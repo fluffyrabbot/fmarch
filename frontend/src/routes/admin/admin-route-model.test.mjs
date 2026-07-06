@@ -1609,6 +1609,17 @@ test("admin route data exposes hosted identity evidence as a native audit row", 
       purpose: input.purpose,
     })),
   });
+  assert.deepEqual(
+    hostedHandoffChecklistRowsForAssertion(
+      identity.hostedHandoffBlockedReceiptRows,
+    ),
+    expectedHostedHandoffBlockedReceiptRows({
+      checklist: identity.hostedHandoffChecklist,
+      headings: hostedHandoffReceiptHeadingsForAudit(
+        localAdminAuditIds.hostedIdentityEvidence,
+      ),
+    }),
+  );
   assert.equal(
     identity.artifactSummary.nextProofTarget,
     HOSTED_IDENTITY_EVIDENCE_PROOF_TARGET,
@@ -1778,14 +1789,17 @@ test("admin audit detail page renders hosted handoff progression rows from route
   assert.match(source, /data-testid=\{row\.testId\}/);
 });
 
-test("admin audit detail page renders hosted identity blocked receipt as a named group", async () => {
+test("admin audit detail page renders hosted handoff blocked receipt rows from route data", async () => {
   const source = await readFile(
     "frontend/src/routes/admin/audit/[audit]/+page.svelte",
     "utf8",
   );
-  assert.match(source, /admin-audit-hosted-handoff-blocked-receipt/);
-  assert.match(source, /hostedHandoffReceiptHeadings\?\.blockedReceipt/);
-  assert.match(source, /firstMissingOperatorArtifact\.roleSurfaceDrilldown/);
+  assert.match(source, /hostedHandoffBlockedReceiptRows/);
+  assert.doesNotMatch(source, /hostedHandoffChecklist\.blockedReceipt/);
+  assert.doesNotMatch(source, /hostedHandoffReceiptHeadings\?/);
+  assert.doesNotMatch(source, /firstMissingOperatorArtifact\.roleSurfaceDrilldown/);
+  assert.match(source, /data-testid=\{row\.testId\}/);
+  assert.match(source, /data-testid=\{subentry\.testId\}/);
 });
 
 test("hosted handoff receipt headings come from the route-model registry", () => {
@@ -1823,18 +1837,10 @@ test("admin audit detail page renders hosted evidence raw-capture intake as a na
     "frontend/src/routes/admin/audit/[audit]/+page.svelte",
     "utf8",
   );
-  assert.doesNotMatch(source, /hostedHandoffBlockedReceiptHeading/);
-  assert.match(source, /hostedHandoffReceiptHeadings\?\.blockedReceipt/);
-  assert.match(
-    source,
-    /hostedHandoffReceiptHeadings\?\.realHostedMatrixRawCaptureIntake/,
-  );
-  assert.match(
-    source,
-    /hostedHandoffReceiptHeadings\?\.firstMissingOperatorArtifact/,
-  );
-  assert.match(source, /realHostedMatrixRawCaptureIntake\.proofTarget/);
-  assert.match(source, /firstMissingOperatorArtifact\.roleSurfaceDrilldown/);
+  assert.match(source, /row\.subentries/);
+  assert.match(source, /subentry\.values/);
+  assert.doesNotMatch(source, /realHostedMatrixRawCaptureIntake\.proofTarget/);
+  assert.doesNotMatch(source, /firstMissingOperatorArtifact\.roleSurfaceDrilldown/);
 });
 
 test("admin audit detail page renders hosted artifact summary sections from route data", async () => {
@@ -3596,6 +3602,17 @@ test("admin local next action detail data carries hosted evidence handoff checkl
   assert.deepEqual(
     hostedHandoffChecklistRowsForAssertion(data.audit.hostedHandoffChecklistRows),
     expectedHostedHandoffChecklistRows(data.audit.hostedHandoffChecklist),
+  );
+  assert.deepEqual(
+    hostedHandoffChecklistRowsForAssertion(
+      data.audit.hostedHandoffBlockedReceiptRows,
+    ),
+    expectedHostedHandoffBlockedReceiptRows({
+      checklist: data.audit.hostedHandoffChecklist,
+      headings: hostedHandoffReceiptHeadingsForAudit(
+        localAdminAuditIds.hostedEvidenceLane,
+      ),
+    }),
   );
   assert.equal(
     data.audit.hostedHandoffChecklist.blockedReceipt.localVsHostedBoundary,
@@ -9333,6 +9350,119 @@ function expectedHostedHandoffProgressionRows(checklist) {
     ],
     [],
   ]);
+}
+
+function expectedHostedHandoffBlockedReceiptRows({ checklist, headings }) {
+  const receipt = checklist.blockedReceipt;
+  if (receipt === null || receipt === undefined) {
+    return [];
+  }
+  return [
+    [
+      "blocked-receipt",
+      "admin-audit-hosted-handoff-blocked-receipt",
+      [
+        ["heading", headings.blockedReceipt, true],
+        ["status", receipt.status, true],
+        ["operatorAction", receipt.operatorAction, false],
+        ["localVsHostedBoundary", receipt.localVsHostedBoundary, false],
+        ...(typeof receipt.rawEvidenceContractSummary === "string"
+          ? [
+              [
+                "rawEvidenceContractSummary",
+                receipt.rawEvidenceContractSummary,
+                false,
+              ],
+            ]
+          : []),
+        [
+          "missingRequiredInputs",
+          receipt.missingRequiredInputs.join(", "),
+          false,
+        ],
+        ["nextProofTarget", receipt.nextProofTarget, false],
+      ],
+      [
+        ...expectedHostedHandoffRawCaptureIntakeRows({
+          intake: receipt.realHostedMatrixRawCaptureIntake,
+          heading: headings.realHostedMatrixRawCaptureIntake,
+        }),
+        ...expectedHostedHandoffFirstMissingOperatorArtifactRows({
+          artifact: receipt.firstMissingOperatorArtifact,
+          heading: headings.firstMissingOperatorArtifact,
+        }),
+      ],
+    ],
+  ];
+}
+
+function expectedHostedHandoffRawCaptureIntakeRows({ intake, heading }) {
+  if (intake === null || intake === undefined) {
+    return [];
+  }
+  return [
+    [
+      "blocked-receipt-raw-capture-intake",
+      "admin-audit-hosted-handoff-blocked-receipt-raw-capture-intake",
+      [
+        ["heading", heading, true],
+        ["command", intake.command, false],
+        ["proofTarget", intake.proofTarget, false],
+        ["status", intake.status, false],
+        ["blockedCheckIds", intake.blockedCheckIds.join(", "), false],
+      ],
+    ],
+  ];
+}
+
+function expectedHostedHandoffFirstMissingOperatorArtifactRows({
+  artifact,
+  heading,
+}) {
+  if (artifact === null || artifact === undefined) {
+    return [];
+  }
+  return [
+    [
+      "blocked-receipt-first-missing-operator-artifact",
+      "admin-audit-hosted-handoff-blocked-receipt-first-missing-operator-artifact",
+      [
+        ["heading", heading, true],
+        ["inputId", artifact.inputId, false],
+        ["checkId", artifact.checkId, false],
+        ["sectionId", artifact.sectionId, false],
+        ["sectionLabel", artifact.sectionLabel, false],
+        ["requiredEvidence", artifact.requiredEvidence, false],
+        ["purpose", artifact.purpose, false],
+        ["proofTarget", artifact.proofTarget, false],
+        [
+          "localCapabilityRoleUrl",
+          artifact.roleSurfaceDrilldown.localCapabilityRoleUrl,
+          false,
+        ],
+        [
+          "handoffRoleUrl",
+          artifact.roleSurfaceDrilldown.handoffRoleUrl,
+          false,
+        ],
+        [
+          "proofGraphNodeId",
+          artifact.roleSurfaceDrilldown.proofGraphNodeId,
+          false,
+        ],
+        [
+          "productionFeatureGraphNodeId",
+          artifact.roleSurfaceDrilldown.productionFeatureGraphNodeId,
+          false,
+        ],
+        [
+          "proofGraphEvidencePath",
+          artifact.roleSurfaceDrilldown.proofGraphEvidencePath,
+          false,
+        ],
+      ],
+    ],
+  ];
 }
 
 function expectedHostedIdentityProviderBoundaryRows(boundary) {

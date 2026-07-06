@@ -23,16 +23,6 @@
     productionFeatureDestinationRows.filter((row) =>
       isHostedEvidenceProgressionDestination(row),
     );
-  $: blockedReceiptHeading =
-    data.audit.hostedHandoffReceiptHeadings?.blockedReceipt ??
-    "Hosted handoff blocked receipt";
-  $: rawCaptureIntakeHeading =
-    data.audit.hostedHandoffReceiptHeadings?.realHostedMatrixRawCaptureIntake ??
-    "Real hosted raw-capture intake";
-  $: firstMissingOperatorArtifactHeading =
-    data.audit.hostedHandoffReceiptHeadings?.firstMissingOperatorArtifact ??
-    "First missing operator artifact";
-
   function prerequisiteRoleHref(prerequisite) {
     const roleUrl = String(prerequisite?.roleUrl ?? "");
     const game = String(data.audit?.artifactSummary?.game ?? "");
@@ -596,44 +586,38 @@
               {/each}
             </li>
           {/each}
-          {#if data.audit.hostedHandoffChecklist.blockedReceipt}
+          {#each data.audit.hostedHandoffBlockedReceiptRows ?? [] as row}
             <li
               class="admin-audit-detail__entry admin-audit-detail__entry--stack"
-              data-testid="admin-audit-hosted-handoff-blocked-receipt"
+              data-testid={row.testId}
             >
-              <h3>{blockedReceiptHeading}</h3>
-              <strong>{data.audit.hostedHandoffChecklist.blockedReceipt.status}</strong>
-              <span>{data.audit.hostedHandoffChecklist.blockedReceipt.operatorAction}</span>
-              <span>{data.audit.hostedHandoffChecklist.blockedReceipt.localVsHostedBoundary}</span>
-              {#if data.audit.hostedHandoffChecklist.blockedReceipt.rawEvidenceContractSummary}
-                <span>{data.audit.hostedHandoffChecklist.blockedReceipt.rawEvidenceContractSummary}</span>
-              {/if}
-              {#if data.audit.hostedHandoffChecklist.blockedReceipt.realHostedMatrixRawCaptureIntake}
-                <h4>{rawCaptureIntakeHeading}</h4>
-                <span>{data.audit.hostedHandoffChecklist.blockedReceipt.realHostedMatrixRawCaptureIntake.command}</span>
-                <span>{data.audit.hostedHandoffChecklist.blockedReceipt.realHostedMatrixRawCaptureIntake.proofTarget}</span>
-                <span>{data.audit.hostedHandoffChecklist.blockedReceipt.realHostedMatrixRawCaptureIntake.status}</span>
-                <span>{data.audit.hostedHandoffChecklist.blockedReceipt.realHostedMatrixRawCaptureIntake.blockedCheckIds.join(", ")}</span>
-              {/if}
-              <span>{data.audit.hostedHandoffChecklist.blockedReceipt.missingRequiredInputs.join(", ")}</span>
-              <span>{data.audit.hostedHandoffChecklist.blockedReceipt.nextProofTarget}</span>
-              {#if data.audit.hostedHandoffChecklist.blockedReceipt.firstMissingOperatorArtifact}
-                <h4>{firstMissingOperatorArtifactHeading}</h4>
-                <span>{data.audit.hostedHandoffChecklist.blockedReceipt.firstMissingOperatorArtifact.inputId}</span>
-                <span>{data.audit.hostedHandoffChecklist.blockedReceipt.firstMissingOperatorArtifact.checkId}</span>
-                <span>{data.audit.hostedHandoffChecklist.blockedReceipt.firstMissingOperatorArtifact.sectionId}</span>
-                <span>{data.audit.hostedHandoffChecklist.blockedReceipt.firstMissingOperatorArtifact.sectionLabel}</span>
-                <span>{data.audit.hostedHandoffChecklist.blockedReceipt.firstMissingOperatorArtifact.requiredEvidence}</span>
-                <span>{data.audit.hostedHandoffChecklist.blockedReceipt.firstMissingOperatorArtifact.purpose}</span>
-                <span>{data.audit.hostedHandoffChecklist.blockedReceipt.firstMissingOperatorArtifact.proofTarget}</span>
-                <span>{data.audit.hostedHandoffChecklist.blockedReceipt.firstMissingOperatorArtifact.roleSurfaceDrilldown.localCapabilityRoleUrl}</span>
-                <span>{data.audit.hostedHandoffChecklist.blockedReceipt.firstMissingOperatorArtifact.roleSurfaceDrilldown.handoffRoleUrl}</span>
-                <span>{data.audit.hostedHandoffChecklist.blockedReceipt.firstMissingOperatorArtifact.roleSurfaceDrilldown.proofGraphNodeId}</span>
-                <span>{data.audit.hostedHandoffChecklist.blockedReceipt.firstMissingOperatorArtifact.roleSurfaceDrilldown.productionFeatureGraphNodeId}</span>
-                <span>{data.audit.hostedHandoffChecklist.blockedReceipt.firstMissingOperatorArtifact.roleSurfaceDrilldown.proofGraphEvidencePath}</span>
+              {#each row.values as value}
+                {#if value.emphasized}
+                  <strong>{value.text}</strong>
+                {:else}
+                  <span>{value.text}</span>
+                {/if}
+              {/each}
+              {#if row.subentries?.length > 0}
+                <ol class="admin-audit-detail__subentries">
+                  {#each row.subentries as subentry}
+                    <li
+                      class="admin-audit-detail__entry admin-audit-detail__entry--stack"
+                      data-testid={subentry.testId}
+                    >
+                      {#each subentry.values as value}
+                        {#if value.emphasized}
+                          <strong>{value.text}</strong>
+                        {:else}
+                          <span>{value.text}</span>
+                        {/if}
+                      {/each}
+                    </li>
+                  {/each}
+                </ol>
               {/if}
             </li>
-          {/if}
+          {/each}
         </ol>
       </section>
     {/if}

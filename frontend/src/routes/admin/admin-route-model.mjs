@@ -677,6 +677,120 @@ function artifactSummaryHasProgressionRows(artifactSummary) {
   );
 }
 
+function buildHostedHandoffBlockedReceiptRows({ checklist, headings }) {
+  const receipt = checklist?.blockedReceipt;
+  if (receipt === null || typeof receipt !== "object") {
+    return Object.freeze([]);
+  }
+  return Object.freeze([
+    artifactSummaryRow({
+      id: "blocked-receipt",
+      testId: "admin-audit-hosted-handoff-blocked-receipt",
+      values: [
+        {
+          id: "heading",
+          text: headings.blockedReceipt,
+          emphasized: true,
+        },
+        { id: "status", text: receipt.status, emphasized: true },
+        { id: "operatorAction", text: receipt.operatorAction },
+        {
+          id: "localVsHostedBoundary",
+          text: receipt.localVsHostedBoundary,
+        },
+        ...(typeof receipt.rawEvidenceContractSummary === "string"
+          ? [
+              {
+                id: "rawEvidenceContractSummary",
+                text: receipt.rawEvidenceContractSummary,
+              },
+            ]
+          : []),
+        {
+          id: "missingRequiredInputs",
+          text: receipt.missingRequiredInputs.join(", "),
+        },
+        { id: "nextProofTarget", text: receipt.nextProofTarget },
+      ],
+      subentries: [
+        ...hostedHandoffRawCaptureIntakeSubentries({
+          intake: receipt.realHostedMatrixRawCaptureIntake,
+          heading: headings.realHostedMatrixRawCaptureIntake,
+        }),
+        ...hostedHandoffFirstMissingOperatorArtifactSubentries({
+          artifact: receipt.firstMissingOperatorArtifact,
+          heading: headings.firstMissingOperatorArtifact,
+        }),
+      ],
+    }),
+  ]);
+}
+
+function hostedHandoffRawCaptureIntakeSubentries({ intake, heading }) {
+  if (intake === null || typeof intake !== "object") {
+    return [];
+  }
+  return [
+    {
+      id: "blocked-receipt-raw-capture-intake",
+      testId: "admin-audit-hosted-handoff-blocked-receipt-raw-capture-intake",
+      values: [
+        { id: "heading", text: heading, emphasized: true },
+        { id: "command", text: intake.command },
+        { id: "proofTarget", text: intake.proofTarget },
+        { id: "status", text: intake.status },
+        { id: "blockedCheckIds", text: intake.blockedCheckIds.join(", ") },
+      ],
+    },
+  ];
+}
+
+function hostedHandoffFirstMissingOperatorArtifactSubentries({
+  artifact,
+  heading,
+}) {
+  if (artifact === null || typeof artifact !== "object") {
+    return [];
+  }
+  return [
+    {
+      id: "blocked-receipt-first-missing-operator-artifact",
+      testId:
+        "admin-audit-hosted-handoff-blocked-receipt-first-missing-operator-artifact",
+      values: [
+        { id: "heading", text: heading, emphasized: true },
+        { id: "inputId", text: artifact.inputId },
+        { id: "checkId", text: artifact.checkId },
+        { id: "sectionId", text: artifact.sectionId },
+        { id: "sectionLabel", text: artifact.sectionLabel },
+        { id: "requiredEvidence", text: artifact.requiredEvidence },
+        { id: "purpose", text: artifact.purpose },
+        { id: "proofTarget", text: artifact.proofTarget },
+        {
+          id: "localCapabilityRoleUrl",
+          text: artifact.roleSurfaceDrilldown.localCapabilityRoleUrl,
+        },
+        {
+          id: "handoffRoleUrl",
+          text: artifact.roleSurfaceDrilldown.handoffRoleUrl,
+        },
+        {
+          id: "proofGraphNodeId",
+          text: artifact.roleSurfaceDrilldown.proofGraphNodeId,
+        },
+        {
+          id: "productionFeatureGraphNodeId",
+          text: artifact.roleSurfaceDrilldown.productionFeatureGraphNodeId,
+        },
+        {
+          id: "proofGraphEvidencePath",
+          text: artifact.roleSurfaceDrilldown.proofGraphEvidencePath,
+        },
+      ],
+    },
+  ];
+}
+
 function hostedReadinessText(value, label) {
   return value === true ? `${label} ready` : `${label} not ready`;
 }
@@ -1744,6 +1858,12 @@ export function normalizeLocalHostedTargetPreflightAudit(
             checklist: hostedHandoffChecklist,
             artifactSummary,
           }),
+          hostedHandoffBlockedReceiptRows: buildHostedHandoffBlockedReceiptRows({
+            checklist: hostedHandoffChecklist,
+            headings: hostedHandoffReceiptHeadingsForAudit(
+              localAdminAuditIds.hostedTargetPreflight,
+            ),
+          }),
         }),
     artifactSummary,
     artifactSummarySections:
@@ -1903,6 +2023,12 @@ export function normalizeLocalHostedIdentityEvidenceAudit(
     hostedHandoffProgressionRows: buildHostedHandoffProgressionRows({
       checklist: hostedHandoffChecklist,
       artifactSummary,
+    }),
+    hostedHandoffBlockedReceiptRows: buildHostedHandoffBlockedReceiptRows({
+      checklist: hostedHandoffChecklist,
+      headings: hostedHandoffReceiptHeadingsForAudit(
+        localAdminAuditIds.hostedIdentityEvidence,
+      ),
     }),
     hostedHandoffReceiptHeadings: hostedHandoffReceiptHeadingsForAudit(
       localAdminAuditIds.hostedIdentityEvidence,
@@ -2193,6 +2319,12 @@ export function normalizeLocalHostedEvidenceLaneAudit(
     hostedHandoffProgressionRows: buildHostedHandoffProgressionRows({
       checklist: hostedHandoffChecklist,
       artifactSummary,
+    }),
+    hostedHandoffBlockedReceiptRows: buildHostedHandoffBlockedReceiptRows({
+      checklist: hostedHandoffChecklist,
+      headings: hostedHandoffReceiptHeadingsForAudit(
+        localAdminAuditIds.hostedEvidenceLane,
+      ),
     }),
     hostedHandoffReceiptHeadings: hostedHandoffReceiptHeadingsForAudit(
       localAdminAuditIds.hostedEvidenceLane,
@@ -2510,6 +2642,12 @@ export function normalizeLocalRealHostedObservabilityHandoffAudit(
     hostedHandoffProgressionRows: buildHostedHandoffProgressionRows({
       checklist: hostedHandoffChecklist,
       artifactSummary,
+    }),
+    hostedHandoffBlockedReceiptRows: buildHostedHandoffBlockedReceiptRows({
+      checklist: hostedHandoffChecklist,
+      headings: hostedHandoffReceiptHeadingsForAudit(
+        localAdminAuditIds.realHostedObservabilityHandoff,
+      ),
     }),
     hostedHandoffReceiptHeadings: hostedHandoffReceiptHeadingsForAudit(
       localAdminAuditIds.realHostedObservabilityHandoff,
@@ -2880,6 +3018,12 @@ export function normalizeLocalHostedConcurrentRaceMatrixAudit(
     hostedHandoffProgressionRows: buildHostedHandoffProgressionRows({
       checklist: hostedHandoffChecklist,
       artifactSummary,
+    }),
+    hostedHandoffBlockedReceiptRows: buildHostedHandoffBlockedReceiptRows({
+      checklist: hostedHandoffChecklist,
+      headings: hostedHandoffReceiptHeadingsForAudit(
+        localAdminAuditIds.hostedConcurrentRaceMatrix,
+      ),
     }),
     hostedHandoffReceiptHeadings: hostedHandoffReceiptHeadingsForAudit(
       localAdminAuditIds.hostedConcurrentRaceMatrix,
@@ -3793,6 +3937,10 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
           hostedHandoffProgressionRows: buildHostedHandoffProgressionRows({
             checklist: hostedHandoffChecklist,
             artifactSummary: null,
+          }),
+          hostedHandoffBlockedReceiptRows: buildHostedHandoffBlockedReceiptRows({
+            checklist: hostedHandoffChecklist,
+            headings: hostedHandoffReceiptHeadingsForNextActionUnproven(unproven),
           }),
         }),
     ...(hostedHandoffChecklist === null
