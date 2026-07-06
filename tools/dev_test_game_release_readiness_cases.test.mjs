@@ -74,6 +74,8 @@ import {
 } from "./dev_test_game_cohost_feature_spine_targets.mjs";
 import {
   hardeningFeatureSpineCycleIds,
+  hardeningFeatureSpineSource,
+  hardeningFeatureSpineTargetProvenanceCases,
   hardeningFeatureSpineTargetRows,
   hardeningFeatureSpineSourceCheckId,
 } from "./dev_test_game_hardening_feature_spine_targets.mjs";
@@ -87,6 +89,12 @@ import {
 import {
   proofGraphAdminFeatureTargetCases,
 } from "./dev_test_game_proof_graph_feature_target_cases.mjs";
+import {
+  proofGraphProductionFeatureTargetDestinations,
+} from "./dev_test_game_proof_graph_production_feature_destinations.mjs";
+import {
+  buildProductionFeatureSpineTargetCollection,
+} from "./dev_test_game_production_feature_spine_resolver.mjs";
 import {
   roleSurfaceBrowserWorkbenchEvidence,
   roleSurfaceSpineCaseList,
@@ -128,98 +136,6 @@ const hardeningConcurrentRaceFeatureTargetExpectations = Object.freeze([
     }),
   ),
 ]);
-
-function expectedHardeningSourceCaseRows() {
-  const replacementStaleConflictLane =
-    replacementStaleConflictMessageSpineLaneCase();
-  return Object.freeze(
-    Object.fromEntries([
-      ...completedGameHardeningSpineTargetCases().map((target) => [
-        target.targetKey,
-        expectedHardeningSourceCaseRow({
-          sourceFactory: "completedGameHardeningSpineTargetCases",
-          featureSlotId: target.featureSlotId,
-          cycleId: target.cycleId,
-          rowId: target.roleUrlId,
-        }),
-      ]),
-      [
-        "replacementStaleConflictMessage",
-        expectedHardeningSourceCaseRow({
-          sourceFactory: "replacementStaleConflictMessageSpineLaneCase",
-          featureSlotId: "replacement-stale-conflict-message",
-          cycleId: hardeningFeatureSpineCycleIds.staleConflict,
-          rowId: replacementStaleConflictLane.laneId,
-        }),
-      ],
-      ...reconnectHardeningSpineTargetCases().map((target) => [
-        target.targetKey,
-        expectedHardeningSourceCaseRow({
-          sourceFactory: "reconnectHardeningSpineTargetCases",
-          featureSlotId: target.featureSlotId,
-          cycleId: hardeningFeatureSpineCycleIds.reconnectRecovery,
-          rowId: target.laneId,
-        }),
-      ]),
-      ...[
-        ...hostPhaseRaceReloadSpineTargetCases(),
-        ...hostStandaloneRaceReloadSpineTargetCases(),
-        ...crossRoleRaceReloadSpineTargetCases(),
-        ...replacementRaceReloadSpineTargetCases(),
-      ].map((target) => [
-        target.targetKey,
-        expectedHardeningSourceCaseRow({
-          sourceFactory: hardeningRaceSourceFactoryForTarget(target.targetKey),
-          featureSlotId: target.featureSlotId,
-          cycleId: hardeningFeatureSpineCycleIds.concurrentRace,
-          rowId: target.reloadLaneId,
-        }),
-      ]),
-    ]),
-  );
-}
-
-function expectedHardeningSourceCaseRow({
-  sourceFactory,
-  featureSlotId,
-  cycleId,
-  rowId,
-}) {
-  return {
-    sourceFactory,
-    featureSlotId,
-    sourceCheckId: hardeningFeatureSpineSourceCheckId,
-    cycleId,
-    roleUrlId: rowId,
-    checkpointId: rowId,
-    adminCheckId: rowId,
-  };
-}
-
-function hardeningRaceSourceFactoryForTarget(targetKey) {
-  if (
-    hostPhaseRaceReloadSpineTargetCases().some(
-      (target) => target.targetKey === targetKey,
-    )
-  ) {
-    return "hostPhaseRaceReloadSpineTargetCases";
-  }
-  if (
-    hostStandaloneRaceReloadSpineTargetCases().some(
-      (target) => target.targetKey === targetKey,
-    )
-  ) {
-    return "hostStandaloneRaceReloadSpineTargetCases";
-  }
-  if (
-    crossRoleRaceReloadSpineTargetCases().some(
-      (target) => target.targetKey === targetKey,
-    )
-  ) {
-    return "crossRoleRaceReloadSpineTargetCases";
-  }
-  return "replacementRaceReloadSpineTargetCases";
-}
 
 test("release readiness unproven cases share blocker IDs and status rows", () => {
   assert.ok(releaseReadinessUnprovenCaseIds.includes("hosted-deployment"));
@@ -675,7 +591,20 @@ test("scenario-owned production feature targets derive proof row ids from source
 });
 
 test("hardening feature spine rows are classified by exported source-case factories", () => {
-  const expectedRows = expectedHardeningSourceCaseRows();
+  const expectedRows = Object.fromEntries(
+    hardeningFeatureSpineTargetProvenanceCases.map((provenanceCase) => [
+      provenanceCase.targetKey,
+      {
+        sourceFactory: provenanceCase.sourceFactory,
+        featureSlotId: provenanceCase.featureSlotId,
+        sourceCheckId: provenanceCase.sourceCheckId,
+        cycleId: provenanceCase.cycleId,
+        roleUrlId: provenanceCase.roleUrlId,
+        checkpointId: provenanceCase.checkpointId,
+        adminCheckId: provenanceCase.adminCheckId,
+      },
+    ]),
+  );
   assert.deepEqual(
     Object.keys(hardeningFeatureSpineTargetRows),
     Object.keys(expectedRows),
@@ -697,6 +626,120 @@ test("hardening feature spine rows are classified by exported source-case factor
     ),
     expectedRows,
   );
+});
+
+test("hardening feature spine provenance reaches readiness and proof graph rows", () => {
+  const roleUrlHrefs = Object.fromEntries(
+    hardeningFeatureSpineTargetProvenanceCases.map((provenanceCase) => [
+      provenanceCase.roleUrlId,
+      `/g/${provenanceCase.roleUrlId}`,
+    ]),
+  );
+  const readinessTargets = buildProductionFeatureSpineTargetCollection({
+    declarations: releaseReadinessProductionFeatureSpineTargets,
+    sourceTarget: {
+      sourceCheckId: hardeningFeatureSpineSourceCheckId,
+      detailRoleUrl: hardeningFeatureSpineSource.detailRoleUrlIncludes,
+      browserProofCommand: "npm run test:dev-test-game-core-live",
+      sourceProofArtifact: hardeningFeatureSpineSource.proofArtifact,
+      rerunCommand: hardeningFeatureSpineSource.rerunCommand,
+      cycleIds: [
+        ...new Set(
+          hardeningFeatureSpineTargetProvenanceCases.map(
+            (provenanceCase) => provenanceCase.cycleId,
+          ),
+        ),
+      ],
+      roleUrlIds: hardeningFeatureSpineTargetProvenanceCases.map(
+        (provenanceCase) => provenanceCase.roleUrlId,
+      ),
+      checkpointIds: hardeningFeatureSpineTargetProvenanceCases.map(
+        (provenanceCase) => provenanceCase.checkpointId,
+      ),
+      visibleAdminCheckIds: hardeningFeatureSpineTargetProvenanceCases.map(
+        (provenanceCase) => provenanceCase.adminCheckId,
+      ),
+      recoveryHookIds: [],
+      roleUrlHrefs,
+    },
+  });
+  const proofGraphDestinations = proofGraphProductionFeatureTargetDestinations({
+    nodes: Object.values(readinessTargets.bySlotId).map((target) => ({
+      kind: "production-feature-spine-target",
+      id: `production-feature:${target.featureSlotId}`,
+      roleUrl: hardeningFeatureSpineSource.detailRoleUrlIncludes,
+      featureSlotId: target.featureSlotId,
+      sourceCheckId: target.sourceCheckId,
+      targetRoleUrl: target.roleUrl,
+      adminCheckId: target.adminCheckId,
+      sourceProofArtifact: target.sourceProofArtifact,
+      browserWorkbench: target.browserWorkbench,
+    })),
+  });
+  const proofGraphDestinationBySlotId = new Map(
+    proofGraphDestinations.map((destination) => [
+      destination.featureSlotId,
+      destination,
+    ]),
+  );
+
+  assert.deepEqual(
+    readinessTargets.slotIds,
+    hardeningFeatureSpineTargetProvenanceCases.map(
+      (provenanceCase) => provenanceCase.featureSlotId,
+    ),
+  );
+  for (const provenanceCase of hardeningFeatureSpineTargetProvenanceCases) {
+    const declaration =
+      releaseReadinessProductionFeatureSpineTargets[
+        provenanceCase.targetKey
+      ];
+    const readinessTarget =
+      readinessTargets.bySlotId[provenanceCase.featureSlotId];
+    const proofGraphDestination = proofGraphDestinationBySlotId.get(
+      provenanceCase.featureSlotId,
+    );
+    assert.deepEqual(declaration, {
+      featureSlotId: provenanceCase.featureSlotId,
+      sourceCheckId: provenanceCase.sourceCheckId,
+      cycleId: provenanceCase.cycleId,
+      roleUrlId: provenanceCase.roleUrlId,
+      rowKind: "checkpoint",
+      checkpointId: provenanceCase.checkpointId,
+      adminCheckId: provenanceCase.adminCheckId,
+    });
+    assert.equal(readinessTarget.sourceProofArtifact, provenanceCase.proofArtifact);
+    assert.equal(readinessTarget.rerunCommand, provenanceCase.rerunCommand);
+    assert.equal(readinessTarget.adminCheckId, provenanceCase.adminCheckId);
+    assert.equal(
+      readinessTarget.browserWorkbench.requiredEvidence.includes(
+        provenanceCase.adminCheckId,
+      ),
+      true,
+    );
+    assert.deepEqual(
+      {
+        kind: proofGraphDestination.kind,
+        auditId: proofGraphDestination.auditId,
+        featureSlotId: proofGraphDestination.featureSlotId,
+        sourceCheckId: proofGraphDestination.sourceCheckId,
+        targetRoleUrl: proofGraphDestination.targetRoleUrl,
+        adminCheckId: proofGraphDestination.adminCheckId,
+        sourceProofArtifact: proofGraphDestination.sourceProofArtifact,
+        requiredChecks: proofGraphDestination.requiredChecks,
+      },
+      {
+        kind: "admin-audit",
+        auditId: "local-hardening",
+        featureSlotId: provenanceCase.featureSlotId,
+        sourceCheckId: provenanceCase.sourceCheckId,
+        targetRoleUrl: `/g/${provenanceCase.roleUrlId}`,
+        adminCheckId: provenanceCase.adminCheckId,
+        sourceProofArtifact: provenanceCase.proofArtifact,
+        requiredChecks: [provenanceCase.adminCheckId],
+      },
+    );
+  }
 });
 
 test("local core production feature targets derive proof row ids from shared source rows", () => {

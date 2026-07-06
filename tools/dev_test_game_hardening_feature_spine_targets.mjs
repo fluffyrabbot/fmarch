@@ -172,3 +172,75 @@ export const hardeningFeatureSpineSource = Object.freeze({
   proofArtifact: devTestGameHardeningAdminProofPath,
   rerunCommand: devTestGameHardeningAdminProofCommand,
 });
+
+export const hardeningFeatureSpineTargetProvenanceCases = Object.freeze([
+  ...completedGameHardeningSpineTargets.map((target) =>
+    hardeningFeatureSpineTargetProvenanceCase({
+      targetKey: target.targetKey,
+      sourceFactory: "completedGameHardeningSpineTargetCases",
+      sourceRow: hardeningFeatureSpineTargetRows[target.targetKey],
+    }),
+  ),
+  hardeningFeatureSpineTargetProvenanceCase({
+    targetKey: "replacementStaleConflictMessage",
+    sourceFactory: "replacementStaleConflictMessageSpineLaneCase",
+    sourceRow:
+      hardeningFeatureSpineTargetRows.replacementStaleConflictMessage,
+  }),
+  ...reconnectHardeningSpineTargets.map((target) =>
+    hardeningFeatureSpineTargetProvenanceCase({
+      targetKey: target.targetKey,
+      sourceFactory: "reconnectHardeningSpineTargetCases",
+      sourceRow: hardeningFeatureSpineTargetRows[target.targetKey],
+    }),
+  ),
+  ...hostPhaseRaceReloadSpineTargets.map((target) =>
+    hardeningFeatureSpineTargetProvenanceCase({
+      targetKey: target.targetKey,
+      sourceFactory: "hostPhaseRaceReloadSpineTargetCases",
+      sourceRow: hardeningFeatureSpineTargetRows[target.targetKey],
+    }),
+  ),
+  ...hostStandaloneRaceReloadSpineTargets.map((target) =>
+    hardeningFeatureSpineTargetProvenanceCase({
+      targetKey: target.targetKey,
+      sourceFactory: "hostStandaloneRaceReloadSpineTargetCases",
+      sourceRow: hardeningFeatureSpineTargetRows[target.targetKey],
+    }),
+  ),
+  ...crossRoleRaceReloadSpineTargets.map((target) =>
+    hardeningFeatureSpineTargetProvenanceCase({
+      targetKey: target.targetKey,
+      sourceFactory: "crossRoleRaceReloadSpineTargetCases",
+      sourceRow: hardeningFeatureSpineTargetRows[target.targetKey],
+    }),
+  ),
+  ...replacementRaceReloadSpineTargets.map((target) =>
+    hardeningFeatureSpineTargetProvenanceCase({
+      targetKey: target.targetKey,
+      sourceFactory: "replacementRaceReloadSpineTargetCases",
+      sourceRow: hardeningFeatureSpineTargetRows[target.targetKey],
+    }),
+  ),
+]);
+
+function hardeningFeatureSpineTargetProvenanceCase({
+  targetKey,
+  sourceFactory,
+  sourceRow,
+}) {
+  return Object.freeze({
+    targetKey,
+    sourceFactory,
+    featureSlotId: sourceRow.featureSlotId,
+    sourceCheckId: sourceRow.sourceCheckId,
+    cycleId: sourceRow.cycleId,
+    roleUrlId: sourceRow.roleUrlId,
+    checkpointId: sourceRow.checkpointId,
+    adminCheckId: sourceRow.adminCheckId,
+    proofArtifact: hardeningFeatureSpineSource.proofArtifact,
+    rerunCommand: hardeningFeatureSpineSource.rerunCommand,
+    graphSourceNodeId: hardeningFeatureSpineSource.graphSourceNodeId,
+    readinessSourceKind: hardeningFeatureSpineSource.readinessSourceKind,
+  });
+}
