@@ -16,6 +16,9 @@ import {
 import {
   productionFeatureBrowserWorkbenchEvidence,
 } from "./dev_test_game_production_feature_spine_resolver.mjs";
+import {
+  productionFeatureSpineTargetProvenanceCaseForSlotId,
+} from "./dev_test_game_production_feature_spine_target_provenance.mjs";
 
 export const invalidActionRecoveryHostedConcurrentRaceMatrixUnprovenText =
   "Hosted or hosted-like concurrent command race matrix beyond the promoted local replacement, host, player, cohost deadline, lifecycle, and complete-game reload milestones, including multi-session reload/reconnect recovery and stale-client conflict evidence";
@@ -86,6 +89,8 @@ export function featureSpineFixture({
   return {
     productionFeatureSpineTarget,
     spineTarget,
+    selectedSpineProvenance:
+      productionFeatureSpineTargetProvenanceCaseForSlotId(slotId),
     spineDrilldown: {
       featureSlotId: declaration.featureSlotId,
       sourceCheckId: declaration.sourceCheckId,

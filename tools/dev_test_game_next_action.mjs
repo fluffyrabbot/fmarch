@@ -74,6 +74,9 @@ import {
   productionFeatureSourceTargetsByCheckIdFromReadiness,
 } from "./dev_test_game_production_feature_readiness_sources.mjs";
 import {
+  productionFeatureSpineTargetProvenanceCaseForSlotId,
+} from "./dev_test_game_production_feature_spine_target_provenance.mjs";
+import {
   defaultProductionFeatureSpineRerunCommands,
   devTestGameProductionFeatureBrowserProofCommand,
   productionFeatureSpineSourceCheckRules,
@@ -429,6 +432,12 @@ export function buildDevTestGameNextAction(
               ...(selectedUnproven.spineTarget == null
                 ? {}
                 : { spineTarget: selectedUnproven.spineTarget }),
+              ...(selectedUnproven.selectedSpineProvenance == null
+                ? {}
+                : {
+                    selectedSpineProvenance:
+                      selectedUnproven.selectedSpineProvenance,
+                  }),
               ...(selectedUnproven.selectedProductionFeatureGraph == null
                 ? {}
                 : {
@@ -1106,6 +1115,10 @@ function rankedBuildableReleaseReadinessItems(
           proofGraph,
           spineTarget,
         });
+      const selectedSpineProvenance =
+        productionFeatureSpineTargetProvenanceCaseForSlotId(
+          spineTarget.featureSlotId,
+        );
       return {
         item,
         index,
@@ -1120,6 +1133,7 @@ function rankedBuildableReleaseReadinessItems(
           selectedBuildable.productionFeatureSpineTarget,
         spineTarget,
         spineDrilldown: buildProductionFeatureSpineDrilldown(spineTarget),
+        selectedSpineProvenance,
         selectedProductionFeatureGraph,
         hostedEvidenceMode: selectedBuildable.hostedEvidenceMode,
         realHostedEvidenceStatus: selectedBuildable.realHostedEvidenceStatus,

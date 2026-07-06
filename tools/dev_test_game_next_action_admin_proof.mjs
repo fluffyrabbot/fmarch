@@ -88,6 +88,9 @@ import {
   proofGraphDestinationSummaryDriftNextActionAdminProofPath,
   proofGraphDestinationSummaryDriftNextActionPath,
 } from "./dev_test_game_next_action_admin_proof_paths.mjs";
+import {
+  selectedProductionFeatureSpineMatchesProvenance,
+} from "./dev_test_game_production_feature_spine_target_provenance.mjs";
 export {
   proofGraphDestinationSummaryDriftNextActionAdminProofPath,
   proofGraphDestinationSummaryDriftNextActionPath,
@@ -239,6 +242,8 @@ export function nextActionAdminProofCase({
         source.nextAction.nextAction.unproven?.spineDrilldown ?? null,
       unprovenSpineTarget:
         source.nextAction.nextAction.unproven?.spineTarget ?? null,
+      unprovenSpineProvenance:
+        source.nextAction.nextAction.unproven?.selectedSpineProvenance ?? null,
       unprovenSelectedProductionFeatureGraph:
         source.nextAction.nextAction.unproven?.selectedProductionFeatureGraph ??
         null,
@@ -741,6 +746,9 @@ export function assertNextActionAdminProof(evidence) {
     const declaration = evidence.generatedFrom.unprovenProductionFeatureSpineTarget;
     const drilldown = evidence.generatedFrom.unprovenSpineDrilldown;
     const target = evidence.generatedFrom.unprovenSpineTarget;
+    const provenance = evidence.generatedFrom.unprovenSpineProvenance;
+    const graphSelection =
+      evidence.generatedFrom.unprovenSelectedProductionFeatureGraph;
     if (
       typeof declaration?.featureSlotId !== "string" ||
       typeof declaration?.cycleId !== "string" ||
@@ -769,8 +777,18 @@ export function assertNextActionAdminProof(evidence) {
       drilldown.sourceProofArtifact !== target.sourceProofArtifact ||
       drilldown.featureSlotId !== declaration.featureSlotId ||
       drilldown.adminCheckId !== declaration.adminCheckId ||
+      !selectedProductionFeatureSpineMatchesProvenance({
+        provenanceCase: provenance,
+        declaration,
+        target,
+        drilldown,
+        graphSelection,
+      }) ||
       !evidence.adminRoleSurface?.visibleChecks?.includes(
         "selected-feature-spine-declaration",
+      ) ||
+      !evidence.adminRoleSurface?.visibleChecks?.includes(
+        "selected-spine-provenance",
       ) ||
       !evidence.adminRoleSurface?.visibleChecks?.includes(
         "selected-spine-target",
@@ -1106,6 +1124,7 @@ function requiredChecksForNextAction(nextAction) {
     }
     if (nextAction.nextAction.unproven.spineTarget !== undefined) {
       checks.push("selected-feature-spine-declaration");
+      checks.push("selected-spine-provenance");
       checks.push("selected-spine-target");
       checks.push("selected-spine-drilldown");
       checks.push("selected-spine-admin-check");
@@ -1682,6 +1701,7 @@ function requiredChecksForEvidence(evidence) {
             ? []
             : [
                 "selected-feature-spine-declaration",
+                "selected-spine-provenance",
                 "selected-spine-target",
                 "selected-spine-drilldown",
                 "selected-spine-admin-check",

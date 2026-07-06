@@ -398,6 +398,9 @@ import {
   productionFeatureGraphSourceNodeId,
 } from "./dev_test_game_production_feature_graph_sources.mjs";
 import {
+  productionFeatureSpineTargetProvenanceCaseForSlotId,
+} from "./dev_test_game_production_feature_spine_target_provenance.mjs";
+import {
   roleSurfaceBrowserWorkbenchEvidence,
   roleSurfaceSpineCases,
 } from "./dev_test_game_role_surface_spine_cases.mjs";
@@ -20586,6 +20589,7 @@ function hostedIdentityProofGraphFixture() {
         sourceCheckId: identityTarget.sourceCheckId,
         roleUrl: identityTarget.detailRoleUrl,
         targetRoleUrl: identityTarget.roleUrl,
+        adminCheckId: identityTarget.adminCheckId,
         browserProofCommand: identityTarget.browserProofCommand,
         sourceProofArtifact: identityTarget.sourceProofArtifact,
         recoveryCommand: identityTarget.rerunCommand,
@@ -21876,7 +21880,9 @@ function proofGraphProductionFeatureTargetDestinationsFixture(targets) {
         detailRoleUrl: `/admin/audit/${auditId}?game=<seeded-game>`,
         featureSlotId: target.featureSlotId,
         sourceCheckId: target.sourceCheckId,
+        targetRoleUrl: target.targetRoleUrl,
         adminCheckId: target.adminCheckId,
+        sourceProofArtifact: target.sourceProofArtifact,
         requiredChecks: [target.adminCheckId],
       };
     }
@@ -22027,6 +22033,10 @@ function nextActionAdminProofFixture() {
         invalidActionRecoveryUnproven.productionFeatureSpineTarget,
       unprovenSpineDrilldown: invalidActionRecoveryUnproven.spineDrilldown,
       unprovenSpineTarget: invalidActionRecoveryUnproven.spineTarget,
+      unprovenSpineProvenance:
+        productionFeatureSpineTargetProvenanceCaseForSlotId(
+          invalidActionRecoveryUnproven.spineTarget.featureSlotId,
+        ),
       unprovenHostedHandoffChecklist: hostedHandoffChecklist,
       selectedProofGraphNode: {
         id: "admin-proof:hosted-concurrent-race-matrix",
@@ -22101,6 +22111,7 @@ function nextActionAdminProofFixture() {
         "selected-proof-graph-node",
         "selected-proof-graph-destination",
         "selected-feature-spine-declaration",
+        "selected-spine-provenance",
         "selected-spine-target",
         "selected-spine-drilldown",
         "selected-spine-admin-check",
@@ -22340,6 +22351,7 @@ function nextActionAdminProofLocalReadinessDependencyFixture({
     "selected-proof-graph-node",
     "selected-proof-graph-destination",
     "selected-feature-spine-declaration",
+    "selected-spine-provenance",
     "selected-spine-target",
     "selected-spine-drilldown",
     "selected-spine-admin-check",
@@ -22361,6 +22373,7 @@ function nextActionAdminProofLocalReadinessDependencyFixture({
     unprovenProductionFeatureSpineTarget: null,
     unprovenSpineDrilldown: null,
     unprovenSpineTarget: null,
+    unprovenSpineProvenance: null,
     unprovenHostedHandoffChecklist: null,
     selectedProofGraphNode: null,
     relatedHandoffs: [],

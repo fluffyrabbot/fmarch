@@ -183,6 +183,9 @@ import {
   validProductionFeatureSpineTargetCollection,
 } from "./dev_test_game_production_feature_spine_resolver.mjs";
 import {
+  selectedProductionFeatureSpineMatchesProvenance,
+} from "./dev_test_game_production_feature_spine_target_provenance.mjs";
+import {
   defaultProductionFeatureSpineRerunCommands,
   devTestGameCohostConsoleProofCommand,
   devTestGameCoreLoopAdminProofCommand,
@@ -6756,6 +6759,9 @@ export function validateDevTestGameNextActionAdminProof(proof, options = {}) {
     const declaration = proof.generatedFrom.unprovenProductionFeatureSpineTarget;
     const drilldown = proof.generatedFrom.unprovenSpineDrilldown;
     const target = proof.generatedFrom.unprovenSpineTarget;
+    const provenance = proof.generatedFrom.unprovenSpineProvenance;
+    const graphSelection =
+      proof.generatedFrom.unprovenSelectedProductionFeatureGraph;
     const rowKind = featureSpineRowKind(declaration);
     if (
       !validFeatureSpineDeclaration(declaration) ||
@@ -6787,8 +6793,18 @@ export function validateDevTestGameNextActionAdminProof(proof, options = {}) {
       drilldown.sourceProofArtifact !== target.sourceProofArtifact ||
       drilldown.featureSlotId !== declaration.featureSlotId ||
       drilldown.adminCheckId !== declaration.adminCheckId ||
+      !selectedProductionFeatureSpineMatchesProvenance({
+        provenanceCase: provenance,
+        declaration,
+        target,
+        drilldown,
+        graphSelection,
+      }) ||
       !proof.adminRoleSurface?.visibleChecks?.includes(
         "selected-feature-spine-declaration",
+      ) ||
+      !proof.adminRoleSurface?.visibleChecks?.includes(
+        "selected-spine-provenance",
       ) ||
       !proof.adminRoleSurface?.visibleChecks?.includes("selected-spine-target") ||
       !proof.adminRoleSurface?.visibleChecks?.includes("selected-spine-drilldown") ||
@@ -6960,6 +6976,8 @@ export function validateDevTestGameNextActionAdminProof(proof, options = {}) {
       proof.generatedFrom?.unprovenProductionFeatureSpineTarget ?? null,
     unprovenSpineDrilldown: proof.generatedFrom?.unprovenSpineDrilldown ?? null,
     unprovenSpineTarget: proof.generatedFrom?.unprovenSpineTarget ?? null,
+    unprovenSpineProvenance:
+      proof.generatedFrom?.unprovenSpineProvenance ?? null,
     seedProofLaneCoverageTrace,
     releaseReadinessCandidateCount: releaseTrace.candidateCount,
     localReadinessDependencyCandidateCount: localTrace.candidateCount,

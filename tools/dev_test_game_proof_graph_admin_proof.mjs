@@ -45,6 +45,9 @@ import {
   proofGraphAdminFeatureTargetCases,
 } from "./dev_test_game_proof_graph_feature_target_cases.mjs";
 import {
+  productionFeatureSpineTargetProvenanceBySlotId,
+} from "./dev_test_game_production_feature_spine_target_provenance.mjs";
+import {
   localNextActionAdminSurfaceCheckId,
   localProofFreshnessAdminSurfaceCheckId,
   localProofGraphAdminRoleHandoffsCheckId,
@@ -390,6 +393,9 @@ function assertProofGraphAdminProofCoversProductionFeatureDestinations(evidence)
       "proof graph admin proof production feature destination count drifted",
     );
   }
+  assertProofGraphAdminProductionFeatureDestinationsMatchProvenance(
+    destinations,
+  );
   for (const destination of destinations) {
     if (
       !productionNodeIds.has(destination.linkId) ||
@@ -442,6 +448,38 @@ function assertProofGraphAdminProofCoversProductionFeatureDestinations(evidence)
     ) {
       throw new Error(
         `proof graph admin proof did not inspect production feature destination: ${destination.linkId}`,
+      );
+    }
+  }
+}
+
+function assertProofGraphAdminProductionFeatureDestinationsMatchProvenance(
+  destinations,
+) {
+  for (const destination of destinations) {
+    const provenanceCase =
+      productionFeatureSpineTargetProvenanceBySlotId[destination.featureSlotId];
+    if (
+      provenanceCase === undefined ||
+      destination.linkId !==
+        `production-feature:${provenanceCase.featureSlotId}` ||
+      destination.sourceCheckId !== provenanceCase.sourceCheckId ||
+      destination.adminCheckId !== provenanceCase.adminCheckId ||
+      destination.sourceProofArtifact !== provenanceCase.proofArtifact ||
+      !String(destination.targetRoleUrl ?? "").includes(
+        provenanceCase.roleUrlIncludes,
+      )
+    ) {
+      throw new Error(
+        [
+          "proof graph admin proof production feature provenance drifted",
+          destination.featureSlotId,
+          `linkId=${destination?.linkId ?? ""}`,
+          `sourceCheckId=${destination?.sourceCheckId ?? ""}`,
+          `adminCheckId=${destination?.adminCheckId ?? ""}`,
+          `sourceProofArtifact=${destination?.sourceProofArtifact ?? ""}`,
+          `targetRoleUrl=${destination?.targetRoleUrl ?? ""}`,
+        ].join(": "),
       );
     }
   }
