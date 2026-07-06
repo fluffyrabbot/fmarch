@@ -98,6 +98,10 @@ import {
   hostResolveRaceScenario,
 } from "./dev_test_game_core_loop_host_phase_scenarios.mjs";
 import {
+  cohostHostRaceCoverageCellCases,
+  playerHostRaceCoverageCellCases,
+} from "./dev_test_game_cross_role_race_scenarios.mjs";
+import {
   cohostStaleDeadlineReconnectLaneId,
   hostStaleAdvanceReconnectLaneId,
   hostStaleDeadlineReconnectLaneId,
@@ -142,6 +146,12 @@ const hostResolveRaceSpineLane = hostResolveRaceScenario();
 const hostAdvanceRaceSpineLane = hostAdvanceRaceScenario();
 const hostDeadlineAdvanceRaceSpineLane = hostDeadlineAdvanceRaceScenario();
 const hostMixedAdvanceRaceSpineLane = hostMixedAdvanceRaceScenario();
+const crossRoleRaceCellById = new Map(
+  [
+    ...playerHostRaceCoverageCellCases(),
+    ...cohostHostRaceCoverageCellCases(),
+  ].map((cell) => [cell.id, cell]),
+);
 const hardeningConcurrentRaceFeatureTargetExpectations = Object.freeze([
   Object.freeze({
     targetKey: "hostConcurrentResolveRaceReload",
@@ -162,6 +172,24 @@ const hardeningConcurrentRaceFeatureTargetExpectations = Object.freeze([
     targetKey: "hostConcurrentMixedAdvanceRaceReload",
     featureSlotId: "host-concurrent-mixed-advance-race-reload",
     rowId: hostMixedAdvanceRaceSpineLane.reloadProofCheckId,
+  }),
+  Object.freeze({
+    targetKey: "playerHostVoteResolveRaceReload",
+    featureSlotId: "player-host-vote-resolve-race-reload",
+    rowId: crossRoleRaceCellById.get("player-vote-vs-host-resolve")
+      .reloadLaneId,
+  }),
+  Object.freeze({
+    targetKey: "playerHostActionAdvanceRaceReload",
+    featureSlotId: "player-host-action-advance-race-reload",
+    rowId: crossRoleRaceCellById.get("player-action-vs-host-advance")
+      .reloadLaneId,
+  }),
+  Object.freeze({
+    targetKey: "cohostHostDeadlineResolveRaceReload",
+    featureSlotId: "cohost-host-deadline-resolve-race-reload",
+    rowId: crossRoleRaceCellById.get("cohost-deadline-vs-host-resolve")
+      .reloadLaneId,
   }),
 ]);
 

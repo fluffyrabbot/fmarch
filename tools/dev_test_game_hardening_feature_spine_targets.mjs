@@ -15,6 +15,10 @@ import {
   hostResolveRaceScenario,
 } from "./dev_test_game_core_loop_host_phase_scenarios.mjs";
 import {
+  cohostHostRaceCoverageCellCases,
+  playerHostRaceCoverageCellCases,
+} from "./dev_test_game_cross_role_race_scenarios.mjs";
+import {
   cohostStaleDeadlineReconnectLaneId,
   hostStaleAdvanceReconnectLaneId,
   hostStaleDeadlineReconnectLaneId,
@@ -37,6 +41,21 @@ const hostResolveRaceSpineLane = hostResolveRaceScenario();
 const hostAdvanceRaceSpineLane = hostAdvanceRaceScenario();
 const hostDeadlineAdvanceRaceSpineLane = hostDeadlineAdvanceRaceScenario();
 const hostMixedAdvanceRaceSpineLane = hostMixedAdvanceRaceScenario();
+const crossRoleRaceCellById = new Map(
+  [
+    ...playerHostRaceCoverageCellCases(),
+    ...cohostHostRaceCoverageCellCases(),
+  ].map((cell) => [cell.id, cell]),
+);
+const playerVoteResolveRaceSpineCell = crossRoleRaceCellById.get(
+  "player-vote-vs-host-resolve",
+);
+const playerActionAdvanceRaceSpineCell = crossRoleRaceCellById.get(
+  "player-action-vs-host-advance",
+);
+const cohostDeadlineResolveRaceSpineCell = crossRoleRaceCellById.get(
+  "cohost-deadline-vs-host-resolve",
+);
 export const hardeningFeatureSpineTargetRows = Object.freeze({
   completedGameStaleRecovery: Object.freeze({
     featureSlotId: "completed-game-stale-recovery",
@@ -134,6 +153,30 @@ export const hardeningFeatureSpineTargetRows = Object.freeze({
     checkpointId: hostMixedAdvanceRaceSpineLane.reloadProofCheckId,
     adminCheckId: hostMixedAdvanceRaceSpineLane.reloadProofCheckId,
   }),
+  playerHostVoteResolveRaceReload: Object.freeze({
+    featureSlotId: "player-host-vote-resolve-race-reload",
+    sourceCheckId: hardeningFeatureSpineSourceCheckId,
+    cycleId: hardeningFeatureSpineCycleIds.concurrentRace,
+    roleUrlId: playerVoteResolveRaceSpineCell.reloadLaneId,
+    checkpointId: playerVoteResolveRaceSpineCell.reloadLaneId,
+    adminCheckId: playerVoteResolveRaceSpineCell.reloadLaneId,
+  }),
+  playerHostActionAdvanceRaceReload: Object.freeze({
+    featureSlotId: "player-host-action-advance-race-reload",
+    sourceCheckId: hardeningFeatureSpineSourceCheckId,
+    cycleId: hardeningFeatureSpineCycleIds.concurrentRace,
+    roleUrlId: playerActionAdvanceRaceSpineCell.reloadLaneId,
+    checkpointId: playerActionAdvanceRaceSpineCell.reloadLaneId,
+    adminCheckId: playerActionAdvanceRaceSpineCell.reloadLaneId,
+  }),
+  cohostHostDeadlineResolveRaceReload: Object.freeze({
+    featureSlotId: "cohost-host-deadline-resolve-race-reload",
+    sourceCheckId: hardeningFeatureSpineSourceCheckId,
+    cycleId: hardeningFeatureSpineCycleIds.concurrentRace,
+    roleUrlId: cohostDeadlineResolveRaceSpineCell.reloadLaneId,
+    checkpointId: cohostDeadlineResolveRaceSpineCell.reloadLaneId,
+    adminCheckId: cohostDeadlineResolveRaceSpineCell.reloadLaneId,
+  }),
 });
 export const hardeningDirectRoleUrlReconnectFeatureSpineTargetRows =
   Object.freeze([
@@ -183,6 +226,18 @@ export const hardeningSynthesizedRoleUrlConcurrentRaceFeatureSpineTargetRows =
     }),
     Object.freeze({
       row: hardeningFeatureSpineTargetRows.hostConcurrentMixedAdvanceRaceReload,
+      role: "host",
+    }),
+    Object.freeze({
+      row: hardeningFeatureSpineTargetRows.playerHostVoteResolveRaceReload,
+      role: "host",
+    }),
+    Object.freeze({
+      row: hardeningFeatureSpineTargetRows.playerHostActionAdvanceRaceReload,
+      role: "host",
+    }),
+    Object.freeze({
+      row: hardeningFeatureSpineTargetRows.cohostHostDeadlineResolveRaceReload,
       role: "host",
     }),
   ]);
