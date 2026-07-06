@@ -1738,6 +1738,15 @@ function withAdminAuditDetailDisplayRows(item, { game }) {
   const scenarioFamilyRows = buildCoreLoopScenarioFamilyRows(
     item.scenarioFamilies,
   );
+  const spineRecoveryHookRows = buildSimpleAdminAuditRows({
+    items: item.spineRecoveryHooks,
+    idPrefix: "spine-recovery-hook",
+    testIdPrefix: "admin-audit-spine-recovery",
+    valuesForItem: (hook) => [
+      { id: "label", text: hook.label, emphasized: true },
+      { id: "status", text: hook.status },
+    ],
+  });
   const localPrerequisiteRows = buildLocalPrerequisiteRows(
     item.localPrerequisites,
     { game },
@@ -1755,6 +1764,9 @@ function withAdminAuditDetailDisplayRows(item, { game }) {
     ...(reconnectLaneRows.length === 0 ? {} : { reconnectLaneRows }),
     ...(staleConflictLaneRows.length === 0 ? {} : { staleConflictLaneRows }),
     ...(scenarioFamilyRows.length === 0 ? {} : { scenarioFamilyRows }),
+    ...(spineRecoveryHookRows.length === 0
+      ? {}
+      : { spineRecoveryHookRows }),
     ...(localPrerequisiteRows.length === 0 ? {} : { localPrerequisiteRows }),
     ...(batchRows.length === 0 ? {} : { batchRows }),
     ...(productionFeatureDestinationSections.length === 0

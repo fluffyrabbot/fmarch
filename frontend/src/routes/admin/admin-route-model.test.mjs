@@ -1917,6 +1917,8 @@ test("admin audit detail page renders simple list rows from route data", async (
   assert.doesNotMatch(source, /scenarioFamilies as family/);
   assert.doesNotMatch(source, /family\.laneIds\.join/);
   assert.doesNotMatch(source, /family\.transitionTokens/);
+  assert.match(source, /spineRecoveryHookRows/);
+  assert.doesNotMatch(source, /spineRecoveryHooks as hook/);
 });
 
 test("admin audit detail page renders admin spine batch rows from route data", async () => {
@@ -4689,6 +4691,14 @@ test("admin local core loop detail data carries lane rows", async () => {
       ["staleActionTransitionReject", "PhaseLocked"],
       ["d03TerminalAdvanceReject", "InvalidTarget"],
     ],
+  );
+  assert.deepEqual(
+    hostedHandoffChecklistRowsForAssertion(data.audit.spineRecoveryHookRows),
+    expectedSimpleLaneRows({
+      rows: data.audit.spineRecoveryHooks,
+      idPrefix: "spine-recovery-hook",
+      testIdPrefix: "admin-audit-spine-recovery",
+    }),
   );
   assert.equal(data.audit.checks.length, coreLoopAdminCheckIds.length);
   assert.deepEqual(

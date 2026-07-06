@@ -100,23 +100,13 @@
         <AdminAuditDescriptorRows rows={data.audit.scenarioFamilyRows} />
       </section>
     {/if}
-    {#if data.audit.spineRecoveryHooks?.length > 0}
+    {#if data.audit.spineRecoveryHookRows?.length > 0}
       <section
         class="admin-audit-detail__group"
         data-testid="admin-audit-detail-spine-recovery-hooks"
       >
         <h2>Recovery hooks</h2>
-        <ol class="admin-audit-detail__entries">
-          {#each data.audit.spineRecoveryHooks as hook}
-            <li
-              class="admin-audit-detail__entry"
-              data-testid={`admin-audit-spine-recovery-${hook.id}`}
-            >
-              <strong>{hook.label}</strong>
-              <span>{hook.status}</span>
-            </li>
-          {/each}
-        </ol>
+        <AdminAuditDescriptorRows rows={data.audit.spineRecoveryHookRows} />
       </section>
     {/if}
     {#if data.audit.entries?.length > 0}
