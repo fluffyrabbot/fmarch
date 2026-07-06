@@ -644,22 +644,25 @@
         {/each}
       </ol>
     {/if}
-    {#if data.audit.setupCommandEvidence?.length > 0}
+    {#if data.audit.setupCommandEvidenceRows?.length > 0}
       <section
         class="admin-audit-detail__group"
         data-testid="admin-audit-detail-setup-command-evidence"
       >
         <h2>Setup command evidence</h2>
         <ol class="admin-audit-detail__entries">
-          {#each data.audit.setupCommandEvidence as command}
+          {#each data.audit.setupCommandEvidenceRows as row}
             <li
-              class="admin-audit-detail__entry"
-              data-testid={`admin-audit-setup-command-evidence-${command.id}`}
+              class="admin-audit-detail__entry admin-audit-detail__entry--stack"
+              data-testid={row.testId}
             >
-              <strong>{command.id}</strong>
-              <span>{command.status}</span>
-              <span>{command.commandKind}</span>
-              <span>{command.readinessSummary}</span>
+              {#each row.values as value}
+                {#if value.emphasized}
+                  <strong>{value.text}</strong>
+                {:else}
+                  <span>{value.text}</span>
+                {/if}
+              {/each}
             </li>
           {/each}
         </ol>

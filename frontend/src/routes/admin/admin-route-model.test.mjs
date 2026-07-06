@@ -1874,6 +1874,19 @@ test("admin audit detail page renders hosted handoff checklist rows from route d
   assert.match(source, /data-testid=\{subentry\.testId\}/);
 });
 
+test("admin audit detail page renders setup command evidence rows from route data", async () => {
+  const source = await readFile(
+    "frontend/src/routes/admin/audit/[audit]/+page.svelte",
+    "utf8",
+  );
+  assert.match(source, /setupCommandEvidenceRows/);
+  assert.doesNotMatch(source, /setupCommandEvidence as command/);
+  assert.doesNotMatch(source, /command\.commandKind/);
+  assert.doesNotMatch(source, /command\.readinessSummary/);
+  assert.match(source, /data-testid=\{row\.testId\}/);
+  assert.match(source, /value\.emphasized/);
+});
+
 test("admin hosted-facing audit inventory carries shared handoff paths where required", async () => {
   const data = await buildAdminRouteData({
     principalUserId: "admin_a",
@@ -5474,6 +5487,10 @@ test("admin local release readiness detail data carries checks and unproven rows
     ],
   );
   assert.deepEqual(
+    hostedHandoffChecklistRowsForAssertion(data.audit.setupCommandEvidenceRows),
+    expectedSetupCommandEvidenceRows(data.audit.setupCommandEvidence),
+  );
+  assert.deepEqual(
     data.audit.unproven.map((item) => [item.id, item.status]),
     releaseReadinessUnprovenStatusRows([
       "hosted-deployment",
@@ -5555,6 +5572,10 @@ test("admin local host setup proof detail data carries setup command evidence ro
       ["setPostPolicy", "ack", "SetPostPolicy", "Ready to start"],
       ["startGame", "ack", "StartGame", "Started at D01"],
     ],
+  );
+  assert.deepEqual(
+    hostedHandoffChecklistRowsForAssertion(data.audit.setupCommandEvidenceRows),
+    expectedSetupCommandEvidenceRows(data.audit.setupCommandEvidence),
   );
 });
 
@@ -9347,6 +9368,20 @@ function expectedHostedHandoffProgressionRows(checklist) {
       ["firstMissingInputId", progression.firstMissingInputId, false],
       ["firstMissingCheckId", progression.firstMissingCheckId, false],
       ["proofBoundary", progression.proofBoundary, false],
+    ],
+    [],
+  ]);
+}
+
+function expectedSetupCommandEvidenceRows(setupCommandEvidence) {
+  return setupCommandEvidence.map((command) => [
+    `setup-command-evidence-${command.id}`,
+    `admin-audit-setup-command-evidence-${command.id}`,
+    [
+      ["id", command.id, true],
+      ["status", command.status, false],
+      ["commandKind", command.commandKind, false],
+      ["readinessSummary", command.readinessSummary, false],
     ],
     [],
   ]);

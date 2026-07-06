@@ -791,6 +791,23 @@ function hostedHandoffFirstMissingOperatorArtifactSubentries({
   ];
 }
 
+function buildSetupCommandEvidenceRows(setupCommandEvidence) {
+  return Object.freeze(
+    setupCommandEvidence.map((command) =>
+      artifactSummaryRow({
+        id: `setup-command-evidence-${command.id}`,
+        testId: `admin-audit-setup-command-evidence-${command.id}`,
+        values: [
+          { id: "id", text: command.id, emphasized: true },
+          { id: "status", text: command.status },
+          { id: "commandKind", text: command.commandKind },
+          { id: "readinessSummary", text: command.readinessSummary },
+        ],
+      }),
+    ),
+  );
+}
+
 function hostedReadinessText(value, label) {
   return value === true ? `${label} ready` : `${label} not ready`;
 }
@@ -6423,6 +6440,8 @@ export function normalizeLocalReleaseReadinessAudit(
       ),
     ),
     setupCommandEvidence,
+    setupCommandEvidenceRows:
+      buildSetupCommandEvidenceRows(setupCommandEvidence),
     artifactSummary: Object.freeze({
       game: String(releaseReadinessChecklist.generatedFrom?.game ?? ""),
       localCheckCount: checks.length,
@@ -6525,6 +6544,8 @@ export function normalizeLocalHostSetupProofAudit(
       ),
     ]),
     setupCommandEvidence,
+    setupCommandEvidenceRows:
+      buildSetupCommandEvidenceRows(setupCommandEvidence),
     artifactSummary: Object.freeze({
       game: String(
         hostSetupProofEvidence.game ??
