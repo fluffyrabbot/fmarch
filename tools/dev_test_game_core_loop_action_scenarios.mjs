@@ -33,6 +33,7 @@ export {
   assertHostVisibleInvalidActionRecoverySummary,
   assertHostVisibleStaleTransitionRecoverySummaries,
   buildHostVisibleInvalidActionRecoverySummary,
+  buildHostVisibleRecoverySummaries,
   buildHostVisibleStaleTransitionRecoverySummaries,
   completedGameStaleRecoverySummaryId,
   hostVisibleRecoverySummaryCases,

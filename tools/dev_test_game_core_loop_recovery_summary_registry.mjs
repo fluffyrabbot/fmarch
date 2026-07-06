@@ -173,6 +173,40 @@ export function assertHostVisibleInvalidActionRecoverySummary({
   return summary;
 }
 
+export function buildHostVisibleRecoverySummaries({
+  proofRun,
+  coreLoopSpineRows,
+  adminRoleSurface,
+  proofSurfaces,
+  detailRoleUrl,
+} = {}) {
+  return Object.freeze([
+    normalizeInvalidActionRecoverySummary(
+      buildHostVisibleInvalidActionRecoverySummary({
+        proofRun,
+        coreLoopSpineRows,
+        adminRoleSurface,
+        detailRoleUrl,
+      }),
+    ),
+    ...buildHostVisibleStaleTransitionRecoverySummaries({
+      proofRun,
+      coreLoopSpineRows,
+      adminRoleSurface,
+      proofSurfaces,
+      detailRoleUrl,
+    }).map((summary) => Object.freeze({ ...summary, group: "stale-transition" })),
+    buildPrivateChannelInvalidActionRecoverySummary({
+      proofRun,
+      detailRoleUrl,
+    }),
+    buildCompletedGameStaleRecoverySummary({
+      proofRun,
+      detailRoleUrl,
+    }),
+  ]);
+}
+
 export function hostVisibleStaleTransitionRecoveryCases() {
   return [
     {
@@ -260,6 +294,155 @@ export function assertHostVisibleStaleTransitionRecoverySummaries({
       }),
     ),
   );
+}
+
+function normalizeInvalidActionRecoverySummary(summary) {
+  return Object.freeze({
+    id: playerInvalidActionRecoveryLaneId,
+    label: "Invalid action recovery",
+    group: "invalid-action",
+    commandKind: "SubmitAction",
+    clickedAction: "submit_invalid_action:factional_kill",
+    ...summary,
+  });
+}
+
+function buildPrivateChannelInvalidActionRecoverySummary({
+  proofRun,
+  detailRoleUrl,
+}) {
+  const lane = proofRunLane(proofRun, privateChannelInvalidActionRecoveryLaneId);
+  const evidence = laneEvidence(lane);
+  const channel = String(evidence.channel ?? "private:mafia_day_chat");
+  const roleUrl = roleUrlForProofRun(proofRun, {
+    game: proofRun?.session?.game,
+    suffix: `/c/${encodeURIComponent(channel)}`,
+  });
+  const recoveryHookStatus = String(
+    proofRun?.coreLoopSpine?.recoveryHooks?.[playerInvalidActionRecoveryHookId] ??
+      evidence.error ??
+      "",
+  );
+  const receiptStatusText = String(
+    evidence.receiptStatusText ?? playerInvalidActionRecoveryMessage,
+  );
+  return Object.freeze({
+    id: privateChannelInvalidActionRecoveryLaneId,
+    label: "Private channel invalid action recovery",
+    group: "private-channel",
+    status:
+      lane?.status === "passed" &&
+      evidence.error === "InvalidTarget" &&
+      evidence.legalActionVisible === true &&
+      evidence.channelContextPreserved === true
+        ? "passed"
+        : "failed",
+    adminCheckId: privateChannelInvalidActionRecoveryLaneId,
+    recoveryHookId: playerInvalidActionRecoveryHookId,
+    recoveryHookStatus,
+    commandKind: "SubmitAction",
+    clickedAction: "submit_invalid_action:factional_kill",
+    rejectError: String(evidence.error ?? ""),
+    receiptStatusText,
+    refreshedPhaseId: String(evidence.phase ?? ""),
+    legalActionVisible: evidence.legalActionVisible === true,
+    channelContextPreserved: evidence.channelContextPreserved === true,
+    channel,
+    hostRoleUrl: roleUrlForProofRun(proofRun, {
+      game: proofRun?.session?.game,
+      suffix: "/host",
+    }),
+    actionPlayerRoleUrl: roleUrl,
+    detailRoleUrl: String(detailRoleUrl ?? ""),
+    proofBoundary:
+      "Host-visible local core-loop private-channel invalid-action recovery summary: the saved proof-run lane names the channel, reject receipt, preserved channel context, refreshed command-state, and restored legal action controls.",
+  });
+}
+
+function buildCompletedGameStaleRecoverySummary({ proofRun, detailRoleUrl }) {
+  const hostLane = proofRunLane(proofRun, "stale-host-complete-reload");
+  const playerLane = proofRunLane(proofRun, "stale-player-complete-reload");
+  const hostEvidence = laneEvidence(hostLane);
+  const playerEvidence = laneEvidence(playerLane);
+  const hostGame = String(hostEvidence.game ?? proofRun?.session?.game ?? "");
+  const playerGame = String(playerEvidence.game ?? hostGame);
+  const receiptStatusText = String(
+    hostEvidence.rejectReceipt ?? "Reject GameAlreadyCompleted: game already completed",
+  );
+  return Object.freeze({
+    id: completedGameStaleRecoverySummaryId,
+    label: "Completed-game stale command recovery",
+    group: "completed-game",
+    status:
+      hostLane?.status === "passed" &&
+      playerLane?.status === "passed" &&
+      hostEvidence.completeActionVisible === false &&
+      playerEvidence.gameCompleted === true
+        ? "passed"
+        : "failed",
+    adminCheckId: "stale-host-complete-reload",
+    recoveryHookId: "gameCompleted",
+    recoveryHookStatus: "GameAlreadyCompleted",
+    commandKind: "CompleteGame",
+    clickedAction: "complete_game",
+    rejectError: "GameAlreadyCompleted",
+    receiptStatusText,
+    completed: playerEvidence.gameCompleted === true,
+    revealedSlots: Number(hostEvidence.revealedSlots ?? 0),
+    completeActionVisible: hostEvidence.completeActionVisible === true,
+    hostRoleUrl: roleUrlForProofRun(proofRun, {
+      game: hostGame,
+      suffix: "/host",
+    }),
+    actionPlayerRoleUrl: roleUrlForProofRun(proofRun, {
+      game: playerGame,
+    }),
+    detailRoleUrl: String(detailRoleUrl ?? ""),
+    proofBoundary:
+      "Host-visible local core-loop completed-game stale recovery summary: the saved proof-run lanes name the stale host reload receipt, completed player reload, revealed slots, and closed completion controls.",
+  });
+}
+
+function proofRunLane(proofRun, laneId) {
+  return (
+    (Array.isArray(proofRun?.lanes) ? proofRun.lanes : []).find(
+      (lane) => lane?.id === laneId,
+    ) ?? null
+  );
+}
+
+function laneEvidence(lane) {
+  return lane?.evidence !== null && typeof lane?.evidence === "object"
+    ? lane.evidence
+    : {};
+}
+
+function roleUrlForProofRun(proofRun, { game, suffix = "" } = {}) {
+  const frontendBaseUrl = proofRunFrontendBaseUrl(proofRun);
+  const normalizedGame = String(game ?? "");
+  if (frontendBaseUrl === "" || normalizedGame === "") {
+    return "";
+  }
+  return `${frontendBaseUrl.replace(/\/$/u, "")}/g/${encodeURIComponent(normalizedGame)}${suffix}`;
+}
+
+function proofRunFrontendBaseUrl(proofRun) {
+  const explicitBaseUrl = String(proofRun?.session?.frontendBaseUrl ?? "");
+  if (explicitBaseUrl !== "") {
+    return explicitBaseUrl;
+  }
+  const roleUrl = Object.values(roleUrlHrefsFromProofRun(proofRun)).find(
+    (href) => typeof href === "string" && href.startsWith("http"),
+  );
+  if (typeof roleUrl !== "string") {
+    return "";
+  }
+  try {
+    const parsed = new URL(roleUrl);
+    return parsed.origin;
+  } catch {
+    return "";
+  }
 }
 
 function buildHostVisibleStaleTransitionRecoverySummary({

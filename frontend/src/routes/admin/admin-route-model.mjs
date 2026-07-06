@@ -35,6 +35,7 @@ import {
 } from "../../../../tools/dev_test_game_core_loop_proof_shape_assertions.mjs";
 import {
   buildHostVisibleInvalidActionRecoverySummary,
+  buildHostVisibleRecoverySummaries,
   buildHostVisibleStaleTransitionRecoverySummaries,
   playerActionBoundaryLaneId,
   playerActionLoopLaneId,
@@ -2080,38 +2081,18 @@ function withAdminAuditDetailDisplayRows(item, { game }) {
   const commandProofRoleUrlAuditRows = buildCoreLoopCommandProofRoleUrlAuditRows(
     item.commandProofRoleUrlAudit,
   );
-  const hostVisibleInvalidActionRecoveryRows = buildSimpleAdminAuditRows({
-    items:
-      item.hostVisibleInvalidActionRecovery === undefined
-        ? []
-        : [item.hostVisibleInvalidActionRecovery],
-    idPrefix: "host-visible-invalid-action-recovery",
-    testIdPrefix: "admin-audit-host-visible-invalid-action-recovery",
-    itemId: () => "invalid-action-recovery",
-    valuesForItem: (summary) => [
-      { id: "label", text: "Invalid action recovery", emphasized: true },
-      { id: "status", text: summary.status },
-      { id: "hook", text: summary.recoveryHookStatus },
-      { id: "receipt", text: summary.receiptStatusText },
-      {
-        id: "legalActionVisible",
-        text: summary.legalActionVisible ? "true" : "false",
-      },
-      { id: "hostRoleUrl", text: summary.hostRoleUrl },
-      { id: "actionPlayerRoleUrl", text: summary.actionPlayerRoleUrl },
-    ],
-  });
-  const hostVisibleStaleTransitionRecoveryRows = buildSimpleAdminAuditRows({
-    items: item.hostVisibleStaleTransitionRecoveries,
-    idPrefix: "host-visible-stale-transition-recovery",
-    testIdPrefix: "admin-audit-host-visible-stale-transition-recovery",
+  const hostVisibleRecoveryRows = buildSimpleAdminAuditRows({
+    items: item.hostVisibleRecoveries,
+    idPrefix: "host-visible-recovery",
+    testIdPrefix: "admin-audit-host-visible-recovery",
     valuesForItem: (summary) => [
       { id: "label", text: summary.label, emphasized: true },
       { id: "status", text: summary.status },
+      { id: "group", text: summary.group },
       { id: "hook", text: summary.recoveryHookStatus },
       { id: "command", text: summary.commandKind },
       { id: "receipt", text: summary.receiptStatusText },
-      { id: "refreshedPhase", text: summary.refreshedPhaseId },
+      { id: "refreshedPhase", text: summary.refreshedPhaseId ?? "" },
       { id: "hostRoleUrl", text: summary.hostRoleUrl },
       { id: "actionPlayerRoleUrl", text: summary.actionPlayerRoleUrl },
     ],
@@ -2150,12 +2131,9 @@ function withAdminAuditDetailDisplayRows(item, { game }) {
     ...(commandProofRoleUrlAuditRows.length === 0
       ? {}
       : { commandProofRoleUrlAuditRows }),
-    ...(hostVisibleInvalidActionRecoveryRows.length === 0
+    ...(hostVisibleRecoveryRows.length === 0
       ? {}
-      : { hostVisibleInvalidActionRecoveryRows }),
-    ...(hostVisibleStaleTransitionRecoveryRows.length === 0
-      ? {}
-      : { hostVisibleStaleTransitionRecoveryRows }),
+      : { hostVisibleRecoveryRows }),
     ...(localPrerequisiteRows.length === 0 ? {} : { localPrerequisiteRows }),
     ...(selectedOperatorHandoffRows.length === 0
       ? {}
@@ -8133,6 +8111,13 @@ export function normalizeLocalCoreLoopAudit(proofRun, { game }) {
     spineRecoveryHooks: normalizeCoreLoopSpineRecoveryHooks(proofRun),
     scenarioFamilies: coreLoopScenarioFamilyRows(),
     commandProofRoleUrlAudit: coreLoopCommandProofRoleUrlAuditExpectation,
+    hostVisibleRecoveries: buildHostVisibleRecoverySummaries({
+      proofRun,
+      detailRoleUrl: adminAuditInspectHref({
+        game,
+        audit: localAdminAuditIds.coreLoop,
+      }),
+    }),
     hostVisibleInvalidActionRecovery:
       buildHostVisibleInvalidActionRecoverySummary({
         proofRun,

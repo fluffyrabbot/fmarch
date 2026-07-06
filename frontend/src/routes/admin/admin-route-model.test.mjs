@@ -70,11 +70,14 @@ import {
   replacementHandoffRecoveryLaneIds,
 } from "../../../../tools/dev_test_game_replacement_handoff_scenario_cases.mjs";
 import {
+  completedGameStaleRecoverySummaryId,
   playerInvalidActionRecoveryMessage,
+  playerInvalidActionRecoveryLaneId,
   playerStaleActionTransitionRecoveryFeatureSlotId,
   playerStaleActionTransitionRecoveryMessage,
   playerStaleVoteTransitionRecoveryFeatureSlotId,
   playerStaleVoteTransitionRecoveryMessage,
+  privateChannelInvalidActionRecoveryLaneId,
 } from "../../../../tools/dev_test_game_core_loop_action_scenarios.mjs";
 import {
   coreLoopPrivateChannelRecoveryCoverageFamilies,
@@ -4912,6 +4915,73 @@ test("admin route data exposes local core loop proof as a native audit row", asy
       },
     ],
   );
+  assert.deepEqual(
+    coreLoop.hostVisibleRecoveries.map((summary) => ({
+      id: summary.id,
+      group: summary.group,
+      status: summary.status,
+      command: summary.commandKind,
+      hook: summary.recoveryHookStatus,
+      receipt: summary.receiptStatusText,
+      hostRoleUrl: summary.hostRoleUrl,
+      actionPlayerRoleUrl: summary.actionPlayerRoleUrl,
+    })),
+    [
+      {
+        id: playerInvalidActionRecoveryLaneId,
+        group: "invalid-action",
+        status: "passed",
+        command: "SubmitAction",
+        hook: "InvalidTarget",
+        receipt: playerInvalidActionRecoveryMessage,
+        hostRoleUrl: "http://127.0.0.1:5173/g/game-b/host",
+        actionPlayerRoleUrl: "http://127.0.0.1:5173/g/game-b",
+      },
+      {
+        id: playerStaleActionTransitionRecoveryFeatureSlotId,
+        group: "stale-transition",
+        status: "passed",
+        command: "SubmitAction",
+        hook: "PhaseLocked",
+        receipt:
+          `Reject PhaseLocked: phase locked; ${playerStaleActionTransitionRecoveryMessage}`,
+        hostRoleUrl: "http://127.0.0.1:5173/g/game-a/host",
+        actionPlayerRoleUrl: "http://127.0.0.1:5173/g/game-a",
+      },
+      {
+        id: playerStaleVoteTransitionRecoveryFeatureSlotId,
+        group: "stale-transition",
+        status: "passed",
+        command: "SubmitVote",
+        hook: "PhaseLocked",
+        receipt:
+          `Reject PhaseLocked: phase locked; ${playerStaleVoteTransitionRecoveryMessage}`,
+        hostRoleUrl: "http://127.0.0.1:5173/g/game-a/host",
+        actionPlayerRoleUrl: "http://127.0.0.1:5173/g/game-a",
+      },
+      {
+        id: privateChannelInvalidActionRecoveryLaneId,
+        group: "private-channel",
+        status: "passed",
+        command: "SubmitAction",
+        hook: "InvalidTarget",
+        receipt: playerInvalidActionRecoveryMessage,
+        hostRoleUrl: "http://127.0.0.1:5173/g/game-a/host",
+        actionPlayerRoleUrl:
+          "http://127.0.0.1:5173/g/game-a/c/private%3Amafia_day_chat",
+      },
+      {
+        id: completedGameStaleRecoverySummaryId,
+        group: "completed-game",
+        status: "passed",
+        command: "CompleteGame",
+        hook: "GameAlreadyCompleted",
+        receipt: "Reject GameAlreadyCompleted: game already completed",
+        hostRoleUrl: "http://127.0.0.1:5173/g/game-a/host",
+        actionPlayerRoleUrl: "http://127.0.0.1:5173/g/game-a",
+      },
+    ],
+  );
 });
 
 test("admin core loop completed-game coverage flags stale shared-case totals", async () => {
@@ -5119,37 +5189,31 @@ test("admin local core loop detail data carries lane rows", async () => {
     ],
   );
   assert.deepEqual(
-    descriptorRowsWithNestedLinksForAssertion(
-      data.audit.hostVisibleInvalidActionRecoveryRows,
-    ),
+    descriptorRowsWithNestedLinksForAssertion(data.audit.hostVisibleRecoveryRows),
     [
       [
-        "host-visible-invalid-action-recovery-invalid-action-recovery",
-        "admin-audit-host-visible-invalid-action-recovery-invalid-action-recovery",
+        `host-visible-recovery-${playerInvalidActionRecoveryLaneId}`,
+        `admin-audit-host-visible-recovery-${playerInvalidActionRecoveryLaneId}`,
         [
           ["label", "Invalid action recovery", true, "", ""],
           ["status", "passed", false, "", ""],
+          ["group", "invalid-action", false, "", ""],
           ["hook", "InvalidTarget", false, "", ""],
+          ["command", "SubmitAction", false, "", ""],
           ["receipt", playerInvalidActionRecoveryMessage, false, "", ""],
-          ["legalActionVisible", "true", false, "", ""],
+          ["refreshedPhase", "", false, "", ""],
           ["hostRoleUrl", "http://127.0.0.1:5173/g/game-b/host", false, "", ""],
           ["actionPlayerRoleUrl", "http://127.0.0.1:5173/g/game-b", false, "", ""],
         ],
         [],
       ],
-    ],
-  );
-  assert.deepEqual(
-    descriptorRowsWithNestedLinksForAssertion(
-      data.audit.hostVisibleStaleTransitionRecoveryRows,
-    ),
-    [
       [
-        `host-visible-stale-transition-recovery-${playerStaleActionTransitionRecoveryFeatureSlotId}`,
-        `admin-audit-host-visible-stale-transition-recovery-${playerStaleActionTransitionRecoveryFeatureSlotId}`,
+        `host-visible-recovery-${playerStaleActionTransitionRecoveryFeatureSlotId}`,
+        `admin-audit-host-visible-recovery-${playerStaleActionTransitionRecoveryFeatureSlotId}`,
         [
           ["label", "Stale action transition recovery", true, "", ""],
           ["status", "passed", false, "", ""],
+          ["group", "stale-transition", false, "", ""],
           ["hook", "PhaseLocked", false, "", ""],
           ["command", "SubmitAction", false, "", ""],
           [
@@ -5166,11 +5230,12 @@ test("admin local core loop detail data carries lane rows", async () => {
         [],
       ],
       [
-        `host-visible-stale-transition-recovery-${playerStaleVoteTransitionRecoveryFeatureSlotId}`,
-        `admin-audit-host-visible-stale-transition-recovery-${playerStaleVoteTransitionRecoveryFeatureSlotId}`,
+        `host-visible-recovery-${playerStaleVoteTransitionRecoveryFeatureSlotId}`,
+        `admin-audit-host-visible-recovery-${playerStaleVoteTransitionRecoveryFeatureSlotId}`,
         [
           ["label", "Stale vote transition recovery", true, "", ""],
           ["status", "passed", false, "", ""],
+          ["group", "stale-transition", false, "", ""],
           ["hook", "PhaseLocked", false, "", ""],
           ["command", "SubmitVote", false, "", ""],
           [
@@ -5181,6 +5246,50 @@ test("admin local core loop detail data carries lane rows", async () => {
             "",
           ],
           ["refreshedPhase", "N05", false, "", ""],
+          ["hostRoleUrl", "http://127.0.0.1:5173/g/game-a/host", false, "", ""],
+          ["actionPlayerRoleUrl", "http://127.0.0.1:5173/g/game-a", false, "", ""],
+        ],
+        [],
+      ],
+      [
+        `host-visible-recovery-${privateChannelInvalidActionRecoveryLaneId}`,
+        `admin-audit-host-visible-recovery-${privateChannelInvalidActionRecoveryLaneId}`,
+        [
+          ["label", "Private channel invalid action recovery", true, "", ""],
+          ["status", "passed", false, "", ""],
+          ["group", "private-channel", false, "", ""],
+          ["hook", "InvalidTarget", false, "", ""],
+          ["command", "SubmitAction", false, "", ""],
+          ["receipt", playerInvalidActionRecoveryMessage, false, "", ""],
+          ["refreshedPhase", "N01", false, "", ""],
+          ["hostRoleUrl", "http://127.0.0.1:5173/g/game-a/host", false, "", ""],
+          [
+            "actionPlayerRoleUrl",
+            "http://127.0.0.1:5173/g/game-a/c/private%3Amafia_day_chat",
+            false,
+            "",
+            "",
+          ],
+        ],
+        [],
+      ],
+      [
+        `host-visible-recovery-${completedGameStaleRecoverySummaryId}`,
+        `admin-audit-host-visible-recovery-${completedGameStaleRecoverySummaryId}`,
+        [
+          ["label", "Completed-game stale command recovery", true, "", ""],
+          ["status", "passed", false, "", ""],
+          ["group", "completed-game", false, "", ""],
+          ["hook", "GameAlreadyCompleted", false, "", ""],
+          ["command", "CompleteGame", false, "", ""],
+          [
+            "receipt",
+            "Reject GameAlreadyCompleted: game already completed",
+            false,
+            "",
+            "",
+          ],
+          ["refreshedPhase", "", false, "", ""],
           ["hostRoleUrl", "http://127.0.0.1:5173/g/game-a/host", false, "", ""],
           ["actionPlayerRoleUrl", "http://127.0.0.1:5173/g/game-a", false, "", ""],
         ],
