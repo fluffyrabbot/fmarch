@@ -1913,6 +1913,10 @@ test("admin audit detail page renders simple list rows from route data", async (
   assert.doesNotMatch(source, /reconnectLanes as lane/);
   assert.match(source, /staleConflictLaneRows/);
   assert.doesNotMatch(source, /staleConflictLanes as lane/);
+  assert.match(source, /scenarioFamilyRows/);
+  assert.doesNotMatch(source, /scenarioFamilies as family/);
+  assert.doesNotMatch(source, /family\.laneIds\.join/);
+  assert.doesNotMatch(source, /family\.transitionTokens/);
 });
 
 test("admin audit detail page renders admin spine batch rows from route data", async () => {
@@ -4665,6 +4669,14 @@ test("admin local core loop detail data carries lane rows", async () => {
       family.laneIds,
       family.surfaces,
     ]),
+  );
+  assert.deepEqual(
+    data.audit.scenarioFamilyRows.map((row) => [
+      row.id,
+      row.testId,
+      row.values.map((value) => [value.id, value.text, value.emphasized]),
+    ]),
+    expectedScenarioFamilyRows(data.audit.scenarioFamilies),
   );
   assert.deepEqual(
     data.audit.spineRecoveryHooks.map((hook) => [hook.id, hook.status]),
@@ -9615,6 +9627,32 @@ function expectedSimpleLaneRows({ rows, idPrefix, testIdPrefix }) {
     ],
     [],
   ]);
+}
+
+function expectedScenarioFamilyRows(families) {
+  return families.map((family) => [
+    `scenario-family-${family.id}`,
+    `admin-audit-scenario-family-${family.id}`,
+    [
+      ["label", family.label, true],
+      ["status", family.status, false],
+      ["laneIds", family.laneIds.join(", "), false],
+      ["surfaces", family.surfaces.join(", "), false],
+      ...optionalExpectedJoinedValue("staleRejects", family.staleRejects),
+      ...optionalExpectedJoinedValue("reloads", family.reloads),
+      ...optionalExpectedJoinedValue("scenarios", family.scenarios),
+      ...optionalExpectedJoinedValue(
+        "transitionTokens",
+        family.transitionTokens,
+      ),
+    ],
+  ]);
+}
+
+function optionalExpectedJoinedValue(id, values) {
+  return Array.isArray(values) && values.length > 0
+    ? [[id, values.join(", "), false]]
+    : [];
 }
 
 function expectedAdminSpineBatchRows(batches) {

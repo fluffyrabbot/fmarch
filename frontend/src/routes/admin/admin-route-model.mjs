@@ -1735,6 +1735,9 @@ function withAdminAuditDetailDisplayRows(item, { game }) {
       { id: "status", text: lane.status },
     ],
   });
+  const scenarioFamilyRows = buildCoreLoopScenarioFamilyRows(
+    item.scenarioFamilies,
+  );
   const localPrerequisiteRows = buildLocalPrerequisiteRows(
     item.localPrerequisites,
     { game },
@@ -1751,6 +1754,7 @@ function withAdminAuditDetailDisplayRows(item, { game }) {
     ...(proofLaneCoverageRows.length === 0 ? {} : { proofLaneCoverageRows }),
     ...(reconnectLaneRows.length === 0 ? {} : { reconnectLaneRows }),
     ...(staleConflictLaneRows.length === 0 ? {} : { staleConflictLaneRows }),
+    ...(scenarioFamilyRows.length === 0 ? {} : { scenarioFamilyRows }),
     ...(localPrerequisiteRows.length === 0 ? {} : { localPrerequisiteRows }),
     ...(batchRows.length === 0 ? {} : { batchRows }),
     ...(productionFeatureDestinationSections.length === 0
@@ -1776,6 +1780,37 @@ function buildSimpleAdminAuditRows({
       });
     }),
   );
+}
+
+function buildCoreLoopScenarioFamilyRows(scenarioFamilies) {
+  return Object.freeze(
+    (Array.isArray(scenarioFamilies) ? scenarioFamilies : []).map((family) =>
+      artifactSummaryRow({
+        id: `scenario-family-${family.id}`,
+        testId: `admin-audit-scenario-family-${family.id}`,
+        values: [
+          { id: "label", text: family.label, emphasized: true },
+          { id: "status", text: family.status },
+          { id: "laneIds", text: joinedValue(family.laneIds) },
+          { id: "surfaces", text: joinedValue(family.surfaces) },
+          ...optionalJoinedValue("staleRejects", family.staleRejects),
+          ...optionalJoinedValue("reloads", family.reloads),
+          ...optionalJoinedValue("scenarios", family.scenarios),
+          ...optionalJoinedValue("transitionTokens", family.transitionTokens),
+        ],
+      }),
+    ),
+  );
+}
+
+function joinedValue(values) {
+  return (Array.isArray(values) ? values : []).join(", ");
+}
+
+function optionalJoinedValue(id, values) {
+  return Array.isArray(values) && values.length > 0
+    ? [{ id, text: joinedValue(values) }]
+    : [];
 }
 
 function buildLocalPrerequisiteRows(localPrerequisites, { game }) {
