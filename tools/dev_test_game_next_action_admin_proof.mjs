@@ -11,6 +11,7 @@ import {
   assertDevTestGameProofGraph,
 } from "./dev_test_game_proof_graph.mjs";
 import {
+  assertAdminRoleSurfaceEvidenceArtifact,
   proveAdminAuditDetail,
   readJson,
   repoRoot,
@@ -203,6 +204,13 @@ export function nextActionAdminProofCase({
           ),
         requiredPhaseLocalNextActionDrilldowns:
           phaseLocalNextActionSnapshotsForProofGraph(source.proofGraph),
+        requiredEvidenceArtifact: {
+          artifact: defaultNextActionPath,
+          requiredText: [
+            "dev-test-game-next-action",
+            "target/dev-test-game/next-action.json",
+          ],
+        },
         requiredHostedIdentityOperatorGate:
           requiredHostedIdentityOperatorGateForNextAction(source.nextAction),
         requiredText: requiredSelectedOperatorHandoffTextForNextAction(
@@ -754,6 +762,11 @@ export function assertNextActionAdminProof(evidence) {
     { label: "next-action admin proof host stale-control trace" },
   );
   assertNextActionAdminRecoveryReceiptGraphs(evidence.generatedFrom);
+  assertAdminRoleSurfaceEvidenceArtifact({
+    adminRoleSurface: evidence.adminRoleSurface,
+    artifact: defaultNextActionPath,
+    proofName: "next-action admin proof",
+  });
   for (const checkId of requiredChecksForEvidence(evidence)) {
     if (!evidence.adminRoleSurface?.visibleChecks?.includes(checkId)) {
       throw new Error(`next-action admin proof missing visible check: ${checkId}`);

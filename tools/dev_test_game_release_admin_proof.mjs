@@ -11,6 +11,7 @@ import {
   devTestGameReleaseReadinessPath,
 } from "./dev_test_game_spine_artifact_paths.mjs";
 import {
+  assertAdminRoleSurfaceEvidenceArtifact,
   assertVisibleAdminRoleSurfaceRows,
   proveAdminAuditDetail,
   readJson,
@@ -74,6 +75,13 @@ export function releaseAdminProofCase() {
             ?.setupCommandEvidence === undefined
             ? []
             : requiredSetupCommandEvidence,
+        requiredEvidenceArtifact: {
+          artifact: readinessRelativePath,
+          requiredText: [
+            "dev-test-game-release-readiness",
+            "local-dev-test-game-release-readiness",
+          ],
+        },
         requiredUnproven: readiness.releaseReadiness.unproven.map((item) => item.id),
         requiredText:
           releaseReadinessDiagnosticIds(readiness).length === 0
@@ -133,6 +141,11 @@ export function assertReleaseAdminProof(evidence) {
   ) {
     throw new Error("release admin proof did not prove admin overview click-through");
   }
+  assertAdminRoleSurfaceEvidenceArtifact({
+    adminRoleSurface: evidence.adminRoleSurface,
+    artifact: readinessRelativePath,
+    proofName: "release admin proof",
+  });
   for (const checkId of evidence.generatedFrom?.localCheckIds ?? requiredReleaseChecks) {
     if (!evidence.adminRoleSurface?.visibleChecks?.includes(checkId)) {
       throw new Error(`release admin proof missing visible check: ${checkId}`);

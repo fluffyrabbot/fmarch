@@ -23269,6 +23269,9 @@ function releaseAdminProofFixture({
       linkTestId: "admin-audit-link-local-release-readiness",
       surfaceTestId: "admin-audit-detail-surface",
       clickedThroughFromOverview: true,
+      visibleEvidenceArtifact: visibleAdminEvidenceArtifactFixture(
+        devTestGameReleaseReadinessPath,
+      ),
       visibleChecks: [
         "local-role-url-browser-proof",
         "local-core-loop-proof",
@@ -23548,6 +23551,9 @@ function proofGraphAdminProofFixture() {
       linkTestId: "admin-audit-link-local-proof-graph",
       surfaceTestId: "admin-audit-detail-surface",
       clickedThroughFromOverview: true,
+      visibleEvidenceArtifact: visibleAdminEvidenceArtifactFixture(
+        devTestGameProofGraphPath,
+      ),
       visibleChecks: [
         ...proofGraphDiagnosticProofNodes.map((node) => node.id),
         ...diagnosticEdgeRowIds,
@@ -24157,6 +24163,7 @@ function nextActionAdminProofFixture() {
       linkTestId: "admin-audit-link-local-next-action",
       surfaceTestId: "admin-audit-detail-surface",
       clickedThroughFromOverview: true,
+      visibleEvidenceArtifact: visibleAdminEvidenceArtifactFixture(nextActionPath),
       visibleChecks: [
         "next-command",
         "release-readiness-unproven",
@@ -26620,6 +26627,18 @@ function proofPathFor(id) {
     return devTestGameHostSetupAdminProofPath;
   }
   return `target/dev-test-game/${id === "core-loop" ? "core-loop" : id}-admin-proof.json`;
+}
+
+function visibleAdminEvidenceArtifactFixture(artifact) {
+  const params = new URLSearchParams({
+    game: "<seeded-game>",
+    path: artifact,
+  });
+  return {
+    artifact,
+    href: `/admin/artifact?${params.toString()}`,
+    clickedThrough: true,
+  };
 }
 
 function adminProofRerunCommandFor(id) {

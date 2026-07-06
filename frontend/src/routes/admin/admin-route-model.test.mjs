@@ -2527,6 +2527,13 @@ test("admin route data exposes local proof graph as a native audit row", async (
     `${proofGraph.summary.nodeCount} proof nodes, ${proofGraph.summary.edgeCount} edges`,
   );
   assert.equal(graph.authority, "GlobalAdmin or GlobalMod");
+  assert.equal(
+    graph.href,
+    expectedAdminArtifactHref({
+      game: "midsummer",
+      artifact: "target/dev-test-game/proof-graph.json",
+    }),
+  );
   assert.equal(graph.inspectHref, localAdminAuditRoleUrl(localAdminAuditIds.proofGraph, { game: "midsummer" }));
   assert.deepEqual(
     graph.checks.map((check) => [check.id, check.status]),
@@ -3249,6 +3256,13 @@ test("admin route data exposes local proof freshness as a native audit row", asy
   assert.equal(freshness.status, "25 fresh, 0 stale, 0 missing");
   assert.equal(freshness.authority, "GlobalAdmin or GlobalMod");
   assert.equal(
+    freshness.href,
+    expectedAdminArtifactHref({
+      game: "midsummer",
+      artifact: "target/dev-test-game/release-readiness-checklist.json",
+    }),
+  );
+  assert.equal(
     freshness.inspectHref,
     localAdminAuditRoleUrl(localAdminAuditIds.proofFreshness, { game: "midsummer" }),
   );
@@ -3392,6 +3406,13 @@ test("admin route data exposes local next action as a native audit row", async (
   assert.equal(nextAction.label, "Local next action");
   assert.equal(nextAction.status, `ready: ${LOCAL_RACE_COMMAND}`);
   assert.equal(nextAction.authority, "GlobalAdmin or GlobalMod");
+  assert.equal(
+    nextAction.href,
+    expectedAdminArtifactHref({
+      game: "midsummer",
+      artifact: "target/dev-test-game/next-action.json",
+    }),
+  );
   assert.equal(nextAction.inspectHref, localAdminAuditRoleUrl(localAdminAuditIds.nextAction, { game: "midsummer" }));
   assert.deepEqual(
     nextAction.checks.map((check) => [check.id, check.status]),
@@ -6293,6 +6314,13 @@ test("admin route data exposes local release readiness as a native audit row", a
   assert.equal(readiness.label, "Local release readiness");
   assert.equal(readiness.status, "13 local checks passed, 2 release items unproven");
   assert.equal(readiness.authority, "GlobalAdmin or GlobalMod");
+  assert.equal(
+    readiness.href,
+    expectedAdminArtifactHref({
+      game: "midsummer",
+      artifact: "target/dev-test-game/release-readiness-checklist.json",
+    }),
+  );
   assert.equal(
     readiness.inspectHref,
     localAdminAuditRoleUrl(localAdminAuditIds.releaseReadiness, { game: "midsummer" }),
@@ -11146,8 +11174,20 @@ function expectedLocalPrerequisiteRows(localPrerequisites, { game }) {
       ["label", prerequisite.label, true, "", ""],
       ["status", prerequisite.status, false, "", ""],
       ["command", prerequisite.command, false, "", ""],
-      ["proofTarget", prerequisite.proofTarget, false, "", ""],
-      ["evidence", prerequisite.evidence, false, "", ""],
+      [
+        "proofTarget",
+        prerequisite.proofTarget,
+        false,
+        expectedAdminArtifactHref({ game, artifact: prerequisite.proofTarget }),
+        `admin-audit-local-prerequisite-proof-target-${prerequisite.id}`,
+      ],
+      [
+        "evidence",
+        prerequisite.evidence,
+        false,
+        expectedAdminArtifactHref({ game, artifact: prerequisite.evidence }),
+        `admin-audit-local-prerequisite-evidence-${prerequisite.id}`,
+      ],
       ["requiredEvidence", prerequisite.requiredEvidence, false, "", ""],
       [
         "roleUrl",
@@ -11158,6 +11198,14 @@ function expectedLocalPrerequisiteRows(localPrerequisites, { game }) {
       ],
     ],
   ]);
+}
+
+function expectedAdminArtifactHref({ game, artifact }) {
+  const params = new URLSearchParams({
+    game,
+    path: artifact,
+  });
+  return `/admin/artifact?${params.toString()}`;
 }
 
 function expectedHostedHandoffBlockedReceiptRows({ checklist, headings }) {

@@ -36,6 +36,7 @@ import {
   hostedEvidenceProgressionHandoffSummary,
 } from "./dev_test_game_hosted_handoff_cases.mjs";
 import {
+  assertAdminRoleSurfaceEvidenceArtifact,
   assertVisibleAdminRoleSurfaceRows,
   proveAdminAuditDetail,
   readJson,
@@ -265,6 +266,13 @@ export function buildProofGraphAdminProofRequirements(source) {
     auditId: localAdminAuditIds.proofGraph,
     requiredChecks: proofGraphVisibleCheckIds(source.proofGraph),
     requiredCheckStatuses: proofGraphVisibleCheckStatuses(source.proofGraph),
+    requiredEvidenceArtifact: {
+      artifact: proofGraphRelativePath,
+      requiredText: [
+        "dev-test-game-proof-graph",
+        "local-dev-test-game-proof-graph",
+      ],
+    },
     requiredPhaseLocalNextActionGraphLinkRows:
       proofGraphPhaseLocalNextActionGraphLinkRows(
         phaseLocalNextActionGraphLinks,
@@ -420,6 +428,11 @@ export function assertProofGraphAdminProof(evidence) {
   ) {
     throw new Error("proof graph admin proof did not prove admin overview click-through");
   }
+  assertAdminRoleSurfaceEvidenceArtifact({
+    adminRoleSurface: evidence.adminRoleSurface,
+    artifact: proofGraphRelativePath,
+    proofName: "proof graph admin proof",
+  });
   for (const nodeId of evidence.generatedFrom?.nodeIds ?? []) {
     if (!evidence.adminRoleSurface?.visibleChecks?.includes(nodeId)) {
       throw new Error(`proof graph admin proof missing visible node: ${nodeId}`);

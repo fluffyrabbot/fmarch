@@ -75,6 +75,24 @@ export function assertAdminRoleSurfaceStatusText({
   }
 }
 
+export function assertAdminRoleSurfaceEvidenceArtifact({
+  adminRoleSurface,
+  artifact,
+  proofName,
+}) {
+  const normalizedArtifact = String(artifact ?? "");
+  const visibleArtifact = adminRoleSurface?.visibleEvidenceArtifact;
+  if (
+    normalizedArtifact === "" ||
+    visibleArtifact?.artifact !== normalizedArtifact ||
+    visibleArtifact.href !==
+      adminArtifactUrlPath({ game: "<seeded-game>", artifact: normalizedArtifact }) ||
+    visibleArtifact.clickedThrough !== true
+  ) {
+    throw new Error(`${proofName} did not prove machine evidence artifact drilldown`);
+  }
+}
+
 export async function runAdminAuditProof({
   smokeName,
   stage,
@@ -382,6 +400,7 @@ export async function proveAdminAuditDetail({
   requiredHandoffPath = null,
   requiredHostedHandoffSummary = null,
   requiredHostedHandoffBlockedReceipt = null,
+  requiredEvidenceArtifact = null,
   requiredRelatedLinks = [],
   requiredRelatedDestinations = [],
   requiredUnprovenStatuses = {},
@@ -923,6 +942,14 @@ export async function proveAdminAuditDetail({
         page,
         expected: requiredHostedHandoffBlockedReceipt,
       });
+    const visibleEvidenceArtifact = await visitMachineEvidenceArtifact({
+      page,
+      frontendBaseUrl,
+      detailUrl,
+      game,
+      auditId,
+      expected: requiredEvidenceArtifact,
+    });
     const visibleRelatedLinks = await waitForRows({
       page,
       prefix: "admin-audit-related-link",
@@ -1663,6 +1690,7 @@ export async function proveAdminAuditDetail({
       ...(visibleHostedHandoffBlockedReceipt === null
         ? {}
         : { visibleHostedHandoffBlockedReceipt }),
+      ...(visibleEvidenceArtifact === null ? {} : { visibleEvidenceArtifact }),
       ...(visibleRelatedLinks.length === 0 ? {} : { visibleRelatedLinks }),
       ...(visibleRelatedDestinations.length === 0
         ? {}
@@ -1873,6 +1901,68 @@ async function visitPhaseLocalNextActionDrilldowns({
     });
   }
   return visited;
+}
+
+async function visitMachineEvidenceArtifact({
+  page,
+  frontendBaseUrl,
+  detailUrl,
+  game,
+  auditId,
+  expected,
+}) {
+  if (expected === null || expected === undefined) {
+    return null;
+  }
+  const artifact = String(expected.artifact ?? "");
+  if (artifact === "") {
+    throw new Error(`${auditId} machine evidence artifact expectation is malformed`);
+  }
+  const expectedHref = adminArtifactUrlPath({ game, artifact });
+  await page.goto(detailUrl, { waitUntil: "networkidle" });
+  await page.getByTestId("admin-audit-detail-surface").waitFor({
+    state: "visible",
+    timeout: 15000,
+  });
+  const link = page.getByTestId("admin-audit-detail-evidence");
+  await link.waitFor({ state: "visible", timeout: 15000 });
+  const href = await link.getAttribute("href");
+  if (href !== expectedHref) {
+    throw new Error(
+      `${auditId} machine evidence href drifted: ${href} !== ${expectedHref}`,
+    );
+  }
+  await Promise.all([
+    page.waitForURL(`${frontendBaseUrl}${expectedHref}`, { timeout: 15000 }),
+    link.click(),
+  ]);
+  await page.waitForLoadState("networkidle");
+  await page.getByTestId("admin-artifact-surface").waitFor({
+    state: "visible",
+    timeout: 15000,
+  });
+  const text = await page.getByTestId("admin-artifact-contents").innerText();
+  for (const token of expected.requiredText ?? []) {
+    const value = String(token ?? "");
+    if (value !== "" && !text.includes(value)) {
+      throw new Error(
+        `${auditId} machine evidence artifact missing text ${value}: ${text.slice(
+          0,
+          2000,
+        )}`,
+      );
+    }
+  }
+  await page.goto(detailUrl, { waitUntil: "networkidle" });
+  await page.getByTestId("admin-audit-detail-surface").waitFor({
+    state: "visible",
+    timeout: 15000,
+  });
+  return {
+    artifact,
+    href: adminArtifactUrlPath({ game: "<seeded-game>", artifact }),
+    clickedThrough: true,
+  };
 }
 
 function adminArtifactUrlPath({ game, artifact }) {

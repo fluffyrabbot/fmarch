@@ -6,8 +6,12 @@ export async function load({ locals, url }) {
   const capabilities = Array.isArray(locals.resolvedCapabilities)
     ? locals.resolvedCapabilities
     : [];
-  if (!capabilities.some((capability) => capability?.kind === "GlobalAdmin")) {
-    throw error(403, "Admin artifact inspection requires GlobalAdmin");
+  if (
+    !capabilities.some((capability) =>
+      ["GlobalAdmin", "GlobalMod"].includes(capability?.kind),
+    )
+  ) {
+    throw error(403, "Admin artifact inspection requires GlobalAdmin or GlobalMod");
   }
 
   const artifactPath = normalizeDevTestGameArtifactPath(

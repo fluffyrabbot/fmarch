@@ -253,6 +253,32 @@ function artifactSummaryValue({
   });
 }
 
+function localProofArtifactHref({ game, artifact }) {
+  const normalized = String(artifact ?? "");
+  return normalized.startsWith("target/dev-test-game/") &&
+    normalized.endsWith(".json")
+    ? adminArtifactInspectHref({ game, artifact: normalized })
+    : "";
+}
+
+function localProofArtifactValue({
+  id,
+  text,
+  game,
+  emphasized = false,
+  testId = "",
+}) {
+  const artifact = String(text ?? "");
+  const href = localProofArtifactHref({ game, artifact });
+  return {
+    id,
+    text: artifact,
+    emphasized,
+    ...(href === "" ? {} : { href }),
+    ...(href === "" || testId === "" ? {} : { testId }),
+  };
+}
+
 function artifactSummarySubentry({ id, testId, values }) {
   return Object.freeze({
     id: String(id),
@@ -368,7 +394,7 @@ function phaseLocalNextActionSummarySections(snapshots, { game }) {
           {
             id: "artifact",
             text: snapshot.artifact,
-            href: adminArtifactInspectHref({ game, artifact: snapshot.artifact }),
+            href: localProofArtifactHref({ game, artifact: snapshot.artifact }),
             testId: `admin-audit-phase-local-next-action-open-artifact-${snapshot.id}`,
           },
           { id: "canonicalArtifact", text: snapshot.canonicalArtifact },
@@ -568,7 +594,12 @@ function proofGraphCoreLoopRecoveryDestinationArtifactRow({ row, game }) {
       { id: "proofEdgeRowId", text: row.proofEdgeRowId },
       { id: "graphEdgeRowId", text: row.graphEdgeRowId },
       { id: "nextActionEdgeRowId", text: row.nextActionEdgeRowId },
-      { id: "proofTarget", text: row.proofTarget },
+      localProofArtifactValue({
+        id: "proofTarget",
+        text: row.proofTarget,
+        game,
+        testId: `admin-audit-core-loop-recovery-destination-proof-target-${row.id}`,
+      }),
       { id: "command", text: row.command },
       {
         id: "roleUrl",
@@ -2464,8 +2495,18 @@ function buildLocalPrerequisiteRows(localPrerequisites, { game }) {
             { id: "label", text: prerequisite.label, emphasized: true },
             { id: "status", text: prerequisite.status },
             { id: "command", text: prerequisite.command },
-            { id: "proofTarget", text: prerequisite.proofTarget },
-            { id: "evidence", text: prerequisite.evidence },
+            localProofArtifactValue({
+              id: "proofTarget",
+              text: prerequisite.proofTarget,
+              game,
+              testId: `admin-audit-local-prerequisite-proof-target-${prerequisite.id}`,
+            }),
+            localProofArtifactValue({
+              id: "evidence",
+              text: prerequisite.evidence,
+              game,
+              testId: `admin-audit-local-prerequisite-evidence-${prerequisite.id}`,
+            }),
             { id: "requiredEvidence", text: prerequisite.requiredEvidence },
             {
               id: "roleUrl",
@@ -4271,7 +4312,7 @@ export function normalizeLocalProofGraphAudit(proofGraph, { game }) {
     boundaryDetail:
       proofGraph.proofBoundary ??
       "Generated local proof graph without hosted or release-readiness claims.",
-    href: devTestGameProofGraphPath,
+    href: localProofArtifactHref({ game, artifact: devTestGameProofGraphPath }),
     inspectHref: adminAuditInspectHref({ game, audit: localAdminAuditIds.proofGraph }),
     checks: normalizeLocalProofGraphCheckRows(proofGraph),
     relatedLinks: normalizeLocalProofGraphRelatedLinks(proofGraph, { game, nodes }),
@@ -5094,7 +5135,7 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
     boundaryDetail:
       nextAction.proofBoundary ??
       "Local dev-test-game next-action receipt without hosted, release, or production claims.",
-    href: nextActionPath,
+    href: localProofArtifactHref({ game, artifact: nextActionPath }),
     inspectHref: adminAuditInspectHref({ game, audit: localAdminAuditIds.nextAction }),
     checks: Object.freeze(checks),
     relatedLinks: normalizeLocalNextActionRelatedLinks({
@@ -7291,7 +7332,10 @@ export function normalizeLocalProofFreshnessAudit(
     boundaryDetail:
       proofFreshness.proofBoundary ??
       "Local dev-test-game artifact age dashboard without content validation or release claims.",
-    href: devTestGameReleaseReadinessPath,
+    href: localProofArtifactHref({
+      game,
+      artifact: devTestGameReleaseReadinessPath,
+    }),
     inspectHref: adminAuditInspectHref({ game, audit: localAdminAuditIds.proofFreshness }),
     checks: Object.freeze(
       [
@@ -8055,7 +8099,10 @@ export function normalizeLocalReleaseReadinessAudit(
     boundaryDetail:
       releaseReadinessChecklist.proofBoundary ??
       "Local dev-test-game release-readiness checklist without beta or production claims.",
-    href: devTestGameReleaseReadinessPath,
+    href: localProofArtifactHref({
+      game,
+      artifact: devTestGameReleaseReadinessPath,
+    }),
     inspectHref: adminAuditInspectHref({
       game,
       audit: localAdminAuditIds.releaseReadiness,
