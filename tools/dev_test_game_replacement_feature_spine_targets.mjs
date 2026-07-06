@@ -1,6 +1,9 @@
 import {
   devTestGameProofRunPath,
 } from "./dev_test_game_spine_artifact_paths.mjs";
+import {
+  featureSpineTargetProvenanceCase,
+} from "./dev_test_game_feature_spine_target_provenance.mjs";
 
 export const replacementFeatureSpineSourceCheckId =
   "local-replacement-player-proof";
@@ -33,3 +36,12 @@ export const replacementFeatureSpineTargetRows = Object.freeze({
     adminCheckId: "replacement-incoming-player",
   }),
 });
+
+export const replacementFeatureSpineTargetProvenanceCases = Object.freeze([
+  featureSpineTargetProvenanceCase({
+    targetKey: "replacementPlayer",
+    sourceFactory: "replacementFeatureSpineTargetRows.replacementPlayer",
+    sourceRow: replacementFeatureSpineTargetRows.replacementPlayer,
+    source: replacementFeatureSpineSource,
+  }),
+]);

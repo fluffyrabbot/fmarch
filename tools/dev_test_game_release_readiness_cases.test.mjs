@@ -55,17 +55,14 @@ import {
 } from "./dev_test_game_identity_feature_spine_targets.mjs";
 import {
   replacementFeatureSpineSource,
-  replacementFeatureSpineSourceCheckId,
   replacementFeatureSpineTargetRows,
 } from "./dev_test_game_replacement_feature_spine_targets.mjs";
 import {
   replacementActionFeatureSpineSource,
-  replacementActionFeatureSpineSourceCheckId,
   replacementActionFeatureSpineTargetRows,
 } from "./dev_test_game_replacement_action_feature_spine_targets.mjs";
 import {
   replacementPrivateFeatureSpineSource,
-  replacementPrivateFeatureSpineSourceCheckId,
   replacementPrivateFeatureSpineTargetRows,
 } from "./dev_test_game_replacement_private_feature_spine_targets.mjs";
 import {
@@ -97,6 +94,7 @@ import {
 } from "./dev_test_game_production_feature_spine_resolver.mjs";
 import {
   roleSurfaceBrowserWorkbenchEvidence,
+  roleSurfaceFeatureSpineTargetProvenanceCases,
   roleSurfaceSpineCaseList,
 } from "./dev_test_game_role_surface_spine_cases.mjs";
 import {
@@ -629,118 +627,200 @@ test("hardening feature spine rows are classified by exported source-case factor
 });
 
 test("hardening feature spine provenance reaches readiness and proof graph rows", () => {
-  const roleUrlHrefs = Object.fromEntries(
-    hardeningFeatureSpineTargetProvenanceCases.map((provenanceCase) => [
-      provenanceCase.roleUrlId,
+  assertFeatureSpineProvenanceReachesReadinessAndProofGraph({
+    provenanceCases: hardeningFeatureSpineTargetProvenanceCases,
+    source: hardeningFeatureSpineSource,
+    expectedGraphKind: "admin-audit",
+    expectedAuditId: "local-hardening",
+    roleUrlForProvenanceCase: (provenanceCase) =>
       `/g/${provenanceCase.roleUrlId}`,
-    ]),
-  );
-  const readinessTargets = buildProductionFeatureSpineTargetCollection({
-    declarations: releaseReadinessProductionFeatureSpineTargets,
-    sourceTarget: {
-      sourceCheckId: hardeningFeatureSpineSourceCheckId,
-      detailRoleUrl: hardeningFeatureSpineSource.detailRoleUrlIncludes,
-      browserProofCommand: "npm run test:dev-test-game-core-live",
-      sourceProofArtifact: hardeningFeatureSpineSource.proofArtifact,
-      rerunCommand: hardeningFeatureSpineSource.rerunCommand,
-      cycleIds: [
-        ...new Set(
-          hardeningFeatureSpineTargetProvenanceCases.map(
-            (provenanceCase) => provenanceCase.cycleId,
-          ),
-        ),
-      ],
-      roleUrlIds: hardeningFeatureSpineTargetProvenanceCases.map(
-        (provenanceCase) => provenanceCase.roleUrlId,
-      ),
-      checkpointIds: hardeningFeatureSpineTargetProvenanceCases.map(
-        (provenanceCase) => provenanceCase.checkpointId,
-      ),
-      visibleAdminCheckIds: hardeningFeatureSpineTargetProvenanceCases.map(
-        (provenanceCase) => provenanceCase.adminCheckId,
-      ),
-      recoveryHookIds: [],
-      roleUrlHrefs,
-    },
   });
-  const proofGraphDestinations = proofGraphProductionFeatureTargetDestinations({
-    nodes: Object.values(readinessTargets.bySlotId).map((target) => ({
-      kind: "production-feature-spine-target",
-      id: `production-feature:${target.featureSlotId}`,
-      roleUrl: hardeningFeatureSpineSource.detailRoleUrlIncludes,
-      featureSlotId: target.featureSlotId,
-      sourceCheckId: target.sourceCheckId,
-      targetRoleUrl: target.roleUrl,
-      adminCheckId: target.adminCheckId,
-      sourceProofArtifact: target.sourceProofArtifact,
-      browserWorkbench: target.browserWorkbench,
-    })),
-  });
-  const proofGraphDestinationBySlotId = new Map(
-    proofGraphDestinations.map((destination) => [
-      destination.featureSlotId,
-      destination,
-    ]),
-  );
+});
 
-  assert.deepEqual(
-    readinessTargets.slotIds,
-    hardeningFeatureSpineTargetProvenanceCases.map(
-      (provenanceCase) => provenanceCase.featureSlotId,
-    ),
+test("role-surface feature spine provenance reaches readiness and proof graph rows", () => {
+  assertFeatureSpineProvenanceReachesReadinessAndProofGraph({
+    provenanceCases: roleSurfaceFeatureSpineTargetProvenanceCases,
+    expectedGraphKind: "role-url",
+    sourceForProvenanceCase: (provenanceCase) =>
+      roleSurfaceSpineCaseList.find(
+        (roleSurfaceCase) =>
+          roleSurfaceCase.generatedFromKey === provenanceCase.generatedFromKey,
+      )?.source,
+  });
+});
+
+function assertFeatureSpineProvenanceReachesReadinessAndProofGraph({
+  provenanceCases,
+  source,
+  expectedGraphKind,
+  expectedAuditId,
+  sourceForProvenanceCase = () => source,
+  roleUrlForProvenanceCase = (provenanceCase) =>
+    sourceForProvenanceCase(provenanceCase).roleUrlIncludes,
+}) {
+  const sourceByCheckId = new Map(
+    provenanceCases.map((provenanceCase) => [
+      provenanceCase.sourceCheckId,
+      sourceForProvenanceCase(provenanceCase),
+    ]),
   );
-  for (const provenanceCase of hardeningFeatureSpineTargetProvenanceCases) {
-    const declaration =
-      releaseReadinessProductionFeatureSpineTargets[
-        provenanceCase.targetKey
-      ];
-    const readinessTarget =
-      readinessTargets.bySlotId[provenanceCase.featureSlotId];
-    const proofGraphDestination = proofGraphDestinationBySlotId.get(
-      provenanceCase.featureSlotId,
+  for (const [sourceCheckId, sourceTarget] of sourceByCheckId) {
+    const sourceProvenanceCases = provenanceCases.filter(
+      (provenanceCase) => provenanceCase.sourceCheckId === sourceCheckId,
     );
-    assert.deepEqual(declaration, {
-      featureSlotId: provenanceCase.featureSlotId,
-      sourceCheckId: provenanceCase.sourceCheckId,
-      cycleId: provenanceCase.cycleId,
-      roleUrlId: provenanceCase.roleUrlId,
-      rowKind: "checkpoint",
-      checkpointId: provenanceCase.checkpointId,
-      adminCheckId: provenanceCase.adminCheckId,
-    });
-    assert.equal(readinessTarget.sourceProofArtifact, provenanceCase.proofArtifact);
-    assert.equal(readinessTarget.rerunCommand, provenanceCase.rerunCommand);
-    assert.equal(readinessTarget.adminCheckId, provenanceCase.adminCheckId);
-    assert.equal(
-      readinessTarget.browserWorkbench.requiredEvidence.includes(
-        provenanceCase.adminCheckId,
-      ),
-      true,
+    const roleUrlHrefs = Object.fromEntries(
+      sourceProvenanceCases.map((provenanceCase) => [
+        provenanceCase.roleUrlId,
+        roleUrlForProvenanceCase(provenanceCase),
+      ]),
     );
-    assert.deepEqual(
-      {
-        kind: proofGraphDestination.kind,
-        auditId: proofGraphDestination.auditId,
-        featureSlotId: proofGraphDestination.featureSlotId,
-        sourceCheckId: proofGraphDestination.sourceCheckId,
-        targetRoleUrl: proofGraphDestination.targetRoleUrl,
-        adminCheckId: proofGraphDestination.adminCheckId,
-        sourceProofArtifact: proofGraphDestination.sourceProofArtifact,
-        requiredChecks: proofGraphDestination.requiredChecks,
+    const readinessTargets = buildProductionFeatureSpineTargetCollection({
+      declarations: releaseReadinessProductionFeatureSpineTargets,
+      sourceTarget: {
+        sourceCheckId,
+        detailRoleUrl: sourceTarget.detailRoleUrlIncludes,
+        browserProofCommand: "npm run test:dev-test-game-core-live",
+        sourceProofArtifact: sourceTarget.proofArtifact,
+        rerunCommand: sourceTarget.rerunCommand,
+        cycleIds: [
+          ...new Set(
+            sourceProvenanceCases.map(
+              (provenanceCase) => provenanceCase.cycleId,
+            ),
+          ),
+        ],
+        roleUrlIds: sourceProvenanceCases.map(
+          (provenanceCase) => provenanceCase.roleUrlId,
+        ),
+        checkpointIds: sourceProvenanceCases.map(
+          (provenanceCase) => provenanceCase.checkpointId,
+        ),
+        visibleAdminCheckIds: sourceProvenanceCases.map(
+          (provenanceCase) => provenanceCase.adminCheckId,
+        ),
+        recoveryHookIds: sourceProvenanceCases
+          .map((provenanceCase) => provenanceCase.recoveryHookId)
+          .filter((id) => id !== undefined),
+        roleUrlHrefs,
       },
-      {
-        kind: "admin-audit",
-        auditId: "local-hardening",
+    });
+    const proofGraphDestinations = proofGraphProductionFeatureTargetDestinations({
+      nodes: Object.values(readinessTargets.bySlotId).map((target) => ({
+        kind: "production-feature-spine-target",
+        id: `production-feature:${target.featureSlotId}`,
+        roleUrl: sourceTarget.detailRoleUrlIncludes,
+        featureSlotId: target.featureSlotId,
+        sourceCheckId: target.sourceCheckId,
+        targetRoleUrl: target.roleUrl,
+        adminCheckId: target.adminCheckId,
+        sourceProofArtifact: target.sourceProofArtifact,
+        browserWorkbench: target.browserWorkbench,
+      })),
+    });
+    const proofGraphDestinationBySlotId = new Map(
+      proofGraphDestinations.map((destination) => [
+        destination.featureSlotId,
+        destination,
+      ]),
+    );
+
+    assert.deepEqual(
+      readinessTargets.slotIds,
+      sourceProvenanceCases.map(
+        (provenanceCase) => provenanceCase.featureSlotId,
+      ),
+    );
+    for (const provenanceCase of sourceProvenanceCases) {
+      const declaration =
+        releaseReadinessProductionFeatureSpineTargets[
+          provenanceCase.targetKey
+        ];
+      const readinessTarget =
+        readinessTargets.bySlotId[provenanceCase.featureSlotId];
+      const proofGraphDestination = proofGraphDestinationBySlotId.get(
+        provenanceCase.featureSlotId,
+      );
+      assert.deepEqual(declaration, {
         featureSlotId: provenanceCase.featureSlotId,
         sourceCheckId: provenanceCase.sourceCheckId,
-        targetRoleUrl: `/g/${provenanceCase.roleUrlId}`,
+        cycleId: provenanceCase.cycleId,
+        roleUrlId: provenanceCase.roleUrlId,
+        rowKind: "checkpoint",
+        checkpointId: provenanceCase.checkpointId,
         adminCheckId: provenanceCase.adminCheckId,
-        sourceProofArtifact: provenanceCase.proofArtifact,
+      });
+      assert.equal(
+        readinessTarget.sourceProofArtifact,
+        provenanceCase.proofArtifact,
+      );
+      assert.equal(readinessTarget.rerunCommand, provenanceCase.rerunCommand);
+      assert.equal(readinessTarget.adminCheckId, provenanceCase.adminCheckId);
+      assert.equal(
+        readinessTarget.browserWorkbench.requiredEvidence.includes(
+          provenanceCase.adminCheckId,
+        ),
+        true,
+      );
+      assertFeatureSpineProofGraphDestination({
+        destination: proofGraphDestination,
+        provenanceCase,
+        expectedGraphKind,
+        expectedAuditId,
+        targetRoleUrl: roleUrlForProvenanceCase(provenanceCase),
+      });
+    }
+  }
+}
+
+function assertFeatureSpineProofGraphDestination({
+  destination,
+  provenanceCase,
+  expectedGraphKind,
+  expectedAuditId,
+  targetRoleUrl,
+}) {
+  const commonDestination = {
+    kind: destination.kind,
+    featureSlotId: destination.featureSlotId,
+    sourceCheckId: destination.sourceCheckId,
+    targetRoleUrl: destination.targetRoleUrl,
+    adminCheckId: destination.adminCheckId,
+    sourceProofArtifact: destination.sourceProofArtifact,
+  };
+  const commonExpected = {
+    kind: expectedGraphKind,
+    featureSlotId: provenanceCase.featureSlotId,
+    sourceCheckId: provenanceCase.sourceCheckId,
+    targetRoleUrl,
+    adminCheckId: provenanceCase.adminCheckId,
+    sourceProofArtifact: provenanceCase.proofArtifact,
+  };
+  if (expectedGraphKind === "admin-audit") {
+    assert.deepEqual(
+      {
+        ...commonDestination,
+        auditId: destination.auditId,
+        requiredChecks: destination.requiredChecks,
+      },
+      {
+        ...commonExpected,
+        auditId: expectedAuditId,
         requiredChecks: [provenanceCase.adminCheckId],
       },
     );
+    return;
   }
-});
+  assert.deepEqual(
+    {
+      ...commonDestination,
+      roleUrl: destination.roleUrl,
+    },
+    {
+      ...commonExpected,
+      roleUrl: targetRoleUrl,
+    },
+  );
+}
 
 test("local core production feature targets derive proof row ids from shared source rows", () => {
   for (const [targetKey, source] of Object.entries(
@@ -765,43 +845,6 @@ test("identity production feature target derives proof row ids from shared sourc
   const target = releaseReadinessProductionFeatureSpineTargets.identityAdapter;
   assert.equal(target.featureSlotId, source.featureSlotId);
   assert.equal(target.sourceCheckId, identityFeatureSpineSourceCheckId);
-  assert.equal(target.cycleId, source.cycleId);
-  assert.equal(target.roleUrlId, source.roleUrlId);
-  assert.equal(target.checkpointId, source.checkpointId);
-  assert.equal(target.adminCheckId, source.adminCheckId);
-});
-
-test("replacement production feature target derives proof row ids from shared source rows", () => {
-  const source = replacementFeatureSpineTargetRows.replacementPlayer;
-  const target = releaseReadinessProductionFeatureSpineTargets.replacementPlayer;
-  assert.equal(target.featureSlotId, source.featureSlotId);
-  assert.equal(target.sourceCheckId, replacementFeatureSpineSourceCheckId);
-  assert.equal(target.cycleId, source.cycleId);
-  assert.equal(target.roleUrlId, source.roleUrlId);
-  assert.equal(target.checkpointId, source.checkpointId);
-  assert.equal(target.adminCheckId, source.adminCheckId);
-});
-
-test("replacement action production feature target derives proof row ids from shared source rows", () => {
-  const source =
-    replacementActionFeatureSpineTargetRows.replacementActionRecovery;
-  const target =
-    releaseReadinessProductionFeatureSpineTargets.replacementActionRecovery;
-  assert.equal(target.featureSlotId, source.featureSlotId);
-  assert.equal(target.sourceCheckId, replacementActionFeatureSpineSourceCheckId);
-  assert.equal(target.cycleId, source.cycleId);
-  assert.equal(target.roleUrlId, source.roleUrlId);
-  assert.equal(target.checkpointId, source.checkpointId);
-  assert.equal(target.adminCheckId, source.adminCheckId);
-});
-
-test("replacement private production feature target derives proof row ids from shared source rows", () => {
-  const source =
-    replacementPrivateFeatureSpineTargetRows.replacementPrivateChannel;
-  const target =
-    releaseReadinessProductionFeatureSpineTargets.replacementPrivateChannel;
-  assert.equal(target.featureSlotId, source.featureSlotId);
-  assert.equal(target.sourceCheckId, replacementPrivateFeatureSpineSourceCheckId);
   assert.equal(target.cycleId, source.cycleId);
   assert.equal(target.roleUrlId, source.roleUrlId);
   assert.equal(target.checkpointId, source.checkpointId);

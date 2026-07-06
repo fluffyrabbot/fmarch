@@ -1,6 +1,9 @@
 import {
   devTestGameProofRunPath,
 } from "./dev_test_game_spine_artifact_paths.mjs";
+import {
+  featureSpineTargetProvenanceCase,
+} from "./dev_test_game_feature_spine_target_provenance.mjs";
 
 export const replacementPrivateFeatureSpineSourceCheckId =
   "local-replacement-private-proof";
@@ -36,3 +39,15 @@ export const replacementPrivateFeatureSpineTargetRows = Object.freeze({
     adminCheckId: "replacement-stale-private-channel",
   }),
 });
+
+export const replacementPrivateFeatureSpineTargetProvenanceCases =
+  Object.freeze([
+    featureSpineTargetProvenanceCase({
+      targetKey: "replacementPrivateChannel",
+      sourceFactory:
+        "replacementPrivateFeatureSpineTargetRows.replacementPrivateChannel",
+      sourceRow:
+        replacementPrivateFeatureSpineTargetRows.replacementPrivateChannel,
+      source: replacementPrivateFeatureSpineSource,
+    }),
+  ]);

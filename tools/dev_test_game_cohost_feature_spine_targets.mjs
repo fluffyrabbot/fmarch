@@ -1,6 +1,9 @@
 import {
   devTestGameProofRunPath,
 } from "./dev_test_game_spine_artifact_paths.mjs";
+import {
+  featureSpineTargetProvenanceCase,
+} from "./dev_test_game_feature_spine_target_provenance.mjs";
 
 export const cohostFeatureSpineSourceCheckId = "local-cohost-console-proof";
 export const cohostFeatureSpineCycleId = "cohost-console";
@@ -32,3 +35,12 @@ export const cohostFeatureSpineTargetRows = Object.freeze({
     adminCheckId: "cohost-console",
   }),
 });
+
+export const cohostFeatureSpineTargetProvenanceCases = Object.freeze([
+  featureSpineTargetProvenanceCase({
+    targetKey: "cohostConsole",
+    sourceFactory: "cohostFeatureSpineTargetRows.cohostConsole",
+    sourceRow: cohostFeatureSpineTargetRows.cohostConsole,
+    source: cohostFeatureSpineSource,
+  }),
+]);

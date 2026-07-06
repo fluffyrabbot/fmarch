@@ -1,21 +1,26 @@
 import {
   cohostFeatureSpineSource,
+  cohostFeatureSpineTargetProvenanceCases,
   cohostFeatureSpineTargetRows,
 } from "./dev_test_game_cohost_feature_spine_targets.mjs";
 import {
   hostSetupFeatureSpineSource,
+  hostSetupFeatureSpineTargetProvenanceCases,
   hostSetupFeatureSpineTargetRows,
 } from "./dev_test_game_host_setup_feature_spine_targets.mjs";
 import {
   replacementFeatureSpineSource,
+  replacementFeatureSpineTargetProvenanceCases,
   replacementFeatureSpineTargetRows,
 } from "./dev_test_game_replacement_feature_spine_targets.mjs";
 import {
   replacementActionFeatureSpineSource,
+  replacementActionFeatureSpineTargetProvenanceCases,
   replacementActionFeatureSpineTargetRows,
 } from "./dev_test_game_replacement_action_feature_spine_targets.mjs";
 import {
   replacementPrivateFeatureSpineSource,
+  replacementPrivateFeatureSpineTargetProvenanceCases,
   replacementPrivateFeatureSpineTargetRows,
 } from "./dev_test_game_replacement_private_feature_spine_targets.mjs";
 
@@ -25,6 +30,7 @@ export const roleSurfaceSpineCases = Object.freeze({
     label: "host setup",
     readinessLabel: "Host setup role URL, policy, roster, and recovery proof",
     source: hostSetupFeatureSpineSource,
+    provenanceCase: hostSetupFeatureSpineTargetProvenanceCases[0],
     targetRow: hostSetupFeatureSpineTargetRows.hostSetupRoute,
     visibleAdminCheckIds: Object.freeze(["start-phase"]),
     readinessDetails: (evidence) => ({
@@ -42,6 +48,7 @@ export const roleSurfaceSpineCases = Object.freeze({
     proofBoundary:
       "Seeded dev-test-game cohost role URL proof from proof-run. Proves delegated deadline control and NotHost rejection for host-only resolve; does not prove hosted identity, multi-node races, release readiness, or production readiness.",
     source: cohostFeatureSpineSource,
+    provenanceCase: cohostFeatureSpineTargetProvenanceCases[0],
     targetRow: cohostFeatureSpineTargetRows.cohostConsole,
     visibleAdminCheckIds: Object.freeze(["cohost-console"]),
     readinessDetails: (evidence) => ({
@@ -61,6 +68,7 @@ export const roleSurfaceSpineCases = Object.freeze({
     proofBoundary:
       "Seeded dev-test-game replacement player role URL proof from proof-run. Proves host-issued replacement URL, fresh replacement session recovery, incoming player slot authority, stale outgoing player rejection, and private-channel authority transfer; does not prove hosted identity, invite delivery, multi-node races, release readiness, or production readiness.",
     source: replacementFeatureSpineSource,
+    provenanceCase: replacementFeatureSpineTargetProvenanceCases[0],
     targetRow: replacementFeatureSpineTargetRows.replacementPlayer,
     visibleAdminCheckIds: Object.freeze([
       "replacement-incoming-player",
@@ -92,6 +100,7 @@ export const roleSurfaceSpineCases = Object.freeze({
     proofBoundary:
       "Seeded dev-test-game replacement action role URL proof from proof-run. Proves incoming replacement factional_kill submission, reconnect into locked resolved state, stale replacement action PhaseLocked recovery, and scoped target receipt visibility; does not prove hosted identity, hosted transport, multi-node races, release readiness, or production readiness.",
     source: replacementActionFeatureSpineSource,
+    provenanceCase: replacementActionFeatureSpineTargetProvenanceCases[0],
     targetRow: replacementActionFeatureSpineTargetRows.replacementActionRecovery,
     visibleAdminCheckIds: Object.freeze([
       "replacement-incoming-action",
@@ -111,6 +120,7 @@ export const roleSurfaceSpineCases = Object.freeze({
     proofBoundary:
       "Seeded dev-test-game replacement private-channel role URL proof from proof-run. Proves current replacement private-channel authority, stale outgoing private-channel and receipt denial, stale private-post ACK and reconnect recovery after resolution, completed-game private-post rejection, and completed private-channel reload; does not prove hosted identity, hosted transport, release readiness, or production readiness.",
     source: replacementPrivateFeatureSpineSource,
+    provenanceCase: replacementPrivateFeatureSpineTargetProvenanceCases[0],
     targetRow: replacementPrivateFeatureSpineTargetRows.replacementPrivateChannel,
     visibleAdminCheckIds: Object.freeze([
       "replacement-stale-private-channel",
@@ -137,6 +147,17 @@ export const roleSurfaceSpineCases = Object.freeze({
 
 export const roleSurfaceSpineCaseList = Object.freeze(
   Object.values(roleSurfaceSpineCases),
+);
+
+export const roleSurfaceFeatureSpineTargetProvenanceCases = Object.freeze(
+  roleSurfaceSpineCaseList.map((roleSurfaceCase) =>
+    Object.freeze({
+      ...roleSurfaceCase.provenanceCase,
+      generatedFromKey: roleSurfaceCase.generatedFromKey,
+      label: roleSurfaceCase.label,
+      readinessLabel: roleSurfaceCase.readinessLabel,
+    }),
+  ),
 );
 
 export function roleSurfaceBrowserWorkbenchEvidence(roleSurfaceCase, roleUrl) {

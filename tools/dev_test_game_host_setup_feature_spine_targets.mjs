@@ -1,3 +1,7 @@
+import {
+  featureSpineTargetProvenanceCase,
+} from "./dev_test_game_feature_spine_target_provenance.mjs";
+
 export const hostSetupFeatureSpineSourceCheckId = "local-host-setup-proof";
 export const hostSetupFeatureSpineCycleId = "host-setup";
 export const devTestGameHostSetupProofPath =
@@ -29,3 +33,12 @@ export const hostSetupFeatureSpineTargetRows = Object.freeze({
     adminCheckId: "start-phase",
   }),
 });
+
+export const hostSetupFeatureSpineTargetProvenanceCases = Object.freeze([
+  featureSpineTargetProvenanceCase({
+    targetKey: "hostSetupRoute",
+    sourceFactory: "hostSetupFeatureSpineTargetRows.hostSetupRoute",
+    sourceRow: hostSetupFeatureSpineTargetRows.hostSetupRoute,
+    source: hostSetupFeatureSpineSource,
+  }),
+]);

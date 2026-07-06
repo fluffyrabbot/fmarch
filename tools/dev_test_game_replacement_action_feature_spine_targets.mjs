@@ -1,6 +1,9 @@
 import {
   devTestGameProofRunPath,
 } from "./dev_test_game_spine_artifact_paths.mjs";
+import {
+  featureSpineTargetProvenanceCase,
+} from "./dev_test_game_feature_spine_target_provenance.mjs";
 
 export const replacementActionFeatureSpineSourceCheckId =
   "local-replacement-action-proof";
@@ -33,3 +36,15 @@ export const replacementActionFeatureSpineTargetRows = Object.freeze({
     adminCheckId: "replacement-incoming-action",
   }),
 });
+
+export const replacementActionFeatureSpineTargetProvenanceCases =
+  Object.freeze([
+    featureSpineTargetProvenanceCase({
+      targetKey: "replacementActionRecovery",
+      sourceFactory:
+        "replacementActionFeatureSpineTargetRows.replacementActionRecovery",
+      sourceRow:
+        replacementActionFeatureSpineTargetRows.replacementActionRecovery,
+      source: replacementActionFeatureSpineSource,
+    }),
+  ]);
