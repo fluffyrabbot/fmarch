@@ -23,6 +23,7 @@ import {
   normalizeLocalNextActionSelectedSpineCheckRows,
   normalizeLocalProofGraphArtifactSummary,
   normalizeLocalProofGraphCheckRows,
+  normalizeLocalProofGraphEdgeCheckRows,
   normalizeLocalProofGraphRelatedLinks,
   summarizeRecoveryGate,
 } from "./admin-route-model.mjs";
@@ -2660,6 +2661,34 @@ test("admin local proof graph detail data carries graph node rows", async () => 
     expectedProductionFeatureDestinationSections(
       proofGraph.summary.productionFeatureDestinationSummary,
     ),
+  );
+});
+
+test("proof graph selected operator handoff edge row carries operator inputs", () => {
+  assert.deepEqual(
+    normalizeLocalProofGraphEdgeCheckRows({
+      from: "next-action",
+      to: "production-feature:host-phase-control",
+      relationship: "selected-operator-handoff",
+      command: "npm run test:dev-test-game-hosted-evidence-lane",
+      firstMissingInputId: "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
+      roleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
+      proofTarget: "target/dev-test-game/hosted-evidence-lane.json",
+      unprovenId: "hosted-deployment",
+    }).map((check) => [check.id, check.status]),
+    [
+      [
+        "edge:next-action:selected-operator-handoff:production-feature:host-phase-control",
+        [
+          "selected-operator-handoff",
+          "firstMissingInputId FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
+          "command npm run test:dev-test-game-hosted-evidence-lane",
+          "proofTarget target/dev-test-game/hosted-evidence-lane.json",
+          "roleUrl /admin/audit/local-core-loop?game=<seeded-game>",
+          "unprovenId hosted-deployment",
+        ].join("\n"),
+      ],
+    ],
   );
 });
 

@@ -4067,9 +4067,28 @@ export function normalizeLocalProofGraphEdgeCheckRows(edge) {
   return Object.freeze([
     Object.freeze({
       id: proofGraphEdgeCheckId(edge),
-      status: String(edge?.relationship ?? "recorded"),
+      status: localProofGraphEdgeCheckStatus(edge),
     }),
   ]);
+}
+
+function localProofGraphEdgeCheckStatus(edge) {
+  const relationship = String(edge?.relationship ?? "recorded");
+  const command = String(edge?.command ?? "").trim();
+  const firstMissingInputId = String(edge?.firstMissingInputId ?? "").trim();
+  const roleUrl = String(edge?.roleUrl ?? "").trim();
+  const proofTarget = String(edge?.proofTarget ?? "").trim();
+  const unprovenId = String(edge?.unprovenId ?? "").trim();
+  return [
+    relationship,
+    ...(firstMissingInputId === ""
+      ? []
+      : [`firstMissingInputId ${firstMissingInputId}`]),
+    ...(command === "" ? [] : [`command ${command}`]),
+    ...(proofTarget === "" ? [] : [`proofTarget ${proofTarget}`]),
+    ...(roleUrl === "" ? [] : [`roleUrl ${roleUrl}`]),
+    ...(unprovenId === "" ? [] : [`unprovenId ${unprovenId}`]),
+  ].join("\n");
 }
 
 export function normalizeLocalProofGraphRelatedLinks(

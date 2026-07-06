@@ -885,11 +885,25 @@ function proofGraphVisibleCheckStatuses(proofGraph) {
       )
       .map((node) => [node.id, `${node.checkedCount} checked`]),
   );
+  const selectedOperatorHandoffEdgeStatuses = Object.fromEntries(
+    proofGraph.edges
+      .filter(
+        (edge) =>
+          edge.relationship === "selected-operator-handoff" &&
+          typeof edge.firstMissingInputId === "string" &&
+          edge.firstMissingInputId.trim() !== "",
+      )
+      .map((edge) => [
+        proofGraphEdgeCheckId(edge),
+        edge.firstMissingInputId,
+      ]),
+  );
   return {
     ...(hostedIdentityReceipt === null
       ? {}
       : { [hostedIdentityReceipt.rowId]: hostedIdentityReceipt.status }),
     ...commandProofRoleUrlAuditStatuses,
+    ...selectedOperatorHandoffEdgeStatuses,
   };
 }
 
