@@ -177,6 +177,9 @@ import {
 import {
   buildProofGraphDiagnosticProofSummary,
   buildProofGraphDiagnosticSummaryTrace,
+  proofGraphDiagnosticProofSummaryRowTestId,
+  proofGraphDiagnosticProofSummarySectionHeading,
+  proofGraphDiagnosticProofSummarySectionId,
   proofGraphDiagnosticSummaryCheckIds,
 } from "../../../../tools/dev_test_game_proof_graph_diagnostic_summary.mjs";
 import {
@@ -2546,12 +2549,12 @@ test("admin route data exposes local proof graph as a native audit row", async (
     ]),
     [
       [
-        "diagnostic-proof-summary",
-        "Diagnostic non-terminal proofs",
-        "admin-audit-detail-diagnostic-proof-summary",
+        proofGraphDiagnosticProofSummarySectionId,
+        proofGraphDiagnosticProofSummarySectionHeading,
+        `admin-audit-detail-${proofGraphDiagnosticProofSummarySectionId}`,
         proofGraph.summary.diagnosticProofSummary.rows.map((row) => [
           row.id,
-          `admin-audit-diagnostic-proof-summary-${row.id}`,
+          proofGraphDiagnosticProofSummaryRowTestId(row.id),
           [
             ["label", row.label, true],
             ["status", row.status, false],

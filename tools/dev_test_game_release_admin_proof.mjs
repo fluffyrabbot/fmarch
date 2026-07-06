@@ -12,12 +12,14 @@ import {
 } from "./dev_test_game_spine_artifact_paths.mjs";
 import {
   assertVisibleAdminRoleSurfaceRows,
-  normalizedEvidenceObjectRowIds,
   proveAdminAuditDetail,
   readJson,
   repoRoot,
   runAdminAuditProof,
 } from "./dev_test_game_admin_audit_proof_helper.mjs";
+import {
+  normalizedEvidenceObjectRowIds,
+} from "./dev_test_game_normalized_evidence_object_rows.mjs";
 
 const readinessPath = path.resolve(
   repoRoot,

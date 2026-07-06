@@ -70,6 +70,9 @@ import {
   preReadinessTraceKeys,
 } from "../../../../tools/dev_test_game_pre_readiness_trace_registry.mjs";
 import {
+  proofGraphDiagnosticProofSummaryRowTestId,
+  proofGraphDiagnosticProofSummarySectionHeading,
+  proofGraphDiagnosticProofSummarySectionId,
   proofGraphDiagnosticSummaryCheckRows,
   normalizeProofGraphDiagnosticProofSummary,
   normalizeProofGraphDiagnosticSummaryTrace,
@@ -510,11 +513,11 @@ function diagnosticProofSummarySections(summary) {
   }
   return [
     buildArtifactSummarySection({
-      id: "diagnostic-proof-summary",
-      heading: "Diagnostic non-terminal proofs",
+      id: proofGraphDiagnosticProofSummarySectionId,
+      heading: proofGraphDiagnosticProofSummarySectionHeading,
       rows: rows.map((row) => ({
         id: row.id,
-        testId: `admin-audit-diagnostic-proof-summary-${row.id}`,
+        testId: proofGraphDiagnosticProofSummaryRowTestId(row.id),
         values: [
           { id: "label", text: row.label, emphasized: true },
           { id: "status", text: row.status },

@@ -20,6 +20,12 @@ import {
 import {
   proofGraphPrerequisiteDestinationRowTestIdPrefix,
 } from "./dev_test_game_proof_graph_prerequisite_destination_rows.mjs";
+import {
+  proofGraphDiagnosticProofSummaryRowTestIdPrefix,
+} from "./dev_test_game_proof_graph_diagnostic_summary.mjs";
+export {
+  normalizedEvidenceObjectRowIds,
+} from "./dev_test_game_normalized_evidence_object_rows.mjs";
 
 export const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 export const frontendRoot = path.join(repoRoot, "frontend");
@@ -30,13 +36,6 @@ const host = "127.0.0.1";
 
 export async function readJson(filePath) {
   return JSON.parse(await readFile(filePath, "utf8"));
-}
-
-export function normalizedEvidenceObjectRowIds({ parentId, objects }) {
-  return (Array.isArray(objects) ? objects : [])
-    .map((object) => String(object?.name ?? ""))
-    .filter((name) => name !== "")
-    .map((name) => `evidence-object:${parentId}:${name}`);
 }
 
 export function assertVisibleAdminRoleSurfaceRows({
@@ -494,13 +493,13 @@ export async function proveAdminAuditDetail({
       });
     const visibleDiagnosticProofSummaries = await waitForRows({
       page,
-      prefix: "admin-audit-diagnostic-proof-summary",
+      prefix: proofGraphDiagnosticProofSummaryRowTestIdPrefix,
       ids: requiredDiagnosticProofSummaries,
       expectedStatuses: requiredDiagnosticProofSummaryStatuses,
     });
     const visibleDiagnosticProofSummaryStatuses = await readRowStatuses({
       page,
-      prefix: "admin-audit-diagnostic-proof-summary",
+      prefix: proofGraphDiagnosticProofSummaryRowTestIdPrefix,
       ids: Object.keys(requiredDiagnosticProofSummaryStatuses),
     });
     const visibleProofGraphPrerequisiteDestinations = await waitForRows({

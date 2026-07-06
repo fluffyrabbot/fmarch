@@ -28,12 +28,14 @@ import {
 } from "./dev_test_game_hosted_handoff_cases.mjs";
 import {
   assertVisibleAdminRoleSurfaceRows,
-  normalizedEvidenceObjectRowIds,
   proveAdminAuditDetail,
   readJson,
   repoRoot,
   runAdminAuditProof,
 } from "./dev_test_game_admin_audit_proof_helper.mjs";
+import {
+  normalizedEvidenceObjectRowIdsForProofGraph,
+} from "./dev_test_game_normalized_evidence_object_rows.mjs";
 import {
   localAdminAuditIds,
   localAdminAuditRoleUrl,
@@ -70,6 +72,7 @@ import {
 import {
   hostedIdentityTerminalReceiptArtifactCase,
   normalizeProofGraphReceiptArtifactRows,
+  proofGraphReceiptArtifactRowIds,
   proofGraphTerminalReceiptParentId,
 } from "./dev_test_game_proof_graph_receipt_artifact_rows.mjs";
 import {
@@ -80,6 +83,7 @@ import {
 } from "./dev_test_game_selected_operator_handoff_receipt.mjs";
 import {
   normalizeProofGraphDiagnosticProofSummary,
+  proofGraphDiagnosticProofSummaryRowIds,
 } from "./dev_test_game_proof_graph_diagnostic_summary.mjs";
 import {
   proofGraphPrerequisiteDestinationRowIds,
@@ -193,9 +197,8 @@ export function proofGraphAdminProofCase() {
         requiredProductionFeatureDestinationSummaries:
           productionFeatureDestinationSummary.rows.map((row) => row.id),
         requiredText: ["Hosted evidence recovery ladder"],
-        requiredDiagnosticProofSummaries: diagnosticProofSummary.rows.map(
-          (row) => row.id,
-        ),
+        requiredDiagnosticProofSummaries:
+          proofGraphDiagnosticProofSummaryRowIds(diagnosticProofSummary),
         requiredDiagnosticProofSummaryStatuses: Object.fromEntries(
           diagnosticProofSummary.rows.map((row) => [
             row.id,
@@ -251,7 +254,9 @@ export function proofGraphAdminProofCase() {
         hostedEvidenceLane: hostedEvidenceLaneRelativePath,
         game: source.proofRun.session.game,
         nodeIds: source.proofGraph.nodes.map((node) => node.id),
-        evidenceObjectRowIds: proofGraphEvidenceObjectRowIds(source.proofGraph),
+        evidenceObjectRowIds: normalizedEvidenceObjectRowIdsForProofGraph(
+          source.proofGraph,
+        ),
         receiptArtifactRowIds: proofGraphReceiptArtifactRowIds(
           source.proofGraph,
         ),
@@ -810,7 +815,7 @@ function proofGraphVisibleCheckIds(proofGraph) {
         ? []
         : [`coverage-decision:${node.id}`],
     ),
-    ...proofGraphEvidenceObjectRowIds(proofGraph),
+    ...normalizedEvidenceObjectRowIdsForProofGraph(proofGraph),
     ...proofGraphReceiptArtifactRowIds(proofGraph),
     ...proofGraph.edges.map((edge) => proofGraphEdgeCheckId(edge)),
   ];
@@ -823,24 +828,6 @@ function proofGraphVisibleCheckStatuses(proofGraph) {
     : {
         [hostedIdentityReceipt.rowId]: hostedIdentityReceipt.status,
       };
-}
-
-function proofGraphEvidenceObjectRowIds(proofGraph) {
-  return proofGraph.nodes.flatMap((node) =>
-    normalizedEvidenceObjectRowIds({
-      parentId: node.id,
-      objects: node.normalizedEvidenceObjects,
-    }),
-  );
-}
-
-function proofGraphReceiptArtifactRowIds(proofGraph) {
-  return proofGraph.nodes.flatMap((node) =>
-    normalizeProofGraphReceiptArtifactRows({
-      parentId: node.id,
-      artifacts: node.receiptArtifacts,
-    }).map((artifact) => artifact.rowId),
-  );
 }
 
 function hostedIdentityTerminalReceiptArtifact(proofGraph) {

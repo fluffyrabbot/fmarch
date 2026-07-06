@@ -580,9 +580,12 @@ import {
 import {
   assertAdminRoleSurfaceStatusText,
   assertVisibleAdminRoleSurfaceRows,
-  normalizedEvidenceObjectRowIds,
   resolveAdminAuditProofBatchPlan,
 } from "./dev_test_game_admin_audit_proof_helper.mjs";
+import {
+  normalizedEvidenceObjectRowIds,
+  normalizedEvidenceObjectRowIdsForProofGraph,
+} from "./dev_test_game_normalized_evidence_object_rows.mjs";
 import {
   recoveryMilestoneCoverageCases,
 } from "./dev_test_game_release_readiness_milestone_cases.mjs";
@@ -649,6 +652,7 @@ import {
   hostedIdentityTerminalReceiptArtifactCase,
   normalizeProofGraphReceiptArtifactRows,
   proofGraphReceiptArtifactRowId,
+  proofGraphReceiptArtifactRowIds,
   proofGraphReceiptArtifactRowStatus,
   terminalProofGraphReceiptArtifacts,
   terminalProofGraphReceiptBatchRegistry,
@@ -6958,6 +6962,35 @@ test("proof graph receipt artifact rows share one browser row id contract", () =
       ],
     ],
   );
+  assert.deepEqual(
+    proofGraphReceiptArtifactRowIds({
+      nodes: [
+        {
+          id: "admin-spine-terminal-batches",
+          receiptArtifacts: [
+            {
+              proofId: "proof-freshness",
+              artifactPath:
+                "target/dev-test-game/proof-freshness-admin-proof.json",
+              batchLabel: "Terminal admin proof batch",
+            },
+            {
+              proofId: "proof-freshness",
+              artifactPath:
+                "target/dev-test-game/proof-freshness-admin-proof.json",
+              batchLabel: "Terminal refresh admin proof batch",
+            },
+            {
+              proofId: "next-action",
+              artifactPath: "target/dev-test-game/next-action-admin-proof.json",
+              batchLabel: "",
+            },
+          ],
+        },
+      ],
+    }),
+    rows.map((row) => row.rowId),
+  );
   assert.equal(
     new Set(rows.map((row) => row.id)).size,
     rows.length,
@@ -7157,6 +7190,21 @@ test("admin proof fixtures prove normalized evidence object rows", () => {
         objects: replacementPrivatePostNormalizedEvidenceObjects,
       }),
     ],
+  );
+  assert.deepEqual(
+    normalizedEvidenceObjectRowIdsForProofGraph({
+      nodes: [
+        {
+          id: "private-channel-recovery-receipt",
+          normalizedEvidenceObjects: privateChannelNormalizedEvidenceObjects,
+        },
+        {
+          id: "replacement-private-recovery-receipt",
+          normalizedEvidenceObjects: replacementPrivatePostNormalizedEvidenceObjects,
+        },
+      ],
+    }),
+    proofGraphProof.generatedFrom.evidenceObjectRowIds,
   );
   assertVisibleAdminRoleSurfaceRows({
     adminRoleSurface: proofGraphProof.adminRoleSurface,

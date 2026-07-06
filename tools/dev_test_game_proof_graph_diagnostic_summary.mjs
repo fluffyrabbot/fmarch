@@ -1,4 +1,10 @@
 export const proofGraphDiagnosticProofSummaryId = "diagnostic-non-terminal";
+export const proofGraphDiagnosticProofSummarySectionId =
+  "diagnostic-proof-summary";
+export const proofGraphDiagnosticProofSummarySectionHeading =
+  "Diagnostic non-terminal proofs";
+export const proofGraphDiagnosticProofSummaryRowTestIdPrefix =
+  "admin-audit-diagnostic-proof-summary";
 export const proofGraphDiagnosticSummaryTraceStrategy =
   "proof-graph-diagnostics-before-readiness";
 export const proofGraphDiagnosticSummaryCheckId =
@@ -23,7 +29,7 @@ export function buildProofGraphDiagnosticProofSummary({ nodes } = {}) {
     );
   return Object.freeze({
     id: proofGraphDiagnosticProofSummaryId,
-    label: "Diagnostic non-terminal proofs",
+    label: proofGraphDiagnosticProofSummarySectionHeading,
     status: proofGraphDiagnosticProofCountLabel(rows.length),
     diagnosticCount: rows.length,
     promotesFreshnessCount: rows.filter((row) => row.promotesFreshness).length,
@@ -57,7 +63,7 @@ export function normalizeProofGraphDiagnosticProofSummary(
     : buildProofGraphDiagnosticProofSummary({ nodes }).rows;
   return Object.freeze({
     id: String(summary.id ?? proofGraphDiagnosticProofSummaryId),
-    label: String(summary.label ?? "Diagnostic non-terminal proofs"),
+    label: String(summary.label ?? proofGraphDiagnosticProofSummarySectionHeading),
     status: String(summary.status ?? proofGraphDiagnosticProofCountLabel(rows.length)),
     diagnosticCount: Number(summary.diagnosticCount ?? rows.length),
     promotesFreshnessCount: Number(
@@ -70,6 +76,18 @@ export function normalizeProofGraphDiagnosticProofSummary(
     ),
     rows: Object.freeze(rows),
   });
+}
+
+export function proofGraphDiagnosticProofSummaryRowIds(summary, { nodes } = {}) {
+  return Object.freeze(
+    normalizeProofGraphDiagnosticProofSummary(summary, { nodes }).rows.map(
+      (row) => row.id,
+    ),
+  );
+}
+
+export function proofGraphDiagnosticProofSummaryRowTestId(rowId) {
+  return `${proofGraphDiagnosticProofSummaryRowTestIdPrefix}-${String(rowId)}`;
 }
 
 export function assertProofGraphDiagnosticProofSummary(summary, { nodes } = {}) {

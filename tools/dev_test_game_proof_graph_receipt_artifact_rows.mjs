@@ -154,6 +154,21 @@ export function normalizeProofGraphReceiptArtifactRows({
   );
 }
 
+export function proofGraphReceiptArtifactRowIds(proofGraph) {
+  return proofGraphReceiptArtifactRowIdsFromNodes(proofGraph?.nodes);
+}
+
+export function proofGraphReceiptArtifactRowIdsFromNodes(nodes) {
+  return Object.freeze(
+    (Array.isArray(nodes) ? nodes : []).flatMap((node) =>
+      normalizeProofGraphReceiptArtifactRows({
+        parentId: node?.id,
+        artifacts: node?.receiptArtifacts,
+      }).map((artifact) => artifact.rowId),
+    ),
+  );
+}
+
 export function proofGraphReceiptArtifactRowId({ parentId, artifact }) {
   const batchSuffix = slugIdPart(artifact?.batchLabel);
   return `receipt-artifact:${String(parentId ?? "")}:${String(
