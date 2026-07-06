@@ -70,6 +70,15 @@
         <AdminAuditDescriptorRows rows={data.audit.spineRecoveryHookRows} />
       </section>
     {/if}
+    {#if data.audit.commandProofRoleUrlAuditRows?.length > 0}
+      <section
+        class="admin-audit-detail__group"
+        data-testid="admin-audit-detail-command-proof-role-url-audit"
+      >
+        <h2>Command proof audit</h2>
+        <AdminAuditDescriptorRows rows={data.audit.commandProofRoleUrlAuditRows} />
+      </section>
+    {/if}
     {#if data.audit.entries?.length > 0}
       <ol class="admin-audit-detail__entries" data-testid="admin-audit-detail-entries">
         {#each data.audit.entries as entry}

@@ -15041,6 +15041,12 @@ test("session card and markdown include role credential URLs and tokens", async 
   assert.deepEqual(
     coreLoopReadiness.localDevelopmentSpine.checks.find(
       (item) => item.id === "local-core-loop-proof",
+    ).adminRoleSurface.visibleCommandProofRoleUrlAudit,
+    coreLoopAdminProofFixture().adminRoleSurface.visibleCommandProofRoleUrlAudit,
+  );
+  assert.deepEqual(
+    coreLoopReadiness.localDevelopmentSpine.checks.find(
+      (item) => item.id === "local-core-loop-proof",
     ).spineTargets,
     coreLoopSpineTargetsFixture(),
   );
@@ -18946,6 +18952,10 @@ function coreLoopAdminProofFixture() {
         "staleActionTransitionReject",
         "d03TerminalAdvanceReject",
       ],
+      visibleCommandProofRoleUrlAudit: {
+        status: "passed",
+        checkedCount: 36,
+      },
       rawInviteTokensVisible: false,
       releaseReady: false,
       productionReady: false,

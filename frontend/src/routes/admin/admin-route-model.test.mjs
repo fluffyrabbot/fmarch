@@ -42,6 +42,9 @@ import {
   coreLoopScenarioFamilyRows,
 } from "../../../../tools/dev_test_game_core_loop_generated_from_families.mjs";
 import {
+  coreLoopCommandProofRoleUrlAuditExpectation,
+} from "../../../../tools/dev_test_game_core_loop_proof_shape_assertions.mjs";
+import {
   completedGameHardeningLaneCases,
 } from "../../../../tools/dev_test_game_core_loop_completed_scenarios.mjs";
 import {
@@ -4740,6 +4743,10 @@ test("admin route data exposes local core loop proof as a native audit row", asy
     releaseReady: false,
     productionReady: false,
   });
+  assert.deepEqual(
+    coreLoop.commandProofRoleUrlAudit,
+    coreLoopCommandProofRoleUrlAuditExpectation,
+  );
 });
 
 test("admin core loop completed-game coverage flags stale shared-case totals", async () => {
@@ -4924,6 +4931,27 @@ test("admin local core loop detail data carries lane rows", async () => {
       idPrefix: "spine-recovery-hook",
       testIdPrefix: "admin-audit-spine-recovery",
     }),
+  );
+  assert.deepEqual(
+    data.audit.commandProofRoleUrlAudit,
+    coreLoopCommandProofRoleUrlAuditExpectation,
+  );
+  assert.deepEqual(
+    descriptorRowsWithNestedLinksForAssertion(
+      data.audit.commandProofRoleUrlAuditRows,
+    ),
+    [
+      [
+        "command-proof-role-url-audit",
+        "admin-audit-command-proof-role-url-audit-command-proof-role-url-audit",
+        [
+          ["label", "Command proof role URLs", true, "", ""],
+          ["status", "passed", false, "", ""],
+          ["checkedCount", "36 checked", false, "", ""],
+        ],
+        [],
+      ],
+    ],
   );
   assert.equal(data.audit.checks.length, coreLoopAdminCheckIds.length);
   assert.deepEqual(

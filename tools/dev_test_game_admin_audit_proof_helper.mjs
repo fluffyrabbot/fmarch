@@ -323,6 +323,8 @@ export async function proveAdminAuditDetail({
   requiredSpineRoleUrls = [],
   requiredSpineCheckpoints = [],
   requiredSpineRecoveryHooks = [],
+  requiredCommandProofRoleUrlAudits = [],
+  requiredCommandProofRoleUrlAuditStatuses = {},
   requiredAdminSpineBatches = [],
   requiredAdminSpineBatchStatuses = {},
   requiredAdminSpineTerminalValidations = [],
@@ -536,6 +538,17 @@ export async function proveAdminAuditDetail({
       page,
       prefix: "admin-audit-spine-recovery",
       ids: requiredSpineRecoveryHooks,
+    });
+    const visibleCommandProofRoleUrlAudits = await waitForRows({
+      page,
+      prefix: "admin-audit-command-proof-role-url-audit",
+      ids: requiredCommandProofRoleUrlAudits,
+      expectedStatuses: requiredCommandProofRoleUrlAuditStatuses,
+    });
+    const visibleCommandProofRoleUrlAuditStatuses = await readRowStatuses({
+      page,
+      prefix: "admin-audit-command-proof-role-url-audit",
+      ids: Object.keys(requiredCommandProofRoleUrlAuditStatuses),
     });
     const visibleAdminSpineBatches = await waitForRows({
       page,
@@ -1285,6 +1298,12 @@ export async function proveAdminAuditDetail({
       ...(visibleSpineRecoveryHooks.length === 0
         ? {}
         : { visibleSpineRecoveryHooks }),
+      ...(visibleCommandProofRoleUrlAudits.length === 0
+        ? {}
+        : { visibleCommandProofRoleUrlAudits }),
+      ...(Object.keys(visibleCommandProofRoleUrlAuditStatuses).length === 0
+        ? {}
+        : { visibleCommandProofRoleUrlAuditStatuses }),
       ...(visibleAdminSpineBatches.length === 0
         ? {}
         : { visibleAdminSpineBatches }),

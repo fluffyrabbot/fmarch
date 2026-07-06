@@ -31,6 +31,9 @@ import {
   coreLoopScenarioFamilyRows,
 } from "../../../../tools/dev_test_game_core_loop_generated_from_families.mjs";
 import {
+  coreLoopCommandProofRoleUrlAuditExpectation,
+} from "../../../../tools/dev_test_game_core_loop_proof_shape_assertions.mjs";
+import {
   playerActionBoundaryLaneId,
   playerActionLoopLaneId,
   playerInvalidActionRecoveryLaneId,
@@ -2012,6 +2015,9 @@ function withAdminAuditDetailDisplayRows(item, { game }) {
     ],
   });
   const spineCycleRows = buildCoreLoopSpineCycleRows(item.spineCycles);
+  const commandProofRoleUrlAuditRows = buildCoreLoopCommandProofRoleUrlAuditRows(
+    item.commandProofRoleUrlAudit,
+  );
   const localPrerequisiteRows = buildLocalPrerequisiteRows(
     item.localPrerequisites,
     { game },
@@ -2043,6 +2049,9 @@ function withAdminAuditDetailDisplayRows(item, { game }) {
       ? {}
       : { spineRecoveryHookRows }),
     ...(spineCycleRows.length === 0 ? {} : { spineCycleRows }),
+    ...(commandProofRoleUrlAuditRows.length === 0
+      ? {}
+      : { commandProofRoleUrlAuditRows }),
     ...(localPrerequisiteRows.length === 0 ? {} : { localPrerequisiteRows }),
     ...(selectedOperatorHandoffRows.length === 0
       ? {}
@@ -2148,6 +2157,27 @@ function buildCoreLoopSpineCycleRows(spineCycles) {
       }),
     ),
   );
+}
+
+function buildCoreLoopCommandProofRoleUrlAuditRows(audit) {
+  if (audit === null || typeof audit !== "object") {
+    return Object.freeze([]);
+  }
+  return Object.freeze([
+    artifactSummaryRow({
+      id: "command-proof-role-url-audit",
+      testId:
+        "admin-audit-command-proof-role-url-audit-command-proof-role-url-audit",
+      values: [
+        { id: "label", text: "Command proof role URLs", emphasized: true },
+        { id: "status", text: String(audit.status ?? "unknown") },
+        {
+          id: "checkedCount",
+          text: `${Number(audit.checkedCount ?? 0)} checked`,
+        },
+      ],
+    }),
+  ]);
 }
 
 function buildUnprovenRows(unproven) {
@@ -7917,6 +7947,7 @@ export function normalizeLocalCoreLoopAudit(proofRun, { game }) {
     spineCycles: normalizeCoreLoopSpineCycles(proofRun),
     spineRecoveryHooks: normalizeCoreLoopSpineRecoveryHooks(proofRun),
     scenarioFamilies: coreLoopScenarioFamilyRows(),
+    commandProofRoleUrlAudit: coreLoopCommandProofRoleUrlAuditExpectation,
     artifactSummary: Object.freeze({
       game: String(proofRun.session?.game ?? ""),
       roleCount: Array.isArray(proofRun.session?.roles)

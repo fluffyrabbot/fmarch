@@ -3,7 +3,9 @@ import { test } from "node:test";
 import {
   assertCoreLoopCommandProofRoleUrls,
   assertCoreLoopCommandProofRoleUrlAudit,
+  assertCoreLoopCommandProofRoleUrlAuditExpectation,
   buildCoreLoopCommandProofRoleUrlAudit,
+  coreLoopCommandProofRoleUrlAuditExpectation,
   coreLoopCommandProofRoleUrlRows,
 } from "./dev_test_game_core_loop_proof_shape_assertions.mjs";
 
@@ -98,5 +100,25 @@ test("core-loop command proof role URL audit summary records checked count", () 
         audit: { status: "passed", checkedCount: 1 },
       }),
     /audit summary drifted/,
+  );
+});
+
+test("core-loop command proof role URL audit expectation records visible count", () => {
+  assert.deepEqual(coreLoopCommandProofRoleUrlAuditExpectation, {
+    status: "passed",
+    checkedCount: 36,
+  });
+  assert.deepEqual(
+    assertCoreLoopCommandProofRoleUrlAuditExpectation({
+      audit: { status: "passed", checkedCount: 36 },
+    }),
+    coreLoopCommandProofRoleUrlAuditExpectation,
+  );
+  assert.throws(
+    () =>
+      assertCoreLoopCommandProofRoleUrlAuditExpectation({
+        audit: { status: "passed", checkedCount: 35 },
+      }),
+    /audit expectation drifted/,
   );
 });

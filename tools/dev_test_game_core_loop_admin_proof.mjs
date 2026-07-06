@@ -9,8 +9,10 @@ import {
 } from "./dev_test_game_core_loop_generated_from_families.mjs";
 import {
   assertCoreLoopCommandProofRoleUrlAudit,
+  assertCoreLoopCommandProofRoleUrlAuditExpectation,
   assertCoreLoopCommandProofRoleUrls,
   buildCoreLoopCommandProofRoleUrlAudit,
+  coreLoopCommandProofRoleUrlAuditExpectation,
 } from "./dev_test_game_core_loop_proof_shape_assertions.mjs";
 import {
   assertCompletedGameProofReadinessSurfaceProof,
@@ -317,6 +319,10 @@ export function coreLoopAdminProofCase() {
         requiredSpineRoleUrls: spineRows.roleUrls,
         requiredSpineCheckpoints: spineRows.checkpoints,
         requiredSpineRecoveryHooks: spineRows.recoveryHooks,
+        requiredCommandProofRoleUrlAudits: ["command-proof-role-url-audit"],
+        requiredCommandProofRoleUrlAuditStatuses: {
+          "command-proof-role-url-audit": `${coreLoopCommandProofRoleUrlAuditExpectation.checkedCount} checked`,
+        },
       });
       const hostRoleSurface = await proveHostLifecycleControlCheckpoint({
         browser,
@@ -493,7 +499,11 @@ export function coreLoopAdminProofCase() {
         hostModkillControlSurfaceFromProofRun(proofRun);
       const hostRaceSurfaces = hostRaceSurfacesFromProofRun(proofRun);
       return {
-        adminRoleSurface,
+        adminRoleSurface: {
+          ...adminRoleSurface,
+          visibleCommandProofRoleUrlAudit:
+            coreLoopCommandProofRoleUrlAuditExpectation,
+        },
         hostRoleSurface,
         hostModkillControlSurface,
         ...hostRaceSurfaces,
@@ -10104,6 +10114,20 @@ export function assertCoreLoopAdminProof(evidence) {
     audit: evidence.commandProofRoleUrlAudit,
     includeEvidenceInError: true,
   });
+  assertCoreLoopCommandProofRoleUrlAuditExpectation({
+    audit: evidence.commandProofRoleUrlAudit,
+    includeEvidenceInError: true,
+  });
+  if (
+    evidence.adminRoleSurface?.visibleCommandProofRoleUrlAudit?.status !==
+      coreLoopCommandProofRoleUrlAuditExpectation.status ||
+    evidence.adminRoleSurface?.visibleCommandProofRoleUrlAudit?.checkedCount !==
+      coreLoopCommandProofRoleUrlAuditExpectation.checkedCount
+  ) {
+    throw new Error(
+      "core-loop admin proof missing visible command proof role URL audit summary",
+    );
+  }
   return evidence;
 }
 

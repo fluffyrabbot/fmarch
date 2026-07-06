@@ -1,6 +1,11 @@
 const roleUrlKeys = Object.freeze(["sourceRoleUrl"]);
 const visitedPathKeys = Object.freeze(["visitedRolePath"]);
 
+export const coreLoopCommandProofRoleUrlAuditExpectation = Object.freeze({
+  status: "passed",
+  checkedCount: 36,
+});
+
 export function coreLoopCommandProofRoleUrlRows(proof) {
   return collectCommandProofRoleUrlRows({
     value: proof,
@@ -55,6 +60,29 @@ export function assertCoreLoopCommandProofRoleUrlAudit({
     throw new Error(message);
   }
   return expectedAudit;
+}
+
+export function assertCoreLoopCommandProofRoleUrlAuditExpectation({
+  audit,
+  includeEvidenceInError = false,
+}) {
+  if (
+    audit?.status !== coreLoopCommandProofRoleUrlAuditExpectation.status ||
+    audit?.checkedCount !==
+      coreLoopCommandProofRoleUrlAuditExpectation.checkedCount
+  ) {
+    const message = `core-loop command proof role URL audit expectation drifted: expected ${coreLoopCommandProofRoleUrlAuditExpectation.checkedCount}, got ${audit?.checkedCount}`;
+    if (includeEvidenceInError) {
+      throw new Error(
+        `${message}: ${JSON.stringify({
+          audit,
+          expected: coreLoopCommandProofRoleUrlAuditExpectation,
+        })}`,
+      );
+    }
+    throw new Error(message);
+  }
+  return coreLoopCommandProofRoleUrlAuditExpectation;
 }
 
 function collectCommandProofRoleUrlRows({

@@ -135,6 +135,7 @@ import {
 } from "./dev_test_game_core_loop_scenarios.mjs";
 import {
   assertCoreLoopCommandProofRoleUrlAudit,
+  assertCoreLoopCommandProofRoleUrlAuditExpectation,
   assertCoreLoopCommandProofRoleUrls,
 } from "./dev_test_game_core_loop_proof_shape_assertions.mjs";
 import {
@@ -3002,6 +3003,11 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
     audit: proof.commandProofRoleUrlAudit,
     includeEvidenceInError: true,
   });
+  const visibleCommandProofRoleUrlAudit =
+    assertCoreLoopCommandProofRoleUrlAuditExpectation({
+      audit: proof.adminRoleSurface?.visibleCommandProofRoleUrlAudit,
+      includeEvidenceInError: true,
+    });
   return {
     status: "passed",
     path: options.path ?? devTestGameCoreLoopAdminProofPath,
@@ -3013,6 +3019,7 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
     visibleSpineRoleUrls: proof.adminRoleSurface.visibleSpineRoleUrls,
     visibleSpineCheckpoints: proof.adminRoleSurface.visibleSpineCheckpoints,
     visibleSpineRecoveryHooks: proof.adminRoleSurface.visibleSpineRecoveryHooks,
+    visibleCommandProofRoleUrlAudit,
     coreLoopSpineRows: proof.generatedFrom.coreLoopSpineRows,
     completedGameHardeningCoverage:
       proof.generatedFrom.completedGameHardeningCoverage,
