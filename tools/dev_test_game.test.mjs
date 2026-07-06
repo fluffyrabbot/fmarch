@@ -127,6 +127,7 @@ import {
   devTestGameSpineManifestAdminProofPath,
 } from "./dev_test_game_local_admin_proof_paths.mjs";
 import {
+  adminSpineProofPath,
   devTestGameProofRunPath,
   selectedOperatorHandoffReceiptAdminProofPath,
   selectedOperatorHandoffTerminalBatchFixturePath,
@@ -605,6 +606,9 @@ import {
   assertProofGraphAdminProof,
   buildProofGraphAdminGeneratedFrom,
   buildProofGraphAdminProofRequirements,
+  loadProofGraphAdminProofSource,
+  proofGraphAdminProofCase,
+  proofGraphAdminProofEnvOverrides,
 } from "./dev_test_game_proof_graph_admin_proof.mjs";
 import {
   proofGraphProductionFeatureDestinationSummary,
@@ -6868,6 +6872,43 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
         adminSpineProof,
       ),
     /proof graph admin surface count drifted/,
+  );
+});
+
+test("proof graph admin proof source loading names default artifacts", () => {
+  const proofCase = proofGraphAdminProofCase();
+  const expectedEnvOverrides = {
+    FMARCH_DEV_TEST_GAME_PROOF_GRAPH: devTestGameProofGraphPath,
+    FMARCH_DEV_TEST_GAME_ADMIN_SPINE_PROOF: adminSpineProofPath,
+    FMARCH_DEV_TEST_GAME_ADMIN_SPINE_TERMINAL_BATCHES:
+      adminSpineTerminalBatchProofPath,
+    FMARCH_DEV_TEST_GAME_HOSTED_CONCURRENT_RACE_MATRIX:
+      devTestGameHostedConcurrentRaceMatrixPath,
+    FMARCH_DEV_TEST_GAME_HOSTED_EVIDENCE_LANE:
+      devTestGameHostedEvidenceLaneDemoBlockedPath,
+  };
+
+  assert.equal(proofCase.loadSource, loadProofGraphAdminProofSource);
+  assert.deepEqual(proofCase.envOverrides, expectedEnvOverrides);
+  assert.deepEqual(proofGraphAdminProofEnvOverrides(), expectedEnvOverrides);
+  assert.deepEqual(
+    proofGraphAdminProofEnvOverrides({
+      proofGraph: "custom/proof-graph.json",
+      adminSpineProof: "custom/admin-spine-proof.json",
+      adminSpineTerminalBatches: "custom/admin-spine-terminal-batches.json",
+      hostedConcurrentRaceMatrix: "custom/hosted-matrix.json",
+      hostedEvidenceLane: "custom/hosted-evidence-lane.json",
+    }),
+    {
+      FMARCH_DEV_TEST_GAME_PROOF_GRAPH: "custom/proof-graph.json",
+      FMARCH_DEV_TEST_GAME_ADMIN_SPINE_PROOF: "custom/admin-spine-proof.json",
+      FMARCH_DEV_TEST_GAME_ADMIN_SPINE_TERMINAL_BATCHES:
+        "custom/admin-spine-terminal-batches.json",
+      FMARCH_DEV_TEST_GAME_HOSTED_CONCURRENT_RACE_MATRIX:
+        "custom/hosted-matrix.json",
+      FMARCH_DEV_TEST_GAME_HOSTED_EVIDENCE_LANE:
+        "custom/hosted-evidence-lane.json",
+    },
   );
 });
 

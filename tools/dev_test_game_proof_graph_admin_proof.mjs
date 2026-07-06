@@ -141,36 +141,8 @@ export function proofGraphAdminProofCase() {
     smokeName: "dev-test-game-proof-graph-admin-proof",
     stage: "proof-graph-admin-proof-listen",
     evidencePath,
-    envOverrides: {
-      FMARCH_DEV_TEST_GAME_PROOF_GRAPH: proofGraphRelativePath,
-      FMARCH_DEV_TEST_GAME_ADMIN_SPINE_PROOF: adminSpineProofRelativePath,
-      FMARCH_DEV_TEST_GAME_ADMIN_SPINE_TERMINAL_BATCHES:
-        adminSpineTerminalBatchesRelativePath,
-      FMARCH_DEV_TEST_GAME_HOSTED_CONCURRENT_RACE_MATRIX:
-        hostedMatrixRelativePath,
-      FMARCH_DEV_TEST_GAME_HOSTED_EVIDENCE_LANE: hostedEvidenceLaneRelativePath,
-    },
-    loadSource: async () => {
-      const adminSpineProof = await readJson(adminSpineProofPath);
-      const adminSpineTerminalBatches =
-        await readOptionalAdminSpineTerminalBatches();
-      return {
-        proofGraph: assertDevTestGameProofGraph(await readJson(proofGraphPath), {
-          adminSpineProof,
-        }),
-        proofRun: assertDevTestGameProofRun(await readJson(proofRunPath)),
-        adminSpineProof: validateDevTestGameAdminSpineProof(adminSpineProof, {
-          path: adminSpineProofRelativePath,
-        }),
-        adminSpineTerminalBatches,
-        hostedMatrix: assertDevTestGameHostedConcurrentRaceMatrixEvidence(
-          await readJson(hostedMatrixPath),
-        ),
-        hostedEvidenceLane: assertDevTestGameHostedEvidenceLane(
-          await readJson(hostedEvidenceLanePath),
-        ),
-      };
-    },
+    envOverrides: proofGraphAdminProofEnvOverrides(),
+    loadSource: loadProofGraphAdminProofSource,
     prove: async ({ browser, frontendBaseUrl, source }) => {
       return await proveAdminAuditDetail({
         browser,
@@ -191,6 +163,62 @@ export function proofGraphAdminProofCase() {
       adminRoleSurface,
     }),
     assertEvidence: assertProofGraphAdminProof,
+  };
+}
+
+export function proofGraphAdminProofEnvOverrides({
+  proofGraph = proofGraphRelativePath,
+  adminSpineProof = adminSpineProofRelativePath,
+  adminSpineTerminalBatches = adminSpineTerminalBatchesRelativePath,
+  hostedConcurrentRaceMatrix = hostedMatrixRelativePath,
+  hostedEvidenceLane = hostedEvidenceLaneRelativePath,
+} = {}) {
+  return {
+    FMARCH_DEV_TEST_GAME_PROOF_GRAPH: proofGraph,
+    FMARCH_DEV_TEST_GAME_ADMIN_SPINE_PROOF: adminSpineProof,
+    FMARCH_DEV_TEST_GAME_ADMIN_SPINE_TERMINAL_BATCHES:
+      adminSpineTerminalBatches,
+    FMARCH_DEV_TEST_GAME_HOSTED_CONCURRENT_RACE_MATRIX:
+      hostedConcurrentRaceMatrix,
+    FMARCH_DEV_TEST_GAME_HOSTED_EVIDENCE_LANE: hostedEvidenceLane,
+  };
+}
+
+export async function loadProofGraphAdminProofSource({
+  proofGraphPath: sourceProofGraphPath = proofGraphPath,
+  proofRunPath: sourceProofRunPath = proofRunPath,
+  adminSpineProofPath: sourceAdminSpineProofPath = adminSpineProofPath,
+  adminSpineProofLabel = adminSpineProofRelativePath,
+  adminSpineTerminalBatchesPath:
+    sourceAdminSpineTerminalBatchesPath = adminSpineTerminalBatchesPath,
+  adminSpineTerminalBatchesLabel = adminSpineTerminalBatchesRelativePath,
+  hostedMatrixPath: sourceHostedMatrixPath = hostedMatrixPath,
+  hostedEvidenceLanePath: sourceHostedEvidenceLanePath = hostedEvidenceLanePath,
+} = {}) {
+  const adminSpineProof = await readJson(sourceAdminSpineProofPath);
+  const adminSpineTerminalBatches =
+    await readOptionalAdminSpineTerminalBatches({
+      path: sourceAdminSpineTerminalBatchesPath,
+      label: adminSpineTerminalBatchesLabel,
+    });
+  return {
+    proofGraph: assertDevTestGameProofGraph(
+      await readJson(sourceProofGraphPath),
+      {
+        adminSpineProof,
+      },
+    ),
+    proofRun: assertDevTestGameProofRun(await readJson(sourceProofRunPath)),
+    adminSpineProof: validateDevTestGameAdminSpineProof(adminSpineProof, {
+      path: adminSpineProofLabel,
+    }),
+    adminSpineTerminalBatches,
+    hostedMatrix: assertDevTestGameHostedConcurrentRaceMatrixEvidence(
+      await readJson(sourceHostedMatrixPath),
+    ),
+    hostedEvidenceLane: assertDevTestGameHostedEvidenceLane(
+      await readJson(sourceHostedEvidenceLanePath),
+    ),
   };
 }
 
@@ -422,10 +450,13 @@ export function assertProofGraphAdminProof(evidence) {
   return evidence;
 }
 
-async function readOptionalAdminSpineTerminalBatches() {
+async function readOptionalAdminSpineTerminalBatches({
+  path: sourcePath = adminSpineTerminalBatchesPath,
+  label = adminSpineTerminalBatchesRelativePath,
+} = {}) {
   let payload;
   try {
-    payload = await readJson(adminSpineTerminalBatchesPath);
+    payload = await readJson(sourcePath);
   } catch (error) {
     if (error?.code === "ENOENT") {
       return null;
@@ -433,7 +464,7 @@ async function readOptionalAdminSpineTerminalBatches() {
     throw error;
   }
   return validateDevTestGameAdminSpineTerminalBatches(payload, {
-    path: adminSpineTerminalBatchesRelativePath,
+    path: label,
   });
 }
 
