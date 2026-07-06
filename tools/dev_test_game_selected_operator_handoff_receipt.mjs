@@ -206,6 +206,46 @@ export function selectedOperatorHandoffReceiptSelectedRowStatus(receipt) {
   ].join("\n");
 }
 
+export function selectedOperatorHandoffTerminalReceiptDestinationFields(
+  receipt,
+) {
+  return {
+    selectedOperatorHandoffReceiptId: receipt.id,
+    selectedOperatorHandoffReceiptStatus: receipt.status,
+    requiredSelectedOperatorHandoffTerminalReceiptRows: [
+      "receipt",
+      "selected",
+      "edge",
+      "readiness-link",
+    ],
+    requiredSelectedOperatorHandoffTerminalReceiptRowStatuses: {
+      receipt: [
+        receipt.status,
+        receipt.id,
+        receipt.proofBoundary,
+        receipt.sourceArtifacts.nextAction,
+        receipt.sourceArtifacts.nextActionAdminProof,
+        receipt.sourceArtifacts.proofGraph,
+        receipt.sourceArtifacts.releaseReadiness,
+      ].join("\n"),
+      selected: selectedOperatorHandoffReceiptSelectedRowStatus(receipt),
+      edge: [
+        receipt.proofGraphEdge.from,
+        receipt.proofGraphEdge.relationship,
+        receipt.proofGraphEdge.to,
+        receipt.proofGraphEdge.firstMissingInputId,
+      ].join("\n"),
+      "readiness-link": [
+        receipt.readinessRelatedLink.id,
+        receipt.readinessRelatedLink.sourceAuditId,
+        receipt.readinessRelatedLink.destinationAuditId,
+        receipt.readinessRelatedLink.status,
+        receipt.readinessRelatedLink.command,
+      ].join("\n"),
+    },
+  };
+}
+
 function assertSelectedOperatorHandoffReceiptShape(receipt) {
   if (receipt.status === "not_applicable") {
     if (

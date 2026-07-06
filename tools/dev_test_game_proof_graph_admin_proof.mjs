@@ -80,7 +80,7 @@ import {
   devTestGameNextActionSequenceHandoffPair,
 } from "./dev_test_game_next_action_sequence_handoff_pair.mjs";
 import {
-  selectedOperatorHandoffReceiptSelectedRowStatus,
+  selectedOperatorHandoffTerminalReceiptDestinationFields,
   selectedOperatorHandoffTerminalReceiptId,
 } from "./dev_test_game_selected_operator_handoff_receipt.mjs";
 import {
@@ -1045,7 +1045,7 @@ function proofGraphAdminSpineTerminalReceiptDestination(
     detailRoleUrl:
       `/admin/audit/${localAdminAuditIds.adminSpine}?game=<seeded-game>`,
     ...(receipt?.status === "passed"
-      ? proofGraphSelectedOperatorHandoffReceiptDestinationFields(receipt)
+      ? selectedOperatorHandoffTerminalReceiptDestinationFields(receipt)
       : {}),
     ...(terminalValidationDestination ?? {}),
   };
@@ -1057,45 +1057,7 @@ function proofGraphSelectedOperatorHandoffReceiptDestination(receipt) {
     auditId: localAdminAuditIds.adminSpine,
     detailRoleUrl:
       `/admin/audit/${localAdminAuditIds.adminSpine}?game=<seeded-game>`,
-    ...proofGraphSelectedOperatorHandoffReceiptDestinationFields(receipt),
-  };
-}
-
-function proofGraphSelectedOperatorHandoffReceiptDestinationFields(receipt) {
-  return {
-    selectedOperatorHandoffReceiptId: receipt.id,
-    selectedOperatorHandoffReceiptStatus: receipt.status,
-    requiredSelectedOperatorHandoffTerminalReceiptRows: [
-      "receipt",
-      "selected",
-      "edge",
-      "readiness-link",
-    ],
-    requiredSelectedOperatorHandoffTerminalReceiptRowStatuses: {
-      receipt: [
-        receipt.status,
-        receipt.id,
-        receipt.proofBoundary,
-        receipt.sourceArtifacts.nextAction,
-        receipt.sourceArtifacts.nextActionAdminProof,
-        receipt.sourceArtifacts.proofGraph,
-        receipt.sourceArtifacts.releaseReadiness,
-      ].join("\n"),
-      selected: selectedOperatorHandoffReceiptSelectedRowStatus(receipt),
-      edge: [
-        receipt.proofGraphEdge.from,
-        receipt.proofGraphEdge.relationship,
-        receipt.proofGraphEdge.to,
-        receipt.proofGraphEdge.firstMissingInputId,
-      ].join("\n"),
-      "readiness-link": [
-        receipt.readinessRelatedLink.id,
-        receipt.readinessRelatedLink.sourceAuditId,
-        receipt.readinessRelatedLink.destinationAuditId,
-        receipt.readinessRelatedLink.status,
-        receipt.readinessRelatedLink.command,
-      ].join("\n"),
-    },
+    ...selectedOperatorHandoffTerminalReceiptDestinationFields(receipt),
   };
 }
 

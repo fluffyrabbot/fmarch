@@ -686,7 +686,7 @@ import {
 } from "./dev_test_game_next_action_sequence_handoff_pair.mjs";
 import {
   buildSelectedOperatorHandoffTerminalReceipt,
-  selectedOperatorHandoffReceiptSelectedRowStatus,
+  selectedOperatorHandoffTerminalReceiptDestinationFields,
 } from "./dev_test_game_selected_operator_handoff_receipt.mjs";
 import {
   selectedOperatorHandoffPassedReceiptFixture,
@@ -25512,74 +25512,17 @@ function selectedOperatorHandoffReceiptPassedFixture() {
 
 function selectedOperatorHandoffReceiptDestinationFixture() {
   const receipt = selectedOperatorHandoffReceiptPassedFixture();
+  const destinationFields =
+    selectedOperatorHandoffTerminalReceiptDestinationFields(receipt);
   return {
     linkId: "admin-spine-terminal-batches",
     auditId: localAdminAuditIds.adminSpine,
     detailRoleUrl: localAdminAuditRoleUrl(localAdminAuditIds.adminSpine),
-    selectedOperatorHandoffReceiptId: receipt.id,
-    selectedOperatorHandoffReceiptStatus: receipt.status,
-    requiredSelectedOperatorHandoffTerminalReceiptRows: [
-      "receipt",
-      "selected",
-      "edge",
-      "readiness-link",
-    ],
-    requiredSelectedOperatorHandoffTerminalReceiptRowStatuses: {
-      receipt: [
-        receipt.status,
-        receipt.id,
-        receipt.proofBoundary,
-        receipt.sourceArtifacts.nextAction,
-        receipt.sourceArtifacts.nextActionAdminProof,
-        receipt.sourceArtifacts.proofGraph,
-        receipt.sourceArtifacts.releaseReadiness,
-      ].join("\n"),
-      selected: selectedOperatorHandoffReceiptSelectedRowStatus(receipt),
-      edge: [
-        receipt.proofGraphEdge.from,
-        receipt.proofGraphEdge.relationship,
-        receipt.proofGraphEdge.to,
-        receipt.proofGraphEdge.firstMissingInputId,
-      ].join("\n"),
-      "readiness-link": [
-        receipt.readinessRelatedLink.id,
-        receipt.readinessRelatedLink.sourceAuditId,
-        receipt.readinessRelatedLink.destinationAuditId,
-        receipt.readinessRelatedLink.status,
-        receipt.readinessRelatedLink.command,
-      ].join("\n"),
-    },
-    visibleSelectedOperatorHandoffTerminalReceiptRows: [
-      "receipt",
-      "selected",
-      "edge",
-      "readiness-link",
-    ],
-    visibleSelectedOperatorHandoffTerminalReceiptRowStatuses: {
-      receipt: [
-        receipt.status,
-        receipt.id,
-        receipt.proofBoundary,
-        receipt.sourceArtifacts.nextAction,
-        receipt.sourceArtifacts.nextActionAdminProof,
-        receipt.sourceArtifacts.proofGraph,
-        receipt.sourceArtifacts.releaseReadiness,
-      ].join("\n"),
-      selected: selectedOperatorHandoffReceiptSelectedRowStatus(receipt),
-      edge: [
-        receipt.proofGraphEdge.from,
-        receipt.proofGraphEdge.relationship,
-        receipt.proofGraphEdge.to,
-        receipt.proofGraphEdge.firstMissingInputId,
-      ].join("\n"),
-      "readiness-link": [
-        receipt.readinessRelatedLink.id,
-        receipt.readinessRelatedLink.sourceAuditId,
-        receipt.readinessRelatedLink.destinationAuditId,
-        receipt.readinessRelatedLink.status,
-        receipt.readinessRelatedLink.command,
-      ].join("\n"),
-    },
+    ...destinationFields,
+    visibleSelectedOperatorHandoffTerminalReceiptRows:
+      destinationFields.requiredSelectedOperatorHandoffTerminalReceiptRows,
+    visibleSelectedOperatorHandoffTerminalReceiptRowStatuses:
+      destinationFields.requiredSelectedOperatorHandoffTerminalReceiptRowStatuses,
   };
 }
 
