@@ -76,6 +76,7 @@ import {
   hardeningFeatureSpineCycleIds,
   hardeningFeatureSpineTargetRows,
   hardeningFeatureSpineSourceCheckId,
+  replacementActionRaceReloadLaneId,
 } from "./dev_test_game_hardening_feature_spine_targets.mjs";
 import {
   hostSetupFeatureSpineSource,
@@ -190,6 +191,11 @@ const hardeningConcurrentRaceFeatureTargetExpectations = Object.freeze([
     featureSlotId: "cohost-host-deadline-resolve-race-reload",
     rowId: crossRoleRaceCellById.get("cohost-deadline-vs-host-resolve")
       .reloadLaneId,
+  }),
+  Object.freeze({
+    targetKey: "replacementActionRaceReload",
+    featureSlotId: "replacement-action-race-reload",
+    rowId: replacementActionRaceReloadLaneId,
   }),
 ]);
 

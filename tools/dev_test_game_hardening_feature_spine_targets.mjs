@@ -56,6 +56,8 @@ const playerActionAdvanceRaceSpineCell = crossRoleRaceCellById.get(
 const cohostDeadlineResolveRaceSpineCell = crossRoleRaceCellById.get(
   "cohost-deadline-vs-host-resolve",
 );
+export const replacementActionRaceReloadLaneId =
+  "concurrent-replacement-action-race-reload";
 export const hardeningFeatureSpineTargetRows = Object.freeze({
   completedGameStaleRecovery: Object.freeze({
     featureSlotId: "completed-game-stale-recovery",
@@ -177,6 +179,14 @@ export const hardeningFeatureSpineTargetRows = Object.freeze({
     checkpointId: cohostDeadlineResolveRaceSpineCell.reloadLaneId,
     adminCheckId: cohostDeadlineResolveRaceSpineCell.reloadLaneId,
   }),
+  replacementActionRaceReload: Object.freeze({
+    featureSlotId: "replacement-action-race-reload",
+    sourceCheckId: hardeningFeatureSpineSourceCheckId,
+    cycleId: hardeningFeatureSpineCycleIds.concurrentRace,
+    roleUrlId: replacementActionRaceReloadLaneId,
+    checkpointId: replacementActionRaceReloadLaneId,
+    adminCheckId: replacementActionRaceReloadLaneId,
+  }),
 });
 export const hardeningDirectRoleUrlReconnectFeatureSpineTargetRows =
   Object.freeze([
@@ -239,6 +249,10 @@ export const hardeningSynthesizedRoleUrlConcurrentRaceFeatureSpineTargetRows =
     Object.freeze({
       row: hardeningFeatureSpineTargetRows.cohostHostDeadlineResolveRaceReload,
       role: "host",
+    }),
+    Object.freeze({
+      row: hardeningFeatureSpineTargetRows.replacementActionRaceReload,
+      role: "player",
     }),
   ]);
 export const hardeningConcurrentRaceFeatureSpineTargetRows = Object.freeze(
