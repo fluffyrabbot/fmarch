@@ -642,6 +642,9 @@ import {
   proofGraphProductionFeatureProvenanceComparison,
 } from "./dev_test_game_proof_graph_production_feature_destinations.mjs";
 import {
+  proofGraphCoreLoopRecoveryDestinationSummary,
+} from "./dev_test_game_proof_graph_core_loop_recovery_destinations.mjs";
+import {
   buildProofGraphDestinationSummaryTrace,
 } from "./dev_test_game_proof_graph_destination_summary_trace.mjs";
 import {
@@ -23126,6 +23129,8 @@ function proofGraphAdminProofFixture() {
     proofGraphCoreLoopHostVisibleRecoveryDestinationsFixture();
   const coreLoopHostVisibleRecoveryEdgeRowIds =
     proofGraphCoreLoopHostVisibleRecoveryEdgeRowIdsFixture();
+  const coreLoopRecoveryDestinationSummary =
+    proofGraphCoreLoopRecoveryDestinationSummaryFixture();
   const evidenceObjectRowIds = [
     ...expectedNormalizedEvidenceObjectRowIds({
       parentId: "private-channel-recovery-receipt",
@@ -23216,6 +23221,7 @@ function proofGraphAdminProofFixture() {
       adminProofRoleHandoffs: handoffs,
       coreLoopScenarioFamilyDestinations: coreLoopFamilyDestinations,
       coreLoopHostVisibleRecoveryDestinations,
+      coreLoopRecoveryDestinationSummary,
       productionFeatureTargetDestinations,
       productionFeatureDestinationSummary,
       manifestProductionFeatureProvenanceSummary,
@@ -23319,6 +23325,27 @@ function proofGraphAdminProofFixture() {
           ].join("\n"),
         ]),
       ),
+      visibleProofGraphCoreLoopRecoveryDestinations:
+        coreLoopRecoveryDestinationSummary.rows.map((row) => row.id),
+      visibleProofGraphCoreLoopRecoveryDestinationStatuses:
+        Object.fromEntries(
+          coreLoopRecoveryDestinationSummary.rows.map((row) => [
+            row.id,
+            [
+              row.label,
+              row.status,
+              row.recoveryCaseId,
+              row.graphNodeId,
+              row.adminRowId,
+              row.proofEdgeRowId,
+              row.graphEdgeRowId,
+              row.nextActionEdgeRowId,
+              row.proofTarget,
+              row.command,
+              row.roleUrl,
+            ].join("\n"),
+          ]),
+        ),
       visibleRelatedDestinations: [
         ...handoffs.map((handoff) => ({
           linkId: handoff.linkId,
@@ -23566,6 +23593,44 @@ function proofGraphCoreLoopHostVisibleRecoveryEdgeRowIdsFixture() {
       `edge:${nodeId}:records:proof-graph`,
       `edge:${nodeId}:summarizes-into:next-action`,
     ];
+  });
+}
+
+function proofGraphCoreLoopRecoveryDestinationSummaryFixture() {
+  return proofGraphCoreLoopRecoveryDestinationSummary({
+    nodes: nextActionProofGraphCoreLoopRecoveryNodesFixture(),
+    edges: hostVisibleRecoverySummaryCases().flatMap((recoveryCase) => {
+      const nodeId = `core-loop-host-visible-recovery:${recoveryCase.id}`;
+      return [
+        {
+          from: "admin-proof:core-loop",
+          to: nodeId,
+          relationship: "proves-host-visible-recovery",
+          roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.coreLoop),
+          command: devTestGameCoreLoopAdminProofCommand,
+          proofTarget: devTestGameCoreLoopAdminProofPath,
+          recoveryCaseId: recoveryCase.id,
+        },
+        {
+          from: nodeId,
+          to: "proof-graph",
+          relationship: "records",
+          roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.coreLoop),
+          command: devTestGameCoreLoopAdminProofCommand,
+          proofTarget: devTestGameCoreLoopAdminProofPath,
+          recoveryCaseId: recoveryCase.id,
+        },
+        {
+          from: nodeId,
+          to: "next-action",
+          relationship: "summarizes-into",
+          roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.coreLoop),
+          command: devTestGameCoreLoopAdminProofCommand,
+          proofTarget: devTestGameCoreLoopAdminProofPath,
+          recoveryCaseId: recoveryCase.id,
+        },
+      ];
+    }),
   });
 }
 

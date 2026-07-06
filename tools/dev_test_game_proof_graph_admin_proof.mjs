@@ -94,6 +94,9 @@ import {
   proofGraphPrerequisiteDestinationRowIds,
 } from "./dev_test_game_proof_graph_prerequisite_destination_rows.mjs";
 import {
+  proofGraphCoreLoopRecoveryDestinationSummary,
+} from "./dev_test_game_proof_graph_core_loop_recovery_destinations.mjs";
+import {
   proofGraphAdminProofDescriptor,
 } from "./dev_test_game_proof_graph_admin_proof_descriptor.mjs";
 
@@ -247,6 +250,8 @@ export function buildProofGraphAdminProofRequirements(source) {
     source.proofGraph.summary?.diagnosticProofSummary,
     { nodes: source.proofGraph.nodes },
   );
+  const coreLoopRecoveryDestinationSummary =
+    proofGraphCoreLoopRecoveryDestinationSummary(source.proofGraph);
   return {
     game: source.proofRun.session.game,
     auditId: localAdminAuditIds.proofGraph,
@@ -265,6 +270,14 @@ export function buildProofGraphAdminProofRequirements(source) {
     ),
     requiredProofGraphPrerequisiteDestinations:
       proofGraphAdminProofPrerequisiteDestinationRowIds(source.proofGraph),
+    requiredProofGraphCoreLoopRecoveryDestinations:
+      coreLoopRecoveryDestinationSummary.rows.map((row) => row.id),
+    requiredProofGraphCoreLoopRecoveryDestinationStatuses: Object.fromEntries(
+      coreLoopRecoveryDestinationSummary.rows.map((row) => [
+        row.id,
+        row.nextActionEdgeRowId,
+      ]),
+    ),
     requiredRelatedLinks: source.proofGraph.nodes
       .filter(
         (node) =>
@@ -350,6 +363,8 @@ export function buildProofGraphAdminGeneratedFrom(
       source.proofGraph.summary?.diagnosticProofSummary,
       { nodes: source.proofGraph.nodes },
     ),
+    coreLoopRecoveryDestinationSummary:
+      proofGraphCoreLoopRecoveryDestinationSummary(source.proofGraph),
     proofGraphPrerequisiteDestinationRowIds:
       proofGraphAdminProofPrerequisiteDestinationRowIds(source.proofGraph),
     ...(source.adminSpineTerminalBatches?.selectedOperatorHandoffReceipt
@@ -447,6 +462,7 @@ export function assertProofGraphAdminProof(evidence) {
   });
   assertProofGraphAdminProofCoversCoreLoopScenarioFamilies(evidence);
   assertProofGraphAdminProofCoversCoreLoopHostVisibleRecoveries(evidence);
+  assertProofGraphAdminProofCoversCoreLoopRecoveryDestinations(evidence);
   assertProofGraphAdminProofCoversProductionFeatureDestinations(evidence);
   assertProofGraphAdminProofCoversProductionFeatureDestinationSummary(evidence);
   assertProofGraphAdminProofCoversProductionFeatureProvenanceComparison(evidence);
@@ -462,6 +478,64 @@ export function assertProofGraphAdminProof(evidence) {
     assertProofGraphAdminProofCoversFeatureTarget(evidence, featureTargetCase);
   }
   return evidence;
+}
+
+function assertProofGraphAdminProofCoversCoreLoopRecoveryDestinations(evidence) {
+  const summary = evidence.generatedFrom?.coreLoopRecoveryDestinationSummary;
+  const rows = Array.isArray(summary?.rows) ? summary.rows : [];
+  if (
+    summary?.id !== "core-loop-recovery-destinations" ||
+    summary.status !== "passed" ||
+    summary.requiredCount !== hostVisibleRecoverySummaryCases().length ||
+    summary.coveredCount !== summary.requiredCount ||
+    summary.missingCount !== 0 ||
+    rows.length !== summary.requiredCount
+  ) {
+    throw new Error(
+      "proof graph admin proof core-loop recovery destination summary drifted",
+    );
+  }
+  const visibleRows =
+    evidence.adminRoleSurface?.visibleProofGraphCoreLoopRecoveryDestinations ??
+    [];
+  const visibleStatuses =
+    evidence.adminRoleSurface
+      ?.visibleProofGraphCoreLoopRecoveryDestinationStatuses ?? {};
+  for (const row of rows) {
+    if (
+      row.status !== "passed" ||
+      !visibleRows.includes(row.id) ||
+      row.graphNodeId !== `core-loop-host-visible-recovery:${row.recoveryCaseId}` ||
+      row.adminRowId !== `host-visible-recovery-${row.recoveryCaseId}` ||
+      row.proofEdgeRowId !==
+        `edge:admin-proof:core-loop:proves-host-visible-recovery:${row.graphNodeId}` ||
+      row.graphEdgeRowId !== `edge:${row.graphNodeId}:records:proof-graph` ||
+      row.nextActionEdgeRowId !==
+        `edge:${row.graphNodeId}:summarizes-into:next-action`
+    ) {
+      throw new Error(
+        `proof graph admin proof core-loop recovery destination row drifted: ${row?.id}`,
+      );
+    }
+    const visibleStatus = String(visibleStatuses[row.id] ?? "");
+    for (const token of [
+      row.status,
+      row.recoveryCaseId,
+      row.graphNodeId,
+      row.adminRowId,
+      row.proofEdgeRowId,
+      row.graphEdgeRowId,
+      row.nextActionEdgeRowId,
+      row.proofTarget,
+      row.command,
+    ]) {
+      if (!visibleStatus.includes(token)) {
+        throw new Error(
+          `proof graph admin proof core-loop recovery destination row missing ${token}: ${row.id}`,
+        );
+      }
+    }
+  }
 }
 
 async function readOptionalAdminSpineTerminalBatches({

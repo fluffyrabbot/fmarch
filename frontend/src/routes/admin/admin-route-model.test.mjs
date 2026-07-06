@@ -227,6 +227,12 @@ import {
   proofGraphPrerequisiteDestinationSectionId,
 } from "../../../../tools/dev_test_game_proof_graph_prerequisite_destination_rows.mjs";
 import {
+  proofGraphCoreLoopRecoveryDestinationRowTestId,
+  proofGraphCoreLoopRecoveryDestinationSectionHeading,
+  proofGraphCoreLoopRecoveryDestinationSectionId,
+  proofGraphCoreLoopRecoveryDestinationSummary,
+} from "../../../../tools/dev_test_game_proof_graph_core_loop_recovery_destinations.mjs";
+import {
   hostedTargetPreflightExternalTargetsRequiredEvidence,
   hostedTargetPreflightMissingApiUrlRequiredEvidence,
   hostedTargetPreflightMissingFrontendUrlRequiredEvidence,
@@ -2559,6 +2565,10 @@ test("admin route data exposes local proof graph as a native audit row", async (
     hostedEvidenceProgressionHandoffSummary(),
   );
   assert.deepEqual(
+    graph.artifactSummary.coreLoopRecoveryDestinationSummary,
+    proofGraphCoreLoopRecoveryDestinationSummary(proofGraph),
+  );
+  assert.deepEqual(
     graph.artifactSummary.productionFeatureDestinationSummary.rows
       .filter((row) => row.id.startsWith("hosted-evidence-progression:"))
       .map((row) => row.progressionId),
@@ -2610,6 +2620,12 @@ test("admin route data exposes local proof graph as a native audit row", async (
         proofGraphPrerequisiteDestinationSectionHeading,
         `admin-audit-detail-${proofGraphPrerequisiteDestinationSectionId}`,
         expectedProofGraphPrerequisiteDestinationRows(proofGraph),
+      ],
+      [
+        proofGraphCoreLoopRecoveryDestinationSectionId,
+        proofGraphCoreLoopRecoveryDestinationSectionHeading,
+        `admin-audit-detail-${proofGraphCoreLoopRecoveryDestinationSectionId}`,
+        expectedProofGraphCoreLoopRecoveryDestinationRows(proofGraph),
       ],
     ],
   );
@@ -9133,6 +9149,28 @@ function expectedProofGraphPrerequisiteDestinationRows(proofGraph) {
         ["destinationId", destinationId, false],
         ["auditId", auditId, false],
         ["roleUrl", roleUrl, false],
+      ],
+    ],
+  );
+}
+
+function expectedProofGraphCoreLoopRecoveryDestinationRows(proofGraph) {
+  return proofGraphCoreLoopRecoveryDestinationSummary(proofGraph).rows.map(
+    (row) => [
+      row.id,
+      proofGraphCoreLoopRecoveryDestinationRowTestId(row.id),
+      [
+        ["label", row.label, true],
+        ["status", row.status, false],
+        ["recoveryCaseId", row.recoveryCaseId, false],
+        ["graphNodeId", row.graphNodeId, false],
+        ["adminRowId", row.adminRowId, false],
+        ["proofEdgeRowId", row.proofEdgeRowId, false],
+        ["graphEdgeRowId", row.graphEdgeRowId, false],
+        ["nextActionEdgeRowId", row.nextActionEdgeRowId, false],
+        ["proofTarget", row.proofTarget, false],
+        ["command", row.command, false],
+        ["roleUrl", row.roleUrl, false],
       ],
     ],
   );

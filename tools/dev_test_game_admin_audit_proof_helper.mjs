@@ -21,6 +21,9 @@ import {
   proofGraphPrerequisiteDestinationRowTestIdPrefix,
 } from "./dev_test_game_proof_graph_prerequisite_destination_rows.mjs";
 import {
+  proofGraphCoreLoopRecoveryDestinationRowTestIdPrefix,
+} from "./dev_test_game_proof_graph_core_loop_recovery_destinations.mjs";
+import {
   proofGraphDiagnosticProofSummaryRowTestIdPrefix,
 } from "./dev_test_game_proof_graph_diagnostic_summary.mjs";
 export {
@@ -317,6 +320,8 @@ export async function proveAdminAuditDetail({
   requiredDiagnosticProofSummaries = [],
   requiredDiagnosticProofSummaryStatuses = {},
   requiredProofGraphPrerequisiteDestinations = [],
+  requiredProofGraphCoreLoopRecoveryDestinations = [],
+  requiredProofGraphCoreLoopRecoveryDestinationStatuses = {},
   requiredScenarioFamilies = [],
   requiredScenarioFamilyText = {},
   requiredSpineCycles = [],
@@ -511,6 +516,18 @@ export async function proveAdminAuditDetail({
       prefix: proofGraphPrerequisiteDestinationRowTestIdPrefix,
       ids: requiredProofGraphPrerequisiteDestinations,
     });
+    const visibleProofGraphCoreLoopRecoveryDestinations = await waitForRows({
+      page,
+      prefix: proofGraphCoreLoopRecoveryDestinationRowTestIdPrefix,
+      ids: requiredProofGraphCoreLoopRecoveryDestinations,
+      expectedStatuses: requiredProofGraphCoreLoopRecoveryDestinationStatuses,
+    });
+    const visibleProofGraphCoreLoopRecoveryDestinationStatuses =
+      await readRowStatuses({
+        page,
+        prefix: proofGraphCoreLoopRecoveryDestinationRowTestIdPrefix,
+        ids: Object.keys(requiredProofGraphCoreLoopRecoveryDestinationStatuses),
+      });
     const visibleScenarioFamilies = await waitForRows({
       page,
       prefix: "admin-audit-scenario-family",
@@ -1317,6 +1334,18 @@ export async function proveAdminAuditDetail({
       ...(visibleProofGraphPrerequisiteDestinations.length === 0
         ? {}
         : { visibleProofGraphPrerequisiteDestinations }),
+      ...(visibleProofGraphCoreLoopRecoveryDestinations.length === 0
+        ? {}
+        : {
+            visibleProofGraphCoreLoopRecoveryDestinations,
+          }),
+      ...(Object.keys(visibleProofGraphCoreLoopRecoveryDestinationStatuses)
+        .length === 0
+        ? {}
+        : {
+            visibleProofGraphCoreLoopRecoveryDestinationStatuses:
+              visibleProofGraphCoreLoopRecoveryDestinationStatuses,
+          }),
       ...(visibleScenarioFamilies.length === 0
         ? {}
         : { visibleScenarioFamilies }),

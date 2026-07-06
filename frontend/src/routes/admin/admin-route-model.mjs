@@ -42,6 +42,12 @@ import {
   playerInvalidActionRecoveryLaneId,
 } from "../../../../tools/dev_test_game_core_loop_action_scenarios.mjs";
 import {
+  proofGraphCoreLoopRecoveryDestinationRowTestId,
+  proofGraphCoreLoopRecoveryDestinationSectionHeading,
+  proofGraphCoreLoopRecoveryDestinationSectionId,
+  proofGraphCoreLoopRecoveryDestinationSummary,
+} from "../../../../tools/dev_test_game_proof_graph_core_loop_recovery_destinations.mjs";
+import {
   hostedEvidenceHandoffInputRows,
 } from "../../../../tools/dev_test_game_hosted_handoff_cases.mjs";
 import {
@@ -483,7 +489,51 @@ function buildLocalProofGraphSummarySections(artifactSummary, { nodes, game } = 
   return Object.freeze([
     ...diagnosticProofSummarySections(artifactSummary.diagnosticProofSummary),
     ...proofGraphPrerequisiteDestinationSections({ nodes, game }),
+    ...proofGraphCoreLoopRecoveryDestinationSections({
+      summary: artifactSummary.coreLoopRecoveryDestinationSummary,
+      game,
+    }),
   ]);
+}
+
+function proofGraphCoreLoopRecoveryDestinationSections({ summary, game } = {}) {
+  const rows = Array.isArray(summary?.rows) ? summary.rows : [];
+  if (rows.length === 0) {
+    return [];
+  }
+  return [
+    buildArtifactSummarySection({
+      id: proofGraphCoreLoopRecoveryDestinationSectionId,
+      heading: proofGraphCoreLoopRecoveryDestinationSectionHeading,
+      rows: rows.map((row) =>
+        proofGraphCoreLoopRecoveryDestinationArtifactRow({ row, game }),
+      ),
+    }),
+  ];
+}
+
+function proofGraphCoreLoopRecoveryDestinationArtifactRow({ row, game }) {
+  return {
+    id: row.id,
+    testId: proofGraphCoreLoopRecoveryDestinationRowTestId(row.id),
+    values: [
+      { id: "label", text: row.label, emphasized: true },
+      { id: "status", text: row.status },
+      { id: "recoveryCaseId", text: row.recoveryCaseId },
+      { id: "graphNodeId", text: row.graphNodeId },
+      { id: "adminRowId", text: row.adminRowId },
+      { id: "proofEdgeRowId", text: row.proofEdgeRowId },
+      { id: "graphEdgeRowId", text: row.graphEdgeRowId },
+      { id: "nextActionEdgeRowId", text: row.nextActionEdgeRowId },
+      { id: "proofTarget", text: row.proofTarget },
+      { id: "command", text: row.command },
+      {
+        id: "roleUrl",
+        text: row.roleUrl,
+        href: seededRoleUrlToAdminHref(row.roleUrl, { game }),
+      },
+    ],
+  };
 }
 
 function proofGraphPrerequisiteDestinationSections({ nodes, game } = {}) {
@@ -4302,6 +4352,11 @@ export function normalizeLocalProofGraphArtifactSummary(
     }),
     productionFeatureDestinationSummary:
       proofGraph?.summary?.productionFeatureDestinationSummary ?? null,
+    coreLoopRecoveryDestinationSummary:
+      proofGraphCoreLoopRecoveryDestinationSummary({
+        nodes: graphNodes,
+        edges: graphEdges,
+      }),
     releaseReady: proofGraph?.releaseReady === true,
     productionReady: proofGraph?.productionReady === true,
   });
