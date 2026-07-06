@@ -268,8 +268,9 @@ import {
   proofGraphCoreLoopScenarioFamilyNodes,
 } from "./dev_test_game_proof_graph_core_loop_scenario_families.mjs";
 import {
-  hostVisibleRecoverySummaryCases,
-} from "./dev_test_game_core_loop_action_scenarios.mjs";
+  proofGraphCoreLoopHostVisibleRecoveryDestinations,
+  proofGraphCoreLoopRecoveryDestinationNodes,
+} from "./dev_test_game_proof_graph_core_loop_recovery_destinations.mjs";
 import {
   assertProofGraphProductionFeatureProvenanceComparison,
   proofGraphProductionFeatureDestinationSummary,
@@ -6743,7 +6744,6 @@ function validateProofGraphAdminCoreLoopScenarioFamilyDestinations(proof) {
   )
     ? proof.adminRoleSurface.visibleRelatedDestinations
     : [];
-  const coreLoopRoleUrl = localAdminAuditRoleUrl(localAdminAuditIds.coreLoop);
   for (const expectedDestination of expectedDestinations) {
     const destination = destinationByFamilyId.get(expectedDestination.familyId);
     if (
@@ -6773,7 +6773,7 @@ function validateProofGraphAdminCoreLoopScenarioFamilyDestinations(proof) {
         item.auditId === localAdminAuditIds.coreLoop,
     );
     if (
-      visibleDestination?.detailRoleUrl !== coreLoopRoleUrl ||
+      visibleDestination?.detailRoleUrl !== expectedDestination.detailRoleUrl ||
       !visibleDestination.visibleScenarioFamilies?.includes(
         expectedDestination.familyId,
       )
@@ -6804,23 +6804,30 @@ function validateProofGraphAdminCoreLoopHostVisibleRecoveryDestinations(proof) {
   const destinationByRecoveryCaseId = new Map(
     destinations.map((destination) => [destination.recoveryCaseId, destination]),
   );
+  const expectedDestinations = proofGraphCoreLoopHostVisibleRecoveryDestinations(
+    {
+      nodes: proofGraphCoreLoopRecoveryDestinationNodes(),
+    },
+  );
   const visibleDestinations = Array.isArray(
     proof.adminRoleSurface?.visibleRelatedDestinations,
   )
     ? proof.adminRoleSurface.visibleRelatedDestinations
     : [];
-  const coreLoopRoleUrl = localAdminAuditRoleUrl(localAdminAuditIds.coreLoop);
-  for (const recoveryCase of hostVisibleRecoverySummaryCases()) {
-    const destination = destinationByRecoveryCaseId.get(recoveryCase.id);
+  for (const expectedDestination of expectedDestinations) {
+    const destination = destinationByRecoveryCaseId.get(
+      expectedDestination.recoveryCaseId,
+    );
     if (
-      destination?.linkId !==
-        `core-loop-host-visible-recovery:${recoveryCase.id}` ||
-      destination?.auditId !== localAdminAuditIds.coreLoop ||
-      destination?.detailRoleUrl !== coreLoopRoleUrl ||
-      !destination?.requiredHostVisibleRecoveries?.includes(recoveryCase.id)
+      destination?.linkId !== expectedDestination.linkId ||
+      destination?.auditId !== expectedDestination.auditId ||
+      destination?.detailRoleUrl !== expectedDestination.detailRoleUrl ||
+      !destination?.requiredHostVisibleRecoveries?.includes(
+        expectedDestination.recoveryCaseId,
+      )
     ) {
       throw new Error(
-        `proof graph admin proof missing core-loop host-visible recovery destination: ${recoveryCase.id}`,
+        `proof graph admin proof missing core-loop host-visible recovery destination: ${expectedDestination.recoveryCaseId}`,
       );
     }
     if (
@@ -6829,7 +6836,7 @@ function validateProofGraphAdminCoreLoopHostVisibleRecoveryDestinations(proof) {
       )
     ) {
       throw new Error(
-        `proof graph admin proof missing core-loop host-visible recovery link: ${recoveryCase.id}`,
+        `proof graph admin proof missing core-loop host-visible recovery link: ${expectedDestination.recoveryCaseId}`,
       );
     }
     const visibleDestination = visibleDestinations.find(
@@ -6838,24 +6845,25 @@ function validateProofGraphAdminCoreLoopHostVisibleRecoveryDestinations(proof) {
         item.auditId === localAdminAuditIds.coreLoop,
     );
     if (
-      visibleDestination?.detailRoleUrl !== coreLoopRoleUrl ||
+      visibleDestination?.detailRoleUrl !== expectedDestination.detailRoleUrl ||
       !visibleDestination.visibleHostVisibleRecoveries?.includes(
-        recoveryCase.id,
+        expectedDestination.recoveryCaseId,
       )
     ) {
       throw new Error(
-        `proof graph admin proof did not visit core-loop host-visible recovery: ${recoveryCase.id}`,
+        `proof graph admin proof did not visit core-loop host-visible recovery: ${expectedDestination.recoveryCaseId}`,
       );
     }
     const visibleText =
-      visibleDestination.visibleHostVisibleRecoveryText?.[recoveryCase.id] ??
-      "";
-    for (const token of destination.requiredHostVisibleRecoveryText?.[
-      recoveryCase.id
+      visibleDestination.visibleHostVisibleRecoveryText?.[
+        expectedDestination.recoveryCaseId
+      ] ?? "";
+    for (const token of expectedDestination.requiredHostVisibleRecoveryText?.[
+      expectedDestination.recoveryCaseId
     ] ?? []) {
       if (!visibleText.includes(token)) {
         throw new Error(
-          `proof graph admin proof missing core-loop host-visible recovery text: ${recoveryCase.id} ${token}`,
+          `proof graph admin proof missing core-loop host-visible recovery text: ${expectedDestination.recoveryCaseId} ${token}`,
         );
       }
     }

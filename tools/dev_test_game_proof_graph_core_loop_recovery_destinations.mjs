@@ -199,6 +199,47 @@ export function proofGraphCoreLoopRecoveryDestinationRows(
   );
 }
 
+export function proofGraphCoreLoopHostVisibleRecoveryDestinations(proofGraph) {
+  const nodesByRecoveryCaseId = new Map(
+    (proofGraph?.nodes ?? [])
+      .filter((node) => node.kind === "core-loop-host-visible-recovery")
+      .map((node) => [node.recoveryCaseId, node]),
+  );
+  return Object.freeze(
+    hostVisibleRecoverySummaryCases().map((recoveryCase) => {
+      const node = nodesByRecoveryCaseId.get(recoveryCase.id);
+      if (node === undefined) {
+        throw new Error(
+          `proof graph missing core-loop host-visible recovery: ${recoveryCase.id}`,
+        );
+      }
+      return Object.freeze({
+        linkId: node.id,
+        auditId: localAdminAuditIds.coreLoop,
+        detailRoleUrl: node.roleUrl,
+        recoveryCaseId: recoveryCase.id,
+        requiredHostVisibleRecoveries: Object.freeze([recoveryCase.id]),
+        requiredHostVisibleRecoveryText: Object.freeze({
+          [recoveryCase.id]:
+            proofGraphCoreLoopHostVisibleRecoveryTextTokens(recoveryCase),
+        }),
+      });
+    }),
+  );
+}
+
+export function proofGraphCoreLoopHostVisibleRecoveryTextTokens(recoveryCase) {
+  return Object.freeze(
+    [
+      recoveryCase.label,
+      "passed",
+      recoveryCase.group,
+      recoveryCase.recoveryHookStatus,
+      recoveryCase.commandKind,
+    ].filter((token) => String(token ?? "") !== ""),
+  );
+}
+
 function proofGraphCoreLoopRecoveryDestinationEdgeDefinitions(node) {
   const metadata = {
     recoveryCaseId: node.recoveryCaseId,

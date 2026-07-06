@@ -2,11 +2,12 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { assertDevTestGameProofGraph } from "./dev_test_game_proof_graph.mjs";
 import {
-  hostVisibleRecoverySummaryCases,
-} from "./dev_test_game_core_loop_action_scenarios.mjs";
-import {
   proofGraphCoreLoopScenarioFamilyDestinations,
 } from "./dev_test_game_proof_graph_core_loop_scenario_families.mjs";
+import {
+  proofGraphCoreLoopHostVisibleRecoveryDestinations,
+  proofGraphCoreLoopRecoveryDestinationNodes,
+} from "./dev_test_game_proof_graph_core_loop_recovery_destinations.mjs";
 import {
   assertProofGraphProductionFeatureProvenanceComparison,
   proofGraphProductionFeatureTargetDestinations,
@@ -486,7 +487,8 @@ function assertProofGraphAdminProofCoversCoreLoopRecoveryDestinations(evidence) 
   if (
     summary?.id !== "core-loop-recovery-destinations" ||
     summary.status !== "passed" ||
-    summary.requiredCount !== hostVisibleRecoverySummaryCases().length ||
+    summary.requiredCount !==
+      proofGraphCoreLoopRecoveryDestinationNodes().length ||
     summary.coveredCount !== summary.requiredCount ||
     summary.missingCount !== 0 ||
     rows.length !== summary.requiredCount
@@ -894,18 +896,25 @@ function assertProofGraphAdminProofCoversCoreLoopHostVisibleRecoveries(evidence)
       (destination) => [destination.recoveryCaseId, destination],
     ),
   );
-  for (const recoveryCase of hostVisibleRecoverySummaryCases()) {
-    const destination = destinationByRecoveryCaseId.get(recoveryCase.id);
+  const expectedDestinations = proofGraphCoreLoopHostVisibleRecoveryDestinations(
+    {
+      nodes: proofGraphCoreLoopRecoveryDestinationNodes(),
+    },
+  );
+  for (const expectedDestination of expectedDestinations) {
+    const destination = destinationByRecoveryCaseId.get(
+      expectedDestination.recoveryCaseId,
+    );
     if (
-      destination?.linkId !==
-        `core-loop-host-visible-recovery:${recoveryCase.id}` ||
-      destination?.auditId !== localAdminAuditIds.coreLoop ||
-      destination?.detailRoleUrl !==
-        `/admin/audit/${localAdminAuditIds.coreLoop}?game=<seeded-game>` ||
-      !destination?.requiredHostVisibleRecoveries?.includes(recoveryCase.id)
+      destination?.linkId !== expectedDestination.linkId ||
+      destination?.auditId !== expectedDestination.auditId ||
+      destination?.detailRoleUrl !== expectedDestination.detailRoleUrl ||
+      !destination?.requiredHostVisibleRecoveries?.includes(
+        expectedDestination.recoveryCaseId,
+      )
     ) {
       throw new Error(
-        `proof graph admin proof missing core-loop host-visible recovery destination: ${recoveryCase.id}`,
+        `proof graph admin proof missing core-loop host-visible recovery destination: ${expectedDestination.recoveryCaseId}`,
       );
     }
     if (
@@ -914,7 +923,7 @@ function assertProofGraphAdminProofCoversCoreLoopHostVisibleRecoveries(evidence)
       )
     ) {
       throw new Error(
-        `proof graph admin proof missing core-loop host-visible recovery link: ${recoveryCase.id}`,
+        `proof graph admin proof missing core-loop host-visible recovery link: ${expectedDestination.recoveryCaseId}`,
       );
     }
     const visibleDestination =
@@ -926,22 +935,23 @@ function assertProofGraphAdminProofCoversCoreLoopHostVisibleRecoveries(evidence)
     if (
       visibleDestination?.detailRoleUrl !== destination.detailRoleUrl ||
       !visibleDestination.visibleHostVisibleRecoveries?.includes(
-        recoveryCase.id,
+        expectedDestination.recoveryCaseId,
       )
     ) {
       throw new Error(
-        `proof graph admin proof did not visit core-loop host-visible recovery: ${recoveryCase.id}`,
+        `proof graph admin proof did not visit core-loop host-visible recovery: ${expectedDestination.recoveryCaseId}`,
       );
     }
     const visibleText =
-      visibleDestination.visibleHostVisibleRecoveryText?.[recoveryCase.id] ??
-      "";
-    for (const token of destination.requiredHostVisibleRecoveryText?.[
-      recoveryCase.id
+      visibleDestination.visibleHostVisibleRecoveryText?.[
+        expectedDestination.recoveryCaseId
+      ] ?? "";
+    for (const token of expectedDestination.requiredHostVisibleRecoveryText?.[
+      expectedDestination.recoveryCaseId
     ] ?? []) {
       if (!visibleText.includes(token)) {
         throw new Error(
-          `proof graph admin proof missing core-loop host-visible recovery text: ${recoveryCase.id} ${token}`,
+          `proof graph admin proof missing core-loop host-visible recovery text: ${expectedDestination.recoveryCaseId} ${token}`,
         );
       }
     }
@@ -1421,43 +1431,6 @@ function proofGraphAdminFeatureTargetEntries(proofGraph) {
       proofGraphFeatureTarget(proofGraph, featureTargetCase),
     ]),
   );
-}
-
-function proofGraphCoreLoopHostVisibleRecoveryDestinations(proofGraph) {
-  const nodesByRecoveryCaseId = new Map(
-    proofGraph.nodes
-      .filter((node) => node.kind === "core-loop-host-visible-recovery")
-      .map((node) => [node.recoveryCaseId, node]),
-  );
-  return hostVisibleRecoverySummaryCases().map((recoveryCase) => {
-    const node = nodesByRecoveryCaseId.get(recoveryCase.id);
-    if (node === undefined) {
-      throw new Error(
-        `proof graph missing core-loop host-visible recovery: ${recoveryCase.id}`,
-      );
-    }
-    return {
-      linkId: node.id,
-      auditId: localAdminAuditIds.coreLoop,
-      detailRoleUrl: `/admin/audit/${localAdminAuditIds.coreLoop}?game=<seeded-game>`,
-      recoveryCaseId: recoveryCase.id,
-      requiredHostVisibleRecoveries: [recoveryCase.id],
-      requiredHostVisibleRecoveryText: {
-        [recoveryCase.id]:
-          coreLoopHostVisibleRecoveryTextTokens(recoveryCase),
-      },
-    };
-  });
-}
-
-function coreLoopHostVisibleRecoveryTextTokens(recoveryCase) {
-  return [
-    recoveryCase.label,
-    "passed",
-    recoveryCase.group,
-    recoveryCase.recoveryHookStatus,
-    recoveryCase.commandKind,
-  ].filter((token) => String(token ?? "") !== "");
 }
 
 function proofGraphFeatureTarget(proofGraph, featureTargetCase) {

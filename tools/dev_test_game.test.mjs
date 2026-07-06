@@ -641,6 +641,7 @@ import {
 import {
   proofGraphCoreLoopRecoveryDestinationEdgeRowIds,
   proofGraphCoreLoopRecoveryDestinationEdges,
+  proofGraphCoreLoopHostVisibleRecoveryDestinations,
   proofGraphCoreLoopRecoveryDestinationNodes,
   proofGraphCoreLoopRecoveryDestinationSummary,
 } from "./dev_test_game_proof_graph_core_loop_recovery_destinations.mjs";
@@ -23543,31 +23544,13 @@ function proofGraphCoreLoopScenarioFamilyDestinationsFixture() {
 }
 
 function proofGraphCoreLoopHostVisibleRecoveryDestinationsFixture() {
-  return hostVisibleRecoverySummaryCases().map((recoveryCase) => ({
-    linkId: `core-loop-host-visible-recovery:${recoveryCase.id}`,
-    auditId: "local-core-loop",
-    detailRoleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
-    recoveryCaseId: recoveryCase.id,
-    requiredHostVisibleRecoveries: [recoveryCase.id],
-    requiredHostVisibleRecoveryText: {
-      [recoveryCase.id]:
-        proofGraphCoreLoopHostVisibleRecoveryTextTokensFixture(recoveryCase),
-    },
-  }));
+  return proofGraphCoreLoopHostVisibleRecoveryDestinations({
+    nodes: proofGraphCoreLoopRecoveryDestinationNodes(),
+  });
 }
 
 function proofGraphCoreLoopHostVisibleRecoveryEdgeRowIdsFixture() {
   return proofGraphCoreLoopRecoveryDestinationEdgeRowIds();
-}
-
-function proofGraphCoreLoopHostVisibleRecoveryTextTokensFixture(recoveryCase) {
-  return [
-    recoveryCase.label,
-    "passed",
-    recoveryCase.group,
-    recoveryCase.recoveryHookStatus,
-    recoveryCase.commandKind,
-  ].filter((token) => String(token ?? "") !== "");
 }
 
 function proofGraphProductionFeatureTargetDestinationsFixture(targets) {
