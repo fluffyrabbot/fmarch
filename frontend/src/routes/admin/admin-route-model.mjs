@@ -383,59 +383,9 @@ function selectedOperatorHandoffTerminalReceiptSummarySections(receipt) {
                       receipt.selectedOperatorHandoff
                         .selectedProductionFeatureGraphNodeId,
                   },
-                  ...(receipt.selectedOperatorHandoff.rawEvidenceTemplate ===
-                  undefined
-                    ? []
-                    : [
-                        {
-                          id: "rawEvidenceTemplateId",
-                          text:
-                            receipt.selectedOperatorHandoff.rawEvidenceTemplate
-                              .id,
-                        },
-                        {
-                          id: "rawEvidenceTemplateStatus",
-                          text:
-                            receipt.selectedOperatorHandoff.rawEvidenceTemplate
-                              .status,
-                        },
-                        {
-                          id: "rawEvidenceTemplatePath",
-                          text:
-                            receipt.selectedOperatorHandoff.rawEvidenceTemplate
-                              .path,
-                        },
-                        {
-                          id: "rawEvidenceTemplateProofCommand",
-                          text:
-                            receipt.selectedOperatorHandoff.rawEvidenceTemplate
-                              .proofCommand,
-                        },
-                        {
-                          id: "rawEvidenceTemplateProofTarget",
-                          text:
-                            receipt.selectedOperatorHandoff.rawEvidenceTemplate
-                              .proofTarget,
-                        },
-                        {
-                          id: "rawEvidenceTemplateCopyToEnv",
-                          text:
-                            receipt.selectedOperatorHandoff.rawEvidenceTemplate
-                              .copyToEnv,
-                        },
-                        {
-                          id: "rawEvidenceTemplateValidatorCommand",
-                          text:
-                            receipt.selectedOperatorHandoff.rawEvidenceTemplate
-                              .validatorCommand,
-                        },
-                        {
-                          id: "rawEvidenceTemplateValidatorProofTarget",
-                          text:
-                            receipt.selectedOperatorHandoff.rawEvidenceTemplate
-                              .validatorProofTarget,
-                        },
-                      ]),
+                  ...rawEvidenceTemplateDescriptorValues(
+                    receipt.selectedOperatorHandoff.rawEvidenceTemplate,
+                  ),
                 ],
               },
               {
@@ -1041,46 +991,36 @@ function hostedOperatorPacketDescriptorRow({
         id: "rawEvidenceContractRequiredTopLevelFields",
         text: packet.rawEvidenceContractRequiredTopLevelFields.join(", "),
       },
-      ...(packet.rawEvidenceTemplate === undefined
-        ? []
-        : [
-            {
-              id: "rawEvidenceTemplateId",
-              text: packet.rawEvidenceTemplate.id,
-            },
-            {
-              id: "rawEvidenceTemplateStatus",
-              text: packet.rawEvidenceTemplate.status,
-            },
-            {
-              id: "rawEvidenceTemplatePath",
-              text: packet.rawEvidenceTemplate.path,
-            },
-            {
-              id: "rawEvidenceTemplateProofCommand",
-              text: packet.rawEvidenceTemplate.proofCommand,
-            },
-            {
-              id: "rawEvidenceTemplateProofTarget",
-              text: packet.rawEvidenceTemplate.proofTarget,
-            },
-            {
-              id: "rawEvidenceTemplateCopyToEnv",
-              text: packet.rawEvidenceTemplate.copyToEnv,
-            },
-            {
-              id: "rawEvidenceTemplateValidatorCommand",
-              text: packet.rawEvidenceTemplate.validatorCommand,
-            },
-            {
-              id: "rawEvidenceTemplateValidatorProofTarget",
-              text: packet.rawEvidenceTemplate.validatorProofTarget,
-            },
-          ]),
+      ...rawEvidenceTemplateDescriptorValues(packet.rawEvidenceTemplate),
       { id: "proofTarget", text: packet.proofTarget },
       { id: "nextProofTarget", text: packet.nextProofTarget },
     ],
   };
+}
+
+function rawEvidenceTemplateDescriptorValues(template) {
+  if (template === undefined) {
+    return [];
+  }
+  return [
+    { id: "rawEvidenceTemplateId", text: template.id },
+    { id: "rawEvidenceTemplateStatus", text: template.status },
+    { id: "rawEvidenceTemplatePath", text: template.path },
+    {
+      id: "rawEvidenceTemplateProofCommand",
+      text: template.proofCommand,
+    },
+    { id: "rawEvidenceTemplateProofTarget", text: template.proofTarget },
+    { id: "rawEvidenceTemplateCopyToEnv", text: template.copyToEnv },
+    {
+      id: "rawEvidenceTemplateValidatorCommand",
+      text: template.validatorCommand,
+    },
+    {
+      id: "rawEvidenceTemplateValidatorProofTarget",
+      text: template.validatorProofTarget,
+    },
+  ];
 }
 
 function hostedHandoffRawCaptureIntakeSubentries({ intake, heading }) {

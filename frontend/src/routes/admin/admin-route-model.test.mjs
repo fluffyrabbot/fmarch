@@ -10687,44 +10687,33 @@ function expectedHostedHandoffBlockedOperatorPacketValues({ packet, heading }) {
       packet.rawEvidenceContractRequiredTopLevelFields.join(", "),
       false,
     ],
-    ...(packet.rawEvidenceTemplate === undefined
-      ? []
-      : [
-          ["rawEvidenceTemplateId", packet.rawEvidenceTemplate.id, false],
-          [
-            "rawEvidenceTemplateStatus",
-            packet.rawEvidenceTemplate.status,
-            false,
-          ],
-          ["rawEvidenceTemplatePath", packet.rawEvidenceTemplate.path, false],
-          [
-            "rawEvidenceTemplateProofCommand",
-            packet.rawEvidenceTemplate.proofCommand,
-            false,
-          ],
-          [
-            "rawEvidenceTemplateProofTarget",
-            packet.rawEvidenceTemplate.proofTarget,
-            false,
-          ],
-          [
-            "rawEvidenceTemplateCopyToEnv",
-            packet.rawEvidenceTemplate.copyToEnv,
-            false,
-          ],
-          [
-            "rawEvidenceTemplateValidatorCommand",
-            packet.rawEvidenceTemplate.validatorCommand,
-            false,
-          ],
-          [
-            "rawEvidenceTemplateValidatorProofTarget",
-            packet.rawEvidenceTemplate.validatorProofTarget,
-            false,
-          ],
-        ]),
+    ...expectedRawEvidenceTemplateDescriptorValues(packet.rawEvidenceTemplate),
     ["proofTarget", packet.proofTarget, false],
     ["nextProofTarget", packet.nextProofTarget, false],
+  ];
+}
+
+function expectedRawEvidenceTemplateDescriptorValues(template) {
+  if (template === undefined) {
+    return [];
+  }
+  return [
+    ["rawEvidenceTemplateId", template.id, false],
+    ["rawEvidenceTemplateStatus", template.status, false],
+    ["rawEvidenceTemplatePath", template.path, false],
+    ["rawEvidenceTemplateProofCommand", template.proofCommand, false],
+    ["rawEvidenceTemplateProofTarget", template.proofTarget, false],
+    ["rawEvidenceTemplateCopyToEnv", template.copyToEnv, false],
+    [
+      "rawEvidenceTemplateValidatorCommand",
+      template.validatorCommand,
+      false,
+    ],
+    [
+      "rawEvidenceTemplateValidatorProofTarget",
+      template.validatorProofTarget,
+      false,
+    ],
   ];
 }
 
