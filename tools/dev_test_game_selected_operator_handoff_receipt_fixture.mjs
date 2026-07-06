@@ -15,6 +15,9 @@ import {
   buildSelectedOperatorHandoffTerminalReceipt,
 } from "./dev_test_game_selected_operator_handoff_receipt.mjs";
 import {
+  hostedMatrixRawEvidenceTemplateDescriptor,
+} from "./dev_test_game_hosted_matrix_raw_evidence_template_proof.mjs";
+import {
   adminSpineTerminalBatchProofPath,
   selectedOperatorHandoffTerminalBatchFixturePath,
 } from "./dev_test_game_spine_artifact_paths.mjs";
@@ -85,6 +88,7 @@ function selectedOperatorHandoffFixture() {
       "production-feature:host-phase-control",
     selectedProductionFeatureRoleUrl:
       `/admin/audit/${localAdminAuditIds.coreLoop}?game=<seeded-game>`,
+    rawEvidenceTemplate: hostedMatrixRawEvidenceTemplateDescriptor(),
   };
 }
 

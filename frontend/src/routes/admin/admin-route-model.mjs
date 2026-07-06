@@ -383,6 +383,59 @@ function selectedOperatorHandoffTerminalReceiptSummarySections(receipt) {
                       receipt.selectedOperatorHandoff
                         .selectedProductionFeatureGraphNodeId,
                   },
+                  ...(receipt.selectedOperatorHandoff.rawEvidenceTemplate ===
+                  undefined
+                    ? []
+                    : [
+                        {
+                          id: "rawEvidenceTemplateId",
+                          text:
+                            receipt.selectedOperatorHandoff.rawEvidenceTemplate
+                              .id,
+                        },
+                        {
+                          id: "rawEvidenceTemplateStatus",
+                          text:
+                            receipt.selectedOperatorHandoff.rawEvidenceTemplate
+                              .status,
+                        },
+                        {
+                          id: "rawEvidenceTemplatePath",
+                          text:
+                            receipt.selectedOperatorHandoff.rawEvidenceTemplate
+                              .path,
+                        },
+                        {
+                          id: "rawEvidenceTemplateProofCommand",
+                          text:
+                            receipt.selectedOperatorHandoff.rawEvidenceTemplate
+                              .proofCommand,
+                        },
+                        {
+                          id: "rawEvidenceTemplateProofTarget",
+                          text:
+                            receipt.selectedOperatorHandoff.rawEvidenceTemplate
+                              .proofTarget,
+                        },
+                        {
+                          id: "rawEvidenceTemplateCopyToEnv",
+                          text:
+                            receipt.selectedOperatorHandoff.rawEvidenceTemplate
+                              .copyToEnv,
+                        },
+                        {
+                          id: "rawEvidenceTemplateValidatorCommand",
+                          text:
+                            receipt.selectedOperatorHandoff.rawEvidenceTemplate
+                              .validatorCommand,
+                        },
+                        {
+                          id: "rawEvidenceTemplateValidatorProofTarget",
+                          text:
+                            receipt.selectedOperatorHandoff.rawEvidenceTemplate
+                              .validatorProofTarget,
+                        },
+                      ]),
                 ],
               },
               {
@@ -7307,6 +7360,46 @@ function normalizeSelectedOperatorHandoffTerminalReceipt(receipt) {
               receipt.selectedOperatorHandoff
                 .selectedProductionFeatureRoleUrl ?? "",
             ),
+            ...(receipt.selectedOperatorHandoff.rawEvidenceTemplate === null ||
+            typeof receipt.selectedOperatorHandoff.rawEvidenceTemplate !==
+              "object"
+              ? {}
+              : {
+                  rawEvidenceTemplate: Object.freeze({
+                    id: String(
+                      receipt.selectedOperatorHandoff.rawEvidenceTemplate.id ??
+                        "",
+                    ),
+                    status: String(
+                      receipt.selectedOperatorHandoff.rawEvidenceTemplate
+                        .status ?? "",
+                    ),
+                    path: String(
+                      receipt.selectedOperatorHandoff.rawEvidenceTemplate.path ??
+                        "",
+                    ),
+                    proofCommand: String(
+                      receipt.selectedOperatorHandoff.rawEvidenceTemplate
+                        .proofCommand ?? "",
+                    ),
+                    proofTarget: String(
+                      receipt.selectedOperatorHandoff.rawEvidenceTemplate
+                        .proofTarget ?? "",
+                    ),
+                    copyToEnv: String(
+                      receipt.selectedOperatorHandoff.rawEvidenceTemplate
+                        .copyToEnv ?? "",
+                    ),
+                    validatorCommand: String(
+                      receipt.selectedOperatorHandoff.rawEvidenceTemplate
+                        .validatorCommand ?? "",
+                    ),
+                    validatorProofTarget: String(
+                      receipt.selectedOperatorHandoff.rawEvidenceTemplate
+                        .validatorProofTarget ?? "",
+                    ),
+                  }),
+                }),
           }),
           proofGraphEdge: Object.freeze({
             from: String(receipt.proofGraphEdge?.from ?? ""),

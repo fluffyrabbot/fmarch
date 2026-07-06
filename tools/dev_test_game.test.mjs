@@ -6118,6 +6118,7 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
           "production-feature:host-phase-control",
         selectedProductionFeatureRoleUrl:
           "/admin/audit/local-core-loop?game=<seeded-game>",
+        rawEvidenceTemplate: hostedMatrixRawEvidenceTemplateDescriptor(),
       },
       proofGraphEdge: {
         from: "next-action",
@@ -25488,6 +25489,7 @@ function selectedOperatorHandoffReceiptPassedFixture() {
           "production-feature:host-phase-control",
         selectedProductionFeatureRoleUrl:
           "/admin/audit/local-core-loop?game=<seeded-game>",
+        rawEvidenceTemplate: hostedMatrixRawEvidenceTemplateDescriptor(),
       },
     },
     proofGraph: {
@@ -25531,12 +25533,7 @@ function selectedOperatorHandoffReceiptDestinationFixture() {
         receipt.sourceArtifacts.proofGraph,
         receipt.sourceArtifacts.releaseReadiness,
       ].join("\n"),
-      selected: [
-        receipt.selectedOperatorHandoff.status,
-        receipt.selectedOperatorHandoff.command,
-        receipt.selectedOperatorHandoff.firstMissingInputId,
-        receipt.selectedOperatorHandoff.selectedProductionFeatureGraphNodeId,
-      ].join("\n"),
+      selected: selectedOperatorHandoffReceiptSelectedRowStatus(receipt),
       edge: [
         receipt.proofGraphEdge.from,
         receipt.proofGraphEdge.relationship,
@@ -25567,12 +25564,7 @@ function selectedOperatorHandoffReceiptDestinationFixture() {
         receipt.sourceArtifacts.proofGraph,
         receipt.sourceArtifacts.releaseReadiness,
       ].join("\n"),
-      selected: [
-        receipt.selectedOperatorHandoff.status,
-        receipt.selectedOperatorHandoff.command,
-        receipt.selectedOperatorHandoff.firstMissingInputId,
-        receipt.selectedOperatorHandoff.selectedProductionFeatureGraphNodeId,
-      ].join("\n"),
+      selected: selectedOperatorHandoffReceiptSelectedRowStatus(receipt),
       edge: [
         receipt.proofGraphEdge.from,
         receipt.proofGraphEdge.relationship,
@@ -25588,6 +25580,28 @@ function selectedOperatorHandoffReceiptDestinationFixture() {
       ].join("\n"),
     },
   };
+}
+
+function selectedOperatorHandoffReceiptSelectedRowStatus(receipt) {
+  const template = receipt.selectedOperatorHandoff.rawEvidenceTemplate;
+  return [
+    receipt.selectedOperatorHandoff.status,
+    receipt.selectedOperatorHandoff.command,
+    receipt.selectedOperatorHandoff.firstMissingInputId,
+    receipt.selectedOperatorHandoff.selectedProductionFeatureGraphNodeId,
+    ...(template === undefined
+      ? []
+      : [
+          template.id,
+          template.status,
+          template.path,
+          template.proofCommand,
+          template.proofTarget,
+          template.copyToEnv,
+          template.validatorCommand,
+          template.validatorProofTarget,
+        ]),
+  ].join("\n");
 }
 
 function adminSpineTerminalValidationDestinationFixture() {

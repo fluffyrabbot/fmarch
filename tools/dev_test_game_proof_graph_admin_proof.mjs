@@ -56,6 +56,7 @@ import {
   localNextActionAdminSurfaceCheckId,
   localProofFreshnessAdminSurfaceCheckId,
   localProofGraphAdminRoleHandoffsCheckId,
+  localProofGraphTerminalValidationCheckId,
 } from "./dev_test_game_local_readiness_dependencies.mjs";
 import {
   assertAdminAuditRelatedHandoffs,
@@ -225,7 +226,7 @@ export async function loadProofGraphAdminProofSource({
 }
 
 export function buildProofGraphAdminProofRequirements(source) {
-  const roleHandoffs = bootstrapProofGraphAdminRoleHandoffs({
+  const roleHandoffs = proofGraphAdminProofRoleHandoffs({
     proofGraph: source.proofGraph,
     hostedMatrix: source.hostedMatrix,
     hostedEvidenceLane: source.hostedEvidenceLane,
@@ -257,7 +258,7 @@ export function buildProofGraphAdminProofRequirements(source) {
       ]),
     ),
     requiredProofGraphPrerequisiteDestinations:
-      proofGraphPrerequisiteDestinationRowIds(source.proofGraph),
+      proofGraphAdminProofPrerequisiteDestinationRowIds(source.proofGraph),
     requiredRelatedLinks: source.proofGraph.nodes
       .filter(
         (node) =>
@@ -269,7 +270,7 @@ export function buildProofGraphAdminProofRequirements(source) {
           ? ["next-action-sequence-handoff"]
           : [],
       ),
-    requiredRelatedDestinations: [
+    requiredRelatedDestinations: proofGraphAdminProofRelatedDestinations([
       ...requiredRelatedDestinationsForHandoffs(roleHandoffs),
       ...coreLoopFamilyDestinations,
       ...productionFeatureTargetDestinations.filter(
@@ -279,7 +280,7 @@ export function buildProofGraphAdminProofRequirements(source) {
       ...proofGraphAdminSpineTerminalReceiptDestinations(
         source.adminSpineTerminalBatches,
       ),
-    ],
+    ]),
   };
 }
 
@@ -320,7 +321,7 @@ export function buildProofGraphAdminGeneratedFrom(
     ),
     edgeCount: source.proofGraph.edges.length,
     adminProofSurfaceIds: source.adminSpineProof.proofIds,
-    adminProofRoleHandoffs: bootstrapProofGraphAdminRoleHandoffs({
+    adminProofRoleHandoffs: proofGraphAdminProofRoleHandoffs({
       proofGraph: source.proofGraph,
       hostedMatrix: source.hostedMatrix,
       hostedEvidenceLane: source.hostedEvidenceLane,
@@ -341,7 +342,7 @@ export function buildProofGraphAdminGeneratedFrom(
       { nodes: source.proofGraph.nodes },
     ),
     proofGraphPrerequisiteDestinationRowIds:
-      proofGraphPrerequisiteDestinationRowIds(source.proofGraph),
+      proofGraphAdminProofPrerequisiteDestinationRowIds(source.proofGraph),
     ...(source.adminSpineTerminalBatches?.selectedOperatorHandoffReceipt
       ?.status === "passed"
       ? {
@@ -1079,12 +1080,7 @@ function proofGraphSelectedOperatorHandoffReceiptDestinationFields(receipt) {
         receipt.sourceArtifacts.proofGraph,
         receipt.sourceArtifacts.releaseReadiness,
       ].join("\n"),
-      selected: [
-        receipt.selectedOperatorHandoff.status,
-        receipt.selectedOperatorHandoff.command,
-        receipt.selectedOperatorHandoff.firstMissingInputId,
-        receipt.selectedOperatorHandoff.selectedProductionFeatureGraphNodeId,
-      ].join("\n"),
+      selected: selectedOperatorHandoffReceiptSelectedRowStatus(receipt),
       edge: [
         receipt.proofGraphEdge.from,
         receipt.proofGraphEdge.relationship,
@@ -1100,6 +1096,66 @@ function proofGraphSelectedOperatorHandoffReceiptDestinationFields(receipt) {
       ].join("\n"),
     },
   };
+}
+
+function selectedOperatorHandoffReceiptSelectedRowStatus(receipt) {
+  const template = receipt.selectedOperatorHandoff.rawEvidenceTemplate;
+  return [
+    receipt.selectedOperatorHandoff.status,
+    receipt.selectedOperatorHandoff.command,
+    receipt.selectedOperatorHandoff.firstMissingInputId,
+    receipt.selectedOperatorHandoff.selectedProductionFeatureGraphNodeId,
+    ...(template === undefined
+      ? []
+      : [
+          template.id,
+          template.status,
+          template.path,
+          template.proofCommand,
+          template.proofTarget,
+          template.copyToEnv,
+          template.validatorCommand,
+          template.validatorProofTarget,
+        ]),
+  ].join("\n");
+}
+
+function proofGraphAdminProofPrerequisiteDestinationRowIds(proofGraph) {
+  return proofGraphPrerequisiteDestinationRowIds(proofGraph).filter(
+    (rowId) =>
+      rowId !== localProofGraphTerminalValidationCheckId &&
+      !rowId.endsWith(`:${localProofGraphTerminalValidationCheckId}`),
+  );
+}
+
+function proofGraphAdminProofRoleHandoffs(source) {
+  return bootstrapProofGraphAdminRoleHandoffs(source).map((handoff) => ({
+    ...handoff,
+    requiredLocalPrerequisiteDestinations: Array.isArray(
+      handoff.requiredLocalPrerequisiteDestinations,
+    )
+      ? handoff.requiredLocalPrerequisiteDestinations.filter(
+          (prerequisite) =>
+            prerequisite.id !== localProofGraphTerminalValidationCheckId,
+        )
+      : [],
+  }));
+}
+
+function proofGraphAdminProofRelatedDestinations(destinations) {
+  return destinations.map((destination) => {
+    if (!Array.isArray(destination.requiredLocalPrerequisiteDestinations)) {
+      return destination;
+    }
+    return {
+      ...destination,
+      requiredLocalPrerequisiteDestinations:
+        destination.requiredLocalPrerequisiteDestinations.filter(
+          (prerequisite) =>
+            prerequisite.id !== localProofGraphTerminalValidationCheckId,
+        ),
+    };
+  });
 }
 
 function proofGraphAdminSpineTerminalValidationDestinationEntry(

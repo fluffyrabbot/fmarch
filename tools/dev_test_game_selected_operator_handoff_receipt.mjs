@@ -6,6 +6,9 @@ import {
   assertBlockedOperatorPacket,
 } from "./dev_test_game_hosted_operator_packet.mjs";
 import {
+  assertHostedMatrixRawEvidenceTemplateDescriptor,
+} from "./dev_test_game_hosted_matrix_raw_evidence_template_proof.mjs";
+import {
   devTestGameReleaseReadinessPath,
 } from "./dev_test_game_spine_readiness_steps.mjs";
 import {
@@ -219,13 +222,19 @@ function assertSelectedOperatorHandoffReceiptShape(receipt) {
     receipt.readinessRelatedLink?.status !==
       `${receipt.selectedOperatorHandoff.status}:${receipt.selectedOperatorHandoff.firstMissingInputId}` ||
     receipt.readinessRelatedLink?.command !==
-      receipt.selectedOperatorHandoff.command
+      receipt.selectedOperatorHandoff.command ||
+    (receipt.selectedOperatorHandoff.rawEvidenceTemplate !== undefined &&
+      assertHostedMatrixRawEvidenceTemplateDescriptor(
+        receipt.selectedOperatorHandoff.rawEvidenceTemplate,
+      ) === null)
   ) {
     throw new Error("selected operator handoff terminal receipt is malformed");
   }
 }
 
 function selectedOperatorHandoffSummary(handoff) {
+  const rawEvidenceTemplateSource =
+    handoff.rawEvidenceTemplate ?? handoff.blockedOperatorPacket?.rawEvidenceTemplate;
   return Object.freeze({
     id: handoff.id,
     status: handoff.status,
@@ -239,6 +248,14 @@ function selectedOperatorHandoffSummary(handoff) {
       handoff.selectedProductionFeatureGraphNodeId,
     selectedProductionFeatureRoleUrl:
       handoff.selectedProductionFeatureRoleUrl,
+    ...(rawEvidenceTemplateSource === undefined
+      ? {}
+      : {
+          rawEvidenceTemplate:
+            assertHostedMatrixRawEvidenceTemplateDescriptor(
+              rawEvidenceTemplateSource,
+            ),
+        }),
   });
 }
 
