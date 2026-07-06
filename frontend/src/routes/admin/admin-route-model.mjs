@@ -7296,6 +7296,9 @@ export function normalizeLocalReleaseReadinessAudit(
   const unproven = Array.isArray(releaseReadinessChecklist.releaseReadiness?.unproven)
     ? releaseReadinessChecklist.releaseReadiness.unproven
     : [];
+  const diagnostics = normalizeLocalReleaseReadinessDiagnostics(
+    releaseReadinessChecklist.localDevelopmentSpine?.diagnostics,
+  );
   const nextActionRow = normalizeLocalNextActionAudit(nextAction, { game });
   const selectedOperatorHandoff = nextActionRow?.selectedOperatorHandoff ?? null;
   const hostSetupProofEvidence =
@@ -7382,6 +7385,7 @@ export function normalizeLocalReleaseReadinessAudit(
         }),
       ),
     ),
+    diagnostics,
     unproven: Object.freeze(
       unproven.map((item) =>
         Object.freeze({
@@ -7401,6 +7405,7 @@ export function normalizeLocalReleaseReadinessAudit(
       coverageDriftCount: coverageSummary.driftCount,
       coverageStatus: coverageSummary.status,
       localPrerequisiteCount: localPrerequisites.length,
+      diagnosticCount: diagnostics.length,
       unprovenCount: unproven.length,
       ...(selectedOperatorHandoff === null
         ? {}
@@ -7413,7 +7418,54 @@ export function normalizeLocalReleaseReadinessAudit(
       releaseReady: releaseReadinessChecklist.releaseReady === true,
       productionReady: releaseReadinessChecklist.productionReady === true,
     }),
+    artifactSummarySections:
+      buildLocalReleaseReadinessSummarySections({ diagnostics }),
   });
+}
+
+function normalizeLocalReleaseReadinessDiagnostics(diagnostics) {
+  return Object.freeze(
+    (Array.isArray(diagnostics) ? diagnostics : []).map((diagnostic) =>
+      Object.freeze({
+        id: String(diagnostic?.id ?? ""),
+        label: String(diagnostic?.label ?? diagnostic?.id ?? ""),
+        status: String(diagnostic?.status ?? "unknown"),
+        kind: String(diagnostic?.kind ?? ""),
+        sourceCheckId: String(diagnostic?.sourceCheckId ?? ""),
+        evidence: String(diagnostic?.evidence ?? ""),
+        command: String(diagnostic?.command ?? ""),
+        roleUrl: String(diagnostic?.roleUrl ?? ""),
+        reason: String(diagnostic?.reason ?? ""),
+      }),
+    ),
+  );
+}
+
+function buildLocalReleaseReadinessSummarySections({ diagnostics }) {
+  return Object.freeze([
+    ...(diagnostics.length === 0
+      ? []
+      : [
+          buildArtifactSummarySection({
+            id: "local-release-readiness-diagnostics",
+            heading: "Diagnostics, Not Gates",
+            rows: diagnostics.map((diagnostic) => ({
+              id: diagnostic.id,
+              testId: `admin-audit-local-diagnostic-${diagnostic.id}`,
+              values: [
+                { id: "label", text: diagnostic.label, emphasized: true },
+                { id: "status", text: diagnostic.status },
+                { id: "kind", text: diagnostic.kind },
+                { id: "sourceCheckId", text: diagnostic.sourceCheckId },
+                { id: "evidence", text: diagnostic.evidence },
+                { id: "command", text: diagnostic.command },
+                ...optionalTextValue("roleUrl", diagnostic.roleUrl),
+                { id: "reason", text: diagnostic.reason },
+              ],
+            })),
+          }),
+        ]),
+  ]);
 }
 
 export function normalizeLocalHostSetupProofAudit(

@@ -299,6 +299,7 @@ export async function proveAdminAuditDetail({
   auditId,
   requiredChecks = [],
   requiredCheckStatuses = {},
+  requiredLocalDiagnostics = [],
   requiredLocalPrerequisites = [],
   requiredScenarios = [],
   requiredSessions = [],
@@ -419,6 +420,11 @@ export async function proveAdminAuditDetail({
       page,
       prefix: "admin-audit-check",
       ids: Object.keys(requiredCheckStatuses),
+    });
+    const visibleLocalDiagnostics = await waitForRows({
+      page,
+      prefix: "admin-audit-local-diagnostic",
+      ids: requiredLocalDiagnostics,
     });
     const visibleLocalPrerequisites = await waitForRows({
       page,
@@ -1158,6 +1164,9 @@ export async function proveAdminAuditDetail({
       ...(Object.keys(visibleCheckStatuses).length === 0
         ? {}
         : { visibleCheckStatuses }),
+      ...(visibleLocalDiagnostics.length === 0
+        ? {}
+        : { visibleLocalDiagnostics }),
       ...(requiredText.length === 0 ? {} : { visibleRequiredText: requiredText }),
       ...(visibleLocalPrerequisites.length === 0
         ? {}

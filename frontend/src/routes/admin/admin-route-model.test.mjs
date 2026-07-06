@@ -5686,6 +5686,18 @@ test("admin route data exposes local release readiness as a native audit row", a
     ],
   );
   assert.deepEqual(
+    readiness.diagnostics.map((diagnostic) => [
+      diagnostic.id,
+      diagnostic.kind,
+      diagnostic.evidence,
+    ]),
+    localDevelopmentDiagnosticsFixture().map((diagnostic) => [
+      diagnostic.id,
+      diagnostic.kind,
+      diagnostic.evidence,
+    ]),
+  );
+  assert.deepEqual(
     readiness.unproven.map((item) => item.id),
     releaseReadinessUnprovenStatusRows([
       "hosted-deployment",
@@ -5699,6 +5711,7 @@ test("admin route data exposes local release readiness as a native audit row", a
     coverageDriftCount: 0,
     coverageStatus: "coherent",
     localPrerequisiteCount: 3,
+    diagnosticCount: 2,
     unprovenCount: 2,
     releaseReady: false,
     productionReady: false,
@@ -5794,6 +5807,35 @@ test("admin local release readiness detail data carries checks and unproven rows
     expectedLocalPrerequisiteRows(data.audit.localPrerequisites, {
       game: "midsummer",
     }),
+  );
+  assert.deepEqual(
+    data.audit.diagnostics.map((diagnostic) => [
+      diagnostic.id,
+      diagnostic.label,
+      diagnostic.status,
+      diagnostic.kind,
+      diagnostic.sourceCheckId,
+      diagnostic.command,
+      diagnostic.reason,
+    ]),
+    localDevelopmentDiagnosticsFixture().map((diagnostic) => [
+      diagnostic.id,
+      diagnostic.label,
+      diagnostic.status,
+      diagnostic.kind,
+      diagnostic.sourceCheckId,
+      diagnostic.command,
+      diagnostic.reason,
+    ]),
+  );
+  assert.deepEqual(
+    data.audit.artifactSummarySections.map((section) => [
+      section.id,
+      section.heading,
+      section.testId,
+      hostedHandoffChecklistRowsForAssertion(section.rows),
+    ]),
+    expectedLocalReleaseReadinessDiagnosticSections(data.audit.diagnostics),
   );
   assert.equal(data.audit.unproven.length, 2);
   assert.deepEqual(
@@ -10113,6 +10155,34 @@ function expectedProductionFeatureDestinationSections(summary) {
   ];
 }
 
+function expectedLocalReleaseReadinessDiagnosticSections(diagnostics) {
+  if (diagnostics.length === 0) {
+    return [];
+  }
+  return [
+    [
+      "local-release-readiness-diagnostics",
+      "Diagnostics, Not Gates",
+      "admin-audit-detail-local-release-readiness-diagnostics",
+      diagnostics.map((diagnostic) => [
+        diagnostic.id,
+        `admin-audit-local-diagnostic-${diagnostic.id}`,
+        [
+          ["label", diagnostic.label, true],
+          ["status", diagnostic.status, false],
+          ["kind", diagnostic.kind, false],
+          ["sourceCheckId", diagnostic.sourceCheckId, false],
+          ["evidence", diagnostic.evidence, false],
+          ["command", diagnostic.command, false],
+          ["roleUrl", diagnostic.roleUrl, false],
+          ["reason", diagnostic.reason, false],
+        ],
+        [],
+      ]),
+    ],
+  ];
+}
+
 function expectedLocalPrerequisiteRows(localPrerequisites, { game }) {
   return localPrerequisites.map((prerequisite) => [
     `local-prerequisite-${prerequisite.id}`,
@@ -10587,6 +10657,7 @@ function releaseReadinessChecklistFixture() {
           "target/dev-test-game/next-action-admin-proof.json",
         ),
       ],
+      diagnostics: localDevelopmentDiagnosticsFixture(),
     },
     releaseReadiness: {
       status: "not_ready",
@@ -10599,6 +10670,41 @@ function releaseReadinessChecklistFixture() {
     proofBoundary:
       "Derived from the local dev-test-game proof-run artifact without release claims.",
   };
+}
+
+function localDevelopmentDiagnosticsFixture() {
+  return [
+    {
+      id: "selected-operator-handoff-receipt-fixture",
+      sourceCheckId: "local-selected-operator-handoff-receipt-fixture-admin-proof",
+      label: "Selected operator handoff receipt fixture admin proof",
+      status: "passed",
+      kind: "fixture-browser-proof",
+      evidence: "target/dev-test-game/selected-operator-handoff-receipt-admin-proof.json",
+      command: "npm run test:dev-test-game-selected-operator-handoff-receipt-admin-proof",
+      roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.proofGraph),
+      reason:
+        "Fixture proof for selected-operator receipt rows; discoverable for local operator debugging but not release evidence.",
+      diagnosticOnly: true,
+      releaseReady: false,
+      productionReady: false,
+    },
+    {
+      id: "proof-freshness-admin-surface",
+      sourceCheckId: "local-proof-freshness-admin-surface",
+      label: "Local proof freshness admin surface",
+      status: "passed",
+      kind: "freshness-browser-proof",
+      evidence: "target/dev-test-game/proof-freshness-admin-proof.json",
+      command: "npm run test:dev-test-game-proof-freshness-admin-proof",
+      roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.proofFreshness),
+      reason:
+        "Proof-freshness browser surface and next-action handoff proof; diagnostic here, local dependency elsewhere.",
+      diagnosticOnly: true,
+      releaseReady: false,
+      productionReady: false,
+    },
+  ];
 }
 
 function localDependencyReadinessCheckFixture(id, evidence) {

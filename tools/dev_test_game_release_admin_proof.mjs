@@ -63,6 +63,7 @@ export function releaseAdminProofCase() {
         game: readiness.generatedFrom.game,
         auditId: "local-release-readiness",
         requiredChecks: releaseReadinessVisibleCheckIds(readiness),
+        requiredLocalDiagnostics: releaseReadinessDiagnosticIds(readiness),
         requiredLocalPrerequisites: readiness.localDevelopmentSpine.checks
           .filter((check) => check.dependencyGated === true)
           .map((check) => check.id),
@@ -72,6 +73,10 @@ export function releaseAdminProofCase() {
             ? []
             : requiredSetupCommandEvidence,
         requiredUnproven: readiness.releaseReadiness.unproven.map((item) => item.id),
+        requiredText:
+          releaseReadinessDiagnosticIds(readiness).length === 0
+            ? []
+            : ["Diagnostics, Not Gates"],
       }),
     buildEvidence: ({ source: readiness, adminRoleSurface }) => ({
       version: 1,
@@ -86,6 +91,7 @@ export function releaseAdminProofCase() {
         releaseReadinessChecklist: readinessRelativePath,
         game: readiness.generatedFrom.game,
         localCheckIds: readiness.localDevelopmentSpine.checks.map((check) => check.id),
+        localDiagnosticIds: releaseReadinessDiagnosticIds(readiness),
         evidenceObjectRowIds:
           releaseReadinessEvidenceObjectRowIds(readiness),
         localPrerequisiteIds: readiness.localDevelopmentSpine.checks
@@ -135,6 +141,13 @@ export function assertReleaseAdminProof(evidence) {
     rowIds: evidence.generatedFrom?.evidenceObjectRowIds,
     proofName: "release admin proof",
     rowName: "evidence object",
+  });
+  assertVisibleAdminRoleSurfaceRows({
+    adminRoleSurface: evidence.adminRoleSurface,
+    rowIds: evidence.generatedFrom?.localDiagnosticIds,
+    proofName: "release admin proof",
+    rowName: "local diagnostic",
+    surfaceKey: "visibleLocalDiagnostics",
   });
   for (const prerequisiteId of
     evidence.generatedFrom?.localPrerequisiteIds ?? requiredLocalPrerequisites) {
@@ -187,6 +200,12 @@ function releaseReadinessVisibleCheckIds(readiness) {
     ...readiness.localDevelopmentSpine.checks.map((check) => check.id),
     ...releaseReadinessEvidenceObjectRowIds(readiness),
   ];
+}
+
+function releaseReadinessDiagnosticIds(readiness) {
+  return (readiness.localDevelopmentSpine.diagnostics ?? []).map(
+    (diagnostic) => diagnostic.id,
+  );
 }
 
 function releaseReadinessEvidenceObjectRowIds(readiness) {
