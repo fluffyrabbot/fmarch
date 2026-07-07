@@ -337,6 +337,23 @@ function summarizeCapabilityKinds(capabilityKinds) {
   return `${capabilityKinds[0]} + ${capabilityKinds.length - 1} roles`;
 }
 
+const NAV_ACCESS_LABELS = Object.freeze({
+  board: "Public",
+  player: "Your seat",
+  moderator: "Your console",
+  admin: "Operator access",
+});
+
+const NAV_BLOCKED_LABELS = Object.freeze({
+  player: "Players only",
+  moderator: "Hosts only",
+  admin: "Operators only",
+});
+
+export function navBlockedLabel(surfaceId) {
+  return NAV_BLOCKED_LABELS[surfaceId] ?? "Not open to you";
+}
+
 function surfaceItem(item) {
   const allowed = item.allowed !== false;
   return Object.freeze({
@@ -346,6 +363,8 @@ function surfaceItem(item) {
     navigation: allowed ? "link" : "blocked",
     ariaDisabled: allowed ? undefined : "true",
     blockedReason: allowed ? null : `Requires ${item.capabilityLabel}`,
+    blockedLabel: allowed ? null : NAV_BLOCKED_LABELS[item.id] ?? "Not open to you",
+    accessLabel: NAV_ACCESS_LABELS[item.id] ?? item.capabilityLabel,
   });
 }
 
@@ -362,6 +381,7 @@ function boardAction(shell, { surface, label, primary = false }) {
     navigation: surfaceItem.navigation,
     ariaDisabled: surfaceItem.ariaDisabled,
     blockedReason: surfaceItem.blockedReason,
+    blockedLabel: surfaceItem.blockedLabel,
     capabilityLabel: surfaceItem.capabilityLabel,
     className: primary
       ? "fm-touch-button"

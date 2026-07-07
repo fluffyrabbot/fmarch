@@ -29,11 +29,12 @@
             href={surface.href}
             aria-current={surface.active ? "page" : undefined}
             data-allowed={surface.allowed}
+            data-capability={surface.capabilityLabel}
             data-min-touch-target-px={surface.minTouchTargetPx}
             data-testid={surface.testId}
           >
             <span class="fm-app-shell__nav-label">{surface.label}</span>
-            <small class="fm-app-shell__nav-capability">{surface.capabilityLabel}</small>
+            <small class="fm-app-shell__nav-capability">{surface.accessLabel}</small>
           </a>
         {:else}
           <button
@@ -48,7 +49,7 @@
             disabled
           >
             <span class="fm-app-shell__nav-label">{surface.label}</span>
-            <small class="fm-app-shell__nav-reason">{surface.blockedReason}</small>
+            <small class="fm-app-shell__nav-reason">{surface.blockedLabel}</small>
           </button>
         {/if}
       {/each}

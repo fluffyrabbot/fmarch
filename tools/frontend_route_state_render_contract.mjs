@@ -6,6 +6,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { buildRoleRouteStateMatrix } from "../frontend/src/lib/app/app-route-state-model.mjs";
 import {
   APP_SHELL_CONTRACT,
+  navBlockedLabel,
   roleNavTestId,
 } from "../frontend/src/lib/app/app-shell-model.mjs";
 import {
@@ -2000,8 +2001,13 @@ function assertRenderedShellNav({ id, render, html, expectedNav }) {
     if (rendered.navigation === "blocked") {
       assertIncludes(
         html,
-        `<small class="fm-app-shell__nav-reason">${rendered.blockedReason}</small>`,
+        `<small class="fm-app-shell__nav-reason">${navBlockedLabel(surface)}</small>`,
         `${id} ${surface} shell nav visible blocked reason`,
+      );
+      assert.match(
+        String(rendered.blockedReason ?? ""),
+        /^Requires /,
+        `${id} ${surface} shell nav capability grammar in data attribute`,
       );
       assertExcludes(
         tag,
@@ -2066,7 +2072,7 @@ function assertBoardBlockedActionReasons({ id, html }) {
       );
       assertIncludes(
         html,
-        `>${action.blockedReason}</small>`,
+        `>${action.blockedLabel}</small>`,
         `${id} blocked board action ${action.testId} visible reason`,
       );
       assertExcludes(

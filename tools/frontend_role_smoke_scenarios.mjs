@@ -543,7 +543,7 @@ function boardActionScenario({ testId, action }) {
     navigation: action.navigation,
     ...(action.navigation === "link"
       ? { hrefPath: action.href }
-      : { blockedReason: action.blockedReason }),
+      : { blockedReason: action.blockedReason, blockedLabel: action.blockedLabel }),
   });
 }
 

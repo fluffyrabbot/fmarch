@@ -49,7 +49,7 @@
                 disabled
               >
                 <span class="fm-touch-button__label">{item.action.label}</span>
-                <small class="fm-touch-button__reason">{item.action.blockedReason}</small>
+                <small class="fm-touch-button__reason">{item.action.blockedLabel}</small>
               </button>
             {/if}
           </article>
@@ -83,7 +83,7 @@
                     disabled
                   >
                     <span class="fm-touch-button__label">{action.label}</span>
-                    <small class="fm-touch-button__reason">{action.blockedReason}</small>
+                    <small class="fm-touch-button__reason">{action.blockedLabel}</small>
                   </button>
                 {/if}
               {/each}

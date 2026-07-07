@@ -144,7 +144,8 @@ body {
 }
 
 .fm-app-shell__nav-reason {
-  font-weight: 800;
+  color: var(--fm-ink-muted);
+  font-weight: 600;
 }
 
 .fm-app-shell__session {
