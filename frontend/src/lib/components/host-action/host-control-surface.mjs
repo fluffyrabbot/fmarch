@@ -8,7 +8,7 @@ export const HOST_CONTROL_SURFACE_CONTRACT = Object.freeze({
     stickyTopPx: 0,
     unstickBelowPx: 0,
   }),
-  controlBayClassName: "host-console-critical-path__control-bay",
+  controlBayClassName: "host-console-critical-path__control-bay fm-section fm-section--accent",
   actionBayClassName: "host-console-critical-path__action-bay",
   actionTileClassName: "host-console-critical-path__action-tile",
   actionTileStabilityMode: "reserved-status-floor",

@@ -59,14 +59,6 @@
 </section>
 
 <style>
-  .day-vote-outcome-panel {
-    border-block-start: 4px solid var(--fm-ink-subtle);
-    display: grid;
-    gap: 14px;
-    min-inline-size: 0;
-    padding-block-start: 14px;
-  }
-
   .day-vote-outcome-panel header {
     align-items: start;
     display: grid;

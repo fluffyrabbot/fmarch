@@ -1,5 +1,5 @@
 export const HOST_VOTECOUNT_PANEL_CONTRACT = Object.freeze({
-  rootClassName: "host-console-critical-path__votecount",
+  rootClassName: "host-console-critical-path__votecount fm-section",
   rowsClassName: "host-console-critical-path__vote-rows",
   rowClassName: "host-console-critical-path__vote-row",
   emptyClassName: "host-console-critical-path__empty",

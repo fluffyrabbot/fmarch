@@ -75,14 +75,6 @@
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
-.host-console-critical-path__votecount {
-  border-block-start: 4px solid var(--fm-ink-subtle);
-  display: grid;
-  gap: 14px;
-  min-inline-size: 0;
-  padding-block-start: 14px;
-}
-
 .host-console-critical-path__votecount header {
   align-items: start;
   display: grid;
@@ -159,12 +151,8 @@
 
 .host-console-critical-path__invite-panel {
   align-items: center;
-  border-block-start: 4px solid var(--fm-ink-subtle);
-  display: grid;
   gap: 12px;
   grid-template-columns: minmax(0, 1fr) auto;
-  min-inline-size: 0;
-  padding-block-start: 14px;
 }
 
 .host-console-critical-path__invite-panel header {
@@ -192,14 +180,6 @@
   grid-column: 1 / -1;
 }
 
-.host-console-critical-path__lifecycle-checkpoint {
-  border-block-start: 4px solid var(--fm-ink-subtle);
-  display: grid;
-  gap: 14px;
-  min-inline-size: 0;
-  padding-block-start: 14px;
-}
-
 .host-console-critical-path__lifecycle-checkpoint header {
   align-items: start;
   display: grid;
@@ -220,12 +200,8 @@
 }
 
 .host-console-critical-path__control-bay {
-  border-block-start: 4px solid var(--fm-accent);
-  display: grid;
   gap: 12px;
   min-block-size: 188px;
-  min-inline-size: 0;
-  padding-block-start: 14px;
 }
 
 .host-console-critical-path__control-bay header {
@@ -257,11 +233,8 @@
 }
 
 .host-console-critical-path__queue {
-  border-block-start: 4px solid var(--fm-ink-subtle);
-  display: grid;
   gap: 8px;
   min-block-size: 112px;
-  padding-block-start: 14px;
 }
 
 .host-console-critical-path__queue p {

@@ -1,6 +1,6 @@
 export const HOST_WORK_QUEUE_STRIP_CONTRACT = Object.freeze({
   rootClassName: "host-console-critical-path__queues",
-  queueClassName: "host-console-critical-path__queue",
+  queueClassName: "host-console-critical-path__queue fm-section",
   componentName: "host-work-queue-strip",
   minQueueBlockPx: 112,
 });

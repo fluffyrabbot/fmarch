@@ -275,7 +275,7 @@
       [inviteTargets.replacement, form?.replacementInvite],
     ] as [inviteTarget, inviteResult]}
       <section
-        class="host-console-critical-path__invite-panel"
+        class="host-console-critical-path__invite-panel fm-section"
         data-testid={inviteTarget.panelTestId}
       >
         <header>

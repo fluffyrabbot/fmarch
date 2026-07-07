@@ -1,6 +1,6 @@
 export const HOST_LIFECYCLE_CONTROL_CHECKPOINT_CONTRACT = Object.freeze({
   proofCheckId: "host-lifecycle-control",
-  rootClassName: "host-console-critical-path__lifecycle-checkpoint",
+  rootClassName: "host-console-critical-path__lifecycle-checkpoint fm-section",
   rootTestId: "host-lifecycle-control-checkpoint",
   phaseTestId: "host-lifecycle-control-phase",
   slotTestId: "host-lifecycle-control-slot",

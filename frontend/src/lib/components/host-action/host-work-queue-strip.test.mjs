@@ -43,7 +43,7 @@ test("host work queue strip model normalizes missing queue fields", () => {
       id: "queue",
       label: "Needs Review!",
       value: "No work queued",
-      className: "host-console-critical-path__queue",
+      className: "host-console-critical-path__queue fm-section",
       testId: "host-work-queue-Needs-Review-",
       minBlockPx: 112,
     },
