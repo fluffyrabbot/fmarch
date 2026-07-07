@@ -991,6 +991,30 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
           },
         )
       : undefined;
+  const hostedEvidenceOperatorChecklistProofEvidence =
+    options.hostedEvidenceOperatorChecklistProof
+      ? assertHostedEvidenceOperatorChecklistProof(
+          options.hostedEvidenceOperatorChecklistProof,
+          {
+            path:
+              options.hostedEvidenceOperatorChecklistProofPath ??
+              devTestGameHostedEvidenceOperatorChecklistProofPath,
+            artifact: options.hostedEvidenceOperatorChecklistProofArtifact,
+          },
+        )
+      : undefined;
+  const hostedEvidenceOperatorChecklistAdminProofEvidence =
+    options.hostedEvidenceOperatorChecklistAdminProof
+      ? assertHostedEvidenceOperatorChecklistAdminProof(
+          options.hostedEvidenceOperatorChecklistAdminProof,
+          {
+            path:
+              options.hostedEvidenceOperatorChecklistAdminProofPath ??
+              devTestGameHostedEvidenceOperatorChecklistAdminProofPath,
+            artifact: options.hostedEvidenceOperatorChecklistAdminProofArtifact,
+          },
+        )
+      : undefined;
   const hostedEvidenceLaneOperatorFixtureAdminProofEvidence =
     options.hostedEvidenceLaneOperatorFixtureAdminProof
       ? validateDevTestGameHostedEvidenceLaneOperatorFixtureAdminProof(
@@ -1514,6 +1538,35 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       adminRoleSurface: hostedEvidenceLaneRealCaptureAdminProofEvidence,
     });
   }
+  if (hostedEvidenceOperatorChecklistAdminProofEvidence !== undefined) {
+    localChecks.push({
+      id: "local-hosted-evidence-operator-checklist-admin-surface",
+      label: "Local hosted evidence operator checklist admin surface",
+      status: "passed",
+      evidence:
+        options.hostedEvidenceOperatorChecklistAdminProofPath ??
+        devTestGameHostedEvidenceOperatorChecklistAdminProofPath,
+      proofBoundary:
+        hostedEvidenceOperatorChecklistAdminProofEvidence.proofBoundary,
+      checklistProofStatus:
+        hostedEvidenceOperatorChecklistProofEvidence?.status ??
+        hostedEvidenceOperatorChecklistAdminProofEvidence.checklistProof?.status,
+      checklistProofTarget:
+        hostedEvidenceOperatorChecklistAdminProofEvidence.generatedFrom
+          ?.checklistProofTarget ??
+        devTestGameHostedEvidenceOperatorChecklistProofPath,
+      command:
+        hostedEvidenceOperatorChecklistAdminProofEvidence.generatedFrom
+          ?.checklistProofCommand,
+      nextCommand: `npm run ${devTestGameRealHostedMatrixRawCaptureCommand}`,
+      nextProofTarget: devTestGameRealHostedMatrixRawCapturePath,
+      roleUrl:
+        hostedEvidenceOperatorChecklistAdminProofEvidence.generatedFrom?.roleUrl,
+      releaseReady: false,
+      productionReady: false,
+      adminRoleSurface: hostedEvidenceOperatorChecklistAdminProofEvidence,
+    });
+  }
   if (hostedEvidenceLaneOperatorFixtureAdminProofEvidence !== undefined) {
     localChecks.push({
       id: "local-hosted-evidence-lane-operator-fixture-admin-surface",
@@ -1857,6 +1910,20 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
             hostedEvidenceLaneRealCaptureAdminProof:
               hostedEvidenceLaneRealCaptureAdminProofEvidence.path,
           }),
+      ...(hostedEvidenceOperatorChecklistProofEvidence === undefined
+        ? {}
+        : {
+            hostedEvidenceOperatorChecklistProof:
+              options.hostedEvidenceOperatorChecklistProofPath ??
+              devTestGameHostedEvidenceOperatorChecklistProofPath,
+          }),
+      ...(hostedEvidenceOperatorChecklistAdminProofEvidence === undefined
+        ? {}
+        : {
+            hostedEvidenceOperatorChecklistAdminProof:
+              options.hostedEvidenceOperatorChecklistAdminProofPath ??
+              devTestGameHostedEvidenceOperatorChecklistAdminProofPath,
+          }),
       ...(proofGraphAdminProofEvidence === undefined
         ? {}
         : {
@@ -1909,6 +1976,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         proofFreshnessAdminProofEvidence === undefined &&
         hostedEvidenceLaneAdminProofEvidence === undefined &&
         hostedEvidenceLaneRealCaptureAdminProofEvidence === undefined &&
+        hostedEvidenceOperatorChecklistAdminProofEvidence === undefined &&
         hostedEvidenceLaneDemoProofEvidence === undefined &&
         hostedIdentityProgressionSummaryEvidence === undefined &&
         hostedIdentityCompleteAdminProofEvidence === undefined &&
@@ -2069,6 +2137,12 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
                 : {
                     hostedEvidenceLaneRealCaptureAdminProof:
                       hostedEvidenceLaneRealCaptureAdminProofEvidence,
+                  }),
+              ...(hostedEvidenceOperatorChecklistAdminProofEvidence === undefined
+                ? {}
+                : {
+                    hostedEvidenceOperatorChecklistAdminProof:
+                      hostedEvidenceOperatorChecklistAdminProofEvidence,
                   }),
               ...(hostedEvidenceLaneDemoProofEvidence === undefined
                 ? {}

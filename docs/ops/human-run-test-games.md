@@ -230,6 +230,18 @@ copy:
 npm run test:dev-test-game-hosted-matrix-raw-evidence-template-proof
 ```
 
+The source-controlled operator checklist is a separate local contract and admin
+handoff proof. Once both are current, release readiness records the checklist
+admin surface as passed and the hosted-identity next-action selector advances
+the `hosted-deployment` handoff to the real raw-capture intake without making a
+hosted deployment claim:
+
+```sh
+npm run test:dev-test-game-hosted-evidence-operator-checklist
+npm run test:dev-test-game-hosted-evidence-operator-checklist-admin-proof
+npm run test:dev-test-game-next-action:hosted-identity
+```
+
 To inspect the difference between fixture-only handoff and real capture
 metadata, compare the checked examples:
 

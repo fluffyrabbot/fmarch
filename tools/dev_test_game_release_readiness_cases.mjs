@@ -69,6 +69,10 @@ import {
 import {
   devTestGameHostedConcurrentRaceMatrixPath,
 } from "./dev_test_game_adjacent_artifact_paths.mjs";
+import {
+  devTestGameRealHostedMatrixRawCaptureCommand,
+  devTestGameRealHostedMatrixRawCapturePath,
+} from "./dev_test_game_real_hosted_matrix_raw_capture_contract.mjs";
 
 export {
   devTestGameReleaseAdminProofPath,
@@ -360,10 +364,16 @@ export function hostedIdentityEvidencePathKind(rawEvidencePath) {
 
 export function releaseReadinessBuildableItemForId(
   itemId,
-  { hostedTargetPreflight = null } = {},
+  {
+    hostedTargetPreflight = null,
+    hostedEvidenceOperatorChecklistAdminProof = null,
+  } = {},
 ) {
   if (itemId === "hosted-deployment") {
-    return hostedDeploymentBuildable({ hostedTargetPreflight });
+    return hostedDeploymentBuildable({
+      hostedTargetPreflight,
+      hostedEvidenceOperatorChecklistAdminProof,
+    });
   }
   const item = localBuildableReleaseReadinessItems.get(itemId);
   return item === undefined ? undefined : cloneBuildableItem(item);
@@ -408,7 +418,10 @@ function humanReleaseUnprovenItems({ releaseRunbookEvidence }) {
   return [releaseReadinessUnprovenItem("human-release-approval")];
 }
 
-function hostedDeploymentBuildable({ hostedTargetPreflight }) {
+function hostedDeploymentBuildable({
+  hostedTargetPreflight,
+  hostedEvidenceOperatorChecklistAdminProof,
+}) {
   if (hostedTargetPreflight?.status === "passed") {
     return {
       priority: 0,
@@ -429,6 +442,35 @@ function hostedDeploymentBuildable({ hostedTargetPreflight }) {
         status: "passed",
         mode: "real-hosted",
       }),
+    };
+  }
+  if (hostedEvidenceOperatorChecklistAdminProof?.status === "passed") {
+    const blockedBuildable = cloneBuildableItem(
+      localBuildableReleaseReadinessItems.get("hosted-deployment"),
+    );
+    return {
+      ...blockedBuildable,
+      command: `npm run ${devTestGameRealHostedMatrixRawCaptureCommand}`,
+      buildSlice:
+        [
+          "Attach or validate real hosted raw matrix capture after the operator checklist admin surface is proven;",
+          "this keeps hosted deployment blocked until externally captured, non-fixture evidence exists.",
+        ].join(" "),
+      proofTarget: devTestGameRealHostedMatrixRawCapturePath,
+      proofBoundary:
+        [
+          "Real hosted raw-capture intake.",
+          "This command validates operator-provided FMARCH_HOSTED_MATRIX_FRONTEND_URL, FMARCH_HOSTED_MATRIX_API_URL, and FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH inputs after the checklist proof is current;",
+          "it does not let local hosted-like, fixture, or synthetic demo evidence satisfy hosted deployment.",
+        ].join(" "),
+      hostedHandoffChecklist:
+        hostedTargetPreflight?.status === "blocked"
+          ? hostedEvidenceBlockedHandoffChecklistFromPreflight({
+              preflight: hostedTargetPreflight,
+              command: blockedBuildable.command,
+              proofTarget: blockedBuildable.proofTarget,
+            })
+          : blockedBuildable.hostedHandoffChecklist,
     };
   }
   const blockedBuildable = cloneBuildableItem(

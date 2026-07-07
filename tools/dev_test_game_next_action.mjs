@@ -1237,7 +1237,11 @@ function rankedBuildableReleaseReadinessItems(
   return (readiness.releaseReadiness?.unproven ?? [])
     .map((item, index) => {
       const buildable =
-        releaseReadinessBuildableItemForId(item.id, { hostedTargetPreflight });
+        releaseReadinessBuildableItemForId(item.id, {
+          hostedTargetPreflight,
+          hostedEvidenceOperatorChecklistAdminProof:
+            hostedEvidenceOperatorChecklistAdminProofFromReadiness(readiness),
+        });
       if (buildable === undefined) {
         return null;
       }
@@ -1314,6 +1318,22 @@ function rankedBuildableReleaseReadinessItems(
     })
     .filter((candidate) => candidate !== null)
     .sort(compareReleaseReadinessCandidatePriority);
+}
+
+function hostedEvidenceOperatorChecklistAdminProofFromReadiness(readiness) {
+  const check = readiness?.localDevelopmentSpine?.checks?.find(
+    (item) =>
+      item.id ===
+      "local-hosted-evidence-operator-checklist-admin-surface",
+  );
+  if (check?.status !== "passed") {
+    return null;
+  }
+  return {
+    status: check.status,
+    evidence: check.evidence,
+    checklistProofTarget: check.checklistProofTarget,
+  };
 }
 
 export function compareReleaseReadinessCandidatePriority(left, right) {

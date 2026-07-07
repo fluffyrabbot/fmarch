@@ -543,6 +543,8 @@ import {
   hostedEvidenceHandoffSectionInputStatuses,
   hostedEvidenceLocalVsHostedBoundary,
   hostedEvidenceOperatorAction,
+  hostedEvidenceOperatorChecklistActionContract,
+  hostedEvidenceOperatorChecklistProofId,
 } from "./dev_test_game_hosted_handoff_cases.mjs";
 import {
   devTestGameHostedEvidenceOperatorChecklistPath,
@@ -554,6 +556,7 @@ import {
   hostedEvidenceOperatorChecklistMarkdown,
 } from "./dev_test_game_hosted_evidence_operator_checklist.mjs";
 import {
+  assertHostedEvidenceOperatorChecklistAdminProof,
   devTestGameHostedEvidenceOperatorChecklistAdminProofPath,
 } from "./dev_test_game_hosted_evidence_operator_checklist_admin_proof.mjs";
 import {
@@ -5320,6 +5323,61 @@ test("dev test-game next-action advances hosted deployment after target prefligh
   assert.equal(
     blockedPreflightAction.selectedOperatorHandoff.firstMissingInputId,
     "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
+  );
+
+  const checklistAdminProvenReadiness =
+    devTestGameReleaseReadinessChecklistFixture({
+      unproven: [
+        {
+          id: "hosted-deployment",
+          status: "unproven",
+          requiredEvidence:
+            "Hosted API/frontend deployment proof with external health checks",
+        },
+      ],
+    });
+  checklistAdminProvenReadiness.localDevelopmentSpine.checks.push({
+    id: "local-hosted-evidence-operator-checklist-admin-surface",
+    label: "Local hosted evidence operator checklist admin surface",
+    status: "passed",
+    evidence: devTestGameHostedEvidenceOperatorChecklistAdminProofPath,
+    checklistProofStatus: "passed",
+    checklistProofTarget: devTestGameHostedEvidenceOperatorChecklistProofPath,
+    nextCommand: `npm run ${devTestGameRealHostedMatrixRawCaptureCommand}`,
+    nextProofTarget: devTestGameRealHostedMatrixRawCapturePath,
+    roleUrl: "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
+    releaseReady: false,
+    productionReady: false,
+  });
+  const checklistAdminProvenAction = buildDevTestGameNextAction(freshManifest, {
+    generatedAt: "2026-06-26T00:00:01.000Z",
+    opsArtifacts: devTestGameOpsArtifactsFixture(),
+    raceCoverage: devTestGameRaceCoverageFixture(),
+    releaseReadinessChecklist: checklistAdminProvenReadiness,
+    hostedTargetPreflight: hostedTargetPreflightFixture({ status: "blocked" }),
+    proofGraph: nextActionProofGraphFixture("host-phase-control"),
+  });
+  assertDevTestGameNextAction(checklistAdminProvenAction);
+  assert.equal(
+    checklistAdminProvenAction.nextAction.command,
+    `npm run ${devTestGameRealHostedMatrixRawCaptureCommand}`,
+  );
+  assert.equal(checklistAdminProvenAction.nextAction.status, "blocked");
+  assert.equal(
+    checklistAdminProvenAction.nextAction.unproven.proofTarget,
+    devTestGameRealHostedMatrixRawCapturePath,
+  );
+  assert.equal(
+    checklistAdminProvenAction.selectedOperatorHandoff.command,
+    `npm run ${devTestGameRealHostedMatrixRawCaptureCommand}`,
+  );
+  assert.equal(
+    checklistAdminProvenAction.selectedOperatorHandoff.proofTarget,
+    devTestGameRealHostedMatrixRawCapturePath,
+  );
+  assert.equal(
+    checklistAdminProvenAction.releaseReadinessTrace.candidates[0].command,
+    `npm run ${devTestGameRealHostedMatrixRawCaptureCommand}`,
   );
 
   const mixedBlockedAndReadyReadiness = devTestGameReleaseReadinessChecklistFixture({
@@ -17593,6 +17651,55 @@ test("session card and markdown include role credential URLs and tokens", async 
       "| Local hosted evidence lane admin surface | passed | `target/dev-test-game/hosted-evidence-lane-admin-proof.json` |  | `FMARCH_HOSTED_MATRIX_FRONTEND_URL`; check `hosted-frontend-url-configured`; role `/admin/audit/local-hosted-evidence-lane?game=<seeded-game>` |",
     ),
   );
+  const hostedEvidenceOperatorChecklistAdminProof =
+    hostedEvidenceOperatorChecklistAdminProofFixture();
+  assertHostedEvidenceOperatorChecklistAdminProof(
+    hostedEvidenceOperatorChecklistAdminProof,
+  );
+  const hostedEvidenceOperatorChecklistReadiness =
+    buildDevTestGameReleaseReadiness(proofRun, {
+      generatedAt: "2026-06-26T00:00:00.000Z",
+      hostedEvidenceOperatorChecklistProofPath:
+        devTestGameHostedEvidenceOperatorChecklistProofPath,
+      hostedEvidenceOperatorChecklistProof:
+        await buildHostedEvidenceOperatorChecklistProof({
+          generatedAt: "2026-06-26T00:00:00.000Z",
+        }),
+      hostedEvidenceOperatorChecklistAdminProofPath:
+        devTestGameHostedEvidenceOperatorChecklistAdminProofPath,
+      hostedEvidenceOperatorChecklistAdminProof:
+        hostedEvidenceOperatorChecklistAdminProof,
+    });
+  assertDevTestGameReleaseReadiness(hostedEvidenceOperatorChecklistReadiness);
+  const hostedEvidenceOperatorChecklistCheck =
+    hostedEvidenceOperatorChecklistReadiness.localDevelopmentSpine.checks.find(
+      (item) =>
+        item.id ===
+        "local-hosted-evidence-operator-checklist-admin-surface",
+    );
+  assert.equal(hostedEvidenceOperatorChecklistCheck.status, "passed");
+  assert.equal(
+    hostedEvidenceOperatorChecklistCheck.evidence,
+    devTestGameHostedEvidenceOperatorChecklistAdminProofPath,
+  );
+  assert.equal(
+    hostedEvidenceOperatorChecklistCheck.nextCommand,
+    `npm run ${devTestGameRealHostedMatrixRawCaptureCommand}`,
+  );
+  assert.equal(
+    hostedEvidenceOperatorChecklistCheck.nextProofTarget,
+    devTestGameRealHostedMatrixRawCapturePath,
+  );
+  assert.equal(
+    hostedEvidenceOperatorChecklistReadiness.generatedFrom
+      .hostedEvidenceOperatorChecklistAdminProof,
+    devTestGameHostedEvidenceOperatorChecklistAdminProofPath,
+  );
+  assert.equal(
+    hostedEvidenceOperatorChecklistReadiness.localDevelopmentSpine.evidence
+      .hostedEvidenceOperatorChecklistAdminProof.proof,
+    "dev-test-game-hosted-evidence-operator-checklist-admin-proof",
+  );
   const hostedEvidenceRealCaptureReadiness = buildDevTestGameReleaseReadiness(
     proofRun,
     {
@@ -26911,6 +27018,88 @@ function realHostedMatrixRawCaptureBlockedFixture() {
     ],
     nextCommand: "npm run test:dev-test-game-real-hosted-matrix-raw-capture",
     nextProofTarget: devTestGameRealHostedMatrixRawCapturePath,
+  };
+}
+
+function hostedEvidenceOperatorChecklistAdminProofFixture() {
+  const expectedCommand =
+    `npm run ${devTestGameHostedEvidenceOperatorChecklistProofCommand}`;
+  const action = hostedEvidenceOperatorChecklistActionContract();
+  const missingHostedInputIds = [
+    "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
+    "FMARCH_HOSTED_MATRIX_API_URL",
+    "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
+  ];
+  return {
+    version: 1,
+    proof: "dev-test-game-hosted-evidence-operator-checklist-admin-proof",
+    status: "passed",
+    releaseReady: false,
+    productionReady: false,
+    scope: "local-dev-test-game-hosted-evidence-operator-checklist-admin-surface",
+    proofBoundary:
+      "Local admin role URL proof for the hosted evidence operator checklist handoff. It does not prove hosted deployment, release readiness, or production readiness.",
+    generatedFrom: {
+      checklistProof: devTestGameHostedEvidenceOperatorChecklistProofPath,
+      proofRun: devTestGameProofRunPath,
+      releaseReadiness: devTestGameReleaseReadinessPath,
+      nextAction: hostedEvidenceOperatorChecklistNextActionPath,
+      game: "game-a",
+      roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.hostedEvidenceLane),
+      checklistPath: devTestGameHostedEvidenceOperatorChecklistPath,
+      checklistProofCommand: expectedCommand,
+      checklistProofTarget: devTestGameHostedEvidenceOperatorChecklistProofPath,
+      missingHostedInputIds,
+    },
+    checklistProof: {
+      status: "passed",
+      templateOnly: true,
+      command: expectedCommand,
+      proofTarget: devTestGameHostedEvidenceOperatorChecklistProofPath,
+    },
+    packageScript:
+      "node tools/dev_test_game_hosted_evidence_operator_checklist_admin_proof.mjs",
+    readiness: {
+      hostedDeploymentStatus: "unproven",
+      adminSurfaceStatus: "passed",
+      missingHostedInputIds,
+      operatorChecklist: {
+        path: devTestGameHostedEvidenceOperatorChecklistPath,
+        checklistProofCommand: expectedCommand,
+        checklistProofTarget: devTestGameHostedEvidenceOperatorChecklistProofPath,
+      },
+    },
+    nextAction: {
+      command: expectedCommand,
+      reason: "release-readiness-unproven",
+      proofTarget: devTestGameHostedEvidenceOperatorChecklistProofPath,
+      roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.hostedEvidenceLane),
+      selectedChecklistHandoff: true,
+      missingHostedInputIds,
+      operatorChecklist: {
+        path: devTestGameHostedEvidenceOperatorChecklistPath,
+        checklistProofCommand: expectedCommand,
+        checklistProofTarget: devTestGameHostedEvidenceOperatorChecklistProofPath,
+      },
+    },
+    adminRoleSurface: {
+      status: "passed",
+      detailRoleUrl: localAdminAuditRoleUrl(localAdminAuditIds.hostedEvidenceLane),
+      visibleHostedHandoffOperatorProofs: [
+        hostedEvidenceOperatorChecklistProofId,
+      ],
+      visibleHostedHandoffOperatorProofActions: {
+        [hostedEvidenceOperatorChecklistProofId]: {
+          copyCommand: { copyValue: action.copyCommand },
+          openDoc: { href: action.sourcePath },
+          openProofTarget: { href: action.proofTarget },
+          order: {
+            beforeRealHostedEvidenceInputs: true,
+            beforeRawEvidenceTemplate: true,
+          },
+        },
+      },
+    },
   };
 }
 

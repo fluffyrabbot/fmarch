@@ -47,6 +47,10 @@ import {
   devTestGameHostedEvidenceOperatorChecklistProofPath,
 } from "./dev_test_game_hosted_evidence_operator_checklist.mjs";
 import {
+  devTestGameRealHostedMatrixRawCaptureCommand,
+  devTestGameRealHostedMatrixRawCapturePath,
+} from "./dev_test_game_real_hosted_matrix_raw_capture_contract.mjs";
+import {
   completedGameHardeningSpineTargetCases,
 } from "./dev_test_game_core_loop_completed_game_proof_readiness_contract.mjs";
 import {
@@ -1106,6 +1110,34 @@ test("hosted deployment buildable case carries blocked and passed preflight stat
     "frontend-url-configured",
   ]);
   assert.ok(blocked.hostedHandoffChecklist.inputIds.includes("proof-target"));
+
+  const checklistProven = releaseReadinessBuildableItemForId(
+    "hosted-deployment",
+    {
+      hostedTargetPreflight: {
+        status: "blocked",
+        checks: [
+          {
+            id: "raw-evidence-path-configured",
+            status: "blocked",
+            requiredEvidence: "Set FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
+          },
+        ],
+      },
+      hostedEvidenceOperatorChecklistAdminProof: { status: "passed" },
+    },
+  );
+  assert.equal(
+    checklistProven.command,
+    `npm run ${devTestGameRealHostedMatrixRawCaptureCommand}`,
+  );
+  assert.equal(
+    checklistProven.proofTarget,
+    devTestGameRealHostedMatrixRawCapturePath,
+  );
+  assert.deepEqual(checklistProven.hostedHandoffChecklist.blockedCheckIds, [
+    "raw-evidence-path-configured",
+  ]);
 
   const passed = releaseReadinessBuildableItemForId("hosted-deployment", {
     hostedTargetPreflight: {
