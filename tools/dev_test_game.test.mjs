@@ -424,6 +424,7 @@ import {
   assertDevTestGameProofGraphCoversDiagnosticProofs,
   assertDevTestGameProofGraphCoversAdminSpine,
   assertDevTestGameProofGraphCoversHandoffPhaseOutputs,
+  assertDevTestGameProofGraphCoversHostedEvidenceMatrixTransition,
   assertDevTestGameProofGraphCoversHostedIdentityOperatorPrerequisites,
   assertDevTestGameProofGraphCoversPhaseLocalNextActions,
   assertDevTestGameProofGraphCoversProductionFeatureTargets,
@@ -6606,6 +6607,73 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
   assertDevTestGameProofGraphCoversProductionFeatureTargets(
     graph,
     releaseReadiness,
+  );
+  const releaseReadinessWithHostedTransition = structuredClone(releaseReadiness);
+  releaseReadinessWithHostedTransition.localDevelopmentSpine.checks.push({
+    id: "local-hosted-concurrent-race-matrix-admin-surface",
+    label: "Local hosted matrix admin surface",
+    status: "passed",
+    evidence: "target/dev-test-game/hosted-concurrent-race-matrix-admin-proof.json",
+    proofBoundary: "Local hosted matrix admin proof only.",
+    hostedEvidenceStatus: "passed",
+    realHostedDeploymentStatus: "passed",
+    hostedEvidenceTransition: {
+      source: "hosted-evidence-lane",
+      sourcePath: "target/dev-test-game/hosted-evidence-lane.json",
+      status: "passed",
+      mode: "real-hosted",
+      realHostedEvidenceStatus: "passed",
+      realHostedDeploymentStatus: "passed",
+      externalEvidencePath: "target/dev-test-game/hosted-matrix-external.json",
+      frontendBaseUrl: "https://fmarch.example.test",
+      apiBaseUrl: "https://api.fmarch.example.test",
+    },
+    adminRoleSurface: {
+      status: "passed",
+      detailRoleUrl:
+        "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
+    },
+  });
+  const graphWithHostedTransition = buildDevTestGameProofGraph(
+    {
+      spineManifest,
+      adminSpineProof,
+      adminSpineTerminalBatches: adminSpineTerminalBatchesFixture(),
+      ...recoveryReceiptFixtures(),
+      nextAction,
+      releaseReadiness: releaseReadinessWithHostedTransition,
+    },
+    {
+      generatedAt: "2026-06-26T00:00:00.000Z",
+    },
+  );
+  assertDevTestGameProofGraphCoversHostedEvidenceMatrixTransition(
+    graphWithHostedTransition,
+    releaseReadinessWithHostedTransition,
+  );
+  assert.deepEqual(
+    graphWithHostedTransition.edges.find(
+      (edge) =>
+        edge.from === "admin-proof:hosted-evidence-lane" &&
+        edge.to === "admin-proof:hosted-concurrent-race-matrix" &&
+        edge.relationship === "feeds-hosted-matrix-transition",
+    ),
+    {
+      from: "admin-proof:hosted-evidence-lane",
+      to: "admin-proof:hosted-concurrent-race-matrix",
+      relationship: "feeds-hosted-matrix-transition",
+      source: "hosted-evidence-lane",
+      sourcePath: "target/dev-test-game/hosted-evidence-lane.json",
+      status: "passed",
+      mode: "real-hosted",
+      realHostedEvidenceStatus: "passed",
+      realHostedDeploymentStatus: "passed",
+      externalEvidencePath: "target/dev-test-game/hosted-matrix-external.json",
+      roleUrl:
+        "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
+      command: devTestGameHostedConcurrentRaceMatrixCommand,
+      proofTarget: devTestGameHostedConcurrentRaceMatrixPath,
+    },
   );
   const proofGraphAdminSource = {
     proofGraph: graph,

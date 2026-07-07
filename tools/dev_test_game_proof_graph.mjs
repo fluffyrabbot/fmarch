@@ -87,6 +87,10 @@ import {
   devTestGameHostedEvidenceLaneRealCaptureAdminProofPath,
 } from "./dev_test_game_hosted_handoff_cases.mjs";
 import {
+  devTestGameHostedConcurrentRaceMatrixCommand,
+  devTestGameHostedConcurrentRaceMatrixPath,
+} from "./dev_test_game_hosted_concurrent_race_matrix.mjs";
+import {
   adminProofDestinationRequirementForLink,
   proofGraphDiagnosticProofEdges,
   proofGraphDiagnosticProofNodes,
@@ -230,6 +234,7 @@ export function buildDevTestGameProofGraph(
   const edges = buildProofGraphEdges({
     nodes,
     nextAction: nextActionEvidence,
+    releaseReadiness: releaseReadinessChecklist,
     adminSpineTerminalBatches: adminSpineTerminalBatchEvidence,
     privateChannelRecoveryReceipt: privateChannelRecoveryReceiptEvidence,
     replacementActionRecoveryReceipt:
@@ -451,6 +456,10 @@ export function assertDevTestGameProofGraph(
   assertDevTestGameProofGraphCoversReplacementActionRecoveryReceipt(evidence);
   assertDevTestGameProofGraphCoversReplacementHandoffRecoveryReceipt(evidence);
   if (releaseReadiness !== undefined) {
+    assertDevTestGameProofGraphCoversHostedEvidenceMatrixTransition(
+      evidence,
+      releaseReadiness,
+    );
     assertDevTestGameProofGraphCoversProductionFeatureTargets(
       evidence,
       releaseReadiness,
@@ -560,6 +569,62 @@ export function assertDevTestGameProofGraphCoversHostedEvidenceRealCaptureProof(
         `proof graph hosted evidence lane real-capture edge missing: ${edge.from}->${edge.to}`,
       );
     }
+  }
+  return graph;
+}
+
+export function assertDevTestGameProofGraphCoversHostedEvidenceMatrixTransition(
+  graph,
+  releaseReadiness,
+) {
+  const transition = hostedEvidenceMatrixTransitionFromReadiness(releaseReadiness);
+  if (transition === null) {
+    return graph;
+  }
+  const edge = (graph.edges ?? []).find(
+    (candidate) =>
+      candidate.from === "admin-proof:hosted-evidence-lane" &&
+      candidate.to === "admin-proof:hosted-concurrent-race-matrix" &&
+      candidate.relationship === "feeds-hosted-matrix-transition",
+  );
+  if (
+    edge === undefined ||
+    edge.command !== devTestGameHostedConcurrentRaceMatrixCommand ||
+    edge.proofTarget !== devTestGameHostedConcurrentRaceMatrixPath ||
+    edge.roleUrl !==
+      localAdminAuditRoleUrl(localAdminAuditIds.hostedConcurrentRaceMatrix) ||
+    edge.source !== transition.source ||
+    edge.status !== transition.status ||
+    edge.mode !== transition.mode ||
+    edge.realHostedEvidenceStatus !== transition.realHostedEvidenceStatus ||
+    edge.realHostedDeploymentStatus !== transition.realHostedDeploymentStatus ||
+    (transition.sourcePath ?? null) !== (edge.sourcePath ?? null) ||
+    (transition.externalEvidencePath ?? null) !==
+      (edge.externalEvidencePath ?? null)
+  ) {
+    throw new Error(
+      "proof graph hosted evidence lane to hosted matrix transition edge drifted",
+    );
+  }
+  if (
+    transition.source === "hosted-evidence-lane" &&
+    (edge.status !== "passed" ||
+      edge.mode !== "real-hosted" ||
+      edge.realHostedDeploymentStatus !== "passed")
+  ) {
+    throw new Error(
+      "proof graph hosted evidence lane transition edge must preserve passed real-hosted status",
+    );
+  }
+  if (
+    transition.source === "not_configured" &&
+    (edge.status !== "not_configured" ||
+      edge.mode !== "not_configured" ||
+      edge.realHostedDeploymentStatus !== "unproven")
+  ) {
+    throw new Error(
+      "proof graph hosted evidence lane transition edge must preserve blocked no-env status",
+    );
   }
   return graph;
 }
@@ -1523,6 +1588,7 @@ function assertProofGraphNodeLocalPrerequisiteDestinations(node) {
 function buildProofGraphEdges({
   nodes,
   nextAction = null,
+  releaseReadiness,
   adminSpineTerminalBatches = null,
   privateChannelRecoveryReceipt = null,
   replacementActionRecoveryReceipt = null,
@@ -1599,6 +1665,10 @@ function buildProofGraphEdges({
     ...nodes
       .filter((node) => node.kind === "admin-proof-surface")
       .map((node) => ["admin-spine", node.id, "aggregates"]),
+    ...hostedEvidenceLaneToHostedMatrixTransitionEdges({
+      nodes,
+      releaseReadiness,
+    }),
     ...hostedEvidenceRealCaptureProofEdges(nodes),
     ...nodes
       .filter((node) => node.kind === "command-proof-role-url-audit")
@@ -1868,6 +1938,74 @@ function releaseAdminProofContractEdges(nodes) {
         ],
       ]
     : [];
+}
+
+function hostedEvidenceLaneToHostedMatrixTransitionEdges({
+  nodes,
+  releaseReadiness,
+}) {
+  if (
+    !nodes.some((node) => node.id === "admin-proof:hosted-evidence-lane") ||
+    !nodes.some(
+      (node) => node.id === "admin-proof:hosted-concurrent-race-matrix",
+    )
+  ) {
+    return [];
+  }
+  const transition = hostedEvidenceMatrixTransitionFromReadiness(
+    releaseReadiness,
+  );
+  if (transition === null) {
+    return [];
+  }
+  return [
+    [
+      "admin-proof:hosted-evidence-lane",
+      "admin-proof:hosted-concurrent-race-matrix",
+      "feeds-hosted-matrix-transition",
+      {
+        source: transition.source,
+        sourcePath: transition.sourcePath,
+        status: transition.status,
+        mode: transition.mode,
+        realHostedEvidenceStatus: transition.realHostedEvidenceStatus,
+        realHostedDeploymentStatus: transition.realHostedDeploymentStatus,
+        externalEvidencePath: transition.externalEvidencePath,
+        roleUrl: localAdminAuditRoleUrl(
+          localAdminAuditIds.hostedConcurrentRaceMatrix,
+        ),
+        command: devTestGameHostedConcurrentRaceMatrixCommand,
+        proofTarget: devTestGameHostedConcurrentRaceMatrixPath,
+      },
+    ],
+  ];
+}
+
+function hostedEvidenceMatrixTransitionFromReadiness(releaseReadiness) {
+  const transition = releaseReadiness?.localDevelopmentSpine?.checks?.find(
+    (check) => check.id === "local-hosted-concurrent-race-matrix-admin-surface",
+  )?.hostedEvidenceTransition;
+  if (transition === null || transition === undefined) {
+    return null;
+  }
+  return {
+    source: String(transition.source ?? ""),
+    sourcePath:
+      transition.sourcePath === null || transition.sourcePath === undefined
+        ? null
+        : String(transition.sourcePath),
+    status: String(transition.status ?? ""),
+    mode: String(transition.mode ?? ""),
+    realHostedEvidenceStatus: String(transition.realHostedEvidenceStatus ?? ""),
+    realHostedDeploymentStatus: String(
+      transition.realHostedDeploymentStatus ?? "",
+    ),
+    externalEvidencePath:
+      transition.externalEvidencePath === null ||
+      transition.externalEvidencePath === undefined
+        ? null
+        : String(transition.externalEvidencePath),
+  };
 }
 
 function hostedEvidenceRealCaptureProofEdges(nodes) {
