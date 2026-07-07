@@ -16,6 +16,7 @@ export {
   buildStaleConflictMessageCoverageSummary,
   hardeningStaleConflictHighlightedLaneIds,
   privateChannelStaleActionConflictMessageLaneId,
+  privateChannelStaleActionConflictMessageSpineLaneCase,
   replacementStaleConflictMessageLaneId,
   replacementStaleConflictMessageSpineLaneCase,
   staleActionConflictMessageLaneId,

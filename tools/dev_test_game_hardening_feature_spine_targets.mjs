@@ -8,6 +8,7 @@ import {
   completedGameHardeningSpineTargetCases,
 } from "./dev_test_game_core_loop_completed_game_proof_readiness_contract.mjs";
 import {
+  privateChannelStaleActionConflictMessageSpineLaneCase,
   replacementStaleConflictMessageSpineLaneCase,
 } from "./dev_test_game_stale_conflict_scenarios.mjs";
 import {
@@ -50,6 +51,8 @@ const completedGameHardeningFeatureSpineTargetRows = Object.freeze(
 );
 const replacementStaleConflictMessageSpineLane =
   replacementStaleConflictMessageSpineLaneCase();
+const privateChannelStaleActionConflictMessageSpineLane =
+  privateChannelStaleActionConflictMessageSpineLaneCase();
 const reconnectHardeningSpineTargets = reconnectHardeningSpineTargetCases();
 const reconnectHardeningFeatureSpineTargetRows = Object.freeze(
   Object.fromEntries(
@@ -111,6 +114,14 @@ export const hardeningFeatureSpineTargetRows = Object.freeze({
     roleUrlId: replacementStaleConflictMessageSpineLane.laneId,
     checkpointId: replacementStaleConflictMessageSpineLane.laneId,
     adminCheckId: replacementStaleConflictMessageSpineLane.laneId,
+  }),
+  privateChannelStaleActionConflictMessage: Object.freeze({
+    featureSlotId: privateChannelStaleActionConflictMessageSpineLane.laneId,
+    sourceCheckId: hardeningFeatureSpineSourceCheckId,
+    cycleId: hardeningFeatureSpineCycleIds.staleConflict,
+    roleUrlId: privateChannelStaleActionConflictMessageSpineLane.laneId,
+    checkpointId: privateChannelStaleActionConflictMessageSpineLane.laneId,
+    adminCheckId: privateChannelStaleActionConflictMessageSpineLane.laneId,
   }),
   ...reconnectHardeningFeatureSpineTargetRows,
   ...localRaceReloadHardeningFeatureSpineTargetRows,
@@ -191,6 +202,13 @@ export const hardeningFeatureSpineTargetProvenanceCases = Object.freeze([
     sourceFactory: "replacementStaleConflictMessageSpineLaneCase",
     sourceRow:
       hardeningFeatureSpineTargetRows.replacementStaleConflictMessage,
+    source: hardeningFeatureSpineSource,
+  }),
+  featureSpineTargetProvenanceCase({
+    targetKey: "privateChannelStaleActionConflictMessage",
+    sourceFactory: "privateChannelStaleActionConflictMessageSpineLaneCase",
+    sourceRow:
+      hardeningFeatureSpineTargetRows.privateChannelStaleActionConflictMessage,
     source: hardeningFeatureSpineSource,
   }),
   ...reconnectHardeningSpineTargets.map((target) =>

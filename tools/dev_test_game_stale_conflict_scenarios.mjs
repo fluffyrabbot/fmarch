@@ -218,6 +218,19 @@ export function replacementStaleConflictMessageSpineLaneCase() {
   return cloneScenarioCase(cases[0]);
 }
 
+export function privateChannelStaleActionConflictMessageSpineLaneCase() {
+  const cases = staleConflictMessageSurfaceCases().filter(
+    (scenario) =>
+      scenario.laneId === privateChannelStaleActionConflictMessageLaneId,
+  );
+  if (cases.length !== 1) {
+    throw new Error(
+      "private-channel stale action conflict-message spine lane drifted",
+    );
+  }
+  return cloneScenarioCase(cases[0]);
+}
+
 export function staleConflictMessageSurfaceCheckIds() {
   return staleConflictMessageSurfaceCases().map((scenario) => scenario.checkId);
 }

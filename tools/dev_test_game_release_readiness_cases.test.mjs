@@ -99,6 +99,7 @@ import {
   roleSurfaceSpineCaseList,
 } from "./dev_test_game_role_surface_spine_cases.mjs";
 import {
+  privateChannelStaleActionConflictMessageSpineLaneCase,
   replacementStaleConflictMessageSpineLaneCase,
 } from "./dev_test_game_stale_conflict_scenarios.mjs";
 import {
@@ -417,6 +418,22 @@ test("release readiness buildable cases share next-action commands and spine tar
       adminCheckId: replacementStaleConflictMessageSpineLaneCase().laneId,
     },
   );
+  assert.deepEqual(
+    releaseReadinessProductionFeatureSpineTargets
+      .privateChannelStaleActionConflictMessage,
+    {
+      featureSlotId: privateChannelStaleActionConflictMessageSpineLaneCase()
+        .laneId,
+      sourceCheckId: hardeningFeatureSpineSourceCheckId,
+      cycleId: hardeningFeatureSpineCycleIds.staleConflict,
+      roleUrlId: privateChannelStaleActionConflictMessageSpineLaneCase().laneId,
+      rowKind: "checkpoint",
+      checkpointId:
+        privateChannelStaleActionConflictMessageSpineLaneCase().laneId,
+      adminCheckId:
+        privateChannelStaleActionConflictMessageSpineLaneCase().laneId,
+    },
+  );
   for (const expectation of hardeningReconnectFeatureTargetExpectations) {
     assert.deepEqual(
       releaseReadinessProductionFeatureSpineTargets[expectation.targetKey],
@@ -559,6 +576,15 @@ test("scenario-owned production feature targets derive proof row ids from source
       source: {
         cycleId: hardeningFeatureSpineCycleIds.staleConflict,
         rowId: replacementStaleConflictMessageSpineLaneCase().laneId,
+      },
+    },
+    {
+      target:
+        releaseReadinessProductionFeatureSpineTargets
+          .privateChannelStaleActionConflictMessage,
+      source: {
+        cycleId: hardeningFeatureSpineCycleIds.staleConflict,
+        rowId: privateChannelStaleActionConflictMessageSpineLaneCase().laneId,
       },
     },
     ...hardeningReconnectFeatureTargetExpectations.map((expectation) => ({
