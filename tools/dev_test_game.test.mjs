@@ -439,6 +439,9 @@ import {
   hostedIdentityProofGraphDependencyFromGraph,
 } from "./dev_test_game_hosted_identity_proof_graph_dependency.mjs";
 import {
+  selectedProofGraphDependencyHandoffSummaries,
+} from "./dev_test_game_selected_proof_graph_dependency.mjs";
+import {
   adminProofDestinationRequirementCases,
   adminProofDestinationRequirementLinkRows,
   proofGraphDiagnosticProofEdges,
@@ -8123,6 +8126,117 @@ test("hosted identity proof graph dependency is shared by graph and next-action"
       }),
     /proof graph hosted identity operator dependency missing/,
   );
+});
+
+test("selected proof graph dependency handoffs are table-driven across hosted lanes", () => {
+  const hostedIdentityDependency = hostedIdentityProofGraphEdgesFixture();
+  const hostedIdentityGraph = hostedIdentityProofGraphFixture();
+  const matrixEdge = {
+    from: "admin-proof:hosted-evidence-lane",
+    to: "admin-proof:hosted-concurrent-race-matrix",
+    relationship: "feeds-hosted-matrix-transition",
+    source: "hosted-evidence-lane",
+    status: "passed",
+    mode: "real-hosted",
+    realHostedEvidenceStatus: "passed",
+    realHostedDeploymentStatus: "passed",
+    externalEvidencePath: "target/dev-test-game/hosted-matrix-external.json",
+    roleUrl:
+      "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
+    command: devTestGameHostedConcurrentRaceMatrixCommand,
+    proofTarget: devTestGameHostedConcurrentRaceMatrixPath,
+  };
+  const cases = [
+    {
+      label: "hosted matrix transition",
+      nextAction: {
+        nextAction: {
+          unproven: {
+            proofGraphNodeId: "admin-proof:hosted-concurrent-race-matrix",
+            roleUrl:
+              "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
+          },
+        },
+      },
+      proofGraph: { edges: [matrixEdge] },
+      dependencies: [
+        {
+          selectedProofGraphNodeId: "admin-proof:hosted-concurrent-race-matrix",
+          roleUrlIncludes: "/admin/audit/local-hosted-concurrent-race-matrix",
+          edges: [
+            {
+              from: matrixEdge.from,
+              to: matrixEdge.to,
+              relationship: matrixEdge.relationship,
+            },
+          ],
+        },
+      ],
+      expectedLinkIds: [
+        "edge:admin-proof:hosted-evidence-lane:feeds-hosted-matrix-transition:admin-proof:hosted-concurrent-race-matrix",
+      ],
+      expectedStatus: [
+        "feeds-hosted-matrix-transition",
+        "source hosted-evidence-lane",
+        "status passed",
+        "mode real-hosted",
+        "realHostedEvidenceStatus passed",
+        "realHostedDeploymentStatus passed",
+        "externalEvidencePath target/dev-test-game/hosted-matrix-external.json",
+        `command ${devTestGameHostedConcurrentRaceMatrixCommand}`,
+        `proofTarget ${devTestGameHostedConcurrentRaceMatrixPath}`,
+        "roleUrl /admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
+      ].join(" "),
+    },
+    {
+      label: "hosted identity prerequisite edges",
+      nextAction: {
+        nextAction: {
+          unproven: {
+            id: "hosted-production-identity",
+            proofGraphNodeId: "admin-proof:hosted-identity-evidence",
+            roleUrl:
+              "/admin/audit/local-hosted-identity-evidence?game=<seeded-game>",
+            hostedIdentityProofGraphEdges: hostedIdentityDependency,
+          },
+        },
+      },
+      proofGraph: hostedIdentityGraph,
+      dependencies: [
+        {
+          unprovenId: "hosted-production-identity",
+          selectedProofGraphNodeId: "admin-proof:hosted-identity-evidence",
+          roleUrlIncludes: "/admin/audit/local-hosted-identity-evidence",
+          edges: hostedIdentityDependency.edges,
+        },
+      ],
+      expectedLinkIds: hostedIdentityDependency.edges.map((edge) => edge.id),
+      expectedStatus: [
+        "operator-predicate-for-admin-surface",
+        "command npm run test:dev-test-game-hosted-identity-operator-admin-proof",
+        `proofTarget ${devTestGameHostedIdentityOperatorAdminProofPath}`,
+      ].join(" "),
+    },
+  ];
+
+  for (const testCase of cases) {
+    const handoffs = selectedProofGraphDependencyHandoffSummaries(testCase);
+    assert.deepEqual(
+      handoffs.map((handoff) => handoff.linkId),
+      testCase.expectedLinkIds,
+      testCase.label,
+    );
+    assert.equal(
+      handoffs.at(-1).auditId,
+      localAdminAuditIds.proofGraph,
+      testCase.label,
+    );
+    assert.equal(
+      handoffs.at(-1).requiredCheckStatuses[handoffs.at(-1).linkId],
+      testCase.expectedStatus,
+      testCase.label,
+    );
+  }
 });
 
 test("spine runner enforces hosted identity graph preconditions before a step", async () => {

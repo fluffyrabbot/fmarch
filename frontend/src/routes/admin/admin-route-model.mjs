@@ -5397,6 +5397,7 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
       unproven,
       unprovenRoleUrl,
       unprovenProofGraphNodeId,
+      hostedIdentityProofGraphEdges,
       localCheck,
       localCheckRoleUrl,
       seedProofLaneCoverage,
@@ -5838,6 +5839,7 @@ export function normalizeLocalNextActionRelatedLinks({
   unproven = null,
   unprovenRoleUrl = "",
   unprovenProofGraphNodeId = "",
+  hostedIdentityProofGraphEdges = null,
   localCheck = null,
   localCheckRoleUrl = "",
   seedProofLaneCoverage = null,
@@ -5853,6 +5855,7 @@ export function normalizeLocalNextActionRelatedLinks({
     proofGraphDestinationSummary === null &&
     sequenceDeferralRoleUrl === "" &&
     selectedProofGraphNode === null &&
+    hostedIdentityProofGraphEdges === null &&
     String(selectedProductionFeatureGraph?.nodeId ?? "") === ""
   ) {
     return Object.freeze([]);
@@ -5878,6 +5881,15 @@ export function normalizeLocalNextActionRelatedLinks({
       actionStatus,
       selectedProofGraphNode,
       unproven,
+      unprovenRoleUrl,
+    }),
+    ...hostedIdentityProofGraphDependencyRelatedLinks({
+      game,
+      command,
+      actionStatus,
+      selectedProofGraphNode,
+      hostedIdentityProofGraphEdges,
+      unprovenProofGraphNodeId,
       unprovenRoleUrl,
     }),
     ...(String(selectedProductionFeatureGraph?.nodeId ?? "") === ""
@@ -5995,6 +6007,40 @@ function hostedMatrixTransitionEdgeRelatedLinks({
       command,
     }),
   ];
+}
+
+function hostedIdentityProofGraphDependencyRelatedLinks({
+  game,
+  command,
+  actionStatus,
+  selectedProofGraphNode,
+  hostedIdentityProofGraphEdges,
+  unprovenProofGraphNodeId,
+  unprovenRoleUrl,
+}) {
+  const selectedNodeId = String(
+    selectedProofGraphNode?.id ?? unprovenProofGraphNodeId ?? "",
+  );
+  if (
+    selectedNodeId !== "admin-proof:hosted-identity-evidence" ||
+    typeof unprovenRoleUrl !== "string" ||
+    !unprovenRoleUrl.includes("/admin/audit/local-hosted-identity-evidence") ||
+    !Array.isArray(hostedIdentityProofGraphEdges?.edges)
+  ) {
+    return [];
+  }
+  return hostedIdentityProofGraphEdges.edges.map((edge) =>
+    Object.freeze({
+      id: proofGraphEdgeCheckId(edge),
+      label: `${edge.from} to ${edge.to}`,
+      href: adminAuditInspectHref({
+        game,
+        audit: localAdminAuditIds.proofGraph,
+      }),
+      status: String(edge.relationship ?? actionStatus),
+      command: String(edge.command ?? command),
+    }),
+  );
 }
 
 export function normalizeLocalNextActionSelectedProofGraphCheckRows({

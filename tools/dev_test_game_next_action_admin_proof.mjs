@@ -30,6 +30,11 @@ import {
   localAdminAuditIds,
 } from "./dev_test_game_admin_audit_surface_ids.mjs";
 import {
+  proofGraphEdgeCheckId,
+  selectedProofGraphDependencyHandoffSummaries,
+  selectedProofGraphDependencyLinkIds,
+} from "./dev_test_game_selected_proof_graph_dependency.mjs";
+import {
   assertSelectedGraphDestinationCaseSurface,
   selectedGraphDestinationHandoffSummary,
   selectedGraphDestinationSubject,
@@ -1471,9 +1476,13 @@ function requiredRelatedLinksForNextAction(nextAction, { proofGraph } = {}) {
     nextAction.nextAction.seedProofLaneCoverage?.roleUrl;
   const proofGraphDestinationSummary =
     nextAction.nextAction.proofGraphDestinationSummary;
-  const hostedMatrixTransitionEdgeLinkId =
-    hostedMatrixTransitionEdgeHandoffSummary({ nextAction, proofGraph })
-      ?.linkId;
+  const selectedDependencyEdgeLinkIds = selectedProofGraphDependencyLinkIds({
+    nextAction,
+    proofGraph,
+    dependencies: selectedProofGraphDependencyDefinitionsForNextAction(
+      nextAction,
+    ),
+  });
   return [
     ...(typeof proofGraphNodeId === "string" && proofGraphNodeId.trim() !== ""
       ? ["selected-proof-graph-node"]
@@ -1485,10 +1494,7 @@ function requiredRelatedLinksForNextAction(nextAction, { proofGraph } = {}) {
     selectedProductionFeatureGraphNodeId.trim() !== ""
       ? [selectedProductionFeatureGraphNodeId]
       : []),
-    ...(typeof hostedMatrixTransitionEdgeLinkId === "string" &&
-    hostedMatrixTransitionEdgeLinkId.trim() !== ""
-      ? [hostedMatrixTransitionEdgeLinkId]
-      : []),
+    ...selectedDependencyEdgeLinkIds,
     ...(typeof localCheckId === "string" && localCheckId.trim() !== ""
       ? [localCheckId]
       : []),
@@ -1678,12 +1684,6 @@ function phaseLocalNextActionEdge({ edges, node, from, relationship }) {
         edge.phaseLocalNextActionId === node.phaseLocalNextActionId,
     ) ?? null
   );
-}
-
-function proofGraphEdgeCheckId(edge) {
-  return `edge:${String(edge?.from ?? "")}:${String(
-    edge?.relationship ?? "related",
-  )}:${String(edge?.to ?? "")}`;
 }
 
 function phaseLocalNextActionSnapshotStatusText(snapshot) {
@@ -1933,62 +1933,51 @@ function selectedHostedIdentityOperatorCandidate(nextAction) {
 function relatedHandoffsForNextAction({ nextAction, proofGraph, hostedMatrix }) {
   return [
     ...selectedGraphDestinationHandoffSummaries({ nextAction, proofGraph }),
-    hostedMatrixTransitionEdgeHandoffSummary({ nextAction, proofGraph }),
+    ...selectedProofGraphDependencyHandoffSummaries({
+      nextAction,
+      proofGraph,
+      dependencies: selectedProofGraphDependencyDefinitionsForNextAction(
+        nextAction,
+      ),
+    }),
     hostedIdentityEvidenceHandoffSummary({ nextAction }),
     hostedMatrixHandoffSummary({ nextAction, hostedMatrix }),
   ].filter((handoff) => handoff !== null);
 }
 
-function hostedMatrixTransitionEdgeHandoffSummary({ nextAction, proofGraph }) {
-  const unproven = nextAction.nextAction.unproven;
-  if (
-    unproven?.proofGraphNodeId !== "admin-proof:hosted-concurrent-race-matrix" ||
-    typeof unproven?.roleUrl !== "string" ||
-    !unproven.roleUrl.includes("/admin/audit/local-hosted-concurrent-race-matrix")
-  ) {
-    return null;
-  }
-  const edge = (proofGraph?.edges ?? []).find(
-    (candidate) =>
-      candidate.from === "admin-proof:hosted-evidence-lane" &&
-      candidate.to === "admin-proof:hosted-concurrent-race-matrix" &&
-      candidate.relationship === "feeds-hosted-matrix-transition",
-  );
-  if (edge === undefined) {
-    return null;
-  }
-  const edgeRowId = proofGraphEdgeCheckId(edge);
+function selectedProofGraphDependencyDefinitionsForNextAction(nextAction) {
+  return [
+    hostedMatrixTransitionDependency(),
+    hostedIdentityProofGraphDependency(nextAction),
+  ].filter((dependency) => dependency !== null);
+}
+
+function hostedMatrixTransitionDependency() {
   return {
-    linkId: edgeRowId,
-    auditId: localAdminAuditIds.proofGraph,
-    requiredCheckIds: [edgeRowId, edge.from, edge.to],
-    requiredCheckStatuses: {
-      [edgeRowId]: hostedMatrixTransitionEdgeStatus(edge),
-    },
-    requiredRelatedLinkIds: [edge.from, edge.to],
+    selectedProofGraphNodeId: "admin-proof:hosted-concurrent-race-matrix",
+    roleUrlIncludes: "/admin/audit/local-hosted-concurrent-race-matrix",
+    edges: [
+      {
+        from: "admin-proof:hosted-evidence-lane",
+        to: "admin-proof:hosted-concurrent-race-matrix",
+        relationship: "feeds-hosted-matrix-transition",
+      },
+    ],
   };
 }
 
-function hostedMatrixTransitionEdgeStatus(edge) {
-  const values = {
-    source: String(edge.source ?? ""),
-    status: String(edge.status ?? ""),
-    mode: String(edge.mode ?? ""),
-    realHostedEvidenceStatus: String(edge.realHostedEvidenceStatus ?? ""),
-    realHostedDeploymentStatus: String(
-      edge.realHostedDeploymentStatus ?? "",
-    ),
-    externalEvidencePath: String(edge.externalEvidencePath ?? ""),
-    command: String(edge.command ?? ""),
-    proofTarget: String(edge.proofTarget ?? ""),
-    roleUrl: String(edge.roleUrl ?? ""),
+function hostedIdentityProofGraphDependency(nextAction) {
+  const dependency =
+    nextAction.nextAction.unproven?.hostedIdentityProofGraphEdges;
+  if (!Array.isArray(dependency?.edges) || dependency.edges.length === 0) {
+    return null;
+  }
+  return {
+    unprovenId: "hosted-production-identity",
+    selectedProofGraphNodeId: "admin-proof:hosted-identity-evidence",
+    roleUrlIncludes: "/admin/audit/local-hosted-identity-evidence",
+    edges: dependency.edges,
   };
-  return [
-    String(edge.relationship ?? ""),
-    ...Object.entries(values).flatMap(([key, value]) =>
-      value.trim() === "" ? [] : [`${key} ${value}`],
-    ),
-  ].join(" ");
 }
 
 function hostedIdentityEvidenceHandoffSummary({ nextAction }) {

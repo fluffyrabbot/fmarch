@@ -4486,6 +4486,20 @@ test("admin local next action detail data carries hosted identity operator recom
     data.audit.hostedIdentityProofGraphEdges,
     HOSTED_IDENTITY_PROOF_GRAPH_EDGES,
   );
+  assert.deepEqual(
+    data.audit.relatedLinks
+      .filter((link) =>
+        HOSTED_IDENTITY_PROOF_GRAPH_EDGES.edges.some(
+          (edge) => edge.id === link.id,
+        ),
+      )
+      .map((link) => [link.id, link.status, link.command]),
+    HOSTED_IDENTITY_PROOF_GRAPH_EDGES.edges.map((edge) => [
+      edge.id,
+      edge.relationship,
+      edge.command,
+    ]),
+  );
   assert.equal(
     data.audit.artifactSummary.command,
     HOSTED_IDENTITY_OPERATOR_COMMAND,
