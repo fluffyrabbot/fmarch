@@ -3181,7 +3181,7 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
   });
   assertVisibleAdminRows({
     label: "core-loop admin proof missing role-surface spine checkpoint",
-    visibleRows: [`d02-n02-${proof.hostRoleSurface?.checkpointTestId}`],
+    visibleRows: coreLoopHostRoleSurfaceCheckpointRows(proof.hostRoleSurface),
     requiredRows: proof.generatedFrom?.coreLoopSpineRows?.roleSurfaceCheckpoints,
   });
   assertVisibleAdminRows({
@@ -3258,6 +3258,24 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
     commandProofRoleUrlAudit,
     ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
   };
+}
+
+function coreLoopHostRoleSurfaceCheckpointRows(hostRoleSurface) {
+  const rows = [];
+  if (typeof hostRoleSurface?.checkpointTestId === "string") {
+    rows.push(`d02-n02-${hostRoleSurface.checkpointTestId}`);
+  }
+  if (
+    hostRoleSurface?.hostLifecycleControlClickProof?.status === "passed" &&
+    hostRoleSurface.hostLifecycleControlClickProof.commandKind === "LockThread" &&
+    hostRoleSurface.hostLifecycleControlClickProof.checkpointPhaseStateAfterAck ===
+      "locked" &&
+    hostRoleSurface.hostLifecycleControlClickProof
+      .checkpointDeadlineAffordanceAfterAck === "unlock_thread,advance_phase"
+  ) {
+    rows.push("d02-n02-host-lifecycle-control-locked-checkpoint");
+  }
+  return rows;
 }
 
 export function validateDevTestGameHostSetupProof(proof, options = {}) {

@@ -178,6 +178,54 @@ test("production feature spine resolver preserves host phase command target shap
   );
 });
 
+test("production feature spine resolver preserves host locked recovery target shape", () => {
+  const sourceTarget = coreLoopSourceTargetFixture();
+  const declaration =
+    releaseReadinessProductionFeatureSpineTargets.hostPhaseLockedRecovery;
+  const target = resolveProductionFeatureSpineTarget({
+    itemId: "host-phase-locked-recovery",
+    declaration,
+    sourceTargetsByCheckId: {
+      "local-core-loop-proof": sourceTarget,
+    },
+  });
+
+  assert.deepEqual(target, {
+    featureSlotId: "host-phase-locked-recovery",
+    sourceCheckId: "local-core-loop-proof",
+    coverageDecision: {
+      kind: "seeded-role-url-proof",
+      proofCommand: coreLoopAdminProofCommand,
+    },
+    detailRoleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
+    cycleId: "d02-n02",
+    roleUrlId: "d02-n02-host",
+    roleUrl: "http://127.0.0.1:5173/g/game-b/host",
+    rowKind: "checkpoint",
+    checkpointId: "d02-n02-host-lifecycle-control-locked-checkpoint",
+    adminCheckId: "host-lifecycle-control",
+    featureTargetKind: "host-phase-locked-recovery",
+    browserProofCommand,
+    browserWorkbench: {
+      status: "passed",
+      route: "/g/game-b/host",
+      roleUrl: "http://127.0.0.1:5173/g/game-b/host",
+      roleSurface: "host",
+      featureSlotId: "host-phase-locked-recovery",
+      requiredEvidence:
+        "Seeded host-phase-locked-recovery role URL opens /g/game-b/host in the browser proof before host-lifecycle-control recovery is trusted.",
+    },
+    sourceProofArtifact: "target/dev-test-game/core-loop-admin-proof.json",
+    rerunCommand: coreLoopAdminProofCommand,
+  });
+  assert.equal(
+    validProductionFeatureSpineTarget(target, {
+      sourceCheckRules: coreLoopSourceCheckRules(),
+    }),
+    true,
+  );
+});
+
 function coreLoopResolutionBrowserWorkbenchFixture() {
   return {
     status: "passed",
@@ -702,6 +750,7 @@ function coreLoopSourceTargetFixture() {
       "d01-n01-d02-n01-resolved-target-killed",
       "d01-n01-d02-d02-day-controls-return",
       "d02-n02-host-lifecycle-control-checkpoint",
+      "d02-n02-host-lifecycle-control-locked-checkpoint",
       "d02-n02-d02-vote-open",
       "d02-n02-d02-deciding-vote-submitted",
       "d02-n02-d02-resolved-target-killed",

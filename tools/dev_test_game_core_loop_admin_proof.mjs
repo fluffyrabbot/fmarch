@@ -120,6 +120,7 @@ import {
   coreLoopHostControlFamilyId,
   hostControlRaceScenarioCases,
   hostLifecycleControlCheckpointId,
+  hostLifecycleControlLockedCheckpointId,
   coreLoopHostControlScenarioFamily,
 } from "./dev_test_game_core_loop_host_control_scenarios.mjs";
 import {
@@ -167,6 +168,7 @@ const requiredChecks = coreLoopAdminCheckIds;
 const coreLoopHostLifecycleControlCycleId = "d02-n02";
 
 const roleSurfaceSpineCheckpointRows = ({ hostRoleSurface } = {}) => {
+  const rows = [];
   if (
     hostRoleSurface?.status === "passed" &&
     hostRoleSurface.clickedThroughFromRoleUrl === true &&
@@ -174,11 +176,23 @@ const roleSurfaceSpineCheckpointRows = ({ hostRoleSurface } = {}) => {
     hostRoleSurface.hostLifecycleControlCheckpoint?.proofCheckId ===
       "host-lifecycle-control"
   ) {
-    return [
+    rows.push(
       `${coreLoopHostLifecycleControlCycleId}-${hostLifecycleControlCheckpointId}`,
-    ];
+    );
   }
-  return [];
+  if (
+    hostRoleSurface?.hostLifecycleControlClickProof?.status === "passed" &&
+    hostRoleSurface.hostLifecycleControlClickProof.commandKind === "LockThread" &&
+    hostRoleSurface.hostLifecycleControlClickProof.checkpointPhaseStateAfterAck ===
+      "locked" &&
+    hostRoleSurface.hostLifecycleControlClickProof
+      .checkpointDeadlineAffordanceAfterAck === "unlock_thread,advance_phase"
+  ) {
+    rows.push(
+      `${coreLoopHostLifecycleControlCycleId}-${hostLifecycleControlLockedCheckpointId}`,
+    );
+  }
+  return rows;
 };
 
 const requiredSpineRows = (proofRun, proofSurfaces = {}) => {
@@ -10084,9 +10098,9 @@ export function assertCoreLoopAdminProof(evidence) {
   );
   assertVisibleRows(
     "core-loop admin proof missing role-surface spine checkpoint",
-    [
-      `${coreLoopHostLifecycleControlCycleId}-${evidence.hostRoleSurface?.checkpointTestId}`,
-    ],
+    roleSurfaceSpineCheckpointRows({
+      hostRoleSurface: evidence.hostRoleSurface,
+    }),
     evidence.generatedFrom?.coreLoopSpineRows?.roleSurfaceCheckpoints,
   );
   assertVisibleRows(

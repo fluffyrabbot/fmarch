@@ -135,7 +135,10 @@ function readinessFixture() {
             browserProofCommand,
             cycleIds: ["d02-n02"],
             roleUrlIds: ["d02-n02-host"],
-            checkpointIds: ["d02-n02-host-lifecycle-control-checkpoint"],
+            checkpointIds: [
+              "d02-n02-host-lifecycle-control-checkpoint",
+              "d02-n02-host-lifecycle-control-locked-checkpoint",
+            ],
             recoveryHookIds: [],
             visibleAdminCheckIds: ["host-lifecycle-control"],
             roleUrlHrefs: {
