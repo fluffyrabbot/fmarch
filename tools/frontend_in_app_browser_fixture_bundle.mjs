@@ -67,7 +67,7 @@ assert.equal(
 );
 assert.equal(importedRoleSmoke.proof, "frontend-role-smoke-imported-contract");
 assert.equal(handoff.fixture.plannedStabilityCheckCount, 2);
-assert.equal(handoff.fixture.stabilityCheckTileCount, 13);
+assert.equal(handoff.fixture.stabilityCheckTileCount, 15);
 
 const optionalScreenshots = (await readdir(interactionsDir))
   .filter((entry) => /^browser-run-.+\.png$/u.test(entry))

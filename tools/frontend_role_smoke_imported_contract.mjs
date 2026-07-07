@@ -250,7 +250,7 @@ function expectedThumbZoneCounts() {
       ],
     },
     { role: "player", zones: [["player-primary-action-zone", 3]] },
-    { role: "moderator", zones: [["moderator-primary-action-zone", 9]] },
+    { role: "moderator", zones: [["moderator-primary-action-zone", 11]] },
   ];
 }
 

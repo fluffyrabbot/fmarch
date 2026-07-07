@@ -3,12 +3,13 @@ import { test } from "node:test";
 import {
   HOST_WORK_QUEUE_STRIP_CONTRACT,
   buildHostWorkQueueStripViewModel,
+  formatDeadlineCountdown,
 } from "./host-work-queue-strip.mjs";
 
 test("host work queue strip model exposes deadline votecount and replacement queues", () => {
   const view = buildHostWorkQueueStripViewModel({
     queues: [
-      { id: "deadline", label: "Deadline", value: "Active extension pending" },
+      { id: "deadline", label: "Deadline", value: "Closes in 9h 41m" },
       { id: "votecount", label: "Votecount", value: "2 projected targets" },
       { id: "replacement", label: "Replacement", value: "Slot 7 / Mira" },
     ],
@@ -26,11 +27,47 @@ test("host work queue strip model exposes deadline votecount and replacement que
       queue.minBlockPx,
     ]),
     [
-      ["deadline", "Deadline", "Active extension pending", "host-work-queue-deadline", 112],
+      ["deadline", "Deadline", "Closes in 9h 41m", "host-work-queue-deadline", 112],
       ["votecount", "Votecount", "2 projected targets", "host-work-queue-votecount", 112],
       ["replacement", "Replacement", "Slot 7 / Mira", "host-work-queue-replacement", 112],
     ],
   );
+});
+
+test("deadline countdown is a pure projection of deadline and injected now", () => {
+  assert.equal(
+    formatDeadlineCountdown({ deadlineSeconds: 1781841600, nowSeconds: 1781806740 }),
+    "Closes in 9h 41m",
+  );
+  assert.equal(
+    formatDeadlineCountdown({ deadlineSeconds: 1781810340, nowSeconds: 1781806740 }),
+    "Closes in 1h",
+  );
+  assert.equal(
+    formatDeadlineCountdown({ deadlineSeconds: 1781809200, nowSeconds: 1781806740 }),
+    "Closes in 41m",
+  );
+  assert.equal(
+    formatDeadlineCountdown({ deadlineSeconds: 1781806780, nowSeconds: 1781806740 }),
+    "Closes in under 1m",
+  );
+  assert.equal(
+    formatDeadlineCountdown({ deadlineSeconds: 1781806740, nowSeconds: 1781806740 }),
+    "Deadline passed",
+  );
+  assert.equal(
+    formatDeadlineCountdown({ deadlineSeconds: 1781800000, nowSeconds: 1781806740 }),
+    "Deadline passed",
+  );
+  assert.equal(
+    formatDeadlineCountdown({ deadlineSeconds: null, nowSeconds: 1781806740 }),
+    null,
+  );
+  assert.equal(
+    formatDeadlineCountdown({ deadlineSeconds: 1781841600, nowSeconds: undefined }),
+    null,
+  );
+  assert.equal(formatDeadlineCountdown(), null);
 });
 
 test("host work queue strip model normalizes missing queue fields", () => {

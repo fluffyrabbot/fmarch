@@ -313,6 +313,8 @@ test("host console proof actions cover the roadmap-critical irreversible actions
     HOST_CONSOLE_CRITICAL_ACTIONS.map((action) => action.id),
     [
       "extend_deadline",
+      "extend_deadline_24h",
+      "extend_deadline_48h",
       "process_replacement",
       "resolve_phase",
       "lock_thread",
@@ -343,7 +345,12 @@ test("host console proof actions cover the roadmap-critical irreversible actions
       action.state.confirmation.message,
       new RegExp(escapeRegExp(actionConfig.outcomeLabel)),
     );
-    assert.equal(actionConfig.payload.kind, actionConfig.id);
+    assert.equal(
+      actionConfig.payload.kind,
+      actionConfig.id.startsWith("extend_deadline")
+        ? "extend_deadline"
+        : actionConfig.id,
+    );
 
     action.confirm();
 
@@ -475,7 +482,7 @@ test("host console action groups turn typed commands into moderator control bays
     groups
       .find((group) => group.id === "deadline")
       .actions.map((action) => action.id),
-    ["extend_deadline"],
+    ["extend_deadline", "extend_deadline_24h", "extend_deadline_48h"],
   );
   assert.deepEqual(
     groups
@@ -523,7 +530,7 @@ test("host console action groups turn typed commands into moderator control bays
   });
   assert.deepEqual(
     cohostActions.map((action) => action.id),
-    ["extend_deadline"],
+    ["extend_deadline", "extend_deadline_24h", "extend_deadline_48h"],
   );
   const cohostGroups = buildHostConsoleActionGroups({
     actions: cohostActions,

@@ -264,7 +264,7 @@ function inAppFileLane(inAppBrowserPage) {
       ? [
           "inAppBrowserPage.status == page-generated",
           "first-viewport board/admin/player/moderator shells are present",
-          "admin cohost/session-grant/recovery-gate, player main/private-channel, and all 9 moderator critical host confirmation controls are present",
+          "admin cohost/session-grant/recovery-gate, player main/private-channel, and all 11 moderator critical host confirmation controls are present",
           "hydrated-surface admin operational forms, player, moderator host-prompt, and slot-lifecycle scenario controls are present",
         ]
       : [],
@@ -324,15 +324,15 @@ function inAppFileBrowserRunLane(inAppBrowserRun, inAppBrowserImportedRun) {
         ? [
           "inAppBrowserRun.status == passed",
           "fixture file URL loaded in Chromium for every proof viewport",
-          "admin cohost/session-grant/recovery-gate, player main/private-channel, route-error, all 9 moderator critical host confirmations, and hydrated-surface controls recorded click/focus evidence",
+          "admin cohost/session-grant/recovery-gate, player main/private-channel, route-error, all 11 moderator critical host confirmations, and hydrated-surface controls recorded click/focus evidence",
           "moderator critical host confirmation records include alertdialog focus metadata and object/outcome text",
           "fixture screenshots include nonblank pixel evidence",
         ]
         : [
           "inAppBrowserImportedRun.status == imported-passed",
           "imported browser-run artifact was validated without relaunching Chromium",
-          "imported browser-run includes every proof viewport and all 21 planned interactions",
-          "all 9 moderator critical host confirmation records include alertdialog focus metadata and object/outcome text",
+          "imported browser-run includes every proof viewport and all 23 planned interactions",
+          "all 11 moderator critical host confirmation records include alertdialog focus metadata and object/outcome text",
           "referenced fixture screenshots were re-read as PNGs and matched nonblank pixel evidence",
         ]
       : [],
@@ -361,7 +361,7 @@ function inAppLocalhostBrowserRunLane(inAppBrowserLocalhostRun) {
       ? [
           "inAppBrowserLocalhostRun.status == passed",
           "fixture loaded from localhost for every proof viewport",
-          "admin cohost/session-grant/recovery-gate, player main/private-channel, route-error, all 9 moderator critical host confirmations, and hydrated-surface controls recorded click/focus evidence",
+          "admin cohost/session-grant/recovery-gate, player main/private-channel, route-error, all 11 moderator critical host confirmations, and hydrated-surface controls recorded click/focus evidence",
           "moderator critical host confirmation records include alertdialog focus metadata and object/outcome text",
           "fixture screenshots include nonblank pixel evidence",
         ]
@@ -392,8 +392,8 @@ function inAppImportedBrowserRunLane(inAppBrowserImportedRun) {
       ? [
           "inAppBrowserImportedRun.status == imported-passed",
           "source browser-run evidence was validated without launching Chromium locally",
-          "imported browser-run includes every proof viewport and all 21 planned interactions",
-          "imported browser-run includes 2 reserved status-floor checks covering 13 admin/moderator action tiles",
+          "imported browser-run includes every proof viewport and all 23 planned interactions",
+          "imported browser-run includes 2 reserved status-floor checks covering 15 admin/moderator action tiles",
           "referenced fixture screenshots were re-read as PNGs and matched nonblank pixel evidence",
         ]
       : [],
@@ -676,7 +676,7 @@ function expectedThumbZoneCounts() {
       ],
     },
     { role: "player", zones: [["player-primary-action-zone", 4]] },
-    { role: "moderator", zones: [["moderator-primary-action-zone", 9]] },
+    { role: "moderator", zones: [["moderator-primary-action-zone", 11]] },
   ];
 }
 
@@ -739,6 +739,8 @@ function noBindInteractionScenarioIds() {
 function moderatorCriticalConfirmationScenarioIds() {
   return [
     "moderator-extend_deadline-confirm-click",
+    "moderator-extend_deadline_24h-confirm-click",
+    "moderator-extend_deadline_48h-confirm-click",
     "moderator-process_replacement-confirm-click",
     "moderator-resolve_phase-confirm-click",
     "moderator-lock_thread-confirm-click",
@@ -993,10 +995,10 @@ function inAppBrowserImportedRunEvidenceComplete(inAppBrowserImportedRun) {
     inAppBrowserImportedRun.validated?.viewportCount > 0 &&
     inAppBrowserImportedRun.validated.runCount >=
       inAppBrowserImportedRun.validated.viewportCount &&
-    inAppBrowserImportedRun.validated.plannedInteractionCount === 21 &&
+    inAppBrowserImportedRun.validated.plannedInteractionCount === 23 &&
     inAppBrowserImportedRun.validated.plannedStabilityCheckCount === 2 &&
-    inAppBrowserImportedRun.validated.stabilityCheckTileCount >= 13 &&
-    inAppBrowserImportedRun.validated.moderatorCriticalConfirmationCount === 9 &&
+    inAppBrowserImportedRun.validated.stabilityCheckTileCount >= 15 &&
+    inAppBrowserImportedRun.validated.moderatorCriticalConfirmationCount === 11 &&
     (inAppBrowserImportedRun.validated.screenshotChecks?.length ?? 0) >=
       inAppBrowserImportedRun.validated.viewportCount
   );

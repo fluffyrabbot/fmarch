@@ -630,6 +630,8 @@ async function proveThumbZonePlacement(bundle) {
           zone: HOST_CONTROL_SURFACE_CONTRACT.thumbZone,
           requiredDescendants: [
             "critical-host-action-extend_deadline",
+            "critical-host-action-extend_deadline_24h",
+            "critical-host-action-extend_deadline_48h",
             "critical-host-action-process_replacement",
             "critical-host-action-resolve_phase",
             "critical-host-action-lock_thread",

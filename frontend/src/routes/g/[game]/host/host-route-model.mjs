@@ -6,6 +6,9 @@ import {
   buildHostLifecycleControlCheckpoint,
 } from "../../../../lib/components/host-action/host-lifecycle-control-checkpoint.mjs";
 import { buildHostConsoleStateEndpoint } from "../../../../lib/components/host-action/host-command-boundary.mjs";
+import {
+  formatDeadlineCountdown,
+} from "../../../../lib/components/host-action/host-work-queue-strip.mjs";
 import { buildAppShell } from "../../../../lib/app/app-shell-model.mjs";
 import { buildAppSurfaceHeaderViewModel } from "../../../../lib/app/app-surface-header-model.mjs";
 import {
@@ -167,27 +170,44 @@ export async function buildHostConsoleRouteData({
     moderatorActionGroups,
     hostLifecycleControlCheckpoint,
     moderatorControls,
-    workQueues: Object.freeze([
-      Object.freeze({
-        id: "deadline",
-        label: "Deadline",
-        value: "Active extension pending",
-      }),
-      Object.freeze({
-        id: "votecount",
-        label: "Votecount",
-        value:
-          coldLoad.votecount.length === 0
-            ? "No active ballots"
-            : `${coldLoad.votecount.length} projected target${coldLoad.votecount.length === 1 ? "" : "s"}`,
-      }),
-      Object.freeze({
-        id: "replacement",
-        label: "Replacement",
-        value: "Slot 7 / Mira",
-      }),
-    ]),
+    deadlineClock: HOST_FIXTURE_DEADLINE_CLOCK,
+    workQueues: buildHostWorkQueues({
+      phase: HOST_FIXTURE_PHASE,
+      votecountCount: coldLoad.votecount.length,
+      nowSeconds: HOST_FIXTURE_DEADLINE_CLOCK.nowSeconds,
+    }),
   });
+}
+
+export function buildHostWorkQueues({
+  phase = {},
+  votecountCount = 0,
+  nowSeconds = null,
+} = {}) {
+  const countdown = formatDeadlineCountdown({
+    deadlineSeconds: phase?.deadline,
+    nowSeconds,
+  });
+  return Object.freeze([
+    Object.freeze({
+      id: "deadline",
+      label: "Deadline",
+      value: countdown ?? "No deadline committed",
+    }),
+    Object.freeze({
+      id: "votecount",
+      label: "Votecount",
+      value:
+        votecountCount === 0
+          ? "No active ballots"
+          : `${votecountCount} projected target${votecountCount === 1 ? "" : "s"}`,
+    }),
+    Object.freeze({
+      id: "replacement",
+      label: "Replacement",
+      value: "Slot 7 / Mira",
+    }),
+  ]);
 }
 
 export function buildHostInviteTargets({
@@ -357,8 +377,13 @@ const HOST_FIXTURE_PHASE = Object.freeze({
   state: "open",
   locked: false,
   summary: "Day 2 deadline is active. Slot 7 / Mira has a pending replacement.",
+  deadline: 1781841600,
   deadlineLabel: "No deadline extension committed",
   lockedLabel: "Thread open",
+});
+
+const HOST_FIXTURE_DEADLINE_CLOCK = Object.freeze({
+  nowSeconds: 1781806740,
 });
 
 function normalizeGame(game) {

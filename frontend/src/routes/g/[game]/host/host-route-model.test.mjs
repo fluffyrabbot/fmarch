@@ -5,6 +5,7 @@ import {
   HOST_CONSOLE_ROUTE_CONTRACT,
   buildHostInviteTargets,
   buildHostConsoleRouteData,
+  buildHostWorkQueues,
   hostConsoleForbiddenMessage,
   resolveHostConsoleAccess,
   resolveHostRouteCapabilities,
@@ -87,12 +88,14 @@ test("host console route data is allowed for HostOf scoped to the current game",
   ]);
   assert.deepEqual(
     data.criticalActions.map((action) => action.payload.gameId),
-    Array(9).fill("midsummer"),
+    Array(11).fill("midsummer"),
   );
   assert.deepEqual(
     data.criticalActions.map((action) => action.id),
     [
       "extend_deadline",
+      "extend_deadline_24h",
+      "extend_deadline_48h",
       "process_replacement",
       "resolve_phase",
       "lock_thread",
@@ -124,6 +127,39 @@ test("host console route data is allowed for HostOf scoped to the current game",
       (action) => action.id,
     ),
     ["resolve_phase", "lock_thread"],
+  );
+  assert.deepEqual(
+    data.moderatorActionGroups
+      .find((group) => group.id === "deadline")
+      .actions.map((action) => action.id),
+    ["extend_deadline", "extend_deadline_24h", "extend_deadline_48h"],
+  );
+  const extend24 = data.criticalActions.find(
+    (action) => action.id === "extend_deadline_24h",
+  );
+  const extend48 = data.criticalActions.find(
+    (action) => action.id === "extend_deadline_48h",
+  );
+  assert.equal(extend24.requiresConfirmation, true);
+  assert.equal(extend24.irreversible, undefined);
+  assert.equal(extend24.payload.kind, "extend_deadline");
+  assert.equal(extend24.payload.phaseId, "D01");
+  assert.equal(extend24.payload.deadlineId, "deadline-day-2");
+  assert.equal(extend24.payload.extendsTo, "2026-06-20T04:00:00.000Z");
+  assert.equal(extend48.payload.extendsTo, "2026-06-21T04:00:00.000Z");
+  assert.equal(
+    extend24.confirmationText,
+    "Extend Day 2 deadline by 24 hours: move the deadline 24 hours later to June 19, 2026 at 9:00 PM PT for Day 2 deadline.",
+  );
+  assert.equal(
+    extend48.confirmationText,
+    "Extend Day 2 deadline by 48 hours: move the deadline 48 hours later to June 20, 2026 at 9:00 PM PT for Day 2 deadline.",
+  );
+  assert.equal(data.deadlineClock.nowSeconds, 1781806740);
+  assert.equal(data.phase.deadline, 1781841600);
+  assert.equal(
+    data.workQueues.find((queue) => queue.id === "deadline").value,
+    "Closes in 9h 41m",
   );
   assert.deepEqual(
     data.moderatorActionGroups
@@ -319,7 +355,7 @@ test("host console route data is allowed for CohostOf scoped to the current game
   assert.equal(data.access.capabilityLabel, "CohostOf(midsummer)");
   assert.deepEqual(
     data.criticalActions.map((action) => action.id),
-    ["extend_deadline"],
+    ["extend_deadline", "extend_deadline_24h", "extend_deadline_48h"],
   );
   assert.deepEqual(
     data.moderatorControls.map((control) => [control.id, control.authority]),
@@ -340,6 +376,47 @@ test("host console route data is allowed for CohostOf scoped to the current game
     "disabled:requires HostOf capability",
   );
   assert.equal(data.hostLifecycleControlCheckpoint.status.state, "pending");
+});
+
+test("host work queue deadline countdown recomputes from the projected phase", () => {
+  const fixtureQueues = buildHostWorkQueues({
+    phase: { deadline: 1781841600 },
+    votecountCount: 2,
+    nowSeconds: 1781806740,
+  });
+  assert.deepEqual(fixtureQueues.map((queue) => [queue.id, queue.value]), [
+    ["deadline", "Closes in 9h 41m"],
+    ["votecount", "2 projected targets"],
+    ["replacement", "Slot 7 / Mira"],
+  ]);
+
+  const extendedQueues = buildHostWorkQueues({
+    phase: { deadline: 1781841600 + 86400 },
+    votecountCount: 1,
+    nowSeconds: 1781806740,
+  });
+  assert.equal(
+    extendedQueues.find((queue) => queue.id === "deadline").value,
+    "Closes in 33h 41m",
+  );
+  assert.equal(
+    extendedQueues.find((queue) => queue.id === "votecount").value,
+    "1 projected target",
+  );
+
+  const noDeadlineQueues = buildHostWorkQueues({
+    phase: { deadline: null },
+    votecountCount: 0,
+    nowSeconds: 1781806740,
+  });
+  assert.equal(
+    noDeadlineQueues.find((queue) => queue.id === "deadline").value,
+    "No deadline committed",
+  );
+  assert.equal(
+    noDeadlineQueues.find((queue) => queue.id === "votecount").value,
+    "No active ballots",
+  );
 });
 
 test("host console access accepts API-shaped game capabilities", () => {

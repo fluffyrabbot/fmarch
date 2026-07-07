@@ -304,6 +304,8 @@ export const roles = Object.freeze([
         zone: "moderator-primary-actions",
         targetSelectors: Object.freeze([
           '[data-testid="critical-host-action-extend_deadline"] [data-testid="critical-host-action-trigger"]',
+          '[data-testid="critical-host-action-extend_deadline_24h"] [data-testid="critical-host-action-trigger"]',
+          '[data-testid="critical-host-action-extend_deadline_48h"] [data-testid="critical-host-action-trigger"]',
           '[data-testid="critical-host-action-process_replacement"] [data-testid="critical-host-action-trigger"]',
           '[data-testid="critical-host-action-resolve_phase"] [data-testid="critical-host-action-trigger"]',
           '[data-testid="critical-host-action-lock_thread"] [data-testid="critical-host-action-trigger"]',

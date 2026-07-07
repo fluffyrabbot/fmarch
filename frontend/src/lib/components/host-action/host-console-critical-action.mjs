@@ -1,3 +1,10 @@
+export const EXTEND_DEADLINE_PRESETS = Object.freeze([
+  Object.freeze({ id: "extend_deadline_24h", label: "Extend +24h", hours: 24 }),
+  Object.freeze({ id: "extend_deadline_48h", label: "Extend +48h", hours: 48 }),
+]);
+
+const FIXTURE_DEADLINE_SECONDS = 1781841600;
+
 export function buildHostConsoleCriticalActions(
   gameId,
   {
@@ -30,6 +37,7 @@ export function buildHostConsoleCriticalActions(
         extendsTo: "2026-06-20T04:00:00Z",
       },
     }),
+    ...buildExtendDeadlinePresetActions(gameId, phase),
     freezeHostAction({
       id: "process_replacement",
       label: "Process replacement",
@@ -83,6 +91,49 @@ export function buildHostConsoleCriticalActions(
       hostActionAllowedForCapability(action, capabilityKind),
     ),
   );
+}
+
+function buildExtendDeadlinePresetActions(gameId, phase) {
+  const baseDeadlineSeconds =
+    typeof phase?.deadline === "number" && Number.isFinite(phase.deadline)
+      ? Math.floor(phase.deadline)
+      : FIXTURE_DEADLINE_SECONDS;
+  return EXTEND_DEADLINE_PRESETS.map((preset) => {
+    const extendsToSeconds = baseDeadlineSeconds + preset.hours * 3600;
+    const outcomeLabel = `move the deadline ${preset.hours} hours later to ${formatDeadlinePacific(extendsToSeconds)}`;
+    return freezeHostAction({
+      id: preset.id,
+      label: preset.label,
+      objectLabel: "Day 2 deadline",
+      outcomeLabel,
+      confirmationText:
+        `Extend Day 2 deadline by ${preset.hours} hours: ${outcomeLabel} for Day 2 deadline.`,
+      requiresConfirmation: true,
+      payload: {
+        kind: "extend_deadline",
+        gameId,
+        phaseId: "D01",
+        deadlineId: "deadline-day-2",
+        extendsTo: new Date(extendsToSeconds * 1000).toISOString(),
+      },
+    });
+  });
+}
+
+function formatDeadlinePacific(epochSeconds) {
+  const date = new Date(epochSeconds * 1000);
+  const day = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Los_Angeles",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  }).format(date);
+  const time = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Los_Angeles",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
+  return `${day} at ${time} PT`;
 }
 
 function buildHostPromptActions(gameId, prompt) {
@@ -314,7 +365,10 @@ export function buildHostConsoleActionGroups({
       value: "Extend the active phase deadline",
       boundary: "Typed command",
       boundaryDetail: "ExtendDeadline /commands Ack or Reject",
-      actionIds: ["extend_deadline"],
+      actionIds: [
+        "extend_deadline",
+        ...EXTEND_DEADLINE_PRESETS.map((preset) => preset.id),
+      ],
       actions: actionList,
     }),
     freezeHostActionGroup({
@@ -409,7 +463,7 @@ export function hostActionAllowedForCapability(action, capabilityKind) {
   if (normalizedCapabilityKind === "HostOf") {
     return true;
   }
-  return action?.id === "extend_deadline";
+  return action?.payload?.kind === "extend_deadline";
 }
 
 function hostActionGroupAllowedForCapability(group, capabilityKind) {

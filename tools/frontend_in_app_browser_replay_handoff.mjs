@@ -47,12 +47,12 @@ assert.equal(
 const plannedInteractionIds = plannedInteractions(manifest, browserRun).map(
   (entry) => entry.id,
 );
-assert.equal(plannedInteractionIds.length, 21);
+assert.equal(plannedInteractionIds.length, 23);
 
 const moderatorCriticalConfirmationIds = manifest.scenarios
   .filter((scenario) => scenario.role === "moderator" && scenario.confirmation)
   .map((scenario) => scenario.id);
-assert.equal(moderatorCriticalConfirmationIds.length, 9);
+assert.equal(moderatorCriticalConfirmationIds.length, 11);
 
 const plannedStabilityChecks = summarizeStabilityChecks(
   browserRun.plannedStabilityChecks?.length > 0
@@ -60,7 +60,7 @@ const plannedStabilityChecks = summarizeStabilityChecks(
     : manifest.stabilityChecks,
 );
 assert.equal(plannedStabilityChecks.length, 2);
-assert.equal(stabilityCheckTileCount(plannedStabilityChecks), 13);
+assert.equal(stabilityCheckTileCount(plannedStabilityChecks), 15);
 assert.equal(
   plannedStabilityChecks.every(
     (check) =>
@@ -120,12 +120,12 @@ const handoff = {
   promotionChecks: [
     "Run npm run test:frontend-iab-fixture-replay in a Chromium-capable environment.",
     "target/frontend-in-app-browser-interactions/browser-run.json has status passed.",
-    "browser-run plannedInteractions includes 21 admin/player/moderator/error interactions.",
-    "browser-run plannedStabilityChecks includes 2 reserved status-floor checks covering 13 admin/moderator action tiles.",
+    "browser-run plannedInteractions includes 23 admin/player/moderator/error interactions.",
+    "browser-run plannedStabilityChecks includes 2 reserved status-floor checks covering 15 admin/moderator action tiles.",
     "route-error interaction includes player private-channel 403 shell evidence.",
     "browser-run runs cover every fixture viewport.",
     "all reserved status floors advertise and render at least 44px before promotion.",
-    "all 9 moderator critical host confirmation interactions include alertdialog focus metadata and object/outcome text.",
+    "all 11 moderator critical host confirmation interactions include alertdialog focus metadata and object/outcome text.",
     "fixture screenshots include nonblank pixel evidence.",
     "Treat this as file-backed fixture proof only; full localhost app acceptance is tracked by the localhost dev-server role-smoke lane.",
   ],

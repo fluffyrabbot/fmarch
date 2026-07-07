@@ -46,6 +46,7 @@
   import {
     HOST_CONSOLE_ROUTE_CONTRACT,
     buildHostInviteTargets,
+    buildHostWorkQueues,
   } from "./host-route-model.mjs";
   import { createProjectionStore } from "$lib/app/projection-store.mjs";
   import "$lib/components/host-action/host-console-critical-path.css";
@@ -80,6 +81,11 @@
   });
   $: inviteTargets = buildHostInviteTargets({
     replacement: projection.replacement,
+  });
+  $: workQueues = buildHostWorkQueues({
+    phase: projection.phase ?? data.phase,
+    votecountCount: votecount.length,
+    nowSeconds: data.deadlineClock?.nowSeconds,
   });
   $: hostLifecycleControlCheckpoint = buildHostLifecycleControlCheckpoint({
     phase: projection.phase ?? data.phase,
@@ -266,7 +272,7 @@
       {hostPrompts}
     />
 
-    <HostWorkQueueStrip queues={data.workQueues} />
+    <HostWorkQueueStrip queues={workQueues} />
 
     <HostLifecycleControlCheckpoint
       checkpoint={hostLifecycleControlCheckpoint}

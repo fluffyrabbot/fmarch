@@ -29,6 +29,28 @@ export function buildHostWorkQueueStripViewModel({ queues = [] } = {}) {
   });
 }
 
+export function formatDeadlineCountdown({ deadlineSeconds, nowSeconds } = {}) {
+  if (!Number.isFinite(deadlineSeconds) || !Number.isFinite(nowSeconds)) {
+    return null;
+  }
+  const remainingSeconds = Math.floor(deadlineSeconds) - Math.floor(nowSeconds);
+  if (remainingSeconds <= 0) {
+    return "Deadline passed";
+  }
+  if (remainingSeconds < 60) {
+    return "Closes in under 1m";
+  }
+  const hours = Math.floor(remainingSeconds / 3600);
+  const minutes = Math.floor((remainingSeconds % 3600) / 60);
+  if (hours === 0) {
+    return `Closes in ${minutes}m`;
+  }
+  if (minutes === 0) {
+    return `Closes in ${hours}h`;
+  }
+  return `Closes in ${hours}h ${minutes}m`;
+}
+
 function stableId(value) {
   return String(value).replace(/[^a-zA-Z0-9_-]+/g, "-");
 }

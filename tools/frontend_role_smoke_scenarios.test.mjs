@@ -189,7 +189,7 @@ test("role smoke scenarios pin tablet thumb-zone target counts", () => {
       ],
       [
         "moderator",
-        [["moderator-primary-action-zone", "moderator-primary-actions", 9]],
+        [["moderator-primary-action-zone", "moderator-primary-actions", 11]],
       ],
     ],
   );

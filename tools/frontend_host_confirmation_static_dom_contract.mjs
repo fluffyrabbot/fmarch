@@ -43,6 +43,8 @@ assert.deepEqual(
   manifest.actions.map((action) => action.id),
   [
     "extend_deadline",
+    "extend_deadline_24h",
+    "extend_deadline_48h",
     "process_replacement",
     "resolve_phase",
     "lock_thread",

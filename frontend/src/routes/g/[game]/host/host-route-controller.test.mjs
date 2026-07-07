@@ -144,7 +144,7 @@ test("host route controller derives action groups from live host projections", (
   });
   assert.deepEqual(
     cohost.criticalActions.map((action) => action.id),
-    ["extend_deadline"],
+    ["extend_deadline", "extend_deadline_24h", "extend_deadline_48h"],
   );
   assert.deepEqual(
     cohost.moderatorActionGroups.map((group) => group.id),
