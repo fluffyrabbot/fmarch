@@ -8,6 +8,9 @@ import {
   coreLoopFeatureSpineTargetRows,
 } from "./dev_test_game_core_loop_feature_spine_targets.mjs";
 import {
+  completedGameEndgameRecoveryFeatureSpineRows,
+} from "./dev_test_game_core_loop_completed_terminal_scenario_assertions.mjs";
+import {
   buildProductionFeatureSpineDrilldown,
   buildProductionFeatureSpineTargetCollection,
   resolveProductionFeatureSpineTarget,
@@ -33,13 +36,11 @@ const browserProofCommand =
   "npm run test:dev-test-game-core-live:local";
 const coreLoopAdminProofCommand =
   "npm run test:dev-test-game-core-loop-admin-proof";
-const completedGameStaleCommandFeatureRowIds = Object.freeze([
-  "completed-game-host-stale-resolve-reject",
-  "completed-game-host-stale-advance-reject",
-  "completed-game-host-stale-complete-reject",
-  "completed-game-stale-player-submit-vote-reject",
-  "completed-game-stale-player-submit-post-reject",
-]);
+const completedGameEndgameRecoveryFeatureRowIds = Object.freeze(
+  completedGameEndgameRecoveryFeatureSpineRows({ cycleId: "d05-n05" }).map(
+    (row) => row.featureSlotId,
+  ),
+);
 
 test("core loop feature spine catalog rows are scenario-owned", () => {
   const source = readFileSync(
@@ -641,7 +642,7 @@ function coreLoopSourceTargetFixture() {
       "d04-n04-d05-deadPlayer",
       "d05-n05-host",
       "d05-n05-actionPlayer",
-      ...completedGameStaleCommandFeatureRowIds,
+      ...completedGameEndgameRecoveryFeatureRowIds,
     ],
     checkpointIds: [
       "d01-n01-d02-d01-resolved-locked",
@@ -689,7 +690,7 @@ function coreLoopSourceTargetFixture() {
       "d05-n05-n05-complete-game",
       "d05-n05-n05-completed-host-reload",
       "d05-n05-n05-completed-player-surface",
-      ...completedGameStaleCommandFeatureRowIds,
+      ...completedGameEndgameRecoveryFeatureRowIds,
     ],
     recoveryHookIds: [
       "staleLockedVoteReject",
@@ -746,6 +747,12 @@ function coreLoopSourceTargetFixture() {
         "http://127.0.0.1:5173/g/game-b",
       "completed-game-stale-player-submit-post-reject":
         "http://127.0.0.1:5173/g/game-b",
+      "completed-game-action-player-reload": "http://127.0.0.1:5173/g/game-b",
+      "completed-game-normal-player-reload": "http://127.0.0.1:5173/g/game-b",
+      "completed-game-dead-player-reload":
+        "http://127.0.0.1:5173/g/game-b?private=notification-1",
+      "completed-game-dead-player-stale-submit-vote-reject":
+        "http://127.0.0.1:5173/g/game-b?private=notification-1",
       "d02-n02-target": "http://127.0.0.1:5173/g/game-b",
     },
   };

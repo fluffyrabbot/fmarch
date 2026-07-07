@@ -37,6 +37,9 @@ import {
   completedGameEndgameScenarioCaseFamilyEntries,
   completedGameEndgameScenarioCaseFamilyIds,
   completedGameEndgameFeatureSpineRows,
+  completedGameDeadPlayerStaleVoteFeatureSpineRows,
+  completedGameEndgameRecoveryFeatureSpineRows,
+  completedGamePlayerReloadFeatureSpineRows,
   completedGameStaleCommandFeatureSpineRows,
   completedGameEndgameSurfaceAssertionCases,
   completedGameEndgameTransition,
@@ -1359,6 +1362,84 @@ test("completed-game scenario module derives command-specific stale feature rows
       },
     ],
   );
+});
+
+test("completed-game scenario module derives player reload feature rows", () => {
+  assert.deepEqual(
+    completedGamePlayerReloadFeatureSpineRows({ cycleId: "d05-n05" }),
+    [
+      {
+        targetKey: "completedPlayerReload",
+        featureSlotId: "completed-game-action-player-reload",
+        cycleId: "d05-n05",
+        role: "actionPlayer",
+        roleUrlId: "completed-game-action-player-reload",
+        checkpointId: "completed-game-action-player-reload",
+        adminCheckId: "completed-game-hardening-coverage",
+        proofField: "completedPlayerReloadProof",
+      },
+      {
+        targetKey: "completedNormalPlayerReload",
+        featureSlotId: "completed-game-normal-player-reload",
+        cycleId: "d05-n05",
+        role: "normalPlayer",
+        roleUrlId: "completed-game-normal-player-reload",
+        checkpointId: "completed-game-normal-player-reload",
+        adminCheckId: "completed-game-hardening-coverage",
+        proofField: "completedNormalPlayerReloadProof",
+      },
+      {
+        targetKey: "completedDeadPlayerReload",
+        featureSlotId: "completed-game-dead-player-reload",
+        cycleId: "d05-n05",
+        role: "deadPlayer",
+        roleUrlId: "completed-game-dead-player-reload",
+        checkpointId: "completed-game-dead-player-reload",
+        adminCheckId: "completed-game-hardening-coverage",
+        proofField: "completedDeadPlayerReloadProof",
+      },
+    ],
+  );
+});
+
+test("completed-game scenario module derives dead-player stale vote feature row", () => {
+  assert.deepEqual(
+    completedGameDeadPlayerStaleVoteFeatureSpineRows({ cycleId: "d05-n05" }),
+    [
+      {
+        targetKey: "completedDeadPlayerStaleVote",
+        featureSlotId: "completed-game-dead-player-stale-submit-vote-reject",
+        cycleId: "d05-n05",
+        role: "deadPlayer",
+        roleUrlId: "completed-game-dead-player-stale-submit-vote-reject",
+        checkpointId: "completed-game-dead-player-stale-submit-vote-reject",
+        adminCheckId: "completed-game-hardening-coverage",
+        proofField: "completedDeadPlayerStaleVoteRecoveryProof",
+      },
+    ],
+  );
+});
+
+test("completed-game scenario module maps every endgame recovery proof field once", () => {
+  const rows = completedGameEndgameRecoveryFeatureSpineRows({
+    cycleId: "d05-n05",
+  });
+  assert.deepEqual(
+    rows.map((row) => row.proofField),
+    [
+      "completedHostStaleResolveRecoveryProof",
+      "completedHostStaleAdvanceRecoveryProof",
+      "completedHostStaleCompleteRecoveryProof",
+      "staleCompletedVoteRecoveryProof",
+      "staleCompletedPostRecoveryProof",
+      "completedPlayerReloadProof",
+      "completedNormalPlayerReloadProof",
+      "completedDeadPlayerReloadProof",
+      "completedDeadPlayerStaleVoteRecoveryProof",
+    ],
+  );
+  assert.equal(new Set(rows.map((row) => row.proofField)).size, rows.length);
+  assert.equal(new Set(rows.map((row) => row.featureSlotId)).size, rows.length);
 });
 
 test("completed-game scenario module derives stale host and dead-player assertion cases", () => {

@@ -347,7 +347,7 @@ import {
   completedGameProofReadinessScenarioFamilies,
   completedGameHardeningSpineCycleId,
   completedGameHardeningSpineLaneCases,
-  completedGameStaleCommandFeatureSpineRows,
+  completedGameEndgameRecoveryFeatureSpineRows,
   completedGameStaleRecoverySpineLaneCase,
 } from "./dev_test_game_core_loop_completed_game_proof_readiness_contract.mjs";
 import {
@@ -4011,16 +4011,18 @@ function sameStringArray(actual, expected) {
 
 function buildCoreLoopReadinessSpineTargets(coreLoopAdminProofEvidence) {
   const rowIds = coreLoopAdminProofEvidence.coreLoopSpineRows ?? {};
-  const completedCommandRows =
-    buildCoreLoopCompletedGameCommandSpineRows(coreLoopAdminProofEvidence);
+  const completedRecoveryRows =
+    buildCoreLoopCompletedGameEndgameRecoverySpineRows(
+      coreLoopAdminProofEvidence,
+    );
   const cycleIds = [...(rowIds.cycles ?? [])];
   const roleUrlIds = [
     ...(rowIds.roleUrls ?? []),
-    ...completedCommandRows.roleUrlIds,
+    ...completedRecoveryRows.roleUrlIds,
   ];
   const checkpointIds = [
     ...(rowIds.checkpoints ?? []),
-    ...completedCommandRows.checkpointIds,
+    ...completedRecoveryRows.checkpointIds,
   ];
   const recoveryHookIds = [...(rowIds.recoveryHooks ?? [])];
   const defaultCycleId = cycleIds.includes("d02-n02")
@@ -4034,7 +4036,7 @@ function buildCoreLoopReadinessSpineTargets(coreLoopAdminProofEvidence) {
     String(checkpointIds[0] ?? "");
   const roleUrlHrefs = {
     ...(rowIds.roleUrlHrefs ?? {}),
-    ...completedCommandRows.roleUrlHrefs,
+    ...completedRecoveryRows.roleUrlHrefs,
   };
   const defaultRoleUrl = String(roleUrlHrefs[defaultRoleUrlId] ?? "");
   return {
@@ -4078,8 +4080,10 @@ function buildCoreLoopReadinessSpineTargets(coreLoopAdminProofEvidence) {
   };
 }
 
-function buildCoreLoopCompletedGameCommandSpineRows(coreLoopAdminProofEvidence) {
-  const rows = completedGameStaleCommandFeatureSpineRows({
+function buildCoreLoopCompletedGameEndgameRecoverySpineRows(
+  coreLoopAdminProofEvidence,
+) {
+  const rows = completedGameEndgameRecoveryFeatureSpineRows({
     cycleId: coreLoopFeatureSpineCycleIds.dayFiveNightFive,
   });
   const surface = coreLoopAdminProofEvidence.completedGameEndgameSurface ?? {};

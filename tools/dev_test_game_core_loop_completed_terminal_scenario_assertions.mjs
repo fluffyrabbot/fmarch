@@ -18,6 +18,7 @@ import {
   completedHostStaleCommandHardeningLaneCases,
   completedHostStaleCommandProofArgs,
   completedPlayerReloadAssertionCases,
+  completedPlayerReloadCases,
   completedPlayerReloadHardeningLaneCaseDefinitions,
   completedPlayerReloadProofCases,
   staleCompletedGamePlayerCommandAssertionCases,
@@ -106,7 +107,7 @@ export function completedGameEndgameFeatureSpineRows({ cycleId }) {
 export function completedGameStaleCommandFeatureSpineRows({ cycleId }) {
   return [
     ...completedHostStaleCommandCases().map((scenario) =>
-      completedGameStaleCommandFeatureSpineRow({
+      completedGameEndgameRecoveryFeatureSpineRow({
         cycleId,
         proofField: scenario.proofField,
         role: "host",
@@ -116,7 +117,7 @@ export function completedGameStaleCommandFeatureSpineRows({ cycleId }) {
       }),
     ),
     ...staleCompletedGamePlayerCommandCases().map((scenario) =>
-      completedGameStaleCommandFeatureSpineRow({
+      completedGameEndgameRecoveryFeatureSpineRow({
         cycleId,
         proofField: scenario.proofField,
         role: "actionPlayer",
@@ -125,6 +126,39 @@ export function completedGameStaleCommandFeatureSpineRows({ cycleId }) {
         )}-reject`,
       }),
     ),
+  ];
+}
+
+export function completedGamePlayerReloadFeatureSpineRows({ cycleId }) {
+  return completedPlayerReloadCases().map((scenario) =>
+    completedGameEndgameRecoveryFeatureSpineRow({
+      cycleId,
+      proofField: scenario.proofField,
+      role: completedGamePlayerReloadRole(scenario.commandStateKind),
+      rowId: `completed-game-${scenario.commandStateKind}-reload`,
+    }),
+  );
+}
+
+export function completedGameDeadPlayerStaleVoteFeatureSpineRows({ cycleId }) {
+  const scenario = completedDeadPlayerStaleVoteCase();
+  return [
+    completedGameEndgameRecoveryFeatureSpineRow({
+      cycleId,
+      proofField: scenario.proofField,
+      role: "deadPlayer",
+      rowId: `completed-game-dead-player-stale-${completedGameCommandKindSlug(
+        scenario.commandKind,
+      )}-reject`,
+    }),
+  ];
+}
+
+export function completedGameEndgameRecoveryFeatureSpineRows({ cycleId }) {
+  return [
+    ...completedGameStaleCommandFeatureSpineRows({ cycleId }),
+    ...completedGamePlayerReloadFeatureSpineRows({ cycleId }),
+    ...completedGameDeadPlayerStaleVoteFeatureSpineRows({ cycleId }),
   ];
 }
 
@@ -139,7 +173,7 @@ export function completedGameRecoveryFeatureSpineRow({ cycleId }) {
   };
 }
 
-function completedGameStaleCommandFeatureSpineRow({
+function completedGameEndgameRecoveryFeatureSpineRow({
   cycleId,
   proofField,
   role,
@@ -158,7 +192,7 @@ function completedGameStaleCommandFeatureSpineRow({
 }
 
 function completedGameStaleCommandTargetKey(proofField) {
-  const stem = String(proofField ?? "").replace(/RecoveryProof$/, "");
+  const stem = String(proofField ?? "").replace(/(?:Recovery)?Proof$/, "");
   return stem.charAt(0).toLowerCase() + stem.slice(1);
 }
 
@@ -166,6 +200,21 @@ function completedGameHostCommandSlug(commandId) {
   return String(commandId ?? "")
     .replace(/^completed-host-stale-/, "")
     .replaceAll("_", "-");
+}
+
+function completedGamePlayerReloadRole(commandStateKind) {
+  const rolesByCommandStateKind = {
+    "action-player": "actionPlayer",
+    "normal-player": "normalPlayer",
+    "dead-player": "deadPlayer",
+  };
+  const role = rolesByCommandStateKind[String(commandStateKind ?? "")];
+  if (role === undefined) {
+    throw new Error(
+      `unknown completed-game player reload role: ${commandStateKind}`,
+    );
+  }
+  return role;
 }
 
 function completedGameCommandKindSlug(commandKind) {
