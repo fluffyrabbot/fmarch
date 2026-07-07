@@ -3180,6 +3180,11 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
     requiredRows: proof.generatedFrom?.coreLoopSpineRows?.checkpoints,
   });
   assertVisibleAdminRows({
+    label: "core-loop admin proof missing role-surface spine checkpoint",
+    visibleRows: [`d02-n02-${proof.hostRoleSurface?.checkpointTestId}`],
+    requiredRows: proof.generatedFrom?.coreLoopSpineRows?.roleSurfaceCheckpoints,
+  });
+  assertVisibleAdminRows({
     label: "core-loop admin proof missing visible spine recovery hook",
     visibleRows: proof.adminRoleSurface?.visibleSpineRecoveryHooks,
     requiredRows: proof.generatedFrom?.coreLoopSpineRows?.recoveryHooks,
@@ -4174,6 +4179,7 @@ function buildCoreLoopReadinessSpineTargets(coreLoopAdminProofEvidence) {
   ];
   const checkpointIds = [
     ...(rowIds.checkpoints ?? []),
+    ...(rowIds.roleSurfaceCheckpoints ?? []),
     ...completedRecoveryRows.checkpointIds,
   ];
   const recoveryHookIds = [...(rowIds.recoveryHooks ?? [])];

@@ -119,6 +119,7 @@ import {
 import {
   coreLoopHostControlFamilyId,
   hostControlRaceScenarioCases,
+  hostLifecycleControlCheckpointId,
   coreLoopHostControlScenarioFamily,
 } from "./dev_test_game_core_loop_host_control_scenarios.mjs";
 import {
@@ -163,7 +164,24 @@ const proofRunRelativePath = path.relative(repoRoot, proofRunPath);
 const evidencePath = path.join(repoRoot, devTestGameCoreLoopAdminProofPath);
 const requiredChecks = coreLoopAdminCheckIds;
 
-const requiredSpineRows = (proofRun) => {
+const coreLoopHostLifecycleControlCycleId = "d02-n02";
+
+const roleSurfaceSpineCheckpointRows = ({ hostRoleSurface } = {}) => {
+  if (
+    hostRoleSurface?.status === "passed" &&
+    hostRoleSurface.clickedThroughFromRoleUrl === true &&
+    hostRoleSurface.checkpointTestId === hostLifecycleControlCheckpointId &&
+    hostRoleSurface.hostLifecycleControlCheckpoint?.proofCheckId ===
+      "host-lifecycle-control"
+  ) {
+    return [
+      `${coreLoopHostLifecycleControlCycleId}-${hostLifecycleControlCheckpointId}`,
+    ];
+  }
+  return [];
+};
+
+const requiredSpineRows = (proofRun, proofSurfaces = {}) => {
   const cycles = Array.isArray(proofRun?.coreLoopSpine?.cycles)
     ? proofRun.coreLoopSpine.cycles
     : [];
@@ -187,6 +205,7 @@ const requiredSpineRows = (proofRun) => {
         (checkpoint) => `${String(cycle.id)}-${String(checkpoint.id)}`,
       ),
     ),
+    roleSurfaceCheckpoints: roleSurfaceSpineCheckpointRows(proofSurfaces),
     recoveryHooks: Object.keys(proofRun?.coreLoopSpine?.recoveryHooks ?? {}),
   };
 };
@@ -550,7 +569,7 @@ export function coreLoopAdminProofCase() {
           proofRun: proofRunRelativePath,
           game: proofRun.session.game,
           coreLoopSpineStatus: coreLoopSpineStatus(proofRun),
-          coreLoopSpineRows: requiredSpineRows(proofRun),
+          coreLoopSpineRows: requiredSpineRows(proofRun, surfaces),
           completedGameHardeningCoverage:
             proofRun.completedGameHardeningCoverage,
           completedGameHardeningCoverageStatus:
@@ -560,13 +579,13 @@ export function coreLoopAdminProofCase() {
           hostVisibleInvalidActionRecovery:
             buildHostVisibleInvalidActionRecoverySummary({
               proofRun,
-              coreLoopSpineRows: requiredSpineRows(proofRun),
+              coreLoopSpineRows: requiredSpineRows(proofRun, surfaces),
               adminRoleSurface: surfaces.adminRoleSurface,
             }),
           hostVisibleStaleTransitionRecoveries:
             buildHostVisibleStaleTransitionRecoverySummaries({
               proofRun,
-              coreLoopSpineRows: requiredSpineRows(proofRun),
+              coreLoopSpineRows: requiredSpineRows(proofRun, surfaces),
               adminRoleSurface: surfaces.adminRoleSurface,
               proofSurfaces: surfaces,
             }),
@@ -10062,6 +10081,13 @@ export function assertCoreLoopAdminProof(evidence) {
     "core-loop admin proof missing visible spine checkpoint",
     evidence.adminRoleSurface?.visibleSpineCheckpoints,
     evidence.generatedFrom?.coreLoopSpineRows?.checkpoints,
+  );
+  assertVisibleRows(
+    "core-loop admin proof missing role-surface spine checkpoint",
+    [
+      `${coreLoopHostLifecycleControlCycleId}-${evidence.hostRoleSurface?.checkpointTestId}`,
+    ],
+    evidence.generatedFrom?.coreLoopSpineRows?.roleSurfaceCheckpoints,
   );
   assertVisibleRows(
     "core-loop admin proof missing visible spine recovery hook",

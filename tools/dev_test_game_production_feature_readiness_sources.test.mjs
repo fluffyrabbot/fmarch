@@ -131,11 +131,11 @@ function readinessFixture() {
             defaultCycleId: "d02-n02",
             defaultRoleUrlId: "d02-n02-host",
             defaultRoleUrl: "http://127.0.0.1:5173/g/game-b/host",
-            defaultCheckpointId: "d02-n02-d02-vote-open",
+            defaultCheckpointId: "d02-n02-host-lifecycle-control-checkpoint",
             browserProofCommand,
             cycleIds: ["d02-n02"],
             roleUrlIds: ["d02-n02-host"],
-            checkpointIds: ["d02-n02-d02-vote-open"],
+            checkpointIds: ["d02-n02-host-lifecycle-control-checkpoint"],
             recoveryHookIds: [],
             visibleAdminCheckIds: ["host-lifecycle-control"],
             roleUrlHrefs: {

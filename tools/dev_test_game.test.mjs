@@ -21257,6 +21257,9 @@ function coreLoopAdminProofFixture() {
           "d05-n05-n05-completed-host-reload",
           "d05-n05-n05-completed-player-surface",
         ],
+        roleSurfaceCheckpoints: [
+          "d02-n02-host-lifecycle-control-checkpoint",
+        ],
         recoveryHooks: [
           "staleLockedVoteReject",
           "invalidActionReject",
@@ -23636,6 +23639,7 @@ function coreLoopSpineTargetsFixture() {
       "d01-n01-d02-n01-action-open",
       "d01-n01-d02-n01-resolved-target-killed",
       "d01-n01-d02-d02-day-controls-return",
+      "d02-n02-host-lifecycle-control-checkpoint",
       "d02-n02-d02-vote-open",
       "d02-n02-d02-deciding-vote-submitted",
       "d02-n02-d02-resolved-target-killed",
