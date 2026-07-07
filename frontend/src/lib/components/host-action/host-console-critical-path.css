@@ -352,74 +352,6 @@
   min-block-size: 44px;
 }
 
-.host-console-critical-path__command-activity {
-  border-block-start: 4px solid var(--fm-ink-subtle);
-  display: grid;
-  gap: 10px;
-  min-inline-size: 0;
-  padding-block-start: 14px;
-}
-
-.host-console-critical-path__command-activity header {
-  align-items: center;
-  display: grid;
-  gap: 12px;
-  grid-template-columns: minmax(0, 1fr) auto;
-}
-
-.host-console-critical-path__command-activity header span {
-  align-items: center;
-  background: var(--fm-surface-muted);
-  border: 1px solid var(--fm-line-strong);
-  border-radius: 8px;
-  color: var(--fm-ink-muted);
-  display: inline-flex;
-  font-size: 13px;
-  font-weight: 700;
-  justify-content: center;
-  min-block-size: 36px;
-  min-inline-size: 36px;
-  padding-inline: 10px;
-}
-
-.host-console-critical-path__command-activity p {
-  color: var(--fm-ink-muted);
-  font-size: 16px;
-  line-height: 1.35;
-  margin: 0;
-}
-
-.host-console-critical-path__command-activity-empty,
-.host-console-critical-path__command-activity-item {
-  background: var(--fm-surface-muted);
-  border: 1px solid var(--fm-line-strong);
-  border-radius: 8px;
-  min-block-size: 44px;
-  padding: 10px 12px;
-}
-
-.host-console-critical-path__command-activity-list {
-  display: grid;
-  gap: 8px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.host-console-critical-path__command-activity-item {
-  display: grid;
-  gap: 8px;
-}
-
-.host-console-critical-path__command-activity-item strong {
-  color: var(--fm-ink);
-  font-size: 16px;
-  line-height: 1.25;
-  overflow-wrap: anywhere;
-}
-
-.host-console-critical-path__command-activity-status {
-  margin: 0;
-}
-
 .host-console-critical-path__queue {
   border-block-start: 4px solid var(--fm-ink-subtle);
   display: grid;
@@ -482,16 +414,8 @@
     grid-template-columns: 1fr;
   }
 
-  .host-console-critical-path__command-activity header {
-    grid-template-columns: 1fr;
-  }
-
   .host-console-critical-path__lifecycle-checkpoint header,
   .host-console-critical-path__lifecycle-checkpoint dl {
-    grid-template-columns: 1fr;
-  }
-
-  .host-console-critical-path__command-activity-list {
     grid-template-columns: 1fr;
   }
 

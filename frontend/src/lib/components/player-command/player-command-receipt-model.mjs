@@ -1,9 +1,9 @@
 export const PLAYER_COMMAND_RECEIPT_CONTRACT = Object.freeze({
   componentName: "player-command-receipt",
-  rootClassName: "player-command-receipt",
-  listClassName: "player-command-receipt__list",
-  itemClassName: "player-command-receipt__item",
-  emptyClassName: "player-command-receipt__empty",
+  rootClassName: "fm-ledger",
+  listClassName: "fm-ledger__list",
+  itemClassName: "fm-ledger__row",
+  emptyClassName: "fm-ledger__empty",
   currentStatusTestId: "player-command-status",
   maxItems: 3,
 });

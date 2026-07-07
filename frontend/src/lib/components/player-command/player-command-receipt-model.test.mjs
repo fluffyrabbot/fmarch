@@ -13,7 +13,7 @@ test("player command receipt model exposes a stable empty state", () => {
   assert.equal(view.summary, "Ready for player commands");
   assert.equal(view.items.length, 0);
   assert.deepEqual(view.empty, {
-    className: "player-command-receipt__empty",
+    className: "fm-ledger__empty",
     testId: "player-command-receipt-empty",
     state: "idle",
     message: "No player commands in flight.",
@@ -56,7 +56,7 @@ test("player command receipt model renders the current command status", () => {
       dispatchKind: "submit_vote",
       projectionRefreshKeys: ["votecount"],
     },
-    className: "player-command-receipt__item",
+    className: "fm-ledger__row",
   });
 });
 

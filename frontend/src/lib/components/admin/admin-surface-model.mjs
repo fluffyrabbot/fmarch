@@ -39,10 +39,10 @@ export const ADMIN_READINESS_STRIP_CONTRACT = Object.freeze({
 
 export const ADMIN_COMMAND_ACTIVITY_CONTRACT = Object.freeze({
   componentName: "admin-command-activity",
-  rootClassName: "admin-command-activity",
-  listClassName: "admin-command-activity__list",
-  itemClassName: "admin-command-activity__item",
-  emptyClassName: "admin-command-activity__empty",
+  rootClassName: "fm-ledger",
+  listClassName: "fm-ledger__list",
+  itemClassName: "fm-ledger__row",
+  emptyClassName: "fm-ledger__empty",
   maxItems: 4,
 });
 

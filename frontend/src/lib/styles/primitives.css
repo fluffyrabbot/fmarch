@@ -1,0 +1,110 @@
+/*
+ * Shared UI primitives (phase 02 of the design architecture).
+ *
+ * Role-specific view models own the facts, states, test ids, and data-*
+ * contracts; these classes own layout and appearance. A surface that needs a
+ * receipts/activity panel uses the ledger primitive instead of re-implementing
+ * the card. Colors come exclusively from tokens.css.
+ */
+
+/* ---- activity ledger: player receipts, admin activity, host activity ---- */
+
+.fm-ledger {
+  background: var(--fm-raised-veil);
+  border: 1px solid var(--fm-line);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  min-inline-size: 0;
+  padding: 14px;
+}
+
+.fm-ledger__head {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.fm-ledger__head h2,
+.fm-ledger__head p,
+.fm-ledger__summary {
+  margin: 0;
+}
+
+.fm-ledger__count {
+  align-items: center;
+  background: var(--fm-ink);
+  border-radius: 999px;
+  color: var(--fm-on-dark);
+  display: inline-flex;
+  font-size: 13px;
+  font-weight: 800;
+  justify-content: center;
+  min-block-size: 36px;
+  min-inline-size: 36px;
+  padding-inline: 8px;
+}
+
+.fm-ledger__summary {
+  color: var(--fm-ink-muted);
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.fm-ledger__empty {
+  background: var(--fm-surface-muted);
+  border: 1px solid var(--fm-line-soft);
+  border-radius: 8px;
+  color: var(--fm-ink-muted);
+  font-weight: 700;
+  margin: 0;
+  min-block-size: 44px;
+  padding: 10px 12px;
+}
+
+.fm-ledger__list {
+  display: grid;
+  gap: 8px;
+}
+
+.fm-ledger__list--grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.fm-ledger__row {
+  align-items: start;
+  background: var(--fm-raised);
+  border: 1px solid var(--fm-line-soft);
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(140px, 0.55fr) minmax(0, 1fr);
+  min-block-size: 44px;
+  padding: 10px 12px;
+}
+
+.fm-ledger__list--grid .fm-ledger__row {
+  grid-template-columns: 1fr;
+}
+
+.fm-ledger__row strong {
+  color: var(--fm-ink);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+  text-transform: capitalize;
+}
+
+.fm-ledger__status {
+  margin: 0;
+}
+
+@media (max-width: 760px) {
+  .fm-ledger__list--grid {
+    grid-template-columns: 1fr;
+  }
+
+  .fm-ledger__row {
+    grid-template-columns: 1fr;
+  }
+}

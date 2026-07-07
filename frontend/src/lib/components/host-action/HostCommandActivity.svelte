@@ -19,16 +19,16 @@
   data-component={view.root.data.component}
   data-testid="host-command-activity"
 >
-  <header>
+  <header class="fm-ledger__head">
     <div>
-      <p class="host-console-critical-path__eyebrow">Host ops</p>
+      <p class="fm-eyebrow">Host ops</p>
       <h2>{view.heading}</h2>
     </div>
-    <span data-testid="host-command-activity-count">
+    <span class="fm-ledger__count" data-testid="host-command-activity-count">
       {view.items.length}
     </span>
   </header>
-  <p>{view.summary}</p>
+  <p class="fm-ledger__summary">{view.summary}</p>
   {#if view.items.length === 0}
     <p
       class={view.empty.className}
@@ -54,7 +54,7 @@
           <AppStatus
             status={{ state: item.state, message: item.message }}
             testId={item.statusTestId}
-            className="host-console-critical-path__command-activity-status"
+            className="fm-ledger__status"
           />
         </article>
       {/each}

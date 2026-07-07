@@ -1,9 +1,9 @@
 export const HOST_COMMAND_ACTIVITY_CONTRACT = Object.freeze({
   componentName: "host-command-activity",
-  rootClassName: "host-console-critical-path__command-activity",
-  listClassName: "host-console-critical-path__command-activity-list",
-  itemClassName: "host-console-critical-path__command-activity-item",
-  emptyClassName: "host-console-critical-path__command-activity-empty",
+  rootClassName: "fm-ledger",
+  listClassName: "fm-ledger__list fm-ledger__list--grid",
+  itemClassName: "fm-ledger__row",
+  emptyClassName: "fm-ledger__empty",
   maxItems: 3,
 });
 

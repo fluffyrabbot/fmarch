@@ -14,7 +14,7 @@ test("host command activity model exposes idle command posture", () => {
   assert.equal(view.heading, "Command activity");
   assert.equal(view.summary, "Ready for host commands");
   assert.deepEqual(view.empty, {
-    className: "host-console-critical-path__command-activity-empty",
+    className: "fm-ledger__empty",
     testId: "host-command-activity-empty",
     state: "idle",
     message: "No host commands in flight.",
