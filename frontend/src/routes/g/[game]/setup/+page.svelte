@@ -458,8 +458,8 @@
 
   .host-setup__identity,
   .host-setup__band {
-    background: #f7f8f5;
-    border: 1px solid #c8d0c2;
+    background: var(--fm-surface-tint);
+    border: 1px solid var(--fm-line-soft);
     border-radius: 8px;
     display: grid;
     gap: 16px;
@@ -495,8 +495,8 @@
 
   .host-setup__slot-card,
   .host-setup__invite {
-    background: #ffffff;
-    border: 1px solid #d6ddd1;
+    background: var(--fm-raised);
+    border: 1px solid var(--fm-line-soft);
     border-radius: 8px;
     min-block-size: 68px;
     padding: 12px;
@@ -510,7 +510,7 @@
   }
 
   .host-setup__slot-card[data-state="blocked"] {
-    border-color: #d7b9a3;
+    border-color: var(--fm-line-warm);
   }
 
   .host-setup__slot-summary,
@@ -530,7 +530,7 @@
 
   .host-setup__slot-state {
     align-items: center;
-    border: 1px solid #b9c5bf;
+    border: 1px solid var(--fm-line);
     border-radius: 8px;
     display: inline-flex;
     font-size: 13px;
@@ -541,15 +541,15 @@
   }
 
   .host-setup__slot-state[data-state="ready"] {
-    background: #e7f3ec;
-    border-color: #648875;
-    color: #183b2a;
+    background: var(--fm-accent-wash);
+    border-color: var(--fm-accent-soft);
+    color: var(--fm-accent-ink);
   }
 
   .host-setup__slot-state[data-state="blocked"] {
-    background: #fff4ed;
-    border-color: #c68664;
-    color: #7a2f1f;
+    background: var(--fm-pending-wash);
+    border-color: var(--fm-pending-soft);
+    color: var(--fm-danger-ink);
   }
 
   .host-setup__slot-form {
@@ -574,7 +574,7 @@
 
   .host-setup input,
   .host-setup select {
-    border: 1px solid #9eaaa0;
+    border: 1px solid var(--fm-line);
     border-radius: 6px;
     font: inherit;
     min-block-size: 44px;
@@ -596,8 +596,8 @@
 
   .host-setup__checklist li {
     align-items: center;
-    background: #ffffff;
-    border: 1px solid #d6ddd1;
+    background: var(--fm-raised);
+    border: 1px solid var(--fm-line-soft);
     border-radius: 8px;
     display: flex;
     justify-content: space-between;
@@ -606,11 +606,11 @@
   }
 
   .host-setup__checklist li[data-state="ready"] strong {
-    color: #26643b;
+    color: var(--fm-ok);
   }
 
   .host-setup__checklist li[data-state="blocked"] strong {
-    color: #8a3b2d;
+    color: var(--fm-danger-ink);
   }
 
   @media (max-width: 820px) {

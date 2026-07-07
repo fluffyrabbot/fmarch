@@ -215,7 +215,7 @@ test("shared app CSS makes disabled touch actions visibly inert", async () => {
   assert.match(css, /:focus-visible\s*\{/);
   assert.match(css, /overscroll-behavior:\s*none/);
   assert.match(css, /overscroll-behavior:\s*contain/);
-  assert.match(css, /outline:\s*3px solid #2868a8/);
+  assert.match(css, /outline:\s*3px solid var\(--fm-focus-ring\)/);
   assert.match(css, /outline-offset:\s*3px/);
   assert.match(css, /env\(safe-area-inset-top\)/);
   assert.match(css, /env\(safe-area-inset-right\)/);

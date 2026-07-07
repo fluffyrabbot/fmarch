@@ -149,8 +149,8 @@
 
 <style>
   .admin-surface__boundary {
-    background: #eef2f5;
-    border: 1px solid #a8b4bd;
+    background: var(--fm-surface-muted);
+    border: 1px solid var(--fm-line-strong);
     border-radius: 8px;
     display: grid;
     gap: 2px;
@@ -163,12 +163,12 @@
   }
 
   .admin-surface__boundary strong {
-    color: #17212b;
+    color: var(--fm-ink);
     font-size: 13px;
   }
 
   .admin-surface__boundary span {
-    color: #425063;
+    color: var(--fm-ink-muted);
     font-size: 12px;
     line-height: 1.3;
   }
@@ -192,7 +192,7 @@
   }
 
   .admin-surface__confirmation-message {
-    color: #17212b;
+    color: var(--fm-ink);
     font-size: 13px;
     font-weight: 800;
     line-height: 1.35;

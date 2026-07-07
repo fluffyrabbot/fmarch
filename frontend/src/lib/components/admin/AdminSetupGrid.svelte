@@ -230,8 +230,8 @@
 
 <style>
   .admin-surface__boundary {
-    background: #eef2f5;
-    border: 1px solid #a8b4bd;
+    background: var(--fm-surface-muted);
+    border: 1px solid var(--fm-line-strong);
     border-radius: 8px;
     display: grid;
     gap: 2px;
@@ -244,12 +244,12 @@
   }
 
   .admin-surface__boundary strong {
-    color: #17212b;
+    color: var(--fm-ink);
     font-size: 13px;
   }
 
   .admin-surface__boundary span {
-    color: #425063;
+    color: var(--fm-ink-muted);
     font-size: 12px;
     line-height: 1.3;
   }
@@ -278,7 +278,7 @@
   }
 
   .admin-surface__confirmation-message {
-    color: #17212b;
+    color: var(--fm-ink);
     font-size: 13px;
     font-weight: 800;
     line-height: 1.35;
@@ -292,15 +292,15 @@
 
   .admin-surface__field span,
   .admin-surface__checkbox span {
-    color: #425063;
+    color: var(--fm-ink-muted);
     font-size: 12px;
     font-weight: 800;
   }
 
   .admin-surface__field input {
-    border: 1px solid #a8b4bd;
+    border: 1px solid var(--fm-line-strong);
     border-radius: 8px;
-    color: #17212b;
+    color: var(--fm-ink);
     font: inherit;
     min-block-size: 44px;
     min-inline-size: 0;

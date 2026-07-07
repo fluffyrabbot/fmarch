@@ -878,7 +878,7 @@ async function proveSharedTouchControlCss() {
     /\.fm-touch-button\[aria-disabled="true"\],\s*\.fm-touch-button:disabled\s*\{/,
   );
   assert.match(css, /:focus-visible\s*\{/);
-  assert.match(css, /outline:\s*3px solid #2868a8/);
+  assert.match(css, /outline:\s*3px solid var\(--fm-focus-ring\)/);
   assert.match(css, /outline-offset:\s*3px/);
   assert.match(css, /\.fm-route-state\s*\{/);
   assert.match(css, /min-block-size:\s*220px/);
@@ -895,7 +895,7 @@ async function proveSharedTouchControlCss() {
       '.fm-touch-button[aria-disabled="true"], .fm-touch-button:disabled',
     cursor: "not-allowed",
     opacityBelowOne: true,
-    focusVisibleOutline: "3px solid #2868a8",
+    focusVisibleOutline: "3px solid var(--fm-focus-ring)",
     focusVisibleOffset: "3px",
     routeStateMinBlockPx: 220,
     touchAction: "manipulation",

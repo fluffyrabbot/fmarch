@@ -101,7 +101,7 @@
   }
 
   .auth-login__field {
-    color: #17212b;
+    color: var(--fm-ink);
     display: grid;
     font-size: 13px;
     font-weight: 800;
@@ -109,10 +109,10 @@
   }
 
   .auth-login__field input {
-    background: #ffffff;
-    border: 1px solid #9aa7b1;
+    background: var(--fm-raised);
+    border: 1px solid var(--fm-line-strong);
     border-radius: 8px;
-    color: #17212b;
+    color: var(--fm-ink);
     font: inherit;
     min-block-size: 44px;
     padding: 9px 10px;
@@ -130,15 +130,15 @@
   }
 
   .auth-login__status {
-    background: #e7f3ec;
-    border: 1px solid #648875;
-    color: #183b2a;
+    background: var(--fm-accent-wash);
+    border: 1px solid var(--fm-accent-soft);
+    color: var(--fm-accent-ink);
   }
 
   .auth-login__reject {
-    background: #fbe9e8;
-    border: 1px solid #b8645a;
-    color: #7f2d27;
+    background: var(--fm-danger-wash);
+    border: 1px solid var(--fm-danger-soft);
+    color: var(--fm-danger-ink);
     margin-block-end: 0;
   }
 </style>

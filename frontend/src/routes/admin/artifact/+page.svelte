@@ -27,7 +27,7 @@
   }
 
   .admin-artifact__eyebrow {
-    color: #5f6f82;
+    color: var(--fm-ink-subtle);
     font-size: 0.85rem;
     font-weight: 700;
     margin: 0;
@@ -42,10 +42,10 @@
   }
 
   .admin-artifact pre {
-    background: #f7fafc;
-    border: 1px solid #d7e0ea;
+    background: var(--fm-surface-cool);
+    border: 1px solid var(--fm-line-cool);
     border-radius: 8px;
-    color: #18212d;
+    color: var(--fm-ink);
     margin: 0;
     overflow: auto;
     padding: 16px;

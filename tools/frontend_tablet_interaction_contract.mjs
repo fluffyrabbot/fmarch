@@ -29,6 +29,8 @@ const routeStateBundle = path.join(
 );
 
 const scannedExtensions = new Set([".css", ".html", ".svelte", ".js", ".mjs"]);
+const tokenFilePath = "frontend/src/lib/styles/tokens.css";
+const rawColorPattern = /#[0-9a-fA-F]{3,8}\b|\brgba?\(|\bhsla?\(/u;
 const forbiddenPatterns = [
   {
     id: "hover-preload-trigger",
@@ -62,6 +64,8 @@ await mkdir(artifactDir, { recursive: true });
 const sources = await scanSources(frontendRoot);
 const forbiddenMatches = findForbiddenMatches(sources);
 assert.deepEqual(forbiddenMatches, []);
+const rawColorMatches = findRawColorLiterals(sources);
+assert.deepEqual(rawColorMatches, []);
 
 const appCss = await readFile(
   path.join(frontendRoot, "lib", "styles", "app.css"),
@@ -122,6 +126,11 @@ const evidence = {
     rationale,
   })),
   forbiddenMatches,
+  tokenOwnership: {
+    tokenFile: tokenFilePath,
+    rule: "raw color literals (hex/rgb/hsl) are only legal in the token file",
+    rawColorMatches,
+  },
   rootAppHtml,
   sharedAppCss,
   adminOperatorSurfaceCss,
@@ -152,6 +161,37 @@ async function scanSources(root) {
     });
   }
   return files.sort((a, b) => a.path.localeCompare(b.path));
+}
+
+function findRawColorLiterals(sources) {
+  const matches = [];
+  for (const source of sources) {
+    if (source.path === tokenFilePath) {
+      continue;
+    }
+    const extension = path.extname(source.path);
+    let cssText = null;
+    if (extension === ".css") {
+      cssText = source.text;
+    } else if (extension === ".svelte") {
+      cssText = (source.text.match(/<style>[\s\S]*?<\/style>/u) ?? [null])[0];
+    }
+    if (cssText === null) {
+      continue;
+    }
+    const lines = cssText.split(/\r?\n/u);
+    for (const [index, line] of lines.entries()) {
+      if (rawColorPattern.test(line)) {
+        matches.push({
+          file: source.path,
+          line: index + 1,
+          pattern: "raw-color-literal-outside-tokens",
+          text: line.trim(),
+        });
+      }
+    }
+  }
+  return matches;
 }
 
 function findForbiddenMatches(sources) {
@@ -213,7 +253,7 @@ function proveSharedAppCss(css) {
     /\.fm-app-shell__topbar\s*\{[^}]*min-block-size:\s*var\(--fm-app-topbar-block-size\);/s,
   );
   assert.match(css, /\.fm-app-shell__topbar\s*\{[^}]*z-index:\s*11;/s);
-  assert.match(css, /:focus-visible\s*\{\s*outline:\s*3px solid #2868a8;/s);
+  assert.match(css, /:focus-visible\s*\{\s*outline:\s*3px solid var\(--fm-focus-ring\);/s);
   assert.match(css, /outline-offset:\s*3px/);
   assert.match(css, /\.fm-skip-link:focus-visible\s*\{/);
   assert.match(
@@ -231,7 +271,7 @@ function proveSharedAppCss(css) {
   assert.match(css, /overflow-wrap:\s*anywhere/);
 
   return {
-    focusVisibleOutline: "3px solid #2868a8",
+    focusVisibleOutline: "3px solid var(--fm-focus-ring)",
     focusVisibleOffset: "3px",
     edgeToEdgeViewport: true,
     safeAreaInsets: ["top", "right", "bottom", "left"],

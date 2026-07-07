@@ -56,13 +56,13 @@
   }
 
   .admin-surface__boundary strong {
-    color: #18212d;
+    color: var(--fm-ink);
     font-size: 0.82rem;
   }
 
   .admin-surface__boundary span,
   .admin-surface__evidence {
-    color: #455466;
+    color: var(--fm-ink-muted);
     font-size: 0.86rem;
   }
 

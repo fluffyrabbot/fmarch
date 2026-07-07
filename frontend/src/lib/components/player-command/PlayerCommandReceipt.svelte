@@ -60,8 +60,8 @@
 
 <style>
   .player-command-receipt {
-    background: #f7faf8;
-    border: 1px solid #aebbb4;
+    background: var(--fm-surface-tint);
+    border: 1px solid var(--fm-line);
     border-radius: 8px;
     display: grid;
     gap: 10px;
@@ -84,9 +84,9 @@
 
   .player-command-receipt header span {
     align-items: center;
-    background: #19322c;
+    background: var(--fm-accent-ink);
     border-radius: 999px;
-    color: #ffffff;
+    color: var(--fm-on-dark);
     display: inline-flex;
     font-size: 13px;
     font-weight: 800;
@@ -96,16 +96,16 @@
   }
 
   .player-command-receipt > p {
-    color: #53606f;
+    color: var(--fm-ink-subtle);
     font-size: 14px;
     line-height: 1.4;
   }
 
   .player-command-receipt__empty {
-    background: #eef4f0;
-    border: 1px solid #c7d2cc;
+    background: var(--fm-surface-tint);
+    border: 1px solid var(--fm-line-soft);
     border-radius: 8px;
-    color: #53606f;
+    color: var(--fm-ink-subtle);
     font-weight: 700;
     padding: 10px 12px;
   }
@@ -116,8 +116,8 @@
   }
 
   .player-command-receipt__item {
-    background: #ffffff;
-    border: 1px solid #c7d2cc;
+    background: var(--fm-raised);
+    border: 1px solid var(--fm-line-soft);
     border-radius: 8px;
     display: grid;
     gap: 8px;
@@ -125,7 +125,7 @@
   }
 
   .player-command-receipt__item strong {
-    color: #17212b;
+    color: var(--fm-ink);
     font-size: 13px;
     overflow-wrap: anywhere;
     text-transform: capitalize;

@@ -369,12 +369,12 @@
   }
 
   .admin-surface__boundary strong {
-    color: #18212d;
+    color: var(--fm-ink);
     font-size: 0.86rem;
   }
 
   .admin-surface__boundary span {
-    color: #455466;
+    color: var(--fm-ink-muted);
     font-size: 0.9rem;
   }
 
@@ -397,19 +397,19 @@
   }
 
   .admin-audit-detail__group h2 {
-    color: #18212d;
+    color: var(--fm-ink);
     font-size: 0.95rem;
     margin: 0;
   }
 
   .admin-audit-detail__subgroup h3 {
-    color: #334155;
+    color: var(--fm-ink-muted);
     font-size: 0.88rem;
     margin: 0;
   }
 
   .admin-audit-detail__entry {
-    border: 1px solid #d7e0ea;
+    border: 1px solid var(--fm-line-cool);
     border-radius: 8px;
     display: flex;
     flex-wrap: wrap;
@@ -419,17 +419,17 @@
   }
 
   .admin-audit-detail__entry strong {
-    color: #18212d;
+    color: var(--fm-ink);
   }
 
   .admin-audit-detail__entry h3 {
-    color: #334155;
+    color: var(--fm-ink-muted);
     font-size: 0.88rem;
     margin: 0;
   }
 
   .admin-audit-detail__entry h4 {
-    color: #455466;
+    color: var(--fm-ink-muted);
     font-size: 0.82rem;
     margin: 0;
   }
@@ -464,7 +464,7 @@
   }
 
   .admin-audit-detail__entry span {
-    color: #455466;
+    color: var(--fm-ink-muted);
   }
 
   .admin-audit-detail__entry a {

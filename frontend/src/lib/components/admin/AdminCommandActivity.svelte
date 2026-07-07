@@ -59,8 +59,8 @@
 
 <style>
   .admin-command-activity {
-    background: #f8fafc;
-    border: 1px solid #a8b4bd;
+    background: var(--fm-surface-cool);
+    border: 1px solid var(--fm-line-strong);
     border-radius: 8px;
     display: grid;
     gap: 10px;
@@ -82,9 +82,9 @@
 
   .admin-command-activity header span {
     align-items: center;
-    background: #17212b;
+    background: var(--fm-ink);
     border-radius: 999px;
-    color: #ffffff;
+    color: var(--fm-on-dark);
     display: inline-flex;
     font-size: 13px;
     font-weight: 800;
@@ -94,16 +94,16 @@
   }
 
   .admin-command-activity > p {
-    color: #425063;
+    color: var(--fm-ink-muted);
     font-size: 14px;
     line-height: 1.4;
   }
 
   .admin-command-activity__empty {
-    background: #eef2f5;
-    border: 1px solid #c6d0d8;
+    background: var(--fm-surface-muted);
+    border: 1px solid var(--fm-line-cool);
     border-radius: 8px;
-    color: #425063;
+    color: var(--fm-ink-muted);
     font-weight: 700;
     padding: 10px 12px;
   }
@@ -115,8 +115,8 @@
 
   .admin-command-activity__item {
     align-items: start;
-    background: #ffffff;
-    border: 1px solid #c6d0d8;
+    background: var(--fm-raised);
+    border: 1px solid var(--fm-line-cool);
     border-radius: 8px;
     display: grid;
     gap: 8px;
@@ -125,7 +125,7 @@
   }
 
   .admin-command-activity__item strong {
-    color: #17212b;
+    color: var(--fm-ink);
     font-size: 13px;
     overflow-wrap: anywhere;
     text-transform: capitalize;

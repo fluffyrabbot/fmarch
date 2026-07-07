@@ -36,10 +36,10 @@
 
   .player-channel-rail__channel {
     align-items: start;
-    background: rgba(255, 255, 255, 0.72);
-    border: 1px solid #bdc7c1;
+    background: var(--fm-raised-veil);
+    border: 1px solid var(--fm-line);
     border-radius: 8px;
-    color: #17212b;
+    color: var(--fm-ink);
     display: grid;
     gap: 2px;
     min-block-size: 56px;
@@ -48,8 +48,8 @@
   }
 
   .player-channel-rail__channel[aria-current="page"] {
-    background: #dfeee7;
-    border-color: #557f68;
+    background: var(--fm-accent-wash-strong);
+    border-color: var(--fm-accent);
   }
 
   .player-channel-rail__channel span {
@@ -57,7 +57,7 @@
   }
 
   .player-channel-rail__channel small {
-    color: #53606f;
+    color: var(--fm-ink-subtle);
     overflow-wrap: anywhere;
   }
 

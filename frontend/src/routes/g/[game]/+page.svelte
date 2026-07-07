@@ -407,8 +407,8 @@
   }
 
   :global(.player-action-submission-checkpoint) {
-    background: rgba(255, 255, 255, 0.74);
-    border: 1px solid #bdc7c1;
+    background: var(--fm-raised-veil);
+    border: 1px solid var(--fm-line);
     border-radius: 8px;
     display: grid;
     gap: 12px;
@@ -424,7 +424,7 @@
   }
 
   :global(.player-action-submission-checkpoint header p) {
-    color: #53606f;
+    color: var(--fm-ink-subtle);
     font-size: 12px;
     font-weight: 800;
     letter-spacing: 0;
@@ -434,7 +434,7 @@
   }
 
   :global(.player-action-submission-checkpoint h2) {
-    color: #17212b;
+    color: var(--fm-ink);
     font-size: 18px;
     line-height: 1.2;
     margin: 0;
@@ -448,15 +448,15 @@
   }
 
   :global(.player-action-submission-checkpoint dl > div) {
-    background: #eef4f6;
-    border: 1px solid #9aa7b1;
+    background: var(--fm-surface-muted);
+    border: 1px solid var(--fm-line-strong);
     border-radius: 8px;
     min-inline-size: 0;
     padding: 10px 12px;
   }
 
   :global(.player-action-submission-checkpoint dt) {
-    color: #53606f;
+    color: var(--fm-ink-subtle);
     font-size: 12px;
     font-weight: 800;
     line-height: 1.25;
@@ -465,7 +465,7 @@
   }
 
   :global(.player-action-submission-checkpoint dd) {
-    color: #17212b;
+    color: var(--fm-ink);
     font-size: 14px;
     line-height: 1.3;
     margin: 0;

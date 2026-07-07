@@ -115,8 +115,8 @@
 <style>
   .player-command-panel {
     align-content: start;
-    background: rgba(255, 255, 255, 0.74);
-    border: 1px solid #bdc7c1;
+    background: var(--fm-raised-veil);
+    border: 1px solid var(--fm-line);
     border-radius: 8px;
     display: grid;
     gap: 12px;
@@ -126,7 +126,7 @@
 
   .player-command-panel__vote-row {
     align-items: center;
-    border-block-start: 1px solid #d0d8d3;
+    border-block-start: 1px solid var(--fm-line-soft);
     display: grid;
     gap: 12px;
     grid-template-columns: minmax(0, 1fr) auto;
@@ -135,8 +135,8 @@
   }
 
   .player-command-panel__deadline {
-    background: #eef4f6;
-    border: 1px solid #9aa7b1;
+    background: var(--fm-surface-muted);
+    border: 1px solid var(--fm-line-strong);
     border-radius: 8px;
     display: grid;
     gap: 2px;
@@ -146,7 +146,7 @@
 
   .player-command-panel__deadline span,
   .player-command-panel__deadline small {
-    color: #53606f;
+    color: var(--fm-ink-subtle);
     font-size: 12px;
     font-weight: 800;
     line-height: 1.25;
@@ -154,14 +154,14 @@
   }
 
   .player-command-panel__deadline strong {
-    color: #17212b;
+    color: var(--fm-ink);
     font-size: 15px;
     line-height: 1.25;
     overflow-wrap: anywhere;
   }
 
   .player-command-panel__vote-row span {
-    color: #53606f;
+    color: var(--fm-ink-subtle);
     overflow-wrap: anywhere;
   }
 
@@ -172,14 +172,14 @@
   }
 
   .player-command-panel__actions {
-    border-block-start: 1px solid #d0d8d3;
+    border-block-start: 1px solid var(--fm-line-soft);
     display: grid;
     gap: 8px;
     padding-block-start: 10px;
   }
 
   .player-command-panel__actions h3 {
-    color: #53606f;
+    color: var(--fm-ink-subtle);
     font-size: 12px;
     line-height: 1.25;
     margin: 0;
@@ -202,8 +202,8 @@
   }
 
   .player-command-panel__channel-context {
-    background: #f7f2ea;
-    border: 1px solid #d6c7ad;
+    background: var(--fm-wash-warm);
+    border: 1px solid var(--fm-line-warm);
     border-radius: 8px;
     display: grid;
     gap: 2px;
@@ -212,8 +212,8 @@
   }
 
   .player-command-panel__current-vote {
-    background: #eef4f6;
-    border: 1px solid #9aa7b1;
+    background: var(--fm-surface-muted);
+    border: 1px solid var(--fm-line-strong);
     border-radius: 8px;
     display: grid;
     gap: 2px;
@@ -230,7 +230,7 @@
   .player-command-panel__current-vote span,
   .player-command-panel__channel-context span,
   .player-command-panel__channel-context small {
-    color: #53606f;
+    color: var(--fm-ink-subtle);
     font-size: 12px;
     font-weight: 800;
     line-height: 1.25;
@@ -239,23 +239,23 @@
   }
 
   .player-command-panel__current-vote strong {
-    color: #17212b;
+    color: var(--fm-ink);
     font-size: 16px;
     line-height: 1.25;
     overflow-wrap: anywhere;
   }
 
   .player-command-panel__channel-context strong {
-    color: #17212b;
+    color: var(--fm-ink);
     font-size: 16px;
     line-height: 1.25;
     overflow-wrap: anywhere;
   }
 
   .player-command-panel__composer textarea {
-    border: 1px solid #9aa7b1;
+    border: 1px solid var(--fm-line-strong);
     border-radius: 8px;
-    color: #17212b;
+    color: var(--fm-ink);
     font: inherit;
     line-height: 1.4;
     min-block-size: 78px;

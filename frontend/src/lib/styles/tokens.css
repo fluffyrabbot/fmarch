@@ -1,0 +1,73 @@
+/*
+ * Design tokens — the only file in frontend/src where raw color literals are
+ * legal (enforced by tools/frontend_tablet_interaction_contract.mjs).
+ *
+ * Phase 01 of the design architecture: these values are the canonical form of
+ * the palette the app already ships; near-duplicate hexes were collapsed onto
+ * one token per role. Later phases re-key the accent tier per game phase
+ * (data-phase) without touching component CSS.
+ */
+
+:root {
+  /* type */
+  --fm-font-ui:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+  --fm-font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* ink — text on light surfaces */
+  --fm-ink: #17212b;
+  --fm-ink-muted: #425063;
+  --fm-ink-subtle: #53606f;
+  --fm-ink-disabled: #586574;
+
+  /* paper — grounds and raised surfaces */
+  --fm-ground: #f5f7f4;
+  --fm-raised: #ffffff;
+  --fm-raised-veil: rgba(255, 255, 255, 0.74);
+  --fm-surface-muted: #eef2f5;
+  --fm-surface-cool: #f7fafc;
+  --fm-surface-tint: #f7faf8;
+  --fm-topbar-veil: rgba(248, 250, 247, 0.96);
+  --fm-wash-top: #f8faf7;
+  --fm-wash-mid: #eef4f6;
+  --fm-wash-warm: #f7f2ea;
+
+  /* lines — borders and rules */
+  --fm-line: #bdc7c1;
+  --fm-line-strong: #9aa7b1;
+  --fm-line-heavy: #8b98a4;
+  --fm-line-soft: #d0d8d3;
+  --fm-line-cool: #cbd6e2;
+  --fm-line-warm: #d6c7ad;
+  --fm-control-border: #53606f;
+
+  /* accent — moss, the current identity color */
+  --fm-accent: #557f68;
+  --fm-accent-soft: #648875;
+  --fm-accent-ink: #183b2a;
+  --fm-accent-wash: #e7f3ec;
+  --fm-accent-wash-strong: #dfeee7;
+
+  /* on-dark — text over ink-colored surfaces (topbar buttons, pending bar) */
+  --fm-on-dark: #ffffff;
+  --fm-on-dark-soft: #dce8df;
+  --fm-on-dark-accent: #b8d5c4;
+
+  /* status — phase-invariant semantic colors on the data-state contract */
+  --fm-ok: #1f6b43;
+  --fm-pending: #b46b32;
+  --fm-pending-soft: #c68664;
+  --fm-pending-wash: #fff4ed;
+  --fm-confirm-wash: #fff8e5;
+  --fm-danger: #a63f35;
+  --fm-danger-ink: #9d2d22;
+  --fm-danger-soft: #b8645a;
+  --fm-danger-wash: #fbe9e8;
+  --fm-info: #2b5877;
+  --fm-focus-ring: #2868a8;
+
+  /* official host post accent */
+  --fm-official: #d5bd6f;
+  --fm-official-ink: #4f3f05;
+}

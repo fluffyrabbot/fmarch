@@ -1,23 +1,19 @@
+@import "../../styles/tokens.css";
+
 :root {
   --fm-touch-target-min: 44px;
   --fm-touch-gap-min: 8px;
   --fm-touch-control-padding-inline: 14px;
   --fm-touch-control-padding-block: 10px;
   --fm-touch-control-radius: 8px;
-  --fm-touch-control-border: #53606f;
-  --fm-touch-control-surface: #f7f9fb;
-  --fm-touch-control-text: #18212d;
-  --fm-host-action-danger: #b3261e;
-  --fm-host-action-danger-surface: #fff2f0;
-  --fm-host-action-confirm-surface: #fff8e5;
 }
 
 .touch-control {
   align-items: center;
-  background: var(--fm-touch-control-surface);
-  border: 1px solid var(--fm-touch-control-border);
+  background: var(--fm-surface-cool);
+  border: 1px solid var(--fm-control-border);
   border-radius: var(--fm-touch-control-radius);
-  color: var(--fm-touch-control-text);
+  color: var(--fm-ink);
   display: inline-flex;
   font: inherit;
   gap: var(--fm-touch-gap-min);
@@ -47,14 +43,14 @@
 }
 
 .host-action__trigger[data-danger="true"] {
-  background: var(--fm-host-action-danger-surface);
-  border-color: var(--fm-host-action-danger);
-  color: var(--fm-host-action-danger);
+  background: var(--fm-danger-wash);
+  border-color: var(--fm-danger);
+  color: var(--fm-danger);
 }
 
 .host-action__confirmation {
-  background: var(--fm-host-action-confirm-surface);
-  border: 1px solid var(--fm-touch-control-border);
+  background: var(--fm-confirm-wash);
+  border: 1px solid var(--fm-control-border);
   border-radius: var(--fm-touch-control-radius);
   display: grid;
   gap: var(--fm-touch-gap-min);

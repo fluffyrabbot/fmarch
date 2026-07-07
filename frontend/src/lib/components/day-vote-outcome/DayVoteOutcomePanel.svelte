@@ -60,7 +60,7 @@
 
 <style>
   .day-vote-outcome-panel {
-    border-block-start: 4px solid #53606f;
+    border-block-start: 4px solid var(--fm-ink-subtle);
     display: grid;
     gap: 14px;
     min-inline-size: 0;
@@ -76,10 +76,10 @@
 
   .day-vote-outcome-panel header span {
     align-items: center;
-    background: #eef2f5;
-    border: 1px solid #9aa7b1;
+    background: var(--fm-surface-muted);
+    border: 1px solid var(--fm-line-strong);
     border-radius: 8px;
-    color: #425063;
+    color: var(--fm-ink-muted);
     display: inline-flex;
     font-size: 13px;
     font-weight: 700;
@@ -89,7 +89,7 @@
 
   .day-vote-outcome-panel__summary,
   .day-vote-outcome-panel__tally {
-    border-block-start: 1px solid #bdc7c1;
+    border-block-start: 1px solid var(--fm-line);
     min-inline-size: 0;
     padding-block-start: 8px;
   }
@@ -102,7 +102,7 @@
 
   .day-vote-outcome-panel__summary strong,
   .day-vote-outcome-panel__tally strong {
-    color: #17212b;
+    color: var(--fm-ink);
     font-size: 18px;
     line-height: 1.25;
     overflow-wrap: anywhere;
@@ -110,7 +110,7 @@
 
   .day-vote-outcome-panel__summary p,
   .day-vote-outcome-panel__empty {
-    color: #425063;
+    color: var(--fm-ink-muted);
     font-size: 15px;
     line-height: 1.35;
     margin: 0;

@@ -129,13 +129,13 @@
   .player-surface__official-post,
   .player-surface__pager,
   .player-surface__post {
-    background: rgba(255, 255, 255, 0.74);
-    border: 1px solid #bdc7c1;
+    background: var(--fm-raised-veil);
+    border: 1px solid var(--fm-line);
     border-radius: 8px;
   }
 
   .player-surface__deadline {
-    color: #173824;
+    color: var(--fm-accent-ink);
     font-size: 18px;
     font-weight: 800;
     min-block-size: 52px;
@@ -143,8 +143,8 @@
   }
 
   .player-surface__official-post {
-    border-color: #557f68;
-    border-inline-start: 6px solid #557f68;
+    border-color: var(--fm-accent);
+    border-inline-start: 6px solid var(--fm-accent);
     display: grid;
     gap: 4px;
     min-block-size: 72px;
@@ -153,14 +153,14 @@
 
   .player-surface__official-post span,
   .player-surface__official-post small {
-    color: #425063;
+    color: var(--fm-ink-muted);
     font-size: 12px;
     font-weight: 800;
     text-transform: uppercase;
   }
 
   .player-surface__official-post strong {
-    color: #173824;
+    color: var(--fm-accent-ink);
     font-size: 17px;
     line-height: 1.25;
     overflow-wrap: anywhere;
@@ -176,7 +176,7 @@
   }
 
   .player-surface__pager span {
-    color: #53606f;
+    color: var(--fm-ink-subtle);
     display: block;
     font-size: 12px;
     font-weight: 800;
@@ -203,7 +203,7 @@
   }
 
   .player-surface__post span {
-    color: #53606f;
+    color: var(--fm-ink-subtle);
   }
 
   .player-surface__post p {
@@ -224,8 +224,8 @@
 
   .player-surface__media-item img {
     aspect-ratio: 4 / 3;
-    background: #edf2f0;
-    border: 1px solid #bdc7c1;
+    background: var(--fm-surface-tint);
+    border: 1px solid var(--fm-line);
     border-radius: 6px;
     display: block;
     inline-size: 100%;
@@ -234,10 +234,10 @@
   }
 
   .player-surface__media-unavailable {
-    background: #fff8e5;
-    border: 1px solid #d5bd6f;
+    background: var(--fm-confirm-wash);
+    border: 1px solid var(--fm-official);
     border-radius: 6px;
-    color: #4f3f05;
+    color: var(--fm-official-ink);
     font-size: 14px;
     font-weight: 800;
     min-block-size: 44px;
