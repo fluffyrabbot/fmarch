@@ -16,6 +16,7 @@ import {
 
 const cloneScenarioCase = (scenario) => ({ ...scenario });
 const cloneStatusExpectation = (expectation) => ({ ...expectation });
+const cloneSpineTargetCase = (target) => ({ ...target });
 
 export const replacementStaleConflictMessageLaneId =
   "replacement-stale-conflict-message";
@@ -208,27 +209,67 @@ export function staleConflictMessageSurfaceCases() {
   return staleConflictMessageSurfaceCaseDefinitions.map(cloneScenarioCase);
 }
 
-export function replacementStaleConflictMessageSpineLaneCase() {
+const staleConflictMessageSpineTargetCaseDefinitions = Object.freeze([
+  Object.freeze({
+    targetKey: "replacementStaleConflictMessage",
+    sourceFactory: "staleConflictMessageSpineTargetCases",
+    laneId: replacementStaleConflictMessageLaneId,
+  }),
+  Object.freeze({
+    targetKey: "privateChannelStaleActionConflictMessage",
+    sourceFactory: "staleConflictMessageSpineTargetCases",
+    laneId: privateChannelStaleActionConflictMessageLaneId,
+  }),
+  Object.freeze({
+    targetKey: "staleDeadActionConflictMessage",
+    sourceFactory: "staleConflictMessageSpineTargetCases",
+    laneId: staleDeadActionConflictLaneId,
+  }),
+  Object.freeze({
+    targetKey: "staleHostDeadlineConflictMessage",
+    sourceFactory: "staleConflictMessageSpineTargetCases",
+    laneId: staleHostDeadlineConflictLaneId,
+  }),
+  Object.freeze({
+    targetKey: "staleCohostDeadlineConflictMessage",
+    sourceFactory: "staleConflictMessageSpineTargetCases",
+    laneId: staleCohostDeadlineConflictLaneId,
+  }),
+]);
+
+function staleConflictMessageSurfaceCaseForLane(laneId) {
   const cases = staleConflictMessageSurfaceCases().filter(
-    (scenario) => scenario.laneId === replacementStaleConflictMessageLaneId,
+    (scenario) => scenario.laneId === laneId,
   );
   if (cases.length !== 1) {
-    throw new Error("replacement stale conflict-message spine lane drifted");
+    throw new Error(`stale conflict-message spine lane drifted: ${laneId}`);
   }
   return cloneScenarioCase(cases[0]);
 }
 
-export function privateChannelStaleActionConflictMessageSpineLaneCase() {
-  const cases = staleConflictMessageSurfaceCases().filter(
-    (scenario) =>
-      scenario.laneId === privateChannelStaleActionConflictMessageLaneId,
+export function staleConflictMessageSpineTargetCases() {
+  return staleConflictMessageSpineTargetCaseDefinitions.map((target) => {
+    const scenario = staleConflictMessageSurfaceCaseForLane(target.laneId);
+    return cloneSpineTargetCase({
+      ...target,
+      featureSlotId: scenario.laneId,
+      roleUrlId: scenario.laneId,
+      checkpointId: scenario.laneId,
+      adminCheckId: scenario.laneId,
+    });
+  });
+}
+
+export function replacementStaleConflictMessageSpineLaneCase() {
+  return staleConflictMessageSurfaceCaseForLane(
+    replacementStaleConflictMessageLaneId,
   );
-  if (cases.length !== 1) {
-    throw new Error(
-      "private-channel stale action conflict-message spine lane drifted",
-    );
-  }
-  return cloneScenarioCase(cases[0]);
+}
+
+export function privateChannelStaleActionConflictMessageSpineLaneCase() {
+  return staleConflictMessageSurfaceCaseForLane(
+    privateChannelStaleActionConflictMessageLaneId,
+  );
 }
 
 export function staleConflictMessageSurfaceCheckIds() {

@@ -8,8 +8,7 @@ import {
   completedGameHardeningSpineTargetCases,
 } from "./dev_test_game_core_loop_completed_game_proof_readiness_contract.mjs";
 import {
-  privateChannelStaleActionConflictMessageSpineLaneCase,
-  replacementStaleConflictMessageSpineLaneCase,
+  staleConflictMessageSpineTargetCases,
 } from "./dev_test_game_stale_conflict_scenarios.mjs";
 import {
   crossRoleRaceReloadSpineTargetCases,
@@ -49,10 +48,23 @@ const completedGameHardeningFeatureSpineTargetRows = Object.freeze(
     ]),
   ),
 );
-const replacementStaleConflictMessageSpineLane =
-  replacementStaleConflictMessageSpineLaneCase();
-const privateChannelStaleActionConflictMessageSpineLane =
-  privateChannelStaleActionConflictMessageSpineLaneCase();
+const staleConflictMessageSpineTargets =
+  staleConflictMessageSpineTargetCases();
+const staleConflictMessageFeatureSpineTargetRows = Object.freeze(
+  Object.fromEntries(
+    staleConflictMessageSpineTargets.map((target) => [
+      target.targetKey,
+      Object.freeze({
+        featureSlotId: target.featureSlotId,
+        sourceCheckId: hardeningFeatureSpineSourceCheckId,
+        cycleId: hardeningFeatureSpineCycleIds.staleConflict,
+        roleUrlId: target.roleUrlId,
+        checkpointId: target.checkpointId,
+        adminCheckId: target.adminCheckId,
+      }),
+    ]),
+  ),
+);
 const reconnectHardeningSpineTargets = reconnectHardeningSpineTargetCases();
 const reconnectHardeningFeatureSpineTargetRows = Object.freeze(
   Object.fromEntries(
@@ -107,22 +119,7 @@ function hardeningConcurrentRaceRowsForTargets(targets) {
 
 export const hardeningFeatureSpineTargetRows = Object.freeze({
   ...completedGameHardeningFeatureSpineTargetRows,
-  replacementStaleConflictMessage: Object.freeze({
-    featureSlotId: "replacement-stale-conflict-message",
-    sourceCheckId: hardeningFeatureSpineSourceCheckId,
-    cycleId: hardeningFeatureSpineCycleIds.staleConflict,
-    roleUrlId: replacementStaleConflictMessageSpineLane.laneId,
-    checkpointId: replacementStaleConflictMessageSpineLane.laneId,
-    adminCheckId: replacementStaleConflictMessageSpineLane.laneId,
-  }),
-  privateChannelStaleActionConflictMessage: Object.freeze({
-    featureSlotId: privateChannelStaleActionConflictMessageSpineLane.laneId,
-    sourceCheckId: hardeningFeatureSpineSourceCheckId,
-    cycleId: hardeningFeatureSpineCycleIds.staleConflict,
-    roleUrlId: privateChannelStaleActionConflictMessageSpineLane.laneId,
-    checkpointId: privateChannelStaleActionConflictMessageSpineLane.laneId,
-    adminCheckId: privateChannelStaleActionConflictMessageSpineLane.laneId,
-  }),
+  ...staleConflictMessageFeatureSpineTargetRows,
   ...reconnectHardeningFeatureSpineTargetRows,
   ...localRaceReloadHardeningFeatureSpineTargetRows,
   ...replacementRaceReloadHardeningFeatureSpineTargetRows,
@@ -197,20 +194,14 @@ export const hardeningFeatureSpineTargetProvenanceCases = Object.freeze([
       source: hardeningFeatureSpineSource,
     }),
   ),
-  featureSpineTargetProvenanceCase({
-    targetKey: "replacementStaleConflictMessage",
-    sourceFactory: "replacementStaleConflictMessageSpineLaneCase",
-    sourceRow:
-      hardeningFeatureSpineTargetRows.replacementStaleConflictMessage,
-    source: hardeningFeatureSpineSource,
-  }),
-  featureSpineTargetProvenanceCase({
-    targetKey: "privateChannelStaleActionConflictMessage",
-    sourceFactory: "privateChannelStaleActionConflictMessageSpineLaneCase",
-    sourceRow:
-      hardeningFeatureSpineTargetRows.privateChannelStaleActionConflictMessage,
-    source: hardeningFeatureSpineSource,
-  }),
+  ...staleConflictMessageSpineTargets.map((target) =>
+    featureSpineTargetProvenanceCase({
+      targetKey: target.targetKey,
+      sourceFactory: target.sourceFactory,
+      sourceRow: hardeningFeatureSpineTargetRows[target.targetKey],
+      source: hardeningFeatureSpineSource,
+    }),
+  ),
   ...reconnectHardeningSpineTargets.map((target) =>
     featureSpineTargetProvenanceCase({
       targetKey: target.targetKey,

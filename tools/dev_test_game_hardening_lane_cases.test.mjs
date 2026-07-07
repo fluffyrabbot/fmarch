@@ -79,6 +79,7 @@ import {
   staleConflictMessageCoverageFamilyDefinitions,
   staleConflictMessageNoSurfaceYetCases,
   staleActionConflictMessageLaneId,
+  staleConflictMessageSpineTargetCases,
   staleConflictMessageStatusExpectations,
   replacementStaleConflictMessageSpineLaneCase,
   staleDeadActionConflictLaneId,
@@ -136,6 +137,64 @@ test("hardening lane cases share stale conflict-message IDs", () => {
       laneId: "replacement-stale-conflict-message",
       role: "host",
     },
+  );
+  assert.deepEqual(
+    staleConflictMessageSpineTargetCases().map((target) => ({
+      targetKey: target.targetKey,
+      laneId: target.laneId,
+      featureSlotId: target.featureSlotId,
+      roleUrlId: target.roleUrlId,
+      checkpointId: target.checkpointId,
+      adminCheckId: target.adminCheckId,
+      sourceFactory: target.sourceFactory,
+    })),
+    [
+      {
+        targetKey: "replacementStaleConflictMessage",
+        laneId: "replacement-stale-conflict-message",
+        featureSlotId: "replacement-stale-conflict-message",
+        roleUrlId: "replacement-stale-conflict-message",
+        checkpointId: "replacement-stale-conflict-message",
+        adminCheckId: "replacement-stale-conflict-message",
+        sourceFactory: "staleConflictMessageSpineTargetCases",
+      },
+      {
+        targetKey: "privateChannelStaleActionConflictMessage",
+        laneId: "private-channel-stale-action-conflict-message",
+        featureSlotId: "private-channel-stale-action-conflict-message",
+        roleUrlId: "private-channel-stale-action-conflict-message",
+        checkpointId: "private-channel-stale-action-conflict-message",
+        adminCheckId: "private-channel-stale-action-conflict-message",
+        sourceFactory: "staleConflictMessageSpineTargetCases",
+      },
+      {
+        targetKey: "staleDeadActionConflictMessage",
+        laneId: "stale-dead-action-conflict",
+        featureSlotId: "stale-dead-action-conflict",
+        roleUrlId: "stale-dead-action-conflict",
+        checkpointId: "stale-dead-action-conflict",
+        adminCheckId: "stale-dead-action-conflict",
+        sourceFactory: "staleConflictMessageSpineTargetCases",
+      },
+      {
+        targetKey: "staleHostDeadlineConflictMessage",
+        laneId: "stale-host-deadline",
+        featureSlotId: "stale-host-deadline",
+        roleUrlId: "stale-host-deadline",
+        checkpointId: "stale-host-deadline",
+        adminCheckId: "stale-host-deadline",
+        sourceFactory: "staleConflictMessageSpineTargetCases",
+      },
+      {
+        targetKey: "staleCohostDeadlineConflictMessage",
+        laneId: "stale-cohost-deadline",
+        featureSlotId: "stale-cohost-deadline",
+        roleUrlId: "stale-cohost-deadline",
+        checkpointId: "stale-cohost-deadline",
+        adminCheckId: "stale-cohost-deadline",
+        sourceFactory: "staleConflictMessageSpineTargetCases",
+      },
+    ],
   );
   assert.deepEqual(staleConflictMessageSurfaceCases(), [
     {

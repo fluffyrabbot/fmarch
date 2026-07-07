@@ -19,6 +19,7 @@ export {
   privateChannelStaleActionConflictMessageSpineLaneCase,
   replacementStaleConflictMessageLaneId,
   replacementStaleConflictMessageSpineLaneCase,
+  staleConflictMessageSpineTargetCases,
   staleActionConflictMessageLaneId,
   staleCohostDeadlineConflictLaneId,
   staleConflictMessageCoverageFamilies,
