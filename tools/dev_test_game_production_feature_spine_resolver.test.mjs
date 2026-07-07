@@ -126,6 +126,58 @@ test("production feature spine resolver resolves seeded role targets", () => {
   );
 });
 
+test("production feature spine resolver preserves host phase command target shape", () => {
+  const sourceTarget = coreLoopSourceTargetFixture();
+  const declaration =
+    releaseReadinessProductionFeatureSpineTargets.hostPhaseControl;
+  const target = resolveProductionFeatureSpineTarget({
+    itemId: "host-phase-control",
+    declaration,
+    sourceTargetsByCheckId: {
+      "local-core-loop-proof": sourceTarget,
+    },
+  });
+
+  assert.deepEqual(target, {
+    featureSlotId: "host-phase-control",
+    sourceCheckId: "local-core-loop-proof",
+    coverageDecision: {
+      kind: "seeded-role-url-proof",
+      proofCommand: coreLoopAdminProofCommand,
+    },
+    detailRoleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
+    cycleId: "d02-n02",
+    roleUrlId: "d02-n02-host",
+    roleUrl: "http://127.0.0.1:5173/g/game-b/host",
+    rowKind: "checkpoint",
+    checkpointId: "d02-n02-d02-vote-open",
+    adminCheckId: "host-lifecycle-control",
+    featureTargetKind: "host-phase-command",
+    browserProofCommand,
+    browserWorkbench: {
+      status: "passed",
+      route: "/g/game-b/host",
+      roleUrl: "http://127.0.0.1:5173/g/game-b/host",
+      roleSurface: "host",
+      featureSlotId: "host-phase-control",
+      requiredEvidence:
+        "Seeded host-phase-control role URL opens /g/game-b/host in the browser proof before host-lifecycle-control recovery is trusted.",
+    },
+    sourceProofArtifact: "target/dev-test-game/core-loop-admin-proof.json",
+    rerunCommand: coreLoopAdminProofCommand,
+  });
+  assert.equal(
+    validProductionFeatureSpineTarget(target, {
+      sourceCheckRules: coreLoopSourceCheckRules(),
+    }),
+    true,
+  );
+  assert.equal(
+    buildProductionFeatureSpineDrilldown(target).featureTargetKind,
+    "host-phase-command",
+  );
+});
+
 function coreLoopResolutionBrowserWorkbenchFixture() {
   return {
     status: "passed",

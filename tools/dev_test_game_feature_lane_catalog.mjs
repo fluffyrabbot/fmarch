@@ -149,6 +149,7 @@ function checkpointRow({
   checkpointId,
   adminCheckId,
   recoveryHookId,
+  featureTargetKind,
 }) {
   return Object.freeze({
     featureSlotId,
@@ -158,6 +159,7 @@ function checkpointRow({
     checkpointId,
     ...(recoveryHookId === undefined ? {} : { recoveryHookId }),
     adminCheckId,
+    ...(featureTargetKind === undefined ? {} : { featureTargetKind }),
   });
 }
 

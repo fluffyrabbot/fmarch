@@ -17,6 +17,7 @@ export {
 } from "./dev_test_game_core_loop_host_phase_scenarios.mjs";
 
 export const coreLoopHostControlFamilyId = "core-loop-host-control";
+export const hostPhaseControlFeatureTargetKind = "host-phase-command";
 
 export const coreLoopHostControlLaneIds = Object.freeze([
   "host-lifecycle-control",
@@ -35,6 +36,7 @@ export function hostPhaseControlFeatureSpineRow({ cycleId }) {
     role: "host",
     checkpointId: `${cycleId}-d02-vote-open`,
     adminCheckId: "host-lifecycle-control",
+    featureTargetKind: hostPhaseControlFeatureTargetKind,
   };
 }
 
