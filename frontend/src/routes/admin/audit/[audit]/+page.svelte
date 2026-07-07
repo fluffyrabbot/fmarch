@@ -34,7 +34,7 @@
   <AppSurfaceHeader header={data.surfaceHeader} />
 
   <section class="fm-panel admin-audit-detail__panel">
-    <p class="admin-surface__boundary">
+    <p class="admin-surface__boundary fm-well fm-well--kv">
       <strong>{auditView.authority}</strong>
       <span>{auditView.boundary}</span>
     </p>
@@ -360,22 +360,6 @@
   .admin-audit-detail__panel {
     display: grid;
     gap: 14px;
-  }
-
-  .admin-surface__boundary {
-    display: grid;
-    gap: 4px;
-    overflow-wrap: anywhere;
-  }
-
-  .admin-surface__boundary strong {
-    color: var(--fm-ink);
-    font-size: 0.86rem;
-  }
-
-  .admin-surface__boundary span {
-    color: var(--fm-ink-muted);
-    font-size: 0.9rem;
   }
 
   .admin-audit-detail__entries {

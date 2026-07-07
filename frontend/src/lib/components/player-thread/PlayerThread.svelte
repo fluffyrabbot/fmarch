@@ -15,13 +15,13 @@
 </script>
 
 <section class="player-surface__thread" aria-label="Thread">
-  <div class="player-surface__deadline" data-testid="player-deadline">
+  <div class="player-surface__deadline fm-card" data-testid="player-deadline">
     {phase.deadlineLabel}
   </div>
 
   {#if liveOfficialPost !== null}
     <aside
-      class="player-surface__official-post"
+      class="player-surface__official-post fm-card"
       data-testid="player-live-official-post"
     >
       <span>{liveOfficialPost.label}</span>
@@ -31,7 +31,7 @@
   {/if}
 
   <div
-    class="player-surface__pager"
+    class="player-surface__pager fm-card"
     aria-busy={threadView.pager.root.busy}
     data-component={threadView.pager.root.component}
     data-state={threadView.pager.root.state}
@@ -71,7 +71,7 @@
   {/if}
 
   {#each threadView.posts as post}
-    <article class="player-surface__post" data-testid={`thread-post-${post.seq}`}>
+    <article class="player-surface__post fm-card" data-testid={`thread-post-${post.seq}`}>
       <header>
         <strong>{post.authorLabel}</strong>
         <span>{post.meta}</span>
@@ -125,30 +125,18 @@
     min-inline-size: 0;
   }
 
-  .player-surface__deadline,
-  .player-surface__official-post,
-  .player-surface__pager,
-  .player-surface__post {
-    background: var(--fm-raised-veil);
-    border: 1px solid var(--fm-line);
-    border-radius: 8px;
-  }
-
   .player-surface__deadline {
     color: var(--fm-accent-ink);
     font-size: 18px;
     font-weight: 800;
     min-block-size: 52px;
-    padding: 14px;
   }
 
   .player-surface__official-post {
     border-color: var(--fm-accent);
     border-inline-start: 6px solid var(--fm-accent);
-    display: grid;
     gap: 4px;
     min-block-size: 72px;
-    padding: 12px 14px;
   }
 
   .player-surface__official-post span,
@@ -168,11 +156,8 @@
 
   .player-surface__pager {
     align-items: center;
-    display: grid;
-    gap: 12px;
     grid-template-columns: minmax(0, 1fr) auto;
     min-block-size: 64px;
-    padding: 12px 14px;
   }
 
   .player-surface__pager span {
@@ -187,12 +172,6 @@
     display: block;
     margin-block-start: 2px;
     overflow-wrap: anywhere;
-  }
-
-  .player-surface__post {
-    display: grid;
-    gap: 10px;
-    padding: 14px;
   }
 
   .player-surface__post header {

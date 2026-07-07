@@ -158,6 +158,40 @@
   overflow-wrap: anywhere;
 }
 
+/* ---- touch button severity tiers (D4) ----
+ *
+ * One severity system shared by both button families:
+ *   .fm-touch-button — app-shell family (app.css owns its base + disabled floor)
+ *   .touch-control   — host-console family (touch-control.css owns its base,
+ *                      focus, and disabled floor; contracts pin those files)
+ *
+ * Tiers, quietest to loudest:
+ *   primary       .fm-touch-button base — filled ink; the surface's main action
+ *   secondary     .fm-touch-button--secondary / .touch-control base — raised, ink text
+ *   danger-quiet  [data-danger="true"] — raised with danger border/ink; irreversible
+ *                 *triggers* warn without shouting (data-danger derives from the
+ *                 action's `irreversible` flag)
+ *   danger        --danger modifier — filled danger; reserved for the confirmation
+ *                 dialog's final confirm
+ *
+ * Tier selectors double the family class so they outrank each family's base rule
+ * regardless of stylesheet order.
+ */
+
+.fm-touch-button[data-danger="true"],
+.touch-control[data-danger="true"] {
+  background: var(--fm-raised);
+  border-color: var(--fm-danger);
+  color: var(--fm-danger-ink);
+}
+
+.fm-touch-button.fm-touch-button--danger,
+.touch-control.touch-control--danger {
+  background: var(--fm-danger);
+  border-color: var(--fm-danger);
+  color: var(--fm-on-dark);
+}
+
 /* ---- disclosure: expandable evidence row (aria-expanded trigger + controlled detail) ---- */
 
 .fm-disclosure {

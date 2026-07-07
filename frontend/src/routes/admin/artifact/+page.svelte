@@ -6,9 +6,9 @@
   <title>Admin Artifact | fmarch</title>
 </svelte:head>
 
-<main class="admin-artifact">
+<main class="fm-surface admin-artifact">
   <section class="admin-artifact__panel" data-testid="admin-artifact-surface">
-    <p class="admin-artifact__eyebrow">Machine evidence</p>
+    <p class="fm-eyebrow">Machine evidence</p>
     <h1>{data.artifact.path}</h1>
     <pre data-testid="admin-artifact-contents">{data.artifact.contents}</pre>
   </section>
@@ -16,9 +16,10 @@
 
 <style>
   .admin-artifact {
-    margin: 0 auto;
-    max-width: 960px;
-    padding: 24px;
+    align-content: start;
+    margin-inline: auto;
+    max-inline-size: 960px;
+    width: 100%;
   }
 
   .admin-artifact__panel {
@@ -26,18 +27,8 @@
     gap: 16px;
   }
 
-  .admin-artifact__eyebrow {
-    color: var(--fm-ink-subtle);
-    font-size: 0.85rem;
-    font-weight: 700;
-    margin: 0;
-    text-transform: uppercase;
-  }
-
   .admin-artifact h1 {
     font-size: 1.35rem;
-    letter-spacing: 0;
-    margin: 0;
     overflow-wrap: anywhere;
   }
 

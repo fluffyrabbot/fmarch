@@ -14,7 +14,7 @@
     <article class="fm-panel" data-testid={item.testId}>
       <h2>{item.label}</h2>
       <p
-        class="admin-surface__boundary"
+        class="admin-surface__boundary fm-well fm-well--kv"
         data-testid={item.boundaryTestId}
       >
         <strong>{item.authority}</strong>
@@ -44,29 +44,7 @@
 </div>
 
 <style>
-  .admin-surface__boundary,
-  .admin-surface__evidence {
-    overflow-wrap: anywhere;
-  }
-
   .admin-surface__boundary {
-    display: grid;
-    gap: 4px;
     margin: 10px 0 0;
-  }
-
-  .admin-surface__boundary strong {
-    color: var(--fm-ink);
-    font-size: 0.82rem;
-  }
-
-  .admin-surface__boundary span,
-  .admin-surface__evidence {
-    color: var(--fm-ink-muted);
-    font-size: 0.86rem;
-  }
-
-  .admin-surface__evidence {
-    margin: 6px 0 0;
   }
 </style>
