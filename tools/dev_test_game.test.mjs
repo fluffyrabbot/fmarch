@@ -401,6 +401,10 @@ import {
   selectedProofGraphNodeCheckRows,
 } from "../frontend/src/lib/app/selected-proof-graph-destinations.mjs";
 import {
+  nextActionRelatedLinkDescriptors,
+  nextActionRelatedLinkIds,
+} from "../frontend/src/lib/app/next-action-related-links.mjs";
+import {
   proofGraphDestinationSummaryDriftNextActionAdminProofPath,
   proofGraphDestinationSummaryDriftNextActionPath,
 } from "./dev_test_game_next_action_admin_proof_paths.mjs";
@@ -9438,6 +9442,65 @@ test("selected graph destination cases share local row descriptors", () => {
     selectedProductionFeatureGraphCheckRows({
       selectedProductionFeatureGraph: selectedProductionFeatureSubject,
     }).map((row) => row.id),
+  );
+});
+
+test("next-action related link descriptors share route and proof ids", () => {
+  const descriptors = nextActionRelatedLinkDescriptors({
+    command: "npm run test:dev-test-game-next-action",
+    actionStatus: "blocked",
+    localCheck: {
+      id: "local-proof-graph-next-action-handoff",
+      status: "missing",
+    },
+    localCheckRoleUrl: "/admin/audit/local-proof-graph?game=<seeded-game>",
+    seedProofLaneCoverage: {
+      status: "drifted",
+    },
+    seedProofLaneCoverageRoleUrl:
+      "/admin/audit/local-seed-fixtures?game=<seeded-game>",
+    proofGraphDestinationSummary: {
+      summaryStatus: "drift",
+    },
+    sequenceDeferral: {
+      deferredUnprovenId: "hosted-identity-sequence-deferral",
+      status: "deferred",
+      deferredCommand: "npm run test:dev-test-game-identity:operator",
+    },
+    sequenceDeferralRoleUrl:
+      "/admin/audit/local-hosted-identity-evidence?game=<seeded-game>",
+  });
+
+  assert.deepEqual(
+    descriptors.map((descriptor) => descriptor.id),
+    [
+      "local-proof-graph-next-action-handoff",
+      "seed-proof-lane-coverage",
+      "proof-graph-destination-summary",
+      "hosted-identity-sequence-deferral",
+    ],
+  );
+  assert.deepEqual(
+    nextActionRelatedLinkIds({
+      localCheck: {
+        id: "local-proof-graph-next-action-handoff",
+        status: "missing",
+      },
+      localCheckRoleUrl: "/admin/audit/local-proof-graph?game=<seeded-game>",
+      seedProofLaneCoverage: {
+        status: "drifted",
+      },
+      seedProofLaneCoverageRoleUrl:
+        "/admin/audit/local-seed-fixtures?game=<seeded-game>",
+      proofGraphDestinationSummary: {
+        summaryStatus: "drift",
+      },
+    }),
+    [
+      "local-proof-graph-next-action-handoff",
+      "seed-proof-lane-coverage",
+      "proof-graph-destination-summary",
+    ],
   );
 });
 

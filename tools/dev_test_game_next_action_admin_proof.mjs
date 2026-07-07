@@ -103,6 +103,9 @@ import {
 import {
   selectedProofGraphDependencyDefinitions,
 } from "../frontend/src/lib/app/selected-proof-graph-dependencies.mjs";
+import {
+  nextActionRelatedLinkIds,
+} from "../frontend/src/lib/app/next-action-related-links.mjs";
 export {
   proofGraphDestinationSummaryDriftNextActionAdminProofPath,
   proofGraphDestinationSummaryDriftNextActionPath,
@@ -1474,11 +1477,6 @@ function requiredRelatedLinksForNextAction(nextAction, { proofGraph } = {}) {
   const proofGraphNodeId = nextAction.nextAction.unproven?.proofGraphNodeId;
   const selectedProductionFeatureGraphNodeId =
     nextAction.nextAction.unproven?.selectedProductionFeatureGraph?.nodeId;
-  const localCheckId = nextAction.nextAction.localCheck?.id;
-  const seedProofLaneCoverageRoleUrl =
-    nextAction.nextAction.seedProofLaneCoverage?.roleUrl;
-  const proofGraphDestinationSummary =
-    nextAction.nextAction.proofGraphDestinationSummary;
   const selectedDependencyEdgeLinkIds = selectedProofGraphDependencyLinkIds({
     nextAction,
     proofGraph,
@@ -1498,17 +1496,17 @@ function requiredRelatedLinksForNextAction(nextAction, { proofGraph } = {}) {
       ? [selectedProductionFeatureGraphNodeId]
       : []),
     ...selectedDependencyEdgeLinkIds,
-    ...(typeof localCheckId === "string" && localCheckId.trim() !== ""
-      ? [localCheckId]
-      : []),
-    ...(typeof seedProofLaneCoverageRoleUrl === "string" &&
-    seedProofLaneCoverageRoleUrl.trim() !== ""
-      ? ["seed-proof-lane-coverage"]
-      : []),
-    ...(proofGraphDestinationSummary !== null &&
-    typeof proofGraphDestinationSummary === "object"
-      ? ["proof-graph-destination-summary"]
-      : []),
+    ...nextActionRelatedLinkIds({
+      command: nextAction.nextAction.command,
+      actionStatus: nextAction.nextAction.status,
+      localCheck: nextAction.nextAction.localCheck,
+      localCheckRoleUrl: nextAction.nextAction.localCheck?.roleUrl,
+      seedProofLaneCoverage: nextAction.nextAction.seedProofLaneCoverage,
+      seedProofLaneCoverageRoleUrl:
+        nextAction.nextAction.seedProofLaneCoverage?.roleUrl,
+      proofGraphDestinationSummary:
+        nextAction.nextAction.proofGraphDestinationSummary,
+    }),
   ];
 }
 

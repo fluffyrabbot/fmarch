@@ -15,6 +15,10 @@ import {
   selectedNextActionProofGraphNodeSummary,
 } from "../../lib/app/local-proof-handoff-status.mjs";
 import {
+  nextActionRelatedLinkDescriptors,
+  nextActionRelatedLinkHrefKinds,
+} from "../../lib/app/next-action-related-links.mjs";
+import {
   proofGraphEdgeCheckId,
   proofGraphEdgeStatusText,
   selectedProofGraphDependencyApplies,
@@ -5831,70 +5835,42 @@ export function normalizeLocalNextActionRelatedLinks({
             }),
           }),
         ]),
-    ...(unprovenRoleUrl === ""
-      ? []
-      : [
-          Object.freeze({
-            id: unprovenProofGraphNodeId || String(unproven?.id),
-            label: String(unproven?.id ?? "Selected role surface"),
-            href: seededRoleUrlToAdminHref(unprovenRoleUrl, { game }),
-            status: String(unproven?.status ?? actionStatus),
-            command,
-          }),
-        ]),
-    ...(localCheckRoleUrl === ""
-      ? []
-      : [
-          Object.freeze({
-            id: String(localCheck?.id ?? "local-readiness-dependency"),
-            label: String(localCheck?.id ?? "Local readiness dependency"),
-            href: seededRoleUrlToAdminHref(localCheckRoleUrl, { game }),
-            status: String(localCheck?.status ?? actionStatus),
-            command,
-          }),
-        ]),
-    ...(seedProofLaneCoverageRoleUrl === ""
-      ? []
-      : [
-          Object.freeze({
-            id: "seed-proof-lane-coverage",
-            label: "Seed proof-lane coverage",
-            href: seededRoleUrlToAdminHref(seedProofLaneCoverageRoleUrl, { game }),
-            status: String(seedProofLaneCoverage?.status ?? actionStatus),
-            command,
-          }),
-        ]),
-    ...(proofGraphDestinationSummary === null
-      ? []
-      : [
-          Object.freeze({
-            id: "proof-graph-destination-summary",
-            label: "Proof graph destination summary",
-            href: adminAuditInspectHref({
-              game,
-              audit: localAdminAuditIds.proofGraph,
-            }),
-            status: String(
-              proofGraphDestinationSummary.summaryStatus ?? actionStatus,
-            ),
-            command,
-          }),
-        ]),
-    ...(sequenceDeferralRoleUrl === ""
-      ? []
-      : [
-          Object.freeze({
-            id: String(
-              sequenceDeferral?.deferredUnprovenId ??
-                "hosted-identity-sequence-deferral",
-            ),
-            label: "Deferred hosted identity",
-            href: seededRoleUrlToAdminHref(sequenceDeferralRoleUrl, { game }),
-            status: String(sequenceDeferral?.status ?? actionStatus),
-            command: String(sequenceDeferral?.deferredCommand ?? command),
-          }),
-        ]),
+    ...nextActionRelatedLinkDescriptors({
+      command,
+      actionStatus,
+      unproven,
+      unprovenRoleUrl,
+      unprovenProofGraphNodeId,
+      localCheck,
+      localCheckRoleUrl,
+      seedProofLaneCoverage,
+      seedProofLaneCoverageRoleUrl,
+      proofGraphDestinationSummary,
+      sequenceDeferral,
+      sequenceDeferralRoleUrl,
+    }).map((descriptor) =>
+      Object.freeze({
+        id: descriptor.id,
+        label: descriptor.label,
+        href: nextActionRelatedLinkHref({
+          descriptor,
+          game,
+        }),
+        status: descriptor.status,
+        command: descriptor.command,
+      }),
+    ),
   ]);
+}
+
+function nextActionRelatedLinkHref({ descriptor, game }) {
+  if (descriptor.hrefKind === nextActionRelatedLinkHrefKinds.proofGraphAudit) {
+    return adminAuditInspectHref({
+      game,
+      audit: localAdminAuditIds.proofGraph,
+    });
+  }
+  return seededRoleUrlToAdminHref(descriptor.roleUrl, { game });
 }
 
 function selectedProofGraphDependencyRelatedLinks({
