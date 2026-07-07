@@ -91,6 +91,10 @@ import {
   devTestGameHostedConcurrentRaceMatrixPath,
 } from "./dev_test_game_hosted_concurrent_race_matrix.mjs";
 import {
+  devTestGameRealHostedObservabilityHandoffCommand,
+  devTestGameRealHostedObservabilityHandoffPath,
+} from "./dev_test_game_real_hosted_observability_handoff_cases.mjs";
+import {
   adminProofDestinationRequirementForLink,
   proofGraphDiagnosticProofEdges,
   proofGraphDiagnosticProofNodes,
@@ -1665,6 +1669,7 @@ function buildProofGraphEdges({
     ...nodes
       .filter((node) => node.kind === "admin-proof-surface")
       .map((node) => ["admin-spine", node.id, "aggregates"]),
+    ...realHostedObservabilityDependencyEdges(nodes),
     ...hostedEvidenceLaneToHostedMatrixTransitionEdges({
       nodes,
       releaseReadiness,
@@ -1938,6 +1943,32 @@ function releaseAdminProofContractEdges(nodes) {
         ],
       ]
     : [];
+}
+
+function realHostedObservabilityDependencyEdges(nodes) {
+  const nodeIds = new Set(nodes.map((node) => node.id));
+  if (
+    !nodeIds.has("admin-proof:hosted-ops-signals") ||
+    !nodeIds.has("admin-proof:real-hosted-observability-handoff")
+  ) {
+    return [];
+  }
+  return [
+    [
+      "admin-proof:hosted-ops-signals",
+      "admin-proof:real-hosted-observability-handoff",
+      "feeds-real-hosted-observability-handoff",
+      {
+        command: `npm run ${devTestGameRealHostedObservabilityHandoffCommand}`,
+        proofTarget: devTestGameRealHostedObservabilityHandoffPath,
+        roleUrl: localAdminAuditRoleUrl(
+          localAdminAuditIds.realHostedObservabilityHandoff,
+        ),
+        status: "blocked",
+        source: "hosted-ops-signals",
+      },
+    ],
+  ];
 }
 
 function hostedEvidenceLaneToHostedMatrixTransitionEdges({

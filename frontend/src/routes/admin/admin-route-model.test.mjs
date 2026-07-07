@@ -131,7 +131,10 @@ import {
   hostedOpsSignalCheckStatusRows,
 } from "../../../../tools/dev_test_game_hosted_ops_signal_cases.mjs";
 import {
+  devTestGameRealHostedObservabilityHandoffCommand,
+  devTestGameRealHostedObservabilityHandoffPath,
   realHostedObservabilityHandoffCase,
+  realHostedObservabilityRoleSurfaceDrilldown,
   realHostedObservabilityBaselineEnv,
   realHostedObservabilityHandoffInputSectionDefinitions,
   realHostedObservabilityHandoffInputSections,
@@ -4011,6 +4014,53 @@ test("admin route data exposes proof graph next-action handoff dependency", asyn
   assert.equal(
     nextAction.artifactSummary.selectedLocalCheckId,
     "local-proof-graph-next-action-handoff",
+  );
+});
+
+test("admin route data exposes real-hosted observability selected dependency edge", async () => {
+  const command = `npm run ${devTestGameRealHostedObservabilityHandoffCommand}`;
+  const unproven = {
+    id: "real-hosted-observability-handoff",
+    status: "blocked",
+    requiredEvidence: "Real hosted observability evidence",
+    buildSlice: "Attach real hosted observability evidence.",
+    proofTarget: devTestGameRealHostedObservabilityHandoffPath,
+    roleUrl: realHostedObservabilityRoleSurfaceDrilldown.handoffRoleUrl,
+    proofGraphNodeId: realHostedObservabilityRoleSurfaceDrilldown.proofGraphNodeId,
+    actionStatus: "blocked",
+  };
+  const data = await buildAdminRouteData({
+    principalUserId: "admin_a",
+    capabilities: [{ kind: "GlobalAdmin" }],
+    nextAction: nextActionFixture({
+      actionStatus: "blocked",
+      command,
+      unproven,
+      releaseReadinessTrace: releaseReadinessTraceFixture({
+        unproven,
+        command,
+      }),
+    }),
+  });
+
+  const nextAction = data.audit.find(
+    (item) => item.id === localAdminAuditIds.nextAction,
+  );
+  assert.deepEqual(
+    nextAction.relatedLinks.find(
+      (link) =>
+        link.id ===
+        "edge:admin-proof:hosted-ops-signals:feeds-real-hosted-observability-handoff:admin-proof:real-hosted-observability-handoff",
+    ),
+    {
+      id: "edge:admin-proof:hosted-ops-signals:feeds-real-hosted-observability-handoff:admin-proof:real-hosted-observability-handoff",
+      label: "Hosted ops signals to real hosted observability",
+      href: localAdminAuditRoleUrl(localAdminAuditIds.proofGraph, {
+        game: "midsummer",
+      }),
+      status: "blocked",
+      command,
+    },
   );
 });
 

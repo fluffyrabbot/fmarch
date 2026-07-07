@@ -115,6 +115,7 @@ import {
 import {
   devTestGameRealHostedObservabilityHandoffCommand,
   devTestGameRealHostedObservabilityHandoffPath,
+  realHostedObservabilityRoleSurfaceDrilldown,
   realHostedObservabilityHandoffCase,
   realHostedObservabilityHandoffCheckIds,
   realHostedObservabilityHandoffInputIds,
@@ -6678,6 +6679,25 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
       proofTarget: devTestGameHostedConcurrentRaceMatrixPath,
     },
   );
+  assert.deepEqual(
+    graph.edges.find(
+      (edge) =>
+        edge.from === "admin-proof:hosted-ops-signals" &&
+        edge.to === "admin-proof:real-hosted-observability-handoff" &&
+        edge.relationship === "feeds-real-hosted-observability-handoff",
+    ),
+    {
+      from: "admin-proof:hosted-ops-signals",
+      to: "admin-proof:real-hosted-observability-handoff",
+      relationship: "feeds-real-hosted-observability-handoff",
+      command: `npm run ${devTestGameRealHostedObservabilityHandoffCommand}`,
+      proofTarget: devTestGameRealHostedObservabilityHandoffPath,
+      roleUrl:
+        "/admin/audit/local-real-hosted-observability-handoff?game=<seeded-game>",
+      status: "blocked",
+      source: "hosted-ops-signals",
+    },
+  );
   const proofGraphAdminSource = {
     proofGraph: graph,
     proofRun: {
@@ -8146,6 +8166,17 @@ test("selected proof graph dependency handoffs are table-driven across hosted la
     command: devTestGameHostedConcurrentRaceMatrixCommand,
     proofTarget: devTestGameHostedConcurrentRaceMatrixPath,
   };
+  const observabilityEdge = {
+    from: "admin-proof:hosted-ops-signals",
+    to: realHostedObservabilityRoleSurfaceDrilldown.proofGraphNodeId,
+    relationship: "feeds-real-hosted-observability-handoff",
+    command: `npm run ${devTestGameRealHostedObservabilityHandoffCommand}`,
+    proofTarget: devTestGameRealHostedObservabilityHandoffPath,
+    roleUrl:
+      "/admin/audit/local-real-hosted-observability-handoff?game=<seeded-game>",
+    status: "blocked",
+    source: "hosted-ops-signals",
+  };
   const cases = [
     {
       label: "hosted matrix transition",
@@ -8215,6 +8246,46 @@ test("selected proof graph dependency handoffs are table-driven across hosted la
         "operator-predicate-for-admin-surface",
         "command npm run test:dev-test-game-hosted-identity-operator-admin-proof",
         `proofTarget ${devTestGameHostedIdentityOperatorAdminProofPath}`,
+      ].join(" "),
+    },
+    {
+      label: "real hosted observability handoff edge",
+      nextAction: {
+        nextAction: {
+          unproven: {
+            proofGraphNodeId:
+              realHostedObservabilityRoleSurfaceDrilldown.proofGraphNodeId,
+            roleUrl:
+              "/admin/audit/local-real-hosted-observability-handoff?game=<seeded-game>",
+          },
+        },
+      },
+      proofGraph: { edges: [observabilityEdge] },
+      dependencies: [
+        {
+          selectedProofGraphNodeId:
+            realHostedObservabilityRoleSurfaceDrilldown.proofGraphNodeId,
+          roleUrlIncludes:
+            "/admin/audit/local-real-hosted-observability-handoff",
+          edges: [
+            {
+              from: observabilityEdge.from,
+              to: observabilityEdge.to,
+              relationship: observabilityEdge.relationship,
+            },
+          ],
+        },
+      ],
+      expectedLinkIds: [
+        "edge:admin-proof:hosted-ops-signals:feeds-real-hosted-observability-handoff:admin-proof:real-hosted-observability-handoff",
+      ],
+      expectedStatus: [
+        "feeds-real-hosted-observability-handoff",
+        "source hosted-ops-signals",
+        "status blocked",
+        `command npm run ${devTestGameRealHostedObservabilityHandoffCommand}`,
+        `proofTarget ${devTestGameRealHostedObservabilityHandoffPath}`,
+        "roleUrl /admin/audit/local-real-hosted-observability-handoff?game=<seeded-game>",
       ].join(" "),
     },
   ];

@@ -69,6 +69,7 @@ import {
 import {
   devTestGameRealHostedObservabilityHandoffCommand,
   devTestGameRealHostedObservabilityHandoffPath,
+  realHostedObservabilityRoleSurfaceDrilldown,
   realHostedObservabilityBaselineEnv,
   realHostedObservabilityEvidenceEnv,
   realHostedObservabilityHandoffInputIds,
@@ -5875,21 +5876,14 @@ export function normalizeLocalNextActionRelatedLinks({
             command: selectedProofGraphNode.proofCommand,
           }),
         ]),
-    ...hostedMatrixTransitionEdgeRelatedLinks({
-      game,
-      command,
-      actionStatus,
-      selectedProofGraphNode,
-      unproven,
-      unprovenRoleUrl,
-    }),
-    ...hostedIdentityProofGraphDependencyRelatedLinks({
+    ...selectedProofGraphDependencyRelatedLinks({
       game,
       command,
       actionStatus,
       selectedProofGraphNode,
       hostedIdentityProofGraphEdges,
       unprovenProofGraphNodeId,
+      unproven,
       unprovenRoleUrl,
     }),
     ...(String(selectedProductionFeatureGraph?.nodeId ?? "") === ""
@@ -5972,74 +5966,115 @@ export function normalizeLocalNextActionRelatedLinks({
   ]);
 }
 
-function hostedMatrixTransitionEdgeRelatedLinks({
-  game,
-  command,
-  actionStatus,
-  selectedProofGraphNode,
-  unproven,
-  unprovenRoleUrl,
-}) {
-  if (
-    selectedProofGraphNode?.id !== "admin-proof:hosted-concurrent-race-matrix" ||
-    typeof unprovenRoleUrl !== "string" ||
-    !unprovenRoleUrl.includes("/admin/audit/local-hosted-concurrent-race-matrix")
-  ) {
-    return [];
-  }
-  return [
-    Object.freeze({
-      id: proofGraphEdgeCheckId({
-        from: "admin-proof:hosted-evidence-lane",
-        relationship: "feeds-hosted-matrix-transition",
-        to: "admin-proof:hosted-concurrent-race-matrix",
-      }),
-      label: "Hosted evidence lane to hosted matrix",
-      href: adminAuditInspectHref({
-        game,
-        audit: localAdminAuditIds.proofGraph,
-      }),
-      status: String(
-        unproven?.realHostedEvidenceStatus ??
-          unproven?.status ??
-          actionStatus,
-      ),
-      command,
-    }),
-  ];
-}
-
-function hostedIdentityProofGraphDependencyRelatedLinks({
+function selectedProofGraphDependencyRelatedLinks({
   game,
   command,
   actionStatus,
   selectedProofGraphNode,
   hostedIdentityProofGraphEdges,
   unprovenProofGraphNodeId,
+  unproven,
   unprovenRoleUrl,
 }) {
   const selectedNodeId = String(
     selectedProofGraphNode?.id ?? unprovenProofGraphNodeId ?? "",
   );
-  if (
-    selectedNodeId !== "admin-proof:hosted-identity-evidence" ||
-    typeof unprovenRoleUrl !== "string" ||
-    !unprovenRoleUrl.includes("/admin/audit/local-hosted-identity-evidence") ||
-    !Array.isArray(hostedIdentityProofGraphEdges?.edges)
-  ) {
-    return [];
-  }
-  return hostedIdentityProofGraphEdges.edges.map((edge) =>
-    Object.freeze({
-      id: proofGraphEdgeCheckId(edge),
-      label: `${edge.from} to ${edge.to}`,
-      href: adminAuditInspectHref({
-        game,
-        audit: localAdminAuditIds.proofGraph,
+  return selectedProofGraphDependencyDefinitions({
+    command,
+    actionStatus,
+    hostedIdentityProofGraphEdges,
+    unproven,
+  })
+    .filter((definition) =>
+      selectedProofGraphDependencyApplies({
+        definition,
+        selectedNodeId,
+        unprovenRoleUrl,
       }),
-      status: String(edge.relationship ?? actionStatus),
-      command: String(edge.command ?? command),
+    )
+    .flatMap((definition) =>
+      definition.edges.map((edge) =>
+        Object.freeze({
+          id: proofGraphEdgeCheckId(edge),
+          label: definition.label(edge),
+          href: adminAuditInspectHref({
+            game,
+            audit: localAdminAuditIds.proofGraph,
+          }),
+          status: definition.status(edge),
+          command: definition.command(edge),
+        }),
+      ),
+    );
+}
+
+function selectedProofGraphDependencyDefinitions({
+  command,
+  actionStatus,
+  hostedIdentityProofGraphEdges,
+  unproven,
+}) {
+  return [
+    Object.freeze({
+      selectedProofGraphNodeId: "admin-proof:hosted-concurrent-race-matrix",
+      roleUrlIncludes: "/admin/audit/local-hosted-concurrent-race-matrix",
+      edges: Object.freeze([
+        Object.freeze({
+          from: "admin-proof:hosted-evidence-lane",
+          relationship: "feeds-hosted-matrix-transition",
+          to: "admin-proof:hosted-concurrent-race-matrix",
+        }),
+      ]),
+      label: () => "Hosted evidence lane to hosted matrix",
+      status: () =>
+        String(
+          unproven?.realHostedEvidenceStatus ??
+            unproven?.status ??
+            actionStatus,
+        ),
+      command: () => command,
     }),
+    Object.freeze({
+      selectedProofGraphNodeId: "admin-proof:hosted-identity-evidence",
+      roleUrlIncludes: "/admin/audit/local-hosted-identity-evidence",
+      edges: Object.freeze(
+        Array.isArray(hostedIdentityProofGraphEdges?.edges)
+          ? hostedIdentityProofGraphEdges.edges
+          : [],
+      ),
+      label: (edge) => `${edge.from} to ${edge.to}`,
+      status: (edge) => String(edge.relationship ?? actionStatus),
+      command: (edge) => String(edge.command ?? command),
+    }),
+    Object.freeze({
+      selectedProofGraphNodeId:
+        realHostedObservabilityRoleSurfaceDrilldown.proofGraphNodeId,
+      roleUrlIncludes:
+        "/admin/audit/local-real-hosted-observability-handoff",
+      edges: Object.freeze([
+        Object.freeze({
+          from: "admin-proof:hosted-ops-signals",
+          relationship: "feeds-real-hosted-observability-handoff",
+          to: realHostedObservabilityRoleSurfaceDrilldown.proofGraphNodeId,
+        }),
+      ]),
+      label: () => "Hosted ops signals to real hosted observability",
+      status: () => String(unproven?.status ?? actionStatus),
+      command: () => command,
+    }),
+  ];
+}
+
+function selectedProofGraphDependencyApplies({
+  definition,
+  selectedNodeId,
+  unprovenRoleUrl,
+}) {
+  return (
+    definition.edges.length > 0 &&
+    selectedNodeId === definition.selectedProofGraphNodeId &&
+    typeof unprovenRoleUrl === "string" &&
+    unprovenRoleUrl.includes(definition.roleUrlIncludes)
   );
 }
 
