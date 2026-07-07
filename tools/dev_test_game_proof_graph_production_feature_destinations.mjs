@@ -54,6 +54,9 @@ export function proofGraphProductionFeatureTargetDestinations(proofGraph) {
         sourceCheckId: String(node.sourceCheckId ?? ""),
         targetRoleUrl: String(node.targetRoleUrl ?? ""),
         adminCheckId: String(node.adminCheckId ?? ""),
+        ...(node.featureTargetKind === undefined
+          ? {}
+          : { featureTargetKind: String(node.featureTargetKind) }),
         sourceProofArtifact: String(node.sourceProofArtifact ?? ""),
         requiredChecks: Object.freeze([String(node.adminCheckId ?? "")]),
         ...(node.browserWorkbench === null ||
@@ -74,6 +77,9 @@ export function proofGraphProductionFeatureTargetDestinations(proofGraph) {
       roleUrl: String(node.roleUrl ?? ""),
       targetRoleUrl: String(node.targetRoleUrl ?? ""),
       adminCheckId: String(node.adminCheckId ?? ""),
+      ...(node.featureTargetKind === undefined
+        ? {}
+        : { featureTargetKind: String(node.featureTargetKind) }),
       sourceProofArtifact: String(node.sourceProofArtifact ?? ""),
       ...(typeof node.adminDetailRoleUrl === "string" &&
       node.adminDetailRoleUrl.trim() !== ""

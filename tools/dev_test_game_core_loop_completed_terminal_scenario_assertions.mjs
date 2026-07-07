@@ -469,12 +469,38 @@ function completedGameHardeningSpineTargetCase({
   return {
     targetKey,
     featureSlotId,
+    featureTargetKind: completedGameHardeningFeatureTargetKind(lane),
     roleUrlId: lane.id,
     checkpointId: lane.id,
     adminCheckId: lane.id,
     cycleId: completedGameHardeningSpineCycleId,
     role: lane.role,
   };
+}
+
+function completedGameHardeningFeatureTargetKind(lane) {
+  if (lane.proofStep === "race") {
+    return lane.proofGroup === "host-complete-race" ||
+      lane.proofGroup === "player-complete-race"
+      ? "hardening-race-action"
+      : "hardening-race";
+  }
+  if (lane.proofStep === "reload") {
+    if (
+      lane.proofGroup === "host-complete-race" ||
+      lane.proofGroup === "player-complete-race"
+    ) {
+      return "hardening-race-reload";
+    }
+    return "hardening-stale-reload";
+  }
+  if (lane.proofStep === "reconnect") {
+    return "hardening-stale-reconnect";
+  }
+  if (lane.proofStep === "reject") {
+    return "aggregate-hardening-coverage";
+  }
+  return "hardening-surface";
 }
 
 export function completedHostSeedDemoOnlyScenarioIds() {

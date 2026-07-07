@@ -59,6 +59,9 @@ export function resolveProductionFeatureSpineTarget({
       ? { recoveryHookId: declaration.recoveryHookId }
       : {}),
     adminCheckId: declaration.adminCheckId,
+    ...(declaration.featureTargetKind === undefined
+      ? {}
+      : { featureTargetKind: declaration.featureTargetKind }),
     browserProofCommand: sourceTarget.browserProofCommand,
     sourceProofArtifact: sourceTarget.sourceProofArtifact,
     rerunCommand:
@@ -87,6 +90,9 @@ export function buildProductionFeatureSpineDrilldown(spineTarget) {
       ? { recoveryHookRowId: spineTarget.recoveryHookId }
       : {}),
     adminCheckId: spineTarget.adminCheckId,
+    ...(spineTarget.featureTargetKind === undefined
+      ? {}
+      : { featureTargetKind: spineTarget.featureTargetKind }),
     roleUrl: spineTarget.roleUrl,
     rerunCommand: spineTarget.rerunCommand,
     browserProofCommand: spineTarget.browserProofCommand,
@@ -252,6 +258,7 @@ export function validProductionFeatureSpineTargetCollection(
       target.roleUrlId !== declaration.roleUrlId ||
       target.checkpointId !== declaration.checkpointId ||
       target.adminCheckId !== declaration.adminCheckId ||
+      target.featureTargetKind !== declaration.featureTargetKind ||
       featureSpineRowKind(target) !== featureSpineRowKind(declaration) ||
       (featureSpineRowKind(declaration) === featureSpineRecoveryHookRowKind &&
         target.recoveryHookId !== declaration.recoveryHookId)

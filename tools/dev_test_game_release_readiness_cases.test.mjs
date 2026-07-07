@@ -401,6 +401,7 @@ test("release readiness buildable cases share next-action commands and spine tar
         rowKind: "checkpoint",
         checkpointId: target.checkpointId,
         adminCheckId: target.adminCheckId,
+        featureTargetKind: target.featureTargetKind,
       },
     );
   }
@@ -601,6 +602,9 @@ test("hardening feature spine rows are classified by exported source-case factor
         roleUrlId: provenanceCase.roleUrlId,
         checkpointId: provenanceCase.checkpointId,
         adminCheckId: provenanceCase.adminCheckId,
+        ...(provenanceCase.featureTargetKind === undefined
+          ? {}
+          : { featureTargetKind: provenanceCase.featureTargetKind }),
       },
     ]),
   );
@@ -620,6 +624,9 @@ test("hardening feature spine rows are classified by exported source-case factor
           roleUrlId: row.roleUrlId,
           checkpointId: row.checkpointId,
           adminCheckId: row.adminCheckId,
+          ...(row.featureTargetKind === undefined
+            ? {}
+            : { featureTargetKind: row.featureTargetKind }),
         },
       ]),
     ),
@@ -698,6 +705,9 @@ function assertFeatureSpineProvenanceReachesReadinessAndProofGraph({
         targetRoleUrl: target.roleUrl,
         adminCheckId: target.adminCheckId,
         sourceProofArtifact: target.sourceProofArtifact,
+        ...(target.featureTargetKind === undefined
+          ? {}
+          : { featureTargetKind: target.featureTargetKind }),
         browserWorkbench: target.browserWorkbench,
       })),
     });
@@ -738,6 +748,9 @@ function assertFeatureSpineProvenanceReachesReadinessAndProofGraph({
           ? {}
           : { recoveryHookId: provenanceCase.recoveryHookId }),
         adminCheckId: provenanceCase.adminCheckId,
+        ...(provenanceCase.featureTargetKind === undefined
+          ? {}
+          : { featureTargetKind: provenanceCase.featureTargetKind }),
       });
       assert.equal(
         readinessTarget.sourceProofArtifact,
@@ -784,6 +797,9 @@ function assertFeatureSpineProofGraphDestination({
     targetRoleUrl: destination.targetRoleUrl,
     adminCheckId: destination.adminCheckId,
     sourceProofArtifact: destination.sourceProofArtifact,
+    ...(destination.featureTargetKind === undefined
+      ? {}
+      : { featureTargetKind: destination.featureTargetKind }),
   };
   const commonExpected = {
     kind: expectedGraphKind,
@@ -792,6 +808,9 @@ function assertFeatureSpineProofGraphDestination({
     targetRoleUrl,
     adminCheckId: provenanceCase.adminCheckId,
     sourceProofArtifact: provenanceCase.proofArtifact,
+    ...(provenanceCase.featureTargetKind === undefined
+      ? {}
+      : { featureTargetKind: provenanceCase.featureTargetKind }),
   };
   if (expectedGraphKind === "admin-audit") {
     const expectedAuditId = provenanceCase.detailRoleUrlIncludes.match(

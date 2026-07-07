@@ -13,6 +13,7 @@ export function featureSpineCheckpointTarget({
   roleUrlId,
   checkpointId,
   adminCheckId,
+  featureTargetKind,
 }) {
   return Object.freeze({
     featureSlotId,
@@ -22,6 +23,7 @@ export function featureSpineCheckpointTarget({
     rowKind: featureSpineCheckpointRowKind,
     checkpointId,
     adminCheckId,
+    ...(featureTargetKind === undefined ? {} : { featureTargetKind }),
   });
 }
 
@@ -33,6 +35,7 @@ export function featureSpineRecoveryHookTarget({
   checkpointId,
   recoveryHookId,
   adminCheckId,
+  featureTargetKind,
 }) {
   return Object.freeze({
     featureSlotId,
@@ -43,6 +46,7 @@ export function featureSpineRecoveryHookTarget({
     checkpointId,
     recoveryHookId,
     adminCheckId,
+    ...(featureTargetKind === undefined ? {} : { featureTargetKind }),
   });
 }
 

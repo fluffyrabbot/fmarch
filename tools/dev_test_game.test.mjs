@@ -6621,6 +6621,7 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
       matches[0].sourceProofArtifact,
       devTestGameHardeningAdminProofPath,
     );
+    assert.equal(matches[0].featureTargetKind, row.featureTargetKind);
   }
   assert.equal(graph.summary.commandProofRoleUrlAuditCount, 1);
   assert.equal(
@@ -23109,6 +23110,9 @@ function nextActionProofGraphFixture(slotId = "player-action-submission") {
         sourceCheckId: target.sourceCheckId,
         roleUrl: target.detailRoleUrl,
         targetRoleUrl: target.roleUrl,
+        ...(target.featureTargetKind === undefined
+          ? {}
+          : { featureTargetKind: target.featureTargetKind }),
         browserProofCommand: target.browserProofCommand,
         sourceProofArtifact: target.sourceProofArtifact,
         artifact: devTestGameReleaseReadinessPath,

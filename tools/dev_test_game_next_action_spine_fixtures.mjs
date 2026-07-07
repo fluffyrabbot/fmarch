@@ -79,6 +79,9 @@ export function featureSpineFixture({
     checkpointId: declaration.checkpointId,
     ...(recoveryHookId === undefined ? {} : { recoveryHookId }),
     adminCheckId: declaration.adminCheckId,
+    ...(declaration.featureTargetKind === undefined
+      ? {}
+      : { featureTargetKind: declaration.featureTargetKind }),
     browserProofCommand,
     sourceProofArtifact,
     ...(includeTargetRerunCommand ? { rerunCommand } : {}),
@@ -103,6 +106,9 @@ export function featureSpineFixture({
         ? {}
         : { recoveryHookRowId: recoveryHookId }),
       adminCheckId: declaration.adminCheckId,
+      ...(declaration.featureTargetKind === undefined
+        ? {}
+        : { featureTargetKind: declaration.featureTargetKind }),
       roleUrl: resolvedRoleUrl,
       rerunCommand,
       browserProofCommand,

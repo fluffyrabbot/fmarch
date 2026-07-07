@@ -2196,6 +2196,9 @@ export function buildProductionFeatureTargetGraphNode({
     checkpointId: target.checkpointId,
     recoveryHookId: target.recoveryHookId,
     adminCheckId: target.adminCheckId,
+    ...(target.featureTargetKind === undefined
+      ? {}
+      : { featureTargetKind: target.featureTargetKind }),
     browserProofCommand: target.browserProofCommand,
     ...(target.browserWorkbench === undefined
       ? {}

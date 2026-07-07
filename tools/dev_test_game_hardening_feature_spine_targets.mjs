@@ -43,6 +43,7 @@ const completedGameHardeningFeatureSpineTargetRows = Object.freeze(
         roleUrlId: target.roleUrlId,
         checkpointId: target.checkpointId,
         adminCheckId: target.adminCheckId,
+        featureTargetKind: target.featureTargetKind,
       }),
     ]),
   ),

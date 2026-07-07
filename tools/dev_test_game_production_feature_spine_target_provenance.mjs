@@ -65,12 +65,14 @@ export function selectedProductionFeatureSpineMatchesProvenance({
     declaration.rowKind === rowKind &&
     declaration.checkpointId === provenanceCase.checkpointId &&
     declaration.adminCheckId === provenanceCase.adminCheckId &&
+    declaration.featureTargetKind === provenanceCase.featureTargetKind &&
     target.featureSlotId === provenanceCase.featureSlotId &&
     target.sourceCheckId === provenanceCase.sourceCheckId &&
     target.cycleId === provenanceCase.cycleId &&
     target.roleUrlId === provenanceCase.roleUrlId &&
     target.checkpointId === provenanceCase.checkpointId &&
     target.adminCheckId === provenanceCase.adminCheckId &&
+    target.featureTargetKind === provenanceCase.featureTargetKind &&
     target.sourceProofArtifact === provenanceCase.proofArtifact &&
     target.rerunCommand === provenanceCase.rerunCommand &&
     drilldown.featureSlotId === provenanceCase.featureSlotId &&
@@ -80,6 +82,7 @@ export function selectedProductionFeatureSpineMatchesProvenance({
     drilldown.rowKind === rowKind &&
     drilldown.checkpointRowId === provenanceCase.checkpointId &&
     drilldown.adminCheckId === provenanceCase.adminCheckId &&
+    drilldown.featureTargetKind === provenanceCase.featureTargetKind &&
     drilldown.sourceProofArtifact === provenanceCase.proofArtifact &&
     drilldown.rerunCommand === provenanceCase.rerunCommand;
   if (!baseMatches) {
@@ -100,6 +103,7 @@ export function selectedProductionFeatureSpineMatchesProvenance({
     graphSelection.sourceNodeId === provenanceCase.graphSourceNodeId &&
     graphSelection.nodeId ===
       `production-feature:${provenanceCase.featureSlotId}` &&
+    graphSelection.featureTargetKind === provenanceCase.featureTargetKind &&
     graphSelection.sourceProofArtifact === provenanceCase.proofArtifact &&
     graphSelection.targetRoleUrlMatchesSelectedSpineTarget === true
   );

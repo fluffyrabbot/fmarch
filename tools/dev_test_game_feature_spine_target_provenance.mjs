@@ -16,6 +16,9 @@ export function featureSpineTargetProvenanceCase({
       ? {}
       : { recoveryHookId: sourceRow.recoveryHookId }),
     adminCheckId: sourceRow.adminCheckId,
+    ...(sourceRow.featureTargetKind === undefined
+      ? {}
+      : { featureTargetKind: sourceRow.featureTargetKind }),
     proofArtifact: source.proofArtifact,
     rerunCommand: source.rerunCommand,
     graphSourceNodeId: source.graphSourceNodeId,
