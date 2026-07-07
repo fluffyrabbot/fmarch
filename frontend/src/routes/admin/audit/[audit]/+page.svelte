@@ -89,10 +89,13 @@
       </section>
     {/if}
     {#if data.audit.entries?.length > 0}
-      <ol class="admin-audit-detail__entries" data-testid="admin-audit-detail-entries">
+      <ol
+        class="admin-audit-detail__entries fm-rowlist"
+        data-testid="admin-audit-detail-entries"
+      >
         {#each data.audit.entries as entry}
           <li
-            class="admin-audit-detail__entry"
+            class="admin-audit-detail__entry fm-rowlist__row"
             data-testid={`admin-audit-entry-${entry.eventKind}`}
           >
             <strong>{entry.eventKind}</strong>
@@ -161,7 +164,7 @@
           </form>
         </div>
         <p
-          class="admin-audit-detail__entry"
+          class="admin-audit-detail__entry fm-rowlist__row"
           data-testid="admin-identity-account-control-target"
         >
           <strong>{data.audit.accountControls.accountId}</strong>
@@ -362,14 +365,6 @@
     gap: 14px;
   }
 
-  .admin-audit-detail__entries {
-    display: grid;
-    gap: 10px;
-    list-style: none;
-    margin: 0;
-    padding: 0;
-  }
-
   .admin-audit-detail__group {
     display: grid;
     gap: 10px;
@@ -390,74 +385,6 @@
     color: var(--fm-ink-muted);
     font-size: 0.88rem;
     margin: 0;
-  }
-
-  .admin-audit-detail__entry {
-    border: 1px solid var(--fm-line-cool);
-    border-radius: 8px;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px 12px;
-    min-block-size: 44px;
-    padding: 10px 12px;
-  }
-
-  .admin-audit-detail__entry strong {
-    color: var(--fm-ink);
-  }
-
-  .admin-audit-detail__entry h3 {
-    color: var(--fm-ink-muted);
-    font-size: 0.88rem;
-    margin: 0;
-  }
-
-  .admin-audit-detail__entry h4 {
-    color: var(--fm-ink-muted);
-    font-size: 0.82rem;
-    margin: 0;
-  }
-
-  .admin-audit-detail__entry--stack {
-    display: grid;
-  }
-
-  .admin-audit-detail__subentries {
-    display: grid;
-    gap: 8px;
-    list-style: none;
-    margin: 0;
-    padding: 0;
-  }
-
-  .admin-audit-detail__subentries li {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px 10px;
-    min-block-size: 44px;
-  }
-
-  .admin-audit-detail__subentries a {
-    align-items: center;
-    color: inherit;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px 10px;
-    min-block-size: 44px;
-    text-decoration: none;
-  }
-
-  .admin-audit-detail__entry span {
-    color: var(--fm-ink-muted);
-  }
-
-  .admin-audit-detail__entry a {
-    color: inherit;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px 12px;
-    min-block-size: 44px;
-    text-decoration: none;
   }
 
   .admin-audit-detail__controls {

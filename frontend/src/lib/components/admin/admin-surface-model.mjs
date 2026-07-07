@@ -249,6 +249,28 @@ export function buildAdminAuditPanelViewModel({ audit = [] } = {}) {
   });
 }
 
+export function buildAdminAuditEvidenceDisclosure({
+  rowTestId,
+  count = 0,
+  expanded = true,
+} = {}) {
+  const normalizedTestId = String(rowTestId ?? "admin-audit-row");
+  const open = expanded !== false;
+  const evidenceCount = Number.isFinite(count) && count > 0 ? Math.floor(count) : 0;
+  return Object.freeze({
+    className: "admin-audit-detail__evidence fm-disclosure",
+    toggleClassName: "fm-touch-button fm-touch-button--secondary",
+    toggleTestId: `${normalizedTestId}-evidence-toggle`,
+    detailTestId: `${normalizedTestId}-evidence`,
+    label: open
+      ? "Hide evidence"
+      : `Review evidence (${evidenceCount})`,
+    ariaExpanded: String(open),
+    expanded: open,
+    minTouchTargetPx: ADMIN_SURFACE_CONTRACT.minTouchTargetPx,
+  });
+}
+
 export function buildAdminRecoveryPanelViewModel({
   tasks = [],
   commandStatuses = {},

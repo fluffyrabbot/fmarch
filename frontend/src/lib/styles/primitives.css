@@ -411,3 +411,74 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ---- rowlist: machine-evidence descriptor rows ---- */
+/* Ledger-family row cards without the ledger's text-transform: capitalize —
+   machine-evidence strings (ids, paths, commands) must render verbatim. */
+
+.fm-rowlist {
+  display: grid;
+  gap: 10px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.fm-rowlist__row {
+  align-items: start;
+  background: var(--fm-raised);
+  border: 1px solid var(--fm-line-soft);
+  border-radius: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  min-block-size: 44px;
+  min-inline-size: 0;
+  padding: 10px 12px;
+}
+
+.fm-rowlist__row--stack {
+  display: grid;
+}
+
+.fm-rowlist__row strong {
+  color: var(--fm-ink);
+  overflow-wrap: anywhere;
+}
+
+.fm-rowlist__row span {
+  color: var(--fm-ink-muted);
+  overflow-wrap: anywhere;
+}
+
+.fm-rowlist__row a {
+  color: inherit;
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  min-block-size: 44px;
+  overflow-wrap: anywhere;
+  text-decoration: none;
+}
+
+.fm-rowlist__action {
+  align-items: center;
+  background: var(--fm-surface-cool);
+  border: 1px solid var(--fm-line-cool);
+  border-radius: 6px;
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  min-block-size: 44px;
+  overflow-wrap: anywhere;
+  padding: 0 12px;
+}
+
+.fm-rowlist__sublist {
+  display: grid;
+  gap: 8px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}

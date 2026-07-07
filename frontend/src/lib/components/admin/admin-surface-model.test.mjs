@@ -4,6 +4,7 @@ import {
   ADMIN_COMMAND_ACTIVITY_CONTRACT,
   ADMIN_CONFIRMATION_CONTRACT,
   ADMIN_SURFACE_CONTRACT,
+  buildAdminAuditEvidenceDisclosure,
   buildAdminAuditPanelViewModel,
   buildAdminCommandActivityViewModel,
   buildAdminEscalationPanelViewModel,
@@ -553,4 +554,29 @@ test("admin recovery model binds proof-gate form and status metadata", () => {
     objectLabel: null,
     outcomeLabel: null,
   });
+});
+
+test("admin audit evidence disclosure defaults to expanded with aria wiring", () => {
+  const expanded = buildAdminAuditEvidenceDisclosure({
+    rowTestId: "admin-audit-spine-cycle-day-1",
+    count: 2,
+  });
+
+  assert.equal(expanded.className, "admin-audit-detail__evidence fm-disclosure");
+  assert.equal(expanded.toggleClassName, "fm-touch-button fm-touch-button--secondary");
+  assert.equal(expanded.toggleTestId, "admin-audit-spine-cycle-day-1-evidence-toggle");
+  assert.equal(expanded.detailTestId, "admin-audit-spine-cycle-day-1-evidence");
+  assert.equal(expanded.label, "Hide evidence");
+  assert.equal(expanded.ariaExpanded, "true");
+  assert.equal(expanded.expanded, true);
+  assert.equal(expanded.minTouchTargetPx, ADMIN_SURFACE_CONTRACT.minTouchTargetPx);
+
+  const collapsed = buildAdminAuditEvidenceDisclosure({
+    rowTestId: "admin-audit-spine-cycle-day-1",
+    count: 2,
+    expanded: false,
+  });
+  assert.equal(collapsed.label, "Review evidence (2)");
+  assert.equal(collapsed.ariaExpanded, "false");
+  assert.equal(collapsed.expanded, false);
 });
