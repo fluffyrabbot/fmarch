@@ -466,7 +466,7 @@ function proveFirstViewportSmokeCoverage(roleSurfaces) {
       statusRegions.map((statusRegion) => statusRegion.testId),
     );
     assert.deepEqual(
-      roleConfig.statusRegions
+      (roleConfig.staticStatusRegions ?? roleConfig.statusRegions)
         .filter((statusRegion) => firstViewportStatusRegionIds.has(statusRegion.testId))
         .map((statusRegion) => ({
           testId: statusRegion.testId,
@@ -1283,10 +1283,11 @@ async function proveAdminSurface() {
   assert.equal(auditDetailData.status, "available");
   assert.equal(auditDetailData.surfaceHeader.title, "Proof runs");
 
+  const gameSetupById = new Map(data.gameSetup.map((item) => [item.id, item]));
   const commandStatuses = {
-    "create-game": adminConfirmStatus(data.gameSetup[0]),
-    "session-grants": adminConfirmStatus(data.gameSetup[1]),
-    cohost: adminConfirmStatus(data.gameSetup[2]),
+    "create-game": adminConfirmStatus(gameSetupById.get("create-game")),
+    "session-grants": adminConfirmStatus(gameSetupById.get("session-grants")),
+    cohost: adminConfirmStatus(gameSetupById.get("cohost")),
     "recovery-gate": adminConfirmStatus(data.recoveryTasks[0]),
   };
   const setup = buildAdminSetupGridViewModel({
@@ -1312,7 +1313,10 @@ async function proveAdminSurface() {
     escalations: data.escalations,
   });
 
-  assert.equal(setup.items.length, 3);
+  assert.deepEqual(
+    setup.items.map((item) => item.id),
+    ["create-game", "host-setup", "session-grants", "cohost"],
+  );
   assert.equal(audit.items.length >= 1, true);
   assert.equal(recovery.items.length, 1);
   assert.equal(escalation.items.length >= 1, true);

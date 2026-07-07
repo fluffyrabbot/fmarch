@@ -76,6 +76,12 @@ const adminReadinessTargets = scanStripTargets({
     audit: "pending",
     recovery: "pending",
   },
+  // The dev server appends machine-local proof-artifact audit rows, which pull
+  // the audit rollup to "pending"; the static route build loads none of them,
+  // so its rollup stays "ack". Each lane asserts its own posture.
+  staticStates: {
+    audit: "ack",
+  },
 });
 
 const playerPostureTargets = scanStripTargets({
@@ -191,6 +197,13 @@ export const roles = Object.freeze([
     overlapTestIds: adminReadinessTargets.overlapTestIds,
     statusRegions: [
       ...adminReadinessTargets.statusRegions,
+      Object.freeze({
+        testId: "admin-audit-status-proof-runs",
+        state: "ack",
+      }),
+    ],
+    staticStatusRegions: [
+      ...adminReadinessTargets.staticStatusRegions,
       Object.freeze({
         testId: "admin-audit-status-proof-runs",
         state: "ack",
@@ -385,7 +398,13 @@ function routeStateScenario({ route, state }) {
   });
 }
 
-function scanStripTargets({ contract, testIdFor, statusTestIdFor, states }) {
+function scanStripTargets({
+  contract,
+  testIdFor,
+  statusTestIdFor,
+  states,
+  staticStates = {},
+}) {
   return Object.freeze({
     overlapTestIds: Object.freeze(contract.itemIds.map((id) => testIdFor(id))),
     statusRegions: Object.freeze(
@@ -393,6 +412,14 @@ function scanStripTargets({ contract, testIdFor, statusTestIdFor, states }) {
         Object.freeze({
           testId: statusTestIdFor(id),
           state: states[id],
+        }),
+      ),
+    ),
+    staticStatusRegions: Object.freeze(
+      contract.itemIds.map((id) =>
+        Object.freeze({
+          testId: statusTestIdFor(id),
+          state: staticStates[id] ?? states[id],
         }),
       ),
     ),

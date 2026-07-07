@@ -211,7 +211,7 @@ async function provePlayerFeedbackTrace(bundle) {
       actionId: "submit_vote",
       statusKey: "submit_vote",
       dispatchKind: "submit_vote",
-      refreshKeys: "votecount",
+      refreshKeys: "votecount,commandState",
     }),
     htmlBytes: Buffer.byteLength(html),
   };

@@ -503,6 +503,7 @@ function area(box) {
 
 async function loadRenderCss() {
   const cssFiles = [
+    "frontend/src/lib/styles/tokens.css",
     "frontend/src/lib/styles/app.css",
     "frontend/src/lib/components/host-action/touch-control.css",
     "frontend/src/lib/components/host-action/host-console-critical-path.css",
