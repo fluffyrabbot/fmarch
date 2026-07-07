@@ -678,6 +678,9 @@ function coreLoopSourceTargetFixture() {
       "d05-n05-d05-no-lynch-vote-submitted",
       "d05-n05-d05-resolved-no-lynch",
       "d05-n05-n05-night-controls-return",
+      "d05-n05-n05-complete-game",
+      "d05-n05-n05-completed-host-reload",
+      "d05-n05-n05-completed-player-surface",
     ],
     recoveryHookIds: [
       "staleLockedVoteReject",

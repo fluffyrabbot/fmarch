@@ -69,6 +69,38 @@ const cloneRaceCoverageCell = (cell) => ({
 export const completedGameHardeningSpineCycleId =
   "hardening-completed-game";
 
+const completedGameEndgameFeatureRowDefinitions = Object.freeze([
+  Object.freeze({
+    targetKey: "completedGameHostComplete",
+    featureSlotId: "completed-game-host-complete",
+    role: "host",
+    checkpointId: "n05-complete-game",
+    adminCheckId: "core-loop",
+  }),
+  Object.freeze({
+    targetKey: "completedGameHostReload",
+    featureSlotId: "completed-game-host-reload",
+    role: "host",
+    checkpointId: "n05-completed-host-reload",
+    adminCheckId: "core-loop",
+  }),
+  Object.freeze({
+    targetKey: "completedGamePlayerSurface",
+    featureSlotId: "completed-game-player-surface",
+    role: "actionPlayer",
+    checkpointId: "n05-completed-player-surface",
+    adminCheckId: "core-loop",
+  }),
+]);
+
+const cloneFeatureRow = (row) => ({ ...row });
+
+export function completedGameEndgameFeatureSpineRows({ cycleId }) {
+  return completedGameEndgameFeatureRowDefinitions.map((scenario) =>
+    cloneFeatureRow(featureRowFromCompletedGameEndgameCase(scenario, { cycleId })),
+  );
+}
+
 export function completedGameRecoveryFeatureSpineRow({ cycleId }) {
   return {
     targetKey: "completedGameRecovery",
@@ -77,6 +109,17 @@ export function completedGameRecoveryFeatureSpineRow({ cycleId }) {
     role: "host",
     checkpointId: `${cycleId}-d02-resolved-target-killed`,
     adminCheckId: "completed-game-hardening-coverage",
+  };
+}
+
+function featureRowFromCompletedGameEndgameCase(scenario, { cycleId }) {
+  return {
+    targetKey: scenario.targetKey,
+    featureSlotId: scenario.featureSlotId,
+    cycleId,
+    role: scenario.role,
+    checkpointId: `${cycleId}-${scenario.checkpointId}`,
+    adminCheckId: scenario.adminCheckId,
   };
 }
 

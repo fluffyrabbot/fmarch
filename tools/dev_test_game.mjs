@@ -5307,6 +5307,70 @@ async function verifySeededD02VoteNightTransition({
       roleUrl: true,
       buttons: true,
     });
+    const completeN05 = await confirmHostPhaseAction(hostEntry.page, "complete_game");
+    await hostEntry.page.waitForFunction(
+      () =>
+        window.__fmarchHostProjection?.completed === true &&
+        window.__fmarchHostProjection?.phase?.id === "N05",
+      null,
+      { timeout: 15000 },
+    );
+    const hostAfterCompleteN05 = await hostProjectionSnapshot(hostEntry.page, {
+      roleUrl: true,
+      slots: true,
+    });
+    const hostActionsAfterCompleteN05 = await visibleHostControlActions(
+      hostEntry.page,
+      "roles",
+    );
+    const apiStateAfterCompleteN05 = await fetchHostConsoleState({
+      apiBaseUrl,
+      game: transitionGame,
+    });
+    const hostReloadAfterCompleteN05 = await hostEntry.page.reload({
+      waitUntil: "networkidle",
+    });
+    if (hostReloadAfterCompleteN05 === null || !hostReloadAfterCompleteN05.ok()) {
+      throw new Error(
+        `N05 completed host reload failed with ${
+          hostReloadAfterCompleteN05?.status() ?? "no response"
+        }`,
+      );
+    }
+    await hostEntry.page.getByTestId("host-console-surface").waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
+    await hostEntry.page.waitForFunction(
+      () =>
+        window.__fmarchHostProjection?.completed === true &&
+        window.__fmarchHostProjection?.phase?.id === "N05",
+      null,
+      { timeout: 15000 },
+    );
+    const hostAfterCompleteReloadN05 = await hostProjectionSnapshot(
+      hostEntry.page,
+      {
+        roleUrl: true,
+        slots: true,
+      },
+    );
+    const hostActionsAfterCompleteReloadN05 = await visibleHostControlActions(
+      hostEntry.page,
+      "roles",
+    );
+    await gotoPlayerBoard(actionEntry.page, transitionGame);
+    await actionEntry.page.waitForFunction(
+      () =>
+        window.__fmarchPlayerProjection?.commandState?.gameCompleted === true &&
+        window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "N05",
+      null,
+      { timeout: 15000 },
+    );
+    const completedActionSurface = await playerProjectionSnapshot(actionEntry.page, {
+      roleUrl: true,
+      buttons: true,
+    });
 
     if (
       d04NoLynchVoteSubmission?.state !== "ack" ||
@@ -5326,7 +5390,29 @@ async function verifySeededD02VoteNightTransition({
       d05DayVoteOutcome?.status !== "NoLynch" ||
       advanceN05?.commandStatus?.state !== "ack" ||
       n05ActionSurface.commandState?.phase?.phaseId !== "N05" ||
-      n05ActionSurface.commandState?.actions?.length !== 0
+      n05ActionSurface.commandState?.actions?.length !== 0 ||
+      completeN05?.commandStatus?.state !== "ack" ||
+      completeN05?.commandStatus?.requestEnvelope?.body?.body?.command
+        ?.CompleteGame?.game !== transitionGame ||
+      hostAfterCompleteN05.completed !== true ||
+      hostAfterCompleteN05.phase?.id !== "N05" ||
+      hostAfterCompleteN05.slots?.some(
+        (slot) => slot.role_revealed !== true || slot.alignment_revealed !== true,
+      ) ||
+      hostActionsAfterCompleteN05.includes("complete_game") ||
+      apiStateAfterCompleteN05?.completed !== true ||
+      hostReloadAfterCompleteN05.status() !== 200 ||
+      hostAfterCompleteReloadN05.completed !== true ||
+      hostAfterCompleteReloadN05.phase?.id !== "N05" ||
+      hostAfterCompleteReloadN05.slots?.some(
+        (slot) => slot.role_revealed !== true || slot.alignment_revealed !== true,
+      ) ||
+      hostActionsAfterCompleteReloadN05.includes("complete_game") ||
+      completedActionSurface.commandState?.gameCompleted !== true ||
+      completedActionSurface.commandState?.phase?.phaseId !== "N05" ||
+      completedActionSurface.commandState?.actions?.length !== 0 ||
+      completedActionSurface.commandState?.voteTargets?.length !== 0 ||
+      completedActionSurface.buttons?.some((button) => button.disabled !== true)
     ) {
       throw new Error(
         `late core-loop progression drifted: ${JSON.stringify({
@@ -5346,6 +5432,14 @@ async function verifySeededD02VoteNightTransition({
           d05DayVoteOutcome,
           advanceN05,
           n05ActionSurface,
+          completeN05,
+          hostAfterCompleteN05,
+          hostActionsAfterCompleteN05,
+          apiStateAfterCompleteN05,
+          hostReloadAfterCompleteN05Status: hostReloadAfterCompleteN05.status(),
+          hostAfterCompleteReloadN05,
+          hostActionsAfterCompleteReloadN05,
+          completedActionSurface,
         })}`,
       );
     }
@@ -5502,8 +5596,19 @@ async function verifySeededD02VoteNightTransition({
       d05DayVoteOutcome,
       advanceN05,
       n05ActionSurface,
+      completeN05,
+      hostAfterCompleteN05,
+      hostActionsAfterCompleteN05,
+      apiStateAfterCompleteN05,
+      hostReloadAfterCompleteN05: {
+        status: hostReloadAfterCompleteN05.status(),
+        ok: hostReloadAfterCompleteN05.ok(),
+      },
+      hostAfterCompleteReloadN05,
+      hostActionsAfterCompleteReloadN05,
+      completedActionSurface,
       proof:
-        "A disposable seeded local game reached open D02 through real phase commands, the Slot 4 mafia-goon role URL submitted the deciding day vote, the host role URL resolved D02 into a day-vote kill with the target-only receipt, advanced to open N02 where the living mafia-goon role URL regained factional_kill while the normal player role URL did not, then the mafia-goon role URL submitted the N02 factional_kill, the host role URL resolved it, and the same role URLs advanced to open D03 day controls before Slot 7 submitted a D03 vote for Slot 4, host resolution recorded NoMajority and issued the D03 revote host prompt, host AdvancePhase rejected InvalidTarget instead of inventing a Night 3, the host role URL reloaded to the same locked D03 NoMajority recovery truth, resolving the revote prompt with the explicit continue-revote policy advanced the same host and player role URLs into open D03R1 controls, the action-player role URL submitted a no-lynch revote ballot whose API tally was keyed to D03R1 while the old D03 slot tally stayed separate, the host role URL resolved D03R1 back to locked NoMajority with a fresh pending D03R1 revote prompt, resolving that prompt with the explicit continue-revote policy advanced the same host and player role URLs into open D03R2 controls, then the action-player role URL submitted and the host role URL resolved a D03R2 no-lynch ballot with D03, D03R1, and D03R2 tallies kept separate before the host chose the explicit no-lynch policy and advanced the same host/player role URLs into open N03, while a frozen stale continue-revote host policy button rejected PromptAlreadyResolved and reloaded to open N03 controls; the same live role URLs then submitted and resolved the real N03 factional_kill, killed the projected target, and advanced to open D04 day controls. The D04 action-player role URL then submitted no-lynch, the host role URL resolved and advanced into open N04 with no legal action available, host resolution advanced the same game into open D05 controls, and the D05 action-player no-lynch plus host resolution advanced into open N05 with no legal action remaining.",
+        "A disposable seeded local game reached open D02 through real phase commands, the Slot 4 mafia-goon role URL submitted the deciding day vote, the host role URL resolved D02 into a day-vote kill with the target-only receipt, advanced to open N02 where the living mafia-goon role URL regained factional_kill while the normal player role URL did not, then the mafia-goon role URL submitted the N02 factional_kill, the host role URL resolved it, and the same role URLs advanced to open D03 day controls before Slot 7 submitted a D03 vote for Slot 4, host resolution recorded NoMajority and issued the D03 revote host prompt, host AdvancePhase rejected InvalidTarget instead of inventing a Night 3, the host role URL reloaded to the same locked D03 NoMajority recovery truth, resolving the revote prompt with the explicit continue-revote policy advanced the same host and player role URLs into open D03R1 controls, the action-player role URL submitted a no-lynch revote ballot whose API tally was keyed to D03R1 while the old D03 slot tally stayed separate, the host role URL resolved D03R1 back to locked NoMajority with a fresh pending D03R1 revote prompt, resolving that prompt with the explicit continue-revote policy advanced the same host and player role URLs into open D03R2 controls, then the action-player role URL submitted and the host role URL resolved a D03R2 no-lynch ballot with D03, D03R1, and D03R2 tallies kept separate before the host chose the explicit no-lynch policy and advanced the same host/player role URLs into open N03, while a frozen stale continue-revote host policy button rejected PromptAlreadyResolved and reloaded to open N03 controls; the same live role URLs then submitted and resolved the real N03 factional_kill, killed the projected target, and advanced to open D04 day controls. The D04 action-player role URL then submitted no-lynch, the host role URL resolved and advanced into open N04 with no legal action available, host resolution advanced the same game into open D05 controls, the D05 action-player no-lynch plus host resolution advanced into open N05 with no legal action remaining, and the same host/action-player role URLs completed the game with revealed endgame state and disabled player controls.",
     };
   } finally {
     await hostEntry.context.close().catch(() => {});
@@ -24352,6 +24457,9 @@ async function hostProjectionSnapshot(
 ) {
   const snapshot = {
     phase: await page.evaluate(() => window.__fmarchHostProjection?.phase),
+    completed: await page.evaluate(
+      () => window.__fmarchHostProjection?.completed ?? false,
+    ),
   };
   if (roleUrl) {
     snapshot.roleUrl = page.url();

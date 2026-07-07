@@ -36,6 +36,7 @@ import {
   completedGameEndgameScenarioCaseFamilyDefinitions,
   completedGameEndgameScenarioCaseFamilyEntries,
   completedGameEndgameScenarioCaseFamilyIds,
+  completedGameEndgameFeatureSpineRows,
   completedGameEndgameSurfaceAssertionCases,
   completedGameEndgameTransition,
   completedGameHardeningLaneCase,
@@ -1252,6 +1253,35 @@ test("completed-game scenario module derives shared assertion cases", () => {
       })),
     ],
   );
+});
+
+test("completed-game scenario module derives terminal feature-spine rows", () => {
+  assert.deepEqual(completedGameEndgameFeatureSpineRows({ cycleId: "d05-n05" }), [
+    {
+      targetKey: "completedGameHostComplete",
+      featureSlotId: "completed-game-host-complete",
+      cycleId: "d05-n05",
+      role: "host",
+      checkpointId: "d05-n05-n05-complete-game",
+      adminCheckId: "core-loop",
+    },
+    {
+      targetKey: "completedGameHostReload",
+      featureSlotId: "completed-game-host-reload",
+      cycleId: "d05-n05",
+      role: "host",
+      checkpointId: "d05-n05-n05-completed-host-reload",
+      adminCheckId: "core-loop",
+    },
+    {
+      targetKey: "completedGamePlayerSurface",
+      featureSlotId: "completed-game-player-surface",
+      cycleId: "d05-n05",
+      role: "actionPlayer",
+      checkpointId: "d05-n05-n05-completed-player-surface",
+      adminCheckId: "core-loop",
+    },
+  ]);
 });
 
 test("completed-game scenario module derives stale host and dead-player assertion cases", () => {

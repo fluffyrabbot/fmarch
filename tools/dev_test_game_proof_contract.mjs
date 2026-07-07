@@ -7882,6 +7882,59 @@ function buildCoreLoopSpineSummary({ session, verification }) {
         ),
         actionCount: d02VoteNight.n05ActionSurface?.commandState?.actions?.length ?? null,
       },
+      {
+        id: "n05-complete-game",
+        completeState: d02VoteNight.completeN05?.commandStatus?.state ?? null,
+        phase: d02VoteNight.hostAfterCompleteN05?.phase?.id ?? null,
+        completed: d02VoteNight.hostAfterCompleteN05?.completed ?? null,
+        revealedSlotCount:
+          d02VoteNight.hostAfterCompleteN05?.slots?.filter(
+            (slot) =>
+              slot.role_revealed === true && slot.alignment_revealed === true,
+          ).length ?? null,
+        completeActionVisible:
+          d02VoteNight.hostActionsAfterCompleteN05?.includes("complete_game") ??
+          null,
+        apiCompleted: d02VoteNight.apiStateAfterCompleteN05?.completed ?? null,
+      },
+      {
+        id: "n05-completed-host-reload",
+        routeStatus: d02VoteNight.hostReloadAfterCompleteN05?.status ?? null,
+        phase: d02VoteNight.hostAfterCompleteReloadN05?.phase?.id ?? null,
+        completed: d02VoteNight.hostAfterCompleteReloadN05?.completed ?? null,
+        revealedSlotCount:
+          d02VoteNight.hostAfterCompleteReloadN05?.slots?.filter(
+            (slot) =>
+              slot.role_revealed === true && slot.alignment_revealed === true,
+          ).length ?? null,
+        completeActionVisible:
+          d02VoteNight.hostActionsAfterCompleteReloadN05?.includes(
+            "complete_game",
+          ) ?? null,
+      },
+      {
+        id: "n05-completed-player-surface",
+        phase:
+          d02VoteNight.completedActionSurface?.commandState?.phase?.phaseId ??
+          null,
+        completed:
+          d02VoteNight.completedActionSurface?.commandState?.gameCompleted ??
+          null,
+        actionSubmitControls: countButtonsWithPrefix(
+          d02VoteNight.completedActionSurface?.buttons,
+          "submit_action",
+        ),
+        actionVoteControls: countButtonsWithPrefix(
+          d02VoteNight.completedActionSurface?.buttons,
+          "submit_vote",
+        ),
+        actionCount:
+          d02VoteNight.completedActionSurface?.commandState?.actions?.length ??
+          null,
+        voteTargetCount:
+          d02VoteNight.completedActionSurface?.commandState?.voteTargets
+            ?.length ?? null,
+      },
     ],
   });
   const recoveryHooks = {
@@ -8233,6 +8286,26 @@ function buildCoreLoopSpineSummary({ session, verification }) {
     cycles[6]?.checkpoints?.[2]?.actionSubmitControls === 0 &&
     cycles[6]?.checkpoints?.[2]?.actionVoteControls === 0 &&
     cycles[6]?.checkpoints?.[2]?.actionCount === 0 &&
+    cycles[6]?.checkpoints?.[3]?.id === "n05-complete-game" &&
+    cycles[6]?.checkpoints?.[3]?.completeState === "ack" &&
+    cycles[6]?.checkpoints?.[3]?.phase === "N05" &&
+    cycles[6]?.checkpoints?.[3]?.completed === true &&
+    cycles[6]?.checkpoints?.[3]?.revealedSlotCount > 0 &&
+    cycles[6]?.checkpoints?.[3]?.completeActionVisible === false &&
+    cycles[6]?.checkpoints?.[3]?.apiCompleted === true &&
+    cycles[6]?.checkpoints?.[4]?.id === "n05-completed-host-reload" &&
+    cycles[6]?.checkpoints?.[4]?.routeStatus === 200 &&
+    cycles[6]?.checkpoints?.[4]?.phase === "N05" &&
+    cycles[6]?.checkpoints?.[4]?.completed === true &&
+    cycles[6]?.checkpoints?.[4]?.revealedSlotCount > 0 &&
+    cycles[6]?.checkpoints?.[4]?.completeActionVisible === false &&
+    cycles[6]?.checkpoints?.[5]?.id === "n05-completed-player-surface" &&
+    cycles[6]?.checkpoints?.[5]?.phase === "N05" &&
+    cycles[6]?.checkpoints?.[5]?.completed === true &&
+    cycles[6]?.checkpoints?.[5]?.actionSubmitControls === 0 &&
+    cycles[6]?.checkpoints?.[5]?.actionVoteControls === 0 &&
+    cycles[6]?.checkpoints?.[5]?.actionCount === 0 &&
+    cycles[6]?.checkpoints?.[5]?.voteTargetCount === 0 &&
     recoveryHooks.staleLockedVoteReject === "PhaseLocked" &&
     recoveryHooks.invalidActionReject === "InvalidTarget" &&
     recoveryHooks.normalPlayerDirectActionReject === "InvalidTarget" &&
@@ -8243,7 +8316,7 @@ function buildCoreLoopSpineSummary({ session, verification }) {
   return {
     status: passed ? "passed" : "failed",
     proof:
-      "Compact derived spine map for the seeded role URL core loop: D01 resolve to N01 action, N01 resolution to D02 day controls, D02 vote resolution, N02 action return, N02 action submission/resolution, D03 day controls, D03 NoMajority AdvancePhase InvalidTarget recovery, host role URL reload back to locked D03 NoMajority truth, host continue-revote policy resolution into open D03R1 controls, a D03R1 no-lynch revote ballot keyed separately from the stale D03 tally, host resolution of D03R1 back to locked NoMajority with a fresh pending revote prompt, second continue-revote policy resolution into open D03R2 controls, D03R2 no-lynch vote submission/resolution with prior revote tallies kept separate, explicit host no-lynch policy resolution into open N03 controls, stale continue-revote policy recovery back to open N03, real N03 action submission/resolution into open D04 day controls, D04 no-lynch resolution into open N04 with no legal action, N04 host resolution into open D05 controls, and D05 no-lynch resolution into open N05 with no legal action remaining.",
+      "Compact derived spine map for the seeded role URL core loop: D01 resolve to N01 action, N01 resolution to D02 day controls, D02 vote resolution, N02 action return, N02 action submission/resolution, D03 day controls, D03 NoMajority AdvancePhase InvalidTarget recovery, host role URL reload back to locked D03 NoMajority truth, host continue-revote policy resolution into open D03R1 controls, a D03R1 no-lynch revote ballot keyed separately from the stale D03 tally, host resolution of D03R1 back to locked NoMajority with a fresh pending revote prompt, second continue-revote policy resolution into open D03R2 controls, D03R2 no-lynch vote submission/resolution with prior revote tallies kept separate, explicit host no-lynch policy resolution into open N03 controls, stale continue-revote policy recovery back to open N03, real N03 action submission/resolution into open D04 day controls, D04 no-lynch resolution into open N04 with no legal action, N04 host resolution into open D05 controls, D05 no-lynch resolution into open N05 with no legal action remaining, and same-game host CompleteGame plus host/player completed-surface reload closure.",
     sourceLaneIds: [...coreLoopPhaseProgressionSpineSourceLaneIds],
     cycles,
     recoveryHooks,
@@ -8282,7 +8355,7 @@ function assertCoreLoopSpineSummary(summary) {
           : cycle.id === "d04-n04-d05"
             ? cycle.checkpoints.length !== 5
             : cycle.id === "d05-n05"
-              ? cycle.checkpoints.length !== 3
+              ? cycle.checkpoints.length !== 6
               : cycle.checkpoints.length !== 4)
     ) {
       throw new Error(`core loop spine cycle malformed: ${JSON.stringify(cycle)}`);

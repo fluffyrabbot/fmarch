@@ -13,6 +13,7 @@ import {
   hostPhaseControlFeatureSpineRow,
 } from "./dev_test_game_core_loop_host_control_scenarios.mjs";
 import {
+  completedGameEndgameFeatureSpineRows,
   completedGameRecoveryFeatureSpineRow,
 } from "./dev_test_game_core_loop_completed_terminal_scenario_assertions.mjs";
 import {
@@ -84,6 +85,7 @@ const dayOneNightOneDayTwo =
 const nightTwoDayThree = coreLoopFeatureSpineCycleIds.nightTwoDayThree;
 const dayThreeNightThree = coreLoopFeatureSpineCycleIds.dayThreeNightThree;
 const nightThreeDayFour = coreLoopFeatureSpineCycleIds.nightThreeDayFour;
+const dayFiveNightFive = coreLoopFeatureSpineCycleIds.dayFiveNightFive;
 const dayTwoNightTwoSpineRows = dayTwoNightTwoFeatureSpineRows({
   cycleId: dayTwoNightTwo,
 });
@@ -104,6 +106,7 @@ const coreLoopFeatureSpineLaneRows = Object.freeze([
   ...nightThreeProgressionFeatureSpineRows({ cycleId: nightThreeDayFour }),
   ...lateActionProgressionFeatureSpineRows(),
   ...dayFiveProgressionFeatureSpineRows(),
+  ...completedGameEndgameFeatureSpineRows({ cycleId: dayFiveNightFive }),
   Object.freeze(
     invalidActionRecoveryFeatureSpineRow({ cycleId: dayTwoNightTwo }),
   ),

@@ -10563,6 +10563,69 @@ test("session card and markdown include role credential URLs and tokens", async 
           },
           buttons: [],
         },
+        completeN05: {
+          commandStatus: {
+            state: "ack",
+            requestEnvelope: {
+              body: {
+                body: {
+                  command: {
+                    CompleteGame: { game },
+                  },
+                },
+              },
+            },
+          },
+        },
+        hostAfterCompleteN05: {
+          phase: { id: "N05", locked: false },
+          completed: true,
+          slots: [
+            {
+              slot_id: "slot-1",
+              role_revealed: true,
+              alignment_revealed: true,
+            },
+            {
+              slot_id: "slot-4",
+              role_revealed: true,
+              alignment_revealed: true,
+            },
+          ],
+        },
+        hostActionsAfterCompleteN05: [],
+        apiStateAfterCompleteN05: {
+          completed: true,
+        },
+        hostReloadAfterCompleteN05: {
+          status: 200,
+        },
+        hostAfterCompleteReloadN05: {
+          phase: { id: "N05", locked: false },
+          completed: true,
+          slots: [
+            {
+              slot_id: "slot-1",
+              role_revealed: true,
+              alignment_revealed: true,
+            },
+            {
+              slot_id: "slot-4",
+              role_revealed: true,
+              alignment_revealed: true,
+            },
+          ],
+        },
+        hostActionsAfterCompleteReloadN05: [],
+        completedActionSurface: {
+          commandState: {
+            gameCompleted: true,
+            phase: { phaseId: "N05", locked: false },
+            actions: [],
+            voteTargets: [],
+          },
+          buttons: [],
+        },
       },
       staleActionConflict: {
         reject: { error: "PhaseLocked" },
@@ -20055,6 +20118,9 @@ function coreLoopAdminProofFixture() {
           "d05-n05-d05-no-lynch-vote-submitted",
           "d05-n05-d05-resolved-no-lynch",
           "d05-n05-n05-night-controls-return",
+          "d05-n05-n05-complete-game",
+          "d05-n05-n05-completed-host-reload",
+          "d05-n05-n05-completed-player-surface",
         ],
         recoveryHooks: [
           "staleLockedVoteReject",
@@ -20159,6 +20225,9 @@ function coreLoopAdminProofFixture() {
         "d05-n05-d05-no-lynch-vote-submitted",
         "d05-n05-d05-resolved-no-lynch",
         "d05-n05-n05-night-controls-return",
+        "d05-n05-n05-complete-game",
+        "d05-n05-n05-completed-host-reload",
+        "d05-n05-n05-completed-player-surface",
       ],
       visibleSpineRecoveryHooks: [
         "staleLockedVoteReject",
@@ -22445,6 +22514,9 @@ function coreLoopSpineTargetsFixture() {
       "d05-n05-d05-no-lynch-vote-submitted",
       "d05-n05-d05-resolved-no-lynch",
       "d05-n05-n05-night-controls-return",
+      "d05-n05-n05-complete-game",
+      "d05-n05-n05-completed-host-reload",
+      "d05-n05-n05-completed-player-surface",
     ],
     recoveryHookIds: [
       "staleLockedVoteReject",

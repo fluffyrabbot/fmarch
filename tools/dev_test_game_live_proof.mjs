@@ -508,6 +508,32 @@ assert.equal(proofRunSpineSeventhCycle.checkpoints[2].locked, false);
 assert.equal(proofRunSpineSeventhCycle.checkpoints[2].actionSubmitControls, 0);
 assert.equal(proofRunSpineSeventhCycle.checkpoints[2].actionVoteControls, 0);
 assert.equal(proofRunSpineSeventhCycle.checkpoints[2].actionCount, 0);
+assert.equal(proofRunSpineSeventhCycle.checkpoints[3].id, "n05-complete-game");
+assert.equal(proofRunSpineSeventhCycle.checkpoints[3].completeState, "ack");
+assert.equal(proofRunSpineSeventhCycle.checkpoints[3].phase, "N05");
+assert.equal(proofRunSpineSeventhCycle.checkpoints[3].completed, true);
+assert.equal(proofRunSpineSeventhCycle.checkpoints[3].revealedSlotCount > 0, true);
+assert.equal(proofRunSpineSeventhCycle.checkpoints[3].completeActionVisible, false);
+assert.equal(proofRunSpineSeventhCycle.checkpoints[3].apiCompleted, true);
+assert.equal(
+  proofRunSpineSeventhCycle.checkpoints[4].id,
+  "n05-completed-host-reload",
+);
+assert.equal(proofRunSpineSeventhCycle.checkpoints[4].routeStatus, 200);
+assert.equal(proofRunSpineSeventhCycle.checkpoints[4].phase, "N05");
+assert.equal(proofRunSpineSeventhCycle.checkpoints[4].completed, true);
+assert.equal(proofRunSpineSeventhCycle.checkpoints[4].revealedSlotCount > 0, true);
+assert.equal(proofRunSpineSeventhCycle.checkpoints[4].completeActionVisible, false);
+assert.equal(
+  proofRunSpineSeventhCycle.checkpoints[5].id,
+  "n05-completed-player-surface",
+);
+assert.equal(proofRunSpineSeventhCycle.checkpoints[5].phase, "N05");
+assert.equal(proofRunSpineSeventhCycle.checkpoints[5].completed, true);
+assert.equal(proofRunSpineSeventhCycle.checkpoints[5].actionSubmitControls, 0);
+assert.equal(proofRunSpineSeventhCycle.checkpoints[5].actionVoteControls, 0);
+assert.equal(proofRunSpineSeventhCycle.checkpoints[5].actionCount, 0);
+assert.equal(proofRunSpineSeventhCycle.checkpoints[5].voteTargetCount, 0);
 assert.equal(proofRun.coreLoopSpine.recoveryHooks.staleLockedVoteReject, "PhaseLocked");
 assert.equal(proofRun.coreLoopSpine.recoveryHooks.invalidActionReject, "InvalidTarget");
 assert.equal(
