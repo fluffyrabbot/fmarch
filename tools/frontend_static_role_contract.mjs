@@ -1564,6 +1564,7 @@ async function provePlayerSurface() {
     actorStatus: "",
     label: "Posting target",
     value: "Main thread as slot-7",
+    audienceLabel: "Everyone at the table reads this",
   });
   assert.equal(commandPanel.deadline.testId, "player-votecount-deadline");
   assert.equal(commandPanel.deadline.value, data.phase.deadlineLabel);

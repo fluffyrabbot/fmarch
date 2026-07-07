@@ -128,7 +128,7 @@ function assertPostDayVoteAdvanceSurfaceProof({
       "principal-scoped-private-projections" ||
     proof.privateQueueBoundary.count !== (surfaceCase.privateReceipt ? 1 : 0) ||
     !String(proof.privateQueueBoundary.text ?? "").includes(
-      "principal-scoped endpoints",
+      "delivered to you alone",
     ) ||
     proof.projectionCommandState?.actorSlot !== surfaceCase.expectedSlot ||
     proof.projectionCommandState?.actorAlive !== surfaceCase.actorAlive ||

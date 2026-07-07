@@ -12,7 +12,7 @@ export function buildPrivateQueueBoundary({
   return Object.freeze({
     status: PLAYER_PRIVATE_QUEUE_CONTRACT.boundaryStatus,
     detail:
-      "Notifications and investigation results are loaded from principal-scoped endpoints only.",
+      "Night results and notices are delivered to you alone.",
     count: notifications.length + investigationResults.length,
   });
 }
@@ -27,7 +27,7 @@ export function buildPrivateQueue({ notifications = [], investigationResults = [
         value: notification.status ?? notification.phase_id ?? "Available",
         detail:
           notification.phase_id === undefined
-            ? "Principal-scoped notification"
+            ? "Sent only to you"
             : `Phase ${notification.phase_id}`,
         buttonLabel: "Review",
       }),
@@ -44,7 +44,7 @@ export function buildPrivateQueue({ notifications = [], investigationResults = [
             : `Result for ${result.target_slot}`),
         detail:
           result.target_slot === undefined
-            ? "Private investigation result"
+            ? "Sent only to you"
             : `Target ${result.target_slot}`,
         buttonLabel: "Review",
       }),

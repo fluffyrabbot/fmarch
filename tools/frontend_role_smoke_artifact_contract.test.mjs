@@ -757,6 +757,7 @@ test("static role contract artifact records shared nav focus and route state mat
     actorStatus: "",
     label: "Posting target",
     value: "Main thread as slot-7",
+    audienceLabel: "Everyone at the table reads this",
   });
   assert.deepEqual(playerStaticRole.commandReceipt, {
     component: "player-command-receipt",

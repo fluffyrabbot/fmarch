@@ -13177,7 +13177,7 @@ async function verifyReplacementStalePrivateReceipts({
     rowanProjection.actionResultVisible !== false ||
     rowanQueue.count !== 0 ||
     rowanQueue.emptyVisible !== true ||
-    !rowanQueue.boundary.includes("principal-scoped endpoints") ||
+    !rowanQueue.boundary.includes("delivered to you alone") ||
     staleRouteStillForbidden !== true
   ) {
     throw new Error(

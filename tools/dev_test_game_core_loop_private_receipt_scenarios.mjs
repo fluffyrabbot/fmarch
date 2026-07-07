@@ -330,7 +330,7 @@ export function assertPrivateChannelRoleSurfaceProof({
       privateQueueBoundaryStatus ||
     privateChannelRoleSurface.privateQueueBoundary?.count < 1 ||
     !String(privateChannelRoleSurface.privateQueueBoundary?.text ?? "").includes(
-      "principal-scoped endpoints",
+      "delivered to you alone",
     ) ||
     privateChannelRoleSurface.expandedPrivateItem?.id !== "notification-1" ||
     privateChannelRoleSurface.expandedPrivateItem?.detailTestId !==
@@ -1150,7 +1150,7 @@ export function assertPrivateReceiptRoleSurfaceCase({
     proof.privateQueueBoundary?.status !== expectedPrivateQueueBoundaryStatus ||
     proof.privateQueueBoundary.count !== expectedPrivateCount ||
     !String(proof.privateQueueBoundary.text ?? "").includes(
-      "principal-scoped endpoints",
+      "delivered to you alone",
     ) ||
     proof.projectionCommandState?.actorSlot !== expectedSlot ||
     proof.projectionCommandState?.actorAlive !== expectedActorAlive ||
@@ -1259,7 +1259,7 @@ export function assertDayThreePlayerObservationProofCase({
     proof.privateQueueBoundary?.status !== privateQueueBoundaryStatus ||
     proof.privateQueueBoundary.count !== expectedPrivateCount ||
     !String(proof.privateQueueBoundary.text ?? "").includes(
-      "principal-scoped endpoints",
+      "delivered to you alone",
     ) ||
     proof.projectionCommandState?.actorSlot !== expectedSlot ||
     proof.projectionCommandState?.actorAlive !== expectedActorAlive ||
@@ -1363,7 +1363,7 @@ export function assertPostDayThreePlayerSurfaceProofCase({
     proof.privateQueueBoundary?.status !== privateQueueBoundaryStatus ||
     proof.privateQueueBoundary.count !== expectedPrivateCount ||
     !String(proof.privateQueueBoundary.text ?? "").includes(
-      "principal-scoped endpoints",
+      "delivered to you alone",
     ) ||
     proof.voteButtonCount !== expectedVoteButtonCount ||
     proof.projectionCommandState?.actorSlot !== expectedSlot ||

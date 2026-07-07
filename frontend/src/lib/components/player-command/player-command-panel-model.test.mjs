@@ -61,6 +61,7 @@ test("player command panel model exposes tablet touch command contracts", () => 
     actorStatus: "",
     label: "Posting target",
     value: "Role PM as slot-7",
+    audienceLabel: "Only this channel's members read this",
   });
   assert.deepEqual(view.deadline, {
     testId: "player-votecount-deadline",
@@ -168,6 +169,7 @@ test("player command panel model disables command controls for dead actors", () 
     actorStatus: "dead",
     label: "Posting target",
     value: "Main thread as slot-2 (dead)",
+    audienceLabel: "Everyone at the table reads this",
   });
   assert.deepEqual(
     view.composer.buttons.map((button) => [button.action, button.disabled]),
@@ -309,6 +311,7 @@ test("player command panel model surfaces replaced slot recovery context", () =>
     actorStatus: "replaced",
     label: "Posting target",
     value: "Main thread as slot-7 (replaced)",
+    audienceLabel: "Everyone at the table reads this",
   });
   assert.deepEqual(
     view.composer.buttons.map((button) => [button.action, button.disabled]),
@@ -337,6 +340,7 @@ test("player command panel model normalizes missing row and label data", () => {
     actorStatus: "",
     label: "Posting target",
     value: "Main thread as slot",
+    audienceLabel: "Everyone at the table reads this",
   });
   assert.deepEqual(view.deadline, {
     testId: "player-votecount-deadline",

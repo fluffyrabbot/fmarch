@@ -102,7 +102,7 @@ function postDayVoteAdvanceProofFixture({ game, surfaceCase }) {
     privateQueueBoundary: {
       status: "principal-scoped-private-projections",
       count: surfaceCase.privateReceipt ? 1 : 0,
-      text: "principal-scoped endpoints",
+      text: "delivered to you alone",
     },
     projectionCommandState: {
       actorSlot: surfaceCase.expectedSlot,

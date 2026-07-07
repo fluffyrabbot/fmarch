@@ -58,7 +58,7 @@
     >
       <span>{view.composer.channelContext.label}</span>
       <strong>{view.composer.channelContext.value}</strong>
-      <small>{view.composer.channelContext.capabilityLabel}</small>
+      <small>{view.composer.channelContext.audienceLabel}</small>
     </div>
     <div
       class="player-command-panel__current-vote fm-well"

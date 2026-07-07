@@ -98,6 +98,10 @@ function buildChannelContextViewModel({ channel = {}, player = {} }) {
     actorStatus,
     label: "Posting target",
     value: `${channelLabel} as ${slotId}${lifecycleSuffix}`,
+    audienceLabel:
+      channelId === "main"
+        ? "Everyone at the table reads this"
+        : "Only this channel's members read this",
   });
 }
 

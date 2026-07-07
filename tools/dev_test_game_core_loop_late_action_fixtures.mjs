@@ -407,7 +407,7 @@ function nightFourResolutionPlayerSurfaceFixture({
       status: "principal-scoped-private-projections",
       count: privateCount,
       text:
-        "Notifications and investigation results are loaded from principal-scoped endpoints only.",
+        "Night results and notices are delivered to you alone.",
     },
     voteButtonCount: 0,
     projectionCommandState: {

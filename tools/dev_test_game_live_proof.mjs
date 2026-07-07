@@ -2612,7 +2612,7 @@ assert.equal(
 );
 assert.match(
   session.verification.replacementConsole.stalePrivateReceipts.rowanQueue.boundary,
-  /principal-scoped endpoints/,
+  /delivered to you alone/,
 );
 assert.equal(
   session.verification.replacementConsole.stalePrivateReceipts

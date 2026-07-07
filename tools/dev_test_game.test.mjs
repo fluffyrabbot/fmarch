@@ -10698,7 +10698,7 @@ test("session card and markdown include role credential URLs and tokens", async 
         actorSlot: "slot-2",
         actorAlive: "false",
         actorStatus: "dead",
-        text: "Posting target Main thread as slot-2 (dead)",
+        text: "Posting target Main thread as slot-2 (dead) Everyone at the table reads this",
       },
       disabledControls: {
         vote: { exists: false, disabled: true, reason: "control absent", text: "" },
@@ -11693,7 +11693,7 @@ test("session card and markdown include role credential URLs and tokens", async 
           count: 0,
           emptyVisible: true,
           boundary:
-            "Notifications and investigation results are loaded from principal-scoped endpoints only.",
+            "Night results and notices are delivered to you alone.",
         },
         staleRouteStillForbidden: true,
       },
@@ -20733,7 +20733,7 @@ function targetResolutionReceiptSurfaceFixture() {
       status: "principal-scoped-private-projections",
       count: 1,
       text:
-        "Notifications and investigation results are loaded from principal-scoped endpoints only.",
+        "Night results and notices are delivered to you alone.",
     },
     privateNotice: {
       id: "notification-1",
@@ -20800,7 +20800,7 @@ function normalResolutionPrivacySurfaceFixture() {
       status: "principal-scoped-private-projections",
       count: 0,
       text:
-        "Notifications and investigation results are loaded from principal-scoped endpoints only.",
+        "Night results and notices are delivered to you alone.",
     },
     privateEmptyText: "No private results visible to this session.",
     targetReceiptVisible: false,
@@ -20857,7 +20857,7 @@ function targetDayVoteReceiptSurfaceFixture() {
       status: "principal-scoped-private-projections",
       count: 1,
       text:
-        "Notifications and investigation results are loaded from principal-scoped endpoints only.",
+        "Night results and notices are delivered to you alone.",
     },
     privateNotice: {
       id: "notification-1",
@@ -20928,7 +20928,7 @@ function normalDayVotePrivacySurfaceFixture() {
       status: "principal-scoped-private-projections",
       count: 0,
       text:
-        "Notifications and investigation results are loaded from principal-scoped endpoints only.",
+        "Night results and notices are delivered to you alone.",
     },
     privateEmptyText: "No private results visible to this session.",
     targetReceiptVisible: false,
@@ -20985,7 +20985,7 @@ function targetPostDayVoteAdvanceSurfaceFixture() {
       status: "principal-scoped-private-projections",
       count: 1,
       text:
-        "Notifications and investigation results are loaded from principal-scoped endpoints only.",
+        "Night results and notices are delivered to you alone.",
     },
     privateNotice: {
       id: "notification-1",
@@ -21059,7 +21059,7 @@ function normalPostDayVoteAdvanceSurfaceFixture() {
       status: "principal-scoped-private-projections",
       count: 0,
       text:
-        "Notifications and investigation results are loaded from principal-scoped endpoints only.",
+        "Night results and notices are delivered to you alone.",
     },
     privateEmptyText: "No private results visible to this session.",
     targetReceiptVisible: false,
@@ -21119,7 +21119,7 @@ function nightActionResolutionReceiptSurfaceFixture() {
       status: "principal-scoped-private-projections",
       count: 1,
       text:
-        "Notifications and investigation results are loaded from principal-scoped endpoints only.",
+        "Night results and notices are delivered to you alone.",
     },
     privateNotice: {
       id: "notification-1",
@@ -21193,7 +21193,7 @@ function normalNightActionResolutionPrivacySurfaceFixture() {
       status: "principal-scoped-private-projections",
       count: 0,
       text:
-        "Notifications and investigation results are loaded from principal-scoped endpoints only.",
+        "Night results and notices are delivered to you alone.",
     },
     privateEmptyText: "No private results visible to this session.",
     targetReceiptVisible: false,
@@ -21639,7 +21639,7 @@ function dayThreeObservationFixture({
       status: "principal-scoped-private-projections",
       count: privateCount,
       text:
-        "Notifications and investigation results are loaded from principal-scoped endpoints only.",
+        "Night results and notices are delivered to you alone.",
     },
     projectionCommandState: {
       actorSlot: slot,
@@ -21987,7 +21987,7 @@ function privateChannelRoleSurfaceFixture() {
       status: "principal-scoped-private-projections",
       count: 2,
       text:
-        "Notifications and investigation results are loaded from principal-scoped endpoints only.",
+        "Night results and notices are delivered to you alone.",
     },
     expandedPrivateItem: {
       id: "notification-1",

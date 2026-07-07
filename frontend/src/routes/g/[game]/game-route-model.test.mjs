@@ -524,7 +524,7 @@ test("player route data uses REST projection cold-loads when available", async (
       kind: "notification",
       label: "Neighborized",
       value: "Delivered",
-      detail: "Principal-scoped notification",
+      detail: "Sent only to you",
       buttonLabel: "Review",
       reviewHref: "/g/midsummer?private=notification-1",
     },
@@ -574,7 +574,7 @@ test("player private queue helpers derive visible queue from scoped projections"
   assert.deepEqual(buildPrivateQueueBoundary(snapshot), {
     status: "principal-scoped-private-projections",
     detail:
-      "Notifications and investigation results are loaded from principal-scoped endpoints only.",
+      "Night results and notices are delivered to you alone.",
     count: 2,
   });
   assert.deepEqual(buildPrivateQueue(snapshot), [

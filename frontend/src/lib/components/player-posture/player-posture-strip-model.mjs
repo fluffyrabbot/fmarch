@@ -31,40 +31,45 @@ export function buildPlayerPostureStripViewModel({
         id: "channel",
         label: "Channel",
         value: channel.label ?? "Unknown channel",
-        detail: channel.capabilityLabel ?? "No scoped channel capability",
+        detail: channel.allowed === false ? "Not open to your seat" : "Open to your seat",
+        evidence: channel.capabilityLabel ?? null,
         status: channelStatus(channel),
       }),
       postureItem({
         id: "thread",
         label: "Thread",
         value: threadPager.hasOlder === true ? "Older posts available" : "At oldest loaded post",
-        detail: threadPager.olderEndpoint ?? `Channel ${threadPager.channel ?? "unknown"}`,
+        detail: `Channel ${threadPager.channel ?? "unknown"}`,
+        evidence: threadPager.olderEndpoint ?? null,
         status: threadStatus(threadPager),
       }),
       postureItem({
         id: "votecount",
         label: "Votecount",
         value: countLabel(votecount.length, "projected target", "projected targets"),
-        detail: projectionBoundary.status ?? "Projection boundary unknown",
+        detail: votecount.length > 0 ? "Wagons update as votes land" : "No wagons rolling yet",
+        evidence: projectionBoundary.status ?? null,
         status: votecountStatus({ projectionBoundary, votecount }),
       }),
       postureItem({
         id: "private",
         label: "Private queue",
         value: countLabel(privateCount, "private item", "private items"),
-        detail: privateQueueBoundary.status ?? "Principal-scoped private projections",
+        detail: "For your eyes only",
+        evidence: privateQueueBoundary.status ?? null,
         status: privateQueueStatus(privateCount),
       }),
     ]),
   });
 }
 
-function postureItem({ id, label, value, detail, status }) {
+function postureItem({ id, label, value, detail, evidence = null, status }) {
   return Object.freeze({
     id,
     label,
     value,
     detail,
+    evidence,
     status,
     className: PLAYER_POSTURE_STRIP_CONTRACT.itemClassName,
     statusClassName: PLAYER_POSTURE_STRIP_CONTRACT.statusClassName,
@@ -117,18 +122,18 @@ function votecountStatus({ projectionBoundary, votecount }) {
   if (!String(projectionBoundary.status ?? "").includes("ws")) {
     return Object.freeze({
       state: "pending",
-      message: "Live projection boundary not established",
+      message: "Live tally not connected yet",
     });
   }
   if (votecount.length === 0) {
     return Object.freeze({
       state: "pending",
-      message: "No active projected ballots",
+      message: "No active ballots",
     });
   }
   return Object.freeze({
     state: "ack",
-    message: "Votecount projection is live",
+    message: "Votecount is live",
   });
 }
 

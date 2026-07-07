@@ -456,7 +456,7 @@ export function assertNightFourResolutionPlayerSurfaceProofCase({
     proof.privateQueueBoundary?.status !== expectedPrivateQueueBoundaryStatus ||
     proof.privateQueueBoundary.count !== expectedPrivateCount ||
     !String(proof.privateQueueBoundary.text ?? "").includes(
-      "principal-scoped endpoints",
+      "delivered to you alone",
     ) ||
     proof.voteButtonCount !== 0 ||
     proof.projectionCommandState?.actorSlot !== expectedSlot ||

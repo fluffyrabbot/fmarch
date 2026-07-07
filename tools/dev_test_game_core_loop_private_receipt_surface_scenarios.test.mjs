@@ -106,7 +106,7 @@ function privateReceiptProofFixture({ game, scenario }) {
     privateQueueBoundary: {
       status: "principal-scoped-private-projections",
       count: scenario.privateReceipt ? 1 : 0,
-      text: "principal-scoped endpoints",
+      text: "delivered to you alone",
     },
     projectionCommandState: {
       actorSlot: scenario.expectedSlot,

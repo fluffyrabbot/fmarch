@@ -16,7 +16,7 @@ test("player private queue model derives scoped private projection boundary", ()
   assert.deepEqual(buildPrivateQueueBoundary(snapshot), {
     status: PLAYER_PRIVATE_QUEUE_CONTRACT.boundaryStatus,
     detail:
-      "Notifications and investigation results are loaded from principal-scoped endpoints only.",
+      "Night results and notices are delivered to you alone.",
     count: 2,
   });
   assert.deepEqual(buildPrivateQueue(snapshot), [
@@ -51,7 +51,7 @@ test("player private queue model builds disclosure view state without host leaka
         kind: "notification",
         label: "Private notification",
         value: "Available",
-        detail: "Principal-scoped notification",
+        detail: "Sent only to you",
         buttonLabel: "Review",
         reviewHref: "/g/midsummer?private=notification-1",
       },
@@ -127,7 +127,7 @@ test("player private queue model normalizes missing private rows conservatively"
         kind: "notification",
         label: "Private notification",
         value: "Available",
-        detail: "Principal-scoped notification",
+        detail: "Sent only to you",
         buttonLabel: "Review",
       },
       {
@@ -135,7 +135,7 @@ test("player private queue model normalizes missing private rows conservatively"
         kind: "investigation-result",
         label: "Investigation result",
         value: "Private result",
-        detail: "Private investigation result",
+        detail: "Sent only to you",
         buttonLabel: "Review",
       },
     ],

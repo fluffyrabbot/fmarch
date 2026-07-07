@@ -25,6 +25,7 @@
     <article
       class={statusStripItemClassName(item.className)}
       data-state={item.status.state}
+      data-evidence={item.evidence ?? undefined}
       data-testid={item.testId}
     >
       <p class={eyebrowClassName}>{item.label}</p>

@@ -772,7 +772,7 @@ test("private receipt role-surface assertion covers target receipt projection", 
     privateQueueBoundary: {
       status: args.expectedPrivateQueueBoundaryStatus,
       count: 1,
-      text: "Uses principal-scoped endpoints",
+      text: "Notices are delivered to you alone",
     },
     projectionCommandState: {
       actorSlot: scenario.expectedSlot,
@@ -859,7 +859,7 @@ test("Day 3 player observation assertion covers target private receipt", () => {
     privateQueueBoundary: {
       status: "principal-scoped-private-projections",
       count: 1,
-      text: "Uses principal-scoped endpoints",
+      text: "Notices are delivered to you alone",
     },
     projectionCommandState: {
       actorSlot: "slot-3",
@@ -965,7 +965,7 @@ test("post-Day 3 player surface assertion covers private day-vote receipt", () =
     privateQueueBoundary: {
       status: "principal-scoped-private-projections",
       count: 1,
-      text: "Uses principal-scoped endpoints",
+      text: "Notices are delivered to you alone",
     },
     voteButtonCount: 0,
     projectionCommandState: {

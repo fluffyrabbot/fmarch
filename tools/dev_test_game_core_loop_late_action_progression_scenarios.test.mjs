@@ -365,7 +365,7 @@ function nightFourPlayerSurfaceProof({
     privateQueueBoundary: {
       status: "principal-scoped-private-projections",
       count: privateCount,
-      text: "principal-scoped endpoints",
+      text: "delivered to you alone",
     },
     voteButtonCount: 0,
     projectionCommandState: {
