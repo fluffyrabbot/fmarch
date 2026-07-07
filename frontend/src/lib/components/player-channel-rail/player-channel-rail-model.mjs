@@ -1,7 +1,7 @@
 import { hasCapability } from "../../app/capabilities.mjs";
 
 export const PLAYER_CHANNEL_RAIL_CONTRACT = Object.freeze({
-  rootClassName: "player-channel-rail",
+  rootClassName: "player-channel-rail fm-rail",
   componentName: "player-channel-rail",
   minTouchTargetPx: 44,
 });

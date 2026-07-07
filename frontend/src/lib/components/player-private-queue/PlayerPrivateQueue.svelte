@@ -40,7 +40,7 @@
   {:else}
     {#each view.items as item}
       <article
-        class="player-private-queue__item"
+        class="player-private-queue__item fm-disclosure"
         data-testid={`player-private-${item.id}`}
         data-kind={item.kind}
       >
@@ -86,30 +86,9 @@
     font-size: 18px;
   }
 
-  .player-private-queue h3,
-  .player-private-queue p {
-    margin: 0;
-  }
-
-  .player-private-queue > p,
-  .player-private-queue__item p {
+  .player-private-queue > p {
     color: var(--fm-ink-subtle);
     line-height: 1.35;
-  }
-
-  .player-private-queue__item {
-    border-block-start: 1px solid var(--fm-line-soft);
-    display: grid;
-    gap: 6px;
-    min-block-size: 44px;
-    padding-block-start: 10px;
-  }
-
-  .player-private-queue__item .fm-touch-button {
-    justify-self: start;
-  }
-
-  .player-private-queue__item > .fm-touch-button + .fm-touch-button {
-    margin-block-start: 2px;
+    margin: 0;
   }
 </style>

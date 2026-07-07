@@ -158,6 +158,76 @@
   overflow-wrap: anywhere;
 }
 
+/* ---- disclosure: expandable evidence row (aria-expanded trigger + controlled detail) ---- */
+
+.fm-disclosure {
+  border-block-start: 1px solid var(--fm-line-soft);
+  display: grid;
+  gap: 6px;
+  min-block-size: 44px;
+  min-inline-size: 0;
+  padding-block-start: 10px;
+}
+
+.fm-disclosure h3,
+.fm-disclosure p {
+  margin: 0;
+}
+
+.fm-disclosure p {
+  color: var(--fm-ink-subtle);
+  line-height: 1.35;
+}
+
+.fm-disclosure > .fm-touch-button {
+  justify-self: start;
+}
+
+.fm-disclosure > .fm-touch-button + .fm-touch-button {
+  margin-block-start: 2px;
+}
+
+/* ---- rail: stacked nav of link tiles (channel rail) ---- */
+/* Capability grammar in the small line truncates on one line instead of
+   letter-wrapping in narrow columns; the full string stays in the DOM. */
+
+.fm-rail {
+  display: grid;
+  gap: 12px;
+  min-inline-size: 0;
+}
+
+.fm-rail__item {
+  align-items: start;
+  background: var(--fm-raised-veil);
+  border: 1px solid var(--fm-line);
+  border-radius: 8px;
+  color: var(--fm-ink);
+  display: grid;
+  gap: 2px;
+  min-block-size: 56px;
+  min-inline-size: 0;
+  padding: 10px 12px;
+  text-decoration: none;
+}
+
+.fm-rail__item[aria-current="page"] {
+  background: var(--fm-accent-wash-strong);
+  border-color: var(--fm-accent);
+}
+
+.fm-rail__item span {
+  font-weight: 800;
+}
+
+.fm-rail__item small {
+  color: var(--fm-ink-subtle);
+  max-inline-size: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* ---- activity ledger: player receipts, admin activity, host activity ---- */
 
 .fm-ledger {
