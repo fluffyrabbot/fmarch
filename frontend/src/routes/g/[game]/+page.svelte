@@ -311,20 +311,7 @@
 <main class="fm-surface player-surface" data-testid={PLAYER_ROUTE_CONTRACT.surfaceTestId}>
   <AppSurfaceHeader header={surfaceHeader} {liveStatus} />
 
-  <PlayerPostureStrip
-    channel={data.channel}
-    {phase}
-    projectionBoundary={data.projectionBoundary}
-    threadPager={data.threadPager}
-    {votecount}
-    {privateQueueBoundary}
-  />
-
-  <DayVoteOutcomePanel
-    outcomes={dayVoteOutcomes}
-    boundary={data.dayVoteOutcomeBoundary}
-    rootTestId="player-day-vote-outcome"
-  />
+  <PlayerPostureStrip {phase} {privateQueueBoundary} />
 
   {#if playerForcedRouteState}
     <RouteState view={playerForcedRouteState} />
@@ -375,6 +362,12 @@
           onCommand={submitPlayerCommand}
         />
         <PlayerCommandReceipt receipts={commandReceipts} />
+
+        <DayVoteOutcomePanel
+          outcomes={dayVoteOutcomes}
+          boundary={data.dayVoteOutcomeBoundary}
+          rootTestId="player-day-vote-outcome"
+        />
       </div>
     </section>
   {/if}
@@ -384,7 +377,7 @@
   .player-surface__layout {
     display: grid;
     gap: 18px;
-    grid-template-columns: minmax(164px, 0.52fr) minmax(420px, 1.6fr) minmax(248px, 0.72fr);
+    grid-template-columns: minmax(164px, 0.4fr) minmax(420px, 2.1fr) minmax(264px, 0.75fr);
     align-items: start;
   }
 
@@ -460,7 +453,7 @@
 
   @media (min-width: 1280px) {
     .player-surface__layout {
-      grid-template-columns: 220px minmax(0, 1fr) 300px;
+      grid-template-columns: 200px minmax(0, 1fr) 320px;
     }
   }
 

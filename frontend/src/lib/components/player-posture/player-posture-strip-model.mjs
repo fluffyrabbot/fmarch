@@ -6,18 +6,15 @@ export const PLAYER_POSTURE_STRIP_CONTRACT = Object.freeze({
   surface: "posture",
   testIdPrefix: "player-posture",
   statusTestIdPrefix: "player-posture-status",
-  itemIds: Object.freeze(["channel", "thread", "votecount", "private"]),
+  itemIds: Object.freeze(["phase", "deadline", "private"]),
 });
 
 export function buildPlayerPostureStripViewModel({
-  channel = {},
   phase = {},
-  projectionBoundary = {},
-  threadPager = {},
-  votecount = [],
   privateQueueBoundary = {},
 } = {}) {
   const privateCount = Number(privateQueueBoundary.count ?? 0);
+  const deadlineLabel = String(phase.deadlineLabel ?? "").trim();
   return Object.freeze({
     root: Object.freeze({
       className: PLAYER_POSTURE_STRIP_CONTRACT.rootClassName,
@@ -28,28 +25,21 @@ export function buildPlayerPostureStripViewModel({
     }),
     items: Object.freeze([
       postureItem({
-        id: "channel",
-        label: "Channel",
-        value: channel.label ?? "Unknown channel",
-        detail: channel.allowed === false ? "Not open to your seat" : "Open to your seat",
-        evidence: channel.capabilityLabel ?? null,
-        status: channelStatus(channel),
+        id: "phase",
+        label: "Phase",
+        value: phase.label ?? "Current phase",
+        detail: phase.summary ?? "Waiting on the game to open",
+        status: phaseStatus(phase),
       }),
       postureItem({
-        id: "thread",
-        label: "Thread",
-        value: threadPager.hasOlder === true ? "Older posts available" : "At oldest loaded post",
-        detail: `Channel ${threadPager.channel ?? "unknown"}`,
-        evidence: threadPager.olderEndpoint ?? null,
-        status: threadStatus(threadPager),
-      }),
-      postureItem({
-        id: "votecount",
-        label: "Votecount",
-        value: countLabel(votecount.length, "projected target", "projected targets"),
-        detail: votecount.length > 0 ? "Wagons update as votes land" : "No wagons rolling yet",
-        evidence: projectionBoundary.status ?? null,
-        status: votecountStatus({ projectionBoundary, votecount }),
+        id: "deadline",
+        label: "Deadline",
+        value: deadlineLabel === "" ? "No deadline committed" : deadlineLabel,
+        detail:
+          deadlineLabel === ""
+            ? "The host has not set one"
+            : "The phase closes at this time",
+        status: deadlineStatus(deadlineLabel),
       }),
       postureItem({
         id: "private",
@@ -86,54 +76,42 @@ export function playerPostureStatusTestId(id) {
   return `${PLAYER_POSTURE_STRIP_CONTRACT.statusTestIdPrefix}-${id}`;
 }
 
-function channelStatus(channel) {
-  if (channel.supported === false) {
+function phaseStatus(phase) {
+  const state = String(phase.state ?? "").trim();
+  if (state === "open") {
     return Object.freeze({
-      state: "reject",
-      message: "Channel is not available",
+      state: "ack",
+      message: "The phase is open",
     });
   }
-  if (channel.allowed === false) {
+  if (state === "locked") {
     return Object.freeze({
-      state: "reject",
-      message: "Channel requires scoped capability",
+      state: "pending",
+      message: "The phase is locked",
+    });
+  }
+  if (state === "complete") {
+    return Object.freeze({
+      state: "ack",
+      message: "The game is complete",
     });
   }
   return Object.freeze({
-    state: "ack",
-    message: "Channel capability resolved",
+    state: "pending",
+    message: "Phase state pending",
   });
 }
 
-function threadStatus(threadPager) {
-  if (threadPager.hasOlder === true) {
+function deadlineStatus(deadlineLabel) {
+  if (deadlineLabel === "") {
     return Object.freeze({
       state: "pending",
-      message: "Older posts can be loaded",
+      message: "Deadline not committed",
     });
   }
   return Object.freeze({
     state: "ack",
-    message: "Loaded thread is at oldest post",
-  });
-}
-
-function votecountStatus({ projectionBoundary, votecount }) {
-  if (!String(projectionBoundary.status ?? "").includes("ws")) {
-    return Object.freeze({
-      state: "pending",
-      message: "Live tally not connected yet",
-    });
-  }
-  if (votecount.length === 0) {
-    return Object.freeze({
-      state: "pending",
-      message: "No active ballots",
-    });
-  }
-  return Object.freeze({
-    state: "ack",
-    message: "Votecount is live",
+    message: "Deadline is committed",
   });
 }
 

@@ -89,9 +89,8 @@ const playerPostureTargets = scanStripTargets({
   testIdFor: playerPostureTestId,
   statusTestIdFor: playerPostureStatusTestId,
   states: {
-    channel: "ack",
-    thread: "pending",
-    votecount: "ack",
+    phase: "ack",
+    deadline: "ack",
     private: "pending",
   },
 });

@@ -436,7 +436,8 @@ function proveFirstViewportSmokeCoverage(roleSurfaces) {
     const role = roleEntries.get(roleConfig.id);
     assert.notEqual(role, undefined, `${roleConfig.id} static role surface missing`);
     const items = firstViewportItemsForRole(role, roleConfig.firstViewportSurface);
-    assert.equal(items.length, 4);
+    assert.equal(items.length >= 3, true);
+    assert.equal(items.length, roleConfig.overlapTestIds.length);
     const overlapTestIds = items.map((item) => item.testId);
     const statusRegions = items.map((item) => ({
       testId: item.statusTestId,
@@ -517,7 +518,8 @@ async function proveFirstViewportLayoutContract(roleSurfaces) {
     const role = roleEntries.get(roleConfig.id);
     assert.notEqual(role, undefined, `${roleConfig.id} static role surface missing`);
     const items = firstViewportItemsForRole(role, roleConfig.firstViewportSurface);
-    assert.equal(items.length, 4);
+    assert.equal(items.length >= 3, true);
+    assert.equal(items.length, roleConfig.overlapTestIds.length);
     const normalizedItems = items.map((item) => {
       assert.equal(item.labelLength <= 24, true);
       assert.equal(item.valueLength <= 80, true);
@@ -1478,11 +1480,7 @@ async function provePlayerSurface() {
     ),
   });
   const posture = buildPlayerPostureStripViewModel({
-    channel: data.channel,
     phase: data.phase,
-    projectionBoundary: data.projectionBoundary,
-    threadPager: data.threadPager,
-    votecount: data.votecount,
     privateQueueBoundary: data.privateQueueBoundary,
   });
   const privateQueue = buildPlayerPrivateQueueViewModel({
@@ -1577,9 +1575,8 @@ async function provePlayerSurface() {
   assert.deepEqual(
     posture.items.map((item) => [item.id, item.status.state]),
     [
-      ["channel", "ack"],
-      ["thread", "pending"],
-      ["votecount", "ack"],
+      ["phase", "ack"],
+      ["deadline", "ack"],
       ["private", "pending"],
     ],
   );

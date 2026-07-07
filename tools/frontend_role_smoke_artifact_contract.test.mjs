@@ -636,8 +636,8 @@ test("static role contract artifact records shared nav focus and route state mat
         "player",
         "/g/midsummer",
         "posture",
-        4,
-        ["channel", "thread", "votecount", "private"],
+        3,
+        ["phase", "deadline", "private"],
         [
           ["tablet", 1024, 2],
           ["tablet-wide", 1180, 2],
@@ -661,7 +661,8 @@ test("static role contract artifact records shared nav focus and route state mat
     ],
   );
   for (const role of staticContract.firstViewportLayoutContract.roles) {
-    assert.equal(role.items.length, 4);
+    assert.equal(role.items.length, role.itemCount);
+    assert.equal(role.items.length >= 3, true);
     for (const item of role.items) {
       assert.equal(item.labelLength <= 24, true);
       assert.equal(item.valueLength <= 80, true);
