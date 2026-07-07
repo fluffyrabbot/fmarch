@@ -25,8 +25,10 @@ const proofGraphClickCoverageFamilies = Object.freeze([
     artifactKey: (artifact) =>
       [artifact?.id, artifact?.artifact].map(normalize).join("\u0000"),
     expectedArtifacts: (generatedFrom) =>
-      Array.isArray(generatedFrom?.handoffPhaseOutputGraphLinks?.outputs)
-        ? generatedFrom.handoffPhaseOutputGraphLinks.outputs
+      Array.isArray(generatedFrom?.handoffPhaseOutputArtifacts)
+        ? generatedFrom.handoffPhaseOutputArtifacts
+        : Array.isArray(generatedFrom?.handoffPhaseOutputGraphLinks?.outputs)
+          ? generatedFrom.handoffPhaseOutputGraphLinks.outputs
         : [],
   }),
   Object.freeze({

@@ -89,11 +89,27 @@ test("Day 5 progression family shares no-lynch resolution and stale vote cases",
   );
 });
 
-test("Day 5 no-lynch surface derives feature-spine row from N05 checkpoint", () => {
+test("Day 5 no-lynch surface derives feature-spine rows from D05 and N05 checkpoints", () => {
   assert.deepEqual(dayFiveProgressionFeatureSpineRows(), [
+    {
+      targetKey: "dayFiveNoLynchVoteSubmitted",
+      featureSlotId: "day-five-no-lynch-vote-submitted",
+      cycleId: "d05-n05",
+      role: "actionPlayer",
+      checkpointId: "d05-n05-d05-no-lynch-vote-submitted",
+      adminCheckId: "core-loop",
+    },
     {
       targetKey: "dayFiveNoLynchResolution",
       featureSlotId: "day-five-no-lynch-resolution",
+      cycleId: "d05-n05",
+      role: "host",
+      checkpointId: "d05-n05-d05-resolved-no-lynch",
+      adminCheckId: "core-loop",
+    },
+    {
+      targetKey: "nightFiveNoActionSurface",
+      featureSlotId: "night-five-no-action-surface",
       cycleId: "d05-n05",
       role: "actionPlayer",
       checkpointId: "d05-n05-n05-night-controls-return",

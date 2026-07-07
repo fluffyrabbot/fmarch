@@ -6346,12 +6346,7 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
   );
   assert.deepEqual(
     proofGraphAdminRequirements.requiredProofGraphHandoffPhaseOutputArtifacts,
-    proofGraphAdminGeneratedFrom.handoffPhaseOutputGraphLinks.outputs.map(
-      (output) => ({
-        id: output.id,
-        artifact: output.artifact,
-      }),
-    ),
+    proofGraphAdminGeneratedFrom.handoffPhaseOutputArtifacts,
   );
   assert.equal(
     proofGraphAdminRequirements.game,
@@ -14621,7 +14616,11 @@ test("session card and markdown include role credential URLs and tokens", async 
         setup: {
           stalePhase: { id: "D02", locked: false },
           phaseActions: ["resolve_phase", "lock_thread"],
-          deadlineActions: ["extend_deadline"],
+          deadlineActions: [
+            "extend_deadline",
+            "extend_deadline_24h",
+            "extend_deadline_48h",
+          ],
           closedStatus: { state: "closed" },
         },
         ackPageRole: "live",
@@ -15685,7 +15684,11 @@ test("session card and markdown include role credential URLs and tokens", async 
             "Reject PhaseLocked: phase locked; stale phase state, refresh and use current controls",
           dispatchRefreshKeys: ["host"],
           phaseAfterReject: { id: "D02", locked: false },
-          deadlineActionsAfterReject: ["extend_deadline"],
+          deadlineActionsAfterReject: [
+            "extend_deadline",
+            "extend_deadline_24h",
+            "extend_deadline_48h",
+          ],
           phaseActionsAfterReject: ["lock_thread", "resolve_phase"],
           apiPhaseAfterReject: { phase_id: "D02", locked: false, deadline: null },
         },
@@ -15703,7 +15706,11 @@ test("session card and markdown include role credential URLs and tokens", async 
           },
         ],
         phaseAfterReject: { id: "D02", locked: false },
-        deadlineActionsAfterReject: ["extend_deadline"],
+        deadlineActionsAfterReject: [
+          "extend_deadline",
+          "extend_deadline_24h",
+          "extend_deadline_48h",
+        ],
         phaseActionsAfterReject: ["lock_thread", "resolve_phase"],
         activityStatusText:
           "Reject PhaseLocked: phase locked; stale phase state, refresh and use current controls",
@@ -15723,7 +15730,11 @@ test("session card and markdown include role credential URLs and tokens", async 
             "Reject PhaseLocked: phase locked; stale phase state, refresh and use current controls",
           surfaceText: "Host console",
           phaseAfterReload: { id: "D02", locked: false },
-          deadlineActionsAfterReload: ["extend_deadline"],
+          deadlineActionsAfterReload: [
+            "extend_deadline",
+            "extend_deadline_24h",
+            "extend_deadline_48h",
+          ],
           phaseActionsAfterReload: ["lock_thread", "resolve_phase"],
           apiPhaseAfterReload: { phase_id: "D02", locked: false, deadline: null },
         },
@@ -15737,7 +15748,11 @@ test("session card and markdown include role credential URLs and tokens", async 
             phase: { id: "D02", locked: false },
           },
         },
-        deadlineActionsAfterReconnect: ["extend_deadline"],
+        deadlineActionsAfterReconnect: [
+          "extend_deadline",
+          "extend_deadline_24h",
+          "extend_deadline_48h",
+        ],
         phaseActionsAfterReconnect: ["lock_thread", "resolve_phase"],
         apiPhaseAfterReconnect: { phase_id: "D02", locked: false, deadline: null },
       },
@@ -15747,7 +15762,11 @@ test("session card and markdown include role credential URLs and tokens", async 
         setup: {
           roleUrl: `/g/${game}/host?cohost=cohost_c`,
           stalePhase: { id: "D01", locked: false },
-          deadlineActions: ["extend_deadline"],
+          deadlineActions: [
+            "extend_deadline",
+            "extend_deadline_24h",
+            "extend_deadline_48h",
+          ],
           phaseActions: [],
           closedStatus: { state: "closed" },
         },
@@ -15758,7 +15777,11 @@ test("session card and markdown include role credential URLs and tokens", async 
             "Reject PhaseLocked: phase locked; stale phase state, refresh and use current controls",
           dispatchRefreshKeys: ["host"],
           phaseAfterReject: { id: "D02", locked: false },
-          deadlineActionsAfterReject: ["extend_deadline"],
+          deadlineActionsAfterReject: [
+            "extend_deadline",
+            "extend_deadline_24h",
+            "extend_deadline_48h",
+          ],
           phaseActionsAfterReject: [],
           apiPhaseAfterReject: { phase_id: "D02", locked: false, deadline: null },
         },
@@ -15776,7 +15799,11 @@ test("session card and markdown include role credential URLs and tokens", async 
           },
         ],
         phaseAfterReject: { id: "D02", locked: false },
-        deadlineActionsAfterReject: ["extend_deadline"],
+        deadlineActionsAfterReject: [
+          "extend_deadline",
+          "extend_deadline_24h",
+          "extend_deadline_48h",
+        ],
         phaseActionsAfterReject: [],
         activityStatusText:
           "Reject PhaseLocked: phase locked; stale phase state, refresh and use current controls",
@@ -15796,7 +15823,11 @@ test("session card and markdown include role credential URLs and tokens", async 
             "Reject PhaseLocked: phase locked; stale phase state, refresh and use current controls",
           surfaceText: "Host console",
           phaseAfterReload: { id: "D02", locked: false },
-          deadlineActionsAfterReload: ["extend_deadline"],
+          deadlineActionsAfterReload: [
+            "extend_deadline",
+            "extend_deadline_24h",
+            "extend_deadline_48h",
+          ],
           phaseActionsAfterReload: [],
           apiPhaseAfterReload: { phase_id: "D02", locked: false, deadline: null },
         },
@@ -15810,7 +15841,11 @@ test("session card and markdown include role credential URLs and tokens", async 
             phase: { id: "D02", locked: false },
           },
         },
-        deadlineActionsAfterReconnect: ["extend_deadline"],
+        deadlineActionsAfterReconnect: [
+          "extend_deadline",
+          "extend_deadline_24h",
+          "extend_deadline_48h",
+        ],
         phaseActionsAfterReconnect: [],
         apiPhaseAfterReconnect: { phase_id: "D02", locked: false, deadline: null },
       },

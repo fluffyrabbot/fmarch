@@ -208,7 +208,8 @@ export function nextActionAdminProofCase({
           artifact: defaultNextActionPath,
           requiredText: [
             "dev-test-game-next-action",
-            "target/dev-test-game/next-action.json",
+            source.nextAction.nextAction.command,
+            source.nextAction.nextAction.reason,
           ],
         },
         requiredHostedIdentityOperatorGate:

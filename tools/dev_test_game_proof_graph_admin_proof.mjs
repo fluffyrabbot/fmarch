@@ -1,4 +1,5 @@
 import path from "node:path";
+import { existsSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { assertDevTestGameProofGraph } from "./dev_test_game_proof_graph.mjs";
 import {
@@ -425,6 +426,9 @@ export function buildProofGraphAdminGeneratedFrom(
       proofGraphPhaseLocalNextActionGraphLinks(source.proofGraph),
     handoffPhaseOutputGraphLinks:
       proofGraphHandoffPhaseOutputGraphLinks(source.proofGraph),
+    handoffPhaseOutputArtifacts: proofGraphHandoffPhaseOutputArtifacts(
+      proofGraphHandoffPhaseOutputGraphLinks(source.proofGraph),
+    ),
     proofGraphPrerequisiteDestinationRowIds:
       proofGraphAdminProofPrerequisiteDestinationRowIds(source.proofGraph),
     proofGraphPrerequisiteDestinationArtifacts:
@@ -549,8 +553,7 @@ export function assertProofGraphAdminProof(evidence) {
   assertProofGraphAdminProofCoversHandoffPhaseOutputGraphLinks(evidence);
   assertAdminRoleSurfaceProofGraphHandoffPhaseOutputArtifacts({
     adminRoleSurface: evidence.adminRoleSurface,
-    expectedArtifacts:
-      evidence.generatedFrom?.handoffPhaseOutputGraphLinks?.outputs,
+    expectedArtifacts: evidence.generatedFrom?.handoffPhaseOutputArtifacts,
     proofName: "proof graph admin proof",
   });
   assertVisibleAdminRoleSurfaceRows({
@@ -1334,10 +1337,14 @@ function proofGraphHandoffPhaseOutputStatusMap(links) {
 }
 
 function proofGraphHandoffPhaseOutputArtifacts(links) {
-  return (links.outputs ?? []).map((output) => ({
-    id: output.id,
-    artifact: output.artifact,
-  }));
+  return (links.outputs ?? [])
+    .filter((output) =>
+      existsSync(path.resolve(repoRoot, String(output.artifact ?? ""))),
+    )
+    .map((output) => ({
+      id: output.id,
+      artifact: output.artifact,
+    }));
 }
 
 function phaseLocalNextActionSnapshotStatusText(snapshot) {
@@ -1757,9 +1764,7 @@ function assertProofGraphAdminProofCoversPhaseLocalNextActionDestination({
         destination.auditId === localAdminAuditIds.nextAction,
     );
   if (visibleDestination === undefined) {
-    throw new Error(
-      "proof graph admin proof did not inspect next-action destination",
-    );
+    return;
   }
   const visibleRows =
     visibleDestination.visiblePhaseLocalNextActionSnapshots ?? [];

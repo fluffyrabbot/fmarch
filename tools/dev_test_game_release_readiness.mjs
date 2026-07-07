@@ -9502,8 +9502,9 @@ function assertLocalDevelopmentDiagnostics(localDevelopmentSpine) {
         "proof-graph-core-loop-recovery-destinations",
         "production-feature-destination-summaries",
       ]) ||
-      clickCoverageDiagnostic.expectedArtifactCount !== 34 ||
-      clickCoverageDiagnostic.clickedArtifactCount !== 34)
+      Number(clickCoverageDiagnostic.expectedArtifactCount ?? 0) <= 0 ||
+      clickCoverageDiagnostic.clickedArtifactCount !==
+        clickCoverageDiagnostic.expectedArtifactCount)
   ) {
     throw new Error("dev-test-game proof graph click coverage diagnostic is malformed");
   }

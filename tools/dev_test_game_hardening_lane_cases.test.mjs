@@ -216,7 +216,11 @@ test("hardening lane cases share stale conflict-message IDs", () => {
       expectedActivitySource: "outcome",
       expectedPhaseId: "D02",
       expectedLocked: false,
-      expectedDeadlineActions: ["extend_deadline"],
+      expectedDeadlineActions: [
+        "extend_deadline",
+        "extend_deadline_24h",
+        "extend_deadline_48h",
+      ],
       expectedPhaseActions: ["lock_thread", "resolve_phase"],
       proofBoundary:
         "Seeded host role URL proof that a stale deadline control rejects with an explicit PhaseLocked conflict message and refreshes into current host phase controls.",
@@ -234,7 +238,11 @@ test("hardening lane cases share stale conflict-message IDs", () => {
       expectedStaleClickRefreshKeys: ["host"],
       expectedActivitySource: "outcome",
       expectedPhaseId: "D02",
-      expectedCurrentActions: ["extend_deadline"],
+      expectedCurrentActions: [
+        "extend_deadline",
+        "extend_deadline_24h",
+        "extend_deadline_48h",
+      ],
       proofBoundary:
         "Seeded cohost role URL proof that a delegated stale deadline control rejects with an explicit PhaseLocked conflict message and refreshes into current delegated controls.",
     },

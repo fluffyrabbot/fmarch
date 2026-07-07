@@ -277,7 +277,6 @@ export function hostedEvidenceOperatorChecklistDescriptorFromHandoffChecklist(
   const descriptor =
     checklist?.blockedReceipt?.blockedOperatorPacket?.operatorChecklist ??
     checklist?.blockedOperatorPacket?.operatorChecklist ??
-    checklist?.operatorChecklist ??
     null;
   return descriptor === null || typeof descriptor !== "object"
     ? null
