@@ -552,6 +552,14 @@ export function buildDevTestGameNextAction(
           buildableLocalDependencyCount: localReadinessDependencyCandidates.length,
           unprovenCount: readiness.releaseReadiness.unproven.length,
           buildableUnprovenCount: releaseReadinessCandidates.length,
+          ...(readiness.readinessSummary
+            ?.roleUrlProductionFeatureAuditSummary === undefined
+            ? {}
+            : {
+                roleUrlProductionFeatureAuditSummary:
+                  readiness.readinessSummary
+                    .roleUrlProductionFeatureAuditSummary,
+              }),
         };
   const evidence = {
     version: DEV_TEST_GAME_NEXT_ACTION_VERSION,
@@ -593,6 +601,14 @@ export function buildDevTestGameNextAction(
             seedProofLaneCoverageStatus: seedProofLaneCoverageDrift.status,
             seedProofLaneCoverageUnclassifiedCount:
               seedProofLaneCoverageDrift.unclassifiedLaneCount,
+            ...(readiness.readinessSummary
+              ?.roleUrlProductionFeatureAuditSummary === undefined
+              ? {}
+              : {
+                  roleUrlProductionFeatureAuditSummary:
+                    readiness.readinessSummary
+                      .roleUrlProductionFeatureAuditSummary,
+                }),
           }),
       ...(races === null
         ? {}
@@ -952,6 +968,7 @@ export function assertDevTestGameNextAction(evidence) {
   assertReleaseReadinessTrace(evidence.releaseReadinessTrace, {
     nextAction: evidence.nextAction,
   });
+  assertNextActionRoleUrlProductionFeatureAuditSummary(evidence);
   assertRecoveryTrace(
     recoveryTraceKeys.replacementRaceReload,
     evidence.replacementRaceReloadTrace,
@@ -1003,6 +1020,41 @@ export function assertDevTestGameNextAction(evidence) {
   );
   assertRecoveryReceiptGraphsForNextAction(evidence.generatedFrom);
   return evidence;
+}
+
+function assertNextActionRoleUrlProductionFeatureAuditSummary(evidence) {
+  const summary = evidence.generatedFrom?.roleUrlProductionFeatureAuditSummary;
+  const releaseSummary =
+    evidence.generatedFrom?.releaseReadinessSummary
+      ?.roleUrlProductionFeatureAuditSummary;
+  if (summary === undefined && releaseSummary === undefined) {
+    return null;
+  }
+  if (
+    !validNextActionRoleUrlProductionFeatureAuditSummary(summary) ||
+    JSON.stringify(summary) !== JSON.stringify(releaseSummary)
+  ) {
+    throw new Error(
+      "next-action role URL production feature audit summary drifted",
+    );
+  }
+  return summary;
+}
+
+function validNextActionRoleUrlProductionFeatureAuditSummary(summary) {
+  return (
+    summary !== null &&
+    typeof summary === "object" &&
+    summary.status === "passed" &&
+    Number.isInteger(summary.passedRoleUrlLaneCount) &&
+    summary.passedRoleUrlLaneCount > 0 &&
+    Number.isInteger(summary.productionFeatureLaneCount) &&
+    summary.productionFeatureLaneCount > 0 &&
+    Number.isInteger(summary.directProductionFeatureLaneCount) &&
+    Number.isInteger(summary.aliasOnlyLaneCount) &&
+    Number.isInteger(summary.aggregateOnlyLaneCount) &&
+    summary.unclassifiedLaneCount === 0
+  );
 }
 
 export async function writeDevTestGameNextAction({

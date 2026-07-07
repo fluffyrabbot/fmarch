@@ -317,13 +317,17 @@ export function seedProofLaneCoverageForPassedLanes(
 export function seedRoleUrlProductionFeatureAudit({
   proofRun,
   proofGraph,
+  productionFeatureLaneIds = null,
   aliasEntries = seedRoleUrlProductionFeatureAliasEntries,
   aggregateOnlyLaneIds = seedAggregateOnlyProofLaneIds,
 } = {}) {
   const passedRoleUrlLaneIds = (proofRun?.lanes ?? [])
     .filter((lane) => lane?.status === "passed" && proofLaneRoleUrl(lane))
     .map((lane) => lane.id);
-  const productionFeatureLaneIds = productionFeatureLaneIdSet(proofGraph);
+  const productionFeatureLaneSet =
+    productionFeatureLaneIds === null
+      ? productionFeatureLaneIdSet(proofGraph)
+      : new Set(productionFeatureLaneIds.map((laneId) => String(laneId)));
   const aliasMap = new Map(aliasEntries);
   const aggregateOnlyLaneSet = new Set(aggregateOnlyLaneIds);
   const directProductionFeatureLaneIds = [];
@@ -332,14 +336,14 @@ export function seedRoleUrlProductionFeatureAudit({
   const unclassifiedLaneIds = [];
 
   for (const laneId of passedRoleUrlLaneIds) {
-    if (productionFeatureLaneIds.has(laneId)) {
+    if (productionFeatureLaneSet.has(laneId)) {
       directProductionFeatureLaneIds.push(laneId);
       continue;
     }
     const aliasTarget = aliasMap.get(laneId);
     if (
       typeof aliasTarget === "string" &&
-      productionFeatureLaneIds.has(aliasTarget)
+      productionFeatureLaneSet.has(aliasTarget)
     ) {
       aliasOnlyLaneIds.push(laneId);
       continue;
@@ -354,7 +358,7 @@ export function seedRoleUrlProductionFeatureAudit({
   return {
     status: unclassifiedLaneIds.length === 0 ? "passed" : "failed",
     passedRoleUrlLaneCount: passedRoleUrlLaneIds.length,
-    productionFeatureLaneCount: productionFeatureLaneIds.size,
+    productionFeatureLaneCount: productionFeatureLaneSet.size,
     directProductionFeature: {
       count: directProductionFeatureLaneIds.length,
       laneIds: directProductionFeatureLaneIds,
@@ -377,7 +381,35 @@ export function seedRoleUrlProductionFeatureAudit({
   };
 }
 
+export function seedRoleUrlProductionFeatureAuditCountSummary(audit) {
+  return {
+    status: String(audit?.status ?? "unknown"),
+    passedRoleUrlLaneCount: Number(audit?.passedRoleUrlLaneCount ?? 0),
+    productionFeatureLaneCount: Number(audit?.productionFeatureLaneCount ?? 0),
+    directProductionFeatureLaneCount: Number(
+      audit?.directProductionFeature?.count ?? 0,
+    ),
+    aliasOnlyLaneCount: Number(audit?.aliasOnly?.count ?? 0),
+    aggregateOnlyLaneCount: Number(audit?.aggregateOnly?.count ?? 0),
+    unclassifiedLaneCount: Number(audit?.unclassified?.count ?? 0),
+  };
+}
+
 export function assertSeedRoleUrlProductionFeatureAudit(audit) {
+  if (
+    audit === null ||
+    typeof audit !== "object" ||
+    !Number.isInteger(audit.passedRoleUrlLaneCount) ||
+    !Number.isInteger(audit.productionFeatureLaneCount) ||
+    !validRoleUrlProductionFeatureAuditBucket(
+      audit.directProductionFeature,
+    ) ||
+    !validRoleUrlProductionFeatureAuditBucket(audit.aliasOnly) ||
+    !validRoleUrlProductionFeatureAuditBucket(audit.aggregateOnly) ||
+    !validRoleUrlProductionFeatureAuditBucket(audit.unclassified)
+  ) {
+    throw new Error("role URL production feature audit is malformed");
+  }
   if (audit?.status !== "passed" || audit?.unclassified?.count !== 0) {
     throw new Error(
       `unclassified passed role URL proof lanes: ${
@@ -386,6 +418,15 @@ export function assertSeedRoleUrlProductionFeatureAudit(audit) {
     );
   }
   return audit;
+}
+
+function validRoleUrlProductionFeatureAuditBucket(bucket) {
+  return (
+    bucket !== null &&
+    typeof bucket === "object" &&
+    Array.isArray(bucket.laneIds) &&
+    bucket.count === bucket.laneIds.length
+  );
 }
 
 export function assertSeedProofLaneCoverage(

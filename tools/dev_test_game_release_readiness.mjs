@@ -83,8 +83,11 @@ import {
   staleConflictMessageLaneIds,
 } from "./dev_test_game_hardening_recovery_scenarios.mjs";
 import {
+  assertSeedRoleUrlProductionFeatureAudit,
   assertSeedProofLaneCoverage,
   seedDemoScenarioIds,
+  seedRoleUrlProductionFeatureAudit,
+  seedRoleUrlProductionFeatureAuditCountSummary,
   seedScenarioCoverageGroups,
 } from "./dev_test_game_seed_scenario_cases.mjs";
 import {
@@ -1690,6 +1693,22 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
   const localDiagnostics = buildLocalDevelopmentDiagnostics(localChecks, {
     proofGraphAdminProofEvidence,
   });
+  const roleUrlProductionFeatureAudit =
+    proofGraphAdminProofEvidence === undefined
+      ? undefined
+      : assertSeedRoleUrlProductionFeatureAudit(
+          seedRoleUrlProductionFeatureAudit({
+            proofRun: proof,
+            productionFeatureLaneIds:
+              proofGraphAdminProofEvidence.productionFeatureLaneIds,
+          }),
+        );
+  const roleUrlProductionFeatureAuditSummary =
+    roleUrlProductionFeatureAudit === undefined
+      ? undefined
+      : seedRoleUrlProductionFeatureAuditCountSummary(
+          roleUrlProductionFeatureAudit,
+        );
   return {
     version: DEV_TEST_GAME_RELEASE_READINESS_VERSION,
     proof: "dev-test-game-release-readiness",
@@ -1838,6 +1857,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         ? {}
         : {
             proofGraphAdminProof: proofGraphAdminProofEvidence.path,
+            roleUrlProductionFeatureAuditSummary,
           }),
       ...(selectedOperatorHandoffReceiptAdminProofEvidence === undefined
         ? {}
@@ -2097,6 +2117,9 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       unprovenIds: unproven.map((item) => item.id),
       firstUnprovenRequiredEvidence: unproven[0]?.requiredEvidence ?? null,
       reason: releaseReadinessReasonText,
+      ...(roleUrlProductionFeatureAuditSummary === undefined
+        ? {}
+        : { roleUrlProductionFeatureAuditSummary }),
     },
     proofBoundary:
       "Derived from the local dev-test-game proof-run artifact. Passing means the local harness evidence is coherent; it does not mean production, hosted, beta, or release readiness.",
@@ -6511,6 +6534,8 @@ export function validateDevTestGameProofGraphAdminProof(proof, options = {}) {
   const destinationAuditIds = [
     ...new Set(handoffs.map((handoff) => String(handoff.auditId))),
   ];
+  const productionFeatureLaneIds =
+    productionFeatureLaneIdsFromProofGraphAdminProof(proof);
   return {
     status: "passed",
     path: options.path ?? "target/dev-test-game/proof-graph-admin-proof.json",
@@ -6523,6 +6548,7 @@ export function validateDevTestGameProofGraphAdminProof(proof, options = {}) {
     roleHandoffCount: handoffs.length,
     roleHandoffIds: handoffs.map((handoff) => String(handoff.linkId)),
     destinationAuditIds,
+    productionFeatureLaneIds,
     nextActionHandoffDestination,
     selectedOperatorHandoffReceiptDestination,
     adminSpineTerminalValidationDestination,
@@ -7039,6 +7065,26 @@ function validateProofGraphAdminProductionFeatureTargetDestinations(proof) {
       continue;
     }
   }
+}
+
+function productionFeatureLaneIdsFromProofGraphAdminProof(proof) {
+  const laneIds = new Set();
+  for (const destination of proof.generatedFrom?.productionFeatureTargetDestinations ??
+    []) {
+    if (
+      typeof destination.featureSlotId === "string" &&
+      destination.featureSlotId.trim() !== ""
+    ) {
+      laneIds.add(destination.featureSlotId);
+    }
+    if (
+      typeof destination.roleUrlId === "string" &&
+      destination.roleUrlId.trim() !== ""
+    ) {
+      laneIds.add(destination.roleUrlId);
+    }
+  }
+  return [...laneIds];
 }
 
 function validateProofGraphAdminProductionFeatureDestinationSummary(proof) {
@@ -8498,6 +8544,54 @@ export function validateDevTestGameAdminSpineAdminProof(proof, options = {}) {
   };
 }
 
+function assertRoleUrlProductionFeatureAuditSummary(checklist) {
+  const summary = checklist.readinessSummary?.roleUrlProductionFeatureAuditSummary;
+  const generatedSummary =
+    checklist.generatedFrom?.roleUrlProductionFeatureAuditSummary;
+  const hasProofGraphProductionFeatureCheck =
+    checklist.localDevelopmentSpine?.checks?.some(
+      (check) => check.id === localProofGraphProductionFeatureProvenanceCheckId,
+    ) === true;
+  if (summary === undefined && generatedSummary === undefined) {
+    if (hasProofGraphProductionFeatureCheck) {
+      throw new Error(
+        "dev-test-game readiness missing role URL production feature audit summary",
+      );
+    }
+    return null;
+  }
+  if (
+    !validRoleUrlProductionFeatureAuditSummary(summary) ||
+    JSON.stringify(summary) !== JSON.stringify(generatedSummary)
+  ) {
+    throw new Error(
+      "dev-test-game role URL production feature audit summary drifted",
+    );
+  }
+  if (summary.status !== "passed" || summary.unclassifiedLaneCount !== 0) {
+    throw new Error(
+      "dev-test-game role URL production feature audit has unclassified role URLs",
+    );
+  }
+  return summary;
+}
+
+function validRoleUrlProductionFeatureAuditSummary(summary) {
+  return (
+    summary !== null &&
+    typeof summary === "object" &&
+    summary.status === "passed" &&
+    Number.isInteger(summary.passedRoleUrlLaneCount) &&
+    summary.passedRoleUrlLaneCount > 0 &&
+    Number.isInteger(summary.productionFeatureLaneCount) &&
+    summary.productionFeatureLaneCount > 0 &&
+    Number.isInteger(summary.directProductionFeatureLaneCount) &&
+    Number.isInteger(summary.aliasOnlyLaneCount) &&
+    Number.isInteger(summary.aggregateOnlyLaneCount) &&
+    Number.isInteger(summary.unclassifiedLaneCount)
+  );
+}
+
 export function assertDevTestGameReleaseReadiness(checklist) {
   if (checklist?.version !== DEV_TEST_GAME_RELEASE_READINESS_VERSION) {
     throw new Error(
@@ -8528,6 +8622,7 @@ export function assertDevTestGameReleaseReadiness(checklist) {
   ) {
     throw new Error("dev-test-game readiness summary drifted from checklist state");
   }
+  assertRoleUrlProductionFeatureAuditSummary(checklist);
   if (checklist.localDevelopmentSpine?.status !== "passed") {
     throw new Error("dev-test-game local development spine did not pass");
   }
@@ -9337,6 +9432,20 @@ export function markdownChecklist(checklist) {
   for (const check of checklist.localDevelopmentSpine.checks) {
     lines.push(
       `| ${check.label} | ${check.status} | \`${check.evidence}\` | ${evidenceObjectNamesText(check)} | ${firstMissingOperatorArtifactText(check)} |`,
+    );
+  }
+  const roleUrlAudit =
+    checklist.readinessSummary?.roleUrlProductionFeatureAuditSummary;
+  if (roleUrlAudit !== undefined) {
+    lines.push(
+      "",
+      "## Role URL Production Feature Audit",
+      "",
+      `Status: ${roleUrlAudit.status}`,
+      "",
+      "| Passed Role URL Lanes | Production Feature Lanes | Direct | Alias | Aggregate | Unclassified |",
+      "| --- | --- | --- | --- | --- | --- |",
+      `| ${roleUrlAudit.passedRoleUrlLaneCount} | ${roleUrlAudit.productionFeatureLaneCount} | ${roleUrlAudit.directProductionFeatureLaneCount} | ${roleUrlAudit.aliasOnlyLaneCount} | ${roleUrlAudit.aggregateOnlyLaneCount} | ${roleUrlAudit.unclassifiedLaneCount} |`,
     );
   }
   if ((checklist.localDevelopmentSpine.diagnostics ?? []).length > 0) {

@@ -156,6 +156,7 @@ import {
   seedProofLaneCoverageCountSummary,
   seedProofLaneCoverageFixture,
   seedProofLaneCoverageForPassedLanes,
+  seedRoleUrlProductionFeatureAuditCountSummary,
   seedRequiredScenarioIds,
   seedScenarioCoverageGroups,
 } from "./dev_test_game_seed_scenario_cases.mjs";
@@ -18713,6 +18714,8 @@ function identityAdapterProofFixture(game) {
 function devTestGameReleaseReadinessChecklistFixture({
   unproven,
   seedProofLaneCoverage = seedProofLaneCoverageFixture(),
+  roleUrlProductionFeatureAuditSummary =
+    roleUrlProductionFeatureAuditSummaryFixture(),
   includeProofGraphHandoffCheck = true,
   includeProofGraphNextActionHandoffCheck = true,
   includeProofGraphTerminalValidationCheck = true,
@@ -18747,6 +18750,9 @@ function devTestGameReleaseReadinessChecklistFixture({
         replacementActionRecoveryMilestoneFixture(),
       replacementHandoffRecoveryMilestone:
         replacementHandoffRecoveryMilestoneFixture(),
+      ...(roleUrlProductionFeatureAuditSummary === null
+        ? {}
+        : { roleUrlProductionFeatureAuditSummary }),
     },
     localDevelopmentSpine: {
       status: "passed",
@@ -19288,10 +19294,41 @@ function devTestGameReleaseReadinessChecklistFixture({
       unprovenIds: unproven.map((item) => item.id),
       firstUnprovenRequiredEvidence: unproven[0]?.requiredEvidence ?? null,
       reason: "Local proof passed, but release evidence remains unproven.",
+      ...(roleUrlProductionFeatureAuditSummary === null
+        ? {}
+        : { roleUrlProductionFeatureAuditSummary }),
     },
     proofBoundary:
       "Derived from the local dev-test-game proof-run artifact without release claims.",
   };
+}
+
+function roleUrlProductionFeatureAuditSummaryFixture() {
+  return seedRoleUrlProductionFeatureAuditCountSummary({
+    status: "passed",
+    passedRoleUrlLaneCount: 6,
+    productionFeatureLaneCount: 92,
+    directProductionFeature: {
+      count: 3,
+      laneIds: [
+        "private-channel-member",
+        "stale-same-action-recovery",
+        "stale-host-resolve",
+      ],
+    },
+    aliasOnly: {
+      count: 2,
+      laneIds: ["host-setup-role", "stale-action-conflict"],
+    },
+    aggregateOnly: {
+      count: 1,
+      laneIds: ["replacement-console"],
+    },
+    unclassified: {
+      count: 0,
+      laneIds: [],
+    },
+  });
 }
 
 function hostedIdentityLocalCapabilityConfidenceFixture() {
@@ -24197,16 +24234,17 @@ function proofGraphAdminProofFixture() {
     proofGraphReplacementActionFeatureTargetFixture();
   const replacementPrivateGraphTarget =
     proofGraphReplacementPrivateFeatureTargetFixture();
-  const coreLoopProductionFeatureTarget =
-    proofGraphCoreLoopProductionFeatureTargetFixture();
+  const coreLoopGraphTargets = proofGraphCoreLoopFeatureTargetFixtures();
+  const hardeningGraphTargets = proofGraphHardeningFeatureTargetFixtures();
   const productionFeatureTargetDestinations =
     proofGraphProductionFeatureTargetDestinationsFixture([
-      coreLoopProductionFeatureTarget,
+      ...coreLoopGraphTargets,
       hostSetupGraphTarget,
       cohostGraphTarget,
       replacementGraphTarget,
       replacementActionGraphTarget,
       replacementPrivateGraphTarget,
+      ...hardeningGraphTargets,
     ]);
   const productionFeatureDestinationSummary =
     proofGraphProductionFeatureDestinationSummaryFixture(
@@ -24303,7 +24341,9 @@ function proofGraphAdminProofFixture() {
         ...proofGraphDiagnosticProofNodes.map((node) => node.id),
         ...handoffs.map((handoff) => handoff.linkId),
         hostSetupGraphTarget.roleSurfaceNodeId,
-        coreLoopProductionFeatureTarget.productionFeatureNodeId,
+        ...coreLoopGraphTargets.map(
+          (target) => target.productionFeatureNodeId,
+        ),
         hostSetupGraphTarget.productionFeatureNodeId,
         cohostGraphTarget.roleSurfaceNodeId,
         cohostGraphTarget.productionFeatureNodeId,
@@ -24313,6 +24353,9 @@ function proofGraphAdminProofFixture() {
         replacementActionGraphTarget.productionFeatureNodeId,
         replacementPrivateGraphTarget.roleSurfaceNodeId,
         replacementPrivateGraphTarget.productionFeatureNodeId,
+        ...hardeningGraphTargets.map(
+          (target) => target.productionFeatureNodeId,
+        ),
         commandProofAuditNodeId,
         ...phaseLocalNextActionGraphLinks.snapshots.map(
           (snapshot) => snapshot.id,
@@ -24396,7 +24439,10 @@ function proofGraphAdminProofFixture() {
         ...handoffs.map((handoff) => handoff.linkId),
         hostSetupGraphTarget.roleSurfaceNodeId,
         hostSetupGraphTarget.productionFeatureNodeId,
-        coreLoopProductionFeatureTarget.productionFeatureNodeId,
+        ...coreLoopGraphTargets.flatMap((target) => [
+          target.productionFeatureNodeId,
+          `coverage-decision:${target.productionFeatureNodeId}`,
+        ]),
         hostSetupGraphTarget.edgeRowId,
         `coverage-decision:${hostSetupGraphTarget.productionFeatureNodeId}`,
         cohostGraphTarget.roleSurfaceNodeId,
@@ -24415,6 +24461,10 @@ function proofGraphAdminProofFixture() {
         replacementPrivateGraphTarget.productionFeatureNodeId,
         replacementPrivateGraphTarget.edgeRowId,
         `coverage-decision:${replacementPrivateGraphTarget.productionFeatureNodeId}`,
+        ...hardeningGraphTargets.flatMap((target) => [
+          target.productionFeatureNodeId,
+          `coverage-decision:${target.productionFeatureNodeId}`,
+        ]),
         commandProofAuditNodeId,
         commandProofAuditEdgeRowId,
         ...phaseLocalNextActionGraphLinkRows,
@@ -24440,7 +24490,9 @@ function proofGraphAdminProofFixture() {
         "next-action",
         hostSetupGraphTarget.roleSurfaceNodeId,
         hostSetupGraphTarget.productionFeatureNodeId,
-        coreLoopProductionFeatureTarget.productionFeatureNodeId,
+        ...coreLoopGraphTargets.map(
+          (target) => target.productionFeatureNodeId,
+        ),
         cohostGraphTarget.roleSurfaceNodeId,
         cohostGraphTarget.productionFeatureNodeId,
         replacementGraphTarget.roleSurfaceNodeId,
@@ -24449,6 +24501,9 @@ function proofGraphAdminProofFixture() {
         replacementActionGraphTarget.productionFeatureNodeId,
         replacementPrivateGraphTarget.roleSurfaceNodeId,
         replacementPrivateGraphTarget.productionFeatureNodeId,
+        ...hardeningGraphTargets.map(
+          (target) => target.productionFeatureNodeId,
+        ),
         commandProofAuditNodeId,
         ...coreLoopHostVisibleRecoveryDestinations.map(
           (destination) => destination.linkId,
@@ -24755,6 +24810,51 @@ function proofGraphReplacementPrivateFeatureTargetFixture() {
       featureSpineCaseFixture("replacement-private-channel-recovery").spineTarget
         .coverageDecision,
   };
+}
+
+function proofGraphCoreLoopFeatureTargetFixtures() {
+  return proofGraphFeatureTargetFixturesFromCollection({
+    targets: coreLoopProductionFeatureTargetsFixture(
+      coreLoopSpineTargetsFixture().roleUrlHrefs,
+    ),
+    detailRoleUrl: localAdminAuditRoleUrl(localAdminAuditIds.coreLoop),
+    recoveryCommand: devTestGameCoreLoopAdminProofCommand,
+  });
+}
+
+function proofGraphHardeningFeatureTargetFixtures() {
+  return proofGraphFeatureTargetFixturesFromCollection({
+    targets: hardeningProductionFeatureTargetsFixture(
+      hardeningRoleUrlHrefsFixture(),
+    ),
+    detailRoleUrl: localAdminAuditRoleUrl(localAdminAuditIds.hardening),
+    recoveryCommand: devTestGameHardeningAdminProofCommand,
+  });
+}
+
+function proofGraphFeatureTargetFixturesFromCollection({
+  targets,
+  detailRoleUrl,
+  recoveryCommand,
+}) {
+  return targets.slotIds.map((slotId) => {
+    const target = targets.bySlotId[slotId];
+    return {
+      productionFeatureNodeId: `production-feature:${slotId}`,
+      sourceCheckId: target.sourceCheckId,
+      featureSlotId: target.featureSlotId,
+      roleUrl: detailRoleUrl,
+      targetRoleUrl: target.roleUrl,
+      checkpointId: target.checkpointId,
+      adminCheckId: target.adminCheckId,
+      browserProofCommand: target.browserProofCommand,
+      recoveryCommand,
+      sourceProofArtifact: target.sourceProofArtifact,
+      readinessEvidence: target.sourceProofArtifact,
+      browserWorkbench: target.browserWorkbench,
+      coverageDecision: target.coverageDecision,
+    };
+  });
 }
 
 function proofGraphCoreLoopScenarioFamilyDestinationsFixture() {
