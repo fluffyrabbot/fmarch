@@ -2,6 +2,7 @@ import { pathToFileURL } from "node:url";
 import {
   devTestGameHostedEvidenceOperatorChecklistAdminProofPath,
   devTestGameHostedEvidenceOperatorChecklistProofPath,
+  devTestGameHostedTargetPreflightPath,
   devTestGameRealHostedMatrixRawCapturePath,
 } from "./dev_test_game_adjacent_artifact_paths.mjs";
 import {
@@ -52,6 +53,18 @@ export const devTestGameRealHostedMatrixRawCaptureSpinePlan = [
       devTestGameRealHostedMatrixRawCapturePath,
       nextActionPath,
       nextActionAdminProofPath,
+    ],
+    env: realHostedMatrixRawCaptureReadinessEnv,
+  }),
+  {
+    kind: "node",
+    script: "tools/dev_test_game_hosted_target_preflight.mjs",
+  },
+  releaseReadinessStep({
+    reason: "real-hosted-matrix-raw-capture-target-preflight",
+    changedInputs: [
+      devTestGameRealHostedMatrixRawCapturePath,
+      devTestGameHostedTargetPreflightPath,
     ],
     env: realHostedMatrixRawCaptureReadinessEnv,
   }),

@@ -1241,6 +1241,8 @@ function rankedBuildableReleaseReadinessItems(
           hostedTargetPreflight,
           hostedEvidenceOperatorChecklistAdminProof:
             hostedEvidenceOperatorChecklistAdminProofFromReadiness(readiness),
+          realHostedMatrixRawCapture:
+            realHostedMatrixRawCaptureFromReadiness(readiness),
         });
       if (buildable === undefined) {
         return null;
@@ -1333,6 +1335,22 @@ function hostedEvidenceOperatorChecklistAdminProofFromReadiness(readiness) {
     status: check.status,
     evidence: check.evidence,
     checklistProofTarget: check.checklistProofTarget,
+  };
+}
+
+function realHostedMatrixRawCaptureFromReadiness(readiness) {
+  const check = readiness?.localDevelopmentSpine?.checks?.find(
+    (item) => item.id === "local-real-hosted-matrix-raw-capture-intake",
+  );
+  if (check === undefined) {
+    return null;
+  }
+  return {
+    status: check.intakeStatus,
+    evidence: check.evidence,
+    rawEvidenceFixture: check.rawEvidenceFixture === true,
+    rawEvidenceSyntheticExternalTarget:
+      check.rawEvidenceSyntheticExternalTarget === true,
   };
 }
 

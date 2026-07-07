@@ -1460,6 +1460,20 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     },
     {
       kind: "node",
+      script: "tools/dev_test_game_hosted_target_preflight.mjs",
+    },
+    {
+      kind: "node",
+      script: devTestGameReleaseReadinessScript,
+      readinessReason: "real-hosted-matrix-raw-capture-target-preflight",
+      changedInputs: [
+        devTestGameRealHostedMatrixRawCapturePath,
+        devTestGameHostedTargetPreflightPath,
+      ],
+      env: realHostedMatrixRawCaptureReadinessEnv,
+    },
+    {
+      kind: "node",
       script: devTestGameNextActionScript,
       env: {
         FMARCH_DEV_TEST_GAME_SEQUENCE_STAGE:
@@ -5553,6 +5567,93 @@ test("dev test-game next-action advances hosted deployment after target prefligh
   assert.equal(
     passedPreflightAction.generatedFrom.hostedTargetPreflightNextProofTarget,
     devTestGameHostedMatrixExternalEvidencePath,
+  );
+
+  const rawCaptureReadyReadiness = devTestGameReleaseReadinessChecklistFixture({
+    unproven: [
+      {
+        id: "hosted-deployment",
+        status: "unproven",
+        requiredEvidence:
+          "Hosted API/frontend deployment proof with external health checks",
+      },
+    ],
+  });
+  rawCaptureReadyReadiness.localDevelopmentSpine.checks.push({
+    id: "local-real-hosted-matrix-raw-capture-intake",
+    status: "passed",
+    evidence: devTestGameRealHostedMatrixRawCapturePath,
+    intakeStatus: "passed",
+    rawEvidenceFixture: false,
+    rawEvidenceSyntheticExternalTarget: false,
+  });
+  const rawCaptureReadyAction = buildDevTestGameNextAction(freshManifest, {
+    generatedAt: "2026-06-26T00:00:01.000Z",
+    opsArtifacts: devTestGameOpsArtifactsFixture(),
+    raceCoverage: devTestGameRaceCoverageFixture(),
+    releaseReadinessChecklist: rawCaptureReadyReadiness,
+    hostedTargetPreflight: hostedTargetPreflightFixture({ status: "blocked" }),
+  });
+  assertDevTestGameNextAction(rawCaptureReadyAction);
+  assert.equal(
+    rawCaptureReadyAction.nextAction.command,
+    `npm run ${devTestGameHostedTargetPreflightCommand}`,
+  );
+  assert.equal(rawCaptureReadyAction.nextAction.status, "blocked");
+  assert.equal(
+    rawCaptureReadyAction.nextAction.unproven.proofTarget,
+    devTestGameHostedTargetPreflightPath,
+  );
+  assert.equal(
+    rawCaptureReadyAction.nextAction.unproven.roleUrl,
+    "/admin/audit/local-hosted-target-preflight?game=<seeded-game>",
+  );
+  assert.equal(
+    rawCaptureReadyAction.nextAction.unproven.proofGraphNodeId,
+    "admin-proof:hosted-target-preflight",
+  );
+
+  const fixtureRawCaptureReadiness = devTestGameReleaseReadinessChecklistFixture({
+    unproven: [
+      {
+        id: "hosted-deployment",
+        status: "unproven",
+        requiredEvidence:
+          "Hosted API/frontend deployment proof with external health checks",
+      },
+    ],
+  });
+  fixtureRawCaptureReadiness.localDevelopmentSpine.checks.push(
+    {
+      id: "local-hosted-evidence-operator-checklist-admin-surface",
+      status: "passed",
+      evidence: devTestGameHostedEvidenceOperatorChecklistProofPath,
+      checklistProofTarget: devTestGameHostedEvidenceOperatorChecklistProofPath,
+    },
+    {
+      id: "local-real-hosted-matrix-raw-capture-intake",
+      status: "passed",
+      evidence: devTestGameRealHostedMatrixRawCapturePath,
+      intakeStatus: "passed",
+      rawEvidenceFixture: true,
+      rawEvidenceSyntheticExternalTarget: false,
+    },
+  );
+  const fixtureRawCaptureAction = buildDevTestGameNextAction(freshManifest, {
+    generatedAt: "2026-06-26T00:00:01.000Z",
+    opsArtifacts: devTestGameOpsArtifactsFixture(),
+    raceCoverage: devTestGameRaceCoverageFixture(),
+    releaseReadinessChecklist: fixtureRawCaptureReadiness,
+    hostedTargetPreflight: hostedTargetPreflightFixture({ status: "blocked" }),
+  });
+  assertDevTestGameNextAction(fixtureRawCaptureAction);
+  assert.equal(
+    fixtureRawCaptureAction.nextAction.command,
+    `npm run ${devTestGameRealHostedMatrixRawCaptureCommand}`,
+  );
+  assert.equal(
+    fixtureRawCaptureAction.nextAction.unproven.proofTarget,
+    devTestGameRealHostedMatrixRawCapturePath,
   );
 
   const syntheticPreflightAction = buildDevTestGameNextAction(freshManifest, {
@@ -27006,11 +27107,21 @@ function hostedEvidenceLaneRealCaptureAdminProofFixture() {
   return proof;
 }
 
-function realHostedMatrixRawCaptureBlockedFixture() {
+function realHostedMatrixRawCaptureFixture({ status = "blocked" } = {}) {
+  const passed = status === "passed";
+  const rawEvidencePath = passed
+    ? devTestGameHostedMatrixRawEvidenceRealCaptureExamplePath
+    : devTestGameHostedMatrixRawEvidenceOperatorFixturePath;
+  const blockedCheckIds = passed
+    ? []
+    : [
+        "fixture-and-demo-markers-absent",
+        "capture-redaction-retention-metadata",
+      ];
   return {
     version: 1,
     proof: "dev-test-game-real-hosted-matrix-raw-capture",
-    status: "blocked",
+    status,
     releaseReady: false,
     productionReady: false,
     generatedAt: "2026-06-26T00:00:00.000Z",
@@ -27020,34 +27131,40 @@ function realHostedMatrixRawCaptureBlockedFixture() {
       frontendBaseUrl: "https://fmarch-demo.example.test",
       apiBaseUrl: "https://api.fmarch-demo.example.test",
       groupId: "replacement-race-reload",
-      rawEvidencePath:
-        devTestGameHostedMatrixRawEvidenceOperatorFixturePath,
+      rawEvidencePath,
       rawEvidenceStatus: "passed",
       rawEvidenceSyntheticExternalTarget: false,
-      rawEvidenceFixture: true,
+      rawEvidenceFixture: !passed,
     },
     checks: [
       {
         id: "raw-evidence-path-configured",
         status: "passed",
-        evidence: devTestGameHostedMatrixRawEvidenceOperatorFixturePath,
+        evidence: rawEvidencePath,
       },
       {
         id: "raw-evidence-contract-valid",
         status: "passed",
         evidence: {
-          path: devTestGameHostedMatrixRawEvidenceOperatorFixturePath,
+          path: rawEvidencePath,
         },
       },
       {
         id: "fixture-and-demo-markers-absent",
-        status: "blocked",
-        requiredEvidence: "Real hosted raw evidence without fixture markers.",
+        status: passed ? "passed" : "blocked",
+        ...(passed
+          ? { evidence: { fixtureEvidence: false } }
+          : {
+              requiredEvidence:
+                "Real hosted raw evidence without fixture markers.",
+            }),
       },
       {
         id: "capture-redaction-retention-metadata",
-        status: "blocked",
-        requiredEvidence: "Capture metadata is required.",
+        status: passed ? "passed" : "blocked",
+        ...(passed
+          ? { evidence: { externallyCaptured: true } }
+          : { requiredEvidence: "Capture metadata is required." }),
       },
       {
         id: "release-claim-boundary-carried",
@@ -27056,13 +27173,18 @@ function realHostedMatrixRawCaptureBlockedFixture() {
         productionReady: false,
       },
     ],
-    blockedCheckIds: [
-      "fixture-and-demo-markers-absent",
-      "capture-redaction-retention-metadata",
-    ],
-    nextCommand: "npm run test:dev-test-game-real-hosted-matrix-raw-capture",
-    nextProofTarget: devTestGameRealHostedMatrixRawCapturePath,
+    blockedCheckIds,
+    nextCommand: passed
+      ? "npm run test:dev-test-game-hosted-evidence-lane"
+      : "npm run test:dev-test-game-real-hosted-matrix-raw-capture",
+    nextProofTarget: passed
+      ? "target/dev-test-game/hosted-evidence-lane.json"
+      : devTestGameRealHostedMatrixRawCapturePath,
   };
+}
+
+function realHostedMatrixRawCaptureBlockedFixture() {
+  return realHostedMatrixRawCaptureFixture({ status: "blocked" });
 }
 
 function hostedEvidenceOperatorChecklistAdminProofFixture() {

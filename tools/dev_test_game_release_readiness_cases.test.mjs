@@ -51,6 +51,9 @@ import {
   devTestGameRealHostedMatrixRawCapturePath,
 } from "./dev_test_game_real_hosted_matrix_raw_capture_contract.mjs";
 import {
+  devTestGameHostedTargetPreflightPath,
+} from "./dev_test_game_adjacent_artifact_paths.mjs";
+import {
   completedGameHardeningSpineTargetCases,
 } from "./dev_test_game_core_loop_completed_game_proof_readiness_contract.mjs";
 import {
@@ -117,6 +120,9 @@ import {
   playerActionConflictSpineTargetCases,
   reconnectHardeningSpineTargetCases,
 } from "./dev_test_game_hardening_recovery_scenarios.mjs";
+
+const devTestGameHostedTargetPreflightCommand =
+  "test:dev-test-game-hosted-target-preflight";
 
 const hardeningReconnectFeatureTargetExpectations = Object.freeze(
   reconnectHardeningSpineTargetCases().map((target) =>
@@ -1138,6 +1144,57 @@ test("hosted deployment buildable case carries blocked and passed preflight stat
   assert.deepEqual(checklistProven.hostedHandoffChecklist.blockedCheckIds, [
     "raw-evidence-path-configured",
   ]);
+
+  const rawCaptureProven = releaseReadinessBuildableItemForId(
+    "hosted-deployment",
+    {
+      realHostedMatrixRawCapture: {
+        status: "passed",
+        rawEvidenceFixture: false,
+        rawEvidenceSyntheticExternalTarget: false,
+      },
+    },
+  );
+  assert.equal(
+    rawCaptureProven.command,
+    `npm run ${devTestGameHostedTargetPreflightCommand}`,
+  );
+  assert.equal(
+    rawCaptureProven.proofTarget,
+    devTestGameHostedTargetPreflightPath,
+  );
+  assert.equal(
+    rawCaptureProven.roleUrl,
+    "/admin/audit/local-hosted-target-preflight?game=<seeded-game>",
+  );
+  assert.equal(
+    rawCaptureProven.proofGraphNodeId,
+    "admin-proof:hosted-target-preflight",
+  );
+  assert.equal(
+    rawCaptureProven.realHostedEvidenceInputs.command,
+    `npm run ${devTestGameHostedTargetPreflightCommand}`,
+  );
+
+  const fixtureRawCapture = releaseReadinessBuildableItemForId(
+    "hosted-deployment",
+    {
+      hostedEvidenceOperatorChecklistAdminProof: { status: "passed" },
+      realHostedMatrixRawCapture: {
+        status: "passed",
+        rawEvidenceFixture: true,
+        rawEvidenceSyntheticExternalTarget: false,
+      },
+    },
+  );
+  assert.equal(
+    fixtureRawCapture.command,
+    `npm run ${devTestGameRealHostedMatrixRawCaptureCommand}`,
+  );
+  assert.equal(
+    fixtureRawCapture.proofTarget,
+    devTestGameRealHostedMatrixRawCapturePath,
+  );
 
   const passed = releaseReadinessBuildableItemForId("hosted-deployment", {
     hostedTargetPreflight: {

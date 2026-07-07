@@ -68,11 +68,15 @@ import {
 } from "./dev_test_game_release_artifact_paths.mjs";
 import {
   devTestGameHostedConcurrentRaceMatrixPath,
+  devTestGameHostedTargetPreflightPath,
 } from "./dev_test_game_adjacent_artifact_paths.mjs";
 import {
   devTestGameRealHostedMatrixRawCaptureCommand,
   devTestGameRealHostedMatrixRawCapturePath,
 } from "./dev_test_game_real_hosted_matrix_raw_capture_contract.mjs";
+
+const devTestGameHostedTargetPreflightCommand =
+  "test:dev-test-game-hosted-target-preflight";
 
 export {
   devTestGameReleaseAdminProofPath,
@@ -367,12 +371,14 @@ export function releaseReadinessBuildableItemForId(
   {
     hostedTargetPreflight = null,
     hostedEvidenceOperatorChecklistAdminProof = null,
+    realHostedMatrixRawCapture = null,
   } = {},
 ) {
   if (itemId === "hosted-deployment") {
     return hostedDeploymentBuildable({
       hostedTargetPreflight,
       hostedEvidenceOperatorChecklistAdminProof,
+      realHostedMatrixRawCapture,
     });
   }
   const item = localBuildableReleaseReadinessItems.get(itemId);
@@ -421,6 +427,7 @@ function humanReleaseUnprovenItems({ releaseRunbookEvidence }) {
 function hostedDeploymentBuildable({
   hostedTargetPreflight,
   hostedEvidenceOperatorChecklistAdminProof,
+  realHostedMatrixRawCapture,
 }) {
   if (hostedTargetPreflight?.status === "passed") {
     return {
@@ -442,6 +449,44 @@ function hostedDeploymentBuildable({
         status: "passed",
         mode: "real-hosted",
       }),
+    };
+  }
+  if (realHostedMatrixRawCaptureSatisfiesPreflightInput(realHostedMatrixRawCapture)) {
+    const command = `npm run ${devTestGameHostedTargetPreflightCommand}`;
+    const blockedBuildable = cloneBuildableItem(
+      localBuildableReleaseReadinessItems.get("hosted-deployment"),
+    );
+    return {
+      ...blockedBuildable,
+      command,
+      buildSlice:
+        [
+          "Run the hosted target preflight against the passed real raw-capture packet;",
+          "this confirms the same externally captured, non-fixture evidence satisfies the hosted target boundary before the hosted evidence lane can write deployment evidence.",
+        ].join(" "),
+      proofTarget: devTestGameHostedTargetPreflightPath,
+      roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.hostedTargetPreflight),
+      proofGraphNodeId: "admin-proof:hosted-target-preflight",
+      proofBoundary:
+        [
+          "Hosted target preflight after passed real raw-capture intake.",
+          "This command revalidates FMARCH_HOSTED_MATRIX_FRONTEND_URL, FMARCH_HOSTED_MATRIX_API_URL, and FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH together;",
+          "it keeps fixture and synthetic packets blocked and does not itself prove hosted deployment.",
+        ].join(" "),
+      realHostedEvidenceInputs: buildRealHostedEvidenceInputs({
+        status: "unproven",
+        mode: "raw_capture_passed",
+        command,
+        proofTarget: devTestGameHostedTargetPreflightPath,
+      }),
+      hostedHandoffChecklist:
+        hostedTargetPreflight?.status === "blocked"
+          ? hostedEvidenceBlockedHandoffChecklistFromPreflight({
+              preflight: hostedTargetPreflight,
+              command,
+              proofTarget: devTestGameHostedTargetPreflightPath,
+            })
+          : blockedBuildable.hostedHandoffChecklist,
     };
   }
   if (hostedEvidenceOperatorChecklistAdminProof?.status === "passed") {
@@ -487,6 +532,14 @@ function hostedDeploymentBuildable({
     };
   }
   return blockedBuildable;
+}
+
+function realHostedMatrixRawCaptureSatisfiesPreflightInput(rawCapture) {
+  return (
+    rawCapture?.status === "passed" &&
+    rawCapture.rawEvidenceFixture !== true &&
+    rawCapture.rawEvidenceSyntheticExternalTarget !== true
+  );
 }
 
 function hostedProductionIdentityBuildable() {
