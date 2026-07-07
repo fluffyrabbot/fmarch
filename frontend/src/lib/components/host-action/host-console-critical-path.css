@@ -181,6 +181,7 @@
 }
 
 .host-console-critical-path__control-bay {
+  border-block-start: 4px solid var(--fm-accent);
   gap: 12px;
   min-block-size: 188px;
 }
@@ -289,7 +290,7 @@
 
 }
 
-@media (max-width: 1359px) {
+@media (max-width: 1179px) {
   .host-console-critical-path__moderator-controls {
     grid-template-columns: 1fr;
   }
