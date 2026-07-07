@@ -444,6 +444,12 @@ import {
   selectedProofGraphDependencyHandoffSummaries,
 } from "./dev_test_game_selected_proof_graph_dependency.mjs";
 import {
+  proofGraphEdgeStatusText,
+  selectedProofGraphDependencyDefinitions,
+  selectedProofGraphDependencyEdgeHandoff,
+  selectedProofGraphDependencyEdgeRelatedLinkDescriptor,
+} from "../frontend/src/lib/app/selected-proof-graph-dependencies.mjs";
+import {
   adminProofDestinationRequirementCases,
   adminProofDestinationRequirementLinkRows,
   proofGraphDiagnosticProofEdges,
@@ -8309,6 +8315,53 @@ test("selected proof graph dependency handoffs are table-driven across hosted la
       testCase.label,
     );
   }
+});
+
+test("selected proof graph dependency edge descriptors share route and proof contracts", () => {
+  const command = `npm run ${devTestGameRealHostedObservabilityHandoffCommand}`;
+  const unproven = {
+    proofGraphNodeId:
+      realHostedObservabilityRoleSurfaceDrilldown.proofGraphNodeId,
+    roleUrl:
+      "/admin/audit/local-real-hosted-observability-handoff?game=<seeded-game>",
+    status: "blocked",
+  };
+  const definition = selectedProofGraphDependencyDefinitions({
+    command,
+    actionStatus: "blocked",
+    unproven,
+  }).find((candidate) => candidate.id === "real-hosted-observability-handoff");
+  const edge = {
+    from: "admin-proof:hosted-ops-signals",
+    to: realHostedObservabilityRoleSurfaceDrilldown.proofGraphNodeId,
+    relationship: "feeds-real-hosted-observability-handoff",
+    command,
+    proofTarget: devTestGameRealHostedObservabilityHandoffPath,
+    roleUrl:
+      "/admin/audit/local-real-hosted-observability-handoff?game=<seeded-game>",
+    status: "blocked",
+    source: "hosted-ops-signals",
+  };
+  const relatedLinkDescriptor =
+    selectedProofGraphDependencyEdgeRelatedLinkDescriptor({
+      definition,
+      edge,
+    });
+  const handoffDescriptor = selectedProofGraphDependencyEdgeHandoff({
+    edge,
+    auditId: localAdminAuditIds.proofGraph,
+  });
+
+  assert.equal(relatedLinkDescriptor.id, handoffDescriptor.linkId);
+  assert.equal(relatedLinkDescriptor.status, "blocked");
+  assert.equal(
+    handoffDescriptor.requiredCheckStatuses[handoffDescriptor.linkId],
+    proofGraphEdgeStatusText(edge, { separator: " " }),
+  );
+  assert.deepEqual(handoffDescriptor.requiredRelatedLinkIds, [
+    "admin-proof:hosted-ops-signals",
+    "admin-proof:real-hosted-observability-handoff",
+  ]);
 });
 
 test("next-action admin proof includes real-hosted observability dependency handoff", () => {

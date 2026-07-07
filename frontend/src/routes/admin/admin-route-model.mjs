@@ -15,8 +15,11 @@ import {
   selectedNextActionProofGraphNodeSummary,
 } from "../../lib/app/local-proof-handoff-status.mjs";
 import {
+  proofGraphEdgeCheckId,
+  proofGraphEdgeStatusText,
   selectedProofGraphDependencyApplies,
   selectedProofGraphDependencyDefinitions,
+  selectedProofGraphDependencyEdgeRelatedLinkDescriptor,
 } from "../../lib/app/selected-proof-graph-dependencies.mjs";
 import {
   hardeningAuditLaneIds,
@@ -4671,50 +4674,9 @@ export function normalizeLocalProofGraphEdgeCheckRows(edge) {
   return Object.freeze([
     Object.freeze({
       id: proofGraphEdgeCheckId(edge),
-      status: localProofGraphEdgeCheckStatus(edge),
+      status: proofGraphEdgeStatusText(edge),
     }),
   ]);
-}
-
-function localProofGraphEdgeCheckStatus(edge) {
-  const relationship = String(edge?.relationship ?? "recorded");
-  const source = String(edge?.source ?? "").trim();
-  const status = String(edge?.status ?? "").trim();
-  const mode = String(edge?.mode ?? "").trim();
-  const realHostedEvidenceStatus = String(
-    edge?.realHostedEvidenceStatus ?? "",
-  ).trim();
-  const realHostedDeploymentStatus = String(
-    edge?.realHostedDeploymentStatus ?? "",
-  ).trim();
-  const externalEvidencePath = String(edge?.externalEvidencePath ?? "").trim();
-  const command = String(edge?.command ?? "").trim();
-  const firstMissingInputId = String(edge?.firstMissingInputId ?? "").trim();
-  const roleUrl = String(edge?.roleUrl ?? "").trim();
-  const proofTarget = String(edge?.proofTarget ?? "").trim();
-  const unprovenId = String(edge?.unprovenId ?? "").trim();
-  return [
-    relationship,
-    ...(source === "" ? [] : [`source ${source}`]),
-    ...(status === "" ? [] : [`status ${status}`]),
-    ...(mode === "" ? [] : [`mode ${mode}`]),
-    ...(realHostedEvidenceStatus === ""
-      ? []
-      : [`realHostedEvidenceStatus ${realHostedEvidenceStatus}`]),
-    ...(realHostedDeploymentStatus === ""
-      ? []
-      : [`realHostedDeploymentStatus ${realHostedDeploymentStatus}`]),
-    ...(externalEvidencePath === ""
-      ? []
-      : [`externalEvidencePath ${externalEvidencePath}`]),
-    ...(firstMissingInputId === ""
-      ? []
-      : [`firstMissingInputId ${firstMissingInputId}`]),
-    ...(command === "" ? [] : [`command ${command}`]),
-    ...(proofTarget === "" ? [] : [`proofTarget ${proofTarget}`]),
-    ...(roleUrl === "" ? [] : [`roleUrl ${roleUrl}`]),
-    ...(unprovenId === "" ? [] : [`unprovenId ${unprovenId}`]),
-  ].join("\n");
 }
 
 export function normalizeLocalProofGraphRelatedLinks(
@@ -4809,12 +4771,6 @@ export function normalizeLocalProofGraphDiagnosticProofSummary({
     proofGraph?.summary?.diagnosticProofSummary,
     { nodes },
   );
-}
-
-function proofGraphEdgeCheckId(edge) {
-  return `edge:${String(edge?.from ?? "")}:${String(
-    edge?.relationship ?? "related",
-  )}:${String(edge?.to ?? "")}`;
 }
 
 function normalizedEvidenceObjectCheckRows({ parentId, objects }) {
@@ -5997,18 +5953,19 @@ function selectedProofGraphDependencyRelatedLinks({
       }),
     )
     .flatMap((definition) =>
-      definition.edges.map((edge) =>
-        Object.freeze({
-          id: proofGraphEdgeCheckId(edge),
-          label: definition.label(edge),
+      definition.edges.map((edge) => {
+        const descriptor = selectedProofGraphDependencyEdgeRelatedLinkDescriptor({
+          definition,
+          edge,
+        });
+        return Object.freeze({
+          ...descriptor,
           href: adminAuditInspectHref({
             game,
             audit: localAdminAuditIds.proofGraph,
           }),
-          status: definition.status(edge),
-          command: definition.command(edge),
-        }),
-      ),
+        });
+      }),
     );
 }
 
