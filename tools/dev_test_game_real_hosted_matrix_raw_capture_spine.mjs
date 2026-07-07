@@ -2,9 +2,13 @@ import { pathToFileURL } from "node:url";
 import {
   devTestGameHostedEvidenceOperatorChecklistAdminProofPath,
   devTestGameHostedEvidenceOperatorChecklistProofPath,
+  devTestGameHostedEvidenceLanePath,
   devTestGameHostedTargetPreflightPath,
   devTestGameRealHostedMatrixRawCapturePath,
 } from "./dev_test_game_adjacent_artifact_paths.mjs";
+import {
+  devTestGameHostedMatrixExternalEvidencePath,
+} from "./dev_test_game_hosted_matrix_external_evidence.mjs";
 import {
   nextActionAdminProofPath,
   nextActionPath,
@@ -25,6 +29,8 @@ export const realHostedMatrixRawCaptureReadinessEnv = {
     devTestGameHostedEvidenceOperatorChecklistAdminProofPath,
   FMARCH_DEV_TEST_GAME_REAL_HOSTED_MATRIX_RAW_CAPTURE:
     devTestGameRealHostedMatrixRawCapturePath,
+  FMARCH_DEV_TEST_GAME_HOSTED_EVIDENCE_LANE:
+    devTestGameHostedEvidenceLanePath,
   FMARCH_DEV_TEST_GAME_NEXT_ACTION_ADMIN_PROOF: nextActionAdminProofPath,
 };
 
@@ -65,6 +71,20 @@ export const devTestGameRealHostedMatrixRawCaptureSpinePlan = [
     changedInputs: [
       devTestGameRealHostedMatrixRawCapturePath,
       devTestGameHostedTargetPreflightPath,
+    ],
+    env: realHostedMatrixRawCaptureReadinessEnv,
+  }),
+  {
+    kind: "node",
+    script: "tools/dev_test_game_hosted_evidence_lane.mjs",
+  },
+  releaseReadinessStep({
+    reason: "real-hosted-matrix-raw-capture-hosted-evidence-lane",
+    changedInputs: [
+      devTestGameRealHostedMatrixRawCapturePath,
+      devTestGameHostedTargetPreflightPath,
+      devTestGameHostedEvidenceLanePath,
+      devTestGameHostedMatrixExternalEvidencePath,
     ],
     env: realHostedMatrixRawCaptureReadinessEnv,
   }),

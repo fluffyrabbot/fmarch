@@ -526,6 +526,9 @@ import {
   runDevTestGameHostedEvidenceLane,
 } from "./dev_test_game_hosted_evidence_lane.mjs";
 import {
+  buildRealHostedEvidenceInputs,
+} from "./dev_test_game_real_hosted_evidence_inputs.mjs";
+import {
   devTestGameHostedEvidenceLaneAdminProofPath,
   devTestGameHostedEvidenceLaneRealCaptureAdminProofCommand,
   devTestGameHostedEvidenceLaneRealCaptureAdminProofPath,
@@ -1420,6 +1423,8 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
       devTestGameHostedEvidenceOperatorChecklistAdminProofPath,
     FMARCH_DEV_TEST_GAME_REAL_HOSTED_MATRIX_RAW_CAPTURE:
       devTestGameRealHostedMatrixRawCapturePath,
+    FMARCH_DEV_TEST_GAME_HOSTED_EVIDENCE_LANE:
+      devTestGameHostedEvidenceLanePath,
     FMARCH_DEV_TEST_GAME_NEXT_ACTION_ADMIN_PROOF: nextActionAdminProofPath,
   });
   assert.deepEqual(devTestGameRealHostedMatrixRawCaptureSpinePlan, [
@@ -1469,6 +1474,22 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
       changedInputs: [
         devTestGameRealHostedMatrixRawCapturePath,
         devTestGameHostedTargetPreflightPath,
+      ],
+      env: realHostedMatrixRawCaptureReadinessEnv,
+    },
+    {
+      kind: "node",
+      script: "tools/dev_test_game_hosted_evidence_lane.mjs",
+    },
+    {
+      kind: "node",
+      script: devTestGameReleaseReadinessScript,
+      readinessReason: "real-hosted-matrix-raw-capture-hosted-evidence-lane",
+      changedInputs: [
+        devTestGameRealHostedMatrixRawCapturePath,
+        devTestGameHostedTargetPreflightPath,
+        devTestGameHostedEvidenceLanePath,
+        devTestGameHostedMatrixExternalEvidencePath,
       ],
       env: realHostedMatrixRawCaptureReadinessEnv,
     },
@@ -17873,6 +17894,45 @@ test("session card and markdown include role credential URLs and tokens", async 
       .hostedEvidenceLaneRealCaptureAdminProof,
     devTestGameHostedEvidenceLaneRealCaptureAdminProofPath,
   );
+  const hostedEvidenceLaneArtifactReadiness = buildDevTestGameReleaseReadiness(
+    proofRun,
+    {
+      generatedAt: "2026-06-26T00:00:00.000Z",
+      hostedEvidenceLanePath: devTestGameHostedEvidenceLanePath,
+      hostedEvidenceLane: hostedEvidenceLaneFixture({ status: "passed" }),
+    },
+  );
+  assertDevTestGameReleaseReadiness(hostedEvidenceLaneArtifactReadiness);
+  const hostedEvidenceLaneArtifactCheck =
+    hostedEvidenceLaneArtifactReadiness.localDevelopmentSpine.checks.find(
+      (item) => item.id === "local-hosted-evidence-lane",
+    );
+  assert.equal(hostedEvidenceLaneArtifactCheck.status, "passed");
+  assert.equal(
+    hostedEvidenceLaneArtifactCheck.evidence,
+    devTestGameHostedEvidenceLanePath,
+  );
+  assert.equal(hostedEvidenceLaneArtifactCheck.laneStatus, "passed");
+  assert.equal(hostedEvidenceLaneArtifactCheck.preflightStatus, "passed");
+  assert.equal(hostedEvidenceLaneArtifactCheck.blockedCheckCount, 0);
+  assert.equal(hostedEvidenceLaneArtifactCheck.hostedEvidenceMode, "real-hosted");
+  assert.equal(
+    hostedEvidenceLaneArtifactCheck.realHostedEvidenceStatus,
+    "passed",
+  );
+  assert.equal(
+    hostedEvidenceLaneArtifactCheck.externalEvidencePath,
+    devTestGameHostedMatrixExternalEvidencePath,
+  );
+  assert.equal(
+    hostedEvidenceLaneArtifactReadiness.generatedFrom.hostedEvidenceLane,
+    devTestGameHostedEvidenceLanePath,
+  );
+  assert.equal(
+    hostedEvidenceLaneArtifactReadiness.localDevelopmentSpine.evidence
+      .hostedEvidenceLane.status,
+    "passed",
+  );
   const hostedEvidenceOperatorFixtureReadiness =
     buildDevTestGameReleaseReadiness(proofRun, {
       generatedAt: "2026-06-26T00:00:00.000Z",
@@ -27483,6 +27543,125 @@ function hostedTargetPreflightFixture({
     nextProofTarget: passed
       ? devTestGameHostedMatrixExternalEvidencePath
       : devTestGameHostedTargetPreflightPath,
+  };
+}
+
+function hostedEvidenceLaneFixture({ status = "blocked" } = {}) {
+  const passed = status === "passed";
+  const blockedCheckIds = passed ? [] : ["hosted-frontend-url-configured"];
+  const proofTarget = passed
+    ? devTestGameHostedMatrixExternalEvidencePath
+    : devTestGameHostedEvidenceLanePath;
+  return {
+    version: 1,
+    proof: "dev-test-game-hosted-evidence-lane",
+    status,
+    releaseReady: false,
+    productionReady: false,
+    generatedAt: "2026-06-26T00:00:00.000Z",
+    scope: "hosted-evidence-lane",
+    proofBoundary: "Hosted evidence lane fixture without release claims.",
+    preflightStatus: passed ? "passed" : "blocked",
+    blockedCheckIds,
+    target: hostedTargetPreflightFixture({ status }).target,
+    ...(passed
+      ? {}
+      : {
+          blockedReceipt: {
+            status: "blocked",
+            blockedCheckIds,
+            command: `npm run ${devTestGameHostedEvidenceLaneCommand}`,
+            nextProofTarget: devTestGameHostedEvidenceLanePath,
+          },
+        }),
+    hostedEvidence: {
+      status,
+      mode: passed ? "real-hosted" : "blocked",
+      syntheticExternalTarget: false,
+      realHostedEvidenceStatus: passed ? "passed" : "unproven",
+      realHostedEvidenceInputs: buildRealHostedEvidenceInputs({
+        status: passed ? "passed" : "unproven",
+        mode: passed ? "real-hosted" : "blocked",
+      }),
+      ...(passed
+        ? {
+            externalEvidencePath: devTestGameHostedMatrixExternalEvidencePath,
+            externalEvidenceSourceMode: "real-hosted",
+            evidence: devTestGameHostedMatrixExternalEvidencePath,
+          }
+        : {
+            requiredEvidence:
+              "Passed hosted target preflight and normalized hosted matrix evidence.",
+          }),
+    },
+    hostedHandoffChecklist: hostedEvidenceHandoffChecklistFixture({
+      status,
+      preflightStatus: passed ? "passed" : "blocked",
+      command: `npm run ${devTestGameHostedEvidenceLaneCommand}`,
+      proofTarget,
+      blockedCheckIds,
+      inputSections: hostedEvidenceHandoffInputSections({
+        providedInputIds: passed
+          ? [
+              "command",
+              "proof-target",
+              "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
+              "FMARCH_HOSTED_MATRIX_API_URL",
+              "FMARCH_HOSTED_MATRIX_GROUP_ID",
+              "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
+            ]
+          : ["command", "proof-target"],
+      }),
+    }),
+    checks: [
+      {
+        id: "hosted-target-preflight",
+        status: passed ? "passed" : "blocked",
+        ...(passed
+          ? {}
+          : { requiredEvidence: "Pass hosted target preflight." }),
+      },
+      ...(passed
+        ? [
+            {
+              id: "external-hosted-evidence-written",
+              status: "passed",
+              evidence: devTestGameHostedMatrixExternalEvidencePath,
+            },
+            {
+              id: "real-hosted-evidence-required",
+              status: "passed",
+              evidence: devTestGameHostedMatrixExternalEvidencePath,
+            },
+            {
+              id: "release-claim-boundary-carried",
+              status: "passed",
+              releaseReady: false,
+              productionReady: false,
+            },
+          ]
+        : [
+            {
+              id: "hosted-frontend-url-configured",
+              status: "blocked",
+              requiredEvidence: "Set FMARCH_HOSTED_MATRIX_FRONTEND_URL.",
+            },
+          ]),
+    ],
+    generatedFrom: {
+      hostedTargetPreflight: devTestGameHostedTargetPreflightPath,
+      ...(passed
+        ? {
+            hostedConcurrentRaceMatrix:
+              devTestGameHostedConcurrentRaceMatrixPath,
+            externalHostedEvidence: devTestGameHostedMatrixExternalEvidencePath,
+          }
+        : {}),
+    },
+    nextCommand: passed
+      ? `npm run ${devTestGameHostedMatrixExternalEvidenceCommand}`
+      : `npm run ${devTestGameHostedEvidenceLaneCommand}`,
+    nextProofTarget: proofTarget,
   };
 }
 

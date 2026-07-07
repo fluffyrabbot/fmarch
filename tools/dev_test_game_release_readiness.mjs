@@ -30,6 +30,10 @@ import {
   raceCoveragePromotedReloadGroups,
 } from "./dev_test_game_race_coverage.mjs";
 import {
+  assertDevTestGameHostedEvidenceLane,
+  devTestGameHostedEvidenceLanePath,
+} from "./dev_test_game_hosted_evidence_lane.mjs";
+import {
   assertDevTestGameHostedEvidenceLaneDemoProof,
   devTestGameHostedEvidenceLaneDemoProofPath,
 } from "./dev_test_game_hosted_evidence_lane_demo_proof.mjs";
@@ -599,6 +603,10 @@ const defaultHostedConcurrentRaceMatrixPath = path.join(
   artifactDir,
   "hosted-concurrent-race-matrix.json",
 );
+const defaultHostedEvidenceLanePath = path.join(
+  repoRoot,
+  devTestGameHostedEvidenceLanePath,
+);
 const defaultHostedEvidenceLaneAdminProofPath = path.join(
   repoRoot,
   devTestGameHostedEvidenceLaneAdminProofPath,
@@ -1028,6 +1036,14 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
           },
         )
       : undefined;
+  const hostedEvidenceLaneEvidence = options.hostedEvidenceLane
+    ? validateDevTestGameHostedEvidenceLane(options.hostedEvidenceLane, {
+        path:
+          options.hostedEvidenceLanePath ??
+          devTestGameHostedEvidenceLanePath,
+        artifact: options.hostedEvidenceLaneArtifact,
+      })
+    : undefined;
   const realHostedMatrixRawCaptureEvidence = options.realHostedMatrixRawCapture
     ? validateDevTestGameRealHostedMatrixRawCapture(
         options.realHostedMatrixRawCapture,
@@ -1495,6 +1511,28 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       adminRoleSurface: hostedConcurrentRaceMatrixAdminProofEvidence,
     });
   }
+  if (hostedEvidenceLaneEvidence !== undefined) {
+    localChecks.push({
+      id: "local-hosted-evidence-lane",
+      label: "Local hosted evidence lane",
+      status: "passed",
+      evidence: hostedEvidenceLaneEvidence.path,
+      proofBoundary: hostedEvidenceLaneEvidence.proofBoundary,
+      laneStatus: hostedEvidenceLaneEvidence.status,
+      preflightStatus: hostedEvidenceLaneEvidence.preflightStatus,
+      blockedCheckCount: hostedEvidenceLaneEvidence.blockedCheckIds.length,
+      blockedCheckIds: hostedEvidenceLaneEvidence.blockedCheckIds,
+      hostedEvidenceMode: hostedEvidenceLaneEvidence.hostedEvidenceMode,
+      realHostedEvidenceStatus:
+        hostedEvidenceLaneEvidence.realHostedEvidenceStatus,
+      externalEvidencePath: hostedEvidenceLaneEvidence.externalEvidencePath,
+      nextCommand: hostedEvidenceLaneEvidence.nextCommand,
+      nextProofTarget: hostedEvidenceLaneEvidence.nextProofTarget,
+      releaseReady: false,
+      productionReady: false,
+      hostedEvidenceLane: hostedEvidenceLaneEvidence,
+    });
+  }
   if (hostedEvidenceLaneAdminProofEvidence !== undefined) {
     localChecks.push({
       id: "local-hosted-evidence-lane-admin-surface",
@@ -1904,6 +1942,11 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         : {
             realHostedMatrixRawCapture: realHostedMatrixRawCaptureEvidence.path,
           }),
+      ...(hostedEvidenceLaneEvidence === undefined
+        ? {}
+        : {
+            hostedEvidenceLane: hostedEvidenceLaneEvidence.path,
+          }),
       ...(hostedEvidenceLaneRealCaptureAdminProofEvidence === undefined
         ? {}
         : {
@@ -1974,6 +2017,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         proofGraphAdminProofEvidence === undefined &&
         selectedOperatorHandoffReceiptAdminProofEvidence === undefined &&
         proofFreshnessAdminProofEvidence === undefined &&
+        hostedEvidenceLaneEvidence === undefined &&
         hostedEvidenceLaneAdminProofEvidence === undefined &&
         hostedEvidenceLaneRealCaptureAdminProofEvidence === undefined &&
         hostedEvidenceOperatorChecklistAdminProofEvidence === undefined &&
@@ -2131,6 +2175,11 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
                 : {
                     hostedEvidenceLaneAdminProof:
                       hostedEvidenceLaneAdminProofEvidence,
+                  }),
+              ...(hostedEvidenceLaneEvidence === undefined
+                ? {}
+                : {
+                    hostedEvidenceLane: hostedEvidenceLaneEvidence,
                   }),
               ...(hostedEvidenceLaneRealCaptureAdminProofEvidence === undefined
                 ? {}
@@ -5455,6 +5504,25 @@ export function validateDevTestGameRealHostedMatrixRawCapture(
     rawEvidenceFixture: proof.target.rawEvidenceFixture,
     rawEvidenceSyntheticExternalTarget:
       proof.target.rawEvidenceSyntheticExternalTarget,
+    nextCommand: proof.nextCommand,
+    nextProofTarget: proof.nextProofTarget,
+    checks: proof.checks,
+    ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
+  };
+}
+
+export function validateDevTestGameHostedEvidenceLane(proof, options = {}) {
+  assertDevTestGameHostedEvidenceLane(proof);
+  return {
+    status: proof.status,
+    path: options.path ?? devTestGameHostedEvidenceLanePath,
+    proofBoundary: proof.proofBoundary,
+    preflightStatus: proof.preflightStatus,
+    blockedCheckIds: proof.blockedCheckIds,
+    hostedEvidenceMode: proof.hostedEvidence?.mode ?? "unknown",
+    realHostedEvidenceStatus:
+      proof.hostedEvidence?.realHostedEvidenceStatus ?? "unknown",
+    externalEvidencePath: proof.hostedEvidence?.externalEvidencePath,
     nextCommand: proof.nextCommand,
     nextProofTarget: proof.nextProofTarget,
     checks: proof.checks,
@@ -10110,6 +10178,18 @@ const optionalReadinessArtifactRegistry = Object.freeze([
     outputKeys: hostedConcurrentRaceMatrixAdminProofArtifact.outputKeys,
   }),
   optionalReadinessArtifact({
+    id: "hostedEvidenceLane",
+    envVar: "FMARCH_DEV_TEST_GAME_HOSTED_EVIDENCE_LANE",
+    defaultPath: defaultHostedEvidenceLanePath,
+    outputKeys: {
+      data: "hostedEvidenceLane",
+      path: "hostedEvidenceLanePath",
+      freshnessMetadata: "hostedEvidenceLaneArtifact",
+    },
+    validator: validateDevTestGameHostedEvidenceLane,
+    ignoreInvalidDefault: true,
+  }),
+  optionalReadinessArtifact({
     id: "hostedEvidenceLaneAdminProof",
     envVar: "FMARCH_DEV_TEST_GAME_HOSTED_EVIDENCE_LANE_ADMIN_PROOF",
     defaultPath: defaultHostedEvidenceLaneAdminProofPath,
@@ -10288,6 +10368,7 @@ const optionalReadinessArtifactLoadPlan = Object.freeze([
   "hostedConcurrentRaceMatrix",
   "raceCoverageAdminProof",
   "hostedConcurrentRaceMatrixAdminProof",
+  "hostedEvidenceLane",
   "hostedEvidenceLaneAdminProof",
   "hostedEvidenceOperatorChecklistProof",
   "hostedEvidenceOperatorChecklistAdminProof",
