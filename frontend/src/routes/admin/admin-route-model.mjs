@@ -15,6 +15,10 @@ import {
   selectedNextActionProofGraphNodeSummary,
 } from "../../lib/app/local-proof-handoff-status.mjs";
 import {
+  selectedProofGraphDependencyApplies,
+  selectedProofGraphDependencyDefinitions,
+} from "../../lib/app/selected-proof-graph-dependencies.mjs";
+import {
   hardeningAuditLaneIds,
 } from "../../../../tools/dev_test_game_hardening_scenarios.mjs";
 import {
@@ -69,7 +73,6 @@ import {
 import {
   devTestGameRealHostedObservabilityHandoffCommand,
   devTestGameRealHostedObservabilityHandoffPath,
-  realHostedObservabilityRoleSurfaceDrilldown,
   realHostedObservabilityBaselineEnv,
   realHostedObservabilityEvidenceEnv,
   realHostedObservabilityHandoffInputIds,
@@ -5989,6 +5992,7 @@ function selectedProofGraphDependencyRelatedLinks({
       selectedProofGraphDependencyApplies({
         definition,
         selectedNodeId,
+        unproven,
         unprovenRoleUrl,
       }),
     )
@@ -6006,76 +6010,6 @@ function selectedProofGraphDependencyRelatedLinks({
         }),
       ),
     );
-}
-
-function selectedProofGraphDependencyDefinitions({
-  command,
-  actionStatus,
-  hostedIdentityProofGraphEdges,
-  unproven,
-}) {
-  return [
-    Object.freeze({
-      selectedProofGraphNodeId: "admin-proof:hosted-concurrent-race-matrix",
-      roleUrlIncludes: "/admin/audit/local-hosted-concurrent-race-matrix",
-      edges: Object.freeze([
-        Object.freeze({
-          from: "admin-proof:hosted-evidence-lane",
-          relationship: "feeds-hosted-matrix-transition",
-          to: "admin-proof:hosted-concurrent-race-matrix",
-        }),
-      ]),
-      label: () => "Hosted evidence lane to hosted matrix",
-      status: () =>
-        String(
-          unproven?.realHostedEvidenceStatus ??
-            unproven?.status ??
-            actionStatus,
-        ),
-      command: () => command,
-    }),
-    Object.freeze({
-      selectedProofGraphNodeId: "admin-proof:hosted-identity-evidence",
-      roleUrlIncludes: "/admin/audit/local-hosted-identity-evidence",
-      edges: Object.freeze(
-        Array.isArray(hostedIdentityProofGraphEdges?.edges)
-          ? hostedIdentityProofGraphEdges.edges
-          : [],
-      ),
-      label: (edge) => `${edge.from} to ${edge.to}`,
-      status: (edge) => String(edge.relationship ?? actionStatus),
-      command: (edge) => String(edge.command ?? command),
-    }),
-    Object.freeze({
-      selectedProofGraphNodeId:
-        realHostedObservabilityRoleSurfaceDrilldown.proofGraphNodeId,
-      roleUrlIncludes:
-        "/admin/audit/local-real-hosted-observability-handoff",
-      edges: Object.freeze([
-        Object.freeze({
-          from: "admin-proof:hosted-ops-signals",
-          relationship: "feeds-real-hosted-observability-handoff",
-          to: realHostedObservabilityRoleSurfaceDrilldown.proofGraphNodeId,
-        }),
-      ]),
-      label: () => "Hosted ops signals to real hosted observability",
-      status: () => String(unproven?.status ?? actionStatus),
-      command: () => command,
-    }),
-  ];
-}
-
-function selectedProofGraphDependencyApplies({
-  definition,
-  selectedNodeId,
-  unprovenRoleUrl,
-}) {
-  return (
-    definition.edges.length > 0 &&
-    selectedNodeId === definition.selectedProofGraphNodeId &&
-    typeof unprovenRoleUrl === "string" &&
-    unprovenRoleUrl.includes(definition.roleUrlIncludes)
-  );
 }
 
 export function normalizeLocalNextActionSelectedProofGraphCheckRows({

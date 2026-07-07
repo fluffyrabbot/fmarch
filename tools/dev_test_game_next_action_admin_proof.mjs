@@ -101,8 +101,8 @@ import {
   visibleBlockedOperatorPacket,
 } from "./dev_test_game_hosted_operator_packet.mjs";
 import {
-  realHostedObservabilityRoleSurfaceDrilldown,
-} from "./dev_test_game_real_hosted_observability_handoff_cases.mjs";
+  selectedProofGraphDependencyDefinitions,
+} from "../frontend/src/lib/app/selected-proof-graph-dependencies.mjs";
 export {
   proofGraphDestinationSummaryDriftNextActionAdminProofPath,
   proofGraphDestinationSummaryDriftNextActionPath,
@@ -1949,55 +1949,14 @@ function relatedHandoffsForNextAction({ nextAction, proofGraph, hostedMatrix }) 
 }
 
 export function selectedProofGraphDependencyDefinitionsForNextAction(nextAction) {
-  return [
-    hostedMatrixTransitionDependency(),
-    hostedIdentityProofGraphDependency(nextAction),
-    realHostedObservabilityProofGraphDependency(),
-  ].filter((dependency) => dependency !== null);
-}
-
-function hostedMatrixTransitionDependency() {
-  return {
-    selectedProofGraphNodeId: "admin-proof:hosted-concurrent-race-matrix",
-    roleUrlIncludes: "/admin/audit/local-hosted-concurrent-race-matrix",
-    edges: [
-      {
-        from: "admin-proof:hosted-evidence-lane",
-        to: "admin-proof:hosted-concurrent-race-matrix",
-        relationship: "feeds-hosted-matrix-transition",
-      },
-    ],
-  };
-}
-
-function hostedIdentityProofGraphDependency(nextAction) {
-  const dependency =
-    nextAction.nextAction.unproven?.hostedIdentityProofGraphEdges;
-  if (!Array.isArray(dependency?.edges) || dependency.edges.length === 0) {
-    return null;
-  }
-  return {
-    unprovenId: "hosted-production-identity",
-    selectedProofGraphNodeId: "admin-proof:hosted-identity-evidence",
-    roleUrlIncludes: "/admin/audit/local-hosted-identity-evidence",
-    edges: dependency.edges,
-  };
-}
-
-function realHostedObservabilityProofGraphDependency() {
-  return {
-    selectedProofGraphNodeId:
-      realHostedObservabilityRoleSurfaceDrilldown.proofGraphNodeId,
-    roleUrlIncludes:
-      "/admin/audit/local-real-hosted-observability-handoff",
-    edges: [
-      {
-        from: "admin-proof:hosted-ops-signals",
-        to: realHostedObservabilityRoleSurfaceDrilldown.proofGraphNodeId,
-        relationship: "feeds-real-hosted-observability-handoff",
-      },
-    ],
-  };
+  return selectedProofGraphDependencyDefinitions({
+    hostedIdentityProofGraphEdges:
+      nextAction?.nextAction?.unproven?.hostedIdentityProofGraphEdges ?? null,
+    unproven: nextAction?.nextAction?.unproven ?? null,
+  }).filter(
+    (dependency) =>
+      Array.isArray(dependency?.edges) && dependency.edges.length > 0,
+  );
 }
 
 function hostedIdentityEvidenceHandoffSummary({ nextAction }) {
