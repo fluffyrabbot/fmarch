@@ -880,7 +880,13 @@ function assertProofGraphAdminProofCoversProductionFeatureDestinationSummary(
         .length ||
     summary.roleUrlDestinationCount !==
       destinations.filter((destination) => destination.kind === "role-url")
-        .length
+        .length ||
+    summary.featureTargetKindCount !==
+      new Set(
+        destinations
+          .map((destination) => String(destination.featureTargetKind ?? ""))
+          .filter((featureTargetKind) => featureTargetKind !== ""),
+      ).size
   ) {
     throw new Error(
       "proof graph admin proof production feature destination summary drifted",

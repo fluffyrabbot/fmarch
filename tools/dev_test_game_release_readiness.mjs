@@ -7024,6 +7024,7 @@ function validateProofGraphAdminProductionFeatureDestinationSummary(proof) {
       featureSlotId: destination.featureSlotId,
       sourceCheckId: destination.sourceCheckId,
       adminCheckId: destination.adminCheckId,
+      featureTargetKind: destination.featureTargetKind,
       targetRoleUrl: destination.targetRoleUrl,
       sourceProofArtifact: destination.sourceProofArtifact,
       adminDetailRoleUrl: destination.adminDetailRoleUrl,
@@ -7043,6 +7044,7 @@ function validateProofGraphAdminProductionFeatureDestinationSummary(proof) {
     summary.adminAuditDestinationCount !==
       expected.adminAuditDestinationCount ||
     summary.roleUrlDestinationCount !== expected.roleUrlDestinationCount ||
+    summary.featureTargetKindCount !== expected.featureTargetKindCount ||
     summary.driftCount !== 0 ||
     JSON.stringify(summary.hostedEvidenceProgressionSummary ?? null) !==
       JSON.stringify(hostedEvidenceProgressionHandoffSummary())

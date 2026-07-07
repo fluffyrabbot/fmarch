@@ -122,6 +122,9 @@ export function proofGraphProductionFeatureDestinationSummary(
   ).length;
   const totalDestinationCount = destinations.length;
   const driftCount = totalDestinationCount - productionFeatureTargetCount;
+  const featureTargetKindRows = productionFeatureDestinationFeatureTargetKindRows(
+    destinations,
+  );
   const roleUrlRows = destinations
     .filter((destination) => destination.kind === "role-url")
     .map((destination) =>
@@ -135,6 +138,9 @@ export function proofGraphProductionFeatureDestinationSummary(
         roleUrl: destination.roleUrl,
         targetRoleUrl: destination.targetRoleUrl,
         sourceProofArtifact: destination.sourceProofArtifact,
+        ...(destination.featureTargetKind === undefined
+          ? {}
+          : { featureTargetKind: destination.featureTargetKind }),
         adminDetailRoleUrl: destination.adminDetailRoleUrl ?? "",
         recoveryCommand: destination.recoveryCommand ?? "",
         readinessEvidence: destination.readinessEvidence ?? "",
@@ -153,6 +159,9 @@ export function proofGraphProductionFeatureDestinationSummary(
         targetRoleUrl: destination.targetRoleUrl,
         detailRoleUrl: destination.detailRoleUrl,
         sourceProofArtifactRef: destination.sourceProofArtifact,
+        ...(destination.featureTargetKind === undefined
+          ? {}
+          : { featureTargetKind: destination.featureTargetKind }),
       }),
     );
   const hostedEvidenceProgressionSummary =
@@ -178,6 +187,7 @@ export function proofGraphProductionFeatureDestinationSummary(
     productionFeatureTargetCount,
     adminAuditDestinationCount,
     roleUrlDestinationCount,
+    featureTargetKindCount: featureTargetKindRows.length,
     driftCount,
     hostedEvidenceProgressionSummary,
     rows: Object.freeze([
@@ -201,11 +211,53 @@ export function proofGraphProductionFeatureDestinationSummary(
         expectedCount: productionFeatureTargetCount,
         driftCount,
       }),
+      ...featureTargetKindRows,
       ...adminAuditRows,
       ...roleUrlRows,
       ...hostedEvidenceProgressionRows,
     ]),
   });
+}
+
+function productionFeatureDestinationFeatureTargetKindRows(destinations) {
+  const groups = new Map();
+  for (const destination of destinations) {
+    const featureTargetKind = String(destination.featureTargetKind ?? "");
+    if (featureTargetKind === "") {
+      continue;
+    }
+    const group = groups.get(featureTargetKind) ?? {
+      featureTargetKind,
+      featureSlotIds: [],
+      sourceCheckIds: [],
+    };
+    group.featureSlotIds.push(String(destination.featureSlotId ?? ""));
+    group.sourceCheckIds.push(String(destination.sourceCheckId ?? ""));
+    groups.set(featureTargetKind, group);
+  }
+  return Object.freeze(
+    Array.from(groups.values())
+      .map((group) => {
+        const featureSlotIds = sortedStrings(group.featureSlotIds);
+        const sourceCheckIds = sortedStrings(group.sourceCheckIds);
+        return Object.freeze({
+          id: `feature-target-kind:${group.featureTargetKind}`,
+          label: `Feature target kind: ${group.featureTargetKind}`,
+          status: [
+            `${featureSlotIds.length} production-feature targets`,
+            `featureSlotIds ${featureSlotIds.join(",")}`,
+            `sourceCheckIds ${sourceCheckIds.join(",")}`,
+          ].join("\n"),
+          featureTargetKind: group.featureTargetKind,
+          count: featureSlotIds.length,
+          featureSlotIds: Object.freeze(featureSlotIds),
+          sourceCheckIds: Object.freeze(sourceCheckIds),
+        });
+      })
+      .sort((left, right) =>
+        left.featureTargetKind.localeCompare(right.featureTargetKind),
+      ),
+  );
 }
 
 export function proofGraphProductionFeatureProvenanceComparison({

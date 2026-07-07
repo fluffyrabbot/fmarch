@@ -6805,6 +6805,28 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
       .map((row) => row.progressionId),
     hostedEvidenceProgressionHandoffSummary().progressionIds,
   );
+  const productionFeatureKindRows =
+    graph.summary.productionFeatureDestinationSummary.rows.filter((row) =>
+      row.id.startsWith("feature-target-kind:"),
+    );
+  assert.deepEqual(
+    productionFeatureKindRows.map((row) => row.featureTargetKind),
+    [
+      "aggregate-hardening-coverage",
+      "hardening-race-action",
+      "hardening-race-reload",
+      "hardening-stale-reconnect",
+      "hardening-stale-reload",
+    ],
+  );
+  assert.equal(
+    productionFeatureKindRows
+      .find(
+        (row) => row.id === "feature-target-kind:aggregate-hardening-coverage",
+      )
+      ?.featureSlotIds.includes("completed-game-stale-host-reject"),
+    true,
+  );
   const hostSetupDestinationSummaryRow =
     graph.summary.productionFeatureDestinationSummary.rows.find(
       (row) => row.id === "production-feature:host-setup-route",
@@ -24744,6 +24766,7 @@ function proofGraphProductionFeatureDestinationSummaryFixture(destinations) {
       featureSlotId: destination.featureSlotId,
       sourceCheckId: destination.sourceCheckId,
       adminCheckId: destination.adminCheckId,
+      featureTargetKind: destination.featureTargetKind,
       targetRoleUrl: destination.targetRoleUrl,
       sourceProofArtifact: destination.sourceProofArtifact,
       adminDetailRoleUrl: destination.adminDetailRoleUrl,
@@ -24769,6 +24792,9 @@ function productionFeatureDestinationSummaryVisibleText(row) {
     row.adminDetailRoleUrl,
     row.roleUrl,
     row.sourceProofArtifactRef,
+    row.featureTargetKind,
+    row.featureSlotIds,
+    row.sourceCheckIds,
     row.recoveryCommand,
     row.proofCommand,
     row.progressionId,
