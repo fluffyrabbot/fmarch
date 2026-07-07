@@ -92,14 +92,6 @@ export function buildDevTestGameHostedConcurrentRaceMatrixEvidence(
       "hosted concurrent race matrix evidence requires promoted local race milestones",
     );
   }
-  const unproven = readiness.releaseReadiness.unproven.find((item) =>
-    hostedMatrixRequestedEvidenceIds.includes(item.id),
-  );
-  if (unproven === undefined) {
-    throw new Error(
-      "release readiness is missing hosted-concurrent-race-matrix or real-hosted-concurrent-race-matrix",
-    );
-  }
   if (coverage.generatedFrom?.proofRun !== proofRunSource) {
     throw new Error(
       `race coverage proof-run source drifted: ${coverage.generatedFrom?.proofRun}`,
@@ -123,6 +115,7 @@ export function buildDevTestGameHostedConcurrentRaceMatrixEvidence(
       ? "passed"
       : "not_applicable";
   const realHostedEvidenceStatus = realHostedDeploymentPassed ? "passed" : "unproven";
+  const requestedEvidence = hostedMatrixRequestedEvidenceFromReadiness(readiness);
   const realHostedEvidenceInputs = buildRealHostedEvidenceInputs({
     status: realHostedEvidenceStatus,
     mode: externalHostedEvidence.hostedEvidenceMode,
@@ -275,9 +268,9 @@ export function buildDevTestGameHostedConcurrentRaceMatrixEvidence(
     staleConflictLanes,
     staleConflictMilestones,
     requestedEvidence: {
-      id: unproven.id,
-      status: unproven.status,
-      requiredEvidence: unproven.requiredEvidence,
+      id: requestedEvidence.id,
+      status: requestedEvidence.status,
+      requiredEvidence: requestedEvidence.requiredEvidence,
       firstProofTarget: devTestGameHostedConcurrentRaceMatrixPath,
       localBaseline: {
         cellCount: promoted.cellCount,
@@ -305,6 +298,21 @@ export function buildDevTestGameHostedConcurrentRaceMatrixEvidence(
   };
   assertDevTestGameHostedConcurrentRaceMatrixEvidence(evidence);
   return evidence;
+}
+
+function hostedMatrixRequestedEvidenceFromReadiness(readiness) {
+  const unproven = readiness.releaseReadiness.unproven.find((item) =>
+    hostedMatrixRequestedEvidenceIds.includes(item.id),
+  );
+  if (unproven !== undefined) {
+    return unproven;
+  }
+  return {
+    id: "real-hosted-concurrent-race-matrix",
+    status: "unproven",
+    requiredEvidence:
+      "Externally reachable hosted API/frontend deployment, multi-node command race execution, and hosted reload/reconnect and stale-client conflict evidence beyond the local hosted-like matrix artifact",
+  };
 }
 
 export function assertDevTestGameHostedConcurrentRaceMatrixEvidence(evidence) {
@@ -462,6 +470,17 @@ export function hostedMatrixTargetFromEnv(env = process.env) {
 
 export async function readHostedMatrixTargetFromEnv(env = process.env) {
   const target = hostedMatrixTargetFromEnv(env);
+  if (target.evidencePath !== null) {
+    return readHostedMatrixTargetEvidence(target);
+  }
+  const laneTarget = await hostedMatrixTargetFromEvidenceLane(env);
+  if (laneTarget !== null) {
+    return readHostedMatrixTargetEvidence(laneTarget);
+  }
+  return target;
+}
+
+async function readHostedMatrixTargetEvidence(target) {
   if (target.evidencePath === null) {
     return target;
   }
@@ -470,6 +489,36 @@ export async function readHostedMatrixTargetFromEnv(env = process.env) {
     ...target,
     evidencePath: path.relative(repoRoot, absoluteEvidencePath),
     evidence: await readJson(absoluteEvidencePath),
+  };
+}
+
+async function hostedMatrixTargetFromEvidenceLane(env) {
+  const lanePath = optionalEnv(env.FMARCH_DEV_TEST_GAME_HOSTED_EVIDENCE_LANE);
+  if (lanePath === null) {
+    return null;
+  }
+  const absoluteLanePath = path.resolve(repoRoot, lanePath);
+  const lane = await readJson(absoluteLanePath);
+  if (
+    lane?.proof !== "dev-test-game-hosted-evidence-lane" ||
+    lane.status !== "passed" ||
+    lane.preflightStatus !== "passed" ||
+    lane.hostedEvidence?.mode !== "real-hosted" ||
+    lane.hostedEvidence.realHostedEvidenceStatus !== "passed" ||
+    typeof lane.hostedEvidence.externalEvidencePath !== "string" ||
+    lane.hostedEvidence.externalEvidencePath.trim() === "" ||
+    typeof lane.target?.frontendBaseUrl !== "string" ||
+    lane.target.frontendBaseUrl.trim() === "" ||
+    typeof lane.target?.apiBaseUrl !== "string" ||
+    lane.target.apiBaseUrl.trim() === ""
+  ) {
+    return null;
+  }
+  return {
+    frontendBaseUrl: lane.target.frontendBaseUrl,
+    apiBaseUrl: lane.target.apiBaseUrl,
+    evidencePath: lane.hostedEvidence.externalEvidencePath,
+    evidence: undefined,
   };
 }
 

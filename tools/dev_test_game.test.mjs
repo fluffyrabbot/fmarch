@@ -468,6 +468,7 @@ import {
   buildDevTestGameHostedConcurrentRaceMatrixEvidence,
   devTestGameHostedConcurrentRaceMatrixCommand,
   devTestGameHostedConcurrentRaceMatrixPath,
+  readHostedMatrixTargetFromEnv,
 } from "./dev_test_game_hosted_concurrent_race_matrix.mjs";
 import {
   featureSpineFixture,
@@ -1423,6 +1424,8 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
       devTestGameHostedEvidenceOperatorChecklistAdminProofPath,
     FMARCH_DEV_TEST_GAME_REAL_HOSTED_MATRIX_RAW_CAPTURE:
       devTestGameRealHostedMatrixRawCapturePath,
+    FMARCH_DEV_TEST_GAME_HOSTED_CONCURRENT_RACE_MATRIX:
+      devTestGameHostedConcurrentRaceMatrixPath,
     FMARCH_DEV_TEST_GAME_HOSTED_EVIDENCE_LANE:
       devTestGameHostedEvidenceLanePath,
     FMARCH_DEV_TEST_GAME_NEXT_ACTION_ADMIN_PROOF: nextActionAdminProofPath,
@@ -1488,6 +1491,25 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
       changedInputs: [
         devTestGameRealHostedMatrixRawCapturePath,
         devTestGameHostedTargetPreflightPath,
+        devTestGameHostedEvidenceLanePath,
+        devTestGameHostedMatrixExternalEvidencePath,
+      ],
+      env: realHostedMatrixRawCaptureReadinessEnv,
+    },
+    {
+      kind: "node",
+      script: "tools/dev_test_game_hosted_concurrent_race_matrix.mjs",
+      env: {
+        FMARCH_DEV_TEST_GAME_HOSTED_EVIDENCE_LANE:
+          devTestGameHostedEvidenceLanePath,
+      },
+    },
+    {
+      kind: "node",
+      script: devTestGameReleaseReadinessScript,
+      readinessReason: "real-hosted-matrix-raw-capture-hosted-matrix",
+      changedInputs: [
+        devTestGameHostedConcurrentRaceMatrixPath,
         devTestGameHostedEvidenceLanePath,
         devTestGameHostedMatrixExternalEvidencePath,
       ],
@@ -17411,6 +17433,25 @@ test("session card and markdown include role credential URLs and tokens", async 
     rawEvidenceSyntheticExternalTarget: false,
     rawEvidenceFixtureEvidence: false,
   });
+  const laneHostedTarget = await readHostedMatrixTargetFromEnv({
+    FMARCH_DEV_TEST_GAME_HOSTED_EVIDENCE_LANE:
+      devTestGameHostedEvidenceLanePath,
+  });
+  assert.equal(laneHostedTarget.frontendBaseUrl, laneFrontendBaseUrl);
+  assert.equal(laneHostedTarget.apiBaseUrl, laneApiBaseUrl);
+  assert.equal(laneHostedTarget.evidencePath, passedLaneExternalEvidencePath);
+  assert.equal(laneHostedTarget.evidence.proof, passedLaneExternalEvidence.proof);
+  await writeFile(
+    devTestGameHostedEvidenceLanePath,
+    `${JSON.stringify(hostedEvidenceLaneFixture({ status: "blocked" }), null, 2)}\n`,
+  );
+  const blockedLaneHostedTarget = await readHostedMatrixTargetFromEnv({
+    FMARCH_DEV_TEST_GAME_HOSTED_EVIDENCE_LANE:
+      devTestGameHostedEvidenceLanePath,
+  });
+  assert.equal(blockedLaneHostedTarget.frontendBaseUrl, null);
+  assert.equal(blockedLaneHostedTarget.apiBaseUrl, null);
+  assert.equal(blockedLaneHostedTarget.evidencePath, null);
   const laneFreshManifest = buildDevTestGameSpineManifest({
     generatedAt: "2026-06-26T00:00:00.000Z",
     proofFreshness: {
