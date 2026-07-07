@@ -242,6 +242,16 @@ npm run test:dev-test-game-hosted-evidence-operator-checklist-admin-proof
 npm run test:dev-test-game-next-action:hosted-identity
 ```
 
+After that, the raw-capture handoff command runs the intake validator, refreshes
+readiness, proves the next-action admin surface, then refreshes and proves the
+final selected action. With no live hosted packet configured, the selected
+`hosted-deployment` blocker stays pointed at the raw-capture proof target until
+real externally captured evidence is present:
+
+```sh
+npm run test:dev-test-game-real-hosted-matrix-raw-capture:handoff
+```
+
 To inspect the difference between fixture-only handoff and real capture
 metadata, compare the checked examples:
 

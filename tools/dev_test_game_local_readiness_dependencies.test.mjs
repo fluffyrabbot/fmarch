@@ -406,9 +406,8 @@ test("missing local readiness dependencies rank before hosted readiness work", (
       [localProofGraphNextActionHandoffCheckId, 2, 1, "missing"],
       [localProofGraphTerminalValidationCheckId, 3, 1, "missing"],
       [localProofFreshnessAdminSurfaceCheckId, 4, 2, "missing"],
-      [localNextActionAdminSurfaceCheckId, 5, 3, "missing"],
-      [localSeedDemoFixtureCheckId, 6, 4, "missing"],
-      [localHostedEvidenceLaneDemoProofCheckId, 7, 5, "missing"],
+      [localSeedDemoFixtureCheckId, 5, 4, "missing"],
+      [localHostedEvidenceLaneDemoProofCheckId, 6, 5, "missing"],
     ],
   );
   assert.deepEqual(

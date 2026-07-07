@@ -272,6 +272,7 @@ export function rankedMissingLocalReadinessDependencies(readiness) {
     (readiness.releaseReadiness?.unproven ?? []).map((item) => item.id),
   );
   return localReadinessDependencies
+    .filter((dependency) => dependency.id !== localNextActionAdminSurfaceCheckId)
     .map((dependency, index) => {
       const current = localChecks.get(dependency.id);
       const sourceUnprovenMissing =

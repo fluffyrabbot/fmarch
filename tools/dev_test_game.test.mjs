@@ -254,6 +254,10 @@ import {
   devTestGameHostedIdentityNextActionSpinePlan,
 } from "./dev_test_game_hosted_identity_next_action_spine.mjs";
 import {
+  devTestGameRealHostedMatrixRawCaptureSpinePlan,
+  realHostedMatrixRawCaptureReadinessEnv,
+} from "./dev_test_game_real_hosted_matrix_raw_capture_spine.mjs";
+import {
   devTestGameNextActionScript,
   handoffPhaseStep,
   handoffPhaseSteps,
@@ -970,6 +974,12 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
   );
   assert.equal(
     packageJson.scripts[
+      "test:dev-test-game-real-hosted-matrix-raw-capture:handoff"
+    ],
+    "node tools/dev_test_game_real_hosted_matrix_raw_capture_spine.mjs",
+  );
+  assert.equal(
+    packageJson.scripts[
       devTestGameHostedEvidenceOperatorChecklistProofCommand
     ],
     "node tools/dev_test_game_hosted_evidence_operator_checklist.mjs",
@@ -1400,6 +1410,76 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
       readinessReason: "hosted-identity-sequence-final-action-proof",
       changedInputs: [nextActionPath, nextActionAdminProofPath],
       env: identityReadinessEnv,
+    },
+  ]);
+  assert.deepEqual(realHostedMatrixRawCaptureReadinessEnv, {
+    ...identityReadinessEnv,
+    FMARCH_DEV_TEST_GAME_HOSTED_EVIDENCE_OPERATOR_CHECKLIST_PROOF:
+      devTestGameHostedEvidenceOperatorChecklistProofPath,
+    FMARCH_DEV_TEST_GAME_HOSTED_EVIDENCE_OPERATOR_CHECKLIST_ADMIN_PROOF:
+      devTestGameHostedEvidenceOperatorChecklistAdminProofPath,
+    FMARCH_DEV_TEST_GAME_REAL_HOSTED_MATRIX_RAW_CAPTURE:
+      devTestGameRealHostedMatrixRawCapturePath,
+    FMARCH_DEV_TEST_GAME_NEXT_ACTION_ADMIN_PROOF: nextActionAdminProofPath,
+  });
+  assert.deepEqual(devTestGameRealHostedMatrixRawCaptureSpinePlan, [
+    {
+      kind: "node",
+      script: "tools/dev_test_game_real_hosted_matrix_raw_capture.mjs",
+    },
+    {
+      kind: "node",
+      script: devTestGameReleaseReadinessScript,
+      readinessReason: "real-hosted-matrix-raw-capture-intake",
+      changedInputs: [devTestGameRealHostedMatrixRawCapturePath],
+      env: realHostedMatrixRawCaptureReadinessEnv,
+    },
+    {
+      kind: "node",
+      script: devTestGameNextActionScript,
+      env: {
+        FMARCH_DEV_TEST_GAME_SEQUENCE_STAGE:
+          devTestGameHostedIdentitySequenceStage,
+      },
+    },
+    {
+      kind: "node",
+      script: "tools/dev_test_game_next_action_admin_proof.mjs",
+    },
+    {
+      kind: "node",
+      script: devTestGameReleaseReadinessScript,
+      readinessReason:
+        "real-hosted-matrix-raw-capture-next-action-admin-proof",
+      changedInputs: [
+        devTestGameRealHostedMatrixRawCapturePath,
+        nextActionPath,
+        nextActionAdminProofPath,
+      ],
+      env: realHostedMatrixRawCaptureReadinessEnv,
+    },
+    {
+      kind: "node",
+      script: devTestGameNextActionScript,
+      env: {
+        FMARCH_DEV_TEST_GAME_SEQUENCE_STAGE:
+          devTestGameHostedIdentitySequenceStage,
+      },
+    },
+    {
+      kind: "node",
+      script: "tools/dev_test_game_next_action_admin_proof.mjs",
+    },
+    {
+      kind: "node",
+      script: devTestGameReleaseReadinessScript,
+      readinessReason: "real-hosted-matrix-raw-capture-final-action-proof",
+      changedInputs: [
+        devTestGameRealHostedMatrixRawCapturePath,
+        nextActionPath,
+        nextActionAdminProofPath,
+      ],
+      env: realHostedMatrixRawCaptureReadinessEnv,
     },
   ]);
   assert.deepEqual(adminSpineReadinessEvidenceEnv, {
@@ -4822,7 +4902,7 @@ test("dev test-game next-action derives one local recovery command from the mani
     missingNextActionAdminDependencyAction.localReadinessDependencyTrace,
     {
       strategy: "local-readiness-dependency-before-hosted-work",
-      candidateCount: 2,
+      candidateCount: 1,
       selectedCheckId: "local-proof-freshness-admin-surface",
       candidates: [
         {
@@ -4840,22 +4920,6 @@ test("dev test-game next-action derives one local recovery command from the mani
             "Local browser proof that the proof-freshness admin surface exposes fresh generated artifacts and the next-action handoff from the seeded admin audit route. This recovers a local readiness dependency only; it does not validate artifact contents, hosted deployment, release readiness, or production readiness.",
           requiredEvidence:
             "Passed proof-freshness admin surface check in the generated release-readiness checklist",
-        },
-        {
-          rank: 2,
-          id: "local-next-action-admin-surface",
-          status: "missing",
-          priority: 3,
-          selected: false,
-          command: "npm run test:dev-test-game-next-action-admin-proof",
-          buildSlice:
-            "Refresh the next-action admin browser proof before hosted readiness work can be selected.",
-          proofTarget: "target/dev-test-game/next-action-admin-proof.json",
-          roleUrl: "/admin/audit/local-next-action?game=<seeded-game>",
-          proofBoundary:
-            "Local browser proof that the next-action admin surface exposes the selected command, local readiness dependency trace, release-readiness trace, and role URL handoffs from the seeded admin audit route. This recovers a local readiness dependency only; it does not prove hosted deployment, release readiness, or production readiness.",
-          requiredEvidence:
-            "Passed next-action admin surface check in the generated release-readiness checklist",
         },
       ],
     },
@@ -4879,45 +4943,25 @@ test("dev test-game next-action derives one local recovery command from the mani
     },
   );
   assertDevTestGameNextAction(missingOnlyNextActionAdminDependencyAction);
-  assert.deepEqual(missingOnlyNextActionAdminDependencyAction.nextAction, {
-    command: "npm run test:dev-test-game-next-action-admin-proof",
-    reason: "release-readiness-local-check-missing",
-    status: "blocked",
-    localCheck: {
-      id: "local-next-action-admin-surface",
-      status: "missing",
-      requiredEvidence:
-        "Passed next-action admin surface check in the generated release-readiness checklist",
-      buildSlice:
-        "Refresh the next-action admin browser proof before hosted readiness work can be selected.",
-      proofTarget: "target/dev-test-game/next-action-admin-proof.json",
-      roleUrl: "/admin/audit/local-next-action?game=<seeded-game>",
-    },
-  });
+  assert.equal(
+    missingOnlyNextActionAdminDependencyAction.nextAction.reason,
+    "release-readiness-unproven",
+  );
+  assert.equal(
+    missingOnlyNextActionAdminDependencyAction.nextAction.command,
+    "npm run test:dev-test-game-hosted-concurrent-race-matrix",
+  );
+  assert.equal(
+    missingOnlyNextActionAdminDependencyAction.nextAction.unproven.id,
+    "hosted-concurrent-race-matrix",
+  );
   assert.deepEqual(
     missingOnlyNextActionAdminDependencyAction.localReadinessDependencyTrace,
     {
       strategy: "local-readiness-dependency-before-hosted-work",
-      candidateCount: 1,
-      selectedCheckId: "local-next-action-admin-surface",
-      candidates: [
-        {
-          rank: 1,
-          id: "local-next-action-admin-surface",
-          status: "missing",
-          priority: 3,
-          selected: true,
-          command: "npm run test:dev-test-game-next-action-admin-proof",
-          buildSlice:
-            "Refresh the next-action admin browser proof before hosted readiness work can be selected.",
-          proofTarget: "target/dev-test-game/next-action-admin-proof.json",
-          roleUrl: "/admin/audit/local-next-action?game=<seeded-game>",
-          proofBoundary:
-            "Local browser proof that the next-action admin surface exposes the selected command, local readiness dependency trace, release-readiness trace, and role URL handoffs from the seeded admin audit route. This recovers a local readiness dependency only; it does not prove hosted deployment, release readiness, or production readiness.",
-          requiredEvidence:
-            "Passed next-action admin surface check in the generated release-readiness checklist",
-        },
-      ],
+      candidateCount: 0,
+      selectedCheckId: null,
+      candidates: [],
     },
   );
   const missingDemoReadinessDependencyAction = buildDevTestGameNextAction(
