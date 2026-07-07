@@ -6,6 +6,7 @@ import {
 } from "./dev_test_game_hosted_identity_evidence.mjs";
 import {
   devTestGameIdentityAdminProofPath,
+  devTestGameSeedAdminProofPath,
 } from "./dev_test_game_local_admin_proof_paths.mjs";
 import {
   devTestGameIdentityAdapterProofPath,
@@ -25,6 +26,7 @@ import {
 export const identityReadinessEnv = {
   FMARCH_DEV_TEST_GAME_OPS_ARTIFACTS: devTestGameOpsArtifactsPath,
   FMARCH_DEV_TEST_GAME_SEED_FIXTURE_SUMMARY: devTestGameSeedFixturePath,
+  FMARCH_DEV_TEST_GAME_SEED_ADMIN_PROOF: devTestGameSeedAdminProofPath,
   FMARCH_DEV_TEST_GAME_IDENTITY_ADAPTER_PROOF:
     devTestGameIdentityAdapterProofPath,
   FMARCH_DEV_TEST_GAME_IDENTITY_ADMIN_PROOF:

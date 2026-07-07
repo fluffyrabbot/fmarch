@@ -251,6 +251,9 @@ import {
   identityReadinessEnv,
 } from "./dev_test_game_identity_spine.mjs";
 import {
+  devTestGameHostedIdentityNextActionSpinePlan,
+} from "./dev_test_game_hosted_identity_next_action_spine.mjs";
+import {
   devTestGameNextActionScript,
   handoffPhaseStep,
   handoffPhaseSteps,
@@ -988,7 +991,7 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
   );
   assert.equal(
     packageJson.scripts["test:dev-test-game-next-action:hosted-identity"],
-    "FMARCH_DEV_TEST_GAME_SEQUENCE_STAGE=hosted-identity npm run test:dev-test-game-next-action",
+    "node tools/dev_test_game_hosted_identity_next_action_spine.mjs",
   );
   assert.equal(
     packageJson.scripts["test:dev-test-game-spine:local"],
@@ -1326,6 +1329,7 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     FMARCH_DEV_TEST_GAME_OPS_ARTIFACTS: devTestGameOpsArtifactsPath,
     FMARCH_DEV_TEST_GAME_SEED_FIXTURE_SUMMARY:
       "target/dev-test-game/seed-fixture-summary.json",
+    FMARCH_DEV_TEST_GAME_SEED_ADMIN_PROOF: devTestGameSeedAdminProofPath,
     FMARCH_DEV_TEST_GAME_IDENTITY_ADAPTER_PROOF:
       "target/auth-invite-role-proof/invite-role-proof.json",
     FMARCH_DEV_TEST_GAME_IDENTITY_ADMIN_PROOF:
@@ -1340,6 +1344,61 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     FMARCH_DEV_TEST_GAME_HOSTED_IDENTITY_EVIDENCE_ADMIN_PROOF:
       devTestGameHostedIdentityOperatorAdminProofPath,
   });
+  assert.deepEqual(devTestGameHostedIdentityNextActionSpinePlan, [
+    {
+      kind: "node",
+      script: devTestGameReleaseReadinessScript,
+      readinessReason: "hosted-identity-sequence-local-capability-confidence",
+      changedInputs: [
+        devTestGameOpsArtifactsPath,
+        devTestGameSeedFixturePath,
+        devTestGameSeedAdminProofPath,
+        devTestGameIdentityAdapterProofPath,
+        devTestGameIdentityAdminProofPath,
+        devTestGameHostedIdentityEvidencePath,
+        devTestGameHostedIdentityProgressionSummaryPath,
+      ],
+      env: identityReadinessEnv,
+    },
+    {
+      kind: "node",
+      script: devTestGameNextActionScript,
+      env: {
+        FMARCH_DEV_TEST_GAME_SEQUENCE_STAGE:
+          devTestGameHostedIdentitySequenceStage,
+      },
+    },
+    {
+      kind: "node",
+      script: "tools/dev_test_game_next_action_admin_proof.mjs",
+    },
+    {
+      kind: "node",
+      script: devTestGameReleaseReadinessScript,
+      readinessReason: "hosted-identity-sequence-next-action-admin-proof",
+      changedInputs: [nextActionPath, nextActionAdminProofPath],
+      env: identityReadinessEnv,
+    },
+    {
+      kind: "node",
+      script: devTestGameNextActionScript,
+      env: {
+        FMARCH_DEV_TEST_GAME_SEQUENCE_STAGE:
+          devTestGameHostedIdentitySequenceStage,
+      },
+    },
+    {
+      kind: "node",
+      script: "tools/dev_test_game_next_action_admin_proof.mjs",
+    },
+    {
+      kind: "node",
+      script: devTestGameReleaseReadinessScript,
+      readinessReason: "hosted-identity-sequence-final-action-proof",
+      changedInputs: [nextActionPath, nextActionAdminProofPath],
+      env: identityReadinessEnv,
+    },
+  ]);
   assert.deepEqual(adminSpineReadinessEvidenceEnv, {
     FMARCH_DEV_TEST_GAME_CORE_LOOP_ADMIN_PROOF:
       devTestGameCoreLoopAdminProofPath,

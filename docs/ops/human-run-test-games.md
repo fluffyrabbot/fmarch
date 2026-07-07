@@ -189,8 +189,12 @@ directly, use the explicit hosted-identity sequence selector:
 npm run test:dev-test-game-next-action:hosted-identity
 ```
 
-That selector points the ranked `hosted-production-identity` action at the
-hosted identity progression batch until the family proof artifacts are current:
+That selector first refreshes release readiness with the local capability and
+identity evidence paths, runs the hosted-identity sequence-stage
+next-action/admin proof recovery pass, then refreshes and proves the final
+selected next action. When `hosted-production-identity` is still unproven it
+points at the hosted identity progression batch until the family proof artifacts
+are current:
 
 ```sh
 npm run test:dev-test-game-hosted-identity-progression-admin-proof:batch
@@ -207,6 +211,10 @@ The generated next-action proof target is
 `target/dev-test-game/hosted-identity-evidence-operator-admin-proof.json`. It
 remains a local operator-predicate proof and does not prove live hosted account,
 session, or invite traffic.
+Once those local hosted-identity predicate artifacts are current, the same
+sequence-stage command can advance to the next hosted-stage blocker, such as
+hosted deployment or hosted operations evidence, without weakening the identity
+non-claims.
 The default local next-action admin detail keeps
 `hosted-production-identity` as a sequence-deferred blocker and shows the
 opt-in `npm run test:dev-test-game-next-action:hosted-identity` promotion row
@@ -811,14 +819,17 @@ is issued from the seeded host role URL before redeeming back to the existing
 player role surface, plus a seeded admin overview-to-local-identity-adapter-detail
 browser proof without raw credential echoes.
 After the local capability rows are passed,
-`npm run test:dev-test-game-next-action:hosted-identity` refreshes
-`target/dev-test-game/next-action.json` with
-`FMARCH_DEV_TEST_GAME_SEQUENCE_STAGE=hosted-identity`. Missing or stale
-hosted-identity family proofs select the shared progression admin-proof batch
-first; once those family artifacts are current, the selector advances to the
-opt-in hosted identity operator spine command and operator admin proof target
-while preserving the same local-predicate boundary and non-claims about live
-hosted identity traffic.
+`npm run test:dev-test-game-next-action:hosted-identity` refreshes readiness
+with the local capability and identity evidence paths, writes
+`target/dev-test-game/next-action.json` with the hosted-identity sequence stage,
+proves the native next-action admin surface, then refreshes and proves the final
+selected next action in the same run. Missing or stale hosted-identity family
+proofs select the shared progression admin-proof batch first; once those family
+artifacts are current, the selector advances to the opt-in hosted identity
+operator spine command and operator admin proof target. If those local
+hosted-identity predicate artifacts are already current, the same command can
+advance to the next hosted-stage blocker while preserving the same
+local-predicate boundary and non-claims about live hosted identity traffic.
 `npm run test:dev-test-game-identity:operator:local` is the opt-in local variant
 that starts repo-local Postgres, runs the inner
 `test:dev-test-game-identity:operator` phase, appends the target-local operator
