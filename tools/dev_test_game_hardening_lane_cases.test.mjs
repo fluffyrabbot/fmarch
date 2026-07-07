@@ -496,12 +496,28 @@ test("hardening lane cases share completed-game spine rows", () => {
     })),
     [
       {
+        id: "stale-host-complete",
+        role: "host",
+      },
+      {
         id: "stale-host-complete-reload",
         role: "host",
       },
       {
         id: "stale-host-complete-reconnect-recovery",
         role: "host",
+      },
+      {
+        id: "concurrent-host-complete-race-reload",
+        role: "host",
+      },
+      {
+        id: "public-player-complete-reload",
+        role: "player",
+      },
+      {
+        id: "stale-player-complete",
+        role: "player",
       },
       {
         id: "stale-player-complete-reload",
@@ -528,6 +544,12 @@ test("hardening lane cases share completed-game spine rows", () => {
     ]),
     [
       [
+        "completedGameStaleHostReject",
+        "completed-game-stale-host-reject",
+        "stale-host-complete",
+        "host",
+      ],
+      [
         "completedGameStaleRecovery",
         "completed-game-stale-recovery",
         "stale-host-complete-reload",
@@ -538,6 +560,24 @@ test("hardening lane cases share completed-game spine rows", () => {
         "completed-game-stale-reconnect-recovery",
         "stale-host-complete-reconnect-recovery",
         "host",
+      ],
+      [
+        "completedGameHostCompleteRaceReload",
+        "completed-game-host-complete-race-reload",
+        "concurrent-host-complete-race-reload",
+        "host",
+      ],
+      [
+        "completedGamePublicPlayerCompleteReload",
+        "completed-game-public-player-complete-reload",
+        "public-player-complete-reload",
+        "player",
+      ],
+      [
+        "completedGameStalePlayerReject",
+        "completed-game-stale-player-reject",
+        "stale-player-complete",
+        "player",
       ],
       [
         "completedGameStalePlayerReloadRecovery",

@@ -39,6 +39,7 @@ import {
   completedGameRaceCoverageCellCases,
   completedGameRaceCoverageCellIds,
   completedGameHardeningSpineLaneCases,
+  completedGameHardeningSpineTargetCases,
 } from "./dev_test_game_core_loop_completed_terminal_scenario_assertions.mjs";
 import {
   coreLoopGeneratedFromScenarioFamilies,
@@ -6603,6 +6604,22 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
     assert.equal(
       matches[0].sourceProofArtifact,
       devTestGameCoreLoopAdminProofPath,
+    );
+  }
+  for (const row of completedGameHardeningSpineTargetCases()) {
+    const matches = graph.nodes.filter(
+      (node) =>
+        node.kind === "production-feature-spine-target" &&
+        node.featureSlotId === row.featureSlotId,
+    );
+    assert.equal(
+      matches.length,
+      1,
+      `expected one completed-game hardening feature node for ${row.featureSlotId}`,
+    );
+    assert.equal(
+      matches[0].sourceProofArtifact,
+      devTestGameHardeningAdminProofPath,
     );
   }
   assert.equal(graph.summary.commandProofRoleUrlAuditCount, 1);
