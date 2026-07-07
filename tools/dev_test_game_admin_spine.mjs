@@ -471,6 +471,27 @@ export const devTestGameAdminSpinePlan = [
   },
   { kind: "node", script: "tools/dev_test_game_proof_graph.mjs" },
   { kind: "node", script: "tools/dev_test_game_proof_graph_admin_proof.mjs" },
+  releaseReadinessStep({
+    reason: "terminal-validation-proof-graph-admin-surface",
+    changedInputs: [
+      adminSpineTerminalBatchProofPath,
+      devTestGameProofGraphPath,
+      devTestGameProofGraphAdminProofPath,
+    ],
+    env: adminSpineTerminalBatchReadinessEvidenceEnv,
+  }),
+  { kind: "node", script: "tools/dev_test_game_next_action.mjs" },
+  { kind: "node", script: "tools/dev_test_game_proof_freshness_admin_proof.mjs" },
+  { kind: "node", script: "tools/dev_test_game_next_action_admin_proof.mjs" },
+  releaseReadinessStep({
+    reason: "final-next-action-guidance-refresh",
+    changedInputs: [
+      nextActionPath,
+      proofFreshnessAdminProofPath,
+      nextActionAdminProofPath,
+    ],
+    env: adminSpineTerminalBatchReadinessEvidenceEnv,
+  }),
 ];
 
 function terminalAdminProofBatchPlanForScript(script) {

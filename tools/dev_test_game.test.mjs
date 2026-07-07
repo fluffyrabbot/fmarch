@@ -1545,6 +1545,11 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
       "admin-spine-terminal-validation-receipt",
       "tools/dev_test_game_proof_graph.mjs",
       "tools/dev_test_game_proof_graph_admin_proof.mjs",
+      devTestGameReleaseReadinessScript,
+      "tools/dev_test_game_next_action.mjs",
+      "tools/dev_test_game_proof_freshness_admin_proof.mjs",
+      "tools/dev_test_game_next_action_admin_proof.mjs",
+      devTestGameReleaseReadinessScript,
     ],
   );
   assert.deepEqual(devTestGameAdminSpinePlan[14], {
@@ -1713,10 +1718,32 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
       step: "readiness-refresh",
     },
   });
-  assert.deepEqual(devTestGameAdminSpinePlan.at(-3), {
+  assert.deepEqual(devTestGameAdminSpinePlan.at(-8), {
     kind: "custom",
     script: "admin-spine-terminal-validation-receipt",
     label: "Admin spine terminal validation receipt",
+  });
+  assert.deepEqual(devTestGameAdminSpinePlan.at(-5), {
+    kind: "node",
+    script: devTestGameReleaseReadinessScript,
+    readinessReason: "terminal-validation-proof-graph-admin-surface",
+    changedInputs: [
+      adminSpineTerminalBatchProofPath,
+      devTestGameProofGraphPath,
+      devTestGameProofGraphAdminProofPath,
+    ],
+    env: adminSpineTerminalBatchReadinessEvidenceEnv,
+  });
+  assert.deepEqual(devTestGameAdminSpinePlan.at(-1), {
+    kind: "node",
+    script: devTestGameReleaseReadinessScript,
+    readinessReason: "final-next-action-guidance-refresh",
+    changedInputs: [
+      nextActionPath,
+      proofFreshnessAdminProofPath,
+      nextActionAdminProofPath,
+    ],
+    env: adminSpineTerminalBatchReadinessEvidenceEnv,
   });
   assert.deepEqual(
     devTestGameAdminSpinePlan
@@ -1755,6 +1782,11 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
       },
       {
         index: 34,
+        sequenceStage: null,
+        outputPath: nextActionPath,
+      },
+      {
+        index: 44,
         sequenceStage: null,
         outputPath: nextActionPath,
       },
