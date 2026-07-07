@@ -24075,6 +24075,8 @@ function releaseAdminProofFixture({
       localPrerequisiteIds: localPrerequisites.map((item) => item.id),
       localPrerequisiteArtifacts,
       setupCommandEvidenceIds: releaseAdminProofSetupCommandEvidenceIds(),
+      roleUrlProductionFeatureAuditSummary:
+        roleUrlProductionFeatureAuditSummaryFixture(),
       unprovenIds: [...releaseAdminProofFallbackUnprovenIds],
     },
     adminRoleSurface: {
@@ -24111,6 +24113,18 @@ function releaseAdminProofFixture({
           clickedThrough: true,
         })),
       visibleSetupCommandEvidence: releaseAdminProofSetupCommandEvidenceIds(),
+      visibleRoleUrlProductionFeatureAudits: ["summary"],
+      visibleRoleUrlProductionFeatureAuditStatuses: {
+        summary: [
+          "passed",
+          "6 passed role URL lanes",
+          "92 production feature lanes",
+          "3 direct",
+          "2 alias",
+          "1 aggregate",
+          "0 unclassified",
+        ].join("\n"),
+      },
       visibleUnproven: [...releaseAdminProofFallbackUnprovenIds],
       rawInviteTokensVisible: false,
       releaseReady: false,

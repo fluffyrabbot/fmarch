@@ -77,6 +77,12 @@ export function releaseAdminProofCase() {
             ?.setupCommandEvidence === undefined
             ? []
             : requiredSetupCommandEvidence,
+        requiredRoleUrlProductionFeatureAudits:
+          releaseRoleUrlProductionFeatureAuditSummary(readiness) === null
+            ? []
+            : ["summary"],
+        requiredRoleUrlProductionFeatureAuditStatuses:
+          releaseRoleUrlProductionFeatureAuditStatusExpectations(readiness),
         requiredEvidenceArtifact: {
           artifact: readinessRelativePath,
           requiredText: [
@@ -119,6 +125,8 @@ export function releaseAdminProofCase() {
             readiness.localDevelopmentSpine.evidence?.hostSetupProof
               ?.setupCommandEvidence?.[id] !== undefined,
         ),
+        roleUrlProductionFeatureAuditSummary:
+          releaseRoleUrlProductionFeatureAuditSummary(readiness),
         unprovenIds: readiness.releaseReadiness.unproven.map((item) => item.id),
       },
       adminRoleSurface,
@@ -214,12 +222,91 @@ export function assertReleaseAdminProof(evidence) {
       );
     }
   }
+  assertReleaseAdminRoleUrlProductionFeatureAudit(evidence);
   for (const itemId of evidence.generatedFrom?.unprovenIds ?? requiredUnprovenItems) {
     if (!evidence.adminRoleSurface?.visibleUnproven?.includes(itemId)) {
       throw new Error(`release admin proof missing visible unproven item: ${itemId}`);
     }
   }
   return evidence;
+}
+
+function releaseRoleUrlProductionFeatureAuditSummary(readiness) {
+  const summary =
+    readiness.readinessSummary?.roleUrlProductionFeatureAuditSummary;
+  if (summary === undefined) {
+    return null;
+  }
+  return {
+    status: String(summary.status ?? "unknown"),
+    passedRoleUrlLaneCount: Number(summary.passedRoleUrlLaneCount ?? 0),
+    productionFeatureLaneCount: Number(summary.productionFeatureLaneCount ?? 0),
+    directProductionFeatureLaneCount: Number(
+      summary.directProductionFeatureLaneCount ?? 0,
+    ),
+    aliasOnlyLaneCount: Number(summary.aliasOnlyLaneCount ?? 0),
+    aggregateOnlyLaneCount: Number(summary.aggregateOnlyLaneCount ?? 0),
+    unclassifiedLaneCount: Number(summary.unclassifiedLaneCount ?? 0),
+  };
+}
+
+function releaseRoleUrlProductionFeatureAuditStatusExpectations(readiness) {
+  const summary = releaseRoleUrlProductionFeatureAuditSummary(readiness);
+  if (summary === null) {
+    return {};
+  }
+  return {
+    summary: `${summary.unclassifiedLaneCount} unclassified`,
+  };
+}
+
+function releaseRoleUrlProductionFeatureAuditStatusText(summary) {
+  return [
+    `${summary.passedRoleUrlLaneCount} passed role URL lanes`,
+    `${summary.productionFeatureLaneCount} production feature lanes`,
+    `${summary.directProductionFeatureLaneCount} direct`,
+    `${summary.aliasOnlyLaneCount} alias`,
+    `${summary.aggregateOnlyLaneCount} aggregate`,
+    `${summary.unclassifiedLaneCount} unclassified`,
+  ].join("\n");
+}
+
+function assertReleaseAdminRoleUrlProductionFeatureAudit(evidence) {
+  const summary = evidence.generatedFrom?.roleUrlProductionFeatureAuditSummary;
+  if (summary === null || summary === undefined) {
+    return null;
+  }
+  if (
+    summary.status !== "passed" ||
+    !Number.isInteger(summary.passedRoleUrlLaneCount) ||
+    !Number.isInteger(summary.productionFeatureLaneCount) ||
+    !Number.isInteger(summary.directProductionFeatureLaneCount) ||
+    !Number.isInteger(summary.aliasOnlyLaneCount) ||
+    !Number.isInteger(summary.aggregateOnlyLaneCount) ||
+    summary.unclassifiedLaneCount !== 0
+  ) {
+    throw new Error("release admin proof role URL audit summary is malformed");
+  }
+  if (
+    !evidence.adminRoleSurface?.visibleRoleUrlProductionFeatureAudits?.includes(
+      "summary",
+    )
+  ) {
+    throw new Error("release admin proof missing visible role URL audit summary");
+  }
+  const visibleText =
+    evidence.adminRoleSurface?.visibleRoleUrlProductionFeatureAuditStatuses
+      ?.summary ?? "";
+  for (const token of releaseRoleUrlProductionFeatureAuditStatusText(
+    summary,
+  ).split("\n")) {
+    if (!visibleText.includes(token)) {
+      throw new Error(
+        `release admin proof role URL audit summary missing text: ${token}`,
+      );
+    }
+  }
+  return summary;
 }
 
 export function assertReleaseAdminProofDiagnosticsMatchReadiness({

@@ -8229,6 +8229,11 @@ export function normalizeLocalReleaseReadinessAudit(
   const diagnostics = normalizeLocalReleaseReadinessDiagnostics(
     releaseReadinessChecklist.localDevelopmentSpine?.diagnostics,
   );
+  const roleUrlProductionFeatureAuditSummary =
+    normalizeRoleUrlProductionFeatureAuditSummary(
+      releaseReadinessChecklist.readinessSummary
+        ?.roleUrlProductionFeatureAuditSummary,
+    );
   const nextActionRow = normalizeLocalNextActionAudit(nextAction, { game });
   const selectedOperatorHandoff = nextActionRow?.selectedOperatorHandoff ?? null;
   const hostSetupProofEvidence =
@@ -8340,6 +8345,9 @@ export function normalizeLocalReleaseReadinessAudit(
       localPrerequisiteCount: localPrerequisites.length,
       diagnosticCount: diagnostics.length,
       unprovenCount: unproven.length,
+      ...(roleUrlProductionFeatureAuditSummary === null
+        ? {}
+        : { roleUrlProductionFeatureAuditSummary }),
       ...(selectedOperatorHandoff === null
         ? {}
         : {
@@ -8352,7 +8360,27 @@ export function normalizeLocalReleaseReadinessAudit(
       productionReady: releaseReadinessChecklist.productionReady === true,
     }),
     artifactSummarySections:
-      buildLocalReleaseReadinessSummarySections({ diagnostics }),
+      buildLocalReleaseReadinessSummarySections({
+        diagnostics,
+        roleUrlProductionFeatureAuditSummary,
+      }),
+  });
+}
+
+function normalizeRoleUrlProductionFeatureAuditSummary(summary) {
+  if (summary === null || typeof summary !== "object") {
+    return null;
+  }
+  return Object.freeze({
+    status: String(summary.status ?? "unknown"),
+    passedRoleUrlLaneCount: Number(summary.passedRoleUrlLaneCount ?? 0),
+    productionFeatureLaneCount: Number(summary.productionFeatureLaneCount ?? 0),
+    directProductionFeatureLaneCount: Number(
+      summary.directProductionFeatureLaneCount ?? 0,
+    ),
+    aliasOnlyLaneCount: Number(summary.aliasOnlyLaneCount ?? 0),
+    aggregateOnlyLaneCount: Number(summary.aggregateOnlyLaneCount ?? 0),
+    unclassifiedLaneCount: Number(summary.unclassifiedLaneCount ?? 0),
   });
 }
 
@@ -8374,8 +8402,56 @@ function normalizeLocalReleaseReadinessDiagnostics(diagnostics) {
   );
 }
 
-function buildLocalReleaseReadinessSummarySections({ diagnostics }) {
+function buildLocalReleaseReadinessSummarySections({
+  diagnostics,
+  roleUrlProductionFeatureAuditSummary,
+}) {
   return Object.freeze([
+    ...(roleUrlProductionFeatureAuditSummary === null
+      ? []
+      : [
+          buildArtifactSummarySection({
+            id: "role-url-production-feature-audit",
+            heading: "Role URL production feature audit",
+            rows: [
+              {
+                id: "summary",
+                testId: "admin-audit-role-url-production-feature-audit-summary",
+                values: [
+                  {
+                    id: "status",
+                    text: roleUrlProductionFeatureAuditSummary.status,
+                    emphasized: true,
+                  },
+                  {
+                    id: "passedRoleUrlLaneCount",
+                    text: `${roleUrlProductionFeatureAuditSummary.passedRoleUrlLaneCount} passed role URL lanes`,
+                  },
+                  {
+                    id: "productionFeatureLaneCount",
+                    text: `${roleUrlProductionFeatureAuditSummary.productionFeatureLaneCount} production feature lanes`,
+                  },
+                  {
+                    id: "directProductionFeatureLaneCount",
+                    text: `${roleUrlProductionFeatureAuditSummary.directProductionFeatureLaneCount} direct`,
+                  },
+                  {
+                    id: "aliasOnlyLaneCount",
+                    text: `${roleUrlProductionFeatureAuditSummary.aliasOnlyLaneCount} alias`,
+                  },
+                  {
+                    id: "aggregateOnlyLaneCount",
+                    text: `${roleUrlProductionFeatureAuditSummary.aggregateOnlyLaneCount} aggregate`,
+                  },
+                  {
+                    id: "unclassifiedLaneCount",
+                    text: `${roleUrlProductionFeatureAuditSummary.unclassifiedLaneCount} unclassified`,
+                  },
+                ],
+              },
+            ],
+          }),
+        ]),
     ...(diagnostics.length === 0
       ? []
       : [

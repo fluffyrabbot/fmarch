@@ -6434,6 +6434,8 @@ test("admin route data exposes local release readiness as a native audit row", a
     localPrerequisiteCount: 3,
     diagnosticCount: 2,
     unprovenCount: 2,
+    roleUrlProductionFeatureAuditSummary:
+      roleUrlProductionFeatureAuditSummaryFixture(),
     releaseReady: false,
     productionReady: false,
   });
@@ -6556,7 +6558,7 @@ test("admin local release readiness detail data carries checks and unproven rows
       section.testId,
       hostedHandoffChecklistRowsForAssertion(section.rows),
     ]),
-    expectedLocalReleaseReadinessDiagnosticSections(data.audit.diagnostics),
+    expectedLocalReleaseReadinessSummarySections(data.audit),
   );
   assert.equal(data.audit.unproven.length, 2);
   assert.deepEqual(
@@ -11425,6 +11427,68 @@ function optionalExpectedProductionFeatureDestinationRoleValue(
       ];
 }
 
+function expectedLocalReleaseReadinessSummarySections(audit) {
+  return [
+    ...expectedRoleUrlProductionFeatureAuditSections(
+      audit.artifactSummary.roleUrlProductionFeatureAuditSummary,
+    ),
+    ...expectedLocalReleaseReadinessDiagnosticSections(audit.diagnostics),
+  ];
+}
+
+function expectedRoleUrlProductionFeatureAuditSections(summary) {
+  if (summary === null || summary === undefined) {
+    return [];
+  }
+  return [
+    [
+      "role-url-production-feature-audit",
+      "Role URL production feature audit",
+      "admin-audit-detail-role-url-production-feature-audit",
+      [
+        [
+          "summary",
+          "admin-audit-role-url-production-feature-audit-summary",
+          [
+            ["status", summary.status, true],
+            [
+              "passedRoleUrlLaneCount",
+              `${summary.passedRoleUrlLaneCount} passed role URL lanes`,
+              false,
+            ],
+            [
+              "productionFeatureLaneCount",
+              `${summary.productionFeatureLaneCount} production feature lanes`,
+              false,
+            ],
+            [
+              "directProductionFeatureLaneCount",
+              `${summary.directProductionFeatureLaneCount} direct`,
+              false,
+            ],
+            [
+              "aliasOnlyLaneCount",
+              `${summary.aliasOnlyLaneCount} alias`,
+              false,
+            ],
+            [
+              "aggregateOnlyLaneCount",
+              `${summary.aggregateOnlyLaneCount} aggregate`,
+              false,
+            ],
+            [
+              "unclassifiedLaneCount",
+              `${summary.unclassifiedLaneCount} unclassified`,
+              false,
+            ],
+          ],
+          [],
+        ],
+      ],
+    ],
+  ];
+}
+
 function expectedLocalReleaseReadinessDiagnosticSections(diagnostics) {
   if (diagnostics.length === 0) {
     return [];
@@ -12004,8 +12068,34 @@ function releaseReadinessChecklistFixture() {
         releaseReadinessUnprovenItem("human-release-runbook"),
       ],
     },
+    readinessSummary: {
+      status: "not_ready",
+      proofStatus: "passed",
+      releaseReady: false,
+      productionReady: false,
+      localDevelopmentSpineStatus: "passed",
+      unprovenCount: 2,
+      unprovenIds: ["hosted-deployment", "human-release-runbook"],
+      firstUnprovenRequiredEvidence:
+        releaseReadinessUnprovenItem("hosted-deployment").requiredEvidence,
+      reason: "Local proof passed, but hosted evidence remains unproven.",
+      roleUrlProductionFeatureAuditSummary:
+        roleUrlProductionFeatureAuditSummaryFixture(),
+    },
     proofBoundary:
       "Derived from the local dev-test-game proof-run artifact without release claims.",
+  };
+}
+
+function roleUrlProductionFeatureAuditSummaryFixture() {
+  return {
+    status: "passed",
+    passedRoleUrlLaneCount: 13,
+    productionFeatureLaneCount: 92,
+    directProductionFeatureLaneCount: 11,
+    aliasOnlyLaneCount: 2,
+    aggregateOnlyLaneCount: 0,
+    unclassifiedLaneCount: 0,
   };
 }
 

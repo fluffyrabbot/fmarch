@@ -533,6 +533,8 @@ export async function proveAdminAuditDetail({
   requiredHostedHandoffOperatorProofActions = {},
   requiredRealHostedObservabilitySummaries = [],
   requiredRealHostedObservabilitySummaryStatuses = {},
+  requiredRoleUrlProductionFeatureAudits = [],
+  requiredRoleUrlProductionFeatureAuditStatuses = {},
   requiredHostedIdentityPacketSummaries = [],
   requiredHostedIdentityPacketSummaryStatuses = {},
   requiredHostedIdentityPacketSections = [],
@@ -916,6 +918,17 @@ export async function proveAdminAuditDetail({
       page,
       prefix: "admin-audit-real-hosted-observability-summary",
       ids: Object.keys(requiredRealHostedObservabilitySummaryStatuses),
+    });
+    const visibleRoleUrlProductionFeatureAudits = await waitForRows({
+      page,
+      prefix: "admin-audit-role-url-production-feature-audit",
+      ids: requiredRoleUrlProductionFeatureAudits,
+      expectedStatuses: requiredRoleUrlProductionFeatureAuditStatuses,
+    });
+    const visibleRoleUrlProductionFeatureAuditStatuses = await readRowStatuses({
+      page,
+      prefix: "admin-audit-role-url-production-feature-audit",
+      ids: Object.keys(requiredRoleUrlProductionFeatureAuditStatuses),
     });
     const visibleHostedIdentityPacketSummaries = await waitForRows({
       page,
@@ -1792,6 +1805,15 @@ export async function proveAdminAuditDetail({
         : {
             visibleRealHostedObservabilitySummaryStatuses:
               visibleRealHostedObservabilitySummaryStatuses,
+          }),
+      ...(visibleRoleUrlProductionFeatureAudits.length === 0
+        ? {}
+        : { visibleRoleUrlProductionFeatureAudits }),
+      ...(Object.keys(visibleRoleUrlProductionFeatureAuditStatuses).length === 0
+        ? {}
+        : {
+            visibleRoleUrlProductionFeatureAuditStatuses:
+              visibleRoleUrlProductionFeatureAuditStatuses,
           }),
       ...(visibleHostedIdentityPacketSummaries.length === 0
         ? {}
