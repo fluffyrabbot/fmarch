@@ -508,8 +508,16 @@ test("hardening lane cases share completed-game spine rows", () => {
         role: "host",
       },
       {
+        id: "concurrent-host-complete-race",
+        role: "host",
+      },
+      {
         id: "concurrent-host-complete-race-reload",
         role: "host",
+      },
+      {
+        id: "concurrent-player-complete-race",
+        role: "player",
       },
       {
         id: "public-player-complete-reload",
@@ -562,10 +570,22 @@ test("hardening lane cases share completed-game spine rows", () => {
         "host",
       ],
       [
+        "completedGameHostCompleteRace",
+        "completed-game-host-complete-race",
+        "concurrent-host-complete-race",
+        "host",
+      ],
+      [
         "completedGameHostCompleteRaceReload",
         "completed-game-host-complete-race-reload",
         "concurrent-host-complete-race-reload",
         "host",
+      ],
+      [
+        "completedGamePlayerCompleteRace",
+        "completed-game-player-complete-race",
+        "concurrent-player-complete-race",
+        "player",
       ],
       [
         "completedGamePublicPlayerCompleteReload",

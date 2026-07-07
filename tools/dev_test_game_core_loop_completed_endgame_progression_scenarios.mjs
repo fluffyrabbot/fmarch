@@ -238,6 +238,7 @@ export function completedHostCompleteRaceProofLaneDescriptors({ hardening }) {
   const [raceLane, reloadLane] = completedHostCompleteRaceHardeningLaneCases();
   return [
     completedGameLaneDescriptor(raceLane, {
+      game: hardening.concurrentHostCompleteRace?.game ?? null,
       ackRaceRole: hardening.concurrentHostCompleteRace?.ackRaceRole ?? null,
       rejectRaceRole: hardening.concurrentHostCompleteRace?.rejectRaceRole ?? null,
       rejectError: hardening.concurrentHostCompleteRace?.reject?.error ?? null,
@@ -414,6 +415,7 @@ export function completedPlayerCompleteRaceProofLaneDescriptors({ hardening }) {
   const [raceLane, reloadLane] = completedPlayerCompleteRaceHardeningLaneCases();
   return [
     completedGameLaneDescriptor(raceLane, {
+      game: hardening.concurrentPlayerCompleteRace?.game ?? null,
       postState: hardening.concurrentPlayerCompleteRace?.post?.state ?? null,
       postError: hardening.concurrentPlayerCompleteRace?.post?.error ?? null,
       postSeq: hardening.concurrentPlayerCompleteRace?.postSeq ?? null,

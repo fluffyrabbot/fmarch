@@ -1,11 +1,15 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  coreLoopCompletedGameHardeningLaneDescriptors,
   coreLoopCompletedEndgameProgressionFamilyId,
   coreLoopCompletedEndgameProgressionLaneIds,
   coreLoopCompletedEndgameProgressionScenarioFamilies,
   coreLoopCompletedEndgameProgressionScenarioFamily,
 } from "./dev_test_game_core_loop_completed_endgame_progression_scenarios.mjs";
+import {
+  completedHardeningProofFixture,
+} from "./dev_test_game_core_loop_completed_game_fixtures.mjs";
 import {
   completedGameEndgameScenarioCaseFamilies,
   completedGameHardeningLaneIds,
@@ -66,5 +70,23 @@ test("completed endgame progression family shares reload and stale command cases
   assert.equal(
     family.staleRejects.completedDeadPlayerStaleVote.proofField,
     "completedDeadPlayerStaleVoteRecoveryProof",
+  );
+});
+
+test("completed endgame progression race lanes carry game-backed role URL evidence", () => {
+  const lanes = new Map(
+    coreLoopCompletedGameHardeningLaneDescriptors({
+      hardening: completedHardeningProofFixture("fixture-completed-game"),
+    }).map((lane) => [lane.id, lane]),
+  );
+  assert.deepEqual(
+    [
+      lanes.get("concurrent-host-complete-race")?.evidence.game,
+      lanes.get("concurrent-player-complete-race")?.evidence.game,
+    ],
+    [
+      "fixture-completed-game-host-race",
+      "fixture-completed-game-player-race",
+    ],
   );
 });

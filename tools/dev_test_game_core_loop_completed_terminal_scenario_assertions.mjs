@@ -362,11 +362,11 @@ export function completedGameHardeningSpineLaneCases() {
     }).map((scenario) => ({ ...scenario, role: "host" })),
     ...completedGameHardeningLaneCasesFor({
       proofGroups: "host-complete-race",
-      proofSteps: "reload",
+      proofSteps: ["race", "reload"],
     }).map((scenario) => ({ ...scenario, role: "host" })),
     ...completedGameHardeningLaneCasesFor({
       proofGroups: "player-complete-race",
-      proofSteps: "reload",
+      proofSteps: ["race", "reload"],
     }).map((scenario) => ({ ...scenario, role: "player" })),
     ...completedGameHardeningLaneCasesFor({
       proofGroups: "stale-player-complete",
@@ -419,9 +419,21 @@ export function completedGameHardeningSpineTargetCases() {
     }),
     completedGameHardeningSpineTargetCase({
       laneCasesById,
+      laneId: "concurrent-host-complete-race",
+      targetKey: "completedGameHostCompleteRace",
+      featureSlotId: "completed-game-host-complete-race",
+    }),
+    completedGameHardeningSpineTargetCase({
+      laneCasesById,
       laneId: "concurrent-host-complete-race-reload",
       targetKey: "completedGameHostCompleteRaceReload",
       featureSlotId: "completed-game-host-complete-race-reload",
+    }),
+    completedGameHardeningSpineTargetCase({
+      laneCasesById,
+      laneId: "concurrent-player-complete-race",
+      targetKey: "completedGamePlayerCompleteRace",
+      featureSlotId: "completed-game-player-complete-race",
     }),
     completedGameHardeningSpineTargetCase({
       laneCasesById,
