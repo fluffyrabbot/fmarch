@@ -1,5 +1,5 @@
 export const PLAYER_PRIVATE_QUEUE_CONTRACT = Object.freeze({
-  rootClassName: "player-private-queue",
+  rootClassName: "player-private-queue fm-card",
   componentName: "player-private-queue",
   boundaryStatus: "principal-scoped-private-projections",
   minTouchTargetPx: 44,

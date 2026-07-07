@@ -72,7 +72,7 @@
       <h2>{item.label}</h2>
       <p>{item.value}</p>
       <p
-        class="admin-surface__boundary"
+        class="fm-well fm-well--kv"
         data-testid={item.boundaryTestId}
       >
         <strong>{item.boundary}</strong>
@@ -229,31 +229,6 @@
 </section>
 
 <style>
-  .admin-surface__boundary {
-    background: var(--fm-surface-muted);
-    border: 1px solid var(--fm-line-strong);
-    border-radius: 8px;
-    display: grid;
-    gap: 2px;
-    padding: 10px 12px;
-  }
-
-  .admin-surface__boundary strong,
-  .admin-surface__boundary span {
-    overflow-wrap: anywhere;
-  }
-
-  .admin-surface__boundary strong {
-    color: var(--fm-ink);
-    font-size: 13px;
-  }
-
-  .admin-surface__boundary span {
-    color: var(--fm-ink-muted);
-    font-size: 12px;
-    line-height: 1.3;
-  }
-
   .admin-surface__action-tile {
     align-content: start;
     display: grid;

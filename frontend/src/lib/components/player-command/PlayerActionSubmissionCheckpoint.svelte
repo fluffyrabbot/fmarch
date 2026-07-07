@@ -39,7 +39,7 @@
         checkpoint.receipt,
         checkpoint.recovery,
       ] as item}
-        <div data-testid={item.testId}>
+        <div class="fm-well" data-testid={item.testId}>
           <dt>{item.label}</dt>
           <dd>{item.value}</dd>
         </div>

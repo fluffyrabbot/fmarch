@@ -406,16 +406,6 @@
     );
   }
 
-  :global(.player-action-submission-checkpoint) {
-    background: var(--fm-raised-veil);
-    border: 1px solid var(--fm-line);
-    border-radius: 8px;
-    display: grid;
-    gap: 12px;
-    min-inline-size: 0;
-    padding: 14px;
-  }
-
   :global(.player-action-submission-checkpoint header) {
     align-items: start;
     display: grid;
@@ -445,14 +435,6 @@
     gap: 8px;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     margin: 0;
-  }
-
-  :global(.player-action-submission-checkpoint dl > div) {
-    background: var(--fm-surface-muted);
-    border: 1px solid var(--fm-line-strong);
-    border-radius: 8px;
-    min-inline-size: 0;
-    padding: 10px 12px;
   }
 
   :global(.player-action-submission-checkpoint dt) {

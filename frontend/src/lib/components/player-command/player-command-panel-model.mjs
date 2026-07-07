@@ -1,5 +1,5 @@
 export const PLAYER_COMMAND_PANEL_CONTRACT = Object.freeze({
-  rootClassName: "player-command-panel",
+  rootClassName: "player-command-panel fm-card",
   componentName: "player-command-panel",
   thumbZone: "player-primary-actions",
   thumbZoneTestId: "player-primary-action-zone",

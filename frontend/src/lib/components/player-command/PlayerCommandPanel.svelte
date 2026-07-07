@@ -30,7 +30,7 @@
 >
   <h2>{view.heading}</h2>
   <div
-    class="player-command-panel__deadline"
+    class="player-command-panel__deadline fm-well"
     data-testid={view.deadline.testId}
     data-state={view.deadline.state}
     data-projected={view.deadline.isProjected}
@@ -47,7 +47,7 @@
   {/each}
   <div class="player-command-panel__composer" data-testid="player-composer">
     <div
-      class="player-command-panel__channel-context"
+      class="player-command-panel__channel-context fm-well fm-well--warm"
       data-testid={view.composer.channelContext.testId}
       data-channel-id={view.composer.channelContext.channelId}
       data-channel-label={view.composer.channelContext.channelLabel}
@@ -61,7 +61,7 @@
       <small>{view.composer.channelContext.capabilityLabel}</small>
     </div>
     <div
-      class="player-command-panel__current-vote"
+      class="player-command-panel__current-vote fm-well"
       data-testid={view.composer.currentVote.testId}
       data-has-vote={view.composer.currentVote.hasVote}
     >
@@ -113,17 +113,6 @@
 </aside>
 
 <style>
-  .player-command-panel {
-    align-content: start;
-    background: var(--fm-raised-veil);
-    border: 1px solid var(--fm-line);
-    border-radius: 8px;
-    display: grid;
-    gap: 12px;
-    min-inline-size: 0;
-    padding: 14px;
-  }
-
   .player-command-panel__vote-row {
     align-items: center;
     border-block-start: 1px solid var(--fm-line-soft);
@@ -135,13 +124,7 @@
   }
 
   .player-command-panel__deadline {
-    background: var(--fm-surface-muted);
-    border: 1px solid var(--fm-line-strong);
-    border-radius: 8px;
-    display: grid;
-    gap: 2px;
     min-block-size: 72px;
-    padding: 10px 12px;
   }
 
   .player-command-panel__deadline span,
@@ -201,24 +184,9 @@
     overflow-wrap: anywhere;
   }
 
-  .player-command-panel__channel-context {
-    background: var(--fm-wash-warm);
-    border: 1px solid var(--fm-line-warm);
-    border-radius: 8px;
-    display: grid;
-    gap: 2px;
-    min-block-size: 58px;
-    padding: 10px 12px;
-  }
-
+  .player-command-panel__channel-context,
   .player-command-panel__current-vote {
-    background: var(--fm-surface-muted);
-    border: 1px solid var(--fm-line-strong);
-    border-radius: 8px;
-    display: grid;
-    gap: 2px;
     min-block-size: 58px;
-    padding: 10px 12px;
   }
 
   .player-command-panel__composer label {

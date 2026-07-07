@@ -59,7 +59,7 @@ test("player private queue model builds disclosure view state without host leaka
     expandedItems: { "notification-1": true },
   });
 
-  assert.equal(view.root.className, "player-private-queue");
+  assert.equal(view.root.className, "player-private-queue fm-card");
   assert.equal(view.root.data.component, "player-private-queue");
   assert.equal(view.root.data.boundaryStatus, "principal-scoped-private-projections");
   assert.equal(view.boundary.count, 1);
