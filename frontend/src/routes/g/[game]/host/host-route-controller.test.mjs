@@ -44,6 +44,7 @@ test("host route controller builds projection store boundaries from route data",
 });
 
 test("host route controller derives action groups from live host projections", () => {
+  const cohostDeadlineSeconds = 1782014400;
   const derived = buildHostDerivedState({
     gameId: "midsummer",
     snapshot: {
@@ -126,7 +127,13 @@ test("host route controller derives action groups from live host projections", (
     capabilityKind: "CohostOf",
     snapshot: {
       host: {
-        phase: { id: "D01", locked: false, state: "open" },
+        phase: {
+          id: "D03R2",
+          label: "Day 3 revote 2",
+          locked: false,
+          state: "open",
+          deadline: cohostDeadlineSeconds,
+        },
         replacement: null,
       },
       votecount: [{ target: "slot-2 / Ilya", count: 2, needed: 4 }],
@@ -145,6 +152,34 @@ test("host route controller derives action groups from live host projections", (
   assert.deepEqual(
     cohost.criticalActions.map((action) => action.id),
     ["extend_deadline", "extend_deadline_24h", "extend_deadline_48h"],
+  );
+  assert.deepEqual(
+    cohost.criticalActions.map((action) => [
+      action.id,
+      action.objectLabel,
+      action.payload.phaseId,
+      action.payload.extendsTo,
+    ]),
+    [
+      [
+        "extend_deadline",
+        "Day 3 revote 2 deadline",
+        "D03R2",
+        new Date((cohostDeadlineSeconds + 24 * 3600) * 1000).toISOString(),
+      ],
+      [
+        "extend_deadline_24h",
+        "Day 3 revote 2 deadline",
+        "D03R2",
+        new Date((cohostDeadlineSeconds + 24 * 3600) * 1000).toISOString(),
+      ],
+      [
+        "extend_deadline_48h",
+        "Day 3 revote 2 deadline",
+        "D03R2",
+        new Date((cohostDeadlineSeconds + 48 * 3600) * 1000).toISOString(),
+      ],
+    ],
   );
   assert.deepEqual(
     cohost.moderatorActionGroups.map((group) => group.id),

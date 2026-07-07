@@ -18,26 +18,11 @@ export function buildHostConsoleCriticalActions(
   if (completed === true) {
     return Object.freeze([]);
   }
+  const deadlineActions = buildExtendDeadlineActions(gameId, phase);
   const phaseActions = buildPhaseActions(gameId, phase);
   const lifecycleActions = buildSlotLifecycleActions(gameId, replacement);
   const actions = [
-    freezeHostAction({
-      id: "extend_deadline",
-      label: "Extend deadline",
-      objectLabel: "Day 2 deadline",
-      outcomeLabel: "move the deadline to June 19, 2026 at 9:00 PM PT",
-      confirmationText:
-        "Extend Day 2 deadline: move the deadline to June 19, 2026 at 9:00 PM PT for Day 2 deadline.",
-      irreversible: true,
-      payload: {
-        kind: "extend_deadline",
-        gameId,
-        phaseId: "D01",
-        deadlineId: "deadline-day-2",
-        extendsTo: "2026-06-20T04:00:00Z",
-      },
-    }),
-    ...buildExtendDeadlinePresetActions(gameId, phase),
+    ...deadlineActions,
     freezeHostAction({
       id: "process_replacement",
       label: "Process replacement",
@@ -93,30 +78,68 @@ export function buildHostConsoleCriticalActions(
   );
 }
 
-function buildExtendDeadlinePresetActions(gameId, phase) {
+function buildExtendDeadlineActions(gameId, phase) {
+  const target = activeDeadlineTarget(phase);
+  const defaultExtendsToSeconds = target.baseDeadlineSeconds + 24 * 3600;
+  return Object.freeze([
+    freezeHostAction({
+      id: "extend_deadline",
+      label: "Extend deadline",
+      objectLabel: target.objectLabel,
+      outcomeLabel: `move the deadline to ${formatDeadlinePacific(defaultExtendsToSeconds)}`,
+      confirmationText:
+        `Extend ${target.objectLabel}: move the deadline to ${formatDeadlinePacific(defaultExtendsToSeconds)} for ${target.objectLabel}.`,
+      irreversible: true,
+      payload: {
+        kind: "extend_deadline",
+        gameId,
+        phaseId: target.phaseId,
+        extendsTo: new Date(defaultExtendsToSeconds * 1000).toISOString(),
+      },
+    }),
+    ...EXTEND_DEADLINE_PRESETS.map((preset) =>
+      buildExtendDeadlinePresetAction(gameId, target, preset),
+    ),
+  ]);
+}
+
+function buildExtendDeadlinePresetAction(gameId, target, preset) {
+  const extendsToSeconds = target.baseDeadlineSeconds + preset.hours * 3600;
+  const outcomeLabel = `move the deadline ${preset.hours} hours later to ${formatDeadlinePacific(extendsToSeconds)}`;
+  return freezeHostAction({
+    id: preset.id,
+    label: preset.label,
+    objectLabel: target.objectLabel,
+    outcomeLabel,
+    confirmationText:
+      `Extend ${target.objectLabel} by ${preset.hours} hours: ${outcomeLabel} for ${target.objectLabel}.`,
+    requiresConfirmation: true,
+    payload: {
+      kind: "extend_deadline",
+      gameId,
+      phaseId: target.phaseId,
+      extendsTo: new Date(extendsToSeconds * 1000).toISOString(),
+    },
+  });
+}
+
+function activeDeadlineTarget(phase) {
+  const phaseId =
+    typeof phase?.id === "string" && phase.id.trim() !== ""
+      ? phase.id.trim()
+      : "D01";
+  const phaseLabel =
+    typeof phase?.label === "string" && phase.label.trim() !== ""
+      ? phase.label.trim()
+      : phaseId;
   const baseDeadlineSeconds =
     typeof phase?.deadline === "number" && Number.isFinite(phase.deadline)
       ? Math.floor(phase.deadline)
       : FIXTURE_DEADLINE_SECONDS;
-  return EXTEND_DEADLINE_PRESETS.map((preset) => {
-    const extendsToSeconds = baseDeadlineSeconds + preset.hours * 3600;
-    const outcomeLabel = `move the deadline ${preset.hours} hours later to ${formatDeadlinePacific(extendsToSeconds)}`;
-    return freezeHostAction({
-      id: preset.id,
-      label: preset.label,
-      objectLabel: "Day 2 deadline",
-      outcomeLabel,
-      confirmationText:
-        `Extend Day 2 deadline by ${preset.hours} hours: ${outcomeLabel} for Day 2 deadline.`,
-      requiresConfirmation: true,
-      payload: {
-        kind: "extend_deadline",
-        gameId,
-        phaseId: "D01",
-        deadlineId: "deadline-day-2",
-        extendsTo: new Date(extendsToSeconds * 1000).toISOString(),
-      },
-    });
+  return Object.freeze({
+    phaseId,
+    objectLabel: `${phaseLabel} deadline`,
+    baseDeadlineSeconds,
   });
 }
 

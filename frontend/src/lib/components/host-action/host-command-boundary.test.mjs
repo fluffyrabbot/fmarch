@@ -668,6 +668,65 @@ test("host console projection clears explicit null deadlines", () => {
   assert.equal(projection.phase.deadlineLabel, "No deadline extension committed");
 });
 
+test("host console projection derives labels when the current phase changes", () => {
+  const projection = projectHostConsoleState(
+    {
+      completed: false,
+      phase: { phase_id: "D03R2", locked: false, deadline: 1782014400 },
+      slots: [],
+      thread_posts: [],
+    },
+    {
+      phase: {
+        id: "D01",
+        label: "Day 2",
+        deadline: 1781928000,
+        deadlineLabel: "Jun 19, 2026, 9:00 PM",
+        lockedLabel: "Thread locked",
+      },
+      replacement: {
+        slotId: "slot-7",
+        occupantLabel: "player-mira",
+        lifecycleLabel: "Alive",
+        historyLabel: "Waiting for replacement command proof",
+      },
+    },
+  );
+
+  assert.equal(projection.phase.id, "D03R2");
+  assert.equal(projection.phase.label, "Day 3 revote 2");
+  assert.equal(projection.phase.deadline, 1782014400);
+  assert.equal(projection.phase.deadlineLabel, "Jun 20, 2026, 9:00 PM");
+});
+
+test("host console projection preserves fallback labels for unchanged phase ids", () => {
+  const projection = projectHostConsoleState(
+    {
+      completed: false,
+      phase: { phase_id: "D01", locked: false, deadline: 1781841600 },
+      slots: [],
+      thread_posts: [],
+    },
+    {
+      phase: {
+        id: "D01",
+        label: "Day 2",
+        deadlineLabel: "No deadline extension committed",
+        lockedLabel: "Thread open",
+      },
+      replacement: {
+        slotId: "slot-7",
+        occupantLabel: "player-mira",
+        lifecycleLabel: "Alive",
+        historyLabel: "Waiting for replacement command proof",
+      },
+    },
+  );
+
+  assert.equal(projection.phase.id, "D01");
+  assert.equal(projection.phase.label, "Day 2");
+});
+
 test("host console state endpoint is scoped by principal and slot", () => {
   assert.equal(
     buildHostConsoleStateEndpoint({

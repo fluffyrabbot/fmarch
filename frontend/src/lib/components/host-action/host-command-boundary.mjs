@@ -308,6 +308,7 @@ export function projectHostConsoleState(state, fallback) {
     phase: Object.freeze({
       ...fallback.phase,
       id: phase?.phase_id ?? fallback.phase.id,
+      label: hostPhaseLabel(phase, fallback.phase),
       locked:
         typeof phase?.locked === "boolean"
           ? phase.locked
@@ -367,6 +368,69 @@ function normalizeHostConsoleSlot(slot) {
     role_revealed: slot?.role_revealed === true,
     alignment_revealed: slot?.alignment_revealed === true,
   });
+}
+
+function hostPhaseLabel(phase, fallbackPhase = {}) {
+  const explicitLabel = phase?.phase_label ?? phase?.phaseLabel ?? phase?.label;
+  if (typeof explicitLabel === "string" && explicitLabel.trim() !== "") {
+    return explicitLabel.trim();
+  }
+  const phaseKind = phase?.phase_kind ?? phase?.phaseKind;
+  const phaseNumber = phase?.phase_number ?? phase?.phaseNumber;
+  if (
+    typeof phaseKind === "string" &&
+    phaseKind.trim() !== "" &&
+    Number.isFinite(Number(phaseNumber)) &&
+    Number(phaseNumber) > 0
+  ) {
+    return `${phaseKind.trim()} ${Number(phaseNumber)}`;
+  }
+  const phaseId = phase?.phase_id ?? phase?.phaseId ?? fallbackPhase.id;
+  if (
+    typeof fallbackPhase.label === "string" &&
+    fallbackPhase.label.trim() !== "" &&
+    fallbackPhase.id === phaseId
+  ) {
+    return fallbackPhase.label.trim();
+  }
+  const derivedLabel = hostPhaseLabelFromId(phaseId);
+  if (derivedLabel !== null) {
+    return derivedLabel;
+  }
+  return typeof phaseId === "string" && phaseId.trim() !== ""
+    ? phaseId.trim()
+    : "Current phase";
+}
+
+function hostPhaseLabelFromId(phaseId) {
+  if (typeof phaseId !== "string") {
+    return null;
+  }
+  const normalized = phaseId.trim();
+  const compactMatch = /^(D|N|T)(\d+)(?:R(\d+))?$/iu.exec(normalized);
+  if (compactMatch !== null) {
+    const kind = {
+      D: "Day",
+      N: "Night",
+      T: "Twilight",
+    }[compactMatch[1].toUpperCase()];
+    const number = Number(compactMatch[2]);
+    const revote = compactMatch[3] === undefined
+      ? ""
+      : ` revote ${Number(compactMatch[3])}`;
+    return `${kind} ${number}${revote}`;
+  }
+  const slugMatch = /^(day|night|twilight)-(\d+)(?:-?r(?:evote)?-?(\d+))?$/iu.exec(
+    normalized,
+  );
+  if (slugMatch !== null) {
+    const kind = slugMatch[1][0].toUpperCase() + slugMatch[1].slice(1).toLowerCase();
+    const revote = slugMatch[3] === undefined
+      ? ""
+      : ` revote ${Number(slugMatch[3])}`;
+    return `${kind} ${Number(slugMatch[2])}${revote}`;
+  }
+  return null;
 }
 
 function requiredString(value, field) {

@@ -144,7 +144,6 @@ test("host console route data is allowed for HostOf scoped to the current game",
   assert.equal(extend24.irreversible, undefined);
   assert.equal(extend24.payload.kind, "extend_deadline");
   assert.equal(extend24.payload.phaseId, "D01");
-  assert.equal(extend24.payload.deadlineId, "deadline-day-2");
   assert.equal(extend24.payload.extendsTo, "2026-06-20T04:00:00.000Z");
   assert.equal(extend48.payload.extendsTo, "2026-06-21T04:00:00.000Z");
   assert.equal(

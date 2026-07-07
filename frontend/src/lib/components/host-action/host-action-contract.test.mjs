@@ -393,6 +393,52 @@ test("host console exposes deadline advance only for locked phases with deadline
   });
 });
 
+test("host console deadline extension actions follow the projected phase", () => {
+  const baseDeadlineSeconds = 1782014400;
+  const actions = buildHostConsoleCriticalActions("midsummer", {
+    phase: {
+      id: "D03R2",
+      label: "Day 3 revote",
+      locked: false,
+      deadline: baseDeadlineSeconds,
+    },
+  }).filter((action) => action.id.startsWith("extend_deadline"));
+
+  assert.deepEqual(
+    actions.map((action) => [
+      action.id,
+      action.objectLabel,
+      action.payload.phaseId,
+      action.payload.deadlineId,
+      action.payload.extendsTo,
+    ]),
+    [
+      [
+        "extend_deadline",
+        "Day 3 revote deadline",
+        "D03R2",
+        undefined,
+        new Date((baseDeadlineSeconds + 24 * 3600) * 1000).toISOString(),
+      ],
+      [
+        "extend_deadline_24h",
+        "Day 3 revote deadline",
+        "D03R2",
+        undefined,
+        new Date((baseDeadlineSeconds + 24 * 3600) * 1000).toISOString(),
+      ],
+      [
+        "extend_deadline_48h",
+        "Day 3 revote deadline",
+        "D03R2",
+        undefined,
+        new Date((baseDeadlineSeconds + 48 * 3600) * 1000).toISOString(),
+      ],
+    ],
+  );
+  assert.match(actions[0].confirmationText, /Day 3 revote deadline/);
+});
+
 test("host console hides terminal slot lifecycle commands", () => {
   const aliveActions = buildHostConsoleCriticalActions("midsummer", {
     replacement: { lifecycleLabel: "Alive" },
