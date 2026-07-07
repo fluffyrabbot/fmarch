@@ -42,10 +42,18 @@
   justify-items: start;
 }
 
+/* danger-quiet: irreversible triggers warn without shouting; the filled
+   danger tier is reserved for the confirmation dialog's final confirm */
 .host-action__trigger[data-danger="true"] {
-  background: var(--fm-danger-wash);
+  background: var(--fm-raised);
   border-color: var(--fm-danger);
-  color: var(--fm-danger);
+  color: var(--fm-danger-ink);
+}
+
+.touch-control--danger {
+  background: var(--fm-danger);
+  border-color: var(--fm-danger);
+  color: var(--fm-on-dark);
 }
 
 .host-action__confirmation {

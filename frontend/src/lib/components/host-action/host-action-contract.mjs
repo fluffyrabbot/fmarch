@@ -136,7 +136,7 @@ export function buildHostActionViewModel(config, confirmation = null) {
         ? String(confirmation !== null)
         : undefined,
       data: {
-        danger: String(normalized.requiresConfirmation),
+        danger: String(normalized.irreversible),
       },
       label: normalized.label,
     },
@@ -165,6 +165,9 @@ export function buildHostActionViewModel(config, confirmation = null) {
             objectLabel: confirmation.objectLabel,
             outcomeLabel: confirmation.outcomeLabel,
             actionsClassName: HOST_ACTION_CONTRACT.confirmationActionsClassName,
+            confirmClassName: normalized.irreversible
+              ? "touch-control touch-control--danger"
+              : "touch-control",
           },
   };
 }
@@ -183,6 +186,7 @@ function normalizeHostActionConfig(config) {
     payload: Object.hasOwn(config, "payload") ? config.payload : null,
     requiresConfirmation:
       config.requiresConfirmation === true || config.irreversible === true,
+    irreversible: config.irreversible === true,
     disabled: config.disabled === true,
   };
 

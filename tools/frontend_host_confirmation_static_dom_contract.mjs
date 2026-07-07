@@ -84,7 +84,10 @@ function assertHostActionConfirmation({ action, html }) {
   );
   assert.equal(trigger.tag, "button");
   assert.equal(trigger.attrs["aria-expanded"], "true");
-  assert.equal(trigger.attrs["data-danger"], "true");
+  assert.equal(
+    trigger.attrs["data-danger"],
+    String(action.irreversible === true),
+  );
   assertTouchControl(trigger, `${action.id} trigger`);
 
   const confirmation = exactlyOne(

@@ -108,7 +108,7 @@
         <div class={view.confirmation.actionsClassName}>
           <button
             type="button"
-            class="touch-control"
+            class={view.confirmation.confirmClassName}
             data-testid={view.confirmation.confirmTestId}
             bind:this={confirmElement}
             on:click={confirm}
