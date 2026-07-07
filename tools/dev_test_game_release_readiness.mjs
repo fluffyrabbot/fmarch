@@ -240,6 +240,7 @@ import {
   productionFeatureSpineSourceCheckRules,
 } from "./dev_test_game_production_feature_source_rules.mjs";
 import {
+  coreLoopFeatureSpineCycleIds,
   coreLoopFeatureSpineSourceCheckId,
 } from "./dev_test_game_core_loop_feature_spine_targets.mjs";
 import {
@@ -346,6 +347,7 @@ import {
   completedGameProofReadinessScenarioFamilies,
   completedGameHardeningSpineCycleId,
   completedGameHardeningSpineLaneCases,
+  completedGameStaleCommandFeatureSpineRows,
   completedGameStaleRecoverySpineLaneCase,
 } from "./dev_test_game_core_loop_completed_game_proof_readiness_contract.mjs";
 import {
@@ -4009,9 +4011,17 @@ function sameStringArray(actual, expected) {
 
 function buildCoreLoopReadinessSpineTargets(coreLoopAdminProofEvidence) {
   const rowIds = coreLoopAdminProofEvidence.coreLoopSpineRows ?? {};
+  const completedCommandRows =
+    buildCoreLoopCompletedGameCommandSpineRows(coreLoopAdminProofEvidence);
   const cycleIds = [...(rowIds.cycles ?? [])];
-  const roleUrlIds = [...(rowIds.roleUrls ?? [])];
-  const checkpointIds = [...(rowIds.checkpoints ?? [])];
+  const roleUrlIds = [
+    ...(rowIds.roleUrls ?? []),
+    ...completedCommandRows.roleUrlIds,
+  ];
+  const checkpointIds = [
+    ...(rowIds.checkpoints ?? []),
+    ...completedCommandRows.checkpointIds,
+  ];
   const recoveryHookIds = [...(rowIds.recoveryHooks ?? [])];
   const defaultCycleId = cycleIds.includes("d02-n02")
     ? "d02-n02"
@@ -4022,7 +4032,11 @@ function buildCoreLoopReadinessSpineTargets(coreLoopAdminProofEvidence) {
   const defaultCheckpointId =
     checkpointIds.find((id) => id === "d02-n02-n02-action-open") ??
     String(checkpointIds[0] ?? "");
-  const defaultRoleUrl = String(rowIds.roleUrlHrefs?.[defaultRoleUrlId] ?? "");
+  const roleUrlHrefs = {
+    ...(rowIds.roleUrlHrefs ?? {}),
+    ...completedCommandRows.roleUrlHrefs,
+  };
+  const defaultRoleUrl = String(roleUrlHrefs[defaultRoleUrlId] ?? "");
   return {
     status: "passed",
     detailRoleUrl: coreLoopAdminProofEvidence.detailRoleUrl,
@@ -4038,7 +4052,7 @@ function buildCoreLoopReadinessSpineTargets(coreLoopAdminProofEvidence) {
       (id) => String(id),
     ),
     recoveryHookIds,
-    roleUrlHrefs: { ...(rowIds.roleUrlHrefs ?? {}) },
+    roleUrlHrefs,
     productionFeatureTargets: buildProductionFeatureSpineTargetCollection({
       declarations: releaseReadinessProductionFeatureSpineTargets,
       sourceTarget: {
@@ -4056,11 +4070,42 @@ function buildCoreLoopReadinessSpineTargets(coreLoopAdminProofEvidence) {
           ...(coreLoopAdminProofEvidence.visibleChecks ?? []),
         ].map((id) => String(id)),
         recoveryHookIds,
-        roleUrlHrefs: rowIds.roleUrlHrefs ?? {},
+        roleUrlHrefs,
       },
       defaultRerunCommandBySourceCheckId:
         defaultProductionFeatureSpineRerunCommands,
     }),
+  };
+}
+
+function buildCoreLoopCompletedGameCommandSpineRows(coreLoopAdminProofEvidence) {
+  const rows = completedGameStaleCommandFeatureSpineRows({
+    cycleId: coreLoopFeatureSpineCycleIds.dayFiveNightFive,
+  });
+  const surface = coreLoopAdminProofEvidence.completedGameEndgameSurface ?? {};
+  const roleUrlEntries = rows
+    .map((row) => {
+      const proof = surface[row.proofField];
+      const roleUrl = String(proof?.sourceRoleUrl ?? "");
+      if (
+        proof?.status !== "passed" ||
+        proof?.clickedThroughFromRoleUrl !== true ||
+        roleUrl.includes("/g/") === false
+      ) {
+        return null;
+      }
+      return [row.roleUrlId, roleUrl];
+    })
+    .filter((entry) => entry !== null);
+  const roleUrlHrefs = Object.fromEntries(roleUrlEntries);
+  return {
+    roleUrlIds: rows
+      .map((row) => row.roleUrlId)
+      .filter((rowId) => roleUrlHrefs[rowId] !== undefined),
+    checkpointIds: rows
+      .map((row) => row.checkpointId)
+      .filter((rowId) => roleUrlHrefs[rowId] !== undefined),
+    roleUrlHrefs,
   };
 }
 

@@ -33,6 +33,13 @@ const browserProofCommand =
   "npm run test:dev-test-game-core-live:local";
 const coreLoopAdminProofCommand =
   "npm run test:dev-test-game-core-loop-admin-proof";
+const completedGameStaleCommandFeatureRowIds = Object.freeze([
+  "completed-game-host-stale-resolve-reject",
+  "completed-game-host-stale-advance-reject",
+  "completed-game-host-stale-complete-reject",
+  "completed-game-stale-player-submit-vote-reject",
+  "completed-game-stale-player-submit-post-reject",
+]);
 
 test("core loop feature spine catalog rows are scenario-owned", () => {
   const source = readFileSync(
@@ -634,6 +641,7 @@ function coreLoopSourceTargetFixture() {
       "d04-n04-d05-deadPlayer",
       "d05-n05-host",
       "d05-n05-actionPlayer",
+      ...completedGameStaleCommandFeatureRowIds,
     ],
     checkpointIds: [
       "d01-n01-d02-d01-resolved-locked",
@@ -681,6 +689,7 @@ function coreLoopSourceTargetFixture() {
       "d05-n05-n05-complete-game",
       "d05-n05-n05-completed-host-reload",
       "d05-n05-n05-completed-player-surface",
+      ...completedGameStaleCommandFeatureRowIds,
     ],
     recoveryHookIds: [
       "staleLockedVoteReject",
@@ -727,6 +736,16 @@ function coreLoopSourceTargetFixture() {
       "d04-n04-d05-deadPlayer": "http://127.0.0.1:5173/g/game-b",
       "d05-n05-host": "http://127.0.0.1:5173/g/game-b/host",
       "d05-n05-actionPlayer": "http://127.0.0.1:5173/g/game-b",
+      "completed-game-host-stale-resolve-reject":
+        "http://127.0.0.1:5173/g/game-b/host",
+      "completed-game-host-stale-advance-reject":
+        "http://127.0.0.1:5173/g/game-b/host",
+      "completed-game-host-stale-complete-reject":
+        "http://127.0.0.1:5173/g/game-b/host",
+      "completed-game-stale-player-submit-vote-reject":
+        "http://127.0.0.1:5173/g/game-b",
+      "completed-game-stale-player-submit-post-reject":
+        "http://127.0.0.1:5173/g/game-b",
       "d02-n02-target": "http://127.0.0.1:5173/g/game-b",
     },
   };

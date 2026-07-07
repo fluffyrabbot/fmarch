@@ -12,6 +12,7 @@ import {
   completedGameEndgameStaleRejectAssertionCases,
   completedGameEndgameTransition,
   completedGameEndgameTransitionTokens,
+  completedHostStaleCommandCases,
   completedHostStaleCommandAssertionCases,
   completedHostStaleCommandHardeningLaneCaseDefinitions,
   completedHostStaleCommandHardeningLaneCases,
@@ -20,6 +21,7 @@ import {
   completedPlayerReloadHardeningLaneCaseDefinitions,
   completedPlayerReloadProofCases,
   staleCompletedGamePlayerCommandAssertionCases,
+  staleCompletedGamePlayerCommandCases,
   staleCompletedGamePlayerCommandHardeningLaneCaseDefinitions,
   staleCompletedGamePlayerCommandProofArgs,
 } from "./dev_test_game_core_loop_completed_game_recovery_scenarios.mjs";
@@ -101,6 +103,31 @@ export function completedGameEndgameFeatureSpineRows({ cycleId }) {
   );
 }
 
+export function completedGameStaleCommandFeatureSpineRows({ cycleId }) {
+  return [
+    ...completedHostStaleCommandCases().map((scenario) =>
+      completedGameStaleCommandFeatureSpineRow({
+        cycleId,
+        proofField: scenario.proofField,
+        role: "host",
+        rowId: `completed-game-host-stale-${completedGameHostCommandSlug(
+          scenario.commandId,
+        )}-reject`,
+      }),
+    ),
+    ...staleCompletedGamePlayerCommandCases().map((scenario) =>
+      completedGameStaleCommandFeatureSpineRow({
+        cycleId,
+        proofField: scenario.proofField,
+        role: "actionPlayer",
+        rowId: `completed-game-stale-player-${completedGameCommandKindSlug(
+          scenario.commandKind,
+        )}-reject`,
+      }),
+    ),
+  ];
+}
+
 export function completedGameRecoveryFeatureSpineRow({ cycleId }) {
   return {
     targetKey: "completedGameRecovery",
@@ -110,6 +137,41 @@ export function completedGameRecoveryFeatureSpineRow({ cycleId }) {
     checkpointId: `${cycleId}-d02-resolved-target-killed`,
     adminCheckId: "completed-game-hardening-coverage",
   };
+}
+
+function completedGameStaleCommandFeatureSpineRow({
+  cycleId,
+  proofField,
+  role,
+  rowId,
+}) {
+  return {
+    targetKey: completedGameStaleCommandTargetKey(proofField),
+    featureSlotId: rowId,
+    cycleId,
+    role,
+    roleUrlId: rowId,
+    checkpointId: rowId,
+    adminCheckId: "completed-game-hardening-coverage",
+    proofField,
+  };
+}
+
+function completedGameStaleCommandTargetKey(proofField) {
+  const stem = String(proofField ?? "").replace(/RecoveryProof$/, "");
+  return stem.charAt(0).toLowerCase() + stem.slice(1);
+}
+
+function completedGameHostCommandSlug(commandId) {
+  return String(commandId ?? "")
+    .replace(/^completed-host-stale-/, "")
+    .replaceAll("_", "-");
+}
+
+function completedGameCommandKindSlug(commandKind) {
+  return String(commandKind ?? "")
+    .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
+    .toLowerCase();
 }
 
 function featureRowFromCompletedGameEndgameCase(scenario, { cycleId }) {

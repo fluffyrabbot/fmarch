@@ -4,6 +4,7 @@ import {
   completedGameHardeningSpineCycleId,
   completedGameHardeningSpineLaneCases,
   completedGameHardeningSpineTargetCases,
+  completedGameStaleCommandFeatureSpineRows,
   completedGameProofReadinessScenarioFamilies,
   completedGameProofReadinessScenarioFamily as completedGameProofReadinessCaseScenarioFamily,
   completedGameStaleRecoverySpineLaneCase,
@@ -36,6 +37,7 @@ export {
   completedGameHardeningSpineCycleId,
   completedGameHardeningSpineLaneCases,
   completedGameHardeningSpineTargetCases,
+  completedGameStaleCommandFeatureSpineRows,
   completedGameStaleRecoverySpineLaneCase,
 };
 

@@ -22379,6 +22379,14 @@ function privateChannelRoleSurfaceFixture() {
   };
 }
 
+const completedGameStaleCommandFeatureRowIds = Object.freeze([
+  "completed-game-host-stale-resolve-reject",
+  "completed-game-host-stale-advance-reject",
+  "completed-game-host-stale-complete-reject",
+  "completed-game-stale-player-submit-vote-reject",
+  "completed-game-stale-player-submit-post-reject",
+]);
+
 function coreLoopSpineTargetsFixture() {
   const roleUrlHrefs = {
     "d01-n01-d02-host":
@@ -22427,6 +22435,16 @@ function coreLoopSpineTargetsFixture() {
       "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002/host",
     "d05-n05-actionPlayer":
       "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002",
+    "completed-game-host-stale-resolve-reject":
+      "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002/host",
+    "completed-game-host-stale-advance-reject":
+      "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002/host",
+    "completed-game-host-stale-complete-reject":
+      "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002/host",
+    "completed-game-stale-player-submit-vote-reject":
+      "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002",
+    "completed-game-stale-player-submit-post-reject":
+      "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002",
   };
   return {
     status: "passed",
@@ -22470,6 +22488,7 @@ function coreLoopSpineTargetsFixture() {
       "d04-n04-d05-deadPlayer",
       "d05-n05-host",
       "d05-n05-actionPlayer",
+      ...completedGameStaleCommandFeatureRowIds,
     ],
     checkpointIds: [
       "d01-n01-d02-d01-resolved-locked",
@@ -22517,6 +22536,7 @@ function coreLoopSpineTargetsFixture() {
       "d05-n05-n05-complete-game",
       "d05-n05-n05-completed-host-reload",
       "d05-n05-n05-completed-player-surface",
+      ...completedGameStaleCommandFeatureRowIds,
     ],
     recoveryHookIds: [
       "staleLockedVoteReject",

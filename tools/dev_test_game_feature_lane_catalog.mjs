@@ -15,6 +15,7 @@ import {
 import {
   completedGameEndgameFeatureSpineRows,
   completedGameRecoveryFeatureSpineRow,
+  completedGameStaleCommandFeatureSpineRows,
 } from "./dev_test_game_core_loop_completed_terminal_scenario_assertions.mjs";
 import {
   dayVoteNoLynchFeatureSpineRow,
@@ -107,6 +108,7 @@ const coreLoopFeatureSpineLaneRows = Object.freeze([
   ...lateActionProgressionFeatureSpineRows(),
   ...dayFiveProgressionFeatureSpineRows(),
   ...completedGameEndgameFeatureSpineRows({ cycleId: dayFiveNightFive }),
+  ...completedGameStaleCommandFeatureSpineRows({ cycleId: dayFiveNightFive }),
   Object.freeze(
     invalidActionRecoveryFeatureSpineRow({ cycleId: dayTwoNightTwo }),
   ),
@@ -141,6 +143,7 @@ function checkpointRow({
   featureSlotId,
   cycleId,
   role,
+  roleUrlId,
   checkpointId,
   adminCheckId,
   recoveryHookId,
@@ -149,7 +152,7 @@ function checkpointRow({
     featureSlotId,
     sourceCheckId: coreLoopFeatureSpineSourceCheckId,
     cycleId,
-    roleUrlId: `${cycleId}-${role}`,
+    roleUrlId: roleUrlId ?? `${cycleId}-${role}`,
     checkpointId,
     ...(recoveryHookId === undefined ? {} : { recoveryHookId }),
     adminCheckId,

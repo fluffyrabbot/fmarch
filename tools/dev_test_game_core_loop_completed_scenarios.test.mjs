@@ -37,6 +37,7 @@ import {
   completedGameEndgameScenarioCaseFamilyEntries,
   completedGameEndgameScenarioCaseFamilyIds,
   completedGameEndgameFeatureSpineRows,
+  completedGameStaleCommandFeatureSpineRows,
   completedGameEndgameSurfaceAssertionCases,
   completedGameEndgameTransition,
   completedGameHardeningLaneCase,
@@ -1300,6 +1301,64 @@ test("completed-game scenario module derives terminal feature-spine rows", () =>
       adminCheckId: "core-loop",
     },
   ]);
+});
+
+test("completed-game scenario module derives command-specific stale feature rows", () => {
+  assert.deepEqual(
+    completedGameStaleCommandFeatureSpineRows({ cycleId: "d05-n05" }),
+    [
+      {
+        targetKey: "completedHostStaleResolve",
+        featureSlotId: "completed-game-host-stale-resolve-reject",
+        cycleId: "d05-n05",
+        role: "host",
+        roleUrlId: "completed-game-host-stale-resolve-reject",
+        checkpointId: "completed-game-host-stale-resolve-reject",
+        adminCheckId: "completed-game-hardening-coverage",
+        proofField: "completedHostStaleResolveRecoveryProof",
+      },
+      {
+        targetKey: "completedHostStaleAdvance",
+        featureSlotId: "completed-game-host-stale-advance-reject",
+        cycleId: "d05-n05",
+        role: "host",
+        roleUrlId: "completed-game-host-stale-advance-reject",
+        checkpointId: "completed-game-host-stale-advance-reject",
+        adminCheckId: "completed-game-hardening-coverage",
+        proofField: "completedHostStaleAdvanceRecoveryProof",
+      },
+      {
+        targetKey: "completedHostStaleComplete",
+        featureSlotId: "completed-game-host-stale-complete-reject",
+        cycleId: "d05-n05",
+        role: "host",
+        roleUrlId: "completed-game-host-stale-complete-reject",
+        checkpointId: "completed-game-host-stale-complete-reject",
+        adminCheckId: "completed-game-hardening-coverage",
+        proofField: "completedHostStaleCompleteRecoveryProof",
+      },
+      {
+        targetKey: "staleCompletedVote",
+        featureSlotId: "completed-game-stale-player-submit-vote-reject",
+        cycleId: "d05-n05",
+        role: "actionPlayer",
+        roleUrlId: "completed-game-stale-player-submit-vote-reject",
+        checkpointId: "completed-game-stale-player-submit-vote-reject",
+        adminCheckId: "completed-game-hardening-coverage",
+        proofField: "staleCompletedVoteRecoveryProof",
+      },
+      {
+        targetKey: "staleCompletedPost",
+        featureSlotId: "completed-game-stale-player-submit-post-reject",
+        cycleId: "d05-n05",
+        role: "actionPlayer",
+        roleUrlId: "completed-game-stale-player-submit-post-reject",
+        checkpointId: "completed-game-stale-player-submit-post-reject",
+        adminCheckId: "completed-game-hardening-coverage",
+        proofField: "staleCompletedPostRecoveryProof",
+      },
+    ],
+  );
 });
 
 test("completed-game scenario module derives stale host and dead-player assertion cases", () => {
