@@ -1,11 +1,19 @@
 <script>
   import "../styles/app.css";
   import { APP_SHELL_CONTRACT } from "./app-shell-model.mjs";
+  import { activePhaseTheme } from "./phase-theme.mjs";
 
   export let shell;
+
+  $: phaseTheme = $activePhaseTheme ?? shell.phase ?? undefined;
 </script>
 
-<div class="fm-app-shell" data-component={APP_SHELL_CONTRACT.component} data-surface={shell.activeSurface}>
+<div
+  class="fm-app-shell"
+  data-component={APP_SHELL_CONTRACT.component}
+  data-surface={shell.activeSurface}
+  data-phase={phaseTheme}
+>
   <a
     class="fm-skip-link"
     href={`#${APP_SHELL_CONTRACT.mainTargetId}`}

@@ -2,10 +2,12 @@
  * Design tokens — the only file in frontend/src where raw color literals are
  * legal (enforced by tools/frontend_tablet_interaction_contract.mjs).
  *
- * Phase 01 of the design architecture: these values are the canonical form of
- * the palette the app already ships; near-duplicate hexes were collapsed onto
- * one token per role. Later phases re-key the accent tier per game phase
- * (data-phase) without touching component CSS.
+ * Phase 05 of the design architecture: the semantic tier is keyed by game
+ * phase. `data-phase="day|night|twilight"` on the app shell re-keys every
+ * token for its subtree; off-game surfaces (no data-phase anywhere) follow
+ * the user's light/dark preference onto the same two palettes. Status colors
+ * are phase-invariant; only their washes re-key. Twilight currently aliases
+ * the night ramp until a dedicated ramp is ratified.
  */
 
 :root {
@@ -13,61 +15,167 @@
   --fm-font-ui:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
     sans-serif;
+  --fm-font-display:
+    "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia,
+    serif;
   --fm-font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
 
-  /* ink — text on light surfaces */
-  --fm-ink: #17212b;
-  --fm-ink-muted: #425063;
-  --fm-ink-subtle: #53606f;
-  --fm-ink-disabled: #586574;
+/* ---- day palette (default ground) ---- */
+
+:root,
+[data-phase="day"] {
+  /* ink — text on paper grounds */
+  --fm-ink: #1c2620;
+  --fm-ink-muted: #57645c;
+  --fm-ink-subtle: #45534b;
+  --fm-ink-disabled: #5c6961;
 
   /* paper — grounds and raised surfaces */
-  --fm-ground: #f5f7f4;
-  --fm-raised: #ffffff;
-  --fm-raised-veil: rgba(255, 255, 255, 0.74);
-  --fm-surface-muted: #eef2f5;
-  --fm-surface-cool: #f7fafc;
-  --fm-surface-tint: #f7faf8;
-  --fm-topbar-veil: rgba(248, 250, 247, 0.96);
-  --fm-wash-top: #f8faf7;
-  --fm-wash-mid: #eef4f6;
-  --fm-wash-warm: #f7f2ea;
+  --fm-ground: #eff0e9;
+  --fm-raised: #fdfcf8;
+  --fm-raised-veil: rgba(253, 252, 248, 0.74);
+  --fm-surface-muted: #e6e8df;
+  --fm-surface-cool: #ecefea;
+  --fm-surface-tint: #e9eee7;
+  --fm-topbar-veil: rgba(247, 248, 242, 0.96);
+  --fm-wash-top: #f4f5ee;
+  --fm-wash-mid: #edefe6;
+  --fm-wash-warm: #f2eee2;
 
   /* lines — borders and rules */
-  --fm-line: #bdc7c1;
-  --fm-line-strong: #9aa7b1;
-  --fm-line-heavy: #8b98a4;
-  --fm-line-soft: #d0d8d3;
-  --fm-line-cool: #cbd6e2;
-  --fm-line-warm: #d6c7ad;
-  --fm-control-border: #53606f;
+  --fm-line: #c8cec0;
+  --fm-line-strong: #a9b2a6;
+  --fm-line-heavy: #97a196;
+  --fm-line-soft: #d8dcd1;
+  --fm-line-cool: #c9d2ce;
+  --fm-line-warm: #d6c8a9;
+  --fm-control-border: #57645c;
 
-  /* accent — moss, the current identity color */
-  --fm-accent: #557f68;
-  --fm-accent-soft: #648875;
-  --fm-accent-ink: #183b2a;
-  --fm-accent-wash: #e7f3ec;
-  --fm-accent-wash-strong: #dfeee7;
+  /* accent — moss carries the day identity */
+  --fm-accent: #3f7257;
+  --fm-accent-soft: #5c8a70;
+  --fm-accent-ink: #2c5540;
+  --fm-accent-wash: #e2ebe1;
+  --fm-accent-wash-strong: #d6e4d8;
 
-  /* on-dark — text over ink-colored surfaces (topbar buttons, pending bar) */
+  /* on-dark — text over ink-colored surfaces (topbar buttons, skip link) */
   --fm-on-dark: #ffffff;
-  --fm-on-dark-soft: #dce8df;
+  --fm-on-dark-soft: #dde7db;
   --fm-on-dark-accent: #b8d5c4;
 
   /* status — phase-invariant semantic colors on the data-state contract */
-  --fm-ok: #1f6b43;
-  --fm-pending: #b46b32;
-  --fm-pending-soft: #c68664;
-  --fm-pending-wash: #fff4ed;
-  --fm-confirm-wash: #fff8e5;
-  --fm-danger: #a63f35;
-  --fm-danger-ink: #9d2d22;
-  --fm-danger-soft: #b8645a;
-  --fm-danger-wash: #fbe9e8;
-  --fm-info: #2b5877;
+  --fm-ok: #2e7d4f;
+  --fm-pending: #b0742c;
+  --fm-pending-soft: #c28e55;
+  --fm-pending-wash: #f8efe1;
+  --fm-confirm-wash: #f7f1dc;
+  --fm-danger: #a63d32;
+  --fm-danger-ink: #8e2a21;
+  --fm-danger-soft: #ba6a5f;
+  --fm-danger-wash: #f4e4e1;
+  --fm-info: #3e6b8c;
   --fm-focus-ring: #2868a8;
 
   /* official host post accent */
-  --fm-official: #d5bd6f;
-  --fm-official-ink: #4f3f05;
+  --fm-official: #d2a63c;
+  --fm-official-ink: #4a3a08;
+}
+
+/* ---- night palette (lantern on ink; twilight aliases night for now) ---- */
+
+[data-phase="night"],
+[data-phase="twilight"] {
+  --fm-ink: #e9e6dc;
+  --fm-ink-muted: #a7b0a6;
+  --fm-ink-subtle: #b6bdb2;
+  --fm-ink-disabled: #8b958c;
+
+  --fm-ground: #12161c;
+  --fm-raised: #222b35;
+  --fm-raised-veil: rgba(34, 43, 53, 0.74);
+  --fm-surface-muted: #1a222b;
+  --fm-surface-cool: #1d2630;
+  --fm-surface-tint: #1c252c;
+  --fm-topbar-veil: rgba(18, 22, 28, 0.94);
+  --fm-wash-top: #151a21;
+  --fm-wash-mid: #12161c;
+  --fm-wash-warm: #171c1e;
+
+  --fm-line: #313b44;
+  --fm-line-strong: #46525c;
+  --fm-line-heavy: #55626c;
+  --fm-line-soft: #2a333c;
+  --fm-line-cool: #33404b;
+  --fm-line-warm: #4a4232;
+  --fm-control-border: #a7b0a6;
+
+  --fm-accent: #d2a63c;
+  --fm-accent-soft: #b99244;
+  --fm-accent-ink: #ebcf8e;
+  --fm-accent-wash: #332d1c;
+  --fm-accent-wash-strong: #3b341f;
+
+  /* night ink is light, so on-dark flips to the dark ground */
+  --fm-on-dark: #12161c;
+  --fm-on-dark-soft: #2e3b33;
+  --fm-on-dark-accent: #2c5540;
+
+  --fm-pending-wash: #332818;
+  --fm-confirm-wash: #33301c;
+  --fm-danger-wash: #331e1b;
+  --fm-focus-ring: #7fb1dc;
+
+  --fm-official: #d2a63c;
+  --fm-official-ink: #4a3a08;
+}
+
+/* ---- off-game dark preference maps onto the night palette ---- */
+/* In-game shells re-key at [data-phase] with equal-or-later specificity on
+   their own subtree, so an explicit day phase stays day under user dark. */
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fm-ink: #e9e6dc;
+    --fm-ink-muted: #a7b0a6;
+    --fm-ink-subtle: #b6bdb2;
+    --fm-ink-disabled: #8b958c;
+
+    --fm-ground: #12161c;
+    --fm-raised: #222b35;
+    --fm-raised-veil: rgba(34, 43, 53, 0.74);
+    --fm-surface-muted: #1a222b;
+    --fm-surface-cool: #1d2630;
+    --fm-surface-tint: #1c252c;
+    --fm-topbar-veil: rgba(18, 22, 28, 0.94);
+    --fm-wash-top: #151a21;
+    --fm-wash-mid: #12161c;
+    --fm-wash-warm: #171c1e;
+
+    --fm-line: #313b44;
+    --fm-line-strong: #46525c;
+    --fm-line-heavy: #55626c;
+    --fm-line-soft: #2a333c;
+    --fm-line-cool: #33404b;
+    --fm-line-warm: #4a4232;
+    --fm-control-border: #a7b0a6;
+
+    --fm-accent: #d2a63c;
+    --fm-accent-soft: #b99244;
+    --fm-accent-ink: #ebcf8e;
+    --fm-accent-wash: #332d1c;
+    --fm-accent-wash-strong: #3b341f;
+
+    --fm-on-dark: #12161c;
+    --fm-on-dark-soft: #2e3b33;
+    --fm-on-dark-accent: #2c5540;
+
+    --fm-pending-wash: #332818;
+    --fm-confirm-wash: #33301c;
+    --fm-danger-wash: #331e1b;
+    --fm-focus-ring: #7fb1dc;
+
+    --fm-official: #d2a63c;
+    --fm-official-ink: #4a3a08;
+  }
 }

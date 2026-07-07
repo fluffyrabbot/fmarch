@@ -1,4 +1,5 @@
 import { resolveSurfaceAccess } from "./capabilities.mjs";
+import { phaseThemeKey } from "./phase-theme.mjs";
 import { buildAppSurfaceHeaderViewModel } from "./app-surface-header-model.mjs";
 import { buildRouteStateViewModel } from "./app-route-state-model.mjs";
 
@@ -52,6 +53,7 @@ export function buildAppShell({
   activeSurface,
   principalUserId = null,
   capabilities = [],
+  phase = null,
 }) {
   const session = buildSessionSummary({
     game,
@@ -94,6 +96,7 @@ export function buildAppShell({
   return Object.freeze({
     activeSurface,
     game,
+    phase: phaseThemeKey(phase),
     session,
     sessionLabel: session.principalLabel,
     surfaces,

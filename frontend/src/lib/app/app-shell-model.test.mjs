@@ -25,9 +25,15 @@ test("app shell builds role navigation from resolved capabilities", () => {
       { kind: "SlotOccupant", game: "midsummer", slot: "slot-7" },
       { kind: "HostOf", game: "other" },
     ],
+    phase: { id: "N02", label: "Night 2" },
   });
 
   assert.equal(shell.sessionLabel, "player_mira");
+  assert.equal(shell.phase, "night");
+  assert.equal(
+    buildAppShell({ activeSurface: "board" }).phase,
+    null,
+  );
   assert.deepEqual(shell.session, {
     testId: "app-shell-session",
     principalTestId: "app-shell-session-principal",

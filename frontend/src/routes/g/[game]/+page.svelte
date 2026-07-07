@@ -12,6 +12,7 @@
     LIVE_PROJECTION_CONNECTING_STATUS,
   } from "$lib/app/live-transport.mjs";
   import { createProjectionStore } from "$lib/app/projection-store.mjs";
+  import { activePhaseTheme, phaseThemeKey } from "$lib/app/phase-theme.mjs";
   import PlayerChannelRail from "$lib/components/player-channel-rail/PlayerChannelRail.svelte";
   import PlayerActionSubmissionCheckpoint from "$lib/components/player-command/PlayerActionSubmissionCheckpoint.svelte";
   import PlayerCommandPanel from "$lib/components/player-command/PlayerCommandPanel.svelte";
@@ -108,6 +109,9 @@
     player,
     commandStatus,
   });
+  $: if (typeof window !== "undefined") {
+    activePhaseTheme.set(phaseThemeKey(phase));
+  }
   $: playerEmptyState = buildRouteStateViewModel({
     surface: "player",
     state: "empty",
@@ -205,6 +209,7 @@
       delete window.__fmarchDropPlayerLiveProjection;
       delete window.__fmarchPlayerColdLoadEndpoints;
       delete window.__fmarchPlayerResyncKeys;
+      activePhaseTheme.set(null);
       connection?.close();
     };
   });

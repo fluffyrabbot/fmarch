@@ -100,6 +100,7 @@ export async function buildHostConsoleRouteData({
       activeSurface: "moderator",
       principalUserId: commandPrincipalUserId,
       capabilities,
+      phase: HOST_FIXTURE_PHASE,
     }),
     game: Object.freeze({
       id: gameId,

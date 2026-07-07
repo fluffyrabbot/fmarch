@@ -125,6 +125,7 @@ export async function buildGameRouteData({
       activeSurface: "player",
       principalUserId,
       capabilities: normalizedCapabilities,
+      phase,
     }),
     game: Object.freeze({
       id: gameId,

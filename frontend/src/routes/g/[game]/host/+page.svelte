@@ -48,6 +48,7 @@
     buildHostInviteTargets,
     buildHostWorkQueues,
   } from "./host-route-model.mjs";
+  import { activePhaseTheme, phaseThemeKey } from "$lib/app/phase-theme.mjs";
   import { createProjectionStore } from "$lib/app/projection-store.mjs";
   import "$lib/components/host-action/host-console-critical-path.css";
 
@@ -87,6 +88,9 @@
     votecountCount: votecount.length,
     nowSeconds: data.deadlineClock?.nowSeconds,
   });
+  $: if (typeof window !== "undefined") {
+    activePhaseTheme.set(phaseThemeKey(projection.phase ?? data.phase));
+  }
   $: hostLifecycleControlCheckpoint = buildHostLifecycleControlCheckpoint({
     phase: projection.phase ?? data.phase,
     replacement: projection.replacement ?? data.replacement,
@@ -176,6 +180,7 @@
       delete window.__fmarchCloseHostLiveProjection;
       delete window.__fmarchDropHostLiveProjection;
       delete window.__fmarchDispatchHostAction;
+      activePhaseTheme.set(null);
       connection?.close();
     };
   });

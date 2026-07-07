@@ -54,6 +54,8 @@ body {
   --fm-app-topbar-block-size: 76px;
   background:
     linear-gradient(180deg, var(--fm-wash-top) 0%, var(--fm-wash-mid) 48%, var(--fm-wash-warm) 100%);
+  /* re-resolve inherited text color under the shell's own data-phase tokens */
+  color: var(--fm-ink);
   min-block-size: 100svh;
   padding:
     env(safe-area-inset-top)
@@ -207,7 +209,9 @@ body {
 }
 
 .fm-surface h1 {
+  font-family: var(--fm-font-display);
   font-size: 34px;
+  font-weight: 700;
   line-height: 1.08;
 }
 
