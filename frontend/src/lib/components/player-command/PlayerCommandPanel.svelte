@@ -68,7 +68,7 @@
       <span>{view.composer.currentVote.label}</span>
       <strong>{view.composer.currentVote.value}</strong>
     </div>
-    <label>
+    <label class="fm-field">
       <span>{view.composer.label}</span>
       <textarea bind:value={body} rows="3"></textarea>
     </label>
@@ -189,11 +189,6 @@
     min-block-size: 58px;
   }
 
-  .player-command-panel__composer label {
-    display: grid;
-    gap: 6px;
-  }
-
   .player-command-panel__composer label span,
   .player-command-panel__current-vote span,
   .player-command-panel__channel-context span,
@@ -218,17 +213,6 @@
     font-size: 16px;
     line-height: 1.25;
     overflow-wrap: anywhere;
-  }
-
-  .player-command-panel__composer textarea {
-    border: 1px solid var(--fm-line-strong);
-    border-radius: 8px;
-    color: var(--fm-ink);
-    font: inherit;
-    line-height: 1.4;
-    min-block-size: 78px;
-    padding: 10px;
-    resize: vertical;
   }
 
 </style>

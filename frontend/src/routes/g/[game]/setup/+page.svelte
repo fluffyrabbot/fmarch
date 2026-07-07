@@ -215,7 +215,7 @@
           data-testid="host-setup-add-slot-form"
           on:submit={(event) => handleSetupSubmit(event, "add-slot")}
         >
-          <label>
+          <label class="fm-field">
             <span>Slot</span>
             <input name="slotId" value={`slot_${setupState.slots.length + 1}`} />
           </label>
@@ -249,7 +249,7 @@
               on:submit={(event) => handleSetupSubmit(event, "assign-slot")}
             >
               <input type="hidden" name="slotId" value={slot.slotId} />
-              <label>
+              <label class="fm-field">
                 <span>Principal</span>
                 <input
                   name="principalUserId"
@@ -275,7 +275,7 @@
                 on:submit={(event) => handleSetupSubmit(event, "assign-role")}
               >
                 <input type="hidden" name="slotId" value={slot.slotId} />
-                <label>
+                <label class="fm-field">
                   <span>Role</span>
                   <select name="roleKey">
                     {#each roleKeys as roleKey}
@@ -405,7 +405,7 @@
         <p class="fm-eyebrow">Start</p>
         <h2>Start game</h2>
         <form on:submit={reviewStart}>
-          <label>
+          <label class="fm-field">
             <span>Start phase</span>
             <select name="phase">
               {#each setupState.pack.startPhaseOptions as phase}
@@ -564,22 +564,6 @@
   .host-setup__invite-status,
   .host-setup__confirm span {
     overflow-wrap: anywhere;
-  }
-
-  .host-setup label {
-    display: grid;
-    gap: 4px;
-    min-inline-size: 0;
-  }
-
-  .host-setup input,
-  .host-setup select {
-    border: 1px solid var(--fm-line);
-    border-radius: 6px;
-    font: inherit;
-    min-block-size: 44px;
-    min-inline-size: min(100%, 220px);
-    padding: 8px 10px;
   }
 
   .host-setup__two-column {

@@ -33,7 +33,7 @@
 
     <form method="POST" class="auth-login__form" data-testid="auth-login-form">
       <input type="hidden" name="returnTo" value={returnTo} />
-      <label class="auth-login__field">
+      <label class="auth-login__field fm-field">
         <span>Session or invite token</span>
         <input
           name="token"
@@ -44,7 +44,7 @@
         />
       </label>
 
-      <label class="auth-login__field">
+      <label class="auth-login__field fm-field">
         <span>Account</span>
         <input
           name="accountId"
@@ -55,7 +55,7 @@
         />
       </label>
 
-      <label class="auth-login__field">
+      <label class="auth-login__field fm-field">
         <span>Password</span>
         <input
           name="password"
@@ -98,25 +98,6 @@
   .auth-login__form {
     display: grid;
     gap: 14px;
-  }
-
-  .auth-login__field {
-    color: var(--fm-ink);
-    display: grid;
-    font-size: 13px;
-    font-weight: 800;
-    gap: 6px;
-  }
-
-  .auth-login__field input {
-    background: var(--fm-raised);
-    border: 1px solid var(--fm-line-strong);
-    border-radius: 8px;
-    color: var(--fm-ink);
-    font: inherit;
-    min-block-size: 44px;
-    padding: 9px 10px;
-    width: 100%;
   }
 
   .auth-login__status,

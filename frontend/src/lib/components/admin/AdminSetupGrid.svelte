@@ -133,7 +133,7 @@
               >
                 {item.confirmation.message}
               </p>
-              <label class="admin-surface__field">
+              <label class="admin-surface__field fm-field">
                 <span>Session token</span>
                 <input
                   name="token"
@@ -142,7 +142,7 @@
                   data-testid="admin-session-grant-token"
                 />
               </label>
-              <label class="admin-surface__field">
+              <label class="admin-surface__field fm-field">
                 <span>Principal</span>
                 <input
                   name="principalUserId"
@@ -151,7 +151,7 @@
                   data-testid="admin-session-grant-principal"
                 />
               </label>
-              <label class="admin-surface__field">
+              <label class="admin-surface__field fm-field">
                 <span>Expires at</span>
                 <input
                   name="expiresAt"
@@ -260,27 +260,10 @@
     overflow-wrap: anywhere;
   }
 
-  .admin-surface__field {
-    display: grid;
-    gap: 4px;
-  }
-
-  .admin-surface__field span,
   .admin-surface__checkbox span {
     color: var(--fm-ink-muted);
     font-size: 12px;
     font-weight: 800;
-  }
-
-  .admin-surface__field input {
-    border: 1px solid var(--fm-line-strong);
-    border-radius: 8px;
-    color: var(--fm-ink);
-    font: inherit;
-    min-block-size: 44px;
-    min-inline-size: 0;
-    padding: 8px 10px;
-    width: 100%;
   }
 
   .admin-surface__checkbox {

@@ -53,6 +53,47 @@
   line-height: 1.3;
 }
 
+/* ---- field: labeled form control stack (label > span + input/select/textarea) ---- */
+/* Focus comes from the global :focus-visible ring in app.css. */
+
+.fm-field {
+  display: grid;
+  gap: 6px;
+  min-inline-size: 0;
+}
+
+.fm-field > span {
+  color: var(--fm-ink-muted);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.fm-field input,
+.fm-field select,
+.fm-field textarea {
+  background: var(--fm-raised);
+  border: 1px solid var(--fm-line-strong);
+  border-radius: 8px;
+  color: var(--fm-ink);
+  font: inherit;
+  min-block-size: 44px;
+  min-inline-size: min(100%, 220px);
+  padding: 9px 10px;
+  width: 100%;
+}
+
+.fm-field textarea {
+  line-height: 1.4;
+  min-block-size: 78px;
+  resize: vertical;
+}
+
+.fm-field :is(input, select, textarea)[aria-invalid="true"] {
+  background: var(--fm-danger-wash);
+  border-color: var(--fm-danger-soft);
+}
+
 /* ---- section: stripe-headed page section ---- */
 
 .fm-section {

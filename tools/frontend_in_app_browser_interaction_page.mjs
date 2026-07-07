@@ -911,6 +911,7 @@ function renderHydratedSurfaceScenario(scenario) {
 async function loadRenderCss() {
   const cssFiles = [
     "frontend/src/lib/styles/tokens.css",
+    "frontend/src/lib/styles/primitives.css",
     "frontend/src/lib/styles/app.css",
     "frontend/src/lib/components/admin/AdminSetupGrid.svelte",
     "frontend/src/lib/components/admin/AdminRecoveryPanel.svelte",
