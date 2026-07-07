@@ -4119,21 +4119,12 @@ function buildHardeningReadinessSpineTargets({
   staleConflictMessageMilestone,
 }) {
   const surfaces = [...(staleConflictMessageMilestone.surfaces ?? [])];
+  const staleBaseRows = buildHardeningStaleBaseSpineRows({ proof, surfaces });
   const completedGameRows = buildCompletedGameHardeningSpineRows(proof);
   const reconnectRows = buildReconnectHardeningSpineRows(proof);
   const concurrentRaceRows = buildConcurrentRaceHardeningSpineRows(proof);
-  const staleConflictRoleUrlHrefs = Object.fromEntries(
-    surfaces
-      .filter(
-        (surface) =>
-          typeof surface.laneId === "string" &&
-          typeof surface.roleUrl === "string" &&
-          surface.roleUrl !== "",
-      )
-      .map((surface) => [surface.laneId, surface.roleUrl]),
-  );
   const roleUrlHrefs = {
-    ...staleConflictRoleUrlHrefs,
+    ...staleBaseRows.roleUrlHrefs,
     ...completedGameRows.roleUrlHrefs,
     ...reconnectRows.roleUrlHrefs,
     ...concurrentRaceRows.roleUrlHrefs,
@@ -4151,7 +4142,7 @@ function buildHardeningReadinessSpineTargets({
       : [hardeningFeatureSpineCycleIds.concurrentRace]),
   ];
   const roleUrlIds = [
-    ...surfaces.map((surface) => String(surface.laneId)),
+    ...staleBaseRows.roleUrlIds,
     ...completedGameRows.roleUrlIds,
     ...reconnectRows.roleUrlIds,
     ...concurrentRaceRows.roleUrlIds,
@@ -4202,6 +4193,47 @@ function buildHardeningReadinessSpineTargets({
       defaultRerunCommandBySourceCheckId:
         defaultProductionFeatureSpineRerunCommands,
     }),
+  };
+}
+
+function buildHardeningStaleBaseSpineRows({ proof, surfaces }) {
+  const laneById = new Map((proof?.lanes ?? []).map((lane) => [lane.id, lane]));
+  const surfaceRoleUrls = Object.fromEntries(
+    surfaces
+      .filter(
+        (surface) =>
+          typeof surface.laneId === "string" &&
+          typeof surface.roleUrl === "string" &&
+          surface.roleUrl !== "",
+      )
+      .map((surface) => [surface.laneId, surface.roleUrl]),
+  );
+  const rows = Object.values(hardeningFeatureSpineTargetRows).filter(
+    (row) =>
+      row.sourceCheckId === hardeningFeatureSpineSourceCheckId &&
+      row.cycleId === hardeningFeatureSpineCycleIds.staleConflict,
+  );
+  const roleUrlHrefs = Object.fromEntries(
+    rows
+      .map((row) => {
+        const lane = laneById.get(row.roleUrlId);
+        const roleUrl =
+          surfaceRoleUrls[row.roleUrlId] ??
+          lane?.evidence?.roleUrl ??
+          lane?.roleUrl ??
+          "";
+        return [row.roleUrlId, String(roleUrl)];
+      })
+      .filter(([, roleUrl]) => roleUrl !== ""),
+  );
+  return {
+    roleUrlIds: rows
+      .map((row) => row.roleUrlId)
+      .filter((rowId) => roleUrlHrefs[rowId] !== undefined),
+    checkpointIds: rows
+      .map((row) => row.checkpointId)
+      .filter((rowId) => roleUrlHrefs[rowId] !== undefined),
+    roleUrlHrefs,
   };
 }
 

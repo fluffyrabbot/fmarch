@@ -28,6 +28,7 @@ import {
   hostStaleControlLaneIds,
   hostPhaseStaleControlCases,
   hostPhaseStaleControlCaseDefinitions,
+  hostPhaseStaleControlSpineTargetCases,
   hostPhaseStaleRecoveryLaneIds,
   hostPhaseStaleControlLaneIds,
   hostPromptStaleControlLaneIds,
@@ -99,6 +100,7 @@ import {
   hardeningPlayerRecoveryHighlightedLaneIds,
   playerActionConflictRecoveryLaneIds,
   playerActionFoundationLaneIds,
+  playerActionConflictSpineTargetCases,
   playerRecoveryRaceLaneIds,
   playerRecoveryStatusExpectations,
   promotedStalePlayerCommandLaneIds,
@@ -871,6 +873,25 @@ test("hardening lane cases share host phase stale-control scenarios", () => {
   assert.equal(hostStaleAdvanceControlCase().rejectError, "InvalidTarget");
   assert.equal(hostStaleAdvanceControlLaneId, "stale-host-advance");
   assert.equal(hostStaleAdvanceReloadLaneId, "stale-host-advance-reload");
+  assert.deepEqual(
+    hostPhaseStaleControlSpineTargetCases().map((target) => [
+      target.targetKey,
+      target.laneId,
+      target.sourceFactory,
+    ]),
+    [
+      [
+        "hostStaleResolve",
+        "stale-host-resolve",
+        "hostPhaseStaleControlSpineTargetCases",
+      ],
+      [
+        "hostStaleAdvance",
+        "stale-host-advance",
+        "hostPhaseStaleControlSpineTargetCases",
+      ],
+    ],
+  );
 });
 
 test("hardening lane cases share host stale-control status expectations", () => {
@@ -1244,6 +1265,17 @@ test("hardening lane cases share player recovery status expectations", () => {
   assert.deepEqual(hardeningPlayerRecoveryHighlightedLaneIds, [
     concurrentActionRaceLaneId,
     concurrentActionRaceReloadLaneId,
+  ]);
+  assert.deepEqual(playerActionConflictSpineTargetCases(), [
+    {
+      targetKey: "staleSameActionRecovery",
+      sourceFactory: "playerActionConflictSpineTargetCases",
+      laneId: staleSameActionRecoveryLaneId,
+      featureSlotId: staleSameActionRecoveryLaneId,
+      roleUrlId: staleSameActionRecoveryLaneId,
+      checkpointId: staleSameActionRecoveryLaneId,
+      adminCheckId: staleSameActionRecoveryLaneId,
+    },
   ]);
 });
 

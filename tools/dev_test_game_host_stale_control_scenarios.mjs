@@ -67,6 +67,7 @@ const cloneRaceCoverageCell = (cell) => ({
   roleSurfaces: [...cell.roleSurfaces],
   commandFacts: cell.commandFacts.map((facts) => ({ ...facts })),
 });
+const cloneSpineTargetCase = (target) => ({ ...target });
 
 const hostLockThreadActionId = hostLockThreadCommandFacts().actionId;
 const hostUnlockThreadActionId = hostUnlockThreadCommandFacts().actionId;
@@ -387,6 +388,24 @@ const hostStandaloneRaceReloadSpineTargetDefinitions = Object.freeze([
   }),
 ]);
 
+const hostPhaseStaleControlSpineTargetDefinitions = Object.freeze(
+  hostPhaseStaleControlCaseDefinitions
+    .filter((scenario) => ["resolve", "advance"].includes(scenario.key))
+    .map((scenario) =>
+      Object.freeze({
+        targetKey: `hostStale${
+          scenario.key[0].toUpperCase() + scenario.key.slice(1)
+        }`,
+        sourceFactory: "hostPhaseStaleControlSpineTargetCases",
+        laneId: scenario.baseLaneId,
+        featureSlotId: scenario.baseLaneId,
+        roleUrlId: scenario.baseLaneId,
+        checkpointId: scenario.baseLaneId,
+        adminCheckId: scenario.baseLaneId,
+      }),
+    ),
+);
+
 export function hostPhaseRaceCoverageCellCases() {
   return hostPhaseRaceCoverageCellDefinitions.map(cloneRaceCoverageCell);
 }
@@ -423,6 +442,10 @@ export function hostStandaloneRaceReloadSpineTargetCases() {
   return hostStandaloneRaceReloadSpineTargetDefinitions.map((target) => ({
     ...target,
   }));
+}
+
+export function hostPhaseStaleControlSpineTargetCases() {
+  return hostPhaseStaleControlSpineTargetDefinitions.map(cloneSpineTargetCase);
 }
 
 export const hostRaceReloadLaneIds = Object.freeze(

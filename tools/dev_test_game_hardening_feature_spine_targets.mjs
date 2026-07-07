@@ -15,12 +15,14 @@ import {
 } from "./dev_test_game_cross_role_race_scenarios.mjs";
 import {
   hostPhaseRaceReloadSpineTargetCases,
+  hostPhaseStaleControlSpineTargetCases,
   hostStandaloneRaceReloadSpineTargetCases,
 } from "./dev_test_game_host_stale_recovery_scenarios.mjs";
 import {
   replacementRaceReloadSpineTargetCases,
 } from "./dev_test_game_replacement_private_scenario_cases.mjs";
 import {
+  playerActionConflictSpineTargetCases,
   reconnectHardeningSpineTargetCases,
 } from "./dev_test_game_hardening_recovery_scenarios.mjs";
 
@@ -50,9 +52,18 @@ const completedGameHardeningFeatureSpineTargetRows = Object.freeze(
 );
 const staleConflictMessageSpineTargets =
   staleConflictMessageSpineTargetCases();
-const staleConflictMessageFeatureSpineTargetRows = Object.freeze(
+const playerActionConflictSpineTargets =
+  playerActionConflictSpineTargetCases();
+const hostPhaseStaleControlSpineTargets =
+  hostPhaseStaleControlSpineTargetCases();
+const hardeningStaleBaseSpineTargets = Object.freeze([
+  ...staleConflictMessageSpineTargets,
+  ...playerActionConflictSpineTargets,
+  ...hostPhaseStaleControlSpineTargets,
+]);
+const hardeningStaleBaseFeatureSpineTargetRows = Object.freeze(
   Object.fromEntries(
-    staleConflictMessageSpineTargets.map((target) => [
+    hardeningStaleBaseSpineTargets.map((target) => [
       target.targetKey,
       Object.freeze({
         featureSlotId: target.featureSlotId,
@@ -119,7 +130,7 @@ function hardeningConcurrentRaceRowsForTargets(targets) {
 
 export const hardeningFeatureSpineTargetRows = Object.freeze({
   ...completedGameHardeningFeatureSpineTargetRows,
-  ...staleConflictMessageFeatureSpineTargetRows,
+  ...hardeningStaleBaseFeatureSpineTargetRows,
   ...reconnectHardeningFeatureSpineTargetRows,
   ...localRaceReloadHardeningFeatureSpineTargetRows,
   ...replacementRaceReloadHardeningFeatureSpineTargetRows,
@@ -194,7 +205,7 @@ export const hardeningFeatureSpineTargetProvenanceCases = Object.freeze([
       source: hardeningFeatureSpineSource,
     }),
   ),
-  ...staleConflictMessageSpineTargets.map((target) =>
+  ...hardeningStaleBaseSpineTargets.map((target) =>
     featureSpineTargetProvenanceCase({
       targetKey: target.targetKey,
       sourceFactory: target.sourceFactory,

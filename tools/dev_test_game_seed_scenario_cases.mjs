@@ -201,6 +201,11 @@ export const seedAggregateOnlyProofLaneIds = Object.freeze([
   "reconnect-recovery",
 ]);
 
+export const seedRoleUrlProductionFeatureAliasEntries = Object.freeze([
+  Object.freeze(["host-setup-role", "host-setup-route"]),
+  Object.freeze(["stale-action-conflict", "night-action-loop"]),
+]);
+
 export const seedNonDirectProofLaneIds = Object.freeze([
   ...seedAliasOnlyProofLaneIds,
   ...seedAggregateOnlyProofLaneIds,
@@ -309,6 +314,80 @@ export function seedProofLaneCoverageForPassedLanes(
   };
 }
 
+export function seedRoleUrlProductionFeatureAudit({
+  proofRun,
+  proofGraph,
+  aliasEntries = seedRoleUrlProductionFeatureAliasEntries,
+  aggregateOnlyLaneIds = seedAggregateOnlyProofLaneIds,
+} = {}) {
+  const passedRoleUrlLaneIds = (proofRun?.lanes ?? [])
+    .filter((lane) => lane?.status === "passed" && proofLaneRoleUrl(lane))
+    .map((lane) => lane.id);
+  const productionFeatureLaneIds = productionFeatureLaneIdSet(proofGraph);
+  const aliasMap = new Map(aliasEntries);
+  const aggregateOnlyLaneSet = new Set(aggregateOnlyLaneIds);
+  const directProductionFeatureLaneIds = [];
+  const aliasOnlyLaneIds = [];
+  const aggregateOnlyRoleUrlLaneIds = [];
+  const unclassifiedLaneIds = [];
+
+  for (const laneId of passedRoleUrlLaneIds) {
+    if (productionFeatureLaneIds.has(laneId)) {
+      directProductionFeatureLaneIds.push(laneId);
+      continue;
+    }
+    const aliasTarget = aliasMap.get(laneId);
+    if (
+      typeof aliasTarget === "string" &&
+      productionFeatureLaneIds.has(aliasTarget)
+    ) {
+      aliasOnlyLaneIds.push(laneId);
+      continue;
+    }
+    if (aggregateOnlyLaneSet.has(laneId)) {
+      aggregateOnlyRoleUrlLaneIds.push(laneId);
+      continue;
+    }
+    unclassifiedLaneIds.push(laneId);
+  }
+
+  return {
+    status: unclassifiedLaneIds.length === 0 ? "passed" : "failed",
+    passedRoleUrlLaneCount: passedRoleUrlLaneIds.length,
+    productionFeatureLaneCount: productionFeatureLaneIds.size,
+    directProductionFeature: {
+      count: directProductionFeatureLaneIds.length,
+      laneIds: directProductionFeatureLaneIds,
+    },
+    aliasOnly: {
+      count: aliasOnlyLaneIds.length,
+      laneIds: aliasOnlyLaneIds,
+      targets: Object.fromEntries(
+        aliasOnlyLaneIds.map((laneId) => [laneId, aliasMap.get(laneId)]),
+      ),
+    },
+    aggregateOnly: {
+      count: aggregateOnlyRoleUrlLaneIds.length,
+      laneIds: aggregateOnlyRoleUrlLaneIds,
+    },
+    unclassified: {
+      count: unclassifiedLaneIds.length,
+      laneIds: unclassifiedLaneIds,
+    },
+  };
+}
+
+export function assertSeedRoleUrlProductionFeatureAudit(audit) {
+  if (audit?.status !== "passed" || audit?.unclassified?.count !== 0) {
+    throw new Error(
+      `unclassified passed role URL proof lanes: ${
+        audit?.unclassified?.laneIds?.join(",") || "unknown"
+      }`,
+    );
+  }
+  return audit;
+}
+
 export function assertSeedProofLaneCoverage(
   coverage,
   {
@@ -402,6 +481,26 @@ function seedProofLaneCoverageBucket(coverage, bucket, { label }) {
   }
   if (coverage[bucket]?.count !== laneIds.length) {
     throw new Error(`${label} count drifted for ${bucket}`);
+  }
+  return laneIds;
+}
+
+function proofLaneRoleUrl(lane) {
+  return lane?.evidence?.roleUrl ?? lane?.roleUrl ?? null;
+}
+
+function productionFeatureLaneIdSet(proofGraph) {
+  const laneIds = new Set();
+  for (const node of proofGraph?.nodes ?? []) {
+    if (node?.kind !== "production-feature-spine-target") {
+      continue;
+    }
+    if (typeof node.featureSlotId === "string" && node.featureSlotId !== "") {
+      laneIds.add(node.featureSlotId);
+    }
+    if (typeof node.roleUrlId === "string" && node.roleUrlId !== "") {
+      laneIds.add(node.roleUrlId);
+    }
   }
   return laneIds;
 }

@@ -106,9 +106,11 @@ import {
 } from "./dev_test_game_cross_role_race_scenarios.mjs";
 import {
   hostPhaseRaceReloadSpineTargetCases,
+  hostPhaseStaleControlSpineTargetCases,
   hostStandaloneRaceReloadSpineTargetCases,
 } from "./dev_test_game_host_stale_recovery_scenarios.mjs";
 import {
+  playerActionConflictSpineTargetCases,
   reconnectHardeningSpineTargetCases,
 } from "./dev_test_game_hardening_recovery_scenarios.mjs";
 
@@ -121,8 +123,12 @@ const hardeningReconnectFeatureTargetExpectations = Object.freeze(
     }),
   ),
 );
-const hardeningStaleConflictFeatureTargetExpectations = Object.freeze(
-  staleConflictMessageSpineTargetCases().map((target) =>
+const hardeningStaleBaseFeatureTargetExpectations = Object.freeze(
+  [
+    ...staleConflictMessageSpineTargetCases(),
+    ...playerActionConflictSpineTargetCases(),
+    ...hostPhaseStaleControlSpineTargetCases(),
+  ].map((target) =>
     Object.freeze({
       targetKey: target.targetKey,
       featureSlotId: target.featureSlotId,
@@ -414,7 +420,7 @@ test("release readiness buildable cases share next-action commands and spine tar
       },
     );
   }
-  for (const expectation of hardeningStaleConflictFeatureTargetExpectations) {
+  for (const expectation of hardeningStaleBaseFeatureTargetExpectations) {
     assert.deepEqual(
       releaseReadinessProductionFeatureSpineTargets[expectation.targetKey],
       {
@@ -564,7 +570,7 @@ test("scenario-owned production feature targets derive proof row ids from source
         rowId: target.roleUrlId,
       },
     })),
-    ...hardeningStaleConflictFeatureTargetExpectations.map((expectation) => ({
+    ...hardeningStaleBaseFeatureTargetExpectations.map((expectation) => ({
       target: releaseReadinessProductionFeatureSpineTargets[
         expectation.targetKey
       ],

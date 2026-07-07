@@ -57,6 +57,10 @@ export {
   stalePlayerActionReconnectLaneId,
 } from "./dev_test_game_stale_client_reconnect_scenarios.mjs";
 
+export {
+  playerActionConflictSpineTargetCases,
+} from "./dev_test_game_player_recovery_scenarios.mjs";
+
 const uniqueLaneIds = (laneIds) => Object.freeze([...new Set(laneIds)]);
 
 export const hardeningRecoveryAuditLaneIds = uniqueLaneIds([

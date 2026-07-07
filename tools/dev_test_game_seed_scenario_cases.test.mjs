@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import {
   assertSeedProofLaneCoverage,
+  assertSeedRoleUrlProductionFeatureAudit,
   seedAggregateOnlyProofLaneIds,
   seedAliasOnlyProofLaneIds,
   directSeedProofLaneIds,
@@ -16,6 +17,8 @@ import {
   seedProofLaneCoverageCountSummary,
   seedProofLaneCoverageForPassedLanes,
   seedRequiredScenarioIds,
+  seedRoleUrlProductionFeatureAliasEntries,
+  seedRoleUrlProductionFeatureAudit,
   seedScenarioCoverageGroups,
   unclassifiedSeedProofLaneIds,
 } from "./dev_test_game_seed_scenario_cases.mjs";
@@ -59,7 +62,7 @@ test("seed scenario cases include reload and stale-reject proof rows", () => {
 });
 
 test("seed scenario cases expose generated demo scenario fixture rows", () => {
-  assert.equal(seedDemoScenarioIds.length, 125);
+  assert.equal(seedDemoScenarioIds.length, 126);
   assert.deepEqual(seedDemoOnlyScenarioIds, [
     "day-vote-resolution",
     "day-vote-no-lynch",
@@ -89,6 +92,7 @@ test("seed scenario cases expose generated demo scenario fixture rows", () => {
     "stale-host-advance",
     "stale-host-deadline",
     "stale-cohost-deadline",
+    "cohost-later-phase-deadline",
     "stale-player-vote",
     "stale-player-vote-after-change",
     "stale-player-post-after-phase-closure",
@@ -167,12 +171,12 @@ test("seed scenario cases expose generated demo scenario fixture rows", () => {
   assert.deepEqual(seedDemoScenarioIds.slice(29, 32), [
     "stale-host-deadline",
     "stale-cohost-deadline",
-    "stale-player-vote",
+    "cohost-later-phase-deadline",
   ]);
   assert.deepEqual(seedDemoScenarioIds.slice(32, 35), [
+    "stale-player-vote",
     "stale-player-vote-after-change",
     "stale-player-post-after-phase-closure",
-    "stale-player-withdraw-after-change",
   ]);
   assert.deepEqual(seedDemoScenarioIds.slice(35, 38), [
     "player-vote-recovery",
@@ -180,13 +184,13 @@ test("seed scenario cases expose generated demo scenario fixture rows", () => {
     "invalid-action-recovery",
   ]);
   assert.deepEqual(seedDemoScenarioIds.slice(43, 45), [
+    "stale-player-withdraw-after-change",
     "stale-player-withdraw-after-phase-closure",
-    "stale-player-vote-after-phase-closure",
   ]);
   assert.deepEqual(seedDemoScenarioIds.slice(44, 47), [
+    "stale-player-withdraw-after-phase-closure",
     "stale-player-vote-after-phase-closure",
     "stale-player-complete",
-    "stale-dead-target-vote",
   ]);
   assert.equal(
     seedDemoScenarioIds.includes("concurrent-vote-race-reload"),
@@ -297,8 +301,8 @@ test("seed scenario cases expose production fixture metadata", () => {
       ["stale-player-vote", "player", "/redacted/player"],
       ["stale-player-vote-after-change", "player", "/redacted/player"],
       ["stale-player-post-after-phase-closure", "player", "/redacted/player"],
-      ["stale-player-withdraw-after-change", "player", "/redacted/player"],
       ["player-action-denied", "player", "/redacted/player"],
+      ["stale-player-withdraw-after-change", "player", "/redacted/player"],
       [
         "stale-player-withdraw-after-phase-closure",
         "player",
@@ -415,5 +419,48 @@ test("seed scenario cases classify every passed proof lane", () => {
         },
       }, { requirePassed: false }),
     /has unclassified lanes: new-production-proof-lane/,
+  );
+});
+
+test("seed scenario cases classify passed role URL lanes against production feature targets", () => {
+  const proofRun = JSON.parse(
+    readFileSync("target/dev-test-game/proof-run.json", "utf8"),
+  );
+  const proofGraph = JSON.parse(
+    readFileSync("target/dev-test-game/proof-graph.json", "utf8"),
+  );
+  const audit = seedRoleUrlProductionFeatureAudit({ proofRun, proofGraph });
+
+  assert.deepEqual(seedRoleUrlProductionFeatureAliasEntries, [
+    ["host-setup-role", "host-setup-route"],
+    ["stale-action-conflict", "night-action-loop"],
+  ]);
+  assert.equal(audit.status, "passed");
+  assert.equal(audit.passedRoleUrlLaneCount, 13);
+  assert.deepEqual(audit.aliasOnly, {
+    count: 2,
+    laneIds: ["host-setup-role", "stale-action-conflict"],
+    targets: {
+      "host-setup-role": "host-setup-route",
+      "stale-action-conflict": "night-action-loop",
+    },
+  });
+  assert.deepEqual(audit.aggregateOnly, {
+    count: 0,
+    laneIds: [],
+  });
+  assert.deepEqual(audit.unclassified, {
+    count: 0,
+    laneIds: [],
+  });
+  assert.deepEqual(assertSeedRoleUrlProductionFeatureAudit(audit), audit);
+  assert.throws(
+    () =>
+      assertSeedRoleUrlProductionFeatureAudit({
+        ...audit,
+        status: "failed",
+        unclassified: { count: 1, laneIds: ["new-role-url-lane"] },
+      }),
+    /unclassified passed role URL proof lanes: new-role-url-lane/,
   );
 });

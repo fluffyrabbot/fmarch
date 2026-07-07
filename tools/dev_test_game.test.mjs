@@ -23042,10 +23042,12 @@ function hardeningRoleUrlHrefsFromProofRun(proofRun) {
   );
   return {
     ...Object.fromEntries(
-      staleConflictMessageSurfaceCases().map((surface) => [
-        surface.laneId,
-        String(laneById.get(surface.laneId)?.evidence?.roleUrl ?? ""),
-      ]),
+      Object.values(hardeningFeatureSpineTargetRows)
+        .filter((row) => row.cycleId === "hardening-stale-conflict")
+        .map((row) => [
+          row.roleUrlId,
+          String(laneById.get(row.roleUrlId)?.evidence?.roleUrl ?? ""),
+        ]),
     ),
     ...Object.fromEntries(
       completedGameHardeningSpineLaneCases().map((scenario) => [

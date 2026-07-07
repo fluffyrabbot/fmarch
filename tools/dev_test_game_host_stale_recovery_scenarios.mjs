@@ -22,6 +22,7 @@ export {
   hostPhaseStaleControlCase,
   hostPhaseStaleControlCaseDefinitions,
   hostPhaseStaleControlCases,
+  hostPhaseStaleControlSpineTargetCases,
   hostPhaseStaleControlLaneIds,
   hostPhaseStaleRecoveryLaneIds,
   hostPromptStaleControlLaneIds,

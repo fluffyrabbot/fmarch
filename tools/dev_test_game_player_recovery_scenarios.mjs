@@ -11,6 +11,7 @@ import {
 } from "./dev_test_game_stale_client_reconnect_scenarios.mjs";
 
 const cloneStatusExpectation = (expectation) => ({ ...expectation });
+const cloneSpineTargetCase = (target) => ({ ...target });
 
 export const idempotentRetryLaneId = "idempotent-retry";
 export const actionIdempotentRetryLaneId = "action-idempotent-retry";
@@ -104,6 +105,22 @@ export const playerRecoveryStatusExpectationDefinitions = Object.freeze([
     actionVisibleAfterRefresh: false,
   }),
 ]);
+
+const playerActionConflictSpineTargetCaseDefinitions = Object.freeze([
+  Object.freeze({
+    targetKey: "staleSameActionRecovery",
+    sourceFactory: "playerActionConflictSpineTargetCases",
+    laneId: staleSameActionRecoveryLaneId,
+    featureSlotId: staleSameActionRecoveryLaneId,
+    roleUrlId: staleSameActionRecoveryLaneId,
+    checkpointId: staleSameActionRecoveryLaneId,
+    adminCheckId: staleSameActionRecoveryLaneId,
+  }),
+]);
+
+export function playerActionConflictSpineTargetCases() {
+  return playerActionConflictSpineTargetCaseDefinitions.map(cloneSpineTargetCase);
+}
 
 export function playerRecoveryStatusExpectations() {
   return playerRecoveryStatusExpectationDefinitions.map(cloneStatusExpectation);
