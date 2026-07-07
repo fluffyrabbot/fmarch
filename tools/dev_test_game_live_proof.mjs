@@ -4928,6 +4928,14 @@ assert.equal(
 );
 assert.equal(session.verification.multiplayerHardening.staleHostComplete.status, "passed");
 assert.equal(
+  typeof session.verification.multiplayerHardening.staleHostComplete.game,
+  "string",
+);
+assert.match(
+  session.verification.multiplayerHardening.staleHostComplete.game,
+  /^[0-9a-f-]{36}$/,
+);
+assert.equal(
   session.verification.multiplayerHardening.staleHostComplete.reject.error,
   "GameAlreadyCompleted",
 );
@@ -5258,6 +5266,8 @@ if (concurrentPlayerCompleteRace.post.state === "ack") {
   );
 }
 assert.equal(stalePlayerComplete.status, "passed");
+assert.equal(typeof stalePlayerComplete.game, "string");
+assert.match(stalePlayerComplete.game, /^[0-9a-f-]{36}$/);
 assert.equal(stalePlayerComplete.reject.error, "GameAlreadyCompleted");
 assert.equal(stalePlayerComplete.currentVoteAfterReject.hasVote, "false");
 assert.match(stalePlayerComplete.currentVoteAfterReject.text, /No current vote/);

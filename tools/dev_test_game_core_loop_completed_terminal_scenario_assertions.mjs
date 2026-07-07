@@ -243,8 +243,16 @@ export function completedGameHardeningSpineLaneCases() {
   return [
     ...completedGameHardeningLaneCasesFor({
       proofGroups: "stale-host-complete",
+      proofSteps: "reject",
+    }).map((scenario) => ({ ...scenario, role: "host" })),
+    ...completedGameHardeningLaneCasesFor({
+      proofGroups: "stale-host-complete",
       proofSteps: ["reload", "reconnect"],
     }).map((scenario) => ({ ...scenario, role: "host" })),
+    ...completedGameHardeningLaneCasesFor({
+      proofGroups: "stale-player-complete",
+      proofSteps: "reject",
+    }).map((scenario) => ({ ...scenario, role: "player" })),
     ...completedGameHardeningLaneCasesFor({
       proofGroups: "stale-player-complete",
       proofSteps: "reload",
@@ -274,6 +282,12 @@ export function completedGameHardeningSpineTargetCases() {
   return [
     completedGameHardeningSpineTargetCase({
       laneCasesById,
+      laneId: "stale-host-complete",
+      targetKey: "completedGameStaleHostReject",
+      featureSlotId: "completed-game-stale-host-reject",
+    }),
+    completedGameHardeningSpineTargetCase({
+      laneCasesById,
       laneId: "stale-host-complete-reload",
       targetKey: "completedGameStaleRecovery",
       featureSlotId: "completed-game-stale-recovery",
@@ -283,6 +297,12 @@ export function completedGameHardeningSpineTargetCases() {
       laneId: "stale-host-complete-reconnect-recovery",
       targetKey: "completedGameStaleReconnectRecovery",
       featureSlotId: "completed-game-stale-reconnect-recovery",
+    }),
+    completedGameHardeningSpineTargetCase({
+      laneCasesById,
+      laneId: "stale-player-complete",
+      targetKey: "completedGameStalePlayerReject",
+      featureSlotId: "completed-game-stale-player-reject",
     }),
     completedGameHardeningSpineTargetCase({
       laneCasesById,

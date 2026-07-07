@@ -73,6 +73,7 @@ export function completedHostStaleCompleteProofLaneDescriptors({ hardening }) {
     completedHostStaleCommandHardeningLaneCases();
   return [
     completedGameLaneDescriptor(rejectLane, {
+      game: hardening.staleHostComplete?.game ?? null,
       rejectError: hardening.staleHostComplete?.reject?.error ?? null,
       liveCompleteSeqs:
         hardening.staleHostComplete?.liveComplete?.commandStatus?.streamSeqs ?? null,
@@ -88,6 +89,8 @@ export function completedHostStaleCompleteProofLaneDescriptors({ hardening }) {
         ).length ?? null,
       passed:
         hardening.staleHostComplete?.status === "passed" &&
+        typeof hardening.staleHostComplete?.game === "string" &&
+        hardening.staleHostComplete.game.length > 0 &&
         hardening.staleHostComplete?.setup?.roleActions?.includes("complete_game") ===
           true &&
         hardening.staleHostComplete?.setup?.slots?.length === 1 &&
@@ -580,6 +583,7 @@ export function completedStalePlayerCompleteProofLaneDescriptors({ hardening }) 
     completedStalePlayerCompleteHardeningLaneCases();
   return [
     completedGameLaneDescriptor(rejectLane, {
+      game: hardening.stalePlayerComplete?.game ?? null,
       rejectError: hardening.stalePlayerComplete?.reject?.error ?? null,
       gameCompleted:
         hardening.stalePlayerComplete?.commandStateAfterReject?.gameCompleted ?? null,
@@ -591,6 +595,8 @@ export function completedStalePlayerCompleteProofLaneDescriptors({ hardening }) 
         hardening.stalePlayerComplete?.commandStateAfterReject?.voteTargets?.length ?? null,
       passed:
         hardening.stalePlayerComplete?.status === "passed" &&
+        typeof hardening.stalePlayerComplete?.game === "string" &&
+        hardening.stalePlayerComplete.game.length > 0 &&
         hardening.stalePlayerComplete?.setupCommandState?.gameCompleted === false &&
         hardening.stalePlayerComplete?.setupCommandState?.voteTargets?.some(
           (target) => target.kind === "no_lynch",

@@ -323,6 +323,15 @@ test("completed-game scenario module derives shared hardening lane groups", () =
     })),
     [
       {
+        targetKey: "completedGameStaleHostReject",
+        featureSlotId: "completed-game-stale-host-reject",
+        roleUrlId: "stale-host-complete",
+        checkpointId: "stale-host-complete",
+        adminCheckId: "stale-host-complete",
+        cycleId: "hardening-completed-game",
+        role: "host",
+      },
+      {
         targetKey: "completedGameStaleRecovery",
         featureSlotId: "completed-game-stale-recovery",
         roleUrlId: "stale-host-complete-reload",
@@ -339,6 +348,15 @@ test("completed-game scenario module derives shared hardening lane groups", () =
         adminCheckId: "stale-host-complete-reconnect-recovery",
         cycleId: "hardening-completed-game",
         role: "host",
+      },
+      {
+        targetKey: "completedGameStalePlayerReject",
+        featureSlotId: "completed-game-stale-player-reject",
+        roleUrlId: "stale-player-complete",
+        checkpointId: "stale-player-complete",
+        adminCheckId: "stale-player-complete",
+        cycleId: "hardening-completed-game",
+        role: "player",
       },
       {
         targetKey: "completedGameStalePlayerReloadRecovery",

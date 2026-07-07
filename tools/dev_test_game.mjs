@@ -10373,6 +10373,7 @@ async function submitStaleHostCompleteRecovery({
   }
   return {
     setup,
+    game: completeGame,
     reject,
     commandOutcomes,
     slotsAfterReject,
