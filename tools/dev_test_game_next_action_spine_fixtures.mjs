@@ -233,11 +233,15 @@ export function releaseReadinessTraceCandidateFixture({
     hostedTargetPreflight: unprovenOptions.hostedTargetPreflight,
   });
   const unproven = releaseReadinessUnprovenFixture(unprovenOptions);
+  const featureTargetKind =
+    unproven.productionFeatureSpineTarget.featureTargetKind;
   return {
     rank,
     id: unproven.id,
     status: unproven.status,
     priority: priority ?? buildable.priority,
+    featureTargetKindPriority:
+      releaseReadinessFeatureTargetKindPriorityFixture(featureTargetKind),
     selected,
     command: command ?? buildable.command,
     buildSlice: unproven.buildSlice,
@@ -250,6 +254,7 @@ export function releaseReadinessTraceCandidateFixture({
     actionStatus: actionStatus ?? actionStatusForBuildable(buildable),
     proofBoundary: proofBoundary ?? buildable.proofBoundary,
     requiredEvidence: unproven.requiredEvidence,
+    ...(featureTargetKind === undefined ? {} : { featureTargetKind }),
     ...(unproven.hostedEvidenceMode === undefined
       ? {}
       : { hostedEvidenceMode: unproven.hostedEvidenceMode }),
@@ -272,6 +277,21 @@ export function releaseReadinessTraceCandidateFixture({
       ? {}
       : { hostedIdentityProofGraphEdges: unproven.hostedIdentityProofGraphEdges }),
   };
+}
+
+function releaseReadinessFeatureTargetKindPriorityFixture(featureTargetKind) {
+  switch (featureTargetKind) {
+    case "aggregate-hardening-coverage":
+      return 100;
+    case "hardening-stale-reload":
+      return 20;
+    case "hardening-stale-reconnect":
+      return 15;
+    case "hardening-race-reload":
+      return 5;
+    default:
+      return 0;
+  }
 }
 
 export function releaseReadinessUnprovenFixture({

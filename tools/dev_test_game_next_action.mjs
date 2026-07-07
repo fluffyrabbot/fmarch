@@ -1220,6 +1220,11 @@ function rankedBuildableReleaseReadinessItems(
           proofGraph,
           spineTarget,
         });
+      const featureTargetKind =
+        spineTarget.featureTargetKind ??
+        selectedProductionFeatureGraph?.featureTargetKind;
+      const featureTargetKindPriority =
+        releaseReadinessFeatureTargetKindPriority(featureTargetKind);
       const selectedSpineProvenance =
         productionFeatureSpineTargetProvenanceCaseForSlotId(
           spineTarget.featureSlotId,
@@ -1228,6 +1233,8 @@ function rankedBuildableReleaseReadinessItems(
         item,
         index,
         priority: selectedBuildable.priority,
+        featureTargetKind,
+        featureTargetKindPriority,
         command: selectedBuildable.command,
         buildSlice: selectedBuildable.buildSlice,
         proofTarget: selectedBuildable.proofTarget,
@@ -1254,13 +1261,41 @@ function rankedBuildableReleaseReadinessItems(
       };
     })
     .filter((candidate) => candidate !== null)
-    .sort(
-      (left, right) =>
-        releaseReadinessActionRank(left.actionStatus) -
-          releaseReadinessActionRank(right.actionStatus) ||
-        left.priority - right.priority ||
-        left.index - right.index,
-    );
+    .sort(compareReleaseReadinessCandidatePriority);
+}
+
+export function compareReleaseReadinessCandidatePriority(left, right) {
+  return (
+    releaseReadinessActionRank(left.actionStatus) -
+      releaseReadinessActionRank(right.actionStatus) ||
+    Number(left.priority ?? 0) - Number(right.priority ?? 0) ||
+    Number(
+      left.featureTargetKindPriority ??
+        releaseReadinessFeatureTargetKindPriority(left.featureTargetKind),
+    ) -
+      Number(
+        right.featureTargetKindPriority ??
+          releaseReadinessFeatureTargetKindPriority(right.featureTargetKind),
+      ) ||
+    Number(left.index ?? 0) - Number(right.index ?? 0)
+  );
+}
+
+export function releaseReadinessFeatureTargetKindPriority(featureTargetKind) {
+  switch (featureTargetKind) {
+    case "aggregate-hardening-coverage":
+      return 100;
+    case "hardening-stale-reload":
+      return 20;
+    case "hardening-stale-reconnect":
+      return 15;
+    case "hardening-race-reload":
+      return 5;
+    case "hardening-race-action":
+      return 0;
+    default:
+      return 0;
+  }
 }
 
 function hostedIdentityOperatorBuildableForManifest(
@@ -1750,6 +1785,9 @@ export function selectedProductionFeatureGraphForTarget({
     targetRoleUrl,
     edgeTargetRoleUrl,
     selectedSpineTargetRoleUrl: String(spineTarget.roleUrl ?? ""),
+    ...(node.featureTargetKind === undefined
+      ? {}
+      : { featureTargetKind: String(node.featureTargetKind) }),
     targetRoleUrlMatchesSelectedSpineTarget:
       targetRoleUrl === spineTarget.roleUrl &&
       edgeTargetRoleUrl === spineTarget.roleUrl,

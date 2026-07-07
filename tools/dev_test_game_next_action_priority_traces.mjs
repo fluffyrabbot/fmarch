@@ -48,6 +48,7 @@ export function buildReleaseReadinessTrace(candidates) {
           id: candidate.item.id,
           status: candidate.item.status,
           priority: candidate.priority,
+          featureTargetKindPriority: candidate.featureTargetKindPriority,
           selected: candidate.item.id === selectedUnprovenId,
           command: candidate.command,
           buildSlice: candidate.buildSlice,
@@ -57,6 +58,9 @@ export function buildReleaseReadinessTrace(candidates) {
           proofBoundary: candidate.proofBoundary,
           actionStatus: candidate.actionStatus,
           requiredEvidence: candidate.item.requiredEvidence,
+          ...(candidate.featureTargetKind === undefined
+            ? {}
+            : { featureTargetKind: candidate.featureTargetKind }),
           productionFeatureSpineTarget: candidate.productionFeatureSpineTarget,
           spineDrilldown: candidate.spineDrilldown,
           ...(candidate.spineTarget == null
@@ -150,6 +154,9 @@ export function normalizeReleaseReadinessTrace(releaseReadinessTrace) {
             id: String(candidate.id ?? "unknown"),
             status: String(candidate.status ?? "unknown"),
             priority: Number(candidate.priority ?? 0),
+            featureTargetKindPriority: Number(
+              candidate.featureTargetKindPriority ?? 0,
+            ),
             selected: candidate.selected === true,
             command: String(candidate.command ?? ""),
             buildSlice: String(candidate.buildSlice ?? ""),

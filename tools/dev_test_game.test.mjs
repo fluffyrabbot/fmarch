@@ -396,6 +396,7 @@ import {
 import {
   assertDevTestGameNextAction,
   buildDevTestGameNextAction,
+  compareReleaseReadinessCandidatePriority,
   devTestGameDefaultSequenceStage,
   devTestGameHardeningAdminProofCommand,
   devTestGameHostedIdentitySequenceStage,
@@ -408,6 +409,7 @@ import {
   devTestGameSeedFixtureCommand,
   devTestGameSeedFixturePath,
   devTestGameSeedFixtureRoleUrl,
+  releaseReadinessFeatureTargetKindPriority,
 } from "./dev_test_game_next_action.mjs";
 import {
   assertDevTestGameProofGraph,
@@ -3482,6 +3484,63 @@ test("next-action priority traces name shared visible check contracts", () => {
         "release-readiness-selection-trace",
       ],
     ],
+  );
+});
+
+test("next-action release-readiness selector demotes aggregate hardening coverage on ties", () => {
+  assert.deepEqual(
+    [
+      "hardening-race-action",
+      "hardening-race-reload",
+      "hardening-stale-reconnect",
+      "hardening-stale-reload",
+      "aggregate-hardening-coverage",
+    ].map((featureTargetKind) => [
+      featureTargetKind,
+      releaseReadinessFeatureTargetKindPriority(featureTargetKind),
+    ]),
+    [
+      ["hardening-race-action", 0],
+      ["hardening-race-reload", 5],
+      ["hardening-stale-reconnect", 15],
+      ["hardening-stale-reload", 20],
+      ["aggregate-hardening-coverage", 100],
+    ],
+  );
+  const candidates = [
+    {
+      id: "aggregate",
+      actionStatus: "ready",
+      priority: 10,
+      featureTargetKind: "aggregate-hardening-coverage",
+      index: 0,
+    },
+    {
+      id: "race-action",
+      actionStatus: "ready",
+      priority: 10,
+      featureTargetKind: "hardening-race-action",
+      index: 1,
+    },
+    {
+      id: "explicit-priority-still-wins",
+      actionStatus: "ready",
+      priority: 9,
+      featureTargetKind: "aggregate-hardening-coverage",
+      index: 2,
+    },
+  ].map((candidate) => ({
+    ...candidate,
+    featureTargetKindPriority: releaseReadinessFeatureTargetKindPriority(
+      candidate.featureTargetKind,
+    ),
+  }));
+
+  assert.deepEqual(
+    [...candidates]
+      .sort(compareReleaseReadinessCandidatePriority)
+      .map((candidate) => candidate.id),
+    ["explicit-priority-still-wins", "race-action", "aggregate"],
   );
 });
 
