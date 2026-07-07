@@ -82,28 +82,9 @@
   grid-template-columns: minmax(0, 1fr) auto;
 }
 
-.host-console-critical-path__vote-rows {
-  display: grid;
-  gap: 8px;
-}
-
 .host-console-critical-path__vote-row {
-  align-items: center;
   border-block-start: 1px solid var(--fm-line);
-  display: grid;
-  gap: 12px;
-  grid-template-columns: minmax(0, 1fr) auto;
-  min-block-size: 44px;
   padding-block-start: 8px;
-}
-
-.host-console-critical-path__vote-row span {
-  overflow-wrap: anywhere;
-}
-
-.host-console-critical-path__vote-row strong {
-  color: var(--fm-ink);
-  font-size: 18px;
 }
 
 .host-console-critical-path__empty {

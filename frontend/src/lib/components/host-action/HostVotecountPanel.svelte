@@ -43,9 +43,16 @@
           class={view.classes.row}
           data-testid={row.testId}
           data-min-touch-target-px={row.minTargetPx}
+          data-at-hammer={row.atHammer}
         >
-          <span>{row.target}</span>
-          <strong>{row.tally}</strong>
+          <span class="fm-wagon__name">{row.target}</span>
+          <span class="fm-wagon__track" aria-hidden="true">
+            <span
+              class="fm-wagon__fill"
+              style={`--fm-wagon-fill: ${row.fillPercent}%`}
+            ></span>
+          </span>
+          <strong class="fm-wagon__count">{row.tally}</strong>
         </div>
       {/each}
     </div>

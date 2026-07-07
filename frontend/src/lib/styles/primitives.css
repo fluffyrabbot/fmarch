@@ -262,6 +262,57 @@
   white-space: nowrap;
 }
 
+/* ---- wagon: votecount tally bars (name · track · count) ----
+   The fill width comes from an inline --fm-wagon-fill custom property set by
+   the view model (count/needed). A row at or one vote from hammer flips its
+   fill to the danger tone. */
+
+.fm-wagon {
+  display: grid;
+  gap: 8px;
+}
+
+.fm-wagon__row {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(96px, 0.55fr) minmax(64px, 1fr) auto;
+  min-block-size: 44px;
+}
+
+.fm-wagon__name {
+  color: var(--fm-ink);
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.fm-wagon__track {
+  background: var(--fm-surface-muted);
+  border-radius: 6px;
+  block-size: 26px;
+  display: block;
+  overflow: hidden;
+}
+
+.fm-wagon__fill {
+  background: var(--fm-accent);
+  block-size: 100%;
+  border-radius: 6px 0 0 6px;
+  display: block;
+  inline-size: var(--fm-wagon-fill, 0%);
+  opacity: 0.85;
+}
+
+.fm-wagon__row[data-at-hammer="true"] .fm-wagon__fill {
+  background: var(--fm-danger);
+}
+
+.fm-wagon__count {
+  color: var(--fm-ink);
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+}
+
 /* ---- activity ledger: player receipts, admin activity, host activity ---- */
 
 .fm-ledger {

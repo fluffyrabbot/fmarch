@@ -26,12 +26,16 @@ test("host votecount panel model exposes live official-count boundary", () => {
     {
       target: "slot-2 / Ilya",
       tally: "4/7",
+      fillPercent: 57,
+      atHammer: false,
       testId: "host-console-votecount-row-slot-2_Ilya",
       minTargetPx: 44,
     },
     {
       target: "No lynch",
       tally: "1/7",
+      fillPercent: 14,
+      atHammer: false,
       testId: "host-console-votecount-row-No_lynch",
       minTargetPx: 44,
     },
