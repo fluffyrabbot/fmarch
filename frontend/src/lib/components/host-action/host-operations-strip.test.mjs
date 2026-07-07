@@ -58,7 +58,7 @@ test("host operations strip summarizes projection-backed host posture", () => {
       [
         "votecount",
         "2 projected targets",
-        "official-votecount-live-ws",
+        "Live official tally",
         "ack",
         "host-operation-votecount",
         "host-operation-status-votecount",

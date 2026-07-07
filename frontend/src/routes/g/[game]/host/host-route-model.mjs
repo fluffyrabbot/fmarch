@@ -30,7 +30,7 @@ export const HOST_CONSOLE_ROUTE_CONTRACT = Object.freeze({
   surfaceTestId: "host-console-surface",
   capabilityTestId: "host-console-capability",
   liveStatusTestId: "host-live-status",
-  requiredText: "official-votecount-live-ws",
+  requiredText: "Live official tally",
 });
 
 export async function buildHostConsoleRouteData({

@@ -16,17 +16,22 @@
   class={view.root.className}
   data-testid={view.root.testId}
   data-component={view.root.data.component}
+  data-boundary-status={view.boundary.status}
   aria-label={view.root.ariaLabel}
 >
   <header>
     <div>
       <p class="fm-eyebrow">
-        {view.boundary.status}
+        {view.boundary.statusLabel}
       </p>
       <h2>{view.heading}</h2>
     </div>
-    <span class="fm-chip" data-testid={view.boundary.commandTestId}>
-      {view.boundary.command}
+    <span
+      class="fm-chip"
+      data-command={view.boundary.command}
+      data-testid={view.boundary.commandTestId}
+    >
+      {view.boundary.label}
     </span>
   </header>
   {#if view.rows.length === 0}

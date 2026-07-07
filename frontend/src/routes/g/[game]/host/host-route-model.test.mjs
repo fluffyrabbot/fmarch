@@ -43,7 +43,7 @@ test("host console route data is allowed for HostOf scoped to the current game",
     surfaceTestId: "host-console-surface",
     capabilityTestId: "host-console-capability",
     liveStatusTestId: "host-live-status",
-    requiredText: "official-votecount-live-ws",
+    requiredText: "Live official tally",
   });
   assert.equal(data.shell.activeSurface, "moderator");
   assert.equal(data.access.capabilityLabel, "HostOf(midsummer)");

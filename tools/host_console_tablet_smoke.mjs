@@ -132,7 +132,7 @@ try {
   }
   const votecountBoundary = await page
     .getByTestId("host-console-votecount-boundary")
-    .innerText();
+    .getAttribute("data-command");
   if (votecountBoundary !== "official-votecount-live-ws") {
     throw new Error(`host votecount boundary drifted: ${votecountBoundary}`);
   }

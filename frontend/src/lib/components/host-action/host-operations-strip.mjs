@@ -45,7 +45,8 @@ export function buildHostOperationsStripViewModel({
         id: "votecount",
         label: "Votecount",
         value: countLabel(votecount.length, "projected target", "projected targets"),
-        detail: votecountBoundary.command ?? "official-votecount-live-ws",
+        detail: "Live official tally",
+        evidence: votecountBoundary.command ?? "official-votecount-live-ws",
         status: votecountStatus({ boundary: votecountBoundary, rows: votecount }),
       }),
       operationItem({
@@ -69,12 +70,13 @@ export function buildHostOperationsStripViewModel({
   });
 }
 
-function operationItem({ id, label, value, detail, status }) {
+function operationItem({ id, label, value, detail, evidence = null, status }) {
   return Object.freeze({
     id,
     label,
     value,
     detail,
+    evidence,
     status,
     className: HOST_OPERATIONS_STRIP_CONTRACT.itemClassName,
     statusClassName: HOST_OPERATIONS_STRIP_CONTRACT.statusClassName,

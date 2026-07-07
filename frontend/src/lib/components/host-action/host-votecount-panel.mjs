@@ -23,7 +23,9 @@ export function buildHostVotecountPanelViewModel({
     heading: "Votecount",
     boundary: Object.freeze({
       status: boundary?.status ?? "unknown",
+      statusLabel: "Official count",
       command: boundary?.command ?? "official-votecount-live-ws",
+      label: "Live official tally",
       commandTestId: "host-console-votecount-boundary",
     }),
     empty: Object.freeze({

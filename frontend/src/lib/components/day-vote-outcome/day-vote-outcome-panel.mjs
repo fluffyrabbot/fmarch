@@ -27,7 +27,9 @@ export function buildDayVoteOutcomePanelViewModel({
     heading,
     boundary: Object.freeze({
       status: boundary.status ?? "REST projection",
+      statusLabel: "Official result",
       command: boundary.command ?? "/day-vote-outcomes",
+      label: "Official record",
       commandTestId: `${rootTestId}-boundary`,
     }),
     empty: Object.freeze({

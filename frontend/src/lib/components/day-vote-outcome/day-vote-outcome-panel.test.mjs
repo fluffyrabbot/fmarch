@@ -28,7 +28,9 @@ test("day vote outcome panel summarizes the latest official result", () => {
   assert.equal(view.root.data.state, "available");
   assert.deepEqual(view.boundary, {
     status: "official-engine-result",
+    statusLabel: "Official result",
     command: "/day-vote-outcomes",
+    label: "Official record",
     commandTestId: "player-day-vote-outcome-boundary",
   });
   assert.deepEqual(view.latest, {

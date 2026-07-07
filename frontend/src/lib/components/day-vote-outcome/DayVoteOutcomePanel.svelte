@@ -21,14 +21,21 @@
   data-testid={view.root.testId}
   data-component={view.root.data.component}
   data-state={view.root.data.state}
+  data-boundary-status={view.boundary.status}
   aria-label={view.root.ariaLabel}
 >
   <header>
     <div>
-      <p class="fm-eyebrow">{view.boundary.status}</p>
+      <p class="fm-eyebrow">{view.boundary.statusLabel}</p>
       <h2>{view.heading}</h2>
     </div>
-    <span class="fm-chip" data-testid={view.boundary.commandTestId}>{view.boundary.command}</span>
+    <span
+      class="fm-chip"
+      data-command={view.boundary.command}
+      data-testid={view.boundary.commandTestId}
+    >
+      {view.boundary.label}
+    </span>
   </header>
 
   {#if view.latest === null}
