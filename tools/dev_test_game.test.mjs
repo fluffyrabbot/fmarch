@@ -8870,6 +8870,7 @@ test("setup browser proof lanes share setup command assertion helpers", async ()
 
 test("session card and markdown include role credential URLs and tokens", async () => {
   const game = "44444444-4444-4444-8444-444444444444";
+  const laterPhaseDeadlineGame = "88888888-8888-4888-8888-888888888888";
   const tokens = createTokenSet("dev-test-card");
   const replacementResolvedPrivatePost =
     replacementStalePrivatePostAfterResolveScenario();
@@ -9208,16 +9209,16 @@ test("session card and markdown include role credential URLs and tokens", async 
     proofStability: {
       status: "passed",
       hostConfirmClicks: {
-        total: 4,
-        firstClickCount: 3,
+        total: 5,
+        firstClickCount: 4,
         concurrentClickCount: 0,
         retryClickCount: 1,
         domFallbackCount: 0,
         forceFallbackCount: 0,
         failureCount: 0,
         maxAttempts: 2,
-        byAction: { resolve_phase: 2, extend_deadline: 2 },
-        byRole: { host: 2, cohost: 2 },
+        byAction: { resolve_phase: 2, extend_deadline: 3 },
+        byRole: { host: 2, cohost: 3 },
         events: [
           {
             actionId: "resolve_phase",
@@ -9282,6 +9283,91 @@ test("session card and markdown include role credential URLs and tokens", async 
         id: "D01",
         locked: false,
       },
+    },
+    cohostLaterPhaseDeadline: {
+      status: "passed",
+      game: laterPhaseDeadlineGame,
+      seed: {
+        game: laterPhaseDeadlineGame,
+        initialDeadline: 1_782_014_400,
+        commands: [
+          {
+            principalUserId: "host_h",
+            command: {
+              ExtendDeadline: {
+                game: laterPhaseDeadlineGame,
+                phase: "D02",
+                at: 1_782_014_400,
+              },
+            },
+            streamSeqs: [52],
+          },
+        ],
+      },
+      initialDeadline: 1_782_014_400,
+      expectedDeadline: 1_782_100_800,
+      cohostEntry: {
+        principalUserId: "cohost_c",
+        capabilityKinds: ["CohostOf"],
+      },
+      capabilityLabel: `CohostOf(${laterPhaseDeadlineGame})`,
+      setupPhase: {
+        id: "D02",
+        locked: false,
+        deadline: 1_782_014_400,
+      },
+      setupDeadlineActions: ["extend_deadline"],
+      setupPhaseActions: [],
+      extendDeadline: {
+        statusMessage: "Ack: stream seqs 52",
+        commandStatus: {
+          state: "ack",
+          requestEnvelope: {
+            body: {
+              body: {
+                principal_user_id: "cohost_c",
+                command: {
+                  ExtendDeadline: {
+                    game: laterPhaseDeadlineGame,
+                    phase: "D02",
+                    at: 1_782_100_800,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      command: {
+        game: laterPhaseDeadlineGame,
+        phase: "D02",
+        at: 1_782_100_800,
+      },
+      commandPrincipal: "cohost_c",
+      phaseAfterExtend: {
+        id: "D02",
+        locked: false,
+        deadline: 1_782_100_800,
+      },
+      deadlineActionsAfterExtend: ["extend_deadline"],
+      phaseActionsAfterExtend: [],
+      reload: {
+        routeResponseStatus: 200,
+        phaseAfterReload: {
+          id: "D02",
+          locked: false,
+          deadline: 1_782_100_800,
+        },
+        deadlineActionsAfterReload: ["extend_deadline"],
+        phaseActionsAfterReload: [],
+        apiPhaseAfterReload: {
+          phase_id: "D02",
+          locked: false,
+          deadline: 1_782_100_800,
+        },
+      },
+      proof:
+        "A disposable seeded local game advanced to open D02 with a real D02 deadline, the delegated cohost role URL submitted ExtendDeadline through the hydrated host-console control for D02, and a reload plus API read both converged to the updated D02 deadline with host-only phase controls still absent.",
     },
     coreLoop: {
       status: "passed",
@@ -15747,7 +15833,7 @@ test("session card and markdown include role credential URLs and tokens", async 
   assert(markdown.includes("## Proof Stability Audit"));
   assert(
     markdown.includes(
-      "Host confirms: 4 total; 0 concurrent browser clicks; 1 retried; 0 DOM fallbacks; 0 force fallbacks",
+      "Host confirms: 5 total; 0 concurrent browser clicks; 1 retried; 0 DOM fallbacks; 0 force fallbacks",
     ),
   );
   assert(markdown.includes("resolve_phase host: playwright-retry after 2 attempts"));
@@ -15755,6 +15841,8 @@ test("session card and markdown include role credential URLs and tokens", async 
   assert(markdown.includes("Extend deadline: Ack: stream seqs 41"));
   assert(markdown.includes("Host-only controls visible: false"));
   assert(markdown.includes("Host-only resolve: Reject NotHost: not host"));
+  assert(markdown.includes("## Cohost Later-Phase Deadline Proof"));
+  assert(markdown.includes("Phase after reload: D02 deadline 1782100800"));
   assert(markdown.includes("## Core Loop Proof"));
   assert(markdown.includes("Reject PhaseLocked: phase locked"));
   assert(markdown.includes("## Day Vote Resolution Proof"));
@@ -15891,6 +15979,7 @@ test("session card and markdown include role credential URLs and tokens", async 
       "browser-entry",
       "host-setup-role",
       "cohost-console",
+      "cohost-later-phase-deadline",
       "core-loop",
       "day-vote-resolution",
       "day-vote-no-lynch",
@@ -16995,12 +17084,12 @@ test("session card and markdown include role credential URLs and tokens", async 
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 19);
   assert.equal(opsArtifacts.proofRun.laneCount, proofRun.lanes.length);
-  assert.equal(opsArtifacts.proofStability.hostConfirmClicks.total, 4);
+  assert.equal(opsArtifacts.proofStability.hostConfirmClicks.total, 5);
   assert.equal(
     opsArtifacts.checks.some(
       (check) =>
         check.id === "proof-stability-summarized" &&
-        check.hostConfirmClicks === 4 &&
+        check.hostConfirmClicks === 5 &&
         check.concurrentClickCount === 0 &&
         check.retryClickCount === 1,
     ),

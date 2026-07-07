@@ -121,6 +121,7 @@ export const seedDemoOnlyScenarioIds = Object.freeze([
   "stale-host-advance",
   "stale-host-deadline",
   "stale-cohost-deadline",
+  "cohost-later-phase-deadline",
   "stale-player-vote",
   "stale-player-vote-after-change",
   "stale-player-post-after-phase-closure",

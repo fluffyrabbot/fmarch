@@ -851,6 +851,20 @@ export function markdownSessionCard(card) {
         "",
       );
     }
+    if (card.verification.cohostLaterPhaseDeadline !== undefined) {
+      lines.push(
+        "## Cohost Later-Phase Deadline Proof",
+        "",
+        `Status: ${card.verification.cohostLaterPhaseDeadline.status}`,
+        "",
+        `Proof: ${card.verification.cohostLaterPhaseDeadline.proof}`,
+        "",
+        `Extend deadline: ${card.verification.cohostLaterPhaseDeadline.extendDeadline.statusMessage}`,
+        "",
+        `Phase after reload: ${card.verification.cohostLaterPhaseDeadline.reload.phaseAfterReload.id} deadline ${card.verification.cohostLaterPhaseDeadline.reload.phaseAfterReload.deadline}`,
+        "",
+      );
+    }
     if (card.verification.actionLoop !== undefined) {
       lines.push(
         "## Action Loop Proof",
@@ -1092,6 +1106,7 @@ async function verifySessionCard(card) {
   const roleEntries = {};
   let hostSetup;
   let cohostConsole;
+  let cohostLaterPhaseDeadline;
   let coreLoop;
   let dayVoteResolution;
   let dayVoteNoLynch;
@@ -1171,6 +1186,11 @@ async function verifySessionCard(card) {
       cohostPage: roleEntries.cohost.page,
       staleCohostPage,
       game: card.game,
+      frontendBaseUrl: card.frontendBaseUrl,
+    });
+    cohostLaterPhaseDeadline = await verifyCohostLaterPhaseDeadlineExtension({
+      browser,
+      apiBaseUrl: card.apiBaseUrl,
       frontendBaseUrl: card.frontendBaseUrl,
     });
     const staleHostDeadlineSetup = await freezeStaleHostDeadlinePage({
@@ -1296,6 +1316,7 @@ async function verifySessionCard(card) {
     mediaResponseGuard: mediaResponseGuard.summary(),
     hostSetup,
     cohostConsole,
+    cohostLaterPhaseDeadline,
     coreLoop,
     dayVoteResolution,
     dayVoteNoLynch,
@@ -1902,6 +1923,199 @@ async function verifySeededCohostConsole({
     proof:
       "The seeded cohost role URL opened the host console with CohostOf authority, exposed only the delegated deadline control, extended the D01 deadline through the hydrated host-console command path, and rejected a direct host-only ResolvePhase command as NotHost without mutating phase state.",
   };
+}
+
+async function verifyCohostLaterPhaseDeadlineExtension({
+  browser,
+  apiBaseUrl,
+  frontendBaseUrl,
+}) {
+  if (browser === null || browser === undefined) {
+    throw new Error("cohost later-phase deadline proof requires a Playwright browser");
+  }
+  const proofGame = crypto.randomUUID();
+  const seed = await seedLaterPhaseCohostDeadlineGame({ game: proofGame });
+  const expectedDeadline = seed.initialDeadline + 86_400;
+  const cohostSession = await createSessionGrantCredential({
+    token: `${tokenPrefix}-later-phase-deadline-cohost-${crypto.randomUUID()}`,
+    principalUserId: "cohost_c",
+    returnTo: `/g/${proofGame}/host`,
+    expectedCapabilityKind: "CohostOf",
+    issuedBy: {
+      principalUserId: "root_admin",
+      capabilityKind: "GlobalAdmin",
+      surface: "/auth/session-grants",
+    },
+  });
+  const cohostEntry = await openVerifiedRoleEntry({
+    browser,
+    session: cohostSession,
+    game: proofGame,
+    apiBaseUrl,
+    frontendBaseUrl,
+  });
+  try {
+    const initialResponse = await cohostEntry.page.goto(
+      `${frontendBaseUrl}/g/${proofGame}/host`,
+      { waitUntil: "networkidle" },
+    );
+    if (initialResponse === null || !initialResponse.ok()) {
+      throw new Error(
+        `cohost later-phase deadline initial load failed: ${initialResponse?.status() ?? null}`,
+      );
+    }
+    await cohostEntry.page.waitForFunction(
+      (expected) =>
+        window.__fmarchHostProjection?.phase?.id === "D02" &&
+        window.__fmarchHostProjection?.phase?.locked === false &&
+        window.__fmarchHostProjection?.phase?.deadline === expected.initialDeadline,
+      { initialDeadline: seed.initialDeadline },
+    );
+    await cohostEntry.page
+      .getByTestId("critical-host-action-extend_deadline")
+      .waitFor({ state: "visible" });
+    const capabilityLabel = await cohostEntry.page
+      .getByTestId("host-console-capability")
+      .innerText();
+    const setupPhase = await cohostEntry.page.evaluate(
+      () => window.__fmarchHostProjection?.phase,
+    );
+    const setupDeadlineActions = await visibleHostControlActions(
+      cohostEntry.page,
+      "deadline",
+    );
+    const setupPhaseActions = await visibleHostControlActions(cohostEntry.page, "phase");
+    const extendDeadline = await confirmHostAction(cohostEntry.page, "extend_deadline");
+    await cohostEntry.page.waitForFunction(
+      (expected) =>
+        window.__fmarchHostProjection?.phase?.id === "D02" &&
+        window.__fmarchHostProjection?.phase?.locked === false &&
+        window.__fmarchHostProjection?.phase?.deadline === expected.deadline,
+      { deadline: expectedDeadline },
+    );
+    const command =
+      extendDeadline.commandStatus?.requestEnvelope?.body?.body?.command
+        ?.ExtendDeadline;
+    const commandPrincipal =
+      extendDeadline.commandStatus?.requestEnvelope?.body?.body?.principal_user_id;
+    const phaseAfterExtend = await cohostEntry.page.evaluate(
+      () => window.__fmarchHostProjection?.phase,
+    );
+    const deadlineActionsAfterExtend = await visibleHostControlActions(
+      cohostEntry.page,
+      "deadline",
+    );
+    const phaseActionsAfterExtend = await visibleHostControlActions(
+      cohostEntry.page,
+      "phase",
+    );
+    const reloadResponse = await cohostEntry.page.goto(
+      `${frontendBaseUrl}/g/${proofGame}/host`,
+      { waitUntil: "networkidle" },
+    );
+    if (reloadResponse === null || !reloadResponse.ok()) {
+      throw new Error(
+        `cohost later-phase deadline reload failed: ${reloadResponse?.status() ?? null}`,
+      );
+    }
+    await cohostEntry.page.waitForFunction(
+      (expected) =>
+        window.__fmarchHostProjection?.phase?.id === "D02" &&
+        window.__fmarchHostProjection?.phase?.locked === false &&
+        window.__fmarchHostProjection?.phase?.deadline === expected.deadline,
+      { deadline: expectedDeadline },
+    );
+    const phaseAfterReload = await cohostEntry.page.evaluate(
+      () => window.__fmarchHostProjection?.phase,
+    );
+    const deadlineActionsAfterReload = await visibleHostControlActions(
+      cohostEntry.page,
+      "deadline",
+    );
+    const phaseActionsAfterReload = await visibleHostControlActions(
+      cohostEntry.page,
+      "phase",
+    );
+    const apiStateAfterReload = await fetchHostConsoleState({
+      apiBaseUrl,
+      game: proofGame,
+      principalUserId: "cohost_c",
+    });
+    const reload = {
+      routeResponseStatus: reloadResponse.status(),
+      phaseAfterReload,
+      deadlineActionsAfterReload,
+      phaseActionsAfterReload,
+      apiPhaseAfterReload: apiStateAfterReload.phase,
+    };
+    if (
+      !capabilityLabel.includes(`CohostOf(${proofGame})`) ||
+      setupPhase?.id !== "D02" ||
+      setupPhase?.locked !== false ||
+      setupPhase?.deadline !== seed.initialDeadline ||
+      setupDeadlineActions.includes("extend_deadline") !== true ||
+      setupPhaseActions.length !== 0 ||
+      extendDeadline.commandStatus?.state !== "ack" ||
+      commandPrincipal !== "cohost_c" ||
+      command?.game !== proofGame ||
+      command?.phase !== "D02" ||
+      command?.at !== expectedDeadline ||
+      phaseAfterExtend?.id !== "D02" ||
+      phaseAfterExtend?.locked !== false ||
+      phaseAfterExtend?.deadline !== expectedDeadline ||
+      deadlineActionsAfterExtend.includes("extend_deadline") !== true ||
+      phaseActionsAfterExtend.length !== 0 ||
+      reload.routeResponseStatus !== 200 ||
+      phaseAfterReload?.id !== "D02" ||
+      phaseAfterReload?.locked !== false ||
+      phaseAfterReload?.deadline !== expectedDeadline ||
+      deadlineActionsAfterReload.includes("extend_deadline") !== true ||
+      phaseActionsAfterReload.length !== 0 ||
+      apiStateAfterReload.phase?.phase_id !== "D02" ||
+      apiStateAfterReload.phase?.locked !== false ||
+      apiStateAfterReload.phase?.deadline !== expectedDeadline
+    ) {
+      throw new Error(
+        `cohost later-phase deadline proof drifted: ${JSON.stringify({
+          proofGame,
+          capabilityLabel,
+          setupPhase,
+          setupDeadlineActions,
+          setupPhaseActions,
+          extendDeadline,
+          command,
+          commandPrincipal,
+          phaseAfterExtend,
+          deadlineActionsAfterExtend,
+          phaseActionsAfterExtend,
+          reload,
+        })}`,
+      );
+    }
+    return {
+      status: "passed",
+      game: proofGame,
+      seed,
+      initialDeadline: seed.initialDeadline,
+      expectedDeadline,
+      cohostEntry: cohostEntry.verification,
+      capabilityLabel,
+      setupPhase,
+      setupDeadlineActions,
+      setupPhaseActions,
+      extendDeadline,
+      command,
+      commandPrincipal,
+      phaseAfterExtend,
+      deadlineActionsAfterExtend,
+      phaseActionsAfterExtend,
+      reload,
+      proof:
+        "A disposable seeded local game advanced to open D02 with a real D02 deadline, the delegated cohost role URL submitted ExtendDeadline through the hydrated host-console control for D02, and a reload plus API read both converged to the updated D02 deadline with host-only phase controls still absent.",
+    };
+  } finally {
+    await cohostEntry.context.close().catch(() => {});
+  }
 }
 
 async function hostActionVisible(page, actionId) {
@@ -14062,6 +14276,33 @@ async function seedConcurrentHostResolveRaceGame({ raceGame }) {
   return {
     game: raceGame,
     commands,
+  };
+}
+
+async function seedLaterPhaseCohostDeadlineGame({ game }) {
+  const initialDeadline = 1_782_014_400;
+  const seed = await seedConcurrentHostResolveRaceGame({ raceGame: game });
+  const command = {
+    ExtendDeadline: {
+      game,
+      phase: "D02",
+      at: initialDeadline,
+    },
+  };
+  const result = await sendCommandResult("host_h", command);
+  if (result.body?.kind === "Reject") {
+    throw new Error(
+      `cohost later-phase deadline seed command rejected: ${JSON.stringify({
+        principalUserId: "host_h",
+        command,
+        result,
+      })}`,
+    );
+  }
+  return {
+    game,
+    initialDeadline,
+    commands: [...seed.commands, commandSummary("host_h", command, result)],
   };
 }
 

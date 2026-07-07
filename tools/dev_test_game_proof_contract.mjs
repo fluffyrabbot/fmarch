@@ -169,6 +169,7 @@ const requiredLaneIds = Object.freeze([
   "browser-entry",
   "host-setup-role",
   "cohost-console",
+  "cohost-later-phase-deadline",
   "core-loop",
   ...coreLoopPhaseProgressionLaneIds,
   "host-deadline-advance",
@@ -231,6 +232,13 @@ export function buildDevTestGameProofRun(session, options = {}) {
   const generatedAt = options.generatedAt ?? new Date().toISOString();
   const verification = session?.verification ?? {};
   const hardening = verification.multiplayerHardening ?? {};
+  const cohostLaterPhaseDeadline = verification.cohostLaterPhaseDeadline ?? {};
+  const cohostLaterPhaseDeadlineCommand =
+    cohostLaterPhaseDeadline.extendDeadline?.commandStatus?.requestEnvelope?.body
+      ?.body?.command?.ExtendDeadline;
+  const cohostLaterPhaseDeadlinePrincipal =
+    cohostLaterPhaseDeadline.extendDeadline?.commandStatus?.requestEnvelope?.body
+      ?.body?.principal_user_id;
   const replacementPrivatePostRaceScenario =
     replacementConcurrentPrivatePostRaceScenario();
   const replacementVoteRaceScenario = replacementConcurrentVoteRaceScenario();
@@ -442,6 +450,72 @@ export function buildDevTestGameProofRun(session, options = {}) {
         verification.cohostConsole?.phaseAfterReject?.id === "D01" &&
         verification.cohostConsole?.phaseAfterReject?.locked === false,
     }),
+    lane(
+      "cohost-later-phase-deadline",
+      "Cohost role URL extends the currently projected later phase deadline",
+      {
+        game: cohostLaterPhaseDeadline.game ?? null,
+        capabilityLabel: cohostLaterPhaseDeadline.capabilityLabel ?? null,
+        phaseBefore: cohostLaterPhaseDeadline.setupPhase ?? null,
+        deadlineBefore: cohostLaterPhaseDeadline.initialDeadline ?? null,
+        expectedDeadline: cohostLaterPhaseDeadline.expectedDeadline ?? null,
+        extendDeadlineState:
+          cohostLaterPhaseDeadline.extendDeadline?.commandStatus?.state ?? null,
+        commandPrincipal: cohostLaterPhaseDeadlinePrincipal ?? null,
+        command: cohostLaterPhaseDeadlineCommand ?? null,
+        phaseAfterExtend: cohostLaterPhaseDeadline.phaseAfterExtend ?? null,
+        phaseAfterReload:
+          cohostLaterPhaseDeadline.reload?.phaseAfterReload ?? null,
+        apiPhaseAfterReload:
+          cohostLaterPhaseDeadline.reload?.apiPhaseAfterReload ?? null,
+        deadlineActionsAfterReload:
+          cohostLaterPhaseDeadline.reload?.deadlineActionsAfterReload ?? null,
+        phaseActionsAfterReload:
+          cohostLaterPhaseDeadline.reload?.phaseActionsAfterReload ?? null,
+        passed:
+          cohostLaterPhaseDeadline.status === "passed" &&
+          typeof cohostLaterPhaseDeadline.game === "string" &&
+          cohostLaterPhaseDeadline.capabilityLabel ===
+            `CohostOf(${cohostLaterPhaseDeadline.game ?? ""})` &&
+          cohostLaterPhaseDeadline.setupPhase?.id === "D02" &&
+          cohostLaterPhaseDeadline.setupPhase?.locked === false &&
+          cohostLaterPhaseDeadline.setupPhase?.deadline ===
+            cohostLaterPhaseDeadline.initialDeadline &&
+          cohostLaterPhaseDeadline.setupDeadlineActions?.includes(
+            "extend_deadline",
+          ) === true &&
+          cohostLaterPhaseDeadline.setupPhaseActions?.length === 0 &&
+          cohostLaterPhaseDeadline.extendDeadline?.commandStatus?.state ===
+            "ack" &&
+          cohostLaterPhaseDeadlinePrincipal === "cohost_c" &&
+          cohostLaterPhaseDeadlineCommand?.game ===
+            cohostLaterPhaseDeadline.game &&
+          cohostLaterPhaseDeadlineCommand?.phase === "D02" &&
+          cohostLaterPhaseDeadlineCommand?.at ===
+            cohostLaterPhaseDeadline.expectedDeadline &&
+          cohostLaterPhaseDeadline.phaseAfterExtend?.id === "D02" &&
+          cohostLaterPhaseDeadline.phaseAfterExtend?.locked === false &&
+          cohostLaterPhaseDeadline.phaseAfterExtend?.deadline ===
+            cohostLaterPhaseDeadline.expectedDeadline &&
+          cohostLaterPhaseDeadline.phaseActionsAfterExtend?.length === 0 &&
+          cohostLaterPhaseDeadline.reload?.routeResponseStatus === 200 &&
+          cohostLaterPhaseDeadline.reload?.phaseAfterReload?.id === "D02" &&
+          cohostLaterPhaseDeadline.reload?.phaseAfterReload?.locked === false &&
+          cohostLaterPhaseDeadline.reload?.phaseAfterReload?.deadline ===
+            cohostLaterPhaseDeadline.expectedDeadline &&
+          cohostLaterPhaseDeadline.reload?.deadlineActionsAfterReload?.includes(
+            "extend_deadline",
+          ) === true &&
+          cohostLaterPhaseDeadline.reload?.phaseActionsAfterReload?.length ===
+            0 &&
+          cohostLaterPhaseDeadline.reload?.apiPhaseAfterReload?.phase_id ===
+            "D02" &&
+          cohostLaterPhaseDeadline.reload?.apiPhaseAfterReload?.locked ===
+            false &&
+          cohostLaterPhaseDeadline.reload?.apiPhaseAfterReload?.deadline ===
+            cohostLaterPhaseDeadline.expectedDeadline,
+      },
+    ),
     lane("core-loop", "Host phase controls and player locked-vote recovery", {
       rejectedVoteError: verification.coreLoop?.rejectedVote?.error ?? null,
       lockState: verification.coreLoop?.lock?.commandStatus?.state ?? null,
