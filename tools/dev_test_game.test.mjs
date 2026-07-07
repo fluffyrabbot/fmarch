@@ -6091,6 +6091,10 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
     nextActionHandoffPairFixture(),
   );
   assert.deepEqual(
+    terminalBatches.selectedLocalDependencyTerminalReceipt,
+    selectedLocalDependencyTerminalReceiptFixture(),
+  );
+  assert.deepEqual(
     terminalBatches.selectedOperatorHandoffReceipt,
     selectedOperatorHandoffReceiptFixture(),
   );
@@ -17994,6 +17998,11 @@ test("session card and markdown include role credential URLs and tokens", async 
   );
   assert.deepEqual(
     adminSpineReadiness.localDevelopmentSpine.evidence.adminProofSpine
+      .terminalBatches.selectedLocalDependencyTerminalReceipt,
+    selectedLocalDependencyTerminalReceiptFixture(),
+  );
+  assert.deepEqual(
+    adminSpineReadiness.localDevelopmentSpine.evidence.adminProofSpine
       .terminalBatches.selectedOperatorHandoffReceipt,
     selectedOperatorHandoffReceiptFixture(),
   );
@@ -18002,6 +18011,12 @@ test("session card and markdown include role credential URLs and tokens", async 
       (item) => item.id === "local-admin-spine-terminal-batches",
     ).nextActionHandoffPair,
     nextActionHandoffPairFixture(),
+  );
+  assert.deepEqual(
+    adminSpineReadiness.localDevelopmentSpine.checks.find(
+      (item) => item.id === "local-admin-spine-terminal-batches",
+    ).selectedLocalDependencyTerminalReceipt,
+    selectedLocalDependencyTerminalReceiptFixture(),
   );
   assert.deepEqual(
     adminSpineReadiness.localDevelopmentSpine.checks.find(
@@ -18017,6 +18032,7 @@ test("session card and markdown include role credential URLs and tokens", async 
       diagnostic.evidence,
       diagnostic.batchCount,
       diagnostic.nextActionHandoffPairStatus,
+      diagnostic.selectedLocalDependencyTerminalReceiptStatus,
       diagnostic.selectedOperatorHandoffReceiptStatus,
     ]),
     [
@@ -18026,6 +18042,7 @@ test("session card and markdown include role credential URLs and tokens", async 
         "terminal-receipts",
         "target/dev-test-game/admin-spine-terminal-batches.json",
         3,
+        "passed",
         "passed",
         "not_applicable",
       ],
@@ -27175,6 +27192,8 @@ function adminSpineTerminalBatchesFixture() {
       terminalValidationCount: 1,
     },
     nextActionHandoffPair: nextActionHandoffPairFixture(),
+    selectedLocalDependencyTerminalReceipt:
+      selectedLocalDependencyTerminalReceiptFixture(),
     selectedOperatorHandoffReceipt: selectedOperatorHandoffReceiptFixture(),
     terminalValidations: [
       {
@@ -27216,6 +27235,40 @@ function nextActionHandoffPairFixture() {
 
 function selectedOperatorHandoffReceiptFixture() {
   return buildSelectedOperatorHandoffTerminalReceipt();
+}
+
+function selectedLocalDependencyTerminalReceiptFixture() {
+  const check = localReadinessDependencyCheckFor(
+    localProofGraphAdminRoleHandoffsCheckId,
+  );
+  return {
+    id: "selected-local-dependency-terminal-receipt",
+    status: "passed",
+    reason: "release-readiness-local-check-missing",
+    proofBoundary:
+      "Local admin spine terminal receipt for the next-action-selected missing local readiness dependency.",
+    sourceArtifacts: {
+      nextAction: nextActionPath,
+      nextActionAdminProof: nextActionAdminProofPath,
+    },
+    selectedLocalDependency: {
+      id: check.id,
+      status: check.status,
+      command: check.recovery.command,
+      requiredEvidence: check.recovery.requiredEvidence,
+      buildSlice: check.recovery.buildSlice,
+      proofTarget: check.recovery.proofTarget,
+      roleUrl: check.recovery.roleUrl,
+    },
+    assertions: [
+      "canonical next-action selected a missing local readiness dependency",
+      "selected local dependency carries a recovery command",
+      "selected local dependency carries a proof target",
+      "selected local dependency carries a seeded admin role URL",
+    ],
+    releaseReady: false,
+    productionReady: false,
+  };
 }
 
 function selectedOperatorHandoffReceiptPassedFixture() {

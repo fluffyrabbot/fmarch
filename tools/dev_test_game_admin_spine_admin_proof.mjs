@@ -90,6 +90,10 @@ await runAdminAuditProof({
     const requiredTerminalValidationIds = adminSpineTerminalValidationIds(
       source.adminSpineTerminalBatches,
     );
+    const requiredSelectedLocalDependencyRows =
+      adminSpineSelectedLocalDependencyTerminalReceiptRows(
+        source.adminSpineTerminalBatches,
+      );
     return await proveAdminAuditDetail({
       browser,
       frontendBaseUrl,
@@ -105,6 +109,20 @@ await runAdminAuditProof({
       requiredAdminSpineTerminalValidationStatuses: Object.fromEntries(
         requiredTerminalValidationIds.map((id) => [id, "passed"]),
       ),
+      requiredSelectedLocalDependencyTerminalReceiptRows:
+        requiredSelectedLocalDependencyRows,
+      requiredSelectedLocalDependencyTerminalReceiptRowStatuses:
+        Object.fromEntries(
+          requiredSelectedLocalDependencyRows.map((id) => [
+            id,
+            id === "receipt"
+              ? source.adminSpineTerminalBatches
+                  ?.selectedLocalDependencyTerminalReceipt?.status
+              : source.adminSpineTerminalBatches
+                  ?.selectedLocalDependencyTerminalReceipt
+                  ?.selectedLocalDependency?.status,
+          ]),
+        ),
     });
   },
   buildEvidence: ({ source, adminRoleSurface }) => ({
@@ -159,6 +177,9 @@ await runAdminAuditProof({
         id: validation.id,
         command: validation.command,
       })),
+      selectedLocalDependencyTerminalReceipt:
+        source.adminSpineTerminalBatches?.selectedLocalDependencyTerminalReceipt ??
+        null,
       relatedAuditIds: requiredRelatedLinks,
     },
     adminRoleSurface,
@@ -199,6 +220,19 @@ function adminSpineTerminalValidationIds(terminalBatches) {
   return adminSpineTerminalValidations(terminalBatches).map(
     (validation) => validation.id,
   );
+}
+
+function adminSpineSelectedLocalDependencyTerminalReceiptRows(terminalBatches) {
+  const receipt = terminalBatches?.selectedLocalDependencyTerminalReceipt;
+  if (receipt === null || typeof receipt !== "object") {
+    return [];
+  }
+  return [
+    "receipt",
+    ...(receipt.selectedLocalDependency === undefined
+      ? []
+      : ["selected-local-dependency"]),
+  ];
 }
 
 export function assertAdminSpineAdminProof(evidence) {

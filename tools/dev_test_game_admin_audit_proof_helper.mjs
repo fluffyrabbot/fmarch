@@ -552,6 +552,8 @@ export async function proveAdminAuditDetail({
   requiredPhaseLocalNextActionDrilldowns = [],
   requiredSelectedOperatorHandoffTerminalReceiptRows = [],
   requiredSelectedOperatorHandoffTerminalReceiptRowStatuses = {},
+  requiredSelectedLocalDependencyTerminalReceiptRows = [],
+  requiredSelectedLocalDependencyTerminalReceiptRowStatuses = {},
   requiredHostedIdentityOperatorGate = null,
   requiredHostedIdentityProviderBoundary = null,
   requiredHostedIdentityRoleSurfaceContractDiffStatus = null,
@@ -1019,6 +1021,22 @@ export async function proveAdminAuditDetail({
         prefix: "admin-audit-selected-operator-handoff-terminal",
         ids: Object.keys(
           requiredSelectedOperatorHandoffTerminalReceiptRowStatuses,
+        ),
+      });
+    const visibleSelectedLocalDependencyTerminalReceiptRows =
+      await waitForRows({
+        page,
+        prefix: "admin-audit-selected-local-dependency-terminal",
+        ids: requiredSelectedLocalDependencyTerminalReceiptRows,
+        expectedStatuses:
+          requiredSelectedLocalDependencyTerminalReceiptRowStatuses,
+      });
+    const visibleSelectedLocalDependencyTerminalReceiptRowStatuses =
+      await readRowStatuses({
+        page,
+        prefix: "admin-audit-selected-local-dependency-terminal",
+        ids: Object.keys(
+          requiredSelectedLocalDependencyTerminalReceiptRowStatuses,
         ),
       });
     const requiredHostedIdentityOperatorGateIds =
@@ -1881,6 +1899,19 @@ export async function proveAdminAuditDetail({
         : {
             visibleSelectedOperatorHandoffTerminalReceiptRowStatuses:
               visibleSelectedOperatorHandoffTerminalReceiptRowStatuses,
+          }),
+      ...(visibleSelectedLocalDependencyTerminalReceiptRows.length === 0
+        ? {}
+        : {
+            visibleSelectedLocalDependencyTerminalReceiptRows:
+              visibleSelectedLocalDependencyTerminalReceiptRows,
+          }),
+      ...(Object.keys(visibleSelectedLocalDependencyTerminalReceiptRowStatuses)
+        .length === 0
+        ? {}
+        : {
+            visibleSelectedLocalDependencyTerminalReceiptRowStatuses:
+              visibleSelectedLocalDependencyTerminalReceiptRowStatuses,
           }),
       ...(visibleHostedIdentityOperatorGate.length === 0
         ? {}

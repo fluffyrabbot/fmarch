@@ -206,11 +206,14 @@ export function nextActionAdminProofCase({
           phaseLocalNextActionSnapshotsForProofGraph(source.proofGraph),
         requiredEvidenceArtifact: {
           artifact: defaultNextActionPath,
-          requiredText: [
-            "dev-test-game-next-action",
-            source.nextAction.nextAction.command,
-            source.nextAction.nextAction.reason,
-          ],
+          requiredText:
+            nextActionRelativePath === defaultNextActionPath
+              ? [
+                  "dev-test-game-next-action",
+                  source.nextAction.nextAction.command,
+                  source.nextAction.nextAction.reason,
+                ]
+              : ["dev-test-game-next-action"],
         },
         requiredHostedIdentityOperatorGate:
           requiredHostedIdentityOperatorGateForNextAction(source.nextAction),

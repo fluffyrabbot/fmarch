@@ -2299,6 +2299,7 @@ test("admin route data exposes local admin spine proof as a native audit row", a
       localAdminAuditHandoffCheckIds.spineManifest,
       "next-action-sequence-handoff",
       "selected-operator-handoff-terminal-receipt",
+      "selected-local-dependency-terminal-receipt",
     ],
   );
   assert.deepEqual(adminSpine.relatedLinks, [
@@ -2321,6 +2322,8 @@ test("admin route data exposes local admin spine proof as a native audit row", a
     spineManifestInspectHref: localAdminAuditRoleUrl(localAdminAuditIds.spineManifest, { game: "midsummer" }),
     nextActionHandoffPair: nextActionHandoffPairFixture(),
     selectedOperatorHandoffReceipt: selectedOperatorHandoffReceiptFixture(),
+    selectedLocalDependencyTerminalReceipt:
+      normalizedSelectedLocalDependencyTerminalReceiptFixture(),
     releaseReady: false,
     productionReady: false,
   });
@@ -2338,7 +2341,7 @@ test("admin local admin spine detail data carries aggregate proof rows", async (
   assert.equal(data.status, "available");
   assert.equal(data.surfaceHeader.title, "Local admin spine");
   assert.equal(data.audit.id, localAdminAuditIds.adminSpine);
-  assert.equal(data.audit.checks.length, 15);
+  assert.equal(data.audit.checks.length, 16);
   assert.equal(data.audit.batches.length, 5);
   assert.equal(data.audit.terminalValidations.length, 1);
   assert.deepEqual(
@@ -2461,6 +2464,7 @@ test("admin local admin spine detail data carries aggregate proof rows", async (
       [localAdminAuditHandoffCheckIds.spineManifest, "passed"],
       ["next-action-sequence-handoff", "passed:passed"],
       ["selected-operator-handoff-terminal-receipt", "not_applicable"],
+      ["selected-local-dependency-terminal-receipt", "passed"],
     ],
   );
   assert.deepEqual(
@@ -2501,7 +2505,76 @@ test("admin local admin spine detail data carries aggregate proof rows", async (
           ],
         ],
       ],
+      [
+        "selected-local-dependency-terminal-receipt",
+        [
+          [
+            "receipt",
+            [
+              ["status", "passed", true],
+              ["id", "selected-local-dependency-terminal-receipt", false],
+              ["reason", "release-readiness-local-check-missing", false],
+              [
+                "proofBoundary",
+                selectedLocalDependencyTerminalReceiptFixture().proofBoundary,
+                false,
+              ],
+              [
+                "sourceNextAction",
+                "target/dev-test-game/next-action.json",
+                false,
+              ],
+              [
+                "sourceNextActionAdminProof",
+                "target/dev-test-game/next-action-admin-proof.json",
+                false,
+              ],
+            ],
+          ],
+          [
+            "selected-local-dependency",
+            [
+              ["status", "missing", true],
+              ["id", "local-proof-graph-admin-role-handoffs", false],
+              ["command", LOCAL_PROOF_GRAPH_COMMAND, false],
+              [
+                "requiredEvidence",
+                proofGraphHandoffLocalCheckFixture().requiredEvidence,
+                false,
+              ],
+              [
+                "buildSlice",
+                proofGraphHandoffLocalCheckFixture().buildSlice,
+                false,
+              ],
+              [
+                "proofTarget",
+                proofGraphHandoffLocalCheckFixture().proofTarget,
+                false,
+              ],
+              [
+                "roleUrl",
+                proofGraphHandoffLocalCheckFixture().roleUrl,
+                false,
+              ],
+            ],
+          ],
+        ],
+      ],
     ],
+  );
+  const selectedLocalDependencySection = data.audit.artifactSummarySections.find(
+    (section) => section.id === "selected-local-dependency-terminal-receipt",
+  );
+  const selectedLocalDependencyRoleUrl =
+    selectedLocalDependencySection.rows[1].values.find(
+      (value) => value.id === "roleUrl",
+    );
+  assert.equal(
+    selectedLocalDependencyRoleUrl.href,
+    localAdminAuditRoleUrl(localAdminAuditIds.proofGraph, {
+      game: "midsummer",
+    }),
   );
   assert.equal(
     data.audit.checks.find((check) => check.id === "core-loop").rerunCommand,
@@ -10731,6 +10804,8 @@ function adminSpineTerminalBatchesFixture() {
       terminalValidationCount: 1,
     },
     nextActionHandoffPair: nextActionHandoffPairFixture(),
+    selectedLocalDependencyTerminalReceipt:
+      selectedLocalDependencyTerminalReceiptFixture(),
     selectedOperatorHandoffReceipt: selectedOperatorHandoffReceiptFixture(),
     terminalValidations: [
       {
@@ -10823,6 +10898,44 @@ function nextActionHandoffPairFixture() {
 
 function selectedOperatorHandoffReceiptFixture() {
   return buildSelectedOperatorHandoffTerminalReceipt();
+}
+
+function selectedLocalDependencyTerminalReceiptFixture() {
+  const localCheck = proofGraphHandoffLocalCheckFixture();
+  return {
+    id: "selected-local-dependency-terminal-receipt",
+    status: "passed",
+    reason: "release-readiness-local-check-missing",
+    proofBoundary:
+      "Local admin spine terminal receipt for the next-action-selected missing local readiness dependency.",
+    sourceArtifacts: {
+      nextAction: "target/dev-test-game/next-action.json",
+      nextActionAdminProof: "target/dev-test-game/next-action-admin-proof.json",
+    },
+    selectedLocalDependency: {
+      id: localCheck.id,
+      status: localCheck.status,
+      command: LOCAL_PROOF_GRAPH_COMMAND,
+      requiredEvidence: localCheck.requiredEvidence,
+      buildSlice: localCheck.buildSlice,
+      proofTarget: localCheck.proofTarget,
+      roleUrl: localCheck.roleUrl,
+    },
+    assertions: [
+      "canonical next-action selected a missing local readiness dependency",
+      "selected local dependency carries a recovery command",
+      "selected local dependency carries a proof target",
+      "selected local dependency carries a seeded admin role URL",
+    ],
+    releaseReady: false,
+    productionReady: false,
+  };
+}
+
+function normalizedSelectedLocalDependencyTerminalReceiptFixture() {
+  const { releaseReady, productionReady, ...receipt } =
+    selectedLocalDependencyTerminalReceiptFixture();
+  return receipt;
 }
 
 function hostedHandoffChecklistRowsForAssertion(rows) {

@@ -162,6 +162,9 @@ import {
   ADMIN_ROUTE_CONTRACT,
 } from "./admin-route-contract.mjs";
 
+const selectedLocalDependencyTerminalReceiptId =
+  "selected-local-dependency-terminal-receipt";
+
 export { ADMIN_ROUTE_CONTRACT };
 
 export const LOCAL_PLAYER_RECOVERY_AUDIT_LANE_IDS = playerRecoveryAuditLaneIds;
@@ -521,6 +524,81 @@ function selectedOperatorHandoffTerminalReceiptSummarySections(receipt) {
                   {
                     id: "command",
                     text: receipt.readinessRelatedLink.command,
+                  },
+                ],
+              },
+            ]),
+      ],
+    }),
+  ];
+}
+
+function selectedLocalDependencyTerminalReceiptSummarySections(
+  receipt,
+  { game } = {},
+) {
+  if (receipt === null) {
+    return [];
+  }
+  return [
+    buildArtifactSummarySection({
+      id: "selected-local-dependency-terminal-receipt",
+      heading: "Selected local dependency receipt",
+      rows: [
+        {
+          id: "receipt",
+          testId: "admin-audit-selected-local-dependency-terminal-receipt",
+          values: [
+            { id: "status", text: receipt.status, emphasized: true },
+            { id: "id", text: receipt.id },
+            { id: "reason", text: receipt.reason },
+            { id: "proofBoundary", text: receipt.proofBoundary },
+            { id: "sourceNextAction", text: receipt.sourceArtifacts.nextAction },
+            {
+              id: "sourceNextActionAdminProof",
+              text: receipt.sourceArtifacts.nextActionAdminProof,
+            },
+          ],
+        },
+        ...(receipt.selectedLocalDependency === undefined
+          ? []
+          : [
+              {
+                id: "selected-local-dependency",
+                testId:
+                  "admin-audit-selected-local-dependency-terminal-selected-local-dependency",
+                values: [
+                  {
+                    id: "status",
+                    text: receipt.selectedLocalDependency.status,
+                    emphasized: true,
+                  },
+                  { id: "id", text: receipt.selectedLocalDependency.id },
+                  {
+                    id: "command",
+                    text: receipt.selectedLocalDependency.command,
+                  },
+                  {
+                    id: "requiredEvidence",
+                    text: receipt.selectedLocalDependency.requiredEvidence,
+                  },
+                  {
+                    id: "buildSlice",
+                    text: receipt.selectedLocalDependency.buildSlice,
+                  },
+                  {
+                    id: "proofTarget",
+                    text: receipt.selectedLocalDependency.proofTarget,
+                  },
+                  {
+                    id: "roleUrl",
+                    text: receipt.selectedLocalDependency.roleUrl,
+                    href: seededRoleUrlToAdminHref(
+                      receipt.selectedLocalDependency.roleUrl,
+                      { game },
+                    ),
+                    testId:
+                      "admin-audit-selected-local-dependency-terminal-role-url",
                   },
                 ],
               },
@@ -7759,6 +7837,12 @@ export function normalizeLocalAdminSpineAudit(
           terminalBatchProof.selectedOperatorHandoffReceipt,
         )
       : null;
+  const terminalSelectedLocalDependencyReceipt =
+    validAdminSpineTerminalBatchProof(terminalBatchProof)
+      ? normalizeSelectedLocalDependencyTerminalReceipt(
+          terminalBatchProof.selectedLocalDependencyTerminalReceipt,
+        )
+      : null;
   const batches = [...aggregateBatches, ...terminalBatches].map((batch, index) =>
     normalizeAdminSpineBatch(batch, index),
   );
@@ -7829,6 +7913,14 @@ export function normalizeLocalAdminSpineAudit(
                 status: terminalSelectedOperatorHandoffReceipt.status,
               }),
             ]),
+        ...(terminalSelectedLocalDependencyReceipt === null
+          ? []
+          : [
+              Object.freeze({
+                id: terminalSelectedLocalDependencyReceipt.id,
+                status: terminalSelectedLocalDependencyReceipt.status,
+              }),
+            ]),
       ],
     ),
     batches: Object.freeze(batches),
@@ -7855,13 +7947,70 @@ export function normalizeLocalAdminSpineAudit(
             selectedOperatorHandoffReceipt:
               terminalSelectedOperatorHandoffReceipt,
           }),
+      ...(terminalSelectedLocalDependencyReceipt === null
+        ? {}
+        : {
+            selectedLocalDependencyTerminalReceipt:
+              terminalSelectedLocalDependencyReceipt,
+          }),
       releaseReady: adminSpineProof.releaseReady === true,
       productionReady: adminSpineProof.productionReady === true,
     }),
-    artifactSummarySections:
-      selectedOperatorHandoffTerminalReceiptSummarySections(
+    artifactSummarySections: [
+      ...selectedOperatorHandoffTerminalReceiptSummarySections(
         terminalSelectedOperatorHandoffReceipt,
       ),
+      ...selectedLocalDependencyTerminalReceiptSummarySections(
+        terminalSelectedLocalDependencyReceipt,
+        { game },
+      ),
+    ],
+  });
+}
+
+function normalizeSelectedLocalDependencyTerminalReceipt(receipt) {
+  if (
+    receipt === null ||
+    typeof receipt !== "object" ||
+    receipt.id !== selectedLocalDependencyTerminalReceiptId ||
+    !["passed", "not_applicable"].includes(receipt.status) ||
+    receipt.sourceArtifacts === null ||
+    typeof receipt.sourceArtifacts !== "object" ||
+    !Array.isArray(receipt.assertions)
+  ) {
+    return null;
+  }
+  return Object.freeze({
+    id: receipt.id,
+    status: receipt.status,
+    reason: String(receipt.reason ?? ""),
+    proofBoundary: String(receipt.proofBoundary ?? ""),
+    sourceArtifacts: Object.freeze({
+      nextAction: String(receipt.sourceArtifacts.nextAction ?? ""),
+      nextActionAdminProof: String(
+        receipt.sourceArtifacts.nextActionAdminProof ?? "",
+      ),
+    }),
+    assertions: Object.freeze(receipt.assertions.map((item) => String(item))),
+    ...(receipt.selectedLocalDependency === undefined
+      ? {}
+      : {
+          selectedLocalDependency: Object.freeze({
+            id: String(receipt.selectedLocalDependency.id ?? ""),
+            status: String(receipt.selectedLocalDependency.status ?? ""),
+            command: String(receipt.selectedLocalDependency.command ?? ""),
+            requiredEvidence: String(
+              receipt.selectedLocalDependency.requiredEvidence ?? "",
+            ),
+            buildSlice: String(
+              receipt.selectedLocalDependency.buildSlice ?? "",
+            ),
+            proofTarget: String(
+              receipt.selectedLocalDependency.proofTarget ?? "",
+            ),
+            roleUrl: String(receipt.selectedLocalDependency.roleUrl ?? ""),
+          }),
+        }),
   });
 }
 
