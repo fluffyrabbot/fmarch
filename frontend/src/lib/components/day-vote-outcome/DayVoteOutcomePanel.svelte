@@ -28,7 +28,7 @@
       <p class="fm-eyebrow">{view.boundary.status}</p>
       <h2>{view.heading}</h2>
     </div>
-    <span data-testid={view.boundary.commandTestId}>{view.boundary.command}</span>
+    <span class="fm-chip" data-testid={view.boundary.commandTestId}>{view.boundary.command}</span>
   </header>
 
   {#if view.latest === null}
@@ -72,19 +72,6 @@
     display: grid;
     gap: 12px;
     grid-template-columns: minmax(0, 1fr) auto;
-  }
-
-  .day-vote-outcome-panel header span {
-    align-items: center;
-    background: var(--fm-surface-muted);
-    border: 1px solid var(--fm-line-strong);
-    border-radius: 8px;
-    color: var(--fm-ink-muted);
-    display: inline-flex;
-    font-size: 13px;
-    font-weight: 700;
-    min-block-size: 36px;
-    padding-inline: 12px;
   }
 
   .day-vote-outcome-panel__summary,

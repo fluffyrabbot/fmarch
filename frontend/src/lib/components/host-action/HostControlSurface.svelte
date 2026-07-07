@@ -51,10 +51,10 @@
     >
       <header>
         <div>
-          <p class="host-console-critical-path__eyebrow">{control.authority}</p>
+          <p class="fm-eyebrow">{control.authority}</p>
           <h2>{control.label}</h2>
         </div>
-        <span>{control.boundary}</span>
+        <span class="fm-chip">{control.boundary}</span>
       </header>
       <p>{control.value}</p>
       <p class={control.classes.boundary}>

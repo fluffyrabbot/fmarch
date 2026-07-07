@@ -279,7 +279,7 @@
         data-testid={inviteTarget.panelTestId}
       >
         <header>
-          <p class="host-console-critical-path__eyebrow">{inviteTarget.eyebrow}</p>
+          <p class="fm-eyebrow">{inviteTarget.eyebrow}</p>
           <strong data-testid={inviteTarget.targetTestId}>{inviteTarget.targetLabel}</strong>
         </header>
         <form method="POST" action={inviteTarget.action}>

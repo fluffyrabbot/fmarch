@@ -17,7 +17,7 @@
   aria-labelledby={view.root.ariaLabelledby}
   data-component={view.root.data.component}
 >
-  <p class="host-console-critical-path__eyebrow">{view.eyebrow}</p>
+  <p class="fm-eyebrow">{view.eyebrow}</p>
   <h2 id={view.headingId}>{view.heading}</h2>
   <p class={view.statusClassName}>{view.summary}</p>
   <dl class={view.factsClassName}>

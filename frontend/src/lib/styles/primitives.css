@@ -53,6 +53,56 @@
   line-height: 1.3;
 }
 
+/* ---- chip: quiet boundary/context readout beside a section heading ---- */
+
+.fm-chip {
+  align-items: center;
+  background: var(--fm-surface-muted);
+  border: 1px solid var(--fm-line-strong);
+  border-radius: 8px;
+  color: var(--fm-ink-muted);
+  display: inline-flex;
+  font-size: 13px;
+  font-weight: 700;
+  min-block-size: 36px;
+  overflow-wrap: anywhere;
+  padding-inline: 12px;
+}
+
+/* ---- facts: dl of small labeled readouts (phase summary, checkpoints) ---- */
+
+.fm-facts {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  margin: 0;
+}
+
+.fm-facts > div {
+  min-inline-size: 0;
+}
+
+.fm-facts--ruled > div {
+  border-block-start: 2px solid var(--fm-line-heavy);
+  padding-block-start: 10px;
+}
+
+.fm-facts dt {
+  color: var(--fm-ink-muted);
+  font-size: 13px;
+  font-weight: 700;
+  margin: 0 0 4px;
+  text-transform: uppercase;
+}
+
+.fm-facts dd {
+  color: var(--fm-ink);
+  font-size: 16px;
+  line-height: 1.35;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
 /* ---- activity ledger: player receipts, admin activity, host activity ---- */
 
 .fm-ledger {

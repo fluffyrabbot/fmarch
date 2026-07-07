@@ -21,4 +21,4 @@
   });
 </script>
 
-<AppStatusStrip {view} eyebrowClassName="host-console-critical-path__eyebrow" />
+<AppStatusStrip {view} />

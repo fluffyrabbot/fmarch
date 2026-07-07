@@ -20,12 +20,12 @@
 >
   <header>
     <div>
-      <p class="host-console-critical-path__eyebrow">
+      <p class="fm-eyebrow">
         {view.boundary.status}
       </p>
       <h2>{view.heading}</h2>
     </div>
-    <span data-testid={view.boundary.commandTestId}>
+    <span class="fm-chip" data-testid={view.boundary.commandTestId}>
       {view.boundary.command}
     </span>
   </header>

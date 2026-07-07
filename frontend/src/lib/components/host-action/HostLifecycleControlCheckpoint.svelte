@@ -18,7 +18,7 @@
   >
     <header>
       <div>
-        <p class="host-console-critical-path__eyebrow">{checkpoint.proofCheckId}</p>
+        <p class="fm-eyebrow">{checkpoint.proofCheckId}</p>
         <h2>{checkpoint.heading}</h2>
       </div>
       <AppStatus
@@ -28,7 +28,7 @@
       />
     </header>
 
-    <dl>
+    <dl class="fm-facts">
       {#each [
         checkpoint.phase,
         checkpoint.slot,
@@ -36,7 +36,7 @@
         checkpoint.deadlineAffordance,
         checkpoint.recovery,
       ] as item}
-        <div data-testid={item.testId}>
+        <div class="fm-well" data-testid={item.testId}>
           <dt>{item.label}</dt>
           <dd>{item.value}</dd>
         </div>

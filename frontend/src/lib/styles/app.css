@@ -330,7 +330,7 @@ body {
   overflow-wrap: anywhere;
 }
 
-.fm-status-strip__item p:not(.fm-eyebrow):not(.host-console-critical-path__eyebrow):not(.fm-status) {
+.fm-status-strip__item p:not(.fm-eyebrow):not(.fm-status) {
   color: var(--fm-ink-muted);
   font-size: 14px;
   line-height: 1.35;

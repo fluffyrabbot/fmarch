@@ -1,6 +1,6 @@
 export const HOST_PHASE_SUMMARY_CONTRACT = Object.freeze({
   rootClassName: "host-console-critical-path__phase",
-  factsClassName: "host-console-critical-path__facts",
+  factsClassName: "fm-facts fm-facts--ruled",
   statusClassName: "host-console-critical-path__status",
   componentName: "host-phase-summary",
 });
