@@ -386,6 +386,7 @@ import {
 import {
   assertNextActionAdminProof,
   proofGraphDestinationSummaryDriftNextActionFixture,
+  selectedProofGraphDependencyDefinitionsForNextAction,
 } from "./dev_test_game_next_action_admin_proof.mjs";
 import {
   applySelectedGraphDestinationFixture,
@@ -8308,6 +8309,66 @@ test("selected proof graph dependency handoffs are table-driven across hosted la
       testCase.label,
     );
   }
+});
+
+test("next-action admin proof includes real-hosted observability dependency handoff", () => {
+  const edge = {
+    from: "admin-proof:hosted-ops-signals",
+    to: realHostedObservabilityRoleSurfaceDrilldown.proofGraphNodeId,
+    relationship: "feeds-real-hosted-observability-handoff",
+    command: `npm run ${devTestGameRealHostedObservabilityHandoffCommand}`,
+    proofTarget: devTestGameRealHostedObservabilityHandoffPath,
+    roleUrl:
+      "/admin/audit/local-real-hosted-observability-handoff?game=<seeded-game>",
+    status: "blocked",
+    source: "hosted-ops-signals",
+  };
+  const nextAction = {
+    nextAction: {
+      unproven: {
+        id: "real-hosted-observability-and-operations",
+        proofGraphNodeId:
+          realHostedObservabilityRoleSurfaceDrilldown.proofGraphNodeId,
+        roleUrl:
+          "/admin/audit/local-real-hosted-observability-handoff?game=<seeded-game>",
+      },
+    },
+  };
+  const handoffs = selectedProofGraphDependencyHandoffSummaries({
+    nextAction,
+    proofGraph: { edges: [edge] },
+    dependencies: selectedProofGraphDependencyDefinitionsForNextAction(
+      nextAction,
+    ),
+  });
+
+  assert.deepEqual(handoffs, [
+    {
+      linkId:
+        "edge:admin-proof:hosted-ops-signals:feeds-real-hosted-observability-handoff:admin-proof:real-hosted-observability-handoff",
+      auditId: localAdminAuditIds.proofGraph,
+      requiredCheckIds: [
+        "edge:admin-proof:hosted-ops-signals:feeds-real-hosted-observability-handoff:admin-proof:real-hosted-observability-handoff",
+        "admin-proof:hosted-ops-signals",
+        "admin-proof:real-hosted-observability-handoff",
+      ],
+      requiredCheckStatuses: {
+        "edge:admin-proof:hosted-ops-signals:feeds-real-hosted-observability-handoff:admin-proof:real-hosted-observability-handoff":
+          [
+            "feeds-real-hosted-observability-handoff",
+            "source hosted-ops-signals",
+            "status blocked",
+            `command npm run ${devTestGameRealHostedObservabilityHandoffCommand}`,
+            `proofTarget ${devTestGameRealHostedObservabilityHandoffPath}`,
+            "roleUrl /admin/audit/local-real-hosted-observability-handoff?game=<seeded-game>",
+          ].join(" "),
+      },
+      requiredRelatedLinkIds: [
+        "admin-proof:hosted-ops-signals",
+        "admin-proof:real-hosted-observability-handoff",
+      ],
+    },
+  ]);
 });
 
 test("spine runner enforces hosted identity graph preconditions before a step", async () => {

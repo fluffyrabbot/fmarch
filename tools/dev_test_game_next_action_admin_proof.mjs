@@ -100,6 +100,9 @@ import {
 import {
   visibleBlockedOperatorPacket,
 } from "./dev_test_game_hosted_operator_packet.mjs";
+import {
+  realHostedObservabilityRoleSurfaceDrilldown,
+} from "./dev_test_game_real_hosted_observability_handoff_cases.mjs";
 export {
   proofGraphDestinationSummaryDriftNextActionAdminProofPath,
   proofGraphDestinationSummaryDriftNextActionPath,
@@ -1945,10 +1948,11 @@ function relatedHandoffsForNextAction({ nextAction, proofGraph, hostedMatrix }) 
   ].filter((handoff) => handoff !== null);
 }
 
-function selectedProofGraphDependencyDefinitionsForNextAction(nextAction) {
+export function selectedProofGraphDependencyDefinitionsForNextAction(nextAction) {
   return [
     hostedMatrixTransitionDependency(),
     hostedIdentityProofGraphDependency(nextAction),
+    realHostedObservabilityProofGraphDependency(),
   ].filter((dependency) => dependency !== null);
 }
 
@@ -1977,6 +1981,22 @@ function hostedIdentityProofGraphDependency(nextAction) {
     selectedProofGraphNodeId: "admin-proof:hosted-identity-evidence",
     roleUrlIncludes: "/admin/audit/local-hosted-identity-evidence",
     edges: dependency.edges,
+  };
+}
+
+function realHostedObservabilityProofGraphDependency() {
+  return {
+    selectedProofGraphNodeId:
+      realHostedObservabilityRoleSurfaceDrilldown.proofGraphNodeId,
+    roleUrlIncludes:
+      "/admin/audit/local-real-hosted-observability-handoff",
+    edges: [
+      {
+        from: "admin-proof:hosted-ops-signals",
+        to: realHostedObservabilityRoleSurfaceDrilldown.proofGraphNodeId,
+        relationship: "feeds-real-hosted-observability-handoff",
+      },
+    ],
   };
 }
 
