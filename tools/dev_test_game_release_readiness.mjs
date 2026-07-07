@@ -1508,6 +1508,8 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         hostedConcurrentRaceMatrixAdminProofEvidence.hostedEvidenceStatus,
       realHostedDeploymentStatus:
         hostedConcurrentRaceMatrixAdminProofEvidence.realHostedDeploymentStatus,
+      hostedEvidenceTransition:
+        hostedConcurrentRaceMatrixAdminProofEvidence.hostedEvidenceTransition,
       adminRoleSurface: hostedConcurrentRaceMatrixAdminProofEvidence,
     });
   }
@@ -6577,6 +6579,11 @@ export function validateDevTestGameHostedConcurrentRaceMatrixAdminProof(
       "hosted concurrent race matrix admin proof missing requested evidence row",
     );
   }
+  if (proof.generatedFrom?.hostedEvidenceTransition === undefined) {
+    throw new Error(
+      "hosted concurrent race matrix admin proof missing hosted evidence transition",
+    );
+  }
   return {
     status: "passed",
     path:
@@ -6592,6 +6599,43 @@ export function validateDevTestGameHostedConcurrentRaceMatrixAdminProof(
     realHostedDeploymentStatus: String(
       proof.generatedFrom?.realHostedDeploymentStatus ?? "",
     ),
+    hostedEvidenceTransition: {
+      source: String(proof.generatedFrom.hostedEvidenceTransition.source ?? ""),
+      sourcePath:
+        proof.generatedFrom.hostedEvidenceTransition.sourcePath === null ||
+        proof.generatedFrom.hostedEvidenceTransition.sourcePath === undefined
+          ? null
+          : String(proof.generatedFrom.hostedEvidenceTransition.sourcePath),
+      status: String(proof.generatedFrom.hostedEvidenceTransition.status ?? ""),
+      mode: String(proof.generatedFrom.hostedEvidenceTransition.mode ?? ""),
+      realHostedEvidenceStatus: String(
+        proof.generatedFrom.hostedEvidenceTransition.realHostedEvidenceStatus ??
+          "",
+      ),
+      realHostedDeploymentStatus: String(
+        proof.generatedFrom.hostedEvidenceTransition.realHostedDeploymentStatus ??
+          "",
+      ),
+      externalEvidencePath:
+        proof.generatedFrom.hostedEvidenceTransition.externalEvidencePath ===
+          null ||
+        proof.generatedFrom.hostedEvidenceTransition.externalEvidencePath ===
+          undefined
+          ? null
+          : String(
+              proof.generatedFrom.hostedEvidenceTransition.externalEvidencePath,
+            ),
+      frontendBaseUrl:
+        proof.generatedFrom.hostedEvidenceTransition.frontendBaseUrl === null ||
+        proof.generatedFrom.hostedEvidenceTransition.frontendBaseUrl === undefined
+          ? null
+          : String(proof.generatedFrom.hostedEvidenceTransition.frontendBaseUrl),
+      apiBaseUrl:
+        proof.generatedFrom.hostedEvidenceTransition.apiBaseUrl === null ||
+        proof.generatedFrom.hostedEvidenceTransition.apiBaseUrl === undefined
+          ? null
+          : String(proof.generatedFrom.hostedEvidenceTransition.apiBaseUrl),
+    },
     ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
   };
 }

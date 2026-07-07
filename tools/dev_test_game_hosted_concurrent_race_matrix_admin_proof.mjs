@@ -61,6 +61,12 @@ const requiredStaleConflictMilestones =
 function hostedMatrixSummaryRows(hostedMatrix) {
   const missingInputs =
     hostedMatrix.hostedHandoffChecklist?.blockedReceipt?.missingRequiredInputs ?? [];
+  const missingInputStatus =
+    missingInputs.length === 0
+      ? "0 missing hosted inputs\nLocal hosted-like matrix evidence cannot satisfy real hosted race evidence."
+      : `${missingInputs.length} missing hosted inputs\n${missingInputs.join(
+          ", ",
+        )}\nLocal hosted-like matrix evidence cannot satisfy real hosted race evidence.`;
   return [
     {
       id: "coverage",
@@ -84,9 +90,7 @@ function hostedMatrixSummaryRows(hostedMatrix) {
     },
     {
       id: "missing-inputs",
-      status: `${missingInputs.length} missing hosted inputs\n${missingInputs.join(
-        ", ",
-      )}\nLocal hosted-like matrix evidence cannot satisfy real hosted race evidence.`,
+      status: missingInputStatus,
     },
   ];
 }
@@ -98,6 +102,40 @@ function hostedMatrixSummaryStatuses(hostedMatrix) {
       summary.status,
     ]),
   );
+}
+
+function hostedEvidenceTransition(hostedMatrix) {
+  return {
+    source: String(hostedMatrix.externalHostedEvidence?.targetSource ?? "unknown"),
+    sourcePath:
+      hostedMatrix.externalHostedEvidence?.targetSourcePath === null ||
+      hostedMatrix.externalHostedEvidence?.targetSourcePath === undefined
+        ? null
+        : String(hostedMatrix.externalHostedEvidence.targetSourcePath),
+    status: String(hostedMatrix.summary?.hostedEvidenceStatus ?? "unknown"),
+    mode: String(hostedMatrix.summary?.hostedEvidenceMode ?? "unknown"),
+    realHostedEvidenceStatus: String(
+      hostedMatrix.summary?.realHostedEvidenceStatus ?? "unknown",
+    ),
+    realHostedDeploymentStatus: String(
+      hostedMatrix.summary?.realHostedDeploymentStatus ?? "unknown",
+    ),
+    externalEvidencePath:
+      hostedMatrix.externalHostedEvidence?.evidencePath === null ||
+      hostedMatrix.externalHostedEvidence?.evidencePath === undefined
+        ? null
+        : String(hostedMatrix.externalHostedEvidence.evidencePath),
+    frontendBaseUrl:
+      hostedMatrix.externalHostedEvidence?.frontendBaseUrl === null ||
+      hostedMatrix.externalHostedEvidence?.frontendBaseUrl === undefined
+        ? null
+        : String(hostedMatrix.externalHostedEvidence.frontendBaseUrl),
+    apiBaseUrl:
+      hostedMatrix.externalHostedEvidence?.apiBaseUrl === null ||
+      hostedMatrix.externalHostedEvidence?.apiBaseUrl === undefined
+        ? null
+        : String(hostedMatrix.externalHostedEvidence.apiBaseUrl),
+  };
 }
 
 function hostedMatrixHandoffPath(hostedMatrix) {
@@ -129,9 +167,12 @@ export function hostedConcurrentRaceMatrixAdminProofCase() {
       proofRun: assertDevTestGameProofRun(await readJson(proofRunPath)),
     }),
     prove: async ({ browser, frontendBaseUrl, source }) => {
-      const hostedHandoffInputValues = hostedEvidenceHandoffInputValues(
-        source.hostedMatrix.realHostedEvidenceInputs,
-      );
+      const hostedHandoffInputValues =
+        source.hostedMatrix.hostedHandoffChecklist === undefined
+          ? {}
+          : hostedEvidenceHandoffInputValues(
+              source.hostedMatrix.realHostedEvidenceInputs,
+            );
       const hostedHandoffBlockedCheckRequiredEvidence =
         hostedEvidenceHandoffBlockedCheckRequiredEvidence(
           source.hostedMatrix.hostedHandoffChecklist?.blockedChecks ?? [],
@@ -245,12 +286,16 @@ export function hostedConcurrentRaceMatrixAdminProofCase() {
           source.hostedMatrix.summary.localDemoHostedEvidenceStatus,
         realHostedEvidenceStatus:
           source.hostedMatrix.summary.realHostedEvidenceStatus,
+        hostedEvidenceTransition: hostedEvidenceTransition(source.hostedMatrix),
         realHostedEvidenceInputIds: requiredRealHostedEvidenceInputs,
         hostedHandoffInputIds:
           source.hostedMatrix.hostedHandoffChecklist?.inputIds ?? [],
-        hostedHandoffInputValues: hostedEvidenceHandoffInputValues(
-          source.hostedMatrix.realHostedEvidenceInputs,
-        ),
+        hostedHandoffInputValues:
+          source.hostedMatrix.hostedHandoffChecklist === undefined
+            ? {}
+            : hostedEvidenceHandoffInputValues(
+                source.hostedMatrix.realHostedEvidenceInputs,
+              ),
         hostedHandoffBlockedCheckIds:
           source.hostedMatrix.hostedHandoffChecklist?.blockedCheckIds ?? [],
         hostedHandoffBlockedCheckRequiredEvidence:
@@ -366,6 +411,7 @@ export function assertHostedConcurrentRaceMatrixAdminProof(evidence) {
     rowName: "hosted matrix summary status",
     surfaceKey: "visibleHostedMatrixSummaryStatuses",
   });
+  assertHostedEvidenceTransition(evidence);
   assertVisibleAdminRoleSurfaceRows({
     adminRoleSurface: evidence.adminRoleSurface,
     rowIds: evidence.generatedFrom?.relatedAuditIds,
@@ -467,4 +513,63 @@ export function assertHostedConcurrentRaceMatrixAdminProof(evidence) {
     proofName: "hosted concurrent race matrix admin proof",
   });
   return evidence;
+}
+
+function assertHostedEvidenceTransition(evidence) {
+  const transition = evidence.generatedFrom?.hostedEvidenceTransition;
+  if (transition === undefined) {
+    throw new Error(
+      "hosted concurrent race matrix admin proof missing hosted evidence transition",
+    );
+  }
+  const visibleHostedEvidenceSummary =
+    evidence.adminRoleSurface?.visibleHostedMatrixSummaryStatuses?.[
+      "hosted-evidence"
+    ];
+  const expectedVisibleSummary = `${transition.realHostedEvidenceStatus}\n${transition.realHostedDeploymentStatus}\n${transition.mode}`;
+  if (visibleHostedEvidenceSummary !== expectedVisibleSummary) {
+    throw new Error(
+      "hosted concurrent race matrix admin proof did not prove hosted evidence transition summary",
+    );
+  }
+  if (
+    transition.status !== evidence.generatedFrom?.hostedEvidenceStatus ||
+    transition.mode !== evidence.generatedFrom?.hostedEvidenceMode ||
+    transition.realHostedEvidenceStatus !==
+      evidence.generatedFrom?.realHostedEvidenceStatus ||
+    transition.realHostedDeploymentStatus !==
+      evidence.generatedFrom?.realHostedDeploymentStatus
+  ) {
+    throw new Error(
+      "hosted concurrent race matrix admin proof transition drifted from generated status fields",
+    );
+  }
+  if (transition.source === "hosted-evidence-lane") {
+    if (
+      transition.status !== "passed" ||
+      transition.mode !== "real-hosted" ||
+      transition.realHostedEvidenceStatus !== "passed" ||
+      transition.realHostedDeploymentStatus !== "passed" ||
+      typeof transition.sourcePath !== "string" ||
+      transition.sourcePath.trim() === "" ||
+      typeof transition.externalEvidencePath !== "string" ||
+      transition.externalEvidencePath.trim() === ""
+    ) {
+      throw new Error(
+        "hosted concurrent race matrix admin proof lane-derived transition is incomplete",
+      );
+    }
+  }
+  if (transition.source === "not_configured") {
+    if (
+      transition.status !== "not_configured" ||
+      transition.mode !== "not_configured" ||
+      transition.realHostedEvidenceStatus !== "unproven" ||
+      transition.realHostedDeploymentStatus !== "unproven"
+    ) {
+      throw new Error(
+        "hosted concurrent race matrix admin proof not-configured transition drifted",
+      );
+    }
+  }
 }

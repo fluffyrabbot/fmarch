@@ -17171,6 +17171,7 @@ test("session card and markdown include role credential URLs and tokens", async 
     /stale-client conflict messages/,
   );
   assert.equal(hostedMatrix.externalHostedEvidence.status, "not_configured");
+  assert.equal(hostedMatrix.externalHostedEvidence.targetSource, "not_configured");
   assert(
     hostedMatrix.hostedLikeTarget.roleSurfaces.every(
       (surface) =>
@@ -17440,7 +17441,32 @@ test("session card and markdown include role credential URLs and tokens", async 
   assert.equal(laneHostedTarget.frontendBaseUrl, laneFrontendBaseUrl);
   assert.equal(laneHostedTarget.apiBaseUrl, laneApiBaseUrl);
   assert.equal(laneHostedTarget.evidencePath, passedLaneExternalEvidencePath);
+  assert.equal(laneHostedTarget.targetSource, "hosted-evidence-lane");
+  assert.equal(
+    laneHostedTarget.targetSourcePath,
+    devTestGameHostedEvidenceLanePath,
+  );
   assert.equal(laneHostedTarget.evidence.proof, passedLaneExternalEvidence.proof);
+  const hostedMatrixFromPassedLane =
+    buildDevTestGameHostedConcurrentRaceMatrixEvidence(raceCoverageReadiness, {
+      raceCoverage,
+      proofRun,
+      session: card,
+      generatedAt: "2026-06-26T00:00:00.000Z",
+      hostedTarget: laneHostedTarget,
+    });
+  assert.equal(
+    hostedMatrixFromPassedLane.externalHostedEvidence.targetSource,
+    "hosted-evidence-lane",
+  );
+  assert.equal(
+    hostedMatrixFromPassedLane.externalHostedEvidence.targetSourcePath,
+    devTestGameHostedEvidenceLanePath,
+  );
+  assert.equal(
+    hostedMatrixFromPassedLane.summary.realHostedDeploymentStatus,
+    "passed",
+  );
   await writeFile(
     devTestGameHostedEvidenceLanePath,
     `${JSON.stringify(hostedEvidenceLaneFixture({ status: "blocked" }), null, 2)}\n`,
@@ -17564,6 +17590,10 @@ test("session card and markdown include role credential URLs and tokens", async 
     "passed",
   );
   assert.equal(
+    hostedMatrixWithProducedExternalEvidence.externalHostedEvidence.targetSource,
+    "direct-env",
+  );
+  assert.equal(
     hostedMatrixWithProducedExternalEvidence.summary.hostedEvidenceStatus,
     "passed",
   );
@@ -17611,6 +17641,21 @@ test("session card and markdown include role credential URLs and tokens", async 
           hostedMatrixStaleConflictMilestoneCases()[0].id,
     ),
   );
+  const hostedMatrixAdminReadinessCheck =
+    hostedMatrixReadiness.localDevelopmentSpine.checks.find(
+      (item) => item.id === "local-hosted-concurrent-race-matrix-admin-surface",
+    );
+  assert.deepEqual(hostedMatrixAdminReadinessCheck.hostedEvidenceTransition, {
+    source: "not_configured",
+    sourcePath: null,
+    status: "not_configured",
+    mode: "not_configured",
+    realHostedEvidenceStatus: "unproven",
+    realHostedDeploymentStatus: "unproven",
+    externalEvidencePath: null,
+    frontendBaseUrl: null,
+    apiBaseUrl: null,
+  });
   assert.equal(
     hostedMatrixReadiness.releaseReadiness.unproven.some(
       (item) => item.id === "hosted-concurrent-race-matrix",
@@ -26090,6 +26135,17 @@ function hostedConcurrentRaceMatrixAdminProofFixture() {
       hostedEvidenceMode: "not_configured",
       localDemoHostedEvidenceStatus: "not_applicable",
       realHostedEvidenceStatus: "unproven",
+      hostedEvidenceTransition: {
+        source: "not_configured",
+        sourcePath: null,
+        status: "not_configured",
+        mode: "not_configured",
+        realHostedEvidenceStatus: "unproven",
+        realHostedDeploymentStatus: "unproven",
+        externalEvidencePath: null,
+        frontendBaseUrl: null,
+        apiBaseUrl: null,
+      },
       hostedMatrixSummaryIds: summaryRows.map((row) => row.id),
       hostedMatrixSummaryStatuses: Object.fromEntries(
         summaryRows.map((row) => [row.id, row.status]),

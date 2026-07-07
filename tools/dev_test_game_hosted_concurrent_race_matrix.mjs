@@ -460,7 +460,12 @@ export function hostedMatrixTargetFromEnv(env = process.env) {
   const frontendBaseUrl = optionalEnv(env.FMARCH_HOSTED_MATRIX_FRONTEND_URL);
   const apiBaseUrl = optionalEnv(env.FMARCH_HOSTED_MATRIX_API_URL);
   const evidencePath = optionalEnv(env.FMARCH_HOSTED_MATRIX_EVIDENCE_PATH);
+  const targetSource =
+    frontendBaseUrl === null && apiBaseUrl === null && evidencePath === null
+      ? "not_configured"
+      : "direct-env";
   return {
+    targetSource,
     frontendBaseUrl,
     apiBaseUrl,
     evidencePath,
@@ -515,6 +520,8 @@ async function hostedMatrixTargetFromEvidenceLane(env) {
     return null;
   }
   return {
+    targetSource: "hosted-evidence-lane",
+    targetSourcePath: path.relative(repoRoot, absoluteLanePath),
     frontendBaseUrl: lane.target.frontendBaseUrl,
     apiBaseUrl: lane.target.apiBaseUrl,
     evidencePath: lane.hostedEvidence.externalEvidencePath,
@@ -526,10 +533,14 @@ function buildExternalHostedEvidence(hostedTarget, promoted) {
   const frontendBaseUrl = hostedTarget?.frontendBaseUrl ?? null;
   const apiBaseUrl = hostedTarget?.apiBaseUrl ?? null;
   const evidencePath = hostedTarget?.evidencePath ?? null;
+  const targetSource = hostedTarget?.targetSource ?? "direct-env";
+  const targetSourcePath = hostedTarget?.targetSourcePath ?? null;
   const source = hostedTarget?.evidence;
   if (frontendBaseUrl === null && apiBaseUrl === null && evidencePath === null) {
     return {
       status: "not_configured",
+      targetSource: "not_configured",
+      targetSourcePath: null,
       hostedEvidenceMode: "not_configured",
       syntheticExternalTarget: false,
       frontendBaseUrl: null,
@@ -552,6 +563,8 @@ function buildExternalHostedEvidence(hostedTarget, promoted) {
   if (source === undefined) {
     return {
       status: "configured_unproven",
+      targetSource,
+      targetSourcePath,
       hostedEvidenceMode: "configured_unproven",
       syntheticExternalTarget: false,
       frontendBaseUrl,
@@ -577,6 +590,8 @@ function buildExternalHostedEvidence(hostedTarget, promoted) {
       : "local_or_loopback";
   return {
     status: "passed",
+    targetSource,
+    targetSourcePath,
     hostedEvidenceMode: syntheticExternalTarget
       ? "synthetic-demo"
       : targetKind === "external"
