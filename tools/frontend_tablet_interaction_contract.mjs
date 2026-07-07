@@ -517,10 +517,16 @@ function assertHostActionBeforeStatusFloor(component) {
 function assertHostControlBeforeStatusReadouts(route) {
   const controlIndex = route.indexOf("<HostControlSurface");
   assert.notEqual(controlIndex, -1, "host route must render HostControlSurface");
+  const workQueueIndex = route.indexOf("<HostWorkQueueStrip");
+  assert.notEqual(workQueueIndex, -1, "host route must render <HostWorkQueueStrip");
+  assert.equal(
+    workQueueIndex < controlIndex,
+    true,
+    "HostWorkQueueStrip floats above HostControlSurface so pending work leads the console",
+  );
   for (const marker of [
     "<HostCommandActivity",
     "<HostPhaseSummary",
-    "<HostWorkQueueStrip",
     "<HostVotecountPanel",
   ]) {
     const index = route.indexOf(marker);

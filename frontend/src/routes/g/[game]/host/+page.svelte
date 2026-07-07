@@ -266,9 +266,36 @@
       {hostPrompts}
     />
 
+    <HostWorkQueueStrip queues={data.workQueues} />
+
     <HostLifecycleControlCheckpoint
       checkpoint={hostLifecycleControlCheckpoint}
     />
+
+    <HostControlSurface
+      groups={moderatorActionGroups}
+      {commandStatuses}
+      commandContext={data.commandContext}
+      onDispatch={handleDispatch}
+    />
+
+    <HostVotecountPanel
+      boundary={data.votecountBoundary}
+      rows={votecount}
+    />
+
+    <DayVoteOutcomePanel
+      outcomes={dayVoteOutcomes}
+      boundary={data.dayVoteOutcomeBoundary}
+      rootTestId="host-day-vote-outcome"
+    />
+
+    <HostCommandActivity
+      {commandStatuses}
+      {commandOutcomes}
+    />
+
+    <HostPhaseSummary phase={data.phase} {projection} />
 
     {#each [
       [inviteTargets.player, form?.playerInvite],
@@ -352,32 +379,5 @@
         {/if}
       </section>
     {/each}
-
-    <HostControlSurface
-      groups={moderatorActionGroups}
-      {commandStatuses}
-      commandContext={data.commandContext}
-      onDispatch={handleDispatch}
-    />
-
-    <HostCommandActivity
-      {commandStatuses}
-      {commandOutcomes}
-    />
-
-    <HostPhaseSummary phase={data.phase} {projection} />
-
-    <HostWorkQueueStrip queues={data.workQueues} />
-
-    <HostVotecountPanel
-      boundary={data.votecountBoundary}
-      rows={votecount}
-    />
-
-    <DayVoteOutcomePanel
-      outcomes={dayVoteOutcomes}
-      boundary={data.dayVoteOutcomeBoundary}
-      rootTestId="host-day-vote-outcome"
-    />
   {/if}
 </main>
