@@ -392,9 +392,14 @@ import {
   applySelectedGraphDestinationFixture,
   selectedGraphDestinationFixture,
   selectedGraphDestinationFixtureSubject,
+  selectedGraphDestinationLocalCheckIds,
   selectedGraphDestinationRequiredCheckText,
   selectedNextActionGraphDestinationCases,
 } from "./dev_test_game_next_action_graph_destination_assertions.mjs";
+import {
+  selectedProductionFeatureGraphCheckRows,
+  selectedProofGraphNodeCheckRows,
+} from "../frontend/src/lib/app/selected-proof-graph-destinations.mjs";
 import {
   proofGraphDestinationSummaryDriftNextActionAdminProofPath,
   proofGraphDestinationSummaryDriftNextActionPath,
@@ -9394,6 +9399,45 @@ test("next-action admin proof fixture proves proof graph next-action handoff dep
   assert.throws(
     () => assertNextActionAdminProof(proofMissingTraceRow),
     /next-action admin proof local readiness dependency trace missing visible check: local-readiness-dependency-local-proof-graph-next-action-handoff/,
+  );
+});
+
+test("selected graph destination cases share local row descriptors", () => {
+  const selectedProofGraphCase = selectedNextActionGraphDestinationCases.find(
+    (destinationCase) => destinationCase.id === "selected-proof-graph-node",
+  );
+  const selectedProofGraphSubject = selectedGraphDestinationFixtureSubject({
+    destinationCase: selectedProofGraphCase,
+  });
+  assert.deepEqual(
+    selectedGraphDestinationLocalCheckIds({
+      destinationCase: selectedProofGraphCase,
+      subject: selectedProofGraphSubject,
+    }),
+    selectedProofGraphNodeCheckRows({
+      selectedProofGraphNode: selectedProofGraphSubject,
+      selectedProofGraphNodeStatus: "",
+    }).map((row) => row.id),
+  );
+
+  const selectedProductionFeatureCase =
+    selectedNextActionGraphDestinationCases.find(
+      (destinationCase) =>
+        destinationCase.id === "selected-production-feature-graph",
+    );
+  const selectedProductionFeatureSubject =
+    selectedGraphDestinationFixtureSubject({
+      destinationCase: selectedProductionFeatureCase,
+      browserProofCommand: devTestGameLiveProofCommand,
+    });
+  assert.deepEqual(
+    selectedGraphDestinationLocalCheckIds({
+      destinationCase: selectedProductionFeatureCase,
+      subject: selectedProductionFeatureSubject,
+    }),
+    selectedProductionFeatureGraphCheckRows({
+      selectedProductionFeatureGraph: selectedProductionFeatureSubject,
+    }).map((row) => row.id),
   );
 });
 

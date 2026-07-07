@@ -2,6 +2,13 @@ import {
   localAdminAuditIds,
   localAdminAuditRoleUrl,
 } from "./dev_test_game_admin_audit_surface_ids.mjs";
+import {
+  selectedProductionFeatureGraphCheckRows,
+  selectedProductionFeatureGraphDestinationCheckIds,
+  selectedProductionFeatureGraphDestinationCheckText,
+  selectedProofGraphDestinationTextTokens,
+  selectedProofGraphNodeCheckRows,
+} from "../frontend/src/lib/app/selected-proof-graph-destinations.mjs";
 
 export const selectedNextActionGraphDestinationCases = Object.freeze([
   Object.freeze({
@@ -24,10 +31,11 @@ export const selectedNextActionGraphDestinationCases = Object.freeze([
     subjectFromGeneratedFrom: (generatedFrom) =>
       selectedProofGraphNodeFromGeneratedFrom(generatedFrom),
     destinationLinkId: () => "selected-proof-graph-node",
-    localCheckIds: () => [
-      "selected-proof-graph-node",
-      "selected-proof-graph-destination",
-    ],
+    localCheckIds: (subject) =>
+      selectedProofGraphNodeCheckRows({
+        selectedProofGraphNode: subject,
+        selectedProofGraphNodeStatus: "",
+      }).map((row) => row.id),
     localRelatedLinkIds: () => ["selected-proof-graph-node"],
     destinationCheckIds: (subject) => [String(subject?.id ?? "")],
     destinationCheckText: (subject) => ({
@@ -84,38 +92,15 @@ export const selectedNextActionGraphDestinationCases = Object.freeze([
     subjectFromGeneratedFrom: (generatedFrom) =>
       selectedProductionFeatureGraphFromGeneratedFrom(generatedFrom),
     destinationLinkId: (subject) => String(subject?.nodeId ?? ""),
-    localCheckIds: () => [
-      "selected-production-feature-graph-node",
-      "selected-production-feature-graph-edge",
-      "selected-production-feature-graph-browser-workbench",
-      "selected-production-feature-graph-coverage-decision",
-    ],
+    localCheckIds: (subject) =>
+      selectedProductionFeatureGraphCheckRows({
+        selectedProductionFeatureGraph: subject,
+      }).map((row) => row.id),
     localRelatedLinkIds: (subject) => [String(subject?.nodeId ?? "")],
-    destinationCheckIds: (subject) => {
-      const coverageDecisionTokens = coverageDecisionTextTokens(
-        subject?.coverageDecision,
-      );
-      return [
-        String(subject?.nodeId ?? ""),
-        ...(coverageDecisionTokens.length === 0
-          ? []
-          : [productionFeatureGraphCoverageDecisionCheckId(subject)]),
-      ];
-    },
-    destinationCheckText: (subject) => {
-      const coverageDecisionTokens = coverageDecisionTextTokens(
-        subject?.coverageDecision,
-      );
-      const coverageDecisionCheckId =
-        productionFeatureGraphCoverageDecisionCheckId(subject);
-      return {
-        [String(subject?.nodeId ?? "")]:
-          selectedProductionFeatureGraphDestinationTextTokens(subject),
-        ...(coverageDecisionTokens.length === 0
-          ? {}
-          : { [coverageDecisionCheckId]: coverageDecisionTokens }),
-      };
-    },
+    destinationCheckIds: (subject) =>
+      selectedProductionFeatureGraphDestinationCheckIds(subject),
+    destinationCheckText: (subject) =>
+      selectedProductionFeatureGraphDestinationCheckText(subject),
     destinationRelatedLinkIds: (subject) => [String(subject?.nodeId ?? "")],
     proofMissingMessage:
       "next-action admin proof missing selected production feature graph destination",
@@ -127,11 +112,6 @@ export const selectedNextActionGraphDestinationCases = Object.freeze([
       "next-action admin proof did not prove selected production feature graph destination",
   }),
 ]);
-
-export function productionFeatureGraphCoverageDecisionCheckId(selectedGraph) {
-  const nodeId = String(selectedGraph?.nodeId ?? "");
-  return nodeId === "" ? "" : `coverage-decision:${nodeId}`;
-}
 
 export function selectedGraphDestinationSubject({
   destinationCase,
@@ -358,27 +338,14 @@ export function assertSelectedProductionFeatureGraphDestinationText({
   selectedProductionFeatureGraph,
   errorMessage = "next-action admin proof did not prove selected production feature graph destination text",
 }) {
-  const nodeId = String(selectedProductionFeatureGraph?.nodeId ?? "");
-  const coverageDecisionCheckId = productionFeatureGraphCoverageDecisionCheckId(
-    selectedProductionFeatureGraph,
-  );
-  const coverageDecisionTokens = coverageDecisionTextTokens(
-    selectedProductionFeatureGraph?.coverageDecision,
-  );
   assertSelectedGraphDestinationText({
     graphDestination,
-    requiredCheckIds: [
-      nodeId,
-      ...(coverageDecisionTokens.length === 0 ? [] : [coverageDecisionCheckId]),
-    ],
-    requiredCheckText: {
-      [nodeId]: selectedProductionFeatureGraphDestinationTextTokens(
-        selectedProductionFeatureGraph,
-      ),
-      ...(coverageDecisionTokens.length === 0
-        ? {}
-        : { [coverageDecisionCheckId]: coverageDecisionTokens }),
-    },
+    requiredCheckIds: selectedProductionFeatureGraphDestinationCheckIds(
+      selectedProductionFeatureGraph,
+    ),
+    requiredCheckText: selectedProductionFeatureGraphDestinationCheckText(
+      selectedProductionFeatureGraph,
+    ),
     errorMessage,
   });
 }
@@ -429,39 +396,4 @@ function assertSelectedGraphDestinationText({
       throw new Error(errorMessage);
     }
   }
-}
-
-function selectedProofGraphDestinationTextTokens(selectedProofGraphNode) {
-  return [
-    String(selectedProofGraphNode?.roleUrl ?? "").trim(),
-    String(
-      selectedProofGraphNode?.graphProofCommand ??
-        selectedProofGraphNode?.proofCommand ??
-        "",
-    ).trim(),
-  ].filter((token) => token !== "");
-}
-
-function selectedProductionFeatureGraphDestinationTextTokens(selectedGraph) {
-  return [
-    String(selectedGraph?.nodeId ?? "").trim(),
-    String(selectedGraph?.roleUrl ?? "").trim(),
-    String(selectedGraph?.targetRoleUrl ?? "").trim(),
-    String(selectedGraph?.browserProofCommand ?? "").trim(),
-    String(selectedGraph?.browserWorkbench?.requiredEvidence ?? "").trim(),
-  ].filter((token) => token !== "");
-}
-
-function coverageDecisionTextTokens(coverageDecision) {
-  if (coverageDecision === null || typeof coverageDecision !== "object") {
-    return [];
-  }
-  return [
-    String(coverageDecision.kind ?? "").trim(),
-    String(coverageDecision.proofCommand ?? "").trim() ||
-      String(coverageDecision.recoveryCommand ?? "").trim() ||
-      String(coverageDecision.reason ?? "").trim() ||
-      String(coverageDecision.prerequisiteCheckId ?? "").trim() ||
-      String(coverageDecision.nextDecisionTrigger ?? "").trim(),
-  ].filter((token) => token !== "");
 }

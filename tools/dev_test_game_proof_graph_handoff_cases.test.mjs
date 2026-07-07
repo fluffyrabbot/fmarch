@@ -399,6 +399,17 @@ test("proof graph base edges share fixed topology and seed recovery metadata", (
         command: devTestGameHostedEvidenceLaneRealCaptureAdminProofCommand,
       },
       {
+        from: "admin-proof:hosted-ops-signals",
+        to: "admin-proof:real-hosted-observability-handoff",
+        relationship: "feeds-real-hosted-observability-handoff",
+        command: realHostedObservabilityHandoffCase().command,
+        proofTarget: realHostedObservabilityHandoffCase().proofTarget,
+        roleUrl:
+          "/admin/audit/local-real-hosted-observability-handoff?game=midsummer",
+        status: "blocked",
+        source: "hosted-ops-signals",
+      },
+      {
         from: "hosted-evidence-lane-real-capture-admin-proof",
         to: "proof-graph",
         relationship: "records",

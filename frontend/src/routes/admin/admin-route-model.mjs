@@ -22,6 +22,13 @@ import {
   selectedProofGraphDependencyEdgeRelatedLinkDescriptor,
 } from "../../lib/app/selected-proof-graph-dependencies.mjs";
 import {
+  coverageDecisionCheckRows,
+  selectedProductionFeatureGraphCheckRows,
+  selectedProductionFeatureGraphRelatedLinkDescriptor,
+  selectedProofGraphNodeCheckRows,
+  selectedProofGraphNodeRelatedLinkDescriptor,
+} from "../../lib/app/selected-proof-graph-destinations.mjs";
+import {
   hardeningAuditLaneIds,
 } from "../../../../tools/dev_test_game_hardening_scenarios.mjs";
 import {
@@ -4789,39 +4796,6 @@ function proofGraphReceiptArtifactCheckRows({ parentId, artifacts }) {
   return normalizeProofGraphReceiptArtifactRows({ parentId, artifacts });
 }
 
-function coverageDecisionCheckRows({
-  parentId,
-  coverageDecision,
-  rowId = `coverage-decision:${parentId}`,
-}) {
-  const status = coverageDecisionStatus(coverageDecision);
-  return status === ""
-    ? []
-    : [
-        Object.freeze({
-          id: rowId,
-          status,
-        }),
-      ];
-}
-
-function coverageDecisionStatus(coverageDecision) {
-  if (coverageDecision === null || typeof coverageDecision !== "object") {
-    return "";
-  }
-  const kind = String(coverageDecision.kind ?? "");
-  if (kind === "") {
-    return "";
-  }
-  const detail =
-    String(coverageDecision.proofCommand ?? "").trim() ||
-    String(coverageDecision.recoveryCommand ?? "").trim() ||
-    String(coverageDecision.reason ?? "").trim() ||
-    String(coverageDecision.prerequisiteCheckId ?? "").trim() ||
-    String(coverageDecision.nextDecisionTrigger ?? "").trim();
-  return detail === "" ? kind : `${kind}:${detail}`;
-}
-
 function normalizeNormalizedEvidenceObjects(objects) {
   return Object.freeze(
     (Array.isArray(objects) ? objects : [])
@@ -5825,14 +5799,13 @@ export function normalizeLocalNextActionRelatedLinks({
       ? []
       : [
           Object.freeze({
-            id: "selected-proof-graph-node",
-            label: selectedProofGraphNode.id,
+            ...selectedProofGraphNodeRelatedLinkDescriptor(
+              selectedProofGraphNode,
+            ),
             href: adminAuditInspectHref({
               game,
               audit: localAdminAuditIds.proofGraph,
             }),
-            status: selectedProofGraphNode.status,
-            command: selectedProofGraphNode.proofCommand,
           }),
         ]),
     ...selectedProofGraphDependencyRelatedLinks({
@@ -5849,14 +5822,13 @@ export function normalizeLocalNextActionRelatedLinks({
       ? []
       : [
           Object.freeze({
-            id: selectedProductionFeatureGraph.nodeId,
-            label: selectedProductionFeatureGraph.nodeId,
+            ...selectedProductionFeatureGraphRelatedLinkDescriptor(
+              selectedProductionFeatureGraph,
+            ),
             href: adminAuditInspectHref({
               game,
               audit: localAdminAuditIds.proofGraph,
             }),
-            status: selectedProductionFeatureGraph.status,
-            command: selectedProductionFeatureGraph.browserProofCommand,
           }),
         ]),
     ...(unprovenRoleUrl === ""
@@ -5973,20 +5945,10 @@ export function normalizeLocalNextActionSelectedProofGraphCheckRows({
   selectedProofGraphNode = null,
   selectedProofGraphNodeStatus = "",
 } = {}) {
-  return selectedProofGraphNode === null
-    ? Object.freeze([])
-    : Object.freeze([
-        Object.freeze({
-          id: "selected-proof-graph-node",
-          status: selectedProofGraphNodeStatus,
-        }),
-        Object.freeze({
-          id: "selected-proof-graph-destination",
-          status: `${selectedProofGraphNode.id}:${
-            selectedProofGraphNode.auditId || "unknown"
-          }`,
-        }),
-      ]);
+  return selectedProofGraphNodeCheckRows({
+    selectedProofGraphNode,
+    selectedProofGraphNodeStatus,
+  });
 }
 
 export function normalizeLocalNextActionSelectedSpineCheckRows({
@@ -6042,43 +6004,9 @@ export function normalizeLocalNextActionSelectedSpineCheckRows({
 export function normalizeLocalNextActionSelectedProductionFeatureGraphCheckRows({
   selectedProductionFeatureGraph = null,
 } = {}) {
-  const edgeFrom = String(
-    selectedProductionFeatureGraph?.edgeFrom ??
-      selectedProductionFeatureGraph?.edge?.from ??
-      "",
-  );
-  const edgeTo = String(
-    selectedProductionFeatureGraph?.edgeTo ??
-      selectedProductionFeatureGraph?.edge?.to ??
-      "",
-  );
-  return String(selectedProductionFeatureGraph?.nodeId ?? "") === ""
-    ? Object.freeze([])
-    : Object.freeze([
-        Object.freeze({
-          id: "selected-production-feature-graph-node",
-          status: `${selectedProductionFeatureGraph.nodeId}:${selectedProductionFeatureGraph.status}`,
-        }),
-        Object.freeze({
-          id: "selected-production-feature-graph-edge",
-          status: `${edgeFrom}->${edgeTo}`,
-        }),
-        ...(selectedProductionFeatureGraph.browserWorkbench == null
-          ? []
-          : [
-              Object.freeze({
-                id: "selected-production-feature-graph-browser-workbench",
-                status:
-                  selectedProductionFeatureGraph.browserWorkbench
-                    .requiredEvidence,
-              }),
-            ]),
-        ...coverageDecisionCheckRows({
-          parentId: "selected-production-feature-graph",
-          rowId: "selected-production-feature-graph-coverage-decision",
-          coverageDecision: selectedProductionFeatureGraph.coverageDecision,
-        }),
-      ]);
+  return selectedProductionFeatureGraphCheckRows({
+    selectedProductionFeatureGraph,
+  });
 }
 
 function normalizeBrowserWorkbench(browserWorkbench) {

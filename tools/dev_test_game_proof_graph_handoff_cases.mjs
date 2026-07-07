@@ -519,7 +519,7 @@ export function devTestGameProofGraphBaseEdges({
       from: "admin-proof:hosted-ops-signals",
       to: "admin-proof:real-hosted-observability-handoff",
       relationship: "feeds-real-hosted-observability-handoff",
-      command: `npm run ${realHostedObservabilityHandoffCase().command}`,
+      command: realHostedObservabilityHandoffCase().command,
       proofTarget: realHostedObservabilityHandoffCase().proofTarget,
       roleUrl: localAdminAuditRoleUrl(
         localAdminAuditIds.realHostedObservabilityHandoff,
