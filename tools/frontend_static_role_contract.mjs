@@ -2203,7 +2203,10 @@ function proveModeratorConfirmationCoverage({ actions }) {
         dispatched.push(event);
       });
       const closedView = controller.viewModel();
-      assert.equal(closedView.trigger.data.danger, "true");
+      assert.equal(
+        closedView.trigger.data.danger,
+        String(actionConfig.irreversible === true),
+      );
       assert.equal(closedView.trigger.ariaExpanded, "false");
 
       controller.activate();

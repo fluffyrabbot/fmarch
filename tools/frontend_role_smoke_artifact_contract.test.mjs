@@ -1015,7 +1015,7 @@ test("static role contract artifact records shared nav focus and route state mat
         "critical-host-action-trigger",
         true,
         "confirm-cancel",
-        "true",
+        "false",
       ],
       [
         "publish_votecount",
@@ -1029,7 +1029,7 @@ test("static role contract artifact records shared nav focus and route state mat
         "critical-host-action-trigger",
         true,
         "confirm-cancel",
-        "true",
+        "false",
       ],
       [
         "mark_dead",
