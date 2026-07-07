@@ -93,6 +93,16 @@ export function assertAdminAuditRelatedHandoff({
       throw new Error(`${name} handoff destination missing visible check: ${checkId}`);
     }
   }
+  for (const [checkId, expectedStatus] of Object.entries(
+    handoff.requiredCheckStatuses ?? {},
+  )) {
+    const visibleStatus = destination.visibleCheckStatuses?.[checkId] ?? "";
+    if (!visibleStatus.includes(String(expectedStatus))) {
+      throw new Error(
+        `${name} handoff destination visible check status drifted: ${checkId}`,
+      );
+    }
+  }
   for (const unprovenId of handoff.requiredUnprovenIds ?? []) {
     if (!destination.visibleUnproven?.includes(unprovenId)) {
       throw new Error(

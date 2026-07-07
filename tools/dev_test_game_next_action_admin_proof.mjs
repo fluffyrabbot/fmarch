@@ -160,7 +160,10 @@ export function nextActionAdminProofCase({
           source.nextAction,
           source.proofGraph,
         ),
-        requiredRelatedLinks: requiredRelatedLinksForNextAction(source.nextAction),
+        requiredRelatedLinks: requiredRelatedLinksForNextAction(
+          source.nextAction,
+          { proofGraph: source.proofGraph },
+        ),
         requiredHostedHandoffInputs: requiredHostedHandoffInputIdsForNextAction(
           source.nextAction,
         ),
@@ -1459,7 +1462,7 @@ function requiredChecksForNextAction(nextAction) {
   return checks;
 }
 
-function requiredRelatedLinksForNextAction(nextAction) {
+function requiredRelatedLinksForNextAction(nextAction, { proofGraph } = {}) {
   const proofGraphNodeId = nextAction.nextAction.unproven?.proofGraphNodeId;
   const selectedProductionFeatureGraphNodeId =
     nextAction.nextAction.unproven?.selectedProductionFeatureGraph?.nodeId;
@@ -1468,6 +1471,9 @@ function requiredRelatedLinksForNextAction(nextAction) {
     nextAction.nextAction.seedProofLaneCoverage?.roleUrl;
   const proofGraphDestinationSummary =
     nextAction.nextAction.proofGraphDestinationSummary;
+  const hostedMatrixTransitionEdgeLinkId =
+    hostedMatrixTransitionEdgeHandoffSummary({ nextAction, proofGraph })
+      ?.linkId;
   return [
     ...(typeof proofGraphNodeId === "string" && proofGraphNodeId.trim() !== ""
       ? ["selected-proof-graph-node"]
@@ -1478,6 +1484,10 @@ function requiredRelatedLinksForNextAction(nextAction) {
     ...(typeof selectedProductionFeatureGraphNodeId === "string" &&
     selectedProductionFeatureGraphNodeId.trim() !== ""
       ? [selectedProductionFeatureGraphNodeId]
+      : []),
+    ...(typeof hostedMatrixTransitionEdgeLinkId === "string" &&
+    hostedMatrixTransitionEdgeLinkId.trim() !== ""
+      ? [hostedMatrixTransitionEdgeLinkId]
       : []),
     ...(typeof localCheckId === "string" && localCheckId.trim() !== ""
       ? [localCheckId]
@@ -1923,9 +1933,62 @@ function selectedHostedIdentityOperatorCandidate(nextAction) {
 function relatedHandoffsForNextAction({ nextAction, proofGraph, hostedMatrix }) {
   return [
     ...selectedGraphDestinationHandoffSummaries({ nextAction, proofGraph }),
+    hostedMatrixTransitionEdgeHandoffSummary({ nextAction, proofGraph }),
     hostedIdentityEvidenceHandoffSummary({ nextAction }),
     hostedMatrixHandoffSummary({ nextAction, hostedMatrix }),
   ].filter((handoff) => handoff !== null);
+}
+
+function hostedMatrixTransitionEdgeHandoffSummary({ nextAction, proofGraph }) {
+  const unproven = nextAction.nextAction.unproven;
+  if (
+    unproven?.proofGraphNodeId !== "admin-proof:hosted-concurrent-race-matrix" ||
+    typeof unproven?.roleUrl !== "string" ||
+    !unproven.roleUrl.includes("/admin/audit/local-hosted-concurrent-race-matrix")
+  ) {
+    return null;
+  }
+  const edge = (proofGraph?.edges ?? []).find(
+    (candidate) =>
+      candidate.from === "admin-proof:hosted-evidence-lane" &&
+      candidate.to === "admin-proof:hosted-concurrent-race-matrix" &&
+      candidate.relationship === "feeds-hosted-matrix-transition",
+  );
+  if (edge === undefined) {
+    return null;
+  }
+  const edgeRowId = proofGraphEdgeCheckId(edge);
+  return {
+    linkId: edgeRowId,
+    auditId: localAdminAuditIds.proofGraph,
+    requiredCheckIds: [edgeRowId, edge.from, edge.to],
+    requiredCheckStatuses: {
+      [edgeRowId]: hostedMatrixTransitionEdgeStatus(edge),
+    },
+    requiredRelatedLinkIds: [edge.from, edge.to],
+  };
+}
+
+function hostedMatrixTransitionEdgeStatus(edge) {
+  const values = {
+    source: String(edge.source ?? ""),
+    status: String(edge.status ?? ""),
+    mode: String(edge.mode ?? ""),
+    realHostedEvidenceStatus: String(edge.realHostedEvidenceStatus ?? ""),
+    realHostedDeploymentStatus: String(
+      edge.realHostedDeploymentStatus ?? "",
+    ),
+    externalEvidencePath: String(edge.externalEvidencePath ?? ""),
+    command: String(edge.command ?? ""),
+    proofTarget: String(edge.proofTarget ?? ""),
+    roleUrl: String(edge.roleUrl ?? ""),
+  };
+  return [
+    String(edge.relationship ?? ""),
+    ...Object.entries(values).flatMap(([key, value]) =>
+      value.trim() === "" ? [] : [`${key} ${value}`],
+    ),
+  ].join(" ");
 }
 
 function hostedIdentityEvidenceHandoffSummary({ nextAction }) {

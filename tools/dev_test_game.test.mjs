@@ -25664,6 +25664,19 @@ function nextActionAdminProofFixture() {
     proofGraphDiagnosticSummaryTraceFixture();
   const phaseLocalNextActionSnapshots =
     phaseLocalNextActionGraphLinksFixture().snapshots;
+  const hostedMatrixTransitionEdgeRowId =
+    "edge:admin-proof:hosted-evidence-lane:feeds-hosted-matrix-transition:admin-proof:hosted-concurrent-race-matrix";
+  const hostedMatrixTransitionEdgeStatus = [
+    "feeds-hosted-matrix-transition",
+    "source not_configured",
+    "status not_configured",
+    "mode not_configured",
+    "realHostedEvidenceStatus unproven",
+    "realHostedDeploymentStatus unproven",
+    `command ${devTestGameHostedConcurrentRaceMatrixCommand}`,
+    `proofTarget ${devTestGameHostedConcurrentRaceMatrixPath}`,
+    "roleUrl /admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
+  ].join(" ");
   return {
     version: 1,
     proof: "dev-test-game-next-action-admin-proof",
@@ -25716,9 +25729,28 @@ function nextActionAdminProofFixture() {
           requiredRelatedLinkIds: ["admin-proof:hosted-concurrent-race-matrix"],
         },
         {
+          linkId: hostedMatrixTransitionEdgeRowId,
+          auditId: "local-proof-graph",
+          requiredCheckIds: [
+            hostedMatrixTransitionEdgeRowId,
+            "admin-proof:hosted-evidence-lane",
+            "admin-proof:hosted-concurrent-race-matrix",
+          ],
+          requiredCheckStatuses: {
+            [hostedMatrixTransitionEdgeRowId]: hostedMatrixTransitionEdgeStatus,
+          },
+          requiredRelatedLinkIds: [
+            "admin-proof:hosted-evidence-lane",
+            "admin-proof:hosted-concurrent-race-matrix",
+          ],
+        },
+        {
           linkId: "admin-proof:hosted-concurrent-race-matrix",
           auditId: "local-hosted-concurrent-race-matrix",
-          requiredCheckIds: [hostedMatrixAdminRequiredCheckIds[0]],
+          requiredCheckIds: [
+            hostedMatrixAdminRequiredCheckIds[0],
+            hostedMatrixAdminRequiredCheckIds.at(-1),
+          ],
           requiredCheckStatuses: {
             [hostedMatrixAdminRequiredCheckIds.at(-1)]: "unproven",
           },
@@ -25787,6 +25819,7 @@ function nextActionAdminProofFixture() {
       ],
       visibleRelatedLinks: [
         "selected-proof-graph-node",
+        hostedMatrixTransitionEdgeRowId,
         "admin-proof:hosted-concurrent-race-matrix",
       ],
       visibleHostedHandoffInputs: hostedHandoffChecklist.inputIds,
@@ -25852,11 +25885,34 @@ function nextActionAdminProofFixture() {
           visibleRelatedLinks: ["admin-proof:hosted-concurrent-race-matrix"],
         },
         {
+          linkId: hostedMatrixTransitionEdgeRowId,
+          auditId: "local-proof-graph",
+          detailRoleUrl: "/admin/audit/local-proof-graph?game=<seeded-game>",
+          visibleChecks: [
+            hostedMatrixTransitionEdgeRowId,
+            "admin-proof:hosted-evidence-lane",
+            "admin-proof:hosted-concurrent-race-matrix",
+          ],
+          visibleCheckStatuses: {
+            [hostedMatrixTransitionEdgeRowId]: hostedMatrixTransitionEdgeStatus,
+          },
+          visibleRelatedLinks: [
+            "admin-proof:hosted-evidence-lane",
+            "admin-proof:hosted-concurrent-race-matrix",
+          ],
+        },
+        {
           linkId: "admin-proof:hosted-concurrent-race-matrix",
           auditId: "local-hosted-concurrent-race-matrix",
           detailRoleUrl:
             "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
-          visibleChecks: [hostedMatrixAdminRequiredCheckIds[0]],
+          visibleChecks: [
+            hostedMatrixAdminRequiredCheckIds[0],
+            hostedMatrixAdminRequiredCheckIds.at(-1),
+          ],
+          visibleCheckStatuses: {
+            [hostedMatrixAdminRequiredCheckIds.at(-1)]: "unproven",
+          },
           visibleUnproven: [hostedMatrixRequestedEvidenceIds[0]],
           visibleRelatedLinks: hostedMatrixRelatedAuditIds,
         },

@@ -4674,6 +4674,16 @@ export function normalizeLocalProofGraphEdgeCheckRows(edge) {
 
 function localProofGraphEdgeCheckStatus(edge) {
   const relationship = String(edge?.relationship ?? "recorded");
+  const source = String(edge?.source ?? "").trim();
+  const status = String(edge?.status ?? "").trim();
+  const mode = String(edge?.mode ?? "").trim();
+  const realHostedEvidenceStatus = String(
+    edge?.realHostedEvidenceStatus ?? "",
+  ).trim();
+  const realHostedDeploymentStatus = String(
+    edge?.realHostedDeploymentStatus ?? "",
+  ).trim();
+  const externalEvidencePath = String(edge?.externalEvidencePath ?? "").trim();
   const command = String(edge?.command ?? "").trim();
   const firstMissingInputId = String(edge?.firstMissingInputId ?? "").trim();
   const roleUrl = String(edge?.roleUrl ?? "").trim();
@@ -4681,6 +4691,18 @@ function localProofGraphEdgeCheckStatus(edge) {
   const unprovenId = String(edge?.unprovenId ?? "").trim();
   return [
     relationship,
+    ...(source === "" ? [] : [`source ${source}`]),
+    ...(status === "" ? [] : [`status ${status}`]),
+    ...(mode === "" ? [] : [`mode ${mode}`]),
+    ...(realHostedEvidenceStatus === ""
+      ? []
+      : [`realHostedEvidenceStatus ${realHostedEvidenceStatus}`]),
+    ...(realHostedDeploymentStatus === ""
+      ? []
+      : [`realHostedDeploymentStatus ${realHostedDeploymentStatus}`]),
+    ...(externalEvidencePath === ""
+      ? []
+      : [`externalEvidencePath ${externalEvidencePath}`]),
     ...(firstMissingInputId === ""
       ? []
       : [`firstMissingInputId ${firstMissingInputId}`]),
@@ -5850,6 +5872,14 @@ export function normalizeLocalNextActionRelatedLinks({
             command: selectedProofGraphNode.proofCommand,
           }),
         ]),
+    ...hostedMatrixTransitionEdgeRelatedLinks({
+      game,
+      command,
+      actionStatus,
+      selectedProofGraphNode,
+      unproven,
+      unprovenRoleUrl,
+    }),
     ...(String(selectedProductionFeatureGraph?.nodeId ?? "") === ""
       ? []
       : [
@@ -5928,6 +5958,43 @@ export function normalizeLocalNextActionRelatedLinks({
           }),
         ]),
   ]);
+}
+
+function hostedMatrixTransitionEdgeRelatedLinks({
+  game,
+  command,
+  actionStatus,
+  selectedProofGraphNode,
+  unproven,
+  unprovenRoleUrl,
+}) {
+  if (
+    selectedProofGraphNode?.id !== "admin-proof:hosted-concurrent-race-matrix" ||
+    typeof unprovenRoleUrl !== "string" ||
+    !unprovenRoleUrl.includes("/admin/audit/local-hosted-concurrent-race-matrix")
+  ) {
+    return [];
+  }
+  return [
+    Object.freeze({
+      id: proofGraphEdgeCheckId({
+        from: "admin-proof:hosted-evidence-lane",
+        relationship: "feeds-hosted-matrix-transition",
+        to: "admin-proof:hosted-concurrent-race-matrix",
+      }),
+      label: "Hosted evidence lane to hosted matrix",
+      href: adminAuditInspectHref({
+        game,
+        audit: localAdminAuditIds.proofGraph,
+      }),
+      status: String(
+        unproven?.realHostedEvidenceStatus ??
+          unproven?.status ??
+          actionStatus,
+      ),
+      command,
+    }),
+  ];
 }
 
 export function normalizeLocalNextActionSelectedProofGraphCheckRows({
