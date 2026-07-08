@@ -52,9 +52,11 @@ import {
   nightActionResolutionReceiptSurfaceFixture as sharedNightActionResolutionReceiptSurfaceFixture,
   normalDayVotePrivacySurfaceFixture as sharedNormalDayVotePrivacySurfaceFixture,
   normalNightActionResolutionPrivacySurfaceFixture as sharedNormalNightActionResolutionPrivacySurfaceFixture,
+  normalPostDayVoteAdvanceSurfaceFixture as sharedNormalPostDayVoteAdvanceSurfaceFixture,
   normalResolutionPrivacySurfaceFixture as sharedNormalResolutionPrivacySurfaceFixture,
   playerActionSubmissionRoleSurfaceFixture as sharedPlayerActionSubmissionRoleSurfaceFixture,
   targetDayVoteReceiptSurfaceFixture as sharedTargetDayVoteReceiptSurfaceFixture,
+  targetPostDayVoteAdvanceSurfaceFixture as sharedTargetPostDayVoteAdvanceSurfaceFixture,
   targetResolutionReceiptSurfaceFixture as sharedTargetResolutionReceiptSurfaceFixture,
 } from "./dev_test_game_core_loop_role_surface_test_fixtures.mjs";
 import {
@@ -21459,8 +21461,14 @@ function coreLoopAdminProofFixture() {
     hostPhaseTransitionSurface: sharedHostPhaseTransitionSurfaceFixture({
       game: coreLoopAdminProofFixtureGameId,
     }),
-    targetPostDayVoteAdvanceSurface: targetPostDayVoteAdvanceSurfaceFixture(),
-    normalPostDayVoteAdvanceSurface: normalPostDayVoteAdvanceSurfaceFixture(),
+    targetPostDayVoteAdvanceSurface:
+      sharedTargetPostDayVoteAdvanceSurfaceFixture({
+        game: coreLoopAdminProofFixtureGameId,
+      }),
+    normalPostDayVoteAdvanceSurface:
+      sharedNormalPostDayVoteAdvanceSurfaceFixture({
+        game: coreLoopAdminProofFixtureGameId,
+      }),
     nightActionResolutionReceiptSurface:
       sharedNightActionResolutionReceiptSurfaceFixture({
         game: coreLoopAdminProofFixtureGameId,
@@ -21999,140 +22007,6 @@ function hostMixedAdvanceRaceSurfaceFixture() {
         apiDeadline: null,
       },
     },
-  };
-}
-
-function targetPostDayVoteAdvanceSurfaceFixture() {
-  return {
-    status: "passed",
-    sourceRoleUrl:
-      "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002?private=notification-1",
-    visitedRolePath:
-      "/g/00000000-0000-0000-0000-000000000002?private=notification-1",
-    surfaceTestId: "player-surface",
-    clickedThroughFromRoleUrl: true,
-    targetSlot: "slot-2",
-    principalUserId: "player_ilya",
-    checkpoint: {
-      phaseId: "N02",
-      phaseState: "open",
-      actorSlot: "slot-2",
-      actionState: "disabled:actor is not alive",
-      receiptState: "idle",
-      statusText: "Player action unavailable: actor is not alive",
-    },
-    privateQueueBoundary: {
-      status: "principal-scoped-private-projections",
-      count: 1,
-      text:
-        "Night results and notices are delivered to you alone.",
-    },
-    privateNotice: {
-      id: "notification-1",
-      kind: "notification",
-      text: "player_killed\nday_vote\nReview player_killed",
-      detailText: "Phase D02",
-    },
-    projectionCommandState: {
-      actorSlot: "slot-2",
-      actorAlive: false,
-      actorStatus: "dead",
-      phase: {
-        phaseId: "N02",
-        locked: false,
-      },
-      actions: [],
-      boundary:
-        "Seeded browser target role remained dead after host advanced D02 to open N02.",
-    },
-    projectionNotifications: [
-      {
-        effect: "player_killed",
-        phase_id: "D02",
-        status: "day_vote",
-      },
-    ],
-    resyncFromSeq: 903,
-    resyncSnapshotCommandState: {
-      actorSlot: "slot-2",
-      phase: {
-        phaseId: "N02",
-      },
-    },
-    resyncSnapshotNotifications: [
-      {
-        status: "day_vote",
-      },
-    ],
-    coldLoadEndpoints: {
-      notificationsEndpoint:
-        "/games/00000000-0000-0000-0000-000000000002/notifications?principal_user_id=player_ilya",
-      commandStateEndpoint:
-        "/games/00000000-0000-0000-0000-000000000002/player-command-state?principal_user_id=player_ilya&slot_id=slot-2",
-    },
-    rawInviteTokensVisible: false,
-    releaseReady: false,
-    productionReady: false,
-  };
-}
-
-function normalPostDayVoteAdvanceSurfaceFixture() {
-  return {
-    status: "passed",
-    sourceRoleUrl:
-      "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002?private=notification-1",
-    visitedRolePath:
-      "/g/00000000-0000-0000-0000-000000000002?private=notification-1",
-    surfaceTestId: "player-surface",
-    clickedThroughFromRoleUrl: true,
-    normalSlot: "slot-4",
-    principalUserId: "player_rowan",
-    checkpoint: {
-      phaseId: "N02",
-      phaseState: "open",
-      actorSlot: "slot-4",
-      actionState: "disabled:no legal action available",
-      receiptState: "idle",
-      statusText: "Player action unavailable: no legal action available",
-    },
-    privateQueueBoundary: {
-      status: "principal-scoped-private-projections",
-      count: 0,
-      text:
-        "Night results and notices are delivered to you alone.",
-    },
-    privateEmptyText: "No private results visible to this session.",
-    targetReceiptVisible: false,
-    projectionCommandState: {
-      actorSlot: "slot-4",
-      actorAlive: true,
-      actorStatus: "alive",
-      phase: {
-        phaseId: "N02",
-        locked: false,
-      },
-      actions: [],
-      boundary:
-        "Seeded browser normal role stayed alive with no target-only receipt after host advanced D02 to open N02.",
-    },
-    projectionNotifications: [],
-    resyncFromSeq: 903,
-    resyncSnapshotCommandState: {
-      actorSlot: "slot-4",
-      phase: {
-        phaseId: "N02",
-      },
-    },
-    resyncSnapshotNotifications: [],
-    coldLoadEndpoints: {
-      notificationsEndpoint:
-        "/games/00000000-0000-0000-0000-000000000002/notifications?principal_user_id=player_rowan",
-      commandStateEndpoint:
-        "/games/00000000-0000-0000-0000-000000000002/player-command-state?principal_user_id=player_rowan&slot_id=slot-4",
-    },
-    rawInviteTokensVisible: false,
-    releaseReady: false,
-    productionReady: false,
   };
 }
 
