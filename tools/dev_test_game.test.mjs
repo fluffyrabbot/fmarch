@@ -802,6 +802,7 @@ import {
 import {
   buildSelectedOperatorHandoffTerminalReceipt,
   selectedOperatorHandoffTerminalReceiptDestinationFields,
+  terminalReceiptContractRegistry,
 } from "./dev_test_game_terminal_receipts.mjs";
 import {
   selectedOperatorHandoffPassedReceiptFixture,
@@ -9012,6 +9013,86 @@ test("proof graph receipt artifact rows share one browser row id contract", () =
     }),
     rows[0].status,
   );
+});
+
+test("terminal receipt contract registry covers browser proof consumers", () => {
+  assert.deepEqual(
+    terminalReceiptContractRegistry.map((contract) => [
+      contract.id,
+      contract.label,
+      contract.rowTestIdPrefix,
+      contract.browserProofConsumers.map((consumer) => [
+        consumer.id,
+        consumer.command,
+        consumer.artifactPath,
+      ]),
+    ]),
+    [
+      [
+        "selected-local-dependency-terminal-receipt",
+        "selected-local-dependency",
+        "admin-audit-selected-local-dependency-terminal",
+        [
+          [
+            "admin-spine-admin-proof",
+            "npm run test:dev-test-game-admin-spine-admin-proof",
+            devTestGameAdminSpineAdminProofPath,
+          ],
+        ],
+      ],
+      [
+        "selected-operator-handoff-terminal-receipt",
+        "selected-operator-handoff",
+        "admin-audit-selected-operator-handoff-terminal",
+        [
+          [
+            "selected-operator-handoff-receipt-admin-proof",
+            `npm run ${selectedOperatorHandoffReceiptAdminProofCommand}`,
+            selectedOperatorHandoffReceiptAdminProofPath,
+          ],
+        ],
+      ],
+    ],
+  );
+
+  const receiptFixtures = new Map([
+    [
+      "selected-local-dependency-terminal-receipt",
+      selectedLocalDependencyTerminalReceiptFixture(),
+    ],
+    [
+      "selected-operator-handoff-terminal-receipt",
+      selectedOperatorHandoffReceiptPassedFixture(),
+    ],
+  ]);
+  for (const contract of terminalReceiptContractRegistry) {
+    assert(contract.rowDefinitions.length > 0);
+    assert.equal(
+      new Set(contract.rowDefinitions.map((definition) => definition.id)).size,
+      contract.rowDefinitions.length,
+    );
+    assert(contract.browserProofConsumers.length > 0);
+    for (const definition of contract.rowDefinitions) {
+      assert(definition.testId.startsWith(`${contract.rowTestIdPrefix}-`));
+      assert.equal(typeof definition.summaryRowId, "string");
+      assert.notEqual(definition.summaryRowId.trim(), "");
+    }
+    for (const consumer of contract.browserProofConsumers) {
+      assert.match(consumer.command, /^npm run test:dev-test-game-/);
+      assert.match(consumer.artifactPath, /^target\/dev-test-game\/.+\.json$/);
+    }
+    const statuses = contract.rowStatusForReceipt(
+      receiptFixtures.get(contract.id),
+    );
+    assert(Object.keys(statuses).length > 0);
+    for (const [rowId, status] of Object.entries(statuses)) {
+      assert(
+        contract.rowDefinitions.some((definition) => definition.id === rowId),
+      );
+      assert.equal(typeof status, "string");
+      assert.notEqual(status.trim(), "");
+    }
+  }
 });
 
 test("admin proof batch registries share validation and status helpers", () => {
