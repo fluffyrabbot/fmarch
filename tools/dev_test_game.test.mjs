@@ -3767,6 +3767,7 @@ test("next-action release-readiness selector demotes aggregate hardening coverag
     [
       "hardening-race-action",
       "hardening-race-reload",
+      "hardening-reconnect-recovery",
       "hardening-stale-reconnect",
       "hardening-stale-reload",
       "aggregate-hardening-coverage",
@@ -3777,6 +3778,7 @@ test("next-action release-readiness selector demotes aggregate hardening coverag
     [
       ["hardening-race-action", 0],
       ["hardening-race-reload", 5],
+      ["hardening-reconnect-recovery", 10],
       ["hardening-stale-reconnect", 15],
       ["hardening-stale-reload", 20],
       ["aggregate-hardening-coverage", 100],
@@ -7438,6 +7440,7 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
       "aggregate-hardening-coverage",
       "hardening-race-action",
       "hardening-race-reload",
+      "hardening-reconnect-recovery",
       "hardening-stale-reconnect",
       "hardening-stale-reload",
       "host-deadline-control",

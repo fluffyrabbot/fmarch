@@ -63,6 +63,7 @@ import {
   hardeningStaleConflictHighlightedLaneIds,
   hostedMatrixReconnectLaneIds,
   hostedMatrixRecoveryLaneIds,
+  hardeningReconnectFeatureTargetKind,
   playerLiveReconnectLaneId,
   privateChannelStaleActionConflictMessageLaneId,
   privateChannelStaleActionReconnectExpectation,
@@ -1451,6 +1452,7 @@ test("hardening lane cases share stale-client reconnect scenarios", async () => 
       role: target.role,
       roleUrlSource: target.roleUrlSource,
       channelId: target.channelId,
+      featureTargetKind: target.featureTargetKind,
     })),
     [
       {
@@ -1460,6 +1462,7 @@ test("hardening lane cases share stale-client reconnect scenarios", async () => 
         role: "player",
         roleUrlSource: "direct",
         channelId: undefined,
+        featureTargetKind: hardeningReconnectFeatureTargetKind,
       },
       {
         targetKey: "privateChannelStaleActionReconnectRecovery",
@@ -1468,6 +1471,7 @@ test("hardening lane cases share stale-client reconnect scenarios", async () => 
         role: "private-channel",
         roleUrlSource: "direct",
         channelId: "private:mafia_day_chat",
+        featureTargetKind: hardeningReconnectFeatureTargetKind,
       },
       {
         targetKey: "hostStaleResolveReconnectRecovery",
@@ -1476,6 +1480,7 @@ test("hardening lane cases share stale-client reconnect scenarios", async () => 
         role: "host",
         roleUrlSource: "synthesized",
         channelId: undefined,
+        featureTargetKind: hardeningReconnectFeatureTargetKind,
       },
       {
         targetKey: "hostStaleAdvanceReconnectRecovery",
@@ -1484,6 +1489,7 @@ test("hardening lane cases share stale-client reconnect scenarios", async () => 
         role: "host",
         roleUrlSource: "synthesized",
         channelId: undefined,
+        featureTargetKind: hardeningReconnectFeatureTargetKind,
       },
       {
         targetKey: "hostStaleDeadlineReconnectRecovery",
@@ -1492,6 +1498,7 @@ test("hardening lane cases share stale-client reconnect scenarios", async () => 
         role: "host",
         roleUrlSource: "synthesized",
         channelId: undefined,
+        featureTargetKind: hardeningReconnectFeatureTargetKind,
       },
       {
         targetKey: "cohostStaleDeadlineReconnectRecovery",
@@ -1500,6 +1507,7 @@ test("hardening lane cases share stale-client reconnect scenarios", async () => 
         role: "host",
         roleUrlSource: "synthesized",
         channelId: undefined,
+        featureTargetKind: hardeningReconnectFeatureTargetKind,
       },
     ],
   );

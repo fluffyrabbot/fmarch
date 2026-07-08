@@ -1379,6 +1379,8 @@ export function releaseReadinessFeatureTargetKindPriority(featureTargetKind) {
       return 20;
     case "hardening-stale-reconnect":
       return 15;
+    case "hardening-reconnect-recovery":
+      return 10;
     case "hardening-race-reload":
       return 5;
     case "hardening-race-action":

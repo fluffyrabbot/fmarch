@@ -88,6 +88,7 @@ const reconnectHardeningFeatureSpineTargetRows = Object.freeze(
         roleUrlId: target.laneId,
         checkpointId: target.laneId,
         adminCheckId: target.laneId,
+        featureTargetKind: target.featureTargetKind,
       }),
     ]),
   ),

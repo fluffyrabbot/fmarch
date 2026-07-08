@@ -41,6 +41,8 @@ export const hostStaleDeadlineReconnectLaneId =
   "stale-host-deadline-reconnect-recovery";
 export const cohostStaleDeadlineReconnectLaneId =
   "stale-cohost-deadline-reconnect-recovery";
+export const hardeningReconnectFeatureTargetKind =
+  "hardening-reconnect-recovery";
 
 const sharedStaleActionReconnectExpectation = Object.freeze({
   rejectError: "PhaseLocked",
@@ -143,6 +145,7 @@ const reconnectHardeningSpineTargetDefinitions = Object.freeze([
     laneId: stalePlayerActionReconnectLaneId,
     role: "player",
     roleUrlSource: "direct",
+    featureTargetKind: hardeningReconnectFeatureTargetKind,
   }),
   Object.freeze({
     targetKey: "privateChannelStaleActionReconnectRecovery",
@@ -151,6 +154,7 @@ const reconnectHardeningSpineTargetDefinitions = Object.freeze([
     role: "private-channel",
     roleUrlSource: "direct",
     channelId: privateChannelStaleActionReconnectExpectationDefinition.channelId,
+    featureTargetKind: hardeningReconnectFeatureTargetKind,
   }),
   Object.freeze({
     targetKey: "hostStaleResolveReconnectRecovery",
@@ -158,6 +162,7 @@ const reconnectHardeningSpineTargetDefinitions = Object.freeze([
     laneId: hostStaleResolveReconnectLaneId,
     role: "host",
     roleUrlSource: "synthesized",
+    featureTargetKind: hardeningReconnectFeatureTargetKind,
   }),
   Object.freeze({
     targetKey: "hostStaleAdvanceReconnectRecovery",
@@ -165,6 +170,7 @@ const reconnectHardeningSpineTargetDefinitions = Object.freeze([
     laneId: hostStaleAdvanceReconnectLaneId,
     role: "host",
     roleUrlSource: "synthesized",
+    featureTargetKind: hardeningReconnectFeatureTargetKind,
   }),
   Object.freeze({
     targetKey: "hostStaleDeadlineReconnectRecovery",
@@ -172,6 +178,7 @@ const reconnectHardeningSpineTargetDefinitions = Object.freeze([
     laneId: hostStaleDeadlineReconnectLaneId,
     role: "host",
     roleUrlSource: "synthesized",
+    featureTargetKind: hardeningReconnectFeatureTargetKind,
   }),
   Object.freeze({
     targetKey: "cohostStaleDeadlineReconnectRecovery",
@@ -179,6 +186,7 @@ const reconnectHardeningSpineTargetDefinitions = Object.freeze([
     laneId: cohostStaleDeadlineReconnectLaneId,
     role: "host",
     roleUrlSource: "synthesized",
+    featureTargetKind: hardeningReconnectFeatureTargetKind,
   }),
 ]);
 
