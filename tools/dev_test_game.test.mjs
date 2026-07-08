@@ -22338,6 +22338,17 @@ function privateChannelRoleSurfaceFixture() {
       sourceRoleUrl: roleUrl,
       visitedRolePath,
       clickedThroughFromRoleUrl: true,
+      channelId: "role-pm",
+      nestedRoleUrlConsistency: {
+        reloadSourceRoleUrl: roleUrl,
+        staleCompletedSourceRoleUrl: roleUrl,
+        reloadVisitedRolePath: visitedRolePath,
+        staleCompletedVisitedRolePath: visitedRolePath,
+        sameSourceRoleUrl: true,
+        sameVisitedRolePath: true,
+        visitedRolePathIncludesChannel: true,
+        rawInviteTokensVisible: false,
+      },
       transition: completedPrivateChannelTransition(),
       reloadProof: {
         status: "passed",

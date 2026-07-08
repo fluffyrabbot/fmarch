@@ -270,8 +270,43 @@ export function assertCompletedPrivateChannelProofCases({
     failureMessage:
       "core-loop admin proof missing completed private channel transition",
   });
+  assertCompletedPrivateChannelRoleUrlConsistency({
+    proof,
+    sourceRoleUrl,
+    visitedRolePath,
+    includeEvidenceInError,
+  });
   for (const { assertProof, ...scenario } of cases) {
     assertProof(scenario);
+  }
+}
+
+export function assertCompletedPrivateChannelRoleUrlConsistency({
+  proof,
+  sourceRoleUrl,
+  visitedRolePath,
+  includeEvidenceInError = false,
+}) {
+  const expectedChannel = channelFromRoleUrl(sourceRoleUrl);
+  if (
+    proof?.channelId !== expectedChannel ||
+    proof.nestedRoleUrlConsistency?.reloadSourceRoleUrl !== sourceRoleUrl ||
+    proof.nestedRoleUrlConsistency?.staleCompletedSourceRoleUrl !==
+      sourceRoleUrl ||
+    proof.nestedRoleUrlConsistency?.reloadVisitedRolePath !== visitedRolePath ||
+    proof.nestedRoleUrlConsistency?.staleCompletedVisitedRolePath !==
+      visitedRolePath ||
+    proof.nestedRoleUrlConsistency?.sameSourceRoleUrl !== true ||
+    proof.nestedRoleUrlConsistency?.sameVisitedRolePath !== true ||
+    proof.nestedRoleUrlConsistency?.visitedRolePathIncludesChannel !== true ||
+    proof.nestedRoleUrlConsistency?.rawInviteTokensVisible !== false
+  ) {
+    throwPrivateChannelScenarioAssertionError({
+      message:
+        "core-loop admin proof missing completed private channel role URL consistency",
+      evidence: proof,
+      includeEvidenceInError,
+    });
   }
 }
 

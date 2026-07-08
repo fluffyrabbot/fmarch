@@ -8624,6 +8624,8 @@ async function proveCompletedPrivateChannelRoleSurface({
   frontendBaseUrl,
   roleUrl,
 }) {
+  const visitedRolePath = privateChannelFocusedRolePathFromUrl(roleUrl);
+  const channelId = channelIdFromPrivateChannelRoleUrl(roleUrl);
   const reloadProof = await proveCompletedPrivateChannelReload({
     browser,
     frontendBaseUrl,
@@ -8638,8 +8640,29 @@ async function proveCompletedPrivateChannelRoleSurface({
   return {
     status: "passed",
     sourceRoleUrl: String(roleUrl),
-    visitedRolePath: privateChannelFocusedRolePathFromUrl(roleUrl),
+    visitedRolePath,
     clickedThroughFromRoleUrl: true,
+    channelId,
+    nestedRoleUrlConsistency: {
+      reloadSourceRoleUrl: reloadProof.sourceRoleUrl,
+      staleCompletedSourceRoleUrl:
+        staleCompletedPostRecoveryProof.sourceRoleUrl,
+      reloadVisitedRolePath: reloadProof.visitedRolePath,
+      staleCompletedVisitedRolePath:
+        staleCompletedPostRecoveryProof.visitedRolePath,
+      sameSourceRoleUrl:
+        reloadProof.sourceRoleUrl === String(roleUrl) &&
+        staleCompletedPostRecoveryProof.sourceRoleUrl === String(roleUrl),
+      sameVisitedRolePath:
+        reloadProof.visitedRolePath === visitedRolePath &&
+        staleCompletedPostRecoveryProof.visitedRolePath === visitedRolePath,
+      visitedRolePathIncludesChannel: visitedRolePath.includes(
+        `/c/${encodeURIComponent(channelId)}`,
+      ),
+      rawInviteTokensVisible:
+        reloadProof.rawInviteTokensVisible === true ||
+        staleCompletedPostRecoveryProof.rawInviteTokensVisible === true,
+    },
     transition: completedPrivateChannelTransition(),
     reloadProof,
     staleCompletedPostRecoveryProof,
