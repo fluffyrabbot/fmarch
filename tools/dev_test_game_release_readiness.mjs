@@ -5275,6 +5275,22 @@ export function validateDevTestGameHostedTargetPreflightAdminProof(
       );
     }
   }
+  const hostedHandoffBlockedReceipt =
+    proof.generatedFrom?.hostedHandoffBlockedReceipt ?? null;
+  const blockedOperatorPacket =
+    hostedHandoffBlockedReceipt?.blockedOperatorPacket ?? null;
+  if (hostedHandoffBlockedReceipt !== null) {
+    const visibleReceipt =
+      proof.adminRoleSurface?.visibleHostedHandoffBlockedReceipt;
+    if (
+      JSON.stringify(visibleReceipt?.blockedOperatorPacket ?? null) !==
+      JSON.stringify(visibleBlockedOperatorPacket(blockedOperatorPacket))
+    ) {
+      throw new Error(
+        "hosted target preflight admin proof visible blocked operator packet drifted",
+      );
+    }
+  }
   return {
     status: "passed",
     path:
@@ -5296,6 +5312,10 @@ export function validateDevTestGameHostedTargetPreflightAdminProof(
       proof.adminRoleSurface.visibleHostedHandoffSectionInputs ?? [],
     visibleHostedHandoffSummary:
       proof.adminRoleSurface.visibleHostedHandoffSummary ?? null,
+    visibleHostedHandoffBlockedReceipt:
+      proof.adminRoleSurface.visibleHostedHandoffBlockedReceipt ?? null,
+    hostedHandoffBlockedReceipt,
+    blockedOperatorPacket,
     preflightStatus: String(proof.generatedFrom?.status ?? "unknown"),
     ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
   };

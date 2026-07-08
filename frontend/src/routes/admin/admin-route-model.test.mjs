@@ -2758,7 +2758,7 @@ test("admin local proof graph detail data carries graph node rows", async () => 
     data.audit.checks.find(
       (check) => check.id === "core-loop-command-proof-role-url-audit",
     )?.status ?? "",
-    /38 checked/,
+    /39 checked/,
   );
   const hostedIdentityReceiptRow = data.audit.checks.find(
     (check) =>
@@ -5458,7 +5458,7 @@ test("admin local core loop detail data carries lane rows", async () => {
         [
           ["label", "Command proof role URLs", true, "", ""],
           ["status", "passed", false, "", ""],
-          ["checkedCount", "38 checked", false, "", ""],
+          ["checkedCount", "39 checked", false, "", ""],
         ],
         [],
       ],
@@ -6008,11 +6008,12 @@ test("admin real hosted observability handoff detail data carries blocked eviden
 });
 
 test("admin hosted target preflight detail data carries blocked setup rows", async () => {
+  const preflight = localHostedTargetPreflightFixture();
   const data = await buildAdminAuditDetailData({
     audit: localAdminAuditIds.hostedTargetPreflight,
     principalUserId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
-    hostedTargetPreflight: localHostedTargetPreflightFixture(),
+    hostedTargetPreflight: preflight,
   });
 
   assert.equal(data.status, "available");
@@ -6061,6 +6062,32 @@ test("admin hosted target preflight detail data carries blocked setup rows", asy
         hostedTargetPreflightMissingRawEvidencePathRequiredEvidence,
       ],
     ],
+  );
+  assert.equal(
+    data.audit.hostedHandoffChecklist.blockedReceipt.blockedOperatorPacket
+      .firstMissingInputId,
+    "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
+  );
+  assert.equal(
+    data.audit.hostedHandoffChecklist.blockedReceipt.blockedOperatorPacket
+      .firstMissingCheckId,
+    "hosted-frontend-url-configured",
+  );
+  assert.equal(
+    data.audit.hostedHandoffChecklist.blockedReceipt.blockedOperatorPacket
+      .rawEvidenceTemplate.path,
+    devTestGameHostedMatrixRawEvidenceTemplatePath,
+  );
+  assert.deepEqual(
+    hostedHandoffChecklistRowsForAssertion(
+      data.audit.hostedHandoffBlockedReceiptRows,
+    ),
+    expectedHostedHandoffBlockedReceiptRows({
+      checklist: data.audit.hostedHandoffChecklist,
+      headings: hostedHandoffReceiptHeadingsForAudit(
+        localAdminAuditIds.hostedTargetPreflight,
+      ),
+    }),
   );
 });
 
@@ -8129,6 +8156,59 @@ function localRealHostedObservabilityHandoffFixture() {
 }
 
 function localHostedTargetPreflightFixture() {
+  const target = {
+    frontendBaseUrl: null,
+    apiBaseUrl: null,
+    groupId: "replacement-race-reload",
+    rawEvidencePath: null,
+    rawEvidenceStatus: "blocked",
+  };
+  const checks = [
+    {
+      id: "hosted-frontend-url-configured",
+      status: "blocked",
+      requiredEvidence:
+        hostedTargetPreflightMissingFrontendUrlRequiredEvidence,
+    },
+    {
+      id: "hosted-api-url-configured",
+      status: "blocked",
+      requiredEvidence: hostedTargetPreflightMissingApiUrlRequiredEvidence,
+    },
+    {
+      id: "hosted-targets-external",
+      status: "blocked",
+      requiredEvidence: hostedTargetPreflightExternalTargetsRequiredEvidence(),
+    },
+    {
+      id: "raw-evidence-path-configured",
+      status: "blocked",
+      requiredEvidence:
+        hostedTargetPreflightMissingRawEvidencePathRequiredEvidence,
+    },
+    {
+      id: "raw-evidence-readable",
+      status: "blocked",
+      requiredEvidence:
+        hostedTargetPreflightMissingRawEvidencePathRequiredEvidence,
+    },
+    {
+      id: "raw-evidence-real-hosted-target",
+      status: "blocked",
+      requiredEvidence:
+        hostedTargetPreflightMissingRawEvidencePathRequiredEvidence,
+    },
+    {
+      id: "release-claim-boundary-carried",
+      status: "passed",
+      releaseReady: false,
+      productionReady: false,
+    },
+  ];
+  const blockedReceipt = hostedBlockedReceiptFixture({
+    proofTarget: HOSTED_TARGET_PREFLIGHT_PROOF_TARGET,
+    nextProofTarget: HOSTED_TARGET_PREFLIGHT_PROOF_TARGET,
+  });
   return {
     version: 1,
     proof: "dev-test-game-hosted-target-preflight",
@@ -8137,58 +8217,15 @@ function localHostedTargetPreflightFixture() {
     productionReady: false,
     scope: "hosted-target-preflight",
     proofBoundary: "Hosted target preflight without hosted deployment claims.",
-    target: {
-      frontendBaseUrl: null,
-      apiBaseUrl: null,
-      groupId: "replacement-race-reload",
-      rawEvidencePath: null,
-      rawEvidenceStatus: "blocked",
-    },
-    checks: [
-      {
-        id: "hosted-frontend-url-configured",
+    target,
+    checks,
+    blockedReceipt,
+    hostedHandoffChecklist: hostedEvidenceHandoffChecklistFromPreflight({
+      preflight: {
         status: "blocked",
-        requiredEvidence:
-          hostedTargetPreflightMissingFrontendUrlRequiredEvidence,
+        checks,
+        target,
       },
-      {
-        id: "hosted-api-url-configured",
-        status: "blocked",
-        requiredEvidence: hostedTargetPreflightMissingApiUrlRequiredEvidence,
-      },
-      {
-        id: "hosted-targets-external",
-        status: "blocked",
-        requiredEvidence: hostedTargetPreflightExternalTargetsRequiredEvidence(),
-      },
-      {
-        id: "raw-evidence-path-configured",
-        status: "blocked",
-        requiredEvidence:
-          hostedTargetPreflightMissingRawEvidencePathRequiredEvidence,
-      },
-      {
-        id: "raw-evidence-readable",
-        status: "blocked",
-        requiredEvidence:
-          hostedTargetPreflightMissingRawEvidencePathRequiredEvidence,
-      },
-      {
-        id: "raw-evidence-real-hosted-target",
-        status: "blocked",
-        requiredEvidence:
-          hostedTargetPreflightMissingRawEvidencePathRequiredEvidence,
-      },
-      {
-        id: "release-claim-boundary-carried",
-        status: "passed",
-        releaseReady: false,
-        productionReady: false,
-      },
-    ],
-    blockedReceipt: hostedBlockedReceiptFixture({
-      proofTarget: HOSTED_TARGET_PREFLIGHT_PROOF_TARGET,
-      nextProofTarget: HOSTED_TARGET_PREFLIGHT_PROOF_TARGET,
     }),
     nextCommand: "npm run test:dev-test-game-hosted-target-preflight",
     nextProofTarget: HOSTED_TARGET_PREFLIGHT_PROOF_TARGET,

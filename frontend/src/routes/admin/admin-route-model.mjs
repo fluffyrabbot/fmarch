@@ -3056,6 +3056,7 @@ export function normalizeLocalHostedTargetPreflightAudit(
       hostedHandoffChecklist: hostedTargetPreflight.hostedHandoffChecklist,
     },
     realHostedEvidenceInputs: [],
+    blockedReceipt: hostedTargetPreflight.blockedReceipt,
   });
   const artifactSummary = Object.freeze({
     frontendBaseUrl: String(hostedTargetPreflight.target?.frontendBaseUrl ?? ""),
@@ -6352,6 +6353,7 @@ function normalizeNextActionCoreLoopRecoveryDestinationCoverage(coverage) {
 function normalizeNextActionHostedHandoffChecklist({
   unproven,
   realHostedEvidenceInputs,
+  blockedReceipt = undefined,
 }) {
   const checklist = unproven?.hostedHandoffChecklist;
   if (checklist === null || typeof checklist !== "object") {
@@ -6402,7 +6404,9 @@ function normalizeNextActionHostedHandoffChecklist({
         }),
       ),
     ),
-    blockedReceipt: normalizeHostedHandoffBlockedReceipt(checklist.blockedReceipt),
+    blockedReceipt: normalizeHostedHandoffBlockedReceipt(
+      blockedReceipt ?? checklist.blockedReceipt,
+    ),
     groups: normalizeHostedHandoffGroups(checklist.requirementGroups),
     inputSections: normalizeHostedHandoffInputSections(checklist.inputSections),
     operatorEvidenceGate: normalizeHostedIdentityOperatorEvidenceGate(

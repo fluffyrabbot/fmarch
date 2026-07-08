@@ -25394,7 +25394,9 @@ function spineManifestAdminProofFixture() {
 }
 
 function hostedTargetPreflightAdminProofFixture() {
-  const handoff = hostedEvidenceBlockedHandoffChecklistFixture();
+  const preflight = hostedTargetPreflightFixture({ status: "blocked" });
+  const handoff = preflight.hostedHandoffChecklist;
+  const hostedHandoffBlockedReceipt = preflight.blockedReceipt;
   const blockedCheckRequiredEvidence = Object.fromEntries(
     handoff.blockedChecks.map((check) => [
       check.id,
@@ -25437,9 +25439,7 @@ function hostedTargetPreflightAdminProofFixture() {
       hostedHandoffSectionInputIds: sectionInputRows.map((row) => row.id),
       hostedHandoffSectionInputStatuses:
         hostedEvidenceHandoffSectionInputStatuses(handoff.inputSections),
-      ...(handoff.blockedReceipt === undefined
-        ? {}
-        : { hostedHandoffBlockedReceipt: handoff.blockedReceipt }),
+      hostedHandoffBlockedReceipt,
       relatedAuditIds: [
         "local-hosted-concurrent-race-matrix",
         "local-next-action",
@@ -25483,17 +25483,23 @@ function hostedTargetPreflightAdminProofFixture() {
       visibleHostedHandoffSectionInputs: sectionInputRows.map((row) => row.id),
       visibleHostedHandoffSectionInputStatuses:
         hostedEvidenceHandoffSectionInputStatuses(handoff.inputSections),
-      ...(handoff.blockedReceipt === undefined
-        ? {}
-        : {
-            visibleHostedHandoffBlockedReceipt: {
-              status: handoff.blockedReceipt.status,
-              operatorAction: handoff.blockedReceipt.operatorAction,
-              localVsHostedBoundary: handoff.blockedReceipt.localVsHostedBoundary,
-              nextProofTarget: handoff.blockedReceipt.nextProofTarget,
-              missingRequiredInputs: handoff.blockedReceipt.missingRequiredInputs,
-            },
-          }),
+      visibleHostedHandoffBlockedReceipt: {
+        status: hostedHandoffBlockedReceipt.status,
+        operatorAction: hostedHandoffBlockedReceipt.operatorAction,
+        localVsHostedBoundary: hostedHandoffBlockedReceipt.localVsHostedBoundary,
+        rawEvidenceContractSummary:
+          hostedHandoffBlockedReceipt.rawEvidenceContractSummary,
+        nextProofTarget: hostedHandoffBlockedReceipt.nextProofTarget,
+        missingRequiredInputs:
+          hostedHandoffBlockedReceipt.missingRequiredInputs,
+        firstMissingOperatorArtifact:
+          visibleHostedEvidenceFirstMissingOperatorArtifact(
+            hostedHandoffBlockedReceipt.firstMissingOperatorArtifact,
+          ),
+        blockedOperatorPacket: visibleBlockedOperatorPacket(
+          hostedHandoffBlockedReceipt.blockedOperatorPacket,
+        ),
+      },
       visibleRelatedLinks: [
         "local-hosted-concurrent-race-matrix",
         "local-next-action",

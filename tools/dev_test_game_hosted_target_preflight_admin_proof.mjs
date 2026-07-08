@@ -17,6 +17,9 @@ import {
   hostedEvidenceHandoffSummary,
 } from "./dev_test_game_hosted_handoff_cases.mjs";
 import {
+  visibleBlockedOperatorPacket,
+} from "./dev_test_game_hosted_operator_packet.mjs";
+import {
   assertAdminRoleSurfaceStatusText,
   assertVisibleAdminRoleSurfaceRows,
   proveAdminAuditDetail,
@@ -72,6 +75,8 @@ export function hostedTargetPreflightAdminProofCase({
         source.preflight.hostedHandoffChecklist?.inputSections ?? [];
       const hostedHandoffSectionInputRows =
         hostedEvidenceHandoffSectionInputRows(hostedHandoffInputSections);
+      const hostedHandoffBlockedReceipt =
+        hostedTargetPreflightBlockedReceipt(source.preflight);
       return await proveAdminAuditDetail({
         browser,
         frontendBaseUrl,
@@ -102,7 +107,7 @@ export function hostedTargetPreflightAdminProofCase({
           proofTarget: source.preflight.hostedHandoffChecklist?.proofTarget,
         }),
         requiredHostedHandoffBlockedReceipt:
-          source.preflight.hostedHandoffChecklist?.blockedReceipt ?? null,
+          hostedHandoffBlockedReceipt,
         requiredText,
         requiredHostedHandoffInputSections: hostedHandoffInputSections.map(
           (section) => section.id,
@@ -117,72 +122,73 @@ export function hostedTargetPreflightAdminProofCase({
         requiredRelatedLinks,
       });
     },
-    buildEvidence: ({ source, adminRoleSurface }) => ({
-      version: 1,
-      proof: "dev-test-game-hosted-target-preflight-admin-proof",
-      status: "passed",
-      releaseReady: false,
-      productionReady: false,
-      scope: "local-dev-test-game-hosted-target-preflight-admin-surface",
-      proofBoundary:
-        "Local SvelteKit admin role URL with fixture admin authority over the hosted target preflight handoff. Proves configured, blocked or passed, and release-boundary checks are discoverable from the seeded admin overview and inspectable in a native admin audit detail route; it does not prove hosted deployment, hosted telemetry, beta readiness, release readiness, or production readiness.",
-      generatedFrom: {
-        hostedTargetPreflight: preflightRelativePath,
-        proofRun: proofRunRelativePath,
-        game: source.proofRun.session.game,
-        status: source.preflight.status,
-        checkIds: requiredChecks,
-        checkStatuses: Object.fromEntries(
-          source.preflight.checks.map((check) => [check.id, check.status]),
-        ),
-        blockedCheckIds: source.preflight.checks
-          .filter((check) => check.status === "blocked")
-          .map((check) => check.id),
-        blockedCheckRequiredEvidence: blockedCheckRequiredEvidence(
-          source.preflight.checks,
-        ),
-        hostedHandoffInputIds: hostedEvidenceHandoffInputIds,
-        hostedHandoffBlockedCheckIds:
-          source.preflight.hostedHandoffChecklist?.blockedCheckIds ?? [],
-        hostedHandoffBlockedCheckRequiredEvidence:
-          blockedCheckRequiredEvidence(
-            source.preflight.hostedHandoffChecklist?.blockedChecks ?? [],
+    buildEvidence: ({ source, adminRoleSurface }) => {
+      const hostedHandoffBlockedReceipt =
+        hostedTargetPreflightBlockedReceipt(source.preflight);
+      return {
+        version: 1,
+        proof: "dev-test-game-hosted-target-preflight-admin-proof",
+        status: "passed",
+        releaseReady: false,
+        productionReady: false,
+        scope: "local-dev-test-game-hosted-target-preflight-admin-surface",
+        proofBoundary:
+          "Local SvelteKit admin role URL with fixture admin authority over the hosted target preflight handoff. Proves configured, blocked or passed, and release-boundary checks are discoverable from the seeded admin overview and inspectable in a native admin audit detail route; it does not prove hosted deployment, hosted telemetry, beta readiness, release readiness, or production readiness.",
+        generatedFrom: {
+          hostedTargetPreflight: preflightRelativePath,
+          proofRun: proofRunRelativePath,
+          game: source.proofRun.session.game,
+          status: source.preflight.status,
+          checkIds: requiredChecks,
+          checkStatuses: Object.fromEntries(
+            source.preflight.checks.map((check) => [check.id, check.status]),
           ),
-        hostedHandoffSummary: hostedEvidenceHandoffSummary({
-          status: source.preflight.hostedHandoffChecklist?.status,
-          preflightStatus:
-            source.preflight.hostedHandoffChecklist?.preflightStatus,
-          command: source.preflight.hostedHandoffChecklist?.command,
-          proofTarget: source.preflight.hostedHandoffChecklist?.proofTarget,
-        }),
-        hostedHandoffInputSectionIds:
-          source.preflight.hostedHandoffChecklist?.inputSections?.map(
-            (section) => section.id,
-          ) ?? [],
-        hostedHandoffInputSectionStatuses:
-          hostedEvidenceHandoffInputSectionStatuses(
+          blockedCheckIds: source.preflight.checks
+            .filter((check) => check.status === "blocked")
+            .map((check) => check.id),
+          blockedCheckRequiredEvidence: blockedCheckRequiredEvidence(
+            source.preflight.checks,
+          ),
+          hostedHandoffInputIds: hostedEvidenceHandoffInputIds,
+          hostedHandoffBlockedCheckIds:
+            source.preflight.hostedHandoffChecklist?.blockedCheckIds ?? [],
+          hostedHandoffBlockedCheckRequiredEvidence:
+            blockedCheckRequiredEvidence(
+              source.preflight.hostedHandoffChecklist?.blockedChecks ?? [],
+            ),
+          hostedHandoffSummary: hostedEvidenceHandoffSummary({
+            status: source.preflight.hostedHandoffChecklist?.status,
+            preflightStatus:
+              source.preflight.hostedHandoffChecklist?.preflightStatus,
+            command: source.preflight.hostedHandoffChecklist?.command,
+            proofTarget: source.preflight.hostedHandoffChecklist?.proofTarget,
+          }),
+          hostedHandoffInputSectionIds:
+            source.preflight.hostedHandoffChecklist?.inputSections?.map(
+              (section) => section.id,
+            ) ?? [],
+          hostedHandoffInputSectionStatuses:
+            hostedEvidenceHandoffInputSectionStatuses(
+              source.preflight.hostedHandoffChecklist?.inputSections ?? [],
+            ),
+          hostedHandoffSectionInputIds: hostedEvidenceHandoffSectionInputRows(
             source.preflight.hostedHandoffChecklist?.inputSections ?? [],
-          ),
-        hostedHandoffSectionInputIds: hostedEvidenceHandoffSectionInputRows(
-          source.preflight.hostedHandoffChecklist?.inputSections ?? [],
-        ).map((row) => row.id),
-        hostedHandoffSectionInputStatuses:
-          hostedEvidenceHandoffSectionInputStatuses(
-            source.preflight.hostedHandoffChecklist?.inputSections ?? [],
-          ),
-        ...(source.preflight.hostedHandoffChecklist?.blockedReceipt === undefined
-          ? {}
-          : {
-              hostedHandoffBlockedReceipt:
-                source.preflight.hostedHandoffChecklist.blockedReceipt,
-            }),
-        ...(requiredText.length === 0
-          ? {}
-          : { requiredText: [...requiredText] }),
-        relatedAuditIds: requiredRelatedLinks,
-      },
-      adminRoleSurface,
-    }),
+          ).map((row) => row.id),
+          hostedHandoffSectionInputStatuses:
+            hostedEvidenceHandoffSectionInputStatuses(
+              source.preflight.hostedHandoffChecklist?.inputSections ?? [],
+            ),
+          ...(hostedHandoffBlockedReceipt === null
+            ? {}
+            : { hostedHandoffBlockedReceipt }),
+          ...(requiredText.length === 0
+            ? {}
+            : { requiredText: [...requiredText] }),
+          relatedAuditIds: requiredRelatedLinks,
+        },
+        adminRoleSurface,
+      };
+    },
     assertEvidence: assertHostedTargetPreflightAdminProof,
   };
 }
@@ -318,6 +324,16 @@ export function assertHostedTargetPreflightAdminProof(evidence) {
         );
       }
     }
+    if (
+      JSON.stringify(visibleReceipt.blockedOperatorPacket ?? null) !==
+      JSON.stringify(
+        visibleBlockedOperatorPacket(expectedBlockedReceipt.blockedOperatorPacket),
+      )
+    ) {
+      throw new Error(
+        "hosted target preflight admin proof missing blocked operator packet",
+      );
+    }
   }
   for (const token of evidence.generatedFrom?.requiredText ?? []) {
     if (!evidence.adminRoleSurface?.visibleRequiredText?.includes(token)) {
@@ -334,6 +350,14 @@ export function assertHostedTargetPreflightAdminProof(evidence) {
     surfaceKey: "visibleRelatedLinks",
   });
   return evidence;
+}
+
+function hostedTargetPreflightBlockedReceipt(preflight) {
+  return (
+    preflight?.hostedHandoffChecklist?.blockedReceipt ??
+    preflight?.blockedReceipt ??
+    null
+  );
 }
 
 function blockedCheckRequiredEvidence(checks) {
