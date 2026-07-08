@@ -232,12 +232,7 @@ import {
 } from "../../../../tools/dev_test_game_next_action_sequence_handoff_pair.mjs";
 import {
   buildSelectedOperatorHandoffTerminalReceipt,
-  selectedLocalDependencyTerminalReceiptRowDefinitionsForReceipt,
-  selectedLocalDependencyTerminalReceiptRowFields,
-  selectedLocalDependencyTerminalReceiptRowStatuses,
-  selectedOperatorHandoffTerminalReceiptRowDefinitionsForReceipt,
-  selectedOperatorHandoffTerminalReceiptRowFields,
-  selectedOperatorHandoffTerminalReceiptRowStatuses,
+  terminalReceiptContractRegistry,
 } from "../../../../tools/dev_test_game_terminal_receipts.mjs";
 import {
   selectedOperatorHandoffPassedReceiptFixture,
@@ -2607,105 +2602,59 @@ test("admin local admin spine detail data carries aggregate proof rows", async (
   ]);
 });
 
-test("admin local admin spine detail uses shared selected operator terminal receipt row contract", async () => {
-  const receipt = selectedOperatorHandoffPassedReceiptFixture();
-  const data = await buildAdminAuditDetailData({
-    audit: localAdminAuditIds.adminSpine,
-    principalUserId: "admin_a",
-    capabilities: [{ kind: "GlobalAdmin" }],
-    adminSpineProof: adminSpineProofFixture(),
-    adminSpineTerminalBatches: {
-      ...adminSpineTerminalBatchesFixture(),
-      selectedOperatorHandoffReceipt: receipt,
-    },
-  });
-  const section = data.audit.artifactSummarySections.find(
-    (candidate) => candidate.id === "selected-operator-handoff-terminal-receipt",
-  );
-  const rowFields = selectedOperatorHandoffTerminalReceiptRowFields(receipt);
-  const rowStatuses =
-    selectedOperatorHandoffTerminalReceiptRowStatuses(receipt);
-  const rowDefinitions =
-    selectedOperatorHandoffTerminalReceiptRowDefinitionsForReceipt(receipt);
-  assert.deepEqual(
-    section.rows.map((row) => [row.id, row.testId]),
-    rowDefinitions.map((definition) => [
-      definition.summaryRowId,
-      definition.testId,
-    ]),
-  );
-  for (const definition of rowDefinitions) {
-    const renderedRow = section.rows.find(
-      (row) => row.testId === definition.testId,
+test("admin local admin spine detail uses registry terminal receipt row contracts", async () => {
+  const receiptFixtures = {
+    selectedLocalDependencyTerminalReceipt:
+      selectedLocalDependencyTerminalReceiptFixture(),
+    selectedOperatorHandoffReceipt: selectedOperatorHandoffPassedReceiptFixture(),
+  };
+  for (const contract of terminalReceiptContractRegistry) {
+    const receipt = receiptFixtures[contract.terminalBatchesKey];
+    const data = await buildAdminAuditDetailData({
+      audit: localAdminAuditIds.adminSpine,
+      principalUserId: "admin_a",
+      capabilities: [{ kind: "GlobalAdmin" }],
+      adminSpineProof: adminSpineProofFixture(),
+      adminSpineTerminalBatches: {
+        ...adminSpineTerminalBatchesFixture(),
+        [contract.terminalBatchesKey]: receipt,
+      },
+    });
+    const section = data.audit.artifactSummarySections.find(
+      (candidate) => candidate.id === contract.id,
     );
-    const fields = rowFields[definition.id];
+    const rowFields = contract.rowFieldsForReceipt(receipt);
+    const rowStatuses = contract.rowStatusForReceipt(receipt);
+    const rowDefinitions = contract.rowDefinitionsForReceipt(receipt);
     assert.deepEqual(
-      renderedRow.values.map((value) => [
-        value.id,
-        value.text,
-        value.emphasized === true,
-      ]),
-      fields.map((field) => [
-        field.id,
-        field.value,
-        field.emphasized === true,
+      section.rows.map((row) => [row.id, row.testId]),
+      rowDefinitions.map((definition) => [
+        definition.summaryRowId,
+        definition.testId,
       ]),
     );
-    assert.equal(
-      renderedRow.values.map((value) => value.text).join("\n"),
-      rowStatuses[definition.id],
-    );
-  }
-});
-
-test("admin local admin spine detail uses shared selected local dependency terminal receipt row contract", async () => {
-  const receipt = selectedLocalDependencyTerminalReceiptFixture();
-  const data = await buildAdminAuditDetailData({
-    audit: localAdminAuditIds.adminSpine,
-    principalUserId: "admin_a",
-    capabilities: [{ kind: "GlobalAdmin" }],
-    adminSpineProof: adminSpineProofFixture(),
-    adminSpineTerminalBatches: {
-      ...adminSpineTerminalBatchesFixture(),
-      selectedLocalDependencyTerminalReceipt: receipt,
-    },
-  });
-  const section = data.audit.artifactSummarySections.find(
-    (candidate) => candidate.id === "selected-local-dependency-terminal-receipt",
-  );
-  const rowFields = selectedLocalDependencyTerminalReceiptRowFields(receipt);
-  const rowStatuses =
-    selectedLocalDependencyTerminalReceiptRowStatuses(receipt);
-  const rowDefinitions =
-    selectedLocalDependencyTerminalReceiptRowDefinitionsForReceipt(receipt);
-  assert.deepEqual(
-    section.rows.map((row) => [row.id, row.testId]),
-    rowDefinitions.map((definition) => [
-      definition.summaryRowId,
-      definition.testId,
-    ]),
-  );
-  for (const definition of rowDefinitions) {
-    const renderedRow = section.rows.find(
-      (row) => row.testId === definition.testId,
-    );
-    const fields = rowFields[definition.id];
-    assert.deepEqual(
-      renderedRow.values.map((value) => [
-        value.id,
-        value.text,
-        value.emphasized === true,
-      ]),
-      fields.map((field) => [
-        field.id,
-        field.value,
-        field.emphasized === true,
-      ]),
-    );
-    assert.equal(
-      renderedRow.values.map((value) => value.text).join("\n"),
-      rowStatuses[definition.id],
-    );
+    for (const definition of rowDefinitions) {
+      const renderedRow = section.rows.find(
+        (row) => row.testId === definition.testId,
+      );
+      const fields = rowFields[definition.id];
+      assert.deepEqual(
+        renderedRow.values.map((value) => [
+          value.id,
+          value.text,
+          value.emphasized === true,
+        ]),
+        fields.map((field) => [
+          field.id,
+          field.value,
+          field.emphasized === true,
+        ]),
+      );
+      assert.equal(
+        renderedRow.values.map((value) => value.text).join("\n"),
+        rowStatuses[definition.id],
+      );
+    }
   }
 });
 

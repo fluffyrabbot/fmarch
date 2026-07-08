@@ -9130,6 +9130,9 @@ test("terminal receipt contract registry covers browser proof consumers", () => 
     assert.notEqual(contract.adminAuditVisibleRowsKey.trim(), "");
     assert.equal(typeof contract.adminAuditVisibleRowStatusesKey, "string");
     assert.notEqual(contract.adminAuditVisibleRowStatusesKey.trim(), "");
+    assert.equal(typeof contract.rowDefinitionsForReceipt, "function");
+    assert.equal(typeof contract.rowFieldsForReceipt, "function");
+    assert.equal(typeof contract.rowStatusForReceipt, "function");
     assert(contract.browserProofConsumers.length > 0);
     for (const definition of contract.rowDefinitions) {
       assert(definition.testId.startsWith(`${contract.rowTestIdPrefix}-`));

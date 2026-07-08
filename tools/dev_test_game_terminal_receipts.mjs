@@ -4,12 +4,16 @@ import {
 import {
   selectedLocalDependencyTerminalReceiptId,
   selectedLocalDependencyTerminalReceiptRowDefinitions,
+  selectedLocalDependencyTerminalReceiptRowDefinitionsForReceipt,
+  selectedLocalDependencyTerminalReceiptRowFields,
   selectedLocalDependencyTerminalReceiptRowStatuses,
   selectedLocalDependencyTerminalReceiptRowTestIdPrefix,
 } from "./dev_test_game_selected_local_dependency_receipt.mjs";
 import {
   selectedOperatorHandoffTerminalReceiptId,
   selectedOperatorHandoffTerminalReceiptRowDefinitions,
+  selectedOperatorHandoffTerminalReceiptRowDefinitionsForReceipt,
+  selectedOperatorHandoffTerminalReceiptRowFields,
   selectedOperatorHandoffTerminalReceiptRowStatuses,
   selectedOperatorHandoffTerminalReceiptRowTestIdPrefix,
 } from "./dev_test_game_selected_operator_handoff_receipt.mjs";
@@ -35,6 +39,9 @@ export const terminalReceiptContractRegistry = Object.freeze([
     adminAuditVisibleRowStatusesKey:
       "visibleSelectedLocalDependencyTerminalReceiptRowStatuses",
     rowDefinitions: selectedLocalDependencyTerminalReceiptRowDefinitions,
+    rowDefinitionsForReceipt:
+      selectedLocalDependencyTerminalReceiptRowDefinitionsForReceipt,
+    rowFieldsForReceipt: selectedLocalDependencyTerminalReceiptRowFields,
     rowStatusForReceipt: selectedLocalDependencyTerminalReceiptRowStatuses,
     rowTestIdPrefix: selectedLocalDependencyTerminalReceiptRowTestIdPrefix,
     browserProofConsumers: Object.freeze([
@@ -59,6 +66,9 @@ export const terminalReceiptContractRegistry = Object.freeze([
     adminAuditVisibleRowStatusesKey:
       "visibleSelectedOperatorHandoffTerminalReceiptRowStatuses",
     rowDefinitions: selectedOperatorHandoffTerminalReceiptRowDefinitions,
+    rowDefinitionsForReceipt:
+      selectedOperatorHandoffTerminalReceiptRowDefinitionsForReceipt,
+    rowFieldsForReceipt: selectedOperatorHandoffTerminalReceiptRowFields,
     rowStatusForReceipt: selectedOperatorHandoffTerminalReceiptRowStatuses,
     rowTestIdPrefix: selectedOperatorHandoffTerminalReceiptRowTestIdPrefix,
     browserProofConsumers: Object.freeze([
