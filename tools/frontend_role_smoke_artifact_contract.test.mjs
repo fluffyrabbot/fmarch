@@ -2,7 +2,11 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { EXPECTED_COUNTS } from "./frontend_proof_expectations.mjs";
+import {
+  EXPECTED_COUNTS,
+  MODERATOR_CRITICAL_ACTION_IDS,
+  MODERATOR_CRITICAL_CONFIRMATION_SCENARIO_IDS,
+} from "./frontend_proof_expectations.mjs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -160,6 +164,9 @@ const hostConfirmationStaticDomPath = path.join(
   "frontend-host-confirmation-static-dom",
   "static-dom.json",
 );
+// The payload-kind column is bespoke (e.g. extend_deadline_24h drives the
+// extend_deadline command), so this table stays local; its action-id column is
+// tied to the single source below so a moderator action can't silently drift.
 const moderatorCriticalConfirmationActions = Object.freeze([
   ["extend_deadline", "extend_deadline"],
   ["extend_deadline_24h", "extend_deadline"],
@@ -173,10 +180,13 @@ const moderatorCriticalConfirmationActions = Object.freeze([
   ["complete_game", "complete_game"],
   ["resolve_host_prompt-D01-skip_next_day-slot_1", "resolve_host_prompt"],
 ]);
+assert.deepEqual(
+  moderatorCriticalConfirmationActions.map(([actionId]) => actionId),
+  [...MODERATOR_CRITICAL_ACTION_IDS],
+  "moderator confirmation table action ids must track frontend_proof_expectations",
+);
 const moderatorCriticalConfirmationScenarioIds =
-  moderatorCriticalConfirmationActions.map(
-    ([actionId]) => `moderator-${actionId}-confirm-click`,
-  );
+  MODERATOR_CRITICAL_CONFIRMATION_SCENARIO_IDS;
 const expectedPlannedStabilityChecks = Object.freeze([
   {
     id: "admin-operator-action-status-floors",
@@ -184,7 +194,7 @@ const expectedPlannedStabilityChecks = Object.freeze([
     surfaceId: "admin",
     mode: "reserved-status-floor",
     statusFloorMinBlockSizePx: 44,
-    tileCount: 4,
+    tileCount: EXPECTED_COUNTS.adminStabilityFloorTiles,
     tileIds: [
       "admin-setup-create-game",
       "admin-setup-session-grants",
@@ -198,20 +208,8 @@ const expectedPlannedStabilityChecks = Object.freeze([
     surfaceId: "moderator",
     mode: "reserved-status-floor",
     statusFloorMinBlockSizePx: 44,
-    tileCount: 11,
-    tileIds: [
-      "moderator-extend_deadline",
-      "moderator-extend_deadline_24h",
-      "moderator-extend_deadline_48h",
-      "moderator-process_replacement",
-      "moderator-resolve_phase",
-      "moderator-lock_thread",
-      "moderator-publish_votecount",
-      "moderator-mark_dead",
-      "moderator-modkill_slot",
-      "moderator-complete_game",
-      "moderator-resolve_host_prompt-D01-skip_next_day-slot_1",
-    ],
+    tileCount: EXPECTED_COUNTS.moderatorCriticalActions,
+    tileIds: MODERATOR_CRITICAL_ACTION_IDS.map((id) => `moderator-${id}`),
   },
 ]);
 const keyboardTraversalPath = path.join(
@@ -4047,9 +4045,9 @@ test("in-app browser operator runbook records external replay workflow", async (
   assert.equal(typeof runbook.currentStatus.promotionEligible, "boolean");
   assert.deepEqual(runbook.fixture, {
     plannedInteractionCount: EXPECTED_COUNTS.plannedInteractions,
-    moderatorCriticalConfirmationCount: 11,
+    moderatorCriticalConfirmationCount: EXPECTED_COUNTS.moderatorCriticalActions,
     plannedStabilityCheckCount: 2,
-    stabilityCheckTileCount: 15,
+    stabilityCheckTileCount: EXPECTED_COUNTS.stabilityCheckTiles,
     plannedStabilityChecks: expectedPlannedStabilityChecks,
   });
   assert.equal(
@@ -4687,7 +4685,7 @@ test("frontend readiness summary reports role proof layers without promoting bro
     hostTouchTargetMinPx: 44,
     forbiddenMatchCount: 0,
     thumbZoneRoles: ["admin", "player", "moderator"],
-    moderatorCriticalActionCount: 11,
+    moderatorCriticalActionCount: EXPECTED_COUNTS.moderatorCriticalActions,
   });
   assert.equal(summary.shared.tabletInteraction.scannedFileCount > 0, true);
   assert.deepEqual(summary.roles.find((role) => role.id === "player").evidence.routeLive, [
@@ -5523,7 +5521,7 @@ test("frontend readiness summary reports role proof layers without promoting bro
           surfaceId: "admin",
           mode: "reserved-status-floor",
           statusFloorMinBlockSizePx: 44,
-          tileCount: 4,
+          tileCount: EXPECTED_COUNTS.adminStabilityFloorTiles,
         },
         {
           id: "moderator-primary-action-status-floors",
@@ -5531,7 +5529,7 @@ test("frontend readiness summary reports role proof layers without promoting bro
           surfaceId: "moderator",
           mode: "reserved-status-floor",
           statusFloorMinBlockSizePx: 44,
-          tileCount: 11,
+          tileCount: EXPECTED_COUNTS.moderatorCriticalActions,
         },
       ],
       blockedReason:
@@ -5542,7 +5540,7 @@ test("frontend readiness summary reports role proof layers without promoting bro
       artifactStatus: "passed",
       boundary:
         `Parses the generated file-backed in-app browser fixture HTML without opening localhost or launching Chromium. This proves every manifest command/error scenario owns exactly one target inside its scenario root, all ${EXPECTED_COUNTS.moderatorCriticalActions} moderator critical host confirmation scenarios carry DOM-visible object/outcome text and alertdialog focus metadata, modeled route evidence is present for the player role-PM scenario, modeled error-surface evidence is present for the player private-channel 403, hydrated-surface controls exist inside their scenario roots, touch-floor metadata is present where the rendered control models it, and player private fixture markup excludes host-only copy. It does not prove CSS layout pixels, browser click delivery, focus landing, Svelte hydration, command dispatch side effects, TCP transport, WebSocket delivery, or localhost-backed app acceptance.`,
-      scenarioCount: 18,
+      scenarioCount: EXPECTED_COUNTS.commandScenarios,
       hydratedScenarioCount: 6,
       stabilityChecks: [
         {
@@ -5551,7 +5549,7 @@ test("frontend readiness summary reports role proof layers without promoting bro
           surfaceId: "admin",
           mode: "reserved-status-floor",
           statusFloorMinBlockSizePx: 44,
-          tileCount: 4,
+          tileCount: EXPECTED_COUNTS.adminStabilityFloorTiles,
         },
         {
           id: "moderator-primary-action-status-floors",
@@ -5559,7 +5557,7 @@ test("frontend readiness summary reports role proof layers without promoting bro
           surfaceId: "moderator",
           mode: "reserved-status-floor",
           statusFloorMinBlockSizePx: 44,
-          tileCount: 11,
+          tileCount: EXPECTED_COUNTS.moderatorCriticalActions,
         },
       ],
       playerPrivateChannelRoute: {
@@ -5678,8 +5676,8 @@ test("frontend readiness summary reports role proof layers without promoting bro
         runCount: 0,
         plannedInteractionCount: EXPECTED_COUNTS.plannedInteractions,
         plannedStabilityCheckCount: 2,
-        stabilityCheckTileCount: 15,
-        moderatorCriticalConfirmationCount: 11,
+        stabilityCheckTileCount: EXPECTED_COUNTS.stabilityCheckTiles,
+        moderatorCriticalConfirmationCount: EXPECTED_COUNTS.moderatorCriticalActions,
         screenshotCheckCount: 0,
       },
       blocking: [
