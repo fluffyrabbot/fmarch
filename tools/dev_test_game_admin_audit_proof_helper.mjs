@@ -1221,7 +1221,7 @@ export async function proveAdminAuditDetail({
       if (linkId === "" || destinationAuditId === "") {
         throw new Error(`${auditId} admin proof has a malformed related destination`);
       }
-      await page.goto(detailUrl, { waitUntil: "networkidle" });
+      await page.goto(detailUrl, { waitUntil: "domcontentloaded" });
       await page.getByTestId("admin-audit-detail-surface").waitFor({
         state: "visible",
         timeout: 15000,
@@ -1239,7 +1239,7 @@ export async function proveAdminAuditDetail({
         ),
         page.getByTestId(`admin-audit-related-link-${linkId}`).click(),
       ]);
-      await page.waitForLoadState("networkidle");
+      await page.waitForLoadState("domcontentloaded");
       await page.getByTestId("admin-audit-detail-surface").waitFor({
         state: "visible",
         timeout: 15000,

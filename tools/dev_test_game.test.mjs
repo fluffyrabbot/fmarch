@@ -6883,7 +6883,7 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
   assert.deepEqual(
     proofGraphAdminGeneratedFrom.selectedOperatorHandoffReceiptDestination
       .requiredSelectedOperatorHandoffTerminalReceiptRows,
-    ["receipt", "selected", "edge", "readiness-link"],
+    ["receipt", "selected", "packet", "edge", "readiness-link"],
   );
   assert.deepEqual(
     proofGraphAdminGeneratedFrom.adminSpineTerminalValidationDestination
@@ -7116,6 +7116,7 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
       assertions: [
         "next-action.selectedOperatorHandoff",
         "proof-graph.selected-operator-handoff-edge",
+        "proof-graph.selected-operator-packet-node",
         "release-readiness.selected-operator-handoff-related-link",
       ],
       selectedOperatorHandoff: {
@@ -7132,6 +7133,25 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
         selectedProductionFeatureRoleUrl:
           "/admin/audit/local-core-loop?game=<seeded-game>",
         rawEvidenceTemplate: hostedMatrixRawEvidenceTemplateDescriptor(),
+      },
+      selectedOperatorHandoffPacket: {
+        status: "blocked",
+        firstMissingInputId: "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
+        firstMissingCheckId: "hosted-frontend-url-configured",
+        firstMissingSectionId: "hosted-target",
+        proofTarget: devTestGameHostedEvidenceOperatorChecklistProofPath,
+        packetProofTarget: devTestGameHostedTargetPreflightPath,
+        nextProofTarget: devTestGameHostedEvidenceOperatorChecklistProofPath,
+        selectedProductionFeatureGraphNodeId:
+          "production-feature:host-phase-control",
+        selectedProductionFeatureRoleUrl:
+          "/admin/audit/local-core-loop?game=<seeded-game>",
+        handoffRoleUrl:
+          "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
+        operatorChecklistProofTarget: devTestGameHostedEvidenceLanePath,
+        operatorChecklistPreflightTarget: devTestGameHostedTargetPreflightPath,
+        rawEvidenceTemplate: hostedMatrixRawEvidenceTemplateDescriptor(),
+        proofGraphNodeId: "selected-operator-handoff-packet",
       },
       proofGraphEdge: {
         from: "next-action",
@@ -19243,6 +19263,7 @@ test("session card and markdown include role credential URLs and tokens", async 
   assert.deepEqual(requiredSelectedOperatorHandoffTerminalReceiptRows, [
     "receipt",
     "selected",
+    "packet",
     "edge",
     "readiness-link",
   ]);
@@ -26944,6 +26965,7 @@ function selectedLocalDependencyTerminalReceiptFixture() {
 }
 
 function selectedOperatorHandoffReceiptPassedFixture() {
+  const blockedOperatorPacket = selectedOperatorHandoffBlockedOperatorPacket();
   return buildSelectedOperatorHandoffTerminalReceipt({
     nextAction: {
       selectedOperatorHandoff: {
@@ -26960,9 +26982,11 @@ function selectedOperatorHandoffReceiptPassedFixture() {
         selectedProductionFeatureRoleUrl:
           "/admin/audit/local-core-loop?game=<seeded-game>",
         rawEvidenceTemplate: hostedMatrixRawEvidenceTemplateDescriptor(),
+        blockedOperatorPacket,
       },
     },
     proofGraph: {
+      nodes: [selectedOperatorHandoffProofGraphPacketNodeFixture()],
       edges: [
         {
           from: "next-action",
@@ -26977,6 +27001,65 @@ function selectedOperatorHandoffReceiptPassedFixture() {
       ],
     },
   });
+}
+
+function selectedOperatorHandoffProofGraphPacketNodeFixture() {
+  const packet = selectedOperatorHandoffBlockedOperatorPacket();
+  return {
+    id: "selected-operator-handoff-packet",
+    packetId: "hosted-deployment:blocked-operator-packet",
+    kind: "selected-operator-handoff-packet",
+    status: packet.status,
+    proofTarget: devTestGameHostedEvidenceLanePath,
+    packetProofTarget: packet.proofTarget,
+    nextProofTarget: packet.nextProofTarget,
+    firstMissingInputId: packet.firstMissingInputId,
+    firstMissingCheckId: packet.firstMissingCheckId,
+    selectedProductionFeatureGraphNodeId:
+      packet.selectedProductionFeatureGraphNodeId,
+    selectedProductionFeatureRoleUrl:
+      packet.selectedProductionFeatureRoleUrl,
+    rawEvidenceTemplate: packet.rawEvidenceTemplate,
+  };
+}
+
+function selectedOperatorHandoffBlockedOperatorPacket() {
+  return {
+    status: "blocked",
+    firstMissingInputId: "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
+    firstMissingCheckId: "hosted-frontend-url-configured",
+    firstMissingSectionId: "hosted-target",
+    firstMissingSectionLabel: "Hosted target",
+    firstMissingRequiredEvidence:
+      hostedTargetPreflightMissingFrontendUrlRequiredEvidence,
+    rawEvidenceContractSummary: hostedMatrixRawEvidenceContractSummary(),
+    rawEvidenceContractRequiredTopLevelFields:
+      hostedMatrixRawEvidenceContract.requiredTopLevelFields,
+    rawEvidenceTemplate: hostedMatrixRawEvidenceTemplateDescriptor(),
+    operatorAction: hostedEvidenceOperatorAction,
+    operatorChecklist: hostedEvidenceOperatorChecklistDescriptor(),
+    localVsHostedBoundary: hostedEvidenceLocalVsHostedBoundary,
+    proofTarget: devTestGameHostedTargetPreflightPath,
+    nextProofTarget: devTestGameHostedTargetPreflightPath,
+    missingRequiredInputs: [
+      "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
+      "FMARCH_HOSTED_MATRIX_API_URL",
+      "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
+    ],
+    selectedProductionFeatureGraphNodeId:
+      "production-feature:host-phase-control",
+    selectedProductionFeatureRoleUrl:
+      "/admin/audit/local-core-loop?game=<seeded-game>",
+    roleSurfaceDrilldown: {
+      localCapabilityAuditId: localAdminAuditIds.coreLoop,
+      localCapabilityRoleUrl: localAdminAuditRoleUrl(localAdminAuditIds.coreLoop),
+      handoffAuditId: localAdminAuditIds.hostedEvidenceLane,
+      handoffRoleUrl: localAdminAuditRoleUrl(localAdminAuditIds.hostedEvidenceLane),
+      proofGraphNodeId: "admin-proof:hosted-evidence-lane",
+      productionFeatureGraphNodeId: "production-feature:host-phase-control",
+      proofGraphEvidencePath: devTestGameProofGraphPath,
+    },
+  };
 }
 
 function selectedOperatorHandoffReceiptDestinationFixture() {

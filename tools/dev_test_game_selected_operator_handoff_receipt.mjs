@@ -104,6 +104,7 @@ export function buildSelectedOperatorHandoffTerminalReceipt({
     assertions: [
       "next-action.selectedOperatorHandoff",
       "proof-graph.selected-operator-handoff-edge",
+      "proof-graph.selected-operator-packet-node",
       "release-readiness.selected-operator-handoff-related-link",
     ],
   };
@@ -122,6 +123,10 @@ export function buildSelectedOperatorHandoffTerminalReceipt({
     selectedOperatorHandoff: selectedOperatorHandoffSummary(
       selectedOperatorHandoff,
     ),
+    selectedOperatorHandoffPacket: selectedOperatorHandoffPacketSummary({
+      handoff: selectedOperatorHandoff,
+      proofGraph,
+    }),
     proofGraphEdge,
     readinessRelatedLink: selectedOperatorHandoffReadinessRelatedLink(
       selectedOperatorHandoff,
@@ -146,6 +151,7 @@ export function assertSelectedOperatorHandoffTerminalReceipt(
     !Array.isArray(receipt.assertions) ||
     !receipt.assertions.includes("next-action.selectedOperatorHandoff") ||
     !receipt.assertions.includes("proof-graph.selected-operator-handoff-edge") ||
+    !receipt.assertions.includes("proof-graph.selected-operator-packet-node") ||
     !receipt.assertions.includes(
       "release-readiness.selected-operator-handoff-related-link",
     )
@@ -166,6 +172,7 @@ export function assertSelectedOperatorHandoffTerminalReceipt(
       receipt.status !== "not_applicable" ||
       receipt.reason !== "no-selected-operator-handoff" ||
       receipt.selectedOperatorHandoff !== undefined ||
+      receipt.selectedOperatorHandoffPacket !== undefined ||
       receipt.proofGraphEdge !== undefined ||
       receipt.readinessRelatedLink !== undefined
     ) {
@@ -207,6 +214,7 @@ export function selectedOperatorHandoffTerminalReceiptDestinationFields(
     requiredSelectedOperatorHandoffTerminalReceiptRows: [
       "receipt",
       "selected",
+      "packet",
       "edge",
       "readiness-link",
     ],
@@ -221,6 +229,7 @@ export function selectedOperatorHandoffTerminalReceiptDestinationFields(
         receipt.sourceArtifacts.releaseReadiness,
       ].join("\n"),
       selected: selectedOperatorHandoffReceiptSelectedRowStatus(receipt),
+      packet: selectedOperatorHandoffReceiptPacketRowStatus(receipt),
       edge: [
         receipt.proofGraphEdge.from,
         receipt.proofGraphEdge.relationship,
@@ -243,6 +252,7 @@ function assertSelectedOperatorHandoffReceiptShape(receipt) {
     if (
       receipt.reason !== "no-selected-operator-handoff" ||
       receipt.selectedOperatorHandoff !== undefined ||
+      receipt.selectedOperatorHandoffPacket !== undefined ||
       receipt.proofGraphEdge !== undefined ||
       receipt.readinessRelatedLink !== undefined
     ) {
@@ -259,6 +269,14 @@ function assertSelectedOperatorHandoffReceiptShape(receipt) {
     receipt.selectedOperatorHandoff.firstMissingInputId === "" ||
     receipt.selectedOperatorHandoff.selectedProductionFeatureGraphNodeId ===
       "" ||
+    receipt.selectedOperatorHandoffPacket === null ||
+    typeof receipt.selectedOperatorHandoffPacket !== "object" ||
+    receipt.selectedOperatorHandoffPacket.firstMissingInputId !==
+      receipt.selectedOperatorHandoff.firstMissingInputId ||
+    receipt.selectedOperatorHandoffPacket.selectedProductionFeatureGraphNodeId !==
+      receipt.selectedOperatorHandoff.selectedProductionFeatureGraphNodeId ||
+    receipt.selectedOperatorHandoffPacket.selectedProductionFeatureRoleUrl !==
+      receipt.selectedOperatorHandoff.selectedProductionFeatureRoleUrl ||
     receipt.proofGraphEdge?.relationship !==
       selectedOperatorHandoffGraphRelationship ||
     receipt.proofGraphEdge?.from !== "next-action" ||
@@ -284,6 +302,28 @@ function assertSelectedOperatorHandoffReceiptShape(receipt) {
   ) {
     throw new Error("selected operator handoff terminal receipt is malformed");
   }
+}
+
+export function selectedOperatorHandoffReceiptPacketRowStatus(receipt) {
+  const packet = receipt.selectedOperatorHandoffPacket;
+  const template = packet.rawEvidenceTemplate;
+  return [
+    packet.status,
+    packet.firstMissingInputId,
+    packet.firstMissingCheckId,
+    packet.firstMissingSectionId,
+    packet.proofTarget,
+    packet.packetProofTarget,
+    packet.nextProofTarget,
+    packet.selectedProductionFeatureGraphNodeId,
+    packet.selectedProductionFeatureRoleUrl,
+    packet.handoffRoleUrl,
+    packet.operatorChecklistProofTarget,
+    packet.operatorChecklistPreflightTarget,
+    ...hostedMatrixRawEvidenceTemplateDescriptorFieldValues(template).map(
+      (field) => field.value,
+    ),
+  ].join("\n");
 }
 
 function selectedOperatorHandoffSummary(handoff) {
@@ -312,6 +352,76 @@ function selectedOperatorHandoffSummary(handoff) {
             ),
         }),
   });
+}
+
+function selectedOperatorHandoffPacketSummary({ handoff, proofGraph }) {
+  const packet = assertBlockedOperatorPacket(handoff.blockedOperatorPacket);
+  const proofGraphNode = selectedOperatorHandoffProofGraphPacketNode({
+    handoff,
+    packet,
+    proofGraph,
+  });
+  const roleSurfaceDrilldown = packet.roleSurfaceDrilldown ?? {};
+  const operatorChecklist = packet.operatorChecklist ?? {};
+  return Object.freeze({
+    status: packet.status,
+    firstMissingInputId: packet.firstMissingInputId,
+    firstMissingCheckId: packet.firstMissingCheckId,
+    firstMissingSectionId: packet.firstMissingSectionId,
+    proofTarget: handoff.proofTarget,
+    packetProofTarget: packet.proofTarget,
+    nextProofTarget: packet.nextProofTarget,
+    selectedProductionFeatureGraphNodeId:
+      packet.selectedProductionFeatureGraphNodeId,
+    selectedProductionFeatureRoleUrl:
+      packet.selectedProductionFeatureRoleUrl,
+    handoffRoleUrl: String(roleSurfaceDrilldown.handoffRoleUrl ?? ""),
+    operatorChecklistProofTarget: String(operatorChecklist.proofTarget ?? ""),
+    operatorChecklistPreflightTarget: String(
+      operatorChecklist.preflightTarget ?? "",
+    ),
+    rawEvidenceTemplate: assertHostedMatrixRawEvidenceTemplateDescriptor(
+      packet.rawEvidenceTemplate,
+    ),
+    ...(proofGraphNode === null ? {} : { proofGraphNodeId: proofGraphNode.id }),
+  });
+}
+
+function selectedOperatorHandoffProofGraphPacketNode({
+  handoff,
+  packet,
+  proofGraph,
+}) {
+  if (
+    proofGraph === null ||
+    typeof proofGraph !== "object" ||
+    !Array.isArray(proofGraph.nodes)
+  ) {
+    return null;
+  }
+  const node = (proofGraph.nodes ?? []).find(
+    (candidate) => candidate.id === "selected-operator-handoff-packet",
+  );
+  if (node === undefined) {
+    throw new Error("proof graph is missing selected operator packet node");
+  }
+  if (
+    node.packetId !== handoff.id ||
+    node.status !== packet.status ||
+    node.proofTarget !== handoff.proofTarget ||
+    node.packetProofTarget !== packet.proofTarget ||
+    node.nextProofTarget !== packet.nextProofTarget ||
+    node.firstMissingInputId !== packet.firstMissingInputId ||
+    node.firstMissingCheckId !== packet.firstMissingCheckId ||
+    node.selectedProductionFeatureGraphNodeId !==
+      packet.selectedProductionFeatureGraphNodeId ||
+    node.selectedProductionFeatureRoleUrl !==
+      packet.selectedProductionFeatureRoleUrl ||
+    node.rawEvidenceTemplate?.path !== packet.rawEvidenceTemplate?.path
+  ) {
+    throw new Error("proof graph selected operator packet node drifted");
+  }
+  return node;
 }
 
 function selectedOperatorHandoffProofGraphEdge({ handoff, proofGraph }) {

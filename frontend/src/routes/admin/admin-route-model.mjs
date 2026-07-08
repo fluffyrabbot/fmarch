@@ -506,6 +506,90 @@ function selectedOperatorHandoffTerminalReceiptSummarySections(receipt) {
                   ),
                 ],
               },
+              ...(receipt.selectedOperatorHandoffPacket === undefined
+                ? []
+                : [
+                    {
+                      id: "selected-operator-handoff-packet",
+                      testId:
+                        "admin-audit-selected-operator-handoff-terminal-packet",
+                      values: [
+                        {
+                          id: "status",
+                          text: receipt.selectedOperatorHandoffPacket.status,
+                          emphasized: true,
+                        },
+                        {
+                          id: "firstMissingInputId",
+                          text:
+                            receipt.selectedOperatorHandoffPacket
+                              .firstMissingInputId,
+                        },
+                        {
+                          id: "firstMissingCheckId",
+                          text:
+                            receipt.selectedOperatorHandoffPacket
+                              .firstMissingCheckId,
+                        },
+                        {
+                          id: "firstMissingSectionId",
+                          text:
+                            receipt.selectedOperatorHandoffPacket
+                              .firstMissingSectionId,
+                        },
+                        {
+                          id: "proofTarget",
+                          text: receipt.selectedOperatorHandoffPacket.proofTarget,
+                        },
+                        {
+                          id: "packetProofTarget",
+                          text:
+                            receipt.selectedOperatorHandoffPacket
+                              .packetProofTarget,
+                        },
+                        {
+                          id: "nextProofTarget",
+                          text:
+                            receipt.selectedOperatorHandoffPacket
+                              .nextProofTarget,
+                        },
+                        {
+                          id: "selectedProductionFeatureGraphNodeId",
+                          text:
+                            receipt.selectedOperatorHandoffPacket
+                              .selectedProductionFeatureGraphNodeId,
+                        },
+                        {
+                          id: "selectedProductionFeatureRoleUrl",
+                          text:
+                            receipt.selectedOperatorHandoffPacket
+                              .selectedProductionFeatureRoleUrl,
+                        },
+                        {
+                          id: "handoffRoleUrl",
+                          text:
+                            receipt.selectedOperatorHandoffPacket
+                              .handoffRoleUrl,
+                        },
+                        {
+                          id: "operatorChecklistProofTarget",
+                          text:
+                            receipt.selectedOperatorHandoffPacket
+                              .operatorChecklistProofTarget,
+                        },
+                        {
+                          id: "operatorChecklistPreflightTarget",
+                          text:
+                            receipt.selectedOperatorHandoffPacket
+                              .operatorChecklistPreflightTarget,
+                        },
+                        ...rawEvidenceTemplateDescriptorValues(
+                          receipt.selectedOperatorHandoffPacket
+                            .rawEvidenceTemplate,
+                        ),
+                      ],
+                    },
+                  ]),
               {
                 id: "proof-graph-edge",
                 testId:
@@ -8019,6 +8103,59 @@ function normalizeSelectedOperatorHandoffTerminalReceipt(receipt) {
               receipt.selectedOperatorHandoff.rawEvidenceTemplate,
             ),
           }),
+          ...(receipt.selectedOperatorHandoffPacket === undefined
+            ? {}
+            : {
+                selectedOperatorHandoffPacket: Object.freeze({
+                  status: String(
+                    receipt.selectedOperatorHandoffPacket.status ?? "",
+                  ),
+                  firstMissingInputId: String(
+                    receipt.selectedOperatorHandoffPacket
+                      .firstMissingInputId ?? "",
+                  ),
+                  firstMissingCheckId: String(
+                    receipt.selectedOperatorHandoffPacket
+                      .firstMissingCheckId ?? "",
+                  ),
+                  firstMissingSectionId: String(
+                    receipt.selectedOperatorHandoffPacket
+                      .firstMissingSectionId ?? "",
+                  ),
+                  proofTarget: String(
+                    receipt.selectedOperatorHandoffPacket.proofTarget ?? "",
+                  ),
+                  packetProofTarget: String(
+                    receipt.selectedOperatorHandoffPacket
+                      .packetProofTarget ?? "",
+                  ),
+                  nextProofTarget: String(
+                    receipt.selectedOperatorHandoffPacket.nextProofTarget ?? "",
+                  ),
+                  selectedProductionFeatureGraphNodeId: String(
+                    receipt.selectedOperatorHandoffPacket
+                      .selectedProductionFeatureGraphNodeId ?? "",
+                  ),
+                  selectedProductionFeatureRoleUrl: String(
+                    receipt.selectedOperatorHandoffPacket
+                      .selectedProductionFeatureRoleUrl ?? "",
+                  ),
+                  handoffRoleUrl: String(
+                    receipt.selectedOperatorHandoffPacket.handoffRoleUrl ?? "",
+                  ),
+                  operatorChecklistProofTarget: String(
+                    receipt.selectedOperatorHandoffPacket
+                      .operatorChecklistProofTarget ?? "",
+                  ),
+                  operatorChecklistPreflightTarget: String(
+                    receipt.selectedOperatorHandoffPacket
+                      .operatorChecklistPreflightTarget ?? "",
+                  ),
+                  ...rawEvidenceTemplateDescriptorProperty(
+                    receipt.selectedOperatorHandoffPacket.rawEvidenceTemplate,
+                  ),
+                }),
+              }),
           proofGraphEdge: Object.freeze({
             from: String(receipt.proofGraphEdge?.from ?? ""),
             to: String(receipt.proofGraphEdge?.to ?? ""),

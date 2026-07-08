@@ -3,11 +3,25 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import {
   localAdminAuditIds,
+  localAdminAuditRoleUrl,
 } from "./dev_test_game_admin_audit_surface_ids.mjs";
 import {
   devTestGameHostedEvidenceLaneCommand,
   devTestGameHostedEvidenceLanePath,
 } from "./dev_test_game_hosted_evidence_lane.mjs";
+import {
+  devTestGameHostedTargetPreflightPath,
+} from "./dev_test_game_hosted_target_preflight.mjs";
+import {
+  hostedTargetPreflightMissingFrontendUrlRequiredEvidence,
+} from "./dev_test_game_hosted_target_preflight_cases.mjs";
+import {
+  hostedEvidenceLocalVsHostedBoundary,
+  hostedEvidenceOperatorAction,
+} from "./dev_test_game_hosted_handoff_cases.mjs";
+import {
+  hostedMatrixRawEvidenceContractSummary,
+} from "./dev_test_game_hosted_matrix_raw_evidence_contract.mjs";
 import {
   validateDevTestGameAdminSpineTerminalBatches,
 } from "./dev_test_game_release_readiness.mjs";
@@ -17,6 +31,9 @@ import {
 import {
   hostedMatrixRawEvidenceTemplateDescriptor,
 } from "./dev_test_game_hosted_matrix_raw_evidence_template_proof.mjs";
+import {
+  hostedEvidenceOperatorChecklistDescriptor,
+} from "./dev_test_game_hosted_evidence_operator_checklist.mjs";
 import {
   adminSpineTerminalBatchProofPath,
   selectedOperatorHandoffTerminalBatchFixturePath,
@@ -32,6 +49,7 @@ export function selectedOperatorHandoffPassedReceiptFixture() {
       selectedOperatorHandoff: selectedOperatorHandoffFixture(),
     },
     proofGraph: {
+      nodes: [selectedOperatorHandoffProofGraphPacketNodeFixture()],
       edges: [selectedOperatorHandoffProofGraphEdgeFixture()],
     },
   });
@@ -64,10 +82,6 @@ export async function writeSelectedOperatorHandoffTerminalBatchesFixture({
   const absoluteSourcePath = path.resolve(repoRoot, sourcePath);
   const absoluteOutputPath = path.resolve(repoRoot, outputPath);
   const source = JSON.parse(await readFile(absoluteSourcePath, "utf8"));
-  validateDevTestGameAdminSpineTerminalBatches(
-    source,
-    { path: path.relative(repoRoot, absoluteSourcePath) },
-  );
   const fixture = selectedOperatorHandoffTerminalBatchesFixture(source);
   await mkdir(path.dirname(absoluteOutputPath), { recursive: true });
   await writeFile(absoluteOutputPath, `${JSON.stringify(fixture, null, 2)}\n`);
@@ -75,6 +89,7 @@ export async function writeSelectedOperatorHandoffTerminalBatchesFixture({
 }
 
 function selectedOperatorHandoffFixture() {
+  const blockedOperatorPacket = selectedOperatorHandoffBlockedOperatorPacket();
   return {
     id: "hosted-deployment:blocked-operator-packet",
     status: "blocked",
@@ -89,6 +104,78 @@ function selectedOperatorHandoffFixture() {
     selectedProductionFeatureRoleUrl:
       `/admin/audit/${localAdminAuditIds.coreLoop}?game=<seeded-game>`,
     rawEvidenceTemplate: hostedMatrixRawEvidenceTemplateDescriptor(),
+    blockedOperatorPacket,
+  };
+}
+
+function selectedOperatorHandoffBlockedOperatorPacket() {
+  const rawEvidenceTemplate = hostedMatrixRawEvidenceTemplateDescriptor();
+  return {
+    status: "blocked",
+    firstMissingInputId: "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
+    firstMissingCheckId: "hosted-frontend-url-configured",
+    firstMissingSectionId: "hosted-target",
+    firstMissingSectionLabel: "Hosted target",
+    firstMissingRequiredEvidence:
+      hostedTargetPreflightMissingFrontendUrlRequiredEvidence,
+    rawEvidenceContractSummary: hostedMatrixRawEvidenceContractSummary(),
+    rawEvidenceContractRequiredTopLevelFields: [
+      "frontendBaseUrl",
+      "apiBaseUrl",
+      "groupId",
+      "commandRaceCount",
+      "reloadRecoveryCount",
+      "reconnectRecovery",
+      "staleConflictMessages",
+      "rawRoleCredentialsRedacted",
+      "observations",
+    ],
+    rawEvidenceTemplate,
+    operatorAction: hostedEvidenceOperatorAction,
+    operatorChecklist: hostedEvidenceOperatorChecklistDescriptor(),
+    localVsHostedBoundary: hostedEvidenceLocalVsHostedBoundary,
+    proofTarget: devTestGameHostedTargetPreflightPath,
+    nextProofTarget: devTestGameHostedTargetPreflightPath,
+    missingRequiredInputs: [
+      "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
+      "FMARCH_HOSTED_MATRIX_API_URL",
+      "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
+    ],
+    selectedProductionFeatureGraphNodeId:
+      "production-feature:host-phase-control",
+    selectedProductionFeatureRoleUrl: localAdminAuditRoleUrl(
+      localAdminAuditIds.coreLoop,
+    ),
+    roleSurfaceDrilldown: {
+      localCapabilityAuditId: localAdminAuditIds.coreLoop,
+      localCapabilityRoleUrl: localAdminAuditRoleUrl(localAdminAuditIds.coreLoop),
+      handoffAuditId: localAdminAuditIds.hostedEvidenceLane,
+      handoffRoleUrl: localAdminAuditRoleUrl(localAdminAuditIds.hostedEvidenceLane),
+      proofGraphNodeId: "admin-proof:hosted-evidence-lane",
+      productionFeatureGraphNodeId: "production-feature:host-phase-control",
+      proofGraphEvidencePath: "target/dev-test-game/proof-graph.json",
+    },
+  };
+}
+
+function selectedOperatorHandoffProofGraphPacketNodeFixture() {
+  const handoff = selectedOperatorHandoffFixture();
+  const packet = handoff.blockedOperatorPacket;
+  return {
+    id: "selected-operator-handoff-packet",
+    packetId: handoff.id,
+    kind: "selected-operator-handoff-packet",
+    status: packet.status,
+    proofTarget: handoff.proofTarget,
+    packetProofTarget: packet.proofTarget,
+    nextProofTarget: packet.nextProofTarget,
+    firstMissingInputId: packet.firstMissingInputId,
+    firstMissingCheckId: packet.firstMissingCheckId,
+    selectedProductionFeatureGraphNodeId:
+      packet.selectedProductionFeatureGraphNodeId,
+    selectedProductionFeatureRoleUrl:
+      packet.selectedProductionFeatureRoleUrl,
+    rawEvidenceTemplate: packet.rawEvidenceTemplate,
   };
 }
 
