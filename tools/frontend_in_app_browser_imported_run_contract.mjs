@@ -3,6 +3,12 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { analyzePngScreenshot } from "./frontend_screenshot_pixels.mjs";
+import {
+  EXPECTED_COUNTS,
+  MODERATOR_CRITICAL_CONFIRMATION_SCENARIO_IDS,
+  PLANNED_INTERACTION_IDS,
+  expectedStabilityCheckShape,
+} from "./frontend_proof_expectations.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const artifactDir = path.join(repoRoot, "target", "frontend-in-app-browser-imported-run");
@@ -12,34 +18,6 @@ const sources = {
   staticDom: "target/frontend-in-app-browser-static-dom/static-dom.json",
   replayHandoff: "target/frontend-in-app-browser-interactions/replay-handoff.json",
 };
-const moderatorCriticalConfirmationScenarioIds = Object.freeze([
-  "moderator-extend_deadline-confirm-click",
-  "moderator-extend_deadline_24h-confirm-click",
-  "moderator-extend_deadline_48h-confirm-click",
-  "moderator-process_replacement-confirm-click",
-  "moderator-resolve_phase-confirm-click",
-  "moderator-lock_thread-confirm-click",
-  "moderator-publish_votecount-confirm-click",
-  "moderator-mark_dead-confirm-click",
-  "moderator-modkill_slot-confirm-click",
-  "moderator-complete_game-confirm-click",
-  "moderator-resolve_host_prompt-D01-skip_next_day-slot_1-confirm-click",
-]);
-const expectedInteractionIds = Object.freeze([
-  "admin-cohost-confirm-click",
-  "admin-session-grant-confirm-click",
-  "admin-recovery-gate-confirm-click",
-  "player-submit-vote-click",
-  "player-submit-post-click",
-  "player-private-channel-submit-post-click",
-  "route-error-back-to-board-click",
-  ...moderatorCriticalConfirmationScenarioIds,
-  "admin-audit-native-flow",
-  "admin-operational-forms",
-  "player-private-disclosure-vote-and-post",
-  "moderator-host-prompt-confirmation",
-  "moderator-slot-lifecycle-confirmation",
-]);
 const expectedStabilityCheckIds = Object.freeze([
   "admin-operator-action-status-floors",
   "moderator-primary-action-status-floors",
@@ -88,7 +66,7 @@ async function importedPassedEvidence() {
   const screenshotChecks = [];
   for (const run of browserRun.runs) {
     assert.equal(run.pageReady.status, "ready");
-    assert.equal(run.pageReady.scenarioCount >= 16, true);
+    assert.equal(run.pageReady.scenarioCount >= EXPECTED_COUNTS.commandScenarios, true);
     assert.equal(run.pageReady.hydratedScenarioCount >= 6, true);
     assertImportedInteractions(run);
     assertImportedStabilityChecks(run);
@@ -99,7 +77,7 @@ async function importedPassedEvidence() {
     status: "imported-passed",
     proof: "in-app-browser-imported-run-contract",
     boundary:
-      "Validates a passed file-backed in-app browser browser-run artifact without launching Chromium. It rechecks the current fixture manifest, static DOM contract, planned interaction matrix, per-viewport click/focus/touch evidence, all 11 moderator critical host confirmation metadata records, player private-channel route/disclosure evidence, and referenced screenshot PNG pixels. It does not prove fixture freshness after the imported run, Svelte client hydration, command side effects, TCP transport, WebSocket delivery, dev-server routing, or localhost-backed app acceptance.",
+      `Validates a passed file-backed in-app browser browser-run artifact without launching Chromium. It rechecks the current fixture manifest, static DOM contract, planned interaction matrix, per-viewport click/focus/touch evidence, all ${EXPECTED_COUNTS.moderatorCriticalActions} moderator critical host confirmation metadata records, player private-channel route/disclosure evidence, and referenced screenshot PNG pixels. It does not prove fixture freshness after the imported run, Svelte client hydration, command side effects, TCP transport, WebSocket delivery, dev-server routing, or localhost-backed app acceptance.`,
     generatedFrom: {
       ...sources,
       sourceBrowserRun: relativeOrAbsolute(sourceBrowserRun),
@@ -115,7 +93,8 @@ async function importedPassedEvidence() {
         (sum, check) => sum + (check.tiles?.length ?? 0),
         0,
       ),
-      moderatorCriticalConfirmationCount: moderatorCriticalConfirmationScenarioIds.length,
+      moderatorCriticalConfirmationCount:
+        EXPECTED_COUNTS.moderatorCriticalActions,
       screenshotChecks,
     },
     blocking: [],
@@ -154,7 +133,8 @@ function sourceBlockedEvidence() {
           0,
         ) ??
         0,
-      moderatorCriticalConfirmationCount: moderatorCriticalConfirmationScenarioIds.length,
+      moderatorCriticalConfirmationCount:
+        EXPECTED_COUNTS.moderatorCriticalActions,
       screenshotChecks: [],
     },
     blocking: [
@@ -186,7 +166,7 @@ async function validateScreenshot(run) {
 
 function assertImportedInteractions(run) {
   const ids = new Set((run.interactions ?? []).map((entry) => entry.id));
-  for (const id of expectedInteractionIds) {
+  for (const id of PLANNED_INTERACTION_IDS) {
     assert.equal(ids.has(id), true, `imported run missing ${id}`);
   }
   for (const entry of run.interactions ?? []) {
@@ -196,7 +176,7 @@ function assertImportedInteractions(run) {
     assert.equal(entry.targetBox.width >= entry.minTouchTargetPx, true);
     assert.equal(entry.targetBox.height >= entry.minTouchTargetPx, true);
   }
-  for (const id of moderatorCriticalConfirmationScenarioIds) {
+  for (const id of MODERATOR_CRITICAL_CONFIRMATION_SCENARIO_IDS) {
     const entry = run.interactions.find((interaction) => interaction.id === id);
     assert.equal(hasModeratorBrowserConfirmationEvidence(entry), true);
   }
@@ -275,17 +255,14 @@ function hasModeratorBrowserConfirmationEvidence(entry) {
 function assertInAppBrowserPlannedInteractions(plannedInteractions) {
   assert.deepEqual(
     plannedInteractions.map((entry) => entry.id),
-    expectedInteractionIds,
+    PLANNED_INTERACTION_IDS,
   );
 }
 
 function assertInAppBrowserPlannedStabilityChecks(plannedStabilityChecks) {
   assert.deepEqual(
     plannedStabilityChecks.map((entry) => [entry.id, entry.mode, entry.tiles.length]),
-    [
-      ["admin-operator-action-status-floors", "reserved-status-floor", 4],
-      ["moderator-primary-action-status-floors", "reserved-status-floor", 11],
-    ],
+    expectedStabilityCheckShape(),
   );
 }
 

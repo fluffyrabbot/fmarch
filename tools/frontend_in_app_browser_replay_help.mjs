@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { EXPECTED_COUNTS } from "./frontend_proof_expectations.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const artifactDir = path.join(repoRoot, "target", "frontend-in-app-browser-replay-help");
@@ -34,12 +35,12 @@ assert.equal(
   true,
 );
 assert.equal(runbook.proof, "in-app-browser-external-replay-operator-runbook");
-assert.equal(handoff.fixture.plannedInteractionCount, 23);
-assert.equal(bundle.fixture.plannedInteractionCount, 23);
+assert.equal(handoff.fixture.plannedInteractionCount, EXPECTED_COUNTS.plannedInteractions);
+assert.equal(bundle.fixture.plannedInteractionCount, EXPECTED_COUNTS.plannedInteractions);
 assert.equal(handoff.fixture.plannedStabilityCheckCount, 2);
 assert.equal(bundle.fixture.plannedStabilityCheckCount, 2);
-assert.equal(handoff.fixture.stabilityCheckTileCount, 15);
-assert.equal(bundle.fixture.stabilityCheckTileCount, 15);
+assert.equal(handoff.fixture.stabilityCheckTileCount, EXPECTED_COUNTS.stabilityCheckTiles);
+assert.equal(bundle.fixture.stabilityCheckTileCount, EXPECTED_COUNTS.stabilityCheckTiles);
 assert.deepEqual(
   bundle.fixture.plannedStabilityChecks,
   handoff.fixture.plannedStabilityChecks,
@@ -140,8 +141,8 @@ const replayHelp = {
   promotionChecks: [
     "returned browser-run.json has status passed",
     "returned localhost browser-run.json has status passed when proving the localhost-served fixture lane",
-    "returned browser-run plannedInteractions includes 23 admin/player/moderator/error interactions",
-    "returned browser-run plannedStabilityChecks includes 2 reserved status-floor checks covering 15 admin/moderator action tiles",
+    `returned browser-run plannedInteractions includes ${EXPECTED_COUNTS.plannedInteractions} admin/player/moderator/error interactions`,
+    `returned browser-run plannedStabilityChecks includes 2 reserved status-floor checks covering ${EXPECTED_COUNTS.stabilityCheckTiles} admin/moderator action tiles`,
     "all returned reserved status floors render at least 44px before promotion",
     "route-error-back-to-board-click records 403 player private-channel shell evidence and Back to board click/focus evidence",
     "returned bundle includes browser-run-*.png screenshot files for every proof viewport",

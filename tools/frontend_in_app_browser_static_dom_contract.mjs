@@ -3,6 +3,7 @@ import { spawn } from "node:child_process";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { EXPECTED_COUNTS } from "./frontend_proof_expectations.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const artifactDir = path.join(
@@ -40,7 +41,7 @@ const evidence = {
   status: "passed",
   proof: "in-app-browser-static-dom-contract",
   boundary:
-    "Parses the generated file-backed in-app browser fixture HTML without opening localhost or launching Chromium. This proves every manifest command/error scenario owns exactly one target inside its scenario root, all 11 moderator critical host confirmation scenarios carry DOM-visible object/outcome text and alertdialog focus metadata, modeled route evidence is present for the player role-PM scenario, modeled error-surface evidence is present for the player private-channel 403, hydrated-surface controls exist inside their scenario roots, touch-floor metadata is present where the rendered control models it, and player private fixture markup excludes host-only copy. It does not prove CSS layout pixels, browser click delivery, focus landing, Svelte hydration, command dispatch side effects, TCP transport, WebSocket delivery, or localhost-backed app acceptance.",
+    `Parses the generated file-backed in-app browser fixture HTML without opening localhost or launching Chromium. This proves every manifest command/error scenario owns exactly one target inside its scenario root, all ${EXPECTED_COUNTS.moderatorCriticalActions} moderator critical host confirmation scenarios carry DOM-visible object/outcome text and alertdialog focus metadata, modeled route evidence is present for the player role-PM scenario, modeled error-surface evidence is present for the player private-channel 403, hydrated-surface controls exist inside their scenario roots, touch-floor metadata is present where the rendered control models it, and player private fixture markup excludes host-only copy. It does not prove CSS layout pixels, browser click delivery, focus landing, Svelte hydration, command dispatch side effects, TCP transport, WebSocket delivery, or localhost-backed app acceptance.`,
   generatedFrom: {
     manifest: "target/frontend-in-app-browser-interactions/interaction-page-manifest.json",
     page: "target/frontend-in-app-browser-interactions/interaction-page.html",

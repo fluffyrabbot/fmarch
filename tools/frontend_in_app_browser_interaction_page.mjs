@@ -7,6 +7,8 @@ import {
   roles,
   viewports,
 } from "./frontend_role_smoke_scenarios.mjs";
+import { loadRenderCss } from "./frontend_render_css.mjs";
+import { EXPECTED_COUNTS } from "./frontend_proof_expectations.mjs";
 import {
   APP_SHELL_CONTRACT,
   roleNavTestId,
@@ -46,7 +48,13 @@ await runHydratedSurfaceContract();
 
 const bundle = await import(`${pathToFileURL(routeStateBundle).href}?t=${Date.now()}`);
 const hydratedSurfaces = await readJson(hydratedSurfacesPath);
-const css = await loadRenderCss();
+const css = await loadRenderCss({
+  repoRoot,
+  componentStyleFiles: [
+    "frontend/src/lib/components/admin/AdminSetupGrid.svelte",
+    "frontend/src/lib/components/admin/AdminRecoveryPanel.svelte",
+  ],
+});
 const surfaces = await buildSurfaces(bundle);
 const moderatorActionManifest = await bundle.renderModeratorCriticalActionManifest();
 const scenarios = await buildCommandScenarios(bundle, moderatorActionManifest);
@@ -56,7 +64,7 @@ const manifest = {
   status: "page-generated",
   proof: "in-app-browser-file-interaction-page",
   boundary:
-    "Generates a file-backed page from build-mode Svelte SSR first-viewport role surfaces, the real player private-channel error surface, command controls, player private-channel controls, all 11 moderator critical host confirmations, and hydrated-surface scenario controls for manual/in-app-browser proof. The page can record native browser click delivery and focus landing for representative admin, player, player private-channel, route-error, and moderator critical host confirmation targets without opening localhost or launching a separate Playwright browser. It does not prove browser behavior unless the generated file is opened and exercised, and it does not prove Svelte hydration, Svelte event scheduling, command dispatch side effects, TCP/network transport, WebSocket delivery, or dev-server routing.",
+    `Generates a file-backed page from build-mode Svelte SSR first-viewport role surfaces, the real player private-channel error surface, command controls, player private-channel controls, all ${EXPECTED_COUNTS.moderatorCriticalActions} moderator critical host confirmations, and hydrated-surface scenario controls for manual/in-app-browser proof. The page can record native browser click delivery and focus landing for representative admin, player, player private-channel, route-error, and moderator critical host confirmation targets without opening localhost or launching a separate Playwright browser. It does not prove browser behavior unless the generated file is opened and exercised, and it does not prove Svelte hydration, Svelte event scheduling, command dispatch side effects, TCP/network transport, WebSocket delivery, or dev-server routing.`,
   page: path.relative(repoRoot, pagePath),
   pageUrl: pathToFileURL(pagePath).href,
   viewports,
@@ -906,30 +914,6 @@ function renderHydratedSurfaceScenario(scenario) {
 </section>`;
   }
   throw new Error(`unknown hydrated surface scenario ${scenario.id}`);
-}
-
-async function loadRenderCss() {
-  const cssFiles = [
-    "frontend/src/lib/styles/tokens.css",
-    "frontend/src/lib/styles/primitives.css",
-    "frontend/src/lib/styles/app.css",
-    "frontend/src/lib/components/admin/AdminSetupGrid.svelte",
-    "frontend/src/lib/components/admin/AdminRecoveryPanel.svelte",
-    "frontend/src/lib/components/host-action/touch-control.css",
-    "frontend/src/lib/components/host-action/host-console-critical-path.css",
-  ];
-  const chunks = await Promise.all(
-    cssFiles.map(async (file) => {
-      const source = await readFile(path.join(repoRoot, file), "utf8");
-      if (file.endsWith(".svelte")) {
-        return [...source.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/gu)]
-          .map((match) => match[1].trim())
-          .join("\n");
-      }
-      return source.replace(/^@import .+;\n/gm, "");
-    }),
-  );
-  return chunks.join("\n");
 }
 
 async function runRouteStateRenderContract() {

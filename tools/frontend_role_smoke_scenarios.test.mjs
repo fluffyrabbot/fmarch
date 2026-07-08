@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { EXPECTED_COUNTS } from "./frontend_proof_expectations.mjs";
 import {
   boardScenario,
   forbiddenRoutes,
@@ -189,7 +190,13 @@ test("role smoke scenarios pin tablet thumb-zone target counts", () => {
       ],
       [
         "moderator",
-        [["moderator-primary-action-zone", "moderator-primary-actions", 11]],
+        [
+          [
+            "moderator-primary-action-zone",
+            "moderator-primary-actions",
+            EXPECTED_COUNTS.moderatorCriticalActions,
+          ],
+        ],
       ],
     ],
   );

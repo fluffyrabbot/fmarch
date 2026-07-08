@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { chromium } from "playwright";
@@ -9,6 +9,7 @@ import {
   roles,
   viewports,
 } from "./frontend_role_smoke_scenarios.mjs";
+import { loadRenderCss } from "./frontend_render_css.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const artifactDir = path.join(repoRoot, "target", "frontend-keyboard-traversal");
@@ -25,7 +26,7 @@ await mkdir(artifactDir, { recursive: true });
 await runRouteStateRenderContract();
 
 const bundle = await import(`${pathToFileURL(routeStateBundle).href}?t=${Date.now()}`);
-const css = await loadRenderCss();
+const css = await loadRenderCss({ repoRoot });
 let browser;
 
 try {
@@ -257,23 +258,6 @@ async function setRenderedContent(page, rendered, css) {
 </html>`,
     { waitUntil: "load" },
   );
-}
-
-async function loadRenderCss() {
-  const cssFiles = [
-    "frontend/src/lib/styles/tokens.css",
-    "frontend/src/lib/styles/primitives.css",
-    "frontend/src/lib/styles/app.css",
-    "frontend/src/lib/components/host-action/touch-control.css",
-    "frontend/src/lib/components/host-action/host-console-critical-path.css",
-  ];
-  const chunks = await Promise.all(
-    cssFiles.map(async (file) => {
-      const source = await readFile(path.join(repoRoot, file), "utf8");
-      return source.replace(/^@import .+;\n/gm, "");
-    }),
-  );
-  return chunks.join("\n");
 }
 
 async function runRouteStateRenderContract() {

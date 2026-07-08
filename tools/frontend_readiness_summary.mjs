@@ -2,6 +2,10 @@ import assert from "node:assert/strict";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  EXPECTED_COUNTS,
+  expectedThumbZoneCounts,
+} from "./frontend_proof_expectations.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const artifactDir = path.join(repoRoot, "target", "frontend-readiness-summary");
@@ -105,7 +109,7 @@ assert.equal(artifacts.routeLive.status, "passed");
 assert.equal(artifacts.routeLive.proof, "frontend-route-live-contract");
 assert.equal(artifacts.hostConfirmations.status, "passed");
 assert.equal(artifacts.hostConfirmations.proof, "host-confirmation-static-dom-contract");
-assert.equal(artifacts.hostConfirmations.actionCount, 11);
+assert.equal(artifacts.hostConfirmations.actionCount, EXPECTED_COUNTS.moderatorCriticalActions);
 assert.equal(artifacts.routeLive.sources.player.onMountConnects, true);
 assert.equal(artifacts.routeLive.sources.moderator.onMountConnects, true);
 assert.equal(artifacts.routeLive.runtime.player.finalStatus.state, "recovered");
@@ -193,7 +197,7 @@ const summary = {
     noBindInteractionRequires: [
       "noBindInteractions.status == passed",
       "noBindInteractions.viewports is nonempty",
-      "noBindInteractions.interactions includes admin cohost, admin session-grant, admin recovery-gate, player vote, player post, player private-channel post, and all 11 moderator critical host confirmations",
+      `noBindInteractions.interactions includes admin cohost, admin session-grant, admin recovery-gate, player vote, player post, player private-channel post, and all ${EXPECTED_COUNTS.moderatorCriticalActions} moderator critical host confirmations`,
       "all noBindInteractions entries include clicked target, activeElement, and targetBox",
     ],
     staticFocusabilityRequires: [
@@ -235,7 +239,7 @@ const summary = {
     inAppBrowserFixtureRequires: [
       "inAppBrowserPage.status == page-generated",
       "inAppBrowserPage.surfaces includes board-player, admin, player, and moderator",
-      "inAppBrowserPage.scenarios includes admin cohost, admin session-grant, admin recovery-gate, player vote, player post, player private-channel post, and all 11 moderator critical host confirmations",
+      `inAppBrowserPage.scenarios includes admin cohost, admin session-grant, admin recovery-gate, player vote, player post, player private-channel post, and all ${EXPECTED_COUNTS.moderatorCriticalActions} moderator critical host confirmations`,
       "inAppBrowserPage.hydratedSurfaceScenarios includes shared shell, admin audit, admin operational forms, player private disclosure/vote/post, moderator host-prompt, and moderator slot-lifecycle controls",
       "inAppBrowserStaticDom.status == passed",
       "inAppBrowserStaticDom.scenarios includes every fixture command target with role-pm route evidence",
@@ -245,7 +249,7 @@ const summary = {
       "inAppBrowserRun.status == passed",
       "inAppBrowserRun.runs includes every proof viewport",
       "all inAppBrowserRun entries include clicked target, activeElement, targetBox, and screenshotPixels",
-      "all 11 moderator critical host confirmation run entries include alertdialog focus metadata and object/outcome text",
+      `all ${EXPECTED_COUNTS.moderatorCriticalActions} moderator critical host confirmation run entries include alertdialog focus metadata and object/outcome text`,
       "player private-channel run entries include active role-pm route evidence",
       "player private disclosure toggles from aria-expanded=false to aria-expanded=true",
     ],
@@ -254,12 +258,12 @@ const summary = {
       "inAppBrowserLocalhostRun.pageUrl is a localhost URL",
       "inAppBrowserLocalhostRun.runs includes every proof viewport",
       "all inAppBrowserLocalhostRun entries include clicked target, activeElement, targetBox, and screenshotPixels",
-      "all 11 moderator critical host confirmation run entries include alertdialog focus metadata and object/outcome text",
+      `all ${EXPECTED_COUNTS.moderatorCriticalActions} moderator critical host confirmation run entries include alertdialog focus metadata and object/outcome text`,
     ],
     inAppBrowserImportedRunRequires: [
       "inAppBrowserImportedRun.status == imported-passed",
       "inAppBrowserImportedRun.validated.runCount covers every proof viewport",
-      "inAppBrowserImportedRun.validated.plannedInteractionCount covers all 23 fixture interactions",
+      `inAppBrowserImportedRun.validated.plannedInteractionCount covers all ${EXPECTED_COUNTS.plannedInteractions} fixture interactions`,
       "inAppBrowserImportedRun.validated.moderatorCriticalConfirmationCount is 11",
       "inAppBrowserImportedRun.validated.screenshotChecks re-read nonblank PNG evidence",
     ],
@@ -896,7 +900,7 @@ function inAppBrowserStaticDomEvidenceComplete(inAppBrowserStaticDom) {
   if (
     inAppBrowserStaticDom.status !== "passed" ||
     inAppBrowserStaticDom.proof !== "in-app-browser-static-dom-contract" ||
-    inAppBrowserStaticDom.scenarioCount < 16 ||
+    inAppBrowserStaticDom.scenarioCount < EXPECTED_COUNTS.commandScenarios ||
     inAppBrowserStaticDom.hydratedScenarioCount < 6
   ) {
     return false;
@@ -1391,19 +1395,6 @@ function renderSmokeThumbZoneEvidenceComplete(renderSmoke) {
   });
 }
 
-function expectedThumbZoneCounts() {
-  return [
-    {
-      role: "admin",
-      zones: [
-        ["admin-setup-action-zone", 3],
-        ["admin-recovery-action-zone", 1],
-      ],
-    },
-    { role: "player", zones: [["player-primary-action-zone", 4]] },
-    { role: "moderator", zones: [["moderator-primary-action-zone", 11]] },
-  ];
-}
 
 function thumbZonesComplete(actual, expectedZones) {
   if (!Array.isArray(actual)) {

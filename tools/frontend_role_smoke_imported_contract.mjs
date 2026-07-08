@@ -2,6 +2,10 @@ import assert from "node:assert/strict";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  EXPECTED_COUNTS,
+  expectedThumbZoneCounts,
+} from "./frontend_proof_expectations.mjs";
 import { analyzePngScreenshot } from "./frontend_screenshot_pixels.mjs";
 import {
   boardScenario,
@@ -240,19 +244,6 @@ function roleSmokeThumbZoneEvidenceComplete(smoke) {
   });
 }
 
-function expectedThumbZoneCounts() {
-  return [
-    {
-      role: "admin",
-      zones: [
-        ["admin-setup-action-zone", 3],
-        ["admin-recovery-action-zone", 1],
-      ],
-    },
-    { role: "player", zones: [["player-primary-action-zone", 3]] },
-    { role: "moderator", zones: [["moderator-primary-action-zone", 11]] },
-  ];
-}
 
 function thumbZonesComplete(actual, expectedZones) {
   if (!Array.isArray(actual)) {

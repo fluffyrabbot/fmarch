@@ -2,6 +2,10 @@ import assert from "node:assert/strict";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  EXPECTED_COUNTS,
+  expectedThumbZoneCounts,
+} from "./frontend_proof_expectations.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const artifactDir = path.join(repoRoot, "target", "frontend-completion-audit");
@@ -123,7 +127,7 @@ assert.equal(artifacts.routeLive.status, "passed");
 assert.equal(artifacts.routeLive.proof, "frontend-route-live-contract");
 assert.equal(artifacts.hostConfirmations.status, "passed");
 assert.equal(artifacts.hostConfirmations.proof, "host-confirmation-static-dom-contract");
-assert.equal(artifacts.hostConfirmations.actionCount, 11);
+assert.equal(artifacts.hostConfirmations.actionCount, EXPECTED_COUNTS.moderatorCriticalActions);
 assert.equal(artifacts.routeLive.sources.player.onMountConnects, true);
 assert.equal(artifacts.routeLive.sources.moderator.onMountConnects, true);
 assert.deepEqual(artifacts.routeLive.runtime.player.eventKinds, [
@@ -368,7 +372,7 @@ const audit = {
         "Player route CSS proves a safe-area-aware sticky tablet command rail for the vote/post thumb zone, offset below the shared app topbar with primary controls rendered before live command receipts, internal scroll containment, and a normal-flow fallback below the tablet cockpit breakpoint.",
         "Moderator route CSS proves a safe-area-aware sticky host control rail for the primary moderator action zone, offset below the shared app topbar with internal scroll containment, narrow fallback, and route order before status readouts.",
         "Host touch-control CSS proves the 44px target variable, 8px minimum gaps, touch-action: manipulation, visible focus outline, and wrapping confirmation actions used by moderator/admin-style destructive confirmations.",
-        "Build-mode SSR proves admin setup/recovery, player vote/post, and all 11 moderator critical host actions are descendants of explicit thumb-zone containers.",
+        `Build-mode SSR proves admin setup/recovery, player vote/post, and all ${EXPECTED_COUNTS.moderatorCriticalActions} moderator critical host actions are descendants of explicit thumb-zone containers.`,
         ...fullBrowserProofLines(
           "Dev-server role smoke proves touch target geometry, thumb-zone target counts, setup workbench geometry for /g/midsummer/setup, overlap-checked visible targets, nonblank screenshots, and focus traversal across mobile, tablet, 1024, 1180, 1280, and desktop viewports.",
         ),
@@ -513,14 +517,14 @@ const audit = {
         "No-localhost hydrated-handler proof records moderator ResolveHostPrompt ACK/reject plus SetSlotStatus ACK outcomes into DOM-facing host command activity view models, including Modkilled projection evidence.",
         "No-localhost hydrated-surface adapter proof records moderator host-prompt confirmation open, confirm dispatch, ResolveHostPrompt ACK, prompt projection removal, plus modkill_slot confirmation-to-SetSlotStatus ACK and Modkilled projection through real route data.",
         "No-bind component interaction proof records moderator HostAction confirmation wiring for host prompt and slot lifecycle controls, plus re-rendered ResolveHostPrompt and SetSlotStatus ACK rows through compiled Svelte components.",
-        "No-browser static DOM proof verifies all 11 moderator critical host confirmations, including deadline, replacement, phase/thread lock, votecount, slot lifecycle, role reveal, and host-prompt actions, own alertdialog metadata, confirm/cancel controls, focus-return/Escape/tab-containment attributes, and message text naming object plus outcome.",
+        `No-browser static DOM proof verifies all ${EXPECTED_COUNTS.moderatorCriticalActions} moderator critical host confirmations, including deadline, replacement, phase/thread lock, votecount, slot lifecycle, role reveal, and host-prompt actions, own alertdialog metadata, confirm/cancel controls, focus-return/Escape/tab-containment attributes, and message text naming object plus outcome.`,
         "Static SSR focusability proof verifies moderator focus targets and denied nav ids against rendered markup.",
         "No-browser route-live contract source-checks the moderator Svelte page onMount WebSocket connection, then drives open/hello/delta/resync frames through the same projection store and host browser bridge to a recovered host-prompt projection.",
-        ...noBindInteractionProof("moderator", "all 11 moderator critical host confirmation click hit-testing and focus landing"),
+        ...noBindInteractionProof(`moderator", "all ${EXPECTED_COUNTS.moderatorCriticalActions} moderator critical host confirmation click hit-testing and focus landing`),
         ...noBindKeyboardProof("moderator surface Tab traversal, visible focus outlines, and denied-control exclusion"),
         "SSR and DOM proof render host console, host operations, command activity rail, votecount panel, critical actions, host-prompt action controls, and DOM-visible confirmation focus/escape/tab metadata.",
         ...fullBrowserProofLines(
-          "Dev-server role smoke proves moderator screenshots, focus traversal, all 11 critical host action confirmations, SetSlotStatus ACK with refreshed slot lifecycle projection, overlap-checked targets, and moderator thumb-zone geometry.",
+          `Dev-server role smoke proves moderator screenshots, focus traversal, all ${EXPECTED_COUNTS.moderatorCriticalActions} critical host action confirmations, SetSlotStatus ACK with refreshed slot lifecycle projection, overlap-checked targets, and moderator thumb-zone geometry.`,
         ),
       ],
       evidence: [
@@ -665,11 +669,11 @@ const audit = {
           : inAppBrowserImportedRunEvidenceComplete()
             ? [
                 "No-browser fallback artifacts are green and record the blocked localhost browser boundary.",
-                "File-backed in-app browser fixture is generated, statically verified, and an external Chromium browser-run artifact was imported and validated for every proof viewport, all 23 fixture interactions, all 11 moderator critical confirmations, player private-channel/disclosure evidence, and nonblank screenshot PNGs.",
+                `File-backed in-app browser fixture is generated, statically verified, and an external Chromium browser-run artifact was imported and validated for every proof viewport, all ${EXPECTED_COUNTS.plannedInteractions} fixture interactions, all ${EXPECTED_COUNTS.moderatorCriticalActions} moderator critical confirmations, player private-channel/disclosure evidence, and nonblank screenshot PNGs.`,
               ]
           : [
               "No-browser fallback artifacts are green and record the blocked browser boundary.",
-              "File-backed in-app browser fixture is generated and statically verified for role shells, representative admin/player controls including admin session-grant/recovery-gate forms and player role-PM private-channel post, all 11 moderator critical host confirmations, plus separate hydrated-surface admin forms, host-prompt, and slot-lifecycle scenario controls, but it has not produced browser click/focus evidence.",
+              `File-backed in-app browser fixture is generated and statically verified for role shells, representative admin/player controls including admin session-grant/recovery-gate forms and player role-PM private-channel post, all ${EXPECTED_COUNTS.moderatorCriticalActions} moderator critical host confirmations, plus separate hydrated-surface admin forms, host-prompt, and slot-lifecycle scenario controls, but it has not produced browser click/focus evidence.`,
               "A localhost-served fixture run is modeled separately from the file URL lane and records the current localhost bind/Chromium boundary before promotion.",
             ],
       evidence: [
@@ -766,8 +770,8 @@ function inAppBrowserImportedRunEvidenceComplete() {
   return (
     validated.viewportCount > 0 &&
     validated.runCount >= validated.viewportCount &&
-    validated.plannedInteractionCount >= 23 &&
-    validated.moderatorCriticalConfirmationCount === 11 &&
+    validated.plannedInteractionCount >= EXPECTED_COUNTS.plannedInteractions &&
+    validated.moderatorCriticalConfirmationCount === EXPECTED_COUNTS.moderatorCriticalActions &&
     Array.isArray(validated.screenshotChecks) &&
     validated.screenshotChecks.length >= validated.viewportCount &&
     validated.screenshotChecks.every((check) =>
@@ -892,19 +896,6 @@ function roleSmokeSetupWorkbenchEvidenceComplete() {
   );
 }
 
-function expectedThumbZoneCounts() {
-  return [
-    {
-      role: "admin",
-      zones: [
-        ["admin-setup-action-zone", 3],
-        ["admin-recovery-action-zone", 1],
-      ],
-    },
-    { role: "player", zones: [["player-primary-action-zone", 4]] },
-    { role: "moderator", zones: [["moderator-primary-action-zone", 11]] },
-  ];
-}
 
 function thumbZonesComplete(actual, expectedZones) {
   if (!Array.isArray(actual)) {
@@ -1120,7 +1111,7 @@ function iabStaticDomEvidenceComplete() {
   if (
     artifacts.inAppBrowserStaticDom.status !== "passed" ||
     artifacts.inAppBrowserStaticDom.proof !== "in-app-browser-static-dom-contract" ||
-    artifacts.inAppBrowserStaticDom.scenarioCount < 16 ||
+    artifacts.inAppBrowserStaticDom.scenarioCount < EXPECTED_COUNTS.commandScenarios ||
     artifacts.inAppBrowserStaticDom.hydratedScenarioCount < 6
   ) {
     return false;

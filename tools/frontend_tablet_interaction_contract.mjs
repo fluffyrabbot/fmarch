@@ -3,6 +3,7 @@ import { spawn } from "node:child_process";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { MODERATOR_CRITICAL_ACTION_IDS } from "./frontend_proof_expectations.mjs";
 import {
   ADMIN_SURFACE_CONTRACT,
 } from "../frontend/src/lib/components/admin/admin-surface-model.mjs";
@@ -628,19 +629,10 @@ async function proveThumbZonePlacement(bundle) {
         {
           testId: HOST_CONTROL_SURFACE_CONTRACT.thumbZoneTestId,
           zone: HOST_CONTROL_SURFACE_CONTRACT.thumbZone,
-          requiredDescendants: [
-            "critical-host-action-extend_deadline",
-            "critical-host-action-extend_deadline_24h",
-            "critical-host-action-extend_deadline_48h",
-            "critical-host-action-process_replacement",
-            "critical-host-action-resolve_phase",
-            "critical-host-action-lock_thread",
-            "critical-host-action-publish_votecount",
-            "critical-host-action-mark_dead",
-            "critical-host-action-modkill_slot",
-            "critical-host-action-complete_game",
-            "critical-host-action-resolve_host_prompt-D01-skip_next_day-slot_1",
-          ].map((value) => ({ kind: "testId", value })),
+          requiredDescendants: MODERATOR_CRITICAL_ACTION_IDS.map((id) => ({
+            kind: "testId",
+            value: `critical-host-action-${id}`,
+          })),
         },
       ],
     }),

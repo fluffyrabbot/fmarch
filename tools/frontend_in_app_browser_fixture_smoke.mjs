@@ -3,6 +3,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { EXPECTED_COUNTS } from "./frontend_proof_expectations.mjs";
 import { chromium } from "playwright";
 import { captureScreenshotEvidence } from "./frontend_screenshot_pixels.mjs";
 
@@ -103,7 +104,7 @@ try {
       }));
       if (
         pageReady.status !== "ready" ||
-        pageReady.scenarioCount < 16 ||
+        pageReady.scenarioCount < EXPECTED_COUNTS.commandScenarios ||
         pageReady.hydratedScenarioCount < 6
       ) {
         throw new Error(
@@ -687,12 +688,12 @@ function navigationBlockedBoundary() {
 function passedBoundary() {
   if (serveLocalhost) {
     return replayExistingFixture
-      ? "Serves the existing in-app browser fixture over localhost without regenerating SSR artifacts first. It proves localhost browser navigation to the prepared page, click delivery, focus landing, 44px touch geometry, player private-channel route evidence, player disclosure toggle behavior, all 11 moderator critical host confirmation metadata records, and nonblank screenshot pixels for the fixture controls across the proof viewports. It does not prove fixture freshness, Svelte client hydration, Svelte event scheduling, command dispatch side effects, dev-server routing, TCP transport, WebSocket delivery, or full localhost app acceptance."
-      : "Serves the generated in-app browser fixture over localhost. It proves localhost browser navigation to the prepared page, click delivery, focus landing, 44px touch geometry, player private-channel route evidence, player disclosure toggle behavior, all 11 moderator critical host confirmation metadata records, and nonblank screenshot pixels for the fixture controls across the proof viewports. It does not prove Svelte client hydration, Svelte event scheduling, command dispatch side effects, dev-server routing, TCP transport, WebSocket delivery, or full localhost app acceptance.";
+      ? `Serves the existing in-app browser fixture over localhost without regenerating SSR artifacts first. It proves localhost browser navigation to the prepared page, click delivery, focus landing, 44px touch geometry, player private-channel route evidence, player disclosure toggle behavior, all ${EXPECTED_COUNTS.moderatorCriticalActions} moderator critical host confirmation metadata records, and nonblank screenshot pixels for the fixture controls across the proof viewports. It does not prove fixture freshness, Svelte client hydration, Svelte event scheduling, command dispatch side effects, dev-server routing, TCP transport, WebSocket delivery, or full localhost app acceptance.`
+      : `Serves the generated in-app browser fixture over localhost. It proves localhost browser navigation to the prepared page, click delivery, focus landing, 44px touch geometry, player private-channel route evidence, player disclosure toggle behavior, all ${EXPECTED_COUNTS.moderatorCriticalActions} moderator critical host confirmation metadata records, and nonblank screenshot pixels for the fixture controls across the proof viewports. It does not prove Svelte client hydration, Svelte event scheduling, command dispatch side effects, dev-server routing, TCP transport, WebSocket delivery, or full localhost app acceptance.`;
   }
   return replayExistingFixture
-    ? "Loads the existing file-backed in-app browser fixture in Chromium using its file URL without regenerating SSR artifacts first. It proves native browser navigation to the prepared page, click delivery, focus landing, 44px touch geometry, player private-channel route evidence, player disclosure toggle behavior, all 11 moderator critical host confirmation metadata records, and nonblank screenshot pixels for the fixture controls across the proof viewports. It does not prove fixture freshness, Svelte client hydration, Svelte event scheduling, command dispatch side effects, dev-server routing, TCP/network transport, WebSocket delivery, or localhost-backed app acceptance."
-    : "Loads the generated file-backed in-app browser fixture in Chromium using its file URL. It proves native browser navigation to the prepared page, click delivery, focus landing, 44px touch geometry, player private-channel route evidence, player disclosure toggle behavior, all 11 moderator critical host confirmation metadata records, and nonblank screenshot pixels for the fixture controls across the proof viewports. It does not prove Svelte client hydration, Svelte event scheduling, command dispatch side effects, dev-server routing, TCP/network transport, WebSocket delivery, or localhost-backed app acceptance.";
+    ? `Loads the existing file-backed in-app browser fixture in Chromium using its file URL without regenerating SSR artifacts first. It proves native browser navigation to the prepared page, click delivery, focus landing, 44px touch geometry, player private-channel route evidence, player disclosure toggle behavior, all ${EXPECTED_COUNTS.moderatorCriticalActions} moderator critical host confirmation metadata records, and nonblank screenshot pixels for the fixture controls across the proof viewports. It does not prove fixture freshness, Svelte client hydration, Svelte event scheduling, command dispatch side effects, dev-server routing, TCP/network transport, WebSocket delivery, or localhost-backed app acceptance.`
+    : `Loads the generated file-backed in-app browser fixture in Chromium using its file URL. It proves native browser navigation to the prepared page, click delivery, focus landing, 44px touch geometry, player private-channel route evidence, player disclosure toggle behavior, all ${EXPECTED_COUNTS.moderatorCriticalActions} moderator critical host confirmation metadata records, and nonblank screenshot pixels for the fixture controls across the proof viewports. It does not prove Svelte client hydration, Svelte event scheduling, command dispatch side effects, dev-server routing, TCP/network transport, WebSocket delivery, or localhost-backed app acceptance.`;
 }
 
 function summarizePlannedInteractions(scenarios) {

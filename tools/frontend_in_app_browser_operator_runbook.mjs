@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { EXPECTED_COUNTS } from "./frontend_proof_expectations.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const artifactDir = path.join(repoRoot, "target", "frontend-in-app-browser-operator-runbook");
@@ -41,7 +42,7 @@ assert.equal(
 assert.equal(["complete", "not_complete"].includes(completionAudit.overall.state), true);
 assert.equal(["complete", "not_complete"].includes(readiness.overall.state), true);
 assert.equal(bundle.fixture.plannedStabilityCheckCount, 2);
-assert.equal(bundle.fixture.stabilityCheckTileCount, 15);
+assert.equal(bundle.fixture.stabilityCheckTileCount, EXPECTED_COUNTS.stabilityCheckTiles);
 assert.deepEqual(
   bundle.fixture.plannedStabilityChecks,
   handoff.fixture.plannedStabilityChecks,
@@ -118,7 +119,7 @@ const runbook = {
         "target/frontend-in-app-browser-localhost/browser-run.json with status passed when localhost bind is allowed",
         "target/frontend-role-smoke/role-smoke.json with status passed",
         "target/frontend-role-smoke/*.png screenshots referenced by role-smoke.json",
-        "browser-run plannedStabilityChecks covering 2 checks and 15 reserved status-floor tiles",
+        `browser-run plannedStabilityChecks covering 2 checks and ${EXPECTED_COUNTS.stabilityCheckTiles} reserved status-floor tiles`,
         "target/frontend-in-app-browser-interactions/browser-run-*.png for each proof viewport",
         "target/frontend-in-app-browser-localhost/browser-run-*.png for each proof viewport when localhost fixture browser-run passed",
         "target/frontend-in-app-browser-bundle/fixture-replay-bundle.tar containing returned browser evidence",
@@ -144,7 +145,7 @@ const runbook = {
   promotionChecks: [
     "returned browser-run.json has status passed",
     "returned localhost browser-run.json has status passed when proving the localhost-served fixture lane",
-    "returned browser-run plannedStabilityChecks includes 2 reserved status-floor checks covering 15 admin/moderator action tiles",
+    `returned browser-run plannedStabilityChecks includes 2 reserved status-floor checks covering ${EXPECTED_COUNTS.stabilityCheckTiles} admin/moderator action tiles`,
     "all returned reserved status floors render at least 44px before promotion",
     "returned bundle includes browser-run-*.png screenshot files for every proof viewport",
     "returned bundle includes localhost browser-run-*.png screenshot files for every proof viewport when localhost fixture browser-run passed",

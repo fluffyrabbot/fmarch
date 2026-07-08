@@ -3,6 +3,7 @@ import { spawn } from "node:child_process";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { MODERATOR_CRITICAL_ACTION_IDS } from "./frontend_proof_expectations.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const artifactDir = path.join(
@@ -41,19 +42,7 @@ const evidence = {
 
 assert.deepEqual(
   manifest.actions.map((action) => action.id),
-  [
-    "extend_deadline",
-    "extend_deadline_24h",
-    "extend_deadline_48h",
-    "process_replacement",
-    "resolve_phase",
-    "lock_thread",
-    "publish_votecount",
-    "mark_dead",
-    "modkill_slot",
-    "complete_game",
-    "resolve_host_prompt-D01-skip_next_day-slot_1",
-  ],
+  [...MODERATOR_CRITICAL_ACTION_IDS],
 );
 
 for (const action of manifest.actions) {

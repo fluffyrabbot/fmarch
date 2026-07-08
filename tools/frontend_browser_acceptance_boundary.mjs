@@ -2,6 +2,10 @@ import assert from "node:assert/strict";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  EXPECTED_COUNTS,
+  expectedThumbZoneCounts,
+} from "./frontend_proof_expectations.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const artifactDir = path.join(repoRoot, "target", "frontend-browser-acceptance-boundary");
@@ -264,7 +268,7 @@ function inAppFileLane(inAppBrowserPage) {
       ? [
           "inAppBrowserPage.status == page-generated",
           "first-viewport board/admin/player/moderator shells are present",
-          "admin cohost/session-grant/recovery-gate, player main/private-channel, and all 11 moderator critical host confirmation controls are present",
+          `admin cohost/session-grant/recovery-gate, player main/private-channel, and all ${EXPECTED_COUNTS.moderatorCriticalActions} moderator critical host confirmation controls are present`,
           "hydrated-surface admin operational forms, player, moderator host-prompt, and slot-lifecycle scenario controls are present",
         ]
       : [],
@@ -324,15 +328,15 @@ function inAppFileBrowserRunLane(inAppBrowserRun, inAppBrowserImportedRun) {
         ? [
           "inAppBrowserRun.status == passed",
           "fixture file URL loaded in Chromium for every proof viewport",
-          "admin cohost/session-grant/recovery-gate, player main/private-channel, route-error, all 11 moderator critical host confirmations, and hydrated-surface controls recorded click/focus evidence",
+          `admin cohost/session-grant/recovery-gate, player main/private-channel, route-error, all ${EXPECTED_COUNTS.moderatorCriticalActions} moderator critical host confirmations, and hydrated-surface controls recorded click/focus evidence`,
           "moderator critical host confirmation records include alertdialog focus metadata and object/outcome text",
           "fixture screenshots include nonblank pixel evidence",
         ]
         : [
           "inAppBrowserImportedRun.status == imported-passed",
           "imported browser-run artifact was validated without relaunching Chromium",
-          "imported browser-run includes every proof viewport and all 23 planned interactions",
-          "all 11 moderator critical host confirmation records include alertdialog focus metadata and object/outcome text",
+          `imported browser-run includes every proof viewport and all ${EXPECTED_COUNTS.plannedInteractions} planned interactions`,
+          `all ${EXPECTED_COUNTS.moderatorCriticalActions} moderator critical host confirmation records include alertdialog focus metadata and object/outcome text`,
           "referenced fixture screenshots were re-read as PNGs and matched nonblank pixel evidence",
         ]
       : [],
@@ -361,7 +365,7 @@ function inAppLocalhostBrowserRunLane(inAppBrowserLocalhostRun) {
       ? [
           "inAppBrowserLocalhostRun.status == passed",
           "fixture loaded from localhost for every proof viewport",
-          "admin cohost/session-grant/recovery-gate, player main/private-channel, route-error, all 11 moderator critical host confirmations, and hydrated-surface controls recorded click/focus evidence",
+          `admin cohost/session-grant/recovery-gate, player main/private-channel, route-error, all ${EXPECTED_COUNTS.moderatorCriticalActions} moderator critical host confirmations, and hydrated-surface controls recorded click/focus evidence`,
           "moderator critical host confirmation records include alertdialog focus metadata and object/outcome text",
           "fixture screenshots include nonblank pixel evidence",
         ]
@@ -392,7 +396,7 @@ function inAppImportedBrowserRunLane(inAppBrowserImportedRun) {
       ? [
           "inAppBrowserImportedRun.status == imported-passed",
           "source browser-run evidence was validated without launching Chromium locally",
-          "imported browser-run includes every proof viewport and all 23 planned interactions",
+          `imported browser-run includes every proof viewport and all ${EXPECTED_COUNTS.plannedInteractions} planned interactions`,
           "imported browser-run includes 2 reserved status-floor checks covering 15 admin/moderator action tiles",
           "referenced fixture screenshots were re-read as PNGs and matched nonblank pixel evidence",
         ]
@@ -666,19 +670,6 @@ function renderSmokeThumbZoneEvidenceComplete(renderSmoke) {
   });
 }
 
-function expectedThumbZoneCounts() {
-  return [
-    {
-      role: "admin",
-      zones: [
-        ["admin-setup-action-zone", 3],
-        ["admin-recovery-action-zone", 1],
-      ],
-    },
-    { role: "player", zones: [["player-primary-action-zone", 4]] },
-    { role: "moderator", zones: [["moderator-primary-action-zone", 11]] },
-  ];
-}
 
 function thumbZonesComplete(actual, expectedZones) {
   if (!Array.isArray(actual)) {
@@ -852,7 +843,7 @@ function inAppBrowserStaticDomEvidenceComplete(inAppBrowserStaticDom) {
   if (
     inAppBrowserStaticDom.status !== "passed" ||
     inAppBrowserStaticDom.proof !== "in-app-browser-static-dom-contract" ||
-    inAppBrowserStaticDom.scenarioCount < 16 ||
+    inAppBrowserStaticDom.scenarioCount < EXPECTED_COUNTS.commandScenarios ||
     inAppBrowserStaticDom.hydratedScenarioCount < 6
   ) {
     return false;
@@ -995,10 +986,10 @@ function inAppBrowserImportedRunEvidenceComplete(inAppBrowserImportedRun) {
     inAppBrowserImportedRun.validated?.viewportCount > 0 &&
     inAppBrowserImportedRun.validated.runCount >=
       inAppBrowserImportedRun.validated.viewportCount &&
-    inAppBrowserImportedRun.validated.plannedInteractionCount === 23 &&
+    inAppBrowserImportedRun.validated.plannedInteractionCount === EXPECTED_COUNTS.plannedInteractions &&
     inAppBrowserImportedRun.validated.plannedStabilityCheckCount === 2 &&
     inAppBrowserImportedRun.validated.stabilityCheckTileCount >= 15 &&
-    inAppBrowserImportedRun.validated.moderatorCriticalConfirmationCount === 11 &&
+    inAppBrowserImportedRun.validated.moderatorCriticalConfirmationCount === EXPECTED_COUNTS.moderatorCriticalActions &&
     (inAppBrowserImportedRun.validated.screenshotChecks?.length ?? 0) >=
       inAppBrowserImportedRun.validated.viewportCount
   );

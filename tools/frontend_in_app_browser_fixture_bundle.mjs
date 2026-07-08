@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { EXPECTED_COUNTS } from "./frontend_proof_expectations.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const bundleDir = path.join(repoRoot, "target", "frontend-in-app-browser-bundle");
@@ -67,7 +68,7 @@ assert.equal(
 );
 assert.equal(importedRoleSmoke.proof, "frontend-role-smoke-imported-contract");
 assert.equal(handoff.fixture.plannedStabilityCheckCount, 2);
-assert.equal(handoff.fixture.stabilityCheckTileCount, 15);
+assert.equal(handoff.fixture.stabilityCheckTileCount, EXPECTED_COUNTS.stabilityCheckTiles);
 
 const optionalScreenshots = (await readdir(interactionsDir))
   .filter((entry) => /^browser-run-.+\.png$/u.test(entry))
