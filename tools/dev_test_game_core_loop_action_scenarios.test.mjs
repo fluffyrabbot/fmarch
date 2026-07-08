@@ -24,6 +24,9 @@ import {
   staleNightOneActionAfterTransitionRecoveryScenario,
   staleVoteTransitionRecoveryFeatureSpineRow,
 } from "./dev_test_game_core_loop_action_scenarios.mjs";
+import {
+  playerActionSubmissionClickProofFixture,
+} from "./dev_test_game_core_loop_role_surface_test_fixtures.mjs";
 
 test("player action scenario module exports proof lane ids", () => {
   assert.equal(playerActionLoopLaneId, "action-loop");
@@ -276,24 +279,6 @@ test("player invalid-action recovery assertion covers InvalidTarget refresh", ()
     /player invalid-action recovery/,
   );
 });
-
-function playerActionSubmissionClickProofFixture() {
-  const scenario = playerActionSubmissionScenario();
-  return {
-    status: "passed",
-    commandKind: scenario.commandKind,
-    commandStatus: {
-      state: scenario.finalState,
-    },
-    bridgePlan: {
-      finalState: scenario.finalState,
-    },
-    checkpointReceiptState: `ack:${scenario.streamSeq}`,
-    checkpointActionStateAfterAck: scenario.checkpointActionState,
-    receiptCount: 1,
-    receiptStatusText: `Ack: stream seqs ${scenario.streamSeq}`,
-  };
-}
 
 test("player stale vote recovery assertion covers PhaseLocked transition reject", () => {
   const scenario = staleDayTwoVoteAfterTransitionRecoveryScenario();

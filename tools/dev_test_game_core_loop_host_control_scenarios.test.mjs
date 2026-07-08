@@ -14,6 +14,10 @@ import {
   hostModkillControlScenario,
   hostPhaseAdvanceTransitionCheckpointPassed,
 } from "./dev_test_game_core_loop_host_control_scenarios.mjs";
+import {
+  hostPhaseTransitionSurfaceFixture,
+  hostRoleSurfaceCheckpointFixture,
+} from "./dev_test_game_core_loop_role_surface_test_fixtures.mjs";
 
 test("host-control family shares lifecycle role surface and proof-run lane ids", () => {
   const raceCases = hostControlRaceScenarioCases();
@@ -113,59 +117,3 @@ test("host-control checkpoint rows are scenario-owned", () => {
     ],
   );
 });
-
-function hostRoleSurfaceCheckpointFixture() {
-  return {
-    status: "passed",
-    clickedThroughFromRoleUrl: true,
-    checkpointTestId: "host-lifecycle-control-checkpoint",
-    hostLifecycleControlCheckpoint: {
-      proofCheckId: "host-lifecycle-control",
-    },
-    hostLifecycleControlClickProof: {
-      status: "passed",
-      commandKind: "LockThread",
-      checkpointPhaseStateAfterAck: "locked",
-      checkpointDeadlineAffordanceAfterAck: "unlock_thread,advance_phase",
-    },
-    hostLifecycleUnlockProof: {
-      status: "passed",
-      commandKind: "UnlockThread",
-      checkpointPhaseStateAfterAck: "open",
-      checkpointDeadlineAffordanceAfterAck: "resolve_phase,lock_thread",
-    },
-    hostLifecycleStaleRejectProof: {
-      status: "passed",
-      commandKind: "LockThread",
-      commandStatus: {
-        state: "reject",
-        error: "PhaseLocked",
-      },
-      bridgePlan: {
-        finalState: "reject",
-        projectionRefreshKeys: ["host"],
-      },
-      checkpointPhaseStateAfterReject: "open",
-      checkpointDeadlineAffordanceAfterReject: "resolve_phase,lock_thread",
-      recoveryText: "Reject PhaseLocked",
-    },
-  };
-}
-
-function hostPhaseTransitionSurfaceFixture() {
-  return {
-    status: "passed",
-    clickedThroughFromRoleUrl: true,
-    transition: "advance_phase:ack:802",
-    advanceProof: {
-      status: "passed",
-      commandKind: "AdvancePhase",
-      commandStatus: { state: "ack" },
-      commandOutcome: { state: "ack" },
-      bridgePlan: { finalState: "ack" },
-      checkpointPhaseId: "N02",
-      checkpointPhaseState: "open",
-      checkpointDeadlineAffordance: "resolve_phase,lock_thread",
-    },
-  };
-}

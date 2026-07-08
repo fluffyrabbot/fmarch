@@ -18,6 +18,12 @@ import {
 import {
   privateReceiptScenario,
 } from "./dev_test_game_core_loop_private_receipt_scenarios.mjs";
+import {
+  nightActionResolutionReceiptSurfaceFixture,
+  normalNightActionResolutionPrivacySurfaceFixture,
+  privateReceiptProofFixture,
+  privateReceiptSourceRoleUrl,
+} from "./dev_test_game_core_loop_role_surface_test_fixtures.mjs";
 
 test("private receipt surface family shares early receipt and privacy cases", () => {
   assert.equal(
@@ -86,13 +92,9 @@ test("night action receipt and privacy feature rows are scenario-owned", () => {
 
 test("night action receipt and privacy checkpoint rows share scenario predicates", () => {
   const game = "game-a";
-  const receiptSurface = privateReceiptProofFixture({
+  const receiptSurface = nightActionResolutionReceiptSurfaceFixture({ game });
+  const privacySurface = normalNightActionResolutionPrivacySurfaceFixture({
     game,
-    scenario: privateReceiptScenario("n02-target-receipt"),
-  });
-  const privacySurface = privateReceiptProofFixture({
-    game,
-    scenario: privateReceiptScenario("n02-normal-privacy"),
   });
 
   assert.equal(
@@ -158,14 +160,14 @@ test("early private receipt surface assertions share target and privacy checks",
     assertTargetResolutionReceiptSurfaceProof({
       proof: privateReceiptProofFixture({ game, scenario: targetScenario }),
       expectedGame: game,
-      sourceRoleUrl: sourceRoleUrl({ game }),
+      sourceRoleUrl: privateReceiptSourceRoleUrl({ game }),
     }),
   );
   assert.doesNotThrow(() =>
     assertNormalNightActionResolutionPrivacySurfaceProof({
       proof: privateReceiptProofFixture({ game, scenario: privacyScenario }),
       expectedGame: game,
-      sourceRoleUrl: sourceRoleUrl({ game }),
+      sourceRoleUrl: privateReceiptSourceRoleUrl({ game }),
     }),
   );
   assert.throws(
@@ -176,86 +178,8 @@ test("early private receipt surface assertions share target and privacy checks",
           projectionNotifications: [{ effect: "player_killed" }],
         },
         expectedGame: game,
-        sourceRoleUrl: sourceRoleUrl({ game }),
+        sourceRoleUrl: privateReceiptSourceRoleUrl({ game }),
       }),
     /normal night action resolution privacy surface/,
   );
 });
-
-function privateReceiptProofFixture({ game, scenario }) {
-  const proof = {
-    status: "passed",
-    clickedThroughFromRoleUrl: true,
-    releaseReady: false,
-    productionReady: false,
-    rawInviteTokensVisible: false,
-    sourceRoleUrl: sourceRoleUrl({ game }),
-    visitedRolePath: `/g/${game}?private=notification-1`,
-    surfaceTestId: "player-surface",
-    [scenario.slotField]: scenario.expectedSlot,
-    principalUserId: scenario.principalUserId,
-    checkpoint: {
-      phaseId: scenario.phaseId,
-      phaseState: scenario.phaseState,
-      actorSlot: scenario.expectedSlot,
-      actionState: scenario.actionState,
-      receiptState: "idle",
-      statusText: `Player action unavailable: ${scenario.statusText}`,
-    },
-    privateQueueBoundary: {
-      status: "principal-scoped-private-projections",
-      count: scenario.privateReceipt ? 1 : 0,
-      text: "delivered to you alone",
-    },
-    projectionCommandState: {
-      actorSlot: scenario.expectedSlot,
-      actorAlive: scenario.actorAlive,
-      actorStatus: scenario.actorStatus,
-      phase: {
-        phaseId: scenario.phaseId,
-        locked: scenario.phaseState === "locked",
-      },
-      actions: [],
-      boundary: scenario.boundaryText,
-    },
-    resyncFromSeq: scenario.resyncFromSeq,
-    resyncSnapshotCommandState: {
-      actorSlot: scenario.expectedSlot,
-      phase: { phaseId: scenario.phaseId },
-    },
-    coldLoadEndpoints: {
-      notificationsEndpoint:
-        `/games/${game}/notifications?principal_user_id=${scenario.principalUserId}`,
-      commandStateEndpoint:
-        `/games/${game}/player-command-state?principal_user_id=${scenario.principalUserId}&slot_id=${scenario.expectedSlot}`,
-    },
-  };
-  if (scenario.privateReceipt) {
-    return {
-      ...proof,
-      privateNotice: {
-        id: "notification-1",
-        kind: "notification",
-        text: `player_killed ${scenario.privateReceiptStatus}`,
-        detailText: `Phase ${scenario.privateReceiptPhaseId}`,
-      },
-      projectionNotifications: [
-        { effect: "player_killed", status: scenario.privateReceiptStatus },
-      ],
-      resyncSnapshotNotifications: [
-        { effect: "player_killed", status: scenario.privateReceiptStatus },
-      ],
-    };
-  }
-  return {
-    ...proof,
-    targetReceiptVisible: false,
-    privateEmptyText: "No private results visible",
-    projectionNotifications: [],
-    resyncSnapshotNotifications: [],
-  };
-}
-
-function sourceRoleUrl({ game }) {
-  return `http://127.0.0.1:5173/g/${game}?private=notification-1`;
-}
