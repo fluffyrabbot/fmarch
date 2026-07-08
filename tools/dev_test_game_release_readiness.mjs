@@ -402,6 +402,8 @@ import {
   assertTargetDayVoteReceiptSurfaceProof,
   assertTargetResolutionReceiptSurfaceProof,
   coreLoopPrivateReceiptSurfaceFamilyId,
+  nightActionResolutionPrivacyCheckpointId,
+  nightActionResolutionReceiptCheckpointId,
 } from "./dev_test_game_core_loop_private_receipt_surface_scenarios.mjs";
 import {
   assertNormalPostDayVoteAdvanceSurfaceProof,
@@ -3190,6 +3192,10 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
       hostRoleSurface: proof.hostRoleSurface,
       hostPhaseTransitionSurface: proof.hostPhaseTransitionSurface,
       playerRoleSurface: proof.playerRoleSurface,
+      nightActionResolutionReceiptSurface:
+        proof.nightActionResolutionReceiptSurface,
+      normalNightActionResolutionPrivacySurface:
+        proof.normalNightActionResolutionPrivacySurface,
     }),
     requiredRows: proof.generatedFrom?.coreLoopSpineRows?.roleSurfaceCheckpoints,
   });
@@ -3273,6 +3279,8 @@ function coreLoopRoleSurfaceCheckpointRows({
   hostRoleSurface,
   hostPhaseTransitionSurface,
   playerRoleSurface,
+  nightActionResolutionReceiptSurface,
+  normalNightActionResolutionPrivacySurface,
 } = {}) {
   const rows = [];
   if (typeof hostRoleSurface?.checkpointTestId === "string") {
@@ -3354,6 +3362,35 @@ function coreLoopRoleSurfaceCheckpointRows({
     ).includes("Ack: stream seqs 501")
   ) {
     rows.push(`d02-n02-${playerActionSubmissionAckCheckpointId}`);
+  }
+  if (
+    nightActionResolutionReceiptSurface?.status === "passed" &&
+    nightActionResolutionReceiptSurface.targetSlot === "slot-3" &&
+    nightActionResolutionReceiptSurface.privateQueueBoundary?.count === 1 &&
+    nightActionResolutionReceiptSurface.privateNotice?.kind === "notification" &&
+    String(nightActionResolutionReceiptSurface.privateNotice?.text ?? "")
+      .includes("factional_kill") &&
+    nightActionResolutionReceiptSurface.projectionNotifications?.[0]?.status ===
+      "factional_kill" &&
+    nightActionResolutionReceiptSurface.checkpoint?.phaseId === "N02" &&
+    nightActionResolutionReceiptSurface.checkpoint?.phaseState === "locked" &&
+    nightActionResolutionReceiptSurface.rawInviteTokensVisible === false
+  ) {
+    rows.push(`d02-n02-${nightActionResolutionReceiptCheckpointId}`);
+  }
+  if (
+    normalNightActionResolutionPrivacySurface?.status === "passed" &&
+    normalNightActionResolutionPrivacySurface.normalSlot === "slot-4" &&
+    normalNightActionResolutionPrivacySurface.privateQueueBoundary?.count === 0 &&
+    normalNightActionResolutionPrivacySurface.targetReceiptVisible === false &&
+    normalNightActionResolutionPrivacySurface.projectionNotifications?.length ===
+      0 &&
+    normalNightActionResolutionPrivacySurface.checkpoint?.phaseId === "N02" &&
+    normalNightActionResolutionPrivacySurface.checkpoint?.phaseState ===
+      "locked" &&
+    normalNightActionResolutionPrivacySurface.rawInviteTokensVisible === false
+  ) {
+    rows.push(`d02-n02-${nightActionResolutionPrivacyCheckpointId}`);
   }
   return rows;
 }

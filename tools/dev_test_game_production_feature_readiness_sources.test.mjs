@@ -142,6 +142,8 @@ function readinessFixture() {
               "d02-n02-host-lifecycle-control-stale-reject-checkpoint",
               "d02-n02-host-phase-advance-transition-checkpoint",
               "d02-n02-player-action-submission-ack-checkpoint",
+              "d02-n02-night-action-resolution-receipt-checkpoint",
+              "d02-n02-night-action-resolution-privacy-checkpoint",
             ],
             recoveryHookIds: [],
             visibleAdminCheckIds: ["host-lifecycle-control"],

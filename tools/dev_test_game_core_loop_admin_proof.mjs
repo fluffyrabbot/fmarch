@@ -77,6 +77,8 @@ import {
   assertTargetResolutionReceiptSurfaceProof,
   coreLoopPrivateReceiptSurfaceFamilyId,
   coreLoopPrivateReceiptSurfaceScenarioFamily,
+  nightActionResolutionPrivacyCheckpointId,
+  nightActionResolutionReceiptCheckpointId,
 } from "./dev_test_game_core_loop_private_receipt_surface_scenarios.mjs";
 import {
   assertNormalPostDayVoteAdvanceSurfaceProof,
@@ -175,6 +177,8 @@ const roleSurfaceSpineCheckpointRows = ({
   hostRoleSurface,
   hostPhaseTransitionSurface,
   playerRoleSurface,
+  nightActionResolutionReceiptSurface,
+  normalNightActionResolutionPrivacySurface,
 } = {}) => {
   const rows = [];
   if (
@@ -273,6 +277,39 @@ const roleSurfaceSpineCheckpointRows = ({
   ) {
     rows.push(
       `${coreLoopHostLifecycleControlCycleId}-${playerActionSubmissionAckCheckpointId}`,
+    );
+  }
+  if (
+    nightActionResolutionReceiptSurface?.status === "passed" &&
+    nightActionResolutionReceiptSurface.targetSlot === "slot-3" &&
+    nightActionResolutionReceiptSurface.privateQueueBoundary?.count === 1 &&
+    nightActionResolutionReceiptSurface.privateNotice?.kind === "notification" &&
+    String(nightActionResolutionReceiptSurface.privateNotice?.text ?? "")
+      .includes("factional_kill") &&
+    nightActionResolutionReceiptSurface.projectionNotifications?.[0]?.status ===
+      "factional_kill" &&
+    nightActionResolutionReceiptSurface.checkpoint?.phaseId === "N02" &&
+    nightActionResolutionReceiptSurface.checkpoint?.phaseState === "locked" &&
+    nightActionResolutionReceiptSurface.rawInviteTokensVisible === false
+  ) {
+    rows.push(
+      `${coreLoopHostLifecycleControlCycleId}-${nightActionResolutionReceiptCheckpointId}`,
+    );
+  }
+  if (
+    normalNightActionResolutionPrivacySurface?.status === "passed" &&
+    normalNightActionResolutionPrivacySurface.normalSlot === "slot-4" &&
+    normalNightActionResolutionPrivacySurface.privateQueueBoundary?.count === 0 &&
+    normalNightActionResolutionPrivacySurface.targetReceiptVisible === false &&
+    normalNightActionResolutionPrivacySurface.projectionNotifications?.length ===
+      0 &&
+    normalNightActionResolutionPrivacySurface.checkpoint?.phaseId === "N02" &&
+    normalNightActionResolutionPrivacySurface.checkpoint?.phaseState ===
+      "locked" &&
+    normalNightActionResolutionPrivacySurface.rawInviteTokensVisible === false
+  ) {
+    rows.push(
+      `${coreLoopHostLifecycleControlCycleId}-${nightActionResolutionPrivacyCheckpointId}`,
     );
   }
   return rows;
@@ -10287,6 +10324,10 @@ export function assertCoreLoopAdminProof(evidence) {
       hostRoleSurface: evidence.hostRoleSurface,
       hostPhaseTransitionSurface: evidence.hostPhaseTransitionSurface,
       playerRoleSurface: evidence.playerRoleSurface,
+      nightActionResolutionReceiptSurface:
+        evidence.nightActionResolutionReceiptSurface,
+      normalNightActionResolutionPrivacySurface:
+        evidence.normalNightActionResolutionPrivacySurface,
     }),
     evidence.generatedFrom?.coreLoopSpineRows?.roleSurfaceCheckpoints,
   );

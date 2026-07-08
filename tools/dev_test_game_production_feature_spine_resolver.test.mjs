@@ -418,6 +418,102 @@ test("production feature spine resolver preserves player action submission ACK t
   );
 });
 
+test("production feature spine resolver preserves night action receipt target shape", () => {
+  const sourceTarget = coreLoopSourceTargetFixture();
+  const declaration =
+    releaseReadinessProductionFeatureSpineTargets.nightActionResolutionReceipt;
+  const target = resolveProductionFeatureSpineTarget({
+    itemId: "night-action-resolution-receipt",
+    declaration,
+    sourceTargetsByCheckId: {
+      "local-core-loop-proof": sourceTarget,
+    },
+  });
+
+  assert.deepEqual(target, {
+    featureSlotId: "night-action-resolution-receipt",
+    sourceCheckId: "local-core-loop-proof",
+    coverageDecision: {
+      kind: "seeded-role-url-proof",
+      proofCommand: coreLoopAdminProofCommand,
+    },
+    detailRoleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
+    cycleId: "d02-n02",
+    roleUrlId: "d02-n02-target",
+    roleUrl: "http://127.0.0.1:5173/g/game-b",
+    rowKind: "checkpoint",
+    checkpointId: "d02-n02-night-action-resolution-receipt-checkpoint",
+    adminCheckId: "resolution-receipts",
+    featureTargetKind: "night-action-resolution-receipt",
+    browserProofCommand,
+    browserWorkbench: {
+      status: "passed",
+      route: "/g/game-b",
+      roleUrl: "http://127.0.0.1:5173/g/game-b",
+      roleSurface: "player",
+      featureSlotId: "night-action-resolution-receipt",
+      requiredEvidence:
+        "Seeded night-action-resolution-receipt role URL opens /g/game-b in the browser proof before resolution-receipts recovery is trusted.",
+    },
+    sourceProofArtifact: "target/dev-test-game/core-loop-admin-proof.json",
+    rerunCommand: coreLoopAdminProofCommand,
+  });
+  assert.equal(
+    validProductionFeatureSpineTarget(target, {
+      sourceCheckRules: coreLoopSourceCheckRules(),
+    }),
+    true,
+  );
+});
+
+test("production feature spine resolver preserves night action privacy target shape", () => {
+  const sourceTarget = coreLoopSourceTargetFixture();
+  const declaration =
+    releaseReadinessProductionFeatureSpineTargets.nightActionResolutionPrivacy;
+  const target = resolveProductionFeatureSpineTarget({
+    itemId: "night-action-resolution-privacy",
+    declaration,
+    sourceTargetsByCheckId: {
+      "local-core-loop-proof": sourceTarget,
+    },
+  });
+
+  assert.deepEqual(target, {
+    featureSlotId: "night-action-resolution-privacy",
+    sourceCheckId: "local-core-loop-proof",
+    coverageDecision: {
+      kind: "seeded-role-url-proof",
+      proofCommand: coreLoopAdminProofCommand,
+    },
+    detailRoleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
+    cycleId: "d02-n02",
+    roleUrlId: "d02-n02-normalPlayer",
+    roleUrl: "http://127.0.0.1:5173/g/game-b",
+    rowKind: "checkpoint",
+    checkpointId: "d02-n02-night-action-resolution-privacy-checkpoint",
+    adminCheckId: "resolution-receipts",
+    featureTargetKind: "night-action-resolution-privacy",
+    browserProofCommand,
+    browserWorkbench: {
+      status: "passed",
+      route: "/g/game-b",
+      roleUrl: "http://127.0.0.1:5173/g/game-b",
+      roleSurface: "player",
+      featureSlotId: "night-action-resolution-privacy",
+      requiredEvidence:
+        "Seeded night-action-resolution-privacy role URL opens /g/game-b in the browser proof before resolution-receipts recovery is trusted.",
+    },
+    sourceProofArtifact: "target/dev-test-game/core-loop-admin-proof.json",
+    rerunCommand: coreLoopAdminProofCommand,
+  });
+  assert.equal(
+    validProductionFeatureSpineTarget(target, {
+      sourceCheckRules: coreLoopSourceCheckRules(),
+    }),
+    true,
+  );
+});
+
 function coreLoopResolutionBrowserWorkbenchFixture() {
   return {
     status: "passed",
@@ -947,6 +1043,8 @@ function coreLoopSourceTargetFixture() {
       "d02-n02-host-lifecycle-control-stale-reject-checkpoint",
       "d02-n02-host-phase-advance-transition-checkpoint",
       "d02-n02-player-action-submission-ack-checkpoint",
+      "d02-n02-night-action-resolution-receipt-checkpoint",
+      "d02-n02-night-action-resolution-privacy-checkpoint",
       "d02-n02-d02-vote-open",
       "d02-n02-d02-deciding-vote-submitted",
       "d02-n02-d02-resolved-target-killed",

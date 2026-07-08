@@ -53,6 +53,10 @@ import {
   devTestGameCoreLoopAdminProofPath,
 } from "./dev_test_game_local_admin_proof_paths.mjs";
 import {
+  nightActionResolutionPrivacyFeatureSpineRow,
+  nightActionResolutionReceiptFeatureSpineRow,
+} from "./dev_test_game_core_loop_private_receipt_surface_scenarios.mjs";
+import {
   featureSpineTargetProvenanceCase,
 } from "./dev_test_game_feature_spine_target_provenance.mjs";
 
@@ -133,6 +137,12 @@ const coreLoopFeatureSpineLaneRows = Object.freeze([
   ),
   Object.freeze(
     playerActionSubmissionAckFeatureSpineRow({ cycleId: dayTwoNightTwo }),
+  ),
+  Object.freeze(
+    nightActionResolutionReceiptFeatureSpineRow({ cycleId: dayTwoNightTwo }),
+  ),
+  Object.freeze(
+    nightActionResolutionPrivacyFeatureSpineRow({ cycleId: dayTwoNightTwo }),
   ),
   Object.freeze(
     staleVoteTransitionRecoveryFeatureSpineRow({ cycleId: dayTwoNightTwo }),

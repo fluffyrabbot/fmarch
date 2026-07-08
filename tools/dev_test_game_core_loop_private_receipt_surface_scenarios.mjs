@@ -10,6 +10,14 @@ export const coreLoopPrivateReceiptSurfaceFamilyId =
 export const coreLoopPrivateReceiptSurfaceLaneIds = Object.freeze([
   "resolution-receipts",
 ]);
+export const nightActionResolutionReceiptCheckpointId =
+  "night-action-resolution-receipt-checkpoint";
+export const nightActionResolutionPrivacyCheckpointId =
+  "night-action-resolution-privacy-checkpoint";
+export const nightActionResolutionReceiptFeatureTargetKind =
+  "night-action-resolution-receipt";
+export const nightActionResolutionPrivacyFeatureTargetKind =
+  "night-action-resolution-privacy";
 
 const privateReceiptSurfaceCaseDefinitions = Object.freeze({
   targetResolutionReceipt: Object.freeze({
@@ -65,6 +73,30 @@ export function coreLoopPrivateReceiptSurfaceScenarioFamily() {
         { ...privateReceiptScenario(surfaceCase.scenarioId) },
       ]),
     ),
+  };
+}
+
+export function nightActionResolutionReceiptFeatureSpineRow({ cycleId }) {
+  return {
+    targetKey: "nightActionResolutionReceipt",
+    featureSlotId: "night-action-resolution-receipt",
+    cycleId,
+    role: "target",
+    checkpointId: `${cycleId}-${nightActionResolutionReceiptCheckpointId}`,
+    adminCheckId: "resolution-receipts",
+    featureTargetKind: nightActionResolutionReceiptFeatureTargetKind,
+  };
+}
+
+export function nightActionResolutionPrivacyFeatureSpineRow({ cycleId }) {
+  return {
+    targetKey: "nightActionResolutionPrivacy",
+    featureSlotId: "night-action-resolution-privacy",
+    cycleId,
+    role: "normalPlayer",
+    checkpointId: `${cycleId}-${nightActionResolutionPrivacyCheckpointId}`,
+    adminCheckId: "resolution-receipts",
+    featureTargetKind: nightActionResolutionPrivacyFeatureTargetKind,
   };
 }
 

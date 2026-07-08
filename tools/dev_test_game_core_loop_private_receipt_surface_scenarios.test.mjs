@@ -6,6 +6,8 @@ import {
   coreLoopPrivateReceiptSurfaceFamilyId,
   coreLoopPrivateReceiptSurfaceLaneIds,
   coreLoopPrivateReceiptSurfaceScenarioFamily,
+  nightActionResolutionPrivacyFeatureSpineRow,
+  nightActionResolutionReceiptFeatureSpineRow,
   privateReceiptSurfaceCases,
 } from "./dev_test_game_core_loop_private_receipt_surface_scenarios.mjs";
 import {
@@ -47,6 +49,33 @@ test("private receipt surface family shares early receipt and privacy cases", ()
   assert.notEqual(
     privateReceiptSurfaceCases().targetResolutionReceipt,
     privateReceiptSurfaceCases().targetResolutionReceipt,
+  );
+});
+
+test("night action receipt and privacy feature rows are scenario-owned", () => {
+  assert.deepEqual(
+    nightActionResolutionReceiptFeatureSpineRow({ cycleId: "d02-n02" }),
+    {
+      targetKey: "nightActionResolutionReceipt",
+      featureSlotId: "night-action-resolution-receipt",
+      cycleId: "d02-n02",
+      role: "target",
+      checkpointId: "d02-n02-night-action-resolution-receipt-checkpoint",
+      adminCheckId: "resolution-receipts",
+      featureTargetKind: "night-action-resolution-receipt",
+    },
+  );
+  assert.deepEqual(
+    nightActionResolutionPrivacyFeatureSpineRow({ cycleId: "d02-n02" }),
+    {
+      targetKey: "nightActionResolutionPrivacy",
+      featureSlotId: "night-action-resolution-privacy",
+      cycleId: "d02-n02",
+      role: "normalPlayer",
+      checkpointId: "d02-n02-night-action-resolution-privacy-checkpoint",
+      adminCheckId: "resolution-receipts",
+      featureTargetKind: "night-action-resolution-privacy",
+    },
   );
 });
 

@@ -21264,6 +21264,8 @@ function coreLoopAdminProofFixture() {
           "d02-n02-host-lifecycle-control-stale-reject-checkpoint",
           "d02-n02-host-phase-advance-transition-checkpoint",
           "d02-n02-player-action-submission-ack-checkpoint",
+          "d02-n02-night-action-resolution-receipt-checkpoint",
+          "d02-n02-night-action-resolution-privacy-checkpoint",
         ],
         recoveryHooks: [
           "staleLockedVoteReject",
@@ -23686,6 +23688,8 @@ function coreLoopSpineTargetsFixture() {
       "d02-n02-host-lifecycle-control-stale-reject-checkpoint",
       "d02-n02-host-phase-advance-transition-checkpoint",
       "d02-n02-player-action-submission-ack-checkpoint",
+      "d02-n02-night-action-resolution-receipt-checkpoint",
+      "d02-n02-night-action-resolution-privacy-checkpoint",
       "d02-n02-d02-vote-open",
       "d02-n02-d02-deciding-vote-submitted",
       "d02-n02-d02-resolved-target-killed",
