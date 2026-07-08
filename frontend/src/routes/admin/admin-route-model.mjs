@@ -113,6 +113,12 @@ import {
   selectedOperatorHandoffTerminalReceiptId,
 } from "../../../../tools/dev_test_game_selected_operator_handoff_receipt.mjs";
 import {
+  selectedLocalDependencyTerminalReceiptId,
+  selectedLocalDependencyTerminalReceiptRowDefinitionsForReceipt,
+  selectedLocalDependencyTerminalReceiptRowFields,
+  selectedLocalDependencyTerminalReceiptRowTestIdPrefix,
+} from "../../../../tools/dev_test_game_selected_local_dependency_receipt.mjs";
+import {
   normalizeLocalReadinessDependencyTrace,
   normalizePreReadinessTrace,
   preReadinessTraceCheckRows,
@@ -181,9 +187,6 @@ import {
 import {
   ADMIN_ROUTE_CONTRACT,
 } from "./admin-route-contract.mjs";
-
-const selectedLocalDependencyTerminalReceiptId =
-  "selected-local-dependency-terminal-receipt";
 
 export { ADMIN_ROUTE_CONTRACT };
 
@@ -491,72 +494,44 @@ function selectedLocalDependencyTerminalReceiptSummarySections(
   if (receipt === null) {
     return [];
   }
+  const rowFields = selectedLocalDependencyTerminalReceiptRowFields(receipt);
+  const rowDefinitions =
+    selectedLocalDependencyTerminalReceiptRowDefinitionsForReceipt(receipt);
   return [
     buildArtifactSummarySection({
       id: "selected-local-dependency-terminal-receipt",
       heading: "Selected local dependency receipt",
-      rows: [
-        {
-          id: "receipt",
-          testId: "admin-audit-selected-local-dependency-terminal-receipt",
-          values: [
-            { id: "status", text: receipt.status, emphasized: true },
-            { id: "id", text: receipt.id },
-            { id: "reason", text: receipt.reason },
-            { id: "proofBoundary", text: receipt.proofBoundary },
-            { id: "sourceNextAction", text: receipt.sourceArtifacts.nextAction },
-            {
-              id: "sourceNextActionAdminProof",
-              text: receipt.sourceArtifacts.nextActionAdminProof,
-            },
-          ],
-        },
-        ...(receipt.selectedLocalDependency === undefined
-          ? []
-          : [
-              {
-                id: "selected-local-dependency",
-                testId:
-                  "admin-audit-selected-local-dependency-terminal-selected-local-dependency",
-                values: [
-                  {
-                    id: "status",
-                    text: receipt.selectedLocalDependency.status,
-                    emphasized: true,
-                  },
-                  { id: "id", text: receipt.selectedLocalDependency.id },
-                  {
-                    id: "command",
-                    text: receipt.selectedLocalDependency.command,
-                  },
-                  {
-                    id: "requiredEvidence",
-                    text: receipt.selectedLocalDependency.requiredEvidence,
-                  },
-                  {
-                    id: "buildSlice",
-                    text: receipt.selectedLocalDependency.buildSlice,
-                  },
-                  {
-                    id: "proofTarget",
-                    text: receipt.selectedLocalDependency.proofTarget,
-                  },
-                  {
-                    id: "roleUrl",
-                    text: receipt.selectedLocalDependency.roleUrl,
-                    href: seededRoleUrlToAdminHref(
-                      receipt.selectedLocalDependency.roleUrl,
-                      { game },
-                    ),
-                    testId:
-                      "admin-audit-selected-local-dependency-terminal-role-url",
-                  },
-                ],
-              },
-            ]),
-      ],
+      rows: rowDefinitions.map((definition) =>
+        selectedLocalDependencyTerminalReceiptSummaryRow({
+          definition,
+          fields: rowFields[definition.id],
+          game,
+        }),
+      ),
     }),
   ];
+}
+
+function selectedLocalDependencyTerminalReceiptSummaryRow({
+  definition,
+  fields,
+  game,
+}) {
+  return {
+    id: definition.summaryRowId,
+    testId: definition.testId,
+    values: fields.map((field) => ({
+      id: field.id,
+      text: field.value,
+      ...(field.emphasized === true ? { emphasized: true } : {}),
+      ...(field.id !== "roleUrl"
+        ? {}
+        : {
+            href: seededRoleUrlToAdminHref(field.value, { game }),
+            testId: `${selectedLocalDependencyTerminalReceiptRowTestIdPrefix}-role-url`,
+          }),
+    })),
+  };
 }
 
 function frontendSetupWorkbenchReadinessSummarySections(readiness) {

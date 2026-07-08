@@ -335,6 +335,10 @@ import {
   assertSelectedOperatorHandoffTerminalReceipt,
 } from "./dev_test_game_selected_operator_handoff_receipt.mjs";
 import {
+  assertSelectedLocalDependencyTerminalReceipt,
+  selectedLocalDependencyTerminalReceiptId,
+} from "./dev_test_game_selected_local_dependency_receipt.mjs";
+import {
   adminSpineProofBatchRegistry,
   adminSpineProofIds,
 } from "./dev_test_game_admin_spine_proof_batches.mjs";
@@ -474,8 +478,6 @@ import {
   hostedAdminHandoffProofArtifactCases,
 } from "./dev_test_game_hosted_handoff_proof_cases.mjs";
 export const DEV_TEST_GAME_RELEASE_READINESS_VERSION = 1;
-const selectedLocalDependencyTerminalReceiptId =
-  "selected-local-dependency-terminal-receipt";
 export const devTestGameIdentityAdapterSeedCommandKinds = Object.freeze([
   "CreateGame",
   "AddSlot",
@@ -8723,52 +8725,6 @@ export function validateDevTestGameAdminSpineTerminalBatches(
     artifactPaths: proof.batches.flatMap((batch) => batch.artifactPaths),
     ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
   };
-}
-
-function assertSelectedLocalDependencyTerminalReceipt(receipt) {
-  if (
-    receipt?.id !== selectedLocalDependencyTerminalReceiptId ||
-    !["passed", "not_applicable"].includes(receipt.status) ||
-    receipt.releaseReady !== false ||
-    receipt.productionReady !== false ||
-    typeof receipt.proofBoundary !== "string" ||
-    receipt.proofBoundary.trim() === "" ||
-    receipt.sourceArtifacts?.nextAction !== nextActionPath ||
-    receipt.sourceArtifacts?.nextActionAdminProof !== nextActionAdminProofPath ||
-    !Array.isArray(receipt.assertions)
-  ) {
-    throw new Error("selected local dependency terminal receipt drifted");
-  }
-  if (receipt.status === "not_applicable") {
-    if (receipt.selectedLocalDependency !== undefined) {
-      throw new Error(
-        "not applicable selected local dependency receipt carried a dependency",
-      );
-    }
-    return;
-  }
-  const dependency = receipt.selectedLocalDependency;
-  if (
-    dependency === null ||
-    typeof dependency !== "object" ||
-    typeof dependency.id !== "string" ||
-    dependency.id.trim() === "" ||
-    dependency.status !== "missing" ||
-    typeof dependency.command !== "string" ||
-    dependency.command.trim() === "" ||
-    typeof dependency.requiredEvidence !== "string" ||
-    dependency.requiredEvidence.trim() === "" ||
-    typeof dependency.buildSlice !== "string" ||
-    dependency.buildSlice.trim() === "" ||
-    typeof dependency.proofTarget !== "string" ||
-    dependency.proofTarget.trim() === "" ||
-    typeof dependency.roleUrl !== "string" ||
-    !dependency.roleUrl.includes("?game=<seeded-game>")
-  ) {
-    throw new Error(
-      "selected local dependency terminal receipt is missing prerequisite details",
-    );
-  }
 }
 
 function validateAdminSpineTerminalValidations(terminalValidations) {

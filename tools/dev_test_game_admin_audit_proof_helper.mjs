@@ -38,6 +38,9 @@ import {
 import {
   selectedOperatorHandoffTerminalReceiptRowTestIdPrefix,
 } from "./dev_test_game_selected_operator_handoff_receipt.mjs";
+import {
+  selectedLocalDependencyTerminalReceiptRowTestIdPrefix,
+} from "./dev_test_game_selected_local_dependency_receipt.mjs";
 export {
   normalizedEvidenceObjectRowIds,
 } from "./dev_test_game_normalized_evidence_object_rows.mjs";
@@ -1029,7 +1032,7 @@ export async function proveAdminAuditDetail({
     const visibleSelectedLocalDependencyTerminalReceiptRows =
       await waitForRows({
         page,
-        prefix: "admin-audit-selected-local-dependency-terminal",
+        prefix: selectedLocalDependencyTerminalReceiptRowTestIdPrefix,
         ids: requiredSelectedLocalDependencyTerminalReceiptRows,
         expectedStatuses:
           requiredSelectedLocalDependencyTerminalReceiptRowStatuses,
@@ -1037,7 +1040,7 @@ export async function proveAdminAuditDetail({
     const visibleSelectedLocalDependencyTerminalReceiptRowStatuses =
       await readRowStatuses({
         page,
-        prefix: "admin-audit-selected-local-dependency-terminal",
+        prefix: selectedLocalDependencyTerminalReceiptRowTestIdPrefix,
         ids: Object.keys(
           requiredSelectedLocalDependencyTerminalReceiptRowStatuses,
         ),

@@ -21,6 +21,10 @@ import {
   adminSpineTerminalBatchProofPath,
   devTestGameProofRunPath,
 } from "./dev_test_game_spine_artifact_paths.mjs";
+import {
+  selectedLocalDependencyTerminalReceiptRows,
+  selectedLocalDependencyTerminalReceiptRowStatuses,
+} from "./dev_test_game_selected_local_dependency_receipt.mjs";
 
 const adminSpineProofPath = path.resolve(
   repoRoot,
@@ -112,16 +116,8 @@ await runAdminAuditProof({
       requiredSelectedLocalDependencyTerminalReceiptRows:
         requiredSelectedLocalDependencyRows,
       requiredSelectedLocalDependencyTerminalReceiptRowStatuses:
-        Object.fromEntries(
-          requiredSelectedLocalDependencyRows.map((id) => [
-            id,
-            id === "receipt"
-              ? source.adminSpineTerminalBatches
-                  ?.selectedLocalDependencyTerminalReceipt?.status
-              : source.adminSpineTerminalBatches
-                  ?.selectedLocalDependencyTerminalReceipt
-                  ?.selectedLocalDependency?.status,
-          ]),
+        adminSpineSelectedLocalDependencyTerminalReceiptRowStatuses(
+          source.adminSpineTerminalBatches,
         ),
     });
   },
@@ -227,12 +223,17 @@ function adminSpineSelectedLocalDependencyTerminalReceiptRows(terminalBatches) {
   if (receipt === null || typeof receipt !== "object") {
     return [];
   }
-  return [
-    "receipt",
-    ...(receipt.selectedLocalDependency === undefined
-      ? []
-      : ["selected-local-dependency"]),
-  ];
+  return selectedLocalDependencyTerminalReceiptRows(receipt);
+}
+
+function adminSpineSelectedLocalDependencyTerminalReceiptRowStatuses(
+  terminalBatches,
+) {
+  const receipt = terminalBatches?.selectedLocalDependencyTerminalReceipt;
+  if (receipt === null || typeof receipt !== "object") {
+    return {};
+  }
+  return selectedLocalDependencyTerminalReceiptRowStatuses(receipt);
 }
 
 export function assertAdminSpineAdminProof(evidence) {

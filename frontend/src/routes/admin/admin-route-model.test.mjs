@@ -240,6 +240,11 @@ import {
   selectedOperatorHandoffPassedReceiptFixture,
 } from "../../../../tools/dev_test_game_selected_operator_handoff_receipt_fixture.mjs";
 import {
+  selectedLocalDependencyTerminalReceiptRowDefinitionsForReceipt,
+  selectedLocalDependencyTerminalReceiptRowFields,
+  selectedLocalDependencyTerminalReceiptRowStatuses,
+} from "../../../../tools/dev_test_game_selected_local_dependency_receipt.mjs";
+import {
   hostedIdentityTerminalReceiptArtifactCase,
   terminalProofGraphReceiptArtifacts,
 } from "../../../../tools/dev_test_game_proof_graph_receipt_artifact_rows.mjs";
@@ -2624,6 +2629,57 @@ test("admin local admin spine detail uses shared selected operator terminal rece
     selectedOperatorHandoffTerminalReceiptRowStatuses(receipt);
   const rowDefinitions =
     selectedOperatorHandoffTerminalReceiptRowDefinitionsForReceipt(receipt);
+  assert.deepEqual(
+    section.rows.map((row) => [row.id, row.testId]),
+    rowDefinitions.map((definition) => [
+      definition.summaryRowId,
+      definition.testId,
+    ]),
+  );
+  for (const definition of rowDefinitions) {
+    const renderedRow = section.rows.find(
+      (row) => row.testId === definition.testId,
+    );
+    const fields = rowFields[definition.id];
+    assert.deepEqual(
+      renderedRow.values.map((value) => [
+        value.id,
+        value.text,
+        value.emphasized === true,
+      ]),
+      fields.map((field) => [
+        field.id,
+        field.value,
+        field.emphasized === true,
+      ]),
+    );
+    assert.equal(
+      renderedRow.values.map((value) => value.text).join("\n"),
+      rowStatuses[definition.id],
+    );
+  }
+});
+
+test("admin local admin spine detail uses shared selected local dependency terminal receipt row contract", async () => {
+  const receipt = selectedLocalDependencyTerminalReceiptFixture();
+  const data = await buildAdminAuditDetailData({
+    audit: localAdminAuditIds.adminSpine,
+    principalUserId: "admin_a",
+    capabilities: [{ kind: "GlobalAdmin" }],
+    adminSpineProof: adminSpineProofFixture(),
+    adminSpineTerminalBatches: {
+      ...adminSpineTerminalBatchesFixture(),
+      selectedLocalDependencyTerminalReceipt: receipt,
+    },
+  });
+  const section = data.audit.artifactSummarySections.find(
+    (candidate) => candidate.id === "selected-local-dependency-terminal-receipt",
+  );
+  const rowFields = selectedLocalDependencyTerminalReceiptRowFields(receipt);
+  const rowStatuses =
+    selectedLocalDependencyTerminalReceiptRowStatuses(receipt);
+  const rowDefinitions =
+    selectedLocalDependencyTerminalReceiptRowDefinitionsForReceipt(receipt);
   assert.deepEqual(
     section.rows.map((row) => [row.id, row.testId]),
     rowDefinitions.map((definition) => [

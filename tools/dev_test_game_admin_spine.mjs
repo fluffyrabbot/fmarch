@@ -123,6 +123,9 @@ export {
 import {
   buildSelectedOperatorHandoffTerminalReceipt,
 } from "./dev_test_game_selected_operator_handoff_receipt.mjs";
+import {
+  buildSelectedLocalDependencyTerminalReceipt,
+} from "./dev_test_game_selected_local_dependency_receipt.mjs";
 import { releaseReadinessStep } from "./dev_test_game_spine_readiness_steps.mjs";
 import {
   handoffPhaseSteps,
@@ -634,61 +637,6 @@ async function writeAdminSpineTerminalBatchProof(
     `${JSON.stringify(evidence, null, 2)}\n`,
   );
   return evidence;
-}
-
-function buildSelectedLocalDependencyTerminalReceipt({ nextAction }) {
-  const localCheck = nextAction?.nextAction?.localCheck;
-  const reason = String(nextAction?.nextAction?.reason ?? "unknown");
-  if (
-    reason !== "release-readiness-local-check-missing" ||
-    localCheck === null ||
-    typeof localCheck !== "object"
-  ) {
-    return {
-      id: "selected-local-dependency-terminal-receipt",
-      status: "not_applicable",
-      reason,
-      proofBoundary:
-        "Local admin spine terminal receipt for next-action-selected local readiness prerequisites. It is not applicable unless the canonical next-action receipt is blocked on a missing local readiness check.",
-      sourceArtifacts: {
-        nextAction: nextActionPath,
-        nextActionAdminProof: nextActionAdminProofPath,
-      },
-      assertions: [
-        "canonical next-action receipt did not select a missing local readiness dependency",
-      ],
-      releaseReady: false,
-      productionReady: false,
-    };
-  }
-  return {
-    id: "selected-local-dependency-terminal-receipt",
-    status: "passed",
-    reason,
-    proofBoundary:
-      "Local admin spine terminal receipt for the next-action-selected missing local readiness dependency. It records the prerequisite, recovery command, proof target, and seeded admin role URL before hosted/operator work can be selected; it does not prove hosted deployment, hosted operations, beta readiness, release readiness, or production readiness.",
-    sourceArtifacts: {
-      nextAction: nextActionPath,
-      nextActionAdminProof: nextActionAdminProofPath,
-    },
-    selectedLocalDependency: {
-      id: String(localCheck.id ?? ""),
-      status: String(localCheck.status ?? ""),
-      command: String(nextAction.nextAction.command ?? ""),
-      requiredEvidence: String(localCheck.requiredEvidence ?? ""),
-      buildSlice: String(localCheck.buildSlice ?? ""),
-      proofTarget: String(localCheck.proofTarget ?? ""),
-      roleUrl: String(localCheck.roleUrl ?? ""),
-    },
-    assertions: [
-      "canonical next-action selected a missing local readiness dependency",
-      "selected local dependency carries a recovery command",
-      "selected local dependency carries a proof target",
-      "selected local dependency carries a seeded admin role URL",
-    ],
-    releaseReady: false,
-    productionReady: false,
-  };
 }
 
 async function readReleaseAdminProofContractTerminalValidation() {
