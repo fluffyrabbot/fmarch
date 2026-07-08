@@ -451,6 +451,14 @@ import {
   releaseReadinessFeatureTargetKindPriority,
 } from "./dev_test_game_next_action.mjs";
 import {
+  hardeningAggregateCoverageFeatureTargetKind,
+  hardeningRaceActionFeatureTargetKind,
+  hardeningRaceReloadFeatureTargetKind,
+  hardeningReconnectRecoveryFeatureTargetKind,
+  hardeningStaleReconnectFeatureTargetKind,
+  hardeningStaleReloadFeatureTargetKind,
+} from "./dev_test_game_hardening_feature_target_kinds.mjs";
+import {
   assertDevTestGameProofGraph,
   assertDevTestGameProofGraphCoversDiagnosticProofs,
   assertDevTestGameProofGraphCoversAdminSpine,
@@ -3765,23 +3773,23 @@ test("next-action priority traces name shared visible check contracts", () => {
 test("next-action release-readiness selector demotes aggregate hardening coverage on ties", () => {
   assert.deepEqual(
     [
-      "hardening-race-action",
-      "hardening-race-reload",
-      "hardening-reconnect-recovery",
-      "hardening-stale-reconnect",
-      "hardening-stale-reload",
-      "aggregate-hardening-coverage",
+      hardeningRaceActionFeatureTargetKind,
+      hardeningRaceReloadFeatureTargetKind,
+      hardeningReconnectRecoveryFeatureTargetKind,
+      hardeningStaleReconnectFeatureTargetKind,
+      hardeningStaleReloadFeatureTargetKind,
+      hardeningAggregateCoverageFeatureTargetKind,
     ].map((featureTargetKind) => [
       featureTargetKind,
       releaseReadinessFeatureTargetKindPriority(featureTargetKind),
     ]),
     [
-      ["hardening-race-action", 0],
-      ["hardening-race-reload", 5],
-      ["hardening-reconnect-recovery", 10],
-      ["hardening-stale-reconnect", 15],
-      ["hardening-stale-reload", 20],
-      ["aggregate-hardening-coverage", 100],
+      [hardeningRaceActionFeatureTargetKind, 0],
+      [hardeningRaceReloadFeatureTargetKind, 5],
+      [hardeningReconnectRecoveryFeatureTargetKind, 10],
+      [hardeningStaleReconnectFeatureTargetKind, 15],
+      [hardeningStaleReloadFeatureTargetKind, 20],
+      [hardeningAggregateCoverageFeatureTargetKind, 100],
     ],
   );
   const candidates = [
@@ -3789,21 +3797,21 @@ test("next-action release-readiness selector demotes aggregate hardening coverag
       id: "aggregate",
       actionStatus: "ready",
       priority: 10,
-      featureTargetKind: "aggregate-hardening-coverage",
+      featureTargetKind: hardeningAggregateCoverageFeatureTargetKind,
       index: 0,
     },
     {
       id: "race-action",
       actionStatus: "ready",
       priority: 10,
-      featureTargetKind: "hardening-race-action",
+      featureTargetKind: hardeningRaceActionFeatureTargetKind,
       index: 1,
     },
     {
       id: "explicit-priority-still-wins",
       actionStatus: "ready",
       priority: 9,
-      featureTargetKind: "aggregate-hardening-coverage",
+      featureTargetKind: hardeningAggregateCoverageFeatureTargetKind,
       index: 2,
     },
   ].map((candidate) => ({
@@ -7437,12 +7445,12 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
   assert.deepEqual(
     productionFeatureKindRows.map((row) => row.featureTargetKind),
     [
-      "aggregate-hardening-coverage",
-      "hardening-race-action",
-      "hardening-race-reload",
-      "hardening-reconnect-recovery",
-      "hardening-stale-reconnect",
-      "hardening-stale-reload",
+      hardeningAggregateCoverageFeatureTargetKind,
+      hardeningRaceActionFeatureTargetKind,
+      hardeningRaceReloadFeatureTargetKind,
+      hardeningReconnectRecoveryFeatureTargetKind,
+      hardeningStaleReconnectFeatureTargetKind,
+      hardeningStaleReloadFeatureTargetKind,
       "host-deadline-control",
       "host-phase-advance-transition",
       "host-phase-command",
@@ -7460,36 +7468,57 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
   assert.equal(
     productionFeatureKindRows
       .find(
-        (row) => row.id === "feature-target-kind:aggregate-hardening-coverage",
+        (row) =>
+          row.id ===
+          `feature-target-kind:${hardeningAggregateCoverageFeatureTargetKind}`,
       )
       ?.featureSlotIds.includes("completed-game-stale-host-reject"),
     true,
   );
   const hardeningRaceReloadKindRow = productionFeatureKindRows.find(
-    (row) => row.id === "feature-target-kind:hardening-race-reload",
+    (row) =>
+      row.id === `feature-target-kind:${hardeningRaceReloadFeatureTargetKind}`,
   );
   assert.equal(hardeningRaceReloadKindRow?.featureSlotIds.length, 14);
-  assert.deepEqual(
-    [
-      "completed-game-host-complete-race-reload",
-      "completed-game-public-player-complete-reload",
-      "host-concurrent-resolve-race-reload",
-      "host-concurrent-advance-race-reload",
-      "host-concurrent-deadline-advance-race-reload",
-      "host-concurrent-mixed-advance-race-reload",
-      "host-concurrent-publish-race-reload",
-      "host-concurrent-lifecycle-race-reload",
-      "player-host-vote-resolve-race-reload",
-      "player-host-action-advance-race-reload",
-      "cohost-host-deadline-resolve-race-reload",
-      "replacement-private-post-race-reload",
-      "replacement-vote-race-reload",
-      "replacement-action-race-reload",
-    ].every((featureSlotId) =>
+  for (const featureSlotId of [
+    "completed-game-host-complete-race-reload",
+    "completed-game-public-player-complete-reload",
+    "host-concurrent-resolve-race-reload",
+    "host-concurrent-advance-race-reload",
+    "host-concurrent-deadline-advance-race-reload",
+    "host-concurrent-mixed-advance-race-reload",
+    "host-concurrent-publish-race-reload",
+    "host-concurrent-lifecycle-race-reload",
+    "player-host-vote-resolve-race-reload",
+    "player-host-action-advance-race-reload",
+    "cohost-host-deadline-resolve-race-reload",
+    "replacement-private-post-race-reload",
+    "replacement-vote-race-reload",
+    "replacement-action-race-reload",
+  ]) {
+    assert.equal(
       hardeningRaceReloadKindRow?.featureSlotIds.includes(featureSlotId),
-    ),
-    true,
+      true,
+    );
+  }
+  const hardeningStaleReloadKindRow = productionFeatureKindRows.find(
+    (row) =>
+      row.id === `feature-target-kind:${hardeningStaleReloadFeatureTargetKind}`,
   );
+  assert.equal(hardeningStaleReloadKindRow?.featureSlotIds.length, 2);
+  assert.deepEqual(hardeningStaleReloadKindRow?.featureSlotIds, [
+    "completed-game-stale-player-reload-recovery",
+    "completed-game-stale-recovery",
+  ]);
+  const hardeningStaleReconnectKindRow = productionFeatureKindRows.find(
+    (row) =>
+      row.id ===
+      `feature-target-kind:${hardeningStaleReconnectFeatureTargetKind}`,
+  );
+  assert.equal(hardeningStaleReconnectKindRow?.featureSlotIds.length, 1);
+  assert.deepEqual(hardeningStaleReconnectKindRow?.featureSlotIds, [
+    "completed-game-stale-reconnect-recovery",
+  ]);
   const hostSetupDestinationSummaryRow =
     graph.summary.productionFeatureDestinationSummary.rows.find(
       (row) => row.id === "production-feature:host-setup-route",
