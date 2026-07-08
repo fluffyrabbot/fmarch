@@ -4820,8 +4820,12 @@ test("dev test-game next-action derives one local recovery command from the mani
       coreLoopRecoveryDestinationCoveredCount: recoveryDestinationCount,
       coreLoopRecoveryDestinationMissingCount: 0,
       coreLoopRecoveryDestinationMissingIds: [],
+      featureKindRoleUrlEvidenceRequiredCount: 0,
+      featureKindRoleUrlEvidenceCoveredCount: 0,
+      featureKindRoleUrlEvidenceMissingCount: 0,
+      featureKindRoleUrlEvidenceMissingIds: [],
       buildSlice:
-        "Refresh the proof graph so its production-feature destination summary and core-loop recovery destinations match the shared proof registries before next-action or readiness guidance is trusted.",
+        "Refresh the proof graph so its production-feature destination summary, grouped role URL evidence, and core-loop recovery destinations match the shared proof registries before next-action or readiness guidance is trusted.",
       proofTarget: "target/dev-test-game/proof-graph.json",
     },
   });
@@ -4841,6 +4845,10 @@ test("dev test-game next-action derives one local recovery command from the mani
       coreLoopRecoveryDestinationCoveredCount: recoveryDestinationCount,
       coreLoopRecoveryDestinationMissingCount: 0,
       coreLoopRecoveryDestinationMissingIds: [],
+      featureKindRoleUrlEvidenceRequiredCount: 0,
+      featureKindRoleUrlEvidenceCoveredCount: 0,
+      featureKindRoleUrlEvidenceMissingCount: 0,
+      featureKindRoleUrlEvidenceMissingIds: [],
     }),
   );
   const missingRecoveryDestinationProofGraph = JSON.parse(
@@ -4879,6 +4887,50 @@ test("dev test-game next-action derives one local recovery command from the mani
     recoveryDestinationDriftAction.proofGraphDestinationSummaryTrace
       .coreLoopRecoveryDestinationMissingCount,
     1,
+  );
+  const mismatchedRoleUrlEvidenceProofGraph = JSON.parse(
+    JSON.stringify(nextActionProofGraphFixture("completed-game-stale-recovery")),
+  );
+  const [featureKindRow] =
+    mismatchedRoleUrlEvidenceProofGraph.summary.productionFeatureDestinationSummary.rows.filter(
+      (row) => String(row.id).startsWith("feature-target-kind:"),
+    );
+  featureKindRow.roleUrlEvidence[0].browserWorkbenchRoleUrl =
+    "http://127.0.0.1:5173/g/mismatched-browser-workbench";
+  const roleUrlEvidenceDriftAction = buildDevTestGameNextAction(freshManifest, {
+    generatedAt: "2026-06-26T00:00:01.000Z",
+    opsArtifacts: devTestGameOpsArtifactsFixture(),
+    raceCoverage: devTestGameRaceCoverageFixture(),
+    proofGraph: mismatchedRoleUrlEvidenceProofGraph,
+    releaseReadinessChecklist: devTestGameReleaseReadinessChecklistFixture({
+      unproven: [],
+    }),
+  });
+  assertDevTestGameNextAction(roleUrlEvidenceDriftAction);
+  assert.equal(
+    roleUrlEvidenceDriftAction.nextAction.reason,
+    "proof-graph-destination-summary-drift",
+  );
+  assert.equal(
+    roleUrlEvidenceDriftAction.nextAction.command,
+    `npm run ${devTestGameProofGraphCommand}`,
+  );
+  assert.equal(
+    roleUrlEvidenceDriftAction.nextAction.proofGraphDestinationSummary
+      .driftCount,
+    0,
+  );
+  assert.equal(
+    roleUrlEvidenceDriftAction.nextAction.proofGraphDestinationSummary
+      .featureKindRoleUrlEvidenceMissingCount,
+    1,
+  );
+  assert.deepEqual(
+    roleUrlEvidenceDriftAction.nextAction.proofGraphDestinationSummary
+      .featureKindRoleUrlEvidenceMissingIds,
+    [
+      "feature-target-kind:hardening-stale-reload:completed-game-stale-recovery",
+    ],
   );
   assert.deepEqual(
     destinationSummaryDriftAction.proofGraphDiagnosticSummaryTrace,
@@ -23056,6 +23108,7 @@ function nextActionProofGraphFixture(slotId = "player-action-submission") {
           ? {}
           : { featureTargetKind: target.featureTargetKind }),
         browserProofCommand: target.browserProofCommand,
+        browserWorkbench: target.browserWorkbench,
         sourceProofArtifact: target.sourceProofArtifact,
         artifact: devTestGameReleaseReadinessPath,
       },

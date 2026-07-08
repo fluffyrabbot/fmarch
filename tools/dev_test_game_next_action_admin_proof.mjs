@@ -551,8 +551,16 @@ export function proofGraphDestinationSummaryDriftNextActionFixture(nextAction) {
       sourceTrace.coreLoopRecoveryDestinationMissingCount ?? 0,
     coreLoopRecoveryDestinationMissingIds:
       sourceTrace.coreLoopRecoveryDestinationMissingIds ?? [],
+    featureKindRoleUrlEvidenceRequiredCount:
+      sourceTrace.featureKindRoleUrlEvidenceRequiredCount ?? 0,
+    featureKindRoleUrlEvidenceCoveredCount:
+      sourceTrace.featureKindRoleUrlEvidenceCoveredCount ?? 0,
+    featureKindRoleUrlEvidenceMissingCount:
+      sourceTrace.featureKindRoleUrlEvidenceMissingCount ?? 0,
+    featureKindRoleUrlEvidenceMissingIds:
+      sourceTrace.featureKindRoleUrlEvidenceMissingIds ?? [],
     buildSlice:
-      "Refresh the proof graph so its production-feature destination summary and core-loop recovery destinations match the shared proof registries before next-action or readiness guidance is trusted.",
+      "Refresh the proof graph so its production-feature destination summary, grouped role URL evidence, and core-loop recovery destinations match the shared proof registries before next-action or readiness guidance is trusted.",
     proofTarget: devTestGameProofGraphPath,
   };
   return assertDevTestGameNextAction({
@@ -564,6 +572,8 @@ export function proofGraphDestinationSummaryDriftNextActionFixture(nextAction) {
       proofGraphDestinationSummaryDriftCount: driftCount,
       coreLoopRecoveryDestinationMissingCount:
         proofGraphDestinationSummary.coreLoopRecoveryDestinationMissingCount,
+      featureKindRoleUrlEvidenceMissingCount:
+        proofGraphDestinationSummary.featureKindRoleUrlEvidenceMissingCount,
       syntheticNextActionFixture:
         "proof-graph-destination-summary-drift-admin-proof",
     },
@@ -599,6 +609,14 @@ export function proofGraphDestinationSummaryDriftNextActionFixture(nextAction) {
         proofGraphDestinationSummary.coreLoopRecoveryDestinationMissingCount,
       coreLoopRecoveryDestinationMissingIds:
         proofGraphDestinationSummary.coreLoopRecoveryDestinationMissingIds,
+      featureKindRoleUrlEvidenceRequiredCount:
+        proofGraphDestinationSummary.featureKindRoleUrlEvidenceRequiredCount,
+      featureKindRoleUrlEvidenceCoveredCount:
+        proofGraphDestinationSummary.featureKindRoleUrlEvidenceCoveredCount,
+      featureKindRoleUrlEvidenceMissingCount:
+        proofGraphDestinationSummary.featureKindRoleUrlEvidenceMissingCount,
+      featureKindRoleUrlEvidenceMissingIds:
+        proofGraphDestinationSummary.featureKindRoleUrlEvidenceMissingIds,
     }),
     proofGraphDiagnosticSummaryTrace: normalizeProofGraphDiagnosticSummaryTrace(
       source.proofGraphDiagnosticSummaryTrace,

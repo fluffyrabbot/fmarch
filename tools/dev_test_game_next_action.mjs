@@ -407,8 +407,20 @@ export function buildDevTestGameNextAction(
               coreLoopRecoveryDestinationMissingIds:
                 proofGraphDestinationSummaryDrift
                   .coreLoopRecoveryDestinationMissingIds,
+              featureKindRoleUrlEvidenceRequiredCount:
+                proofGraphDestinationSummaryDrift
+                  .featureKindRoleUrlEvidenceRequiredCount,
+              featureKindRoleUrlEvidenceCoveredCount:
+                proofGraphDestinationSummaryDrift
+                  .featureKindRoleUrlEvidenceCoveredCount,
+              featureKindRoleUrlEvidenceMissingCount:
+                proofGraphDestinationSummaryDrift
+                  .featureKindRoleUrlEvidenceMissingCount,
+              featureKindRoleUrlEvidenceMissingIds:
+                proofGraphDestinationSummaryDrift
+                  .featureKindRoleUrlEvidenceMissingIds,
               buildSlice:
-                "Refresh the proof graph so its production-feature destination summary and core-loop recovery destinations match the shared proof registries before next-action or readiness guidance is trusted.",
+                "Refresh the proof graph so its production-feature destination summary, grouped role URL evidence, and core-loop recovery destinations match the shared proof registries before next-action or readiness guidance is trusted.",
               proofTarget: devTestGameProofGraphPath,
             },
           }
@@ -679,6 +691,9 @@ export function buildDevTestGameNextAction(
             coreLoopRecoveryDestinationMissingCount:
               proofGraphDestinationSummaryDrift
                 .coreLoopRecoveryDestinationMissingCount,
+            featureKindRoleUrlEvidenceMissingCount:
+              proofGraphDestinationSummaryDrift
+                .featureKindRoleUrlEvidenceMissingCount,
             proofGraphDiagnosticSummaryStatus:
               proofGraphDiagnosticSummaryTrace.status,
             proofGraphDiagnosticCount:
@@ -909,6 +924,14 @@ export function assertDevTestGameNextAction(evidence) {
       !Array.isArray(
         evidence.nextAction.proofGraphDestinationSummary
           .coreLoopRecoveryDestinationMissingIds,
+      ) ||
+      !Number.isInteger(
+        evidence.nextAction.proofGraphDestinationSummary
+          .featureKindRoleUrlEvidenceMissingCount,
+      ) ||
+      !Array.isArray(
+        evidence.nextAction.proofGraphDestinationSummary
+          .featureKindRoleUrlEvidenceMissingIds,
       )
     ) {
       throw new Error(

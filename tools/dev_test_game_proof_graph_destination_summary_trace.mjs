@@ -10,6 +10,8 @@ export const proofGraphDestinationSummaryTraceDriftCountCheckId =
   "proof-graph-destination-summary-trace-drift-count";
 export const proofGraphDestinationSummaryTraceRecoveryCoverageCheckId =
   "proof-graph-destination-summary-trace-core-loop-recovery-coverage";
+export const proofGraphDestinationSummaryTraceRoleUrlEvidenceCheckId =
+  "proof-graph-destination-summary-trace-role-url-evidence";
 
 export function proofGraphDestinationSummaryDriftFromProofGraph(
   proofGraph,
@@ -30,13 +32,16 @@ export function proofGraphDestinationSummaryDriftFromProofGraph(
   const summaryStatus = String(summary?.status ?? "missing");
   const recoveryCoverage =
     coreLoopRecoveryDestinationCoverageFromProofGraph(proofGraph);
+  const roleUrlEvidenceCoverage =
+    featureKindRoleUrlEvidenceCoverageFromSummary(summary);
   const status =
     proofGraph === null
       ? "unavailable"
       : summaryStatus === "passed" &&
           driftCount === 0 &&
           totalDestinationCount === productionFeatureTargetCount &&
-          recoveryCoverage.missingCount === 0
+          recoveryCoverage.missingCount === 0 &&
+          roleUrlEvidenceCoverage.missingCount === 0
         ? "clean"
         : "drifted";
   return Object.freeze({
@@ -53,6 +58,14 @@ export function proofGraphDestinationSummaryDriftFromProofGraph(
     coreLoopRecoveryDestinationCoveredCount: recoveryCoverage.coveredCount,
     coreLoopRecoveryDestinationMissingCount: recoveryCoverage.missingCount,
     coreLoopRecoveryDestinationMissingIds: recoveryCoverage.missingIds,
+    featureKindRoleUrlEvidenceRequiredCount:
+      roleUrlEvidenceCoverage.requiredCount,
+    featureKindRoleUrlEvidenceCoveredCount:
+      roleUrlEvidenceCoverage.coveredCount,
+    featureKindRoleUrlEvidenceMissingCount:
+      roleUrlEvidenceCoverage.missingCount,
+    featureKindRoleUrlEvidenceMissingIds:
+      roleUrlEvidenceCoverage.missingIds,
   });
 }
 
@@ -100,6 +113,20 @@ export function normalizeProofGraphDestinationSummaryTrace(trace) {
         ? trace.coreLoopRecoveryDestinationMissingIds.map((id) => String(id))
         : [],
     ),
+    featureKindRoleUrlEvidenceRequiredCount: Number(
+      trace.featureKindRoleUrlEvidenceRequiredCount ?? 0,
+    ),
+    featureKindRoleUrlEvidenceCoveredCount: Number(
+      trace.featureKindRoleUrlEvidenceCoveredCount ?? 0,
+    ),
+    featureKindRoleUrlEvidenceMissingCount: Number(
+      trace.featureKindRoleUrlEvidenceMissingCount ?? 0,
+    ),
+    featureKindRoleUrlEvidenceMissingIds: Object.freeze(
+      Array.isArray(trace.featureKindRoleUrlEvidenceMissingIds)
+        ? trace.featureKindRoleUrlEvidenceMissingIds.map((id) => String(id))
+        : [],
+    ),
   });
 }
 
@@ -131,7 +158,11 @@ export function assertProofGraphDestinationSummaryTrace(
     !Number.isInteger(normalized.coreLoopRecoveryDestinationRequiredCount) ||
     !Number.isInteger(normalized.coreLoopRecoveryDestinationCoveredCount) ||
     !Number.isInteger(normalized.coreLoopRecoveryDestinationMissingCount) ||
-    !Array.isArray(normalized.coreLoopRecoveryDestinationMissingIds)
+    !Array.isArray(normalized.coreLoopRecoveryDestinationMissingIds) ||
+    !Number.isInteger(normalized.featureKindRoleUrlEvidenceRequiredCount) ||
+    !Number.isInteger(normalized.featureKindRoleUrlEvidenceCoveredCount) ||
+    !Number.isInteger(normalized.featureKindRoleUrlEvidenceMissingCount) ||
+    !Array.isArray(normalized.featureKindRoleUrlEvidenceMissingIds)
   ) {
     throw new Error(`${label} is missing or malformed`);
   }
@@ -144,6 +175,9 @@ export function assertProofGraphDestinationSummaryTrace(
       nextActionProofGraphDestinationSummary
         ?.coreLoopRecoveryDestinationMissingCount !==
         normalized.coreLoopRecoveryDestinationMissingCount ||
+      nextActionProofGraphDestinationSummary
+        ?.featureKindRoleUrlEvidenceMissingCount !==
+        normalized.featureKindRoleUrlEvidenceMissingCount ||
       nextActionProofGraphDestinationSummary?.summaryStatus !==
         normalized.summaryStatus)
   ) {
@@ -166,6 +200,7 @@ export function proofGraphDestinationSummaryTraceCheckIds(trace) {
         proofGraphDestinationSummaryTraceCheckId,
         proofGraphDestinationSummaryTraceDriftCountCheckId,
         proofGraphDestinationSummaryTraceRecoveryCoverageCheckId,
+        proofGraphDestinationSummaryTraceRoleUrlEvidenceCheckId,
       ])
     : Object.freeze([]);
 }
@@ -186,6 +221,10 @@ export function proofGraphDestinationSummaryTraceCheckRows(trace) {
         Object.freeze({
           id: checkIds[2],
           status: `${normalized.coreLoopRecoveryDestinationCoveredCount}/${normalized.coreLoopRecoveryDestinationRequiredCount} recoveries`,
+        }),
+        Object.freeze({
+          id: checkIds[3],
+          status: `${normalized.featureKindRoleUrlEvidenceCoveredCount}/${normalized.featureKindRoleUrlEvidenceRequiredCount} role URLs`,
         }),
       ])
     : Object.freeze([]);
@@ -222,12 +261,62 @@ function unavailableProofGraphDestinationSummaryTrace() {
     coreLoopRecoveryDestinationCoveredCount: 0,
     coreLoopRecoveryDestinationMissingCount: 0,
     coreLoopRecoveryDestinationMissingIds: Object.freeze([]),
+    featureKindRoleUrlEvidenceRequiredCount: 0,
+    featureKindRoleUrlEvidenceCoveredCount: 0,
+    featureKindRoleUrlEvidenceMissingCount: 0,
+    featureKindRoleUrlEvidenceMissingIds: Object.freeze([]),
   });
 }
 
 function numberOrZero(value) {
   const number = Number(value ?? 0);
   return Number.isFinite(number) ? number : 0;
+}
+
+function featureKindRoleUrlEvidenceCoverageFromSummary(summary) {
+  const featureKindRows = (Array.isArray(summary?.rows) ? summary.rows : [])
+    .filter((row) => String(row?.id ?? "").startsWith("feature-target-kind:"));
+  const missingIds = [];
+  let requiredCount = 0;
+  let coveredCount = 0;
+  for (const row of featureKindRows) {
+    const featureSlotIds = Array.isArray(row?.featureSlotIds)
+      ? row.featureSlotIds.map((id) => String(id))
+      : [];
+    const evidenceBySlot = new Map(
+      (Array.isArray(row?.roleUrlEvidence) ? row.roleUrlEvidence : []).map(
+        (evidence) => [String(evidence?.featureSlotId ?? ""), evidence],
+      ),
+    );
+    for (const featureSlotId of featureSlotIds) {
+      requiredCount += 1;
+      const evidence = evidenceBySlot.get(featureSlotId);
+      if (validFeatureKindRoleUrlEvidence(evidence, featureSlotId)) {
+        coveredCount += 1;
+      } else {
+        missingIds.push(`${String(row.id)}:${featureSlotId}`);
+      }
+    }
+  }
+  return Object.freeze({
+    requiredCount,
+    coveredCount,
+    missingCount: missingIds.length,
+    missingIds: Object.freeze(missingIds.sort()),
+  });
+}
+
+function validFeatureKindRoleUrlEvidence(evidence, featureSlotId) {
+  if (evidence === null || typeof evidence !== "object") {
+    return false;
+  }
+  const targetRoleUrl = String(evidence.targetRoleUrl ?? "");
+  return (
+    targetRoleUrl.startsWith("http://127.0.0.1:5173/g/") &&
+    String(evidence.browserWorkbenchRoleUrl ?? "") === targetRoleUrl &&
+    String(evidence.browserWorkbenchFeatureSlotId ?? "") === featureSlotId &&
+    String(evidence.browserWorkbenchRoleSurface ?? "") !== ""
+  );
 }
 
 function coreLoopRecoveryDestinationCoverageFromProofGraph(proofGraph) {
