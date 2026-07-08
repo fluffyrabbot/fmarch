@@ -12,6 +12,7 @@ import {
   hostDeadlineAffordanceForPhaseState,
 } from "./dev_test_game_core_loop_host_phase_scenarios.mjs";
 import {
+  dayFourSurvivorRoleSurfaceCase,
   nightThreeEmptyResolutionSurfaceCase,
 } from "./dev_test_game_core_loop_phase_progression_scenarios.mjs";
 
@@ -341,6 +342,43 @@ export function nightThreeEmptyResolutionSurfaceFixture({
       resyncFromSeq: surfaceCase.actionPlayerDayFourCase.expectedResyncFromSeq,
       voteButtonCount: surfaceCase.actionPlayerDayFourCase.expectedVoteButtonCount,
       voteTargets: [{ kind: "no_lynch", slotId: null, label: "No lynch" }],
+    }),
+    releaseReady: false,
+    productionReady: false,
+  };
+}
+
+export function dayFourSurvivorRoleSurfaceFixture({
+  game = "00000000-0000-0000-0000-000000000002",
+} = {}) {
+  const surfaceCase = dayFourSurvivorRoleSurfaceCase();
+  const survivorCase = surfaceCase.survivorCase;
+  return {
+    status: "passed",
+    sourceRoleUrl: seededCoreLoopRoleUrl({ game }),
+    clickedThroughFromRoleUrl: true,
+    survivorProof: seededCoreLoopPlayerSurfaceFixture({
+      game,
+      slotField: survivorCase.slotField,
+      slot: survivorCase.expectedSlot,
+      principalUserId: survivorCase.expectedPrincipalUserId,
+      phaseId: survivorCase.expectedPhaseId,
+      phaseState: survivorCase.expectedPhaseState,
+      actorAlive: survivorCase.expectedActorAlive,
+      actorStatus: survivorCase.expectedActorStatus,
+      actionState: survivorCase.expectedActionState,
+      statusText:
+        `Player action unavailable: ${survivorCase.expectedStatusText}`,
+      privateCount: survivorCase.expectedPrivateCount,
+      privateReceipt: survivorCase.expectedPrivateReceipt,
+      boundary:
+        "Seeded browser survivor role opened D04 as a living vote target for the next night-action loop.",
+      resyncFromSeq: survivorCase.expectedResyncFromSeq,
+      voteButtonCount: survivorCase.expectedVoteButtonCount,
+      voteTargets: [
+        { kind: "slot", slotId: "slot-7", label: "Slot 7" },
+        { kind: "no_lynch", slotId: null, label: "No lynch" },
+      ],
     }),
     releaseReady: false,
     productionReady: false,

@@ -33,6 +33,7 @@ import {
   assertPostDayThreePlayerSurfaceProofCase,
 } from "./dev_test_game_core_loop_private_receipt_scenarios.mjs";
 import {
+  dayFourSurvivorRoleSurfaceFixture,
   nightThreeEmptyResolutionSurfaceFixture,
 } from "./dev_test_game_core_loop_surface_fixtures.mjs";
 
@@ -281,4 +282,22 @@ test("empty Night 3 fixture satisfies the shared phase progression assertion", (
     surface.hostTransitionProof.advanceProof.commandStatus.message,
     "Ack: stream seqs 911",
   );
+});
+
+test("Day 4 survivor fixture satisfies the shared phase progression assertion", () => {
+  const surface = dayFourSurvivorRoleSurfaceFixture({ game: "game-a" });
+
+  assert.doesNotThrow(() =>
+    assertDayFourSurvivorRoleSurfaceCase({
+      dayFourSurvivorRoleSurface: surface,
+      assertPostDayThreePlayerSurfaceProof:
+        assertPostDayThreePlayerSurfaceProofCase,
+    }),
+  );
+  assert.equal(surface.survivorProof.survivorSlot, "slot-5");
+  assert.equal(surface.survivorProof.voteButtonCount, 2);
+  assert.deepEqual(surface.survivorProof.projectionCommandState.voteTargets, [
+    { kind: "slot", slotId: "slot-7", label: "Slot 7" },
+    { kind: "no_lynch", slotId: null, label: "No lynch" },
+  ]);
 });
