@@ -9020,6 +9020,8 @@ test("terminal receipt contract registry covers browser proof consumers", () => 
     terminalReceiptContractRegistry.map((contract) => [
       contract.id,
       contract.label,
+      contract.terminalBatchesKey,
+      contract.diagnosticStatusKey,
       contract.rowTestIdPrefix,
       contract.browserProofConsumers.map((consumer) => [
         consumer.id,
@@ -9031,6 +9033,8 @@ test("terminal receipt contract registry covers browser proof consumers", () => 
       [
         "selected-local-dependency-terminal-receipt",
         "selected-local-dependency",
+        "selectedLocalDependencyTerminalReceipt",
+        "selectedLocalDependencyTerminalReceiptStatus",
         "admin-audit-selected-local-dependency-terminal",
         [
           [
@@ -9043,6 +9047,8 @@ test("terminal receipt contract registry covers browser proof consumers", () => 
       [
         "selected-operator-handoff-terminal-receipt",
         "selected-operator-handoff",
+        "selectedOperatorHandoffReceipt",
+        "selectedOperatorHandoffReceiptStatus",
         "admin-audit-selected-operator-handoff-terminal",
         [
           [
@@ -9065,12 +9071,32 @@ test("terminal receipt contract registry covers browser proof consumers", () => 
       selectedOperatorHandoffReceiptPassedFixture(),
     ],
   ]);
+  assert.equal(
+    new Set(
+      terminalReceiptContractRegistry.map(
+        (contract) => contract.terminalBatchesKey,
+      ),
+    ).size,
+    terminalReceiptContractRegistry.length,
+  );
+  assert.equal(
+    new Set(
+      terminalReceiptContractRegistry.map(
+        (contract) => contract.diagnosticStatusKey,
+      ),
+    ).size,
+    terminalReceiptContractRegistry.length,
+  );
   for (const contract of terminalReceiptContractRegistry) {
     assert(contract.rowDefinitions.length > 0);
     assert.equal(
       new Set(contract.rowDefinitions.map((definition) => definition.id)).size,
       contract.rowDefinitions.length,
     );
+    assert.equal(typeof contract.terminalBatchesKey, "string");
+    assert.notEqual(contract.terminalBatchesKey.trim(), "");
+    assert.equal(typeof contract.diagnosticStatusKey, "string");
+    assert.notEqual(contract.diagnosticStatusKey.trim(), "");
     assert(contract.browserProofConsumers.length > 0);
     for (const definition of contract.rowDefinitions) {
       assert(definition.testId.startsWith(`${contract.rowTestIdPrefix}-`));
@@ -19173,10 +19199,49 @@ test("session card and markdown include role credential URLs and tokens", async 
     selectedOperatorHandoffReceiptFixture(),
   );
   assert.deepEqual(
+    adminSpineReadiness.localDevelopmentSpine.evidence.adminProofSpine
+      .terminalBatches.terminalReceipts.map((receipt) => [
+        receipt.id,
+        receipt.label,
+        receipt.terminalBatchesKey,
+        receipt.diagnosticStatusKey,
+        receipt.status,
+        receipt.rowIds,
+        receipt.browserProofConsumers.map((consumer) => [
+          consumer.command,
+          consumer.artifactPath,
+        ]),
+      ]),
+    terminalReceiptContractRegistry.map((contract) => {
+      const receipt =
+        adminSpineTerminalBatchesFixture()[contract.terminalBatchesKey];
+      const rowStatuses = contract.rowStatusForReceipt(receipt);
+      return [
+        contract.id,
+        contract.label,
+        contract.terminalBatchesKey,
+        contract.diagnosticStatusKey,
+        receipt.status,
+        Object.keys(rowStatuses),
+        contract.browserProofConsumers.map((consumer) => [
+          consumer.command,
+          consumer.artifactPath,
+        ]),
+      ];
+    }),
+  );
+  assert.deepEqual(
     adminSpineReadiness.localDevelopmentSpine.checks.find(
       (item) => item.id === "local-admin-spine-terminal-batches",
     ).nextActionHandoffPair,
     nextActionHandoffPairFixture(),
+  );
+  assert.deepEqual(
+    adminSpineReadiness.localDevelopmentSpine.checks.find(
+      (item) => item.id === "local-admin-spine-terminal-batches",
+    ).terminalReceipts,
+    adminSpineReadiness.localDevelopmentSpine.evidence.adminProofSpine
+      .terminalBatches.terminalReceipts,
   );
   assert.deepEqual(
     adminSpineReadiness.localDevelopmentSpine.checks.find(
@@ -19198,6 +19263,8 @@ test("session card and markdown include role credential URLs and tokens", async 
       diagnostic.evidence,
       diagnostic.batchCount,
       diagnostic.nextActionHandoffPairStatus,
+      diagnostic.terminalReceiptStatuses,
+      diagnostic.terminalReceiptConsumerCommands,
       diagnostic.selectedLocalDependencyTerminalReceiptStatus,
       diagnostic.selectedOperatorHandoffReceiptStatus,
     ]),
@@ -19209,6 +19276,19 @@ test("session card and markdown include role credential URLs and tokens", async 
         "target/dev-test-game/admin-spine-terminal-batches.json",
         3,
         "passed",
+        Object.fromEntries(
+          terminalReceiptContractRegistry.map((contract) => {
+            const receipt =
+              adminSpineTerminalBatchesFixture()[contract.terminalBatchesKey];
+            return [contract.diagnosticStatusKey, receipt.status];
+          }),
+        ),
+        Object.fromEntries(
+          terminalReceiptContractRegistry.map((contract) => [
+            contract.diagnosticStatusKey,
+            contract.browserProofConsumers.map((consumer) => consumer.command),
+          ]),
+        ),
         "passed",
         "not_applicable",
       ],

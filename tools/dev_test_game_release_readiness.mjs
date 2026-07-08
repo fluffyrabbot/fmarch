@@ -134,7 +134,11 @@ import {
   selectedOperatorHandoffReceiptAdminProofPath,
 } from "./dev_test_game_selected_operator_handoff_receipt_admin_proof_paths.mjs";
 import {
+  assertSelectedLocalDependencyTerminalReceipt,
+  assertSelectedOperatorHandoffTerminalReceipt,
+  selectedLocalDependencyTerminalReceiptId,
   selectedOperatorHandoffTerminalReceiptId,
+  terminalReceiptContractRegistry,
 } from "./dev_test_game_terminal_receipts.mjs";
 export {
   devTestGameReleaseReadinessMarkdownPath,
@@ -331,13 +335,6 @@ import {
   assertDevTestGameNextActionSequenceHandoffPair,
   devTestGameNextActionSequenceHandoffPair,
 } from "./dev_test_game_next_action_sequence_handoff_pair.mjs";
-import {
-  assertSelectedOperatorHandoffTerminalReceipt,
-} from "./dev_test_game_terminal_receipts.mjs";
-import {
-  assertSelectedLocalDependencyTerminalReceipt,
-  selectedLocalDependencyTerminalReceiptId,
-} from "./dev_test_game_terminal_receipts.mjs";
 import {
   adminSpineProofBatchRegistry,
   adminSpineProofIds,
@@ -1424,6 +1421,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       artifactPaths: adminSpineTerminalBatchEvidence.artifactPaths,
       nextActionHandoffPair:
         adminSpineTerminalBatchEvidence.nextActionHandoffPair,
+      terminalReceipts: adminSpineTerminalBatchEvidence.terminalReceipts,
       selectedLocalDependencyTerminalReceipt:
         adminSpineTerminalBatchEvidence.selectedLocalDependencyTerminalReceipt,
       selectedOperatorHandoffReceipt:
@@ -8665,6 +8663,7 @@ export function validateDevTestGameAdminSpineTerminalBatches(
       `admin spine terminal batch proof ${error.message}`,
     );
   }
+  const terminalReceipts = adminSpineTerminalReceiptSummaries(proof);
   for (const [index, expected] of requiredBatches.entries()) {
     const batch = proof.batches[index];
     if (batch?.label !== expected.label || batch.status !== "passed") {
@@ -8712,6 +8711,7 @@ export function validateDevTestGameAdminSpineTerminalBatches(
     selectedLocalDependencyTerminalReceipt:
       proof.selectedLocalDependencyTerminalReceipt,
     selectedOperatorHandoffReceipt: proof.selectedOperatorHandoffReceipt,
+    terminalReceipts,
     terminalValidations,
     batches: proof.batches.map((batch) => ({
       label: batch.label,
@@ -8725,6 +8725,29 @@ export function validateDevTestGameAdminSpineTerminalBatches(
     artifactPaths: proof.batches.flatMap((batch) => batch.artifactPaths),
     ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
   };
+}
+
+function adminSpineTerminalReceiptSummaries(proof) {
+  return terminalReceiptContractRegistry.map((contract) => {
+    const receipt = proof[contract.terminalBatchesKey];
+    const rowStatuses =
+      receipt === null || typeof receipt !== "object"
+        ? Object.freeze({})
+        : contract.rowStatusForReceipt(receipt);
+    return {
+      id: contract.id,
+      label: contract.label,
+      terminalBatchesKey: contract.terminalBatchesKey,
+      diagnosticStatusKey: contract.diagnosticStatusKey,
+      status:
+        receipt === null || typeof receipt !== "object"
+          ? "missing"
+          : String(receipt.status ?? ""),
+      rowIds: Object.keys(rowStatuses),
+      rowStatuses,
+      browserProofConsumers: contract.browserProofConsumers,
+    };
+  });
 }
 
 function validateAdminSpineTerminalValidations(terminalValidations) {
@@ -9884,13 +9907,43 @@ function buildLocalDevelopmentDiagnostics(
         batchCount: check.batchCount,
         batchIds: check.batchIds,
         nextActionHandoffPairStatus: check.nextActionHandoffPair?.status,
-        selectedLocalDependencyTerminalReceiptStatus:
-          check.selectedLocalDependencyTerminalReceipt?.status,
-        selectedOperatorHandoffReceiptStatus:
-          check.selectedOperatorHandoffReceipt?.status,
+        terminalReceiptStatuses: terminalReceiptStatusesByDiagnosticKey(
+          check.terminalReceipts,
+        ),
+        terminalReceiptConsumerCommands: terminalReceiptConsumerCommands(
+          check.terminalReceipts,
+        ),
+        ...legacyTerminalReceiptStatusFields(check.terminalReceipts),
       }),
     }),
   ].filter((diagnostic) => diagnostic !== null);
+}
+
+function terminalReceiptStatusesByDiagnosticKey(terminalReceipts = []) {
+  return Object.fromEntries(
+    terminalReceipts.map((receipt) => [
+      receipt.diagnosticStatusKey,
+      receipt.status,
+    ]),
+  );
+}
+
+function terminalReceiptConsumerCommands(terminalReceipts = []) {
+  return Object.fromEntries(
+    terminalReceipts.map((receipt) => [
+      receipt.diagnosticStatusKey,
+      receipt.browserProofConsumers.map((consumer) => consumer.command),
+    ]),
+  );
+}
+
+function legacyTerminalReceiptStatusFields(terminalReceipts = []) {
+  return Object.fromEntries(
+    terminalReceipts.map((receipt) => [
+      receipt.diagnosticStatusKey,
+      receipt.status,
+    ]),
+  );
 }
 
 function proofGraphClickCoverageDiagnostic({
@@ -10009,6 +10062,38 @@ function assertLocalDevelopmentDiagnostics(localDevelopmentSpine) {
         clickCoverageDiagnostic.expectedArtifactCount)
   ) {
     throw new Error("dev-test-game proof graph click coverage diagnostic is malformed");
+  }
+  const terminalReceiptDiagnostic = diagnostics.find(
+    (diagnostic) => diagnostic.id === "admin-spine-terminal-batches",
+  );
+  if (terminalReceiptDiagnostic !== undefined) {
+    for (const contract of terminalReceiptContractRegistry) {
+      if (
+        terminalReceiptDiagnostic.terminalReceiptStatuses?.[
+          contract.diagnosticStatusKey
+        ] === undefined ||
+        terminalReceiptDiagnostic[contract.diagnosticStatusKey] === undefined
+      ) {
+        throw new Error(
+          `dev-test-game terminal receipt diagnostic missing ${contract.id}`,
+        );
+      }
+      const consumerCommands =
+        terminalReceiptDiagnostic.terminalReceiptConsumerCommands?.[
+          contract.diagnosticStatusKey
+        ];
+      if (
+        !Array.isArray(consumerCommands) ||
+        !sameStringArray(
+          consumerCommands,
+          contract.browserProofConsumers.map((consumer) => consumer.command),
+        )
+      ) {
+        throw new Error(
+          `dev-test-game terminal receipt diagnostic missing proof consumers for ${contract.id}`,
+        );
+      }
+    }
   }
 }
 

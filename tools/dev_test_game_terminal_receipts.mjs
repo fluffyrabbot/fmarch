@@ -24,6 +24,8 @@ export const terminalReceiptContractRegistry = Object.freeze([
   Object.freeze({
     id: selectedLocalDependencyTerminalReceiptId,
     label: "selected-local-dependency",
+    terminalBatchesKey: "selectedLocalDependencyTerminalReceipt",
+    diagnosticStatusKey: "selectedLocalDependencyTerminalReceiptStatus",
     rowDefinitions: selectedLocalDependencyTerminalReceiptRowDefinitions,
     rowStatusForReceipt: selectedLocalDependencyTerminalReceiptRowStatuses,
     rowTestIdPrefix: selectedLocalDependencyTerminalReceiptRowTestIdPrefix,
@@ -38,6 +40,8 @@ export const terminalReceiptContractRegistry = Object.freeze([
   Object.freeze({
     id: selectedOperatorHandoffTerminalReceiptId,
     label: "selected-operator-handoff",
+    terminalBatchesKey: "selectedOperatorHandoffReceipt",
+    diagnosticStatusKey: "selectedOperatorHandoffReceiptStatus",
     rowDefinitions: selectedOperatorHandoffTerminalReceiptRowDefinitions,
     rowStatusForReceipt: selectedOperatorHandoffTerminalReceiptRowStatuses,
     rowTestIdPrefix: selectedOperatorHandoffTerminalReceiptRowTestIdPrefix,
