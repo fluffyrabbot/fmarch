@@ -203,6 +203,7 @@ struct ReceiptClaim {
 struct ActiveAction {
     template_id: String,
     grant_id: Option<String>,
+    targets: Vec<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -5043,6 +5044,17 @@ async fn active_actions_for_actor_phase(
                         ActiveAction {
                             template_id: template_id.to_string(),
                             grant_id: ev.payload["grant_id"].as_str().map(str::to_string),
+                            targets: ev.payload["targets"]
+                                .as_array()
+                                .map(|targets| {
+                                    targets
+                                        .iter()
+                                        .filter_map(|target| {
+                                            target.as_str().map(str::to_string)
+                                        })
+                                        .collect()
+                                })
+                                .unwrap_or_default(),
                         },
                     );
                 }
@@ -5084,6 +5096,37 @@ pub async fn active_action_templates_for_actor_phase(
             .map(|action| action.template_id)
             .collect(),
     )
+}
+
+/// A night action the actor has currently submitted this phase, carrying the
+/// targets it was submitted against. Survives until withdrawn; feeds the player
+/// command-state `current_actions` surface so the client can render the pick and
+/// build a `WithdrawAction`. Ordered by `action_id` (the `BTreeMap` key) so the
+/// view is deterministic across reads and replays.
+#[derive(Debug, Clone)]
+pub struct CurrentAction {
+    pub action_id: String,
+    pub template_id: String,
+    pub targets: Vec<String>,
+    pub grant_id: Option<String>,
+}
+
+pub async fn active_actions_view_for_actor_phase(
+    pool: &PgPool,
+    game: Uuid,
+    phase_id: &str,
+    actor_slot: &str,
+) -> Result<Vec<CurrentAction>, Reject> {
+    Ok(active_actions_for_actor_phase(pool, game, phase_id, actor_slot)
+        .await?
+        .into_iter()
+        .map(|(action_id, action)| CurrentAction {
+            action_id,
+            template_id: action.template_id,
+            targets: action.targets,
+            grant_id: action.grant_id,
+        })
+        .collect())
 }
 
 fn action_counter_id(template_id: &str) -> String {

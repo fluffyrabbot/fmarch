@@ -837,6 +837,7 @@ async fn player_command_state_derives_phase_valid_role_actions(pool: sqlx::PgPoo
         .as_str()
         .unwrap()
         .contains("Final command validation"));
+    assert_eq!(state["current_actions"], serde_json::json!([]));
 
     expect_ack(
         post_command(
@@ -874,11 +875,77 @@ async fn player_command_state_derives_phase_valid_role_actions(pool: sqlx::PgPoo
     assert_eq!(submitted_state["actor_alive"], true);
     assert_eq!(submitted_state["actor_status"], "alive");
     assert_eq!(submitted_state["actions"], serde_json::json!([]));
+    // current_actions surfaces the submitted night action with its chosen target
+    // (slice 2). factional_kill is filtered out of `actions` once submitted, so
+    // the client renders and withdraws it from current_actions.
+    assert_eq!(
+        submitted_state["current_actions"],
+        serde_json::json!([{
+            "action_id": "role_factional_kill",
+            "template_id": "factional_kill",
+            "targets": ["slot-2"],
+            "grant_id": null
+        }])
+    );
 
+    // Withdrawing clears current_actions and restores factional_kill to `actions`.
     expect_ack(
         post_command(
             app.clone(),
             13,
+            "action-goon",
+            Command::WithdrawAction {
+                game,
+                action_id: "role_factional_kill".into(),
+                actor_slot: "slot_4".into(),
+            },
+        )
+        .await,
+    );
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!(
+                    "/games/{game}/player-command-state?principal_user_id=action-goon&slot_id=slot_4"
+                ))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let withdrawn_state: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(withdrawn_state["current_actions"], serde_json::json!([]));
+    assert_eq!(
+        withdrawn_state["actions"][0]["template_id"],
+        "factional_kill"
+    );
+
+    // Re-submit so the night kill still resolves for the rest of the scenario.
+    expect_ack(
+        post_command(
+            app.clone(),
+            14,
+            "action-goon",
+            Command::SubmitAction {
+                game,
+                action_id: "role_factional_kill".into(),
+                actor_slot: "slot_4".into(),
+                template_id: "factional_kill".into(),
+                targets: vec!["slot-2".into()],
+                grant_id: None,
+            },
+        )
+        .await,
+    );
+
+    expect_ack(
+        post_command(
+            app.clone(),
+            15,
             "host_h",
             Command::ResolvePhase { game, seed: 930901 },
         )
@@ -952,7 +1019,7 @@ async fn player_command_state_derives_phase_valid_role_actions(pool: sqlx::PgPoo
     expect_ack(
         post_command(
             app.clone(),
-            14,
+            16,
             "host_h",
             Command::OpenDayPhase {
                 game,

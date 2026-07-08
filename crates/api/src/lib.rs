@@ -1900,6 +1900,7 @@ pub struct PlayerCommandStateResponse {
     pub game_completed: bool,
     pub phase: Option<PlayerCommandPhaseState>,
     pub actions: Vec<PlayerCommandAction>,
+    pub current_actions: Vec<PlayerCommandCurrentAction>,
     pub vote_targets: Vec<PlayerVoteTarget>,
     pub current_vote: Option<PlayerVoteTarget>,
     pub boundary: String,
@@ -1931,6 +1932,17 @@ pub struct PlayerCommandAction {
     pub detail: String,
     pub targets: Vec<String>,
     pub target_options: Vec<String>,
+    pub grant_id: Option<String>,
+}
+
+/// A night action the actor has already submitted this phase (and may withdraw).
+/// Additive to the command-state read: the client renders the current pick and,
+/// carrying `action_id`, can build a `WithdrawAction`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PlayerCommandCurrentAction {
+    pub action_id: String,
+    pub template_id: String,
+    pub targets: Vec<String>,
     pub grant_id: Option<String>,
 }
 
@@ -2014,10 +2026,13 @@ async fn player_command_state(
     } else {
         Vec::new()
     };
-    let actions = if actor.alive && !game_completed {
+    let (actions, current_actions) = if actor.alive && !game_completed {
         match (phase.as_ref(), role_key.as_deref()) {
             (Some(phase), Some(role_key)) if !phase.locked => {
-                let active_templates = commands::active_action_templates_for_actor_phase(
+                // One stream fold, two outputs: the templates still open to submit
+                // (filtered by available_role_actions) and the actions already
+                // submitted this phase (rendered as current_actions, withdrawable).
+                let submitted = commands::active_actions_view_for_actor_phase(
                     &state.pool,
                     game,
                     &phase.phase_id,
@@ -2025,7 +2040,11 @@ async fn player_command_state(
                 )
                 .await
                 .map_err(command_reject_api_error)?;
-                available_role_actions(
+                let active_templates: BTreeSet<String> = submitted
+                    .iter()
+                    .map(|action| action.template_id.clone())
+                    .collect();
+                let actions = available_role_actions(
                     &state,
                     game,
                     phase,
@@ -2034,12 +2053,22 @@ async fn player_command_state(
                     role_key,
                     &active_templates,
                 )
-                .await?
+                .await?;
+                let current_actions = submitted
+                    .into_iter()
+                    .map(|action| PlayerCommandCurrentAction {
+                        action_id: action.action_id,
+                        template_id: action.template_id,
+                        targets: action.targets,
+                        grant_id: action.grant_id,
+                    })
+                    .collect();
+                (actions, current_actions)
             }
-            _ => Vec::new(),
+            _ => (Vec::new(), Vec::new()),
         }
     } else {
-        Vec::new()
+        (Vec::new(), Vec::new())
     };
 
     Ok(Json(PlayerCommandStateResponse {
@@ -2052,6 +2081,7 @@ async fn player_command_state(
         game_completed,
         phase: phase_view,
         actions,
+        current_actions,
         vote_targets,
         current_vote,
         boundary: if game_completed {
