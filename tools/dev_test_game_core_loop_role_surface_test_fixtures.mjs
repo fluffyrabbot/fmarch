@@ -471,6 +471,42 @@ export function playerRoleSurfaceVisitedRolePath({ game }) {
   return `/g/${game}`;
 }
 
+export function targetResolutionReceiptSurfaceFixture({
+  game = "game-a",
+} = {}) {
+  return privateReceiptProofFixture({
+    game,
+    scenario: privateReceiptScenario("n01-target-receipt"),
+  });
+}
+
+export function normalResolutionPrivacySurfaceFixture({
+  game = "game-a",
+} = {}) {
+  return privateReceiptProofFixture({
+    game,
+    scenario: privateReceiptScenario("n01-normal-privacy"),
+  });
+}
+
+export function targetDayVoteReceiptSurfaceFixture({
+  game = "game-a",
+} = {}) {
+  return privateReceiptProofFixture({
+    game,
+    scenario: privateReceiptScenario("d02-target-receipt"),
+  });
+}
+
+export function normalDayVotePrivacySurfaceFixture({
+  game = "game-a",
+} = {}) {
+  return privateReceiptProofFixture({
+    game,
+    scenario: privateReceiptScenario("d02-normal-privacy"),
+  });
+}
+
 export function nightActionResolutionReceiptSurfaceFixture({
   game = "game-a",
 } = {}) {
