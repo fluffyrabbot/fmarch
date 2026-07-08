@@ -4,6 +4,160 @@ import {
   seededCoreLoopPlayerSurfaceFixture,
   seededCoreLoopRoleUrl,
 } from "./dev_test_game_core_loop_proof_fixtures.mjs";
+import {
+  dayThreeVoteResolutionSurfaceCase,
+} from "./dev_test_game_core_loop_vote_resolution_scenarios.mjs";
+import {
+  hostDeadlineAffordanceForPhaseState,
+} from "./dev_test_game_core_loop_host_phase_scenarios.mjs";
+
+export function dayThreeVoteResolutionSurfaceFixture({
+  game = "00000000-0000-0000-0000-000000000002",
+} = {}) {
+  const surfaceCase = dayThreeVoteResolutionSurfaceCase();
+  const voteCase = surfaceCase.playerVoteCase;
+  const hostCase = surfaceCase.hostResolutionCase;
+  const baseRoleUrl = seededCoreLoopRoleUrl({ game });
+  const hostRoleUrl = seededCoreLoopRoleUrl({ game, suffix: "/host" });
+  return {
+    status: "passed",
+    sourceActionPlayerRoleUrl: baseRoleUrl,
+    sourceHostRoleUrl: hostRoleUrl,
+    clickedThroughFromRoleUrl: true,
+    transition: surfaceCase.transitionFragments.join(" -> "),
+    playerVoteProof: {
+      status: "passed",
+      sourceRoleUrl: baseRoleUrl,
+      visitedRolePath: `/g/${game}`,
+      surfaceTestId: voteCase.surfaceTestId,
+      clickedThroughFromRoleUrl: true,
+      clickedAction: voteCase.clickedAction,
+      commandKind: voteCase.commandKind,
+      command: {
+        game,
+        actor_slot: voteCase.actorSlot,
+        target: { Slot: voteCase.targetSlot },
+      },
+      commandStatus: {
+        state: "ack",
+        message: `Ack: stream seqs ${voteCase.streamSeq}`,
+      },
+      bridgePlan: {
+        role: "player",
+        commandKind: voteCase.commandKind,
+        commandEndpoint: "/commands",
+        finalState: "ack",
+        projectionRefreshKeys: voteCase.expectedRefreshKeys,
+      },
+      receipts: [
+        {
+          actionId: voteCase.clickedAction,
+          state: "ack",
+          message: `Ack: stream seqs ${voteCase.streamSeq}`,
+          current: true,
+        },
+      ],
+      projectionCommandState: {
+        actorSlot: voteCase.actorSlot,
+        phase: {
+          phaseId: voteCase.expectedPhaseId,
+          locked: false,
+        },
+        currentVote: {
+          kind: "slot",
+          slotId: voteCase.targetSlot,
+          label: "Slot 4",
+        },
+        boundary:
+          "Seeded browser Day 3 vote ACK refreshed current vote and votecount projection.",
+      },
+      projectionVotecount: [
+        {
+          target: hostCase.targetLabel,
+          count: hostCase.expectedCount,
+          needed: hostCase.expectedNeeded,
+        },
+      ],
+      projectionDayVoteOutcomes: [
+        {
+          phaseId: voteCase.previousOutcomePhaseId,
+          status: "Lynch",
+        },
+      ],
+      setupResyncFromSeq: voteCase.setupResyncFromSeq,
+      setupSnapshotCommandState: {
+        phase: {
+          phaseId: voteCase.expectedPhaseId,
+        },
+      },
+      currentVote: {
+        hasVote: "true",
+        text: "Current vote Slot 4",
+      },
+      receiptCount: 1,
+      receiptStatusText: `Ack: stream seqs ${voteCase.streamSeq}`,
+      receiptRefreshKeys: voteCase.expectedReceiptRefreshKeys,
+      rawInviteTokensVisible: false,
+      targetOnlyReceiptVisible: false,
+      releaseReady: false,
+      productionReady: false,
+    },
+    hostResolutionProof: seededCoreLoopHostSurfaceFixture({
+      game,
+      resolveProof: {
+        ...hostPhaseTransitionActionFixture({
+          sourceRoleUrl: hostRoleUrl,
+          visitedRolePath: `/g/${game}/host`,
+          actionId: hostCase.resolveCase.actionId,
+          commandKind: hostCase.resolveCase.commandKind,
+          streamSeq: hostCase.resolveCase.streamSeq,
+          phaseId: hostCase.resolveCase.expectedPhaseId,
+          phaseState: hostCase.resolveCase.expectedPhaseState,
+          deadlineAffordance: hostDeadlineAffordanceForPhaseState(
+            hostCase.resolveCase.expectedPhaseState,
+          ),
+          projectionRefreshKeys: hostCase.resolveCase.expectedRefreshKeys,
+          command: {
+            game,
+            seed: 918273,
+          },
+        }),
+        votecountProjection: [
+          {
+            target: hostCase.targetLabel,
+            count: hostCase.expectedCount,
+            needed: hostCase.expectedNeeded,
+          },
+        ],
+        dayVoteOutcomesProjection: [
+          { phaseId: "D02", status: "Lynch" },
+          {
+            phaseId: hostCase.expectedOutcomePhaseId,
+            status: hostCase.expectedOutcomeStatus,
+            winnerSlot: hostCase.expectedWinnerSlot,
+          },
+        ],
+      },
+      hostVotecountProjection: [
+        {
+          target: hostCase.targetLabel,
+          count: hostCase.expectedCount,
+          needed: hostCase.expectedNeeded,
+        },
+      ],
+      hostDayVoteOutcomesProjection: [
+        { phaseId: "D02", status: "Lynch" },
+        {
+          phaseId: hostCase.expectedOutcomePhaseId,
+          status: hostCase.expectedOutcomeStatus,
+          winnerSlot: hostCase.expectedWinnerSlot,
+        },
+      ],
+    }),
+    releaseReady: false,
+    productionReady: false,
+  };
+}
 
 export function postDayThreeResolutionSurfaceFixture({
   game = "00000000-0000-0000-0000-000000000002",

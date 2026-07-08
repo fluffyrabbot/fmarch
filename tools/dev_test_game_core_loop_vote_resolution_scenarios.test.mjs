@@ -8,6 +8,12 @@ import {
   dayThreeVoteResolutionLaneId,
   dayThreeVoteResolutionSurfaceCase,
 } from "./dev_test_game_core_loop_vote_resolution_scenarios.mjs";
+import {
+  assertHostPhaseTransitionActionProofCase,
+} from "./dev_test_game_core_loop_host_phase_scenarios.mjs";
+import {
+  dayThreeVoteResolutionSurfaceFixture,
+} from "./dev_test_game_core_loop_surface_fixtures.mjs";
 
 test("Day 3 vote resolution scenario module exports family and proof lane id", () => {
   assert.equal(coreLoopVoteResolutionFamilyId, "core-loop-vote-resolution");
@@ -200,5 +206,23 @@ test("Day 3 vote resolution assertion delegates host resolve and covers vote pro
         assertHostPhaseTransitionActionProof: () => {},
       }),
     /Day 3 vote resolution surface/,
+  );
+});
+
+test("Day 3 vote resolution fixture satisfies the shared scenario assertion", () => {
+  const surface = dayThreeVoteResolutionSurfaceFixture({ game: "game-a" });
+
+  assert.doesNotThrow(() =>
+    assertDayThreeVoteResolutionSurfaceCase({
+      dayThreeVoteResolutionSurface: surface,
+      expectedGame: "game-a",
+      assertHostPhaseTransitionActionProof:
+        assertHostPhaseTransitionActionProofCase,
+    }),
+  );
+  assert.equal(surface.playerVoteProof.command.actor_slot, "slot-7");
+  assert.equal(
+    surface.hostResolutionProof.resolveProof.commandStatus.message,
+    "Ack: stream seqs 908",
   );
 });
