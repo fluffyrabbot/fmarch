@@ -300,9 +300,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     let report_json = format!("{}\n", serde_json::to_string_pretty(&report)?);
     if let Some(write_report_path) = &args.write_report_path {
+        // Report goes to the file sink only. Emitting it on an inherited stdout
+        // pipe as well can wedge a spawning parent on macOS, so keep stdout quiet
+        // whenever a --write-report path is provided.
         write_text(write_report_path, &report_json)?;
+    } else {
+        print!("{report_json}");
     }
-    print!("{report_json}");
     Ok(())
 }
 

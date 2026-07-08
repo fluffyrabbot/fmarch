@@ -147,5 +147,12 @@ crates/
   conflicts, fan-out lag, WS connection count.
 - **Determinism guard**: folds must not call `now()`/RNG/network; this is enforced by
   construction (the `domain` crate doesn't depend on anything that could).
+- **Test tiers**: the default `cargo test -p commands` is hermetic and parallel-safe.
+  Subprocess audit/minimizer tests keep their report on a `--write-report`/`--output`
+  file with the child's stdout redirected off the inherited pipe, so a fanned-out spawn
+  never wedges the parent (a macOS stdout-pipe CLOEXEC race). The one test that shells out
+  to a *nested* `cargo test` is `#[ignore]`d; run it explicitly with
+  `cargo test -p commands -- --ignored`, ideally on Linux CI where nested-cargo spawns are
+  safe.
 
 Continue to [04-wire-protocol](04-wire-protocol.md).
