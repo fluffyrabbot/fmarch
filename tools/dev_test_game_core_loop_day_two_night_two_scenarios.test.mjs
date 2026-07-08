@@ -9,6 +9,7 @@ import {
   dayTwoNightTwoFeatureSpineRows,
   dayTwoNightTwoRoleIds,
   dayTwoNightTwoRoleUrlKey,
+  dayTwoNightTwoRoleUrlsFrom,
 } from "./dev_test_game_core_loop_day_two_night_two_scenarios.mjs";
 import {
   playerActionLoopLaneId,
@@ -122,6 +123,26 @@ test("Day 2 Night 2 role URL keys are scenario-owned", () => {
     () => dayTwoNightTwoRoleUrlKey("privateChannel"),
     /unknown day two night two role id/,
   );
+  assert.deepEqual(
+    dayTwoNightTwoRoleUrlsFrom({
+      "d02-n02-host": "host-url",
+      "d02-n02-actionPlayer": "action-url",
+      "d02-n02-target": "target-url",
+      "d02-n02-normalPlayer": "normal-url",
+    }),
+    {
+      host: "host-url",
+      actionPlayer: "action-url",
+      target: "target-url",
+      normalPlayer: "normal-url",
+    },
+  );
+  assert.deepEqual(dayTwoNightTwoRoleUrlsFrom({}), {
+    host: undefined,
+    actionPlayer: undefined,
+    target: undefined,
+    normalPlayer: undefined,
+  });
 });
 
 test("Day 2 Night 2 assertions cover the saved core-loop spine proof", async () => {

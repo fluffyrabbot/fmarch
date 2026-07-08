@@ -120,10 +120,10 @@ import {
 } from "./dev_test_game_core_loop_day_five_progression_scenarios.mjs";
 import {
   dayTwoNightTwoCycleId,
-  dayTwoNightTwoRoleUrlKey,
+  dayTwoNightTwoRoleUrlsFrom,
 } from "./dev_test_game_core_loop_day_two_night_two_scenarios.mjs";
 import {
-  dayOneNightOneDayTwoRoleUrlKey,
+  dayOneNightOneDayTwoRoleUrlsFrom,
 } from "./dev_test_game_core_loop_day_one_night_one_scenarios.mjs";
 import {
   coreLoopHostControlFamilyId,
@@ -203,20 +203,6 @@ const roleSurfaceSpineCheckpointRows = ({
   );
   return rows;
 };
-
-const dayTwoNightTwoRoleUrlsFrom = (roleUrlHrefs) => ({
-  host: roleUrlHrefs[dayTwoNightTwoRoleUrlKey("host")],
-  actionPlayer: roleUrlHrefs[dayTwoNightTwoRoleUrlKey("actionPlayer")],
-  target: roleUrlHrefs[dayTwoNightTwoRoleUrlKey("target")],
-  normalPlayer: roleUrlHrefs[dayTwoNightTwoRoleUrlKey("normalPlayer")],
-});
-
-const dayOneNightOneDayTwoRoleUrlsFrom = (roleUrlHrefs) => ({
-  target: roleUrlHrefs[dayOneNightOneDayTwoRoleUrlKey("target")],
-  normalPlayer: roleUrlHrefs[dayOneNightOneDayTwoRoleUrlKey("normalPlayer")],
-  privateChannel:
-    roleUrlHrefs[dayOneNightOneDayTwoRoleUrlKey("privateChannel")],
-});
 
 const requiredSpineRows = (proofRun, proofSurfaces = {}) => {
   const cycles = Array.isArray(proofRun?.coreLoopSpine?.cycles)

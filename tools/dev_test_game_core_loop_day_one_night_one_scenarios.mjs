@@ -189,6 +189,15 @@ export function dayOneNightOneDayTwoRoleUrlKey(roleId) {
   return `${dayOneNightOneDayTwoCycleId}-${roleId}`;
 }
 
+export function dayOneNightOneDayTwoRoleUrlsFrom(roleUrlHrefs) {
+  return Object.fromEntries(
+    dayOneNightOneDayTwoRoleIds.map((roleId) => [
+      roleId,
+      roleUrlHrefs?.[dayOneNightOneDayTwoRoleUrlKey(roleId)],
+    ]),
+  );
+}
+
 export function assertDayOneNightOneCheckpointEvidence({
   cycle,
   recoveryHooks,

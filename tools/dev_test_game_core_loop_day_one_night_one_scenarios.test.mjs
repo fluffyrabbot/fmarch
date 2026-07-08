@@ -7,6 +7,7 @@ import {
   dayOneNightOneDayTwoCycleId,
   dayOneNightOneDayTwoRoleIds,
   dayOneNightOneDayTwoRoleUrlKey,
+  dayOneNightOneDayTwoRoleUrlsFrom,
   dayOneNightOneFeatureSpineRows,
   staleActionConflictRecoveryHookId,
   staleLockedVoteRecoveryHookId,
@@ -222,6 +223,29 @@ test("Day 1 Night 1 Day 2 role URL keys are scenario-owned", () => {
     () => dayOneNightOneDayTwoRoleUrlKey("observer"),
     /unknown day one night one role id/,
   );
+  assert.deepEqual(
+    dayOneNightOneDayTwoRoleUrlsFrom({
+      "d01-n01-d02-host": "host-url",
+      "d01-n01-d02-actionPlayer": "action-url",
+      "d01-n01-d02-target": "target-url",
+      "d01-n01-d02-normalPlayer": "normal-url",
+      "d01-n01-d02-privateChannel": "private-channel-url",
+    }),
+    {
+      host: "host-url",
+      actionPlayer: "action-url",
+      target: "target-url",
+      normalPlayer: "normal-url",
+      privateChannel: "private-channel-url",
+    },
+  );
+  assert.deepEqual(dayOneNightOneDayTwoRoleUrlsFrom({}), {
+    host: undefined,
+    actionPlayer: undefined,
+    target: undefined,
+    normalPlayer: undefined,
+    privateChannel: undefined,
+  });
 });
 
 test("Day 1 Night 1 assertions cover the saved core-loop spine proof", async () => {
