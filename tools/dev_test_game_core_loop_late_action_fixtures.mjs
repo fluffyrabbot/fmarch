@@ -10,6 +10,7 @@ import {
   dayFourNoLynchResolutionSurfaceCase,
 } from "./dev_test_game_core_loop_no_lynch_progression_scenarios.mjs";
 import {
+  nightFourNoActionResolutionSurfaceCase,
   nightFourNoActionSurfaceCase,
 } from "./dev_test_game_core_loop_late_action_progression_scenarios.mjs";
 
@@ -202,32 +203,31 @@ export function nightFourNoActionSurfaceFixture({
 export function nightFourNoActionResolutionSurfaceFixture({
   game = "00000000-0000-0000-0000-000000000002",
 } = {}) {
+  const surfaceCase = nightFourNoActionResolutionSurfaceCase();
+  const hostCase = surfaceCase.hostResolutionCase;
+  const privacyCase = surfaceCase.actionPlayerPrivacyScenario;
   const baseRoleUrl = `http://127.0.0.1:5173/g/${game}`;
   return {
     status: "passed",
     sourceHostRoleUrl: `${baseRoleUrl}/host`,
     sourceActionPlayerRoleUrl: baseRoleUrl,
     clickedThroughFromRoleUrl: true,
-    transition:
-      "host:N04:resolve_phase:ack:916 -> actionPlayer:N04:no_action_privacy",
+    transition: surfaceCase.transitionFragments.join(" -> "),
     hostResolutionProof: seededCoreLoopHostSurfaceFixture({
       game,
-      setupResyncFromSeq: 914,
-      setupPhaseId: "N04",
-      setupPhaseState: "open",
+      setupResyncFromSeq: hostCase.setupResyncFromSeq,
+      setupPhaseId: hostCase.setupPhaseId,
+      setupPhaseState: hostCase.setupPhaseState,
       resolveProof: hostPhaseTransitionActionFixture({
-        actionId: "resolve_phase",
-        commandKind: "ResolvePhase",
-        streamSeq: 916,
-        phaseId: "N04",
-        phaseState: "locked",
-        deadlineAffordance: "unlock_thread,advance_phase",
-        projectionRefreshKeys: [
-          "host",
-          "votecount",
-          "dayVoteOutcomes",
-          "hostPrompts",
-        ],
+        actionId: hostCase.resolveCase.actionId,
+        commandKind: hostCase.resolveCase.commandKind,
+        streamSeq: hostCase.resolveCase.streamSeq,
+        phaseId: hostCase.resolveCase.expectedPhaseId,
+        phaseState: hostCase.resolveCase.expectedPhaseState,
+        deadlineAffordance: hostDeadlineAffordanceForPhaseState(
+          hostCase.resolveCase.expectedPhaseState,
+        ),
+        projectionRefreshKeys: hostCase.resolveCase.expectedRefreshKeys,
         command: {
           game,
           seed: 918273,
@@ -237,21 +237,25 @@ export function nightFourNoActionResolutionSurfaceFixture({
     actionPlayerPrivacyProof: nightFourResolutionPlayerSurfaceFixture({
       sourceRoleUrl: baseRoleUrl,
       visitedRolePath: `/g/${game}`,
-      slotField: "actionPlayerSlot",
-      slot: "slot-7",
-      principalUserId: "player_mira",
-      actorAlive: true,
-      actorStatus: "alive",
-      actionState: "disabled:phase locked",
-      statusText: "Player action unavailable: phase locked",
-      privateCount: 0,
-      privateReceipt: false,
-      boundary:
-        "Seeded browser action player observed locked Night 4 after no-action host resolution with no private receipt.",
+      slotField: privacyCase.slotField,
+      slot: privacyCase.expectedSlot,
+      principalUserId: privacyCase.principalUserId,
+      phaseId: privacyCase.phaseId,
+      phaseState: privacyCase.phaseState,
+      actorAlive: privacyCase.actorAlive,
+      actorStatus: privacyCase.actorStatus,
+      actionState: privacyCase.actionState,
+      statusText: `Player action unavailable: ${privacyCase.statusText}`,
+      privateCount: privacyCase.privateReceipt ? 1 : 0,
+      privateReceipt: privacyCase.privateReceipt,
+      privateReceiptStatus: privacyCase.privateReceiptStatus,
+      privateReceiptPhaseId: privacyCase.privateReceiptPhaseId,
+      boundary: `Seeded browser ${privacyCase.boundaryText}.`,
+      resyncFromSeq: privacyCase.resyncFromSeq,
       commandStateEndpoint:
-        `/games/${game}/player-command-state?principal_user_id=player_mira&slot_id=slot-7`,
+        `/games/${game}/player-command-state?principal_user_id=${privacyCase.principalUserId}&slot_id=${privacyCase.expectedSlot}`,
       notificationsEndpoint:
-        `/games/${game}/notifications?principal_user_id=player_mira`,
+        `/games/${game}/notifications?principal_user_id=${privacyCase.principalUserId}`,
     }),
     releaseReady: false,
     productionReady: false,
@@ -406,13 +410,18 @@ function nightFourResolutionPlayerSurfaceFixture({
   slotField,
   slot,
   principalUserId,
+  phaseId,
+  phaseState,
   actorAlive,
   actorStatus,
   actionState,
   statusText,
   privateCount,
   privateReceipt,
+  privateReceiptStatus,
+  privateReceiptPhaseId,
   boundary,
+  resyncFromSeq,
   commandStateEndpoint,
   notificationsEndpoint,
 }) {
@@ -425,8 +434,8 @@ function nightFourResolutionPlayerSurfaceFixture({
     [slotField]: slot,
     principalUserId,
     checkpoint: {
-      phaseId: "N04",
-      phaseState: "locked",
+      phaseId,
+      phaseState,
       actorSlot: slot,
       actionState,
       receiptState: "idle",
@@ -444,8 +453,8 @@ function nightFourResolutionPlayerSurfaceFixture({
       actorAlive,
       actorStatus,
       phase: {
-        phaseId: "N04",
-        locked: true,
+        phaseId,
+        locked: phaseState === "locked",
       },
       actions: [],
       voteTargets: [],
@@ -455,22 +464,22 @@ function nightFourResolutionPlayerSurfaceFixture({
       ? [
           {
             effect: "player_killed",
-            status: "factional_kill",
+            status: privateReceiptStatus,
           },
         ]
       : [],
     projectionDayVoteOutcomes: lateLoopDayVoteOutcomesFixture(),
-    resyncFromSeq: 916,
+    resyncFromSeq,
     resyncSnapshotCommandState: {
       actorSlot: slot,
       phase: {
-        phaseId: "N04",
+        phaseId,
       },
     },
     resyncSnapshotNotifications: privateReceipt
       ? [
           {
-            status: "factional_kill",
+            status: privateReceiptStatus,
           },
         ]
       : [],
@@ -486,8 +495,8 @@ function nightFourResolutionPlayerSurfaceFixture({
     proof.privateNotice = {
       id: "notification-1",
       kind: "notification",
-      text: "player_killed factional_kill",
-      detailText: "Phase N04",
+      text: `player_killed ${privateReceiptStatus}`,
+      detailText: `Phase ${privateReceiptPhaseId}`,
     };
   } else {
     proof.privateEmptyText = "No private results visible";
