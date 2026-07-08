@@ -232,8 +232,8 @@ import {
 } from "../../../../tools/dev_test_game_next_action_sequence_handoff_pair.mjs";
 import {
   buildSelectedOperatorHandoffTerminalReceipt,
-  selectedOperatorHandoffReceiptPacketRowFields,
-  selectedOperatorHandoffReceiptPacketRowStatus,
+  selectedOperatorHandoffTerminalReceiptRowFields,
+  selectedOperatorHandoffTerminalReceiptRowStatuses,
 } from "../../../../tools/dev_test_game_selected_operator_handoff_receipt.mjs";
 import {
   selectedOperatorHandoffPassedReceiptFixture,
@@ -2603,7 +2603,7 @@ test("admin local admin spine detail data carries aggregate proof rows", async (
   ]);
 });
 
-test("admin local admin spine detail uses shared selected operator packet row contract", async () => {
+test("admin local admin spine detail uses shared selected operator terminal receipt row contract", async () => {
   const receipt = selectedOperatorHandoffPassedReceiptFixture();
   const data = await buildAdminAuditDetailData({
     audit: localAdminAuditIds.adminSpine,
@@ -2618,27 +2618,41 @@ test("admin local admin spine detail uses shared selected operator packet row co
   const section = data.audit.artifactSummarySections.find(
     (candidate) => candidate.id === "selected-operator-handoff-terminal-receipt",
   );
-  const packetRow = section.rows.find(
-    (row) => row.id === "selected-operator-handoff-packet",
+  const renderedRows = Object.fromEntries(
+    section.rows.map((row) => [
+      row.testId.replace(
+        "admin-audit-selected-operator-handoff-terminal-",
+        "",
+      ),
+      row,
+    ]),
   );
+  const rowFields = selectedOperatorHandoffTerminalReceiptRowFields(receipt);
+  const rowStatuses =
+    selectedOperatorHandoffTerminalReceiptRowStatuses(receipt);
   assert.deepEqual(
-    packetRow.values.map((value) => [
-      value.id,
-      value.text,
-      value.emphasized === true,
-    ]),
-    selectedOperatorHandoffReceiptPacketRowFields(
-      receipt.selectedOperatorHandoffPacket,
-    ).map((field) => [
-      field.id,
-      field.value,
-      field.emphasized === true,
-    ]),
+    Object.keys(renderedRows),
+    Object.keys(rowFields),
   );
-  assert.equal(
-    packetRow.values.map((value) => value.text).join("\n"),
-    selectedOperatorHandoffReceiptPacketRowStatus(receipt),
-  );
+  for (const [rowId, fields] of Object.entries(rowFields)) {
+    const renderedRow = renderedRows[rowId];
+    assert.deepEqual(
+      renderedRow.values.map((value) => [
+        value.id,
+        value.text,
+        value.emphasized === true,
+      ]),
+      fields.map((field) => [
+        field.id,
+        field.value,
+        field.emphasized === true,
+      ]),
+    );
+    assert.equal(
+      renderedRow.values.map((value) => value.text).join("\n"),
+      rowStatuses[rowId],
+    );
+  }
 });
 
 test("admin route data exposes local proof graph as a native audit row", async () => {

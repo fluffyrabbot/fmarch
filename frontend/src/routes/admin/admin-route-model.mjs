@@ -108,7 +108,7 @@ import {
   proofGraphPrerequisiteDestinationSectionId,
 } from "../../../../tools/dev_test_game_proof_graph_prerequisite_destination_rows.mjs";
 import {
-  selectedOperatorHandoffReceiptPacketRowFields,
+  selectedOperatorHandoffTerminalReceiptRowFields,
   selectedOperatorHandoffTerminalReceiptId,
 } from "../../../../tools/dev_test_game_selected_operator_handoff_receipt.mjs";
 import {
@@ -451,124 +451,49 @@ function selectedOperatorHandoffTerminalReceiptSummarySections(receipt) {
   if (receipt === null) {
     return [];
   }
+  const rowFields = selectedOperatorHandoffTerminalReceiptRowFields(receipt);
   return [
     buildArtifactSummarySection({
       id: "selected-operator-handoff-terminal-receipt",
       heading: "Selected operator handoff receipt",
       rows: [
-        {
-          id: "summary",
-          testId: "admin-audit-selected-operator-handoff-terminal-receipt",
-          values: [
-            { id: "status", text: receipt.status, emphasized: true },
-            { id: "id", text: receipt.id },
-            { id: "proofBoundary", text: receipt.proofBoundary },
-            { id: "sourceNextAction", text: receipt.sourceArtifacts.nextAction },
-            {
-              id: "sourceNextActionAdminProof",
-              text: receipt.sourceArtifacts.nextActionAdminProof,
-            },
-            { id: "sourceProofGraph", text: receipt.sourceArtifacts.proofGraph },
-            {
-              id: "sourceReleaseReadiness",
-              text: receipt.sourceArtifacts.releaseReadiness,
-            },
-          ],
-        },
-        ...(receipt.selectedOperatorHandoff === undefined
-          ? []
-          : [
-              {
-                id: "selected-operator-handoff",
-                testId:
-                  "admin-audit-selected-operator-handoff-terminal-selected",
-                values: [
-                  {
-                    id: "status",
-                    text: receipt.selectedOperatorHandoff.status,
-                    emphasized: true,
-                  },
-                  {
-                    id: "command",
-                    text: receipt.selectedOperatorHandoff.command,
-                  },
-                  {
-                    id: "firstMissingInputId",
-                    text: receipt.selectedOperatorHandoff.firstMissingInputId,
-                  },
-                  {
-                    id: "selectedProductionFeatureGraphNodeId",
-                    text:
-                      receipt.selectedOperatorHandoff
-                        .selectedProductionFeatureGraphNodeId,
-                  },
-                  ...rawEvidenceTemplateDescriptorValues(
-                    receipt.selectedOperatorHandoff.rawEvidenceTemplate,
-                  ),
-                ],
-              },
-              ...(receipt.selectedOperatorHandoffPacket === undefined
-                ? []
-                : [
-                    {
-                      id: "selected-operator-handoff-packet",
-                      testId:
-                        "admin-audit-selected-operator-handoff-terminal-packet",
-                      values:
-                        selectedOperatorHandoffReceiptPacketRowFields(
-                          receipt.selectedOperatorHandoffPacket,
-                        ).map((field) => ({
-                          id: field.id,
-                          text: field.value,
-                          ...(field.emphasized === true
-                            ? { emphasized: true }
-                            : {}),
-                        })),
-                    },
-                  ]),
-              {
-                id: "proof-graph-edge",
-                testId:
-                  "admin-audit-selected-operator-handoff-terminal-edge",
-                values: [
-                  { id: "from", text: receipt.proofGraphEdge.from },
-                  {
-                    id: "relationship",
-                    text: receipt.proofGraphEdge.relationship,
-                    emphasized: true,
-                  },
-                  { id: "to", text: receipt.proofGraphEdge.to },
-                  {
-                    id: "firstMissingInputId",
-                    text: receipt.proofGraphEdge.firstMissingInputId,
-                  },
-                ],
-              },
-              {
-                id: "readiness-related-link",
-                testId:
-                  "admin-audit-selected-operator-handoff-terminal-readiness-link",
-                values: [
-                  { id: "id", text: receipt.readinessRelatedLink.id },
-                  {
-                    id: "sourceAuditId",
-                    text: receipt.readinessRelatedLink.sourceAuditId,
-                  },
-                  {
-                    id: "destinationAuditId",
-                    text: receipt.readinessRelatedLink.destinationAuditId,
-                  },
-                  { id: "status", text: receipt.readinessRelatedLink.status },
-                  {
-                    id: "command",
-                    text: receipt.readinessRelatedLink.command,
-                  },
-                ],
-              },
-            ]),
+        selectedOperatorHandoffTerminalReceiptSummaryRow({
+          rowId: "receipt",
+          fields: rowFields.receipt,
+        }),
+        ...Object.entries({
+          selected: "selected-operator-handoff",
+          packet: "selected-operator-handoff-packet",
+          edge: "proof-graph-edge",
+          "readiness-link": "readiness-related-link",
+        })
+          .filter(([rowId]) => rowFields[rowId] !== undefined)
+          .map(([rowId, summaryRowId]) =>
+            selectedOperatorHandoffTerminalReceiptSummaryRow({
+              rowId,
+              summaryRowId,
+              fields: rowFields[rowId],
+            }),
+          ),
       ],
     }),
   ];
+}
+
+function selectedOperatorHandoffTerminalReceiptSummaryRow({
+  rowId,
+  summaryRowId = "summary",
+  fields,
+}) {
+  return {
+    id: summaryRowId,
+    testId: `admin-audit-selected-operator-handoff-terminal-${rowId}`,
+    values: fields.map((field) => ({
+      id: field.id,
+      text: field.value,
+      ...(field.emphasized === true ? { emphasized: true } : {}),
+    })),
+  };
 }
 
 function selectedLocalDependencyTerminalReceiptSummarySections(

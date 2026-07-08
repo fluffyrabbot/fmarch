@@ -192,58 +192,16 @@ export function assertSelectedOperatorHandoffTerminalReceipt(
   return receipt;
 }
 
-export function selectedOperatorHandoffReceiptSelectedRowStatus(receipt) {
-  const template = receipt.selectedOperatorHandoff.rawEvidenceTemplate;
-  return [
-    receipt.selectedOperatorHandoff.status,
-    receipt.selectedOperatorHandoff.command,
-    receipt.selectedOperatorHandoff.firstMissingInputId,
-    receipt.selectedOperatorHandoff.selectedProductionFeatureGraphNodeId,
-    ...hostedMatrixRawEvidenceTemplateDescriptorFieldValues(template).map(
-      (field) => field.value,
-    ),
-  ].join("\n");
-}
-
 export function selectedOperatorHandoffTerminalReceiptDestinationFields(
   receipt,
 ) {
+  const rowFields = selectedOperatorHandoffTerminalReceiptRowFields(receipt);
   return {
     selectedOperatorHandoffReceiptId: receipt.id,
     selectedOperatorHandoffReceiptStatus: receipt.status,
-    requiredSelectedOperatorHandoffTerminalReceiptRows: [
-      "receipt",
-      "selected",
-      "packet",
-      "edge",
-      "readiness-link",
-    ],
-    requiredSelectedOperatorHandoffTerminalReceiptRowStatuses: {
-      receipt: [
-        receipt.status,
-        receipt.id,
-        receipt.proofBoundary,
-        receipt.sourceArtifacts.nextAction,
-        receipt.sourceArtifacts.nextActionAdminProof,
-        receipt.sourceArtifacts.proofGraph,
-        receipt.sourceArtifacts.releaseReadiness,
-      ].join("\n"),
-      selected: selectedOperatorHandoffReceiptSelectedRowStatus(receipt),
-      packet: selectedOperatorHandoffReceiptPacketRowStatus(receipt),
-      edge: [
-        receipt.proofGraphEdge.from,
-        receipt.proofGraphEdge.relationship,
-        receipt.proofGraphEdge.to,
-        receipt.proofGraphEdge.firstMissingInputId,
-      ].join("\n"),
-      "readiness-link": [
-        receipt.readinessRelatedLink.id,
-        receipt.readinessRelatedLink.sourceAuditId,
-        receipt.readinessRelatedLink.destinationAuditId,
-        receipt.readinessRelatedLink.status,
-        receipt.readinessRelatedLink.command,
-      ].join("\n"),
-    },
+    requiredSelectedOperatorHandoffTerminalReceiptRows: Object.keys(rowFields),
+    requiredSelectedOperatorHandoffTerminalReceiptRowStatuses:
+      selectedOperatorHandoffTerminalReceiptRowStatuses(receipt),
   };
 }
 
@@ -305,11 +263,124 @@ function assertSelectedOperatorHandoffReceiptShape(receipt) {
 }
 
 export function selectedOperatorHandoffReceiptPacketRowStatus(receipt) {
-  return selectedOperatorHandoffReceiptPacketRowFields(
-    receipt.selectedOperatorHandoffPacket,
-  )
-    .map((field) => field.value)
-    .join("\n");
+  return selectedOperatorHandoffTerminalReceiptRowStatus(receipt, "packet");
+}
+
+export function selectedOperatorHandoffTerminalReceiptRowStatuses(receipt) {
+  const rows = selectedOperatorHandoffTerminalReceiptRowFields(receipt);
+  return Object.freeze(
+    Object.fromEntries(
+      Object.entries(rows).map(([id, fields]) => [
+        id,
+        selectedOperatorHandoffRowStatusText(fields),
+      ]),
+    ),
+  );
+}
+
+export function selectedOperatorHandoffTerminalReceiptRowStatus(
+  receipt,
+  rowId,
+) {
+  return selectedOperatorHandoffRowStatusText(
+    selectedOperatorHandoffTerminalReceiptRowFields(receipt)[rowId],
+  );
+}
+
+export function selectedOperatorHandoffTerminalReceiptRowFields(receipt) {
+  return Object.freeze({
+    receipt: Object.freeze([
+      Object.freeze({ id: "status", value: receipt.status, emphasized: true }),
+      Object.freeze({ id: "id", value: receipt.id }),
+      Object.freeze({ id: "proofBoundary", value: receipt.proofBoundary }),
+      Object.freeze({
+        id: "sourceNextAction",
+        value: receipt.sourceArtifacts.nextAction,
+      }),
+      Object.freeze({
+        id: "sourceNextActionAdminProof",
+        value: receipt.sourceArtifacts.nextActionAdminProof,
+      }),
+      Object.freeze({
+        id: "sourceProofGraph",
+        value: receipt.sourceArtifacts.proofGraph,
+      }),
+      Object.freeze({
+        id: "sourceReleaseReadiness",
+        value: receipt.sourceArtifacts.releaseReadiness,
+      }),
+    ]),
+    ...(receipt.selectedOperatorHandoff === undefined
+      ? {}
+      : {
+          selected: selectedOperatorHandoffReceiptSelectedRowFields(
+            receipt.selectedOperatorHandoff,
+          ),
+          ...(receipt.selectedOperatorHandoffPacket === undefined
+            ? {}
+            : {
+                packet: selectedOperatorHandoffReceiptPacketRowFields(
+                  receipt.selectedOperatorHandoffPacket,
+                ),
+              }),
+          edge: Object.freeze([
+            Object.freeze({ id: "from", value: receipt.proofGraphEdge.from }),
+            Object.freeze({
+              id: "relationship",
+              value: receipt.proofGraphEdge.relationship,
+              emphasized: true,
+            }),
+            Object.freeze({ id: "to", value: receipt.proofGraphEdge.to }),
+            Object.freeze({
+              id: "firstMissingInputId",
+              value: receipt.proofGraphEdge.firstMissingInputId,
+            }),
+          ]),
+          "readiness-link": Object.freeze([
+            Object.freeze({ id: "id", value: receipt.readinessRelatedLink.id }),
+            Object.freeze({
+              id: "sourceAuditId",
+              value: receipt.readinessRelatedLink.sourceAuditId,
+            }),
+            Object.freeze({
+              id: "destinationAuditId",
+              value: receipt.readinessRelatedLink.destinationAuditId,
+            }),
+            Object.freeze({
+              id: "status",
+              value: receipt.readinessRelatedLink.status,
+            }),
+            Object.freeze({
+              id: "command",
+              value: receipt.readinessRelatedLink.command,
+            }),
+          ]),
+        }),
+  });
+}
+
+function selectedOperatorHandoffRowStatusText(fields) {
+  return fields.map((field) => field.value).join("\n");
+}
+
+export function selectedOperatorHandoffReceiptSelectedRowFields(handoff) {
+  return Object.freeze([
+    Object.freeze({ id: "status", value: handoff.status, emphasized: true }),
+    Object.freeze({ id: "command", value: handoff.command }),
+    Object.freeze({
+      id: "firstMissingInputId",
+      value: handoff.firstMissingInputId,
+    }),
+    Object.freeze({
+      id: "selectedProductionFeatureGraphNodeId",
+      value: handoff.selectedProductionFeatureGraphNodeId,
+    }),
+    ...hostedMatrixRawEvidenceTemplateDescriptorFieldValues(
+      handoff.rawEvidenceTemplate,
+    ).map((field) =>
+      Object.freeze({ id: field.rowId, value: field.value }),
+    ),
+  ]);
 }
 
 export function selectedOperatorHandoffReceiptPacketRowFields(packet) {
