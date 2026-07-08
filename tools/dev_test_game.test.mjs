@@ -6418,13 +6418,13 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
     roleSurfaceProofInventory,
   );
   assert.deepEqual(
-    roleSurfaceProofInventory.surfaceKeys.filter(
-      (surfaceKey) =>
+    roleSurfaceProofInventory.rows.filter(
+      ({ surfaceKey }) =>
         coreLoopProof[surfaceKey] !== null &&
         typeof coreLoopProof[surfaceKey] === "object" &&
         !Array.isArray(coreLoopProof[surfaceKey]),
     ),
-    roleSurfaceProofInventory.surfaceKeys,
+    roleSurfaceProofInventory.rows,
   );
   const adminSpineProof = adminSpineProofFixture();
   const validatedAdminSpineProof = validateDevTestGameAdminSpineProof(

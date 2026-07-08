@@ -43,7 +43,9 @@ test("core loop admin proof role surfaces have one declarative serial order", ()
     caseKeys.slice(1),
   );
   assert.deepEqual(coreLoopRoleSurfaceProofInventory(), {
-    surfaceKeys: caseKeys,
-    proofKeys: coreLoopRoleSurfaceProofCases.map(({ proofKey }) => proofKey),
+    rows: coreLoopRoleSurfaceProofCases.map(({ surfaceKey, proofKey }) => ({
+      surfaceKey,
+      proofKey,
+    })),
   });
 });

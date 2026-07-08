@@ -262,12 +262,32 @@ const coreLoopRoleSurfaceProofFunctions = {
   privateChannelRoleSurface: provePrivateChannelRoleSurface,
 };
 
+function assertCoreLoopRoleSurfaceProofFunctionsImplemented() {
+  const expectedProofKeys = coreLoopRoleSurfaceProofCases.map(
+    ({ proofKey }) => proofKey,
+  );
+  const implementedProofKeys = Object.keys(coreLoopRoleSurfaceProofFunctions);
+  const missingProofKeys = expectedProofKeys.filter(
+    (proofKey) =>
+      typeof coreLoopRoleSurfaceProofFunctions[proofKey] !== "function",
+  );
+  const extraProofKeys = implementedProofKeys.filter(
+    (proofKey) => !expectedProofKeys.includes(proofKey),
+  );
+  if (missingProofKeys.length > 0 || extraProofKeys.length > 0) {
+    throw new Error(
+      `core loop role surface proof registry drifted: missing=${missingProofKeys.join(",") || "<none>"} extra=${extraProofKeys.join(",") || "<none>"}`,
+    );
+  }
+}
+
 async function runCoreLoopRoleSurfaceProofs({
   browser,
   frontendBaseUrl,
   proofRun,
   roleProofUrls,
 }) {
+  assertCoreLoopRoleSurfaceProofFunctionsImplemented();
   const surfaces = {};
   for (const proofCase of coreLoopRoleSurfaceProofCases) {
     const prove = coreLoopRoleSurfaceProofFunctions[proofCase.proofKey];

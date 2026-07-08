@@ -3771,13 +3771,10 @@ function assertCoreLoopHostLifecycleCheckpoint(hostRoleSurface) {
 function assertCoreLoopRoleSurfaceProofInventory(proof) {
   const expectedInventory = coreLoopRoleSurfaceProofInventory();
   const actualInventory = proof?.generatedFrom?.coreLoopRoleSurfaceProofs;
-  if (
-    !sameStringArray(actualInventory?.surfaceKeys, expectedInventory.surfaceKeys) ||
-    !sameStringArray(actualInventory?.proofKeys, expectedInventory.proofKeys)
-  ) {
+  if (!sameInventoryRows(actualInventory?.rows, expectedInventory.rows)) {
     throw new Error("core-loop admin proof role-surface inventory drifted");
   }
-  for (const surfaceKey of expectedInventory.surfaceKeys) {
+  for (const { surfaceKey } of expectedInventory.rows) {
     if (
       proof?.[surfaceKey] === null ||
       typeof proof?.[surfaceKey] !== "object" ||
@@ -3788,6 +3785,21 @@ function assertCoreLoopRoleSurfaceProofInventory(proof) {
       );
     }
   }
+}
+
+function sameInventoryRows(actualRows, expectedRows) {
+  return (
+    Array.isArray(actualRows) &&
+    Array.isArray(expectedRows) &&
+    actualRows.length === expectedRows.length &&
+    actualRows.every((actualRow, index) => {
+      const expectedRow = expectedRows[index];
+      return (
+        actualRow?.surfaceKey === expectedRow.surfaceKey &&
+        actualRow?.proofKey === expectedRow.proofKey
+      );
+    })
+  );
 }
 
 function assertCoreLoopHostModkillControlSurface({ hostModkillControlSurface }) {

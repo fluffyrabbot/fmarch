@@ -238,8 +238,10 @@ export function coreLoopRoleSurfaceProofCaseKeys() {
 
 export function coreLoopRoleSurfaceProofInventory() {
   return {
-    surfaceKeys: coreLoopRoleSurfaceProofCaseKeys(),
-    proofKeys: coreLoopRoleSurfaceProofCases.map(({ proofKey }) => proofKey),
+    rows: coreLoopRoleSurfaceProofCases.map(({ surfaceKey, proofKey }) => ({
+      surfaceKey,
+      proofKey,
+    })),
   };
 }
 
