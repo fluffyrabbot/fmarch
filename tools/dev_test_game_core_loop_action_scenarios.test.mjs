@@ -8,6 +8,8 @@ import {
   assertPlayerStaleVoteAfterTransitionProofCase,
   playerActionBoundaryLaneId,
   playerActionLoopLaneId,
+  playerActionSubmissionAckCheckpointPassed,
+  playerActionSubmissionAckCheckpointRows,
   playerFactionalKillActionCommandFacts,
   playerActionSubmissionScenario,
   playerInvalidActionRecoveryLaneId,
@@ -184,6 +186,37 @@ test("player action submission assertion covers factional kill ACK", () => {
   );
 });
 
+test("player action submission checkpoint rows are scenario-owned", () => {
+  const proof = playerActionSubmissionClickProofFixture();
+  const playerRoleSurface = {
+    playerActionSubmissionClickProof: proof,
+  };
+
+  assert.equal(
+    playerActionSubmissionAckCheckpointPassed(playerRoleSurface),
+    true,
+  );
+  assert.deepEqual(
+    playerActionSubmissionAckCheckpointRows({
+      cycleId: "d02-n02",
+      playerRoleSurface,
+    }),
+    ["d02-n02-player-action-submission-ack-checkpoint"],
+  );
+  assert.deepEqual(
+    playerActionSubmissionAckCheckpointRows({
+      cycleId: "d02-n02",
+      playerRoleSurface: {
+        playerActionSubmissionClickProof: {
+          ...proof,
+          receiptStatusText: "Ack: stream seqs 500",
+        },
+      },
+    }),
+    [],
+  );
+});
+
 test("player invalid-action recovery assertion covers InvalidTarget refresh", () => {
   const scenario = playerInvalidActionRecoveryScenario();
   const proof = {
@@ -243,6 +276,24 @@ test("player invalid-action recovery assertion covers InvalidTarget refresh", ()
     /player invalid-action recovery/,
   );
 });
+
+function playerActionSubmissionClickProofFixture() {
+  const scenario = playerActionSubmissionScenario();
+  return {
+    status: "passed",
+    commandKind: scenario.commandKind,
+    commandStatus: {
+      state: scenario.finalState,
+    },
+    bridgePlan: {
+      finalState: scenario.finalState,
+    },
+    checkpointReceiptState: `ack:${scenario.streamSeq}`,
+    checkpointActionStateAfterAck: scenario.checkpointActionState,
+    receiptCount: 1,
+    receiptStatusText: `Ack: stream seqs ${scenario.streamSeq}`,
+  };
+}
 
 test("player stale vote recovery assertion covers PhaseLocked transition reject", () => {
   const scenario = staleDayTwoVoteAfterTransitionRecoveryScenario();

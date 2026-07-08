@@ -1,5 +1,7 @@
 import {
+  hostAdvancePhaseTransitionCase,
   hostControlRaceScenarioCases,
+  hostDeadlineAffordanceForPhaseState,
   hostLifecycleControlScenario,
   hostModkillControlScenario,
 } from "./dev_test_game_core_loop_host_phase_scenarios.mjs";
@@ -104,6 +106,106 @@ export function hostPhaseAdvanceTransitionFeatureSpineRow({ cycleId }) {
     adminCheckId: "core-loop",
     featureTargetKind: hostPhaseAdvanceTransitionFeatureTargetKind,
   };
+}
+
+export function hostControlRoleSurfaceCheckpointRows({
+  cycleId,
+  hostRoleSurface,
+  hostPhaseTransitionSurface,
+} = {}) {
+  const rows = [];
+  if (hostLifecycleControlCheckpointPassed(hostRoleSurface)) {
+    rows.push(`${cycleId}-${hostLifecycleControlCheckpointId}`);
+  }
+  if (hostLifecycleControlLockedCheckpointPassed(hostRoleSurface)) {
+    rows.push(`${cycleId}-${hostLifecycleControlLockedCheckpointId}`);
+  }
+  if (hostLifecycleControlUnlockedCheckpointPassed(hostRoleSurface)) {
+    rows.push(`${cycleId}-${hostLifecycleControlUnlockedCheckpointId}`);
+  }
+  if (hostLifecycleControlStaleRejectCheckpointPassed(hostRoleSurface)) {
+    rows.push(`${cycleId}-${hostLifecycleControlStaleRejectCheckpointId}`);
+  }
+  if (hostPhaseAdvanceTransitionCheckpointPassed(hostPhaseTransitionSurface)) {
+    rows.push(`${cycleId}-${hostPhaseAdvanceTransitionCheckpointId}`);
+  }
+  return rows;
+}
+
+export function hostLifecycleControlCheckpointPassed(surface) {
+  const scenario = hostLifecycleControlScenario();
+  const checkpoint = surface?.hostLifecycleControlCheckpoint;
+  return (
+    surface?.status === "passed" &&
+    surface.clickedThroughFromRoleUrl === true &&
+    surface.checkpointTestId === scenario.checkpointTestId &&
+    checkpoint?.proofCheckId === scenario.proofCheckId
+  );
+}
+
+export function hostLifecycleControlLockedCheckpointPassed(surface) {
+  const scenario = hostLifecycleControlScenario();
+  const proof = surface?.hostLifecycleControlClickProof;
+  return (
+    proof?.status === "passed" &&
+    proof.commandKind === scenario.commandKind &&
+    proof.checkpointPhaseStateAfterAck === scenario.lockedPhaseState &&
+    proof.checkpointDeadlineAffordanceAfterAck ===
+      scenario.lockedDeadlineAffordance
+  );
+}
+
+export function hostLifecycleControlUnlockedCheckpointPassed(surface) {
+  const scenario = hostLifecycleControlScenario();
+  const proof = surface?.hostLifecycleUnlockProof;
+  return (
+    proof?.status === "passed" &&
+    proof.commandKind === scenario.unlockCommandKind &&
+    proof.checkpointPhaseStateAfterAck === scenario.openPhaseState &&
+    proof.checkpointDeadlineAffordanceAfterAck ===
+      scenario.openDeadlineAffordance
+  );
+}
+
+export function hostLifecycleControlStaleRejectCheckpointPassed(surface) {
+  const scenario = hostLifecycleControlScenario();
+  const proof = surface?.hostLifecycleStaleRejectProof;
+  return (
+    proof?.status === "passed" &&
+    proof.commandKind === scenario.commandKind &&
+    proof.commandStatus?.state === "reject" &&
+    proof.commandStatus?.error === "PhaseLocked" &&
+    proof.bridgePlan?.finalState === "reject" &&
+    proof.bridgePlan?.projectionRefreshKeys?.[0] === "host" &&
+    proof.checkpointPhaseStateAfterReject === scenario.openPhaseState &&
+    proof.checkpointDeadlineAffordanceAfterReject ===
+      scenario.openDeadlineAffordance &&
+    String(proof.recoveryText ?? "").includes("Reject PhaseLocked")
+  );
+}
+
+export function hostPhaseAdvanceTransitionCheckpointPassed(surface) {
+  const advanceCase = hostAdvancePhaseTransitionCase({
+    streamSeq: 802,
+    expectedPhaseId: "N02",
+  });
+  const proof = surface?.advanceProof;
+  return (
+    surface?.status === "passed" &&
+    surface.clickedThroughFromRoleUrl === true &&
+    proof?.status === "passed" &&
+    proof.commandKind === advanceCase.commandKind &&
+    proof.commandStatus?.state === "ack" &&
+    proof.commandOutcome?.state === "ack" &&
+    proof.bridgePlan?.finalState === "ack" &&
+    proof.checkpointPhaseId === advanceCase.expectedPhaseId &&
+    proof.checkpointPhaseState === advanceCase.expectedPhaseState &&
+    proof.checkpointDeadlineAffordance ===
+      hostDeadlineAffordanceForPhaseState(advanceCase.expectedPhaseState) &&
+    String(surface.transition ?? "").includes(
+      `${advanceCase.actionId}:ack:${advanceCase.streamSeq}`,
+    )
+  );
 }
 
 export function coreLoopHostControlScenarioFamily() {

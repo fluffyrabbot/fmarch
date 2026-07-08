@@ -37,6 +37,33 @@ export function playerActionSubmissionAckFeatureSpineRow({ cycleId }) {
   };
 }
 
+export function playerActionSubmissionAckCheckpointRows({
+  cycleId,
+  playerRoleSurface,
+} = {}) {
+  if (playerActionSubmissionAckCheckpointPassed(playerRoleSurface)) {
+    return [`${cycleId}-${playerActionSubmissionAckCheckpointId}`];
+  }
+  return [];
+}
+
+export function playerActionSubmissionAckCheckpointPassed(surface) {
+  const scenario = playerActionSubmissionScenario();
+  const proof = surface?.playerActionSubmissionClickProof;
+  return (
+    proof?.status === "passed" &&
+    proof.commandKind === scenario.commandKind &&
+    proof.commandStatus?.state === scenario.finalState &&
+    proof.bridgePlan?.finalState === scenario.finalState &&
+    proof.checkpointReceiptState?.startsWith("ack:") &&
+    proof.checkpointActionStateAfterAck === scenario.checkpointActionState &&
+    proof.receiptCount === 1 &&
+    String(proof.receiptStatusText ?? "").includes(
+      `Ack: stream seqs ${scenario.streamSeq}`,
+    )
+  );
+}
+
 export function invalidActionRecoveryFeatureSpineRow({ cycleId }) {
   return {
     targetKey: "invalidActionRecovery",

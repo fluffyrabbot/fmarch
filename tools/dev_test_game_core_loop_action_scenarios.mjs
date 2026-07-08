@@ -10,6 +10,8 @@ export {
   playerActionBoundaryLaneId,
   playerActionBoundaryRecoveryHookId,
   playerActionLoopLaneId,
+  playerActionSubmissionAckCheckpointPassed,
+  playerActionSubmissionAckCheckpointRows,
   playerActionSubmissionScenario,
   playerFactionalKillActionCommandFacts,
   playerInvalidActionRecoveryMessage,

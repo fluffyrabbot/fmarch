@@ -25,7 +25,7 @@ import {
   assertPlayerStaleVoteAfterTransitionProofCase,
 } from "./dev_test_game_core_loop_action_scenarios.mjs";
 import {
-  playerActionSubmissionAckCheckpointId,
+  playerActionSubmissionAckCheckpointRows,
   playerActionSubmissionScenario,
   playerInvalidActionRecoveryScenario,
   staleNightFourActionRecoveryScenario,
@@ -120,12 +120,8 @@ import {
 } from "./dev_test_game_core_loop_day_five_progression_scenarios.mjs";
 import {
   coreLoopHostControlFamilyId,
+  hostControlRoleSurfaceCheckpointRows,
   hostControlRaceScenarioCases,
-  hostLifecycleControlCheckpointId,
-  hostLifecycleControlLockedCheckpointId,
-  hostLifecycleControlStaleRejectCheckpointId,
-  hostLifecycleControlUnlockedCheckpointId,
-  hostPhaseAdvanceTransitionCheckpointId,
   coreLoopHostControlScenarioFamily,
 } from "./dev_test_game_core_loop_host_control_scenarios.mjs";
 import {
@@ -180,104 +176,19 @@ const roleSurfaceSpineCheckpointRows = ({
   normalNightActionResolutionPrivacySurface,
 } = {}) => {
   const rows = [];
-  if (
-    hostRoleSurface?.status === "passed" &&
-    hostRoleSurface.clickedThroughFromRoleUrl === true &&
-    hostRoleSurface.checkpointTestId === hostLifecycleControlCheckpointId &&
-    hostRoleSurface.hostLifecycleControlCheckpoint?.proofCheckId ===
-      "host-lifecycle-control"
-  ) {
-    rows.push(
-      `${coreLoopHostLifecycleControlCycleId}-${hostLifecycleControlCheckpointId}`,
-    );
-  }
-  if (
-    hostRoleSurface?.hostLifecycleControlClickProof?.status === "passed" &&
-    hostRoleSurface.hostLifecycleControlClickProof.commandKind === "LockThread" &&
-    hostRoleSurface.hostLifecycleControlClickProof.checkpointPhaseStateAfterAck ===
-      "locked" &&
-    hostRoleSurface.hostLifecycleControlClickProof
-      .checkpointDeadlineAffordanceAfterAck === "unlock_thread,advance_phase"
-  ) {
-    rows.push(
-      `${coreLoopHostLifecycleControlCycleId}-${hostLifecycleControlLockedCheckpointId}`,
-    );
-  }
-  if (
-    hostRoleSurface?.hostLifecycleUnlockProof?.status === "passed" &&
-    hostRoleSurface.hostLifecycleUnlockProof.commandKind === "UnlockThread" &&
-    hostRoleSurface.hostLifecycleUnlockProof.checkpointPhaseStateAfterAck ===
-      "open" &&
-    hostRoleSurface.hostLifecycleUnlockProof
-      .checkpointDeadlineAffordanceAfterAck === "resolve_phase,lock_thread"
-  ) {
-    rows.push(
-      `${coreLoopHostLifecycleControlCycleId}-${hostLifecycleControlUnlockedCheckpointId}`,
-    );
-  }
-  if (
-    hostRoleSurface?.hostLifecycleStaleRejectProof?.status === "passed" &&
-    hostRoleSurface.hostLifecycleStaleRejectProof.commandKind === "LockThread" &&
-    hostRoleSurface.hostLifecycleStaleRejectProof.commandStatus?.state ===
-      "reject" &&
-    hostRoleSurface.hostLifecycleStaleRejectProof.commandStatus?.error ===
-      "PhaseLocked" &&
-    hostRoleSurface.hostLifecycleStaleRejectProof.bridgePlan?.finalState ===
-      "reject" &&
-    hostRoleSurface.hostLifecycleStaleRejectProof.bridgePlan
-      ?.projectionRefreshKeys?.[0] === "host" &&
-    hostRoleSurface.hostLifecycleStaleRejectProof
-      .checkpointPhaseStateAfterReject === "open" &&
-    hostRoleSurface.hostLifecycleStaleRejectProof
-      .checkpointDeadlineAffordanceAfterReject === "resolve_phase,lock_thread" &&
-    String(hostRoleSurface.hostLifecycleStaleRejectProof.recoveryText ?? "")
-      .includes("Reject PhaseLocked")
-  ) {
-    rows.push(
-      `${coreLoopHostLifecycleControlCycleId}-${hostLifecycleControlStaleRejectCheckpointId}`,
-    );
-  }
-  if (
-    hostPhaseTransitionSurface?.status === "passed" &&
-    hostPhaseTransitionSurface.clickedThroughFromRoleUrl === true &&
-    hostPhaseTransitionSurface.advanceProof?.status === "passed" &&
-    hostPhaseTransitionSurface.advanceProof.commandKind === "AdvancePhase" &&
-    hostPhaseTransitionSurface.advanceProof.commandStatus?.state === "ack" &&
-    hostPhaseTransitionSurface.advanceProof.commandOutcome?.state === "ack" &&
-    hostPhaseTransitionSurface.advanceProof.bridgePlan?.finalState === "ack" &&
-    hostPhaseTransitionSurface.advanceProof.checkpointPhaseId === "N02" &&
-    hostPhaseTransitionSurface.advanceProof.checkpointPhaseState === "open" &&
-    hostPhaseTransitionSurface.advanceProof.checkpointDeadlineAffordance ===
-      "resolve_phase,lock_thread" &&
-    String(hostPhaseTransitionSurface.transition ?? "").includes(
-      "advance_phase:ack:802",
-    )
-  ) {
-    rows.push(
-      `${coreLoopHostLifecycleControlCycleId}-${hostPhaseAdvanceTransitionCheckpointId}`,
-    );
-  }
-  if (
-    playerRoleSurface?.playerActionSubmissionClickProof?.status === "passed" &&
-    playerRoleSurface.playerActionSubmissionClickProof.commandKind ===
-      "SubmitAction" &&
-    playerRoleSurface.playerActionSubmissionClickProof.commandStatus?.state ===
-      "ack" &&
-    playerRoleSurface.playerActionSubmissionClickProof.bridgePlan?.finalState ===
-      "ack" &&
-    playerRoleSurface.playerActionSubmissionClickProof.checkpointReceiptState
-      ?.startsWith("ack:") &&
-    playerRoleSurface.playerActionSubmissionClickProof
-      .checkpointActionStateAfterAck === "disabled:no legal action available" &&
-    playerRoleSurface.playerActionSubmissionClickProof.receiptCount === 1 &&
-    String(
-      playerRoleSurface.playerActionSubmissionClickProof.receiptStatusText ?? "",
-    ).includes("Ack: stream seqs 501")
-  ) {
-    rows.push(
-      `${coreLoopHostLifecycleControlCycleId}-${playerActionSubmissionAckCheckpointId}`,
-    );
-  }
+  rows.push(
+    ...hostControlRoleSurfaceCheckpointRows({
+      cycleId: coreLoopHostLifecycleControlCycleId,
+      hostRoleSurface,
+      hostPhaseTransitionSurface,
+    }),
+  );
+  rows.push(
+    ...playerActionSubmissionAckCheckpointRows({
+      cycleId: coreLoopHostLifecycleControlCycleId,
+      playerRoleSurface,
+    }),
+  );
   rows.push(
     ...nightActionResolutionPrivateReceiptCheckpointRows({
       cycleId: coreLoopHostLifecycleControlCycleId,
