@@ -21306,6 +21306,21 @@ function coreLoopSpineRowsFixture() {
   };
 }
 
+function coreLoopCompletedRecoveryRowsFixture(proof) {
+  const rows = completedGameEndgameRecoveryFeatureSpineRows({
+    cycleId: "d05-n05",
+  });
+  return {
+    rows,
+    roleUrlHrefs: Object.fromEntries(
+      rows.map((row) => [
+        row.roleUrlId,
+        proof.completedGameEndgameSurface[row.proofField].sourceRoleUrl,
+      ]),
+    ),
+  };
+}
+
 function coreLoopAdminProofFixture() {
   const completedGameHardeningCoverageStatus =
     completedGameHardeningCoverageStatusFixture();
@@ -22169,18 +22184,10 @@ function privateChannelRoleSurfaceFixture() {
 function coreLoopSpineTargetsFixture() {
   const rowIds = coreLoopSpineRowsFixture();
   const proof = coreLoopAdminProofFixture();
-  const completedRecoveryRows = completedGameEndgameRecoveryFeatureSpineRows({
-    cycleId: "d05-n05",
-  });
-  const completedRecoveryRoleUrlHrefs = Object.fromEntries(
-    completedRecoveryRows.map((row) => [
-      row.roleUrlId,
-      proof.completedGameEndgameSurface[row.proofField].sourceRoleUrl,
-    ]),
-  );
+  const completedRecovery = coreLoopCompletedRecoveryRowsFixture(proof);
   const roleUrlHrefs = {
     ...rowIds.roleUrlHrefs,
-    ...completedRecoveryRoleUrlHrefs,
+    ...completedRecovery.roleUrlHrefs,
   };
   return {
     status: "passed",
@@ -22194,12 +22201,12 @@ function coreLoopSpineTargetsFixture() {
     cycleIds: [...rowIds.cycles],
     roleUrlIds: [
       ...rowIds.roleUrls,
-      ...completedRecoveryRows.map((row) => row.roleUrlId),
+      ...completedRecovery.rows.map((row) => row.roleUrlId),
     ],
     checkpointIds: [
       ...rowIds.checkpoints,
       ...rowIds.roleSurfaceCheckpoints,
-      ...completedRecoveryRows.map((row) => row.checkpointId),
+      ...completedRecovery.rows.map((row) => row.checkpointId),
     ],
     recoveryHookIds: [...rowIds.recoveryHooks],
     visibleAdminCheckIds: [...coreLoopAdminCheckIds],
