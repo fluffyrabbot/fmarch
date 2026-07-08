@@ -22,8 +22,7 @@ import {
   devTestGameProofRunPath,
 } from "./dev_test_game_spine_artifact_paths.mjs";
 import {
-  selectedLocalDependencyTerminalReceiptRows,
-  selectedLocalDependencyTerminalReceiptRowStatuses,
+  terminalReceiptContractRegistry,
 } from "./dev_test_game_terminal_receipts.mjs";
 
 const adminSpineProofPath = path.resolve(
@@ -94,8 +93,8 @@ await runAdminAuditProof({
     const requiredTerminalValidationIds = adminSpineTerminalValidationIds(
       source.adminSpineTerminalBatches,
     );
-    const requiredSelectedLocalDependencyRows =
-      adminSpineSelectedLocalDependencyTerminalReceiptRows(
+    const terminalReceiptRequirements =
+      adminSpineTerminalReceiptProofRequirements(
         source.adminSpineTerminalBatches,
       );
     return await proveAdminAuditDetail({
@@ -113,12 +112,7 @@ await runAdminAuditProof({
       requiredAdminSpineTerminalValidationStatuses: Object.fromEntries(
         requiredTerminalValidationIds.map((id) => [id, "passed"]),
       ),
-      requiredSelectedLocalDependencyTerminalReceiptRows:
-        requiredSelectedLocalDependencyRows,
-      requiredSelectedLocalDependencyTerminalReceiptRowStatuses:
-        adminSpineSelectedLocalDependencyTerminalReceiptRowStatuses(
-          source.adminSpineTerminalBatches,
-        ),
+      ...terminalReceiptRequirements.params,
     });
   },
   buildEvidence: ({ source, adminRoleSurface }) => ({
@@ -173,9 +167,9 @@ await runAdminAuditProof({
         id: validation.id,
         command: validation.command,
       })),
-      selectedLocalDependencyTerminalReceipt:
-        source.adminSpineTerminalBatches?.selectedLocalDependencyTerminalReceipt ??
-        null,
+      terminalReceiptRequirements: adminSpineTerminalReceiptProofRequirements(
+        source.adminSpineTerminalBatches,
+      ).summary,
       relatedAuditIds: requiredRelatedLinks,
     },
     adminRoleSurface,
@@ -218,22 +212,36 @@ function adminSpineTerminalValidationIds(terminalBatches) {
   );
 }
 
-function adminSpineSelectedLocalDependencyTerminalReceiptRows(terminalBatches) {
-  const receipt = terminalBatches?.selectedLocalDependencyTerminalReceipt;
-  if (receipt === null || typeof receipt !== "object") {
-    return [];
+function adminSpineTerminalReceiptProofRequirements(terminalBatches) {
+  const params = {};
+  const summary = [];
+  for (const contract of terminalReceiptContractRegistry) {
+    const receipt = terminalBatches?.[contract.terminalBatchesKey];
+    if (receipt === null || typeof receipt !== "object") {
+      params[contract.adminAuditProofRowsParam] = [];
+      params[contract.adminAuditProofRowStatusesParam] = {};
+      continue;
+    }
+    const rowStatuses = contract.rowStatusForReceipt(receipt);
+    const rowIds = Object.keys(rowStatuses);
+    params[contract.adminAuditProofRowsParam] = rowIds;
+    params[contract.adminAuditProofRowStatusesParam] = rowStatuses;
+    summary.push({
+      id: contract.id,
+      label: contract.label,
+      terminalBatchesKey: contract.terminalBatchesKey,
+      adminAuditProofRowsParam: contract.adminAuditProofRowsParam,
+      adminAuditProofRowStatusesParam:
+        contract.adminAuditProofRowStatusesParam,
+      adminAuditVisibleRowsKey: contract.adminAuditVisibleRowsKey,
+      adminAuditVisibleRowStatusesKey:
+        contract.adminAuditVisibleRowStatusesKey,
+      status: String(receipt.status ?? ""),
+      rowIds,
+      rowStatuses,
+    });
   }
-  return selectedLocalDependencyTerminalReceiptRows(receipt);
-}
-
-function adminSpineSelectedLocalDependencyTerminalReceiptRowStatuses(
-  terminalBatches,
-) {
-  const receipt = terminalBatches?.selectedLocalDependencyTerminalReceipt;
-  if (receipt === null || typeof receipt !== "object") {
-    return {};
-  }
-  return selectedLocalDependencyTerminalReceiptRowStatuses(receipt);
+  return { params, summary };
 }
 
 export function assertAdminSpineAdminProof(evidence) {
@@ -308,6 +316,34 @@ export function assertAdminSpineAdminProof(evidence) {
       throw new Error(
         `admin spine admin proof missing terminal validation status: ${validationId}`,
       );
+    }
+  }
+  for (const receiptRequirement of evidence.generatedFrom
+    ?.terminalReceiptRequirements ?? []) {
+    assertVisibleAdminRoleSurfaceRows({
+      adminRoleSurface: evidence.adminRoleSurface,
+      rowIds: receiptRequirement.rowIds,
+      proofName: "admin spine admin proof",
+      rowName: `${receiptRequirement.id} row`,
+      surfaceKey: receiptRequirement.adminAuditVisibleRowsKey,
+    });
+    const visibleStatuses =
+      evidence.adminRoleSurface?.[
+        receiptRequirement.adminAuditVisibleRowStatusesKey
+      ] ?? {};
+    for (const rowId of receiptRequirement.rowIds ?? []) {
+      const visibleText = visibleStatuses[rowId] ?? "";
+      const expectedText = receiptRequirement.rowStatuses?.[rowId] ?? "";
+      if (
+        typeof visibleText !== "string" ||
+        visibleText.trim() === "" ||
+        expectedText === "" ||
+        visibleText !== expectedText
+      ) {
+        throw new Error(
+          `admin spine admin proof missing ${receiptRequirement.id} row status: ${rowId}`,
+        );
+      }
     }
   }
   return evidence;

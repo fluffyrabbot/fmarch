@@ -9022,6 +9022,10 @@ test("terminal receipt contract registry covers browser proof consumers", () => 
       contract.label,
       contract.terminalBatchesKey,
       contract.diagnosticStatusKey,
+      contract.adminAuditProofRowsParam,
+      contract.adminAuditProofRowStatusesParam,
+      contract.adminAuditVisibleRowsKey,
+      contract.adminAuditVisibleRowStatusesKey,
       contract.rowTestIdPrefix,
       contract.browserProofConsumers.map((consumer) => [
         consumer.id,
@@ -9035,6 +9039,10 @@ test("terminal receipt contract registry covers browser proof consumers", () => 
         "selected-local-dependency",
         "selectedLocalDependencyTerminalReceipt",
         "selectedLocalDependencyTerminalReceiptStatus",
+        "requiredSelectedLocalDependencyTerminalReceiptRows",
+        "requiredSelectedLocalDependencyTerminalReceiptRowStatuses",
+        "visibleSelectedLocalDependencyTerminalReceiptRows",
+        "visibleSelectedLocalDependencyTerminalReceiptRowStatuses",
         "admin-audit-selected-local-dependency-terminal",
         [
           [
@@ -9049,6 +9057,10 @@ test("terminal receipt contract registry covers browser proof consumers", () => 
         "selected-operator-handoff",
         "selectedOperatorHandoffReceipt",
         "selectedOperatorHandoffReceiptStatus",
+        "requiredSelectedOperatorHandoffTerminalReceiptRows",
+        "requiredSelectedOperatorHandoffTerminalReceiptRowStatuses",
+        "visibleSelectedOperatorHandoffTerminalReceiptRows",
+        "visibleSelectedOperatorHandoffTerminalReceiptRowStatuses",
         "admin-audit-selected-operator-handoff-terminal",
         [
           [
@@ -9087,6 +9099,19 @@ test("terminal receipt contract registry covers browser proof consumers", () => 
     ).size,
     terminalReceiptContractRegistry.length,
   );
+  for (const key of [
+    "adminAuditProofRowsParam",
+    "adminAuditProofRowStatusesParam",
+    "adminAuditVisibleRowsKey",
+    "adminAuditVisibleRowStatusesKey",
+  ]) {
+    assert.equal(
+      new Set(
+        terminalReceiptContractRegistry.map((contract) => contract[key]),
+      ).size,
+      terminalReceiptContractRegistry.length,
+    );
+  }
   for (const contract of terminalReceiptContractRegistry) {
     assert(contract.rowDefinitions.length > 0);
     assert.equal(
@@ -9097,6 +9122,14 @@ test("terminal receipt contract registry covers browser proof consumers", () => 
     assert.notEqual(contract.terminalBatchesKey.trim(), "");
     assert.equal(typeof contract.diagnosticStatusKey, "string");
     assert.notEqual(contract.diagnosticStatusKey.trim(), "");
+    assert.equal(typeof contract.adminAuditProofRowsParam, "string");
+    assert.notEqual(contract.adminAuditProofRowsParam.trim(), "");
+    assert.equal(typeof contract.adminAuditProofRowStatusesParam, "string");
+    assert.notEqual(contract.adminAuditProofRowStatusesParam.trim(), "");
+    assert.equal(typeof contract.adminAuditVisibleRowsKey, "string");
+    assert.notEqual(contract.adminAuditVisibleRowsKey.trim(), "");
+    assert.equal(typeof contract.adminAuditVisibleRowStatusesKey, "string");
+    assert.notEqual(contract.adminAuditVisibleRowStatusesKey.trim(), "");
     assert(contract.browserProofConsumers.length > 0);
     for (const definition of contract.rowDefinitions) {
       assert(definition.testId.startsWith(`${contract.rowTestIdPrefix}-`));
@@ -26912,6 +26945,9 @@ function hostedTargetPreflightRequiredEvidence(id) {
 }
 
 function adminSpineAdminProofFixture() {
+  const terminalBatches = adminSpineTerminalBatchesFixture();
+  const terminalReceiptRequirements =
+    terminalReceiptRequirementFixtureSummaries(terminalBatches);
   return {
     version: 1,
     proof: "dev-test-game-admin-spine-admin-proof",
@@ -26966,6 +27002,7 @@ function adminSpineAdminProofFixture() {
           command: devTestGameReleaseAdminProofContractCommand,
         },
       ],
+      terminalReceiptRequirements,
     },
     adminRoleSurface: {
       status: "passed",
@@ -27012,11 +27049,46 @@ function adminSpineAdminProofFixture() {
           `${releaseAdminProofLocalDiagnosticIds().length} diagnostics`,
         ].join(" "),
       },
+      ...terminalReceiptAdminRoleSurfaceFixtureFields(terminalBatches),
       rawInviteTokensVisible: false,
       releaseReady: false,
       productionReady: false,
     },
   };
+}
+
+function terminalReceiptRequirementFixtureSummaries(terminalBatches) {
+  return terminalReceiptContractRegistry.map((contract) => {
+    const receipt = terminalBatches[contract.terminalBatchesKey];
+    const rowStatuses = contract.rowStatusForReceipt(receipt);
+    return {
+      id: contract.id,
+      label: contract.label,
+      terminalBatchesKey: contract.terminalBatchesKey,
+      adminAuditProofRowsParam: contract.adminAuditProofRowsParam,
+      adminAuditProofRowStatusesParam:
+        contract.adminAuditProofRowStatusesParam,
+      adminAuditVisibleRowsKey: contract.adminAuditVisibleRowsKey,
+      adminAuditVisibleRowStatusesKey:
+        contract.adminAuditVisibleRowStatusesKey,
+      status: receipt.status,
+      rowIds: Object.keys(rowStatuses),
+      rowStatuses,
+    };
+  });
+}
+
+function terminalReceiptAdminRoleSurfaceFixtureFields(terminalBatches) {
+  return Object.fromEntries(
+    terminalReceiptContractRegistry.flatMap((contract) => {
+      const receipt = terminalBatches[contract.terminalBatchesKey];
+      const rowStatuses = contract.rowStatusForReceipt(receipt);
+      return [
+        [contract.adminAuditVisibleRowsKey, Object.keys(rowStatuses)],
+        [contract.adminAuditVisibleRowStatusesKey, rowStatuses],
+      ];
+    }),
+  );
 }
 
 function adminSpineTerminalBatchesFixture() {
