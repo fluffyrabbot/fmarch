@@ -298,7 +298,9 @@ export function buildPlayerPhaseView(commandState) {
     label,
     state,
     deadlineLabel:
-      typeof phase.deadline === "number" ? formatDeadline(phase.deadline) : "",
+      typeof phase.deadline === "number"
+        ? formatDeadline(phase.deadline)
+        : "No deadline committed",
     summary: `${label} is ${state}.`,
   });
 }

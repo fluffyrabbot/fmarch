@@ -15,9 +15,11 @@
 </script>
 
 <section class="player-surface__thread" aria-label="Thread">
-  <div class="player-surface__deadline fm-card" data-testid="player-deadline">
-    {phase.deadlineLabel}
-  </div>
+  {#if phase.deadlineLabel}
+    <div class="player-surface__deadline fm-card" data-testid="player-deadline">
+      {phase.deadlineLabel}
+    </div>
+  {/if}
 
   {#if liveOfficialPost !== null}
     <aside

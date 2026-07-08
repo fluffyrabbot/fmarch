@@ -163,13 +163,19 @@
 
 .host-console-critical-path__lifecycle-checkpoint header {
   align-items: start;
-  display: grid;
+  display: flex;
+  flex-wrap: wrap;
   gap: 12px;
-  grid-template-columns: minmax(0, 1fr) auto;
+  justify-content: space-between;
+  /* not grid: an intrinsic status column is maximized before the 1fr
+     title column, collapsing the title to 0px in the 360px rail and
+     overlaying the texts; wrapping lets the status yield below */
 }
 
 .host-console-critical-path__lifecycle-checkpoint-status {
   margin: 0;
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
 }
 
 .host-console-critical-path__invite-status {
@@ -270,10 +276,6 @@
   }
 
   .host-console-critical-path__queues {
-    grid-template-columns: 1fr;
-  }
-
-  .host-console-critical-path__lifecycle-checkpoint header {
     grid-template-columns: 1fr;
   }
 
