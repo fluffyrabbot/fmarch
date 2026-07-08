@@ -24,6 +24,37 @@ export const selectedOperatorHandoffGraphRelationship =
   "selected-operator-handoff";
 export const selectedOperatorHandoffRelatedLinkId =
   "selected-operator-handoff";
+export const selectedOperatorHandoffTerminalReceiptRowTestIdPrefix =
+  "admin-audit-selected-operator-handoff-terminal";
+export const selectedOperatorHandoffTerminalReceiptRowDefinitions =
+  Object.freeze([
+    Object.freeze({
+      id: "receipt",
+      summaryRowId: "summary",
+      testId: `${selectedOperatorHandoffTerminalReceiptRowTestIdPrefix}-receipt`,
+    }),
+    Object.freeze({
+      id: "selected",
+      summaryRowId: "selected-operator-handoff",
+      testId: `${selectedOperatorHandoffTerminalReceiptRowTestIdPrefix}-selected`,
+    }),
+    Object.freeze({
+      id: "packet",
+      summaryRowId: "selected-operator-handoff-packet",
+      testId: `${selectedOperatorHandoffTerminalReceiptRowTestIdPrefix}-packet`,
+    }),
+    Object.freeze({
+      id: "edge",
+      summaryRowId: "proof-graph-edge",
+      testId: `${selectedOperatorHandoffTerminalReceiptRowTestIdPrefix}-edge`,
+    }),
+    Object.freeze({
+      id: "readiness-link",
+      summaryRowId: "readiness-related-link",
+      testId:
+        `${selectedOperatorHandoffTerminalReceiptRowTestIdPrefix}-readiness-link`,
+    }),
+  ]);
 
 export function selectedOperatorHandoffFromNextAction(nextAction) {
   const packet =
@@ -195,11 +226,11 @@ export function assertSelectedOperatorHandoffTerminalReceipt(
 export function selectedOperatorHandoffTerminalReceiptDestinationFields(
   receipt,
 ) {
-  const rowFields = selectedOperatorHandoffTerminalReceiptRowFields(receipt);
   return {
     selectedOperatorHandoffReceiptId: receipt.id,
     selectedOperatorHandoffReceiptStatus: receipt.status,
-    requiredSelectedOperatorHandoffTerminalReceiptRows: Object.keys(rowFields),
+    requiredSelectedOperatorHandoffTerminalReceiptRows:
+      selectedOperatorHandoffTerminalReceiptRows(receipt),
     requiredSelectedOperatorHandoffTerminalReceiptRowStatuses:
       selectedOperatorHandoffTerminalReceiptRowStatuses(receipt),
   };
@@ -274,6 +305,24 @@ export function selectedOperatorHandoffTerminalReceiptRowStatuses(receipt) {
         id,
         selectedOperatorHandoffRowStatusText(fields),
       ]),
+    ),
+  );
+}
+
+export function selectedOperatorHandoffTerminalReceiptRows(receipt) {
+  const rowFields = selectedOperatorHandoffTerminalReceiptRowFields(receipt);
+  return selectedOperatorHandoffTerminalReceiptRowDefinitions
+    .filter((definition) => rowFields[definition.id] !== undefined)
+    .map((definition) => definition.id);
+}
+
+export function selectedOperatorHandoffTerminalReceiptRowDefinitionsForReceipt(
+  receipt,
+) {
+  const rowFields = selectedOperatorHandoffTerminalReceiptRowFields(receipt);
+  return Object.freeze(
+    selectedOperatorHandoffTerminalReceiptRowDefinitions.filter(
+      (definition) => rowFields[definition.id] !== undefined,
     ),
   );
 }

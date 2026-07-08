@@ -108,6 +108,7 @@ import {
   proofGraphPrerequisiteDestinationSectionId,
 } from "../../../../tools/dev_test_game_proof_graph_prerequisite_destination_rows.mjs";
 import {
+  selectedOperatorHandoffTerminalReceiptRowDefinitionsForReceipt,
   selectedOperatorHandoffTerminalReceiptRowFields,
   selectedOperatorHandoffTerminalReceiptId,
 } from "../../../../tools/dev_test_game_selected_operator_handoff_receipt.mjs";
@@ -452,42 +453,29 @@ function selectedOperatorHandoffTerminalReceiptSummarySections(receipt) {
     return [];
   }
   const rowFields = selectedOperatorHandoffTerminalReceiptRowFields(receipt);
+  const rowDefinitions =
+    selectedOperatorHandoffTerminalReceiptRowDefinitionsForReceipt(receipt);
   return [
     buildArtifactSummarySection({
       id: "selected-operator-handoff-terminal-receipt",
       heading: "Selected operator handoff receipt",
-      rows: [
+      rows: rowDefinitions.map((definition) =>
         selectedOperatorHandoffTerminalReceiptSummaryRow({
-          rowId: "receipt",
-          fields: rowFields.receipt,
+          definition,
+          fields: rowFields[definition.id],
         }),
-        ...Object.entries({
-          selected: "selected-operator-handoff",
-          packet: "selected-operator-handoff-packet",
-          edge: "proof-graph-edge",
-          "readiness-link": "readiness-related-link",
-        })
-          .filter(([rowId]) => rowFields[rowId] !== undefined)
-          .map(([rowId, summaryRowId]) =>
-            selectedOperatorHandoffTerminalReceiptSummaryRow({
-              rowId,
-              summaryRowId,
-              fields: rowFields[rowId],
-            }),
-          ),
-      ],
+      ),
     }),
   ];
 }
 
 function selectedOperatorHandoffTerminalReceiptSummaryRow({
-  rowId,
-  summaryRowId = "summary",
+  definition,
   fields,
 }) {
   return {
-    id: summaryRowId,
-    testId: `admin-audit-selected-operator-handoff-terminal-${rowId}`,
+    id: definition.summaryRowId,
+    testId: definition.testId,
     values: fields.map((field) => ({
       id: field.id,
       text: field.value,

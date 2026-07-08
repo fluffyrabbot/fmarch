@@ -35,6 +35,9 @@ import {
   proofGraphHandoffPhaseOutputArtifactTestId,
   proofGraphHandoffPhaseOutputRowTestIdPrefix,
 } from "./dev_test_game_handoff_phase_outputs.mjs";
+import {
+  selectedOperatorHandoffTerminalReceiptRowTestIdPrefix,
+} from "./dev_test_game_selected_operator_handoff_receipt.mjs";
 export {
   normalizedEvidenceObjectRowIds,
 } from "./dev_test_game_normalized_evidence_object_rows.mjs";
@@ -1010,7 +1013,7 @@ export async function proveAdminAuditDetail({
     const visibleSelectedOperatorHandoffTerminalReceiptRows =
       await waitForRows({
         page,
-        prefix: "admin-audit-selected-operator-handoff-terminal",
+        prefix: selectedOperatorHandoffTerminalReceiptRowTestIdPrefix,
         ids: requiredSelectedOperatorHandoffTerminalReceiptRows,
         expectedStatuses:
           requiredSelectedOperatorHandoffTerminalReceiptRowStatuses,
@@ -1018,7 +1021,7 @@ export async function proveAdminAuditDetail({
     const visibleSelectedOperatorHandoffTerminalReceiptRowStatuses =
       await readRowStatuses({
         page,
-        prefix: "admin-audit-selected-operator-handoff-terminal",
+        prefix: selectedOperatorHandoffTerminalReceiptRowTestIdPrefix,
         ids: Object.keys(
           requiredSelectedOperatorHandoffTerminalReceiptRowStatuses,
         ),
@@ -1418,7 +1421,7 @@ export async function proveAdminAuditDetail({
       const destinationVisibleSelectedOperatorHandoffTerminalReceiptRows =
         await waitForRows({
           page,
-          prefix: "admin-audit-selected-operator-handoff-terminal",
+          prefix: selectedOperatorHandoffTerminalReceiptRowTestIdPrefix,
           ids:
             destination.requiredSelectedOperatorHandoffTerminalReceiptRows ??
             [],
@@ -1429,7 +1432,7 @@ export async function proveAdminAuditDetail({
       const destinationVisibleSelectedOperatorHandoffTerminalReceiptRowStatuses =
         await readRowStatuses({
           page,
-          prefix: "admin-audit-selected-operator-handoff-terminal",
+          prefix: selectedOperatorHandoffTerminalReceiptRowTestIdPrefix,
           ids: Object.keys(
             destination.requiredSelectedOperatorHandoffTerminalReceiptRowStatuses ??
               {},

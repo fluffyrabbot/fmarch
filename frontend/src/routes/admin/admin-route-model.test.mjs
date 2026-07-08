@@ -232,6 +232,7 @@ import {
 } from "../../../../tools/dev_test_game_next_action_sequence_handoff_pair.mjs";
 import {
   buildSelectedOperatorHandoffTerminalReceipt,
+  selectedOperatorHandoffTerminalReceiptRowDefinitionsForReceipt,
   selectedOperatorHandoffTerminalReceiptRowFields,
   selectedOperatorHandoffTerminalReceiptRowStatuses,
 } from "../../../../tools/dev_test_game_selected_operator_handoff_receipt.mjs";
@@ -2618,24 +2619,23 @@ test("admin local admin spine detail uses shared selected operator terminal rece
   const section = data.audit.artifactSummarySections.find(
     (candidate) => candidate.id === "selected-operator-handoff-terminal-receipt",
   );
-  const renderedRows = Object.fromEntries(
-    section.rows.map((row) => [
-      row.testId.replace(
-        "admin-audit-selected-operator-handoff-terminal-",
-        "",
-      ),
-      row,
-    ]),
-  );
   const rowFields = selectedOperatorHandoffTerminalReceiptRowFields(receipt);
   const rowStatuses =
     selectedOperatorHandoffTerminalReceiptRowStatuses(receipt);
+  const rowDefinitions =
+    selectedOperatorHandoffTerminalReceiptRowDefinitionsForReceipt(receipt);
   assert.deepEqual(
-    Object.keys(renderedRows),
-    Object.keys(rowFields),
+    section.rows.map((row) => [row.id, row.testId]),
+    rowDefinitions.map((definition) => [
+      definition.summaryRowId,
+      definition.testId,
+    ]),
   );
-  for (const [rowId, fields] of Object.entries(rowFields)) {
-    const renderedRow = renderedRows[rowId];
+  for (const definition of rowDefinitions) {
+    const renderedRow = section.rows.find(
+      (row) => row.testId === definition.testId,
+    );
+    const fields = rowFields[definition.id];
     assert.deepEqual(
       renderedRow.values.map((value) => [
         value.id,
@@ -2650,7 +2650,7 @@ test("admin local admin spine detail uses shared selected operator terminal rece
     );
     assert.equal(
       renderedRow.values.map((value) => value.text).join("\n"),
-      rowStatuses[rowId],
+      rowStatuses[definition.id],
     );
   }
 });
