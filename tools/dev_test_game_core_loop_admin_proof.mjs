@@ -145,6 +145,7 @@ import {
   buildCoreLoopRoleProofUrls,
   coreLoopRoleSurfaceProofCases,
   coreLoopRoleSurfaceProofEvidence,
+  coreLoopRoleSurfaceProofInventory,
 } from "./dev_test_game_core_loop_role_surface_proof_cases.mjs";
 import {
   coreLoopAdminCheckIds,
@@ -464,6 +465,7 @@ export function coreLoopAdminProofCase() {
           game: proofRun.session.game,
           coreLoopSpineStatus: coreLoopSpineStatus(proofRun),
           coreLoopSpineRows: requiredSpineRows(proofRun, surfaces),
+          coreLoopRoleSurfaceProofs: coreLoopRoleSurfaceProofInventory(),
           completedGameHardeningCoverage:
             proofRun.completedGameHardeningCoverage,
           completedGameHardeningCoverageStatus:

@@ -4,6 +4,7 @@ import {
   coreLoopRoleSurfaceProofCases,
   coreLoopRoleSurfaceProofEvidenceKeys,
   coreLoopRoleSurfaceProofCaseKeys,
+  coreLoopRoleSurfaceProofInventory,
 } from "./dev_test_game_core_loop_role_surface_proof_cases.mjs";
 
 test("core loop admin proof role surfaces have one declarative serial order", () => {
@@ -41,4 +42,8 @@ test("core loop admin proof role surfaces have one declarative serial order", ()
     coreLoopRoleSurfaceProofEvidenceKeys({ omit: ["hostRoleSurface"] }),
     caseKeys.slice(1),
   );
+  assert.deepEqual(coreLoopRoleSurfaceProofInventory(), {
+    surfaceKeys: caseKeys,
+    proofKeys: coreLoopRoleSurfaceProofCases.map(({ proofKey }) => proofKey),
+  });
 });

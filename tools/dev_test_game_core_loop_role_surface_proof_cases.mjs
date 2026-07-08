@@ -236,6 +236,13 @@ export function coreLoopRoleSurfaceProofCaseKeys() {
   return coreLoopRoleSurfaceProofCases.map(({ surfaceKey }) => surfaceKey);
 }
 
+export function coreLoopRoleSurfaceProofInventory() {
+  return {
+    surfaceKeys: coreLoopRoleSurfaceProofCaseKeys(),
+    proofKeys: coreLoopRoleSurfaceProofCases.map(({ proofKey }) => proofKey),
+  };
+}
+
 export function coreLoopRoleSurfaceProofEvidenceKeys({ omit = [] } = {}) {
   const omittedKeys = new Set(omit);
   return coreLoopRoleSurfaceProofCaseKeys().filter(

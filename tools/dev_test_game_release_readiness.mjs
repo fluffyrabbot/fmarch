@@ -158,7 +158,7 @@ import {
   assertCoreLoopCommandProofRoleUrls,
 } from "./dev_test_game_core_loop_proof_shape_assertions.mjs";
 import {
-  coreLoopRoleSurfaceProofCaseKeys,
+  coreLoopRoleSurfaceProofInventory,
 } from "./dev_test_game_core_loop_role_surface_proof_cases.mjs";
 import {
   devTestGameHostedOpsSignalsAdminProofPath,
@@ -3769,7 +3769,15 @@ function assertCoreLoopHostLifecycleCheckpoint(hostRoleSurface) {
 }
 
 function assertCoreLoopRoleSurfaceProofInventory(proof) {
-  for (const surfaceKey of coreLoopRoleSurfaceProofCaseKeys()) {
+  const expectedInventory = coreLoopRoleSurfaceProofInventory();
+  const actualInventory = proof?.generatedFrom?.coreLoopRoleSurfaceProofs;
+  if (
+    !sameStringArray(actualInventory?.surfaceKeys, expectedInventory.surfaceKeys) ||
+    !sameStringArray(actualInventory?.proofKeys, expectedInventory.proofKeys)
+  ) {
+    throw new Error("core-loop admin proof role-surface inventory drifted");
+  }
+  for (const surfaceKey of expectedInventory.surfaceKeys) {
     if (
       proof?.[surfaceKey] === null ||
       typeof proof?.[surfaceKey] !== "object" ||

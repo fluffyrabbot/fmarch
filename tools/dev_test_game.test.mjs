@@ -45,7 +45,7 @@ import {
   coreLoopGeneratedFromScenarioFamilies,
 } from "./dev_test_game_core_loop_generated_from_families.mjs";
 import {
-  coreLoopRoleSurfaceProofCaseKeys,
+  coreLoopRoleSurfaceProofInventory,
 } from "./dev_test_game_core_loop_role_surface_proof_cases.mjs";
 import {
   buildCoreLoopCommandProofRoleUrlAudit,
@@ -6412,14 +6412,19 @@ test("dev test-game next-action prioritizes development-spine recovery over mani
 
 test("dev test-game proof graph records local proof role URLs and recovery edges", () => {
   const coreLoopProof = coreLoopAdminProofFixture();
+  const roleSurfaceProofInventory = coreLoopRoleSurfaceProofInventory();
   assert.deepEqual(
-    coreLoopRoleSurfaceProofCaseKeys().filter(
+    coreLoopProof.generatedFrom.coreLoopRoleSurfaceProofs,
+    roleSurfaceProofInventory,
+  );
+  assert.deepEqual(
+    roleSurfaceProofInventory.surfaceKeys.filter(
       (surfaceKey) =>
         coreLoopProof[surfaceKey] !== null &&
         typeof coreLoopProof[surfaceKey] === "object" &&
         !Array.isArray(coreLoopProof[surfaceKey]),
     ),
-    coreLoopRoleSurfaceProofCaseKeys(),
+    roleSurfaceProofInventory.surfaceKeys,
   );
   const adminSpineProof = adminSpineProofFixture();
   const validatedAdminSpineProof = validateDevTestGameAdminSpineProof(
@@ -21148,6 +21153,7 @@ function coreLoopAdminProofFixture() {
         "passed: D01 -> N01 -> D02, vote ack, N02 action ack, next D03, terminal advance InvalidTarget, reload D03, revote D03R1 via no_majority_continue_revote, revote vote ack, revote resolve ack, second revote D03R2 via no_majority_continue_revote, second vote ack, second resolve ack, policy no_majority_no_lynch -> N03",
       completedGameHardeningCoverageStatus,
       ...coreLoopGeneratedFromScenarioFamilies(),
+      coreLoopRoleSurfaceProofs: coreLoopRoleSurfaceProofInventory(),
       coreLoopSpineRows: {
         cycles: [
           "d01-n01-d02",
