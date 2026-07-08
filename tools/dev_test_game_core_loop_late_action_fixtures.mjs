@@ -10,9 +10,15 @@ import {
   dayFourNoLynchResolutionSurfaceCase,
 } from "./dev_test_game_core_loop_no_lynch_progression_scenarios.mjs";
 import {
+  staleNightFourActionRecoveryScenario,
+} from "./dev_test_game_core_loop_action_scenario_cases.mjs";
+import {
   nightFourNoActionResolutionSurfaceCase,
   nightFourNoActionSurfaceCase,
 } from "./dev_test_game_core_loop_late_action_progression_scenarios.mjs";
+import {
+  postNightFourTransitionSurfaceCase,
+} from "./dev_test_game_core_loop_post_night_four_transition_scenarios.mjs";
 
 export function lateLoopDayVoteOutcomesFixture() {
   return [
@@ -266,6 +272,17 @@ export function postNightFourTransitionSurfaceFixture({
   game = "00000000-0000-0000-0000-000000000002",
   dayVoteOutcomes = lateLoopDayVoteOutcomesFixture(),
 } = {}) {
+  const surfaceCase = postNightFourTransitionSurfaceCase();
+  const hostAdvanceCase = surfaceCase.hostAdvanceCase;
+  const deadPlayerCase = playerObservationCaseForProofField(
+    surfaceCase,
+    "deadPlayerDayFiveProof",
+  );
+  const actionPlayerCase = playerObservationCaseForProofField(
+    surfaceCase,
+    "actionPlayerDayFiveProof",
+  );
+  const staleActionCase = staleNightFourActionRecoveryScenario();
   const baseRoleUrl = `http://127.0.0.1:5173/g/${game}`;
   return {
     status: "passed",
@@ -273,21 +290,22 @@ export function postNightFourTransitionSurfaceFixture({
     sourceActionPlayerRoleUrl: baseRoleUrl,
     sourceDeadPlayerRoleUrl: `${baseRoleUrl}?private=notification-1`,
     clickedThroughFromRoleUrl: true,
-    transition:
-      "host:N04:advance_phase:ack:917 -> deadPlayer:D05:dead_no_controls -> actionPlayer:D05:no_lynch_controls -> stale:N04:submit_action:reject:PhaseLocked",
+    transition: surfaceCase.transitionFragments.join(" -> "),
     hostAdvanceProof: seededCoreLoopHostSurfaceFixture({
       game,
-      setupResyncFromSeq: 916,
-      setupPhaseId: "N04",
-      setupPhaseState: "locked",
+      setupResyncFromSeq: surfaceCase.hostAdvanceSetupResyncFromSeq,
+      setupPhaseId: surfaceCase.hostAdvanceSetupPhaseId,
+      setupPhaseState: surfaceCase.hostAdvanceSetupPhaseState,
       advanceProof: hostPhaseTransitionActionFixture({
-        actionId: "advance_phase",
-        commandKind: "AdvancePhase",
-        streamSeq: 917,
-        phaseId: "D05",
-        phaseState: "open",
-        deadlineAffordance: "resolve_phase,lock_thread",
-        projectionRefreshKeys: [],
+        actionId: hostAdvanceCase.actionId,
+        commandKind: hostAdvanceCase.commandKind,
+        streamSeq: hostAdvanceCase.streamSeq,
+        phaseId: hostAdvanceCase.expectedPhaseId,
+        phaseState: hostAdvanceCase.expectedPhaseState,
+        deadlineAffordance: hostDeadlineAffordanceForPhaseState(
+          hostAdvanceCase.expectedPhaseState,
+        ),
+        projectionRefreshKeys: hostAdvanceCase.expectedRefreshKeys,
         command: {
           game,
         },
@@ -297,42 +315,51 @@ export function postNightFourTransitionSurfaceFixture({
     deadPlayerDayFiveProof: seededCoreLoopPlayerSurfaceFixture({
       game,
       roleUrlSuffix: "?private=notification-1",
-      slotField: "deadPlayerSlot",
-      slot: "slot-3",
-      principalUserId: "player-seed",
-      phaseId: "D05",
-      phaseState: "open",
-      actorAlive: false,
-      actorStatus: "dead",
-      actionState: "disabled:actor is not alive",
-      statusText: "Player action unavailable: actor is not alive",
-      privateCount: 1,
-      privateReceipt: true,
-      privateReceiptStatus: "factional_kill",
-      privateReceiptPhaseId: "N02",
+      slotField: deadPlayerCase.slotField,
+      slot: deadPlayerCase.expectedSlot,
+      principalUserId: deadPlayerCase.expectedPrincipalUserId,
+      phaseId: deadPlayerCase.expectedPhaseId,
+      phaseState: deadPlayerCase.expectedPhaseState,
+      actorAlive: deadPlayerCase.expectedActorAlive,
+      actorStatus: deadPlayerCase.expectedActorStatus,
+      actionState: deadPlayerCase.expectedActionState,
+      statusText: `Player action unavailable: ${deadPlayerCase.expectedStatusText}`,
+      privateCount: deadPlayerCase.expectedPrivateCount,
+      privateReceipt: deadPlayerCase.expectedPrivateReceipt,
+      privateReceiptStatus: deadPlayerCase.expectedPrivateReceiptStatus,
+      privateReceiptPhaseId: deadPlayerCase.expectedPrivateReceiptPhaseId,
       boundary:
         "Seeded browser dead player stayed dead from the N02 factional kill after N04 advanced to Day 5.",
-      resyncFromSeq: 917,
+      resyncFromSeq: deadPlayerCase.expectedResyncFromSeq,
       dayVoteOutcomes,
     }),
     actionPlayerDayFiveProof: seededCoreLoopPlayerSurfaceFixture({
       game,
-      slotField: "actionPlayerSlot",
-      slot: "slot-7",
-      principalUserId: "player_mira",
-      phaseId: "D05",
-      phaseState: "open",
-      actorAlive: true,
-      actorStatus: "alive",
-      actionState: "disabled:no legal action available",
-      statusText: "Player action unavailable: no legal action available",
-      privateCount: 0,
-      privateReceipt: false,
+      slotField: actionPlayerCase.slotField,
+      slot: actionPlayerCase.expectedSlot,
+      principalUserId: actionPlayerCase.expectedPrincipalUserId,
+      phaseId: actionPlayerCase.expectedPhaseId,
+      phaseState: actionPlayerCase.expectedPhaseState,
+      actorAlive: actionPlayerCase.expectedActorAlive,
+      actorStatus: actionPlayerCase.expectedActorStatus,
+      actionState: actionPlayerCase.expectedActionState,
+      statusText: `Player action unavailable: ${actionPlayerCase.expectedStatusText}`,
+      privateCount: actionPlayerCase.expectedPrivateCount,
+      privateReceipt: actionPlayerCase.expectedPrivateReceipt,
       boundary:
         "Seeded browser action player observed open Day 5 no-lynch controls after Night 4 advanced.",
-      resyncFromSeq: 917,
-      voteButtonCount: 1,
-      voteTargets: [{ kind: "no_lynch", slotId: null, label: "No lynch" }],
+      resyncFromSeq: actionPlayerCase.expectedResyncFromSeq,
+      voteButtonCount: actionPlayerCase.expectedVoteButtonCount,
+      voteTargets:
+        actionPlayerCase.expectedVoteTargetCount > 0
+          ? [
+              {
+                kind: staleActionCase.refreshedVoteTargetKind,
+                slotId: null,
+                label: "No lynch",
+              },
+            ]
+          : [],
       dayVoteOutcomes,
     }),
     staleNightFourActionRecoveryProof: {
@@ -341,59 +368,58 @@ export function postNightFourTransitionSurfaceFixture({
       visitedRolePath: `/g/${game}`,
       surfaceTestId: "player-surface",
       clickedThroughFromRoleUrl: true,
-      clickedAction: "submit_action:factional_kill",
-      commandKind: "SubmitAction",
-      setupResyncFromSeq: 916,
+      clickedAction: staleActionCase.clickedAction,
+      commandKind: staleActionCase.commandKind,
+      setupResyncFromSeq: staleActionCase.setupResyncFromSeq,
       setupSnapshotCommandState: {
-        phase: { phaseId: "N04" },
-        actions: [{ targets: ["slot-5"] }],
+        phase: { phaseId: staleActionCase.setupPhaseId },
+        actions: [{ targets: [staleActionCase.targetSlot] }],
       },
       command: {
         game,
-        actor_slot: "slot-7",
-        action_id: "factional_kill",
-        template_id: "factional_kill",
-        targets: ["slot-5"],
-        grant_id: "grant-factional-kill-n04",
+        actor_slot: staleActionCase.actorSlot,
+        action_id: staleActionCase.actionId,
+        template_id: staleActionCase.templateId,
+        targets: [staleActionCase.targetSlot],
+        grant_id: staleActionCase.grantId,
       },
       commandStatus: {
-        state: "reject",
-        error: "PhaseLocked",
-        message:
-          "Reject PhaseLocked: phase locked; stale action state, refresh and use current action controls",
+        state: staleActionCase.finalState,
+        error: staleActionCase.error,
+        message: `Reject ${staleActionCase.error}: phase locked; ${staleActionCase.messageIncludes}`,
       },
       bridgePlan: {
         role: "player",
-        commandKind: "SubmitAction",
+        commandKind: staleActionCase.commandKind,
         commandEndpoint: "/commands",
-        finalState: "reject",
-        projectionRefreshKeys: [
-          "notifications",
-          "investigationResults",
-          "commandState",
-          "dayVoteOutcomes",
-        ],
+        finalState: staleActionCase.finalState,
+        projectionRefreshKeys: staleActionCase.expectedRefreshKeys,
       },
-      receipts: [{ state: "reject" }],
+      receipts: [{ state: staleActionCase.finalState }],
       projectionCommandState: {
-        actorSlot: "slot-7",
+        actorSlot: staleActionCase.actorSlot,
         phase: {
-          phaseId: "D05",
+          phaseId: staleActionCase.refreshedPhaseId,
           locked: false,
         },
         actions: [],
-        voteTargets: [{ kind: "no_lynch", slotId: null, label: "No lynch" }],
-        boundary:
-          "Seeded browser PhaseLocked stale N04 action refreshed into current Day 5 controls.",
+        voteTargets: [
+          {
+            kind: staleActionCase.refreshedVoteTargetKind,
+            slotId: null,
+            label: "No lynch",
+          },
+        ],
+        boundary: `Seeded browser ${staleActionCase.error} ${staleActionCase.refreshedBoundary}.`,
       },
-      checkpointReceiptState: "reject:PhaseLocked",
-      checkpointPhaseIdAfterReject: "D05",
-      checkpointActionStateAfterReject: "disabled:no legal action available",
-      checkpointTargetSlotsAfterReject: "",
+      checkpointReceiptState: staleActionCase.checkpointReceiptState,
+      checkpointPhaseIdAfterReject: staleActionCase.refreshedPhaseId,
+      checkpointActionStateAfterReject: staleActionCase.checkpointActionState,
+      checkpointTargetSlotsAfterReject: staleActionCase.checkpointTargetSlots,
       recoveryText:
-        "Stale recovery\nReject PhaseLocked: refresh and use current action controls.",
+        `Stale recovery\nReject ${staleActionCase.error}: refresh and use current action controls.`,
       receiptCount: 1,
-      receiptStatusText: "Reject PhaseLocked",
+      receiptStatusText: `Reject ${staleActionCase.error}`,
       rawInviteTokensVisible: false,
       targetOnlyReceiptVisible: false,
       releaseReady: false,
@@ -402,6 +428,16 @@ export function postNightFourTransitionSurfaceFixture({
     releaseReady: false,
     productionReady: false,
   };
+}
+
+function playerObservationCaseForProofField(surfaceCase, proofField) {
+  const playerCase = surfaceCase.playerObservationCases.find(
+    (candidate) => candidate.proofField === proofField,
+  );
+  if (playerCase === undefined) {
+    throw new Error(`missing post-Night 4 player observation case: ${proofField}`);
+  }
+  return playerCase;
 }
 
 function nightFourResolutionPlayerSurfaceFixture({
