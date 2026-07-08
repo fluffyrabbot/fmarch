@@ -2,6 +2,9 @@ import {
   playerActionSubmissionScenario,
 } from "./dev_test_game_core_loop_action_scenario_cases.mjs";
 import {
+  hostPhaseTransitionActionFixture,
+} from "./dev_test_game_core_loop_proof_fixtures.mjs";
+import {
   privateReceiptScenario,
 } from "./dev_test_game_core_loop_private_receipt_scenarios.mjs";
 
@@ -43,21 +46,269 @@ export function hostRoleSurfaceCheckpointFixture() {
   };
 }
 
-export function hostPhaseTransitionSurfaceFixture() {
+export function hostPhaseTransitionSurfaceFixture({
+  game = "game-a",
+} = {}) {
+  const baseRoleUrl = `http://127.0.0.1:5173/g/${game}`;
+  const hostRoleUrl = `${baseRoleUrl}/host`;
+  const hostRolePath = `/g/${game}/host`;
   return {
     status: "passed",
+    sourceHostRoleUrl: hostRoleUrl,
+    sourcePlayerRoleUrl: baseRoleUrl,
+    visitedHostRolePath: hostRolePath,
+    surfaceTestId: "host-console-surface",
     clickedThroughFromRoleUrl: true,
-    transition: "advance_phase:ack:802",
-    advanceProof: {
-      status: "passed",
+    transition: "resolve_phase:ack:801 -> advance_phase:ack:802 -> player:N02",
+    resolveProof: hostPhaseTransitionActionFixture({
+      sourceRoleUrl: hostRoleUrl,
+      visitedRolePath: hostRolePath,
+      actionId: "resolve_phase",
+      commandKind: "ResolvePhase",
+      streamSeq: 801,
+      phaseId: "D02",
+      phaseState: "locked",
+      deadlineAffordance: "unlock_thread,advance_phase",
+      projectionRefreshKeys: [
+        "host",
+        "votecount",
+        "dayVoteOutcomes",
+        "hostPrompts",
+      ],
+      command: {
+        game,
+        seed: 918273,
+      },
+    }),
+    advanceProof: hostPhaseTransitionActionFixture({
+      sourceRoleUrl: hostRoleUrl,
+      visitedRolePath: hostRolePath,
+      actionId: "advance_phase",
       commandKind: "AdvancePhase",
-      commandStatus: { state: "ack" },
-      commandOutcome: { state: "ack" },
-      bridgePlan: { finalState: "ack" },
+      streamSeq: 802,
+      phaseId: "N02",
+      phaseState: "open",
+      deadlineAffordance: "resolve_phase,lock_thread",
+      projectionRefreshKeys: [],
+      command: {
+        game,
+      },
+    }),
+    staleHostAdvanceRecoveryProof: {
+      status: "passed",
+      sourceRoleUrl: hostRoleUrl,
+      visitedRolePath: hostRolePath,
+      surfaceTestId: "host-console-surface",
+      setupResyncFromSeq: 801,
+      setupSnapshotHost: {
+        phase: {
+          id: "D02",
+          state: "locked",
+        },
+      },
+      clickedAction: "advance_phase",
+      commandKind: "AdvancePhase",
+      command: {
+        game,
+      },
+      commandStatus: {
+        state: "reject",
+        error: "InvalidTarget",
+        message:
+          "Reject InvalidTarget: invalid target; stale phase state, refresh and use current controls",
+      },
+      commandOutcome: {
+        state: "reject",
+        error: "InvalidTarget",
+        message:
+          "Reject InvalidTarget: invalid target; stale phase state, refresh and use current controls",
+      },
+      bridgePlan: {
+        role: "moderator",
+        commandKind: "AdvancePhase",
+        commandEndpoint: "/commands",
+        finalState: "reject",
+        projectionRefreshKeys: ["host"],
+      },
+      projection: {
+        phase: {
+          id: "N02",
+          state: "open",
+          locked: false,
+        },
+      },
+      checkpointPhaseIdAfterReject: "N02",
+      checkpointPhaseStateAfterReject: "open",
+      checkpointDeadlineAffordanceAfterReject: "resolve_phase,lock_thread",
+      activityStatusText:
+        "Reject InvalidTarget: invalid target; stale phase state, refresh and use current controls",
+      releaseReady: false,
+      productionReady: false,
+    },
+    playerObservationProof: {
+      status: "passed",
+      sourceRoleUrl: baseRoleUrl,
+      visitedRolePath: `/g/${game}`,
+      surfaceTestId: "player-surface",
+      resyncFromSeq: 802,
+      resyncKeys: [
+        "thread",
+        "votecount",
+        "dayVoteOutcomes",
+        "notifications",
+        "investigationResults",
+        "commandState",
+      ],
+      staleVoteRecoveryProof: {
+        status: "passed",
+        sourceRoleUrl: baseRoleUrl,
+        visitedRolePath: `/g/${game}`,
+        clickedAction: "submit_vote",
+        commandKind: "SubmitVote",
+        setupResyncFromSeq: 801,
+        setupSnapshotCommandState: {
+          phase: {
+            phaseId: "D02",
+          },
+          voteTargets: [
+            { kind: "slot", slotId: "slot-2", label: "Slot 2" },
+            { kind: "no_lynch", slotId: null, label: "No lynch" },
+          ],
+        },
+        command: {
+          game,
+          actor_slot: "slot-7",
+          target: { Slot: "slot-2" },
+        },
+        commandStatus: {
+          state: "reject",
+          error: "PhaseLocked",
+          message:
+            "Reject PhaseLocked: phase locked; stale vote state, refresh and use current vote controls",
+        },
+        bridgePlan: {
+          role: "player",
+          commandKind: "SubmitVote",
+          commandEndpoint: "/commands",
+          finalState: "reject",
+          projectionRefreshKeys: [
+            "votecount",
+            "commandState",
+            "dayVoteOutcomes",
+          ],
+        },
+        receipts: [
+          {
+            actionId: "submit_vote",
+            state: "reject",
+            message:
+              "Reject PhaseLocked: phase locked; stale vote state, refresh and use current vote controls",
+            current: true,
+          },
+        ],
+        projectionCommandState: {
+          phase: {
+            phaseId: "N02",
+          },
+          boundary:
+            "Seeded browser PhaseLocked recovery and player resync observed host AdvancePhase into Night 2.",
+        },
+        checkpointReceiptState: "reject:PhaseLocked",
+        checkpointPhaseIdAfterReject: "N02",
+        checkpointActionStateAfterReject: "enabled:submit_action:factional_kill",
+        checkpointTargetSlotsAfterReject: "slot-3",
+        recoveryText:
+          "Stale recovery\nReject PhaseLocked: refresh command state and use current action controls.",
+        receiptCount: 1,
+        receiptStatusText:
+          "Reject PhaseLocked: phase locked; stale vote state, refresh and use current vote controls",
+      },
+      staleActionRecoveryProof: {
+        status: "passed",
+        sourceRoleUrl: baseRoleUrl,
+        visitedRolePath: `/g/${game}`,
+        clickedAction: "submit_action:factional_kill",
+        commandKind: "SubmitAction",
+        command: {
+          game,
+          action_id: "factional_kill",
+          actor_slot: "slot-7",
+          template_id: "factional_kill",
+          targets: ["slot-3"],
+          grant_id: "grant-factional-kill",
+        },
+        commandStatus: {
+          state: "reject",
+          error: "PhaseLocked",
+          message:
+            "Reject PhaseLocked: phase locked; stale action state, refresh and use current action controls",
+        },
+        bridgePlan: {
+          role: "player",
+          commandKind: "SubmitAction",
+          commandEndpoint: "/commands",
+          finalState: "reject",
+          projectionRefreshKeys: [
+            "notifications",
+            "investigationResults",
+            "commandState",
+          ],
+        },
+        receipts: [
+          {
+            actionId: "submit_vote",
+            state: "reject",
+            message:
+              "Reject PhaseLocked: phase locked; stale vote state, refresh and use current vote controls",
+            current: false,
+          },
+          {
+            actionId: "submit_action:factional_kill",
+            state: "reject",
+            message:
+              "Reject PhaseLocked: phase locked; stale action state, refresh and use current action controls",
+            current: true,
+          },
+        ],
+        projectionCommandState: {
+          phase: {
+            phaseId: "N02",
+          },
+          boundary:
+            "Seeded browser PhaseLocked recovery and player resync observed host AdvancePhase into Night 2.",
+        },
+        checkpointReceiptState: "reject:PhaseLocked",
+        checkpointPhaseIdAfterReject: "N02",
+        checkpointActionStateAfterReject: "enabled:submit_action:factional_kill",
+        checkpointTargetSlotsAfterReject: "slot-3",
+        recoveryText:
+          "Stale recovery\nReject PhaseLocked: refresh command state and use current action controls.",
+        receiptCount: 2,
+        receiptStatusText:
+          "Reject PhaseLocked: phase locked; stale action state, refresh and use current action controls",
+      },
+      resyncSnapshotCommandState: {
+        phase: {
+          phaseId: "N02",
+        },
+      },
+      projectionCommandState: {
+        phase: {
+          phaseId: "N02",
+        },
+        boundary:
+          "Seeded browser PhaseLocked recovery and player resync observed host AdvancePhase into Night 2.",
+      },
       checkpointPhaseId: "N02",
       checkpointPhaseState: "open",
-      checkpointDeadlineAffordance: "resolve_phase,lock_thread",
+      checkpointActionState: "enabled:submit_action:factional_kill",
+      checkpointTargetSlots: "slot-3",
+      checkpointReceiptState: "reject:PhaseLocked",
+      releaseReady: false,
+      productionReady: false,
     },
+    releaseReady: false,
+    productionReady: false,
   };
 }
 
