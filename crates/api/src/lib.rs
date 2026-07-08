@@ -2126,6 +2126,10 @@ async fn available_vote_targets(
             label: slot_label(&slot.slot_id),
         })
         .collect();
+    targets.sort_by(|a, b| {
+        slot_sort_key(a.slot_id.as_deref().unwrap_or_default())
+            .cmp(&slot_sort_key(b.slot_id.as_deref().unwrap_or_default()))
+    });
     if pack.vote.no_lynch_allowed {
         targets.push(PlayerVoteTarget {
             kind: "no_lynch".to_string(),
@@ -2205,6 +2209,21 @@ async fn available_role_actions(
         .collect())
 }
 
+/// Canonical candidate ordering: sort by the trailing slot ordinal (so `slot_10`
+/// sorts after `slot_2`), separator-agnostic, with the raw id as a stable
+/// tiebreak. `slot_state` returns rows `ORDER BY slot_id`, which is
+/// Postgres-collation dependent for raw TEXT ids; sorting candidates here makes
+/// the default target (`target_options.first()` and the first vote candidate)
+/// deterministic across environments regardless of hyphen/underscore separators.
+fn slot_sort_key(slot_id: &str) -> (u64, &str) {
+    let ordinal = slot_id
+        .rsplit(|c| c == '-' || c == '_')
+        .next()
+        .and_then(|tail| tail.parse::<u64>().ok())
+        .unwrap_or(u64::MAX);
+    (ordinal, slot_id)
+}
+
 fn target_options_for_action(
     action: &domain::pack::ActionTemplate,
     slots: &[projections::SlotStateRow],
@@ -2217,7 +2236,7 @@ fn target_options_for_action(
         .constraints
         .target_state
         .unwrap_or(domain::pack::TargetState::Alive);
-    slots
+    let mut options: Vec<String> = slots
         .iter()
         .filter(|slot| {
             if !action.constraints.self_allowed && slot.slot_id == actor.slot_id {
@@ -2230,7 +2249,9 @@ fn target_options_for_action(
             }
         })
         .map(|slot| slot.slot_id.clone())
-        .collect()
+        .collect();
+    options.sort_by(|a, b| slot_sort_key(a).cmp(&slot_sort_key(b)));
+    options
 }
 
 fn default_targets_for_action(
@@ -2336,6 +2357,15 @@ mod tests {
         assert_eq!(phase_number_for_id("D03R1").unwrap(), 3);
         assert_eq!(phase_number_for_id("N12R2").unwrap(), 12);
         assert!(phase_number_for_id("DR1").is_err());
+    }
+
+    #[test]
+    fn slot_sort_key_orders_candidates_by_numeric_ordinal() {
+        let mut slots = vec!["slot_10", "slot-2", "slot_1", "slot-3"];
+        slots.sort_by(|a, b| slot_sort_key(a).cmp(&slot_sort_key(b)));
+        // Numeric, not lexical (lexical would sort "slot_10" before "slot-2"), and
+        // separator-agnostic so mixed hyphen/underscore ids interleave by ordinal.
+        assert_eq!(slots, ["slot_1", "slot-2", "slot-3", "slot_10"]);
     }
 }
 
