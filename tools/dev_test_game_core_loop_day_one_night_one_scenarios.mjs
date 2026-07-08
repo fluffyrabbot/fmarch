@@ -14,6 +14,13 @@ import {
 } from "./dev_test_game_player_recovery_scenarios.mjs";
 
 export const dayOneNightOneDayTwoCycleId = "d01-n01-d02";
+export const dayOneNightOneDayTwoRoleIds = Object.freeze([
+  "host",
+  "actionPlayer",
+  "target",
+  "normalPlayer",
+  "privateChannel",
+]);
 export const staleLockedVoteRecoveryHookId = "staleLockedVoteReject";
 export const staleActionConflictRecoveryHookId = "staleActionConflictReject";
 
@@ -173,6 +180,13 @@ export function dayOneNightOneFeatureSpineRows({
   return dayOneNightOneCheckpointCaseDefinitions.map((scenario) =>
     cloneFeatureRow(featureRowFromCase(scenario, { cycleId })),
   );
+}
+
+export function dayOneNightOneDayTwoRoleUrlKey(roleId) {
+  if (!dayOneNightOneDayTwoRoleIds.includes(roleId)) {
+    throw new Error(`unknown day one night one role id: ${roleId}`);
+  }
+  return `${dayOneNightOneDayTwoCycleId}-${roleId}`;
 }
 
 export function assertDayOneNightOneCheckpointEvidence({

@@ -123,6 +123,9 @@ import {
   dayTwoNightTwoRoleUrlKey,
 } from "./dev_test_game_core_loop_day_two_night_two_scenarios.mjs";
 import {
+  dayOneNightOneDayTwoRoleUrlKey,
+} from "./dev_test_game_core_loop_day_one_night_one_scenarios.mjs";
+import {
   coreLoopHostControlFamilyId,
   hostControlRoleSurfaceCheckpointRows,
   hostControlRaceScenarioCases,
@@ -206,6 +209,13 @@ const dayTwoNightTwoRoleUrlsFrom = (roleUrlHrefs) => ({
   actionPlayer: roleUrlHrefs[dayTwoNightTwoRoleUrlKey("actionPlayer")],
   target: roleUrlHrefs[dayTwoNightTwoRoleUrlKey("target")],
   normalPlayer: roleUrlHrefs[dayTwoNightTwoRoleUrlKey("normalPlayer")],
+});
+
+const dayOneNightOneDayTwoRoleUrlsFrom = (roleUrlHrefs) => ({
+  target: roleUrlHrefs[dayOneNightOneDayTwoRoleUrlKey("target")],
+  normalPlayer: roleUrlHrefs[dayOneNightOneDayTwoRoleUrlKey("normalPlayer")],
+  privateChannel:
+    roleUrlHrefs[dayOneNightOneDayTwoRoleUrlKey("privateChannel")],
 });
 
 const requiredSpineRows = (proofRun, proofSurfaces = {}) => {
@@ -379,6 +389,9 @@ export function coreLoopAdminProofCase() {
       const dayTwoNightTwoRoleUrls = dayTwoNightTwoRoleUrlsFrom(
         spineRows.roleUrlHrefs,
       );
+      const dayOneNightOneDayTwoRoleUrls = dayOneNightOneDayTwoRoleUrlsFrom(
+        spineRows.roleUrlHrefs,
+      );
       const hostRoleSurface = await proveHostLifecycleControlCheckpoint({
         browser,
         frontendBaseUrl,
@@ -395,7 +408,7 @@ export function coreLoopAdminProofCase() {
           browser,
           frontendBaseUrl,
           roleUrl: targetResolutionReceiptRoleUrl(
-            spineRows.roleUrlHrefs["d01-n01-d02-target"],
+            dayOneNightOneDayTwoRoleUrls.target,
           ),
         });
       const normalResolutionPrivacySurface =
@@ -403,7 +416,7 @@ export function coreLoopAdminProofCase() {
           browser,
           frontendBaseUrl,
           roleUrl: normalResolutionPrivacyRoleUrl(
-            spineRows.roleUrlHrefs["d01-n01-d02-normalPlayer"],
+            dayOneNightOneDayTwoRoleUrls.normalPlayer,
           ),
         });
       const targetDayVoteReceiptSurface = await proveTargetDayVoteReceiptSurface({
@@ -545,7 +558,7 @@ export function coreLoopAdminProofCase() {
         browser,
         frontendBaseUrl,
         roleUrl:
-          spineRows.roleUrlHrefs["d01-n01-d02-privateChannel"] ??
+          dayOneNightOneDayTwoRoleUrls.privateChannel ??
           privateChannelRoleUrlFromPlayerRoleUrl(
             dayTwoNightTwoRoleUrls.actionPlayer,
           ),

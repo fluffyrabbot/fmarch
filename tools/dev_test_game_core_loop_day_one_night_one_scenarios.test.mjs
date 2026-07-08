@@ -5,6 +5,8 @@ import {
   assertDayOneNightOneCheckpointEvidence,
   dayOneNightOneCheckpointCases,
   dayOneNightOneDayTwoCycleId,
+  dayOneNightOneDayTwoRoleIds,
+  dayOneNightOneDayTwoRoleUrlKey,
   dayOneNightOneFeatureSpineRows,
   staleActionConflictRecoveryHookId,
   staleLockedVoteRecoveryHookId,
@@ -80,6 +82,14 @@ test("Day 1 Night 1 cases share feature rows and checkpoint expectations", () =>
       checkpointId: "d01-n01-d02-n01-action-open",
       recoveryHookId: staleActionConflictRecoveryHookId,
       adminCheckId: playerActionLoopLaneId,
+    },
+    {
+      targetKey: "dayTwoControlsReturn",
+      featureSlotId: "day-two-controls-return",
+      cycleId: "d01-n01-d02",
+      role: "actionPlayer",
+      checkpointId: "d01-n01-d02-d02-day-controls-return",
+      adminCheckId: "core-loop",
     },
   ]);
   assert.deepEqual(
@@ -167,7 +177,50 @@ test("Day 1 Night 1 cases share feature rows and checkpoint expectations", () =>
           actionButtonVisible: true,
         },
       ],
+      [
+        "day-two-controls-return",
+        "d02-day-controls-return",
+        undefined,
+        undefined,
+        {
+          phase: "D02",
+          locked: false,
+          advanceState: "ack",
+          actionSubmitControls: 0,
+          actionVoteControls: 3,
+          normalVoteControls: 3,
+        },
+      ],
     ],
+  );
+});
+
+test("Day 1 Night 1 Day 2 role URL keys are scenario-owned", () => {
+  assert.deepEqual(dayOneNightOneDayTwoRoleIds, [
+    "host",
+    "actionPlayer",
+    "target",
+    "normalPlayer",
+    "privateChannel",
+  ]);
+  assert.deepEqual(
+    Object.fromEntries(
+      dayOneNightOneDayTwoRoleIds.map((roleId) => [
+        roleId,
+        dayOneNightOneDayTwoRoleUrlKey(roleId),
+      ]),
+    ),
+    {
+      host: "d01-n01-d02-host",
+      actionPlayer: "d01-n01-d02-actionPlayer",
+      target: "d01-n01-d02-target",
+      normalPlayer: "d01-n01-d02-normalPlayer",
+      privateChannel: "d01-n01-d02-privateChannel",
+    },
+  );
+  assert.throws(
+    () => dayOneNightOneDayTwoRoleUrlKey("observer"),
+    /unknown day one night one role id/,
   );
 });
 
