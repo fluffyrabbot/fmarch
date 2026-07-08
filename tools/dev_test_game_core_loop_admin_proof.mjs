@@ -25,7 +25,6 @@ import {
   assertPlayerStaleVoteAfterTransitionProofCase,
 } from "./dev_test_game_core_loop_action_scenarios.mjs";
 import {
-  playerActionSubmissionAckCheckpointRows,
   playerActionSubmissionScenario,
   playerInvalidActionRecoveryScenario,
   staleNightFourActionRecoveryScenario,
@@ -77,7 +76,6 @@ import {
   assertTargetResolutionReceiptSurfaceProof,
   coreLoopPrivateReceiptSurfaceFamilyId,
   coreLoopPrivateReceiptSurfaceScenarioFamily,
-  nightActionResolutionPrivateReceiptCheckpointRows,
 } from "./dev_test_game_core_loop_private_receipt_surface_scenarios.mjs";
 import {
   assertNormalPostDayVoteAdvanceSurfaceProof,
@@ -119,14 +117,13 @@ import {
   coreLoopDayFiveProgressionScenarioFamily,
 } from "./dev_test_game_core_loop_day_five_progression_scenarios.mjs";
 import {
-  dayTwoNightTwoCycleId,
-} from "./dev_test_game_core_loop_day_two_night_two_scenarios.mjs";
-import {
   coreLoopHostControlFamilyId,
-  hostControlRoleSurfaceCheckpointRows,
   hostControlRaceScenarioCases,
   coreLoopHostControlScenarioFamily,
 } from "./dev_test_game_core_loop_host_control_scenarios.mjs";
+import {
+  coreLoopRoleSurfaceSpineCheckpointRows,
+} from "./dev_test_game_core_loop_role_surface_checkpoint_rows.mjs";
 import {
   coreLoopCompletedEndgameProgressionFamilyId,
   coreLoopCompletedEndgameProgressionScenarioFamily,
@@ -175,37 +172,6 @@ const proofRunRelativePath = path.relative(repoRoot, proofRunPath);
 const evidencePath = path.join(repoRoot, devTestGameCoreLoopAdminProofPath);
 const requiredChecks = coreLoopAdminCheckIds;
 
-const roleSurfaceSpineCheckpointRows = ({
-  hostRoleSurface,
-  hostPhaseTransitionSurface,
-  playerRoleSurface,
-  nightActionResolutionReceiptSurface,
-  normalNightActionResolutionPrivacySurface,
-} = {}) => {
-  const rows = [];
-  rows.push(
-    ...hostControlRoleSurfaceCheckpointRows({
-      cycleId: dayTwoNightTwoCycleId,
-      hostRoleSurface,
-      hostPhaseTransitionSurface,
-    }),
-  );
-  rows.push(
-    ...playerActionSubmissionAckCheckpointRows({
-      cycleId: dayTwoNightTwoCycleId,
-      playerRoleSurface,
-    }),
-  );
-  rows.push(
-    ...nightActionResolutionPrivateReceiptCheckpointRows({
-      cycleId: dayTwoNightTwoCycleId,
-      nightActionResolutionReceiptSurface,
-      normalNightActionResolutionPrivacySurface,
-    }),
-  );
-  return rows;
-};
-
 const requiredSpineRows = (proofRun, proofSurfaces = {}) => {
   const cycles = Array.isArray(proofRun?.coreLoopSpine?.cycles)
     ? proofRun.coreLoopSpine.cycles
@@ -230,7 +196,8 @@ const requiredSpineRows = (proofRun, proofSurfaces = {}) => {
         (checkpoint) => `${String(cycle.id)}-${String(checkpoint.id)}`,
       ),
     ),
-    roleSurfaceCheckpoints: roleSurfaceSpineCheckpointRows(proofSurfaces),
+    roleSurfaceCheckpoints:
+      coreLoopRoleSurfaceSpineCheckpointRows(proofSurfaces),
     recoveryHooks: Object.keys(proofRun?.coreLoopSpine?.recoveryHooks ?? {}),
   };
 };
@@ -10052,7 +10019,7 @@ export function assertCoreLoopAdminProof(evidence) {
   );
   assertVisibleRows(
     "core-loop admin proof missing role-surface spine checkpoint",
-    roleSurfaceSpineCheckpointRows({
+    coreLoopRoleSurfaceSpineCheckpointRows({
       hostRoleSurface: evidence.hostRoleSurface,
       hostPhaseTransitionSurface: evidence.hostPhaseTransitionSurface,
       playerRoleSurface: evidence.playerRoleSurface,
