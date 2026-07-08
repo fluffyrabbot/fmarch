@@ -1501,6 +1501,10 @@ const AUDIT_PROJECTIONS: &[AuditProjection] = &[
         order_by: "phase_id, actor_slot",
     },
     AuditProjection {
+        table: "game_result",
+        order_by: "game_id",
+    },
+    AuditProjection {
         table: "host_phase_control",
         order_by: "stream_seq, prompt_id",
     },

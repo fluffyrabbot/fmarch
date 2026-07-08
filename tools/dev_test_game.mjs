@@ -4210,6 +4210,7 @@ async function verifySeededD02VoteNightTransition({
     const n02ActionSubmission = await submitPlayerCommandAndWait({
       page: actionEntry.page,
       actionId: "submit_action:factional_kill",
+      confirmTestId: "player-action-confirm-factional_kill",
       waitArg: n02ActionTarget,
       waitFor: (targetSlot) =>
         window.__fmarchPlayerCommandStatus?.state === "ack" &&
@@ -4968,6 +4969,7 @@ async function verifySeededD02VoteNightTransition({
     const n03ActionSubmission = await submitPlayerCommandAndWait({
       page: actionEntry.page,
       actionId: nightThreeProgressionActionId,
+      confirmTestId: "player-action-confirm-factional_kill",
       waitArg: { scenario: n03Scenario, targetSlot: n03ActionTarget },
       waitFor: ({ scenario, targetSlot }) =>
         window.__fmarchPlayerCommandStatus?.state === "ack" &&
@@ -10672,11 +10674,17 @@ async function submitPlayerCommandAndWait({
   page,
   actionId,
   locatorOptions = {},
+  confirmTestId = null,
   waitFor,
   waitArg,
   waitOptions,
 }) {
   await page.locator(`[data-action="${actionId}"]`, locatorOptions).first().click();
+  if (confirmTestId) {
+    const confirmButton = page.locator(`[data-testid="${confirmTestId}"]`);
+    await confirmButton.waitFor({ state: "visible" });
+    await confirmButton.click();
+  }
   await page.waitForFunction(waitFor, waitArg, waitOptions);
   return page.evaluate(() => window.__fmarchPlayerCommandStatus);
 }
@@ -23066,6 +23074,11 @@ async function verifyStaleReplacementActionAfterResolve({
     await replacementEntry.page
       .locator(`[data-action="${scenario.commandAction}"]`)
       .click();
+    const replacementActionConfirm = replacementEntry.page.locator(
+      `[data-testid="player-action-confirm-${scenario.templateId}"]`,
+    );
+    await replacementActionConfirm.waitFor({ state: "visible" });
+    await replacementActionConfirm.click();
     await replacementEntry.page.waitForFunction(
       ({ staleActionId, rejectionError }) =>
         window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body?.command

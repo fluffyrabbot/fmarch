@@ -363,6 +363,192 @@ async fn vertical_command_boundary_updates_votecount(pool: sqlx::PgPool) {
     )));
 }
 
+async fn get_endgame_summary(app: axum::Router, game: Uuid) -> api::EndgameSummaryResponse {
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!("/games/{game}/endgame-summary"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    serde_json::from_slice(&bytes).unwrap()
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn endgame_summary_reveals_winner_only_after_terminal_win(pool: sqlx::PgPool) {
+    let app = router(pool);
+    let game = Uuid::new_v4();
+
+    expect_ack(
+        post_command(
+            app.clone(),
+            1,
+            "host_h",
+            Command::CreateGame {
+                game,
+                pack: "default_open".into(),
+            },
+        )
+        .await,
+    );
+    for (base, slot, user_id, role) in [
+        (10, "slot_1", "user_1", "citizen"),
+        (20, "slot_2", "user_2", "agent"),
+    ] {
+        expect_ack(
+            post_command(
+                app.clone(),
+                base,
+                "host_h",
+                Command::AddSlot {
+                    game,
+                    slot: slot.into(),
+                },
+            )
+            .await,
+        );
+        expect_ack(
+            post_command(
+                app.clone(),
+                base + 1,
+                "host_h",
+                Command::AssignSlot {
+                    game,
+                    slot: slot.into(),
+                    user: user_id.into(),
+                },
+            )
+            .await,
+        );
+        expect_ack(
+            post_command(
+                app.clone(),
+                base + 2,
+                "host_h",
+                Command::AssignRole {
+                    game,
+                    slot: slot.into(),
+                    role_key: role.into(),
+                },
+            )
+            .await,
+        );
+    }
+    expect_ack(
+        post_command(
+            app.clone(),
+            30,
+            "host_h",
+            Command::StartGame {
+                game,
+                phase: "N01".into(),
+            },
+        )
+        .await,
+    );
+
+    let ongoing = get_endgame_summary(app.clone(), game).await;
+    assert_eq!(ongoing.game, game);
+    assert!(
+        !ongoing.completed,
+        "endgame summary must not report completion mid-game"
+    );
+    assert!(
+        ongoing.winner.is_none(),
+        "winner fact must be absent before the terminal WinReached"
+    );
+    assert_eq!(ongoing.slots.len(), 2);
+    assert!(
+        ongoing.slots.iter().all(|slot| slot.role_key.is_none()
+            && slot.alignment.is_none()
+            && !slot.role_revealed
+            && !slot.alignment_revealed),
+        "per-slot role facts must stay reveal-gated mid-game: {:?}",
+        ongoing.slots
+    );
+
+    expect_ack(
+        post_command(
+            app.clone(),
+            40,
+            "user_2",
+            Command::SubmitAction {
+                game,
+                action_id: "agent_kills_last_town_n01".into(),
+                actor_slot: "slot_2".into(),
+                template_id: "agent_kill".into(),
+                targets: vec!["slot_1".into()],
+                grant_id: None,
+            },
+        )
+        .await,
+    );
+    expect_ack(
+        post_command(
+            app.clone(),
+            41,
+            "host_h",
+            Command::ResolvePhase { game, seed: 9911 },
+        )
+        .await,
+    );
+
+    let won = get_endgame_summary(app.clone(), game).await;
+    let winner = won
+        .winner
+        .expect("terminal WinReached must fold the winner fact into the summary");
+    assert_eq!(winner.alignment, "mafia");
+    assert!(
+        winner.reason.contains("reaches parity"),
+        "winner reason carries the engine's win reason: {}",
+        winner.reason
+    );
+    assert_eq!(winner.phase_id, "N01");
+    assert!(
+        !won.completed,
+        "the engine win is not the host's GameCompleted fact"
+    );
+    assert!(
+        won.slots
+            .iter()
+            .all(|slot| slot.role_revealed && slot.alignment_revealed),
+        "WinReached must flip every slot's reveal flags: {:?}",
+        won.slots
+    );
+    let citizen = won
+        .slots
+        .iter()
+        .find(|slot| slot.slot_id == "slot_1")
+        .expect("citizen slot in summary");
+    assert!(!citizen.alive, "the night kill folds into the summary");
+    assert_eq!(citizen.role_key.as_deref(), Some("citizen"));
+    assert_eq!(citizen.alignment.as_deref(), Some("town"));
+    let agent = won
+        .slots
+        .iter()
+        .find(|slot| slot.slot_id == "slot_2")
+        .expect("agent slot in summary");
+    assert!(agent.alive);
+    assert_eq!(agent.role_key.as_deref(), Some("agent"));
+    assert_eq!(agent.alignment.as_deref(), Some("mafia"));
+
+    expect_ack(post_command(app.clone(), 42, "host_h", Command::CompleteGame { game }).await);
+    let completed = get_endgame_summary(app, game).await;
+    assert!(
+        completed.completed,
+        "CompleteGame must flip the endgame summary's completed fact"
+    );
+    assert!(
+        completed.winner.is_some(),
+        "the winner fact must survive completion"
+    );
+}
+
 #[sqlx::test(migrations = "../projections/migrations")]
 async fn host_can_publish_projection_derived_votecount_to_thread(pool: sqlx::PgPool) {
     let app = router(pool);

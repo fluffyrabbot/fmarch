@@ -20,7 +20,8 @@ use commands::{
 use eventstore::{ActorId, EventInput};
 use projections::{
     action_counters, action_grants, action_history, append_and_project, audit_rebuild,
-    day_vote_outcomes, delayed_death_queues, host_prompts, investigation_memory, phase_state,
+    day_vote_outcomes, delayed_death_queues, game_result, host_prompts, investigation_memory,
+    phase_state,
     player_info_results, player_notifications, player_notifications_for_slot, rebuild,
     sheriff_badges, slot_effects, slot_state, visit_history, votecount,
 };
@@ -2383,6 +2384,23 @@ async fn resolve_phase_folds_night_kill_into_faction_win_and_rebuild(pool: PgPoo
         .expect("town slot projection");
     assert!(!town.alive, "night kill folds into slot_state");
     assert_win_revealed_all_slots(&slots, "default_open night parity win");
+    let result = game_result(&pool, game)
+        .await
+        .expect("default_open night win game_result read")
+        .expect("terminal WinReached should fold a game_result row");
+    assert_eq!(
+        result.winner, "mafia",
+        "game_result winner folds from the terminal WinReached"
+    );
+    assert!(
+        result.reason.contains("reaches parity"),
+        "game_result reason carries the engine's win reason: {}",
+        result.reason
+    );
+    assert_eq!(
+        result.phase_id, "N01",
+        "game_result pins the phase the win landed in"
+    );
     let slots_before = serde_json::to_string(&slots).unwrap();
     let projection_audit = audit_rebuild(&pool, game)
         .await
@@ -2395,6 +2413,15 @@ async fn resolve_phase_folds_night_kill_into_faction_win_and_rebuild(pool: PgPoo
         slots_before,
         serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
         "slot_state rebuild must preserve night kill plus faction win"
+    );
+    rebuild(&pool, game).await.expect("projection rebuild");
+    assert_eq!(
+        result,
+        game_result(&pool, game)
+            .await
+            .expect("post-rebuild game_result read")
+            .expect("rebuild must refold the game_result row"),
+        "game_result rebuild must converge on the same trailing WinReached"
     );
 }
 
