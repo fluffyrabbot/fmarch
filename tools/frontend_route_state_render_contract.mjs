@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -43,6 +44,21 @@ const evidencePath = path.join(artifactDir, "route-state-render.json");
 const tempEntryDir = path.join(frontendRoot, ".tmp-route-state-render");
 const bundleDir = path.join(artifactDir, "bundle");
 const frontendRequire = createRequire(path.join(frontendRoot, "package.json"));
+const stampPath = path.join(artifactDir, "input-stamp.json");
+
+// Content-addressed skip: this contract is rerun by every harness that needs
+// the SSR bundle, and its output is a pure function of the hashed inputs.
+// FMARCH_FORCE_ROUTE_STATE_RENDER=1 bypasses the stamp.
+const inputHash = await computeInputHash();
+if (
+  process.env.FMARCH_FORCE_ROUTE_STATE_RENDER !== "1" &&
+  (await stampMatches(inputHash))
+) {
+  console.log(
+    `route-state render up to date (inputs ${inputHash.slice(0, 12)}); skipping rebuild`,
+  );
+  process.exit(0);
+}
 
 await rm(tempEntryDir, { recursive: true, force: true });
 await rm(bundleDir, { recursive: true, force: true });
@@ -170,6 +186,10 @@ try {
     playerPrivateDisclosure,
   };
   await writeFile(evidencePath, `${JSON.stringify(evidence, null, 2)}\n`);
+  await writeFile(
+    stampPath,
+    `${JSON.stringify({ hash: inputHash, generatedAt: new Date().toISOString() }, null, 2)}\n`,
+  );
   console.log(`wrote ${path.relative(repoRoot, evidencePath)}`);
 } finally {
   await rm(tempEntryDir, { recursive: true, force: true });
@@ -2854,4 +2874,46 @@ export const updated = {
   check: async () => false,
 };
 `;
+}
+
+async function computeInputHash() {
+  const hash = createHash("sha256");
+  const files = [
+    path.join(repoRoot, "tools", "frontend_route_state_render_contract.mjs"),
+    path.join(repoRoot, "tools", "frontend_role_smoke_scenarios.mjs"),
+    path.join(frontendRoot, "package.json"),
+    path.join(frontendRoot, "package-lock.json"),
+    path.join(frontendRoot, "svelte.config.js"),
+    path.join(frontendRoot, "vite.config.js"),
+    ...(await sourceFiles(path.join(frontendRoot, "src"))),
+  ];
+  for (const file of files) {
+    hash.update(path.relative(repoRoot, file));
+    hash.update("\0");
+    hash.update(await readFile(file));
+    hash.update("\0");
+  }
+  return hash.digest("hex");
+}
+
+async function sourceFiles(root) {
+  const entries = await readdir(root, { recursive: true, withFileTypes: true });
+  return entries
+    .filter((entry) => entry.isFile() && !entry.name.startsWith("."))
+    .map((entry) => path.join(entry.parentPath, entry.name))
+    .sort();
+}
+
+async function stampMatches(hash) {
+  try {
+    const stamp = JSON.parse(await readFile(stampPath, "utf8"));
+    if (stamp.hash !== hash) {
+      return false;
+    }
+    await stat(evidencePath);
+    await stat(path.join(bundleDir, "entry.js"));
+    return true;
+  } catch {
+    return false;
+  }
 }

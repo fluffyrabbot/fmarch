@@ -324,6 +324,9 @@ async function setRenderedContent(page, rendered, css) {
 </html>`,
     { waitUntil: "load" },
   );
+  // fonts swapping in after load shifts boxes mid-measurement and flakes
+  // the geometry checks; settle them before any boundingBox call
+  await page.evaluate(() => document.fonts.ready);
 }
 
 async function assertFeedbackRailGeometry(page, rail, { viewport }) {

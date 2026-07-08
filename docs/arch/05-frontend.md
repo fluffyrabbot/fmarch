@@ -94,6 +94,27 @@ checklist before they are called done:
   admin/player/moderator scan strips, and may prove no-bind Chromium render pixels and
   keyboard traversal when Chromium can launch, but it still does not prove hydrated route
   navigation, command dispatch, WebSocket behavior, or real pointer interaction.
+- **Gate tiers** — the proof chain runs at two costs, and the split is deliberate:
+  - `npm run test:frontend-role-proof:quick` is the inner-loop gate: contract unit tests,
+    the route-state render contract, the static role contract, the tablet interaction
+    contract, and the DOM smoke. No Chromium, no dev server; it finishes in well under a
+    minute and should run after every edit worth checking.
+  - `npm run test:frontend-role-proof` (or `:browser`) is the commit gate. Nothing lands
+    without the full chain green plus the completion audit reporting `passed` — the quick
+    tier never substitutes for it.
+  - The route-state render contract is content-addressed: it hashes `frontend/src`, its
+    own tool sources, and the frontend build config into
+    `target/frontend-route-state-render/input-stamp.json`, and skips the rebuild when the
+    hash matches and the outputs exist. Every harness that re-invokes it mid-chain gets the
+    skip for free. The skip preserves fidelity because the artifact is a pure function of
+    the hashed inputs; `FMARCH_FORCE_ROUTE_STATE_RENDER=1` forces a rebuild when in doubt.
+  - Chain weight policy: prefer cutting rebuilds, process launches, and duplicate
+    assertions over cutting evidence. Viewport coverage, screenshot evidence, and artifact
+    cross-checks are the fidelity and are not reduced to make lanes faster. Known accepted
+    duplication: the file-fixture and localhost-fixture smokes re-prove geometry on the
+    same fixture; candidates if the chain grows heavier are a lane-dependency orchestrator
+    (parallel branches instead of the serial `&&` chain) and merging the four no-bind
+    Chromium lanes into one browser process while keeping their artifacts separate.
 - **Viewport proof** — exercise the changed surface at 1024x768, 1180x820, 1280x900, and
   one desktop width once the surface has a real shell. The tablet widths are the design
   baseline; desktop is the scale-up case. The first host-console critical path is guarded by
