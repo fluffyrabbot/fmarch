@@ -3275,6 +3275,26 @@ function coreLoopHostRoleSurfaceCheckpointRows(hostRoleSurface) {
   ) {
     rows.push("d02-n02-host-lifecycle-control-locked-checkpoint");
   }
+  if (
+    hostRoleSurface?.hostLifecycleStaleRejectProof?.status === "passed" &&
+    hostRoleSurface.hostLifecycleStaleRejectProof.commandKind === "LockThread" &&
+    hostRoleSurface.hostLifecycleStaleRejectProof.commandStatus?.state ===
+      "reject" &&
+    hostRoleSurface.hostLifecycleStaleRejectProof.commandStatus?.error ===
+      "PhaseLocked" &&
+    hostRoleSurface.hostLifecycleStaleRejectProof.bridgePlan?.finalState ===
+      "reject" &&
+    hostRoleSurface.hostLifecycleStaleRejectProof.bridgePlan
+      ?.projectionRefreshKeys?.[0] === "host" &&
+    hostRoleSurface.hostLifecycleStaleRejectProof
+      .checkpointPhaseStateAfterReject === "open" &&
+    hostRoleSurface.hostLifecycleStaleRejectProof
+      .checkpointDeadlineAffordanceAfterReject === "resolve_phase,lock_thread" &&
+    String(hostRoleSurface.hostLifecycleStaleRejectProof.recoveryText ?? "")
+      .includes("Reject PhaseLocked")
+  ) {
+    rows.push("d02-n02-host-lifecycle-control-stale-reject-checkpoint");
+  }
   return rows;
 }
 

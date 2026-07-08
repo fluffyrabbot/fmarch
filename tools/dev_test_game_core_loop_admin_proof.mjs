@@ -121,6 +121,7 @@ import {
   hostControlRaceScenarioCases,
   hostLifecycleControlCheckpointId,
   hostLifecycleControlLockedCheckpointId,
+  hostLifecycleControlStaleRejectCheckpointId,
   coreLoopHostControlScenarioFamily,
 } from "./dev_test_game_core_loop_host_control_scenarios.mjs";
 import {
@@ -190,6 +191,28 @@ const roleSurfaceSpineCheckpointRows = ({ hostRoleSurface } = {}) => {
   ) {
     rows.push(
       `${coreLoopHostLifecycleControlCycleId}-${hostLifecycleControlLockedCheckpointId}`,
+    );
+  }
+  if (
+    hostRoleSurface?.hostLifecycleStaleRejectProof?.status === "passed" &&
+    hostRoleSurface.hostLifecycleStaleRejectProof.commandKind === "LockThread" &&
+    hostRoleSurface.hostLifecycleStaleRejectProof.commandStatus?.state ===
+      "reject" &&
+    hostRoleSurface.hostLifecycleStaleRejectProof.commandStatus?.error ===
+      "PhaseLocked" &&
+    hostRoleSurface.hostLifecycleStaleRejectProof.bridgePlan?.finalState ===
+      "reject" &&
+    hostRoleSurface.hostLifecycleStaleRejectProof.bridgePlan
+      ?.projectionRefreshKeys?.[0] === "host" &&
+    hostRoleSurface.hostLifecycleStaleRejectProof
+      .checkpointPhaseStateAfterReject === "open" &&
+    hostRoleSurface.hostLifecycleStaleRejectProof
+      .checkpointDeadlineAffordanceAfterReject === "resolve_phase,lock_thread" &&
+    String(hostRoleSurface.hostLifecycleStaleRejectProof.recoveryText ?? "")
+      .includes("Reject PhaseLocked")
+  ) {
+    rows.push(
+      `${coreLoopHostLifecycleControlCycleId}-${hostLifecycleControlStaleRejectCheckpointId}`,
     );
   }
   return rows;

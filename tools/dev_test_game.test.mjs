@@ -21260,6 +21260,7 @@ function coreLoopAdminProofFixture() {
         roleSurfaceCheckpoints: [
           "d02-n02-host-lifecycle-control-checkpoint",
           "d02-n02-host-lifecycle-control-locked-checkpoint",
+          "d02-n02-host-lifecycle-control-stale-reject-checkpoint",
         ],
         recoveryHooks: [
           "staleLockedVoteReject",
@@ -23642,6 +23643,7 @@ function coreLoopSpineTargetsFixture() {
       "d01-n01-d02-d02-day-controls-return",
       "d02-n02-host-lifecycle-control-checkpoint",
       "d02-n02-host-lifecycle-control-locked-checkpoint",
+      "d02-n02-host-lifecycle-control-stale-reject-checkpoint",
       "d02-n02-d02-vote-open",
       "d02-n02-d02-deciding-vote-submitted",
       "d02-n02-d02-resolved-target-killed",

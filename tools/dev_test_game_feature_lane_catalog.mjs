@@ -12,6 +12,7 @@ import {
 import {
   hostPhaseControlFeatureSpineRow,
   hostPhaseLockedRecoveryFeatureSpineRow,
+  hostPhaseStaleRejectFeatureSpineRow,
 } from "./dev_test_game_core_loop_host_control_scenarios.mjs";
 import {
   completedGameEndgameFeatureSpineRows,
@@ -99,6 +100,9 @@ const coreLoopFeatureSpineLaneRows = Object.freeze([
   Object.freeze(hostPhaseControlFeatureSpineRow({ cycleId: dayTwoNightTwo })),
   Object.freeze(
     hostPhaseLockedRecoveryFeatureSpineRow({ cycleId: dayTwoNightTwo }),
+  ),
+  Object.freeze(
+    hostPhaseStaleRejectFeatureSpineRow({ cycleId: dayTwoNightTwo }),
   ),
   Object.freeze(dayVoteResolutionFeatureSpineRow({ cycleId: dayTwoNightTwo })),
   Object.freeze(dayVoteNoLynchFeatureSpineRow({ cycleId: dayThreeNightThree })),
