@@ -2,7 +2,8 @@ export const DAY_VOTE_OUTCOME_PANEL_CONTRACT = Object.freeze({
   componentName: "day-vote-outcome-panel",
   rootClassName: "day-vote-outcome-panel fm-section",
   emptyClassName: "day-vote-outcome-panel__empty",
-  tallyClassName: "day-vote-outcome-panel__tally",
+  tallyClassName:
+    "day-vote-outcome-panel__tally fm-rowlist__row fm-rowlist__row--stack",
   minRowTargetPx: 44,
 });
 

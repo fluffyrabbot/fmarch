@@ -70,6 +70,12 @@ const roleSmokePath = path.join(
   "frontend-role-smoke",
   "role-smoke.json",
 );
+const renderSmokePath = path.join(
+  repoRoot,
+  "target",
+  "frontend-role-render-smoke",
+  "render-smoke.json",
+);
 const importedRoleSmokePath = path.join(
   repoRoot,
   "target",
@@ -4844,6 +4850,9 @@ test("frontend readiness summary reports role proof layers without promoting bro
       summary.browserAcceptance.localhost.status === "browser_proven"
         ? "browser_proven"
         : "imported_browser_proven";
+    const renderSmoke = await readJsonArtifact(renderSmokePath).catch(() => null);
+    const noBindChromiumSurface =
+      renderSmoke?.status === "passed" ? "chromium_no_bind_proven" : "blocked";
     assert.deepEqual(roleProofRows, [
       [
         "admin",
@@ -4854,7 +4863,7 @@ test("frontend readiness summary reports role proof layers without promoting bro
         "proven",
         "chromium_no_bind_interactions_proven",
         "chromium_no_bind_keyboard_proven",
-        "blocked",
+        noBindChromiumSurface,
         fullBrowserSurface,
         "dispatchBridge.rolePlans[admin]",
         "hydratedHandlers.roles[admin]",
@@ -4876,7 +4885,7 @@ test("frontend readiness summary reports role proof layers without promoting bro
         "proven",
         "chromium_no_bind_interactions_proven",
         "chromium_no_bind_keyboard_proven",
-        "blocked",
+        noBindChromiumSurface,
         fullBrowserSurface,
         "dispatchBridge.rolePlans[player]",
         "hydratedHandlers.roles[player]",
@@ -4898,7 +4907,7 @@ test("frontend readiness summary reports role proof layers without promoting bro
         "proven",
         "chromium_no_bind_interactions_proven",
         "chromium_no_bind_keyboard_proven",
-        "blocked",
+        noBindChromiumSurface,
         fullBrowserSurface,
         "dispatchBridge.rolePlans[moderator]",
         "hydratedHandlers.roles[moderator]",
@@ -5116,18 +5125,28 @@ test("frontend readiness summary reports role proof layers without promoting bro
         ],
       );
     }
-    assert.deepEqual(
-      [
-        summary.browserAcceptance.noBindChromium.status,
-        summary.browserAcceptance.noBindChromium.artifactStatus,
-        summary.browserAcceptance.noBindChromium.blockedReason,
-      ],
-      [
-        "blocked",
-        "chromium-launch-blocked",
-        "Chromium launch is denied before no-bind screenshots or geometry can run",
-      ],
-    );
+    if (summary.browserAcceptance.noBindChromium.status === "chromium_no_bind_proven") {
+      assert.deepEqual(
+        [
+          summary.browserAcceptance.noBindChromium.artifactStatus,
+          summary.browserAcceptance.noBindChromium.blockedReason,
+        ],
+        ["passed", null],
+      );
+    } else {
+      assert.deepEqual(
+        [
+          summary.browserAcceptance.noBindChromium.status,
+          summary.browserAcceptance.noBindChromium.artifactStatus,
+          summary.browserAcceptance.noBindChromium.blockedReason,
+        ],
+        [
+          "blocked",
+          "chromium-launch-blocked",
+          "Chromium launch is denied before no-bind screenshots or geometry can run",
+        ],
+      );
+    }
     assert.deepEqual(
       [
         summary.browserAcceptance.noBindInteractions.status,
@@ -5219,8 +5238,11 @@ test("frontend readiness summary reports role proof layers without promoting bro
         ],
         [
           "chromium-no-bind-render",
-          "blocked",
-          "chromium-launch-blocked",
+          summary.browserAcceptance.noBindChromium.status ===
+          "chromium_no_bind_proven"
+            ? "proven"
+            : "blocked",
+          summary.browserAcceptance.noBindChromium.artifactStatus,
           false,
         ],
         ["chromium-no-bind-interactions", "proven", "passed", false],

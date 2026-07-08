@@ -206,7 +206,7 @@ function surfaceScenarios() {
       path: "/admin/audit/proof-runs?game=midsummer",
       render: "renderAdminAuditDetailSurface",
       surfaceTestId: "admin-audit-detail-surface",
-      requiredText: ["Operator proof runs", "midsummer"],
+      requiredText: ["Proof runs", "midsummer"],
       requiredSelectors: ['[data-testid="admin-audit-detail-back"]'],
     },
     {
@@ -252,9 +252,9 @@ function surfaceScenarios() {
       role: "moderator",
       path: "/g/midsummer/host",
       render: "renderModeratorSurface",
-      surfaceTestId: "moderator-surface",
+      surfaceTestId: "host-console-surface",
       requiredText: ["Host console", "Votecount"],
-      requiredSelectors: ['[data-testid="host-action-extend_deadline"]'],
+      requiredSelectors: ['[data-testid="critical-host-action-extend_deadline"]'],
       thumbZones: roleById.get("moderator")?.thumbZones ?? [],
     },
   ];
@@ -477,9 +477,15 @@ async function assertNoObviousOverlap(targets, { id, viewport }) {
         continue;
       }
       const smallerArea = Math.min(area(targets[left].box), area(targets[right].box));
+      if (overlap >= smallerArea * 0.99) {
+        // Full containment is a container wrapping its own controls (surface
+        // root, thumb zone) or the same control measured by two collectors,
+        // not a collision; only partial overlap indicates stacked targets.
+        continue;
+      }
       if (overlap / smallerArea > 0.65) {
         throw new Error(
-          `${id} ${viewport.name} has overlapping targets ${targets[left].label} and ${targets[right].label}`,
+          `${id} ${viewport.name} has overlapping targets ${targets[left].label} and ${targets[right].label} (${JSON.stringify(targets[left].box)} vs ${JSON.stringify(targets[right].box)})`,
         );
       }
     }

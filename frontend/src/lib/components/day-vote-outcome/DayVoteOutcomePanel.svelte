@@ -49,7 +49,7 @@
       {/if}
     </div>
     {#if view.tallies.length > 0}
-      <div class="day-vote-outcome-panel__tallies">
+      <div class="day-vote-outcome-panel__tallies fm-rowlist">
         {#each view.tallies as row}
           <div
             class={view.classes.tally}
@@ -73,21 +73,16 @@
     grid-template-columns: minmax(0, 1fr) auto;
   }
 
-  .day-vote-outcome-panel__summary,
-  .day-vote-outcome-panel__tally {
+  .day-vote-outcome-panel__summary {
     border-block-start: 1px solid var(--fm-line);
+    display: grid;
+    gap: 8px;
+    min-block-size: 76px;
     min-inline-size: 0;
     padding-block-start: 8px;
   }
 
-  .day-vote-outcome-panel__summary {
-    display: grid;
-    gap: 8px;
-    min-block-size: 76px;
-  }
-
-  .day-vote-outcome-panel__summary strong,
-  .day-vote-outcome-panel__tally strong {
+  .day-vote-outcome-panel__summary strong {
     color: var(--fm-ink);
     font-size: 18px;
     line-height: 1.25;
@@ -103,21 +98,14 @@
     overflow-wrap: anywhere;
   }
 
-  .day-vote-outcome-panel__tallies {
-    display: grid;
-    gap: 8px;
-  }
-
   .day-vote-outcome-panel__tally {
     align-items: center;
-    display: grid;
-    gap: 12px;
     grid-template-columns: minmax(0, 1fr) auto;
-    min-block-size: 44px;
   }
 
-  .day-vote-outcome-panel__tally span {
-    overflow-wrap: anywhere;
+  .day-vote-outcome-panel__tally strong {
+    font-size: 18px;
+    line-height: 1.25;
   }
 
   @media (max-width: 760px) {
