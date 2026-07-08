@@ -7501,6 +7501,29 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
       true,
     );
   }
+  assertFeatureKindRoleUrlEvidence(hardeningRaceReloadKindRow);
+  const hardeningReconnectRecoveryKindRow = productionFeatureKindRows.find(
+    (row) =>
+      row.id ===
+      `feature-target-kind:${hardeningReconnectRecoveryFeatureTargetKind}`,
+  );
+  assert.equal(hardeningReconnectRecoveryKindRow?.featureSlotIds.length, 6);
+  for (const featureSlotId of [
+    "cohost-stale-deadline-reconnect-recovery",
+    "host-stale-advance-reconnect-recovery",
+    "host-stale-deadline-reconnect-recovery",
+    "host-stale-resolve-reconnect-recovery",
+    "private-channel-stale-action-reconnect-recovery",
+    "stale-action-reconnect-recovery",
+  ]) {
+    assert.equal(
+      hardeningReconnectRecoveryKindRow?.featureSlotIds.includes(
+        featureSlotId,
+      ),
+      true,
+    );
+  }
+  assertFeatureKindRoleUrlEvidence(hardeningReconnectRecoveryKindRow);
   const hardeningStaleReloadKindRow = productionFeatureKindRows.find(
     (row) =>
       row.id === `feature-target-kind:${hardeningStaleReloadFeatureTargetKind}`,
@@ -7510,6 +7533,7 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
     "completed-game-stale-player-reload-recovery",
     "completed-game-stale-recovery",
   ]);
+  assertFeatureKindRoleUrlEvidence(hardeningStaleReloadKindRow);
   const hardeningStaleReconnectKindRow = productionFeatureKindRows.find(
     (row) =>
       row.id ===
@@ -7519,6 +7543,7 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
   assert.deepEqual(hardeningStaleReconnectKindRow?.featureSlotIds, [
     "completed-game-stale-reconnect-recovery",
   ]);
+  assertFeatureKindRoleUrlEvidence(hardeningStaleReconnectKindRow);
   const hostSetupDestinationSummaryRow =
     graph.summary.productionFeatureDestinationSummary.rows.find(
       (row) => row.id === "production-feature:host-setup-route",
@@ -24658,6 +24683,7 @@ function proofGraphFeatureTargetFixturesFromCollection({
       targetRoleUrl: target.roleUrl,
       checkpointId: target.checkpointId,
       adminCheckId: target.adminCheckId,
+      featureTargetKind: target.featureTargetKind,
       browserProofCommand: target.browserProofCommand,
       recoveryCommand,
       sourceProofArtifact: target.sourceProofArtifact,
@@ -24697,8 +24723,17 @@ function proofGraphProductionFeatureTargetDestinationsFixture(targets) {
         sourceCheckId: target.sourceCheckId,
         targetRoleUrl: target.targetRoleUrl,
         adminCheckId: target.adminCheckId,
+        ...(target.featureTargetKind === undefined
+          ? {}
+          : { featureTargetKind: target.featureTargetKind }),
         sourceProofArtifact: target.sourceProofArtifact,
         requiredChecks: [target.adminCheckId],
+        ...(target.browserWorkbench === undefined
+          ? {}
+          : { browserWorkbench: target.browserWorkbench }),
+        ...(target.readinessEvidence === undefined
+          ? {}
+          : { readinessEvidence: target.readinessEvidence }),
       };
     }
     return {
@@ -24709,6 +24744,9 @@ function proofGraphProductionFeatureTargetDestinationsFixture(targets) {
       roleUrl: target.roleUrl,
       targetRoleUrl: target.targetRoleUrl,
       adminCheckId: target.adminCheckId,
+      ...(target.featureTargetKind === undefined
+        ? {}
+        : { featureTargetKind: target.featureTargetKind }),
       sourceProofArtifact: target.sourceProofArtifact,
       ...(target.adminDetailRoleUrl === undefined
         ? {}
@@ -24767,6 +24805,10 @@ function productionFeatureDestinationSummaryVisibleText(row) {
     row.featureTargetKind,
     row.featureSlotIds,
     row.sourceCheckIds,
+    row.targetRoleUrls,
+    row.browserWorkbenchRoleUrls,
+    row.browserWorkbenchFeatureSlotIds,
+    row.browserWorkbenchRoleSurfaces,
     row.recoveryCommand,
     row.proofCommand,
     row.progressionId,
@@ -24776,6 +24818,26 @@ function productionFeatureDestinationSummaryVisibleText(row) {
     .map((value) => String(value ?? ""))
     .filter((value) => value !== "")
     .join("\n");
+}
+
+function assertFeatureKindRoleUrlEvidence(row) {
+  assert.equal(Array.isArray(row?.roleUrlEvidence), true);
+  assert.equal(row.roleUrlEvidence.length, row.featureSlotIds.length);
+  assert.deepEqual(row.browserWorkbenchFeatureSlotIds, row.featureSlotIds);
+  assert.deepEqual(row.browserWorkbenchRoleUrls, row.targetRoleUrls);
+  assert.equal(row.status.includes("targetRoleUrls "), true);
+  assert.equal(row.status.includes("browserWorkbenchRoleUrls "), true);
+  assert.equal(row.status.includes("browserWorkbenchFeatureSlotIds "), true);
+  for (const evidence of row.roleUrlEvidence) {
+    assert.equal(row.featureSlotIds.includes(evidence.featureSlotId), true);
+    assert.equal(
+      evidence.browserWorkbenchFeatureSlotId,
+      evidence.featureSlotId,
+    );
+    assert.equal(evidence.browserWorkbenchRoleUrl, evidence.targetRoleUrl);
+    assert.match(evidence.targetRoleUrl, /^http:\/\/127\.0\.0\.1:5173\/g\//);
+    assert.notEqual(evidence.browserWorkbenchRoleSurface, "");
+  }
 }
 
 function productionFeatureProvenanceSummaryFixture(destinations) {

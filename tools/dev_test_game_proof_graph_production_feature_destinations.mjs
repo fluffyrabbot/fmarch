@@ -230,9 +230,24 @@ function productionFeatureDestinationFeatureTargetKindRows(destinations) {
       featureTargetKind,
       featureSlotIds: [],
       sourceCheckIds: [],
+      roleUrlEvidence: [],
     };
-    group.featureSlotIds.push(String(destination.featureSlotId ?? ""));
+    const featureSlotId = String(destination.featureSlotId ?? "");
+    group.featureSlotIds.push(featureSlotId);
     group.sourceCheckIds.push(String(destination.sourceCheckId ?? ""));
+    group.roleUrlEvidence.push({
+      featureSlotId,
+      targetRoleUrl: String(destination.targetRoleUrl ?? ""),
+      browserWorkbenchRoleUrl: String(
+        destination.browserWorkbench?.roleUrl ?? "",
+      ),
+      browserWorkbenchFeatureSlotId: String(
+        destination.browserWorkbench?.featureSlotId ?? "",
+      ),
+      browserWorkbenchRoleSurface: String(
+        destination.browserWorkbench?.roleSurface ?? "",
+      ),
+    });
     groups.set(featureTargetKind, group);
   }
   return Object.freeze(
@@ -240,6 +255,41 @@ function productionFeatureDestinationFeatureTargetKindRows(destinations) {
       .map((group) => {
         const featureSlotIds = sortedStrings(group.featureSlotIds);
         const sourceCheckIds = sortedStrings(group.sourceCheckIds);
+        const roleUrlEvidence = group.roleUrlEvidence
+          .map((evidence) =>
+            Object.freeze({
+              featureSlotId: String(evidence.featureSlotId ?? ""),
+              targetRoleUrl: String(evidence.targetRoleUrl ?? ""),
+              browserWorkbenchRoleUrl: String(
+                evidence.browserWorkbenchRoleUrl ?? "",
+              ),
+              browserWorkbenchFeatureSlotId: String(
+                evidence.browserWorkbenchFeatureSlotId ?? "",
+              ),
+              browserWorkbenchRoleSurface: String(
+                evidence.browserWorkbenchRoleSurface ?? "",
+              ),
+            }),
+          )
+          .sort((left, right) =>
+            left.featureSlotId.localeCompare(right.featureSlotId),
+          );
+        const targetRoleUrls = sortedStrings(
+          roleUrlEvidence.map((evidence) => evidence.targetRoleUrl),
+        );
+        const browserWorkbenchRoleUrls = sortedStrings(
+          roleUrlEvidence.map((evidence) => evidence.browserWorkbenchRoleUrl),
+        );
+        const browserWorkbenchFeatureSlotIds = sortedStrings(
+          roleUrlEvidence.map(
+            (evidence) => evidence.browserWorkbenchFeatureSlotId,
+          ),
+        );
+        const browserWorkbenchRoleSurfaces = sortedStrings(
+          roleUrlEvidence.map(
+            (evidence) => evidence.browserWorkbenchRoleSurface,
+          ),
+        );
         return Object.freeze({
           id: `feature-target-kind:${group.featureTargetKind}`,
           label: `Feature target kind: ${group.featureTargetKind}`,
@@ -247,11 +297,24 @@ function productionFeatureDestinationFeatureTargetKindRows(destinations) {
             `${featureSlotIds.length} production-feature targets`,
             `featureSlotIds ${featureSlotIds.join(",")}`,
             `sourceCheckIds ${sourceCheckIds.join(",")}`,
+            `targetRoleUrls ${targetRoleUrls.join(",")}`,
+            `browserWorkbenchRoleUrls ${browserWorkbenchRoleUrls.join(",")}`,
+            `browserWorkbenchFeatureSlotIds ${browserWorkbenchFeatureSlotIds.join(",")}`,
+            `browserWorkbenchRoleSurfaces ${browserWorkbenchRoleSurfaces.join(",")}`,
           ].join("\n"),
           featureTargetKind: group.featureTargetKind,
           count: featureSlotIds.length,
           featureSlotIds: Object.freeze(featureSlotIds),
           sourceCheckIds: Object.freeze(sourceCheckIds),
+          targetRoleUrls: Object.freeze(targetRoleUrls),
+          browserWorkbenchRoleUrls: Object.freeze(browserWorkbenchRoleUrls),
+          browserWorkbenchFeatureSlotIds: Object.freeze(
+            browserWorkbenchFeatureSlotIds,
+          ),
+          browserWorkbenchRoleSurfaces: Object.freeze(
+            browserWorkbenchRoleSurfaces,
+          ),
+          roleUrlEvidence: Object.freeze(roleUrlEvidence),
         });
       })
       .sort((left, right) =>
