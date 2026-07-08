@@ -137,6 +137,7 @@ export function coreLoopSpineRowsFixture() {
       "d02-n02-host-lifecycle-control-checkpoint",
       "d02-n02-host-lifecycle-control-locked-checkpoint",
       "d02-n02-host-lifecycle-control-unlocked-checkpoint",
+      "d02-n02-host-deadline-control-checkpoint",
       "d02-n02-host-lifecycle-control-stale-reject-checkpoint",
       "d02-n02-host-phase-advance-transition-checkpoint",
       "d02-n02-player-action-submission-ack-checkpoint",

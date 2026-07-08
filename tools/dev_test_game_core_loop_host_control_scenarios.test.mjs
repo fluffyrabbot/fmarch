@@ -6,6 +6,7 @@ import {
   coreLoopHostControlScenarioFamily,
   hostControlRaceScenarioCases,
   hostControlRoleSurfaceCheckpointRows,
+  hostDeadlineControlCheckpointPassed,
   hostLifecycleControlCheckpointPassed,
   hostLifecycleControlLockedCheckpointPassed,
   hostLifecycleControlScenario,
@@ -73,6 +74,7 @@ test("host-control checkpoint rows are scenario-owned", () => {
     hostLifecycleControlUnlockedCheckpointPassed(hostRoleSurface),
     true,
   );
+  assert.equal(hostDeadlineControlCheckpointPassed(hostRoleSurface), true);
   assert.equal(
     hostLifecycleControlStaleRejectCheckpointPassed(hostRoleSurface),
     true,
@@ -91,6 +93,7 @@ test("host-control checkpoint rows are scenario-owned", () => {
       "d02-n02-host-lifecycle-control-checkpoint",
       "d02-n02-host-lifecycle-control-locked-checkpoint",
       "d02-n02-host-lifecycle-control-unlocked-checkpoint",
+      "d02-n02-host-deadline-control-checkpoint",
       "d02-n02-host-lifecycle-control-stale-reject-checkpoint",
       "d02-n02-host-phase-advance-transition-checkpoint",
     ],
@@ -103,6 +106,10 @@ test("host-control checkpoint rows are scenario-owned", () => {
         hostLifecycleStaleRejectProof: {
           ...hostRoleSurface.hostLifecycleStaleRejectProof,
           recoveryText: "refresh",
+        },
+        hostDeadlineControlProof: {
+          ...hostRoleSurface.hostDeadlineControlProof,
+          checkpointDeadlineAfterAck: null,
         },
       },
       hostPhaseTransitionSurface: {

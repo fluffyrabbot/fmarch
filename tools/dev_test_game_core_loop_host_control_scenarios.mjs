@@ -25,6 +25,8 @@ export const hostLifecycleControlLockedCheckpointId =
   "host-lifecycle-control-locked-checkpoint";
 export const hostLifecycleControlUnlockedCheckpointId =
   "host-lifecycle-control-unlocked-checkpoint";
+export const hostDeadlineControlCheckpointId =
+  "host-deadline-control-checkpoint";
 export const hostLifecycleControlStaleRejectCheckpointId =
   "host-lifecycle-control-stale-reject-checkpoint";
 export const hostPhaseAdvanceTransitionCheckpointId =
@@ -34,6 +36,8 @@ export const hostPhaseLockedRecoveryFeatureTargetKind =
   "host-phase-locked-recovery";
 export const hostPhaseUnlockedRecoveryFeatureTargetKind =
   "host-phase-unlocked-recovery";
+export const hostDeadlineControlFeatureTargetKind =
+  "host-deadline-control";
 export const hostPhaseStaleRejectFeatureTargetKind =
   "host-phase-stale-reject";
 export const hostPhaseAdvanceTransitionFeatureTargetKind =
@@ -84,6 +88,18 @@ export function hostPhaseUnlockedRecoveryFeatureSpineRow({ cycleId }) {
   };
 }
 
+export function hostDeadlineControlFeatureSpineRow({ cycleId }) {
+  return {
+    targetKey: "hostDeadlineControl",
+    featureSlotId: "host-deadline-control",
+    cycleId,
+    role: "host",
+    checkpointId: `${cycleId}-${hostDeadlineControlCheckpointId}`,
+    adminCheckId: "host-lifecycle-control",
+    featureTargetKind: hostDeadlineControlFeatureTargetKind,
+  };
+}
+
 export function hostPhaseStaleRejectFeatureSpineRow({ cycleId }) {
   return {
     targetKey: "hostPhaseStaleReject",
@@ -122,6 +138,9 @@ export function hostControlRoleSurfaceCheckpointRows({
   }
   if (hostLifecycleControlUnlockedCheckpointPassed(hostRoleSurface)) {
     rows.push(`${cycleId}-${hostLifecycleControlUnlockedCheckpointId}`);
+  }
+  if (hostDeadlineControlCheckpointPassed(hostRoleSurface)) {
+    rows.push(`${cycleId}-${hostDeadlineControlCheckpointId}`);
   }
   if (hostLifecycleControlStaleRejectCheckpointPassed(hostRoleSurface)) {
     rows.push(`${cycleId}-${hostLifecycleControlStaleRejectCheckpointId}`);
@@ -164,6 +183,25 @@ export function hostLifecycleControlUnlockedCheckpointPassed(surface) {
     proof.checkpointPhaseStateAfterAck === scenario.openPhaseState &&
     proof.checkpointDeadlineAffordanceAfterAck ===
       scenario.openDeadlineAffordance
+  );
+}
+
+export function hostDeadlineControlCheckpointPassed(surface) {
+  const scenario = hostLifecycleControlScenario();
+  const proof = surface?.hostDeadlineControlProof;
+  return (
+    proof?.status === "passed" &&
+    proof.commandKind === scenario.deadlineCommandKind &&
+    proof.commandStatus?.state === "ack" &&
+    proof.commandOutcome?.state === "ack" &&
+    proof.bridgePlan?.finalState === "ack" &&
+    proof.command?.phase === scenario.openPhaseId &&
+    proof.command?.at === scenario.extendedDeadline &&
+    proof.projection?.phase?.deadline === scenario.extendedDeadline &&
+    proof.checkpointPhaseStateAfterAck === scenario.openPhaseState &&
+    proof.checkpointDeadlineAffordanceAfterAck ===
+      scenario.openDeadlineAffordance &&
+    proof.checkpointDeadlineAfterAck === scenario.extendedDeadline
   );
 }
 

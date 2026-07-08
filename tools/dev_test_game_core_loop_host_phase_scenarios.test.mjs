@@ -6,6 +6,7 @@ import {
   assertHostAdvanceRaceSurfaceCase,
   assertHostControlRaceSurfaceCase,
   assertHostDeadlineAdvanceRaceSurfaceCase,
+  assertHostDeadlineControlProofCase,
   assertHostLifecycleRaceSurfaceCase,
   assertHostNightActionTransitionSurfaceCase,
   assertHostLifecycleControlRoleSurfaceCase,
@@ -195,6 +196,11 @@ test("host phase scenario module exposes shared lifecycle control case", () => {
     unlockActionId: "unlock_thread",
     unlockCommandKind: "UnlockThread",
     unlockAckStreamSeq: 602,
+    deadlineActionId: "extend_deadline_24h",
+    deadlineCommandKind: "ExtendDeadline",
+    deadlineAckStreamSeq: 603,
+    baseDeadline: 1781841600,
+    extendedDeadline: 1781928000,
     openPhaseId: "D01",
     openPhaseState: "open",
     lockedPhaseState: "locked",
@@ -948,7 +954,7 @@ test("post-Night 4 fixture satisfies the shared transition assertion", () => {
   );
 });
 
-test("host lifecycle control assertion covers checkpoint, click, unlock, and stale reject", () => {
+test("host lifecycle control assertion covers checkpoint, lock, unlock, deadline, and stale reject", () => {
   const sourceRoleUrl = "http://127.0.0.1:5173/g/game-a/host";
   const visitedRolePath = "/g/game-a/host";
   const hostRoleSurface = {
@@ -1023,6 +1029,40 @@ test("host lifecycle control assertion covers checkpoint, click, unlock, and sta
       activityCount: 2,
       activityStatusText: "Ack: stream seqs 602",
     },
+    hostDeadlineControlProof: {
+      status: "passed",
+      sourceRoleUrl,
+      visitedRolePath,
+      clickedAction: "extend_deadline_24h",
+      commandKind: "ExtendDeadline",
+      command: {
+        game: "game-a",
+        phase: "D01",
+        at: 1781928000,
+      },
+      commandStatus: { state: "ack", message: "Ack: stream seqs 603" },
+      commandOutcome: { state: "ack", message: "Ack: stream seqs 603" },
+      bridgePlan: {
+        role: "moderator",
+        commandKind: "ExtendDeadline",
+        commandEndpoint: "/commands",
+        finalState: "ack",
+        projectionRefreshKeys: [],
+      },
+      projection: {
+        phase: {
+          id: "D01",
+          locked: false,
+          deadline: 1781928000,
+        },
+      },
+      checkpointPhaseStateAfterAck: "open",
+      checkpointDeadlineAffordanceAfterAck: "resolve_phase,lock_thread",
+      checkpointDeadlineAfterAck: 1781928000,
+      statusText: "Ack: stream seqs 603",
+      activityCount: 3,
+      activityStatusText: "Ack: stream seqs 603",
+    },
     hostLifecycleStaleRejectProof: {
       status: "passed",
       sourceRoleUrl,
@@ -1060,6 +1100,14 @@ test("host lifecycle control assertion covers checkpoint, click, unlock, and sta
     assertHostLifecycleControlRoleSurfaceCase({
       hostRoleSurface,
       expectedGame: "game-a",
+    }),
+  );
+  assert.doesNotThrow(() =>
+    assertHostDeadlineControlProofCase({
+      deadlineProof: hostRoleSurface.hostDeadlineControlProof,
+      expectedGame: "game-a",
+      sourceRoleUrl,
+      visitedRolePath,
     }),
   );
   assert.throws(

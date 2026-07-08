@@ -32,6 +32,31 @@ export function hostRoleSurfaceCheckpointFixture() {
       checkpointPhaseStateAfterAck: "open",
       checkpointDeadlineAffordanceAfterAck: "resolve_phase,lock_thread",
     },
+    hostDeadlineControlProof: {
+      status: "passed",
+      commandKind: "ExtendDeadline",
+      command: {
+        phase: "D01",
+        at: 1781928000,
+      },
+      commandStatus: {
+        state: "ack",
+      },
+      commandOutcome: {
+        state: "ack",
+      },
+      bridgePlan: {
+        finalState: "ack",
+      },
+      projection: {
+        phase: {
+          deadline: 1781928000,
+        },
+      },
+      checkpointPhaseStateAfterAck: "open",
+      checkpointDeadlineAffordanceAfterAck: "resolve_phase,lock_thread",
+      checkpointDeadlineAfterAck: 1781928000,
+    },
     hostLifecycleStaleRejectProof: {
       status: "passed",
       commandKind: "LockThread",

@@ -7440,6 +7440,7 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
       "hardening-race-reload",
       "hardening-stale-reconnect",
       "hardening-stale-reload",
+      "host-deadline-control",
       "host-phase-advance-transition",
       "host-phase-command",
       "host-phase-locked-recovery",
@@ -21484,7 +21485,7 @@ function coreLoopAdminProofFixture() {
       visibleSpineRecoveryHooks: [...coreLoopSpineRows.recoveryHooks],
       visibleCommandProofRoleUrlAudit: {
         status: "passed",
-        checkedCount: 39,
+        checkedCount: 40,
       },
       rawInviteTokensVisible: false,
       releaseReady: false,
@@ -21751,6 +21752,46 @@ function hostLifecycleRoleSurfaceFixture() {
       statusText: "Ack: stream seqs 602",
       activityCount: 2,
       activityStatusText: "Ack: stream seqs 602",
+    },
+    hostDeadlineControlProof: {
+      status: "passed",
+      sourceRoleUrl,
+      visitedRolePath,
+      clickedAction: "extend_deadline_24h",
+      commandKind: "ExtendDeadline",
+      command: {
+        game: "00000000-0000-0000-0000-000000000002",
+        phase: "D01",
+        at: 1781928000,
+      },
+      commandStatus: {
+        state: "ack",
+        message: "Ack: stream seqs 603",
+      },
+      commandOutcome: {
+        state: "ack",
+        message: "Ack: stream seqs 603",
+      },
+      bridgePlan: {
+        role: "moderator",
+        commandKind: "ExtendDeadline",
+        commandEndpoint: "/commands",
+        finalState: "ack",
+        projectionRefreshKeys: [],
+      },
+      projection: {
+        phase: {
+          id: "D01",
+          locked: false,
+          deadline: 1781928000,
+        },
+      },
+      checkpointPhaseStateAfterAck: "open",
+      checkpointDeadlineAffordanceAfterAck: "resolve_phase,lock_thread",
+      checkpointDeadlineAfterAck: 1781928000,
+      statusText: "Ack: stream seqs 603",
+      activityCount: 3,
+      activityStatusText: "Ack: stream seqs 603",
     },
     hostLifecycleStaleRejectProof: {
       status: "passed",

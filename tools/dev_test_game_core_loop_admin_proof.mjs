@@ -51,6 +51,7 @@ import {
   hostAdvancePhaseTransitionCase,
   hostCompleteGameCommandFacts,
   hostDeadlineAffordanceForPhaseState,
+  hostLifecycleControlScenario,
   hostResolvePhaseTransitionCase,
 } from "./dev_test_game_core_loop_host_phase_scenarios.mjs";
 import {
@@ -576,6 +577,12 @@ async function proveHostLifecycleControlCheckpoint({
       roleUrl,
       visitedRolePath,
     });
+    const deadlineProof = await proveHostDeadlineControl({
+      page,
+      commandRequests,
+      roleUrl,
+      visitedRolePath,
+    });
     const staleRejectProof = await proveHostLifecycleStaleReject({
       browser,
       frontendBaseUrl,
@@ -601,6 +608,7 @@ async function proveHostLifecycleControlCheckpoint({
       },
       hostLifecycleControlClickProof: clickProof,
       hostLifecycleUnlockProof: unlockProof,
+      hostDeadlineControlProof: deadlineProof,
       hostLifecycleStaleRejectProof: staleRejectProof,
       releaseReady: false,
       productionReady: false,
@@ -612,6 +620,8 @@ async function proveHostLifecycleControlCheckpoint({
 
 async function installHostLifecycleControlBrowserRoutes(page, { commandRequests }) {
   let locked = false;
+  const scenario = hostLifecycleControlScenario();
+  let deadline = null;
   await page.route("**/commands", async (route) => {
     const commandEnvelope = route.request().postDataJSON();
     const command = commandEnvelope?.body?.body?.command;
@@ -652,6 +662,24 @@ async function installHostLifecycleControlBrowserRoutes(page, { commandRequests 
       });
       return;
     }
+    if (command?.ExtendDeadline !== undefined) {
+      deadline = command.ExtendDeadline.at;
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          v: 1,
+          id: commandEnvelope.id,
+          body: {
+            kind: "Ack",
+            body: {
+              stream_seqs: [scenario.deadlineAckStreamSeq],
+            },
+          },
+        }),
+      });
+      return;
+    }
 
     await route.fulfill({
       status: 409,
@@ -664,7 +692,8 @@ async function installHostLifecycleControlBrowserRoutes(page, { commandRequests 
           body: {
             error: "WrongHostLifecycleProofCommand",
             retryable: false,
-            message: "host lifecycle proof only accepts LockThread/UnlockThread",
+            message:
+              "host lifecycle proof only accepts LockThread/UnlockThread/ExtendDeadline",
           },
         },
       }),
@@ -674,8 +703,11 @@ async function installHostLifecycleControlBrowserRoutes(page, { commandRequests 
     await fulfillJson(
       route,
       locked
-        ? hostLockedConsoleState()
-        : hostOpenConsoleState({ boundary: "Host lifecycle controls open" }),
+        ? hostLockedConsoleState({ deadline })
+        : hostOpenConsoleState({
+            boundary: "Host lifecycle controls open",
+            deadline,
+          }),
     );
   });
 }
@@ -815,6 +847,107 @@ async function proveHostLifecycleUnlock({
     checkpointPhaseStateAfterAck: phaseStateAfterAck,
     checkpointDeadlineAffordanceAfterAck: deadlineAffordanceAfterAck,
     statusText: commandStatuses?.unlock_thread?.message ?? null,
+    activityCount: Number.parseInt(activityCountText, 10),
+    activityStatusText,
+  };
+}
+
+async function proveHostDeadlineControl({
+  page,
+  commandRequests,
+  roleUrl,
+  visitedRolePath,
+}) {
+  const scenario = hostLifecycleControlScenario();
+  const actionTile = page.getByTestId(
+    `critical-host-action-${scenario.deadlineActionId}`,
+  );
+  await actionTile.waitFor({ state: "visible", timeout: 15000 });
+  await actionTile.getByTestId("critical-host-action-trigger").click();
+  await actionTile.getByTestId("critical-host-action-confirm").waitFor({
+    state: "visible",
+    timeout: 15000,
+  });
+  await actionTile.getByTestId("critical-host-action-confirm").click();
+  await page.waitForFunction(
+    ({
+      actionId,
+      commandKind,
+      streamSeq,
+      expectedDeadline,
+    }) =>
+      window.__fmarchHostCommandStatuses?.[actionId]?.state === "ack" &&
+      window.__fmarchHostCommandStatuses?.[actionId]?.message?.includes(
+        `Ack: stream seqs ${streamSeq}`,
+      ) &&
+      window.__fmarchHostCommandDispatchBridgePlan?.commandKind ===
+        commandKind &&
+      window.__fmarchHostProjection?.phase?.deadline === expectedDeadline,
+    {
+      actionId: scenario.deadlineActionId,
+      commandKind: scenario.deadlineCommandKind,
+      streamSeq: scenario.deadlineAckStreamSeq,
+      expectedDeadline: scenario.extendedDeadline,
+    },
+    { timeout: 15000 },
+  );
+  await page.waitForFunction(
+    ({ expectedState, expectedAffordance }) => {
+      const checkpoint = document.querySelector(
+        '[data-testid="host-lifecycle-control-checkpoint"]',
+      );
+      return (
+        checkpoint?.getAttribute("data-phase-state") === expectedState &&
+        checkpoint?.getAttribute("data-deadline-affordance") ===
+          expectedAffordance
+      );
+    },
+    {
+      expectedState: scenario.openPhaseState,
+      expectedAffordance: scenario.openDeadlineAffordance,
+    },
+    { timeout: 15000 },
+  );
+  const commandStatuses = await page.evaluate(
+    () => window.__fmarchHostCommandStatuses,
+  );
+  const commandOutcomes = await page.evaluate(
+    () => window.__fmarchHostCommandOutcomes,
+  );
+  const bridgePlan = await page.evaluate(
+    () => window.__fmarchHostCommandDispatchBridgePlan,
+  );
+  const projection = await page.evaluate(() => window.__fmarchHostProjection);
+  const checkpoint = page.getByTestId("host-lifecycle-control-checkpoint");
+  const phaseStateAfterAck = await checkpoint.getAttribute("data-phase-state");
+  const deadlineAffordanceAfterAck = await checkpoint.getAttribute(
+    "data-deadline-affordance",
+  );
+  const activityCountText = await page
+    .getByTestId("host-command-activity-count")
+    .innerText();
+  const activityStatusText = await page
+    .getByTestId(
+      `host-command-activity-status-${scenario.deadlineActionId}`,
+    )
+    .innerText();
+  const command = commandRequests.at(-1)?.ExtendDeadline ?? null;
+  return {
+    status: "passed",
+    sourceRoleUrl: String(roleUrl),
+    visitedRolePath,
+    clickedAction: scenario.deadlineActionId,
+    commandKind: command === null ? null : scenario.deadlineCommandKind,
+    command,
+    commandStatus: commandStatuses?.[scenario.deadlineActionId] ?? null,
+    commandOutcome: commandOutcomes?.at?.(-1) ?? null,
+    bridgePlan,
+    projection,
+    checkpointPhaseStateAfterAck: phaseStateAfterAck,
+    checkpointDeadlineAffordanceAfterAck: deadlineAffordanceAfterAck,
+    checkpointDeadlineAfterAck: projection?.phase?.deadline ?? null,
+    statusText:
+      commandStatuses?.[scenario.deadlineActionId]?.message ?? null,
     activityCount: Number.parseInt(activityCountText, 10),
     activityStatusText,
   };
@@ -9604,13 +9737,13 @@ function seededDayVoteOpenCommandState({ boundary, locked = false }) {
   };
 }
 
-function hostLockedConsoleState() {
+function hostLockedConsoleState({ deadline = null } = {}) {
   return {
     completed: false,
     phase: {
       phase_id: "D01",
       locked: true,
-      deadline: null,
+      deadline,
     },
     slots: [
       {
@@ -9631,13 +9764,13 @@ function hostLockedConsoleState() {
   };
 }
 
-function hostOpenConsoleState({ boundary }) {
+function hostOpenConsoleState({ boundary, deadline = null }) {
   return {
     completed: false,
     phase: {
       phase_id: "D01",
       locked: false,
-      deadline: null,
+      deadline,
     },
     slots: [
       {

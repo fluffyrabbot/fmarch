@@ -497,6 +497,11 @@ const hostLifecycleControlScenarioDefinition = Object.freeze({
   unlockActionId: hostUnlockThreadCommandFacts().actionId,
   unlockCommandKind: hostUnlockThreadCommandFacts().commandKind,
   unlockAckStreamSeq: 602,
+  deadlineActionId: "extend_deadline_24h",
+  deadlineCommandKind: hostExtendDeadlineCommandFacts().commandKind,
+  deadlineAckStreamSeq: 603,
+  baseDeadline: 1781841600,
+  extendedDeadline: 1781928000,
   openPhaseId: "D01",
   openPhaseState: "open",
   lockedPhaseState: "locked",
@@ -829,6 +834,14 @@ export function assertHostLifecycleControlRoleSurfaceCase({
     scenario,
     includeEvidenceInError,
   });
+  assertHostDeadlineControlProofCase({
+    deadlineProof: hostRoleSurface.hostDeadlineControlProof,
+    expectedGame,
+    sourceRoleUrl: hostRoleSurface.sourceRoleUrl,
+    visitedRolePath: hostRoleSurface.visitedRolePath,
+    scenario,
+    includeEvidenceInError,
+  });
   assertHostLifecycleStaleRejectProofCase({
     staleRejectProof,
     expectedGame,
@@ -934,6 +947,61 @@ export function assertHostLifecycleUnlockProofCase({
     throwHostPhaseScenarioAssertionError({
       message: "core-loop admin proof missing host lifecycle unlock ACK",
       evidence: unlockProof,
+      includeEvidenceInError,
+    });
+  }
+}
+
+export function assertHostDeadlineControlProofCase({
+  deadlineProof,
+  expectedGame,
+  sourceRoleUrl,
+  visitedRolePath,
+  scenario = hostLifecycleControlScenarioDefinition,
+  includeEvidenceInError = false,
+}) {
+  if (
+    deadlineProof?.status !== "passed" ||
+    (sourceRoleUrl !== undefined &&
+      deadlineProof.sourceRoleUrl !== sourceRoleUrl) ||
+    (visitedRolePath !== undefined &&
+      deadlineProof.visitedRolePath !== visitedRolePath) ||
+    deadlineProof.clickedAction !== scenario.deadlineActionId ||
+    deadlineProof.commandKind !== scenario.deadlineCommandKind ||
+    deadlineProof.command?.game !== expectedGame ||
+    deadlineProof.command?.phase !== scenario.openPhaseId ||
+    deadlineProof.command?.at !== scenario.extendedDeadline ||
+    deadlineProof.commandStatus?.state !== "ack" ||
+    !deadlineProof.commandStatus?.message?.includes(
+      `Ack: stream seqs ${scenario.deadlineAckStreamSeq}`,
+    ) ||
+    deadlineProof.commandOutcome?.state !== "ack" ||
+    !deadlineProof.commandOutcome?.message?.includes(
+      `Ack: stream seqs ${scenario.deadlineAckStreamSeq}`,
+    ) ||
+    deadlineProof.bridgePlan?.role !== scenario.role ||
+    deadlineProof.bridgePlan.commandKind !== scenario.deadlineCommandKind ||
+    deadlineProof.bridgePlan.commandEndpoint !== scenario.commandEndpoint ||
+    deadlineProof.bridgePlan.finalState !== "ack" ||
+    deadlineProof.bridgePlan.projectionRefreshKeys?.length !== 0 ||
+    deadlineProof.projection?.phase?.id !== scenario.openPhaseId ||
+    deadlineProof.projection?.phase?.locked !== false ||
+    deadlineProof.projection?.phase?.deadline !== scenario.extendedDeadline ||
+    deadlineProof.checkpointPhaseStateAfterAck !== scenario.openPhaseState ||
+    deadlineProof.checkpointDeadlineAffordanceAfterAck !==
+      scenario.openDeadlineAffordance ||
+    deadlineProof.checkpointDeadlineAfterAck !== scenario.extendedDeadline ||
+    !String(deadlineProof.statusText ?? "")
+      .toLowerCase()
+      .includes(`ack: stream seqs ${scenario.deadlineAckStreamSeq}`) ||
+    deadlineProof.activityCount !== 3 ||
+    !String(deadlineProof.activityStatusText ?? "")
+      .toLowerCase()
+      .includes(`ack: stream seqs ${scenario.deadlineAckStreamSeq}`)
+  ) {
+    throwHostPhaseScenarioAssertionError({
+      message: "core-loop admin proof missing host deadline control ACK",
+      evidence: deadlineProof,
       includeEvidenceInError,
     });
   }

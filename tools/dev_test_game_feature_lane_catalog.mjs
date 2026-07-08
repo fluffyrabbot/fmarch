@@ -13,6 +13,7 @@ import {
 import {
   hostPhaseControlFeatureSpineRow,
   hostPhaseAdvanceTransitionFeatureSpineRow,
+  hostDeadlineControlFeatureSpineRow,
   hostPhaseLockedRecoveryFeatureSpineRow,
   hostPhaseStaleRejectFeatureSpineRow,
   hostPhaseUnlockedRecoveryFeatureSpineRow,
@@ -112,6 +113,7 @@ const coreLoopFeatureSpineLaneRows = Object.freeze([
   Object.freeze(
     hostPhaseUnlockedRecoveryFeatureSpineRow({ cycleId: dayTwoNightTwo }),
   ),
+  Object.freeze(hostDeadlineControlFeatureSpineRow({ cycleId: dayTwoNightTwo })),
   Object.freeze(
     hostPhaseStaleRejectFeatureSpineRow({ cycleId: dayTwoNightTwo }),
   ),
