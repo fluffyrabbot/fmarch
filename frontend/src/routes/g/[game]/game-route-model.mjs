@@ -383,7 +383,10 @@ export function buildPlayerActionCommands(
   selectedActionTargets = {},
 ) {
   const actions = commandState?.actions ?? [];
-  if (actions.length === 0) {
+  const currentActions = Array.isArray(commandState?.currentActions)
+    ? commandState.currentActions
+    : [];
+  if (actions.length === 0 && currentActions.length === 0) {
     return Object.freeze([]);
   }
   const legal = actions.map((action) => {
@@ -414,19 +417,45 @@ export function buildPlayerActionCommands(
       window: action.window,
     });
   });
-  const first = actions[0];
-  const invalidRecovery = Object.freeze({
-    action: `submit_invalid_action:${first.templateId}`,
-    commandKind: "submit_invalid_action",
-    label: "Try invalid self-action",
-    detail: `${first.templateId} -> own slot`,
-    actionId: `invalid_self_${first.templateId}`,
-    templateId: first.templateId,
-    targets: Object.freeze([actorSlot]),
-    targetOptions: Object.freeze([]),
-    grantId: first.grantId,
+  // Slice 2: a submitted night action is filtered out of `actions`, so surface it
+  // from currentActions as a withdraw affordance. The picker stays visible showing
+  // the current pick; the Withdraw command carries the submitted action_id.
+  const withdrawals = currentActions.map((current) => {
+    const targets = Object.freeze(
+      Array.isArray(current.targets)
+        ? current.targets.map((target) => String(target))
+        : [],
+    );
+    return Object.freeze({
+      action: `withdraw_action:${current.templateId}`,
+      commandKind: "withdraw_action",
+      label: `Withdraw ${current.templateId}`,
+      detail: `Current pick: ${targets.length > 0 ? targets.join(", ") : "no target"}`,
+      actionId: current.actionId,
+      templateId: current.templateId,
+      targets,
+      targetOptions: Object.freeze([]),
+      grantId: current.grantId ?? null,
+    });
   });
-  return Object.freeze([...legal, invalidRecovery]);
+  const recovery = [];
+  if (actions.length > 0) {
+    const first = actions[0];
+    recovery.push(
+      Object.freeze({
+        action: `submit_invalid_action:${first.templateId}`,
+        commandKind: "submit_invalid_action",
+        label: "Try invalid self-action",
+        detail: `${first.templateId} -> own slot`,
+        actionId: `invalid_self_${first.templateId}`,
+        templateId: first.templateId,
+        targets: Object.freeze([actorSlot]),
+        targetOptions: Object.freeze([]),
+        grantId: first.grantId,
+      }),
+    );
+  }
+  return Object.freeze([...legal, ...withdrawals, ...recovery]);
 }
 
 export function playerForbiddenMessage(game) {

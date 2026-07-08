@@ -271,6 +271,27 @@ test("selected action targets override the server default when legal", () => {
   assert.deepEqual(noSelection.targets, ["slot-3"]);
 });
 
+test("current actions surface a withdraw command once the picker template is submitted", () => {
+  const commandState = {
+    actions: [],
+    currentActions: [
+      {
+        actionId: "role_factional_kill",
+        templateId: "factional_kill",
+        targets: ["slot-2"],
+        grantId: null,
+      },
+    ],
+  };
+  const withdrawal = buildPlayerComposerView({}, commandState, "slot-7")
+    .actionCommands.find((command) => command.commandKind === "withdraw_action");
+  assert.equal(withdrawal.action, "withdraw_action:factional_kill");
+  assert.equal(withdrawal.actionId, "role_factional_kill");
+  assert.equal(withdrawal.templateId, "factional_kill");
+  assert.deepEqual(withdrawal.targets, ["slot-2"]);
+  assert.match(withdrawal.detail, /Current pick: slot-2/u);
+});
+
 test("player vote commands honor explicitly empty live command-state targets", () => {
   assert.deepEqual(
     buildPlayerVoteCommands(

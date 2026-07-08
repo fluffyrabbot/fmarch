@@ -192,6 +192,12 @@ export function playerRefreshKeysForAction(action) {
   ) {
     return Object.freeze(["votecount", "commandState"]);
   }
+  if (
+    normalizedAction === "withdraw_action" ||
+    normalizedAction.startsWith("withdraw_action:")
+  ) {
+    return Object.freeze(["commandState"]);
+  }
   switch (normalizedAction) {
     case "submit_post":
       return Object.freeze(["thread", "votecount", "commandState", "dayVoteOutcomes"]);

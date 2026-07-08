@@ -17,6 +17,11 @@ export const PLAYER_ACTION_TARGET_PICKER_CONTRACT = Object.freeze({
   cancelTestIdPrefix: "player-action-cancel",
   confirmationTestIdPrefix: "player-action-confirmation",
   messageIdPrefix: "player-action-confirmation-message",
+  withdrawTriggerTestIdPrefix: "player-action-withdraw",
+  withdrawConfirmTestIdPrefix: "player-action-withdraw-confirm",
+  withdrawCancelTestIdPrefix: "player-action-withdraw-cancel",
+  withdrawConfirmationTestIdPrefix: "player-action-withdraw-confirmation",
+  withdrawMessageIdPrefix: "player-action-withdraw-confirmation-message",
 });
 
 // The picker owns the legal submit_action commands; recovery commands
@@ -29,8 +34,10 @@ export function buildPlayerActionTargetPicker({
 } = {}) {
   const commands = Array.isArray(actionCommands) ? actionCommands : [];
   const submittable = commands.filter(isSubmitActionCommand);
+  const withdrawable = commands.filter(isWithdrawActionCommand);
   const recovery = commands.filter(
-    (command) => !isSubmitActionCommand(command),
+    (command) =>
+      !isSubmitActionCommand(command) && !isWithdrawActionCommand(command),
   );
   return Object.freeze({
     root: Object.freeze({
@@ -40,11 +47,14 @@ export function buildPlayerActionTargetPicker({
         component: PLAYER_ACTION_TARGET_PICKER_CONTRACT.componentName,
       }),
     }),
-    actions: Object.freeze(
-      submittable.map((command) =>
+    actions: Object.freeze([
+      ...submittable.map((command) =>
         pickerAction({ command, confirmingAction, disabled }),
       ),
-    ),
+      ...withdrawable.map((command) =>
+        withdrawPickerAction({ command, confirmingAction, disabled }),
+      ),
+    ]),
     recoveryCommands: Object.freeze(recovery.map(recoveryCommandButton)),
   });
 }
@@ -55,6 +65,14 @@ function isSubmitActionCommand(command) {
     return kind === "submit_action";
   }
   return String(command?.action ?? "").startsWith("submit_action");
+}
+
+function isWithdrawActionCommand(command) {
+  const kind = String(command?.commandKind ?? "");
+  if (kind !== "") {
+    return kind === "withdraw_action";
+  }
+  return String(command?.action ?? "").startsWith("withdraw_action");
 }
 
 function pickerAction({ command, confirmingAction, disabled }) {
@@ -124,6 +142,68 @@ function pickerAction({ command, confirmingAction, disabled }) {
         actionsClassName:
           PLAYER_ACTION_TARGET_PICKER_CONTRACT.confirmationActionsClassName,
         objectLabel: targets.join(", "),
+        outcomeLabel: label,
+      }),
+      confirmClassName: "fm-touch-button",
+      cancelClassName: "fm-touch-button fm-touch-button--secondary",
+    }),
+  });
+}
+
+// A submitted action's withdraw affordance. Shaped like pickerAction so it renders
+// through the same panel block (no radios; the current pick shows in `detail`, the
+// trigger is the Withdraw button, and confirm dispatches the withdraw_action command).
+function withdrawPickerAction({ command, confirmingAction, disabled }) {
+  const templateId = String(command.templateId ?? "");
+  const action = String(command.action ?? `withdraw_action:${templateId}`);
+  const targets = Object.freeze(
+    Array.isArray(command.targets)
+      ? command.targets.map((target) => String(target))
+      : [],
+  );
+  const label = String(command.label ?? `Withdraw ${templateId}`);
+  const detail = String(command.detail ?? "");
+  const pick = targets.length > 0 ? targets.map(slotLabel).join(", ") : "no target";
+  return Object.freeze({
+    action,
+    commandKind: "withdraw_action",
+    templateId,
+    label,
+    detail,
+    targets,
+    selectedTarget: targets[0] ?? null,
+    hasTargetChoice: false,
+    options: Object.freeze([]),
+    className: PLAYER_ACTION_TARGET_PICKER_CONTRACT.actionClassName,
+    optionsClassName: PLAYER_ACTION_TARGET_PICKER_CONTRACT.optionsClassName,
+    trigger: Object.freeze({
+      testId: `${PLAYER_ACTION_TARGET_PICKER_CONTRACT.withdrawTriggerTestIdPrefix}-${templateId}`,
+      className: "fm-touch-button fm-touch-button--secondary",
+      disabled: disabled === true,
+      ariaExpanded: String(confirmingAction === action),
+      data: Object.freeze({
+        action,
+        templateId,
+        targetSlots: targets,
+        minTouchTargetPx: PLAYER_ACTION_TARGET_PICKER_CONTRACT.minTouchTargetPx,
+      }),
+    }),
+    confirming: confirmingAction === action,
+    confirmation: Object.freeze({
+      ...buildConfirmationActionViewModel({
+        surface: PLAYER_ACTION_TARGET_PICKER_CONTRACT.surface,
+        actionId: `withdraw-${templateId}`,
+        label,
+        message: `${label}: withdraws your submitted ${templateId} action (current pick ${pick}) for this phase.`,
+        messageIdPrefix: PLAYER_ACTION_TARGET_PICKER_CONTRACT.withdrawMessageIdPrefix,
+        confirmTestId: `${PLAYER_ACTION_TARGET_PICKER_CONTRACT.withdrawConfirmTestIdPrefix}-${templateId}`,
+        cancelTestId: `${PLAYER_ACTION_TARGET_PICKER_CONTRACT.withdrawCancelTestIdPrefix}-${templateId}`,
+        triggerTestId: `${PLAYER_ACTION_TARGET_PICKER_CONTRACT.withdrawTriggerTestIdPrefix}-${templateId}`,
+        confirmationTestId: `${PLAYER_ACTION_TARGET_PICKER_CONTRACT.withdrawConfirmationTestIdPrefix}-${templateId}`,
+        className: PLAYER_ACTION_TARGET_PICKER_CONTRACT.confirmationClassName,
+        actionsClassName:
+          PLAYER_ACTION_TARGET_PICKER_CONTRACT.confirmationActionsClassName,
+        objectLabel: pick,
         outcomeLabel: label,
       }),
       confirmClassName: "fm-touch-button",

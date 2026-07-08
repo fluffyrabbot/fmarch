@@ -57,6 +57,14 @@ export function buildPlayerCommand({
           actor_slot: requiredString(actorSlot, "actorSlot"),
         }),
       });
+    case "withdraw_action":
+      return Object.freeze({
+        WithdrawAction: Object.freeze({
+          game: requiredString(game, "game"),
+          actor_slot: requiredString(actorSlot, "actorSlot"),
+          action_id: requiredString(actionConfig?.actionId, "actionConfig.actionId"),
+        }),
+      });
     case "submit_action":
     case "submit_invalid_action":
       return Object.freeze({

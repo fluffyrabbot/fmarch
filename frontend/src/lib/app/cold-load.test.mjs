@@ -496,6 +496,7 @@ test("normalizes player command state into route action configs", () => {
           window: "Night",
         },
       ],
+      currentActions: [],
       voteTargets: [
         { kind: "slot", slotId: "slot-2", label: "Slot 2" },
         { kind: "slot", slotId: "slot-3", label: "Slot 3" },

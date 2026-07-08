@@ -491,6 +491,7 @@ export const EMPTY_PLAYER_COMMAND_STATE = Object.freeze({
   gameCompleted: false,
   phase: null,
   actions: Object.freeze([]),
+  currentActions: Object.freeze([]),
   voteTargets: Object.freeze([]),
   currentVote: null,
   boundary:
@@ -502,6 +503,11 @@ export function normalizePlayerCommandState(payload, fallback = EMPTY_PLAYER_COM
     return fallback;
   }
   const actions = Array.isArray(payload.actions) ? payload.actions : [];
+  const currentActions = Array.isArray(payload.current_actions)
+    ? payload.current_actions
+    : Array.isArray(payload.currentActions)
+      ? payload.currentActions
+      : [];
   const voteTargets = Array.isArray(payload.vote_targets)
     ? payload.vote_targets
     : Array.isArray(payload.voteTargets)
@@ -529,6 +535,9 @@ export function normalizePlayerCommandState(payload, fallback = EMPTY_PLAYER_COM
           : fallback.gameCompleted === true,
     phase: normalizePlayerCommandPhase(payload.phase ?? null),
     actions: Object.freeze(actions.map(normalizePlayerCommandAction).filter(Boolean)),
+    currentActions: Object.freeze(
+      currentActions.map(normalizePlayerCommandCurrentAction).filter(Boolean),
+    ),
     voteTargets: Object.freeze(
       voteTargets.map(normalizePlayerVoteTarget).filter(Boolean),
     ),
@@ -536,6 +545,25 @@ export function normalizePlayerCommandState(payload, fallback = EMPTY_PLAYER_COM
       payload.current_vote ?? payload.currentVote ?? null,
     ),
     boundary: String(payload.boundary ?? fallback.boundary ?? ""),
+  });
+}
+
+function normalizePlayerCommandCurrentAction(entry) {
+  if (entry === null || typeof entry !== "object") {
+    return null;
+  }
+  const actionId = entry.action_id ?? entry.actionId ?? null;
+  const templateId = entry.template_id ?? entry.templateId ?? null;
+  if (actionId === null || templateId === null) {
+    return null;
+  }
+  return Object.freeze({
+    actionId: String(actionId),
+    templateId: String(templateId),
+    targets: Object.freeze(
+      Array.isArray(entry.targets) ? entry.targets.map((target) => String(target)) : [],
+    ),
+    grantId: entry.grant_id ?? entry.grantId ?? null,
   });
 }
 

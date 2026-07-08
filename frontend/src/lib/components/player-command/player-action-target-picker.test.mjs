@@ -41,6 +41,37 @@ test("picker splits legal actions from recovery commands", () => {
   );
 });
 
+test("picker renders a withdraw affordance for a submitted action", () => {
+  const withdrawCommand = Object.freeze({
+    action: "withdraw_action:factional_kill",
+    commandKind: "withdraw_action",
+    actionId: "role_factional_kill",
+    templateId: "factional_kill",
+    label: "Withdraw factional_kill",
+    detail: "Current pick: slot-2",
+    targets: ["slot-2"],
+  });
+  const picker = buildPlayerActionTargetPicker({
+    actionCommands: [withdrawCommand],
+    confirmingAction: "withdraw_action:factional_kill",
+  });
+  assert.equal(picker.actions.length, 1);
+  const withdrawal = picker.actions[0];
+  assert.equal(withdrawal.commandKind, "withdraw_action");
+  assert.equal(withdrawal.action, "withdraw_action:factional_kill");
+  assert.equal(withdrawal.options.length, 0);
+  assert.equal(
+    withdrawal.trigger.testId,
+    "player-action-withdraw-factional_kill",
+  );
+  assert.equal(
+    withdrawal.confirmation.confirmTestId,
+    "player-action-withdraw-confirm-factional_kill",
+  );
+  assert.equal(withdrawal.confirming, true);
+  assert.equal(picker.recoveryCommands.length, 0);
+});
+
 test("picker options mirror target options with the current target checked", () => {
   const picker = buildPlayerActionTargetPicker({
     actionCommands: [LEGAL_ACTION],
