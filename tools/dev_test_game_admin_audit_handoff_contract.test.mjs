@@ -278,6 +278,9 @@ function adminRoleSurfaceFixture() {
         detailRoleUrl:
           "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
         visibleChecks: [hostedMatrixAdminRequiredCheckIds.at(-1)],
+        visibleCheckStatuses: {
+          [hostedMatrixAdminRequiredCheckIds.at(-1)]: "unproven",
+        },
         visibleScenarios: ["host-phase-controls"],
         visibleSessions: ["host"],
         visibleReconnectLanes: ["reconnect-recovery"],

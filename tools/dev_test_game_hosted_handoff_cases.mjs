@@ -251,7 +251,37 @@ export function hostedEvidenceBlockedOperatorPacketFromReceipt(receipt) {
 
 export function assertHostedEvidenceBlockedOperatorPacket(packet) {
   assertBlockedOperatorPacket(packet);
-  assertHostedEvidenceOperatorChecklistDescriptor(packet.operatorChecklist);
+  const operatorChecklist = assertHostedEvidenceOperatorChecklistDescriptor(
+    packet.operatorChecklist,
+  );
+  const expectedEnv = [
+    { name: "FMARCH_HOSTED_MATRIX_FRONTEND_URL", required: true },
+    { name: "FMARCH_HOSTED_MATRIX_API_URL", required: true },
+    { name: "FMARCH_HOSTED_MATRIX_GROUP_ID", required: true },
+    { name: "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH", required: true },
+    { name: "FMARCH_HOSTED_MATRIX_EVIDENCE_PATH", required: false },
+  ];
+  const actualEnv = operatorChecklist.env.map((input) => ({
+    name: input.name,
+    required: input.required,
+  }));
+  if (
+    JSON.stringify(actualEnv) !== JSON.stringify(expectedEnv) ||
+    (packet.firstMissingCheckId === "raw-evidence-real-hosted-target" &&
+      packet.firstMissingInputId !== "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH") ||
+    packet.proofTarget !== devTestGameHostedTargetPreflightPath ||
+    packet.rawEvidenceTemplate === undefined ||
+    packet.rawEvidenceTemplate.path !==
+      devTestGameHostedMatrixRawEvidenceTemplatePath ||
+    operatorChecklist.rawEvidenceTemplatePath !==
+      devTestGameHostedMatrixRawEvidenceTemplatePath ||
+    operatorChecklist.preflightTarget !== devTestGameHostedTargetPreflightPath ||
+    operatorChecklist.proofTarget !== hostedEvidenceLanePath ||
+    packet.roleSurfaceDrilldown.handoffRoleUrl !==
+      localAdminAuditRoleUrl(localAdminAuditIds.hostedEvidenceLane)
+  ) {
+    throw new Error("hosted evidence blocked operator packet drifted");
+  }
   return packet;
 }
 

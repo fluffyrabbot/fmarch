@@ -575,6 +575,7 @@ import {
   devTestGameHostedEvidenceLaneRealCaptureAdminProofCommand,
   devTestGameHostedEvidenceLaneRealCaptureAdminProofPath,
   devTestGameHostedEvidenceLaneRealCaptureSourcePath,
+  assertHostedEvidenceBlockedOperatorPacket,
   hostedEvidenceBlockedOperatorPacketFromReceipt,
   hostedEvidenceBlockedHandoffChecklistFixture,
   hostedEvidenceFirstMissingOperatorArtifact,
@@ -5449,6 +5450,62 @@ test("dev test-game next-action advances hosted deployment after target prefligh
   const blockedPreflightOperatorPacket =
     blockedPreflightAction.nextAction.unproven.hostedHandoffChecklist
       .blockedReceipt.blockedOperatorPacket;
+  assert.equal(
+    assertHostedEvidenceBlockedOperatorPacket(blockedPreflightOperatorPacket),
+    blockedPreflightOperatorPacket,
+  );
+  assert.equal(
+    blockedPreflightAction.nextAction.unproven.roleUrl,
+    localAdminAuditRoleUrl(localAdminAuditIds.hostedEvidenceLane),
+  );
+  assert.equal(
+    blockedPreflightOperatorPacket.roleSurfaceDrilldown.handoffRoleUrl,
+    localAdminAuditRoleUrl(localAdminAuditIds.hostedEvidenceLane),
+  );
+  assert.deepEqual(
+    blockedPreflightOperatorPacket.operatorChecklist.env.map((input) => ({
+      name: input.name,
+      required: input.required,
+    })),
+    [
+      { name: "FMARCH_HOSTED_MATRIX_FRONTEND_URL", required: true },
+      { name: "FMARCH_HOSTED_MATRIX_API_URL", required: true },
+      { name: "FMARCH_HOSTED_MATRIX_GROUP_ID", required: true },
+      { name: "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH", required: true },
+      { name: "FMARCH_HOSTED_MATRIX_EVIDENCE_PATH", required: false },
+    ],
+  );
+  assert.equal(
+    blockedPreflightOperatorPacket.rawEvidenceTemplate.path,
+    devTestGameHostedMatrixRawEvidenceTemplatePath,
+  );
+  assert.throws(
+    () =>
+      assertHostedEvidenceBlockedOperatorPacket({
+        ...blockedPreflightOperatorPacket,
+        operatorChecklist: {
+          ...blockedPreflightOperatorPacket.operatorChecklist,
+          env: blockedPreflightOperatorPacket.operatorChecklist.env.map(
+            (input) =>
+              input.name === "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH"
+                ? { ...input, name: "FMARCH_HOSTED_MATRIX_RAW_CAPTURE_PATH" }
+                : input,
+          ),
+        },
+      }),
+    /hosted evidence blocked operator packet drifted/,
+  );
+  assert.throws(
+    () =>
+      assertHostedEvidenceBlockedOperatorPacket({
+        ...blockedPreflightOperatorPacket,
+        rawEvidenceTemplate: {
+          ...blockedPreflightOperatorPacket.rawEvidenceTemplate,
+          path: "target/dev-test-game/raw-evidence-template.json",
+        },
+      }),
+    /drifted/,
+  );
   assert.deepEqual(blockedPreflightAction.selectedOperatorHandoff, {
     id: "hosted-deployment:blocked-operator-packet",
     status: "blocked",
