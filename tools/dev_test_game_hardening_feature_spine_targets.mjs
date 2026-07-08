@@ -123,6 +123,7 @@ function hardeningConcurrentRaceRowsForTargets(targets) {
           roleUrlId: target.reloadLaneId,
           checkpointId: target.reloadLaneId,
           adminCheckId: target.reloadLaneId,
+          featureTargetKind: target.featureTargetKind,
         }),
       ]),
     ),

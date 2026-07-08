@@ -26,6 +26,15 @@ import {
   staleCompletedGamePlayerCommandHardeningLaneCaseDefinitions,
   staleCompletedGamePlayerCommandProofArgs,
 } from "./dev_test_game_core_loop_completed_game_recovery_scenarios.mjs";
+import {
+  hardeningAggregateCoverageFeatureTargetKind,
+  hardeningRaceActionFeatureTargetKind,
+  hardeningRaceFeatureTargetKind,
+  hardeningRaceReloadFeatureTargetKind,
+  hardeningStaleReconnectFeatureTargetKind,
+  hardeningStaleReloadFeatureTargetKind,
+  hardeningSurfaceFeatureTargetKind,
+} from "./dev_test_game_hardening_feature_target_kinds.mjs";
 
 export {
   assertCompletedGameEndgameTransition,
@@ -482,25 +491,25 @@ function completedGameHardeningFeatureTargetKind(lane) {
   if (lane.proofStep === "race") {
     return lane.proofGroup === "host-complete-race" ||
       lane.proofGroup === "player-complete-race"
-      ? "hardening-race-action"
-      : "hardening-race";
+      ? hardeningRaceActionFeatureTargetKind
+      : hardeningRaceFeatureTargetKind;
   }
   if (lane.proofStep === "reload") {
     if (
       lane.proofGroup === "host-complete-race" ||
       lane.proofGroup === "player-complete-race"
     ) {
-      return "hardening-race-reload";
+      return hardeningRaceReloadFeatureTargetKind;
     }
-    return "hardening-stale-reload";
+    return hardeningStaleReloadFeatureTargetKind;
   }
   if (lane.proofStep === "reconnect") {
-    return "hardening-stale-reconnect";
+    return hardeningStaleReconnectFeatureTargetKind;
   }
   if (lane.proofStep === "reject") {
-    return "aggregate-hardening-coverage";
+    return hardeningAggregateCoverageFeatureTargetKind;
   }
-  return "hardening-surface";
+  return hardeningSurfaceFeatureTargetKind;
 }
 
 export function completedHostSeedDemoOnlyScenarioIds() {

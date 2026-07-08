@@ -1,3 +1,7 @@
+import {
+  hardeningRaceReloadFeatureTargetKind,
+} from "./dev_test_game_hardening_feature_target_kinds.mjs";
+
 const cloneRaceCoverageCell = (cell) => ({
   ...cell,
   roleSurfaces: [...cell.roleSurfaces],
@@ -43,18 +47,21 @@ const crossRoleRaceReloadSpineTargetDefinitions = Object.freeze([
     featureSlotId: "player-host-vote-resolve-race-reload",
     reloadLaneId: playerHostRaceCoverageCellDefinitions[0].reloadLaneId,
     role: "host",
+    featureTargetKind: hardeningRaceReloadFeatureTargetKind,
   }),
   Object.freeze({
     targetKey: "playerHostActionAdvanceRaceReload",
     featureSlotId: "player-host-action-advance-race-reload",
     reloadLaneId: playerHostRaceCoverageCellDefinitions[1].reloadLaneId,
     role: "host",
+    featureTargetKind: hardeningRaceReloadFeatureTargetKind,
   }),
   Object.freeze({
     targetKey: "cohostHostDeadlineResolveRaceReload",
     featureSlotId: "cohost-host-deadline-resolve-race-reload",
     reloadLaneId: cohostHostRaceCoverageCellDefinitions[0].reloadLaneId,
     role: "host",
+    featureTargetKind: hardeningRaceReloadFeatureTargetKind,
   }),
 ]);
 

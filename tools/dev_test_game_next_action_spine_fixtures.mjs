@@ -19,6 +19,13 @@ import {
 import {
   productionFeatureSpineTargetProvenanceCaseForSlotId,
 } from "./dev_test_game_production_feature_spine_target_provenance.mjs";
+import {
+  hardeningAggregateCoverageFeatureTargetKind,
+  hardeningRaceReloadFeatureTargetKind,
+  hardeningReconnectRecoveryFeatureTargetKind,
+  hardeningStaleReconnectFeatureTargetKind,
+  hardeningStaleReloadFeatureTargetKind,
+} from "./dev_test_game_hardening_feature_target_kinds.mjs";
 
 export const invalidActionRecoveryHostedConcurrentRaceMatrixUnprovenText =
   "Hosted or hosted-like concurrent command race matrix beyond the promoted local replacement, host, player, cohost deadline, lifecycle, and complete-game reload milestones, including multi-session reload/reconnect recovery and stale-client conflict evidence";
@@ -281,13 +288,15 @@ export function releaseReadinessTraceCandidateFixture({
 
 function releaseReadinessFeatureTargetKindPriorityFixture(featureTargetKind) {
   switch (featureTargetKind) {
-    case "aggregate-hardening-coverage":
+    case hardeningAggregateCoverageFeatureTargetKind:
       return 100;
-    case "hardening-stale-reload":
+    case hardeningStaleReloadFeatureTargetKind:
       return 20;
-    case "hardening-stale-reconnect":
+    case hardeningStaleReconnectFeatureTargetKind:
       return 15;
-    case "hardening-race-reload":
+    case hardeningReconnectRecoveryFeatureTargetKind:
+      return 10;
+    case hardeningRaceReloadFeatureTargetKind:
       return 5;
     default:
       return 0;

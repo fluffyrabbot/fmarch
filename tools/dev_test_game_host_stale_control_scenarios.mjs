@@ -21,6 +21,9 @@ import {
   buildLaneCoverageSummary,
   cloneLaneCoverageFamilies,
 } from "./dev_test_game_lane_coverage.mjs";
+import {
+  hardeningRaceReloadFeatureTargetKind,
+} from "./dev_test_game_hardening_feature_target_kinds.mjs";
 
 export const hostStandaloneStaleControlLaneIds = Object.freeze([
   "stale-host-publish",
@@ -352,24 +355,28 @@ const hostPhaseRaceReloadSpineTargetDefinitions = Object.freeze([
     featureSlotId: "host-concurrent-resolve-race-reload",
     reloadLaneId: hostPhaseRaceCoverageCellDefinitions[0].reloadLaneId,
     role: "host",
+    featureTargetKind: hardeningRaceReloadFeatureTargetKind,
   }),
   Object.freeze({
     targetKey: "hostConcurrentAdvanceRaceReload",
     featureSlotId: "host-concurrent-advance-race-reload",
     reloadLaneId: hostPhaseRaceCoverageCellDefinitions[1].reloadLaneId,
     role: "host",
+    featureTargetKind: hardeningRaceReloadFeatureTargetKind,
   }),
   Object.freeze({
     targetKey: "hostConcurrentDeadlineAdvanceRaceReload",
     featureSlotId: "host-concurrent-deadline-advance-race-reload",
     reloadLaneId: hostPhaseRaceCoverageCellDefinitions[2].reloadLaneId,
     role: "host",
+    featureTargetKind: hardeningRaceReloadFeatureTargetKind,
   }),
   Object.freeze({
     targetKey: "hostConcurrentMixedAdvanceRaceReload",
     featureSlotId: "host-concurrent-mixed-advance-race-reload",
     reloadLaneId: hostPhaseRaceCoverageCellDefinitions[3].reloadLaneId,
     role: "host",
+    featureTargetKind: hardeningRaceReloadFeatureTargetKind,
   }),
 ]);
 
@@ -379,12 +386,14 @@ const hostStandaloneRaceReloadSpineTargetDefinitions = Object.freeze([
     featureSlotId: "host-concurrent-publish-race-reload",
     reloadLaneId: hostStandaloneRaceCoverageCellDefinitions[0].reloadLaneId,
     role: "host",
+    featureTargetKind: hardeningRaceReloadFeatureTargetKind,
   }),
   Object.freeze({
     targetKey: "hostConcurrentLifecycleRaceReload",
     featureSlotId: "host-concurrent-lifecycle-race-reload",
     reloadLaneId: hostStandaloneRaceCoverageCellDefinitions[1].reloadLaneId,
     role: "host",
+    featureTargetKind: hardeningRaceReloadFeatureTargetKind,
   }),
 ]);
 

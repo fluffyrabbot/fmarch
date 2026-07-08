@@ -7465,6 +7465,31 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
       ?.featureSlotIds.includes("completed-game-stale-host-reject"),
     true,
   );
+  const hardeningRaceReloadKindRow = productionFeatureKindRows.find(
+    (row) => row.id === "feature-target-kind:hardening-race-reload",
+  );
+  assert.equal(hardeningRaceReloadKindRow?.featureSlotIds.length, 14);
+  assert.deepEqual(
+    [
+      "completed-game-host-complete-race-reload",
+      "completed-game-public-player-complete-reload",
+      "host-concurrent-resolve-race-reload",
+      "host-concurrent-advance-race-reload",
+      "host-concurrent-deadline-advance-race-reload",
+      "host-concurrent-mixed-advance-race-reload",
+      "host-concurrent-publish-race-reload",
+      "host-concurrent-lifecycle-race-reload",
+      "player-host-vote-resolve-race-reload",
+      "player-host-action-advance-race-reload",
+      "cohost-host-deadline-resolve-race-reload",
+      "replacement-private-post-race-reload",
+      "replacement-vote-race-reload",
+      "replacement-action-race-reload",
+    ].every((featureSlotId) =>
+      hardeningRaceReloadKindRow?.featureSlotIds.includes(featureSlotId),
+    ),
+    true,
+  );
   const hostSetupDestinationSummaryRow =
     graph.summary.productionFeatureDestinationSummary.rows.find(
       (row) => row.id === "production-feature:host-setup-route",

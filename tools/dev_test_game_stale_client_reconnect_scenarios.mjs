@@ -4,6 +4,9 @@ import {
 import {
   replacementPrivatePostRecoveryLaneIds,
 } from "./dev_test_game_replacement_private_scenarios.mjs";
+import {
+  hardeningReconnectRecoveryFeatureTargetKind,
+} from "./dev_test_game_hardening_feature_target_kinds.mjs";
 
 const cloneScenarioCase = (scenario) => ({ ...scenario });
 const cloneExpectation = (expectation) => {
@@ -42,7 +45,7 @@ export const hostStaleDeadlineReconnectLaneId =
 export const cohostStaleDeadlineReconnectLaneId =
   "stale-cohost-deadline-reconnect-recovery";
 export const hardeningReconnectFeatureTargetKind =
-  "hardening-reconnect-recovery";
+  hardeningReconnectRecoveryFeatureTargetKind;
 
 const sharedStaleActionReconnectExpectation = Object.freeze({
   rejectError: "PhaseLocked",

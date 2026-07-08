@@ -29,6 +29,9 @@ import {
   replacementStalePrivatePostAfterResolveScenario,
   replacementStalePrivatePostAfterCompleteScenario,
 } from "./dev_test_game_replacement_private_scenario_cases.mjs";
+import {
+  hardeningRaceReloadFeatureTargetKind,
+} from "./dev_test_game_hardening_feature_target_kinds.mjs";
 
 test("replacement private scenario module groups private-post race and recovery lanes", () => {
   assert.deepEqual(replacementPrivatePostRaceLaneIds, [
@@ -103,18 +106,21 @@ test("replacement private scenario module groups private-post race and recovery 
       reloadLaneId: replacementPrivatePostRaceLaneIds[1],
       role: "private-channel",
       channelId: "private:mafia_day_chat",
+      featureTargetKind: hardeningRaceReloadFeatureTargetKind,
     },
     {
       targetKey: "replacementVoteRaceReload",
       featureSlotId: "replacement-vote-race-reload",
       reloadLaneId: replacementVoteRaceLaneIds[1],
       role: "player",
+      featureTargetKind: hardeningRaceReloadFeatureTargetKind,
     },
     {
       targetKey: "replacementActionRaceReload",
       featureSlotId: "replacement-action-race-reload",
       reloadLaneId: replacementActionRaceLaneIds[1],
       role: "player",
+      featureTargetKind: hardeningRaceReloadFeatureTargetKind,
     },
   ]);
 });

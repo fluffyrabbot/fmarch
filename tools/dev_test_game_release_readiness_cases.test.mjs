@@ -158,6 +158,7 @@ const hardeningConcurrentRaceFeatureTargetExpectations = Object.freeze([
       targetKey: target.targetKey,
       featureSlotId: target.featureSlotId,
       rowId: target.reloadLaneId,
+      featureTargetKind: target.featureTargetKind,
     }),
   ),
 ]);
@@ -471,6 +472,7 @@ test("release readiness buildable cases share next-action commands and spine tar
         rowKind: "checkpoint",
         checkpointId: expectation.rowId,
         adminCheckId: expectation.rowId,
+        featureTargetKind: expectation.featureTargetKind,
       },
     );
   }

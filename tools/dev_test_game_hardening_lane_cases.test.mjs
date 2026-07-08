@@ -121,6 +121,9 @@ import {
   crossRoleRaceLaneIds,
   playerHostRaceLaneIds,
 } from "./dev_test_game_cross_role_race_scenarios.mjs";
+import {
+  hardeningRaceReloadFeatureTargetKind,
+} from "./dev_test_game_hardening_feature_target_kinds.mjs";
 
 test("hardening lane cases share stale conflict-message IDs", () => {
   assert.deepEqual(staleConflictMessageLaneIds, [
@@ -1035,6 +1038,7 @@ test("hardening lane cases share host race/reload IDs", () => {
       target.featureSlotId,
       target.reloadLaneId,
       target.role,
+      target.featureTargetKind,
     ]),
     [
       [
@@ -1042,24 +1046,28 @@ test("hardening lane cases share host race/reload IDs", () => {
         "host-concurrent-resolve-race-reload",
         "concurrent-host-resolve-race-reload",
         "host",
+        hardeningRaceReloadFeatureTargetKind,
       ],
       [
         "hostConcurrentAdvanceRaceReload",
         "host-concurrent-advance-race-reload",
         "concurrent-host-advance-race-reload",
         "host",
+        hardeningRaceReloadFeatureTargetKind,
       ],
       [
         "hostConcurrentDeadlineAdvanceRaceReload",
         "host-concurrent-deadline-advance-race-reload",
         "concurrent-host-deadline-advance-race-reload",
         "host",
+        hardeningRaceReloadFeatureTargetKind,
       ],
       [
         "hostConcurrentMixedAdvanceRaceReload",
         "host-concurrent-mixed-advance-race-reload",
         "concurrent-host-mixed-advance-race-reload",
         "host",
+        hardeningRaceReloadFeatureTargetKind,
       ],
     ],
   );
@@ -1081,12 +1089,14 @@ test("hardening lane cases share host race/reload IDs", () => {
       featureSlotId: "host-concurrent-publish-race-reload",
       reloadLaneId: hostPublishRaceLaneIds[1],
       role: "host",
+      featureTargetKind: hardeningRaceReloadFeatureTargetKind,
     },
     {
       targetKey: "hostConcurrentLifecycleRaceReload",
       featureSlotId: "host-concurrent-lifecycle-race-reload",
       reloadLaneId: hostLifecycleRaceLaneIds[1],
       role: "host",
+      featureTargetKind: hardeningRaceReloadFeatureTargetKind,
     },
   ]);
   assert.deepEqual(
@@ -1306,6 +1316,7 @@ test("hardening lane cases share cross-role race IDs", async () => {
       target.featureSlotId,
       target.reloadLaneId,
       target.role,
+      target.featureTargetKind,
     ]),
     [
       [
@@ -1313,18 +1324,21 @@ test("hardening lane cases share cross-role race IDs", async () => {
         "player-host-vote-resolve-race-reload",
         "concurrent-player-vote-resolve-race-reload",
         "host",
+        hardeningRaceReloadFeatureTargetKind,
       ],
       [
         "playerHostActionAdvanceRaceReload",
         "player-host-action-advance-race-reload",
         "concurrent-player-action-advance-race-reload",
         "host",
+        hardeningRaceReloadFeatureTargetKind,
       ],
       [
         "cohostHostDeadlineResolveRaceReload",
         "cohost-host-deadline-resolve-race-reload",
         "concurrent-cohost-deadline-resolve-race-reload",
         "host",
+        hardeningRaceReloadFeatureTargetKind,
       ],
     ],
   );

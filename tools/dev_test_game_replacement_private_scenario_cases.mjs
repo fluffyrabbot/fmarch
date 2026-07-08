@@ -11,6 +11,9 @@ import {
   buildLaneCoverageSummary,
   cloneLaneCoverageFamilies,
 } from "./dev_test_game_lane_coverage.mjs";
+import {
+  hardeningRaceReloadFeatureTargetKind,
+} from "./dev_test_game_hardening_feature_target_kinds.mjs";
 
 export const replacementPrivatePostRaceLaneIds = Object.freeze([
   "concurrent-replacement-private-post-race",
@@ -80,18 +83,21 @@ const replacementRaceReloadSpineTargetDefinitions = Object.freeze([
     reloadLaneId: replacementPrivatePostRaceLaneIds[1],
     role: "private-channel",
     channelId: "private:mafia_day_chat",
+    featureTargetKind: hardeningRaceReloadFeatureTargetKind,
   }),
   Object.freeze({
     targetKey: "replacementVoteRaceReload",
     featureSlotId: "replacement-vote-race-reload",
     reloadLaneId: replacementVoteRaceLaneIds[1],
     role: "player",
+    featureTargetKind: hardeningRaceReloadFeatureTargetKind,
   }),
   Object.freeze({
     targetKey: "replacementActionRaceReload",
     featureSlotId: "replacement-action-race-reload",
     reloadLaneId: replacementActionRaceLaneIds[1],
     role: "player",
+    featureTargetKind: hardeningRaceReloadFeatureTargetKind,
   }),
 ]);
 

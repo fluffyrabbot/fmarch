@@ -24,6 +24,14 @@ import {
   devTestGameReleaseReadinessPath,
 } from "./dev_test_game_spine_readiness_steps.mjs";
 import {
+  hardeningAggregateCoverageFeatureTargetKind,
+  hardeningRaceActionFeatureTargetKind,
+  hardeningRaceReloadFeatureTargetKind,
+  hardeningReconnectRecoveryFeatureTargetKind,
+  hardeningStaleReconnectFeatureTargetKind,
+  hardeningStaleReloadFeatureTargetKind,
+} from "./dev_test_game_hardening_feature_target_kinds.mjs";
+import {
   assertDevTestGameRaceCoverage,
   devTestGameRaceCoverageAdminProofPath,
   devTestGameRaceCoveragePath,
@@ -1373,17 +1381,17 @@ export function compareReleaseReadinessCandidatePriority(left, right) {
 
 export function releaseReadinessFeatureTargetKindPriority(featureTargetKind) {
   switch (featureTargetKind) {
-    case "aggregate-hardening-coverage":
+    case hardeningAggregateCoverageFeatureTargetKind:
       return 100;
-    case "hardening-stale-reload":
+    case hardeningStaleReloadFeatureTargetKind:
       return 20;
-    case "hardening-stale-reconnect":
+    case hardeningStaleReconnectFeatureTargetKind:
       return 15;
-    case "hardening-reconnect-recovery":
+    case hardeningReconnectRecoveryFeatureTargetKind:
       return 10;
-    case "hardening-race-reload":
+    case hardeningRaceReloadFeatureTargetKind:
       return 5;
-    case "hardening-race-action":
+    case hardeningRaceActionFeatureTargetKind:
       return 0;
     default:
       return 0;
