@@ -295,6 +295,21 @@ async function buildCommandScenarios(bundle, moderatorActionManifest) {
       ...(await renderedFragment(bundle.renderPlayerPrivateChannelRoute())),
     },
     {
+      id: "player-action-target-pick-confirm-click",
+      role: "player",
+      render: "renderPlayerActionTargetConfirmation",
+      targetSelector: '[data-testid="player-action-confirm-factional_kill"]',
+      targetTestId: "player-action-confirm-factional_kill",
+      expectedText: "factional_kill -> slot-2",
+      minTouchTargetPx: 44,
+      focusContract: {
+        initialFocusTestId: "player-action-confirm-factional_kill",
+        returnFocusTestId: "player-action-trigger-factional_kill",
+        tabContainment: "local-confirmation-controls",
+      },
+      ...(await renderedFragment(bundle.renderPlayerActionTargetConfirmation())),
+    },
+    {
       id: "route-error-back-to-board-click",
       role: "player",
       render: "renderRouteErrorSurface",

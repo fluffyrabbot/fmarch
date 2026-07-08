@@ -306,7 +306,12 @@ export function buildPlayerPhaseView(commandState) {
   });
 }
 
-export function buildPlayerComposerView(baseComposer, commandState, actorSlot) {
+export function buildPlayerComposerView(
+  baseComposer,
+  commandState,
+  actorSlot,
+  selectedActionTargets = {},
+) {
   const withdrawState = playerWithdrawVoteState(commandState);
   return Object.freeze({
     ...baseComposer,
@@ -315,7 +320,11 @@ export function buildPlayerComposerView(baseComposer, commandState, actorSlot) {
     hasCurrentVote: commandState?.currentVote != null,
     canWithdrawVote: withdrawState.canWithdrawVote,
     withdrawDisabledReason: withdrawState.reason,
-    actionCommands: buildPlayerActionCommands(commandState, actorSlot),
+    actionCommands: buildPlayerActionCommands(
+      commandState,
+      actorSlot,
+      selectedActionTargets,
+    ),
   });
 }
 
@@ -367,23 +376,43 @@ export function buildPlayerVoteCommands(baseComposer, commandState) {
   );
 }
 
-export function buildPlayerActionCommands(commandState, actorSlot) {
+export function buildPlayerActionCommands(
+  commandState,
+  actorSlot,
+  selectedActionTargets = {},
+) {
   const actions = commandState?.actions ?? [];
   if (actions.length === 0) {
     return Object.freeze([]);
   }
-  const legal = actions.map((action) =>
-    Object.freeze({
+  const legal = actions.map((action) => {
+    const targetOptions = Object.freeze(
+      Array.isArray(action.targetOptions)
+        ? action.targetOptions.map((option) => String(option))
+        : [],
+    );
+    const selected = selectedActionTargets?.[action.templateId];
+    const targets =
+      selected !== undefined && targetOptions.includes(String(selected))
+        ? Object.freeze([String(selected)])
+        : action.targets;
+    return Object.freeze({
       action: action.action,
       commandKind: action.commandKind,
       label: action.label,
-      detail: action.detail,
+      detail:
+        targets === action.targets
+          ? action.detail
+          : `${action.templateId} -> ${targets.join(", ")}`,
       actionId: action.actionId,
       templateId: action.templateId,
-      targets: action.targets,
+      targets,
+      targetOptions,
       grantId: action.grantId,
-    }),
-  );
+      ability: action.ability,
+      window: action.window,
+    });
+  });
   const first = actions[0];
   const invalidRecovery = Object.freeze({
     action: `submit_invalid_action:${first.templateId}`,
@@ -393,6 +422,7 @@ export function buildPlayerActionCommands(commandState, actorSlot) {
     actionId: `invalid_self_${first.templateId}`,
     templateId: first.templateId,
     targets: Object.freeze([actorSlot]),
+    targetOptions: Object.freeze([]),
     grantId: first.grantId,
   });
   return Object.freeze([...legal, invalidRecovery]);
@@ -599,6 +629,12 @@ const PLAYER_ACTION_OPEN_FIXTURE_COLD_LOAD = Object.freeze({
     boundary: "Seeded local action-open player command state.",
   }),
 });
+
+// Deterministic action-open fixture for proof harnesses that need a legal
+// night action with multiple target options (picker scenarios).
+export function playerActionOpenFixture() {
+  return PLAYER_ACTION_OPEN_FIXTURE_COLD_LOAD;
+}
 
 function playerFixtureColdLoad(gameId) {
   if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(gameId)) {

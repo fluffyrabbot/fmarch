@@ -2408,6 +2408,12 @@ test("no-bind browser interaction artifact records click focus evidence or a Chr
       originalUrlRendered: false,
     },
   });
+  assertNoBindInteractionEntries(noBindInteractions.interactions.player, {
+    id: "player-action-target-pick-confirm-click",
+    render: "renderPlayerActionTargetConfirmation",
+    targetSelector: '[data-testid="player-action-confirm-factional_kill"]',
+    targetTestId: "player-action-confirm-factional_kill",
+  });
   for (const [actionId, payloadKind] of moderatorCriticalConfirmationActions) {
     assertNoBindInteractionEntries(noBindInteractions.interactions.moderator, {
       id: `moderator-${actionId}-confirm-click`,
@@ -2955,6 +2961,15 @@ test("in-app browser interaction page fixture records role command targets", asy
         "submit_post",
       ],
       [
+        "player-action-target-pick-confirm-click",
+        "player",
+        "renderPlayerActionTargetConfirmation",
+        undefined,
+        '[data-testid="player-action-confirm-factional_kill"]',
+        "player-action-confirm-factional_kill",
+        undefined,
+      ],
+      [
         "route-error-back-to-board-click",
         "player",
         "renderRouteErrorSurface",
@@ -3226,6 +3241,10 @@ test("in-app browser interaction page fixture records role command targets", asy
   assert.match(page, /data-action="submit_post"/);
   assert.match(page, /data-iab-scenario-id="player-private-channel-submit-post-click"/);
   assert.match(page, /data-iab-scenario-id="route-error-back-to-board-click"/);
+  assert.match(
+    page,
+    /data-iab-scenario-id="player-action-target-pick-confirm-click"/,
+  );
   assert.match(page, /data-testid="route-error-action"/);
   assert.match(page, /data-testid="player-channel-role-pm"/);
   assert.match(page, /data-testid="critical-host-action-confirm"/);
@@ -3312,6 +3331,14 @@ test("in-app browser static DOM artifact verifies generated fixture structure", 
         "button",
         null,
         "submit_post",
+        44,
+      ],
+      [
+        "player-action-target-pick-confirm-click",
+        "player",
+        "button",
+        "player-action-confirm-factional_kill",
+        null,
         44,
       ],
       [
@@ -3483,6 +3510,7 @@ test("in-app browser fixture smoke records browser-run evidence or block", async
       "player-submit-vote-click",
       "player-submit-post-click",
       "player-private-channel-submit-post-click",
+      "player-action-target-pick-confirm-click",
       "route-error-back-to-board-click",
       ...moderatorCriticalConfirmationScenarioIds,
       "admin-audit-native-flow",
@@ -3602,6 +3630,7 @@ test("in-app browser fixture replay handoff records portable rerun instructions"
     "player-submit-vote-click",
     "player-submit-post-click",
     "player-private-channel-submit-post-click",
+    "player-action-target-pick-confirm-click",
     "route-error-back-to-board-click",
     ...moderatorCriticalConfirmationScenarioIds,
     "admin-audit-native-flow",
@@ -3781,7 +3810,7 @@ test("in-app browser fixture bundle records deterministic portable payload", asy
   }
   assert.equal(
     bundle.fixture.plannedInteractionCount,
-    23,
+    EXPECTED_COUNTS.plannedInteractions,
   );
   assert.equal(bundle.fixture.moderatorCriticalConfirmationCount, 11);
   assert.equal(bundle.fixture.plannedStabilityCheckCount, 2);
@@ -4017,7 +4046,7 @@ test("in-app browser operator runbook records external replay workflow", async (
   );
   assert.equal(typeof runbook.currentStatus.promotionEligible, "boolean");
   assert.deepEqual(runbook.fixture, {
-    plannedInteractionCount: 23,
+    plannedInteractionCount: EXPECTED_COUNTS.plannedInteractions,
     moderatorCriticalConfirmationCount: 11,
     plannedStabilityCheckCount: 2,
     stabilityCheckTileCount: 15,
@@ -5426,6 +5455,12 @@ test("frontend readiness summary reports role proof layers without promoting bro
           targetAction: "submit_post",
         },
         {
+          id: "player-action-target-pick-confirm-click",
+          role: "player",
+          render: "renderPlayerActionTargetConfirmation",
+          targetTestId: "player-action-confirm-factional_kill",
+        },
+        {
           id: "route-error-back-to-board-click",
           role: "player",
           render: "renderRouteErrorSurface",
@@ -5566,6 +5601,7 @@ test("frontend readiness summary reports role proof layers without promoting bro
         "player-submit-vote-click",
         "player-submit-post-click",
         "player-private-channel-submit-post-click",
+        "player-action-target-pick-confirm-click",
         "route-error-back-to-board-click",
         ...moderatorCriticalConfirmationScenarioIds,
         "admin-audit-native-flow",
@@ -5600,6 +5636,7 @@ test("frontend readiness summary reports role proof layers without promoting bro
         "player-submit-vote-click",
         "player-submit-post-click",
         "player-private-channel-submit-post-click",
+        "player-action-target-pick-confirm-click",
         "route-error-back-to-board-click",
         ...moderatorCriticalConfirmationScenarioIds,
         "admin-audit-native-flow",
@@ -5633,13 +5670,13 @@ test("frontend readiness summary reports role proof layers without promoting bro
         mode: "generate-and-run",
         regeneratedFixture: true,
         pageUrl: summary.browserAcceptance.inAppBrowserImportedRun.sourceBrowserRun.pageUrl,
-        plannedInteractionCount: 23,
+        plannedInteractionCount: EXPECTED_COUNTS.plannedInteractions,
         plannedStabilityCheckCount: 2,
       },
       validated: {
         viewportCount: 0,
         runCount: 0,
-        plannedInteractionCount: 23,
+        plannedInteractionCount: EXPECTED_COUNTS.plannedInteractions,
         plannedStabilityCheckCount: 2,
         stabilityCheckTileCount: 15,
         moderatorCriticalConfirmationCount: 11,
@@ -6666,6 +6703,7 @@ function assertNoBindPlannedInteractions(plannedInteractions) {
       "player-submit-vote-click",
       "player-submit-post-click",
       "player-private-channel-submit-post-click",
+      "player-action-target-pick-confirm-click",
     ],
   );
   assert.deepEqual(
@@ -6749,6 +6787,15 @@ function assertInAppBrowserPlannedInteractions(plannedInteractions) {
         "manifest.scenarios",
         undefined,
         "submit_post",
+        undefined,
+        undefined,
+      ],
+      [
+        "player-action-target-pick-confirm-click",
+        "player",
+        "manifest.scenarios",
+        "player-action-confirm-factional_kill",
+        undefined,
         undefined,
         undefined,
       ],

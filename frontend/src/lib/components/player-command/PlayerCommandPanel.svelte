@@ -1,4 +1,9 @@
 <script>
+  import { tick } from "svelte";
+  import ConfirmationShell from "$lib/app/ConfirmationShell.svelte";
+  import {
+    containTabWithinConfirmation,
+  } from "$lib/app/confirmation-focus.mjs";
   import {
     buildPlayerCommandPanelViewModel,
   } from "./player-command-panel-model.mjs";
@@ -10,6 +15,12 @@
   export let player = {};
   export let body = "";
   export let onCommand = () => {};
+  export let onSelectTarget = () => {};
+  export let initialConfirmingAction = null;
+
+  let confirmingAction = initialConfirmingAction;
+  let triggerElements = {};
+  let confirmElements = {};
 
   $: view = buildPlayerCommandPanelViewModel({
     composer,
@@ -17,7 +28,39 @@
     votecount,
     channel,
     player,
+    confirmingAction,
   });
+
+  async function activateConfirmation(pickerAction) {
+    confirmingAction = pickerAction.action;
+    await tick();
+    confirmElements[pickerAction.action]?.focus();
+  }
+
+  async function confirmPickerAction(pickerAction) {
+    confirmingAction = null;
+    onCommand(pickerAction.action);
+    await tick();
+    triggerElements[pickerAction.action]?.focus();
+  }
+
+  async function cancelConfirmation(pickerAction) {
+    confirmingAction = null;
+    await tick();
+    triggerElements[pickerAction.action]?.focus();
+  }
+
+  function onConfirmationKeydown(event, pickerAction) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      cancelConfirmation(pickerAction);
+      return;
+    }
+    if (event.key !== "Tab") {
+      return;
+    }
+    containTabWithinConfirmation(event);
+  }
 </script>
 
 <aside
@@ -88,10 +131,100 @@
       {/each}
     </div>
   </div>
-  {#if view.composer.actionButtons.length > 0}
-    <div class="player-command-panel__actions" data-testid="player-action-commands">
+  {#if view.composer.actionPicker.actions.length > 0 || view.composer.actionPicker.recoveryCommands.length > 0}
+    <div
+      class="player-command-panel__actions {view.composer.actionPicker.root.className}"
+      data-component={view.composer.actionPicker.root.data.component}
+      data-testid={view.composer.actionPicker.root.testId}
+    >
       <h3>{view.composer.actionHeading}</h3>
-      {#each view.composer.actionButtons as button}
+      {#each view.composer.actionPicker.actions as pickerAction (pickerAction.action)}
+        <div
+          class={pickerAction.className}
+          data-template-id={pickerAction.templateId}
+          data-selected-target={pickerAction.selectedTarget}
+        >
+          {#if pickerAction.options.length > 0}
+            <div
+              class={pickerAction.optionsClassName}
+              role="radiogroup"
+              aria-label={`Target for ${pickerAction.label}`}
+            >
+              {#each pickerAction.options as option (option.slot)}
+                <label
+                  class={option.className}
+                  data-testid={option.testId}
+                  data-min-touch-target-px={option.minTouchTargetPx}
+                >
+                  <input
+                    type="radio"
+                    name={option.name}
+                    value={option.slot}
+                    checked={option.checked}
+                    on:change={() => onSelectTarget(pickerAction.templateId, option.slot)}
+                  />
+                  <span>{option.label}</span>
+                </label>
+              {/each}
+            </div>
+          {/if}
+          <button
+            type="button"
+            class={pickerAction.trigger.className}
+            data-testid={pickerAction.trigger.testId}
+            data-action={pickerAction.trigger.data.action}
+            data-template-id={pickerAction.trigger.data.templateId}
+            data-target-slots={pickerAction.trigger.data.targetSlots.join(",")}
+            data-min-touch-target-px={pickerAction.trigger.data.minTouchTargetPx}
+            disabled={pickerAction.trigger.disabled}
+            aria-expanded={pickerAction.trigger.ariaExpanded}
+            bind:this={triggerElements[pickerAction.action]}
+            on:click={() => activateConfirmation(pickerAction)}
+          >
+            <span>{pickerAction.label}</span>
+            {#if pickerAction.detail}
+              <small>{pickerAction.detail}</small>
+            {/if}
+          </button>
+          {#if pickerAction.confirming}
+            <ConfirmationShell
+              className={pickerAction.confirmation.className}
+              confirmation={pickerAction.confirmation}
+              testId={pickerAction.confirmation.confirmationTestId}
+              onKeydown={(event) => onConfirmationKeydown(event, pickerAction)}
+            >
+              <p
+                id={pickerAction.confirmation.messageId}
+                data-testid={pickerAction.confirmation.messageTestId}
+              >
+                {pickerAction.confirmation.message}
+              </p>
+              <div class={pickerAction.confirmation.actionsClassName}>
+                <button
+                  type="button"
+                  class={pickerAction.confirmation.confirmClassName}
+                  data-testid={pickerAction.confirmation.confirmTestId}
+                  data-min-touch-target-px={pickerAction.trigger.data.minTouchTargetPx}
+                  bind:this={confirmElements[pickerAction.action]}
+                  on:click={() => confirmPickerAction(pickerAction)}
+                >
+                  Confirm
+                </button>
+                <button
+                  type="button"
+                  class={pickerAction.confirmation.cancelClassName}
+                  data-testid={pickerAction.confirmation.cancelTestId}
+                  data-min-touch-target-px={pickerAction.trigger.data.minTouchTargetPx}
+                  on:click={() => cancelConfirmation(pickerAction)}
+                >
+                  Cancel
+                </button>
+              </div>
+            </ConfirmationShell>
+          {/if}
+        </div>
+      {/each}
+      {#each view.composer.actionPicker.recoveryCommands as button (button.action)}
         <button
           type="button"
           class={button.className}

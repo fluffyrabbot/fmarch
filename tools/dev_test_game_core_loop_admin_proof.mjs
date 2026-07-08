@@ -3975,6 +3975,7 @@ async function proveStaleNightFourActionRecovery({
     const actionButton = page.locator(scenario.commandButtonSelector);
     await actionButton.waitFor({ state: "visible", timeout: 15000 });
     await actionButton.click();
+    await confirmPlayerActionDialog(page, scenario.templateId);
     await page.waitForFunction(
       (proofScenario) =>
         window.__fmarchPlayerCommandStatus?.state === proofScenario.finalState &&
@@ -4747,6 +4748,7 @@ async function provePlayerStaleActionAfterTransition({
   );
   await actionButton.waitFor({ state: "visible", timeout: 15000 });
   await actionButton.click();
+  await confirmPlayerActionDialog(page);
   await page.waitForFunction(
     () =>
       window.__fmarchPlayerCommandStatus?.state === "reject" &&
@@ -8168,6 +8170,14 @@ async function installPostDayVoteAdvanceCommonRoutes(
   });
 }
 
+async function confirmPlayerActionDialog(page, templateId = "factional_kill") {
+  const confirmButton = page.locator(
+    `[data-testid="player-action-confirm-${templateId}"]`,
+  );
+  await confirmButton.waitFor({ state: "visible", timeout: 15000 });
+  await confirmButton.click();
+}
+
 async function provePlayerActionSubmissionClick({
   page,
   commandRequests,
@@ -8175,9 +8185,13 @@ async function provePlayerActionSubmissionClick({
   visitedRolePath,
 }) {
   const scenario = playerActionSubmissionScenario();
+  const targetRadio = page.locator(scenario.targetRadioSelector);
+  await targetRadio.waitFor({ state: "visible", timeout: 15000 });
+  await targetRadio.check();
   const actionButton = page.locator(scenario.commandButtonSelector);
   await actionButton.waitFor({ state: "visible", timeout: 15000 });
   await actionButton.click();
+  await confirmPlayerActionDialog(page, scenario.templateId);
   await page.waitForFunction(
     (proofScenario) =>
       window.__fmarchPlayerCommandStatus?.state === proofScenario.finalState &&

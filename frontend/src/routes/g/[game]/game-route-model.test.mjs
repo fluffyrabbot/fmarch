@@ -10,6 +10,7 @@ import {
   buildPrivateQueueBoundary,
   buildPrivateQueueRouteItems,
   buildGameRouteData,
+  buildPlayerComposerView,
   buildPlayerVoteCommands,
   playerChannelForbiddenMessage,
   playerChannelNotFoundMessage,
@@ -225,6 +226,49 @@ test("player route data exposes action-open state for seeded UUID role URLs", as
       },
     ],
   );
+});
+
+test("selected action targets override the server default when legal", () => {
+  const commandState = {
+    actions: [
+      {
+        action: "submit_action:factional_kill",
+        commandKind: "submit_action",
+        actionId: "factional_kill",
+        templateId: "factional_kill",
+        ability: "Kill",
+        window: "Night",
+        label: "Submit factional kill",
+        detail: "factional_kill -> slot-3",
+        targets: ["slot-3"],
+        targetOptions: ["slot-2", "slot-3"],
+        grantId: null,
+      },
+    ],
+  };
+  const picked = buildPlayerComposerView(
+    {},
+    commandState,
+    "slot-7",
+    { factional_kill: "slot-2" },
+  ).actionCommands[0];
+  assert.deepEqual(picked.targets, ["slot-2"]);
+  assert.equal(picked.detail, "factional_kill -> slot-2");
+  assert.deepEqual(picked.targetOptions, ["slot-2", "slot-3"]);
+  assert.equal(picked.action, "submit_action:factional_kill");
+
+  const staleSelection = buildPlayerComposerView(
+    {},
+    commandState,
+    "slot-7",
+    { factional_kill: "slot-9" },
+  ).actionCommands[0];
+  assert.deepEqual(staleSelection.targets, ["slot-3"]);
+  assert.equal(staleSelection.detail, "factional_kill -> slot-3");
+
+  const noSelection = buildPlayerComposerView({}, commandState, "slot-7")
+    .actionCommands[0];
+  assert.deepEqual(noSelection.targets, ["slot-3"]);
 });
 
 test("player vote commands honor explicitly empty live command-state targets", () => {

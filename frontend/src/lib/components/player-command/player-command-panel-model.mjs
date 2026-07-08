@@ -1,3 +1,5 @@
+import { buildPlayerActionTargetPicker } from "./player-action-target-picker.mjs";
+
 export const PLAYER_COMMAND_PANEL_CONTRACT = Object.freeze({
   rootClassName: "player-command-panel fm-card",
   componentName: "player-command-panel",
@@ -15,6 +17,7 @@ export function buildPlayerCommandPanelViewModel({
   votecount = [],
   channel = {},
   player = {},
+  confirmingAction = null,
 }) {
   const channelContext = buildChannelContextViewModel({ channel, player });
   const playerCommandsDisabled =
@@ -58,9 +61,11 @@ export function buildPlayerCommandPanelViewModel({
         }),
       ]),
       actionHeading: "Night actions",
-      actionButtons: Object.freeze(
-        (composer.actionCommands ?? []).map(actionCommandButton),
-      ),
+      actionPicker: buildPlayerActionTargetPicker({
+        actionCommands: composer.actionCommands ?? [],
+        confirmingAction,
+        disabled: playerCommandsDisabled,
+      }),
     }),
   });
 }
@@ -171,32 +176,3 @@ function normalizeVoteCommands(composer = {}) {
   ]);
 }
 
-function actionCommandButton(command) {
-  const action = String(command?.action ?? "submit_action");
-  return Object.freeze({
-    action,
-    commandKind: String(command?.commandKind ?? action),
-    label: String(command?.label ?? action),
-    disabled: false,
-    detail: String(command?.detail ?? ""),
-    className: "fm-touch-button fm-touch-button--secondary",
-    data: Object.freeze({
-      action,
-      templateId: String(command?.templateId ?? ""),
-      targetSlots: Object.freeze(
-        normalizeTargets(command?.targets ?? command?.targetSlot),
-      ),
-      minTouchTargetPx: PLAYER_COMMAND_PANEL_CONTRACT.minTouchTargetPx,
-    }),
-  });
-}
-
-function normalizeTargets(value) {
-  if (Array.isArray(value)) {
-    return value.map((target) => String(target));
-  }
-  if (value === undefined || value === null || value === "") {
-    return Object.freeze([]);
-  }
-  return Object.freeze([String(value)]);
-}

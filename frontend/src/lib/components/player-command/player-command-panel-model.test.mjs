@@ -118,27 +118,32 @@ test("player command panel model exposes tablet touch command contracts", () => 
     ],
   );
   assert.deepEqual(
-    view.composer.actionButtons.map((button) => ({
-      action: button.action,
-      label: button.label,
-      disabled: button.disabled,
-      detail: button.detail,
-      templateId: button.data.templateId,
-      targetSlots: button.data.targetSlots,
-      minTouchTargetPx: button.data.minTouchTargetPx,
+    view.composer.actionPicker.actions.map((pickerAction) => ({
+      action: pickerAction.action,
+      label: pickerAction.label,
+      detail: pickerAction.detail,
+      templateId: pickerAction.templateId,
+      targets: pickerAction.targets,
+      triggerTestId: pickerAction.trigger.testId,
+      triggerDisabled: pickerAction.trigger.disabled,
+      minTouchTargetPx: pickerAction.trigger.data.minTouchTargetPx,
+      confirming: pickerAction.confirming,
     })),
     [
       {
         action: "submit_action",
         label: "Submit factional kill",
-        disabled: false,
         detail: "factional_kill -> slot-2",
         templateId: "factional_kill",
-        targetSlots: ["slot-2"],
+        targets: ["slot-2"],
+        triggerTestId: "player-action-trigger-factional_kill",
+        triggerDisabled: false,
         minTouchTargetPx: 44,
+        confirming: false,
       },
     ],
   );
+  assert.deepEqual(view.composer.actionPicker.recoveryCommands, []);
   assert.match(view.composer.buttons[1].className, /secondary/);
 });
 
@@ -179,7 +184,8 @@ test("player command panel model disables command controls for dead actors", () 
       ["submit_post", true],
     ],
   );
-  assert.deepEqual(view.composer.actionButtons, []);
+  assert.deepEqual(view.composer.actionPicker.actions, []);
+  assert.deepEqual(view.composer.actionPicker.recoveryCommands, []);
 });
 
 test("player command panel disables withdraw until command state has a current vote", () => {
@@ -354,5 +360,6 @@ test("player command panel model normalizes missing row and label data", () => {
     view.composer.buttons.map((button) => button.label),
     ["submit_vote", "withdraw_vote", "submit_post"],
   );
-  assert.deepEqual(view.composer.actionButtons, []);
+  assert.deepEqual(view.composer.actionPicker.actions, []);
+  assert.deepEqual(view.composer.actionPicker.recoveryCommands, []);
 });

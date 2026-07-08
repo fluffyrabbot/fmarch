@@ -2263,6 +2263,7 @@ import AdminRecoveryPanel from "../src/lib/components/admin/AdminRecoveryPanel.s
 import AdminCommandActivity from "../src/lib/components/admin/AdminCommandActivity.svelte";
 import HostAction from "../src/lib/components/host-action/HostAction.svelte";
 import HostCommandActivity from "../src/lib/components/host-action/HostCommandActivity.svelte";
+import PlayerCommandPanel from "../src/lib/components/player-command/PlayerCommandPanel.svelte";
 import PlayerCommandReceipt from "../src/lib/components/player-command/PlayerCommandReceipt.svelte";
 import PlayerPrivateQueue from "../src/lib/components/player-private-queue/PlayerPrivateQueue.svelte";
 import PlayerThread from "../src/lib/components/player-thread/PlayerThread.svelte";
@@ -2276,7 +2277,11 @@ import {
   recordPlayerCommandReceipt,
 } from "../src/routes/g/[game]/player-route-controller.mjs";
 import { hostConfirmationCommandTrace } from "../src/lib/components/host-action/host-action-contract.mjs";
-import { buildGameRouteData } from "../src/routes/g/[game]/game-route-model.mjs";
+import {
+  buildGameRouteData,
+  buildPlayerComposerView,
+  playerActionOpenFixture,
+} from "../src/routes/g/[game]/game-route-model.mjs";
 import { buildHostConsoleRouteData } from "../src/routes/g/[game]/host/host-route-model.mjs";
 import { buildRouteStateRouteData } from "../src/lib/app/app-route-state-model.mjs";
 import { buildBoardRouteData } from "../src/lib/app/app-shell-model.mjs";
@@ -2752,6 +2757,39 @@ export async function renderModeratorCriticalActionManifest() {
       irreversible: action.irreversible,
     })),
   };
+}
+
+export async function renderPlayerActionTargetConfirmation() {
+  const coldLoad = playerActionOpenFixture();
+  const commandState = coldLoad.commandState;
+  const composer = buildPlayerComposerView(
+    {
+      defaultBody: "",
+      postCommandLabel: "Post",
+      voteCommandLabel: "Vote",
+      withdrawCommandLabel: "Withdraw vote",
+    },
+    commandState,
+    commandState.actorSlot,
+    { factional_kill: "slot-2" },
+  );
+  return render(PlayerCommandPanel, {
+    props: {
+      composer,
+      phase: { label: "Night 2", state: "open", deadlineLabel: "" },
+      votecount: [],
+      channel: { channel: "main", label: "Main thread" },
+      player: {
+        slotId: commandState.actorSlot,
+        alive: true,
+        status: "alive",
+        capabilityLabel: "SlotOccupant(seeded-action-open)",
+      },
+      initialConfirmingAction: "submit_action:factional_kill",
+      onCommand: () => {},
+      onSelectTarget: () => {},
+    },
+  });
 }
 
 export async function renderModeratorActionConfirmation(actionId) {

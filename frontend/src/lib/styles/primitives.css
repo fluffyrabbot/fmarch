@@ -124,6 +124,34 @@
   padding-inline: 12px;
 }
 
+/* ---- choice: touch-safe radio/checkbox option row ---- */
+
+.fm-choice {
+  align-items: center;
+  border: 1px solid var(--fm-line-soft);
+  border-radius: 8px;
+  color: var(--fm-ink);
+  cursor: pointer;
+  display: flex;
+  font-size: 14px;
+  font-weight: 700;
+  gap: 10px;
+  min-block-size: 44px;
+  padding-inline: 12px;
+}
+
+.fm-choice input {
+  accent-color: var(--fm-accent);
+  block-size: 20px;
+  inline-size: 20px;
+  margin: 0;
+}
+
+.fm-choice:has(input:checked) {
+  background: var(--fm-surface-muted);
+  border-color: var(--fm-line-strong);
+}
+
 /* ---- facts: dl of small labeled readouts (phase summary, checkpoints) ---- */
 
 .fm-facts {

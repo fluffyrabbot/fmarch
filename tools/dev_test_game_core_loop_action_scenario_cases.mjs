@@ -107,6 +107,10 @@ export function playerActionSubmissionScenario() {
     commandSelector: "SubmitAction",
     commandButtonSelector:
       '[data-testid="player-action-commands"] button[data-action="submit_action:factional_kill"]',
+    targetRadioSelector:
+      '[data-testid="player-action-target-factional_kill-slot-3"] input',
+    confirmButtonSelector:
+      '[data-testid="player-action-confirm-factional_kill"]',
     actionId: "factional_kill",
     actorSlot: "slot-7",
     templateId: "factional_kill",
@@ -190,6 +194,8 @@ export function staleNightFourActionRecoveryScenario() {
     commandSelector: "SubmitAction",
     commandButtonSelector:
       '[data-testid="player-action-commands"] button[data-action="submit_action:factional_kill"]',
+    confirmButtonSelector:
+      '[data-testid="player-action-confirm-factional_kill"]',
     actionId: "factional_kill",
     actorSlot: "slot-7",
     templateId: "factional_kill",

@@ -166,6 +166,16 @@ async function interactionScenarios() {
         expectedVariant: "tablet",
       },
     },
+    {
+      id: "player-action-target-pick-confirm-click",
+      role: "player",
+      render: "renderPlayerActionTargetConfirmation",
+      targetSelector: '[data-testid="player-action-confirm-factional_kill"]',
+      targetTestId: "player-action-confirm-factional_kill",
+      rootSelector: '[data-testid="player-action-confirmation-factional_kill"]',
+      expectedText: "factional_kill -> slot-2",
+      minTouchTargetPx: 44,
+    },
     ...manifest.actions.map(moderatorCriticalConfirmationScenario),
   ];
 }

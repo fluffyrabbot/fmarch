@@ -6660,13 +6660,22 @@ function liveStaleN01ToD02ActionTransitionScenario({
   };
 }
 
+async function clickPlayerActionThroughConfirm(page) {
+  await page.locator('[data-action="submit_action:factional_kill"]').click();
+  const confirmButton = page.locator(
+    '[data-testid="player-action-confirm-factional_kill"]',
+  );
+  await confirmButton.waitFor({ state: "visible" });
+  await confirmButton.click();
+}
+
 async function submitPrivateChannelStaleActionReconnectRecovery({
   page,
   setup,
   apiBaseUrl,
   game,
 }) {
-  await page.locator('[data-action="submit_action:factional_kill"]').click();
+  await clickPlayerActionThroughConfirm(page);
   await page.waitForFunction(
     () =>
       window.__fmarchPlayerCommandStatus?.state === "reject" &&
@@ -6853,6 +6862,14 @@ async function submitConcurrentActionRace({
   await Promise.all([
     actionPage.locator('[data-action="submit_action:factional_kill"]').click(),
     concurrentActionPage.locator('[data-action="submit_action:factional_kill"]').click(),
+  ]);
+  await Promise.all([
+    actionPage
+      .locator('[data-testid="player-action-confirm-factional_kill"]')
+      .click(),
+    concurrentActionPage
+      .locator('[data-testid="player-action-confirm-factional_kill"]')
+      .click(),
   ]);
   await Promise.all([
     actionPage.waitForFunction(
@@ -7106,7 +7123,7 @@ async function submitActionIdempotentRetry({
   await staleActionRetryPage.evaluate((fixedCommandId) => {
     window.__fmarchPlayerCommandIdFactory = () => fixedCommandId;
   }, legalAction.commandId);
-  await staleActionRetryPage.locator('[data-action="submit_action:factional_kill"]').click();
+  await clickPlayerActionThroughConfirm(staleActionRetryPage);
   await staleActionRetryPage.waitForFunction(
     () => window.__fmarchPlayerCommandStatus?.state === "ack",
   );
@@ -7213,7 +7230,7 @@ async function submitStaleSameActionRecovery({
   apiBaseUrl,
   game,
 }) {
-  await staleSameActionPage.locator('[data-action="submit_action:factional_kill"]').click();
+  await clickPlayerActionThroughConfirm(staleSameActionPage);
   await staleSameActionPage.waitForFunction(
     () =>
       window.__fmarchPlayerCommandStatus?.state === "reject" &&
@@ -7331,7 +7348,7 @@ async function submitStaleActionConflict({
   apiBaseUrl,
   game,
 }) {
-  await staleActionPage.locator('[data-action="submit_action:factional_kill"]').click();
+  await clickPlayerActionThroughConfirm(staleActionPage);
   await staleActionPage.waitForFunction(
     () =>
       window.__fmarchPlayerCommandStatus?.state === "reject" &&
@@ -7499,7 +7516,7 @@ async function submitStaleDeadActionConflict({
     game,
     slot: "slot_4",
   });
-  await staleDeadActionPage.locator('[data-action="submit_action:factional_kill"]').click();
+  await clickPlayerActionThroughConfirm(staleDeadActionPage);
   await staleDeadActionPage.waitForFunction(
     () =>
       window.__fmarchPlayerCommandStatus?.state === "reject" &&
@@ -19463,8 +19480,16 @@ async function verifyConcurrentPlayerActionAdvanceRace({
     await advanceActionRoot
       .getByTestId("critical-host-action-confirmation")
       .waitFor({ state: "visible" });
+    await actionEntry.page
+      .locator('[data-action="submit_action:factional_kill"]')
+      .click();
+    await actionEntry.page
+      .locator('[data-testid="player-action-confirm-factional_kill"]')
+      .waitFor({ state: "visible" });
     await Promise.all([
-      actionEntry.page.locator('[data-action="submit_action:factional_kill"]').click(),
+      actionEntry.page
+        .locator('[data-testid="player-action-confirm-factional_kill"]')
+        .click(),
       clickCriticalHostActionConfirm(advanceActionRoot, {
         actionId: "advance_phase",
         roleLabel: "host advance",

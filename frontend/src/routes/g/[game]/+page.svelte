@@ -78,6 +78,20 @@
   let threadPageStatus = null;
   let expandedPrivateItems = data.privateQueueExpandedItems;
   let expandedPrivateRouteKey = JSON.stringify(data.privateQueueExpandedItems);
+  let selectedActionTargets = Object.freeze({});
+
+  function selectActionTarget(templateId, slot) {
+    selectedActionTargets = Object.freeze({
+      ...selectedActionTargets,
+      [String(templateId)]: String(slot),
+    });
+    composer = buildPlayerComposerView(
+      data.composer,
+      commandState,
+      data.player.slotId,
+      selectedActionTargets,
+    );
+  }
   $: {
     const nextExpandedPrivateRouteKey = JSON.stringify(data.privateQueueExpandedItems);
     if (nextExpandedPrivateRouteKey !== expandedPrivateRouteKey) {
@@ -145,7 +159,12 @@
           : data.player.capabilityLabel,
     });
     phase = buildPlayerPhaseView(commandState);
-    composer = buildPlayerComposerView(data.composer, commandState, data.player.slotId);
+    composer = buildPlayerComposerView(
+      data.composer,
+      commandState,
+      data.player.slotId,
+      selectedActionTargets,
+    );
     surfaceHeader = Object.freeze({
       ...data.surfaceHeader,
       title: phase.label,
@@ -370,6 +389,7 @@
           {player}
           bind:body={composerBody}
           onCommand={submitPlayerCommand}
+          onSelectTarget={selectActionTarget}
         />
         <PlayerCommandReceipt receipts={commandReceipts} />
 
@@ -504,6 +524,29 @@
 
   :global(.player-action-submission-checkpoint__status) {
     margin: 0;
+  }
+
+  :global(.player-action-target-picker__action) {
+    display: grid;
+    gap: 8px;
+  }
+
+  :global(.player-action-target-picker__options) {
+    display: grid;
+    gap: 6px;
+  }
+
+  :global(.player-action-target-picker__confirmation) {
+    display: grid;
+    gap: 10px;
+  }
+
+  :global(.player-action-target-picker__confirmation p) {
+    color: var(--fm-ink);
+    font-size: 14px;
+    line-height: 1.4;
+    margin: 0;
+    overflow-wrap: anywhere;
   }
 
   @media (min-width: 1280px) {

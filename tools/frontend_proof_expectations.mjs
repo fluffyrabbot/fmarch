@@ -43,6 +43,7 @@ export const COMMAND_SCENARIO_IDS = Object.freeze([
   "player-submit-vote-click",
   "player-submit-post-click",
   "player-private-channel-submit-post-click",
+  "player-action-target-pick-confirm-click",
   "route-error-back-to-board-click",
   ...MODERATOR_CRITICAL_CONFIRMATION_SCENARIO_IDS,
 ]);

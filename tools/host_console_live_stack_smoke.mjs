@@ -2304,6 +2304,7 @@ async function drivePlayerActionBrowser(frontendBaseUrl) {
   const legalButton = page.locator('[data-action="submit_action:factional_kill"]');
   assertHitTarget(await legalButton.boundingBox(), "legal player action button");
   await legalButton.click();
+  await confirmPlayerActionThroughDialog(page, "legal player action confirm");
   await page.waitForFunction(
     () =>
       document
@@ -2541,12 +2542,22 @@ async function openStalePlayerActionBrowser(frontendBaseUrl) {
   };
 }
 
+async function confirmPlayerActionThroughDialog(page, label) {
+  const confirmButton = page.locator(
+    '[data-testid="player-action-confirm-factional_kill"]',
+  );
+  await confirmButton.waitFor({ state: "visible" });
+  assertHitTarget(await confirmButton.boundingBox(), label);
+  await confirmButton.click();
+}
+
 async function submitStalePlayerAction(staleSession) {
   const { page, commandStateRequests, commandStateResponses, commandStateResponseTasks } =
     staleSession;
   const staleButton = page.locator('[data-action="submit_action:factional_kill"]');
   assertHitTarget(await staleButton.boundingBox(), "stale player action button");
   await staleButton.click();
+  await confirmPlayerActionThroughDialog(page, "stale player action confirm");
   const status = page.getByTestId("player-command-status");
   await status.waitFor({ state: "visible" });
   await page.waitForFunction(
@@ -2606,6 +2617,7 @@ async function submitDuplicatePlayerAction(duplicateSession, { firstOutcome, com
   const staleButton = page.locator('[data-action="submit_action:factional_kill"]');
   assertHitTarget(await staleButton.boundingBox(), "duplicate player action button");
   await staleButton.click();
+  await confirmPlayerActionThroughDialog(page, "duplicate player action confirm");
   const status = page.getByTestId("player-command-status");
   await status.waitFor({ state: "visible" });
   await page.waitForFunction(
@@ -2668,6 +2680,7 @@ async function submitRacingPlayerAction(raceSession, { winningCommandId }) {
   const staleButton = page.locator('[data-action="submit_action:factional_kill"]');
   assertHitTarget(await staleButton.boundingBox(), "racing player action button");
   await staleButton.click();
+  await confirmPlayerActionThroughDialog(page, "racing player action confirm");
   const status = page.getByTestId("player-command-status");
   await status.waitFor({ state: "visible" });
   await page.waitForFunction(
