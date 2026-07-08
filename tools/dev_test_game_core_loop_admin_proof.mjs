@@ -262,14 +262,22 @@ const coreLoopRoleSurfaceProofFunctions = {
   privateChannelRoleSurface: provePrivateChannelRoleSurface,
 };
 
-function assertCoreLoopRoleSurfaceProofFunctionsImplemented() {
+export function coreLoopRoleSurfaceProofFunctionKeys(
+  proofFunctions = coreLoopRoleSurfaceProofFunctions,
+) {
+  return Object.keys(proofFunctions);
+}
+
+export function assertCoreLoopRoleSurfaceProofFunctionsImplemented(
+  proofFunctions = coreLoopRoleSurfaceProofFunctions,
+) {
   const expectedProofKeys = coreLoopRoleSurfaceProofCases.map(
     ({ proofKey }) => proofKey,
   );
-  const implementedProofKeys = Object.keys(coreLoopRoleSurfaceProofFunctions);
+  const implementedProofKeys =
+    coreLoopRoleSurfaceProofFunctionKeys(proofFunctions);
   const missingProofKeys = expectedProofKeys.filter(
-    (proofKey) =>
-      typeof coreLoopRoleSurfaceProofFunctions[proofKey] !== "function",
+    (proofKey) => typeof proofFunctions[proofKey] !== "function",
   );
   const extraProofKeys = implementedProofKeys.filter(
     (proofKey) => !expectedProofKeys.includes(proofKey),

@@ -6,6 +6,10 @@ import {
   coreLoopRoleSurfaceProofCaseKeys,
   coreLoopRoleSurfaceProofInventory,
 } from "./dev_test_game_core_loop_role_surface_proof_cases.mjs";
+import {
+  assertCoreLoopRoleSurfaceProofFunctionsImplemented,
+  coreLoopRoleSurfaceProofFunctionKeys,
+} from "./dev_test_game_core_loop_admin_proof.mjs";
 
 test("core loop admin proof role surfaces have one declarative serial order", () => {
   const caseKeys = coreLoopRoleSurfaceProofCaseKeys();
@@ -48,4 +52,32 @@ test("core loop admin proof role surfaces have one declarative serial order", ()
       proofKey,
     })),
   });
+});
+
+test("core loop admin proof browser registry covers extracted proof keys", () => {
+  const proofKeys = coreLoopRoleSurfaceProofCases.map(({ proofKey }) => proofKey);
+  const fakeRegistry = Object.fromEntries(
+    proofKeys.map((proofKey) => [proofKey, () => ({ status: "passed" })]),
+  );
+
+  assert.deepEqual(coreLoopRoleSurfaceProofFunctionKeys(), proofKeys);
+  assert.doesNotThrow(() =>
+    assertCoreLoopRoleSurfaceProofFunctionsImplemented(),
+  );
+  assert.throws(
+    () =>
+      assertCoreLoopRoleSurfaceProofFunctionsImplemented({
+        ...fakeRegistry,
+        privateChannelRoleSurface: undefined,
+      }),
+    /missing=privateChannelRoleSurface extra=<none>/,
+  );
+  assert.throws(
+    () =>
+      assertCoreLoopRoleSurfaceProofFunctionsImplemented({
+        ...fakeRegistry,
+        unexpectedProofSurface: () => ({ status: "passed" }),
+      }),
+    /missing=<none> extra=unexpectedProofSurface/,
+  );
 });
