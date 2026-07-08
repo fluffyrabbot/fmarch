@@ -11,6 +11,7 @@ import {
 } from "./dev_test_game_core_loop_vote_resolution_scenarios.mjs";
 import {
   hostPhaseControlFeatureSpineRow,
+  hostPhaseAdvanceTransitionFeatureSpineRow,
   hostPhaseLockedRecoveryFeatureSpineRow,
   hostPhaseStaleRejectFeatureSpineRow,
   hostPhaseUnlockedRecoveryFeatureSpineRow,
@@ -107,6 +108,9 @@ const coreLoopFeatureSpineLaneRows = Object.freeze([
   ),
   Object.freeze(
     hostPhaseStaleRejectFeatureSpineRow({ cycleId: dayTwoNightTwo }),
+  ),
+  Object.freeze(
+    hostPhaseAdvanceTransitionFeatureSpineRow({ cycleId: dayTwoNightTwo }),
   ),
   Object.freeze(dayVoteResolutionFeatureSpineRow({ cycleId: dayTwoNightTwo })),
   Object.freeze(dayVoteNoLynchFeatureSpineRow({ cycleId: dayThreeNightThree })),

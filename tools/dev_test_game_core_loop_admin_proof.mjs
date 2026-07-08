@@ -123,6 +123,7 @@ import {
   hostLifecycleControlLockedCheckpointId,
   hostLifecycleControlStaleRejectCheckpointId,
   hostLifecycleControlUnlockedCheckpointId,
+  hostPhaseAdvanceTransitionCheckpointId,
   coreLoopHostControlScenarioFamily,
 } from "./dev_test_game_core_loop_host_control_scenarios.mjs";
 import {
@@ -169,7 +170,10 @@ const requiredChecks = coreLoopAdminCheckIds;
 
 const coreLoopHostLifecycleControlCycleId = "d02-n02";
 
-const roleSurfaceSpineCheckpointRows = ({ hostRoleSurface } = {}) => {
+const roleSurfaceSpineCheckpointRows = ({
+  hostRoleSurface,
+  hostPhaseTransitionSurface,
+} = {}) => {
   const rows = [];
   if (
     hostRoleSurface?.status === "passed" &&
@@ -226,6 +230,26 @@ const roleSurfaceSpineCheckpointRows = ({ hostRoleSurface } = {}) => {
   ) {
     rows.push(
       `${coreLoopHostLifecycleControlCycleId}-${hostLifecycleControlStaleRejectCheckpointId}`,
+    );
+  }
+  if (
+    hostPhaseTransitionSurface?.status === "passed" &&
+    hostPhaseTransitionSurface.clickedThroughFromRoleUrl === true &&
+    hostPhaseTransitionSurface.advanceProof?.status === "passed" &&
+    hostPhaseTransitionSurface.advanceProof.commandKind === "AdvancePhase" &&
+    hostPhaseTransitionSurface.advanceProof.commandStatus?.state === "ack" &&
+    hostPhaseTransitionSurface.advanceProof.commandOutcome?.state === "ack" &&
+    hostPhaseTransitionSurface.advanceProof.bridgePlan?.finalState === "ack" &&
+    hostPhaseTransitionSurface.advanceProof.checkpointPhaseId === "N02" &&
+    hostPhaseTransitionSurface.advanceProof.checkpointPhaseState === "open" &&
+    hostPhaseTransitionSurface.advanceProof.checkpointDeadlineAffordance ===
+      "resolve_phase,lock_thread" &&
+    String(hostPhaseTransitionSurface.transition ?? "").includes(
+      "advance_phase:ack:802",
+    )
+  ) {
+    rows.push(
+      `${coreLoopHostLifecycleControlCycleId}-${hostPhaseAdvanceTransitionCheckpointId}`,
     );
   }
   return rows;
@@ -10238,6 +10262,7 @@ export function assertCoreLoopAdminProof(evidence) {
     "core-loop admin proof missing role-surface spine checkpoint",
     roleSurfaceSpineCheckpointRows({
       hostRoleSurface: evidence.hostRoleSurface,
+      hostPhaseTransitionSurface: evidence.hostPhaseTransitionSurface,
     }),
     evidence.generatedFrom?.coreLoopSpineRows?.roleSurfaceCheckpoints,
   );

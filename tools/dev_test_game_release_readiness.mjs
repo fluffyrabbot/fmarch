@@ -436,6 +436,7 @@ import {
   coreLoopHostControlFamilyId,
   hostControlRaceScenarioCases,
   hostLifecycleControlUnlockedCheckpointId,
+  hostPhaseAdvanceTransitionCheckpointId,
   coreLoopHostControlScenarioFamily,
 } from "./dev_test_game_core_loop_host_control_scenarios.mjs";
 import {
@@ -3182,7 +3183,10 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
   });
   assertVisibleAdminRows({
     label: "core-loop admin proof missing role-surface spine checkpoint",
-    visibleRows: coreLoopHostRoleSurfaceCheckpointRows(proof.hostRoleSurface),
+    visibleRows: coreLoopRoleSurfaceCheckpointRows({
+      hostRoleSurface: proof.hostRoleSurface,
+      hostPhaseTransitionSurface: proof.hostPhaseTransitionSurface,
+    }),
     requiredRows: proof.generatedFrom?.coreLoopSpineRows?.roleSurfaceCheckpoints,
   });
   assertVisibleAdminRows({
@@ -3261,7 +3265,10 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
   };
 }
 
-function coreLoopHostRoleSurfaceCheckpointRows(hostRoleSurface) {
+function coreLoopRoleSurfaceCheckpointRows({
+  hostRoleSurface,
+  hostPhaseTransitionSurface,
+} = {}) {
   const rows = [];
   if (typeof hostRoleSurface?.checkpointTestId === "string") {
     rows.push(`d02-n02-${hostRoleSurface.checkpointTestId}`);
@@ -3305,6 +3312,24 @@ function coreLoopHostRoleSurfaceCheckpointRows(hostRoleSurface) {
       .includes("Reject PhaseLocked")
   ) {
     rows.push("d02-n02-host-lifecycle-control-stale-reject-checkpoint");
+  }
+  if (
+    hostPhaseTransitionSurface?.status === "passed" &&
+    hostPhaseTransitionSurface.clickedThroughFromRoleUrl === true &&
+    hostPhaseTransitionSurface.advanceProof?.status === "passed" &&
+    hostPhaseTransitionSurface.advanceProof.commandKind === "AdvancePhase" &&
+    hostPhaseTransitionSurface.advanceProof.commandStatus?.state === "ack" &&
+    hostPhaseTransitionSurface.advanceProof.commandOutcome?.state === "ack" &&
+    hostPhaseTransitionSurface.advanceProof.bridgePlan?.finalState === "ack" &&
+    hostPhaseTransitionSurface.advanceProof.checkpointPhaseId === "N02" &&
+    hostPhaseTransitionSurface.advanceProof.checkpointPhaseState === "open" &&
+    hostPhaseTransitionSurface.advanceProof.checkpointDeadlineAffordance ===
+      "resolve_phase,lock_thread" &&
+    String(hostPhaseTransitionSurface.transition ?? "").includes(
+      "advance_phase:ack:802",
+    )
+  ) {
+    rows.push(`d02-n02-${hostPhaseAdvanceTransitionCheckpointId}`);
   }
   return rows;
 }

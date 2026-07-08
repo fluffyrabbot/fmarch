@@ -25,6 +25,8 @@ export const hostLifecycleControlUnlockedCheckpointId =
   "host-lifecycle-control-unlocked-checkpoint";
 export const hostLifecycleControlStaleRejectCheckpointId =
   "host-lifecycle-control-stale-reject-checkpoint";
+export const hostPhaseAdvanceTransitionCheckpointId =
+  "host-phase-advance-transition-checkpoint";
 export const hostPhaseControlFeatureTargetKind = "host-phase-command";
 export const hostPhaseLockedRecoveryFeatureTargetKind =
   "host-phase-locked-recovery";
@@ -32,6 +34,8 @@ export const hostPhaseUnlockedRecoveryFeatureTargetKind =
   "host-phase-unlocked-recovery";
 export const hostPhaseStaleRejectFeatureTargetKind =
   "host-phase-stale-reject";
+export const hostPhaseAdvanceTransitionFeatureTargetKind =
+  "host-phase-advance-transition";
 
 export const coreLoopHostControlLaneIds = Object.freeze([
   "host-lifecycle-control",
@@ -87,6 +91,18 @@ export function hostPhaseStaleRejectFeatureSpineRow({ cycleId }) {
     checkpointId: `${cycleId}-${hostLifecycleControlStaleRejectCheckpointId}`,
     adminCheckId: "host-lifecycle-control",
     featureTargetKind: hostPhaseStaleRejectFeatureTargetKind,
+  };
+}
+
+export function hostPhaseAdvanceTransitionFeatureSpineRow({ cycleId }) {
+  return {
+    targetKey: "hostPhaseAdvanceTransition",
+    featureSlotId: "host-phase-advance-transition",
+    cycleId,
+    role: "host",
+    checkpointId: `${cycleId}-${hostPhaseAdvanceTransitionCheckpointId}`,
+    adminCheckId: "core-loop",
+    featureTargetKind: hostPhaseAdvanceTransitionFeatureTargetKind,
   };
 }
 

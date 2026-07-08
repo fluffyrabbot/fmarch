@@ -322,6 +322,54 @@ test("production feature spine resolver preserves host stale reject target shape
   );
 });
 
+test("production feature spine resolver preserves host advance transition target shape", () => {
+  const sourceTarget = coreLoopSourceTargetFixture();
+  const declaration =
+    releaseReadinessProductionFeatureSpineTargets.hostPhaseAdvanceTransition;
+  const target = resolveProductionFeatureSpineTarget({
+    itemId: "host-phase-advance-transition",
+    declaration,
+    sourceTargetsByCheckId: {
+      "local-core-loop-proof": sourceTarget,
+    },
+  });
+
+  assert.deepEqual(target, {
+    featureSlotId: "host-phase-advance-transition",
+    sourceCheckId: "local-core-loop-proof",
+    coverageDecision: {
+      kind: "seeded-role-url-proof",
+      proofCommand: coreLoopAdminProofCommand,
+    },
+    detailRoleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
+    cycleId: "d02-n02",
+    roleUrlId: "d02-n02-host",
+    roleUrl: "http://127.0.0.1:5173/g/game-b/host",
+    rowKind: "checkpoint",
+    checkpointId: "d02-n02-host-phase-advance-transition-checkpoint",
+    adminCheckId: "core-loop",
+    featureTargetKind: "host-phase-advance-transition",
+    browserProofCommand,
+    browserWorkbench: {
+      status: "passed",
+      route: "/g/game-b/host",
+      roleUrl: "http://127.0.0.1:5173/g/game-b/host",
+      roleSurface: "host",
+      featureSlotId: "host-phase-advance-transition",
+      requiredEvidence:
+        "Seeded host-phase-advance-transition role URL opens /g/game-b/host in the browser proof before core-loop recovery is trusted.",
+    },
+    sourceProofArtifact: "target/dev-test-game/core-loop-admin-proof.json",
+    rerunCommand: coreLoopAdminProofCommand,
+  });
+  assert.equal(
+    validProductionFeatureSpineTarget(target, {
+      sourceCheckRules: coreLoopSourceCheckRules(),
+    }),
+    true,
+  );
+});
+
 function coreLoopResolutionBrowserWorkbenchFixture() {
   return {
     status: "passed",
@@ -849,6 +897,7 @@ function coreLoopSourceTargetFixture() {
       "d02-n02-host-lifecycle-control-locked-checkpoint",
       "d02-n02-host-lifecycle-control-unlocked-checkpoint",
       "d02-n02-host-lifecycle-control-stale-reject-checkpoint",
+      "d02-n02-host-phase-advance-transition-checkpoint",
       "d02-n02-d02-vote-open",
       "d02-n02-d02-deciding-vote-submitted",
       "d02-n02-d02-resolved-target-killed",
