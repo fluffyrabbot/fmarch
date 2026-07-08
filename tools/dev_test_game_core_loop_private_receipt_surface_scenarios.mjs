@@ -100,6 +100,56 @@ export function nightActionResolutionPrivacyFeatureSpineRow({ cycleId }) {
   };
 }
 
+export function nightActionResolutionPrivateReceiptCheckpointRows({
+  cycleId,
+  nightActionResolutionReceiptSurface,
+  normalNightActionResolutionPrivacySurface,
+} = {}) {
+  const rows = [];
+  if (
+    nightActionResolutionReceiptCheckpointPassed(
+      nightActionResolutionReceiptSurface,
+    )
+  ) {
+    rows.push(`${cycleId}-${nightActionResolutionReceiptCheckpointId}`);
+  }
+  if (
+    nightActionResolutionPrivacyCheckpointPassed(
+      normalNightActionResolutionPrivacySurface,
+    )
+  ) {
+    rows.push(`${cycleId}-${nightActionResolutionPrivacyCheckpointId}`);
+  }
+  return rows;
+}
+
+export function nightActionResolutionReceiptCheckpointPassed(surface) {
+  return (
+    surface?.status === "passed" &&
+    surface.targetSlot === "slot-3" &&
+    surface.privateQueueBoundary?.count === 1 &&
+    surface.privateNotice?.kind === "notification" &&
+    String(surface.privateNotice?.text ?? "").includes("factional_kill") &&
+    surface.projectionNotifications?.[0]?.status === "factional_kill" &&
+    surface.checkpoint?.phaseId === "N02" &&
+    surface.checkpoint?.phaseState === "locked" &&
+    surface.rawInviteTokensVisible === false
+  );
+}
+
+export function nightActionResolutionPrivacyCheckpointPassed(surface) {
+  return (
+    surface?.status === "passed" &&
+    surface.normalSlot === "slot-4" &&
+    surface.privateQueueBoundary?.count === 0 &&
+    surface.targetReceiptVisible === false &&
+    surface.projectionNotifications?.length === 0 &&
+    surface.checkpoint?.phaseId === "N02" &&
+    surface.checkpoint?.phaseState === "locked" &&
+    surface.rawInviteTokensVisible === false
+  );
+}
+
 export function assertTargetResolutionReceiptSurfaceProof({
   proof,
   expectedGame,

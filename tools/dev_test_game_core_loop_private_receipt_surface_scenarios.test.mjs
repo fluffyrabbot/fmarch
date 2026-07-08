@@ -6,7 +6,10 @@ import {
   coreLoopPrivateReceiptSurfaceFamilyId,
   coreLoopPrivateReceiptSurfaceLaneIds,
   coreLoopPrivateReceiptSurfaceScenarioFamily,
+  nightActionResolutionPrivateReceiptCheckpointRows,
+  nightActionResolutionPrivacyCheckpointPassed,
   nightActionResolutionPrivacyFeatureSpineRow,
+  nightActionResolutionReceiptCheckpointPassed,
   nightActionResolutionReceiptFeatureSpineRow,
   privateReceiptSurfaceCases,
 } from "./dev_test_game_core_loop_private_receipt_surface_scenarios.mjs";
@@ -76,6 +79,52 @@ test("night action receipt and privacy feature rows are scenario-owned", () => {
       adminCheckId: "resolution-receipts",
       featureTargetKind: "night-action-resolution-privacy",
     },
+  );
+});
+
+test("night action receipt and privacy checkpoint rows share scenario predicates", () => {
+  const game = "game-a";
+  const receiptSurface = privateReceiptProofFixture({
+    game,
+    scenario: privateReceiptScenario("n02-target-receipt"),
+  });
+  const privacySurface = privateReceiptProofFixture({
+    game,
+    scenario: privateReceiptScenario("n02-normal-privacy"),
+  });
+
+  assert.equal(
+    nightActionResolutionReceiptCheckpointPassed(receiptSurface),
+    true,
+  );
+  assert.equal(
+    nightActionResolutionPrivacyCheckpointPassed(privacySurface),
+    true,
+  );
+  assert.deepEqual(
+    nightActionResolutionPrivateReceiptCheckpointRows({
+      cycleId: "d02-n02",
+      nightActionResolutionReceiptSurface: receiptSurface,
+      normalNightActionResolutionPrivacySurface: privacySurface,
+    }),
+    [
+      "d02-n02-night-action-resolution-receipt-checkpoint",
+      "d02-n02-night-action-resolution-privacy-checkpoint",
+    ],
+  );
+  assert.deepEqual(
+    nightActionResolutionPrivateReceiptCheckpointRows({
+      cycleId: "d02-n02",
+      nightActionResolutionReceiptSurface: {
+        ...receiptSurface,
+        rawInviteTokensVisible: true,
+      },
+      normalNightActionResolutionPrivacySurface: {
+        ...privacySurface,
+        targetReceiptVisible: true,
+      },
+    }),
+    [],
   );
 });
 

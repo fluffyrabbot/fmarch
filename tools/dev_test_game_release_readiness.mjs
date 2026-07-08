@@ -402,8 +402,7 @@ import {
   assertTargetDayVoteReceiptSurfaceProof,
   assertTargetResolutionReceiptSurfaceProof,
   coreLoopPrivateReceiptSurfaceFamilyId,
-  nightActionResolutionPrivacyCheckpointId,
-  nightActionResolutionReceiptCheckpointId,
+  nightActionResolutionPrivateReceiptCheckpointRows,
 } from "./dev_test_game_core_loop_private_receipt_surface_scenarios.mjs";
 import {
   assertNormalPostDayVoteAdvanceSurfaceProof,
@@ -3363,35 +3362,13 @@ function coreLoopRoleSurfaceCheckpointRows({
   ) {
     rows.push(`d02-n02-${playerActionSubmissionAckCheckpointId}`);
   }
-  if (
-    nightActionResolutionReceiptSurface?.status === "passed" &&
-    nightActionResolutionReceiptSurface.targetSlot === "slot-3" &&
-    nightActionResolutionReceiptSurface.privateQueueBoundary?.count === 1 &&
-    nightActionResolutionReceiptSurface.privateNotice?.kind === "notification" &&
-    String(nightActionResolutionReceiptSurface.privateNotice?.text ?? "")
-      .includes("factional_kill") &&
-    nightActionResolutionReceiptSurface.projectionNotifications?.[0]?.status ===
-      "factional_kill" &&
-    nightActionResolutionReceiptSurface.checkpoint?.phaseId === "N02" &&
-    nightActionResolutionReceiptSurface.checkpoint?.phaseState === "locked" &&
-    nightActionResolutionReceiptSurface.rawInviteTokensVisible === false
-  ) {
-    rows.push(`d02-n02-${nightActionResolutionReceiptCheckpointId}`);
-  }
-  if (
-    normalNightActionResolutionPrivacySurface?.status === "passed" &&
-    normalNightActionResolutionPrivacySurface.normalSlot === "slot-4" &&
-    normalNightActionResolutionPrivacySurface.privateQueueBoundary?.count === 0 &&
-    normalNightActionResolutionPrivacySurface.targetReceiptVisible === false &&
-    normalNightActionResolutionPrivacySurface.projectionNotifications?.length ===
-      0 &&
-    normalNightActionResolutionPrivacySurface.checkpoint?.phaseId === "N02" &&
-    normalNightActionResolutionPrivacySurface.checkpoint?.phaseState ===
-      "locked" &&
-    normalNightActionResolutionPrivacySurface.rawInviteTokensVisible === false
-  ) {
-    rows.push(`d02-n02-${nightActionResolutionPrivacyCheckpointId}`);
-  }
+  rows.push(
+    ...nightActionResolutionPrivateReceiptCheckpointRows({
+      cycleId: "d02-n02",
+      nightActionResolutionReceiptSurface,
+      normalNightActionResolutionPrivacySurface,
+    }),
+  );
   return rows;
 }
 
