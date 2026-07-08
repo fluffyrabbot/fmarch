@@ -101,7 +101,7 @@ import {
 } from "./dev_test_game_proof_graph_handoff_cases.mjs";
 import {
   selectedOperatorHandoffFromNextAction,
-} from "./dev_test_game_selected_operator_handoff_receipt.mjs";
+} from "./dev_test_game_terminal_receipts.mjs";
 import {
   assertProofGraphDiagnosticProofSummary,
   buildProofGraphDiagnosticProofSummary,

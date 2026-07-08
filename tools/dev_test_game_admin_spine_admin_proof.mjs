@@ -24,7 +24,7 @@ import {
 import {
   selectedLocalDependencyTerminalReceiptRows,
   selectedLocalDependencyTerminalReceiptRowStatuses,
-} from "./dev_test_game_selected_local_dependency_receipt.mjs";
+} from "./dev_test_game_terminal_receipts.mjs";
 
 const adminSpineProofPath = path.resolve(
   repoRoot,

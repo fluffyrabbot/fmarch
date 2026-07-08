@@ -135,7 +135,7 @@ import {
 } from "./dev_test_game_selected_operator_handoff_receipt_admin_proof_paths.mjs";
 import {
   selectedOperatorHandoffTerminalReceiptId,
-} from "./dev_test_game_selected_operator_handoff_receipt.mjs";
+} from "./dev_test_game_terminal_receipts.mjs";
 export {
   devTestGameReleaseReadinessMarkdownPath,
   devTestGameReleaseReadinessPath,
@@ -333,11 +333,11 @@ import {
 } from "./dev_test_game_next_action_sequence_handoff_pair.mjs";
 import {
   assertSelectedOperatorHandoffTerminalReceipt,
-} from "./dev_test_game_selected_operator_handoff_receipt.mjs";
+} from "./dev_test_game_terminal_receipts.mjs";
 import {
   assertSelectedLocalDependencyTerminalReceipt,
   selectedLocalDependencyTerminalReceiptId,
-} from "./dev_test_game_selected_local_dependency_receipt.mjs";
+} from "./dev_test_game_terminal_receipts.mjs";
 import {
   adminSpineProofBatchRegistry,
   adminSpineProofIds,

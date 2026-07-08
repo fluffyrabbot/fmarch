@@ -27,7 +27,7 @@ import {
 } from "./dev_test_game_release_readiness.mjs";
 import {
   buildSelectedOperatorHandoffTerminalReceipt,
-} from "./dev_test_game_selected_operator_handoff_receipt.mjs";
+} from "./dev_test_game_terminal_receipts.mjs";
 import {
   hostedMatrixRawEvidenceTemplateDescriptor,
 } from "./dev_test_game_hosted_matrix_raw_evidence_template_proof.mjs";

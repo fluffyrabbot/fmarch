@@ -15,7 +15,7 @@ import {
 import {
   assertSelectedOperatorHandoffForNextAction,
   selectedOperatorHandoffFromNextAction,
-} from "./dev_test_game_selected_operator_handoff_receipt.mjs";
+} from "./dev_test_game_terminal_receipts.mjs";
 import {
   assertDevTestGameOpsArtifacts,
   devTestGameOpsArtifactsPath,

@@ -232,18 +232,16 @@ import {
 } from "../../../../tools/dev_test_game_next_action_sequence_handoff_pair.mjs";
 import {
   buildSelectedOperatorHandoffTerminalReceipt,
-  selectedOperatorHandoffTerminalReceiptRowDefinitionsForReceipt,
-  selectedOperatorHandoffTerminalReceiptRowFields,
-  selectedOperatorHandoffTerminalReceiptRowStatuses,
-} from "../../../../tools/dev_test_game_selected_operator_handoff_receipt.mjs";
-import {
-  selectedOperatorHandoffPassedReceiptFixture,
-} from "../../../../tools/dev_test_game_selected_operator_handoff_receipt_fixture.mjs";
-import {
   selectedLocalDependencyTerminalReceiptRowDefinitionsForReceipt,
   selectedLocalDependencyTerminalReceiptRowFields,
   selectedLocalDependencyTerminalReceiptRowStatuses,
-} from "../../../../tools/dev_test_game_selected_local_dependency_receipt.mjs";
+  selectedOperatorHandoffTerminalReceiptRowDefinitionsForReceipt,
+  selectedOperatorHandoffTerminalReceiptRowFields,
+  selectedOperatorHandoffTerminalReceiptRowStatuses,
+} from "../../../../tools/dev_test_game_terminal_receipts.mjs";
+import {
+  selectedOperatorHandoffPassedReceiptFixture,
+} from "../../../../tools/dev_test_game_selected_operator_handoff_receipt_fixture.mjs";
 import {
   hostedIdentityTerminalReceiptArtifactCase,
   terminalProofGraphReceiptArtifacts,

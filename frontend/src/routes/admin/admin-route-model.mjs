@@ -108,16 +108,14 @@ import {
   proofGraphPrerequisiteDestinationSectionId,
 } from "../../../../tools/dev_test_game_proof_graph_prerequisite_destination_rows.mjs";
 import {
-  selectedOperatorHandoffTerminalReceiptRowDefinitionsForReceipt,
-  selectedOperatorHandoffTerminalReceiptRowFields,
-  selectedOperatorHandoffTerminalReceiptId,
-} from "../../../../tools/dev_test_game_selected_operator_handoff_receipt.mjs";
-import {
   selectedLocalDependencyTerminalReceiptId,
   selectedLocalDependencyTerminalReceiptRowDefinitionsForReceipt,
   selectedLocalDependencyTerminalReceiptRowFields,
   selectedLocalDependencyTerminalReceiptRowTestIdPrefix,
-} from "../../../../tools/dev_test_game_selected_local_dependency_receipt.mjs";
+  selectedOperatorHandoffTerminalReceiptRowDefinitionsForReceipt,
+  selectedOperatorHandoffTerminalReceiptRowFields,
+  selectedOperatorHandoffTerminalReceiptId,
+} from "../../../../tools/dev_test_game_terminal_receipts.mjs";
 import {
   normalizeLocalReadinessDependencyTrace,
   normalizePreReadinessTrace,

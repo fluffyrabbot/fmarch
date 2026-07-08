@@ -121,11 +121,9 @@ export {
   devTestGameHostedIdentityHandoffPhaseId,
 } from "./dev_test_game_handoff_phase_outputs.mjs";
 import {
-  buildSelectedOperatorHandoffTerminalReceipt,
-} from "./dev_test_game_selected_operator_handoff_receipt.mjs";
-import {
   buildSelectedLocalDependencyTerminalReceipt,
-} from "./dev_test_game_selected_local_dependency_receipt.mjs";
+  buildSelectedOperatorHandoffTerminalReceipt,
+} from "./dev_test_game_terminal_receipts.mjs";
 import { releaseReadinessStep } from "./dev_test_game_spine_readiness_steps.mjs";
 import {
   handoffPhaseSteps,

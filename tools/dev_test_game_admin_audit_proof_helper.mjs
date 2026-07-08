@@ -36,11 +36,9 @@ import {
   proofGraphHandoffPhaseOutputRowTestIdPrefix,
 } from "./dev_test_game_handoff_phase_outputs.mjs";
 import {
-  selectedOperatorHandoffTerminalReceiptRowTestIdPrefix,
-} from "./dev_test_game_selected_operator_handoff_receipt.mjs";
-import {
   selectedLocalDependencyTerminalReceiptRowTestIdPrefix,
-} from "./dev_test_game_selected_local_dependency_receipt.mjs";
+  selectedOperatorHandoffTerminalReceiptRowTestIdPrefix,
+} from "./dev_test_game_terminal_receipts.mjs";
 export {
   normalizedEvidenceObjectRowIds,
 } from "./dev_test_game_normalized_evidence_object_rows.mjs";
