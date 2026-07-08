@@ -28,8 +28,13 @@ export const terminalReceiptContractRegistry = Object.freeze([
   Object.freeze({
     id: selectedLocalDependencyTerminalReceiptId,
     label: "selected-local-dependency",
+    summaryHeading: "Selected local dependency receipt",
+    adminRouteOrder: 20,
     terminalBatchesKey: "selectedLocalDependencyTerminalReceipt",
     diagnosticStatusKey: "selectedLocalDependencyTerminalReceiptStatus",
+    summaryLinkFieldId: "roleUrl",
+    summaryLinkTestId:
+      `${selectedLocalDependencyTerminalReceiptRowTestIdPrefix}-role-url`,
     adminAuditProofRowsParam:
       "requiredSelectedLocalDependencyTerminalReceiptRows",
     adminAuditProofRowStatusesParam:
@@ -55,6 +60,8 @@ export const terminalReceiptContractRegistry = Object.freeze([
   Object.freeze({
     id: selectedOperatorHandoffTerminalReceiptId,
     label: "selected-operator-handoff",
+    summaryHeading: "Selected operator handoff receipt",
+    adminRouteOrder: 10,
     terminalBatchesKey: "selectedOperatorHandoffReceipt",
     diagnosticStatusKey: "selectedOperatorHandoffReceiptStatus",
     adminAuditProofRowsParam:

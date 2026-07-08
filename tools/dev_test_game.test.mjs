@@ -9022,6 +9022,8 @@ test("terminal receipt contract registry covers browser proof consumers", () => 
       contract.label,
       contract.terminalBatchesKey,
       contract.diagnosticStatusKey,
+      contract.summaryHeading,
+      contract.adminRouteOrder,
       contract.adminAuditProofRowsParam,
       contract.adminAuditProofRowStatusesParam,
       contract.adminAuditVisibleRowsKey,
@@ -9039,6 +9041,8 @@ test("terminal receipt contract registry covers browser proof consumers", () => 
         "selected-local-dependency",
         "selectedLocalDependencyTerminalReceipt",
         "selectedLocalDependencyTerminalReceiptStatus",
+        "Selected local dependency receipt",
+        20,
         "requiredSelectedLocalDependencyTerminalReceiptRows",
         "requiredSelectedLocalDependencyTerminalReceiptRowStatuses",
         "visibleSelectedLocalDependencyTerminalReceiptRows",
@@ -9057,6 +9061,8 @@ test("terminal receipt contract registry covers browser proof consumers", () => 
         "selected-operator-handoff",
         "selectedOperatorHandoffReceipt",
         "selectedOperatorHandoffReceiptStatus",
+        "Selected operator handoff receipt",
+        10,
         "requiredSelectedOperatorHandoffTerminalReceiptRows",
         "requiredSelectedOperatorHandoffTerminalReceiptRowStatuses",
         "visibleSelectedOperatorHandoffTerminalReceiptRows",
@@ -9122,6 +9128,9 @@ test("terminal receipt contract registry covers browser proof consumers", () => 
     assert.notEqual(contract.terminalBatchesKey.trim(), "");
     assert.equal(typeof contract.diagnosticStatusKey, "string");
     assert.notEqual(contract.diagnosticStatusKey.trim(), "");
+    assert.equal(typeof contract.summaryHeading, "string");
+    assert.notEqual(contract.summaryHeading.trim(), "");
+    assert.equal(typeof contract.adminRouteOrder, "number");
     assert.equal(typeof contract.adminAuditProofRowsParam, "string");
     assert.notEqual(contract.adminAuditProofRowsParam.trim(), "");
     assert.equal(typeof contract.adminAuditProofRowStatusesParam, "string");

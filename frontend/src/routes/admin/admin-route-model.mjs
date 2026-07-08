@@ -108,13 +108,7 @@ import {
   proofGraphPrerequisiteDestinationSectionId,
 } from "../../../../tools/dev_test_game_proof_graph_prerequisite_destination_rows.mjs";
 import {
-  selectedLocalDependencyTerminalReceiptId,
-  selectedLocalDependencyTerminalReceiptRowDefinitionsForReceipt,
-  selectedLocalDependencyTerminalReceiptRowFields,
-  selectedLocalDependencyTerminalReceiptRowTestIdPrefix,
-  selectedOperatorHandoffTerminalReceiptRowDefinitionsForReceipt,
-  selectedOperatorHandoffTerminalReceiptRowFields,
-  selectedOperatorHandoffTerminalReceiptId,
+  terminalReceiptContractRegistry,
 } from "../../../../tools/dev_test_game_terminal_receipts.mjs";
 import {
   normalizeLocalReadinessDependencyTrace,
@@ -122,6 +116,19 @@ import {
   preReadinessTraceCheckRows,
   preReadinessTraceKeys,
 } from "../../../../tools/dev_test_game_pre_readiness_trace_registry.mjs";
+
+const adminRouteTerminalReceiptContracts = Object.freeze(
+  [...terminalReceiptContractRegistry].sort(
+    (left, right) =>
+      Number(left.adminRouteOrder ?? 0) - Number(right.adminRouteOrder ?? 0),
+  ),
+);
+const terminalReceiptContractByKey = new Map(
+  terminalReceiptContractRegistry.map((contract) => [
+    contract.terminalBatchesKey,
+    contract,
+  ]),
+);
 import {
   proofGraphDiagnosticProofSummaryRowTestId,
   proofGraphDiagnosticProofSummarySectionHeading,
@@ -449,31 +456,32 @@ function phaseLocalNextActionSummarySections(snapshots, { game }) {
   ];
 }
 
-function selectedOperatorHandoffTerminalReceiptSummarySections(receipt) {
-  if (receipt === null) {
-    return [];
-  }
-  const rowFields = selectedOperatorHandoffTerminalReceiptRowFields(receipt);
-  const rowDefinitions =
-    selectedOperatorHandoffTerminalReceiptRowDefinitionsForReceipt(receipt);
-  return [
-    buildArtifactSummarySection({
-      id: "selected-operator-handoff-terminal-receipt",
-      heading: "Selected operator handoff receipt",
-      rows: rowDefinitions.map((definition) =>
-        selectedOperatorHandoffTerminalReceiptSummaryRow({
-          definition,
-          fields: rowFields[definition.id],
-        }),
-      ),
-    }),
-  ];
+function terminalReceiptSummarySections(terminalReceiptsByKey, { game } = {}) {
+  return adminRouteTerminalReceiptContracts.flatMap((contract) => {
+    const receipt = terminalReceiptsByKey[contract.terminalBatchesKey];
+    if (receipt === null || receipt === undefined) {
+      return [];
+    }
+    const rowFields = contract.rowFieldsForReceipt(receipt);
+    const rowDefinitions = contract.rowDefinitionsForReceipt(receipt);
+    return [
+      buildArtifactSummarySection({
+        id: contract.id,
+        heading: contract.summaryHeading,
+        rows: rowDefinitions.map((definition) =>
+          terminalReceiptSummaryRow({
+            contract,
+            definition,
+            fields: rowFields[definition.id],
+            game,
+          }),
+        ),
+      }),
+    ];
+  });
 }
 
-function selectedOperatorHandoffTerminalReceiptSummaryRow({
-  definition,
-  fields,
-}) {
+function terminalReceiptSummaryRow({ contract, definition, fields, game }) {
   return {
     id: definition.summaryRowId,
     testId: definition.testId,
@@ -481,52 +489,11 @@ function selectedOperatorHandoffTerminalReceiptSummaryRow({
       id: field.id,
       text: field.value,
       ...(field.emphasized === true ? { emphasized: true } : {}),
-    })),
-  };
-}
-
-function selectedLocalDependencyTerminalReceiptSummarySections(
-  receipt,
-  { game } = {},
-) {
-  if (receipt === null) {
-    return [];
-  }
-  const rowFields = selectedLocalDependencyTerminalReceiptRowFields(receipt);
-  const rowDefinitions =
-    selectedLocalDependencyTerminalReceiptRowDefinitionsForReceipt(receipt);
-  return [
-    buildArtifactSummarySection({
-      id: "selected-local-dependency-terminal-receipt",
-      heading: "Selected local dependency receipt",
-      rows: rowDefinitions.map((definition) =>
-        selectedLocalDependencyTerminalReceiptSummaryRow({
-          definition,
-          fields: rowFields[definition.id],
-          game,
-        }),
-      ),
-    }),
-  ];
-}
-
-function selectedLocalDependencyTerminalReceiptSummaryRow({
-  definition,
-  fields,
-  game,
-}) {
-  return {
-    id: definition.summaryRowId,
-    testId: definition.testId,
-    values: fields.map((field) => ({
-      id: field.id,
-      text: field.value,
-      ...(field.emphasized === true ? { emphasized: true } : {}),
-      ...(field.id !== "roleUrl"
+      ...(field.id !== contract.summaryLinkFieldId
         ? {}
         : {
             href: seededRoleUrlToAdminHref(field.value, { game }),
-            testId: `${selectedLocalDependencyTerminalReceiptRowTestIdPrefix}-role-url`,
+            testId: contract.summaryLinkTestId,
           }),
     })),
   };
@@ -7684,18 +7651,8 @@ export function normalizeLocalAdminSpineAudit(
         terminalBatchProof.nextActionHandoffPair,
       )
     : null;
-  const terminalSelectedOperatorHandoffReceipt =
-    validAdminSpineTerminalBatchProof(terminalBatchProof)
-      ? normalizeSelectedOperatorHandoffTerminalReceipt(
-          terminalBatchProof.selectedOperatorHandoffReceipt,
-        )
-      : null;
-  const terminalSelectedLocalDependencyReceipt =
-    validAdminSpineTerminalBatchProof(terminalBatchProof)
-      ? normalizeSelectedLocalDependencyTerminalReceipt(
-          terminalBatchProof.selectedLocalDependencyTerminalReceipt,
-        )
-      : null;
+  const terminalReceiptsByKey =
+    normalizeAdminSpineTerminalReceipts(terminalBatchProof);
   const batches = [...aggregateBatches, ...terminalBatches].map((batch, index) =>
     normalizeAdminSpineBatch(batch, index),
   );
@@ -7758,22 +7715,17 @@ export function normalizeLocalAdminSpineAudit(
                 status: `${terminalNextActionHandoffPair.defaultSequenceBlocker.status}:${terminalNextActionHandoffPair.hostedIdentityPredicate.status}`,
               }),
             ]),
-        ...(terminalSelectedOperatorHandoffReceipt === null
-          ? []
-          : [
-              Object.freeze({
-                id: terminalSelectedOperatorHandoffReceipt.id,
-                status: terminalSelectedOperatorHandoffReceipt.status,
-              }),
-            ]),
-        ...(terminalSelectedLocalDependencyReceipt === null
-          ? []
-          : [
-              Object.freeze({
-                id: terminalSelectedLocalDependencyReceipt.id,
-                status: terminalSelectedLocalDependencyReceipt.status,
-              }),
-            ]),
+        ...adminRouteTerminalReceiptContracts.flatMap((contract) => {
+          const receipt = terminalReceiptsByKey[contract.terminalBatchesKey];
+          return receipt === null
+            ? []
+            : [
+                Object.freeze({
+                  id: receipt.id,
+                  status: receipt.status,
+                }),
+              ];
+        }),
       ],
     ),
     batches: Object.freeze(batches),
@@ -7794,38 +7746,66 @@ export function normalizeLocalAdminSpineAudit(
       ...(terminalNextActionHandoffPair === null
         ? {}
         : { nextActionHandoffPair: terminalNextActionHandoffPair }),
-      ...(terminalSelectedOperatorHandoffReceipt === null
-        ? {}
-        : {
-            selectedOperatorHandoffReceipt:
-              terminalSelectedOperatorHandoffReceipt,
-          }),
-      ...(terminalSelectedLocalDependencyReceipt === null
-        ? {}
-        : {
-            selectedLocalDependencyTerminalReceipt:
-              terminalSelectedLocalDependencyReceipt,
-          }),
+      ...Object.fromEntries(
+        adminRouteTerminalReceiptContracts.flatMap((contract) => {
+          const receipt = terminalReceiptsByKey[contract.terminalBatchesKey];
+          return receipt === null
+            ? []
+            : [[contract.terminalBatchesKey, receipt]];
+        }),
+      ),
       releaseReady: adminSpineProof.releaseReady === true,
       productionReady: adminSpineProof.productionReady === true,
     }),
-    artifactSummarySections: [
-      ...selectedOperatorHandoffTerminalReceiptSummarySections(
-        terminalSelectedOperatorHandoffReceipt,
-      ),
-      ...selectedLocalDependencyTerminalReceiptSummarySections(
-        terminalSelectedLocalDependencyReceipt,
-        { game },
-      ),
-    ],
+    artifactSummarySections: terminalReceiptSummarySections(
+      terminalReceiptsByKey,
+      { game },
+    ),
   });
 }
 
+function normalizeAdminSpineTerminalReceipts(terminalBatchProof) {
+  if (!validAdminSpineTerminalBatchProof(terminalBatchProof)) {
+    return Object.freeze(
+      Object.fromEntries(
+        terminalReceiptContractRegistry.map((contract) => [
+          contract.terminalBatchesKey,
+          null,
+        ]),
+      ),
+    );
+  }
+  return Object.freeze(
+    Object.fromEntries(
+      terminalReceiptContractRegistry.map((contract) => [
+        contract.terminalBatchesKey,
+        normalizeAdminSpineTerminalReceipt({
+          contract,
+          receipt: terminalBatchProof[contract.terminalBatchesKey],
+        }),
+      ]),
+    ),
+  );
+}
+
+function normalizeAdminSpineTerminalReceipt({ contract, receipt }) {
+  if (contract.terminalBatchesKey === "selectedLocalDependencyTerminalReceipt") {
+    return normalizeSelectedLocalDependencyTerminalReceipt(receipt);
+  }
+  if (contract.terminalBatchesKey === "selectedOperatorHandoffReceipt") {
+    return normalizeSelectedOperatorHandoffTerminalReceipt(receipt);
+  }
+  return null;
+}
+
 function normalizeSelectedLocalDependencyTerminalReceipt(receipt) {
+  const contract = terminalReceiptContractByKey.get(
+    "selectedLocalDependencyTerminalReceipt",
+  );
   if (
     receipt === null ||
     typeof receipt !== "object" ||
-    receipt.id !== selectedLocalDependencyTerminalReceiptId ||
+    receipt.id !== contract?.id ||
     !["passed", "not_applicable"].includes(receipt.status) ||
     receipt.sourceArtifacts === null ||
     typeof receipt.sourceArtifacts !== "object" ||
@@ -7868,10 +7848,13 @@ function normalizeSelectedLocalDependencyTerminalReceipt(receipt) {
 }
 
 function normalizeSelectedOperatorHandoffTerminalReceipt(receipt) {
+  const contract = terminalReceiptContractByKey.get(
+    "selectedOperatorHandoffReceipt",
+  );
   if (
     receipt === null ||
     typeof receipt !== "object" ||
-    receipt.id !== selectedOperatorHandoffTerminalReceiptId ||
+    receipt.id !== contract?.id ||
     !["passed", "not_applicable"].includes(receipt.status) ||
     receipt.sourceArtifacts === null ||
     typeof receipt.sourceArtifacts !== "object" ||
