@@ -3,6 +3,7 @@ import {
 } from "./dev_test_game_local_admin_proof_paths.mjs";
 import {
   selectedLocalDependencyTerminalReceiptId,
+  normalizeSelectedLocalDependencyTerminalReceipt,
   selectedLocalDependencyTerminalReceiptRowDefinitions,
   selectedLocalDependencyTerminalReceiptRowDefinitionsForReceipt,
   selectedLocalDependencyTerminalReceiptRowFields,
@@ -11,6 +12,7 @@ import {
 } from "./dev_test_game_selected_local_dependency_receipt.mjs";
 import {
   selectedOperatorHandoffTerminalReceiptId,
+  normalizeSelectedOperatorHandoffTerminalReceipt,
   selectedOperatorHandoffTerminalReceiptRowDefinitions,
   selectedOperatorHandoffTerminalReceiptRowDefinitionsForReceipt,
   selectedOperatorHandoffTerminalReceiptRowFields,
@@ -44,6 +46,7 @@ export const terminalReceiptContractRegistry = Object.freeze([
     adminAuditVisibleRowStatusesKey:
       "visibleSelectedLocalDependencyTerminalReceiptRowStatuses",
     rowDefinitions: selectedLocalDependencyTerminalReceiptRowDefinitions,
+    normalizeReceipt: normalizeSelectedLocalDependencyTerminalReceipt,
     rowDefinitionsForReceipt:
       selectedLocalDependencyTerminalReceiptRowDefinitionsForReceipt,
     rowFieldsForReceipt: selectedLocalDependencyTerminalReceiptRowFields,
@@ -73,6 +76,7 @@ export const terminalReceiptContractRegistry = Object.freeze([
     adminAuditVisibleRowStatusesKey:
       "visibleSelectedOperatorHandoffTerminalReceiptRowStatuses",
     rowDefinitions: selectedOperatorHandoffTerminalReceiptRowDefinitions,
+    normalizeReceipt: normalizeSelectedOperatorHandoffTerminalReceipt,
     rowDefinitionsForReceipt:
       selectedOperatorHandoffTerminalReceiptRowDefinitionsForReceipt,
     rowFieldsForReceipt: selectedOperatorHandoffTerminalReceiptRowFields,

@@ -124,6 +124,52 @@ export function assertSelectedLocalDependencyTerminalReceipt(receipt) {
   return receipt;
 }
 
+export function normalizeSelectedLocalDependencyTerminalReceipt(receipt) {
+  if (
+    receipt === null ||
+    typeof receipt !== "object" ||
+    receipt.id !== selectedLocalDependencyTerminalReceiptId ||
+    !["passed", "not_applicable"].includes(receipt.status) ||
+    receipt.sourceArtifacts === null ||
+    typeof receipt.sourceArtifacts !== "object" ||
+    !Array.isArray(receipt.assertions)
+  ) {
+    return null;
+  }
+  return Object.freeze({
+    id: receipt.id,
+    status: receipt.status,
+    reason: String(receipt.reason ?? ""),
+    proofBoundary: String(receipt.proofBoundary ?? ""),
+    sourceArtifacts: Object.freeze({
+      nextAction: String(receipt.sourceArtifacts.nextAction ?? ""),
+      nextActionAdminProof: String(
+        receipt.sourceArtifacts.nextActionAdminProof ?? "",
+      ),
+    }),
+    assertions: Object.freeze(receipt.assertions.map((item) => String(item))),
+    ...(receipt.selectedLocalDependency === undefined
+      ? {}
+      : {
+          selectedLocalDependency: Object.freeze({
+            id: String(receipt.selectedLocalDependency.id ?? ""),
+            status: String(receipt.selectedLocalDependency.status ?? ""),
+            command: String(receipt.selectedLocalDependency.command ?? ""),
+            requiredEvidence: String(
+              receipt.selectedLocalDependency.requiredEvidence ?? "",
+            ),
+            buildSlice: String(
+              receipt.selectedLocalDependency.buildSlice ?? "",
+            ),
+            proofTarget: String(
+              receipt.selectedLocalDependency.proofTarget ?? "",
+            ),
+            roleUrl: String(receipt.selectedLocalDependency.roleUrl ?? ""),
+          }),
+        }),
+  });
+}
+
 export function selectedLocalDependencyTerminalReceiptRowFields(receipt) {
   return Object.freeze({
     receipt: Object.freeze([

@@ -9280,6 +9280,7 @@ test("terminal receipt contract registry covers browser proof consumers", () => 
     assert.equal(typeof contract.rowDefinitionsForReceipt, "function");
     assert.equal(typeof contract.rowFieldsForReceipt, "function");
     assert.equal(typeof contract.rowStatusForReceipt, "function");
+    assert.equal(typeof contract.normalizeReceipt, "function");
     assert(contract.browserProofConsumers.length > 0);
     for (const definition of contract.rowDefinitions) {
       assert(definition.testId.startsWith(`${contract.rowTestIdPrefix}-`));
@@ -9293,6 +9294,16 @@ test("terminal receipt contract registry covers browser proof consumers", () => 
     const statuses = contract.rowStatusForReceipt(
       receiptFixtures.get(contract.id),
     );
+    const normalizedReceipt = contract.normalizeReceipt(
+      receiptFixtures.get(contract.id),
+    );
+    assert.equal(normalizedReceipt.id, contract.id);
+    assert.equal(
+      normalizedReceipt.status,
+      receiptFixtures.get(contract.id).status,
+    );
+    assert.deepEqual(contract.rowStatusForReceipt(normalizedReceipt), statuses);
+    assert.equal(contract.normalizeReceipt({ id: contract.id }), null);
     assert(Object.keys(statuses).length > 0);
     for (const [rowId, status] of Object.entries(statuses)) {
       assert(

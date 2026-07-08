@@ -297,6 +297,146 @@ export function selectedOperatorHandoffReceiptPacketRowStatus(receipt) {
   return selectedOperatorHandoffTerminalReceiptRowStatus(receipt, "packet");
 }
 
+export function normalizeSelectedOperatorHandoffTerminalReceipt(receipt) {
+  if (
+    receipt === null ||
+    typeof receipt !== "object" ||
+    receipt.id !== selectedOperatorHandoffTerminalReceiptId ||
+    !["passed", "not_applicable"].includes(receipt.status) ||
+    receipt.sourceArtifacts === null ||
+    typeof receipt.sourceArtifacts !== "object" ||
+    !Array.isArray(receipt.assertions)
+  ) {
+    return null;
+  }
+  return Object.freeze({
+    id: receipt.id,
+    status: receipt.status,
+    proofBoundary: String(receipt.proofBoundary ?? ""),
+    sourceArtifacts: Object.freeze({
+      nextAction: String(receipt.sourceArtifacts.nextAction ?? ""),
+      nextActionAdminProof: String(
+        receipt.sourceArtifacts.nextActionAdminProof ?? "",
+      ),
+      proofGraph: String(receipt.sourceArtifacts.proofGraph ?? ""),
+      releaseReadiness: String(
+        receipt.sourceArtifacts.releaseReadiness ?? "",
+      ),
+    }),
+    assertions: Object.freeze(receipt.assertions.map((item) => String(item))),
+    ...(receipt.reason === undefined ? {} : { reason: String(receipt.reason) }),
+    ...(receipt.selectedOperatorHandoff === undefined
+      ? {}
+      : {
+          selectedOperatorHandoff: Object.freeze({
+            id: String(receipt.selectedOperatorHandoff.id ?? ""),
+            status: String(receipt.selectedOperatorHandoff.status ?? ""),
+            reason: String(receipt.selectedOperatorHandoff.reason ?? ""),
+            command: String(receipt.selectedOperatorHandoff.command ?? ""),
+            unprovenId: String(
+              receipt.selectedOperatorHandoff.unprovenId ?? "",
+            ),
+            proofTarget: String(
+              receipt.selectedOperatorHandoff.proofTarget ?? "",
+            ),
+            roleUrl: String(receipt.selectedOperatorHandoff.roleUrl ?? ""),
+            firstMissingInputId: String(
+              receipt.selectedOperatorHandoff.firstMissingInputId ?? "",
+            ),
+            selectedProductionFeatureGraphNodeId: String(
+              receipt.selectedOperatorHandoff
+                .selectedProductionFeatureGraphNodeId ?? "",
+            ),
+            selectedProductionFeatureRoleUrl: String(
+              receipt.selectedOperatorHandoff
+                .selectedProductionFeatureRoleUrl ?? "",
+            ),
+            ...rawEvidenceTemplateDescriptorProperty(
+              receipt.selectedOperatorHandoff.rawEvidenceTemplate,
+            ),
+          }),
+          ...(receipt.selectedOperatorHandoffPacket === undefined
+            ? {}
+            : {
+                selectedOperatorHandoffPacket: Object.freeze({
+                  status: String(
+                    receipt.selectedOperatorHandoffPacket.status ?? "",
+                  ),
+                  firstMissingInputId: String(
+                    receipt.selectedOperatorHandoffPacket
+                      .firstMissingInputId ?? "",
+                  ),
+                  firstMissingCheckId: String(
+                    receipt.selectedOperatorHandoffPacket
+                      .firstMissingCheckId ?? "",
+                  ),
+                  firstMissingSectionId: String(
+                    receipt.selectedOperatorHandoffPacket
+                      .firstMissingSectionId ?? "",
+                  ),
+                  proofTarget: String(
+                    receipt.selectedOperatorHandoffPacket.proofTarget ?? "",
+                  ),
+                  packetProofTarget: String(
+                    receipt.selectedOperatorHandoffPacket
+                      .packetProofTarget ?? "",
+                  ),
+                  nextProofTarget: String(
+                    receipt.selectedOperatorHandoffPacket.nextProofTarget ?? "",
+                  ),
+                  selectedProductionFeatureGraphNodeId: String(
+                    receipt.selectedOperatorHandoffPacket
+                      .selectedProductionFeatureGraphNodeId ?? "",
+                  ),
+                  selectedProductionFeatureRoleUrl: String(
+                    receipt.selectedOperatorHandoffPacket
+                      .selectedProductionFeatureRoleUrl ?? "",
+                  ),
+                  handoffRoleUrl: String(
+                    receipt.selectedOperatorHandoffPacket.handoffRoleUrl ?? "",
+                  ),
+                  operatorChecklistProofTarget: String(
+                    receipt.selectedOperatorHandoffPacket
+                      .operatorChecklistProofTarget ?? "",
+                  ),
+                  operatorChecklistPreflightTarget: String(
+                    receipt.selectedOperatorHandoffPacket
+                      .operatorChecklistPreflightTarget ?? "",
+                  ),
+                  ...rawEvidenceTemplateDescriptorProperty(
+                    receipt.selectedOperatorHandoffPacket.rawEvidenceTemplate,
+                  ),
+                }),
+              }),
+          proofGraphEdge: Object.freeze({
+            from: String(receipt.proofGraphEdge?.from ?? ""),
+            to: String(receipt.proofGraphEdge?.to ?? ""),
+            relationship: String(receipt.proofGraphEdge?.relationship ?? ""),
+            command: String(receipt.proofGraphEdge?.command ?? ""),
+            firstMissingInputId: String(
+              receipt.proofGraphEdge?.firstMissingInputId ?? "",
+            ),
+            roleUrl: String(receipt.proofGraphEdge?.roleUrl ?? ""),
+            proofTarget: String(receipt.proofGraphEdge?.proofTarget ?? ""),
+            unprovenId: String(receipt.proofGraphEdge?.unprovenId ?? ""),
+          }),
+          readinessRelatedLink: Object.freeze({
+            id: String(receipt.readinessRelatedLink?.id ?? ""),
+            label: String(receipt.readinessRelatedLink?.label ?? ""),
+            sourceAuditId: String(
+              receipt.readinessRelatedLink?.sourceAuditId ?? "",
+            ),
+            destinationAuditId: String(
+              receipt.readinessRelatedLink?.destinationAuditId ?? "",
+            ),
+            href: String(receipt.readinessRelatedLink?.href ?? ""),
+            status: String(receipt.readinessRelatedLink?.status ?? ""),
+            command: String(receipt.readinessRelatedLink?.command ?? ""),
+          }),
+        }),
+  });
+}
+
 export function selectedOperatorHandoffTerminalReceiptRowStatuses(receipt) {
   const rows = selectedOperatorHandoffTerminalReceiptRowFields(receipt);
   return Object.freeze(
@@ -410,6 +550,21 @@ export function selectedOperatorHandoffTerminalReceiptRowFields(receipt) {
 
 function selectedOperatorHandoffRowStatusText(fields) {
   return fields.map((field) => field.value).join("\n");
+}
+
+function rawEvidenceTemplateDescriptorProperty(template) {
+  if (template === null || typeof template !== "object") {
+    return {};
+  }
+  return {
+    rawEvidenceTemplate: Object.freeze(
+      Object.fromEntries(
+        hostedMatrixRawEvidenceTemplateDescriptorFieldValues(template).map(
+          (field) => [field.key, String(field.value ?? "")],
+        ),
+      ),
+    ),
+  };
 }
 
 export function selectedOperatorHandoffReceiptSelectedRowFields(handoff) {
