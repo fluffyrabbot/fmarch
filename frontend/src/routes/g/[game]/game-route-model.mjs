@@ -271,6 +271,7 @@ function pendingReplacementColdLoad(game, slotId) {
     }),
     votecount: Object.freeze([]),
     dayVoteOutcomes: Object.freeze([]),
+    endgameSummary: null,
     thread: Object.freeze({
       nextBeforeSeq: null,
       posts: Object.freeze([]),
@@ -525,6 +526,7 @@ const PLAYER_FIXTURE_COLD_LOAD = Object.freeze({
     Object.freeze({ target: "slot-7 / Mira", count: 2, needed: 7 }),
     Object.freeze({ target: "No lynch", count: 1, needed: 7 }),
   ]),
+  endgameSummary: null,
   dayVoteOutcomes: Object.freeze([
     Object.freeze({
       phaseId: "D01",

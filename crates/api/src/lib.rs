@@ -97,6 +97,7 @@ pub fn router_with_state(state: ApiState) -> Router {
         .route("/commands", post(command))
         .route("/games/{game}/votecount", get(votecount))
         .route("/games/{game}/day-vote-outcomes", get(day_vote_outcomes))
+        .route("/games/{game}/endgame-summary", get(endgame_summary))
         .route("/games/{game}/thread", get(thread_view))
         .route(
             "/games/{game}/channels/{channel}/thread",
@@ -1584,6 +1585,79 @@ async fn votecount(
     Path(game): Path<Uuid>,
 ) -> Result<Json<Vec<ProjectionDelta>>, ApiError> {
     Ok(Json(current_votecount_deltas(&state, game).await?))
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct EndgameSummaryResponse {
+    pub game: Uuid,
+    pub completed: bool,
+    pub winner: Option<EndgameWinner>,
+    pub slots: Vec<EndgameSlotReveal>,
+    pub boundary: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EndgameWinner {
+    pub alignment: String,
+    pub reason: String,
+    pub phase_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EndgameSlotReveal {
+    pub slot_id: String,
+    pub alive: bool,
+    pub status: String,
+    pub role_key: Option<String>,
+    pub alignment: Option<String>,
+    pub role_revealed: bool,
+    pub alignment_revealed: bool,
+}
+
+/// Public game read in the votecount access class. Role and alignment facts
+/// are gated per-slot by the projection's reveal flags, so mid-game death
+/// flips honor pack death_reveal policy and full reveal arrives only when
+/// GameCompleted/WinReached fold the flip.
+async fn endgame_summary(
+    State(state): State<ApiState>,
+    Path(game): Path<Uuid>,
+) -> Result<Json<EndgameSummaryResponse>, ApiError> {
+    let completed = commands::game_completed(&state.pool, game)
+        .await
+        .map_err(command_reject_api_error)?;
+    let result = projections::game_result(&state.pool, game).await?;
+    let slots = projections::slot_state(&state.pool, game)
+        .await?
+        .into_iter()
+        .map(|slot| EndgameSlotReveal {
+            slot_id: slot.slot_id,
+            alive: slot.alive,
+            status: slot.status,
+            role_key: if slot.role_revealed { slot.role_key } else { None },
+            alignment: if slot.alignment_revealed {
+                slot.alignment
+            } else {
+                None
+            },
+            role_revealed: slot.role_revealed,
+            alignment_revealed: slot.alignment_revealed,
+        })
+        .collect();
+    Ok(Json(EndgameSummaryResponse {
+        game,
+        completed,
+        winner: result.map(|row| EndgameWinner {
+            alignment: row.winner,
+            reason: row.reason,
+            phase_id: row.phase_id,
+        }),
+        slots,
+        boundary: "Endgame summary is reveal-gated: per-slot role and alignment appear only \
+                   after the projection's reveal flags flip (death_reveal policy mid-game, \
+                   GameCompleted/WinReached at the end). The winner fact is folded from the \
+                   engine's terminal WinReached."
+            .to_string(),
+    }))
 }
 
 async fn current_votecount_deltas(

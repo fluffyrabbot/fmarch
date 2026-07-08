@@ -2264,6 +2264,8 @@ import AdminCommandActivity from "../src/lib/components/admin/AdminCommandActivi
 import HostAction from "../src/lib/components/host-action/HostAction.svelte";
 import HostCommandActivity from "../src/lib/components/host-action/HostCommandActivity.svelte";
 import PlayerCommandPanel from "../src/lib/components/player-command/PlayerCommandPanel.svelte";
+import PlayerEndgameSummary from "../src/lib/components/player-endgame-summary/PlayerEndgameSummary.svelte";
+import { buildPlayerEndgameSummaryViewModel } from "../src/lib/components/player-endgame-summary/player-endgame-summary-model.mjs";
 import PlayerCommandReceipt from "../src/lib/components/player-command/PlayerCommandReceipt.svelte";
 import PlayerPrivateQueue from "../src/lib/components/player-private-queue/PlayerPrivateQueue.svelte";
 import PlayerThread from "../src/lib/components/player-thread/PlayerThread.svelte";
@@ -2757,6 +2759,45 @@ export async function renderModeratorCriticalActionManifest() {
       irreversible: action.irreversible,
     })),
   };
+}
+
+export async function renderPlayerEndgameSummary() {
+  return render(PlayerEndgameSummary, {
+    props: {
+      view: buildPlayerEndgameSummaryViewModel({
+        gameCompleted: true,
+        endgameSummary: {
+          completed: true,
+          winner: {
+            alignment: "town",
+            reason: "all mafia eliminated",
+            phaseId: "D05",
+          },
+          slots: [
+            {
+              slotId: "slot-2",
+              alive: false,
+              status: "dead",
+              roleKey: "mafia_goon",
+              alignment: "mafia",
+              roleRevealed: true,
+              alignmentRevealed: true,
+            },
+            {
+              slotId: "slot-7",
+              alive: true,
+              status: "alive",
+              roleKey: "vanilla_townie",
+              alignment: "town",
+              roleRevealed: true,
+              alignmentRevealed: true,
+            },
+          ],
+          boundary: "Endgame summary is reveal-gated.",
+        },
+      }),
+    },
+  });
 }
 
 export async function renderPlayerActionTargetConfirmation() {

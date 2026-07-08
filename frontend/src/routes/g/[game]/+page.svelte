@@ -18,6 +18,8 @@
   import PlayerCommandPanel from "$lib/components/player-command/PlayerCommandPanel.svelte";
   import PlayerCommandReceipt from "$lib/components/player-command/PlayerCommandReceipt.svelte";
   import PlayerPostureStrip from "$lib/components/player-posture/PlayerPostureStrip.svelte";
+  import PlayerEndgameSummary from "$lib/components/player-endgame-summary/PlayerEndgameSummary.svelte";
+  import { buildPlayerEndgameSummaryViewModel } from "$lib/components/player-endgame-summary/player-endgame-summary-model.mjs";
   import PlayerRoleCard from "$lib/components/player-role-card/PlayerRoleCard.svelte";
   import PlayerPrivateQueue from "$lib/components/player-private-queue/PlayerPrivateQueue.svelte";
   import PlayerThread from "$lib/components/player-thread/PlayerThread.svelte";
@@ -126,6 +128,10 @@
     commandStatus,
   });
   $: playerRoleCard = buildPlayerRoleCardViewModel({ commandState, player });
+  $: playerEndgameSummary = buildPlayerEndgameSummaryViewModel({
+    endgameSummary: data.endgameSummary ?? null,
+    gameCompleted: player.gameCompleted === true,
+  });
   $: if (typeof window !== "undefined") {
     activePhaseTheme.set(phaseThemeKey(phase));
   }
@@ -375,6 +381,8 @@
         data-unstick-below-px={data.layout.commandRail.data.unstickBelowPx}
         data-stability-mode={data.layout.commandRail.data.stabilityMode}
       >
+        <PlayerEndgameSummary view={playerEndgameSummary} />
+
         <PlayerRoleCard card={playerRoleCard} />
 
         <PlayerActionSubmissionCheckpoint
@@ -524,6 +532,51 @@
 
   :global(.player-action-submission-checkpoint__status) {
     margin: 0;
+  }
+
+  :global(.player-endgame-summary header p) {
+    margin: 0;
+  }
+
+  :global(.player-endgame-summary h2) {
+    color: var(--fm-ink);
+    font-size: 18px;
+    line-height: 1.2;
+    margin: 0;
+  }
+
+  :global(.player-endgame-summary__winner strong) {
+    color: var(--fm-ink);
+    font-size: 17px;
+    line-height: 1.25;
+  }
+
+  :global(.player-endgame-summary__winner p),
+  :global(.player-endgame-summary__boundary) {
+    color: var(--fm-ink-muted);
+    font-size: 13px;
+    line-height: 1.4;
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+
+  :global(.player-endgame-summary__row) {
+    align-items: center;
+    display: grid;
+    gap: 4px 10px;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  :global(.player-endgame-summary__row span),
+  :global(.player-endgame-summary__row small) {
+    color: var(--fm-ink-subtle);
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  :global(.player-endgame-summary__row strong) {
+    color: var(--fm-ink);
+    font-size: 14px;
   }
 
   :global(.player-action-target-picker__action) {

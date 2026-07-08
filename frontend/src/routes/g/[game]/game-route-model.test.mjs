@@ -817,6 +817,7 @@ test("player load rejects signed-out sessions without private scoped requests", 
     "/games/midsummer/thread?limit=50",
     "/games/midsummer/votecount",
     "/games/midsummer/day-vote-outcomes",
+    "/games/midsummer/endgame-summary",
   ]);
 });
 

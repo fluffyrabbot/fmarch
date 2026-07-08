@@ -79,13 +79,14 @@ test("board smoke scenario keeps allowed and blocked navigation explicit", () =>
       ["workbench-action-admin", "blocked"],
       ["game-action-midsummer-player", "link"],
       ["game-action-midsummer-moderator", "blocked"],
+      ["game-action-solstice-player", "link"],
     ],
   );
   assert.deepEqual(
     boardScenario.actions
       .filter((action) => action.navigation === "link")
       .map((action) => action.hrefPath),
-    ["/g/midsummer", "/g/midsummer"],
+    ["/g/midsummer", "/g/midsummer", "/g/solstice"],
   );
   assert.deepEqual(
     boardScenario.actions

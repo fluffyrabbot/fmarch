@@ -127,6 +127,7 @@ test("player cold-load uses channel-scoped thread endpoint for private channel r
     "/games/midsummer/channels/role-pm/thread?limit=50&principal_user_id=player_mira",
     "/games/midsummer/votecount",
     "/games/midsummer/day-vote-outcomes",
+    "/games/midsummer/endgame-summary",
     "/games/midsummer/notifications?principal_user_id=player_mira",
     "/games/midsummer/investigation-results?principal_user_id=player_mira",
     "/games/midsummer/player-command-state?principal_user_id=player_mira&slot_id=slot-7",
@@ -395,6 +396,7 @@ test("player cold-load fetches real endpoints and falls back per endpoint", asyn
     "/games/midsummer/thread?limit=50",
     "/games/midsummer/votecount",
     "/games/midsummer/day-vote-outcomes",
+    "/games/midsummer/endgame-summary",
     "/games/midsummer/notifications?principal_user_id=player_mira",
     "/games/midsummer/investigation-results?principal_user_id=player_mira",
     "/games/midsummer/player-command-state?principal_user_id=player_mira&slot_id=slot_4",
@@ -521,6 +523,7 @@ test("player cold-load skips private scoped endpoints without a principal", asyn
     "/games/midsummer/thread?limit=50",
     "/games/midsummer/votecount",
     "/games/midsummer/day-vote-outcomes",
+    "/games/midsummer/endgame-summary",
   ]);
   assert.deepEqual(data.notifications, []);
   assert.deepEqual(data.investigationResults, []);

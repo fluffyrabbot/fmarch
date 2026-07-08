@@ -15,6 +15,7 @@ export async function loadPlayerColdData({
     thread,
     votecount,
     dayVoteOutcomes,
+    endgameSummary,
     notifications,
     investigationResults,
     commandState,
@@ -39,6 +40,11 @@ export async function loadPlayerColdData({
       fetchImpl,
       fallback: fallback.dayVoteOutcomes ?? [],
       url: dayVoteOutcomesUrl({ apiBaseUrl, game }),
+    }),
+    fetchJson({
+      fetchImpl,
+      fallback: fallback.endgameSummary ?? null,
+      url: endgameSummaryUrl({ apiBaseUrl, game }),
     }),
     canLoadPrivate
       ? fetchJson({
@@ -84,6 +90,10 @@ export async function loadPlayerColdData({
     dayVoteOutcomes: normalizeDayVoteOutcomes(
       dayVoteOutcomes,
       fallback.dayVoteOutcomes ?? [],
+    ),
+    endgameSummary: normalizeEndgameSummary(
+      endgameSummary,
+      fallback.endgameSummary ?? null,
     ),
     notifications: Object.freeze(
       Array.isArray(notifications) ? notifications : [],
@@ -529,6 +539,43 @@ export function normalizePlayerCommandState(payload, fallback = EMPTY_PLAYER_COM
   });
 }
 
+export function normalizeEndgameSummary(payload, fallback = null) {
+  if (payload === null || typeof payload !== "object") {
+    return fallback;
+  }
+  const slots = Array.isArray(payload.slots) ? payload.slots : [];
+  const winner = payload.winner ?? null;
+  return Object.freeze({
+    completed: payload.completed === true,
+    winner:
+      winner === null || typeof winner !== "object"
+        ? null
+        : Object.freeze({
+            alignment: String(winner.alignment ?? ""),
+            reason: String(winner.reason ?? ""),
+            phaseId: String(winner.phase_id ?? winner.phaseId ?? ""),
+          }),
+    slots: Object.freeze(
+      slots
+        .filter((slot) => slot !== null && typeof slot === "object")
+        .map((slot) =>
+          Object.freeze({
+            slotId: String(slot.slot_id ?? slot.slotId ?? ""),
+            alive: slot.alive === true,
+            status: String(slot.status ?? ""),
+            roleKey: slot.role_key ?? slot.roleKey ?? null,
+            alignment: slot.alignment ?? null,
+            roleRevealed:
+              slot.role_revealed === true || slot.roleRevealed === true,
+            alignmentRevealed:
+              slot.alignment_revealed === true || slot.alignmentRevealed === true,
+          }),
+        ),
+    ),
+    boundary: String(payload.boundary ?? ""),
+  });
+}
+
 function normalizePlayerCommandRole(role) {
   if (role === null || typeof role !== "object") {
     return null;
@@ -859,6 +906,10 @@ export function playerVotecountUrl({ apiBaseUrl = "", game }) {
 
 export function dayVoteOutcomesUrl({ apiBaseUrl = "", game }) {
   return `${apiBaseUrl}/games/${encodeURIComponent(game)}/day-vote-outcomes`;
+}
+
+export function endgameSummaryUrl({ apiBaseUrl = "", game }) {
+  return `${apiBaseUrl}/games/${encodeURIComponent(game)}/endgame-summary`;
 }
 
 export function playerCommandStateUrl({

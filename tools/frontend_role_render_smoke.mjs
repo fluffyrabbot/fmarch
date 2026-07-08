@@ -249,6 +249,19 @@ function surfaceScenarios() {
       ],
     },
     {
+      id: "player-endgame",
+      role: "player",
+      path: "/g/midsummer",
+      render: "renderPlayerEndgameSummary",
+      surfaceTestId: "player-endgame-summary",
+      requiredText: ["Town wins", "Mafia goon"],
+      requiredSelectors: [
+        '[data-testid="player-endgame-winner"]',
+        '[data-testid="player-endgame-reveal-slot-2"]',
+        '[data-testid="player-endgame-reveal-slot-7"]',
+      ],
+    },
+    {
       id: "moderator",
       role: "moderator",
       path: "/g/midsummer/host",

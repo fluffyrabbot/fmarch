@@ -144,6 +144,27 @@ export function buildBoardRouteData({
             }),
           ]),
         }),
+        Object.freeze({
+          id: "solstice",
+          title: "Solstice Minuet",
+          phase: "Complete",
+          deadline: "Final result posted",
+          activity: "Town wins — view result",
+          actions: Object.freeze([
+            Object.freeze({
+              id: "player",
+              label: "View result",
+              href: "/g/solstice",
+              allowed: true,
+              navigation: "link",
+              ariaDisabled: "false",
+              blockedReason: "",
+              blockedLabel: "",
+              capabilityLabel: "Public endgame result",
+              className: "fm-touch-button fm-touch-button--secondary",
+            }),
+          ]),
+        }),
       ]),
     }),
     workbench: Object.freeze([

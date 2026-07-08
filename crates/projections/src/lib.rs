@@ -1273,13 +1273,40 @@ async fn fold_inner(
             .execute(&mut **tx)
             .await?;
         }
-        WinReached { .. } => {
+        WinReached {
+            winner,
+            reason,
+            metadata,
+        } => {
             // Win reached → reveal roles (the reveal flag, doc 10).
             sqlx::query(
                 "UPDATE slot_state SET role_revealed = TRUE, alignment_revealed = TRUE \
                  WHERE game_id = $1",
             )
             .bind(game_id)
+            .execute(&mut **tx)
+            .await?;
+            // Terminal winner fact → game_result (one row per game; rebuild
+            // converges on the same trailing WinReached).
+            sqlx::query(
+                "INSERT INTO game_result \
+                     (game_id, winner, reason, metadata, phase_id, source_seq, event_index) \
+                 VALUES ($1, $2, $3, $4, $5, $6, $7) \
+                 ON CONFLICT (game_id) DO UPDATE SET \
+                     winner = EXCLUDED.winner, \
+                     reason = EXCLUDED.reason, \
+                     metadata = EXCLUDED.metadata, \
+                     phase_id = EXCLUDED.phase_id, \
+                     source_seq = EXCLUDED.source_seq, \
+                     event_index = EXCLUDED.event_index",
+            )
+            .bind(game_id)
+            .bind(winner)
+            .bind(reason)
+            .bind(metadata)
+            .bind(phase_id)
+            .bind(source_seq)
+            .bind(event_index)
             .execute(&mut **tx)
             .await?;
         }
@@ -1400,6 +1427,7 @@ async fn rebuild_in_tx(
     for table in [
         "vote_ballot",
         "day_vote_outcome",
+        "game_result",
         "host_phase_control",
         "host_prompt",
         "player_info_result",
@@ -1703,6 +1731,40 @@ pub async fn day_vote_outcomes(
             reason: r.get("reason"),
         })
         .collect())
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct GameResultRow {
+    pub game_id: Uuid,
+    pub winner: String,
+    pub reason: String,
+    pub metadata: serde_json::Value,
+    pub phase_id: String,
+    pub source_seq: i64,
+    pub event_index: i32,
+}
+
+/// Read a game's terminal engine win result, if one has been folded.
+pub async fn game_result(
+    pool: &PgPool,
+    game_id: Uuid,
+) -> Result<Option<GameResultRow>, ProjectionError> {
+    let row = sqlx::query(
+        "SELECT game_id, winner, reason, metadata, phase_id, source_seq, event_index \
+         FROM game_result WHERE game_id = $1",
+    )
+    .bind(game_id)
+    .fetch_optional(pool)
+    .await?;
+    Ok(row.map(|r| GameResultRow {
+        game_id: r.get("game_id"),
+        winner: r.get("winner"),
+        reason: r.get("reason"),
+        metadata: r.get("metadata"),
+        phase_id: r.get("phase_id"),
+        source_seq: r.get("source_seq"),
+        event_index: r.get("event_index"),
+    }))
 }
 
 /// Read a game's slot_state rows, ordered deterministically.
