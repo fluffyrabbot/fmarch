@@ -11,6 +11,7 @@ import {
   assertDevTestGameHostedMatrixRawEvidenceTemplate,
   devTestGameHostedMatrixRawEvidenceTemplatePath,
   devTestGameHostedMatrixRawEvidenceTemplateProofCommand,
+  devTestGameHostedMatrixRawEvidenceTemplateProofPath,
 } from "./dev_test_game_hosted_matrix_raw_evidence_template_proof.mjs";
 import {
   devTestGameRealHostedMatrixRawCaptureCommand,
@@ -29,6 +30,8 @@ export const devTestGameHostedEvidenceOperatorChecklistProofCommand =
   "test:dev-test-game-hosted-evidence-operator-checklist";
 export const hostedEvidenceLaneCommandText =
   "npm run test:dev-test-game-hosted-evidence-lane";
+export const hostedTargetPreflightCommandText =
+  "npm run test:dev-test-game-hosted-target-preflight";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -57,21 +60,56 @@ export const hostedEvidenceOperatorChecklistInputSections = Object.freeze([
 ]);
 
 export function hostedEvidenceOperatorChecklistDescriptor() {
+  const checklistProofCommand =
+    `npm run ${devTestGameHostedEvidenceOperatorChecklistProofCommand}`;
+  const rawEvidenceTemplateProofCommand =
+    `npm run ${devTestGameHostedMatrixRawEvidenceTemplateProofCommand}`;
+  const rawCaptureCommand = `npm run ${devTestGameRealHostedMatrixRawCaptureCommand}`;
   return assertHostedEvidenceOperatorChecklistDescriptor({
     id: "dev-test-game-hosted-evidence-operator-checklist",
     path: devTestGameHostedEvidenceOperatorChecklistPath,
     status: "blocked-until-operator-input",
-    checklistProofCommand:
-      `npm run ${devTestGameHostedEvidenceOperatorChecklistProofCommand}`,
+    checklistProofCommand,
     checklistProofTarget: devTestGameHostedEvidenceOperatorChecklistProofPath,
     command: hostedEvidenceLaneCommandText,
     proofTarget: devTestGameHostedEvidenceLanePath,
     preflightTarget: devTestGameHostedTargetPreflightPath,
     rawEvidenceTemplatePath: devTestGameHostedMatrixRawEvidenceTemplatePath,
-    rawEvidenceTemplateProofCommand:
-      `npm run ${devTestGameHostedMatrixRawEvidenceTemplateProofCommand}`,
-    rawCaptureCommand: `npm run ${devTestGameRealHostedMatrixRawCaptureCommand}`,
+    rawEvidenceTemplateProofCommand,
+    rawCaptureCommand,
     rawCaptureProofTarget: devTestGameRealHostedMatrixRawCapturePath,
+    operatorRunSequence: [
+      {
+        id: "checklist-contract",
+        label: "Prove checklist contract",
+        command: checklistProofCommand,
+        proofTarget: devTestGameHostedEvidenceOperatorChecklistProofPath,
+      },
+      {
+        id: "raw-evidence-template",
+        label: "Validate raw evidence template",
+        command: rawEvidenceTemplateProofCommand,
+        proofTarget: devTestGameHostedMatrixRawEvidenceTemplateProofPath,
+      },
+      {
+        id: "real-hosted-raw-capture",
+        label: "Validate operator raw capture",
+        command: rawCaptureCommand,
+        proofTarget: devTestGameRealHostedMatrixRawCapturePath,
+      },
+      {
+        id: "hosted-target-preflight",
+        label: "Recheck hosted target preflight",
+        command: hostedTargetPreflightCommandText,
+        proofTarget: devTestGameHostedTargetPreflightPath,
+      },
+      {
+        id: "hosted-evidence-lane",
+        label: "Rerun hosted evidence lane",
+        command: hostedEvidenceLaneCommandText,
+        proofTarget: devTestGameHostedEvidenceLanePath,
+      },
+    ],
     rawEvidenceContractSummary: hostedMatrixRawEvidenceContractSummary(),
     blockedCheckIds: [...hostedTargetPreflightBlockingCheckIds],
     inputSections: hostedEvidenceOperatorChecklistInputSections.map((section) => ({
@@ -134,6 +172,51 @@ export function assertHostedEvidenceOperatorChecklistDescriptor(descriptor) {
     typeof descriptor.rawCaptureCommand !== "string" ||
     descriptor.rawCaptureCommand === "" ||
     descriptor.rawCaptureProofTarget !== devTestGameRealHostedMatrixRawCapturePath ||
+    !Array.isArray(descriptor.operatorRunSequence) ||
+    descriptor.operatorRunSequence.length !== 5 ||
+    JSON.stringify(
+      descriptor.operatorRunSequence.map((step) => [
+        step.id,
+        step.command,
+        step.proofTarget,
+      ]),
+    ) !==
+      JSON.stringify([
+        [
+          "checklist-contract",
+          `npm run ${devTestGameHostedEvidenceOperatorChecklistProofCommand}`,
+          devTestGameHostedEvidenceOperatorChecklistProofPath,
+        ],
+        [
+          "raw-evidence-template",
+          `npm run ${devTestGameHostedMatrixRawEvidenceTemplateProofCommand}`,
+          devTestGameHostedMatrixRawEvidenceTemplateProofPath,
+        ],
+        [
+          "real-hosted-raw-capture",
+          `npm run ${devTestGameRealHostedMatrixRawCaptureCommand}`,
+          devTestGameRealHostedMatrixRawCapturePath,
+        ],
+        [
+          "hosted-target-preflight",
+          hostedTargetPreflightCommandText,
+          devTestGameHostedTargetPreflightPath,
+        ],
+        [
+          "hosted-evidence-lane",
+          hostedEvidenceLaneCommandText,
+          devTestGameHostedEvidenceLanePath,
+        ],
+      ]) ||
+    !descriptor.operatorRunSequence.every(
+      (step) =>
+        typeof step.label === "string" &&
+        step.label !== "" &&
+        typeof step.command === "string" &&
+        step.command !== "" &&
+        typeof step.proofTarget === "string" &&
+        step.proofTarget !== "",
+    ) ||
     descriptor.rawEvidenceContractSummary !==
       hostedMatrixRawEvidenceContractSummary() ||
     !Array.isArray(descriptor.blockedCheckIds) ||
@@ -186,7 +269,16 @@ export function hostedEvidenceOperatorChecklistMarkdown(
     `1. Prove this checklist contract: \`${descriptor.checklistProofCommand}\``,
     `2. Validate the raw evidence template: \`${descriptor.rawEvidenceTemplateProofCommand}\``,
     `3. Capture or validate the real hosted raw packet: \`${descriptor.rawCaptureCommand}\``,
-    `4. Rerun the hosted evidence lane: \`${descriptor.command}\``,
+    `4. Recheck hosted target preflight: \`${hostedTargetPreflightCommandText}\``,
+    `5. Rerun the hosted evidence lane: \`${descriptor.command}\``,
+    "",
+    "## Direct Operator Run Sequence",
+    "",
+    "| Step | Command | Proof Target |",
+    "| --- | --- | --- |",
+    ...descriptor.operatorRunSequence.map(
+      (step) => `| ${step.label} | \`${step.command}\` | \`${step.proofTarget}\` |`,
+    ),
     "",
     "## Artifacts",
     "",

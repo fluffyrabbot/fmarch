@@ -17,7 +17,18 @@ This checklist is the source-controlled operator contract for unblocking the hos
 1. Prove this checklist contract: `npm run test:dev-test-game-hosted-evidence-operator-checklist`
 2. Validate the raw evidence template: `npm run test:dev-test-game-hosted-matrix-raw-evidence-template-proof`
 3. Capture or validate the real hosted raw packet: `npm run test:dev-test-game-real-hosted-matrix-raw-capture`
-4. Rerun the hosted evidence lane: `npm run test:dev-test-game-hosted-evidence-lane`
+4. Recheck hosted target preflight: `npm run test:dev-test-game-hosted-target-preflight`
+5. Rerun the hosted evidence lane: `npm run test:dev-test-game-hosted-evidence-lane`
+
+## Direct Operator Run Sequence
+
+| Step | Command | Proof Target |
+| --- | --- | --- |
+| Prove checklist contract | `npm run test:dev-test-game-hosted-evidence-operator-checklist` | `target/dev-test-game/hosted-evidence-operator-checklist-proof.json` |
+| Validate raw evidence template | `npm run test:dev-test-game-hosted-matrix-raw-evidence-template-proof` | `target/dev-test-game/hosted-matrix-raw-evidence-template-proof.json` |
+| Validate operator raw capture | `npm run test:dev-test-game-real-hosted-matrix-raw-capture` | `target/dev-test-game/real-hosted-matrix-raw-capture.json` |
+| Recheck hosted target preflight | `npm run test:dev-test-game-hosted-target-preflight` | `target/dev-test-game/hosted-target-preflight.json` |
+| Rerun hosted evidence lane | `npm run test:dev-test-game-hosted-evidence-lane` | `target/dev-test-game/hosted-evidence-lane.json` |
 
 ## Artifacts
 

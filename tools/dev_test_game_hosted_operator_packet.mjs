@@ -210,6 +210,12 @@ export function blockedOperatorPacketText(packet) {
           visible.operatorChecklist.rawEvidenceTemplateProofCommand,
           visible.operatorChecklist.rawCaptureCommand,
           visible.operatorChecklist.rawCaptureProofTarget,
+          ...(Array.isArray(visible.operatorChecklist.operatorRunSequence)
+            ? visible.operatorChecklist.operatorRunSequence.flatMap((step) => [
+                String(step.command ?? ""),
+                String(step.proofTarget ?? ""),
+              ])
+            : []),
         ]),
     visible.localVsHostedBoundary,
     visible.proofTarget,

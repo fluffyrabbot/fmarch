@@ -2818,7 +2818,7 @@ test("admin local proof graph detail data carries graph node rows", async () => 
     data.audit.checks.find(
       (check) => check.id === "core-loop-command-proof-role-url-audit",
     )?.status ?? "",
-    /39 checked/,
+    /41 checked/,
   );
   const hostedIdentityReceiptRow = data.audit.checks.find(
     (check) =>
@@ -5518,7 +5518,7 @@ test("admin local core loop detail data carries lane rows", async () => {
         [
           ["label", "Command proof role URLs", true, "", ""],
           ["status", "passed", false, "", ""],
-          ["checkedCount", "39 checked", false, "", ""],
+          ["checkedCount", "41 checked", false, "", ""],
         ],
         [],
       ],
@@ -6365,6 +6365,7 @@ test("admin hosted evidence lane detail data carries blocked setup rows", async 
       progressionId: "hosted-deployment",
       sourcePath: devTestGameHostedEvidenceOperatorChecklistPath,
       proofTarget: devTestGameHostedEvidenceOperatorChecklistProofPath,
+      operatorRunSequence: expectedHostedEvidenceOperatorRunSequence(),
       roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.hostedEvidenceLane),
       firstMissingInputId: "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
       firstMissingCheckId: "hosted-frontend-url-configured",
@@ -6413,6 +6414,56 @@ test("admin hosted evidence lane detail data carries blocked setup rows", async 
               ["copyCommand", "Copy command", false],
               ["openSource", "Open doc", false],
               ["openProofTarget", "Open proof", false],
+              [
+                "runSequence1",
+                `Prove checklist contract: npm run ${devTestGameHostedEvidenceOperatorChecklistProofCommand}`,
+                false,
+              ],
+              [
+                "runSequence1ProofTarget",
+                devTestGameHostedEvidenceOperatorChecklistProofPath,
+                false,
+              ],
+              [
+                "runSequence2",
+                `Validate raw evidence template: npm run ${devTestGameHostedMatrixRawEvidenceTemplateProofCommand}`,
+                false,
+              ],
+              [
+                "runSequence2ProofTarget",
+                devTestGameHostedMatrixRawEvidenceTemplateProofPath,
+                false,
+              ],
+              [
+                "runSequence3",
+                `Validate operator raw capture: npm run ${devTestGameRealHostedMatrixRawCaptureCommand}`,
+                false,
+              ],
+              [
+                "runSequence3ProofTarget",
+                devTestGameRealHostedMatrixRawCapturePath,
+                false,
+              ],
+              [
+                "runSequence4",
+                "Recheck hosted target preflight: npm run test:dev-test-game-hosted-target-preflight",
+                false,
+              ],
+              [
+                "runSequence4ProofTarget",
+                HOSTED_TARGET_PREFLIGHT_PROOF_TARGET,
+                false,
+              ],
+              [
+                "runSequence5",
+                "Rerun hosted evidence lane: npm run test:dev-test-game-hosted-evidence-lane",
+                false,
+              ],
+              [
+                "runSequence5ProofTarget",
+                HOSTED_EVIDENCE_LANE_PROOF_TARGET,
+                false,
+              ],
               [
                 "firstMissingInputId",
                 "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
@@ -11980,6 +12031,16 @@ function expectedHostedEvidenceOperatorChecklistDescriptorValues(checklist) {
   return [
     ["operatorChecklistId", checklist.id, false],
     ["operatorChecklistPath", checklist.path, false],
+    [
+      "operatorChecklistChecklistProofCommand",
+      checklist.checklistProofCommand,
+      false,
+    ],
+    [
+      "operatorChecklistChecklistProofTarget",
+      checklist.checklistProofTarget,
+      false,
+    ],
     ["operatorChecklistCommand", checklist.command, false],
     ["operatorChecklistProofTarget", checklist.proofTarget, false],
     [
@@ -12007,6 +12068,56 @@ function expectedHostedEvidenceOperatorChecklistDescriptorValues(checklist) {
       checklist.rawCaptureProofTarget,
       false,
     ],
+    ...(Array.isArray(checklist.operatorRunSequence)
+      ? checklist.operatorRunSequence
+      : []
+    ).flatMap((step, index) => [
+      [
+        `operatorChecklistRunSequence${index + 1}`,
+        `${step.label}: ${step.command}`,
+        false,
+      ],
+      [
+        `operatorChecklistRunSequence${index + 1}ProofTarget`,
+        step.proofTarget,
+        false,
+      ],
+    ]),
+  ];
+}
+
+function expectedHostedEvidenceOperatorRunSequence() {
+  return [
+    {
+      id: "checklist-contract",
+      label: "Prove checklist contract",
+      command: `npm run ${devTestGameHostedEvidenceOperatorChecklistProofCommand}`,
+      proofTarget: devTestGameHostedEvidenceOperatorChecklistProofPath,
+    },
+    {
+      id: "raw-evidence-template",
+      label: "Validate raw evidence template",
+      command: `npm run ${devTestGameHostedMatrixRawEvidenceTemplateProofCommand}`,
+      proofTarget: devTestGameHostedMatrixRawEvidenceTemplateProofPath,
+    },
+    {
+      id: "real-hosted-raw-capture",
+      label: "Validate operator raw capture",
+      command: `npm run ${devTestGameRealHostedMatrixRawCaptureCommand}`,
+      proofTarget: devTestGameRealHostedMatrixRawCapturePath,
+    },
+    {
+      id: "hosted-target-preflight",
+      label: "Recheck hosted target preflight",
+      command: "npm run test:dev-test-game-hosted-target-preflight",
+      proofTarget: HOSTED_TARGET_PREFLIGHT_PROOF_TARGET,
+    },
+    {
+      id: "hosted-evidence-lane",
+      label: "Rerun hosted evidence lane",
+      command: "npm run test:dev-test-game-hosted-evidence-lane",
+      proofTarget: HOSTED_EVIDENCE_LANE_PROOF_TARGET,
+    },
   ];
 }
 

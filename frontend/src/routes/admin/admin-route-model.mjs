@@ -987,6 +987,7 @@ function hostedHandoffOperatorProofRows(drilldowns) {
           { id: "proofTarget", text: drilldown.proofTarget },
           { id: "roleUrl", text: drilldown.roleUrl },
           ...hostedHandoffOperatorProofActionValues(drilldown),
+          ...hostedHandoffOperatorRunSequenceValues(drilldown),
           { id: "firstMissingInputId", text: drilldown.firstMissingInputId },
           { id: "firstMissingCheckId", text: drilldown.firstMissingCheckId },
           { id: "proofBoundary", text: drilldown.proofBoundary },
@@ -994,6 +995,22 @@ function hostedHandoffOperatorProofRows(drilldowns) {
       })),
     },
   ];
+}
+
+function hostedHandoffOperatorRunSequenceValues(drilldown) {
+  return (Array.isArray(drilldown.operatorRunSequence)
+    ? drilldown.operatorRunSequence
+    : []
+  ).flatMap((step, index) => [
+    {
+      id: `runSequence${index + 1}`,
+      text: `${step.label}: ${step.command}`,
+    },
+    {
+      id: `runSequence${index + 1}ProofTarget`,
+      text: step.proofTarget,
+    },
+  ]);
 }
 
 function hostedHandoffOperatorProofActionValues(drilldown) {
@@ -1223,6 +1240,14 @@ function hostedEvidenceOperatorChecklistDescriptorValues(checklist) {
   return [
     { id: "operatorChecklistId", text: checklist.id },
     { id: "operatorChecklistPath", text: checklist.path },
+    {
+      id: "operatorChecklistChecklistProofCommand",
+      text: checklist.checklistProofCommand,
+    },
+    {
+      id: "operatorChecklistChecklistProofTarget",
+      text: checklist.checklistProofTarget,
+    },
     { id: "operatorChecklistCommand", text: checklist.command },
     { id: "operatorChecklistProofTarget", text: checklist.proofTarget },
     { id: "operatorChecklistPreflightTarget", text: checklist.preflightTarget },
@@ -1242,6 +1267,18 @@ function hostedEvidenceOperatorChecklistDescriptorValues(checklist) {
       id: "operatorChecklistRawCaptureProofTarget",
       text: checklist.rawCaptureProofTarget,
     },
+    ...(Array.isArray(checklist.operatorRunSequence)
+      ? checklist.operatorRunSequence.flatMap((step, index) => [
+          {
+            id: `operatorChecklistRunSequence${index + 1}`,
+            text: `${step.label}: ${step.command}`,
+          },
+          {
+            id: `operatorChecklistRunSequence${index + 1}ProofTarget`,
+            text: step.proofTarget,
+          },
+        ])
+      : []),
   ];
 }
 
@@ -3587,6 +3624,9 @@ function normalizeHostedEvidenceOperatorChecklistProofDrilldowns(blockedReceipt)
         operatorChecklist.checklistProofTarget ??
           devTestGameHostedEvidenceOperatorChecklistProofPath,
       ),
+      operatorRunSequence: normalizeOperatorRunSequence(
+        operatorChecklist.operatorRunSequence,
+      ),
       roleUrl: String(
         drilldown.handoffRoleUrl ??
           operatorChecklist.roleUrl ??
@@ -3597,6 +3637,19 @@ function normalizeHostedEvidenceOperatorChecklistProofDrilldowns(blockedReceipt)
       proofBoundary: String(operatorChecklist.localVsHostedBoundary ?? ""),
     }),
   ]);
+}
+
+function normalizeOperatorRunSequence(sequence) {
+  return Object.freeze(
+    (Array.isArray(sequence) ? sequence : []).map((step) =>
+      Object.freeze({
+        id: String(step.id ?? ""),
+        label: String(step.label ?? ""),
+        command: String(step.command ?? ""),
+        proofTarget: String(step.proofTarget ?? ""),
+      }),
+    ),
+  );
 }
 
 function normalizeLocalHostedEvidenceLaneDemoProofSummary(proof) {
@@ -6604,6 +6657,19 @@ function normalizeHostedEvidenceOperatorChecklist(checklist) {
     rawCaptureProofTarget: String(checklist.rawCaptureProofTarget ?? ""),
     rawEvidenceContractSummary: String(
       checklist.rawEvidenceContractSummary ?? "",
+    ),
+    operatorRunSequence: Object.freeze(
+      (Array.isArray(checklist.operatorRunSequence)
+        ? checklist.operatorRunSequence
+        : []
+      ).map((step) =>
+        Object.freeze({
+          id: String(step?.id ?? ""),
+          label: String(step?.label ?? ""),
+          command: String(step?.command ?? ""),
+          proofTarget: String(step?.proofTarget ?? ""),
+        }),
+      ),
     ),
     blockedCheckIds: Object.freeze(
       (Array.isArray(checklist.blockedCheckIds)
