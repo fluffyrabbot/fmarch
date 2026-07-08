@@ -1,13 +1,18 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  coreLoopRoleSurfaceProofCases,
   coreLoopRoleSurfaceProofEvidenceKeys,
   coreLoopRoleSurfaceProofCaseKeys,
-} from "./dev_test_game_core_loop_admin_proof.mjs";
+} from "./dev_test_game_core_loop_role_surface_proof_cases.mjs";
 
 test("core loop admin proof role surfaces have one declarative serial order", () => {
   const caseKeys = coreLoopRoleSurfaceProofCaseKeys();
   assert.equal(new Set(caseKeys).size, caseKeys.length);
+  assert.equal(
+    new Set(coreLoopRoleSurfaceProofCases.map(({ proofKey }) => proofKey)).size,
+    coreLoopRoleSurfaceProofCases.length,
+  );
   assert.deepEqual(caseKeys, [
     "hostRoleSurface",
     "playerRoleSurface",
