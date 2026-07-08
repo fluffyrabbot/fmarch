@@ -51,6 +51,7 @@ import {
   hostPhaseTransitionSurfaceFixture as sharedHostPhaseTransitionSurfaceFixture,
   nightActionResolutionReceiptSurfaceFixture as sharedNightActionResolutionReceiptSurfaceFixture,
   normalNightActionResolutionPrivacySurfaceFixture as sharedNormalNightActionResolutionPrivacySurfaceFixture,
+  playerActionSubmissionRoleSurfaceFixture as sharedPlayerActionSubmissionRoleSurfaceFixture,
 } from "./dev_test_game_core_loop_role_surface_test_fixtures.mjs";
 import {
   buildCoreLoopCommandProofRoleUrlAudit,
@@ -21434,7 +21435,9 @@ function coreLoopAdminProofFixture() {
     hostAdvanceRaceSurface: hostAdvanceRaceSurfaceFixture(),
     hostDeadlineAdvanceRaceSurface: hostDeadlineAdvanceRaceSurfaceFixture(),
     hostMixedAdvanceRaceSurface: hostMixedAdvanceRaceSurfaceFixture(),
-    playerRoleSurface: playerActionRoleSurfaceFixture(),
+    playerRoleSurface: sharedPlayerActionSubmissionRoleSurfaceFixture({
+      game: coreLoopAdminProofFixtureGameId,
+    }),
     targetResolutionReceiptSurface: targetResolutionReceiptSurfaceFixture(),
     normalResolutionPrivacySurface: normalResolutionPrivacySurfaceFixture(),
     targetDayVoteReceiptSurface: targetDayVoteReceiptSurfaceFixture(),
@@ -21982,146 +21985,6 @@ function hostMixedAdvanceRaceSurfaceFixture() {
         apiDeadline: null,
       },
     },
-  };
-}
-
-function playerActionRoleSurfaceFixture() {
-  const sourceRoleUrl =
-    "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002";
-  const visitedRolePath = "/g/00000000-0000-0000-0000-000000000002";
-  return {
-    status: "passed",
-    sourceRoleUrl,
-    visitedRolePath,
-    surfaceTestId: "player-surface",
-    checkpointTestId: "player-action-submission-checkpoint",
-    clickedThroughFromRoleUrl: true,
-    playerActionSubmissionCheckpoint: {
-      proofCheckId: "player-action-submission",
-      phaseId: "N02",
-      phaseState: "open",
-      actorSlot: "slot-7",
-      actionState: "enabled:submit_action:factional_kill",
-      selectedAction: "factional_kill",
-      targetSlots: "slot-3",
-      receiptState: "idle",
-      visibleRows: [
-        "phase",
-        "actor",
-        "actionState",
-        "target",
-        "receipt",
-        "recovery",
-      ],
-      targetText: "Selected target\nfactional_kill -> slot-3",
-      recoveryText:
-        "Stale recovery\nReject PhaseLocked: refresh command state and use current action controls.",
-      statusText: "Player action submission is reachable from this role URL",
-    },
-    playerActionSubmissionClickProof: {
-      status: "passed",
-      sourceRoleUrl,
-      visitedRolePath,
-      clickedAction: "submit_action:factional_kill",
-      commandKind: "SubmitAction",
-      command: {
-        game: "00000000-0000-0000-0000-000000000002",
-        action_id: "factional_kill",
-        actor_slot: "slot-7",
-        template_id: "factional_kill",
-        targets: ["slot-3"],
-        grant_id: "grant-factional-kill",
-      },
-      commandStatus: {
-        state: "ack",
-        message: "Ack: stream seqs 501",
-      },
-      bridgePlan: {
-        role: "player",
-        commandKind: "SubmitAction",
-        commandEndpoint: "/commands",
-        finalState: "ack",
-        projectionRefreshKeys: [
-          "notifications",
-          "investigationResults",
-          "commandState",
-        ],
-      },
-      receipts: [
-        {
-          actionId: "submit_action:factional_kill",
-          state: "ack",
-          message: "Ack: stream seqs 501",
-          current: true,
-        },
-      ],
-      projectionCommandState: {
-        phase: {
-          phaseId: "N02",
-        },
-        actions: [],
-      },
-      checkpointReceiptState: "ack:Ack: stream seqs 501",
-      checkpointActionStateAfterAck: "disabled:no legal action available",
-      receiptCount: 1,
-      receiptStatusText: "Ack: stream seqs 501",
-    },
-    playerActionInvalidRecoveryProof: {
-      status: "passed",
-      sourceRoleUrl,
-      visitedRolePath,
-      clickedAction: "submit_invalid_action:factional_kill",
-      commandKind: "SubmitAction",
-      command: {
-        game: "00000000-0000-0000-0000-000000000002",
-        action_id: "invalid_self_factional_kill",
-        actor_slot: "slot-7",
-        template_id: "factional_kill",
-        targets: ["slot-7"],
-        grant_id: "grant-factional-kill",
-      },
-      commandStatus: {
-        state: "reject",
-        error: "InvalidTarget",
-        message: playerInvalidActionRecoveryMessage,
-      },
-      bridgePlan: {
-        role: "player",
-        commandKind: "SubmitAction",
-        commandEndpoint: "/commands",
-        finalState: "reject",
-        projectionRefreshKeys: [
-          "notifications",
-          "investigationResults",
-          "commandState",
-        ],
-      },
-      receipts: [
-        {
-          actionId: "submit_invalid_action:factional_kill",
-          state: "reject",
-          message: playerInvalidActionRecoveryMessage,
-          current: true,
-        },
-      ],
-      projectionCommandState: {
-        phase: {
-          phaseId: "N02",
-        },
-        actions: [
-          {
-            templateId: "factional_kill",
-          },
-        ],
-      },
-      checkpointReceiptState: "reject:InvalidTarget",
-      checkpointActionStateAfterReject: "enabled:submit_action:factional_kill",
-      checkpointTargetSlotsAfterReject: "slot-3",
-      receiptCount: 1,
-      receiptStatusText: playerInvalidActionRecoveryMessage,
-    },
-    releaseReady: false,
-    productionReady: false,
   };
 }
 

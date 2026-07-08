@@ -1,4 +1,5 @@
 import {
+  playerInvalidActionRecoveryScenario,
   playerActionSubmissionScenario,
 } from "./dev_test_game_core_loop_action_scenario_cases.mjs";
 import {
@@ -312,16 +313,50 @@ export function hostPhaseTransitionSurfaceFixture({
   };
 }
 
-export function playerActionSubmissionClickProofFixture() {
+export function playerActionSubmissionClickProofFixture({
+  game = "game-a",
+  sourceRoleUrl = playerRoleSurfaceSourceRoleUrl({ game }),
+  visitedRolePath = playerRoleSurfaceVisitedRolePath({ game }),
+} = {}) {
   const scenario = playerActionSubmissionScenario();
   return {
     status: "passed",
+    sourceRoleUrl,
+    visitedRolePath,
+    clickedAction: scenario.clickedAction,
     commandKind: scenario.commandKind,
+    command: {
+      game,
+      action_id: scenario.actionId,
+      actor_slot: scenario.actorSlot,
+      template_id: scenario.templateId,
+      targets: [scenario.targetSlot],
+      grant_id: scenario.grantId,
+    },
     commandStatus: {
       state: scenario.finalState,
+      message: `Ack: stream seqs ${scenario.streamSeq}`,
     },
     bridgePlan: {
+      role: "player",
+      commandKind: scenario.commandKind,
+      commandEndpoint: "/commands",
       finalState: scenario.finalState,
+      projectionRefreshKeys: scenario.expectedRefreshKeys,
+    },
+    receipts: [
+      {
+        actionId: scenario.clickedAction,
+        state: scenario.finalState,
+        message: `Ack: stream seqs ${scenario.streamSeq}`,
+        current: true,
+      },
+    ],
+    projectionCommandState: {
+      phase: {
+        phaseId: scenario.refreshedPhaseId,
+      },
+      actions: [],
     },
     checkpointReceiptState: `ack:${scenario.streamSeq}`,
     checkpointActionStateAfterAck: scenario.checkpointActionState,
@@ -330,11 +365,110 @@ export function playerActionSubmissionClickProofFixture() {
   };
 }
 
-export function playerActionSubmissionRoleSurfaceFixture() {
+export function playerActionSubmissionRoleSurfaceFixture({
+  game = "game-a",
+} = {}) {
+  const scenario = playerActionSubmissionScenario();
+  const invalidScenario = playerInvalidActionRecoveryScenario();
+  const sourceRoleUrl = playerRoleSurfaceSourceRoleUrl({ game });
+  const visitedRolePath = playerRoleSurfaceVisitedRolePath({ game });
   return {
+    status: "passed",
+    sourceRoleUrl,
+    visitedRolePath,
+    surfaceTestId: "player-surface",
+    checkpointTestId: "player-action-submission-checkpoint",
+    clickedThroughFromRoleUrl: true,
+    playerActionSubmissionCheckpoint: {
+      proofCheckId: "player-action-submission",
+      phaseId: scenario.refreshedPhaseId,
+      phaseState: "open",
+      actorSlot: scenario.actorSlot,
+      actionState: `enabled:${scenario.clickedAction}`,
+      selectedAction: scenario.actionId,
+      targetSlots: scenario.targetSlot,
+      receiptState: "idle",
+      visibleRows: [
+        "phase",
+        "actor",
+        "actionState",
+        "target",
+        "receipt",
+        "recovery",
+      ],
+      targetText: `Selected target\n${scenario.actionId} -> ${scenario.targetSlot}`,
+      recoveryText:
+        "Stale recovery\nReject PhaseLocked: refresh command state and use current action controls.",
+      statusText: "Player action submission is reachable from this role URL",
+    },
     playerActionSubmissionClickProof:
-      playerActionSubmissionClickProofFixture(),
+      playerActionSubmissionClickProofFixture({
+        game,
+        sourceRoleUrl,
+        visitedRolePath,
+      }),
+    playerActionInvalidRecoveryProof: {
+      status: "passed",
+      sourceRoleUrl,
+      visitedRolePath,
+      clickedAction: invalidScenario.clickedAction,
+      commandKind: invalidScenario.commandKind,
+      command: {
+        game,
+        action_id: invalidScenario.actionId,
+        actor_slot: invalidScenario.actorSlot,
+        template_id: invalidScenario.templateId,
+        targets: [invalidScenario.targetSlot],
+        grant_id: invalidScenario.grantId,
+      },
+      commandStatus: {
+        state: invalidScenario.finalState,
+        error: invalidScenario.error,
+        message: invalidScenario.messageIncludes,
+      },
+      bridgePlan: {
+        role: "player",
+        commandKind: invalidScenario.commandKind,
+        commandEndpoint: "/commands",
+        finalState: invalidScenario.finalState,
+        projectionRefreshKeys: invalidScenario.expectedRefreshKeys,
+      },
+      receipts: [
+        {
+          actionId: invalidScenario.clickedAction,
+          state: invalidScenario.finalState,
+          message: invalidScenario.messageIncludes,
+          current: true,
+        },
+      ],
+      projectionCommandState: {
+        phase: {
+          phaseId: invalidScenario.refreshedPhaseId,
+        },
+        actions: [
+          {
+            templateId: invalidScenario.refreshedActionTemplateId,
+          },
+        ],
+      },
+      checkpointReceiptState: invalidScenario.checkpointReceiptState,
+      checkpointActionStateAfterReject: invalidScenario.checkpointActionState,
+      checkpointTargetSlotsAfterReject:
+        invalidScenario.checkpointTargetSlots,
+      receiptCount: 1,
+      receiptStatusText: invalidScenario.messageIncludes,
+    },
+    releaseReady: false,
+    productionReady: false,
   };
+}
+
+export function playerRoleSurfaceSourceRoleUrl({ game }) {
+  return `http://127.0.0.1:5173/g/${game}`;
+}
+
+export function playerRoleSurfaceVisitedRolePath({ game }) {
+  return `/g/${game}`;
 }
 
 export function nightActionResolutionReceiptSurfaceFixture({
