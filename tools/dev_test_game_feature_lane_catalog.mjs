@@ -1,5 +1,6 @@
 import {
   invalidActionRecoveryFeatureSpineRow,
+  playerActionSubmissionAckFeatureSpineRow,
   playerActionLoopLaneId,
   staleActionTransitionRecoveryFeatureSpineRow,
   staleVoteTransitionRecoveryFeatureSpineRow,
@@ -129,6 +130,9 @@ const coreLoopFeatureSpineLaneRows = Object.freeze([
   }),
   Object.freeze(
     invalidActionRecoveryFeatureSpineRow({ cycleId: dayTwoNightTwo }),
+  ),
+  Object.freeze(
+    playerActionSubmissionAckFeatureSpineRow({ cycleId: dayTwoNightTwo }),
   ),
   Object.freeze(
     staleVoteTransitionRecoveryFeatureSpineRow({ cycleId: dayTwoNightTwo }),

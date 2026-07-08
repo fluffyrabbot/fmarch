@@ -1,4 +1,10 @@
 export const playerActionLoopLaneId = "action-loop";
+export const playerActionSubmissionAckCheckpointId =
+  "player-action-submission-ack-checkpoint";
+export const playerActionSubmissionAckFeatureSlotId =
+  "player-action-submission-ack";
+export const playerActionSubmissionAckFeatureTargetKind =
+  "player-action-submission-ack";
 export const playerInvalidActionRecoveryLaneId = "invalid-action-recovery";
 export const playerInvalidActionRecoveryHookId = "invalidActionReject";
 export const playerInvalidActionRecoveryMessage =
@@ -18,6 +24,18 @@ export const playerStaleVoteTransitionRecoveryMessage =
   "stale vote state, refresh and use current vote controls";
 export const playerStaleActionTransitionRecoveryMessage =
   "stale action state, refresh and use current action controls";
+
+export function playerActionSubmissionAckFeatureSpineRow({ cycleId }) {
+  return {
+    targetKey: "playerActionSubmissionAck",
+    featureSlotId: playerActionSubmissionAckFeatureSlotId,
+    cycleId,
+    role: "actionPlayer",
+    checkpointId: `${cycleId}-${playerActionSubmissionAckCheckpointId}`,
+    adminCheckId: playerActionLoopLaneId,
+    featureTargetKind: playerActionSubmissionAckFeatureTargetKind,
+  };
+}
 
 export function invalidActionRecoveryFeatureSpineRow({ cycleId }) {
   return {

@@ -141,6 +141,7 @@ function readinessFixture() {
               "d02-n02-host-lifecycle-control-unlocked-checkpoint",
               "d02-n02-host-lifecycle-control-stale-reject-checkpoint",
               "d02-n02-host-phase-advance-transition-checkpoint",
+              "d02-n02-player-action-submission-ack-checkpoint",
             ],
             recoveryHookIds: [],
             visibleAdminCheckIds: ["host-lifecycle-control"],

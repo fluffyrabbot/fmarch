@@ -370,6 +370,54 @@ test("production feature spine resolver preserves host advance transition target
   );
 });
 
+test("production feature spine resolver preserves player action submission ACK target shape", () => {
+  const sourceTarget = coreLoopSourceTargetFixture();
+  const declaration =
+    releaseReadinessProductionFeatureSpineTargets.playerActionSubmissionAck;
+  const target = resolveProductionFeatureSpineTarget({
+    itemId: "player-action-submission-ack",
+    declaration,
+    sourceTargetsByCheckId: {
+      "local-core-loop-proof": sourceTarget,
+    },
+  });
+
+  assert.deepEqual(target, {
+    featureSlotId: "player-action-submission-ack",
+    sourceCheckId: "local-core-loop-proof",
+    coverageDecision: {
+      kind: "seeded-role-url-proof",
+      proofCommand: coreLoopAdminProofCommand,
+    },
+    detailRoleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
+    cycleId: "d02-n02",
+    roleUrlId: "d02-n02-actionPlayer",
+    roleUrl: "http://127.0.0.1:5173/g/game-b",
+    rowKind: "checkpoint",
+    checkpointId: "d02-n02-player-action-submission-ack-checkpoint",
+    adminCheckId: "action-loop",
+    featureTargetKind: "player-action-submission-ack",
+    browserProofCommand,
+    browserWorkbench: {
+      status: "passed",
+      route: "/g/game-b",
+      roleUrl: "http://127.0.0.1:5173/g/game-b",
+      roleSurface: "player",
+      featureSlotId: "player-action-submission-ack",
+      requiredEvidence:
+        "Seeded player-action-submission-ack role URL opens /g/game-b in the browser proof before action-loop recovery is trusted.",
+    },
+    sourceProofArtifact: "target/dev-test-game/core-loop-admin-proof.json",
+    rerunCommand: coreLoopAdminProofCommand,
+  });
+  assert.equal(
+    validProductionFeatureSpineTarget(target, {
+      sourceCheckRules: coreLoopSourceCheckRules(),
+    }),
+    true,
+  );
+});
+
 function coreLoopResolutionBrowserWorkbenchFixture() {
   return {
     status: "passed",
@@ -898,6 +946,7 @@ function coreLoopSourceTargetFixture() {
       "d02-n02-host-lifecycle-control-unlocked-checkpoint",
       "d02-n02-host-lifecycle-control-stale-reject-checkpoint",
       "d02-n02-host-phase-advance-transition-checkpoint",
+      "d02-n02-player-action-submission-ack-checkpoint",
       "d02-n02-d02-vote-open",
       "d02-n02-d02-deciding-vote-submitted",
       "d02-n02-d02-resolved-target-killed",

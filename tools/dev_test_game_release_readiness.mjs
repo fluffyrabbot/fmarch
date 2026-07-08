@@ -370,6 +370,9 @@ import {
   coreLoopPlayerActionRecoveryScenarioFamily,
 } from "./dev_test_game_core_loop_player_action_recovery_scenarios.mjs";
 import {
+  playerActionSubmissionAckCheckpointId,
+} from "./dev_test_game_core_loop_action_scenario_cases.mjs";
+import {
   assertEmptyNightThreeHostTransitionProofCase,
   assertHostControlRaceSurfaceCase,
   assertHostLifecycleControlRoleSurfaceCase,
@@ -3186,6 +3189,7 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
     visibleRows: coreLoopRoleSurfaceCheckpointRows({
       hostRoleSurface: proof.hostRoleSurface,
       hostPhaseTransitionSurface: proof.hostPhaseTransitionSurface,
+      playerRoleSurface: proof.playerRoleSurface,
     }),
     requiredRows: proof.generatedFrom?.coreLoopSpineRows?.roleSurfaceCheckpoints,
   });
@@ -3268,6 +3272,7 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
 function coreLoopRoleSurfaceCheckpointRows({
   hostRoleSurface,
   hostPhaseTransitionSurface,
+  playerRoleSurface,
 } = {}) {
   const rows = [];
   if (typeof hostRoleSurface?.checkpointTestId === "string") {
@@ -3330,6 +3335,25 @@ function coreLoopRoleSurfaceCheckpointRows({
     )
   ) {
     rows.push(`d02-n02-${hostPhaseAdvanceTransitionCheckpointId}`);
+  }
+  if (
+    playerRoleSurface?.playerActionSubmissionClickProof?.status === "passed" &&
+    playerRoleSurface.playerActionSubmissionClickProof.commandKind ===
+      "SubmitAction" &&
+    playerRoleSurface.playerActionSubmissionClickProof.commandStatus?.state ===
+      "ack" &&
+    playerRoleSurface.playerActionSubmissionClickProof.bridgePlan?.finalState ===
+      "ack" &&
+    playerRoleSurface.playerActionSubmissionClickProof.checkpointReceiptState
+      ?.startsWith("ack:") &&
+    playerRoleSurface.playerActionSubmissionClickProof
+      .checkpointActionStateAfterAck === "disabled:no legal action available" &&
+    playerRoleSurface.playerActionSubmissionClickProof.receiptCount === 1 &&
+    String(
+      playerRoleSurface.playerActionSubmissionClickProof.receiptStatusText ?? "",
+    ).includes("Ack: stream seqs 501")
+  ) {
+    rows.push(`d02-n02-${playerActionSubmissionAckCheckpointId}`);
   }
   return rows;
 }

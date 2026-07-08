@@ -25,6 +25,7 @@ import {
   assertPlayerStaleVoteAfterTransitionProofCase,
 } from "./dev_test_game_core_loop_action_scenarios.mjs";
 import {
+  playerActionSubmissionAckCheckpointId,
   playerActionSubmissionScenario,
   playerInvalidActionRecoveryScenario,
   staleNightFourActionRecoveryScenario,
@@ -173,6 +174,7 @@ const coreLoopHostLifecycleControlCycleId = "d02-n02";
 const roleSurfaceSpineCheckpointRows = ({
   hostRoleSurface,
   hostPhaseTransitionSurface,
+  playerRoleSurface,
 } = {}) => {
   const rows = [];
   if (
@@ -250,6 +252,27 @@ const roleSurfaceSpineCheckpointRows = ({
   ) {
     rows.push(
       `${coreLoopHostLifecycleControlCycleId}-${hostPhaseAdvanceTransitionCheckpointId}`,
+    );
+  }
+  if (
+    playerRoleSurface?.playerActionSubmissionClickProof?.status === "passed" &&
+    playerRoleSurface.playerActionSubmissionClickProof.commandKind ===
+      "SubmitAction" &&
+    playerRoleSurface.playerActionSubmissionClickProof.commandStatus?.state ===
+      "ack" &&
+    playerRoleSurface.playerActionSubmissionClickProof.bridgePlan?.finalState ===
+      "ack" &&
+    playerRoleSurface.playerActionSubmissionClickProof.checkpointReceiptState
+      ?.startsWith("ack:") &&
+    playerRoleSurface.playerActionSubmissionClickProof
+      .checkpointActionStateAfterAck === "disabled:no legal action available" &&
+    playerRoleSurface.playerActionSubmissionClickProof.receiptCount === 1 &&
+    String(
+      playerRoleSurface.playerActionSubmissionClickProof.receiptStatusText ?? "",
+    ).includes("Ack: stream seqs 501")
+  ) {
+    rows.push(
+      `${coreLoopHostLifecycleControlCycleId}-${playerActionSubmissionAckCheckpointId}`,
     );
   }
   return rows;
@@ -10263,6 +10286,7 @@ export function assertCoreLoopAdminProof(evidence) {
     roleSurfaceSpineCheckpointRows({
       hostRoleSurface: evidence.hostRoleSurface,
       hostPhaseTransitionSurface: evidence.hostPhaseTransitionSurface,
+      playerRoleSurface: evidence.playerRoleSurface,
     }),
     evidence.generatedFrom?.coreLoopSpineRows?.roleSurfaceCheckpoints,
   );
