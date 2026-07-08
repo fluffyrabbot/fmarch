@@ -138,6 +138,7 @@ function readinessFixture() {
             checkpointIds: [
               "d02-n02-host-lifecycle-control-checkpoint",
               "d02-n02-host-lifecycle-control-locked-checkpoint",
+              "d02-n02-host-lifecycle-control-unlocked-checkpoint",
               "d02-n02-host-lifecycle-control-stale-reject-checkpoint",
             ],
             recoveryHookIds: [],

@@ -945,7 +945,7 @@ test("post-Night 4 fixture satisfies the shared transition assertion", () => {
   );
 });
 
-test("host lifecycle control assertion covers checkpoint, click, and stale reject", () => {
+test("host lifecycle control assertion covers checkpoint, click, unlock, and stale reject", () => {
   const sourceRoleUrl = "http://127.0.0.1:5173/g/game-a/host";
   const visitedRolePath = "/g/game-a/host";
   const hostRoleSurface = {
@@ -996,6 +996,29 @@ test("host lifecycle control assertion covers checkpoint, click, and stale rejec
       statusText: "Ack: stream seqs 601",
       activityCount: 1,
       activityStatusText: "Ack: stream seqs 601",
+    },
+    hostLifecycleUnlockProof: {
+      status: "passed",
+      sourceRoleUrl,
+      visitedRolePath,
+      clickedAction: "unlock_thread",
+      commandKind: "UnlockThread",
+      command: { game: "game-a" },
+      commandStatus: { state: "ack", message: "Ack: stream seqs 602" },
+      commandOutcome: { state: "ack", message: "Ack: stream seqs 602" },
+      bridgePlan: {
+        role: "moderator",
+        commandKind: "UnlockThread",
+        commandEndpoint: "/commands",
+        finalState: "ack",
+        projectionRefreshKeys: [],
+      },
+      projection: { phase: { id: "D01", locked: false } },
+      checkpointPhaseStateAfterAck: "open",
+      checkpointDeadlineAffordanceAfterAck: "resolve_phase,lock_thread",
+      statusText: "Ack: stream seqs 602",
+      activityCount: 2,
+      activityStatusText: "Ack: stream seqs 602",
     },
     hostLifecycleStaleRejectProof: {
       status: "passed",

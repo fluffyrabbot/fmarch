@@ -21,11 +21,15 @@ export const hostLifecycleControlCheckpointId =
   "host-lifecycle-control-checkpoint";
 export const hostLifecycleControlLockedCheckpointId =
   "host-lifecycle-control-locked-checkpoint";
+export const hostLifecycleControlUnlockedCheckpointId =
+  "host-lifecycle-control-unlocked-checkpoint";
 export const hostLifecycleControlStaleRejectCheckpointId =
   "host-lifecycle-control-stale-reject-checkpoint";
 export const hostPhaseControlFeatureTargetKind = "host-phase-command";
 export const hostPhaseLockedRecoveryFeatureTargetKind =
   "host-phase-locked-recovery";
+export const hostPhaseUnlockedRecoveryFeatureTargetKind =
+  "host-phase-unlocked-recovery";
 export const hostPhaseStaleRejectFeatureTargetKind =
   "host-phase-stale-reject";
 
@@ -59,6 +63,18 @@ export function hostPhaseLockedRecoveryFeatureSpineRow({ cycleId }) {
     checkpointId: `${cycleId}-${hostLifecycleControlLockedCheckpointId}`,
     adminCheckId: "host-lifecycle-control",
     featureTargetKind: hostPhaseLockedRecoveryFeatureTargetKind,
+  };
+}
+
+export function hostPhaseUnlockedRecoveryFeatureSpineRow({ cycleId }) {
+  return {
+    targetKey: "hostPhaseUnlockedRecovery",
+    featureSlotId: "host-phase-unlocked-recovery",
+    cycleId,
+    role: "host",
+    checkpointId: `${cycleId}-${hostLifecycleControlUnlockedCheckpointId}`,
+    adminCheckId: "host-lifecycle-control",
+    featureTargetKind: hostPhaseUnlockedRecoveryFeatureTargetKind,
   };
 }
 

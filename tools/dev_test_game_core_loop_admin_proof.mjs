@@ -122,6 +122,7 @@ import {
   hostLifecycleControlCheckpointId,
   hostLifecycleControlLockedCheckpointId,
   hostLifecycleControlStaleRejectCheckpointId,
+  hostLifecycleControlUnlockedCheckpointId,
   coreLoopHostControlScenarioFamily,
 } from "./dev_test_game_core_loop_host_control_scenarios.mjs";
 import {
@@ -191,6 +192,18 @@ const roleSurfaceSpineCheckpointRows = ({ hostRoleSurface } = {}) => {
   ) {
     rows.push(
       `${coreLoopHostLifecycleControlCycleId}-${hostLifecycleControlLockedCheckpointId}`,
+    );
+  }
+  if (
+    hostRoleSurface?.hostLifecycleUnlockProof?.status === "passed" &&
+    hostRoleSurface.hostLifecycleUnlockProof.commandKind === "UnlockThread" &&
+    hostRoleSurface.hostLifecycleUnlockProof.checkpointPhaseStateAfterAck ===
+      "open" &&
+    hostRoleSurface.hostLifecycleUnlockProof
+      .checkpointDeadlineAffordanceAfterAck === "resolve_phase,lock_thread"
+  ) {
+    rows.push(
+      `${coreLoopHostLifecycleControlCycleId}-${hostLifecycleControlUnlockedCheckpointId}`,
     );
   }
   if (
@@ -745,6 +758,12 @@ async function proveHostLifecycleControlCheckpoint({
       roleUrl,
       visitedRolePath,
     });
+    const unlockProof = await proveHostLifecycleUnlock({
+      page,
+      commandRequests,
+      roleUrl,
+      visitedRolePath,
+    });
     const staleRejectProof = await proveHostLifecycleStaleReject({
       browser,
       frontendBaseUrl,
@@ -769,6 +788,7 @@ async function proveHostLifecycleControlCheckpoint({
         statusText,
       },
       hostLifecycleControlClickProof: clickProof,
+      hostLifecycleUnlockProof: unlockProof,
       hostLifecycleStaleRejectProof: staleRejectProof,
       releaseReady: false,
       productionReady: false,
@@ -779,11 +799,13 @@ async function proveHostLifecycleControlCheckpoint({
 }
 
 async function installHostLifecycleControlBrowserRoutes(page, { commandRequests }) {
+  let locked = false;
   await page.route("**/commands", async (route) => {
     const commandEnvelope = route.request().postDataJSON();
     const command = commandEnvelope?.body?.body?.command;
     commandRequests.push(command);
     if (command?.LockThread !== undefined) {
+      locked = true;
       await route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -794,6 +816,24 @@ async function installHostLifecycleControlBrowserRoutes(page, { commandRequests 
             kind: "Ack",
             body: {
               stream_seqs: [601],
+            },
+          },
+        }),
+      });
+      return;
+    }
+    if (command?.UnlockThread !== undefined) {
+      locked = false;
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          v: 1,
+          id: commandEnvelope.id,
+          body: {
+            kind: "Ack",
+            body: {
+              stream_seqs: [602],
             },
           },
         }),
@@ -812,14 +852,19 @@ async function installHostLifecycleControlBrowserRoutes(page, { commandRequests 
           body: {
             error: "WrongHostLifecycleProofCommand",
             retryable: false,
-            message: "host lifecycle proof only accepts LockThread",
+            message: "host lifecycle proof only accepts LockThread/UnlockThread",
           },
         },
       }),
     });
   });
   await page.route("**/games/*/host-console-state?**", async (route) => {
-    await fulfillJson(route, hostLockedConsoleState());
+    await fulfillJson(
+      route,
+      locked
+        ? hostLockedConsoleState()
+        : hostOpenConsoleState({ boundary: "Host lifecycle controls open" }),
+    );
   });
 }
 
@@ -888,6 +933,76 @@ async function proveHostLifecycleControlClick({
     checkpointPhaseStateAfterAck: phaseStateAfterAck,
     checkpointDeadlineAffordanceAfterAck: deadlineAffordanceAfterAck,
     statusText: commandStatuses?.lock_thread?.message ?? null,
+    activityCount: Number.parseInt(activityCountText, 10),
+    activityStatusText,
+  };
+}
+
+async function proveHostLifecycleUnlock({
+  page,
+  commandRequests,
+  roleUrl,
+  visitedRolePath,
+}) {
+  const actionTile = page.getByTestId("critical-host-action-unlock_thread");
+  await actionTile.waitFor({ state: "visible", timeout: 15000 });
+  await actionTile.getByTestId("critical-host-action-trigger").click();
+  await actionTile.getByTestId("critical-host-action-confirm").waitFor({
+    state: "visible",
+    timeout: 15000,
+  });
+  await actionTile.getByTestId("critical-host-action-confirm").click();
+  await page.waitForFunction(
+    () =>
+      window.__fmarchHostCommandStatuses?.unlock_thread?.state === "ack" &&
+      window.__fmarchHostCommandDispatchBridgePlan?.commandKind === "UnlockThread",
+    null,
+    { timeout: 15000 },
+  );
+  await page.waitForFunction(
+    () =>
+      document
+        .querySelector('[data-testid="host-lifecycle-control-checkpoint"]')
+        ?.getAttribute("data-phase-state") === "open",
+    null,
+    { timeout: 15000 },
+  );
+  const commandStatuses = await page.evaluate(
+    () => window.__fmarchHostCommandStatuses,
+  );
+  const commandOutcomes = await page.evaluate(
+    () => window.__fmarchHostCommandOutcomes,
+  );
+  const bridgePlan = await page.evaluate(
+    () => window.__fmarchHostCommandDispatchBridgePlan,
+  );
+  const projection = await page.evaluate(() => window.__fmarchHostProjection);
+  const checkpoint = page.getByTestId("host-lifecycle-control-checkpoint");
+  const phaseStateAfterAck = await checkpoint.getAttribute("data-phase-state");
+  const deadlineAffordanceAfterAck = await checkpoint.getAttribute(
+    "data-deadline-affordance",
+  );
+  const activityCountText = await page
+    .getByTestId("host-command-activity-count")
+    .innerText();
+  const activityStatusText = await page
+    .getByTestId("host-command-activity-status-unlock_thread")
+    .innerText();
+  const command = commandRequests.at(-1)?.UnlockThread ?? null;
+  return {
+    status: "passed",
+    sourceRoleUrl: String(roleUrl),
+    visitedRolePath,
+    clickedAction: "unlock_thread",
+    commandKind: command === null ? null : "UnlockThread",
+    command,
+    commandStatus: commandStatuses?.unlock_thread ?? null,
+    commandOutcome: commandOutcomes?.at?.(-1) ?? null,
+    bridgePlan,
+    projection,
+    checkpointPhaseStateAfterAck: phaseStateAfterAck,
+    checkpointDeadlineAffordanceAfterAck: deadlineAffordanceAfterAck,
+    statusText: commandStatuses?.unlock_thread?.message ?? null,
     activityCount: Number.parseInt(activityCountText, 10),
     activityStatusText,
   };

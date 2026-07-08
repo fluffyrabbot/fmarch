@@ -21260,6 +21260,7 @@ function coreLoopAdminProofFixture() {
         roleSurfaceCheckpoints: [
           "d02-n02-host-lifecycle-control-checkpoint",
           "d02-n02-host-lifecycle-control-locked-checkpoint",
+          "d02-n02-host-lifecycle-control-unlocked-checkpoint",
           "d02-n02-host-lifecycle-control-stale-reject-checkpoint",
         ],
         recoveryHooks: [
@@ -21380,7 +21381,7 @@ function coreLoopAdminProofFixture() {
       ],
       visibleCommandProofRoleUrlAudit: {
         status: "passed",
-        checkedCount: 38,
+        checkedCount: 39,
       },
       rawInviteTokensVisible: false,
       releaseReady: false,
@@ -21584,6 +21585,42 @@ function hostLifecycleRoleSurfaceFixture() {
       statusText: "Ack: stream seqs 601",
       activityCount: 1,
       activityStatusText: "Ack: stream seqs 601",
+    },
+    hostLifecycleUnlockProof: {
+      status: "passed",
+      sourceRoleUrl,
+      visitedRolePath,
+      clickedAction: "unlock_thread",
+      commandKind: "UnlockThread",
+      command: {
+        game: "00000000-0000-0000-0000-000000000002",
+      },
+      commandStatus: {
+        state: "ack",
+        message: "Ack: stream seqs 602",
+      },
+      commandOutcome: {
+        state: "ack",
+        message: "Ack: stream seqs 602",
+      },
+      bridgePlan: {
+        role: "moderator",
+        commandKind: "UnlockThread",
+        commandEndpoint: "/commands",
+        finalState: "ack",
+        projectionRefreshKeys: [],
+      },
+      projection: {
+        phase: {
+          id: "D01",
+          locked: false,
+        },
+      },
+      checkpointPhaseStateAfterAck: "open",
+      checkpointDeadlineAffordanceAfterAck: "resolve_phase,lock_thread",
+      statusText: "Ack: stream seqs 602",
+      activityCount: 2,
+      activityStatusText: "Ack: stream seqs 602",
     },
     hostLifecycleStaleRejectProof: {
       status: "passed",
@@ -23643,6 +23680,7 @@ function coreLoopSpineTargetsFixture() {
       "d01-n01-d02-d02-day-controls-return",
       "d02-n02-host-lifecycle-control-checkpoint",
       "d02-n02-host-lifecycle-control-locked-checkpoint",
+      "d02-n02-host-lifecycle-control-unlocked-checkpoint",
       "d02-n02-host-lifecycle-control-stale-reject-checkpoint",
       "d02-n02-d02-vote-open",
       "d02-n02-d02-deciding-vote-submitted",

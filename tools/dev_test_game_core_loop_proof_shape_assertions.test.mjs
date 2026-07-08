@@ -106,18 +106,18 @@ test("core-loop command proof role URL audit summary records checked count", () 
 test("core-loop command proof role URL audit expectation records visible count", () => {
   assert.deepEqual(coreLoopCommandProofRoleUrlAuditExpectation, {
     status: "passed",
-    checkedCount: 36,
+    checkedCount: 39,
   });
   assert.deepEqual(
     assertCoreLoopCommandProofRoleUrlAuditExpectation({
-      audit: { status: "passed", checkedCount: 36 },
+      audit: { status: "passed", checkedCount: 39 },
     }),
     coreLoopCommandProofRoleUrlAuditExpectation,
   );
   assert.throws(
     () =>
       assertCoreLoopCommandProofRoleUrlAuditExpectation({
-        audit: { status: "passed", checkedCount: 35 },
+        audit: { status: "passed", checkedCount: 38 },
       }),
     /audit expectation drifted/,
   );

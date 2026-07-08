@@ -435,6 +435,7 @@ import {
 import {
   coreLoopHostControlFamilyId,
   hostControlRaceScenarioCases,
+  hostLifecycleControlUnlockedCheckpointId,
   coreLoopHostControlScenarioFamily,
 } from "./dev_test_game_core_loop_host_control_scenarios.mjs";
 import {
@@ -3274,6 +3275,16 @@ function coreLoopHostRoleSurfaceCheckpointRows(hostRoleSurface) {
       .checkpointDeadlineAffordanceAfterAck === "unlock_thread,advance_phase"
   ) {
     rows.push("d02-n02-host-lifecycle-control-locked-checkpoint");
+  }
+  if (
+    hostRoleSurface?.hostLifecycleUnlockProof?.status === "passed" &&
+    hostRoleSurface.hostLifecycleUnlockProof.commandKind === "UnlockThread" &&
+    hostRoleSurface.hostLifecycleUnlockProof.checkpointPhaseStateAfterAck ===
+      "open" &&
+    hostRoleSurface.hostLifecycleUnlockProof
+      .checkpointDeadlineAffordanceAfterAck === "resolve_phase,lock_thread"
+  ) {
+    rows.push(`d02-n02-${hostLifecycleControlUnlockedCheckpointId}`);
   }
   if (
     hostRoleSurface?.hostLifecycleStaleRejectProof?.status === "passed" &&

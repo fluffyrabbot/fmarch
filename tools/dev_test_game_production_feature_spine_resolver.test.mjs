@@ -226,6 +226,54 @@ test("production feature spine resolver preserves host locked recovery target sh
   );
 });
 
+test("production feature spine resolver preserves host unlocked recovery target shape", () => {
+  const sourceTarget = coreLoopSourceTargetFixture();
+  const declaration =
+    releaseReadinessProductionFeatureSpineTargets.hostPhaseUnlockedRecovery;
+  const target = resolveProductionFeatureSpineTarget({
+    itemId: "host-phase-unlocked-recovery",
+    declaration,
+    sourceTargetsByCheckId: {
+      "local-core-loop-proof": sourceTarget,
+    },
+  });
+
+  assert.deepEqual(target, {
+    featureSlotId: "host-phase-unlocked-recovery",
+    sourceCheckId: "local-core-loop-proof",
+    coverageDecision: {
+      kind: "seeded-role-url-proof",
+      proofCommand: coreLoopAdminProofCommand,
+    },
+    detailRoleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
+    cycleId: "d02-n02",
+    roleUrlId: "d02-n02-host",
+    roleUrl: "http://127.0.0.1:5173/g/game-b/host",
+    rowKind: "checkpoint",
+    checkpointId: "d02-n02-host-lifecycle-control-unlocked-checkpoint",
+    adminCheckId: "host-lifecycle-control",
+    featureTargetKind: "host-phase-unlocked-recovery",
+    browserProofCommand,
+    browserWorkbench: {
+      status: "passed",
+      route: "/g/game-b/host",
+      roleUrl: "http://127.0.0.1:5173/g/game-b/host",
+      roleSurface: "host",
+      featureSlotId: "host-phase-unlocked-recovery",
+      requiredEvidence:
+        "Seeded host-phase-unlocked-recovery role URL opens /g/game-b/host in the browser proof before host-lifecycle-control recovery is trusted.",
+    },
+    sourceProofArtifact: "target/dev-test-game/core-loop-admin-proof.json",
+    rerunCommand: coreLoopAdminProofCommand,
+  });
+  assert.equal(
+    validProductionFeatureSpineTarget(target, {
+      sourceCheckRules: coreLoopSourceCheckRules(),
+    }),
+    true,
+  );
+});
+
 test("production feature spine resolver preserves host stale reject target shape", () => {
   const sourceTarget = coreLoopSourceTargetFixture();
   const declaration =
@@ -799,6 +847,7 @@ function coreLoopSourceTargetFixture() {
       "d01-n01-d02-d02-day-controls-return",
       "d02-n02-host-lifecycle-control-checkpoint",
       "d02-n02-host-lifecycle-control-locked-checkpoint",
+      "d02-n02-host-lifecycle-control-unlocked-checkpoint",
       "d02-n02-host-lifecycle-control-stale-reject-checkpoint",
       "d02-n02-d02-vote-open",
       "d02-n02-d02-deciding-vote-submitted",

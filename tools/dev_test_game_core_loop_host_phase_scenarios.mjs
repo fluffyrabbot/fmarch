@@ -494,6 +494,9 @@ const hostLifecycleControlScenarioDefinition = Object.freeze({
   commandEndpoint: "/commands",
   ...hostLockThreadCommandFacts(),
   ackStreamSeq: 601,
+  unlockActionId: hostUnlockThreadCommandFacts().actionId,
+  unlockCommandKind: hostUnlockThreadCommandFacts().commandKind,
+  unlockAckStreamSeq: 602,
   openPhaseId: "D01",
   openPhaseState: "open",
   lockedPhaseState: "locked",
@@ -771,6 +774,7 @@ export function assertHostLifecycleControlRoleSurfaceCase({
 }) {
   const checkpoint = hostRoleSurface?.hostLifecycleControlCheckpoint;
   const clickProof = hostRoleSurface?.hostLifecycleControlClickProof;
+  const unlockProof = hostRoleSurface?.hostLifecycleUnlockProof;
   const staleRejectProof = hostRoleSurface?.hostLifecycleStaleRejectProof;
   if (
     hostRoleSurface?.status !== "passed" ||
@@ -811,6 +815,14 @@ export function assertHostLifecycleControlRoleSurfaceCase({
   }
   assertHostLifecycleControlClickProofCase({
     clickProof,
+    expectedGame,
+    sourceRoleUrl: hostRoleSurface.sourceRoleUrl,
+    visitedRolePath: hostRoleSurface.visitedRolePath,
+    scenario,
+    includeEvidenceInError,
+  });
+  assertHostLifecycleUnlockProofCase({
+    unlockProof,
     expectedGame,
     sourceRoleUrl: hostRoleSurface.sourceRoleUrl,
     visitedRolePath: hostRoleSurface.visitedRolePath,
@@ -872,6 +884,56 @@ export function assertHostLifecycleControlClickProofCase({
     throwHostPhaseScenarioAssertionError({
       message: "core-loop admin proof missing host lifecycle click ACK",
       evidence: clickProof,
+      includeEvidenceInError,
+    });
+  }
+}
+
+export function assertHostLifecycleUnlockProofCase({
+  unlockProof,
+  expectedGame,
+  sourceRoleUrl,
+  visitedRolePath,
+  scenario = hostLifecycleControlScenarioDefinition,
+  includeEvidenceInError = false,
+}) {
+  if (
+    unlockProof?.status !== "passed" ||
+    (sourceRoleUrl !== undefined && unlockProof.sourceRoleUrl !== sourceRoleUrl) ||
+    (visitedRolePath !== undefined &&
+      unlockProof.visitedRolePath !== visitedRolePath) ||
+    unlockProof.clickedAction !== scenario.unlockActionId ||
+    unlockProof.commandKind !== scenario.unlockCommandKind ||
+    unlockProof.command?.game !== expectedGame ||
+    unlockProof.commandStatus?.state !== "ack" ||
+    !unlockProof.commandStatus?.message?.includes(
+      `Ack: stream seqs ${scenario.unlockAckStreamSeq}`,
+    ) ||
+    unlockProof.commandOutcome?.state !== "ack" ||
+    !unlockProof.commandOutcome?.message?.includes(
+      `Ack: stream seqs ${scenario.unlockAckStreamSeq}`,
+    ) ||
+    unlockProof.bridgePlan?.role !== scenario.role ||
+    unlockProof.bridgePlan.commandKind !== scenario.unlockCommandKind ||
+    unlockProof.bridgePlan.commandEndpoint !== scenario.commandEndpoint ||
+    unlockProof.bridgePlan.finalState !== "ack" ||
+    unlockProof.bridgePlan.projectionRefreshKeys?.length !== 0 ||
+    unlockProof.projection?.phase?.id !== scenario.openPhaseId ||
+    unlockProof.projection?.phase?.locked !== false ||
+    unlockProof.checkpointPhaseStateAfterAck !== scenario.openPhaseState ||
+    unlockProof.checkpointDeadlineAffordanceAfterAck !==
+      scenario.openDeadlineAffordance ||
+    !String(unlockProof.statusText ?? "")
+      .toLowerCase()
+      .includes(`ack: stream seqs ${scenario.unlockAckStreamSeq}`) ||
+    unlockProof.activityCount !== 2 ||
+    !String(unlockProof.activityStatusText ?? "")
+      .toLowerCase()
+      .includes(`ack: stream seqs ${scenario.unlockAckStreamSeq}`)
+  ) {
+    throwHostPhaseScenarioAssertionError({
+      message: "core-loop admin proof missing host lifecycle unlock ACK",
+      evidence: unlockProof,
       includeEvidenceInError,
     });
   }
