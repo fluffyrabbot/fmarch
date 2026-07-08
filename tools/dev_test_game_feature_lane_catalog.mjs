@@ -44,6 +44,7 @@ import {
   dayFiveProgressionFeatureSpineRows,
 } from "./dev_test_game_core_loop_day_five_progression_scenarios.mjs";
 import {
+  dayTwoNightTwoCycleId,
   dayTwoNightTwoFeatureSpineRows,
 } from "./dev_test_game_core_loop_day_two_night_two_scenarios.mjs";
 import {
@@ -80,7 +81,7 @@ export const coreLoopFeatureSpineSource = Object.freeze({
 });
 
 export const coreLoopFeatureSpineCycleIds = Object.freeze({
-  dayTwoNightTwo: "d02-n02",
+  dayTwoNightTwo: dayTwoNightTwoCycleId,
   dayOneNightOneDayTwo: "d01-n01-d02",
   nightTwoDayThree: "n02-d03",
   dayThreeNightThree: "d03-n03",

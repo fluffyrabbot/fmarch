@@ -437,6 +437,9 @@ import {
   coreLoopDayFiveProgressionFamilyId,
 } from "./dev_test_game_core_loop_day_five_progression_scenarios.mjs";
 import {
+  dayTwoNightTwoCycleId,
+} from "./dev_test_game_core_loop_day_two_night_two_scenarios.mjs";
+import {
   coreLoopHostControlFamilyId,
   hostControlRoleSurfaceCheckpointRows,
   hostControlRaceScenarioCases,
@@ -3283,20 +3286,20 @@ function coreLoopRoleSurfaceCheckpointRows({
   const rows = [];
   rows.push(
     ...hostControlRoleSurfaceCheckpointRows({
-      cycleId: "d02-n02",
+      cycleId: dayTwoNightTwoCycleId,
       hostRoleSurface,
       hostPhaseTransitionSurface,
     }),
   );
   rows.push(
     ...playerActionSubmissionAckCheckpointRows({
-      cycleId: "d02-n02",
+      cycleId: dayTwoNightTwoCycleId,
       playerRoleSurface,
     }),
   );
   rows.push(
     ...nightActionResolutionPrivateReceiptCheckpointRows({
-      cycleId: "d02-n02",
+      cycleId: dayTwoNightTwoCycleId,
       nightActionResolutionReceiptSurface,
       normalNightActionResolutionPrivacySurface,
     }),

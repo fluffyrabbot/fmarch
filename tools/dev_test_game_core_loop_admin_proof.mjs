@@ -119,6 +119,9 @@ import {
   coreLoopDayFiveProgressionScenarioFamily,
 } from "./dev_test_game_core_loop_day_five_progression_scenarios.mjs";
 import {
+  dayTwoNightTwoCycleId,
+} from "./dev_test_game_core_loop_day_two_night_two_scenarios.mjs";
+import {
   coreLoopHostControlFamilyId,
   hostControlRoleSurfaceCheckpointRows,
   hostControlRaceScenarioCases,
@@ -166,8 +169,6 @@ const proofRunRelativePath = path.relative(repoRoot, proofRunPath);
 const evidencePath = path.join(repoRoot, devTestGameCoreLoopAdminProofPath);
 const requiredChecks = coreLoopAdminCheckIds;
 
-const coreLoopHostLifecycleControlCycleId = "d02-n02";
-
 const roleSurfaceSpineCheckpointRows = ({
   hostRoleSurface,
   hostPhaseTransitionSurface,
@@ -178,20 +179,20 @@ const roleSurfaceSpineCheckpointRows = ({
   const rows = [];
   rows.push(
     ...hostControlRoleSurfaceCheckpointRows({
-      cycleId: coreLoopHostLifecycleControlCycleId,
+      cycleId: dayTwoNightTwoCycleId,
       hostRoleSurface,
       hostPhaseTransitionSurface,
     }),
   );
   rows.push(
     ...playerActionSubmissionAckCheckpointRows({
-      cycleId: coreLoopHostLifecycleControlCycleId,
+      cycleId: dayTwoNightTwoCycleId,
       playerRoleSurface,
     }),
   );
   rows.push(
     ...nightActionResolutionPrivateReceiptCheckpointRows({
-      cycleId: coreLoopHostLifecycleControlCycleId,
+      cycleId: dayTwoNightTwoCycleId,
       nightActionResolutionReceiptSurface,
       normalNightActionResolutionPrivacySurface,
     }),
