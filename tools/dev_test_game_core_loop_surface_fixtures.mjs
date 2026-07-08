@@ -8,8 +8,12 @@ import {
   dayThreeVoteResolutionSurfaceCase,
 } from "./dev_test_game_core_loop_vote_resolution_scenarios.mjs";
 import {
+  emptyNightThreeHostTransitionProofCase,
   hostDeadlineAffordanceForPhaseState,
 } from "./dev_test_game_core_loop_host_phase_scenarios.mjs";
+import {
+  nightThreeEmptyResolutionSurfaceCase,
+} from "./dev_test_game_core_loop_phase_progression_scenarios.mjs";
 
 export function dayThreeVoteResolutionSurfaceFixture({
   game = "00000000-0000-0000-0000-000000000002",
@@ -243,6 +247,100 @@ export function postDayThreeResolutionSurfaceFixture({
       boundary:
         "Seeded browser action player observed host AdvancePhase from locked D03 into open N03.",
       resyncFromSeq: 909,
+    }),
+    releaseReady: false,
+    productionReady: false,
+  };
+}
+
+export function nightThreeEmptyResolutionSurfaceFixture({
+  game = "00000000-0000-0000-0000-000000000002",
+} = {}) {
+  const surfaceCase = nightThreeEmptyResolutionSurfaceCase();
+  const hostTransitionCase = emptyNightThreeHostTransitionProofCase();
+  const baseRoleUrl = seededCoreLoopRoleUrl({ game });
+  const hostRoleUrl = seededCoreLoopRoleUrl({ game, suffix: "/host" });
+  return {
+    status: "passed",
+    sourceHostRoleUrl: hostRoleUrl,
+    sourceActionPlayerRoleUrl: baseRoleUrl,
+    clickedThroughFromRoleUrl: true,
+    transition: surfaceCase.transitionFragments.join(" -> "),
+    actionPlayerNoActionProof: seededCoreLoopPlayerSurfaceFixture({
+      game,
+      slotField: surfaceCase.actionPlayerNoActionCase.slotField,
+      slot: surfaceCase.actionPlayerNoActionCase.expectedSlot,
+      principalUserId:
+        surfaceCase.actionPlayerNoActionCase.expectedPrincipalUserId,
+      phaseId: surfaceCase.actionPlayerNoActionCase.expectedPhaseId,
+      phaseState: surfaceCase.actionPlayerNoActionCase.expectedPhaseState,
+      actorAlive: surfaceCase.actionPlayerNoActionCase.expectedActorAlive,
+      actorStatus: surfaceCase.actionPlayerNoActionCase.expectedActorStatus,
+      actionState: surfaceCase.actionPlayerNoActionCase.expectedActionState,
+      statusText:
+        `Player action unavailable: ${surfaceCase.actionPlayerNoActionCase.expectedStatusText}`,
+      privateCount: surfaceCase.actionPlayerNoActionCase.expectedPrivateCount,
+      privateReceipt:
+        surfaceCase.actionPlayerNoActionCase.expectedPrivateReceipt,
+      boundary:
+        "Seeded browser action player opened N03 with no legal night action after D03 attrition.",
+      resyncFromSeq: surfaceCase.actionPlayerNoActionCase.expectedResyncFromSeq,
+    }),
+    hostTransitionProof: seededCoreLoopHostSurfaceFixture({
+      game,
+      setupResyncFromSeq: hostTransitionCase.setupResyncFromSeq,
+      setupPhaseId: hostTransitionCase.setupPhaseId,
+      setupPhaseState: hostTransitionCase.setupPhaseState,
+      resolveProof: hostPhaseTransitionActionFixture({
+        actionId: hostTransitionCase.resolveCase.actionId,
+        commandKind: hostTransitionCase.resolveCase.commandKind,
+        streamSeq: hostTransitionCase.resolveCase.streamSeq,
+        phaseId: hostTransitionCase.resolveCase.expectedPhaseId,
+        phaseState: hostTransitionCase.resolveCase.expectedPhaseState,
+        deadlineAffordance: hostDeadlineAffordanceForPhaseState(
+          hostTransitionCase.resolveCase.expectedPhaseState,
+        ),
+        projectionRefreshKeys: hostTransitionCase.resolveCase.expectedRefreshKeys,
+        command: {
+          game,
+          seed: 918273,
+        },
+      }),
+      advanceProof: hostPhaseTransitionActionFixture({
+        actionId: hostTransitionCase.advanceCase.actionId,
+        commandKind: hostTransitionCase.advanceCase.commandKind,
+        streamSeq: hostTransitionCase.advanceCase.streamSeq,
+        phaseId: hostTransitionCase.advanceCase.expectedPhaseId,
+        phaseState: hostTransitionCase.advanceCase.expectedPhaseState,
+        deadlineAffordance: hostDeadlineAffordanceForPhaseState(
+          hostTransitionCase.advanceCase.expectedPhaseState,
+        ),
+        projectionRefreshKeys: hostTransitionCase.advanceCase.expectedRefreshKeys,
+        command: {
+          game,
+        },
+      }),
+    }),
+    actionPlayerDayFourProof: seededCoreLoopPlayerSurfaceFixture({
+      game,
+      slotField: surfaceCase.actionPlayerDayFourCase.slotField,
+      slot: surfaceCase.actionPlayerDayFourCase.expectedSlot,
+      principalUserId:
+        surfaceCase.actionPlayerDayFourCase.expectedPrincipalUserId,
+      phaseId: surfaceCase.actionPlayerDayFourCase.expectedPhaseId,
+      phaseState: surfaceCase.actionPlayerDayFourCase.expectedPhaseState,
+      actorAlive: surfaceCase.actionPlayerDayFourCase.expectedActorAlive,
+      actorStatus: surfaceCase.actionPlayerDayFourCase.expectedActorStatus,
+      actionState: surfaceCase.actionPlayerDayFourCase.expectedActionState,
+      statusText:
+        `Player action unavailable: ${surfaceCase.actionPlayerDayFourCase.expectedStatusText}`,
+      privateCount: surfaceCase.actionPlayerDayFourCase.expectedPrivateCount,
+      privateReceipt: surfaceCase.actionPlayerDayFourCase.expectedPrivateReceipt,
+      boundary:
+        "Seeded browser action player observed host AdvancePhase from empty N03 into open D04 no-lynch voting.",
+      resyncFromSeq: surfaceCase.actionPlayerDayFourCase.expectedResyncFromSeq,
+      voteButtonCount: surfaceCase.actionPlayerDayFourCase.expectedVoteButtonCount,
+      voteTargets: [{ kind: "no_lynch", slotId: null, label: "No lynch" }],
     }),
     releaseReady: false,
     productionReady: false,

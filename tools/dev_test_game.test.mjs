@@ -98,8 +98,6 @@ import {
   staleCompletedPrivatePostScenario,
 } from "./dev_test_game_core_loop_private_channel_recovery_scenarios.mjs";
 import {
-  hostPhaseTransitionActionFixture,
-  seededCoreLoopHostSurfaceFixture,
   seededCoreLoopPlayerSurfaceFixture,
 } from "./dev_test_game_core_loop_proof_fixtures.mjs";
 import {
@@ -109,6 +107,7 @@ import {
 } from "./dev_test_game_core_loop_late_action_fixtures.mjs";
 import {
   dayThreeVoteResolutionSurfaceFixture,
+  nightThreeEmptyResolutionSurfaceFixture,
   postDayThreeResolutionSurfaceFixture,
 } from "./dev_test_game_core_loop_surface_fixtures.mjs";
 import {
@@ -22014,93 +22013,6 @@ function hostMixedAdvanceRaceSurfaceFixture() {
         apiDeadline: null,
       },
     },
-  };
-}
-
-function nightThreeEmptyResolutionSurfaceFixture() {
-  const game = "00000000-0000-0000-0000-000000000002";
-  const baseRoleUrl = `http://127.0.0.1:5173/g/${game}`;
-  return {
-    status: "passed",
-    sourceHostRoleUrl: `${baseRoleUrl}/host`,
-    sourceActionPlayerRoleUrl: baseRoleUrl,
-    clickedThroughFromRoleUrl: true,
-    transition:
-      "actionPlayer:N03:no_action -> host:resolve_phase:ack:910 -> host:advance_phase:ack:911 -> actionPlayer:D04:no_lynch_vote",
-    actionPlayerNoActionProof: seededCoreLoopPlayerSurfaceFixture({
-      game,
-      slotField: "actionPlayerSlot",
-      slot: "slot-7",
-      principalUserId: "player_mira",
-      phaseId: "N03",
-      phaseState: "open",
-      actorAlive: true,
-      actorStatus: "alive",
-      actionState: "disabled:no legal action available",
-      statusText: "Player action unavailable: no legal action available",
-      privateCount: 0,
-      privateReceipt: false,
-      boundary:
-        "Seeded browser action player opened N03 with no legal night action after D03 attrition.",
-      resyncFromSeq: 909,
-    }),
-    hostTransitionProof: seededCoreLoopHostSurfaceFixture({
-      game,
-      setupResyncFromSeq: 909,
-      setupPhaseId: "N03",
-      setupPhaseState: "open",
-      resolveProof: hostPhaseTransitionActionFixture({
-        actionId: "resolve_phase",
-        commandKind: "ResolvePhase",
-        streamSeq: 910,
-        phaseId: "N03",
-        phaseState: "locked",
-        deadlineAffordance: "unlock_thread,advance_phase",
-        projectionRefreshKeys: [
-          "host",
-          "votecount",
-          "dayVoteOutcomes",
-          "hostPrompts",
-        ],
-        command: {
-          game,
-          seed: 918273,
-        },
-      }),
-      advanceProof: hostPhaseTransitionActionFixture({
-        actionId: "advance_phase",
-        commandKind: "AdvancePhase",
-        streamSeq: 911,
-        phaseId: "D04",
-        phaseState: "open",
-        deadlineAffordance: "resolve_phase,lock_thread",
-        projectionRefreshKeys: [],
-        command: {
-          game,
-        },
-      }),
-    }),
-    actionPlayerDayFourProof: seededCoreLoopPlayerSurfaceFixture({
-      game,
-      slotField: "actionPlayerSlot",
-      slot: "slot-7",
-      principalUserId: "player_mira",
-      phaseId: "D04",
-      phaseState: "open",
-      actorAlive: true,
-      actorStatus: "alive",
-      actionState: "disabled:no legal action available",
-      statusText: "Player action unavailable: no legal action available",
-      privateCount: 0,
-      privateReceipt: false,
-      boundary:
-        "Seeded browser action player observed host AdvancePhase from empty N03 into open D04 no-lynch voting.",
-      resyncFromSeq: 911,
-      voteButtonCount: 1,
-      voteTargets: [{ kind: "no_lynch", slotId: null, label: "No lynch" }],
-    }),
-    releaseReady: false,
-    productionReady: false,
   };
 }
 

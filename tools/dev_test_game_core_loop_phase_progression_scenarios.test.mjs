@@ -26,6 +26,15 @@ import {
 import {
   postDayThreeResolutionSurfaceCase,
 } from "./dev_test_game_core_loop_post_day_three_scenarios.mjs";
+import {
+  assertEmptyNightThreeHostTransitionProofCase,
+} from "./dev_test_game_core_loop_host_phase_scenarios.mjs";
+import {
+  assertPostDayThreePlayerSurfaceProofCase,
+} from "./dev_test_game_core_loop_private_receipt_scenarios.mjs";
+import {
+  nightThreeEmptyResolutionSurfaceFixture,
+} from "./dev_test_game_core_loop_surface_fixtures.mjs";
 
 test("core loop phase progression family names proof, seed, and stale reject cases", () => {
   assert.equal(
@@ -253,4 +262,23 @@ test("phase progression shares empty Night 3 and Day 4 survivor assertions", () 
     expectedVoteTargetCount: 2,
     includeEvidenceInError: false,
   });
+});
+
+test("empty Night 3 fixture satisfies the shared phase progression assertion", () => {
+  const surface = nightThreeEmptyResolutionSurfaceFixture({ game: "game-a" });
+
+  assert.doesNotThrow(() =>
+    assertNightThreeEmptyResolutionSurfaceCase({
+      nightThreeEmptyResolutionSurface: surface,
+      assertPostDayThreePlayerSurfaceProof:
+        assertPostDayThreePlayerSurfaceProofCase,
+      assertNightThreeEmptyHostTransitionProof:
+        assertEmptyNightThreeHostTransitionProofCase,
+    }),
+  );
+  assert.equal(surface.actionPlayerNoActionProof.actionPlayerSlot, "slot-7");
+  assert.equal(
+    surface.hostTransitionProof.advanceProof.commandStatus.message,
+    "Ack: stream seqs 911",
+  );
 });
