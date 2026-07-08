@@ -21153,10 +21153,8 @@ function identityAdminProofFixture() {
 const coreLoopAdminProofFixtureGameId =
   "00000000-0000-0000-0000-000000000002";
 
-function coreLoopAdminProofFixture() {
-  const completedGameHardeningCoverageStatus =
-    completedGameHardeningCoverageStatusFixture();
-  const coreLoopSpineRows = {
+function coreLoopSpineRowsFixture() {
+  return {
     cycles: [
       "d01-n01-d02",
       "d02-n02",
@@ -21306,6 +21304,12 @@ function coreLoopAdminProofFixture() {
       "d03TerminalAdvanceReject",
     ],
   };
+}
+
+function coreLoopAdminProofFixture() {
+  const completedGameHardeningCoverageStatus =
+    completedGameHardeningCoverageStatusFixture();
+  const coreLoopSpineRows = coreLoopSpineRowsFixture();
   const proof = {
     version: 1,
     proof: "dev-test-game-core-loop-admin-proof",
@@ -22163,8 +22167,8 @@ function privateChannelRoleSurfaceFixture() {
 }
 
 function coreLoopSpineTargetsFixture() {
+  const rowIds = coreLoopSpineRowsFixture();
   const proof = coreLoopAdminProofFixture();
-  const rowIds = proof.generatedFrom.coreLoopSpineRows;
   const completedRecoveryRows = completedGameEndgameRecoveryFeatureSpineRows({
     cycleId: "d05-n05",
   });
