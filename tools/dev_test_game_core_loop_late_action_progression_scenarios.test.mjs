@@ -144,6 +144,22 @@ test("late action progression family shares Night 4 no-action and recovery cases
 test("late action progression surfaces derive feature-spine rows from N04/D05 checkpoints", () => {
   assert.deepEqual(lateActionProgressionFeatureSpineRows(), [
     {
+      targetKey: "dayFourNoLynchVoteSubmitted",
+      featureSlotId: "day-four-no-lynch-vote-submitted",
+      cycleId: "d04-n04-d05",
+      role: "actionPlayer",
+      checkpointId: "d04-n04-d05-d04-no-lynch-vote-submitted",
+      adminCheckId: "core-loop",
+    },
+    {
+      targetKey: "dayFourNoLynchResolution",
+      featureSlotId: "day-four-no-lynch-resolution",
+      cycleId: "d04-n04-d05",
+      role: "host",
+      checkpointId: "d04-n04-d05-d04-resolved-no-lynch",
+      adminCheckId: "core-loop",
+    },
+    {
       targetKey: "nightFourNoActionSurface",
       featureSlotId: "night-four-no-action-surface",
       cycleId: "d04-n04-d05",

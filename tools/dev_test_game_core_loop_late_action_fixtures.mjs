@@ -3,6 +3,15 @@ import {
   seededCoreLoopHostSurfaceFixture,
   seededCoreLoopPlayerSurfaceFixture,
 } from "./dev_test_game_core_loop_proof_fixtures.mjs";
+import {
+  hostDeadlineAffordanceForPhaseState,
+} from "./dev_test_game_core_loop_host_phase_scenarios.mjs";
+import {
+  dayFourNoLynchResolutionSurfaceCase,
+} from "./dev_test_game_core_loop_no_lynch_progression_scenarios.mjs";
+import {
+  nightFourNoActionSurfaceCase,
+} from "./dev_test_game_core_loop_late_action_progression_scenarios.mjs";
 
 export function lateLoopDayVoteOutcomesFixture() {
   return [
@@ -15,43 +24,47 @@ export function lateLoopDayVoteOutcomesFixture() {
 export function nightFourNoActionSurfaceFixture({
   game = "00000000-0000-0000-0000-000000000002",
 } = {}) {
+  const surfaceCase = nightFourNoActionSurfaceCase();
+  const noLynchCase = dayFourNoLynchResolutionSurfaceCase();
+  const voteCase = noLynchCase.voteCase;
+  const hostTransitionCase = surfaceCase.dayFourHostTransitionCase;
+  const noActionCase = surfaceCase.noActionCase;
   const baseRoleUrl = `http://127.0.0.1:5173/g/${game}`;
   return {
     status: "passed",
     sourceHostRoleUrl: `${baseRoleUrl}/host`,
     sourceActionPlayerRoleUrl: baseRoleUrl,
     clickedThroughFromRoleUrl: true,
-    transition:
-      "player:D04:no_lynch:ack:912 -> host:D04:resolve_phase:ack:913 -> host:advance_phase:ack:914 -> actionPlayer:N04:no_action",
+    transition: surfaceCase.transitionFragments.join(" -> "),
     dayFourVoteProof: {
       status: "passed",
       sourceRoleUrl: baseRoleUrl,
       visitedRolePath: `/g/${game}`,
-      surfaceTestId: "player-surface",
+      surfaceTestId: voteCase.surfaceTestId,
       clickedThroughFromRoleUrl: true,
-      clickedAction: "submit_vote:no_lynch",
-      commandKind: "SubmitVote",
+      clickedAction: voteCase.clickedAction,
+      commandKind: voteCase.commandKind,
       command: {
         game,
-        actor_slot: "slot-7",
-        target: "NoLynch",
+        actor_slot: voteCase.actorSlot,
+        target: voteCase.target,
       },
       commandStatus: {
         state: "ack",
-        message: "Ack: stream seqs 912",
+        message: `Ack: stream seqs ${voteCase.streamSeq}`,
       },
       bridgePlan: {
         role: "player",
-        commandKind: "SubmitVote",
+        commandKind: voteCase.commandKind,
         commandEndpoint: "/commands",
         finalState: "ack",
-        projectionRefreshKeys: ["votecount", "commandState"],
+        projectionRefreshKeys: voteCase.expectedRefreshKeys,
       },
       receipts: [{ state: "ack" }],
       projectionCommandState: {
-        actorSlot: "slot-7",
+        actorSlot: voteCase.actorSlot,
         phase: {
-          phaseId: "D04",
+          phaseId: voteCase.setupPhaseId,
           locked: false,
         },
         currentVote: {
@@ -60,15 +73,21 @@ export function nightFourNoActionSurfaceFixture({
         boundary:
           "Seeded browser Day 4 no-lynch vote ACK refreshed current vote and votecount projection.",
       },
-      projectionVotecount: [{ target: "No lynch", count: 1, needed: 1 }],
+      projectionVotecount: [
+        {
+          target: voteCase.expectedVotecountTarget,
+          count: voteCase.expectedVotecountCount,
+          needed: voteCase.expectedVotecountNeeded,
+        },
+      ],
       projectionDayVoteOutcomes: [
         { phaseId: "D02" },
-        { phaseId: "D03" },
+        { phaseId: voteCase.expectedPriorDayVoteOutcomePhaseId },
       ],
-      setupResyncFromSeq: 911,
+      setupResyncFromSeq: voteCase.setupResyncFromSeq,
       setupSnapshotCommandState: {
         phase: {
-          phaseId: "D04",
+          phaseId: voteCase.setupPhaseId,
         },
       },
       currentVote: {
@@ -76,8 +95,8 @@ export function nightFourNoActionSurfaceFixture({
         text: "Current vote: No lynch",
       },
       receiptCount: 1,
-      receiptStatusText: "Ack: stream seqs 912",
-      receiptRefreshKeys: "votecount,commandState",
+      receiptStatusText: `Ack: stream seqs ${voteCase.streamSeq}`,
+      receiptRefreshKeys: voteCase.expectedReceiptRefreshKeys,
       rawInviteTokensVisible: false,
       targetOnlyReceiptVisible: false,
       releaseReady: false,
@@ -85,43 +104,53 @@ export function nightFourNoActionSurfaceFixture({
     },
     hostTransitionProof: seededCoreLoopHostSurfaceFixture({
       game,
-      setupResyncFromSeq: 912,
-      setupPhaseId: "D04",
-      setupPhaseState: "open",
+      setupResyncFromSeq: hostTransitionCase.setupResyncFromSeq,
+      setupPhaseId: hostTransitionCase.setupPhaseId,
+      setupPhaseState: hostTransitionCase.setupPhaseState,
       resolveProof: {
         ...hostPhaseTransitionActionFixture({
-          actionId: "resolve_phase",
-          commandKind: "ResolvePhase",
-          streamSeq: 913,
-          phaseId: "D04",
-          phaseState: "locked",
-          deadlineAffordance: "unlock_thread,advance_phase",
-          projectionRefreshKeys: [
-            "host",
-            "votecount",
-            "dayVoteOutcomes",
-            "hostPrompts",
-          ],
+          actionId: hostTransitionCase.resolveCase.actionId,
+          commandKind: hostTransitionCase.resolveCase.commandKind,
+          streamSeq: hostTransitionCase.resolveCase.streamSeq,
+          phaseId: hostTransitionCase.resolveCase.expectedPhaseId,
+          phaseState: hostTransitionCase.resolveCase.expectedPhaseState,
+          deadlineAffordance: hostDeadlineAffordanceForPhaseState(
+            hostTransitionCase.resolveCase.expectedPhaseState,
+          ),
+          projectionRefreshKeys:
+            hostTransitionCase.resolveCase.expectedRefreshKeys,
           command: {
             game,
             seed: 918273,
           },
         }),
-        votecountProjection: [{ target: "No lynch", count: 1, needed: 1 }],
+        votecountProjection: [
+          {
+            target: hostTransitionCase.expectedVotecountTarget,
+            count: voteCase.expectedVotecountCount,
+            needed: voteCase.expectedVotecountNeeded,
+          },
+        ],
         dayVoteOutcomesProjection: [
           { phaseId: "D02" },
           { phaseId: "D03" },
-          { phaseId: "D04", status: "NoLynch" },
+          {
+            phaseId: hostTransitionCase.expectedDayVoteOutcomePhaseId,
+            status: hostTransitionCase.expectedDayVoteOutcomeStatus,
+          },
         ],
       },
       advanceProof: hostPhaseTransitionActionFixture({
-        actionId: "advance_phase",
-        commandKind: "AdvancePhase",
-        streamSeq: 914,
-        phaseId: "N04",
-        phaseState: "open",
-        deadlineAffordance: "resolve_phase,lock_thread",
-        projectionRefreshKeys: [],
+        actionId: hostTransitionCase.advanceCase.actionId,
+        commandKind: hostTransitionCase.advanceCase.commandKind,
+        streamSeq: hostTransitionCase.advanceCase.streamSeq,
+        phaseId: hostTransitionCase.advanceCase.expectedPhaseId,
+        phaseState: hostTransitionCase.advanceCase.expectedPhaseState,
+        deadlineAffordance: hostDeadlineAffordanceForPhaseState(
+          hostTransitionCase.advanceCase.expectedPhaseState,
+        ),
+        projectionRefreshKeys:
+          hostTransitionCase.advanceCase.expectedRefreshKeys,
         command: {
           game,
         },
@@ -131,30 +160,30 @@ export function nightFourNoActionSurfaceFixture({
       status: "passed",
       sourceRoleUrl: baseRoleUrl,
       visitedRolePath: `/g/${game}`,
-      surfaceTestId: "player-surface",
+      surfaceTestId: noActionCase.surfaceTestId,
       clickedThroughFromRoleUrl: true,
-      setupResyncFromSeq: 914,
+      setupResyncFromSeq: noActionCase.setupResyncFromSeq,
       setupSnapshotCommandState: {
         phase: {
-          phaseId: "N04",
+          phaseId: noActionCase.setupPhaseId,
         },
         actions: [],
       },
       checkpoint: {
-        phaseId: "N04",
-        phaseState: "open",
-        actorSlot: "slot-7",
-        actionCount: 0,
-        submitActionControls: 0,
-        voteTargetCount: 0,
-        privateCount: 0,
+        phaseId: noActionCase.setupPhaseId,
+        phaseState: noActionCase.expectedPhaseState,
+        actorSlot: noActionCase.expectedSlot,
+        actionCount: noActionCase.expectedActionCount,
+        submitActionControls: noActionCase.expectedSubmitActionControls,
+        voteTargetCount: noActionCase.expectedVoteTargetCount,
+        privateCount: noActionCase.expectedPrivateCount,
       },
       projectionCommandState: {
-        actorSlot: "slot-7",
-        actorAlive: true,
-        actorStatus: "alive",
+        actorSlot: noActionCase.expectedSlot,
+        actorAlive: noActionCase.expectedActorAlive,
+        actorStatus: noActionCase.expectedActorStatus,
         phase: {
-          phaseId: "N04",
+          phaseId: noActionCase.setupPhaseId,
           locked: false,
         },
         actions: [],
