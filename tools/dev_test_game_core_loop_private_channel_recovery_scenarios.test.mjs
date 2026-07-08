@@ -8,6 +8,7 @@ import {
   completedPrivateChannelTransitionTokens,
   coreLoopPrivateChannelCompletedFeatureTargetKind,
   coreLoopPrivateChannelCompletedPostLaneId,
+  coreLoopPrivateChannelInvalidActionFeatureTargetKind,
   coreLoopPrivateChannelRecoveryCoverageFamilies,
   coreLoopPrivateChannelRecoveryCoverageFamilyDefinitions,
   coreLoopPrivateChannelInvalidActionLaneId,
@@ -19,6 +20,7 @@ import {
   coreLoopPrivateChannelStalePostFeatureTargetKind,
   coreLoopPrivateChannelStalePostLaneId,
   privateChannelCompletedFeatureSpineRow,
+  privateChannelInvalidActionFeatureSpineRow,
   privateChannelRoleUrlFromPlayerRoleUrl,
   privateChannelRoleUrlWithFallback,
   privateChannelInvalidActionRecoveryScenario,
@@ -158,7 +160,7 @@ test("private-channel recovery family shares post, reload, and stale recovery ca
   );
 });
 
-test("private-channel recovery feature rows promote stale and completed browser proofs", () => {
+test("private-channel recovery feature rows promote browser proofs", () => {
   assert.deepEqual(
     privateChannelStalePostFeatureSpineRow({
       cycleId: "d01-n01-d02",
@@ -189,6 +191,22 @@ test("private-channel recovery feature rows promote stale and completed browser 
       checkpointId: "d05-n05-n05-completed-player-surface",
       adminCheckId: coreLoopPrivateChannelPostLaneId,
       featureTargetKind: coreLoopPrivateChannelCompletedFeatureTargetKind,
+    },
+  );
+  assert.deepEqual(
+    privateChannelInvalidActionFeatureSpineRow({
+      cycleId: "d01-n01-d02",
+      roleUrlId: "d01-n01-d02-privateChannel",
+    }),
+    {
+      targetKey: "privateChannelInvalidActionRecovery",
+      featureSlotId: coreLoopPrivateChannelInvalidActionLaneId,
+      cycleId: "d01-n01-d02",
+      role: "privateChannel",
+      roleUrlId: "d01-n01-d02-privateChannel",
+      checkpointId: "d01-n01-d02-n01-action-open",
+      adminCheckId: coreLoopPrivateChannelPostLaneId,
+      featureTargetKind: coreLoopPrivateChannelInvalidActionFeatureTargetKind,
     },
   );
 });

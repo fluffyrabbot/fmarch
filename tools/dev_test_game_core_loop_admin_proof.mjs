@@ -136,6 +136,7 @@ import {
   coreLoopPrivateChannelRecoveryScenarioFamily,
   completedPrivateChannelReloadScenario,
   completedPrivateChannelTransition,
+  privateChannelInvalidActionRecoveryScenario,
   privateChannelSubmitPostScenario,
   staleCompletedPrivatePostScenario,
   stalePrivateChannelPostPhaseLockedScenario,
@@ -8325,6 +8326,12 @@ async function provePrivateChannelRoleSurface({
         frontendBaseUrl,
         roleUrl,
       });
+    const invalidActionRecoveryProof =
+      await provePrivateChannelInvalidActionRecovery({
+        browser,
+        frontendBaseUrl,
+        roleUrl,
+      });
     const completedPrivateChannelProof =
       await proveCompletedPrivateChannelRoleSurface({
         browser,
@@ -8370,10 +8377,136 @@ async function provePrivateChannelRoleSurface({
         receiptRefreshKeys,
       },
       stalePostAfterPhaseTransitionProof,
+      invalidActionRecoveryProof,
       completedPrivateChannelProof,
       rawInviteTokensVisible: false,
       releaseReady: false,
       productionReady: false,
+    };
+  } finally {
+    await page.close();
+  }
+}
+
+async function provePrivateChannelInvalidActionRecovery({
+  browser,
+  frontendBaseUrl,
+  roleUrl,
+}) {
+  const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
+  const visitedRolePath = privateChannelFocusedRolePathFromUrl(roleUrl);
+  const commandRequests = [];
+  const scenario = privateChannelScenarioForRoleUrl({
+    roleUrl,
+    scenario: {
+      ...privateChannelInvalidActionRecoveryScenario(),
+      actorSlot: "slot-7",
+    },
+  });
+  try {
+    await installPrivateChannelInvalidActionBrowserRoutes(page, {
+      commandRequests,
+      roleUrl,
+    });
+    await page.context().addCookies([
+      {
+        name: "fmarch_fixture_session",
+        value: "fixture-player",
+        url: frontendBaseUrl,
+        httpOnly: true,
+        sameSite: "Lax",
+      },
+    ]);
+    await page.goto(`${frontendBaseUrl}${visitedRolePath}`, {
+      waitUntil: "networkidle",
+    });
+    await page.getByTestId("player-surface").waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
+    const commandPanel = page.getByTestId("player-primary-action-zone");
+    await commandPanel.waitFor({ state: "visible", timeout: 15000 });
+    const commandPanelChannelIdBeforeReject =
+      await commandPanel.getAttribute("data-channel-id");
+    const channelContext = page.getByTestId("player-command-channel-context");
+    await channelContext.waitFor({ state: "visible", timeout: 15000 });
+    const channelContextChannelIdBeforeReject =
+      await channelContext.getAttribute("data-channel-id");
+    await page.locator(
+      `[data-testid="player-action-commands"] button[data-action="${scenario.clickedAction}"]`,
+    ).click();
+    await page.waitForFunction(
+      (expectedError) =>
+        window.__fmarchPlayerCommandStatus?.state === "reject" &&
+        window.__fmarchPlayerCommandStatus?.error === expectedError &&
+        window.__fmarchPlayerCommandDispatchBridgePlan?.commandKind ===
+          "SubmitAction",
+      scenario.commandError,
+      { timeout: 15000 },
+    );
+    await page.waitForFunction(
+      (expectedPhaseId) =>
+        window.__fmarchPlayerProjection?.commandState?.phase?.phaseId ===
+          expectedPhaseId,
+      scenario.expectedPhaseId,
+      { timeout: 15000 },
+    );
+    const invalidActionReceipt = page.getByTestId(
+      `player-command-receipt-${scenario.clickedAction}`,
+    );
+    await invalidActionReceipt.waitFor({ state: "visible", timeout: 15000 });
+    const commandStatus = await page.evaluate(() => window.__fmarchPlayerCommandStatus);
+    const bridgePlan = await page.evaluate(
+      () => window.__fmarchPlayerCommandDispatchBridgePlan,
+    );
+    const receipts = await page.evaluate(() => window.__fmarchPlayerCommandReceipts);
+    const projection = await page.evaluate(() => window.__fmarchPlayerProjection);
+    const checkpoint = page.getByTestId("player-action-submission-checkpoint");
+    const checkpointPhaseId = await checkpoint.getAttribute("data-phase-id");
+    const checkpointActionState = await checkpoint.getAttribute("data-action-state");
+    const checkpointReceiptState = await checkpoint.getAttribute("data-receipt-state");
+    const checkpointActorSlot = await checkpoint.getAttribute("data-actor-slot");
+    const checkpointTargetSlots = await checkpoint.getAttribute("data-target-slots");
+    const receiptRefreshKeys = await invalidActionReceipt.getAttribute(
+      "data-command-refresh-keys",
+    );
+    const receiptStatusText = await page.getByTestId("player-command-status").innerText();
+    const commandPanelChannelIdAfterReject =
+      await commandPanel.getAttribute("data-channel-id");
+    const channelContextChannelIdAfterReject =
+      await channelContext.getAttribute("data-channel-id");
+    const legalActionVisible = await page.locator(
+      '[data-testid="player-action-commands"] button[data-action="submit_action:factional_kill"]',
+    ).isVisible();
+    const bodyText = await page.locator("body").innerText();
+    if (/invite=(?!REDACTED)/.test(bodyText)) {
+      throw new Error("invalid private channel action proof leaked an invite URL token");
+    }
+    const command = commandRequests.at(-1)?.SubmitAction ?? null;
+    return {
+      status: "passed",
+      sourceRoleUrl: String(roleUrl),
+      visitedRolePath,
+      clickedAction: scenario.clickedAction,
+      commandKind: command === null ? null : scenario.commandKind,
+      command,
+      commandStatus,
+      bridgePlan,
+      receipts,
+      projectionCommandState: projection?.commandState ?? null,
+      commandPanelChannelIdBeforeReject,
+      commandPanelChannelIdAfterReject,
+      channelContextChannelIdBeforeReject,
+      channelContextChannelIdAfterReject,
+      checkpointPhaseId,
+      checkpointActionState,
+      checkpointReceiptState,
+      checkpointActorSlot,
+      checkpointTargetSlots,
+      receiptStatusText,
+      receiptRefreshKeys,
+      legalActionVisible,
+      rawInviteTokensVisible: false,
     };
   } finally {
     await page.close();
@@ -8890,6 +9023,94 @@ async function installPrivateChannelStalePostBrowserRoutes(
   });
 }
 
+async function installPrivateChannelInvalidActionBrowserRoutes(
+  page,
+  { commandRequests, roleUrl },
+) {
+  const scenario = privateChannelScenarioForRoleUrl({
+    roleUrl,
+    scenario: {
+      ...privateChannelInvalidActionRecoveryScenario(),
+      actorSlot: "slot-7",
+    },
+  });
+  await page.route("**/commands", async (route) => {
+    const commandEnvelope = route.request().postDataJSON();
+    const command = commandEnvelope?.body?.body?.command;
+    commandRequests.push(command);
+    if (command?.SubmitAction !== undefined) {
+      await fulfillJson(
+        route,
+        {
+          v: 1,
+          id: commandEnvelope.id,
+          body: {
+            kind: "Reject",
+            body: {
+              error: scenario.commandError,
+              retryable: false,
+              message: scenario.commandMessage,
+            },
+          },
+        },
+        409,
+      );
+      return;
+    }
+
+    await fulfillJson(
+      route,
+      {
+        v: 1,
+        id: commandEnvelope?.id ?? "private-channel-invalid-action-reject",
+        body: {
+          kind: "Reject",
+          body: {
+            error: "WrongPrivateChannelProofCommand",
+            retryable: false,
+            message:
+              "invalid private channel proof only accepts SubmitAction",
+          },
+        },
+      },
+      409,
+    );
+  });
+  await page.route("**/games/*/channels/*/thread?**", async (route) => {
+    await fulfillJson(route, {
+      next_before_seq: null,
+      posts: [
+        {
+          source_seq: 901,
+          stream_seq: 901,
+          author_slot: "host",
+          author_user: "host_h",
+          body: "Current private channel before invalid action reject",
+          occurred_at: 1781928000,
+        },
+      ],
+    });
+  });
+  await page.route("**/games/*/notifications?**", async (route) => {
+    await fulfillJson(route, []);
+  });
+  await page.route("**/games/*/investigation-results?**", async (route) => {
+    await fulfillJson(route, []);
+  });
+  await page.route("**/games/*/votecount?**", async (route) => {
+    await fulfillJson(route, []);
+  });
+  await page.route("**/games/*/day-vote-outcomes?**", async (route) => {
+    await fulfillJson(route, []);
+  });
+  await page.route("**/games/*/player-command-state?**", async (route) => {
+    await fulfillJson(route, seededPrivateChannelInvalidActionCommandState({
+      actorSlot: scenario.actorSlot,
+      boundary: scenario.commandMessage,
+    }));
+  });
+}
+
 async function installCompletedPrivateChannelBrowserRoutes(page, { roleUrl }) {
   await page.route("**/commands", async (route) => {
     const commandEnvelope = route.request().postDataJSON();
@@ -9135,6 +9356,44 @@ function seededPrivateChannelPostOpenCommandState({ boundary }) {
       locked: false,
     },
     actions: [],
+    voteTargets: [],
+    currentVote: null,
+    boundary,
+  };
+}
+
+function seededPrivateChannelInvalidActionCommandState({
+  actorSlot,
+  boundary,
+}) {
+  return {
+    game: "seeded-private-channel-invalid-action",
+    actorSlot,
+    actorAlive: true,
+    actorStatus: "alive",
+    roleKey: "mafia_goon",
+    gameCompleted: false,
+    phase: {
+      phaseId: "N01",
+      phaseKind: "Night",
+      phaseNumber: 1,
+      locked: false,
+    },
+    actions: [
+      {
+        action: "submit_action:factional_kill",
+        commandKind: "submit_action",
+        actionId: "factional_kill",
+        templateId: "factional_kill",
+        ability: "Kill",
+        window: "Night",
+        label: "Submit factional kill",
+        detail: "factional_kill -> slot_3",
+        targets: ["slot_3"],
+        targetOptions: ["slot_2", "slot_3"],
+        grantId: "grant-factional-kill",
+      },
+    ],
     voteTargets: [],
     currentVote: null,
     boundary,

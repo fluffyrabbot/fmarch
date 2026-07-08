@@ -7450,6 +7450,7 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
       "night-action-resolution-receipt",
       "player-action-submission-ack",
       "private-channel-completed-game-recovery",
+      "private-channel-invalid-action-recovery",
       "private-channel-stale-post-recovery",
     ],
   );
@@ -21487,7 +21488,7 @@ function coreLoopAdminProofFixture() {
       visibleSpineRecoveryHooks: [...coreLoopSpineRows.recoveryHooks],
       visibleCommandProofRoleUrlAudit: {
         status: "passed",
-        checkedCount: 40,
+        checkedCount: 41,
       },
       rawInviteTokensVisible: false,
       releaseReady: false,
@@ -22266,6 +22267,70 @@ function privateChannelRoleSurfaceFixture() {
       receiptStatusText:
         "Reject PhaseLocked: phase locked; stale projection, refresh and use current controls",
       receiptRefreshKeys: "thread,votecount,commandState,dayVoteOutcomes",
+      rawInviteTokensVisible: false,
+    },
+    invalidActionRecoveryProof: {
+      status: "passed",
+      sourceRoleUrl: roleUrl,
+      visitedRolePath,
+      clickedAction: "submit_invalid_action:factional_kill",
+      commandKind: "SubmitAction",
+      command: {
+        game,
+        action_id: "invalid_self_factional_kill",
+        actor_slot: "slot-7",
+        template_id: "factional_kill",
+        targets: ["slot-7"],
+        grant_id: "grant-factional-kill",
+      },
+      commandStatus: {
+        state: "reject",
+        error: "InvalidTarget",
+        message:
+          "Reject InvalidTarget: invalid target; action target is no longer valid, refresh and use current action controls",
+      },
+      bridgePlan: {
+        role: "player",
+        commandKind: "SubmitAction",
+        commandEndpoint: "/commands",
+        finalState: "reject",
+        projectionRefreshKeys: [
+          "notifications",
+          "investigationResults",
+          "commandState",
+        ],
+      },
+      receipts: [
+        {
+          actionId: "submit_invalid_action:factional_kill",
+          state: "reject",
+          message:
+            "Reject InvalidTarget: invalid target; action target is no longer valid, refresh and use current action controls",
+          current: true,
+        },
+      ],
+      projectionCommandState: {
+        actorSlot: "slot-7",
+        phase: {
+          phaseId: "N01",
+          locked: false,
+        },
+        boundary:
+          "Reject InvalidTarget: invalid target; action target is no longer valid, refresh and use current action controls",
+      },
+      commandPanelChannelIdBeforeReject: "role-pm",
+      commandPanelChannelIdAfterReject: "role-pm",
+      channelContextChannelIdBeforeReject: "role-pm",
+      channelContextChannelIdAfterReject: "role-pm",
+      checkpointPhaseId: "N01",
+      checkpointActionState: "enabled:submit_action:factional_kill",
+      checkpointReceiptState: "reject:InvalidTarget",
+      checkpointActorSlot: "slot-7",
+      checkpointTargetSlots: "slot_3",
+      receiptStatusText:
+        "Reject InvalidTarget: invalid target; action target is no longer valid, refresh and use current action controls",
+      receiptRefreshKeys: "notifications,investigationResults,commandState",
+      legalActionVisible: true,
       rawInviteTokensVisible: false,
     },
     completedPrivateChannelProof: {

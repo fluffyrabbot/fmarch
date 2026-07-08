@@ -3,7 +3,7 @@ const visitedPathKeys = Object.freeze(["visitedRolePath"]);
 
 export const coreLoopCommandProofRoleUrlAuditExpectation = Object.freeze({
   status: "passed",
-  checkedCount: 40,
+  checkedCount: 41,
 });
 
 export function coreLoopCommandProofRoleUrlRows(proof) {

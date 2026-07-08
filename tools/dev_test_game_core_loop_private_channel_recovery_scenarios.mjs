@@ -37,6 +37,8 @@ export const coreLoopPrivateChannelStalePostFeatureTargetKind =
   "private-channel-stale-post-recovery";
 export const coreLoopPrivateChannelCompletedFeatureTargetKind =
   "private-channel-completed-game-recovery";
+export const coreLoopPrivateChannelInvalidActionFeatureTargetKind =
+  "private-channel-invalid-action-recovery";
 
 export function privateChannelInvalidActionRecoveryScenario() {
   return {
@@ -198,6 +200,22 @@ export function privateChannelCompletedFeatureSpineRow({
     checkpointId: `${cycleId}-n05-completed-player-surface`,
     adminCheckId: coreLoopPrivateChannelPostLaneId,
     featureTargetKind: coreLoopPrivateChannelCompletedFeatureTargetKind,
+  };
+}
+
+export function privateChannelInvalidActionFeatureSpineRow({
+  cycleId,
+  roleUrlId,
+} = {}) {
+  return {
+    targetKey: "privateChannelInvalidActionRecovery",
+    featureSlotId: coreLoopPrivateChannelInvalidActionLaneId,
+    cycleId,
+    role: "privateChannel",
+    roleUrlId,
+    checkpointId: `${cycleId}-n01-action-open`,
+    adminCheckId: coreLoopPrivateChannelPostLaneId,
+    featureTargetKind: coreLoopPrivateChannelInvalidActionFeatureTargetKind,
   };
 }
 

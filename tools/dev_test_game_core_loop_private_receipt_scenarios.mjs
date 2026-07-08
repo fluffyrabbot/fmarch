@@ -16,6 +16,7 @@ import {
 } from "./dev_test_game_core_loop_private_channel_scenario_case_definitions.mjs";
 import {
   coreLoopPrivateChannelRecoveryScenarioFamily,
+  privateChannelInvalidActionRecoveryScenario,
 } from "./dev_test_game_core_loop_private_channel_recovery_scenarios.mjs";
 
 const privateQueueBoundaryStatus = "principal-scoped-private-projections";
@@ -282,6 +283,8 @@ export function assertPrivateChannelRoleSurfaceProof({
   const submitPostProof = privateChannelRoleSurface?.submitPostProof;
   const stalePostProof =
     privateChannelRoleSurface?.stalePostAfterPhaseTransitionProof;
+  const invalidActionProof =
+    privateChannelRoleSurface?.invalidActionRecoveryProof;
   const completedProof =
     privateChannelRoleSurface?.completedPrivateChannelProof;
   const expectedGame = gameFromRoleUrl(privateChannelRoleSurface?.sourceRoleUrl);
@@ -297,6 +300,15 @@ export function assertPrivateChannelRoleSurfaceProof({
       scenario: scenarioFamily.scenarios.stalePostAfterPhaseTransition,
       channelId: expectedChannel,
     });
+  const invalidActionScenario = privateChannelScenarioForChannel({
+    scenario: {
+      ...scenarioFamily.scenarios.invalidActionRecovery,
+      actorSlot:
+        invalidActionProof?.command?.actor_slot ??
+        scenarioFamily.scenarios.invalidActionRecovery.actorSlot,
+    },
+    channelId: expectedChannel,
+  });
   const completedReloadScenario = privateChannelScenarioForChannel({
     scenario: scenarioFamily.scenarios.completedPrivateChannelReload,
     channelId: expectedChannel,
@@ -361,6 +373,14 @@ export function assertPrivateChannelRoleSurfaceProof({
     scenario: stalePostScenario,
     includeEvidenceInError,
   });
+  assertPrivateChannelInvalidActionRecoveryProofCase({
+    proof: invalidActionProof,
+    expectedGame,
+    sourceRoleUrl: privateChannelRoleSurface.sourceRoleUrl,
+    visitedRolePath: privateChannelRoleSurface.visitedRolePath,
+    scenario: invalidActionScenario,
+    includeEvidenceInError,
+  });
   assertCompletedPrivateChannelProofCases({
     proof: completedProof,
     sourceRoleUrl: privateChannelRoleSurface.sourceRoleUrl,
@@ -386,6 +406,68 @@ export function assertPrivateChannelRoleSurfaceProof({
         }),
     }),
   });
+}
+
+export function assertPrivateChannelInvalidActionRecoveryProofCase({
+  proof,
+  expectedGame,
+  sourceRoleUrl,
+  visitedRolePath,
+  scenario = privateChannelInvalidActionRecoveryScenario(),
+  includeEvidenceInError = false,
+}) {
+  const refreshKeys = proof?.bridgePlan?.projectionRefreshKeys ?? [];
+  if (
+    proof?.status !== "passed" ||
+    proof.sourceRoleUrl !== sourceRoleUrl ||
+    proof.visitedRolePath !== visitedRolePath ||
+    proof.clickedAction !== scenario.clickedAction ||
+    proof.commandKind !== scenario.commandKind ||
+    proof.command?.game !== expectedGame ||
+    proof.command?.actor_slot !== scenario.actorSlot ||
+    proof.command?.template_id !== scenario.expectedActionTemplateId ||
+    !sameStringArray(proof.command?.targets, [scenario.actorSlot]) ||
+    proof.command?.grant_id !== "grant-factional-kill" ||
+    proof.commandStatus?.state !== "reject" ||
+    proof.commandStatus.error !== scenario.commandError ||
+    !String(proof.commandStatus.message ?? "").includes(
+      scenario.commandMessage,
+    ) ||
+    proof.bridgePlan?.role !== "player" ||
+    proof.bridgePlan.commandKind !== scenario.commandKind ||
+    proof.bridgePlan.commandEndpoint !== "/commands" ||
+    proof.bridgePlan.finalState !== "reject" ||
+    !scenario.expectedRefreshKeys.every((key) => refreshKeys.includes(key)) ||
+    proof.receipts?.at?.(-1)?.state !== "reject" ||
+    proof.projectionCommandState?.phase?.phaseId !== scenario.expectedPhaseId ||
+    proof.projectionCommandState?.actorSlot !== scenario.actorSlot ||
+    !String(proof.projectionCommandState?.boundary ?? "").includes(
+      scenario.commandMessage,
+    ) ||
+    proof.commandPanelChannelIdBeforeReject !== scenario.channelId ||
+    proof.commandPanelChannelIdAfterReject !== scenario.channelId ||
+    proof.channelContextChannelIdBeforeReject !== scenario.channelId ||
+    proof.channelContextChannelIdAfterReject !== scenario.channelId ||
+    proof.checkpointPhaseId !== scenario.expectedPhaseId ||
+    proof.checkpointActionState !==
+      `enabled:submit_action:${scenario.expectedActionTemplateId}` ||
+    proof.checkpointReceiptState !== `reject:${scenario.commandError}` ||
+    proof.checkpointActorSlot !== scenario.actorSlot ||
+    proof.checkpointTargetSlots !== "slot_3" ||
+    !String(proof.receiptStatusText ?? "").includes(scenario.commandMessage) ||
+    !scenario.expectedRefreshKeys.every((key) =>
+      String(proof.receiptRefreshKeys ?? "").split(",").includes(key),
+    ) ||
+    proof.legalActionVisible !== true ||
+    proof.rawInviteTokensVisible !== false
+  ) {
+    throwPrivateChannelScenarioAssertionError({
+      message:
+        "core-loop admin proof missing private channel invalid action recovery",
+      evidence: proof,
+      includeEvidenceInError,
+    });
+  }
 }
 
 function privateChannelScenarioForChannel({ scenario, channelId }) {

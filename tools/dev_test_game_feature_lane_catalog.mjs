@@ -57,6 +57,7 @@ import {
 } from "./dev_test_game_local_admin_proof_paths.mjs";
 import {
   privateChannelCompletedFeatureSpineRow,
+  privateChannelInvalidActionFeatureSpineRow,
   privateChannelStalePostFeatureSpineRow,
 } from "./dev_test_game_core_loop_private_channel_recovery_scenarios.mjs";
 import {
@@ -169,6 +170,12 @@ const coreLoopFeatureSpineLaneRows = Object.freeze([
   Object.freeze(
     privateChannelCompletedFeatureSpineRow({
       cycleId: dayFiveNightFive,
+      roleUrlId: dayOneNightOneDayTwoRoleUrlKey("privateChannel"),
+    }),
+  ),
+  Object.freeze(
+    privateChannelInvalidActionFeatureSpineRow({
+      cycleId: dayOneNightOneDayTwo,
       roleUrlId: dayOneNightOneDayTwoRoleUrlKey("privateChannel"),
     }),
   ),
