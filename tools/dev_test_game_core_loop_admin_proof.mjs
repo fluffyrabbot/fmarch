@@ -282,6 +282,201 @@ const buildCoreLoopRoleProofUrls = (roleUrlHrefs) => {
   };
 };
 
+const coreLoopRoleSurfaceProofCases = [
+  {
+    surfaceKey: "hostRoleSurface",
+    prove: proveHostLifecycleControlCheckpoint,
+    argsFrom: ({ proofRun, roleProofUrls }) => ({
+      game: proofRun.session.game,
+      roleUrl: roleProofUrls.dayTwoNightTwo.host,
+    }),
+  },
+  {
+    surfaceKey: "playerRoleSurface",
+    prove: provePlayerActionSubmissionCheckpoint,
+    argsFrom: ({ roleProofUrls }) => ({
+      roleUrl: roleProofUrls.dayTwoNightTwo.actionPlayer,
+    }),
+  },
+  {
+    surfaceKey: "targetResolutionReceiptSurface",
+    prove: proveTargetResolutionReceiptSurface,
+    argsFrom: ({ roleProofUrls }) => ({
+      roleUrl: roleProofUrls.proof.earlyTargetResolutionReceipt,
+    }),
+  },
+  {
+    surfaceKey: "normalResolutionPrivacySurface",
+    prove: proveNormalResolutionPrivacySurface,
+    argsFrom: ({ roleProofUrls }) => ({
+      roleUrl: roleProofUrls.proof.earlyNormalResolutionPrivacy,
+    }),
+  },
+  {
+    surfaceKey: "targetDayVoteReceiptSurface",
+    prove: proveTargetDayVoteReceiptSurface,
+    argsFrom: ({ roleProofUrls }) => ({
+      roleUrl: roleProofUrls.proof.targetDayVoteReceipt,
+    }),
+  },
+  {
+    surfaceKey: "normalDayVotePrivacySurface",
+    prove: proveNormalDayVotePrivacySurface,
+    argsFrom: ({ roleProofUrls }) => ({
+      roleUrl: roleProofUrls.proof.normalDayVotePrivacy,
+    }),
+  },
+  {
+    surfaceKey: "hostPhaseTransitionSurface",
+    prove: proveHostPhaseTransitionSurface,
+    argsFrom: ({ roleProofUrls }) => ({
+      hostRoleUrl: roleProofUrls.dayTwoNightTwo.host,
+      playerRoleUrl: roleProofUrls.dayTwoNightTwo.actionPlayer,
+    }),
+  },
+  {
+    surfaceKey: "targetPostDayVoteAdvanceSurface",
+    prove: proveTargetPostDayVoteAdvanceSurface,
+    argsFrom: ({ roleProofUrls }) => ({
+      roleUrl: roleProofUrls.proof.targetPostDayVoteAdvance,
+    }),
+  },
+  {
+    surfaceKey: "normalPostDayVoteAdvanceSurface",
+    prove: proveNormalPostDayVoteAdvanceSurface,
+    argsFrom: ({ roleProofUrls }) => ({
+      roleUrl: roleProofUrls.proof.normalPostDayVoteAdvance,
+    }),
+  },
+  {
+    surfaceKey: "nightActionResolutionReceiptSurface",
+    prove: proveNightActionResolutionReceiptSurface,
+    argsFrom: ({ roleProofUrls }) => ({
+      roleUrl: roleProofUrls.proof.nightActionResolutionReceipt,
+    }),
+  },
+  {
+    surfaceKey: "normalNightActionResolutionPrivacySurface",
+    prove: proveNormalNightActionResolutionPrivacySurface,
+    argsFrom: ({ roleProofUrls }) => ({
+      roleUrl: roleProofUrls.proof.normalNightActionResolutionPrivacy,
+    }),
+  },
+  {
+    surfaceKey: "hostNightActionTransitionSurface",
+    prove: proveHostNightActionTransitionSurface,
+    argsFrom: ({ roleProofUrls }) => ({
+      hostRoleUrl: roleProofUrls.dayTwoNightTwo.host,
+      actionPlayerRoleUrl: roleProofUrls.dayTwoNightTwo.actionPlayer,
+      nightTargetRoleUrl: roleProofUrls.proof.nightActionResolutionReceipt,
+      normalRoleUrl: roleProofUrls.proof.normalNightActionResolutionPrivacy,
+    }),
+  },
+  {
+    surfaceKey: "dayThreeVoteResolutionSurface",
+    prove: proveDayThreeVoteResolutionSurface,
+    argsFrom: ({ roleProofUrls }) => ({
+      actionPlayerRoleUrl: roleProofUrls.dayTwoNightTwo.actionPlayer,
+      hostRoleUrl: roleProofUrls.dayTwoNightTwo.host,
+    }),
+  },
+  {
+    surfaceKey: "postDayThreeResolutionSurface",
+    prove: provePostDayThreeResolutionSurface,
+    argsFrom: ({ roleProofUrls }) => ({
+      hostRoleUrl: roleProofUrls.dayTwoNightTwo.host,
+      actionPlayerRoleUrl: roleProofUrls.dayTwoNightTwo.actionPlayer,
+      targetRoleUrl: roleProofUrls.proof.postDayThreeResolutionTarget,
+    }),
+  },
+  {
+    surfaceKey: "nightThreeEmptyResolutionSurface",
+    prove: proveNightThreeEmptyResolutionSurface,
+    argsFrom: ({ roleProofUrls }) => ({
+      hostRoleUrl: roleProofUrls.dayTwoNightTwo.host,
+      actionPlayerRoleUrl: roleProofUrls.dayTwoNightTwo.actionPlayer,
+    }),
+  },
+  {
+    surfaceKey: "dayFourSurvivorRoleSurface",
+    prove: proveDayFourSurvivorRoleSurface,
+    argsFrom: ({ roleProofUrls }) => ({
+      roleUrl: roleProofUrls.dayTwoNightTwo.actionPlayer,
+    }),
+  },
+  {
+    surfaceKey: "nightFourNoActionSurface",
+    prove: proveNightFourNoActionSurface,
+    argsFrom: ({ roleProofUrls }) => ({
+      hostRoleUrl: roleProofUrls.dayTwoNightTwo.host,
+      actionPlayerRoleUrl: roleProofUrls.dayTwoNightTwo.actionPlayer,
+    }),
+  },
+  {
+    surfaceKey: "nightFourNoActionResolutionSurface",
+    prove: proveNightFourNoActionResolutionSurface,
+    argsFrom: ({ roleProofUrls }) => ({
+      hostRoleUrl: roleProofUrls.dayTwoNightTwo.host,
+      actionPlayerRoleUrl: roleProofUrls.dayTwoNightTwo.actionPlayer,
+    }),
+  },
+  {
+    surfaceKey: "postNightFourTransitionSurface",
+    prove: provePostNightFourTransitionSurface,
+    argsFrom: ({ roleProofUrls }) => ({
+      hostRoleUrl: roleProofUrls.dayTwoNightTwo.host,
+      actionPlayerRoleUrl: roleProofUrls.dayTwoNightTwo.actionPlayer,
+      deadPlayerRoleUrl: roleProofUrls.proof.deadPlayerReceipt,
+    }),
+  },
+  {
+    surfaceKey: "dayFiveNoLynchResolutionSurface",
+    prove: proveDayFiveNoLynchResolutionSurface,
+    argsFrom: ({ roleProofUrls }) => ({
+      hostRoleUrl: roleProofUrls.dayTwoNightTwo.host,
+      actionPlayerRoleUrl: roleProofUrls.dayTwoNightTwo.actionPlayer,
+    }),
+  },
+  {
+    surfaceKey: "completedGameEndgameSurface",
+    prove: proveCompletedGameEndgameSurface,
+    argsFrom: ({ roleProofUrls }) => ({
+      hostRoleUrl: roleProofUrls.dayTwoNightTwo.host,
+      actionPlayerRoleUrl: roleProofUrls.dayTwoNightTwo.actionPlayer,
+      normalPlayerRoleUrl: roleProofUrls.dayTwoNightTwo.normalPlayer,
+      deadPlayerRoleUrl: roleProofUrls.proof.deadPlayerReceipt,
+    }),
+  },
+  {
+    surfaceKey: "privateChannelRoleSurface",
+    prove: provePrivateChannelRoleSurface,
+    argsFrom: ({ roleProofUrls }) => ({
+      roleUrl: roleProofUrls.proof.privateChannel,
+    }),
+  },
+];
+
+export function coreLoopRoleSurfaceProofCaseKeys() {
+  return coreLoopRoleSurfaceProofCases.map(({ surfaceKey }) => surfaceKey);
+}
+
+async function runCoreLoopRoleSurfaceProofs({
+  browser,
+  frontendBaseUrl,
+  proofRun,
+  roleProofUrls,
+}) {
+  const surfaces = {};
+  for (const proofCase of coreLoopRoleSurfaceProofCases) {
+    surfaces[proofCase.surfaceKey] = await proofCase.prove({
+      browser,
+      frontendBaseUrl,
+      ...proofCase.argsFrom({ proofRun, roleProofUrls }),
+    });
+  }
+  return surfaces;
+}
+
 function completedGameHardeningCoverageStatus(proofRun) {
   const coverage = proofRun?.completedGameHardeningCoverage;
   const status = String(coverage?.status ?? "unknown");
@@ -424,147 +619,11 @@ export function coreLoopAdminProofCase() {
       const roleProofUrls = buildCoreLoopRoleProofUrls(
         spineRows.roleUrlHrefs,
       );
-      const hostRoleSurface = await proveHostLifecycleControlCheckpoint({
+      const roleSurfaces = await runCoreLoopRoleSurfaceProofs({
         browser,
         frontendBaseUrl,
-        game: proofRun.session.game,
-        roleUrl: roleProofUrls.dayTwoNightTwo.host,
-      });
-      const playerRoleSurface = await provePlayerActionSubmissionCheckpoint({
-        browser,
-        frontendBaseUrl,
-        roleUrl: roleProofUrls.dayTwoNightTwo.actionPlayer,
-      });
-      const targetResolutionReceiptSurface =
-        await proveTargetResolutionReceiptSurface({
-          browser,
-          frontendBaseUrl,
-          roleUrl: roleProofUrls.proof.earlyTargetResolutionReceipt,
-        });
-      const normalResolutionPrivacySurface =
-        await proveNormalResolutionPrivacySurface({
-          browser,
-          frontendBaseUrl,
-          roleUrl: roleProofUrls.proof.earlyNormalResolutionPrivacy,
-        });
-      const targetDayVoteReceiptSurface = await proveTargetDayVoteReceiptSurface({
-        browser,
-        frontendBaseUrl,
-        roleUrl: roleProofUrls.proof.targetDayVoteReceipt,
-      });
-      const normalDayVotePrivacySurface = await proveNormalDayVotePrivacySurface({
-        browser,
-        frontendBaseUrl,
-        roleUrl: roleProofUrls.proof.normalDayVotePrivacy,
-      });
-      const hostPhaseTransitionSurface = await proveHostPhaseTransitionSurface({
-        browser,
-        frontendBaseUrl,
-        hostRoleUrl: roleProofUrls.dayTwoNightTwo.host,
-        playerRoleUrl: roleProofUrls.dayTwoNightTwo.actionPlayer,
-      });
-      const targetPostDayVoteAdvanceSurface =
-        await proveTargetPostDayVoteAdvanceSurface({
-          browser,
-          frontendBaseUrl,
-          roleUrl: roleProofUrls.proof.targetPostDayVoteAdvance,
-        });
-      const normalPostDayVoteAdvanceSurface =
-        await proveNormalPostDayVoteAdvanceSurface({
-          browser,
-          frontendBaseUrl,
-          roleUrl: roleProofUrls.proof.normalPostDayVoteAdvance,
-        });
-      const nightActionResolutionReceiptSurface =
-        await proveNightActionResolutionReceiptSurface({
-          browser,
-          frontendBaseUrl,
-          roleUrl: roleProofUrls.proof.nightActionResolutionReceipt,
-        });
-      const normalNightActionResolutionPrivacySurface =
-        await proveNormalNightActionResolutionPrivacySurface({
-          browser,
-          frontendBaseUrl,
-          roleUrl: roleProofUrls.proof.normalNightActionResolutionPrivacy,
-        });
-      const hostNightActionTransitionSurface =
-        await proveHostNightActionTransitionSurface({
-          browser,
-          frontendBaseUrl,
-          hostRoleUrl: roleProofUrls.dayTwoNightTwo.host,
-          actionPlayerRoleUrl: roleProofUrls.dayTwoNightTwo.actionPlayer,
-          nightTargetRoleUrl: roleProofUrls.proof.nightActionResolutionReceipt,
-          normalRoleUrl:
-            roleProofUrls.proof.normalNightActionResolutionPrivacy,
-        });
-      const dayThreeVoteResolutionSurface =
-        await proveDayThreeVoteResolutionSurface({
-          browser,
-          frontendBaseUrl,
-          actionPlayerRoleUrl: roleProofUrls.dayTwoNightTwo.actionPlayer,
-          hostRoleUrl: roleProofUrls.dayTwoNightTwo.host,
-        });
-      const postDayThreeResolutionSurface =
-        await provePostDayThreeResolutionSurface({
-          browser,
-          frontendBaseUrl,
-          hostRoleUrl: roleProofUrls.dayTwoNightTwo.host,
-          actionPlayerRoleUrl: roleProofUrls.dayTwoNightTwo.actionPlayer,
-          targetRoleUrl: roleProofUrls.proof.postDayThreeResolutionTarget,
-        });
-      const nightThreeEmptyResolutionSurface =
-        await proveNightThreeEmptyResolutionSurface({
-          browser,
-          frontendBaseUrl,
-          hostRoleUrl: roleProofUrls.dayTwoNightTwo.host,
-          actionPlayerRoleUrl: roleProofUrls.dayTwoNightTwo.actionPlayer,
-        });
-      const dayFourSurvivorRoleSurface = await proveDayFourSurvivorRoleSurface({
-        browser,
-        frontendBaseUrl,
-        roleUrl: roleProofUrls.dayTwoNightTwo.actionPlayer,
-      });
-      const nightFourNoActionSurface =
-        await proveNightFourNoActionSurface({
-          browser,
-          frontendBaseUrl,
-          hostRoleUrl: roleProofUrls.dayTwoNightTwo.host,
-          actionPlayerRoleUrl: roleProofUrls.dayTwoNightTwo.actionPlayer,
-        });
-      const nightFourNoActionResolutionSurface =
-        await proveNightFourNoActionResolutionSurface({
-          browser,
-          frontendBaseUrl,
-          hostRoleUrl: roleProofUrls.dayTwoNightTwo.host,
-          actionPlayerRoleUrl: roleProofUrls.dayTwoNightTwo.actionPlayer,
-        });
-      const postNightFourTransitionSurface =
-        await provePostNightFourTransitionSurface({
-          browser,
-          frontendBaseUrl,
-          hostRoleUrl: roleProofUrls.dayTwoNightTwo.host,
-          actionPlayerRoleUrl: roleProofUrls.dayTwoNightTwo.actionPlayer,
-          deadPlayerRoleUrl: roleProofUrls.proof.deadPlayerReceipt,
-        });
-      const dayFiveNoLynchResolutionSurface =
-        await proveDayFiveNoLynchResolutionSurface({
-          browser,
-          frontendBaseUrl,
-          hostRoleUrl: roleProofUrls.dayTwoNightTwo.host,
-          actionPlayerRoleUrl: roleProofUrls.dayTwoNightTwo.actionPlayer,
-        });
-      const completedGameEndgameSurface = await proveCompletedGameEndgameSurface({
-        browser,
-        frontendBaseUrl,
-        hostRoleUrl: roleProofUrls.dayTwoNightTwo.host,
-        actionPlayerRoleUrl: roleProofUrls.dayTwoNightTwo.actionPlayer,
-        normalPlayerRoleUrl: roleProofUrls.dayTwoNightTwo.normalPlayer,
-        deadPlayerRoleUrl: roleProofUrls.proof.deadPlayerReceipt,
-      });
-      const privateChannelRoleSurface = await provePrivateChannelRoleSurface({
-        browser,
-        frontendBaseUrl,
-        roleUrl: roleProofUrls.proof.privateChannel,
+        proofRun,
+        roleProofUrls,
       });
       const hostModkillControlSurface =
         hostModkillControlSurfaceFromProofRun(proofRun);
@@ -575,30 +634,44 @@ export function coreLoopAdminProofCase() {
           visibleCommandProofRoleUrlAudit:
             coreLoopCommandProofRoleUrlAuditExpectation,
         },
-        hostRoleSurface,
+        hostRoleSurface: roleSurfaces.hostRoleSurface,
         hostModkillControlSurface,
         ...hostRaceSurfaces,
-        playerRoleSurface,
-        targetResolutionReceiptSurface,
-        normalResolutionPrivacySurface,
-        targetDayVoteReceiptSurface,
-        normalDayVotePrivacySurface,
-        hostPhaseTransitionSurface,
-        targetPostDayVoteAdvanceSurface,
-        normalPostDayVoteAdvanceSurface,
-        nightActionResolutionReceiptSurface,
-        normalNightActionResolutionPrivacySurface,
-        hostNightActionTransitionSurface,
-        dayThreeVoteResolutionSurface,
-        postDayThreeResolutionSurface,
-        nightThreeEmptyResolutionSurface,
-        dayFourSurvivorRoleSurface,
-        nightFourNoActionSurface,
-        nightFourNoActionResolutionSurface,
-        postNightFourTransitionSurface,
-        dayFiveNoLynchResolutionSurface,
-        completedGameEndgameSurface,
-        privateChannelRoleSurface,
+        playerRoleSurface: roleSurfaces.playerRoleSurface,
+        targetResolutionReceiptSurface:
+          roleSurfaces.targetResolutionReceiptSurface,
+        normalResolutionPrivacySurface:
+          roleSurfaces.normalResolutionPrivacySurface,
+        targetDayVoteReceiptSurface: roleSurfaces.targetDayVoteReceiptSurface,
+        normalDayVotePrivacySurface: roleSurfaces.normalDayVotePrivacySurface,
+        hostPhaseTransitionSurface: roleSurfaces.hostPhaseTransitionSurface,
+        targetPostDayVoteAdvanceSurface:
+          roleSurfaces.targetPostDayVoteAdvanceSurface,
+        normalPostDayVoteAdvanceSurface:
+          roleSurfaces.normalPostDayVoteAdvanceSurface,
+        nightActionResolutionReceiptSurface:
+          roleSurfaces.nightActionResolutionReceiptSurface,
+        normalNightActionResolutionPrivacySurface:
+          roleSurfaces.normalNightActionResolutionPrivacySurface,
+        hostNightActionTransitionSurface:
+          roleSurfaces.hostNightActionTransitionSurface,
+        dayThreeVoteResolutionSurface:
+          roleSurfaces.dayThreeVoteResolutionSurface,
+        postDayThreeResolutionSurface:
+          roleSurfaces.postDayThreeResolutionSurface,
+        nightThreeEmptyResolutionSurface:
+          roleSurfaces.nightThreeEmptyResolutionSurface,
+        dayFourSurvivorRoleSurface: roleSurfaces.dayFourSurvivorRoleSurface,
+        nightFourNoActionSurface: roleSurfaces.nightFourNoActionSurface,
+        nightFourNoActionResolutionSurface:
+          roleSurfaces.nightFourNoActionResolutionSurface,
+        postNightFourTransitionSurface:
+          roleSurfaces.postNightFourTransitionSurface,
+        dayFiveNoLynchResolutionSurface:
+          roleSurfaces.dayFiveNoLynchResolutionSurface,
+        completedGameEndgameSurface:
+          roleSurfaces.completedGameEndgameSurface,
+        privateChannelRoleSurface: roleSurfaces.privateChannelRoleSurface,
       };
     },
     buildEvidence: ({ source: proofRun, adminRoleSurface: surfaces }) => {
