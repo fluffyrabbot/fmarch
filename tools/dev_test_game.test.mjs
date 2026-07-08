@@ -7325,6 +7325,14 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
       "hardening-race-reload",
       "hardening-stale-reconnect",
       "hardening-stale-reload",
+      "host-phase-advance-transition",
+      "host-phase-command",
+      "host-phase-locked-recovery",
+      "host-phase-stale-reject",
+      "host-phase-unlocked-recovery",
+      "night-action-resolution-privacy",
+      "night-action-resolution-receipt",
+      "player-action-submission-ack",
     ],
   );
   assert.equal(

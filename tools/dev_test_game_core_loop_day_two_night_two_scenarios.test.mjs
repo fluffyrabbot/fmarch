@@ -7,6 +7,8 @@ import {
   dayTwoNightTwoCheckpointCases,
   dayTwoNightTwoCycleId,
   dayTwoNightTwoFeatureSpineRows,
+  dayTwoNightTwoRoleIds,
+  dayTwoNightTwoRoleUrlKey,
 } from "./dev_test_game_core_loop_day_two_night_two_scenarios.mjs";
 import {
   playerActionLoopLaneId,
@@ -92,6 +94,33 @@ test("Day 2 Night 2 cases share feature rows and checkpoint expectations", () =>
         },
       ],
     ],
+  );
+});
+
+test("Day 2 Night 2 role URL keys are scenario-owned", () => {
+  assert.deepEqual(dayTwoNightTwoRoleIds, [
+    "host",
+    "actionPlayer",
+    "target",
+    "normalPlayer",
+  ]);
+  assert.deepEqual(
+    Object.fromEntries(
+      dayTwoNightTwoRoleIds.map((roleId) => [
+        roleId,
+        dayTwoNightTwoRoleUrlKey(roleId),
+      ]),
+    ),
+    {
+      host: "d02-n02-host",
+      actionPlayer: "d02-n02-actionPlayer",
+      target: "d02-n02-target",
+      normalPlayer: "d02-n02-normalPlayer",
+    },
+  );
+  assert.throws(
+    () => dayTwoNightTwoRoleUrlKey("privateChannel"),
+    /unknown day two night two role id/,
   );
 });
 

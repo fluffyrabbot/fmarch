@@ -10,6 +10,12 @@ import {
 
 export const dayTwoNightTwoCycleId = "d02-n02";
 export const dayTwoNightTwoAdminCheckId = "core-loop";
+export const dayTwoNightTwoRoleIds = Object.freeze([
+  "host",
+  "actionPlayer",
+  "target",
+  "normalPlayer",
+]);
 
 const cloneCase = (scenario) => ({
   ...scenario,
@@ -93,6 +99,13 @@ export function dayTwoNightTwoFeatureSpineRows({
   return dayTwoNightTwoCheckpointCaseDefinitions.map((scenario) =>
     cloneFeatureRow(featureRowFromCase(scenario, { cycleId })),
   );
+}
+
+export function dayTwoNightTwoRoleUrlKey(roleId) {
+  if (!dayTwoNightTwoRoleIds.includes(roleId)) {
+    throw new Error(`unknown day two night two role id: ${roleId}`);
+  }
+  return `${dayTwoNightTwoCycleId}-${roleId}`;
 }
 
 export function assertDayTwoNightTwoCheckpointEvidence({
