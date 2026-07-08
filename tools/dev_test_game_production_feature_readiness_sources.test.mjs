@@ -12,6 +12,9 @@ import {
   localAdminAuditIds,
   localAdminAuditRoleUrl,
 } from "./dev_test_game_admin_audit_surface_ids.mjs";
+import {
+  coreLoopSpineRowsFixture,
+} from "./dev_test_game_core_loop_spine_target_fixtures.mjs";
 
 const browserProofCommand =
   "npm run test:dev-test-game-core-live:local";
@@ -121,6 +124,10 @@ test("production feature readiness source target fails closed for missing rows",
 });
 
 function readinessFixture() {
+  const coreLoopSpineRows = coreLoopSpineRowsFixture();
+  const coreLoopDefaultRoleUrlId = "d02-n02-host";
+  const coreLoopDefaultCheckpointId =
+    coreLoopSpineRows.roleSurfaceCheckpoints[0];
   return {
     localDevelopmentSpine: {
       checks: [
@@ -129,26 +136,22 @@ function readinessFixture() {
           spineTargets: {
             detailRoleUrl: coreLoopRoleUrl,
             defaultCycleId: "d02-n02",
-            defaultRoleUrlId: "d02-n02-host",
+            defaultRoleUrlId: coreLoopDefaultRoleUrlId,
             defaultRoleUrl: "http://127.0.0.1:5173/g/game-b/host",
-            defaultCheckpointId: "d02-n02-host-lifecycle-control-checkpoint",
+            defaultCheckpointId: coreLoopDefaultCheckpointId,
             browserProofCommand,
-            cycleIds: ["d02-n02"],
-            roleUrlIds: ["d02-n02-host"],
-            checkpointIds: [
-              "d02-n02-host-lifecycle-control-checkpoint",
-              "d02-n02-host-lifecycle-control-locked-checkpoint",
-              "d02-n02-host-lifecycle-control-unlocked-checkpoint",
-              "d02-n02-host-lifecycle-control-stale-reject-checkpoint",
-              "d02-n02-host-phase-advance-transition-checkpoint",
-              "d02-n02-player-action-submission-ack-checkpoint",
-              "d02-n02-night-action-resolution-receipt-checkpoint",
-              "d02-n02-night-action-resolution-privacy-checkpoint",
-            ],
+            cycleIds: ["d02-n02"].filter((id) =>
+              coreLoopSpineRows.cycles.includes(id),
+            ),
+            roleUrlIds: [coreLoopDefaultRoleUrlId].filter((id) =>
+              coreLoopSpineRows.roleUrls.includes(id),
+            ),
+            checkpointIds: [...coreLoopSpineRows.roleSurfaceCheckpoints],
             recoveryHookIds: [],
             visibleAdminCheckIds: ["host-lifecycle-control"],
             roleUrlHrefs: {
-              "d02-n02-host": "http://127.0.0.1:5173/g/game-b/host",
+              [coreLoopDefaultRoleUrlId]:
+                "http://127.0.0.1:5173/g/game-b/host",
             },
           },
         },
