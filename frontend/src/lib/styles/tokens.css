@@ -5,9 +5,10 @@
  * Phase 05 of the design architecture: the semantic tier is keyed by game
  * phase. `data-phase="day|night|twilight"` on the app shell re-keys every
  * token for its subtree; off-game surfaces (no data-phase anywhere) follow
- * the user's light/dark preference onto the same two palettes. Status colors
- * are phase-invariant; only their washes re-key. Twilight currently aliases
- * the night ramp until a dedicated ramp is ratified.
+ * the user's light/dark preference onto the night palette. Status hues are
+ * phase-invariant, but their inks re-key on dark grounds to hold contrast
+ * (the role smoke gates every status ink on ground and raised). Twilight has
+ * its own ramp — oxblood ground, lantern gold accent — ratified 2026-07-07.
  */
 
 :root {
@@ -82,10 +83,9 @@
   --fm-official-ink: #4a3a08;
 }
 
-/* ---- night palette (lantern on ink; twilight aliases night for now) ---- */
+/* ---- night palette (lantern on ink) ---- */
 
-[data-phase="night"],
-[data-phase="twilight"] {
+[data-phase="night"] {
   --fm-ink: #e9e6dc;
   --fm-ink-muted: #a7b0a6;
   --fm-ink-subtle: #b6bdb2;
@@ -121,9 +121,73 @@
   --fm-on-dark-soft: #2e3b33;
   --fm-on-dark-accent: #2c5540;
 
+  /* status inks re-key lighter on the dark ground to hold contrast */
+  --fm-ok: #57a876;
+  --fm-pending: #d09a52;
+  --fm-pending-soft: #d5a05c;
+  --fm-danger: #d67a6a;
+  --fm-danger-ink: #e59486;
+  --fm-danger-soft: #cc8f70;
+  --fm-info: #7aabce;
+
   --fm-pending-wash: #332818;
   --fm-confirm-wash: #33301c;
   --fm-danger-wash: #331e1b;
+  --fm-focus-ring: #7fb1dc;
+
+  --fm-official: #d2a63c;
+  --fm-official-ink: #4a3a08;
+}
+
+/* ---- twilight palette (oxblood ground, lantern gold; hammer-adjacent) ---- */
+
+[data-phase="twilight"] {
+  --fm-ink: #efe5e0;
+  --fm-ink-muted: #bda3a4;
+  --fm-ink-subtle: #c2a6a8;
+  --fm-ink-disabled: #a08a8c;
+
+  --fm-ground: #241115;
+  --fm-raised: #382026;
+  --fm-raised-veil: rgba(56, 32, 38, 0.74);
+  --fm-surface-muted: #2c161c;
+  --fm-surface-cool: #301a20;
+  --fm-surface-tint: #2e181e;
+  --fm-topbar-veil: rgba(36, 17, 21, 0.94);
+  --fm-wash-top: #2a151a;
+  --fm-wash-mid: #241115;
+  --fm-wash-warm: #2b1a17;
+
+  --fm-line: #4a3038;
+  --fm-line-strong: #5f414b;
+  --fm-line-heavy: #6e4d57;
+  --fm-line-soft: #3e2830;
+  --fm-line-cool: #46333e;
+  --fm-line-warm: #55402f;
+  --fm-control-border: #bda3a4;
+
+  --fm-accent: #d2a63c;
+  --fm-accent-soft: #b99244;
+  --fm-accent-ink: #ebcf8e;
+  --fm-accent-wash: #3a2a1e;
+  --fm-accent-wash-strong: #423220;
+
+  /* twilight ink is light, so on-dark flips to the oxblood ground */
+  --fm-on-dark: #241115;
+  --fm-on-dark-soft: #3c282d;
+  --fm-on-dark-accent: #55333c;
+
+  --fm-ok: #57a876;
+  --fm-pending: #d09a52;
+  --fm-pending-soft: #d5a05c;
+  --fm-danger: #d67a6a;
+  --fm-danger-ink: #e59486;
+  --fm-danger-soft: #cc8f70;
+  --fm-info: #7aabce;
+
+  --fm-pending-wash: #3a2519;
+  --fm-confirm-wash: #3a301c;
+  --fm-danger-wash: #3d2220;
   --fm-focus-ring: #7fb1dc;
 
   --fm-official: #d2a63c;
@@ -169,6 +233,14 @@
     --fm-on-dark: #12161c;
     --fm-on-dark-soft: #2e3b33;
     --fm-on-dark-accent: #2c5540;
+
+    --fm-ok: #57a876;
+    --fm-pending: #d09a52;
+    --fm-pending-soft: #d5a05c;
+    --fm-danger: #d67a6a;
+    --fm-danger-ink: #e59486;
+    --fm-danger-soft: #cc8f70;
+    --fm-info: #7aabce;
 
     --fm-pending-wash: #332818;
     --fm-confirm-wash: #33301c;

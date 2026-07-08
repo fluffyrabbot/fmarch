@@ -853,6 +853,11 @@ async function provePhaseGroundContrast(page) {
         ground: token("--fm-ground"),
         raised: token("--fm-raised"),
         accent: token("--fm-accent"),
+        ok: token("--fm-ok"),
+        pending: token("--fm-pending"),
+        danger: token("--fm-danger"),
+        dangerInk: token("--fm-danger-ink"),
+        info: token("--fm-info"),
       };
     };
     const original = shell.getAttribute("data-phase");
@@ -860,12 +865,14 @@ async function provePhaseGroundContrast(page) {
     const day = readPalette();
     shell.setAttribute("data-phase", "night");
     const night = readPalette();
+    shell.setAttribute("data-phase", "twilight");
+    const twilight = readPalette();
     if (original === null) {
       shell.removeAttribute("data-phase");
     } else {
       shell.setAttribute("data-phase", original);
     }
-    return { day, night };
+    return { day, night, twilight };
   });
 
   const checks = [];
@@ -876,6 +883,16 @@ async function provePhaseGroundContrast(page) {
       ["ink-muted-on-ground", palette.inkMuted, palette.ground, 4.5],
       ["ink-muted-on-raised", palette.inkMuted, palette.raised, 4.5],
       ["accent-on-ground", palette.accent, palette.ground, 3],
+      ["ok-on-ground", palette.ok, palette.ground, 3],
+      ["ok-on-raised", palette.ok, palette.raised, 3],
+      ["pending-on-ground", palette.pending, palette.ground, 3],
+      ["pending-on-raised", palette.pending, palette.raised, 3],
+      ["danger-on-ground", palette.danger, palette.ground, 3],
+      ["danger-on-raised", palette.danger, palette.raised, 3],
+      ["info-on-ground", palette.info, palette.ground, 3],
+      ["info-on-raised", palette.info, palette.raised, 3],
+      ["danger-ink-on-ground", palette.dangerInk, palette.ground, 4.5],
+      ["danger-ink-on-raised", palette.dangerInk, palette.raised, 4.5],
     ];
     for (const [label, foreground, background, minimum] of pairs) {
       const ratio = wcagContrastRatio(foreground, background);
