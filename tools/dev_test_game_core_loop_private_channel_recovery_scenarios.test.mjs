@@ -16,6 +16,8 @@ import {
   coreLoopPrivateChannelRecoveryScenarioFamily,
   coreLoopPrivateChannelPostLaneId,
   coreLoopPrivateChannelStalePostLaneId,
+  privateChannelRoleUrlFromPlayerRoleUrl,
+  privateChannelRoleUrlWithFallback,
   privateChannelInvalidActionRecoveryScenario,
   privateChannelSubmitPostScenario,
   staleCompletedPrivatePostScenario,
@@ -193,6 +195,33 @@ test("private-channel recovery coverage uses core-loop lane families", () => {
   assert.equal(
     assertCoreLoopPrivateChannelRecoveryCoverageSummary({ summary, lanes }),
     summary,
+  );
+});
+
+test("private-channel role URL helper preserves explicit channel or derives fallback", () => {
+  assert.equal(
+    privateChannelRoleUrlWithFallback({
+      privateChannelRoleUrl:
+        "http://127.0.0.1:5173/g/game-a/c/private%3Amafia_day_chat",
+      playerRoleUrl: "http://127.0.0.1:5173/g/game-a?x=1",
+    }),
+    "http://127.0.0.1:5173/g/game-a/c/private%3Amafia_day_chat",
+  );
+  assert.equal(
+    privateChannelRoleUrlFromPlayerRoleUrl(
+      "http://127.0.0.1:5173/g/game-a?x=1",
+    ),
+    "http://127.0.0.1:5173/g/game-a/c/role-pm?private=notification-1",
+  );
+  assert.equal(
+    privateChannelRoleUrlWithFallback({
+      playerRoleUrl: "http://127.0.0.1:5173/g/game-a/",
+    }),
+    "http://127.0.0.1:5173/g/game-a/c/role-pm?private=notification-1",
+  );
+  assert.throws(
+    () => privateChannelRoleUrlWithFallback({}),
+    /private channel proof missing source player role URL/,
   );
 });
 

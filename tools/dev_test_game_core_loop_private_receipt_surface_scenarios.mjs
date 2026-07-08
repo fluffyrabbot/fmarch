@@ -150,6 +150,20 @@ export function nightActionResolutionPrivacyCheckpointPassed(surface) {
   );
 }
 
+export function targetResolutionReceiptRoleUrl(roleUrl) {
+  if (typeof roleUrl !== "string" || roleUrl.trim() === "") {
+    throw new Error("target resolution proof missing source role URL");
+  }
+  return privateReceiptFocusedRoleUrl(roleUrl);
+}
+
+export function normalResolutionPrivacyRoleUrl(roleUrl) {
+  if (typeof roleUrl !== "string" || roleUrl.trim() === "") {
+    throw new Error("normal resolution proof missing source role URL");
+  }
+  return privateReceiptFocusedRoleUrl(roleUrl);
+}
+
 export function assertTargetResolutionReceiptSurfaceProof({
   proof,
   expectedGame,
@@ -263,4 +277,10 @@ function assertPrivateReceiptSurfaceProof({
     errorMessage: surfaceCase.errorMessage,
     includeEvidenceInError,
   });
+}
+
+function privateReceiptFocusedRoleUrl(roleUrl) {
+  const parsed = new URL(roleUrl);
+  parsed.search = "?private=notification-1";
+  return parsed.toString();
 }

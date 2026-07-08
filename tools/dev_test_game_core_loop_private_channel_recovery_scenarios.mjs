@@ -141,6 +141,30 @@ export const coreLoopPrivateChannelRecoveryCoverageFamilyDefinitions =
       ),
   );
 
+export function privateChannelRoleUrlWithFallback({
+  privateChannelRoleUrl,
+  playerRoleUrl,
+} = {}) {
+  if (
+    typeof privateChannelRoleUrl === "string" &&
+    privateChannelRoleUrl.trim() !== ""
+  ) {
+    return privateChannelRoleUrl;
+  }
+  return privateChannelRoleUrlFromPlayerRoleUrl(playerRoleUrl);
+}
+
+export function privateChannelRoleUrlFromPlayerRoleUrl(roleUrl) {
+  if (typeof roleUrl !== "string" || roleUrl.trim() === "") {
+    throw new Error("private channel proof missing source player role URL");
+  }
+  const parsed = new URL(roleUrl);
+  const basePath = parsed.pathname.replace(/\/$/u, "");
+  parsed.pathname = `${basePath}/c/role-pm`;
+  parsed.search = "?private=notification-1";
+  return parsed.toString();
+}
+
 export function coreLoopPrivateChannelRecoveryCoverageFamilies() {
   return cloneLaneCoverageFamilies(
     coreLoopPrivateChannelRecoveryCoverageFamilyDefinitions,

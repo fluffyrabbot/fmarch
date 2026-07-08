@@ -11,7 +11,9 @@ import {
   nightActionResolutionPrivacyFeatureSpineRow,
   nightActionResolutionReceiptCheckpointPassed,
   nightActionResolutionReceiptFeatureSpineRow,
+  normalResolutionPrivacyRoleUrl,
   privateReceiptSurfaceCases,
+  targetResolutionReceiptRoleUrl,
 } from "./dev_test_game_core_loop_private_receipt_surface_scenarios.mjs";
 import {
   privateReceiptScenario,
@@ -125,6 +127,25 @@ test("night action receipt and privacy checkpoint rows share scenario predicates
       },
     }),
     [],
+  );
+});
+
+test("private receipt surface role URLs focus the private notification", () => {
+  assert.equal(
+    targetResolutionReceiptRoleUrl("http://127.0.0.1:5173/g/game-a"),
+    "http://127.0.0.1:5173/g/game-a?private=notification-1",
+  );
+  assert.equal(
+    normalResolutionPrivacyRoleUrl("http://127.0.0.1:5173/g/game-a?x=1"),
+    "http://127.0.0.1:5173/g/game-a?private=notification-1",
+  );
+  assert.throws(
+    () => targetResolutionReceiptRoleUrl(""),
+    /target resolution proof missing source role URL/,
+  );
+  assert.throws(
+    () => normalResolutionPrivacyRoleUrl(""),
+    /normal resolution proof missing source role URL/,
   );
 });
 

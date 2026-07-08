@@ -78,6 +78,8 @@ import {
   coreLoopPrivateReceiptSurfaceFamilyId,
   coreLoopPrivateReceiptSurfaceScenarioFamily,
   nightActionResolutionPrivateReceiptCheckpointRows,
+  normalResolutionPrivacyRoleUrl,
+  targetResolutionReceiptRoleUrl,
 } from "./dev_test_game_core_loop_private_receipt_surface_scenarios.mjs";
 import {
   assertNormalPostDayVoteAdvanceSurfaceProof,
@@ -141,6 +143,7 @@ import {
   coreLoopPrivateChannelRecoveryScenarioFamily,
   completedPrivateChannelReloadScenario,
   completedPrivateChannelTransition,
+  privateChannelRoleUrlWithFallback,
   privateChannelSubmitPostScenario,
   staleCompletedPrivatePostScenario,
   stalePrivateChannelPostPhaseLockedScenario,
@@ -543,11 +546,10 @@ export function coreLoopAdminProofCase() {
       const privateChannelRoleSurface = await provePrivateChannelRoleSurface({
         browser,
         frontendBaseUrl,
-        roleUrl:
-          dayOneNightOneDayTwoRoleUrls.privateChannel ??
-          privateChannelRoleUrlFromPlayerRoleUrl(
-            dayTwoNightTwoRoleUrls.actionPlayer,
-          ),
+        roleUrl: privateChannelRoleUrlWithFallback({
+          privateChannelRoleUrl: dayOneNightOneDayTwoRoleUrls.privateChannel,
+          playerRoleUrl: dayTwoNightTwoRoleUrls.actionPlayer,
+        }),
       });
       const hostModkillControlSurface =
         hostModkillControlSurfaceFromProofRun(proofRun);
@@ -10014,35 +10016,6 @@ function channelIdFromPrivateChannelRoleUrl(roleUrl) {
   const parts = new URL(roleUrl).pathname.split("/");
   const channelIndex = parts.indexOf("c") + 1;
   return decodeURIComponent(parts[channelIndex] ?? "role-pm");
-}
-
-function privateChannelRoleUrlFromPlayerRoleUrl(roleUrl) {
-  if (typeof roleUrl !== "string" || roleUrl.trim() === "") {
-    throw new Error("private channel proof missing source player role URL");
-  }
-  const parsed = new URL(roleUrl);
-  const basePath = parsed.pathname.replace(/\/$/u, "");
-  parsed.pathname = `${basePath}/c/role-pm`;
-  parsed.search = "?private=notification-1";
-  return parsed.toString();
-}
-
-function targetResolutionReceiptRoleUrl(roleUrl) {
-  if (typeof roleUrl !== "string" || roleUrl.trim() === "") {
-    throw new Error("target resolution proof missing source role URL");
-  }
-  const parsed = new URL(roleUrl);
-  parsed.search = "?private=notification-1";
-  return parsed.toString();
-}
-
-function normalResolutionPrivacyRoleUrl(roleUrl) {
-  if (typeof roleUrl !== "string" || roleUrl.trim() === "") {
-    throw new Error("normal resolution proof missing source role URL");
-  }
-  const parsed = new URL(roleUrl);
-  parsed.search = "?private=notification-1";
-  return parsed.toString();
 }
 
 export function assertCoreLoopAdminProof(evidence) {
