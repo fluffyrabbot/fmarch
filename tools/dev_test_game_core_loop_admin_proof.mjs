@@ -460,6 +460,22 @@ export function coreLoopRoleSurfaceProofCaseKeys() {
   return coreLoopRoleSurfaceProofCases.map(({ surfaceKey }) => surfaceKey);
 }
 
+export function coreLoopRoleSurfaceProofEvidenceKeys({ omit = [] } = {}) {
+  const omittedKeys = new Set(omit);
+  return coreLoopRoleSurfaceProofCaseKeys().filter(
+    (surfaceKey) => !omittedKeys.has(surfaceKey),
+  );
+}
+
+function coreLoopRoleSurfaceProofEvidence(surfaces, options) {
+  return Object.fromEntries(
+    coreLoopRoleSurfaceProofEvidenceKeys(options).map((surfaceKey) => [
+      surfaceKey,
+      surfaces[surfaceKey],
+    ]),
+  );
+}
+
 async function runCoreLoopRoleSurfaceProofs({
   browser,
   frontendBaseUrl,
@@ -637,41 +653,9 @@ export function coreLoopAdminProofCase() {
         hostRoleSurface: roleSurfaces.hostRoleSurface,
         hostModkillControlSurface,
         ...hostRaceSurfaces,
-        playerRoleSurface: roleSurfaces.playerRoleSurface,
-        targetResolutionReceiptSurface:
-          roleSurfaces.targetResolutionReceiptSurface,
-        normalResolutionPrivacySurface:
-          roleSurfaces.normalResolutionPrivacySurface,
-        targetDayVoteReceiptSurface: roleSurfaces.targetDayVoteReceiptSurface,
-        normalDayVotePrivacySurface: roleSurfaces.normalDayVotePrivacySurface,
-        hostPhaseTransitionSurface: roleSurfaces.hostPhaseTransitionSurface,
-        targetPostDayVoteAdvanceSurface:
-          roleSurfaces.targetPostDayVoteAdvanceSurface,
-        normalPostDayVoteAdvanceSurface:
-          roleSurfaces.normalPostDayVoteAdvanceSurface,
-        nightActionResolutionReceiptSurface:
-          roleSurfaces.nightActionResolutionReceiptSurface,
-        normalNightActionResolutionPrivacySurface:
-          roleSurfaces.normalNightActionResolutionPrivacySurface,
-        hostNightActionTransitionSurface:
-          roleSurfaces.hostNightActionTransitionSurface,
-        dayThreeVoteResolutionSurface:
-          roleSurfaces.dayThreeVoteResolutionSurface,
-        postDayThreeResolutionSurface:
-          roleSurfaces.postDayThreeResolutionSurface,
-        nightThreeEmptyResolutionSurface:
-          roleSurfaces.nightThreeEmptyResolutionSurface,
-        dayFourSurvivorRoleSurface: roleSurfaces.dayFourSurvivorRoleSurface,
-        nightFourNoActionSurface: roleSurfaces.nightFourNoActionSurface,
-        nightFourNoActionResolutionSurface:
-          roleSurfaces.nightFourNoActionResolutionSurface,
-        postNightFourTransitionSurface:
-          roleSurfaces.postNightFourTransitionSurface,
-        dayFiveNoLynchResolutionSurface:
-          roleSurfaces.dayFiveNoLynchResolutionSurface,
-        completedGameEndgameSurface:
-          roleSurfaces.completedGameEndgameSurface,
-        privateChannelRoleSurface: roleSurfaces.privateChannelRoleSurface,
+        ...coreLoopRoleSurfaceProofEvidence(roleSurfaces, {
+          omit: ["hostRoleSurface"],
+        }),
       };
     },
     buildEvidence: ({ source: proofRun, adminRoleSurface: surfaces }) => {
@@ -718,38 +702,9 @@ export function coreLoopAdminProofCase() {
             surfaces[raceCase.surfaceField],
           ]),
         ),
-        playerRoleSurface: surfaces.playerRoleSurface,
-        targetResolutionReceiptSurface: surfaces.targetResolutionReceiptSurface,
-        normalResolutionPrivacySurface: surfaces.normalResolutionPrivacySurface,
-        targetDayVoteReceiptSurface: surfaces.targetDayVoteReceiptSurface,
-        normalDayVotePrivacySurface: surfaces.normalDayVotePrivacySurface,
-        hostPhaseTransitionSurface: surfaces.hostPhaseTransitionSurface,
-        targetPostDayVoteAdvanceSurface:
-          surfaces.targetPostDayVoteAdvanceSurface,
-        normalPostDayVoteAdvanceSurface:
-          surfaces.normalPostDayVoteAdvanceSurface,
-        nightActionResolutionReceiptSurface:
-          surfaces.nightActionResolutionReceiptSurface,
-        normalNightActionResolutionPrivacySurface:
-          surfaces.normalNightActionResolutionPrivacySurface,
-        hostNightActionTransitionSurface:
-          surfaces.hostNightActionTransitionSurface,
-        dayThreeVoteResolutionSurface: surfaces.dayThreeVoteResolutionSurface,
-        postDayThreeResolutionSurface: surfaces.postDayThreeResolutionSurface,
-        nightThreeEmptyResolutionSurface:
-          surfaces.nightThreeEmptyResolutionSurface,
-        dayFourSurvivorRoleSurface: surfaces.dayFourSurvivorRoleSurface,
-        nightFourNoActionSurface:
-          surfaces.nightFourNoActionSurface,
-        nightFourNoActionResolutionSurface:
-          surfaces.nightFourNoActionResolutionSurface,
-        postNightFourTransitionSurface:
-          surfaces.postNightFourTransitionSurface,
-        dayFiveNoLynchResolutionSurface:
-          surfaces.dayFiveNoLynchResolutionSurface,
-        completedGameEndgameSurface:
-          surfaces.completedGameEndgameSurface,
-        privateChannelRoleSurface: surfaces.privateChannelRoleSurface,
+        ...coreLoopRoleSurfaceProofEvidence(surfaces, {
+          omit: ["hostRoleSurface"],
+        }),
       };
       return {
         ...evidence,

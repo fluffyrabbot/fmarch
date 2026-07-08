@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  coreLoopRoleSurfaceProofEvidenceKeys,
   coreLoopRoleSurfaceProofCaseKeys,
 } from "./dev_test_game_core_loop_admin_proof.mjs";
 
@@ -31,4 +32,8 @@ test("core loop admin proof role surfaces have one declarative serial order", ()
     "completedGameEndgameSurface",
     "privateChannelRoleSurface",
   ]);
+  assert.deepEqual(
+    coreLoopRoleSurfaceProofEvidenceKeys({ omit: ["hostRoleSurface"] }),
+    caseKeys.slice(1),
+  );
 });
