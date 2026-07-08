@@ -316,6 +316,15 @@ export function hostPhaseTransitionSurfaceFixture({
         receiptStatusText:
           "Reject PhaseLocked: phase locked; stale action state, refresh and use current action controls",
       },
+      staleTransitionRecoveryRoleUrlConsistency: {
+        staleVoteSourceRoleUrl: baseRoleUrl,
+        staleActionSourceRoleUrl: baseRoleUrl,
+        staleVoteVisitedRolePath: `/g/${game}`,
+        staleActionVisitedRolePath: `/g/${game}`,
+        sameSourceRoleUrl: true,
+        sameVisitedRolePath: true,
+        rawInviteTokensVisible: false,
+      },
       resyncSnapshotCommandState: {
         phase: {
           phaseId: "N02",
@@ -333,6 +342,7 @@ export function hostPhaseTransitionSurfaceFixture({
       checkpointActionState: "enabled:submit_action:factional_kill",
       checkpointTargetSlots: "slot-3",
       checkpointReceiptState: "reject:PhaseLocked",
+      rawInviteTokensVisible: false,
       releaseReady: false,
       productionReady: false,
     },

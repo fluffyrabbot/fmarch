@@ -4657,6 +4657,19 @@ async function provePlayerPhaseTransitionObservation({
       resyncKeys,
       staleVoteRecoveryProof,
       staleActionRecoveryProof,
+      staleTransitionRecoveryRoleUrlConsistency: {
+        staleVoteSourceRoleUrl: staleVoteRecoveryProof.sourceRoleUrl,
+        staleActionSourceRoleUrl: staleActionRecoveryProof.sourceRoleUrl,
+        staleVoteVisitedRolePath: staleVoteRecoveryProof.visitedRolePath,
+        staleActionVisitedRolePath: staleActionRecoveryProof.visitedRolePath,
+        sameSourceRoleUrl:
+          staleVoteRecoveryProof.sourceRoleUrl === String(roleUrl) &&
+          staleActionRecoveryProof.sourceRoleUrl === String(roleUrl),
+        sameVisitedRolePath:
+          staleVoteRecoveryProof.visitedRolePath === visitedRolePath &&
+          staleActionRecoveryProof.visitedRolePath === visitedRolePath,
+        rawInviteTokensVisible: false,
+      },
       resyncSnapshotCommandState: resyncSnapshot?.commandState ?? null,
       projectionCommandState: projection?.commandState ?? null,
       checkpointPhaseId,
@@ -4664,6 +4677,7 @@ async function provePlayerPhaseTransitionObservation({
       checkpointActionState,
       checkpointTargetSlots,
       checkpointReceiptState,
+      rawInviteTokensVisible: false,
       releaseReady: false,
       productionReady: false,
     };

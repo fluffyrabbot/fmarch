@@ -97,6 +97,11 @@ export function assertHostPhaseTransitionSurfaceProof({
     hostPhaseTransitionSurface,
     includeEvidenceInError,
   });
+  assertPhaseTransitionPlayerRecoveryRoleUrlConsistency({
+    playerObservationProof,
+    hostPhaseTransitionSurface,
+    includeEvidenceInError,
+  });
   assertPlayerStaleVoteAfterTransitionProofCase({
     proof: playerObservationProof.staleVoteRecoveryProof,
     expectedGame,
@@ -111,6 +116,36 @@ export function assertHostPhaseTransitionSurfaceProof({
     visitedRolePath: playerObservationProof.visitedRolePath,
     includeEvidenceInError,
   });
+}
+
+export function assertPhaseTransitionPlayerRecoveryRoleUrlConsistency({
+  playerObservationProof,
+  hostPhaseTransitionSurface,
+  includeEvidenceInError = false,
+}) {
+  const consistency =
+    playerObservationProof?.staleTransitionRecoveryRoleUrlConsistency;
+  if (
+    playerObservationProof?.rawInviteTokensVisible !== false ||
+    consistency?.staleVoteSourceRoleUrl !==
+      hostPhaseTransitionSurface?.sourcePlayerRoleUrl ||
+    consistency?.staleActionSourceRoleUrl !==
+      hostPhaseTransitionSurface?.sourcePlayerRoleUrl ||
+    consistency?.staleVoteVisitedRolePath !==
+      playerObservationProof?.visitedRolePath ||
+    consistency?.staleActionVisitedRolePath !==
+      playerObservationProof?.visitedRolePath ||
+    consistency?.sameSourceRoleUrl !== true ||
+    consistency?.sameVisitedRolePath !== true ||
+    consistency?.rawInviteTokensVisible !== false
+  ) {
+    throwTransitionRecoveryAssertionError({
+      message:
+        "core-loop admin proof missing stale transition player role URL consistency",
+      evidence: playerObservationProof,
+      includeEvidenceInError,
+    });
+  }
 }
 
 export function assertStaleNightFourActionRecoveryProofCase({

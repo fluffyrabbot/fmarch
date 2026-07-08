@@ -411,6 +411,16 @@ function playerObservationProofFixture() {
       sourceRoleUrl,
       visitedRolePath,
     }),
+    staleTransitionRecoveryRoleUrlConsistency: {
+      staleVoteSourceRoleUrl: sourceRoleUrl,
+      staleActionSourceRoleUrl: sourceRoleUrl,
+      staleVoteVisitedRolePath: visitedRolePath,
+      staleActionVisitedRolePath: visitedRolePath,
+      sameSourceRoleUrl: true,
+      sameVisitedRolePath: true,
+      rawInviteTokensVisible: false,
+    },
+    rawInviteTokensVisible: false,
   };
 }
 
