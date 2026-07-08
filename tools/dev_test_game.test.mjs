@@ -45,6 +45,9 @@ import {
   coreLoopGeneratedFromScenarioFamilies,
 } from "./dev_test_game_core_loop_generated_from_families.mjs";
 import {
+  coreLoopRoleSurfaceProofCaseKeys,
+} from "./dev_test_game_core_loop_role_surface_proof_cases.mjs";
+import {
   buildCoreLoopCommandProofRoleUrlAudit,
   coreLoopCommandProofRoleUrlAuditExpectation,
 } from "./dev_test_game_core_loop_proof_shape_assertions.mjs";
@@ -6408,6 +6411,16 @@ test("dev test-game next-action prioritizes development-spine recovery over mani
 });
 
 test("dev test-game proof graph records local proof role URLs and recovery edges", () => {
+  const coreLoopProof = coreLoopAdminProofFixture();
+  assert.deepEqual(
+    coreLoopRoleSurfaceProofCaseKeys().filter(
+      (surfaceKey) =>
+        coreLoopProof[surfaceKey] !== null &&
+        typeof coreLoopProof[surfaceKey] === "object" &&
+        !Array.isArray(coreLoopProof[surfaceKey]),
+    ),
+    coreLoopRoleSurfaceProofCaseKeys(),
+  );
   const adminSpineProof = adminSpineProofFixture();
   const validatedAdminSpineProof = validateDevTestGameAdminSpineProof(
     adminSpineProof,

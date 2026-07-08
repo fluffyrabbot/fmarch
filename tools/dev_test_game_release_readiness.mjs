@@ -158,6 +158,9 @@ import {
   assertCoreLoopCommandProofRoleUrls,
 } from "./dev_test_game_core_loop_proof_shape_assertions.mjs";
 import {
+  coreLoopRoleSurfaceProofCaseKeys,
+} from "./dev_test_game_core_loop_role_surface_proof_cases.mjs";
+import {
   devTestGameHostedOpsSignalsAdminProofPath,
   hostedOpsReadinessBoundaryCheckId,
   hostedOpsSignalCheckIds,
@@ -3127,6 +3130,7 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
       throw new Error(`core-loop admin proof missing browser role URL: ${rowId}`);
     }
   }
+  assertCoreLoopRoleSurfaceProofInventory(proof);
   assertCoreLoopHostLifecycleCheckpoint(proof.hostRoleSurface);
   assertCoreLoopHostModkillControlSurface({
     hostModkillControlSurface: proof.hostModkillControlSurface,
@@ -3762,6 +3766,20 @@ function assertCoreLoopHostLifecycleCheckpoint(hostRoleSurface) {
     expectedGame: gameFromRoleUrl(hostRoleSurface?.sourceRoleUrl),
     scenario: scenarioFamily.surfaces.hostLifecycleControl,
   });
+}
+
+function assertCoreLoopRoleSurfaceProofInventory(proof) {
+  for (const surfaceKey of coreLoopRoleSurfaceProofCaseKeys()) {
+    if (
+      proof?.[surfaceKey] === null ||
+      typeof proof?.[surfaceKey] !== "object" ||
+      Array.isArray(proof?.[surfaceKey])
+    ) {
+      throw new Error(
+        `core-loop admin proof missing role-surface proof inventory: ${surfaceKey}`,
+      );
+    }
+  }
 }
 
 function assertCoreLoopHostModkillControlSurface({ hostModkillControlSurface }) {
