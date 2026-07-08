@@ -33,6 +33,10 @@ export const coreLoopPrivateChannelCompletedPostLaneId =
   "private-channel-completed-game-recovery";
 export const coreLoopPrivateChannelInvalidActionLaneId =
   "private-channel-invalid-action-recovery";
+export const coreLoopPrivateChannelStalePostFeatureTargetKind =
+  "private-channel-stale-post-recovery";
+export const coreLoopPrivateChannelCompletedFeatureTargetKind =
+  "private-channel-completed-game-recovery";
 
 export function privateChannelInvalidActionRecoveryScenario() {
   return {
@@ -163,6 +167,38 @@ export function privateChannelRoleUrlFromPlayerRoleUrl(roleUrl) {
   parsed.pathname = `${basePath}/c/role-pm`;
   parsed.search = "?private=notification-1";
   return parsed.toString();
+}
+
+export function privateChannelStalePostFeatureSpineRow({
+  cycleId,
+  roleUrlId,
+} = {}) {
+  return {
+    targetKey: "privateChannelStalePostRecovery",
+    featureSlotId: coreLoopPrivateChannelStalePostLaneId,
+    cycleId,
+    role: "privateChannel",
+    roleUrlId,
+    checkpointId: `${cycleId}-d02-day-controls-return`,
+    adminCheckId: coreLoopPrivateChannelPostLaneId,
+    featureTargetKind: coreLoopPrivateChannelStalePostFeatureTargetKind,
+  };
+}
+
+export function privateChannelCompletedFeatureSpineRow({
+  cycleId,
+  roleUrlId,
+} = {}) {
+  return {
+    targetKey: "privateChannelCompletedRecovery",
+    featureSlotId: coreLoopPrivateChannelCompletedPostLaneId,
+    cycleId,
+    role: "privateChannel",
+    roleUrlId,
+    checkpointId: `${cycleId}-n05-completed-player-surface`,
+    adminCheckId: coreLoopPrivateChannelPostLaneId,
+    featureTargetKind: coreLoopPrivateChannelCompletedFeatureTargetKind,
+  };
 }
 
 export function coreLoopPrivateChannelRecoveryCoverageFamilies() {

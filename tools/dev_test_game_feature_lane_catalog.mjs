@@ -50,10 +50,15 @@ import {
 } from "./dev_test_game_core_loop_day_two_night_two_scenarios.mjs";
 import {
   dayOneNightOneFeatureSpineRows,
+  dayOneNightOneDayTwoRoleUrlKey,
 } from "./dev_test_game_core_loop_day_one_night_one_scenarios.mjs";
 import {
   devTestGameCoreLoopAdminProofPath,
 } from "./dev_test_game_local_admin_proof_paths.mjs";
+import {
+  privateChannelCompletedFeatureSpineRow,
+  privateChannelStalePostFeatureSpineRow,
+} from "./dev_test_game_core_loop_private_channel_recovery_scenarios.mjs";
 import {
   nightActionResolutionPrivacyFeatureSpineRow,
   nightActionResolutionReceiptFeatureSpineRow,
@@ -153,6 +158,18 @@ const coreLoopFeatureSpineLaneRows = Object.freeze([
   Object.freeze(
     staleActionTransitionRecoveryFeatureSpineRow({
       cycleId: dayOneNightOneDayTwo,
+    }),
+  ),
+  Object.freeze(
+    privateChannelStalePostFeatureSpineRow({
+      cycleId: dayOneNightOneDayTwo,
+      roleUrlId: dayOneNightOneDayTwoRoleUrlKey("privateChannel"),
+    }),
+  ),
+  Object.freeze(
+    privateChannelCompletedFeatureSpineRow({
+      cycleId: dayFiveNightFive,
+      roleUrlId: dayOneNightOneDayTwoRoleUrlKey("privateChannel"),
     }),
   ),
   ...dayOneNightOneSpineRows.slice(1),

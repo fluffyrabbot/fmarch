@@ -130,6 +130,7 @@ import {
   coreLoopCompletedEndgameProgressionScenarioFamily,
 } from "./dev_test_game_core_loop_completed_endgame_progression_scenarios.mjs";
 import {
+  buildCoreLoopPrivateChannelRecoveryCoverageSummary,
   coreLoopPrivateChannelRecoveryFamilyId,
   coreLoopPrivateChannelRecoveryLaneIds,
   coreLoopPrivateChannelRecoveryScenarioFamily,
@@ -381,6 +382,14 @@ function proofRunLane(proofRun, laneId) {
   };
 }
 
+function privateChannelRecoveryCoverageFromProofRun(proofRun) {
+  return buildCoreLoopPrivateChannelRecoveryCoverageSummary(
+    coreLoopPrivateChannelRecoveryLaneIds.map((laneId) =>
+      proofRunLane(proofRun, laneId),
+    ),
+  );
+}
+
 function coreLoopScenarioFamilyIds() {
   return Object.values(coreLoopGeneratedFromScenarioFamilies()).map(
     (family) => family.id,
@@ -482,6 +491,8 @@ export function coreLoopAdminProofCase() {
               proofSurfaces: surfaces,
             }),
         },
+        coreLoopPrivateChannelRecoveryCoverage:
+          privateChannelRecoveryCoverageFromProofRun(proofRun),
         adminRoleSurface: surfaces.adminRoleSurface,
         hostRoleSurface: surfaces.hostRoleSurface,
         hostModkillControlSurface: surfaces.hostModkillControlSurface,

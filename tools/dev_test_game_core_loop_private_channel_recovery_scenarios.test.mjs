@@ -6,6 +6,7 @@ import {
   buildCoreLoopPrivateChannelRecoveryCoverageSummary,
   completedPrivateChannelReloadScenario,
   completedPrivateChannelTransitionTokens,
+  coreLoopPrivateChannelCompletedFeatureTargetKind,
   coreLoopPrivateChannelCompletedPostLaneId,
   coreLoopPrivateChannelRecoveryCoverageFamilies,
   coreLoopPrivateChannelRecoveryCoverageFamilyDefinitions,
@@ -15,10 +16,13 @@ import {
   coreLoopPrivateChannelRecoveryScenarioCases,
   coreLoopPrivateChannelRecoveryScenarioFamily,
   coreLoopPrivateChannelPostLaneId,
+  coreLoopPrivateChannelStalePostFeatureTargetKind,
   coreLoopPrivateChannelStalePostLaneId,
+  privateChannelCompletedFeatureSpineRow,
   privateChannelRoleUrlFromPlayerRoleUrl,
   privateChannelRoleUrlWithFallback,
   privateChannelInvalidActionRecoveryScenario,
+  privateChannelStalePostFeatureSpineRow,
   privateChannelSubmitPostScenario,
   staleCompletedPrivatePostScenario,
   stalePrivateChannelPostPhaseLockedScenario,
@@ -151,6 +155,41 @@ test("private-channel recovery family shares post, reload, and stale recovery ca
   assert.deepEqual(
     family.staleRejects.invalidActionRecovery,
     privateChannelInvalidActionRecoveryScenario(),
+  );
+});
+
+test("private-channel recovery feature rows promote stale and completed browser proofs", () => {
+  assert.deepEqual(
+    privateChannelStalePostFeatureSpineRow({
+      cycleId: "d01-n01-d02",
+      roleUrlId: "d01-n01-d02-privateChannel",
+    }),
+    {
+      targetKey: "privateChannelStalePostRecovery",
+      featureSlotId: coreLoopPrivateChannelStalePostLaneId,
+      cycleId: "d01-n01-d02",
+      role: "privateChannel",
+      roleUrlId: "d01-n01-d02-privateChannel",
+      checkpointId: "d01-n01-d02-d02-day-controls-return",
+      adminCheckId: coreLoopPrivateChannelPostLaneId,
+      featureTargetKind: coreLoopPrivateChannelStalePostFeatureTargetKind,
+    },
+  );
+  assert.deepEqual(
+    privateChannelCompletedFeatureSpineRow({
+      cycleId: "d05-n05",
+      roleUrlId: "d01-n01-d02-privateChannel",
+    }),
+    {
+      targetKey: "privateChannelCompletedRecovery",
+      featureSlotId: coreLoopPrivateChannelCompletedPostLaneId,
+      cycleId: "d05-n05",
+      role: "privateChannel",
+      roleUrlId: "d01-n01-d02-privateChannel",
+      checkpointId: "d05-n05-n05-completed-player-surface",
+      adminCheckId: coreLoopPrivateChannelPostLaneId,
+      featureTargetKind: coreLoopPrivateChannelCompletedFeatureTargetKind,
+    },
   );
 });
 

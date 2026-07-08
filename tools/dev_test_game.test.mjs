@@ -7449,6 +7449,8 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
       "night-action-resolution-privacy",
       "night-action-resolution-receipt",
       "player-action-submission-ack",
+      "private-channel-completed-game-recovery",
+      "private-channel-stale-post-recovery",
     ],
   );
   assert.equal(
