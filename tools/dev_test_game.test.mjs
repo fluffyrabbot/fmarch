@@ -60,6 +60,9 @@ import {
   targetResolutionReceiptSurfaceFixture as sharedTargetResolutionReceiptSurfaceFixture,
 } from "./dev_test_game_core_loop_role_surface_test_fixtures.mjs";
 import {
+  hostNightActionTransitionSurfaceFixture as sharedHostNightActionTransitionSurfaceFixture,
+} from "./dev_test_game_core_loop_host_night_transition_fixtures.mjs";
+import {
   buildCoreLoopCommandProofRoleUrlAudit,
   coreLoopCommandProofRoleUrlAuditExpectation,
 } from "./dev_test_game_core_loop_proof_shape_assertions.mjs";
@@ -21477,7 +21480,10 @@ function coreLoopAdminProofFixture() {
       sharedNormalNightActionResolutionPrivacySurfaceFixture({
         game: coreLoopAdminProofFixtureGameId,
       }),
-    hostNightActionTransitionSurface: hostNightActionTransitionSurfaceFixture(),
+    hostNightActionTransitionSurface:
+      sharedHostNightActionTransitionSurfaceFixture({
+        game: coreLoopAdminProofFixtureGameId,
+      }),
     dayThreeVoteResolutionSurface: dayThreeVoteResolutionSurfaceFixture(),
     postDayThreeResolutionSurface: postDayThreeResolutionSurfaceFixture(),
     nightThreeEmptyResolutionSurface: nightThreeEmptyResolutionSurfaceFixture(),
@@ -22008,203 +22014,6 @@ function hostMixedAdvanceRaceSurfaceFixture() {
       },
     },
   };
-}
-
-function hostNightActionTransitionSurfaceFixture() {
-  const game = "00000000-0000-0000-0000-000000000002";
-  const baseRoleUrl = `http://127.0.0.1:5173/g/${game}`;
-  return {
-    status: "passed",
-    sourceHostRoleUrl: `${baseRoleUrl}/host`,
-    sourceActionPlayerRoleUrl: baseRoleUrl,
-    sourceNightTargetRoleUrl: `${baseRoleUrl}?private=notification-1`,
-    sourceNormalRoleUrl: `${baseRoleUrl}?private=notification-1`,
-    visitedHostRolePath: `/g/${game}/host`,
-    surfaceTestId: "host-console-surface",
-    clickedThroughFromRoleUrl: true,
-    transition:
-      "resolve_phase:ack:905 -> advance_phase:ack:906 -> actionPlayer:D03 -> target:D03 -> normal:D03",
-    resolveProof: hostPhaseTransitionActionFixture({
-      sourceRoleUrl: `${baseRoleUrl}/host`,
-      visitedRolePath: `/g/${game}/host`,
-      actionId: "resolve_phase",
-      commandKind: "ResolvePhase",
-      streamSeq: 905,
-      phaseId: "N02",
-      phaseState: "locked",
-      deadlineAffordance: "unlock_thread,advance_phase",
-      projectionRefreshKeys: [
-        "host",
-        "votecount",
-        "dayVoteOutcomes",
-        "hostPrompts",
-      ],
-      command: {
-        game,
-        seed: 918273,
-      },
-    }),
-    advanceProof: hostPhaseTransitionActionFixture({
-      sourceRoleUrl: `${baseRoleUrl}/host`,
-      visitedRolePath: `/g/${game}/host`,
-      actionId: "advance_phase",
-      commandKind: "AdvancePhase",
-      streamSeq: 906,
-      phaseId: "D03",
-      phaseState: "open",
-      deadlineAffordance: "resolve_phase,lock_thread",
-      projectionRefreshKeys: [],
-      command: {
-        game,
-      },
-    }),
-    actionPlayerObservationProof: dayThreeObservationFixture({
-      sourceRoleUrl: baseRoleUrl,
-      visitedRolePath: `/g/${game}`,
-      principalUserId: "player_mira",
-      slotField: "actionPlayerSlot",
-      slot: "slot-7",
-      actorAlive: true,
-      actorStatus: "alive",
-      actionState: "disabled:no legal action available",
-      statusText: "Player action unavailable: no legal action available",
-      privateCount: 0,
-      boundary:
-        "Seeded browser action player observed host AdvancePhase from resolved N02 into open D03.",
-      commandStateEndpoint:
-        `/games/${game}/player-command-state?principal_user_id=player_mira&slot_id=slot-7`,
-      notificationsEndpoint: `/games/${game}/notifications?principal_user_id=player_mira`,
-    }),
-    nightTargetObservationProof: dayThreeObservationFixture({
-      sourceRoleUrl: `${baseRoleUrl}?private=notification-1`,
-      visitedRolePath: `/g/${game}?private=notification-1`,
-      principalUserId: "player-seed",
-      slotField: "targetSlot",
-      slot: "slot-3",
-      actorAlive: false,
-      actorStatus: "dead",
-      actionState: "disabled:actor is not alive",
-      statusText: "Player action unavailable: actor is not alive",
-      privateCount: 1,
-      boundary:
-        "Seeded browser killed target stayed dead with factional_kill receipt after host advanced N02 to D03.",
-      commandStateEndpoint:
-        `/games/${game}/player-command-state?principal_user_id=player-seed&slot_id=slot-3`,
-      notificationsEndpoint: `/games/${game}/notifications?principal_user_id=player-seed`,
-    }),
-    normalObservationProof: dayThreeObservationFixture({
-      sourceRoleUrl: `${baseRoleUrl}?private=notification-1`,
-      visitedRolePath: `/g/${game}?private=notification-1`,
-      principalUserId: "player_rowan",
-      slotField: "normalSlot",
-      slot: "slot-4",
-      actorAlive: true,
-      actorStatus: "alive",
-      actionState: "disabled:no legal action available",
-      statusText: "Player action unavailable: no legal action available",
-      privateCount: 0,
-      boundary:
-        "Seeded browser normal player observed open D03 with no target-only private receipt after host advanced N02.",
-      commandStateEndpoint:
-        `/games/${game}/player-command-state?principal_user_id=player_rowan&slot_id=slot-4`,
-      notificationsEndpoint: `/games/${game}/notifications?principal_user_id=player_rowan`,
-    }),
-    releaseReady: false,
-    productionReady: false,
-  };
-}
-
-function dayThreeObservationFixture({
-  sourceRoleUrl,
-  visitedRolePath,
-  principalUserId,
-  slotField,
-  slot,
-  actorAlive,
-  actorStatus,
-  actionState,
-  statusText,
-  privateCount,
-  boundary,
-  commandStateEndpoint,
-  notificationsEndpoint,
-}) {
-  const privateReceipt = privateCount > 0;
-  const proof = {
-    status: "passed",
-    sourceRoleUrl,
-    visitedRolePath,
-    surfaceTestId: "player-surface",
-    clickedThroughFromRoleUrl: true,
-    [slotField]: slot,
-    principalUserId,
-    checkpoint: {
-      phaseId: "D03",
-      phaseState: "open",
-      actorSlot: slot,
-      actionState,
-      receiptState: "idle",
-      statusText,
-    },
-    privateQueueBoundary: {
-      status: "principal-scoped-private-projections",
-      count: privateCount,
-      text:
-        "Night results and notices are delivered to you alone.",
-    },
-    projectionCommandState: {
-      actorSlot: slot,
-      actorAlive,
-      actorStatus,
-      phase: {
-        phaseId: "D03",
-        locked: false,
-      },
-      actions: [],
-      boundary,
-    },
-    projectionNotifications: privateReceipt
-      ? [
-          {
-            effect: "player_killed",
-            phase_id: "N02",
-            status: "factional_kill",
-          },
-        ]
-      : [],
-    resyncFromSeq: 906,
-    resyncSnapshotCommandState: {
-      actorSlot: slot,
-      phase: {
-        phaseId: "D03",
-      },
-    },
-    resyncSnapshotNotifications: privateReceipt
-      ? [
-          {
-            status: "factional_kill",
-          },
-        ]
-      : [],
-    coldLoadEndpoints: {
-      notificationsEndpoint,
-      commandStateEndpoint,
-    },
-    rawInviteTokensVisible: false,
-    releaseReady: false,
-    productionReady: false,
-  };
-  if (privateReceipt) {
-    proof.privateNotice = {
-      id: "notification-1",
-      kind: "notification",
-      text: "player_killed factional_kill",
-      detailText: "Phase N02",
-    };
-  } else {
-    proof.privateEmptyText = "No private results visible";
-  }
-  return proof;
 }
 
 function dayThreeVoteResolutionSurfaceFixture() {
