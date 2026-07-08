@@ -108,6 +108,7 @@ import {
   proofGraphPrerequisiteDestinationSectionId,
 } from "../../../../tools/dev_test_game_proof_graph_prerequisite_destination_rows.mjs";
 import {
+  selectedOperatorHandoffReceiptPacketRowFields,
   selectedOperatorHandoffTerminalReceiptId,
 } from "../../../../tools/dev_test_game_selected_operator_handoff_receipt.mjs";
 import {
@@ -513,81 +514,16 @@ function selectedOperatorHandoffTerminalReceiptSummarySections(receipt) {
                       id: "selected-operator-handoff-packet",
                       testId:
                         "admin-audit-selected-operator-handoff-terminal-packet",
-                      values: [
-                        {
-                          id: "status",
-                          text: receipt.selectedOperatorHandoffPacket.status,
-                          emphasized: true,
-                        },
-                        {
-                          id: "firstMissingInputId",
-                          text:
-                            receipt.selectedOperatorHandoffPacket
-                              .firstMissingInputId,
-                        },
-                        {
-                          id: "firstMissingCheckId",
-                          text:
-                            receipt.selectedOperatorHandoffPacket
-                              .firstMissingCheckId,
-                        },
-                        {
-                          id: "firstMissingSectionId",
-                          text:
-                            receipt.selectedOperatorHandoffPacket
-                              .firstMissingSectionId,
-                        },
-                        {
-                          id: "proofTarget",
-                          text: receipt.selectedOperatorHandoffPacket.proofTarget,
-                        },
-                        {
-                          id: "packetProofTarget",
-                          text:
-                            receipt.selectedOperatorHandoffPacket
-                              .packetProofTarget,
-                        },
-                        {
-                          id: "nextProofTarget",
-                          text:
-                            receipt.selectedOperatorHandoffPacket
-                              .nextProofTarget,
-                        },
-                        {
-                          id: "selectedProductionFeatureGraphNodeId",
-                          text:
-                            receipt.selectedOperatorHandoffPacket
-                              .selectedProductionFeatureGraphNodeId,
-                        },
-                        {
-                          id: "selectedProductionFeatureRoleUrl",
-                          text:
-                            receipt.selectedOperatorHandoffPacket
-                              .selectedProductionFeatureRoleUrl,
-                        },
-                        {
-                          id: "handoffRoleUrl",
-                          text:
-                            receipt.selectedOperatorHandoffPacket
-                              .handoffRoleUrl,
-                        },
-                        {
-                          id: "operatorChecklistProofTarget",
-                          text:
-                            receipt.selectedOperatorHandoffPacket
-                              .operatorChecklistProofTarget,
-                        },
-                        {
-                          id: "operatorChecklistPreflightTarget",
-                          text:
-                            receipt.selectedOperatorHandoffPacket
-                              .operatorChecklistPreflightTarget,
-                        },
-                        ...rawEvidenceTemplateDescriptorValues(
-                          receipt.selectedOperatorHandoffPacket
-                            .rawEvidenceTemplate,
-                        ),
-                      ],
+                      values:
+                        selectedOperatorHandoffReceiptPacketRowFields(
+                          receipt.selectedOperatorHandoffPacket,
+                        ).map((field) => ({
+                          id: field.id,
+                          text: field.value,
+                          ...(field.emphasized === true
+                            ? { emphasized: true }
+                            : {}),
+                        })),
                     },
                   ]),
               {

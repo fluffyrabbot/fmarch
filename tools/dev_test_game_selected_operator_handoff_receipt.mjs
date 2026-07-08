@@ -305,25 +305,57 @@ function assertSelectedOperatorHandoffReceiptShape(receipt) {
 }
 
 export function selectedOperatorHandoffReceiptPacketRowStatus(receipt) {
-  const packet = receipt.selectedOperatorHandoffPacket;
-  const template = packet.rawEvidenceTemplate;
-  return [
-    packet.status,
-    packet.firstMissingInputId,
-    packet.firstMissingCheckId,
-    packet.firstMissingSectionId,
-    packet.proofTarget,
-    packet.packetProofTarget,
-    packet.nextProofTarget,
-    packet.selectedProductionFeatureGraphNodeId,
-    packet.selectedProductionFeatureRoleUrl,
-    packet.handoffRoleUrl,
-    packet.operatorChecklistProofTarget,
-    packet.operatorChecklistPreflightTarget,
-    ...hostedMatrixRawEvidenceTemplateDescriptorFieldValues(template).map(
-      (field) => field.value,
+  return selectedOperatorHandoffReceiptPacketRowFields(
+    receipt.selectedOperatorHandoffPacket,
+  )
+    .map((field) => field.value)
+    .join("\n");
+}
+
+export function selectedOperatorHandoffReceiptPacketRowFields(packet) {
+  return Object.freeze([
+    Object.freeze({ id: "status", value: packet.status, emphasized: true }),
+    Object.freeze({
+      id: "firstMissingInputId",
+      value: packet.firstMissingInputId,
+    }),
+    Object.freeze({
+      id: "firstMissingCheckId",
+      value: packet.firstMissingCheckId,
+    }),
+    Object.freeze({
+      id: "firstMissingSectionId",
+      value: packet.firstMissingSectionId,
+    }),
+    Object.freeze({ id: "proofTarget", value: packet.proofTarget }),
+    Object.freeze({
+      id: "packetProofTarget",
+      value: packet.packetProofTarget,
+    }),
+    Object.freeze({ id: "nextProofTarget", value: packet.nextProofTarget }),
+    Object.freeze({
+      id: "selectedProductionFeatureGraphNodeId",
+      value: packet.selectedProductionFeatureGraphNodeId,
+    }),
+    Object.freeze({
+      id: "selectedProductionFeatureRoleUrl",
+      value: packet.selectedProductionFeatureRoleUrl,
+    }),
+    Object.freeze({ id: "handoffRoleUrl", value: packet.handoffRoleUrl }),
+    Object.freeze({
+      id: "operatorChecklistProofTarget",
+      value: packet.operatorChecklistProofTarget,
+    }),
+    Object.freeze({
+      id: "operatorChecklistPreflightTarget",
+      value: packet.operatorChecklistPreflightTarget,
+    }),
+    ...hostedMatrixRawEvidenceTemplateDescriptorFieldValues(
+      packet.rawEvidenceTemplate,
+    ).map((field) =>
+      Object.freeze({ id: field.rowId, value: field.value }),
     ),
-  ].join("\n");
+  ]);
 }
 
 function selectedOperatorHandoffSummary(handoff) {

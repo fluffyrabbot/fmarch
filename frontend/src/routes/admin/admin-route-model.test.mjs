@@ -232,7 +232,12 @@ import {
 } from "../../../../tools/dev_test_game_next_action_sequence_handoff_pair.mjs";
 import {
   buildSelectedOperatorHandoffTerminalReceipt,
+  selectedOperatorHandoffReceiptPacketRowFields,
+  selectedOperatorHandoffReceiptPacketRowStatus,
 } from "../../../../tools/dev_test_game_selected_operator_handoff_receipt.mjs";
+import {
+  selectedOperatorHandoffPassedReceiptFixture,
+} from "../../../../tools/dev_test_game_selected_operator_handoff_receipt_fixture.mjs";
 import {
   hostedIdentityTerminalReceiptArtifactCase,
   terminalProofGraphReceiptArtifacts,
@@ -2596,6 +2601,44 @@ test("admin local admin spine detail data carries aggregate proof rows", async (
       command: "npm run test:dev-test-game-spine-manifest-admin-proof",
     },
   ]);
+});
+
+test("admin local admin spine detail uses shared selected operator packet row contract", async () => {
+  const receipt = selectedOperatorHandoffPassedReceiptFixture();
+  const data = await buildAdminAuditDetailData({
+    audit: localAdminAuditIds.adminSpine,
+    principalUserId: "admin_a",
+    capabilities: [{ kind: "GlobalAdmin" }],
+    adminSpineProof: adminSpineProofFixture(),
+    adminSpineTerminalBatches: {
+      ...adminSpineTerminalBatchesFixture(),
+      selectedOperatorHandoffReceipt: receipt,
+    },
+  });
+  const section = data.audit.artifactSummarySections.find(
+    (candidate) => candidate.id === "selected-operator-handoff-terminal-receipt",
+  );
+  const packetRow = section.rows.find(
+    (row) => row.id === "selected-operator-handoff-packet",
+  );
+  assert.deepEqual(
+    packetRow.values.map((value) => [
+      value.id,
+      value.text,
+      value.emphasized === true,
+    ]),
+    selectedOperatorHandoffReceiptPacketRowFields(
+      receipt.selectedOperatorHandoffPacket,
+    ).map((field) => [
+      field.id,
+      field.value,
+      field.emphasized === true,
+    ]),
+  );
+  assert.equal(
+    packetRow.values.map((value) => value.text).join("\n"),
+    selectedOperatorHandoffReceiptPacketRowStatus(receipt),
+  );
 });
 
 test("admin route data exposes local proof graph as a native audit row", async () => {
