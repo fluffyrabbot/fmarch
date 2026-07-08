@@ -477,6 +477,7 @@ export const EMPTY_PLAYER_COMMAND_STATE = Object.freeze({
   actorAlive: null,
   actorStatus: null,
   roleKey: null,
+  role: null,
   gameCompleted: false,
   phase: null,
   actions: Object.freeze([]),
@@ -509,6 +510,7 @@ export function normalizePlayerCommandState(payload, fallback = EMPTY_PLAYER_COM
       payload.actor_status ?? payload.actorStatus ?? fallback.actorStatus ?? "",
     ),
     roleKey: payload.role_key ?? payload.roleKey ?? fallback.roleKey ?? null,
+    role: normalizePlayerCommandRole(payload.role ?? fallback.role ?? null),
     gameCompleted:
       typeof payload.game_completed === "boolean"
         ? payload.game_completed
@@ -524,6 +526,22 @@ export function normalizePlayerCommandState(payload, fallback = EMPTY_PLAYER_COM
       payload.current_vote ?? payload.currentVote ?? null,
     ),
     boundary: String(payload.boundary ?? fallback.boundary ?? ""),
+  });
+}
+
+function normalizePlayerCommandRole(role) {
+  if (role === null || typeof role !== "object") {
+    return null;
+  }
+  const key = String(role.key ?? "").trim();
+  if (key === "") {
+    return null;
+  }
+  const alignment = role.alignment ?? null;
+  return Object.freeze({
+    key,
+    alignment: alignment === null ? null : String(alignment),
+    description: String(role.description ?? ""),
   });
 }
 

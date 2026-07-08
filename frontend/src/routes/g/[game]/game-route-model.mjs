@@ -262,6 +262,7 @@ function pendingReplacementColdLoad(game, slotId) {
       actorAlive: false,
       actorStatus: "pending_replacement",
       roleKey: null,
+      role: null,
       gameCompleted: false,
       phase: null,
       actions: Object.freeze([]),
@@ -478,6 +479,7 @@ const PLAYER_FIXTURE_COLD_LOAD = Object.freeze({
     game: "midsummer",
     actorSlot: "slot-7",
     roleKey: null,
+    role: null,
     phase: null,
     actions: Object.freeze([]),
     voteTargets: Object.freeze([
@@ -564,6 +566,12 @@ const PLAYER_ACTION_OPEN_FIXTURE_COLD_LOAD = Object.freeze({
     actorAlive: true,
     actorStatus: "alive",
     roleKey: "mafia_goon",
+    role: Object.freeze({
+      key: "mafia_goon",
+      alignment: "mafia",
+      description:
+        "Mafia Goon. Carries out the nightly factional kill (one per night, faction-shared).",
+    }),
     gameCompleted: false,
     phase: Object.freeze({
       phaseId: "N02",

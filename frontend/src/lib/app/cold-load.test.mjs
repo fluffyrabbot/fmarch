@@ -427,6 +427,11 @@ test("normalizes player command state into route action configs", () => {
         actor_alive: false,
         actor_status: "dead",
         role_key: "mafia_goon",
+        role: {
+          key: "mafia_goon",
+          alignment: "mafia",
+          description: "Mafia Goon. Carries out the nightly factional kill.",
+        },
         game_completed: true,
         phase: {
           phase_id: "N01",
@@ -460,6 +465,11 @@ test("normalizes player command state into route action configs", () => {
       actorAlive: false,
       actorStatus: "dead",
       roleKey: "mafia_goon",
+      role: {
+        key: "mafia_goon",
+        alignment: "mafia",
+        description: "Mafia Goon. Carries out the nightly factional kill.",
+      },
       gameCompleted: true,
       phase: {
         phaseId: "N01",

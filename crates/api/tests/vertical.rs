@@ -630,6 +630,12 @@ async fn player_command_state_derives_phase_valid_role_actions(pool: sqlx::PgPoo
     assert_eq!(state["actor_alive"], true);
     assert_eq!(state["actor_status"], "alive");
     assert_eq!(state["role_key"], "mafia_goon");
+    assert_eq!(state["role"]["key"], "mafia_goon");
+    assert_eq!(state["role"]["alignment"], "mafia");
+    assert!(state["role"]["description"]
+        .as_str()
+        .unwrap()
+        .contains("factional kill"));
     assert_eq!(state["phase"]["phase_id"], "N01");
     assert_eq!(state["phase"]["phase_kind"], "Night");
     assert_eq!(state["actions"][0]["template_id"], "factional_kill");

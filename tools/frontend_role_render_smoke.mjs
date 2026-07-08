@@ -217,6 +217,7 @@ function surfaceScenarios() {
       surfaceTestId: "player-surface",
       requiredText: ["Votecount", "Private queue"],
       requiredSelectors: [
+        '[data-testid="player-role-card"][data-role-state="unassigned"]',
         '[data-testid="player-private-link-notification-1"]',
         '[data-testid="thread-post-media-receipt-442"][data-media-variant="tablet"]',
       ],

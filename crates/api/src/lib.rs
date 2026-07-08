@@ -1822,6 +1822,7 @@ pub struct PlayerCommandStateResponse {
     pub actor_alive: bool,
     pub actor_status: String,
     pub role_key: Option<String>,
+    pub role: Option<PlayerCommandRoleView>,
     pub game_completed: bool,
     pub phase: Option<PlayerCommandPhaseState>,
     pub actions: Vec<PlayerCommandAction>,
@@ -1837,6 +1838,13 @@ pub struct PlayerCommandPhaseState {
     pub phase_number: u32,
     pub locked: bool,
     pub deadline: Option<i64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PlayerCommandRoleView {
+    pub key: String,
+    pub alignment: Option<String>,
+    pub description: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1903,6 +1911,10 @@ async fn player_command_state(
             message: "actor slot does not exist in this game".to_string(),
         })?;
     let role_key = actor.role_key.clone();
+    let role = match role_key.as_deref() {
+        Some(key) => player_role_view(&state, game, key).await,
+        None => None,
+    };
     let game_completed = commands::game_completed(&state.pool, game)
         .await
         .map_err(command_reject_api_error)?;
@@ -1962,6 +1974,7 @@ async fn player_command_state(
         actor_alive: actor.alive,
         actor_status: actor.status.clone(),
         role_key,
+        role,
         game_completed,
         phase: phase_view,
         actions,
@@ -1973,6 +1986,23 @@ async fn player_command_state(
             "Role-action availability is derived from committed phase_state, slot_state, the actor role in the game pack, and conservative target candidates. Final command validation still happens at /commands.".to_string()
         },
     }))
+}
+
+/// Self-scoped role identity for the requesting SlotOccupant. Reads only the
+/// actor's own pack role; a missing pack or unknown role key degrades to None
+/// rather than failing the whole command-state read.
+async fn player_role_view(
+    state: &ApiState,
+    game: Uuid,
+    role_key: &str,
+) -> Option<PlayerCommandRoleView> {
+    let pack = load_pack_for_game(state, game).await.ok()?;
+    let role = pack.roles.get(role_key)?;
+    Some(PlayerCommandRoleView {
+        key: role_key.to_string(),
+        alignment: role.alignment.clone(),
+        description: role.description.clone(),
+    })
 }
 
 async fn available_vote_targets(

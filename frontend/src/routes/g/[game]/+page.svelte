@@ -18,6 +18,7 @@
   import PlayerCommandPanel from "$lib/components/player-command/PlayerCommandPanel.svelte";
   import PlayerCommandReceipt from "$lib/components/player-command/PlayerCommandReceipt.svelte";
   import PlayerPostureStrip from "$lib/components/player-posture/PlayerPostureStrip.svelte";
+  import PlayerRoleCard from "$lib/components/player-role-card/PlayerRoleCard.svelte";
   import PlayerPrivateQueue from "$lib/components/player-private-queue/PlayerPrivateQueue.svelte";
   import PlayerThread from "$lib/components/player-thread/PlayerThread.svelte";
   import {
@@ -31,6 +32,7 @@
   import {
     buildPlayerActionSubmissionCheckpoint,
   } from "$lib/components/player-command/player-action-submission-checkpoint.mjs";
+  import { buildPlayerRoleCardViewModel } from "$lib/components/player-role-card/player-role-card-model.mjs";
   import {
     exposePlayerCommandReceipts,
     exposePlayerCommandDispatchBridgePlan,
@@ -109,6 +111,7 @@
     player,
     commandStatus,
   });
+  $: playerRoleCard = buildPlayerRoleCardViewModel({ commandState, player });
   $: if (typeof window !== "undefined") {
     activePhaseTheme.set(phaseThemeKey(phase));
   }
@@ -353,6 +356,8 @@
         data-unstick-below-px={data.layout.commandRail.data.unstickBelowPx}
         data-stability-mode={data.layout.commandRail.data.stabilityMode}
       >
+        <PlayerRoleCard card={playerRoleCard} />
+
         <PlayerActionSubmissionCheckpoint
           checkpoint={playerActionSubmissionCheckpoint}
         />
@@ -404,11 +409,56 @@
     );
   }
 
+  :global(.player-role-card header),
   :global(.player-action-submission-checkpoint header) {
     align-items: start;
     display: grid;
     gap: 12px;
     grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  :global(.player-role-card header p) {
+    color: var(--fm-ink-subtle);
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0;
+    line-height: 1.25;
+    margin: 0 0 4px;
+    text-transform: uppercase;
+  }
+
+  :global(.player-role-card h2) {
+    color: var(--fm-ink);
+    font-size: 18px;
+    line-height: 1.2;
+    margin: 0;
+  }
+
+  :global(.player-role-card__identity) {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  :global(.player-role-card__name) {
+    color: var(--fm-ink);
+    font-size: 18px;
+    font-weight: 800;
+    line-height: 1.2;
+    margin: 0;
+  }
+
+  :global(.player-role-card__description) {
+    color: var(--fm-ink-muted);
+    font-size: 14px;
+    line-height: 1.4;
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+
+  :global(.player-role-card__status) {
+    margin: 0;
   }
 
   :global(.player-action-submission-checkpoint header p) {
