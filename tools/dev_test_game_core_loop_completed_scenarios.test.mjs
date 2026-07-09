@@ -315,6 +315,7 @@ test("completed-game scenario module derives shared hardening lane groups", () =
     "stale-player-complete",
     "stale-player-complete-reload",
     "stale-player-complete-endgame-resync",
+    "stale-player-complete-vote-history",
   ]);
   assert.deepEqual(
     completedGameHardeningSpineTargetCases().map((target) => ({
@@ -437,6 +438,7 @@ test("completed-game scenario module derives shared hardening lane groups", () =
     "stale-player-complete",
     "stale-player-complete-reload",
     "stale-player-complete-endgame-resync",
+    "stale-player-complete-vote-history",
   ]);
   assert.deepEqual(
     completedPlayerCompleteRaceHardeningLaneCases().map((scenario) => [
@@ -453,6 +455,7 @@ test("completed-game scenario module derives shared hardening lane groups", () =
     "public-player-complete-reload",
     "stale-player-complete-reload",
     "stale-player-complete-endgame-resync",
+    "stale-player-complete-vote-history",
   ]);
   assert.deepEqual(completedPlayerSeedDemoOnlyScenarioIds(), [
     "stale-player-complete",
@@ -466,6 +469,7 @@ test("completed-game scenario module derives shared hardening lane groups", () =
     "public-player-complete-reload",
     "stale-player-complete-reload",
     "stale-player-complete-endgame-resync",
+    "stale-player-complete-vote-history",
   ]);
   assert.deepEqual(completedGameSeedDemoOnlyScenarioIds(), [
     "stale-host-complete",
@@ -480,6 +484,7 @@ test("completed-game scenario module derives shared hardening lane groups", () =
       "public-player-complete-reload",
       "stale-player-complete-reload",
       "stale-player-complete-endgame-resync",
+      "stale-player-complete-vote-history",
     ],
   );
   assert.deepEqual(
@@ -512,6 +517,7 @@ test("completed-game scenario module derives shared hardening lane groups", () =
       ["stale-player-complete", "reject"],
       ["stale-player-complete-reload", "reload"],
       ["stale-player-complete-endgame-resync", "resync"],
+      ["stale-player-complete-vote-history", "vote-history"],
     ],
   );
 });

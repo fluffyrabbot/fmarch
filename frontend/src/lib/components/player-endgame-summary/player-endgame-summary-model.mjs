@@ -4,8 +4,12 @@ export const PLAYER_ENDGAME_SUMMARY_CONTRACT = Object.freeze({
   rootTestId: "player-endgame-summary",
   winnerTestId: "player-endgame-winner",
   revealRowTestIdPrefix: "player-endgame-reveal",
+  voteHistoryTestId: "player-endgame-vote-history",
+  voteRowTestIdPrefix: "player-endgame-vote",
   boundaryTestId: "player-endgame-boundary",
   rowClassName: "player-endgame-summary__row fm-rowlist__row",
+  voteRowClassName:
+    "player-endgame-summary__vote-row fm-rowlist__row fm-rowlist__row--stack",
   minTouchTargetPx: 44,
 });
 
@@ -66,6 +70,27 @@ export function buildPlayerEndgameSummaryViewModel({
         }),
       ),
     ),
+    voteHistory: Object.freeze({
+      testId: PLAYER_ENDGAME_SUMMARY_CONTRACT.voteHistoryTestId,
+      heading: "Vote history",
+      rows: Object.freeze(
+        (summary?.voteHistory ?? []).map((outcome) =>
+          Object.freeze({
+            testId: `${PLAYER_ENDGAME_SUMMARY_CONTRACT.voteRowTestIdPrefix}-${outcome.phaseId}-${outcome.sourceSeq}-${outcome.eventIndex}`,
+            className: PLAYER_ENDGAME_SUMMARY_CONTRACT.voteRowClassName,
+            phaseLabel: outcome.phaseId,
+            resultLabel: endgameVoteResultLabel(outcome),
+            tallyLabel: endgameVoteTallyLabel(outcome),
+            ballotLabel: endgameVoteBallotLabel(outcome),
+            majorityLabel:
+              outcome.majority === null
+                ? "Majority not recorded"
+                : `Majority ${outcome.majority}`,
+            minTouchTargetPx: PLAYER_ENDGAME_SUMMARY_CONTRACT.minTouchTargetPx,
+          }),
+        ),
+      ),
+    }),
     boundary: Object.freeze({
       testId: PLAYER_ENDGAME_SUMMARY_CONTRACT.boundaryTestId,
       message:
@@ -76,10 +101,42 @@ export function buildPlayerEndgameSummaryViewModel({
   });
 }
 
+function endgameVoteResultLabel(outcome) {
+  if (outcome.status === "Lynch" && outcome.winnerSlot !== null) {
+    return `Lynch: ${humanizeTag(outcome.winnerSlot)}`;
+  }
+  return humanizeTag(outcome.status);
+}
+
+function endgameVoteTallyLabel(outcome) {
+  const rows = Object.entries(outcome.tallies ?? {});
+  return rows.length === 0
+    ? "No final tally"
+    : rows
+        .map(([target, count]) => `${humanizeTag(target)}: ${count}`)
+        .join("; ");
+}
+
+function endgameVoteBallotLabel(outcome) {
+  const rows = Object.entries(outcome.votes ?? {});
+  return rows.length === 0
+    ? "No ballots recorded"
+    : rows
+        .map(
+          ([actor, target]) =>
+            `${humanizeTag(actor)} to ${humanizeTag(target)}`,
+        )
+        .join("; ");
+}
+
 function humanizeTag(tag) {
-  const spaced = String(tag ?? "").replaceAll("_", " ").replaceAll("-", " ").trim();
+  const spaced = String(tag ?? "")
+    .replace(/([a-z])([A-Z])/gu, "$1 $2")
+    .replaceAll("_", " ")
+    .replaceAll("-", " ")
+    .trim();
   if (spaced === "") {
     return "Unknown";
   }
-  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1).toLowerCase();
 }

@@ -350,6 +350,10 @@ export function completedHardeningProofFixture(
     stalePlayerComplete: {
       status: "passed",
       game: `${game}-stale-player`,
+      seed: {
+        slotCount: 3,
+        expectedThreadBodies: ["Phase D01 announcement: no deaths."],
+      },
       setupCommandState: {
         gameCompleted: false,
         voteTargets: [{ kind: "no_lynch" }],
@@ -405,14 +409,17 @@ export function completedHardeningProofFixture(
         endgameSurface: completedPlayerEndgameSurfaceFixture(),
         reloadButtons: [{ action: "submit_post", disabled: true }],
         reloadCurrentVote: { hasVote: "false", text: "No current vote" },
-        reloadThreadPostBodies: [],
+        reloadThreadPostBodies: ["Phase D01 announcement: no deaths."],
         apiCommandStateAfterReload: {
           game_completed: true,
           actions: [],
           vote_targets: [],
         },
-        apiThreadPostBodiesAfterReload: [],
-        apiStateAfterReload: { completed: true, slots: [revealedSlot] },
+        apiThreadPostBodiesAfterReload: ["Phase D01 announcement: no deaths."],
+        apiStateAfterReload: {
+          completed: true,
+          slots: [revealedSlot, revealedSlot, revealedSlot],
+        },
       },
     },
   };
@@ -431,6 +438,19 @@ function completedPlayerEndgameSummaryFixture() {
         alignmentRevealed: true,
       },
     ],
+    voteHistory: [
+      {
+        phaseId: "D01",
+        sourceSeq: 31,
+        eventIndex: 0,
+        status: "NoLynch",
+        winnerSlot: null,
+        tallies: { no_lynch: 2 },
+        votes: { "slot-2": "no_lynch", "slot-3": "no_lynch" },
+        majority: 2,
+        reason: null,
+      },
+    ],
   };
 }
 
@@ -446,6 +466,19 @@ function completedPlayerEndgameApiSummaryFixture() {
         alignment_revealed: true,
       },
     ],
+    vote_history: [
+      {
+        phase_id: "D01",
+        source_seq: 31,
+        event_index: 0,
+        status: "NoLynch",
+        winner_slot: null,
+        tallies: { no_lynch: 2 },
+        votes: { "slot-2": "no_lynch", "slot-3": "no_lynch" },
+        majority: 2,
+        reason: null,
+      },
+    ],
   };
 }
 
@@ -456,6 +489,13 @@ function completedPlayerEndgameSurfaceFixture() {
       {
         testId: "player-endgame-reveal-slot-7",
         text: "Slot 7 Godfather Mafia Survived",
+      },
+    ],
+    voteRows: [
+      {
+        testId: "player-endgame-vote-D01-31-0",
+        text:
+          "D01 No lynch No lynch: 2 Slot 2 to No lynch; Slot 3 to No lynch Majority 2",
       },
     ],
   };

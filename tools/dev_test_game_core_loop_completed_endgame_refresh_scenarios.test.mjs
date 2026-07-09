@@ -28,10 +28,20 @@ test("completed player endgame refresh owns command, resync, and reveal expectat
     expectedRevealSlot: "slot-7",
     expectedRoleKey: "godfather",
     expectedAlignment: "mafia",
+    expectedVoteHistoryPhaseId: "D01",
+    expectedVoteHistoryStatus: "NoLynch",
+    expectedVoteHistoryTarget: "no_lynch",
+    expectedVoteHistoryCount: 2,
+    expectedVoteHistoryActors: ["slot-2", "slot-3"],
   });
-  assert.equal(
-    completedPlayerReloadHardeningLaneCaseDefinitions().at(-1).id,
-    "stale-player-complete-endgame-resync",
+  assert.deepEqual(
+    completedPlayerReloadHardeningLaneCaseDefinitions()
+      .slice(-2)
+      .map((lane) => lane.id),
+    [
+      "stale-player-complete-endgame-resync",
+      "stale-player-complete-vote-history",
+    ],
   );
 });
 
@@ -68,6 +78,19 @@ function completedEndgameRefreshProofFixture() {
         alignmentRevealed: true,
       },
     ],
+    voteHistory: [
+      {
+        phaseId: "D01",
+        sourceSeq: 31,
+        eventIndex: 0,
+        status: "NoLynch",
+        winnerSlot: null,
+        tallies: { no_lynch: 2 },
+        votes: { "slot-2": "no_lynch", "slot-3": "no_lynch" },
+        majority: 2,
+        reason: null,
+      },
+    ],
   };
   const surface = {
     state: "revealed",
@@ -75,6 +98,13 @@ function completedEndgameRefreshProofFixture() {
       {
         testId: "player-endgame-reveal-slot-7",
         text: "Slot 7 Godfather Mafia Survived",
+      },
+    ],
+    voteRows: [
+      {
+        testId: "player-endgame-vote-D01-31-0",
+        text:
+          "D01 No lynch No lynch: 2 Slot 2 to No lynch; Slot 3 to No lynch Majority 2",
       },
     ],
   };
@@ -103,6 +133,19 @@ function completedEndgameRefreshProofFixture() {
           alignment: "mafia",
           role_revealed: true,
           alignment_revealed: true,
+        },
+      ],
+      vote_history: [
+        {
+          phase_id: "D01",
+          source_seq: 31,
+          event_index: 0,
+          status: "NoLynch",
+          winner_slot: null,
+          tallies: { no_lynch: 2 },
+          votes: { "slot-2": "no_lynch", "slot-3": "no_lynch" },
+          majority: 2,
+          reason: null,
         },
       ],
     },

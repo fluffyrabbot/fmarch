@@ -4860,6 +4860,12 @@ async function collectCompletedPlayerReloadSnapshot(page) {
             testId: row.getAttribute("data-testid"),
             text: row.textContent?.trim() ?? "",
           })),
+          voteRows: Array.from(
+            document.querySelectorAll('[data-testid^="player-endgame-vote-D"]'),
+          ).map((row) => ({
+            testId: row.getAttribute("data-testid"),
+            text: row.textContent?.trim() ?? "",
+          })),
         };
       })(),
       coldLoadEndpoints: window.__fmarchPlayerColdLoadEndpoints ?? null,
@@ -8004,8 +8010,26 @@ function completedPlayerEndgameSummaryResponse() {
         alignment_revealed: true,
       },
     ],
+    vote_history: [
+      {
+        phase_id: "D02",
+        source_seq: 902,
+        event_index: 0,
+        status: "Lynch",
+        winner_slot: "slot-2",
+        tallies: { "slot-2": 4 },
+        votes: {
+          "slot-3": "slot-2",
+          "slot-7": "slot-2",
+          slot_4: "slot-2",
+          slot_5: "slot-2",
+        },
+        majority: 4,
+        reason: null,
+      },
+    ],
     boundary:
-      "The completed game exposes reveal-gated role and alignment facts to player role URLs.",
+      "The completed game exposes reveal-gated role, alignment, and vote-history facts to player role URLs.",
   };
 }
 

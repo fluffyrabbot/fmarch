@@ -550,6 +550,13 @@
     margin: 0;
   }
 
+  :global(.player-endgame-summary h3) {
+    color: var(--fm-ink);
+    font-size: 15px;
+    line-height: 1.25;
+    margin: 0;
+  }
+
   :global(.player-endgame-summary__winner strong) {
     color: var(--fm-ink);
     font-size: 17px;
@@ -582,6 +589,27 @@
   :global(.player-endgame-summary__row strong) {
     color: var(--fm-ink);
     font-size: 14px;
+  }
+
+  :global(.player-endgame-summary__vote-history) {
+    display: grid;
+    gap: 8px;
+  }
+
+  :global(.player-endgame-summary__vote-row > div) {
+    align-items: baseline;
+    display: flex;
+    gap: 8px;
+    justify-content: space-between;
+  }
+
+  :global(.player-endgame-summary__vote-row p),
+  :global(.player-endgame-summary__vote-row small) {
+    color: var(--fm-ink-subtle);
+    font-size: 12px;
+    line-height: 1.35;
+    margin: 0;
+    overflow-wrap: anywhere;
   }
 
   :global(.player-action-target-picker__action) {

@@ -32,6 +32,34 @@ const REVEALED_SUMMARY = Object.freeze({
       alignmentRevealed: true,
     }),
   ]),
+  voteHistory: Object.freeze([
+    Object.freeze({
+      phaseId: "D04",
+      sourceSeq: 91,
+      eventIndex: 0,
+      status: "Lynch",
+      winnerSlot: "slot-2",
+      tallies: Object.freeze({ "slot-2": 3 }),
+      votes: Object.freeze({
+        "slot-3": "slot-2",
+        "slot-7": "slot-2",
+        slot_4: "slot-2",
+      }),
+      majority: 3,
+      reason: null,
+    }),
+    Object.freeze({
+      phaseId: "D05",
+      sourceSeq: 99,
+      eventIndex: 0,
+      status: "NoLynch",
+      winnerSlot: null,
+      tallies: Object.freeze({ no_lynch: 2 }),
+      votes: Object.freeze({ "slot-3": "no_lynch", "slot-7": "no_lynch" }),
+      majority: 2,
+      reason: null,
+    }),
+  ]),
   boundary: "Endgame summary is reveal-gated.",
 });
 
@@ -58,6 +86,31 @@ test("endgame summary renders winner banner and reveal rows for completed games"
       ["player-endgame-reveal-slot-7", "Vanilla townie", "Town", "Survived"],
     ],
   );
+  assert.deepEqual(
+    view.voteHistory.rows.map((row) => [
+      row.testId,
+      row.resultLabel,
+      row.tallyLabel,
+      row.ballotLabel,
+      row.majorityLabel,
+    ]),
+    [
+      [
+        "player-endgame-vote-D04-91-0",
+        "Lynch: Slot 2",
+        "Slot 2: 3",
+        "Slot 3 to Slot 2; Slot 7 to Slot 2; Slot 4 to Slot 2",
+        "Majority 3",
+      ],
+      [
+        "player-endgame-vote-D05-99-0",
+        "No lynch",
+        "No lynch: 2",
+        "Slot 3 to No lynch; Slot 7 to No lynch",
+        "Majority 2",
+      ],
+    ],
+  );
 });
 
 test("endgame summary is absent while the game is running", () => {
@@ -78,6 +131,7 @@ test("completed game without published summary shows a pending result", () => {
   assert.equal(view.root.data.state, "pending");
   assert.equal(view.winner.label, "Result pending");
   assert.deepEqual(view.rows, []);
+  assert.deepEqual(view.voteHistory.rows, []);
   assert.match(view.boundary.message, /final role and alignment facts/u);
 });
 

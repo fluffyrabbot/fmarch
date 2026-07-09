@@ -2794,6 +2794,23 @@ export async function renderPlayerEndgameSummary() {
               alignmentRevealed: true,
             },
           ],
+          voteHistory: [
+            {
+              phaseId: "D04",
+              sourceSeq: 91,
+              eventIndex: 0,
+              status: "Lynch",
+              winnerSlot: "slot-2",
+              tallies: { "slot-2": 3 },
+              votes: {
+                "slot-3": "slot-2",
+                "slot-7": "slot-2",
+                slot_4: "slot-2",
+              },
+              majority: 3,
+              reason: null,
+            },
+          ],
           boundary: "Endgame summary is reveal-gated.",
         },
       }),

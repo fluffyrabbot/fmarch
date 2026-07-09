@@ -201,6 +201,19 @@ async function provePlayerLiveRuntime() {
             alignment_revealed: true,
           },
         ],
+        vote_history: [
+          {
+            phase_id: "D01",
+            source_seq: 31,
+            event_index: 0,
+            status: "NoLynch",
+            winner_slot: null,
+            tallies: { no_lynch: 2 },
+            votes: { "slot-2": "no_lynch", "slot-3": "no_lynch" },
+            majority: 2,
+            reason: null,
+          },
+        ],
         boundary: "Completed summary recovered through live resync.",
       },
       [data.coldLoad.notificationsEndpoint]: [
@@ -273,6 +286,10 @@ async function provePlayerLiveRuntime() {
   assert.equal(
     windowRef.__fmarchPlayerProjection.endgameSummary.slots[0].roleKey,
     "godfather",
+  );
+  assert.deepEqual(
+    windowRef.__fmarchPlayerProjection.endgameSummary.voteHistory[0].votes,
+    { "slot-2": "no_lynch", "slot-3": "no_lynch" },
   );
   assert.deepEqual(playerResyncKeys(data), [
     "thread",

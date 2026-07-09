@@ -5333,9 +5333,9 @@ assert.match(
   stalePlayerComplete.stalePublicReloadAfterReject.reloadCurrentVote.text,
   /No current vote/,
 );
-assert.equal(
-  stalePlayerComplete.stalePublicReloadAfterReject.reloadThreadPostBodies.length,
-  0,
+assert.deepEqual(
+  stalePlayerComplete.stalePublicReloadAfterReject.reloadThreadPostBodies,
+  stalePlayerComplete.seed.expectedThreadBodies,
 );
 assert.equal(
   stalePlayerComplete.stalePublicReloadAfterReject.apiCommandStateAfterReload
@@ -5352,9 +5352,9 @@ assert.equal(
     .vote_targets.length,
   0,
 );
-assert.equal(
-  stalePlayerComplete.stalePublicReloadAfterReject.apiThreadPostBodiesAfterReload.length,
-  0,
+assert.deepEqual(
+  stalePlayerComplete.stalePublicReloadAfterReject.apiThreadPostBodiesAfterReload,
+  stalePlayerComplete.seed.expectedThreadBodies,
 );
 assert.equal(
   stalePlayerComplete.stalePublicReloadAfterReject.apiStateAfterReload.completed,

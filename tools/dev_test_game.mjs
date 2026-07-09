@@ -9929,6 +9929,112 @@ async function seedHostCompleteRecoveryGame({ completeGame }) {
   };
 }
 
+async function seedPlayerEndgameHistoryRecoveryGame({ completeGame }) {
+  const plan = [
+    ["host_h", { CreateGame: { game: completeGame, pack: "mafiascum" } }],
+    ["host_h", { AddSlot: { game: completeGame, slot: "slot-7" } }],
+    [
+      "host_h",
+      {
+        AssignSlot: {
+          game: completeGame,
+          slot: "slot-7",
+          user: "player-mira",
+        },
+      },
+    ],
+    [
+      "host_h",
+      {
+        AssignRole: {
+          game: completeGame,
+          slot: "slot-7",
+          role_key: "godfather",
+        },
+      },
+    ],
+    ["host_h", { AddSlot: { game: completeGame, slot: "slot-2" } }],
+    [
+      "host_h",
+      {
+        AssignSlot: {
+          game: completeGame,
+          slot: "slot-2",
+          user: "player-target",
+        },
+      },
+    ],
+    [
+      "host_h",
+      {
+        AssignRole: {
+          game: completeGame,
+          slot: "slot-2",
+          role_key: "vanilla_townie",
+        },
+      },
+    ],
+    ["host_h", { AddSlot: { game: completeGame, slot: "slot-3" } }],
+    [
+      "host_h",
+      {
+        AssignSlot: {
+          game: completeGame,
+          slot: "slot-3",
+          user: "player-seed",
+        },
+      },
+    ],
+    [
+      "host_h",
+      {
+        AssignRole: {
+          game: completeGame,
+          slot: "slot-3",
+          role_key: "vanilla_townie",
+        },
+      },
+    ],
+    ["host_h", { StartGame: { game: completeGame, phase: "D01" } }],
+    [
+      "player-target",
+      {
+        SubmitVote: {
+          game: completeGame,
+          actor_slot: "slot-2",
+          target: "NoLynch",
+        },
+      },
+    ],
+    [
+      "player-seed",
+      {
+        SubmitVote: {
+          game: completeGame,
+          actor_slot: "slot-3",
+          target: "NoLynch",
+        },
+      },
+    ],
+    ["host_h", { ResolvePhase: { game: completeGame, seed: 73021 } }],
+    ["host_h", { UnlockThread: { game: completeGame } }],
+  ];
+  const commands = [];
+  for (const [principalUserId, command] of plan) {
+    commands.push(await sendCommand(principalUserId, command));
+  }
+  return {
+    game: completeGame,
+    commands: commands.length,
+    slotCount: 3,
+    voteHistoryPhaseId: "D01",
+    voteHistoryStatus: "NoLynch",
+    voteHistoryTarget: "no_lynch",
+    voteHistoryActors: ["slot-2", "slot-3"],
+    expectedThreadBodies: ["Phase D01 announcement: no deaths."],
+  };
+}
+
 async function verifyConcurrentPlayerCompleteRace({
   hostPage,
   playerPage,
@@ -10480,7 +10586,7 @@ async function verifyStalePlayerCompleteRecovery({
 }) {
   const endgameScenario = completedPlayerEndgameRefreshScenario();
   const completeGame = crypto.randomUUID();
-  const seed = await seedHostCompleteRecoveryGame({ completeGame });
+  const seed = await seedPlayerEndgameHistoryRecoveryGame({ completeGame });
   const context = playerPage.context();
   const stalePlayerPage = await context.newPage();
   try {
@@ -10544,6 +10650,10 @@ async function verifyStalePlayerCompleteRecovery({
         window.__fmarchPlayerProjection?.commandState?.gameCompleted === true &&
         (window.__fmarchPlayerProjection?.commandState?.actions ?? []).length === 0 &&
         window.__fmarchPlayerProjection?.endgameSummary?.completed === true &&
+        window.__fmarchPlayerProjection?.endgameSummary?.voteHistory?.some(
+          (outcome) =>
+            outcome.phaseId === "D01" && outcome.status === "NoLynch",
+        ) &&
         document
           .querySelector('[data-testid="player-endgame-summary"]')
           ?.getAttribute("data-state") === "revealed",
@@ -10591,6 +10701,10 @@ async function verifyStalePlayerCompleteRecovery({
     await stalePlayerPage.waitForFunction(
       () =>
         window.__fmarchPlayerProjection?.endgameSummary?.completed === true &&
+        window.__fmarchPlayerProjection?.endgameSummary?.voteHistory?.some(
+          (outcome) =>
+            outcome.phaseId === "D01" && outcome.status === "NoLynch",
+        ) &&
         document
           .querySelector('[data-testid="player-endgame-summary"]')
           ?.getAttribute("data-state") === "revealed",
@@ -10624,6 +10738,10 @@ async function verifyStalePlayerCompleteRecovery({
         (window.__fmarchPlayerProjection?.commandState?.voteTargets ?? []).length ===
           0 &&
         window.__fmarchPlayerProjection?.endgameSummary?.completed === true &&
+        window.__fmarchPlayerProjection?.endgameSummary?.voteHistory?.some(
+          (outcome) =>
+            outcome.phaseId === "D01" && outcome.status === "NoLynch",
+        ) &&
         document
           .querySelector('[data-testid="player-endgame-summary"]')
           ?.getAttribute("data-state") === "revealed",
@@ -10713,14 +10831,21 @@ async function verifyStalePlayerCompleteRecovery({
       ) ||
       stalePublicReloadAfterReject.reloadCurrentVote.hasVote !== "false" ||
       !stalePublicReloadAfterReject.reloadCurrentVote.text.includes("No current vote") ||
-      stalePublicReloadAfterReject.reloadThreadPostBodies.length !== 0 ||
+      !sameArray(
+        stalePublicReloadAfterReject.reloadThreadPostBodies,
+        seed.expectedThreadBodies,
+      ) ||
       stalePublicReloadAfterReject.apiCommandStateAfterReload?.game_completed !== true ||
       stalePublicReloadAfterReject.apiCommandStateAfterReload?.actions?.length !== 0 ||
       stalePublicReloadAfterReject.apiCommandStateAfterReload?.vote_targets?.length !==
         0 ||
-      stalePublicReloadAfterReject.apiThreadPostBodiesAfterReload.length !== 0 ||
+      !sameArray(
+        stalePublicReloadAfterReject.apiThreadPostBodiesAfterReload,
+        seed.expectedThreadBodies,
+      ) ||
       stalePublicReloadAfterReject.apiStateAfterReload?.completed !== true ||
-      stalePublicReloadAfterReject.apiStateAfterReload?.slots?.length !== 1 ||
+      stalePublicReloadAfterReject.apiStateAfterReload?.slots?.length !==
+        seed.slotCount ||
       stalePublicReloadAfterReject.apiStateAfterReload.slots.some(
         (slot) => slot.role_revealed !== true || slot.alignment_revealed !== true,
       )
@@ -10769,7 +10894,7 @@ async function verifyStalePlayerCompleteRecovery({
       apiCommandStateAfterReject,
       stalePublicReloadAfterReject,
       proof:
-        "A disposable player role URL froze before completion with a projection-derived vote control, the game completed from another browser command, then that stale player vote control rejected with GameAlreadyCompleted, refreshed commandState plus the reveal-gated endgame summary, recovered the same summary through explicit live resync, disabled vote/post controls, and reloaded the public player board to completed revealed Endgame truth with no current vote, no vote targets, and no thread mutation.",
+        "A disposable player role URL froze before completion with a projection-derived vote control after a D01 no-lynch resolved from two other players' ballots, the game completed from another browser command, then that stale player vote control rejected with GameAlreadyCompleted, refreshed commandState plus the reveal-gated endgame summary and vote history, recovered the same summary through explicit live resync, disabled vote/post controls, and reloaded the public player board to completed revealed Endgame truth with durable tallies and actor ballots, no current vote, no vote targets, and no thread mutation.",
     };
     assertCompletedPlayerEndgameRefreshBrowserProof({
       proof,
@@ -10789,6 +10914,14 @@ async function playerEndgameSummarySurface(page) {
     winnerText: await page.getByTestId("player-endgame-winner").innerText(),
     revealRows: await page
       .locator('[data-testid^="player-endgame-reveal-"]')
+      .evaluateAll((rows) =>
+        rows.map((row) => ({
+          testId: row.getAttribute("data-testid"),
+          text: row.textContent?.trim() ?? "",
+        })),
+      ),
+    voteRows: await page
+      .locator('[data-testid^="player-endgame-vote-D"]')
       .evaluateAll((rows) =>
         rows.map((row) => ({
           testId: row.getAttribute("data-testid"),

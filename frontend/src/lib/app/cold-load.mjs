@@ -573,6 +573,11 @@ export function normalizeEndgameSummary(payload, fallback = null) {
   }
   const slots = Array.isArray(payload.slots) ? payload.slots : [];
   const winner = payload.winner ?? null;
+  const voteHistory = Array.isArray(payload.vote_history)
+    ? payload.vote_history
+    : Array.isArray(payload.voteHistory)
+      ? payload.voteHistory
+      : [];
   return Object.freeze({
     completed: payload.completed === true,
     winner:
@@ -600,8 +605,49 @@ export function normalizeEndgameSummary(payload, fallback = null) {
           }),
         ),
     ),
+    voteHistory: Object.freeze(
+      voteHistory
+        .map(normalizeEndgameDayVote)
+        .filter((outcome) => outcome !== null),
+    ),
     boundary: String(payload.boundary ?? ""),
   });
+}
+
+function normalizeEndgameDayVote(outcome) {
+  if (outcome === null || typeof outcome !== "object") {
+    return null;
+  }
+  const phaseId = String(outcome.phase_id ?? outcome.phaseId ?? "").trim();
+  const status = String(outcome.status ?? "").trim();
+  if (phaseId === "" || status === "") {
+    return null;
+  }
+  return Object.freeze({
+    phaseId,
+    sourceSeq: Number(outcome.source_seq ?? outcome.sourceSeq ?? 0),
+    eventIndex: Number(outcome.event_index ?? outcome.eventIndex ?? 0),
+    status,
+    winnerSlot: outcome.winner_slot ?? outcome.winnerSlot ?? null,
+    tallies: normalizeNumericRecord(outcome.tallies),
+    votes: normalizeStringRecord(outcome.votes),
+    majority: normalizeNullableNumber(outcome.majority),
+    reason:
+      typeof outcome.reason === "string" && outcome.reason.trim() !== ""
+        ? outcome.reason
+        : null,
+  });
+}
+
+function normalizeStringRecord(value) {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return Object.freeze({});
+  }
+  return Object.freeze(
+    Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [String(key), String(item)]),
+    ),
+  );
 }
 
 function normalizePlayerCommandRole(role) {

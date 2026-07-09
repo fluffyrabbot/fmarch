@@ -464,6 +464,10 @@ async fn endgame_summary_reveals_winner_only_after_terminal_win(pool: sqlx::PgPo
     );
     assert_eq!(ongoing.slots.len(), 2);
     assert!(
+        ongoing.vote_history.is_empty(),
+        "vote history must stay absent before host completion"
+    );
+    assert!(
         ongoing.slots.iter().all(|slot| slot.role_key.is_none()
             && slot.alignment.is_none()
             && !slot.role_revealed
@@ -547,6 +551,41 @@ async fn endgame_summary_reveals_winner_only_after_terminal_win(pool: sqlx::PgPo
         completed.winner.is_some(),
         "the winner fact must survive completion"
     );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn endgame_summary_reveals_vote_history_only_after_completion(pool: sqlx::PgPool) {
+    let app = router(pool);
+    let game = Uuid::new_v4();
+    seed_single_vote_game(app.clone(), game).await;
+
+    expect_ack(
+        post_command(
+            app.clone(),
+            12,
+            "host_h",
+            Command::ResolvePhase { game, seed: 8812 },
+        )
+        .await,
+    );
+    let resolved = get_endgame_summary(app.clone(), game).await;
+    assert!(!resolved.completed);
+    assert!(
+        resolved.vote_history.is_empty(),
+        "resolved ballots must remain outside the endgame summary before CompleteGame"
+    );
+
+    expect_ack(post_command(app.clone(), 13, "host_h", Command::CompleteGame { game }).await);
+    let completed = get_endgame_summary(app, game).await;
+    assert!(completed.completed);
+    assert_eq!(completed.vote_history.len(), 1);
+    let day_one = &completed.vote_history[0];
+    assert_eq!(day_one.phase_id, "D01");
+    assert_eq!(day_one.status, "NoMajority");
+    assert_eq!(day_one.winner_slot, None);
+    assert_eq!(day_one.tallies, serde_json::json!({ "slot_2": 1.0 }));
+    assert_eq!(day_one.votes, serde_json::json!({ "slot_1": "slot_2" }));
+    assert_eq!(day_one.majority, Some(2.0));
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]

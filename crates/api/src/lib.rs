@@ -1593,6 +1593,7 @@ pub struct EndgameSummaryResponse {
     pub completed: bool,
     pub winner: Option<EndgameWinner>,
     pub slots: Vec<EndgameSlotReveal>,
+    pub vote_history: Vec<EndgameDayVote>,
     pub boundary: String,
 }
 
@@ -1614,6 +1615,19 @@ pub struct EndgameSlotReveal {
     pub alignment_revealed: bool,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct EndgameDayVote {
+    pub phase_id: String,
+    pub source_seq: i64,
+    pub event_index: i32,
+    pub status: String,
+    pub winner_slot: Option<String>,
+    pub tallies: serde_json::Value,
+    pub votes: serde_json::Value,
+    pub majority: Option<f64>,
+    pub reason: Option<String>,
+}
+
 /// Public game read in the votecount access class. Role and alignment facts
 /// are gated per-slot by the projection's reveal flags, so mid-game death
 /// flips honor pack death_reveal policy and full reveal arrives only when
@@ -1626,6 +1640,25 @@ async fn endgame_summary(
         .await
         .map_err(command_reject_api_error)?;
     let result = projections::game_result(&state.pool, game).await?;
+    let vote_history = if completed {
+        projections::day_vote_outcomes(&state.pool, game)
+            .await?
+            .into_iter()
+            .map(|outcome| EndgameDayVote {
+                phase_id: outcome.phase_id,
+                source_seq: outcome.source_seq,
+                event_index: outcome.event_index,
+                status: outcome.status,
+                winner_slot: outcome.winner_slot,
+                tallies: outcome.tallies,
+                votes: outcome.votes,
+                majority: outcome.majority,
+                reason: outcome.reason,
+            })
+            .collect()
+    } else {
+        Vec::new()
+    };
     let slots = projections::slot_state(&state.pool, game)
         .await?
         .into_iter()
@@ -1633,7 +1666,11 @@ async fn endgame_summary(
             slot_id: slot.slot_id,
             alive: slot.alive,
             status: slot.status,
-            role_key: if slot.role_revealed { slot.role_key } else { None },
+            role_key: if slot.role_revealed {
+                slot.role_key
+            } else {
+                None
+            },
             alignment: if slot.alignment_revealed {
                 slot.alignment
             } else {
@@ -1652,10 +1689,12 @@ async fn endgame_summary(
             phase_id: row.phase_id,
         }),
         slots,
+        vote_history,
         boundary: "Endgame summary is reveal-gated: per-slot role and alignment appear only \
                    after the projection's reveal flags flip (death_reveal policy mid-game, \
-                   GameCompleted/WinReached at the end). The winner fact is folded from the \
-                   engine's terminal WinReached."
+                   GameCompleted/WinReached at the end). Per-day vote history appears only \
+                   after GameCompleted. The winner fact is folded from the engine's terminal \
+                   WinReached."
             .to_string(),
     }))
 }

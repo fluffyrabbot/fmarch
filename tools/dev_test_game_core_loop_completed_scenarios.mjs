@@ -395,9 +395,14 @@ export function assertCompletedPlayerReloadProofCase({
           slot.roleRevealed === true &&
           slot.alignmentRevealed === true,
       ) !== true ||
+      !Array.isArray(snapshot.endgameSummary?.voteHistory) ||
+      snapshot.endgameSummary.voteHistory.length < 1 ||
       snapshot.endgameSurface?.state !== "revealed" ||
       snapshot.endgameSurface?.revealRows?.some(
         (row) => row.testId === "player-endgame-reveal-slot-7",
+      ) !== true ||
+      snapshot.endgameSurface?.voteRows?.some((row) =>
+        row.testId?.startsWith("player-endgame-vote-"),
       ) !== true ||
       snapshot.enabledMutatingButtons?.length !== 0 ||
       !snapshot.disabledMutatingButtons?.some(
@@ -475,7 +480,12 @@ export function assertCompletedDeadPlayerStaleVoteRecoveryProofCase({
     snapshot.coldLoadEndpoints?.endgameSummaryEndpoint !==
       `/games/${expectedGame}/endgame-summary` ||
     snapshot.endgameSummary?.completed !== true ||
+    !Array.isArray(snapshot.endgameSummary?.voteHistory) ||
+    snapshot.endgameSummary.voteHistory.length < 1 ||
     snapshot.endgameSurface?.state !== "revealed" ||
+    snapshot.endgameSurface?.voteRows?.some((row) =>
+      row.testId?.startsWith("player-endgame-vote-"),
+    ) !== true ||
     snapshot.enabledMutatingButtons?.length !== 0
   ) {
     throwCompletedScenarioAssertionError({

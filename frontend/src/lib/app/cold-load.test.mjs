@@ -8,6 +8,7 @@ import {
   loadHostColdData,
   loadPlayerColdData,
   normalizeDayVoteOutcomes,
+  normalizeEndgameSummary,
   normalizeHostPrompts,
   normalizePlayerCommandState,
   normalizeThreadPage,
@@ -18,6 +19,40 @@ import {
   playerThreadUrl,
   principalScopedGameUrl,
 } from "./cold-load.mjs";
+
+test("endgame summary normalizes reveal-gated per-day vote history", () => {
+  const summary = normalizeEndgameSummary({
+    completed: true,
+    slots: [],
+    vote_history: [
+      {
+        phase_id: "D01",
+        source_seq: 31,
+        event_index: 0,
+        status: "NoLynch",
+        winner_slot: null,
+        tallies: { no_lynch: 2 },
+        votes: { "slot-2": "no_lynch", "slot-3": "no_lynch" },
+        majority: 2,
+        reason: null,
+      },
+    ],
+  });
+
+  assert.deepEqual(summary.voteHistory, [
+    {
+      phaseId: "D01",
+      sourceSeq: 31,
+      eventIndex: 0,
+      status: "NoLynch",
+      winnerSlot: null,
+      tallies: { no_lynch: 2 },
+      votes: { "slot-2": "no_lynch", "slot-3": "no_lynch" },
+      majority: 2,
+      reason: null,
+    },
+  ]);
+});
 
 const FALLBACK = Object.freeze({
   thread: Object.freeze({ nextBeforeSeq: null, posts: Object.freeze([]) }),

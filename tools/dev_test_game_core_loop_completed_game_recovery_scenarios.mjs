@@ -164,6 +164,14 @@ export function completedPlayerReloadHardeningLaneCaseDefinitions() {
       proofGroup: "stale-player-complete",
       proofStep: "resync",
     },
+    {
+      id: "stale-player-complete-vote-history",
+      label: "Completed player endgame reveals durable vote history",
+      family: "completed-player-reload",
+      seedGroup: "required",
+      proofGroup: "stale-player-complete",
+      proofStep: "vote-history",
+    },
   ]);
 }
 
@@ -233,6 +241,11 @@ export function completedPlayerEndgameRefreshScenario() {
     expectedRevealSlot: "slot-7",
     expectedRoleKey: "godfather",
     expectedAlignment: "mafia",
+    expectedVoteHistoryPhaseId: "D01",
+    expectedVoteHistoryStatus: "NoLynch",
+    expectedVoteHistoryTarget: "no_lynch",
+    expectedVoteHistoryCount: 2,
+    expectedVoteHistoryActors: ["slot-2", "slot-3"],
   });
 }
 
@@ -255,12 +268,22 @@ export function assertCompletedPlayerEndgameRefreshBrowserProof({
     const slot = summary?.slots?.find(
       (candidate) => candidate.slotId === scenario.expectedRevealSlot,
     );
+    const voteHistory = summary?.voteHistory?.find(
+      (outcome) => outcome.phaseId === scenario.expectedVoteHistoryPhaseId,
+    );
     return (
       summary?.completed === true &&
       slot?.roleKey === scenario.expectedRoleKey &&
       slot?.alignment === scenario.expectedAlignment &&
       slot?.roleRevealed === true &&
-      slot?.alignmentRevealed === true
+      slot?.alignmentRevealed === true &&
+      voteHistory?.status === scenario.expectedVoteHistoryStatus &&
+      voteHistory?.tallies?.[scenario.expectedVoteHistoryTarget] ===
+        scenario.expectedVoteHistoryCount &&
+      scenario.expectedVoteHistoryActors.every(
+        (actor) =>
+          voteHistory?.votes?.[actor] === scenario.expectedVoteHistoryTarget,
+      )
     );
   });
   const surfacesMatch = surfaces.every(
@@ -271,10 +294,22 @@ export function assertCompletedPlayerEndgameRefreshBrowserProof({
           row.testId === `player-endgame-reveal-${scenario.expectedRevealSlot}` &&
           row.text.includes("Godfather") &&
           row.text.includes("Mafia"),
+      ) &&
+      surface.voteRows?.some(
+        (row) =>
+          row.testId?.startsWith(
+            `player-endgame-vote-${scenario.expectedVoteHistoryPhaseId}-`,
+          ) &&
+          row.text.includes("No lynch") &&
+          row.text.includes("Slot 2 to No lynch") &&
+          row.text.includes("Slot 3 to No lynch"),
       ),
   );
   const apiSlot = proof?.apiEndgameSummaryAfterReject?.slots?.find(
     (slot) => slot.slot_id === scenario.expectedRevealSlot,
+  );
+  const apiVoteHistory = proof?.apiEndgameSummaryAfterReject?.vote_history?.find(
+    (outcome) => outcome.phase_id === scenario.expectedVoteHistoryPhaseId,
   );
   if (
     !sameOrderedValues(
@@ -291,7 +326,13 @@ export function assertCompletedPlayerEndgameRefreshBrowserProof({
     apiSlot?.role_key !== scenario.expectedRoleKey ||
     apiSlot?.alignment !== scenario.expectedAlignment ||
     apiSlot?.role_revealed !== true ||
-    apiSlot?.alignment_revealed !== true
+    apiSlot?.alignment_revealed !== true ||
+    apiVoteHistory?.status !== scenario.expectedVoteHistoryStatus ||
+    apiVoteHistory?.tallies?.[scenario.expectedVoteHistoryTarget] !==
+      scenario.expectedVoteHistoryCount ||
+    !scenario.expectedVoteHistoryActors.every(
+      (actor) => apiVoteHistory?.votes?.[actor] === scenario.expectedVoteHistoryTarget,
+    )
   ) {
     const suffix = includeEvidenceInError ? `: ${JSON.stringify(proof)}` : "";
     throw new Error(`completed player endgame refresh proof drifted${suffix}`);

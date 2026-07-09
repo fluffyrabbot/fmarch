@@ -581,7 +581,7 @@ export function completedPlayerCompleteRaceProofLaneDescriptors({ hardening }) {
 }
 
 export function completedStalePlayerCompleteProofLaneDescriptors({ hardening }) {
-  const [rejectLane, reloadLane, resyncLane] =
+  const [rejectLane, reloadLane, resyncLane, voteHistoryLane] =
     completedStalePlayerCompleteHardeningLaneCases();
   return [
     completedGameLaneDescriptor(rejectLane, {
@@ -687,7 +687,8 @@ export function completedStalePlayerCompleteProofLaneDescriptors({ hardening }) 
           hardening.stalePlayerComplete?.stalePublicReloadAfterReject
             ?.reloadCurrentVote?.text?.includes("No current vote") === true &&
           hardening.stalePlayerComplete?.stalePublicReloadAfterReject
-            ?.reloadThreadPostBodies?.length === 0 &&
+            ?.reloadThreadPostBodies?.join("\n") ===
+            hardening.stalePlayerComplete?.seed?.expectedThreadBodies?.join("\n") &&
           hardening.stalePlayerComplete?.stalePublicReloadAfterReject
             ?.apiCommandStateAfterReload?.game_completed === true &&
           hardening.stalePlayerComplete?.stalePublicReloadAfterReject
@@ -695,11 +696,13 @@ export function completedStalePlayerCompleteProofLaneDescriptors({ hardening }) 
           hardening.stalePlayerComplete?.stalePublicReloadAfterReject
             ?.apiCommandStateAfterReload?.vote_targets?.length === 0 &&
           hardening.stalePlayerComplete?.stalePublicReloadAfterReject
-            ?.apiThreadPostBodiesAfterReload?.length === 0 &&
+            ?.apiThreadPostBodiesAfterReload?.join("\n") ===
+            hardening.stalePlayerComplete?.seed?.expectedThreadBodies?.join("\n") &&
           hardening.stalePlayerComplete?.stalePublicReloadAfterReject
             ?.apiStateAfterReload?.completed === true &&
           hardening.stalePlayerComplete?.stalePublicReloadAfterReject
-            ?.apiStateAfterReload?.slots?.length === 1 &&
+            ?.apiStateAfterReload?.slots?.length ===
+            hardening.stalePlayerComplete?.seed?.slotCount &&
           hardening.stalePlayerComplete?.stalePublicReloadAfterReject
             ?.apiStateAfterReload?.slots?.every(
               (slot) =>
@@ -742,6 +745,37 @@ export function completedStalePlayerCompleteProofLaneDescriptors({ hardening }) 
             row.text.includes("Godfather") &&
             row.text.includes("Mafia"),
         ) === true,
+    }),
+    completedGameLaneDescriptor(voteHistoryLane, {
+      game: hardening.stalePlayerComplete?.game ?? null,
+      phaseId:
+        hardening.stalePlayerComplete?.manualEndgameResync
+          ?.snapshotEndgameSummary?.voteHistory?.[0]?.phaseId ?? null,
+      status:
+        hardening.stalePlayerComplete?.manualEndgameResync
+          ?.snapshotEndgameSummary?.voteHistory?.[0]?.status ?? null,
+      ballotCount: Object.keys(
+        hardening.stalePlayerComplete?.manualEndgameResync
+          ?.snapshotEndgameSummary?.voteHistory?.[0]?.votes ?? {},
+      ).length,
+      passed:
+        hardening.stalePlayerComplete?.status === "passed" &&
+        hardening.stalePlayerComplete?.manualEndgameResync
+          ?.snapshotEndgameSummary?.voteHistory?.some(
+            (outcome) =>
+              outcome.phaseId === "D01" &&
+              outcome.status === "NoLynch" &&
+              outcome.tallies?.no_lynch === 2 &&
+              outcome.votes?.["slot-2"] === "no_lynch" &&
+              outcome.votes?.["slot-3"] === "no_lynch",
+          ) === true &&
+        hardening.stalePlayerComplete?.stalePublicReloadAfterReject
+          ?.endgameSurface?.voteRows?.some(
+            (row) =>
+              row.testId?.startsWith("player-endgame-vote-D01-") &&
+              row.text.includes("Slot 2 to No lynch") &&
+              row.text.includes("Slot 3 to No lynch"),
+          ) === true,
     }),
   ];
 }
