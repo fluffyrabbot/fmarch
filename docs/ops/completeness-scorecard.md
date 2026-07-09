@@ -5,7 +5,7 @@
 > [08-roadmap](../arch/08-roadmap.md) and the
 > [engine-port readiness baseline](engine-port-readiness-baseline-2026-06-18.md).
 >
-> Last updated **2026-07-09** — `main` @ `0494668d`.
+> Last updated **2026-07-09** — `main` @ `9dfe7bcf`.
 > Visual version: <https://claude.ai/code/artifact/da80a9e8-3a15-4cd4-9ff0-ed549dbd206e>.
 
 The hard part is done: the resolution engine is at full im-human V4 parity on a proven
@@ -19,7 +19,7 @@ event-sourcing spine. The remaining work is almost entirely **product breadth** 
 | Engine parity | **192/192** | port checklist complete; 8/8 build-order phases; parity matrix has no unsupported rows |
 | Proof surface | **119** | `npm` test lanes; 378 files under `tools/` |
 | In flight | **0** | local `main` matches `origin/main` |
-| Remaining | **5 tiers** | 11 to finish + 1 optional |
+| Remaining | **5 tiers** | 10 to finish + 1 optional |
 
 ## What we have (shipped & proven)
 
@@ -88,12 +88,15 @@ if needed).
   holds an advisory-lock connection and then needs another (the lock layer postdates that
   binary); fixed by raising it to 5. Both verified: concurrent test green ×3; the CLI's
   pass (exit 0, `ok=true`) and threshold-fail (exit 1, `ok=false`) branches both confirmed.
-- [ ] **1.4 Finish the macOS deadlock remediation.** `[Partial]` Hermetic tiering shipped
-  (minimize/shrink family quarantined behind `--ignored`). Remaining: collapse the other
-  CLI-spawn tests to in-process calls, add a bounded spawn helper (timeout + pgid kill +
-  stdout cap), and fix the `nonminimal_trigger_dependency…shrink` semantic red that
-  un-quarantining exposed. Unblocks a fast, parallel-safe default suite instead of 44
-  ignored tests.
+- [x] **1.4 Finish the macOS deadlock remediation.** `[Landed]` Operator proof contracts
+  now call the underlying audit/report APIs in-process. The remaining unavoidable child
+  processes run through one bounded helper with wall-clock deadlines, process-group kill,
+  capped-but-drained output, and an inherited-pipe regression check. The minimizer uses
+  its measured four-connection lower bound, while the repo defaults Rust tests to four
+  threads to respect SQLx's shared 20-connection parent pool. The nonminimal semantic
+  shrink replay and all restored generated-shrink cases are green in the default suite:
+  337 passed, 0 failed, with only the heavy aggregate matrix left as an explicit opt-in
+  instead of 44 ignored tests (commit `9dfe7bcf`).
 - [x] **1.5 Fix the release-readiness freshness gate.** `[Landed]` Declarative readiness
   steps now derive a freshness scope from their declared `changedInputs`: consumed stale
   inputs still fail, while stale sibling defaults that the lane did not produce are
@@ -152,7 +155,7 @@ lifecycle are the biggest slice→launch gaps.*
 
 ## Provenance — how each row was established
 
-- **Code-verified (2026-07-09):** local and remote `main` aligned at `0494668d`, port
+- **Code-verified (2026-07-09):** local and remote `main` aligned at `9dfe7bcf`, port
   checklist 192/192, parity-matrix gaps, the absent media pipeline (no blob crate; zero
   upload/transcode in `crates/*/src`), the missing forum/register/profile routes, and all
   counts (packs, migrations, 119 test lanes, 378 files under `tools/`).
@@ -161,6 +164,11 @@ lifecycle are the biggest slice→launch gaps.*
   contract suite passed 63/63 and the admin route model passed 99/99. Standalone readiness
   and next-action regeneration are green while release and production remain explicitly
   false and hosted evidence remains blocked pending real operator capture.
+- **Default generated-shrink restoration (2026-07-09):** the bounded-process helper's
+  three stream/timeout/process-group checks passed; the nonminimal shrink replay passed;
+  all command targets compiled; and the full default Postgres pipeline passed 337/337 in
+  242.66s. The sole ignored heavy aggregate matrix remains discoverable through its
+  explicit `--ignored` lane.
 - **Reproduced & resolved on Postgres (2026-07-08):** 1.1 and 1.2 — both reproduced
   against the live dev DB, root-caused as stale-reference test bugs (live == rebuild in
   both), and fixed test-side; `replay_audit_and_rebuild_deterministically` re-run green
