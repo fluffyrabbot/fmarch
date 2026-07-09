@@ -5,6 +5,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { chromium } from "playwright";
 import { viewports } from "./frontend_role_smoke_scenarios.mjs";
 import { loadRenderCss } from "./frontend_render_css.mjs";
+import { noBindCommandScenarioDefs } from "./frontend_proof_scenarios.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const artifactDir = path.join(repoRoot, "target", "frontend-no-bind-interactions");
@@ -77,116 +78,7 @@ try {
 async function interactionScenarios() {
   const manifest = await bundle.renderModeratorCriticalActionManifest();
   return [
-    {
-      id: "admin-cohost-confirm-click",
-      role: "admin",
-      render: "renderAdminSetupConfirmation",
-      targetSelector: '[data-testid="admin-command-confirm-cohost"]',
-      targetTestId: "admin-command-confirm-cohost",
-      rootSelector: '[data-testid="admin-setup-cohost"]',
-      expectedText: "Delegate cohost_c as cohost",
-      minTouchTargetPx: 44,
-    },
-    {
-      id: "admin-session-grant-confirm-click",
-      role: "admin",
-      render: "renderAdminSetupConfirmation",
-      targetSelector: '[data-testid="admin-command-confirm-session-grants"]',
-      targetTestId: "admin-command-confirm-session-grants",
-      rootSelector: '[data-testid="admin-setup-session-grants"]',
-      expectedText: "Grant GlobalMod",
-      minTouchTargetPx: 44,
-      form: {
-        action: "?/grantSession",
-        fieldTestIds: [
-          "admin-session-grant-token",
-          "admin-session-grant-principal",
-          "admin-session-grant-expires-at",
-          "admin-session-grant-global-mod",
-        ],
-      },
-    },
-    {
-      id: "admin-recovery-gate-confirm-click",
-      role: "admin",
-      render: "renderAdminRecoveryConfirmation",
-      targetSelector: '[data-testid="admin-recovery-confirm-recovery-gate"]',
-      targetTestId: "admin-recovery-confirm-recovery-gate",
-      rootSelector: '[data-testid="admin-recovery-recovery-gate"]',
-      expectedText: "Run check",
-      minTouchTargetPx: 44,
-      form: {
-        action: "?/checkRecoveryGate",
-        fieldNames: ["game", "principalUserId"],
-      },
-    },
-    {
-      id: "player-submit-vote-click",
-      role: "player",
-      render: "renderPlayerSurface",
-      targetSelector: '[data-action="submit_vote"]',
-      targetAction: "submit_vote",
-      rootSelector: '[data-testid="player-surface"]',
-      expectedText: "Votecount",
-      minTouchTargetPx: 44,
-    },
-    {
-      id: "player-submit-post-click",
-      role: "player",
-      render: "renderPlayerSurface",
-      targetSelector: '[data-action="submit_post"]',
-      targetAction: "submit_post",
-      rootSelector: '[data-testid="player-surface"]',
-      expectedText: "Post",
-      minTouchTargetPx: 44,
-      media: {
-        boundaryTestId: "thread-post-media-boundary-442",
-        mediaTestId: "thread-post-media-receipt-442",
-        expectedVariant: "tablet",
-      },
-    },
-    {
-      id: "player-private-channel-submit-post-click",
-      role: "player",
-      render: "renderPlayerPrivateChannelRoute",
-      targetSelector: '[data-action="submit_post"]',
-      targetAction: "submit_post",
-      rootSelector: '[data-testid="player-surface"]',
-      expectedText: "Post",
-      minTouchTargetPx: 44,
-      route: {
-        path: "/g/midsummer/c/role-pm",
-        activeChannelTestId: "player-channel-role-pm",
-        activeChannelHref: "/g/midsummer/c/role-pm",
-        privateReviewHref: "/g/midsummer/c/role-pm?private=notification-1",
-      },
-      media: {
-        boundaryTestId: "thread-post-media-boundary-442",
-        mediaTestId: "thread-post-media-receipt-442",
-        expectedVariant: "tablet",
-      },
-    },
-    {
-      id: "player-action-target-pick-confirm-click",
-      role: "player",
-      render: "renderPlayerActionTargetConfirmation",
-      targetSelector: '[data-testid="player-action-confirm-factional_kill"]',
-      targetTestId: "player-action-confirm-factional_kill",
-      rootSelector: '[data-testid="player-action-confirmation-factional_kill"]',
-      expectedText: "factional_kill -> slot-2",
-      minTouchTargetPx: 44,
-    },
-    {
-      id: "player-action-withdraw-confirm-click",
-      role: "player",
-      render: "renderPlayerActionWithdrawConfirmation",
-      targetSelector: '[data-testid="player-action-withdraw-confirm-factional_kill"]',
-      targetTestId: "player-action-withdraw-confirm-factional_kill",
-      rootSelector:
-        '[data-testid="player-action-withdraw-confirmation-factional_kill"]',
-      expectedText: "withdraws your submitted factional_kill action",
-      minTouchTargetPx: 44,
-    },
+    ...noBindCommandScenarioDefs(),
     ...manifest.actions.map(moderatorCriticalConfirmationScenario),
   ];
 }

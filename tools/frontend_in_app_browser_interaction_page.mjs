@@ -9,6 +9,7 @@ import {
 } from "./frontend_role_smoke_scenarios.mjs";
 import { loadRenderCss } from "./frontend_render_css.mjs";
 import { EXPECTED_COUNTS } from "./frontend_proof_expectations.mjs";
+import { iabCommandScenarioDefs } from "./frontend_proof_scenarios.mjs";
 import {
   APP_SHELL_CONTRACT,
   roleNavTestId,
@@ -201,149 +202,14 @@ async function buildSurfaces(bundle) {
 }
 
 async function buildCommandScenarios(bundle, moderatorActionManifest) {
+  const named = await Promise.all(
+    iabCommandScenarioDefs().map(async (def) => ({
+      ...def,
+      ...(await renderedFragment(bundle[def.render](...(def.renderArgs ?? [])))),
+    })),
+  );
   return [
-    {
-      id: "admin-cohost-confirm-click",
-      role: "admin",
-      render: "renderAdminSetupConfirmation",
-      targetSelector: '[data-testid="admin-command-confirm-cohost"]',
-      targetTestId: "admin-command-confirm-cohost",
-      expectedText: "Delegate cohost_c as cohost",
-      minTouchTargetPx: 44,
-      ...(await renderedFragment(bundle.renderAdminSetupConfirmation())),
-    },
-    {
-      id: "admin-session-grant-confirm-click",
-      role: "admin",
-      render: "renderAdminSetupConfirmation",
-      targetSelector: '[data-testid="admin-command-confirm-session-grants"]',
-      targetTestId: "admin-command-confirm-session-grants",
-      expectedText: "Grant GlobalMod",
-      minTouchTargetPx: 44,
-      form: {
-        action: "?/grantSession",
-        fields: {
-          token: "session-grant-midsummer",
-          principalUserId: "mod_a",
-          expiresAt: "4102444800",
-          globalCapability: "GlobalMod",
-        },
-      },
-      focusContract: {
-        initialFocusTestId: "admin-command-confirm-session-grants",
-        returnFocusTestId: "admin-command-trigger-session-grants",
-        tabContainment: "local-confirmation-controls",
-      },
-      ...(await renderedFragment(bundle.renderAdminSetupConfirmation())),
-    },
-    {
-      id: "admin-recovery-gate-confirm-click",
-      role: "admin",
-      render: "renderAdminRecoveryConfirmation",
-      targetSelector: '[data-testid="admin-recovery-confirm-recovery-gate"]',
-      targetTestId: "admin-recovery-confirm-recovery-gate",
-      expectedText: "Run check",
-      minTouchTargetPx: 44,
-      form: {
-        action: "?/checkRecoveryGate",
-        fields: {
-          game: "midsummer",
-          principalUserId: "admin_a",
-        },
-      },
-      focusContract: {
-        initialFocusTestId: "admin-recovery-confirm-recovery-gate",
-        returnFocusTestId: "admin-recovery-trigger-recovery-gate",
-        tabContainment: "local-confirmation-controls",
-      },
-      ...(await renderedFragment(bundle.renderAdminRecoveryConfirmation())),
-    },
-    {
-      id: "player-submit-vote-click",
-      role: "player",
-      render: "renderPlayerSurface",
-      targetSelector: '[data-action="submit_vote"]',
-      targetAction: "submit_vote",
-      expectedText: "Votecount",
-      minTouchTargetPx: 44,
-      ...(await renderedFragment(bundle.renderPlayerSurface())),
-    },
-    {
-      id: "player-submit-post-click",
-      role: "player",
-      render: "renderPlayerSurface",
-      targetSelector: '[data-action="submit_post"]',
-      targetAction: "submit_post",
-      expectedText: "Post",
-      minTouchTargetPx: 44,
-      ...(await renderedFragment(bundle.renderPlayerSurface())),
-    },
-    {
-      id: "player-private-channel-submit-post-click",
-      role: "player",
-      render: "renderPlayerPrivateChannelRoute",
-      targetSelector: '[data-action="submit_post"]',
-      targetAction: "submit_post",
-      expectedText: "Post",
-      minTouchTargetPx: 44,
-      route: {
-        path: "/g/midsummer/c/role-pm",
-        activeChannelTestId: "player-channel-role-pm",
-        activeChannelHref: "/g/midsummer/c/role-pm",
-        privateReviewHref: "/g/midsummer/c/role-pm?private=notification-1",
-      },
-      ...(await renderedFragment(bundle.renderPlayerPrivateChannelRoute())),
-    },
-    {
-      id: "player-action-target-pick-confirm-click",
-      role: "player",
-      render: "renderPlayerActionTargetConfirmation",
-      targetSelector: '[data-testid="player-action-confirm-factional_kill"]',
-      targetTestId: "player-action-confirm-factional_kill",
-      expectedText: "factional_kill -> slot-2",
-      minTouchTargetPx: 44,
-      focusContract: {
-        initialFocusTestId: "player-action-confirm-factional_kill",
-        returnFocusTestId: "player-action-trigger-factional_kill",
-        tabContainment: "local-confirmation-controls",
-      },
-      ...(await renderedFragment(bundle.renderPlayerActionTargetConfirmation())),
-    },
-    {
-      id: "player-action-withdraw-confirm-click",
-      role: "player",
-      render: "renderPlayerActionWithdrawConfirmation",
-      targetSelector: '[data-testid="player-action-withdraw-confirm-factional_kill"]',
-      targetTestId: "player-action-withdraw-confirm-factional_kill",
-      expectedText: "withdraws your submitted factional_kill action",
-      minTouchTargetPx: 44,
-      focusContract: {
-        initialFocusTestId: "player-action-withdraw-confirm-factional_kill",
-        returnFocusTestId: "player-action-withdraw-factional_kill",
-        tabContainment: "local-confirmation-controls",
-      },
-      ...(await renderedFragment(bundle.renderPlayerActionWithdrawConfirmation())),
-    },
-    {
-      id: "route-error-back-to-board-click",
-      role: "player",
-      render: "renderRouteErrorSurface",
-      targetSelector: '[data-testid="route-error-action"]',
-      targetTestId: "route-error-action",
-      expectedText: "Back to board",
-      minTouchTargetPx: 44,
-      errorSurface: {
-        path: "/g/midsummer/c/role-pm",
-        status: 403,
-        surfaceTestId: "route-error-surface",
-        panelTestId: "route-error-panel",
-        actionHref: "/",
-        activeNavTestId: roleNavTestId("player"),
-        sessionPrincipal: "player_mira",
-        capabilitySummary: "ChannelMember + SlotOccupant",
-      },
-      ...(await renderedFragment(bundle.renderRouteErrorSurface())),
-    },
+    ...named,
     ...(await Promise.all(
       moderatorActionManifest.actions.map((action) =>
         moderatorCriticalConfirmationScenario(bundle, action),

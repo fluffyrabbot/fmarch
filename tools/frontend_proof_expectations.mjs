@@ -1,4 +1,5 @@
 import { HOST_CONSOLE_CRITICAL_ACTIONS } from "../frontend/src/lib/components/host-action/host-console-critical-action.mjs";
+import { COMMAND_SCENARIOS } from "./frontend_proof_scenarios.mjs";
 
 // Single source for cross-lane proof expectations. The ordered moderator list
 // below is the one tripwire: when the host console gains or loses a critical
@@ -36,16 +37,11 @@ export const MODERATOR_CRITICAL_CONFIRMATION_SCENARIO_IDS = Object.freeze(
   MODERATOR_CRITICAL_ACTION_IDS.map((id) => `moderator-${id}-confirm-click`),
 );
 
+// The named command scenarios are single-sourced from the rich manifest in
+// frontend_proof_scenarios.mjs (which also owns their per-lane membership); the
+// moderator confirmations follow the ordered critical-action list above.
 export const COMMAND_SCENARIO_IDS = Object.freeze([
-  "admin-cohost-confirm-click",
-  "admin-session-grant-confirm-click",
-  "admin-recovery-gate-confirm-click",
-  "player-submit-vote-click",
-  "player-submit-post-click",
-  "player-private-channel-submit-post-click",
-  "player-action-target-pick-confirm-click",
-  "player-action-withdraw-confirm-click",
-  "route-error-back-to-board-click",
+  ...COMMAND_SCENARIOS.map((scenario) => scenario.id),
   ...MODERATOR_CRITICAL_CONFIRMATION_SCENARIO_IDS,
 ]);
 
