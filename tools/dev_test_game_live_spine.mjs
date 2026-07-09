@@ -15,6 +15,9 @@ import {
   recoveryReceiptProofPlanSteps,
   recoveryReceiptProofTargets,
 } from "./dev_test_game_recovery_receipt_catalog.mjs";
+import {
+  devTestGameHostSetupProofPath,
+} from "./dev_test_game_host_setup_feature_spine_targets.mjs";
 
 const coreLoopRecoveryReceiptSelector = {
   provingNodeId: "admin-proof:core-loop",
@@ -35,6 +38,7 @@ export const devTestGameCoreLiveSpinePlan = [
     reason: "core-live-gameplay-admin-surfaces",
     changedInputs: [
       devTestGameProofRunPath,
+      devTestGameHostSetupProofPath,
       devTestGameCoreLoopAdminProofPath,
       ...recoveryReceiptProofTargets(coreLoopRecoveryReceiptSelector),
       devTestGameHardeningAdminProofPath,

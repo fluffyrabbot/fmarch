@@ -34,7 +34,10 @@ export function proofStabilityDriftFromOpsArtifacts(ops) {
   });
 }
 
-export function buildProofStabilityTrace(stabilityDrift) {
+export function buildProofStabilityTrace(
+  stabilityDrift,
+  { selected = stabilityDrift?.status === "drifted" } = {},
+) {
   return normalizeProofStabilityTrace({
     strategy: proofStabilityTraceStrategy,
     status: stabilityDrift?.status,
@@ -47,7 +50,7 @@ export function buildProofStabilityTrace(stabilityDrift) {
     eventCount: Array.isArray(stabilityDrift?.events)
       ? stabilityDrift.events.length
       : 0,
-    selected: stabilityDrift?.status === "drifted",
+    selected,
   });
 }
 

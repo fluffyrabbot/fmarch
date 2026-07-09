@@ -98,7 +98,7 @@ export function proofFreshnessAdminProofCase() {
       productionReady: false,
       scope: "local-dev-test-game-proof-freshness-admin-surface",
       proofBoundary:
-        "Local SvelteKit admin role URL with fixture admin authority over the dev-test-game proof freshness dashboard. Proves fresh generated proof artifacts are discoverable from the seeded admin overview and inspectable in a native admin audit detail route; it does not validate artifact contents, hosted operations, beta readiness, release readiness, or production readiness.",
+        "Local SvelteKit admin role URL with fixture admin authority over the dev-test-game proof freshness dashboard. Proves required local-spine artifacts are fresh and optional real-hosted handoff freshness remains visible as diagnostic evidence from the seeded admin overview and native audit detail route; it does not validate artifact contents, hosted operations, beta readiness, release readiness, or production readiness.",
       generatedFrom: {
         proofRun: proofRunRelativePath,
         nextAction: nextActionRelativePath,
@@ -133,7 +133,10 @@ function assertProofFreshness(freshness) {
     throw new Error("proof freshness source must be fresh and local-only");
   }
   for (const artifact of freshness.artifacts ?? []) {
-    if (artifact.status !== "fresh") {
+    if (
+      artifact.requiredForLocalSpine !== false &&
+      artifact.status !== "fresh"
+    ) {
       throw new Error(`proof freshness artifact ${artifact.id} is ${artifact.status}`);
     }
   }

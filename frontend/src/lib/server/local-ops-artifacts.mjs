@@ -337,6 +337,7 @@ const LOCAL_PROOF_FRESHNESS_ARTIFACTS = Object.freeze([
     label: "Hosted evidence lane real-capture admin proof",
     env: "FMARCH_DEV_TEST_GAME_HOSTED_EVIDENCE_LANE_REAL_CAPTURE_ADMIN_PROOF",
     fallback: DEFAULT_HOSTED_EVIDENCE_LANE_REAL_CAPTURE_ADMIN_PROOF,
+    requiredForLocalSpine: false,
   }),
   Object.freeze({
     id: "hosted-evidence-lane-demo",
@@ -539,16 +540,28 @@ export async function readLocalProofFreshness({
   const freshCount = artifacts.filter((artifact) => artifact.status === "fresh").length;
   const staleCount = artifacts.filter((artifact) => artifact.status === "stale").length;
   const missingCount = artifacts.filter((artifact) => artifact.status === "missing").length;
+  const requiredArtifacts = artifacts.filter(
+    (artifact) => artifact.requiredForLocalSpine !== false,
+  );
+  const requiredStaleCount = requiredArtifacts.filter(
+    (artifact) => artifact.status === "stale",
+  ).length;
+  const requiredMissingCount = requiredArtifacts.filter(
+    (artifact) => artifact.status === "missing",
+  ).length;
   return Object.freeze({
     version: 1,
     proof: "dev-test-game-proof-freshness",
-    status: staleCount === 0 && missingCount === 0 ? "passed" : "blocked",
+    status:
+      requiredStaleCount === 0 && requiredMissingCount === 0
+        ? "passed"
+        : "blocked",
     releaseReady: false,
     productionReady: false,
     generatedAt: now.toISOString(),
     scope: "local-dev-test-game-proof-freshness",
     proofBoundary:
-      "Local proof freshness dashboard for generated dev-test-game artifacts. It checks file presence and mtime age only; it does not validate artifact contents, hosted operations, beta readiness, release readiness, or production readiness.",
+      "Local proof freshness dashboard for generated dev-test-game artifacts. Required local-spine artifacts determine pass/fail; optional real-hosted handoff artifacts remain visible diagnostics. It checks file presence and mtime age only; it does not validate artifact contents, hosted operations, beta readiness, release readiness, or production readiness.",
     maxAgeHours,
     maxAgeSeconds,
     summary: Object.freeze({
@@ -556,6 +569,10 @@ export async function readLocalProofFreshness({
       freshCount,
       staleCount,
       missingCount,
+      requiredArtifactCount: requiredArtifacts.length,
+      diagnosticArtifactCount: artifacts.length - requiredArtifacts.length,
+      requiredStaleCount,
+      requiredMissingCount,
     }),
     artifacts: Object.freeze(artifacts),
   });
@@ -587,6 +604,7 @@ async function summarizeArtifactFreshness({ artifact, env, now, maxAgeSeconds })
       ageSeconds,
       maxAgeSeconds,
       sizeBytes: metadata.size,
+      requiredForLocalSpine: artifact.requiredForLocalSpine !== false,
     });
   } catch {
     return Object.freeze({
@@ -595,6 +613,7 @@ async function summarizeArtifactFreshness({ artifact, env, now, maxAgeSeconds })
       path: artifactPath,
       status: "missing",
       maxAgeSeconds,
+      requiredForLocalSpine: artifact.requiredForLocalSpine !== false,
     });
   }
 }

@@ -278,7 +278,6 @@ export function buildDevTestGameNextAction(
   const artifact = candidates[0]?.artifact;
   const selectionTrace = buildSelectionTrace(candidates);
   const stabilityDrift = proofStabilityDriftFromOpsArtifacts(ops);
-  const stabilityTrace = buildProofStabilityTrace(stabilityDrift);
   const seedProofLaneCoverageDrift =
     seedProofLaneCoverageDriftFromReadiness(readiness, {
       source: devTestGameReleaseReadinessPath,
@@ -544,6 +543,9 @@ export function buildDevTestGameNextAction(
             reason: "all-artifacts-fresh",
             status: "ready",
           };
+  const stabilityTrace = buildProofStabilityTrace(stabilityDrift, {
+    selected: nextAction.reason === "harness-stability-drift",
+  });
   const selectedOperatorHandoff =
     selectedOperatorHandoffFromNextAction(nextAction);
   const phaseLocalNextAction = phaseLocalNextActionMetadataForOutput(manifest, {

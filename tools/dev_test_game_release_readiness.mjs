@@ -116,6 +116,11 @@ import {
   devTestGameReleaseReadinessPath,
 } from "./dev_test_game_spine_readiness_steps.mjs";
 import {
+  devTestGameReadinessFreshnessScopeEnvVar,
+  normalizeReadinessFreshnessPath,
+  parseReadinessFreshnessScope,
+} from "./dev_test_game_readiness_freshness_scope.mjs";
+import {
   adminSpineProofPath,
   adminSpineTerminalBatchProofPath,
   devTestGameProofGraphPath,
@@ -575,8 +580,8 @@ const defaultHostedIdentityEvidenceAdminProofPath = path.join(
   hostedIdentityEvidenceAdminProofArtifact.path,
 );
 const defaultHostedIdentityEvidenceAdminProofPaths = Object.freeze([
-  path.join(repoRoot, devTestGameHostedIdentityOperatorAdminProofPath),
   defaultHostedIdentityEvidenceAdminProofPath,
+  path.join(repoRoot, devTestGameHostedIdentityOperatorAdminProofPath),
 ]);
 const defaultHostedIdentityCompleteAdminProofPath = path.join(
   repoRoot,
@@ -668,11 +673,14 @@ const defaultReleaseRunbookAdminProofPath = path.join(
 );
 const jsonPath = path.join(repoRoot, devTestGameReleaseReadinessPath);
 const markdownPath = path.join(repoRoot, devTestGameReleaseReadinessMarkdownPath);
-const maxBackupArtifactAgeHours = Number.parseFloat(
+const maxReadinessArtifactAgeHours = Number.parseFloat(
   process.env.FMARCH_DEV_TEST_GAME_READINESS_MAX_ARTIFACT_AGE_HOURS ?? "24",
 );
 
-if (!Number.isFinite(maxBackupArtifactAgeHours) || maxBackupArtifactAgeHours <= 0) {
+if (
+  !Number.isFinite(maxReadinessArtifactAgeHours) ||
+  maxReadinessArtifactAgeHours <= 0
+) {
   throw new Error(
     "FMARCH_DEV_TEST_GAME_READINESS_MAX_ARTIFACT_AGE_HOURS must be a positive number",
   );
@@ -10220,6 +10228,7 @@ const optionalReadinessArtifactRegistry = Object.freeze([
     id: "hostedIdentityCompleteAdminProof",
     envVar: "FMARCH_DEV_TEST_GAME_HOSTED_IDENTITY_COMPLETE_ADMIN_PROOF",
     defaultPath: defaultHostedIdentityCompleteAdminProofPath,
+    requiredForStandaloneReadiness: false,
     outputKeys: {
       data: "hostedIdentityCompleteAdminProof",
       path: "hostedIdentityCompleteAdminProofPath",
@@ -10423,6 +10432,7 @@ const optionalReadinessArtifactRegistry = Object.freeze([
     id: "hostedEvidenceLaneRealCaptureAdminProof",
     envVar: "FMARCH_DEV_TEST_GAME_HOSTED_EVIDENCE_LANE_REAL_CAPTURE_ADMIN_PROOF",
     defaultPath: defaultHostedEvidenceLaneRealCaptureAdminProofPath,
+    requiredForStandaloneReadiness: false,
     outputKeys: {
       data: "hostedEvidenceLaneRealCaptureAdminProof",
       path: "hostedEvidenceLaneRealCaptureAdminProofPath",
@@ -10445,6 +10455,7 @@ const optionalReadinessArtifactRegistry = Object.freeze([
     id: "realHostedMatrixRawCapture",
     envVar: "FMARCH_DEV_TEST_GAME_REAL_HOSTED_MATRIX_RAW_CAPTURE",
     defaultPath: defaultRealHostedMatrixRawCapturePath,
+    requiredForStandaloneReadiness: false,
     outputKeys: {
       data: "realHostedMatrixRawCapture",
       path: "realHostedMatrixRawCapturePath",
@@ -10478,6 +10489,7 @@ const optionalReadinessArtifactRegistry = Object.freeze([
     envVar:
       "FMARCH_DEV_TEST_GAME_SELECTED_OPERATOR_HANDOFF_RECEIPT_ADMIN_PROOF",
     defaultPath: defaultSelectedOperatorHandoffReceiptAdminProofPath,
+    requiredForStandaloneReadiness: false,
     ignoreInvalidDefault: true,
     outputKeys: {
       data: "selectedOperatorHandoffReceiptAdminProof",
@@ -10588,12 +10600,16 @@ const nonReadinessFacingHostedAdminHandoffProofIds = new Set();
 
 async function readOptionalReleaseReadinessArtifacts({ expectedGame } = {}) {
   await assertHostedAdminHandoffProofReadinessDecisions();
+  const freshnessScope = parseReadinessFreshnessScope(
+    process.env[devTestGameReadinessFreshnessScopeEnvVar],
+    { root: repoRoot },
+  );
   const optionParts = await Promise.all(
     optionalReadinessArtifactLoadPlan.map((loader) => {
       if (typeof loader === "function") {
-        return loader({ expectedGame });
+        return loader({ expectedGame, freshnessScope });
       }
-      return readOptionalReadinessArtifact(loader);
+      return readOptionalReadinessArtifact(loader, { freshnessScope });
     }),
   );
   return Object.assign({}, ...optionParts.filter(Boolean));
@@ -10654,12 +10670,26 @@ async function hostedAdminHandoffProofArtifactExists(artifactCase) {
   }
 }
 
-async function readOptionalReadinessArtifact(id) {
+async function readOptionalReadinessArtifact(id, options = {}) {
   const descriptor = optionalReadinessArtifactById.get(id);
   if (descriptor === undefined) {
     throw new Error(`unknown optional readiness artifact: ${id}`);
   }
-  const override = process.env[descriptor.envVar];
+  return readOptionalReadinessArtifactDescriptor(descriptor, options);
+}
+
+export async function readOptionalReadinessArtifactDescriptor(
+  descriptor,
+  {
+    env = process.env,
+    freshnessScope = parseReadinessFreshnessScope(
+      env[devTestGameReadinessFreshnessScopeEnvVar],
+      { root: repoRoot },
+    ),
+    now = new Date(),
+  } = {},
+) {
+  const override = env[descriptor.envVar];
   const artifactPath = await resolveOptionalDefaultArtifactPath(
     override,
     descriptor.defaultPath,
@@ -10667,8 +10697,19 @@ async function readOptionalReadinessArtifact(id) {
   if (artifactPath === undefined) {
     return undefined;
   }
-  const now = new Date();
-  const artifact = await readFreshArtifactMetadata(artifactPath, now);
+  const artifact = await readReadinessArtifactMetadata(artifactPath, {
+    now,
+    freshnessRequired: readinessArtifactRequiresFreshness({
+      artifactPath,
+      override,
+      freshnessScope,
+      requiredForStandaloneReadiness:
+        descriptor.requiredForStandaloneReadiness,
+    }),
+  });
+  if (artifact === undefined) {
+    return undefined;
+  }
   const payload = JSON.parse(await readFile(artifactPath, "utf8"));
   const relativePath = path.relative(repoRoot, artifactPath);
   if (descriptor.validator !== undefined) {
@@ -10696,7 +10737,7 @@ function optionalArtifactEnvUnset(value) {
   return value === undefined || value.trim() === "";
 }
 
-async function readOptionalSeedAdminProof({ expectedGame } = {}) {
+async function readOptionalSeedAdminProof({ expectedGame, freshnessScope } = {}) {
   const override = process.env.FMARCH_DEV_TEST_GAME_SEED_ADMIN_PROOF;
   const proofPath = await resolveOptionalDefaultArtifactPath(override, defaultSeedAdminProofPath);
   if (proofPath === undefined) {
@@ -10709,8 +10750,15 @@ async function readOptionalSeedAdminProof({ expectedGame } = {}) {
   ) {
     return undefined;
   }
-  const now = new Date();
-  const artifact = await readFreshArtifactMetadata(proofPath, now);
+  const artifact = await readReadinessArtifactMetadata(proofPath, {
+    freshnessRequired: readinessArtifactRequiresFreshness({
+      artifactPath: proofPath,
+      freshnessScope,
+    }),
+  });
+  if (artifact === undefined) {
+    return undefined;
+  }
   return {
     seedAdminProof: proof,
     seedAdminProofPath: path.relative(repoRoot, proofPath),
@@ -10718,7 +10766,7 @@ async function readOptionalSeedAdminProof({ expectedGame } = {}) {
   };
 }
 
-async function readOptionalSeedFixtureSummary({ expectedGame } = {}) {
+async function readOptionalSeedFixtureSummary({ expectedGame, freshnessScope } = {}) {
   const override = process.env.FMARCH_DEV_TEST_GAME_SEED_FIXTURE_SUMMARY;
   const fixturePath = await resolveOptionalDefaultArtifactPath(
     override,
@@ -10734,8 +10782,15 @@ async function readOptionalSeedFixtureSummary({ expectedGame } = {}) {
   ) {
     return undefined;
   }
-  const now = new Date();
-  const artifact = await readFreshArtifactMetadata(fixturePath, now);
+  const artifact = await readReadinessArtifactMetadata(fixturePath, {
+    freshnessRequired: readinessArtifactRequiresFreshness({
+      artifactPath: fixturePath,
+      freshnessScope,
+    }),
+  });
+  if (artifact === undefined) {
+    return undefined;
+  }
   return {
     seedFixtureSummary: summary,
     seedFixtureSummaryPath: path.relative(repoRoot, fixturePath),
@@ -10769,7 +10824,7 @@ function defaultSeedAdminProofMatchesCurrentProof(proof, { expectedGame } = {}) 
   return seedDemoScenarioIds.every((id) => visibleScenarios.has(id));
 }
 
-async function readOptionalBackupRestoreArtifacts() {
+async function readOptionalBackupRestoreArtifacts({ freshnessScope } = {}) {
   const proofOverride = process.env.FMARCH_DEV_TEST_GAME_BACKUP_RESTORE_PROOF;
   const dumpOverride = process.env.FMARCH_DEV_TEST_GAME_BACKUP_RESTORE_DUMP;
   if (
@@ -10794,11 +10849,19 @@ async function readOptionalBackupRestoreArtifacts() {
   if (proofPath === undefined || dumpPath === undefined) {
     throw new Error("dev-test-game backup/restore proof and dump artifacts must exist together");
   }
+  const freshnessRequired =
+    freshnessScope === null ||
+    freshnessScope === undefined ||
+    freshnessScope.has(normalizeReadinessFreshnessPath(proofPath, { root: repoRoot })) ||
+    freshnessScope.has(normalizeReadinessFreshnessPath(dumpPath, { root: repoRoot }));
   const now = new Date();
   const [proofArtifact, dumpArtifact] = await Promise.all([
-    readFreshArtifactMetadata(proofPath, now),
-    readFreshArtifactMetadata(dumpPath, now),
+    readReadinessArtifactMetadata(proofPath, { now, freshnessRequired }),
+    readReadinessArtifactMetadata(dumpPath, { now, freshnessRequired }),
   ]);
+  if (proofArtifact === undefined || dumpArtifact === undefined) {
+    return undefined;
+  }
   return {
     backupRestoreProof: JSON.parse(await readFile(proofPath, "utf8")),
     backupRestoreProofPath: path.relative(repoRoot, proofPath),
@@ -10839,14 +10902,43 @@ function resolveArtifactPath(value, fallback) {
   return path.resolve(process.cwd(), value);
 }
 
-async function readFreshArtifactMetadata(absolutePath, now) {
+function readinessArtifactRequiresFreshness({
+  artifactPath,
+  override,
+  freshnessScope,
+  requiredForStandaloneReadiness = true,
+}) {
+  if (freshnessScope === null || freshnessScope === undefined) {
+    return (
+      requiredForStandaloneReadiness !== false ||
+      !optionalArtifactEnvUnset(override)
+    );
+  }
+  return (
+    freshnessScope.has(
+      normalizeReadinessFreshnessPath(artifactPath, { root: repoRoot }),
+    )
+  );
+}
+
+export async function readReadinessArtifactMetadata(
+  absolutePath,
+  {
+    now = new Date(),
+    freshnessRequired = true,
+    maxArtifactAgeHours = maxReadinessArtifactAgeHours,
+  } = {},
+) {
   const metadata = await stat(absolutePath);
   const ageMs = now.getTime() - metadata.mtime.getTime();
   if (ageMs < 0) {
     throw new Error(`${path.relative(repoRoot, absolutePath)} has a future mtime`);
   }
-  const maxAgeMs = maxBackupArtifactAgeHours * 60 * 60 * 1000;
+  const maxAgeMs = maxArtifactAgeHours * 60 * 60 * 1000;
   if (ageMs > maxAgeMs) {
+    if (!freshnessRequired) {
+      return undefined;
+    }
     throw new Error(
       `${path.relative(repoRoot, absolutePath)} is stale: ${formatAge(ageMs)} old`,
     );

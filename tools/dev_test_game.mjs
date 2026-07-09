@@ -216,18 +216,12 @@ export async function main(rawArgs = process.argv.slice(2), env = process.env) {
       : await verifySessionCard(card);
     card.verification = verification;
     await writeSessionArtifacts(card, sessionArtifacts);
+    const hostSetupProof = buildDevTestGameHostSetupProof(card, verification);
+    await writeFile(
+      hostSetupProofJsonPath,
+      `${JSON.stringify(hostSetupProof, null, 2)}\n`,
+    );
     if (args.verifyHostSetupOnly) {
-      const proof = {
-        proof: "dev-test-game-host-setup-proof",
-        status: "passed",
-        game: card.game,
-        generatedAt: new Date().toISOString(),
-        proofBoundary:
-          "Local dev-test-game host setup role URL browser proof over the seeded setup route plus a disposable setup game. Proves setup route rendering, policy round-trip, stale duplicate AddSlot rejection, setup refresh after reject, roster assignment, role assignment, and readiness recovery; it does not prove the full core loop, multiplayer hardening, hosted deployment, beta readiness, or production readiness.",
-        hostSetup: verification.hostSetup,
-        mediaResponseGuard: verification.mediaResponseGuard,
-      };
-      await writeFile(hostSetupProofJsonPath, `${JSON.stringify(proof, null, 2)}\n`);
       console.log(`\nverified host setup browser proof: ${path.relative(repoRoot, hostSetupProofJsonPath)}`);
     } else {
       const proofRun = buildDevTestGameProofRun(card);
@@ -243,6 +237,23 @@ export async function main(rawArgs = process.argv.slice(2), env = process.env) {
     console.log("\nKeeping the API and frontend alive. Press Ctrl-C to stop.");
     await new Promise(() => {});
   }
+}
+
+export function buildDevTestGameHostSetupProof(
+  card,
+  verification,
+  { generatedAt = new Date().toISOString() } = {},
+) {
+  return {
+    proof: "dev-test-game-host-setup-proof",
+    status: "passed",
+    game: card.game,
+    generatedAt,
+    proofBoundary:
+      "Local dev-test-game host setup role URL browser proof over the seeded setup route plus a disposable setup game. Proves setup route rendering, policy round-trip, stale duplicate AddSlot rejection, setup refresh after reject, roster assignment, role assignment, and readiness recovery; it does not prove the full core loop, multiplayer hardening, hosted deployment, beta readiness, or production readiness.",
+    hostSetup: verification.hostSetup,
+    mediaResponseGuard: verification.mediaResponseGuard,
+  };
 }
 
 if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
@@ -24153,6 +24164,10 @@ async function fetchHostConsoleState({ apiBaseUrl, game, slot, principalUserId =
 
 async function confirmHostAction(page, actionId, expectedState = "ack") {
   const actionRoot = page.getByTestId(`critical-host-action-${actionId}`);
+  const previousCommandStatus = await page.evaluate(
+    (expectedActionId) => window.__fmarchHostCommandStatuses?.[expectedActionId],
+    actionId,
+  );
   const trigger = actionRoot.getByTestId("critical-host-action-trigger");
   await trigger.waitFor({ state: "visible" });
   await trigger.click();
@@ -24163,7 +24178,11 @@ async function confirmHostAction(page, actionId, expectedState = "ack") {
   const confirmationMessage = await actionRoot
     .getByTestId("critical-host-action-confirmation-message")
     .innerText();
-  await clickCriticalHostActionConfirm(actionRoot, { actionId });
+  await clickCriticalHostActionConfirm(actionRoot, {
+    actionId,
+    expectedState,
+    previousCommandStatus,
+  });
 
   await page.waitForFunction(
     ({ expectedActionId, state }) =>
@@ -24261,22 +24280,21 @@ function buildProofStabilityAudit() {
 
 async function clickCriticalHostActionConfirm(
   actionRoot,
-  { actionId = "unknown", roleLabel = "host", timeoutMs = 10_000 } = {},
+  {
+    actionId = "unknown",
+    roleLabel = "host",
+    timeoutMs = 10_000,
+    expectedState,
+    previousCommandStatus,
+  } = {},
 ) {
   const confirm = actionRoot.getByTestId("critical-host-action-confirm");
   let lastError;
-  try {
-    await confirm.waitFor({ state: "visible", timeout: timeoutMs });
-  } catch (error) {
-    lastError = error;
-    await throwCriticalHostActionConfirmClickError(actionRoot, {
-      actionId,
-      roleLabel,
-      cause: lastError,
-    });
-  }
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
+      await ensureCriticalHostActionConfirmation(actionRoot, confirm, {
+        timeoutMs,
+      });
       await confirm.click({ timeout: 5_000 });
       recordCriticalHostActionConfirmClick({
         actionId,
@@ -24287,10 +24305,24 @@ async function clickCriticalHostActionConfirm(
       return;
     } catch (error) {
       lastError = error;
+      if (
+        await recoverSettledCriticalHostActionClick(actionRoot, {
+          actionId,
+          roleLabel,
+          expectedState,
+          previousCommandStatus,
+          attempts: attempt + 1,
+        })
+      ) {
+        return;
+      }
       await delay(100);
     }
   }
   try {
+    await ensureCriticalHostActionConfirmation(actionRoot, confirm, {
+      timeoutMs,
+    });
     await confirm.evaluate((node) => node.click());
     recordCriticalHostActionConfirmClick({
       actionId,
@@ -24303,6 +24335,9 @@ async function clickCriticalHostActionConfirm(
     lastError = error;
   }
   try {
+    await ensureCriticalHostActionConfirmation(actionRoot, confirm, {
+      timeoutMs,
+    });
     await confirm.click({ timeout: 5_000, force: true });
     recordCriticalHostActionConfirmClick({
       actionId,
@@ -24318,6 +24353,72 @@ async function clickCriticalHostActionConfirm(
       cause: lastError,
     });
   }
+}
+
+async function ensureCriticalHostActionConfirmation(
+  actionRoot,
+  confirm,
+  { timeoutMs },
+) {
+  if (await confirm.isVisible().catch(() => false)) {
+    return;
+  }
+  const trigger = actionRoot.getByTestId("critical-host-action-trigger");
+  await trigger.waitFor({ state: "visible", timeout: timeoutMs });
+  await trigger.click({ timeout: timeoutMs });
+  await confirm.waitFor({ state: "visible", timeout: timeoutMs });
+}
+
+async function recoverSettledCriticalHostActionClick(
+  actionRoot,
+  {
+    actionId,
+    roleLabel,
+    expectedState,
+    previousCommandStatus,
+    attempts,
+    timeoutMs = 5_000,
+  },
+) {
+  if (expectedState === undefined) {
+    return false;
+  }
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() <= deadline) {
+    const commandStatus = await actionRoot
+      .evaluate(
+        (_node, expectedActionId) =>
+          window.__fmarchHostCommandStatuses?.[expectedActionId],
+        actionId,
+      )
+      .catch(() => undefined);
+    if (
+      hostCommandStatusReachedExpectedState(commandStatus, {
+        expectedState,
+        previousCommandStatus,
+      })
+    ) {
+      recordCriticalHostActionConfirmClick({
+        actionId,
+        roleLabel,
+        method: "status-settled",
+        attempts,
+      });
+      return true;
+    }
+    await delay(50);
+  }
+  return false;
+}
+
+export function hostCommandStatusReachedExpectedState(
+  commandStatus,
+  { expectedState, previousCommandStatus },
+) {
+  return (
+    commandStatus?.state === expectedState &&
+    JSON.stringify(commandStatus) !== JSON.stringify(previousCommandStatus)
+  );
 }
 
 async function clickConcurrentCriticalHostActionConfirms(entries, { timeoutMs = 10_000 } = {}) {

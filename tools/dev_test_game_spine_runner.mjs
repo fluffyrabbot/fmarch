@@ -5,6 +5,9 @@ import { fileURLToPath } from "node:url";
 import {
   assertHostedIdentityProofGraphDependency,
 } from "./dev_test_game_hosted_identity_proof_graph_dependency.mjs";
+import {
+  readinessFreshnessScopeEnv,
+} from "./dev_test_game_readiness_freshness_scope.mjs";
 
 export const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 export const devTestGameNextActionScript = "tools/dev_test_game_next_action.mjs";
@@ -121,11 +124,11 @@ async function runSpinePlanStep(step, { custom }) {
   await runSpinePlanStepPreconditions(step.preconditions);
   const kind = step.kind ?? "node";
   if (kind === "node") {
-    await runNodeScript(step.script, { env: step.env });
+    await runNodeScript(step.script, { env: spinePlanStepEnv(step) });
     return;
   }
   if (kind === "npm") {
-    await runNpmScript(step.script, { env: step.env });
+    await runNpmScript(step.script, { env: spinePlanStepEnv(step) });
     return;
   }
   if (kind === "custom") {
@@ -137,6 +140,16 @@ async function runSpinePlanStep(step, { custom }) {
     return;
   }
   throw new Error(`unknown spine plan step kind: ${kind}`);
+}
+
+export function spinePlanStepEnv(step) {
+  if (step.readinessReason === undefined) {
+    return step.env;
+  }
+  return {
+    ...step.env,
+    ...readinessFreshnessScopeEnv(step.changedInputs, { root: repoRoot }),
+  };
 }
 
 async function runSpinePlanStepPreconditions(preconditions = []) {

@@ -125,6 +125,12 @@ import {
 import {
   spineManifestAdminProofCase,
 } from "./dev_test_game_spine_manifest_admin_proof.mjs";
+import {
+  releaseReadinessStep,
+} from "./dev_test_game_spine_readiness_steps.mjs";
+import {
+  runSpinePlan,
+} from "./dev_test_game_spine_runner.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const artifactDir = path.join(repoRoot, "target", "dev-test-game");
@@ -360,7 +366,12 @@ export async function runAdminSpineProof() {
     entries,
     batches,
   });
-  await runNodeScript("tools/dev_test_game_release_readiness.mjs");
+  await runSpinePlan([
+    releaseReadinessStep({
+      reason: "admin-spine-pre-release-admin-proof-batch",
+      changedInputs: preReleaseBatch.artifactPaths,
+    }),
+  ]);
   for (const batchPlan of releaseAndHostedBatches) {
     await runAdminSpineProofBatch({
       batchPlan,

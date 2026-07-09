@@ -1,9 +1,12 @@
 import assert from "node:assert/strict";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, utimes, writeFile } from "node:fs/promises";
+import path from "node:path";
 import { test } from "node:test";
 import {
   buildSessionCard,
+  buildDevTestGameHostSetupProof,
   createTokenSet,
+  hostCommandStatusReachedExpectedState,
   markdownSessionCard,
   parseArgs,
   seedCommandPlanForGame,
@@ -25,6 +28,8 @@ import {
   devTestGameIdentityAdapterSeedCommandKinds,
   hostedAdminHandoffProofReadinessDecision,
   markdownChecklist,
+  readOptionalReadinessArtifactDescriptor,
+  readReadinessArtifactMetadata,
   recoveryReceiptReleaseReadinessValidators,
   validateDevTestGameAdminSpineProof,
   validateDevTestGameAdminSpineTerminalBatches,
@@ -284,7 +289,13 @@ import {
   handoffPhaseSteps,
   phaseLocalNextActionStep,
   runSpinePlan,
+  spinePlanStepEnv,
 } from "./dev_test_game_spine_runner.mjs";
+import {
+  devTestGameReadinessFreshnessScopeEnvVar,
+  parseReadinessFreshnessScope,
+  readinessFreshnessScopeEnv,
+} from "./dev_test_game_readiness_freshness_scope.mjs";
 import {
   devTestGameHandoffPhaseOutputs,
   proofGraphHandoffPhaseOutputArtifactTestId,
@@ -534,6 +545,7 @@ import {
 } from "./dev_test_game_identity_feature_spine_targets.mjs";
 import {
   devTestGameHostSetupProofCommand,
+  devTestGameHostSetupProofPath,
   hostSetupFeatureSpineCycleId,
   hostSetupFeatureSpineTargetRows,
 } from "./dev_test_game_host_setup_feature_spine_targets.mjs";
@@ -1145,12 +1157,12 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
   );
   assert(
     hostedIdentityDefaultPaths.indexOf(
-      "devTestGameHostedIdentityOperatorAdminProofPath",
+      "defaultHostedIdentityEvidenceAdminProofPath,",
     ) <
       hostedIdentityDefaultPaths.indexOf(
-        "defaultHostedIdentityEvidenceAdminProofPath,",
+        "devTestGameHostedIdentityOperatorAdminProofPath",
       ),
-    "plain readiness regeneration should prefer the operator identity admin proof once it exists",
+    "plain readiness regeneration should prefer the standard identity admin proof and require explicit operator selection",
   );
   assert.equal(
     packageJson.scripts[
@@ -1734,6 +1746,7 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
       readinessReason: "core-live-gameplay-admin-surfaces",
       changedInputs: [
         "target/dev-test-game/proof-run.json",
+        devTestGameHostSetupProofPath,
         devTestGameCoreLoopAdminProofPath,
         ...recoveryReceiptProofTargets(coreLoopRecoveryReceiptSelector),
         devTestGameHardeningAdminProofPath,
@@ -2174,6 +2187,13 @@ function assertReleaseReadinessStepMetadata(plansByName) {
         new Set(step.changedInputs).size,
         step.changedInputs.length,
         `${name} readiness step ${step.readinessReason} repeats an input`,
+      );
+      assert.deepEqual(
+        JSON.parse(
+          spinePlanStepEnv(step)[devTestGameReadinessFreshnessScopeEnvVar],
+        ),
+        step.changedInputs,
+        `${name} readiness step ${step.readinessReason} freshness scope drifted`,
       );
       const changedInputs = step.changedInputs.join("\0");
       assert.notEqual(
@@ -8818,6 +8838,209 @@ test("phase-local next-action spine steps share one env contract", () => {
       }),
     /phase-local next-action spine step is missing an output path/,
   );
+});
+
+test("readiness runner scopes freshness to each plan step changed inputs", () => {
+  const changedInputs = [
+    devTestGameProofRunPath,
+    devTestGameCoreLoopAdminProofPath,
+  ];
+  const step = releaseReadinessStep({
+    reason: "test-core-scope",
+    changedInputs,
+    env: { FMARCH_TEST_SENTINEL: "preserved" },
+  });
+  const env = spinePlanStepEnv(step);
+  assert.equal(env.FMARCH_TEST_SENTINEL, "preserved");
+  assert.deepEqual(
+    parseReadinessFreshnessScope(
+      env[devTestGameReadinessFreshnessScopeEnvVar],
+    ),
+    new Set(changedInputs),
+  );
+  assert.deepEqual(readinessFreshnessScopeEnv(changedInputs), {
+    [devTestGameReadinessFreshnessScopeEnvVar]: JSON.stringify(changedInputs),
+  });
+  assert.equal(
+    spinePlanStepEnv({ kind: "node", script: "tools/example.mjs" }),
+    undefined,
+  );
+});
+
+test("readiness artifact loader skips stale siblings and rejects stale consumed inputs", async () => {
+  const directory = path.resolve(
+    "target/dev-test-game/readiness-freshness-scope-test",
+  );
+  const stalePath = path.join(directory, "stale-sibling.json");
+  const freshInputPath = path.join(directory, "fresh-input.json");
+  const now = new Date("2026-07-09T12:00:00.000Z");
+  const staleAt = new Date(now.getTime() - 48 * 60 * 60 * 1000);
+  await mkdir(directory, { recursive: true });
+  await writeFile(stalePath, '{"status":"passed"}\n');
+  await utimes(stalePath, staleAt, staleAt);
+  const descriptor = {
+    id: "testStaleSibling",
+    envVar: "FMARCH_TEST_STALE_SIBLING",
+    defaultPath: stalePath,
+    outputKeys: {
+      data: "testStaleSibling",
+      path: "testStaleSiblingPath",
+      freshnessMetadata: "testStaleSiblingArtifact",
+    },
+  };
+  const diagnosticDescriptor = {
+    ...descriptor,
+    id: "testStaleDiagnostic",
+    requiredForStandaloneReadiness: false,
+  };
+  const siblingScope = parseReadinessFreshnessScope(
+    readinessFreshnessScopeEnv([freshInputPath])[
+      devTestGameReadinessFreshnessScopeEnvVar
+    ],
+  );
+  const consumedScope = parseReadinessFreshnessScope(
+    readinessFreshnessScopeEnv([stalePath])[
+      devTestGameReadinessFreshnessScopeEnvVar
+    ],
+  );
+
+  try {
+    assert.equal(
+      await readOptionalReadinessArtifactDescriptor(descriptor, {
+        env: {},
+        freshnessScope: siblingScope,
+        now,
+      }),
+      undefined,
+    );
+    await assert.rejects(
+      () =>
+        readOptionalReadinessArtifactDescriptor(descriptor, {
+          env: {},
+          freshnessScope: consumedScope,
+          now,
+        }),
+      /stale-sibling\.json is stale: 48h 0m old/,
+    );
+    await assert.rejects(
+      () =>
+        readOptionalReadinessArtifactDescriptor(descriptor, {
+          env: { [descriptor.envVar]: stalePath },
+          freshnessScope: null,
+          now,
+        }),
+      /stale-sibling\.json is stale: 48h 0m old/,
+    );
+    assert.equal(
+      await readOptionalReadinessArtifactDescriptor(descriptor, {
+        env: { [descriptor.envVar]: stalePath },
+        freshnessScope: siblingScope,
+        now,
+      }),
+      undefined,
+    );
+    assert.equal(
+      await readReadinessArtifactMetadata(stalePath, {
+        now,
+        freshnessRequired: false,
+      }),
+      undefined,
+    );
+    assert.equal(
+      await readOptionalReadinessArtifactDescriptor(diagnosticDescriptor, {
+        env: {},
+        freshnessScope: null,
+        now,
+      }),
+      undefined,
+    );
+    await assert.rejects(
+      () =>
+        readOptionalReadinessArtifactDescriptor(diagnosticDescriptor, {
+          env: {},
+          freshnessScope: consumedScope,
+          now,
+        }),
+      /stale-sibling\.json is stale: 48h 0m old/,
+    );
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("host confirmation click recovery requires a newly settled expected status", () => {
+  const previousCommandStatus = {
+    state: "ack",
+    message: "Ack: stream seqs 70",
+  };
+  assert.equal(
+    hostCommandStatusReachedExpectedState(
+      { state: "ack", message: "Ack: stream seqs 71" },
+      { expectedState: "ack", previousCommandStatus },
+    ),
+    true,
+  );
+  assert.equal(
+    hostCommandStatusReachedExpectedState(previousCommandStatus, {
+      expectedState: "ack",
+      previousCommandStatus,
+    }),
+    false,
+  );
+  assert.equal(
+    hostCommandStatusReachedExpectedState(
+      { state: "pending", message: "Sending" },
+      { expectedState: "ack", previousCommandStatus },
+    ),
+    false,
+  );
+  assert.equal(
+    hostCommandStatusReachedExpectedState(
+      { state: "ack", message: "Ack: stream seqs 71" },
+      { expectedState: "reject", previousCommandStatus },
+    ),
+    false,
+  );
+});
+
+test("proof stability trace preserves drift when a higher-priority action is selected", () => {
+  const trace = buildProofStabilityTrace(
+    {
+      status: "drifted",
+      hostConfirmClicks: 79,
+      retryClickCount: 1,
+      domFallbackCount: 0,
+      forceFallbackCount: 0,
+      failureCount: 0,
+      maxAttempts: 2,
+      events: [{ method: "playwright-retry" }],
+    },
+    { selected: false },
+  );
+  assert.equal(trace.status, "drifted");
+  assert.equal(trace.selected, false);
+  assert.equal(trace.retryClickCount, 1);
+  assert.equal(trace.eventCount, 1);
+});
+
+test("full live verification promotes host setup evidence into its dedicated artifact", () => {
+  const hostSetup = { route: "/g/game-a/setup", status: "passed" };
+  const mediaResponseGuard = { status: "passed", unexpected404Count: 0 };
+  const proof = buildDevTestGameHostSetupProof(
+    { game: "game-a" },
+    { hostSetup, mediaResponseGuard },
+    { generatedAt: "2026-07-09T12:00:00.000Z" },
+  );
+  assert.deepEqual(proof, {
+    proof: "dev-test-game-host-setup-proof",
+    status: "passed",
+    game: "game-a",
+    generatedAt: "2026-07-09T12:00:00.000Z",
+    proofBoundary:
+      "Local dev-test-game host setup role URL browser proof over the seeded setup route plus a disposable setup game. Proves setup route rendering, policy round-trip, stale duplicate AddSlot rejection, setup refresh after reject, roster assignment, role assignment, and readiness recovery; it does not prove the full core loop, multiplayer hardening, hosted deployment, beta readiness, or production readiness.",
+    hostSetup,
+    mediaResponseGuard,
+  });
 });
 
 test("handoff phase spine steps require declared phase metadata and outputs", () => {
