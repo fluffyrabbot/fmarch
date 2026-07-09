@@ -5,7 +5,7 @@
 > [08-roadmap](../arch/08-roadmap.md) and the
 > [engine-port readiness baseline](engine-port-readiness-baseline-2026-06-18.md).
 >
-> Last updated **2026-07-08** — branch `sprint-b-withdraw-action`, base `main` @ `d573ac03`.
+> Last updated **2026-07-09** — `main` @ `a4d4a499`.
 > Visual version: <https://claude.ai/code/artifact/da80a9e8-3a15-4cd4-9ff0-ed549dbd206e>.
 
 The hard part is done: the resolution engine is at full im-human V4 parity on a proven
@@ -17,9 +17,9 @@ event-sourcing spine. The remaining work is almost entirely **product breadth** 
 | Metric | Value | Notes |
 |---|---|---|
 | Engine parity | **192/192** | port checklist complete; 8/8 build-order phases; parity matrix has no unsupported rows |
-| Proof surface | **119** | `npm` test lanes; 347 tools |
-| In flight | **10** | commits unpushed on the branch |
-| Remaining | **5 tiers** | 17 to finish + 1 optional |
+| Proof surface | **119** | `npm` test lanes; 377 files under `tools/` |
+| In flight | **0** | local `main` matches `origin/main` |
+| Remaining | **5 tiers** | 12 to finish + 1 optional |
 
 ## What we have (shipped & proven)
 
@@ -44,11 +44,11 @@ if needed).
 
 *Gate: everything downstream assumes `main` is the source of truth. Do this first.*
 
-- [ ] **0.1 Push & integrate `sprint-b-withdraw-action`.** `[Open]` Ten atomic commits
-  — the withdraw/current-action feature plus four refactors (hermetic cargo test,
-  single-sourced proof counts, `day_vote_outcome` audit, collation-safe ordering) — sit
-  unpushed. Decide push/PR, then fast-forward `main`. *Blocks a clean baseline for all
-  later work.*
+- [x] **0.1 Push & integrate `sprint-b-withdraw-action`.** `[Landed]` The ten atomic
+  commits are now on `main` through `a4d4a499`: the withdraw/current-action feature,
+  hermetic cargo-test tiering, single-sourced proof scenarios, the `day_vote_outcome`
+  audit, collation-safe ordering, stale-reference oracle corrections, and advisory-lock
+  pool fixes. `main` and `origin/main` are aligned.
 - [x] **0.2 Proof-infra manifest refactor (Sprint B "Task F").** `[Landed — generator side]`
   Command-scenario definitions promoted to one rich manifest
   (`tools/frontend_proof_scenarios.mjs`); both interaction generators and the
@@ -148,15 +148,15 @@ lifecycle are the biggest slice→launch gaps.*
 
 ## Provenance — how each row was established
 
-- **Code-verified (2026-07-08):** branch/remote state (10 commits, no upstream), port
+- **Code-verified (2026-07-09):** local and remote `main` aligned at `a4d4a499`, port
   checklist 192/192, parity-matrix gaps, the absent media pipeline (no blob crate; zero
   upload/transcode in `crates/*/src`), the missing forum/register/profile routes, and all
-  counts (packs, migrations, 119 test lanes, 347 tools).
+  counts (packs, migrations, 119 test lanes, 377 files under `tools/`).
 - **Reproduced & resolved on Postgres (2026-07-08):** 1.1 and 1.2 — both reproduced
   against the live dev DB, root-caused as stale-reference test bugs (live == rebuild in
   both), and fixed test-side; `replay_audit_and_rebuild_deterministically` re-run green
   (12/12).
-- **Reported from prior Postgres / Chromium sessions** (re-confirm on the current branch
-  before acting): the remaining Tier 1 test reds (1.3) and the Task F queue. No full
-  Rust/Postgres or browser suite was run when this snapshot was taken, so those statuses
-  are as last observed, not freshly reproduced.
+- **Re-verified on current `main` (2026-07-09):** the full frontend role-proof chain is
+  green (29/29 artifact checks); the no-bind Chromium render smoke is green; both corrected
+  rebuild tests, the concurrent advisory-lock race, and the ignored large-action-graph CLI
+  pass/fail contract are green against the repo-local Postgres.
