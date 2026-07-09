@@ -5,7 +5,7 @@
 > [08-roadmap](../arch/08-roadmap.md) and the
 > [engine-port readiness baseline](engine-port-readiness-baseline-2026-06-18.md).
 >
-> Last updated **2026-07-09** — `main` @ `9dfe7bcf`.
+> Last updated **2026-07-09** — `main` @ `c9d47fe0`.
 > Visual version: <https://claude.ai/code/artifact/da80a9e8-3a15-4cd4-9ff0-ed549dbd206e>.
 
 The hard part is done: the resolution engine is at full im-human V4 parity on a proven
@@ -17,9 +17,9 @@ event-sourcing spine. The remaining work is almost entirely **product breadth** 
 | Metric | Value | Notes |
 |---|---|---|
 | Engine parity | **192/192** | port checklist complete; 8/8 build-order phases; parity matrix has no unsupported rows |
-| Proof surface | **119** | `npm` test lanes; 378 files under `tools/` |
+| Proof surface | **124** | dev-test-game proof lanes; 379 files under `tools/` |
 | In flight | **0** | local `main` matches `origin/main` |
-| Remaining | **5 tiers** | 10 to finish + 1 optional |
+| Remaining | **5 tiers** | 9 to finish + 1 optional |
 
 ## What we have (shipped & proven)
 
@@ -32,7 +32,7 @@ event-sourcing spine. The remaining work is almost entirely **product breadth** 
 | Wire protocol | CBOR over WebSocket, explicitly versioned; TS types generated from the Rust `wire` crate | ~53 domain events |
 | Player & host surfaces | Board, private channel, touch-first host console, admin audit, setup, login | Ballot & Lantern design program 5/5 |
 | Gameplay gaps T1–T3 | Role card, night-action target picker (+withdraw), reveal-gated endgame summary | T1 · T2 · T3 landed |
-| Proof harness | Live-stack browser smokes, operator replay, hermetic `cargo test`, frontend role proof | 119 lanes · 378 tools |
+| Proof harness | Live-stack browser smokes, operator replay, hermetic `cargo test`, frontend role proof | 124 lanes · 379 tools |
 
 ## What's left (dependency-ordered)
 
@@ -109,9 +109,12 @@ if needed).
 
 *Gate: cheap wins that build directly on shipped T1–T3 and the engine.*
 
-- [ ] **2.1 Endgame summary in live resync / refresh keys.** `[Partial]` Wired for cold
-  load only; add it to the deep-equal refresh-key arrays so it survives live resync and
-  hydrated refresh across lanes.
+- [x] **2.1 Endgame summary in live resync / refresh keys.** `[Landed]` The player
+  projection store now owns `endgameSummary` across cold load, live resync, and completed
+  command recovery. A seeded player role URL proves the reveal after a stale
+  `GameAlreadyCompleted` vote, an explicit resync from sequence zero, and a full reload;
+  completed private-channel receipts expose the same reconciled refresh plan. The named
+  `stale-player-complete-endgame-resync` hardening lane keeps this boundary addressable.
 - [ ] **2.2 Vote history in the reveal table.** `[Open]` Reveal shows winner + full slot
   roles; per-day vote history is still deferred. Fold it into the reveal-gated endgame
   projection and table.
@@ -155,10 +158,15 @@ lifecycle are the biggest slice→launch gaps.*
 
 ## Provenance — how each row was established
 
-- **Code-verified (2026-07-09):** local and remote `main` aligned at `9dfe7bcf`, port
+- **Endgame resync recovery (2026-07-09):** `test:dev-test-game-core-live` passed against
+  local Postgres and rewrote the proof set at 124/124 lanes. The saved browser evidence
+  covers completed summary reveal after stale-command refresh, explicit sequence-zero
+  resync, and reload; frontend, harness, proof, and readiness contracts are green.
+  Release readiness remains `not_ready`, with release and production claims false.
+- **Code-verified (2026-07-09):** local and remote `main` aligned at `c9d47fe0`, port
   checklist 192/192, parity-matrix gaps, the absent media pipeline (no blob crate; zero
   upload/transcode in `crates/*/src`), the missing forum/register/profile routes, and all
-  counts (packs, migrations, 119 test lanes, 378 files under `tools/`).
+  counts (packs, migrations, 124 proof lanes, 379 files under `tools/`).
 - **Readiness freshness remediation (2026-07-09):** the core-live and full-live local
   spines completed against Postgres; the proof contract validated 123 lanes; the harness
   contract suite passed 63/63 and the admin route model passed 99/99. Standalone readiness
