@@ -37,6 +37,7 @@ use sqlx::{pool::PoolConnection, postgres::PgPool, Postgres, Row};
 use uuid::Uuid;
 
 mod model;
+pub mod operator_process;
 pub mod operator_proof;
 pub use model::{
     Ack, Command, HostPromptDecision, Reject, ThreadPostMedia, ThreadPostMediaVariant, VoteTarget,

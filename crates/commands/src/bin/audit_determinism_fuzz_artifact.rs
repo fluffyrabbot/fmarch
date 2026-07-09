@@ -1,6 +1,9 @@
-use std::{env, fs, io::Write, path::PathBuf, process::Command as ProcessCommand, time::Instant};
+use std::{env, fs, io::Write, path::PathBuf, process::Command as ProcessCommand, time::Duration};
 
-use commands::operator_proof::build_operator_determinism_fuzz_report;
+use commands::{
+    operator_process::{run_bounded_process, ProcessLimits},
+    operator_proof::build_operator_determinism_fuzz_report,
+};
 
 const DEFAULT_TEST_FILTER: &str = "replay_audit_and_rebuild_deterministically";
 
@@ -23,23 +26,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "DATABASE_URL={} cargo test -p commands --test pipeline {} -- --nocapture",
         database_url, args.test_filter
     );
-    let started = Instant::now();
-    let output = ProcessCommand::new("cargo")
-        .env("DATABASE_URL", database_url)
-        .args([
-            "test",
-            "-p",
-            "commands",
-            "--test",
-            "pipeline",
-            args.test_filter.as_str(),
-            "--",
-            "--nocapture",
-        ])
-        .output()?;
-    let elapsed_ms = started.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
+    let output = run_bounded_process(
+        ProcessCommand::new("cargo")
+            .env("DATABASE_URL", database_url)
+            .args([
+                "test",
+                "-p",
+                "commands",
+                "--test",
+                "pipeline",
+                args.test_filter.as_str(),
+                "--",
+                "--nocapture",
+            ]),
+        ProcessLimits::new(Duration::from_secs(15 * 60), 1024 * 1024, 1024 * 1024),
+    )?;
+    let elapsed_ms = output.elapsed.as_millis().try_into().unwrap_or(u64::MAX);
+    let stdout = String::from_utf8_lossy(&output.stdout.bytes);
+    let stderr = String::from_utf8_lossy(&output.stderr.bytes);
     let combined = format!("{stdout}\n{stderr}");
     let report = build_operator_determinism_fuzz_report(
         artifact_path,

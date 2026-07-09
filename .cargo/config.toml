@@ -1,0 +1,4 @@
+[env]
+# SQLx integration tests share a hardcoded 20-connection parent pool. Four
+# workers preserve parallel proof while allowing each test its five-slot pool.
+RUST_TEST_THREADS = { value = "4", force = false }

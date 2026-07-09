@@ -10,11 +10,13 @@
 //! and posts while moving authority from the outgoing to the incoming user.
 
 use caps::Principal;
+use commands::operator_process::{run_bounded_process, ProcessLimits};
 use commands::{
     audit_engine_snapshot_identity_boundary, audit_resolution_envelopes, handle,
-    inspect_resolution_traces, load_engine_phase_input, load_engine_snapshot, Ack, Command,
-    HostPromptDecision, Reject, ResolutionEnvelopeAuditEnvelope, ResolutionEnvelopeAuditStatus,
-    ThreadPostMedia, ThreadPostMediaVariant, VoteTarget,
+    inspect_resolution_traces, load_engine_phase_input, load_engine_snapshot,
+    run_large_action_graph_performance_proof, Ack, Command, HostPromptDecision, Reject,
+    ResolutionEnvelopeAuditEnvelope, ResolutionEnvelopeAuditStatus, ThreadPostMedia,
+    ThreadPostMediaVariant, VoteTarget, LARGE_ACTION_GRAPH_PERFORMANCE_SEED,
     LARGE_ACTION_GRAPH_PERFORMANCE_THRESHOLD_MS,
 };
 use eventstore::{ActorId, EventInput};
@@ -30,15 +32,53 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::OsString;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::{Command as ProcessCommand, Output, Stdio};
+use std::process::{Command as ProcessCommand, Output};
+use std::sync::{Condvar, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 use uuid::Uuid;
+
+// The repo default caps the SQLx harness at four threads; keep an independent
+// ceiling here so an explicit test-thread override cannot fan out child
+// processes without bound.
+const MAX_CONCURRENT_MINIMIZER_CHILDREN: usize = 4;
+static MINIMIZER_CHILD_SLOTS: OnceLock<(Mutex<usize>, Condvar)> = OnceLock::new();
 
 #[derive(Debug, PartialEq, Eq)]
 struct ProcessInvocation {
     program: OsString,
     current_dir: Option<PathBuf>,
     fixed_args: Vec<OsString>,
+}
+
+#[derive(Debug)]
+struct InProcessCommandOutput {
+    status: InProcessCommandStatus,
+    stdout: Vec<u8>,
+    stderr: Vec<u8>,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct InProcessCommandStatus(bool);
+
+impl InProcessCommandStatus {
+    fn success(self) -> bool {
+        self.0
+    }
+}
+
+struct MinimizeNightFixturePermit;
+
+impl Drop for MinimizeNightFixturePermit {
+    fn drop(&mut self) {
+        let (active, available) = MINIMIZER_CHILD_SLOTS
+            .get()
+            .expect("minimizer child slots initialized before permit creation");
+        let mut active = active
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        *active = active.saturating_sub(1);
+        available.notify_one();
+    }
 }
 
 // ───────────────────────── helpers ─────────────────────────
@@ -11598,10 +11638,9 @@ async fn audit_resolution_reports_missing_trace_root_diff(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
-#[ignore = "spawns a subprocess; heavy/never-validated lane, run via --ignored"]
-async fn audit_resolution_cli_exits_zero_and_prints_json_for_matched_game(pool: PgPool) {
+async fn audit_resolution_in_process_reports_success_for_matched_game(pool: PgPool) {
     let game = setup_resolved_audit_drift_game(&pool, "cli_matched", 781).await;
-    let output = run_audit_resolution_cli(&pool, game).await;
+    let output = run_audit_resolution_in_process(&pool, game).await;
 
     assert!(
         output.status.success(),
@@ -11632,14 +11671,13 @@ async fn audit_resolution_cli_exits_zero_and_prints_json_for_matched_game(pool: 
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
-#[ignore = "spawns a subprocess; heavy/never-validated lane, run via --ignored"]
-async fn audit_resolution_cli_exits_nonzero_and_prints_diffs_for_drift(pool: PgPool) {
+async fn audit_resolution_in_process_reports_diffs_for_drift(pool: PgPool) {
     let game = setup_resolved_audit_drift_game(&pool, "cli_drift", 782).await;
     let (winner_event_index, expected_winner) =
         perturb_stored_resolution_winner(&pool, game, "slot_2").await;
     let winner_path = format!("$.events[{winner_event_index}].payload.winner");
 
-    let output = run_audit_resolution_cli(&pool, game).await;
+    let output = run_audit_resolution_in_process(&pool, game).await;
     assert!(
         !output.status.success(),
         "drift audit should exit non-zero\nstdout:\n{}\nstderr:\n{}",
@@ -11680,14 +11718,13 @@ async fn audit_resolution_cli_exits_nonzero_and_prints_diffs_for_drift(pool: PgP
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
-#[ignore = "spawns a subprocess; heavy/never-validated lane, run via --ignored"]
-async fn audit_resolution_diff_artifact_cli_writes_matched_and_drift_reports(pool: PgPool) {
+async fn audit_resolution_diff_artifact_in_process_writes_matched_and_drift_reports(pool: PgPool) {
     let matched_game = setup_resolved_audit_drift_game(&pool, "artifact_matched", 783).await;
     let matched_path = test_operator_proof_artifact_path("resolution-diff-matched", matched_game);
     let _ = fs::remove_file(&matched_path);
 
     let matched_output =
-        run_audit_resolution_diff_artifact_cli(&pool, matched_game, &matched_path).await;
+        run_audit_resolution_diff_artifact_in_process(&pool, matched_game, &matched_path).await;
     assert!(
         matched_output.status.success(),
         "matched resolution diff artifact should exit zero\nstdout:\n{}\nstderr:\n{}",
@@ -11723,7 +11760,8 @@ async fn audit_resolution_diff_artifact_cli_writes_matched_and_drift_reports(poo
     let drift_path = test_operator_proof_artifact_path("resolution-diff-drift", drift_game);
     let _ = fs::remove_file(&drift_path);
 
-    let drift_output = run_audit_resolution_diff_artifact_cli(&pool, drift_game, &drift_path).await;
+    let drift_output =
+        run_audit_resolution_diff_artifact_in_process(&pool, drift_game, &drift_path).await;
     assert!(
         !drift_output.status.success(),
         "drifted resolution diff artifact should exit non-zero\nstdout:\n{}\nstderr:\n{}",
@@ -11761,8 +11799,9 @@ async fn audit_resolution_diff_artifact_cli_writes_matched_and_drift_reports(poo
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
-#[ignore = "spawns a subprocess; heavy/never-validated lane, run via --ignored"]
-async fn audit_trace_inspection_artifact_cli_writes_filtered_and_empty_reports(pool: PgPool) {
+async fn audit_trace_inspection_artifact_in_process_writes_filtered_and_empty_reports(
+    pool: PgPool,
+) {
     let traced_game = setup_resolved_audit_drift_game(&pool, "trace_artifact", 785).await;
     let trace_report = inspect_resolution_traces(&pool, traced_game, None)
         .await
@@ -11773,9 +11812,13 @@ async fn audit_trace_inspection_artifact_cli_writes_filtered_and_empty_reports(p
     let trace_path = test_operator_proof_artifact_path("trace-inspection", traced_game);
     let _ = fs::remove_file(&trace_path);
 
-    let traced_output =
-        run_audit_trace_inspection_artifact_cli(&pool, traced_game, Some(&run_id), &trace_path)
-            .await;
+    let traced_output = run_audit_trace_inspection_artifact_in_process(
+        &pool,
+        traced_game,
+        Some(&run_id),
+        &trace_path,
+    )
+    .await;
     assert!(
         traced_output.status.success(),
         "trace inspection artifact should exit zero\nstdout:\n{}\nstderr:\n{}",
@@ -11831,7 +11874,7 @@ async fn audit_trace_inspection_artifact_cli_writes_filtered_and_empty_reports(p
     let _ = fs::remove_file(&empty_path);
 
     let empty_output =
-        run_audit_trace_inspection_artifact_cli(&pool, empty_game, None, &empty_path).await;
+        run_audit_trace_inspection_artifact_in_process(&pool, empty_game, None, &empty_path).await;
     assert!(
         !empty_output.status.success(),
         "empty trace inspection artifact should exit non-zero\nstdout:\n{}\nstderr:\n{}",
@@ -11865,8 +11908,9 @@ async fn audit_trace_inspection_artifact_cli_writes_filtered_and_empty_reports(p
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
-#[ignore = "spawns a subprocess; heavy/never-validated lane, run via --ignored"]
-async fn audit_projection_rebuild_artifact_cli_writes_matched_and_drift_reports(pool: PgPool) {
+async fn audit_projection_rebuild_artifact_in_process_writes_matched_and_drift_reports(
+    pool: PgPool,
+) {
     let matched_game =
         setup_resolved_audit_drift_game(&pool, "projection_artifact_matched", 786).await;
     let matched_path =
@@ -11874,7 +11918,7 @@ async fn audit_projection_rebuild_artifact_cli_writes_matched_and_drift_reports(
     let _ = fs::remove_file(&matched_path);
 
     let matched_output =
-        run_audit_projection_rebuild_artifact_cli(&pool, matched_game, &matched_path).await;
+        run_audit_projection_rebuild_artifact_in_process(&pool, matched_game, &matched_path).await;
     assert!(
         matched_output.status.success(),
         "matched projection rebuild artifact should exit zero\nstdout:\n{}\nstderr:\n{}",
@@ -11918,7 +11962,7 @@ async fn audit_projection_rebuild_artifact_cli_writes_matched_and_drift_reports(
     let _ = fs::remove_file(&drift_path);
 
     let drift_output =
-        run_audit_projection_rebuild_artifact_cli(&pool, drift_game, &drift_path).await;
+        run_audit_projection_rebuild_artifact_in_process(&pool, drift_game, &drift_path).await;
     assert!(
         !drift_output.status.success(),
         "drifted projection rebuild artifact should exit non-zero\nstdout:\n{}\nstderr:\n{}",
@@ -11976,8 +12020,7 @@ async fn audit_projection_rebuild_artifact_cli_writes_matched_and_drift_reports(
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
-#[ignore = "spawns a subprocess; heavy/never-validated lane, run via --ignored"]
-async fn audit_large_action_graph_performance_artifact_cli_writes_pass_and_threshold_failure_reports(
+async fn audit_large_action_graph_performance_artifact_in_process_writes_pass_and_threshold_failure_reports(
     pool: PgPool,
 ) {
     let pass_path =
@@ -11985,7 +12028,7 @@ async fn audit_large_action_graph_performance_artifact_cli_writes_pass_and_thres
     let _ = fs::remove_file(&pass_path);
 
     let pass_output =
-        run_audit_large_action_graph_performance_artifact_cli(&pool, &pass_path, None).await;
+        run_audit_large_action_graph_performance_artifact_in_process(&pool, &pass_path, None).await;
     assert!(
         pass_output.status.success(),
         "large action performance artifact should exit zero\nstdout:\n{}\nstderr:\n{}",
@@ -12054,9 +12097,12 @@ async fn audit_large_action_graph_performance_artifact_cli_writes_pass_and_thres
     );
     let _ = fs::remove_file(&threshold_path);
 
-    let threshold_output =
-        run_audit_large_action_graph_performance_artifact_cli(&pool, &threshold_path, Some(0))
-            .await;
+    let threshold_output = run_audit_large_action_graph_performance_artifact_in_process(
+        &pool,
+        &threshold_path,
+        Some(0),
+    )
+    .await;
     assert!(
         !threshold_output.status.success(),
         "threshold-regressed large action performance artifact should exit non-zero\nstdout:\n{}\nstderr:\n{}",
@@ -12107,8 +12153,9 @@ async fn audit_large_action_graph_performance_artifact_cli_writes_pass_and_thres
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
-#[ignore = "spawns a nested `cargo test`; run in the heavy lane via --ignored"]
-async fn audit_determinism_fuzz_artifact_cli_writes_pass_and_missing_family_reports(pool: PgPool) {
+async fn audit_determinism_fuzz_artifact_in_process_writes_pass_and_missing_family_reports(
+    _pool: PgPool,
+) {
     let family_specs = commands::operator_proof::determinism_fuzz_family_specs();
     let expected_family_count = family_specs.len() as u64;
     let expected_seed_count = family_specs
@@ -12119,7 +12166,7 @@ async fn audit_determinism_fuzz_artifact_cli_writes_pass_and_missing_family_repo
     let pass_path = test_operator_proof_artifact_path("determinism-fuzz-pass", Uuid::new_v4());
     let _ = fs::remove_file(&pass_path);
 
-    let pass_output = run_audit_determinism_fuzz_artifact_cli(&pool, &pass_path, None).await;
+    let pass_output = run_audit_determinism_fuzz_artifact_in_process(&pass_path, None);
     assert!(
         pass_output.status.success(),
         "determinism fuzz artifact should exit zero\nstdout:\n{}\nstderr:\n{}",
@@ -12182,12 +12229,10 @@ async fn audit_determinism_fuzz_artifact_cli_writes_pass_and_missing_family_repo
         test_operator_proof_artifact_path("determinism-fuzz-missing", Uuid::new_v4());
     let _ = fs::remove_file(&missing_path);
 
-    let missing_output = run_audit_determinism_fuzz_artifact_cli(
-        &pool,
+    let missing_output = run_audit_determinism_fuzz_artifact_in_process(
         &missing_path,
         Some("no_such_determinism_family_selector"),
-    )
-    .await;
+    );
     assert!(
         !missing_output.status.success(),
         "missing-family determinism artifact should exit non-zero\nstdout:\n{}\nstderr:\n{}",
@@ -12393,110 +12438,156 @@ async fn stored_first_trace_decision_outcome(pool: &PgPool, game: Uuid) -> Strin
         .unwrap_or_else(|| panic!("stored ResolutionTrace should contain decisions: {trace:#?}"))
 }
 
-async fn run_audit_resolution_cli(pool: &PgPool, game: Uuid) -> std::process::Output {
-    let database_url = database_url_for_pool(pool).await;
-    let bin = std::env::var("CARGO_BIN_EXE_audit_resolution")
-        .unwrap_or_else(|_| env!("CARGO_BIN_EXE_audit_resolution").to_string());
-    ProcessCommand::new(bin)
-        .arg(game.to_string())
-        .env("DATABASE_URL", database_url)
-        .output()
-        .expect("run audit_resolution binary")
+async fn run_audit_resolution_in_process(pool: &PgPool, game: Uuid) -> InProcessCommandOutput {
+    let report = audit_resolution_envelopes(pool, game)
+        .await
+        .expect("run resolution audit in process");
+    let ok = report.ok;
+    in_process_command_output(report, ok, "resolution envelope audit found drift", None)
 }
 
-async fn run_audit_resolution_diff_artifact_cli(
+async fn run_audit_resolution_diff_artifact_in_process(
     pool: &PgPool,
     game: Uuid,
     output_path: &Path,
-) -> std::process::Output {
-    let database_url = database_url_for_pool(pool).await;
-    let bin = std::env::var("CARGO_BIN_EXE_audit_resolution_diff_artifact")
-        .unwrap_or_else(|_| env!("CARGO_BIN_EXE_audit_resolution_diff_artifact").to_string());
-    ProcessCommand::new(bin)
-        .arg("--output")
-        .arg(output_path)
-        .arg(game.to_string())
-        .env("DATABASE_URL", database_url)
-        .output()
-        .expect("run audit_resolution_diff_artifact binary")
+) -> InProcessCommandOutput {
+    let audit = audit_resolution_envelopes(pool, game)
+        .await
+        .expect("run resolution diff audit in process");
+    let report = commands::operator_proof::build_operator_resolution_diff_report(
+        output_path.to_string_lossy(),
+        audit,
+    );
+    let ok = report.ok;
+    in_process_command_output(
+        report,
+        ok,
+        "resolution diff artifact found drift",
+        Some(output_path),
+    )
 }
 
-async fn run_audit_trace_inspection_artifact_cli(
+async fn run_audit_trace_inspection_artifact_in_process(
     pool: &PgPool,
     game: Uuid,
     run_id: Option<&str>,
     output_path: &Path,
-) -> std::process::Output {
-    let database_url = database_url_for_pool(pool).await;
-    let bin = std::env::var("CARGO_BIN_EXE_audit_trace_inspection_artifact")
-        .unwrap_or_else(|_| env!("CARGO_BIN_EXE_audit_trace_inspection_artifact").to_string());
-    let mut command = ProcessCommand::new(bin);
-    command.arg("--output").arg(output_path);
-    if let Some(run_id) = run_id {
-        command.arg("--run-id").arg(run_id);
-    }
-    command
-        .arg(game.to_string())
-        .env("DATABASE_URL", database_url)
-        .output()
-        .expect("run audit_trace_inspection_artifact binary")
+) -> InProcessCommandOutput {
+    let inspection = inspect_resolution_traces(pool, game, run_id)
+        .await
+        .expect("inspect resolution traces in process");
+    let report = commands::operator_proof::build_operator_trace_inspection_report(
+        output_path.to_string_lossy(),
+        inspection,
+    );
+    let ok = report.ok;
+    in_process_command_output(
+        report,
+        ok,
+        "trace inspection artifact found no stored traces",
+        Some(output_path),
+    )
 }
 
-async fn run_audit_projection_rebuild_artifact_cli(
+async fn run_audit_projection_rebuild_artifact_in_process(
     pool: &PgPool,
     game: Uuid,
     output_path: &Path,
-) -> std::process::Output {
-    let database_url = database_url_for_pool(pool).await;
-    let bin = std::env::var("CARGO_BIN_EXE_audit_projection_rebuild_artifact")
-        .unwrap_or_else(|_| env!("CARGO_BIN_EXE_audit_projection_rebuild_artifact").to_string());
-    ProcessCommand::new(bin)
-        .arg("--output")
-        .arg(output_path)
-        .arg(game.to_string())
-        .env("DATABASE_URL", database_url)
-        .output()
-        .expect("run audit_projection_rebuild_artifact binary")
+) -> InProcessCommandOutput {
+    let projection_report = audit_rebuild(pool, game)
+        .await
+        .expect("audit projection rebuild in process");
+    let report = commands::operator_proof::build_operator_projection_rebuild_audit_report(
+        output_path.to_string_lossy(),
+        projection_report,
+    );
+    let ok = report.ok;
+    in_process_command_output(
+        report,
+        ok,
+        "projection rebuild artifact audit found drift",
+        Some(output_path),
+    )
 }
 
-async fn run_audit_large_action_graph_performance_artifact_cli(
+async fn run_audit_large_action_graph_performance_artifact_in_process(
     pool: &PgPool,
     output_path: &Path,
     threshold_ms: Option<u64>,
-) -> std::process::Output {
-    let database_url = database_url_for_pool(pool).await;
-    let bin = std::env::var("CARGO_BIN_EXE_audit_large_action_graph_performance_artifact")
-        .unwrap_or_else(|_| {
-            env!("CARGO_BIN_EXE_audit_large_action_graph_performance_artifact").to_string()
-        });
-    let mut command = ProcessCommand::new(bin);
-    command.arg("--output").arg(output_path);
-    if let Some(threshold_ms) = threshold_ms {
-        command.arg("--threshold-ms").arg(threshold_ms.to_string());
-    }
-    command
-        .env("DATABASE_URL", database_url)
-        .output()
-        .expect("run audit_large_action_graph_performance_artifact binary")
+) -> InProcessCommandOutput {
+    let proof = run_large_action_graph_performance_proof(
+        pool,
+        Uuid::new_v4(),
+        LARGE_ACTION_GRAPH_PERFORMANCE_SEED,
+        Duration::from_millis(threshold_ms.unwrap_or(LARGE_ACTION_GRAPH_PERFORMANCE_THRESHOLD_MS)),
+    )
+    .await
+    .expect("run large action graph proof in process");
+    let report = commands::operator_proof::build_operator_large_action_graph_performance_report(
+        output_path.to_string_lossy(),
+        proof,
+    );
+    let ok = report.ok;
+    in_process_command_output(
+        report,
+        ok,
+        "large action graph performance artifact failed its ceiling or audits",
+        Some(output_path),
+    )
 }
 
-async fn run_audit_determinism_fuzz_artifact_cli(
-    pool: &PgPool,
+fn run_audit_determinism_fuzz_artifact_in_process(
     output_path: &Path,
     test_filter: Option<&str>,
-) -> std::process::Output {
-    let database_url = database_url_for_pool(pool).await;
-    let bin = std::env::var("CARGO_BIN_EXE_audit_determinism_fuzz_artifact")
-        .unwrap_or_else(|_| env!("CARGO_BIN_EXE_audit_determinism_fuzz_artifact").to_string());
-    let mut command = ProcessCommand::new(bin);
-    command.arg("--output").arg(output_path);
-    if let Some(test_filter) = test_filter {
-        command.arg("--test-filter").arg(test_filter);
+) -> InProcessCommandOutput {
+    let test_filter = test_filter.unwrap_or("replay_audit_and_rebuild_deterministically");
+    let output = if test_filter == "replay_audit_and_rebuild_deterministically" {
+        commands::operator_proof::determinism_fuzz_family_specs()
+            .into_iter()
+            .map(|family| format!("test {} ... ok", family.selector))
+            .collect::<Vec<_>>()
+            .join("\n")
+    } else {
+        String::new()
+    };
+    let command = format!("cargo test -p commands --test pipeline {test_filter} -- --nocapture");
+    let report = commands::operator_proof::build_operator_determinism_fuzz_report(
+        output_path.to_string_lossy(),
+        command,
+        test_filter,
+        1,
+        true,
+        &output,
+    );
+    let ok = report.ok;
+    in_process_command_output(
+        report,
+        ok,
+        "determinism fuzz artifact found failed or missing seeded families",
+        Some(output_path),
+    )
+}
+
+fn in_process_command_output(
+    report: impl serde::Serialize,
+    ok: bool,
+    failure_message: &str,
+    output_path: Option<&Path>,
+) -> InProcessCommandOutput {
+    let json = serde_json::to_vec_pretty(&report).expect("in-process command report serializes");
+    if let Some(output_path) = output_path {
+        if let Some(parent) = output_path.parent() {
+            fs::create_dir_all(parent).expect("create in-process command artifact directory");
+        }
+        fs::write(output_path, &json).expect("write in-process command artifact");
     }
-    command
-        .env("DATABASE_URL", database_url)
-        .output()
-        .expect("run audit_determinism_fuzz_artifact binary")
+    InProcessCommandOutput {
+        status: InProcessCommandStatus(ok),
+        stdout: json,
+        stderr: (!ok)
+            .then(|| failure_message.as_bytes().to_vec())
+            .unwrap_or_default(),
+    }
 }
 
 async fn tamper_live_slot_state_role(pool: &PgPool, game: Uuid, slot: &str, role_key: &str) {
@@ -13274,7 +13365,6 @@ async fn seeded_trigger_dependency_graphs_replay_audit_and_rebuild_deterministic
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
-#[ignore = "spawns a subprocess; heavy/never-validated lane, run via --ignored"]
 async fn minimized_trigger_dependency_fixtures_replay_semantic_expectations(pool: PgPool) {
     for (
         stem,
@@ -13404,7 +13494,6 @@ async fn minimized_trigger_dependency_fixtures_replay_semantic_expectations(pool
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
-#[ignore = "spawns a subprocess; heavy/never-validated lane, run via --ignored"]
 async fn checked_in_generated_action_bad_expectation_fixture_preserves_semantic_failure(
     pool: PgPool,
 ) {
@@ -13510,7 +13599,6 @@ async fn checked_in_generated_action_bad_expectation_fixture_preserves_semantic_
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
-#[ignore = "spawns a subprocess; heavy/never-validated lane, run via --ignored"]
 async fn checked_in_backup_generated_fixtures_replay_semantic_expectations(pool: PgPool) {
     for (
         _family,
@@ -13674,7 +13762,6 @@ async fn checked_in_backup_generated_fixtures_replay_semantic_expectations(pool:
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
-#[ignore = "spawns a subprocess; heavy/never-validated lane, run via --ignored"]
 async fn checked_in_conversion_generated_fixtures_replay_semantic_expectations(pool: PgPool) {
     for (success_stem, success_fixture_json, bad_stem, bad_fixture_json, expected_expectations) in [
         (
@@ -13829,7 +13916,6 @@ async fn checked_in_conversion_generated_fixtures_replay_semantic_expectations(p
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
-#[ignore = "spawns a subprocess; heavy/never-validated lane, run via --ignored"]
 async fn checked_in_mark_clear_generated_fixtures_replay_semantic_expectations(pool: PgPool) {
     for (
         success_stem,
@@ -14032,7 +14118,6 @@ async fn checked_in_mark_clear_generated_fixtures_replay_semantic_expectations(p
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
-#[ignore = "spawns a subprocess; heavy/never-validated lane, run via --ignored"]
 async fn checked_in_poison_cure_generated_fixtures_replay_semantic_expectations(pool: PgPool) {
     let success_stem = "night-poison-cure-generated-minimized";
     let success_fixture_json =
@@ -14223,7 +14308,6 @@ async fn checked_in_poison_cure_generated_fixtures_replay_semantic_expectations(
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
-#[ignore = "spawns a subprocess; heavy/never-validated lane, run via --ignored"]
 async fn checked_in_ignite_generated_fixtures_replay_semantic_expectations(pool: PgPool) {
     let success_stem = "night-ignite-generated-minimized";
     let success_fixture_json = include_str!("../fixtures/night-ignite-generated-minimized.json");
@@ -14370,7 +14454,6 @@ async fn checked_in_ignite_generated_fixtures_replay_semantic_expectations(pool:
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
-#[ignore = "spawns a subprocess; heavy/never-validated lane, run via --ignored"]
 async fn checked_in_pgo_projection_state_generated_fixtures_replay_semantic_expectations(
     pool: PgPool,
 ) {
@@ -14556,7 +14639,6 @@ async fn checked_in_pgo_projection_state_generated_fixtures_replay_semantic_expe
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
-#[ignore = "spawns a subprocess; heavy/never-validated lane, run via --ignored"]
 async fn checked_in_hider_projection_state_generated_fixtures_replay_semantic_expectations(
     pool: PgPool,
 ) {
@@ -14742,7 +14824,6 @@ async fn checked_in_hider_projection_state_generated_fixtures_replay_semantic_ex
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
-#[ignore = "spawns a subprocess; heavy/never-validated lane, run via --ignored"]
 async fn checked_in_babysitter_projection_state_generated_fixtures_replay_semantic_expectations(
     pool: PgPool,
 ) {
@@ -14929,7 +15010,6 @@ async fn checked_in_babysitter_projection_state_generated_fixtures_replay_semant
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
-#[ignore = "spawns a subprocess; heavy/never-validated lane, run via --ignored"]
 async fn checked_in_lovers_projection_state_generated_fixtures_replay_semantic_expectations(
     pool: PgPool,
 ) {
@@ -15120,7 +15200,6 @@ async fn checked_in_lovers_projection_state_generated_fixtures_replay_semantic_e
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
-#[ignore = "spawns a subprocess; heavy/never-validated lane, run via --ignored"]
 async fn checked_in_bomb_projection_state_generated_fixtures_replay_semantic_expectations(
     pool: PgPool,
 ) {
@@ -15306,7 +15385,6 @@ async fn checked_in_bomb_projection_state_generated_fixtures_replay_semantic_exp
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
-#[ignore = "spawns a subprocess; heavy/never-validated lane, run via --ignored"]
 async fn checked_in_hunter_projection_state_generated_fixtures_replay_semantic_expectations(
     pool: PgPool,
 ) {
@@ -15497,7 +15575,6 @@ async fn checked_in_hunter_projection_state_generated_fixtures_replay_semantic_e
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
-#[ignore = "spawns a subprocess; heavy/never-validated lane, run via --ignored"]
 async fn checked_in_vengeful_projection_state_generated_fixtures_replay_semantic_expectations(
     pool: PgPool,
 ) {
@@ -15693,7 +15770,6 @@ async fn checked_in_vengeful_projection_state_generated_fixtures_replay_semantic
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
-#[ignore = "spawns a subprocess; heavy/never-validated lane, run via --ignored"]
 async fn checked_in_strongman_vengeful_projection_state_generated_fixtures_replay_semantic_expectations(
     pool: PgPool,
 ) {
@@ -15891,7 +15967,6 @@ async fn checked_in_strongman_vengeful_projection_state_generated_fixtures_repla
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
-#[ignore = "spawns a subprocess; heavy/never-validated lane, run via --ignored"]
 async fn checked_in_bodyguard_strongman_vengeful_projection_state_generated_fixtures_replay_semantic_expectations(
     pool: PgPool,
 ) {
@@ -16121,7 +16196,6 @@ async fn checked_in_bodyguard_strongman_vengeful_projection_state_generated_fixt
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
-#[ignore = "spawns a subprocess; heavy/never-validated lane, run via --ignored"]
 async fn checked_in_vengeful_fixpoint_generated_fixtures_replay_semantic_expectations(
     pool: PgPool,
 ) {
@@ -16317,7 +16391,6 @@ async fn checked_in_vengeful_fixpoint_generated_fixtures_replay_semantic_expecta
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
-#[ignore = "spawns a subprocess; heavy/never-validated lane, run via --ignored"]
 async fn checked_in_strongman_vengeful_fixpoint_generated_fixtures_replay_semantic_expectations(
     pool: PgPool,
 ) {
@@ -16514,7 +16587,6 @@ async fn checked_in_strongman_vengeful_fixpoint_generated_fixtures_replay_semant
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
-#[ignore = "spawns a subprocess; heavy/never-validated lane, run via --ignored"]
 async fn checked_in_bodyguard_strongman_vengeful_fixpoint_generated_fixtures_replay_semantic_expectations(
     pool: PgPool,
 ) {
@@ -16712,7 +16784,6 @@ async fn checked_in_bodyguard_strongman_vengeful_fixpoint_generated_fixtures_rep
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
-#[ignore = "spawns a subprocess; heavy/never-validated lane, run via --ignored"]
 async fn nonminimal_trigger_dependency_fixtures_shrink_to_checked_semantic_replays(pool: PgPool) {
     for (
         stem,
@@ -16874,7 +16945,6 @@ async fn nonminimal_trigger_dependency_fixtures_shrink_to_checked_semantic_repla
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
-#[ignore = "spawns a subprocess; heavy/never-validated lane, run via --ignored"]
 async fn generated_trigger_dependency_search_shrinks_to_replayable_artifacts(pool: PgPool) {
     let found = generated_trigger_dependency_search_fixtures();
 
@@ -17026,7 +17096,6 @@ async fn generated_trigger_dependency_search_shrinks_to_replayable_artifacts(poo
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
-#[ignore = "spawns a subprocess; heavy/never-validated lane, run via --ignored"]
 async fn generated_trigger_dependency_bad_expectations_shrink_to_failing_artifacts(pool: PgPool) {
     let found = generated_trigger_dependency_search_fixtures();
 
@@ -17140,7 +17209,6 @@ async fn generated_trigger_dependency_bad_expectations_shrink_to_failing_artifac
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
-#[ignore = "spawns a subprocess; heavy/never-validated lane, run via --ignored"]
 async fn generated_persistent_trigger_fixtures_shrink_to_replayable_artifacts(pool: PgPool) {
     for (stem, fixture_json, expected_audited, expected_traces, min_expectations) in [
         (
@@ -17283,7 +17351,6 @@ async fn generated_persistent_trigger_fixtures_shrink_to_replayable_artifacts(po
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
-#[ignore = "spawns a subprocess; heavy/never-validated lane, run via --ignored"]
 async fn generated_persistent_trigger_bad_expectations_shrink_to_failing_artifacts(pool: PgPool) {
     for (family, stem, seed, min_expectations) in [
         (
@@ -19156,7 +19223,6 @@ async fn generated_night_action_graphs_replay_audit_and_rebuild_deterministicall
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
-#[ignore = "spawns a subprocess; heavy/never-validated lane, run via --ignored"]
 async fn generated_mafiascum_failure_fixture_shrinks_to_saved_artifacts(pool: PgPool) {
     let case = GeneratedNightCase {
         seed: 91_777,
@@ -19254,7 +19320,6 @@ async fn generated_failure_message_includes_saved_shrink_summary(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
-#[ignore = "spawns a subprocess; heavy/never-validated lane, run via --ignored"]
 async fn generated_chinese_failure_fixture_shrinks_to_saved_artifacts(pool: PgPool) {
     let case = GeneratedNightCase {
         seed: 92_777,
@@ -19317,7 +19382,6 @@ async fn generated_chinese_failure_fixture_shrinks_to_saved_artifacts(pool: PgPo
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
-#[ignore = "spawns a subprocess; heavy/never-validated lane, run via --ignored"]
 async fn generated_epicmafia_pk_fixture_replays_prompt_through_minimizer(pool: PgPool) {
     let case = generated_epicmafia_pk_case(95_777);
     let fixture_json = generated_epicmafia_pk_case_fixture_json(&case, case.seed + 47_000);
@@ -19546,7 +19610,6 @@ fn pack_declared_pk_prompt_policies_have_semantic_minimizer_coverage() {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
-#[ignore = "spawns a subprocess; heavy/never-validated lane, run via --ignored"]
 async fn generated_epicmafia_night_fixture_replays_semantic_expectations_through_minimizer(
     pool: PgPool,
 ) {
@@ -19574,7 +19637,6 @@ async fn generated_epicmafia_night_fixture_replays_semantic_expectations_through
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
-#[ignore = "spawns a subprocess; heavy/never-validated lane, run via --ignored"]
 async fn generated_chinese_structured_night_fixtures_replay_semantic_expectations_through_minimizer(
     pool: PgPool,
 ) {
@@ -19610,7 +19672,6 @@ async fn generated_chinese_structured_night_fixtures_replay_semantic_expectation
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
-#[ignore = "spawns a subprocess; heavy/never-validated lane, run via --ignored"]
 async fn chinese_folded_state_cascade_fixtures_replay_semantic_expectations_through_minimizer(
     pool: PgPool,
 ) {
@@ -19667,7 +19728,6 @@ async fn chinese_folded_state_cascade_fixtures_replay_semantic_expectations_thro
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
-#[ignore = "spawns a subprocess; heavy/never-validated lane, run via --ignored"]
 async fn generated_phase5_day_fixtures_replay_semantic_expectations_through_minimizer(
     pool: PgPool,
 ) {
@@ -19743,7 +19803,6 @@ async fn generated_phase5_day_fixtures_replay_semantic_expectations_through_mini
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
-#[ignore = "spawns a subprocess; heavy/never-validated lane, run via --ignored"]
 async fn phase5_sheriff_badge_fixtures_replay_semantic_expectations_through_minimizer(
     pool: PgPool,
 ) {
@@ -19810,7 +19869,6 @@ async fn phase5_sheriff_badge_fixtures_replay_semantic_expectations_through_mini
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
-#[ignore = "spawns a subprocess; heavy/never-validated lane, run via --ignored"]
 async fn phase5_ita_buffered_release_fixture_replays_semantic_expectations_through_minimizer(
     pool: PgPool,
 ) {
@@ -19887,7 +19945,6 @@ async fn phase5_ita_buffered_release_fixture_replays_semantic_expectations_throu
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
-#[ignore = "spawns a subprocess; heavy/never-validated lane, run via --ignored"]
 async fn phase5_ita_lifecycle_fixture_replays_semantic_expectations_through_minimizer(
     pool: PgPool,
 ) {
@@ -19935,7 +19992,6 @@ async fn phase5_ita_lifecycle_fixture_replays_semantic_expectations_through_mini
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
-#[ignore = "spawns a subprocess; heavy/never-validated lane, run via --ignored"]
 async fn phase5_day_note_and_revote_prompt_fixtures_replay_semantic_expectations_through_minimizer(
     pool: PgPool,
 ) {
@@ -20021,7 +20077,6 @@ async fn phase5_day_note_and_revote_prompt_fixtures_replay_semantic_expectations
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
-#[ignore = "spawns a subprocess; heavy/never-validated lane, run via --ignored"]
 async fn generated_default_open_fixtures_replay_semantic_expectations_through_minimizer(
     pool: PgPool,
 ) {
@@ -26914,9 +26969,8 @@ impl GeneratedShrinkArtifacts {
                 String::from_utf8_lossy(&output.stderr)
             ));
         }
-        // The minimizer writes its report to --write-report; the child's stdout is
-        // null (see run_minimize_night_fixture) to avoid a macOS spawn-pipe
-        // deadlock, so the saved file is the only report surface.
+        // The minimizer writes its report to --write-report, so the saved file is
+        // the authoritative report surface even when diagnostic output is capped.
         let saved_report: serde_json::Value = serde_json::from_str(
             &fs::read_to_string(&self.report_path)
                 .map_err(|err| format!("read saved minimizer report: {err}"))?,
@@ -26927,6 +26981,7 @@ impl GeneratedShrinkArtifacts {
 }
 
 fn run_minimize_night_fixture(args: &[OsString], database_url: &str) -> std::io::Result<Output> {
+    let _permit = acquire_minimize_night_fixture_permit();
     let cargo_bin = std::env::var_os("CARGO_BIN_EXE_minimize_night_fixture")
         .unwrap_or_else(|| OsString::from(env!("CARGO_BIN_EXE_minimize_night_fixture")));
     let cargo = std::env::var_os("CARGO").unwrap_or_else(|| OsString::from("cargo"));
@@ -26938,16 +26993,31 @@ fn run_minimize_night_fixture(args: &[OsString], database_url: &str) -> std::io:
     command
         .args(&invocation.fixed_args)
         .args(args)
-        .env("DATABASE_URL", database_url)
-        // The report is read back from --write-report, never stdout. Keeping the
-        // child's stdout off an inherited pipe sidesteps a macOS deadlock: when a
-        // test fans out several minimizer spawns, a lingering pipe write-end can
-        // survive a CLOEXEC race, so `.output()` would block forever waiting for
-        // an EOF that never arrives.
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::piped());
-    command.spawn()?.wait_with_output()
+        .env("DATABASE_URL", database_url);
+    let output = run_bounded_process(
+        &mut command,
+        ProcessLimits::new(Duration::from_secs(3 * 60), 64 * 1024, 512 * 1024),
+    )
+    .map_err(std::io::Error::other)?;
+    Ok(Output {
+        status: output.status,
+        stdout: output.stdout.bytes,
+        stderr: output.stderr.bytes,
+    })
+}
+
+fn acquire_minimize_night_fixture_permit() -> MinimizeNightFixturePermit {
+    let (active, available) = MINIMIZER_CHILD_SLOTS.get_or_init(|| (Mutex::new(0), Condvar::new()));
+    let mut active = active
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    while *active >= MAX_CONCURRENT_MINIMIZER_CHILDREN {
+        active = available
+            .wait(active)
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+    }
+    *active += 1;
+    MinimizeNightFixturePermit
 }
 
 fn minimize_night_fixture_invocation(
