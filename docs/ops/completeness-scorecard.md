@@ -5,7 +5,7 @@
 > [08-roadmap](../arch/08-roadmap.md) and the
 > [engine-port readiness baseline](engine-port-readiness-baseline-2026-06-18.md).
 >
-> Last updated **2026-07-09** — `main` @ `a4d4a499`.
+> Last updated **2026-07-09** — `main` @ `0494668d`.
 > Visual version: <https://claude.ai/code/artifact/da80a9e8-3a15-4cd4-9ff0-ed549dbd206e>.
 
 The hard part is done: the resolution engine is at full im-human V4 parity on a proven
@@ -17,9 +17,9 @@ event-sourcing spine. The remaining work is almost entirely **product breadth** 
 | Metric | Value | Notes |
 |---|---|---|
 | Engine parity | **192/192** | port checklist complete; 8/8 build-order phases; parity matrix has no unsupported rows |
-| Proof surface | **119** | `npm` test lanes; 377 files under `tools/` |
+| Proof surface | **119** | `npm` test lanes; 378 files under `tools/` |
 | In flight | **0** | local `main` matches `origin/main` |
-| Remaining | **5 tiers** | 12 to finish + 1 optional |
+| Remaining | **5 tiers** | 11 to finish + 1 optional |
 
 ## What we have (shipped & proven)
 
@@ -32,7 +32,7 @@ event-sourcing spine. The remaining work is almost entirely **product breadth** 
 | Wire protocol | CBOR over WebSocket, explicitly versioned; TS types generated from the Rust `wire` crate | ~53 domain events |
 | Player & host surfaces | Board, private channel, touch-first host console, admin audit, setup, login | Ballot & Lantern design program 5/5 |
 | Gameplay gaps T1–T3 | Role card, night-action target picker (+withdraw), reveal-gated endgame summary | T1 · T2 · T3 landed |
-| Proof harness | Live-stack browser smokes, operator replay, hermetic `cargo test`, frontend role proof | 119 lanes · 347 tools |
+| Proof harness | Live-stack browser smokes, operator replay, hermetic `cargo test`, frontend role proof | 119 lanes · 378 tools |
 
 ## What's left (dependency-ordered)
 
@@ -94,9 +94,13 @@ if needed).
   stdout cap), and fix the `nonminimal_trigger_dependency…shrink` semantic red that
   un-quarantining exposed. Unblocks a fast, parallel-safe default suite instead of 44
   ignored tests.
-- [ ] **1.5 Fix the release-readiness freshness gate.** `[Open]` The dev-test-game
-  readiness step trips when a *sibling* lane's artifact is >24h stale; only an env-var
-  workaround exists. Make lanes self-refresh or scope the gate to the lane under test.
+- [x] **1.5 Fix the release-readiness freshness gate.** `[Landed]` Declarative readiness
+  steps now derive a freshness scope from their declared `changedInputs`: consumed stale
+  inputs still fail, while stale sibling defaults that the lane did not produce are
+  omitted. Standalone readiness remains strict for required local evidence; real-hosted
+  handoff artifacts stay visible as diagnostics without blocking the local spine. The
+  full live proof now promotes host-setup evidence into its dedicated artifact, and the
+  admin spine's internal readiness boundary runs through the shared declarative runner.
 
 ### Tier 2 — Close the deferred gameplay slices
 
@@ -148,10 +152,15 @@ lifecycle are the biggest slice→launch gaps.*
 
 ## Provenance — how each row was established
 
-- **Code-verified (2026-07-09):** local and remote `main` aligned at `a4d4a499`, port
+- **Code-verified (2026-07-09):** local and remote `main` aligned at `0494668d`, port
   checklist 192/192, parity-matrix gaps, the absent media pipeline (no blob crate; zero
   upload/transcode in `crates/*/src`), the missing forum/register/profile routes, and all
-  counts (packs, migrations, 119 test lanes, 377 files under `tools/`).
+  counts (packs, migrations, 119 test lanes, 378 files under `tools/`).
+- **Readiness freshness remediation (2026-07-09):** the core-live and full-live local
+  spines completed against Postgres; the proof contract validated 123 lanes; the harness
+  contract suite passed 63/63 and the admin route model passed 99/99. Standalone readiness
+  and next-action regeneration are green while release and production remain explicitly
+  false and hosted evidence remains blocked pending real operator capture.
 - **Reproduced & resolved on Postgres (2026-07-08):** 1.1 and 1.2 — both reproduced
   against the live dev DB, root-caused as stale-reference test bugs (live == rebuild in
   both), and fixed test-side; `replay_audit_and_rebuild_deterministically` re-run green
