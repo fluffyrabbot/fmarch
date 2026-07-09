@@ -80,7 +80,7 @@ const CHECKS = Object.freeze([
       evidence?.browser?.hostVotecountConvergence?.status === "passed" &&
       evidence?.browser?.hostVotecountConvergence?.expectedCount === 1 &&
       evidence?.browser?.hostVotecountConvergence?.after?.projection?.some(
-        (row) => row.target === "slot-2" && row.count === 1,
+        (row) => row.target === "slot_1" && row.count === 1,
       ),
   },
   {

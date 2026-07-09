@@ -88,14 +88,14 @@ export function buildLiveStackProofSummary(
     hostVotecountConvergence: {
       status: convergence?.status ?? "missing",
       expectedCount: convergence?.expectedCount ?? null,
-      apiSlot2Count: voteCountForSlot(convergence?.apiVoteCount, "slot-2"),
-      beforeSlot2Count: voteCountForProjection(
+      apiSlot1Count: voteCountForSlot(convergence?.apiVoteCount, "slot_1"),
+      beforeSlot1Count: voteCountForProjection(
         convergence?.before?.projection,
-        "slot-2",
+        "slot_1",
       ),
-      afterSlot2Count: voteCountForProjection(
+      afterSlot1Count: voteCountForProjection(
         convergence?.after?.projection,
-        "slot-2",
+        "slot_1",
       ),
       resyncState: convergence?.resyncEvent?.state ?? null,
       sawFreshVoteEvent: convergence?.sawFreshVoteEvent ?? false,
@@ -137,7 +137,7 @@ export function buildLiveStackProofSummary(
         status:
           convergence?.status === "passed" &&
           convergence.expectedCount === 1 &&
-          voteCountForProjection(convergence.after?.projection, "slot-2") === 1
+          voteCountForProjection(convergence.after?.projection, "slot_1") === 1
             ? "passed"
             : "failed",
       },
@@ -205,7 +205,7 @@ export function assertLiveStackProofSummary(summary) {
   if (summary.hostVotecountConvergence?.expectedCount !== 1) {
     throw new Error("live-stack summary votecount expected count drifted");
   }
-  if (summary.hostVotecountConvergence?.afterSlot2Count !== 1) {
+  if (summary.hostVotecountConvergence?.afterSlot1Count !== 1) {
     throw new Error("live-stack summary missing host votecount convergence");
   }
   if (summary.hostVotecountConvergence?.resyncState !== "recovered") {
@@ -271,9 +271,9 @@ export function markdownLiveStackProofSummary(summary) {
     "| --- | --- |",
     `| status | ${summary.hostVotecountConvergence.status} |`,
     `| expectedCount | ${summary.hostVotecountConvergence.expectedCount ?? ""} |`,
-    `| before slot-2 | ${summary.hostVotecountConvergence.beforeSlot2Count ?? ""} |`,
-    `| API slot-2 | ${summary.hostVotecountConvergence.apiSlot2Count ?? ""} |`,
-    `| after slot-2 | ${summary.hostVotecountConvergence.afterSlot2Count ?? ""} |`,
+    `| before slot_1 | ${summary.hostVotecountConvergence.beforeSlot1Count ?? ""} |`,
+    `| API slot_1 | ${summary.hostVotecountConvergence.apiSlot1Count ?? ""} |`,
+    `| after slot_1 | ${summary.hostVotecountConvergence.afterSlot1Count ?? ""} |`,
     `| resync | ${summary.hostVotecountConvergence.resyncState ?? ""} |`,
     `| fresh vote event | ${summary.hostVotecountConvergence.sawFreshVoteEvent} |`,
     `| proof | ${summary.hostVotecountConvergence.proof ?? ""} |`,

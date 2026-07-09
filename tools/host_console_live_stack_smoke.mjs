@@ -489,7 +489,7 @@ async function seedGame() {
         SubmitVote: {
           game,
           actor_slot: "slot-3",
-          target: { Slot: "slot-2" },
+          target: { Slot: "slot_1" },
         },
       },
     ],
@@ -1548,7 +1548,7 @@ async function drivePlayerBrowser(frontendBaseUrl) {
     window.__fmarchLiveProjectionEvents?.some(
       (event) =>
         event?.delta?.kind === "VoteCountChanged" &&
-        event.delta.body?.candidate_slot === "slot-2" &&
+        event.delta.body?.candidate_slot === "slot_1" &&
         event.delta.body?.count === 1,
     ),
   );
@@ -1635,14 +1635,14 @@ async function drivePlayerBrowser(frontendBaseUrl) {
       return window.__fmarchLiveProjectionEvents?.some(
         (event) =>
           event?.delta?.kind === "VoteCountChanged" &&
-          event.delta.body?.candidate_slot === "slot-2" &&
+          event.delta.body?.candidate_slot === "slot_1" &&
           event.delta.body?.count === 3,
       );
     });
     await page.waitForFunction(() => {
       const projection = window.__fmarchPlayerProjection;
       return projection?.votecount?.some(
-        (row) => row.target === "slot-2" && row.count === 3,
+        (row) => row.target === "slot_1" && row.count === 3,
       );
     });
     await raceVoteSession.page.waitForFunction(() =>
@@ -1651,7 +1651,7 @@ async function drivePlayerBrowser(frontendBaseUrl) {
     await raceVoteSession.page.evaluate(() => window.__fmarchTriggerPlayerResync(0));
     await raceVoteSession.page.waitForFunction(() =>
       window.__fmarchPlayerProjection?.votecount?.some(
-        (row) => row.target === "slot-2" && row.count === 3,
+        (row) => row.target === "slot_1" && row.count === 3,
       ),
     );
     concurrentVoteRows = await runSql(
@@ -1712,21 +1712,21 @@ async function drivePlayerBrowser(frontendBaseUrl) {
       const countThreeIndex = events.findIndex(
         (event) =>
           event?.delta?.kind === "VoteCountChanged" &&
-          event.delta.body?.candidate_slot === "slot-2" &&
+          event.delta.body?.candidate_slot === "slot_1" &&
           event.delta.body?.count === 3,
       );
       return events.some(
         (event, index) =>
           index > countThreeIndex &&
           event?.delta?.kind === "VoteCountChanged" &&
-          event.delta.body?.candidate_slot === "slot-2" &&
+          event.delta.body?.candidate_slot === "slot_1" &&
           event.delta.body?.count === 2,
       );
     });
     await page.waitForFunction(() => {
       const projection = window.__fmarchPlayerProjection;
       return projection?.votecount?.some(
-        (row) => row.target === "slot-2" && row.count === 2,
+        (row) => row.target === "slot_1" && row.count === 2,
       );
     });
     playerStep = "withdraw-racing-vote";
@@ -1739,21 +1739,21 @@ async function drivePlayerBrowser(frontendBaseUrl) {
       const countTwoIndex = events.findIndex(
         (event) =>
           event?.delta?.kind === "VoteCountChanged" &&
-          event.delta.body?.candidate_slot === "slot-2" &&
+          event.delta.body?.candidate_slot === "slot_1" &&
           event.delta.body?.count === 2,
       );
       return events.some(
         (event, index) =>
           index > countTwoIndex &&
           event?.delta?.kind === "VoteCountChanged" &&
-          event.delta.body?.candidate_slot === "slot-2" &&
+          event.delta.body?.candidate_slot === "slot_1" &&
           event.delta.body?.count === 1,
       );
     });
     await page.waitForFunction(() => {
       const projection = window.__fmarchPlayerProjection;
       return projection?.votecount?.some(
-        (row) => row.target === "slot-2" && row.count === 1,
+        (row) => row.target === "slot_1" && row.count === 1,
       );
     });
     playerStep = "drop-live-projection";
@@ -2036,7 +2036,7 @@ async function submitDuplicatePlayerVote(
   await page.waitForFunction(
     (count) =>
       window.__fmarchPlayerProjection?.votecount?.some(
-        (row) => row.target === "slot-2" && row.count === count,
+        (row) => row.target === "slot_1" && row.count === count,
       ),
     expectedCount,
   );
@@ -2646,8 +2646,12 @@ async function submitDuplicatePlayerAction(duplicateSession, { firstOutcome, com
   await page.waitForFunction(
     () => document.querySelector('[data-action="submit_action:factional_kill"]') === null,
   );
+  // C5: while the phase is still open, a submitted night action stays visible as a
+  // withdraw affordance (the submit control is replaced, the picker persists), so the
+  // command surface is not empty — it now offers withdraw_action instead of submit.
   await page.waitForFunction(
-    () => document.querySelector('[data-testid="player-action-commands"]') === null,
+    () =>
+      document.querySelector('[data-action="withdraw_action:factional_kill"]') !== null,
   );
   await Promise.allSettled(commandStateResponseTasks);
   const noActionCommandState = await waitForCommandStateResponse(
@@ -2702,8 +2706,12 @@ async function submitRacingPlayerAction(raceSession, { winningCommandId }) {
   await page.waitForFunction(
     () => document.querySelector('[data-action="submit_action:factional_kill"]') === null,
   );
+  // C5: while the phase is still open, a submitted night action stays visible as a
+  // withdraw affordance (the submit control is replaced, the picker persists), so the
+  // command surface is not empty — it now offers withdraw_action instead of submit.
   await page.waitForFunction(
-    () => document.querySelector('[data-testid="player-action-commands"]') === null,
+    () =>
+      document.querySelector('[data-action="withdraw_action:factional_kill"]') !== null,
   );
   await Promise.allSettled(commandStateResponseTasks);
   const noActionCommandState = await waitForCommandStateResponse(
@@ -3521,7 +3529,7 @@ async function waitForHostLiveVotecount(page, count) {
         window.__fmarchHostLiveProjectionEvents?.some(
           (event) =>
             event?.delta?.kind === "VoteCountChanged" &&
-            event.delta.body?.candidate_slot === "slot-2" &&
+            event.delta.body?.candidate_slot === "slot_1" &&
             event.delta.body?.count === expectedCount,
         ),
       count,
@@ -3529,7 +3537,7 @@ async function waitForHostLiveVotecount(page, count) {
     await page.waitForFunction(
       (expectedCount) =>
         window.__fmarchHostVotecountProjection?.some(
-          (row) => row.target === "slot-2" && row.count === expectedCount,
+          (row) => row.target === "slot_1" && row.count === expectedCount,
         ),
       count,
     );
@@ -3546,7 +3554,7 @@ async function waitForHostLiveVotecount(page, count) {
 async function proveHostVotecountConvergesAfterPlayerLoop(page, { before }) {
   const apiVoteCount = await fetchJson(`${apiBaseUrl}/games/${game}/votecount`);
   assertPlayerVoteProjection(apiVoteCount);
-  const expectedCount = voteCountForSlot(apiVoteCount, "slot-2");
+  const expectedCount = voteCountForSlot(apiVoteCount, "slot_1");
   if (expectedCount !== 1) {
     throw new Error(
       `player vote loop did not restore API votecount to 1: ${JSON.stringify(apiVoteCount)}`,
@@ -3558,7 +3566,7 @@ async function proveHostVotecountConvergesAfterPlayerLoop(page, { before }) {
   await page.waitForFunction(
     (expectedCount) =>
       window.__fmarchHostVotecountProjection?.some(
-        (row) => row.target === "slot-2" && row.count === expectedCount,
+        (row) => row.target === "slot_1" && row.count === expectedCount,
       ),
     expectedCount,
   );
@@ -3567,11 +3575,11 @@ async function proveHostVotecountConvergesAfterPlayerLoop(page, { before }) {
   const sawFreshVoteEvent = eventsSinceBaseline.some(
     (event) =>
       event?.delta?.kind === "VoteCountChanged" &&
-      event.delta.body?.candidate_slot === "slot-2" &&
+      event.delta.body?.candidate_slot === "slot_1" &&
       event.delta.body?.count === expectedCount,
   );
 
-  if (voteCountForProjection(after.projection, "slot-2") !== expectedCount) {
+  if (voteCountForProjection(after.projection, "slot_1") !== expectedCount) {
     throw new Error(
       `host votecount projection did not converge to API truth: ${JSON.stringify({
         expectedCount,
@@ -3592,7 +3600,7 @@ async function proveHostVotecountConvergesAfterPlayerLoop(page, { before }) {
     resyncEvent,
     sawFreshVoteEvent,
     proof:
-      "After the player vote/duplicate/race/withdraw loop completed, the host browser explicitly resynced and its votecount projection converged to the API votecount for slot-2. The proof no longer depends on the host socket retaining transient intermediate count events.",
+      "After the player vote/duplicate/race/withdraw loop completed, the host browser explicitly resynced and its votecount projection converged to the API votecount for slot_1. The proof no longer depends on the host socket retaining transient intermediate count events.",
   };
 }
 
@@ -3645,7 +3653,7 @@ async function triggerHostResync(page, fromSeq, { expectedCount = 1 } = {}) {
   await page.waitForFunction(
     (count) =>
       window.__fmarchHostVotecountProjection?.some(
-        (row) => row.target === "slot-2" && row.count === count,
+        (row) => row.target === "slot_1" && row.count === count,
       ),
     expectedCount,
   );
@@ -3788,7 +3796,7 @@ function assertPlayerVoteProjection(deltas) {
   const vote = deltas.find(
     (delta) =>
       delta?.kind === "VoteCountChanged" &&
-      delta?.body?.candidate_slot === "slot-2" &&
+      delta?.body?.candidate_slot === "slot_1" &&
       delta.body.count === 1,
   );
   if (vote === undefined) {
@@ -3798,7 +3806,7 @@ function assertPlayerVoteProjection(deltas) {
 
 function assertPlayerVoteSubmitOutcome(
   outcome,
-  { actorSlot = "slot-7", targetSlot = "slot-2", label = "player SubmitVote" } = {},
+  { actorSlot = "slot-7", targetSlot = "slot_1", label = "player SubmitVote" } = {},
 ) {
   if (outcome?.state !== "ack") {
     throw new Error(`${label} did not ACK: ${JSON.stringify(outcome)}`);
@@ -3859,7 +3867,7 @@ function assertSinglePlayerVoteSubmittedRow(voteRows) {
       `duplicate player SubmitVote appended ${voteSubmittedRows.length} VoteSubmitted rows:\n${voteRows}`,
     );
   }
-  if (!voteRows.includes("slot-7") || !voteRows.includes("slot-2") || !voteRows.includes("D01")) {
+  if (!voteRows.includes("slot-7") || !voteRows.includes("slot_1") || !voteRows.includes("D01")) {
     throw new Error(`duplicate player SubmitVote row drifted:\n${voteRows}`);
   }
 }
@@ -3876,7 +3884,7 @@ function assertConcurrentPlayerVoteRows(voteRows) {
       throw new Error(`concurrent player SubmitVote rows missing ${actor}:\n${voteRows}`);
     }
   }
-  if (!voteRows.includes("slot-2") || !voteRows.includes("D01")) {
+  if (!voteRows.includes("slot_1") || !voteRows.includes("D01")) {
     throw new Error(`concurrent player SubmitVote row target/phase drifted:\n${voteRows}`);
   }
 }
@@ -4011,7 +4019,7 @@ function assertStalePlayerVoteRecovery(outcome) {
   if (command.actor_slot !== "slot-7") {
     throw new Error(`stale player vote used wrong actor slot: ${JSON.stringify(command)}`);
   }
-  if (command.target?.Slot !== "slot-2") {
+  if (command.target?.Slot !== "slot_1") {
     throw new Error(`stale player vote used wrong target: ${JSON.stringify(command)}`);
   }
 }
