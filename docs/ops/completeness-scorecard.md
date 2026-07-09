@@ -64,14 +64,19 @@ if needed).
 *Gate: don't stack breadth on an unreliable suite — and one red touches the core
 "truth is an event log" invariant.*
 
-- [ ] **1.1 Fix the douse/ignite fold-vs-rebuild divergence.** `[Open]` **Highest
-  priority.** `host_resolve_phase_projects_conversion_and_persistent_effects`: an explicit
-  rebuild emits an N02 `player_killed`/ignite notification the live fold never produced.
-  Rebuild ≠ live state is the one bug class an event-sourced system must not have.
-- [ ] **1.2 Votecount keeps a stale ballot on rebuild.** `[Open]`
-  `engine_phase_input_preserves_submit_withdraw_history_and_current_day_ballots` retains a
-  projection-only ballot (slot_5 count 3 vs expected empty). Same fold/rebuild family as
-  1.1; may be tangled with the C4 `current_actions` work — re-check on the branch.
+- [x] **1.1 — Not a divergence; stale-reference test bug.** `[Landed]`
+  `host_resolve_phase_projects_conversion_and_persistent_effects` compared post-rebuild
+  `player_notifications` against a snapshot captured *before* the N02 ignite. Live already
+  emits the N02 `player_killed`/ignite receipt (the `PlayerKilled` fold does so for all
+  kills, by design); live == rebuild == 3 rows. Fixed test-side: compare rebuild to the
+  live post-ignite snapshot. No projection/domain change.
+- [x] **1.2 — Not a divergence; stale-reference test bug.** `[Landed]`
+  `engine_phase_input_preserves_submit_withdraw_history_and_current_day_ballots` compared
+  post-rebuild `votecount` against a snapshot captured while D01 was still open. The D01
+  lynch clears all ballots for the dead slot (`clear_ballots_for_dead_slot`) in both live
+  and rebuild, so the log-derived boundary is genuinely empty; the only surviving live row
+  was a raw stale ballot injected by SQL, which rebuild correctly discards. Fixed test-side:
+  assert the rebuilt votecount is empty. No projection/domain change.
 - [ ] **1.3 Advisory-lock & connection-pool timeouts.** `[Partial/Flaky]`
   `concurrent_submit_action_revalidates_after_winning_action` hits an advisory-lock gate
   timeout; `audit_large_action_graph_performance` times out on a pool connection. Reproduce
@@ -141,7 +146,11 @@ lifecycle are the biggest slice→launch gaps.*
   checklist 192/192, parity-matrix gaps, the absent media pipeline (no blob crate; zero
   upload/transcode in `crates/*/src`), the missing forum/register/profile routes, and all
   counts (packs, migrations, 119 test lanes, 347 tools).
+- **Reproduced & resolved on Postgres (2026-07-08):** 1.1 and 1.2 — both reproduced
+  against the live dev DB, root-caused as stale-reference test bugs (live == rebuild in
+  both), and fixed test-side; `replay_audit_and_rebuild_deterministically` re-run green
+  (12/12).
 - **Reported from prior Postgres / Chromium sessions** (re-confirm on the current branch
-  before acting): the Tier 1 test reds (1.1–1.3) and the Task F queue. No Rust/Postgres or
-  browser suite was run when this snapshot was taken, so those statuses are as last
-  observed, not freshly reproduced.
+  before acting): the remaining Tier 1 test reds (1.3) and the Task F queue. No full
+  Rust/Postgres or browser suite was run when this snapshot was taken, so those statuses
+  are as last observed, not freshly reproduced.

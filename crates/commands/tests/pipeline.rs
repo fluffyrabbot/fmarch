@@ -11079,10 +11079,15 @@ async fn engine_phase_input_preserves_submit_withdraw_history_and_current_day_ba
     rebuild(&pool, game)
         .await
         .expect("projection rebuild after D01");
-    assert_eq!(
-        votes_before,
-        serde_json::to_string(&votecount(&pool, game).await.unwrap()).unwrap(),
-        "votecount rebuild must discard projection-only stale ballots and restore the log-derived boundary"
+    // The D01 lynch of slot_5 clears every ballot targeting the dead slot (dead
+    // players cannot be voted for), so the log-derived votecount boundary for
+    // D01 is empty. The only row still present live was the raw stale ballot
+    // injected above, which has no backing event — rebuild folds solely from the
+    // log, so it must discard that projection-only row and reproduce an empty
+    // votecount.
+    assert!(
+        votecount(&pool, game).await.unwrap().is_empty(),
+        "votecount rebuild must discard projection-only stale ballots and restore the (empty) log-derived boundary after the D01 lynch"
     );
     assert_eq!(
         serde_json::to_string(&official_rows).unwrap(),
@@ -55687,6 +55692,11 @@ async fn host_resolve_phase_projects_conversion_and_persistent_effects(pool: PgP
 
     let slots_before = serde_json::to_string(&slots_after_ignite).unwrap();
     let effects_before = serde_json::to_string(&slot_effects(&pool, game).await.unwrap()).unwrap();
+    // Snapshot the live notices *after* the ignite: the N01 douse marks plus the
+    // N02 ignite kill receipt (PlayerKilled folds a private `player_killed`
+    // notice for the slain slot). Rebuild must reproduce this exactly.
+    let notifications_before_rebuild =
+        serde_json::to_string(&player_notifications(&pool, game).await.unwrap()).unwrap();
     let thread_before_rebuild = projections::thread_view(&pool, game, None, 50)
         .await
         .expect("read thread view before rebuild");
@@ -55711,9 +55721,10 @@ async fn host_resolve_phase_projects_conversion_and_persistent_effects(pool: PgP
         "slot_effect rebuild must preserve persistent effect tags"
     );
     assert_eq!(
-        serde_json::to_string(&douse_notifications).unwrap(),
+        notifications_before_rebuild,
         serde_json::to_string(&player_notifications(&pool, game).await.unwrap()).unwrap(),
-        "player_notification rebuild must preserve actor/target douse notices"
+        "player_notification rebuild must reproduce the live notices \
+         (actor/target douse marks plus the ignite kill receipt)"
     );
     assert_eq!(
         thread_before_rebuild,
