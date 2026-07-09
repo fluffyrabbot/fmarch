@@ -49,11 +49,15 @@ if needed).
   single-sourced proof counts, `day_vote_outcome` audit, collation-safe ordering) — sit
   unpushed. Decide push/PR, then fast-forward `main`. *Blocks a clean baseline for all
   later work.*
-- [ ] **0.2 Proof-infra manifest refactor (Sprint B "Task F").** `[Open]` The scenario
-  set is re-encoded ~14× (one id list + two generators + eleven hand-mirrored contract
-  projections). Promote to one rich manifest and derive the generators + contract sites;
-  keep a single intentional tripwire. *Depends on 0.1; user-ratified sequence C→B→F, and
-  B is done.*
+- [x] **0.2 Proof-infra manifest refactor (Sprint B "Task F").** `[Landed — generator side]`
+  Command-scenario definitions promoted to one rich manifest
+  (`tools/frontend_proof_scenarios.mjs`); both interaction generators and the
+  `COMMAND_SCENARIO_IDS` list now derive from it, with `lanes` as the single membership
+  tripwire (commit `2f4c6d8e`, full `test:frontend-role-proof` chain green). The ~11
+  role-smoke artifact-contract projections were **left hand-written on purpose** — they
+  read the generated artifacts as an independent oracle, so deriving them from the same
+  manifest would make the assertions tautological. Optional follow-up: single-source only
+  the pure id/ordering lists (not the value tuples) if further dedup is wanted.
 
 ### Tier 1 — Restore a trustworthy green gate
 
