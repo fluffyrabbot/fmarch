@@ -359,9 +359,24 @@ export function completedHardeningProofFixture(
       reject: {
         state: "reject",
         error: "GameAlreadyCompleted",
+        message: "Reject GameAlreadyCompleted: game already completed",
         serverEnvelope: { body: { kind: "Reject" } },
       },
-      dispatchPlan: { projectionRefreshKeys: ["commandState"] },
+      dispatchPlan: {
+        projectionRefreshKeys: ["votecount", "commandState", "endgameSummary"],
+      },
+      coldLoadEndpointsAfterReject: {
+        endgameSummaryEndpoint: `/games/${game}-stale-player/endgame-summary`,
+      },
+      resyncKeysAfterReject: ["thread", "endgameSummary", "commandState"],
+      endgameSummaryAfterReject: completedPlayerEndgameSummaryFixture(),
+      endgameSurfaceAfterReject: completedPlayerEndgameSurfaceFixture(),
+      apiEndgameSummaryAfterReject: completedPlayerEndgameApiSummaryFixture(),
+      manualEndgameResync: {
+        fromSeq: 0,
+        snapshotEndgameSummary: completedPlayerEndgameSummaryFixture(),
+        surface: completedPlayerEndgameSurfaceFixture(),
+      },
       commandStateAfterReject: {
         gameCompleted: true,
         actions: [],
@@ -386,6 +401,8 @@ export function completedHardeningProofFixture(
           voteTargets: [],
           boundary: "game is complete",
         },
+        recoveredEndgameSummary: completedPlayerEndgameSummaryFixture(),
+        endgameSurface: completedPlayerEndgameSurfaceFixture(),
         reloadButtons: [{ action: "submit_post", disabled: true }],
         reloadCurrentVote: { hasVote: "false", text: "No current vote" },
         reloadThreadPostBodies: [],
@@ -398,6 +415,49 @@ export function completedHardeningProofFixture(
         apiStateAfterReload: { completed: true, slots: [revealedSlot] },
       },
     },
+  };
+}
+
+function completedPlayerEndgameSummaryFixture() {
+  return {
+    completed: true,
+    winner: null,
+    slots: [
+      {
+        slotId: "slot-7",
+        roleKey: "godfather",
+        alignment: "mafia",
+        roleRevealed: true,
+        alignmentRevealed: true,
+      },
+    ],
+  };
+}
+
+function completedPlayerEndgameApiSummaryFixture() {
+  return {
+    completed: true,
+    slots: [
+      {
+        slot_id: "slot-7",
+        role_key: "godfather",
+        alignment: "mafia",
+        role_revealed: true,
+        alignment_revealed: true,
+      },
+    ],
+  };
+}
+
+function completedPlayerEndgameSurfaceFixture() {
+  return {
+    state: "revealed",
+    revealRows: [
+      {
+        testId: "player-endgame-reveal-slot-7",
+        text: "Slot 7 Godfather Mafia Survived",
+      },
+    ],
   };
 }
 
@@ -771,6 +831,8 @@ export function completedPlayerReloadSnapshotFixture({
       targetSlots: "",
     },
     commandState,
+    endgameSummary: completedPlayerEndgameSummaryFixture(),
+    endgameSurface: completedPlayerEndgameSurfaceFixture(),
     notifications: [],
     dayVoteOutcomes,
     coldLoadEndpoints: {
@@ -778,6 +840,7 @@ export function completedPlayerReloadSnapshotFixture({
         `/games/${game}/player-command-state?principal_user_id=${principalUserId}&slot_id=${slot}`,
       notificationsEndpoint:
         `/games/${game}/notifications?principal_user_id=${principalUserId}`,
+      endgameSummaryEndpoint: `/games/${game}/endgame-summary`,
     },
     buttons: [{ action: "submit_post", disabled: true, text: "Post" }],
     enabledMutatingButtons: [],

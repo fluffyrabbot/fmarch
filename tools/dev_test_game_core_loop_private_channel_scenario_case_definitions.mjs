@@ -79,6 +79,7 @@ export function staleCompletedPrivatePostScenario() {
       "votecount",
       "commandState",
       "dayVoteOutcomes",
+      "endgameSummary",
     ],
     routeBoundary:
       "Seeded browser completed private-channel GameAlreadyCompleted recovery refreshed role-pm controls.",

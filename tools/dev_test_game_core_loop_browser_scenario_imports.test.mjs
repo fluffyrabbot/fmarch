@@ -17,6 +17,18 @@ const browserScenarioModules = Object.freeze([
   }),
   Object.freeze({
     moduleSpecifier:
+      "./dev_test_game_core_loop_completed_game_recovery_scenarios.mjs",
+    imports: [
+      "assertCompletedPlayerEndgameRefreshBrowserProof",
+      "completedPlayerEndgameRefreshScenario",
+    ],
+    usages: [
+      "const endgameScenario = completedPlayerEndgameRefreshScenario();",
+      "assertCompletedPlayerEndgameRefreshBrowserProof({",
+    ],
+  }),
+  Object.freeze({
+    moduleSpecifier:
       "./dev_test_game_core_loop_revote_progression_scenarios.mjs",
     imports: [
       "assertRevoteProgressionBrowserProof",

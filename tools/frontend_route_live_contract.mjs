@@ -94,6 +94,7 @@ async function provePlayerRouteSource() {
   assert.match(source, /buildPlayerProjectionInitialSnapshot\(data\)/);
   assert.match(source, /buildPlayerProjectionColdLoads\(data\)/);
   assert.match(source, /playerResyncKeys\(data\)/);
+  assert.match(source, /endgameSummary = snapshot\.endgameSummary/);
   return {
     route: "frontend/src/routes/g/[game]/+page.svelte",
     onMountConnects: true,
@@ -186,6 +187,22 @@ async function provePlayerLiveRuntime() {
         },
       ],
       [data.coldLoad.dayVoteOutcomesEndpoint]: [],
+      [data.coldLoad.endgameSummaryEndpoint]: {
+        completed: true,
+        winner: null,
+        slots: [
+          {
+            slot_id: "slot-7",
+            alive: true,
+            status: "alive",
+            role_key: "godfather",
+            alignment: "mafia",
+            role_revealed: true,
+            alignment_revealed: true,
+          },
+        ],
+        boundary: "Completed summary recovered through live resync.",
+      },
       [data.coldLoad.notificationsEndpoint]: [
         { effect: "Commuted", phase_id: "N02", status: "Delivered" },
       ],
@@ -252,10 +269,16 @@ async function provePlayerLiveRuntime() {
   );
   assert.equal(windowRef.__fmarchLiveProjectionStatus.state, "recovered");
   assert.equal(windowRef.__fmarchPlayerProjection.thread.posts[0].seq, 450);
+  assert.equal(windowRef.__fmarchPlayerProjection.endgameSummary.completed, true);
+  assert.equal(
+    windowRef.__fmarchPlayerProjection.endgameSummary.slots[0].roleKey,
+    "godfather",
+  );
   assert.deepEqual(playerResyncKeys(data), [
     "thread",
     "votecount",
     "dayVoteOutcomes",
+    "endgameSummary",
     "notifications",
     "investigationResults",
     "commandState",
@@ -269,6 +292,7 @@ async function provePlayerLiveRuntime() {
     eventKinds: events.map((event) => event?.kind),
     finalStatus: windowRef.__fmarchLiveProjectionStatus,
     recoveredThreadSeq: windowRef.__fmarchPlayerProjection.thread.posts[0].seq,
+    recoveredEndgameSummary: windowRef.__fmarchPlayerProjection.endgameSummary,
     exposureKey: "__fmarchPlayerProjection",
   };
 }

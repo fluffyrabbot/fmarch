@@ -30,6 +30,7 @@ test("player route controller builds projection store boundaries from route data
     thread: data.thread,
     votecount: data.votecount,
     dayVoteOutcomes: data.dayVoteOutcomes,
+    endgameSummary: data.endgameSummary,
     notifications: data.notifications,
     investigationResults: data.investigationResults,
     commandState: data.commandState,
@@ -38,6 +39,7 @@ test("player route controller builds projection store boundaries from route data
     "thread",
     "votecount",
     "dayVoteOutcomes",
+    "endgameSummary",
     "notifications",
     "investigationResults",
     "commandState",
@@ -46,6 +48,7 @@ test("player route controller builds projection store boundaries from route data
     "thread",
     "votecount",
     "dayVoteOutcomes",
+    "endgameSummary",
     "notifications",
     "investigationResults",
     "commandState",
@@ -63,11 +66,13 @@ test("player route controller builds projection store boundaries from route data
     "thread",
     "votecount",
     "dayVoteOutcomes",
+    "endgameSummary",
   ]);
   assert.deepEqual(playerResyncKeys(anonymousData), [
     "thread",
     "votecount",
     "dayVoteOutcomes",
+    "endgameSummary",
   ]);
   assert.deepEqual(
     playerRefreshKeysForLiveDelta(data, {
@@ -350,7 +355,7 @@ test("player route controller refreshes command state after stale phase rejects"
       action: "submit_vote",
       commandStatus: { state: "reject", error: "GameAlreadyCompleted" },
     }),
-    ["votecount", "commandState"],
+    ["votecount", "commandState", "endgameSummary"],
   );
   assert.deepEqual(
     playerRefreshKeysForCommandOutcome({
@@ -358,7 +363,12 @@ test("player route controller refreshes command state after stale phase rejects"
       action: "submit_action:factional_kill",
       commandStatus: { state: "reject", error: "GameAlreadyCompleted" },
     }),
-    ["notifications", "investigationResults", "commandState"],
+    [
+      "notifications",
+      "investigationResults",
+      "commandState",
+      "endgameSummary",
+    ],
   );
 });
 
@@ -648,6 +658,20 @@ test("player route controller records one current command receipt per action", (
       current: true,
     },
   ]);
+
+  const completed = recordPlayerCommandReceipt(
+    third,
+    "submit_post",
+    { state: "reject", message: "Reject GameAlreadyCompleted" },
+    ["thread", "votecount", "commandState", "dayVoteOutcomes", "endgameSummary"],
+  );
+  assert.deepEqual(completed.at(-1).commandTrace.projectionRefreshKeys, [
+    "thread",
+    "votecount",
+    "commandState",
+    "dayVoteOutcomes",
+    "endgameSummary",
+  ]);
 });
 
 test("player route controller toggles private item expansion and validates private rows", () => {
@@ -707,6 +731,7 @@ function fixtureData(overrides = {}) {
     thread: { nextBeforeSeq: 41, posts: [] },
     votecount: [],
     dayVoteOutcomes: [],
+    endgameSummary: null,
     notifications: [],
     investigationResults: [],
     commandState: {
@@ -717,6 +742,7 @@ function fixtureData(overrides = {}) {
       threadEndpoint: "/games/midsummer/thread?limit=50",
       votecountEndpoint: "/games/midsummer/votecount",
       dayVoteOutcomesEndpoint: "/games/midsummer/day-vote-outcomes",
+      endgameSummaryEndpoint: "/games/midsummer/endgame-summary",
       notificationsEndpoint:
         "/games/midsummer/notifications?principal_user_id=player_mira",
       investigationResultsEndpoint:

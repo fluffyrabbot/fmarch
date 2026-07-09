@@ -68,6 +68,7 @@
   let thread = data.thread;
   let votecount = data.votecount;
   let dayVoteOutcomes = data.dayVoteOutcomes;
+  let endgameSummary = data.endgameSummary;
   let commandState = data.commandState;
   let player = data.player;
   let phase = data.phase;
@@ -116,6 +117,7 @@
     ...data,
     commandState,
     dayVoteOutcomes,
+    endgameSummary,
     player,
     phase,
     composer,
@@ -129,7 +131,7 @@
   });
   $: playerRoleCard = buildPlayerRoleCardViewModel({ commandState, player });
   $: playerEndgameSummary = buildPlayerEndgameSummaryViewModel({
-    endgameSummary: data.endgameSummary ?? null,
+    endgameSummary: endgameSummary ?? null,
     gameCompleted: player.gameCompleted === true,
   });
   $: if (typeof window !== "undefined") {
@@ -153,6 +155,7 @@
     dayVoteOutcomes = Array.isArray(snapshot.dayVoteOutcomes)
       ? snapshot.dayVoteOutcomes
       : [];
+    endgameSummary = snapshot.endgameSummary ?? null;
     commandState = snapshot.commandState;
     player = Object.freeze({
       ...data.player,
@@ -264,19 +267,20 @@
         projectionStore,
       });
       commandStatus = result.commandStatus;
+      const bridgePlan = buildPlayerCommandDispatchBridgePlan({
+        data: dispatchData,
+        action,
+        composerBody,
+        optimisticStatus,
+        finalStatus: commandStatus,
+      });
       commandReceipts = recordPlayerCommandReceipt(
         commandReceipts,
         action,
         commandStatus,
+        bridgePlan.projectionRefreshKeys,
       );
       if (typeof window !== "undefined") {
-        const bridgePlan = buildPlayerCommandDispatchBridgePlan({
-          data: dispatchData,
-          action,
-          composerBody,
-          optimisticStatus,
-          finalStatus: commandStatus,
-        });
         exposePlayerCommandDispatchBridgePlan({
           windowRef: window,
           plan: bridgePlan,
@@ -287,19 +291,20 @@
       }
     } catch (error) {
       commandStatus = playerCommandErrorStatus(error, action);
+      const bridgePlan = buildPlayerCommandDispatchBridgePlan({
+        data: dispatchData,
+        action,
+        composerBody,
+        optimisticStatus,
+        finalStatus: commandStatus,
+      });
       commandReceipts = recordPlayerCommandReceipt(
         commandReceipts,
         action,
         commandStatus,
+        bridgePlan.projectionRefreshKeys,
       );
       if (typeof window !== "undefined") {
-        const bridgePlan = buildPlayerCommandDispatchBridgePlan({
-          data: dispatchData,
-          action,
-          composerBody,
-          optimisticStatus,
-          finalStatus: commandStatus,
-        });
         exposePlayerCommandDispatchBridgePlan({
           windowRef: window,
           plan: bridgePlan,

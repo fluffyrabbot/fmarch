@@ -90,6 +90,7 @@ import {
 } from "./dev_test_game_core_loop_action_scenarios.mjs";
 import {
   completedGameEndgameSurfaceFixture,
+  completedHardeningProofFixture,
   dayFiveNoLynchResolutionSurfaceFixture,
 } from "./dev_test_game_core_loop_completed_game_fixtures.mjs";
 import {
@@ -16083,6 +16084,7 @@ test("session card and markdown include role credential URLs and tokens", async 
               "notifications",
               "investigationResults",
               "commandState",
+              "dayVoteOutcomes",
             ],
           },
         },
@@ -17223,93 +17225,8 @@ test("session card and markdown include role credential URLs and tokens", async 
           ],
         },
       },
-      stalePlayerComplete: {
-        status: "passed",
-        game: `${game}-player-complete-test`,
-        setupCommandState: {
-          actorSlot: "slot-7",
-          gameCompleted: false,
-          actions: [],
-          voteTargets: [{ kind: "no_lynch", slotId: null, label: "No lynch" }],
-        },
-        setupButtons: [
-          { action: "submit_vote:no_lynch", disabled: false },
-          { action: "withdraw_vote", disabled: false },
-          { action: "submit_post", disabled: false },
-        ],
-        staleVoteButton: { action: "submit_vote:no_lynch", disabled: false },
-        closedStatus: { state: "closed" },
-        liveComplete: {
-          state: "ack",
-          streamSeqs: [56],
-        },
-        reject: {
-          state: "reject",
-          error: "GameAlreadyCompleted",
-          message: "Reject GameAlreadyCompleted: game already completed",
-          serverEnvelope: { body: { kind: "Reject" } },
-        },
-        commandStateAfterReject: {
-          gameCompleted: true,
-          actions: [],
-          voteTargets: [],
-          boundary: "The game is complete; role actions, votes, and posts are closed.",
-        },
-        dispatchPlan: {
-          projectionRefreshKeys: ["votecount", "commandState"],
-        },
-        buttonsAfterReject: [
-          { action: "submit_vote", disabled: true },
-          { action: "withdraw_vote", disabled: true },
-          { action: "submit_post", disabled: true },
-        ],
-        currentVoteAfterReject: {
-          hasVote: "false",
-          text: "No current vote",
-        },
-        apiCommandStateAfterReject: {
-          game_completed: true,
-          actions: [],
-          vote_targets: [],
-        },
-        stalePublicReloadAfterReject: {
-          status: "passed",
-          routeResponseStatus: 200,
-          surfaceText:
-            "Endgame\nThe game is complete.\nNo current vote\nNo older posts",
-          threadPagerVisible: true,
-          recoveredCommandState: {
-            actorSlot: "slot-7",
-            gameCompleted: true,
-            actions: [],
-            voteTargets: [],
-            boundary:
-              "The game is complete; role actions, votes, and posts are closed.",
-          },
-          reloadButtons: [
-            { action: "submit_vote", disabled: true },
-            { action: "withdraw_vote", disabled: true },
-            { action: "submit_post", disabled: true },
-          ],
-          reloadCurrentVote: {
-            hasVote: "false",
-            text: "No current vote",
-          },
-          reloadThreadPostBodies: [],
-          apiCommandStateAfterReload: {
-            game_completed: true,
-            actions: [],
-            vote_targets: [],
-          },
-          apiThreadPostBodiesAfterReload: [],
-          apiStateAfterReload: {
-            completed: true,
-            slots: [
-              { role_revealed: true, alignment_revealed: true },
-            ],
-          },
-        },
-      },
+      stalePlayerComplete: completedHardeningProofFixture(game)
+        .stalePlayerComplete,
       staleHostDeadline: {
         status: "passed",
         actionId: "extend_deadline",
@@ -17723,6 +17640,7 @@ test("session card and markdown include role credential URLs and tokens", async 
       "public-player-complete-reload",
       "stale-player-complete",
       "stale-player-complete-reload",
+      "stale-player-complete-endgame-resync",
       "stale-same-action-recovery",
       "stale-dead-action-conflict",
       "stale-action-conflict",
@@ -23758,6 +23676,7 @@ function hardeningAdminProofFixture() {
         "public-player-complete-reload",
         "stale-player-complete",
         "stale-player-complete-reload",
+        "stale-player-complete-endgame-resync",
         "stale-same-action-recovery",
         "stale-dead-action-conflict",
         "stale-action-conflict",
@@ -23781,6 +23700,7 @@ function hardeningAdminProofFixture() {
         "concurrent-player-complete-race",
         "public-player-complete-reload",
         "stale-player-complete-reload",
+        "stale-player-complete-endgame-resync",
         "concurrent-host-mixed-advance-race",
         "concurrent-host-mixed-advance-race-reload",
         "stale-host-resolve",

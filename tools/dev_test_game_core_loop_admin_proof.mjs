@@ -3250,6 +3250,7 @@ async function proveCompletedPlayerRoleReload({
       notifications: [],
       threadBody: "The game is complete.",
       threadSeq: 921,
+      endgameSummary: completedPlayerEndgameSummaryResponse(),
       dayVoteOutcomesRows: [
         ...dayTwoVoteOutcomeRows(),
         dayThreeVoteOutcomeRow(),
@@ -3398,6 +3399,7 @@ async function proveCompletedDeadPlayerStaleVoteRecovery({
       notifications: [],
       threadBody: "The game is complete.",
       threadSeq: 921,
+      endgameSummary: completedPlayerEndgameSummaryResponse(),
       dayVoteOutcomesRows: [
         ...dayTwoVoteOutcomeRows(),
         dayThreeVoteOutcomeRow(),
@@ -4847,6 +4849,19 @@ async function collectCompletedPlayerReloadSnapshot(page) {
       commandState: window.__fmarchPlayerProjection?.commandState ?? null,
       notifications: window.__fmarchPlayerProjection?.notifications ?? null,
       dayVoteOutcomes: window.__fmarchPlayerProjection?.dayVoteOutcomes ?? null,
+      endgameSummary: window.__fmarchPlayerProjection?.endgameSummary ?? null,
+      endgameSurface: (() => {
+        const root = document.querySelector('[data-testid="player-endgame-summary"]');
+        return {
+          state: root?.getAttribute("data-state") ?? null,
+          revealRows: Array.from(
+            document.querySelectorAll('[data-testid^="player-endgame-reveal-"]'),
+          ).map((row) => ({
+            testId: row.getAttribute("data-testid"),
+            text: row.textContent?.trim() ?? "",
+          })),
+        };
+      })(),
       coldLoadEndpoints: window.__fmarchPlayerColdLoadEndpoints ?? null,
       buttons,
       enabledMutatingButtons: mutatingButtons.filter((button) => !button.disabled),
@@ -7896,6 +7911,12 @@ async function installStaleCompletedGamePlayerCommandRecoveryBrowserRoutes(
       dayFiveNoLynchOutcomeRow(),
     ]);
   });
+  await page.route("**/games/*/endgame-summary**", async (route) => {
+    await fulfillJson(
+      route,
+      rejected ? completedPlayerEndgameSummaryResponse() : null,
+    );
+  });
   await page.route("**/games/*/notifications?**", async (route) => {
     await fulfillJson(route, []);
   });
@@ -7924,6 +7945,7 @@ async function installPostDayThreePlayerBrowserRoutes(
     threadBody,
     threadSeq,
     dayVoteOutcomesRows = [...dayTwoVoteOutcomeRows(), dayThreeVoteOutcomeRow()],
+    endgameSummary = null,
   },
 ) {
   await page.route("**/games/*/thread?**", async (route) => {
@@ -7953,6 +7975,9 @@ async function installPostDayThreePlayerBrowserRoutes(
   await page.route("**/games/*/day-vote-outcomes?**", async (route) => {
     await fulfillJson(route, dayVoteOutcomesRows);
   });
+  await page.route("**/games/*/endgame-summary**", async (route) => {
+    await fulfillJson(route, endgameSummary);
+  });
   await page.route("**/games/*/notifications?**", async (route) => {
     await fulfillJson(route, notifications);
   });
@@ -7962,6 +7987,26 @@ async function installPostDayThreePlayerBrowserRoutes(
   await page.route("**/games/*/player-command-state?**", async (route) => {
     await fulfillJson(route, commandState);
   });
+}
+
+function completedPlayerEndgameSummaryResponse() {
+  return {
+    completed: true,
+    winner: null,
+    slots: [
+      {
+        slot_id: "slot-7",
+        alive: true,
+        status: "alive",
+        role_key: "godfather",
+        alignment: "mafia",
+        role_revealed: true,
+        alignment_revealed: true,
+      },
+    ],
+    boundary:
+      "The completed game exposes reveal-gated role and alignment facts to player role URLs.",
+  };
 }
 
 async function installPostDayThreeHostAdvanceBrowserRoutes(

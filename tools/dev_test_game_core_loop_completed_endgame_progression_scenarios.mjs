@@ -581,7 +581,7 @@ export function completedPlayerCompleteRaceProofLaneDescriptors({ hardening }) {
 }
 
 export function completedStalePlayerCompleteProofLaneDescriptors({ hardening }) {
-  const [rejectLane, reloadLane] =
+  const [rejectLane, reloadLane, resyncLane] =
     completedStalePlayerCompleteHardeningLaneCases();
   return [
     completedGameLaneDescriptor(rejectLane, {
@@ -707,6 +707,42 @@ export function completedStalePlayerCompleteProofLaneDescriptors({ hardening }) 
             ) === true,
       },
     ),
+    completedGameLaneDescriptor(resyncLane, {
+      game: hardening.stalePlayerComplete?.game ?? null,
+      resyncFromSeq:
+        hardening.stalePlayerComplete?.manualEndgameResync?.fromSeq ?? null,
+      resyncKeys: hardening.stalePlayerComplete?.resyncKeysAfterReject ?? null,
+      summaryCompleted:
+        hardening.stalePlayerComplete?.manualEndgameResync
+          ?.snapshotEndgameSummary?.completed ?? null,
+      summaryState:
+        hardening.stalePlayerComplete?.manualEndgameResync?.surface?.state ?? null,
+      passed:
+        hardening.stalePlayerComplete?.status === "passed" &&
+        hardening.stalePlayerComplete?.resyncKeysAfterReject?.includes(
+          "endgameSummary",
+        ) === true &&
+        hardening.stalePlayerComplete?.manualEndgameResync?.fromSeq === 0 &&
+        hardening.stalePlayerComplete?.manualEndgameResync
+          ?.snapshotEndgameSummary?.completed === true &&
+        hardening.stalePlayerComplete?.manualEndgameResync
+          ?.snapshotEndgameSummary?.slots?.some(
+            (slot) =>
+              slot.slotId === "slot-7" &&
+              slot.roleKey === "godfather" &&
+              slot.alignment === "mafia" &&
+              slot.roleRevealed === true &&
+              slot.alignmentRevealed === true,
+          ) === true &&
+        hardening.stalePlayerComplete?.manualEndgameResync?.surface?.state ===
+          "revealed" &&
+        hardening.stalePlayerComplete?.manualEndgameResync?.surface?.revealRows?.some(
+          (row) =>
+            row.testId === "player-endgame-reveal-slot-7" &&
+            row.text.includes("Godfather") &&
+            row.text.includes("Mafia"),
+        ) === true,
+    }),
   ];
 }
 

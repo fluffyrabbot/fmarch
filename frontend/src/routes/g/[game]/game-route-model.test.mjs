@@ -125,6 +125,10 @@ test("player route data exposes thread, channel, votecount, and touch command la
     data.coldLoad.dayVoteOutcomesEndpoint,
     "/games/midsummer/day-vote-outcomes",
   );
+  assert.equal(
+    data.coldLoad.endgameSummaryEndpoint,
+    "/games/midsummer/endgame-summary",
+  );
   assert.deepEqual(data.dayVoteOutcomes, [
     {
       game: null,

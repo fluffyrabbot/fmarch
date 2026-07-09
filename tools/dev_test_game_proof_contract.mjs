@@ -5663,8 +5663,12 @@ export function buildDevTestGameProofRun(session, options = {}) {
             "commandState",
             "dayVoteOutcomes",
           ],
-          receiptRefreshKeys: ["commandState"],
-          forbiddenReceiptRefreshKeys: ["dayVoteOutcomes"],
+          receiptRefreshKeys: [
+            "notifications",
+            "investigationResults",
+            "commandState",
+            "dayVoteOutcomes",
+          ],
           receiptStatusFragments: ["Reject PhaseLocked", "stale action state"],
           stalePhaseId: "N01",
           browserCommandState: {

@@ -8,6 +8,7 @@ import {
 import {
   loadPlayerColdData,
   dayVoteOutcomesUrl,
+  endgameSummaryUrl,
   playerCommandStateUrl,
   playerThreadUrl,
   playerVotecountUrl,
@@ -202,6 +203,7 @@ export async function buildGameRouteData({
       }),
       votecountEndpoint: playerVotecountUrl({ game: gameId }),
       dayVoteOutcomesEndpoint: dayVoteOutcomesUrl({ game: gameId }),
+      endgameSummaryEndpoint: endgameSummaryUrl({ game: gameId }),
       notificationsEndpoint: hasPrincipal
         ? principalScopedGameUrl({
             game: gameId,

@@ -314,6 +314,7 @@ test("completed-game scenario module derives shared hardening lane groups", () =
     "public-player-complete-reload",
     "stale-player-complete",
     "stale-player-complete-reload",
+    "stale-player-complete-endgame-resync",
   ]);
   assert.deepEqual(
     completedGameHardeningSpineTargetCases().map((target) => ({
@@ -435,6 +436,7 @@ test("completed-game scenario module derives shared hardening lane groups", () =
     "public-player-complete-reload",
     "stale-player-complete",
     "stale-player-complete-reload",
+    "stale-player-complete-endgame-resync",
   ]);
   assert.deepEqual(
     completedPlayerCompleteRaceHardeningLaneCases().map((scenario) => [
@@ -450,6 +452,7 @@ test("completed-game scenario module derives shared hardening lane groups", () =
     "concurrent-player-complete-race",
     "public-player-complete-reload",
     "stale-player-complete-reload",
+    "stale-player-complete-endgame-resync",
   ]);
   assert.deepEqual(completedPlayerSeedDemoOnlyScenarioIds(), [
     "stale-player-complete",
@@ -462,6 +465,7 @@ test("completed-game scenario module derives shared hardening lane groups", () =
     "concurrent-player-complete-race",
     "public-player-complete-reload",
     "stale-player-complete-reload",
+    "stale-player-complete-endgame-resync",
   ]);
   assert.deepEqual(completedGameSeedDemoOnlyScenarioIds(), [
     "stale-host-complete",
@@ -472,7 +476,11 @@ test("completed-game scenario module derives shared hardening lane groups", () =
       families: "completed-player-reload",
       seedGroups: "required",
     }),
-    ["public-player-complete-reload", "stale-player-complete-reload"],
+    [
+      "public-player-complete-reload",
+      "stale-player-complete-reload",
+      "stale-player-complete-endgame-resync",
+    ],
   );
   assert.deepEqual(
     completedGameHardeningLaneCasesFor({
@@ -503,6 +511,7 @@ test("completed-game scenario module derives shared hardening lane groups", () =
     [
       ["stale-player-complete", "reject"],
       ["stale-player-complete-reload", "reload"],
+      ["stale-player-complete-endgame-resync", "resync"],
     ],
   );
 });

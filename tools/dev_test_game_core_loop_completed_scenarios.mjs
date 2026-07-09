@@ -381,6 +381,24 @@ export function assertCompletedPlayerReloadProofCase({
         expectedCommandStateEndpoint ||
       snapshot.coldLoadEndpoints?.notificationsEndpoint !==
         expectedNotificationsEndpoint ||
+      snapshot.coldLoadEndpoints?.endgameSummaryEndpoint !==
+        expectedCommandStateEndpoint.replace(
+          /\/player-command-state\?.*$/,
+          "/endgame-summary",
+        ) ||
+      snapshot.endgameSummary?.completed !== true ||
+      snapshot.endgameSummary?.slots?.some(
+        (slot) =>
+          slot.slotId === "slot-7" &&
+          slot.roleKey === "godfather" &&
+          slot.alignment === "mafia" &&
+          slot.roleRevealed === true &&
+          slot.alignmentRevealed === true,
+      ) !== true ||
+      snapshot.endgameSurface?.state !== "revealed" ||
+      snapshot.endgameSurface?.revealRows?.some(
+        (row) => row.testId === "player-endgame-reveal-slot-7",
+      ) !== true ||
       snapshot.enabledMutatingButtons?.length !== 0 ||
       !snapshot.disabledMutatingButtons?.some(
         (button) => button.action === "submit_post" && button.disabled === true,
@@ -454,6 +472,10 @@ export function assertCompletedDeadPlayerStaleVoteRecoveryProofCase({
       `/games/${expectedGame}/player-command-state?principal_user_id=${scenario.principalUserId}&slot_id=${scenario.expectedSlot}` ||
     snapshot.coldLoadEndpoints?.notificationsEndpoint !==
       `/games/${expectedGame}/notifications?principal_user_id=${scenario.principalUserId}` ||
+    snapshot.coldLoadEndpoints?.endgameSummaryEndpoint !==
+      `/games/${expectedGame}/endgame-summary` ||
+    snapshot.endgameSummary?.completed !== true ||
+    snapshot.endgameSurface?.state !== "revealed" ||
     snapshot.enabledMutatingButtons?.length !== 0
   ) {
     throwCompletedScenarioAssertionError({

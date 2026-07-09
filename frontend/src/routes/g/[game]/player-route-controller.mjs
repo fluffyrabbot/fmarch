@@ -13,6 +13,7 @@ import {
 import {
   normalizeThreadPage,
   normalizeDayVoteOutcomes,
+  normalizeEndgameSummary,
   normalizePlayerCommandState,
   normalizeVotecount,
   playerThreadUrl,
@@ -27,6 +28,7 @@ export function buildPlayerProjectionInitialSnapshot(data) {
     thread: data.thread,
     votecount: data.votecount,
     dayVoteOutcomes: data.dayVoteOutcomes,
+    endgameSummary: data.endgameSummary,
     notifications: data.notifications,
     investigationResults: data.investigationResults,
     commandState: data.commandState,
@@ -46,6 +48,10 @@ export function buildPlayerProjectionColdLoads(data) {
     dayVoteOutcomes: Object.freeze({
       url: data.coldLoad.dayVoteOutcomesEndpoint,
       normalize: normalizeDayVoteOutcomes,
+    }),
+    endgameSummary: Object.freeze({
+      url: data.coldLoad.endgameSummaryEndpoint,
+      normalize: normalizeEndgameSummary,
     }),
     ...(data.coldLoad.notificationsEndpoint === null
       ? {}
@@ -79,6 +85,7 @@ export function playerResyncKeys(data) {
     "thread",
     "votecount",
     "dayVoteOutcomes",
+    "endgameSummary",
     ...(data.coldLoad.notificationsEndpoint === null ? [] : ["notifications"]),
     ...(data.coldLoad.investigationResultsEndpoint === null
       ? []
@@ -131,12 +138,25 @@ export function playerCommandErrorStatus(error, action = null) {
     : attachCommandTrace(status, playerCommandTrace(action));
 }
 
-export function recordPlayerCommandReceipt(commandReceipts, action, status) {
+export function recordPlayerCommandReceipt(
+  commandReceipts,
+  action,
+  status,
+  projectionRefreshKeys = null,
+) {
+  const commandTrace =
+    status?.commandTrace ?? playerCommandTrace(String(action));
   const receipt = Object.freeze({
     actionId: String(action),
     state: String(status?.state ?? "info"),
     message: String(status?.message ?? "Command updated"),
-    commandTrace: status?.commandTrace ?? playerCommandTrace(String(action)),
+    commandTrace:
+      projectionRefreshKeys === null
+        ? commandTrace
+        : Object.freeze({
+            ...commandTrace,
+            projectionRefreshKeys: Object.freeze([...projectionRefreshKeys]),
+          }),
     current: true,
   });
   return Object.freeze([
@@ -307,7 +327,7 @@ export function playerRefreshKeysForCommandOutcome({ data, action, commandStatus
     return playerRefreshKeysForDataActionWithCommandState(data, action);
   }
   if (commandStatus?.state === "reject" && commandStatus?.error === "GameAlreadyCompleted") {
-    return playerRefreshKeysForDataActionWithCommandState(data, action);
+    return playerRefreshKeysForCompletedGame(data, action);
   }
   if (
     commandStatus?.state === "reject" &&
@@ -357,6 +377,17 @@ function playerRefreshKeysForDataActionWithCommandState(data, action) {
     !keys.includes("commandState")
   ) {
     keys.push("commandState");
+  }
+  return Object.freeze(keys);
+}
+
+function playerRefreshKeysForCompletedGame(data, action) {
+  const keys = [...playerRefreshKeysForDataActionWithCommandState(data, action)];
+  if (
+    data.coldLoad.endgameSummaryEndpoint != null &&
+    !keys.includes("endgameSummary")
+  ) {
+    keys.push("endgameSummary");
   }
   return Object.freeze(keys);
 }

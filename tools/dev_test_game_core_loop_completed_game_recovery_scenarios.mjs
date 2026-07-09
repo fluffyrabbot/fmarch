@@ -156,6 +156,14 @@ export function completedPlayerReloadHardeningLaneCaseDefinitions() {
       proofGroup: "stale-player-complete",
       proofStep: "reload",
     },
+    {
+      id: "stale-player-complete-endgame-resync",
+      label: "Completed player endgame summary survives live resync",
+      family: "completed-player-reload",
+      seedGroup: "required",
+      proofGroup: "stale-player-complete",
+      proofStep: "resync",
+    },
   ]);
 }
 
@@ -180,7 +188,7 @@ export const staleCompletedGamePlayerCommandCaseDefinitions = Object.freeze([
       "Seeded browser GameAlreadyCompleted stale D05 vote refreshed into completed endgame controls.",
     staleBoundary:
       "Seeded browser stale completed-game vote proof opened with old Day 5 no-lynch controls.",
-    expectedRefreshKeys: ["votecount", "commandState"],
+    expectedRefreshKeys: ["votecount", "commandState", "endgameSummary"],
   }),
   Object.freeze({
     proofField: "staleCompletedPostRecoveryProof",
@@ -202,12 +210,92 @@ export const staleCompletedGamePlayerCommandCaseDefinitions = Object.freeze([
       "votecount",
       "commandState",
       "dayVoteOutcomes",
+      "endgameSummary",
     ],
   }),
 ]);
 
 export function staleCompletedGamePlayerCommandCases() {
   return freezeScenarioCases(staleCompletedGamePlayerCommandCaseDefinitions);
+}
+
+export function completedPlayerEndgameRefreshScenario() {
+  const staleVote = staleCompletedGamePlayerCommandCaseDefinitions.find(
+    (scenario) => scenario.commandKind === "SubmitVote",
+  );
+  if (staleVote === undefined) {
+    throw new Error("completed player endgame refresh scenario is missing");
+  }
+  return freezeScenarioCase({
+    ...staleVote,
+    expectedResyncKey: "endgameSummary",
+    expectedSummaryState: "revealed",
+    expectedRevealSlot: "slot-7",
+    expectedRoleKey: "godfather",
+    expectedAlignment: "mafia",
+  });
+}
+
+export function assertCompletedPlayerEndgameRefreshBrowserProof({
+  proof,
+  scenario = completedPlayerEndgameRefreshScenario(),
+  includeEvidenceInError = false,
+}) {
+  const summaries = [
+    proof?.endgameSummaryAfterReject,
+    proof?.manualEndgameResync?.snapshotEndgameSummary,
+    proof?.stalePublicReloadAfterReject?.recoveredEndgameSummary,
+  ];
+  const surfaces = [
+    proof?.endgameSurfaceAfterReject,
+    proof?.manualEndgameResync?.surface,
+    proof?.stalePublicReloadAfterReject?.endgameSurface,
+  ];
+  const summariesMatch = summaries.every((summary) => {
+    const slot = summary?.slots?.find(
+      (candidate) => candidate.slotId === scenario.expectedRevealSlot,
+    );
+    return (
+      summary?.completed === true &&
+      slot?.roleKey === scenario.expectedRoleKey &&
+      slot?.alignment === scenario.expectedAlignment &&
+      slot?.roleRevealed === true &&
+      slot?.alignmentRevealed === true
+    );
+  });
+  const surfacesMatch = surfaces.every(
+    (surface) =>
+      surface?.state === scenario.expectedSummaryState &&
+      surface.revealRows?.some(
+        (row) =>
+          row.testId === `player-endgame-reveal-${scenario.expectedRevealSlot}` &&
+          row.text.includes("Godfather") &&
+          row.text.includes("Mafia"),
+      ),
+  );
+  const apiSlot = proof?.apiEndgameSummaryAfterReject?.slots?.find(
+    (slot) => slot.slot_id === scenario.expectedRevealSlot,
+  );
+  if (
+    !sameOrderedValues(
+      proof?.dispatchPlan?.projectionRefreshKeys,
+      scenario.expectedRefreshKeys,
+    ) ||
+    proof?.coldLoadEndpointsAfterReject?.endgameSummaryEndpoint !==
+      `/games/${proof?.game}/endgame-summary` ||
+    !proof?.resyncKeysAfterReject?.includes(scenario.expectedResyncKey) ||
+    proof?.manualEndgameResync?.fromSeq !== 0 ||
+    !summariesMatch ||
+    !surfacesMatch ||
+    proof?.apiEndgameSummaryAfterReject?.completed !== true ||
+    apiSlot?.role_key !== scenario.expectedRoleKey ||
+    apiSlot?.alignment !== scenario.expectedAlignment ||
+    apiSlot?.role_revealed !== true ||
+    apiSlot?.alignment_revealed !== true
+  ) {
+    const suffix = includeEvidenceInError ? `: ${JSON.stringify(proof)}` : "";
+    throw new Error(`completed player endgame refresh proof drifted${suffix}`);
+  }
 }
 
 export function staleCompletedGamePlayerCommandHardeningLaneCaseDefinitions() {
@@ -550,4 +638,13 @@ export function staleCompletedGamePlayerCommandProofArgs({
     sourceRoleUrl: sourceActionPlayerRoleUrl,
     scenario,
   };
+}
+
+function sameOrderedValues(actual, expected) {
+  return (
+    Array.isArray(actual) &&
+    Array.isArray(expected) &&
+    actual.length === expected.length &&
+    actual.every((value, index) => value === expected[index])
+  );
 }

@@ -32,6 +32,9 @@ import {
   privateChannelInvalidActionRecoveryScenario,
   staleCompletedPrivatePostScenario,
 } from "./dev_test_game_core_loop_private_channel_recovery_scenarios.mjs";
+import {
+  assertCompletedPlayerEndgameRefreshBrowserProof,
+} from "./dev_test_game_core_loop_completed_game_recovery_scenarios.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const sessionPath = path.join(repoRoot, "target", "dev-test-game", "session.json");
@@ -1663,6 +1666,10 @@ const concurrentPlayerCompleteRace =
   session.verification.multiplayerHardening.concurrentPlayerCompleteRace;
 const stalePlayerComplete =
   session.verification.multiplayerHardening.stalePlayerComplete;
+assertCompletedPlayerEndgameRefreshBrowserProof({
+  proof: stalePlayerComplete,
+  includeEvidenceInError: true,
+});
 const concurrentHostPublishRace =
   session.verification.multiplayerHardening.concurrentHostPublishRace;
 assert.equal(session.verification.multiplayerHardening.hostVotecountPublication.status, "passed");

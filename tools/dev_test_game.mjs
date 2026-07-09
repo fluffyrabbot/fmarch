@@ -58,6 +58,10 @@ import {
   terminalRecoveryBrowserScenario,
 } from "./dev_test_game_core_loop_terminal_recovery_scenarios.mjs";
 import {
+  assertCompletedPlayerEndgameRefreshBrowserProof,
+  completedPlayerEndgameRefreshScenario,
+} from "./dev_test_game_core_loop_completed_game_recovery_scenarios.mjs";
+import {
   createUnexpectedMediaResponseGuard,
 } from "./dev_test_game_media_response_guard.mjs";
 import {
@@ -7484,7 +7488,7 @@ async function submitStaleActionConflict({
       true ||
     currentReceipt?.commandTrace?.projectionRefreshKeys?.includes(
       "dayVoteOutcomes",
-    ) === true ||
+    ) !== true ||
     commandStateAfterReject?.actorAlive !== true ||
     commandStateAfterReject?.actorStatus !== "alive" ||
     commandStateAfterReject?.phase?.locked !== false ||
@@ -10474,6 +10478,7 @@ async function verifyStalePlayerCompleteRecovery({
   frontendBaseUrl,
   normalizeCommandResponse,
 }) {
+  const endgameScenario = completedPlayerEndgameRefreshScenario();
   const completeGame = crypto.randomUUID();
   const seed = await seedHostCompleteRecoveryGame({ completeGame });
   const context = playerPage.context();
@@ -10490,7 +10495,8 @@ async function verifyStalePlayerCompleteRecovery({
     );
     const setupButtons = await playerCommandButtons(stalePlayerPage);
     const staleVoteButton = setupButtons.find(
-      (button) => button.action?.startsWith("submit_vote") && button.disabled === false,
+      (button) =>
+        button.action === endgameScenario.clickedAction && button.disabled === false,
     );
     const closedStatus = await stalePlayerPage.evaluate(
       () => window.__fmarchClosePlayerLiveProjection?.(),
@@ -10536,7 +10542,11 @@ async function verifyStalePlayerCompleteRecovery({
     await stalePlayerPage.waitForFunction(
       () =>
         window.__fmarchPlayerProjection?.commandState?.gameCompleted === true &&
-        (window.__fmarchPlayerProjection?.commandState?.actions ?? []).length === 0,
+        (window.__fmarchPlayerProjection?.commandState?.actions ?? []).length === 0 &&
+        window.__fmarchPlayerProjection?.endgameSummary?.completed === true &&
+        document
+          .querySelector('[data-testid="player-endgame-summary"]')
+          ?.getAttribute("data-state") === "revealed",
     );
     const reject = await stalePlayerPage.evaluate(
       () => window.__fmarchPlayerCommandStatus,
@@ -10546,6 +10556,18 @@ async function verifyStalePlayerCompleteRecovery({
     );
     const dispatchPlan = await stalePlayerPage.evaluate(
       () => window.__fmarchPlayerCommandDispatchBridgePlan,
+    );
+    const endgameSummaryAfterReject = await stalePlayerPage.evaluate(
+      () => window.__fmarchPlayerProjection?.endgameSummary,
+    );
+    const endgameSurfaceAfterReject = await playerEndgameSummarySurface(
+      stalePlayerPage,
+    );
+    const coldLoadEndpointsAfterReject = await stalePlayerPage.evaluate(
+      () => window.__fmarchPlayerColdLoadEndpoints,
+    );
+    const resyncKeysAfterReject = await stalePlayerPage.evaluate(
+      () => window.__fmarchPlayerResyncKeys,
     );
     const buttonsAfterReject = await playerCommandButtons(stalePlayerPage);
     const phaseAfterReject = await stalePlayerPage.evaluate(
@@ -10560,6 +10582,24 @@ async function verifyStalePlayerCompleteRecovery({
     const apiCommandStateAfterReject = await fetchJson(
       `${apiBaseUrl}/games/${completeGame}/player-command-state?principal_user_id=player-mira&slot_id=slot-7`,
     );
+    const apiEndgameSummaryAfterReject = await fetchJson(
+      `${apiBaseUrl}/games/${completeGame}/endgame-summary`,
+    );
+    const manualResyncSnapshot = await stalePlayerPage.evaluate(
+      () => window.__fmarchTriggerPlayerResync(0),
+    );
+    await stalePlayerPage.waitForFunction(
+      () =>
+        window.__fmarchPlayerProjection?.endgameSummary?.completed === true &&
+        document
+          .querySelector('[data-testid="player-endgame-summary"]')
+          ?.getAttribute("data-state") === "revealed",
+    );
+    const manualEndgameResync = {
+      fromSeq: 0,
+      snapshotEndgameSummary: manualResyncSnapshot.endgameSummary,
+      surface: await playerEndgameSummarySurface(stalePlayerPage),
+    };
     const reloadResponse = await stalePlayerPage.goto(
       `${frontendBaseUrl}/g/${completeGame}`,
       {
@@ -10582,7 +10622,11 @@ async function verifyStalePlayerCompleteRecovery({
         window.__fmarchPlayerProjection?.commandState?.gameCompleted === true &&
         (window.__fmarchPlayerProjection?.commandState?.actions ?? []).length === 0 &&
         (window.__fmarchPlayerProjection?.commandState?.voteTargets ?? []).length ===
-          0,
+          0 &&
+        window.__fmarchPlayerProjection?.endgameSummary?.completed === true &&
+        document
+          .querySelector('[data-testid="player-endgame-summary"]')
+          ?.getAttribute("data-state") === "revealed",
     );
     const reloadSurfaceText = await stalePlayerPage
       .getByTestId("player-surface")
@@ -10593,6 +10637,10 @@ async function verifyStalePlayerCompleteRecovery({
     const reloadCommandState = await stalePlayerPage.evaluate(
       () => window.__fmarchPlayerProjection?.commandState,
     );
+    const recoveredEndgameSummary = await stalePlayerPage.evaluate(
+      () => window.__fmarchPlayerProjection?.endgameSummary,
+    );
+    const reloadEndgameSurface = await playerEndgameSummarySurface(stalePlayerPage);
     const reloadButtons = await playerCommandButtons(stalePlayerPage);
     const reloadThreadPostBodies = await stalePlayerPage.evaluate(
       () =>
@@ -10623,6 +10671,8 @@ async function verifyStalePlayerCompleteRecovery({
       surfaceText: reloadSurfaceText,
       threadPagerVisible: reloadThreadPagerVisible,
       recoveredCommandState: reloadCommandState,
+      recoveredEndgameSummary,
+      endgameSurface: reloadEndgameSurface,
       reloadButtons,
       reloadCurrentVote,
       reloadThreadPostBodies,
@@ -10695,7 +10745,7 @@ async function verifyStalePlayerCompleteRecovery({
         })}`,
       );
     }
-    return {
+    const proof = {
       status: "passed",
       game: completeGame,
       seed,
@@ -10707,17 +10757,45 @@ async function verifyStalePlayerCompleteRecovery({
       reject,
       commandStateAfterReject,
       dispatchPlan,
+      endgameSummaryAfterReject,
+      endgameSurfaceAfterReject,
+      coldLoadEndpointsAfterReject,
+      resyncKeysAfterReject,
+      apiEndgameSummaryAfterReject,
+      manualEndgameResync,
       buttonsAfterReject,
       phaseAfterReject,
       currentVoteAfterReject,
       apiCommandStateAfterReject,
       stalePublicReloadAfterReject,
       proof:
-        "A disposable player role URL froze before completion with a projection-derived vote control, the game completed from another browser command, then that stale player vote control rejected with GameAlreadyCompleted, refreshed commandState, disabled vote/post controls, and reloaded the public player board to completed Endgame truth with no current vote, no vote targets, and no thread mutation.",
+        "A disposable player role URL froze before completion with a projection-derived vote control, the game completed from another browser command, then that stale player vote control rejected with GameAlreadyCompleted, refreshed commandState plus the reveal-gated endgame summary, recovered the same summary through explicit live resync, disabled vote/post controls, and reloaded the public player board to completed revealed Endgame truth with no current vote, no vote targets, and no thread mutation.",
     };
+    assertCompletedPlayerEndgameRefreshBrowserProof({
+      proof,
+      scenario: endgameScenario,
+      includeEvidenceInError: true,
+    });
+    return proof;
   } finally {
     await stalePlayerPage.close().catch(() => {});
   }
+}
+
+async function playerEndgameSummarySurface(page) {
+  const root = page.getByTestId("player-endgame-summary");
+  return {
+    state: await root.getAttribute("data-state"),
+    winnerText: await page.getByTestId("player-endgame-winner").innerText(),
+    revealRows: await page
+      .locator('[data-testid^="player-endgame-reveal-"]')
+      .evaluateAll((rows) =>
+        rows.map((row) => ({
+          testId: row.getAttribute("data-testid"),
+          text: row.textContent?.trim() ?? "",
+        })),
+      ),
+  };
 }
 
 async function playerCommandButtons(page) {

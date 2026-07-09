@@ -5182,7 +5182,7 @@ test("admin route data exposes local core loop proof as a native audit row", asy
     roleCount: 6,
     laneCount: proofRunFixture().lanes.length,
     completedGameCoverageStatus: "passed",
-    completedGameCoverageLaneCount: 9,
+    completedGameCoverageLaneCount: 10,
     completedGameCoverageFamilyCount: 4,
     releaseReady: false,
     productionReady: false,
@@ -5860,6 +5860,7 @@ test("admin local player recovery detail data carries focused lane rows", async 
       ["public-player-complete-reload", "passed"],
       ["stale-player-complete", "passed"],
       ["stale-player-complete-reload", "passed"],
+      ["stale-player-complete-endgame-resync", "passed"],
       [
         "stale-dead-action-conflict",
         "passed: Reject SlotNotAlive, role URL true, actor dead",
