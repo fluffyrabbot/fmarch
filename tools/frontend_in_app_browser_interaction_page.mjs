@@ -310,6 +310,21 @@ async function buildCommandScenarios(bundle, moderatorActionManifest) {
       ...(await renderedFragment(bundle.renderPlayerActionTargetConfirmation())),
     },
     {
+      id: "player-action-withdraw-confirm-click",
+      role: "player",
+      render: "renderPlayerActionWithdrawConfirmation",
+      targetSelector: '[data-testid="player-action-withdraw-confirm-factional_kill"]',
+      targetTestId: "player-action-withdraw-confirm-factional_kill",
+      expectedText: "withdraws your submitted factional_kill action",
+      minTouchTargetPx: 44,
+      focusContract: {
+        initialFocusTestId: "player-action-withdraw-confirm-factional_kill",
+        returnFocusTestId: "player-action-withdraw-factional_kill",
+        tabContainment: "local-confirmation-controls",
+      },
+      ...(await renderedFragment(bundle.renderPlayerActionWithdrawConfirmation())),
+    },
+    {
       id: "route-error-back-to-board-click",
       role: "player",
       render: "renderRouteErrorSurface",

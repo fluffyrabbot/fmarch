@@ -2283,6 +2283,7 @@ import {
   buildGameRouteData,
   buildPlayerComposerView,
   playerActionOpenFixture,
+  playerActionSubmittedFixture,
 } from "../src/routes/g/[game]/game-route-model.mjs";
 import { buildHostConsoleRouteData } from "../src/routes/g/[game]/host/host-route-model.mjs";
 import { buildRouteStateRouteData } from "../src/lib/app/app-route-state-model.mjs";
@@ -2827,6 +2828,39 @@ export async function renderPlayerActionTargetConfirmation() {
         capabilityLabel: "SlotOccupant(seeded-action-open)",
       },
       initialConfirmingAction: "submit_action:factional_kill",
+      onCommand: () => {},
+      onSelectTarget: () => {},
+    },
+  });
+}
+
+export async function renderPlayerActionWithdrawConfirmation() {
+  const coldLoad = playerActionSubmittedFixture();
+  const commandState = coldLoad.commandState;
+  const composer = buildPlayerComposerView(
+    {
+      defaultBody: "",
+      postCommandLabel: "Post",
+      voteCommandLabel: "Vote",
+      withdrawCommandLabel: "Withdraw vote",
+    },
+    commandState,
+    commandState.actorSlot,
+    {},
+  );
+  return render(PlayerCommandPanel, {
+    props: {
+      composer,
+      phase: { label: "Night 2", state: "open", deadlineLabel: "" },
+      votecount: [],
+      channel: { channel: "main", label: "Main thread" },
+      player: {
+        slotId: commandState.actorSlot,
+        alive: true,
+        status: "alive",
+        capabilityLabel: "SlotOccupant(seeded-action-submitted)",
+      },
+      initialConfirmingAction: "withdraw_action:factional_kill",
       onCommand: () => {},
       onSelectTarget: () => {},
     },

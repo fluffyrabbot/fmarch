@@ -2412,6 +2412,12 @@ test("no-bind browser interaction artifact records click focus evidence or a Chr
     targetSelector: '[data-testid="player-action-confirm-factional_kill"]',
     targetTestId: "player-action-confirm-factional_kill",
   });
+  assertNoBindInteractionEntries(noBindInteractions.interactions.player, {
+    id: "player-action-withdraw-confirm-click",
+    render: "renderPlayerActionWithdrawConfirmation",
+    targetSelector: '[data-testid="player-action-withdraw-confirm-factional_kill"]',
+    targetTestId: "player-action-withdraw-confirm-factional_kill",
+  });
   for (const [actionId, payloadKind] of moderatorCriticalConfirmationActions) {
     assertNoBindInteractionEntries(noBindInteractions.interactions.moderator, {
       id: `moderator-${actionId}-confirm-click`,
@@ -2968,6 +2974,15 @@ test("in-app browser interaction page fixture records role command targets", asy
         undefined,
       ],
       [
+        "player-action-withdraw-confirm-click",
+        "player",
+        "renderPlayerActionWithdrawConfirmation",
+        undefined,
+        '[data-testid="player-action-withdraw-confirm-factional_kill"]',
+        "player-action-withdraw-confirm-factional_kill",
+        undefined,
+      ],
+      [
         "route-error-back-to-board-click",
         "player",
         "renderRouteErrorSurface",
@@ -3243,6 +3258,11 @@ test("in-app browser interaction page fixture records role command targets", asy
     page,
     /data-iab-scenario-id="player-action-target-pick-confirm-click"/,
   );
+  assert.match(
+    page,
+    /data-iab-scenario-id="player-action-withdraw-confirm-click"/,
+  );
+  assert.match(page, /data-testid="player-action-withdraw-confirm-factional_kill"/);
   assert.match(page, /data-testid="route-error-action"/);
   assert.match(page, /data-testid="player-channel-role-pm"/);
   assert.match(page, /data-testid="critical-host-action-confirm"/);
@@ -3336,6 +3356,14 @@ test("in-app browser static DOM artifact verifies generated fixture structure", 
         "player",
         "button",
         "player-action-confirm-factional_kill",
+        null,
+        44,
+      ],
+      [
+        "player-action-withdraw-confirm-click",
+        "player",
+        "button",
+        "player-action-withdraw-confirm-factional_kill",
         null,
         44,
       ],
@@ -3509,6 +3537,7 @@ test("in-app browser fixture smoke records browser-run evidence or block", async
       "player-submit-post-click",
       "player-private-channel-submit-post-click",
       "player-action-target-pick-confirm-click",
+      "player-action-withdraw-confirm-click",
       "route-error-back-to-board-click",
       ...moderatorCriticalConfirmationScenarioIds,
       "admin-audit-native-flow",
@@ -3629,6 +3658,7 @@ test("in-app browser fixture replay handoff records portable rerun instructions"
     "player-submit-post-click",
     "player-private-channel-submit-post-click",
     "player-action-target-pick-confirm-click",
+    "player-action-withdraw-confirm-click",
     "route-error-back-to-board-click",
     ...moderatorCriticalConfirmationScenarioIds,
     "admin-audit-native-flow",
@@ -5459,6 +5489,12 @@ test("frontend readiness summary reports role proof layers without promoting bro
           targetTestId: "player-action-confirm-factional_kill",
         },
         {
+          id: "player-action-withdraw-confirm-click",
+          role: "player",
+          render: "renderPlayerActionWithdrawConfirmation",
+          targetTestId: "player-action-withdraw-confirm-factional_kill",
+        },
+        {
           id: "route-error-back-to-board-click",
           role: "player",
           render: "renderRouteErrorSurface",
@@ -5600,6 +5636,7 @@ test("frontend readiness summary reports role proof layers without promoting bro
         "player-submit-post-click",
         "player-private-channel-submit-post-click",
         "player-action-target-pick-confirm-click",
+        "player-action-withdraw-confirm-click",
         "route-error-back-to-board-click",
         ...moderatorCriticalConfirmationScenarioIds,
         "admin-audit-native-flow",
@@ -5635,6 +5672,7 @@ test("frontend readiness summary reports role proof layers without promoting bro
         "player-submit-post-click",
         "player-private-channel-submit-post-click",
         "player-action-target-pick-confirm-click",
+        "player-action-withdraw-confirm-click",
         "route-error-back-to-board-click",
         ...moderatorCriticalConfirmationScenarioIds,
         "admin-audit-native-flow",
@@ -6702,6 +6740,7 @@ function assertNoBindPlannedInteractions(plannedInteractions) {
       "player-submit-post-click",
       "player-private-channel-submit-post-click",
       "player-action-target-pick-confirm-click",
+      "player-action-withdraw-confirm-click",
     ],
   );
   assert.deepEqual(
@@ -6793,6 +6832,15 @@ function assertInAppBrowserPlannedInteractions(plannedInteractions) {
         "player",
         "manifest.scenarios",
         "player-action-confirm-factional_kill",
+        undefined,
+        undefined,
+        undefined,
+      ],
+      [
+        "player-action-withdraw-confirm-click",
+        "player",
+        "manifest.scenarios",
+        "player-action-withdraw-confirm-factional_kill",
         undefined,
         undefined,
         undefined,

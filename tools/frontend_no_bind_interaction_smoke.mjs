@@ -176,6 +176,17 @@ async function interactionScenarios() {
       expectedText: "factional_kill -> slot-2",
       minTouchTargetPx: 44,
     },
+    {
+      id: "player-action-withdraw-confirm-click",
+      role: "player",
+      render: "renderPlayerActionWithdrawConfirmation",
+      targetSelector: '[data-testid="player-action-withdraw-confirm-factional_kill"]',
+      targetTestId: "player-action-withdraw-confirm-factional_kill",
+      rootSelector:
+        '[data-testid="player-action-withdraw-confirmation-factional_kill"]',
+      expectedText: "withdraws your submitted factional_kill action",
+      minTouchTargetPx: 44,
+    },
     ...manifest.actions.map(moderatorCriticalConfirmationScenario),
   ];
 }

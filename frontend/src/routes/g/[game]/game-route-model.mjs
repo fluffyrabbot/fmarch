@@ -661,10 +661,38 @@ const PLAYER_ACTION_OPEN_FIXTURE_COLD_LOAD = Object.freeze({
   }),
 });
 
+// Post-submit sibling of the action-open fixture: the factional_kill template is
+// no longer open to submit (server filters it out of `actions`), so it surfaces
+// through `currentActions` as the withdrawable submitted action. This drives the
+// withdraw affordance and its confirmation in proof harnesses.
+const PLAYER_ACTION_SUBMITTED_FIXTURE_COLD_LOAD = Object.freeze({
+  ...PLAYER_ACTION_OPEN_FIXTURE_COLD_LOAD,
+  commandState: Object.freeze({
+    ...PLAYER_ACTION_OPEN_FIXTURE_COLD_LOAD.commandState,
+    game: "seeded-action-submitted",
+    actions: Object.freeze([]),
+    currentActions: Object.freeze([
+      Object.freeze({
+        actionId: "role_factional_kill",
+        templateId: "factional_kill",
+        targets: Object.freeze(["slot-2"]),
+        grantId: "grant-factional-kill",
+      }),
+    ]),
+    boundary: "Seeded local action-submitted player command state.",
+  }),
+});
+
 // Deterministic action-open fixture for proof harnesses that need a legal
 // night action with multiple target options (picker scenarios).
 export function playerActionOpenFixture() {
   return PLAYER_ACTION_OPEN_FIXTURE_COLD_LOAD;
+}
+
+// Deterministic action-submitted fixture whose one night action is already
+// submitted, exposed as a withdrawable currentAction (withdraw scenarios).
+export function playerActionSubmittedFixture() {
+  return PLAYER_ACTION_SUBMITTED_FIXTURE_COLD_LOAD;
 }
 
 function playerFixtureColdLoad(gameId) {
