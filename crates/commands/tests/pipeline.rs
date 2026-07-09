@@ -73095,7 +73095,21 @@ async fn concurrent_submit_action_revalidates_after_winning_action(pool: PgPool)
 
     let lock_key = 41_005_i64;
     install_action_insert_blocker(&pool, game, lock_key).await;
-    let mut blocker = pool.acquire().await.unwrap();
+
+    // `#[sqlx::test]` caps the handler pool at 5 connections. Each in-flight
+    // `submit_action` holds three (phase-boundary lock + submit-action lock +
+    // the persist tx that parks in the insert trigger), so the racing `first`
+    // and `second` handlers alone can hold 4. Run the harness's own blocker and
+    // advisory-wait poller on a separate pool against the same per-test DB so
+    // they never contend for the handler budget (which otherwise deadlocks the
+    // count-of-2 wait against the 5-connection cap).
+    let aux_pool = sqlx::postgres::PgPoolOptions::new()
+        .max_connections(4)
+        .connect_with((*pool.connect_options()).clone())
+        .await
+        .expect("harness aux pool connects to the per-test database");
+
+    let mut blocker = aux_pool.acquire().await.unwrap();
     sqlx::query("SELECT pg_advisory_lock($1)")
         .bind(lock_key)
         .execute(&mut *blocker)
@@ -73118,7 +73132,7 @@ async fn concurrent_submit_action_revalidates_after_winning_action(pool: PgPool)
         )
         .await
     });
-    wait_for_advisory_wait_count(&pool, 1).await;
+    wait_for_advisory_wait_count(&aux_pool, 1).await;
 
     let second_pool = pool.clone();
     let second = tokio::spawn(async move {
@@ -73136,7 +73150,7 @@ async fn concurrent_submit_action_revalidates_after_winning_action(pool: PgPool)
         )
         .await
     });
-    wait_for_advisory_wait_count(&pool, 2).await;
+    wait_for_advisory_wait_count(&aux_pool, 2).await;
 
     sqlx::query("SELECT pg_advisory_unlock($1)")
         .bind(lock_key)

@@ -77,11 +77,17 @@ if needed).
   and rebuild, so the log-derived boundary is genuinely empty; the only surviving live row
   was a raw stale ballot injected by SQL, which rebuild correctly discards. Fixed test-side:
   assert the rebuilt votecount is empty. No projection/domain change.
-- [ ] **1.3 Advisory-lock & connection-pool timeouts.** `[Partial/Flaky]`
-  `concurrent_submit_action_revalidates_after_winning_action` hits an advisory-lock gate
-  timeout; `audit_large_action_graph_performance` times out on a pool connection. Reproduce
-  on a quiet machine — core-count/pool-size collision, not load. Right-size the pool /
-  test-thread budget.
+- [x] **1.3 Advisory-lock & connection-pool timeouts — both were pool-size starvation.**
+  `[Landed]` Not load or core-count: each in-flight command that takes per-game advisory
+  locks holds a dedicated pooled connection per lock plus its work/tx connection.
+  `concurrent_submit_action_revalidates_after_winning_action` needed 6 simultaneous
+  connections against `#[sqlx::test]`'s hardcoded `max_connections(5)` cap (2 racing
+  handlers = 4, plus the harness blocker + advisory-wait poller); fixed by moving the
+  harness's own connections onto a separate `aux_pool`. The `audit_large_action_graph_performance`
+  CLI built its pool with `max_connections(1)`, which self-deadlocks the moment a command
+  holds an advisory-lock connection and then needs another (the lock layer postdates that
+  binary); fixed by raising it to 5. Both verified: concurrent test green ×3; the CLI's
+  pass (exit 0, `ok=true`) and threshold-fail (exit 1, `ok=false`) branches both confirmed.
 - [ ] **1.4 Finish the macOS deadlock remediation.** `[Partial]` Hermetic tiering shipped
   (minimize/shrink family quarantined behind `--ignored`). Remaining: collapse the other
   CLI-spawn tests to in-process calls, add a bounded spawn helper (timeout + pgid kill +
