@@ -4221,6 +4221,41 @@ async function verifySeededD02VoteNightTransition({
         document.querySelector('[data-action="submit_action:factional_kill"]') ===
           null,
     });
+    // C5: exercise the night-action withdraw round-trip. The submitted
+    // factional_kill now surfaces a withdraw affordance; withdrawing it restores
+    // the submit action, and re-submitting the same target leaves N02 in the state
+    // the downstream host resolution expects (the projected target is still killed).
+    const n02WithdrawSubmission = await submitPlayerCommandAndWait({
+      page: actionEntry.page,
+      actionId: "withdraw_action:factional_kill",
+      confirmTestId: "player-action-withdraw-confirm-factional_kill",
+      waitFor: () =>
+        window.__fmarchPlayerCommandStatus?.state === "ack" &&
+        window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body?.command
+          ?.WithdrawAction?.actor_slot === "slot_4" &&
+        document.querySelector('[data-action="withdraw_action:factional_kill"]') ===
+          null &&
+        document.querySelector('[data-action="submit_action:factional_kill"]') !==
+          null,
+    });
+    const n02ActionAfterWithdraw = await playerProjectionSnapshot(actionEntry.page, {
+      buttons: true,
+      currentReceipt: true,
+    });
+    const n02ResubmitSubmission = await submitPlayerCommandAndWait({
+      page: actionEntry.page,
+      actionId: "submit_action:factional_kill",
+      confirmTestId: "player-action-confirm-factional_kill",
+      waitArg: n02ActionTarget,
+      waitFor: (targetSlot) =>
+        window.__fmarchPlayerCommandStatus?.state === "ack" &&
+        window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body?.command
+          ?.SubmitAction?.template_id === "factional_kill" &&
+        window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body?.command
+          ?.SubmitAction?.targets?.includes(targetSlot) &&
+        document.querySelector('[data-action="submit_action:factional_kill"]') ===
+          null,
+    });
     const n02ActionAfterSubmit = await playerProjectionSnapshot(actionEntry.page, {
       buttons: true,
       currentReceipt: true,
@@ -4290,6 +4325,20 @@ async function verifySeededD02VoteNightTransition({
       n02ActionSubmission?.requestEnvelope?.body?.body?.command?.SubmitAction
         ?.template_id !== "factional_kill" ||
       n02ActionSubmission?.requestEnvelope?.body?.body?.command?.SubmitAction
+        ?.targets?.[0] !== n02ActionTarget ||
+      n02WithdrawSubmission?.state !== "ack" ||
+      n02WithdrawSubmission?.requestEnvelope?.body?.body?.command?.WithdrawAction
+        ?.actor_slot !== "slot_4" ||
+      n02ActionAfterWithdraw.buttons.some(
+        (button) => button.action === "withdraw_action:factional_kill",
+      ) ||
+      !n02ActionAfterWithdraw.buttons.some(
+        (button) => button.action === "submit_action:factional_kill",
+      ) ||
+      n02ResubmitSubmission?.state !== "ack" ||
+      n02ResubmitSubmission?.requestEnvelope?.body?.body?.command?.SubmitAction
+        ?.template_id !== "factional_kill" ||
+      n02ResubmitSubmission?.requestEnvelope?.body?.body?.command?.SubmitAction
         ?.targets?.[0] !== n02ActionTarget ||
       n02ActionAfterSubmit.commandState?.phase?.phaseId !== "N02" ||
       n02ActionAfterSubmit.buttons.some(
@@ -5610,7 +5659,7 @@ async function verifySeededD02VoteNightTransition({
       hostActionsAfterCompleteReloadN05,
       completedActionSurface,
       proof:
-        "A disposable seeded local game reached open D02 through real phase commands, the Slot 4 mafia-goon role URL submitted the deciding day vote, the host role URL resolved D02 into a day-vote kill with the target-only receipt, advanced to open N02 where the living mafia-goon role URL regained factional_kill while the normal player role URL did not, then the mafia-goon role URL submitted the N02 factional_kill, the host role URL resolved it, and the same role URLs advanced to open D03 day controls before Slot 7 submitted a D03 vote for Slot 4, host resolution recorded NoMajority and issued the D03 revote host prompt, host AdvancePhase rejected InvalidTarget instead of inventing a Night 3, the host role URL reloaded to the same locked D03 NoMajority recovery truth, resolving the revote prompt with the explicit continue-revote policy advanced the same host and player role URLs into open D03R1 controls, the action-player role URL submitted a no-lynch revote ballot whose API tally was keyed to D03R1 while the old D03 slot tally stayed separate, the host role URL resolved D03R1 back to locked NoMajority with a fresh pending D03R1 revote prompt, resolving that prompt with the explicit continue-revote policy advanced the same host and player role URLs into open D03R2 controls, then the action-player role URL submitted and the host role URL resolved a D03R2 no-lynch ballot with D03, D03R1, and D03R2 tallies kept separate before the host chose the explicit no-lynch policy and advanced the same host/player role URLs into open N03, while a frozen stale continue-revote host policy button rejected PromptAlreadyResolved and reloaded to open N03 controls; the same live role URLs then submitted and resolved the real N03 factional_kill, killed the projected target, and advanced to open D04 day controls. The D04 action-player role URL then submitted no-lynch, the host role URL resolved and advanced into open N04 with no legal action available, host resolution advanced the same game into open D05 controls, the D05 action-player no-lynch plus host resolution advanced into open N05 with no legal action remaining, and the same host/action-player role URLs completed the game with revealed endgame state and disabled player controls.",
+        "A disposable seeded local game reached open D02 through real phase commands, the Slot 4 mafia-goon role URL submitted the deciding day vote, the host role URL resolved D02 into a day-vote kill with the target-only receipt, advanced to open N02 where the living mafia-goon role URL regained factional_kill while the normal player role URL did not, then the mafia-goon role URL submitted the N02 factional_kill, withdrew it through the picker withdraw affordance which restored the submit action, and re-submitted the same target before the host role URL resolved it, and the same role URLs advanced to open D03 day controls before Slot 7 submitted a D03 vote for Slot 4, host resolution recorded NoMajority and issued the D03 revote host prompt, host AdvancePhase rejected InvalidTarget instead of inventing a Night 3, the host role URL reloaded to the same locked D03 NoMajority recovery truth, resolving the revote prompt with the explicit continue-revote policy advanced the same host and player role URLs into open D03R1 controls, the action-player role URL submitted a no-lynch revote ballot whose API tally was keyed to D03R1 while the old D03 slot tally stayed separate, the host role URL resolved D03R1 back to locked NoMajority with a fresh pending D03R1 revote prompt, resolving that prompt with the explicit continue-revote policy advanced the same host and player role URLs into open D03R2 controls, then the action-player role URL submitted and the host role URL resolved a D03R2 no-lynch ballot with D03, D03R1, and D03R2 tallies kept separate before the host chose the explicit no-lynch policy and advanced the same host/player role URLs into open N03, while a frozen stale continue-revote host policy button rejected PromptAlreadyResolved and reloaded to open N03 controls; the same live role URLs then submitted and resolved the real N03 factional_kill, killed the projected target, and advanced to open D04 day controls. The D04 action-player role URL then submitted no-lynch, the host role URL resolved and advanced into open N04 with no legal action available, host resolution advanced the same game into open D05 controls, the D05 action-player no-lynch plus host resolution advanced into open N05 with no legal action remaining, and the same host/action-player role URLs completed the game with revealed endgame state and disabled player controls.",
     };
   } finally {
     await hostEntry.context.close().catch(() => {});
