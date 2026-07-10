@@ -1345,20 +1345,20 @@ test("route-state render artifact covers every forced board and role page state"
   assert.equal(routeStateRender.playerPrivateReviewRoute.htmlBytes > 0, true);
   assert.deepEqual(routeStateRender.playerPrivateChannelRoute, {
     role: "player",
-    path: "/g/midsummer/c/role-pm",
-    channel: "role-pm",
+    path: "/g/midsummer/c/private%3Arole_pm%3Aslot-7",
+    channel: "private:role_pm:slot-7",
     surfaceTestId: "player-surface",
-    activeChannelTestId: "player-channel-role-pm",
-    activeChannelHref: "/g/midsummer/c/role-pm",
+    activeChannelTestId: "player-channel-private:role_pm:slot-7",
+    activeChannelHref: "/g/midsummer/c/private%3Arole_pm%3Aslot-7",
     commandChannelContext: {
       testId: PLAYER_COMMAND_PANEL_CONTRACT.channelContextTestId,
-      channelId: "role-pm",
+      channelId: "private:role_pm:slot-7",
       channelLabel: "Role PM",
-      capabilityLabel: "ChannelMember(role-pm)",
+      capabilityLabel: "ChannelMember(private:role_pm:slot-7)",
       actorSlot: "slot-7",
     },
     privateReviewLinkTestId: "player-private-link-notification-1",
-    privateReviewHref: "/g/midsummer/c/role-pm?private=notification-1",
+    privateReviewHref: "/g/midsummer/c/private%3Arole_pm%3Aslot-7?private=notification-1",
     privateReviewLinkLabel: "Open Commuted review",
     privateBoundaryStatus: "principal-scoped-private-projections",
     mediaVariant: "tablet",
@@ -1368,7 +1368,7 @@ test("route-state render artifact covers every forced board and role page state"
   assert.equal(routeStateRender.playerPrivateChannelRoute.htmlBytes > 0, true);
   assert.deepEqual(routeStateRender.errorSurface, {
     role: "player",
-    path: "/g/midsummer/c/role-pm",
+    path: "/g/midsummer/c/private%3Arole_pm%3Aslot-7",
     status: 403,
     surface: "player",
     surfaceTestId: "route-error-surface",
@@ -1378,13 +1378,13 @@ test("route-state render artifact covers every forced board and role page state"
     activeNavTestId: roleNavTestId("player"),
     sessionPrincipal: "player_mira",
     capabilitySummary: "ChannelMember + SlotOccupant",
-    message: "Channel role-pm is not visible.",
+    message: "Channel private:role_pm:slot-7 is not visible.",
     htmlBytes: routeStateRender.errorSurface.htmlBytes,
   });
   assert.equal(routeStateRender.errorSurface.htmlBytes > 0, true);
   assert.deepEqual(routeStateRender.loadingSurface, {
     role: "player",
-    path: "/g/midsummer/c/role-pm",
+    path: "/g/midsummer/c/private%3Arole_pm%3Aslot-7",
     surface: "player",
     surfaceTestId: "route-loading-surface",
     routeStateTestId: "route-state-player-loading",
@@ -1397,7 +1397,7 @@ test("route-state render artifact covers every forced board and role page state"
   });
   assert.equal(routeStateRender.loadingSurface.htmlBytes > 0, true);
   assert.deepEqual(routeStateRender.navigationPending, {
-    path: "/g/midsummer/c/role-pm",
+    path: "/g/midsummer/c/private%3Arole_pm%3Aslot-7",
     surface: "player",
     rootTestId: "app-navigation-pending",
     statusTestId: "app-navigation-pending-status",
@@ -1938,7 +1938,7 @@ test("hydrated handler artifact records DOM-facing command outcomes without loca
           statusTestId: "player-command-status",
         },
         ackRefreshKeys: ["thread", "votecount", "dayVoteOutcomes"],
-        channelId: "role-pm",
+        channelId: "private:role_pm:slot-7",
       },
     },
   });
@@ -2393,11 +2393,11 @@ test("no-bind browser interaction artifact records click focus evidence or a Chr
     targetSelector: '[data-action="submit_post"]',
     targetAction: "submit_post",
     route: {
-      path: "/g/midsummer/c/role-pm",
-      activeChannelTestId: "player-channel-role-pm",
-      activeChannelHref: "/g/midsummer/c/role-pm",
+      path: "/g/midsummer/c/private%3Arole_pm%3Aslot-7",
+      activeChannelTestId: "player-channel-private:role_pm:slot-7",
+      activeChannelHref: "/g/midsummer/c/private%3Arole_pm%3Aslot-7",
       activeChannelCurrent: "page",
-      privateReviewHref: "/g/midsummer/c/role-pm?private=notification-1",
+      privateReviewHref: "/g/midsummer/c/private%3Arole_pm%3Aslot-7?private=notification-1",
     },
     media: {
       boundaryTestId: "thread-post-media-boundary-442",
@@ -2882,7 +2882,7 @@ test("in-app browser interaction page fixture records role command targets", asy
       [
         "route-error-player-private-channel",
         "player",
-        "/g/midsummer/c/role-pm",
+        "/g/midsummer/c/private%3Arole_pm%3Aslot-7",
         "renderRouteErrorSurface",
         "route-error-surface",
         APP_SHELL_CONTRACT.minTouchTargetPx,
@@ -3011,16 +3011,16 @@ test("in-app browser interaction page fixture records role command targets", asy
     (scenario) => scenario.id === "player-private-channel-submit-post-click",
   );
   assert.deepEqual(playerPrivateChannelScenario.route, {
-    path: "/g/midsummer/c/role-pm",
-    activeChannelTestId: "player-channel-role-pm",
-    activeChannelHref: "/g/midsummer/c/role-pm",
-    privateReviewHref: "/g/midsummer/c/role-pm?private=notification-1",
+    path: "/g/midsummer/c/private%3Arole_pm%3Aslot-7",
+    activeChannelTestId: "player-channel-private:role_pm:slot-7",
+    activeChannelHref: "/g/midsummer/c/private%3Arole_pm%3Aslot-7",
+    privateReviewHref: "/g/midsummer/c/private%3Arole_pm%3Aslot-7?private=notification-1",
   });
   const routeErrorScenario = manifest.scenarios.find(
     (scenario) => scenario.id === "route-error-back-to-board-click",
   );
   assert.deepEqual(routeErrorScenario.errorSurface, {
-    path: "/g/midsummer/c/role-pm",
+    path: "/g/midsummer/c/private%3Arole_pm%3Aslot-7",
     status: 403,
     surfaceTestId: "route-error-surface",
     panelTestId: "route-error-panel",
@@ -3265,7 +3265,7 @@ test("in-app browser interaction page fixture records role command targets", asy
   );
   assert.match(page, /data-testid="player-action-withdraw-confirm-factional_kill"/);
   assert.match(page, /data-testid="route-error-action"/);
-  assert.match(page, /data-testid="player-channel-role-pm"/);
+  assert.match(page, /data-testid="player-channel-private:role_pm:slot-7"/);
   assert.match(page, /data-testid="critical-host-action-confirm"/);
   assert.match(page, /data-iab-hydrated-scenario-id="admin-audit-native-flow"/);
   assert.match(page, /data-testid="iab-admin-audit-detail-link"/);
@@ -3404,17 +3404,17 @@ test("in-app browser static DOM artifact verifies generated fixture structure", 
     (scenario) => scenario.id === "player-private-channel-submit-post-click",
   );
   assert.deepEqual(playerPrivateChannel.route, {
-    path: "/g/midsummer/c/role-pm",
-    activeChannelTestId: "player-channel-role-pm",
-    activeChannelHref: "/g/midsummer/c/role-pm",
+    path: "/g/midsummer/c/private%3Arole_pm%3Aslot-7",
+    activeChannelTestId: "player-channel-private:role_pm:slot-7",
+    activeChannelHref: "/g/midsummer/c/private%3Arole_pm%3Aslot-7",
     activeChannelCurrent: "page",
-    privateReviewHref: "/g/midsummer/c/role-pm?private=notification-1",
+    privateReviewHref: "/g/midsummer/c/private%3Arole_pm%3Aslot-7?private=notification-1",
   });
   const routeError = staticDom.scenarios.find(
     (scenario) => scenario.id === "route-error-back-to-board-click",
   );
   assert.deepEqual(routeError.errorSurface, {
-    path: "/g/midsummer/c/role-pm",
+    path: "/g/midsummer/c/private%3Arole_pm%3Aslot-7",
     status: 403,
     surfaceTestId: "route-error-surface",
     panelTestId: "route-error-panel",
@@ -3596,14 +3596,14 @@ test("in-app browser fixture smoke records browser-run evidence or block", async
       (interaction) => interaction.id === "route-error-back-to-board-click",
     );
     assert.deepEqual(playerPrivateChannel.route, {
-      path: "/g/midsummer/c/role-pm",
-      activeChannelTestId: "player-channel-role-pm",
-      activeChannelHref: "/g/midsummer/c/role-pm",
+      path: "/g/midsummer/c/private%3Arole_pm%3Aslot-7",
+      activeChannelTestId: "player-channel-private:role_pm:slot-7",
+      activeChannelHref: "/g/midsummer/c/private%3Arole_pm%3Aslot-7",
       activeChannelCurrent: "page",
-      privateReviewHref: "/g/midsummer/c/role-pm?private=notification-1",
+      privateReviewHref: "/g/midsummer/c/private%3Arole_pm%3Aslot-7?private=notification-1",
     });
     assert.deepEqual(routeError.errorSurface, {
-      path: "/g/midsummer/c/role-pm",
+      path: "/g/midsummer/c/private%3Arole_pm%3Aslot-7",
       status: 403,
       surfaceTestId: "route-error-surface",
       panelTestId: "route-error-panel",
@@ -4179,7 +4179,7 @@ test("in-app browser replay help records condensed external proof commands", asy
     targetTestId: "route-error-action",
     expectedText: "Back to board",
     errorSurface: {
-      path: "/g/midsummer/c/role-pm",
+      path: "/g/midsummer/c/private%3Arole_pm%3Aslot-7",
       status: 403,
       surfaceTestId: "route-error-surface",
       panelTestId: "route-error-panel",
@@ -4270,7 +4270,7 @@ test("browser acceptance boundary records blocked and prepared browser lanes", a
   );
   assert.equal(
     boundary.promotionRule,
-    "Full app browser acceptance is proven by the localhost dev-server role smoke, either run locally or imported through the role-smoke import contract, when it passes with board, setup, admin, player, moderator, forbidden-route, and route-state screenshots, screenshot pixel evidence, setup workbench geometry for /g/midsummer/setup, overlap-checked target evidence, tablet thumb-zone geometry evidence, admin session-grant/recovery-gate form evidence, player main-thread SubmitPost ACK refresh evidence, player role-pm SubmitPost ACK evidence, player tablet-media browser request evidence, and moderator SetSlotStatus projection evidence. Passed file-backed or localhost-served fixture browser-runs promote their fixture lanes only; prepared fixtures, bind blocks, and Chromium launch blocks do not promote full app acceptance.",
+    "Full app browser acceptance is proven by the localhost dev-server role smoke, either run locally or imported through the role-smoke import contract, when it passes with board, setup, admin, player, moderator, forbidden-route, and route-state screenshots, screenshot pixel evidence, setup workbench geometry for /g/midsummer/setup, overlap-checked target evidence, tablet thumb-zone geometry evidence, admin session-grant/recovery-gate form evidence, player main-thread SubmitPost ACK refresh evidence, player private:role_pm:slot-7 SubmitPost ACK evidence, player tablet-media browser request evidence, and moderator SetSlotStatus projection evidence. Passed file-backed or localhost-served fixture browser-runs promote their fixture lanes only; prepared fixtures, bind blocks, and Chromium launch blocks do not promote full app acceptance.",
   );
   const laneById = new Map(boundary.lanes.map((lane) => [lane.id, lane]));
   assert.deepEqual([...laneById.keys()], [
@@ -4734,7 +4734,7 @@ test("frontend readiness summary reports role proof layers without promoting bro
     routeEvidence: "routeStateRender.errorSurface",
     domEvidence: "domSmoke.errorSurface",
     status: 403,
-    path: "/g/midsummer/c/role-pm",
+    path: "/g/midsummer/c/private%3Arole_pm%3Aslot-7",
     activeNavTestId: "role-nav-player",
     sessionPrincipal: "player_mira",
     capabilitySummary: "ChannelMember + SlotOccupant",
@@ -4797,7 +4797,7 @@ test("frontend readiness summary reports role proof layers without promoting bro
       "roleSmoke admin/player/moderator entries include tablet thumb-zone geometry for setup/recovery, player vote/post, and moderator critical actions",
       "admin roleSmoke entries include session-grant form evidence and recovery-gate ACK evidence",
       "player roleSmoke entries include SubmitPost ACK and refreshed thread evidence",
-      "playerPrivateChannel roleSmoke entries include role-pm SubmitPost ACK evidence",
+      "playerPrivateChannel roleSmoke entries include private:role_pm:slot-7 SubmitPost ACK evidence",
       "player roleSmoke entries include tablet-media browser request evidence without original/full/desktop URLs",
       "moderator roleSmoke entries include SetSlotStatus ACK and slot lifecycle projection evidence",
     ],
@@ -4807,7 +4807,7 @@ test("frontend readiness summary reports role proof layers without promoting bro
       `inAppBrowserPage.scenarios includes admin cohost, admin session-grant, admin recovery-gate, player vote, player post, player private-channel post, and all ${EXPECTED_COUNTS.moderatorCriticalActions} moderator critical host confirmations`,
       "inAppBrowserPage.hydratedSurfaceScenarios includes shared shell, admin audit, admin operational forms, player private disclosure/vote/post, moderator host-prompt, and moderator slot-lifecycle controls",
       "inAppBrowserStaticDom.status == passed",
-      "inAppBrowserStaticDom.scenarios includes every fixture command target with role-pm route evidence",
+      "inAppBrowserStaticDom.scenarios includes every fixture command target with private:role_pm:slot-7 route evidence",
       "inAppBrowserPage.pageUrl is a file URL prepared for manual/in-app browser execution",
     ],
     inAppBrowserRunRequires: [
@@ -4815,7 +4815,7 @@ test("frontend readiness summary reports role proof layers without promoting bro
       "inAppBrowserRun.runs includes every proof viewport",
       "all inAppBrowserRun entries include clicked target, activeElement, targetBox, and screenshotPixels",
       `all ${EXPECTED_COUNTS.moderatorCriticalActions} moderator critical host confirmation run entries include alertdialog focus metadata and object/outcome text`,
-      "player private-channel run entries include active role-pm route evidence",
+      "player private-channel run entries include active private:role_pm:slot-7 route evidence",
       "player private disclosure toggles from aria-expanded=false to aria-expanded=true",
     ],
     inAppBrowserLocalhostRunRequires: [
@@ -5033,7 +5033,7 @@ test("frontend readiness summary reports role proof layers without promoting bro
           "localhostBrowser: roleSmoke.roles missing tablet thumb-zone geometry evidence",
           "localhostBrowser: roleSmoke.roles[player] missing SubmitPost browser ACK evidence",
           "localhostBrowser: roleSmoke.roles[player] missing tablet-media browser request evidence",
-          "localhostBrowser: roleSmoke.playerPrivateChannel missing role-pm SubmitPost browser ACK evidence",
+          "localhostBrowser: roleSmoke.playerPrivateChannel missing private:role_pm:slot-7 SubmitPost browser ACK evidence",
           "localhostBrowser: roleSmoke.roles[moderator] missing SetSlotStatus browser ACK evidence",
         ],
       ],
@@ -5087,7 +5087,7 @@ test("frontend readiness summary reports role proof layers without promoting bro
           "localhostBrowser: roleSmoke.roles missing tablet thumb-zone geometry evidence",
           "localhostBrowser: roleSmoke.roles[player] missing SubmitPost browser ACK evidence",
           "localhostBrowser: roleSmoke.roles[player] missing tablet-media browser request evidence",
-          "localhostBrowser: roleSmoke.playerPrivateChannel missing role-pm SubmitPost browser ACK evidence",
+          "localhostBrowser: roleSmoke.playerPrivateChannel missing private:role_pm:slot-7 SubmitPost browser ACK evidence",
           "localhostBrowser: roleSmoke.roles[moderator] missing SetSlotStatus browser ACK evidence",
         ],
       ],
@@ -5141,7 +5141,7 @@ test("frontend readiness summary reports role proof layers without promoting bro
           "localhostBrowser: roleSmoke.roles missing tablet thumb-zone geometry evidence",
           "localhostBrowser: roleSmoke.roles[player] missing SubmitPost browser ACK evidence",
           "localhostBrowser: roleSmoke.roles[player] missing tablet-media browser request evidence",
-          "localhostBrowser: roleSmoke.playerPrivateChannel missing role-pm SubmitPost browser ACK evidence",
+          "localhostBrowser: roleSmoke.playerPrivateChannel missing private:role_pm:slot-7 SubmitPost browser ACK evidence",
           "localhostBrowser: roleSmoke.roles[moderator] missing SetSlotStatus browser ACK evidence",
         ],
       ],
@@ -5365,7 +5365,7 @@ test("frontend readiness summary reports role proof layers without promoting bro
         "roleSmoke.roles missing tablet thumb-zone geometry evidence",
         "roleSmoke.roles[player] missing SubmitPost browser ACK evidence",
         "roleSmoke.roles[player] missing tablet-media browser request evidence",
-        "roleSmoke.playerPrivateChannel missing role-pm SubmitPost browser ACK evidence",
+        "roleSmoke.playerPrivateChannel missing private:role_pm:slot-7 SubmitPost browser ACK evidence",
         "roleSmoke.roles[moderator] missing SetSlotStatus browser ACK evidence",
       ],
       blockedReason:
@@ -5598,14 +5598,14 @@ test("frontend readiness summary reports role proof layers without promoting bro
         },
       ],
       playerPrivateChannelRoute: {
-        path: "/g/midsummer/c/role-pm",
-        activeChannelTestId: "player-channel-role-pm",
-        activeChannelHref: "/g/midsummer/c/role-pm",
+        path: "/g/midsummer/c/private%3Arole_pm%3Aslot-7",
+        activeChannelTestId: "player-channel-private:role_pm:slot-7",
+        activeChannelHref: "/g/midsummer/c/private%3Arole_pm%3Aslot-7",
         activeChannelCurrent: "page",
-        privateReviewHref: "/g/midsummer/c/role-pm?private=notification-1",
+        privateReviewHref: "/g/midsummer/c/private%3Arole_pm%3Aslot-7?private=notification-1",
       },
       routeError: {
-        path: "/g/midsummer/c/role-pm",
+        path: "/g/midsummer/c/private%3Arole_pm%3Aslot-7",
         status: 403,
         surfaceTestId: "route-error-surface",
         panelTestId: "route-error-panel",
@@ -6397,19 +6397,19 @@ function assertBrowserPlayerPrivateChannelEvidence(entries) {
 
   for (const entry of entries) {
     assert.equal(entry.role, "player-private-channel");
-    assert.equal(entry.path, "/g/midsummer/c/role-pm");
-    assert.equal(entry.activeChannelTestId, "player-channel-role-pm");
+    assert.equal(entry.path, "/g/midsummer/c/private%3Arole_pm%3Aslot-7");
+    assert.equal(entry.activeChannelTestId, "player-channel-private:role_pm:slot-7");
     assert.equal(
       entry.privateReviewHref,
-      "/g/midsummer/c/role-pm?private=notification-1",
+      "/g/midsummer/c/private%3Arole_pm%3Aslot-7?private=notification-1",
     );
     assert.equal(entry.commandResult.state, "ack");
     assert.match(entry.commandResult.message, /Ack: stream seqs 172/);
     assert.deepEqual(entry.commandResult.requestCommand, {
       game: "midsummer",
-      channel_id: "role-pm",
+      channel_id: "private:role_pm:slot-7",
       actor_slot: "slot-7",
-      body: "Browser smoke role-pm post",
+      body: "Browser smoke private:role_pm:slot-7 post",
     });
     assert.equal(entry.commandResult.refreshedPostTestId, "thread-post-446");
     assert.match(
@@ -6456,7 +6456,7 @@ function assertBrowserPlayerPrivateChannelEvidence(entries) {
         "role-nav-board",
         "role-nav-player",
         "player-channel-main",
-        "player-channel-role-pm",
+        "player-channel-private:role_pm:slot-7",
         "player-thread-load-older",
       ],
     );
@@ -6503,7 +6503,7 @@ async function assertRoleDomFallbackEvidence(roleSmoke) {
       [
         "player-private-channel",
         "player",
-        "/g/midsummer/c/role-pm",
+        "/g/midsummer/c/private%3Arole_pm%3Aslot-7",
         "player-surface",
       ],
       ["moderator", "moderator", "/g/midsummer/host", "host-console-surface"],
@@ -6517,7 +6517,7 @@ async function assertRoleDomFallbackEvidence(roleSmoke) {
   const domErrorSurface = roleSmoke.domSmoke.errorSurface ?? domSmoke.errorSurface;
   assert.deepEqual(domErrorSurface, {
     role: "player",
-    path: "/g/midsummer/c/role-pm",
+    path: "/g/midsummer/c/private%3Arole_pm%3Aslot-7",
     status: 403,
     surface: "player",
     surfaceTestId: "route-error-surface",
@@ -6527,7 +6527,7 @@ async function assertRoleDomFallbackEvidence(roleSmoke) {
     activeNavTestId: roleNavTestId("player"),
     sessionPrincipal: "player_mira",
     capabilitySummary: "ChannelMember + SlotOccupant",
-    message: "Channel role-pm is not visible.",
+    message: "Channel private:role_pm:slot-7 is not visible.",
     touchTargets: {
       count: domErrorSurface.touchTargets.count,
       minPx: domErrorSurface.touchTargets.minPx,

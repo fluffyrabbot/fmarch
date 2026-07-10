@@ -34,6 +34,20 @@ test("host setup workflow requires shared setup command evidence", () => {
   );
 });
 
+test("Role PM readiness requires replacement transfer and stale denial", () => {
+  const evidence = liveStackReadinessFixture();
+  assert.equal(
+    checkStatus(buildLiveStackReadiness(evidence), "role-pm-replacement-lifecycle"),
+    "passed",
+  );
+
+  delete evidence.browser.moderator.rolePmReplacement.outgoing.stalePostReject;
+  assert.equal(
+    checkStatus(buildLiveStackReadiness(evidence), "role-pm-replacement-lifecycle"),
+    "failed",
+  );
+});
+
 function checkStatus(readiness, id) {
   return readiness.checks.find((check) => check.id === id)?.status;
 }
@@ -148,7 +162,7 @@ function liveStackReadinessFixture() {
         status: "passed",
         expectedCount: 1,
         after: {
-          projection: [{ target: "slot-2", count: 1 }],
+          projection: [{ target: "slot_1", count: 1 }],
         },
       },
       playerAction: {
@@ -169,6 +183,9 @@ function liveStackReadinessFixture() {
       privateChannelForbidden: {
         status: 403,
       },
+      rolePmHistory: {
+        channelId: "private:role_pm:slot-7",
+      },
       moderator: {
         phaseControls: {
           lock: { commandStatus: { state: "ack" } },
@@ -187,6 +204,25 @@ function liveStackReadinessFixture() {
           retry: {
             state: "ack",
             target: { principalUserId: "player-rowan" },
+          },
+        },
+        rolePmReplacement: {
+          status: "passed",
+          incoming: {
+            submitOutcome: { state: "ack" },
+            initialLiveDelta: { delta: { kind: "ThreadPostsChanged" } },
+            commandLiveDelta: { delta: { kind: "ThreadPostsChanged" } },
+            reloadedPostBodies: [
+              "Role PM history before replacement",
+              "Incoming replacement continued the durable Role PM",
+            ],
+          },
+          outgoing: {
+            routeStatus: 403,
+            threadStatus: 403,
+            mediaStatus: 403,
+            mediaBodyBytes: 0,
+            stalePostReject: { error: "NotYourSlot" },
           },
         },
       },

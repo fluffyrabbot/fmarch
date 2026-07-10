@@ -34,6 +34,7 @@ export function buildLiveStackProofSummary(
   const convergence = evidence.browser?.hostVotecountConvergence;
   const reconnect = evidence.browser?.player?.reconnect;
   const moderator = evidence.browser?.moderator;
+  const rolePmReplacement = moderator?.rolePmReplacement;
   const summary = {
     version: LIVE_STACK_PROOF_SUMMARY_VERSION,
     proof: "host-console-live-stack-summary",
@@ -42,7 +43,7 @@ export function buildLiveStackProofSummary(
     generatedAt,
     scope: "local-live-stack-proof-summary",
     proofBoundary:
-      "Compact derivative report from the local live-stack browser proof. It summarizes host setup, host votecount convergence, reconnect recovery, and host ops evidence for inspection; the full proof JSON remains the source of truth and this does not prove hosted, beta, release, or production readiness.",
+      "Compact derivative report from the local live-stack browser proof. It summarizes host setup, host votecount convergence, reconnect recovery, the Role PM replacement lifecycle, and host ops evidence for inspection; the full proof JSON remains the source of truth and this does not prove hosted, beta, release, or production readiness.",
     generatedFrom: {
       liveStackProof: proofPath,
       game: evidence.game,
@@ -111,6 +112,33 @@ export function buildLiveStackProofSummary(
       recoveredSnapshotContainsPost:
         reconnect?.recoveredSnapshotContainsPost ?? false,
     },
+    rolePmReplacementLifecycle: {
+      status: rolePmReplacementStatus(rolePmReplacement),
+      channelId: rolePmReplacement?.channelId ?? null,
+      slotId: rolePmReplacement?.slotId ?? null,
+      incomingPrincipalUserId:
+        rolePmReplacement?.incoming?.principalUserId ?? null,
+      incomingSubmitState:
+        rolePmReplacement?.incoming?.submitOutcome?.state ?? null,
+      initialLiveDeltaKind:
+        rolePmReplacement?.incoming?.initialLiveDelta?.delta?.kind ?? null,
+      commandLiveDeltaKind:
+        rolePmReplacement?.incoming?.commandLiveDelta?.delta?.kind ?? null,
+      reloadedPostCount:
+        rolePmReplacement?.incoming?.reloadedPostBodies?.length ?? 0,
+      incomingMediaBodyBytes:
+        rolePmReplacement?.incoming?.mediaBodyBytes ?? 0,
+      outgoingRouteStatus:
+        rolePmReplacement?.outgoing?.routeStatus ?? null,
+      outgoingThreadStatus:
+        rolePmReplacement?.outgoing?.threadStatus ?? null,
+      outgoingMediaStatus:
+        rolePmReplacement?.outgoing?.mediaStatus ?? null,
+      outgoingMediaBodyBytes:
+        rolePmReplacement?.outgoing?.mediaBodyBytes ?? null,
+      stalePostReject:
+        rolePmReplacement?.outgoing?.stalePostReject?.error ?? null,
+    },
     hostOpsWorkflow: {
       status: hostOpsStatus(moderator),
       promptState: moderator?.hostPrompt?.commandStatus?.state ?? null,
@@ -150,6 +178,10 @@ export function buildLiveStackProofSummary(
             : "failed",
       },
       {
+        id: "role-pm-replacement-summary",
+        status: rolePmReplacementStatus(rolePmReplacement),
+      },
+      {
         id: "host-ops-summary",
         status: hostOpsStatus(moderator),
       },
@@ -183,6 +215,7 @@ export function assertLiveStackProofSummary(summary) {
     "host-setup-summary",
     "host-votecount-convergence-summary",
     "reconnect-summary",
+    "role-pm-replacement-summary",
     "host-ops-summary",
     "production-boundary-carried",
   ]) {
@@ -210,6 +243,17 @@ export function assertLiveStackProofSummary(summary) {
   }
   if (summary.hostVotecountConvergence?.resyncState !== "recovered") {
     throw new Error("live-stack summary missing host votecount resync recovery");
+  }
+  if (
+    summary.rolePmReplacementLifecycle?.channelId !== "private:role_pm:slot-7" ||
+    summary.rolePmReplacementLifecycle?.initialLiveDeltaKind !==
+      "ThreadPostsChanged" ||
+    summary.rolePmReplacementLifecycle?.commandLiveDeltaKind !==
+      "ThreadPostsChanged" ||
+    summary.rolePmReplacementLifecycle?.outgoingMediaBodyBytes !== 0 ||
+    summary.rolePmReplacementLifecycle?.stalePostReject !== "NotYourSlot"
+  ) {
+    throw new Error("live-stack summary missing Role PM replacement lifecycle proof");
   }
   return summary;
 }
@@ -283,6 +327,7 @@ export function markdownLiveStackProofSummary(summary) {
     "| Surface | Status | Details |",
     "| --- | --- | --- |",
     `| reconnect | ${summary.reconnectRecovery.status} | state=${summary.reconnectRecovery.state ?? ""}, post=${summary.reconnectRecovery.recoveredSnapshotContainsPost} |`,
+    `| Role PM replacement | ${summary.rolePmReplacementLifecycle.status} | channel=${summary.rolePmReplacementLifecycle.channelId ?? ""}, incoming=${summary.rolePmReplacementLifecycle.incomingPrincipalUserId ?? ""}, live=${summary.rolePmReplacementLifecycle.commandLiveDeltaKind ?? ""}, reloadPosts=${summary.rolePmReplacementLifecycle.reloadedPostCount}, stale=${summary.rolePmReplacementLifecycle.stalePostReject ?? ""}, media=${summary.rolePmReplacementLifecycle.outgoingMediaStatus ?? ""}/${summary.rolePmReplacementLifecycle.outgoingMediaBodyBytes ?? ""} bytes |`,
     `| host ops | ${summary.hostOpsWorkflow.status} | prompt=${summary.hostOpsWorkflow.promptState ?? ""}, lifecycle=${summary.hostOpsWorkflow.slotLifecycleState ?? ""}, invite=${summary.hostOpsWorkflow.playerInviteStatus ?? ""}, staleInvite=${summary.hostOpsWorkflow.stalePlayerInviteState ?? ""}/${summary.hostOpsWorkflow.stalePlayerInviteRetryState ?? ""} |`,
   );
   return `${lines.join("\n")}\n`;
@@ -294,6 +339,23 @@ function hostOpsStatus(moderator) {
     moderator?.playerInviteTarget?.status === "passed" &&
     moderator?.stalePlayerInviteReject?.state === "recovered" &&
     moderator?.stalePlayerInviteReject?.retry?.state === "ack"
+    ? "passed"
+    : "failed";
+}
+
+function rolePmReplacementStatus(evidence) {
+  return evidence?.status === "passed" &&
+    evidence?.channelId === "private:role_pm:slot-7" &&
+    evidence?.incoming?.submitOutcome?.state === "ack" &&
+    evidence?.incoming?.initialLiveDelta?.delta?.kind === "ThreadPostsChanged" &&
+    evidence?.incoming?.commandLiveDelta?.delta?.kind === "ThreadPostsChanged" &&
+    evidence?.incoming?.reloadedPostBodies?.length >= 2 &&
+    evidence?.incoming?.mediaBodyBytes > 0 &&
+    evidence?.outgoing?.routeStatus === 403 &&
+    evidence?.outgoing?.threadStatus === 403 &&
+    evidence?.outgoing?.mediaStatus === 403 &&
+    evidence?.outgoing?.mediaBodyBytes === 0 &&
+    evidence?.outgoing?.stalePostReject?.error === "NotYourSlot"
     ? "passed"
     : "failed";
 }

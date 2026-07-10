@@ -252,8 +252,9 @@ async fn engine_store_projection(pool: sqlx::PgPool) {
     );
 
     // votecount (running, ballot-keyed, UNWEIGHTED): D01 → slot_1 has 1 current
-    // ballot (slot_2 and slot_3 both voted slot_1, then slot_3 withdrew), and
-    // slot_3 has 1 (slot_1's ballot).
+    // ballot (slot_2 and slot_3 both voted slot_1, then slot_3 withdrew). The
+    // ballot targeting slot_3 is cleared when the night resolution kills that
+    // slot, so dead targets cannot remain in the current tally.
     let vc = votecount(&pool, game).await.unwrap();
     let tally: BTreeMap<(String, String), i64> = vc
         .iter()
@@ -264,7 +265,7 @@ async fn engine_store_projection(pool: sqlx::PgPool) {
         1,
         "2 ballots - 1 withdrawn = 1"
     );
-    assert_eq!(tally[&("D01".into(), "slot_3".into())], 1);
+    assert!(!tally.contains_key(&("D01".into(), "slot_3".into())));
 
     let thread = projections::thread_view(&pool, game, None, 50)
         .await

@@ -22988,9 +22988,9 @@ function hostMixedAdvanceRaceSurfaceFixture() {
 function privateChannelRoleSurfaceFixture() {
   const game = "00000000-0000-0000-0000-000000000002";
   const roleUrl =
-    `http://127.0.0.1:5173/g/${game}/c/role-pm?private=notification-1`;
+    `http://127.0.0.1:5173/g/${game}/c/private%3Arole_pm%3Aslot-7?private=notification-1`;
   const visitedRolePath =
-    `/g/${game}/c/role-pm?private=notification-1`;
+    `/g/${game}/c/private%3Arole_pm%3Aslot-7?private=notification-1`;
   const completedPrivateReloadScenario = completedPrivateChannelReloadScenario();
   const staleCompletedPrivateScenario = staleCompletedPrivatePostScenario();
   const completedPrivateReloadSnapshot = completedPrivateChannelSnapshot({
@@ -23006,13 +23006,13 @@ function privateChannelRoleSurfaceFixture() {
     sourceRoleUrl: roleUrl,
     visitedRolePath,
     surfaceTestId: "player-surface",
-    channelRailTestId: "player-channel-role-pm",
+    channelRailTestId: "player-channel-private:role_pm:slot-7",
     clickedThroughFromRoleUrl: true,
-    channelId: "role-pm",
+    channelId: "private:role_pm:slot-7",
     channelAriaCurrent: "page",
-    commandPanelChannelId: "role-pm",
-    channelContextChannelId: "role-pm",
-    channelContextCapabilityLabel: "ChannelMember(role-pm)",
+    commandPanelChannelId: "private:role_pm:slot-7",
+    channelContextChannelId: "private:role_pm:slot-7",
+    channelContextCapabilityLabel: "ChannelMember(private:role_pm:slot-7)",
     privateQueueBoundary: {
       status: "principal-scoped-private-projections",
       count: 2,
@@ -23032,7 +23032,7 @@ function privateChannelRoleSurfaceFixture() {
       commandKind: "SubmitPost",
       command: {
         game: "00000000-0000-0000-0000-000000000002",
-        channel_id: "role-pm",
+        channel_id: "private:role_pm:slot-7",
         actor_slot: "slot-7",
         body: "Private role proof post",
       },
@@ -23076,14 +23076,14 @@ function privateChannelRoleSurfaceFixture() {
     stalePostAfterPhaseTransitionProof: {
       status: "passed",
       sourceRoleUrl:
-        "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002/c/role-pm?private=notification-1",
+        "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002/c/private%3Arole_pm%3Aslot-7?private=notification-1",
       visitedRolePath:
-        "/g/00000000-0000-0000-0000-000000000002/c/role-pm?private=notification-1",
+        "/g/00000000-0000-0000-0000-000000000002/c/private%3Arole_pm%3Aslot-7?private=notification-1",
       clickedAction: "submit_post",
       commandKind: "SubmitPost",
       command: {
         game: "00000000-0000-0000-0000-000000000002",
-        channel_id: "role-pm",
+        channel_id: "private:role_pm:slot-7",
         actor_slot: "slot-7",
         body: "Stale private phase proof post",
       },
@@ -23120,18 +23120,18 @@ function privateChannelRoleSurfaceFixture() {
           locked: true,
         },
         boundary:
-          "Seeded browser private post PhaseLocked recovery refreshed role-pm into locked Day 2.",
+          "Seeded browser private post PhaseLocked recovery refreshed private:role_pm:slot-7 into locked Day 2.",
       },
       projectionThread: {
         posts: [
           {
             seq: 802,
-            body: "Current role-pm thread after stale private post reject",
+            body: "Current private:role_pm:slot-7 thread after stale private post reject",
           },
         ],
       },
       stalePrivatePostBody: "Stale private phase proof post",
-      currentThreadText: "Current role-pm thread after stale private post reject",
+      currentThreadText: "Current private:role_pm:slot-7 thread after stale private post reject",
       checkpointPhaseId: "D02",
       checkpointActionState: "disabled:phase locked",
       checkpointReceiptState: "reject:PhaseLocked",
@@ -23189,10 +23189,10 @@ function privateChannelRoleSurfaceFixture() {
         boundary:
           "Reject InvalidTarget: invalid target; action target is no longer valid, refresh and use current action controls",
       },
-      commandPanelChannelIdBeforeReject: "role-pm",
-      commandPanelChannelIdAfterReject: "role-pm",
-      channelContextChannelIdBeforeReject: "role-pm",
-      channelContextChannelIdAfterReject: "role-pm",
+      commandPanelChannelIdBeforeReject: "private:role_pm:slot-7",
+      commandPanelChannelIdAfterReject: "private:role_pm:slot-7",
+      channelContextChannelIdBeforeReject: "private:role_pm:slot-7",
+      channelContextChannelIdAfterReject: "private:role_pm:slot-7",
       checkpointPhaseId: "N01",
       checkpointActionState: "enabled:submit_action:factional_kill",
       checkpointReceiptState: "reject:InvalidTarget",
@@ -23209,7 +23209,7 @@ function privateChannelRoleSurfaceFixture() {
       sourceRoleUrl: roleUrl,
       visitedRolePath,
       clickedThroughFromRoleUrl: true,
-      channelId: "role-pm",
+      channelId: "private:role_pm:slot-7",
       nestedRoleUrlConsistency: {
         reloadSourceRoleUrl: roleUrl,
         staleCompletedSourceRoleUrl: roleUrl,

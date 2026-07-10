@@ -166,7 +166,7 @@ export function privateChannelRoleUrlFromPlayerRoleUrl(roleUrl) {
   }
   const parsed = new URL(roleUrl);
   const basePath = parsed.pathname.replace(/\/$/u, "");
-  parsed.pathname = `${basePath}/c/role-pm`;
+  parsed.pathname = `${basePath}/c/private%3Arole_pm%3Aslot-7`;
   parsed.search = "?private=notification-1";
   return parsed.toString();
 }

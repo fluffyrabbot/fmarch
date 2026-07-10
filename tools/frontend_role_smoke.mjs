@@ -591,7 +591,7 @@ try {
     await installPrivateChannelBrowserRoutes(privateChannelPage, {
       commandRequests: privateChannelCommandRequests,
     });
-    const privateChannelPath = "/g/midsummer/c/role-pm";
+    const privateChannelPath = "/g/midsummer/c/private%3Arole_pm%3Aslot-7";
     const privateChannelResponse = await privateChannelPage.goto(
       `${baseUrl}${privateChannelPath}`,
       {
@@ -622,7 +622,7 @@ try {
       {
         label: "player-private-channel active rail",
         box: await assertNavigationAffordance(
-          privateChannelPage.getByTestId("player-channel-role-pm"),
+          privateChannelPage.getByTestId("player-channel-private:role_pm:slot-7"),
           {
             label: "player-private-channel active rail",
             navigation: "link",
@@ -678,7 +678,7 @@ try {
       role: "player-private-channel",
       viewport,
       path: privateChannelPath,
-      activeChannelTestId: "player-channel-role-pm",
+      activeChannelTestId: "player-channel-private:role_pm:slot-7",
       privateReviewHref: `${privateChannelPath}?private=notification-1`,
       media: privateChannelMedia,
       focusTraversal: privateChannelFocusTraversal,
@@ -2060,14 +2060,14 @@ async function assertConfirmationRoot(
 }
 
 async function drivePlayerPrivateChannelPost(page, { commandRequests }) {
-  const activeChannel = page.getByTestId("player-channel-role-pm");
+  const activeChannel = page.getByTestId("player-channel-private:role_pm:slot-7");
   await activeChannel.waitFor({ state: "visible" });
   if ((await activeChannel.getAttribute("aria-current")) !== "page") {
-    throw new Error("player private channel route did not mark role-pm active");
+    throw new Error("player private channel route did not mark private:role_pm:slot-7 active");
   }
 
   const composer = page.getByTestId("player-composer");
-  await composer.locator("textarea").fill("Browser smoke role-pm post");
+  await composer.locator("textarea").fill("Browser smoke private:role_pm:slot-7 post");
   await composer.locator('[data-action="submit_post"]').click();
   const status = page.getByTestId("player-command-status");
   await status.waitFor({ state: "visible" });
@@ -2094,9 +2094,9 @@ async function drivePlayerPrivateChannelPost(page, { commandRequests }) {
   }
   const expectedCommand = {
     game: "midsummer",
-    channel_id: "role-pm",
+    channel_id: "private:role_pm:slot-7",
     actor_slot: "slot-7",
-    body: "Browser smoke role-pm post",
+    body: "Browser smoke private:role_pm:slot-7 post",
   };
   if (JSON.stringify(requestCommand) !== JSON.stringify(expectedCommand)) {
     throw new Error(

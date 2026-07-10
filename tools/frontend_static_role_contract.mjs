@@ -1442,7 +1442,7 @@ async function proveAdminSurface() {
 async function provePlayerSurface() {
   const capabilities = [
     { kind: "SlotOccupant", game: "midsummer", slot: "slot-7" },
-    { kind: "ChannelMember", game: "midsummer", channel: "role-pm" },
+    { kind: "ChannelMember", game: "midsummer", channel: "private:role_pm:slot-7" },
   ];
   const data = await buildGameRouteData({
     game: "midsummer",
@@ -1608,10 +1608,10 @@ async function provePlayerSurface() {
   assert.deepEqual(data.layout.regions, ["channels", "thread", "commands"]);
   const rolePmRoute = await buildGameRouteData({
     game: "midsummer",
-    activeChannel: "role-pm",
+    activeChannel: "private:role_pm:slot-7",
     principalUserId: "player_mira",
     capabilities: [
-      { kind: "ChannelMember", game: "midsummer", channel: "role-pm" },
+      { kind: "ChannelMember", game: "midsummer", channel: "private:role_pm:slot-7" },
     ],
   });
   assert.equal(rolePmRoute.channel.supported, true);
@@ -1637,7 +1637,7 @@ async function provePlayerSurface() {
     sendCommandImpl: async (request) => {
       assert.deepEqual(request.command.SubmitPost, {
         game: "midsummer",
-        channel_id: "role-pm",
+        channel_id: "private:role_pm:slot-7",
         actor_slot: "slot-7",
         body: "private role note",
       });

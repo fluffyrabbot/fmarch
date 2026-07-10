@@ -268,13 +268,13 @@ test("private-channel role URL helper preserves explicit channel or derives fall
     privateChannelRoleUrlFromPlayerRoleUrl(
       "http://127.0.0.1:5173/g/game-a?x=1",
     ),
-    "http://127.0.0.1:5173/g/game-a/c/role-pm?private=notification-1",
+    "http://127.0.0.1:5173/g/game-a/c/private%3Arole_pm%3Aslot-7?private=notification-1",
   );
   assert.equal(
     privateChannelRoleUrlWithFallback({
       playerRoleUrl: "http://127.0.0.1:5173/g/game-a/",
     }),
-    "http://127.0.0.1:5173/g/game-a/c/role-pm?private=notification-1",
+    "http://127.0.0.1:5173/g/game-a/c/private%3Arole_pm%3Aslot-7?private=notification-1",
   );
   assert.throws(
     () => privateChannelRoleUrlWithFallback({}),

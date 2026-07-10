@@ -82,7 +82,13 @@ DeadViewer(game)            see dead-visible content
 - `SlotOccupant` is bound to the **current** occupant of the slot — after a replacement, the
   outgoing user's capability is gone and the incoming user's is granted, while the slot's
   history is untouched ([01](01-domain-model.md)).
-- Capabilities are derived from projections (`channel_membership`, `slot_state`) so they
+- `private:role_pm:<slot_id>` membership is keyed to the stable slot in
+  `private_channel_member`. Replacement therefore transfers Role PM read/post authority by
+  changing `slot_occupancy`; it does not rewrite membership, authorship, or history.
+- Replacement revokes the outgoing session's **game-scoped slot and channel authority** on
+  the next capability resolution. It intentionally does not revoke the account session
+  globally, because that credential may still have unrelated authority elsewhere.
+- Capabilities are derived from projections (`private_channel_member`, `slot_occupancy`) so they
   always reflect committed game state, never stale client claims.
 
 ## Visibility enforcement (defense in depth)
@@ -92,6 +98,10 @@ Reads and live deltas are filtered server-side by capability ([03](03-backend.md
 - A delta is sent to a connection only if the connection's capabilities permit seeing that
   event. Scumchat frames never leave the server toward a spectator's socket — it's not
   hidden in the UI, the bytes are never sent.
+- A private player route selects its active channel on the live connection. Initial and
+  command-following `ThreadPostsChanged` frames are built from that channel only after the
+  principal resolves `ChannelMember(channel)`; an outgoing replacement session receives no
+  Role PM thread frame.
 - Role data is access-controlled *and* the projection's reveal flag gates it; end-game
   reveal flips the flag ([02](02-event-sourcing.md)). The client UI hiding something is
   never the only line of defense.

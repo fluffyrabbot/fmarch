@@ -5849,6 +5849,51 @@ test("admin local core loop detail data carries lane rows", async () => {
   );
 });
 
+test("admin local core loop renders the validated earliest-reached tie as a spine cycle", async () => {
+  const proofRun = proofRunFixture();
+  proofRun.earliestReachedTie = {
+    status: "passed",
+    game: "game-earliest",
+    sourceRoleUrls: {
+      host: "http://127.0.0.1:5173/g/game-earliest/host",
+    },
+    outcome: {
+      winner_slot: "slot-2",
+      tiebreak: "EarliestReached",
+    },
+  };
+  const data = await buildAdminAuditDetailData({
+    audit: localAdminAuditIds.coreLoop,
+    principalUserId: "admin_a",
+    capabilities: [{ kind: "GlobalAdmin" }],
+    proofRun,
+  });
+
+  const cycle = data.audit.spineCycles.find(
+    (candidate) => candidate.id === "earliest-reached",
+  );
+  assert.deepEqual(cycle, {
+    id: "earliest-reached",
+    label: "Earliest reached",
+    game: "game-earliest",
+    status: "1 checkpoint",
+    roleUrls: [
+      {
+        id: "host",
+        label: "Host",
+        href: "http://127.0.0.1:5173/g/game-earliest/host",
+      },
+    ],
+    checkpoints: [
+      {
+        id: "d01-tie-resolved",
+        label: "D01 tie resolved",
+        status: "winner slot-2, tiebreak EarliestReached",
+      },
+    ],
+  });
+});
+
 test("admin local player recovery detail data carries focused lane rows", async () => {
   const data = await buildAdminAuditDetailData({
     audit: localAdminAuditIds.playerRecovery,

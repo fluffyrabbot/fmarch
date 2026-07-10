@@ -113,10 +113,10 @@ export const COMMAND_SCENARIOS = Object.freeze([
     rootSelector: '[data-testid="player-surface"]',
     expectedText: "Post",
     route: {
-      path: "/g/midsummer/c/role-pm",
-      activeChannelTestId: "player-channel-role-pm",
-      activeChannelHref: "/g/midsummer/c/role-pm",
-      privateReviewHref: "/g/midsummer/c/role-pm?private=notification-1",
+      path: "/g/midsummer/c/private%3Arole_pm%3Aslot-7",
+      activeChannelTestId: "player-channel-private:role_pm:slot-7",
+      activeChannelHref: "/g/midsummer/c/private%3Arole_pm%3Aslot-7",
+      privateReviewHref: "/g/midsummer/c/private%3Arole_pm%3Aslot-7?private=notification-1",
     },
     media: {
       boundaryTestId: "thread-post-media-boundary-442",
@@ -163,7 +163,7 @@ export const COMMAND_SCENARIOS = Object.freeze([
     targetTestId: "route-error-action",
     expectedText: "Back to board",
     errorSurface: {
-      path: "/g/midsummer/c/role-pm",
+      path: "/g/midsummer/c/private%3Arole_pm%3Aslot-7",
       status: 403,
       surfaceTestId: "route-error-surface",
       panelTestId: "route-error-panel",

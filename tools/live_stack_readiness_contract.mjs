@@ -106,6 +106,31 @@ const CHECKS = Object.freeze([
       evidence?.browser?.privateChannelForbidden?.status === 403,
   },
   {
+    id: "role-pm-replacement-lifecycle",
+    label: "Role PM proves engine declaration, live replacement transfer, reload, and stale denial",
+    predicate: (evidence) =>
+      evidence?.browser?.rolePmHistory?.channelId === "private:role_pm:slot-7" &&
+      evidence?.browser?.moderator?.rolePmReplacement?.status === "passed" &&
+      evidence.browser.moderator.rolePmReplacement?.incoming?.submitOutcome?.state ===
+        "ack" &&
+      evidence.browser.moderator.rolePmReplacement?.incoming?.initialLiveDelta?.delta
+        ?.kind === "ThreadPostsChanged" &&
+      evidence.browser.moderator.rolePmReplacement?.incoming?.commandLiveDelta?.delta
+        ?.kind === "ThreadPostsChanged" &&
+      evidence.browser.moderator.rolePmReplacement?.incoming?.reloadedPostBodies?.includes(
+        "Role PM history before replacement",
+      ) &&
+      evidence.browser.moderator.rolePmReplacement?.incoming?.reloadedPostBodies?.includes(
+        "Incoming replacement continued the durable Role PM",
+      ) &&
+      evidence.browser.moderator.rolePmReplacement?.outgoing?.routeStatus === 403 &&
+      evidence.browser.moderator.rolePmReplacement?.outgoing?.threadStatus === 403 &&
+      evidence.browser.moderator.rolePmReplacement?.outgoing?.mediaStatus === 403 &&
+      evidence.browser.moderator.rolePmReplacement?.outgoing?.mediaBodyBytes === 0 &&
+      evidence.browser.moderator.rolePmReplacement?.outgoing?.stalePostReject?.error ===
+        "NotYourSlot",
+  },
+  {
     id: "reconnect-recovery",
     label: "Player route proves live projection reconnect recovery without reload",
     predicate: (evidence) =>

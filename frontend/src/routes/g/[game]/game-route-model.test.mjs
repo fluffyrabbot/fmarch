@@ -322,38 +322,42 @@ test("player vote commands honor explicitly empty live command-state targets", (
 test("player route data marks active private channel access without host data", async () => {
   const data = await buildGameRouteData({
     game: "midsummer",
-    activeChannel: "role-pm",
+    activeChannel: "private:role_pm:slot-7",
     principalUserId: "player_mira",
     capabilities: [
-      { kind: "ChannelMember", game: "midsummer", channel: "role-pm" },
+      { kind: "ChannelMember", game: "midsummer", channel: "private:role_pm:slot-7" },
     ],
   });
 
   assert.equal(data.access.allowed, true);
   assert.deepEqual(data.channel, {
-    channel: "role-pm",
+    channel: "private:role_pm:slot-7",
     supported: true,
     allowed: true,
     label: "Role PM",
-    capabilityLabel: "ChannelMember(role-pm)",
-    href: "/g/midsummer/c/role-pm",
+    capabilityLabel: "ChannelMember(private:role_pm:slot-7)",
+    href: "/g/midsummer/c/private%3Arole_pm%3Aslot-7",
   });
   assert.deepEqual(data.channels, [
     {
-      id: "role-pm",
+      id: "private:role_pm:slot-7",
       label: "Role PM",
-      href: "/g/midsummer/c/role-pm",
+      href: "/g/midsummer/c/private%3Arole_pm%3Aslot-7",
       active: true,
-      capabilityLabel: "ChannelMember(role-pm)",
+      capabilityLabel: "ChannelMember(private:role_pm:slot-7)",
     },
   ]);
   assert.equal(
     data.coldLoad.threadEndpoint,
-    "/games/midsummer/channels/role-pm/thread?limit=50&principal_user_id=player_mira",
+    "/games/midsummer/channels/private%3Arole_pm%3Aslot-7/thread?limit=50&principal_user_id=player_mira",
   );
   assert.equal(
     data.threadPager.olderEndpoint,
-    "/games/midsummer/channels/role-pm/thread?limit=50&before_seq=441&principal_user_id=player_mira",
+    "/games/midsummer/channels/private%3Arole_pm%3Aslot-7/thread?limit=50&before_seq=441&principal_user_id=player_mira",
+  );
+  assert.equal(
+    data.liveProjection.endpoint,
+    "/ws?game=midsummer&principal_user_id=player_mira&channel=private%3Arole_pm%3Aslot-7",
   );
   assert.equal(Object.hasOwn(data, "hostPrompts"), false);
 });
@@ -385,15 +389,15 @@ test("player route data can address private queue rows from the URL", async () =
 
   const rolePm = await buildGameRouteData({
     game: "midsummer",
-    activeChannel: "role-pm",
+    activeChannel: "private:role_pm:slot-7",
     privateItem: "investigation-1",
     principalUserId: "player_mira",
-    capabilities: [{ kind: "ChannelMember", game: "midsummer", channel: "role-pm" }],
+    capabilities: [{ kind: "ChannelMember", game: "midsummer", channel: "private:role_pm:slot-7" }],
   });
   assert.deepEqual(rolePm.privateQueueExpandedItems, { "investigation-1": true });
   assert.equal(
     rolePm.privateQueue[1].reviewHref,
-    "/g/midsummer/c/role-pm?private=investigation-1",
+    "/g/midsummer/c/private%3Arole_pm%3Aslot-7?private=investigation-1",
   );
 });
 
@@ -403,7 +407,7 @@ test("player route data models unsupported and denied channel access", async () 
     activeChannel: "scum-chat",
     principalUserId: "player_mira",
     capabilities: [
-      { kind: "ChannelMember", game: "midsummer", channel: "role-pm" },
+      { kind: "ChannelMember", game: "midsummer", channel: "private:role_pm:slot-7" },
     ],
   });
   assert.equal(unsupported.channel.supported, false);
@@ -414,7 +418,7 @@ test("player route data models unsupported and denied channel access", async () 
 
   const denied = await buildGameRouteData({
     game: "midsummer",
-    activeChannel: "role-pm",
+    activeChannel: "private:role_pm:slot-7",
     principalUserId: "player_mira",
     capabilities: [
       { kind: "ChannelMember", game: "midsummer", channel: "main" },
@@ -425,8 +429,8 @@ test("player route data models unsupported and denied channel access", async () 
   assert.equal(denied.channel.allowed, false);
   assert.equal(playerChannelForbiddenMessage({
     game: "midsummer",
-    channel: "role-pm",
-  }), "Game midsummer channel role-pm requires scoped channel capability.");
+    channel: "private:role_pm:slot-7",
+  }), "Game midsummer channel private:role_pm:slot-7 requires scoped channel capability.");
 });
 
 test("player route data uses REST projection cold-loads when available", async () => {
@@ -665,12 +669,12 @@ test("player private queue helpers derive visible queue from scoped projections"
     },
   ]);
   assert.deepEqual(
-    buildPrivateQueueRouteItems(snapshot, { game: "midsummer", channel: "role-pm" }).map(
+    buildPrivateQueueRouteItems(snapshot, { game: "midsummer", channel: "private:role_pm:slot-7" }).map(
       (item) => [item.id, item.reviewHref],
     ),
     [
-      ["notification-1", "/g/midsummer/c/role-pm?private=notification-1"],
-      ["investigation-1", "/g/midsummer/c/role-pm?private=investigation-1"],
+      ["notification-1", "/g/midsummer/c/private%3Arole_pm%3Aslot-7?private=notification-1"],
+      ["investigation-1", "/g/midsummer/c/private%3Arole_pm%3Aslot-7?private=investigation-1"],
     ],
   );
 });
@@ -742,7 +746,7 @@ test("player route data exposes only channels granted to the session", async () 
     game: "midsummer",
     principalUserId: "player_mira",
     capabilities: [
-      { kind: "ChannelMember", game: "midsummer", channel: "role-pm" },
+      { kind: "ChannelMember", game: "midsummer", channel: "private:role_pm:slot-7" },
       { kind: "DeadViewer", game: "midsummer" },
     ],
   });
@@ -750,7 +754,7 @@ test("player route data exposes only channels granted to the session", async () 
   assert.equal(rolePmData.access.allowed, true);
   assert.deepEqual(
     rolePmData.channels.map((channel) => channel.id),
-    ["role-pm", "dead"],
+    ["private:role_pm:slot-7", "dead"],
   );
 
   const slotData = await buildGameRouteData({
@@ -758,7 +762,7 @@ test("player route data exposes only channels granted to the session", async () 
     principalUserId: "player_mira",
     capabilities: [
       { kind: "SlotOccupant", game: "midsummer", slot: "slot-7" },
-      { kind: "ChannelMember", game: "other", channel: "role-pm" },
+      { kind: "ChannelMember", game: "other", channel: "private:role_pm:slot-7" },
       { kind: "DeadViewer", game: "other" },
     ],
   });
@@ -868,24 +872,24 @@ test("player channel load exposes active channel route state from fixture query"
   process.env.FMARCH_FRONTEND_FIXTURE_SESSION = "1";
   try {
     const data = await loadChannelRoute({
-      params: { game: "midsummer", channel: "role-pm" },
+      params: { game: "midsummer", channel: "private:role_pm:slot-7" },
       locals: {
         principalUserId: "player_mira",
         resolvedCapabilities: [
-          { kind: "ChannelMember", game: "midsummer", channel: "role-pm" },
+          { kind: "ChannelMember", game: "midsummer", channel: "private:role_pm:slot-7" },
         ],
       },
       fetch: async () => ({ ok: false }),
       url: new URL(
-        `https://fmarch.local/g/midsummer/c/role-pm?${APP_ROUTE_STATE_CONTRACT.fixtureQueryParam}=loading`,
+        `https://fmarch.local/g/midsummer/c/private%3Arole_pm%3Aslot-7?${APP_ROUTE_STATE_CONTRACT.fixtureQueryParam}=loading`,
       ),
     });
 
     assert.equal(data.shell.activeSurface, "player");
     assert.equal(data.shellOwner, "layout");
-    assert.equal(data.channel.channel, "role-pm");
+    assert.equal(data.channel.channel, "private:role_pm:slot-7");
     assert.equal(data.channel.allowed, true);
-    assert.equal(data.threadPager.channel, "role-pm");
+    assert.equal(data.threadPager.channel, "private:role_pm:slot-7");
     assert.deepEqual(data.routeState, {
       surface: "player",
       state: "loading",
@@ -894,7 +898,7 @@ test("player channel load exposes active channel route state from fixture query"
     });
     assert.equal(
       data.privateQueue[0].reviewHref,
-      "/g/midsummer/c/role-pm?private=notification-1",
+      "/g/midsummer/c/private%3Arole_pm%3Aslot-7?private=notification-1",
     );
   } finally {
     if (previousFixtureMode === undefined) {

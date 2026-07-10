@@ -41,9 +41,9 @@ pub use resolver::{
     ItaSessionControlInput, ResolutionInput, ResolutionOutput, RESULT_VERSION,
 };
 pub use state::{
-    apply_events, ActionCounterRecord, ActionGrantRecord, BackupTargetRecord,
+    apply_events, role_pm_channel_id, ActionCounterRecord, ActionGrantRecord, BackupTargetRecord,
     BufferedItaShotRecord, ConversionOriginRecord, DelayedDeathRecord, EffectRecord,
     InvestigationMemoryRecord, LinkRecord, PrivateChannelRecord, RetaliationRecord, RevealState,
     SlotLifecycle, SlotState, StateSnapshot, Submission, VisitRecord, WolfBeautyMarkRecord,
-    WolfCarryTokenRecord,
+    WolfCarryTokenRecord, ROLE_PM_CHANNEL_PREFIX,
 };

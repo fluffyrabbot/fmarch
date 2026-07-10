@@ -22,17 +22,6 @@ const PLAYER_CHANNELS = Object.freeze([
     },
   }),
   Object.freeze({
-    id: "role-pm",
-    label: "Role PM",
-    capabilityLabel: "ChannelMember(role-pm)",
-    href(game) {
-      return `/g/${encodeURIComponent(game)}/c/role-pm`;
-    },
-    allowed({ capabilities, game }) {
-      return hasChannelMember({ capabilities, game, channel: "role-pm" });
-    },
-  }),
-  Object.freeze({
     id: "dead",
     label: "Dead chat",
     capabilityLabel: "DeadViewer(game)",
@@ -125,7 +114,9 @@ function playerChannelDefinitions({ capabilities, game }) {
         !PLAYER_CHANNELS.some((channel) => channel.id === capability.channel),
     )
     .map((capability) => dynamicPrivateChannel(capability.channel));
-  const definitions = [...PLAYER_CHANNELS, ...dynamicChannels];
+  const definitions = [...PLAYER_CHANNELS, ...dynamicChannels].sort(
+    (left, right) => channelOrder(left.id) - channelOrder(right.id),
+  );
   const seen = new Set();
   return definitions.filter((channel) => {
     if (seen.has(channel.id)) {
@@ -134,6 +125,13 @@ function playerChannelDefinitions({ capabilities, game }) {
     seen.add(channel.id);
     return true;
   });
+}
+
+function channelOrder(channelId) {
+  if (channelId === "main") return 0;
+  if (channelId.startsWith("private:role_pm:")) return 1;
+  if (channelId === "dead") return 2;
+  return 3;
 }
 
 function dynamicPrivateChannel(channelId) {
@@ -152,6 +150,9 @@ function dynamicPrivateChannel(channelId) {
 }
 
 function privateChannelLabel(channelId) {
+  if (channelId.startsWith("private:role_pm:")) {
+    return "Role PM";
+  }
   const cleaned = channelId
     .replace(/^private:/, "")
     .replace(/[-_]+/g, " ")

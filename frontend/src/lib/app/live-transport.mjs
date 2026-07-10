@@ -32,6 +32,7 @@ export function buildLiveProjectionUrl({
   game,
   principalUserId,
   slotId = null,
+  channel = "main",
 }) {
   const params = new URLSearchParams({
     game: requiredString(game, "game"),
@@ -39,6 +40,9 @@ export function buildLiveProjectionUrl({
   });
   if (slotId !== null && slotId !== undefined) {
     params.set("slot_id", requiredString(slotId, "slotId"));
+  }
+  if (channel !== "main") {
+    params.set("channel", requiredString(channel, "channel"));
   }
   if (apiBaseUrl === "") {
     return `/ws?${params.toString()}`;

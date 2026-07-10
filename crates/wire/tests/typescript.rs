@@ -13,7 +13,7 @@ fn submit_post_media_rejects_client_authored_variant_fields() {
     let command = serde_json::json!({
         "SubmitPost": {
             "game": uuid::Uuid::nil(),
-            "channel_id": "role-pm",
+            "channel_id": "private:role_pm:slot-7",
             "actor_slot": "slot_1",
             "body": "private image",
             "media": [{

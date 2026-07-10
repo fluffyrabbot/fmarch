@@ -8776,8 +8776,7 @@ function normalizeCoreLoopSpineCycles(proofRun) {
   const cycles = Array.isArray(proofRun?.coreLoopSpine?.cycles)
     ? proofRun.coreLoopSpine.cycles
     : [];
-  return Object.freeze(
-    cycles.map((cycle) => {
+  const normalized = cycles.map((cycle) => {
       const roleUrls =
         cycle?.roleUrls !== null && typeof cycle?.roleUrls === "object"
           ? cycle.roleUrls
@@ -8809,8 +8808,39 @@ function normalizeCoreLoopSpineCycles(proofRun) {
           ),
         ),
       });
-    }),
-  );
+    });
+  const earliestReached = proofRun?.earliestReachedTie;
+  if (
+    earliestReached?.status === "passed" &&
+    typeof earliestReached?.sourceRoleUrls?.host === "string"
+  ) {
+    normalized.push(
+      Object.freeze({
+        id: "earliest-reached",
+        label: "Earliest reached",
+        game: String(earliestReached.game ?? ""),
+        status: "1 checkpoint",
+        roleUrls: Object.freeze([
+          Object.freeze({
+            id: "host",
+            label: "Host",
+            href: String(earliestReached.sourceRoleUrls.host),
+          }),
+        ]),
+        checkpoints: Object.freeze([
+          Object.freeze({
+            id: "d01-tie-resolved",
+            label: "D01 tie resolved",
+            status: [
+              `winner ${String(earliestReached.outcome?.winner_slot ?? "unknown")}`,
+              `tiebreak ${String(earliestReached.outcome?.tiebreak ?? "unknown")}`,
+            ].join(", "),
+          }),
+        ]),
+      }),
+    );
+  }
+  return Object.freeze(normalized);
 }
 
 function normalizeCoreLoopSpineRecoveryHooks(proofRun) {

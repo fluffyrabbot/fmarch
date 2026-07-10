@@ -214,7 +214,7 @@ async function proveAdminHandlers() {
 
 async function provePlayerHandlers() {
   const voteData = playerData({ channel: "main" });
-  const postData = playerData({ channel: "role-pm" });
+  const postData = playerData({ channel: "private:role_pm:slot-7" });
   const voteAck = await provePlayerHandlerPath({
     action: "submit_vote",
     composerBody: "vote: slot-2",
@@ -267,7 +267,7 @@ async function provePlayerHandlers() {
         commandKind: postAck.plan.commandKind,
         ack: postAck.visible,
         ackRefreshKeys: postAck.refreshed[0],
-        channelId: "role-pm",
+        channelId: "private:role_pm:slot-7",
       },
     },
   };

@@ -1011,7 +1011,8 @@ async fn start_game(
         ActorId::Host,
         0,
     )];
-    events.extend(private_channel_declarations(&pack, &stream)?);
+    events.extend(role_pm_declarations(&stream)?);
+    events.extend(pack_private_channel_declarations(&pack, &stream)?);
     persist(pool, game, &events, receipt).await
 }
 
@@ -1284,14 +1285,22 @@ async fn assign_slot(
     if !projections::slot_exists(pool, game, &slot).await? {
         return Err(Reject::UnknownSlot);
     }
-    let ev = EventInput::new(
+    let stream = eventstore::load_stream(pool, game)
+        .await
+        .map_err(|e| Reject::Internal(e.to_string()))?;
+    let mut events = vec![EventInput::new(
         "SlotAssigned",
         1,
-        serde_json::json!({ "slot_id": slot, "user_id": user }),
+        serde_json::json!({ "slot_id": &slot, "user_id": user }),
         ActorId::Host,
         0,
-    );
-    persist(pool, game, &[ev], receipt).await
+    )];
+    if stream.iter().any(|event| event.kind == "GameStarted") {
+        if let Some(role_key) = role_assignments_from_stream(&stream)?.get(&slot) {
+            events.push(role_pm_declaration(&slot, role_key));
+        }
+    }
+    persist(pool, game, &events, receipt).await
 }
 
 async fn assign_role(
@@ -1308,24 +1317,34 @@ async fn assign_role(
     if !projections::slot_exists(pool, game, &slot).await? {
         return Err(Reject::UnknownSlot);
     }
-    let pack = load_pack(&current_pack_name(pool, game).await?)?;
+    let stream = eventstore::load_stream(pool, game)
+        .await
+        .map_err(|e| Reject::Internal(e.to_string()))?;
+    let pack = load_pack(&pack_name_from_stream(&stream)?)?;
     let role = pack
         .roles
         .get(&role_key)
         .ok_or_else(|| Reject::InvalidRole(role_key.clone()))?;
-    let ev = EventInput::new(
+    let mut events = vec![EventInput::new(
         "RoleAssigned",
         1,
         serde_json::json!({
-            "slot_id": slot,
-            "role_key": role_key,
+            "slot_id": &slot,
+            "role_key": &role_key,
             "alignment": role.alignment.clone(),
             "role_effects": role.effects.clone(),
         }),
         ActorId::Host,
         0,
-    );
-    persist(pool, game, &[ev], receipt).await
+    )];
+    if stream.iter().any(|event| event.kind == "GameStarted")
+        && projections::slot_occupant(pool, game, &slot)
+            .await?
+            .is_some()
+    {
+        events.push(role_pm_declaration(&slot, &role_key));
+    }
+    persist(pool, game, &events, receipt).await
 }
 
 // ───────────────────────── slice handlers ─────────────────────────
@@ -3552,7 +3571,7 @@ fn pack_name_from_stream(stream: &[eventstore::StoredEvent]) -> Result<String, R
         .ok_or_else(|| Reject::Internal("game stream has no GameCreated.pack".to_string()))
 }
 
-fn private_channel_declarations(
+fn pack_private_channel_declarations(
     pack: &domain::Pack,
     stream: &[eventstore::StoredEvent],
 ) -> Result<Vec<EventInput>, Reject> {
@@ -3637,6 +3656,51 @@ fn private_channel_declarations(
         ));
     }
     Ok(events)
+}
+
+fn role_pm_declarations(stream: &[eventstore::StoredEvent]) -> Result<Vec<EventInput>, Reject> {
+    let roles = role_assignments_from_stream(stream)?;
+    let occupied = occupied_slots_from_stream(stream)?;
+    Ok(roles
+        .into_iter()
+        .filter(|(slot_id, _)| occupied.contains(slot_id))
+        .map(|(slot_id, role_key)| role_pm_declaration(&slot_id, &role_key))
+        .collect())
+}
+
+fn role_pm_declaration(slot_id: &str, role_key: &str) -> EventInput {
+    EventInput::new(
+        "PrivateChannelDeclared",
+        1,
+        serde_json::json!({
+            "channel_id": domain::role_pm_channel_id(slot_id),
+            "group_id": "role_pm",
+            "kind": "RolePm",
+            "members": [{
+                "slot_id": slot_id,
+                "role_key": role_key,
+            }],
+            "reveals_alignment": "None",
+            "source": "engine.role_pm",
+        }),
+        ActorId::Host,
+        0,
+    )
+}
+
+fn occupied_slots_from_stream(
+    stream: &[eventstore::StoredEvent],
+) -> Result<BTreeSet<String>, Reject> {
+    let mut occupied = BTreeSet::new();
+    for event in stream {
+        match event.kind.as_str() {
+            "SlotAssigned" | "ReplacementCompleted" => {
+                occupied.insert(str_payload(event, "slot_id")?);
+            }
+            _ => {}
+        }
+    }
+    Ok(occupied)
 }
 
 fn private_channel_revocations(

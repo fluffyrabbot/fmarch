@@ -140,7 +140,7 @@ test("player route controller builds typed player command requests", () => {
   assert.deepEqual(
     buildPlayerCommandRequest({
       data: fixtureData({
-        threadPager: { pageSize: 50, channel: "role-pm" },
+        threadPager: { pageSize: 50, channel: "private:role_pm:slot-7" },
       }),
       action: "submit_post",
       composerBody: "private role note",
@@ -157,7 +157,7 @@ test("player route controller builds typed player command requests", () => {
       command: {
         SubmitPost: {
           game: "midsummer",
-          channel_id: "role-pm",
+          channel_id: "private:role_pm:slot-7",
           actor_slot: "slot-7",
           body: "private role note",
           media: [
@@ -602,7 +602,7 @@ test("player route controller pages older posts from the active private channel"
   const seenUrls = [];
   await loadOlderPlayerThreadPage({
     data: fixtureData({
-      threadPager: { pageSize: 50, channel: "role-pm" },
+      threadPager: { pageSize: 50, channel: "private:role_pm:slot-7" },
     }),
     fetchImpl: async (url) => {
       seenUrls.push(url);
@@ -619,7 +619,7 @@ test("player route controller pages older posts from the active private channel"
   });
 
   assert.deepEqual(seenUrls, [
-    "/games/midsummer/channels/role-pm/thread?limit=50&before_seq=41&principal_user_id=player_mira",
+    "/games/midsummer/channels/private%3Arole_pm%3Aslot-7/thread?limit=50&before_seq=41&principal_user_id=player_mira",
   ]);
 });
 

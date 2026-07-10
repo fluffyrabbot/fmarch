@@ -151,7 +151,7 @@ function fixtureSession({ token, context }) {
           {
             kind: "ChannelMember",
             game,
-            channel: "role-pm",
+            channel: "private:role_pm:slot-7",
             source: "fixture",
           },
           {

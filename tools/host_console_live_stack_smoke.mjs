@@ -57,6 +57,11 @@ const factionDayChatChannel = "private:mafia_day_chat";
 const factionDayChatRoute = encodeURIComponent(factionDayChatChannel);
 const factionDayChatPostBody = "Faction day chat received from live-stack smoke";
 const factionDayChatMediaAlt = "Private faction day chat vote receipt";
+const rolePmChannel = "private:role_pm:slot-7";
+const rolePmRoute = encodeURIComponent(rolePmChannel);
+const rolePmHistoryBody = "Role PM history before replacement";
+const rolePmIncomingBody = "Incoming replacement continued the durable Role PM";
+const rolePmMediaAlt = "Transferred private Role PM receipt";
 const factionDayChatUploadAsset = Object.freeze({
   contentAddress: "live-stack-private-upload-source",
   variantName: "source",
@@ -782,6 +787,9 @@ async function driveBrowser(frontendBaseUrl, privateChannelFixture) {
     const playerActionEvidence = await drivePlayerActionBrowser(frontendBaseUrl);
     const playerPrivateChannelEvidence =
       await drivePlayerPrivateChannelBrowser(frontendBaseUrl, privateChannelFixture);
+    const rolePmHistory = await seedRolePmHistory(
+      playerPrivateChannelEvidence.media.contentId,
+    );
     const privateChannelForbiddenEvidence =
       await drivePrivateChannelForbiddenBrowser(
         frontendBaseUrl,
@@ -792,12 +800,16 @@ async function driveBrowser(frontendBaseUrl, privateChannelFixture) {
       { before: hostVotecountBeforePlayer },
     );
     const playerVoteCountAfterPlayer = hostVotecountConvergence.apiVoteCount;
-    moderatorEvidence = await driveModeratorBrowser(moderatorSession);
+    moderatorEvidence = await driveModeratorBrowser(moderatorSession, {
+      frontendBaseUrl,
+      rolePmHistory,
+    });
     return {
       admin: adminEvidence,
       player: playerEvidence,
       playerAction: playerActionEvidence,
       playerPrivateChannel: playerPrivateChannelEvidence,
+      rolePmHistory,
       privateChannelForbidden: privateChannelForbiddenEvidence,
       hostVotecountConvergence,
       moderator: moderatorEvidence,
@@ -1036,6 +1048,66 @@ async function drivePlayerPrivateChannelBrowser(frontendBaseUrl, privateChannelF
   return evidence;
 }
 
+async function seedRolePmHistory(contentId) {
+  const membership = await runSql(
+    smokeDatabase.url,
+    `SELECT channel_id, kind, slot_id, role_key, source
+     FROM private_channel_member
+     WHERE game_id = '${game}' AND channel_id = '${rolePmChannel}'`,
+  );
+  if (
+    !membership.includes(rolePmChannel) ||
+    !membership.includes("RolePm") ||
+    !membership.includes("slot-7") ||
+    !membership.includes("engine.role_pm")
+  ) {
+    throw new Error(`Role PM membership was not engine-declared:\n${membership}`);
+  }
+
+  const command = await sendCommand("player-mira", {
+    SubmitPost: {
+      game,
+      channel_id: rolePmChannel,
+      actor_slot: "slot-7",
+      body: rolePmHistoryBody,
+      media: [{ content_id: contentId, alt: rolePmMediaAlt }],
+    },
+  });
+  const thread = await fetchJson(
+    `${apiBaseUrl}/games/${game}/channels/${rolePmRoute}/thread?principal_user_id=player-mira&limit=50`,
+  );
+  const post = thread.posts?.find((candidate) => candidate.body === rolePmHistoryBody);
+  if (post === undefined) {
+    throw new Error(`engine-declared Role PM did not project seeded history: ${JSON.stringify(thread)}`);
+  }
+  const mediaPostSeq = Number(post.source_seq ?? post.sourceSeq);
+  const projectedMedia = post.media?.find((item) => item.content_id === contentId);
+  assertManifestBackedPrivateMedia({
+    projectedMedia,
+    contentId,
+    mediaPostSeq,
+    channelId: rolePmChannel,
+    expectedAlt: rolePmMediaAlt,
+  });
+  return {
+    channelId: rolePmChannel,
+    route: rolePmRoute,
+    memberSlot: "slot-7",
+    outgoingPrincipalUserId: "player-mira",
+    incomingPrincipalUserId: "player-rowan",
+    body: rolePmHistoryBody,
+    command,
+    media: {
+      contentId,
+      mediaPostSeq,
+      privateUrl: projectedMedia.variants.tablet.avif_url,
+      projectedVariants: projectedMedia.variants,
+    },
+    boundary:
+      "StartGame declared a one-slot RolePm membership, and the outgoing occupant authored encrypted slot history with a canonical media reference before replacement.",
+  };
+}
+
 async function drivePrivateChannelForbiddenBrowser(frontendBaseUrl, privateMediaPath) {
   const deniedToken = `host-console-live-stack-denied-${crypto.randomUUID()}`;
   const deniedSession = await createAccountSession({
@@ -1111,6 +1183,266 @@ async function drivePrivateChannelForbiddenBrowser(frontendBaseUrl, privateMedia
       proof:
         "An enabled-account non-member received 403 with a zero-byte body for the exact manifest-backed private media URL recovered by the member after reload.",
     },
+  };
+}
+
+async function driveRolePmReplacementBrowser(frontendBaseUrl, fixture) {
+  if (fixture?.channelId !== rolePmChannel || fixture?.memberSlot !== "slot-7") {
+    throw new Error(`Role PM replacement fixture drifted: ${JSON.stringify(fixture)}`);
+  }
+  const incomingToken = `host-console-live-stack-role-pm-incoming-${crypto.randomUUID()}`;
+  const incomingSession = await createAccountSession({
+    token: incomingToken,
+    principalUserId: fixture.incomingPrincipalUserId,
+    label: "role-pm-incoming",
+  });
+  const incomingContext = await browser.newContext({ viewport: smokeViewport });
+  await incomingContext.addCookies([
+    {
+      name: "fmarch_session",
+      value: incomingToken,
+      domain: host,
+      path: "/",
+      httpOnly: true,
+      sameSite: "Lax",
+    },
+  ]);
+  const incomingPage = await incomingContext.newPage();
+  const pageUrl = `${frontendBaseUrl}/g/${game}/c/${rolePmRoute}`;
+  const response = await incomingPage.goto(pageUrl, { waitUntil: "networkidle" });
+  if (response === null || !response.ok()) {
+    throw new Error(
+      `incoming Role PM route failed with ${response?.status() ?? "no response"}: ${await incomingPage.textContent("body")}`,
+    );
+  }
+  await incomingPage.getByTestId("player-surface").waitFor({ state: "visible" });
+  const channelContext = incomingPage.getByTestId("player-command-channel-context");
+  await channelContext.waitFor({ state: "visible" });
+  if ((await channelContext.getAttribute("data-channel-id")) !== rolePmChannel) {
+    throw new Error(`incoming Role PM channel context drifted: ${await channelContext.innerText()}`);
+  }
+  const activeChannel = incomingPage.getByTestId(`player-channel-${rolePmChannel}`);
+  await activeChannel.waitFor({ state: "visible" });
+  if ((await activeChannel.getAttribute("aria-current")) !== "page") {
+    throw new Error("incoming Role PM rail item is not active");
+  }
+
+  const historicalPost = incomingPage.locator(
+    `[data-testid="thread-post-${fixture.media.mediaPostSeq}"]`,
+  );
+  await historicalPost.waitFor({ state: "visible" });
+  const historicalText = await historicalPost.innerText();
+  if (!historicalText.includes(rolePmHistoryBody)) {
+    throw new Error(`incoming replacement lost Role PM history: ${historicalText}`);
+  }
+  const mediaFigure = incomingPage.getByTestId(
+    `thread-post-media-${fixture.media.contentId}`,
+  );
+  await mediaFigure.waitFor({ state: "visible" });
+  await incomingPage.waitForFunction(
+    (testId) => {
+      const image = document.querySelector(`[data-testid="${testId}"] img`);
+      return image?.complete === true && image.naturalWidth > 0;
+    },
+    `thread-post-media-${fixture.media.contentId}`,
+    { timeout: 120_000 },
+  );
+  await incomingPage.waitForFunction(
+    (expectedBody) =>
+      (window.__fmarchLiveProjectionEvents ?? []).some(
+        (event) =>
+          event?.delta?.kind === "ThreadPostsChanged" &&
+          event.delta.body?.posts?.some((post) => post.body === expectedBody),
+      ),
+    rolePmHistoryBody,
+  );
+  const initialLiveDelta = await incomingPage.evaluate((expectedBody) =>
+    (window.__fmarchLiveProjectionEvents ?? []).find(
+      (event) =>
+        event?.delta?.kind === "ThreadPostsChanged" &&
+        event.delta.body?.posts?.some((post) => post.body === expectedBody),
+    ), rolePmHistoryBody);
+
+  const incomingMediaResponse = await incomingContext.request.get(
+    `${frontendBaseUrl}${fixture.media.privateUrl}`,
+    { headers: { accept: "image/avif" } },
+  );
+  const incomingMediaBytes = await incomingMediaResponse.body();
+  if (incomingMediaResponse.status() !== 200 || incomingMediaBytes.byteLength === 0) {
+    throw new Error(
+      `incoming replacement could not read transferred Role PM media: ${incomingMediaResponse.status()} bytes=${incomingMediaBytes.byteLength}`,
+    );
+  }
+
+  const textarea = incomingPage.locator('[data-testid="player-composer"] textarea');
+  await textarea.fill(rolePmIncomingBody);
+  const postButton = incomingPage.locator('[data-action="submit_post"]');
+  assertHitTarget(await postButton.boundingBox(), "incoming Role PM post button");
+  await postButton.click();
+  const status = incomingPage.getByTestId("player-command-status");
+  await status.waitFor({ state: "visible" });
+  await incomingPage.waitForFunction(
+    () =>
+      document
+        .querySelector('[data-testid="player-command-status"]')
+        ?.getAttribute("data-state") === "ack",
+  );
+  await incomingPage.waitForFunction(
+    (expectedBody) =>
+      (window.__fmarchLiveProjectionEvents ?? []).some(
+        (event) =>
+          event?.delta?.kind === "ThreadPostsChanged" &&
+          event.delta.body?.posts?.some((post) => post.body === expectedBody),
+      ),
+    rolePmIncomingBody,
+  );
+  const submitOutcome = await incomingPage.evaluate(
+    () => window.__fmarchPlayerCommandStatus,
+  );
+  const commandStatus = await status.innerText();
+  const submitCommand = submitOutcome?.requestEnvelope?.body?.body?.command?.SubmitPost;
+  if (
+    submitOutcome?.state !== "ack" ||
+    submitCommand?.channel_id !== rolePmChannel ||
+    submitCommand?.actor_slot !== "slot-7" ||
+    submitCommand?.body !== rolePmIncomingBody
+  ) {
+    throw new Error(`incoming Role PM SubmitPost drifted: ${JSON.stringify(submitOutcome)}`);
+  }
+  const commandLiveDelta = await incomingPage.evaluate((expectedBody) =>
+    (window.__fmarchLiveProjectionEvents ?? []).find(
+      (event) =>
+        event?.delta?.kind === "ThreadPostsChanged" &&
+        event.delta.body?.posts?.some((post) => post.body === expectedBody),
+    ), rolePmIncomingBody);
+
+  const reloadResponse = await incomingPage.reload({
+    waitUntil: "networkidle",
+    timeout: 180_000,
+  });
+  if (reloadResponse === null || !reloadResponse.ok()) {
+    throw new Error(`incoming Role PM reload failed: ${reloadResponse?.status() ?? "none"}`);
+  }
+  await incomingPage.getByTestId("player-surface").waitFor({ state: "visible" });
+  const reloadedPosts = await incomingPage
+    .locator('[data-testid^="thread-post-"]')
+    .allInnerTexts();
+  if (
+    !reloadedPosts.some((text) => text.includes(rolePmHistoryBody)) ||
+    !reloadedPosts.some((text) => text.includes(rolePmIncomingBody))
+  ) {
+    throw new Error(`Role PM reload lost durable posts: ${JSON.stringify(reloadedPosts)}`);
+  }
+  const apiThread = await fetchJson(
+    `${apiBaseUrl}/games/${game}/channels/${rolePmRoute}/thread?principal_user_id=player-rowan&limit=50`,
+  );
+  if (
+    !apiThread.posts?.some((post) => post.body === rolePmHistoryBody) ||
+    !apiThread.posts?.some((post) => post.body === rolePmIncomingBody)
+  ) {
+    throw new Error(`Role PM API reload lost replacement history: ${JSON.stringify(apiThread)}`);
+  }
+  await incomingContext.close();
+
+  const outgoingContext = await browser.newContext({ viewport: smokeViewport });
+  await outgoingContext.addCookies([
+    {
+      name: "fmarch_session",
+      value: playerSessionToken,
+      domain: host,
+      path: "/",
+      httpOnly: true,
+      sameSite: "Lax",
+    },
+  ]);
+  const outgoingPage = await outgoingContext.newPage();
+  const deniedRoute = await outgoingPage.goto(pageUrl, { waitUntil: "networkidle" });
+  if (deniedRoute === null || deniedRoute.status() !== 403) {
+    throw new Error(
+      `outgoing Role PM route expected 403, got ${deniedRoute?.status() ?? "none"}`,
+    );
+  }
+  await outgoingPage.getByTestId("route-error-surface").waitFor({ state: "visible" });
+  const staleThreadResponse = await fetchWithTimeout(
+    `${apiBaseUrl}/games/${game}/channels/${rolePmRoute}/thread?principal_user_id=player-mira&limit=50`,
+    {},
+    15_000,
+  );
+  if (staleThreadResponse.status !== 403) {
+    throw new Error(`outgoing principal read Role PM rows: ${staleThreadResponse.status}`);
+  }
+  const deniedMediaResponse = await outgoingContext.request.get(
+    `${frontendBaseUrl}${fixture.media.privateUrl}`,
+    { headers: { accept: "image/avif" } },
+  );
+  const deniedMediaBytes = await deniedMediaResponse.body();
+  if (deniedMediaResponse.status() !== 403 || deniedMediaBytes.byteLength !== 0) {
+    throw new Error(
+      `outgoing principal received Role PM media: ${deniedMediaResponse.status()} bytes=${deniedMediaBytes.byteLength}`,
+    );
+  }
+  const stalePostResponse = await outgoingContext.request.post(
+    `${frontendBaseUrl}/commands`,
+    {
+      data: {
+        v: 1,
+        id: commandEnvelopeId++,
+        body: {
+          kind: "Command",
+          body: {
+            command_id: crypto.randomUUID(),
+            principal_user_id: "player-mira",
+            command: {
+              SubmitPost: {
+                game,
+                channel_id: rolePmChannel,
+                actor_slot: "slot-7",
+                body: "stale outgoing Role PM post",
+                media: [],
+              },
+            },
+          },
+        },
+      },
+    },
+  );
+  const stalePost = await stalePostResponse.json();
+  if (
+    stalePostResponse.status() !== 200 ||
+    stalePost.body?.kind !== "Reject" ||
+    stalePost.body?.body?.error !== "NotYourSlot"
+  ) {
+    throw new Error(`outgoing stale Role PM post was not denied: ${JSON.stringify(stalePost)}`);
+  }
+  await outgoingContext.close();
+
+  return {
+    status: "passed",
+    pageUrl,
+    channelId: rolePmChannel,
+    slotId: "slot-7",
+    incomingSession,
+    incoming: {
+      principalUserId: "player-rowan",
+      commandStatus,
+      submitOutcome,
+      initialLiveDelta,
+      commandLiveDelta,
+      reloadedPostBodies: apiThread.posts.map((post) => post.body),
+      mediaStatus: incomingMediaResponse.status(),
+      mediaBodyBytes: incomingMediaBytes.byteLength,
+    },
+    outgoing: {
+      principalUserId: "player-mira",
+      authenticatedSessionRemainedActive: true,
+      routeStatus: deniedRoute.status(),
+      threadStatus: staleThreadResponse.status,
+      mediaStatus: deniedMediaResponse.status(),
+      mediaBodyBytes: deniedMediaBytes.byteLength,
+      stalePostReject: stalePost.body.body,
+    },
+    proof:
+      "The incoming account session opened the engine-declared slot-stable Role PM, received its capability-filtered websocket hydration, retained pre-replacement slot history and media, ACKed a new post, observed the channel-scoped live delta, and recovered both posts after reload. The still-authenticated outgoing session received 403 for the route and thread, zero media bytes, and NotYourSlot for a stale append.",
   };
 }
 
@@ -2819,7 +3151,10 @@ async function openModeratorBrowser(frontendBaseUrl) {
   return { context, page, pageUrl };
 }
 
-async function driveModeratorBrowser({ page, pageUrl }) {
+async function driveModeratorBrowser(
+  { page, pageUrl },
+  { frontendBaseUrl, rolePmHistory },
+) {
   const phaseControlEvidence = await driveHostPhaseControlsBrowser(page, pageUrl);
   const streamConflictEvidence = await driveHostStreamConflictBrowser(page);
   const actionEvidence = [];
@@ -2923,6 +3258,10 @@ async function driveModeratorBrowser({ page, pageUrl }) {
   const apiStateBeforePrompt = await fetchJson(
     `${apiBaseUrl}/games/${game}/host-console-state?principal_user_id=host_h&slot_id=slot-7`,
   );
+  const rolePmReplacement = await driveRolePmReplacementBrowser(
+    frontendBaseUrl,
+    rolePmHistory,
+  );
 
   const hostPromptIssueCommands = await issueBelovedPrincessPrompt();
   await waitForHostPromptDelta(page, "pending");
@@ -2942,6 +3281,7 @@ async function driveModeratorBrowser({ page, pageUrl }) {
       expectedOccupantUserId: livePlayerInvite.expectedOccupantUserId,
     },
     stalePlayerInviteReject,
+    rolePmReplacement,
     hostPrompt: {
       issueCommands: hostPromptIssueCommands,
       ...hostPromptEvidence,
@@ -4320,8 +4660,14 @@ function assertDuplicatePlayerSubmitReceipt({ commandId, receiptRows }) {
   }
 }
 
-function assertManifestBackedPrivateMedia({ projectedMedia, contentId, mediaPostSeq }) {
-  if (projectedMedia?.content_id !== contentId || projectedMedia.alt !== factionDayChatMediaAlt) {
+function assertManifestBackedPrivateMedia({
+  projectedMedia,
+  contentId,
+  mediaPostSeq,
+  channelId = factionDayChatChannel,
+  expectedAlt = factionDayChatMediaAlt,
+}) {
+  if (projectedMedia?.content_id !== contentId || projectedMedia.alt !== expectedAlt) {
     throw new Error(`projected private media identity drifted: ${JSON.stringify(projectedMedia)}`);
   }
   const expectedRoles = ["full-bounded", "tablet", "thumb"];
@@ -4329,7 +4675,7 @@ function assertManifestBackedPrivateMedia({ projectedMedia, contentId, mediaPost
   if (JSON.stringify(actualRoles) !== JSON.stringify(expectedRoles)) {
     throw new Error(`projected private media roles drifted: ${JSON.stringify(projectedMedia)}`);
   }
-  const encodedChannel = encodeURIComponent(factionDayChatChannel);
+  const encodedChannel = encodeURIComponent(channelId);
   for (const role of expectedRoles) {
     const variant = projectedMedia.variants[role];
     const prefix = `/media/thread/${game}/${encodedChannel}/${mediaPostSeq}/${contentId}/${role}`;

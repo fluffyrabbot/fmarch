@@ -8353,11 +8353,14 @@ fn role_set_contains(role_set: &[String], input: &ResolutionInput, target: &Slot
 }
 
 fn private_topic_access(input: &ResolutionInput, target: &SlotId) -> Vec<String> {
+    // A Role PM is the universal per-slot control channel, not social access
+    // granted by a role or faction. Including it would make PT-access checks
+    // positive for every occupied slot and erase the mechanic's distinction.
     input
         .state
         .private_channels
         .iter()
-        .filter(|record| &record.slot_id == target)
+        .filter(|record| &record.slot_id == target && record.kind != "RolePm")
         .map(|record| record.channel_id.clone())
         .collect::<BTreeSet<_>>()
         .into_iter()

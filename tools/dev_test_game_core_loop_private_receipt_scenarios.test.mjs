@@ -63,11 +63,11 @@ test("completed private-channel scenarios build reusable snapshots and transitio
         actionState: "disabled:game complete",
         receiptState: "reject:GameAlreadyCompleted",
       },
-      commandPanelChannelId: "role-pm",
+      commandPanelChannelId: "private:role_pm:slot-7",
       channelContext: {
-        channelId: "role-pm",
+        channelId: "private:role_pm:slot-7",
         actorSlot: "slot-7",
-        capabilityLabel: "ChannelMember(role-pm)",
+        capabilityLabel: "ChannelMember(private:role_pm:slot-7)",
         actorStatus: "alive",
       },
       commandState: {
@@ -76,7 +76,7 @@ test("completed private-channel scenarios build reusable snapshots and transitio
         actions: [],
         voteTargets: [],
         boundary:
-          "Seeded browser completed private-channel GameAlreadyCompleted recovery refreshed role-pm controls.",
+          "Seeded browser completed private-channel GameAlreadyCompleted recovery refreshed private:role_pm:slot-7 controls.",
       },
       threadPostBodies: ["Completed private channel remains readable."],
       buttons: [
@@ -101,16 +101,16 @@ test("completed private-channel scenarios derive shared proof assertion cases", 
   });
   const proof = {
     status: "passed",
-    sourceRoleUrl: "http://127.0.0.1/g/game-a/c/role-pm",
-    visitedRolePath: "/g/game-a/c/role-pm",
+    sourceRoleUrl: "http://127.0.0.1/g/game-a/c/private%3Arole_pm%3Aslot-7",
+    visitedRolePath: "/g/game-a/c/private%3Arole_pm%3Aslot-7",
     clickedThroughFromRoleUrl: true,
     channelId: reloadScenario.channelId,
     nestedRoleUrlConsistency: {
-      reloadSourceRoleUrl: "http://127.0.0.1/g/game-a/c/role-pm",
+      reloadSourceRoleUrl: "http://127.0.0.1/g/game-a/c/private%3Arole_pm%3Aslot-7",
       staleCompletedSourceRoleUrl:
-        "http://127.0.0.1/g/game-a/c/role-pm",
-      reloadVisitedRolePath: "/g/game-a/c/role-pm",
-      staleCompletedVisitedRolePath: "/g/game-a/c/role-pm",
+        "http://127.0.0.1/g/game-a/c/private%3Arole_pm%3Aslot-7",
+      reloadVisitedRolePath: "/g/game-a/c/private%3Arole_pm%3Aslot-7",
+      staleCompletedVisitedRolePath: "/g/game-a/c/private%3Arole_pm%3Aslot-7",
       sameSourceRoleUrl: true,
       sameVisitedRolePath: true,
       visitedRolePathIncludesChannel: true,
@@ -119,8 +119,8 @@ test("completed private-channel scenarios derive shared proof assertion cases", 
     transition: completedPrivateChannelTransition(),
     reloadProof: {
       status: "passed",
-      sourceRoleUrl: "http://127.0.0.1/g/game-a/c/role-pm",
-      visitedRolePath: "/g/game-a/c/role-pm",
+      sourceRoleUrl: "http://127.0.0.1/g/game-a/c/private%3Arole_pm%3Aslot-7",
+      visitedRolePath: "/g/game-a/c/private%3Arole_pm%3Aslot-7",
       surfaceTestId: "player-surface",
       clickedThroughFromRoleUrl: true,
       resyncFromSeq: reloadScenario.resyncFromSeq,
@@ -136,8 +136,8 @@ test("completed private-channel scenarios derive shared proof assertion cases", 
     },
     staleCompletedPostRecoveryProof: {
       status: "passed",
-      sourceRoleUrl: "http://127.0.0.1/g/game-a/c/role-pm",
-      visitedRolePath: "/g/game-a/c/role-pm",
+      sourceRoleUrl: "http://127.0.0.1/g/game-a/c/private%3Arole_pm%3Aslot-7",
+      visitedRolePath: "/g/game-a/c/private%3Arole_pm%3Aslot-7",
       clickedThroughFromRoleUrl: true,
       clickedAction: staleScenario.clickedAction,
       commandKind: staleScenario.commandKind,
@@ -427,8 +427,8 @@ test("stale private-channel PhaseLocked assertion covers refreshed private post 
   const scenario = stalePrivateChannelPostPhaseLockedScenario();
   const proof = {
     status: "passed",
-    sourceRoleUrl: "http://127.0.0.1/g/game-a/c/role-pm?private=notification-1",
-    visitedRolePath: "/g/game-a/c/role-pm?private=notification-1",
+    sourceRoleUrl: "http://127.0.0.1/g/game-a/c/private%3Arole_pm%3Aslot-7?private=notification-1",
+    visitedRolePath: "/g/game-a/c/private%3Arole_pm%3Aslot-7?private=notification-1",
     clickedAction: scenario.clickedAction,
     commandKind: scenario.commandKind,
     command: {

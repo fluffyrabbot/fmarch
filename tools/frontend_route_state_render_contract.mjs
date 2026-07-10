@@ -594,13 +594,13 @@ async function proveRenderedPlayerPrivateChannelRoute(bundle) {
   assertIncludes(html, 'data-testid="player-surface"', "player private channel surface");
   assertIncludes(
     html,
-    'data-testid="player-channel-role-pm"',
+    'data-testid="player-channel-private:role_pm:slot-7"',
     "player private channel active rail item",
   );
   assertIncludes(
     html,
-    'href="/g/midsummer/c/role-pm"',
-    "player private channel role-pm href",
+    'href="/g/midsummer/c/private%3Arole_pm%3Aslot-7"',
+    "player private channel private:role_pm:slot-7 href",
   );
   assertIncludes(html, 'aria-current="page"', "player private channel active state");
   assertIncludes(html, "Role PM", "player private channel label");
@@ -611,12 +611,12 @@ async function proveRenderedPlayerPrivateChannelRoute(bundle) {
   );
   assertIncludes(
     html,
-    'data-channel-id="role-pm"',
+    'data-channel-id="private:role_pm:slot-7"',
     "player private channel command target id",
   );
   assertIncludes(
     html,
-    'data-capability-label="ChannelMember(role-pm)"',
+    'data-capability-label="ChannelMember(private:role_pm:slot-7)"',
     "player private channel command capability",
   );
   assertIncludes(
@@ -631,7 +631,7 @@ async function proveRenderedPlayerPrivateChannelRoute(bundle) {
   );
   assertIncludes(
     html,
-    'href="/g/midsummer/c/role-pm?private=notification-1"',
+    'href="/g/midsummer/c/private%3Arole_pm%3Aslot-7?private=notification-1"',
     "player private channel scoped review href",
   );
   assertIncludes(
@@ -661,20 +661,20 @@ async function proveRenderedPlayerPrivateChannelRoute(bundle) {
 
   return {
     role: "player",
-    path: "/g/midsummer/c/role-pm",
-    channel: "role-pm",
+    path: "/g/midsummer/c/private%3Arole_pm%3Aslot-7",
+    channel: "private:role_pm:slot-7",
     surfaceTestId: "player-surface",
-    activeChannelTestId: "player-channel-role-pm",
-    activeChannelHref: "/g/midsummer/c/role-pm",
+    activeChannelTestId: "player-channel-private:role_pm:slot-7",
+    activeChannelHref: "/g/midsummer/c/private%3Arole_pm%3Aslot-7",
     commandChannelContext: {
       testId: PLAYER_COMMAND_PANEL_CONTRACT.channelContextTestId,
-      channelId: "role-pm",
+      channelId: "private:role_pm:slot-7",
       channelLabel: "Role PM",
-      capabilityLabel: "ChannelMember(role-pm)",
+      capabilityLabel: "ChannelMember(private:role_pm:slot-7)",
       actorSlot: "slot-7",
     },
     privateReviewLinkTestId: "player-private-link-notification-1",
-    privateReviewHref: "/g/midsummer/c/role-pm?private=notification-1",
+    privateReviewHref: "/g/midsummer/c/private%3Arole_pm%3Aslot-7?private=notification-1",
     privateReviewLinkLabel: "Open Commuted review",
     privateBoundaryStatus: "principal-scoped-private-projections",
     mediaVariant: "tablet",
@@ -703,10 +703,10 @@ async function proveRenderedRouteErrorSurface(bundle) {
   assertIncludes(html, "Access blocked", "route error title");
   assertIncludes(
     html,
-    "Channel role-pm is not visible.",
+    "Channel private:role_pm:slot-7 is not visible.",
     "route error message",
   );
-  assertIncludes(html, "/g/midsummer/c/role-pm", "route error path");
+  assertIncludes(html, "/g/midsummer/c/private%3Arole_pm%3Aslot-7", "route error path");
   assertIncludes(
     html,
     `data-testid="${APP_SHELL_CONTRACT.sessionTestId}"`,
@@ -731,7 +731,7 @@ async function proveRenderedRouteErrorSurface(bundle) {
 
   return {
     role: "player",
-    path: "/g/midsummer/c/role-pm",
+    path: "/g/midsummer/c/private%3Arole_pm%3Aslot-7",
     status: 403,
     surface: "player",
     surfaceTestId: "route-error-surface",
@@ -741,7 +741,7 @@ async function proveRenderedRouteErrorSurface(bundle) {
     activeNavTestId: roleNavTestId("player"),
     sessionPrincipal: "player_mira",
     capabilitySummary: "ChannelMember + SlotOccupant",
-    message: "Channel role-pm is not visible.",
+    message: "Channel private:role_pm:slot-7 is not visible.",
     htmlBytes: Buffer.byteLength(html),
   };
 }
@@ -761,7 +761,7 @@ async function proveRenderedRouteLoadingSurface(bundle) {
   );
   assertIncludes(
     html,
-    'data-path="/g/midsummer/c/role-pm"',
+    'data-path="/g/midsummer/c/private%3Arole_pm%3Aslot-7"',
     "route loading path",
   );
   assertIncludes(
@@ -794,7 +794,7 @@ async function proveRenderedRouteLoadingSurface(bundle) {
 
   return {
     role: "player",
-    path: "/g/midsummer/c/role-pm",
+    path: "/g/midsummer/c/private%3Arole_pm%3Aslot-7",
     surface: "player",
     surfaceTestId: "route-loading-surface",
     routeStateTestId: "route-state-player-loading",
@@ -825,7 +825,7 @@ async function proveRenderedNavigationPendingLayer(bundle) {
   assertIncludes(html, 'data-surface="player"', "navigation pending surface");
   assertIncludes(
     html,
-    'data-path="/g/midsummer/c/role-pm"',
+    'data-path="/g/midsummer/c/private%3Arole_pm%3Aslot-7"',
     "navigation pending path",
   );
   assertIncludes(
@@ -861,7 +861,7 @@ async function proveRenderedNavigationPendingLayer(bundle) {
   );
 
   return {
-    path: "/g/midsummer/c/role-pm",
+    path: "/g/midsummer/c/private%3Arole_pm%3Aslot-7",
     surface: "player",
     rootTestId: "app-navigation-pending",
     statusTestId: "app-navigation-pending-status",
@@ -2362,7 +2362,7 @@ export async function renderBoardSurface() {
       { kind: "GlobalAdmin" },
       { kind: "HostOf", game: "midsummer" },
       { kind: "SlotOccupant", game: "midsummer", slot: "slot-7" },
-      { kind: "ChannelMember", game: "midsummer", channel: "role-pm" },
+      { kind: "ChannelMember", game: "midsummer", channel: "private:role_pm:slot-7" },
     ],
 	  });
 	  return renderWithRootLayout({ page: "board", data });
@@ -2380,15 +2380,15 @@ export async function renderRouteErrorSurface() {
   setPage({
     status: 403,
     error: {
-      message: "Channel role-pm is not visible.",
+      message: "Channel private:role_pm:slot-7 is not visible.",
     },
-    url: new URL("http://localhost/g/midsummer/c/role-pm"),
+    url: new URL("http://localhost/g/midsummer/c/private%3Arole_pm%3Aslot-7"),
     data: {
       appSession: {
         principalUserId: "player_mira",
         resolvedCapabilities: [
           { kind: "SlotOccupant", game: "midsummer", slot: "slot-7" },
-          { kind: "ChannelMember", game: "midsummer", channel: "role-pm" },
+          { kind: "ChannelMember", game: "midsummer", channel: "private:role_pm:slot-7" },
         ],
       },
     },
@@ -2399,11 +2399,11 @@ export async function renderRouteErrorSurface() {
 export async function renderRouteLoadingSurface() {
   return render(RouteLoading, {
     props: {
-      path: "/g/midsummer/c/role-pm",
+      path: "/g/midsummer/c/private%3Arole_pm%3Aslot-7",
       principalUserId: "player_mira",
       capabilities: [
         { kind: "SlotOccupant", game: "midsummer", slot: "slot-7" },
-        { kind: "ChannelMember", game: "midsummer", channel: "role-pm" },
+        { kind: "ChannelMember", game: "midsummer", channel: "private:role_pm:slot-7" },
       ],
     },
   });
@@ -2412,11 +2412,11 @@ export async function renderRouteLoadingSurface() {
 export async function renderNavigationPendingLayer() {
   return render(AppNavigationPending, {
     props: {
-      path: "/g/midsummer/c/role-pm",
+      path: "/g/midsummer/c/private%3Arole_pm%3Aslot-7",
       principalUserId: "player_mira",
       capabilities: [
         { kind: "SlotOccupant", game: "midsummer", slot: "slot-7" },
-        { kind: "ChannelMember", game: "midsummer", channel: "role-pm" },
+        { kind: "ChannelMember", game: "midsummer", channel: "private:role_pm:slot-7" },
       ],
     },
   });
@@ -2469,7 +2469,7 @@ export async function renderScenario(role, state) {
 	    const data = {
 	      ...(await buildGameRouteData({
 	        game: "midsummer",
-	        activeChannel: "role-pm",
+	        activeChannel: "private:role_pm:slot-7",
 	        ...fixtureRouteInputForRole("player"),
 	      })),
 	      routeState: buildRouteStateRouteData({ surface: "player", state }),
@@ -2477,7 +2477,7 @@ export async function renderScenario(role, state) {
 	    return renderWithRootLayout({
 	      page: "player-channel",
 	      data,
-	      url: "http://localhost/g/midsummer/c/role-pm",
+	      url: "http://localhost/g/midsummer/c/private%3Arole_pm%3Aslot-7",
 	    });
 	  }
 
@@ -2546,13 +2546,13 @@ export async function renderPlayerPrivateReviewRoute() {
 export async function renderPlayerPrivateChannelRoute() {
 	  const data = await buildGameRouteData({
 	    game: "midsummer",
-	    activeChannel: "role-pm",
+	    activeChannel: "private:role_pm:slot-7",
 	    ...fixtureRouteInputForRole("player"),
 	  });
 	  return renderWithRootLayout({
 	    page: "player-channel",
 	    data,
-	    url: "http://localhost/g/midsummer/c/role-pm",
+	    url: "http://localhost/g/midsummer/c/private%3Arole_pm%3Aslot-7",
 	  });
 	}
 
@@ -2975,15 +2975,15 @@ function renderAppStoresSource() {
 const pageState = writable({
   status: 403,
   error: {
-    message: "Channel role-pm is not visible.",
+    message: "Channel private:role_pm:slot-7 is not visible.",
   },
-  url: new URL("http://localhost/g/midsummer/c/role-pm"),
+  url: new URL("http://localhost/g/midsummer/c/private%3Arole_pm%3Aslot-7"),
   data: {
     appSession: {
       principalUserId: "player_mira",
       resolvedCapabilities: [
         { kind: "SlotOccupant", game: "midsummer", slot: "slot-7" },
-        { kind: "ChannelMember", game: "midsummer", channel: "role-pm" },
+        { kind: "ChannelMember", game: "midsummer", channel: "private:role_pm:slot-7" },
       ],
     },
   },

@@ -152,7 +152,7 @@ async function provePlayerLiveRuntime() {
     principalUserId: "player_mira",
     capabilities: [
       { kind: "SlotOccupant", game: "midsummer", slot: "slot-7" },
-      { kind: "ChannelMember", game: "midsummer", channel: "role-pm" },
+      { kind: "ChannelMember", game: "midsummer", channel: "private:role_pm:slot-7" },
     ],
   });
   const store = createProjectionStore({

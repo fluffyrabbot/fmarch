@@ -348,16 +348,19 @@ async fn media_upload_rejects_type_malformed_dimension_and_body_limits_without_r
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
-async fn media_upload_posts_reloads_and_serves_only_to_private_channel_members(pool: sqlx::PgPool) {
+async fn role_pm_media_reloads_transfers_and_denies_stale_outgoing_session(pool: sqlx::PgPool) {
     let root = tempfile::tempdir().unwrap();
     let store = MediaStore::open(root.path(), MediaLimits::default()).unwrap();
     let app =
         api::router_with_state(ApiState::new(pool.clone(), store.clone()).with_dev_auth(true));
-    let (member_token, member_principal) =
+    let (outgoing_token, outgoing_principal) =
         create_media_upload_account_session(&app, "private-post-member").await;
-    let (nonmember_token, _) =
+    let (incoming_token, incoming_principal) =
+        create_media_upload_account_session(&app, "private-post-incoming").await;
+    let (outsider_token, _) =
         create_media_upload_account_session(&app, "private-post-nonmember").await;
     let game = Uuid::new_v4();
+    let channel_id = domain::role_pm_channel_id("slot_1");
 
     for (id, principal, command) in [
         (
@@ -382,7 +385,7 @@ async fn media_upload_posts_reloads_and_serves_only_to_private_channel_members(p
             Command::AssignSlot {
                 game,
                 slot: "slot_1".into(),
-                user: member_principal.clone(),
+                user: outgoing_principal.clone(),
             },
         ),
         (
@@ -405,19 +408,19 @@ async fn media_upload_posts_reloads_and_serves_only_to_private_channel_members(p
     ] {
         expect_ack(post_command(app.clone(), id, principal, command).await);
     }
-    sqlx::query(
-        "INSERT INTO private_channel_member \
-         (game_id, channel_id, kind, slot_id, role_key, reveals_alignment, source) \
-         VALUES ($1, 'role-pm', 'role_pm', 'slot_1', 'vanilla_townie', 'never', 'test')",
-    )
-    .bind(game)
-    .execute(&pool)
-    .await
-    .unwrap();
+    let members = projections::private_channel_members(&pool, game)
+        .await
+        .unwrap();
+    assert!(members.iter().any(|member| {
+        member.channel_id == channel_id
+            && member.kind == "RolePm"
+            && member.slot_id == "slot_1"
+            && member.source == "engine.role_pm"
+    }));
 
     let upload = post_media_upload(
         &app,
-        Some(&member_token),
+        Some(&outgoing_token),
         "image/png",
         media_upload_png(300, 225),
     )
@@ -430,10 +433,10 @@ async fn media_upload_posts_reloads_and_serves_only_to_private_channel_members(p
         post_command(
             app.clone(),
             6,
-            member_principal.as_str(),
+            outgoing_principal.as_str(),
             Command::SubmitPost {
                 game,
-                channel_id: "role-pm".into(),
+                channel_id: channel_id.clone(),
                 actor_slot: "slot_1".into(),
                 body: "private uploaded image".into(),
                 media: Some(vec![SubmitPostMedia {
@@ -464,10 +467,10 @@ async fn media_upload_posts_reloads_and_serves_only_to_private_channel_members(p
     let rejected = post_command(
         app.clone(),
         7,
-        member_principal.as_str(),
+        outgoing_principal.as_str(),
         Command::SubmitPost {
             game,
-            channel_id: "role-pm".into(),
+            channel_id: channel_id.clone(),
             actor_slot: "slot_1".into(),
             body: "missing media must not post".into(),
             media: Some(vec![SubmitPostMedia {
@@ -479,17 +482,145 @@ async fn media_upload_posts_reloads_and_serves_only_to_private_channel_members(p
     .await;
     expect_reject(rejected, RejectCode::InvalidTarget);
 
+    expect_ack(
+        post_command(
+            app.clone(),
+            8,
+            "host_h",
+            Command::ProcessReplacement {
+                game,
+                slot: "slot_1".into(),
+                outgoing_user: outgoing_principal.clone(),
+                incoming_user: incoming_principal.clone(),
+            },
+        )
+        .await,
+    );
+    expect_reject(
+        post_command(
+            app.clone(),
+            9,
+            outgoing_principal.as_str(),
+            Command::SubmitPost {
+                game,
+                channel_id: channel_id.clone(),
+                actor_slot: "slot_1".into(),
+                body: "stale outgoing Role PM post".into(),
+                media: None,
+            },
+        )
+        .await,
+        RejectCode::NotYourSlot,
+    );
     drop(app);
     drop(store);
     let restarted = MediaStore::open(root.path(), MediaLimits::default()).unwrap();
     let app = api::router(pool.clone(), restarted);
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let server_app = app.clone();
+    let server = tokio::spawn(async move {
+        axum::serve(listener, server_app).await.unwrap();
+    });
+    let (mut socket, _) = tokio_tungstenite::connect_async(format!(
+        "ws://{addr}/ws?game={game}&principal_user_id={incoming_principal}&channel={channel_id}"
+    ))
+    .await
+    .unwrap();
+    let hello = socket.next().await.unwrap().unwrap();
+    let hello: ServerEnvelope = serde_json::from_str(&hello.into_text().unwrap()).unwrap();
+    assert!(matches!(hello.body, ServerMsg::Hello(_)));
+    let initial_role_pm = tokio::time::timeout(std::time::Duration::from_secs(3), async {
+        loop {
+            let frame = socket.next().await.unwrap().unwrap();
+            let envelope: ServerEnvelope =
+                serde_json::from_str(&frame.into_text().unwrap()).unwrap();
+            if matches!(
+                envelope.body,
+                ServerMsg::Delta(ProjectionDelta::ThreadPostsChanged(ref delta))
+                    if delta.game == game
+                        && delta.posts.len() == 1
+                        && delta.posts[0].body == "private uploaded image"
+            ) {
+                return envelope;
+            }
+        }
+    })
+    .await
+    .expect("incoming replacement should hydrate the transferred Role PM thread");
+
+    expect_ack(
+        post_command(
+            app.clone(),
+            10,
+            incoming_principal.as_str(),
+            Command::SubmitPost {
+                game,
+                channel_id: channel_id.clone(),
+                actor_slot: "slot_1".into(),
+                body: "incoming Role PM post".into(),
+                media: None,
+            },
+        )
+        .await,
+    );
+    let live_role_pm = tokio::time::timeout(std::time::Duration::from_secs(3), async {
+        loop {
+            let frame = socket.next().await.unwrap().unwrap();
+            let envelope: ServerEnvelope =
+                serde_json::from_str(&frame.into_text().unwrap()).unwrap();
+            if matches!(
+                envelope.body,
+                ServerMsg::Delta(ProjectionDelta::ThreadPostsChanged(ref delta))
+                    if delta.game == game
+                        && delta.posts.iter().any(|post| post.body == "incoming Role PM post")
+            ) {
+                return envelope;
+            }
+        }
+    })
+    .await
+    .expect("incoming Role PM post should publish a capability-filtered live thread delta");
+    assert!(live_role_pm.id > initial_role_pm.id);
+
+    let (mut stale_socket, _) = tokio_tungstenite::connect_async(format!(
+        "ws://{addr}/ws?game={game}&principal_user_id={outgoing_principal}&channel={channel_id}"
+    ))
+    .await
+    .unwrap();
+    let stale_hello = stale_socket.next().await.unwrap().unwrap();
+    let stale_hello: ServerEnvelope =
+        serde_json::from_str(&stale_hello.into_text().unwrap()).unwrap();
+    assert!(matches!(stale_hello.body, ServerMsg::Hello(_)));
+    let stale_thread = tokio::time::timeout(std::time::Duration::from_millis(500), async {
+        loop {
+            let frame = stale_socket.next().await.unwrap().unwrap();
+            let envelope: ServerEnvelope =
+                serde_json::from_str(&frame.into_text().unwrap()).unwrap();
+            if matches!(
+                envelope.body,
+                ServerMsg::Delta(ProjectionDelta::ThreadPostsChanged(_))
+            ) {
+                return envelope;
+            }
+        }
+    })
+    .await;
+    assert!(
+        stale_thread.is_err(),
+        "the replaced principal must not receive Role PM rows on websocket hydration"
+    );
+    drop(socket);
+    drop(stale_socket);
+    server.abort();
+
     let thread = app
         .clone()
         .oneshot(
             Request::builder()
                 .method("GET")
                 .uri(format!(
-                    "/games/{game}/channels/role-pm/thread?principal_user_id={member_principal}&limit=10"
+                    "/games/{game}/channels/{channel_id}/thread?principal_user_id={incoming_principal}&limit=10"
                 ))
                 .body(Body::empty())
                 .unwrap(),
@@ -499,8 +630,9 @@ async fn media_upload_posts_reloads_and_serves_only_to_private_channel_members(p
     assert_eq!(thread.status(), StatusCode::OK);
     let thread: ThreadPage =
         serde_json::from_slice(&to_bytes(thread.into_body(), usize::MAX).await.unwrap()).unwrap();
-    assert_eq!(thread.posts.len(), 1);
+    assert_eq!(thread.posts.len(), 2);
     assert_eq!(thread.posts[0].body, "private uploaded image");
+    assert_eq!(thread.posts[1].body, "incoming Role PM post");
     assert_eq!(thread.posts[0].media.len(), 1);
     let media = &thread.posts[0].media[0];
     assert_eq!(media.content_id, upload.content_id);
@@ -517,7 +649,7 @@ async fn media_upload_posts_reloads_and_serves_only_to_private_channel_members(p
             Request::builder()
                 .method("GET")
                 .uri(tablet.avif_url.as_str())
-                .header("authorization", format!("Bearer {member_token}"))
+                .header("authorization", format!("Bearer {incoming_token}"))
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -529,7 +661,10 @@ async fn media_upload_posts_reloads_and_serves_only_to_private_channel_members(p
         served.headers()["x-fmarch-media-content-address"],
         upload.content_id
     );
-    assert_eq!(served.headers()["x-fmarch-media-channel"], "role-pm");
+    assert_eq!(
+        served.headers()["x-fmarch-media-channel"],
+        channel_id.as_str()
+    );
     assert_eq!(served.headers()["x-fmarch-media-variant"], "tablet");
     assert_eq!(served.headers()["x-fmarch-media-format"], "avif");
     assert_eq!(served.headers()["cache-control"], "private, no-cache");
@@ -545,7 +680,7 @@ async fn media_upload_posts_reloads_and_serves_only_to_private_channel_members(p
             Request::builder()
                 .method("GET")
                 .uri(tablet.avif_url.as_str())
-                .header("authorization", format!("Bearer {member_token}"))
+                .header("authorization", format!("Bearer {incoming_token}"))
                 .header("if-none-match", etag.as_str())
                 .body(Body::empty())
                 .unwrap(),
@@ -559,18 +694,56 @@ async fn media_upload_posts_reloads_and_serves_only_to_private_channel_members(p
         .unwrap()
         .is_empty());
 
+    let stale_thread = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!(
+                    "/games/{game}/channels/{channel_id}/thread?principal_user_id={outgoing_principal}&limit=10"
+                ))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(stale_thread.status(), StatusCode::FORBIDDEN);
+
+    let stale_media = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(tablet.avif_url.as_str())
+                .header("authorization", format!("Bearer {outgoing_token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(stale_media.status(), StatusCode::FORBIDDEN);
+    assert_ne!(stale_media.headers()["content-type"], "image/avif");
+    let stale_media_reject: RejectMsg =
+        serde_json::from_slice(&to_bytes(stale_media.into_body(), usize::MAX).await.unwrap())
+            .unwrap();
+    assert_eq!(stale_media_reject.error, RejectCode::NotAuthorized);
+
     let denied = app
         .oneshot(
             Request::builder()
                 .method("GET")
                 .uri(tablet.avif_url.as_str())
-                .header("authorization", format!("Bearer {nonmember_token}"))
+                .header("authorization", format!("Bearer {outsider_token}"))
                 .body(Body::empty())
                 .unwrap(),
         )
         .await
         .unwrap();
     assert_eq!(denied.status(), StatusCode::FORBIDDEN);
+    assert_ne!(denied.headers()["content-type"], "image/avif");
+    let denied_reject: RejectMsg =
+        serde_json::from_slice(&to_bytes(denied.into_body(), usize::MAX).await.unwrap()).unwrap();
+    assert_eq!(denied_reject.error, RejectCode::NotAuthorized);
 }
 
 fn stable_command_id(id: u64) -> Uuid {
@@ -2794,7 +2967,7 @@ async fn vertical_channel_thread_cold_load_is_channel_scoped_and_authorized(pool
     sqlx::query(
         "INSERT INTO private_channel_member \
          (game_id, channel_id, kind, slot_id, role_key, reveals_alignment, source) \
-         VALUES ($1, 'role-pm', 'role_pm', 'slot_1', 'vanilla_townie', 'never', 'test')",
+         VALUES ($1, 'private:role_pm:slot_1', 'role_pm', 'slot_1', 'vanilla_townie', 'never', 'test')",
     )
     .bind(game)
     .execute(&pool)
@@ -2802,7 +2975,7 @@ async fn vertical_channel_thread_cold_load_is_channel_scoped_and_authorized(pool
     .unwrap();
     for (source_seq, channel_id, body) in [
         (10_i64, "main", "main thread post"),
-        (11_i64, "role-pm", "private role note"),
+        (11_i64, "private:role_pm:slot_1", "private role note"),
     ] {
         sqlx::query(
             "INSERT INTO thread_view \
@@ -2848,7 +3021,7 @@ async fn vertical_channel_thread_cold_load_is_channel_scoped_and_authorized(pool
             Request::builder()
                 .method("GET")
                 .uri(format!(
-                    "/games/{game}/channels/role-pm/thread?principal_user_id=user_a&limit=10"
+                    "/games/{game}/channels/private:role_pm:slot_1/thread?principal_user_id=user_a&limit=10"
                 ))
                 .body(Body::empty())
                 .unwrap(),
@@ -2864,7 +3037,7 @@ async fn vertical_channel_thread_cold_load_is_channel_scoped_and_authorized(pool
             .iter()
             .map(|post| (post.channel_id.as_str(), post.body.as_str()))
             .collect::<Vec<_>>(),
-        vec![("role-pm", "private role note")]
+        vec![("private:role_pm:slot_1", "private role note")]
     );
 
     let denied = app
@@ -2872,7 +3045,7 @@ async fn vertical_channel_thread_cold_load_is_channel_scoped_and_authorized(pool
             Request::builder()
                 .method("GET")
                 .uri(format!(
-                    "/games/{game}/channels/role-pm/thread?principal_user_id=user_b"
+                    "/games/{game}/channels/private:role_pm:slot_1/thread?principal_user_id=user_b"
                 ))
                 .body(Body::empty())
                 .unwrap(),
@@ -2936,7 +3109,7 @@ async fn vertical_private_channel_submit_post_requires_channel_membership(pool: 
     sqlx::query(
         "INSERT INTO private_channel_member \
          (game_id, channel_id, kind, slot_id, role_key, reveals_alignment, source) \
-         VALUES ($1, 'role-pm', 'role_pm', 'slot_1', 'vanilla_townie', 'never', 'test')",
+         VALUES ($1, 'private:role_pm:slot_1', 'role_pm', 'slot_1', 'vanilla_townie', 'never', 'test')",
     )
     .bind(game)
     .execute(&pool)
@@ -2950,7 +3123,7 @@ async fn vertical_private_channel_submit_post_requires_channel_membership(pool: 
             "user_a",
             Command::SubmitPost {
                 game,
-                channel_id: "role-pm".into(),
+                channel_id: "private:role_pm:slot_1".into(),
                 actor_slot: "slot_1".into(),
                 body: "private role confirmation".into(),
                 media: None,
@@ -2965,7 +3138,7 @@ async fn vertical_private_channel_submit_post_requires_channel_membership(pool: 
     .fetch_one(&pool)
     .await
     .unwrap();
-    assert_eq!(payload["channel_id"], "role-pm");
+    assert_eq!(payload["channel_id"], "private:role_pm:slot_1");
     assert_eq!(payload["slot_or_user"]["slot"], "slot_1");
     assert_eq!(payload["phase_id"], "D01");
     assert!(payload.get("body").is_none());
@@ -2978,7 +3151,7 @@ async fn vertical_private_channel_submit_post_requires_channel_membership(pool: 
             Request::builder()
                 .method("GET")
                 .uri(format!(
-                    "/games/{game}/channels/role-pm/thread?principal_user_id=user_a&limit=10"
+                    "/games/{game}/channels/private:role_pm:slot_1/thread?principal_user_id=user_a&limit=10"
                 ))
                 .body(Body::empty())
                 .unwrap(),

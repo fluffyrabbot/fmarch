@@ -5,11 +5,11 @@ import { load } from "./+page.server.js";
 test("player channel route loads an allowed role PM channel", async () => {
   const seen = [];
   const data = await load({
-    params: { game: "midsummer", channel: "role-pm" },
+    params: { game: "midsummer", channel: "private:role_pm:slot-7" },
     locals: {
       principalUserId: "player_mira",
       resolvedCapabilities: [
-        { kind: "ChannelMember", game: "midsummer", channel: "role-pm" },
+        { kind: "ChannelMember", game: "midsummer", channel: "private:role_pm:slot-7" },
       ],
     },
     fetch: async (url) => {
@@ -20,14 +20,14 @@ test("player channel route loads an allowed role PM channel", async () => {
 
   assert.equal(data.shell.activeSurface, "player");
   assert.equal(data.shellOwner, "layout");
-  assert.equal(data.channel.channel, "role-pm");
+  assert.equal(data.channel.channel, "private:role_pm:slot-7");
   assert.equal(data.channel.allowed, true);
   assert.deepEqual(data.channels.map((channel) => [channel.id, channel.active]), [
-    ["role-pm", true],
+    ["private:role_pm:slot-7", true],
   ]);
   assert.equal(
     seen[0],
-    "/games/midsummer/channels/role-pm/thread?limit=50&principal_user_id=player_mira",
+    "/games/midsummer/channels/private%3Arole_pm%3Aslot-7/thread?limit=50&principal_user_id=player_mira",
   );
 });
 
@@ -36,7 +36,7 @@ test("player channel route rejects missing channel capability", async () => {
   await assert.rejects(
     async () =>
       await load({
-        params: { game: "midsummer", channel: "role-pm" },
+        params: { game: "midsummer", channel: "private:role_pm:slot-7" },
         locals: {
           principalUserId: "player_mira",
           resolvedCapabilities: [
@@ -51,7 +51,7 @@ test("player channel route rejects missing channel capability", async () => {
     (err) =>
       err.status === 403 &&
       err.body.message ===
-        "Game midsummer channel role-pm requires scoped channel capability.",
+        "Game midsummer channel private:role_pm:slot-7 requires scoped channel capability.",
   );
   assert.deepEqual(seen, []);
 });
@@ -90,7 +90,7 @@ test("player channel route distinguishes unsupported channels", async () => {
         locals: {
           principalUserId: "player_mira",
           resolvedCapabilities: [
-            { kind: "ChannelMember", game: "midsummer", channel: "role-pm" },
+            { kind: "ChannelMember", game: "midsummer", channel: "private:role_pm:slot-7" },
           ],
         },
         fetch: async (url) => {

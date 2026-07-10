@@ -130,7 +130,7 @@ const boundary = {
   boundary:
     "Generated browser acceptance boundary over the current frontend proof artifacts. It distinguishes proven browser evidence from blocked or prepared-only lanes, and does not promote model/SSR/DOM evidence to hydrated browser acceptance.",
   promotionRule:
-    "Full app browser acceptance is proven by the localhost dev-server role smoke, either run locally or imported through the role-smoke import contract, when it passes with board, setup, admin, player, moderator, forbidden-route, and route-state screenshots, screenshot pixel evidence, setup workbench geometry for /g/midsummer/setup, overlap-checked target evidence, tablet thumb-zone geometry evidence, admin session-grant/recovery-gate form evidence, player main-thread SubmitPost ACK refresh evidence, player role-pm SubmitPost ACK evidence, player tablet-media browser request evidence, and moderator SetSlotStatus projection evidence. Passed file-backed or localhost-served fixture browser-runs promote their fixture lanes only; prepared fixtures, bind blocks, and Chromium launch blocks do not promote full app acceptance.",
+    "Full app browser acceptance is proven by the localhost dev-server role smoke, either run locally or imported through the role-smoke import contract, when it passes with board, setup, admin, player, moderator, forbidden-route, and route-state screenshots, screenshot pixel evidence, setup workbench geometry for /g/midsummer/setup, overlap-checked target evidence, tablet thumb-zone geometry evidence, admin session-grant/recovery-gate form evidence, player main-thread SubmitPost ACK refresh evidence, player private:role_pm:slot-7 SubmitPost ACK evidence, player tablet-media browser request evidence, and moderator SetSlotStatus projection evidence. Passed file-backed or localhost-served fixture browser-runs promote their fixture lanes only; prepared fixtures, bind blocks, and Chromium launch blocks do not promote full app acceptance.",
   lanes,
   overall: {
     state: fullAppBrowserProven ? "browser_proven" : "not_complete",
@@ -161,7 +161,7 @@ function localhostLane(roleSmoke) {
           "roleSmoke admin/player/moderator entries include tablet thumb-zone geometry evidence",
           "roleSmoke admin entries include session-grant/recovery-gate form evidence",
           "roleSmoke player entries include SubmitPost ACK and refreshed thread evidence",
-          "roleSmoke playerPrivateChannel entries include role-pm SubmitPost ACK evidence",
+          "roleSmoke playerPrivateChannel entries include private:role_pm:slot-7 SubmitPost ACK evidence",
           "roleSmoke player entries include tablet-media browser request evidence without original/full/desktop URLs",
           "roleSmoke moderator entries include SetSlotStatus ACK and refreshed slot lifecycle evidence",
           "roleSmoke.board and roleSmoke.routeStates are nonempty",
@@ -176,7 +176,7 @@ function localhostLane(roleSmoke) {
           "board and route-state browser screenshots are absent",
           "admin/player/moderator tablet thumb-zone geometry evidence is absent",
           "admin session-grant/recovery-gate browser form evidence is absent",
-          "player role-pm SubmitPost browser ACK evidence is absent",
+          "player private:role_pm:slot-7 SubmitPost browser ACK evidence is absent",
           "player tablet-media browser request evidence is absent",
         ],
   };
@@ -295,7 +295,7 @@ function inAppStaticDomLane(inAppBrowserStaticDom) {
       ? [
           "inAppBrowserStaticDom.status == passed",
           "fixture HTML contains every manifest command target inside its scenario root",
-          "player private-channel fixture root records active role-pm route evidence without host operational leakage",
+          "player private-channel fixture root records active private:role_pm:slot-7 route evidence without host operational leakage",
           "hydrated-surface fixture controls exist inside their scenario roots",
         ]
       : [],
@@ -568,13 +568,13 @@ function playerPrivateChannelBrowserPostEvidenceComplete(roleSmoke) {
     return false;
   }
   return entries.every((entry) =>
-    entry.path === "/g/midsummer/c/role-pm" &&
-    entry.activeChannelTestId === "player-channel-role-pm" &&
-    entry.privateReviewHref === "/g/midsummer/c/role-pm?private=notification-1" &&
+    entry.path === "/g/midsummer/c/private%3Arole_pm%3Aslot-7" &&
+    entry.activeChannelTestId === "player-channel-private:role_pm:slot-7" &&
+    entry.privateReviewHref === "/g/midsummer/c/private%3Arole_pm%3Aslot-7?private=notification-1" &&
     entry.commandResult?.requestCommand?.game === "midsummer" &&
-    entry.commandResult?.requestCommand?.channel_id === "role-pm" &&
+    entry.commandResult?.requestCommand?.channel_id === "private:role_pm:slot-7" &&
     entry.commandResult?.requestCommand?.actor_slot === "slot-7" &&
-    entry.commandResult?.requestCommand?.body === "Browser smoke role-pm post" &&
+    entry.commandResult?.requestCommand?.body === "Browser smoke private:role_pm:slot-7 post" &&
     entry.commandResult?.refreshedPostTestId === "thread-post-446" &&
     entry.screenshotPixels !== undefined,
   );
@@ -855,12 +855,12 @@ function inAppBrowserStaticDomEvidenceComplete(inAppBrowserStaticDom) {
     (entry) => entry.id === "route-error-back-to-board-click",
   );
   return (
-    playerPrivateChannel?.route?.path === "/g/midsummer/c/role-pm" &&
-    playerPrivateChannel.route.activeChannelTestId === "player-channel-role-pm" &&
+    playerPrivateChannel?.route?.path === "/g/midsummer/c/private%3Arole_pm%3Aslot-7" &&
+    playerPrivateChannel.route.activeChannelTestId === "player-channel-private:role_pm:slot-7" &&
     playerPrivateChannel.route.activeChannelCurrent === "page" &&
     playerPrivateChannel.route.privateReviewHref ===
-      "/g/midsummer/c/role-pm?private=notification-1" &&
-    routeError?.errorSurface?.path === "/g/midsummer/c/role-pm" &&
+      "/g/midsummer/c/private%3Arole_pm%3Aslot-7?private=notification-1" &&
+    routeError?.errorSurface?.path === "/g/midsummer/c/private%3Arole_pm%3Aslot-7" &&
     routeError.errorSurface.status === 403 &&
     routeError.errorSurface.actionHref === "/" &&
     routeError.errorSurface.activeNavCurrent === "page" &&
@@ -924,11 +924,11 @@ function inAppBrowserRunEvidenceComplete(inAppBrowserRun) {
       (entry) => entry.id === "player-private-channel-submit-post-click",
     );
     if (
-      playerPrivateChannel?.route?.path !== "/g/midsummer/c/role-pm" ||
-      playerPrivateChannel.route.activeChannelTestId !== "player-channel-role-pm" ||
+      playerPrivateChannel?.route?.path !== "/g/midsummer/c/private%3Arole_pm%3Aslot-7" ||
+      playerPrivateChannel.route.activeChannelTestId !== "player-channel-private:role_pm:slot-7" ||
       playerPrivateChannel.route.activeChannelCurrent !== "page" ||
       playerPrivateChannel.route.privateReviewHref !==
-        "/g/midsummer/c/role-pm?private=notification-1"
+        "/g/midsummer/c/private%3Arole_pm%3Aslot-7?private=notification-1"
     ) {
       return false;
     }
@@ -939,7 +939,7 @@ function inAppBrowserRunEvidenceComplete(inAppBrowserRun) {
       (entry) => entry.id === "route-error-back-to-board-click",
     );
     if (
-      routeError?.errorSurface?.path !== "/g/midsummer/c/role-pm" ||
+      routeError?.errorSurface?.path !== "/g/midsummer/c/private%3Arole_pm%3Aslot-7" ||
       routeError.errorSurface.status !== 403 ||
       routeError.errorSurface.actionHref !== "/" ||
       routeError.errorSurface.activeNavCurrent !== "page"

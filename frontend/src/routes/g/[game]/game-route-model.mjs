@@ -236,6 +236,7 @@ export async function buildGameRouteData({
             apiBaseUrl,
             game: gameId,
             principalUserId,
+            channel: channelId,
           })
         : null,
     }),

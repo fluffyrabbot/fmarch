@@ -36,26 +36,26 @@ test("player command panel model exposes tablet touch command contracts", () => 
     },
     votecount: [{ target: "slot-2 / Ilya", count: 4, needed: 7 }],
     channel: {
-      channel: "role-pm",
+      channel: "private:role_pm:slot-7",
       label: "Role PM",
-      capabilityLabel: "ChannelMember(role-pm)",
+      capabilityLabel: "ChannelMember(private:role_pm:slot-7)",
     },
     player: {
       slotId: "slot-7",
-      capabilityLabel: "ChannelMember(role-pm)",
+      capabilityLabel: "ChannelMember(private:role_pm:slot-7)",
     },
   });
 
   assert.equal(view.root.className, PLAYER_COMMAND_PANEL_CONTRACT.rootClassName);
   assert.equal(view.root.data.component, "player-command-panel");
   assert.equal(view.root.data.thumbZone, "player-primary-actions");
-  assert.equal(view.root.data.channelId, "role-pm");
+  assert.equal(view.root.data.channelId, "private:role_pm:slot-7");
   assert.equal(view.root.testId, "player-primary-action-zone");
   assert.deepEqual(view.composer.channelContext, {
     testId: PLAYER_COMMAND_PANEL_CONTRACT.channelContextTestId,
-    channelId: "role-pm",
+    channelId: "private:role_pm:slot-7",
     channelLabel: "Role PM",
-    capabilityLabel: "ChannelMember(role-pm)",
+    capabilityLabel: "ChannelMember(private:role_pm:slot-7)",
     slotId: "slot-7",
     actorAlive: "unknown",
     actorStatus: "",

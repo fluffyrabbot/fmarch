@@ -35,6 +35,14 @@ test("builds websocket URLs from API bases and relative app origins", () => {
     "/ws?game=midsummer&principal_user_id=host_h&slot_id=slot-7",
   );
   assert.equal(
+    buildLiveProjectionUrl({
+      game: "midsummer",
+      principalUserId: "player-mira",
+      channel: "private:role_pm:slot-7",
+    }),
+    "/ws?game=midsummer&principal_user_id=player-mira&channel=private%3Arole_pm%3Aslot-7",
+  );
+  assert.equal(
     resolveWebSocketUrl("/ws?game=midsummer", "https://app.example/g/midsummer"),
     "wss://app.example/ws?game=midsummer",
   );

@@ -179,7 +179,7 @@ async function buildSurfaces(bundle) {
     {
       id: "route-error-player-private-channel",
       role: "player",
-      path: "/g/midsummer/c/role-pm",
+      path: "/g/midsummer/c/private%3Arole_pm%3Aslot-7",
       render: "renderRouteErrorSurface",
       surfaceTestId: "route-error-surface",
       requiredText: "Access blocked",

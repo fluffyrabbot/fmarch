@@ -172,7 +172,7 @@ test("fixture sessions exercise admin, player, and host role routes", async () =
     ]),
     [
       ["SlotOccupant", "midsummer", "slot-7"],
-      ["ChannelMember", "midsummer", "role-pm"],
+      ["ChannelMember", "midsummer", "private:role_pm:slot-7"],
       ["ChannelMember", "midsummer", "private:mafia_day_chat"],
     ],
   );
@@ -198,7 +198,7 @@ test("fixture sessions exercise admin, player, and host role routes", async () =
     ]),
     [
       ["SlotOccupant", "slot-7"],
-      ["ChannelMember", "role-pm"],
+      ["ChannelMember", "private:role_pm:slot-7"],
       ["ChannelMember", "private:mafia_day_chat"],
     ],
   );
@@ -283,7 +283,7 @@ test("fixture session helper exposes the same game-scoped proof capabilities", (
     ]),
     [
       ["SlotOccupant", "midsummer", "slot-7"],
-      ["ChannelMember", "midsummer", "role-pm"],
+      ["ChannelMember", "midsummer", "private:role_pm:slot-7"],
       ["ChannelMember", "midsummer", "private:mafia_day_chat"],
     ],
   );

@@ -46,10 +46,10 @@ test("private-channel route context includes thread pager visibility", () => {
   assert.doesNotThrow(() =>
     assertPrivateChannelRouteContext({
       context: {
-        channelId: "role-pm",
+        channelId: "private:role_pm:slot-7",
         actorSlot: "slot-7",
       },
-      expectedChannelId: "role-pm",
+      expectedChannelId: "private:role_pm:slot-7",
       expectedActorSlot: "slot-7",
       privateThreadPagerVisible: true,
     }),
@@ -58,10 +58,10 @@ test("private-channel route context includes thread pager visibility", () => {
     () =>
       assertPrivateChannelRouteContext({
         context: {
-          channelId: "role-pm",
+          channelId: "private:role_pm:slot-7",
           actorSlot: "slot-7",
         },
-        expectedChannelId: "role-pm",
+        expectedChannelId: "private:role_pm:slot-7",
         expectedActorSlot: "slot-7",
         privateThreadPagerVisible: false,
       }),
@@ -72,8 +72,8 @@ test("private-channel route context includes thread pager visibility", () => {
 test("private-channel id and pager helpers reject drift", () => {
   assert.doesNotThrow(() =>
     assertPrivateChannelId({
-      channelId: "role-pm",
-      expectedChannelId: "role-pm",
+      channelId: "private:role_pm:slot-7",
+      expectedChannelId: "private:role_pm:slot-7",
     }),
   );
   assert.doesNotThrow(() =>
@@ -85,7 +85,7 @@ test("private-channel id and pager helpers reject drift", () => {
     () =>
       assertPrivateChannelId({
         channelId: "main",
-        expectedChannelId: "role-pm",
+        expectedChannelId: "private:role_pm:slot-7",
       }),
     /private-channel id drifted/,
   );

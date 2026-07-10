@@ -17,7 +17,7 @@ count is treated as product progress.
 
 | Execution class | Complete | Partial | Open | Blocked | Deferred | Total |
 |---|---:|---:|---:|---:|---:|---:|
-| code | 18 | 5 | 5 | 0 | 0 | 28 |
+| code | 19 | 4 | 5 | 0 | 0 | 28 |
 | external-evidence | 0 | 0 | 0 | 6 | 0 | 6 |
 | human | 0 | 0 | 1 | 1 | 0 | 2 |
 | optional | 0 | 0 | 0 | 0 | 1 | 1 |
@@ -28,24 +28,24 @@ Overall release closure complete: **no**.
 
 ## Next buildable coding slice
 
-### Role private-message lifecycle `product.private.role-pm`
+### Neighborhood, mason, dead, and spectator rooms `product.private.additional-rooms`
 
-Make each occupied slot's Role PM a first-class, engine-declared private channel instead of a frontend-conventional `role-pm` identifier: declare its stable channel identity and membership from authoritative slot assignment/start events, project and capability-gate it through the generic private-channel model, preserve slot-authored history while transferring current membership on replacement, and revoke the outgoing principal/session immediately. Extend the seeded real-stack lane to post through the incoming role URL, observe the command receipt and live delta, reload the same durable thread, then prove the replaced principal receives neither thread rows nor media bytes and cannot append a stale post.
+Complete the first additional-room vertical for pack-declared Mason and Neighbor channels: seed real occupied role groups through StartGame, expose their capability-derived player routes without room-specific frontend constants, post encrypted text and canonical media through the browser, observe channel-scoped live deltas, reload durable history, transfer membership across replacement, and prove both a non-member and the stale outgoing account receive neither thread rows nor media bytes and cannot append. Keep this registry item partial until dead and spectator room families receive their own lifecycle proof.
 
-Owned paths: `migrations/`, `crates/domain/`, `crates/commands/`, `crates/projections/`, `crates/caps/`, `crates/api/`, `crates/wire/`, `frontend/src/lib/components/player-channel-rail/`, `frontend/src/routes/g/[game]/`, `tools/dev_test_game_core_loop_private_channel_recovery_scenarios.mjs`, `tools/host_console_live_stack_smoke.mjs`, `docs/arch/01-domain-model.md`, `docs/arch/06-security.md`.
+Owned paths: `packs/mafiascum/pack.json`, `crates/commands/`, `crates/projections/`, `crates/caps/`, `crates/api/`, `frontend/src/lib/components/player-channel-rail/`, `frontend/src/routes/g/[game]/`, `tools/host_console_live_stack_smoke.mjs`, `tools/dev_test_game_core_loop_private_channel_recovery_scenarios.mjs`, `docs/arch/01-domain-model.md`, `docs/arch/06-security.md`.
 
 Proof:
 
-- `cargo test -p commands -p projections -p caps`
-- `DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p api role_pm -- --test-threads=1`
+- `DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p commands -p projections -p caps`
+- `DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p api mason_neighbor -- --test-threads=1`
 - `npm run test:frontend-contract`
 - `npm run test:dev-test-game-core-live:local`
 
 Explicit non-claims:
 
-- No neighborhood, mason, dead, spectator, or arbitrary user-created room completion claim.
-- No cross-game direct messaging, inbox, notification-delivery, blocking, reporting, or moderation workflow.
-- No hosted deployment, hosted identity, production concurrency, or release-readiness promotion from the local seeded proof.
+- No dead-chat, spectator-room, or arbitrary user-created room completion claim from the Mason and Neighbor vertical.
+- No cross-game direct messaging, inbox, notification delivery, blocking, reporting, or general moderation workflow.
+- No hosted deployment, production concurrency, or release-readiness promotion from the local seeded proof.
 
 ## Locally proven foundation
 
@@ -81,7 +81,7 @@ Explicit non-claims:
 | Status | Capability | Depends on | Complete when | Current / remaining | Evidence / boundary |
 |---|---|---|---|---|---|
 | complete | Mafia private room<br>`product.private.mafia-room` | `product.game.core-loop` | Members can post and recover through the private role URL while non-members never receive room data. | Complete. | source: `tools/dev_test_game_core_loop_private_channel_recovery_scenarios.mjs`<br>artifact: `target/dev-test-game/proof-run.json`<br>A real private mafia day-chat room is pack-created, capability-filtered, command-backed, live, reloadable, and denied to non-members. |
-| partial | Role private-message lifecycle<br>`product.private.role-pm` | `product.private.mafia-room`<br>`product.identity.account-login-invites` | Role PM creation, membership, posting, receipts, reload, replacement transfer, and stale outgoing denial pass through the real stack. | Remaining: Add a seeded live role-PM lifecycle including replacement and stale-session boundaries. | source: `frontend/src/routes/g/[game]/c/[channel]/+page.svelte`<br>Role-PM routes and frontend proof shapes exist, but a complete live create/post/recover/replacement lifecycle is not yet the durable product proof. |
+| complete | Role private-message lifecycle<br>`product.private.role-pm` | `product.private.mafia-room`<br>`product.identity.account-login-invites` | Role PM creation, membership, posting, receipts, reload, replacement transfer, and stale outgoing denial pass through the real stack. | Complete. | source: `crates/domain/src/state.rs`<br>source: `crates/commands/src/lib.rs`<br>source: `crates/commands/tests/pipeline.rs`<br>source: `crates/projections/src/lib.rs`<br>source: `crates/caps/src/lib.rs`<br>source: `crates/api/src/lib.rs`<br>source: `crates/api/tests/vertical.rs`<br>source: `frontend/src/lib/components/player-channel-rail/player-channel-rail-model.mjs`<br>source: `tools/host_console_live_stack_smoke.mjs`<br>artifact: `target/host-console-live-stack-smoke/live-stack-proof.json`<br>command: `DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p commands -p projections -p caps`<br>command: `DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p api role_pm -- --test-threads=1`<br>command: `npm run test:frontend-contract`<br>command: `npm run test:dev-test-game-core-live:local`<br>The engine declares one slot-stable Role PM per occupied slot; generic private-channel projections and capabilities transfer access on replacement, the incoming account receives private live deltas and durable history/media after reload, and the stale outgoing account receives no thread or media data and cannot append. |
 | partial | Neighborhood, mason, dead, and spectator rooms<br>`product.private.additional-rooms` | `product.private.role-pm` | Every supported private room family is pack/config-created, encrypted at rest, capability-filtered, replacement-safe, and live/reload proven. | Remaining: Implement and prove each additional private-room family across creation, membership, encryption, posting, and recovery. | source: `docs/arch/01-domain-model.md`<br>source: `docs/arch/06-security.md`<br>The generic scoped-channel model exists, but the remaining room families and their encryption, lifecycle, replacement, and recovery behavior are not proven end to end. |
 
 ## Account and identity lifecycle

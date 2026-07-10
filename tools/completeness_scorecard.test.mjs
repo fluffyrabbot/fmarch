@@ -13,7 +13,7 @@ import {
   validateRegistry,
 } from "./completeness_scorecard.mjs";
 
-test("real completion registry validates and selects the role-PM lifecycle", async () => {
+test("real completion registry validates and selects the additional-room lifecycle", async () => {
   const registry = await loadCompletionRegistry();
   await validateRegistry(registry);
   const summary = summarizeRegistry(registry);
@@ -30,7 +30,7 @@ test("real completion registry validates and selects the role-PM lifecycle", asy
   assert.equal(summary.releaseComplete, false);
   assert.equal(
     nextBuildableCodeItem(registry)?.id,
-    "product.private.role-pm",
+    "product.private.additional-rooms",
   );
 });
 
@@ -69,14 +69,14 @@ test("registry validation rejects duplicate ids and unknown dependencies", async
 test("registry validation rejects dependency cycles", async () => {
   const registry = await loadCompletionRegistry();
   const cyclic = structuredClone(registry);
-  const upload = cyclic.items.find(
-    (item) => item.id === "product.private.role-pm",
+  const additionalRooms = cyclic.items.find(
+    (item) => item.id === "product.private.additional-rooms",
   );
   const profiles = cyclic.items.find(
     (item) => item.id === "product.community.profiles",
   );
-  upload.depends_on = [profiles.id];
-  profiles.depends_on = [upload.id];
+  additionalRooms.depends_on = [profiles.id];
+  profiles.depends_on = [additionalRooms.id];
   await assert.rejects(
     validateRegistry(cyclic, { verifySourcePaths: false }),
     /dependency cycle/,
@@ -113,7 +113,7 @@ test("registry validation rejects illegal completion and blocked states", async 
 
   const whitespaceRemaining = structuredClone(registry);
   whitespaceRemaining.items.find(
-    (item) => item.id === "product.private.role-pm",
+    (item) => item.id === "product.private.additional-rooms",
   ).remaining = ["   "];
   await assert.rejects(
     validateRegistry(whitespaceRemaining, { verifySourcePaths: false }),
@@ -123,7 +123,7 @@ test("registry validation rejects illegal completion and blocked states", async 
   const completeRecommendedSlice = structuredClone(registry);
   completeRecommendedSlice.items[0].recommended_slice = structuredClone(
     registry.items.find(
-      (item) => item.id === "product.private.role-pm",
+      (item) => item.id === "product.private.additional-rooms",
     ).recommended_slice,
   );
   await assert.rejects(

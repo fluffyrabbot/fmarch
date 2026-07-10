@@ -238,13 +238,13 @@ function surfaceScenarios() {
     {
       id: "player-private-channel",
       role: "player",
-      path: "/g/midsummer/c/role-pm",
+      path: "/g/midsummer/c/private%3Arole_pm%3Aslot-7",
       render: "renderPlayerPrivateChannelRoute",
       surfaceTestId: "player-surface",
       requiredText: ["Role PM", "Private queue"],
       requiredSelectors: [
-        '[data-testid="player-channel-role-pm"][aria-current="page"]',
-        '[data-testid="player-private-link-notification-1"][href="/g/midsummer/c/role-pm?private=notification-1"]',
+        '[data-testid="player-channel-private:role_pm:slot-7"][aria-current="page"]',
+        '[data-testid="player-private-link-notification-1"][href="/g/midsummer/c/private%3Arole_pm%3Aslot-7?private=notification-1"]',
         '[data-testid="thread-post-media-receipt-442"][data-media-variant="tablet"]',
       ],
     },

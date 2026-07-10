@@ -106,7 +106,7 @@ const playerData = await buildGameRouteData({
   principalUserId: "player_mira",
   capabilities: [
     { kind: "SlotOccupant", game: "midsummer", slot: "slot-7" },
-    { kind: "ChannelMember", game: "midsummer", channel: "role-pm" },
+    { kind: "ChannelMember", game: "midsummer", channel: "private:role_pm:slot-7" },
   ],
 });
 const moderatorData = await buildHostConsoleRouteData({
@@ -341,7 +341,7 @@ async function provePlayerSurfaceAdapter() {
       ...playerData,
       threadPager: {
         ...playerData.threadPager,
-        channel: "role-pm",
+        channel: "private:role_pm:slot-7",
       },
     },
     message: "Ack: post submitted",
@@ -352,7 +352,7 @@ async function provePlayerSurfaceAdapter() {
   assert.deepEqual(voteCommand.refreshed, [["votecount", "commandState"]]);
   assert.deepEqual(postCommand.request.command.SubmitPost, {
     game: "midsummer",
-    channel_id: "role-pm",
+    channel_id: "private:role_pm:slot-7",
     actor_slot: "slot-7",
     body: "private role note",
   });
@@ -383,7 +383,7 @@ async function provePlayerSurfaceAdapter() {
       exposureKey: "__fmarchPlayerCommandDispatchBridgePlan",
       visible: postCommand.visible,
       refreshed: postCommand.refreshed[0],
-      channelId: "role-pm",
+      channelId: "private:role_pm:slot-7",
     },
     threadPager,
   };

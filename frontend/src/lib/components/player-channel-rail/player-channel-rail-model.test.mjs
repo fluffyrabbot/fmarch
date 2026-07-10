@@ -12,13 +12,13 @@ test("player channel rail filters channels to scoped capabilities", () => {
     buildPlayerChannels({
       game: "midsummer",
       capabilities: [
-        { kind: "ChannelMember", game: "midsummer", channel: "role-pm" },
+        { kind: "ChannelMember", game: "midsummer", channel: "private:role_pm:slot-7" },
         { kind: "ChannelMember", game: "midsummer", channel: "private:mafia_day_chat" },
         { kind: "DeadViewer", game: "midsummer" },
         { kind: "ChannelMember", game: "other", channel: "main" },
       ],
     }).map((channel) => channel.id),
-    ["role-pm", "dead", "private:mafia_day_chat"],
+    ["private:role_pm:slot-7", "dead", "private:mafia_day_chat"],
   );
 
   assert.deepEqual(
@@ -26,7 +26,7 @@ test("player channel rail filters channels to scoped capabilities", () => {
       game: "midsummer",
       capabilities: [
         { kind: "SlotOccupant", game: "midsummer", slot: "slot-7" },
-        { kind: "ChannelMember", game: "other", channel: "role-pm" },
+        { kind: "ChannelMember", game: "other", channel: "private:role_pm:slot-7" },
         { kind: "DeadViewer", game: "other" },
       ],
     }).map((channel) => channel.id),
@@ -61,50 +61,50 @@ test("player channel rail model exposes active and touch contracts", () => {
 test("player channel rail encodes game ids in channel hrefs", () => {
   const channels = buildPlayerChannels({
     game: "game with spaces",
-    capabilities: [{ kind: "ChannelMember", game: "game with spaces", channel: "role-pm" }],
+    capabilities: [{ kind: "ChannelMember", game: "game with spaces", channel: "private:role_pm:slot-7" }],
   });
 
   assert.deepEqual(channels, [
     {
-      id: "role-pm",
+      id: "private:role_pm:slot-7",
       label: "Role PM",
-      href: "/g/game%20with%20spaces/c/role-pm",
+      href: "/g/game%20with%20spaces/c/private%3Arole_pm%3Aslot-7",
       active: false,
-      capabilityLabel: "ChannelMember(role-pm)",
+      capabilityLabel: "ChannelMember(private:role_pm:slot-7)",
     },
   ]);
 });
 
 test("player channel rail marks the active private channel and resolves access", () => {
   const capabilities = [
-    { kind: "ChannelMember", game: "midsummer", channel: "role-pm" },
+    { kind: "ChannelMember", game: "midsummer", channel: "private:role_pm:slot-7" },
   ];
   const channels = buildPlayerChannels({
     game: "midsummer",
     capabilities,
-    activeChannel: "role-pm",
+    activeChannel: "private:role_pm:slot-7",
   });
 
   assert.deepEqual(channels, [
     {
-      id: "role-pm",
+      id: "private:role_pm:slot-7",
       label: "Role PM",
-      href: "/g/midsummer/c/role-pm",
+      href: "/g/midsummer/c/private%3Arole_pm%3Aslot-7",
       active: true,
-      capabilityLabel: "ChannelMember(role-pm)",
+      capabilityLabel: "ChannelMember(private:role_pm:slot-7)",
     },
   ]);
   assert.deepEqual(resolvePlayerChannelAccess({
     game: "midsummer",
-    channel: "role-pm",
+    channel: "private:role_pm:slot-7",
     capabilities,
   }), {
-    channel: "role-pm",
+    channel: "private:role_pm:slot-7",
     supported: true,
     allowed: true,
     label: "Role PM",
-    capabilityLabel: "ChannelMember(role-pm)",
-    href: "/g/midsummer/c/role-pm",
+    capabilityLabel: "ChannelMember(private:role_pm:slot-7)",
+    href: "/g/midsummer/c/private%3Arole_pm%3Aslot-7",
   });
   assert.equal(resolvePlayerChannelAccess({
     game: "midsummer",

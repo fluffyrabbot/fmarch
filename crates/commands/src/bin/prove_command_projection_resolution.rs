@@ -63,7 +63,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let fixture_path = args.fixture_path.to_string_lossy().to_string();
     let database_url = env::var("DATABASE_URL")?;
     let pool = PgPoolOptions::new()
-        .max_connections(1)
+        // Command boundary locks intentionally hold connections while command
+        // bodies read, append, project, and audit through the pool. Match the
+        // small real-stack pool shape so this proof exercises serialization
+        // instead of deadlocking its own single-connection harness.
+        .max_connections(5)
         .connect(&database_url)
         .await?;
     sqlx::migrate!("../projections/migrations")

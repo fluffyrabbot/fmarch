@@ -18,6 +18,15 @@ pub type PhaseId = String;
 pub type Seed = u64;
 pub type LogicalTime = u64;
 
+/// Engine-owned namespace for the private channel attached to a stable slot.
+/// The identity deliberately follows the slot rather than its current user so
+/// replacement preserves history while capability resolution moves access.
+pub const ROLE_PM_CHANNEL_PREFIX: &str = "private:role_pm:";
+
+pub fn role_pm_channel_id(slot_id: &str) -> String {
+    format!("{ROLE_PM_CHANNEL_PREFIX}{slot_id}")
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StateSnapshot {
     pub phase_id: PhaseId,

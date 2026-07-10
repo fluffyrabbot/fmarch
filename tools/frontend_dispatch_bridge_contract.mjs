@@ -292,7 +292,7 @@ async function provePlayerDispatchBridge() {
   const postTrace = playerCommandTrace("submit_post");
   const postPath = await provePlayerPath({
     trace: postTrace,
-    data: playerData({ channel: "role-pm" }),
+    data: playerData({ channel: "private:role_pm:slot-7" }),
     composerBody: "private role note",
     outcome: {
       state: "ack",
@@ -321,7 +321,7 @@ async function provePlayerDispatchBridge() {
   assert.deepEqual(postPath.refreshed, [["thread", "votecount", "dayVoteOutcomes"]]);
   assert.deepEqual(postPath.request.command.SubmitPost, {
     game: "midsummer",
-    channel_id: "role-pm",
+    channel_id: "private:role_pm:slot-7",
     actor_slot: "slot-7",
     body: "private role note",
   });

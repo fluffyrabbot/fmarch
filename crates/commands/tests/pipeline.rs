@@ -2955,6 +2955,133 @@ async fn replacement_preserves_slot_history_and_transfers_authority(pool: PgPool
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+async fn role_pm_is_engine_declared_slot_stable_and_replacement_safe(pool: PgPool) {
+    let host = "host_h";
+    let slot = "slot_7";
+    let outgoing = "user_a";
+    let incoming = "user_b";
+    let game = setup_game(&pool, host, slot, outgoing).await;
+    let channel_id = domain::role_pm_channel_id(slot);
+
+    let declaration: serde_json::Value = sqlx::query_scalar(
+        "SELECT payload FROM events WHERE stream_id = $1 \
+         AND kind = 'PrivateChannelDeclared' AND payload->>'channel_id' = $2",
+    )
+    .bind(game)
+    .bind(&channel_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(declaration["kind"], "RolePm");
+    assert_eq!(declaration["source"], "engine.role_pm");
+    assert_eq!(declaration["members"][0]["slot_id"], slot);
+    assert_eq!(declaration["members"][0]["role_key"], "vanilla_townie");
+
+    let members = projections::private_channel_members(&pool, game)
+        .await
+        .unwrap();
+    assert!(members.iter().any(|member| {
+        member.channel_id == channel_id
+            && member.kind == "RolePm"
+            && member.slot_id == slot
+            && member.source == "engine.role_pm"
+    }));
+
+    let outgoing_caps = caps::resolve(&pool, &user(outgoing), game).await.unwrap();
+    assert!(outgoing_caps.grants(&caps::Capability::ChannelMember(channel_id.clone())));
+    handle(
+        &pool,
+        &user(outgoing),
+        Command::SubmitPost {
+            game,
+            channel_id: channel_id.clone(),
+            actor_slot: slot.into(),
+            body: "Role PM history before replacement".into(),
+            media: Vec::new(),
+        },
+    )
+    .await
+    .expect("outgoing occupant posts in its engine-declared Role PM");
+
+    handle(
+        &pool,
+        &user(host),
+        Command::ProcessReplacement {
+            game,
+            slot: slot.into(),
+            outgoing_user: outgoing.into(),
+            incoming_user: incoming.into(),
+        },
+    )
+    .await
+    .expect("host replaces the Role PM member behind the stable slot");
+
+    let stale_caps = caps::resolve(&pool, &user(outgoing), game).await.unwrap();
+    assert!(!stale_caps.grants(&caps::Capability::SlotOccupant(slot.into())));
+    assert!(!stale_caps.grants(&caps::Capability::ChannelMember(channel_id.clone())));
+    let incoming_caps = caps::resolve(&pool, &user(incoming), game).await.unwrap();
+    assert!(incoming_caps.grants(&caps::Capability::SlotOccupant(slot.into())));
+    assert!(incoming_caps.grants(&caps::Capability::ChannelMember(channel_id.clone())));
+
+    let stale_post = handle(
+        &pool,
+        &user(outgoing),
+        Command::SubmitPost {
+            game,
+            channel_id: channel_id.clone(),
+            actor_slot: slot.into(),
+            body: "stale outgoing Role PM post".into(),
+            media: Vec::new(),
+        },
+    )
+    .await
+    .expect_err("outgoing principal loses slot and Role PM authority immediately");
+    assert_eq!(stale_post, Reject::NotYourSlot);
+
+    handle(
+        &pool,
+        &user(incoming),
+        Command::SubmitPost {
+            game,
+            channel_id: channel_id.clone(),
+            actor_slot: slot.into(),
+            body: "Incoming occupant continues the same Role PM".into(),
+            media: Vec::new(),
+        },
+    )
+    .await
+    .expect("incoming occupant posts through the transferred Role PM capability");
+
+    let thread = projections::thread_view_for_channel(&pool, game, &channel_id, None, 10)
+        .await
+        .unwrap();
+    assert_eq!(
+        thread
+            .posts
+            .iter()
+            .map(|post| (post.author_slot.as_deref(), post.body.as_str()))
+            .collect::<Vec<_>>(),
+        vec![
+            (Some(slot), "Role PM history before replacement"),
+            (Some(slot), "Incoming occupant continues the same Role PM"),
+        ],
+    );
+
+    let before_rebuild = serde_json::to_string(&members).unwrap();
+    rebuild(&pool, game).await.unwrap();
+    assert_eq!(
+        serde_json::to_string(
+            &projections::private_channel_members(&pool, game)
+                .await
+                .unwrap()
+        )
+        .unwrap(),
+        before_rebuild,
+        "Role PM membership remains event-rebuildable across replacement",
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
 async fn submit_post_uses_stream_logical_time_and_preserves_empty_text_media_pagination(
     pool: PgPool,
 ) {
@@ -43779,6 +43906,7 @@ async fn host_resolve_phase_carries_mafiascum_pt_cop_access(pool: PgPool) {
     assert_eq!(
         channel_members
             .iter()
+            .filter(|member| member.channel_id == "private:mason")
             .map(|member| (
                 member.channel_id.as_str(),
                 member.kind.as_str(),
@@ -43791,6 +43919,14 @@ async fn host_resolve_phase_carries_mafiascum_pt_cop_access(pool: PgPool) {
             ("private:mason", "Mason", "slot_5", "mason"),
         ],
         "PT Cop proof should consume setup-declared private channel membership"
+    );
+    assert_eq!(
+        channel_members
+            .iter()
+            .filter(|member| member.kind == "RolePm")
+            .count(),
+        6,
+        "each occupied PT Cop fixture slot also owns an engine-declared Role PM",
     );
 
     for (principal, actor_slot, action_id, target) in [

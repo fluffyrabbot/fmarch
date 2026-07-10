@@ -89,12 +89,12 @@ test("cold-load URLs match existing API route contracts", () => {
   assert.equal(
     playerThreadUrl({
       game: "game a",
-      channel: "role-pm",
+      channel: "private:role_pm:slot-7",
       principalUserId: "player_a",
       limit: 25,
       beforeSeq: 441,
     }),
-    "/games/game%20a/channels/role-pm/thread?limit=25&before_seq=441&principal_user_id=player_a",
+    "/games/game%20a/channels/private%3Arole_pm%3Aslot-7/thread?limit=25&before_seq=441&principal_user_id=player_a",
   );
   assert.equal(
     principalScopedGameUrl({
@@ -148,7 +148,7 @@ test("player cold-load uses channel-scoped thread endpoint for private channel r
   const seen = [];
   await loadPlayerColdData({
     game: "midsummer",
-    activeChannel: "role-pm",
+    activeChannel: "private:role_pm:slot-7",
     principalUserId: "player_mira",
     actorSlot: "slot-7",
     fallback: FALLBACK,
@@ -159,7 +159,7 @@ test("player cold-load uses channel-scoped thread endpoint for private channel r
   });
 
   assert.deepEqual(seen, [
-    "/games/midsummer/channels/role-pm/thread?limit=50&principal_user_id=player_mira",
+    "/games/midsummer/channels/private%3Arole_pm%3Aslot-7/thread?limit=50&principal_user_id=player_mira",
     "/games/midsummer/votecount",
     "/games/midsummer/day-vote-outcomes",
     "/games/midsummer/endgame-summary",

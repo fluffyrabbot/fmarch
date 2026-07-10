@@ -131,10 +131,10 @@ async function proveRouteErrorSurface(bundle) {
   assertIncludes(html, "Access blocked", "route error title");
   assertIncludes(
     html,
-    "Channel role-pm is not visible.",
+    "Channel private:role_pm:slot-7 is not visible.",
     "route error message",
   );
-  assertIncludes(html, "/g/midsummer/c/role-pm", "route error path");
+  assertIncludes(html, "/g/midsummer/c/private%3Arole_pm%3Aslot-7", "route error path");
   assertIncludes(html, "player_mira", "route error session principal");
   assertIncludes(
     html,
@@ -152,7 +152,7 @@ async function proveRouteErrorSurface(bundle) {
 
   return {
     role: "player",
-    path: "/g/midsummer/c/role-pm",
+    path: "/g/midsummer/c/private%3Arole_pm%3Aslot-7",
     status: 403,
     surface: "player",
     surfaceTestId: "route-error-surface",
@@ -162,7 +162,7 @@ async function proveRouteErrorSurface(bundle) {
     activeNavTestId: roleNavTestId("player"),
     sessionPrincipal: "player_mira",
     capabilitySummary: "ChannelMember + SlotOccupant",
-    message: "Channel role-pm is not visible.",
+    message: "Channel private:role_pm:slot-7 is not visible.",
     touchTargets,
     htmlBytes: Buffer.byteLength(html),
   };
@@ -411,30 +411,30 @@ function surfaceScenarios() {
     {
       id: "player-private-channel",
       role: "player",
-      path: "/g/midsummer/c/role-pm",
+      path: "/g/midsummer/c/private%3Arole_pm%3Aslot-7",
       render: "renderPlayerPrivateChannelRoute",
       surfaceTestId: "player-surface",
       requiredText: ["Role PM", "Private queue"],
       requiredTestIds: [
-        "player-channel-role-pm",
+        "player-channel-private:role_pm:slot-7",
         PLAYER_COMMAND_PANEL_CONTRACT.channelContextTestId,
         "player-private-link-notification-1",
         "thread-post-media-receipt-442",
       ],
       links: [
         {
-          testId: "player-channel-role-pm",
-          href: "/g/midsummer/c/role-pm",
+          testId: "player-channel-private:role_pm:slot-7",
+          href: "/g/midsummer/c/private%3Arole_pm%3Aslot-7",
         },
         {
           testId: "player-private-link-notification-1",
-          href: "/g/midsummer/c/role-pm?private=notification-1",
+          href: "/g/midsummer/c/private%3Arole_pm%3Aslot-7?private=notification-1",
         },
       ],
       requiredAttributes: [
         'aria-current="page"',
-        'data-channel-id="role-pm"',
-        'data-capability-label="ChannelMember(role-pm)"',
+        'data-channel-id="private:role_pm:slot-7"',
+        'data-capability-label="ChannelMember(private:role_pm:slot-7)"',
         'data-boundary-status="principal-scoped-private-projections"',
         'data-component="player-thread-media"',
         'data-media-variant="tablet"',

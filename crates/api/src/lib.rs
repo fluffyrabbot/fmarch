@@ -3452,8 +3452,9 @@ async fn channel_thread_view(
 async fn current_thread_posts_delta(
     state: &ApiState,
     game: Uuid,
+    channel: &str,
 ) -> Result<ProjectionDelta, projections::ProjectionError> {
-    let page = projections::thread_view(&state.pool, game, None, 50).await?;
+    let page = projections::thread_view_for_channel(&state.pool, game, channel, None, 50).await?;
     Ok(ProjectionDelta::ThreadPostsChanged(ThreadPostsDelta {
         game,
         posts: page.posts.into_iter().map(ThreadPost::from).collect(),
@@ -4543,6 +4544,7 @@ struct WsParams {
     principal_user_id: Option<String>,
     game: Option<Uuid>,
     slot_id: Option<String>,
+    channel: Option<String>,
 }
 
 async fn ws(
@@ -4570,7 +4572,14 @@ async fn ws_session(mut socket: WebSocket, state: ApiState, params: WsParams) {
     if let Ok(deltas) = current_votecount_deltas(&state, game).await {
         next_envelope_id = send_projection_deltas(&mut socket, next_envelope_id, deltas).await;
     }
-    if let Ok(delta) = current_thread_posts_delta(&state, game).await {
+    if let Some(delta) = thread_posts_delta_for_ws(
+        &state,
+        game,
+        params.principal_user_id.as_deref(),
+        params.channel.as_deref().unwrap_or("main"),
+    )
+    .await
+    {
         next_envelope_id = send_projection_deltas(&mut socket, next_envelope_id, vec![delta]).await;
     }
     if let Some(delta) = host_console_state_delta_for_ws(
@@ -4639,7 +4648,14 @@ async fn ws_session(mut socket: WebSocket, state: ApiState, params: WsParams) {
         }
         next_envelope_id = sent_to;
         if update.thread_dirty {
-            let Ok(delta) = current_thread_posts_delta(&state, game).await else {
+            let Some(delta) = thread_posts_delta_for_ws(
+                &state,
+                game,
+                params.principal_user_id.as_deref(),
+                params.channel.as_deref().unwrap_or("main"),
+            )
+            .await
+            else {
                 continue;
             };
             let sent_to = send_projection_deltas(&mut socket, next_envelope_id, vec![delta]).await;
@@ -4703,6 +4719,21 @@ async fn ws_session(mut socket: WebSocket, state: ApiState, params: WsParams) {
             next_envelope_id = sent_to;
         }
     }
+}
+
+async fn thread_posts_delta_for_ws(
+    state: &ApiState,
+    game: Uuid,
+    principal_user_id: Option<&str>,
+    channel: &str,
+) -> Option<ProjectionDelta> {
+    if channel != "main" {
+        let principal_user_id = principal_user_id?;
+        require_channel_thread_access(state, game, channel, Some(principal_user_id))
+            .await
+            .ok()?;
+    }
+    current_thread_posts_delta(state, game, channel).await.ok()
 }
 
 enum LiveProjectionReceive {

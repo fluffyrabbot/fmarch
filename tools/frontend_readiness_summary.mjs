@@ -232,7 +232,7 @@ const summary = {
       "roleSmoke admin/player/moderator entries include tablet thumb-zone geometry for setup/recovery, player vote/post, and moderator critical actions",
       "admin roleSmoke entries include session-grant form evidence and recovery-gate ACK evidence",
       "player roleSmoke entries include SubmitPost ACK and refreshed thread evidence",
-      "playerPrivateChannel roleSmoke entries include role-pm SubmitPost ACK evidence",
+      "playerPrivateChannel roleSmoke entries include private:role_pm:slot-7 SubmitPost ACK evidence",
       "player roleSmoke entries include tablet-media browser request evidence without original/full/desktop URLs",
       "moderator roleSmoke entries include SetSlotStatus ACK and slot lifecycle projection evidence",
     ],
@@ -242,7 +242,7 @@ const summary = {
       `inAppBrowserPage.scenarios includes admin cohost, admin session-grant, admin recovery-gate, player vote, player post, player private-channel post, and all ${EXPECTED_COUNTS.moderatorCriticalActions} moderator critical host confirmations`,
       "inAppBrowserPage.hydratedSurfaceScenarios includes shared shell, admin audit, admin operational forms, player private disclosure/vote/post, moderator host-prompt, and moderator slot-lifecycle controls",
       "inAppBrowserStaticDom.status == passed",
-      "inAppBrowserStaticDom.scenarios includes every fixture command target with role-pm route evidence",
+      "inAppBrowserStaticDom.scenarios includes every fixture command target with private:role_pm:slot-7 route evidence",
       "inAppBrowserPage.pageUrl is a file URL prepared for manual/in-app browser execution",
     ],
     inAppBrowserRunRequires: [
@@ -250,7 +250,7 @@ const summary = {
       "inAppBrowserRun.runs includes every proof viewport",
       "all inAppBrowserRun entries include clicked target, activeElement, targetBox, and screenshotPixels",
       `all ${EXPECTED_COUNTS.moderatorCriticalActions} moderator critical host confirmation run entries include alertdialog focus metadata and object/outcome text`,
-      "player private-channel run entries include active role-pm route evidence",
+      "player private-channel run entries include active private:role_pm:slot-7 route evidence",
       "player private disclosure toggles from aria-expanded=false to aria-expanded=true",
     ],
     inAppBrowserLocalhostRunRequires: [
@@ -912,12 +912,12 @@ function inAppBrowserStaticDomEvidenceComplete(inAppBrowserStaticDom) {
     (entry) => entry.id === "route-error-back-to-board-click",
   );
   return (
-    playerPrivateChannel?.route?.path === "/g/midsummer/c/role-pm" &&
-    playerPrivateChannel.route.activeChannelTestId === "player-channel-role-pm" &&
+    playerPrivateChannel?.route?.path === "/g/midsummer/c/private%3Arole_pm%3Aslot-7" &&
+    playerPrivateChannel.route.activeChannelTestId === "player-channel-private:role_pm:slot-7" &&
     playerPrivateChannel.route.activeChannelCurrent === "page" &&
     playerPrivateChannel.route.privateReviewHref ===
-      "/g/midsummer/c/role-pm?private=notification-1" &&
-    routeError?.errorSurface?.path === "/g/midsummer/c/role-pm" &&
+      "/g/midsummer/c/private%3Arole_pm%3Aslot-7?private=notification-1" &&
+    routeError?.errorSurface?.path === "/g/midsummer/c/private%3Arole_pm%3Aslot-7" &&
     routeError.errorSurface.status === 403 &&
     routeError.errorSurface.actionHref === "/" &&
     routeError.errorSurface.activeNavCurrent === "page" &&
@@ -967,11 +967,11 @@ function inAppBrowserRunEvidenceComplete(inAppBrowserRun) {
       (entry) => entry.id === "player-private-channel-submit-post-click",
     );
     if (
-      playerPrivateChannel?.route?.path !== "/g/midsummer/c/role-pm" ||
-      playerPrivateChannel.route.activeChannelTestId !== "player-channel-role-pm" ||
+      playerPrivateChannel?.route?.path !== "/g/midsummer/c/private%3Arole_pm%3Aslot-7" ||
+      playerPrivateChannel.route.activeChannelTestId !== "player-channel-private:role_pm:slot-7" ||
       playerPrivateChannel.route.activeChannelCurrent !== "page" ||
       playerPrivateChannel.route.privateReviewHref !==
-        "/g/midsummer/c/role-pm?private=notification-1"
+        "/g/midsummer/c/private%3Arole_pm%3Aslot-7?private=notification-1"
     ) {
       return false;
     }
@@ -1293,13 +1293,13 @@ function playerPrivateChannelBrowserPostEvidenceComplete(roleSmoke) {
     return false;
   }
   return entries.every((entry) =>
-    entry.path === "/g/midsummer/c/role-pm" &&
-    entry.activeChannelTestId === "player-channel-role-pm" &&
-    entry.privateReviewHref === "/g/midsummer/c/role-pm?private=notification-1" &&
+    entry.path === "/g/midsummer/c/private%3Arole_pm%3Aslot-7" &&
+    entry.activeChannelTestId === "player-channel-private:role_pm:slot-7" &&
+    entry.privateReviewHref === "/g/midsummer/c/private%3Arole_pm%3Aslot-7?private=notification-1" &&
     entry.commandResult?.requestCommand?.game === "midsummer" &&
-    entry.commandResult?.requestCommand?.channel_id === "role-pm" &&
+    entry.commandResult?.requestCommand?.channel_id === "private:role_pm:slot-7" &&
     entry.commandResult?.requestCommand?.actor_slot === "slot-7" &&
-    entry.commandResult?.requestCommand?.body === "Browser smoke role-pm post" &&
+    entry.commandResult?.requestCommand?.body === "Browser smoke private:role_pm:slot-7 post" &&
     entry.commandResult?.refreshedPostTestId === "thread-post-446" &&
     entry.screenshotPixels !== undefined,
   );
@@ -1534,7 +1534,7 @@ function localhostFailureReasons(roleSmoke) {
   }
   if (!playerPrivateChannelBrowserPostEvidenceComplete(roleSmoke)) {
     failures.push(
-      "roleSmoke.playerPrivateChannel missing role-pm SubmitPost browser ACK evidence",
+      "roleSmoke.playerPrivateChannel missing private:role_pm:slot-7 SubmitPost browser ACK evidence",
     );
   }
   if (!moderatorBrowserSlotLifecycleEvidenceComplete(roleSmoke)) {
@@ -1740,18 +1740,18 @@ function inAppBrowserRunFailureReasons(inAppBrowserRun) {
     if (playerPrivateChannel === undefined) {
       failures.push("inAppBrowserRun missing player private-channel proof");
     } else {
-      if (playerPrivateChannel.route?.path !== "/g/midsummer/c/role-pm") {
-        failures.push("inAppBrowserRun player private-channel path is not role-pm");
+      if (playerPrivateChannel.route?.path !== "/g/midsummer/c/private%3Arole_pm%3Aslot-7") {
+        failures.push("inAppBrowserRun player private-channel path is not private:role_pm:slot-7");
       }
       if (
-        playerPrivateChannel.route?.activeChannelTestId !== "player-channel-role-pm" ||
+        playerPrivateChannel.route?.activeChannelTestId !== "player-channel-private:role_pm:slot-7" ||
         playerPrivateChannel.route?.activeChannelCurrent !== "page"
       ) {
         failures.push("inAppBrowserRun player private-channel active route is absent");
       }
       if (
         playerPrivateChannel.route?.privateReviewHref !==
-        "/g/midsummer/c/role-pm?private=notification-1"
+        "/g/midsummer/c/private%3Arole_pm%3Aslot-7?private=notification-1"
       ) {
         failures.push("inAppBrowserRun player private-channel review href is absent");
       }
@@ -1920,7 +1920,7 @@ function assertRouteErrorSurface(errorSurface, { artifact, includesTouchTargets 
     },
     {
       role: "player",
-      path: "/g/midsummer/c/role-pm",
+      path: "/g/midsummer/c/private%3Arole_pm%3Aslot-7",
       status: 403,
       surface: "player",
       surfaceTestId: "route-error-surface",
@@ -1930,7 +1930,7 @@ function assertRouteErrorSurface(errorSurface, { artifact, includesTouchTargets 
       activeNavTestId: "role-nav-player",
       sessionPrincipal: "player_mira",
       capabilitySummary: "ChannelMember + SlotOccupant",
-      message: "Channel role-pm is not visible.",
+      message: "Channel private:role_pm:slot-7 is not visible.",
     },
     `${artifact} route error surface drifted`,
   );

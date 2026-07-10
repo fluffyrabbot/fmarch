@@ -286,7 +286,7 @@ test("route error state keeps failed paths inside the shared app shell", () => {
     principalUserId: "player_mira",
     capabilities: [
       { kind: "SlotOccupant", game: "midsummer", slot: "slot-7" },
-      { kind: "ChannelMember", game: "midsummer", channel: "role-pm" },
+      { kind: "ChannelMember", game: "midsummer", channel: "private:role_pm:slot-7" },
     ],
   });
   assert.equal(playerError.shell.activeSurface, "player");
@@ -297,8 +297,8 @@ test("route error state keeps failed paths inside the shared app shell", () => {
 
   const privateChannelError = buildRouteErrorData({
     status: 403,
-    message: "Channel role-pm is not visible.",
-    path: "/g/midsummer/c/role-pm",
+    message: "Channel private:role_pm:slot-7 is not visible.",
+    path: "/g/midsummer/c/private%3Arole_pm%3Aslot-7",
     principalUserId: "player_mira",
     capabilities: [{ kind: "SlotOccupant", game: "midsummer", slot: "slot-7" }],
   });
@@ -320,14 +320,14 @@ test("route loading state keeps target paths inside the shared app shell", () =>
   assert.equal(boardLoading.routeState.rootTestId, "route-state-board-loading");
 
   const privateChannelLoading = buildRouteLoadingData({
-    path: "/g/midsummer/c/role-pm",
+    path: "/g/midsummer/c/private%3Arole_pm%3Aslot-7",
     principalUserId: "player_mira",
     capabilities: [
       { kind: "SlotOccupant", game: "midsummer", slot: "slot-7" },
-      { kind: "ChannelMember", game: "midsummer", channel: "role-pm" },
+      { kind: "ChannelMember", game: "midsummer", channel: "private:role_pm:slot-7" },
     ],
   });
-  assert.equal(privateChannelLoading.path, "/g/midsummer/c/role-pm");
+  assert.equal(privateChannelLoading.path, "/g/midsummer/c/private%3Arole_pm%3Aslot-7");
   assert.equal(privateChannelLoading.shell.activeSurface, "player");
   assert.equal(privateChannelLoading.shell.game, "midsummer");
   assert.equal(privateChannelLoading.routeState.surface, "player");
@@ -345,11 +345,11 @@ test("navigation pending data exposes route-aware status without a duplicate she
   assert.deepEqual(buildNavigationPendingData(), { visible: false });
 
   const pending = buildNavigationPendingData({
-    path: "/g/midsummer/c/role-pm",
+    path: "/g/midsummer/c/private%3Arole_pm%3Aslot-7",
     principalUserId: "player_mira",
     capabilities: [
       { kind: "SlotOccupant", game: "midsummer", slot: "slot-7" },
-      { kind: "ChannelMember", game: "midsummer", channel: "role-pm" },
+      { kind: "ChannelMember", game: "midsummer", channel: "private:role_pm:slot-7" },
     ],
   });
 
@@ -358,7 +358,7 @@ test("navigation pending data exposes route-aware status without a duplicate she
   assert.equal(pending.rootTestId, APP_NAVIGATION_PENDING_CONTRACT.rootTestId);
   assert.equal(pending.statusTestId, APP_NAVIGATION_PENDING_CONTRACT.statusTestId);
   assert.equal(pending.label, APP_NAVIGATION_PENDING_CONTRACT.label);
-  assert.equal(pending.path, "/g/midsummer/c/role-pm");
+  assert.equal(pending.path, "/g/midsummer/c/private%3Arole_pm%3Aslot-7");
   assert.equal(pending.surface, "player");
   assert.equal(pending.title, "Loading game surface");
   assert.equal(

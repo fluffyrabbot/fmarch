@@ -69,6 +69,14 @@ night-only). Modeling all private messaging as *scoped channels* — rather than
 means one mechanism covers role PMs, scumchat, neighborhoods, and mod comms, and the
 moderator can be a member of all of them (server-trusted; see [06-security](06-security.md)).
 
+Role PM identity is engine-owned and slot-stable. Starting a game declares one
+`PrivateChannelDeclared` channel for every occupied, role-assigned slot, using
+`private:role_pm:<slot_id>` and a one-slot membership. A post therefore remains attached to
+the same channel and author slot across replacement; only the live `slot → user` occupancy
+projection changes. Post-start slot/role assignment emits the same declaration when it first
+makes a slot eligible. The player rail discovers the channel from `ChannelMember` rather than
+inventing a shared `role-pm` route.
+
 ### Post
 Authored by a **slot** (in a game context) or a **user** (in non-game forum areas).
 Belongs to exactly one channel and one phase. Content is **immutable**; edits are recorded

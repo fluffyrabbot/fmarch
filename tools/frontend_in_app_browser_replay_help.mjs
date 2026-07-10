@@ -51,7 +51,7 @@ const routeErrorScenario = manifest.scenarios.find(
 );
 assert(routeErrorScenario, "route-error fixture scenario is missing");
 assert.deepEqual(routeErrorScenario.errorSurface, {
-  path: "/g/midsummer/c/role-pm",
+  path: "/g/midsummer/c/private%3Arole_pm%3Aslot-7",
   status: 403,
   surfaceTestId: "route-error-surface",
   panelTestId: "route-error-panel",

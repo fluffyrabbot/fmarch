@@ -639,7 +639,7 @@ const audit = {
       state: fullBrowserProof ? "browser_proven" : "ssr_and_dom_proven",
       proven: [
         "The real SvelteKit error page renders in build-mode SSR through the shared app shell.",
-        "A player private-channel 403 keeps the failed /g/midsummer/c/role-pm path inside the player surface.",
+        "A player private-channel 403 keeps the failed /g/midsummer/c/private%3Arole_pm%3Aslot-7 path inside the player surface.",
         "SSR and DOM proof preserve the principal and capability summary from root layout session context.",
         "DOM proof verifies the error surface owns shell touch metadata and the active player nav.",
         ...fullBrowserProofLines(
@@ -664,7 +664,7 @@ const audit = {
       proven:
         browserRoleSmokeEvidenceComplete()
           ? [
-              "Dev-server Chromium role smoke passed, generated screenshots, recorded setup workbench geometry for /g/midsummer/setup, recorded tablet thumb-zone geometry, and recorded admin session-grant/recovery-gate form evidence, player main-thread SubmitPost ACK, player role-pm SubmitPost ACK, player tablet-media browser request evidence, and moderator SetSlotStatus ACK evidence with refreshed projections.",
+              "Dev-server Chromium role smoke passed, generated screenshots, recorded setup workbench geometry for /g/midsummer/setup, recorded tablet thumb-zone geometry, and recorded admin session-grant/recovery-gate form evidence, player main-thread SubmitPost ACK, player private:role_pm:slot-7 SubmitPost ACK, player tablet-media browser request evidence, and moderator SetSlotStatus ACK evidence with refreshed projections.",
             ]
           : inAppBrowserImportedRunEvidenceComplete()
             ? [
@@ -985,13 +985,13 @@ function playerPrivateChannelBrowserPostEvidenceComplete() {
     return false;
   }
   return entries.every((entry) =>
-    entry.path === "/g/midsummer/c/role-pm" &&
-    entry.activeChannelTestId === "player-channel-role-pm" &&
-    entry.privateReviewHref === "/g/midsummer/c/role-pm?private=notification-1" &&
+    entry.path === "/g/midsummer/c/private%3Arole_pm%3Aslot-7" &&
+    entry.activeChannelTestId === "player-channel-private:role_pm:slot-7" &&
+    entry.privateReviewHref === "/g/midsummer/c/private%3Arole_pm%3Aslot-7?private=notification-1" &&
     entry.commandResult?.requestCommand?.game === "midsummer" &&
-    entry.commandResult?.requestCommand?.channel_id === "role-pm" &&
+    entry.commandResult?.requestCommand?.channel_id === "private:role_pm:slot-7" &&
     entry.commandResult?.requestCommand?.actor_slot === "slot-7" &&
-    entry.commandResult?.requestCommand?.body === "Browser smoke role-pm post" &&
+    entry.commandResult?.requestCommand?.body === "Browser smoke private:role_pm:slot-7 post" &&
     entry.commandResult?.refreshedPostTestId === "thread-post-446" &&
     entry.screenshotPixels !== undefined,
   );
@@ -1123,12 +1123,12 @@ function iabStaticDomEvidenceComplete() {
     (entry) => entry.id === "route-error-back-to-board-click",
   );
   return (
-    playerPrivateChannel?.route?.path === "/g/midsummer/c/role-pm" &&
-    playerPrivateChannel.route.activeChannelTestId === "player-channel-role-pm" &&
+    playerPrivateChannel?.route?.path === "/g/midsummer/c/private%3Arole_pm%3Aslot-7" &&
+    playerPrivateChannel.route.activeChannelTestId === "player-channel-private:role_pm:slot-7" &&
     playerPrivateChannel.route.activeChannelCurrent === "page" &&
     playerPrivateChannel.route.privateReviewHref ===
-      "/g/midsummer/c/role-pm?private=notification-1" &&
-    routeError?.errorSurface?.path === "/g/midsummer/c/role-pm" &&
+      "/g/midsummer/c/private%3Arole_pm%3Aslot-7?private=notification-1" &&
+    routeError?.errorSurface?.path === "/g/midsummer/c/private%3Arole_pm%3Aslot-7" &&
     routeError.errorSurface.status === 403 &&
     routeError.errorSurface.actionHref === "/" &&
     routeError.errorSurface.activeNavCurrent === "page" &&
@@ -1240,7 +1240,7 @@ function assertRouteErrorSurface(errorSurface, { artifact, includesTouchTargets 
     },
     {
       role: "player",
-      path: "/g/midsummer/c/role-pm",
+      path: "/g/midsummer/c/private%3Arole_pm%3Aslot-7",
       status: 403,
       surface: "player",
       surfaceTestId: "route-error-surface",
@@ -1250,7 +1250,7 @@ function assertRouteErrorSurface(errorSurface, { artifact, includesTouchTargets 
       activeNavTestId: "role-nav-player",
       sessionPrincipal: "player_mira",
       capabilitySummary: "ChannelMember + SlotOccupant",
-      message: "Channel role-pm is not visible.",
+      message: "Channel private:role_pm:slot-7 is not visible.",
     },
     `${artifact} route error surface drifted`,
   );

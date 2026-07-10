@@ -10379,7 +10379,7 @@ function channelIdFromPrivateChannelRoleUrl(roleUrl) {
   }
   const parts = new URL(roleUrl).pathname.split("/");
   const channelIndex = parts.indexOf("c") + 1;
-  return decodeURIComponent(parts[channelIndex] ?? "role-pm");
+  return decodeURIComponent(parts[channelIndex] ?? "private:role_pm:slot-7");
 }
 
 export function assertCoreLoopAdminProof(evidence) {

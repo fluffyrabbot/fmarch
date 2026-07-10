@@ -306,13 +306,13 @@ function playerPrivateChannelBrowserPostEvidenceComplete(smoke) {
     return false;
   }
   return entries.every((entry) =>
-    entry.path === "/g/midsummer/c/role-pm" &&
-    entry.activeChannelTestId === "player-channel-role-pm" &&
-    entry.privateReviewHref === "/g/midsummer/c/role-pm?private=notification-1" &&
+    entry.path === "/g/midsummer/c/private%3Arole_pm%3Aslot-7" &&
+    entry.activeChannelTestId === "player-channel-private:role_pm:slot-7" &&
+    entry.privateReviewHref === "/g/midsummer/c/private%3Arole_pm%3Aslot-7?private=notification-1" &&
     entry.commandResult?.requestCommand?.game === "midsummer" &&
-    entry.commandResult?.requestCommand?.channel_id === "role-pm" &&
+    entry.commandResult?.requestCommand?.channel_id === "private:role_pm:slot-7" &&
     entry.commandResult?.requestCommand?.actor_slot === "slot-7" &&
-    entry.commandResult?.requestCommand?.body === "Browser smoke role-pm post" &&
+    entry.commandResult?.requestCommand?.body === "Browser smoke private:role_pm:slot-7 post" &&
     entry.commandResult?.refreshedPostTestId === "thread-post-446" &&
     entry.screenshotPixels !== undefined,
   );

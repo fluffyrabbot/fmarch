@@ -129,7 +129,7 @@ const playerPrivateChannelRoute = Object.freeze({
   id: "player-private-channel",
   role: "player-private-channel",
   token: "fixture-player",
-  path: "/g/midsummer/c/role-pm",
+  path: "/g/midsummer/c/private%3Arole_pm%3Aslot-7",
   surface: "player",
   surfaceTestId: PLAYER_ROUTE_CONTRACT.surfaceTestId,
   nav: playerNav,
@@ -137,7 +137,7 @@ const playerPrivateChannelRoute = Object.freeze({
     shell: playerShell,
     expectedAfterNav: [
       "player-channel-main",
-      "player-channel-role-pm",
+      "player-channel-private:role_pm:slot-7",
       "player-thread-load-older",
     ],
   }),
@@ -269,7 +269,7 @@ export const roles = Object.freeze([
       shell: playerShell,
       expectedAfterNav: [
         "player-channel-main",
-        "player-channel-role-pm",
+        "player-channel-private:role_pm:slot-7",
         "player-thread-load-older",
       ],
     }),

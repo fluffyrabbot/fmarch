@@ -1,7 +1,7 @@
 export function completedPrivateChannelReloadScenario() {
   return {
-    transitionToken: "private:role-pm:reload:complete",
-    channelId: "role-pm",
+    transitionToken: "private:role_pm:slot-7:reload:complete",
+    channelId: "private:role_pm:slot-7",
     actorSlot: "slot-7",
     actorStatus: "alive",
     completedPhaseId: "N05",
@@ -22,7 +22,7 @@ export function privateChannelSubmitPostScenario() {
   return {
     clickedAction: "submit_post",
     commandKind: "SubmitPost",
-    channelId: "role-pm",
+    channelId: "private:role_pm:slot-7",
     actorSlot: "slot-7",
     postBody: "Private role proof post",
     ackSeq: 701,
@@ -32,7 +32,7 @@ export function privateChannelSubmitPostScenario() {
       "commandState",
       "dayVoteOutcomes",
     ],
-    routeBoundary: "Seeded browser private post ACK refreshed role-pm state.",
+    routeBoundary: "Seeded browser private post ACK refreshed private:role_pm:slot-7 state.",
   };
 }
 
@@ -40,7 +40,7 @@ export function stalePrivateChannelPostPhaseLockedScenario() {
   return {
     clickedAction: "submit_post",
     commandKind: "SubmitPost",
-    channelId: "role-pm",
+    channelId: "private:role_pm:slot-7",
     actorSlot: "slot-7",
     stalePostBody: "Stale private phase proof post",
     commandError: "PhaseLocked",
@@ -52,14 +52,14 @@ export function stalePrivateChannelPostPhaseLockedScenario() {
       "commandState",
       "dayVoteOutcomes",
     ],
-    currentThreadBody: "Current role-pm thread after stale private post reject",
+    currentThreadBody: "Current private:role_pm:slot-7 thread after stale private post reject",
     expectedPhaseId: "D02",
     expectedLocked: true,
     expectedActionState: "disabled:phase locked",
     expectedReceiptState: "reject:PhaseLocked",
     expectedReceiptStatusFragment: "reject phaselocked: phase locked",
     routeBoundary:
-      "Seeded browser private post PhaseLocked recovery refreshed role-pm into locked Day 2.",
+      "Seeded browser private post PhaseLocked recovery refreshed private:role_pm:slot-7 into locked Day 2.",
   };
 }
 
@@ -68,7 +68,7 @@ export function staleCompletedPrivatePostScenario() {
     transitionToken: "private:submit_post:reject:GameAlreadyCompleted",
     clickedAction: "submit_post",
     commandKind: "SubmitPost",
-    channelId: "role-pm",
+    channelId: "private:role_pm:slot-7",
     actorSlot: "slot-7",
     commandError: "GameAlreadyCompleted",
     commandMessage: "Reject GameAlreadyCompleted: game already completed",
@@ -82,10 +82,10 @@ export function staleCompletedPrivatePostScenario() {
       "endgameSummary",
     ],
     routeBoundary:
-      "Seeded browser completed private-channel GameAlreadyCompleted recovery refreshed role-pm controls.",
+      "Seeded browser completed private-channel GameAlreadyCompleted recovery refreshed private:role_pm:slot-7 controls.",
     staleBoundary:
       "Seeded browser stale completed private-channel proof opened before completion refresh.",
-    expectedBoundary: "GameAlreadyCompleted recovery refreshed role-pm controls",
+    expectedBoundary: "GameAlreadyCompleted recovery refreshed private:role_pm:slot-7 controls",
   };
 }
 

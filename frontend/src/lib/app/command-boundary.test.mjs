@@ -64,14 +64,14 @@ test("player actions map to Rust wire command variants", () => {
     buildPlayerCommand({
       action: "submit_post",
       game: "00000000-0000-0000-0000-000000000001",
-      channelId: "role-pm",
+      channelId: "private:role_pm:slot-7",
       actorSlot: "slot-7",
       body: "private note",
     }),
     {
       SubmitPost: {
         game: "00000000-0000-0000-0000-000000000001",
-        channel_id: "role-pm",
+        channel_id: "private:role_pm:slot-7",
         actor_slot: "slot-7",
         body: "private note",
       },
@@ -82,7 +82,7 @@ test("player actions map to Rust wire command variants", () => {
     buildPlayerCommand({
       action: "submit_post",
       game: "00000000-0000-0000-0000-000000000001",
-      channelId: "role-pm",
+      channelId: "private:role_pm:slot-7",
       actorSlot: "slot-7",
       body: "private note with receipt",
       media: [
@@ -95,7 +95,7 @@ test("player actions map to Rust wire command variants", () => {
     {
       SubmitPost: {
         game: "00000000-0000-0000-0000-000000000001",
-        channel_id: "role-pm",
+        channel_id: "private:role_pm:slot-7",
         actor_slot: "slot-7",
         body: "private note with receipt",
         media: [
