@@ -198,12 +198,18 @@ export function isPlayerRouteEmpty({
   votecount,
   privateQueue,
   commandState,
+  channel,
 } = {}) {
+  const hasAvailableComposer =
+    commandState?.actorAlive === true ||
+    (commandState?.actorAlive === false &&
+      channel?.channel === "dead" &&
+      channel?.allowed === true);
   return (
     arrayLength(thread?.posts) === 0 &&
     arrayLength(votecount) === 0 &&
     arrayLength(privateQueue) === 0 &&
-    commandState?.actorAlive !== true &&
+    !hasAvailableComposer &&
     commandState?.currentVote == null &&
     arrayLength(commandState?.voteTargets) === 0 &&
     arrayLength(commandState?.actions) === 0

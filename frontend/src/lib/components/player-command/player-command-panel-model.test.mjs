@@ -188,6 +188,47 @@ test("player command panel model disables command controls for dead actors", () 
   assert.deepEqual(view.composer.actionPicker.recoveryCommands, []);
 });
 
+test("dead chat enables only posting for a dead actor", () => {
+  const view = buildPlayerCommandPanelViewModel({
+    composer: {
+      voteCommandLabel: "Vote slot-2",
+      withdrawCommandLabel: "Withdraw vote",
+      postCommandLabel: "Post to dead chat",
+      actionCommands: [
+        {
+          action: "submit_action",
+          label: "Submit action",
+          templateId: "night_action",
+          targets: ["slot-2"],
+        },
+      ],
+    },
+    channel: {
+      channel: "dead",
+      label: "Dead chat",
+      capabilityLabel: "DeadViewer(midsummer)",
+    },
+    player: {
+      slotId: "slot-7",
+      alive: false,
+      status: "dead",
+      capabilityLabel: "DeadViewer(midsummer)",
+    },
+  });
+
+  assert.equal(view.composer.channelContext.channelId, "dead");
+  assert.equal(view.composer.channelContext.actorAlive, "false");
+  assert.deepEqual(
+    view.composer.buttons.map((button) => [button.action, button.disabled]),
+    [
+      ["submit_vote", true],
+      ["withdraw_vote", true],
+      ["submit_post", false],
+    ],
+  );
+  assert.equal(view.composer.actionPicker.actions[0].trigger.disabled, true);
+});
+
 test("player command panel disables withdraw until command state has a current vote", () => {
   const view = buildPlayerCommandPanelViewModel({
     composer: {

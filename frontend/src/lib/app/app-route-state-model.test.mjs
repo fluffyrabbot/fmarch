@@ -183,6 +183,22 @@ test("route empty helpers use role-owned visible work queues", () => {
       thread: { posts: [] },
       votecount: [],
       privateQueue: [],
+      channel: { channel: "dead", allowed: true },
+      commandState: {
+        actorAlive: false,
+        voteTargets: [],
+        actions: [],
+        currentVote: null,
+      },
+    }),
+    false,
+    "an authorized dead-chat route must expose its empty composer",
+  );
+  assert.equal(
+    isPlayerRouteEmpty({
+      thread: { posts: [] },
+      votecount: [],
+      privateQueue: [],
     }),
     true,
   );

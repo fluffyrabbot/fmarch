@@ -22,6 +22,9 @@ export function buildPlayerCommandPanelViewModel({
   const channelContext = buildChannelContextViewModel({ channel, player });
   const playerCommandsDisabled =
     player.alive === false || player.gameCompleted === true;
+  const postCommandDisabled =
+    player.gameCompleted === true ||
+    (player.alive === false && channelContext.channelId !== "dead");
   return Object.freeze({
     root: Object.freeze({
       className: PLAYER_COMMAND_PANEL_CONTRACT.rootClassName,
@@ -57,7 +60,7 @@ export function buildPlayerCommandPanelViewModel({
         commandButton({
           action: "submit_post",
           label: composer.postCommandLabel,
-          disabled: playerCommandsDisabled,
+          disabled: postCommandDisabled,
         }),
       ]),
       actionHeading: "Night actions",
@@ -175,4 +178,3 @@ function normalizeVoteCommands(composer = {}) {
     }),
   ]);
 }
-

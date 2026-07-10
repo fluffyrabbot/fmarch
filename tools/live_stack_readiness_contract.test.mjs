@@ -62,6 +62,20 @@ test("Mason and Neighbor readiness requires both complete room lifecycles", () =
   );
 });
 
+test("dead-chat readiness requires restoration revocation and zero-byte denial", () => {
+  const evidence = liveStackReadinessFixture();
+  assert.equal(
+    checkStatus(buildLiveStackReadiness(evidence), "dead-chat-lifecycle"),
+    "passed",
+  );
+
+  evidence.browser.deadChat.restoredAlive.mediaBodyBytes = 12;
+  assert.equal(
+    checkStatus(buildLiveStackReadiness(evidence), "dead-chat-lifecycle"),
+    "failed",
+  );
+});
+
 function checkStatus(readiness, id) {
   return readiness.checks.find((check) => check.id === id)?.status;
 }
@@ -200,12 +214,13 @@ function liveStackReadinessFixture() {
       additionalRooms: {
         status: "passed",
         coveredKinds: ["Mason", "Neighbor"],
-        remainingKinds: ["Dead", "Spectator"],
+        remainingKinds: ["Spectator"],
         rooms: [
           additionalRoomFixture("Mason", "private:mason"),
           additionalRoomFixture("Neighbor", "private:neighbor"),
         ],
       },
+      deadChat: deadChatFixture(),
       rolePmHistory: {
         channelId: "private:role_pm:slot-7",
       },
@@ -283,6 +298,58 @@ function additionalRoomFixture(kind, channelId) {
       postReject: { error: "NotYourSlot" },
     },
     outsider: {
+      routeStatus: 403,
+      threadStatus: 403,
+      mediaStatus: 403,
+      mediaBodyBytes: 0,
+      postReject: { error: "NotAuthorized" },
+    },
+  };
+}
+
+function deadChatFixture() {
+  return {
+    status: "passed",
+    channelId: "dead",
+    derivedCapability: "DeadViewer(game)",
+    preDeath: {
+      outgoing: {
+        routeStatus: 403,
+        threadStatus: 403,
+        postReject: { error: "NotAuthorized" },
+      },
+      living: { routeStatus: 403 },
+    },
+    death: { streamSeqs: [1] },
+    outgoing: {
+      submitOutcome: { state: "ack" },
+      commandLiveDelta: { delta: { kind: "ThreadPostsChanged" } },
+      mediaBodyBytes: 1226,
+    },
+    incoming: {
+      submitOutcome: { state: "ack" },
+      initialLiveDelta: { delta: { kind: "ThreadPostsChanged" } },
+      commandLiveDelta: { delta: { kind: "ThreadPostsChanged" } },
+      reloadedPostBodies: ["history", "incoming"],
+      mediaBodyBytes: 1226,
+    },
+    encryptedStorage: { rawCheck: "2|0|2|0" },
+    staleOutgoing: {
+      routeStatus: 403,
+      threadStatus: 403,
+      mediaStatus: 403,
+      mediaBodyBytes: 0,
+      postReject: { error: "NotYourSlot" },
+    },
+    living: {
+      routeStatus: 403,
+      threadStatus: 403,
+      mediaStatus: 403,
+      mediaBodyBytes: 0,
+      postReject: { error: "NotAuthorized" },
+    },
+    restoration: { streamSeqs: [2] },
+    restoredAlive: {
       routeStatus: 403,
       threadStatus: 403,
       mediaStatus: 403,

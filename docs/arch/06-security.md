@@ -76,7 +76,7 @@ HostOf(game)                run this game (deadlines, phases, reveals, replaceme
 CohostOf(game)              delegated host authority for this game
 SlotOccupant(slot)          act as this slot: post, vote (bound to current occupant)
 ChannelMember(channel)      read/post in this channel
-DeadViewer(game)            see dead-visible content
+DeadViewer(game)            read dead-visible content; dead slot may post in dead chat
 ```
 
 - `SlotOccupant` is bound to the **current** occupant of the slot — after a replacement, the
@@ -89,11 +89,15 @@ DeadViewer(game)            see dead-visible content
   matching role slots. The outgoing account loses both `SlotOccupant` and the derived
   `ChannelMember` after replacement; the incoming account receives the same room history
   and media without copying or re-authoring either.
+- `DeadViewer(game)` is derived by joining current `slot_occupancy` with `slot_state`. A dead
+  slot grants it to the current occupant, replacement transfers it, and an alive restoration
+  revokes it. Posting additionally checks that the command's actor slot itself is dead, so a
+  principal occupying multiple slots cannot use one dead slot to post as a living slot.
 - Replacement revokes the outgoing session's **game-scoped slot and channel authority** on
   the next capability resolution. It intentionally does not revoke the account session
   globally, because that credential may still have unrelated authority elsewhere.
-- Capabilities are derived from projections (`private_channel_member`, `slot_occupancy`) so they
-  always reflect committed game state, never stale client claims.
+- Capabilities are derived from projections (`private_channel_member`, `slot_occupancy`,
+  `slot_state`) so they always reflect committed game state, never stale client claims.
 
 ## Visibility enforcement (defense in depth)
 
@@ -106,6 +110,9 @@ Reads and live deltas are filtered server-side by capability ([03](03-backend.md
   command-following `ThreadPostsChanged` frames are built from that channel only after the
   principal resolves `ChannelMember(channel)`; an outgoing replacement session receives no
   Role PM, Mason, or Neighbor thread frame.
+- The `dead` route and selected live channel require `DeadViewer(game)` on every cold-load,
+  media, and live-delta boundary. Living, restored-alive, and stale outgoing accounts receive
+  neither rows nor media bytes, and cannot append.
 - Role data is access-controlled *and* the projection's reveal flag gates it; end-game
   reveal flips the flag ([02](02-event-sourcing.md)). The client UI hiding something is
   never the only line of defense.

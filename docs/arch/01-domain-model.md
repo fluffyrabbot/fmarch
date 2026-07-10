@@ -84,7 +84,14 @@ reveals the group's Town guarantee; Neighbor membership reveals no alignment. Bo
 identities and member slots remain unchanged across replacement while the live occupancy
 projection transfers `ChannelMember` to the incoming account. The player rail and route
 derive both rooms from that capability, and non-`main` post bodies use the generic encrypted
-event envelope. Dead chat and spectator-room lifecycles are not yet implemented end to end.
+event envelope.
+
+Dead chat is lifecycle-derived rather than pack-member-declared. The current occupant of
+any dead slot resolves `DeadViewer(game)`; replacement transfers that grant with the stable
+slot, and restoring the slot alive revokes it. A dead occupant may author encrypted posts in
+the `dead` channel but retains the ordinary dead-slot prohibition on main-thread posting,
+votes, and actions. Dead-chat history and canonical media remain slot-authored across
+replacement. The spectator-room lifecycle is not yet implemented end to end.
 
 ### Post
 Authored by a **slot** (in a game context) or a **user** (in non-game forum areas).
@@ -152,7 +159,7 @@ global roles (see [06-security](06-security.md)):
 - `HostOf(game)`, `CohostOf(game)` — run *this* game
 - `SlotOccupant(slot)` — act as this slot (post, vote)
 - `ChannelMember(channel)` — read/post in this channel
-- `DeadViewer(game)` — see dead-visible content
+- `DeadViewer(game)` — read dead-visible content and post to dead chat while occupying a dead slot
 
 A host of one game has no authority in another. `if user.is_admin` cannot express this;
 a capability resolved per request can.

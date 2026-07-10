@@ -1185,6 +1185,439 @@ async fn mason_neighbor_rooms_encrypt_reload_transfer_and_deny_nonmembers(pool: 
     }
 }
 
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn dead_chat_lifecycle_encrypts_streams_transfers_and_revokes(pool: sqlx::PgPool) {
+    let root = tempfile::tempdir().unwrap();
+    let store = MediaStore::open(root.path(), MediaLimits::default()).unwrap();
+    let app = api::router_with_state(ApiState::new(pool.clone(), store).with_dev_auth(true));
+    let (outgoing_token, outgoing) =
+        create_media_upload_account_session(&app, "dead-chat-outgoing").await;
+    let (incoming_token, incoming) =
+        create_media_upload_account_session(&app, "dead-chat-incoming").await;
+    let (living_token, living) =
+        create_media_upload_account_session(&app, "dead-chat-living").await;
+    let game = Uuid::new_v4();
+    let dead_slot = "dead_slot";
+    let living_slot = "living_slot";
+    let mut command_id = 1_u64;
+
+    expect_ack(
+        post_command(
+            app.clone(),
+            command_id,
+            "host_h",
+            Command::CreateGame {
+                game,
+                pack: "mafiascum".into(),
+            },
+        )
+        .await,
+    );
+    command_id += 1;
+    for (slot, principal) in [
+        (dead_slot, outgoing.as_str()),
+        (living_slot, living.as_str()),
+    ] {
+        for command in [
+            Command::AddSlot {
+                game,
+                slot: slot.into(),
+            },
+            Command::AssignSlot {
+                game,
+                slot: slot.into(),
+                user: principal.into(),
+            },
+            Command::AssignRole {
+                game,
+                slot: slot.into(),
+                role_key: "vanilla_townie".into(),
+            },
+        ] {
+            expect_ack(post_command(app.clone(), command_id, "host_h", command).await);
+            command_id += 1;
+        }
+    }
+    expect_ack(
+        post_command(
+            app.clone(),
+            command_id,
+            "host_h",
+            Command::StartGame {
+                game,
+                phase: "D01".into(),
+            },
+        )
+        .await,
+    );
+    command_id += 1;
+
+    let before_death = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!(
+                    "/games/{game}/channels/dead/thread?principal_user_id={outgoing}"
+                ))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(before_death.status(), StatusCode::FORBIDDEN);
+    expect_reject(
+        post_command(
+            app.clone(),
+            command_id,
+            outgoing.as_str(),
+            Command::SubmitPost {
+                game,
+                channel_id: "dead".into(),
+                actor_slot: dead_slot.into(),
+                body: "alive dead-chat attempt".into(),
+                media: None,
+            },
+        )
+        .await,
+        RejectCode::NotAuthorized,
+    );
+    command_id += 1;
+
+    expect_ack(
+        post_command(
+            app.clone(),
+            command_id,
+            "host_h",
+            Command::SetSlotStatus {
+                game,
+                slot: dead_slot.into(),
+                status: SlotLifecycle::Dead,
+            },
+        )
+        .await,
+    );
+    command_id += 1;
+
+    let upload = post_media_upload(
+        &app,
+        Some(&outgoing_token),
+        "image/png",
+        media_upload_png(360, 240),
+    )
+    .await;
+    assert_eq!(upload.status(), StatusCode::CREATED);
+    let upload: MediaUploadResponse =
+        serde_json::from_slice(&to_bytes(upload.into_body(), usize::MAX).await.unwrap()).unwrap();
+    expect_ack(
+        post_command(
+            app.clone(),
+            command_id,
+            outgoing.as_str(),
+            Command::SubmitPost {
+                game,
+                channel_id: "dead".into(),
+                actor_slot: dead_slot.into(),
+                body: "dead history with canonical media".into(),
+                media: Some(vec![SubmitPostMedia {
+                    content_id: upload.content_id.clone(),
+                    alt: "Dead-chat receipt".into(),
+                }]),
+            },
+        )
+        .await,
+    );
+    command_id += 1;
+
+    let stored: serde_json::Value = sqlx::query_scalar(
+        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'PostSubmitted' \
+         AND payload->>'channel_id' = 'dead' ORDER BY stream_seq DESC LIMIT 1",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(stored.get("body").is_none());
+    assert!(stored["body_private"]["ciphertext"].is_string());
+    assert_eq!(stored["media"][0]["content_id"], upload.content_id);
+
+    expect_ack(
+        post_command(
+            app.clone(),
+            command_id,
+            "host_h",
+            Command::ProcessReplacement {
+                game,
+                slot: dead_slot.into(),
+                outgoing_user: outgoing.clone(),
+                incoming_user: incoming.clone(),
+            },
+        )
+        .await,
+    );
+    command_id += 1;
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let server_app = app.clone();
+    let server = tokio::spawn(async move {
+        axum::serve(listener, server_app).await.unwrap();
+    });
+    let (mut socket, _) = tokio_tungstenite::connect_async(format!(
+        "ws://{addr}/ws?game={game}&principal_user_id={incoming}&channel=dead"
+    ))
+    .await
+    .unwrap();
+    let hello: ServerEnvelope =
+        serde_json::from_str(&socket.next().await.unwrap().unwrap().into_text().unwrap()).unwrap();
+    assert!(matches!(hello.body, ServerMsg::Hello(_)));
+    let initial_dead_chat = tokio::time::timeout(std::time::Duration::from_secs(3), async {
+        loop {
+            let envelope: ServerEnvelope =
+                serde_json::from_str(&socket.next().await.unwrap().unwrap().into_text().unwrap())
+                    .unwrap();
+            if matches!(
+                envelope.body,
+                ServerMsg::Delta(ProjectionDelta::ThreadPostsChanged(ref delta))
+                    if delta.game == game
+                        && delta.posts.len() == 1
+                        && delta.posts[0].channel_id == "dead"
+                        && delta.posts[0].body == "dead history with canonical media"
+            ) {
+                return envelope;
+            }
+        }
+    })
+    .await
+    .expect("incoming dead occupant receives channel-scoped initial delta");
+
+    expect_ack(
+        post_command(
+            app.clone(),
+            command_id,
+            incoming.as_str(),
+            Command::SubmitPost {
+                game,
+                channel_id: "dead".into(),
+                actor_slot: dead_slot.into(),
+                body: "incoming dead-chat live delta".into(),
+                media: None,
+            },
+        )
+        .await,
+    );
+    command_id += 1;
+    let live_dead_chat = tokio::time::timeout(std::time::Duration::from_secs(3), async {
+        loop {
+            let envelope: ServerEnvelope =
+                serde_json::from_str(&socket.next().await.unwrap().unwrap().into_text().unwrap())
+                    .unwrap();
+            if matches!(
+                envelope.body,
+                ServerMsg::Delta(ProjectionDelta::ThreadPostsChanged(ref delta))
+                    if delta.game == game
+                        && delta.posts.len() == 2
+                        && delta.posts.iter().all(|post| post.channel_id == "dead")
+                        && delta.posts[1].body == "incoming dead-chat live delta"
+            ) {
+                return envelope;
+            }
+        }
+    })
+    .await
+    .expect("dead-chat command publishes a channel-scoped live delta");
+    assert!(live_dead_chat.id > initial_dead_chat.id);
+
+    let thread = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!(
+                    "/games/{game}/channels/dead/thread?principal_user_id={incoming}&limit=10"
+                ))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(thread.status(), StatusCode::OK);
+    let thread: ThreadPage =
+        serde_json::from_slice(&to_bytes(thread.into_body(), usize::MAX).await.unwrap()).unwrap();
+    assert_eq!(
+        thread
+            .posts
+            .iter()
+            .map(|post| post.body.as_str())
+            .collect::<Vec<_>>(),
+        vec![
+            "dead history with canonical media",
+            "incoming dead-chat live delta"
+        ],
+    );
+    assert!(thread.posts.iter().all(|post| post.channel_id == "dead"));
+    let media_url = thread.posts[0].media[0]
+        .variants
+        .get("tablet")
+        .unwrap()
+        .avif_url
+        .clone();
+    let allowed_media = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(media_url.as_str())
+                .header("authorization", format!("Bearer {incoming_token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(allowed_media.status(), StatusCode::OK);
+    assert_eq!(allowed_media.headers()["content-type"], "image/avif");
+    assert!(!to_bytes(allowed_media.into_body(), usize::MAX)
+        .await
+        .unwrap()
+        .is_empty());
+
+    for (principal, token, slot, expected_append_reject) in [
+        (
+            outgoing.as_str(),
+            outgoing_token.as_str(),
+            dead_slot,
+            RejectCode::NotYourSlot,
+        ),
+        (
+            living.as_str(),
+            living_token.as_str(),
+            living_slot,
+            RejectCode::NotAuthorized,
+        ),
+    ] {
+        let denied_thread = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri(format!(
+                        "/games/{game}/channels/dead/thread?principal_user_id={principal}"
+                    ))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(denied_thread.status(), StatusCode::FORBIDDEN);
+        let denied_media = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri(media_url.as_str())
+                    .header("authorization", format!("Bearer {token}"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(denied_media.status(), StatusCode::FORBIDDEN);
+        assert_ne!(denied_media.headers()["content-type"], "image/avif");
+        expect_reject(
+            post_command(
+                app.clone(),
+                command_id,
+                principal,
+                Command::SubmitPost {
+                    game,
+                    channel_id: "dead".into(),
+                    actor_slot: slot.into(),
+                    body: "denied dead-chat append".into(),
+                    media: None,
+                },
+            )
+            .await,
+            expected_append_reject,
+        );
+        command_id += 1;
+    }
+
+    let before_rebuild = projections::thread_view_for_channel(&pool, game, "dead", None, 10)
+        .await
+        .unwrap();
+    projections::rebuild(&pool, game).await.unwrap();
+    assert_eq!(
+        projections::thread_view_for_channel(&pool, game, "dead", None, 10)
+            .await
+            .unwrap()
+            .posts,
+        before_rebuild.posts,
+        "dead-chat text and canonical media survive projection rebuild",
+    );
+
+    expect_ack(
+        post_command(
+            app.clone(),
+            command_id,
+            "host_h",
+            Command::SetSlotStatus {
+                game,
+                slot: dead_slot.into(),
+                status: SlotLifecycle::Alive,
+            },
+        )
+        .await,
+    );
+    command_id += 1;
+    let restored_thread = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!(
+                    "/games/{game}/channels/dead/thread?principal_user_id={incoming}"
+                ))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(restored_thread.status(), StatusCode::FORBIDDEN);
+    let restored_media = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(media_url.as_str())
+                .header("authorization", format!("Bearer {incoming_token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(restored_media.status(), StatusCode::FORBIDDEN);
+    assert_ne!(restored_media.headers()["content-type"], "image/avif");
+    expect_reject(
+        post_command(
+            app,
+            command_id,
+            incoming.as_str(),
+            Command::SubmitPost {
+                game,
+                channel_id: "dead".into(),
+                actor_slot: dead_slot.into(),
+                body: "restored-alive dead-chat append".into(),
+                media: None,
+            },
+        )
+        .await,
+        RejectCode::NotAuthorized,
+    );
+
+    drop(socket);
+    server.abort();
+}
+
 fn stable_command_id(id: u64) -> Uuid {
     Uuid::from_u128(id as u128)
 }

@@ -314,35 +314,39 @@
       "title": "Neighborhood, mason, dead, and spectator rooms",
       "execution_class": "code",
       "status": "partial",
-      "summary": "Pack-declared Mason and Neighbor rooms are locally complete across occupied-group creation, encrypted browser text/media posting, capability-derived routes, channel-scoped live delivery, durable reload, replacement transfer, and stale/non-member denial; dead and spectator room families remain incomplete.",
+      "summary": "Pack-declared Mason and Neighbor rooms plus lifecycle-derived dead chat are locally complete across encrypted browser text/media posting, capability-derived routes, channel-scoped live delivery, durable reload, replacement transfer, and stale/non-member denial; only the spectator room family remains incomplete.",
       "complete_when": ["Every supported private room family is pack/config-created, encrypted at rest, capability-filtered, replacement-safe, and live/reload proven."],
       "depends_on": ["product.private.role-pm"],
       "evidence": [
         { "kind": "source", "value": "packs/mafiascum/pack.json" },
         { "kind": "source", "value": "crates/commands/src/lib.rs" },
         { "kind": "source", "value": "crates/commands/tests/pipeline.rs" },
+        { "kind": "source", "value": "crates/caps/src/lib.rs" },
         { "kind": "source", "value": "crates/api/tests/vertical.rs" },
+        { "kind": "source", "value": "frontend/src/lib/app/app-route-state-model.mjs" },
         { "kind": "source", "value": "frontend/src/lib/components/player-channel-rail/player-channel-rail-model.mjs" },
+        { "kind": "source", "value": "frontend/src/lib/components/player-command/player-command-panel-model.mjs" },
         { "kind": "source", "value": "tools/host_console_live_stack_smoke.mjs" },
+        { "kind": "source", "value": "tools/live_stack_readiness_contract.mjs" },
         { "kind": "source", "value": "docs/arch/01-domain-model.md" },
         { "kind": "source", "value": "docs/arch/06-security.md" },
         { "kind": "artifact", "value": "target/host-console-live-stack-smoke/live-stack-proof.json" },
         { "kind": "command", "value": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p commands -p projections -p caps" },
         { "kind": "command", "value": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p api mason_neighbor -- --test-threads=1" },
+        { "kind": "command", "value": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p api dead_chat -- --test-threads=1" },
         { "kind": "command", "value": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch npm run test:host-console-live-stack-smoke" },
         { "kind": "command", "value": "npm run test:frontend-contract" }
       ],
       "remaining": [
-        "Implement and prove dead-chat authority, posting, encryption, media, live/reload, and lifecycle transitions.",
         "Implement and prove spectator-room read-only authority, history/media visibility, and lifecycle boundaries."
       ],
       "recommended_slice": {
-        "objective": "Complete the dead-chat vertical as a real lifecycle capability rather than a fixture-only route: derive `DeadViewer(game)` for the current occupant of a dead slot and revoke it when that slot is restored alive, allow a dead occupant to post only in the encrypted `dead` channel while keeping main and living-player posting rules unchanged, preserve dead-chat history and media across replacement, deliver channel-scoped initial and command live deltas, and prove browser reload plus canonical media serving. Exercise a real death transition and an alive-restoration transition, then prove a living account, a restored-alive account, and the stale outgoing replacement account receive neither dead-chat rows nor media bytes and cannot append. Keep this registry item partial until spectator-room authority is implemented and proven.",
-        "paths": ["crates/commands/", "crates/projections/", "crates/caps/", "crates/api/", "crates/wire/", "frontend/src/lib/components/player-channel-rail/", "frontend/src/routes/g/[game]/", "tools/host_console_live_stack_smoke.mjs", "tools/dev_test_game_core_loop_private_channel_recovery_scenarios.mjs", "docs/arch/01-domain-model.md", "docs/arch/06-security.md"],
-        "proof_commands": ["DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p commands -p projections -p caps", "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p api dead_chat -- --test-threads=1", "npm run test:frontend-contract", "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch npm run test:host-console-live-stack-smoke", "npm run test:dev-test-game-core-live:local"],
+        "objective": "Complete the spectator-room vertical as an explicitly configured read-only capability rather than reusing player or dead authority: define the game-scoped spectator grant and room declaration, expose only the spectator thread route plus canonical media to current spectators, deliver channel-scoped initial and live deltas with durable reload, and reject every spectator append because spectators have no actor slot. Prove grant and revoke lifecycle boundaries, zero-byte media denial after revocation, and that spectators cannot read role PMs, faction rooms, dead chat, unrevealed role/alignment state, investigation results, notifications, or player command state before endgame. Mark this parent capability complete only when the spectator contract, API proof, real browser proof, and refreshed registry/scorecard all agree.",
+        "paths": ["crates/commands/", "crates/projections/", "crates/caps/", "crates/api/", "crates/wire/", "frontend/src/lib/components/player-channel-rail/", "frontend/src/routes/g/[game]/", "tools/host_console_live_stack_smoke.mjs", "tools/live_stack_readiness_contract.mjs", "docs/arch/01-domain-model.md", "docs/arch/06-security.md", "docs/ops/completion-registry.json"],
+        "proof_commands": ["DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p commands -p projections -p caps", "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p api spectator -- --test-threads=1", "npm run test:frontend-contract", "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch npm run test:host-console-live-stack-smoke", "npm run test:completeness-scorecard"],
         "non_claims": [
-          "No spectator-room or arbitrary user-created room completion claim from the dead-chat vertical.",
-          "No resurrection mechanics beyond revoking dead-chat authority when the existing host lifecycle restores a slot alive.",
+          "No spectator posting, voting, action, replacement-slot, or player-command authority from a read-only spectator grant.",
+          "No access to role PMs, faction rooms, dead chat, unrevealed private role state, or other player-private projections before endgame.",
           "No cross-game direct messaging, inbox, notification delivery, blocking, reporting, or general moderation workflow.",
           "No hosted deployment, production concurrency, or release-readiness promotion from the local seeded proof."
         ]

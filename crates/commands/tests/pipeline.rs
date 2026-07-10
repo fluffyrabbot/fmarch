@@ -2955,6 +2955,275 @@ async fn replacement_preserves_slot_history_and_transfers_authority(pool: PgPool
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+async fn dead_chat_authority_tracks_dead_slot_restore_and_replacement(pool: PgPool) {
+    let game = Uuid::new_v4();
+    let host = "dead_chat_host";
+    let outgoing = "dead_chat_outgoing";
+    let incoming = "dead_chat_incoming";
+    let living = "dead_chat_living";
+    let dead_slot = "dead_slot";
+    let living_slot = "living_slot";
+
+    handle(
+        &pool,
+        &user(host),
+        Command::CreateGame {
+            game,
+            pack: "mafiascum".into(),
+        },
+    )
+    .await
+    .unwrap();
+    for (slot, occupant) in [(dead_slot, outgoing), (living_slot, living)] {
+        handle(
+            &pool,
+            &user(host),
+            Command::AddSlot {
+                game,
+                slot: slot.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &user(host),
+            Command::AssignSlot {
+                game,
+                slot: slot.into(),
+                user: occupant.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &user(host),
+            Command::AssignRole {
+                game,
+                slot: slot.into(),
+                role_key: "vanilla_townie".into(),
+            },
+        )
+        .await
+        .unwrap();
+    }
+    handle(
+        &pool,
+        &user(host),
+        Command::StartGame {
+            game,
+            phase: "D01".into(),
+        },
+    )
+    .await
+    .unwrap();
+
+    let pre_death = caps::resolve(&pool, &user(outgoing), game).await.unwrap();
+    assert!(!pre_death.grants(&caps::Capability::DeadViewer(game)));
+    assert_eq!(
+        handle(
+            &pool,
+            &user(outgoing),
+            Command::SubmitPost {
+                game,
+                channel_id: "dead".into(),
+                actor_slot: dead_slot.into(),
+                body: "alive principals cannot enter dead chat".into(),
+                media: Vec::new(),
+            },
+        )
+        .await
+        .unwrap_err(),
+        Reject::NotAuthorized,
+    );
+
+    handle(
+        &pool,
+        &user(host),
+        Command::SetSlotStatus {
+            game,
+            slot: dead_slot.into(),
+            status: domain::SlotLifecycle::Dead,
+        },
+    )
+    .await
+    .unwrap();
+
+    let dead_caps = caps::resolve(&pool, &user(outgoing), game).await.unwrap();
+    assert!(dead_caps.grants(&caps::Capability::DeadViewer(game)));
+    handle(
+        &pool,
+        &user(outgoing),
+        Command::SubmitPost {
+            game,
+            channel_id: "dead".into(),
+            actor_slot: dead_slot.into(),
+            body: "dead history before replacement".into(),
+            media: Vec::new(),
+        },
+    )
+    .await
+    .expect("dead occupant posts in dead chat");
+    assert_eq!(
+        handle(
+            &pool,
+            &user(outgoing),
+            Command::SubmitPost {
+                game,
+                channel_id: "main".into(),
+                actor_slot: dead_slot.into(),
+                body: "dead main post".into(),
+                media: Vec::new(),
+            },
+        )
+        .await
+        .unwrap_err(),
+        Reject::SlotNotAlive,
+        "ordinary main-thread lifecycle rules remain unchanged",
+    );
+    assert_eq!(
+        handle(
+            &pool,
+            &user(living),
+            Command::SubmitPost {
+                game,
+                channel_id: "dead".into(),
+                actor_slot: living_slot.into(),
+                body: "living outsider".into(),
+                media: Vec::new(),
+            },
+        )
+        .await
+        .unwrap_err(),
+        Reject::NotAuthorized,
+    );
+
+    let encrypted: serde_json::Value = sqlx::query_scalar(
+        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'PostSubmitted' \
+         AND payload->>'channel_id' = 'dead' ORDER BY stream_seq DESC LIMIT 1",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(encrypted.get("body").is_none());
+    assert!(encrypted["body_private"]["ciphertext"].is_string());
+
+    handle(
+        &pool,
+        &user(host),
+        Command::ProcessReplacement {
+            game,
+            slot: dead_slot.into(),
+            outgoing_user: outgoing.into(),
+            incoming_user: incoming.into(),
+        },
+    )
+    .await
+    .unwrap();
+    let stale_caps = caps::resolve(&pool, &user(outgoing), game).await.unwrap();
+    assert!(!stale_caps.grants(&caps::Capability::DeadViewer(game)));
+    let incoming_caps = caps::resolve(&pool, &user(incoming), game).await.unwrap();
+    assert!(incoming_caps.grants(&caps::Capability::DeadViewer(game)));
+    assert_eq!(
+        handle(
+            &pool,
+            &user(outgoing),
+            Command::SubmitPost {
+                game,
+                channel_id: "dead".into(),
+                actor_slot: dead_slot.into(),
+                body: "stale outgoing post".into(),
+                media: Vec::new(),
+            },
+        )
+        .await
+        .unwrap_err(),
+        Reject::NotYourSlot,
+    );
+    handle(
+        &pool,
+        &user(incoming),
+        Command::SubmitPost {
+            game,
+            channel_id: "dead".into(),
+            actor_slot: dead_slot.into(),
+            body: "incoming continues dead history".into(),
+            media: Vec::new(),
+        },
+    )
+    .await
+    .unwrap();
+
+    let before_rebuild = projections::thread_view_for_channel(&pool, game, "dead", None, 10)
+        .await
+        .unwrap();
+    assert_eq!(
+        before_rebuild
+            .posts
+            .iter()
+            .map(|post| post.body.as_str())
+            .collect::<Vec<_>>(),
+        vec![
+            "dead history before replacement",
+            "incoming continues dead history"
+        ],
+    );
+    rebuild(&pool, game).await.unwrap();
+    assert_eq!(
+        projections::thread_view_for_channel(&pool, game, "dead", None, 10)
+            .await
+            .unwrap(),
+        before_rebuild,
+        "dead-chat history survives projection rebuild",
+    );
+
+    handle(
+        &pool,
+        &user(host),
+        Command::SetSlotStatus {
+            game,
+            slot: dead_slot.into(),
+            status: domain::SlotLifecycle::Alive,
+        },
+    )
+    .await
+    .unwrap();
+    let restored_caps = caps::resolve(&pool, &user(incoming), game).await.unwrap();
+    assert!(!restored_caps.grants(&caps::Capability::DeadViewer(game)));
+    assert_eq!(
+        handle(
+            &pool,
+            &user(incoming),
+            Command::SubmitPost {
+                game,
+                channel_id: "dead".into(),
+                actor_slot: dead_slot.into(),
+                body: "restored-alive dead post".into(),
+                media: Vec::new(),
+            },
+        )
+        .await
+        .unwrap_err(),
+        Reject::NotAuthorized,
+    );
+    handle(
+        &pool,
+        &user(incoming),
+        Command::SubmitPost {
+            game,
+            channel_id: "main".into(),
+            actor_slot: dead_slot.into(),
+            body: "restored-alive main post".into(),
+            media: Vec::new(),
+        },
+    )
+    .await
+    .expect("restoring alive restores ordinary main-thread posting");
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
 async fn role_pm_is_engine_declared_slot_stable_and_replacement_safe(pool: PgPool) {
     let host = "host_h";
     let slot = "slot_7";

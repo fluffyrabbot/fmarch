@@ -149,11 +149,14 @@ pub enum CapError {
 
 /// Resolve the capabilities a `principal` holds in `game` (the IO half).
 ///
-/// Reads ONLY committed projections (`game_authority`, `slot_occupancy`) so the
-/// result reflects real game state, never a stale client claim or an ambient
-/// global. After a replacement the outgoing user's `SlotOccupant` is gone and
-/// the incoming user's is granted — because occupancy is the live mapping and
-/// the slot id is stable (doc 06 / doc 01).
+/// Reads ONLY committed projections (`game_authority`, `slot_occupancy`, and
+/// `slot_state`) so the result reflects real game state, never a stale client
+/// claim or an ambient global. After a replacement the outgoing user's
+/// slot-derived capabilities are gone and the incoming user's are granted —
+/// because occupancy is the live mapping and the slot id is stable (doc 06 /
+/// doc 01). A current occupant receives [`Capability::DeadViewer`] whenever at
+/// least one of their occupied slots is dead; restoring that slot alive revokes
+/// the capability on the next boundary resolution.
 ///
 /// Global capabilities (`GlobalAdmin`/`GlobalMod`) are intentionally NOT derived
 /// here: there is no auth/role store yet (a later phase). They can be injected by
@@ -192,6 +195,18 @@ pub async fn resolve(
     // SlotOccupant for every slot this user CURRENTLY occupies (live mapping).
     for slot_id in &occupied_slots {
         set.insert(Capability::SlotOccupant(slot_id.clone()));
+    }
+
+    // DeadViewer follows the CURRENT occupant of any dead slot. It is derived
+    // from the same stable-slot/current-occupancy join as SlotOccupant, so a
+    // replacement transfers dead-chat authority and an alive restoration
+    // revokes it without a separate mutable grant.
+    if projections::slot_state(pool, game)
+        .await?
+        .into_iter()
+        .any(|slot| !slot.alive && occupied_slots.contains(&slot.slot_id))
+    {
+        set.insert(Capability::DeadViewer(game));
     }
 
     // ChannelMember from private channel membership projections for the

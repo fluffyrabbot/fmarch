@@ -1788,7 +1788,7 @@ async fn submit_post_locked(
     let caps = caps::resolve(pool, principal, game).await?;
     require_slot_occupant(pool, game, &actor_slot, &caps).await?;
     require_channel_post_access(game, &channel_id, &caps)?;
-    require_slot_can_post(pool, game, &actor_slot).await?;
+    require_channel_actor_can_post(pool, game, &channel_id, &actor_slot).await?;
     validate_thread_post_media(&media)?;
     if body.trim().is_empty() {
         let policy = projections::post_policy(pool, game, &channel_id).await?;
@@ -4709,6 +4709,7 @@ fn require_channel_post_access(
         || caps.grants(&Capability::HostOf(game))
         || caps.grants(&Capability::CohostOf(game))
         || caps.grants(&Capability::ChannelMember(channel_id.to_string()))
+        || (channel_id == "dead" && caps.grants(&Capability::DeadViewer(game)))
     {
         Ok(())
     } else {
@@ -4716,6 +4717,22 @@ fn require_channel_post_access(
     }
 }
 
+async fn require_channel_actor_can_post(
+    pool: &PgPool,
+    game: Uuid,
+    channel_id: &str,
+    slot: &str,
+) -> Result<(), Reject> {
+    if channel_id == "dead" {
+        return match projections::slot_alive(pool, game, slot).await? {
+            Some(false) => Ok(()),
+            Some(true) => Err(Reject::NotAuthorized),
+            None => Err(Reject::UnknownSlot),
+        };
+    }
+
+    require_slot_can_post(pool, game, slot).await
+}
 
 /// The current phase must exist and be UNLOCKED. Returns the phase id.
 async fn require_open_phase(pool: &PgPool, game: Uuid) -> Result<String, Reject> {

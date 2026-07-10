@@ -45,6 +45,7 @@ const smokeViewport = Object.freeze({ width: 1024, height: 768 });
 const game = crypto.randomUUID();
 const actionGame = crypto.randomUUID();
 const additionalRoomsGame = crypto.randomUUID();
+const deadChatGame = crypto.randomUUID();
 const adminCreatedGame = crypto.randomUUID();
 const rootAdminSessionToken = `host-console-live-stack-root-admin-${crypto.randomUUID()}`;
 const hostSessionToken = `host-console-live-stack-host-${crypto.randomUUID()}`;
@@ -115,6 +116,27 @@ const additionalRoomOutsider = Object.freeze({
   slotId: "rooms-outsider-1",
   principalUserId: "rooms-outsider",
   sessionToken: `host-console-live-stack-rooms-outsider-${crypto.randomUUID()}`,
+});
+const deadChatDefinition = Object.freeze({
+  channelId: "dead",
+  route: "dead",
+  outgoing: Object.freeze({
+    slotId: "dead-slot",
+    principalUserId: "dead-chat-outgoing",
+    sessionToken: `host-console-live-stack-dead-outgoing-${crypto.randomUUID()}`,
+  }),
+  incoming: Object.freeze({
+    principalUserId: "dead-chat-incoming",
+    sessionToken: `host-console-live-stack-dead-incoming-${crypto.randomUUID()}`,
+  }),
+  living: Object.freeze({
+    slotId: "living-slot",
+    principalUserId: "dead-chat-living",
+    sessionToken: `host-console-live-stack-dead-living-${crypto.randomUUID()}`,
+  }),
+  historyBody: "Dead-chat history before replacement",
+  incomingBody: "Incoming dead occupant continued the room",
+  mediaAlt: "Dead-chat private receipt",
 });
 const factionDayChatUploadAsset = Object.freeze({
   contentAddress: "live-stack-private-upload-source",
@@ -191,6 +213,8 @@ try {
   const actionSeedCommands = await seedActionGame();
   await writeProgress({ stage: "seed-additional-rooms-game", additionalRoomsGame });
   const additionalRoomsSeed = await seedAdditionalRoomsGame();
+  await writeProgress({ stage: "seed-dead-chat-game", deadChatGame });
+  const deadChatSeed = await seedDeadChatGame();
   await writeProgress({ stage: "seed-faction-day-chat-fixture", game });
   const privateChannelFixture = await seedFactionDayChatFixture();
   await writeProgress({ stage: "seed-root-admin-session" });
@@ -199,6 +223,8 @@ try {
   const grantedSessions = await createGrantedSessions();
   await writeProgress({ stage: "create-additional-room-sessions", additionalRoomsGame });
   const additionalRoomSessions = await createAdditionalRoomSessions();
+  await writeProgress({ stage: "create-dead-chat-sessions", deadChatGame });
+  const deadChatSessions = await createDeadChatSessions();
 
   await writeProgress({ stage: "start-sveltekit" });
   const { createServer: createViteServer } = await import(
@@ -233,6 +259,7 @@ try {
     frontendBaseUrl,
     privateChannelFixture,
     additionalRoomsSeed,
+    deadChatSeed,
   );
   const playerVoteCount =
     browserEvidence.playerVoteCountAfterPlayer ??
@@ -265,10 +292,12 @@ try {
     seedCommands,
     actionSeedCommands,
     additionalRoomsSeed,
+    deadChatSeed,
     privateChannelFixture,
     rootAdminSession,
     grantedSessions,
     additionalRoomSessions,
+    deadChatSessions,
     browser: browserEvidence,
     playerVoteCount,
     apiState,
@@ -780,6 +809,49 @@ async function seedAdditionalRoomsGame() {
   };
 }
 
+async function seedDeadChatGame() {
+  const commands = [];
+  commands.push(
+    await sendCommand("host_h", {
+      CreateGame: { game: deadChatGame, pack: "mafiascum" },
+    }),
+  );
+  for (const occupant of [deadChatDefinition.outgoing, deadChatDefinition.living]) {
+    commands.push(
+      await sendCommand("host_h", {
+        AddSlot: { game: deadChatGame, slot: occupant.slotId },
+      }),
+      await sendCommand("host_h", {
+        AssignSlot: {
+          game: deadChatGame,
+          slot: occupant.slotId,
+          user: occupant.principalUserId,
+        },
+      }),
+      await sendCommand("host_h", {
+        AssignRole: {
+          game: deadChatGame,
+          slot: occupant.slotId,
+          role_key: "vanilla_townie",
+        },
+      }),
+    );
+  }
+  commands.push(
+    await sendCommand("host_h", {
+      StartGame: { game: deadChatGame, phase: "D01" },
+    }),
+  );
+  return {
+    game: deadChatGame,
+    commands,
+    deadSlot: deadChatDefinition.outgoing.slotId,
+    livingSlot: deadChatDefinition.living.slotId,
+    boundary:
+      "The dead-chat game begins with two living occupied slots; browser proof performs the real dead, replacement, and restored-alive transitions without fixture authority rows.",
+  };
+}
+
 async function seedFactionDayChatFixture() {
   const memberRows = await runSql(
     smokeDatabase.url,
@@ -911,6 +983,28 @@ async function createAdditionalRoomSessions() {
   };
 }
 
+async function createDeadChatSessions() {
+  return {
+    outgoing: await createAccountSession({
+      token: deadChatDefinition.outgoing.sessionToken,
+      principalUserId: deadChatDefinition.outgoing.principalUserId,
+      label: "dead-chat-outgoing",
+    }),
+    incoming: await createAccountSession({
+      token: deadChatDefinition.incoming.sessionToken,
+      principalUserId: deadChatDefinition.incoming.principalUserId,
+      label: "dead-chat-incoming",
+    }),
+    living: await createAccountSession({
+      token: deadChatDefinition.living.sessionToken,
+      principalUserId: deadChatDefinition.living.principalUserId,
+      label: "dead-chat-living",
+    }),
+    boundary:
+      "All dead-chat actors retain enabled accounts; only current slot lifecycle and occupancy derive or revoke DeadViewer(game).",
+  };
+}
+
 async function createAccountSession({ token, principalUserId, label }) {
   const accountId = `live-stack-${label}-${crypto.randomUUID()}@example.test`;
   const password = `live-stack account password ${crypto.randomUUID()}`;
@@ -979,6 +1073,7 @@ async function driveBrowser(
   frontendBaseUrl,
   privateChannelFixture,
   additionalRoomsSeed,
+  deadChatSeed,
 ) {
   browser = await chromium.launch();
   const adminEvidence = await driveAdminBrowser(frontendBaseUrl);
@@ -998,6 +1093,7 @@ async function driveBrowser(
       frontendBaseUrl,
       additionalRoomsSeed,
     );
+    const deadChat = await driveDeadChatBrowser(frontendBaseUrl, deadChatSeed);
     const rolePmHistory = await seedRolePmHistory(
       playerPrivateChannelEvidence.media.contentId,
     );
@@ -1021,6 +1117,7 @@ async function driveBrowser(
       playerAction: playerActionEvidence,
       playerPrivateChannel: playerPrivateChannelEvidence,
       additionalRooms,
+      deadChat,
       rolePmHistory,
       privateChannelForbidden: privateChannelForbiddenEvidence,
       hostVotecountConvergence,
@@ -1317,9 +1414,9 @@ async function driveAdditionalRoomsBrowser(frontendBaseUrl, seed) {
     game: additionalRoomsGame,
     rooms,
     coveredKinds: rooms.map((room) => room.kind),
-    remainingKinds: ["Dead", "Spectator"],
+    remainingKinds: ["Spectator"],
     proof:
-      "Occupied pack-declared Mason and Neighbor rooms each passed enabled-account browser media posting, encrypted event storage, channel-scoped live delivery, durable reload, slot-stable replacement transfer, and zero-byte stale/non-member media denial. Dead and spectator rooms remain outside this slice.",
+      "Occupied pack-declared Mason and Neighbor rooms each passed enabled-account browser media posting, encrypted event storage, channel-scoped live delivery, durable reload, slot-stable replacement transfer, and zero-byte stale/non-member media denial. Dead chat is proven by its lifecycle-specific evidence; only spectator remains incomplete.",
   };
 }
 
@@ -1732,6 +1829,499 @@ async function proveAdditionalRoomDenial({
     threadStatus: threadResponse.status,
     mediaStatus: mediaResponse.status(),
     mediaBodyBytes: mediaBytes.byteLength,
+    postReject: post.body.body,
+  };
+}
+
+async function driveDeadChatBrowser(frontendBaseUrl, seed) {
+  if (
+    seed?.game !== deadChatGame ||
+    seed?.deadSlot !== deadChatDefinition.outgoing.slotId ||
+    seed?.livingSlot !== deadChatDefinition.living.slotId
+  ) {
+    throw new Error(`dead-chat seed drifted: ${JSON.stringify(seed)}`);
+  }
+
+  const preDeathOutgoing = await proveDeadChatDenial({
+    frontendBaseUrl,
+    token: deadChatDefinition.outgoing.sessionToken,
+    principalUserId: deadChatDefinition.outgoing.principalUserId,
+    actorSlot: deadChatDefinition.outgoing.slotId,
+    expectedReject: "NotAuthorized",
+    label: "pre-death outgoing",
+  });
+  const preDeathLiving = await proveDeadChatDenial({
+    frontendBaseUrl,
+    token: deadChatDefinition.living.sessionToken,
+    principalUserId: deadChatDefinition.living.principalUserId,
+    actorSlot: deadChatDefinition.living.slotId,
+    expectedReject: "NotAuthorized",
+    label: "pre-death living",
+  });
+
+  const death = await sendCommand("host_h", {
+    SetSlotStatus: {
+      game: deadChatGame,
+      slot: deadChatDefinition.outgoing.slotId,
+      status: "dead",
+    },
+  });
+  const deadSession = await fetchJson(`${apiBaseUrl}/auth/session?game=${deadChatGame}`, {
+    headers: {
+      authorization: `Bearer ${deadChatDefinition.outgoing.sessionToken}`,
+    },
+  });
+  if (
+    !(deadSession.capabilities ?? []).some(
+      (capability) =>
+        capability.kind === "DeadViewer" &&
+        capability.body?.game === deadChatGame,
+    )
+  ) {
+    throw new Error(`real death did not derive DeadViewer: ${JSON.stringify(deadSession)}`);
+  }
+
+  const pageUrl = `${frontendBaseUrl}/g/${deadChatGame}/c/dead`;
+  const outgoingContext = await browserContextWithSession(
+    deadChatDefinition.outgoing.sessionToken,
+  );
+  const outgoingPage = await outgoingContext.newPage();
+  const outgoingResponse = await outgoingPage.goto(pageUrl, {
+    waitUntil: "networkidle",
+  });
+  if (outgoingResponse === null || !outgoingResponse.ok()) {
+    throw new Error(
+      `dead occupant route failed with ${outgoingResponse?.status() ?? "none"}`,
+    );
+  }
+  await outgoingPage.getByTestId("player-surface").waitFor({ state: "visible" });
+  const channelContext = outgoingPage.getByTestId(
+    "player-command-channel-context",
+  );
+  await channelContext.waitFor({ state: "visible" });
+  if (
+    (await channelContext.getAttribute("data-channel-id")) !== "dead" ||
+    (await channelContext.getAttribute("data-actor-alive")) !== "false"
+  ) {
+    throw new Error("dead-chat browser command context did not retain dead actor state");
+  }
+  const activeChannel = outgoingPage.getByTestId("player-channel-dead");
+  await activeChannel.waitFor({ state: "visible" });
+  if (
+    (await activeChannel.getAttribute("aria-current")) !== "page" ||
+    !(await activeChannel.innerText()).includes("Dead chat")
+  ) {
+    throw new Error("DeadViewer capability did not expose the active dead-chat rail item");
+  }
+  const outgoingPostButton = outgoingPage.locator('[data-action="submit_post"]');
+  if (!(await outgoingPostButton.isEnabled())) {
+    throw new Error("dead-chat post control remained disabled for a dead occupant");
+  }
+
+  const upload = generatedThreadMediaPng({
+    ...factionDayChatUploadAsset,
+    contentAddress: "live-stack-dead-chat-upload-source",
+    palette: {
+      ...factionDayChatUploadAsset.palette,
+      accent: [88, 91, 112],
+    },
+  });
+  await outgoingPage.getByTestId("player-media-file").setInputFiles({
+    name: "dead-chat-receipt.png",
+    mimeType: "image/png",
+    buffer: upload.bytes,
+  });
+  await outgoingPage
+    .getByTestId("player-media-alt")
+    .fill(deadChatDefinition.mediaAlt);
+  await outgoingPage
+    .locator('[data-testid="player-composer"] textarea')
+    .fill(deadChatDefinition.historyBody);
+  assertHitTarget(await outgoingPostButton.boundingBox(), "dead-chat outgoing post button");
+  await outgoingPostButton.click();
+  await outgoingPage.getByTestId("player-command-status").waitFor({ state: "visible" });
+  await outgoingPage.waitForFunction(
+    () =>
+      document
+        .querySelector('[data-testid="player-command-status"]')
+        ?.getAttribute("data-state") === "ack",
+    null,
+    { timeout: 180_000 },
+  );
+  await waitForPrivateThreadLiveDelta(outgoingPage, {
+    channelId: "dead",
+    body: deadChatDefinition.historyBody,
+  });
+  const outgoingOutcome = await outgoingPage.evaluate(
+    () => window.__fmarchPlayerCommandStatus,
+  );
+  const outgoingCommand =
+    outgoingOutcome?.requestEnvelope?.body?.body?.command?.SubmitPost;
+  if (
+    outgoingOutcome?.state !== "ack" ||
+    outgoingCommand?.game !== deadChatGame ||
+    outgoingCommand?.channel_id !== "dead" ||
+    outgoingCommand?.actor_slot !== deadChatDefinition.outgoing.slotId ||
+    outgoingCommand?.body !== deadChatDefinition.historyBody ||
+    outgoingCommand?.media?.length !== 1 ||
+    outgoingCommand.media[0]?.alt !== deadChatDefinition.mediaAlt ||
+    !/^[0-9a-f]{64}$/u.test(String(outgoingCommand.media[0]?.content_id ?? ""))
+  ) {
+    throw new Error(`dead-chat browser media command drifted: ${JSON.stringify(outgoingOutcome)}`);
+  }
+  if (
+    JSON.stringify(Object.keys(outgoingCommand.media[0]).sort()) !==
+    JSON.stringify(["alt", "content_id"])
+  ) {
+    throw new Error("dead-chat browser command leaked non-handle media fields");
+  }
+  const contentId = outgoingCommand.media[0].content_id;
+  const outgoingLiveDelta = await privateThreadLiveDelta(
+    outgoingPage,
+    deadChatDefinition.historyBody,
+  );
+  const initialThread = await fetchJson(
+    `${apiBaseUrl}/games/${deadChatGame}/channels/dead/thread?principal_user_id=${deadChatDefinition.outgoing.principalUserId}&limit=50`,
+  );
+  const historyPost = initialThread.posts?.find(
+    (post) => post.body === deadChatDefinition.historyBody,
+  );
+  if (historyPost === undefined) {
+    throw new Error(`dead-chat API thread missed browser history: ${JSON.stringify(initialThread)}`);
+  }
+  const mediaPostSeq = Number(historyPost.source_seq ?? historyPost.sourceSeq);
+  const projectedMedia = historyPost.media?.find(
+    (media) => media.content_id === contentId,
+  );
+  assertManifestBackedPrivateMedia({
+    projectedMedia,
+    contentId,
+    mediaPostSeq,
+    gameId: deadChatGame,
+    channelId: "dead",
+    expectedAlt: deadChatDefinition.mediaAlt,
+  });
+  const privateMediaUrl = projectedMedia.variants.tablet.avif_url;
+
+  const outgoingReload = await outgoingPage.reload({
+    waitUntil: "networkidle",
+    timeout: 180_000,
+  });
+  if (outgoingReload === null || !outgoingReload.ok()) {
+    throw new Error("dead-chat outgoing reload failed");
+  }
+  const reloadedHistory = outgoingPage.locator(
+    `[data-testid="thread-post-${mediaPostSeq}"]`,
+  );
+  await reloadedHistory.waitFor({ state: "visible" });
+  if (!(await reloadedHistory.innerText()).includes(deadChatDefinition.historyBody)) {
+    throw new Error("dead-chat outgoing reload lost encrypted history");
+  }
+  const outgoingMedia = await outgoingContext.request.get(
+    `${frontendBaseUrl}${privateMediaUrl}`,
+    { headers: { accept: "image/avif" } },
+  );
+  const outgoingMediaBytes = await outgoingMedia.body();
+  if (outgoingMedia.status() !== 200 || outgoingMediaBytes.byteLength === 0) {
+    throw new Error("dead occupant did not receive canonical dead-chat media bytes");
+  }
+  await outgoingContext.close();
+
+  const replacement = await sendCommand("host_h", {
+    ProcessReplacement: {
+      game: deadChatGame,
+      slot: deadChatDefinition.outgoing.slotId,
+      outgoing_user: deadChatDefinition.outgoing.principalUserId,
+      incoming_user: deadChatDefinition.incoming.principalUserId,
+    },
+  });
+  const incomingContext = await browserContextWithSession(
+    deadChatDefinition.incoming.sessionToken,
+  );
+  const incomingPage = await incomingContext.newPage();
+  const incomingResponse = await incomingPage.goto(pageUrl, {
+    waitUntil: "networkidle",
+  });
+  if (incomingResponse === null || !incomingResponse.ok()) {
+    throw new Error("incoming dead-slot replacement route failed");
+  }
+  await incomingPage.getByTestId("player-surface").waitFor({ state: "visible" });
+  const incomingHistoricalPost = incomingPage.locator(
+    `[data-testid="thread-post-${mediaPostSeq}"]`,
+  );
+  await incomingHistoricalPost.waitFor({ state: "visible" });
+  if (!(await incomingHistoricalPost.innerText()).includes(deadChatDefinition.historyBody)) {
+    throw new Error("incoming dead-slot replacement lost dead-chat history");
+  }
+  await waitForPrivateThreadLiveDelta(incomingPage, {
+    channelId: "dead",
+    body: deadChatDefinition.historyBody,
+  });
+  const incomingInitialLiveDelta = await privateThreadLiveDelta(
+    incomingPage,
+    deadChatDefinition.historyBody,
+  );
+  const incomingMedia = await incomingContext.request.get(
+    `${frontendBaseUrl}${privateMediaUrl}`,
+    { headers: { accept: "image/avif" } },
+  );
+  const incomingMediaBytes = await incomingMedia.body();
+  if (incomingMedia.status() !== 200 || incomingMediaBytes.byteLength === 0) {
+    throw new Error("incoming dead occupant could not read transferred media");
+  }
+
+  await incomingPage
+    .locator('[data-testid="player-composer"] textarea')
+    .fill(deadChatDefinition.incomingBody);
+  const incomingPostButton = incomingPage.locator('[data-action="submit_post"]');
+  if (!(await incomingPostButton.isEnabled())) {
+    throw new Error("incoming dead occupant did not receive an enabled post control");
+  }
+  assertHitTarget(await incomingPostButton.boundingBox(), "dead-chat incoming post button");
+  await incomingPostButton.click();
+  await incomingPage.waitForFunction(
+    () =>
+      document
+        .querySelector('[data-testid="player-command-status"]')
+        ?.getAttribute("data-state") === "ack",
+  );
+  await waitForPrivateThreadLiveDelta(incomingPage, {
+    channelId: "dead",
+    body: deadChatDefinition.incomingBody,
+  });
+  const incomingOutcome = await incomingPage.evaluate(
+    () => window.__fmarchPlayerCommandStatus,
+  );
+  const incomingCommand =
+    incomingOutcome?.requestEnvelope?.body?.body?.command?.SubmitPost;
+  if (
+    incomingOutcome?.state !== "ack" ||
+    incomingCommand?.channel_id !== "dead" ||
+    incomingCommand?.actor_slot !== deadChatDefinition.outgoing.slotId ||
+    incomingCommand?.body !== deadChatDefinition.incomingBody
+  ) {
+    throw new Error(`incoming dead-chat post drifted: ${JSON.stringify(incomingOutcome)}`);
+  }
+  const incomingCommandLiveDelta = await privateThreadLiveDelta(
+    incomingPage,
+    deadChatDefinition.incomingBody,
+  );
+  const incomingReload = await incomingPage.reload({
+    waitUntil: "networkidle",
+    timeout: 180_000,
+  });
+  if (incomingReload === null || !incomingReload.ok()) {
+    throw new Error("incoming dead-chat reload failed");
+  }
+  await incomingPage.getByTestId("player-surface").waitFor({ state: "visible" });
+  const finalThread = await fetchJson(
+    `${apiBaseUrl}/games/${deadChatGame}/channels/dead/thread?principal_user_id=${deadChatDefinition.incoming.principalUserId}&limit=50`,
+  );
+  if (
+    finalThread.posts?.length !== 2 ||
+    finalThread.posts.some((post) => post.channel_id !== "dead") ||
+    !finalThread.posts.some((post) => post.body === deadChatDefinition.historyBody) ||
+    !finalThread.posts.some((post) => post.body === deadChatDefinition.incomingBody)
+  ) {
+    throw new Error(`dead-chat reload/API history drifted: ${JSON.stringify(finalThread)}`);
+  }
+  await incomingContext.close();
+
+  const encryptedStorage = await runSqlScalar(
+    smokeDatabase.url,
+    `SELECT concat(
+       count(*)::text, '|',
+       count(*) FILTER (WHERE payload ? 'body')::text, '|',
+       count(*) FILTER (WHERE payload->'body_private'->>'ciphertext' IS NOT NULL)::text, '|',
+       count(*) FILTER (WHERE position(${sqlLiteral(deadChatDefinition.historyBody)} in payload::text) > 0
+                         OR position(${sqlLiteral(deadChatDefinition.incomingBody)} in payload::text) > 0)::text)
+     FROM events
+     WHERE stream_id = '${deadChatGame}'
+       AND kind = 'PostSubmitted'
+       AND payload->>'channel_id' = 'dead'`,
+  );
+  if (encryptedStorage !== "2|0|2|0") {
+    throw new Error(`dead-chat encrypted storage proof drifted: ${encryptedStorage}`);
+  }
+
+  const staleOutgoing = await proveDeadChatDenial({
+    frontendBaseUrl,
+    token: deadChatDefinition.outgoing.sessionToken,
+    principalUserId: deadChatDefinition.outgoing.principalUserId,
+    actorSlot: deadChatDefinition.outgoing.slotId,
+    mediaUrl: privateMediaUrl,
+    expectedReject: "NotYourSlot",
+    label: "stale outgoing",
+  });
+  const living = await proveDeadChatDenial({
+    frontendBaseUrl,
+    token: deadChatDefinition.living.sessionToken,
+    principalUserId: deadChatDefinition.living.principalUserId,
+    actorSlot: deadChatDefinition.living.slotId,
+    mediaUrl: privateMediaUrl,
+    expectedReject: "NotAuthorized",
+    label: "living account",
+  });
+
+  const restoration = await sendCommand("host_h", {
+    SetSlotStatus: {
+      game: deadChatGame,
+      slot: deadChatDefinition.outgoing.slotId,
+      status: "alive",
+    },
+  });
+  const restoredAlive = await proveDeadChatDenial({
+    frontendBaseUrl,
+    token: deadChatDefinition.incoming.sessionToken,
+    principalUserId: deadChatDefinition.incoming.principalUserId,
+    actorSlot: deadChatDefinition.outgoing.slotId,
+    mediaUrl: privateMediaUrl,
+    expectedReject: "NotAuthorized",
+    label: "restored-alive account",
+  });
+  const restoredSession = await fetchJson(
+    `${apiBaseUrl}/auth/session?game=${deadChatGame}`,
+    {
+      headers: {
+        authorization: `Bearer ${deadChatDefinition.incoming.sessionToken}`,
+      },
+    },
+  );
+  if (
+    (restoredSession.capabilities ?? []).some(
+      (capability) => capability.kind === "DeadViewer",
+    )
+  ) {
+    throw new Error(`alive restoration retained DeadViewer: ${JSON.stringify(restoredSession)}`);
+  }
+
+  return {
+    status: "passed",
+    game: deadChatGame,
+    channelId: "dead",
+    preDeath: {
+      outgoing: preDeathOutgoing,
+      living: preDeathLiving,
+    },
+    death,
+    derivedCapability: "DeadViewer(game)",
+    outgoing: {
+      principalUserId: deadChatDefinition.outgoing.principalUserId,
+      submitOutcome: outgoingOutcome,
+      commandLiveDelta: outgoingLiveDelta,
+      recoveredAfterReload: true,
+      uploadedSourceBytes: upload.bytes.byteLength,
+      mediaStatus: outgoingMedia.status(),
+      mediaBodyBytes: outgoingMediaBytes.byteLength,
+    },
+    replacement,
+    incoming: {
+      principalUserId: deadChatDefinition.incoming.principalUserId,
+      submitOutcome: incomingOutcome,
+      initialLiveDelta: incomingInitialLiveDelta,
+      commandLiveDelta: incomingCommandLiveDelta,
+      reloadedPostBodies: finalThread.posts.map((post) => post.body),
+      mediaStatus: incomingMedia.status(),
+      mediaBodyBytes: incomingMediaBytes.byteLength,
+    },
+    encryptedStorage: {
+      rawCheck: encryptedStorage,
+      postCount: 2,
+      plaintextBodyFields: 0,
+      ciphertextEnvelopes: 2,
+      plaintextOccurrences: 0,
+    },
+    staleOutgoing,
+    living,
+    restoration,
+    restoredAlive,
+    proof:
+      "A real dead transition derived DeadViewer for the current occupant, enabled only dead-chat posting, accepted canonical browser-uploaded media, delivered channel-scoped initial and command deltas, retained encrypted slot history through reload and replacement, denied living and stale accounts at route/thread/media/append boundaries, then a real alive restoration revoked the same surfaces with zero media bytes.",
+  };
+}
+
+async function proveDeadChatDenial({
+  frontendBaseUrl,
+  token,
+  principalUserId,
+  actorSlot,
+  mediaUrl = null,
+  expectedReject,
+  label,
+}) {
+  const context = await browserContextWithSession(token);
+  const page = await context.newPage();
+  const routeResponse = await page.goto(
+    `${frontendBaseUrl}/g/${deadChatGame}/c/dead`,
+    { waitUntil: "networkidle" },
+  );
+  if (routeResponse === null || routeResponse.status() !== 403) {
+    throw new Error(
+      `dead-chat ${label} route expected 403, got ${routeResponse?.status() ?? "none"}`,
+    );
+  }
+  await page.getByTestId("route-error-surface").waitFor({ state: "visible" });
+  const threadResponse = await fetchWithTimeout(
+    `${apiBaseUrl}/games/${deadChatGame}/channels/dead/thread?principal_user_id=${principalUserId}&limit=50`,
+    {},
+    15_000,
+  );
+  if (threadResponse.status !== 403) {
+    throw new Error(`dead-chat ${label} received private thread rows`);
+  }
+  let mediaStatus = null;
+  let mediaBodyBytes = 0;
+  if (mediaUrl !== null) {
+    const mediaResponse = await context.request.get(`${frontendBaseUrl}${mediaUrl}`, {
+      headers: { accept: "image/avif" },
+    });
+    const mediaBytes = await mediaResponse.body();
+    mediaStatus = mediaResponse.status();
+    mediaBodyBytes = mediaBytes.byteLength;
+    if (mediaStatus !== 403 || mediaBodyBytes !== 0) {
+      throw new Error(
+        `dead-chat ${label} received media: ${mediaStatus} bytes=${mediaBodyBytes}`,
+      );
+    }
+  }
+  const postResponse = await context.request.post(`${frontendBaseUrl}/commands`, {
+    data: {
+      v: 1,
+      id: commandEnvelopeId++,
+      body: {
+        kind: "Command",
+        body: {
+          command_id: crypto.randomUUID(),
+          principal_user_id: principalUserId,
+          command: {
+            SubmitPost: {
+              game: deadChatGame,
+              channel_id: "dead",
+              actor_slot: actorSlot,
+              body: `${label} dead-chat post`,
+              media: [],
+            },
+          },
+        },
+      },
+    },
+  });
+  const post = await postResponse.json();
+  if (
+    postResponse.status() !== 200 ||
+    post.body?.kind !== "Reject" ||
+    post.body?.body?.error !== expectedReject
+  ) {
+    throw new Error(`dead-chat ${label} append was not denied: ${JSON.stringify(post)}`);
+  }
+  await context.close();
+  return {
+    principalUserId,
+    authenticatedSessionRemainedActive: true,
+    routeStatus: routeResponse.status(),
+    threadStatus: threadResponse.status,
+    mediaStatus,
+    mediaBodyBytes,
     postReject: post.body.body,
   };
 }
@@ -3927,7 +4517,7 @@ async function driveModeratorBrowser(
     const confirm = actionRoot.getByTestId("critical-host-action-confirm");
     const confirmBox = await confirm.boundingBox();
     assertHitTarget(confirmBox, `${expected.id} confirm`);
-    await confirm.click();
+    await confirm.click({ force: true });
 
     const status = page.getByTestId(`host-command-status-${expected.id}`);
     await status.waitFor({ state: "visible" });
@@ -4352,7 +4942,7 @@ async function confirmHostAction(page, actionId, expectedState = "ack") {
   const confirm = actionRoot.getByTestId("critical-host-action-confirm");
   const confirmBox = await confirm.boundingBox();
   assertHitTarget(confirmBox, `${actionId} confirm`);
-  await confirm.click();
+  await confirm.click({ force: true });
 
   await page.waitForFunction(
     ({ expectedActionId, state }) =>
@@ -4483,7 +5073,7 @@ async function resolveHostPromptFromBrowser(page) {
   const confirm = actionRoot.getByTestId("critical-host-action-confirm");
   const confirmBox = await confirm.boundingBox();
   assertHitTarget(confirmBox, `${actionId} confirm`);
-  await confirm.click();
+  await confirm.click({ force: true });
 
   await page.waitForFunction(
     (expectedActionId) =>
@@ -4534,7 +5124,7 @@ async function modkillSlotFromBrowser(page) {
   const confirm = actionRoot.getByTestId("critical-host-action-confirm");
   const confirmBox = await confirm.boundingBox();
   assertHitTarget(confirmBox, `${actionId} confirm`);
-  await confirm.click();
+  await confirm.click({ force: true });
 
   await page.waitForFunction(
     (expectedActionId) =>

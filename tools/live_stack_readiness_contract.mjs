@@ -140,7 +140,7 @@ const CHECKS = Object.freeze([
         JSON.stringify(additionalRooms.coveredKinds) !==
           JSON.stringify(["Mason", "Neighbor"]) ||
         JSON.stringify(additionalRooms.remainingKinds) !==
-          JSON.stringify(["Dead", "Spectator"])
+          JSON.stringify(["Spectator"])
       ) {
         return false;
       }
@@ -151,6 +151,11 @@ const CHECKS = Object.freeze([
         ),
       );
     },
+  },
+  {
+    id: "dead-chat-lifecycle",
+    label: "Dead chat proves lifecycle authority, encryption, media, live reload, replacement, and revocation",
+    predicate: (evidence) => deadChatLifecyclePassed(evidence?.browser?.deadChat),
   },
   {
     id: "reconnect-recovery",
@@ -225,6 +230,44 @@ function additionalRoomLifecyclePassed(room, kind) {
     room.outsider?.mediaStatus === 403 &&
     room.outsider?.mediaBodyBytes === 0 &&
     room.outsider?.postReject?.error === "NotAuthorized"
+  );
+}
+
+function deadChatLifecyclePassed(room) {
+  return (
+    room?.status === "passed" &&
+    room.channelId === "dead" &&
+    room.derivedCapability === "DeadViewer(game)" &&
+    room.preDeath?.outgoing?.routeStatus === 403 &&
+    room.preDeath?.outgoing?.threadStatus === 403 &&
+    room.preDeath?.outgoing?.postReject?.error === "NotAuthorized" &&
+    room.preDeath?.living?.routeStatus === 403 &&
+    room.death?.streamSeqs?.length > 0 &&
+    room.outgoing?.submitOutcome?.state === "ack" &&
+    room.outgoing?.commandLiveDelta?.delta?.kind === "ThreadPostsChanged" &&
+    room.outgoing?.mediaBodyBytes > 0 &&
+    room.incoming?.submitOutcome?.state === "ack" &&
+    room.incoming?.initialLiveDelta?.delta?.kind === "ThreadPostsChanged" &&
+    room.incoming?.commandLiveDelta?.delta?.kind === "ThreadPostsChanged" &&
+    room.incoming?.reloadedPostBodies?.length === 2 &&
+    room.incoming?.mediaBodyBytes > 0 &&
+    room.encryptedStorage?.rawCheck === "2|0|2|0" &&
+    room.staleOutgoing?.routeStatus === 403 &&
+    room.staleOutgoing?.threadStatus === 403 &&
+    room.staleOutgoing?.mediaStatus === 403 &&
+    room.staleOutgoing?.mediaBodyBytes === 0 &&
+    room.staleOutgoing?.postReject?.error === "NotYourSlot" &&
+    room.living?.routeStatus === 403 &&
+    room.living?.threadStatus === 403 &&
+    room.living?.mediaStatus === 403 &&
+    room.living?.mediaBodyBytes === 0 &&
+    room.living?.postReject?.error === "NotAuthorized" &&
+    room.restoration?.streamSeqs?.length > 0 &&
+    room.restoredAlive?.routeStatus === 403 &&
+    room.restoredAlive?.threadStatus === 403 &&
+    room.restoredAlive?.mediaStatus === 403 &&
+    room.restoredAlive?.mediaBodyBytes === 0 &&
+    room.restoredAlive?.postReject?.error === "NotAuthorized"
   );
 }
 
