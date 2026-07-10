@@ -1120,6 +1120,10 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     "node tools/dev_test_game_local_spine.mjs",
   );
   assert.equal(
+    packageJson.scripts["test:dev-test-game-identity:local"],
+    "node tools/dev_test_game_local_spine.mjs --script test:dev-test-game-identity",
+  );
+  assert.equal(
     packageJson.scripts["test:dev-test-game-identity:operator"],
     "node tools/dev_test_game_identity_spine.mjs --operator",
   );

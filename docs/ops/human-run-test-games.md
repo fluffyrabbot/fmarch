@@ -461,7 +461,7 @@ changing role surfaces, proving local lifecycle recovery, and proving a host
 can issue a game-scoped local player invite from the seeded host role URL is:
 
 ```sh
-DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-identity
+npm run test:dev-test-game-identity:local
 ```
 
 That command also writes `target/dev-test-game/identity-admin-proof.json` by
