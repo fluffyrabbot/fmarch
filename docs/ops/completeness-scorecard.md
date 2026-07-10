@@ -5,7 +5,7 @@
 > [08-roadmap](../arch/08-roadmap.md) and the
 > [engine-port readiness baseline](engine-port-readiness-baseline-2026-06-18.md).
 >
-> Last updated **2026-07-09** — `main` @ `b29619d0`.
+> Last updated **2026-07-09** — `main` @ `9b82e957`.
 > Visual version: <https://claude.ai/code/artifact/da80a9e8-3a15-4cd4-9ff0-ed549dbd206e>.
 
 The hard part is done: the resolution engine is at full im-human V4 parity on a proven
@@ -17,9 +17,9 @@ event-sourcing spine. The remaining work is almost entirely **product breadth** 
 | Metric | Value | Notes |
 |---|---|---|
 | Engine parity | **192/192** | port checklist complete; 8/8 build-order phases; parity matrix has no unsupported rows |
-| Proof surface | **125** | dev-test-game proof lanes; 379 files under `tools/` |
+| Proof surface | **126** | dev-test-game proof lanes; 382 files under `tools/` |
 | In flight | **0** | local `main` matches `origin/main` |
-| Remaining | **5 tiers** | 8 to finish + 1 optional |
+| Remaining | **5 tiers** | 7 to finish + 1 optional |
 
 ## What we have (shipped & proven)
 
@@ -32,7 +32,7 @@ event-sourcing spine. The remaining work is almost entirely **product breadth** 
 | Wire protocol | CBOR over WebSocket, explicitly versioned; TS types generated from the Rust `wire` crate | ~53 domain events |
 | Player & host surfaces | Board, private channel, touch-first host console, admin audit, setup, login | Ballot & Lantern design program 5/5 |
 | Gameplay gaps T1–T3 | Role card, night-action target picker (+withdraw), reveal-gated endgame summary | T1 · T2 · T3 landed |
-| Proof harness | Live-stack browser smokes, operator replay, hermetic `cargo test`, frontend role proof | 125 lanes · 379 tools |
+| Proof harness | Live-stack browser smokes, operator replay, hermetic `cargo test`, frontend role proof | 126 lanes · 382 tools |
 
 ## What's left (dependency-ordered)
 
@@ -121,10 +121,13 @@ if needed).
   dedicated three-player D01 no-lynch seed proves the same history after stale-command
   refresh, explicit resync, and full reload through the named
   `stale-player-complete-vote-history` lane.
-- [ ] **2.3 Ship the last edge primitives.** `[Open]` `super_saint` (TriggerOn::Lynch) and
-  `visitor_kill` (TriggerOn::Visit) are golden-covered but not in a shipped pack /
-  resolver-integrated path; the `vanillizer` role wants command/projection integration.
-  The only non-green rows left in the parity matrix.
+- [x] **2.3 Ship the last edge primitives.** `[Landed]` The shipped Mafiascum pack and
+  Postgres command pipeline already carried `super_saint` (`TriggerOn::Lynch`) and
+  `visitor_kill` (`TriggerOn::Visit`); their red matrix rows came from a whitespace-sensitive
+  JSON scan and now derive from parsed trigger metadata. The `vanillizer` alias has its own
+  golden plus a seeded N01 role URL that mutates a Cop, advances through D02, and proves at
+  N02 and reload that the target is a Vanilla Townie with no Cop action while the actor
+  retains `vanillaize`. The named `vanillizer-role-action` lane keeps the slice addressable.
 
 ### Tier 3 — Grow the slice into a platform
 
@@ -161,6 +164,14 @@ lifecycle are the biggest slice→launch gaps.*
 
 ## Provenance — how each row was established
 
+- **Last edge primitives (2026-07-09):** the exact Postgres `super_saint` and
+  target-filtered `visitor_kill` command/projection tests passed, structured inventory
+  regeneration made both primitive rows fully green, and the role-specific `vanillizer`
+  golden passed. `test:dev-test-game-core-live` then passed at 126/126 lanes; its saved
+  browser evidence carries the `vanillaize` ACK, Cop-to-Vanilla-Townie projection, N02
+  capability loss, actor capability retention, API agreement, and target reload. Seed
+  fixture, proof, readiness, and next-action regeneration are green while release and
+  production claims remain false.
 - **Endgame vote history (2026-07-09):** the focused API tests passed 2/2 and prove a
   resolved outcome remains absent from the endgame summary until `CompleteGame`. The
   seeded player role URL then rendered the D01 `NoLynch` tally and both actor ballots
@@ -172,10 +183,11 @@ lifecycle are the biggest slice→launch gaps.*
   covers completed summary reveal after stale-command refresh, explicit sequence-zero
   resync, and reload; frontend, harness, proof, and readiness contracts are green.
   Release readiness remains `not_ready`, with release and production claims false.
-- **Code-verified (2026-07-09):** local and remote `main` aligned at `b29619d0`, port
-  checklist 192/192, parity-matrix gaps, the absent media pipeline (no blob crate; zero
-  upload/transcode in `crates/*/src`), the missing forum/register/profile routes, and all
-  counts (packs, migrations, 125 proof lanes, 379 files under `tools/`).
+- **Code-verified (2026-07-09):** local and remote `main` aligned at `9b82e957`, port
+  checklist 192/192, zero actionable parity-matrix gaps, the absent media pipeline (no
+  blob crate; zero upload/transcode in `crates/*/src`), the missing
+  forum/register/profile routes, and all
+  counts (packs, migrations, 126 proof lanes, 382 files under `tools/`).
 - **Readiness freshness remediation (2026-07-09):** the core-live and full-live local
   spines completed against Postgres; the proof contract validated 123 lanes; the harness
   contract suite passed 63/63 and the admin route model passed 99/99. Standalone readiness
