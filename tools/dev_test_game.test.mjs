@@ -24,6 +24,7 @@ import {
 } from "./dev_test_game_proof_contract.mjs";
 import {
   assertDevTestGameEarliestReachedProof,
+  devTestGameEarliestReachedProofSummary,
 } from "./dev_test_game_earliest_reached_proof_contract.mjs";
 import {
   buildVanillizerRoleActionProofFixture,
@@ -927,6 +928,15 @@ test("EarliestReached browser proof has a standalone artifact contract", () => {
     ballotProofs: [{}, {}, {}, {}],
   };
   assert.equal(assertDevTestGameEarliestReachedProof(proof), proof);
+  assert.deepEqual(devTestGameEarliestReachedProofSummary(proof), {
+    status: "passed",
+    pack: "dev_test_earliest_reached",
+    tieBreaker: "EarliestReached",
+    winnerSlot: "slot-2",
+    tallies: { "slot-1": 2, "slot-2": 2 },
+    ballotCount: 4,
+    hostRoleUrl: "http://127.0.0.1:5173/g/game-a/host",
+  });
   assert.throws(
     () => assertDevTestGameEarliestReachedProof({ ...proof, ballotProofs: [] }),
     /contract drifted/,

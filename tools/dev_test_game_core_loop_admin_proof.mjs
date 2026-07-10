@@ -160,6 +160,11 @@ import {
   devTestGameProofRunPath,
 } from "./dev_test_game_spine_artifact_paths.mjs";
 import {
+  assertDevTestGameEarliestReachedProof,
+  devTestGameEarliestReachedProofPath,
+  devTestGameEarliestReachedProofSummary,
+} from "./dev_test_game_earliest_reached_proof_contract.mjs";
+import {
   proveAdminAuditDetail,
   readJson,
   repoRoot,
@@ -172,6 +177,15 @@ const proofRunPath = path.resolve(
     devTestGameProofRunPath,
 );
 const proofRunRelativePath = path.relative(repoRoot, proofRunPath);
+const earliestReachedProofPath = path.resolve(
+  repoRoot,
+  process.env.FMARCH_DEV_TEST_GAME_EARLIEST_REACHED_PROOF ??
+    devTestGameEarliestReachedProofPath,
+);
+const earliestReachedProofRelativePath = path.relative(
+  repoRoot,
+  earliestReachedProofPath,
+);
 const evidencePath = path.join(repoRoot, devTestGameCoreLoopAdminProofPath);
 const requiredChecks = coreLoopAdminCheckIds;
 
@@ -414,8 +428,15 @@ export function coreLoopAdminProofCase() {
     evidencePath,
     envOverrides: {
       FMARCH_DEV_TEST_GAME_PROOF_RUN: proofRunRelativePath,
+      FMARCH_DEV_TEST_GAME_EARLIEST_REACHED_PROOF:
+        earliestReachedProofRelativePath,
     },
-    loadSource: async () => assertDevTestGameProofRun(await readJson(proofRunPath)),
+    loadSource: async () => ({
+      ...assertDevTestGameProofRun(await readJson(proofRunPath)),
+      earliestReachedArtifact: assertDevTestGameEarliestReachedProof(
+        await readJson(earliestReachedProofPath),
+      ),
+    }),
     prove: async ({ browser, frontendBaseUrl, source: proofRun }) => {
       const spineRows = requiredSpineRows(proofRun);
       const adminRoleSurface = await proveAdminAuditDetail({
@@ -478,6 +499,11 @@ export function coreLoopAdminProofCase() {
           "Local SvelteKit admin role URL with fixture admin authority over the dev-test-game core-loop proof-run lanes. Proves the saved host-control, lynch and no-lynch day-vote resolution, player-action, day/night, second-night action-resolution receipt/privacy, host Night 2 resolution to Day 3 transition, Day 3 player-vote submission and host resolution, post-Day 3 receipt/privacy and advance to Night 3, empty Night 3 host resolution and advance to Day 4 player vote controls, a living Day 4 survivor role URL, Day 4 no-lynch resolution into Night 4, Night 4 no-action player surface with no legal action controls, Night 4 no-action resolution/privacy after host resolution, post-Night 4 advance to Day 5 with dead-player/no-lynch surfaces plus frozen stale N04 action-control recovery, Day 5 no-lynch resolution into Night 5 with stale Day 5 vote recovery, and host CompleteGame into completed endgame host/player surfaces with role URL reload closure plus stale completed-game vote recovery; official-votecount publication, private-channel, replacement, stale outgoing-player recovery, and incoming replacement-player evidence is discoverable from the seeded admin overview and inspectable in a native admin audit detail route; it does not prove hosted deployment, production identity, exhaustive action/race coverage, beta readiness, or production readiness.",
         generatedFrom: {
           proofRun: proofRunRelativePath,
+          earliestReachedProof: earliestReachedProofRelativePath,
+          earliestReachedProofSummary:
+            devTestGameEarliestReachedProofSummary(
+              proofRun.earliestReachedArtifact,
+            ),
           game: proofRun.session.game,
           coreLoopSpineStatus: coreLoopSpineStatus(proofRun),
           coreLoopSpineRows: requiredSpineRows(proofRun, surfaces),

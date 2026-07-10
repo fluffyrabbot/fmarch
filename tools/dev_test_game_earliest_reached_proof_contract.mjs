@@ -24,6 +24,22 @@ export function assertDevTestGameEarliestReachedProof(proof) {
   return proof;
 }
 
+export function devTestGameEarliestReachedProofSummary(proof) {
+  const validated = assertDevTestGameEarliestReachedProof(proof);
+  return Object.freeze({
+    status: validated.status,
+    pack: validated.pack,
+    tieBreaker: validated.tieBreaker,
+    winnerSlot: validated.outcome.winner_slot,
+    tallies: Object.freeze({
+      "slot-1": validated.outcome.tallies["slot-1"],
+      "slot-2": validated.outcome.tallies["slot-2"],
+    }),
+    ballotCount: validated.ballotProofs.length,
+    hostRoleUrl: validated.sourceRoleUrls.host,
+  });
+}
+
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
