@@ -873,6 +873,7 @@ def load_fmarch_context(fmarch_root: Path) -> dict[str, Any]:
     pack_dynamic_vote_effects: set[str] = set()
     pack_dynamic_vote_grants: set[str] = set()
     pack_vote_threshold_adjustments: dict[str, float] = {}
+    pack_triggers: list[dict[str, Any]] = []
 
     def harvest_pack_action(pack_name: str, action: Any, role_key: str | None = None) -> None:
         if not isinstance(action, dict):
@@ -1006,6 +1007,21 @@ def load_fmarch_context(fmarch_root: Path) -> dict[str, Any]:
             for role_key, adjustment in threshold_adjustments.items():
                 if isinstance(adjustment, (int, float)):
                     pack_vote_threshold_adjustments[f"{pack_name}:{role_key}"] = float(adjustment)
+        for trigger in pack.get("triggers") or []:
+            if not isinstance(trigger, dict):
+                continue
+            produces = trigger.get("produces") or {}
+            pack_triggers.append(
+                {
+                    "pack": pack_name,
+                    "id": trigger.get("id"),
+                    "on": trigger.get("on"),
+                    "if_target_has": tuple(trigger.get("if_target_has") or []),
+                    "if_actor_has": tuple(trigger.get("if_actor_has") or []),
+                    "produced_actor": produces.get("actor") if isinstance(produces, dict) else None,
+                    "produced_target": produces.get("target") if isinstance(produces, dict) else None,
+                }
+            )
         for effect in (pack.get("effects") or {}).keys():
             pack_modifiers.add(str(effect))
         for role_key, role in (pack.get("roles") or {}).items():
@@ -1052,7 +1068,38 @@ def load_fmarch_context(fmarch_root: Path) -> dict[str, Any]:
         "pack_dynamic_vote_effects": pack_dynamic_vote_effects,
         "pack_dynamic_vote_grants": pack_dynamic_vote_grants,
         "pack_vote_threshold_adjustments": pack_vote_threshold_adjustments,
+        "pack_triggers": pack_triggers,
     }
+
+
+def has_pack_trigger(
+    fmarch: dict[str, Any],
+    trigger_id: str | None = None,
+    *,
+    pack_name: str | None = None,
+    on: str | None = None,
+    target_tags: tuple[str, ...] = (),
+    actor_tags: tuple[str, ...] = (),
+    produced_actor: str | None = None,
+    produced_target: str | None = None,
+) -> bool:
+    for trigger in fmarch["pack_triggers"]:
+        if trigger_id is not None and trigger["id"] != trigger_id:
+            continue
+        if pack_name is not None and trigger["pack"] != pack_name:
+            continue
+        if on is not None and trigger["on"] != on:
+            continue
+        if not set(target_tags).issubset(trigger["if_target_has"]):
+            continue
+        if not set(actor_tags).issubset(trigger["if_actor_has"]):
+            continue
+        if produced_actor is not None and trigger["produced_actor"] != produced_actor:
+            continue
+        if produced_target is not None and trigger["produced_target"] != produced_target:
+            continue
+        return True
+    return False
 
 
 def mark(value: bool) -> str:
@@ -1270,17 +1317,23 @@ def build_matrix(inventory: dict[str, Any], fmarch: dict[str, Any]) -> list[dict
             category = "policy:death_reveal"
         elif name == "trigger":
             canonical = "trigger_table+trigger_fixpoint_policy"
+            required_trigger_events = {
+                "Death",
+                "EffectMarked",
+                "PhaseEnd",
+                "Win",
+                "Visit",
+                "Lynch",
+                "Kill",
+            }
             modeled = (
                 '"triggers": [' in fmarch["pack_text"]
                 and '"trigger_fixpoint_policy": {' in fmarch["pack_text"]
                 and '"generated_kill_cause_policy": {' in fmarch["pack_text"]
-                and '"on": "Death"' in fmarch["pack_text"]
-                and '"on": "EffectMarked"' in fmarch["pack_text"]
-                and '"on": "PhaseEnd"' in fmarch["pack_text"]
-                and '"on": "Win"' in fmarch["pack_text"]
-                and '"on": "Visit"' in fmarch["pack_text"]
-                and '"on": "Lynch"' in fmarch["pack_text"]
-                and '"on": "Kill"' in fmarch["pack_text"]
+                and all(
+                    has_pack_trigger(fmarch, on=event)
+                    for event in required_trigger_events
+                )
             )
             implemented = (
                 modeled
@@ -1295,8 +1348,12 @@ def build_matrix(inventory: dict[str, Any], fmarch: dict[str, Any]) -> list[dict
             canonical = "TriggerOn::Kill+bomb_retaliates"
             modeled = (
                 "bomb" in fmarch["pack_modifiers"]
-                and '"id": "bomb_retaliates"' in fmarch["pack_text"]
-                and '"if_target_has": ["bomb"]' in fmarch["pack_text"]
+                and has_pack_trigger(
+                    fmarch,
+                    "bomb_retaliates",
+                    on="Kill",
+                    target_tags=("bomb",),
+                )
             )
             implemented = (
                 modeled
@@ -1318,8 +1375,7 @@ def build_matrix(inventory: dict[str, Any], fmarch: dict[str, Any]) -> list[dict
             canonical = "TriggerOn::Visit+pgo_shoots_visitor"
             modeled = (
                 "pgo" in fmarch["pack_modifiers"]
-                and '"id": "pgo_shoots_visitor"' in fmarch["pack_text"]
-                and '"on": "Visit"' in fmarch["pack_text"]
+                and has_pack_trigger(fmarch, "pgo_shoots_visitor", on="Visit")
             )
             implemented = (
                 modeled
@@ -1330,8 +1386,14 @@ def build_matrix(inventory: dict[str, Any], fmarch: dict[str, Any]) -> list[dict
             canonical = "TriggerOn::Lynch+super_saint_retaliates"
             modeled = (
                 "super_saint" in fmarch["pack_modifiers"]
-                and '"id": "super_saint_retaliates"' in fmarch["pack_text"]
-                and '"if_target_has": ["super_saint"]' in fmarch["pack_text"]
+                and has_pack_trigger(
+                    fmarch,
+                    "super_saint_retaliates",
+                    on="Lynch",
+                    target_tags=("super_saint",),
+                    produced_actor="Target",
+                    produced_target="Actor",
+                )
             )
             implemented = (
                 modeled
@@ -1342,9 +1404,15 @@ def build_matrix(inventory: dict[str, Any], fmarch: dict[str, Any]) -> list[dict
             canonical = "TriggerOn::Visit+TargetFilteredKill"
             modeled = (
                 "visitor_kill" in fmarch["pack_modifiers"]
-                and '"id": "visitor_kill_marked_visitor"' in fmarch["pack_text"]
-                and '"if_target_has": ["visitor_kill"]' in fmarch["pack_text"]
-                and '"if_actor_has": ["visitor_kill_target"]' in fmarch["pack_text"]
+                and has_pack_trigger(
+                    fmarch,
+                    "visitor_kill_marked_visitor",
+                    on="Visit",
+                    target_tags=("visitor_kill",),
+                    actor_tags=("visitor_kill_target",),
+                    produced_actor="Target",
+                    produced_target="Actor",
+                )
             )
             implemented = (
                 modeled
@@ -1355,8 +1423,12 @@ def build_matrix(inventory: dict[str, Any], fmarch: dict[str, Any]) -> list[dict
             canonical = "TriggerOn::Kill+vengeful_retaliates"
             modeled = (
                 "vengeful" in fmarch["pack_modifiers"]
-                and '"id": "vengeful_retaliates"' in fmarch["pack_text"]
-                and '"if_target_has": ["vengeful"]' in fmarch["pack_text"]
+                and has_pack_trigger(
+                    fmarch,
+                    "vengeful_retaliates",
+                    on="Kill",
+                    target_tags=("vengeful",),
+                )
             )
             implemented = modeled and "TriggerOn::Ability(IrAbility::Kill)" in resolver
         elif name == "result_mod":
@@ -2332,8 +2404,12 @@ def build_matrix(inventory: dict[str, Any], fmarch: dict[str, Any]) -> list[dict
             canonical = "TriggerOn::Kill+vengeful_retaliates"
             modeled = (
                 "vengeful" in fmarch["pack_modifiers"]
-                and '"id": "vengeful_retaliates"' in fmarch["pack_text"]
-                and '"if_target_has": ["vengeful"]' in fmarch["pack_text"]
+                and has_pack_trigger(
+                    fmarch,
+                    "vengeful_retaliates",
+                    on="Kill",
+                    target_tags=("vengeful",),
+                )
             )
             implemented = modeled and "TriggerOn::Ability(IrAbility::Kill)" in resolver
             integrated = (
@@ -2803,8 +2879,14 @@ def build_matrix(inventory: dict[str, Any], fmarch: dict[str, Any]) -> list[dict
             modeled = (
                 "mafiascum:bomb" in fmarch["pack_roles"]
                 and "bomb" in fmarch["pack_modifiers"]
-                and '"id": "bomb_retaliates"' in fmarch["pack_text"]
-                and '"target": "Killer"' in fmarch["pack_text"]
+                and has_pack_trigger(
+                    fmarch,
+                    "bomb_retaliates",
+                    pack_name="mafiascum",
+                    on="Kill",
+                    target_tags=("bomb",),
+                    produced_target="Killer",
+                )
             )
             implemented = (
                 modeled
@@ -2862,9 +2944,14 @@ def build_matrix(inventory: dict[str, Any], fmarch: dict[str, Any]) -> list[dict
             modeled = (
                 scoped_name in fmarch["pack_roles"]
                 and "hero" in fmarch["pack_modifiers"]
-                and '"id": "hero_instigator_kill"' in fmarch["pack_text"]
-                and '"on": "VoteDuel"' in fmarch["pack_text"]
-                and '"target": "Actor"' in fmarch["pack_text"]
+                and has_pack_trigger(
+                    fmarch,
+                    "hero_instigator_kill",
+                    pack_name="mafiascum",
+                    on="VoteDuel",
+                    target_tags=("hero",),
+                    produced_target="Actor",
+                )
             )
             implemented = (
                 modeled
@@ -2926,9 +3013,14 @@ def build_matrix(inventory: dict[str, Any], fmarch: dict[str, Any]) -> list[dict
             modeled = (
                 scoped_name in fmarch["pack_roles"]
                 and '"bomb"' in fmarch["pack_text"]
-                and '"id": "bomb_retaliates"' in fmarch["pack_text"]
-                and '"if_target_has": ["bomb"]' in fmarch["pack_text"]
-                and '"target": "Killer"' in fmarch["pack_text"]
+                and has_pack_trigger(
+                    fmarch,
+                    "bomb_retaliates",
+                    pack_name="mafia_universe",
+                    on="Kill",
+                    target_tags=("bomb",),
+                    produced_target="Killer",
+                )
             )
             implemented = (
                 modeled

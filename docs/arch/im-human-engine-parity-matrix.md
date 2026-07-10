@@ -320,11 +320,11 @@ Inventory source: `docs/arch/im-human-engine-inventory.json`.
 | primitive | `roleblock` | `Block` | 1 | no | yes | yes | yes | yes |  |
 | primitive | `schedule` | `Grant+DelayedDeathQueued` | 1 | no | yes | yes | yes | yes |  |
 | primitive | `strongman` | `Kill` | 1 | no | yes | yes | yes | yes | standard-NAR kill causes are catalog-owned through `standard_nar.kill_cause_ids` |
-| primitive | `super_saint` | `TriggerOn::Lynch+super_saint_retaliates` | 1 | no | no | no | yes | no | standard-NAR kill causes are catalog-owned through `standard_nar.kill_cause_ids` |
+| primitive | `super_saint` | `TriggerOn::Lynch+super_saint_retaliates` | 1 | no | yes | yes | yes | yes | standard-NAR kill causes are catalog-owned through `standard_nar.kill_cause_ids` |
 | primitive | `swap` | `Redirect` | 1 | no | yes | yes | yes | yes |  |
 | primitive | `vanillaize` | `Convert::AssignRole` | 1 | no | yes | yes | yes | yes | `conversion_policy` owns same-resolution dead-target and pending-death conversion blocks |
 | primitive | `vengeful` | `TriggerOn::Kill+vengeful_retaliates` | 1 | no | yes | yes | yes | yes | standard-NAR kill causes are catalog-owned through `standard_nar.kill_cause_ids` |
-| primitive | `visitor_kill` | `TriggerOn::Visit+TargetFilteredKill` | 1 | no | no | no | yes | no |  |
+| primitive | `visitor_kill` | `TriggerOn::Visit+TargetFilteredKill` | 1 | no | yes | yes | yes | yes |  |
 | result_event_kind | `day.vote.outcome` | `DayVoteOutcome` | 2 | no | yes | yes | yes | yes |  |
 | result_event_kind | `day.vote.recorded` | `DayVoteRecorded` | 2 | no | yes | yes | yes | yes |  |
 | result_event_kind | `effects.cleared` | `EffectsCleared` | 2 | no | yes | yes | yes | yes |  |
