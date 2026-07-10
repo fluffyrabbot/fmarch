@@ -398,26 +398,17 @@
       "order": 40,
       "title": "Complete session lifecycle",
       "execution_class": "code",
-      "status": "partial",
-      "summary": "Opaque issuance and revocation, authenticated logout, and server-declared browser-session rotation are implemented with focused API and frontend contract proof; the existing scratch-Postgres Chromium identity lane has not yet incorporated the logout interaction.",
+      "status": "complete",
+      "summary": "Opaque login, atomic rotation, authenticated logout, password/recovery/disablement invalidation, expiry, and reauthentication preserve the local capability-derived role surfaces and are proven through the scratch-Postgres Chromium identity lane.",
       "complete_when": ["Login, logout, privilege change, password change, recovery, disablement, expiry, and periodic rotation each enforce the declared session transition."],
       "depends_on": ["product.identity.account-login-invites", "product.identity.recovery"],
       "evidence": [
         { "kind": "source", "value": "docs/arch/06-security.md" },
-        { "kind": "source", "value": "crates/api/src/lib.rs" }
+        { "kind": "source", "value": "crates/api/src/lib.rs" },
+        { "kind": "command", "value": "npm run test:dev-test-game-identity:local" },
+        { "kind": "artifact", "value": "target/auth-invite-role-proof/invite-role-proof.json" }
       ],
-      "remaining": ["Extend the scratch-Postgres Chromium identity proof with logout/back-navigation denial and overdue-session rotation evidence, then promote this item only when that browser artifact agrees."],
-      "recommended_slice": {
-        "objective": "Add the new session-lifecycle browser cases to tools/auth_invite_role_proof.mjs: logout must revoke the presented cookie before redirecting, a back-navigation role URL must render the shared denied recovery state, an overdue account session must be replaced before role rendering, and concurrent stale rotation must clear the loser. Preserve the existing password, recovery, disablement, expiry, and reauthentication cases; then promote this item only when API, frontend, scratch-Postgres browser proof, architecture docs, registry, and scorecard agree.",
-        "paths": ["tools/auth_invite_role_proof.mjs", "tools/dev_test_game_identity_adapter_contract.mjs", "docs/ops/completion-registry.json"],
-        "proof_commands": ["DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p api session_lifecycle -- --test-threads=1", "npm run test:frontend-contract", "npm run test:dev-test-game-identity:local", "npm run test:completeness-scorecard"],
-        "non_claims": [
-          "No hosted identity provider, OAuth, passkey, MFA, or email-delivery completion claim from the local session lifecycle.",
-          "No multi-node cache-invalidation or distributed revocation propagation claim from scratch-Postgres proof.",
-          "No self-service registration completion claim.",
-          "No beta, release, or production-readiness promotion from local logout and rotation proof."
-        ]
-      }
+      "remaining": []
     },
     {
       "id": "product.identity.registration",
@@ -432,7 +423,17 @@
       "evidence": [
         { "kind": "source", "value": "docs/arch/06-security.md" }
       ],
-      "remaining": ["Design and implement the registration API, route, abuse boundary, and browser proof." ]
+      "remaining": ["Design and implement the registration API, route, abuse boundary, and browser proof."],
+      "recommended_slice": {
+        "objective": "Add bounded self-service account registration without changing the seeded role-URL architecture: accept a validated account identifier and password, create an unprivileged account plus opaque browser session atomically, expose a local registration role surface, and reject duplicate or rate-limited attempts with clear recovery. Prove registration reaches a seeded local game through the same capability adapter and remains redacted in identity/admin artifacts.",
+        "paths": ["crates/api/", "frontend/src/routes/auth/", "tools/auth_invite_role_proof.mjs", "docs/arch/06-security.md"],
+        "proof_commands": ["npm run test:frontend-contract", "npm run test:dev-test-game-identity:local", "npm run test:completeness-scorecard"],
+        "non_claims": [
+          "No hosted email verification, OAuth, passkey, MFA, or production identity-provider claim.",
+          "No hosted abuse-control or distributed session-invalidation claim.",
+          "No release or production-readiness promotion from local registration proof."
+        ]
+      }
     },
     {
       "id": "product.identity.delivery",

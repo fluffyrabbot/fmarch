@@ -10,7 +10,7 @@ import {
 
 test("identity adapter contract preserves shared role-surface architecture", () => {
   const packet = buildDevTestGameIdentityAdapterContractPacket();
-  assert.equal(devTestGameIdentityAdapterProofVersion, 16);
+  assert.equal(devTestGameIdentityAdapterProofVersion, 17);
   assert.equal(packet.status, "passed");
   assert.equal(packet.adapterId, "local-production-identity-adapter-v1");
   assert.equal(
@@ -70,6 +70,11 @@ test("identity adapter contract preserves shared role-surface architecture", () 
   assert.ok(
     devTestGameIdentityAdapterExpectedContract.lifecycleControls.includes(
       "credential-attempt-throttling",
+    ),
+  );
+  assert.ok(
+    devTestGameIdentityAdapterExpectedContract.lifecycleControls.includes(
+      "session-logout",
     ),
   );
 });

@@ -6237,6 +6237,8 @@ export function validateDevTestGameIdentityAdapterProof(proof, options = {}) {
       "credential-attempt-throttling",
     ) ||
     !proof.identityAdapter?.lifecycleControls?.includes("session-rotation") ||
+    !proof.identityAdapter?.lifecycleControls?.includes("session-age-rotation") ||
+    !proof.identityAdapter?.lifecycleControls?.includes("session-logout") ||
     !proof.identityAdapter?.lifecycleControls?.includes("session-revocation") ||
     !proof.identityAdapter?.lifecycleControls?.includes("invite-revocation") ||
     !proof.identityAdapter?.delegatedIssuanceControls?.includes(
@@ -6252,6 +6254,22 @@ export function validateDevTestGameIdentityAdapterProof(proof, options = {}) {
     !proof.identityLifecycle?.sessionRotation?.rotatedSessionCapabilityKinds?.includes(
       "HostOf",
     ) ||
+    proof.identityLifecycle?.sessionAgeRotation?.status !== "passed" ||
+    proof.identityLifecycle?.sessionAgeRotation?.maxAgeSeconds !== 86_400 ||
+    proof.identityLifecycle?.sessionAgeRotation?.oldSessionRejected !== true ||
+    !proof.identityLifecycle?.sessionAgeRotation?.rotatedSessionCapabilityKinds?.includes(
+      "HostOf",
+    ) ||
+    proof.identityLifecycle?.sessionAgeRotation?.winnerRenderedRole !== true ||
+    proof.identityLifecycle?.sessionAgeRotation?.staleLoserCookieCleared !== true ||
+    proof.identityLifecycle?.sessionAgeRotation?.staleLoserDeniedStatus !== 403 ||
+    proof.identityLifecycle?.sessionLogout?.status !== "passed" ||
+    proof.identityLifecycle?.sessionLogout?.logoutSurfaceTestId !== "auth-logout-surface" ||
+    proof.identityLifecycle?.sessionLogout?.oldSessionRejected !== true ||
+    proof.identityLifecycle?.sessionLogout?.cookieCleared !== true ||
+    proof.identityLifecycle?.sessionLogout?.backNavigationDeniedStatus !== 403 ||
+    proof.identityLifecycle?.sessionLogout?.backNavigationRecoveryTestId !==
+      "route-error-surface" ||
     proof.identityLifecycle?.sessionRevocation?.revokedSessionRejected !== true ||
     proof.identityLifecycle?.inviteRevocation?.revokedInviteRejected !== true ||
     !proof.identityLifecycle?.inviteRevocation?.recoveryCapabilityKinds?.includes(
@@ -6537,6 +6555,8 @@ export function validateDevTestGameIdentityAdminProof(proof, options = {}) {
     "account-lifecycle",
     "credential-attempt-throttling",
     "session-rotation",
+    "session-age-rotation",
+    "session-logout",
     "session-revocation",
     "invite-revocation",
     "host-scoped-invite-issuance",

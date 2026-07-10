@@ -195,6 +195,8 @@
         "account-recovery",
         "credential-attempt-throttling",
         "session-rotation",
+        "session-age-rotation",
+        "session-logout",
         "session-revocation",
         "invite-revocation"
       ],

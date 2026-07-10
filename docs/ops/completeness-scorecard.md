@@ -17,7 +17,7 @@ count is treated as product progress.
 
 | Execution class | Complete | Partial | Open | Blocked | Deferred | Total |
 |---|---:|---:|---:|---:|---:|---:|
-| code | 20 | 3 | 5 | 0 | 0 | 28 |
+| code | 21 | 2 | 5 | 0 | 0 | 28 |
 | external-evidence | 0 | 0 | 0 | 6 | 0 | 6 |
 | human | 0 | 0 | 1 | 1 | 0 | 2 |
 | optional | 0 | 0 | 0 | 0 | 1 | 1 |
@@ -28,25 +28,23 @@ Overall release closure complete: **no**.
 
 ## Next buildable coding slice
 
-### Complete session lifecycle `product.identity.session-lifecycle`
+### Account registration `product.identity.registration`
 
-Add the new session-lifecycle browser cases to tools/auth_invite_role_proof.mjs: logout must revoke the presented cookie before redirecting, a back-navigation role URL must render the shared denied recovery state, an overdue account session must be replaced before role rendering, and concurrent stale rotation must clear the loser. Preserve the existing password, recovery, disablement, expiry, and reauthentication cases; then promote this item only when API, frontend, scratch-Postgres browser proof, architecture docs, registry, and scorecard agree.
+Add bounded self-service account registration without changing the seeded role-URL architecture: accept a validated account identifier and password, create an unprivileged account plus opaque browser session atomically, expose a local registration role surface, and reject duplicate or rate-limited attempts with clear recovery. Prove registration reaches a seeded local game through the same capability adapter and remains redacted in identity/admin artifacts.
 
-Owned paths: `tools/auth_invite_role_proof.mjs`, `tools/dev_test_game_identity_adapter_contract.mjs`, `docs/ops/completion-registry.json`.
+Owned paths: `crates/api/`, `frontend/src/routes/auth/`, `tools/auth_invite_role_proof.mjs`, `docs/arch/06-security.md`.
 
 Proof:
 
-- `DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p api session_lifecycle -- --test-threads=1`
 - `npm run test:frontend-contract`
 - `npm run test:dev-test-game-identity:local`
 - `npm run test:completeness-scorecard`
 
 Explicit non-claims:
 
-- No hosted identity provider, OAuth, passkey, MFA, or email-delivery completion claim from the local session lifecycle.
-- No multi-node cache-invalidation or distributed revocation propagation claim from scratch-Postgres proof.
-- No self-service registration completion claim.
-- No beta, release, or production-readiness promotion from local logout and rotation proof.
+- No hosted email verification, OAuth, passkey, MFA, or production identity-provider claim.
+- No hosted abuse-control or distributed session-invalidation claim.
+- No release or production-readiness promotion from local registration proof.
 
 ## Locally proven foundation
 
@@ -92,7 +90,7 @@ Explicit non-claims:
 | complete | Account login and account-bound invites<br>`product.identity.account-login-invites` | `foundation.command-capability-runtime` | A real local account can log in, redeem only its invite, reach the intended role URL, and lose access when disabled or revoked. | Complete. | command: `npm run test:dev-test-game-identity:local`<br>artifact: `target/auth-invite-role-proof/invite-role-proof.json`<br>Local accounts, opaque sessions, account-bound single-use invites, admin lifecycle controls, and the preserved role-surface adapter are locally proven. |
 | complete | Password storage and rotation security<br>`product.identity.password-security` | `product.identity.account-login-invites` | Password verification and rotation preserve equalized failure work, revoke old sessions, and recover after bounded throttling. | Complete. | source: `frontend/src/routes/auth/account/security/+page.server.js`<br>command: `npm run test:dev-test-game-identity:local`<br>Argon2id storage, authenticated password rotation, session revocation, timing equalization, and bounded credential-attempt state are locally proven. |
 | complete | Single-use account recovery<br>`product.identity.recovery` | `product.identity.password-security` | Only one valid recovery credential can replace a password and all invalid, expired, revoked, or replayed credentials fail safely. | Complete. | source: `frontend/src/routes/auth/account/recovery/+page.server.js`<br>command: `npm run test:dev-test-game-identity:local`<br>Recovery credentials support issue, revoke, consume, expiry, replay rejection, password replacement, and session revocation in the local identity proof. |
-| partial | Complete session lifecycle<br>`product.identity.session-lifecycle` | `product.identity.account-login-invites`<br>`product.identity.recovery` | Login, logout, privilege change, password change, recovery, disablement, expiry, and periodic rotation each enforce the declared session transition. | Remaining: Extend the scratch-Postgres Chromium identity proof with logout/back-navigation denial and overdue-session rotation evidence, then promote this item only when that browser artifact agrees. | source: `docs/arch/06-security.md`<br>source: `crates/api/src/lib.rs`<br>Opaque issuance and revocation, authenticated logout, and server-declared browser-session rotation are implemented with focused API and frontend contract proof; the existing scratch-Postgres Chromium identity lane has not yet incorporated the logout interaction. |
+| complete | Complete session lifecycle<br>`product.identity.session-lifecycle` | `product.identity.account-login-invites`<br>`product.identity.recovery` | Login, logout, privilege change, password change, recovery, disablement, expiry, and periodic rotation each enforce the declared session transition. | Complete. | source: `docs/arch/06-security.md`<br>source: `crates/api/src/lib.rs`<br>command: `npm run test:dev-test-game-identity:local`<br>artifact: `target/auth-invite-role-proof/invite-role-proof.json`<br>Opaque login, atomic rotation, authenticated logout, password/recovery/disablement invalidation, expiry, and reauthentication preserve the local capability-derived role surfaces and are proven through the scratch-Postgres Chromium identity lane. |
 | open | Account registration<br>`product.identity.registration` | `product.identity.password-security`<br>`product.identity.session-lifecycle` | A bounded registration route creates an account, verifies policy, establishes the correct initial session state, and rejects duplicate/abusive attempts. | Remaining: Design and implement the registration API, route, abuse boundary, and browser proof. | source: `docs/arch/06-security.md`<br>There is no self-service registration product flow yet; existing accounts are created through administrative or proof setup paths. |
 | open | Invite and recovery delivery adapters<br>`product.identity.delivery` | `product.identity.account-login-invites`<br>`product.identity.recovery` | Invite and recovery delivery are provider-abstracted, retryable, auditable, redacted, and locally testable without claiming live provider traffic. | Remaining: Implement delivery interfaces, queue/retry state, redacted operator audit, and local provider fakes. | source: `docs/arch/06-security.md`<br>Invite and recovery credentials exist, but durable delivery-provider adapters, retry state, bounce/failure handling, and operator visibility are not implemented. |
 

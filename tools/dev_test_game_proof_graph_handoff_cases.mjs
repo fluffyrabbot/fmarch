@@ -162,7 +162,12 @@ export const adminProofDestinationRequirementCases = Object.freeze([
   Object.freeze({
     linkId: "admin-proof:identity",
     auditId: localAdminAuditIds.identityAdapter,
-    requiredCheckIds: Object.freeze(["session-rotation", "invite-revocation"]),
+    requiredCheckIds: Object.freeze([
+      "session-rotation",
+      "session-age-rotation",
+      "session-logout",
+      "invite-revocation",
+    ]),
     requiredSessionIds: Object.freeze(["admin", "host", "player"]),
   }),
   Object.freeze({

@@ -137,7 +137,7 @@ try {
     scope: "local-auth-invite-role-proof",
     productionReady: false,
     proofBoundary:
-      "Local scratch-Postgres plus local Rust API, SvelteKit login/account-security/account-recovery/host/admin-audit routes, and Chromium proof. Proves Argon2id account credentials, hashed single-use recovery credentials, account-bound invite redemption, and a local account credential lifecycle preserve the existing role-surface capability architecture for seeded admin, host, and player URLs, including authenticated password rotation and account recovery with session revocation, invalid/expired/revoked/replayed recovery rejection, recovered-password return to the same host role URL, two-tier Postgres credential-attempt throttling with hashed account/source scopes, bounded unknown-account traffic, stale-row pruning, timing-equalized missing credentials, visible retry states, and post-lockout recovery to the same host role URL, host-role-surface game-scoped player invite issuance, GlobalAdmin account creation/disable/enable, stale account-session revocation, disabled-account login rejection, GlobalAdmin discovery, and inspection of local identity lifecycle audit rows from the admin overview; it does not prove hosted recovery delivery or traffic, email delivery, hosted identity, distributed or edge abuse controls, hosted password-parameter monitoring, hosted audit retention/export, or beta release readiness.",
+      "Local scratch-Postgres plus local Rust API, SvelteKit login/logout/account-security/account-recovery/host/admin-audit routes, and Chromium proof. Proves Argon2id account credentials, hashed single-use recovery credentials, account-bound invite redemption, and a local account credential lifecycle preserve the existing role-surface capability architecture for seeded admin, host, and player URLs, including authenticated logout with denied role back navigation, atomic overdue-session rotation with one concurrent winner and a cleared stale loser, authenticated password rotation and account recovery with session revocation, invalid/expired/revoked/replayed recovery rejection, recovered-password return to the same host role URL, two-tier Postgres credential-attempt throttling with hashed account/source scopes, bounded unknown-account traffic, stale-row pruning, timing-equalized missing credentials, visible retry states, and post-lockout recovery to the same host role URL, host-role-surface game-scoped player invite issuance, GlobalAdmin account creation/disable/enable, stale account-session revocation, disabled-account login rejection, GlobalAdmin discovery, and inspection of local identity lifecycle audit rows from the admin overview; it does not prove hosted recovery delivery or traffic, email delivery, hosted identity, distributed or edge abuse controls, hosted password-parameter monitoring, hosted audit retention/export, or beta release readiness.",
     identityAdapter: {
       status: "passed",
       replacesDevTokensWithoutRoleSurfaceChange: true,
@@ -158,6 +158,8 @@ try {
         "account-recovery",
         "credential-attempt-throttling",
         "session-rotation",
+        "session-age-rotation",
+        "session-logout",
         "session-revocation",
         "invite-revocation",
       ],
@@ -1087,6 +1089,34 @@ async function proveIdentityLifecycle({
     returnTo: hostReturnTo,
     expectedText: game,
   });
+  const browserLogoutLogin = await driveAccountLogin({
+    frontendBaseUrl,
+    apiBaseUrl,
+    accountId: hostAccount.accountId,
+    password: hostAccount.password,
+    returnTo: hostReturnTo,
+    expectedCapability: "HostOf",
+  });
+  const browserLogout = await driveBrowserLogout({
+    apiBaseUrl,
+    frontendBaseUrl,
+    sessionToken: browserLogoutLogin.sessionToken,
+    returnTo: hostReturnTo,
+  });
+  const overdueSessionLogin = await driveAccountLogin({
+    frontendBaseUrl,
+    apiBaseUrl,
+    accountId: hostAccount.accountId,
+    password: hostAccount.password,
+    returnTo: hostReturnTo,
+    expectedCapability: "HostOf",
+  });
+  const overdueSessionRotation = await driveOverdueBrowserSessionRotation({
+    apiBaseUrl,
+    frontendBaseUrl,
+    sessionToken: overdueSessionLogin.sessionToken,
+    returnTo: hostReturnTo,
+  });
   const staleAccountLifecyclePage = await openAdminAccountLifecyclePage({
     frontendBaseUrl,
     adminSessionToken,
@@ -1269,6 +1299,8 @@ async function proveIdentityLifecycle({
       adminSessionToken,
       hostSessionToken,
       rotatedSessionToken,
+      browserLogout,
+      overdueSessionRotation,
       revokedInviteToken,
       recoveryInviteToken,
       accountLogin,
@@ -1316,6 +1348,8 @@ async function finishIdentityLifecycleProof({
   adminSessionToken,
   hostSessionToken,
   rotatedSessionToken,
+  browserLogout,
+  overdueSessionRotation,
   revokedInviteToken,
   recoveryInviteToken,
   accountLogin,
@@ -1376,6 +1410,7 @@ async function finishIdentityLifecycleProof({
     "auth_attempt_rate_limited",
     "invite_redeemed",
     "invite_revoked",
+    "session_logged_out",
     "session_revoked",
     "session_rotated",
   ]) {
@@ -1406,6 +1441,9 @@ async function finishIdentityLifecycleProof({
   for (const rawToken of [
     hostSessionToken,
     rotatedSessionToken,
+    browserLogout.oldSessionToken,
+    overdueSessionRotation.oldSessionToken,
+    overdueSessionRotation.rotatedSessionToken,
     revokedInviteToken,
     recoveryInviteToken,
     accountLogin.sessionToken,
@@ -1429,6 +1467,9 @@ async function finishIdentityLifecycleProof({
     rawTokens: [
       hostSessionToken,
       rotatedSessionToken,
+      browserLogout.oldSessionToken,
+      overdueSessionRotation.oldSessionToken,
+      overdueSessionRotation.rotatedSessionToken,
       revokedInviteToken,
       recoveryInviteToken,
       accountLogin.sessionToken,
@@ -1454,6 +1495,24 @@ async function finishIdentityLifecycleProof({
         (capability) => capability.kind,
       ),
       sameRoleSurface: true,
+    },
+    sessionAgeRotation: {
+      status: "passed",
+      maxAgeSeconds: overdueSessionRotation.maxAgeSeconds,
+      oldSessionRejected: overdueSessionRotation.oldSessionRejected,
+      rotatedSessionCapabilityKinds: overdueSessionRotation.rotatedSessionCapabilityKinds,
+      winnerRenderedRole: overdueSessionRotation.winnerRenderedRole,
+      staleLoserCookieCleared: overdueSessionRotation.staleLoserCookieCleared,
+      staleLoserDeniedStatus: overdueSessionRotation.staleLoserDeniedStatus,
+    },
+    sessionLogout: {
+      status: "passed",
+      logoutRoleUrl: browserLogout.logoutRoleUrl,
+      logoutSurfaceTestId: browserLogout.logoutSurfaceTestId,
+      oldSessionRejected: browserLogout.oldSessionRejected,
+      cookieCleared: browserLogout.cookieCleared,
+      backNavigationDeniedStatus: browserLogout.backNavigationDeniedStatus,
+      backNavigationRecoveryTestId: browserLogout.backNavigationRecoveryTestId,
     },
     sessionRevocation: {
       status: "passed",
@@ -2179,6 +2238,7 @@ async function driveAdminIdentityAuditSurface({
       "account_session_created",
       "invite_redeemed",
       "session_rotated",
+      "session_logged_out",
       "session_revoked",
       "invite_revoked",
     ]) {
@@ -2266,6 +2326,185 @@ async function assertBrowserSessionRendersRole({
     }
   } finally {
     await page.close();
+  }
+}
+
+async function driveBrowserLogout({
+  apiBaseUrl,
+  frontendBaseUrl,
+  sessionToken,
+  returnTo,
+}) {
+  const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
+  const logoutRoleUrl = `/auth/logout?returnTo=${encodeURIComponent(returnTo)}`;
+  const expectedLoginUrl = `${frontendBaseUrl}/auth/login?returnTo=${encodeURIComponent(
+    returnTo,
+  )}`;
+  try {
+    await page.context().addCookies([
+      {
+        name: "fmarch_session",
+        value: sessionToken,
+        url: frontendBaseUrl,
+        httpOnly: true,
+        sameSite: "Lax",
+      },
+    ]);
+    await page.goto(`${frontendBaseUrl}${returnTo}`, { waitUntil: "networkidle" });
+    await page.goto(`${frontendBaseUrl}${logoutRoleUrl}`, { waitUntil: "networkidle" });
+    await page.getByTestId("auth-logout-surface").waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
+    await Promise.all([
+      page.waitForURL(expectedLoginUrl, { timeout: 15000 }),
+      page.getByTestId("auth-logout-submit").click(),
+    ]);
+    await page.getByTestId("auth-login-surface").waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
+    const cookies = await page.context().cookies(frontendBaseUrl);
+    const cookieCleared = !cookies.some((cookie) => cookie.name === "fmarch_session");
+    await assertUnauthorizedSession(apiBaseUrl, sessionToken);
+    const backNavigation = await page.goto(`${frontendBaseUrl}${returnTo}`, {
+      waitUntil: "networkidle",
+    });
+    const recovery = page.getByTestId("route-error-surface");
+    await recovery.waitFor({ state: "visible", timeout: 15000 });
+    const backNavigationDeniedStatus = Number(await recovery.getAttribute("data-status"));
+    if (
+      !cookieCleared ||
+      backNavigation?.status() !== 403 ||
+      backNavigationDeniedStatus !== 403
+    ) {
+      throw new Error(
+        `browser logout recovery drifted: ${JSON.stringify({
+          cookieCleared,
+          responseStatus: backNavigation?.status() ?? null,
+          backNavigationDeniedStatus,
+        })}`,
+      );
+    }
+    return {
+      oldSessionToken: sessionToken,
+      logoutRoleUrl,
+      logoutSurfaceTestId: "auth-logout-surface",
+      oldSessionRejected: true,
+      cookieCleared,
+      backNavigationDeniedStatus,
+      backNavigationRecoveryTestId: "route-error-surface",
+    };
+  } finally {
+    await page.close();
+  }
+}
+
+async function driveOverdueBrowserSessionRotation({
+  apiBaseUrl,
+  frontendBaseUrl,
+  sessionToken,
+  returnTo,
+}) {
+  if (proofDatabase === undefined) {
+    throw new Error("proof database is not available");
+  }
+  const maxAgeSeconds = 86_400;
+  await runSql(
+    proofDatabase.url,
+    `
+      UPDATE auth_session
+      SET created_at = 0
+      WHERE token_hash = ${sqlLiteral(hashSessionToken(sessionToken))}
+    `,
+  );
+  const overdue = await fetchJson(`${apiBaseUrl}/auth/session?game=${game}`, {
+    headers: { authorization: `Bearer ${sessionToken}` },
+  });
+  if (overdue.rotation_required !== true) {
+    throw new Error("overdue account session did not report a rotation requirement");
+  }
+
+  const firstContext = await browser.newContext({ viewport: { width: 1024, height: 768 } });
+  const secondContext = await browser.newContext({ viewport: { width: 1024, height: 768 } });
+  const firstPage = await firstContext.newPage();
+  const secondPage = await secondContext.newPage();
+  const cookie = {
+    name: "fmarch_session",
+    value: sessionToken,
+    url: frontendBaseUrl,
+    httpOnly: true,
+    sameSite: "Lax",
+  };
+  try {
+    await Promise.all([
+      firstContext.addCookies([cookie]),
+      secondContext.addCookies([cookie]),
+    ]);
+    await Promise.all([
+      firstPage.goto(`${frontendBaseUrl}${returnTo}`, { waitUntil: "networkidle" }),
+      secondPage.goto(`${frontendBaseUrl}${returnTo}`, { waitUntil: "networkidle" }),
+    ]);
+    const pages = [
+      { context: firstContext, page: firstPage },
+      { context: secondContext, page: secondPage },
+    ];
+    const sessions = await Promise.all(
+      pages.map(async ({ context, page }) => ({
+        context,
+        page,
+        cookie: (await context.cookies(frontendBaseUrl)).find(
+          (entry) => entry.name === "fmarch_session",
+        ),
+      })),
+    );
+    const winners = sessions.filter(
+      (entry) => entry.cookie !== undefined && entry.cookie.value !== sessionToken,
+    );
+    const losers = sessions.filter((entry) => entry.cookie === undefined);
+    if (winners.length !== 1 || losers.length !== 1) {
+      throw new Error(
+        `overdue rotation did not produce one winner and one stale loser: ${JSON.stringify({
+          winnerCount: winners.length,
+          loserCount: losers.length,
+        })}`,
+      );
+    }
+    const winner = winners[0];
+    const loser = losers[0];
+    const winnerText = await winner.page.locator("body").innerText();
+    if (!winnerText.includes(game)) {
+      throw new Error("rotated browser session did not render the role surface");
+    }
+    const loserRecovery = loser.page.getByTestId("route-error-surface");
+    await loserRecovery.waitFor({ state: "visible", timeout: 15000 });
+    const staleLoserDeniedStatus = Number(
+      await loserRecovery.getAttribute("data-status"),
+    );
+    if (staleLoserDeniedStatus !== 403) {
+      throw new Error(`stale rotation loser did not render 403: ${staleLoserDeniedStatus}`);
+    }
+    await assertUnauthorizedSession(apiBaseUrl, sessionToken);
+    const rotatedSession = await assertSessionCapability({
+      apiBaseUrl,
+      token: winner.cookie.value,
+      expectedCapability: "HostOf",
+    });
+    return {
+      oldSessionToken: sessionToken,
+      rotatedSessionToken: winner.cookie.value,
+      maxAgeSeconds,
+      oldSessionRejected: true,
+      rotatedSessionCapabilityKinds: (rotatedSession.capabilities ?? []).map(
+        (capability) => capability.kind,
+      ),
+      winnerRenderedRole: true,
+      staleLoserCookieCleared: true,
+      staleLoserDeniedStatus,
+    };
+  } finally {
+    await firstContext.close();
+    await secondContext.close();
   }
 }
 
@@ -2368,12 +2607,26 @@ function assertInviteProof(evidence) {
     !evidence.identityAdapter?.lifecycleControls?.includes(
       "credential-attempt-throttling",
     ) ||
+    !evidence.identityAdapter?.lifecycleControls?.includes("session-age-rotation") ||
+    !evidence.identityAdapter?.lifecycleControls?.includes("session-logout") ||
     evidence.identityAdapterContractDiff?.status !== "passed" ||
     !evidence.identityAdapter?.delegatedIssuanceControls?.includes(
       "host-scoped-invite-issuance",
     ) ||
     evidence.identityLifecycle?.status !== "passed" ||
     evidence.identityLifecycle?.sessionRotation?.oldSessionRejected !== true ||
+    evidence.identityLifecycle?.sessionAgeRotation?.oldSessionRejected !== true ||
+    !evidence.identityLifecycle?.sessionAgeRotation?.rotatedSessionCapabilityKinds?.includes(
+      "HostOf",
+    ) ||
+    evidence.identityLifecycle?.sessionAgeRotation?.winnerRenderedRole !== true ||
+    evidence.identityLifecycle?.sessionAgeRotation?.staleLoserCookieCleared !== true ||
+    evidence.identityLifecycle?.sessionAgeRotation?.staleLoserDeniedStatus !== 403 ||
+    evidence.identityLifecycle?.sessionLogout?.oldSessionRejected !== true ||
+    evidence.identityLifecycle?.sessionLogout?.cookieCleared !== true ||
+    evidence.identityLifecycle?.sessionLogout?.backNavigationDeniedStatus !== 403 ||
+    evidence.identityLifecycle?.sessionLogout?.backNavigationRecoveryTestId !==
+      "route-error-surface" ||
     evidence.identityLifecycle?.sessionRevocation?.revokedSessionRejected !== true ||
     evidence.identityLifecycle?.inviteRevocation?.revokedInviteRejected !== true ||
     evidence.identityLifecycle?.hostScopedInviteIssuance?.status !== "passed" ||

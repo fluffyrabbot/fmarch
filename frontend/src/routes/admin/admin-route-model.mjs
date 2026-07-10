@@ -9409,6 +9409,11 @@ export function normalizeLocalIdentityAdapterAudit(identityAdapterProof, { game 
       identityAdapterProof.identityLifecycle?.accountLifecycle?.status,
     ],
     ["session-rotation", identityAdapterProof.identityLifecycle?.sessionRotation?.status],
+    [
+      "session-age-rotation",
+      identityAdapterProof.identityLifecycle?.sessionAgeRotation?.status,
+    ],
+    ["session-logout", identityAdapterProof.identityLifecycle?.sessionLogout?.status],
     ["session-revocation", identityAdapterProof.identityLifecycle?.sessionRevocation?.status],
     ["invite-revocation", identityAdapterProof.identityLifecycle?.inviteRevocation?.status],
     [

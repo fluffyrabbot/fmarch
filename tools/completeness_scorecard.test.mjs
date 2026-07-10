@@ -13,7 +13,7 @@ import {
   validateRegistry,
 } from "./completeness_scorecard.mjs";
 
-test("real completion registry validates completed room families and selects session lifecycle", async () => {
+test("real completion registry validates completed room families and selects account registration", async () => {
   const registry = await loadCompletionRegistry();
   await validateRegistry(registry);
   const summary = summarizeRegistry(registry);
@@ -29,11 +29,11 @@ test("real completion registry validates completed room families and selects ses
   assert.equal(summary.platformComplete, false);
   assert.equal(summary.releaseComplete, false);
   const nextItem = nextBuildableCodeItem(registry);
-  assert.equal(nextItem?.id, "product.identity.session-lifecycle");
+  assert.equal(nextItem?.id, "product.identity.registration");
   assert.deepEqual(nextItem?.remaining, [
-    "Extend the scratch-Postgres Chromium identity proof with logout/back-navigation denial and overdue-session rotation evidence, then promote this item only when that browser artifact agrees.",
+    "Design and implement the registration API, route, abuse boundary, and browser proof.",
   ]);
-  assert.match(nextItem?.recommended_slice?.objective ?? "", /auth_invite_role_proof/);
+  assert.match(nextItem?.recommended_slice?.objective ?? "", /self-service account registration/);
 });
 
 test("generated scorecard exactly matches the canonical registry", async () => {
@@ -71,14 +71,12 @@ test("registry validation rejects duplicate ids and unknown dependencies", async
 test("registry validation rejects dependency cycles", async () => {
   const registry = await loadCompletionRegistry();
   const cyclic = structuredClone(registry);
-  const sessionLifecycle = cyclic.items.find(
-    (item) => item.id === "product.identity.session-lifecycle",
-  );
   const registration = cyclic.items.find(
     (item) => item.id === "product.identity.registration",
   );
-  sessionLifecycle.depends_on = [registration.id];
-  registration.depends_on = [sessionLifecycle.id];
+  const delivery = cyclic.items.find((item) => item.id === "product.identity.delivery");
+  registration.depends_on = [delivery.id];
+  delivery.depends_on = [registration.id];
   await assert.rejects(
     validateRegistry(cyclic, { verifySourcePaths: false }),
     /dependency cycle/,
@@ -114,9 +112,7 @@ test("registry validation rejects illegal completion and blocked states", async 
   );
 
   const whitespaceRemaining = structuredClone(registry);
-  whitespaceRemaining.items.find(
-    (item) => item.id === "product.identity.session-lifecycle",
-  ).remaining = ["   "];
+  whitespaceRemaining.items.find((item) => item.id === "product.identity.registration").remaining = ["   "];
   await assert.rejects(
     validateRegistry(whitespaceRemaining, { verifySourcePaths: false }),
     /remaining must contain nonempty strings/,
@@ -124,9 +120,8 @@ test("registry validation rejects illegal completion and blocked states", async 
 
   const completeRecommendedSlice = structuredClone(registry);
   completeRecommendedSlice.items[0].recommended_slice = structuredClone(
-    registry.items.find(
-      (item) => item.id === "product.identity.session-lifecycle",
-    ).recommended_slice,
+    registry.items.find((item) => item.id === "product.identity.registration")
+      .recommended_slice,
   );
   await assert.rejects(
     validateRegistry(completeRecommendedSlice, { verifySourcePaths: false }),

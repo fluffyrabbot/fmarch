@@ -7433,7 +7433,7 @@ test("admin route data exposes local identity adapter proof as a native audit ro
 
   const identity = data.audit.find((item) => item.id === localAdminAuditIds.identityAdapter);
   assert.equal(identity.label, "Local identity adapter");
-  assert.equal(identity.status, "3 role surfaces, 10 lifecycle controls");
+  assert.equal(identity.status, "3 role surfaces, 12 lifecycle controls");
   assert.equal(identity.authority, "GlobalAdmin or GlobalMod");
   assert.equal(
     identity.inspectHref,
@@ -7448,6 +7448,8 @@ test("admin route data exposes local identity adapter proof as a native audit ro
       "credential-attempt-throttling",
       "account-lifecycle",
       "session-rotation",
+      "session-age-rotation",
+      "session-logout",
       "session-revocation",
       "invite-revocation",
       "host-scoped-invite-issuance",
@@ -7490,6 +7492,8 @@ test("admin route data exposes local identity adapter proof as a native audit ro
       "account-recovery",
       "credential-attempt-throttling",
       "session-rotation",
+      "session-age-rotation",
+      "session-logout",
       "session-revocation",
       "invite-revocation",
     ],
@@ -7626,7 +7630,7 @@ test("admin local identity adapter detail data carries lifecycle checks and role
   assert.equal(data.status, "available");
   assert.equal(data.surfaceHeader.title, "Local identity adapter");
   assert.equal(data.audit.id, localAdminAuditIds.identityAdapter);
-  assert.equal(data.audit.checks.length, 11);
+  assert.equal(data.audit.checks.length, 13);
   assert.equal(data.audit.sessions.length, 3);
   assert.deepEqual(
     data.audit.checks.map((check) => [check.id, check.status]),
@@ -7637,6 +7641,8 @@ test("admin local identity adapter detail data carries lifecycle checks and role
       ["credential-attempt-throttling", "passed"],
       ["account-lifecycle", "passed"],
       ["session-rotation", "passed"],
+      ["session-age-rotation", "passed"],
+      ["session-logout", "passed"],
       ["session-revocation", "passed"],
       ["invite-revocation", "passed"],
       ["host-scoped-invite-issuance", "passed"],
@@ -13132,6 +13138,8 @@ function identityAdapterProofFixture() {
         "account-recovery",
         "credential-attempt-throttling",
         "session-rotation",
+        "session-age-rotation",
+        "session-logout",
         "session-revocation",
         "invite-revocation",
       ],
@@ -13143,6 +13151,12 @@ function identityAdapterProofFixture() {
     identityLifecycle: {
       status: "passed",
       sessionRotation: {
+        status: "passed",
+      },
+      sessionAgeRotation: {
+        status: "passed",
+      },
+      sessionLogout: {
         status: "passed",
       },
       sessionRevocation: {
