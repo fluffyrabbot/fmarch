@@ -331,6 +331,8 @@ import {
   assertOpsArtifactPlanOrder,
   devTestGameSpineArtifactDependencyGraph,
   devTestGameOpsArtifactDependencyGraph,
+  readinessArtifactPaths,
+  readinessEvidenceEnv,
 } from "./dev_test_game_ops_artifact_dependencies.mjs";
 import {
   devTestGameSeedFixtureSpinePlan,
@@ -1345,6 +1347,18 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
         adminPlan: devTestGameAdminSpinePlan,
       }),
     /consumes target\/dev-test-game\/session\.json before its producer/,
+  );
+  assert.deepEqual(
+    readinessArtifactPaths(["opsArtifacts", "opsAdminProof"]),
+    [devTestGameOpsArtifactsPath, devTestGameOpsAdminProofPath],
+  );
+  assert.deepEqual(
+    readinessEvidenceEnv(["seedFixture", "seedAdminProof"]),
+    seedFixtureSpineEnv,
+  );
+  assert.throws(
+    () => readinessArtifactPaths(["not-a-readiness-artifact"]),
+    /unknown release-readiness artifact id/,
   );
   assert.throws(
     () =>

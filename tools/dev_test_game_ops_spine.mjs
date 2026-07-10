@@ -1,24 +1,20 @@
 import { pathToFileURL } from "node:url";
-import {
-  devTestGameOpsAdminProofPath,
-} from "./dev_test_game_local_admin_proof_paths.mjs";
-import {
-  devTestGameOpsArtifactsPath,
-} from "./dev_test_game_ops_artifacts.mjs";
+import { readinessEvidenceEnv } from "./dev_test_game_ops_artifact_dependencies.mjs";
 import { releaseReadinessStep } from "./dev_test_game_spine_readiness_steps.mjs";
 import { runSpinePlan } from "./dev_test_game_spine_runner.mjs";
 
-export const opsSpineReadinessEnv = {
-  FMARCH_DEV_TEST_GAME_OPS_ARTIFACTS: devTestGameOpsArtifactsPath,
-  FMARCH_DEV_TEST_GAME_OPS_ADMIN_PROOF: devTestGameOpsAdminProofPath,
-};
+const opsSpineReadinessArtifactIds = ["opsArtifacts", "opsAdminProof"];
+
+export const opsSpineReadinessEnv = readinessEvidenceEnv(
+  opsSpineReadinessArtifactIds,
+);
 
 export const devTestGameOpsSpinePlan = [
   { kind: "node", script: "tools/dev_test_game_ops_artifacts.mjs" },
   { kind: "node", script: "tools/dev_test_game_ops_admin_proof.mjs" },
   releaseReadinessStep({
     reason: "ops-artifacts-and-admin-surface",
-    changedInputs: [devTestGameOpsArtifactsPath, devTestGameOpsAdminProofPath],
+    changedArtifactIds: opsSpineReadinessArtifactIds,
     env: opsSpineReadinessEnv,
   }),
 ];

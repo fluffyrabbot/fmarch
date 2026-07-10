@@ -30,6 +30,11 @@ import {
   devTestGameSessionPath,
   spineManifestPath,
 } from "./dev_test_game_spine_artifact_paths.mjs";
+import {
+  devTestGameHostedIdentityEvidencePath,
+  devTestGameHostedIdentityOperatorAdminProofPath,
+  devTestGameHostedIdentityProgressionSummaryPath,
+} from "./dev_test_game_hosted_identity_evidence.mjs";
 
 // Upstream evidence is safe to order as a DAG. Presentation snapshots may read
 // one another across successive refreshes, so they are recorded separately.
@@ -214,6 +219,96 @@ export const devTestGameSpineArtifactDependencyGraph = Object.freeze(
 export const devTestGameOpsArtifactDependencyGraph =
   devTestGameSpineArtifactDependencyGraph;
 
+const readinessArtifactRegistry = Object.freeze([
+  readinessArtifact({
+    id: "coreLoopAdminProof",
+    path: devTestGameCoreLoopAdminProofPath,
+    envVar: "FMARCH_DEV_TEST_GAME_CORE_LOOP_ADMIN_PROOF",
+  }),
+  readinessArtifact({
+    id: "hardeningAdminProof",
+    path: devTestGameHardeningAdminProofPath,
+    envVar: "FMARCH_DEV_TEST_GAME_HARDENING_ADMIN_PROOF",
+  }),
+  readinessArtifact({
+    id: "backupRestoreProof",
+    path: devTestGameBackupRestoreProofPath,
+    envVar: "FMARCH_DEV_TEST_GAME_BACKUP_RESTORE_PROOF",
+  }),
+  readinessArtifact({
+    id: "backupRestoreDump",
+    path: devTestGameBackupRestoreDumpPath,
+    envVar: "FMARCH_DEV_TEST_GAME_BACKUP_RESTORE_DUMP",
+  }),
+  readinessArtifact({
+    id: "backupAdminProof",
+    path: devTestGameBackupAdminProofPath,
+    envVar: "FMARCH_DEV_TEST_GAME_BACKUP_ADMIN_PROOF",
+  }),
+  readinessArtifact({
+    id: "opsArtifacts",
+    path: devTestGameOpsArtifactsPath,
+    envVar: "FMARCH_DEV_TEST_GAME_OPS_ARTIFACTS",
+  }),
+  readinessArtifact({
+    id: "opsAdminProof",
+    path: devTestGameOpsAdminProofPath,
+    envVar: "FMARCH_DEV_TEST_GAME_OPS_ADMIN_PROOF",
+  }),
+  readinessArtifact({
+    id: "seedFixture",
+    path: devTestGameSeedFixturePath,
+    envVar: "FMARCH_DEV_TEST_GAME_SEED_FIXTURE_SUMMARY",
+  }),
+  readinessArtifact({
+    id: "seedAdminProof",
+    path: devTestGameSeedAdminProofPath,
+    envVar: "FMARCH_DEV_TEST_GAME_SEED_ADMIN_PROOF",
+  }),
+  readinessArtifact({
+    id: "identityAdapterProof",
+    path: devTestGameIdentityAdapterProofPath,
+    envVar: "FMARCH_DEV_TEST_GAME_IDENTITY_ADAPTER_PROOF",
+  }),
+  readinessArtifact({
+    id: "identityAdminProof",
+    path: devTestGameIdentityAdminProofPath,
+    envVar: "FMARCH_DEV_TEST_GAME_IDENTITY_ADMIN_PROOF",
+  }),
+  readinessArtifact({
+    id: "hostedIdentityEvidence",
+    path: devTestGameHostedIdentityEvidencePath,
+    envVar: "FMARCH_DEV_TEST_GAME_HOSTED_IDENTITY_EVIDENCE",
+  }),
+  readinessArtifact({
+    id: "hostedIdentityProgressionSummary",
+    path: devTestGameHostedIdentityProgressionSummaryPath,
+    envVar: "FMARCH_DEV_TEST_GAME_HOSTED_IDENTITY_PROGRESSION_SUMMARY",
+  }),
+  readinessArtifact({
+    id: "hostedIdentityOperatorAdminProof",
+    path: devTestGameHostedIdentityOperatorAdminProofPath,
+    envVar: "FMARCH_DEV_TEST_GAME_HOSTED_IDENTITY_EVIDENCE_ADMIN_PROOF",
+  }),
+]);
+
+const readinessArtifactById = new Map(
+  readinessArtifactRegistry.map((artifact) => [artifact.id, artifact]),
+);
+
+export function readinessArtifactPaths(ids) {
+  return ids.map((id) => readinessArtifactForId(id).path);
+}
+
+export function readinessEvidenceEnv(ids) {
+  return Object.fromEntries(
+    ids.map((id) => {
+      const artifact = readinessArtifactForId(id);
+      return [artifact.envVar, artifact.path];
+    }),
+  );
+}
+
 export function assertDevTestGameSpineArtifactDependencyGraph() {
   const producerByOutput = new Map();
   for (const contract of artifactContracts) {
@@ -337,4 +432,16 @@ function inputsForStep(contract, step) {
       .filter(([env]) => step.env?.[env] !== undefined)
       .map(([, artifact]) => artifact),
   ];
+}
+
+function readinessArtifactForId(id) {
+  const artifact = readinessArtifactById.get(id);
+  if (artifact === undefined) {
+    throw new Error(`unknown release-readiness artifact id: ${id}`);
+  }
+  return artifact;
+}
+
+function readinessArtifact({ id, path, envVar }) {
+  return Object.freeze({ id, path, envVar });
 }

@@ -1,23 +1,27 @@
 import { pathToFileURL } from "node:url";
-import {
-  devTestGameBackupAdminProofPath,
-  devTestGameSeedAdminProofPath,
-} from "./dev_test_game_local_admin_proof_paths.mjs";
-import {
-  devTestGameBackupRestoreDumpPath,
-  devTestGameBackupRestoreProofPath,
-  devTestGameOpsArtifactsPath,
-  devTestGameSeedFixturePath,
-} from "./dev_test_game_adjacent_artifact_paths.mjs";
+import { readinessEvidenceEnv } from "./dev_test_game_ops_artifact_dependencies.mjs";
 import { releaseReadinessStep } from "./dev_test_game_spine_readiness_steps.mjs";
 import { runSpinePlan } from "./dev_test_game_spine_runner.mjs";
 
-export const backupRestoreEvidenceEnv = {
-  FMARCH_DEV_TEST_GAME_BACKUP_RESTORE_PROOF:
-    devTestGameBackupRestoreProofPath,
-  FMARCH_DEV_TEST_GAME_BACKUP_RESTORE_DUMP:
-    devTestGameBackupRestoreDumpPath,
-};
+const backupRestoreReadinessArtifactIds = [
+  "backupRestoreProof",
+  "backupRestoreDump",
+];
+const opsReadinessArtifactIds = [
+  ...backupRestoreReadinessArtifactIds,
+  "opsArtifacts",
+];
+const seedReadinessArtifactIds = ["seedFixture", "seedAdminProof"];
+const backupRestoreFinalReadinessArtifactIds = [
+  ...backupRestoreReadinessArtifactIds,
+  "backupAdminProof",
+  "opsArtifacts",
+  ...seedReadinessArtifactIds,
+];
+
+export const backupRestoreEvidenceEnv = readinessEvidenceEnv(
+  backupRestoreReadinessArtifactIds,
+);
 
 export const backupAwareOpsEnv = {
   FMARCH_DEV_TEST_GAME_OPS_BACKUP_RESTORE_PROOF:
@@ -26,26 +30,13 @@ export const backupAwareOpsEnv = {
     backupRestoreEvidenceEnv.FMARCH_DEV_TEST_GAME_BACKUP_RESTORE_DUMP,
 };
 
-export const opsReadinessEnv = {
-  ...backupRestoreEvidenceEnv,
-  FMARCH_DEV_TEST_GAME_OPS_ARTIFACTS: devTestGameOpsArtifactsPath,
-};
+export const opsReadinessEnv = readinessEvidenceEnv(opsReadinessArtifactIds);
 
-export const seedReadinessEnv = {
-  FMARCH_DEV_TEST_GAME_SEED_FIXTURE_SUMMARY: devTestGameSeedFixturePath,
-  FMARCH_DEV_TEST_GAME_SEED_ADMIN_PROOF: devTestGameSeedAdminProofPath,
-};
+export const seedReadinessEnv = readinessEvidenceEnv(seedReadinessArtifactIds);
 
-export const backupRestoreFinalReadinessEnv = {
-  ...backupRestoreEvidenceEnv,
-  FMARCH_DEV_TEST_GAME_BACKUP_ADMIN_PROOF:
-    devTestGameBackupAdminProofPath,
-  FMARCH_DEV_TEST_GAME_OPS_ARTIFACTS: opsReadinessEnv.FMARCH_DEV_TEST_GAME_OPS_ARTIFACTS,
-  FMARCH_DEV_TEST_GAME_SEED_FIXTURE_SUMMARY:
-    seedReadinessEnv.FMARCH_DEV_TEST_GAME_SEED_FIXTURE_SUMMARY,
-  FMARCH_DEV_TEST_GAME_SEED_ADMIN_PROOF:
-    seedReadinessEnv.FMARCH_DEV_TEST_GAME_SEED_ADMIN_PROOF,
-};
+export const backupRestoreFinalReadinessEnv = readinessEvidenceEnv(
+  backupRestoreFinalReadinessArtifactIds,
+);
 
 export const devTestGameBackupRestoreSpinePlan = [
   { kind: "node", script: "tools/live_stack_backup_restore_drill.mjs" },
@@ -56,11 +47,7 @@ export const devTestGameBackupRestoreSpinePlan = [
   },
   releaseReadinessStep({
     reason: "backup-and-ops-artifacts-for-seed-fixtures",
-    changedInputs: [
-      devTestGameBackupRestoreProofPath,
-      devTestGameBackupRestoreDumpPath,
-      devTestGameOpsArtifactsPath,
-    ],
+    changedArtifactIds: opsReadinessArtifactIds,
     env: opsReadinessEnv,
   }),
   { kind: "node", script: "tools/dev_test_game_seed_fixture_summary.mjs" },
@@ -68,10 +55,9 @@ export const devTestGameBackupRestoreSpinePlan = [
   { kind: "node", script: "tools/dev_test_game_backup_admin_proof.mjs" },
   releaseReadinessStep({
     reason: "backup-seed-and-admin-surfaces-final",
-    changedInputs: [
-      devTestGameSeedFixturePath,
-      devTestGameSeedAdminProofPath,
-      devTestGameBackupAdminProofPath,
+    changedArtifactIds: [
+      ...seedReadinessArtifactIds,
+      "backupAdminProof",
     ],
     env: backupRestoreFinalReadinessEnv,
   }),

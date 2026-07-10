@@ -4,15 +4,33 @@ export {
   devTestGameReleaseReadinessMarkdownPath,
   devTestGameReleaseReadinessPath,
 } from "./dev_test_game_spine_artifact_paths.mjs";
+import { readinessArtifactPaths } from "./dev_test_game_ops_artifact_dependencies.mjs";
 
-export function releaseReadinessStep({ reason, changedInputs, env } = {}) {
+export function releaseReadinessStep({
+  reason,
+  changedArtifactIds,
+  changedInputs,
+  additionalChangedInputs = [],
+  env,
+} = {}) {
   if (typeof reason !== "string" || reason.trim() === "") {
     throw new Error("release-readiness spine step is missing a reason");
   }
+  if (changedArtifactIds !== undefined && changedInputs !== undefined) {
+    throw new Error(
+      "release-readiness spine step cannot declare both artifact ids and input paths",
+    );
+  }
+  const resolvedChangedInputs =
+    changedArtifactIds === undefined
+      ? changedInputs
+      : [...readinessArtifactPaths(changedArtifactIds), ...additionalChangedInputs];
   if (
-    !Array.isArray(changedInputs) ||
-    changedInputs.length === 0 ||
-    changedInputs.some((input) => typeof input !== "string" || input.trim() === "")
+    !Array.isArray(resolvedChangedInputs) ||
+    resolvedChangedInputs.length === 0 ||
+    resolvedChangedInputs.some(
+      (input) => typeof input !== "string" || input.trim() === "",
+    )
   ) {
     throw new Error("release-readiness spine step is missing changed inputs");
   }
@@ -21,7 +39,7 @@ export function releaseReadinessStep({ reason, changedInputs, env } = {}) {
     script: devTestGameReleaseReadinessScript,
     ...(env === undefined ? {} : { env }),
     readinessReason: reason,
-    changedInputs: [...changedInputs],
+    changedInputs: [...resolvedChangedInputs],
   };
 }
 
