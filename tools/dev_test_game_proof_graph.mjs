@@ -91,6 +91,10 @@ import {
   devTestGameHostedConcurrentRaceMatrixPath,
 } from "./dev_test_game_hosted_concurrent_race_matrix.mjs";
 import {
+  devTestGameHostedEvidenceOperatorChecklistAdminProofPath,
+  devTestGameHostedEvidenceOperatorChecklistProofPath,
+} from "./dev_test_game_adjacent_artifact_paths.mjs";
+import {
   devTestGameRealHostedObservabilityHandoffCommand,
   devTestGameRealHostedObservabilityHandoffPath,
 } from "./dev_test_game_real_hosted_observability_handoff_cases.mjs";
@@ -1840,8 +1844,7 @@ export function assertDevTestGameProofGraphCoversHandoffPhaseOutputs(graph) {
     {
       handoffPhaseId: "hosted-evidence-operator-checklist-handoff",
       handoffPhaseStep: "checklist-proof",
-      artifact:
-        "target/dev-test-game/hosted-evidence-operator-checklist-proof.json",
+      artifact: devTestGameHostedEvidenceOperatorChecklistProofPath,
     },
     {
       handoffPhaseId: "hosted-evidence-operator-checklist-handoff",
@@ -1852,8 +1855,7 @@ export function assertDevTestGameProofGraphCoversHandoffPhaseOutputs(graph) {
     {
       handoffPhaseId: "hosted-evidence-operator-checklist-handoff",
       handoffPhaseStep: "admin-proof",
-      artifact:
-        "target/dev-test-game/hosted-evidence-operator-checklist-admin-proof.json",
+      artifact: devTestGameHostedEvidenceOperatorChecklistAdminProofPath,
     },
     {
       handoffPhaseId: "hosted-identity-handoff",
