@@ -35,6 +35,9 @@ import {
 import {
   assertCompletedPlayerEndgameRefreshBrowserProof,
 } from "./dev_test_game_core_loop_completed_game_recovery_scenarios.mjs";
+import {
+  assertVanillizerRoleActionBrowserProof,
+} from "./dev_test_game_vanillizer_scenario.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const sessionPath = path.join(repoRoot, "target", "dev-test-game", "session.json");
@@ -96,6 +99,10 @@ assert.equal(proofRun.status, "passed");
 assert.equal(proofRun.session.game, session.game);
 assert.equal(proofRun.productionReady, false);
 assert.equal(proofRun.releaseReady, false);
+assertVanillizerRoleActionBrowserProof({
+  proof: session.verification?.vanillizerRoleAction,
+  includeEvidenceInError: true,
+});
 assert.equal(
   proofRun.lanes.every((lane) => lane.status === "passed"),
   true,

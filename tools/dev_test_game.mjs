@@ -76,6 +76,11 @@ import {
   verifyHostSetupPolicyCommandRoundTrip,
   waitForHostSetupCommand,
 } from "./dev_test_game_setup_bootstrap_scenario.mjs";
+import {
+  assertVanillizerRoleActionBrowserProof,
+  vanillizerRoleActionScenario,
+  vanillizerSeedCommandPlan,
+} from "./dev_test_game_vanillizer_scenario.mjs";
 
 export {
   seedPreSetupCommandPlanForGame,
@@ -850,6 +855,22 @@ export function markdownSessionCard(card) {
         "",
       );
     }
+    if (card.verification.vanillizerRoleAction !== undefined) {
+      lines.push(
+        "## Vanillizer Role Action Proof",
+        "",
+        `Status: ${card.verification.vanillizerRoleAction.status}`,
+        "",
+        `Proof: ${card.verification.vanillizerRoleAction.proof}`,
+        "",
+        `Actor role URL: ${card.verification.vanillizerRoleAction.actorRoleUrl}`,
+        "",
+        `Target role URL: ${card.verification.vanillizerRoleAction.targetRoleUrl}`,
+        "",
+        `Target role: ${card.verification.vanillizerRoleAction.targetBefore.commandState.role.key} -> ${card.verification.vanillizerRoleAction.targetAfterReload.commandState.role.key}`,
+        "",
+      );
+    }
     if (card.verification.cohostConsole !== undefined) {
       lines.push(
         "## Cohost Console Proof",
@@ -1125,6 +1146,7 @@ async function verifySessionCard(card) {
   let coreLoop;
   let dayVoteResolution;
   let dayVoteNoLynch;
+  let vanillizerRoleAction;
   let privateChannel;
   let actionLoop;
   let invalidActionRecovery;
@@ -1227,6 +1249,11 @@ async function verifySessionCard(card) {
       frontendBaseUrl: card.frontendBaseUrl,
     });
     dayVoteNoLynch = await verifySeededDayVoteNoLynch({
+      browser,
+      apiBaseUrl: card.apiBaseUrl,
+      frontendBaseUrl: card.frontendBaseUrl,
+    });
+    vanillizerRoleAction = await verifySeededVanillizerRoleAction({
       browser,
       apiBaseUrl: card.apiBaseUrl,
       frontendBaseUrl: card.frontendBaseUrl,
@@ -1335,6 +1362,7 @@ async function verifySessionCard(card) {
     coreLoop,
     dayVoteResolution,
     dayVoteNoLynch,
+    vanillizerRoleAction,
     privateChannel,
     actionLoop,
     invalidActionRecovery,
@@ -3423,6 +3451,339 @@ async function seedDayVoteNoLynchGame({ game }) {
     preseededNoLynchVotes: 0,
     browserNoLynchVoteSlots: ["slot-7", "slot-2"],
     survivorSlot: "slot_3",
+  };
+}
+
+async function verifySeededVanillizerRoleAction({
+  browser,
+  apiBaseUrl,
+  frontendBaseUrl,
+}) {
+  const scenario = vanillizerRoleActionScenario();
+  const vanillizerGame = crypto.randomUUID();
+  const seed = await seedVanillizerRoleActionGame(vanillizerGame);
+  const sessionSpecs = {
+    host: {
+      principalUserId: "host_h",
+      returnTo: `/g/${vanillizerGame}/host`,
+      expectedCapabilityKind: "HostOf",
+    },
+    actor: {
+      principalUserId: scenario.actor.principalUserId,
+      returnTo: `/g/${vanillizerGame}`,
+      expectedCapabilityKind: "SlotOccupant",
+    },
+    target: {
+      principalUserId: scenario.target.principalUserId,
+      returnTo: `/g/${vanillizerGame}`,
+      expectedCapabilityKind: "SlotOccupant",
+    },
+  };
+  const sessionEntries = Object.fromEntries(
+    await Promise.all(
+      Object.entries(sessionSpecs).map(async ([key, spec]) => [
+        key,
+        await createSessionGrantCredential({
+          token: `${tokenPrefix}-vanillizer-${key}-${crypto.randomUUID()}`,
+          ...spec,
+          issuedBy: {
+            principalUserId: "root_admin",
+            capabilityKind: "GlobalAdmin",
+            surface: "/auth/session-grants",
+          },
+        }),
+      ]),
+    ),
+  );
+  const entries = Object.fromEntries(
+    await Promise.all(
+      Object.entries(sessionEntries).map(async ([key, session]) => [
+        key,
+        await openVerifiedRoleEntry({
+          browser,
+          session,
+          game: vanillizerGame,
+          apiBaseUrl,
+          frontendBaseUrl,
+        }),
+      ]),
+    ),
+  );
+
+  try {
+    await gotoPlayerBoard(entries.actor.page, vanillizerGame);
+    await gotoPlayerBoard(entries.target.page, vanillizerGame);
+    await entries.actor.page.waitForFunction(
+      ({ roleKey, templateId, targetSlot }) => {
+        const state = window.__fmarchPlayerProjection?.commandState;
+        return (
+          state?.phase?.phaseId === "N01" &&
+          state?.phase?.locked === false &&
+          state?.role?.key === roleKey &&
+          state?.actions?.some(
+            (action) =>
+              action.templateId === templateId &&
+              action.targetOptions?.includes(targetSlot),
+          )
+        );
+      },
+      {
+        roleKey: scenario.actor.roleKey,
+        templateId: scenario.templateId,
+        targetSlot: scenario.target.slotId,
+      },
+    );
+    await entries.target.page.waitForFunction(
+      ({ roleKey, templateId }) => {
+        const state = window.__fmarchPlayerProjection?.commandState;
+        return (
+          state?.phase?.phaseId === "N01" &&
+          state?.role?.key === roleKey &&
+          state?.actions?.some((action) => action.templateId === templateId)
+        );
+      },
+      {
+        roleKey: scenario.target.initialRoleKey,
+        templateId: scenario.target.initialActionTemplateId,
+      },
+    );
+    const actorBefore = {
+      commandState: await entries.actor.page.evaluate(
+        () => window.__fmarchPlayerProjection?.commandState,
+      ),
+      roleCard: await playerRoleCardSnapshot(entries.actor.page),
+      buttons: await playerCommandButtons(entries.actor.page),
+    };
+    const targetBefore = {
+      commandState: await entries.target.page.evaluate(
+        () => window.__fmarchPlayerProjection?.commandState,
+      ),
+      roleCard: await playerRoleCardSnapshot(entries.target.page),
+      buttons: await playerCommandButtons(entries.target.page),
+    };
+
+    const targetOption = entries.actor.page.getByTestId(
+      `player-action-target-${scenario.templateId}-${scenario.target.slotId}`,
+    );
+    await targetOption.locator("input").check();
+    const trigger = entries.actor.page.getByTestId(
+      `player-action-trigger-${scenario.templateId}`,
+    );
+    await entries.actor.page.waitForFunction(
+      ({ templateId, targetSlot }) =>
+        document
+          .querySelector(`[data-testid="player-action-trigger-${templateId}"]`)
+          ?.getAttribute("data-target-slots") === targetSlot,
+      { templateId: scenario.templateId, targetSlot: scenario.target.slotId },
+    );
+    const selectedTarget = await trigger.getAttribute("data-target-slots");
+    await trigger.click();
+    const confirmationMessage = await entries.actor.page
+      .getByTestId(`player-action-confirmation-message-${scenario.templateId}`)
+      .innerText();
+    await entries.actor.page
+      .getByTestId(`player-action-confirm-${scenario.templateId}`)
+      .click();
+    await entries.actor.page.waitForFunction(
+      ({ templateId, targetSlot }) => {
+        const status = window.__fmarchPlayerCommandStatus;
+        const submitted = status?.requestEnvelope?.body?.body?.command?.SubmitAction;
+        return (
+          status?.state === "ack" &&
+          submitted?.template_id === templateId &&
+          submitted?.targets?.[0] === targetSlot
+        );
+      },
+      {
+        templateId: scenario.templateId,
+        targetSlot: scenario.target.slotId,
+      },
+    );
+    const submit = await entries.actor.page.evaluate(
+      () => window.__fmarchPlayerCommandStatus,
+    );
+    await entries.actor.page.waitForFunction(
+      ({ templateId, targetSlot }) =>
+        window.__fmarchPlayerProjection?.commandState?.currentActions?.some(
+          (action) =>
+            action.templateId === templateId && action.targets?.[0] === targetSlot,
+        ),
+      { templateId: scenario.templateId, targetSlot: scenario.target.slotId },
+    );
+    const actorAfterSubmit = await entries.actor.page.evaluate(
+      () => window.__fmarchPlayerProjection?.commandState,
+    );
+
+    await gotoHostConsole(entries.host.page, vanillizerGame);
+    await waitForHostProjectionPhase(entries.host.page, {
+      phaseId: "N01",
+      locked: false,
+    });
+    const resolveNight = (await confirmHostAction(entries.host.page, "resolve_phase"))
+      .commandStatus;
+    await waitForHostProjectionPhase(entries.host.page, {
+      phaseId: "N01",
+      locked: true,
+    });
+    await entries.target.page.waitForFunction(
+      ({ roleKey }) =>
+        window.__fmarchPlayerProjection?.commandState?.role?.key === roleKey,
+      { roleKey: scenario.target.resolvedRoleKey },
+    );
+    const targetAfterResolve = {
+      commandState: await entries.target.page.evaluate(
+        () => window.__fmarchPlayerProjection?.commandState,
+      ),
+      roleCard: await playerRoleCardSnapshot(entries.target.page),
+    };
+
+    const advanceDay = (await confirmHostAction(entries.host.page, "advance_phase"))
+      .commandStatus;
+    await waitForHostProjectionPhase(entries.host.page, {
+      phaseId: "D02",
+      locked: false,
+    });
+    const resolveDay = (await confirmHostAction(entries.host.page, "resolve_phase"))
+      .commandStatus;
+    await waitForHostProjectionPhase(entries.host.page, {
+      phaseId: "D02",
+      locked: true,
+    });
+    const advanceNextNight = (
+      await confirmHostAction(entries.host.page, "advance_phase")
+    ).commandStatus;
+    await waitForHostProjectionPhase(entries.host.page, {
+      phaseId: scenario.nextEligiblePhaseId,
+      locked: false,
+    });
+    await entries.target.page.waitForFunction(
+      ({ phaseId, roleKey }) => {
+        const state = window.__fmarchPlayerProjection?.commandState;
+        return (
+          state?.phase?.phaseId === phaseId &&
+          state?.phase?.locked === false &&
+          state?.role?.key === roleKey &&
+          state?.actions?.length === 0
+        );
+      },
+      {
+        phaseId: scenario.nextEligiblePhaseId,
+        roleKey: scenario.target.resolvedRoleKey,
+      },
+    );
+    await entries.actor.page.waitForFunction(
+      ({ phaseId, roleKey, templateId }) => {
+        const state = window.__fmarchPlayerProjection?.commandState;
+        return (
+          state?.phase?.phaseId === phaseId &&
+          state?.role?.key === roleKey &&
+          state?.actions?.some((action) => action.templateId === templateId)
+        );
+      },
+      {
+        phaseId: scenario.nextEligiblePhaseId,
+        roleKey: scenario.actor.roleKey,
+        templateId: scenario.templateId,
+      },
+    );
+    const actorAtNextNight = {
+      commandState: await entries.actor.page.evaluate(
+        () => window.__fmarchPlayerProjection?.commandState,
+      ),
+      roleCard: await playerRoleCardSnapshot(entries.actor.page),
+    };
+
+    await entries.target.page.reload({ waitUntil: "networkidle" });
+    await entries.target.page.getByTestId("player-surface").waitFor({ state: "visible" });
+    await entries.target.page.waitForFunction(
+      ({ phaseId, roleKey }) => {
+        const state = window.__fmarchPlayerProjection?.commandState;
+        return (
+          state?.phase?.phaseId === phaseId &&
+          state?.role?.key === roleKey &&
+          state?.actions?.length === 0
+        );
+      },
+      {
+        phaseId: scenario.nextEligiblePhaseId,
+        roleKey: scenario.target.resolvedRoleKey,
+      },
+    );
+    const targetAfterReload = {
+      commandState: await entries.target.page.evaluate(
+        () => window.__fmarchPlayerProjection?.commandState,
+      ),
+      roleCard: await playerRoleCardSnapshot(entries.target.page),
+      buttons: await playerCommandButtons(entries.target.page),
+    };
+    const apiStateAfterReload = await fetchHostConsoleState({
+      apiBaseUrl,
+      game: vanillizerGame,
+      slot: scenario.target.slotId,
+    });
+    const apiTargetAfterReload = apiStateAfterReload.slots?.find(
+      (slot) => slot.slot_id === scenario.target.slotId,
+    );
+    const proof = {
+      status: "passed",
+      game: vanillizerGame,
+      seed,
+      actorRoleUrl: entries.actor.page.url(),
+      targetRoleUrl: entries.target.page.url(),
+      hostRoleUrl: entries.host.page.url(),
+      actorBefore,
+      targetBefore,
+      selectedTarget,
+      confirmationMessage,
+      submit,
+      actorAfterSubmit,
+      resolveNight,
+      targetAfterResolve,
+      advanceDay,
+      resolveDay,
+      advanceNextNight,
+      actorAtNextNight,
+      targetAfterReload,
+      apiTargetAfterReload,
+      proof:
+        "A disposable seeded N01 game opened Vanillizer, Cop target, and host role URLs; the Vanillizer selected the Cop through the browser target picker, confirmed vanillaize through /commands, and the host resolved and advanced through D02 into N02. The target role URL changed from Cop to Vanilla townie, lost its investigate action, and reloaded durably while the Vanillizer retained its own action.",
+    };
+    assertVanillizerRoleActionBrowserProof({
+      proof,
+      expectedGame: vanillizerGame,
+      includeEvidenceInError: true,
+    });
+    return proof;
+  } finally {
+    await Promise.all(
+      Object.values(entries).map((entry) => entry.context.close().catch(() => {})),
+    );
+  }
+}
+
+async function seedVanillizerRoleActionGame(game) {
+  const plan = vanillizerSeedCommandPlan(game);
+  const commands = [];
+  for (const [principalUserId, command] of plan) {
+    commands.push(await sendCommand(principalUserId, command));
+  }
+  return {
+    game,
+    commands: commands.length,
+    phaseId: vanillizerRoleActionScenario().phaseId,
+  };
+}
+
+async function playerRoleCardSnapshot(page) {
+  const root = page.getByTestId("player-role-card");
+  await root.waitFor({ state: "visible" });
+  return {
+    roleKey: await root.getAttribute("data-role-key"),
+    alignment: await root.getAttribute("data-role-alignment"),
+    state: await root.getAttribute("data-role-state"),
+    name: await page.getByTestId("player-role-card-name").innerText(),
+    description: await page.getByTestId("player-role-card-description").innerText(),
+    status: await page.getByTestId("player-role-card-status").innerText(),
   };
 }
 

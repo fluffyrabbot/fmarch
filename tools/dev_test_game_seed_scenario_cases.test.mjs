@@ -24,7 +24,7 @@ import {
 } from "./dev_test_game_seed_scenario_cases.mjs";
 
 test("seed scenario cases expose one full shared required inventory", () => {
-  assert.equal(seedRequiredScenarioIds.length, 86);
+  assert.equal(seedRequiredScenarioIds.length, 89);
   assert.equal(new Set(seedRequiredScenarioIds).size, seedRequiredScenarioIds.length);
   assert.deepEqual(seedRequiredScenarioIds.slice(0, 8), [
     "host-phase-controls",
@@ -62,7 +62,7 @@ test("seed scenario cases include reload and stale-reject proof rows", () => {
 });
 
 test("seed scenario cases expose generated demo scenario fixture rows", () => {
-  assert.equal(seedDemoScenarioIds.length, 126);
+  assert.equal(seedDemoScenarioIds.length, 129);
   assert.deepEqual(seedDemoOnlyScenarioIds, [
     "day-vote-resolution",
     "day-vote-no-lynch",
@@ -116,12 +116,15 @@ test("seed scenario cases expose generated demo scenario fixture rows", () => {
     "concurrent-player-complete-race",
     "public-player-complete-reload",
     "stale-player-complete-reload",
+    "stale-player-complete-endgame-resync",
+    "stale-player-complete-vote-history",
   ]);
   assert.deepEqual(seedScenarioCoverageGroups.completedGameDemoOnly, [
     "stale-host-complete",
     "stale-player-complete",
   ]);
   assert.equal(new Set(seedDemoScenarioIds).size, seedDemoScenarioIds.length);
+  assert.equal(seedDemoScenarioIds.includes("vanillizer-role-action"), true);
   assert.deepEqual(seedDemoScenarioIds.slice(0, 6), [
     "host-phase-controls",
     "host-setup-role",
@@ -199,6 +202,21 @@ test("seed scenario cases expose generated demo scenario fixture rows", () => {
   assert.deepEqual(
     seedDemoScenarioFixtureRows().map((scenario) => scenario.status),
     Array.from({ length: seedDemoScenarioIds.length }, () => "available_locally"),
+  );
+});
+
+test("seed scenario catalog prefers a disposable lane role URL", () => {
+  const [scenario] = seedDemoScenarioCatalog({
+    ids: ["vanillizer-role-action"],
+    roleUrlForId: () =>
+      "http://127.0.0.1:5173/g/00000000-0000-4000-8000-000000000001",
+    roleUrlForRole: () => "http://127.0.0.1:5173/g/main-game",
+  });
+
+  assert.equal(scenario.role, "actionPlayer");
+  assert.equal(
+    scenario.roleUrlRedacted,
+    "http://127.0.0.1:5173/g/00000000-0000-4000-8000-000000000001",
   );
 });
 

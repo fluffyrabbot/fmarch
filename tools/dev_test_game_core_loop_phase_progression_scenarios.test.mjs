@@ -56,6 +56,7 @@ test("core loop phase progression family names proof, seed, and stale reject cas
   ]);
   assert.deepEqual(coreLoopPhaseProgressionRequiredSeedScenarioIds, [
     "night-action-loop",
+    "vanillizer-role-action",
     nightThreeActionResolutionLaneId,
   ]);
   assert.deepEqual(coreLoopPhaseProgressionDemoOnlySeedScenarioIds, [

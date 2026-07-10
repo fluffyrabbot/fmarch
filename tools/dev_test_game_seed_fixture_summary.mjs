@@ -51,7 +51,11 @@ export function buildDevTestGameSeedFixtureSummary({
   const passedLaneIds = proof.lanes
     .filter((lane) => lane.status === "passed")
     .map((lane) => lane.id);
-  const demoScenarioRows = demoScenarios({ roles, laneIds: passedLaneIds });
+  const demoScenarioRows = demoScenarios({
+    roles,
+    lanes: proof.lanes,
+    laneIds: passedLaneIds,
+  });
   const proofLaneCoverage = seedProofLaneCoverageForPassedLanes(passedLaneIds);
   const summary = {
     version: DEV_TEST_GAME_SEED_FIXTURE_SUMMARY_VERSION,
@@ -217,15 +221,33 @@ export function assertDevTestGameSeedFixtureSummary(summary) {
   return summary;
 }
 
-function demoScenarios({ roles, laneIds }) {
+function demoScenarios({ roles, lanes, laneIds }) {
   const laneSet = new Set(laneIds);
+  const lanesById = new Map(lanes.map((lane) => [lane.id, lane]));
   return seedDemoScenarioCatalog({
     provenByForId: (id) =>
       seedDemoScenarioProofLaneCandidates(id).filter((laneId) =>
         laneSet.has(laneId),
       ),
+    roleUrlForId: (id) => directSeededLaneRoleUrl(lanesById.get(id)),
     roleUrlForRole: (role) => roles[role]?.loginUrlRedacted ?? null,
   });
+}
+
+function directSeededLaneRoleUrl(lane) {
+  const evidence = lane?.evidence ?? {};
+  for (const key of [
+    "actorRoleUrl",
+    "actionRoleUrl",
+    "playerRoleUrl",
+    "roleUrl",
+    "hostRoleUrl",
+  ]) {
+    if (typeof evidence[key] === "string" && evidence[key] !== "") {
+      return evidence[key];
+    }
+  }
+  return null;
 }
 
 function summarizeSeedSlots(plan) {

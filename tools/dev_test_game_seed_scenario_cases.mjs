@@ -227,6 +227,7 @@ export function seedDemoScenarioCatalog({
   ids = seedDemoScenarioIds,
   status = "available_locally",
   provenByForId = seedDemoScenarioProofLaneCandidates,
+  roleUrlForId = () => null,
   roleUrlForRole = () => null,
 } = {}) {
   return ids.map((id) => {
@@ -236,7 +237,7 @@ export function seedDemoScenarioCatalog({
       title: seedScenarioTitle(id),
       status,
       role,
-      roleUrlRedacted: roleUrlForRole(role),
+      roleUrlRedacted: roleUrlForId(id, role) ?? roleUrlForRole(role),
       provenBy: provenByForId(id),
       note: seedScenarioNote(id, role),
     };

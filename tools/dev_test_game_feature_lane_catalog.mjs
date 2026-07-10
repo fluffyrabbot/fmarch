@@ -67,6 +67,9 @@ import {
 import {
   featureSpineTargetProvenanceCase,
 } from "./dev_test_game_feature_spine_target_provenance.mjs";
+import {
+  vanillizerRoleActionLaneId,
+} from "./dev_test_game_vanillizer_scenario.mjs";
 
 export { nightThreeActionResolutionLaneId };
 
@@ -190,6 +193,12 @@ const coreLoopSeedOnlyLaneRows = Object.freeze([
     featureSlotId: "night-action-loop",
     seedMembership: "required",
     seedOrder: 10,
+  }),
+  Object.freeze({
+    featureSlotId: vanillizerRoleActionLaneId,
+    seedMembership: "required",
+    seedOrder: 20,
+    seedRoleOverride: "actionPlayer",
   }),
 ]);
 

@@ -22,6 +22,10 @@ import {
   buildDevTestGameProofRun,
 } from "./dev_test_game_proof_contract.mjs";
 import {
+  buildVanillizerRoleActionProofFixture,
+  vanillizerRoleActionLaneId,
+} from "./dev_test_game_vanillizer_scenario.mjs";
+import {
   assertHostedAdminHandoffProofReadinessDecisions,
   assertDevTestGameReleaseReadiness,
   buildDevTestGameReleaseReadiness,
@@ -11139,6 +11143,9 @@ test("session card and markdown include role credential URLs and tokens", async 
         "D01 NoLynch\nThe official vote resolved without an elimination.",
       survivorOutcomeTally: "No lynch\n2/2",
     },
+    vanillizerRoleAction: buildVanillizerRoleActionProofFixture(
+      "77777777-7777-4777-8777-777777777777",
+    ),
     actionLoop: {
       status: "passed",
       proof: "host resolved N01 and action player advanced to D02",
@@ -17444,6 +17451,8 @@ test("session card and markdown include role credential URLs and tokens", async 
   assert(markdown.includes("Outcome: Lynch slot-2"));
   assert(markdown.includes("## Day Vote No-Lynch Proof"));
   assert(markdown.includes("Outcome: NoLynch 2"));
+  assert(markdown.includes("## Vanillizer Role Action Proof"));
+  assert(markdown.includes("Target role: cop -> vanilla_townie"));
   assert(markdown.includes("## Action Loop Proof"));
   assert(markdown.includes("Reject InvalidTarget: invalid target"));
   assert(markdown.includes("## Invalid Action Recovery Proof"));
@@ -17579,6 +17588,7 @@ test("session card and markdown include role credential URLs and tokens", async 
       "day-vote-resolution",
       "day-vote-no-lynch",
       "action-loop",
+      vanillizerRoleActionLaneId,
       "night-three-action-resolution",
       "host-deadline-advance",
       "stale-deadline-advance",

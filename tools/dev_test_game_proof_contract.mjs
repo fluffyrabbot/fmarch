@@ -139,6 +139,10 @@ import {
   privateChannelSubmitPostScenario,
 } from "./dev_test_game_core_loop_private_receipt_scenarios.mjs";
 import {
+  vanillizerRoleActionLaneId,
+  vanillizerRoleActionProofPassed,
+} from "./dev_test_game_vanillizer_scenario.mjs";
+import {
   assertCoreLoopPrivateChannelRecoveryCoverageSummary,
   buildCoreLoopPrivateChannelRecoveryCoverageSummary,
   coreLoopPrivateChannelCompletedPostLaneId,
@@ -172,6 +176,7 @@ const requiredLaneIds = Object.freeze([
   "cohost-later-phase-deadline",
   "core-loop",
   ...coreLoopPhaseProgressionLaneIds,
+  vanillizerRoleActionLaneId,
   "host-deadline-advance",
   "stale-deadline-advance",
   playerInvalidActionRecoveryLaneId,
@@ -1020,6 +1025,36 @@ export function buildDevTestGameProofRun(session, options = {}) {
         verification.actionLoop?.resolvedTargetSlot?.alive === false &&
         verification.actionLoop?.d02Phase?.phaseId === "D02",
     }),
+    lane(
+      vanillizerRoleActionLaneId,
+      "Vanillizer role action mutates a target through role URLs",
+      {
+        game: verification.vanillizerRoleAction?.game ?? null,
+        actorRoleUrl: verification.vanillizerRoleAction?.actorRoleUrl ?? null,
+        targetRoleUrl: verification.vanillizerRoleAction?.targetRoleUrl ?? null,
+        hostRoleUrl: verification.vanillizerRoleAction?.hostRoleUrl ?? null,
+        submittedTemplate:
+          verification.vanillizerRoleAction?.submit?.requestEnvelope?.body?.body
+            ?.command?.SubmitAction?.template_id ?? null,
+        selectedTarget: verification.vanillizerRoleAction?.selectedTarget ?? null,
+        initialTargetRole:
+          verification.vanillizerRoleAction?.targetBefore?.commandState?.role?.key ??
+          null,
+        resolvedTargetRole:
+          verification.vanillizerRoleAction?.targetAfterReload?.commandState?.role
+            ?.key ?? null,
+        targetActionCount:
+          verification.vanillizerRoleAction?.targetAfterReload?.commandState?.actions
+            ?.length ?? null,
+        actorNextNightActionTemplates:
+          verification.vanillizerRoleAction?.actorAtNextNight?.commandState?.actions?.map(
+            (action) => action.templateId,
+          ) ?? null,
+        passed: vanillizerRoleActionProofPassed(
+          verification.vanillizerRoleAction,
+        ),
+      },
+    ),
     lane(
       nightThreeActionResolutionLaneId,
       "Night 3 action resolution advances to Day 4 controls",
