@@ -3423,6 +3423,213 @@ async fn global_admin_account_login_creates_normal_role_session(pool: sqlx::PgPo
         assert_eq!(response.status(), expected_status);
     }
 
+    let recovery_expires_at = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as i64
+        + 86_400;
+    let mut recovery_credentials = Vec::new();
+    for _ in 0..2 {
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/auth/accounts/recovery-credentials")
+                    .header("content-type", "application/json")
+                    .header(
+                        "authorization",
+                        "Bearer rotated-password-host-account-session",
+                    )
+                    .body(Body::from(
+                        serde_json::json!({
+                            "account_id": "host@example.test",
+                            "current_password": "rotated correct horse battery",
+                            "expires_at": recovery_expires_at
+                        })
+                        .to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let credential: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(credential["status"], "issued");
+        assert!(credential["recovery_token"]
+            .as_str()
+            .unwrap()
+            .starts_with("account-recovery-"));
+        recovery_credentials.push(credential);
+    }
+
+    let active_recovery_token = recovery_credentials[0]["recovery_token"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let revoked_recovery_token = recovery_credentials[1]["recovery_token"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let revoked_recovery_id = recovery_credentials[1]["recovery_id"].as_str().unwrap();
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/auth/accounts/recovery-credential-revocations")
+                .header("content-type", "application/json")
+                .header(
+                    "authorization",
+                    "Bearer rotated-password-host-account-session",
+                )
+                .body(Body::from(
+                    serde_json::json!({
+                        "account_id": "host@example.test",
+                        "current_password": "rotated correct horse battery",
+                        "recovery_id": revoked_recovery_id
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/auth/accounts/recoveries")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    serde_json::json!({
+                        "account_id": "host@example.test",
+                        "recovery_token": revoked_recovery_token,
+                        "new_password": "must not become the password"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/auth/accounts/recoveries")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    serde_json::json!({
+                        "account_id": "host@example.test",
+                        "recovery_token": active_recovery_token,
+                        "new_password": "recovered correct horse battery"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let recovery: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(recovery["status"], "recovered");
+    assert_eq!(recovery["password_algorithm"], "argon2id");
+    assert!(recovery["revoked_session_count"].as_i64().unwrap() >= 1);
+
+    for recovery_token in [&active_recovery_token, &revoked_recovery_token] {
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/auth/accounts/recoveries")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        serde_json::json!({
+                            "account_id": "host@example.test",
+                            "recovery_token": recovery_token,
+                            "new_password": "replay must not become password"
+                        })
+                        .to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!("/auth/session?game={game}"))
+                .header(
+                    "authorization",
+                    "Bearer rotated-password-host-account-session",
+                )
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+
+    for (password, session_token, expected_status) in [
+        (
+            "rotated correct horse battery",
+            "pre-recovery-password-session",
+            StatusCode::UNAUTHORIZED,
+        ),
+        (
+            "recovered correct horse battery",
+            "recovered-password-session",
+            StatusCode::OK,
+        ),
+    ] {
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/auth/accounts/login")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        serde_json::json!({
+                            "account_id": "host@example.test",
+                            "password": password,
+                            "session_token": session_token,
+                            "expires_at": 4_102_444_800i64
+                        })
+                        .to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), expected_status);
+    }
+
+    let stored_recovery_hashes = sqlx::query_scalar::<_, String>(
+        "SELECT token_hash FROM auth_account_recovery_credential ORDER BY recovery_id",
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert!(stored_recovery_hashes
+        .iter()
+        .all(|hash| !hash.contains("account-recovery-")));
+
     let response = app
         .clone()
         .oneshot(
@@ -3444,14 +3651,23 @@ async fn global_admin_account_login_creates_normal_role_session(pool: sqlx::PgPo
     assert!(audit_text.contains("account_disabled"));
     assert!(audit_text.contains("account_enabled"));
     assert!(audit_text.contains("account_password_rotated"));
+    assert!(audit_text.contains("account_recovery_credential_issued"));
+    assert!(audit_text.contains("account_recovery_credential_revoked"));
+    assert!(audit_text.contains("account_recovery_rejected"));
+    assert!(audit_text.contains("account_recovered"));
     assert!(audit_text.contains("argon2id"));
     assert!(!audit_text.contains("correct horse battery"));
     assert!(!audit_text.contains("rotated correct horse battery"));
+    assert!(!audit_text.contains("recovered correct horse battery"));
+    assert!(!audit_text.contains(&active_recovery_token));
+    assert!(!audit_text.contains(&revoked_recovery_token));
     assert!(!audit_text.contains("host-account-session"));
     assert!(!audit_text.contains("disabled-host-account-session"));
     assert!(!audit_text.contains("reenabled-host-account-session"));
     assert!(!audit_text.contains("old-password-host-account-session"));
     assert!(!audit_text.contains("rotated-password-host-account-session"));
+    assert!(!audit_text.contains("pre-recovery-password-session"));
+    assert!(!audit_text.contains("recovered-password-session"));
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]

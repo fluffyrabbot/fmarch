@@ -845,7 +845,7 @@ test("admin route data exposes identity lifecycle audit when admin session is pr
     "Bearer admin-session",
   );
   assert.equal(identity.label, "Identity lifecycle");
-  assert.equal(identity.status, "8 lifecycle audit events available");
+  assert.equal(identity.status, "12 lifecycle audit events available");
   assert.equal(identity.authority, "GlobalAdmin");
   assert.equal(identity.rawTokensStored, false);
   assert.deepEqual(identity.eventKinds, [
@@ -853,6 +853,10 @@ test("admin route data exposes identity lifecycle audit when admin session is pr
     "account_disabled",
     "account_enabled",
     "account_password_rotated",
+    "account_recovered",
+    "account_recovery_credential_issued",
+    "account_recovery_credential_revoked",
+    "account_recovery_rejected",
     "account_session_created",
     "invite_revoked",
     "session_revoked",
@@ -873,6 +877,10 @@ test("admin route data exposes identity lifecycle audit when admin session is pr
       "account_disabled",
       "account_enabled",
       "account_password_rotated",
+      "account_recovery_credential_issued",
+      "account_recovery_credential_revoked",
+      "account_recovery_rejected",
+      "account_recovered",
       "account_session_created",
       "session_rotated",
       "session_revoked",
@@ -899,7 +907,7 @@ test("admin identity lifecycle detail data carries audit event rows", async () =
   assert.equal(data.surfaceHeader.title, "Identity lifecycle");
   assert.match(data.surfaceHeader.summary, /identity-lifecycle-audit/);
   assert.equal(data.audit.id, "identity-lifecycle");
-  assert.equal(data.audit.entries.length, 8);
+  assert.equal(data.audit.entries.length, 12);
   assert.deepEqual(
     data.audit.entries.map((entry) => [
       entry.eventKind,
@@ -911,6 +919,10 @@ test("admin identity lifecycle detail data carries audit event rows", async () =
       ["account_disabled", "host_h", "admin_a"],
       ["account_enabled", "host_h", "admin_a"],
       ["account_password_rotated", "host_h", "host_h"],
+      ["account_recovery_credential_issued", "host_h", "host_h"],
+      ["account_recovery_credential_revoked", "host_h", "host_h"],
+      ["account_recovery_rejected", "host_h", null],
+      ["account_recovered", "host_h", "host_h"],
       ["account_session_created", "host_h", "host_h"],
       ["session_rotated", "host_h", "host_h"],
       ["session_revoked", "host_h", "admin_a"],
@@ -7215,7 +7227,7 @@ test("admin route data exposes local identity adapter proof as a native audit ro
 
   const identity = data.audit.find((item) => item.id === localAdminAuditIds.identityAdapter);
   assert.equal(identity.label, "Local identity adapter");
-  assert.equal(identity.status, "3 role surfaces, 6 lifecycle controls");
+  assert.equal(identity.status, "3 role surfaces, 9 lifecycle controls");
   assert.equal(identity.authority, "GlobalAdmin or GlobalMod");
   assert.equal(
     identity.inspectHref,
@@ -7226,6 +7238,7 @@ test("admin route data exposes local identity adapter proof as a native audit ro
     [
       "account-login",
       "account-password-rotation",
+      "account-recovery",
       "account-lifecycle",
       "session-rotation",
       "session-revocation",
@@ -7258,10 +7271,14 @@ test("admin route data exposes local identity adapter proof as a native audit ro
     sessionCredentialKind: "opaque-session",
     accountCredentialKind: "local-password-account",
     accountPasswordAlgorithm: "argon2id",
+    accountRecoveryCredentialKind: "hashed-single-use-recovery-credential",
     lifecycleControls: [
       "account-disable",
       "account-enable",
       "account-password-rotation",
+      "account-recovery-credential-issuance",
+      "account-recovery-credential-revocation",
+      "account-recovery",
       "session-rotation",
       "session-revocation",
       "invite-revocation",
@@ -7292,6 +7309,19 @@ test("admin route data exposes local identity adapter proof as a native audit ro
       sameRoleSurface: true,
       revokedSessionCount: 2,
       rawPasswordStored: false,
+    },
+    accountRecovery: {
+      credentialKind: "hashed-single-use-recovery-credential",
+      recoveryRoleUrl:
+        "/auth/account/recovery?account=host%40example.test&returnTo=%2Fg%2Fgame-a%2Fhost",
+      invalidCredentialRejected: true,
+      expiredCredentialRejected: true,
+      revokedCredentialRejected: true,
+      replayedCredentialRejected: true,
+      priorSessionRejected: true,
+      sameRoleSurface: true,
+      revokedSessionCount: 1,
+      rawCredentialStored: false,
     },
     accountLifecycle: {
       disabledStatus: "disabled",
@@ -7365,13 +7395,14 @@ test("admin local identity adapter detail data carries lifecycle checks and role
   assert.equal(data.status, "available");
   assert.equal(data.surfaceHeader.title, "Local identity adapter");
   assert.equal(data.audit.id, localAdminAuditIds.identityAdapter);
-  assert.equal(data.audit.checks.length, 9);
+  assert.equal(data.audit.checks.length, 10);
   assert.equal(data.audit.sessions.length, 3);
   assert.deepEqual(
     data.audit.checks.map((check) => [check.id, check.status]),
     [
       ["account-login", "passed"],
       ["account-password-rotation", "passed"],
+      ["account-recovery", "passed"],
       ["account-lifecycle", "passed"],
       ["session-rotation", "passed"],
       ["session-revocation", "passed"],
@@ -7463,6 +7494,38 @@ function identityLifecycleAuditFixture() {
       },
       {
         id: 5,
+        event_at: 102,
+        event_kind: "account_recovery_credential_issued",
+        actor_user_id: "host_h",
+        principal_user_id: "host_h",
+        metadata: { account_id: "host@example.test" },
+      },
+      {
+        id: 6,
+        event_at: 103,
+        event_kind: "account_recovery_credential_revoked",
+        actor_user_id: "host_h",
+        principal_user_id: "host_h",
+        metadata: { account_id: "host@example.test" },
+      },
+      {
+        id: 7,
+        event_at: 104,
+        event_kind: "account_recovery_rejected",
+        actor_user_id: null,
+        principal_user_id: "host_h",
+        metadata: { account_id: "host@example.test" },
+      },
+      {
+        id: 8,
+        event_at: 105,
+        event_kind: "account_recovered",
+        actor_user_id: "host_h",
+        principal_user_id: "host_h",
+        metadata: { account_id: "host@example.test" },
+      },
+      {
+        id: 9,
         event_at: 99,
         event_kind: "account_session_created",
         actor_user_id: "host_h",
@@ -7470,7 +7533,7 @@ function identityLifecycleAuditFixture() {
         metadata: { account_id: "host@example.test" },
       },
       {
-        id: 6,
+        id: 10,
         event_at: 100,
         event_kind: "session_rotated",
         actor_user_id: "host_h",
@@ -7478,7 +7541,7 @@ function identityLifecycleAuditFixture() {
         metadata: { global_capability_count: 0 },
       },
       {
-        id: 7,
+        id: 11,
         event_at: 101,
         event_kind: "session_revoked",
         actor_user_id: "admin_a",
@@ -7486,7 +7549,7 @@ function identityLifecycleAuditFixture() {
         metadata: {},
       },
       {
-        id: 8,
+        id: 12,
         event_at: 102,
         event_kind: "invite_revoked",
         actor_user_id: "admin_a",
@@ -12762,11 +12825,15 @@ function identityAdapterProofFixture() {
       inviteCredentialKind: "account-bound-single-use-invite",
       accountCredentialKind: "local-password-account",
       accountPasswordAlgorithm: "argon2id",
+      accountRecoveryCredentialKind: "hashed-single-use-recovery-credential",
       sessionCredentialKind: "opaque-session",
       lifecycleControls: [
         "account-disable",
         "account-enable",
         "account-password-rotation",
+        "account-recovery-credential-issuance",
+        "account-recovery-credential-revocation",
+        "account-recovery",
         "session-rotation",
         "session-revocation",
         "invite-revocation",
@@ -12809,6 +12876,31 @@ function identityAdapterProofFixture() {
         sameRoleSurface: true,
         revokedSessionCount: 2,
         rawPasswordStored: false,
+      },
+      accountRecovery: {
+        status: "passed",
+        credentialKind: "hashed-single-use-recovery-credential",
+        passwordAlgorithm: "argon2id",
+        securityRoleUrl:
+          "/auth/account/security?account=host%40example.test&returnTo=%2Fg%2Fgame-a%2Fhost",
+        recoveryRoleUrl:
+          "/auth/account/recovery?account=host%40example.test&returnTo=%2Fg%2Fgame-a%2Fhost",
+        securitySurfaceTestId: "account-security-surface",
+        recoverySurfaceTestId: "account-recovery-surface",
+        rawCredentialVisibleOnce: true,
+        rawCredentialStored: false,
+        invalidCredentialRejected: true,
+        expiredCredentialRejected: true,
+        revokedCredentialRejected: true,
+        replayedCredentialRejected: true,
+        priorSessionRejected: true,
+        priorPasswordRejected: true,
+        recoveredPasswordCapabilityKinds: ["HostOf"],
+        sameRoleSurface: true,
+        revokedSessionCount: 1,
+        storedCredentialCount: 3,
+        usedCredentialCount: 1,
+        revokedCredentialCount: 1,
       },
       accountLifecycle: {
         status: "passed",

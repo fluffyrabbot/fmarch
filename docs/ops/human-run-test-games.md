@@ -908,9 +908,12 @@ concurrent host resolve/advance/deadline-advance/lifecycle/complete-game/mixed-a
 local artifact-bundle, local seed/demo fixture inventory,
 local identity-adapter shape, including Argon2id credential storage and the seeded
 `/auth/account/security?account=<account-id>&returnTo=<role-surface>` password-rotation
-flow back to the unchanged host role surface, and local backup/restore lanes. It does not prove
+flow plus hashed single-use recovery credential management, rejection of
+invalid/expired/revoked/replayed credentials, and
+`/auth/account/recovery?account=<account-id>&returnTo=<role-surface>` recovery back to
+the unchanged host role surface, and local backup/restore lanes. It does not prove
 hosted production account lifecycle,
-invite delivery, account recovery, hosted password-parameter monitoring, rate limits, abuse controls, production
+invite delivery, hosted recovery delivery/traffic, hosted password-parameter monitoring, rate limits, abuse controls, production
 session-secret policy, hosted deployment, hosted demo fixtures,
 production-like backup/PITR, exhaustive race coverage, hosted
 logs/metrics/traces, upload or transcode behavior, beta readiness, or

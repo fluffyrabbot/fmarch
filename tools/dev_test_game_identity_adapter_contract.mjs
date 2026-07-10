@@ -3,7 +3,7 @@ import {
   hostedIdentityRoleSurfaceContractDiff,
 } from "./dev_test_game_hosted_identity_evidence_cases.mjs";
 
-export const devTestGameIdentityAdapterProofVersion = 13;
+export const devTestGameIdentityAdapterProofVersion = 14;
 export const devTestGameIdentityAdapterContractId =
   "local-production-identity-adapter-v1";
 
@@ -15,6 +15,7 @@ export const devTestGameIdentityAdapterExpectedContract = deepFreeze({
   credentialKinds: {
     invite: "account-bound-single-use-invite",
     account: "local-password-account",
+    recovery: "hashed-single-use-recovery-credential",
     session: "opaque-session",
   },
   passwordAlgorithm: "argon2id",
@@ -23,6 +24,9 @@ export const devTestGameIdentityAdapterExpectedContract = deepFreeze({
     "account-disable",
     "account-enable",
     "account-password-rotation",
+    "account-recovery-credential-issuance",
+    "account-recovery-credential-revocation",
+    "account-recovery",
     "session-rotation",
     "session-revocation",
     "invite-revocation",

@@ -9231,6 +9231,7 @@ export function normalizeLocalIdentityAdapterAudit(identityAdapterProof, { game 
       "account-password-rotation",
       identityAdapterProof.identityLifecycle?.accountPasswordRotation?.status,
     ],
+    ["account-recovery", identityAdapterProof.identityLifecycle?.accountRecovery?.status],
     [
       "account-lifecycle",
       identityAdapterProof.identityLifecycle?.accountLifecycle?.status,
@@ -9289,6 +9290,32 @@ export function normalizeLocalIdentityAdapterAudit(identityAdapterProof, { game 
       ?.revokedSessionCount < 1 ||
     identityAdapterProof.identityLifecycle?.accountPasswordRotation?.rawPasswordStored !==
       false ||
+    identityAdapterProof.identityLifecycle?.accountRecovery?.credentialKind !==
+      "hashed-single-use-recovery-credential" ||
+    identityAdapterProof.identityLifecycle?.accountRecovery?.passwordAlgorithm !==
+      "argon2id" ||
+    identityAdapterProof.identityLifecycle?.accountRecovery?.recoverySurfaceTestId !==
+      "account-recovery-surface" ||
+    identityAdapterProof.identityLifecycle?.accountRecovery?.rawCredentialVisibleOnce !==
+      true ||
+    identityAdapterProof.identityLifecycle?.accountRecovery?.rawCredentialStored !==
+      false ||
+    identityAdapterProof.identityLifecycle?.accountRecovery?.invalidCredentialRejected !==
+      true ||
+    identityAdapterProof.identityLifecycle?.accountRecovery?.expiredCredentialRejected !==
+      true ||
+    identityAdapterProof.identityLifecycle?.accountRecovery?.revokedCredentialRejected !==
+      true ||
+    identityAdapterProof.identityLifecycle?.accountRecovery?.replayedCredentialRejected !==
+      true ||
+    identityAdapterProof.identityLifecycle?.accountRecovery?.priorSessionRejected !==
+      true ||
+    identityAdapterProof.identityLifecycle?.accountRecovery?.priorPasswordRejected !==
+      true ||
+    !identityAdapterProof.identityLifecycle?.accountRecovery
+      ?.recoveredPasswordCapabilityKinds?.includes("HostOf") ||
+    identityAdapterProof.identityLifecycle?.accountRecovery?.sameRoleSurface !== true ||
+    identityAdapterProof.identityLifecycle?.accountRecovery?.revokedSessionCount < 1 ||
     identityAdapterProof.identityLifecycle?.accountLifecycle?.adminControlSurface?.status !==
       "passed" ||
     identityAdapterProof.identityLifecycle?.accountLifecycle?.adminControlSurface
@@ -9347,6 +9374,9 @@ export function normalizeLocalIdentityAdapterAudit(identityAdapterProof, { game 
     ),
     accountPasswordAlgorithm: String(
       identityAdapterProof.identityAdapter?.accountPasswordAlgorithm ?? "",
+    ),
+    accountRecoveryCredentialKind: String(
+      identityAdapterProof.identityAdapter?.accountRecoveryCredentialKind ?? "",
     ),
     lifecycleControls: Object.freeze(controls.map((control) => String(control))),
     delegatedIssuanceControls: Object.freeze(
@@ -9422,6 +9452,37 @@ export function normalizeLocalIdentityAdapterAudit(identityAdapterProof, { game 
       rawPasswordStored:
         identityAdapterProof.identityLifecycle.accountPasswordRotation
           ?.rawPasswordStored === true,
+    }),
+    accountRecovery: Object.freeze({
+      credentialKind: String(
+        identityAdapterProof.identityLifecycle.accountRecovery?.credentialKind ?? "",
+      ),
+      recoveryRoleUrl: String(
+        identityAdapterProof.identityLifecycle.accountRecovery?.recoveryRoleUrl ?? "",
+      ),
+      invalidCredentialRejected:
+        identityAdapterProof.identityLifecycle.accountRecovery
+          ?.invalidCredentialRejected === true,
+      expiredCredentialRejected:
+        identityAdapterProof.identityLifecycle.accountRecovery
+          ?.expiredCredentialRejected === true,
+      revokedCredentialRejected:
+        identityAdapterProof.identityLifecycle.accountRecovery
+          ?.revokedCredentialRejected === true,
+      replayedCredentialRejected:
+        identityAdapterProof.identityLifecycle.accountRecovery
+          ?.replayedCredentialRejected === true,
+      priorSessionRejected:
+        identityAdapterProof.identityLifecycle.accountRecovery?.priorSessionRejected ===
+        true,
+      sameRoleSurface:
+        identityAdapterProof.identityLifecycle.accountRecovery?.sameRoleSurface === true,
+      revokedSessionCount:
+        identityAdapterProof.identityLifecycle.accountRecovery?.revokedSessionCount ??
+        null,
+      rawCredentialStored:
+        identityAdapterProof.identityLifecycle.accountRecovery?.rawCredentialStored ===
+        true,
     }),
     accountLifecycle: Object.freeze({
       disabledStatus: String(

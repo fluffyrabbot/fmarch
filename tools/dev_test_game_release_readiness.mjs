@@ -6203,12 +6203,15 @@ export function validateDevTestGameIdentityAdapterProof(proof, options = {}) {
       "account-bound-single-use-invite" ||
     proof.identityAdapter?.accountCredentialKind !== "local-password-account" ||
     proof.identityAdapter?.accountPasswordAlgorithm !== "argon2id" ||
+    proof.identityAdapter?.accountRecoveryCredentialKind !==
+      "hashed-single-use-recovery-credential" ||
     proof.identityAdapter?.sessionCredentialKind !== "opaque-session" ||
     !proof.identityAdapter?.lifecycleControls?.includes("account-disable") ||
     !proof.identityAdapter?.lifecycleControls?.includes("account-enable") ||
     !proof.identityAdapter?.lifecycleControls?.includes(
       "account-password-rotation",
     ) ||
+    !proof.identityAdapter?.lifecycleControls?.includes("account-recovery") ||
     !proof.identityAdapter?.lifecycleControls?.includes("session-rotation") ||
     !proof.identityAdapter?.lifecycleControls?.includes("session-revocation") ||
     !proof.identityAdapter?.lifecycleControls?.includes("invite-revocation") ||
@@ -6273,6 +6276,28 @@ export function validateDevTestGameIdentityAdapterProof(proof, options = {}) {
     proof.identityLifecycle?.accountPasswordRotation?.sameRoleSurface !== true ||
     proof.identityLifecycle?.accountPasswordRotation?.revokedSessionCount < 1 ||
     proof.identityLifecycle?.accountPasswordRotation?.rawPasswordStored !== false ||
+    proof.identityLifecycle?.accountRecovery?.status !== "passed" ||
+    proof.identityLifecycle?.accountRecovery?.credentialKind !==
+      "hashed-single-use-recovery-credential" ||
+    proof.identityLifecycle?.accountRecovery?.passwordAlgorithm !== "argon2id" ||
+    proof.identityLifecycle?.accountRecovery?.recoverySurfaceTestId !==
+      "account-recovery-surface" ||
+    proof.identityLifecycle?.accountRecovery?.rawCredentialVisibleOnce !== true ||
+    proof.identityLifecycle?.accountRecovery?.rawCredentialStored !== false ||
+    proof.identityLifecycle?.accountRecovery?.invalidCredentialRejected !== true ||
+    proof.identityLifecycle?.accountRecovery?.expiredCredentialRejected !== true ||
+    proof.identityLifecycle?.accountRecovery?.revokedCredentialRejected !== true ||
+    proof.identityLifecycle?.accountRecovery?.replayedCredentialRejected !== true ||
+    proof.identityLifecycle?.accountRecovery?.priorSessionRejected !== true ||
+    proof.identityLifecycle?.accountRecovery?.priorPasswordRejected !== true ||
+    !proof.identityLifecycle?.accountRecovery?.recoveredPasswordCapabilityKinds?.includes(
+      "HostOf",
+    ) ||
+    proof.identityLifecycle?.accountRecovery?.sameRoleSurface !== true ||
+    proof.identityLifecycle?.accountRecovery?.revokedSessionCount < 1 ||
+    proof.identityLifecycle?.accountRecovery?.storedCredentialCount !== 3 ||
+    proof.identityLifecycle?.accountRecovery?.usedCredentialCount !== 1 ||
+    proof.identityLifecycle?.accountRecovery?.revokedCredentialCount !== 1 ||
     proof.identityLifecycle?.accountLifecycle?.status !== "passed" ||
     proof.identityLifecycle?.accountLifecycle?.adminControlSurface?.status !== "passed" ||
     proof.identityLifecycle?.accountLifecycle?.adminControlSurface?.detailRoleUrl !==
@@ -6324,6 +6349,18 @@ export function validateDevTestGameIdentityAdapterProof(proof, options = {}) {
     !proof.identityLifecycle?.auditTrail?.eventKinds?.includes(
       "account_password_rotated",
     ) ||
+    !proof.identityLifecycle?.auditTrail?.eventKinds?.includes(
+      "account_recovery_credential_issued",
+    ) ||
+    !proof.identityLifecycle?.auditTrail?.eventKinds?.includes(
+      "account_recovery_credential_revoked",
+    ) ||
+    !proof.identityLifecycle?.auditTrail?.eventKinds?.includes(
+      "account_recovery_rejected",
+    ) ||
+    !proof.identityLifecycle?.auditTrail?.eventKinds?.includes(
+      "account_recovered",
+    ) ||
     !proof.identityLifecycle?.auditTrail?.eventKinds?.includes("session_rotated") ||
     !proof.identityLifecycle?.auditTrail?.eventKinds?.includes("session_revoked") ||
     !proof.identityLifecycle?.auditTrail?.eventKinds?.includes("invite_revoked") ||
@@ -6344,6 +6381,18 @@ export function validateDevTestGameIdentityAdapterProof(proof, options = {}) {
     ) ||
     !proof.identityLifecycle?.adminAuditSurface?.visibleEventKinds?.includes(
       "account_password_rotated",
+    ) ||
+    !proof.identityLifecycle?.adminAuditSurface?.visibleEventKinds?.includes(
+      "account_recovery_credential_issued",
+    ) ||
+    !proof.identityLifecycle?.adminAuditSurface?.visibleEventKinds?.includes(
+      "account_recovery_credential_revoked",
+    ) ||
+    !proof.identityLifecycle?.adminAuditSurface?.visibleEventKinds?.includes(
+      "account_recovery_rejected",
+    ) ||
+    !proof.identityLifecycle?.adminAuditSurface?.visibleEventKinds?.includes(
+      "account_recovered",
     ) ||
     !proof.identityLifecycle?.adminAuditSurface?.visibleEventKinds?.includes(
       "session_rotated",

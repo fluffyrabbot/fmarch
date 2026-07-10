@@ -89,6 +89,15 @@ pub fn router_with_state(state: ApiState) -> Router {
             "/auth/accounts/password-rotations",
             post(rotate_auth_account_password),
         )
+        .route(
+            "/auth/accounts/recovery-credentials",
+            post(issue_auth_account_recovery_credential),
+        )
+        .route(
+            "/auth/accounts/recovery-credential-revocations",
+            post(revoke_auth_account_recovery_credential),
+        )
+        .route("/auth/accounts/recoveries", post(recover_auth_account))
         .route("/auth/accounts/disable", post(disable_auth_account))
         .route("/auth/accounts/enable", post(enable_auth_account))
         .route("/auth/session-rotations", post(rotate_auth_session))
@@ -201,6 +210,55 @@ struct RotateAuthAccountPassword {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct AuthAccountPasswordRotationResponse {
     status: String,
+    account_id: String,
+    principal_user_id: String,
+    revoked_session_count: i64,
+    password_algorithm: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct IssueAuthAccountRecoveryCredential {
+    account_id: String,
+    current_password: String,
+    expires_at: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct AuthAccountRecoveryCredentialResponse {
+    status: String,
+    recovery_id: Uuid,
+    recovery_token: String,
+    account_id: String,
+    principal_user_id: String,
+    expires_at: i64,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct RevokeAuthAccountRecoveryCredential {
+    account_id: String,
+    current_password: String,
+    recovery_id: Uuid,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct AuthAccountRecoveryCredentialLifecycleResponse {
+    status: String,
+    recovery_id: Uuid,
+    account_id: String,
+    principal_user_id: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct RecoverAuthAccount {
+    account_id: String,
+    recovery_token: String,
+    new_password: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct AuthAccountRecoveryResponse {
+    status: String,
+    recovery_id: Uuid,
     account_id: String,
     principal_user_id: String,
     revoked_session_count: i64,
@@ -649,39 +707,14 @@ async fn rotate_auth_account_password(
     let now = unix_now_seconds();
     let caller_hash = hash_session_token(caller_token);
     let mut tx = state.pool.begin().await?;
-    let caller_principal_user_id = sqlx::query_scalar::<_, String>(
-        r#"
-        SELECT principal_user_id
-        FROM auth_session
-        WHERE token_hash = $1
-          AND revoked_at IS NULL
-          AND expires_at > $2
-        FOR UPDATE
-        "#,
+    let caller_principal_user_id = authenticated_account_principal_for_update(
+        &mut tx,
+        &caller_hash,
+        account_id,
+        current_password,
+        now,
     )
-    .bind(&caller_hash)
-    .bind(now)
-    .fetch_optional(&mut *tx)
-    .await?
-    .ok_or_else(unauthorized_session)?;
-    let account = sqlx::query_as::<_, (String, String)>(
-        r#"
-        SELECT principal_user_id, password_hash
-        FROM auth_account
-        WHERE account_id = $1
-          AND disabled_at IS NULL
-        FOR UPDATE
-        "#,
-    )
-    .bind(account_id)
-    .fetch_optional(&mut *tx)
-    .await?
-    .ok_or_else(unauthorized_account)?;
-    if account.0 != caller_principal_user_id
-        || !verify_account_password(account.1.as_str(), current_password).await?
-    {
-        return Err(unauthorized_account());
-    }
+    .await?;
 
     let password_hash = hash_account_password(new_password).await?;
     sqlx::query("UPDATE auth_account SET password_hash = $2 WHERE account_id = $1")
@@ -737,6 +770,314 @@ async fn rotate_auth_account_password(
         status: "rotated".to_string(),
         account_id: account_id.to_string(),
         principal_user_id: caller_principal_user_id,
+        revoked_session_count,
+        password_algorithm: "argon2id".to_string(),
+    }))
+}
+
+async fn issue_auth_account_recovery_credential(
+    State(state): State<ApiState>,
+    headers: HeaderMap,
+    Json(request): Json<IssueAuthAccountRecoveryCredential>,
+) -> Result<Json<AuthAccountRecoveryCredentialResponse>, ApiError> {
+    let caller_token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
+    let account_id = request.account_id.trim();
+    let current_password = request.current_password.as_str();
+    if account_id.is_empty() || current_password.trim().is_empty() {
+        return Err(ApiError::Reject {
+            status: StatusCode::BAD_REQUEST,
+            error: RejectCode::Internal,
+            message: "recovery credential issuance requires account_id and current_password"
+                .to_string(),
+        });
+    }
+    validate_account_password_input(current_password)?;
+    let now = unix_now_seconds();
+    if request.expires_at <= now || request.expires_at > now + 31_536_000 {
+        return Err(ApiError::Reject {
+            status: StatusCode::BAD_REQUEST,
+            error: RejectCode::Internal,
+            message: "recovery credential expiry must be within the next 365 days".to_string(),
+        });
+    }
+
+    let caller_hash = hash_session_token(caller_token);
+    let recovery_id = Uuid::new_v4();
+    let recovery_token = format!("account-recovery-{}-{}", Uuid::new_v4(), Uuid::new_v4());
+    let recovery_hash = hash_session_token(recovery_token.as_str());
+    let mut tx = state.pool.begin().await?;
+    let principal_user_id = authenticated_account_principal_for_update(
+        &mut tx,
+        &caller_hash,
+        account_id,
+        current_password,
+        now,
+    )
+    .await?;
+    sqlx::query(
+        r#"
+        INSERT INTO auth_account_recovery_credential (
+            recovery_id,
+            account_id,
+            token_hash,
+            created_at,
+            expires_at,
+            used_at,
+            revoked_at
+        )
+        VALUES ($1, $2, $3, $4, $5, NULL, NULL)
+        "#,
+    )
+    .bind(recovery_id)
+    .bind(account_id)
+    .bind(&recovery_hash)
+    .bind(now)
+    .bind(request.expires_at)
+    .execute(&mut *tx)
+    .await?;
+    sqlx::query(
+        r#"
+        INSERT INTO identity_lifecycle_audit (
+            event_at,
+            event_kind,
+            actor_user_id,
+            principal_user_id,
+            token_hash,
+            related_token_hash,
+            metadata
+        )
+        VALUES ($1, 'account_recovery_credential_issued', $2, $3, $4, NULL, $5::JSONB)
+        "#,
+    )
+    .bind(now)
+    .bind(principal_user_id.as_str())
+    .bind(principal_user_id.as_str())
+    .bind(recovery_hash)
+    .bind(
+        serde_json::json!({
+            "account_id": account_id,
+            "recovery_id": recovery_id,
+            "expires_at": request.expires_at
+        })
+        .to_string(),
+    )
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+
+    Ok(Json(AuthAccountRecoveryCredentialResponse {
+        status: "issued".to_string(),
+        recovery_id,
+        recovery_token,
+        account_id: account_id.to_string(),
+        principal_user_id,
+        expires_at: request.expires_at,
+    }))
+}
+
+async fn revoke_auth_account_recovery_credential(
+    State(state): State<ApiState>,
+    headers: HeaderMap,
+    Json(request): Json<RevokeAuthAccountRecoveryCredential>,
+) -> Result<Json<AuthAccountRecoveryCredentialLifecycleResponse>, ApiError> {
+    let caller_token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
+    let account_id = request.account_id.trim();
+    let current_password = request.current_password.as_str();
+    if account_id.is_empty() || current_password.trim().is_empty() {
+        return Err(ApiError::Reject {
+            status: StatusCode::BAD_REQUEST,
+            error: RejectCode::Internal,
+            message: "recovery credential revocation requires account_id and current_password"
+                .to_string(),
+        });
+    }
+    validate_account_password_input(current_password)?;
+    let now = unix_now_seconds();
+    let caller_hash = hash_session_token(caller_token);
+    let mut tx = state.pool.begin().await?;
+    let principal_user_id = authenticated_account_principal_for_update(
+        &mut tx,
+        &caller_hash,
+        account_id,
+        current_password,
+        now,
+    )
+    .await?;
+    let recovery_hash = sqlx::query_scalar::<_, String>(
+        r#"
+        UPDATE auth_account_recovery_credential
+        SET revoked_at = $1
+        WHERE recovery_id = $2
+          AND account_id = $3
+          AND used_at IS NULL
+          AND revoked_at IS NULL
+        RETURNING token_hash
+        "#,
+    )
+    .bind(now)
+    .bind(request.recovery_id)
+    .bind(account_id)
+    .fetch_optional(&mut *tx)
+    .await?
+    .ok_or_else(unauthorized_account_recovery)?;
+    sqlx::query(
+        r#"
+        INSERT INTO identity_lifecycle_audit (
+            event_at,
+            event_kind,
+            actor_user_id,
+            principal_user_id,
+            token_hash,
+            related_token_hash,
+            metadata
+        )
+        VALUES ($1, 'account_recovery_credential_revoked', $2, $3, $4, NULL, $5::JSONB)
+        "#,
+    )
+    .bind(now)
+    .bind(principal_user_id.as_str())
+    .bind(principal_user_id.as_str())
+    .bind(recovery_hash)
+    .bind(
+        serde_json::json!({
+            "account_id": account_id,
+            "recovery_id": request.recovery_id
+        })
+        .to_string(),
+    )
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+
+    Ok(Json(AuthAccountRecoveryCredentialLifecycleResponse {
+        status: "revoked".to_string(),
+        recovery_id: request.recovery_id,
+        account_id: account_id.to_string(),
+        principal_user_id,
+    }))
+}
+
+async fn recover_auth_account(
+    State(state): State<ApiState>,
+    Json(request): Json<RecoverAuthAccount>,
+) -> Result<Json<AuthAccountRecoveryResponse>, ApiError> {
+    let account_id = request.account_id.trim();
+    let recovery_token = request.recovery_token.trim();
+    let new_password = request.new_password.as_str();
+    if account_id.is_empty() || recovery_token.is_empty() || new_password.trim().is_empty() {
+        return Err(ApiError::Reject {
+            status: StatusCode::BAD_REQUEST,
+            error: RejectCode::Internal,
+            message: "account recovery requires account_id, recovery_token, and new_password"
+                .to_string(),
+        });
+    }
+    if recovery_token.len() > 256 {
+        return Err(ApiError::Reject {
+            status: StatusCode::BAD_REQUEST,
+            error: RejectCode::Internal,
+            message: "account recovery credentials cannot exceed 256 bytes".to_string(),
+        });
+    }
+    validate_new_account_password(new_password)?;
+    let now = unix_now_seconds();
+    let recovery_hash = hash_session_token(recovery_token);
+    let password_hash = hash_account_password(new_password).await?;
+    let mut tx = state.pool.begin().await?;
+    let credential = sqlx::query_as::<_, (Uuid, String)>(
+        r#"
+        SELECT recovery.recovery_id,
+               account.principal_user_id
+        FROM auth_account_recovery_credential AS recovery
+        JOIN auth_account AS account
+          ON account.account_id = recovery.account_id
+        WHERE recovery.account_id = $1
+          AND recovery.token_hash = $2
+          AND recovery.used_at IS NULL
+          AND recovery.revoked_at IS NULL
+          AND recovery.expires_at > $3
+          AND account.disabled_at IS NULL
+        FOR UPDATE OF recovery, account
+        "#,
+    )
+    .bind(account_id)
+    .bind(&recovery_hash)
+    .bind(now)
+    .fetch_optional(&mut *tx)
+    .await?;
+    let Some((recovery_id, principal_user_id)) = credential else {
+        tx.rollback().await?;
+        record_account_recovery_rejection(&state.pool, account_id, recovery_hash.as_str(), now)
+            .await?;
+        return Err(unauthorized_account_recovery());
+    };
+
+    sqlx::query(
+        r#"
+        UPDATE auth_account_recovery_credential
+        SET used_at = $1
+        WHERE recovery_id = $2
+        "#,
+    )
+    .bind(now)
+    .bind(recovery_id)
+    .execute(&mut *tx)
+    .await?;
+    sqlx::query("UPDATE auth_account SET password_hash = $2 WHERE account_id = $1")
+        .bind(account_id)
+        .bind(password_hash)
+        .execute(&mut *tx)
+        .await?;
+    let revoked_session_count = sqlx::query(
+        r#"
+        UPDATE auth_session
+        SET revoked_at = $1
+        WHERE principal_user_id = $2
+          AND revoked_at IS NULL
+          AND expires_at > $1
+        "#,
+    )
+    .bind(now)
+    .bind(principal_user_id.as_str())
+    .execute(&mut *tx)
+    .await?
+    .rows_affected() as i64;
+    sqlx::query(
+        r#"
+        INSERT INTO identity_lifecycle_audit (
+            event_at,
+            event_kind,
+            actor_user_id,
+            principal_user_id,
+            token_hash,
+            related_token_hash,
+            metadata
+        )
+        VALUES ($1, 'account_recovered', $2, $3, $4, NULL, $5::JSONB)
+        "#,
+    )
+    .bind(now)
+    .bind(principal_user_id.as_str())
+    .bind(principal_user_id.as_str())
+    .bind(&recovery_hash)
+    .bind(
+        serde_json::json!({
+            "account_id": account_id,
+            "recovery_id": recovery_id,
+            "password_algorithm": "argon2id",
+            "revoked_session_count": revoked_session_count
+        })
+        .to_string(),
+    )
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+
+    Ok(Json(AuthAccountRecoveryResponse {
+        status: "recovered".to_string(),
+        recovery_id,
+        account_id: account_id.to_string(),
+        principal_user_id,
         revoked_session_count,
         password_algorithm: "argon2id".to_string(),
     }))
@@ -1517,6 +1858,93 @@ async fn active_session_principal_and_globals(
     .ok_or_else(unauthorized_session)
 }
 
+async fn authenticated_account_principal_for_update(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    caller_hash: &str,
+    account_id: &str,
+    current_password: &str,
+    now: i64,
+) -> Result<String, ApiError> {
+    let caller_principal_user_id = sqlx::query_scalar::<_, String>(
+        r#"
+        SELECT principal_user_id
+        FROM auth_session
+        WHERE token_hash = $1
+          AND revoked_at IS NULL
+          AND expires_at > $2
+        FOR UPDATE
+        "#,
+    )
+    .bind(caller_hash)
+    .bind(now)
+    .fetch_optional(&mut **tx)
+    .await?
+    .ok_or_else(unauthorized_session)?;
+    let account = sqlx::query_as::<_, (String, String)>(
+        r#"
+        SELECT principal_user_id, password_hash
+        FROM auth_account
+        WHERE account_id = $1
+          AND disabled_at IS NULL
+        FOR UPDATE
+        "#,
+    )
+    .bind(account_id)
+    .fetch_optional(&mut **tx)
+    .await?
+    .ok_or_else(unauthorized_account)?;
+    if account.0 != caller_principal_user_id
+        || !verify_account_password(account.1.as_str(), current_password).await?
+    {
+        return Err(unauthorized_account());
+    }
+    Ok(caller_principal_user_id)
+}
+
+async fn record_account_recovery_rejection(
+    pool: &PgPool,
+    account_id: &str,
+    recovery_hash: &str,
+    now: i64,
+) -> Result<(), ApiError> {
+    let principal_user_id = sqlx::query_scalar::<_, String>(
+        "SELECT principal_user_id FROM auth_account WHERE account_id = $1",
+    )
+    .bind(account_id)
+    .fetch_optional(pool)
+    .await?;
+    let Some(principal_user_id) = principal_user_id else {
+        return Ok(());
+    };
+    sqlx::query(
+        r#"
+        INSERT INTO identity_lifecycle_audit (
+            event_at,
+            event_kind,
+            actor_user_id,
+            principal_user_id,
+            token_hash,
+            related_token_hash,
+            metadata
+        )
+        VALUES ($1, 'account_recovery_rejected', NULL, $2, $3, NULL, $4::JSONB)
+        "#,
+    )
+    .bind(now)
+    .bind(principal_user_id)
+    .bind(recovery_hash)
+    .bind(
+        serde_json::json!({
+            "account_id": account_id,
+            "reason": "invalid_expired_revoked_or_used"
+        })
+        .to_string(),
+    )
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
 async fn require_global_admin(
     state: &ApiState,
     token: &str,
@@ -1558,6 +1986,15 @@ fn unauthorized_account() -> ApiError {
         status: StatusCode::UNAUTHORIZED,
         error: RejectCode::NotAuthorized,
         message: "account credentials are missing, disabled, or invalid".to_string(),
+    }
+}
+
+fn unauthorized_account_recovery() -> ApiError {
+    ApiError::Reject {
+        status: StatusCode::UNAUTHORIZED,
+        error: RejectCode::NotAuthorized,
+        message: "account recovery credential is missing, expired, revoked, used, or invalid"
+            .to_string(),
     }
 }
 

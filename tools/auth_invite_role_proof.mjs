@@ -129,7 +129,7 @@ try {
     scope: "local-auth-invite-role-proof",
     productionReady: false,
     proofBoundary:
-      "Local scratch-Postgres plus local Rust API, SvelteKit login/account-security/host/admin-audit routes, and Chromium proof. Proves Argon2id account credentials, account-bound invite redemption, and a local account credential lifecycle preserve the existing role-surface capability architecture for seeded admin, host, and player URLs, including authenticated password rotation with session revocation, old-password rejection, new-password recovery to the same host role URL, host-role-surface game-scoped player invite issuance, GlobalAdmin account creation/disable/enable, stale account-session revocation, disabled-account login rejection, GlobalAdmin discovery, and inspection of local identity lifecycle audit rows from the admin overview; it does not prove hosted account recovery, email delivery, hosted identity, abuse controls, hosted password-parameter monitoring, hosted audit retention/export, or beta release readiness.",
+      "Local scratch-Postgres plus local Rust API, SvelteKit login/account-security/account-recovery/host/admin-audit routes, and Chromium proof. Proves Argon2id account credentials, hashed single-use recovery credentials, account-bound invite redemption, and a local account credential lifecycle preserve the existing role-surface capability architecture for seeded admin, host, and player URLs, including authenticated password rotation and account recovery with session revocation, invalid/expired/revoked/replayed recovery rejection, recovered-password return to the same host role URL, host-role-surface game-scoped player invite issuance, GlobalAdmin account creation/disable/enable, stale account-session revocation, disabled-account login rejection, GlobalAdmin discovery, and inspection of local identity lifecycle audit rows from the admin overview; it does not prove hosted recovery delivery or traffic, email delivery, hosted identity, abuse controls, hosted password-parameter monitoring, hosted audit retention/export, or beta release readiness.",
     identityAdapter: {
       status: "passed",
       replacesDevTokensWithoutRoleSurfaceChange: true,
@@ -138,10 +138,14 @@ try {
       inviteCredentialKind: "account-bound-single-use-invite",
       accountCredentialKind: "local-password-account",
       accountPasswordAlgorithm: "argon2id",
+      accountRecoveryCredentialKind: "hashed-single-use-recovery-credential",
       lifecycleControls: [
         "account-disable",
         "account-enable",
         "account-password-rotation",
+        "account-recovery-credential-issuance",
+        "account-recovery-credential-revocation",
+        "account-recovery",
         "session-rotation",
         "session-revocation",
         "invite-revocation",
@@ -152,6 +156,8 @@ try {
       accountRoleSurfacePattern: "/auth/login?returnTo=<role-surface>&account=<account-id>",
       accountSecurityRoleSurfacePattern:
         "/auth/account/security?account=<account-id>&returnTo=<role-surface>",
+      accountRecoveryRoleSurfacePattern:
+        "/auth/account/recovery?account=<account-id>&returnTo=<role-surface>",
       capabilityAuthority:
         "auth_session resolves principal_user_id and committed game/global capabilities at the API boundary",
     },
@@ -549,6 +555,227 @@ async function driveAccountPasswordRotation({
   }
 }
 
+async function driveAccountRecoveryCredentialIssuance({
+  frontendBaseUrl,
+  sessionToken,
+  accountId,
+  currentPassword,
+  returnTo,
+}) {
+  const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
+  const securityRoleUrl = `/auth/account/security?account=${encodeURIComponent(
+    accountId,
+  )}&returnTo=${encodeURIComponent(returnTo)}`;
+  try {
+    await page.context().addCookies([
+      {
+        name: "fmarch_session",
+        value: sessionToken,
+        url: frontendBaseUrl,
+        httpOnly: true,
+        sameSite: "Lax",
+      },
+    ]);
+    await page.goto(`${frontendBaseUrl}${securityRoleUrl}`, {
+      waitUntil: "networkidle",
+    });
+    await page.getByTestId("account-security-surface").waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
+    await page.getByTestId("account-recovery-issue-password").fill(currentPassword);
+    await page.getByTestId("account-recovery-issue-submit").click();
+    await page.getByTestId("account-recovery-issued").waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
+    const recoveryToken = (
+      await page.getByTestId("account-recovery-issued-token").innerText()
+    ).trim();
+    const recoveryId = (
+      await page.getByTestId("account-recovery-issued-id").innerText()
+    ).trim();
+    if (!recoveryToken.startsWith("account-recovery-") || recoveryId === "") {
+      throw new Error("account security surface returned a malformed recovery credential");
+    }
+    return {
+      status: "passed",
+      securityRoleUrl,
+      surfaceTestId: "account-security-surface",
+      issueFormTestId: "account-recovery-issue-form",
+      recoveryToken,
+      recoveryId,
+      rawTokenVisibleOnce: true,
+    };
+  } finally {
+    await page.close();
+  }
+}
+
+async function driveAccountRecoveryCredentialRevocation({
+  frontendBaseUrl,
+  sessionToken,
+  accountId,
+  currentPassword,
+  recoveryId,
+  returnTo,
+}) {
+  const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
+  const securityRoleUrl = `/auth/account/security?account=${encodeURIComponent(
+    accountId,
+  )}&returnTo=${encodeURIComponent(returnTo)}`;
+  try {
+    await page.context().addCookies([
+      {
+        name: "fmarch_session",
+        value: sessionToken,
+        url: frontendBaseUrl,
+        httpOnly: true,
+        sameSite: "Lax",
+      },
+    ]);
+    await page.goto(`${frontendBaseUrl}${securityRoleUrl}`, {
+      waitUntil: "networkidle",
+    });
+    await page.getByTestId("account-recovery-revoke-id").fill(recoveryId);
+    await page.getByTestId("account-recovery-revoke-password").fill(currentPassword);
+    await page.getByTestId("account-recovery-revoke-submit").click();
+    await page.getByTestId("account-recovery-revoke-status").waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
+    return {
+      status: "passed",
+      securityRoleUrl,
+      revokeFormTestId: "account-recovery-revoke-form",
+      recoveryId,
+    };
+  } finally {
+    await page.close();
+  }
+}
+
+async function issueAccountRecoveryCredential({
+  apiBaseUrl,
+  sessionToken,
+  accountId,
+  currentPassword,
+  expiresAt,
+}) {
+  const response = await fetchJson(`${apiBaseUrl}/auth/accounts/recovery-credentials`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${sessionToken}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      account_id: accountId,
+      current_password: currentPassword,
+      expires_at: expiresAt,
+    }),
+  });
+  return {
+    status: response.status,
+    recoveryId: response.recovery_id,
+    recoveryToken: response.recovery_token,
+    expiresAt: response.expires_at,
+  };
+}
+
+async function driveRejectedAccountRecovery({
+  frontendBaseUrl,
+  accountId,
+  recoveryToken,
+  returnTo,
+}) {
+  const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
+  const recoveryRoleUrl = `/auth/account/recovery?account=${encodeURIComponent(
+    accountId,
+  )}&returnTo=${encodeURIComponent(returnTo)}`;
+  try {
+    await page.goto(`${frontendBaseUrl}${recoveryRoleUrl}`, {
+      waitUntil: "networkidle",
+    });
+    await page.getByTestId("account-recovery-surface").waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
+    await page.getByTestId("account-recovery-token").fill(recoveryToken);
+    await page
+      .getByTestId("account-recovery-new-password")
+      .fill(`rejected-recovery-password-${game}`);
+    await page
+      .getByTestId("account-recovery-confirm-password")
+      .fill(`rejected-recovery-password-${game}`);
+    await page.getByTestId("account-recovery-submit").click();
+    await page.getByTestId("account-recovery-reject").waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
+    const rejectionText = await page.getByTestId("account-recovery-reject").innerText();
+    if (!rejectionText.includes("missing, expired, revoked, used, or invalid")) {
+      throw new Error(`account recovery rejection drifted: ${rejectionText}`);
+    }
+    return {
+      status: "reject",
+      recoveryRoleUrl,
+      surfaceTestId: "account-recovery-surface",
+      rejectionText,
+    };
+  } finally {
+    await page.close();
+  }
+}
+
+async function driveAccountRecovery({
+  frontendBaseUrl,
+  accountId,
+  recoveryToken,
+  newPassword,
+  returnTo,
+}) {
+  const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
+  const recoveryRoleUrl = `/auth/account/recovery?account=${encodeURIComponent(
+    accountId,
+  )}&returnTo=${encodeURIComponent(returnTo)}`;
+  const expectedLoginUrl = `${frontendBaseUrl}/auth/login?returnTo=${encodeURIComponent(
+    returnTo,
+  )}&account=${encodeURIComponent(accountId)}`;
+  try {
+    await page.goto(`${frontendBaseUrl}${recoveryRoleUrl}`, {
+      waitUntil: "networkidle",
+    });
+    await page.getByTestId("account-recovery-surface").waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
+    const accountValue = await page.getByTestId("account-recovery-account").inputValue();
+    if (accountValue !== accountId) {
+      throw new Error(`account recovery id was not prefilled: ${accountValue}`);
+    }
+    await page.getByTestId("account-recovery-token").fill(recoveryToken);
+    await page.getByTestId("account-recovery-new-password").fill(newPassword);
+    await page.getByTestId("account-recovery-confirm-password").fill(newPassword);
+    await Promise.all([
+      page.waitForURL(expectedLoginUrl, { timeout: 15000 }),
+      page.getByTestId("account-recovery-submit").click(),
+    ]);
+    await page.getByTestId("auth-login-surface").waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
+    return {
+      status: "passed",
+      recoveryRoleUrl,
+      surfaceTestId: "account-recovery-surface",
+      accountPrefilled: true,
+      loginReturnTo: returnTo,
+    };
+  } finally {
+    await page.close();
+  }
+}
+
 async function proveIdentityLifecycle({
   apiBaseUrl,
   frontendBaseUrl,
@@ -559,6 +786,7 @@ async function proveIdentityLifecycle({
 }) {
   const rotatedSessionToken = `rotated-host-session-${game}`;
   const rotatedHostPassword = `rotated-host-password-${game}`;
+  const recoveredHostPassword = `recovered-host-password-${game}`;
   const rotation = await rotateSession({
     apiBaseUrl,
     oldSessionToken: hostSessionToken,
@@ -691,6 +919,35 @@ async function proveIdentityLifecycle({
       returnTo: hostReturnTo,
       expectedText: game,
     });
+    const activeRecoveryCredential = await driveAccountRecoveryCredentialIssuance({
+      frontendBaseUrl,
+      sessionToken: accountRecoveryLogin.sessionToken,
+      accountId: hostAccount.accountId,
+      currentPassword: hostAccount.password,
+      returnTo: hostReturnTo,
+    });
+    const revokedRecoveryCredential = await driveAccountRecoveryCredentialIssuance({
+      frontendBaseUrl,
+      sessionToken: accountRecoveryLogin.sessionToken,
+      accountId: hostAccount.accountId,
+      currentPassword: hostAccount.password,
+      returnTo: hostReturnTo,
+    });
+    const recoveryCredentialRevocation = await driveAccountRecoveryCredentialRevocation({
+      frontendBaseUrl,
+      sessionToken: accountRecoveryLogin.sessionToken,
+      accountId: hostAccount.accountId,
+      currentPassword: hostAccount.password,
+      recoveryId: revokedRecoveryCredential.recoveryId,
+      returnTo: hostReturnTo,
+    });
+    const expiredRecoveryCredential = await issueAccountRecoveryCredential({
+      apiBaseUrl,
+      sessionToken: accountRecoveryLogin.sessionToken,
+      accountId: hostAccount.accountId,
+      currentPassword: hostAccount.password,
+      expiresAt: Math.floor(Date.now() / 1000) + 2,
+    });
     const accountPasswordRotation = await driveAccountPasswordRotation({
       frontendBaseUrl,
       sessionToken: accountRecoveryLogin.sessionToken,
@@ -720,6 +977,61 @@ async function proveIdentityLifecycle({
       returnTo: hostReturnTo,
       expectedText: game,
     });
+    const invalidRecoveryReject = await driveRejectedAccountRecovery({
+      frontendBaseUrl,
+      accountId: hostAccount.accountId,
+      recoveryToken: `invalid-recovery-${game}`,
+      returnTo: hostReturnTo,
+    });
+    const revokedRecoveryReject = await driveRejectedAccountRecovery({
+      frontendBaseUrl,
+      accountId: hostAccount.accountId,
+      recoveryToken: revokedRecoveryCredential.recoveryToken,
+      returnTo: hostReturnTo,
+    });
+    await delay(
+      Math.max(0, (expiredRecoveryCredential.expiresAt + 1) * 1000 - Date.now()),
+    );
+    const expiredRecoveryReject = await driveRejectedAccountRecovery({
+      frontendBaseUrl,
+      accountId: hostAccount.accountId,
+      recoveryToken: expiredRecoveryCredential.recoveryToken,
+      returnTo: hostReturnTo,
+    });
+    const accountRecovery = await driveAccountRecovery({
+      frontendBaseUrl,
+      accountId: hostAccount.accountId,
+      recoveryToken: activeRecoveryCredential.recoveryToken,
+      newPassword: recoveredHostPassword,
+      returnTo: hostReturnTo,
+    });
+    await assertUnauthorizedSession(apiBaseUrl, rotatedPasswordLogin.sessionToken);
+    const replayedRecoveryReject = await driveRejectedAccountRecovery({
+      frontendBaseUrl,
+      accountId: hostAccount.accountId,
+      recoveryToken: activeRecoveryCredential.recoveryToken,
+      returnTo: hostReturnTo,
+    });
+    const rotatedPasswordReject = await driveRejectedAccountLogin({
+      frontendBaseUrl,
+      accountId: hostAccount.accountId,
+      password: rotatedHostPassword,
+      returnTo: hostReturnTo,
+    });
+    const recoveredPasswordLogin = await driveAccountLogin({
+      frontendBaseUrl,
+      apiBaseUrl,
+      accountId: hostAccount.accountId,
+      password: recoveredHostPassword,
+      returnTo: hostReturnTo,
+      expectedCapability: "HostOf",
+    });
+    await assertBrowserSessionRendersRole({
+      frontendBaseUrl,
+      sessionToken: recoveredPasswordLogin.sessionToken,
+      returnTo: hostReturnTo,
+      expectedText: game,
+    });
     return await finishIdentityLifecycleProof({
       apiBaseUrl,
       frontendBaseUrl,
@@ -734,6 +1046,18 @@ async function proveIdentityLifecycle({
       oldPasswordReject,
       rotatedPasswordLogin,
       rotatedHostPassword,
+      recoveredPasswordLogin,
+      recoveredHostPassword,
+      activeRecoveryCredential,
+      revokedRecoveryCredential,
+      expiredRecoveryCredential,
+      recoveryCredentialRevocation,
+      invalidRecoveryReject,
+      revokedRecoveryReject,
+      expiredRecoveryReject,
+      replayedRecoveryReject,
+      rotatedPasswordReject,
+      accountRecovery,
       accountDisableControl,
       accountEnableControl,
       staleAccountLifecycleConflict,
@@ -768,6 +1092,18 @@ async function finishIdentityLifecycleProof({
   oldPasswordReject,
   rotatedPasswordLogin,
   rotatedHostPassword,
+  recoveredPasswordLogin,
+  recoveredHostPassword,
+  activeRecoveryCredential,
+  revokedRecoveryCredential,
+  expiredRecoveryCredential,
+  recoveryCredentialRevocation,
+  invalidRecoveryReject,
+  revokedRecoveryReject,
+  expiredRecoveryReject,
+  replayedRecoveryReject,
+  rotatedPasswordReject,
+  accountRecovery,
   accountDisableControl,
   accountEnableControl,
   staleAccountLifecycleConflict,
@@ -791,12 +1127,19 @@ async function finishIdentityLifecycleProof({
   const passwordRotationAudit = auditTrail.entries.find(
     (entry) => entry.event_kind === "account_password_rotated",
   );
+  const accountRecoveryAudit = auditTrail.entries.find(
+    (entry) => entry.event_kind === "account_recovered",
+  );
   for (const eventKind of [
     "account_created",
     "account_disabled",
     "account_enabled",
     "account_session_created",
     "account_password_rotated",
+    "account_recovery_credential_issued",
+    "account_recovery_credential_revoked",
+    "account_recovery_rejected",
+    "account_recovered",
     "invite_redeemed",
     "invite_revoked",
     "session_revoked",
@@ -809,6 +1152,22 @@ async function finishIdentityLifecycleProof({
   if ((passwordRotationAudit?.metadata?.revoked_session_count ?? 0) < 1) {
     throw new Error("password rotation audit did not record revoked sessions");
   }
+  if ((accountRecoveryAudit?.metadata?.revoked_session_count ?? 0) < 1) {
+    throw new Error("account recovery audit did not record revoked sessions");
+  }
+  const storedRecoveryCredentials = await storedRecoveryCredentialRecords();
+  const rawRecoveryTokens = [
+    activeRecoveryCredential.recoveryToken,
+    revokedRecoveryCredential.recoveryToken,
+    expiredRecoveryCredential.recoveryToken,
+  ];
+  const storedRecoveryText = JSON.stringify(storedRecoveryCredentials);
+  if (
+    storedRecoveryCredentials.length !== 3 ||
+    rawRecoveryTokens.some((token) => storedRecoveryText.includes(token))
+  ) {
+    throw new Error("account recovery credentials were not stored as redacted hashes");
+  }
   const auditText = JSON.stringify(auditTrail);
   for (const rawToken of [
     hostSessionToken,
@@ -818,8 +1177,11 @@ async function finishIdentityLifecycleProof({
     accountLogin.sessionToken,
     accountRecoveryLogin.sessionToken,
     rotatedPasswordLogin.sessionToken,
+    recoveredPasswordLogin.sessionToken,
     hostAccount.password,
     rotatedHostPassword,
+    recoveredHostPassword,
+    ...rawRecoveryTokens,
   ]) {
     if (auditText.includes(rawToken)) {
       throw new Error("identity lifecycle audit leaked a raw credential");
@@ -836,8 +1198,11 @@ async function finishIdentityLifecycleProof({
       accountLogin.sessionToken,
       accountRecoveryLogin.sessionToken,
       rotatedPasswordLogin.sessionToken,
+      recoveredPasswordLogin.sessionToken,
       hostAccount.password,
       rotatedHostPassword,
+      recoveredHostPassword,
+      ...rawRecoveryTokens,
     ],
   });
 
@@ -889,6 +1254,37 @@ async function finishIdentityLifecycleProof({
         hostReturnTo,
       revokedSessionCount: passwordRotationAudit.metadata.revoked_session_count,
       rawPasswordStored: false,
+    },
+    accountRecovery: {
+      status: "passed",
+      credentialKind: "hashed-single-use-recovery-credential",
+      passwordAlgorithm: "argon2id",
+      securityRoleUrl: activeRecoveryCredential.securityRoleUrl,
+      recoveryRoleUrl: accountRecovery.recoveryRoleUrl,
+      securitySurfaceTestId: activeRecoveryCredential.surfaceTestId,
+      recoverySurfaceTestId: accountRecovery.surfaceTestId,
+      issueFormTestId: activeRecoveryCredential.issueFormTestId,
+      revokeFormTestId: recoveryCredentialRevocation.revokeFormTestId,
+      accountPrefilled: accountRecovery.accountPrefilled,
+      rawCredentialVisibleOnce: activeRecoveryCredential.rawTokenVisibleOnce,
+      rawCredentialStored: false,
+      invalidCredentialRejected: invalidRecoveryReject.status === "reject",
+      expiredCredentialRejected: expiredRecoveryReject.status === "reject",
+      revokedCredentialRejected: revokedRecoveryReject.status === "reject",
+      replayedCredentialRejected: replayedRecoveryReject.status === "reject",
+      priorSessionRejected: true,
+      priorPasswordRejected: rotatedPasswordReject.status === "reject",
+      recoveredPasswordCapabilityKinds: recoveredPasswordLogin.capabilityKinds,
+      sameRoleSurface:
+        new URL(recoveredPasswordLogin.loginUrl).searchParams.get("returnTo") ===
+        hostReturnTo,
+      revokedSessionCount: accountRecoveryAudit.metadata.revoked_session_count,
+      storedCredentialCount: storedRecoveryCredentials.length,
+      usedCredentialCount: storedRecoveryCredentials.filter((entry) => entry.used)
+        .length,
+      revokedCredentialCount: storedRecoveryCredentials.filter(
+        (entry) => entry.revoked,
+      ).length,
     },
     accountLifecycle: {
       status: "passed",
@@ -945,7 +1341,7 @@ async function finishIdentityLifecycleProof({
     },
     adminAuditSurface,
     nonClaims: [
-      "hosted account recovery",
+      "hosted account recovery delivery or traffic",
       "hosted password parameter monitoring or credential reset policy",
       "email or out-of-band invite delivery",
       "cross-game invite restrictions beyond recorded local game scope",
@@ -1353,6 +1749,37 @@ async function storedInviteRecord(inviteToken) {
   return JSON.parse(json);
 }
 
+async function storedRecoveryCredentialRecords() {
+  if (proofDatabase === undefined) {
+    throw new Error("proof database is not available");
+  }
+  const output = await runProcess("psql", [
+    proofDatabase.url,
+    "-v",
+    "ON_ERROR_STOP=1",
+    "-t",
+    "-A",
+    "-c",
+    `
+      SELECT COALESCE(
+        json_agg(
+          json_build_object(
+            'recoveryId', recovery_id,
+            'tokenHash', token_hash,
+            'used', used_at IS NOT NULL,
+            'revoked', revoked_at IS NOT NULL,
+            'expired', expires_at <= EXTRACT(EPOCH FROM NOW())::BIGINT
+          )
+          ORDER BY created_at, recovery_id
+        ),
+        '[]'::JSON
+      )::TEXT
+      FROM auth_account_recovery_credential
+    `,
+  ]);
+  return JSON.parse(output.trim() || "[]");
+}
+
 async function driveAdminIdentityAuditSurface({
   frontendBaseUrl,
   adminSessionToken,
@@ -1410,6 +1837,10 @@ async function driveAdminIdentityAuditSurface({
       "account_disabled",
       "account_enabled",
       "account_password_rotated",
+      "account_recovery_credential_issued",
+      "account_recovery_credential_revoked",
+      "account_recovery_rejected",
+      "account_recovered",
       "account_session_created",
       "invite_redeemed",
       "session_rotated",
@@ -1589,9 +2020,12 @@ function assertInviteProof(evidence) {
       "account-bound-single-use-invite" ||
     evidence.identityAdapter?.accountCredentialKind !== "local-password-account" ||
     evidence.identityAdapter?.accountPasswordAlgorithm !== "argon2id" ||
+    evidence.identityAdapter?.accountRecoveryCredentialKind !==
+      "hashed-single-use-recovery-credential" ||
     !evidence.identityAdapter?.lifecycleControls?.includes(
       "account-password-rotation",
     ) ||
+    !evidence.identityAdapter?.lifecycleControls?.includes("account-recovery") ||
     evidence.identityAdapterContractDiff?.status !== "passed" ||
     !evidence.identityAdapter?.delegatedIssuanceControls?.includes(
       "host-scoped-invite-issuance",
@@ -1651,6 +2085,32 @@ function assertInviteProof(evidence) {
     evidence.identityLifecycle?.accountPasswordRotation?.sameRoleSurface !== true ||
     evidence.identityLifecycle?.accountPasswordRotation?.revokedSessionCount < 1 ||
     evidence.identityLifecycle?.accountPasswordRotation?.rawPasswordStored !== false ||
+    evidence.identityLifecycle?.accountRecovery?.status !== "passed" ||
+    evidence.identityLifecycle?.accountRecovery?.credentialKind !==
+      "hashed-single-use-recovery-credential" ||
+    evidence.identityLifecycle?.accountRecovery?.passwordAlgorithm !== "argon2id" ||
+    evidence.identityLifecycle?.accountRecovery?.recoveryRoleUrl !==
+      `/auth/account/recovery?account=${encodeURIComponent(
+        accountCredentials.host.accountId,
+      )}&returnTo=${encodeURIComponent(`/g/${game}/host`)}` ||
+    evidence.identityLifecycle?.accountRecovery?.recoverySurfaceTestId !==
+      "account-recovery-surface" ||
+    evidence.identityLifecycle?.accountRecovery?.rawCredentialVisibleOnce !== true ||
+    evidence.identityLifecycle?.accountRecovery?.rawCredentialStored !== false ||
+    evidence.identityLifecycle?.accountRecovery?.invalidCredentialRejected !== true ||
+    evidence.identityLifecycle?.accountRecovery?.expiredCredentialRejected !== true ||
+    evidence.identityLifecycle?.accountRecovery?.revokedCredentialRejected !== true ||
+    evidence.identityLifecycle?.accountRecovery?.replayedCredentialRejected !== true ||
+    evidence.identityLifecycle?.accountRecovery?.priorSessionRejected !== true ||
+    evidence.identityLifecycle?.accountRecovery?.priorPasswordRejected !== true ||
+    !evidence.identityLifecycle?.accountRecovery?.recoveredPasswordCapabilityKinds?.includes(
+      "HostOf",
+    ) ||
+    evidence.identityLifecycle?.accountRecovery?.sameRoleSurface !== true ||
+    evidence.identityLifecycle?.accountRecovery?.revokedSessionCount < 1 ||
+    evidence.identityLifecycle?.accountRecovery?.storedCredentialCount !== 3 ||
+    evidence.identityLifecycle?.accountRecovery?.usedCredentialCount !== 1 ||
+    evidence.identityLifecycle?.accountRecovery?.revokedCredentialCount !== 1 ||
     evidence.identityLifecycle?.accountLifecycle?.status !== "passed" ||
     evidence.identityLifecycle?.accountLifecycle?.adminControlSurface?.status !== "passed" ||
     evidence.identityLifecycle?.accountLifecycle?.adminControlSurface?.detailRoleUrl !==
@@ -1706,6 +2166,18 @@ function assertInviteProof(evidence) {
     !evidence.identityLifecycle?.auditTrail?.eventKinds?.includes(
       "account_password_rotated",
     ) ||
+    !evidence.identityLifecycle?.auditTrail?.eventKinds?.includes(
+      "account_recovery_credential_issued",
+    ) ||
+    !evidence.identityLifecycle?.auditTrail?.eventKinds?.includes(
+      "account_recovery_credential_revoked",
+    ) ||
+    !evidence.identityLifecycle?.auditTrail?.eventKinds?.includes(
+      "account_recovery_rejected",
+    ) ||
+    !evidence.identityLifecycle?.auditTrail?.eventKinds?.includes(
+      "account_recovered",
+    ) ||
     evidence.identityLifecycle?.adminAuditSurface?.status !== "passed" ||
     evidence.identityLifecycle?.adminAuditSurface?.clickedThroughFromOverview !== true ||
     evidence.identityLifecycle?.adminAuditSurface?.rawTokensVisible !== false ||
@@ -1732,6 +2204,18 @@ function assertInviteProof(evidence) {
     ) ||
     !evidence.identityLifecycle?.adminAuditSurface?.visibleEventKinds?.includes(
       "account_password_rotated",
+    ) ||
+    !evidence.identityLifecycle?.adminAuditSurface?.visibleEventKinds?.includes(
+      "account_recovery_credential_issued",
+    ) ||
+    !evidence.identityLifecycle?.adminAuditSurface?.visibleEventKinds?.includes(
+      "account_recovery_credential_revoked",
+    ) ||
+    !evidence.identityLifecycle?.adminAuditSurface?.visibleEventKinds?.includes(
+      "account_recovery_rejected",
+    ) ||
+    !evidence.identityLifecycle?.adminAuditSurface?.visibleEventKinds?.includes(
+      "account_recovered",
     )
   ) {
     throw new Error("invite proof must preserve the role-surface identity adapter");

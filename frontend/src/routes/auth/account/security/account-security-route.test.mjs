@@ -39,7 +39,7 @@ test("security load sends an unauthenticated browser through account login", () 
 test("password rotation revokes the browser cookie and preserves the game return URL", async () => {
   const observed = { deleted: null, request: null };
   await assert.rejects(
-    actions.default({
+    actions.rotatePassword({
       cookies: {
         get(name) {
           return name === "fmarch_session" ? "active-host-session" : undefined;
@@ -93,7 +93,7 @@ test("password rotation revokes the browser cookie and preserves the game return
 });
 
 test("password rotation rejects mismatched confirmation before calling auth", async () => {
-  const result = await actions.default({
+  const result = await actions.rotatePassword({
     cookies: {
       get() {
         return "active-host-session";
@@ -116,6 +116,88 @@ test("password rotation rejects mismatched confirmation before calling auth", as
   assert.equal(result.data.state, "reject");
   assert.equal(result.data.message, "New password confirmation does not match");
   assert.equal(result.data.returnTo, "/");
+});
+
+test("security action issues a one-time recovery credential", async () => {
+  let observed;
+  const result = await actions.issueRecovery({
+    cookies: {
+      get(name) {
+        return name === "fmarch_session" ? "active-host-session" : undefined;
+      },
+    },
+    fetch: async (url, init) => {
+      observed = {
+        url,
+        authorization: init.headers.authorization,
+        body: JSON.parse(init.body),
+      };
+      return jsonResponse({
+        status: "issued",
+        recovery_id: "00000000-0000-0000-0000-000000000001",
+        recovery_token: "account-recovery-once-only",
+        account_id: "host@example.test",
+        principal_user_id: "host_h",
+        expires_at: 4_102_444_800,
+      });
+    },
+    request: formRequest({
+      accountId: "host@example.test",
+      currentPassword: "correct horse battery",
+      returnTo: "/g/game-1/host",
+    }),
+  });
+
+  assert.equal(result.state, "ack");
+  assert.equal(result.id, "account-recovery-issue");
+  assert.equal(result.recoveryToken, "account-recovery-once-only");
+  assert.equal(observed.url, "/auth/accounts/recovery-credentials");
+  assert.equal(observed.authorization, "Bearer active-host-session");
+  assert.equal(observed.body.account_id, "host@example.test");
+  assert.equal(observed.body.current_password, "correct horse battery");
+  assert.ok(observed.body.expires_at > Math.floor(Date.now() / 1000));
+});
+
+test("security action revokes a recovery credential", async () => {
+  let observed;
+  const result = await actions.revokeRecovery({
+    cookies: {
+      get(name) {
+        return name === "fmarch_session" ? "active-host-session" : undefined;
+      },
+    },
+    fetch: async (url, init) => {
+      observed = {
+        url,
+        authorization: init.headers.authorization,
+        body: JSON.parse(init.body),
+      };
+      return jsonResponse({
+        status: "revoked",
+        recovery_id: "00000000-0000-0000-0000-000000000001",
+        account_id: "host@example.test",
+        principal_user_id: "host_h",
+      });
+    },
+    request: formRequest({
+      accountId: "host@example.test",
+      recoveryId: "00000000-0000-0000-0000-000000000001",
+      currentPassword: "correct horse battery",
+      returnTo: "/g/game-1/host",
+    }),
+  });
+
+  assert.equal(result.state, "ack");
+  assert.equal(result.id, "account-recovery-revoke");
+  assert.deepEqual(observed, {
+    url: "/auth/accounts/recovery-credential-revocations",
+    authorization: "Bearer active-host-session",
+    body: {
+      account_id: "host@example.test",
+      current_password: "correct horse battery",
+      recovery_id: "00000000-0000-0000-0000-000000000001",
+    },
+  });
 });
 
 function formRequest(fields) {

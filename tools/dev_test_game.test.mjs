@@ -20186,10 +20186,14 @@ function identityAdapterProofFixture(game) {
       inviteCredentialKind: "account-bound-single-use-invite",
       accountCredentialKind: "local-password-account",
       accountPasswordAlgorithm: "argon2id",
+      accountRecoveryCredentialKind: "hashed-single-use-recovery-credential",
       lifecycleControls: [
         "account-disable",
         "account-enable",
         "account-password-rotation",
+        "account-recovery-credential-issuance",
+        "account-recovery-credential-revocation",
+        "account-recovery",
         "session-rotation",
         "session-revocation",
         "invite-revocation",
@@ -20199,6 +20203,8 @@ function identityAdapterProofFixture(game) {
       accountRoleSurfacePattern: "/auth/login?returnTo=<role-surface>&account=<account-id>",
       accountSecurityRoleSurfacePattern:
         "/auth/account/security?account=<account-id>&returnTo=<role-surface>",
+      accountRecoveryRoleSurfacePattern:
+        "/auth/account/recovery?account=<account-id>&returnTo=<role-surface>",
       capabilityAuthority:
         "auth_session resolves principal_user_id and committed game/global capabilities at the API boundary",
     },
@@ -20268,6 +20274,38 @@ function identityAdapterProofFixture(game) {
         revokedSessionCount: 2,
         rawPasswordStored: false,
       },
+      accountRecovery: {
+        status: "passed",
+        credentialKind: "hashed-single-use-recovery-credential",
+        passwordAlgorithm: "argon2id",
+        securityRoleUrl:
+          `/auth/account/security?account=${encodeURIComponent(
+            "host@example.test",
+          )}&returnTo=${encodeURIComponent(`/g/${game}/host`)}`,
+        recoveryRoleUrl:
+          `/auth/account/recovery?account=${encodeURIComponent(
+            "host@example.test",
+          )}&returnTo=${encodeURIComponent(`/g/${game}/host`)}`,
+        securitySurfaceTestId: "account-security-surface",
+        recoverySurfaceTestId: "account-recovery-surface",
+        issueFormTestId: "account-recovery-issue-form",
+        revokeFormTestId: "account-recovery-revoke-form",
+        accountPrefilled: true,
+        rawCredentialVisibleOnce: true,
+        rawCredentialStored: false,
+        invalidCredentialRejected: true,
+        expiredCredentialRejected: true,
+        revokedCredentialRejected: true,
+        replayedCredentialRejected: true,
+        priorSessionRejected: true,
+        priorPasswordRejected: true,
+        recoveredPasswordCapabilityKinds: ["HostOf"],
+        sameRoleSurface: true,
+        revokedSessionCount: 1,
+        storedCredentialCount: 3,
+        usedCredentialCount: 1,
+        revokedCredentialCount: 1,
+      },
       accountLifecycle: {
         status: "passed",
         adminControlSurface: {
@@ -20304,6 +20342,10 @@ function identityAdapterProofFixture(game) {
           "account_disabled",
           "account_enabled",
           "account_password_rotated",
+          "account_recovery_credential_issued",
+          "account_recovery_credential_revoked",
+          "account_recovery_rejected",
+          "account_recovered",
           "account_session_created",
           "invite_revoked",
           "session_revoked",
@@ -20325,6 +20367,10 @@ function identityAdapterProofFixture(game) {
           "account_disabled",
           "account_enabled",
           "account_password_rotated",
+          "account_recovery_credential_issued",
+          "account_recovery_credential_revoked",
+          "account_recovery_rejected",
+          "account_recovered",
           "account_session_created",
           "session_rotated",
           "session_revoked",
@@ -20334,7 +20380,7 @@ function identityAdapterProofFixture(game) {
         rawTokensVisible: false,
       },
       nonClaims: [
-        "hosted account recovery",
+        "hosted account recovery delivery or traffic",
         "email or out-of-band invite delivery",
         "rate limiting or abuse controls",
         "hosted audit retention or export policy",
