@@ -48,6 +48,20 @@ test("Role PM readiness requires replacement transfer and stale denial", () => {
   );
 });
 
+test("Mason and Neighbor readiness requires both complete room lifecycles", () => {
+  const evidence = liveStackReadinessFixture();
+  assert.equal(
+    checkStatus(buildLiveStackReadiness(evidence), "mason-neighbor-room-lifecycle"),
+    "passed",
+  );
+
+  evidence.browser.additionalRooms.rooms[1].outsider.mediaBodyBytes = 12;
+  assert.equal(
+    checkStatus(buildLiveStackReadiness(evidence), "mason-neighbor-room-lifecycle"),
+    "failed",
+  );
+});
+
 function checkStatus(readiness, id) {
   return readiness.checks.find((check) => check.id === id)?.status;
 }
@@ -183,6 +197,15 @@ function liveStackReadinessFixture() {
       privateChannelForbidden: {
         status: 403,
       },
+      additionalRooms: {
+        status: "passed",
+        coveredKinds: ["Mason", "Neighbor"],
+        remainingKinds: ["Dead", "Spectator"],
+        rooms: [
+          additionalRoomFixture("Mason", "private:mason"),
+          additionalRoomFixture("Neighbor", "private:neighbor"),
+        ],
+      },
       rolePmHistory: {
         channelId: "private:role_pm:slot-7",
       },
@@ -229,6 +252,42 @@ function liveStackReadinessFixture() {
     },
     slotLifecycleApiState: {
       slots: [{ slot_id: "slot-7", alive: false }],
+    },
+  };
+}
+
+function additionalRoomFixture(kind, channelId) {
+  return {
+    status: "passed",
+    kind,
+    channelId,
+    declaredMemberSlots: [`${kind.toLowerCase()}-1`, `${kind.toLowerCase()}-2`],
+    outgoing: {
+      submitOutcome: { state: "ack" },
+      commandLiveDelta: { delta: { kind: "ThreadPostsChanged" } },
+      mediaBodyBytes: 1226,
+    },
+    incoming: {
+      submitOutcome: { state: "ack" },
+      initialLiveDelta: { delta: { kind: "ThreadPostsChanged" } },
+      commandLiveDelta: { delta: { kind: "ThreadPostsChanged" } },
+      reloadedPostBodies: ["history", "incoming"],
+      mediaBodyBytes: 1226,
+    },
+    encryptedStorage: { rawCheck: "2|0|2|0" },
+    staleOutgoing: {
+      routeStatus: 403,
+      threadStatus: 403,
+      mediaStatus: 403,
+      mediaBodyBytes: 0,
+      postReject: { error: "NotYourSlot" },
+    },
+    outsider: {
+      routeStatus: 403,
+      threadStatus: 403,
+      mediaStatus: 403,
+      mediaBodyBytes: 0,
+      postReject: { error: "NotAuthorized" },
     },
   };
 }

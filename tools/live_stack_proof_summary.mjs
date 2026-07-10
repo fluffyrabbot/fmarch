@@ -35,6 +35,7 @@ export function buildLiveStackProofSummary(
   const reconnect = evidence.browser?.player?.reconnect;
   const moderator = evidence.browser?.moderator;
   const rolePmReplacement = moderator?.rolePmReplacement;
+  const additionalRooms = evidence.browser?.additionalRooms;
   const summary = {
     version: LIVE_STACK_PROOF_SUMMARY_VERSION,
     proof: "host-console-live-stack-summary",
@@ -43,7 +44,7 @@ export function buildLiveStackProofSummary(
     generatedAt,
     scope: "local-live-stack-proof-summary",
     proofBoundary:
-      "Compact derivative report from the local live-stack browser proof. It summarizes host setup, host votecount convergence, reconnect recovery, the Role PM replacement lifecycle, and host ops evidence for inspection; the full proof JSON remains the source of truth and this does not prove hosted, beta, release, or production readiness.",
+      "Compact derivative report from the local live-stack browser proof. It summarizes host setup, host votecount convergence, reconnect recovery, Role PM plus Mason/Neighbor private-room replacement lifecycles, and host ops evidence for inspection; the full proof JSON remains the source of truth and this does not prove dead/spectator rooms, hosted, beta, release, or production readiness.",
     generatedFrom: {
       liveStackProof: proofPath,
       game: evidence.game,
@@ -139,6 +140,31 @@ export function buildLiveStackProofSummary(
       stalePostReject:
         rolePmReplacement?.outgoing?.stalePostReject?.error ?? null,
     },
+    additionalRoomLifecycle: {
+      status: additionalRoomsStatus(additionalRooms),
+      game: additionalRooms?.game ?? null,
+      coveredKinds: additionalRooms?.coveredKinds ?? [],
+      remainingKinds: additionalRooms?.remainingKinds ?? [],
+      rooms: (additionalRooms?.rooms ?? []).map((room) => ({
+        kind: room.kind,
+        channelId: room.channelId,
+        status: room.status,
+        declaredMemberCount: room.declaredMemberSlots?.length ?? 0,
+        outgoingSubmitState: room.outgoing?.submitOutcome?.state ?? null,
+        outgoingLiveDeltaKind:
+          room.outgoing?.commandLiveDelta?.delta?.kind ?? null,
+        incomingSubmitState: room.incoming?.submitOutcome?.state ?? null,
+        incomingInitialLiveDeltaKind:
+          room.incoming?.initialLiveDelta?.delta?.kind ?? null,
+        incomingCommandLiveDeltaKind:
+          room.incoming?.commandLiveDelta?.delta?.kind ?? null,
+        reloadedPostCount: room.incoming?.reloadedPostBodies?.length ?? 0,
+        incomingMediaBodyBytes: room.incoming?.mediaBodyBytes ?? 0,
+        encryptedStorage: room.encryptedStorage?.rawCheck ?? null,
+        staleOutgoing: `${room.staleOutgoing?.routeStatus ?? ""}/${room.staleOutgoing?.threadStatus ?? ""}/${room.staleOutgoing?.mediaStatus ?? ""}/${room.staleOutgoing?.mediaBodyBytes ?? ""}/${room.staleOutgoing?.postReject?.error ?? ""}`,
+        outsider: `${room.outsider?.routeStatus ?? ""}/${room.outsider?.threadStatus ?? ""}/${room.outsider?.mediaStatus ?? ""}/${room.outsider?.mediaBodyBytes ?? ""}/${room.outsider?.postReject?.error ?? ""}`,
+      })),
+    },
     hostOpsWorkflow: {
       status: hostOpsStatus(moderator),
       promptState: moderator?.hostPrompt?.commandStatus?.state ?? null,
@@ -182,6 +208,10 @@ export function buildLiveStackProofSummary(
         status: rolePmReplacementStatus(rolePmReplacement),
       },
       {
+        id: "mason-neighbor-room-summary",
+        status: additionalRoomsStatus(additionalRooms),
+      },
+      {
         id: "host-ops-summary",
         status: hostOpsStatus(moderator),
       },
@@ -216,6 +246,7 @@ export function assertLiveStackProofSummary(summary) {
     "host-votecount-convergence-summary",
     "reconnect-summary",
     "role-pm-replacement-summary",
+    "mason-neighbor-room-summary",
     "host-ops-summary",
     "production-boundary-carried",
   ]) {
@@ -254,6 +285,22 @@ export function assertLiveStackProofSummary(summary) {
     summary.rolePmReplacementLifecycle?.stalePostReject !== "NotYourSlot"
   ) {
     throw new Error("live-stack summary missing Role PM replacement lifecycle proof");
+  }
+  if (
+    summary.additionalRoomLifecycle?.status !== "passed" ||
+    JSON.stringify(summary.additionalRoomLifecycle?.coveredKinds) !==
+      JSON.stringify(["Mason", "Neighbor"]) ||
+    JSON.stringify(summary.additionalRoomLifecycle?.remainingKinds) !==
+      JSON.stringify(["Dead", "Spectator"]) ||
+    summary.additionalRoomLifecycle?.rooms?.some(
+      (room) =>
+        room.status !== "passed" ||
+        room.encryptedStorage !== "2|0|2|0" ||
+        room.staleOutgoing !== "403/403/403/0/NotYourSlot" ||
+        room.outsider !== "403/403/403/0/NotAuthorized",
+    )
+  ) {
+    throw new Error("live-stack summary missing Mason/Neighbor room lifecycle proof");
   }
   return summary;
 }
@@ -328,6 +375,7 @@ export function markdownLiveStackProofSummary(summary) {
     "| --- | --- | --- |",
     `| reconnect | ${summary.reconnectRecovery.status} | state=${summary.reconnectRecovery.state ?? ""}, post=${summary.reconnectRecovery.recoveredSnapshotContainsPost} |`,
     `| Role PM replacement | ${summary.rolePmReplacementLifecycle.status} | channel=${summary.rolePmReplacementLifecycle.channelId ?? ""}, incoming=${summary.rolePmReplacementLifecycle.incomingPrincipalUserId ?? ""}, live=${summary.rolePmReplacementLifecycle.commandLiveDeltaKind ?? ""}, reloadPosts=${summary.rolePmReplacementLifecycle.reloadedPostCount}, stale=${summary.rolePmReplacementLifecycle.stalePostReject ?? ""}, media=${summary.rolePmReplacementLifecycle.outgoingMediaStatus ?? ""}/${summary.rolePmReplacementLifecycle.outgoingMediaBodyBytes ?? ""} bytes |`,
+    `| Mason and Neighbor rooms | ${summary.additionalRoomLifecycle.status} | covered=${summary.additionalRoomLifecycle.coveredKinds.join(",")}, remaining=${summary.additionalRoomLifecycle.remainingKinds.join(",")}, rooms=${summary.additionalRoomLifecycle.rooms.map((room) => `${room.kind}:${room.status}:${room.encryptedStorage}`).join("; ")} |`,
     `| host ops | ${summary.hostOpsWorkflow.status} | prompt=${summary.hostOpsWorkflow.promptState ?? ""}, lifecycle=${summary.hostOpsWorkflow.slotLifecycleState ?? ""}, invite=${summary.hostOpsWorkflow.playerInviteStatus ?? ""}, staleInvite=${summary.hostOpsWorkflow.stalePlayerInviteState ?? ""}/${summary.hostOpsWorkflow.stalePlayerInviteRetryState ?? ""} |`,
   );
   return `${lines.join("\n")}\n`;
@@ -356,6 +404,41 @@ function rolePmReplacementStatus(evidence) {
     evidence?.outgoing?.mediaStatus === 403 &&
     evidence?.outgoing?.mediaBodyBytes === 0 &&
     evidence?.outgoing?.stalePostReject?.error === "NotYourSlot"
+    ? "passed"
+    : "failed";
+}
+
+function additionalRoomsStatus(evidence) {
+  const expectedKinds = ["Mason", "Neighbor"];
+  return evidence?.status === "passed" &&
+    JSON.stringify(evidence.coveredKinds) === JSON.stringify(expectedKinds) &&
+    JSON.stringify(evidence.remainingKinds) ===
+      JSON.stringify(["Dead", "Spectator"]) &&
+    expectedKinds.every((kind) => {
+      const room = evidence.rooms?.find((candidate) => candidate.kind === kind);
+      return (
+        room?.status === "passed" &&
+        room.declaredMemberSlots?.length === 2 &&
+        room.outgoing?.submitOutcome?.state === "ack" &&
+        room.outgoing?.commandLiveDelta?.delta?.kind === "ThreadPostsChanged" &&
+        room.incoming?.submitOutcome?.state === "ack" &&
+        room.incoming?.initialLiveDelta?.delta?.kind === "ThreadPostsChanged" &&
+        room.incoming?.commandLiveDelta?.delta?.kind === "ThreadPostsChanged" &&
+        room.incoming?.reloadedPostBodies?.length === 2 &&
+        room.incoming?.mediaBodyBytes > 0 &&
+        room.encryptedStorage?.rawCheck === "2|0|2|0" &&
+        room.staleOutgoing?.routeStatus === 403 &&
+        room.staleOutgoing?.threadStatus === 403 &&
+        room.staleOutgoing?.mediaStatus === 403 &&
+        room.staleOutgoing?.mediaBodyBytes === 0 &&
+        room.staleOutgoing?.postReject?.error === "NotYourSlot" &&
+        room.outsider?.routeStatus === 403 &&
+        room.outsider?.threadStatus === 403 &&
+        room.outsider?.mediaStatus === 403 &&
+        room.outsider?.mediaBodyBytes === 0 &&
+        room.outsider?.postReject?.error === "NotAuthorized"
+      );
+    })
     ? "passed"
     : "failed";
 }

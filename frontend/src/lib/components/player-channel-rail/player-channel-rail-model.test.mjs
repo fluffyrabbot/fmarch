@@ -172,3 +172,38 @@ test("player channel rail exposes capability-derived private rooms", () => {
     },
   );
 });
+
+test("player channel rail derives Mason and Neighbor rooms from capabilities", () => {
+  const capabilities = [
+    {
+      kind: "ChannelMember",
+      game: "midsummer",
+      channel: "private:mason",
+    },
+    {
+      kind: "ChannelMember",
+      game: "midsummer",
+      channel: "private:neighbor",
+    },
+  ];
+
+  assert.deepEqual(
+    buildPlayerChannels({ game: "midsummer", capabilities }),
+    [
+      {
+        id: "private:mason",
+        label: "Mason",
+        href: "/g/midsummer/c/private%3Amason",
+        active: false,
+        capabilityLabel: "ChannelMember(private:mason)",
+      },
+      {
+        id: "private:neighbor",
+        label: "Neighbor",
+        href: "/g/midsummer/c/private%3Aneighbor",
+        active: false,
+        capabilityLabel: "ChannelMember(private:neighbor)",
+      },
+    ],
+  );
+});

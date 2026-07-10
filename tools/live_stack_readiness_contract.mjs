@@ -131,6 +131,28 @@ const CHECKS = Object.freeze([
         "NotYourSlot",
   },
   {
+    id: "mason-neighbor-room-lifecycle",
+    label: "Mason and Neighbor rooms prove pack creation, encryption, media, live reload, replacement, and denial",
+    predicate: (evidence) => {
+      const additionalRooms = evidence?.browser?.additionalRooms;
+      if (
+        additionalRooms?.status !== "passed" ||
+        JSON.stringify(additionalRooms.coveredKinds) !==
+          JSON.stringify(["Mason", "Neighbor"]) ||
+        JSON.stringify(additionalRooms.remainingKinds) !==
+          JSON.stringify(["Dead", "Spectator"])
+      ) {
+        return false;
+      }
+      return ["Mason", "Neighbor"].every((kind) =>
+        additionalRoomLifecyclePassed(
+          additionalRooms.rooms?.find((room) => room.kind === kind),
+          kind,
+        ),
+      );
+    },
+  },
+  {
     id: "reconnect-recovery",
     label: "Player route proves live projection reconnect recovery without reload",
     predicate: (evidence) =>
@@ -178,6 +200,33 @@ const CHECKS = Object.freeze([
       ),
   },
 ]);
+
+function additionalRoomLifecyclePassed(room, kind) {
+  return (
+    room?.status === "passed" &&
+    room.kind === kind &&
+    room.declaredMemberSlots?.length === 2 &&
+    room.outgoing?.submitOutcome?.state === "ack" &&
+    room.outgoing?.commandLiveDelta?.delta?.kind === "ThreadPostsChanged" &&
+    room.outgoing?.mediaBodyBytes > 0 &&
+    room.incoming?.submitOutcome?.state === "ack" &&
+    room.incoming?.initialLiveDelta?.delta?.kind === "ThreadPostsChanged" &&
+    room.incoming?.commandLiveDelta?.delta?.kind === "ThreadPostsChanged" &&
+    room.incoming?.reloadedPostBodies?.length === 2 &&
+    room.incoming?.mediaBodyBytes > 0 &&
+    room.encryptedStorage?.rawCheck === "2|0|2|0" &&
+    room.staleOutgoing?.routeStatus === 403 &&
+    room.staleOutgoing?.threadStatus === 403 &&
+    room.staleOutgoing?.mediaStatus === 403 &&
+    room.staleOutgoing?.mediaBodyBytes === 0 &&
+    room.staleOutgoing?.postReject?.error === "NotYourSlot" &&
+    room.outsider?.routeStatus === 403 &&
+    room.outsider?.threadStatus === 403 &&
+    room.outsider?.mediaStatus === 403 &&
+    room.outsider?.mediaBodyBytes === 0 &&
+    room.outsider?.postReject?.error === "NotAuthorized"
+  );
+}
 
 function isStalePlayerVoteRecoveryMessage(message) {
   const value = String(message ?? "");

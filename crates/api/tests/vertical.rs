@@ -746,6 +746,445 @@ async fn role_pm_media_reloads_transfers_and_denies_stale_outgoing_session(pool:
     assert_eq!(denied_reject.error, RejectCode::NotAuthorized);
 }
 
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn mason_neighbor_rooms_encrypt_reload_transfer_and_deny_nonmembers(pool: sqlx::PgPool) {
+    let root = tempfile::tempdir().unwrap();
+    let store = MediaStore::open(root.path(), MediaLimits::default()).unwrap();
+    let app = api::router_with_state(ApiState::new(pool.clone(), store).with_dev_auth(true));
+    let (mason_outgoing_token, mason_outgoing) =
+        create_media_upload_account_session(&app, "mason-outgoing").await;
+    let (mason_incoming_token, mason_incoming) =
+        create_media_upload_account_session(&app, "mason-incoming").await;
+    let (neighbor_outgoing_token, neighbor_outgoing) =
+        create_media_upload_account_session(&app, "neighbor-outgoing").await;
+    let (neighbor_incoming_token, neighbor_incoming) =
+        create_media_upload_account_session(&app, "neighbor-incoming").await;
+    let (outsider_token, outsider) =
+        create_media_upload_account_session(&app, "mason-neighbor-outsider").await;
+    let game = Uuid::new_v4();
+
+    let mut command_id = 1_u64;
+    expect_ack(
+        post_command(
+            app.clone(),
+            command_id,
+            "host_h",
+            Command::CreateGame {
+                game,
+                pack: "mafiascum".into(),
+            },
+        )
+        .await,
+    );
+    command_id += 1;
+    for (slot, principal, role) in [
+        ("mason_1", mason_outgoing.as_str(), "mason"),
+        ("mason_2", "mason_peer", "mason"),
+        ("neighbor_1", neighbor_outgoing.as_str(), "neighbor"),
+        ("neighbor_2", "neighbor_peer", "neighbor"),
+        ("outsider_1", outsider.as_str(), "vanilla_townie"),
+    ] {
+        for command in [
+            Command::AddSlot {
+                game,
+                slot: slot.into(),
+            },
+            Command::AssignSlot {
+                game,
+                slot: slot.into(),
+                user: principal.into(),
+            },
+            Command::AssignRole {
+                game,
+                slot: slot.into(),
+                role_key: role.into(),
+            },
+        ] {
+            expect_ack(post_command(app.clone(), command_id, "host_h", command).await);
+            command_id += 1;
+        }
+    }
+    expect_ack(
+        post_command(
+            app.clone(),
+            command_id,
+            "host_h",
+            Command::StartGame {
+                game,
+                phase: "D01".into(),
+            },
+        )
+        .await,
+    );
+    command_id += 1;
+
+    let memberships = projections::private_channel_members(&pool, game)
+        .await
+        .unwrap()
+        .into_iter()
+        .filter(|member| {
+            matches!(
+                member.channel_id.as_str(),
+                "private:mason" | "private:neighbor"
+            )
+        })
+        .map(|member| {
+            (
+                member.channel_id,
+                member.kind,
+                member.slot_id,
+                member.reveals_alignment,
+                member.source,
+            )
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        memberships,
+        vec![
+            (
+                "private:mason".into(),
+                "Mason".into(),
+                "mason_1".into(),
+                "Town".into(),
+                "pack.private_channels.mason".into(),
+            ),
+            (
+                "private:mason".into(),
+                "Mason".into(),
+                "mason_2".into(),
+                "Town".into(),
+                "pack.private_channels.mason".into(),
+            ),
+            (
+                "private:neighbor".into(),
+                "Neighbor".into(),
+                "neighbor_1".into(),
+                "None".into(),
+                "pack.private_channels.neighbor".into(),
+            ),
+            (
+                "private:neighbor".into(),
+                "Neighbor".into(),
+                "neighbor_2".into(),
+                "None".into(),
+                "pack.private_channels.neighbor".into(),
+            ),
+        ]
+    );
+
+    let upload = post_media_upload(
+        &app,
+        Some(&mason_outgoing_token),
+        "image/png",
+        media_upload_png(320, 240),
+    )
+    .await;
+    assert_eq!(upload.status(), StatusCode::CREATED);
+    let upload: MediaUploadResponse =
+        serde_json::from_slice(&to_bytes(upload.into_body(), usize::MAX).await.unwrap()).unwrap();
+
+    for (principal, slot, channel, body, alt) in [
+        (
+            mason_outgoing.as_str(),
+            "mason_1",
+            "private:mason",
+            "Mason history before replacement",
+            "Mason private receipt",
+        ),
+        (
+            neighbor_outgoing.as_str(),
+            "neighbor_1",
+            "private:neighbor",
+            "Neighbor history before replacement",
+            "Neighbor private receipt",
+        ),
+    ] {
+        expect_ack(
+            post_command(
+                app.clone(),
+                command_id,
+                principal,
+                Command::SubmitPost {
+                    game,
+                    channel_id: channel.into(),
+                    actor_slot: slot.into(),
+                    body: body.into(),
+                    media: Some(vec![SubmitPostMedia {
+                        content_id: upload.content_id.clone(),
+                        alt: alt.into(),
+                    }]),
+                },
+            )
+            .await,
+        );
+        command_id += 1;
+    }
+
+    let stored_private_posts = sqlx::query_scalar::<_, serde_json::Value>(
+        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'PostSubmitted' \
+         AND payload->>'channel_id' IN ('private:mason', 'private:neighbor') ORDER BY stream_seq",
+    )
+    .bind(game)
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(stored_private_posts.len(), 2);
+    for payload in &stored_private_posts {
+        assert!(payload.get("body").is_none());
+        assert!(payload["body_private"]["ciphertext"].is_string());
+        assert_eq!(payload["media"][0]["content_id"], upload.content_id);
+    }
+
+    for (slot, outgoing, incoming) in [
+        ("mason_1", mason_outgoing.as_str(), mason_incoming.as_str()),
+        (
+            "neighbor_1",
+            neighbor_outgoing.as_str(),
+            neighbor_incoming.as_str(),
+        ),
+    ] {
+        expect_ack(
+            post_command(
+                app.clone(),
+                command_id,
+                "host_h",
+                Command::ProcessReplacement {
+                    game,
+                    slot: slot.into(),
+                    outgoing_user: outgoing.into(),
+                    incoming_user: incoming.into(),
+                },
+            )
+            .await,
+        );
+        command_id += 1;
+    }
+
+    for (principal, slot, channel) in [
+        (mason_outgoing.as_str(), "mason_1", "private:mason"),
+        (neighbor_outgoing.as_str(), "neighbor_1", "private:neighbor"),
+    ] {
+        expect_reject(
+            post_command(
+                app.clone(),
+                command_id,
+                principal,
+                Command::SubmitPost {
+                    game,
+                    channel_id: channel.into(),
+                    actor_slot: slot.into(),
+                    body: "stale outgoing room post".into(),
+                    media: None,
+                },
+            )
+            .await,
+            RejectCode::NotYourSlot,
+        );
+        command_id += 1;
+    }
+
+    for (principal, slot, channel, body) in [
+        (
+            mason_incoming.as_str(),
+            "mason_1",
+            "private:mason",
+            "Incoming Mason continued the room",
+        ),
+        (
+            neighbor_incoming.as_str(),
+            "neighbor_1",
+            "private:neighbor",
+            "Incoming Neighbor continued the room",
+        ),
+    ] {
+        expect_ack(
+            post_command(
+                app.clone(),
+                command_id,
+                principal,
+                Command::SubmitPost {
+                    game,
+                    channel_id: channel.into(),
+                    actor_slot: slot.into(),
+                    body: body.into(),
+                    media: None,
+                },
+            )
+            .await,
+        );
+        command_id += 1;
+    }
+
+    let room_cases = [
+        (
+            "private:mason",
+            mason_incoming.as_str(),
+            mason_incoming_token.as_str(),
+            mason_outgoing.as_str(),
+            mason_outgoing_token.as_str(),
+            "Mason history before replacement",
+            "Incoming Mason continued the room",
+        ),
+        (
+            "private:neighbor",
+            neighbor_incoming.as_str(),
+            neighbor_incoming_token.as_str(),
+            neighbor_outgoing.as_str(),
+            neighbor_outgoing_token.as_str(),
+            "Neighbor history before replacement",
+            "Incoming Neighbor continued the room",
+        ),
+    ];
+    let mut rebuilt_bodies = Vec::new();
+    for (
+        channel,
+        incoming,
+        incoming_token,
+        outgoing,
+        outgoing_token,
+        history_body,
+        incoming_body,
+    ) in room_cases
+    {
+        let thread = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri(format!(
+                        "/games/{game}/channels/{channel}/thread?principal_user_id={incoming}&limit=10"
+                    ))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(thread.status(), StatusCode::OK);
+        let thread: ThreadPage =
+            serde_json::from_slice(&to_bytes(thread.into_body(), usize::MAX).await.unwrap())
+                .unwrap();
+        assert_eq!(
+            thread
+                .posts
+                .iter()
+                .map(|post| post.body.as_str())
+                .collect::<Vec<_>>(),
+            vec![history_body, incoming_body],
+        );
+        assert!(thread.posts.iter().all(|post| post.channel_id == channel));
+        let media_url = thread.posts[0].media[0]
+            .variants
+            .get("tablet")
+            .unwrap()
+            .avif_url
+            .clone();
+        rebuilt_bodies.push((
+            channel.to_string(),
+            incoming.to_string(),
+            thread.posts.clone(),
+        ));
+
+        let allowed_media = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri(media_url.as_str())
+                    .header("authorization", format!("Bearer {incoming_token}"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(allowed_media.status(), StatusCode::OK);
+        assert_eq!(allowed_media.headers()["content-type"], "image/avif");
+        assert!(!to_bytes(allowed_media.into_body(), usize::MAX)
+            .await
+            .unwrap()
+            .is_empty());
+
+        for (denied_principal, denied_token) in [
+            (outgoing, outgoing_token),
+            (outsider.as_str(), outsider_token.as_str()),
+        ] {
+            let denied_thread = app
+                .clone()
+                .oneshot(
+                    Request::builder()
+                        .method("GET")
+                        .uri(format!(
+                            "/games/{game}/channels/{channel}/thread?principal_user_id={denied_principal}"
+                        ))
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(denied_thread.status(), StatusCode::FORBIDDEN);
+
+            let denied_media = app
+                .clone()
+                .oneshot(
+                    Request::builder()
+                        .method("GET")
+                        .uri(media_url.as_str())
+                        .header("authorization", format!("Bearer {denied_token}"))
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(denied_media.status(), StatusCode::FORBIDDEN);
+            assert_ne!(denied_media.headers()["content-type"], "image/avif");
+        }
+    }
+
+    for channel in ["private:mason", "private:neighbor"] {
+        expect_reject(
+            post_command(
+                app.clone(),
+                command_id,
+                outsider.as_str(),
+                Command::SubmitPost {
+                    game,
+                    channel_id: channel.into(),
+                    actor_slot: "outsider_1".into(),
+                    body: "outsider room post".into(),
+                    media: None,
+                },
+            )
+            .await,
+            RejectCode::NotAuthorized,
+        );
+        command_id += 1;
+    }
+
+    projections::rebuild(&pool, game).await.unwrap();
+    for (channel, incoming, before) in rebuilt_bodies {
+        let rebuilt = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri(format!(
+                        "/games/{game}/channels/{channel}/thread?principal_user_id={incoming}&limit=10"
+                    ))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(rebuilt.status(), StatusCode::OK);
+        let rebuilt: ThreadPage =
+            serde_json::from_slice(&to_bytes(rebuilt.into_body(), usize::MAX).await.unwrap())
+                .unwrap();
+        assert_eq!(
+            rebuilt.posts, before,
+            "{channel} history and canonical media must survive projection rebuild",
+        );
+    }
+}
+
 fn stable_command_id(id: u64) -> Uuid {
     Uuid::from_u128(id as u128)
 }

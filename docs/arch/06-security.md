@@ -85,6 +85,10 @@ DeadViewer(game)            see dead-visible content
 - `private:role_pm:<slot_id>` membership is keyed to the stable slot in
   `private_channel_member`. Replacement therefore transfers Role PM read/post authority by
   changing `slot_occupancy`; it does not rewrite membership, authorship, or history.
+- Pack-declared `private:mason` and `private:neighbor` membership is likewise keyed to the
+  matching role slots. The outgoing account loses both `SlotOccupant` and the derived
+  `ChannelMember` after replacement; the incoming account receives the same room history
+  and media without copying or re-authoring either.
 - Replacement revokes the outgoing session's **game-scoped slot and channel authority** on
   the next capability resolution. It intentionally does not revoke the account session
   globally, because that credential may still have unrelated authority elsewhere.
@@ -101,7 +105,7 @@ Reads and live deltas are filtered server-side by capability ([03](03-backend.md
 - A private player route selects its active channel on the live connection. Initial and
   command-following `ThreadPostsChanged` frames are built from that channel only after the
   principal resolves `ChannelMember(channel)`; an outgoing replacement session receives no
-  Role PM thread frame.
+  Role PM, Mason, or Neighbor thread frame.
 - Role data is access-controlled *and* the projection's reveal flag gates it; end-game
   reveal flips the flag ([02](02-event-sourcing.md)). The client UI hiding something is
   never the only line of defense.
@@ -118,6 +122,10 @@ Reads and live deltas are filtered server-side by capability ([03](03-backend.md
   `PostSubmitted` stores plaintext `channel_id`, `slot_or_user`, `phase_id`, and media metadata
   with `body` in an authenticated ciphertext envelope. `eventstore::load_stream` and projection
   rebuild decode those envelopes at the durable read boundary.
+- The local real-stack proof exercises this envelope independently for Mason and Neighbor
+  browser posts: each room records two ciphertext envelopes, no plaintext `body` fields, and
+  no plaintext body occurrence in the stored JSON. This is local at-rest and replay proof,
+  not a hosted key-management or backup-encryption claim.
 - Local dev falls back to a deterministic `local-dev` key if `FMARCH_EVENT_ENCRYPTION_KEY` is
   unset so tests and scratch stacks stay runnable. Production/staged deployments must provide
   `FMARCH_EVENT_ENCRYPTION_KEY` and `FMARCH_EVENT_ENCRYPTION_KID` from the environment or a

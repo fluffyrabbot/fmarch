@@ -77,6 +77,15 @@ projection changes. Post-start slot/role assignment emits the same declaration w
 makes a slot eligible. The player rail discovers the channel from `ChannelMember` rather than
 inventing a shared `role-pm` route.
 
+Pack-defined role groups use the same slot-stable mechanism. The mafiascum pack declares
+`private:mason` for occupied Mason roles and `private:neighbor` for occupied Neighbor roles
+at `StartGame` (only groups of at least two become rooms). Mason membership explicitly
+reveals the group's Town guarantee; Neighbor membership reveals no alignment. Both room
+identities and member slots remain unchanged across replacement while the live occupancy
+projection transfers `ChannelMember` to the incoming account. The player rail and route
+derive both rooms from that capability, and non-`main` post bodies use the generic encrypted
+event envelope. Dead chat and spectator-room lifecycles are not yet implemented end to end.
+
 ### Post
 Authored by a **slot** (in a game context) or a **user** (in non-game forum areas).
 Belongs to exactly one channel and one phase. Content is **immutable**; edits are recorded

@@ -13,7 +13,7 @@ import {
   validateRegistry,
 } from "./completeness_scorecard.mjs";
 
-test("real completion registry validates and selects the additional-room lifecycle", async () => {
+test("real completion registry validates and selects the dead-chat lifecycle", async () => {
   const registry = await loadCompletionRegistry();
   await validateRegistry(registry);
   const summary = summarizeRegistry(registry);
@@ -28,10 +28,9 @@ test("real completion registry validates and selects the additional-room lifecyc
   assert.equal(summary.productCapabilitiesComplete, false);
   assert.equal(summary.platformComplete, false);
   assert.equal(summary.releaseComplete, false);
-  assert.equal(
-    nextBuildableCodeItem(registry)?.id,
-    "product.private.additional-rooms",
-  );
+  const nextItem = nextBuildableCodeItem(registry);
+  assert.equal(nextItem?.id, "product.private.additional-rooms");
+  assert.match(nextItem?.recommended_slice?.objective ?? "", /dead-chat vertical/);
 });
 
 test("generated scorecard exactly matches the canonical registry", async () => {

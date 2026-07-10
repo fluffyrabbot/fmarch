@@ -44,6 +44,7 @@ const host = "127.0.0.1";
 const smokeViewport = Object.freeze({ width: 1024, height: 768 });
 const game = crypto.randomUUID();
 const actionGame = crypto.randomUUID();
+const additionalRoomsGame = crypto.randomUUID();
 const adminCreatedGame = crypto.randomUUID();
 const rootAdminSessionToken = `host-console-live-stack-root-admin-${crypto.randomUUID()}`;
 const hostSessionToken = `host-console-live-stack-host-${crypto.randomUUID()}`;
@@ -62,6 +63,59 @@ const rolePmRoute = encodeURIComponent(rolePmChannel);
 const rolePmHistoryBody = "Role PM history before replacement";
 const rolePmIncomingBody = "Incoming replacement continued the durable Role PM";
 const rolePmMediaAlt = "Transferred private Role PM receipt";
+const additionalRoomDefinitions = Object.freeze([
+  Object.freeze({
+    id: "mason",
+    kind: "Mason",
+    channelId: "private:mason",
+    route: encodeURIComponent("private:mason"),
+    revealsAlignment: "Town",
+    outgoing: Object.freeze({
+      slotId: "mason-1",
+      principalUserId: "rooms-mason-outgoing",
+      sessionToken: `host-console-live-stack-mason-outgoing-${crypto.randomUUID()}`,
+    }),
+    peer: Object.freeze({
+      slotId: "mason-2",
+      principalUserId: "rooms-mason-peer",
+    }),
+    incoming: Object.freeze({
+      principalUserId: "rooms-mason-incoming",
+      sessionToken: `host-console-live-stack-mason-incoming-${crypto.randomUUID()}`,
+    }),
+    historyBody: "Mason room history before replacement",
+    incomingBody: "Incoming Mason continued the private room",
+    mediaAlt: "Mason private room receipt",
+  }),
+  Object.freeze({
+    id: "neighbor",
+    kind: "Neighbor",
+    channelId: "private:neighbor",
+    route: encodeURIComponent("private:neighbor"),
+    revealsAlignment: "None",
+    outgoing: Object.freeze({
+      slotId: "neighbor-1",
+      principalUserId: "rooms-neighbor-outgoing",
+      sessionToken: `host-console-live-stack-neighbor-outgoing-${crypto.randomUUID()}`,
+    }),
+    peer: Object.freeze({
+      slotId: "neighbor-2",
+      principalUserId: "rooms-neighbor-peer",
+    }),
+    incoming: Object.freeze({
+      principalUserId: "rooms-neighbor-incoming",
+      sessionToken: `host-console-live-stack-neighbor-incoming-${crypto.randomUUID()}`,
+    }),
+    historyBody: "Neighbor room history before replacement",
+    incomingBody: "Incoming Neighbor continued the private room",
+    mediaAlt: "Neighbor private room receipt",
+  }),
+]);
+const additionalRoomOutsider = Object.freeze({
+  slotId: "rooms-outsider-1",
+  principalUserId: "rooms-outsider",
+  sessionToken: `host-console-live-stack-rooms-outsider-${crypto.randomUUID()}`,
+});
 const factionDayChatUploadAsset = Object.freeze({
   contentAddress: "live-stack-private-upload-source",
   variantName: "source",
@@ -135,12 +189,16 @@ try {
   const seedCommands = await seedGame();
   await writeProgress({ stage: "seed-action-game", actionGame });
   const actionSeedCommands = await seedActionGame();
+  await writeProgress({ stage: "seed-additional-rooms-game", additionalRoomsGame });
+  const additionalRoomsSeed = await seedAdditionalRoomsGame();
   await writeProgress({ stage: "seed-faction-day-chat-fixture", game });
   const privateChannelFixture = await seedFactionDayChatFixture();
   await writeProgress({ stage: "seed-root-admin-session" });
   const rootAdminSession = await seedRootAdminSession();
   await writeProgress({ stage: "create-granted-sessions", game });
   const grantedSessions = await createGrantedSessions();
+  await writeProgress({ stage: "create-additional-room-sessions", additionalRoomsGame });
+  const additionalRoomSessions = await createAdditionalRoomSessions();
 
   await writeProgress({ stage: "start-sveltekit" });
   const { createServer: createViteServer } = await import(
@@ -171,7 +229,11 @@ try {
   const frontendBaseUrl = `http://${host}:${frontendAddress.port}`;
 
   await writeProgress({ stage: "drive-browser", frontendBaseUrl, apiBaseUrl });
-  const browserEvidence = await driveBrowser(frontendBaseUrl, privateChannelFixture);
+  const browserEvidence = await driveBrowser(
+    frontendBaseUrl,
+    privateChannelFixture,
+    additionalRoomsSeed,
+  );
   const playerVoteCount =
     browserEvidence.playerVoteCountAfterPlayer ??
     (await fetchJson(`${apiBaseUrl}/games/${game}/votecount`));
@@ -202,9 +264,11 @@ try {
     viewport: smokeViewport,
     seedCommands,
     actionSeedCommands,
+    additionalRoomsSeed,
     privateChannelFixture,
     rootAdminSession,
     grantedSessions,
+    additionalRoomSessions,
     browser: browserEvidence,
     playerVoteCount,
     apiState,
@@ -337,6 +401,18 @@ async function runSql(url, sql) {
     "-c",
     sql,
   ]);
+}
+
+async function runSqlScalar(url, sql) {
+  return (
+    await runProcess("psql", [
+      url,
+      "-v",
+      "ON_ERROR_STOP=1",
+      "-Atc",
+      sql,
+    ])
+  ).trim();
 }
 
 function sqlLiteral(value) {
@@ -605,6 +681,105 @@ async function seedActionGame() {
   return commands;
 }
 
+async function seedAdditionalRoomsGame() {
+  const commands = [];
+  commands.push(
+    await sendCommand("host_h", {
+      CreateGame: { game: additionalRoomsGame, pack: "mafiascum" },
+    }),
+  );
+  const occupants = [
+    ...additionalRoomDefinitions.flatMap((room) => [
+      {
+        slotId: room.outgoing.slotId,
+        principalUserId: room.outgoing.principalUserId,
+        roleKey: room.id,
+      },
+      {
+        slotId: room.peer.slotId,
+        principalUserId: room.peer.principalUserId,
+        roleKey: room.id,
+      },
+    ]),
+    {
+      slotId: additionalRoomOutsider.slotId,
+      principalUserId: additionalRoomOutsider.principalUserId,
+      roleKey: "vanilla_townie",
+    },
+  ];
+  for (const occupant of occupants) {
+    commands.push(
+      await sendCommand("host_h", {
+        AddSlot: { game: additionalRoomsGame, slot: occupant.slotId },
+      }),
+      await sendCommand("host_h", {
+        AssignSlot: {
+          game: additionalRoomsGame,
+          slot: occupant.slotId,
+          user: occupant.principalUserId,
+        },
+      }),
+      await sendCommand("host_h", {
+        AssignRole: {
+          game: additionalRoomsGame,
+          slot: occupant.slotId,
+          role_key: occupant.roleKey,
+        },
+      }),
+    );
+  }
+  commands.push(
+    await sendCommand("host_h", {
+      StartGame: { game: additionalRoomsGame, phase: "D01" },
+    }),
+  );
+
+  const memberRows = await runSql(
+    smokeDatabase.url,
+    `SELECT channel_id, kind, slot_id, role_key, reveals_alignment, source
+     FROM private_channel_member
+     WHERE game_id = '${additionalRoomsGame}'
+       AND channel_id IN ('private:mason', 'private:neighbor')
+     ORDER BY channel_id, slot_id`,
+  );
+  for (const room of additionalRoomDefinitions) {
+    for (const member of [room.outgoing, room.peer]) {
+      if (!memberRows.includes(room.channelId) || !memberRows.includes(member.slotId)) {
+        throw new Error(
+          `${room.kind} membership was not pack-declared for ${member.slotId}:\n${memberRows}`,
+        );
+      }
+    }
+    if (
+      !memberRows.includes(room.kind) ||
+      !memberRows.includes(room.revealsAlignment) ||
+      !memberRows.includes(`pack.private_channels.${room.id}`)
+    ) {
+      throw new Error(`${room.kind} declaration metadata drifted:\n${memberRows}`);
+    }
+  }
+
+  return {
+    game: additionalRoomsGame,
+    commands,
+    rooms: additionalRoomDefinitions.map((room) => ({
+      id: room.id,
+      kind: room.kind,
+      channelId: room.channelId,
+      revealsAlignment: room.revealsAlignment,
+      declaredMemberSlots: [room.outgoing.slotId, room.peer.slotId],
+      outgoingPrincipalUserId: room.outgoing.principalUserId,
+      incomingPrincipalUserId: room.incoming.principalUserId,
+    })),
+    outsider: {
+      slotId: additionalRoomOutsider.slotId,
+      principalUserId: additionalRoomOutsider.principalUserId,
+    },
+    boundary:
+      "The mafiascum pack declared occupied Mason and Neighbor role groups through StartGame; no test-only private_channel_member rows were inserted.",
+  };
+}
+
 async function seedFactionDayChatFixture() {
   const memberRows = await runSql(
     smokeDatabase.url,
@@ -708,6 +883,34 @@ async function createGrantedSessions() {
   };
 }
 
+async function createAdditionalRoomSessions() {
+  const rooms = {};
+  for (const room of additionalRoomDefinitions) {
+    rooms[room.id] = {
+      outgoing: await createAccountSession({
+        token: room.outgoing.sessionToken,
+        principalUserId: room.outgoing.principalUserId,
+        label: `${room.id}-outgoing`,
+      }),
+      incoming: await createAccountSession({
+        token: room.incoming.sessionToken,
+        principalUserId: room.incoming.principalUserId,
+        label: `${room.id}-incoming`,
+      }),
+    };
+  }
+  return {
+    rooms,
+    outsider: await createAccountSession({
+      token: additionalRoomOutsider.sessionToken,
+      principalUserId: additionalRoomOutsider.principalUserId,
+      label: "additional-rooms-outsider",
+    }),
+    boundary:
+      "Every browser actor uses an enabled local account login and opaque session; the replacement changes game-scoped room authority without revoking the account globally.",
+  };
+}
+
 async function createAccountSession({ token, principalUserId, label }) {
   const accountId = `live-stack-${label}-${crypto.randomUUID()}@example.test`;
   const password = `live-stack account password ${crypto.randomUUID()}`;
@@ -772,7 +975,11 @@ function hashSessionToken(token) {
   return createHash("sha256").update(token).digest("hex");
 }
 
-async function driveBrowser(frontendBaseUrl, privateChannelFixture) {
+async function driveBrowser(
+  frontendBaseUrl,
+  privateChannelFixture,
+  additionalRoomsSeed,
+) {
   browser = await chromium.launch();
   const adminEvidence = await driveAdminBrowser(frontendBaseUrl);
   const moderatorSession = await openModeratorBrowser(frontendBaseUrl);
@@ -787,6 +994,10 @@ async function driveBrowser(frontendBaseUrl, privateChannelFixture) {
     const playerActionEvidence = await drivePlayerActionBrowser(frontendBaseUrl);
     const playerPrivateChannelEvidence =
       await drivePlayerPrivateChannelBrowser(frontendBaseUrl, privateChannelFixture);
+    const additionalRooms = await driveAdditionalRoomsBrowser(
+      frontendBaseUrl,
+      additionalRoomsSeed,
+    );
     const rolePmHistory = await seedRolePmHistory(
       playerPrivateChannelEvidence.media.contentId,
     );
@@ -809,6 +1020,7 @@ async function driveBrowser(frontendBaseUrl, privateChannelFixture) {
       player: playerEvidence,
       playerAction: playerActionEvidence,
       playerPrivateChannel: playerPrivateChannelEvidence,
+      additionalRooms,
       rolePmHistory,
       privateChannelForbidden: privateChannelForbiddenEvidence,
       hostVotecountConvergence,
@@ -858,6 +1070,15 @@ async function drivePlayerPrivateChannelBrowser(frontendBaseUrl, privateChannelF
           format: headers["x-fmarch-media-format"] ?? null,
           etag: headers.etag ?? null,
           bodyBytes: body.byteLength,
+        });
+      }).catch((error) => {
+        mediaResponses.push({
+          url: response.url(),
+          pathname,
+          status: response.status(),
+          ok: response.ok(),
+          bodyReadError: String(error?.message ?? error),
+          bodyBytes: null,
         });
       }),
     );
@@ -1002,6 +1223,30 @@ async function drivePlayerPrivateChannelBrowser(frontendBaseUrl, privateChannelF
       })),
     };
   }, mediaTestId);
+  const verifiedTabletResponse = await context.request.get(
+    `${frontendBaseUrl}${projectedMedia.variants.tablet.avif_url}`,
+    { headers: { accept: "image/avif" } },
+  );
+  const verifiedTabletBody = await verifiedTabletResponse.body();
+  const verifiedTabletHeaders = verifiedTabletResponse.headers();
+  mediaResponses.push({
+    url: verifiedTabletResponse.url(),
+    pathname: new URL(verifiedTabletResponse.url()).pathname,
+    status: verifiedTabletResponse.status(),
+    ok: verifiedTabletResponse.ok(),
+    contentType: verifiedTabletHeaders["content-type"] ?? null,
+    cacheControl: verifiedTabletHeaders["cache-control"] ?? null,
+    contentAddress:
+      verifiedTabletHeaders["x-fmarch-media-content-address"] ?? null,
+    channel: verifiedTabletHeaders["x-fmarch-media-channel"] ?? null,
+    postSeq: verifiedTabletHeaders["x-fmarch-media-post-seq"] ?? null,
+    reference: verifiedTabletHeaders["x-fmarch-media-reference"] ?? null,
+    variant: verifiedTabletHeaders["x-fmarch-media-variant"] ?? null,
+    format: verifiedTabletHeaders["x-fmarch-media-format"] ?? null,
+    etag: verifiedTabletHeaders.etag ?? null,
+    bodyBytes: verifiedTabletBody.byteLength,
+    observedBy: "authenticated-context-request",
+  });
   await Promise.allSettled(mediaResponseTasks);
   assertTabletMediaEvidence({
     mediaAttributes,
@@ -1046,6 +1291,492 @@ async function drivePlayerPrivateChannelBrowser(frontendBaseUrl, privateChannelF
   };
   await context.close();
   return evidence;
+}
+
+async function driveAdditionalRoomsBrowser(frontendBaseUrl, seed) {
+  if (
+    seed?.game !== additionalRoomsGame ||
+    seed?.rooms?.length !== additionalRoomDefinitions.length
+  ) {
+    throw new Error(`additional-room seed drifted: ${JSON.stringify(seed)}`);
+  }
+  const rooms = [];
+  for (const room of additionalRoomDefinitions) {
+    const declared = seed.rooms.find((candidate) => candidate.id === room.id);
+    if (
+      declared?.channelId !== room.channelId ||
+      JSON.stringify(declared.declaredMemberSlots) !==
+        JSON.stringify([room.outgoing.slotId, room.peer.slotId])
+    ) {
+      throw new Error(`${room.kind} declared membership drifted: ${JSON.stringify(declared)}`);
+    }
+    rooms.push(await driveAdditionalRoomLifecycle(frontendBaseUrl, room));
+  }
+  return {
+    status: rooms.every((room) => room.status === "passed") ? "passed" : "failed",
+    game: additionalRoomsGame,
+    rooms,
+    coveredKinds: rooms.map((room) => room.kind),
+    remainingKinds: ["Dead", "Spectator"],
+    proof:
+      "Occupied pack-declared Mason and Neighbor rooms each passed enabled-account browser media posting, encrypted event storage, channel-scoped live delivery, durable reload, slot-stable replacement transfer, and zero-byte stale/non-member media denial. Dead and spectator rooms remain outside this slice.",
+  };
+}
+
+async function driveAdditionalRoomLifecycle(frontendBaseUrl, room) {
+  const pageUrl = `${frontendBaseUrl}/g/${additionalRoomsGame}/c/${room.route}`;
+  const outgoingContext = await browserContextWithSession(
+    room.outgoing.sessionToken,
+  );
+  const outgoingPage = await outgoingContext.newPage();
+  const outgoingResponse = await outgoingPage.goto(pageUrl, {
+    waitUntil: "networkidle",
+  });
+  if (outgoingResponse === null || !outgoingResponse.ok()) {
+    throw new Error(
+      `${room.kind} outgoing route failed with ${outgoingResponse?.status() ?? "none"}`,
+    );
+  }
+  await outgoingPage.getByTestId("player-surface").waitFor({ state: "visible" });
+  const channelContext = outgoingPage.getByTestId(
+    "player-command-channel-context",
+  );
+  await channelContext.waitFor({ state: "visible" });
+  if ((await channelContext.getAttribute("data-channel-id")) !== room.channelId) {
+    throw new Error(`${room.kind} command context did not select ${room.channelId}`);
+  }
+  const activeChannel = outgoingPage.getByTestId(
+    `player-channel-${room.channelId}`,
+  );
+  await activeChannel.waitFor({ state: "visible" });
+  if (
+    (await activeChannel.getAttribute("aria-current")) !== "page" ||
+    !(await activeChannel.innerText()).includes(room.kind)
+  ) {
+    throw new Error(`${room.kind} capability-derived rail item was not active`);
+  }
+
+  const upload = generatedThreadMediaPng({
+    ...factionDayChatUploadAsset,
+    contentAddress: `live-stack-${room.id}-room-upload-source`,
+    palette: {
+      ...factionDayChatUploadAsset.palette,
+      accent: room.id === "mason" ? [68, 101, 132] : [113, 86, 128],
+    },
+  });
+  await outgoingPage.getByTestId("player-media-file").setInputFiles({
+    name: `${room.id}-private-receipt.png`,
+    mimeType: "image/png",
+    buffer: upload.bytes,
+  });
+  await outgoingPage.getByTestId("player-media-alt").fill(room.mediaAlt);
+  await outgoingPage
+    .locator('[data-testid="player-composer"] textarea')
+    .fill(room.historyBody);
+  const outgoingPostButton = outgoingPage.locator('[data-action="submit_post"]');
+  assertHitTarget(
+    await outgoingPostButton.boundingBox(),
+    `${room.kind} outgoing post button`,
+  );
+  await outgoingPostButton.click();
+  const outgoingStatus = outgoingPage.getByTestId("player-command-status");
+  await outgoingStatus.waitFor({ state: "visible" });
+  await outgoingPage.waitForFunction(
+    () =>
+      document
+        .querySelector('[data-testid="player-command-status"]')
+        ?.getAttribute("data-state") === "ack",
+    null,
+    { timeout: 180_000 },
+  );
+  await waitForPrivateThreadLiveDelta(outgoingPage, {
+    channelId: room.channelId,
+    body: room.historyBody,
+  });
+  const outgoingOutcome = await outgoingPage.evaluate(
+    () => window.__fmarchPlayerCommandStatus,
+  );
+  const outgoingCommand =
+    outgoingOutcome?.requestEnvelope?.body?.body?.command?.SubmitPost;
+  if (
+    outgoingOutcome?.state !== "ack" ||
+    outgoingCommand?.game !== additionalRoomsGame ||
+    outgoingCommand?.channel_id !== room.channelId ||
+    outgoingCommand?.actor_slot !== room.outgoing.slotId ||
+    outgoingCommand?.body !== room.historyBody ||
+    outgoingCommand?.media?.length !== 1 ||
+    outgoingCommand.media[0]?.alt !== room.mediaAlt ||
+    !/^[0-9a-f]{64}$/u.test(String(outgoingCommand.media[0]?.content_id ?? ""))
+  ) {
+    throw new Error(`${room.kind} browser media command drifted: ${JSON.stringify(outgoingOutcome)}`);
+  }
+  const attachmentKeys = Object.keys(outgoingCommand.media[0]).sort();
+  if (JSON.stringify(attachmentKeys) !== JSON.stringify(["alt", "content_id"])) {
+    throw new Error(`${room.kind} browser command leaked non-handle media fields`);
+  }
+  const contentId = outgoingCommand.media[0].content_id;
+  const outgoingLiveDelta = await privateThreadLiveDelta(
+    outgoingPage,
+    room.historyBody,
+  );
+  const initialThread = await fetchJson(
+    `${apiBaseUrl}/games/${additionalRoomsGame}/channels/${room.route}/thread?principal_user_id=${room.outgoing.principalUserId}&limit=50`,
+  );
+  const historyPost = initialThread.posts?.find(
+    (post) => post.body === room.historyBody,
+  );
+  if (historyPost === undefined) {
+    throw new Error(`${room.kind} API thread did not project the browser post`);
+  }
+  const mediaPostSeq = Number(historyPost.source_seq ?? historyPost.sourceSeq);
+  const projectedMedia = historyPost.media?.find(
+    (media) => media.content_id === contentId,
+  );
+  assertManifestBackedPrivateMedia({
+    projectedMedia,
+    contentId,
+    mediaPostSeq,
+    gameId: additionalRoomsGame,
+    channelId: room.channelId,
+    expectedAlt: room.mediaAlt,
+  });
+  const privateMediaUrl = projectedMedia.variants.tablet.avif_url;
+
+  const outgoingReload = await outgoingPage.reload({
+    waitUntil: "networkidle",
+    timeout: 180_000,
+  });
+  if (outgoingReload === null || !outgoingReload.ok()) {
+    throw new Error(`${room.kind} outgoing reload failed`);
+  }
+  const reloadedHistory = outgoingPage.locator(
+    `[data-testid="thread-post-${mediaPostSeq}"]`,
+  );
+  await reloadedHistory.waitFor({ state: "visible" });
+  if (!(await reloadedHistory.innerText()).includes(room.historyBody)) {
+    throw new Error(`${room.kind} outgoing reload lost private history`);
+  }
+  const outgoingMedia = await outgoingContext.request.get(
+    `${frontendBaseUrl}${privateMediaUrl}`,
+    { headers: { accept: "image/avif" } },
+  );
+  const outgoingMediaBytes = await outgoingMedia.body();
+  if (outgoingMedia.status() !== 200 || outgoingMediaBytes.byteLength === 0) {
+    throw new Error(`${room.kind} member did not receive canonical media bytes`);
+  }
+  await outgoingContext.close();
+
+  const replacement = await sendCommand("host_h", {
+    ProcessReplacement: {
+      game: additionalRoomsGame,
+      slot: room.outgoing.slotId,
+      outgoing_user: room.outgoing.principalUserId,
+      incoming_user: room.incoming.principalUserId,
+    },
+  });
+
+  const incomingContext = await browserContextWithSession(
+    room.incoming.sessionToken,
+  );
+  const incomingPage = await incomingContext.newPage();
+  const incomingResponse = await incomingPage.goto(pageUrl, {
+    waitUntil: "networkidle",
+  });
+  if (incomingResponse === null || !incomingResponse.ok()) {
+    throw new Error(`${room.kind} incoming replacement route failed`);
+  }
+  await incomingPage.getByTestId("player-surface").waitFor({ state: "visible" });
+  const incomingHistoricalPost = incomingPage.locator(
+    `[data-testid="thread-post-${mediaPostSeq}"]`,
+  );
+  await incomingHistoricalPost.waitFor({ state: "visible" });
+  if (!(await incomingHistoricalPost.innerText()).includes(room.historyBody)) {
+    throw new Error(`${room.kind} replacement lost slot-authored history`);
+  }
+  await waitForPrivateThreadLiveDelta(incomingPage, {
+    channelId: room.channelId,
+    body: room.historyBody,
+  });
+  const incomingInitialLiveDelta = await privateThreadLiveDelta(
+    incomingPage,
+    room.historyBody,
+  );
+  const incomingMedia = await incomingContext.request.get(
+    `${frontendBaseUrl}${privateMediaUrl}`,
+    { headers: { accept: "image/avif" } },
+  );
+  const incomingMediaBytes = await incomingMedia.body();
+  if (incomingMedia.status() !== 200 || incomingMediaBytes.byteLength === 0) {
+    throw new Error(`${room.kind} replacement could not read transferred media`);
+  }
+
+  await incomingPage
+    .locator('[data-testid="player-composer"] textarea')
+    .fill(room.incomingBody);
+  const incomingPostButton = incomingPage.locator('[data-action="submit_post"]');
+  assertHitTarget(
+    await incomingPostButton.boundingBox(),
+    `${room.kind} incoming post button`,
+  );
+  await incomingPostButton.click();
+  const incomingStatus = incomingPage.getByTestId("player-command-status");
+  await incomingStatus.waitFor({ state: "visible" });
+  await incomingPage.waitForFunction(
+    () =>
+      document
+        .querySelector('[data-testid="player-command-status"]')
+        ?.getAttribute("data-state") === "ack",
+  );
+  await waitForPrivateThreadLiveDelta(incomingPage, {
+    channelId: room.channelId,
+    body: room.incomingBody,
+  });
+  const incomingOutcome = await incomingPage.evaluate(
+    () => window.__fmarchPlayerCommandStatus,
+  );
+  const incomingCommand =
+    incomingOutcome?.requestEnvelope?.body?.body?.command?.SubmitPost;
+  if (
+    incomingOutcome?.state !== "ack" ||
+    incomingCommand?.channel_id !== room.channelId ||
+    incomingCommand?.actor_slot !== room.outgoing.slotId ||
+    incomingCommand?.body !== room.incomingBody
+  ) {
+    throw new Error(`${room.kind} incoming browser post drifted: ${JSON.stringify(incomingOutcome)}`);
+  }
+  const incomingCommandLiveDelta = await privateThreadLiveDelta(
+    incomingPage,
+    room.incomingBody,
+  );
+  const incomingReload = await incomingPage.reload({
+    waitUntil: "networkidle",
+    timeout: 180_000,
+  });
+  if (incomingReload === null || !incomingReload.ok()) {
+    throw new Error(`${room.kind} incoming reload failed`);
+  }
+  await incomingPage.getByTestId("player-surface").waitFor({ state: "visible" });
+  const reloadedBodies = await incomingPage
+    .locator('[data-testid^="thread-post-"]')
+    .allInnerTexts();
+  if (
+    !reloadedBodies.some((body) => body.includes(room.historyBody)) ||
+    !reloadedBodies.some((body) => body.includes(room.incomingBody))
+  ) {
+    throw new Error(`${room.kind} incoming reload lost durable room history`);
+  }
+  const finalThread = await fetchJson(
+    `${apiBaseUrl}/games/${additionalRoomsGame}/channels/${room.route}/thread?principal_user_id=${room.incoming.principalUserId}&limit=50`,
+  );
+  if (
+    finalThread.posts?.length !== 2 ||
+    finalThread.posts.some((post) => post.channel_id !== room.channelId)
+  ) {
+    throw new Error(`${room.kind} channel-scoped API history drifted: ${JSON.stringify(finalThread)}`);
+  }
+  await incomingContext.close();
+
+  const encryptedStorage = await runSqlScalar(
+    smokeDatabase.url,
+    `SELECT concat(
+       count(*)::text, '|',
+       count(*) FILTER (WHERE payload ? 'body')::text, '|',
+       count(*) FILTER (WHERE payload->'body_private'->>'ciphertext' IS NOT NULL)::text, '|',
+       count(*) FILTER (WHERE position(${sqlLiteral(room.historyBody)} in payload::text) > 0
+                         OR position(${sqlLiteral(room.incomingBody)} in payload::text) > 0)::text)
+     FROM events
+     WHERE stream_id = '${additionalRoomsGame}'
+       AND kind = 'PostSubmitted'
+       AND payload->>'channel_id' = ${sqlLiteral(room.channelId)}`,
+  );
+  if (encryptedStorage !== "2|0|2|0") {
+    throw new Error(`${room.kind} encrypted storage proof drifted: ${encryptedStorage}`);
+  }
+
+  const staleOutgoing = await proveAdditionalRoomDenial({
+    frontendBaseUrl,
+    room,
+    token: room.outgoing.sessionToken,
+    principalUserId: room.outgoing.principalUserId,
+    actorSlot: room.outgoing.slotId,
+    mediaUrl: privateMediaUrl,
+    expectedReject: "NotYourSlot",
+    label: "stale outgoing",
+  });
+  const outsider = await proveAdditionalRoomDenial({
+    frontendBaseUrl,
+    room,
+    token: additionalRoomOutsider.sessionToken,
+    principalUserId: additionalRoomOutsider.principalUserId,
+    actorSlot: additionalRoomOutsider.slotId,
+    mediaUrl: privateMediaUrl,
+    expectedReject: "NotAuthorized",
+    label: "non-member",
+  });
+
+  return {
+    status: "passed",
+    id: room.id,
+    kind: room.kind,
+    channelId: room.channelId,
+    revealsAlignment: room.revealsAlignment,
+    pageUrl,
+    declaredMemberSlots: [room.outgoing.slotId, room.peer.slotId],
+    outgoing: {
+      principalUserId: room.outgoing.principalUserId,
+      submitOutcome: outgoingOutcome,
+      commandLiveDelta: outgoingLiveDelta,
+      recoveredAfterReload: true,
+      uploadedSourceBytes: upload.bytes.byteLength,
+      mediaStatus: outgoingMedia.status(),
+      mediaBodyBytes: outgoingMediaBytes.byteLength,
+    },
+    replacement,
+    incoming: {
+      principalUserId: room.incoming.principalUserId,
+      submitOutcome: incomingOutcome,
+      initialLiveDelta: incomingInitialLiveDelta,
+      commandLiveDelta: incomingCommandLiveDelta,
+      reloadedPostBodies: finalThread.posts.map((post) => post.body),
+      mediaStatus: incomingMedia.status(),
+      mediaBodyBytes: incomingMediaBytes.byteLength,
+    },
+    encryptedStorage: {
+      rawCheck: encryptedStorage,
+      postCount: 2,
+      plaintextBodyFields: 0,
+      ciphertextEnvelopes: 2,
+      plaintextOccurrences: 0,
+    },
+    staleOutgoing,
+    outsider,
+    proof:
+      `${room.kind} was pack-declared for two occupied slots, rendered from ChannelMember capability, accepted canonical browser-uploaded media, delivered channel-scoped live deltas, retained encrypted slot history through replacement and reload, then denied the stale outgoing account and an occupied non-member at route, thread, media, and append boundaries.`,
+  };
+}
+
+async function proveAdditionalRoomDenial({
+  frontendBaseUrl,
+  room,
+  token,
+  principalUserId,
+  actorSlot,
+  mediaUrl,
+  expectedReject,
+  label,
+}) {
+  const context = await browserContextWithSession(token);
+  const page = await context.newPage();
+  const routeResponse = await page.goto(
+    `${frontendBaseUrl}/g/${additionalRoomsGame}/c/${room.route}`,
+    { waitUntil: "networkidle" },
+  );
+  if (routeResponse === null || routeResponse.status() !== 403) {
+    throw new Error(
+      `${room.kind} ${label} route expected 403, got ${routeResponse?.status() ?? "none"}`,
+    );
+  }
+  await page.getByTestId("route-error-surface").waitFor({ state: "visible" });
+  const threadResponse = await fetchWithTimeout(
+    `${apiBaseUrl}/games/${additionalRoomsGame}/channels/${room.route}/thread?principal_user_id=${principalUserId}&limit=50`,
+    {},
+    15_000,
+  );
+  if (threadResponse.status !== 403) {
+    throw new Error(`${room.kind} ${label} received private thread rows`);
+  }
+  const mediaResponse = await context.request.get(`${frontendBaseUrl}${mediaUrl}`, {
+    headers: { accept: "image/avif" },
+  });
+  const mediaBytes = await mediaResponse.body();
+  if (mediaResponse.status() !== 403 || mediaBytes.byteLength !== 0) {
+    throw new Error(
+      `${room.kind} ${label} received media: ${mediaResponse.status()} bytes=${mediaBytes.byteLength}`,
+    );
+  }
+  const postResponse = await context.request.post(`${frontendBaseUrl}/commands`, {
+    data: {
+      v: 1,
+      id: commandEnvelopeId++,
+      body: {
+        kind: "Command",
+        body: {
+          command_id: crypto.randomUUID(),
+          principal_user_id: principalUserId,
+          command: {
+            SubmitPost: {
+              game: additionalRoomsGame,
+              channel_id: room.channelId,
+              actor_slot: actorSlot,
+              body: `${label} ${room.kind} post`,
+              media: [],
+            },
+          },
+        },
+      },
+    },
+  });
+  const post = await postResponse.json();
+  if (
+    postResponse.status() !== 200 ||
+    post.body?.kind !== "Reject" ||
+    post.body?.body?.error !== expectedReject
+  ) {
+    throw new Error(`${room.kind} ${label} append was not denied: ${JSON.stringify(post)}`);
+  }
+  await context.close();
+  return {
+    principalUserId,
+    authenticatedSessionRemainedActive: true,
+    routeStatus: routeResponse.status(),
+    threadStatus: threadResponse.status,
+    mediaStatus: mediaResponse.status(),
+    mediaBodyBytes: mediaBytes.byteLength,
+    postReject: post.body.body,
+  };
+}
+
+async function browserContextWithSession(token) {
+  const context = await browser.newContext({ viewport: smokeViewport });
+  await context.addCookies([
+    {
+      name: "fmarch_session",
+      value: token,
+      domain: host,
+      path: "/",
+      httpOnly: true,
+      sameSite: "Lax",
+    },
+  ]);
+  return context;
+}
+
+async function waitForPrivateThreadLiveDelta(page, { channelId, body }) {
+  await page.waitForFunction(
+    ({ expectedChannel, expectedBody }) =>
+      (window.__fmarchLiveProjectionEvents ?? []).some(
+        (event) =>
+          event?.delta?.kind === "ThreadPostsChanged" &&
+          event.delta.body?.posts?.some(
+            (post) =>
+              post.channel_id === expectedChannel && post.body === expectedBody,
+          ),
+      ),
+    { expectedChannel: channelId, expectedBody: body },
+    { timeout: 60_000 },
+  );
+}
+
+async function privateThreadLiveDelta(page, body) {
+  return await page.evaluate(
+    (expectedBody) =>
+      (window.__fmarchLiveProjectionEvents ?? []).find(
+        (event) =>
+          event?.delta?.kind === "ThreadPostsChanged" &&
+          event.delta.body?.posts?.some((post) => post.body === expectedBody),
+      ),
+    body,
+  );
 }
 
 async function seedRolePmHistory(contentId) {
@@ -4664,6 +5395,7 @@ function assertManifestBackedPrivateMedia({
   projectedMedia,
   contentId,
   mediaPostSeq,
+  gameId = game,
   channelId = factionDayChatChannel,
   expectedAlt = factionDayChatMediaAlt,
 }) {
@@ -4678,7 +5410,7 @@ function assertManifestBackedPrivateMedia({
   const encodedChannel = encodeURIComponent(channelId);
   for (const role of expectedRoles) {
     const variant = projectedMedia.variants[role];
-    const prefix = `/media/thread/${game}/${encodedChannel}/${mediaPostSeq}/${contentId}/${role}`;
+    const prefix = `/media/thread/${gameId}/${encodedChannel}/${mediaPostSeq}/${contentId}/${role}`;
     if (
       variant?.avif_url !== `${prefix}.avif` ||
       variant?.webp_url !== `${prefix}.webp` ||

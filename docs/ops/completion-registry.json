@@ -314,20 +314,35 @@
       "title": "Neighborhood, mason, dead, and spectator rooms",
       "execution_class": "code",
       "status": "partial",
-      "summary": "The generic scoped-channel model exists, but the remaining room families and their encryption, lifecycle, replacement, and recovery behavior are not proven end to end.",
+      "summary": "Pack-declared Mason and Neighbor rooms are locally complete across occupied-group creation, encrypted browser text/media posting, capability-derived routes, channel-scoped live delivery, durable reload, replacement transfer, and stale/non-member denial; dead and spectator room families remain incomplete.",
       "complete_when": ["Every supported private room family is pack/config-created, encrypted at rest, capability-filtered, replacement-safe, and live/reload proven."],
       "depends_on": ["product.private.role-pm"],
       "evidence": [
+        { "kind": "source", "value": "packs/mafiascum/pack.json" },
+        { "kind": "source", "value": "crates/commands/src/lib.rs" },
+        { "kind": "source", "value": "crates/commands/tests/pipeline.rs" },
+        { "kind": "source", "value": "crates/api/tests/vertical.rs" },
+        { "kind": "source", "value": "frontend/src/lib/components/player-channel-rail/player-channel-rail-model.mjs" },
+        { "kind": "source", "value": "tools/host_console_live_stack_smoke.mjs" },
         { "kind": "source", "value": "docs/arch/01-domain-model.md" },
-        { "kind": "source", "value": "docs/arch/06-security.md" }
+        { "kind": "source", "value": "docs/arch/06-security.md" },
+        { "kind": "artifact", "value": "target/host-console-live-stack-smoke/live-stack-proof.json" },
+        { "kind": "command", "value": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p commands -p projections -p caps" },
+        { "kind": "command", "value": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p api mason_neighbor -- --test-threads=1" },
+        { "kind": "command", "value": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch npm run test:host-console-live-stack-smoke" },
+        { "kind": "command", "value": "npm run test:frontend-contract" }
       ],
-      "remaining": ["Implement and prove each additional private-room family across creation, membership, encryption, posting, and recovery." ],
+      "remaining": [
+        "Implement and prove dead-chat authority, posting, encryption, media, live/reload, and lifecycle transitions.",
+        "Implement and prove spectator-room read-only authority, history/media visibility, and lifecycle boundaries."
+      ],
       "recommended_slice": {
-        "objective": "Complete the first additional-room vertical for pack-declared Mason and Neighbor channels: seed real occupied role groups through StartGame, expose their capability-derived player routes without room-specific frontend constants, post encrypted text and canonical media through the browser, observe channel-scoped live deltas, reload durable history, transfer membership across replacement, and prove both a non-member and the stale outgoing account receive neither thread rows nor media bytes and cannot append. Keep this registry item partial until dead and spectator room families receive their own lifecycle proof.",
-        "paths": ["packs/mafiascum/pack.json", "crates/commands/", "crates/projections/", "crates/caps/", "crates/api/", "frontend/src/lib/components/player-channel-rail/", "frontend/src/routes/g/[game]/", "tools/host_console_live_stack_smoke.mjs", "tools/dev_test_game_core_loop_private_channel_recovery_scenarios.mjs", "docs/arch/01-domain-model.md", "docs/arch/06-security.md"],
-        "proof_commands": ["DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p commands -p projections -p caps", "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p api mason_neighbor -- --test-threads=1", "npm run test:frontend-contract", "npm run test:dev-test-game-core-live:local"],
+        "objective": "Complete the dead-chat vertical as a real lifecycle capability rather than a fixture-only route: derive `DeadViewer(game)` for the current occupant of a dead slot and revoke it when that slot is restored alive, allow a dead occupant to post only in the encrypted `dead` channel while keeping main and living-player posting rules unchanged, preserve dead-chat history and media across replacement, deliver channel-scoped initial and command live deltas, and prove browser reload plus canonical media serving. Exercise a real death transition and an alive-restoration transition, then prove a living account, a restored-alive account, and the stale outgoing replacement account receive neither dead-chat rows nor media bytes and cannot append. Keep this registry item partial until spectator-room authority is implemented and proven.",
+        "paths": ["crates/commands/", "crates/projections/", "crates/caps/", "crates/api/", "crates/wire/", "frontend/src/lib/components/player-channel-rail/", "frontend/src/routes/g/[game]/", "tools/host_console_live_stack_smoke.mjs", "tools/dev_test_game_core_loop_private_channel_recovery_scenarios.mjs", "docs/arch/01-domain-model.md", "docs/arch/06-security.md"],
+        "proof_commands": ["DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p commands -p projections -p caps", "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p api dead_chat -- --test-threads=1", "npm run test:frontend-contract", "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch npm run test:host-console-live-stack-smoke", "npm run test:dev-test-game-core-live:local"],
         "non_claims": [
-          "No dead-chat, spectator-room, or arbitrary user-created room completion claim from the Mason and Neighbor vertical.",
+          "No spectator-room or arbitrary user-created room completion claim from the dead-chat vertical.",
+          "No resurrection mechanics beyond revoking dead-chat authority when the existing host lifecycle restores a slot alive.",
           "No cross-game direct messaging, inbox, notification delivery, blocking, reporting, or general moderation workflow.",
           "No hosted deployment, production concurrency, or release-readiness promotion from the local seeded proof."
         ]
