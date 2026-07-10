@@ -745,6 +745,9 @@ struct AuthAccountRecoveryCredentialResponse {
     account_id: String,
     principal_user_id: String,
     expires_at: i64,
+    delivery_id: Uuid,
+    delivery_status: String,
+    delivery_attempt_count: i32,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -831,6 +834,16 @@ struct AuthInviteResponse {
     game: Option<Uuid>,
     global_capabilities: Vec<String>,
     invited_by_user_id: String,
+    delivery_id: Uuid,
+    delivery_status: String,
+    delivery_attempt_count: i32,
+}
+
+#[derive(Debug, Clone)]
+struct AuthDeliveryReceipt {
+    delivery_id: Uuid,
+    status: String,
+    attempt_count: i32,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -1500,7 +1513,7 @@ async fn issue_auth_account_recovery_credential(
     .bind(now)
     .bind(principal_user_id.as_str())
     .bind(principal_user_id.as_str())
-    .bind(recovery_hash)
+    .bind(&recovery_hash)
     .bind(
         serde_json::json!({
             "account_id": account_id,
@@ -1511,6 +1524,15 @@ async fn issue_auth_account_recovery_credential(
     )
     .execute(&mut *tx)
     .await?;
+    let delivery = deliver_local_auth_credential(
+        &mut tx,
+        "recovery",
+        account_id,
+        principal_user_id.as_str(),
+        recovery_hash.as_str(),
+        now,
+    )
+    .await?;
     tx.commit().await?;
 
     Ok(Json(AuthAccountRecoveryCredentialResponse {
@@ -1520,6 +1542,9 @@ async fn issue_auth_account_recovery_credential(
         account_id: account_id.to_string(),
         principal_user_id,
         expires_at: request.expires_at,
+        delivery_id: delivery.delivery_id,
+        delivery_status: delivery.status,
+        delivery_attempt_count: delivery.attempt_count,
     }))
 }
 
@@ -2221,6 +2246,8 @@ async fn create_auth_invite(
         });
     }
 
+    let invite_hash = hash_session_token(invite_token);
+    let mut tx = state.pool.begin().await?;
     let inserted = sqlx::query(
         r#"
         INSERT INTO auth_invite (
@@ -2239,7 +2266,7 @@ async fn create_auth_invite(
         ON CONFLICT (token_hash) DO NOTHING
         "#,
     )
-    .bind(hash_session_token(invite_token))
+    .bind(&invite_hash)
     .bind(account_id)
     .bind(account_principal_user_id.as_str())
     .bind(request.game)
@@ -2247,7 +2274,7 @@ async fn create_auth_invite(
     .bind(request.expires_at)
     .bind(&global_capabilities)
     .bind(&invited_by_user_id)
-    .execute(&state.pool)
+    .execute(&mut *tx)
     .await?;
 
     if inserted.rows_affected() != 1 {
@@ -2258,6 +2285,17 @@ async fn create_auth_invite(
         });
     }
 
+    let delivery = deliver_local_auth_credential(
+        &mut tx,
+        "invite",
+        account_id,
+        account_principal_user_id.as_str(),
+        invite_hash.as_str(),
+        now,
+    )
+    .await?;
+    tx.commit().await?;
+
     Ok(Json(AuthInviteResponse {
         account_id: account_id.to_string(),
         principal_user_id: account_principal_user_id,
@@ -2265,6 +2303,9 @@ async fn create_auth_invite(
         game: request.game,
         global_capabilities,
         invited_by_user_id,
+        delivery_id: delivery.delivery_id,
+        delivery_status: delivery.status,
+        delivery_attempt_count: delivery.attempt_count,
     }))
 }
 
@@ -3007,6 +3048,135 @@ async fn authenticated_account_principal_for_update(
         return Err(unauthorized_account());
     }
     Ok(caller_principal_user_id)
+}
+
+async fn deliver_local_auth_credential(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    delivery_kind: &str,
+    account_id: &str,
+    principal_user_id: &str,
+    credential_hash: &str,
+    now: i64,
+) -> Result<AuthDeliveryReceipt, ApiError> {
+    let delivery_id = Uuid::new_v4();
+    sqlx::query(
+        r#"
+        INSERT INTO auth_delivery_intent (
+            delivery_id,
+            delivery_kind,
+            account_id,
+            principal_user_id,
+            credential_hash,
+            status,
+            attempt_count,
+            next_attempt_at,
+            delivered_at,
+            last_error,
+            created_at,
+            updated_at
+        )
+        VALUES ($1, $2, $3, $4, $5, 'queued', 0, $6, NULL, NULL, $6, $6)
+        "#,
+    )
+    .bind(delivery_id)
+    .bind(delivery_kind)
+    .bind(account_id)
+    .bind(principal_user_id)
+    .bind(credential_hash)
+    .bind(now)
+    .execute(&mut **tx)
+    .await?;
+    record_auth_delivery_audit(
+        tx,
+        "auth_delivery_queued",
+        delivery_kind,
+        account_id,
+        principal_user_id,
+        credential_hash,
+        delivery_id,
+        now,
+    )
+    .await?;
+
+    // The local adapter has no network dependency: it deterministically accepts
+    // the redacted intent while retaining a conventional retry-capable schema.
+    let attempt_count = sqlx::query_scalar::<_, i32>(
+        r#"
+        UPDATE auth_delivery_intent
+        SET status = 'delivered',
+            attempt_count = attempt_count + 1,
+            next_attempt_at = NULL,
+            delivered_at = $2,
+            last_error = NULL,
+            updated_at = $2
+        WHERE delivery_id = $1
+          AND status IN ('queued', 'retryable_failed')
+        RETURNING attempt_count
+        "#,
+    )
+    .bind(delivery_id)
+    .bind(now)
+    .fetch_one(&mut **tx)
+    .await?;
+    record_auth_delivery_audit(
+        tx,
+        "auth_delivery_delivered",
+        delivery_kind,
+        account_id,
+        principal_user_id,
+        credential_hash,
+        delivery_id,
+        now,
+    )
+    .await?;
+    Ok(AuthDeliveryReceipt {
+        delivery_id,
+        status: "delivered".to_string(),
+        attempt_count,
+    })
+}
+
+async fn record_auth_delivery_audit(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    event_kind: &str,
+    delivery_kind: &str,
+    account_id: &str,
+    principal_user_id: &str,
+    credential_hash: &str,
+    delivery_id: Uuid,
+    now: i64,
+) -> Result<(), ApiError> {
+    sqlx::query(
+        r#"
+        INSERT INTO identity_lifecycle_audit (
+            event_at,
+            event_kind,
+            actor_user_id,
+            principal_user_id,
+            token_hash,
+            related_token_hash,
+            metadata
+        )
+        VALUES ($1, $2, $3, $4, $5, NULL, $6::JSONB)
+        "#,
+    )
+    .bind(now)
+    .bind(event_kind)
+    .bind(principal_user_id)
+    .bind(principal_user_id)
+    .bind(credential_hash)
+    .bind(
+        serde_json::json!({
+            "delivery_id": delivery_id,
+            "delivery_kind": delivery_kind,
+            "account_id": account_id,
+            "adapter": "local-deterministic"
+        })
+        .to_string(),
+    )
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
 }
 
 async fn record_account_recovery_rejection(
