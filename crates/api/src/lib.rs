@@ -4021,6 +4021,8 @@ async fn ws_session(mut socket: WebSocket, state: ApiState, params: WsParams) {
         return;
     };
 
+    // Subscribe before hydration so commands cannot publish into a handshake gap.
+    let mut live_projection_rx = state.live_projection_tx.subscribe();
     let mut next_envelope_id = 1;
     if let Ok(deltas) = current_votecount_deltas(&state, game).await {
         next_envelope_id = send_projection_deltas(&mut socket, next_envelope_id, deltas).await;
@@ -4050,7 +4052,6 @@ async fn ws_session(mut socket: WebSocket, state: ApiState, params: WsParams) {
             send_projection_deltas(&mut socket, next_envelope_id, private_deltas).await;
     }
 
-    let mut live_projection_rx = state.live_projection_tx.subscribe();
     while let Ok(update) = live_projection_rx.recv().await {
         if update.game != game {
             continue;
