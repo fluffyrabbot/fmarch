@@ -460,6 +460,10 @@ export function coreLoopAdminProofCase() {
         requiredCommandProofRoleUrlAuditStatuses: {
           "command-proof-role-url-audit": `${coreLoopCommandProofRoleUrlAuditExpectation.checkedCount} checked`,
         },
+        requiredText: [
+          "Earliest reached vote proof",
+          "Seeded local-game browser proof only. It does not prove hosted deployment, production identity, release readiness, or production readiness.",
+        ],
       });
       const roleProofUrls = buildCoreLoopRoleProofUrls(
         spineRows.roleUrlHrefs,

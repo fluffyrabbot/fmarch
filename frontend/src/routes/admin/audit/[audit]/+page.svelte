@@ -70,6 +70,15 @@
         <AdminAuditDescriptorRows rows={data.audit.spineRecoveryHookRows} />
       </section>
     {/if}
+    {#if data.audit.earliestReachedProofRows?.length > 0}
+      <section
+        class="admin-audit-detail__group"
+        data-testid="admin-audit-detail-earliest-reached-proof"
+      >
+        <h2>Earliest reached vote proof</h2>
+        <AdminAuditDescriptorRows rows={data.audit.earliestReachedProofRows} />
+      </section>
+    {/if}
     {#if data.audit.commandProofRoleUrlAuditRows?.length > 0}
       <section
         class="admin-audit-detail__group"

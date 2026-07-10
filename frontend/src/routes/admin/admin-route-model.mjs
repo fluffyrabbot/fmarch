@@ -2351,6 +2351,9 @@ function withAdminAuditDetailDisplayRows(item, { game }) {
     ],
   });
   const spineCycleRows = buildCoreLoopSpineCycleRows(item.spineCycles);
+  const earliestReachedProofRows = buildEarliestReachedProofRows(
+    item.earliestReachedProof,
+  );
   const commandProofRoleUrlAuditRows = buildCoreLoopCommandProofRoleUrlAuditRows(
     item.commandProofRoleUrlAudit,
   );
@@ -2402,6 +2405,9 @@ function withAdminAuditDetailDisplayRows(item, { game }) {
       ? {}
       : { spineRecoveryHookRows }),
     ...(spineCycleRows.length === 0 ? {} : { spineCycleRows }),
+    ...(earliestReachedProofRows.length === 0
+      ? {}
+      : { earliestReachedProofRows }),
     ...(commandProofRoleUrlAuditRows.length === 0
       ? {}
       : { commandProofRoleUrlAuditRows }),
@@ -2513,6 +2519,33 @@ function buildCoreLoopSpineCycleRows(spineCycles) {
       }),
     ),
   );
+}
+
+function buildEarliestReachedProofRows(summary) {
+  if (summary === null || typeof summary !== "object") {
+    return Object.freeze([]);
+  }
+  return Object.freeze([
+    artifactSummaryRow({
+      id: "earliest-reached-proof",
+      testId: "admin-audit-earliest-reached-proof",
+      values: [
+        { id: "status", text: summary.status, emphasized: true },
+        { id: "pack", text: summary.pack },
+        { id: "tieBreaker", text: summary.tieBreaker },
+        { id: "tally", text: summary.tally },
+        { id: "winner", text: summary.winnerSlot },
+        { id: "ballots", text: String(summary.ballotCount) },
+        {
+          id: "hostRoleUrl",
+          text: summary.hostRoleUrl,
+          href: summary.hostRoleUrl,
+          testId: "admin-audit-earliest-reached-host-role-url",
+        },
+        { id: "proofBoundary", text: summary.proofBoundary },
+      ],
+    }),
+  ]);
 }
 
 function buildCoreLoopCommandProofRoleUrlAuditRows(audit) {
@@ -8670,6 +8703,23 @@ export function normalizeLocalCoreLoopAudit(proofRun, { game }) {
   ) {
     return null;
   }
+  const earliestReached = proofRun.earliestReachedTie;
+  const earliestReachedProof =
+    earliestReached?.status === "passed"
+      ? Object.freeze({
+          status: "passed",
+          pack: String(earliestReached.pack ?? ""),
+          tieBreaker: String(earliestReached.tieBreaker ?? ""),
+          tally: `${Number(earliestReached.outcome?.tallies?.["slot-1"] ?? 0)}-${Number(earliestReached.outcome?.tallies?.["slot-2"] ?? 0)}`,
+          winnerSlot: String(earliestReached.outcome?.winner_slot ?? ""),
+          ballotCount: Array.isArray(earliestReached.ballotProofs)
+            ? earliestReached.ballotProofs.length
+            : 0,
+          hostRoleUrl: String(earliestReached.sourceRoleUrls?.host ?? ""),
+          proofBoundary:
+            "Seeded local-game browser proof only. It does not prove hosted deployment, production identity, release readiness, or production readiness.",
+        })
+      : null;
   return Object.freeze({
     id: localAdminAuditIds.coreLoop,
     label: "Local core loop",
@@ -8704,6 +8754,7 @@ export function normalizeLocalCoreLoopAudit(proofRun, { game }) {
       ],
     ),
     spineCycles: normalizeCoreLoopSpineCycles(proofRun),
+    ...(earliestReachedProof === null ? {} : { earliestReachedProof }),
     spineRecoveryHooks: normalizeCoreLoopSpineRecoveryHooks(proofRun),
     scenarioFamilies: coreLoopScenarioFamilyRows(),
     commandProofRoleUrlAudit: coreLoopCommandProofRoleUrlAuditExpectation,

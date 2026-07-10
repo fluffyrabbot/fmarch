@@ -1883,6 +1883,19 @@ test("admin audit detail page renders descriptor artifact sections from route da
   assert.match(descriptorSource, /data-copy-status=\{copyStatus\(value\)\}/);
 });
 
+test("admin audit detail page renders earliest-reached proof rows from route data", async () => {
+  const source = await readFile(
+    "frontend/src/routes/admin/audit/[audit]/+page.svelte",
+    "utf8",
+  );
+  assert.match(source, /admin-audit-detail-earliest-reached-proof/);
+  assert.match(source, /Earliest reached vote proof/);
+  assert.match(
+    source,
+    /AdminAuditDescriptorRows rows=\{data\.audit\.earliestReachedProofRows\}/,
+  );
+});
+
 test("admin audit detail page renders hosted handoff operator rows from route data", async () => {
   const source = await readFile(
     "frontend/src/routes/admin/audit/[audit]/+page.svelte",
@@ -5196,6 +5209,17 @@ test("admin route data exposes local core loop proof as a native audit row", asy
   assert.equal(coreLoop.label, "Local core loop");
   assert.equal(coreLoop.status, `${coreLoopAuditLaneIds.length} core loop lanes passed`);
   assert.equal(coreLoop.authority, "GlobalAdmin or GlobalMod");
+  assert.deepEqual(coreLoop.earliestReachedProof, {
+    status: "passed",
+    pack: "dev_test_earliest_reached",
+    tieBreaker: "EarliestReached",
+    tally: "2-2",
+    winnerSlot: "slot-2",
+    ballotCount: 4,
+    hostRoleUrl: "http://127.0.0.1:5173/g/game-earliest/host",
+    proofBoundary:
+      "Seeded local-game browser proof only. It does not prove hosted deployment, production identity, release readiness, or production readiness.",
+  });
   assert.equal(coreLoop.inspectHref, localAdminAuditRoleUrl(localAdminAuditIds.coreLoop, { game: "midsummer" }));
   assert.deepEqual(
     coreLoop.checks.map((check) => check.id),
@@ -5485,11 +5509,56 @@ test("admin local core loop detail data carries lane rows", async () => {
           ],
         ],
       ],
+      [
+        "earliest-reached",
+        "game-earliest",
+        [["host", "http://127.0.0.1:5173/g/game-earliest/host"]],
+        [
+          [
+            "d01-tie-resolved",
+            "winner slot-2, tiebreak EarliestReached",
+          ],
+        ],
+      ],
     ],
   );
   assert.deepEqual(
     descriptorRowsWithNestedLinksForAssertion(data.audit.spineCycleRows),
     expectedSpineCycleRows(data.audit.spineCycles),
+  );
+  assert.deepEqual(
+    descriptorRowsWithNestedLinksForAssertion(
+      data.audit.earliestReachedProofRows,
+    ),
+    [
+      [
+        "earliest-reached-proof",
+        "admin-audit-earliest-reached-proof",
+        [
+          ["status", "passed", true, "", ""],
+          ["pack", "dev_test_earliest_reached", false, "", ""],
+          ["tieBreaker", "EarliestReached", false, "", ""],
+          ["tally", "2-2", false, "", ""],
+          ["winner", "slot-2", false, "", ""],
+          ["ballots", "4", false, "", ""],
+          [
+            "hostRoleUrl",
+            "http://127.0.0.1:5173/g/game-earliest/host",
+            false,
+            "http://127.0.0.1:5173/g/game-earliest/host",
+            "admin-audit-earliest-reached-host-role-url",
+          ],
+          [
+            "proofBoundary",
+            "Seeded local-game browser proof only. It does not prove hosted deployment, production identity, release readiness, or production readiness.",
+            false,
+            "",
+            "",
+          ],
+        ],
+        [],
+      ],
+    ],
   );
   assert.deepEqual(
     data.audit.scenarioFamilies.map((family) => [
@@ -8205,6 +8274,21 @@ function proofRunFixture() {
         staleActionTransitionReject: "PhaseLocked",
         d03TerminalAdvanceReject: "InvalidTarget",
       },
+    },
+    earliestReachedTie: {
+      status: "passed",
+      pack: "dev_test_earliest_reached",
+      tieBreaker: "EarliestReached",
+      game: "game-earliest",
+      sourceRoleUrls: {
+        host: "http://127.0.0.1:5173/g/game-earliest/host",
+      },
+      outcome: {
+        winner_slot: "slot-2",
+        tiebreak: "EarliestReached",
+        tallies: { "slot-1": 2, "slot-2": 2 },
+      },
+      ballotProofs: [{}, {}, {}, {}],
     },
     completedGameHardeningCoverage: completedGameHardeningCoverageFixture(),
     hostStaleControlCoverage: hostStaleControlCoverageFixture(),
