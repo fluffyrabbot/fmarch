@@ -976,6 +976,7 @@ export function assertDevTestGameSpineManifest(manifest) {
   assertPlanScripts(coreLivePlan, [
     "dev:test-game:prebuild",
     "tools/dev_test_game_live_proof.mjs",
+    "tools/dev_test_game_earliest_reached_proof_contract.mjs",
     "tools/dev_test_game_proof_contract.mjs",
     "tools/dev_test_game_core_loop_admin_proof.mjs",
     "tools/dev_test_game_private_channel_recovery_receipt.mjs",
@@ -989,6 +990,7 @@ export function assertDevTestGameSpineManifest(manifest) {
   assertPlanScripts(livePlan, [
     "dev:test-game:prebuild",
     "tools/dev_test_game_live_proof.mjs",
+    "tools/dev_test_game_earliest_reached_proof_contract.mjs",
     "tools/dev_test_game_proof_contract.mjs",
     "tools/dev_test_game_core_loop_admin_proof.mjs",
     "tools/dev_test_game_private_channel_recovery_receipt.mjs",

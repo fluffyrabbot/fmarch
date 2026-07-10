@@ -10,6 +10,9 @@ import { releaseReadinessStep } from "./dev_test_game_spine_readiness_steps.mjs"
 import {
   devTestGameProofRunPath,
 } from "./dev_test_game_spine_artifact_paths.mjs";
+import {
+  devTestGameEarliestReachedProofPath,
+} from "./dev_test_game_earliest_reached_proof_contract.mjs";
 import { runSpinePlan } from "./dev_test_game_spine_runner.mjs";
 import {
   recoveryReceiptProofPlanSteps,
@@ -29,6 +32,7 @@ const hardeningRecoveryReceiptSelector = {
 export const devTestGameCoreLiveSpinePlan = [
   { kind: "npm", script: "dev:test-game:prebuild" },
   { kind: "node", script: "tools/dev_test_game_live_proof.mjs" },
+  { kind: "node", script: "tools/dev_test_game_earliest_reached_proof_contract.mjs" },
   { kind: "node", script: "tools/dev_test_game_proof_contract.mjs" },
   { kind: "node", script: "tools/dev_test_game_core_loop_admin_proof.mjs" },
   ...recoveryReceiptProofPlanSteps(coreLoopRecoveryReceiptSelector),
@@ -38,6 +42,7 @@ export const devTestGameCoreLiveSpinePlan = [
     reason: "core-live-gameplay-admin-surfaces",
     changedInputs: [
       devTestGameProofRunPath,
+      devTestGameEarliestReachedProofPath,
       devTestGameHostSetupProofPath,
       devTestGameCoreLoopAdminProofPath,
       ...recoveryReceiptProofTargets(coreLoopRecoveryReceiptSelector),

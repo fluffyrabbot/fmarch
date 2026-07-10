@@ -23,6 +23,9 @@ import {
   buildDevTestGameProofRun,
 } from "./dev_test_game_proof_contract.mjs";
 import {
+  assertDevTestGameEarliestReachedProof,
+} from "./dev_test_game_earliest_reached_proof_contract.mjs";
+import {
   buildVanillizerRoleActionProofFixture,
   vanillizerRoleActionLaneId,
 } from "./dev_test_game_vanillizer_scenario.mjs";
@@ -907,6 +910,26 @@ test("live projection lag proof config always overflows its burst", () => {
   assert.throws(
     () => liveProjectionProofConfig({ FMARCH_LIVE_PROJECTION_CAPACITY: "5" }),
     /must stay below/,
+  );
+});
+
+test("EarliestReached browser proof has a standalone artifact contract", () => {
+  const proof = {
+    status: "passed",
+    pack: "dev_test_earliest_reached",
+    tieBreaker: "EarliestReached",
+    sourceRoleUrls: { host: "http://127.0.0.1:5173/g/game-a/host" },
+    outcome: {
+      winner_slot: "slot-2",
+      tiebreak: "EarliestReached",
+      tallies: { "slot-1": 2, "slot-2": 2 },
+    },
+    ballotProofs: [{}, {}, {}, {}],
+  };
+  assert.equal(assertDevTestGameEarliestReachedProof(proof), proof);
+  assert.throws(
+    () => assertDevTestGameEarliestReachedProof({ ...proof, ballotProofs: [] }),
+    /contract drifted/,
   );
 });
 
@@ -1911,6 +1934,10 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
   assert.deepEqual(devTestGameCoreLiveSpinePlan, [
     { kind: "npm", script: "dev:test-game:prebuild" },
     { kind: "node", script: "tools/dev_test_game_live_proof.mjs" },
+    {
+      kind: "node",
+      script: "tools/dev_test_game_earliest_reached_proof_contract.mjs",
+    },
     { kind: "node", script: "tools/dev_test_game_proof_contract.mjs" },
     { kind: "node", script: "tools/dev_test_game_core_loop_admin_proof.mjs" },
     ...recoveryReceiptProofPlanSteps(coreLoopRecoveryReceiptSelector),
@@ -1922,6 +1949,7 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
       readinessReason: "core-live-gameplay-admin-surfaces",
       changedInputs: [
         "target/dev-test-game/proof-run.json",
+        "target/dev-test-game/earliest-reached-proof.json",
         devTestGameHostSetupProofPath,
         devTestGameCoreLoopAdminProofPath,
         ...recoveryReceiptProofTargets(coreLoopRecoveryReceiptSelector),

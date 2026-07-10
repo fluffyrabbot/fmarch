@@ -81,6 +81,9 @@ import {
   vanillizerRoleActionScenario,
   vanillizerSeedCommandPlan,
 } from "./dev_test_game_vanillizer_scenario.mjs";
+import {
+  devTestGameEarliestReachedProofPath,
+} from "./dev_test_game_earliest_reached_proof_contract.mjs";
 
 export {
   seedPreSetupCommandPlanForGame,
@@ -94,10 +97,7 @@ const artifactDir = path.join(repoRoot, "target", "dev-test-game");
 const sessionJsonPath = path.join(artifactDir, "session.json");
 const sessionMdPath = path.join(artifactDir, "session.md");
 const proofRunJsonPath = path.join(artifactDir, "proof-run.json");
-const earliestReachedProofJsonPath = path.join(
-  artifactDir,
-  "earliest-reached-proof.json",
-);
+const earliestReachedProofJsonPath = path.join(repoRoot, devTestGameEarliestReachedProofPath);
 const hostSetupSessionJsonPath = path.join(artifactDir, "host-setup-session.json");
 const hostSetupSessionMdPath = path.join(artifactDir, "host-setup-session.md");
 const hostSetupProofJsonPath = path.join(artifactDir, "host-setup-proof.json");
@@ -253,6 +253,12 @@ export async function main(rawArgs = process.argv.slice(2), env = process.env) {
       : await verifySessionCard(card);
     card.verification = verification;
     await writeSessionArtifacts(card, sessionArtifacts);
+    if (verification.earliestReachedTie !== undefined) {
+      await writeFile(
+        earliestReachedProofJsonPath,
+        `${JSON.stringify(verification.earliestReachedTie, null, 2)}\n`,
+      );
+    }
     const hostSetupProof = buildDevTestGameHostSetupProof(card, verification);
     await writeFile(
       hostSetupProofJsonPath,
@@ -261,10 +267,6 @@ export async function main(rawArgs = process.argv.slice(2), env = process.env) {
     if (args.verifyHostSetupOnly) {
       console.log(`\nverified host setup browser proof: ${path.relative(repoRoot, hostSetupProofJsonPath)}`);
     } else if (args.verifyEarliestReachedOnly) {
-      await writeFile(
-        earliestReachedProofJsonPath,
-        `${JSON.stringify(verification.earliestReachedTie, null, 2)}\n`,
-      );
       console.log(
         `\nverified earliest reached browser proof: ${path.relative(repoRoot, earliestReachedProofJsonPath)}`,
       );
