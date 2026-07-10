@@ -5,6 +5,7 @@ edition.workspace = true
 
 [dependencies]
 api = { path = "../api" }
+media = { path = "../media" }
 operator_api = { path = "../operator_api" }
 axum = "0.8"
 sqlx = { version = "0.8", default-features = false, features = [

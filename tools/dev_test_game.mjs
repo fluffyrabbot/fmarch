@@ -94,6 +94,14 @@ export {
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const frontendRoot = path.join(repoRoot, "frontend");
 const artifactDir = path.join(repoRoot, "target", "dev-test-game");
+const configuredMediaRoot = process.env.FMARCH_MEDIA_ROOT;
+if (configuredMediaRoot !== undefined && configuredMediaRoot.trim() === "") {
+  throw new Error("FMARCH_MEDIA_ROOT must not be empty");
+}
+const mediaRoot =
+  configuredMediaRoot === undefined
+    ? path.join(artifactDir, "media-store")
+    : path.resolve(repoRoot, configuredMediaRoot);
 const sessionJsonPath = path.join(artifactDir, "session.json");
 const sessionMdPath = path.join(artifactDir, "session.md");
 const proofRunJsonPath = path.join(artifactDir, "proof-run.json");
@@ -325,6 +333,7 @@ async function startApi() {
   if (args.apiPort !== undefined) {
     await assertPortAvailable(port, "API");
   }
+  await mkdir(mediaRoot, { recursive: true, mode: 0o700 });
   const baseUrl = `http://${host}:${port}`;
   console.log(`starting Rust API on ${baseUrl} with cargo run -p server`);
   apiServer = spawn("cargo", ["run", "-p", "server"], {
@@ -333,6 +342,7 @@ async function startApi() {
       ...process.env,
       DATABASE_URL: databaseUrl,
       FMARCH_BIND: `${host}:${port}`,
+      FMARCH_MEDIA_ROOT: mediaRoot,
       FMARCH_LIVE_PROJECTION_CAPACITY: String(
         liveProjectionProofConfig(process.env).capacity,
       ),

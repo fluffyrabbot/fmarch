@@ -6,6 +6,7 @@
 
 use axum::body::{to_bytes, Body};
 use axum::http::{Request, StatusCode};
+use media::{MediaLimits, MediaStore};
 use std::sync::{Mutex, MutexGuard};
 use tower::ServiceExt;
 use uuid::Uuid;
@@ -128,7 +129,9 @@ async fn mixed_kid_private_payloads_survive_rebuild_and_private_thread_api_read(
     pool: sqlx::PgPool,
 ) {
     let env = EncryptionEnvGuard::new();
-    let app = api::router(pool.clone());
+    let media_root = tempfile::tempdir().unwrap();
+    let media_store = MediaStore::open(media_root.path(), MediaLimits::default()).unwrap();
+    let app = api::router(pool.clone(), media_store);
     let game = Uuid::new_v4();
     let old_kid = "old-kid";
     let old_key = "old private event encryption key";

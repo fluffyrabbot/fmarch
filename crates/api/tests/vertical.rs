@@ -1,8 +1,12 @@
-use api::{ApiState, HostSetupStateResponse};
+use api::{ApiState, HostSetupStateResponse, MediaUploadResponse};
 use axum::body::{to_bytes, Body};
 use axum::http::{Request, StatusCode};
 use futures_util::StreamExt;
+use media::{MediaLimits, MediaStore, VariantLimits};
 use std::collections::{BTreeMap, BTreeSet};
+use std::path::Path;
+use std::sync::OnceLock;
+use tempfile::TempDir;
 use tower::ServiceExt;
 use uuid::Uuid;
 use wire::{
@@ -12,11 +16,21 @@ use wire::{
 };
 
 fn router(pool: sqlx::PgPool) -> axum::Router {
-    api::router(pool)
+    api::router(pool, shared_test_media_store())
 }
 
 fn router_with_dev_auth(pool: sqlx::PgPool) -> axum::Router {
-    api::router_with_state(ApiState::new(pool).with_dev_auth(true))
+    api::router_with_state(test_api_state(pool).with_dev_auth(true))
+}
+
+fn test_api_state(pool: sqlx::PgPool) -> ApiState {
+    ApiState::new(pool, shared_test_media_store())
+}
+
+fn shared_test_media_store() -> MediaStore {
+    static ROOT: OnceLock<TempDir> = OnceLock::new();
+    let root = ROOT.get_or_init(|| tempfile::tempdir().expect("create shared API test media root"));
+    MediaStore::open(root.path(), MediaLimits::default()).expect("open shared API test media store")
 }
 
 async fn create_test_auth_account(
@@ -49,6 +63,103 @@ async fn create_test_auth_account(
     assert_eq!(response.status(), StatusCode::OK);
 }
 
+async fn create_media_upload_account_session(app: &axum::Router, label: &str) -> (String, String) {
+    let admin_token = format!("media-upload-admin-{label}");
+    let account_id = format!("media-upload-{label}@example.test");
+    let principal_user_id = format!("media_upload_{label}");
+    let password = "correct horse battery";
+    let session_token = format!("media-upload-session-{label}");
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/auth/dev-session")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    serde_json::json!({
+                        "token": admin_token,
+                        "principal_user_id": format!("media_admin_{label}"),
+                        "expires_at": 4_102_444_800i64,
+                        "global_capabilities": ["GlobalAdmin"]
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    create_test_auth_account(app, &admin_token, &account_id, password, &principal_user_id).await;
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/auth/accounts/login")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    serde_json::json!({
+                        "account_id": account_id,
+                        "password": password,
+                        "session_token": session_token,
+                        "expires_at": 4_102_444_800i64
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    (session_token, principal_user_id)
+}
+
+async fn post_media_upload(
+    app: &axum::Router,
+    token: Option<&str>,
+    content_type: &str,
+    body: Vec<u8>,
+) -> axum::response::Response {
+    let mut request = Request::builder()
+        .method("POST")
+        .uri("/media/uploads")
+        .header("content-type", content_type);
+    if let Some(token) = token {
+        request = request.header("authorization", format!("Bearer {token}"));
+    }
+    app.clone()
+        .oneshot(request.body(Body::from(body)).unwrap())
+        .await
+        .unwrap()
+}
+
+fn media_upload_png(width: u32, height: u32) -> Vec<u8> {
+    let pixels: Vec<u8> = (0..u64::from(width) * u64::from(height))
+        .flat_map(|index| {
+            [
+                (index % 251) as u8,
+                ((index * 3) % 251) as u8,
+                ((index * 7) % 251) as u8,
+                if index % 5 == 0 { 127 } else { 255 },
+            ]
+        })
+        .collect();
+    let mut encoded = Vec::new();
+    {
+        let mut encoder = png::Encoder::new(&mut encoded, width, height);
+        encoder.set_color(png::ColorType::Rgba);
+        encoder.set_depth(png::BitDepth::Eight);
+        let mut writer = encoder.write_header().unwrap();
+        writer.write_image_data(&pixels).unwrap();
+    }
+    encoded
+}
+
+fn media_blob_entry_count(root: &Path) -> usize {
+    std::fs::read_dir(root.join("blobs")).unwrap().count()
+}
+
 async fn post_public_auth_json(
     app: &axum::Router,
     uri: &str,
@@ -66,6 +177,174 @@ async fn post_public_auth_json(
         .oneshot(request.body(Body::from(body.to_string())).unwrap())
         .await
         .unwrap()
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn media_upload_authorized_is_idempotent_and_restart_verified(pool: sqlx::PgPool) {
+    let root = tempfile::tempdir().unwrap();
+    let store = MediaStore::open(root.path(), MediaLimits::default()).unwrap();
+    let app = api::router_with_state(
+        ApiState::new(pool, store.clone())
+            .with_dev_auth(true)
+            .with_variant_limits(VariantLimits::default()),
+    );
+    let (token, _) = create_media_upload_account_session(&app, "authorized").await;
+    let png = media_upload_png(3, 2);
+
+    let first = post_media_upload(&app, Some(&token), "image/png", png.clone()).await;
+    assert_eq!(first.status(), StatusCode::CREATED);
+    let first: MediaUploadResponse =
+        serde_json::from_slice(&to_bytes(first.into_body(), usize::MAX).await.unwrap()).unwrap();
+    assert_eq!(first.intrinsic_width, 3);
+    assert_eq!(first.intrinsic_height, 2);
+    assert_eq!(
+        first.variant_recipe_revision,
+        media::VARIANT_RECIPE_REVISION
+    );
+    assert_eq!(first.variants.len(), 6);
+    assert!(first
+        .variants
+        .iter()
+        .all(|variant| variant.encoded_len > 0 && variant.blake3.len() == 64));
+
+    let repeated = post_media_upload(&app, Some(&token), "image/png", png).await;
+    assert_eq!(repeated.status(), StatusCode::OK);
+    let repeated: MediaUploadResponse =
+        serde_json::from_slice(&to_bytes(repeated.into_body(), usize::MAX).await.unwrap()).unwrap();
+    assert_eq!(repeated, first);
+    assert_eq!(media_blob_entry_count(root.path()), 1);
+
+    drop(app);
+    drop(store);
+    let restarted = MediaStore::open(root.path(), MediaLimits::default()).unwrap();
+    let id = first.content_id.parse::<media::ContentId>().unwrap();
+    assert!(restarted.lookup(id).unwrap().is_some());
+    assert!(restarted
+        .lookup_variant_set(id, VariantLimits::default())
+        .unwrap()
+        .is_some());
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn media_upload_rejects_nonaccount_expired_revoked_and_disabled_sessions_without_retention(
+    pool: sqlx::PgPool,
+) {
+    let root = tempfile::tempdir().unwrap();
+    let store = MediaStore::open(root.path(), MediaLimits::default()).unwrap();
+    let app = api::router_with_state(ApiState::new(pool.clone(), store).with_dev_auth(true));
+    let png = media_upload_png(2, 2);
+
+    let missing = post_media_upload(&app, None, "image/png", png.clone()).await;
+    assert_eq!(missing.status(), StatusCode::UNAUTHORIZED);
+
+    let dev_only_token = "media-upload-dev-only";
+    let dev_only = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/auth/dev-session")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    serde_json::json!({
+                        "token": dev_only_token,
+                        "principal_user_id": "media_dev_only",
+                        "expires_at": 4_102_444_800i64,
+                        "global_capabilities": []
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(dev_only.status(), StatusCode::OK);
+    let rejected = post_media_upload(&app, Some(dev_only_token), "image/png", png.clone()).await;
+    assert_eq!(rejected.status(), StatusCode::UNAUTHORIZED);
+
+    let (expired_token, expired_principal) =
+        create_media_upload_account_session(&app, "expired").await;
+    sqlx::query("UPDATE auth_session SET expires_at = 1 WHERE principal_user_id = $1")
+        .bind(&expired_principal)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let rejected = post_media_upload(&app, Some(&expired_token), "image/png", png.clone()).await;
+    assert_eq!(rejected.status(), StatusCode::UNAUTHORIZED);
+
+    let (revoked_token, revoked_principal) =
+        create_media_upload_account_session(&app, "revoked").await;
+    sqlx::query("UPDATE auth_session SET revoked_at = 1 WHERE principal_user_id = $1")
+        .bind(&revoked_principal)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let rejected = post_media_upload(&app, Some(&revoked_token), "image/png", png.clone()).await;
+    assert_eq!(rejected.status(), StatusCode::UNAUTHORIZED);
+
+    let (disabled_token, disabled_principal) =
+        create_media_upload_account_session(&app, "disabled").await;
+    sqlx::query("UPDATE auth_account SET disabled_at = 1 WHERE principal_user_id = $1")
+        .bind(&disabled_principal)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let rejected = post_media_upload(&app, Some(&disabled_token), "image/png", png).await;
+    assert_eq!(rejected.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(media_blob_entry_count(root.path()), 0);
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn media_upload_rejects_type_malformed_dimension_and_body_limits_without_retention(
+    pool: sqlx::PgPool,
+) {
+    let root = tempfile::tempdir().unwrap();
+    let media_limits = MediaLimits::new(1_024, 1, 1, 1, 4).unwrap();
+    let store = MediaStore::open(root.path(), media_limits).unwrap();
+    let app = api::router_with_state(ApiState::new(pool.clone(), store).with_dev_auth(true));
+    let (token, _) = create_media_upload_account_session(&app, "invalid").await;
+    let png = media_upload_png(2, 2);
+
+    let rejected =
+        post_media_upload(&app, Some(&token), "application/octet-stream", png.clone()).await;
+    assert_eq!(rejected.status(), StatusCode::UNSUPPORTED_MEDIA_TYPE);
+    let rejected = post_media_upload(&app, Some(&token), "image/jpeg", png.clone()).await;
+    assert_eq!(rejected.status(), StatusCode::UNSUPPORTED_MEDIA_TYPE);
+    let rejected = post_media_upload(&app, Some(&token), "image/gif", b"GIF89a".to_vec()).await;
+    assert_eq!(rejected.status(), StatusCode::UNSUPPORTED_MEDIA_TYPE);
+
+    let mut malformed = b"\x89PNG\r\n\x1a\n".to_vec();
+    malformed.extend_from_slice(b"not-a-real-png");
+    let rejected = post_media_upload(&app, Some(&token), "image/png", malformed).await;
+    assert_eq!(rejected.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    let rejected = post_media_upload(&app, Some(&token), "image/png", png).await;
+    assert_eq!(rejected.status(), StatusCode::UNPROCESSABLE_ENTITY);
+
+    let mut oversized = vec![0_u8; 1_025];
+    oversized[..8].copy_from_slice(b"\x89PNG\r\n\x1a\n");
+    let rejected = post_media_upload(&app, Some(&token), "image/png", oversized).await;
+    assert_eq!(rejected.status(), StatusCode::PAYLOAD_TOO_LARGE);
+    assert_eq!(media_blob_entry_count(root.path()), 0);
+
+    let variant_root = tempfile::tempdir().unwrap();
+    let variant_store = MediaStore::open(variant_root.path(), MediaLimits::default()).unwrap();
+    let variant_limits = VariantLimits::new(2_560, 2_560, 6_553_600, 8, 48).unwrap();
+    let variant_app = api::router_with_state(
+        ApiState::new(pool, variant_store)
+            .with_dev_auth(true)
+            .with_variant_limits(variant_limits),
+    );
+    let (variant_token, _) =
+        create_media_upload_account_session(&variant_app, "variant-limit").await;
+    let rejected = post_media_upload(
+        &variant_app,
+        Some(&variant_token),
+        "image/png",
+        media_upload_png(1, 1),
+    )
+    .await;
+    assert_eq!(rejected.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(media_blob_entry_count(variant_root.path()), 0);
 }
 
 fn stable_command_id(id: u64) -> Uuid {
@@ -1508,7 +1787,7 @@ async fn websocket_game_connection_streams_command_following_votecount_delta(poo
 
 #[sqlx::test(migrations = "../projections/migrations")]
 async fn websocket_lag_requests_resync_and_keeps_streaming(pool: sqlx::PgPool) {
-    let state = ApiState::new(pool)
+    let state = test_api_state(pool)
         .with_live_projection_capacity(1)
         .with_live_projection_delivery_delay(std::time::Duration::from_secs(2));
     let app = api::router_with_state(state);
@@ -3965,7 +4244,7 @@ async fn public_credential_failures_share_a_hashed_retryable_lockout(pool: sqlx:
 #[sqlx::test(migrations = "../projections/migrations")]
 async fn unknown_credentials_use_one_source_scope_and_prune_stale_rows(pool: sqlx::PgPool) {
     let app = api::router_with_state(
-        ApiState::new(pool.clone())
+        test_api_state(pool.clone())
             .with_dev_auth(true)
             .with_auth_attempt_limits(2, 3, 900, 900, 900),
     );
@@ -4065,7 +4344,7 @@ async fn unknown_credentials_use_one_source_scope_and_prune_stale_rows(pool: sql
 #[sqlx::test(migrations = "../projections/migrations")]
 async fn trusted_credential_sources_partition_account_lockouts(pool: sqlx::PgPool) {
     let app = api::router_with_state(
-        ApiState::new(pool.clone())
+        test_api_state(pool.clone())
             .with_dev_auth(true)
             .with_auth_attempt_limits(3, 20, 900, 900, 900)
             .with_trusted_auth_attempt_source_header(true),

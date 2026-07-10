@@ -9,6 +9,10 @@ import { seedCommandPlanForGame } from "./dev_test_game.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const artifactDir = path.join(repoRoot, "target", "live-stack-backup-restore-drill");
+const configuredMediaRoot = process.env.FMARCH_MEDIA_ROOT;
+if (configuredMediaRoot !== undefined && configuredMediaRoot.trim() === "") {
+  throw new Error("FMARCH_MEDIA_ROOT must not be empty");
+}
 const proofPath = path.join(artifactDir, "local-backup-restore-proof.json");
 const dumpPath = path.join(artifactDir, "local-live-stack.dump");
 const databaseUrl = process.env.DATABASE_URL;
@@ -394,12 +398,18 @@ async function dropScratchDatabase({ adminUrl, name }) {
 async function startApi(url, label) {
   const port = await freePort();
   const baseUrl = `http://${host}:${port}`;
+  const mediaRoot =
+    configuredMediaRoot === undefined
+      ? path.join(artifactDir, `media-store-${label}`)
+      : path.resolve(repoRoot, configuredMediaRoot);
+  await mkdir(mediaRoot, { recursive: true, mode: 0o700 });
   const child = spawn("cargo", ["run", "-p", "server"], {
     cwd: repoRoot,
     env: {
       ...process.env,
       DATABASE_URL: url,
       FMARCH_BIND: `${host}:${port}`,
+      FMARCH_MEDIA_ROOT: mediaRoot,
       RUST_LOG: process.env.RUST_LOG ?? "warn",
     },
     stdio: ["ignore", "pipe", "pipe"],

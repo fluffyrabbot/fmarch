@@ -222,25 +222,22 @@
       "order": 40,
       "title": "Authenticated bounded media upload",
       "execution_class": "code",
-      "status": "open",
-      "summary": "Expose a capability-checked REST upload that applies resource limits and returns only server-issued content-addressed handles.",
+      "status": "complete",
+      "summary": "Server startup now requires a pre-provisioned media root, and an active enabled account can submit bounded raw PNG/JPEG bytes to a prepare-before-persist endpoint that commits one canonical raster plus the fixed six-member variant set and returns only typed immutable handle metadata. Missing, non-account, expired, revoked, disabled, unsupported, mismatched, malformed, dimension-limited, body-limited, and variant-output-limited requests retain no canonical or variant bytes; this is local API/filesystem proof, not post serving, browser, hosted durability, or production upload readiness.",
       "complete_when": ["Authorized uploads return a persistent handle while malformed, oversized, unsupported, and unauthorized requests fail without retained bytes."],
       "depends_on": ["product.media.canonical-blob-store", "product.media.variant-generation", "product.identity.account-login-invites"],
       "evidence": [
+        { "kind": "source", "value": "crates/api/src/lib.rs" },
+        { "kind": "source", "value": "crates/api/tests/vertical.rs" },
+        { "kind": "source", "value": "crates/media/src/variants.rs" },
+        { "kind": "source", "value": "crates/server/src/main.rs" },
+        { "kind": "source", "value": "tools/dev_test_game.mjs" },
         { "kind": "source", "value": "docs/arch/07-images.md" },
-        { "kind": "planned-command", "value": "cargo test -p api media_upload" }
+        { "kind": "command", "value": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p api -- --test-threads=1" },
+        { "kind": "command", "value": "cargo test -p media" },
+        { "kind": "command", "value": "cargo check -p server" }
       ],
-      "remaining": ["Add the authenticated API contract and bounded ingest integration."],
-      "recommended_slice": {
-        "objective": "Require a pre-provisioned media root at server startup, inject the canonical MediaStore into API state, and add a raw-body PNG/JPEG upload endpoint that authenticates an active enabled account before persistence, enforces request and media limits, generates the fixed variant set, and returns only typed immutable handle metadata; prove every rejected request retains no canonical or variant bytes.",
-        "paths": ["Cargo.lock", "crates/api/Cargo.toml", "crates/api/src/lib.rs", "crates/server/Cargo.toml", "crates/server/src/main.rs", "docs/arch/07-images.md"],
-        "proof_commands": ["cargo test -p api media_upload -- --test-threads=1", "cargo check -p server"],
-        "non_claims": [
-          "No thread-post command, projection-serving, frontend, or browser integration.",
-          "No multipart/resumable protocol, orphan-retention lifecycle, or public original-byte route.",
-          "No object-store/CDN integration, hosted durability, or production upload-readiness claim."
-        ]
-      }
+      "remaining": []
     },
     {
       "id": "product.media.upload-to-private-post",
@@ -256,7 +253,17 @@
         { "kind": "source", "value": "docs/arch/07-images.md" },
         { "kind": "planned-command", "value": "npm run test:dev-test-game-core-live:local" }
       ],
-      "remaining": ["Wire upload, post attachment, persistent serving, responsive UI, and seeded browser authorization proof." ]
+      "remaining": ["Wire upload, post attachment, persistent serving, responsive UI, and seeded browser authorization proof."],
+      "recommended_slice": {
+        "objective": "Replace client-authored post-media URL maps with a server-issued content-id attachment contract: accept only an uploaded content id plus alt text at SubmitPost, verify the canonical handle before command acceptance, persist and project that immutable reference, derive private AVIF/WebP URLs server-side, and serve only manifest-backed variants after both account-session and projected channel-membership checks. Update the player composer to upload then post and render a responsive picture, and prove with the seeded live stack that a member receives real variant bytes after reload while a non-member receives no media bytes.",
+        "paths": ["Cargo.lock", "crates/api/", "crates/commands/", "crates/media/", "crates/projections/", "crates/server/", "crates/wire/", "frontend/src/lib/components/player-thread/", "frontend/src/routes/g/[game]/", "frontend/src/routes/media/live-stack/thread/[asset]/", "tools/host_console_live_stack_smoke.mjs", "docs/arch/07-images.md"],
+        "proof_commands": ["cargo test -p media", "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p api media -- --test-threads=1", "npm run test:frontend-contract", "npm run test:dev-test-game-core-live:local"],
+        "non_claims": [
+          "No public or original-byte route, cross-post media library, gallery, profile-media, or moderation workflow.",
+          "No multipart/resumable upload, direct object-store upload, quotas/rate limits, orphan cleanup, or retention lifecycle.",
+          "No object-store/CDN integration, hosted durability, production performance, or production codec-quality claim."
+        ]
+      }
     },
     {
       "id": "product.private.mafia-room",

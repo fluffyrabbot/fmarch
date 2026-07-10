@@ -13,6 +13,14 @@ const port = process.env.FMARCH_BROWSER_SMOKE_PORT
   : await freePort();
 const baseUrl = `http://${host}:${port}`;
 const artifactDir = path.join(root, "target", "operator-browser-smoke");
+const configuredMediaRoot = process.env.FMARCH_MEDIA_ROOT;
+if (configuredMediaRoot !== undefined && configuredMediaRoot.trim() === "") {
+  throw new Error("FMARCH_MEDIA_ROOT must not be empty");
+}
+const mediaRoot =
+  configuredMediaRoot === undefined
+    ? path.join(artifactDir, "media-store")
+    : path.resolve(root, configuredMediaRoot);
 const proofArtifacts = [
   "target/operator-proof/game-specific-audit-bundle-20260613T000000Z.json",
   "target/operator-proof/game-specific-audit-bundle-20260613T001500Z.json",
@@ -1214,6 +1222,7 @@ function assertProofRunStatusContract(name, body, expectedContractVersion) {
 
 async function main() {
   await mkdir(artifactDir, { recursive: true });
+  await mkdir(mediaRoot, { recursive: true, mode: 0o700 });
   await writeSmokeProgress({ stage: "write-provenance-proof-artifacts" });
   await writeProvenanceProofArtifacts();
   await writeSmokeProgress({ stage: "require-proof-artifacts" });
@@ -1227,6 +1236,7 @@ async function main() {
       ...process.env,
       DATABASE_URL: databaseUrl,
       FMARCH_BIND: `${host}:${port}`,
+      FMARCH_MEDIA_ROOT: mediaRoot,
       RUST_LOG: process.env.RUST_LOG ?? "warn",
     },
     stdio: ["ignore", "pipe", "pipe"],

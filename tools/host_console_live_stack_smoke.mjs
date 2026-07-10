@@ -27,6 +27,14 @@ import {
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const frontendRoot = path.join(repoRoot, "frontend");
 const artifactDir = path.join(repoRoot, "target", "host-console-live-stack-smoke");
+const configuredMediaRoot = process.env.FMARCH_MEDIA_ROOT;
+if (configuredMediaRoot !== undefined && configuredMediaRoot.trim() === "") {
+  throw new Error("FMARCH_MEDIA_ROOT must not be empty");
+}
+const mediaRoot =
+  configuredMediaRoot === undefined
+    ? path.join(artifactDir, "media-store")
+    : path.resolve(repoRoot, configuredMediaRoot);
 const evidencePath = path.join(artifactDir, "live-stack-proof.json");
 const summaryPath = path.join(artifactDir, "live-stack-summary.json");
 const summaryMarkdownPath = path.join(artifactDir, "live-stack-summary.md");
@@ -81,6 +89,7 @@ process.chdir(frontendRoot);
 
 try {
   await mkdir(artifactDir, { recursive: true });
+  await mkdir(mediaRoot, { recursive: true, mode: 0o700 });
   await writeProgress({ stage: "create-temp-database" });
   smokeDatabase = await createSmokeDatabase(databaseUrl);
 
@@ -91,6 +100,7 @@ try {
       ...process.env,
       DATABASE_URL: smokeDatabase.url,
       FMARCH_BIND: `${host}:${apiPort}`,
+      FMARCH_MEDIA_ROOT: mediaRoot,
       RUST_LOG: process.env.RUST_LOG ?? "warn",
     },
     stdio: ["ignore", "pipe", "pipe"],

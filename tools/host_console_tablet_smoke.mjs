@@ -11,6 +11,14 @@ import { chromium } from "playwright";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const frontendRoot = path.join(repoRoot, "frontend");
 const artifactDir = path.join(repoRoot, "target", "host-console-tablet-smoke");
+const configuredMediaRoot = process.env.FMARCH_MEDIA_ROOT;
+if (configuredMediaRoot !== undefined && configuredMediaRoot.trim() === "") {
+  throw new Error("FMARCH_MEDIA_ROOT must not be empty");
+}
+const mediaRoot =
+  configuredMediaRoot === undefined
+    ? path.join(artifactDir, "media-store")
+    : path.resolve(repoRoot, configuredMediaRoot);
 const evidencePath = path.join(artifactDir, "tablet-host-actions.json");
 const smokeViewport = Object.freeze({ width: 1024, height: 768 });
 const smokeGame = randomUUID();
@@ -59,6 +67,7 @@ let serverOutput = "";
 
 try {
   await mkdir(artifactDir, { recursive: true });
+  await mkdir(mediaRoot, { recursive: true, mode: 0o700 });
   smokeDatabase = await createSmokeDatabase(databaseUrl);
   rustServer = startRustServer(apiPort);
   await waitForHealth(`${apiBaseUrl}/healthz`);
@@ -348,6 +357,7 @@ function startRustServer(port) {
       ...process.env,
       DATABASE_URL: smokeDatabase.url,
       FMARCH_BIND: `127.0.0.1:${port}`,
+      FMARCH_MEDIA_ROOT: mediaRoot,
       FMARCH_DEV_AUTH: "1",
       RUST_LOG: process.env.RUST_LOG ?? "warn",
     },

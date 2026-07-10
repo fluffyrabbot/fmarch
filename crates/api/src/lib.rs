@@ -6,14 +6,19 @@
 
 use argon2::password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString};
 use argon2::Argon2;
+use axum::body::Bytes;
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
-use axum::extract::{Path, Query, State};
-use axum::http::header::{AUTHORIZATION, RETRY_AFTER};
+use axum::extract::{DefaultBodyLimit, Path, Query, State};
+use axum::http::header::{AUTHORIZATION, CONTENT_TYPE, RETRY_AFTER};
 use axum::http::{HeaderMap, HeaderValue, StatusCode};
 use axum::response::IntoResponse;
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use caps::{Capability, Principal};
+use media::{
+    IngestStatus, MediaError, MediaStore, VariantGenerationStatus, VariantLimits,
+    VARIANT_RECIPE_REVISION,
+};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use sqlx::postgres::PgPool;
@@ -36,6 +41,8 @@ use wire::{
 #[derive(Clone)]
 pub struct ApiState {
     pool: PgPool,
+    media_store: MediaStore,
+    variant_limits: VariantLimits,
     server_name: String,
     dev_auth_enabled: bool,
     auth_attempt_policy: AuthAttemptPolicy,
@@ -74,7 +81,7 @@ struct AuthAttemptScope {
 const AUTH_ATTEMPT_SOURCE_HEADER: &str = "x-fmarch-auth-source";
 
 impl ApiState {
-    pub fn new(pool: PgPool) -> Self {
+    pub fn new(pool: PgPool, media_store: MediaStore) -> Self {
         let live_projection_capacity =
             env_i64("FMARCH_LIVE_PROJECTION_CAPACITY", 256, 1, 65_536) as usize;
         let live_projection_delivery_delay =
@@ -85,6 +92,8 @@ impl ApiState {
         let _ = dummy_account_password_hash();
         ApiState {
             pool,
+            media_store,
+            variant_limits: VariantLimits::default(),
             server_name: "fmarch-dev".to_string(),
             dev_auth_enabled: std::env::var("FMARCH_DEV_AUTH").ok().as_deref() == Some("1"),
             auth_attempt_policy: auth_attempt_policy_from_env(),
@@ -100,6 +109,11 @@ impl ApiState {
 
     pub fn with_dev_auth(mut self, enabled: bool) -> Self {
         self.dev_auth_enabled = enabled;
+        self
+    }
+
+    pub fn with_variant_limits(mut self, limits: VariantLimits) -> Self {
+        self.variant_limits = limits;
         self
     }
 
@@ -141,11 +155,12 @@ impl ApiState {
     }
 }
 
-pub fn router(pool: PgPool) -> Router {
-    router_with_state(ApiState::new(pool))
+pub fn router(pool: PgPool, media_store: MediaStore) -> Router {
+    router_with_state(ApiState::new(pool, media_store))
 }
 
 pub fn router_with_state(state: ApiState) -> Router {
+    let media_upload_limit = state.media_store.limits().max_encoded_bytes();
     Router::new()
         .route("/healthz", get(healthz))
         .route("/auth/session", get(auth_session))
@@ -173,6 +188,10 @@ pub fn router_with_state(state: ApiState) -> Router {
         .route("/auth/invites", post(create_auth_invite))
         .route("/auth/invites/redeem", post(redeem_auth_invite))
         .route("/auth/invite-revocations", post(revoke_auth_invite))
+        .route(
+            "/media/uploads",
+            post(media_upload).layer(DefaultBodyLimit::max(media_upload_limit)),
+        )
         .route(
             "/auth/identity-lifecycle-audit",
             get(identity_lifecycle_audit),
@@ -213,6 +232,206 @@ pub struct Health {
 
 async fn healthz() -> Json<Health> {
     Json(Health { ok: true })
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MediaUploadResponse {
+    pub content_id: String,
+    pub intrinsic_width: u32,
+    pub intrinsic_height: u32,
+    pub variant_recipe_revision: String,
+    pub variants: Vec<MediaUploadVariant>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MediaUploadVariant {
+    pub format: String,
+    pub kind: String,
+    pub mime_type: String,
+    pub width: u32,
+    pub height: u32,
+    pub encoded_len: u64,
+    pub blake3: String,
+    pub has_alpha: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DeclaredUploadFormat {
+    Png,
+    Jpeg,
+}
+
+enum MediaUploadFailure {
+    Prepare(MediaError),
+    Commit(MediaError),
+}
+
+async fn media_upload(
+    State(state): State<ApiState>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Result<impl IntoResponse, ApiError> {
+    let token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
+    require_active_enabled_account(&state, token).await?;
+    let declared_format = declared_upload_format(&headers)?;
+    if sniff_upload_format(&body) != Some(declared_format) {
+        return Err(media_request_reject(
+            StatusCode::UNSUPPORTED_MEDIA_TYPE,
+            "declared media type does not match PNG/JPEG bytes",
+        ));
+    }
+
+    let store = state.media_store.clone();
+    let variant_limits = state.variant_limits;
+    let encoded = body.to_vec();
+    let committed = tokio::task::spawn_blocking(move || {
+        let prepared = store
+            .prepare_upload(&encoded, variant_limits)
+            .map_err(MediaUploadFailure::Prepare)?;
+        store
+            .commit_prepared_upload(prepared)
+            .map_err(MediaUploadFailure::Commit)
+    })
+    .await
+    .map_err(|error| {
+        tracing::error!(error = %error, "media upload worker failed");
+        media_internal_error("media upload worker failed".to_string())
+    })?
+    .map_err(|error| match error {
+        MediaUploadFailure::Prepare(error) => media_api_error(error),
+        MediaUploadFailure::Commit(error) => {
+            tracing::error!(error = %error, "media upload commit failed");
+            media_internal_error("media upload commit failed".to_string())
+        }
+    })?;
+    let ingest = committed.ingest();
+    let variants = committed.variants();
+
+    let response = MediaUploadResponse {
+        content_id: ingest.handle().id().to_string(),
+        intrinsic_width: ingest.handle().width(),
+        intrinsic_height: ingest.handle().height(),
+        variant_recipe_revision: VARIANT_RECIPE_REVISION.to_string(),
+        variants: variants
+            .set()
+            .variants()
+            .iter()
+            .map(|record| MediaUploadVariant {
+                format: record.key().format().to_string(),
+                kind: record.key().kind().to_string(),
+                mime_type: record.mime_type().to_string(),
+                width: record.width(),
+                height: record.height(),
+                encoded_len: record.encoded_len(),
+                blake3: record.blake3().to_string(),
+                has_alpha: record.has_alpha(),
+            })
+            .collect(),
+    };
+    let status = if ingest.status() == IngestStatus::Stored
+        || variants.status() == VariantGenerationStatus::Stored
+    {
+        StatusCode::CREATED
+    } else {
+        StatusCode::OK
+    };
+    Ok((status, Json(response)))
+}
+
+async fn require_active_enabled_account(state: &ApiState, token: &str) -> Result<String, ApiError> {
+    let token_hash = hash_session_token(token);
+    let now = unix_now_seconds();
+    sqlx::query_scalar::<_, String>(
+        r#"
+        SELECT session.principal_user_id
+        FROM auth_session AS session
+        WHERE session.token_hash = $1
+          AND session.revoked_at IS NULL
+          AND session.expires_at > $2
+          AND EXISTS (
+              SELECT 1
+              FROM auth_account AS account
+              WHERE account.principal_user_id = session.principal_user_id
+                AND account.disabled_at IS NULL
+          )
+        "#,
+    )
+    .bind(token_hash)
+    .bind(now)
+    .fetch_optional(&state.pool)
+    .await?
+    .ok_or_else(unauthorized_account)
+}
+
+fn declared_upload_format(headers: &HeaderMap) -> Result<DeclaredUploadFormat, ApiError> {
+    let media_type = headers
+        .get(CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.split(';').next())
+        .map(str::trim);
+    match media_type {
+        Some(value) if value.eq_ignore_ascii_case("image/png") => Ok(DeclaredUploadFormat::Png),
+        Some(value) if value.eq_ignore_ascii_case("image/jpeg") => Ok(DeclaredUploadFormat::Jpeg),
+        _ => Err(media_request_reject(
+            StatusCode::UNSUPPORTED_MEDIA_TYPE,
+            "content-type must be image/png or image/jpeg",
+        )),
+    }
+}
+
+fn sniff_upload_format(bytes: &[u8]) -> Option<DeclaredUploadFormat> {
+    if bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
+        Some(DeclaredUploadFormat::Png)
+    } else if bytes.starts_with(&[0xff, 0xd8, 0xff]) {
+        Some(DeclaredUploadFormat::Jpeg)
+    } else {
+        None
+    }
+}
+
+fn media_api_error(error: MediaError) -> ApiError {
+    match error {
+        MediaError::EncodedInputTooLarge { .. } => media_request_reject(
+            StatusCode::PAYLOAD_TOO_LARGE,
+            "encoded media exceeds the upload limit",
+        ),
+        MediaError::UnsupportedFormat => media_request_reject(
+            StatusCode::UNSUPPORTED_MEDIA_TYPE,
+            "only PNG and JPEG uploads are supported",
+        ),
+        MediaError::MalformedImage(_)
+        | MediaError::DimensionsExceeded { .. }
+        | MediaError::PixelCountExceeded { .. }
+        | MediaError::DecodedBytesExceeded { .. }
+        | MediaError::DecoderResourceLimit(_)
+        | MediaError::VariantDimensionsExceeded { .. }
+        | MediaError::VariantPixelCountExceeded { .. }
+        | MediaError::VariantEncodedBytesExceeded { .. }
+        | MediaError::VariantAggregateBytesExceeded { .. } => media_request_reject(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "media cannot be processed within configured limits",
+        ),
+        other => {
+            tracing::error!(error = %other, "media upload preparation failed");
+            media_internal_error("media upload preparation failed".to_string())
+        }
+    }
+}
+
+fn media_request_reject(status: StatusCode, message: impl Into<String>) -> ApiError {
+    ApiError::Reject {
+        status,
+        error: RejectCode::Internal,
+        message: message.into(),
+    }
+}
+
+fn media_internal_error(message: String) -> ApiError {
+    ApiError::Reject {
+        status: StatusCode::INTERNAL_SERVER_ERROR,
+        error: RejectCode::Internal,
+        message,
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]

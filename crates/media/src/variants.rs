@@ -318,6 +318,61 @@ impl VariantGenerationResult {
     }
 }
 
+struct PreparedVariant {
+    record: VariantRecord,
+    encoded_bytes: Vec<u8>,
+}
+
+struct PreparedVariantSet {
+    set: VariantSet,
+    members: Vec<PreparedVariant>,
+    manifest: Vec<u8>,
+}
+
+/// Fully decoded, canonicalized, resized, encoded, and validated upload with no filesystem
+/// effects yet. Client-controlled validation failures therefore occur before persistence.
+pub struct PreparedMediaUpload {
+    handle: MediaHandle,
+    canonical_bytes: Vec<u8>,
+    variants: PreparedVariantSet,
+}
+
+impl fmt::Debug for PreparedMediaUpload {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("PreparedMediaUpload")
+            .field("handle", &self.handle)
+            .field("variant_set", &self.variants.set)
+            .finish_non_exhaustive()
+    }
+}
+
+impl PreparedMediaUpload {
+    pub fn handle(&self) -> MediaHandle {
+        self.handle
+    }
+
+    pub fn variant_set(&self) -> &VariantSet {
+        &self.variants.set
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MediaUploadCommitResult {
+    ingest: IngestResult,
+    variants: VariantGenerationResult,
+}
+
+impl MediaUploadCommitResult {
+    pub fn ingest(&self) -> IngestResult {
+        self.ingest
+    }
+
+    pub fn variants(&self) -> &VariantGenerationResult {
+        &self.variants
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct DiskManifest {
@@ -362,6 +417,53 @@ enum VariantLookupStage {
 }
 
 impl MediaStore {
+    /// Perform every client-controlled decode, canonicalization, resize, encode, and output-limit
+    /// check without creating a content directory or retaining bytes.
+    pub fn prepare_upload(
+        &self,
+        encoded: &[u8],
+        limits: VariantLimits,
+    ) -> Result<PreparedMediaUpload, MediaError> {
+        limits.validate()?;
+        let decoded = self.decode_bounded(encoded)?;
+        let canonical_bytes = canonical_raster_bytes(decoded)?;
+        let id = ContentId::from_bytes(*blake3::hash(&canonical_bytes).as_bytes());
+        let (width, height) = parse_canonical_header(&canonical_bytes)
+            .map_err(|reason| MediaError::CorruptStoredRaster { id, reason })?;
+        let handle = MediaHandle { id, width, height };
+        let variants =
+            prepare_variant_set(handle, &canonical_bytes[CANONICAL_HEADER_BYTES..], limits)?;
+        Ok(PreparedMediaUpload {
+            handle,
+            canonical_bytes,
+            variants,
+        })
+    }
+
+    /// Persist an already validated upload. The canonical record is installed first and the
+    /// precomputed six-member manifest-backed set is committed last.
+    pub fn commit_prepared_upload(
+        &self,
+        prepared: PreparedMediaUpload,
+    ) -> Result<MediaUploadCommitResult, MediaError> {
+        let PreparedMediaUpload {
+            handle,
+            canonical_bytes,
+            variants,
+        } = prepared;
+        let ingest_status = self.persist(&handle, &canonical_bytes)?;
+        let ingest = IngestResult {
+            handle,
+            status: ingest_status,
+        };
+        let id_directory = self.open_id_directory(handle.id, false)?.ok_or_else(|| {
+            corrupt_set(handle.id, "id directory vanished after canonical commit")
+        })?;
+        let variants =
+            self.persist_prepared_variant_set(handle.id, &id_directory, variants, false)?;
+        Ok(MediaUploadCommitResult { ingest, variants })
+    }
+
     /// Generate the fixed six-member variant set, installing the manifest only after every member
     /// is durably persisted and fully reverified.
     pub fn generate_variants(
@@ -564,76 +666,38 @@ impl MediaStore {
         let id_directory = self
             .open_id_directory(id, false)?
             .ok_or_else(|| corrupt_set(id, "id directory vanished after orig lookup"))?;
+        let prepared = prepare_variant_set(raster.handle(), raster.rgba8_pixels(), limits)?;
+        self.persist_prepared_variant_set(id, &id_directory, prepared, repair)
+    }
+
+    fn persist_prepared_variant_set(
+        &self,
+        id: ContentId,
+        id_directory: &File,
+        prepared: PreparedVariantSet,
+        repair: bool,
+    ) -> Result<VariantGenerationResult, MediaError> {
+        let PreparedVariantSet {
+            set,
+            members,
+            manifest,
+        } = prepared;
         let recipe_directory = self
-            .open_recipe_directory(id, &id_directory, true)?
+            .open_recipe_directory(id, id_directory, true)?
             .expect("create=true always opens recipe directory");
-        let mut records = Vec::with_capacity(VARIANT_COUNT);
-        let mut aggregate = 0_u64;
-
-        for format in VariantFormat::ALL {
+        for member in &members {
             let format_directory = self
-                .open_format_directory(id, &recipe_directory, format, true)?
+                .open_format_directory(id, &recipe_directory, member.record.key.format, true)?
                 .expect("create=true always opens format directory");
-            for kind in VariantKind::ALL {
-                let key = VariantKey {
-                    source: id,
-                    format,
-                    kind,
-                };
-                let (width, height) = fitted_dimensions(
-                    raster.handle().width(),
-                    raster.handle().height(),
-                    kind.maximum_dimensions(),
-                )?;
-                check_variant_dimensions(key, width, height, limits)?;
-                let resized = resize_premultiplied(
-                    raster.rgba8_pixels(),
-                    raster.handle().width(),
-                    raster.handle().height(),
-                    width,
-                    height,
-                )?;
-                let has_alpha = resized.chunks_exact(4).any(|pixel| pixel[3] != 255);
-                let encoded = encode_variant(key, &resized, width, height, has_alpha, limits)?;
-                aggregate = aggregate.checked_add(encoded.len() as u64).ok_or({
-                    MediaError::VariantAggregateBytesExceeded {
-                        id,
-                        max: limits.max_total_encoded_bytes,
-                    }
-                })?;
-                if aggregate > limits.max_total_encoded_bytes {
-                    return Err(MediaError::VariantAggregateBytesExceeded {
-                        id,
-                        max: limits.max_total_encoded_bytes,
-                    });
-                }
-                let record = VariantRecord {
-                    key,
-                    width,
-                    height,
-                    encoded_len: encoded.len() as u64,
-                    blake3: ContentId::from_bytes(*blake3::hash(&encoded).as_bytes()),
-                    has_alpha,
-                };
-                self.persist_variant_member(
-                    &id_directory,
-                    &recipe_directory,
-                    &format_directory,
-                    &record,
-                    &encoded,
-                    repair,
-                )?;
-                records.push(record);
-            }
+            self.persist_variant_member(
+                id_directory,
+                &recipe_directory,
+                &format_directory,
+                &member.record,
+                &member.encoded_bytes,
+                repair,
+            )?;
         }
-
-        let set = VariantSet {
-            source: id,
-            source_width: raster.handle().width(),
-            source_height: raster.handle().height(),
-            variants: records,
-        };
-        let manifest = serialize_manifest(&set)?;
         let stored = persist_named_bytes(
             &recipe_directory,
             MANIFEST_NAME,
@@ -649,8 +713,8 @@ impl MediaStore {
             },
         )?;
         sync_fd(&recipe_directory)?;
-        self.verify_recipe_attached(id, &id_directory, &recipe_directory)?;
-        self.verify_id_attached(id, &id_directory)?;
+        self.verify_recipe_attached(id, id_directory, &recipe_directory)?;
+        self.verify_id_attached(id, id_directory)?;
         self.verify_store_attached()?;
 
         Ok(VariantGenerationResult {
@@ -823,6 +887,71 @@ impl MediaStore {
             &self.recipe_path(id).join(format.component()),
         )
     }
+}
+
+fn prepare_variant_set(
+    handle: MediaHandle,
+    rgba8_pixels: &[u8],
+    limits: VariantLimits,
+) -> Result<PreparedVariantSet, MediaError> {
+    limits.validate()?;
+    let id = handle.id();
+    let mut records = Vec::with_capacity(VARIANT_COUNT);
+    let mut members = Vec::with_capacity(VARIANT_COUNT);
+    let mut aggregate = 0_u64;
+    for format in VariantFormat::ALL {
+        for kind in VariantKind::ALL {
+            let key = VariantKey {
+                source: id,
+                format,
+                kind,
+            };
+            let (width, height) =
+                fitted_dimensions(handle.width(), handle.height(), kind.maximum_dimensions())?;
+            check_variant_dimensions(key, width, height, limits)?;
+            let resized =
+                resize_premultiplied(rgba8_pixels, handle.width(), handle.height(), width, height)?;
+            let has_alpha = resized.chunks_exact(4).any(|pixel| pixel[3] != 255);
+            let encoded = encode_variant(key, &resized, width, height, has_alpha, limits)?;
+            aggregate = aggregate.checked_add(encoded.len() as u64).ok_or(
+                MediaError::VariantAggregateBytesExceeded {
+                    id,
+                    max: limits.max_total_encoded_bytes,
+                },
+            )?;
+            if aggregate > limits.max_total_encoded_bytes {
+                return Err(MediaError::VariantAggregateBytesExceeded {
+                    id,
+                    max: limits.max_total_encoded_bytes,
+                });
+            }
+            let record = VariantRecord {
+                key,
+                width,
+                height,
+                encoded_len: encoded.len() as u64,
+                blake3: ContentId::from_bytes(*blake3::hash(&encoded).as_bytes()),
+                has_alpha,
+            };
+            members.push(PreparedVariant {
+                record: record.clone(),
+                encoded_bytes: encoded,
+            });
+            records.push(record);
+        }
+    }
+    let set = VariantSet {
+        source: id,
+        source_width: handle.width(),
+        source_height: handle.height(),
+        variants: records,
+    };
+    let manifest = serialize_manifest(&set)?;
+    Ok(PreparedVariantSet {
+        set,
+        members,
+        manifest,
+    })
 }
 
 fn fitted_dimensions(
@@ -1879,6 +2008,50 @@ mod tests {
         };
         let fake_webp = b"RIFF\x08\0\0\0WEBPfake";
         assert!(validate_encoded_variant(webp_key, fake_webp, 1, 1, false).is_err());
+    }
+
+    #[test]
+    fn variant_prepared_upload_limit_failure_has_no_filesystem_effects() {
+        let directory = tempdir().unwrap();
+        let store = MediaStore::open(directory.path(), MediaLimits::default()).unwrap();
+        let limits = VariantLimits::new(2_560, 2_560, 6_553_600, 8, 48).unwrap();
+
+        assert!(matches!(
+            store
+                .prepare_upload(&patterned_png(1, 1, true), limits)
+                .unwrap_err(),
+            MediaError::VariantEncodedBytesExceeded { .. }
+        ));
+        assert_eq!(fs::read_dir(store.root.join("blobs")).unwrap().count(), 0);
+    }
+
+    #[test]
+    fn variant_prepared_upload_commits_idempotently_and_survives_restart() {
+        let directory = tempdir().unwrap();
+        let limits = VariantLimits::default();
+        let encoded = patterned_png(9, 7, true);
+        let store = MediaStore::open(directory.path(), MediaLimits::default()).unwrap();
+        let prepared = store.prepare_upload(&encoded, limits).unwrap();
+        let id = prepared.handle().id();
+        assert_eq!(prepared.variant_set().variants().len(), VARIANT_COUNT);
+        assert_eq!(fs::read_dir(store.root.join("blobs")).unwrap().count(), 0);
+
+        let first = store.commit_prepared_upload(prepared).unwrap();
+        assert_eq!(first.ingest().status(), IngestStatus::Stored);
+        assert_eq!(first.variants().status(), VariantGenerationStatus::Stored);
+        let repeated = store
+            .commit_prepared_upload(store.prepare_upload(&encoded, limits).unwrap())
+            .unwrap();
+        assert_eq!(repeated.ingest().status(), IngestStatus::AlreadyPresent);
+        assert_eq!(
+            repeated.variants().status(),
+            VariantGenerationStatus::AlreadyPresent
+        );
+        drop(store);
+
+        let restarted = MediaStore::open(directory.path(), MediaLimits::default()).unwrap();
+        assert!(restarted.lookup(id).unwrap().is_some());
+        assert!(restarted.lookup_variant_set(id, limits).unwrap().is_some());
     }
 
     #[test]

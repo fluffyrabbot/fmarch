@@ -24,8 +24,9 @@ use rustix::fs::{AtFlags, Mode, OFlags};
 mod variants;
 
 pub use variants::{
-    StoredVariant, VariantFormat, VariantGenerationResult, VariantGenerationStatus, VariantKey,
-    VariantKind, VariantLimits, VariantRecord, VariantSet, VARIANT_RECIPE_REVISION,
+    MediaUploadCommitResult, PreparedMediaUpload, StoredVariant, VariantFormat,
+    VariantGenerationResult, VariantGenerationStatus, VariantKey, VariantKind, VariantLimits,
+    VariantRecord, VariantSet, VARIANT_RECIPE_REVISION,
 };
 
 const CANONICAL_MAGIC: &[u8; 8] = b"FMRGBA01";

@@ -135,6 +135,24 @@ Current implemented slice:
   persistence limits, not a strict cap on resize buffers, codec workspace, allocator overhead, or
   total process memory. Generation is sequential and the AVIF thread count is one to keep those
   indirect costs and deterministic behavior bounded in practice.
+- Server startup now requires `FMARCH_MEDIA_ROOT` to name a pre-provisioned directory; failure to
+  open the private store prevents the main API from starting. The store is a required `ApiState`
+  dependency rather than a route-local or optional filesystem singleton. Repo-owned local server
+  harnesses explicitly pre-provision isolated roots under their `target/` artifact directories and
+  pass the resulting path; the server itself has no implicit fallback.
+- `POST /media/uploads` accepts one raw `image/png` or `image/jpeg` body. Its Axum route limit is
+  the store's encoded-byte cap, and the declared content type must match the PNG/JPEG signature.
+  Before any persistence, the endpoint resolves the bearer token to an unrevoked, unexpired
+  session whose principal still has an enabled account.
+- Upload preparation performs bounded decode, canonicalization, all six resizes, AVIF/WebP encode,
+  codec validation, and member/aggregate limit checks entirely in memory. A rejected client input
+  therefore creates no content-id directory, canonical record, member, temporary, or manifest.
+  Only a fully prepared upload reaches persistence; it atomically installs each immutable file and
+  installs the variant manifest last, without claiming a filesystem-wide transaction for internal
+  commit failures.
+- A new upload returns `201`; an idempotent repeat returns `200`. The JSON response contains only
+  the content id, intrinsic dimensions, recipe revision, and each immutable variant's typed role,
+  format, MIME, dimensions, length, BLAKE3, and alpha flag—never paths or original bytes.
 - `frontend/src/routes/media/live-stack/thread/[asset]/+server.js` serves the live-stack
   thread handles used by the browser proof as real generated PNG bytes for `tablet` and
   `small` only. `original`, `full`, and unknown variants are not routable.
@@ -150,11 +168,11 @@ Current implemented slice:
   headers, tablet/small rendering, and 403 denial for a non-member private-channel media
   request. That proof fixture is not yet wired to the `media` crate's canonical blob store.
 
-This slice deliberately does **not** claim ICC/profile color-space normalization, a REST upload
-endpoint, integration with thread-post commands or the live-stack serving route, browser UI/proof,
-production codec-quality or memory benchmarks, an object store/CDN, or hosted durability. Those
-remain separate vertical slices; the local `orig` and manifest-backed variant set are the durable
-core they can build on.
+This slice deliberately does **not** claim ICC/profile color-space normalization, multipart or
+resumable upload, account quotas/rate limiting, orphan-retention cleanup, integration with
+thread-post commands or the live-stack serving route, browser UI/proof, production codec-quality
+or memory benchmarks, an object store/CDN, or hosted durability. Those remain separate vertical
+slices; the local upload and manifest-backed variant set are the durable core they can build on.
 
 ## Access control
 
@@ -166,7 +184,8 @@ core they can build on.
 
 ## Limits & abuse
 
-- Per-upload size and dimension caps; per-user rate limits.
+- Per-upload size and dimension caps are implemented; per-account quotas and rate limits remain a
+  later abuse-control slice.
 - Animated formats bounded (frame count / dimensions) or transcoded to a still where policy
   requires.
 - Reject undecodable / malformed inputs early; never hand untrusted bytes to a serving path

@@ -22,6 +22,14 @@ import {
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const frontendRoot = path.join(repoRoot, "frontend");
 const artifactDir = path.join(repoRoot, "target", "auth-invite-role-proof");
+const configuredMediaRoot = process.env.FMARCH_MEDIA_ROOT;
+if (configuredMediaRoot !== undefined && configuredMediaRoot.trim() === "") {
+  throw new Error("FMARCH_MEDIA_ROOT must not be empty");
+}
+const mediaRoot =
+  configuredMediaRoot === undefined
+    ? path.join(artifactDir, "media-store")
+    : path.resolve(repoRoot, configuredMediaRoot);
 const evidencePath = path.join(artifactDir, "invite-role-proof.json");
 const databaseUrl = process.env.DATABASE_URL;
 const host = "127.0.0.1";
@@ -2666,12 +2674,14 @@ async function dropScratchDatabase({ adminUrl, name }) {
 async function startApi(url) {
   const port = await freePort();
   const baseUrl = `http://${host}:${port}`;
+  await mkdir(mediaRoot, { recursive: true, mode: 0o700 });
   server = spawn("cargo", ["run", "-p", "server"], {
     cwd: repoRoot,
     env: {
       ...process.env,
       DATABASE_URL: url,
       FMARCH_BIND: `${host}:${port}`,
+      FMARCH_MEDIA_ROOT: mediaRoot,
       FMARCH_AUTH_RATE_LIMIT_MAX_FAILURES: "5",
       FMARCH_AUTH_SOURCE_RATE_LIMIT_MAX_FAILURES: "7",
       FMARCH_AUTH_RATE_LIMIT_WINDOW_SECONDS: "30",
