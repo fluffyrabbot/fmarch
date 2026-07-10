@@ -443,6 +443,12 @@ The local ops artifact bundle generator is:
 npm run test:dev-test-game-ops
 ```
 
+The ops bundle checksums the session, proof run, core-loop admin proof, and
+hardening admin proof, plus backup/restore artifacts when supplied. It is an
+upstream input to release readiness and never reads the readiness checklist;
+the declarative ops plan therefore has one acyclic `ops -> ops admin ->
+readiness` direction.
+
 The local seed/demo fixture summary generator is:
 
 ```sh

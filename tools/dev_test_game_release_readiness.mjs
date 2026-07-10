@@ -4939,11 +4939,12 @@ export function validateDevTestGameOpsArtifacts(ops, options = {}) {
     "source-artifacts-checksummed",
     "role-entrypoints-redacted",
     "proof-lanes-summarized",
+    "admin-role-surfaces-summarized",
     "proof-stability-summarized",
     "live-projection-lag-observability-summarized",
     "release-boundary-carried",
   ];
-  if (ops?.version !== 2) {
+  if (ops?.version !== 3) {
     throw new Error(`ops artifact version drifted: ${ops?.version}`);
   }
   if (ops.proof !== "dev-test-game-ops-artifacts") {
@@ -4989,6 +4990,7 @@ export function validateDevTestGameOpsAdminProof(proof, options = {}) {
     "source-artifacts-checksummed",
     "role-entrypoints-redacted",
     "proof-lanes-summarized",
+    "admin-role-surfaces-summarized",
     "proof-stability-summarized",
     "live-projection-lag-observability-summarized",
     "release-boundary-carried",
@@ -10360,6 +10362,7 @@ const optionalReadinessArtifactRegistry = Object.freeze([
       path: "opsArtifactsPath",
       freshnessMetadata: "opsArtifactsArtifact",
     },
+    filter: defaultOpsArtifactsMatchesCurrentProof,
   }),
   optionalReadinessArtifact({
     id: "identityAdapterProof",
@@ -10772,7 +10775,10 @@ async function readOptionalReleaseReadinessArtifacts({ expectedGame } = {}) {
       if (typeof loader === "function") {
         return loader({ expectedGame, freshnessScope });
       }
-      return readOptionalReadinessArtifact(loader, { freshnessScope });
+      return readOptionalReadinessArtifact(loader, {
+        expectedGame,
+        freshnessScope,
+      });
     }),
   );
   return Object.assign({}, ...optionParts.filter(Boolean));
@@ -10850,6 +10856,7 @@ export async function readOptionalReadinessArtifactDescriptor(
       { root: repoRoot },
     ),
     now = new Date(),
+    expectedGame,
   } = {},
 ) {
   const override = env[descriptor.envVar];
@@ -10875,6 +10882,17 @@ export async function readOptionalReadinessArtifactDescriptor(
   }
   const payload = JSON.parse(await readFile(artifactPath, "utf8"));
   const relativePath = path.relative(repoRoot, artifactPath);
+  if (
+    descriptor.filter !== undefined &&
+    !descriptor.filter(payload, { expectedGame, path: relativePath, artifact })
+  ) {
+    if (optionalArtifactEnvUnset(override)) {
+      return undefined;
+    }
+    throw new Error(
+      `${relativePath} does not match the current readiness proof`,
+    );
+  }
   if (descriptor.validator !== undefined) {
     try {
       descriptor.validator(payload, { path: relativePath, artifact });
@@ -10898,6 +10916,13 @@ export async function readOptionalReadinessArtifactDescriptor(
 
 function optionalArtifactEnvUnset(value) {
   return value === undefined || value.trim() === "";
+}
+
+function defaultOpsArtifactsMatchesCurrentProof(
+  artifacts,
+  { expectedGame } = {},
+) {
+  return expectedGame === undefined || artifacts?.run?.game === expectedGame;
 }
 
 async function readOptionalSeedAdminProof({ expectedGame, freshnessScope } = {}) {

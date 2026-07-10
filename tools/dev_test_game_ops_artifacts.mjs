@@ -4,9 +4,14 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { assertDevTestGameProofRun } from "./dev_test_game_proof_contract.mjs";
 import {
-  assertDevTestGameReleaseReadiness,
+  validateDevTestGameCoreLoopAdminProof,
+  validateDevTestGameHardeningAdminProof,
   validateDevTestGameBackupRestoreProof,
 } from "./dev_test_game_release_readiness.mjs";
+import {
+  devTestGameCoreLoopAdminProofPath,
+  devTestGameHardeningAdminProofPath,
+} from "./dev_test_game_local_admin_proof_paths.mjs";
 import {
   devTestGameOpsArtifactsPath,
 } from "./dev_test_game_adjacent_artifact_paths.mjs";
@@ -15,7 +20,7 @@ import {
   liveProjectionLagObservabilityFromProofRun,
 } from "./dev_test_game_live_projection_observability.mjs";
 
-export const DEV_TEST_GAME_OPS_ARTIFACTS_VERSION = 2;
+export const DEV_TEST_GAME_OPS_ARTIFACTS_VERSION = 3;
 export { devTestGameOpsArtifactsPath };
 export const devTestGameOpsArtifactsMarkdownPath =
   "target/dev-test-game/ops-artifacts.md";
@@ -25,7 +30,8 @@ const artifactDir = path.join(repoRoot, "target", "dev-test-game");
 const defaultPaths = Object.freeze({
   session: path.join(artifactDir, "session.json"),
   proofRun: path.join(artifactDir, "proof-run.json"),
-  readiness: path.join(artifactDir, "release-readiness-checklist.json"),
+  coreLoopAdminProof: path.join(repoRoot, devTestGameCoreLoopAdminProofPath),
+  hardeningAdminProof: path.join(repoRoot, devTestGameHardeningAdminProofPath),
   backupRestoreProof: path.join(
     repoRoot,
     "target",
@@ -52,21 +58,32 @@ if (!Number.isFinite(maxArtifactAgeHours) || maxArtifactAgeHours <= 0) {
 export function buildDevTestGameOpsArtifacts({
   session,
   proofRun,
-  readiness,
+  coreLoopAdminProof,
+  hardeningAdminProof,
   artifacts,
   backupRestoreProof,
   generatedAt = new Date().toISOString(),
 }) {
   const proof = assertDevTestGameProofRun(proofRun);
+  const coreLoopAdmin = validateDevTestGameCoreLoopAdminProof(
+    coreLoopAdminProof,
+    { path: artifacts.coreLoopAdminProof.path },
+  );
+  const hardeningAdmin = validateDevTestGameHardeningAdminProof(
+    hardeningAdminProof,
+    { path: artifacts.hardeningAdminProof.path },
+  );
   const liveProjectionLagObservability =
     liveProjectionLagObservabilityFromProofRun(proof);
-  assertDevTestGameReleaseReadiness(readiness);
   if (session?.game !== proof.session.game) {
     throw new Error(`ops artifact session/proof game mismatch: ${session?.game}`);
   }
-  if (readiness.generatedFrom?.game !== proof.session.game) {
+  if (
+    coreLoopAdminProof.generatedFrom?.game !== proof.session.game ||
+    hardeningAdminProof.generatedFrom?.game !== proof.session.game
+  ) {
     throw new Error(
-      `ops artifact readiness/proof game mismatch: ${readiness.generatedFrom?.game}`,
+      "ops artifact admin proof game does not match the proof run",
     );
   }
   const backupRestoreEvidence =
@@ -88,11 +105,12 @@ export function buildDevTestGameOpsArtifacts({
     generatedAt,
     scope: "local-dev-test-game-ops-artifacts",
     proofBoundary:
-      "Local artifact bundle for one dev-test-game run. It redacts role credentials and records checksums, command counts, proof lanes, measured live-projection lag recovery counters, and optional local backup/restore evidence; it does not prove hosted observability, centralized logs, paging, SLOs, production incident response, or release readiness.",
+      "Local artifact bundle for one dev-test-game run. It redacts role credentials and records checksums, command counts, proof lanes, core-loop and hardening admin role-surface evidence, measured live-projection lag recovery counters, and optional local backup/restore evidence; it does not prove hosted observability, centralized logs, paging, SLOs, production incident response, or release readiness.",
     generatedFrom: {
       sessionJson: artifacts.session.path,
       proofRun: artifacts.proofRun.path,
-      readinessChecklist: artifacts.readiness.path,
+      coreLoopAdminProof: artifacts.coreLoopAdminProof.path,
+      hardeningAdminProof: artifacts.hardeningAdminProof.path,
       ...(backupRestoreEvidence === undefined
         ? {}
         : {
@@ -122,23 +140,15 @@ export function buildDevTestGameOpsArtifacts({
     },
     proofStability: session.verification?.proofStability ?? null,
     liveProjectionLagObservability,
-    readiness: {
-      status: readiness.status,
-      releaseReady: readiness.releaseReady,
-      productionReady: readiness.productionReady,
-      localChecks: readiness.localDevelopmentSpine.checks.map((check) => ({
-        id: check.id,
-        status: check.status,
-      })),
-      unproven: readiness.releaseReadiness.unproven.map((item) => ({
-        id: item.id,
-        status: item.status,
-      })),
+    adminProofs: {
+      coreLoop: summarizeAdminProof(coreLoopAdmin),
+      hardening: summarizeAdminProof(hardeningAdmin),
     },
     artifacts: {
       session: artifacts.session,
       proofRun: artifacts.proofRun,
-      readiness: artifacts.readiness,
+      coreLoopAdminProof: artifacts.coreLoopAdminProof,
+      hardeningAdminProof: artifacts.hardeningAdminProof,
       ...(backupRestoreEvidence === undefined
         ? {}
         : {
@@ -150,7 +160,12 @@ export function buildDevTestGameOpsArtifacts({
       {
         id: "source-artifacts-checksummed",
         status: "passed",
-        evidence: [artifacts.session.path, artifacts.proofRun.path, artifacts.readiness.path],
+        evidence: [
+          artifacts.session.path,
+          artifacts.proofRun.path,
+          artifacts.coreLoopAdminProof.path,
+          artifacts.hardeningAdminProof.path,
+        ],
       },
       {
         id: "role-entrypoints-redacted",
@@ -161,6 +176,14 @@ export function buildDevTestGameOpsArtifacts({
         id: "proof-lanes-summarized",
         status: "passed",
         laneCount: proof.lanes.length,
+      },
+      {
+        id: "admin-role-surfaces-summarized",
+        status: "passed",
+        evidence: [
+          coreLoopAdmin.detailRoleUrl,
+          hardeningAdmin.detailRoleUrl,
+        ],
       },
       {
         id: "proof-stability-summarized",
@@ -228,6 +251,7 @@ export function assertDevTestGameOpsArtifacts(ops) {
     "source-artifacts-checksummed",
     "role-entrypoints-redacted",
     "proof-lanes-summarized",
+    "admin-role-surfaces-summarized",
     "proof-stability-summarized",
     "live-projection-lag-observability-summarized",
     "release-boundary-carried",
@@ -237,6 +261,17 @@ export function assertDevTestGameOpsArtifacts(ops) {
     }
   }
   assertLiveProjectionLagObservability(ops.liveProjectionLagObservability);
+  for (const id of ["coreLoop", "hardening"]) {
+    const adminProof = ops.adminProofs?.[id];
+    if (
+      adminProof?.status !== "passed" ||
+      typeof adminProof.detailRoleUrl !== "string" ||
+      adminProof.detailRoleUrl === "" ||
+      Number(adminProof.visibleCheckCount ?? 0) <= 0
+    ) {
+      throw new Error(`ops artifact missing ${id} admin role-surface evidence`);
+    }
+  }
   const serialized = JSON.stringify(ops);
   if (/invite=(?!REDACTED)/.test(serialized)) {
     throw new Error("ops artifact leaked an invite URL token");
@@ -263,6 +298,14 @@ export function assertDevTestGameOpsArtifacts(ops) {
     }
   }
   return ops;
+}
+
+function summarizeAdminProof(proof) {
+  return Object.freeze({
+    status: proof.status,
+    detailRoleUrl: proof.detailRoleUrl,
+    visibleCheckCount: proof.visibleChecks.length,
+  });
 }
 
 function redactRoles(sessions) {
@@ -337,9 +380,13 @@ if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
   const paths = {
     session: resolvePath(process.env.FMARCH_DEV_TEST_GAME_SESSION, defaultPaths.session),
     proofRun: resolvePath(process.env.FMARCH_DEV_TEST_GAME_PROOF_RUN, defaultPaths.proofRun),
-    readiness: resolvePath(
-      process.env.FMARCH_DEV_TEST_GAME_READINESS,
-      defaultPaths.readiness,
+    coreLoopAdminProof: resolvePath(
+      process.env.FMARCH_DEV_TEST_GAME_CORE_LOOP_ADMIN_PROOF,
+      defaultPaths.coreLoopAdminProof,
+    ),
+    hardeningAdminProof: resolvePath(
+      process.env.FMARCH_DEV_TEST_GAME_HARDENING_ADMIN_PROOF,
+      defaultPaths.hardeningAdminProof,
     ),
     backupRestoreProof: resolvePath(
       process.env.FMARCH_DEV_TEST_GAME_OPS_BACKUP_RESTORE_PROOF,
@@ -361,15 +408,17 @@ if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
       "FMARCH_DEV_TEST_GAME_OPS_BACKUP_RESTORE_PROOF and FMARCH_DEV_TEST_GAME_OPS_BACKUP_RESTORE_DUMP must be set together",
     );
   }
-  const [session, proofRun, readiness] = await Promise.all([
+  const [session, proofRun, coreLoopAdminProof, hardeningAdminProof] = await Promise.all([
     readJson(paths.session),
     readJson(paths.proofRun),
-    readJson(paths.readiness),
+    readJson(paths.coreLoopAdminProof),
+    readJson(paths.hardeningAdminProof),
   ]);
   const artifacts = {
     session: await artifactSummary(paths.session, now),
     proofRun: await artifactSummary(paths.proofRun, now),
-    readiness: await artifactSummary(paths.readiness, now),
+    coreLoopAdminProof: await artifactSummary(paths.coreLoopAdminProof, now),
+    hardeningAdminProof: await artifactSummary(paths.hardeningAdminProof, now),
   };
   let backupRestoreProof;
   if (includeBackupRestore) {
@@ -384,7 +433,8 @@ if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
   const ops = buildDevTestGameOpsArtifacts({
     session,
     proofRun,
-    readiness,
+    coreLoopAdminProof,
+    hardeningAdminProof,
     artifacts,
     backupRestoreProof,
   });

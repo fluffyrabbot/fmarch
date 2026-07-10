@@ -7508,7 +7508,7 @@ export function normalizeLocalOpsArtifactsAudit(opsArtifacts, { game }) {
   if (
     opsArtifacts === null ||
     typeof opsArtifacts !== "object" ||
-    opsArtifacts.version !== 2 ||
+    opsArtifacts.version !== 3 ||
     opsArtifacts.proof !== "dev-test-game-ops-artifacts" ||
     opsArtifacts.status !== "passed"
   ) {

@@ -6,6 +6,9 @@ import {
   readLocalProofFreshness,
 } from "../frontend/src/lib/server/local-ops-artifacts.mjs";
 import {
+  assertOpsArtifactPlanOrder,
+} from "./dev_test_game_ops_artifact_dependencies.mjs";
+import {
   adminSpineProofPath,
   adminSpineReadinessEvidenceEnv,
   adminSpineTerminalBatchProofPath,
@@ -988,7 +991,6 @@ export function assertDevTestGameSpineManifest(manifest) {
   ]);
   assertPlanScripts(manifest.commands?.backupRestore?.plan ?? [], [
     "tools/live_stack_backup_restore_drill.mjs",
-    "tools/dev_test_game_release_readiness.mjs",
     "tools/dev_test_game_ops_artifacts.mjs",
     "tools/dev_test_game_release_readiness.mjs",
     "tools/dev_test_game_seed_fixture_summary.mjs",
@@ -1001,6 +1003,8 @@ export function assertDevTestGameSpineManifest(manifest) {
     "tools/dev_test_game_ops_admin_proof.mjs",
     "tools/dev_test_game_release_readiness.mjs",
   ]);
+  assertOpsArtifactPlanOrder(manifest.commands?.backupRestore?.plan ?? []);
+  assertOpsArtifactPlanOrder(manifest.commands?.ops?.plan ?? []);
   assertPlanScripts(manifest.commands?.seedFixture?.plan ?? [], [
     "tools/dev_test_game_seed_fixture_summary.mjs",
     "tools/dev_test_game_seed_admin_proof.mjs",

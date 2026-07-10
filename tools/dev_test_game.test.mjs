@@ -132,6 +132,8 @@ import {
   liveProjectionLagServerTraceContract,
 } from "./dev_test_game_live_projection_observability.mjs";
 import {
+  devTestGameBackupRestoreDumpPath,
+  devTestGameBackupRestoreProofPath,
   devTestGameIdentityAdapterProofPath,
 } from "./dev_test_game_adjacent_artifact_paths.mjs";
 import {
@@ -322,6 +324,11 @@ import {
   devTestGameOpsSpinePlan,
   opsSpineReadinessEnv,
 } from "./dev_test_game_ops_spine.mjs";
+import {
+  assertDevTestGameOpsArtifactDependencyGraph,
+  assertOpsArtifactPlanOrder,
+  devTestGameOpsArtifactDependencyGraph,
+} from "./dev_test_game_ops_artifact_dependencies.mjs";
 import {
   devTestGameSeedFixtureSpinePlan,
   seedFixtureSpineEnv,
@@ -1294,6 +1301,37 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     changedInputs: [devTestGameOpsArtifactsPath, devTestGameOpsAdminProofPath],
     env: opsSpineReadinessEnv,
   });
+  assert.equal(
+    assertOpsArtifactPlanOrder(devTestGameOpsSpinePlan),
+    devTestGameOpsSpinePlan,
+  );
+  assert.equal(
+    assertOpsArtifactPlanOrder(devTestGameBackupRestoreSpinePlan),
+    devTestGameBackupRestoreSpinePlan,
+  );
+  assert.equal(
+    assertOpsArtifactPlanOrder(devTestGameAdminSpinePlan),
+    devTestGameAdminSpinePlan,
+  );
+  assert.equal(
+    assertDevTestGameOpsArtifactDependencyGraph(),
+    devTestGameOpsArtifactDependencyGraph,
+  );
+  assert.throws(
+    () =>
+      assertOpsArtifactPlanOrder([
+        devTestGameOpsSpinePlan[2],
+        devTestGameOpsSpinePlan[0],
+      ]),
+    /consumes target\/dev-test-game\/ops-artifacts\.json before its producer/,
+  );
+  const opsArtifactNode = devTestGameOpsArtifactDependencyGraph.find(
+    (node) => node.id === "ops-artifacts",
+  );
+  assert.equal(
+    opsArtifactNode.inputs.includes(devTestGameReleaseReadinessPath),
+    false,
+  );
   assert.deepEqual(
     devTestGameSeedFixtureSpinePlan.map((step) => step.script),
     [
@@ -1319,7 +1357,6 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     devTestGameBackupRestoreSpinePlan.map((step) => step.script),
     [
       "tools/live_stack_backup_restore_drill.mjs",
-      devTestGameReleaseReadinessScript,
       "tools/dev_test_game_ops_artifacts.mjs",
       devTestGameReleaseReadinessScript,
       "tools/dev_test_game_seed_fixture_summary.mjs",
@@ -1328,6 +1365,17 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
       devTestGameReleaseReadinessScript,
     ],
   );
+  assert.deepEqual(devTestGameBackupRestoreSpinePlan[2], {
+    kind: "node",
+    script: devTestGameReleaseReadinessScript,
+    readinessReason: "backup-and-ops-artifacts-for-seed-fixtures",
+    changedInputs: [
+      devTestGameBackupRestoreProofPath,
+      devTestGameBackupRestoreDumpPath,
+      devTestGameOpsArtifactsPath,
+    ],
+    env: opsReadinessEnv,
+  });
   assert.deepEqual(backupRestoreEvidenceEnv, {
     FMARCH_DEV_TEST_GAME_BACKUP_RESTORE_PROOF:
       "target/live-stack-backup-restore-drill/local-backup-restore-proof.json",
@@ -8993,6 +9041,59 @@ test("readiness artifact loader skips stale siblings and rejects stale consumed 
           now,
         }),
       /stale-sibling\.json is stale: 48h 0m old/,
+    );
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("readiness artifact loader filters mismatched defaults and rejects explicit mismatches", async () => {
+  const directory = path.resolve(
+    "target/dev-test-game/readiness-current-game-filter-test",
+  );
+  const artifactPath = path.join(directory, "ops-artifacts.json");
+  const descriptor = {
+    id: "testCurrentGameFilter",
+    envVar: "FMARCH_TEST_CURRENT_GAME_FILTER",
+    defaultPath: artifactPath,
+    outputKeys: {
+      data: "testCurrentGameFilter",
+      path: "testCurrentGameFilterPath",
+      freshnessMetadata: "testCurrentGameFilterArtifact",
+    },
+    filter: (payload, { expectedGame }) =>
+      payload?.run?.game === expectedGame,
+  };
+  await mkdir(directory, { recursive: true });
+  await writeFile(
+    artifactPath,
+    `${JSON.stringify({ run: { game: "previous-game" } })}\n`,
+  );
+
+  try {
+    assert.equal(
+      await readOptionalReadinessArtifactDescriptor(descriptor, {
+        env: {},
+        expectedGame: "current-game",
+      }),
+      undefined,
+    );
+    await assert.rejects(
+      () =>
+        readOptionalReadinessArtifactDescriptor(descriptor, {
+          env: { [descriptor.envVar]: artifactPath },
+          expectedGame: "current-game",
+        }),
+      /does not match the current readiness proof/,
+    );
+    assert.equal(
+      (
+        await readOptionalReadinessArtifactDescriptor(descriptor, {
+          env: {},
+          expectedGame: "previous-game",
+        })
+      ).testCurrentGameFilter.run.game,
+      "previous-game",
     );
   } finally {
     await rm(directory, { recursive: true, force: true });
@@ -18872,16 +18973,22 @@ test("session card and markdown include role credential URLs and tokens", async 
     refreshedHostedMatrix.hostedHandoffChecklist.command,
     hostedMatrixRealHostedEvidenceCommand,
   );
+  const opsCoreLoopAdminProof = coreLoopAdminProofFixture({ game });
+  const opsHardeningAdminProof = hardeningAdminProofFixture({ game });
   const opsArtifacts = buildDevTestGameOpsArtifacts({
     session: card,
     proofRun,
-    readiness,
+    coreLoopAdminProof: opsCoreLoopAdminProof,
+    hardeningAdminProof: opsHardeningAdminProof,
     generatedAt: "2026-06-26T00:00:00.000Z",
     artifacts: {
       session: artifactSummary("target/dev-test-game/session.json"),
       proofRun: artifactSummary("target/dev-test-game/proof-run.json"),
-      readiness: artifactSummary(
-        "target/dev-test-game/release-readiness-checklist.json",
+      coreLoopAdminProof: artifactSummary(
+        devTestGameCoreLoopAdminProofPath,
+      ),
+      hardeningAdminProof: artifactSummary(
+        devTestGameHardeningAdminProofPath,
       ),
     },
   });
@@ -18892,6 +18999,24 @@ test("session card and markdown include role credential URLs and tokens", async 
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 19);
   assert.equal(opsArtifacts.proofRun.laneCount, proofRun.lanes.length);
+  assert.equal(opsArtifacts.version, 3);
+  assert.equal(opsArtifacts.readiness, undefined);
+  assert.equal(opsArtifacts.generatedFrom.readinessChecklist, undefined);
+  assert.equal(opsArtifacts.artifacts.readiness, undefined);
+  assert.deepEqual(opsArtifacts.adminProofs, {
+    coreLoop: {
+      status: "passed",
+      detailRoleUrl: localAdminAuditRoleUrl(localAdminAuditIds.coreLoop),
+      visibleCheckCount:
+        opsCoreLoopAdminProof.adminRoleSurface.visibleChecks.length,
+    },
+    hardening: {
+      status: "passed",
+      detailRoleUrl: localAdminAuditRoleUrl(localAdminAuditIds.hardening),
+      visibleCheckCount:
+        opsHardeningAdminProof.adminRoleSurface.visibleChecks.length,
+    },
+  });
   assert.equal(opsArtifacts.proofStability.hostConfirmClicks.total, 5);
   assert.deepEqual(opsArtifacts.liveProjectionLagObservability.clientMetrics, {
     resyncFramesReceived: 2,
@@ -21927,7 +22052,7 @@ function devTestGameOpsArtifactsFixture({
   },
 } = {}) {
   return {
-    version: 2,
+    version: 3,
     proof: "dev-test-game-ops-artifacts",
     status: "passed",
     releaseReady: false,
@@ -21938,7 +22063,8 @@ function devTestGameOpsArtifactsFixture({
     generatedFrom: {
       sessionJson: "target/dev-test-game/session.json",
       proofRun: "target/dev-test-game/proof-run.json",
-      readinessChecklist: "target/dev-test-game/release-readiness-checklist.json",
+      coreLoopAdminProof: devTestGameCoreLoopAdminProofPath,
+      hardeningAdminProof: devTestGameHardeningAdminProofPath,
     },
     run: {
       name: "midsummer",
@@ -21956,22 +22082,29 @@ function devTestGameOpsArtifactsFixture({
     },
     proofStability,
     liveProjectionLagObservability: liveProjectionLagObservabilityFixture(),
-    readiness: {
-      status: "not_ready",
-      releaseReady: false,
-      productionReady: false,
-      localChecks: [],
-      unproven: [],
+    adminProofs: {
+      coreLoop: {
+        status: "passed",
+        detailRoleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
+        visibleCheckCount: 30,
+      },
+      hardening: {
+        status: "passed",
+        detailRoleUrl: "/admin/audit/local-hardening?game=<seeded-game>",
+        visibleCheckCount: 40,
+      },
     },
     artifacts: {
       session: { path: "target/dev-test-game/session.json" },
       proofRun: { path: "target/dev-test-game/proof-run.json" },
-      readiness: { path: "target/dev-test-game/release-readiness-checklist.json" },
+      coreLoopAdminProof: { path: devTestGameCoreLoopAdminProofPath },
+      hardeningAdminProof: { path: devTestGameHardeningAdminProofPath },
     },
     checks: [
       { id: "source-artifacts-checksummed", status: "passed" },
       { id: "role-entrypoints-redacted", status: "passed" },
       { id: "proof-lanes-summarized", status: "passed" },
+      { id: "admin-role-surfaces-summarized", status: "passed" },
       {
         id: "proof-stability-summarized",
         status: "passed",
@@ -22040,7 +22173,9 @@ function identityAdminProofFixture() {
 const coreLoopAdminProofFixtureGameId =
   "00000000-0000-0000-0000-000000000002";
 
-function coreLoopAdminProofFixture() {
+function coreLoopAdminProofFixture({
+  game = "00000000-0000-0000-0000-000000000001",
+} = {}) {
   const completedGameHardeningCoverageStatus =
     completedGameHardeningCoverageStatusFixture();
   const coreLoopSpineRows = coreLoopSpineRowsFixture();
@@ -22054,7 +22189,7 @@ function coreLoopAdminProofFixture() {
     proofBoundary: "Local admin core-loop proof only.",
     generatedFrom: {
       proofRun: "target/dev-test-game/proof-run.json",
-      game: "00000000-0000-0000-0000-000000000001",
+      game,
       coreLoopSpineStatus:
         "passed: D01 -> N01 -> D02, vote ack, N02 action ack, next D03, terminal advance InvalidTarget, reload D03, revote D03R1 via no_majority_continue_revote, revote vote ack, revote resolve ack, second revote D03R2 via no_majority_continue_revote, second vote ack, second resolve ack, policy no_majority_no_lynch -> N03",
       completedGameHardeningCoverageStatus,
@@ -23918,7 +24053,9 @@ function hostedIdentityProgressionAdminProofArtifactFixture(progression) {
   };
 }
 
-function hardeningAdminProofFixture() {
+function hardeningAdminProofFixture({
+  game = "00000000-0000-0000-0000-000000000001",
+} = {}) {
   return {
     version: 1,
     proof: "dev-test-game-hardening-admin-proof",
@@ -23929,7 +24066,7 @@ function hardeningAdminProofFixture() {
     proofBoundary: "Local admin hardening proof only.",
     generatedFrom: {
       proofRun: "target/dev-test-game/proof-run.json",
-      game: "00000000-0000-0000-0000-000000000001",
+      game,
     },
     adminRoleSurface: {
       status: "passed",
@@ -24075,6 +24212,7 @@ function opsAdminProofFixture() {
         "source-artifacts-checksummed",
         "role-entrypoints-redacted",
         "proof-lanes-summarized",
+        "admin-role-surfaces-summarized",
         "proof-stability-summarized",
         "live-projection-lag-observability-summarized",
         "release-boundary-carried",

@@ -25,6 +25,7 @@ const requiredChecks = [
   "source-artifacts-checksummed",
   "role-entrypoints-redacted",
   "proof-lanes-summarized",
+  "admin-role-surfaces-summarized",
   "proof-stability-summarized",
   "live-projection-lag-observability-summarized",
   "release-boundary-carried",
@@ -56,7 +57,7 @@ export function opsAdminProofCase() {
       productionReady: false,
       scope: "local-dev-test-game-ops-admin-surface",
       proofBoundary:
-        "Local SvelteKit admin role URL with fixture admin authority over a saved dev-test-game ops artifact. Proves the local ops artifact bundle, including measured live-projection lag recovery counters, is discoverable from the seeded admin overview and inspectable in a native admin audit detail route; it does not prove hosted observability, centralized logs, paging, SLOs, incident response, or release readiness.",
+        "Local SvelteKit admin role URL with fixture admin authority over a saved dev-test-game ops artifact. Proves the local ops artifact bundle, including core-loop and hardening admin role-surface evidence plus measured live-projection lag recovery counters, is discoverable from the seeded admin overview and inspectable in a native admin audit detail route; it does not prove hosted observability, centralized logs, paging, SLOs, incident response, or release readiness.",
       generatedFrom: {
         opsArtifacts: opsArtifactsRelativePath,
         game: opsArtifacts.run.game,

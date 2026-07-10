@@ -951,7 +951,7 @@ test("admin route data exposes local ops artifacts as a native audit row", async
 
   const ops = data.audit.find((item) => item.id === localAdminAuditIds.opsArtifacts);
   assert.equal(ops.label, "Local ops artifacts");
-  assert.equal(ops.status, "6 local ops checks passed");
+  assert.equal(ops.status, "7 local ops checks passed");
   assert.equal(ops.authority, "GlobalAdmin or GlobalMod");
   assert.equal(ops.inspectHref, localAdminAuditRoleUrl(localAdminAuditIds.opsArtifacts, { game: "midsummer" }));
   assert.deepEqual(
@@ -960,6 +960,7 @@ test("admin route data exposes local ops artifacts as a native audit row", async
       "source-artifacts-checksummed",
       "role-entrypoints-redacted",
       "proof-lanes-summarized",
+      "admin-role-surfaces-summarized",
       "proof-stability-summarized",
       "live-projection-lag-observability-summarized",
       "release-boundary-carried",
@@ -976,7 +977,7 @@ test("admin route data exposes local ops artifacts as a native audit row", async
   const legacy = await buildAdminRouteData({
     principalUserId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
-    opsArtifacts: { ...localOpsArtifactsFixture(), version: 1 },
+    opsArtifacts: { ...localOpsArtifactsFixture(), version: 2 },
   });
   assert.equal(
     legacy.audit.some((item) => item.id === localAdminAuditIds.opsArtifacts),
@@ -5989,13 +5990,14 @@ test("admin local ops artifact detail data carries check rows", async () => {
   assert.equal(data.status, "available");
   assert.equal(data.surfaceHeader.title, "Local ops artifacts");
   assert.equal(data.audit.id, localAdminAuditIds.opsArtifacts);
-  assert.equal(data.audit.checks.length, 6);
+  assert.equal(data.audit.checks.length, 7);
   assert.deepEqual(
     data.audit.checks.map((check) => [check.id, check.status]),
     [
       ["source-artifacts-checksummed", "passed"],
       ["role-entrypoints-redacted", "passed"],
       ["proof-lanes-summarized", "passed"],
+      ["admin-role-surfaces-summarized", "passed"],
       ["proof-stability-summarized", "passed"],
       ["live-projection-lag-observability-summarized", "passed"],
       ["release-boundary-carried", "passed"],
@@ -8325,7 +8327,7 @@ function releaseReadinessCoverageStatus(
 
 function localOpsArtifactsFixture() {
   return {
-    version: 2,
+    version: 3,
     proof: "dev-test-game-ops-artifacts",
     status: "passed",
     releaseReady: false,
@@ -8343,6 +8345,7 @@ function localOpsArtifactsFixture() {
       { id: "source-artifacts-checksummed", status: "passed" },
       { id: "role-entrypoints-redacted", status: "passed" },
       { id: "proof-lanes-summarized", status: "passed" },
+      { id: "admin-role-surfaces-summarized", status: "passed" },
       { id: "proof-stability-summarized", status: "passed" },
       {
         id: "live-projection-lag-observability-summarized",

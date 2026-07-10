@@ -49,22 +49,18 @@ export const backupRestoreFinalReadinessEnv = {
 
 export const devTestGameBackupRestoreSpinePlan = [
   { kind: "node", script: "tools/live_stack_backup_restore_drill.mjs" },
-  releaseReadinessStep({
-    reason: "backup-restore-evidence-for-ops-artifacts",
-    changedInputs: [
-      devTestGameBackupRestoreProofPath,
-      devTestGameBackupRestoreDumpPath,
-    ],
-    env: backupRestoreEvidenceEnv,
-  }),
   {
     kind: "node",
     script: "tools/dev_test_game_ops_artifacts.mjs",
     env: backupAwareOpsEnv,
   },
   releaseReadinessStep({
-    reason: "ops-artifact-bundle-for-seed-fixtures",
-    changedInputs: [devTestGameOpsArtifactsPath],
+    reason: "backup-and-ops-artifacts-for-seed-fixtures",
+    changedInputs: [
+      devTestGameBackupRestoreProofPath,
+      devTestGameBackupRestoreDumpPath,
+      devTestGameOpsArtifactsPath,
+    ],
     env: opsReadinessEnv,
   }),
   { kind: "node", script: "tools/dev_test_game_seed_fixture_summary.mjs" },
