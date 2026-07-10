@@ -2147,7 +2147,6 @@ function refreshCommandForArtifact(artifact) {
   );
 }
 
-const localDatabasePrefix = "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch";
 const devTestGameHostSetupProofPath =
   "target/dev-test-game/host-setup-proof.json";
 
@@ -2205,7 +2204,7 @@ const artifactRefreshCommands = Object.freeze({
     "npm run test:dev-test-game-release-admin-proof-contract",
   [devTestGameReleaseAdminProofContractPath]:
     "npm run test:dev-test-game-release-admin-proof-contract",
-  "identity-adapter": `${localDatabasePrefix} npm run test:dev-test-game-identity`,
+  "identity-adapter": "npm run test:dev-test-game-identity:local",
   "spine-manifest": "npm run test:dev-test-game-spine-manifest",
   "core-loop": "npm run test:dev-test-game-core-loop-admin-proof",
   hardening: "npm run test:dev-test-game-hardening-admin-proof",

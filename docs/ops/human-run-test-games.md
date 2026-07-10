@@ -848,7 +848,7 @@ the checklist consumes `target/dev-test-game/seed-fixture-summary.json` plus
 seed/demo fixture inventory with its seeded admin overview-to-detail browser
 proof, then refreshes `target/dev-test-game/next-action.json` with the same seed
 evidence so the handoff advances past the recovered local dependency. After
-`npm run test:dev-test-game-identity`, the checklist consumes
+`npm run test:dev-test-game-identity:local`, the checklist consumes
 `target/auth-invite-role-proof/invite-role-proof.json` plus
 `target/dev-test-game/identity-admin-proof.json`, and promotes only the local
 identity-adapter proof that invite-issued opaque sessions preserve the same role
