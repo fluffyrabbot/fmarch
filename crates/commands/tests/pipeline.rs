@@ -3224,6 +3224,255 @@ async fn dead_chat_authority_tracks_dead_slot_restore_and_replacement(pool: PgPo
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+async fn spectator_grant_is_explicit_read_only_and_slot_disjoint(pool: PgPool) {
+    let game = Uuid::new_v4();
+    let host = "spectator_host";
+    let spectator = "spectator_user";
+    let player = "spectator_fixture_player";
+    let slot = "spectator_fixture_slot";
+
+    handle(
+        &pool,
+        &user(host),
+        Command::CreateGame {
+            game,
+            pack: "mafiascum".into(),
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        handle(
+            &pool,
+            &user("not_host"),
+            Command::GrantSpectator {
+                game,
+                user: spectator.into(),
+            },
+        )
+        .await
+        .unwrap_err(),
+        Reject::NotHost,
+    );
+    assert_eq!(
+        handle(
+            &pool,
+            &user(host),
+            Command::GrantSpectator {
+                game,
+                user: " ".into(),
+            },
+        )
+        .await
+        .unwrap_err(),
+        Reject::InvalidTarget,
+    );
+    handle(
+        &pool,
+        &user(host),
+        Command::GrantSpectator {
+            game,
+            user: spectator.into(),
+        },
+    )
+    .await
+    .unwrap();
+
+    let spectator_caps = caps::resolve(&pool, &user(spectator), game).await.unwrap();
+    assert!(spectator_caps.grants(&caps::Capability::SpectatorOf(game)));
+    assert!(!spectator_caps
+        .iter()
+        .any(|cap| matches!(cap, caps::Capability::SlotOccupant(_))));
+    assert_eq!(
+        handle(
+            &pool,
+            &user(spectator),
+            Command::SubmitPost {
+                game,
+                channel_id: "spectator".into(),
+                actor_slot: "invented-slot".into(),
+                body: "spectator append".into(),
+                media: Vec::new(),
+            },
+        )
+        .await
+        .unwrap_err(),
+        Reject::NotAuthorized,
+    );
+    assert_eq!(
+        handle(
+            &pool,
+            &user(spectator),
+            Command::PublishSpectatorPost {
+                game,
+                body: "spectator cannot publish".into(),
+                media: Vec::new(),
+            },
+        )
+        .await
+        .unwrap_err(),
+        Reject::NotHost,
+    );
+
+    handle(
+        &pool,
+        &user(host),
+        Command::AddSlot {
+            game,
+            slot: slot.into(),
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        handle(
+            &pool,
+            &user(host),
+            Command::AssignSlot {
+                game,
+                slot: slot.into(),
+                user: spectator.into(),
+            },
+        )
+        .await
+        .unwrap_err(),
+        Reject::InvalidTarget,
+        "a current spectator cannot acquire a player slot",
+    );
+    handle(
+        &pool,
+        &user(host),
+        Command::AssignSlot {
+            game,
+            slot: slot.into(),
+            user: player.into(),
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        handle(
+            &pool,
+            &user(host),
+            Command::GrantSpectator {
+                game,
+                user: player.into(),
+            },
+        )
+        .await
+        .unwrap_err(),
+        Reject::InvalidTarget,
+        "a current player cannot also acquire spectator authority",
+    );
+    handle(
+        &pool,
+        &user(host),
+        Command::AssignRole {
+            game,
+            slot: slot.into(),
+            role_key: "vanilla_townie".into(),
+        },
+    )
+    .await
+    .unwrap();
+    handle(
+        &pool,
+        &user(host),
+        Command::StartGame {
+            game,
+            phase: "D01".into(),
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        handle(
+            &pool,
+            &user(host),
+            Command::ProcessReplacement {
+                game,
+                slot: slot.into(),
+                outgoing_user: player.into(),
+                incoming_user: spectator.into(),
+            },
+        )
+        .await
+        .unwrap_err(),
+        Reject::InvalidTarget,
+        "replacement cannot convert a spectator into a slot occupant",
+    );
+
+    handle(
+        &pool,
+        &user(host),
+        Command::PublishSpectatorPost {
+            game,
+            body: "host-authored spectator notice".into(),
+            media: Vec::new(),
+        },
+    )
+    .await
+    .unwrap();
+    let stored: serde_json::Value = sqlx::query_scalar(
+        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'PostSubmitted' \
+         AND payload->>'channel_id' = 'spectator' ORDER BY stream_seq DESC LIMIT 1",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(stored.get("body").is_none());
+    assert!(stored["body_private"]["ciphertext"].is_string());
+
+    rebuild(&pool, game).await.unwrap();
+    assert_eq!(
+        projections::spectator_memberships(&pool, game)
+            .await
+            .unwrap(),
+        vec![projections::SpectatorMembershipRow {
+            game_id: game,
+            user_id: spectator.into(),
+        }],
+    );
+    assert_eq!(
+        projections::thread_view_for_channel(&pool, game, "spectator", None, 10)
+            .await
+            .unwrap()
+            .posts[0]
+            .body,
+        "host-authored spectator notice",
+    );
+
+    handle(
+        &pool,
+        &user(host),
+        Command::RevokeSpectator {
+            game,
+            user: spectator.into(),
+        },
+    )
+    .await
+    .unwrap();
+    assert!(!caps::resolve(&pool, &user(spectator), game)
+        .await
+        .unwrap()
+        .grants(&caps::Capability::SpectatorOf(game)));
+    assert_eq!(
+        handle(
+            &pool,
+            &user(host),
+            Command::RevokeSpectator {
+                game,
+                user: spectator.into(),
+            },
+        )
+        .await
+        .unwrap_err(),
+        Reject::InvalidTarget,
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
 async fn role_pm_is_engine_declared_slot_stable_and_replacement_safe(pool: PgPool) {
     let host = "host_h";
     let slot = "slot_7";

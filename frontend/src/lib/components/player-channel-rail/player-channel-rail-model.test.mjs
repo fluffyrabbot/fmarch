@@ -15,10 +15,11 @@ test("player channel rail filters channels to scoped capabilities", () => {
         { kind: "ChannelMember", game: "midsummer", channel: "private:role_pm:slot-7" },
         { kind: "ChannelMember", game: "midsummer", channel: "private:mafia_day_chat" },
         { kind: "DeadViewer", game: "midsummer" },
+        { kind: "SpectatorOf", game: "midsummer" },
         { kind: "ChannelMember", game: "other", channel: "main" },
       ],
     }).map((channel) => channel.id),
-    ["private:role_pm:slot-7", "dead", "private:mafia_day_chat"],
+    ["private:role_pm:slot-7", "dead", "spectator", "private:mafia_day_chat"],
   );
 
   assert.deepEqual(
@@ -31,6 +32,26 @@ test("player channel rail filters channels to scoped capabilities", () => {
       ],
     }).map((channel) => channel.id),
     ["main"],
+  );
+});
+
+test("player channel rail gives spectators only the fixed read-only room", () => {
+  const capabilities = [{ kind: "SpectatorOf", game: "midsummer" }];
+  assert.deepEqual(
+    buildPlayerChannels({ game: "midsummer", capabilities }),
+    [
+      {
+        id: "spectator",
+        label: "Spectator room",
+        href: "/g/midsummer/c/spectator",
+        active: false,
+        capabilityLabel: "SpectatorOf(game)",
+      },
+    ],
+  );
+  assert.equal(
+    resolvePlayerChannelAccess({ game: "midsummer", channel: "main", capabilities }).allowed,
+    false,
   );
 });
 

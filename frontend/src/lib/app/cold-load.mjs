@@ -11,6 +11,7 @@ export async function loadPlayerColdData({
     typeof principalUserId === "string" && principalUserId.trim() !== "";
   const canLoadCommandState =
     canLoadPrivate && typeof actorSlot === "string" && actorSlot.trim() !== "";
+  const canLoadPlayerPrivate = canLoadCommandState;
   const [
     thread,
     votecount,
@@ -46,7 +47,7 @@ export async function loadPlayerColdData({
       fallback: fallback.endgameSummary ?? null,
       url: endgameSummaryUrl({ apiBaseUrl, game }),
     }),
-    canLoadPrivate
+    canLoadPlayerPrivate
       ? fetchJson({
           fetchImpl,
           fallback: fallback.notifications ?? [],
@@ -58,7 +59,7 @@ export async function loadPlayerColdData({
           }),
         })
       : [],
-    canLoadPrivate
+    canLoadPlayerPrivate
       ? fetchJson({
           fetchImpl,
           fallback: fallback.investigationResults ?? [],

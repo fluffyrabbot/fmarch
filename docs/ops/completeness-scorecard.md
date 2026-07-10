@@ -17,7 +17,7 @@ count is treated as product progress.
 
 | Execution class | Complete | Partial | Open | Blocked | Deferred | Total |
 |---|---:|---:|---:|---:|---:|---:|
-| code | 19 | 4 | 5 | 0 | 0 | 28 |
+| code | 20 | 3 | 5 | 0 | 0 | 28 |
 | external-evidence | 0 | 0 | 0 | 6 | 0 | 6 |
 | human | 0 | 0 | 1 | 1 | 0 | 2 |
 | optional | 0 | 0 | 0 | 0 | 1 | 1 |
@@ -28,26 +28,25 @@ Overall release closure complete: **no**.
 
 ## Next buildable coding slice
 
-### Neighborhood, mason, dead, and spectator rooms `product.private.additional-rooms`
+### Complete session lifecycle `product.identity.session-lifecycle`
 
-Complete the spectator-room vertical as an explicitly configured read-only capability rather than reusing player or dead authority: define the game-scoped spectator grant and room declaration, expose only the spectator thread route plus canonical media to current spectators, deliver channel-scoped initial and live deltas with durable reload, and reject every spectator append because spectators have no actor slot. Prove grant and revoke lifecycle boundaries, zero-byte media denial after revocation, and that spectators cannot read role PMs, faction rooms, dead chat, unrevealed role/alignment state, investigation results, notifications, or player command state before endgame. Mark this parent capability complete only when the spectator contract, API proof, real browser proof, and refreshed registry/scorecard all agree.
+Complete the session-lifecycle vertical around one explicit server-owned transition model: add authenticated logout that revokes the presented opaque token before the SvelteKit action clears its cookie; add account-session rotation that issues a new opaque token, atomically revokes the predecessor, records redacted lifecycle audit metadata, and is required after the declared maximum age and account privilege/security changes. Reuse the existing account, auth_session, recovery, disablement, and identity-lifecycle audit seams. Prove browser logout/back-navigation denial, old-token rejection after rotation, single-success concurrent rotation, password/recovery/disablement invalidation, expiry, and an enabled account's successful reauthentication. Mark the item complete only when API, frontend, scratch-Postgres browser proof, architecture docs, registry, and scorecard agree.
 
-Owned paths: `crates/commands/`, `crates/projections/`, `crates/caps/`, `crates/api/`, `crates/wire/`, `frontend/src/lib/components/player-channel-rail/`, `frontend/src/routes/g/[game]/`, `tools/host_console_live_stack_smoke.mjs`, `tools/live_stack_readiness_contract.mjs`, `docs/arch/01-domain-model.md`, `docs/arch/06-security.md`, `docs/ops/completion-registry.json`.
+Owned paths: `crates/api/`, `frontend/src/routes/auth/`, `frontend/src/hooks.server.js`, `tools/dev_test_game_identity_live.mjs`, `docs/arch/06-security.md`, `docs/ops/completion-registry.json`.
 
 Proof:
 
-- `DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p commands -p projections -p caps`
-- `DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p api spectator -- --test-threads=1`
+- `DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p api session_lifecycle -- --test-threads=1`
 - `npm run test:frontend-contract`
-- `DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch npm run test:host-console-live-stack-smoke`
+- `npm run test:dev-test-game-identity:local`
 - `npm run test:completeness-scorecard`
 
 Explicit non-claims:
 
-- No spectator posting, voting, action, replacement-slot, or player-command authority from a read-only spectator grant.
-- No access to role PMs, faction rooms, dead chat, unrevealed private role state, or other player-private projections before endgame.
-- No cross-game direct messaging, inbox, notification delivery, blocking, reporting, or general moderation workflow.
-- No hosted deployment, production concurrency, or release-readiness promotion from the local seeded proof.
+- No hosted identity provider, OAuth, passkey, MFA, or email-delivery completion claim from the local session lifecycle.
+- No multi-node cache-invalidation or distributed revocation propagation claim from scratch-Postgres proof.
+- No self-service registration completion claim.
+- No beta, release, or production-readiness promotion from local logout and rotation proof.
 
 ## Locally proven foundation
 
@@ -84,7 +83,7 @@ Explicit non-claims:
 |---|---|---|---|---|---|
 | complete | Mafia private room<br>`product.private.mafia-room` | `product.game.core-loop` | Members can post and recover through the private role URL while non-members never receive room data. | Complete. | source: `tools/dev_test_game_core_loop_private_channel_recovery_scenarios.mjs`<br>artifact: `target/dev-test-game/proof-run.json`<br>A real private mafia day-chat room is pack-created, capability-filtered, command-backed, live, reloadable, and denied to non-members. |
 | complete | Role private-message lifecycle<br>`product.private.role-pm` | `product.private.mafia-room`<br>`product.identity.account-login-invites` | Role PM creation, membership, posting, receipts, reload, replacement transfer, and stale outgoing denial pass through the real stack. | Complete. | source: `crates/domain/src/state.rs`<br>source: `crates/commands/src/lib.rs`<br>source: `crates/commands/tests/pipeline.rs`<br>source: `crates/projections/src/lib.rs`<br>source: `crates/caps/src/lib.rs`<br>source: `crates/api/src/lib.rs`<br>source: `crates/api/tests/vertical.rs`<br>source: `frontend/src/lib/components/player-channel-rail/player-channel-rail-model.mjs`<br>source: `tools/host_console_live_stack_smoke.mjs`<br>artifact: `target/host-console-live-stack-smoke/live-stack-proof.json`<br>command: `DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p commands -p projections -p caps`<br>command: `DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p api role_pm -- --test-threads=1`<br>command: `npm run test:frontend-contract`<br>command: `npm run test:dev-test-game-core-live:local`<br>The engine declares one slot-stable Role PM per occupied slot; generic private-channel projections and capabilities transfer access on replacement, the incoming account receives private live deltas and durable history/media after reload, and the stale outgoing account receives no thread or media data and cannot append. |
-| partial | Neighborhood, mason, dead, and spectator rooms<br>`product.private.additional-rooms` | `product.private.role-pm` | Every supported private room family is pack/config-created, encrypted at rest, capability-filtered, replacement-safe, and live/reload proven. | Remaining: Implement and prove spectator-room read-only authority, history/media visibility, and lifecycle boundaries. | source: `packs/mafiascum/pack.json`<br>source: `crates/commands/src/lib.rs`<br>source: `crates/commands/tests/pipeline.rs`<br>source: `crates/caps/src/lib.rs`<br>source: `crates/api/tests/vertical.rs`<br>source: `frontend/src/lib/app/app-route-state-model.mjs`<br>source: `frontend/src/lib/components/player-channel-rail/player-channel-rail-model.mjs`<br>source: `frontend/src/lib/components/player-command/player-command-panel-model.mjs`<br>source: `tools/host_console_live_stack_smoke.mjs`<br>source: `tools/live_stack_readiness_contract.mjs`<br>source: `docs/arch/01-domain-model.md`<br>source: `docs/arch/06-security.md`<br>artifact: `target/host-console-live-stack-smoke/live-stack-proof.json`<br>command: `DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p commands -p projections -p caps`<br>command: `DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p api mason_neighbor -- --test-threads=1`<br>command: `DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p api dead_chat -- --test-threads=1`<br>command: `DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch npm run test:host-console-live-stack-smoke`<br>command: `npm run test:frontend-contract`<br>Pack-declared Mason and Neighbor rooms plus lifecycle-derived dead chat are locally complete across encrypted browser text/media posting, capability-derived routes, channel-scoped live delivery, durable reload, replacement transfer, and stale/non-member denial; only the spectator room family remains incomplete. |
+| complete | Neighborhood, mason, dead, and spectator rooms<br>`product.private.additional-rooms` | `product.private.role-pm` | Every supported private room family is pack/config-created, encrypted at rest, capability-filtered, replacement-safe, and live/reload proven. | Complete. | source: `packs/mafiascum/pack.json`<br>source: `crates/commands/src/lib.rs`<br>source: `crates/commands/tests/pipeline.rs`<br>source: `crates/caps/src/lib.rs`<br>source: `crates/projections/migrations/0037_spectator_membership.sql`<br>source: `crates/api/tests/vertical.rs`<br>source: `crates/wire/src/lib.rs`<br>source: `frontend/src/lib/app/cold-load.mjs`<br>source: `frontend/src/lib/app/app-route-state-model.mjs`<br>source: `frontend/src/lib/components/player-channel-rail/player-channel-rail-model.mjs`<br>source: `frontend/src/lib/components/player-command/player-command-panel-model.mjs`<br>source: `frontend/src/routes/g/[game]/+page.server.js`<br>source: `tools/host_console_live_stack_smoke.mjs`<br>source: `tools/live_stack_readiness_contract.mjs`<br>source: `docs/arch/01-domain-model.md`<br>source: `docs/arch/06-security.md`<br>artifact: `target/host-console-live-stack-smoke/live-stack-proof.json`<br>command: `DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p commands -p projections -p caps`<br>command: `DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p api mason_neighbor -- --test-threads=1`<br>command: `DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p api dead_chat -- --test-threads=1`<br>command: `DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch npm run test:host-console-live-stack-smoke`<br>command: `npm run test:frontend-contract`<br>All supported additional room families are locally complete: pack-declared Mason and Neighbor rooms transfer with stable slots, dead chat follows dead-slot lifecycle authority, and explicit slot-disjoint SpectatorOf grants expose a fixed read-only host-authored room. Each family is encrypted, capability-filtered, live/reload proven, media-authorized, and closed at its stale, non-member, or revoked boundary. |
 
 ## Account and identity lifecycle
 

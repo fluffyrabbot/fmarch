@@ -13,7 +13,7 @@ import {
   validateRegistry,
 } from "./completeness_scorecard.mjs";
 
-test("real completion registry validates and selects the spectator-room lifecycle", async () => {
+test("real completion registry validates completed room families and selects session lifecycle", async () => {
   const registry = await loadCompletionRegistry();
   await validateRegistry(registry);
   const summary = summarizeRegistry(registry);
@@ -29,11 +29,11 @@ test("real completion registry validates and selects the spectator-room lifecycl
   assert.equal(summary.platformComplete, false);
   assert.equal(summary.releaseComplete, false);
   const nextItem = nextBuildableCodeItem(registry);
-  assert.equal(nextItem?.id, "product.private.additional-rooms");
+  assert.equal(nextItem?.id, "product.identity.session-lifecycle");
   assert.deepEqual(nextItem?.remaining, [
-    "Implement and prove spectator-room read-only authority, history/media visibility, and lifecycle boundaries.",
+    "Add explicit logout and declared periodic/privilege-change session rotation with focused proof.",
   ]);
-  assert.match(nextItem?.recommended_slice?.objective ?? "", /spectator-room vertical/);
+  assert.match(nextItem?.recommended_slice?.objective ?? "", /session-lifecycle vertical/);
 });
 
 test("generated scorecard exactly matches the canonical registry", async () => {
@@ -71,14 +71,14 @@ test("registry validation rejects duplicate ids and unknown dependencies", async
 test("registry validation rejects dependency cycles", async () => {
   const registry = await loadCompletionRegistry();
   const cyclic = structuredClone(registry);
-  const additionalRooms = cyclic.items.find(
-    (item) => item.id === "product.private.additional-rooms",
+  const sessionLifecycle = cyclic.items.find(
+    (item) => item.id === "product.identity.session-lifecycle",
   );
-  const profiles = cyclic.items.find(
-    (item) => item.id === "product.community.profiles",
+  const registration = cyclic.items.find(
+    (item) => item.id === "product.identity.registration",
   );
-  additionalRooms.depends_on = [profiles.id];
-  profiles.depends_on = [additionalRooms.id];
+  sessionLifecycle.depends_on = [registration.id];
+  registration.depends_on = [sessionLifecycle.id];
   await assert.rejects(
     validateRegistry(cyclic, { verifySourcePaths: false }),
     /dependency cycle/,
@@ -115,7 +115,7 @@ test("registry validation rejects illegal completion and blocked states", async 
 
   const whitespaceRemaining = structuredClone(registry);
   whitespaceRemaining.items.find(
-    (item) => item.id === "product.private.additional-rooms",
+    (item) => item.id === "product.identity.session-lifecycle",
   ).remaining = ["   "];
   await assert.rejects(
     validateRegistry(whitespaceRemaining, { verifySourcePaths: false }),
@@ -125,7 +125,7 @@ test("registry validation rejects illegal completion and blocked states", async 
   const completeRecommendedSlice = structuredClone(registry);
   completeRecommendedSlice.items[0].recommended_slice = structuredClone(
     registry.items.find(
-      (item) => item.id === "product.private.additional-rooms",
+      (item) => item.id === "product.identity.session-lifecycle",
     ).recommended_slice,
   );
   await assert.rejects(

@@ -77,6 +77,7 @@ CohostOf(game)              delegated host authority for this game
 SlotOccupant(slot)          act as this slot: post, vote (bound to current occupant)
 ChannelMember(channel)      read/post in this channel
 DeadViewer(game)            read dead-visible content; dead slot may post in dead chat
+SpectatorOf(game)            read fixed spectator room; never grants a player slot or append
 ```
 
 - `SlotOccupant` is bound to the **current** occupant of the slot — after a replacement, the
@@ -93,11 +94,17 @@ DeadViewer(game)            read dead-visible content; dead slot may post in dea
   slot grants it to the current occupant, replacement transfers it, and an alive restoration
   revokes it. Posting additionally checks that the command's actor slot itself is dead, so a
   principal occupying multiple slots cannot use one dead slot to post as a living slot.
+- `SpectatorOf(game)` is derived from explicit `spectator_membership` grant/revoke events.
+  Granting rejects current slot occupants, and assignment/replacement rejects current
+  spectators, keeping observer and player authority disjoint. The spectator room accepts
+  only host-authored `PublishSpectatorPost`; all player `SubmitPost` attempts reject before
+  any client-supplied actor slot is considered.
 - Replacement revokes the outgoing session's **game-scoped slot and channel authority** on
   the next capability resolution. It intentionally does not revoke the account session
   globally, because that credential may still have unrelated authority elsewhere.
-- Capabilities are derived from projections (`private_channel_member`, `slot_occupancy`,
-  `slot_state`) so they always reflect committed game state, never stale client claims.
+- Capabilities are derived from projections (`private_channel_member`, `spectator_membership`,
+  `slot_occupancy`, `slot_state`) so they always reflect committed game state, never stale
+  client claims.
 
 ## Visibility enforcement (defense in depth)
 
@@ -113,6 +120,12 @@ Reads and live deltas are filtered server-side by capability ([03](03-backend.md
 - The `dead` route and selected live channel require `DeadViewer(game)` on every cold-load,
   media, and live-delta boundary. Living, restored-alive, and stale outgoing accounts receive
   neither rows nor media bytes, and cannot append.
+- The `spectator` route and selected live channel require `SpectatorOf(game)` on every
+  cold-load, media, and live-delta boundary. The frontend does not request player-private
+  endpoints without an actor slot; the backend independently returns 403 for role PMs,
+  faction rooms, dead chat, notifications, investigations, and player command state.
+  Revocation returns 403 and zero media bytes through the browser proxy while the opaque
+  account session remains valid.
 - Role data is access-controlled *and* the projection's reveal flag gates it; end-game
   reveal flips the flag ([02](02-event-sourcing.md)). The client UI hiding something is
   never the only line of defense.

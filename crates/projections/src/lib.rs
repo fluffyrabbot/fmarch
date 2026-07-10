@@ -40,6 +40,8 @@
 //!   from `DayVoteOutcome`, separate from the running ballot tally.
 //! - `game_authority` — host + cohosts per game (`GameCreated`, `CohostAdded`).
 //!   Backs `caps` HostOf / CohostOf resolution.
+//! - `spectator_membership` — explicit read-only game grants
+//!   (`SpectatorGranted` / `SpectatorRevoked`). Backs `caps` SpectatorOf.
 //! - `slot_occupancy` — the LIVE slot→user mapping (`SlotAssigned`,
 //!   `ReplacementCompleted`). The slot id is STABLE across replacement; only the
 //!   occupant moves. Backs `caps` SlotOccupant resolution.
@@ -328,6 +330,13 @@ pub struct GameAuthorityRow {
     pub role: String,
 }
 
+/// A durable game-scoped spectator grant, independent of any player slot.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SpectatorMembershipRow {
+    pub game_id: Uuid,
+    pub user_id: String,
+}
+
 /// A row of the `slot_occupancy` projection: the slot's CURRENT occupant.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SlotOccupancyRow {
@@ -528,6 +537,14 @@ async fn fold_event(
         "CohostAdded" => {
             let cohost = str_field(&ev.payload, "user_id", &ev.kind)?;
             upsert_authority(tx, game_id, &cohost, "cohost").await?;
+        }
+        "SpectatorGranted" => {
+            let user = str_field(&ev.payload, "user_id", &ev.kind)?;
+            insert_spectator_membership(tx, game_id, &user).await?;
+        }
+        "SpectatorRevoked" => {
+            let user = str_field(&ev.payload, "user_id", &ev.kind)?;
+            delete_spectator_membership(tx, game_id, &user).await?;
         }
 
         // ── slot lifecycle / occupancy ──
@@ -1473,6 +1490,7 @@ async fn rebuild_in_tx(
         "slot_effect",
         "slot_state",
         "game_authority",
+        "spectator_membership",
         "slot_occupancy",
         "phase_state",
         "private_channel_member",
@@ -1597,6 +1615,10 @@ const AUDIT_PROJECTIONS: &[AuditProjection] = &[
     AuditProjection {
         table: "game_authority",
         order_by: "role, user_id",
+    },
+    AuditProjection {
+        table: "spectator_membership",
+        order_by: "user_id",
     },
     AuditProjection {
         table: "slot_occupancy",
@@ -2369,6 +2391,41 @@ pub async fn game_authority(
         .collect())
 }
 
+/// Whether a user currently holds the explicit spectator grant for this game.
+pub async fn spectator_membership(
+    pool: &PgPool,
+    game_id: Uuid,
+    user_id: &str,
+) -> Result<bool, ProjectionError> {
+    let row =
+        sqlx::query("SELECT 1 AS x FROM spectator_membership WHERE game_id = $1 AND user_id = $2")
+            .bind(game_id)
+            .bind(user_id)
+            .fetch_optional(pool)
+            .await?;
+    Ok(row.is_some())
+}
+
+/// Read a game's spectator grants in deterministic order for audit and tests.
+pub async fn spectator_memberships(
+    pool: &PgPool,
+    game_id: Uuid,
+) -> Result<Vec<SpectatorMembershipRow>, ProjectionError> {
+    let rows = sqlx::query(
+        "SELECT game_id, user_id FROM spectator_membership WHERE game_id = $1 ORDER BY user_id",
+    )
+    .bind(game_id)
+    .fetch_all(pool)
+    .await?;
+    Ok(rows
+        .into_iter()
+        .map(|r| SpectatorMembershipRow {
+            game_id: r.get("game_id"),
+            user_id: r.get("user_id"),
+        })
+        .collect())
+}
+
 /// The CURRENT occupant of a slot, if any (the live mapping for `caps`).
 pub async fn slot_occupant(
     pool: &PgPool,
@@ -2719,6 +2776,35 @@ async fn upsert_authority(
     .bind(role)
     .execute(&mut **tx)
     .await?;
+    Ok(())
+}
+
+async fn insert_spectator_membership(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    game_id: Uuid,
+    user_id: &str,
+) -> Result<(), ProjectionError> {
+    sqlx::query(
+        "INSERT INTO spectator_membership (game_id, user_id) VALUES ($1, $2) \
+         ON CONFLICT (game_id, user_id) DO NOTHING",
+    )
+    .bind(game_id)
+    .bind(user_id)
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
+}
+
+async fn delete_spectator_membership(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    game_id: Uuid,
+    user_id: &str,
+) -> Result<(), ProjectionError> {
+    sqlx::query("DELETE FROM spectator_membership WHERE game_id = $1 AND user_id = $2")
+        .bind(game_id)
+        .bind(user_id)
+        .execute(&mut **tx)
+        .await?;
     Ok(())
 }
 

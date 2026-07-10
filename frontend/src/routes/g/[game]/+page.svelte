@@ -406,11 +406,13 @@
       >
         <PlayerEndgameSummary view={playerEndgameSummary} />
 
-        <PlayerRoleCard card={playerRoleCard} />
+        {#if player.readOnly !== true}
+          <PlayerRoleCard card={playerRoleCard} />
 
-        <PlayerActionSubmissionCheckpoint
-          checkpoint={playerActionSubmissionCheckpoint}
-        />
+          <PlayerActionSubmissionCheckpoint
+            checkpoint={playerActionSubmissionCheckpoint}
+          />
+        {/if}
 
         <PlayerCommandPanel
           {composer}
@@ -424,7 +426,9 @@
           onCommand={submitPlayerCommand}
           onSelectTarget={selectActionTarget}
         />
-        <PlayerCommandReceipt receipts={commandReceipts} />
+        {#if player.readOnly !== true}
+          <PlayerCommandReceipt receipts={commandReceipts} />
+        {/if}
 
         <DayVoteOutcomePanel
           outcomes={dayVoteOutcomes}

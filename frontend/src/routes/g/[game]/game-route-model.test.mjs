@@ -236,6 +236,34 @@ test("player route data exposes action-open state for seeded UUID role URLs", as
   );
 });
 
+test("spectator role URLs load only the spectator room without player-private cold loads", async () => {
+  const data = await buildGameRouteData({
+    game: "midsummer",
+    principalUserId: "spectator_s",
+    activeChannel: "spectator",
+    capabilities: [{ kind: "SpectatorOf", game: "midsummer" }],
+  });
+  assert.equal(data.access.allowed, true);
+  assert.equal(data.player.readOnly, true);
+  assert.equal(data.player.slotId, null);
+  assert.deepEqual(data.channels.map((channel) => channel.id), ["spectator"]);
+  assert.equal(data.channel.allowed, true);
+  assert.equal(data.channel.capabilityLabel, "SpectatorOf(game)");
+  assert.equal(data.composer.readOnly, true);
+  assert.equal(data.commandState.actorSlot, null);
+  assert.equal(data.commandState.role, null);
+  assert.deepEqual(data.notifications, []);
+  assert.deepEqual(data.investigationResults, []);
+  assert.deepEqual(data.privateQueue, []);
+  assert.equal(data.coldLoad.notificationsEndpoint, null);
+  assert.equal(data.coldLoad.investigationResultsEndpoint, null);
+  assert.equal(data.coldLoad.commandStateEndpoint, null);
+  assert.equal(
+    data.coldLoad.threadEndpoint,
+    "/games/midsummer/channels/spectator/thread?limit=50&principal_user_id=spectator_s",
+  );
+});
+
 test("selected action targets override the server default when legal", () => {
   const commandState = {
     actions: [
@@ -392,7 +420,10 @@ test("player route data can address private queue rows from the URL", async () =
     activeChannel: "private:role_pm:slot-7",
     privateItem: "investigation-1",
     principalUserId: "player_mira",
-    capabilities: [{ kind: "ChannelMember", game: "midsummer", channel: "private:role_pm:slot-7" }],
+    capabilities: [
+      { kind: "SlotOccupant", game: "midsummer", slot: "slot-7" },
+      { kind: "ChannelMember", game: "midsummer", channel: "private:role_pm:slot-7" },
+    ],
   });
   assert.deepEqual(rolePm.privateQueueExpandedItems, { "investigation-1": true });
   assert.equal(
@@ -876,6 +907,7 @@ test("player channel load exposes active channel route state from fixture query"
       locals: {
         principalUserId: "player_mira",
         resolvedCapabilities: [
+          { kind: "SlotOccupant", game: "midsummer", slot: "slot-7" },
           { kind: "ChannelMember", game: "midsummer", channel: "private:role_pm:slot-7" },
         ],
       },
@@ -909,22 +941,21 @@ test("player channel load exposes active channel route state from fixture query"
   }
 });
 
-test("player load accepts dead-viewer access scoped to the game", async () => {
-  const data = await load({
-    params: { game: "midsummer" },
-    locals: {
-      principalUserId: "dead_reader",
-      resolvedCapabilities: [
-        { kind: "DeadViewer", game: "midsummer" },
-      ],
-    },
-    fetch: async () => ({ ok: false }),
-  });
-
-  assert.equal(data.shell.activeSurface, "player");
-  assert.equal(data.shellOwner, "layout");
-  assert.equal(data.access.capabilityLabel, "DeadViewer(midsummer)");
-  assert.deepEqual(data.channels.map((channel) => channel.id), ["dead"]);
+test("player main route rejects dead-viewer access without main-channel authority", async () => {
+  await assert.rejects(
+    load({
+      params: { game: "midsummer" },
+      locals: {
+        principalUserId: "dead_reader",
+        resolvedCapabilities: [{ kind: "DeadViewer", game: "midsummer" }],
+      },
+      fetch: async () => ({ ok: false }),
+    }),
+    (err) =>
+      err.status === 403 &&
+      err.body.message ===
+        playerChannelForbiddenMessage({ game: "midsummer", channel: "main" }),
+  );
 });
 
 function jsonResponse(body) {

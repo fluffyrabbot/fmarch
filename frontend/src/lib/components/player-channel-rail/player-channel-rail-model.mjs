@@ -32,6 +32,17 @@ const PLAYER_CHANNELS = Object.freeze([
       return hasCapability({ capabilities, kind: "DeadViewer", game });
     },
   }),
+  Object.freeze({
+    id: "spectator",
+    label: "Spectator room",
+    capabilityLabel: "SpectatorOf(game)",
+    href(game) {
+      return `/g/${encodeURIComponent(game)}/c/spectator`;
+    },
+    allowed({ capabilities, game }) {
+      return hasCapability({ capabilities, kind: "SpectatorOf", game });
+    },
+  }),
 ]);
 
 export function buildPlayerChannels({ game, capabilities, activeChannel = "main" }) {
@@ -131,7 +142,8 @@ function channelOrder(channelId) {
   if (channelId === "main") return 0;
   if (channelId.startsWith("private:role_pm:")) return 1;
   if (channelId === "dead") return 2;
-  return 3;
+  if (channelId === "spectator") return 3;
+  return 4;
 }
 
 function dynamicPrivateChannel(channelId) {

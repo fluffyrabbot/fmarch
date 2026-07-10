@@ -82,11 +82,16 @@ export async function buildGameRouteData({
       capability.kind === "SlotOccupant" &&
       (capability.game === gameId || capability.game === undefined),
   );
-  const playerSlotId = slotCapability?.slot ?? "slot-7";
+  const spectator = normalizedCapabilities.some(
+    (capability) => capability.kind === "SpectatorOf" && capability.game === gameId,
+  );
+  const playerSlotId = slotCapability?.slot ?? (spectator ? null : "slot-7");
   const playerCommandStateSlot = slotCapability === undefined ? null : playerSlotId;
   const coldLoadFallback = pendingReplacement
     ? pendingReplacementColdLoad(gameId, playerSlotId)
-    : playerFixtureColdLoad(gameId);
+    : spectator
+      ? spectatorColdLoad(gameId)
+      : playerFixtureColdLoad(gameId);
 
   const coldLoad = await loadPlayerColdData({
     game: gameId,
@@ -151,6 +156,7 @@ export async function buildGameRouteData({
       status: coldLoad.commandState.actorStatus,
       gameCompleted: coldLoad.commandState.gameCompleted === true,
       capabilityLabel: playerCapabilityLabel,
+      readOnly: spectator && slotCapability === undefined,
     }),
     surfaceHeader: buildAppSurfaceHeaderViewModel({
       surface: "player",
@@ -207,14 +213,14 @@ export async function buildGameRouteData({
       votecountEndpoint: playerVotecountUrl({ game: gameId }),
       dayVoteOutcomesEndpoint: dayVoteOutcomesUrl({ game: gameId }),
       endgameSummaryEndpoint: endgameSummaryUrl({ game: gameId }),
-      notificationsEndpoint: hasPrincipal
+      notificationsEndpoint: hasPrincipal && playerCommandStateSlot !== null
         ? principalScopedGameUrl({
             game: gameId,
             path: "notifications",
             principalUserId,
           })
         : null,
-      investigationResultsEndpoint: hasPrincipal
+      investigationResultsEndpoint: hasPrincipal && playerCommandStateSlot !== null
         ? principalScopedGameUrl({
             game: gameId,
             path: "investigation-results",
@@ -241,7 +247,7 @@ export async function buildGameRouteData({
         : null,
     }),
     projectionBoundary: LIVE_TRANSPORT_BOUNDARY,
-    composer,
+    composer: Object.freeze({ ...composer, readOnly: spectator && slotCapability === undefined }),
   });
 }
 
@@ -256,6 +262,7 @@ function pendingPlayerAccess(game) {
       `SlotOccupant(${game})`,
       `ChannelMember(${game})`,
       `DeadViewer(${game})`,
+      `SpectatorOf(${game})`,
     ]),
   });
 }
@@ -274,6 +281,35 @@ function pendingReplacementColdLoad(game, slotId) {
       actions: Object.freeze([]),
       boundary:
         "Replacement invite has no current SlotOccupant authority until the host processes replacement.",
+    }),
+    votecount: Object.freeze([]),
+    dayVoteOutcomes: Object.freeze([]),
+    endgameSummary: null,
+    thread: Object.freeze({
+      nextBeforeSeq: null,
+      posts: Object.freeze([]),
+    }),
+    notifications: Object.freeze([]),
+    investigationResults: Object.freeze([]),
+  });
+}
+
+function spectatorColdLoad(game) {
+  return Object.freeze({
+    commandState: Object.freeze({
+      game,
+      actorSlot: null,
+      actorAlive: null,
+      actorStatus: "spectator",
+      roleKey: null,
+      role: null,
+      gameCompleted: false,
+      phase: null,
+      actions: Object.freeze([]),
+      currentActions: Object.freeze([]),
+      voteTargets: Object.freeze([]),
+      currentVote: null,
+      boundary: "Spectators have no player slot or player-private command state.",
     }),
     votecount: Object.freeze([]),
     dayVoteOutcomes: Object.freeze([]),

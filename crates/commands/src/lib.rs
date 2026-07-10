@@ -583,6 +583,12 @@ async fn handle_command(
             )
             .await
         }
+        Command::GrantSpectator { game, user } => {
+            grant_spectator(pool, principal, game, user, receipt).await
+        }
+        Command::RevokeSpectator { game, user } => {
+            revoke_spectator(pool, principal, game, user, receipt).await
+        }
         Command::StartGame { game, phase } => {
             start_game(pool, principal, game, phase, receipt).await
         }
@@ -614,6 +620,9 @@ async fn handle_command(
             channel_id,
             allow_media_only,
         } => set_post_policy(pool, principal, game, channel_id, allow_media_only, receipt).await,
+        Command::PublishSpectatorPost { game, body, media } => {
+            publish_spectator_post(pool, principal, game, body, media, receipt).await
+        }
         Command::ControlItaSession {
             game,
             session_id,
@@ -714,6 +723,8 @@ fn game_closed_by_completion(command: &Command) -> Option<Uuid> {
         | Command::AddSlotStatusTag { game, .. }
         | Command::RemoveSlotStatusTag { game, .. }
         | Command::AddCohost { game, .. }
+        | Command::GrantSpectator { game, .. }
+        | Command::RevokeSpectator { game, .. }
         | Command::StartGame { game, .. }
         | Command::OpenDayPhase { game, .. }
         | Command::AdvancePhase { game }
@@ -724,6 +735,7 @@ fn game_closed_by_completion(command: &Command) -> Option<Uuid> {
         | Command::PublishVotecount { game }
         | Command::ResolveHostPrompt { game, .. }
         | Command::SetPostPolicy { game, .. }
+        | Command::PublishSpectatorPost { game, .. }
         | Command::ControlItaSession { game, .. }
         | Command::SubmitVote { game, .. }
         | Command::WithdrawVote { game, .. }
@@ -795,6 +807,73 @@ async fn host_lifecycle(
         pool,
         game,
         &[EventInput::new(kind, 1, payload, actor, 0)],
+        receipt,
+    )
+    .await
+}
+
+async fn grant_spectator(
+    pool: &PgPool,
+    principal: &Principal,
+    game: Uuid,
+    user: String,
+    receipt: Option<&ReceiptClaim>,
+) -> Result<Ack, Reject> {
+    require_game(pool, game).await?;
+    let caps = caps::resolve(pool, principal, game).await?;
+    require(&caps, &Capability::HostOf(game), Reject::NotHost)?;
+    if user.trim().is_empty() {
+        return Err(Reject::InvalidTarget);
+    }
+    if projections::slot_occupancy(pool, game)
+        .await?
+        .into_iter()
+        .any(|row| row.occupant_user_id == user)
+        || projections::spectator_membership(pool, game, &user).await?
+    {
+        return Err(Reject::InvalidTarget);
+    }
+    persist(
+        pool,
+        game,
+        &[EventInput::new(
+            "SpectatorGranted",
+            1,
+            serde_json::json!({ "user_id": user }),
+            ActorId::Host,
+            0,
+        )],
+        receipt,
+    )
+    .await
+}
+
+async fn revoke_spectator(
+    pool: &PgPool,
+    principal: &Principal,
+    game: Uuid,
+    user: String,
+    receipt: Option<&ReceiptClaim>,
+) -> Result<Ack, Reject> {
+    require_game(pool, game).await?;
+    let caps = caps::resolve(pool, principal, game).await?;
+    require(&caps, &Capability::HostOf(game), Reject::NotHost)?;
+    if user.trim().is_empty() {
+        return Err(Reject::InvalidTarget);
+    }
+    if !projections::spectator_membership(pool, game, &user).await? {
+        return Err(Reject::InvalidTarget);
+    }
+    persist(
+        pool,
+        game,
+        &[EventInput::new(
+            "SpectatorRevoked",
+            1,
+            serde_json::json!({ "user_id": user }),
+            ActorId::Host,
+            0,
+        )],
         receipt,
     )
     .await
@@ -1314,6 +1393,9 @@ async fn assign_slot(
     if !projections::slot_exists(pool, game, &slot).await? {
         return Err(Reject::UnknownSlot);
     }
+    if projections::spectator_membership(pool, game, &user).await? {
+        return Err(Reject::InvalidTarget);
+    }
     let stream = eventstore::load_stream(pool, game)
         .await
         .map_err(|e| Reject::Internal(e.to_string()))?;
@@ -1786,6 +1868,12 @@ async fn submit_post_locked(
     } = request;
     require_game(pool, game).await?;
     let caps = caps::resolve(pool, principal, game).await?;
+    // The fixed spectator room has no player-authoring path. It only accepts
+    // host-authored notices through PublishSpectatorPost, before any
+    // client-supplied slot or capability is inspected.
+    if channel_id == "spectator" {
+        return Err(Reject::NotAuthorized);
+    }
     require_slot_occupant(pool, game, &actor_slot, &caps).await?;
     require_channel_post_access(game, &channel_id, &caps)?;
     require_channel_actor_can_post(pool, game, &channel_id, &actor_slot).await?;
@@ -1821,6 +1909,50 @@ async fn submit_post_locked(
         occurred_at,
     );
     persist(pool, game, &[ev], receipt).await
+}
+
+async fn publish_spectator_post(
+    pool: &PgPool,
+    principal: &Principal,
+    game: Uuid,
+    body: String,
+    media: Vec<ThreadPostMedia>,
+    receipt: Option<&ReceiptClaim>,
+) -> Result<Ack, Reject> {
+    require_game(pool, game).await?;
+    let caps = caps::resolve(pool, principal, game).await?;
+    require(&caps, &Capability::HostOf(game), Reject::NotHost)?;
+    validate_thread_post_media(&media)?;
+    if body.trim().is_empty() {
+        return Err(Reject::InvalidTarget);
+    }
+    let phase = current_phase(pool, game).await?.unwrap_or_default();
+    let stream = eventstore::load_stream(pool, game)
+        .await
+        .map_err(|e| Reject::Internal(e.to_string()))?;
+    let occurred_at = next_stream_logical_time(&stream);
+    let mut payload = serde_json::json!({
+        "channel_id": "spectator",
+        "slot_or_user": { "user": "host" },
+        "body": body,
+        "phase_id": phase,
+    });
+    if !media.is_empty() {
+        payload["media"] = serde_json::to_value(media).expect("thread post media serializes");
+    }
+    persist(
+        pool,
+        game,
+        &[EventInput::new(
+            "PostSubmitted",
+            1,
+            payload,
+            ActorId::Host,
+            occurred_at,
+        )],
+        receipt,
+    )
+    .await
 }
 
 fn validate_thread_post_media(media: &[model::ThreadPostMedia]) -> Result<(), Reject> {
@@ -2016,6 +2148,9 @@ async fn process_replacement_locked(
         Some(current) if current == outgoing_user => {}
         Some(_) => return Err(Reject::InvalidTarget),
         None => return Err(Reject::InvalidTarget),
+    }
+    if projections::spectator_membership(pool, game, &incoming_user).await? {
+        return Err(Reject::InvalidTarget);
     }
 
     let ev = EventInput::new(

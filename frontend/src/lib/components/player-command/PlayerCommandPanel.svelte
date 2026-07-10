@@ -90,6 +90,7 @@
       <strong>{row.tally}</strong>
     </div>
   {/each}
+  {#if view.composer.readOnly !== true}
   <div class="player-command-panel__composer" data-testid="player-composer">
     <div
       class="player-command-panel__channel-context fm-well fm-well--warm"
@@ -270,6 +271,7 @@
         </button>
       {/each}
     </div>
+  {/if}
   {/if}
 </aside>
 

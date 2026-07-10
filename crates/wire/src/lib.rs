@@ -219,6 +219,14 @@ pub enum Command {
         game: Uuid,
         user: String,
     },
+    GrantSpectator {
+        game: Uuid,
+        user: String,
+    },
+    RevokeSpectator {
+        game: Uuid,
+        user: String,
+    },
     StartGame {
         game: Uuid,
         phase: String,
@@ -260,6 +268,13 @@ pub enum Command {
         game: Uuid,
         channel_id: String,
         allow_media_only: bool,
+    },
+    PublishSpectatorPost {
+        game: Uuid,
+        body: String,
+        #[serde(default)]
+        #[ts(optional)]
+        media: Option<Vec<SubmitPostMedia>>,
     },
     SubmitVote {
         game: Uuid,
@@ -329,6 +344,12 @@ impl From<Command> for commands::Command {
                 status: status.into(),
             },
             Command::AddCohost { game, user } => commands::Command::AddCohost { game, user },
+            Command::GrantSpectator { game, user } => {
+                commands::Command::GrantSpectator { game, user }
+            }
+            Command::RevokeSpectator { game, user } => {
+                commands::Command::RevokeSpectator { game, user }
+            }
             Command::StartGame { game, phase } => commands::Command::StartGame { game, phase },
             Command::OpenDayPhase { game, phase } => {
                 commands::Command::OpenDayPhase { game, phase }
@@ -366,6 +387,21 @@ impl From<Command> for commands::Command {
                 channel_id,
                 allow_media_only,
             },
+            Command::PublishSpectatorPost { game, body, media } => {
+                commands::Command::PublishSpectatorPost {
+                    game,
+                    body,
+                    media: media
+                        .unwrap_or_default()
+                        .into_iter()
+                        .map(|media| commands::ThreadPostMedia {
+                            content_id: media.content_id,
+                            alt: media.alt,
+                            variants: BTreeMap::new(),
+                        })
+                        .collect(),
+                }
+            }
             Command::SubmitVote {
                 game,
                 actor_slot,
@@ -1195,6 +1231,7 @@ pub enum CapabilityGrant {
     SlotOccupant { slot: String },
     ChannelMember { channel: String },
     DeadViewer { game: Uuid },
+    SpectatorOf { game: Uuid },
 }
 
 pub mod typescript {
@@ -1290,6 +1327,7 @@ impl From<&caps::Capability> for CapabilityGrant {
                 channel: channel.clone(),
             },
             caps::Capability::DeadViewer(game) => CapabilityGrant::DeadViewer { game: *game },
+            caps::Capability::SpectatorOf(game) => CapabilityGrant::SpectatorOf { game: *game },
         }
     }
 }

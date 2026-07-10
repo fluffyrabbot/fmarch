@@ -46,6 +46,7 @@ const game = crypto.randomUUID();
 const actionGame = crypto.randomUUID();
 const additionalRoomsGame = crypto.randomUUID();
 const deadChatGame = crypto.randomUUID();
+const spectatorGame = crypto.randomUUID();
 const adminCreatedGame = crypto.randomUUID();
 const rootAdminSessionToken = `host-console-live-stack-root-admin-${crypto.randomUUID()}`;
 const hostSessionToken = `host-console-live-stack-host-${crypto.randomUUID()}`;
@@ -138,6 +139,15 @@ const deadChatDefinition = Object.freeze({
   incomingBody: "Incoming dead occupant continued the room",
   mediaAlt: "Dead-chat private receipt",
 });
+const spectatorDefinition = Object.freeze({
+  channelId: "spectator",
+  route: "spectator",
+  principalUserId: "spectator-room-user",
+  sessionToken: `host-console-live-stack-spectator-${crypto.randomUUID()}`,
+  historyBody: "Host notice preserved for spectators",
+  liveBody: "Second host notice delivered live to spectators",
+  mediaAlt: "Spectator room notice receipt",
+});
 const factionDayChatUploadAsset = Object.freeze({
   contentAddress: "live-stack-private-upload-source",
   variantName: "source",
@@ -215,6 +225,8 @@ try {
   const additionalRoomsSeed = await seedAdditionalRoomsGame();
   await writeProgress({ stage: "seed-dead-chat-game", deadChatGame });
   const deadChatSeed = await seedDeadChatGame();
+  await writeProgress({ stage: "seed-spectator-game", spectatorGame });
+  const spectatorSeed = await seedSpectatorGame();
   await writeProgress({ stage: "seed-faction-day-chat-fixture", game });
   const privateChannelFixture = await seedFactionDayChatFixture();
   await writeProgress({ stage: "seed-root-admin-session" });
@@ -225,6 +237,8 @@ try {
   const additionalRoomSessions = await createAdditionalRoomSessions();
   await writeProgress({ stage: "create-dead-chat-sessions", deadChatGame });
   const deadChatSessions = await createDeadChatSessions();
+  await writeProgress({ stage: "create-spectator-session", spectatorGame });
+  const spectatorSession = await createSpectatorSession();
 
   await writeProgress({ stage: "start-sveltekit" });
   const { createServer: createViteServer } = await import(
@@ -260,6 +274,7 @@ try {
     privateChannelFixture,
     additionalRoomsSeed,
     deadChatSeed,
+    spectatorSeed,
   );
   const playerVoteCount =
     browserEvidence.playerVoteCountAfterPlayer ??
@@ -293,11 +308,13 @@ try {
     actionSeedCommands,
     additionalRoomsSeed,
     deadChatSeed,
+    spectatorSeed,
     privateChannelFixture,
     rootAdminSession,
     grantedSessions,
     additionalRoomSessions,
     deadChatSessions,
+    spectatorSession,
     browser: browserEvidence,
     playerVoteCount,
     apiState,
@@ -314,6 +331,10 @@ try {
   console.log(`wrote ${path.relative(repoRoot, evidencePath)}`);
 } catch (error) {
   primaryError = error;
+  await writeProgress({
+    stage: "failed",
+    error: String(error?.stack ?? error),
+  });
   const handled = await handleLocalhostBindFailure({
     error,
     repoRoot,
@@ -334,7 +355,13 @@ try {
     await vite.close();
   }
   if (smokeDatabase !== undefined) {
-    await writeProgress({ stage: "drop-temp-database", database: smokeDatabase.name });
+    await writeProgress({
+      stage: primaryError === null ? "drop-temp-database" : "failed",
+      database: smokeDatabase.name,
+      ...(primaryError === null
+        ? {}
+        : { error: String(primaryError?.stack ?? primaryError) }),
+    });
     try {
       await dropSmokeDatabase(smokeDatabase);
     } catch (dropError) {
@@ -852,6 +879,21 @@ async function seedDeadChatGame() {
   };
 }
 
+async function seedSpectatorGame() {
+  const commands = [
+    await sendCommand("host_h", {
+      CreateGame: { game: spectatorGame, pack: "mafiascum" },
+    }),
+  ];
+  return {
+    game: spectatorGame,
+    channelId: spectatorDefinition.channelId,
+    commands,
+    boundary:
+      "The spectator room is fixed by platform policy and becomes readable only through a host-issued SpectatorOf(game) grant; no player slot is created for this account.",
+  };
+}
+
 async function seedFactionDayChatFixture() {
   const memberRows = await runSql(
     smokeDatabase.url,
@@ -1005,6 +1047,14 @@ async function createDeadChatSessions() {
   };
 }
 
+async function createSpectatorSession() {
+  return await createAccountSession({
+    token: spectatorDefinition.sessionToken,
+    principalUserId: spectatorDefinition.principalUserId,
+    label: "spectator-room",
+  });
+}
+
 async function createAccountSession({ token, principalUserId, label }) {
   const accountId = `live-stack-${label}-${crypto.randomUUID()}@example.test`;
   const password = `live-stack account password ${crypto.randomUUID()}`;
@@ -1074,6 +1124,7 @@ async function driveBrowser(
   privateChannelFixture,
   additionalRoomsSeed,
   deadChatSeed,
+  spectatorSeed,
 ) {
   browser = await chromium.launch();
   const adminEvidence = await driveAdminBrowser(frontendBaseUrl);
@@ -1094,6 +1145,7 @@ async function driveBrowser(
       additionalRoomsSeed,
     );
     const deadChat = await driveDeadChatBrowser(frontendBaseUrl, deadChatSeed);
+    const spectator = await driveSpectatorBrowser(frontendBaseUrl, spectatorSeed);
     const rolePmHistory = await seedRolePmHistory(
       playerPrivateChannelEvidence.media.contentId,
     );
@@ -1118,6 +1170,7 @@ async function driveBrowser(
       playerPrivateChannel: playerPrivateChannelEvidence,
       additionalRooms,
       deadChat,
+      spectator,
       rolePmHistory,
       privateChannelForbidden: privateChannelForbiddenEvidence,
       hostVotecountConvergence,
@@ -1414,9 +1467,9 @@ async function driveAdditionalRoomsBrowser(frontendBaseUrl, seed) {
     game: additionalRoomsGame,
     rooms,
     coveredKinds: rooms.map((room) => room.kind),
-    remainingKinds: ["Spectator"],
+    remainingKinds: [],
     proof:
-      "Occupied pack-declared Mason and Neighbor rooms each passed enabled-account browser media posting, encrypted event storage, channel-scoped live delivery, durable reload, slot-stable replacement transfer, and zero-byte stale/non-member media denial. Dead chat is proven by its lifecycle-specific evidence; only spectator remains incomplete.",
+      "Occupied pack-declared Mason and Neighbor rooms each passed enabled-account browser media posting, encrypted event storage, channel-scoped live delivery, durable reload, slot-stable replacement transfer, and zero-byte stale/non-member media denial. Dead chat and spectator access are proven by lifecycle-specific evidence; no supported room family remains incomplete.",
   };
 }
 
@@ -2237,6 +2290,347 @@ async function driveDeadChatBrowser(frontendBaseUrl, seed) {
     restoredAlive,
     proof:
       "A real dead transition derived DeadViewer for the current occupant, enabled only dead-chat posting, accepted canonical browser-uploaded media, delivered channel-scoped initial and command deltas, retained encrypted slot history through reload and replacement, denied living and stale accounts at route/thread/media/append boundaries, then a real alive restoration revoked the same surfaces with zero media bytes.",
+  };
+}
+
+async function driveSpectatorBrowser(frontendBaseUrl, seed) {
+  if (
+    seed?.game !== spectatorGame ||
+    seed?.channelId !== spectatorDefinition.channelId
+  ) {
+    throw new Error(`spectator seed drifted: ${JSON.stringify(seed)}`);
+  }
+
+  const pageUrl = `${frontendBaseUrl}/g/${spectatorGame}/c/${spectatorDefinition.route}`;
+  const preGrantContext = await browserContextWithSession(
+    spectatorDefinition.sessionToken,
+  );
+  const preGrantPage = await preGrantContext.newPage();
+  const preGrantRoute = await preGrantPage.goto(pageUrl, {
+    waitUntil: "networkidle",
+  });
+  if (preGrantRoute === null || preGrantRoute.status() !== 403) {
+    throw new Error(
+      `pre-grant spectator route expected 403, got ${preGrantRoute?.status() ?? "none"}`,
+    );
+  }
+  const preGrantThread = await preGrantContext.request.get(
+    `${frontendBaseUrl}/games/${spectatorGame}/channels/spectator/thread?principal_user_id=${spectatorDefinition.principalUserId}&limit=50`,
+  );
+  if (preGrantThread.status() !== 403) {
+    throw new Error(`pre-grant spectator received thread rows (${preGrantThread.status()})`);
+  }
+  await preGrantContext.close();
+
+  const grant = await sendCommand("host_h", {
+    GrantSpectator: {
+      game: spectatorGame,
+      user: spectatorDefinition.principalUserId,
+    },
+  });
+  const session = await fetchJson(`${apiBaseUrl}/auth/session?game=${spectatorGame}`, {
+    headers: { authorization: `Bearer ${spectatorDefinition.sessionToken}` },
+  });
+  if (
+    !(session.capabilities ?? []).some(
+      (capability) =>
+        capability.kind === "SpectatorOf" &&
+        capability.body?.game === spectatorGame,
+    )
+  ) {
+    throw new Error(`spectator grant did not resolve SpectatorOf: ${JSON.stringify(session)}`);
+  }
+
+  const upload = generatedThreadMediaPng({
+    ...factionDayChatUploadAsset,
+    contentAddress: "live-stack-spectator-notice-source",
+    palette: {
+      ...factionDayChatUploadAsset.palette,
+      accent: [55, 98, 89],
+    },
+  });
+  const uploadResponse = await fetchWithTimeout(
+    `${apiBaseUrl}/media/uploads`,
+    {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${spectatorDefinition.sessionToken}`,
+        "content-type": "image/png",
+      },
+      body: upload.bytes,
+    },
+    180_000,
+  );
+  if (!uploadResponse.ok) {
+    throw new Error(`spectator notice upload failed with ${uploadResponse.status}`);
+  }
+  const uploaded = await uploadResponse.json();
+  const historyNotice = await sendCommand("host_h", {
+    PublishSpectatorPost: {
+      game: spectatorGame,
+      body: spectatorDefinition.historyBody,
+      media: [{ content_id: uploaded.content_id, alt: spectatorDefinition.mediaAlt }],
+    },
+  });
+
+  const context = await browserContextWithSession(spectatorDefinition.sessionToken);
+  const page = await context.newPage();
+  const response = await page.goto(pageUrl, { waitUntil: "networkidle" });
+  if (response === null || !response.ok()) {
+    throw new Error(`spectator role URL failed with ${response?.status() ?? "none"}`);
+  }
+  await page.getByTestId("player-surface").waitFor({ state: "visible" });
+  const activeChannel = page.getByTestId("player-channel-spectator");
+  await activeChannel.waitFor({ state: "visible" });
+  if ((await activeChannel.getAttribute("aria-current")) !== "page") {
+    throw new Error("SpectatorOf did not expose the active spectator room rail item");
+  }
+  if ((await page.getByTestId("player-composer").count()) !== 0) {
+    throw new Error("spectator route exposed a player composer");
+  }
+  if ((await page.getByTestId("player-role-card").count()) !== 0) {
+    throw new Error("spectator route exposed a player role card");
+  }
+  if (
+    (await page.getByTestId("player-command-receipt").count()) !== 0 ||
+    (await page.getByTestId("player-action-submission-checkpoint").count()) !== 0
+  ) {
+    throw new Error("spectator route exposed player command or action state");
+  }
+
+  const thread = await fetchJson(
+    `${apiBaseUrl}/games/${spectatorGame}/channels/spectator/thread?principal_user_id=${spectatorDefinition.principalUserId}&limit=50`,
+  );
+  const historyPost = thread.posts?.find(
+    (post) => post.body === spectatorDefinition.historyBody,
+  );
+  if (historyPost === undefined) {
+    throw new Error(`spectator history was absent: ${JSON.stringify(thread)}`);
+  }
+  const mediaPostSeq = Number(historyPost.source_seq ?? historyPost.sourceSeq);
+  const projectedMedia = historyPost.media?.find(
+    (media) => media.content_id === uploaded.content_id,
+  );
+  assertManifestBackedPrivateMedia({
+    projectedMedia,
+    contentId: uploaded.content_id,
+    mediaPostSeq,
+    gameId: spectatorGame,
+    channelId: spectatorDefinition.channelId,
+    expectedAlt: spectatorDefinition.mediaAlt,
+  });
+  const mediaUrl = projectedMedia.variants.tablet.avif_url;
+  const loadedHistory = page.locator(`[data-testid="thread-post-${mediaPostSeq}"]`);
+  await loadedHistory.waitFor({ state: "visible" });
+  if (!(await loadedHistory.innerText()).includes(spectatorDefinition.historyBody)) {
+    throw new Error("spectator role URL did not render host history");
+  }
+  await waitForPrivateThreadLiveDelta(page, {
+    channelId: spectatorDefinition.channelId,
+    body: spectatorDefinition.historyBody,
+  });
+  const initialLiveDelta = await privateThreadLiveDelta(
+    page,
+    spectatorDefinition.historyBody,
+  );
+  const allowedMedia = await context.request.get(`${frontendBaseUrl}${mediaUrl}`, {
+    headers: { accept: "image/avif" },
+  });
+  const allowedMediaBytes = await allowedMedia.body();
+  if (allowedMedia.status() !== 200 || allowedMediaBytes.byteLength === 0) {
+    throw new Error("spectator did not receive canonical room media bytes");
+  }
+
+  const liveNotice = await sendCommand("host_h", {
+    PublishSpectatorPost: {
+      game: spectatorGame,
+      body: spectatorDefinition.liveBody,
+      media: [],
+    },
+  });
+  await waitForPrivateThreadLiveDelta(page, {
+    channelId: spectatorDefinition.channelId,
+    body: spectatorDefinition.liveBody,
+  });
+  const liveDelta = await privateThreadLiveDelta(page, spectatorDefinition.liveBody);
+  const encryptedStorage = await runSqlScalar(
+    smokeDatabase.url,
+    `SELECT concat(
+       count(*)::text, '|',
+       count(*) FILTER (WHERE payload ? 'body')::text, '|',
+       count(*) FILTER (WHERE payload->'body_private'->>'ciphertext' IS NOT NULL)::text, '|',
+       count(*) FILTER (WHERE position(${sqlLiteral(spectatorDefinition.historyBody)} in payload::text) > 0
+                         OR position(${sqlLiteral(spectatorDefinition.liveBody)} in payload::text) > 0)::text)
+     FROM events
+     WHERE stream_id = '${spectatorGame}'
+       AND kind = 'PostSubmitted'
+       AND payload->>'channel_id' = 'spectator'`,
+  );
+  if (encryptedStorage !== "2|0|2|0") {
+    throw new Error(`spectator encrypted storage proof drifted: ${encryptedStorage}`);
+  }
+  const reload = await page.reload({ waitUntil: "networkidle", timeout: 180_000 });
+  if (reload === null || !reload.ok()) {
+    throw new Error("spectator role URL reload failed");
+  }
+  await page.getByTestId("player-surface").waitFor({ state: "visible" });
+  const reloadedLive = page.locator(`text=${spectatorDefinition.liveBody}`);
+  await reloadedLive.waitFor({ state: "visible" });
+
+  const postAttempt = await context.request.post(`${frontendBaseUrl}/commands`, {
+    data: {
+      v: 1,
+      id: commandEnvelopeId++,
+      body: {
+        kind: "Command",
+        body: {
+          command_id: crypto.randomUUID(),
+          principal_user_id: spectatorDefinition.principalUserId,
+          command: {
+            SubmitPost: {
+              game: spectatorGame,
+              channel_id: "spectator",
+              actor_slot: "invented-spectator-slot",
+              body: "spectator append attempt",
+              media: [],
+            },
+          },
+        },
+      },
+    },
+  });
+  const postReject = await postAttempt.json();
+  if (postReject.body?.kind !== "Reject" || postReject.body?.body?.error !== "NotAuthorized") {
+    throw new Error(`spectator append did not reject at the read-only boundary: ${JSON.stringify(postReject)}`);
+  }
+
+  const deniedEndpoints = {};
+  for (const [id, path] of Object.entries({
+    dead: `/g/${spectatorGame}/c/dead`,
+    rolePm: `/g/${spectatorGame}/c/${encodeURIComponent("private:role_pm:any")}`,
+    faction: `/g/${spectatorGame}/c/${encodeURIComponent("private:mafia_day_chat")}`,
+    main: `/g/${spectatorGame}`,
+  })) {
+    const denied = await page.goto(`${frontendBaseUrl}${path}`, { waitUntil: "networkidle" });
+    if (denied === null || denied.status() !== 403) {
+      throw new Error(`spectator ${id} route expected 403, got ${denied?.status() ?? "none"}`);
+    }
+    deniedEndpoints[id] = denied.status();
+  }
+  for (const [id, path] of Object.entries({
+    notifications: `/games/${spectatorGame}/notifications?principal_user_id=${spectatorDefinition.principalUserId}`,
+    investigations: `/games/${spectatorGame}/investigation-results?principal_user_id=${spectatorDefinition.principalUserId}`,
+    commandState: `/games/${spectatorGame}/player-command-state?principal_user_id=${spectatorDefinition.principalUserId}`,
+  })) {
+    const denied = await context.request.get(`${frontendBaseUrl}${path}`);
+    if (denied.status() !== 403) {
+      throw new Error(`spectator ${id} endpoint expected 403, got ${denied.status()}`);
+    }
+    deniedEndpoints[id] = denied.status();
+  }
+
+  const revoke = await sendCommand("host_h", {
+    RevokeSpectator: {
+      game: spectatorGame,
+      user: spectatorDefinition.principalUserId,
+    },
+  });
+  const revokedRoute = await page.goto(pageUrl, { waitUntil: "networkidle" });
+  if (revokedRoute === null || revokedRoute.status() !== 403) {
+    throw new Error(`revoked spectator route expected 403, got ${revokedRoute?.status() ?? "none"}`);
+  }
+  const revokedThread = await context.request.get(
+    `${frontendBaseUrl}/games/${spectatorGame}/channels/spectator/thread?principal_user_id=${spectatorDefinition.principalUserId}&limit=50`,
+  );
+  if (revokedThread.status() !== 403) {
+    throw new Error(`revoked spectator received thread rows (${revokedThread.status()})`);
+  }
+  const revokedMedia = await context.request.get(`${frontendBaseUrl}${mediaUrl}`, {
+    headers: { accept: "image/avif" },
+  });
+  const revokedMediaBytes = await revokedMedia.body();
+  if (revokedMedia.status() !== 403 || revokedMediaBytes.byteLength !== 0) {
+    throw new Error(
+      `revoked spectator media denial drifted: ${revokedMedia.status()} bytes=${revokedMediaBytes.byteLength}`,
+    );
+  }
+  const revokedPostAttempt = await context.request.post(`${frontendBaseUrl}/commands`, {
+    data: {
+      v: 1,
+      id: commandEnvelopeId++,
+      body: {
+        kind: "Command",
+        body: {
+          command_id: crypto.randomUUID(),
+          principal_user_id: spectatorDefinition.principalUserId,
+          command: {
+            SubmitPost: {
+              game: spectatorGame,
+              channel_id: "spectator",
+              actor_slot: "invented-spectator-slot",
+              body: "revoked spectator append attempt",
+              media: [],
+            },
+          },
+        },
+      },
+    },
+  });
+  const revokedPostReject = await revokedPostAttempt.json();
+  if (
+    revokedPostReject.body?.kind !== "Reject" ||
+    revokedPostReject.body?.body?.error !== "NotAuthorized"
+  ) {
+    throw new Error(
+      `revoked spectator append did not reject: ${JSON.stringify(revokedPostReject)}`,
+    );
+  }
+  const sessionAfterRevoke = await fetchJson(`${apiBaseUrl}/auth/session`, {
+    headers: { authorization: `Bearer ${spectatorDefinition.sessionToken}` },
+  });
+  if (sessionAfterRevoke.principal_user_id !== spectatorDefinition.principalUserId) {
+    throw new Error(
+      `spectator account session did not remain active: ${JSON.stringify(sessionAfterRevoke)}`,
+    );
+  }
+  await context.close();
+
+  return {
+    status: "passed",
+    game: spectatorGame,
+    channelId: spectatorDefinition.channelId,
+    derivedCapability: "SpectatorOf(game)",
+    preGrant: {
+      routeStatus: preGrantRoute.status(),
+      threadStatus: preGrantThread.status(),
+    },
+    grant,
+    historyNotice,
+    liveNotice,
+    initialMediaBodyBytes: allowedMediaBytes.byteLength,
+    initialLiveDelta,
+    liveDelta,
+    reloadedPostBodies: [spectatorDefinition.historyBody, spectatorDefinition.liveBody],
+    appendReject: postReject.body.body,
+    encryptedStorage: {
+      rawCheck: encryptedStorage,
+      postCount: 2,
+      plaintextBodyFields: 0,
+      ciphertextEnvelopes: 2,
+      plaintextOccurrences: 0,
+    },
+    deniedEndpoints,
+    revoke,
+    revoked: {
+      routeStatus: revokedRoute.status(),
+      threadStatus: revokedThread.status(),
+      mediaStatus: revokedMedia.status(),
+      mediaBodyBytes: revokedMediaBytes.byteLength,
+      appendReject: revokedPostReject.body.body,
+      accountSessionActive: true,
+    },
+    proof:
+      "A host-issued SpectatorOf(game) grant exposed only the read-only spectator role URL. The enabled account received host-authored encrypted history, canonical media, a channel-scoped live notice, and durable reload; it had no composer or role card, could not append or read player-private surfaces, and grant revocation closed route/thread/media with zero media bytes.",
   };
 }
 

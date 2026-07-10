@@ -70,6 +70,8 @@ pub enum Capability {
     ChannelMember(ChannelId),
     /// See dead-visible content.
     DeadViewer(GameId),
+    /// Read the game-scoped spectator room without occupying a player slot.
+    SpectatorOf(GameId),
 }
 
 /// The set of capabilities a principal holds in a resolved context. Resolved
@@ -120,6 +122,7 @@ impl CapabilitySet {
             // never by a same-game lesser capability.
             Capability::HostOf(_)
             | Capability::DeadViewer(_)
+            | Capability::SpectatorOf(_)
             | Capability::SlotOccupant(_)
             | Capability::ChannelMember(_) => self.has_global(),
             Capability::GlobalAdmin | Capability::GlobalMod => false,
@@ -149,8 +152,8 @@ pub enum CapError {
 
 /// Resolve the capabilities a `principal` holds in `game` (the IO half).
 ///
-/// Reads ONLY committed projections (`game_authority`, `slot_occupancy`, and
-/// `slot_state`) so the result reflects real game state, never a stale client
+/// Reads ONLY committed projections (`game_authority`, `spectator_membership`,
+/// `slot_occupancy`, and `slot_state`) so the result reflects real game state, never a stale client
 /// claim or an ambient global. After a replacement the outgoing user's
 /// slot-derived capabilities are gone and the incoming user's are granted —
 /// because occupancy is the live mapping and the slot id is stable (doc 06 /
@@ -178,6 +181,10 @@ pub async fn resolve(
                 _ => {}
             }
         }
+    }
+
+    if projections::spectator_membership(pool, game, user).await? {
+        set.insert(Capability::SpectatorOf(game));
     }
 
     let occupied_slots: BTreeSet<_> = projections::slot_occupancy(pool, game)

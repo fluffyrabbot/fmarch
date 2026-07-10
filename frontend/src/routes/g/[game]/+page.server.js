@@ -1,6 +1,10 @@
 import { error } from "@sveltejs/kit";
 import { resolveFixtureRouteState } from "../../../lib/app/app-route-state-model.mjs";
-import { buildGameRouteData, playerForbiddenMessage } from "./game-route-model.mjs";
+import {
+  buildGameRouteData,
+  playerChannelForbiddenMessage,
+  playerForbiddenMessage,
+} from "./game-route-model.mjs";
 
 export async function load({ params, locals, fetch, url }) {
   const apiBaseUrl = process.env.FMARCH_API_BASE_URL ?? "";
@@ -16,6 +20,12 @@ export async function load({ params, locals, fetch, url }) {
 
   if (!data.access.allowed) {
     throw error(403, playerForbiddenMessage(params.game));
+  }
+  if (!data.channel.allowed && !data.pendingReplacement) {
+    throw error(
+      403,
+      playerChannelForbiddenMessage({ game: params.game, channel: "main" }),
+    );
   }
 
   return {

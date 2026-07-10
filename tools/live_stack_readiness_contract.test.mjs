@@ -76,6 +76,20 @@ test("dead-chat readiness requires restoration revocation and zero-byte denial",
   );
 });
 
+test("spectator readiness requires read-only private denial and lifecycle revocation", () => {
+  const evidence = liveStackReadinessFixture();
+  assert.equal(
+    checkStatus(buildLiveStackReadiness(evidence), "spectator-room-lifecycle"),
+    "passed",
+  );
+
+  evidence.browser.spectator.deniedEndpoints.rolePm = 200;
+  assert.equal(
+    checkStatus(buildLiveStackReadiness(evidence), "spectator-room-lifecycle"),
+    "failed",
+  );
+});
+
 function checkStatus(readiness, id) {
   return readiness.checks.find((check) => check.id === id)?.status;
 }
@@ -214,13 +228,14 @@ function liveStackReadinessFixture() {
       additionalRooms: {
         status: "passed",
         coveredKinds: ["Mason", "Neighbor"],
-        remainingKinds: ["Spectator"],
+        remainingKinds: [],
         rooms: [
           additionalRoomFixture("Mason", "private:mason"),
           additionalRoomFixture("Neighbor", "private:neighbor"),
         ],
       },
       deadChat: deadChatFixture(),
+      spectator: spectatorRoomFixture(),
       rolePmHistory: {
         channelId: "private:role_pm:slot-7",
       },
@@ -355,6 +370,42 @@ function deadChatFixture() {
       mediaStatus: 403,
       mediaBodyBytes: 0,
       postReject: { error: "NotAuthorized" },
+    },
+  };
+}
+
+function spectatorRoomFixture() {
+  return {
+    status: "passed",
+    channelId: "spectator",
+    derivedCapability: "SpectatorOf(game)",
+    preGrant: { routeStatus: 403, threadStatus: 403 },
+    grant: { streamSeqs: [1] },
+    historyNotice: { streamSeqs: [2] },
+    liveNotice: { streamSeqs: [3] },
+    initialMediaBodyBytes: 1226,
+    initialLiveDelta: { delta: { kind: "ThreadPostsChanged" } },
+    liveDelta: { delta: { kind: "ThreadPostsChanged" } },
+    reloadedPostBodies: ["history", "live"],
+    appendReject: { error: "NotAuthorized" },
+    encryptedStorage: { rawCheck: "2|0|2|0" },
+    deniedEndpoints: {
+      dead: 403,
+      rolePm: 403,
+      faction: 403,
+      main: 403,
+      notifications: 403,
+      investigations: 403,
+      commandState: 403,
+    },
+    revoke: { streamSeqs: [4] },
+    revoked: {
+      routeStatus: 403,
+      threadStatus: 403,
+      mediaStatus: 403,
+      mediaBodyBytes: 0,
+      appendReject: { error: "NotAuthorized" },
+      accountSessionActive: true,
     },
   };
 }

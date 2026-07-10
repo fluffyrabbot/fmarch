@@ -188,6 +188,17 @@ test("player command panel model disables command controls for dead actors", () 
   assert.deepEqual(view.composer.actionPicker.recoveryCommands, []);
 });
 
+test("spectator command panel exposes public state without a composer", () => {
+  const view = buildPlayerCommandPanelViewModel({
+    player: { readOnly: true },
+    channel: { channel: "spectator" },
+    phase: { label: "Day 1", state: "open" },
+  });
+  assert.equal(view.root.data.channelId, "spectator");
+  assert.equal(view.composer.readOnly, true);
+  assert.equal("buttons" in view.composer, false);
+});
+
 test("dead chat enables only posting for a dead actor", () => {
   const view = buildPlayerCommandPanelViewModel({
     composer: {

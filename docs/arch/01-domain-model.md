@@ -91,7 +91,15 @@ any dead slot resolves `DeadViewer(game)`; replacement transfers that grant with
 slot, and restoring the slot alive revokes it. A dead occupant may author encrypted posts in
 the `dead` channel but retains the ordinary dead-slot prohibition on main-thread posting,
 votes, and actions. Dead-chat history and canonical media remain slot-authored across
-replacement. The spectator-room lifecycle is not yet implemented end to end.
+replacement.
+
+Spectator access is explicit, game-scoped, and slot-disjoint. A host grants
+`SpectatorOf(game)` to an account that occupies no player slot; assigning or replacing that
+account into a slot is rejected until the spectator grant is revoked. The capability exposes
+only the fixed `spectator` room, whose encrypted text and canonical media are host-authored.
+Spectators have no composer, vote/action controls, role card, notifications, investigation
+results, or player command state. Revocation removes route, thread, media, and live access
+without disabling the account session.
 
 ### Post
 Authored by a **slot** (in a game context) or a **user** (in non-game forum areas).
@@ -160,6 +168,7 @@ global roles (see [06-security](06-security.md)):
 - `SlotOccupant(slot)` — act as this slot (post, vote)
 - `ChannelMember(channel)` — read/post in this channel
 - `DeadViewer(game)` — read dead-visible content and post to dead chat while occupying a dead slot
+- `SpectatorOf(game)` — read the fixed spectator room without a player slot or append authority
 
 A host of one game has no authority in another. `if user.is_admin` cannot express this;
 a capability resolved per request can.

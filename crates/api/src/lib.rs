@@ -3034,8 +3034,10 @@ async fn prepare_command_media(
     state: &ApiState,
     mut command: commands::Command,
 ) -> Result<commands::Command, commands::Reject> {
-    let commands::Command::SubmitPost { media, .. } = &mut command else {
-        return Ok(command);
+    let media = match &mut command {
+        commands::Command::SubmitPost { media, .. }
+        | commands::Command::PublishSpectatorPost { media, .. } => media,
+        _ => return Ok(command),
     };
     if media.is_empty() {
         return Ok(command);
@@ -3478,10 +3480,12 @@ async fn require_channel_thread_access(
     let caps = caps::resolve(&state.pool, &Principal::user(principal_user_id), game).await?;
     let channel_cap = Capability::ChannelMember(channel.to_string());
     let dead_channel_cap = Capability::DeadViewer(game);
+    let spectator_channel_cap = Capability::SpectatorOf(game);
     if caps.grants(&Capability::HostOf(game))
         || caps.grants(&Capability::CohostOf(game))
         || caps.grants(&channel_cap)
         || (channel == "dead" && caps.grants(&dead_channel_cap))
+        || (channel == "spectator" && caps.grants(&spectator_channel_cap))
     {
         return Ok(());
     }
@@ -4875,6 +4879,8 @@ fn command_game(command: &wire::Command) -> Option<Uuid> {
         | wire::Command::AssignRole { game, .. }
         | wire::Command::SetSlotStatus { game, .. }
         | wire::Command::AddCohost { game, .. }
+        | wire::Command::GrantSpectator { game, .. }
+        | wire::Command::RevokeSpectator { game, .. }
         | wire::Command::StartGame { game, .. }
         | wire::Command::OpenDayPhase { game, .. }
         | wire::Command::AdvancePhase { game }
@@ -4886,6 +4892,7 @@ fn command_game(command: &wire::Command) -> Option<Uuid> {
         | wire::Command::PublishVotecount { game }
         | wire::Command::ResolveHostPrompt { game, .. }
         | wire::Command::SetPostPolicy { game, .. }
+        | wire::Command::PublishSpectatorPost { game, .. }
         | wire::Command::SubmitVote { game, .. }
         | wire::Command::WithdrawVote { game, .. }
         | wire::Command::SubmitAction { game, .. }
@@ -4926,6 +4933,7 @@ fn command_affects_thread(command: &wire::Command) -> bool {
         wire::Command::ResolvePhase { .. }
             | wire::Command::SubmitAction { .. }
             | wire::Command::SubmitPost { .. }
+            | wire::Command::PublishSpectatorPost { .. }
             | wire::Command::PublishVotecount { .. }
     )
 }

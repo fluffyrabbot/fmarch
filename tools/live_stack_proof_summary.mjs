@@ -37,6 +37,7 @@ export function buildLiveStackProofSummary(
   const rolePmReplacement = moderator?.rolePmReplacement;
   const additionalRooms = evidence.browser?.additionalRooms;
   const deadChat = evidence.browser?.deadChat;
+  const spectator = evidence.browser?.spectator;
   const summary = {
     version: LIVE_STACK_PROOF_SUMMARY_VERSION,
     proof: "host-console-live-stack-summary",
@@ -45,7 +46,7 @@ export function buildLiveStackProofSummary(
     generatedAt,
     scope: "local-live-stack-proof-summary",
     proofBoundary:
-      "Compact derivative report from the local live-stack browser proof. It summarizes host setup, host votecount convergence, reconnect recovery, Role PM, Mason/Neighbor, and dead-chat lifecycle evidence plus host ops evidence for inspection; the full proof JSON remains the source of truth and this does not prove spectator rooms, hosted, beta, release, or production readiness.",
+      "Compact derivative report from the local live-stack browser proof. It summarizes host setup, host votecount convergence, reconnect recovery, Role PM, Mason/Neighbor, dead-chat, and read-only spectator lifecycle evidence plus host ops evidence for inspection; the full proof JSON remains the source of truth and this does not prove hosted, beta, release, or production readiness.",
     generatedFrom: {
       liveStackProof: proofPath,
       game: evidence.game,
@@ -186,6 +187,22 @@ export function buildLiveStackProofSummary(
       living: `${deadChat?.living?.routeStatus ?? ""}/${deadChat?.living?.threadStatus ?? ""}/${deadChat?.living?.mediaStatus ?? ""}/${deadChat?.living?.mediaBodyBytes ?? ""}/${deadChat?.living?.postReject?.error ?? ""}`,
       restoredAlive: `${deadChat?.restoredAlive?.routeStatus ?? ""}/${deadChat?.restoredAlive?.threadStatus ?? ""}/${deadChat?.restoredAlive?.mediaStatus ?? ""}/${deadChat?.restoredAlive?.mediaBodyBytes ?? ""}/${deadChat?.restoredAlive?.postReject?.error ?? ""}`,
     },
+    spectatorRoomLifecycle: {
+      status: spectatorRoomStatus(spectator),
+      game: spectator?.game ?? null,
+      channelId: spectator?.channelId ?? null,
+      derivedCapability: spectator?.derivedCapability ?? null,
+      preGrant: `${spectator?.preGrant?.routeStatus ?? ""}/${spectator?.preGrant?.threadStatus ?? ""}`,
+      initialLiveDeltaKind: spectator?.initialLiveDelta?.delta?.kind ?? null,
+      liveDeltaKind: spectator?.liveDelta?.delta?.kind ?? null,
+      reloadedPostCount: spectator?.reloadedPostBodies?.length ?? 0,
+      mediaBodyBytes: spectator?.initialMediaBodyBytes ?? 0,
+      appendReject: spectator?.appendReject?.error ?? null,
+      encryptedStorage: spectator?.encryptedStorage?.rawCheck ?? null,
+      deniedEndpoints: spectator?.deniedEndpoints ?? {},
+      revoked: `${spectator?.revoked?.routeStatus ?? ""}/${spectator?.revoked?.threadStatus ?? ""}/${spectator?.revoked?.mediaStatus ?? ""}/${spectator?.revoked?.mediaBodyBytes ?? ""}/${spectator?.revoked?.appendReject?.error ?? ""}`,
+      accountSessionActive: spectator?.revoked?.accountSessionActive ?? false,
+    },
     hostOpsWorkflow: {
       status: hostOpsStatus(moderator),
       promptState: moderator?.hostPrompt?.commandStatus?.state ?? null,
@@ -235,6 +252,10 @@ export function buildLiveStackProofSummary(
       {
         id: "dead-chat-summary",
         status: deadChatStatus(deadChat),
+      },
+      {
+        id: "spectator-room-summary",
+        status: spectatorRoomStatus(spectator),
       },
       {
         id: "host-ops-summary",
@@ -316,7 +337,7 @@ export function assertLiveStackProofSummary(summary) {
     JSON.stringify(summary.additionalRoomLifecycle?.coveredKinds) !==
       JSON.stringify(["Mason", "Neighbor"]) ||
     JSON.stringify(summary.additionalRoomLifecycle?.remainingKinds) !==
-      JSON.stringify(["Spectator"]) ||
+      JSON.stringify([]) ||
     summary.additionalRoomLifecycle?.rooms?.some(
       (room) =>
         room.status !== "passed" ||
@@ -337,6 +358,20 @@ export function assertLiveStackProofSummary(summary) {
     summary.deadChatLifecycle?.restoredAlive !== "403/403/403/0/NotAuthorized"
   ) {
     throw new Error("live-stack summary missing dead-chat lifecycle proof");
+  }
+  if (
+    summary.spectatorRoomLifecycle?.status !== "passed" ||
+    summary.spectatorRoomLifecycle?.channelId !== "spectator" ||
+    summary.spectatorRoomLifecycle?.derivedCapability !== "SpectatorOf(game)" ||
+    summary.spectatorRoomLifecycle?.preGrant !== "403/403" ||
+    summary.spectatorRoomLifecycle?.initialLiveDeltaKind !== "ThreadPostsChanged" ||
+    summary.spectatorRoomLifecycle?.liveDeltaKind !== "ThreadPostsChanged" ||
+    summary.spectatorRoomLifecycle?.encryptedStorage !== "2|0|2|0" ||
+    summary.spectatorRoomLifecycle?.appendReject !== "NotAuthorized" ||
+    summary.spectatorRoomLifecycle?.revoked !== "403/403/403/0/NotAuthorized" ||
+    summary.spectatorRoomLifecycle?.accountSessionActive !== true
+  ) {
+    throw new Error("live-stack summary missing spectator-room lifecycle proof");
   }
   return summary;
 }
@@ -413,6 +448,7 @@ export function markdownLiveStackProofSummary(summary) {
     `| Role PM replacement | ${summary.rolePmReplacementLifecycle.status} | channel=${summary.rolePmReplacementLifecycle.channelId ?? ""}, incoming=${summary.rolePmReplacementLifecycle.incomingPrincipalUserId ?? ""}, live=${summary.rolePmReplacementLifecycle.commandLiveDeltaKind ?? ""}, reloadPosts=${summary.rolePmReplacementLifecycle.reloadedPostCount}, stale=${summary.rolePmReplacementLifecycle.stalePostReject ?? ""}, media=${summary.rolePmReplacementLifecycle.outgoingMediaStatus ?? ""}/${summary.rolePmReplacementLifecycle.outgoingMediaBodyBytes ?? ""} bytes |`,
     `| Mason and Neighbor rooms | ${summary.additionalRoomLifecycle.status} | covered=${summary.additionalRoomLifecycle.coveredKinds.join(",")}, remaining=${summary.additionalRoomLifecycle.remainingKinds.join(",")}, rooms=${summary.additionalRoomLifecycle.rooms.map((room) => `${room.kind}:${room.status}:${room.encryptedStorage}`).join("; ")} |`,
     `| Dead chat | ${summary.deadChatLifecycle.status} | capability=${summary.deadChatLifecycle.derivedCapability ?? ""}, live=${summary.deadChatLifecycle.incomingInitialLiveDeltaKind ?? ""}/${summary.deadChatLifecycle.incomingCommandLiveDeltaKind ?? ""}, encrypted=${summary.deadChatLifecycle.encryptedStorage ?? ""}, stale=${summary.deadChatLifecycle.staleOutgoing}, living=${summary.deadChatLifecycle.living}, restored=${summary.deadChatLifecycle.restoredAlive} |`,
+    `| Spectator room | ${summary.spectatorRoomLifecycle.status} | capability=${summary.spectatorRoomLifecycle.derivedCapability ?? ""}, preGrant=${summary.spectatorRoomLifecycle.preGrant}, live=${summary.spectatorRoomLifecycle.initialLiveDeltaKind ?? ""}/${summary.spectatorRoomLifecycle.liveDeltaKind ?? ""}, encrypted=${summary.spectatorRoomLifecycle.encryptedStorage ?? ""}, append=${summary.spectatorRoomLifecycle.appendReject ?? ""}, revoked=${summary.spectatorRoomLifecycle.revoked} |`,
     `| host ops | ${summary.hostOpsWorkflow.status} | prompt=${summary.hostOpsWorkflow.promptState ?? ""}, lifecycle=${summary.hostOpsWorkflow.slotLifecycleState ?? ""}, invite=${summary.hostOpsWorkflow.playerInviteStatus ?? ""}, staleInvite=${summary.hostOpsWorkflow.stalePlayerInviteState ?? ""}/${summary.hostOpsWorkflow.stalePlayerInviteRetryState ?? ""} |`,
   );
   return `${lines.join("\n")}\n`;
@@ -450,7 +486,7 @@ function additionalRoomsStatus(evidence) {
   return evidence?.status === "passed" &&
     JSON.stringify(evidence.coveredKinds) === JSON.stringify(expectedKinds) &&
     JSON.stringify(evidence.remainingKinds) ===
-      JSON.stringify(["Spectator"]) &&
+      JSON.stringify([]) &&
     expectedKinds.every((kind) => {
       const room = evidence.rooms?.find((candidate) => candidate.kind === kind);
       return (
@@ -507,6 +543,32 @@ function deadChatStatus(evidence) {
     evidence?.restoredAlive?.mediaStatus === 403 &&
     evidence?.restoredAlive?.mediaBodyBytes === 0 &&
     evidence?.restoredAlive?.postReject?.error === "NotAuthorized"
+    ? "passed"
+    : "failed";
+}
+
+function spectatorRoomStatus(evidence) {
+  const denied = evidence?.deniedEndpoints ?? {};
+  return evidence?.status === "passed" &&
+    evidence?.channelId === "spectator" &&
+    evidence?.derivedCapability === "SpectatorOf(game)" &&
+    evidence?.preGrant?.routeStatus === 403 &&
+    evidence?.preGrant?.threadStatus === 403 &&
+    evidence?.initialMediaBodyBytes > 0 &&
+    evidence?.initialLiveDelta?.delta?.kind === "ThreadPostsChanged" &&
+    evidence?.liveDelta?.delta?.kind === "ThreadPostsChanged" &&
+    evidence?.reloadedPostBodies?.length === 2 &&
+    evidence?.appendReject?.error === "NotAuthorized" &&
+    evidence?.encryptedStorage?.rawCheck === "2|0|2|0" &&
+    ["dead", "rolePm", "faction", "main", "notifications", "investigations", "commandState"].every(
+      (id) => denied[id] === 403,
+    ) &&
+    evidence?.revoked?.routeStatus === 403 &&
+    evidence?.revoked?.threadStatus === 403 &&
+    evidence?.revoked?.mediaStatus === 403 &&
+    evidence?.revoked?.mediaBodyBytes === 0 &&
+    evidence?.revoked?.appendReject?.error === "NotAuthorized" &&
+    evidence?.revoked?.accountSessionActive === true
     ? "passed"
     : "failed";
 }

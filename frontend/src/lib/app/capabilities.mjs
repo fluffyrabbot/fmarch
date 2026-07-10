@@ -7,7 +7,12 @@ export const ROLE_SURFACES = Object.freeze({
   player: Object.freeze({
     id: "player",
     label: "Player",
-    capabilityKinds: Object.freeze(["SlotOccupant", "ChannelMember", "DeadViewer"]),
+    capabilityKinds: Object.freeze([
+      "SlotOccupant",
+      "ChannelMember",
+      "DeadViewer",
+      "SpectatorOf",
+    ]),
   }),
   moderator: Object.freeze({
     id: "moderator",
@@ -53,6 +58,7 @@ export function normalizeCapability(capability) {
       }
       return freezeWithoutNulls(normalized);
     case "DeadViewer":
+    case "SpectatorOf":
       return normalized.game === null ? null : freezeWithoutNulls(normalized);
     default:
       return null;

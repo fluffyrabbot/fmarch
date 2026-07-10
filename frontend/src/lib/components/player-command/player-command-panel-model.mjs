@@ -19,6 +19,23 @@ export function buildPlayerCommandPanelViewModel({
   player = {},
   confirmingAction = null,
 }) {
+  if (player.readOnly === true) {
+    return Object.freeze({
+      root: Object.freeze({
+        className: PLAYER_COMMAND_PANEL_CONTRACT.rootClassName,
+        data: Object.freeze({
+          component: PLAYER_COMMAND_PANEL_CONTRACT.componentName,
+          thumbZone: PLAYER_COMMAND_PANEL_CONTRACT.thumbZone,
+          channelId: String(channel.channel ?? "spectator"),
+        }),
+        testId: PLAYER_COMMAND_PANEL_CONTRACT.thumbZoneTestId,
+      }),
+      heading: "Votecount",
+      deadline: buildDeadlineViewModel(phase),
+      rows: Object.freeze(votecount.map(normalizeVotecountRow)),
+      composer: Object.freeze({ readOnly: true }),
+    });
+  }
   const channelContext = buildChannelContextViewModel({ channel, player });
   const playerCommandsDisabled =
     player.alive === false || player.gameCompleted === true;

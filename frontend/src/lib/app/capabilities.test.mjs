@@ -15,6 +15,7 @@ test("normalizes documented capability vocabulary without ambient roles", () => 
     { kind: "SlotOccupant", game: "midsummer", slot: "slot-7" },
     { kind: "ChannelMember", body: { game: "midsummer", channel: "main" } },
     { kind: "DeadViewer", game: "midsummer" },
+    { kind: "SpectatorOf", game: "midsummer" },
     { kind: "UnknownAmbientAdmin" },
   ]);
 
@@ -28,6 +29,7 @@ test("normalizes documented capability vocabulary without ambient roles", () => 
       "SlotOccupant",
       "ChannelMember",
       "DeadViewer",
+      "SpectatorOf",
     ],
   );
   assert.equal(capabilityLabel(capabilities[2]), "HostOf(midsummer)");
@@ -64,5 +66,13 @@ test("role surface access is explicit and scoped", () => {
       capabilities: [{ kind: "DeadViewer", game: "midsummer" }],
     }).capabilityLabel,
     "DeadViewer(midsummer)",
+  );
+  assert.equal(
+    resolveSurfaceAccess({
+      surface: "player",
+      game: "midsummer",
+      capabilities: [{ kind: "SpectatorOf", game: "midsummer" }],
+    }).capabilityLabel,
+    "SpectatorOf(midsummer)",
   );
 });

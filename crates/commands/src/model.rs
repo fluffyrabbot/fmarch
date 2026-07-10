@@ -87,6 +87,10 @@ pub enum Command {
     },
     /// Delegate cohost authority to a user. Host-gated.
     AddCohost { game: Uuid, user: String },
+    /// Grant read-only access to the fixed spectator room. Host-gated.
+    GrantSpectator { game: Uuid, user: String },
+    /// Revoke read-only access to the fixed spectator room. Host-gated.
+    RevokeSpectator { game: Uuid, user: String },
     /// Freeze the roster and start the game at `phase`. Host-gated.
     StartGame { game: Uuid, phase: String },
     /// Open a Day phase (the votable window). Host-gated.
@@ -124,6 +128,13 @@ pub enum Command {
         game: Uuid,
         channel_id: String,
         allow_media_only: bool,
+    },
+    /// Publish a host-authored post into the fixed spectator room. Host-gated.
+    PublishSpectatorPost {
+        game: Uuid,
+        body: String,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        media: Vec<ThreadPostMedia>,
     },
     /// Record a host/admin ITA session lifecycle control for the current Day phase. Host-gated.
     ControlItaSession {

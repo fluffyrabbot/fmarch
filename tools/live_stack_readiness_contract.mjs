@@ -140,7 +140,7 @@ const CHECKS = Object.freeze([
         JSON.stringify(additionalRooms.coveredKinds) !==
           JSON.stringify(["Mason", "Neighbor"]) ||
         JSON.stringify(additionalRooms.remainingKinds) !==
-          JSON.stringify(["Spectator"])
+          JSON.stringify([])
       ) {
         return false;
       }
@@ -156,6 +156,11 @@ const CHECKS = Object.freeze([
     id: "dead-chat-lifecycle",
     label: "Dead chat proves lifecycle authority, encryption, media, live reload, replacement, and revocation",
     predicate: (evidence) => deadChatLifecyclePassed(evidence?.browser?.deadChat),
+  },
+  {
+    id: "spectator-room-lifecycle",
+    label: "Spectator room proves explicit read-only grant, encrypted media, live reload, private denial, and revocation",
+    predicate: (evidence) => spectatorRoomLifecyclePassed(evidence?.browser?.spectator),
   },
   {
     id: "reconnect-recovery",
@@ -268,6 +273,35 @@ function deadChatLifecyclePassed(room) {
     room.restoredAlive?.mediaStatus === 403 &&
     room.restoredAlive?.mediaBodyBytes === 0 &&
     room.restoredAlive?.postReject?.error === "NotAuthorized"
+  );
+}
+
+function spectatorRoomLifecyclePassed(room) {
+  return (
+    room?.status === "passed" &&
+    room.channelId === "spectator" &&
+    room.derivedCapability === "SpectatorOf(game)" &&
+    room.preGrant?.routeStatus === 403 &&
+    room.preGrant?.threadStatus === 403 &&
+    room.grant?.streamSeqs?.length > 0 &&
+    room.historyNotice?.streamSeqs?.length > 0 &&
+    room.liveNotice?.streamSeqs?.length > 0 &&
+    room.initialMediaBodyBytes > 0 &&
+    room.initialLiveDelta?.delta?.kind === "ThreadPostsChanged" &&
+    room.liveDelta?.delta?.kind === "ThreadPostsChanged" &&
+    room.reloadedPostBodies?.length === 2 &&
+    room.appendReject?.error === "NotAuthorized" &&
+    room.encryptedStorage?.rawCheck === "2|0|2|0" &&
+    ["dead", "rolePm", "faction", "main", "notifications", "investigations", "commandState"].every(
+      (id) => room.deniedEndpoints?.[id] === 403,
+    ) &&
+    room.revoke?.streamSeqs?.length > 0 &&
+    room.revoked?.routeStatus === 403 &&
+    room.revoked?.threadStatus === 403 &&
+    room.revoked?.mediaStatus === 403 &&
+    room.revoked?.mediaBodyBytes === 0 &&
+    room.revoked?.appendReject?.error === "NotAuthorized" &&
+    room.revoked?.accountSessionActive === true
   );
 }
 

@@ -199,6 +199,22 @@ test("route empty helpers use role-owned visible work queues", () => {
       thread: { posts: [] },
       votecount: [],
       privateQueue: [],
+      channel: { channel: "spectator", allowed: true },
+      commandState: {
+        actorAlive: null,
+        voteTargets: [],
+        actions: [],
+        currentVote: null,
+      },
+    }),
+    false,
+    "an authorized empty spectator room must render its read-only surface",
+  );
+  assert.equal(
+    isPlayerRouteEmpty({
+      thread: { posts: [] },
+      votecount: [],
+      privateQueue: [],
     }),
     true,
   );

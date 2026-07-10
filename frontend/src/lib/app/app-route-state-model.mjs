@@ -204,7 +204,8 @@ export function isPlayerRouteEmpty({
     commandState?.actorAlive === true ||
     (commandState?.actorAlive === false &&
       channel?.channel === "dead" &&
-      channel?.allowed === true);
+      channel?.allowed === true) ||
+    (channel?.channel === "spectator" && channel?.allowed === true);
   return (
     arrayLength(thread?.posts) === 0 &&
     arrayLength(votecount) === 0 &&

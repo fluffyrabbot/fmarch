@@ -576,6 +576,34 @@ test("player cold-load skips private scoped endpoints without a principal", asyn
   assert.deepEqual(data.dayVoteOutcomes, []);
 });
 
+test("player cold-load skips player-private endpoints without an actor slot", async () => {
+  const seen = [];
+  const data = await loadPlayerColdData({
+    game: "midsummer",
+    activeChannel: "spectator",
+    principalUserId: "spectator_s",
+    actorSlot: null,
+    fallback: {
+      ...FALLBACK,
+      notifications: [],
+      investigationResults: [],
+    },
+    fetchImpl: async (url) => {
+      seen.push(url);
+      return { ok: false };
+    },
+  });
+
+  assert.deepEqual(seen, [
+    "/games/midsummer/channels/spectator/thread?limit=50&principal_user_id=spectator_s",
+    "/games/midsummer/votecount",
+    "/games/midsummer/day-vote-outcomes",
+    "/games/midsummer/endgame-summary",
+  ]);
+  assert.deepEqual(data.notifications, []);
+  assert.deepEqual(data.investigationResults, []);
+});
+
 test("admin cold-load maps operator proof status when available", async () => {
   const data = await loadAdminColdData({
     game: "midsummer",

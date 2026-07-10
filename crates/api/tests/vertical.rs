@@ -1618,6 +1618,393 @@ async fn dead_chat_lifecycle_encrypts_streams_transfers_and_revokes(pool: sqlx::
     server.abort();
 }
 
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn spectator_room_grant_reads_host_notices_and_revokes(pool: sqlx::PgPool) {
+    let root = tempfile::tempdir().unwrap();
+    let store = MediaStore::open(root.path(), MediaLimits::default()).unwrap();
+    let app = api::router_with_state(ApiState::new(pool.clone(), store).with_dev_auth(true));
+    let (spectator_token, spectator) =
+        create_media_upload_account_session(&app, "spectator-room").await;
+    let game = Uuid::new_v4();
+
+    expect_ack(
+        post_command(
+            app.clone(),
+            1,
+            "host_h",
+            Command::CreateGame {
+                game,
+                pack: "mafiascum".into(),
+            },
+        )
+        .await,
+    );
+    let before_grant = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!(
+                    "/games/{game}/channels/spectator/thread?principal_user_id={spectator}"
+                ))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(before_grant.status(), StatusCode::FORBIDDEN);
+    expect_ack(
+        post_command(
+            app.clone(),
+            2,
+            "host_h",
+            Command::GrantSpectator {
+                game,
+                user: spectator.clone(),
+            },
+        )
+        .await,
+    );
+    expect_reject(
+        post_command(
+            app.clone(),
+            3,
+            "host_h",
+            Command::GrantSpectator {
+                game,
+                user: spectator.clone(),
+            },
+        )
+        .await,
+        RejectCode::InvalidTarget,
+    );
+
+    let upload = post_media_upload(
+        &app,
+        Some(&spectator_token),
+        "image/png",
+        media_upload_png(32, 32),
+    )
+    .await;
+    assert_eq!(upload.status(), StatusCode::CREATED);
+    let upload: MediaUploadResponse =
+        serde_json::from_slice(&to_bytes(upload.into_body(), usize::MAX).await.unwrap()).unwrap();
+    let content_id = upload.content_id.clone();
+    expect_ack(
+        post_command(
+            app.clone(),
+            4,
+            "host_h",
+            Command::PublishSpectatorPost {
+                game,
+                body: "Host notice for the spectator room".into(),
+                media: Some(vec![SubmitPostMedia {
+                    content_id: content_id.clone(),
+                    alt: "Spectator notice receipt".into(),
+                }]),
+            },
+        )
+        .await,
+    );
+
+    let stored: serde_json::Value = sqlx::query_scalar(
+        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'PostSubmitted' \
+         AND payload->>'channel_id' = 'spectator' ORDER BY stream_seq DESC LIMIT 1",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(stored.get("body").is_none());
+    assert!(stored["body_private"]["ciphertext"].is_string());
+    assert!(!stored
+        .to_string()
+        .contains("Host notice for the spectator room"));
+    assert_eq!(stored["media"][0]["content_id"], content_id);
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let server_app = app.clone();
+    let server = tokio::spawn(async move {
+        axum::serve(listener, server_app).await.unwrap();
+    });
+    let (mut socket, _) = tokio_tungstenite::connect_async(format!(
+        "ws://{addr}/ws?game={game}&principal_user_id={spectator}&channel=spectator"
+    ))
+    .await
+    .unwrap();
+    let hello: ServerEnvelope =
+        serde_json::from_str(&socket.next().await.unwrap().unwrap().into_text().unwrap()).unwrap();
+    assert!(matches!(hello.body, ServerMsg::Hello(_)));
+    let initial_spectator = tokio::time::timeout(std::time::Duration::from_secs(3), async {
+        loop {
+            let envelope: ServerEnvelope =
+                serde_json::from_str(&socket.next().await.unwrap().unwrap().into_text().unwrap())
+                    .unwrap();
+            if matches!(
+                envelope.body,
+                ServerMsg::Delta(ProjectionDelta::ThreadPostsChanged(ref delta))
+                    if delta.game == game
+                        && delta.posts.len() == 1
+                        && delta.posts[0].channel_id == "spectator"
+                        && delta.posts[0].body == "Host notice for the spectator room"
+            ) {
+                return envelope;
+            }
+        }
+    })
+    .await
+    .expect("spectator websocket receives a channel-scoped initial delta");
+
+    expect_ack(
+        post_command(
+            app.clone(),
+            5,
+            "host_h",
+            Command::PublishSpectatorPost {
+                game,
+                body: "Live spectator notice".into(),
+                media: None,
+            },
+        )
+        .await,
+    );
+    let live_spectator = tokio::time::timeout(std::time::Duration::from_secs(3), async {
+        loop {
+            let envelope: ServerEnvelope =
+                serde_json::from_str(&socket.next().await.unwrap().unwrap().into_text().unwrap())
+                    .unwrap();
+            if matches!(
+                envelope.body,
+                ServerMsg::Delta(ProjectionDelta::ThreadPostsChanged(ref delta))
+                    if delta.game == game
+                        && delta.posts.len() == 2
+                        && delta.posts.iter().all(|post| post.channel_id == "spectator")
+                        && delta.posts[1].body == "Live spectator notice"
+            ) {
+                return envelope;
+            }
+        }
+    })
+    .await
+    .expect("host publication produces a channel-scoped spectator live delta");
+    assert!(live_spectator.id > initial_spectator.id);
+
+    let thread = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!(
+                    "/games/{game}/channels/spectator/thread?principal_user_id={spectator}&limit=10"
+                ))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(thread.status(), StatusCode::OK);
+    let thread: ThreadPage =
+        serde_json::from_slice(&to_bytes(thread.into_body(), usize::MAX).await.unwrap()).unwrap();
+    assert_eq!(thread.posts.len(), 2);
+    assert!(thread
+        .posts
+        .iter()
+        .all(|post| post.channel_id == "spectator"));
+    assert!(thread
+        .posts
+        .iter()
+        .all(|post| post.author_user.as_deref() == Some("host")));
+    assert_eq!(thread.posts[0].body, "Host notice for the spectator room");
+    assert_eq!(thread.posts[1].body, "Live spectator notice");
+    let media_url = thread.posts[0].media[0]
+        .variants
+        .get("tablet")
+        .unwrap()
+        .avif_url
+        .clone();
+    let allowed_media = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(media_url.as_str())
+                .header("authorization", format!("Bearer {spectator_token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(allowed_media.status(), StatusCode::OK);
+    assert_eq!(allowed_media.headers()["content-type"], "image/avif");
+    assert!(!to_bytes(allowed_media.into_body(), usize::MAX)
+        .await
+        .unwrap()
+        .is_empty());
+
+    for path in [
+        format!("/games/{game}/channels/dead/thread?principal_user_id={spectator}"),
+        format!(
+            "/games/{game}/channels/private:role_pm:slot_1/thread?principal_user_id={spectator}"
+        ),
+        format!(
+            "/games/{game}/channels/private:mafia_day_chat/thread?principal_user_id={spectator}"
+        ),
+        format!("/games/{game}/notifications?principal_user_id={spectator}"),
+        format!("/games/{game}/investigation-results?principal_user_id={spectator}"),
+        format!("/games/{game}/player-command-state?principal_user_id={spectator}"),
+    ] {
+        let denied = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri(path)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(denied.status(), StatusCode::FORBIDDEN);
+    }
+    expect_reject(
+        post_command(
+            app.clone(),
+            6,
+            spectator.as_str(),
+            Command::SubmitPost {
+                game,
+                channel_id: "spectator".into(),
+                actor_slot: "invented-slot".into(),
+                body: "spectator append attempt".into(),
+                media: None,
+            },
+        )
+        .await,
+        RejectCode::NotAuthorized,
+    );
+
+    projections::rebuild(&pool, game).await.unwrap();
+    assert_eq!(
+        projections::spectator_memberships(&pool, game)
+            .await
+            .unwrap()
+            .len(),
+        1,
+        "the explicit spectator grant survives rebuild"
+    );
+    assert_eq!(
+        projections::thread_view_for_channel(&pool, game, "spectator", None, 10)
+            .await
+            .unwrap()
+            .posts
+            .iter()
+            .map(|post| post.body.as_str())
+            .collect::<Vec<_>>(),
+        vec![
+            "Host notice for the spectator room",
+            "Live spectator notice"
+        ],
+        "encrypted spectator history and media references survive rebuild",
+    );
+    expect_ack(
+        post_command(
+            app.clone(),
+            7,
+            "host_h",
+            Command::RevokeSpectator {
+                game,
+                user: spectator.clone(),
+            },
+        )
+        .await,
+    );
+    let revoked_thread = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!(
+                    "/games/{game}/channels/spectator/thread?principal_user_id={spectator}"
+                ))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(revoked_thread.status(), StatusCode::FORBIDDEN);
+    let revoked_media = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(media_url.as_str())
+                .header("authorization", format!("Bearer {spectator_token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(revoked_media.status(), StatusCode::FORBIDDEN);
+    assert_ne!(revoked_media.headers()["content-type"], "image/avif");
+    let revoked_media_reject: RejectMsg = serde_json::from_slice(
+        &to_bytes(revoked_media.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(revoked_media_reject.error, RejectCode::NotAuthorized);
+    expect_reject(
+        post_command(
+            app.clone(),
+            8,
+            spectator.as_str(),
+            Command::SubmitPost {
+                game,
+                channel_id: "spectator".into(),
+                actor_slot: "invented-slot".into(),
+                body: "revoked spectator append attempt".into(),
+                media: None,
+            },
+        )
+        .await,
+        RejectCode::NotAuthorized,
+    );
+    expect_ack(
+        post_command(
+            app,
+            9,
+            "host_h",
+            Command::PublishSpectatorPost {
+                game,
+                body: "Notice after revocation".into(),
+                media: None,
+            },
+        )
+        .await,
+    );
+    let revoked_live = tokio::time::timeout(std::time::Duration::from_millis(500), async {
+        loop {
+            let envelope: ServerEnvelope =
+                serde_json::from_str(&socket.next().await.unwrap().unwrap().into_text().unwrap())
+                    .unwrap();
+            if matches!(
+                envelope.body,
+                ServerMsg::Delta(ProjectionDelta::ThreadPostsChanged(_))
+            ) {
+                return envelope;
+            }
+        }
+    })
+    .await;
+    assert!(
+        revoked_live.is_err(),
+        "revoked spectator receives no thread rows from later host publications",
+    );
+    drop(socket);
+    server.abort();
+}
+
 fn stable_command_id(id: u64) -> Uuid {
     Uuid::from_u128(id as u128)
 }
