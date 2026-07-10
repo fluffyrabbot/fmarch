@@ -179,26 +179,36 @@ const requiredSpineRows = (proofRun, proofSurfaces = {}) => {
   const cycles = Array.isArray(proofRun?.coreLoopSpine?.cycles)
     ? proofRun.coreLoopSpine.cycles
     : [];
+  const earliestReached = proofRun?.earliestReachedTie ?? {};
   return {
-    cycles: cycles.map((cycle) => String(cycle.id)),
-    roleUrls: cycles.flatMap((cycle) =>
+    cycles: [...cycles.map((cycle) => String(cycle.id)), "earliest-reached"],
+    roleUrls: [
+      ...cycles.flatMap((cycle) =>
       Object.keys(cycle.roleUrls ?? {}).map(
         (roleId) => `${String(cycle.id)}-${String(roleId)}`,
       ),
-    ),
-    roleUrlHrefs: Object.fromEntries(
+      ),
+      "earliest-reached-host",
+    ],
+    roleUrlHrefs: {
+      ...Object.fromEntries(
       cycles.flatMap((cycle) =>
         Object.entries(cycle.roleUrls ?? {}).map(([roleId, href]) => [
           `${String(cycle.id)}-${String(roleId)}`,
           String(href ?? ""),
         ]),
       ),
-    ),
-    checkpoints: cycles.flatMap((cycle) =>
+      ),
+      "earliest-reached-host": String(earliestReached.sourceRoleUrls?.host ?? ""),
+    },
+    checkpoints: [
+      ...cycles.flatMap((cycle) =>
       (cycle.checkpoints ?? []).map(
         (checkpoint) => `${String(cycle.id)}-${String(checkpoint.id)}`,
       ),
-    ),
+      ),
+      "earliest-reached-d01-tie-resolved",
+    ],
     roleSurfaceCheckpoints:
       coreLoopRoleSurfaceSpineCheckpointRows(proofSurfaces),
     recoveryHooks: Object.keys(proofRun?.coreLoopSpine?.recoveryHooks ?? {}),

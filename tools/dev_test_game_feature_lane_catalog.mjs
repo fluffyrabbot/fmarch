@@ -11,6 +11,9 @@ import {
   dayThreeVoteResolutionLaneId,
 } from "./dev_test_game_core_loop_vote_resolution_scenarios.mjs";
 import {
+  earliestReachedTieFeatureSpineRow,
+} from "./dev_test_game_earliest_reached_scenarios.mjs";
+import {
   hostPhaseControlFeatureSpineRow,
   hostPhaseAdvanceTransitionFeatureSpineRow,
   hostDeadlineControlFeatureSpineRow,
@@ -130,6 +133,7 @@ const coreLoopFeatureSpineLaneRows = Object.freeze([
     hostPhaseAdvanceTransitionFeatureSpineRow({ cycleId: dayTwoNightTwo }),
   ),
   Object.freeze(dayVoteResolutionFeatureSpineRow({ cycleId: dayTwoNightTwo })),
+  Object.freeze(earliestReachedTieFeatureSpineRow()),
   Object.freeze(dayVoteNoLynchFeatureSpineRow({ cycleId: dayThreeNightThree })),
   Object.freeze(dayTwoNightTwoSpineRows[0]),
   Object.freeze(dayOneNightOneSpineRows[0]),

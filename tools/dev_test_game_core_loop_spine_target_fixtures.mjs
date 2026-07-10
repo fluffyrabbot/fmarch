@@ -12,6 +12,7 @@ export function coreLoopSpineRowsFixture() {
       "n03-d04",
       "d04-n04-d05",
       "d05-n05",
+      "earliest-reached",
     ],
     roleUrls: [
       "d01-n01-d02-host",
@@ -37,6 +38,7 @@ export function coreLoopSpineRowsFixture() {
       "d04-n04-d05-deadPlayer",
       "d05-n05-host",
       "d05-n05-actionPlayer",
+      "earliest-reached-host",
     ],
     roleUrlHrefs: {
       "d01-n01-d02-host":
@@ -85,6 +87,8 @@ export function coreLoopSpineRowsFixture() {
         "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002/host",
       "d05-n05-actionPlayer":
         "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002",
+      "earliest-reached-host":
+        "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000003/host",
     },
     checkpoints: [
       "d01-n01-d02-d01-resolved-locked",
@@ -117,6 +121,7 @@ export function coreLoopSpineRowsFixture() {
       "d03-n03-d03r2-revote-ballot-submitted",
       "d03-n03-d03r2-revote-resolved-no-majority",
       "d03-n03-d03r2-stale-continue-policy-recovery",
+      "earliest-reached-d01-tie-resolved",
       "n03-d04-n03-action-open",
       "n03-d04-n03-action-submitted",
       "n03-d04-n03-resolved-target-killed",

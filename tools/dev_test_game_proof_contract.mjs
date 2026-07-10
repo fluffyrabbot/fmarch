@@ -6885,6 +6885,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
             },
     },
     identityBootstrap: session?.identityBootstrap ?? null,
+    earliestReachedTie: verification.earliestReachedTie ?? null,
     coreLoopSpine,
     completedGameHardeningCoverage,
     hostStaleControlCoverage,
@@ -6922,6 +6923,16 @@ export function assertDevTestGameProofRun(proof) {
   }
   if (proof.productionReady !== false || proof.releaseReady !== false) {
     throw new Error("dev-test-game proof must not claim production or release readiness");
+  }
+  if (
+    proof.earliestReachedTie !== null &&
+    proof.earliestReachedTie !== undefined &&
+    (proof.earliestReachedTie.status !== "passed" ||
+      proof.earliestReachedTie.pack !== "dev_test_earliest_reached" ||
+      proof.earliestReachedTie.outcome?.winner_slot !== "slot-2" ||
+      proof.earliestReachedTie.outcome?.tiebreak !== "EarliestReached")
+  ) {
+    throw new Error("dev-test-game proof is missing EarliestReached browser evidence");
   }
   if (
     proof.identityBootstrap?.status !== "passed" ||
