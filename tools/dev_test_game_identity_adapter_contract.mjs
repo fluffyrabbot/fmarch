@@ -3,7 +3,7 @@ import {
   hostedIdentityRoleSurfaceContractDiff,
 } from "./dev_test_game_hosted_identity_evidence_cases.mjs";
 
-export const devTestGameIdentityAdapterProofVersion = 17;
+export const devTestGameIdentityAdapterProofVersion = 18;
 export const devTestGameIdentityAdapterContractId =
   "local-production-identity-adapter-v1";
 
@@ -29,6 +29,7 @@ export const devTestGameIdentityAdapterExpectedContract = deepFreeze({
     "account-recovery-credential-issuance",
     "account-recovery-credential-revocation",
     "account-recovery",
+    "account-registration",
     "credential-attempt-throttling",
     "session-rotation",
     "session-age-rotation",

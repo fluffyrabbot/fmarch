@@ -20816,6 +20816,7 @@ function identityAdapterProofFixture(game) {
         "account-recovery-credential-issuance",
         "account-recovery-credential-revocation",
         "account-recovery",
+        "account-registration",
         "credential-attempt-throttling",
         "session-rotation",
         "session-age-rotation",
@@ -20830,6 +20831,8 @@ function identityAdapterProofFixture(game) {
         "/auth/account/security?account=<account-id>&returnTo=<role-surface>",
       accountRecoveryRoleSurfacePattern:
         "/auth/account/recovery?account=<account-id>&returnTo=<role-surface>",
+      accountRegistrationRoleSurfacePattern:
+        "/auth/register?account=<account-id>&returnTo=<role-surface>",
       capabilityAuthority:
         "auth_session resolves principal_user_id and committed game/global capabilities at the API boundary",
     },
@@ -20838,6 +20841,28 @@ function identityAdapterProofFixture(game) {
       devTestGameIdentityAdapterContractDiff(identityAdapterContract),
     identityLifecycle: {
       status: "passed",
+      accountRegistration: {
+        status: "passed",
+        registrationRoleUrl:
+          `/auth/register?account=${encodeURIComponent("registered@example.test")}&returnTo=${encodeURIComponent(`/g/${game}`)}`,
+        securityRoleUrl:
+          `/auth/account/security?account=${encodeURIComponent("registered@example.test")}&returnTo=${encodeURIComponent(`/g/${game}`)}`,
+        registrationSurfaceTestId: "auth-registration-surface",
+        securitySurfaceTestId: "account-security-surface",
+        accountId: "registered@example.test",
+        principalUserId: "registered-user",
+        sessionCookiePrefix: "registration-session-",
+        sessionHasNoGameCapabilities: true,
+        gameRolePendingReplacement: true,
+        gameRoleRecoveryTestId: "route-state-player-empty",
+        duplicateRejected: true,
+        rateLimitVisible: true,
+        rateLimitSeconds: 2,
+        registrationScopeHashed: true,
+        registrationScopeCount: 1,
+        rawPasswordStored: false,
+        auditEventKinds: ["account_registered", "account_session_created"],
+      },
       sessionRotation: {
         status: "passed",
         principalUserId: "host_h",
@@ -22598,6 +22623,7 @@ function identityAdminProofFixture() {
       visibleChecks: [
         "account-login",
         "account-lifecycle",
+        "account-registration",
         "credential-attempt-throttling",
         "session-rotation",
         "session-age-rotation",

@@ -7433,7 +7433,7 @@ test("admin route data exposes local identity adapter proof as a native audit ro
 
   const identity = data.audit.find((item) => item.id === localAdminAuditIds.identityAdapter);
   assert.equal(identity.label, "Local identity adapter");
-  assert.equal(identity.status, "3 role surfaces, 12 lifecycle controls");
+  assert.equal(identity.status, "3 role surfaces, 13 lifecycle controls");
   assert.equal(identity.authority, "GlobalAdmin or GlobalMod");
   assert.equal(
     identity.inspectHref,
@@ -7447,6 +7447,7 @@ test("admin route data exposes local identity adapter proof as a native audit ro
       "account-recovery",
       "credential-attempt-throttling",
       "account-lifecycle",
+      "account-registration",
       "session-rotation",
       "session-age-rotation",
       "session-logout",
@@ -7490,6 +7491,7 @@ test("admin route data exposes local identity adapter proof as a native audit ro
       "account-recovery-credential-issuance",
       "account-recovery-credential-revocation",
       "account-recovery",
+      "account-registration",
       "credential-attempt-throttling",
       "session-rotation",
       "session-age-rotation",
@@ -7536,6 +7538,23 @@ test("admin route data exposes local identity adapter proof as a native audit ro
       sameRoleSurface: true,
       revokedSessionCount: 1,
       rawCredentialStored: false,
+    },
+    accountRegistration: {
+      accountId: "registered@example.test",
+      principalUserId: "registered-user",
+      registrationRoleUrl:
+        "/auth/register?account=registered%40example.test&returnTo=%2Fg%2Fgame-a",
+      securityRoleUrl:
+        "/auth/account/security?account=registered%40example.test&returnTo=%2Fg%2Fgame-a",
+      sessionCookiePrefix: "registration-session-",
+      sessionHasNoGameCapabilities: true,
+      gameRolePendingReplacement: true,
+      duplicateRejected: true,
+      rateLimitVisible: true,
+      rateLimitSeconds: 2,
+      registrationScopeHashed: true,
+      registrationScopeCount: 1,
+      rawPasswordStored: false,
     },
     credentialAttemptThrottling: {
       policyKind: "two-tier-postgres-account-source-lockout",
@@ -7630,7 +7649,7 @@ test("admin local identity adapter detail data carries lifecycle checks and role
   assert.equal(data.status, "available");
   assert.equal(data.surfaceHeader.title, "Local identity adapter");
   assert.equal(data.audit.id, localAdminAuditIds.identityAdapter);
-  assert.equal(data.audit.checks.length, 13);
+  assert.equal(data.audit.checks.length, 14);
   assert.equal(data.audit.sessions.length, 3);
   assert.deepEqual(
     data.audit.checks.map((check) => [check.id, check.status]),
@@ -7640,6 +7659,7 @@ test("admin local identity adapter detail data carries lifecycle checks and role
       ["account-recovery", "passed"],
       ["credential-attempt-throttling", "passed"],
       ["account-lifecycle", "passed"],
+      ["account-registration", "passed"],
       ["session-rotation", "passed"],
       ["session-age-rotation", "passed"],
       ["session-logout", "passed"],
@@ -13136,6 +13156,7 @@ function identityAdapterProofFixture() {
         "account-recovery-credential-issuance",
         "account-recovery-credential-revocation",
         "account-recovery",
+        "account-registration",
         "credential-attempt-throttling",
         "session-rotation",
         "session-age-rotation",
@@ -13150,6 +13171,28 @@ function identityAdapterProofFixture() {
       devTestGameIdentityAdapterContractDiff(identityAdapterContract),
     identityLifecycle: {
       status: "passed",
+      accountRegistration: {
+        status: "passed",
+        registrationRoleUrl:
+          "/auth/register?account=registered%40example.test&returnTo=%2Fg%2Fgame-a",
+        securityRoleUrl:
+          "/auth/account/security?account=registered%40example.test&returnTo=%2Fg%2Fgame-a",
+        registrationSurfaceTestId: "auth-registration-surface",
+        securitySurfaceTestId: "account-security-surface",
+        accountId: "registered@example.test",
+        principalUserId: "registered-user",
+        sessionCookiePrefix: "registration-session-",
+        sessionHasNoGameCapabilities: true,
+        gameRolePendingReplacement: true,
+        gameRoleRecoveryTestId: "route-state-player-empty",
+        duplicateRejected: true,
+        rateLimitVisible: true,
+        rateLimitSeconds: 2,
+        registrationScopeHashed: true,
+        registrationScopeCount: 1,
+        rawPasswordStored: false,
+        auditEventKinds: ["account_registered", "account_session_created"],
+      },
       sessionRotation: {
         status: "passed",
       },

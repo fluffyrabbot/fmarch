@@ -69,6 +69,11 @@ test("identity adapter contract preserves shared role-surface architecture", () 
   );
   assert.ok(
     devTestGameIdentityAdapterExpectedContract.lifecycleControls.includes(
+      "account-registration",
+    ),
+  );
+  assert.ok(
+    devTestGameIdentityAdapterExpectedContract.lifecycleControls.includes(
       "credential-attempt-throttling",
     ),
   );

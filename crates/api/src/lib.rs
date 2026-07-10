@@ -67,6 +67,7 @@ struct LiveProjectionUpdate {
 struct AuthAttemptPolicy {
     account_max_failures: i32,
     source_max_failures: i32,
+    registration_max_per_source: i32,
     window_seconds: i64,
     lockout_seconds: i64,
     retention_seconds: i64,
@@ -81,6 +82,7 @@ struct AuthAttemptScope {
 }
 
 const AUTH_ATTEMPT_SOURCE_HEADER: &str = "x-fmarch-auth-source";
+const REGISTRATION_SESSION_TTL_SECONDS: i64 = 60 * 60 * 24 * 7;
 
 impl ApiState {
     pub fn new(pool: PgPool, media_store: MediaStore) -> Self {
@@ -145,6 +147,11 @@ impl ApiState {
         self
     }
 
+    pub fn with_registration_source_limit(mut self, max_registrations: i32) -> Self {
+        self.auth_attempt_policy.registration_max_per_source = max_registrations.clamp(2, 10_000);
+        self
+    }
+
     pub fn with_live_projection_capacity(mut self, capacity: usize) -> Self {
         let (live_projection_tx, _) = broadcast::channel(capacity.clamp(1, 65_536));
         self.live_projection_tx = live_projection_tx;
@@ -169,6 +176,7 @@ pub fn router_with_state(state: ApiState) -> Router {
         .route("/auth/dev-session", post(create_dev_auth_session))
         .route("/auth/session-grants", post(create_auth_session_grant))
         .route("/auth/accounts", post(create_auth_account))
+        .route("/auth/accounts/registrations", post(register_auth_account))
         .route("/auth/accounts/login", post(login_auth_account))
         .route(
             "/auth/accounts/password-rotations",
@@ -685,6 +693,20 @@ struct AuthAccountResponse {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+struct RegisterAuthAccount {
+    account_id: String,
+    password: String,
+    session_token: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct AuthAccountRegistrationResponse {
+    account_id: String,
+    principal_user_id: String,
+    expires_at: i64,
+}
+
+#[derive(Debug, Clone, Deserialize)]
 struct LoginAuthAccount {
     account_id: String,
     password: String,
@@ -1067,6 +1089,127 @@ async fn create_auth_account(
         account_id: account_id.to_string(),
         principal_user_id: principal_user_id.to_string(),
         global_capabilities,
+    }))
+}
+
+async fn register_auth_account(
+    State(state): State<ApiState>,
+    headers: HeaderMap,
+    Json(request): Json<RegisterAuthAccount>,
+) -> Result<Json<AuthAccountRegistrationResponse>, ApiError> {
+    let account_id = normalize_registration_account_id(request.account_id.as_str())?;
+    let password = request.password.as_str();
+    let session_token = request.session_token.trim();
+    if session_token.is_empty() {
+        return Err(ApiError::Reject {
+            status: StatusCode::BAD_REQUEST,
+            error: RejectCode::Internal,
+            message: "account registration requires a session_token".to_string(),
+        });
+    }
+    validate_new_account_password(password)?;
+    enforce_registration_source_limit(&state, &headers).await?;
+
+    let now = unix_now_seconds();
+    let expires_at = now + REGISTRATION_SESSION_TTL_SECONDS;
+    let principal_user_id = format!("registered-{}", Uuid::new_v4());
+    let password_hash = hash_account_password(password).await?;
+    let session_hash = hash_session_token(session_token);
+    let mut tx = state.pool.begin().await?;
+    let inserted = sqlx::query(
+        r#"
+        INSERT INTO auth_account (
+            account_id,
+            principal_user_id,
+            password_hash,
+            created_at,
+            disabled_at,
+            global_capabilities
+        )
+        VALUES ($1, $2, $3, $4, NULL, '{}')
+        ON CONFLICT (account_id) DO NOTHING
+        "#,
+    )
+    .bind(account_id.as_str())
+    .bind(principal_user_id.as_str())
+    .bind(&password_hash)
+    .bind(now)
+    .execute(&mut *tx)
+    .await?;
+    if inserted.rows_affected() != 1 {
+        return Err(ApiError::Reject {
+            status: StatusCode::CONFLICT,
+            error: RejectCode::Internal,
+            message: "account already exists".to_string(),
+        });
+    }
+
+    sqlx::query(
+        r#"
+        INSERT INTO auth_session (
+            token_hash,
+            principal_user_id,
+            created_at,
+            expires_at,
+            revoked_at,
+            global_capabilities
+        )
+        VALUES ($1, $2, $3, $4, NULL, '{}')
+        "#,
+    )
+    .bind(&session_hash)
+    .bind(principal_user_id.as_str())
+    .bind(now)
+    .bind(expires_at)
+    .execute(&mut *tx)
+    .await?;
+    for (event_kind, metadata) in [
+        (
+            "account_registered",
+            serde_json::json!({
+                "account_id": account_id.as_str(),
+                "global_capability_count": 0
+            }),
+        ),
+        (
+            "account_session_created",
+            serde_json::json!({
+                "account_id": account_id.as_str(),
+                "session_expires_at": expires_at,
+                "global_capability_count": 0,
+                "registration": true
+            }),
+        ),
+    ] {
+        sqlx::query(
+            r#"
+            INSERT INTO identity_lifecycle_audit (
+                event_at,
+                event_kind,
+                actor_user_id,
+                principal_user_id,
+                token_hash,
+                related_token_hash,
+                metadata
+            )
+            VALUES ($1, $2, $3, $4, $5, NULL, $6::JSONB)
+            "#,
+        )
+        .bind(now)
+        .bind(event_kind)
+        .bind(principal_user_id.as_str())
+        .bind(principal_user_id.as_str())
+        .bind(&session_hash)
+        .bind(metadata.to_string())
+        .execute(&mut *tx)
+        .await?;
+    }
+    tx.commit().await?;
+
+    Ok(Json(AuthAccountRegistrationResponse {
+        account_id,
+        principal_user_id,
+        expires_at,
     }))
 }
 
@@ -2438,17 +2581,7 @@ async fn enforce_auth_attempt_limit(
     account_id: &str,
 ) -> Result<AuthAttemptScope, ApiError> {
     let policy = state.auth_attempt_policy.clone();
-    let source = if policy.trust_source_header {
-        headers
-            .get(AUTH_ATTEMPT_SOURCE_HEADER)
-            .and_then(|value| value.to_str().ok())
-            .map(str::trim)
-            .filter(|value| !value.is_empty() && value.len() <= 256)
-            .unwrap_or("direct")
-    } else {
-        "direct"
-    };
-    let normalized_source = source.to_ascii_lowercase();
+    let normalized_source = normalized_auth_attempt_source(headers, &policy);
     let source_scope_hash =
         hash_session_token(format!("credential-source:\0{normalized_source}").as_str());
     let now = unix_now_seconds();
@@ -2486,6 +2619,94 @@ async fn enforce_auth_attempt_limit(
         account_scope_hash,
         policy,
     })
+}
+
+async fn enforce_registration_source_limit(
+    state: &ApiState,
+    headers: &HeaderMap,
+) -> Result<(), ApiError> {
+    let policy = state.auth_attempt_policy.clone();
+    let normalized_source = normalized_auth_attempt_source(headers, &policy);
+    let source_hash =
+        hash_session_token(format!("account-registration-source:\0{normalized_source}").as_str());
+    let now = unix_now_seconds();
+    let mut tx = state.pool.begin().await?;
+    sqlx::query(
+        "DELETE FROM auth_registration_attempt WHERE updated_at < $1 AND (blocked_until IS NULL OR blocked_until <= $2)",
+    )
+    .bind(now - policy.retention_seconds)
+    .bind(now)
+    .execute(&mut *tx)
+    .await?;
+    let blocked_until = sqlx::query_scalar::<_, Option<i64>>(
+        "SELECT blocked_until FROM auth_registration_attempt WHERE scope_hash = $1 FOR UPDATE",
+    )
+    .bind(source_hash.as_str())
+    .fetch_optional(&mut *tx)
+    .await?
+    .flatten();
+    if let Some(blocked_until) = blocked_until.filter(|value| *value > now) {
+        tx.commit().await?;
+        return Err(rate_limited(blocked_until - now));
+    }
+
+    let (_, blocked_until) = sqlx::query_as::<_, (i32, Option<i64>)>(
+        r#"
+        INSERT INTO auth_registration_attempt (
+            scope_hash,
+            window_started_at,
+            attempt_count,
+            blocked_until,
+            updated_at
+        )
+        VALUES ($1, $2, 1, NULL, $2)
+        ON CONFLICT (scope_hash) DO UPDATE
+        SET window_started_at = CASE
+                WHEN auth_registration_attempt.window_started_at + $3 <= $2 THEN $2
+                ELSE auth_registration_attempt.window_started_at
+            END,
+            attempt_count = CASE
+                WHEN auth_registration_attempt.window_started_at + $3 <= $2 THEN 1
+                ELSE auth_registration_attempt.attempt_count + 1
+            END,
+            blocked_until = CASE
+                WHEN (
+                    CASE
+                        WHEN auth_registration_attempt.window_started_at + $3 <= $2 THEN 1
+                        ELSE auth_registration_attempt.attempt_count + 1
+                    END
+                ) >= $4 THEN $2 + $5
+                ELSE NULL
+            END,
+            updated_at = $2
+        RETURNING attempt_count, blocked_until
+        "#,
+    )
+    .bind(source_hash.as_str())
+    .bind(now)
+    .bind(policy.window_seconds)
+    .bind(policy.registration_max_per_source)
+    .bind(policy.lockout_seconds)
+    .fetch_one(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    if let Some(blocked_until) = blocked_until.filter(|value| *value > now) {
+        return Err(rate_limited(blocked_until - now));
+    }
+    Ok(())
+}
+
+fn normalized_auth_attempt_source(headers: &HeaderMap, policy: &AuthAttemptPolicy) -> String {
+    if !policy.trust_source_header {
+        return "direct".to_string();
+    }
+    headers
+        .get(AUTH_ATTEMPT_SOURCE_HEADER)
+        .and_then(|value| value.to_str().ok())
+        .map(str::trim)
+        .filter(|value| !value.is_empty() && value.len() <= 256)
+        .unwrap_or("direct")
+        .to_ascii_lowercase()
 }
 
 async fn record_failed_auth_attempt(
@@ -2710,6 +2931,8 @@ fn auth_attempt_policy_from_env() -> AuthAttemptPolicy {
     AuthAttemptPolicy {
         account_max_failures: env_i64("FMARCH_AUTH_RATE_LIMIT_MAX_FAILURES", 5, 2, 100) as i32,
         source_max_failures: env_i64("FMARCH_AUTH_SOURCE_RATE_LIMIT_MAX_FAILURES", 50, 2, 10_000)
+            as i32,
+        registration_max_per_source: env_i64("FMARCH_AUTH_REGISTRATION_SOURCE_LIMIT", 5, 2, 10_000)
             as i32,
         window_seconds,
         lockout_seconds,
@@ -3071,6 +3294,47 @@ fn validate_new_account_password(password: &str) -> Result<(), ApiError> {
         });
     }
     Ok(())
+}
+
+fn normalize_registration_account_id(value: &str) -> Result<String, ApiError> {
+    let account_id = value.trim();
+    let Some((local, domain)) = account_id.split_once('@') else {
+        return Err(invalid_registration_account_id());
+    };
+    if account_id.len() > 320
+        || local.is_empty()
+        || local.len() > 64
+        || domain.is_empty()
+        || domain.len() > 255
+        || domain.contains('@')
+        || !local
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'+' | b'-'))
+        || !valid_registration_domain(domain)
+    {
+        return Err(invalid_registration_account_id());
+    }
+    Ok(account_id.to_ascii_lowercase())
+}
+
+fn valid_registration_domain(domain: &str) -> bool {
+    domain.split('.').all(|label| {
+        !label.is_empty()
+            && label.len() <= 63
+            && !label.starts_with('-')
+            && !label.ends_with('-')
+            && label
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-')
+    })
+}
+
+fn invalid_registration_account_id() -> ApiError {
+    ApiError::Reject {
+        status: StatusCode::BAD_REQUEST,
+        error: RejectCode::Internal,
+        message: "account registration requires a valid email-style account_id".to_string(),
+    }
 }
 
 fn validate_account_password_input(password: &str) -> Result<(), ApiError> {

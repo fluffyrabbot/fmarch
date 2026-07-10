@@ -5067,6 +5067,176 @@ async fn global_admin_can_issue_scoped_operator_session_grants(pool: sqlx::PgPoo
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+async fn public_account_registration_creates_unprivileged_opaque_session(pool: sqlx::PgPool) {
+    let app = router(pool.clone());
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/auth/accounts/registrations")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    serde_json::json!({
+                        "account_id": "New.User+One@Example.Test",
+                        "password": "correct horse battery",
+                        "session_token": "registered-account-session"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let registered: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(registered["account_id"], "new.user+one@example.test");
+    let principal_user_id = registered["principal_user_id"]
+        .as_str()
+        .expect("registration principal");
+    assert!(principal_user_id.starts_with("registered-"));
+    assert!(registered["expires_at"].as_i64().is_some());
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/auth/session")
+                .header("authorization", "Bearer registered-account-session")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let session: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(session["principal_user_id"], principal_user_id);
+    assert_eq!(session["capabilities"], serde_json::json!([]));
+
+    let (stored_principal, password_hash, global_capabilities) =
+        sqlx::query_as::<_, (String, String, Vec<String>)>(
+            "SELECT principal_user_id, password_hash, global_capabilities FROM auth_account WHERE account_id = $1",
+        )
+        .bind("new.user+one@example.test")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(stored_principal, principal_user_id);
+    assert!(password_hash.starts_with("$argon2id$"));
+    assert!(global_capabilities.is_empty());
+
+    let audit_kinds = sqlx::query_scalar::<_, String>(
+        "SELECT event_kind FROM identity_lifecycle_audit WHERE principal_user_id = $1 ORDER BY id",
+    )
+    .bind(principal_user_id)
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        audit_kinds,
+        vec![
+            "account_registered".to_string(),
+            "account_session_created".to_string(),
+        ]
+    );
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/auth/accounts/registrations")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    serde_json::json!({
+                        "account_id": "new.user+one@example.test",
+                        "password": "correct horse battery",
+                        "session_token": "registered-account-session-replay"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::CONFLICT);
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn public_account_registration_bounds_hashed_source_attempts(pool: sqlx::PgPool) {
+    let app = api::router_with_state(
+        test_api_state(pool.clone())
+            .with_registration_source_limit(2)
+            .with_trusted_auth_attempt_source_header(true),
+    );
+    for (account_id, session_token, expected_status) in [
+        ("first@example.test", "registration-first", StatusCode::OK),
+        (
+            "second@example.test",
+            "registration-second",
+            StatusCode::TOO_MANY_REQUESTS,
+        ),
+    ] {
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/auth/accounts/registrations")
+                    .header("content-type", "application/json")
+                    .header("x-fmarch-auth-source", "198.51.100.71")
+                    .body(Body::from(
+                        serde_json::json!({
+                            "account_id": account_id,
+                            "password": "correct horse battery",
+                            "session_token": session_token
+                        })
+                        .to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), expected_status);
+    }
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/auth/accounts/registrations")
+                .header("content-type", "application/json")
+                .header("x-fmarch-auth-source", "198.51.100.72")
+                .body(Body::from(
+                    serde_json::json!({
+                        "account_id": "other-source@example.test",
+                        "password": "correct horse battery",
+                        "session_token": "registration-other-source"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let stored_scopes = sqlx::query_scalar::<_, String>(
+        "SELECT scope_hash FROM auth_registration_attempt ORDER BY scope_hash",
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(stored_scopes.len(), 2);
+    assert!(stored_scopes.iter().all(|scope| scope.len() == 64));
+    assert!(stored_scopes
+        .iter()
+        .all(|scope| !scope.contains("198.51.100")));
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
 async fn global_admin_account_login_creates_normal_role_session(pool: sqlx::PgPool) {
     let app = router_with_dev_auth(pool.clone());
     let game = Uuid::new_v4();

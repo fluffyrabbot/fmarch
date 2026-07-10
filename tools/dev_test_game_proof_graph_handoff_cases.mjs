@@ -166,6 +166,7 @@ export const adminProofDestinationRequirementCases = Object.freeze([
       "session-rotation",
       "session-age-rotation",
       "session-logout",
+      "account-registration",
       "invite-revocation",
     ]),
     requiredSessionIds: Object.freeze(["admin", "host", "player"]),

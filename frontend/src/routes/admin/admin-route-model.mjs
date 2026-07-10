@@ -9408,6 +9408,10 @@ export function normalizeLocalIdentityAdapterAudit(identityAdapterProof, { game 
       "account-lifecycle",
       identityAdapterProof.identityLifecycle?.accountLifecycle?.status,
     ],
+    [
+      "account-registration",
+      identityAdapterProof.identityLifecycle?.accountRegistration?.status,
+    ],
     ["session-rotation", identityAdapterProof.identityLifecycle?.sessionRotation?.status],
     [
       "session-age-rotation",
@@ -9696,6 +9700,46 @@ export function normalizeLocalIdentityAdapterAudit(identityAdapterProof, { game 
         null,
       rawCredentialStored:
         identityAdapterProof.identityLifecycle.accountRecovery?.rawCredentialStored ===
+        true,
+    }),
+    accountRegistration: Object.freeze({
+      accountId: String(
+        identityAdapterProof.identityLifecycle.accountRegistration?.accountId ?? "",
+      ),
+      principalUserId: String(
+        identityAdapterProof.identityLifecycle.accountRegistration?.principalUserId ?? "",
+      ),
+      registrationRoleUrl: String(
+        identityAdapterProof.identityLifecycle.accountRegistration?.registrationRoleUrl ?? "",
+      ),
+      securityRoleUrl: String(
+        identityAdapterProof.identityLifecycle.accountRegistration?.securityRoleUrl ?? "",
+      ),
+      sessionCookiePrefix: String(
+        identityAdapterProof.identityLifecycle.accountRegistration?.sessionCookiePrefix ?? "",
+      ),
+      sessionHasNoGameCapabilities:
+        identityAdapterProof.identityLifecycle.accountRegistration
+          ?.sessionHasNoGameCapabilities === true,
+      gameRolePendingReplacement:
+        identityAdapterProof.identityLifecycle.accountRegistration
+          ?.gameRolePendingReplacement === true,
+      duplicateRejected:
+        identityAdapterProof.identityLifecycle.accountRegistration?.duplicateRejected ===
+        true,
+      rateLimitVisible:
+        identityAdapterProof.identityLifecycle.accountRegistration?.rateLimitVisible ===
+        true,
+      rateLimitSeconds:
+        identityAdapterProof.identityLifecycle.accountRegistration?.rateLimitSeconds ?? null,
+      registrationScopeHashed:
+        identityAdapterProof.identityLifecycle.accountRegistration
+          ?.registrationScopeHashed === true,
+      registrationScopeCount:
+        identityAdapterProof.identityLifecycle.accountRegistration
+          ?.registrationScopeCount ?? null,
+      rawPasswordStored:
+        identityAdapterProof.identityLifecycle.accountRegistration?.rawPasswordStored ===
         true,
     }),
     credentialAttemptThrottling: Object.freeze({

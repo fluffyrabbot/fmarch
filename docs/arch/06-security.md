@@ -32,6 +32,17 @@ content (incompatible with moderation; out of scope by design).
   game-role capability changes are resolved from committed projections on every request rather
   than being copied into a browser token. `/auth/session-grants` remains the GlobalAdmin operator
   issuance boundary. Local HTTP development omits `Secure` only because localhost is not TLS.
+- **Local registration:** `/auth/register` posts a validated email-style account identifier,
+  a 12+ byte password, and a server-generated opaque token to the public registration endpoint.
+  The API creates a server-generated principal, an unprivileged Argon2id account, its initial
+  seven-day opaque session, and redacted `account_registered`/`account_session_created` audit
+  rows in one transaction. A separate hashed source-only registration quota counts successful
+  attempts as well as failures, so fresh account identifiers cannot bypass the bounded local
+  rate limit. Registration reaches the seeded game role URL only in its explicit pending-authority
+  state; it never creates `SlotOccupant`, channel, host, or global capability. Duplicate and
+  rate-limited registrations keep the browser unauthenticated and expose a recoverable response.
+  This is local browser proof only: it does not claim email verification, OAuth, passkeys, MFA,
+  distributed abuse control, or a hosted identity provider.
 - **Brute-force defense:** account login, invite redemption, and account recovery share a
   two-tier Postgres failure window. Known accounts lock their hashed account/source scope after
   five failures; unknown account identifiers only increment a hashed source-pressure scope, so

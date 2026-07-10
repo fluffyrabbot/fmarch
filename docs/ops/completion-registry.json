@@ -416,24 +416,17 @@
       "order": 50,
       "title": "Account registration",
       "execution_class": "code",
-      "status": "open",
-      "summary": "There is no self-service registration product flow yet; existing accounts are created through administrative or proof setup paths.",
-      "complete_when": ["A bounded registration route creates an account, verifies policy, establishes the correct initial session state, and rejects duplicate/abusive attempts."],
+      "status": "complete",
+      "summary": "The local registration role URL validates an email-style identifier and password, atomically creates a server-generated unprivileged principal plus opaque session, reaches the seeded game URL in its explicit pending-authority state, and shows duplicate/rate-limit recovery without leaking credentials.",
+      "complete_when": ["A bounded registration route creates an unprivileged account and opaque session, preserves the capability-derived role surface, and rejects duplicate or source-quota attempts with browser-visible recovery."],
       "depends_on": ["product.identity.password-security", "product.identity.session-lifecycle"],
       "evidence": [
-        { "kind": "source", "value": "docs/arch/06-security.md" }
+        { "kind": "source", "value": "docs/arch/06-security.md" },
+        { "kind": "source", "value": "crates/api/src/lib.rs" },
+        { "kind": "command", "value": "npm run test:dev-test-game-identity:local" },
+        { "kind": "artifact", "value": "target/auth-invite-role-proof/invite-role-proof.json" }
       ],
-      "remaining": ["Design and implement the registration API, route, abuse boundary, and browser proof."],
-      "recommended_slice": {
-        "objective": "Add bounded self-service account registration without changing the seeded role-URL architecture: accept a validated account identifier and password, create an unprivileged account plus opaque browser session atomically, expose a local registration role surface, and reject duplicate or rate-limited attempts with clear recovery. Prove registration reaches a seeded local game through the same capability adapter and remains redacted in identity/admin artifacts.",
-        "paths": ["crates/api/", "frontend/src/routes/auth/", "tools/auth_invite_role_proof.mjs", "docs/arch/06-security.md"],
-        "proof_commands": ["npm run test:frontend-contract", "npm run test:dev-test-game-identity:local", "npm run test:completeness-scorecard"],
-        "non_claims": [
-          "No hosted email verification, OAuth, passkey, MFA, or production identity-provider claim.",
-          "No hosted abuse-control or distributed session-invalidation claim.",
-          "No release or production-readiness promotion from local registration proof."
-        ]
-      }
+      "remaining": []
     },
     {
       "id": "product.identity.delivery",
@@ -448,7 +441,17 @@
       "evidence": [
         { "kind": "source", "value": "docs/arch/06-security.md" }
       ],
-      "remaining": ["Implement delivery interfaces, queue/retry state, redacted operator audit, and local provider fakes." ]
+      "remaining": ["Implement delivery interfaces, queue/retry state, redacted operator audit, and local provider fakes." ],
+      "recommended_slice": {
+        "objective": "Add a local durable delivery outbox for invite and recovery messages: persist a typed delivery intent, provide deterministic local adapter outcomes with retry/backoff state, expose redacted operator audit rows, and prove a seeded role URL can follow the generated local delivery artifact without changing the capability adapter.",
+        "paths": ["crates/api/", "crates/projections/migrations/", "frontend/src/routes/auth/", "tools/auth_invite_role_proof.mjs", "docs/arch/06-security.md"],
+        "proof_commands": ["npm run test:frontend-contract", "npm run test:dev-test-game-identity:local", "npm run test:completeness-scorecard"],
+        "non_claims": [
+          "No real email, SMS, or third-party provider traffic claim.",
+          "No hosted delivery availability, bounce handling, or operator SLA claim.",
+          "No release or production-readiness promotion from local delivery proof."
+        ]
+      }
     },
     {
       "id": "product.community.game-index",

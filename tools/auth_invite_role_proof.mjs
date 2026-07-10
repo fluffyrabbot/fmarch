@@ -54,6 +54,10 @@ const accountCredentials = Object.freeze({
     password: `player-account-password-${game}`,
   }),
 });
+const registrationCredentials = Object.freeze({
+  accountId: `registered-${game}@example.test`,
+  password: `registered-account-password-${game}`,
+});
 const frontendRequire = createRequire(path.join(frontendRoot, "package.json"));
 
 if (!databaseUrl) {
@@ -137,7 +141,7 @@ try {
     scope: "local-auth-invite-role-proof",
     productionReady: false,
     proofBoundary:
-      "Local scratch-Postgres plus local Rust API, SvelteKit login/logout/account-security/account-recovery/host/admin-audit routes, and Chromium proof. Proves Argon2id account credentials, hashed single-use recovery credentials, account-bound invite redemption, and a local account credential lifecycle preserve the existing role-surface capability architecture for seeded admin, host, and player URLs, including authenticated logout with denied role back navigation, atomic overdue-session rotation with one concurrent winner and a cleared stale loser, authenticated password rotation and account recovery with session revocation, invalid/expired/revoked/replayed recovery rejection, recovered-password return to the same host role URL, two-tier Postgres credential-attempt throttling with hashed account/source scopes, bounded unknown-account traffic, stale-row pruning, timing-equalized missing credentials, visible retry states, and post-lockout recovery to the same host role URL, host-role-surface game-scoped player invite issuance, GlobalAdmin account creation/disable/enable, stale account-session revocation, disabled-account login rejection, GlobalAdmin discovery, and inspection of local identity lifecycle audit rows from the admin overview; it does not prove hosted recovery delivery or traffic, email delivery, hosted identity, distributed or edge abuse controls, hosted password-parameter monitoring, hosted audit retention/export, or beta release readiness.",
+      "Local scratch-Postgres plus local Rust API, SvelteKit registration/login/logout/account-security/account-recovery/host/admin-audit routes, and Chromium proof. Proves Argon2id account credentials, bounded self-service registration into an unprivileged opaque session and seeded game pending-authority surface, hashed single-use recovery credentials, account-bound invite redemption, and a local account credential lifecycle preserve the existing role-surface capability architecture for seeded admin, host, and player URLs, including authenticated logout with denied role back navigation, atomic overdue-session rotation with one concurrent winner and a cleared stale loser, authenticated password rotation and account recovery with session revocation, invalid/expired/revoked/replayed recovery rejection, recovered-password return to the same host role URL, two-tier Postgres credential-attempt throttling with hashed account/source scopes, bounded unknown-account traffic, stale-row pruning, timing-equalized missing credentials, visible retry states, and post-lockout recovery to the same host role URL, host-role-surface game-scoped player invite issuance, GlobalAdmin account creation/disable/enable, stale account-session revocation, disabled-account login rejection, GlobalAdmin discovery, and inspection of local identity lifecycle audit rows from the admin overview; it does not prove hosted recovery delivery or traffic, email verification or delivery, hosted identity, distributed or edge abuse controls, hosted password-parameter monitoring, hosted audit retention/export, or beta release readiness.",
     identityAdapter: {
       status: "passed",
       replacesDevTokensWithoutRoleSurfaceChange: true,
@@ -156,6 +160,7 @@ try {
         "account-recovery-credential-issuance",
         "account-recovery-credential-revocation",
         "account-recovery",
+        "account-registration",
         "credential-attempt-throttling",
         "session-rotation",
         "session-age-rotation",
@@ -171,6 +176,8 @@ try {
         "/auth/account/security?account=<account-id>&returnTo=<role-surface>",
       accountRecoveryRoleSurfacePattern:
         "/auth/account/recovery?account=<account-id>&returnTo=<role-surface>",
+      accountRegistrationRoleSurfacePattern:
+        "/auth/register?account=<account-id>&returnTo=<role-surface>",
       capabilityAuthority:
         "auth_session resolves principal_user_id and committed game/global capabilities at the API boundary",
     },
@@ -500,6 +507,152 @@ async function driveAccountLogin({
   } finally {
     await page.close();
   }
+}
+
+async function driveAccountRegistration({
+  apiBaseUrl,
+  frontendBaseUrl,
+  accountCredential,
+  returnTo,
+}) {
+  const registrationRoleUrl = `/auth/register?account=${encodeURIComponent(
+    accountCredential.accountId,
+  )}&returnTo=${encodeURIComponent(returnTo)}`;
+  const securityRoleUrl = `/auth/account/security?account=${encodeURIComponent(
+    accountCredential.accountId,
+  )}&returnTo=${encodeURIComponent(returnTo)}`;
+  const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
+  let sessionToken;
+  let principalUserId;
+  try {
+    await page.goto(`${frontendBaseUrl}${registrationRoleUrl}`, {
+      waitUntil: "networkidle",
+    });
+    await page.getByTestId("auth-registration-surface").waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
+    await page.getByTestId("auth-registration-password").fill(accountCredential.password);
+    await page
+      .getByTestId("auth-registration-confirm-password")
+      .fill(accountCredential.password);
+    await Promise.all([
+      page.waitForURL(`${frontendBaseUrl}${securityRoleUrl}`, { timeout: 15000 }),
+      page.getByTestId("auth-registration-submit").click(),
+    ]);
+    await page.getByTestId("account-security-surface").waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
+    const cookies = await page.context().cookies(frontendBaseUrl);
+    const sessionCookie = cookies.find((cookie) => cookie.name === "fmarch_session");
+    if (sessionCookie === undefined || !sessionCookie.value.startsWith("registration-session-")) {
+      throw new Error("account registration did not establish an opaque registration session");
+    }
+    sessionToken = sessionCookie.value;
+    const session = await fetchJson(`${apiBaseUrl}/auth/session?game=${game}`, {
+      headers: { authorization: `Bearer ${sessionToken}` },
+    });
+    principalUserId = session.principal_user_id;
+    if (
+      typeof principalUserId !== "string" ||
+      !principalUserId.startsWith("registered-") ||
+      (session.capabilities ?? []).length !== 0
+    ) {
+      throw new Error(`account registration session drifted: ${JSON.stringify(session)}`);
+    }
+    await page.goto(`${frontendBaseUrl}${returnTo}`, { waitUntil: "networkidle" });
+    await page.getByTestId("route-state-player-empty").waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
+    const gameRoleText = await page.getByTestId("route-state-player-empty").innerText();
+    if (!gameRoleText.includes("Slot authority is pending host replacement")) {
+      throw new Error(`registered account game role recovery drifted: ${gameRoleText}`);
+    }
+  } finally {
+    await page.close();
+  }
+
+  const duplicateContext = await browser.newContext();
+  try {
+    const duplicatePage = await duplicateContext.newPage();
+    await duplicatePage.goto(`${frontendBaseUrl}${registrationRoleUrl}`, {
+      waitUntil: "networkidle",
+    });
+    await duplicatePage.getByTestId("auth-registration-password").fill(accountCredential.password);
+    await duplicatePage
+      .getByTestId("auth-registration-confirm-password")
+      .fill(accountCredential.password);
+    await duplicatePage.getByTestId("auth-registration-submit").click();
+    await duplicatePage.getByTestId("auth-registration-reject").waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
+    const duplicateText = await duplicatePage.getByTestId("auth-registration-reject").innerText();
+    const duplicateCookies = await duplicateContext.cookies(frontendBaseUrl);
+    if (!duplicateText.includes("already exists") || duplicateCookies.some((cookie) => cookie.name === "fmarch_session")) {
+      throw new Error(`account registration duplicate recovery drifted: ${duplicateText}`);
+    }
+  } finally {
+    await duplicateContext.close();
+  }
+
+  const rateLimitContext = await browser.newContext();
+  try {
+    const rateLimitPage = await rateLimitContext.newPage();
+    await rateLimitPage.goto(
+      `${frontendBaseUrl}/auth/register?account=${encodeURIComponent(
+        `rate-limit-${game}@example.test`,
+      )}&returnTo=${encodeURIComponent(returnTo)}`,
+      { waitUntil: "networkidle" },
+    );
+    await rateLimitPage
+      .getByTestId("auth-registration-password")
+      .fill(`rate-limit-password-${game}`);
+    await rateLimitPage
+      .getByTestId("auth-registration-confirm-password")
+      .fill(`rate-limit-password-${game}`);
+    await rateLimitPage.getByTestId("auth-registration-submit").click();
+    await rateLimitPage.getByTestId("auth-registration-reject").waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
+    const rateLimitText = await rateLimitPage.getByTestId("auth-registration-reject").innerText();
+    if (!rateLimitText.includes("Too many registration attempts")) {
+      throw new Error(`account registration rate limit recovery drifted: ${rateLimitText}`);
+    }
+  } finally {
+    await rateLimitContext.close();
+  }
+
+  const registrationAttempts = await storedRegistrationAttemptRecords();
+  if (
+    registrationAttempts.length !== 1 ||
+    registrationAttempts[0].scopeHash.length !== 64 ||
+    registrationAttempts[0].attemptCount !== 3 ||
+    registrationAttempts[0].blocked !== true
+  ) {
+    throw new Error(`account registration attempt storage drifted: ${JSON.stringify(registrationAttempts)}`);
+  }
+  return {
+    registrationRoleUrl,
+    securityRoleUrl,
+    registrationSurfaceTestId: "auth-registration-surface",
+    securitySurfaceTestId: "account-security-surface",
+    accountId: accountCredential.accountId,
+    principalUserId,
+    sessionToken,
+    sessionCookiePrefix: "registration-session-",
+    sessionHasNoGameCapabilities: true,
+    gameRolePendingReplacement: true,
+    gameRoleRecoveryTestId: "route-state-player-empty",
+    duplicateRejected: true,
+    rateLimitVisible: true,
+    rateLimitSeconds: 2,
+    registrationScopeHashed: true,
+    registrationScopeCount: registrationAttempts.length,
+  };
 }
 
 async function proveCredentialAttemptThrottling({
@@ -1010,6 +1163,12 @@ async function proveIdentityLifecycle({
   hostReturnTo,
   hostAccount,
 }) {
+  const accountRegistration = await driveAccountRegistration({
+    apiBaseUrl,
+    frontendBaseUrl,
+    accountCredential: registrationCredentials,
+    returnTo: `/g/${game}`,
+  });
   const rotatedSessionToken = `rotated-host-session-${game}`;
   const rotatedHostPassword = `rotated-host-password-${game}`;
   const recoveredHostPassword = `recovered-host-password-${game}`;
@@ -1336,6 +1495,7 @@ async function proveIdentityLifecycle({
       recovery,
       hostReturnTo,
       hostAccount,
+      accountRegistration,
     });
   } finally {
     await staleAccountLifecyclePage.page.close();
@@ -1385,6 +1545,7 @@ async function finishIdentityLifecycleProof({
   recovery,
   hostReturnTo,
   hostAccount,
+  accountRegistration,
 }) {
   const auditTrail = await fetchIdentityLifecycleAudit({
     apiBaseUrl,
@@ -1397,6 +1558,18 @@ async function finishIdentityLifecycleProof({
   const accountRecoveryAudit = auditTrail.entries.find(
     (entry) => entry.event_kind === "account_recovered",
   );
+  const registrationAuditTrail = await fetchIdentityLifecycleAudit({
+    apiBaseUrl,
+    principalUserId: accountRegistration.principalUserId,
+  });
+  const registrationAuditEventKinds = registrationAuditTrail.entries
+    .map((entry) => entry.event_kind)
+    .sort();
+  for (const eventKind of ["account_registered", "account_session_created"]) {
+    if (!registrationAuditEventKinds.includes(eventKind)) {
+      throw new Error(`account registration audit missing ${eventKind}`);
+    }
+  }
   for (const eventKind of [
     "account_created",
     "account_disabled",
@@ -1453,6 +1626,8 @@ async function finishIdentityLifecycleProof({
     credentialAttemptThrottling.recoveredSessionToken,
     credentialAttemptThrottling.unknownAccountRecoveredSessionToken,
     hostAccount.password,
+    registrationCredentials.password,
+    accountRegistration.sessionToken,
     rotatedHostPassword,
     recoveredHostPassword,
     ...rawRecoveryTokens,
@@ -1479,6 +1654,8 @@ async function finishIdentityLifecycleProof({
       credentialAttemptThrottling.recoveredSessionToken,
       credentialAttemptThrottling.unknownAccountRecoveredSessionToken,
       hostAccount.password,
+      registrationCredentials.password,
+      accountRegistration.sessionToken,
       rotatedHostPassword,
       recoveredHostPassword,
       ...rawRecoveryTokens,
@@ -1487,6 +1664,26 @@ async function finishIdentityLifecycleProof({
 
   return {
     status: "passed",
+    accountRegistration: {
+      status: "passed",
+      registrationRoleUrl: accountRegistration.registrationRoleUrl,
+      securityRoleUrl: accountRegistration.securityRoleUrl,
+      registrationSurfaceTestId: accountRegistration.registrationSurfaceTestId,
+      securitySurfaceTestId: accountRegistration.securitySurfaceTestId,
+      accountId: accountRegistration.accountId,
+      principalUserId: accountRegistration.principalUserId,
+      sessionCookiePrefix: accountRegistration.sessionCookiePrefix,
+      sessionHasNoGameCapabilities: accountRegistration.sessionHasNoGameCapabilities,
+      gameRolePendingReplacement: accountRegistration.gameRolePendingReplacement,
+      gameRoleRecoveryTestId: accountRegistration.gameRoleRecoveryTestId,
+      duplicateRejected: accountRegistration.duplicateRejected,
+      rateLimitVisible: accountRegistration.rateLimitVisible,
+      rateLimitSeconds: accountRegistration.rateLimitSeconds,
+      registrationScopeHashed: accountRegistration.registrationScopeHashed,
+      registrationScopeCount: accountRegistration.registrationScopeCount,
+      rawPasswordStored: false,
+      auditEventKinds: registrationAuditEventKinds,
+    },
     sessionRotation: {
       status: "passed",
       principalUserId: rotation.principal_user_id,
@@ -2155,6 +2352,35 @@ async function storedAuthAttemptRecords() {
   return JSON.parse(output.trim() || "[]");
 }
 
+async function storedRegistrationAttemptRecords() {
+  if (proofDatabase === undefined) {
+    throw new Error("proof database is not available");
+  }
+  const output = await runProcess("psql", [
+    proofDatabase.url,
+    "-v",
+    "ON_ERROR_STOP=1",
+    "-t",
+    "-A",
+    "-c",
+    `
+      SELECT COALESCE(
+        json_agg(
+          json_build_object(
+            'scopeHash', scope_hash,
+            'attemptCount', attempt_count,
+            'blocked', blocked_until > EXTRACT(EPOCH FROM NOW())::BIGINT
+          )
+          ORDER BY scope_hash
+        ),
+        '[]'::JSON
+      )::TEXT
+      FROM auth_registration_attempt
+    `,
+  ]);
+  return JSON.parse(output.trim() || "[]");
+}
+
 async function insertStaleAuthAttemptRecord() {
   if (proofDatabase === undefined) {
     throw new Error("proof database is not available");
@@ -2603,6 +2829,7 @@ function assertInviteProof(evidence) {
     !evidence.identityAdapter?.lifecycleControls?.includes(
       "account-password-rotation",
     ) ||
+    !evidence.identityAdapter?.lifecycleControls?.includes("account-registration") ||
     !evidence.identityAdapter?.lifecycleControls?.includes("account-recovery") ||
     !evidence.identityAdapter?.lifecycleControls?.includes(
       "credential-attempt-throttling",
@@ -2614,6 +2841,21 @@ function assertInviteProof(evidence) {
       "host-scoped-invite-issuance",
     ) ||
     evidence.identityLifecycle?.status !== "passed" ||
+    evidence.identityLifecycle?.accountRegistration?.status !== "passed" ||
+    evidence.identityLifecycle?.accountRegistration?.registrationSurfaceTestId !==
+      "auth-registration-surface" ||
+    evidence.identityLifecycle?.accountRegistration?.securitySurfaceTestId !==
+      "account-security-surface" ||
+    evidence.identityLifecycle?.accountRegistration?.sessionCookiePrefix !==
+      "registration-session-" ||
+    evidence.identityLifecycle?.accountRegistration?.sessionHasNoGameCapabilities !== true ||
+    evidence.identityLifecycle?.accountRegistration?.gameRolePendingReplacement !== true ||
+    evidence.identityLifecycle?.accountRegistration?.gameRoleRecoveryTestId !==
+      "route-state-player-empty" ||
+    evidence.identityLifecycle?.accountRegistration?.duplicateRejected !== true ||
+    evidence.identityLifecycle?.accountRegistration?.rateLimitVisible !== true ||
+    evidence.identityLifecycle?.accountRegistration?.registrationScopeHashed !== true ||
+    evidence.identityLifecycle?.accountRegistration?.rawPasswordStored !== false ||
     evidence.identityLifecycle?.sessionRotation?.oldSessionRejected !== true ||
     evidence.identityLifecycle?.sessionAgeRotation?.oldSessionRejected !== true ||
     !evidence.identityLifecycle?.sessionAgeRotation?.rotatedSessionCapabilityKinds?.includes(
@@ -2937,6 +3179,7 @@ async function startApi(url) {
       FMARCH_MEDIA_ROOT: mediaRoot,
       FMARCH_AUTH_RATE_LIMIT_MAX_FAILURES: "5",
       FMARCH_AUTH_SOURCE_RATE_LIMIT_MAX_FAILURES: "7",
+      FMARCH_AUTH_REGISTRATION_SOURCE_LIMIT: "3",
       FMARCH_AUTH_RATE_LIMIT_WINDOW_SECONDS: "30",
       FMARCH_AUTH_RATE_LIMIT_LOCKOUT_SECONDS: "2",
       FMARCH_AUTH_RATE_LIMIT_RETENTION_SECONDS: "120",

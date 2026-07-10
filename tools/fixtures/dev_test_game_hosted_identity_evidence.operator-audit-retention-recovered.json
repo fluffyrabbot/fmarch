@@ -195,6 +195,7 @@
         "account-recovery-credential-issuance",
         "account-recovery-credential-revocation",
         "account-recovery",
+        "account-registration",
         "credential-attempt-throttling",
         "session-rotation",
         "session-age-rotation",

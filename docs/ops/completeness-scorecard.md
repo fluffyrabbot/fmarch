@@ -17,7 +17,7 @@ count is treated as product progress.
 
 | Execution class | Complete | Partial | Open | Blocked | Deferred | Total |
 |---|---:|---:|---:|---:|---:|---:|
-| code | 21 | 2 | 5 | 0 | 0 | 28 |
+| code | 22 | 2 | 4 | 0 | 0 | 28 |
 | external-evidence | 0 | 0 | 0 | 6 | 0 | 6 |
 | human | 0 | 0 | 1 | 1 | 0 | 2 |
 | optional | 0 | 0 | 0 | 0 | 1 | 1 |
@@ -28,11 +28,11 @@ Overall release closure complete: **no**.
 
 ## Next buildable coding slice
 
-### Account registration `product.identity.registration`
+### Invite and recovery delivery adapters `product.identity.delivery`
 
-Add bounded self-service account registration without changing the seeded role-URL architecture: accept a validated account identifier and password, create an unprivileged account plus opaque browser session atomically, expose a local registration role surface, and reject duplicate or rate-limited attempts with clear recovery. Prove registration reaches a seeded local game through the same capability adapter and remains redacted in identity/admin artifacts.
+Add a local durable delivery outbox for invite and recovery messages: persist a typed delivery intent, provide deterministic local adapter outcomes with retry/backoff state, expose redacted operator audit rows, and prove a seeded role URL can follow the generated local delivery artifact without changing the capability adapter.
 
-Owned paths: `crates/api/`, `frontend/src/routes/auth/`, `tools/auth_invite_role_proof.mjs`, `docs/arch/06-security.md`.
+Owned paths: `crates/api/`, `crates/projections/migrations/`, `frontend/src/routes/auth/`, `tools/auth_invite_role_proof.mjs`, `docs/arch/06-security.md`.
 
 Proof:
 
@@ -42,9 +42,9 @@ Proof:
 
 Explicit non-claims:
 
-- No hosted email verification, OAuth, passkey, MFA, or production identity-provider claim.
-- No hosted abuse-control or distributed session-invalidation claim.
-- No release or production-readiness promotion from local registration proof.
+- No real email, SMS, or third-party provider traffic claim.
+- No hosted delivery availability, bounce handling, or operator SLA claim.
+- No release or production-readiness promotion from local delivery proof.
 
 ## Locally proven foundation
 
@@ -91,7 +91,7 @@ Explicit non-claims:
 | complete | Password storage and rotation security<br>`product.identity.password-security` | `product.identity.account-login-invites` | Password verification and rotation preserve equalized failure work, revoke old sessions, and recover after bounded throttling. | Complete. | source: `frontend/src/routes/auth/account/security/+page.server.js`<br>command: `npm run test:dev-test-game-identity:local`<br>Argon2id storage, authenticated password rotation, session revocation, timing equalization, and bounded credential-attempt state are locally proven. |
 | complete | Single-use account recovery<br>`product.identity.recovery` | `product.identity.password-security` | Only one valid recovery credential can replace a password and all invalid, expired, revoked, or replayed credentials fail safely. | Complete. | source: `frontend/src/routes/auth/account/recovery/+page.server.js`<br>command: `npm run test:dev-test-game-identity:local`<br>Recovery credentials support issue, revoke, consume, expiry, replay rejection, password replacement, and session revocation in the local identity proof. |
 | complete | Complete session lifecycle<br>`product.identity.session-lifecycle` | `product.identity.account-login-invites`<br>`product.identity.recovery` | Login, logout, privilege change, password change, recovery, disablement, expiry, and periodic rotation each enforce the declared session transition. | Complete. | source: `docs/arch/06-security.md`<br>source: `crates/api/src/lib.rs`<br>command: `npm run test:dev-test-game-identity:local`<br>artifact: `target/auth-invite-role-proof/invite-role-proof.json`<br>Opaque login, atomic rotation, authenticated logout, password/recovery/disablement invalidation, expiry, and reauthentication preserve the local capability-derived role surfaces and are proven through the scratch-Postgres Chromium identity lane. |
-| open | Account registration<br>`product.identity.registration` | `product.identity.password-security`<br>`product.identity.session-lifecycle` | A bounded registration route creates an account, verifies policy, establishes the correct initial session state, and rejects duplicate/abusive attempts. | Remaining: Design and implement the registration API, route, abuse boundary, and browser proof. | source: `docs/arch/06-security.md`<br>There is no self-service registration product flow yet; existing accounts are created through administrative or proof setup paths. |
+| complete | Account registration<br>`product.identity.registration` | `product.identity.password-security`<br>`product.identity.session-lifecycle` | A bounded registration route creates an unprivileged account and opaque session, preserves the capability-derived role surface, and rejects duplicate or source-quota attempts with browser-visible recovery. | Complete. | source: `docs/arch/06-security.md`<br>source: `crates/api/src/lib.rs`<br>command: `npm run test:dev-test-game-identity:local`<br>artifact: `target/auth-invite-role-proof/invite-role-proof.json`<br>The local registration role URL validates an email-style identifier and password, atomically creates a server-generated unprivileged principal plus opaque session, reaches the seeded game URL in its explicit pending-authority state, and shows duplicate/rate-limit recovery without leaking credentials. |
 | open | Invite and recovery delivery adapters<br>`product.identity.delivery` | `product.identity.account-login-invites`<br>`product.identity.recovery` | Invite and recovery delivery are provider-abstracted, retryable, auditable, redacted, and locally testable without claiming live provider traffic. | Remaining: Implement delivery interfaces, queue/retry state, redacted operator audit, and local provider fakes. | source: `docs/arch/06-security.md`<br>Invite and recovery credentials exist, but durable delivery-provider adapters, retry state, bounce/failure handling, and operator visibility are not implemented. |
 
 ## Community and forum surface

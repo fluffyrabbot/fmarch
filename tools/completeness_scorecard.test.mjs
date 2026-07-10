@@ -13,7 +13,7 @@ import {
   validateRegistry,
 } from "./completeness_scorecard.mjs";
 
-test("real completion registry validates completed room families and selects account registration", async () => {
+test("real completion registry validates completed room families and selects identity delivery", async () => {
   const registry = await loadCompletionRegistry();
   await validateRegistry(registry);
   const summary = summarizeRegistry(registry);
@@ -29,11 +29,11 @@ test("real completion registry validates completed room families and selects acc
   assert.equal(summary.platformComplete, false);
   assert.equal(summary.releaseComplete, false);
   const nextItem = nextBuildableCodeItem(registry);
-  assert.equal(nextItem?.id, "product.identity.registration");
+  assert.equal(nextItem?.id, "product.identity.delivery");
   assert.deepEqual(nextItem?.remaining, [
-    "Design and implement the registration API, route, abuse boundary, and browser proof.",
+    "Implement delivery interfaces, queue/retry state, redacted operator audit, and local provider fakes.",
   ]);
-  assert.match(nextItem?.recommended_slice?.objective ?? "", /self-service account registration/);
+  assert.match(nextItem?.recommended_slice?.objective ?? "", /durable delivery outbox/);
 });
 
 test("generated scorecard exactly matches the canonical registry", async () => {
@@ -75,6 +75,8 @@ test("registry validation rejects dependency cycles", async () => {
     (item) => item.id === "product.identity.registration",
   );
   const delivery = cyclic.items.find((item) => item.id === "product.identity.delivery");
+  registration.status = "open";
+  registration.remaining = ["cyclic test dependency"];
   registration.depends_on = [delivery.id];
   delivery.depends_on = [registration.id];
   await assert.rejects(
@@ -112,7 +114,7 @@ test("registry validation rejects illegal completion and blocked states", async 
   );
 
   const whitespaceRemaining = structuredClone(registry);
-  whitespaceRemaining.items.find((item) => item.id === "product.identity.registration").remaining = ["   "];
+  whitespaceRemaining.items.find((item) => item.id === "product.identity.delivery").remaining = ["   "];
   await assert.rejects(
     validateRegistry(whitespaceRemaining, { verifySourcePaths: false }),
     /remaining must contain nonempty strings/,
@@ -120,7 +122,7 @@ test("registry validation rejects illegal completion and blocked states", async 
 
   const completeRecommendedSlice = structuredClone(registry);
   completeRecommendedSlice.items[0].recommended_slice = structuredClone(
-    registry.items.find((item) => item.id === "product.identity.registration")
+    registry.items.find((item) => item.id === "product.identity.delivery")
       .recommended_slice,
   );
   await assert.rejects(

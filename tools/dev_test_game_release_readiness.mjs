@@ -6233,6 +6233,7 @@ export function validateDevTestGameIdentityAdapterProof(proof, options = {}) {
       "account-password-rotation",
     ) ||
     !proof.identityAdapter?.lifecycleControls?.includes("account-recovery") ||
+    !proof.identityAdapter?.lifecycleControls?.includes("account-registration") ||
     !proof.identityAdapter?.lifecycleControls?.includes(
       "credential-attempt-throttling",
     ) ||
@@ -6250,6 +6251,26 @@ export function validateDevTestGameIdentityAdapterProof(proof, options = {}) {
   assertDevTestGameIdentityAdapterContractPacket(proof.identityAdapterContract);
   if (
     proof.identityLifecycle?.status !== "passed" ||
+    proof.identityLifecycle?.accountRegistration?.status !== "passed" ||
+    proof.identityLifecycle?.accountRegistration?.registrationSurfaceTestId !==
+      "auth-registration-surface" ||
+    proof.identityLifecycle?.accountRegistration?.securitySurfaceTestId !==
+      "account-security-surface" ||
+    proof.identityLifecycle?.accountRegistration?.sessionCookiePrefix !==
+      "registration-session-" ||
+    proof.identityLifecycle?.accountRegistration?.sessionHasNoGameCapabilities !== true ||
+    proof.identityLifecycle?.accountRegistration?.gameRolePendingReplacement !== true ||
+    proof.identityLifecycle?.accountRegistration?.gameRoleRecoveryTestId !==
+      "route-state-player-empty" ||
+    proof.identityLifecycle?.accountRegistration?.duplicateRejected !== true ||
+    proof.identityLifecycle?.accountRegistration?.rateLimitVisible !== true ||
+    proof.identityLifecycle?.accountRegistration?.rateLimitSeconds !== 2 ||
+    proof.identityLifecycle?.accountRegistration?.registrationScopeHashed !== true ||
+    proof.identityLifecycle?.accountRegistration?.registrationScopeCount !== 1 ||
+    proof.identityLifecycle?.accountRegistration?.rawPasswordStored !== false ||
+    !proof.identityLifecycle?.accountRegistration?.auditEventKinds?.includes(
+      "account_registered",
+    ) ||
     proof.identityLifecycle?.sessionRotation?.oldSessionRejected !== true ||
     !proof.identityLifecycle?.sessionRotation?.rotatedSessionCapabilityKinds?.includes(
       "HostOf",
@@ -6553,6 +6574,7 @@ export function validateDevTestGameIdentityAdminProof(proof, options = {}) {
   const requiredChecks = [
     "account-login",
     "account-lifecycle",
+    "account-registration",
     "credential-attempt-throttling",
     "session-rotation",
     "session-age-rotation",
