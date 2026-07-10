@@ -647,9 +647,9 @@ target-only private receipts did not leak to the incoming player. It then
 revokes that replacement browser session through `/auth/session-revocations`,
 verifies the old cookie is rejected by `/auth/session`, and reloads the role
 path into the shared 403 recovery boundary with no player controls. The harness
-then grants `player-rowan` a fresh local session through `/auth/session-grants`,
-submits that session credential through the normal login page without replaying
-the invite token, restores Slot 7 authority, and ACKs a new Slot 7 post, while
+then signs `player-rowan` in through the seeded account on the normal login page
+without replaying the invite or minting a session grant, restores Slot 7
+authority, and ACKs a new Slot 7 post, while
 a separate stale browser context with the revoked replacement cookie still
 reloads the role path into the shared 403 recovery boundary without player
 controls. The fresh replacement role page then drops its live projection and
@@ -914,6 +914,7 @@ production-like backup/PITR, exhaustive race coverage, hosted
 logs/metrics/traces, upload or transcode behavior, beta readiness, or
 rollback/delete semantics for existing append-only games. The harness seeds a
 local root GlobalAdmin row directly into `auth_session` with `/auth/dev-session`
-disabled, then mints local browser credentials through `/auth/session-grants`
-and invite redemption; hosted production accounts/sessions/invites remain a
-later identity layer over the same role surfaces.
+disabled; every seeded browser role then enters through account login or
+account-bound invite redemption. Hosted production accounts, recovery,
+delivery, and abuse controls remain a later identity layer over the same role
+surfaces.

@@ -1797,6 +1797,15 @@ export function buildDevTestGameProofRun(session, options = {}) {
       usedInviteToken:
         verification.replacementConsole?.replacementSessionRefresh?.login
           ?.usedInviteToken ?? null,
+      usedSessionGrant:
+        verification.replacementConsole?.replacementSessionRefresh?.login
+          ?.usedSessionGrant ?? null,
+      prefilledAccountId:
+        verification.replacementConsole?.replacementSessionRefresh?.login
+          ?.prefilledAccountId ?? null,
+      submittedAccountPassword:
+        verification.replacementConsole?.replacementSessionRefresh?.login
+          ?.submittedAccountPassword ?? null,
       landedOnDirectUrl:
         verification.replacementConsole?.replacementSessionRefresh?.login
           ?.landedOnDirectUrl ?? null,
@@ -1819,11 +1828,17 @@ export function buildDevTestGameProofRun(session, options = {}) {
         verification.replacementConsole?.replacementSessionRefresh?.status ===
           "passed" &&
         verification.replacementConsole?.replacementSessionRefresh?.session
-          ?.credentialKind === "session" &&
+          ?.credentialKind === "account" &&
         verification.replacementConsole?.replacementSessionRefresh?.session
           ?.principalUserId === "player-rowan" &&
         verification.replacementConsole?.replacementSessionRefresh?.login
           ?.usedInviteToken === false &&
+        verification.replacementConsole?.replacementSessionRefresh?.login
+          ?.usedSessionGrant === false &&
+        verification.replacementConsole?.replacementSessionRefresh?.login
+          ?.prefilledAccountId === true &&
+        verification.replacementConsole?.replacementSessionRefresh?.login
+          ?.submittedAccountPassword === true &&
         verification.replacementConsole?.replacementSessionRefresh?.login
           ?.landedOnDirectUrl === true &&
         verification.replacementConsole?.replacementSessionRefresh?.browserEntry
@@ -1876,6 +1891,9 @@ export function buildDevTestGameProofRun(session, options = {}) {
       freshRoleUrlHasInvite:
         verification.replacementConsole?.replacementStaleSessionAfterRefresh
           ?.freshRoleUrlHasInvite ?? null,
+      freshRoleUrlHasAccount:
+        verification.replacementConsole?.replacementStaleSessionAfterRefresh
+          ?.freshRoleUrlHasAccount ?? null,
       passed:
         verification.replacementConsole?.replacementStaleSessionAfterRefresh
           ?.status === "passed" &&
@@ -1894,9 +1912,11 @@ export function buildDevTestGameProofRun(session, options = {}) {
         verification.replacementConsole?.replacementStaleSessionAfterRefresh
           ?.staleCookie?.valuePrefix === "invite-session-" &&
         verification.replacementConsole?.replacementStaleSessionAfterRefresh
-          ?.freshCredentialKind === "session" &&
+          ?.freshCredentialKind === "account" &&
         verification.replacementConsole?.replacementStaleSessionAfterRefresh
-          ?.freshRoleUrlHasInvite === false,
+          ?.freshRoleUrlHasInvite === false &&
+        verification.replacementConsole?.replacementStaleSessionAfterRefresh
+          ?.freshRoleUrlHasAccount === true,
     }),
     lane("replacement-reconnect-recovery", "Replacement player reconnect recovers Slot 7 state", {
       principalUserId:
@@ -6868,12 +6888,16 @@ export function assertDevTestGameProofRun(proof) {
     proof.identityBootstrap?.status !== "passed" ||
     proof.identityBootstrap?.devSessionEndpointEnabled !== false ||
     proof.identityBootstrap?.rootSessionSource !== "auth_session" ||
-    proof.identityBootstrap?.browserCredentialIssuer !== "/auth/session-grants" ||
+    proof.identityBootstrap?.browserCredentialIssuer !==
+      "/auth/accounts + /auth/invites" ||
+    proof.identityBootstrap?.browserSessionGrantUsage !== false ||
+    JSON.stringify(proof.identityBootstrap?.browserCredentialKinds) !==
+      JSON.stringify(["account", "account-bound-invite"]) ||
     proof.identityBootstrap?.rawRootTokenStored !== false ||
     !proof.identityBootstrap?.rootCapabilityKinds?.includes("GlobalAdmin")
   ) {
     throw new Error(
-      "dev-test-game proof must bootstrap identity through auth_session with /auth/dev-session disabled",
+      "dev-test-game proof must bootstrap root identity through auth_session with /auth/dev-session disabled and browser roles on accounts/invites",
     );
   }
   if (

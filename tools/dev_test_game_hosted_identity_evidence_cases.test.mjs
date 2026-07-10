@@ -198,7 +198,7 @@ test("hosted identity evidence cases share handoff inputs and blocked groups", (
       provider.roleSurfaceArchitectureChanged,
     ]),
     [
-      ["local-dev-token-provider", "passed", false],
+      ["local-account-invite-provider", "passed", false],
       ["hosted-production-provider", "blocked", false],
     ],
   );

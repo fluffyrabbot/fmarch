@@ -239,10 +239,11 @@ export function assertDevTestGameOpsArtifacts(ops) {
       throw new Error(`ops artifact role ${role} missing redacted invite URL`);
     }
     if (
-      entry.credentialKind === "session" &&
-      entry.loginUrlRedacted?.includes("invite=") === true
+      entry.credentialKind === "account" &&
+      (entry.loginUrlRedacted?.includes("invite=") === true ||
+        entry.loginUrlRedacted?.includes("account=REDACTED") !== true)
     ) {
-      throw new Error(`ops artifact role ${role} leaked invite query on session URL`);
+      throw new Error(`ops artifact role ${role} has malformed account login URL`);
     }
   }
   return ops;
@@ -271,6 +272,9 @@ function redactLoginUrl(loginUrl) {
   const url = new URL(loginUrl);
   if (url.searchParams.has("invite")) {
     url.searchParams.set("invite", "REDACTED");
+  }
+  if (url.searchParams.has("account")) {
+    url.searchParams.set("account", "REDACTED");
   }
   return url.toString();
 }

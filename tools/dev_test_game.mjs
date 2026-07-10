@@ -530,12 +530,14 @@ async function seedRootAdminSession() {
     status: "passed",
     devSessionEndpointEnabled: false,
     rootSessionSource: "auth_session",
-    browserCredentialIssuer: "/auth/session-grants",
+    browserCredentialIssuer: "/auth/accounts + /auth/invites",
+    browserCredentialKinds: ["account", "account-bound-invite"],
+    browserSessionGrantUsage: false,
     rootPrincipalUserId: session.principal_user_id,
     rootCapabilityKinds: capabilityKinds,
     rawRootTokenStored: false,
     boundary:
-      "Root GlobalAdmin is seeded directly into the local auth_session table so the dev-test-game spine keeps /auth/dev-session disabled and mints browser credentials through /auth/session-grants plus invite redemption.",
+      "Root GlobalAdmin is seeded directly into the local auth_session table so the dev-test-game spine keeps /auth/dev-session disabled while every browser role enters through account login or account-bound invite redemption.",
   };
 }
 
@@ -633,41 +635,24 @@ function localAccountForPrincipal(principalUserId) {
   return account;
 }
 
-async function createSessionGrantCredential({
-  token,
+async function createAccountLoginCredential({
   principalUserId,
   returnTo,
   globalCapabilities = [],
   expectedCapabilityKind,
-  issuedBy,
 }) {
-  const session = await grantAuthSession({
-    apiBaseUrl,
-    token,
+  const account = await ensureLocalAccount({
     principalUserId,
     globalCapabilities,
   });
-  const capabilityKinds = (session.capabilities ?? []).map((capability) => capability.kind);
-  if (
-    expectedCapabilityKind !== undefined &&
-    !capabilityKinds.includes(expectedCapabilityKind) &&
-    !["HostOf", "CohostOf", "SlotOccupant"].includes(expectedCapabilityKind)
-  ) {
-    throw new Error(
-      `${principalUserId} session grant missing ${expectedCapabilityKind}: ${JSON.stringify(
-        session,
-      )}`,
-    );
-  }
   const credential = {
-    principalUserId: session.principal_user_id,
-    credentialKind: "session",
-    token,
+    principalUserId,
+    credentialKind: "account",
+    accountId: account.accountId,
+    password: account.password,
     returnTo,
     expectedCapabilityKind,
     globalCapabilities,
-    capabilityKinds,
-    issuedBy,
   };
   return {
     ...credential,
@@ -683,6 +668,8 @@ function roleLoginUrl({ frontendBaseUrl, session }) {
     if (session.accountId !== undefined) {
       params.set("account", session.accountId);
     }
+  } else if (session.credentialKind === "account") {
+    params.set("account", session.accountId);
   }
   return `${frontendBaseUrl}/auth/login?${params.toString()}`;
 }
@@ -796,10 +783,15 @@ function printSessionCard(card) {
   for (const [role, session] of Object.entries(card.sessions)) {
     console.log(`\n${role}`);
     console.log(`  url:    ${session.loginUrl}`);
-    console.log(`  token:  ${session.inviteToken ?? session.token}`);
+    const token = session.inviteToken ?? session.token;
+    if (token !== undefined) {
+      console.log(`  token:  ${token}`);
+    }
     if (session.accountId !== undefined) {
       console.log(`  account: ${session.accountId}`);
-      console.log(`  password: ${session.password}`);
+      if (typeof session.password === "string") {
+        console.log(`  password: ${session.password}`);
+      }
     }
   }
 }
@@ -833,15 +825,21 @@ export function markdownSessionCard(card) {
     "",
   ];
   for (const [role, session] of Object.entries(card.sessions)) {
+    const token = session.inviteToken ?? session.token;
     lines.push(
       `## ${role}`,
       "",
       `Role login URL: ${session.loginUrl}`,
       "",
-      `Credential token: ${session.inviteToken ?? session.token}`,
+      ...(token === undefined ? [] : [`Credential token: ${token}`]),
       ...(session.accountId === undefined
         ? []
-        : [`Account: ${session.accountId}`, `Password: ${session.password}`]),
+        : [
+            `Account: ${session.accountId}`,
+            ...(typeof session.password === "string"
+              ? [`Password: ${session.password}`]
+              : []),
+          ]),
       "",
     );
   }
@@ -1484,16 +1482,10 @@ async function bootstrapSeededGameThroughSetup(card) {
   const browser = await chromium.launch();
   let entry;
   try {
-    const bootstrapSession = await createSessionGrantCredential({
-      token: `${tokenPrefix}-setup-bootstrap-${card.game}`,
+    const bootstrapSession = await createAccountLoginCredential({
       principalUserId: "host_h",
       returnTo: `/g/${card.game}/setup`,
       expectedCapabilityKind: "HostOf",
-      issuedBy: {
-        principalUserId: "root_admin",
-        capabilityKind: "GlobalAdmin",
-        surface: "/auth/session-grants",
-      },
     });
     entry = await openVerifiedRoleEntry({
       browser,
@@ -1636,27 +1628,15 @@ async function verifyDisposableHostSetupRosterRoleCommand({
 }) {
   const setupGame = crypto.randomUUID();
   const seed = await seedHostSetupRosterRoleGame({ setupGame });
-  const setupSession = await createSessionGrantCredential({
-    token: `${tokenPrefix}-host-setup-mutation-${setupGame}`,
+  const setupSession = await createAccountLoginCredential({
     principalUserId: "host_h",
     returnTo: `/g/${setupGame}/setup`,
     expectedCapabilityKind: "HostOf",
-    issuedBy: {
-      principalUserId: "root_admin",
-      capabilityKind: "GlobalAdmin",
-      surface: "/auth/session-grants",
-    },
   });
-  const staleSetupSession = await createSessionGrantCredential({
-    token: `${tokenPrefix}-host-setup-mutation-stale-${setupGame}`,
+  const staleSetupSession = await createAccountLoginCredential({
     principalUserId: "host_h",
     returnTo: `/g/${setupGame}/setup`,
     expectedCapabilityKind: "HostOf",
-    issuedBy: {
-      principalUserId: "root_admin",
-      capabilityKind: "GlobalAdmin",
-      surface: "/auth/session-grants",
-    },
   });
   const entry = await openVerifiedRoleEntry({
     browser,
@@ -1901,7 +1881,7 @@ async function openVerifiedRoleEntry({
     await page.getByTestId("auth-login-surface").waitFor({ state: "visible" });
     const credential = session.inviteToken ?? session.token;
     const prefilled = await page.getByTestId("auth-login-token").inputValue();
-    if (prefilled !== credential) {
+    if (typeof credential === "string" && prefilled !== credential) {
       await page.getByTestId("auth-login-token").fill(credential);
     }
     if (session.accountId !== undefined) {
@@ -1936,6 +1916,8 @@ async function openVerifiedRoleEntry({
     if (!body.includes(game)) {
       throw new Error(`authenticated page for ${session.principalUserId} did not show ${game}`);
     }
+    const cookiePrefix =
+      session.credentialKind === "account" ? "account-session-" : "invite-session-";
     return {
       context,
       page,
@@ -1946,7 +1928,7 @@ async function openVerifiedRoleEntry({
           httpOnly: sessionCookie.httpOnly,
           sameSite: sessionCookie.sameSite,
           secure: sessionCookie.secure,
-          valuePrefix: sessionCookie.value.slice(0, "invite-session-".length),
+          valuePrefix: sessionCookie.value.slice(0, cookiePrefix.length),
         },
       },
     };
@@ -2040,16 +2022,10 @@ async function verifyCohostLaterPhaseDeadlineExtension({
   const proofGame = crypto.randomUUID();
   const seed = await seedLaterPhaseCohostDeadlineGame({ game: proofGame });
   const expectedDeadline = seed.initialDeadline + 86_400;
-  const cohostSession = await createSessionGrantCredential({
-    token: `${tokenPrefix}-later-phase-deadline-cohost-${crypto.randomUUID()}`,
+  const cohostSession = await createAccountLoginCredential({
     principalUserId: "cohost_c",
     returnTo: `/g/${proofGame}/host`,
     expectedCapabilityKind: "CohostOf",
-    issuedBy: {
-      principalUserId: "root_admin",
-      capabilityKind: "GlobalAdmin",
-      surface: "/auth/session-grants",
-    },
   });
   const cohostEntry = await openVerifiedRoleEntry({
     browser,
@@ -3163,49 +3139,25 @@ async function verifySeededDayVoteNoLynch({
 }) {
   const noLynchGame = crypto.randomUUID();
   const seed = await seedDayVoteNoLynchGame({ game: noLynchGame });
-  const hostSession = await createSessionGrantCredential({
-    token: `${tokenPrefix}-no-lynch-host-${crypto.randomUUID()}`,
+  const hostSession = await createAccountLoginCredential({
     principalUserId: "host_h",
     returnTo: `/g/${noLynchGame}/host`,
     expectedCapabilityKind: "HostOf",
-    issuedBy: {
-      principalUserId: "root_admin",
-      capabilityKind: "GlobalAdmin",
-      surface: "/auth/session-grants",
-    },
   });
-  const miraVoterSession = await createSessionGrantCredential({
-    token: `${tokenPrefix}-no-lynch-mira-voter-${crypto.randomUUID()}`,
+  const miraVoterSession = await createAccountLoginCredential({
     principalUserId: "player-mira",
     returnTo: `/g/${noLynchGame}`,
     expectedCapabilityKind: "SlotOccupant",
-    issuedBy: {
-      principalUserId: "root_admin",
-      capabilityKind: "GlobalAdmin",
-      surface: "/auth/session-grants",
-    },
   });
-  const seedVoterSession = await createSessionGrantCredential({
-    token: `${tokenPrefix}-no-lynch-seed-voter-${crypto.randomUUID()}`,
+  const seedVoterSession = await createAccountLoginCredential({
     principalUserId: "player-seed",
     returnTo: `/g/${noLynchGame}`,
     expectedCapabilityKind: "SlotOccupant",
-    issuedBy: {
-      principalUserId: "root_admin",
-      capabilityKind: "GlobalAdmin",
-      surface: "/auth/session-grants",
-    },
   });
-  const survivorSession = await createSessionGrantCredential({
-    token: `${tokenPrefix}-no-lynch-survivor-${crypto.randomUUID()}`,
+  const survivorSession = await createAccountLoginCredential({
     principalUserId: "player-target",
     returnTo: `/g/${noLynchGame}`,
     expectedCapabilityKind: "SlotOccupant",
-    issuedBy: {
-      principalUserId: "root_admin",
-      capabilityKind: "GlobalAdmin",
-      surface: "/auth/session-grants",
-    },
   });
   const hostEntry = await openVerifiedRoleEntry({
     browser,
@@ -3544,14 +3496,8 @@ async function verifySeededVanillizerRoleAction({
     await Promise.all(
       Object.entries(sessionSpecs).map(async ([key, spec]) => [
         key,
-        await createSessionGrantCredential({
-          token: `${tokenPrefix}-vanillizer-${key}-${crypto.randomUUID()}`,
+        await createAccountLoginCredential({
           ...spec,
-          issuedBy: {
-            principalUserId: "root_admin",
-            capabilityKind: "GlobalAdmin",
-            surface: "/auth/session-grants",
-          },
         }),
       ]),
     ),
@@ -4245,49 +4191,25 @@ async function verifySeededD02VoteNightTransition({
 }) {
   const transitionGame = crypto.randomUUID();
   const seed = await seedD02VoteNightTransitionGame({ game: transitionGame });
-  const hostSession = await createSessionGrantCredential({
-    token: `${tokenPrefix}-d02-night-host-${crypto.randomUUID()}`,
+  const hostSession = await createAccountLoginCredential({
     principalUserId: "host_h",
     returnTo: `/g/${transitionGame}/host`,
     expectedCapabilityKind: "HostOf",
-    issuedBy: {
-      principalUserId: "root_admin",
-      capabilityKind: "GlobalAdmin",
-      surface: "/auth/session-grants",
-    },
   });
-  const actionSession = await createSessionGrantCredential({
-    token: `${tokenPrefix}-d02-night-action-${crypto.randomUUID()}`,
+  const actionSession = await createAccountLoginCredential({
     principalUserId: "player-goon-a",
     returnTo: `/g/${transitionGame}`,
     expectedCapabilityKind: "SlotOccupant",
-    issuedBy: {
-      principalUserId: "root_admin",
-      capabilityKind: "GlobalAdmin",
-      surface: "/auth/session-grants",
-    },
   });
-  const playerSession = await createSessionGrantCredential({
-    token: `${tokenPrefix}-d02-night-player-${crypto.randomUUID()}`,
+  const playerSession = await createAccountLoginCredential({
     principalUserId: "player-mira",
     returnTo: `/g/${transitionGame}`,
     expectedCapabilityKind: "SlotOccupant",
-    issuedBy: {
-      principalUserId: "root_admin",
-      capabilityKind: "GlobalAdmin",
-      surface: "/auth/session-grants",
-    },
   });
-  const targetSession = await createSessionGrantCredential({
-    token: `${tokenPrefix}-d02-night-target-${crypto.randomUUID()}`,
+  const targetSession = await createAccountLoginCredential({
     principalUserId: "player-target",
     returnTo: `/g/${transitionGame}`,
     expectedCapabilityKind: "SlotOccupant",
-    issuedBy: {
-      principalUserId: "root_admin",
-      capabilityKind: "GlobalAdmin",
-      surface: "/auth/session-grants",
-    },
   });
   const hostEntry = await openVerifiedRoleEntry({
     browser,
@@ -8560,27 +8482,15 @@ async function verifyCompletedPrivateChannelRecovery({
   }
   const completeGame = crypto.randomUUID();
   const seed = await seedPrivateChannelCompleteGame({ game: completeGame });
-  const hostSession = await createSessionGrantCredential({
-    token: `${tokenPrefix}-completed-private-host-${crypto.randomUUID()}`,
+  const hostSession = await createAccountLoginCredential({
     principalUserId: "host_h",
     returnTo: `/g/${completeGame}/host`,
     expectedCapabilityKind: "HostOf",
-    issuedBy: {
-      principalUserId: "root_admin",
-      capabilityKind: "GlobalAdmin",
-      surface: "/auth/session-grants",
-    },
   });
-  const playerSession = await createSessionGrantCredential({
-    token: `${tokenPrefix}-completed-private-player-${crypto.randomUUID()}`,
+  const playerSession = await createAccountLoginCredential({
     principalUserId: "player-mira",
     returnTo: `/g/${completeGame}`,
     expectedCapabilityKind: "SlotOccupant",
-    issuedBy: {
-      principalUserId: "root_admin",
-      capabilityKind: "GlobalAdmin",
-      surface: "/auth/session-grants",
-    },
   });
   const hostEntry = await openVerifiedRoleEntry({
     browser,
@@ -12979,10 +12889,15 @@ async function verifySeededReplacementConsole({
       replacementSessionRevocation?.controlCounts?.primaryButtons !== 0 ||
       replacementSessionRevocation?.controlCounts?.actionButtons !== 0 ||
       replacementSessionRefresh?.status !== "passed" ||
-      replacementSessionRefresh?.session?.credentialKind !== "session" ||
+      replacementSessionRefresh?.session?.credentialKind !== "account" ||
       replacementSessionRefresh?.session?.principalUserId !== "player-rowan" ||
+      replacementSessionRefresh?.login?.prefilledAccountId !== true ||
+      replacementSessionRefresh?.login?.submittedAccountPassword !== true ||
       replacementSessionRefresh?.login?.usedInviteToken !== false ||
+      replacementSessionRefresh?.login?.usedSessionGrant !== false ||
       replacementSessionRefresh?.browserEntry?.principalUserId !== "player-rowan" ||
+      replacementSessionRefresh?.browserEntry?.cookie?.valuePrefix !==
+        "account-session-" ||
       replacementSessionRefresh?.browserEntry?.capabilityKinds?.includes(
         "SlotOccupant",
       ) !== true ||
@@ -12995,8 +12910,9 @@ async function verifySeededReplacementConsole({
       replacementStaleSessionAfterRefresh?.playerSurfaceVisible !== false ||
       replacementStaleSessionAfterRefresh?.controlCounts?.primaryButtons !== 0 ||
       replacementStaleSessionAfterRefresh?.controlCounts?.actionButtons !== 0 ||
-      replacementStaleSessionAfterRefresh?.freshCredentialKind !== "session" ||
+      replacementStaleSessionAfterRefresh?.freshCredentialKind !== "account" ||
       replacementStaleSessionAfterRefresh?.freshRoleUrlHasInvite !== false ||
+      replacementStaleSessionAfterRefresh?.freshRoleUrlHasAccount !== true ||
       replacementStaleSessionAfterRefresh?.staleCookie?.valuePrefix !==
         "invite-session-" ||
       replacementReconnectRecovery?.status !== "passed" ||
@@ -14434,6 +14350,8 @@ async function verifyReplacementStaleSessionAfterRefresh({
   const staleCookie = cookies.find((cookie) => cookie.name === "fmarch_session");
   const freshRoleUrlHasInvite =
     replacementSessionRefresh?.session?.loginUrl?.includes("invite=") === true;
+  const freshRoleUrlHasAccount =
+    replacementSessionRefresh?.session?.loginUrl?.includes("account=") === true;
   if (
     replacementSessionRefresh?.status !== "passed" ||
     unauthorized.status !== 401 ||
@@ -14446,8 +14364,9 @@ async function verifyReplacementStaleSessionAfterRefresh({
     controlCounts.primaryButtons !== 0 ||
     controlCounts.actionButtons !== 0 ||
     staleCookie?.value !== sessionCookie.value ||
-    replacementSessionRefresh?.session?.credentialKind !== "session" ||
-    freshRoleUrlHasInvite !== false
+    replacementSessionRefresh?.session?.credentialKind !== "account" ||
+    freshRoleUrlHasInvite !== false ||
+    freshRoleUrlHasAccount !== true
   ) {
     throw new Error(
       `stale replacement session after refresh drifted: ${JSON.stringify({
@@ -14462,6 +14381,7 @@ async function verifyReplacementStaleSessionAfterRefresh({
         staleCookieValuePrefix: staleCookie?.value?.slice(0, "invite-session-".length),
         freshCredentialKind: replacementSessionRefresh?.session?.credentialKind,
         freshRoleUrlHasInvite,
+        freshRoleUrlHasAccount,
       })}`,
     );
   }
@@ -14480,8 +14400,9 @@ async function verifyReplacementStaleSessionAfterRefresh({
     },
     freshCredentialKind: replacementSessionRefresh.session.credentialKind,
     freshRoleUrlHasInvite,
+    freshRoleUrlHasAccount,
     proof:
-      "A separate browser context kept the revoked replacement cookie while a fresh replacement session was granted elsewhere; reloading the stale role path still rendered the shared 403 recovery boundary without controls, and the old cookie remained unauthorized.",
+      "A separate browser context kept the revoked replacement cookie while a fresh account-backed replacement session was created elsewhere; reloading the stale role path still rendered the shared 403 recovery boundary without controls, and the old cookie remained unauthorized.",
   };
 }
 
@@ -14496,22 +14417,16 @@ async function verifyReplacementSessionRefreshRecovery({
   if (page === undefined || context === undefined) {
     throw new Error("replacement session refresh proof requires an open browser entry");
   }
-  const sessionToken = `${tokenPrefix}-replacement-session-refresh-${crypto.randomUUID()}`;
-  const session = await createSessionGrantCredential({
-    token: sessionToken,
+  const session = await createAccountLoginCredential({
     principalUserId: "player-rowan",
     returnTo: `/g/${game}`,
     expectedCapabilityKind: "SlotOccupant",
-    issuedBy: {
-      principalUserId: "root_admin",
-      capabilityKind: "GlobalAdmin",
-      surface: "/auth/session-grants",
-    },
   });
   await page.goto(session.loginUrl, { waitUntil: "networkidle" });
   await page.getByTestId("auth-login-surface").waitFor({ state: "visible" });
-  const prefilled = await page.getByTestId("auth-login-token").inputValue();
-  await page.getByTestId("auth-login-token").fill(session.token);
+  const prefilledToken = await page.getByTestId("auth-login-token").inputValue();
+  const prefilledAccountId = await page.getByTestId("auth-login-account").inputValue();
+  await page.getByTestId("auth-login-password").fill(session.password);
   await Promise.all([
     page.waitForURL(session.directUrl, { timeout: 15000 }),
     page.getByTestId("auth-login-submit").click(),
@@ -14543,7 +14458,7 @@ async function verifyReplacementSessionRefreshRecovery({
       secure: sessionCookie.secure,
       valuePrefix: sessionCookie.value.slice(
         0,
-        `${tokenPrefix}-replacement-session-refresh-`.length,
+        "account-session-".length,
       ),
     },
   };
@@ -14603,9 +14518,10 @@ async function verifyReplacementSessionRefreshRecovery({
     investigationResultCount: investigationResults.length,
   };
   if (
-    session.credentialKind !== "session" ||
+    session.credentialKind !== "account" ||
     session.principalUserId !== "player-rowan" ||
-    prefilled !== "" ||
+    prefilledToken !== "" ||
+    prefilledAccountId !== session.accountId ||
     browserEntry.principalUserId !== "player-rowan" ||
     !browserEntry.capabilityKinds.includes("SlotOccupant") ||
     commandState?.actorSlot !== "slot-7" ||
@@ -14624,9 +14540,10 @@ async function verifyReplacementSessionRefreshRecovery({
       `replacement session refresh recovery drifted: ${JSON.stringify({
         session: {
           ...session,
-          token: "<redacted>",
+          password: "<redacted>",
         },
-        prefilled,
+        prefilledToken,
+        prefilledAccountId,
         browserEntry,
         commandState,
         capabilityLabel,
@@ -14639,11 +14556,15 @@ async function verifyReplacementSessionRefreshRecovery({
   }
   return {
     status: "passed",
-    session,
+    session: {
+      ...session,
+      password: undefined,
+    },
     login: {
-      prefilledSessionToken: false,
-      submittedSessionToken: true,
+      prefilledAccountId: true,
+      submittedAccountPassword: true,
       usedInviteToken: false,
+      usedSessionGrant: false,
       landedOnDirectUrl: page.url() === session.directUrl,
     },
     browserEntry,
@@ -14654,7 +14575,7 @@ async function verifyReplacementSessionRefreshRecovery({
     rowanProjectedPost,
     privateReceiptIsolation,
     proof:
-      "After the replacement session was revoked, a fresh local session grant for player-rowan was submitted through the normal login page without replaying the invite token; the role path restored Slot 7 controls, ACKed a new Slot 7 post, and still withheld target-only private receipts.",
+      "After the replacement session was revoked, player-rowan signed in through the seeded account on the normal login page without replaying the invite or minting a session grant; the role path restored Slot 7 controls, ACKed a new Slot 7 post, and still withheld target-only private receipts.",
   };
 }
 
@@ -18910,27 +18831,15 @@ async function openResolvedDayStalePlayerProof({
     slotSevenRoleKey,
     slotFourRoleKey,
   });
-  const hostSession = await createSessionGrantCredential({
-    token: `${tokenPrefix}-${tokenLabel}-phase-host-${crypto.randomUUID()}`,
+  const hostSession = await createAccountLoginCredential({
     principalUserId: "host_h",
     returnTo: `/g/${phaseClosureGame}/host`,
     expectedCapabilityKind: "HostOf",
-    issuedBy: {
-      principalUserId: "root_admin",
-      capabilityKind: "GlobalAdmin",
-      surface: "/auth/session-grants",
-    },
   });
-  const playerSession = await createSessionGrantCredential({
-    token: `${tokenPrefix}-${tokenLabel}-phase-player-${crypto.randomUUID()}`,
+  const playerSession = await createAccountLoginCredential({
     principalUserId: "player-mira",
     returnTo: `/g/${phaseClosureGame}`,
     expectedCapabilityKind: "SlotOccupant",
-    issuedBy: {
-      principalUserId: "root_admin",
-      capabilityKind: "GlobalAdmin",
-      surface: "/auth/session-grants",
-    },
   });
   const hostEntry = await openVerifiedRoleEntry({
     browser,
@@ -19771,27 +19680,15 @@ async function verifyConcurrentPlayerVoteResolveRace({
   }
   const raceGame = crypto.randomUUID();
   const seed = await seedDayVoteResolutionGame({ game: raceGame });
-  const hostSession = await createSessionGrantCredential({
-    token: `${tokenPrefix}-vote-resolve-host-${crypto.randomUUID()}`,
+  const hostSession = await createAccountLoginCredential({
     principalUserId: "host_h",
     returnTo: `/g/${raceGame}/host`,
     expectedCapabilityKind: "HostOf",
-    issuedBy: {
-      principalUserId: "root_admin",
-      capabilityKind: "GlobalAdmin",
-      surface: "/auth/session-grants",
-    },
   });
-  const playerSession = await createSessionGrantCredential({
-    token: `${tokenPrefix}-vote-resolve-player-${crypto.randomUUID()}`,
+  const playerSession = await createAccountLoginCredential({
     principalUserId: "player-goon-a",
     returnTo: `/g/${raceGame}`,
     expectedCapabilityKind: "SlotOccupant",
-    issuedBy: {
-      principalUserId: "root_admin",
-      capabilityKind: "GlobalAdmin",
-      surface: "/auth/session-grants",
-    },
   });
   const hostEntry = await openVerifiedRoleEntry({
     browser,
@@ -20113,27 +20010,15 @@ async function verifyConcurrentPlayerActionAdvanceRace({
   }
   const raceGame = crypto.randomUUID();
   const seed = await seedPlayerActionAdvanceRaceGame({ raceGame });
-  const hostSession = await createSessionGrantCredential({
-    token: `${tokenPrefix}-action-advance-host-${crypto.randomUUID()}`,
+  const hostSession = await createAccountLoginCredential({
     principalUserId: "host_h",
     returnTo: `/g/${raceGame}/host`,
     expectedCapabilityKind: "HostOf",
-    issuedBy: {
-      principalUserId: "root_admin",
-      capabilityKind: "GlobalAdmin",
-      surface: "/auth/session-grants",
-    },
   });
-  const actionSession = await createSessionGrantCredential({
-    token: `${tokenPrefix}-action-advance-player-${crypto.randomUUID()}`,
+  const actionSession = await createAccountLoginCredential({
     principalUserId: "player-goon-a",
     returnTo: `/g/${raceGame}`,
     expectedCapabilityKind: "SlotOccupant",
-    issuedBy: {
-      principalUserId: "root_admin",
-      capabilityKind: "GlobalAdmin",
-      surface: "/auth/session-grants",
-    },
   });
   const hostEntry = await openVerifiedRoleEntry({
     browser,
@@ -20452,27 +20337,15 @@ async function verifyConcurrentCohostDeadlineResolveRace({
   const raceGame = crypto.randomUUID();
   const deadlineAt = 1_781_928_000;
   const seed = await seedCohostDeadlineResolveRaceGame({ raceGame });
-  const hostSession = await createSessionGrantCredential({
-    token: `${tokenPrefix}-deadline-resolve-host-${crypto.randomUUID()}`,
+  const hostSession = await createAccountLoginCredential({
     principalUserId: "host_h",
     returnTo: `/g/${raceGame}/host`,
     expectedCapabilityKind: "HostOf",
-    issuedBy: {
-      principalUserId: "root_admin",
-      capabilityKind: "GlobalAdmin",
-      surface: "/auth/session-grants",
-    },
   });
-  const cohostSession = await createSessionGrantCredential({
-    token: `${tokenPrefix}-deadline-resolve-cohost-${crypto.randomUUID()}`,
+  const cohostSession = await createAccountLoginCredential({
     principalUserId: "cohost_c",
     returnTo: `/g/${raceGame}/host`,
     expectedCapabilityKind: "CohostOf",
-    issuedBy: {
-      principalUserId: "root_admin",
-      capabilityKind: "GlobalAdmin",
-      surface: "/auth/session-grants",
-    },
   });
   const hostEntry = await openVerifiedRoleEntry({
     browser,
@@ -20837,27 +20710,15 @@ async function verifyConcurrentReplacementPrivatePostRace({
   }
   const raceGame = crypto.randomUUID();
   const seed = await seedReplacementPrivatePostRaceGame({ raceGame });
-  const hostSession = await createSessionGrantCredential({
-    token: `${tokenPrefix}-replacement-post-host-${crypto.randomUUID()}`,
+  const hostSession = await createAccountLoginCredential({
     principalUserId: scenario.hostPrincipalUserId,
     returnTo: `/g/${raceGame}/host`,
     expectedCapabilityKind: "HostOf",
-    issuedBy: {
-      principalUserId: "root_admin",
-      capabilityKind: "GlobalAdmin",
-      surface: "/auth/session-grants",
-    },
   });
-  const stalePlayerSession = await createSessionGrantCredential({
-    token: `${tokenPrefix}-replacement-post-player-${crypto.randomUUID()}`,
+  const stalePlayerSession = await createAccountLoginCredential({
     principalUserId: scenario.staleOutgoingPrincipalUserId,
     returnTo: `/g/${raceGame}`,
     expectedCapabilityKind: "SlotOccupant",
-    issuedBy: {
-      principalUserId: "root_admin",
-      capabilityKind: "GlobalAdmin",
-      surface: "/auth/session-grants",
-    },
   });
   const hostEntry = await openVerifiedRoleEntry({
     browser,
@@ -21148,38 +21009,20 @@ async function verifyStaleReplacementPrivatePostAfterResolve({
   const seed = await seedReplacementPrivatePostRaceGame({
     raceGame: privatePostGame,
   });
-  const hostSession = await createSessionGrantCredential({
-    token: `${tokenPrefix}-replacement-stale-private-post-host-${crypto.randomUUID()}`,
+  const hostSession = await createAccountLoginCredential({
     principalUserId: scenario.hostPrincipalUserId,
     returnTo: `/g/${privatePostGame}/host`,
     expectedCapabilityKind: "HostOf",
-    issuedBy: {
-      principalUserId: "root_admin",
-      capabilityKind: "GlobalAdmin",
-      surface: "/auth/session-grants",
-    },
   });
-  const staleOutgoingSession = await createSessionGrantCredential({
-    token: `${tokenPrefix}-replacement-stale-private-post-mira-${crypto.randomUUID()}`,
+  const staleOutgoingSession = await createAccountLoginCredential({
     principalUserId: scenario.staleOutgoingPrincipalUserId,
     returnTo: `/g/${privatePostGame}`,
     expectedCapabilityKind: "SlotOccupant",
-    issuedBy: {
-      principalUserId: "root_admin",
-      capabilityKind: "GlobalAdmin",
-      surface: "/auth/session-grants",
-    },
   });
-  const replacementSession = await createSessionGrantCredential({
-    token: `${tokenPrefix}-replacement-stale-private-post-rowan-${crypto.randomUUID()}`,
+  const replacementSession = await createAccountLoginCredential({
     principalUserId: scenario.replacementPrincipalUserId,
     returnTo: `/g/${privatePostGame}`,
     expectedCapabilityKind: "SlotOccupant",
-    issuedBy: {
-      principalUserId: "root_admin",
-      capabilityKind: "GlobalAdmin",
-      surface: "/auth/session-grants",
-    },
   });
   const hostEntry = await openVerifiedRoleEntry({
     browser,
@@ -21789,38 +21632,20 @@ async function verifyStaleReplacementPrivatePostAfterComplete({
   }
   const completeGame = crypto.randomUUID();
   const seed = await seedReplacementPrivatePostRaceGame({ raceGame: completeGame });
-  const hostSession = await createSessionGrantCredential({
-    token: `${tokenPrefix}-replacement-stale-private-complete-host-${crypto.randomUUID()}`,
+  const hostSession = await createAccountLoginCredential({
     principalUserId: scenario.hostPrincipalUserId,
     returnTo: `/g/${completeGame}/host`,
     expectedCapabilityKind: "HostOf",
-    issuedBy: {
-      principalUserId: "root_admin",
-      capabilityKind: "GlobalAdmin",
-      surface: "/auth/session-grants",
-    },
   });
-  const staleOutgoingSession = await createSessionGrantCredential({
-    token: `${tokenPrefix}-replacement-stale-private-complete-mira-${crypto.randomUUID()}`,
+  const staleOutgoingSession = await createAccountLoginCredential({
     principalUserId: scenario.staleOutgoingPrincipalUserId,
     returnTo: `/g/${completeGame}`,
     expectedCapabilityKind: "SlotOccupant",
-    issuedBy: {
-      principalUserId: "root_admin",
-      capabilityKind: "GlobalAdmin",
-      surface: "/auth/session-grants",
-    },
   });
-  const replacementSession = await createSessionGrantCredential({
-    token: `${tokenPrefix}-replacement-stale-private-complete-rowan-${crypto.randomUUID()}`,
+  const replacementSession = await createAccountLoginCredential({
     principalUserId: scenario.replacementPrincipalUserId,
     returnTo: `/g/${completeGame}`,
     expectedCapabilityKind: "SlotOccupant",
-    issuedBy: {
-      principalUserId: "root_admin",
-      capabilityKind: "GlobalAdmin",
-      surface: "/auth/session-grants",
-    },
   });
   const hostEntry = await openVerifiedRoleEntry({
     browser,
@@ -22331,27 +22156,15 @@ async function verifyConcurrentReplacementVoteRace({
   }
   const raceGame = crypto.randomUUID();
   const seed = await seedReplacementVoteRaceGame({ raceGame });
-  const hostSession = await createSessionGrantCredential({
-    token: `${tokenPrefix}-replacement-vote-host-${crypto.randomUUID()}`,
+  const hostSession = await createAccountLoginCredential({
     principalUserId: scenario.hostPrincipalUserId,
     returnTo: `/g/${raceGame}/host`,
     expectedCapabilityKind: "HostOf",
-    issuedBy: {
-      principalUserId: "root_admin",
-      capabilityKind: "GlobalAdmin",
-      surface: "/auth/session-grants",
-    },
   });
-  const stalePlayerSession = await createSessionGrantCredential({
-    token: `${tokenPrefix}-replacement-vote-player-${crypto.randomUUID()}`,
+  const stalePlayerSession = await createAccountLoginCredential({
     principalUserId: scenario.staleOutgoingPrincipalUserId,
     returnTo: `/g/${raceGame}`,
     expectedCapabilityKind: "SlotOccupant",
-    issuedBy: {
-      principalUserId: "root_admin",
-      capabilityKind: "GlobalAdmin",
-      surface: "/auth/session-grants",
-    },
   });
   const hostEntry = await openVerifiedRoleEntry({
     browser,
@@ -22621,27 +22434,15 @@ async function verifyConcurrentReplacementActionRace({
   }
   const raceGame = crypto.randomUUID();
   const seed = await seedReplacementActionRaceGame({ raceGame });
-  const hostSession = await createSessionGrantCredential({
-    token: `${tokenPrefix}-replacement-action-host-${crypto.randomUUID()}`,
+  const hostSession = await createAccountLoginCredential({
     principalUserId: scenario.hostPrincipalUserId,
     returnTo: `/g/${raceGame}/host`,
     expectedCapabilityKind: "HostOf",
-    issuedBy: {
-      principalUserId: "root_admin",
-      capabilityKind: "GlobalAdmin",
-      surface: "/auth/session-grants",
-    },
   });
-  const stalePlayerSession = await createSessionGrantCredential({
-    token: `${tokenPrefix}-replacement-action-player-${crypto.randomUUID()}`,
+  const stalePlayerSession = await createAccountLoginCredential({
     principalUserId: scenario.staleOutgoingPrincipalUserId,
     returnTo: `/g/${raceGame}`,
     expectedCapabilityKind: "SlotOccupant",
-    issuedBy: {
-      principalUserId: "root_admin",
-      capabilityKind: "GlobalAdmin",
-      surface: "/auth/session-grants",
-    },
   });
   const hostEntry = await openVerifiedRoleEntry({
     browser,
@@ -22851,16 +22652,10 @@ async function verifyConcurrentReplacementActionRace({
       `${apiBaseUrl}/games/${raceGame}/player-command-state?principal_user_id=${scenario.replacementPrincipalUserId}&slot_id=${scenario.actorSlot}`,
     );
     const currentCommandStateAfterRace = apiCurrentCommandStateStatus.body;
-    const replacementSession = await createSessionGrantCredential({
-      token: `${tokenPrefix}-replacement-action-current-${crypto.randomUUID()}`,
+    const replacementSession = await createAccountLoginCredential({
       principalUserId: scenario.replacementPrincipalUserId,
       returnTo: `/g/${raceGame}`,
       expectedCapabilityKind: "SlotOccupant",
-      issuedBy: {
-        principalUserId: "root_admin",
-        capabilityKind: "GlobalAdmin",
-        surface: "/auth/session-grants",
-      },
     });
     replacementEntry = await openVerifiedRoleEntry({
       browser,
@@ -23009,16 +22804,10 @@ async function verifyIncomingReplacementActionSubmission({
   }
   const actionGame = crypto.randomUUID();
   const seed = await seedIncomingReplacementActionGame({ actionGame });
-  const hostSession = await createSessionGrantCredential({
-    token: `${tokenPrefix}-incoming-replacement-action-host-${crypto.randomUUID()}`,
+  const hostSession = await createAccountLoginCredential({
     principalUserId: scenario.hostPrincipalUserId,
     returnTo: `/g/${actionGame}/host`,
     expectedCapabilityKind: "HostOf",
-    issuedBy: {
-      principalUserId: "root_admin",
-      capabilityKind: "GlobalAdmin",
-      surface: "/auth/session-grants",
-    },
   });
   const hostEntry = await openVerifiedRoleEntry({
     browser,
@@ -23069,16 +22858,10 @@ async function verifyIncomingReplacementActionSubmission({
     const outgoingCommandStateAfterReplacement = await fetchJsonStatus(
       `${apiBaseUrl}/games/${actionGame}/player-command-state?principal_user_id=${scenario.staleOutgoingPrincipalUserId}&slot_id=${scenario.actorSlot}`,
     );
-    const replacementSession = await createSessionGrantCredential({
-      token: `${tokenPrefix}-incoming-replacement-action-player-${crypto.randomUUID()}`,
+    const replacementSession = await createAccountLoginCredential({
       principalUserId: scenario.replacementPrincipalUserId,
       returnTo: `/g/${actionGame}`,
       expectedCapabilityKind: "SlotOccupant",
-      issuedBy: {
-        principalUserId: "root_admin",
-        capabilityKind: "GlobalAdmin",
-        surface: "/auth/session-grants",
-      },
     });
     replacementEntry = await openVerifiedRoleEntry({
       browser,
@@ -23156,16 +22939,10 @@ async function verifyIncomingReplacementActionSubmission({
     const hostPhaseAfterResolve = await hostEntry.page.evaluate(
       () => window.__fmarchHostProjection?.phase,
     );
-    const targetSession = await createSessionGrantCredential({
-      token: `${tokenPrefix}-incoming-replacement-action-target-${crypto.randomUUID()}`,
+    const targetSession = await createAccountLoginCredential({
       principalUserId: scenario.targetPrincipalUserId,
       returnTo: `/g/${actionGame}`,
       expectedCapabilityKind: "SlotOccupant",
-      issuedBy: {
-        principalUserId: "root_admin",
-        capabilityKind: "GlobalAdmin",
-        surface: "/auth/session-grants",
-      },
     });
     targetEntry = await openVerifiedRoleEntry({
       browser,
@@ -23363,38 +23140,20 @@ async function verifyReplacementActionReconnectRecovery({
   }
   const actionGame = crypto.randomUUID();
   const seed = await seedIncomingReplacementActionGame({ actionGame });
-  const hostSession = await createSessionGrantCredential({
-    token: `${tokenPrefix}-replacement-action-reconnect-host-${crypto.randomUUID()}`,
+  const hostSession = await createAccountLoginCredential({
     principalUserId: scenario.hostPrincipalUserId,
     returnTo: `/g/${actionGame}/host`,
     expectedCapabilityKind: "HostOf",
-    issuedBy: {
-      principalUserId: "root_admin",
-      capabilityKind: "GlobalAdmin",
-      surface: "/auth/session-grants",
-    },
   });
-  const replacementSession = await createSessionGrantCredential({
-    token: `${tokenPrefix}-replacement-action-reconnect-rowan-${crypto.randomUUID()}`,
+  const replacementSession = await createAccountLoginCredential({
     principalUserId: scenario.replacementPrincipalUserId,
     returnTo: `/g/${actionGame}`,
     expectedCapabilityKind: "SlotOccupant",
-    issuedBy: {
-      principalUserId: "root_admin",
-      capabilityKind: "GlobalAdmin",
-      surface: "/auth/session-grants",
-    },
   });
-  const targetSession = await createSessionGrantCredential({
-    token: `${tokenPrefix}-replacement-action-reconnect-target-${crypto.randomUUID()}`,
+  const targetSession = await createAccountLoginCredential({
     principalUserId: scenario.targetPrincipalUserId,
     returnTo: `/g/${actionGame}`,
     expectedCapabilityKind: "SlotOccupant",
-    issuedBy: {
-      principalUserId: "root_admin",
-      capabilityKind: "GlobalAdmin",
-      surface: "/auth/session-grants",
-    },
   });
   const hostEntry = await openVerifiedRoleEntry({
     browser,
@@ -23674,27 +23433,15 @@ async function verifyStaleReplacementActionAfterResolve({
   }
   const actionGame = crypto.randomUUID();
   const seed = await seedIncomingReplacementActionGame({ actionGame });
-  const hostSession = await createSessionGrantCredential({
-    token: `${tokenPrefix}-replacement-stale-action-host-${crypto.randomUUID()}`,
+  const hostSession = await createAccountLoginCredential({
     principalUserId: scenario.hostPrincipalUserId,
     returnTo: `/g/${actionGame}/host`,
     expectedCapabilityKind: "HostOf",
-    issuedBy: {
-      principalUserId: "root_admin",
-      capabilityKind: "GlobalAdmin",
-      surface: "/auth/session-grants",
-    },
   });
-  const replacementSession = await createSessionGrantCredential({
-    token: `${tokenPrefix}-replacement-stale-action-rowan-${crypto.randomUUID()}`,
+  const replacementSession = await createAccountLoginCredential({
     principalUserId: scenario.replacementPrincipalUserId,
     returnTo: `/g/${actionGame}`,
     expectedCapabilityKind: "SlotOccupant",
-    issuedBy: {
-      principalUserId: "root_admin",
-      capabilityKind: "GlobalAdmin",
-      surface: "/auth/session-grants",
-    },
   });
   const hostEntry = await openVerifiedRoleEntry({
     browser,
@@ -23854,16 +23601,10 @@ async function verifyStaleReplacementActionAfterResolve({
       notificationCount: rowanNotificationsAfterReject.length,
     };
 
-    const targetSession = await createSessionGrantCredential({
-      token: `${tokenPrefix}-replacement-stale-action-target-${crypto.randomUUID()}`,
+    const targetSession = await createAccountLoginCredential({
       principalUserId: scenario.targetPrincipalUserId,
       returnTo: `/g/${actionGame}`,
       expectedCapabilityKind: "SlotOccupant",
-      issuedBy: {
-        principalUserId: "root_admin",
-        capabilityKind: "GlobalAdmin",
-        surface: "/auth/session-grants",
-      },
     });
     targetEntry = await openVerifiedRoleEntry({
       browser,
@@ -25418,27 +25159,6 @@ async function revokeAuthSession({ apiBaseUrl, token }) {
       "content-type": "application/json",
     },
     body: JSON.stringify({ token }),
-  });
-}
-
-async function grantAuthSession({
-  apiBaseUrl,
-  token,
-  principalUserId,
-  globalCapabilities = [],
-}) {
-  return await fetchJson(`${apiBaseUrl}/auth/session-grants`, {
-    method: "POST",
-    headers: {
-      authorization: `Bearer ${tokens.rootAdmin}`,
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({
-      token,
-      principal_user_id: principalUserId,
-      expires_at: expiresAt,
-      global_capabilities: globalCapabilities,
-    }),
   });
 }
 

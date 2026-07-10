@@ -213,8 +213,8 @@
       "proofBoundary": "Production identity swaps provider credentials behind the same seeded role URL and session adapter surface. The hosted provider remains blocked until operator evidence proves real account, invite, session, recovery, abuse/rate-limit, secret, and audit-retention behavior.",
       "providers": [
         {
-          "id": "local-dev-token-provider",
-          "label": "Local dev-token provider",
+          "id": "local-account-invite-provider",
+          "label": "Local account/invite provider",
           "mode": "local-capability-model",
           "status": "passed",
           "accountCredential": "local-password-account",

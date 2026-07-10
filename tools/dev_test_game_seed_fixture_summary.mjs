@@ -209,10 +209,11 @@ export function assertDevTestGameSeedFixtureSummary(summary) {
       throw new Error(`seed fixture role ${role} missing redacted invite URL`);
     }
     if (
-      entry.credentialKind === "session" &&
-      entry.loginUrlRedacted?.includes("invite=") === true
+      entry.credentialKind === "account" &&
+      (entry.loginUrlRedacted?.includes("invite=") === true ||
+        entry.loginUrlRedacted?.includes("account=REDACTED") !== true)
     ) {
-      throw new Error(`seed fixture role ${role} leaked invite query on session URL`);
+      throw new Error(`seed fixture role ${role} has malformed account login URL`);
     }
     if ("token" in entry || "inviteToken" in entry) {
       throw new Error(`seed fixture role ${role} leaked a credential field`);
@@ -314,6 +315,9 @@ function redactLoginUrl(loginUrl) {
   const url = new URL(loginUrl);
   if (url.searchParams.has("invite")) {
     url.searchParams.set("invite", "REDACTED");
+  }
+  if (url.searchParams.has("account")) {
+    url.searchParams.set("account", "REDACTED");
   }
   return url.toString();
 }

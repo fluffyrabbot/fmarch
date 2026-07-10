@@ -3477,9 +3477,12 @@ function validateReplacementPlayerLaneProof(proof, options = {}) {
     hostIssuedInvite.evidence?.returnTo !== `/g/${game}` ||
     hostIssuedInvite.evidence?.tokenPresent !== true ||
     sessionRefresh?.status !== "passed" ||
-    sessionRefresh.evidence?.credentialKind !== "session" ||
+    sessionRefresh.evidence?.credentialKind !== "account" ||
     sessionRefresh.evidence?.principalUserId !== "player-rowan" ||
     sessionRefresh.evidence?.usedInviteToken !== false ||
+    sessionRefresh.evidence?.usedSessionGrant !== false ||
+    sessionRefresh.evidence?.prefilledAccountId !== true ||
+    sessionRefresh.evidence?.submittedAccountPassword !== true ||
     sessionRefresh.evidence?.landedOnDirectUrl !== true ||
     !sessionRefresh.evidence?.capabilityKinds?.includes("SlotOccupant") ||
     !sessionRefresh.evidence?.capabilityKinds?.includes("ChannelMember") ||
@@ -3531,6 +3534,9 @@ function validateReplacementPlayerLaneProof(proof, options = {}) {
     sessionRefresh: {
       credentialKind: sessionRefresh.evidence.credentialKind,
       usedInviteToken: sessionRefresh.evidence.usedInviteToken,
+      usedSessionGrant: sessionRefresh.evidence.usedSessionGrant,
+      prefilledAccountId: sessionRefresh.evidence.prefilledAccountId,
+      submittedAccountPassword: sessionRefresh.evidence.submittedAccountPassword,
       landedOnDirectUrl: sessionRefresh.evidence.landedOnDirectUrl,
       commandStateSlot: sessionRefresh.evidence.commandStateSlot,
     },
@@ -9045,8 +9051,9 @@ export function assertDevTestGameReleaseReadiness(checklist) {
     replacementCheck.hostIssuedInvite?.issuedBy !== "host_h" ||
     replacementCheck.hostIssuedInvite?.issuedByCapability !== "HostOf" ||
     replacementCheck.hostIssuedInvite?.tokenPresent !== true ||
-    replacementCheck.sessionRefresh?.credentialKind !== "session" ||
+    replacementCheck.sessionRefresh?.credentialKind !== "account" ||
     replacementCheck.sessionRefresh?.usedInviteToken !== false ||
+    replacementCheck.sessionRefresh?.usedSessionGrant !== false ||
     replacementCheck.incomingPlayer?.postState !== "ack" ||
     replacementCheck.incomingPlayer?.voteState !== "Ack" ||
     replacementCheck.staleOutgoing?.rejectError !== "NotYourSlot" ||

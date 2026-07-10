@@ -918,6 +918,14 @@ test("session cards can target focused proof artifacts without clobbering canoni
   });
 });
 
+test("dev test-game browser role entry uses accounts and invites only", async () => {
+  const source = await readFile("tools/dev_test_game.mjs", "utf8");
+  assert.match(source, /createAccountLoginCredential/);
+  assert.match(source, /createInviteCredential/);
+  assert.doesNotMatch(source, /createSessionGrantCredential/);
+  assert.doesNotMatch(source, /\/auth\/session-grants/);
+});
+
 test("private-channel stale action recovery uses shared transition assertion", async () => {
   const source = await readFile("tools/dev_test_game.mjs", "utf8");
   assert(
@@ -10466,7 +10474,7 @@ test("session card and markdown include role credential URLs and tokens", async 
       "Seeded local game bootstrap used the /setup route to add slots, assign occupants, assign roles, round-trip main post policy, and start D01 before gameplay priming.",
     roleUrl: `http://127.0.0.1:4102/g/${game}/setup`,
     sessionPrincipalUserId: "host_h",
-    credentialKind: "session",
+    credentialKind: "account",
     capabilityLabel: `HostOf(${game})`,
     readinessSummary: "Started at D01",
     phaseId: "D01",
@@ -10543,7 +10551,9 @@ test("session card and markdown include role credential URLs and tokens", async 
       status: "passed",
       devSessionEndpointEnabled: false,
       rootSessionSource: "auth_session",
-      browserCredentialIssuer: "/auth/session-grants",
+      browserCredentialIssuer: "/auth/accounts + /auth/invites",
+      browserCredentialKinds: ["account", "account-bound-invite"],
+      browserSessionGrantUsage: false,
       rootPrincipalUserId: "root_admin",
       rootCapabilityKinds: ["GlobalAdmin"],
       rawRootTokenStored: false,
@@ -10556,6 +10566,8 @@ test("session card and markdown include role credential URLs and tokens", async 
         credentialKind: "invite",
         token: tokens.host,
         inviteToken: tokens.host,
+        accountId: "host_h@local.fmarch.test",
+        password: "host-password",
         returnTo: `/g/${game}/host`,
         expectedCapabilityKind: "HostOf",
       },
@@ -10564,6 +10576,8 @@ test("session card and markdown include role credential URLs and tokens", async 
         credentialKind: "invite",
         token: tokens.hostSetup,
         inviteToken: tokens.hostSetup,
+        accountId: "host_h@local.fmarch.test",
+        password: "host-password",
         returnTo: `/g/${game}/setup`,
         expectedCapabilityKind: "HostOf",
       },
@@ -10572,6 +10586,8 @@ test("session card and markdown include role credential URLs and tokens", async 
         credentialKind: "invite",
         token: tokens.player,
         inviteToken: tokens.player,
+        accountId: "player-mira@local.fmarch.test",
+        password: "player-password",
         returnTo: `/g/${game}`,
         expectedCapabilityKind: "SlotOccupant",
       },
@@ -10580,6 +10596,8 @@ test("session card and markdown include role credential URLs and tokens", async 
         credentialKind: "invite",
         token: tokens.replacementPlayer,
         inviteToken: tokens.replacementPlayer,
+        accountId: "player-rowan@local.fmarch.test",
+        password: "replacement-password",
         returnTo: `/g/${game}`,
         expectedCapabilityKind: "SlotOccupant",
       },
@@ -10588,6 +10606,8 @@ test("session card and markdown include role credential URLs and tokens", async 
         credentialKind: "invite",
         token: tokens.cohost,
         inviteToken: tokens.cohost,
+        accountId: "cohost_c@local.fmarch.test",
+        password: "cohost-password",
         returnTo: `/g/${game}/host`,
         expectedCapabilityKind: "CohostOf",
       },
@@ -10599,10 +10619,18 @@ test("session card and markdown include role credential URLs and tokens", async 
   assert.equal(card.directSeedCommandCount, 1);
   assert.equal(card.identityBootstrap.devSessionEndpointEnabled, false);
   assert.equal(card.identityBootstrap.rootSessionSource, "auth_session");
-  assert.equal(card.identityBootstrap.browserCredentialIssuer, "/auth/session-grants");
+  assert.equal(
+    card.identityBootstrap.browserCredentialIssuer,
+    "/auth/accounts + /auth/invites",
+  );
+  assert.deepEqual(card.identityBootstrap.browserCredentialKinds, [
+    "account",
+    "account-bound-invite",
+  ]);
+  assert.equal(card.identityBootstrap.browserSessionGrantUsage, false);
   assert.equal(
     card.sessions.host.loginUrl,
-    `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=dev-test-card-host`,
+    `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=dev-test-card-host&account=host_h%40local.fmarch.test`,
   );
   assert.equal(card.sessions.host.credentialKind, "invite");
   assert.equal(card.sessions.host.inviteToken, "dev-test-card-host");
@@ -12863,30 +12891,25 @@ test("session card and markdown include role credential URLs and tokens", async 
         status: "passed",
         session: {
           principalUserId: "player-rowan",
-          credentialKind: "session",
-          token: `dev-test-card-${game}-replacement-session-refresh-token`,
-          loginUrl: `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}`,
+          credentialKind: "account",
+          accountId: "player-rowan@local.fmarch.test",
+          loginUrl: `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}&account=player-rowan%40local.fmarch.test`,
           directUrl: `http://127.0.0.1:4102/g/${game}`,
           returnTo: `/g/${game}`,
           expectedCapabilityKind: "SlotOccupant",
           globalCapabilities: [],
-          capabilityKinds: [],
-          issuedBy: {
-            principalUserId: "root_admin",
-            capabilityKind: "GlobalAdmin",
-            surface: "/auth/session-grants",
-          },
         },
         login: {
-          prefilledSessionToken: false,
-          submittedSessionToken: true,
+          prefilledAccountId: true,
+          submittedAccountPassword: true,
           usedInviteToken: false,
+          usedSessionGrant: false,
           landedOnDirectUrl: true,
         },
         browserEntry: {
           principalUserId: "player-rowan",
           capabilityKinds: ["SlotOccupant", "ChannelMember"],
-          cookie: { valuePrefix: "dev-test-card-" },
+          cookie: { valuePrefix: "account-session-" },
         },
         commandState: {
           actorSlot: "slot-7",
@@ -12942,8 +12965,9 @@ test("session card and markdown include role credential URLs and tokens", async 
           secure: false,
           valuePrefix: "invite-session-",
         },
-        freshCredentialKind: "session",
+        freshCredentialKind: "account",
         freshRoleUrlHasInvite: false,
+        freshRoleUrlHasAccount: true,
       },
       replacementReconnectRecovery: {
         status: "passed",
@@ -17424,12 +17448,18 @@ test("session card and markdown include role credential URLs and tokens", async 
     card.verification.replacementConsole.replacementSessionRefresh.browserEntry;
   const markdown = markdownSessionCard(card);
   assert(markdown.includes("# fmarch Dev Test Game"));
-  assert(markdown.includes("identity bootstrap: auth_session -> /auth/session-grants"));
+  assert(
+    markdown.includes(
+      "identity bootstrap: auth_session -> /auth/accounts + /auth/invites",
+    ),
+  );
   assert(markdown.includes("dev session endpoint enabled: false"));
   assert(markdown.includes("Open a role login URL"));
   assert(markdown.includes("dev-test-card-host"));
   assert(markdown.includes("dev-test-card-cohost"));
-  assert(markdown.includes("replacement-session-refresh-token"));
+  assert(markdown.includes("Account: player-rowan@local.fmarch.test"));
+  assert(!markdown.includes("Credential token: undefined"));
+  assert(!markdown.includes("Password: undefined"));
   assert(markdown.includes(`returnTo=%2Fg%2F${game}`));
   assert(markdown.includes("Credential token: dev-test-card-player"));
   assert(markdown.includes("## Proof Stability Audit"));
@@ -17921,8 +17951,11 @@ test("session card and markdown include role credential URLs and tokens", async 
         tokenPresent: true,
       },
       {
-        credentialKind: "session",
+        credentialKind: "account",
         usedInviteToken: false,
+        usedSessionGrant: false,
+        prefilledAccountId: true,
+        submittedAccountPassword: true,
         landedOnDirectUrl: true,
         commandStateSlot: "slot-7",
       },
@@ -18768,12 +18801,12 @@ test("session card and markdown include role credential URLs and tokens", async 
   );
   assert.equal(
     opsArtifacts.roles.host.loginUrlRedacted,
-    `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED`,
+    `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED&account=REDACTED`,
   );
-  assert.equal(opsArtifacts.roles.replacementPlayer.credentialKind, "session");
+  assert.equal(opsArtifacts.roles.replacementPlayer.credentialKind, "account");
   assert.equal(
     opsArtifacts.roles.replacementPlayer.loginUrlRedacted,
-    `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}`,
+    `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}&account=REDACTED`,
   );
   assert.equal(
     opsArtifacts.roles.replacementPlayer.loginUrlRedacted.includes("invite="),
@@ -19180,12 +19213,12 @@ test("session card and markdown include role credential URLs and tokens", async 
   assert.equal(seedFixture.fixture.slots.length, 5);
   assert.equal(
     seedFixture.fixture.roles.host.loginUrlRedacted,
-    `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED`,
+    `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED&account=REDACTED`,
   );
-  assert.equal(seedFixture.fixture.roles.replacementPlayer.credentialKind, "session");
+  assert.equal(seedFixture.fixture.roles.replacementPlayer.credentialKind, "account");
   assert.equal(
     seedFixture.fixture.roles.replacementPlayer.loginUrlRedacted,
-    `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}`,
+    `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}&account=REDACTED`,
   );
   assert.equal(
     seedFixture.fixture.roles.replacementPlayer.loginUrlRedacted.includes("invite="),
@@ -20446,8 +20479,11 @@ function devTestGameReleaseReadinessChecklistFixture({
             tokenPresent: true,
           },
           sessionRefresh: {
-            credentialKind: "session",
+            credentialKind: "account",
             usedInviteToken: false,
+            usedSessionGrant: false,
+            prefilledAccountId: true,
+            submittedAccountPassword: true,
             landedOnDirectUrl: true,
             commandStateSlot: "slot-7",
           },

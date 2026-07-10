@@ -583,10 +583,17 @@ for (const role of [
   assert.equal(typeof session.sessions[role]?.token, "string", `${role} token`);
   assert.equal(session.sessions[role].credentialKind, "invite", `${role} credential kind`);
   assert.equal(session.sessions[role].inviteToken, session.sessions[role].token);
-  assert.match(session.sessions[role].loginUrl, /\/auth\/login\?returnTo=.*&invite=/);
+  assert.equal(typeof session.sessions[role].accountId, "string", `${role} account id`);
+  assert.equal(typeof session.sessions[role].password, "string", `${role} password`);
+  assert.match(
+    session.sessions[role].loginUrl,
+    /\/auth\/login\?returnTo=.*&invite=.*&account=/,
+  );
 }
-assert.equal(typeof session.sessions.replacementPlayer?.token, "string");
-assert.equal(session.sessions.replacementPlayer.credentialKind, "session");
+assert.equal(session.sessions.replacementPlayer?.token, undefined);
+assert.equal(session.sessions.replacementPlayer?.password, undefined);
+assert.equal(typeof session.sessions.replacementPlayer?.accountId, "string");
+assert.equal(session.sessions.replacementPlayer.credentialKind, "account");
 assert.equal(session.sessions.replacementPlayer.inviteToken, undefined);
 assert.match(
   session.sessions.replacementPlayer.loginUrl,
@@ -595,6 +602,10 @@ assert.match(
 assert.equal(
   session.sessions.replacementPlayer.loginUrl.includes("&invite="),
   false,
+);
+assert.equal(
+  session.sessions.replacementPlayer.loginUrl.includes("&account="),
+  true,
 );
 assert.equal(
   session.verification.sessions.host.capabilityKinds.includes("HostOf"),
@@ -2042,7 +2053,7 @@ assert.equal(
 assert.equal(
   session.verification.replacementConsole.replacementSessionRefresh.session
     .credentialKind,
-  "session",
+  "account",
 );
 assert.equal(
   session.verification.replacementConsole.replacementSessionRefresh.session
@@ -2056,6 +2067,21 @@ assert.equal(
 );
 assert.equal(
   session.verification.replacementConsole.replacementSessionRefresh.login
+    .usedSessionGrant,
+  false,
+);
+assert.equal(
+  session.verification.replacementConsole.replacementSessionRefresh.login
+    .prefilledAccountId,
+  true,
+);
+assert.equal(
+  session.verification.replacementConsole.replacementSessionRefresh.login
+    .submittedAccountPassword,
+  true,
+);
+assert.equal(
+  session.verification.replacementConsole.replacementSessionRefresh.login
     .landedOnDirectUrl,
   true,
 );
@@ -2063,6 +2089,11 @@ assert.equal(
   session.verification.replacementConsole.replacementSessionRefresh.browserEntry
     .principalUserId,
   "player-rowan",
+);
+assert.equal(
+  session.verification.replacementConsole.replacementSessionRefresh.browserEntry
+    .cookie.valuePrefix,
+  "account-session-",
 );
 assert(
   session.verification.replacementConsole.replacementSessionRefresh.browserEntry
@@ -2149,12 +2180,17 @@ assert.equal(
 assert.equal(
   session.verification.replacementConsole.replacementStaleSessionAfterRefresh
     .freshCredentialKind,
-  "session",
+  "account",
 );
 assert.equal(
   session.verification.replacementConsole.replacementStaleSessionAfterRefresh
     .freshRoleUrlHasInvite,
   false,
+);
+assert.equal(
+  session.verification.replacementConsole.replacementStaleSessionAfterRefresh
+    .freshRoleUrlHasAccount,
+  true,
 );
 assert.equal(
   session.verification.replacementConsole.replacementReconnectRecovery.status,
