@@ -49,6 +49,25 @@ async fn create_test_auth_account(
     assert_eq!(response.status(), StatusCode::OK);
 }
 
+async fn post_public_auth_json(
+    app: &axum::Router,
+    uri: &str,
+    body: serde_json::Value,
+    source: Option<&str>,
+) -> axum::response::Response {
+    let mut request = Request::builder()
+        .method("POST")
+        .uri(uri)
+        .header("content-type", "application/json");
+    if let Some(source) = source {
+        request = request.header("x-fmarch-auth-source", source);
+    }
+    app.clone()
+        .oneshot(request.body(Body::from(body.to_string())).unwrap())
+        .await
+        .unwrap()
+}
+
 fn stable_command_id(id: u64) -> Uuid {
     Uuid::from_u128(id as u128)
 }
@@ -3777,16 +3796,28 @@ async fn public_credential_failures_share_a_hashed_retryable_lockout(pool: sqlx:
         }
     }
 
-    let attempt = sqlx::query_as::<_, (String, i32, Option<i64>)>(
-        "SELECT scope_hash, failure_count, blocked_until FROM auth_credential_attempt",
+    let attempts = sqlx::query_as::<_, (String, i32, Option<i64>)>(
+        "SELECT scope_hash, failure_count, blocked_until FROM auth_credential_attempt ORDER BY scope_hash",
     )
-    .fetch_one(&pool)
+    .fetch_all(&pool)
     .await
     .unwrap();
-    assert_eq!(attempt.0.len(), 64);
-    assert!(!attempt.0.contains(account_id));
-    assert_eq!(attempt.1, 5);
-    assert!(attempt.2.is_some());
+    assert_eq!(attempts.len(), 2);
+    assert!(attempts
+        .iter()
+        .all(|attempt| attempt.0.len() == 64 && !attempt.0.contains(account_id)));
+    assert!(attempts.iter().all(|attempt| attempt.1 == 5));
+    let blocked_attempt = attempts
+        .iter()
+        .find(|attempt| attempt.2.is_some())
+        .expect("known account scope must be blocked");
+    assert_eq!(
+        attempts
+            .iter()
+            .filter(|attempt| attempt.2.is_some())
+            .count(),
+        1
+    );
 
     let rate_limit_audit = sqlx::query_as::<_, (String, serde_json::Value)>(
         "SELECT token_hash, metadata FROM identity_lifecycle_audit WHERE event_kind = 'auth_attempt_rate_limited'",
@@ -3794,8 +3825,11 @@ async fn public_credential_failures_share_a_hashed_retryable_lockout(pool: sqlx:
     .fetch_one(&pool)
     .await
     .unwrap();
-    assert_eq!(rate_limit_audit.0, attempt.0);
+    assert_eq!(rate_limit_audit.0, blocked_attempt.0);
     assert_eq!(rate_limit_audit.1["operation"], "account-recovery");
+    assert_eq!(rate_limit_audit.1["scope_kind"], "account");
+    assert_eq!(rate_limit_audit.1["account_max_failures"], 5);
+    assert_eq!(rate_limit_audit.1["source_max_failures"], 50);
     assert_eq!(rate_limit_audit.1["trusted_source_header"], false);
     assert!(!rate_limit_audit.1.to_string().contains("invalid-recovery"));
 
@@ -3829,6 +3863,204 @@ async fn public_credential_failures_share_a_hashed_retryable_lockout(pool: sqlx:
             .await
             .unwrap();
     assert_eq!(remaining_attempts, 0);
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn unknown_credentials_use_one_source_scope_and_prune_stale_rows(pool: sqlx::PgPool) {
+    let app = api::router_with_state(
+        ApiState::new(pool.clone())
+            .with_dev_auth(true)
+            .with_auth_attempt_limits(2, 3, 900, 900, 900),
+    );
+    sqlx::query(
+        r#"
+        INSERT INTO auth_credential_attempt (
+            scope_hash, window_started_at, failure_count, blocked_until, updated_at
+        )
+        VALUES ('stale-scope', 0, 1, NULL, 0)
+        "#,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let requests = [
+        (
+            "/auth/accounts/login",
+            serde_json::json!({
+                "account_id": "missing-login@example.test",
+                "password": "wrong password",
+                "session_token": "missing-login-session",
+                "expires_at": 4_102_444_800i64
+            }),
+            "spoofed-source-a",
+        ),
+        (
+            "/auth/invites/redeem",
+            serde_json::json!({
+                "invite_token": "missing-invite",
+                "account_id": "missing-invite@example.test",
+                "password": "wrong password",
+                "session_token": "missing-invite-session"
+            }),
+            "spoofed-source-b",
+        ),
+        (
+            "/auth/accounts/recoveries",
+            serde_json::json!({
+                "account_id": "missing-recovery@example.test",
+                "recovery_token": "missing-recovery",
+                "new_password": "replacement password"
+            }),
+            "spoofed-source-c",
+        ),
+    ];
+    for (index, (uri, body, spoofed_source)) in requests.into_iter().enumerate() {
+        let response = post_public_auth_json(&app, uri, body, Some(spoofed_source)).await;
+        assert_eq!(
+            response.status(),
+            if index < 2 {
+                StatusCode::UNAUTHORIZED
+            } else {
+                StatusCode::TOO_MANY_REQUESTS
+            },
+        );
+    }
+
+    let attempts = sqlx::query_as::<_, (String, i32, Option<i64>)>(
+        "SELECT scope_hash, failure_count, blocked_until FROM auth_credential_attempt",
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(attempts.len(), 1);
+    assert_eq!(attempts[0].0.len(), 64);
+    assert_eq!(attempts[0].1, 3);
+    assert!(attempts[0].2.is_some());
+    let audit_count = sqlx::query_scalar::<_, i64>(
+        "SELECT COUNT(*) FROM identity_lifecycle_audit WHERE event_kind = 'auth_attempt_rate_limited'",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(audit_count, 0);
+
+    let response = post_public_auth_json(
+        &app,
+        "/auth/accounts/login",
+        serde_json::json!({
+            "account_id": "another-random-account@example.test",
+            "password": "wrong password",
+            "session_token": "another-missing-session",
+            "expires_at": 4_102_444_800i64
+        }),
+        Some("another-spoofed-source"),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
+    let row_count = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM auth_credential_attempt")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(row_count, 1);
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn trusted_credential_sources_partition_account_lockouts(pool: sqlx::PgPool) {
+    let app = api::router_with_state(
+        ApiState::new(pool.clone())
+            .with_dev_auth(true)
+            .with_auth_attempt_limits(3, 20, 900, 900, 900)
+            .with_trusted_auth_attempt_source_header(true),
+    );
+    let admin_token = "trusted-source-admin";
+    let account_id = "partitioned-host@example.test";
+    let password = "correct horse battery";
+    let response = post_public_auth_json(
+        &app,
+        "/auth/dev-session",
+        serde_json::json!({
+            "token": admin_token,
+            "principal_user_id": "admin_a",
+            "expires_at": 4_102_444_800i64,
+            "global_capabilities": ["GlobalAdmin"]
+        }),
+        None,
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    create_test_auth_account(&app, admin_token, account_id, password, "host_h").await;
+
+    for (source, expected_status) in [
+        ("source-a", StatusCode::UNAUTHORIZED),
+        ("source-b", StatusCode::UNAUTHORIZED),
+        ("source-a", StatusCode::UNAUTHORIZED),
+        ("source-b", StatusCode::UNAUTHORIZED),
+        ("source-a", StatusCode::TOO_MANY_REQUESTS),
+    ] {
+        let response = post_public_auth_json(
+            &app,
+            "/auth/accounts/login",
+            serde_json::json!({
+                "account_id": account_id,
+                "password": "wrong password",
+                "session_token": format!("wrong-{source}-session"),
+                "expires_at": 4_102_444_800i64
+            }),
+            Some(source),
+        )
+        .await;
+        assert_eq!(response.status(), expected_status);
+    }
+
+    let attempts_before_success =
+        sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM auth_credential_attempt")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(attempts_before_success, 4);
+    let response = post_public_auth_json(
+        &app,
+        "/auth/accounts/login",
+        serde_json::json!({
+            "account_id": account_id,
+            "password": password,
+            "session_token": "trusted-source-b-session",
+            "expires_at": 4_102_444_800i64
+        }),
+        Some("source-b"),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let remaining_attempts =
+        sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM auth_credential_attempt")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(remaining_attempts, 2);
+
+    let response = post_public_auth_json(
+        &app,
+        "/auth/accounts/login",
+        serde_json::json!({
+            "account_id": account_id,
+            "password": password,
+            "session_token": "blocked-source-a-session",
+            "expires_at": 4_102_444_800i64
+        }),
+        Some("source-a"),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
+    let audit = sqlx::query_scalar::<_, serde_json::Value>(
+        "SELECT metadata FROM identity_lifecycle_audit WHERE event_kind = 'auth_attempt_rate_limited'",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(audit["scope_kind"], "account");
+    assert_eq!(audit["trusted_source_header"], true);
+    assert!(!audit.to_string().contains("source-a"));
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]

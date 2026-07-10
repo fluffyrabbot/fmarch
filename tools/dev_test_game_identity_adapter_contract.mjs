@@ -3,7 +3,7 @@ import {
   hostedIdentityRoleSurfaceContractDiff,
 } from "./dev_test_game_hosted_identity_evidence_cases.mjs";
 
-export const devTestGameIdentityAdapterProofVersion = 15;
+export const devTestGameIdentityAdapterProofVersion = 16;
 export const devTestGameIdentityAdapterContractId =
   "local-production-identity-adapter-v1";
 
@@ -19,6 +19,8 @@ export const devTestGameIdentityAdapterExpectedContract = deepFreeze({
     session: "opaque-session",
   },
   passwordAlgorithm: "argon2id",
+  credentialAttemptPolicyKind: "two-tier-postgres-account-source-lockout",
+  credentialAttemptSourceKind: "sveltekit-client-address-to-trusted-api-header",
   browserCookieName: "fmarch_session",
   lifecycleControls: [
     "account-disable",
@@ -67,6 +69,8 @@ export function devTestGameIdentityAdapterContractDiff(packet) {
           roleSurfaceContract: packet.roleSurfaceContract,
           credentialKinds: packet.credentialKinds,
           passwordAlgorithm: packet.passwordAlgorithm,
+          credentialAttemptPolicyKind: packet.credentialAttemptPolicyKind,
+          credentialAttemptSourceKind: packet.credentialAttemptSourceKind,
           browserCookieName: packet.browserCookieName,
           lifecycleControls: packet.lifecycleControls,
           delegatedIssuanceControls: packet.delegatedIssuanceControls,

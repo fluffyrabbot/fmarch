@@ -19,6 +19,7 @@ use sha2::{Digest, Sha256};
 use sqlx::postgres::PgPool;
 use std::collections::{BTreeSet, HashSet};
 use std::path::Path as FsPath;
+use std::sync::OnceLock;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::broadcast;
 use uuid::Uuid;
@@ -37,6 +38,7 @@ pub struct ApiState {
     pool: PgPool,
     server_name: String,
     dev_auth_enabled: bool,
+    auth_attempt_policy: AuthAttemptPolicy,
     live_projection_tx: broadcast::Sender<LiveProjectionUpdate>,
 }
 
@@ -53,15 +55,18 @@ struct LiveProjectionUpdate {
 
 #[derive(Debug, Clone)]
 struct AuthAttemptPolicy {
-    max_failures: i32,
+    account_max_failures: i32,
+    source_max_failures: i32,
     window_seconds: i64,
     lockout_seconds: i64,
+    retention_seconds: i64,
     trust_source_header: bool,
 }
 
 #[derive(Debug, Clone)]
 struct AuthAttemptScope {
-    scope_hash: String,
+    source_scope_hash: String,
+    account_scope_hash: Option<String>,
     policy: AuthAttemptPolicy,
 }
 
@@ -70,10 +75,12 @@ const AUTH_ATTEMPT_SOURCE_HEADER: &str = "x-fmarch-auth-source";
 impl ApiState {
     pub fn new(pool: PgPool) -> Self {
         let (live_projection_tx, _) = broadcast::channel(256);
+        let _ = dummy_account_password_hash();
         ApiState {
             pool,
             server_name: "fmarch-dev".to_string(),
             dev_auth_enabled: std::env::var("FMARCH_DEV_AUTH").ok().as_deref() == Some("1"),
+            auth_attempt_policy: auth_attempt_policy_from_env(),
             live_projection_tx,
         }
     }
@@ -85,6 +92,32 @@ impl ApiState {
 
     pub fn with_dev_auth(mut self, enabled: bool) -> Self {
         self.dev_auth_enabled = enabled;
+        self
+    }
+
+    pub fn with_auth_attempt_limits(
+        mut self,
+        account_max_failures: i32,
+        source_max_failures: i32,
+        window_seconds: i64,
+        lockout_seconds: i64,
+        retention_seconds: i64,
+    ) -> Self {
+        self.auth_attempt_policy.account_max_failures = account_max_failures.clamp(2, 100);
+        self.auth_attempt_policy.source_max_failures = source_max_failures.clamp(2, 10_000);
+        self.auth_attempt_policy.window_seconds = window_seconds.clamp(1, 86_400);
+        self.auth_attempt_policy.lockout_seconds = lockout_seconds.clamp(1, 86_400);
+        self.auth_attempt_policy.retention_seconds = retention_seconds.clamp(
+            self.auth_attempt_policy
+                .window_seconds
+                .max(self.auth_attempt_policy.lockout_seconds),
+            31_536_000,
+        );
+        self
+    }
+
+    pub fn with_trusted_auth_attempt_source_header(mut self, trusted: bool) -> Self {
+        self.auth_attempt_policy.trust_source_header = trusted;
         self
     }
 }
@@ -627,6 +660,7 @@ async fn login_auth_account(
     .fetch_optional(&state.pool)
     .await?;
     let Some(account) = account else {
+        consume_dummy_password_verification(password).await?;
         record_failed_auth_attempt(&state, &attempt_scope, account_id, "account-login").await?;
         return Err(unauthorized_account());
     };
@@ -1031,6 +1065,7 @@ async fn recover_auth_account(
     .await?;
     let Some((recovery_id, principal_user_id)) = credential else {
         tx.rollback().await?;
+        consume_dummy_password_verification(new_password).await?;
         record_account_recovery_rejection(&state.pool, account_id, recovery_hash.as_str(), now)
             .await?;
         record_failed_auth_attempt(&state, &attempt_scope, account_id, "account-recovery").await?;
@@ -1646,6 +1681,7 @@ async fn redeem_auth_invite(
     .await?;
     let Some(invite) = invite else {
         tx.rollback().await?;
+        consume_dummy_password_verification(password).await?;
         record_failed_auth_attempt(&state, &attempt_scope, account_id, "invite-redemption").await?;
         return Err(unauthorized_invite());
     };
@@ -1899,7 +1935,7 @@ async fn enforce_auth_attempt_limit(
     headers: &HeaderMap,
     account_id: &str,
 ) -> Result<AuthAttemptScope, ApiError> {
-    let policy = auth_attempt_policy();
+    let policy = state.auth_attempt_policy.clone();
     let source = if policy.trust_source_header {
         headers
             .get(AUTH_ATTEMPT_SOURCE_HEADER)
@@ -1910,26 +1946,44 @@ async fn enforce_auth_attempt_limit(
     } else {
         "direct"
     };
-    let scope_hash = hash_session_token(
-        format!(
-            "account:{}\0source:{}",
-            account_id.trim().to_ascii_lowercase(),
-            source
-        )
-        .as_str(),
-    );
+    let normalized_source = source.to_ascii_lowercase();
+    let source_scope_hash =
+        hash_session_token(format!("credential-source:\0{normalized_source}").as_str());
     let now = unix_now_seconds();
-    let blocked_until = sqlx::query_scalar::<_, Option<i64>>(
-        "SELECT blocked_until FROM auth_credential_attempt WHERE scope_hash = $1",
-    )
-    .bind(scope_hash.as_str())
-    .fetch_optional(&state.pool)
-    .await?
-    .flatten();
-    if let Some(blocked_until) = blocked_until.filter(|blocked_until| *blocked_until > now) {
-        return Err(rate_limited(blocked_until - now));
+    if let Some(retry_after) =
+        blocked_auth_attempt_retry_after(&state.pool, source_scope_hash.as_str(), now).await?
+    {
+        return Err(rate_limited(retry_after));
     }
-    Ok(AuthAttemptScope { scope_hash, policy })
+
+    let account_exists = sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS (SELECT 1 FROM auth_account WHERE account_id = $1)",
+    )
+    .bind(account_id)
+    .fetch_one(&state.pool)
+    .await?;
+    let account_scope_hash = account_exists.then(|| {
+        hash_session_token(
+            format!(
+                "credential-account:{}\0source:{}",
+                account_id.trim().to_ascii_lowercase(),
+                normalized_source
+            )
+            .as_str(),
+        )
+    });
+    if let Some(account_scope_hash) = account_scope_hash.as_deref() {
+        if let Some(retry_after) =
+            blocked_auth_attempt_retry_after(&state.pool, account_scope_hash, now).await?
+        {
+            return Err(rate_limited(retry_after));
+        }
+    }
+    Ok(AuthAttemptScope {
+        source_scope_hash,
+        account_scope_hash,
+        policy,
+    })
 }
 
 async fn record_failed_auth_attempt(
@@ -1939,7 +1993,89 @@ async fn record_failed_auth_attempt(
     operation: &str,
 ) -> Result<(), ApiError> {
     let now = unix_now_seconds();
-    let (failure_count, blocked_until) = sqlx::query_as::<_, (i32, Option<i64>)>(
+    let mut tx = state.pool.begin().await?;
+    sqlx::query(
+        r#"
+        DELETE FROM auth_credential_attempt
+        WHERE updated_at < $1
+          AND (blocked_until IS NULL OR blocked_until <= $2)
+        "#,
+    )
+    .bind(now - scope.policy.retention_seconds)
+    .bind(now)
+    .execute(&mut *tx)
+    .await?;
+
+    let source_result = upsert_auth_attempt_scope(
+        &mut tx,
+        scope.source_scope_hash.as_str(),
+        now,
+        &scope.policy,
+        scope.policy.source_max_failures,
+    )
+    .await?;
+    let account_result = match scope.account_scope_hash.as_deref() {
+        Some(account_scope_hash) => Some(
+            upsert_auth_attempt_scope(
+                &mut tx,
+                account_scope_hash,
+                now,
+                &scope.policy,
+                scope.policy.account_max_failures,
+            )
+            .await?,
+        ),
+        None => None,
+    };
+    let limited = account_result
+        .filter(|(_, blocked_until)| blocked_until.is_some_and(|value| value > now))
+        .map(|result| {
+            (
+                "account",
+                scope.account_scope_hash.as_deref().unwrap_or_default(),
+                scope.policy.account_max_failures,
+                result,
+            )
+        })
+        .or_else(|| {
+            (source_result.1.is_some_and(|value| value > now)).then_some((
+                "source",
+                scope.source_scope_hash.as_str(),
+                scope.policy.source_max_failures,
+                source_result,
+            ))
+        });
+    if let Some((scope_kind, scope_hash, max_failures, (failure_count, blocked_until))) = limited {
+        let blocked_until = blocked_until.unwrap_or(now + scope.policy.lockout_seconds);
+        if failure_count == max_failures && scope.account_scope_hash.is_some() {
+            record_auth_attempt_rate_limited(
+                &mut tx,
+                scope,
+                scope_hash,
+                scope_kind,
+                max_failures,
+                account_id,
+                operation,
+                now,
+                blocked_until,
+            )
+            .await?;
+        }
+        tx.commit().await?;
+        return Err(rate_limited(blocked_until - now));
+    }
+    tx.commit().await?;
+    Ok(())
+}
+
+async fn upsert_auth_attempt_scope(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    scope_hash: &str,
+    now: i64,
+    policy: &AuthAttemptPolicy,
+    max_failures: i32,
+) -> Result<(i32, Option<i64>), ApiError> {
+    Ok(sqlx::query_as::<_, (i32, Option<i64>)>(
         r#"
         INSERT INTO auth_credential_attempt (
             scope_hash,
@@ -1971,44 +2107,49 @@ async fn record_failed_auth_attempt(
         RETURNING failure_count, blocked_until
         "#,
     )
-    .bind(scope.scope_hash.as_str())
+    .bind(scope_hash)
     .bind(now)
-    .bind(scope.policy.window_seconds)
-    .bind(scope.policy.max_failures)
-    .bind(scope.policy.lockout_seconds)
-    .fetch_one(&state.pool)
-    .await?;
-    if let Some(blocked_until) = blocked_until.filter(|blocked_until| *blocked_until > now) {
-        if failure_count == scope.policy.max_failures {
-            record_auth_attempt_rate_limited(
-                &state.pool,
-                scope,
-                account_id,
-                operation,
-                now,
-                blocked_until,
-            )
-            .await?;
-        }
-        return Err(rate_limited(blocked_until - now));
-    }
-    Ok(())
+    .bind(policy.window_seconds)
+    .bind(max_failures)
+    .bind(policy.lockout_seconds)
+    .fetch_one(&mut **tx)
+    .await?)
+}
+
+async fn blocked_auth_attempt_retry_after(
+    pool: &PgPool,
+    scope_hash: &str,
+    now: i64,
+) -> Result<Option<i64>, ApiError> {
+    Ok(sqlx::query_scalar::<_, Option<i64>>(
+        "SELECT blocked_until FROM auth_credential_attempt WHERE scope_hash = $1",
+    )
+    .bind(scope_hash)
+    .fetch_optional(pool)
+    .await?
+    .flatten()
+    .filter(|blocked_until| *blocked_until > now)
+    .map(|blocked_until| blocked_until - now))
 }
 
 async fn clear_auth_attempt_failures(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     scope: &AuthAttemptScope,
 ) -> Result<(), ApiError> {
-    sqlx::query("DELETE FROM auth_credential_attempt WHERE scope_hash = $1")
-        .bind(scope.scope_hash.as_str())
+    sqlx::query("DELETE FROM auth_credential_attempt WHERE scope_hash = $1 OR scope_hash = $2")
+        .bind(scope.source_scope_hash.as_str())
+        .bind(scope.account_scope_hash.as_deref())
         .execute(&mut **tx)
         .await?;
     Ok(())
 }
 
 async fn record_auth_attempt_rate_limited(
-    pool: &PgPool,
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     scope: &AuthAttemptScope,
+    scope_hash: &str,
+    scope_kind: &str,
+    max_failures: i32,
     account_id: &str,
     operation: &str,
     now: i64,
@@ -2037,30 +2178,45 @@ async fn record_auth_attempt_rate_limited(
         "#,
     )
     .bind(now)
-    .bind(scope.scope_hash.as_str())
+    .bind(scope_hash)
     .bind(
         serde_json::json!({
             "account_id": account_id,
             "operation": operation,
-            "max_failures": scope.policy.max_failures,
+            "scope_kind": scope_kind,
+            "max_failures": max_failures,
+            "account_max_failures": scope.policy.account_max_failures,
+            "source_max_failures": scope.policy.source_max_failures,
             "window_seconds": scope.policy.window_seconds,
             "lockout_seconds": scope.policy.lockout_seconds,
+            "retention_seconds": scope.policy.retention_seconds,
             "blocked_until": blocked_until,
             "trusted_source_header": scope.policy.trust_source_header
         })
         .to_string(),
     )
     .bind(account_id)
-    .execute(pool)
+    .execute(&mut **tx)
     .await?;
     Ok(())
 }
 
-fn auth_attempt_policy() -> AuthAttemptPolicy {
+fn auth_attempt_policy_from_env() -> AuthAttemptPolicy {
+    let window_seconds = env_i64("FMARCH_AUTH_RATE_LIMIT_WINDOW_SECONDS", 900, 1, 86_400);
+    let lockout_seconds = env_i64("FMARCH_AUTH_RATE_LIMIT_LOCKOUT_SECONDS", 900, 1, 86_400);
+    let minimum_retention = window_seconds.max(lockout_seconds);
     AuthAttemptPolicy {
-        max_failures: env_i64("FMARCH_AUTH_RATE_LIMIT_MAX_FAILURES", 5, 2, 100) as i32,
-        window_seconds: env_i64("FMARCH_AUTH_RATE_LIMIT_WINDOW_SECONDS", 900, 1, 86_400),
-        lockout_seconds: env_i64("FMARCH_AUTH_RATE_LIMIT_LOCKOUT_SECONDS", 900, 1, 86_400),
+        account_max_failures: env_i64("FMARCH_AUTH_RATE_LIMIT_MAX_FAILURES", 5, 2, 100) as i32,
+        source_max_failures: env_i64("FMARCH_AUTH_SOURCE_RATE_LIMIT_MAX_FAILURES", 50, 2, 10_000)
+            as i32,
+        window_seconds,
+        lockout_seconds,
+        retention_seconds: env_i64(
+            "FMARCH_AUTH_RATE_LIMIT_RETENTION_SECONDS",
+            minimum_retention.saturating_mul(4),
+            minimum_retention,
+            31_536_000,
+        ),
         trust_source_header: std::env::var("FMARCH_TRUST_AUTH_SOURCE_HEADER")
             .ok()
             .as_deref()
@@ -2378,6 +2534,21 @@ fn verify_account_password_sync(encoded_hash: &str, password: &str) -> bool {
     Argon2::default()
         .verify_password(password.as_bytes(), &parsed_hash)
         .is_ok()
+}
+
+fn dummy_account_password_hash() -> &'static str {
+    static DUMMY_HASH: OnceLock<String> = OnceLock::new();
+    DUMMY_HASH
+        .get_or_init(|| {
+            hash_account_password_sync("fmarch-dummy-account-password")
+                .expect("dummy account password hash must initialize")
+        })
+        .as_str()
+}
+
+async fn consume_dummy_password_verification(password: &str) -> Result<(), ApiError> {
+    let _ = verify_account_password(dummy_account_password_hash(), password).await?;
+    Ok(())
 }
 
 fn validate_new_account_password(password: &str) -> Result<(), ApiError> {

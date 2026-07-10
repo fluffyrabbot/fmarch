@@ -11,7 +11,7 @@ export function load({ url }) {
 }
 
 export const actions = {
-  default: async ({ cookies, fetch, request }) => {
+  default: async ({ cookies, fetch, getClientAddress, request }) => {
     const formData = await request.formData();
     const accountId = optionalField(formData.get("accountId"));
     const recoveryToken = credentialField(formData.get("recoveryToken"));
@@ -45,6 +45,7 @@ export const actions = {
       headers: {
         "content-type": "application/json",
         accept: "application/json",
+        ...authSourceHeader(clientAuthSource(getClientAddress)),
       },
       body: JSON.stringify({
         account_id: accountId,
@@ -112,6 +113,24 @@ function authRateLimitMessage(response) {
   return Number.isSafeInteger(retryAfter) && retryAfter > 0
     ? `Too many credential attempts. Try again in ${retryAfter} seconds.`
     : "Too many credential attempts. Try again shortly.";
+}
+
+function clientAuthSource(getClientAddress) {
+  if (typeof getClientAddress !== "function") {
+    return null;
+  }
+  try {
+    const value = getClientAddress();
+    return typeof value === "string" && value.trim() !== "" && value.length <= 256
+      ? value.trim()
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function authSourceHeader(authSource) {
+  return authSource === null ? {} : { "x-fmarch-auth-source": authSource };
 }
 
 function credentialField(value) {

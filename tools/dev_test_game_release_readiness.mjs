@@ -6206,7 +6206,9 @@ export function validateDevTestGameIdentityAdapterProof(proof, options = {}) {
     proof.identityAdapter?.accountRecoveryCredentialKind !==
       "hashed-single-use-recovery-credential" ||
     proof.identityAdapter?.credentialAttemptPolicyKind !==
-      "shared-postgres-account-source-lockout" ||
+      "two-tier-postgres-account-source-lockout" ||
+    proof.identityAdapter?.credentialAttemptSourceKind !==
+      "sveltekit-client-address-to-trusted-api-header" ||
     proof.identityAdapter?.sessionCredentialKind !== "opaque-session" ||
     !proof.identityAdapter?.lifecycleControls?.includes("account-disable") ||
     !proof.identityAdapter?.lifecycleControls?.includes("account-enable") ||
@@ -6305,10 +6307,14 @@ export function validateDevTestGameIdentityAdapterProof(proof, options = {}) {
     proof.identityLifecycle?.accountRecovery?.revokedCredentialCount !== 1 ||
     proof.identityLifecycle?.credentialAttemptThrottling?.status !== "passed" ||
     proof.identityLifecycle?.credentialAttemptThrottling?.policyKind !==
-      "shared-postgres-account-source-lockout" ||
+      "two-tier-postgres-account-source-lockout" ||
     proof.identityLifecycle?.credentialAttemptThrottling?.threshold !== 5 ||
+    proof.identityLifecycle?.credentialAttemptThrottling?.sourceThreshold !== 7 ||
+    proof.identityLifecycle?.credentialAttemptThrottling?.retentionSeconds !== 120 ||
     proof.identityLifecycle?.credentialAttemptThrottling?.retryTimingVisible !== true ||
     proof.identityLifecycle?.credentialAttemptThrottling?.hashedScopeStored !== true ||
+    proof.identityLifecycle?.credentialAttemptThrottling?.storedScopeCount !== 2 ||
+    proof.identityLifecycle?.credentialAttemptThrottling?.blockedScopeCount !== 1 ||
     proof.identityLifecycle?.credentialAttemptThrottling?.rawAccountOrSourceStored !== false ||
     proof.identityLifecycle?.credentialAttemptThrottling?.trustedSourceHeader !== false ||
     proof.identityLifecycle?.credentialAttemptThrottling?.successfulLoginClearedFailures !==
@@ -6323,6 +6329,26 @@ export function validateDevTestGameIdentityAdapterProof(proof, options = {}) {
       "HostOf",
     ) ||
     proof.identityLifecycle?.credentialAttemptThrottling?.sameRoleSurface !== true ||
+    proof.identityLifecycle?.credentialAttemptThrottling?.unknownAccountBounding?.status !==
+      "passed" ||
+    proof.identityLifecycle?.credentialAttemptThrottling?.unknownAccountBounding
+      ?.identifierCount !== 7 ||
+    proof.identityLifecycle?.credentialAttemptThrottling?.unknownAccountBounding
+      ?.storedScopeCount !== 1 ||
+    proof.identityLifecycle?.credentialAttemptThrottling?.unknownAccountBounding
+      ?.spoofedSourceHeadersIgnored !== true ||
+    proof.identityLifecycle?.credentialAttemptThrottling?.unknownAccountBounding
+      ?.staleRowsPruned !== true ||
+    proof.identityLifecycle?.credentialAttemptThrottling?.unknownAccountBounding
+      ?.unknownCredentialWorkFactor !== "argon2id-dummy-verification" ||
+    !proof.identityLifecycle?.credentialAttemptThrottling?.unknownAccountBounding
+      ?.operationKinds?.includes("account-recovery") ||
+    proof.identityLifecycle?.credentialAttemptThrottling?.unknownAccountBounding
+      ?.retryAfterPresent !== true ||
+    !proof.identityLifecycle?.credentialAttemptThrottling?.unknownAccountBounding
+      ?.postLockoutCapabilityKinds?.includes("HostOf") ||
+    proof.identityLifecycle?.credentialAttemptThrottling?.unknownAccountBounding
+      ?.sameRoleSurface !== true ||
     proof.identityLifecycle?.accountLifecycle?.status !== "passed" ||
     proof.identityLifecycle?.accountLifecycle?.adminControlSurface?.status !== "passed" ||
     proof.identityLifecycle?.accountLifecycle?.adminControlSurface?.detailRoleUrl !==

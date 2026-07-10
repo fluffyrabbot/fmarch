@@ -912,8 +912,9 @@ flow plus hashed single-use recovery credential management, rejection of
 invalid/expired/revoked/replayed credentials, and
 `/auth/account/recovery?account=<account-id>&returnTo=<role-surface>` recovery back to
 the unchanged host role surface, plus a visible five-failure local credential lockout
-with `Retry-After`, hashed Postgres scope storage, successful lockout expiry, and return
-to that same host role surface, and local backup/restore lanes. It does not prove
+with `Retry-After`, two hashed Postgres tiers, bounded unknown-account source pressure,
+stale-attempt pruning, missing-credential Argon2id work equalization, successful lockout
+expiry, and return to that same host role surface, and local backup/restore lanes. It does not prove
 hosted production account lifecycle,
 invite delivery, hosted recovery delivery/traffic, hosted password-parameter monitoring,
 distributed or edge rate limits and abuse controls, production

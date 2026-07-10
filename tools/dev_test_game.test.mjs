@@ -20187,7 +20187,8 @@ function identityAdapterProofFixture(game) {
       accountCredentialKind: "local-password-account",
       accountPasswordAlgorithm: "argon2id",
       accountRecoveryCredentialKind: "hashed-single-use-recovery-credential",
-      credentialAttemptPolicyKind: "shared-postgres-account-source-lockout",
+      credentialAttemptPolicyKind: "two-tier-postgres-account-source-lockout",
+      credentialAttemptSourceKind: "sveltekit-client-address-to-trusted-api-header",
       lifecycleControls: [
         "account-disable",
         "account-enable",
@@ -20310,17 +20311,21 @@ function identityAdapterProofFixture(game) {
       },
       credentialAttemptThrottling: {
         status: "passed",
-        policyKind: "shared-postgres-account-source-lockout",
+        policyKind: "two-tier-postgres-account-source-lockout",
         loginUrl:
           `http://127.0.0.1:5173/auth/login?returnTo=${encodeURIComponent(
             `/g/${game}/host`,
           )}&account=${encodeURIComponent("host@example.test")}`,
         rejectionTestId: "auth-login-reject",
         threshold: 5,
+        sourceThreshold: 7,
         windowSeconds: 30,
         lockoutSeconds: 2,
+        retentionSeconds: 120,
         retryTimingVisible: true,
         hashedScopeStored: true,
+        storedScopeCount: 2,
+        blockedScopeCount: 1,
         rawAccountOrSourceStored: false,
         browserObservedOperation: "account-login",
         coveredCredentialOperations: [
@@ -20332,6 +20337,19 @@ function identityAdapterProofFixture(game) {
         postLockoutCapabilityKinds: ["HostOf"],
         sameRoleSurface: true,
         successfulLoginClearedFailures: true,
+        unknownAccountBounding: {
+          status: "passed",
+          identifierCount: 7,
+          storedScopeCount: 1,
+          sourceThreshold: 7,
+          spoofedSourceHeadersIgnored: true,
+          staleRowsPruned: true,
+          unknownCredentialWorkFactor: "argon2id-dummy-verification",
+          operationKinds: ["account-login", "invite-redemption", "account-recovery"],
+          retryAfterPresent: true,
+          postLockoutCapabilityKinds: ["HostOf"],
+          sameRoleSurface: true,
+        },
       },
       accountLifecycle: {
         status: "passed",

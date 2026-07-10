@@ -135,6 +135,7 @@ test("login action redeems invite tokens into opaque browser sessions", async ()
             method: init.method,
             authorization: init.headers.authorization,
             accept: init.headers.accept,
+            authSource: init.headers["x-fmarch-auth-source"] ?? null,
             body: init.body === undefined ? null : JSON.parse(init.body),
           });
           if (url === "/auth/session") {
@@ -155,6 +156,7 @@ test("login action redeems invite tokens into opaque browser sessions", async ()
           password: " invited account password ",
           returnTo: "/g/midsummer/host",
         }),
+        getClientAddress: () => "203.0.113.17",
         url: new URL("http://localhost/auth/login"),
       }),
     (err) => err.status === 303 && err.location === "/g/midsummer/host",
@@ -166,11 +168,13 @@ test("login action redeems invite tokens into opaque browser sessions", async ()
     method: "GET",
     authorization: "Bearer host-invite-token",
     accept: "application/json",
+    authSource: null,
     body: null,
   });
   assert.equal(observed.requests[1].url, "/auth/invites/redeem");
   assert.equal(observed.requests[1].method, "POST");
   assert.equal(observed.requests[1].accept, "application/json");
+  assert.equal(observed.requests[1].authSource, "203.0.113.17");
   assert.equal(observed.requests[1].body.invite_token, "host-invite-token");
   assert.equal(observed.requests[1].body.account_id, "host@example.test");
   assert.equal(observed.requests[1].body.password, "invited account password");
@@ -203,6 +207,7 @@ test("login action exchanges account credentials for an opaque browser session",
             method: init.method,
             authorization: init.headers.authorization,
             accept: init.headers.accept,
+            authSource: init.headers["x-fmarch-auth-source"] ?? null,
             body: init.body === undefined ? null : JSON.parse(init.body),
           });
           assert.equal(url, "/auth/accounts/login");
@@ -217,6 +222,7 @@ test("login action exchanges account credentials for an opaque browser session",
           password: " correct horse battery ",
           returnTo: "/g/midsummer/host",
         }),
+        getClientAddress: () => "203.0.113.17",
         url: new URL("http://localhost/auth/login"),
       }),
     (err) => err.status === 303 && err.location === "/g/midsummer/host",
@@ -226,6 +232,7 @@ test("login action exchanges account credentials for an opaque browser session",
   assert.equal(observed.requests[0].url, "/auth/accounts/login");
   assert.equal(observed.requests[0].method, "POST");
   assert.equal(observed.requests[0].accept, "application/json");
+  assert.equal(observed.requests[0].authSource, "203.0.113.17");
   assert.equal(observed.requests[0].body.account_id, "host@example.test");
   assert.equal(observed.requests[0].body.password, "correct horse battery");
   assert.match(observed.requests[0].body.session_token, /^account-session-/);

@@ -15,12 +15,13 @@ export function load({ locals, url }) {
 }
 
 export const actions = {
-  default: async ({ cookies, fetch, request, url }) => {
+  default: async ({ cookies, fetch, getClientAddress, request, url }) => {
     const formData = await request.formData();
     const token = requiredToken(formData, "token");
     const accountId = requiredToken(formData, "accountId");
     const password = requiredToken(formData, "password");
     const returnTo = safeReturnTo(formData.get("returnTo"));
+    const authSource = clientAuthSource(getClientAddress);
     if (token === null && (accountId === null || password === null)) {
       return fail(400, {
         state: "reject",
@@ -55,6 +56,7 @@ export const actions = {
         inviteToken: token,
         accountId,
         password,
+        authSource,
       });
       if (redeemed.status !== "ok") {
         return fail(redeemed.statusCode, {
@@ -68,7 +70,7 @@ export const actions = {
       throw redirect(303, returnTo);
     }
 
-    const account = await loginAccount({ fetch, accountId, password });
+    const account = await loginAccount({ fetch, accountId, password, authSource });
     if (account.status !== "ok") {
       return fail(account.statusCode, {
         state: "reject",
@@ -110,13 +112,14 @@ async function verifySessionToken({ fetch, token }) {
   return { status: "ok", session: body };
 }
 
-async function redeemInviteToken({ fetch, inviteToken, accountId, password }) {
+async function redeemInviteToken({ fetch, inviteToken, accountId, password, authSource }) {
   const sessionToken = `invite-session-${randomUUID()}`;
   const response = await fetch(authInviteRedeemUrl(process.env), {
     method: "POST",
     headers: {
       "content-type": "application/json",
       accept: "application/json",
+      ...authSourceHeader(authSource),
     },
     body: JSON.stringify({
       invite_token: inviteToken,
@@ -146,13 +149,14 @@ async function redeemInviteToken({ fetch, inviteToken, accountId, password }) {
   return { status: "ok", sessionToken, session: body };
 }
 
-async function loginAccount({ fetch, accountId, password }) {
+async function loginAccount({ fetch, accountId, password, authSource }) {
   const sessionToken = `account-session-${randomUUID()}`;
   const response = await fetch(authAccountLoginUrl(process.env), {
     method: "POST",
     headers: {
       "content-type": "application/json",
       accept: "application/json",
+      ...authSourceHeader(authSource),
     },
     body: JSON.stringify({
       account_id: accountId,
@@ -192,6 +196,24 @@ function authRateLimitRejection(response) {
         ? `Too many credential attempts. Try again in ${retryAfter} seconds.`
         : "Too many credential attempts. Try again shortly.",
   };
+}
+
+function clientAuthSource(getClientAddress) {
+  if (typeof getClientAddress !== "function") {
+    return null;
+  }
+  try {
+    const value = getClientAddress();
+    return typeof value === "string" && value.trim() !== "" && value.length <= 256
+      ? value.trim()
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function authSourceHeader(authSource) {
+  return authSource === null ? {} : { "x-fmarch-auth-source": authSource };
 }
 
 function requiredToken(formData, field) {

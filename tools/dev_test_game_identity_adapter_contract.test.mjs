@@ -10,7 +10,7 @@ import {
 
 test("identity adapter contract preserves shared role-surface architecture", () => {
   const packet = buildDevTestGameIdentityAdapterContractPacket();
-  assert.equal(devTestGameIdentityAdapterProofVersion, 15);
+  assert.equal(devTestGameIdentityAdapterProofVersion, 16);
   assert.equal(packet.status, "passed");
   assert.equal(packet.adapterId, "local-production-identity-adapter-v1");
   assert.equal(
@@ -45,6 +45,14 @@ test("identity adapter contract preserves shared role-surface architecture", () 
     "fmarch_session",
   );
   assert.equal(devTestGameIdentityAdapterExpectedContract.passwordAlgorithm, "argon2id");
+  assert.equal(
+    devTestGameIdentityAdapterExpectedContract.credentialAttemptPolicyKind,
+    "two-tier-postgres-account-source-lockout",
+  );
+  assert.equal(
+    devTestGameIdentityAdapterExpectedContract.credentialAttemptSourceKind,
+    "sveltekit-client-address-to-trusted-api-header",
+  );
   assert.ok(
     devTestGameIdentityAdapterExpectedContract.lifecycleControls.includes(
       "account-password-rotation",

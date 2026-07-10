@@ -31,12 +31,21 @@ content (incompatible with moderation; out of scope by design).
   revocation data is already in the table so logout and compromise response can be immediate
   once the logout endpoint lands.
 - **Brute-force defense:** account login, invite redemption, and account recovery share a
-  Postgres-backed account/source failure window. The default direct-source bucket locks after
-  five failures for 15 minutes, returns `429` with `Retry-After`, stores only a hashed scope,
-  and clears on successful credential use. `FMARCH_TRUST_AUTH_SOURCE_HEADER=1` is reserved for
-  deployments where a trusted edge overwrites `x-fmarch-auth-source`; never trust that header
-  from the public internet. Distributed edge enforcement, hosted policy tuning, and monitoring
-  remain deployment work. Credential failures stay generic to avoid a user-existence oracle.
+  two-tier Postgres failure window. Known accounts lock their hashed account/source scope after
+  five failures; unknown account identifiers only increment a hashed source-pressure scope, so
+  random identifiers cannot allocate one row each. The source tier defaults to 50 failures,
+  both tiers return `429` with `Retry-After`, stale rows are pruned, successful credential use
+  clears the relevant tiers, and missing account/invite/recovery paths consume a dummy Argon2id
+  verification. Policy is read once into `ApiState`; the account/source thresholds, window,
+  lockout, and retention are configurable through `FMARCH_AUTH_RATE_LIMIT_MAX_FAILURES`,
+  `FMARCH_AUTH_SOURCE_RATE_LIMIT_MAX_FAILURES`, `FMARCH_AUTH_RATE_LIMIT_WINDOW_SECONDS`,
+  `FMARCH_AUTH_RATE_LIMIT_LOCKOUT_SECONDS`, and `FMARCH_AUTH_RATE_LIMIT_RETENTION_SECONDS`.
+  SvelteKit auth actions derive `x-fmarch-auth-source` from server-side
+  `getClientAddress()`. `FMARCH_TRUST_AUTH_SOURCE_HEADER=1` is reserved for deployments where
+  that trusted frontend or edge is the API's only caller and overwrites the header; never expose
+  a trusting API directly to the public internet or forward a browser-supplied source value.
+  Distributed edge enforcement, hosted policy tuning, and monitoring remain deployment work.
+  Credential failures stay generic to avoid a user-existence oracle.
 - **CSRF:** state-changing REST endpoints require an anti-CSRF token. The WebSocket is
   authenticated at handshake and bound to the session; commands carry no ambient cookie
   authority beyond that bound session.

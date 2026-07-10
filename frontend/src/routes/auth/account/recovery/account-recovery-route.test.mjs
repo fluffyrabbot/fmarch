@@ -28,7 +28,11 @@ test("successful recovery clears a stale cookie and redirects through account lo
         },
       },
       fetch: async (url, init) => {
-        observed.request = { url, body: JSON.parse(init.body) };
+        observed.request = {
+          url,
+          authSource: init.headers["x-fmarch-auth-source"] ?? null,
+          body: JSON.parse(init.body),
+        };
         return jsonResponse({
           status: "recovered",
           recovery_id: "00000000-0000-0000-0000-000000000001",
@@ -45,6 +49,7 @@ test("successful recovery clears a stale cookie and redirects through account lo
         confirmPassword: "recovered correct horse battery",
         returnTo: "/g/game-1/host",
       }),
+      getClientAddress: () => "2001:db8::17",
     }),
     (error) =>
       error.status === 303 &&
@@ -54,6 +59,7 @@ test("successful recovery clears a stale cookie and redirects through account lo
 
   assert.deepEqual(observed.request, {
     url: "/auth/accounts/recoveries",
+    authSource: "2001:db8::17",
     body: {
       account_id: "host@example.test",
       recovery_token: "account-recovery-secret",

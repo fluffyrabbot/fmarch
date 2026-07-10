@@ -129,7 +129,7 @@ try {
     scope: "local-auth-invite-role-proof",
     productionReady: false,
     proofBoundary:
-      "Local scratch-Postgres plus local Rust API, SvelteKit login/account-security/account-recovery/host/admin-audit routes, and Chromium proof. Proves Argon2id account credentials, hashed single-use recovery credentials, account-bound invite redemption, and a local account credential lifecycle preserve the existing role-surface capability architecture for seeded admin, host, and player URLs, including authenticated password rotation and account recovery with session revocation, invalid/expired/revoked/replayed recovery rejection, recovered-password return to the same host role URL, shared Postgres credential-attempt throttling with a visible retry state and post-lockout recovery to the same host role URL, host-role-surface game-scoped player invite issuance, GlobalAdmin account creation/disable/enable, stale account-session revocation, disabled-account login rejection, GlobalAdmin discovery, and inspection of local identity lifecycle audit rows from the admin overview; it does not prove hosted recovery delivery or traffic, email delivery, hosted identity, distributed or edge abuse controls, hosted password-parameter monitoring, hosted audit retention/export, or beta release readiness.",
+      "Local scratch-Postgres plus local Rust API, SvelteKit login/account-security/account-recovery/host/admin-audit routes, and Chromium proof. Proves Argon2id account credentials, hashed single-use recovery credentials, account-bound invite redemption, and a local account credential lifecycle preserve the existing role-surface capability architecture for seeded admin, host, and player URLs, including authenticated password rotation and account recovery with session revocation, invalid/expired/revoked/replayed recovery rejection, recovered-password return to the same host role URL, two-tier Postgres credential-attempt throttling with hashed account/source scopes, bounded unknown-account traffic, stale-row pruning, timing-equalized missing credentials, visible retry states, and post-lockout recovery to the same host role URL, host-role-surface game-scoped player invite issuance, GlobalAdmin account creation/disable/enable, stale account-session revocation, disabled-account login rejection, GlobalAdmin discovery, and inspection of local identity lifecycle audit rows from the admin overview; it does not prove hosted recovery delivery or traffic, email delivery, hosted identity, distributed or edge abuse controls, hosted password-parameter monitoring, hosted audit retention/export, or beta release readiness.",
     identityAdapter: {
       status: "passed",
       replacesDevTokensWithoutRoleSurfaceChange: true,
@@ -139,7 +139,8 @@ try {
       accountCredentialKind: "local-password-account",
       accountPasswordAlgorithm: "argon2id",
       accountRecoveryCredentialKind: "hashed-single-use-recovery-credential",
-      credentialAttemptPolicyKind: "shared-postgres-account-source-lockout",
+      credentialAttemptPolicyKind: "two-tier-postgres-account-source-lockout",
+      credentialAttemptSourceKind: "sveltekit-client-address-to-trusted-api-header",
       lifecycleControls: [
         "account-disable",
         "account-enable",
@@ -527,15 +528,19 @@ async function proveCredentialAttemptThrottling({
     }
 
     const storedAttempts = await storedAuthAttemptRecords();
+    const blockedAttempts = storedAttempts.filter((attempt) => attempt.blocked);
     if (
-      storedAttempts.length !== 1 ||
-      storedAttempts[0].failureCount !== 5 ||
-      storedAttempts[0].blocked !== true ||
-      storedAttempts[0].scopeHash.length !== 64 ||
-      storedAttempts[0].scopeHash.includes(accountId)
+      storedAttempts.length !== 2 ||
+      blockedAttempts.length !== 1 ||
+      storedAttempts.some(
+        (attempt) =>
+          attempt.failureCount !== 5 ||
+          attempt.scopeHash.length !== 64 ||
+          attempt.scopeHash.includes(accountId),
+      )
     ) {
       throw new Error(
-        `credential attempt policy did not store one hashed lockout: ${JSON.stringify(storedAttempts)}`,
+        `credential attempt policy did not store two hashed tiers with one lockout: ${JSON.stringify(storedAttempts)}`,
       );
     }
 
@@ -552,15 +557,26 @@ async function proveCredentialAttemptThrottling({
     if (remainingAttempts.length !== 0) {
       throw new Error("successful post-lockout login did not clear credential attempts");
     }
+    const unknownAccountBounding = await proveUnknownCredentialAttemptBounding({
+      apiBaseUrl,
+      frontendBaseUrl,
+      accountId,
+      password,
+      returnTo,
+    });
     return {
       status: "passed",
       loginUrl,
       rejectionTestId: "auth-login-reject",
       threshold: 5,
+      sourceThreshold: 7,
       windowSeconds: 30,
       lockoutSeconds: 2,
+      retentionSeconds: 120,
       retryTimingVisible: true,
       hashedScopeStored: true,
+      storedScopeCount: storedAttempts.length,
+      blockedScopeCount: blockedAttempts.length,
       rawAccountOrSourceStored: false,
       browserObservedOperation: "account-login",
       coveredCredentialOperations: [
@@ -573,11 +589,120 @@ async function proveCredentialAttemptThrottling({
       sameRoleSurface:
         new URL(recoveredLogin.loginUrl).searchParams.get("returnTo") === returnTo,
       successfulLoginClearedFailures: true,
+      unknownAccountBounding,
       recoveredSessionToken: recoveredLogin.sessionToken,
+      unknownAccountRecoveredSessionToken:
+        unknownAccountBounding.recoveredSessionToken,
     };
   } finally {
     await page.close();
   }
+}
+
+async function proveUnknownCredentialAttemptBounding({
+  apiBaseUrl,
+  frontendBaseUrl,
+  accountId,
+  password,
+  returnTo,
+}) {
+  await insertStaleAuthAttemptRecord();
+  const requests = Array.from({ length: 7 }, (_, index) => {
+    const unknownAccountId = `unknown-${index}-${game}@example.test`;
+    const operation = ["account-login", "invite-redemption", "account-recovery"][index % 3];
+    if (operation === "account-login") {
+      return {
+        operation,
+        url: `${apiBaseUrl}/auth/accounts/login`,
+        body: {
+          account_id: unknownAccountId,
+          password: `unknown-password-${game}`,
+          session_token: `unknown-session-${index}-${game}`,
+          expires_at: 4102444800,
+        },
+      };
+    }
+    if (operation === "invite-redemption") {
+      return {
+        operation,
+        url: `${apiBaseUrl}/auth/invites/redeem`,
+        body: {
+          invite_token: `unknown-invite-${index}-${game}`,
+          account_id: unknownAccountId,
+          password: `unknown-password-${game}`,
+          session_token: `unknown-invite-session-${index}-${game}`,
+        },
+      };
+    }
+    return {
+      operation,
+      url: `${apiBaseUrl}/auth/accounts/recoveries`,
+      body: {
+        account_id: unknownAccountId,
+        recovery_token: `unknown-recovery-${index}-${game}`,
+        new_password: `unknown-recovery-password-${game}`,
+      },
+    };
+  });
+  for (const [index, request] of requests.entries()) {
+    const response = await fetchWithTimeout(request.url, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-fmarch-auth-source": `spoofed-source-${index}`,
+      },
+      body: JSON.stringify(request.body),
+    });
+    const expectedStatus = index < 6 ? 401 : 429;
+    if (response.status !== expectedStatus) {
+      throw new Error(
+        `unknown ${request.operation} attempt ${index + 1} returned ${response.status}, expected ${expectedStatus}`,
+      );
+    }
+    if (index === 6 && !/^\d+$/.test(response.headers.get("retry-after") ?? "")) {
+      throw new Error("unknown credential source lockout omitted Retry-After");
+    }
+    await response.json();
+  }
+
+  const storedAttempts = await storedAuthAttemptRecords();
+  if (
+    storedAttempts.length !== 1 ||
+    storedAttempts[0].failureCount !== 7 ||
+    storedAttempts[0].blocked !== true ||
+    storedAttempts[0].scopeHash.length !== 64
+  ) {
+    throw new Error(
+      `unknown credential attempts did not collapse into one source scope: ${JSON.stringify(storedAttempts)}`,
+    );
+  }
+  await delay(2500);
+  const recoveredLogin = await driveAccountLogin({
+    frontendBaseUrl,
+    apiBaseUrl,
+    accountId,
+    password,
+    returnTo,
+    expectedCapability: "HostOf",
+  });
+  if ((await storedAuthAttemptRecords()).length !== 0) {
+    throw new Error("known login did not clear the expired source-pressure scope");
+  }
+  return {
+    status: "passed",
+    identifierCount: requests.length,
+    storedScopeCount: storedAttempts.length,
+    sourceThreshold: 7,
+    spoofedSourceHeadersIgnored: true,
+    staleRowsPruned: true,
+    unknownCredentialWorkFactor: "argon2id-dummy-verification",
+    operationKinds: [...new Set(requests.map((request) => request.operation))],
+    retryAfterPresent: true,
+    postLockoutCapabilityKinds: recoveredLogin.capabilityKinds,
+    sameRoleSurface:
+      new URL(recoveredLogin.loginUrl).searchParams.get("returnTo") === returnTo,
+    recoveredSessionToken: recoveredLogin.sessionToken,
+  };
 }
 
 async function driveAccountPasswordRotation({
@@ -1280,6 +1405,7 @@ async function finishIdentityLifecycleProof({
     rotatedPasswordLogin.sessionToken,
     recoveredPasswordLogin.sessionToken,
     credentialAttemptThrottling.recoveredSessionToken,
+    credentialAttemptThrottling.unknownAccountRecoveredSessionToken,
     hostAccount.password,
     rotatedHostPassword,
     recoveredHostPassword,
@@ -1302,6 +1428,7 @@ async function finishIdentityLifecycleProof({
       rotatedPasswordLogin.sessionToken,
       recoveredPasswordLogin.sessionToken,
       credentialAttemptThrottling.recoveredSessionToken,
+      credentialAttemptThrottling.unknownAccountRecoveredSessionToken,
       hostAccount.password,
       rotatedHostPassword,
       recoveredHostPassword,
@@ -1391,14 +1518,18 @@ async function finishIdentityLifecycleProof({
     },
     credentialAttemptThrottling: {
       status: credentialAttemptThrottling.status,
-      policyKind: "shared-postgres-account-source-lockout",
+      policyKind: "two-tier-postgres-account-source-lockout",
       loginUrl: credentialAttemptThrottling.loginUrl,
       rejectionTestId: credentialAttemptThrottling.rejectionTestId,
       threshold: credentialAttemptThrottling.threshold,
+      sourceThreshold: credentialAttemptThrottling.sourceThreshold,
       windowSeconds: credentialAttemptThrottling.windowSeconds,
       lockoutSeconds: credentialAttemptThrottling.lockoutSeconds,
+      retentionSeconds: credentialAttemptThrottling.retentionSeconds,
       retryTimingVisible: credentialAttemptThrottling.retryTimingVisible,
       hashedScopeStored: credentialAttemptThrottling.hashedScopeStored,
+      storedScopeCount: credentialAttemptThrottling.storedScopeCount,
+      blockedScopeCount: credentialAttemptThrottling.blockedScopeCount,
       rawAccountOrSourceStored: credentialAttemptThrottling.rawAccountOrSourceStored,
       browserObservedOperation: credentialAttemptThrottling.browserObservedOperation,
       coveredCredentialOperations: credentialAttemptThrottling.coveredCredentialOperations,
@@ -1407,6 +1538,32 @@ async function finishIdentityLifecycleProof({
       sameRoleSurface: credentialAttemptThrottling.sameRoleSurface,
       successfulLoginClearedFailures:
         credentialAttemptThrottling.successfulLoginClearedFailures,
+      unknownAccountBounding: {
+        status: credentialAttemptThrottling.unknownAccountBounding.status,
+        identifierCount:
+          credentialAttemptThrottling.unknownAccountBounding.identifierCount,
+        storedScopeCount:
+          credentialAttemptThrottling.unknownAccountBounding.storedScopeCount,
+        sourceThreshold:
+          credentialAttemptThrottling.unknownAccountBounding.sourceThreshold,
+        spoofedSourceHeadersIgnored:
+          credentialAttemptThrottling.unknownAccountBounding
+            .spoofedSourceHeadersIgnored,
+        staleRowsPruned:
+          credentialAttemptThrottling.unknownAccountBounding.staleRowsPruned,
+        unknownCredentialWorkFactor:
+          credentialAttemptThrottling.unknownAccountBounding
+            .unknownCredentialWorkFactor,
+        operationKinds:
+          credentialAttemptThrottling.unknownAccountBounding.operationKinds,
+        retryAfterPresent:
+          credentialAttemptThrottling.unknownAccountBounding.retryAfterPresent,
+        postLockoutCapabilityKinds:
+          credentialAttemptThrottling.unknownAccountBounding
+            .postLockoutCapabilityKinds,
+        sameRoleSurface:
+          credentialAttemptThrottling.unknownAccountBounding.sameRoleSurface,
+      },
     },
     accountLifecycle: {
       status: "passed",
@@ -1931,6 +2088,24 @@ async function storedAuthAttemptRecords() {
   return JSON.parse(output.trim() || "[]");
 }
 
+async function insertStaleAuthAttemptRecord() {
+  if (proofDatabase === undefined) {
+    throw new Error("proof database is not available");
+  }
+  await runProcess("psql", [
+    proofDatabase.url,
+    "-v",
+    "ON_ERROR_STOP=1",
+    "-c",
+    `
+      INSERT INTO auth_credential_attempt (
+        scope_hash, window_started_at, failure_count, blocked_until, updated_at
+      )
+      VALUES ('stale-proof-scope', 0, 1, NULL, 0)
+    `,
+  ]);
+}
+
 async function driveAdminIdentityAuditSurface({
   frontendBaseUrl,
   adminSessionToken,
@@ -2175,7 +2350,9 @@ function assertInviteProof(evidence) {
     evidence.identityAdapter?.accountRecoveryCredentialKind !==
       "hashed-single-use-recovery-credential" ||
     evidence.identityAdapter?.credentialAttemptPolicyKind !==
-      "shared-postgres-account-source-lockout" ||
+      "two-tier-postgres-account-source-lockout" ||
+    evidence.identityAdapter?.credentialAttemptSourceKind !==
+      "sveltekit-client-address-to-trusted-api-header" ||
     !evidence.identityAdapter?.lifecycleControls?.includes(
       "account-password-rotation",
     ) ||
@@ -2270,12 +2447,16 @@ function assertInviteProof(evidence) {
     evidence.identityLifecycle?.accountRecovery?.revokedCredentialCount !== 1 ||
     evidence.identityLifecycle?.credentialAttemptThrottling?.status !== "passed" ||
     evidence.identityLifecycle?.credentialAttemptThrottling?.policyKind !==
-      "shared-postgres-account-source-lockout" ||
+      "two-tier-postgres-account-source-lockout" ||
     evidence.identityLifecycle?.credentialAttemptThrottling?.rejectionTestId !==
       "auth-login-reject" ||
     evidence.identityLifecycle?.credentialAttemptThrottling?.threshold !== 5 ||
+    evidence.identityLifecycle?.credentialAttemptThrottling?.sourceThreshold !== 7 ||
+    evidence.identityLifecycle?.credentialAttemptThrottling?.retentionSeconds !== 120 ||
     evidence.identityLifecycle?.credentialAttemptThrottling?.retryTimingVisible !== true ||
     evidence.identityLifecycle?.credentialAttemptThrottling?.hashedScopeStored !== true ||
+    evidence.identityLifecycle?.credentialAttemptThrottling?.storedScopeCount !== 2 ||
+    evidence.identityLifecycle?.credentialAttemptThrottling?.blockedScopeCount !== 1 ||
     evidence.identityLifecycle?.credentialAttemptThrottling?.rawAccountOrSourceStored !== false ||
     evidence.identityLifecycle?.credentialAttemptThrottling?.trustedSourceHeader !== false ||
     evidence.identityLifecycle?.credentialAttemptThrottling?.successfulLoginClearedFailures !==
@@ -2290,6 +2471,26 @@ function assertInviteProof(evidence) {
       "HostOf",
     ) ||
     evidence.identityLifecycle?.credentialAttemptThrottling?.sameRoleSurface !== true ||
+    evidence.identityLifecycle?.credentialAttemptThrottling?.unknownAccountBounding?.status !==
+      "passed" ||
+    evidence.identityLifecycle?.credentialAttemptThrottling?.unknownAccountBounding
+      ?.identifierCount !== 7 ||
+    evidence.identityLifecycle?.credentialAttemptThrottling?.unknownAccountBounding
+      ?.storedScopeCount !== 1 ||
+    evidence.identityLifecycle?.credentialAttemptThrottling?.unknownAccountBounding
+      ?.spoofedSourceHeadersIgnored !== true ||
+    evidence.identityLifecycle?.credentialAttemptThrottling?.unknownAccountBounding
+      ?.staleRowsPruned !== true ||
+    evidence.identityLifecycle?.credentialAttemptThrottling?.unknownAccountBounding
+      ?.unknownCredentialWorkFactor !== "argon2id-dummy-verification" ||
+    !evidence.identityLifecycle?.credentialAttemptThrottling?.unknownAccountBounding
+      ?.operationKinds?.includes("account-recovery") ||
+    evidence.identityLifecycle?.credentialAttemptThrottling?.unknownAccountBounding
+      ?.retryAfterPresent !== true ||
+    !evidence.identityLifecycle?.credentialAttemptThrottling?.unknownAccountBounding
+      ?.postLockoutCapabilityKinds?.includes("HostOf") ||
+    evidence.identityLifecycle?.credentialAttemptThrottling?.unknownAccountBounding
+      ?.sameRoleSurface !== true ||
     evidence.identityLifecycle?.accountLifecycle?.status !== "passed" ||
     evidence.identityLifecycle?.accountLifecycle?.adminControlSurface?.status !== "passed" ||
     evidence.identityLifecycle?.accountLifecycle?.adminControlSurface?.detailRoleUrl !==
@@ -2472,8 +2673,10 @@ async function startApi(url) {
       DATABASE_URL: url,
       FMARCH_BIND: `${host}:${port}`,
       FMARCH_AUTH_RATE_LIMIT_MAX_FAILURES: "5",
+      FMARCH_AUTH_SOURCE_RATE_LIMIT_MAX_FAILURES: "7",
       FMARCH_AUTH_RATE_LIMIT_WINDOW_SECONDS: "30",
       FMARCH_AUTH_RATE_LIMIT_LOCKOUT_SECONDS: "2",
+      FMARCH_AUTH_RATE_LIMIT_RETENTION_SECONDS: "120",
       FMARCH_TRUST_AUTH_SOURCE_HEADER: "0",
       RUST_LOG: process.env.RUST_LOG ?? "warn",
     },
