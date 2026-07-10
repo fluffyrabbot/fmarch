@@ -200,6 +200,10 @@ pub fn router_with_state(state: ApiState) -> Router {
         .route("/auth/invites/redeem", post(redeem_auth_invite))
         .route("/auth/invite-revocations", post(revoke_auth_invite))
         .route(
+            "/auth/delivery-intents/{delivery_id}/retry",
+            post(retry_auth_delivery_intent),
+        )
+        .route(
             "/media/uploads",
             post(media_upload).layer(DefaultBodyLimit::max(media_upload_limit)),
         )
@@ -843,6 +847,14 @@ struct AuthInviteResponse {
 struct AuthDeliveryReceipt {
     delivery_id: Uuid,
     status: String,
+    attempt_count: i32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct AuthDeliveryRetryResponse {
+    status: String,
+    delivery_id: Uuid,
+    delivery_kind: String,
     attempt_count: i32,
 }
 
@@ -2507,6 +2519,73 @@ async fn revoke_auth_invite(
     }))
 }
 
+async fn retry_auth_delivery_intent(
+    State(state): State<ApiState>,
+    headers: HeaderMap,
+    Path(delivery_id): Path<Uuid>,
+) -> Result<Json<AuthDeliveryRetryResponse>, ApiError> {
+    let caller_token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
+    let actor_user_id = require_global_admin(&state, caller_token, "delivery retry").await?;
+    let now = unix_now_seconds();
+    let mut tx = state.pool.begin().await?;
+    let intent = sqlx::query_as::<_, (String, String, String, String, i32)>(
+        r#"
+        SELECT delivery_kind, account_id, principal_user_id, credential_hash, attempt_count
+        FROM auth_delivery_intent
+        WHERE delivery_id = $1
+          AND status = 'retryable_failed'
+          AND next_attempt_at <= $2
+        FOR UPDATE
+        "#,
+    )
+    .bind(delivery_id)
+    .bind(now)
+    .fetch_optional(&mut *tx)
+    .await?
+    .ok_or_else(|| ApiError::Reject {
+        status: StatusCode::CONFLICT,
+        error: RejectCode::StreamConflict,
+        message: "delivery intent is not ready for retry; refresh delivery status and try again"
+            .to_string(),
+    })?;
+    let attempt_count = sqlx::query_scalar::<_, i32>(
+        r#"
+        UPDATE auth_delivery_intent
+        SET status = 'delivered',
+            attempt_count = attempt_count + 1,
+            next_attempt_at = NULL,
+            delivered_at = $2,
+            last_error = NULL,
+            updated_at = $2
+        WHERE delivery_id = $1
+        RETURNING attempt_count
+        "#,
+    )
+    .bind(delivery_id)
+    .bind(now)
+    .fetch_one(&mut *tx)
+    .await?;
+    record_auth_delivery_audit(
+        &mut tx,
+        "auth_delivery_retried",
+        intent.0.as_str(),
+        intent.1.as_str(),
+        intent.2.as_str(),
+        intent.3.as_str(),
+        delivery_id,
+        now,
+    )
+    .await?;
+    tx.commit().await?;
+    let _ = actor_user_id;
+    Ok(Json(AuthDeliveryRetryResponse {
+        status: "delivered".to_string(),
+        delivery_id,
+        delivery_kind: intent.0,
+        attempt_count,
+    }))
+}
+
 async fn identity_lifecycle_audit(
     State(state): State<ApiState>,
     Query(query): Query<IdentityLifecycleAuditQuery>,
@@ -2999,6 +3078,13 @@ fn auth_session_rotation_max_age_seconds() -> i64 {
     )
 }
 
+fn local_delivery_fail_first_attempt() -> bool {
+    std::env::var("FMARCH_LOCAL_DELIVERY_FAIL_FIRST_ATTEMPT")
+        .ok()
+        .as_deref()
+        == Some("1")
+}
+
 fn env_i64(name: &str, default: i64, minimum: i64, maximum: i64) -> i64 {
     std::env::var(name)
         .ok()
@@ -3097,6 +3183,43 @@ async fn deliver_local_auth_credential(
         now,
     )
     .await?;
+
+    if local_delivery_fail_first_attempt() {
+        let attempt_count = sqlx::query_scalar::<_, i32>(
+            r#"
+            UPDATE auth_delivery_intent
+            SET status = 'retryable_failed',
+                attempt_count = attempt_count + 1,
+                next_attempt_at = $2 + 1,
+                delivered_at = NULL,
+                last_error = 'local-delivery-transient',
+                updated_at = $2
+            WHERE delivery_id = $1
+              AND status = 'queued'
+            RETURNING attempt_count
+            "#,
+        )
+        .bind(delivery_id)
+        .bind(now)
+        .fetch_one(&mut **tx)
+        .await?;
+        record_auth_delivery_audit(
+            tx,
+            "auth_delivery_retryable_failed",
+            delivery_kind,
+            account_id,
+            principal_user_id,
+            credential_hash,
+            delivery_id,
+            now,
+        )
+        .await?;
+        return Ok(AuthDeliveryReceipt {
+            delivery_id,
+            status: "retryable_failed".to_string(),
+            attempt_count,
+        });
+    }
 
     // The local adapter has no network dependency: it deterministically accepts
     // the redacted intent while retaining a conventional retry-capable schema.

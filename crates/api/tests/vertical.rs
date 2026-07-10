@@ -5067,6 +5067,124 @@ async fn global_admin_can_issue_scoped_operator_session_grants(pool: sqlx::PgPoo
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+async fn identity_delivery_intent_is_redacted_and_retryable(pool: sqlx::PgPool) {
+    let app = router_with_dev_auth(pool.clone());
+    let admin_token = "delivery-admin-token";
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/auth/dev-session")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    serde_json::json!({
+                        "token": admin_token,
+                        "principal_user_id": "admin_a",
+                        "expires_at": 4_102_444_800i64,
+                        "global_capabilities": ["GlobalAdmin"]
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    create_test_auth_account(
+        &app,
+        admin_token,
+        "delivery@example.test",
+        "correct horse battery",
+        "delivery_user",
+    )
+    .await;
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/auth/invites")
+                .header("content-type", "application/json")
+                .header("authorization", format!("Bearer {admin_token}"))
+                .body(Body::from(
+                    serde_json::json!({
+                        "invite_token": "delivery-invite-raw-token",
+                        "account_id": "delivery@example.test",
+                        "expected_principal_user_id": "delivery_user",
+                        "expires_at": 4_102_444_800i64
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let invite: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(invite["delivery_status"], "delivered");
+    assert_eq!(invite["delivery_attempt_count"], 1);
+    let delivery_id = Uuid::parse_str(invite["delivery_id"].as_str().expect("delivery id"))
+        .expect("typed delivery id");
+
+    let (credential_hash, status, attempts, next_attempt_at, delivered_at, last_error) =
+        sqlx::query_as::<_, (String, String, i32, Option<i64>, Option<i64>, Option<String>)>(
+            "SELECT credential_hash, status, attempt_count, next_attempt_at, delivered_at, last_error FROM auth_delivery_intent WHERE delivery_id = $1",
+        )
+        .bind(delivery_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(status, "delivered");
+    assert_eq!(attempts, 1);
+    assert!(next_attempt_at.is_none());
+    assert!(delivered_at.is_some());
+    assert!(last_error.is_none());
+    assert!(!credential_hash.contains("delivery-invite-raw-token"));
+
+    sqlx::query(
+        "UPDATE auth_delivery_intent SET status = 'retryable_failed', next_attempt_at = 0, delivered_at = NULL, last_error = 'local-delivery-transient' WHERE delivery_id = $1",
+    )
+    .bind(delivery_id)
+    .execute(&pool)
+    .await
+    .unwrap();
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/auth/delivery-intents/{delivery_id}/retry"))
+                .header("authorization", format!("Bearer {admin_token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let retried: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(retried["status"], "delivered");
+    assert_eq!(retried["attempt_count"], 2);
+    let audit_kinds = sqlx::query_scalar::<_, String>(
+        "SELECT event_kind FROM identity_lifecycle_audit WHERE principal_user_id = 'delivery_user' ORDER BY id",
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        audit_kinds,
+        vec![
+            "account_created".to_string(),
+            "auth_delivery_queued".to_string(),
+            "auth_delivery_delivered".to_string(),
+            "auth_delivery_retried".to_string(),
+        ]
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
 async fn public_account_registration_creates_unprivileged_opaque_session(pool: sqlx::PgPool) {
     let app = router(pool.clone());
     let response = app
