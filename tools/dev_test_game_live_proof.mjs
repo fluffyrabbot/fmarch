@@ -95,6 +95,35 @@ assert.equal(session.seedMode, "seeded");
 assert.equal(session.seedCommandCount, 24);
 assert.equal(session.verification?.status, "passed");
 assert.equal(session.artifacts.proofRun, devTestGameProofRunPath);
+assert.equal(session.verification?.earliestReachedTie?.status, "passed");
+assert.equal(
+  session.verification?.earliestReachedTie?.pack,
+  "dev_test_earliest_reached",
+);
+assert.equal(
+  session.verification?.earliestReachedTie?.tieBreaker,
+  "EarliestReached",
+);
+assert.equal(
+  session.verification?.earliestReachedTie?.outcome?.winner_slot,
+  "slot-2",
+);
+assert.equal(
+  session.verification?.earliestReachedTie?.outcome?.tiebreak,
+  "EarliestReached",
+);
+assert.equal(
+  session.verification?.earliestReachedTie?.outcome?.tallies?.["slot-1"],
+  2,
+);
+assert.equal(
+  session.verification?.earliestReachedTie?.outcome?.tallies?.["slot-2"],
+  2,
+);
+assert.equal(
+  session.verification?.earliestReachedTie?.ballotProofs?.length,
+  4,
+);
 assert.equal(proofRun.proof, "dev-test-game-proof-run");
 assert.equal(proofRun.status, "passed");
 assert.equal(proofRun.session.game, session.game);

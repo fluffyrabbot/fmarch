@@ -94,6 +94,10 @@ const artifactDir = path.join(repoRoot, "target", "dev-test-game");
 const sessionJsonPath = path.join(artifactDir, "session.json");
 const sessionMdPath = path.join(artifactDir, "session.md");
 const proofRunJsonPath = path.join(artifactDir, "proof-run.json");
+const earliestReachedProofJsonPath = path.join(
+  artifactDir,
+  "earliest-reached-proof.json",
+);
 const hostSetupSessionJsonPath = path.join(artifactDir, "host-setup-session.json");
 const hostSetupSessionMdPath = path.join(artifactDir, "host-setup-session.md");
 const hostSetupProofJsonPath = path.join(artifactDir, "host-setup-proof.json");
@@ -140,8 +144,11 @@ export async function main(rawArgs = process.argv.slice(2), env = process.env) {
     printHelp();
     return;
   }
-  if (args.verify && args.verifyHostSetupOnly) {
-    throw new Error("--verify and --verify-host-setup-only are mutually exclusive");
+  if (
+    [args.verify, args.verifyHostSetupOnly, args.verifyEarliestReachedOnly].filter(Boolean)
+      .length > 1
+  ) {
+    throw new Error("only one dev-test-game verification mode may be selected");
   }
 
   databaseUrl = args.databaseUrl ?? env.DATABASE_URL ?? defaultDatabaseUrl;
@@ -221,9 +228,11 @@ export async function main(rawArgs = process.argv.slice(2), env = process.env) {
   await writeNamedGame(gameName, card);
   printSessionCard(card);
 
-  if (args.verify || args.verifyHostSetupOnly) {
+  if (args.verify || args.verifyHostSetupOnly || args.verifyEarliestReachedOnly) {
     const verification = args.verifyHostSetupOnly
       ? await verifyHostSetupOnly(card)
+      : args.verifyEarliestReachedOnly
+        ? await verifyEarliestReachedOnly(card)
       : await verifySessionCard(card);
     card.verification = verification;
     await writeSessionArtifacts(card, sessionArtifacts);
@@ -234,6 +243,14 @@ export async function main(rawArgs = process.argv.slice(2), env = process.env) {
     );
     if (args.verifyHostSetupOnly) {
       console.log(`\nverified host setup browser proof: ${path.relative(repoRoot, hostSetupProofJsonPath)}`);
+    } else if (args.verifyEarliestReachedOnly) {
+      await writeFile(
+        earliestReachedProofJsonPath,
+        `${JSON.stringify(verification.earliestReachedTie, null, 2)}\n`,
+      );
+      console.log(
+        `\nverified earliest reached browser proof: ${path.relative(repoRoot, earliestReachedProofJsonPath)}`,
+      );
     } else {
       const proofRun = buildDevTestGameProofRun(card);
       assertDevTestGameProofRun(proofRun);
@@ -1203,6 +1220,7 @@ async function verifySessionCard(card) {
   let coreLoop;
   let dayVoteResolution;
   let dayVoteNoLynch;
+  let earliestReachedTie;
   let vanillizerRoleAction;
   let privateChannel;
   let actionLoop;
@@ -1307,6 +1325,15 @@ async function verifySessionCard(card) {
     });
     dayVoteNoLynch = await verifySeededDayVoteNoLynch({
       browser,
+      apiBaseUrl: card.apiBaseUrl,
+      frontendBaseUrl: card.frontendBaseUrl,
+    });
+    earliestReachedTie = await verifySeededEarliestReachedTie({
+      browser,
+      hostPage: roleEntries.host.page,
+      playerPage: roleEntries.player.page,
+      actionPage: roleEntries.actionPlayer.page,
+      targetPage: roleEntries.deniedPlayer.page,
       apiBaseUrl: card.apiBaseUrl,
       frontendBaseUrl: card.frontendBaseUrl,
     });
@@ -1419,6 +1446,7 @@ async function verifySessionCard(card) {
     coreLoop,
     dayVoteResolution,
     dayVoteNoLynch,
+    earliestReachedTie,
     vanillizerRoleAction,
     privateChannel,
     actionLoop,
@@ -1475,6 +1503,45 @@ async function verifyHostSetupOnly(card) {
     };
   } finally {
     await entry?.context.close().catch(() => {});
+    await browser.close();
+  }
+}
+
+async function verifyEarliestReachedOnly(card) {
+  const { chromium } = await import("playwright");
+  const browser = await chromium.launch();
+  const entries = {};
+  try {
+    for (const role of ["host", "player", "actionPlayer", "deniedPlayer"]) {
+      entries[role] = await openVerifiedRoleEntry({
+        browser,
+        session: card.sessions[role],
+        game: card.game,
+        apiBaseUrl: card.apiBaseUrl,
+        frontendBaseUrl: card.frontendBaseUrl,
+      });
+    }
+    const earliestReachedTie = await verifySeededEarliestReachedTie({
+      browser,
+      hostPage: entries.host.page,
+      playerPage: entries.player.page,
+      actionPage: entries.actionPlayer.page,
+      targetPage: entries.deniedPlayer.page,
+      apiBaseUrl: card.apiBaseUrl,
+      frontendBaseUrl: card.frontendBaseUrl,
+    });
+    return {
+      status: "passed",
+      roles: ["host", "player", "actionPlayer", "deniedPlayer"],
+      sessions: Object.fromEntries(
+        Object.entries(entries).map(([role, entry]) => [role, entry.verification]),
+      ),
+      earliestReachedTie,
+    };
+  } finally {
+    await Promise.all(
+      Object.values(entries).map((entry) => entry.context.close().catch(() => {})),
+    );
     await browser.close();
   }
 }
@@ -3132,6 +3199,206 @@ async function seedDayVoteResolutionGame({
     slotSevenRoleKey,
     slotFourRoleKey,
   };
+}
+
+async function verifySeededEarliestReachedTie({
+  browser,
+  hostPage,
+  playerPage,
+  actionPage,
+  targetPage,
+  apiBaseUrl,
+  frontendBaseUrl,
+}) {
+  const tieGame = crypto.randomUUID();
+  const seed = await seedEarliestReachedTieGame({ game: tieGame });
+  const seedSession = await createAccountLoginCredential({
+    principalUserId: "player-seed",
+    returnTo: `/g/${tieGame}`,
+    expectedCapabilityKind: "SlotOccupant",
+  });
+  const seedEntry = await openVerifiedRoleEntry({
+    browser,
+    session: seedSession,
+    game: tieGame,
+    apiBaseUrl,
+    frontendBaseUrl,
+  });
+  const hostProofPage = await hostPage.context().newPage();
+  const miraProofPage = await playerPage.context().newPage();
+  const actionProofPage = await actionPage.context().newPage();
+  const targetProofPage = await targetPage.context().newPage();
+  try {
+    await Promise.all([
+      gotoHostConsole(hostProofPage, tieGame),
+      gotoPlayerBoard(seedEntry.page, tieGame),
+      gotoPlayerBoard(miraProofPage, tieGame),
+      gotoPlayerBoard(actionProofPage, tieGame),
+      gotoPlayerBoard(targetProofPage, tieGame),
+    ]);
+
+    const votes = [
+      { page: seedEntry.page, actorSlot: "slot-4", targetSlot: "slot-2", count: 1 },
+      { page: miraProofPage, actorSlot: "slot-1", targetSlot: "slot-2", count: 2 },
+      { page: targetProofPage, actorSlot: "slot-2", targetSlot: "slot-1", count: 1 },
+      { page: actionProofPage, actorSlot: "slot-3", targetSlot: "slot-1", count: 2 },
+    ];
+    const ballotProofs = [];
+    for (const vote of votes) {
+      ballotProofs.push(await submitEarliestReachedBrowserVote(vote));
+    }
+
+    await hostProofPage.waitForFunction(
+      () =>
+        window.__fmarchHostVotecountProjection?.some(
+          (row) => row.target === "slot-1" && row.count === 2,
+        ) &&
+        window.__fmarchHostVotecountProjection?.some(
+          (row) => row.target === "slot-2" && row.count === 2,
+        ),
+    );
+    const resolve = await confirmHostAction(hostProofPage, "resolve_phase");
+    await hostProofPage.waitForFunction(
+      () =>
+        window.__fmarchHostDayVoteOutcomesProjection?.some(
+          (row) =>
+            row.phaseId === "D01" &&
+            row.status === "Lynch" &&
+            row.winnerSlot === "slot-2",
+        ),
+    );
+    await targetProofPage.waitForFunction(
+      () =>
+        window.__fmarchPlayerProjection?.commandState?.actorAlive === false &&
+        window.__fmarchPlayerProjection?.dayVoteOutcomes?.some(
+          (row) =>
+            row.phaseId === "D01" &&
+            row.status === "Lynch" &&
+            row.winnerSlot === "slot-2",
+        ),
+    );
+    const outcomes = await fetchJson(
+      `${apiBaseUrl}/games/${tieGame}/day-vote-outcomes`,
+    );
+    const outcome = outcomes.find((row) => row.kind === "DayVoteOutcomeApplied")?.body;
+    const hostOutcomePanel = await hostProofPage
+      .getByTestId("host-day-vote-outcome-latest")
+      .innerText();
+    const targetOutcomePanel = await targetProofPage
+      .getByTestId("player-day-vote-outcome-latest")
+      .innerText();
+    if (
+      resolve.commandStatus?.state !== "ack" ||
+      outcome?.status !== "Lynch" ||
+      outcome?.winner_slot !== "slot-2" ||
+      outcome?.tiebreak !== "EarliestReached" ||
+      outcome?.tallies?.["slot-1"] !== 2 ||
+      outcome?.tallies?.["slot-2"] !== 2 ||
+      !hostOutcomePanel.includes("Slot 2 was eliminated") ||
+      !targetOutcomePanel.includes("Slot 2 was eliminated")
+    ) {
+      throw new Error(
+        `earliest reached browser proof drifted: ${JSON.stringify({
+          tieGame,
+          seed,
+          ballotProofs,
+          resolve,
+          outcomes,
+          hostOutcomePanel,
+          targetOutcomePanel,
+        })}`,
+      );
+    }
+    return {
+      status: "passed",
+      game: tieGame,
+      pack: "dev_test_earliest_reached",
+      tieBreaker: "EarliestReached",
+      sourceRoleUrls: {
+        host: `${frontendBaseUrl}/g/${tieGame}/host`,
+        firstVoter: `${frontendBaseUrl}/g/${tieGame}`,
+        target: `${frontendBaseUrl}/g/${tieGame}`,
+      },
+      seed,
+      ballotProofs,
+      resolve,
+      outcome,
+      hostOutcomePanel,
+      targetOutcomePanel,
+      proof:
+        "A disposable EarliestReached pack game used four player role URLs to cast a 2-2 plurality tie, with Slot 2 reaching the final tally first, then the host role URL resolved D01 to the EarliestReached Slot 2 elimination shown to both host and eliminated player.",
+    };
+  } finally {
+    await hostProofPage.close().catch(() => {});
+    await miraProofPage.close().catch(() => {});
+    await actionProofPage.close().catch(() => {});
+    await targetProofPage.close().catch(() => {});
+    await seedEntry.context.close().catch(() => {});
+  }
+}
+
+async function submitEarliestReachedBrowserVote({
+  page,
+  actorSlot,
+  targetSlot,
+  count,
+}) {
+  await page.waitForFunction(
+    ({ actorSlot: expectedActorSlot, targetSlot: expectedTargetSlot }) =>
+      window.__fmarchPlayerProjection?.commandState?.actorSlot === expectedActorSlot &&
+      window.__fmarchPlayerProjection?.commandState?.voteTargets?.some(
+        (target) => target.kind === "slot" && target.slotId === expectedTargetSlot,
+      ),
+    { actorSlot, targetSlot },
+  );
+  const action = await page.evaluate((expectedTargetSlot) => {
+    const targets = window.__fmarchPlayerProjection?.commandState?.voteTargets ?? [];
+    const index = targets.findIndex(
+      (target) => target.kind === "slot" && target.slotId === expectedTargetSlot,
+    );
+    return index === 0 ? "submit_vote" : `submit_vote:${expectedTargetSlot}`;
+  }, targetSlot);
+  await page.locator(`[data-action="${action}"]`).click();
+  await page.waitForFunction(
+    (expectedTargetSlot) =>
+      window.__fmarchPlayerCommandStatus?.state === "ack" &&
+      window.__fmarchPlayerProjection?.commandState?.currentVote?.slotId ===
+        expectedTargetSlot,
+    targetSlot,
+  );
+  await waitForPlayerVotecount(page, { target: targetSlot, count });
+  return {
+    actorSlot,
+    targetSlot,
+    action,
+    commandStatus: await page.evaluate(() => window.__fmarchPlayerCommandStatus),
+    currentVote: await page.evaluate(
+      () => window.__fmarchPlayerProjection?.commandState?.currentVote ?? null,
+    ),
+  };
+}
+
+async function seedEarliestReachedTieGame({ game }) {
+  const roster = [
+    ["slot-1", "player-mira"],
+    ["slot-2", "player-target"],
+    ["slot-3", "player-goon-a"],
+    ["slot-4", "player-seed"],
+  ];
+  const plan = [
+    ["host_h", { CreateGame: { game, pack: "dev_test_earliest_reached" } }],
+    ...roster.flatMap(([slot, user]) => [
+      ["host_h", { AddSlot: { game, slot } }],
+      ["host_h", { AssignSlot: { game, slot, user } }],
+      ["host_h", { AssignRole: { game, slot, role_key: "citizen" } }],
+    ]),
+    ["host_h", { StartGame: { game, phase: "D01" } }],
+  ];
+  const commands = [];
+  for (const [principalUserId, command] of plan) {
+    commands.push(await sendCommand(principalUserId, command));
+  }
+  return { game, commands: commands.length, roster };
 }
 
 async function verifySeededDayVoteNoLynch({
@@ -25711,6 +25978,9 @@ export function parseArgs(values) {
       case "--verify-host-setup-only":
         parsed.verifyHostSetupOnly = true;
         break;
+      case "--verify-earliest-reached-only":
+        parsed.verifyEarliestReachedOnly = true;
+        break;
       case "--no-keepalive":
         parsed.noKeepalive = true;
         break;
@@ -25781,6 +26051,7 @@ Options:
   --token-prefix TEXT      Prefix for generated opaque login tokens
   --verify                 Verify host and player browser entry before returning
   --verify-host-setup-only Verify only the host setup role URL browser proof
+  --verify-earliest-reached-only Verify only the disposable EarliestReached role URL browser proof
   --no-keepalive           Stop started servers after seeding and writing artifacts
   --help                   Show this help
 `);

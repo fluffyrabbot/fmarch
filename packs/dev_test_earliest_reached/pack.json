@@ -1,0 +1,142 @@
+{
+  "name": "dev_test_earliest_reached",
+  "version": 1,
+  "ir_version": 46,
+  "roles": {
+    "citizen": {
+      "description": "Citizen. No night action; wins with town.",
+      "alignment": "town",
+      "actions": []
+    },
+    "guardian": {
+      "description": "Guardian. Each night protects one other slot from an ordinary kill.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "guardian_protect",
+          "ability": "Protect",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 70,
+            "x_shots": null
+          }
+        }
+      ]
+    },
+    "seer": {
+      "description": "Seer. Each night checks one slot and receives the default town/scum parity result.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "seer_check",
+          "ability": "Investigate",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 20,
+            "x_shots": null
+          },
+          "mode": "Parity"
+        }
+      ]
+    },
+    "agent": {
+      "description": "Agent. Carries the nightly faction kill for the opposing team.",
+      "alignment": "mafia",
+      "actions": [
+        {
+          "id": "agent_kill",
+          "ability": "Kill",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 30,
+            "x_shots": null
+          }
+        }
+      ]
+    }
+  },
+  "precedence": [
+    {
+      "id": "protect_beats_kill",
+      "when": { "effect": "Protect", "target_state": null },
+      "beats": ["Kill"],
+      "blocked_by": [],
+      "unless_modifiers": [],
+      "notes": "Guardian protection stops an ordinary Agent kill."
+    },
+    {
+      "id": "kill_resolves",
+      "when": { "effect": "Kill", "target_state": null },
+      "beats": [],
+      "blocked_by": ["Protect"],
+      "unless_modifiers": [],
+      "notes": "An Agent kill removes the target unless protected."
+    }
+  ],
+  "visibility": {
+    "Investigate": { "sees": ["TargetId", "Result"], "unless_modifiers": [] },
+    "Kill": { "sees": ["TargetId"], "unless_modifiers": [] },
+    "Protect": { "sees": ["TargetId"], "unless_modifiers": [] }
+  },
+  "visibility_families": [
+    "PrivateInvestigationResults"
+  ],
+  "redirects": {
+    "order": [],
+    "loop_cap": 8,
+    "tie_breaker": "Stable"
+  },
+  "triggers": [],
+  "vote": {
+    "method": "Plurality",
+    "no_lynch_allowed": true,
+    "self_vote_allowed": false,
+    "hammer": false,
+    "weights": "Equal",
+    "threshold_adjustments": {},
+    "tie_breaker": "EarliestReached"
+  },
+  "phases": {
+    "cadence": ["Day", "Night"],
+    "subsegments": {
+      "Day": ["main", "eod"],
+      "Night": ["actions"]
+    },
+    "twilight": false
+  },
+  "effects": {},
+  "win_families": [
+    "FactionElimination",
+    "FactionParity"
+  ],
+  "win": {
+    "rules": [
+      {
+        "winner": "town",
+        "when": { "FactionEliminated": "mafia" }
+      },
+      {
+        "winner": "mafia",
+        "when": { "FactionReachesParity": "mafia" }
+      }
+    ]
+  }
+}
