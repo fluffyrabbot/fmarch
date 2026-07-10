@@ -18,6 +18,8 @@ export { devTestGameRaceCoveragePath };
 export const hostLifecycleRaceCoverageCellId = "host-lifecycle";
 export const hostVotecountPublicationRaceCoverageCellId =
   "host-votecount-publication";
+export const hostPromptSelectionRaceCoverageCellId =
+  "host-prompt-selection";
 
 export const raceCoveragePromotedReloadGroups = Object.freeze(
   [
@@ -41,6 +43,9 @@ export const raceCoveragePromotedReloadGroups = Object.freeze(
         "host-mixed-advance",
         ...hostStandaloneRaceCoverageCellIds().filter(
           (id) => id === hostVotecountPublicationRaceCoverageCellId,
+        ),
+        ...hostStandaloneRaceCoverageCellIds().filter(
+          (id) => id === hostPromptSelectionRaceCoverageCellId,
         ),
         ...completedGameRaceCoverageCellIdsForPromotedGroup(
           "host-concurrent-race-reload",

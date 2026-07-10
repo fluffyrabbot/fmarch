@@ -347,6 +347,15 @@ export const hostStandaloneRaceCoverageCellDefinitions = Object.freeze([
     roleSurfaces: Object.freeze(["host"]),
     commandFacts: Object.freeze([]),
   }),
+  Object.freeze({
+    id: "host-prompt-selection",
+    actorPair: "host vs host",
+    commandFamily: "host prompt selection",
+    raceLaneId: "concurrent-host-prompt-selection-race",
+    reloadLaneId: "concurrent-host-prompt-selection-race-reload",
+    roleSurfaces: Object.freeze(["host", "player"]),
+    commandFacts: Object.freeze([]),
+  }),
 ]);
 
 const hostPhaseRaceReloadSpineTargetDefinitions = Object.freeze([
@@ -392,6 +401,13 @@ const hostStandaloneRaceReloadSpineTargetDefinitions = Object.freeze([
     targetKey: "hostConcurrentLifecycleRaceReload",
     featureSlotId: "host-concurrent-lifecycle-race-reload",
     reloadLaneId: hostStandaloneRaceCoverageCellDefinitions[1].reloadLaneId,
+    role: "host",
+    featureTargetKind: hardeningRaceReloadFeatureTargetKind,
+  }),
+  Object.freeze({
+    targetKey: "hostConcurrentPromptSelectionRaceReload",
+    featureSlotId: "host-concurrent-prompt-selection-race-reload",
+    reloadLaneId: hostStandaloneRaceCoverageCellDefinitions[2].reloadLaneId,
     role: "host",
     featureTargetKind: hardeningRaceReloadFeatureTargetKind,
   }),
@@ -474,9 +490,15 @@ export const hostLifecycleRaceLaneIds = Object.freeze([
   hostStandaloneRaceCoverageCellCase("host-lifecycle").reloadLaneId,
 ]);
 
+export const hostPromptSelectionRaceLaneIds = Object.freeze([
+  hostStandaloneRaceCoverageCellCase("host-prompt-selection").raceLaneId,
+  hostStandaloneRaceCoverageCellCase("host-prompt-selection").reloadLaneId,
+]);
+
 export const hostStandaloneRaceReloadLaneIds = Object.freeze([
   ...hostPublishRaceLaneIds,
   ...hostLifecycleRaceLaneIds,
+  ...hostPromptSelectionRaceLaneIds,
 ]);
 
 export const hostPhaseStaleRecoveryLaneIds = Object.freeze([

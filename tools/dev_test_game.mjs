@@ -87,6 +87,9 @@ import {
 import {
   devTestGameHostDecidesProofPath,
 } from "./dev_test_game_host_decides_proof_contract.mjs";
+import {
+  devTestGameHostDecidesRaceProofPath,
+} from "./dev_test_game_host_decides_race_proof_contract.mjs";
 
 export {
   seedPreSetupCommandPlanForGame,
@@ -110,6 +113,10 @@ const sessionMdPath = path.join(artifactDir, "session.md");
 const proofRunJsonPath = path.join(artifactDir, "proof-run.json");
 const earliestReachedProofJsonPath = path.join(repoRoot, devTestGameEarliestReachedProofPath);
 const hostDecidesProofJsonPath = path.join(repoRoot, devTestGameHostDecidesProofPath);
+const hostDecidesRaceProofJsonPath = path.join(
+  repoRoot,
+  devTestGameHostDecidesRaceProofPath,
+);
 const hostSetupSessionJsonPath = path.join(artifactDir, "host-setup-session.json");
 const hostSetupSessionMdPath = path.join(artifactDir, "host-setup-session.md");
 const hostSetupProofJsonPath = path.join(artifactDir, "host-setup-proof.json");
@@ -287,6 +294,15 @@ export async function main(rawArgs = process.argv.slice(2), env = process.env) {
       await writeFile(
         hostDecidesProofJsonPath,
         `${JSON.stringify(verification.hostDecidesTie, null, 2)}\n`,
+      );
+    }
+    const hostDecidesRace =
+      verification.hostDecidesRace ??
+      verification.multiplayerHardening?.concurrentHostPromptSelectionRace;
+    if (hostDecidesRace !== undefined) {
+      await writeFile(
+        hostDecidesRaceProofJsonPath,
+        `${JSON.stringify(hostDecidesRace, null, 2)}\n`,
       );
     }
     const hostSetupProof = buildDevTestGameHostSetupProof(card, verification);
@@ -1211,6 +1227,8 @@ export function markdownSessionCard(card) {
         "",
         `Concurrent host lifecycle race: ${card.verification.multiplayerHardening.concurrentHostLifecycleRace.reject.message}`,
         "",
+        `Concurrent HostDecides selection race: ${card.verification.multiplayerHardening.concurrentHostPromptSelectionRace.reject.message}`,
+        "",
         `Concurrent host complete race: ${card.verification.multiplayerHardening.concurrentHostCompleteRace.reject.message}`,
         "",
         `Concurrent host publish race: ${card.verification.multiplayerHardening.concurrentHostPublishRace.reject.message}`,
@@ -1638,6 +1656,13 @@ async function verifyHostDecidesOnly(card) {
       apiBaseUrl: card.apiBaseUrl,
       frontendBaseUrl: card.frontendBaseUrl,
     });
+    const concurrentHostPromptSelectionRace =
+      await verifyConcurrentHostPromptSelectionRace({
+        browser,
+        hostPage: entries.host.page,
+        apiBaseUrl: card.apiBaseUrl,
+        frontendBaseUrl: card.frontendBaseUrl,
+      });
     return {
       status: "passed",
       roles: ["host", "player", "actionPlayer", "deniedPlayer"],
@@ -1645,6 +1670,7 @@ async function verifyHostDecidesOnly(card) {
         Object.entries(entries).map(([role, entry]) => [role, entry.verification]),
       ),
       hostDecidesTie,
+      hostDecidesRace: concurrentHostPromptSelectionRace,
     };
   } finally {
     await Promise.all(
@@ -9835,6 +9861,13 @@ async function verifySeededMultiplayerHardening({
     frontendBaseUrl,
     game,
   });
+  const concurrentHostPromptSelectionRace =
+    await verifyConcurrentHostPromptSelectionRace({
+      browser: playerPage.context().browser(),
+      hostPage,
+      apiBaseUrl,
+      frontendBaseUrl,
+    });
   const staleHostComplete = await verifyStaleHostCompleteRecovery({
     hostPage,
     apiBaseUrl,
@@ -9915,6 +9948,7 @@ async function verifySeededMultiplayerHardening({
     staleHostResolve,
     staleHostAdvance,
     staleHostPrompt,
+    concurrentHostPromptSelectionRace,
     staleHostComplete,
     concurrentHostCompleteRace,
     concurrentPlayerCompleteRace,
@@ -9980,6 +10014,435 @@ async function verifyStaleHostPromptRecovery({
     await stalePromptRecovery?.close();
     await livePromptPage.close().catch(() => {});
   }
+}
+
+async function verifyConcurrentHostPromptSelectionRace({
+  browser,
+  hostPage,
+  apiBaseUrl,
+  frontendBaseUrl,
+}) {
+  const raceGame = crypto.randomUUID();
+  const promptId = "D01:pk:Tie";
+  const seed = await seedHostDecidesPromptRaceGame({ game: raceGame });
+  const hostContext = hostPage.context();
+  const slotOneHostPage = await hostContext.newPage();
+  const slotTwoHostPage = await hostContext.newPage();
+  const playerEntries = {};
+  try {
+    for (const [key, principalUserId] of [
+      ["slotOne", "player-mira"],
+      ["slotTwo", "player-target"],
+    ]) {
+      const session = await createAccountLoginCredential({
+        principalUserId,
+        returnTo: `/g/${raceGame}`,
+        expectedCapabilityKind: "SlotOccupant",
+      });
+      playerEntries[key] = await openVerifiedRoleEntry({
+        browser,
+        session,
+        game: raceGame,
+        apiBaseUrl,
+        frontendBaseUrl,
+      });
+    }
+    await Promise.all([
+      gotoHostConsole(slotOneHostPage, raceGame),
+      gotoHostConsole(slotTwoHostPage, raceGame),
+      gotoPlayerBoard(playerEntries.slotOne.page, raceGame),
+      gotoPlayerBoard(playerEntries.slotTwo.page, raceGame),
+    ]);
+    const choices = [
+      {
+        pageRole: "slot-one-host",
+        page: slotOneHostPage,
+        slot: "slot-1",
+        actionId: "resolve_host_prompt-D01-pk-Tie-slot-1",
+      },
+      {
+        pageRole: "slot-two-host",
+        page: slotTwoHostPage,
+        slot: "slot-2",
+        actionId: "resolve_host_prompt-D01-pk-Tie-slot-2",
+      },
+    ];
+    await Promise.all(
+      choices.map(({ page, actionId }) =>
+        page
+          .getByTestId(`critical-host-action-${actionId}`)
+          .waitFor({ state: "visible" }),
+      ),
+    );
+    await Promise.all([
+      playerEntries.slotOne.page.waitForFunction(
+        () => window.__fmarchPlayerProjection?.commandState?.actorAlive === true,
+      ),
+      playerEntries.slotTwo.page.waitForFunction(
+        () => window.__fmarchPlayerProjection?.commandState?.actorAlive === true,
+      ),
+    ]);
+    const setup = {
+      promptId,
+      hostRoleUrls: choices.map(
+        () => `${frontendBaseUrl}/g/${raceGame}/host`,
+      ),
+      playerRoleUrls: {
+        "slot-1": `${frontendBaseUrl}/g/${raceGame}`,
+        "slot-2": `${frontendBaseUrl}/g/${raceGame}`,
+      },
+      promptActions: await Promise.all(
+        choices.map(({ page }) => visibleHostControlActions(page, "host-prompts")),
+      ),
+      prompts: await Promise.all(
+        choices.map(({ page }) =>
+          page.evaluate(() => window.__fmarchHostPromptsProjection ?? []),
+        ),
+      ),
+    };
+    const previousStatuses = await Promise.all(
+      choices.map(({ page, actionId }) =>
+        page.evaluate(
+          (expectedActionId) =>
+            window.__fmarchHostCommandStatuses?.[expectedActionId] ?? null,
+          actionId,
+        ),
+      ),
+    );
+    const actionRoots = choices.map(({ page, actionId }) =>
+      page.getByTestId(`critical-host-action-${actionId}`),
+    );
+    await Promise.all(
+      actionRoots.map((root) =>
+        root.getByTestId("critical-host-action-trigger").click(),
+      ),
+    );
+    await Promise.all(
+      actionRoots.map((root) =>
+        root
+          .getByTestId("critical-host-action-confirmation")
+          .waitFor({ state: "visible" }),
+      ),
+    );
+    const confirmationMessages = await Promise.all(
+      actionRoots.map((root) =>
+        root.getByTestId("critical-host-action-confirmation-message").innerText(),
+      ),
+    );
+    await clickConcurrentCriticalHostActionConfirms(
+      choices.map((choice, index) => ({
+        actionRoot: actionRoots[index],
+        actionId: choice.actionId,
+        roleLabel: choice.pageRole,
+      })),
+    );
+    await Promise.all(
+      choices.map((choice, index) =>
+        choice.page.waitForFunction(
+          ({ expectedActionId, beforeCommandId }) => {
+            const status = window.__fmarchHostCommandStatuses?.[expectedActionId];
+            return (
+              status?.commandId !== beforeCommandId &&
+              (status?.state === "ack" || status?.state === "reject")
+            );
+          },
+          {
+            expectedActionId: choice.actionId,
+            beforeCommandId: previousStatuses[index]?.commandId ?? null,
+          },
+        ),
+      ),
+    );
+    const outcomes = await Promise.all(
+      choices.map(async (choice) => ({
+        ...choice,
+        outcome: await choice.page.evaluate(
+          (expectedActionId) =>
+            window.__fmarchHostCommandStatuses?.[expectedActionId] ?? null,
+          choice.actionId,
+        ),
+      })),
+    );
+    const ackEntries = outcomes.filter(({ outcome }) => outcome?.state === "ack");
+    const rejectEntries = outcomes.filter(
+      ({ outcome }) => outcome?.state === "reject",
+    );
+    const ackEntry = ackEntries[0];
+    const rejectEntry = rejectEntries[0];
+    await Promise.all(
+      choices.map(({ page }) =>
+        page.waitForFunction(
+          (expectedPromptId) =>
+            window.__fmarchHostPromptsProjection?.some(
+              (prompt) =>
+                prompt.id === expectedPromptId && prompt.status === "resolved",
+            ),
+          promptId,
+        ),
+      ),
+    );
+    const apiPrompts = await fetchJson(
+      `${apiBaseUrl}/games/${raceGame}/host-prompts?principal_user_id=host_h`,
+    );
+    const resolvedPrompt = apiPrompts.find(
+      (prompt) => prompt.prompt_id === promptId,
+    );
+    const selectedSlot = resolvedPrompt?.decision?.slot;
+    await waitForHostPromptSelectionPlayerConvergence({
+      playerEntries,
+      selectedSlot,
+    });
+    const [slotOneState, slotTwoState] = await Promise.all([
+      playerEntries.slotOne.page.evaluate(
+        () => window.__fmarchPlayerProjection?.commandState ?? null,
+      ),
+      playerEntries.slotTwo.page.evaluate(
+        () => window.__fmarchPlayerProjection?.commandState ?? null,
+      ),
+    ]);
+    const playerStates = {
+      "slot-1": slotOneState,
+      "slot-2": slotTwoState,
+    };
+    const activityStatusTexts = await Promise.all(
+      outcomes.map(({ page, actionId }) =>
+        page.getByTestId(`host-command-activity-status-${actionId}`).innerText(),
+      ),
+    );
+    const rejectActivityStatusText =
+      activityStatusTexts[outcomes.indexOf(rejectEntry)];
+    const roleReloadAfterRace =
+      await verifyConcurrentHostPromptSelectionRaceReload({
+        choices,
+        playerEntries,
+        raceGame,
+        promptId,
+        selectedSlot,
+        apiBaseUrl,
+      });
+    if (
+      setup.promptActions.some(
+        (actions) =>
+          !choices.every(({ actionId }) => actions.includes(actionId)),
+      ) ||
+      setup.prompts.some(
+        (prompts) =>
+          prompts.find((prompt) => prompt.id === promptId)?.status !== "pending",
+      ) ||
+      ackEntries.length !== 1 ||
+      rejectEntries.length !== 1 ||
+      ackEntry?.outcome?.serverEnvelope?.body?.kind !== "Ack" ||
+      ackEntry?.outcome?.requestEnvelope?.body?.body?.command?.ResolveHostPrompt
+        ?.decision?.SelectSlot?.slot !== ackEntry?.slot ||
+      rejectEntry?.outcome?.error !== "PromptAlreadyResolved" ||
+      rejectEntry?.outcome?.serverEnvelope?.body?.kind !== "Reject" ||
+      Array.isArray(rejectEntry?.outcome?.streamSeqs) ||
+      !rejectEntry?.outcome?.message?.includes("host prompt selection is stale") ||
+      ackEntry?.outcome?.commandId === rejectEntry?.outcome?.commandId ||
+      selectedSlot !== ackEntry?.slot ||
+      resolvedPrompt?.status !== "resolved" ||
+      resolvedPrompt?.decision?.kind !== "select_slot" ||
+      Object.values(playerStates).filter((state) => state?.actorAlive === false)
+        .length !== 1 ||
+      playerStates[selectedSlot]?.actorAlive !== false ||
+      Object.entries(playerStates).find(([slot]) => slot !== selectedSlot)?.[1]
+        ?.actorAlive !== true ||
+      !rejectActivityStatusText.includes("Reject PromptAlreadyResolved") ||
+      !rejectActivityStatusText.includes("host prompt selection is stale") ||
+      roleReloadAfterRace.status !== "passed"
+    ) {
+      throw new Error(
+        `concurrent HostDecides selection race drifted: ${JSON.stringify({
+          seed,
+          setup,
+          confirmationMessages,
+          outcomes: outcomes.map(({ page, ...entry }) => entry),
+          activityStatusTexts,
+          apiPrompts,
+          playerStates,
+          roleReloadAfterRace,
+        })}`,
+      );
+    }
+    return {
+      status: "passed",
+      game: raceGame,
+      promptId,
+      seed,
+      sourceRoleUrls: {
+        host: `${frontendBaseUrl}/g/${raceGame}/host`,
+        selectedPlayer: `${frontendBaseUrl}/g/${raceGame}`,
+        survivingPlayer: `${frontendBaseUrl}/g/${raceGame}`,
+      },
+      setup,
+      confirmationMessages,
+      ackPageRole: ackEntry.pageRole,
+      rejectPageRole: rejectEntry.pageRole,
+      ack: ackEntry.outcome,
+      reject: rejectEntry.outcome,
+      attemptedSelections: Object.fromEntries(
+        outcomes.map(({ pageRole, slot }) => [pageRole, slot]),
+      ),
+      selectedSlot,
+      resolvedPrompt,
+      playerStates,
+      rejectActivityStatusText,
+      roleReloadAfterRace,
+      proof:
+        "Two seeded host role pages raced different HostDecides contender controls with distinct command ids; one selection ACKed, one rejected PromptAlreadyResolved with explicit stale-selection recovery, one player died, one survived, and both host plus player role URLs reloaded to the single durable selection.",
+    };
+  } finally {
+    await slotOneHostPage.close().catch(() => {});
+    await slotTwoHostPage.close().catch(() => {});
+    await Promise.all(
+      Object.values(playerEntries).map((entry) =>
+        entry.context.close().catch(() => {}),
+      ),
+    );
+  }
+}
+
+async function seedHostDecidesPromptRaceGame({ game }) {
+  const seed = await seedHostDecidesTieGame({ game });
+  const votes = [
+    ["player-seed", "slot-4", "slot-2"],
+    ["player-mira", "slot-1", "slot-2"],
+    ["player-target", "slot-2", "slot-1"],
+    ["player-goon-a", "slot-3", "slot-1"],
+  ];
+  for (const [principalUserId, actorSlot, targetSlot] of votes) {
+    await sendCommand(principalUserId, {
+      SubmitVote: {
+        game,
+        actor_slot: actorSlot,
+        target: { Slot: targetSlot },
+      },
+    });
+  }
+  await sendCommand("host_h", { ResolvePhase: { game, seed: 918_733 } });
+  return {
+    ...seed,
+    commands: seed.commands + votes.length + 1,
+    promptId: "D01:pk:Tie",
+  };
+}
+
+async function verifyConcurrentHostPromptSelectionRaceReload({
+  choices,
+  playerEntries,
+  raceGame,
+  promptId,
+  selectedSlot,
+  apiBaseUrl,
+}) {
+  const [hostReloads, playerReloads] = await Promise.all([
+    Promise.all(choices.map(({ page }) => gotoHostConsole(page, raceGame))),
+    Promise.all(
+      Object.values(playerEntries).map(({ page }) =>
+        gotoPlayerBoard(page, raceGame),
+      ),
+    ),
+  ]);
+  await Promise.all(
+    choices.map(({ page }) =>
+      page.waitForFunction(
+        (expectedPromptId) =>
+          window.__fmarchHostPromptsProjection?.some(
+            (prompt) =>
+              prompt.id === expectedPromptId && prompt.status === "resolved",
+          ),
+        promptId,
+      ),
+    ),
+  );
+  await waitForHostPromptSelectionPlayerConvergence({
+    playerEntries,
+    selectedSlot,
+  });
+  const [hostPrompts, hostPromptActions, playerStates, apiPrompts] =
+    await Promise.all([
+      Promise.all(
+        choices.map(({ page }) =>
+          page.evaluate(() => window.__fmarchHostPromptsProjection ?? []),
+        ),
+      ),
+      Promise.all(
+        choices.map(({ page }) =>
+          visibleHostControlActions(page, "host-prompts"),
+        ),
+      ),
+      Promise.all(
+        Object.entries(playerEntries).map(async ([key, { page }]) => [
+          key === "slotOne" ? "slot-1" : "slot-2",
+          await page.evaluate(
+            () => window.__fmarchPlayerProjection?.commandState ?? null,
+          ),
+        ]),
+      ),
+      fetchJson(
+        `${apiBaseUrl}/games/${raceGame}/host-prompts?principal_user_id=host_h`,
+      ),
+    ]);
+  const stateBySlot = Object.fromEntries(playerStates);
+  const resolvedPrompt = apiPrompts.find(
+    (prompt) => prompt.prompt_id === promptId,
+  );
+  if (
+    hostReloads.some((response) => response.status !== 200) ||
+    playerReloads.some((response) => response.status !== 200) ||
+    hostPrompts.some(
+      (prompts) =>
+        prompts.find((prompt) => prompt.id === promptId)?.status !== "resolved",
+    ) ||
+    hostPromptActions.some((actions) => actions.length !== 0) ||
+    resolvedPrompt?.status !== "resolved" ||
+    resolvedPrompt?.decision?.slot !== selectedSlot ||
+    stateBySlot[selectedSlot]?.actorAlive !== false ||
+    Object.entries(stateBySlot).find(([slot]) => slot !== selectedSlot)?.[1]
+      ?.actorAlive !== true
+  ) {
+    throw new Error(
+      `concurrent HostDecides reload drifted: ${JSON.stringify({
+        hostReloadStatuses: hostReloads.map((response) => response.status),
+        playerReloadStatuses: playerReloads.map((response) => response.status),
+        hostPrompts,
+        hostPromptActions,
+        stateBySlot,
+        apiPrompts,
+        selectedSlot,
+      })}`,
+    );
+  }
+  return {
+    status: "passed",
+    hostRouteStatuses: hostReloads.map((response) => response.status),
+    playerRouteStatuses: playerReloads.map((response) => response.status),
+    hostPrompts,
+    hostPromptActions,
+    playerStates: stateBySlot,
+    resolvedPrompt,
+  };
+}
+
+async function waitForHostPromptSelectionPlayerConvergence({
+  playerEntries,
+  selectedSlot,
+}) {
+  if (selectedSlot !== "slot-1" && selectedSlot !== "slot-2") {
+    throw new Error(`HostDecides selected slot is invalid: ${selectedSlot ?? "missing"}`);
+  }
+  await Promise.all([
+    playerEntries.slotOne.page.waitForFunction(
+      (expectedAlive) =>
+        window.__fmarchPlayerProjection?.commandState?.actorAlive === expectedAlive,
+      selectedSlot !== "slot-1",
+    ),
+    playerEntries.slotTwo.page.waitForFunction(
+      (expectedAlive) =>
+        window.__fmarchPlayerProjection?.commandState?.actorAlive === expectedAlive,
+      selectedSlot !== "slot-2",
+    ),
+  ]);
 }
 
 async function seedHostPromptRecoveryGame({ promptGame, promptId }) {
@@ -25455,13 +25918,7 @@ async function confirmHostAction(page, actionId, expectedState = "ack") {
   await trigger.waitFor({ state: "visible" });
   await trigger.click();
 
-  await actionRoot.getByTestId("critical-host-action-confirmation").waitFor({
-    state: "visible",
-  });
-  const confirmationMessage = await actionRoot
-    .getByTestId("critical-host-action-confirmation-message")
-    .innerText();
-  await clickCriticalHostActionConfirm(actionRoot, {
+  const confirmationMessage = await clickCriticalHostActionConfirm(actionRoot, {
     actionId,
     expectedState,
     previousCommandStatus,
@@ -25573,9 +26030,10 @@ async function clickCriticalHostActionConfirm(
 ) {
   const confirm = actionRoot.getByTestId("critical-host-action-confirm");
   let lastError;
+  let confirmationMessage;
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
-      await ensureCriticalHostActionConfirmation(actionRoot, confirm, {
+      confirmationMessage = await ensureCriticalHostActionConfirmation(actionRoot, confirm, {
         timeoutMs,
       });
       await confirm.click({ timeout: 5_000 });
@@ -25585,7 +26043,7 @@ async function clickCriticalHostActionConfirm(
         method: attempt === 0 ? "playwright-first" : "playwright-retry",
         attempts: attempt + 1,
       });
-      return;
+      return confirmationMessage;
     } catch (error) {
       lastError = error;
       if (
@@ -25597,13 +26055,13 @@ async function clickCriticalHostActionConfirm(
           attempts: attempt + 1,
         })
       ) {
-        return;
+        return confirmationMessage ?? "";
       }
       await delay(100);
     }
   }
   try {
-    await ensureCriticalHostActionConfirmation(actionRoot, confirm, {
+    confirmationMessage = await ensureCriticalHostActionConfirmation(actionRoot, confirm, {
       timeoutMs,
     });
     await confirm.evaluate((node) => node.click());
@@ -25613,12 +26071,12 @@ async function clickCriticalHostActionConfirm(
       method: "dom-fallback",
       attempts: 4,
     });
-    return;
+    return confirmationMessage;
   } catch (error) {
     lastError = error;
   }
   try {
-    await ensureCriticalHostActionConfirmation(actionRoot, confirm, {
+    confirmationMessage = await ensureCriticalHostActionConfirmation(actionRoot, confirm, {
       timeoutMs,
     });
     await confirm.click({ timeout: 5_000, force: true });
@@ -25628,7 +26086,7 @@ async function clickCriticalHostActionConfirm(
       method: "force-fallback",
       attempts: 5,
     });
-    return;
+    return confirmationMessage;
   } catch {
     await throwCriticalHostActionConfirmClickError(actionRoot, {
       actionId,
@@ -25644,12 +26102,17 @@ async function ensureCriticalHostActionConfirmation(
   { timeoutMs },
 ) {
   if (await confirm.isVisible().catch(() => false)) {
-    return;
+    return await actionRoot
+      .getByTestId("critical-host-action-confirmation-message")
+      .innerText({ timeout: timeoutMs });
   }
   const trigger = actionRoot.getByTestId("critical-host-action-trigger");
   await trigger.waitFor({ state: "visible", timeout: timeoutMs });
   await trigger.click({ timeout: timeoutMs });
   await confirm.waitFor({ state: "visible", timeout: timeoutMs });
+  return await actionRoot
+    .getByTestId("critical-host-action-confirmation-message")
+    .innerText({ timeout: timeoutMs });
 }
 
 async function recoverSettledCriticalHostActionClick(

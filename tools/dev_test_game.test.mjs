@@ -31,6 +31,10 @@ import {
   devTestGameHostDecidesProofSummary,
 } from "./dev_test_game_host_decides_proof_contract.mjs";
 import {
+  assertDevTestGameHostDecidesRaceProof,
+  devTestGameHostDecidesRaceProofSummary,
+} from "./dev_test_game_host_decides_race_proof_contract.mjs";
+import {
   buildVanillizerRoleActionProofFixture,
   vanillizerRoleActionLaneId,
 } from "./dev_test_game_vanillizer_scenario.mjs";
@@ -989,6 +993,66 @@ test("HostDecides browser proof has a standalone artifact contract", () => {
   });
   assert.throws(
     () => assertDevTestGameHostDecidesProof({ ...proof, promptActions: [] }),
+    /contract drifted/,
+  );
+});
+
+test("HostDecides race browser proof has a standalone artifact contract", () => {
+  const proof = {
+    status: "passed",
+    promptId: "D01:pk:Tie",
+    sourceRoleUrls: { host: "http://127.0.0.1:5173/g/game-a/host" },
+    ackPageRole: "slot-two-host",
+    rejectPageRole: "slot-one-host",
+    ack: { state: "ack", commandId: "ack" },
+    reject: {
+      state: "reject",
+      commandId: "reject",
+      error: "PromptAlreadyResolved",
+      message:
+        "Reject PromptAlreadyResolved: host prompt selection is stale",
+    },
+    selectedSlot: "slot-2",
+    resolvedPrompt: {
+      status: "resolved",
+      decision: { kind: "select_slot", slot: "slot-2" },
+    },
+    playerStates: {
+      "slot-1": { actorAlive: true },
+      "slot-2": { actorAlive: false },
+    },
+    roleReloadAfterRace: {
+      status: "passed",
+      hostRouteStatuses: [200, 200],
+      playerRouteStatuses: [200, 200],
+      hostPromptActions: [[], []],
+      playerStates: {
+        "slot-1": { actorAlive: true },
+        "slot-2": { actorAlive: false },
+      },
+    },
+  };
+  assert.equal(assertDevTestGameHostDecidesRaceProof(proof), proof);
+  assert.deepEqual(devTestGameHostDecidesRaceProofSummary(proof), {
+    status: "passed",
+    promptId: "D01:pk:Tie",
+    selectedSlot: "slot-2",
+    ackPageRole: "slot-two-host",
+    rejectPageRole: "slot-one-host",
+    rejectError: "PromptAlreadyResolved",
+    hostReloadCount: 2,
+    playerReloadCount: 2,
+    hostRoleUrl: "http://127.0.0.1:5173/g/game-a/host",
+  });
+  assert.throws(
+    () =>
+      assertDevTestGameHostDecidesRaceProof({
+        ...proof,
+        playerStates: {
+          "slot-1": { actorAlive: false },
+          "slot-2": { actorAlive: false },
+        },
+      }),
     /contract drifted/,
   );
 });
@@ -2009,8 +2073,13 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     { kind: "node", script: "tools/dev_test_game_proof_contract.mjs" },
     { kind: "node", script: "tools/dev_test_game_core_loop_admin_proof.mjs" },
     ...recoveryReceiptProofPlanSteps(coreLoopRecoveryReceiptSelector),
+    {
+      kind: "node",
+      script: "tools/dev_test_game_host_decides_race_proof_contract.mjs",
+    },
     { kind: "node", script: "tools/dev_test_game_hardening_admin_proof.mjs" },
     ...recoveryReceiptProofPlanSteps(hardeningRecoveryReceiptSelector),
+    { kind: "node", script: "tools/dev_test_game_race_coverage.mjs" },
     {
       kind: "node",
       script: devTestGameReleaseReadinessScript,
@@ -2019,11 +2088,13 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
         "target/dev-test-game/proof-run.json",
         "target/dev-test-game/earliest-reached-proof.json",
         "target/dev-test-game/host-decides-proof.json",
+        "target/dev-test-game/host-decides-race-proof.json",
         devTestGameHostSetupProofPath,
         devTestGameCoreLoopAdminProofPath,
         ...recoveryReceiptProofTargets(coreLoopRecoveryReceiptSelector),
         devTestGameHardeningAdminProofPath,
         ...recoveryReceiptProofTargets(hardeningRecoveryReceiptSelector),
+        devTestGameRaceCoveragePath,
       ],
     },
   ]);
@@ -5525,8 +5596,8 @@ test("dev test-game next-action derives one local recovery command from the mani
     strategy: "host-concurrent-race-reload-before-readiness",
     status: "covered",
     source: devTestGameRaceCoveragePath,
-    requiredCellCount: 7,
-    coveredCellCount: 7,
+    requiredCellCount: 8,
+    coveredCellCount: 8,
     gapCount: 0,
     cells: hostConcurrentRaceReloadCellsFixture(),
   });
@@ -7834,7 +7905,7 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
     (row) =>
       row.id === `feature-target-kind:${hardeningRaceReloadFeatureTargetKind}`,
   );
-  assert.equal(hardeningRaceReloadKindRow?.featureSlotIds.length, 14);
+  assert.equal(hardeningRaceReloadKindRow?.featureSlotIds.length, 15);
   for (const featureSlotId of [
     "completed-game-host-complete-race-reload",
     "completed-game-public-player-complete-reload",
@@ -7844,6 +7915,7 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
     "host-concurrent-mixed-advance-race-reload",
     "host-concurrent-publish-race-reload",
     "host-concurrent-lifecycle-race-reload",
+    "host-concurrent-prompt-selection-race-reload",
     "player-host-vote-resolve-race-reload",
     "player-host-action-advance-race-reload",
     "cohost-host-deadline-resolve-race-reload",
@@ -17340,6 +17412,56 @@ test("session card and markdown include role credential URLs and tokens", async 
           ],
         },
       },
+      concurrentHostPromptSelectionRace: {
+        status: "passed",
+        game: `${game}-prompt-race-test`,
+        promptId: "D01:pk:Tie",
+        sourceRoleUrls: {
+          host: `/g/${game}-prompt-race-test/host`,
+          selectedPlayer: `/g/${game}-prompt-race-test`,
+          survivingPlayer: `/g/${game}-prompt-race-test`,
+        },
+        ackPageRole: "slot-two-host",
+        rejectPageRole: "slot-one-host",
+        ack: {
+          state: "ack",
+          commandId: "prompt-race-ack",
+          serverEnvelope: { body: { kind: "Ack" } },
+        },
+        reject: {
+          state: "reject",
+          commandId: "prompt-race-reject",
+          error: "PromptAlreadyResolved",
+          message:
+            "Reject PromptAlreadyResolved: prompt already resolved; host prompt selection is stale, refresh the host console and use current prompt controls",
+          serverEnvelope: { body: { kind: "Reject" } },
+        },
+        selectedSlot: "slot-2",
+        resolvedPrompt: {
+          status: "resolved",
+          decision: { kind: "select_slot", slot: "slot-2" },
+        },
+        playerStates: {
+          "slot-1": { actorAlive: true, actorStatus: "alive" },
+          "slot-2": { actorAlive: false, actorStatus: "dead" },
+        },
+        rejectActivityStatusText:
+          "Reject PromptAlreadyResolved: prompt already resolved; host prompt selection is stale, refresh the host console and use current prompt controls",
+        roleReloadAfterRace: {
+          status: "passed",
+          hostRouteStatuses: [200, 200],
+          playerRouteStatuses: [200, 200],
+          hostPromptActions: [[], []],
+          resolvedPrompt: {
+            status: "resolved",
+            decision: { kind: "select_slot", slot: "slot-2" },
+          },
+          playerStates: {
+            "slot-1": { actorAlive: true, actorStatus: "alive" },
+            "slot-2": { actorAlive: false, actorStatus: "dead" },
+          },
+        },
+      },
       staleHostComplete: {
         status: "passed",
         game: `${game}-complete-test`,
@@ -18086,6 +18208,8 @@ test("session card and markdown include role credential URLs and tokens", async 
       "concurrent-host-lifecycle-race-reload",
       "stale-host-prompt",
       "stale-host-prompt-reload",
+      "concurrent-host-prompt-selection-race",
+      "concurrent-host-prompt-selection-race-reload",
       "stale-host-complete",
       "stale-host-complete-reload",
       "stale-host-complete-reconnect-recovery",
@@ -18134,10 +18258,10 @@ test("session card and markdown include role credential URLs and tokens", async 
   assert.equal(raceCoverage.status, "passed");
   assert.equal(raceCoverage.releaseReady, false);
   assert.equal(raceCoverage.productionReady, false);
-  assert.equal(raceCoverage.summary.cellCount, 16);
-  assert.equal(raceCoverage.summary.provenCellCount, 16);
-  assert.equal(raceCoverage.summary.reloadRequiredCellCount, 16);
-  assert.equal(raceCoverage.summary.reloadCoveredCellCount, 16);
+  assert.equal(raceCoverage.summary.cellCount, 17);
+  assert.equal(raceCoverage.summary.provenCellCount, 17);
+  assert.equal(raceCoverage.summary.reloadRequiredCellCount, 17);
+  assert.equal(raceCoverage.summary.reloadCoveredCellCount, 17);
   assert.equal(raceCoverage.summary.reloadGapCount, 0);
   assert.deepEqual(
     raceCoverage.cells
@@ -18150,6 +18274,7 @@ test("session card and markdown include role credential URLs and tokens", async 
       "host-lifecycle",
       "host-mixed-advance",
       "host-votecount-publication",
+      "host-prompt-selection",
       "host-complete-game",
     ],
   );
@@ -18530,7 +18655,7 @@ test("session card and markdown include role credential URLs and tokens", async 
     raceCoverageReadiness.localDevelopmentSpine.checks.find(
       (item) => item.id === "local-race-coverage-inventory",
     ).cellCount,
-    16,
+    17,
   );
   assert.equal(
     raceCoverageReadiness.localDevelopmentSpine.checks.find(
@@ -18604,8 +18729,8 @@ test("session card and markdown include role credential URLs and tokens", async 
     hostedMatrix.requestedEvidence.firstProofTarget,
     devTestGameHostedConcurrentRaceMatrixPath,
   );
-  assert.equal(hostedMatrix.summary.cellCount, 16);
-  assert.equal(hostedMatrix.summary.reloadCoveredCellCount, 16);
+  assert.equal(hostedMatrix.summary.cellCount, 17);
+  assert.equal(hostedMatrix.summary.reloadCoveredCellCount, 17);
   assert.equal(
     hostedMatrix.summary.reconnectLaneCount,
     hostedMatrixReconnectLaneIds.length,
@@ -19133,7 +19258,7 @@ test("session card and markdown include role credential URLs and tokens", async 
       (item) =>
         item.id === "local-hosted-concurrent-race-matrix" &&
         item.status === "passed" &&
-        item.cellCount === 16 &&
+        item.cellCount === 17 &&
         item.staleConflictMilestones?.[0]?.id ===
           hostedMatrixStaleConflictMilestoneCases()[0].id,
     ),
@@ -19332,7 +19457,7 @@ test("session card and markdown include role credential URLs and tokens", async 
     devTestGameHostedOpsSignalsPath,
     "target/dev-test-game/hosted-ops-signals.json",
   );
-  assert.equal(hostedOpsSignals.matrix.cellCount, 16);
+  assert.equal(hostedOpsSignals.matrix.cellCount, 17);
   assert.equal(
     hostedOpsSignals.checks.find(
       (check) => check.id === hostedOpsTelemetryBoundaryCheckId,
@@ -19361,7 +19486,7 @@ test("session card and markdown include role credential URLs and tokens", async 
       (item) => item.id === "local-hosted-ops-signals",
     );
   assert.equal(hostedOpsReadinessCheck.status, "passed");
-  assert.equal(hostedOpsReadinessCheck.cellCount, 16);
+  assert.equal(hostedOpsReadinessCheck.cellCount, 17);
   assert.equal(
     hostedOpsReadinessCheck.realHostedObservabilityHandoffAdminRoleSurface
       .path,
@@ -22026,6 +22151,11 @@ function devTestGameRaceCoverageFixture() {
       "concurrent-host-publish-race",
       "concurrent-host-publish-race-reload",
     ),
+    raceCoverageCell(
+      "host-prompt-selection",
+      "concurrent-host-prompt-selection-race",
+      "concurrent-host-prompt-selection-race-reload",
+    ),
     ...completedGameRaceCoverageCellCases().map(
       ({ id, raceLaneId, reloadLaneId }) =>
         raceCoverageCell(id, raceLaneId, reloadLaneId),
@@ -22108,6 +22238,13 @@ function hostConcurrentRaceReloadCellsFixture() {
       id: "host-votecount-publication",
       raceLaneId: "concurrent-host-publish-race",
       reloadLaneId: "concurrent-host-publish-race-reload",
+      reloadStatus: "passed",
+      covered: true,
+    },
+    {
+      id: "host-prompt-selection",
+      raceLaneId: "concurrent-host-prompt-selection-race",
+      reloadLaneId: "concurrent-host-prompt-selection-race-reload",
       reloadStatus: "passed",
       covered: true,
     },
@@ -24324,6 +24461,8 @@ function hardeningAdminProofFixture({
         "stale-host-modkill-reload",
         "stale-host-prompt",
         "stale-host-prompt-reload",
+        "concurrent-host-prompt-selection-race",
+        "concurrent-host-prompt-selection-race-reload",
         "stale-host-complete",
         "stale-host-complete-reload",
         "stale-host-complete-reconnect-recovery",
@@ -26140,8 +26279,8 @@ function nextActionAdminProofLocalReadinessDependencyFixture({
     strategy: "host-concurrent-race-reload-before-readiness",
     status: "covered",
     source: devTestGameRaceCoveragePath,
-    requiredCellCount: 7,
-    coveredCellCount: 7,
+    requiredCellCount: 8,
+    coveredCellCount: 8,
     gapCount: 0,
     cells: hostConcurrentRaceReloadCellsFixture(),
   };
@@ -26325,10 +26464,11 @@ function raceCoverageAdminProofFixture() {
         "host-deadline-advance",
         "host-lifecycle",
         "host-mixed-advance",
+        "host-prompt-selection",
         ...completedGameRaceCoverageCellIds(),
       ],
-      cellCount: 16,
-      reloadCoveredCellCount: 15,
+      cellCount: 17,
+      reloadCoveredCellCount: 17,
     },
     adminRoleSurface: {
       status: "passed",
@@ -26351,6 +26491,7 @@ function raceCoverageAdminProofFixture() {
         "host-deadline-advance",
         "host-lifecycle",
         "host-mixed-advance",
+        "host-prompt-selection",
         ...completedGameRaceCoverageCellIds(),
       ],
       rawInviteTokensVisible: false,

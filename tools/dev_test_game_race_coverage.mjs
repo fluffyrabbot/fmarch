@@ -23,6 +23,7 @@ import {
 import {
   devTestGameRaceCoveragePath,
   hostLifecycleRaceCoverageCellId,
+  hostPromptSelectionRaceCoverageCellId,
   hostVotecountPublicationRaceCoverageCellId,
   raceCoveragePromotedReloadGroup,
   raceCoveragePromotedReloadGroups,
@@ -81,6 +82,9 @@ const raceCells = Object.freeze([
   ),
   ...hostStandaloneRaceCoverageCells.filter(
     (cell) => cell.id === hostVotecountPublicationRaceCoverageCellId,
+  ),
+  ...hostStandaloneRaceCoverageCells.filter(
+    (cell) => cell.id === hostPromptSelectionRaceCoverageCellId,
   ),
   ...completedGameRaceCoverageCellCases().map(raceCell),
 ]);

@@ -26,6 +26,7 @@ export {
   hostPhaseStaleControlLaneIds,
   hostPhaseStaleRecoveryLaneIds,
   hostPromptStaleControlLaneIds,
+  hostPromptSelectionRaceLaneIds,
   hostPublishRaceLaneIds,
   hostRaceReloadLaneIds,
   hostStandaloneRaceCoverageCellCase,

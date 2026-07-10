@@ -14,6 +14,7 @@ import {
 import {
   hostCohostRaceRecoveryLaneIds,
   hostLifecycleRaceLaneIds,
+  hostPromptSelectionRaceLaneIds,
   hostPublishRaceLaneIds,
 } from "./dev_test_game_host_stale_recovery_scenarios.mjs";
 import {
@@ -63,6 +64,7 @@ export const seedRequiredScenarioIds = Object.freeze([
   "replacement-stale-private-post-after-complete-reload",
   ...hostCohostRaceRecoveryLaneIds.slice(0, 14),
   ...hostLifecycleRaceLaneIds,
+  ...hostPromptSelectionRaceLaneIds,
   ...completedHostRaceHardeningLaneIds(),
   "stale-host-prompt-reload",
   ...completedHostStaleCommandSeedRecoveryLaneIds(),

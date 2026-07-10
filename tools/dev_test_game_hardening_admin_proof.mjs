@@ -25,6 +25,11 @@ import {
   devTestGameProofRunPath,
 } from "./dev_test_game_spine_artifact_paths.mjs";
 import {
+  assertDevTestGameHostDecidesRaceProof,
+  devTestGameHostDecidesRaceProofPath,
+  devTestGameHostDecidesRaceProofSummary,
+} from "./dev_test_game_host_decides_race_proof_contract.mjs";
+import {
   proveAdminAuditDetail,
   readJson,
   repoRoot,
@@ -37,6 +42,15 @@ const proofRunPath = path.resolve(
     devTestGameProofRunPath,
 );
 const proofRunRelativePath = path.relative(repoRoot, proofRunPath);
+const hostDecidesRaceProofPath = path.resolve(
+  repoRoot,
+  process.env.FMARCH_DEV_TEST_GAME_HOST_DECIDES_RACE_PROOF ??
+    devTestGameHostDecidesRaceProofPath,
+);
+const hostDecidesRaceProofRelativePath = path.relative(
+  repoRoot,
+  hostDecidesRaceProofPath,
+);
 const evidencePath = path.join(repoRoot, devTestGameHardeningAdminProofPath);
 const requiredChecks = hardeningAuditLaneIds;
 
@@ -47,8 +61,15 @@ export function hardeningAdminProofCase() {
     evidencePath,
     envOverrides: {
       FMARCH_DEV_TEST_GAME_PROOF_RUN: proofRunRelativePath,
+      FMARCH_DEV_TEST_GAME_HOST_DECIDES_RACE_PROOF:
+        hostDecidesRaceProofRelativePath,
     },
-    loadSource: async () => assertDevTestGameProofRun(await readJson(proofRunPath)),
+    loadSource: async () => ({
+      ...assertDevTestGameProofRun(await readJson(proofRunPath)),
+      hostDecidesRaceArtifact: assertDevTestGameHostDecidesRaceProof(
+        await readJson(hostDecidesRaceProofPath),
+      ),
+    }),
     prove: async ({ browser, frontendBaseUrl, source: proofRun }) => {
       const highlightedLaneEvidence = hardeningHighlightedLaneEvidence(proofRun);
       const playerRecoveryHighlightedLaneEvidence = Object.fromEntries(
@@ -94,6 +115,11 @@ export function hardeningAdminProofCase() {
         hostStaleControlLaneIds: [...hostStaleControlLaneIds],
         hardeningRecoveryAuditLaneIds: [...hardeningRecoveryAuditLaneIds],
         staleConflictMessageLaneIds: [...staleConflictMessageLaneIds],
+        hostDecidesRaceProof: hostDecidesRaceProofRelativePath,
+        hostDecidesRaceProofSummary:
+          devTestGameHostDecidesRaceProofSummary(
+            proofRun.hostDecidesRaceArtifact,
+          ),
       },
       adminRoleSurface: surfaces.adminRoleSurface,
       playerRecoveryRoleSurface: surfaces.playerRecoveryRoleSurface,

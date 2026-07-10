@@ -5602,6 +5602,111 @@ export function buildDevTestGameProofRun(session, options = {}) {
             )?.status === "resolved",
       },
     ),
+    lane(
+      "concurrent-host-prompt-selection-race",
+      "Concurrent HostDecides selections converge to one durable choice",
+      {
+        game: hardening.concurrentHostPromptSelectionRace?.game ?? null,
+        promptId:
+          hardening.concurrentHostPromptSelectionRace?.promptId ?? null,
+        selectedSlot:
+          hardening.concurrentHostPromptSelectionRace?.selectedSlot ?? null,
+        ackPageRole:
+          hardening.concurrentHostPromptSelectionRace?.ackPageRole ?? null,
+        rejectPageRole:
+          hardening.concurrentHostPromptSelectionRace?.rejectPageRole ?? null,
+        rejectError:
+          hardening.concurrentHostPromptSelectionRace?.reject?.error ?? null,
+        rejectMessage:
+          hardening.concurrentHostPromptSelectionRace?.reject?.message ?? null,
+        passed:
+          hardening.concurrentHostPromptSelectionRace?.status === "passed" &&
+          hardening.concurrentHostPromptSelectionRace?.promptId ===
+            "D01:pk:Tie" &&
+          hardening.concurrentHostPromptSelectionRace?.ack?.state === "ack" &&
+          hardening.concurrentHostPromptSelectionRace?.ack?.serverEnvelope?.body
+            ?.kind === "Ack" &&
+          hardening.concurrentHostPromptSelectionRace?.reject?.state ===
+            "reject" &&
+          hardening.concurrentHostPromptSelectionRace?.reject?.error ===
+            "PromptAlreadyResolved" &&
+          hardening.concurrentHostPromptSelectionRace?.reject?.serverEnvelope
+            ?.body?.kind === "Reject" &&
+          Array.isArray(
+            hardening.concurrentHostPromptSelectionRace?.reject?.streamSeqs,
+          ) === false &&
+          hardening.concurrentHostPromptSelectionRace?.reject?.message?.includes(
+            "host prompt selection is stale",
+          ) === true &&
+          hardening.concurrentHostPromptSelectionRace?.ack?.commandId !==
+            hardening.concurrentHostPromptSelectionRace?.reject?.commandId &&
+          hardening.concurrentHostPromptSelectionRace?.resolvedPrompt?.status ===
+            "resolved" &&
+          hardening.concurrentHostPromptSelectionRace?.resolvedPrompt?.decision
+            ?.kind === "select_slot" &&
+          hardening.concurrentHostPromptSelectionRace?.resolvedPrompt?.decision
+            ?.slot ===
+            hardening.concurrentHostPromptSelectionRace?.selectedSlot &&
+          Object.values(
+            hardening.concurrentHostPromptSelectionRace?.playerStates ?? {},
+          ).filter((state) => state?.actorAlive === false).length === 1 &&
+          hardening.concurrentHostPromptSelectionRace?.playerStates?.[
+            hardening.concurrentHostPromptSelectionRace?.selectedSlot
+          ]?.actorAlive === false &&
+          hardening.concurrentHostPromptSelectionRace?.rejectActivityStatusText
+            ?.includes("Reject PromptAlreadyResolved") === true &&
+          typeof hardening.concurrentHostPromptSelectionRace?.sourceRoleUrls
+            ?.host === "string" &&
+          hardening.concurrentHostPromptSelectionRace.sourceRoleUrls.host.includes(
+            "/g/",
+          ),
+      },
+    ),
+    lane(
+      "concurrent-host-prompt-selection-race-reload",
+      "Concurrent HostDecides race reloads one resolved prompt and player death",
+      {
+        game: hardening.concurrentHostPromptSelectionRace?.game ?? null,
+        selectedSlot:
+          hardening.concurrentHostPromptSelectionRace?.selectedSlot ?? null,
+        hostRouteStatuses:
+          hardening.concurrentHostPromptSelectionRace?.roleReloadAfterRace
+            ?.hostRouteStatuses ?? null,
+        playerRouteStatuses:
+          hardening.concurrentHostPromptSelectionRace?.roleReloadAfterRace
+            ?.playerRouteStatuses ?? null,
+        passed:
+          hardening.concurrentHostPromptSelectionRace?.status === "passed" &&
+          hardening.concurrentHostPromptSelectionRace?.roleReloadAfterRace
+            ?.status === "passed" &&
+          hardening.concurrentHostPromptSelectionRace?.roleReloadAfterRace
+            ?.hostRouteStatuses?.length === 2 &&
+          hardening.concurrentHostPromptSelectionRace.roleReloadAfterRace.hostRouteStatuses.every(
+            (status) => status === 200,
+          ) &&
+          hardening.concurrentHostPromptSelectionRace?.roleReloadAfterRace
+            ?.playerRouteStatuses?.length === 2 &&
+          hardening.concurrentHostPromptSelectionRace.roleReloadAfterRace.playerRouteStatuses.every(
+            (status) => status === 200,
+          ) &&
+          hardening.concurrentHostPromptSelectionRace?.roleReloadAfterRace
+            ?.hostPromptActions?.every((actions) => actions.length === 0) ===
+            true &&
+          hardening.concurrentHostPromptSelectionRace?.roleReloadAfterRace
+            ?.resolvedPrompt?.status === "resolved" &&
+          hardening.concurrentHostPromptSelectionRace?.roleReloadAfterRace
+            ?.resolvedPrompt?.decision?.slot ===
+            hardening.concurrentHostPromptSelectionRace?.selectedSlot &&
+          hardening.concurrentHostPromptSelectionRace?.roleReloadAfterRace
+            ?.playerStates?.[
+              hardening.concurrentHostPromptSelectionRace?.selectedSlot
+            ]?.actorAlive === false &&
+          Object.values(
+            hardening.concurrentHostPromptSelectionRace?.roleReloadAfterRace
+              ?.playerStates ?? {},
+          ).filter((state) => state?.actorAlive === true).length === 1,
+      },
+    ),
     ...completedGameHardeningProofLanes({ hardening }),
     lane("stale-same-action-recovery", "Stale duplicate player action rejects and refreshes", {
       roleUrl: hardening.staleSameActionRecovery?.sourceRoleUrl ?? null,

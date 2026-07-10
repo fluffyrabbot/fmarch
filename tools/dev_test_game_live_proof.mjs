@@ -5099,6 +5099,63 @@ assert.equal(
     )?.status,
   "resolved",
 );
+const hostPromptSelectionRace =
+  session.verification.multiplayerHardening.concurrentHostPromptSelectionRace;
+assert.equal(hostPromptSelectionRace.status, "passed");
+assert.equal(hostPromptSelectionRace.promptId, "D01:pk:Tie");
+assert.equal(hostPromptSelectionRace.ack.state, "ack");
+assert.equal(hostPromptSelectionRace.reject.state, "reject");
+assert.equal(hostPromptSelectionRace.reject.error, "PromptAlreadyResolved");
+assert.match(
+  hostPromptSelectionRace.reject.message,
+  /host prompt selection is stale/,
+);
+assert.notEqual(
+  hostPromptSelectionRace.ack.commandId,
+  hostPromptSelectionRace.reject.commandId,
+);
+assert.equal(
+  hostPromptSelectionRace.resolvedPrompt.decision.slot,
+  hostPromptSelectionRace.selectedSlot,
+);
+assert.equal(
+  hostPromptSelectionRace.playerStates[hostPromptSelectionRace.selectedSlot]
+    .actorAlive,
+  false,
+);
+assert.equal(
+  Object.values(hostPromptSelectionRace.playerStates).filter(
+    (state) => state.actorAlive === true,
+  ).length,
+  1,
+);
+assert.match(
+  hostPromptSelectionRace.rejectActivityStatusText,
+  /Reject PromptAlreadyResolved/,
+);
+assert.equal(hostPromptSelectionRace.roleReloadAfterRace.status, "passed");
+assert.deepEqual(
+  hostPromptSelectionRace.roleReloadAfterRace.hostRouteStatuses,
+  [200, 200],
+);
+assert.deepEqual(
+  hostPromptSelectionRace.roleReloadAfterRace.playerRouteStatuses,
+  [200, 200],
+);
+assert.deepEqual(
+  hostPromptSelectionRace.roleReloadAfterRace.hostPromptActions,
+  [[], []],
+);
+assert.equal(
+  hostPromptSelectionRace.roleReloadAfterRace.resolvedPrompt.decision.slot,
+  hostPromptSelectionRace.selectedSlot,
+);
+assert.equal(
+  hostPromptSelectionRace.roleReloadAfterRace.playerStates[
+    hostPromptSelectionRace.selectedSlot
+  ].actorAlive,
+  false,
+);
 assert.equal(session.verification.multiplayerHardening.staleHostComplete.status, "passed");
 assert.equal(
   typeof session.verification.multiplayerHardening.staleHostComplete.game,

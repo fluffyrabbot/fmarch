@@ -16,7 +16,13 @@ import {
 import {
   devTestGameHostDecidesProofPath,
 } from "./dev_test_game_host_decides_proof_contract.mjs";
+import {
+  devTestGameHostDecidesRaceProofPath,
+} from "./dev_test_game_host_decides_race_proof_contract.mjs";
 import { runSpinePlan } from "./dev_test_game_spine_runner.mjs";
+import {
+  devTestGameRaceCoveragePath,
+} from "./dev_test_game_race_coverage_contracts.mjs";
 import {
   recoveryReceiptProofPlanSteps,
   recoveryReceiptProofTargets,
@@ -40,19 +46,23 @@ export const devTestGameCoreLiveSpinePlan = [
   { kind: "node", script: "tools/dev_test_game_proof_contract.mjs" },
   { kind: "node", script: "tools/dev_test_game_core_loop_admin_proof.mjs" },
   ...recoveryReceiptProofPlanSteps(coreLoopRecoveryReceiptSelector),
+  { kind: "node", script: "tools/dev_test_game_host_decides_race_proof_contract.mjs" },
   { kind: "node", script: "tools/dev_test_game_hardening_admin_proof.mjs" },
   ...recoveryReceiptProofPlanSteps(hardeningRecoveryReceiptSelector),
+  { kind: "node", script: "tools/dev_test_game_race_coverage.mjs" },
   releaseReadinessStep({
     reason: "core-live-gameplay-admin-surfaces",
     changedInputs: [
       devTestGameProofRunPath,
       devTestGameEarliestReachedProofPath,
       devTestGameHostDecidesProofPath,
+      devTestGameHostDecidesRaceProofPath,
       devTestGameHostSetupProofPath,
       devTestGameCoreLoopAdminProofPath,
       ...recoveryReceiptProofTargets(coreLoopRecoveryReceiptSelector),
       devTestGameHardeningAdminProofPath,
       ...recoveryReceiptProofTargets(hardeningRecoveryReceiptSelector),
+      devTestGameRaceCoveragePath,
     ],
   }),
 ];
