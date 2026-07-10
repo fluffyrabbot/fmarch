@@ -43,7 +43,19 @@ export const actions = {
         });
       }
 
-      const redeemed = await redeemInviteToken({ fetch, inviteToken: token });
+      if (accountId === null || password === null) {
+        return fail(400, {
+          state: "reject",
+          message: "Invite redemption requires the invited account and password",
+          returnTo,
+        });
+      }
+      const redeemed = await redeemInviteToken({
+        fetch,
+        inviteToken: token,
+        accountId,
+        password,
+      });
       if (redeemed.status !== "ok") {
         return fail(redeemed.statusCode, {
           state: "reject",
@@ -98,7 +110,7 @@ async function verifySessionToken({ fetch, token }) {
   return { status: "ok", session: body };
 }
 
-async function redeemInviteToken({ fetch, inviteToken }) {
+async function redeemInviteToken({ fetch, inviteToken, accountId, password }) {
   const sessionToken = `invite-session-${randomUUID()}`;
   const response = await fetch(authInviteRedeemUrl(process.env), {
     method: "POST",
@@ -108,6 +120,8 @@ async function redeemInviteToken({ fetch, inviteToken }) {
     },
     body: JSON.stringify({
       invite_token: inviteToken,
+      account_id: accountId,
+      password,
       session_token: sessionToken,
     }),
   });

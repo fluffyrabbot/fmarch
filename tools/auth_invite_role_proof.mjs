@@ -33,9 +33,17 @@ const inviteTokens = Object.freeze({
   player: `invite-proof-player-${game}`,
 });
 const accountCredentials = Object.freeze({
+  admin: Object.freeze({
+    accountId: `admin-${game}@example.test`,
+    password: `admin-account-password-${game}`,
+  }),
   host: Object.freeze({
     accountId: `host-${game}@example.test`,
     password: `host-account-password-${game}`,
+  }),
+  player: Object.freeze({
+    accountId: `player-${game}@example.test`,
+    password: `player-account-password-${game}`,
   }),
 });
 const frontendRequire = createRequire(path.join(frontendRoot, "package.json"));
@@ -67,8 +75,8 @@ try {
   const apiBaseUrl = await startApi(proofDatabase.url);
   await seedRootAdminSession(proofDatabase.url);
   const seedCommands = await seedGame(apiBaseUrl);
-  const invites = await createInvites(apiBaseUrl);
   const accounts = await createAccounts(apiBaseUrl);
+  const invites = await createInvites(apiBaseUrl);
   const frontendBaseUrl = await startFrontend(apiBaseUrl);
   browser = await chromium.launch();
   const proofRoles = {
@@ -77,6 +85,7 @@ try {
       apiBaseUrl,
       role: "admin",
       inviteToken: inviteTokens.admin,
+      accountCredential: accountCredentials.admin,
       returnTo: "/admin",
       expectedCapability: "GlobalAdmin",
     }),
@@ -85,6 +94,7 @@ try {
       apiBaseUrl,
       role: "host",
       inviteToken: inviteTokens.host,
+      accountCredential: accountCredentials.host,
       returnTo: `/g/${game}/host`,
       expectedCapability: "HostOf",
     }),
@@ -93,6 +103,7 @@ try {
       apiBaseUrl,
       role: "player",
       inviteToken: inviteTokens.player,
+      accountCredential: accountCredentials.player,
       returnTo: `/g/${game}`,
       expectedCapability: "SlotOccupant",
     }),
@@ -118,13 +129,13 @@ try {
     scope: "local-auth-invite-role-proof",
     productionReady: false,
     proofBoundary:
-      "Local scratch-Postgres plus local Rust API, SvelteKit login/action/host/admin-audit routes, and Chromium proof. Proves invite-issued sessions plus a local account credential lifecycle preserve the existing role-surface capability architecture for seeded admin, host, and player URLs, including host-role-surface game-scoped player invite issuance, GlobalAdmin account creation/disable/enable, stale account-session revocation, disabled-account login rejection, GlobalAdmin discovery, and inspection of local identity lifecycle audit rows from the admin overview; it does not prove production password hardening, account recovery, email delivery, hosted identity, abuse controls, hosted audit retention/export, or beta release readiness.",
+      "Local scratch-Postgres plus local Rust API, SvelteKit login/action/host/admin-audit routes, and Chromium proof. Proves account-bound invite redemption plus a local account credential lifecycle preserve the existing role-surface capability architecture for seeded admin, host, and player URLs, including host-role-surface game-scoped player invite issuance, GlobalAdmin account creation/disable/enable, stale account-session revocation, disabled-account login rejection, GlobalAdmin discovery, and inspection of local identity lifecycle audit rows from the admin overview; it does not prove production password hardening, account recovery, email delivery, hosted identity, abuse controls, hosted audit retention/export, or beta release readiness.",
     identityAdapter: {
       status: "passed",
       replacesDevTokensWithoutRoleSurfaceChange: true,
       browserCookieName: "fmarch_session",
       sessionCredentialKind: "opaque-session",
-      inviteCredentialKind: "single-use-invite",
+      inviteCredentialKind: "account-bound-single-use-invite",
       accountCredentialKind: "local-password-account",
       lifecycleControls: [
         "account-disable",
@@ -134,7 +145,8 @@ try {
         "invite-revocation",
       ],
       delegatedIssuanceControls: ["host-scoped-invite-issuance"],
-      roleSurfacePattern: "/auth/login?returnTo=<role-surface>&invite=<token>",
+      roleSurfacePattern:
+        "/auth/login?returnTo=<role-surface>&invite=<token>&account=<account-id>",
       accountRoleSurfacePattern: "/auth/login?returnTo=<role-surface>&account=<account-id>",
       capabilityAuthority:
         "auth_session resolves principal_user_id and committed game/global capabilities at the API boundary",
@@ -226,15 +238,18 @@ async function createInvites(apiBaseUrl) {
   return {
     admin: await createInvite(apiBaseUrl, {
       inviteToken: inviteTokens.admin,
+      accountId: accountCredentials.admin.accountId,
       principalUserId: "admin_a",
       globalCapabilities: ["GlobalAdmin"],
     }),
     host: await createInvite(apiBaseUrl, {
       inviteToken: inviteTokens.host,
+      accountId: accountCredentials.host.accountId,
       principalUserId: "host_h",
     }),
     player: await createInvite(apiBaseUrl, {
       inviteToken: inviteTokens.player,
+      accountId: accountCredentials.player.accountId,
       principalUserId: "player-mira",
     }),
   };
@@ -242,10 +257,21 @@ async function createInvites(apiBaseUrl) {
 
 async function createAccounts(apiBaseUrl) {
   return {
+    admin: await createAccount(apiBaseUrl, {
+      accountId: accountCredentials.admin.accountId,
+      password: accountCredentials.admin.password,
+      principalUserId: "admin_a",
+      globalCapabilities: ["GlobalAdmin"],
+    }),
     host: await createAccount(apiBaseUrl, {
       accountId: accountCredentials.host.accountId,
       password: accountCredentials.host.password,
       principalUserId: "host_h",
+    }),
+    player: await createAccount(apiBaseUrl, {
+      accountId: accountCredentials.player.accountId,
+      password: accountCredentials.player.password,
+      principalUserId: "player-mira",
     }),
   };
 }
@@ -284,6 +310,7 @@ async function createInvite(
   apiBaseUrl,
   {
     inviteToken,
+    accountId,
     principalUserId,
     globalCapabilities = [],
     gameScope = null,
@@ -298,13 +325,15 @@ async function createInvite(
     },
     body: JSON.stringify({
       invite_token: inviteToken,
-      principal_user_id: principalUserId,
+      account_id: accountId,
+      expected_principal_user_id: principalUserId,
       expires_at: 4102444800,
       ...(gameScope === null ? {} : { game: gameScope }),
       global_capabilities: globalCapabilities,
     }),
   });
   return {
+    accountId: response.account_id,
     principalUserId: response.principal_user_id,
     expiresAt: response.expires_at,
     game: response.game,
@@ -318,13 +347,16 @@ async function driveInviteLogin({
   apiBaseUrl,
   role,
   inviteToken,
+  accountCredential,
   returnTo,
   expectedCapability,
 }) {
   const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
   const loginUrl = `${frontendBaseUrl}/auth/login?returnTo=${encodeURIComponent(
     returnTo,
-  )}&invite=${encodeURIComponent(inviteToken)}`;
+  )}&invite=${encodeURIComponent(inviteToken)}&account=${encodeURIComponent(
+    accountCredential.accountId,
+  )}`;
   try {
     await page.goto(loginUrl, { waitUntil: "networkidle" });
     await page.getByTestId("auth-login-surface").waitFor({ state: "visible" });
@@ -332,6 +364,11 @@ async function driveInviteLogin({
     if (tokenValue !== inviteToken) {
       throw new Error(`${role} invite token was not prefilled`);
     }
+    const accountValue = await page.getByTestId("auth-login-account").inputValue();
+    if (accountValue !== accountCredential.accountId) {
+      throw new Error(`${role} invite account was not prefilled`);
+    }
+    await page.getByTestId("auth-login-password").fill(accountCredential.password);
     await Promise.all([
       page.waitForURL(`${frontendBaseUrl}${returnTo}`, { timeout: 15000 }),
       page.getByTestId("auth-login-submit").click(),
@@ -362,6 +399,7 @@ async function driveInviteLogin({
       loginUrl,
       returnTo,
       principalUserId: session.principal_user_id,
+      accountId: accountCredential.accountId,
       capabilityKinds,
       sessionToken: sessionCookie.value,
       cookie: {
@@ -476,6 +514,7 @@ async function proveIdentityLifecycle({
   const revokedInviteToken = `revoked-host-invite-${game}`;
   await createInvite(apiBaseUrl, {
     inviteToken: revokedInviteToken,
+    accountId: hostAccount.accountId,
     principalUserId: "host_h",
   });
   const inviteRevocation = await revokeInvite({
@@ -485,12 +524,14 @@ async function proveIdentityLifecycle({
   const revokedInviteReject = await driveRejectedInviteLogin({
     frontendBaseUrl,
     inviteToken: revokedInviteToken,
+    accountCredential: hostAccount,
     returnTo: hostReturnTo,
   });
 
   const recoveryInviteToken = `recovery-host-invite-${game}`;
   await createInvite(apiBaseUrl, {
     inviteToken: recoveryInviteToken,
+    accountId: hostAccount.accountId,
     principalUserId: "host_h",
   });
   const recovery = await driveInviteLogin({
@@ -498,6 +539,7 @@ async function proveIdentityLifecycle({
     apiBaseUrl,
     role: "hostRecovery",
     inviteToken: recoveryInviteToken,
+    accountCredential: hostAccount,
     returnTo: hostReturnTo,
     expectedCapability: "HostOf",
   });
@@ -506,6 +548,7 @@ async function proveIdentityLifecycle({
     frontendBaseUrl,
     hostSessionToken: recovery.sessionToken,
     hostReturnTo,
+    playerAccount: accountCredentials.player,
   });
   const accountLogin = await driveAccountLogin({
     frontendBaseUrl,
@@ -642,6 +685,7 @@ async function finishIdentityLifecycleProof({
     "account_disabled",
     "account_enabled",
     "account_session_created",
+    "invite_redeemed",
     "invite_revoked",
     "session_revoked",
     "session_rotated",
@@ -782,14 +826,20 @@ async function proveHostScopedInviteIssuance({
   frontendBaseUrl,
   hostSessionToken,
   hostReturnTo,
+  playerAccount,
 }) {
   const hostSurface = await driveHostPlayerInviteSurface({
     frontendBaseUrl,
     hostSessionToken,
     hostReturnTo,
+    playerAccount,
   });
   const issued = await storedInviteRecord(hostSurface.inviteToken);
-  if (issued.invitedByUserId !== "host_h" || issued.principalUserId !== "player-mira") {
+  if (
+    issued.invitedByUserId !== "host_h" ||
+    issued.principalUserId !== "player-mira" ||
+    issued.accountId !== playerAccount.accountId
+  ) {
     throw new Error(
       `host-scoped invite row did not match host surface: ${JSON.stringify(issued)}`,
     );
@@ -807,6 +857,7 @@ async function proveHostScopedInviteIssuance({
     apiBaseUrl,
     role: "hostSurfacePlayerInvite",
     inviteToken: hostSurface.inviteToken,
+    accountCredential: playerAccount,
     returnTo: `/g/${game}`,
     expectedCapability: "SlotOccupant",
   });
@@ -833,6 +884,8 @@ async function proveHostScopedInviteIssuance({
     issuedForGame: hostSurface.game,
     storedGameScope: issued.game,
     principalUserId: player.principalUserId,
+    boundAccountId: issued.accountId,
+    accountBindingRequired: true,
     globalCapabilitiesGranted: issued.globalCapabilities.length,
     redeemedCapabilityKinds: player.capabilityKinds,
     sameRoleSurface:
@@ -846,6 +899,7 @@ async function driveHostPlayerInviteSurface({
   frontendBaseUrl,
   hostSessionToken,
   hostReturnTo,
+  playerAccount,
 }) {
   const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
   try {
@@ -867,6 +921,9 @@ async function driveHostPlayerInviteSurface({
     if (!targetText.includes("player-mira")) {
       throw new Error(`host player invite target drifted: ${targetText}`);
     }
+    await page
+      .getByTestId("host-player-invite-account")
+      .fill(playerAccount.accountId);
     await page.getByTestId("host-player-invite-submit").click();
     await page.getByTestId("host-player-invite-url").waitFor({
       state: "visible",
@@ -880,11 +937,13 @@ async function driveHostPlayerInviteSurface({
     const loginUrl = new URL(href, frontendBaseUrl);
     const inviteToken = loginUrl.searchParams.get("invite");
     const returnTo = loginUrl.searchParams.get("returnTo");
+    const accountId = loginUrl.searchParams.get("account");
     if (
       loginUrl.pathname !== "/auth/login" ||
       inviteToken === null ||
       !inviteToken.startsWith(`player-${game}-`) ||
-      returnTo !== `/g/${game}`
+      returnTo !== `/g/${game}` ||
+      accountId !== playerAccount.accountId
     ) {
       throw new Error(`host player invite URL drifted: ${loginUrl.toString()}`);
     }
@@ -894,6 +953,7 @@ async function driveHostPlayerInviteSurface({
       game,
       loginUrl: loginUrl.toString(),
       returnTo,
+      accountId,
       inviteToken,
       clickedThroughFromHostRoleUrl: true,
     };
@@ -1142,6 +1202,7 @@ async function storedInviteRecord(inviteToken) {
     "-c",
     `
       SELECT json_build_object(
+        'accountId', account_id,
         'principalUserId', principal_user_id,
         'game', COALESCE(game::TEXT, ''),
         'invitedByUserId', invited_by_user_id,
@@ -1209,6 +1270,7 @@ async function driveAdminIdentityAuditSurface({
       "account_disabled",
       "account_enabled",
       "account_session_created",
+      "invite_redeemed",
       "session_rotated",
       "session_revoked",
       "invite_revoked",
@@ -1294,14 +1356,22 @@ async function assertBrowserSessionRendersRole({
   }
 }
 
-async function driveRejectedInviteLogin({ frontendBaseUrl, inviteToken, returnTo }) {
+async function driveRejectedInviteLogin({
+  frontendBaseUrl,
+  inviteToken,
+  accountCredential,
+  returnTo,
+}) {
   const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
   const loginUrl = `${frontendBaseUrl}/auth/login?returnTo=${encodeURIComponent(
     returnTo,
-  )}&invite=${encodeURIComponent(inviteToken)}`;
+  )}&invite=${encodeURIComponent(inviteToken)}&account=${encodeURIComponent(
+    accountCredential.accountId,
+  )}`;
   try {
     await page.goto(loginUrl, { waitUntil: "networkidle" });
     await page.getByTestId("auth-login-surface").waitFor({ state: "visible" });
+    await page.getByTestId("auth-login-password").fill(accountCredential.password);
     await page.getByTestId("auth-login-submit").click();
     await page.getByText("Session or invite token is missing, expired, or revoked").waitFor({
       state: "visible",
@@ -1368,6 +1438,8 @@ function assertInviteProof(evidence) {
   if (
     evidence.identityAdapter?.replacesDevTokensWithoutRoleSurfaceChange !== true ||
     evidence.identityAdapter?.browserCookieName !== "fmarch_session" ||
+    evidence.identityAdapter?.inviteCredentialKind !==
+      "account-bound-single-use-invite" ||
     evidence.identityAdapter?.accountCredentialKind !== "local-password-account" ||
     evidence.identityAdapterContractDiff?.status !== "passed" ||
     !evidence.identityAdapter?.delegatedIssuanceControls?.includes(
@@ -1392,6 +1464,9 @@ function assertInviteProof(evidence) {
       "host_h" ||
     evidence.identityLifecycle?.hostScopedInviteIssuance?.issuedForGame !== game ||
     evidence.identityLifecycle?.hostScopedInviteIssuance?.storedGameScope !== game ||
+    evidence.identityLifecycle?.hostScopedInviteIssuance?.accountBindingRequired !== true ||
+    evidence.identityLifecycle?.hostScopedInviteIssuance?.boundAccountId !==
+      accountCredentials.player.accountId ||
     evidence.identityLifecycle?.hostScopedInviteIssuance?.globalCapabilitiesGranted !== 0 ||
     evidence.identityLifecycle?.hostScopedInviteIssuance?.rawInviteTokenStored !== false ||
     !evidence.identityLifecycle?.hostScopedInviteIssuance?.redeemedCapabilityKinds?.includes(
@@ -1451,6 +1526,7 @@ function assertInviteProof(evidence) {
     evidence.identityLifecycle?.auditTrail?.rawTokensStored !== false ||
     !evidence.identityLifecycle?.auditTrail?.eventKinds?.includes("session_rotated") ||
     !evidence.identityLifecycle?.auditTrail?.eventKinds?.includes("session_revoked") ||
+    !evidence.identityLifecycle?.auditTrail?.eventKinds?.includes("invite_redeemed") ||
     !evidence.identityLifecycle?.auditTrail?.eventKinds?.includes("invite_revoked") ||
     !evidence.identityLifecycle?.auditTrail?.eventKinds?.includes("account_created") ||
     !evidence.identityLifecycle?.auditTrail?.eventKinds?.includes("account_disabled") ||

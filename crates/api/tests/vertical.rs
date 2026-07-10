@@ -19,6 +19,36 @@ fn router_with_dev_auth(pool: sqlx::PgPool) -> axum::Router {
     api::router_with_state(ApiState::new(pool).with_dev_auth(true))
 }
 
+async fn create_test_auth_account(
+    app: &axum::Router,
+    admin_token: &str,
+    account_id: &str,
+    password: &str,
+    principal_user_id: &str,
+) {
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/auth/accounts")
+                .header("content-type", "application/json")
+                .header("authorization", format!("Bearer {admin_token}"))
+                .body(Body::from(
+                    serde_json::json!({
+                        "account_id": account_id,
+                        "password": password,
+                        "principal_user_id": principal_user_id
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+}
+
 fn stable_command_id(id: u64) -> Uuid {
     Uuid::from_u128(id as u128)
 }
@@ -3372,6 +3402,15 @@ async fn global_admin_invite_redeems_to_normal_role_session(pool: sqlx::PgPool) 
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
 
+    create_test_auth_account(
+        &app,
+        "invite-admin-token",
+        "host@example.test",
+        "host invite password",
+        "host_h",
+    )
+    .await;
+
     let response = app
         .clone()
         .oneshot(
@@ -3383,7 +3422,8 @@ async fn global_admin_invite_redeems_to_normal_role_session(pool: sqlx::PgPool) 
                 .body(Body::from(
                     serde_json::json!({
                         "invite_token": "host-invite-token",
-                        "principal_user_id": "host_h",
+                        "account_id": "host@example.test",
+                        "expected_principal_user_id": "host_h",
                         "expires_at": 4_102_444_800i64
                     })
                     .to_string(),
@@ -3395,6 +3435,7 @@ async fn global_admin_invite_redeems_to_normal_role_session(pool: sqlx::PgPool) 
     assert_eq!(response.status(), StatusCode::OK);
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let invite: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(invite["account_id"], "host@example.test");
     assert_eq!(invite["principal_user_id"], "host_h");
 
     let response = app
@@ -3407,6 +3448,30 @@ async fn global_admin_invite_redeems_to_normal_role_session(pool: sqlx::PgPool) 
                 .body(Body::from(
                     serde_json::json!({
                         "invite_token": "host-invite-token",
+                        "account_id": "host@example.test",
+                        "password": "wrong invite password",
+                        "session_token": "wrong-host-invite-session"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/auth/invites/redeem")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    serde_json::json!({
+                        "invite_token": "host-invite-token",
+                        "account_id": "host@example.test",
+                        "password": "host invite password",
                         "session_token": "host-invite-session"
                     })
                     .to_string(),
@@ -3449,6 +3514,8 @@ async fn global_admin_invite_redeems_to_normal_role_session(pool: sqlx::PgPool) 
                 .body(Body::from(
                     serde_json::json!({
                         "invite_token": "host-invite-token",
+                        "account_id": "host@example.test",
+                        "password": "host invite password",
                         "session_token": "second-host-session"
                     })
                     .to_string(),
@@ -3532,13 +3599,44 @@ async fn host_issued_invite_redeems_through_game_role_projection(pool: sqlx::PgP
         .oneshot(
             Request::builder()
                 .method("POST")
+                .uri("/auth/dev-session")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    serde_json::json!({
+                        "token": "invite-account-admin",
+                        "principal_user_id": "admin_a",
+                        "expires_at": 4_102_444_800i64,
+                        "global_capabilities": ["GlobalAdmin"]
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    create_test_auth_account(
+        &app,
+        "invite-account-admin",
+        "rowan@example.test",
+        "rowan invite password",
+        "player-rowan",
+    )
+    .await;
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
                 .uri("/auth/invites")
                 .header("content-type", "application/json")
                 .header("authorization", "Bearer host-issuer-session")
                 .body(Body::from(
                     serde_json::json!({
                         "invite_token": "rowan-replacement-invite",
-                        "principal_user_id": "player-rowan",
+                        "account_id": "rowan@example.test",
+                        "expected_principal_user_id": "player-rowan",
                         "expires_at": 4_102_444_800i64,
                         "game": game
                     })
@@ -3566,6 +3664,8 @@ async fn host_issued_invite_redeems_through_game_role_projection(pool: sqlx::PgP
                 .body(Body::from(
                     serde_json::json!({
                         "invite_token": "rowan-replacement-invite",
+                        "account_id": "rowan@example.test",
+                        "password": "rowan invite password",
                         "session_token": "rowan-replacement-session"
                     })
                     .to_string(),
@@ -3605,7 +3705,8 @@ async fn host_issued_invite_redeems_through_game_role_projection(pool: sqlx::PgP
                 .body(Body::from(
                     serde_json::json!({
                         "invite_token": "forbidden-global",
-                        "principal_user_id": "other",
+                        "account_id": "missing@example.test",
+                        "expected_principal_user_id": "other",
                         "expires_at": 4_102_444_800i64,
                         "game": game,
                         "global_capabilities": ["GlobalAdmin"]
@@ -3658,6 +3759,15 @@ async fn auth_lifecycle_rotates_sessions_and_revokes_invites(pool: sqlx::PgPool)
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
+
+    create_test_auth_account(
+        &app,
+        "lifecycle-admin-token",
+        "lifecycle-host@example.test",
+        "lifecycle invite password",
+        "host_h",
+    )
+    .await;
 
     let response = app
         .clone()
@@ -3780,7 +3890,8 @@ async fn auth_lifecycle_rotates_sessions_and_revokes_invites(pool: sqlx::PgPool)
                 .body(Body::from(
                     serde_json::json!({
                         "invite_token": "revoked-host-invite",
-                        "principal_user_id": "host_h",
+                        "account_id": "lifecycle-host@example.test",
+                        "expected_principal_user_id": "host_h",
                         "expires_at": 4_102_444_800i64
                     })
                     .to_string(),
@@ -3821,6 +3932,8 @@ async fn auth_lifecycle_rotates_sessions_and_revokes_invites(pool: sqlx::PgPool)
                 .body(Body::from(
                     serde_json::json!({
                         "invite_token": "revoked-host-invite",
+                        "account_id": "lifecycle-host@example.test",
+                        "password": "lifecycle invite password",
                         "session_token": "should-not-exist"
                     })
                     .to_string(),
@@ -3842,7 +3955,8 @@ async fn auth_lifecycle_rotates_sessions_and_revokes_invites(pool: sqlx::PgPool)
                 .body(Body::from(
                     serde_json::json!({
                         "invite_token": "replacement-host-invite",
-                        "principal_user_id": "host_h",
+                        "account_id": "lifecycle-host@example.test",
+                        "expected_principal_user_id": "host_h",
                         "expires_at": 4_102_444_800i64
                     })
                     .to_string(),
@@ -3863,6 +3977,8 @@ async fn auth_lifecycle_rotates_sessions_and_revokes_invites(pool: sqlx::PgPool)
                 .body(Body::from(
                     serde_json::json!({
                         "invite_token": "replacement-host-invite",
+                        "account_id": "lifecycle-host@example.test",
+                        "password": "lifecycle invite password",
                         "session_token": "replacement-host-session"
                     })
                     .to_string(),
@@ -3895,7 +4011,13 @@ async fn auth_lifecycle_rotates_sessions_and_revokes_invites(pool: sqlx::PgPool)
         .collect();
     assert_eq!(
         event_kinds,
-        BTreeSet::from(["invite_revoked", "session_revoked", "session_rotated"])
+        BTreeSet::from([
+            "account_created",
+            "invite_redeemed",
+            "invite_revoked",
+            "session_revoked",
+            "session_rotated",
+        ])
     );
     assert!(entries.iter().any(|entry| {
         entry["event_kind"] == "session_rotated"

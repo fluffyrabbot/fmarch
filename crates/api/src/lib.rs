@@ -221,7 +221,8 @@ struct RevokeAuthSession {
 #[derive(Debug, Clone, Deserialize)]
 struct CreateAuthInvite {
     invite_token: String,
-    principal_user_id: String,
+    account_id: String,
+    expected_principal_user_id: String,
     expires_at: i64,
     game: Option<Uuid>,
     #[serde(default)]
@@ -230,6 +231,7 @@ struct CreateAuthInvite {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct AuthInviteResponse {
+    account_id: String,
     principal_user_id: String,
     expires_at: i64,
     game: Option<Uuid>,
@@ -240,6 +242,8 @@ struct AuthInviteResponse {
 #[derive(Debug, Clone, Deserialize)]
 struct RedeemAuthInvite {
     invite_token: String,
+    account_id: String,
+    password: String,
     session_token: String,
 }
 
@@ -958,11 +962,14 @@ async fn create_auth_invite(
         .any(|capability| capability == "GlobalAdmin");
 
     let invite_token = request.invite_token.trim();
-    if invite_token.is_empty() || request.principal_user_id.trim().is_empty() {
+    let account_id = request.account_id.trim();
+    let expected_principal_user_id = request.expected_principal_user_id.trim();
+    if invite_token.is_empty() || account_id.is_empty() || expected_principal_user_id.is_empty() {
         return Err(ApiError::Reject {
             status: StatusCode::BAD_REQUEST,
             error: RejectCode::Internal,
-            message: "invite requires invite_token and principal_user_id".to_string(),
+            message: "invite requires invite_token, account_id, and expected_principal_user_id"
+                .to_string(),
         });
     }
     let now = unix_now_seconds();
@@ -1003,11 +1010,32 @@ async fn create_auth_invite(
             });
         }
     }
+    let account_principal_user_id = sqlx::query_scalar::<_, String>(
+        r#"
+        SELECT principal_user_id
+        FROM auth_account
+        WHERE account_id = $1
+          AND disabled_at IS NULL
+        "#,
+    )
+    .bind(account_id)
+    .fetch_optional(&state.pool)
+    .await?
+    .ok_or_else(unauthorized_account)?;
+    if account_principal_user_id != expected_principal_user_id {
+        return Err(ApiError::Reject {
+            status: StatusCode::CONFLICT,
+            error: RejectCode::StreamConflict,
+            message: "invite account no longer matches the expected principal; refresh the target and try again"
+                .to_string(),
+        });
+    }
 
     let inserted = sqlx::query(
         r#"
         INSERT INTO auth_invite (
             token_hash,
+            account_id,
             principal_user_id,
             game,
             created_at,
@@ -1017,12 +1045,13 @@ async fn create_auth_invite(
             global_capabilities,
             invited_by_user_id
         )
-        VALUES ($1, $2, $3, $4, $5, NULL, NULL, $6, $7)
+        VALUES ($1, $2, $3, $4, $5, $6, NULL, NULL, $7, $8)
         ON CONFLICT (token_hash) DO NOTHING
         "#,
     )
     .bind(hash_session_token(invite_token))
-    .bind(request.principal_user_id.as_str())
+    .bind(account_id)
+    .bind(account_principal_user_id.as_str())
     .bind(request.game)
     .bind(now)
     .bind(request.expires_at)
@@ -1040,7 +1069,8 @@ async fn create_auth_invite(
     }
 
     Ok(Json(AuthInviteResponse {
-        principal_user_id: request.principal_user_id,
+        account_id: account_id.to_string(),
+        principal_user_id: account_principal_user_id,
         expires_at: request.expires_at,
         game: request.game,
         global_capabilities,
@@ -1053,12 +1083,20 @@ async fn redeem_auth_invite(
     Json(request): Json<RedeemAuthInvite>,
 ) -> Result<Json<AuthSessionResponse>, ApiError> {
     let invite_token = request.invite_token.trim();
+    let account_id = request.account_id.trim();
+    let password = request.password.trim();
     let session_token = request.session_token.trim();
-    if invite_token.is_empty() || session_token.is_empty() {
+    if invite_token.is_empty()
+        || account_id.is_empty()
+        || password.is_empty()
+        || session_token.is_empty()
+    {
         return Err(ApiError::Reject {
             status: StatusCode::BAD_REQUEST,
             error: RejectCode::Internal,
-            message: "invite redemption requires invite_token and session_token".to_string(),
+            message:
+                "invite redemption requires invite_token, account_id, password, and session_token"
+                    .to_string(),
         });
     }
 
@@ -1066,24 +1104,50 @@ async fn redeem_auth_invite(
     let invite_hash = hash_session_token(invite_token);
     let session_hash = hash_session_token(session_token);
     let mut tx = state.pool.begin().await?;
-    let invite = sqlx::query_as::<_, (String, i64, Vec<String>)>(
+    let invite = sqlx::query_as::<_, (String, i64, Vec<String>, String, String)>(
+        r#"
+        SELECT invite.principal_user_id,
+               invite.expires_at,
+               invite.global_capabilities,
+               account.password_salt,
+               account.password_hash
+        FROM auth_invite AS invite
+        JOIN auth_account AS account
+          ON account.account_id = invite.account_id
+        WHERE invite.token_hash = $1
+          AND invite.account_id = $2
+          AND invite.redeemed_at IS NULL
+          AND invite.revoked_at IS NULL
+          AND invite.expires_at > $3
+          AND account.disabled_at IS NULL
+          AND account.principal_user_id = invite.principal_user_id
+        FOR UPDATE OF invite
+        "#,
+    )
+    .bind(&invite_hash)
+    .bind(account_id)
+    .bind(now)
+    .fetch_optional(&mut *tx)
+    .await?
+    .ok_or_else(unauthorized_invite)?;
+
+    if hash_account_password(invite.3.as_str(), password) != invite.4 {
+        return Err(unauthorized_invite());
+    }
+
+    sqlx::query(
         r#"
         UPDATE auth_invite
         SET redeemed_at = $1,
             redeemed_session_token_hash = $2
         WHERE token_hash = $3
-          AND redeemed_at IS NULL
-          AND revoked_at IS NULL
-          AND expires_at > $1
-        RETURNING principal_user_id, expires_at, global_capabilities
         "#,
     )
     .bind(now)
     .bind(&session_hash)
-    .bind(invite_hash)
-    .fetch_optional(&mut *tx)
-    .await?
-    .ok_or_else(unauthorized_invite)?;
+    .bind(&invite_hash)
+    .execute(&mut *tx)
+    .await?;
 
     sqlx::query(
         r#"
@@ -1103,11 +1167,33 @@ async fn redeem_auth_invite(
             global_capabilities = EXCLUDED.global_capabilities
         "#,
     )
-    .bind(session_hash)
+    .bind(&session_hash)
     .bind(invite.0.as_str())
     .bind(now)
     .bind(invite.1)
     .bind(&invite.2)
+    .execute(&mut *tx)
+    .await?;
+    sqlx::query(
+        r#"
+        INSERT INTO identity_lifecycle_audit (
+            event_at,
+            event_kind,
+            actor_user_id,
+            principal_user_id,
+            token_hash,
+            related_token_hash,
+            metadata
+        )
+        VALUES ($1, 'invite_redeemed', $2, $3, $4, $5, $6::JSONB)
+        "#,
+    )
+    .bind(now)
+    .bind(invite.0.as_str())
+    .bind(invite.0.as_str())
+    .bind(&invite_hash)
+    .bind(&session_hash)
+    .bind(serde_json::json!({ "account_id": account_id }).to_string())
     .execute(&mut *tx)
     .await?;
     tx.commit().await?;

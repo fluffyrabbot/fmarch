@@ -114,6 +114,14 @@ export async function _issueHostScopedInvite({
     formData.get("principalUserId"),
     defaultPrincipalUserId,
   );
+  const accountId = inviteAccountId(formData.get("accountId"));
+  if (accountId === "") {
+    return fail(400, inviteForm(field, {
+      state: "reject",
+      message: "Invited account is required",
+      principalUserId,
+    }));
+  }
   const slotId = inviteSlotId(formData.get("slotId"));
   const expectedOccupantUserId = invitePrincipal(
     formData.get("expectedOccupantUserId"),
@@ -148,7 +156,8 @@ export async function _issueHostScopedInvite({
     },
     body: JSON.stringify({
       invite_token: inviteToken,
-      principal_user_id: principalUserId,
+      account_id: accountId,
+      expected_principal_user_id: principalUserId,
       expires_at: expiresAt,
       game: params.game,
     }),
@@ -162,11 +171,16 @@ export async function _issueHostScopedInvite({
   }
 
   const invite = await response.json();
-  const loginPath = inviteLoginPath({ returnTo, inviteToken });
+  const loginPath = inviteLoginPath({
+    returnTo,
+    inviteToken,
+    accountId: invite.account_id,
+  });
   return inviteForm(field, {
     state: "ack",
     message: ackMessage,
     principalUserId: invite.principal_user_id,
+    accountId: invite.account_id,
     invitedByUserId: invite.invited_by_user_id,
     game: invite.game,
     returnTo,
@@ -186,12 +200,20 @@ function invitePrincipal(value, fallback) {
   return typeof value === "string" && value.trim() !== "" ? value.trim() : fallback;
 }
 
+function inviteAccountId(value) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
 function inviteSlotId(value) {
   return typeof value === "string" && value.trim() !== "" ? value.trim() : "slot-7";
 }
 
-function inviteLoginPath({ returnTo, inviteToken }) {
-  const params = new URLSearchParams({ returnTo, invite: inviteToken });
+function inviteLoginPath({ returnTo, inviteToken, accountId }) {
+  const params = new URLSearchParams({
+    returnTo,
+    invite: inviteToken,
+    account: accountId,
+  });
   return `/auth/login?${params.toString()}`;
 }
 

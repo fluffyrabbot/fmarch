@@ -7250,7 +7250,7 @@ test("admin route data exposes local identity adapter proof as a native audit ro
       mismatches: [],
     },
     browserCookieName: "fmarch_session",
-    inviteCredentialKind: "single-use-invite",
+    inviteCredentialKind: "account-bound-single-use-invite",
     sessionCredentialKind: "opaque-session",
     accountCredentialKind: "local-password-account",
     lifecycleControls: [
@@ -12731,7 +12731,7 @@ function identityAdapterProofFixture() {
       status: "passed",
       replacesDevTokensWithoutRoleSurfaceChange: true,
       browserCookieName: "fmarch_session",
-      inviteCredentialKind: "single-use-invite",
+      inviteCredentialKind: "account-bound-single-use-invite",
       accountCredentialKind: "local-password-account",
       sessionCredentialKind: "opaque-session",
       lifecycleControls: [

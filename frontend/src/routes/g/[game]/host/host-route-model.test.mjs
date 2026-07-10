@@ -191,6 +191,7 @@ test("host console route data is allowed for HostOf scoped to the current game",
     submitTestId: "host-player-invite-submit",
     statusTestId: "host-player-invite-status",
     urlTestId: "host-player-invite-url",
+    accountTestId: "host-player-invite-account",
     slotId: "slot-7",
     principalUserId: "player-mira",
     expectedOccupantUserId: "player-mira",
@@ -527,6 +528,7 @@ test("host action issues a replacement invite through the authenticated host ses
         });
       }
       return jsonResponse({
+        account_id: "rowan@example.test",
         principal_user_id: "player-rowan",
         invited_by_user_id: "host_h",
         game: "midsummer",
@@ -540,6 +542,7 @@ test("host action issues a replacement invite through the authenticated host ses
     },
     params: { game: "midsummer" },
     request: formRequest({
+      accountId: "rowan@example.test",
       principalUserId: " player-rowan ",
       slotId: "slot-7",
       expectedOccupantUserId: "player-mira",
@@ -557,19 +560,21 @@ test("host action issues a replacement invite through the authenticated host ses
   assert.equal(observed[1].method, "POST");
   assert.equal(observed[1].authorization, "Bearer host-session-token");
   assert.equal(observed[1].accept, "application/json");
-  assert.equal(observed[1].body.principal_user_id, "player-rowan");
+  assert.equal(observed[1].body.account_id, "rowan@example.test");
+  assert.equal(observed[1].body.expected_principal_user_id, "player-rowan");
   assert.equal(observed[1].body.game, "midsummer");
   assert.equal(observed[1].body.global_capabilities, undefined);
   assert.match(observed[1].body.invite_token, /^replacement-midsummer-/);
   assert.deepEqual(result.replacementInvite, {
     state: "ack",
     message: "Replacement invite issued",
+    accountId: "rowan@example.test",
     principalUserId: "player-rowan",
     invitedByUserId: "host_h",
     game: "midsummer",
     returnTo: "/g/midsummer",
-    loginUrl: `http://localhost/auth/login?returnTo=%2Fg%2Fmidsummer&invite=${observed[1].body.invite_token}`,
-    loginPath: `/auth/login?returnTo=%2Fg%2Fmidsummer&invite=${observed[1].body.invite_token}`,
+    loginUrl: `http://localhost/auth/login?returnTo=%2Fg%2Fmidsummer&invite=${observed[1].body.invite_token}&account=rowan%40example.test`,
+    loginPath: `/auth/login?returnTo=%2Fg%2Fmidsummer&invite=${observed[1].body.invite_token}&account=rowan%40example.test`,
     expiresAt: observed[1].body.expires_at,
   });
 });
@@ -596,6 +601,7 @@ test("host action issues a player invite through the authenticated host session"
         });
       }
       return jsonResponse({
+        account_id: "mira@example.test",
         principal_user_id: "player-mira",
         invited_by_user_id: "host_h",
         game: "midsummer",
@@ -609,6 +615,7 @@ test("host action issues a player invite through the authenticated host session"
     },
     params: { game: "midsummer" },
     request: formRequest({
+      accountId: "mira@example.test",
       principalUserId: " player-mira ",
       slotId: "slot-7",
       expectedOccupantUserId: "player-mira",
@@ -626,19 +633,21 @@ test("host action issues a player invite through the authenticated host session"
   assert.equal(observed[1].method, "POST");
   assert.equal(observed[1].authorization, "Bearer host-session-token");
   assert.equal(observed[1].accept, "application/json");
-  assert.equal(observed[1].body.principal_user_id, "player-mira");
+  assert.equal(observed[1].body.account_id, "mira@example.test");
+  assert.equal(observed[1].body.expected_principal_user_id, "player-mira");
   assert.equal(observed[1].body.game, "midsummer");
   assert.equal(observed[1].body.global_capabilities, undefined);
   assert.match(observed[1].body.invite_token, /^player-midsummer-/);
   assert.deepEqual(result.playerInvite, {
     state: "ack",
     message: "Player invite issued",
+    accountId: "mira@example.test",
     principalUserId: "player-mira",
     invitedByUserId: "host_h",
     game: "midsummer",
     returnTo: "/g/midsummer",
-    loginUrl: `http://localhost/auth/login?returnTo=%2Fg%2Fmidsummer&invite=${observed[1].body.invite_token}`,
-    loginPath: `/auth/login?returnTo=%2Fg%2Fmidsummer&invite=${observed[1].body.invite_token}`,
+    loginUrl: `http://localhost/auth/login?returnTo=%2Fg%2Fmidsummer&invite=${observed[1].body.invite_token}&account=mira%40example.test`,
+    loginPath: `/auth/login?returnTo=%2Fg%2Fmidsummer&invite=${observed[1].body.invite_token}&account=mira%40example.test`,
     expiresAt: observed[1].body.expires_at,
   });
 });
@@ -668,6 +677,7 @@ test("host action rejects stale player invite targets before issuing an invite",
     },
     params: { game: "midsummer" },
     request: formRequest({
+      accountId: "mira@example.test",
       principalUserId: "player-mira",
       slotId: "slot-7",
       expectedOccupantUserId: "player-mira",
@@ -711,6 +721,7 @@ test("host action retries stale player invites against the current occupant", as
         });
       }
       return jsonResponse({
+        account_id: "rowan@example.test",
         principal_user_id: "player-rowan",
         invited_by_user_id: "host_h",
         game: "midsummer",
@@ -724,6 +735,7 @@ test("host action retries stale player invites against the current occupant", as
     },
     params: { game: "midsummer" },
     request: formRequest({
+      accountId: "rowan@example.test",
       principalUserId: "player-rowan",
       slotId: "slot-7",
       expectedOccupantUserId: "player-rowan",
@@ -732,7 +744,8 @@ test("host action retries stale player invites against the current occupant", as
   });
 
   assert.equal(observed[1].url, "/auth/invites");
-  assert.equal(observed[1].body.principal_user_id, "player-rowan");
+  assert.equal(observed[1].body.account_id, "rowan@example.test");
+  assert.equal(observed[1].body.expected_principal_user_id, "player-rowan");
   assert.match(observed[1].body.invite_token, /^player-midsummer-/);
   assert.equal(result.playerInvite.state, "ack");
   assert.equal(result.playerInvite.principalUserId, "player-rowan");

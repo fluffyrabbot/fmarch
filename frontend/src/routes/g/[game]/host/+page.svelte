@@ -321,6 +321,16 @@
           <strong data-testid={inviteTarget.targetTestId}>{inviteTarget.targetLabel}</strong>
         </header>
         <form method="POST" action={inviteTarget.action}>
+          <label class="fm-field">
+            <span>Account</span>
+            <input
+              name="accountId"
+              type="text"
+              autocomplete="username"
+              required
+              data-testid={inviteTarget.accountTestId}
+            />
+          </label>
           <input
             type="hidden"
             name="principalUserId"
@@ -363,6 +373,16 @@
               action={inviteTarget.action}
               data-testid="host-player-invite-retry"
             >
+              <label class="fm-field">
+                <span>Account</span>
+                <input
+                  name="accountId"
+                  type="text"
+                  autocomplete="username"
+                  required
+                  data-testid="host-player-invite-retry-account"
+                />
+              </label>
               <input
                 type="hidden"
                 name="principalUserId"

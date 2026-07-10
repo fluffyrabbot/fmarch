@@ -20150,7 +20150,7 @@ function identityAdapterProofFixture(game) {
       replacesDevTokensWithoutRoleSurfaceChange: true,
       browserCookieName: "fmarch_session",
       sessionCredentialKind: "opaque-session",
-      inviteCredentialKind: "single-use-invite",
+      inviteCredentialKind: "account-bound-single-use-invite",
       accountCredentialKind: "local-password-account",
       lifecycleControls: [
         "account-disable",

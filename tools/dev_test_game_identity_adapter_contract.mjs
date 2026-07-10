@@ -3,7 +3,7 @@ import {
   hostedIdentityRoleSurfaceContractDiff,
 } from "./dev_test_game_hosted_identity_evidence_cases.mjs";
 
-export const devTestGameIdentityAdapterProofVersion = 11;
+export const devTestGameIdentityAdapterProofVersion = 12;
 export const devTestGameIdentityAdapterContractId =
   "local-production-identity-adapter-v1";
 
@@ -13,7 +13,7 @@ export const devTestGameIdentityAdapterExpectedContract = deepFreeze({
   roleSurfaceArchitectureChanged: false,
   roleSurfaceContract: hostedIdentityExpectedRoleSurfaceContract,
   credentialKinds: {
-    invite: "single-use-invite",
+    invite: "account-bound-single-use-invite",
     account: "local-password-account",
     session: "opaque-session",
   },

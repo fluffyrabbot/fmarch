@@ -278,7 +278,7 @@ export const hostedIdentityProviderBoundary = deepFreeze({
       mode: "local-capability-model",
       status: "passed",
       accountCredential: "local-password-account",
-      inviteCredential: "single-use-invite",
+      inviteCredential: "account-bound-single-use-invite",
       sessionCredential: "opaque-session",
       loginBoundary: "/auth/login",
       sessionBoundary: "/auth/session",
@@ -1159,7 +1159,7 @@ function hostedIdentityEvidenceFixtureAdapterContract() {
     roleSurfaceArchitectureChanged: false,
     roleSurfaceContract: fixtureClone(hostedIdentityExpectedRoleSurfaceContract),
     credentialKinds: {
-      invite: "single-use-invite",
+      invite: "account-bound-single-use-invite",
       account: "local-password-account",
       session: "opaque-session",
     },

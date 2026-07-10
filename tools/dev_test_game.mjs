@@ -132,6 +132,7 @@ let apiServerExit;
 let apiStartupTimeoutMs = defaultApiStartupTimeoutMs;
 let proofStabilityAudit;
 let identityBootstrap;
+let localAccounts;
 
 export async function main(rawArgs = process.argv.slice(2), env = process.env) {
   args = parseArgs(rawArgs);
@@ -159,6 +160,7 @@ export async function main(rawArgs = process.argv.slice(2), env = process.env) {
   serverOutput = "";
   apiServerExit = undefined;
   identityBootstrap = undefined;
+  localAccounts = new Map();
 
   await mkdir(artifactDir, { recursive: true });
   if (apiBaseUrl === undefined) {
@@ -437,6 +439,7 @@ async function seedPostSetupGameplayCommands() {
 
 async function createSessions() {
   identityBootstrap = await seedRootAdminSession();
+  await ensureLocalAccount({ principalUserId: "player-rowan" });
 
   return {
     admin: await createInviteCredential({
@@ -557,6 +560,10 @@ async function createInviteCredential({
   globalCapabilities = [],
   expectedCapabilityKind,
 }) {
+  const account = await ensureLocalAccount({
+    principalUserId,
+    globalCapabilities,
+  });
   const invite = await fetchJson(`${apiBaseUrl}/auth/invites`, {
     method: "POST",
     headers: {
@@ -565,13 +572,16 @@ async function createInviteCredential({
     },
     body: JSON.stringify({
       invite_token: inviteToken,
-      principal_user_id: principalUserId,
+      account_id: account.accountId,
+      expected_principal_user_id: principalUserId,
       expires_at: expiresAt,
       global_capabilities: globalCapabilities,
     }),
   });
   return {
     principalUserId: invite.principal_user_id,
+    accountId: account.accountId,
+    password: account.password,
     credentialKind: "invite",
     token: inviteToken,
     inviteToken,
@@ -584,6 +594,43 @@ async function createInviteCredential({
     expectedCapabilityKind,
     globalCapabilities: invite.global_capabilities ?? [],
   };
+}
+
+async function ensureLocalAccount({ principalUserId, globalCapabilities = [] }) {
+  const existing = localAccounts.get(principalUserId);
+  if (existing !== undefined) {
+    return existing;
+  }
+  const account = {
+    accountId: `${principalUserId}-${crypto.randomUUID()}@local.fmarch.test`,
+    password: `${tokenPrefix}-account-${principalUserId}`,
+  };
+  const created = await fetchJson(`${apiBaseUrl}/auth/accounts`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${tokens.rootAdmin}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      account_id: account.accountId,
+      password: account.password,
+      principal_user_id: principalUserId,
+      global_capabilities: globalCapabilities,
+    }),
+  });
+  if (created.principal_user_id !== principalUserId) {
+    throw new Error(`local account principal drifted for ${principalUserId}`);
+  }
+  localAccounts.set(principalUserId, account);
+  return account;
+}
+
+function localAccountForPrincipal(principalUserId) {
+  const account = localAccounts.get(principalUserId);
+  if (account === undefined) {
+    throw new Error(`local account was not seeded for ${principalUserId}`);
+  }
+  return account;
 }
 
 async function createSessionGrantCredential({
@@ -633,6 +680,9 @@ function roleLoginUrl({ frontendBaseUrl, session }) {
   const params = new URLSearchParams({ returnTo: session.returnTo });
   if (session.credentialKind === "invite" || session.inviteToken !== undefined) {
     params.set("invite", session.inviteToken);
+    if (session.accountId !== undefined) {
+      params.set("account", session.accountId);
+    }
   }
   return `${frontendBaseUrl}/auth/login?${params.toString()}`;
 }
@@ -747,6 +797,10 @@ function printSessionCard(card) {
     console.log(`\n${role}`);
     console.log(`  url:    ${session.loginUrl}`);
     console.log(`  token:  ${session.inviteToken ?? session.token}`);
+    if (session.accountId !== undefined) {
+      console.log(`  account: ${session.accountId}`);
+      console.log(`  password: ${session.password}`);
+    }
   }
 }
 
@@ -775,7 +829,7 @@ export function markdownSessionCard(card) {
           `- dev session endpoint enabled: ${card.identityBootstrap.devSessionEndpointEnabled}`,
         ]),
     "",
-    "Open a role login URL and submit. Invite tokens are prefilled in the URL; session tokens are repeated below for recovery/debug use.",
+    "Open a role login URL, enter the seeded account password, and submit. Invite tokens and account IDs are prefilled in the URL; session tokens are repeated below for recovery/debug use.",
     "",
   ];
   for (const [role, session] of Object.entries(card.sessions)) {
@@ -785,6 +839,9 @@ export function markdownSessionCard(card) {
       `Role login URL: ${session.loginUrl}`,
       "",
       `Credential token: ${session.inviteToken ?? session.token}`,
+      ...(session.accountId === undefined
+        ? []
+        : [`Account: ${session.accountId}`, `Password: ${session.password}`]),
       "",
     );
   }
@@ -1846,6 +1903,10 @@ async function openVerifiedRoleEntry({
     const prefilled = await page.getByTestId("auth-login-token").inputValue();
     if (prefilled !== credential) {
       await page.getByTestId("auth-login-token").fill(credential);
+    }
+    if (session.accountId !== undefined) {
+      await page.getByTestId("auth-login-account").fill(session.accountId);
+      await page.getByTestId("auth-login-password").fill(session.password);
     }
     await Promise.all([
       page.waitForURL(session.directUrl, { timeout: 15000 }),
@@ -13019,6 +13080,10 @@ async function issueReplacementInviteFromHost({ hostPage, game, frontendBaseUrl 
   const targetLabel = await hostPage
     .getByTestId("host-replacement-invite-target")
     .innerText();
+  const replacementAccount = localAccountForPrincipal("player-rowan");
+  await hostPage
+    .getByTestId("host-replacement-invite-account")
+    .fill(replacementAccount.accountId);
   await hostPage.getByTestId("host-replacement-invite-submit").click();
   await hostPage.getByTestId("host-replacement-invite-url").waitFor({
     state: "visible",
@@ -13032,11 +13097,14 @@ async function issueReplacementInviteFromHost({ hostPage, game, frontendBaseUrl 
   const loginUrl = new URL(href, frontendBaseUrl);
   const inviteToken = loginUrl.searchParams.get("invite");
   const returnTo = loginUrl.searchParams.get("returnTo");
+  const accountId = loginUrl.searchParams.get("account");
   const session = {
     principalUserId: "player-rowan",
     credentialKind: "invite",
     token: inviteToken,
     inviteToken,
+    accountId,
+    password: replacementAccount.password,
     loginUrl: loginUrl.toString(),
     directUrl: `${frontendBaseUrl}${returnTo}`,
     returnTo,
@@ -13056,6 +13124,7 @@ async function issueReplacementInviteFromHost({ hostPage, game, frontendBaseUrl 
     loginUrl.origin !== frontendBaseUrl ||
     loginUrl.pathname !== "/auth/login" ||
     returnTo !== `/g/${game}` ||
+    accountId !== replacementAccount.accountId ||
     typeof inviteToken !== "string" ||
     !inviteToken.startsWith(`replacement-${game}-`)
   ) {
@@ -13066,6 +13135,7 @@ async function issueReplacementInviteFromHost({ hostPage, game, frontendBaseUrl 
         targetLabel,
         loginUrl: loginUrl.toString(),
         returnTo,
+        accountId,
         inviteTokenPrefix: inviteToken?.slice(0, `replacement-${game}-`.length),
       })}`,
     );
@@ -13099,6 +13169,9 @@ async function openStaleHostInvitePage({ browser, hostPage, game, frontendBaseUr
   try {
     await page.goto(`${frontendBaseUrl}/g/${game}/host`, { waitUntil: "networkidle" });
     await page.getByTestId("host-player-invite-panel").waitFor({ state: "visible" });
+    await page
+      .getByTestId("host-player-invite-account")
+      .fill(localAccountForPrincipal("player-mira").accountId);
     const before = await readPlayerInviteTarget(page);
     if (
       before.principalUserId !== "player-mira" ||
@@ -13119,6 +13192,7 @@ async function openStaleHostInvitePage({ browser, hostPage, game, frontendBaseUr
 async function readPlayerInviteTarget(page) {
   return {
     targetLabel: await page.getByTestId("host-player-invite-target").innerText(),
+    accountId: await page.getByTestId("host-player-invite-account").inputValue(),
     principalUserId: await page
       .getByTestId("host-player-invite-panel")
       .locator('input[name="principalUserId"]')
@@ -13168,6 +13242,10 @@ async function verifyStaleHostPlayerInviteRecovery({
       .locator('input[name="expectedOccupantUserId"]')
       .inputValue(),
   };
+  const retryAccount = localAccountForPrincipal("player-rowan");
+  await staleHostInvitePage
+    .getByTestId("host-player-invite-retry-account")
+    .fill(retryAccount.accountId);
   await retry.click();
   await staleHostInvitePage.waitForFunction(
     () =>
@@ -13215,6 +13293,8 @@ async function verifyPendingReplacementPlayer({
     if (prefilled !== replacementSession.inviteToken) {
       await page.getByTestId("auth-login-token").fill(replacementSession.inviteToken);
     }
+    await page.getByTestId("auth-login-account").fill(replacementSession.accountId);
+    await page.getByTestId("auth-login-password").fill(replacementSession.password);
     await Promise.all([
       page.waitForURL(replacementSession.directUrl, { timeout: 15000 }),
       page.getByTestId("auth-login-submit").click(),
@@ -13265,6 +13345,8 @@ async function verifyRedeemedReplacementInviteRecovery({
     await page.goto(replacementSession.loginUrl, { waitUntil: "networkidle" });
     await page.getByTestId("auth-login-surface").waitFor({ state: "visible" });
     const prefilled = await page.getByTestId("auth-login-token").inputValue();
+    await page.getByTestId("auth-login-account").fill(replacementSession.accountId);
+    await page.getByTestId("auth-login-password").fill(replacementSession.password);
     await page.getByTestId("auth-login-submit").click();
     await page.getByTestId("auth-login-reject").waitFor({
       state: "visible",

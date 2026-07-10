@@ -151,6 +151,8 @@ test("login action redeems invite tokens into opaque browser sessions", async ()
         },
         request: formRequest({
           token: "  host-invite-token  ",
+          accountId: " host@example.test ",
+          password: " invited account password ",
           returnTo: "/g/midsummer/host",
         }),
         url: new URL("http://localhost/auth/login"),
@@ -170,6 +172,8 @@ test("login action redeems invite tokens into opaque browser sessions", async ()
   assert.equal(observed.requests[1].method, "POST");
   assert.equal(observed.requests[1].accept, "application/json");
   assert.equal(observed.requests[1].body.invite_token, "host-invite-token");
+  assert.equal(observed.requests[1].body.account_id, "host@example.test");
+  assert.equal(observed.requests[1].body.password, "invited account password");
   assert.match(observed.requests[1].body.session_token, /^invite-session-/);
   assert.deepEqual(observed.cookie, {
     name: "fmarch_session",
@@ -252,20 +256,17 @@ test("login action rejects missing or revoked tokens without setting a cookie", 
     "Session, invite, or account credentials are required",
   );
 
-  const revoked = await actions.default({
+  const missingInviteAccount = await actions.default({
     cookies: forbiddenCookieJar(),
-    fetch: async (url) =>
-      url === "/auth/session"
-        ? jsonResponse({ message: "nope" }, { ok: false, status: 401 })
-        : jsonResponse({ message: "nope" }, { ok: false, status: 401 }),
+    fetch: async () => jsonResponse({ message: "nope" }, { ok: false, status: 401 }),
     request: formRequest({ token: "revoked-token", returnTo: "//evil.test/" }),
     url: new URL("http://localhost/auth/login"),
   });
-  assert.equal(revoked.status, 401);
-  assert.equal(revoked.data.returnTo, "/");
+  assert.equal(missingInviteAccount.status, 400);
+  assert.equal(missingInviteAccount.data.returnTo, "/");
   assert.equal(
-    revoked.data.message,
-    "Session or invite token is missing, expired, or revoked",
+    missingInviteAccount.data.message,
+    "Invite redemption requires the invited account and password",
   );
 });
 

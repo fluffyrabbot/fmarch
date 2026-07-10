@@ -6193,7 +6193,8 @@ export function validateDevTestGameIdentityAdapterProof(proof, options = {}) {
     devTestGameIdentityAdapterContractDiff(proof.identityAdapterContract).status !==
       "passed" ||
     proof.identityAdapter?.browserCookieName !== "fmarch_session" ||
-    proof.identityAdapter?.inviteCredentialKind !== "single-use-invite" ||
+    proof.identityAdapter?.inviteCredentialKind !==
+      "account-bound-single-use-invite" ||
     proof.identityAdapter?.accountCredentialKind !== "local-password-account" ||
     proof.identityAdapter?.sessionCredentialKind !== "opaque-session" ||
     !proof.identityAdapter?.lifecycleControls?.includes("account-disable") ||

@@ -19,7 +19,7 @@
       <p class="fm-eyebrow">Auth</p>
       <h1>Sign in</h1>
       <p class="fm-summary">
-        Use an opaque session, invite, or account credential issued through an authenticated identity flow.
+        Use an opaque session or account credential. Invitations require the invited account password.
       </p>
     </div>
   </section>
@@ -34,7 +34,7 @@
     <form method="POST" class="auth-login__form" data-testid="auth-login-form">
       <input type="hidden" name="returnTo" value={returnTo} />
       <label class="auth-login__field fm-field">
-        <span>Session or invite token</span>
+        <span>Session or invitation</span>
         <input
           name="token"
           type="password"
