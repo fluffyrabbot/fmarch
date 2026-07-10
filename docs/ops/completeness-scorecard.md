@@ -17,7 +17,7 @@ count is treated as product progress.
 
 | Execution class | Complete | Partial | Open | Blocked | Deferred | Total |
 |---|---:|---:|---:|---:|---:|---:|
-| code | 15 | 5 | 8 | 0 | 0 | 28 |
+| code | 16 | 5 | 7 | 0 | 0 | 28 |
 | external-evidence | 0 | 0 | 0 | 6 | 0 | 6 |
 | human | 0 | 0 | 1 | 1 | 0 | 2 |
 | optional | 0 | 0 | 0 | 0 | 1 | 1 |
@@ -28,22 +28,22 @@ Overall release closure complete: **no**.
 
 ## Next buildable coding slice
 
-### AVIF/WebP variant generation `product.media.variant-generation`
+### Authenticated bounded media upload `product.media.authenticated-upload`
 
-Add versioned thumb, tablet, and full-bounded AVIF/WebP generation from verified canonical rasters, with bounded resize/encode resources, deterministic immutable keys, private atomic persistence, idempotent reuse, and restart regeneration.
+Require a pre-provisioned media root at server startup, inject the canonical MediaStore into API state, and add a raw-body PNG/JPEG upload endpoint that authenticates an active enabled account before persistence, enforces request and media limits, generates the fixed variant set, and returns only typed immutable handle metadata; prove every rejected request retains no canonical or variant bytes.
 
-Owned paths: `Cargo.lock`, `crates/media/`, `docs/arch/07-images.md`.
+Owned paths: `Cargo.lock`, `crates/api/Cargo.toml`, `crates/api/src/lib.rs`, `crates/server/Cargo.toml`, `crates/server/src/main.rs`, `docs/arch/07-images.md`.
 
 Proof:
 
-- `cargo test -p media variant`
+- `cargo test -p api media_upload -- --test-threads=1`
 - `cargo check -p server`
 
 Explicit non-claims:
 
-- No REST upload endpoint, serving-route integration, or browser UI/proof.
-- No command/thread-post integration or authenticated delivery contract.
-- No object-store/CDN integration, hosted durability, or production codec-quality claim.
+- No thread-post command, projection-serving, frontend, or browser integration.
+- No multipart/resumable protocol, orphan-retention lifecycle, or public original-byte route.
+- No object-store/CDN integration, hosted durability, or production upload-readiness claim.
 
 ## Locally proven foundation
 
@@ -70,7 +70,7 @@ Explicit non-claims:
 |---|---|---|---|---|---|
 | complete | Reference-backed private media baseline<br>`product.media.reference-ingest-serving` | `product.game.core-loop` | A command-backed private post serves referenced tablet/small bytes to a member and denies a non-member. | Complete. | source: `frontend/src/routes/media/live-stack/thread/[asset]/+server.js`<br>source: `docs/arch/07-images.md`<br>command: `npm run test:host-console-live-stack-smoke`<br>Generated tablet/small PNG references flow through SubmitPost, projection-backed serving, immutable headers, and member/non-member authorization; this does not prove upload, durable blob storage, metadata stripping, or transcoding. |
 | complete | Canonical private media blob store<br>`product.media.canonical-blob-store` | `product.media.reference-ingest-serving` | Malformed and oversized inputs are rejected; metadata is stripped before BLAKE3 identity; equivalent images deduplicate; persistence is atomic and root-confined; restart lookup succeeds. | Complete. | source: `crates/media/src/lib.rs`<br>source: `docs/arch/07-images.md`<br>command: `cargo test -p media`<br>command: `cargo clippy -p media --all-targets -- -D warnings`<br>command: `cargo check -p server`<br>Bounded local PNG/JPEG ingest applies EXIF orientation, serializes decoder-produced RGBA8 into a versioned canonical record, strips container metadata, derives BLAKE3 identity, and persists it through private fd-relative atomic storage with verified restart lookup; it does not normalize ICC profiles or expose upload, serving, or variants. |
-| open | AVIF/WebP variant generation<br>`product.media.variant-generation` | `product.media.canonical-blob-store` | The media core produces validated AVIF/WebP variants for every supported size and can regenerate them from canonical storage. | Remaining: Implement bounded AVIF/WebP transcode, variant manifests, and deterministic regeneration. | source: `docs/arch/07-images.md`<br>planned-command: `cargo test -p media variant`<br>Derive bounded thumb, tablet, and full variants from the canonical stripped source with deterministic immutable keys. |
+| complete | AVIF/WebP variant generation<br>`product.media.variant-generation` | `product.media.canonical-blob-store` | The media core produces validated AVIF/WebP variants for every supported size and can regenerate them from canonical storage. | Complete. | source: `crates/media/src/variants.rs`<br>source: `docs/arch/07-images.md`<br>command: `cargo test -p media`<br>command: `cargo test -p media variant`<br>command: `cargo clippy -p media --all-targets -- -D warnings`<br>command: `cargo check -p server`<br>A pinned media recipe generates verified thumb, tablet, and full-bounded AVIF/WebP from canonical rasters, commits six private immutable members through a manifest installed last, and reproduces exact bytes across concurrency, restart, and explicit regeneration; this is local recipe proof, not a production codec-quality benchmark. |
 | open | Authenticated bounded media upload<br>`product.media.authenticated-upload` | `product.media.canonical-blob-store`<br>`product.media.variant-generation`<br>`product.identity.account-login-invites` | Authorized uploads return a persistent handle while malformed, oversized, unsupported, and unauthorized requests fail without retained bytes. | Remaining: Add the authenticated API contract and bounded ingest integration. | source: `docs/arch/07-images.md`<br>planned-command: `cargo test -p api media_upload`<br>Expose a capability-checked REST upload that applies resource limits and returns only server-issued content-addressed handles. |
 | open | Uploaded media through a private post<br>`product.media.upload-to-private-post` | `product.media.authenticated-upload`<br>`product.media.variant-generation`<br>`product.media.reference-ingest-serving`<br>`product.private.mafia-room` | A seeded member uploads and posts media, receives the correct variant after reload, and a non-member receives no bytes. | Remaining: Wire upload, post attachment, persistent serving, responsive UI, and seeded browser authorization proof. | source: `docs/arch/07-images.md`<br>planned-command: `npm run test:dev-test-game-core-live:local`<br>Carry a real upload handle through SubmitPost, persistent projection serving, responsive rendering, and private-channel denial in a seeded browser flow. |
 

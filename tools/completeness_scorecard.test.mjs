@@ -13,7 +13,7 @@ import {
   validateRegistry,
 } from "./completeness_scorecard.mjs";
 
-test("real completion registry validates and selects the media variant slice", async () => {
+test("real completion registry validates and selects authenticated media upload", async () => {
   const registry = await loadCompletionRegistry();
   await validateRegistry(registry);
   const summary = summarizeRegistry(registry);
@@ -30,7 +30,7 @@ test("real completion registry validates and selects the media variant slice", a
   assert.equal(summary.releaseComplete, false);
   assert.equal(
     nextBuildableCodeItem(registry)?.id,
-    "product.media.variant-generation",
+    "product.media.authenticated-upload",
   );
 });
 
@@ -44,6 +44,7 @@ test("generated scorecard exactly matches the canonical registry", async () => {
   assert.equal(saved, rendered);
   assert.equal(await checkScorecard(), true);
   assert.match(rendered, /Canonical private media blob store/);
+  assert.match(rendered, /Authenticated bounded media upload/);
   assert.doesNotMatch(rendered, /Last updated|main @|Proof surface|tools\/ file/);
 });
 
@@ -67,10 +68,10 @@ test("registry validation rejects duplicate ids and unknown dependencies", async
 test("registry validation rejects dependency cycles", async () => {
   const registry = await loadCompletionRegistry();
   const cyclic = structuredClone(registry);
-  const variants = cyclic.items.find(
-    (item) => item.id === "product.media.variant-generation",
+  const upload = cyclic.items.find(
+    (item) => item.id === "product.media.authenticated-upload",
   );
-  variants.depends_on = ["product.media.authenticated-upload"];
+  upload.depends_on = ["product.media.upload-to-private-post"];
   await assert.rejects(
     validateRegistry(cyclic, { verifySourcePaths: false }),
     /dependency cycle/,
@@ -107,7 +108,7 @@ test("registry validation rejects illegal completion and blocked states", async 
 
   const whitespaceRemaining = structuredClone(registry);
   whitespaceRemaining.items.find(
-    (item) => item.id === "product.media.variant-generation",
+    (item) => item.id === "product.media.authenticated-upload",
   ).remaining = ["   "];
   await assert.rejects(
     validateRegistry(whitespaceRemaining, { verifySourcePaths: false }),
@@ -117,7 +118,7 @@ test("registry validation rejects illegal completion and blocked states", async 
   const completeRecommendedSlice = structuredClone(registry);
   completeRecommendedSlice.items[0].recommended_slice = structuredClone(
     registry.items.find(
-      (item) => item.id === "product.media.variant-generation",
+      (item) => item.id === "product.media.authenticated-upload",
     ).recommended_slice,
   );
   await assert.rejects(

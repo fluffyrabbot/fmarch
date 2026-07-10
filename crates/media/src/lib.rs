@@ -1,10 +1,10 @@
 //! Canonical image ingestion and local content-addressed persistence (doc 07).
 //!
-//! This crate owns the narrow storage boundary below future HTTP and variant-generation
-//! layers. Untrusted PNG/JPEG uploads are decoded under explicit encoded-byte, dimension, pixel,
-//! and output-buffer caps. EXIF orientation is applied, all remaining container metadata is
-//! discarded, and the resulting pixels are serialized as a versioned RGBA8 raster before their
-//! BLAKE3 identity is computed.
+//! This crate owns canonical ingest, private local persistence, and deterministic AVIF/WebP
+//! variants below future HTTP and product-integration layers. Untrusted PNG/JPEG uploads are
+//! decoded under explicit encoded-byte, dimension, pixel, and output-buffer caps. EXIF orientation
+//! is applied, all remaining container metadata is discarded, and the resulting pixels are
+//! serialized as a versioned RGBA8 raster before their BLAKE3 identity is computed.
 //!
 //! The on-disk handle is a typed 32-byte digest, never a caller-provided path. A complete blob is
 //! synced to a private temporary file and installed with an atomic no-clobber hard link, so
@@ -20,6 +20,13 @@ use std::sync::Arc;
 
 use image::{DynamicImage, ImageDecoder, ImageFormat, ImageReader, Limits};
 use rustix::fs::{AtFlags, Mode, OFlags};
+
+mod variants;
+
+pub use variants::{
+    StoredVariant, VariantFormat, VariantGenerationResult, VariantGenerationStatus, VariantKey,
+    VariantKind, VariantLimits, VariantRecord, VariantSet, VARIANT_RECIPE_REVISION,
+};
 
 const CANONICAL_MAGIC: &[u8; 8] = b"FMRGBA01";
 const CANONICAL_HEADER_BYTES: usize = CANONICAL_MAGIC.len() + 8;
@@ -290,6 +297,28 @@ pub enum MediaError {
     CorruptStoredRaster { id: ContentId, reason: String },
     #[error("stored media {id} does not match newly canonicalized bytes")]
     ExistingRasterMismatch { id: ContentId },
+    #[error("invalid variant limits: {0}")]
+    InvalidVariantLimits(&'static str),
+    #[error("variant {key} dimensions {width}x{height} exceed configured output bounds")]
+    VariantDimensionsExceeded {
+        key: VariantKey,
+        width: u32,
+        height: u32,
+    },
+    #[error("variant {key} has {pixels} pixels; limit is {max_pixels}")]
+    VariantPixelCountExceeded {
+        key: VariantKey,
+        pixels: u64,
+        max_pixels: u64,
+    },
+    #[error("variant {key} exceeded its encoded-byte limit of {max} bytes")]
+    VariantEncodedBytesExceeded { key: VariantKey, max: usize },
+    #[error("variant set for {id} exceeded its aggregate encoded-byte limit of {max} bytes")]
+    VariantAggregateBytesExceeded { id: ContentId, max: u64 },
+    #[error("variant encoding failed for {key}: {reason}")]
+    VariantEncoding { key: VariantKey, reason: String },
+    #[error("variant set for {id} is corrupt: {reason}")]
+    CorruptVariantSet { id: ContentId, reason: String },
     #[error("media filesystem operation failed: {0}")]
     Io(#[from] io::Error),
 }

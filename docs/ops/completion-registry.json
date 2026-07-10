@@ -202,25 +202,19 @@
       "order": 30,
       "title": "AVIF/WebP variant generation",
       "execution_class": "code",
-      "status": "open",
-      "summary": "Derive bounded thumb, tablet, and full variants from the canonical stripped source with deterministic immutable keys.",
+      "status": "complete",
+      "summary": "A pinned media recipe generates verified thumb, tablet, and full-bounded AVIF/WebP from canonical rasters, commits six private immutable members through a manifest installed last, and reproduces exact bytes across concurrency, restart, and explicit regeneration; this is local recipe proof, not a production codec-quality benchmark.",
       "complete_when": ["The media core produces validated AVIF/WebP variants for every supported size and can regenerate them from canonical storage."],
       "depends_on": ["product.media.canonical-blob-store"],
       "evidence": [
+        { "kind": "source", "value": "crates/media/src/variants.rs" },
         { "kind": "source", "value": "docs/arch/07-images.md" },
-        { "kind": "planned-command", "value": "cargo test -p media variant" }
+        { "kind": "command", "value": "cargo test -p media" },
+        { "kind": "command", "value": "cargo test -p media variant" },
+        { "kind": "command", "value": "cargo clippy -p media --all-targets -- -D warnings" },
+        { "kind": "command", "value": "cargo check -p server" }
       ],
-      "remaining": ["Implement bounded AVIF/WebP transcode, variant manifests, and deterministic regeneration."],
-      "recommended_slice": {
-        "objective": "Add versioned thumb, tablet, and full-bounded AVIF/WebP generation from verified canonical rasters, with bounded resize/encode resources, deterministic immutable keys, private atomic persistence, idempotent reuse, and restart regeneration.",
-        "paths": ["Cargo.lock", "crates/media/", "docs/arch/07-images.md"],
-        "proof_commands": ["cargo test -p media variant", "cargo check -p server"],
-        "non_claims": [
-          "No REST upload endpoint, serving-route integration, or browser UI/proof.",
-          "No command/thread-post integration or authenticated delivery contract.",
-          "No object-store/CDN integration, hosted durability, or production codec-quality claim."
-        ]
-      }
+      "remaining": []
     },
     {
       "id": "product.media.authenticated-upload",
@@ -236,7 +230,17 @@
         { "kind": "source", "value": "docs/arch/07-images.md" },
         { "kind": "planned-command", "value": "cargo test -p api media_upload" }
       ],
-      "remaining": ["Add the authenticated API contract and bounded ingest integration." ]
+      "remaining": ["Add the authenticated API contract and bounded ingest integration."],
+      "recommended_slice": {
+        "objective": "Require a pre-provisioned media root at server startup, inject the canonical MediaStore into API state, and add a raw-body PNG/JPEG upload endpoint that authenticates an active enabled account before persistence, enforces request and media limits, generates the fixed variant set, and returns only typed immutable handle metadata; prove every rejected request retains no canonical or variant bytes.",
+        "paths": ["Cargo.lock", "crates/api/Cargo.toml", "crates/api/src/lib.rs", "crates/server/Cargo.toml", "crates/server/src/main.rs", "docs/arch/07-images.md"],
+        "proof_commands": ["cargo test -p api media_upload -- --test-threads=1", "cargo check -p server"],
+        "non_claims": [
+          "No thread-post command, projection-serving, frontend, or browser integration.",
+          "No multipart/resumable protocol, orphan-retention lifecycle, or public original-byte route.",
+          "No object-store/CDN integration, hosted durability, or production upload-readiness claim."
+        ]
+      }
     },
     {
       "id": "product.media.upload-to-private-post",
