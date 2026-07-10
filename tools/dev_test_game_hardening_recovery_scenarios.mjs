@@ -43,6 +43,7 @@ export {
   hostStaleReconnectExpectations,
   hostStaleResolveReconnectLaneId,
   hardeningReconnectFeatureTargetKind,
+  playerLiveLagResyncLaneId,
   playerLiveReconnectLaneId,
   privateChannelStaleActionReconnectExpectation,
   privateChannelStaleActionReconnectLaneId,

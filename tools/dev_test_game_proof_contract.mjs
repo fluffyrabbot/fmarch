@@ -40,6 +40,9 @@ import {
   stalePlayerActionReconnectLaneId,
 } from "./dev_test_game_hardening_recovery_scenarios.mjs";
 import {
+  playerLiveLagResyncLaneId,
+} from "./dev_test_game_stale_client_reconnect_scenarios.mjs";
+import {
   hostAdvanceByDeadlineCommandFacts,
   hostAdvancePhaseCommandFacts,
   hostExtendDeadlineCommandFacts,
@@ -2809,6 +2812,49 @@ export function buildDevTestGameProofRun(session, options = {}) {
         hardening.reconnect?.reconnectRecoveryEvent?.state === "recovered" &&
         hardening.reconnect?.recoveredSnapshotContainsPost === true,
     }),
+    lane(
+      playerLiveLagResyncLaneId,
+      "Lagged player live projection resyncs without reconnecting",
+      {
+        roleUrl: hardening.liveProjectionLagResync?.roleUrl ?? null,
+        configuredCapacity:
+          hardening.liveProjectionLagResync?.configuredCapacity ?? null,
+        configuredDeliveryDelayMs:
+          hardening.liveProjectionLagResync?.configuredDeliveryDelayMs ?? null,
+        resyncState:
+          hardening.liveProjectionLagResync?.resyncEvent?.state ?? null,
+        continuationDeltaKind:
+          hardening.liveProjectionLagResync?.continuationDeltaKind ?? null,
+        projectedPostCount:
+          hardening.liveProjectionLagResync?.projectedPostCount ?? null,
+        apiContinuationPostCount:
+          hardening.liveProjectionLagResync?.apiContinuationPostCount ?? null,
+        currentSubmitPostReceiptCount:
+          hardening.liveProjectionLagResync?.currentSubmitPostReceiptCount ?? null,
+        reconnectEventCount:
+          hardening.liveProjectionLagResync?.reconnectEventCount ?? null,
+        passed:
+          hardening.liveProjectionLagResync?.status === "passed" &&
+          typeof hardening.liveProjectionLagResync?.roleUrl === "string" &&
+          hardening.liveProjectionLagResync.roleUrl.includes("/g/") &&
+          hardening.liveProjectionLagResync?.configuredCapacity === 1 &&
+          hardening.liveProjectionLagResync?.configuredDeliveryDelayMs > 0 &&
+          hardening.liveProjectionLagResync?.resyncEvent?.fromSeq === 0 &&
+          hardening.liveProjectionLagResync?.resyncEvent?.state === "recovered" &&
+          hardening.liveProjectionLagResync?.continuationDeltaKind ===
+            "ThreadPostsChanged" &&
+          hardening.liveProjectionLagResync?.projectedPostCount === 1 &&
+          hardening.liveProjectionLagResync?.apiContinuationPostCount === 1 &&
+          hardening.liveProjectionLagResync?.currentSubmitPostReceiptCount === 1 &&
+          hardening.liveProjectionLagResync?.reconnectEventCount === 0 &&
+          Array.isArray(hardening.liveProjectionLagResync?.burstCommandIds) &&
+          new Set(hardening.liveProjectionLagResync.burstCommandIds).size ===
+            hardening.liveProjectionLagResync.burstCommandIds.length &&
+          Object.values(
+            hardening.liveProjectionLagResync?.burstPostCounts ?? {},
+          ).every((count) => count === 1),
+      },
+    ),
     lane("stale-player-vote", "Stale player vote rejects and refreshes command state", {
       rejectError: hardening.stalePlayerVote?.reject?.error ?? null,
       phaseAfterRejectLocked: hardening.stalePlayerVote?.phaseAfterReject?.locked ?? null,

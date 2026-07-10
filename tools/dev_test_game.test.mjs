@@ -7592,8 +7592,9 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
       row.id ===
       `feature-target-kind:${hardeningReconnectRecoveryFeatureTargetKind}`,
   );
-  assert.equal(hardeningReconnectRecoveryKindRow?.featureSlotIds.length, 6);
+  assert.equal(hardeningReconnectRecoveryKindRow?.featureSlotIds.length, 7);
   for (const featureSlotId of [
+    "live-projection-lag-resync",
     "cohost-stale-deadline-reconnect-recovery",
     "host-stale-advance-reconnect-recovery",
     "host-stale-deadline-reconnect-recovery",
@@ -13469,6 +13470,26 @@ test("session card and markdown include role credential URLs and tokens", async 
         reconnectRecoveryEvent: { attempt: 1, state: "recovered" },
         recoveredSnapshotContainsPost: true,
       },
+      liveProjectionLagResync: {
+        status: "passed",
+        roleUrl: `http://127.0.0.1:4102/g/${game}`,
+        configuredCapacity: 1,
+        configuredDeliveryDelayMs: 500,
+        burstCommandIds: [
+          "10000000-0000-4000-8000-000000000001",
+          "10000000-0000-4000-8000-000000000002",
+        ],
+        burstPostCounts: {
+          "10000000-0000-4000-8000-000000000001": 1,
+          "10000000-0000-4000-8000-000000000002": 1,
+        },
+        resyncEvent: { kind: "resync-required", fromSeq: 0, state: "recovered" },
+        continuationDeltaKind: "ThreadPostsChanged",
+        projectedPostCount: 1,
+        apiContinuationPostCount: 1,
+        currentSubmitPostReceiptCount: 1,
+        reconnectEventCount: 0,
+      },
       stalePlayerVote: {
         status: "passed",
         commandStateBeforeClose: {
@@ -17523,6 +17544,11 @@ test("session card and markdown include role credential URLs and tokens", async 
   assert(markdown.includes("## Multiplayer Hardening Proof"));
   assert(markdown.includes("Duplicate retry: Ack: stream seqs 44"));
   assert(markdown.includes("Reconnect: attempt 1 recovered"));
+  assert(
+    markdown.includes(
+      "Live lag resync: recovered, ThreadPostsChanged, reconnects 0",
+    ),
+  );
   assert(markdown.includes("Stale player vote: Reject PhaseLocked"));
   assert(markdown.includes("Stale dead-target vote: Reject InvalidTarget"));
   assert(markdown.includes("Dead current vote: Slot 3 cleared"));
@@ -17635,6 +17661,7 @@ test("session card and markdown include role credential URLs and tokens", async 
       "concurrent-action-race",
       "concurrent-action-race-reload",
       "reconnect-recovery",
+      "live-projection-lag-resync",
       "stale-player-vote",
       "stale-player-vote-after-change",
       "stale-player-withdraw-after-change",
@@ -23801,6 +23828,7 @@ function hardeningAdminProofFixture() {
         "concurrent-action-race",
         "concurrent-action-race-reload",
         "reconnect-recovery",
+        "live-projection-lag-resync",
         "stale-player-vote",
         "stale-player-vote-after-change",
         "stale-player-withdraw-after-change",

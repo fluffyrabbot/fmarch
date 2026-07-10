@@ -21,6 +21,7 @@ import {
   replacementConcurrentVoteRaceScenario,
 } from "./dev_test_game_replacement_private_scenario_cases.mjs";
 import {
+  playerLiveLagResyncLaneId,
   privateChannelStaleActionReconnectExpectation,
 } from "./dev_test_game_stale_client_reconnect_scenarios.mjs";
 import {
@@ -2878,6 +2879,50 @@ assert.equal(
 assert.match(
   session.verification.multiplayerHardening.reconnect.recoveredPostBody,
   /^Player reconnect proof from dev:test-game /,
+);
+assert.equal(
+  session.verification.multiplayerHardening.liveProjectionLagResync.status,
+  "passed",
+);
+assert.equal(
+  session.verification.multiplayerHardening.liveProjectionLagResync.configuredCapacity,
+  1,
+);
+assert.equal(
+  session.verification.multiplayerHardening.liveProjectionLagResync
+    .configuredDeliveryDelayMs,
+  Number(process.env.FMARCH_LIVE_PROJECTION_DELIVERY_DELAY_MS ?? 500),
+);
+assert.deepEqual(
+  session.verification.multiplayerHardening.liveProjectionLagResync.resyncEvent,
+  { kind: "resync-required", fromSeq: 0, state: "recovered" },
+);
+assert.equal(
+  session.verification.multiplayerHardening.liveProjectionLagResync
+    .continuationDeltaKind,
+  "ThreadPostsChanged",
+);
+assert.equal(
+  session.verification.multiplayerHardening.liveProjectionLagResync.projectedPostCount,
+  1,
+);
+assert.equal(
+  session.verification.multiplayerHardening.liveProjectionLagResync
+    .apiContinuationPostCount,
+  1,
+);
+assert.equal(
+  session.verification.multiplayerHardening.liveProjectionLagResync
+    .currentSubmitPostReceiptCount,
+  1,
+);
+assert.equal(
+  session.verification.multiplayerHardening.liveProjectionLagResync.reconnectEventCount,
+  0,
+);
+assert.equal(
+  proofRun.lanes.find((lane) => lane.id === playerLiveLagResyncLaneId)?.status,
+  "passed",
 );
 assert.equal(
   session.verification.multiplayerHardening.stalePlayerVote.status,
@@ -7383,6 +7428,10 @@ async function run(command, args) {
     env: {
       ...process.env,
       DATABASE_URL: databaseUrl,
+      FMARCH_LIVE_PROJECTION_CAPACITY:
+        process.env.FMARCH_LIVE_PROJECTION_CAPACITY ?? "1",
+      FMARCH_LIVE_PROJECTION_DELIVERY_DELAY_MS:
+        process.env.FMARCH_LIVE_PROJECTION_DELIVERY_DELAY_MS ?? "500",
     },
     stdio: "inherit",
   });

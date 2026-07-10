@@ -25,6 +25,7 @@ const cloneExpectation = (expectation) => {
 };
 
 export const playerLiveReconnectLaneId = "reconnect-recovery";
+export const playerLiveLagResyncLaneId = "live-projection-lag-resync";
 export const replacementSessionReconnectLaneId =
   replacementSessionRecoveryLaneIds.at(-1);
 export const replacementActionReconnectLaneId = "replacement-action-reconnect";
@@ -142,6 +143,14 @@ export const hostStaleReconnectExpectationDefinitions = Object.freeze([
 ]);
 
 const reconnectHardeningSpineTargetDefinitions = Object.freeze([
+  Object.freeze({
+    targetKey: "playerLiveLagResyncRecovery",
+    featureSlotId: playerLiveLagResyncLaneId,
+    laneId: playerLiveLagResyncLaneId,
+    role: "player",
+    roleUrlSource: "direct",
+    featureTargetKind: hardeningReconnectFeatureTargetKind,
+  }),
   Object.freeze({
     targetKey: "staleActionReconnectRecovery",
     featureSlotId: "stale-action-reconnect-recovery",

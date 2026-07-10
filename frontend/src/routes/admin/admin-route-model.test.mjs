@@ -5867,6 +5867,10 @@ test("admin local player recovery detail data carries focused lane rows", async 
       ["concurrent-action-race", "passed: ack action, reject ActionAlreadySubmitted"],
       ["concurrent-action-race-reload", "passed: target slot-2, alive false"],
       ["reconnect-recovery", "passed: reconnecting -> recovered"],
+      [
+        "live-projection-lag-resync",
+        "passed: resync recovered, continued ThreadPostsChanged, reconnects 0",
+      ],
       ["stale-player-vote", "passed"],
       ["concurrent-vote-race", "passed"],
       ["concurrent-vote-race-reload", "passed"],
@@ -7698,6 +7702,11 @@ function proofRunFixture() {
       reconnectingState: "reconnecting",
       recoveryState: "recovered",
       recoveredSnapshotContainsPost: true,
+    },
+    "live-projection-lag-resync": {
+      resyncState: "recovered",
+      continuationDeltaKind: "ThreadPostsChanged",
+      reconnectEventCount: 0,
     },
     "stale-same-action-recovery": {
       roleUrl: "http://127.0.0.1:5173/g/midsummer",

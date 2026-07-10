@@ -5,6 +5,7 @@ import {
   playerHostRaceLaneIds,
 } from "./dev_test_game_cross_role_race_scenarios.mjs";
 import {
+  playerLiveLagResyncLaneId,
   playerLiveReconnectLaneId,
   privateChannelStaleActionReconnectLaneId,
   stalePlayerActionReconnectLaneId,
@@ -26,6 +27,7 @@ export const playerActionFoundationLaneIds = Object.freeze([
   concurrentActionRaceLaneId,
   concurrentActionRaceReloadLaneId,
   playerLiveReconnectLaneId,
+  playerLiveLagResyncLaneId,
 ]);
 
 export const stalePlayerCommandLaneIds = Object.freeze([

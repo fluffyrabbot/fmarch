@@ -20,7 +20,7 @@ use sqlx::postgres::PgPool;
 use std::collections::{BTreeSet, HashSet};
 use std::path::Path as FsPath;
 use std::sync::OnceLock;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::broadcast;
 use uuid::Uuid;
 use wire::{
@@ -40,6 +40,7 @@ pub struct ApiState {
     dev_auth_enabled: bool,
     auth_attempt_policy: AuthAttemptPolicy,
     live_projection_tx: broadcast::Sender<LiveProjectionUpdate>,
+    live_projection_delivery_delay: Duration,
 }
 
 #[derive(Debug, Clone)]
@@ -74,7 +75,13 @@ const AUTH_ATTEMPT_SOURCE_HEADER: &str = "x-fmarch-auth-source";
 
 impl ApiState {
     pub fn new(pool: PgPool) -> Self {
-        let (live_projection_tx, _) = broadcast::channel(256);
+        let live_projection_capacity =
+            env_i64("FMARCH_LIVE_PROJECTION_CAPACITY", 256, 1, 65_536) as usize;
+        let live_projection_delivery_delay =
+            Duration::from_millis(
+                env_i64("FMARCH_LIVE_PROJECTION_DELIVERY_DELAY_MS", 0, 0, 60_000) as u64,
+            );
+        let (live_projection_tx, _) = broadcast::channel(live_projection_capacity);
         let _ = dummy_account_password_hash();
         ApiState {
             pool,
@@ -82,6 +89,7 @@ impl ApiState {
             dev_auth_enabled: std::env::var("FMARCH_DEV_AUTH").ok().as_deref() == Some("1"),
             auth_attempt_policy: auth_attempt_policy_from_env(),
             live_projection_tx,
+            live_projection_delivery_delay,
         }
     }
 
@@ -118,6 +126,17 @@ impl ApiState {
 
     pub fn with_trusted_auth_attempt_source_header(mut self, trusted: bool) -> Self {
         self.auth_attempt_policy.trust_source_header = trusted;
+        self
+    }
+
+    pub fn with_live_projection_capacity(mut self, capacity: usize) -> Self {
+        let (live_projection_tx, _) = broadcast::channel(capacity.clamp(1, 65_536));
+        self.live_projection_tx = live_projection_tx;
+        self
+    }
+
+    pub fn with_live_projection_delivery_delay(mut self, delay: Duration) -> Self {
+        self.live_projection_delivery_delay = delay.min(Duration::from_secs(60));
         self
     }
 }
@@ -4052,7 +4071,27 @@ async fn ws_session(mut socket: WebSocket, state: ApiState, params: WsParams) {
             send_projection_deltas(&mut socket, next_envelope_id, private_deltas).await;
     }
 
-    while let Ok(update) = live_projection_rx.recv().await {
+    loop {
+        let update = match receive_live_projection(&mut live_projection_rx).await {
+            LiveProjectionReceive::Update(update) => update,
+            LiveProjectionReceive::Lagged => {
+                let sent_to = send_projection_deltas(
+                    &mut socket,
+                    next_envelope_id,
+                    vec![ProjectionDelta::ResyncRequired { from_seq: 0 }],
+                )
+                .await;
+                if sent_to == next_envelope_id {
+                    break;
+                }
+                next_envelope_id = sent_to;
+                continue;
+            }
+            LiveProjectionReceive::Closed => break,
+        };
+        if !state.live_projection_delivery_delay.is_zero() {
+            tokio::time::sleep(state.live_projection_delivery_delay).await;
+        }
         if update.game != game {
             continue;
         }
@@ -4131,6 +4170,22 @@ async fn ws_session(mut socket: WebSocket, state: ApiState, params: WsParams) {
             }
             next_envelope_id = sent_to;
         }
+    }
+}
+
+enum LiveProjectionReceive {
+    Update(LiveProjectionUpdate),
+    Lagged,
+    Closed,
+}
+
+async fn receive_live_projection(
+    receiver: &mut broadcast::Receiver<LiveProjectionUpdate>,
+) -> LiveProjectionReceive {
+    match receiver.recv().await {
+        Ok(update) => LiveProjectionReceive::Update(update),
+        Err(broadcast::error::RecvError::Lagged(_)) => LiveProjectionReceive::Lagged,
+        Err(broadcast::error::RecvError::Closed) => LiveProjectionReceive::Closed,
     }
 }
 
@@ -4345,6 +4400,41 @@ fn command_affects_player_command_state(command: &wire::Command) -> bool {
             | wire::Command::WithdrawVote { .. }
             | wire::Command::ProcessReplacement { .. }
     )
+}
+
+#[cfg(test)]
+mod live_projection_tests {
+    use super::*;
+
+    fn live_update(game: Uuid) -> LiveProjectionUpdate {
+        LiveProjectionUpdate {
+            game,
+            deltas: Vec::new(),
+            thread_dirty: true,
+            host_console_dirty: false,
+            host_prompts_dirty: false,
+            player_private_dirty: false,
+            player_command_state_dirty: false,
+        }
+    }
+
+    #[tokio::test]
+    async fn bounded_live_projection_receiver_reports_lag_and_then_continues() {
+        let (sender, _) = broadcast::channel(1);
+        let mut receiver = sender.subscribe();
+        let game = Uuid::new_v4();
+        sender.send(live_update(game)).unwrap();
+        sender.send(live_update(game)).unwrap();
+
+        assert!(matches!(
+            receive_live_projection(&mut receiver).await,
+            LiveProjectionReceive::Lagged
+        ));
+        assert!(matches!(
+            receive_live_projection(&mut receiver).await,
+            LiveProjectionReceive::Update(update) if update.game == game
+        ));
+    }
 }
 
 async fn require_host_audit_access(

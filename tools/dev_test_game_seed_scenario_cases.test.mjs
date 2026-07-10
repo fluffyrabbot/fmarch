@@ -24,7 +24,7 @@ import {
 } from "./dev_test_game_seed_scenario_cases.mjs";
 
 test("seed scenario cases expose one full shared required inventory", () => {
-  assert.equal(seedRequiredScenarioIds.length, 89);
+  assert.equal(seedRequiredScenarioIds.length, 90);
   assert.equal(new Set(seedRequiredScenarioIds).size, seedRequiredScenarioIds.length);
   assert.deepEqual(seedRequiredScenarioIds.slice(0, 8), [
     "host-phase-controls",
@@ -62,7 +62,7 @@ test("seed scenario cases include reload and stale-reject proof rows", () => {
 });
 
 test("seed scenario cases expose generated demo scenario fixture rows", () => {
-  assert.equal(seedDemoScenarioIds.length, 129);
+  assert.equal(seedDemoScenarioIds.length, 130);
   assert.deepEqual(seedDemoOnlyScenarioIds, [
     "day-vote-resolution",
     "day-vote-no-lynch",

@@ -33,6 +33,9 @@ import {
 import {
   replacementRaceLaneIds,
 } from "./dev_test_game_replacement_private_scenarios.mjs";
+import {
+  playerLiveLagResyncLaneId,
+} from "./dev_test_game_stale_client_reconnect_scenarios.mjs";
 
 export const seedRequiredScenarioIds = Object.freeze([
   "host-phase-controls",
@@ -47,6 +50,7 @@ export const seedRequiredScenarioIds = Object.freeze([
   "action-idempotent-retry",
   "concurrent-action-race",
   "concurrent-action-race-reload",
+  playerLiveLagResyncLaneId,
   ...playerHostRaceLaneIds,
   ...cohostHostRaceLaneIds,
   ...replacementRaceLaneIds,
@@ -160,6 +164,7 @@ const seedScenarioRoleOverrides = new Map([
   ["host-setup-role", "hostSetup"],
   ["player-action-denied", "player"],
   [playerActionBoundaryLaneId, "player"],
+  [playerLiveLagResyncLaneId, "player"],
   ["stale-deadline-advance", "host"],
   ...replacementRaceLaneIds.map((laneId) => [laneId, "player"]),
   ["replacement-incoming-action", "player"],

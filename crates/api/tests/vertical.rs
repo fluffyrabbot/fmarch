@@ -1507,6 +1507,103 @@ async fn websocket_game_connection_streams_command_following_votecount_delta(poo
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+async fn websocket_lag_requests_resync_and_keeps_streaming(pool: sqlx::PgPool) {
+    let state = ApiState::new(pool)
+        .with_live_projection_capacity(1)
+        .with_live_projection_delivery_delay(std::time::Duration::from_secs(2));
+    let app = api::router_with_state(state);
+    let game = Uuid::new_v4();
+    seed_single_vote_game(app.clone(), game).await;
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let server_app = app.clone();
+    let server = tokio::spawn(async move {
+        axum::serve(listener, server_app).await.unwrap();
+    });
+
+    let (mut socket, _) = tokio_tungstenite::connect_async(format!(
+        "ws://{addr}/ws?game={game}&principal_user_id=user_b"
+    ))
+    .await
+    .unwrap();
+    let hello = socket.next().await.unwrap().unwrap();
+    let hello: ServerEnvelope = serde_json::from_str(&hello.into_text().unwrap()).unwrap();
+    assert!(matches!(hello.body, ServerMsg::Hello(_)));
+
+    for offset in 0_u64..3 {
+        expect_ack(
+            post_command(
+                app.clone(),
+                1_000 + offset,
+                "user_b",
+                Command::SubmitPost {
+                    game,
+                    channel_id: "main".into(),
+                    actor_slot: "slot_3".into(),
+                    body: format!("lag burst post {offset}"),
+                    media: None,
+                },
+            )
+            .await,
+        );
+    }
+
+    let resync = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        loop {
+            let frame = socket.next().await.unwrap().unwrap();
+            let envelope: ServerEnvelope =
+                serde_json::from_str(&frame.into_text().unwrap()).unwrap();
+            if matches!(
+                envelope.body,
+                ServerMsg::Delta(ProjectionDelta::ResyncRequired { from_seq: 0 })
+            ) {
+                return envelope;
+            }
+        }
+    })
+    .await
+    .expect("capacity-one websocket should request projection resync after lag");
+
+    let continuation_body = format!("post after lag resync {}", Uuid::new_v4());
+    expect_ack(
+        post_command(
+            app,
+            2_000,
+            "user_b",
+            Command::SubmitPost {
+                game,
+                channel_id: "main".into(),
+                actor_slot: "slot_3".into(),
+                body: continuation_body.clone(),
+                media: None,
+            },
+        )
+        .await,
+    );
+
+    let continued = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        loop {
+            let frame = socket.next().await.unwrap().unwrap();
+            let envelope: ServerEnvelope =
+                serde_json::from_str(&frame.into_text().unwrap()).unwrap();
+            if matches!(
+                envelope.body,
+                ServerMsg::Delta(ProjectionDelta::ThreadPostsChanged(ref thread))
+                    if thread.posts.iter().any(|post| post.body == continuation_body)
+            ) {
+                return envelope;
+            }
+        }
+    })
+    .await
+    .expect("websocket should keep delivering current projections after lag resync");
+    assert!(continued.id > resync.id);
+
+    server.abort();
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
 async fn websocket_game_connection_streams_votecount_clear_delta(pool: sqlx::PgPool) {
     let app = router(pool);
     let game = Uuid::new_v4();

@@ -84,8 +84,10 @@ it may see (a spectator never receives scumchat frames; the bytes don't leave th
 - Subscriptions are scoped: a client subscribes to a game / channel set, and the server
   resolves visibility per delta. Visibility is computed from the `channel_membership` and
   `slot_state` projections, never trusted from the client.
-- Connection backpressure: bounded per-connection send queue; a slow client gets dropped
-  and resyncs via REST cold-load on reconnect rather than ballooning server memory.
+- Connection backpressure: the live projection broadcast is bounded. A receiver that falls
+  behind gets `ResyncRequired`, cold-loads current REST projections, and continues on the same
+  socket; only a failed socket send ends that delivery loop. This bounds memory without turning
+  a recoverable broadcast gap into an unnecessary reconnect.
 
 ## Cold loads & uploads over REST
 
