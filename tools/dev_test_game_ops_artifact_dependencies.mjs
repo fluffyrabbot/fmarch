@@ -35,6 +35,9 @@ import {
   devTestGameHostedIdentityOperatorAdminProofPath,
   devTestGameHostedIdentityProgressionSummaryPath,
 } from "./dev_test_game_hosted_identity_evidence.mjs";
+import {
+  devTestGameHostedIdentityEvidenceAdminProofPath,
+} from "./dev_test_game_hosted_identity_evidence_cases.mjs";
 
 // Upstream evidence is safe to order as a DAG. Presentation snapshots may read
 // one another across successive refreshes, so they are recorded separately.
@@ -284,6 +287,11 @@ const readinessArtifactRegistry = Object.freeze([
     id: "hostedIdentityProgressionSummary",
     path: devTestGameHostedIdentityProgressionSummaryPath,
     envVar: "FMARCH_DEV_TEST_GAME_HOSTED_IDENTITY_PROGRESSION_SUMMARY",
+  }),
+  readinessArtifact({
+    id: "hostedIdentityEvidenceAdminProof",
+    path: devTestGameHostedIdentityEvidenceAdminProofPath,
+    envVar: "FMARCH_DEV_TEST_GAME_HOSTED_IDENTITY_EVIDENCE_ADMIN_PROOF",
   }),
   readinessArtifact({
     id: "hostedIdentityOperatorAdminProof",

@@ -207,6 +207,21 @@ identity spine:
 npm run test:dev-test-game-identity:operator:local
 ```
 
+For a real operator-provided packet, use the separate hosted-evidence lane.
+It requires `FMARCH_HOSTED_IDENTITY_EVIDENCE_PATH` to resolve outside
+`tools/fixtures/`, refreshes the evidence intake, its browser admin proof, the
+family progression artifacts, readiness, and the hosted-identity next action.
+It never writes a fixture packet or makes release/production claims:
+
+```sh
+FMARCH_HOSTED_IDENTITY_EVIDENCE_PATH=/secure/operator-evidence/hosted-identity-redacted.json \
+  npm run test:dev-test-game-identity:hosted-evidence
+```
+
+The existing `test:dev-test-game-identity:operator` lane remains a synthetic
+target-local predicate test and must not be used to ingest a real operator
+packet.
+
 The generated next-action proof target is
 `target/dev-test-game/hosted-identity-evidence-operator-admin-proof.json`. It
 remains a local operator-predicate proof and does not prove live hosted account,
@@ -875,6 +890,10 @@ that starts repo-local Postgres, runs the inner
 `test:dev-test-game-identity:operator` phase, appends the target-local operator
 predicate proof and a separate readiness pass, then stops Postgres; the default
 identity spine remains fixture-safe.
+`npm run test:dev-test-game-identity:hosted-evidence` is the real-packet
+counterpart: it does not start Postgres because it consumes the already-proven
+local capability artifacts and runs the hosted evidence/admin handoff only when
+the required operator packet path is supplied.
 After `npm run test:dev-test-game-admin-spine`, the checklist consumes
 `target/dev-test-game/admin-spine-proof.json` and records the ordered local
 admin browser proof set as a single development-spine evidence signal while

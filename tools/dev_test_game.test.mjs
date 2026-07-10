@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, readFile, rm, utimes, writeFile } from "node:fs/promises";
+import { mkdir, readFile, realpath, rm, utimes, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { test } from "node:test";
 import {
@@ -288,6 +288,14 @@ import {
   identityReadinessEnv,
 } from "./dev_test_game_identity_spine.mjs";
 import {
+  devTestGameHostedIdentityEvidenceSpinePlan,
+  hostedIdentityEvidenceReadinessEnv,
+} from "./dev_test_game_hosted_identity_evidence_spine.mjs";
+import {
+  assertRealHostedIdentityEvidencePath,
+  hostedIdentityEvidencePathEnv,
+} from "./dev_test_game_hosted_identity_real_evidence_guard.mjs";
+import {
   devTestGameHostedIdentityNextActionSpinePlan,
 } from "./dev_test_game_hosted_identity_next_action_spine.mjs";
 import {
@@ -396,6 +404,9 @@ import {
   hostedIdentityEvidenceSectionInputStatuses,
   validateHostedIdentityEvidencePlaceholder,
 } from "./dev_test_game_hosted_identity_evidence.mjs";
+import {
+  devTestGameHostedIdentityEvidenceAdminProofPath,
+} from "./dev_test_game_hosted_identity_evidence_cases.mjs";
 import {
   assertDevTestGameHostedIdentityProgressionSummary,
   buildDevTestGameHostedIdentityProgressionSummary,
@@ -1131,6 +1142,10 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     packageJson.scripts["test:dev-test-game-identity:operator:local"],
     "node tools/dev_test_game_local_spine.mjs --script test:dev-test-game-identity:operator",
   );
+  assert.equal(
+    packageJson.scripts["test:dev-test-game-identity:hosted-evidence"],
+    "node tools/dev_test_game_hosted_identity_evidence_spine.mjs",
+  );
   assert.deepEqual(parseLocalSpineArgs([]), {
     script: "test:dev-test-game-identity:operator",
     prebuild: false,
@@ -1524,6 +1539,22 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     devTestGameIdentityOperatorSpinePlan.at(-1).readinessReason,
     "identity-operator-hosted-evidence-predicate",
   );
+  assert.deepEqual(
+    devTestGameHostedIdentityEvidenceSpinePlan.map((step) => step.script),
+    [
+      "tools/dev_test_game_hosted_identity_real_evidence_guard.mjs",
+      "tools/dev_test_game_hosted_identity_evidence.mjs",
+      "tools/dev_test_game_hosted_identity_evidence_admin_proof.mjs",
+      "tools/dev_test_game_hosted_identity_progression_summary.mjs",
+      devTestGameHostedIdentityProgressionAdminProofBatchScript,
+      devTestGameReleaseReadinessScript,
+      "test:dev-test-game-next-action:hosted-identity",
+    ],
+  );
+  assert.equal(
+    devTestGameHostedIdentityEvidenceSpinePlan.at(-2).readinessReason,
+    "hosted-identity-operator-evidence-intake",
+  );
   assert.deepEqual(hostedIdentityOperatorProofGraphDependencyPrecondition, {
     kind: "hosted-identity-proof-graph-dependency",
     path: devTestGameProofGraphPath,
@@ -1548,6 +1579,11 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     ...identityReadinessEnv,
     FMARCH_DEV_TEST_GAME_HOSTED_IDENTITY_EVIDENCE_ADMIN_PROOF:
       devTestGameHostedIdentityOperatorAdminProofPath,
+  });
+  assert.deepEqual(hostedIdentityEvidenceReadinessEnv, {
+    ...identityReadinessEnv,
+    FMARCH_DEV_TEST_GAME_HOSTED_IDENTITY_EVIDENCE_ADMIN_PROOF:
+      devTestGameHostedIdentityEvidenceAdminProofPath,
   });
   assert.deepEqual(devTestGameHostedIdentityNextActionSpinePlan, [
     {
@@ -2499,6 +2535,28 @@ test("hosted identity evidence lane records blocked and passed handoffs", async 
     await readFile(hostedIdentityEvidenceRedactedPassFixturePath, "utf8"),
   );
   assert.deepEqual(validateHostedIdentityEvidencePlaceholder(redactedPassSource), []);
+  const operatorPacketPath =
+    "target/dev-test-game/hosted-identity-evidence-real-packet.test.json";
+  await writeFile(operatorPacketPath, `${JSON.stringify(redactedPassSource)}\n`);
+  await assert.rejects(
+    assertRealHostedIdentityEvidencePath({ env: {} }),
+    new RegExp(`${hostedIdentityEvidencePathEnv} is required`),
+  );
+  await assert.rejects(
+    assertRealHostedIdentityEvidencePath({
+      env: {
+        [hostedIdentityEvidencePathEnv]:
+          hostedIdentityEvidenceRedactedPassFixturePath,
+      },
+    }),
+    /operator-provided non-fixture packet/,
+  );
+  assert.equal(
+    await assertRealHostedIdentityEvidencePath({
+      env: { [hostedIdentityEvidencePathEnv]: operatorPacketPath },
+    }),
+    await realpath(operatorPacketPath),
+  );
   const placeholder = await buildDevTestGameHostedIdentityEvidence({
     env: {
       FMARCH_HOSTED_IDENTITY_EVIDENCE_PATH:
@@ -3458,6 +3516,14 @@ test("dev test-game spine manifest records command order and evidence wiring", (
     ],
   );
   assert.deepEqual(manifest.evidenceEnv.identity.identityReadinessEnv, identityReadinessEnv);
+  assert.deepEqual(
+    manifest.evidenceEnv.identity.hostedIdentityEvidenceReadinessEnv,
+    hostedIdentityEvidenceReadinessEnv,
+  );
+  assert.deepEqual(
+    manifest.commands.identityHostedEvidence.plan,
+    devTestGameHostedIdentityEvidenceSpinePlan,
+  );
   assert.deepEqual(manifest.evidenceEnv.ops.opsSpineReadinessEnv, opsSpineReadinessEnv);
   assert.deepEqual(
     manifest.evidenceEnv.seedFixture.seedFixtureSpineEnv,

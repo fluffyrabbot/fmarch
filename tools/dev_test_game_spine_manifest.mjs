@@ -158,6 +158,10 @@ import {
   identityReadinessEnv,
 } from "./dev_test_game_identity_spine.mjs";
 import {
+  devTestGameHostedIdentityEvidenceSpinePlan,
+  hostedIdentityEvidenceReadinessEnv,
+} from "./dev_test_game_hosted_identity_evidence_spine.mjs";
+import {
   hostedIdentityProgressionAdminProofBatchArtifactPaths,
 } from "./dev_test_game_hosted_identity_progression_admin_proof_batch.mjs";
 import {
@@ -307,6 +311,7 @@ export function buildDevTestGameSpineManifest({
     },
     identity: {
       identityReadinessEnv,
+      hostedIdentityEvidenceReadinessEnv,
     },
     adminSpine: {
       adminSpineReadinessEvidenceEnv,
@@ -353,6 +358,10 @@ export function buildDevTestGameSpineManifest({
       identityOperator: {
         script: "test:dev-test-game-identity:operator",
         plan: clonePlan(devTestGameIdentityOperatorSpinePlan),
+      },
+      identityHostedEvidence: {
+        script: "test:dev-test-game-identity:hosted-evidence",
+        plan: clonePlan(devTestGameHostedIdentityEvidenceSpinePlan),
       },
       adminSpine: {
         script: "test:dev-test-game-admin-spine",
@@ -713,6 +722,7 @@ export function buildDevTestGameSpineManifest({
       ...envValues(evidenceEnv.ops.opsSpineReadinessEnv),
       ...envValues(evidenceEnv.seedFixture.seedFixtureSpineEnv),
       ...envValues(evidenceEnv.identity.identityReadinessEnv),
+      ...envValues(evidenceEnv.identity.hostedIdentityEvidenceReadinessEnv),
       ...envValues(
         evidenceEnv.adminSpine.adminSpineTerminalBatchReadinessEvidenceEnv,
       ),
@@ -1038,6 +1048,15 @@ export function assertDevTestGameSpineManifest(manifest) {
     "tools/dev_test_game_release_readiness.mjs",
     "tools/dev_test_game_hosted_identity_operator_admin_proof.mjs",
     "tools/dev_test_game_release_readiness.mjs",
+  ]);
+  assertPlanScripts(manifest.commands?.identityHostedEvidence?.plan ?? [], [
+    "tools/dev_test_game_hosted_identity_real_evidence_guard.mjs",
+    "tools/dev_test_game_hosted_identity_evidence.mjs",
+    "tools/dev_test_game_hosted_identity_evidence_admin_proof.mjs",
+    "tools/dev_test_game_hosted_identity_progression_summary.mjs",
+    "tools/dev_test_game_hosted_identity_progression_admin_proof_batch.mjs",
+    "tools/dev_test_game_release_readiness.mjs",
+    "test:dev-test-game-next-action:hosted-identity",
   ]);
   assertPlanScripts(manifest.commands?.adminSpine?.plan ?? [], [
     "tools/dev_test_game_core_loop_admin_proof.mjs",
