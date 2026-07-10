@@ -1,0 +1,638 @@
+{
+  "version": 1,
+  "boundary": "This is the canonical overall inventory for capability status, dependency order, and assignment. It separates durable product capabilities from operator-owned external evidence, human decisions, and optional optimization; release-readiness authorities remain the delegated validators for their evidence gates. Local or fixture proof can complete a code capability, but it cannot promote hosted, release, or production evidence.",
+  "status_boundary": "Capability status is a reviewed source-control judgment. Validation checks dependency shape, source anchors, release authority, and package commands without executing proofs or treating ignored target artifacts as fresh evidence.",
+  "sections": [
+    { "id": "foundation", "title": "Locally proven foundation", "kind": "foundation", "required_for": "platform", "order": 10 },
+    { "id": "game", "title": "Game product capabilities", "kind": "product-capability", "required_for": "platform", "order": 20 },
+    { "id": "media", "title": "Media pipeline", "kind": "product-capability", "required_for": "platform", "order": 30 },
+    { "id": "private-channels", "title": "Private-channel breadth", "kind": "product-capability", "required_for": "platform", "order": 40 },
+    { "id": "identity", "title": "Account and identity lifecycle", "kind": "product-capability", "required_for": "platform", "order": 50 },
+    { "id": "community", "title": "Community and forum surface", "kind": "product-capability", "required_for": "platform", "order": 60 },
+    { "id": "archive", "title": "Archival and export", "kind": "product-capability", "required_for": "platform", "order": 70 },
+    { "id": "release-evidence", "title": "Release evidence and approval", "kind": "release-gate", "required_for": "release", "order": 80 },
+    { "id": "housekeeping", "title": "Housekeeping decisions", "kind": "housekeeping", "required_for": "platform", "order": 90 },
+    { "id": "optional", "title": "Optional optimization", "kind": "optimization", "required_for": "optional", "order": 100 }
+  ],
+  "items": [
+    {
+      "id": "foundation.event-store-projections",
+      "section": "foundation",
+      "order": 10,
+      "title": "Event store and replayable projections",
+      "execution_class": "code",
+      "status": "complete",
+      "summary": "Append-only Postgres streams, optimistic concurrency, synchronous projections, and deterministic rebuild audits form the durable state boundary.",
+      "complete_when": ["Committed events rebuild every declared projection without drift."],
+      "depends_on": [],
+      "evidence": [
+        { "kind": "source", "value": "crates/eventstore/src/lib.rs" },
+        { "kind": "source", "value": "crates/projections/src/lib.rs" }
+      ],
+      "remaining": []
+    },
+    {
+      "id": "foundation.resolution-engine-parity",
+      "section": "foundation",
+      "order": 20,
+      "title": "Deterministic resolution engine and pack parity",
+      "execution_class": "code",
+      "status": "complete",
+      "summary": "The closed rules IR and deterministic resolver cover the full source-derived engine inventory; this is local engine parity, not hosted product readiness.",
+      "complete_when": ["Every actionable in-scope engine inventory row is supported and validated, and every remaining unsupported row is explicitly classified out of scope."],
+      "depends_on": [],
+      "evidence": [
+        { "kind": "source", "value": "docs/arch/11-engine-port-checklist.md" },
+        { "kind": "source", "value": "docs/arch/im-human-engine-parity-matrix.md" },
+        { "kind": "source", "value": "tools/engine_port_completion_audit.py" }
+      ],
+      "remaining": []
+    },
+    {
+      "id": "foundation.command-capability-runtime",
+      "section": "foundation",
+      "order": 30,
+      "title": "Capability-gated command runtime",
+      "execution_class": "code",
+      "status": "complete",
+      "summary": "Typed commands resolve authority at the boundary, append events transactionally, update projections, and return idempotent acknowledgements.",
+      "complete_when": ["Commands preserve capability, concurrency, idempotency, and event-log invariants through the Postgres pipeline."],
+      "depends_on": ["foundation.event-store-projections", "foundation.resolution-engine-parity"],
+      "evidence": [
+        { "kind": "source", "value": "crates/commands/src/lib.rs" },
+        { "kind": "source", "value": "crates/caps/src/lib.rs" }
+      ],
+      "remaining": []
+    },
+    {
+      "id": "foundation.wire-live-delivery",
+      "section": "foundation",
+      "order": 40,
+      "title": "Versioned wire and recoverable live delivery",
+      "execution_class": "code",
+      "status": "complete",
+      "summary": "Versioned wire types, REST cold loads, WebSocket projection delivery, lag resync, and frontend hydration recovery are locally proven.",
+      "complete_when": ["A seeded client can cold-load, receive live updates, recover from lag, and retain capability-filtered state."],
+      "depends_on": ["foundation.command-capability-runtime"],
+      "evidence": [
+        { "kind": "source", "value": "crates/wire/src/lib.rs" },
+        { "kind": "source", "value": "frontend/src/lib/app/live-transport.mjs" }
+      ],
+      "remaining": []
+    },
+    {
+      "id": "product.game.setup",
+      "section": "game",
+      "order": 10,
+      "title": "Host setup workbench",
+      "execution_class": "code",
+      "status": "complete",
+      "summary": "The host setup role URL drives roster, role, policy, start-phase, stale-command rejection, and recovery through the real command path.",
+      "complete_when": ["A seeded host can configure and start a valid game from the setup role URL and recover from a stale mutation."],
+      "depends_on": ["foundation.command-capability-runtime", "foundation.wire-live-delivery"],
+      "evidence": [
+        { "kind": "command", "value": "npm run dev:test-game -- --verify-host-setup-only" },
+        { "kind": "artifact", "value": "target/dev-test-game/host-setup-proof.json" }
+      ],
+      "remaining": []
+    },
+    {
+      "id": "product.game.core-loop",
+      "section": "game",
+      "order": 20,
+      "title": "Seeded playable core loop",
+      "execution_class": "code",
+      "status": "complete",
+      "summary": "Seeded host and player role URLs exercise posting, voting, actions, phase resolution, stale recovery, and completion in a real local game.",
+      "complete_when": ["The core live spine completes through browser role surfaces with its saved proof contract green."],
+      "depends_on": ["product.game.setup"],
+      "evidence": [
+        { "kind": "command", "value": "npm run test:dev-test-game-core-live:local" },
+        { "kind": "artifact", "value": "target/dev-test-game/proof-run.json" }
+      ],
+      "remaining": []
+    },
+    {
+      "id": "product.game.host-moderation",
+      "section": "game",
+      "order": 30,
+      "title": "Host and cohost moderation controls",
+      "execution_class": "code",
+      "status": "complete",
+      "summary": "Host and delegated cohost controls cover deadlines, phases, prompts, publication, lifecycle changes, completion, conflict rejection, and reload recovery.",
+      "complete_when": ["Every shipped critical moderation control has a typed command, projection result, rejection boundary, and seeded role-surface proof."],
+      "depends_on": ["product.game.core-loop"],
+      "evidence": [
+        { "kind": "source", "value": "tools/dev_test_game_core_loop_host_control_scenarios.mjs" },
+        { "kind": "artifact", "value": "target/dev-test-game/core-loop-admin-proof.json" }
+      ],
+      "remaining": []
+    },
+    {
+      "id": "product.game.replacement-continuity",
+      "section": "game",
+      "order": 40,
+      "title": "Replacement continuity and authority transfer",
+      "execution_class": "code",
+      "status": "complete",
+      "summary": "Replacement preserves slot history while transferring role URLs, sessions, actions, votes, and private-channel authority with stale outgoing denial.",
+      "complete_when": ["Incoming authority recovers across reconnect/reload and outgoing credentials cannot retain current slot capabilities."],
+      "depends_on": ["product.game.core-loop"],
+      "evidence": [
+        { "kind": "source", "value": "tools/dev_test_game_replacement_feature_spine_targets.mjs" },
+        { "kind": "artifact", "value": "target/dev-test-game/proof-run.json" }
+      ],
+      "remaining": []
+    },
+    {
+      "id": "product.game.endgame-reveal-history",
+      "section": "game",
+      "order": 50,
+      "title": "Reveal-gated endgame and vote history",
+      "execution_class": "code",
+      "status": "complete",
+      "summary": "Completed games reveal roles and resolved vote history only after completion and preserve them through stale recovery, resync, and reload.",
+      "complete_when": ["Normal and stale player surfaces converge on the same reveal-gated endgame summary and durable vote history."],
+      "depends_on": ["product.game.core-loop"],
+      "evidence": [
+        { "kind": "source", "value": "tools/dev_test_game_core_loop_completed_terminal_scenario_assertions.mjs" },
+        { "kind": "artifact", "value": "target/dev-test-game/proof-run.json" }
+      ],
+      "remaining": []
+    },
+    {
+      "id": "product.media.reference-ingest-serving",
+      "section": "media",
+      "order": 10,
+      "title": "Reference-backed private media baseline",
+      "execution_class": "code",
+      "status": "complete",
+      "summary": "Generated tablet/small PNG references flow through SubmitPost, projection-backed serving, immutable headers, and member/non-member authorization; this does not prove upload, durable blob storage, metadata stripping, or transcoding.",
+      "complete_when": ["A command-backed private post serves referenced tablet/small bytes to a member and denies a non-member."],
+      "depends_on": ["product.game.core-loop"],
+      "evidence": [
+        { "kind": "source", "value": "frontend/src/routes/media/live-stack/thread/[asset]/+server.js" },
+        { "kind": "source", "value": "docs/arch/07-images.md" },
+        { "kind": "command", "value": "npm run test:host-console-live-stack-smoke" }
+      ],
+      "remaining": []
+    },
+    {
+      "id": "product.media.canonical-blob-store",
+      "section": "media",
+      "order": 20,
+      "title": "Canonical private media blob store",
+      "execution_class": "code",
+      "status": "open",
+      "summary": "Build the media core that safely decodes, strips metadata, canonicalizes, hashes, deduplicates, and atomically persists private media without freezing a public upload API.",
+      "complete_when": ["Malformed and oversized inputs are rejected; metadata is stripped before BLAKE3 identity; equivalent images deduplicate; persistence is atomic and root-confined; restart lookup succeeds."],
+      "depends_on": ["product.media.reference-ingest-serving"],
+      "evidence": [
+        { "kind": "source", "value": "docs/arch/07-images.md" },
+        { "kind": "planned-command", "value": "cargo test -p media" }
+      ],
+      "remaining": ["Create crates/media and its bounded canonical filesystem storage contract."],
+      "recommended_slice": {
+        "objective": "Add a new crates/media core that performs bounded decode, metadata stripping, canonical raster hashing with BLAKE3, atomic idempotent filesystem persistence, deduplication, and restart lookup.",
+        "paths": ["Cargo.toml", "Cargo.lock", "crates/media/", "docs/arch/07-images.md"],
+        "proof_commands": ["cargo test -p media", "cargo check -p server"],
+        "non_claims": [
+          "No REST upload endpoint or browser upload UI.",
+          "No AVIF/WebP variant generation or CDN/object-store durability.",
+          "No seeded browser proof until the later upload-to-private-post slice."
+        ]
+      }
+    },
+    {
+      "id": "product.media.variant-generation",
+      "section": "media",
+      "order": 30,
+      "title": "AVIF/WebP variant generation",
+      "execution_class": "code",
+      "status": "open",
+      "summary": "Derive bounded thumb, tablet, and full variants from the canonical stripped source with deterministic immutable keys.",
+      "complete_when": ["The media core produces validated AVIF/WebP variants for every supported size and can regenerate them from canonical storage."],
+      "depends_on": ["product.media.canonical-blob-store"],
+      "evidence": [
+        { "kind": "source", "value": "docs/arch/07-images.md" },
+        { "kind": "planned-command", "value": "cargo test -p media variant" }
+      ],
+      "remaining": ["Implement bounded AVIF/WebP transcode, variant manifests, and deterministic regeneration." ]
+    },
+    {
+      "id": "product.media.authenticated-upload",
+      "section": "media",
+      "order": 40,
+      "title": "Authenticated bounded media upload",
+      "execution_class": "code",
+      "status": "open",
+      "summary": "Expose a capability-checked REST upload that applies resource limits and returns only server-issued content-addressed handles.",
+      "complete_when": ["Authorized uploads return a persistent handle while malformed, oversized, unsupported, and unauthorized requests fail without retained bytes."],
+      "depends_on": ["product.media.canonical-blob-store", "product.media.variant-generation", "product.identity.account-login-invites"],
+      "evidence": [
+        { "kind": "source", "value": "docs/arch/07-images.md" },
+        { "kind": "planned-command", "value": "cargo test -p api media_upload" }
+      ],
+      "remaining": ["Add the authenticated API contract and bounded ingest integration." ]
+    },
+    {
+      "id": "product.media.upload-to-private-post",
+      "section": "media",
+      "order": 50,
+      "title": "Uploaded media through a private post",
+      "execution_class": "code",
+      "status": "open",
+      "summary": "Carry a real upload handle through SubmitPost, persistent projection serving, responsive rendering, and private-channel denial in a seeded browser flow.",
+      "complete_when": ["A seeded member uploads and posts media, receives the correct variant after reload, and a non-member receives no bytes."],
+      "depends_on": ["product.media.authenticated-upload", "product.media.variant-generation", "product.media.reference-ingest-serving", "product.private.mafia-room"],
+      "evidence": [
+        { "kind": "source", "value": "docs/arch/07-images.md" },
+        { "kind": "planned-command", "value": "npm run test:dev-test-game-core-live:local" }
+      ],
+      "remaining": ["Wire upload, post attachment, persistent serving, responsive UI, and seeded browser authorization proof." ]
+    },
+    {
+      "id": "product.private.mafia-room",
+      "section": "private-channels",
+      "order": 10,
+      "title": "Mafia private room",
+      "execution_class": "code",
+      "status": "complete",
+      "summary": "A real private mafia day-chat room is pack-created, capability-filtered, command-backed, live, reloadable, and denied to non-members.",
+      "complete_when": ["Members can post and recover through the private role URL while non-members never receive room data."],
+      "depends_on": ["product.game.core-loop"],
+      "evidence": [
+        { "kind": "source", "value": "tools/dev_test_game_core_loop_private_channel_recovery_scenarios.mjs" },
+        { "kind": "artifact", "value": "target/dev-test-game/proof-run.json" }
+      ],
+      "remaining": []
+    },
+    {
+      "id": "product.private.role-pm",
+      "section": "private-channels",
+      "order": 20,
+      "title": "Role private-message lifecycle",
+      "execution_class": "code",
+      "status": "partial",
+      "summary": "Role-PM routes and frontend proof shapes exist, but a complete live create/post/recover/replacement lifecycle is not yet the durable product proof.",
+      "complete_when": ["Role PM creation, membership, posting, receipts, reload, replacement transfer, and stale outgoing denial pass through the real stack."],
+      "depends_on": ["product.private.mafia-room", "product.identity.account-login-invites"],
+      "evidence": [
+        { "kind": "source", "value": "frontend/src/routes/g/[game]/c/[channel]/+page.svelte" }
+      ],
+      "remaining": ["Add a seeded live role-PM lifecycle including replacement and stale-session boundaries." ]
+    },
+    {
+      "id": "product.private.additional-rooms",
+      "section": "private-channels",
+      "order": 30,
+      "title": "Neighborhood, mason, dead, and spectator rooms",
+      "execution_class": "code",
+      "status": "partial",
+      "summary": "The generic scoped-channel model exists, but the remaining room families and their encryption, lifecycle, replacement, and recovery behavior are not proven end to end.",
+      "complete_when": ["Every supported private room family is pack/config-created, encrypted at rest, capability-filtered, replacement-safe, and live/reload proven."],
+      "depends_on": ["product.private.role-pm"],
+      "evidence": [
+        { "kind": "source", "value": "docs/arch/01-domain-model.md" },
+        { "kind": "source", "value": "docs/arch/06-security.md" }
+      ],
+      "remaining": ["Implement and prove each additional private-room family across creation, membership, encryption, posting, and recovery." ]
+    },
+    {
+      "id": "product.identity.account-login-invites",
+      "section": "identity",
+      "order": 10,
+      "title": "Account login and account-bound invites",
+      "execution_class": "code",
+      "status": "complete",
+      "summary": "Local accounts, opaque sessions, account-bound single-use invites, admin lifecycle controls, and the preserved role-surface adapter are locally proven.",
+      "complete_when": ["A real local account can log in, redeem only its invite, reach the intended role URL, and lose access when disabled or revoked."],
+      "depends_on": ["foundation.command-capability-runtime"],
+      "evidence": [
+        { "kind": "command", "value": "npm run test:dev-test-game-identity:local" },
+        { "kind": "artifact", "value": "target/auth-invite-role-proof/invite-role-proof.json" }
+      ],
+      "remaining": []
+    },
+    {
+      "id": "product.identity.password-security",
+      "section": "identity",
+      "order": 20,
+      "title": "Password storage and rotation security",
+      "execution_class": "code",
+      "status": "complete",
+      "summary": "Argon2id storage, authenticated password rotation, session revocation, timing equalization, and bounded credential-attempt state are locally proven.",
+      "complete_when": ["Password verification and rotation preserve equalized failure work, revoke old sessions, and recover after bounded throttling."],
+      "depends_on": ["product.identity.account-login-invites"],
+      "evidence": [
+        { "kind": "source", "value": "frontend/src/routes/auth/account/security/+page.server.js" },
+        { "kind": "command", "value": "npm run test:dev-test-game-identity:local" }
+      ],
+      "remaining": []
+    },
+    {
+      "id": "product.identity.recovery",
+      "section": "identity",
+      "order": 30,
+      "title": "Single-use account recovery",
+      "execution_class": "code",
+      "status": "complete",
+      "summary": "Recovery credentials support issue, revoke, consume, expiry, replay rejection, password replacement, and session revocation in the local identity proof.",
+      "complete_when": ["Only one valid recovery credential can replace a password and all invalid, expired, revoked, or replayed credentials fail safely."],
+      "depends_on": ["product.identity.password-security"],
+      "evidence": [
+        { "kind": "source", "value": "frontend/src/routes/auth/account/recovery/+page.server.js" },
+        { "kind": "command", "value": "npm run test:dev-test-game-identity:local" }
+      ],
+      "remaining": []
+    },
+    {
+      "id": "product.identity.session-lifecycle",
+      "section": "identity",
+      "order": 40,
+      "title": "Complete session lifecycle",
+      "execution_class": "code",
+      "status": "partial",
+      "summary": "Opaque issuance and revocation are implemented, but explicit logout plus periodic and privilege-change rotation remain incomplete.",
+      "complete_when": ["Login, logout, privilege change, password change, recovery, disablement, expiry, and periodic rotation each enforce the declared session transition."],
+      "depends_on": ["product.identity.account-login-invites", "product.identity.recovery"],
+      "evidence": [
+        { "kind": "source", "value": "docs/arch/06-security.md" },
+        { "kind": "source", "value": "crates/api/src/lib.rs" }
+      ],
+      "remaining": ["Add explicit logout and declared periodic/privilege-change session rotation with focused proof." ]
+    },
+    {
+      "id": "product.identity.registration",
+      "section": "identity",
+      "order": 50,
+      "title": "Account registration",
+      "execution_class": "code",
+      "status": "open",
+      "summary": "There is no self-service registration product flow yet; existing accounts are created through administrative or proof setup paths.",
+      "complete_when": ["A bounded registration route creates an account, verifies policy, establishes the correct initial session state, and rejects duplicate/abusive attempts."],
+      "depends_on": ["product.identity.password-security", "product.identity.session-lifecycle"],
+      "evidence": [
+        { "kind": "source", "value": "docs/arch/06-security.md" }
+      ],
+      "remaining": ["Design and implement the registration API, route, abuse boundary, and browser proof." ]
+    },
+    {
+      "id": "product.identity.delivery",
+      "section": "identity",
+      "order": 60,
+      "title": "Invite and recovery delivery adapters",
+      "execution_class": "code",
+      "status": "open",
+      "summary": "Invite and recovery credentials exist, but durable delivery-provider adapters, retry state, bounce/failure handling, and operator visibility are not implemented.",
+      "complete_when": ["Invite and recovery delivery are provider-abstracted, retryable, auditable, redacted, and locally testable without claiming live provider traffic."],
+      "depends_on": ["product.identity.account-login-invites", "product.identity.recovery"],
+      "evidence": [
+        { "kind": "source", "value": "docs/arch/06-security.md" }
+      ],
+      "remaining": ["Implement delivery interfaces, queue/retry state, redacted operator audit, and local provider fakes." ]
+    },
+    {
+      "id": "product.community.game-index",
+      "section": "community",
+      "order": 10,
+      "title": "Public game index",
+      "execution_class": "code",
+      "status": "partial",
+      "summary": "The root board shell and per-game routes exist, but a durable public active/completed game index is not yet a complete product surface.",
+      "complete_when": ["The public board lists capability-safe active and completed games from a real projection with pagination and browser proof."],
+      "depends_on": ["product.game.core-loop", "product.identity.account-login-invites"],
+      "evidence": [
+        { "kind": "source", "value": "frontend/src/routes/+page.svelte" },
+        { "kind": "source", "value": "docs/arch/02-event-sourcing.md" }
+      ],
+      "remaining": ["Build the game-index projection/query and replace the board shell with its real paginated surface." ]
+    },
+    {
+      "id": "product.community.discussions",
+      "section": "community",
+      "order": 20,
+      "title": "Non-game discussion areas",
+      "execution_class": "code",
+      "status": "open",
+      "summary": "The product has game-scoped threads but no non-game discussion area, topic lifecycle, or moderation surface.",
+      "complete_when": ["Users can browse, create, post in, and moderate capability-scoped non-game discussions through real routes and projections."],
+      "depends_on": ["product.community.game-index", "product.identity.registration"],
+      "evidence": [
+        { "kind": "source", "value": "docs/arch/08-roadmap.md" }
+      ],
+      "remaining": ["Define and implement non-game discussion aggregates, projections, routes, moderation, and proof." ]
+    },
+    {
+      "id": "product.community.profiles",
+      "section": "community",
+      "order": 30,
+      "title": "User profiles",
+      "execution_class": "code",
+      "status": "open",
+      "summary": "There is no public profile route or profile-editing lifecycle.",
+      "complete_when": ["A user can view and edit an authorization-safe profile, with durable projection state and browser proof."],
+      "depends_on": ["product.identity.registration"],
+      "evidence": [
+        { "kind": "source", "value": "docs/arch/08-roadmap.md" }
+      ],
+      "remaining": ["Design profile events/projections, routes, privacy controls, editing, and media integration." ]
+    },
+    {
+      "id": "product.archive.completed-game-export",
+      "section": "archive",
+      "order": 10,
+      "title": "Portable completed-game export",
+      "execution_class": "code",
+      "status": "open",
+      "summary": "Completed games are durable event streams but cannot yet be exported as a self-contained, validated archive.",
+      "complete_when": ["A completed game exports its events, schema/version metadata, referenced projections/media manifest, checksum, and deterministic import/audit result."],
+      "depends_on": ["foundation.event-store-projections", "product.game.endgame-reveal-history"],
+      "evidence": [
+        { "kind": "source", "value": "docs/arch/02-event-sourcing.md" },
+        { "kind": "source", "value": "docs/arch/08-roadmap.md" }
+      ],
+      "remaining": ["Specify and implement the portable event-stream export format, CLI/API, checksum, and round-trip audit." ]
+    },
+    {
+      "id": "hosted-production-identity",
+      "section": "release-evidence",
+      "order": 10,
+      "title": "Real hosted identity evidence",
+      "execution_class": "external-evidence",
+      "status": "blocked",
+      "summary": "Local identity code and packet validators are not live hosted account, invite, recovery, abuse-control, session-secret, or retention evidence.",
+      "complete_when": ["A non-fixture redacted operator packet records passed real hosted identity lifecycle and role-surface evidence for every required family."],
+      "depends_on": ["product.identity.registration", "product.identity.delivery", "product.identity.session-lifecycle"],
+      "evidence": [
+        { "kind": "command", "value": "npm run test:dev-test-game-identity:hosted-evidence" },
+        { "kind": "source", "value": "tools/dev_test_game_hosted_identity_real_evidence_guard.mjs" }
+      ],
+      "remaining": ["Deploy the identity lifecycle and attach real redacted retained/exportable evidence for every hosted family."],
+      "blocked_on": ["Real hosted identity target and operator evidence packet"],
+      "authority": { "kind": "release-readiness", "id": "hosted-production-identity" }
+    },
+    {
+      "id": "hosted-deployment",
+      "section": "release-evidence",
+      "order": 20,
+      "title": "Hosted API/frontend deployment evidence",
+      "execution_class": "external-evidence",
+      "status": "blocked",
+      "summary": "Local and hosted-like proof cannot establish an externally reachable deployment or external health checks.",
+      "complete_when": ["Externally reachable API and frontend targets pass the real-hosted preflight and raw-capture contract without fixture or synthetic inputs."],
+      "depends_on": ["product.game.core-loop"],
+      "evidence": [
+        { "kind": "command", "value": "npm run test:dev-test-game-real-hosted-matrix-raw-capture" },
+        { "kind": "source", "value": "docs/dev-test-game-hosted-evidence-operator-checklist.md" }
+      ],
+      "remaining": ["Provision the hosted target and capture non-synthetic external frontend/API health and flow evidence."],
+      "blocked_on": ["Externally reachable deployment and raw operator capture"],
+      "authority": { "kind": "release-readiness", "id": "hosted-deployment" }
+    },
+    {
+      "id": "hosted-demo-fixtures",
+      "section": "release-evidence",
+      "order": 30,
+      "title": "Hosted demo fixtures and sanitized-data policy",
+      "execution_class": "external-evidence",
+      "status": "blocked",
+      "summary": "Local seed fixtures do not prove a hosted demo environment, sanitized data policy, or release-safe invite delivery.",
+      "complete_when": ["The hosted demo target is reproducibly seeded from sanitized policy-approved data and its invite delivery is release-safe."],
+      "depends_on": ["hosted-deployment", "product.identity.delivery"],
+      "evidence": [
+        { "kind": "source", "value": "tools/dev_test_game_release_readiness_cases.mjs" }
+      ],
+      "remaining": ["Provision and audit hosted demo data, reset policy, and invite delivery."],
+      "blocked_on": ["Hosted demo environment and operator-approved sanitized-data policy"],
+      "authority": { "kind": "release-readiness", "id": "hosted-demo-fixtures" }
+    },
+    {
+      "id": "production-backup-recovery",
+      "section": "release-evidence",
+      "order": 40,
+      "title": "Production backup and recovery evidence",
+      "execution_class": "external-evidence",
+      "status": "blocked",
+      "summary": "The local backup/restore drill is baseline proof only; it does not establish production storage, PITR, key escrow, or secret rotation.",
+      "complete_when": ["A production-like backup, PITR restore, key escrow, and secret-rotation drill produces retained operator evidence."],
+      "depends_on": ["hosted-deployment"],
+      "evidence": [
+        { "kind": "command", "value": "npm run test:dev-test-game-backup-restore" },
+        { "kind": "source", "value": "tools/dev_test_game_release_readiness_cases.mjs" }
+      ],
+      "remaining": ["Run and retain the production-like backup/PITR, escrow, and rotation drill."],
+      "blocked_on": ["Production-like storage, keys, secrets, and operator access"],
+      "authority": { "kind": "release-readiness", "id": "production-backup-recovery" }
+    },
+    {
+      "id": "real-hosted-concurrent-race-matrix",
+      "section": "release-evidence",
+      "order": 50,
+      "title": "Real hosted concurrent-race evidence",
+      "execution_class": "external-evidence",
+      "status": "blocked",
+      "summary": "The promoted local race matrix does not prove multi-node hosted races, reload/reconnect convergence, or hosted stale-client behavior.",
+      "complete_when": ["The real hosted matrix executes concurrent commands across the deployed topology and records reload, reconnect, and stale-conflict convergence."],
+      "depends_on": ["hosted-deployment"],
+      "evidence": [
+        { "kind": "command", "value": "npm run test:dev-test-game-hosted-matrix-external-evidence" },
+        { "kind": "source", "value": "tools/dev_test_game_release_readiness_cases.mjs" }
+      ],
+      "remaining": ["Execute and retain the non-fixture multi-node hosted race matrix."],
+      "blocked_on": ["Stable real hosted topology and external race capture"],
+      "authority": { "kind": "release-readiness", "id": "real-hosted-concurrent-race-matrix" }
+    },
+    {
+      "id": "real-hosted-observability-and-operations",
+      "section": "release-evidence",
+      "order": 60,
+      "title": "Real hosted observability and operations evidence",
+      "execution_class": "external-evidence",
+      "status": "blocked",
+      "summary": "Local structured logs and hosted-like signal bundles do not prove hosted logs, metrics, traces, paging/SLOs, or incident response.",
+      "complete_when": ["The deployed target emits retained logs, metrics, traces, alerts/SLO evidence, and an exercised incident-response receipt."],
+      "depends_on": ["hosted-deployment"],
+      "evidence": [
+        { "kind": "command", "value": "npm run test:dev-test-game-real-hosted-observability-handoff" },
+        { "kind": "source", "value": "tools/dev_test_game_real_hosted_observability_handoff.mjs" }
+      ],
+      "remaining": ["Capture real hosted telemetry, alerting/SLO, paging, and incident-response evidence."],
+      "blocked_on": ["Hosted telemetry stack and operator incident-response exercise"],
+      "authority": { "kind": "release-readiness", "id": "real-hosted-observability-and-operations" }
+    },
+    {
+      "id": "human-release-approval",
+      "section": "release-evidence",
+      "order": 70,
+      "title": "Human beta/release approval",
+      "execution_class": "human",
+      "status": "blocked",
+      "summary": "No coding agent or generated artifact can approve release ownership, rollback readiness, or support staffing.",
+      "complete_when": ["The release owner reviews product scope and all external evidence, verifies rollback/support staffing, and records explicit approval."],
+      "depends_on": ["hosted-production-identity", "hosted-deployment", "hosted-demo-fixtures", "production-backup-recovery", "real-hosted-concurrent-race-matrix", "real-hosted-observability-and-operations"],
+      "evidence": [
+        { "kind": "command", "value": "npm run test:dev-test-game-release-runbook" },
+        { "kind": "source", "value": "docs/ops/human-run-test-games.md" }
+      ],
+      "remaining": ["Obtain and record explicit human release-owner approval after all prerequisites close."],
+      "blocked_on": ["All required product capabilities and operator-owned release evidence"],
+      "authority": { "kind": "release-readiness", "id": "human-release-approval" }
+    },
+    {
+      "id": "housekeeping.vote-syntax-decision",
+      "section": "housekeeping",
+      "order": 10,
+      "title": "Record the strict vote-syntax decision",
+      "execution_class": "code",
+      "status": "partial",
+      "summary": "The confirm-picker behavior is strict and shipped, but the architecture docs still describe strict tags versus freeform input as unresolved.",
+      "complete_when": ["The domain and roadmap docs record the shipped strict-target decision and remove the stale open call."],
+      "depends_on": ["product.game.core-loop"],
+      "evidence": [
+        { "kind": "source", "value": "docs/arch/08-roadmap.md" },
+        { "kind": "source", "value": "docs/arch/01-domain-model.md" }
+      ],
+      "remaining": ["Update the governing design docs to match the shipped strict-target UI and command contract." ]
+    },
+    {
+      "id": "housekeeping.codename",
+      "section": "housekeeping",
+      "order": 20,
+      "title": "Ratify the fmarch codename",
+      "execution_class": "human",
+      "status": "open",
+      "summary": "The repository and packages use fmarch while the vision docs still call the product unnamed or TBD.",
+      "complete_when": ["The owner ratifies the name and the vision/index docs consistently use it."],
+      "depends_on": [],
+      "evidence": [
+        { "kind": "source", "value": "docs/arch/README.md" },
+        { "kind": "source", "value": "docs/arch/00-vision.md" }
+      ],
+      "remaining": ["Obtain the naming decision and update the governing docs." ]
+    },
+    {
+      "id": "optional.projection-snapshots",
+      "section": "optional",
+      "order": 10,
+      "title": "Projection snapshots",
+      "execution_class": "optional",
+      "status": "deferred",
+      "summary": "Snapshots are a discardable replay optimization and are excluded from required completion until measured replay cost demands them.",
+      "complete_when": ["A measured replay SLO breach is addressed by versioned discardable snapshots with deterministic fallback to full replay."],
+      "depends_on": ["foundation.event-store-projections"],
+      "evidence": [
+        { "kind": "source", "value": "docs/arch/02-event-sourcing.md" }
+      ],
+      "remaining": ["Define a replay benchmark and SLO before deciding whether snapshot implementation is warranted."],
+      "decision_trigger": "Promote only when a representative long-game replay benchmark exceeds the declared latency or resource SLO."
+    }
+  ],
+  "orchestration_rules": [
+    "The default coding selector may choose only dependency-satisfied incomplete code items; external evidence and human approval never become coding-agent work.",
+    "One integrator owns main, central registries, canonical artifacts, commits, and pushes; reviewers remain read-only while a slice is active.",
+    "A product-facing capability closes only with its listed acceptance evidence and explicit proof boundary; additional wrappers or commits are not progress by themselves.",
+    "Local, fixture, and hosted-like evidence may prepare operator handoffs but cannot complete an external-evidence item.",
+    "Optional work remains outside required completion until its decision trigger fires."
+  ]
+}

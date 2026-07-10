@@ -2,6 +2,8 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "generate:completeness-scorecard": "node tools/completeness_scorecard.mjs --write",
+    "test:completeness-scorecard": "node --test tools/completeness_scorecard.test.mjs && node tools/completeness_scorecard.mjs --check",
     "check:build-posture": "bash scripts/check-build-posture.sh",
     "dev:postgres": "node tools/dev_postgres.mjs",
     "dev:test-game:prebuild": "cargo build -p server",
