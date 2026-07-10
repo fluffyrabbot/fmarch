@@ -108,7 +108,23 @@ export const defaultApiStartupTimeoutMs = 15 * 60 * 1000;
 const factionDayChatChannel = "private:mafia_day_chat";
 const factionDayChatPostBody = "Faction day chat post from dev:test-game.";
 const hardeningRetryChannel = "main";
-const liveProjectionProofCapacity = "4";
+export const liveProjectionProofBurstSize = 5;
+export const defaultLiveProjectionProofCapacity = 4;
+
+export function liveProjectionProofConfig(env = process.env) {
+  const capacity = Number(
+    env.FMARCH_LIVE_PROJECTION_CAPACITY ?? defaultLiveProjectionProofCapacity,
+  );
+  if (!Number.isInteger(capacity) || capacity < 1) {
+    throw new Error("FMARCH_LIVE_PROJECTION_CAPACITY must be a positive integer");
+  }
+  if (capacity >= liveProjectionProofBurstSize) {
+    throw new Error(
+      `FMARCH_LIVE_PROJECTION_CAPACITY must stay below the ${liveProjectionProofBurstSize}-message lag proof burst`,
+    );
+  }
+  return Object.freeze({ capacity, burstSize: liveProjectionProofBurstSize });
+}
 const host = "127.0.0.1";
 const frontendRequire = createRequire(path.join(frontendRoot, "package.json"));
 
@@ -315,9 +331,9 @@ async function startApi() {
       ...process.env,
       DATABASE_URL: databaseUrl,
       FMARCH_BIND: `${host}:${port}`,
-      FMARCH_LIVE_PROJECTION_CAPACITY:
-        process.env.FMARCH_LIVE_PROJECTION_CAPACITY ??
-        liveProjectionProofCapacity,
+      FMARCH_LIVE_PROJECTION_CAPACITY: String(
+        liveProjectionProofConfig(process.env).capacity,
+      ),
       RUST_LOG: process.env.RUST_LOG ?? "warn",
     },
     stdio: ["ignore", "pipe", "pipe"],
@@ -18427,9 +18443,7 @@ async function verifyPlayerLagResyncRecovery({ playerPage, game, apiBaseUrl }) {
   return {
     status: "passed",
     roleUrl: playerPage.url(),
-    configuredCapacity: Number(
-      process.env.FMARCH_LIVE_PROJECTION_CAPACITY ?? liveProjectionProofCapacity,
-    ),
+    configuredCapacity: liveProjectionProofConfig(process.env).capacity,
     configuredDeliveryDelayMs: Number(
       process.env.FMARCH_LIVE_PROJECTION_DELIVERY_DELAY_MS ?? 0,
     ),
@@ -18492,7 +18506,7 @@ async function verifyPlayerLagResyncEpisode({
     eventStart,
   );
   const burst = [];
-  for (let index = 0; index < 5; index += 1) {
+  for (let index = 0; index < liveProjectionProofBurstSize; index += 1) {
     const commandId = crypto.randomUUID();
     const body = `Live lag episode ${episode} burst ${index} from dev:test-game ${commandId}.`;
     const result = await sendBrowserCommand(playerPage, {

@@ -7,6 +7,7 @@ import {
   buildDevTestGameHostSetupProof,
   createTokenSet,
   hostCommandStatusReachedExpectedState,
+  liveProjectionProofConfig,
   markdownSessionCard,
   parseArgs,
   seedCommandPlanForGame,
@@ -892,6 +893,21 @@ test("dev test-game args expose reset reuse naming and verification controls", (
   );
 
   assert.throws(() => parseArgs(["--frontend-port", "nope"]), /positive integer/);
+});
+
+test("live projection lag proof config always overflows its burst", () => {
+  assert.deepEqual(liveProjectionProofConfig({}), {
+    capacity: 4,
+    burstSize: 5,
+  });
+  assert.deepEqual(
+    liveProjectionProofConfig({ FMARCH_LIVE_PROJECTION_CAPACITY: "3" }),
+    { capacity: 3, burstSize: 5 },
+  );
+  assert.throws(
+    () => liveProjectionProofConfig({ FMARCH_LIVE_PROJECTION_CAPACITY: "5" }),
+    /must stay below/,
+  );
 });
 
 test("live projection lag observability contract matches the server trace", async () => {
