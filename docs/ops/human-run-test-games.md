@@ -180,37 +180,16 @@ The local release-readiness checklist generator is:
 npm run test:dev-test-game-readiness
 ```
 
-The default next-action handoff stays in the local capability-model sequence.
-After the local core, hardening, ops, seed/demo, and identity-adapter rows are
-all passed and the operator is ready to inspect the hosted identity blocker
-directly, use the explicit hosted-identity sequence selector:
-
-```sh
-npm run test:dev-test-game-next-action:hosted-identity
-```
-
-That selector first refreshes release readiness with the local capability and
-identity evidence paths, runs the hosted-identity sequence-stage
-next-action/admin proof recovery pass, then refreshes and proves the final
-selected next action. When `hosted-production-identity` is still unproven it
-points at the hosted identity progression batch until the family proof artifacts
-are current:
-
-```sh
-npm run test:dev-test-game-hosted-identity-progression-admin-proof:batch
-```
-
-After that batch is current, the selector advances to the opt-in operator
-identity spine:
-
-```sh
-npm run test:dev-test-game-identity:operator:local
-```
+The default next-action handoff is strictly local-development guidance. Once
+the core, hardening, ops, seed/demo, and identity-adapter rows are current, it
+reports `all-artifacts-fresh` instead of promoting hosted identity work.
+Hosted identity is a deferred operator/release item, not a blocker for the next
+seeded-game feature.
 
 For a real operator-provided packet, use the separate hosted-evidence lane.
 It requires `FMARCH_HOSTED_IDENTITY_EVIDENCE_PATH` to resolve outside
 `tools/fixtures/`, refreshes the evidence intake, its browser admin proof, the
-family progression artifacts, readiness, and the hosted-identity next action.
+family progression artifacts, and readiness.
 It never writes a fixture packet or makes release/production claims:
 
 ```sh
@@ -222,19 +201,12 @@ The existing `test:dev-test-game-identity:operator` lane remains a synthetic
 target-local predicate test and must not be used to ingest a real operator
 packet.
 
-The generated next-action proof target is
+The operator proof target is
 `target/dev-test-game/hosted-identity-evidence-operator-admin-proof.json`. It
-remains a local operator-predicate proof and does not prove live hosted account,
-session, or invite traffic.
-Once those local hosted-identity predicate artifacts are current, the same
-sequence-stage command can advance to the next hosted-stage blocker, such as
-hosted deployment or hosted operations evidence, without weakening the identity
-non-claims.
-The default local next-action admin detail keeps
-`hosted-production-identity` as a sequence-deferred blocker and shows the
-opt-in `npm run test:dev-test-game-next-action:hosted-identity` promotion row
-beside it, so the current local-sequence blocker and the hosted-identity
-predicate are visible without weakening the hosted evidence boundary.
+remains a local predicate proof and does not prove live hosted account, session,
+or invite traffic. The release runbook owns the later hosted deployment and
+operations handoffs; the default local next-action surface does not promote
+either one.
 
 The hosted deployment evidence lane accepts a raw hosted matrix packet through
 `FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH`. Start by checking the operator
@@ -246,20 +218,15 @@ npm run test:dev-test-game-hosted-matrix-raw-evidence-template-proof
 ```
 
 The source-controlled operator checklist is a separate local contract and admin
-handoff proof. Once both are current, release readiness records the checklist
-admin surface as passed and the hosted-identity next-action selector advances
-the `hosted-deployment` handoff to the real raw-capture intake without making a
-hosted deployment claim:
+handoff proof. It supports the later release-runbook handoff without changing
+the default local next-action selector or making a hosted deployment claim:
 
 ```sh
 npm run test:dev-test-game-hosted-evidence-operator-checklist
 npm run test:dev-test-game-hosted-evidence-operator-checklist-admin-proof
-npm run test:dev-test-game-next-action:hosted-identity
 ```
 
-After that, the raw-capture handoff command runs the intake validator, refreshes
-readiness, proves the next-action admin surface, then refreshes and proves the
-final selected action. With no live hosted packet configured, the selected
+With no live hosted packet configured, the release-runbook
 `hosted-deployment` blocker stays pointed at the raw-capture proof target until
 real externally captured evidence is present:
 
@@ -873,18 +840,10 @@ host-issued game-scoped player invite that persists its local game scope and
 is issued from the seeded host role URL before redeeming back to the existing
 player role surface, plus a seeded admin overview-to-local-identity-adapter-detail
 browser proof without raw credential echoes.
-After the local capability rows are passed,
-`npm run test:dev-test-game-next-action:hosted-identity` refreshes readiness
-with the local capability and identity evidence paths, writes
-`target/dev-test-game/next-action.json` with the hosted-identity sequence stage,
-proves the native next-action admin surface, then refreshes and proves the final
-selected next action in the same run. Missing or stale hosted-identity family
-proofs select the shared progression admin-proof batch first; once those family
-artifacts are current, the selector advances to the opt-in hosted identity
-operator spine command and operator admin proof target. If those local
-hosted-identity predicate artifacts are already current, the same command can
-advance to the next hosted-stage blocker while preserving the same
-local-predicate boundary and non-claims about live hosted identity traffic.
+After the local capability rows are passed, `next-action.json` remains a local
+development receipt and reports `all-artifacts-fresh` until a new seeded-game
+feature is registered. Hosted identity family/admin proofs remain explicit
+operator/release work and do not alter the default development selector.
 `npm run test:dev-test-game-identity:operator:local` is the opt-in local variant
 that starts repo-local Postgres, runs the inner
 `test:dev-test-game-identity:operator` phase, appends the target-local operator

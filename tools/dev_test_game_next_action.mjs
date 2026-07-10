@@ -73,6 +73,7 @@ import {
   devTestGameHostedTargetPreflightPath,
 } from "./dev_test_game_hosted_target_preflight.mjs";
 import {
+  isOperatorDeferredReleaseReadinessItemId,
   releaseReadinessBuildableItemForId,
 } from "./dev_test_game_release_readiness_cases.mjs";
 import { rankedMissingLocalReadinessDependencies } from "./dev_test_game_local_readiness_dependencies.mjs";
@@ -301,7 +302,6 @@ export function buildDevTestGameNextAction(
       hostedIdentityOperatorBuildableForManifest(manifest, { sequenceStage }),
     hostedIdentityProgressionProofs,
   });
-  const releaseReadinessTrace = buildReleaseReadinessTrace(releaseReadinessCandidates);
   const localReadinessDependencyCandidates =
     rankedMissingLocalReadinessDependencies(readiness);
   const localReadinessDependencyTrace = buildLocalReadinessDependencyTrace(
@@ -333,15 +333,26 @@ export function buildDevTestGameNextAction(
   );
   const staleConflictMessageTrace = buildStaleConflictMessageTrace(readiness);
   const hostStaleControlTrace = buildHostStaleControlTrace(readiness);
-  const selectedUnproven = releaseReadinessCandidates[0];
   const selectedLocalReadinessDependency = localReadinessDependencyCandidates[0];
   const localCapabilityConfidence =
     localCapabilityConfidenceFromReadiness(readiness);
   const hostedIdentitySequenceDeferral =
-    hostedIdentitySequenceDeferralFor(selectedUnproven, {
+    hostedIdentitySequenceDeferralFor(releaseReadinessCandidates[0], {
       sequenceStage,
       localCapabilityConfidence,
     });
+  const developmentReleaseReadinessCandidates =
+    sequenceStage === devTestGameDefaultSequenceStage &&
+    localCapabilityConfidence.status === "passed"
+      ? releaseReadinessCandidates.filter(
+          (candidate) =>
+            !isOperatorDeferredReleaseReadinessItemId(candidate.item.id),
+        )
+      : releaseReadinessCandidates;
+  const releaseReadinessTrace = buildReleaseReadinessTrace(
+    developmentReleaseReadinessCandidates,
+  );
+  const selectedUnproven = developmentReleaseReadinessCandidates[0];
   const nextAction =
     artifact !== undefined
       ? {
@@ -573,7 +584,7 @@ export function buildDevTestGameNextAction(
           localCheckCount: readiness.localDevelopmentSpine.checks.length,
           buildableLocalDependencyCount: localReadinessDependencyCandidates.length,
           unprovenCount: readiness.releaseReadiness.unproven.length,
-          buildableUnprovenCount: releaseReadinessCandidates.length,
+          buildableUnprovenCount: developmentReleaseReadinessCandidates.length,
           ...(readiness.readinessSummary
             ?.roleUrlProductionFeatureAuditSummary === undefined
             ? {}
@@ -2094,6 +2105,9 @@ function hostedIdentitySequenceDeferralFor(
   }
   const readyForHostedIdentity =
     localCapabilityConfidence?.status === "passed";
+  if (readyForHostedIdentity) {
+    return null;
+  }
   return {
     status: "blocked",
     currentSequenceStage: sequenceStage,
@@ -2102,21 +2116,16 @@ function hostedIdentitySequenceDeferralFor(
     deferredCommand: selectedUnproven.command,
     deferredProofTarget: selectedUnproven.proofTarget,
     deferredRoleUrl: selectedUnproven.roleUrl,
-    nextLocalCommand: readyForHostedIdentity
-      ? devTestGameHostedIdentitySequencePromotionCommand
-      : devTestGameLiveProofCommand,
-    nextLocalProofTarget: readyForHostedIdentity
-      ? devTestGameNextActionPath
-      : devTestGameProofRunPath,
+    nextLocalCommand: devTestGameLiveProofCommand,
+    nextLocalProofTarget: devTestGameProofRunPath,
     roleUrl: selectedUnproven.spineTarget?.roleUrl ?? "",
     sequenceTransition: {
-      status: readyForHostedIdentity ? "ready" : "blocked",
+      status: "blocked",
       promotionCommand: devTestGameHostedIdentitySequencePromotionCommand,
       promotedSequenceStage: devTestGameHostedIdentitySequenceStage,
     },
-    buildSlice: readyForHostedIdentity
-      ? "Local seeded capability confidence is passed; promote the next-action generator to the hosted-identity sequence stage before replacing dev tokens with hosted accounts, sessions, and invites."
-      : "Keep hosted production identity deferred while the local seeded capability model remains the active architecture sequence; refresh the core-live role proof before replacing dev tokens with hosted accounts, sessions, and invites.",
+    buildSlice:
+      "Keep hosted production identity deferred while the local seeded capability model remains the active architecture sequence; refresh the core-live role proof before replacing dev tokens with hosted accounts, sessions, and invites.",
     requiredBeforeHostedIdentity:
       "The local core gameplay, hardening, and local ops proof spine should remain the trusted development surface before production identity replaces dev tokens.",
     localCapabilityConfidence,
@@ -2161,21 +2170,9 @@ function assertHostedIdentitySequenceDeferral(deferral) {
     throw new Error("next-action hosted identity sequence deferral is malformed");
   }
   if (
-    deferral.localCapabilityConfidence.status === "passed" &&
-    (deferral.nextLocalCommand !==
-      devTestGameHostedIdentitySequencePromotionCommand ||
-      deferral.nextLocalProofTarget !== devTestGameNextActionPath ||
-      deferral.sequenceTransition.status !== "ready")
-  ) {
-    throw new Error(
-      "next-action hosted identity deferral must expose the stage promotion command",
-    );
-  }
-  if (
-    deferral.localCapabilityConfidence.status !== "passed" &&
-    (deferral.nextLocalCommand !== devTestGameLiveProofCommand ||
-      deferral.nextLocalProofTarget !== devTestGameProofRunPath ||
-      deferral.sequenceTransition.status !== "blocked")
+    deferral.nextLocalCommand !== devTestGameLiveProofCommand ||
+    deferral.nextLocalProofTarget !== devTestGameProofRunPath ||
+    deferral.sequenceTransition.status !== "blocked"
   ) {
     throw new Error(
       "next-action hosted identity deferral must refresh local proof while confidence is blocked",

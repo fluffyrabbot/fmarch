@@ -1056,7 +1056,6 @@ export function assertDevTestGameSpineManifest(manifest) {
     "tools/dev_test_game_hosted_identity_progression_summary.mjs",
     "tools/dev_test_game_hosted_identity_progression_admin_proof_batch.mjs",
     "tools/dev_test_game_release_readiness.mjs",
-    "test:dev-test-game-next-action:hosted-identity",
   ]);
   assertPlanScripts(manifest.commands?.adminSpine?.plan ?? [], [
     "tools/dev_test_game_core_loop_admin_proof.mjs",

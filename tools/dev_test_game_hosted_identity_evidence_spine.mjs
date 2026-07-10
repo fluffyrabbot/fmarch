@@ -51,10 +51,6 @@ export const devTestGameHostedIdentityEvidenceSpinePlan = [
     additionalChangedInputs: hostedIdentityProgressionAdminProofBatchArtifactPaths,
     env: hostedIdentityEvidenceReadinessEnv,
   }),
-  {
-    kind: "npm",
-    script: "test:dev-test-game-next-action:hosted-identity",
-  },
 ];
 
 export async function runDevTestGameHostedIdentityEvidenceSpine() {

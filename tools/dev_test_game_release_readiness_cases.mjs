@@ -677,6 +677,16 @@ export const releaseReadinessBuildableItemIds = Object.freeze([
   ...localBuildableReleaseReadinessItems.keys(),
 ]);
 
+// These commands prepare or validate operator-owned hosted evidence. They are
+// release/runbook work, never the next local seeded-game development action.
+export const operatorDeferredReleaseReadinessItemIds = Object.freeze([
+  ...releaseReadinessBuildableItemIds,
+]);
+
+export function isOperatorDeferredReleaseReadinessItemId(itemId) {
+  return operatorDeferredReleaseReadinessItemIds.includes(itemId);
+}
+
 function cloneBuildableItem(item) {
   if (item === undefined) {
     return undefined;
