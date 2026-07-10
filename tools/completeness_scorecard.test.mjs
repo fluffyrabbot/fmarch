@@ -13,7 +13,7 @@ import {
   validateRegistry,
 } from "./completeness_scorecard.mjs";
 
-test("real completion registry validates and selects the media storage slice", async () => {
+test("real completion registry validates and selects the media variant slice", async () => {
   const registry = await loadCompletionRegistry();
   await validateRegistry(registry);
   const summary = summarizeRegistry(registry);
@@ -30,7 +30,7 @@ test("real completion registry validates and selects the media storage slice", a
   assert.equal(summary.releaseComplete, false);
   assert.equal(
     nextBuildableCodeItem(registry)?.id,
-    "product.media.canonical-blob-store",
+    "product.media.variant-generation",
   );
 });
 
@@ -67,13 +67,10 @@ test("registry validation rejects duplicate ids and unknown dependencies", async
 test("registry validation rejects dependency cycles", async () => {
   const registry = await loadCompletionRegistry();
   const cyclic = structuredClone(registry);
-  const canonical = cyclic.items.find(
-    (item) => item.id === "product.media.canonical-blob-store",
-  );
   const variants = cyclic.items.find(
     (item) => item.id === "product.media.variant-generation",
   );
-  canonical.depends_on = [variants.id];
+  variants.depends_on = ["product.media.authenticated-upload"];
   await assert.rejects(
     validateRegistry(cyclic, { verifySourcePaths: false }),
     /dependency cycle/,
@@ -110,7 +107,7 @@ test("registry validation rejects illegal completion and blocked states", async 
 
   const whitespaceRemaining = structuredClone(registry);
   whitespaceRemaining.items.find(
-    (item) => item.id === "product.media.canonical-blob-store",
+    (item) => item.id === "product.media.variant-generation",
   ).remaining = ["   "];
   await assert.rejects(
     validateRegistry(whitespaceRemaining, { verifySourcePaths: false }),
@@ -120,7 +117,7 @@ test("registry validation rejects illegal completion and blocked states", async 
   const completeRecommendedSlice = structuredClone(registry);
   completeRecommendedSlice.items[0].recommended_slice = structuredClone(
     registry.items.find(
-      (item) => item.id === "product.media.canonical-blob-store",
+      (item) => item.id === "product.media.variant-generation",
     ).recommended_slice,
   );
   await assert.rejects(

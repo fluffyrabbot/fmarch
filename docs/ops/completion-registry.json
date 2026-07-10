@@ -183,25 +183,18 @@
       "order": 20,
       "title": "Canonical private media blob store",
       "execution_class": "code",
-      "status": "open",
-      "summary": "Build the media core that safely decodes, strips metadata, canonicalizes, hashes, deduplicates, and atomically persists private media without freezing a public upload API.",
+      "status": "complete",
+      "summary": "Bounded local PNG/JPEG ingest applies EXIF orientation, serializes decoder-produced RGBA8 into a versioned canonical record, strips container metadata, derives BLAKE3 identity, and persists it through private fd-relative atomic storage with verified restart lookup; it does not normalize ICC profiles or expose upload, serving, or variants.",
       "complete_when": ["Malformed and oversized inputs are rejected; metadata is stripped before BLAKE3 identity; equivalent images deduplicate; persistence is atomic and root-confined; restart lookup succeeds."],
       "depends_on": ["product.media.reference-ingest-serving"],
       "evidence": [
+        { "kind": "source", "value": "crates/media/src/lib.rs" },
         { "kind": "source", "value": "docs/arch/07-images.md" },
-        { "kind": "planned-command", "value": "cargo test -p media" }
+        { "kind": "command", "value": "cargo test -p media" },
+        { "kind": "command", "value": "cargo clippy -p media --all-targets -- -D warnings" },
+        { "kind": "command", "value": "cargo check -p server" }
       ],
-      "remaining": ["Create crates/media and its bounded canonical filesystem storage contract."],
-      "recommended_slice": {
-        "objective": "Add a new crates/media core that performs bounded decode, metadata stripping, canonical raster hashing with BLAKE3, atomic idempotent filesystem persistence, deduplication, and restart lookup.",
-        "paths": ["Cargo.toml", "Cargo.lock", "crates/media/", "docs/arch/07-images.md"],
-        "proof_commands": ["cargo test -p media", "cargo check -p server"],
-        "non_claims": [
-          "No REST upload endpoint or browser upload UI.",
-          "No AVIF/WebP variant generation or CDN/object-store durability.",
-          "No seeded browser proof until the later upload-to-private-post slice."
-        ]
-      }
+      "remaining": []
     },
     {
       "id": "product.media.variant-generation",
@@ -217,7 +210,17 @@
         { "kind": "source", "value": "docs/arch/07-images.md" },
         { "kind": "planned-command", "value": "cargo test -p media variant" }
       ],
-      "remaining": ["Implement bounded AVIF/WebP transcode, variant manifests, and deterministic regeneration." ]
+      "remaining": ["Implement bounded AVIF/WebP transcode, variant manifests, and deterministic regeneration."],
+      "recommended_slice": {
+        "objective": "Add versioned thumb, tablet, and full-bounded AVIF/WebP generation from verified canonical rasters, with bounded resize/encode resources, deterministic immutable keys, private atomic persistence, idempotent reuse, and restart regeneration.",
+        "paths": ["Cargo.lock", "crates/media/", "docs/arch/07-images.md"],
+        "proof_commands": ["cargo test -p media variant", "cargo check -p server"],
+        "non_claims": [
+          "No REST upload endpoint, serving-route integration, or browser UI/proof.",
+          "No command/thread-post integration or authenticated delivery contract.",
+          "No object-store/CDN integration, hosted durability, or production codec-quality claim."
+        ]
+      }
     },
     {
       "id": "product.media.authenticated-upload",
