@@ -87,3 +87,25 @@ test("day vote outcome panel renders no-lynch without raw engine keys", () => {
     [["No lynch", 2, 2, "day-vote-outcome-tally-no_lynch"]],
   );
 });
+
+test("day vote outcome panel names the final HostDecides selection", () => {
+  const view = buildDayVoteOutcomePanelViewModel({
+    rootTestId: "player-day-vote-outcome",
+    outcomes: [
+      {
+        phaseId: "D01",
+        status: "Lynch",
+        winnerSlot: "slot-2",
+        tallies: { "slot-1": 2, "slot-2": 2 },
+        majority: null,
+        reason: "host_decides_tie",
+      },
+    ],
+  });
+
+  assert.equal(view.latest.summary, "Slot 2 was eliminated by official vote.");
+  assert.equal(
+    view.latest.reason,
+    "HostDecides selected Slot 2 after the tied vote.",
+  );
+});

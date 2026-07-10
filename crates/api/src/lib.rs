@@ -4959,6 +4959,7 @@ fn command_affects_player_command_state(command: &wire::Command) -> bool {
             | wire::Command::LockThread { .. }
             | wire::Command::UnlockThread { .. }
             | wire::Command::ResolvePhase { .. }
+            | wire::Command::ResolveHostPrompt { .. }
             | wire::Command::CompleteGame { .. }
             | wire::Command::SetPostPolicy { .. }
             | wire::Command::SubmitVote { .. }
@@ -5000,6 +5001,19 @@ mod live_projection_tests {
         assert!(matches!(
             receive_live_projection(&mut receiver).await,
             LiveProjectionReceive::Update(update) if update.game == game
+        ));
+    }
+
+    #[test]
+    fn host_prompt_resolution_refreshes_player_command_and_outcome_state() {
+        assert!(command_affects_player_command_state(
+            &wire::Command::ResolveHostPrompt {
+                game: Uuid::new_v4(),
+                prompt_id: "D01:pk:Tie".to_string(),
+                decision: wire::HostPromptDecision::SelectSlot {
+                    slot: "slot-2".to_string(),
+                },
+            },
         ));
     }
 }

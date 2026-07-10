@@ -22,6 +22,10 @@ export function assertDevTestGameHostDecidesRaceProof(proof) {
     Object.values(proof?.playerStates ?? {}).filter(
       (state) => state?.actorAlive === true,
     ).length !== 1 ||
+    !validPlayerOutcomeConvergence(
+      proof?.playerOutcomeConvergence,
+      selectedSlot,
+    ) ||
     proof?.roleReloadAfterRace?.status !== "passed" ||
     proof.roleReloadAfterRace.hostRouteStatuses?.length !== 2 ||
     !proof.roleReloadAfterRace.hostRouteStatuses.every(
@@ -35,6 +39,10 @@ export function assertDevTestGameHostDecidesRaceProof(proof) {
       (actions) => Array.isArray(actions) && actions.length === 0,
     ) ||
     proof.roleReloadAfterRace.playerStates?.[selectedSlot]?.actorAlive !== false ||
+    !validPlayerOutcomeConvergence(
+      proof?.roleReloadAfterRace?.playerOutcomeConvergence,
+      selectedSlot,
+    ) ||
     typeof proof?.sourceRoleUrls?.host !== "string" ||
     !proof.sourceRoleUrls.host.includes("/g/")
   ) {
@@ -54,8 +62,28 @@ export function devTestGameHostDecidesRaceProofSummary(proof) {
     rejectError: validated.reject.error,
     hostReloadCount: validated.roleReloadAfterRace.hostRouteStatuses.length,
     playerReloadCount: validated.roleReloadAfterRace.playerRouteStatuses.length,
+    visiblePlayerOutcomeCount: Object.keys(
+      validated.playerOutcomeConvergence.players,
+    ).length,
     hostRoleUrl: validated.sourceRoleUrls.host,
   });
+}
+
+function validPlayerOutcomeConvergence(convergence, selectedSlot) {
+  const players = convergence?.players;
+  return (
+    convergence?.status === "passed" &&
+    convergence?.selectedSlot === selectedSlot &&
+    Object.keys(players ?? {}).length === 2 &&
+    Object.values(players).every(
+      ({ outcome, panelText }) =>
+        outcome?.status === "Lynch" &&
+        outcome?.winnerSlot === selectedSlot &&
+        outcome?.reason === "host_decides_tie" &&
+        panelText?.includes("D01 Lynch") &&
+        panelText?.includes("HostDecides selected"),
+    )
+  );
 }
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");

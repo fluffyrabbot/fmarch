@@ -358,6 +358,9 @@ export const hostStandaloneRaceCoverageCellDefinitions = Object.freeze([
   }),
 ]);
 
+export const hostPromptSelectionPlayerOutcomeLaneId =
+  "host-decides-player-outcome-reload";
+
 const hostPhaseRaceReloadSpineTargetDefinitions = Object.freeze([
   Object.freeze({
     targetKey: "hostConcurrentResolveRaceReload",
@@ -409,6 +412,13 @@ const hostStandaloneRaceReloadSpineTargetDefinitions = Object.freeze([
     featureSlotId: "host-concurrent-prompt-selection-race-reload",
     reloadLaneId: hostStandaloneRaceCoverageCellDefinitions[2].reloadLaneId,
     role: "host",
+    featureTargetKind: hardeningRaceReloadFeatureTargetKind,
+  }),
+  Object.freeze({
+    targetKey: "playerHostDecidesOutcomeReload",
+    featureSlotId: "player-host-decides-outcome-reload",
+    reloadLaneId: hostPromptSelectionPlayerOutcomeLaneId,
+    role: "player",
     featureTargetKind: hardeningRaceReloadFeatureTargetKind,
   }),
 ]);
@@ -493,6 +503,7 @@ export const hostLifecycleRaceLaneIds = Object.freeze([
 export const hostPromptSelectionRaceLaneIds = Object.freeze([
   hostStandaloneRaceCoverageCellCase("host-prompt-selection").raceLaneId,
   hostStandaloneRaceCoverageCellCase("host-prompt-selection").reloadLaneId,
+  hostPromptSelectionPlayerOutcomeLaneId,
 ]);
 
 export const hostStandaloneRaceReloadLaneIds = Object.freeze([

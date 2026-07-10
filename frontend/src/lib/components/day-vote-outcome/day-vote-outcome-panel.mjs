@@ -46,7 +46,7 @@ export function buildDayVoteOutcomePanelViewModel({
             winnerSlot: latest.winnerSlot,
             winnerLabel: outcomeWinnerLabel(latest),
             summary: outcomeSummary(latest),
-            reason: latest.reason,
+            reason: outcomeReasonLabel(latest),
             testId: `${rootTestId}-latest`,
           }),
     tallies: Object.freeze(outcomeTallies(latest).map((row) => Object.freeze({
@@ -78,6 +78,16 @@ function outcomeWinnerLabel(outcome) {
     return slotDisplayLabel(outcome.winnerSlot);
   }
   return outcome.status === "NoLynch" ? "No lynch" : "No winner";
+}
+
+function outcomeReasonLabel(outcome) {
+  if (
+    outcome.reason === "host_decides_tie" &&
+    typeof outcome.winnerSlot === "string"
+  ) {
+    return `HostDecides selected ${slotDisplayLabel(outcome.winnerSlot)} after the tied vote.`;
+  }
+  return outcome.reason;
 }
 
 function outcomeTallies(outcome) {

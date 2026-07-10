@@ -724,6 +724,7 @@ async fn fold_event(
         "HostPromptResolved" => {
             let p = &ev.payload;
             let prompt_id = str_field(p, "prompt_id", &ev.kind)?;
+            let phase_id = str_field(p, "phase_id", &ev.kind)?;
             let resolved_by = str_field(p, "resolved_by", &ev.kind)?;
             sqlx::query(
                 "UPDATE host_prompt SET \
@@ -737,6 +738,24 @@ async fn fold_event(
             .bind(ev.occurred_at)
             .execute(&mut **tx)
             .await?;
+
+            if p["reason"].as_str() == Some("host_decides_tie")
+                && p["decision"]["kind"].as_str() == Some("select_slot")
+            {
+                if let Some(selected_slot) = p["decision"]["slot"].as_str() {
+                    sqlx::query(
+                        "UPDATE day_vote_outcome SET \
+                         status = 'Lynch', winner_slot = $3, reason = 'host_decides_tie' \
+                         WHERE game_id = $1 AND phase_id = $2 \
+                           AND status = 'Tie' AND tiebreak = 'HostDecides'",
+                    )
+                    .bind(game_id)
+                    .bind(&phase_id)
+                    .bind(selected_slot)
+                    .execute(&mut **tx)
+                    .await?;
+                }
+            }
         }
 
         // ── reveal flip (doc 10): end-of-game flips role visibility ──

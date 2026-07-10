@@ -130,7 +130,12 @@ assert.equal(
   session.verification?.hostDecidesTie?.tieBreaker,
   "HostDecides",
 );
-assert.equal(session.verification?.hostDecidesTie?.outcome?.status, "Tie");
+assert.equal(session.verification?.hostDecidesTie?.outcome?.status, "Lynch");
+assert.equal(session.verification?.hostDecidesTie?.outcome?.winner_slot, "slot-2");
+assert.equal(
+  session.verification?.hostDecidesTie?.outcome?.reason,
+  "host_decides_tie",
+);
 assert.equal(
   session.verification?.hostDecidesTie?.outcome?.tiebreak,
   "HostDecides",
@@ -139,6 +144,14 @@ assert.equal(session.verification?.hostDecidesTie?.selectedSlot, "slot-2");
 assert.equal(
   session.verification?.hostDecidesTie?.targetAfterDecision?.actorAlive,
   false,
+);
+assert.match(
+  session.verification?.hostDecidesTie?.hostOutcomePanel,
+  /HostDecides selected Slot 2/,
+);
+assert.match(
+  session.verification?.hostDecidesTie?.targetOutcomePanel,
+  /HostDecides selected Slot 2/,
 );
 assert.deepEqual(
   session.verification?.hostDecidesTie?.promptActions,
@@ -5129,6 +5142,17 @@ assert.equal(
   ).length,
   1,
 );
+assert.equal(hostPromptSelectionRace.playerOutcomeConvergence.status, "passed");
+assert.equal(
+  Object.values(hostPromptSelectionRace.playerOutcomeConvergence.players).every(
+    ({ outcome, panelText }) =>
+      outcome.status === "Lynch" &&
+      outcome.winnerSlot === hostPromptSelectionRace.selectedSlot &&
+      outcome.reason === "host_decides_tie" &&
+      panelText.includes("HostDecides selected"),
+  ),
+  true,
+);
 assert.match(
   hostPromptSelectionRace.rejectActivityStatusText,
   /Reject PromptAlreadyResolved/,
@@ -5155,6 +5179,22 @@ assert.equal(
     hostPromptSelectionRace.selectedSlot
   ].actorAlive,
   false,
+);
+assert.equal(
+  hostPromptSelectionRace.roleReloadAfterRace.playerOutcomeConvergence.status,
+  "passed",
+);
+assert.equal(
+  Object.values(
+    hostPromptSelectionRace.roleReloadAfterRace.playerOutcomeConvergence.players,
+  ).every(
+    ({ outcome, panelText }) =>
+      outcome.status === "Lynch" &&
+      outcome.winnerSlot === hostPromptSelectionRace.selectedSlot &&
+      outcome.reason === "host_decides_tie" &&
+      panelText.includes("HostDecides selected"),
+  ),
+  true,
 );
 assert.equal(session.verification.multiplayerHardening.staleHostComplete.status, "passed");
 assert.equal(

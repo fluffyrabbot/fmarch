@@ -962,9 +962,10 @@ test("HostDecides browser proof has a standalone artifact contract", () => {
     tieBreaker: "HostDecides",
     sourceRoleUrls: { host: "http://127.0.0.1:5173/g/game-a/host" },
     outcome: {
-      status: "Tie",
-      winner_slot: null,
+      status: "Lynch",
+      winner_slot: "slot-2",
       tiebreak: "HostDecides",
+      reason: "host_decides_tie",
       tallies: { "slot-1": 2, "slot-2": 2 },
     },
     ballotProofs: [{}, {}, {}, {}],
@@ -978,6 +979,10 @@ test("HostDecides browser proof has a standalone artifact contract", () => {
     resolvedPrompt: { status: "resolved", decision: { slot: "slot-2" } },
     targetBeforeDecision: { actorAlive: true },
     targetAfterDecision: { actorAlive: false },
+    hostOutcomePanel:
+      "D01 Lynch\nSlot 2 was eliminated by official vote.\nHostDecides selected Slot 2 after the tied vote.",
+    targetOutcomePanel:
+      "D01 Lynch\nSlot 2 was eliminated by official vote.\nHostDecides selected Slot 2 after the tied vote.",
   };
   assert.equal(assertDevTestGameHostDecidesProof(proof), proof);
   assert.deepEqual(devTestGameHostDecidesProofSummary(proof), {
@@ -1021,6 +1026,7 @@ test("HostDecides race browser proof has a standalone artifact contract", () => 
       "slot-1": { actorAlive: true },
       "slot-2": { actorAlive: false },
     },
+    playerOutcomeConvergence: hostDecidesPlayerOutcomeConvergenceFixture(),
     roleReloadAfterRace: {
       status: "passed",
       hostRouteStatuses: [200, 200],
@@ -1030,6 +1036,7 @@ test("HostDecides race browser proof has a standalone artifact contract", () => 
         "slot-1": { actorAlive: true },
         "slot-2": { actorAlive: false },
       },
+      playerOutcomeConvergence: hostDecidesPlayerOutcomeConvergenceFixture(),
     },
   };
   assert.equal(assertDevTestGameHostDecidesRaceProof(proof), proof);
@@ -1042,6 +1049,7 @@ test("HostDecides race browser proof has a standalone artifact contract", () => 
     rejectError: "PromptAlreadyResolved",
     hostReloadCount: 2,
     playerReloadCount: 2,
+    visiblePlayerOutcomeCount: 2,
     hostRoleUrl: "http://127.0.0.1:5173/g/game-a/host",
   });
   assert.throws(
@@ -7905,7 +7913,7 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
     (row) =>
       row.id === `feature-target-kind:${hardeningRaceReloadFeatureTargetKind}`,
   );
-  assert.equal(hardeningRaceReloadKindRow?.featureSlotIds.length, 15);
+  assert.equal(hardeningRaceReloadKindRow?.featureSlotIds.length, 16);
   for (const featureSlotId of [
     "completed-game-host-complete-race-reload",
     "completed-game-public-player-complete-reload",
@@ -7916,6 +7924,7 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
     "host-concurrent-publish-race-reload",
     "host-concurrent-lifecycle-race-reload",
     "host-concurrent-prompt-selection-race-reload",
+    "player-host-decides-outcome-reload",
     "player-host-vote-resolve-race-reload",
     "player-host-action-advance-race-reload",
     "cohost-host-deadline-resolve-race-reload",
@@ -17445,6 +17454,7 @@ test("session card and markdown include role credential URLs and tokens", async 
           "slot-1": { actorAlive: true, actorStatus: "alive" },
           "slot-2": { actorAlive: false, actorStatus: "dead" },
         },
+        playerOutcomeConvergence: hostDecidesPlayerOutcomeConvergenceFixture(),
         rejectActivityStatusText:
           "Reject PromptAlreadyResolved: prompt already resolved; host prompt selection is stale, refresh the host console and use current prompt controls",
         roleReloadAfterRace: {
@@ -17460,6 +17470,7 @@ test("session card and markdown include role credential URLs and tokens", async 
             "slot-1": { actorAlive: true, actorStatus: "alive" },
             "slot-2": { actorAlive: false, actorStatus: "dead" },
           },
+          playerOutcomeConvergence: hostDecidesPlayerOutcomeConvergenceFixture(),
         },
       },
       staleHostComplete: {
@@ -18210,6 +18221,7 @@ test("session card and markdown include role credential URLs and tokens", async 
       "stale-host-prompt-reload",
       "concurrent-host-prompt-selection-race",
       "concurrent-host-prompt-selection-race-reload",
+      "host-decides-player-outcome-reload",
       "stale-host-complete",
       "stale-host-complete-reload",
       "stale-host-complete-reconnect-recovery",
@@ -22099,6 +22111,39 @@ function replacementHandoffRecoveryMilestoneFixture() {
   };
 }
 
+function hostDecidesPlayerOutcomeConvergenceFixture(selectedSlot = "slot-2") {
+  const panelText = [
+    "D01 Lynch",
+    "Slot 2 was eliminated by official vote.",
+    "HostDecides selected Slot 2 after the tied vote.",
+  ].join("\n");
+  return {
+    status: "passed",
+    selectedSlot,
+    expectedPanelFragments: panelText.split("\n"),
+    players: {
+      "slot-1": {
+        outcome: {
+          phaseId: "D01",
+          status: "Lynch",
+          winnerSlot: selectedSlot,
+          reason: "host_decides_tie",
+        },
+        panelText,
+      },
+      "slot-2": {
+        outcome: {
+          phaseId: "D01",
+          status: "Lynch",
+          winnerSlot: selectedSlot,
+          reason: "host_decides_tie",
+        },
+        panelText,
+      },
+    },
+  };
+}
+
 function devTestGameRaceCoverageFixture() {
   const cells = [
     raceCoverageCell("player-vote-change", "concurrent-vote-race", "concurrent-vote-race-reload"),
@@ -24463,6 +24508,7 @@ function hardeningAdminProofFixture({
         "stale-host-prompt-reload",
         "concurrent-host-prompt-selection-race",
         "concurrent-host-prompt-selection-race-reload",
+        "host-decides-player-outcome-reload",
         "stale-host-complete",
         "stale-host-complete-reload",
         "stale-host-complete-reconnect-recovery",

@@ -14,9 +14,10 @@ export function assertDevTestGameHostDecidesProof(proof) {
     proof?.status !== "passed" ||
     proof?.pack !== "epicmafia" ||
     proof?.tieBreaker !== "HostDecides" ||
-    proof?.outcome?.status !== "Tie" ||
-    proof?.outcome?.winner_slot !== null ||
+    proof?.outcome?.status !== "Lynch" ||
+    proof?.outcome?.winner_slot !== "slot-2" ||
     proof?.outcome?.tiebreak !== "HostDecides" ||
+    proof?.outcome?.reason !== "host_decides_tie" ||
     proof?.outcome?.tallies?.["slot-1"] !== 2 ||
     proof?.outcome?.tallies?.["slot-2"] !== 2 ||
     !Array.isArray(proof?.ballotProofs) ||
@@ -28,6 +29,8 @@ export function assertDevTestGameHostDecidesProof(proof) {
     proof?.resolvedPrompt?.decision?.slot !== "slot-2" ||
     proof?.targetBeforeDecision?.actorAlive !== true ||
     proof?.targetAfterDecision?.actorAlive !== false ||
+    !proof?.hostOutcomePanel?.includes("HostDecides selected Slot 2") ||
+    !proof?.targetOutcomePanel?.includes("HostDecides selected Slot 2") ||
     typeof proof?.sourceRoleUrls?.host !== "string" ||
     !proof.sourceRoleUrls.host.includes("/g/")
   ) {

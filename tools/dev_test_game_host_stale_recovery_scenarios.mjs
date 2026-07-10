@@ -26,6 +26,7 @@ export {
   hostPhaseStaleControlLaneIds,
   hostPhaseStaleRecoveryLaneIds,
   hostPromptStaleControlLaneIds,
+  hostPromptSelectionPlayerOutcomeLaneId,
   hostPromptSelectionRaceLaneIds,
   hostPublishRaceLaneIds,
   hostRaceReloadLaneIds,

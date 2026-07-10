@@ -328,6 +328,12 @@ test("normalizes thread and votecount projection payloads for the player view", 
     ),
     [],
   );
+  assert.equal(
+    normalizeDayVoteOutcomes([
+      { phase_id: "D01", status: "Tie", majority: null },
+    ])[0].majority,
+    null,
+  );
 });
 
 test("normalizes live and cold thread posts through the same media contract", () => {

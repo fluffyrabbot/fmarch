@@ -3606,6 +3606,30 @@ async function verifySeededHostDecidesTie({
     await targetProofPage.waitForFunction(
       () => window.__fmarchPlayerProjection?.commandState?.actorAlive === false,
     );
+    await Promise.all([
+      hostProofPage.waitForFunction(
+        (expectedSlot) =>
+          window.__fmarchHostDayVoteOutcomesProjection?.some(
+            (outcome) =>
+              outcome.phaseId === "D01" &&
+              outcome.status === "Lynch" &&
+              outcome.winnerSlot === expectedSlot &&
+              outcome.reason === "host_decides_tie",
+          ),
+        selectedSlot,
+      ),
+      targetProofPage.waitForFunction(
+        (expectedSlot) =>
+          window.__fmarchPlayerProjection?.dayVoteOutcomes?.some(
+            (outcome) =>
+              outcome.phaseId === "D01" &&
+              outcome.status === "Lynch" &&
+              outcome.winnerSlot === expectedSlot &&
+              outcome.reason === "host_decides_tie",
+          ),
+        selectedSlot,
+      ),
+    ]);
 
     const outcomes = await fetchJson(
       `${apiBaseUrl}/games/${tieGame}/day-vote-outcomes`,
@@ -3635,9 +3659,10 @@ async function verifySeededHostDecidesTie({
       .innerText();
     if (
       resolve.commandStatus?.state !== "ack" ||
-      outcome?.status !== "Tie" ||
-      outcome?.winner_slot !== null ||
+      outcome?.status !== "Lynch" ||
+      outcome?.winner_slot !== selectedSlot ||
       outcome?.tiebreak !== "HostDecides" ||
+      outcome?.reason !== "host_decides_tie" ||
       outcome?.tallies?.["slot-1"] !== 2 ||
       outcome?.tallies?.["slot-2"] !== 2 ||
       targetBeforeDecision?.actorAlive !== true ||
@@ -3648,8 +3673,8 @@ async function verifySeededHostDecidesTie({
       prompts.find((prompt) => prompt.prompt_id === promptId)?.status !== "resolved" ||
       prompts.find((prompt) => prompt.prompt_id === promptId)?.decision?.slot !== selectedSlot ||
       targetAfterDecision?.actorAlive !== false ||
-      !hostOutcomePanel.includes("Tie") ||
-      !targetOutcomePanel.includes("Tie")
+      !hostOutcomePanel.includes("HostDecides selected Slot 2") ||
+      !targetOutcomePanel.includes("HostDecides selected Slot 2")
     ) {
       throw new Error(
         `host decides browser proof drifted: ${JSON.stringify({
@@ -3695,7 +3720,7 @@ async function verifySeededHostDecidesTie({
       hostOutcomePanel,
       targetOutcomePanel,
       proof:
-        "A disposable EpicMafia game used four player role URLs to cast a 2-2 plurality tie, the host role URL resolved D01 into a durable HostDecides PK prompt with one explicit control per contender, selected Slot 2, and the selected player role URL converged from alive to dead while the official tied vote outcome remained inspectable.",
+        "A disposable EpicMafia game used four player role URLs to cast a 2-2 plurality tie, the host role URL resolved D01 into a durable HostDecides PK prompt with one explicit control per contender, selected Slot 2, and both host plus selected-player surfaces rendered the finalized official Lynch outcome and HostDecides reason while the selected player converged from alive to dead.",
     };
   } finally {
     await hostProofPage.close().catch(() => {});
@@ -10192,6 +10217,11 @@ async function verifyConcurrentHostPromptSelectionRace({
       playerEntries,
       selectedSlot,
     });
+    const playerOutcomeConvergence =
+      await captureHostPromptSelectionPlayerOutcome({
+        playerEntries,
+        selectedSlot,
+      });
     const [slotOneState, slotTwoState] = await Promise.all([
       playerEntries.slotOne.page.evaluate(
         () => window.__fmarchPlayerProjection?.commandState ?? null,
@@ -10247,6 +10277,7 @@ async function verifyConcurrentHostPromptSelectionRace({
       playerStates[selectedSlot]?.actorAlive !== false ||
       Object.entries(playerStates).find(([slot]) => slot !== selectedSlot)?.[1]
         ?.actorAlive !== true ||
+      playerOutcomeConvergence.status !== "passed" ||
       !rejectActivityStatusText.includes("Reject PromptAlreadyResolved") ||
       !rejectActivityStatusText.includes("host prompt selection is stale") ||
       roleReloadAfterRace.status !== "passed"
@@ -10260,6 +10291,7 @@ async function verifyConcurrentHostPromptSelectionRace({
           activityStatusTexts,
           apiPrompts,
           playerStates,
+          playerOutcomeConvergence,
           roleReloadAfterRace,
         })}`,
       );
@@ -10286,10 +10318,11 @@ async function verifyConcurrentHostPromptSelectionRace({
       selectedSlot,
       resolvedPrompt,
       playerStates,
+      playerOutcomeConvergence,
       rejectActivityStatusText,
       roleReloadAfterRace,
       proof:
-        "Two seeded host role pages raced different HostDecides contender controls with distinct command ids; one selection ACKed, one rejected PromptAlreadyResolved with explicit stale-selection recovery, one player died, one survived, and both host plus player role URLs reloaded to the single durable selection.",
+        "Two seeded host role pages raced different HostDecides contender controls with distinct command ids; one selection ACKed, one rejected PromptAlreadyResolved with explicit stale-selection recovery, one player died, one survived, both player role URLs rendered the same final official Lynch outcome and HostDecides selection, and both host plus player role URLs reloaded to that durable result.",
     };
   } finally {
     await slotOneHostPage.close().catch(() => {});
@@ -10359,6 +10392,11 @@ async function verifyConcurrentHostPromptSelectionRaceReload({
     playerEntries,
     selectedSlot,
   });
+  const playerOutcomeConvergence =
+    await captureHostPromptSelectionPlayerOutcome({
+      playerEntries,
+      selectedSlot,
+    });
   const [hostPrompts, hostPromptActions, playerStates, apiPrompts] =
     await Promise.all([
       Promise.all(
@@ -10399,7 +10437,8 @@ async function verifyConcurrentHostPromptSelectionRaceReload({
     resolvedPrompt?.decision?.slot !== selectedSlot ||
     stateBySlot[selectedSlot]?.actorAlive !== false ||
     Object.entries(stateBySlot).find(([slot]) => slot !== selectedSlot)?.[1]
-      ?.actorAlive !== true
+      ?.actorAlive !== true ||
+    playerOutcomeConvergence.status !== "passed"
   ) {
     throw new Error(
       `concurrent HostDecides reload drifted: ${JSON.stringify({
@@ -10408,6 +10447,7 @@ async function verifyConcurrentHostPromptSelectionRaceReload({
         hostPrompts,
         hostPromptActions,
         stateBySlot,
+        playerOutcomeConvergence,
         apiPrompts,
         selectedSlot,
       })}`,
@@ -10420,6 +10460,7 @@ async function verifyConcurrentHostPromptSelectionRaceReload({
     hostPrompts,
     hostPromptActions,
     playerStates: stateBySlot,
+    playerOutcomeConvergence,
     resolvedPrompt,
   };
 }
@@ -10443,6 +10484,60 @@ async function waitForHostPromptSelectionPlayerConvergence({
       selectedSlot !== "slot-2",
     ),
   ]);
+}
+
+async function captureHostPromptSelectionPlayerOutcome({
+  playerEntries,
+  selectedSlot,
+}) {
+  const expectedSlotLabel = `Slot ${selectedSlot.match(/\d+/)?.[0] ?? selectedSlot}`;
+  const players = Object.fromEntries(
+    await Promise.all(
+      Object.entries(playerEntries).map(async ([key, { page }]) => {
+        const slot = key === "slotOne" ? "slot-1" : "slot-2";
+        await page.waitForFunction(
+          (expectedSlot) =>
+            window.__fmarchPlayerProjection?.dayVoteOutcomes?.some(
+              (outcome) =>
+                outcome.phaseId === "D01" &&
+                outcome.status === "Lynch" &&
+                outcome.winnerSlot === expectedSlot &&
+                outcome.reason === "host_decides_tie",
+            ),
+          selectedSlot,
+        );
+        const outcome = await page.evaluate((expectedSlot) =>
+          window.__fmarchPlayerProjection?.dayVoteOutcomes?.find(
+            (candidate) =>
+              candidate.phaseId === "D01" &&
+              candidate.winnerSlot === expectedSlot,
+          ) ?? null,
+        selectedSlot);
+        const panelText = await page
+          .getByTestId("player-day-vote-outcome-latest")
+          .innerText();
+        return [slot, { outcome, panelText }];
+      }),
+    ),
+  );
+  const expectedPanelFragments = [
+    "D01 Lynch",
+    `${expectedSlotLabel} was eliminated by official vote.`,
+    `HostDecides selected ${expectedSlotLabel} after the tied vote.`,
+  ];
+  const passed = Object.values(players).every(
+    ({ outcome, panelText }) =>
+      outcome?.status === "Lynch" &&
+      outcome?.winnerSlot === selectedSlot &&
+      outcome?.reason === "host_decides_tie" &&
+      expectedPanelFragments.every((fragment) => panelText.includes(fragment)),
+  );
+  return {
+    status: passed ? "passed" : "failed",
+    selectedSlot,
+    expectedPanelFragments,
+    players,
+  };
 }
 
 async function seedHostPromptRecoveryGame({ promptGame, promptId }) {

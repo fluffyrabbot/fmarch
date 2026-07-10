@@ -355,6 +355,93 @@ async fn official_day_vote_outcome_projection_records_and_rebuilds(pool: sqlx::P
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+async fn host_decides_prompt_finalizes_official_day_vote_outcome(pool: sqlx::PgPool) {
+    let game = Uuid::new_v4();
+    let outcome = domain::DayVoteOutcome {
+        status: domain::VoteStatus::Tie,
+        winner: None,
+        contenders: vec!["slot-1".into(), "slot-2".into()],
+        tallies: BTreeMap::from([("slot-1".into(), 2.0), ("slot-2".into(), 2.0)]),
+        votes: BTreeMap::new(),
+        weights: BTreeMap::new(),
+        majority: None,
+        thresholds: BTreeMap::new(),
+        total_weight: 4.0,
+        tiebreak: Some("HostDecides".into()),
+        reason: Some("tied vote requires host decision".into()),
+    };
+    let applied = ResolutionApplied {
+        phase_id: "D01".into(),
+        phase_kind: PhaseKind::Day,
+        phase_number: 1,
+        run_id: "run_host_decides_outcome_projection".into(),
+        result_version: domain::RESULT_VERSION,
+        seed: 23,
+        started_at: 23,
+        finished_at: 24,
+        counts: ResolutionCounts {
+            events: 2,
+            kills: 0,
+            saves: 0,
+        },
+        events: vec![
+            IndexedEvent {
+                index: 0,
+                event: InnerEvent::DayVoteOutcome(outcome),
+            },
+            empty_phase_announcement(1, "D01"),
+        ],
+    };
+
+    append_and_project(
+        &pool,
+        game,
+        &[
+            EventInput::new(
+                "ResolutionApplied",
+                1,
+                serde_json::to_value(applied).unwrap(),
+                ActorId::System,
+                1,
+            ),
+            EventInput::new(
+                "HostPromptResolved",
+                1,
+                serde_json::json!({
+                    "prompt_id": "D01:pk:Tie",
+                    "phase_id": "D01",
+                    "kind": "pk",
+                    "reason": "host_decides_tie",
+                    "decision": { "kind": "select_slot", "slot": "slot-2" },
+                    "resolved_by": "host_h"
+                }),
+                ActorId::Host,
+                2,
+            ),
+        ],
+    )
+    .await
+    .unwrap();
+
+    let rows = day_vote_outcomes(&pool, game).await.unwrap();
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].status, "Lynch");
+    assert_eq!(rows[0].winner_slot.as_deref(), Some("slot-2"));
+    assert_eq!(rows[0].tiebreak.as_deref(), Some("HostDecides"));
+    assert_eq!(rows[0].reason.as_deref(), Some("host_decides_tie"));
+    assert_eq!(rows[0].tallies["slot-1"], 2.0);
+    assert_eq!(rows[0].tallies["slot-2"], 2.0);
+
+    let before = serde_json::to_string(&rows).unwrap();
+    rebuild(&pool, game).await.unwrap();
+    assert_eq!(
+        before,
+        serde_json::to_string(&day_vote_outcomes(&pool, game).await.unwrap()).unwrap(),
+        "HostDecides outcome rebuild must match incremental fold"
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
 async fn effect_notifications_project_per_audience_slot_and_rebuild(pool: sqlx::PgPool) {
     let game = Uuid::new_v4();
     let applied = ResolutionApplied {

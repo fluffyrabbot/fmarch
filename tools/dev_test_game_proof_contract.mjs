@@ -5619,6 +5619,11 @@ export function buildDevTestGameProofRun(session, options = {}) {
           hardening.concurrentHostPromptSelectionRace?.reject?.error ?? null,
         rejectMessage:
           hardening.concurrentHostPromptSelectionRace?.reject?.message ?? null,
+        playerOutcomePanels:
+          Object.values(
+            hardening.concurrentHostPromptSelectionRace?.playerOutcomeConvergence
+              ?.players ?? {},
+          ).map(({ panelText }) => panelText),
         passed:
           hardening.concurrentHostPromptSelectionRace?.status === "passed" &&
           hardening.concurrentHostPromptSelectionRace?.promptId ===
@@ -5653,6 +5658,23 @@ export function buildDevTestGameProofRun(session, options = {}) {
           hardening.concurrentHostPromptSelectionRace?.playerStates?.[
             hardening.concurrentHostPromptSelectionRace?.selectedSlot
           ]?.actorAlive === false &&
+          hardening.concurrentHostPromptSelectionRace?.playerOutcomeConvergence
+            ?.status === "passed" &&
+          Object.values(
+            hardening.concurrentHostPromptSelectionRace?.playerOutcomeConvergence
+              ?.players ?? {},
+          ).length === 2 &&
+          Object.values(
+            hardening.concurrentHostPromptSelectionRace?.playerOutcomeConvergence
+              ?.players ?? {},
+          ).every(
+            ({ outcome, panelText }) =>
+              outcome?.status === "Lynch" &&
+              outcome?.winnerSlot ===
+                hardening.concurrentHostPromptSelectionRace?.selectedSlot &&
+              outcome?.reason === "host_decides_tie" &&
+              panelText?.includes("HostDecides selected"),
+          ) &&
           hardening.concurrentHostPromptSelectionRace?.rejectActivityStatusText
             ?.includes("Reject PromptAlreadyResolved") === true &&
           typeof hardening.concurrentHostPromptSelectionRace?.sourceRoleUrls
@@ -5675,6 +5697,11 @@ export function buildDevTestGameProofRun(session, options = {}) {
         playerRouteStatuses:
           hardening.concurrentHostPromptSelectionRace?.roleReloadAfterRace
             ?.playerRouteStatuses ?? null,
+        playerOutcomePanels:
+          Object.values(
+            hardening.concurrentHostPromptSelectionRace?.roleReloadAfterRace
+              ?.playerOutcomeConvergence?.players ?? {},
+          ).map(({ panelText }) => panelText),
         passed:
           hardening.concurrentHostPromptSelectionRace?.status === "passed" &&
           hardening.concurrentHostPromptSelectionRace?.roleReloadAfterRace
@@ -5704,7 +5731,63 @@ export function buildDevTestGameProofRun(session, options = {}) {
           Object.values(
             hardening.concurrentHostPromptSelectionRace?.roleReloadAfterRace
               ?.playerStates ?? {},
-          ).filter((state) => state?.actorAlive === true).length === 1,
+          ).filter((state) => state?.actorAlive === true).length === 1 &&
+          hardening.concurrentHostPromptSelectionRace?.roleReloadAfterRace
+            ?.playerOutcomeConvergence?.status === "passed" &&
+          Object.values(
+            hardening.concurrentHostPromptSelectionRace?.roleReloadAfterRace
+              ?.playerOutcomeConvergence?.players ?? {},
+          ).length === 2 &&
+          Object.values(
+            hardening.concurrentHostPromptSelectionRace?.roleReloadAfterRace
+              ?.playerOutcomeConvergence?.players ?? {},
+          ).every(
+            ({ outcome, panelText }) =>
+              outcome?.status === "Lynch" &&
+              outcome?.winnerSlot ===
+                hardening.concurrentHostPromptSelectionRace?.selectedSlot &&
+              outcome?.reason === "host_decides_tie" &&
+              panelText?.includes("HostDecides selected"),
+          ),
+      },
+    ),
+    lane(
+      "host-decides-player-outcome-reload",
+      "Both player role URLs render the final HostDecides elimination",
+      {
+        game: hardening.concurrentHostPromptSelectionRace?.game ?? null,
+        selectedSlot:
+          hardening.concurrentHostPromptSelectionRace?.selectedSlot ?? null,
+        roleUrls:
+          hardening.concurrentHostPromptSelectionRace?.sourceRoleUrls ?? null,
+        playerOutcomePanels:
+          Object.values(
+            hardening.concurrentHostPromptSelectionRace?.roleReloadAfterRace
+              ?.playerOutcomeConvergence?.players ?? {},
+          ).map(({ panelText }) => panelText),
+        passed:
+          hardening.concurrentHostPromptSelectionRace?.roleReloadAfterRace
+            ?.playerOutcomeConvergence?.status === "passed" &&
+          Object.values(
+            hardening.concurrentHostPromptSelectionRace?.roleReloadAfterRace
+              ?.playerOutcomeConvergence?.players ?? {},
+          ).length === 2 &&
+          Object.values(
+            hardening.concurrentHostPromptSelectionRace?.roleReloadAfterRace
+              ?.playerOutcomeConvergence?.players ?? {},
+          ).every(
+            ({ outcome, panelText }) =>
+              outcome?.status === "Lynch" &&
+              outcome?.winnerSlot ===
+                hardening.concurrentHostPromptSelectionRace?.selectedSlot &&
+              outcome?.reason === "host_decides_tie" &&
+              panelText?.includes("was eliminated by official vote") &&
+              panelText?.includes("HostDecides selected"),
+          ) &&
+          typeof hardening.concurrentHostPromptSelectionRace?.sourceRoleUrls
+            ?.selectedPlayer === "string" &&
+          typeof hardening.concurrentHostPromptSelectionRace?.sourceRoleUrls
+            ?.survivingPlayer === "string",
       },
     ),
     ...completedGameHardeningProofLanes({ hardening }),
@@ -7045,10 +7128,18 @@ export function assertDevTestGameProofRun(proof) {
     proof.hostDecidesTie !== undefined &&
     (proof.hostDecidesTie.status !== "passed" ||
       proof.hostDecidesTie.pack !== "epicmafia" ||
-      proof.hostDecidesTie.outcome?.status !== "Tie" ||
+      proof.hostDecidesTie.outcome?.status !== "Lynch" ||
+      proof.hostDecidesTie.outcome?.winner_slot !== "slot-2" ||
       proof.hostDecidesTie.outcome?.tiebreak !== "HostDecides" ||
+      proof.hostDecidesTie.outcome?.reason !== "host_decides_tie" ||
       proof.hostDecidesTie.selectedSlot !== "slot-2" ||
-      proof.hostDecidesTie.targetAfterDecision?.actorAlive !== false)
+      proof.hostDecidesTie.targetAfterDecision?.actorAlive !== false ||
+      !proof.hostDecidesTie.hostOutcomePanel?.includes(
+        "HostDecides selected Slot 2",
+      ) ||
+      !proof.hostDecidesTie.targetOutcomePanel?.includes(
+        "HostDecides selected Slot 2",
+      ))
   ) {
     throw new Error("dev-test-game proof is missing HostDecides browser evidence");
   }
