@@ -186,6 +186,7 @@ pub fn router_with_state(state: ApiState) -> Router {
         .route("/auth/accounts/disable", post(disable_auth_account))
         .route("/auth/accounts/enable", post(enable_auth_account))
         .route("/auth/session-rotations", post(rotate_auth_session))
+        .route("/auth/session-logout", post(logout_auth_session))
         .route("/auth/session-revocations", post(revoke_auth_session))
         .route("/auth/invites", post(create_auth_invite))
         .route("/auth/invites/redeem", post(redeem_auth_invite))
@@ -641,6 +642,12 @@ struct AuthSessionQuery {
 struct AuthSessionResponse {
     principal_user_id: String,
     capabilities: Vec<CapabilityGrant>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    created_at: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    expires_at: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    rotation_required: Option<bool>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -852,24 +859,29 @@ async fn auth_session(
     let token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
     let token_hash = hash_session_token(token);
     let now = unix_now_seconds();
-    let (principal_user_id, global_capabilities) = sqlx::query_as::<_, (String, Vec<String>)>(
-        r#"
-        SELECT principal_user_id, global_capabilities
+    let (principal_user_id, created_at, expires_at, global_capabilities) =
+        sqlx::query_as::<_, (String, i64, i64, Vec<String>)>(
+            r#"
+        SELECT principal_user_id, created_at, expires_at, global_capabilities
         FROM auth_session
         WHERE token_hash = $1
           AND revoked_at IS NULL
           AND expires_at > $2
         "#,
-    )
-    .bind(token_hash)
-    .bind(now)
-    .fetch_optional(&state.pool)
-    .await?
-    .ok_or_else(unauthorized_session)?;
+        )
+        .bind(token_hash)
+        .bind(now)
+        .fetch_optional(&state.pool)
+        .await?
+        .ok_or_else(unauthorized_session)?;
 
-    Ok(Json(
-        auth_session_response(&state, principal_user_id, query.game, global_capabilities).await?,
-    ))
+    let mut response =
+        auth_session_response(&state, principal_user_id, query.game, global_capabilities).await?;
+    response.created_at = Some(created_at);
+    response.expires_at = Some(expires_at);
+    response.rotation_required =
+        Some(now.saturating_sub(created_at) >= auth_session_rotation_max_age_seconds());
+    Ok(Json(response))
 }
 
 async fn create_dev_auth_session(
@@ -1871,6 +1883,57 @@ async fn rotate_auth_session(
     ))
 }
 
+async fn logout_auth_session(
+    State(state): State<ApiState>,
+    headers: HeaderMap,
+) -> Result<Json<AuthLifecycleResponse>, ApiError> {
+    let caller_token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
+    let token_hash = hash_session_token(caller_token);
+    let now = unix_now_seconds();
+    let mut tx = state.pool.begin().await?;
+    let principal_user_id = sqlx::query_scalar::<_, String>(
+        r#"
+        UPDATE auth_session
+        SET revoked_at = $1
+        WHERE token_hash = $2
+          AND revoked_at IS NULL
+          AND expires_at > $1
+        RETURNING principal_user_id
+        "#,
+    )
+    .bind(now)
+    .bind(&token_hash)
+    .fetch_optional(&mut *tx)
+    .await?
+    .ok_or_else(unauthorized_session)?;
+    sqlx::query(
+        r#"
+        INSERT INTO identity_lifecycle_audit (
+            event_at,
+            event_kind,
+            actor_user_id,
+            principal_user_id,
+            token_hash,
+            related_token_hash,
+            metadata
+        )
+        VALUES ($1, 'session_logged_out', $2, $3, $4, NULL, '{}'::JSONB)
+        "#,
+    )
+    .bind(now)
+    .bind(principal_user_id.as_str())
+    .bind(principal_user_id.as_str())
+    .bind(token_hash)
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+
+    Ok(Json(AuthLifecycleResponse {
+        status: "logged_out".to_string(),
+        principal_user_id,
+    }))
+}
+
 async fn revoke_auth_session(
     State(state): State<ApiState>,
     headers: HeaderMap,
@@ -2331,6 +2394,9 @@ async fn auth_session_response(
     Ok(AuthSessionResponse {
         principal_user_id,
         capabilities,
+        created_at: None,
+        expires_at: None,
+        rotation_required: None,
     })
 }
 
@@ -2658,6 +2724,15 @@ fn auth_attempt_policy_from_env() -> AuthAttemptPolicy {
             .as_deref()
             == Some("1"),
     }
+}
+
+fn auth_session_rotation_max_age_seconds() -> i64 {
+    env_i64(
+        "FMARCH_AUTH_SESSION_ROTATION_MAX_AGE_SECONDS",
+        86_400,
+        60,
+        604_800,
+    )
 }
 
 fn env_i64(name: &str, default: i64, minimum: i64, maximum: i64) -> i64 {

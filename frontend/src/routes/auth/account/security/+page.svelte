@@ -26,6 +26,13 @@
         Signed in as {security.principalUserId}
       </p>
     </div>
+    <a
+      class="fm-touch-button fm-touch-button--secondary"
+      data-testid="account-security-logout"
+      href={`/auth/logout?returnTo=${encodeURIComponent(returnTo)}`}
+    >
+      Sign out
+    </a>
   </section>
 
   <section class="account-security__panel fm-panel" aria-label="Password rotation">

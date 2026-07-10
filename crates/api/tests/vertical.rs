@@ -6423,6 +6423,136 @@ async fn host_issued_invite_redeems_through_game_role_projection(pool: sqlx::PgP
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+async fn session_lifecycle_rotates_once_and_logs_out_the_presented_token(pool: sqlx::PgPool) {
+    let app = router_with_dev_auth(pool.clone());
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/auth/dev-session")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    serde_json::json!({
+                        "token": "lifecycle-browser-session-v1",
+                        "principal_user_id": "host_h",
+                        "expires_at": 4_102_444_800i64
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    sqlx::query("UPDATE auth_session SET created_at = 0 WHERE principal_user_id = 'host_h'")
+        .execute(&pool)
+        .await
+        .unwrap();
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/auth/session")
+                .header("authorization", "Bearer lifecycle-browser-session-v1")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let session: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(session["rotation_required"], true);
+    assert_eq!(session["created_at"], 0);
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/auth/session-rotations")
+                .header("content-type", "application/json")
+                .header("authorization", "Bearer lifecycle-browser-session-v1")
+                .body(Body::from(
+                    serde_json::json!({ "session_token": "lifecycle-browser-session-v2" })
+                        .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/auth/session-rotations")
+                .header("content-type", "application/json")
+                .header("authorization", "Bearer lifecycle-browser-session-v1")
+                .body(Body::from(
+                    serde_json::json!({ "session_token": "lifecycle-browser-session-v3" })
+                        .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/auth/session-logout")
+                .header("authorization", "Bearer lifecycle-browser-session-v2")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let logged_out: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(logged_out["status"], "logged_out");
+    assert_eq!(logged_out["principal_user_id"], "host_h");
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/auth/session")
+                .header("authorization", "Bearer lifecycle-browser-session-v2")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+
+    let audit = sqlx::query_as::<_, (String, String, Option<String>, serde_json::Value)>(
+        r#"
+        SELECT event_kind, principal_user_id, related_token_hash, metadata
+        FROM identity_lifecycle_audit
+        WHERE event_kind = 'session_logged_out'
+        "#,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(audit.0, "session_logged_out");
+    assert_eq!(audit.1, "host_h");
+    assert_eq!(audit.2, None);
+    assert_eq!(audit.3, serde_json::json!({}));
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
 async fn auth_lifecycle_rotates_sessions_and_revokes_invites(pool: sqlx::PgPool) {
     let app = router_with_dev_auth(pool.clone());
     let game = Uuid::new_v4();

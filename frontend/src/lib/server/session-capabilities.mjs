@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { normalizeCapabilities } from "../app/capabilities.mjs";
 
 export const SESSION_COOKIE_NAME = "fmarch_session";
@@ -36,6 +37,49 @@ export async function resolveAuthenticatedSession({
   return normalizeSessionPayload(await response.json(), context);
 }
 
+export async function rotateAuthenticatedBrowserSession({
+  cookies,
+  request,
+  fetchImpl = fetch,
+  env = process.env,
+} = {}) {
+  const token = cookies?.get?.(SESSION_COOKIE_NAME);
+  if (typeof token !== "string" || token.trim() === "") {
+    return { status: "missing" };
+  }
+
+  const sessionToken = `account-session-${randomUUID()}`;
+  const response = await fetchImpl(`${authApiBaseUrl(env)}/auth/session-rotations`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${token}`,
+      "content-type": "application/json",
+      accept: "application/json",
+    },
+    body: JSON.stringify({ session_token: sessionToken }),
+  });
+  if (!response.ok) {
+    return { status: response.status === 401 ? "stale" : "unavailable" };
+  }
+
+  const body = await response.json().catch(() => null);
+  if (!validSessionPayload(body)) {
+    return { status: "unavailable" };
+  }
+  const url = new URL(typeof request?.url === "string" ? request.url : "http://localhost/");
+  cookies?.set?.(SESSION_COOKIE_NAME, sessionToken, browserSessionCookieOptions(url));
+  return { status: "rotated" };
+}
+
+export function browserSessionCookieOptions(url) {
+  return {
+    path: "/",
+    httpOnly: true,
+    sameSite: "lax",
+    secure: url?.protocol === "https:",
+  };
+}
+
 export function hostGameFromRequest(request) {
   const href = typeof request?.url === "string" ? request.url : "http://localhost/";
   const pathname = new URL(href).pathname;
@@ -56,7 +100,7 @@ export function sessionContextFromRequest(request) {
   if (/^\/admin(?:\/.*)?$/.test(pathname)) {
     return Object.freeze({ kind: "admin" });
   }
-  if (/^\/auth\/account\/security\/?$/.test(pathname)) {
+  if (/^\/auth\/(?:account\/security|logout)\/?$/.test(pathname)) {
     return Object.freeze({ kind: "account" });
   }
   return null;
@@ -70,15 +114,18 @@ export function resolveFixtureSession({ token, game = "midsummer" } = {}) {
 }
 
 function authSessionUrl({ env, context }) {
-  const baseUrl =
-    typeof env?.FMARCH_API_BASE_URL === "string"
-      ? env.FMARCH_API_BASE_URL.replace(/\/$/, "")
-      : "";
+  const baseUrl = authApiBaseUrl(env);
   const path =
     context?.kind === "game"
       ? `/auth/session?game=${encodeURIComponent(context.game)}`
       : "/auth/session";
   return `${baseUrl}${path}`;
+}
+
+function authApiBaseUrl(env) {
+  return typeof env?.FMARCH_API_BASE_URL === "string"
+    ? env.FMARCH_API_BASE_URL.replace(/\/$/, "")
+    : "";
 }
 
 function normalizeSessionPayload(payload, context = null) {
@@ -104,6 +151,7 @@ function normalizeSessionPayload(payload, context = null) {
 
   return Object.freeze({
     principalUserId,
+    ...(payload.rotation_required === true ? { rotationRequired: true } : {}),
     resolvedCapabilities: normalizeCapabilities(
       rawCapabilities.map((capability) =>
         capabilityWithContext({
@@ -221,6 +269,16 @@ function fixtureSession({ token, context }) {
     default:
       return emptySession();
   }
+}
+
+function validSessionPayload(payload) {
+  return (
+    payload !== null &&
+    typeof payload === "object" &&
+    typeof payload.principal_user_id === "string" &&
+    payload.principal_user_id.trim() !== "" &&
+    Array.isArray(payload.capabilities)
+  );
 }
 
 function firstString(...values) {

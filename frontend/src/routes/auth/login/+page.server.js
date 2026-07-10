@@ -1,6 +1,9 @@
 import { fail, redirect } from "@sveltejs/kit";
 import { randomUUID } from "node:crypto";
-import { SESSION_COOKIE_NAME } from "../../../lib/server/session-capabilities.mjs";
+import {
+  browserSessionCookieOptions,
+  SESSION_COOKIE_NAME,
+} from "../../../lib/server/session-capabilities.mjs";
 
 export function load({ locals, url }) {
   return {
@@ -33,7 +36,7 @@ export const actions = {
     if (token !== null) {
       const direct = await verifySessionToken({ fetch, token });
       if (direct.status === "ok") {
-        cookies.set(SESSION_COOKIE_NAME, token, sessionCookieOptions(url));
+        cookies.set(SESSION_COOKIE_NAME, token, browserSessionCookieOptions(url));
         throw redirect(303, returnTo);
       }
       if (direct.status !== "unauthorized") {
@@ -66,7 +69,7 @@ export const actions = {
         });
       }
 
-      cookies.set(SESSION_COOKIE_NAME, redeemed.sessionToken, sessionCookieOptions(url));
+      cookies.set(SESSION_COOKIE_NAME, redeemed.sessionToken, browserSessionCookieOptions(url));
       throw redirect(303, returnTo);
     }
 
@@ -79,7 +82,7 @@ export const actions = {
       });
     }
 
-    cookies.set(SESSION_COOKIE_NAME, account.sessionToken, sessionCookieOptions(url));
+    cookies.set(SESSION_COOKIE_NAME, account.sessionToken, browserSessionCookieOptions(url));
     throw redirect(303, returnTo);
   },
 };
@@ -264,15 +267,6 @@ function validSessionBody(body) {
     body.principal_user_id.trim() !== "" &&
     Array.isArray(body.capabilities)
   );
-}
-
-function sessionCookieOptions(url) {
-  return {
-    path: "/",
-    httpOnly: true,
-    sameSite: "lax",
-    secure: url.protocol === "https:",
-  };
 }
 
 function safeReturnTo(value) {

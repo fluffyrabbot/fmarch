@@ -22,14 +22,16 @@ content (incompatible with moderation; out of scope by design).
 
 - **Passwords:** argon2id with sane params; never anything reversible. Never logged.
 - **Sessions:** opaque, rotating session tokens in an **httpOnly, Secure, SameSite** cookie.
-  Current implemented slice: `auth_session` stores token hashes and revocation/expiry data;
-  `/auth/session` resolves bearer tokens into server-derived principals/capabilities;
-  `/auth/session-grants` lets an active `GlobalAdmin` issue scoped operator tokens; and the
-  browser `/auth/login` action verifies one of those opaque tokens before writing
-  `fmarch_session`. Local HTTP development omits `Secure` only because localhost is not TLS.
-  Rotation on privilege change and periodically remains future hardening; server-side
-  revocation data is already in the table so logout and compromise response can be immediate
-  once the logout endpoint lands.
+  `auth_session` stores token hashes and revocation/expiry data; `/auth/session` resolves
+  bearer tokens into server-derived principals/capabilities and reports a server-declared
+  refresh boundary after `FMARCH_AUTH_SESSION_ROTATION_MAX_AGE_SECONDS` (24 hours by default).
+  The SvelteKit request hook atomically exchanges an overdue browser token before rendering;
+  a concurrent loser clears its stale cookie. `/auth/session-logout` revokes only the presented
+  active token and writes a redacted lifecycle audit row before the browser clears
+  `fmarch_session`. Password rotation, recovery, and account disablement revoke active sessions;
+  game-role capability changes are resolved from committed projections on every request rather
+  than being copied into a browser token. `/auth/session-grants` remains the GlobalAdmin operator
+  issuance boundary. Local HTTP development omits `Secure` only because localhost is not TLS.
 - **Brute-force defense:** account login, invite redemption, and account recovery share a
   two-tier Postgres failure window. Known accounts lock their hashed account/source scope after
   five failures; unknown account identifiers only increment a hashed source-pressure scope, so

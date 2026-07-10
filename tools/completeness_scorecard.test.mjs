@@ -31,9 +31,9 @@ test("real completion registry validates completed room families and selects ses
   const nextItem = nextBuildableCodeItem(registry);
   assert.equal(nextItem?.id, "product.identity.session-lifecycle");
   assert.deepEqual(nextItem?.remaining, [
-    "Add explicit logout and declared periodic/privilege-change session rotation with focused proof.",
+    "Extend the scratch-Postgres Chromium identity proof with logout/back-navigation denial and overdue-session rotation evidence, then promote this item only when that browser artifact agrees.",
   ]);
-  assert.match(nextItem?.recommended_slice?.objective ?? "", /session-lifecycle vertical/);
+  assert.match(nextItem?.recommended_slice?.objective ?? "", /auth_invite_role_proof/);
 });
 
 test("generated scorecard exactly matches the canonical registry", async () => {
