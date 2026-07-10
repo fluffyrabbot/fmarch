@@ -20846,6 +20846,7 @@ function identityAdapterProofFixture(game) {
         adapter: "local-deterministic",
         invite: { deliveryKind: "invite", status: "delivered", attemptCount: 2 },
         recovery: { deliveryKind: "recovery", status: "delivered", attemptCount: 2 },
+        retryActorUserId: "root_admin",
         rawCredentialsStored: false,
       },
       accountRegistration: {

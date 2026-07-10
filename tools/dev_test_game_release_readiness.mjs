@@ -6259,6 +6259,7 @@ export function validateDevTestGameIdentityAdapterProof(proof, options = {}) {
     proof.identityLifecycle?.localDelivery?.recovery?.deliveryKind !== "recovery" ||
     proof.identityLifecycle?.localDelivery?.recovery?.status !== "delivered" ||
     proof.identityLifecycle?.localDelivery?.recovery?.attemptCount !== 2 ||
+    proof.identityLifecycle?.localDelivery?.retryActorUserId !== "root_admin" ||
     proof.identityLifecycle?.localDelivery?.rawCredentialsStored !== false ||
     proof.identityLifecycle?.accountRegistration?.status !== "passed" ||
     proof.identityLifecycle?.accountRegistration?.registrationSurfaceTestId !==

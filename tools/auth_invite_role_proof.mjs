@@ -1598,6 +1598,9 @@ async function finishIdentityLifecycleProof({
     "account_recovery_rejected",
     "account_recovered",
     "auth_attempt_rate_limited",
+    "auth_delivery_queued",
+    "auth_delivery_retryable_failed",
+    "auth_delivery_retried",
     "invite_redeemed",
     "invite_revoked",
     "session_logged_out",
@@ -1607,6 +1610,12 @@ async function finishIdentityLifecycleProof({
     if (!auditEventKinds.includes(eventKind)) {
       throw new Error(`identity lifecycle audit missing ${eventKind}`);
     }
+  }
+  const deliveryRetryAudit = auditTrail.entries.find(
+    (entry) => entry.event_kind === "auth_delivery_retried",
+  );
+  if (deliveryRetryAudit?.actor_user_id !== "root_admin") {
+    throw new Error("delivery retry audit did not identify the GlobalAdmin actor");
   }
   if ((passwordRotationAudit?.metadata?.revoked_session_count ?? 0) < 1) {
     throw new Error("password rotation audit did not record revoked sessions");
@@ -1686,6 +1695,7 @@ async function finishIdentityLifecycleProof({
       adapter: "local-deterministic",
       invite: inviteDelivery,
       recovery: recoveryDelivery,
+      retryActorUserId: deliveryRetryAudit.actor_user_id,
       rawCredentialsStored: false,
     },
     accountRegistration: {
@@ -2555,6 +2565,9 @@ async function driveAdminIdentityAuditSurface({
       "account_recovery_rejected",
       "account_recovered",
       "auth_attempt_rate_limited",
+      "auth_delivery_queued",
+      "auth_delivery_retryable_failed",
+      "auth_delivery_retried",
       "account_session_created",
       "invite_redeemed",
       "session_rotated",
@@ -2950,6 +2963,16 @@ function assertInviteProof(evidence) {
     evidence.identityLifecycle?.accountRegistration?.rateLimitVisible !== true ||
     evidence.identityLifecycle?.accountRegistration?.registrationScopeHashed !== true ||
     evidence.identityLifecycle?.accountRegistration?.rawPasswordStored !== false ||
+    evidence.identityLifecycle?.localDelivery?.status !== "passed" ||
+    evidence.identityLifecycle?.localDelivery?.adapter !== "local-deterministic" ||
+    evidence.identityLifecycle?.localDelivery?.invite?.deliveryKind !== "invite" ||
+    evidence.identityLifecycle?.localDelivery?.invite?.status !== "delivered" ||
+    evidence.identityLifecycle?.localDelivery?.invite?.attemptCount !== 2 ||
+    evidence.identityLifecycle?.localDelivery?.recovery?.deliveryKind !== "recovery" ||
+    evidence.identityLifecycle?.localDelivery?.recovery?.status !== "delivered" ||
+    evidence.identityLifecycle?.localDelivery?.recovery?.attemptCount !== 2 ||
+    evidence.identityLifecycle?.localDelivery?.retryActorUserId !== "root_admin" ||
+    evidence.identityLifecycle?.localDelivery?.rawCredentialsStored !== false ||
     evidence.identityLifecycle?.sessionRotation?.oldSessionRejected !== true ||
     evidence.identityLifecycle?.sessionAgeRotation?.oldSessionRejected !== true ||
     !evidence.identityLifecycle?.sessionAgeRotation?.rotatedSessionCapabilityKinds?.includes(
@@ -3158,6 +3181,15 @@ function assertInviteProof(evidence) {
     !evidence.identityLifecycle?.auditTrail?.eventKinds?.includes(
       "auth_attempt_rate_limited",
     ) ||
+    !evidence.identityLifecycle?.auditTrail?.eventKinds?.includes(
+      "auth_delivery_queued",
+    ) ||
+    !evidence.identityLifecycle?.auditTrail?.eventKinds?.includes(
+      "auth_delivery_retryable_failed",
+    ) ||
+    !evidence.identityLifecycle?.auditTrail?.eventKinds?.includes(
+      "auth_delivery_retried",
+    ) ||
     evidence.identityLifecycle?.adminAuditSurface?.status !== "passed" ||
     evidence.identityLifecycle?.adminAuditSurface?.clickedThroughFromOverview !== true ||
     evidence.identityLifecycle?.adminAuditSurface?.rawTokensVisible !== false ||
@@ -3199,6 +3231,15 @@ function assertInviteProof(evidence) {
     ) ||
     !evidence.identityLifecycle?.adminAuditSurface?.visibleEventKinds?.includes(
       "auth_attempt_rate_limited",
+    ) ||
+    !evidence.identityLifecycle?.adminAuditSurface?.visibleEventKinds?.includes(
+      "auth_delivery_queued",
+    ) ||
+    !evidence.identityLifecycle?.adminAuditSurface?.visibleEventKinds?.includes(
+      "auth_delivery_retryable_failed",
+    ) ||
+    !evidence.identityLifecycle?.adminAuditSurface?.visibleEventKinds?.includes(
+      "auth_delivery_retried",
     )
   ) {
     throw new Error("invite proof must preserve the role-surface identity adapter");

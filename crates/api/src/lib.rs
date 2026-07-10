@@ -2570,6 +2570,7 @@ async fn retry_auth_delivery_intent(
         "auth_delivery_retried",
         intent.0.as_str(),
         intent.1.as_str(),
+        actor_user_id.as_str(),
         intent.2.as_str(),
         intent.3.as_str(),
         delivery_id,
@@ -2577,7 +2578,6 @@ async fn retry_auth_delivery_intent(
     )
     .await?;
     tx.commit().await?;
-    let _ = actor_user_id;
     Ok(Json(AuthDeliveryRetryResponse {
         status: "delivered".to_string(),
         delivery_id,
@@ -3178,6 +3178,7 @@ async fn deliver_local_auth_credential(
         delivery_kind,
         account_id,
         principal_user_id,
+        principal_user_id,
         credential_hash,
         delivery_id,
         now,
@@ -3208,6 +3209,7 @@ async fn deliver_local_auth_credential(
             "auth_delivery_retryable_failed",
             delivery_kind,
             account_id,
+            principal_user_id,
             principal_user_id,
             credential_hash,
             delivery_id,
@@ -3247,6 +3249,7 @@ async fn deliver_local_auth_credential(
         delivery_kind,
         account_id,
         principal_user_id,
+        principal_user_id,
         credential_hash,
         delivery_id,
         now,
@@ -3264,6 +3267,7 @@ async fn record_auth_delivery_audit(
     event_kind: &str,
     delivery_kind: &str,
     account_id: &str,
+    actor_user_id: &str,
     principal_user_id: &str,
     credential_hash: &str,
     delivery_id: Uuid,
@@ -3285,7 +3289,7 @@ async fn record_auth_delivery_audit(
     )
     .bind(now)
     .bind(event_kind)
-    .bind(principal_user_id)
+    .bind(actor_user_id)
     .bind(principal_user_id)
     .bind(credential_hash)
     .bind(

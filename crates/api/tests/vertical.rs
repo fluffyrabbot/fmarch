@@ -5167,19 +5167,25 @@ async fn identity_delivery_intent_is_redacted_and_retryable(pool: sqlx::PgPool) 
     let retried: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     assert_eq!(retried["status"], "delivered");
     assert_eq!(retried["attempt_count"], 2);
-    let audit_kinds = sqlx::query_scalar::<_, String>(
-        "SELECT event_kind FROM identity_lifecycle_audit WHERE principal_user_id = 'delivery_user' ORDER BY id",
+    let audit_rows = sqlx::query_as::<_, (String, String)>(
+        "SELECT event_kind, actor_user_id FROM identity_lifecycle_audit WHERE principal_user_id = 'delivery_user' ORDER BY id",
     )
     .fetch_all(&pool)
     .await
     .unwrap();
     assert_eq!(
-        audit_kinds,
+        audit_rows,
         vec![
-            "account_created".to_string(),
-            "auth_delivery_queued".to_string(),
-            "auth_delivery_delivered".to_string(),
-            "auth_delivery_retried".to_string(),
+            ("account_created".to_string(), "admin_a".to_string()),
+            (
+                "auth_delivery_queued".to_string(),
+                "delivery_user".to_string()
+            ),
+            (
+                "auth_delivery_delivered".to_string(),
+                "delivery_user".to_string()
+            ),
+            ("auth_delivery_retried".to_string(), "admin_a".to_string()),
         ]
     );
 }
