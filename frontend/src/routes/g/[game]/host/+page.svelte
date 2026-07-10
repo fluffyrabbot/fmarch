@@ -11,6 +11,7 @@
   import HostControlSurface from "$lib/components/host-action/HostControlSurface.svelte";
   import HostLifecycleControlCheckpoint from "$lib/components/host-action/HostLifecycleControlCheckpoint.svelte";
   import HostOperationsStrip from "$lib/components/host-action/HostOperationsStrip.svelte";
+  import HostPromptResolutionHistory from "$lib/components/host-action/HostPromptResolutionHistory.svelte";
   import HostPhaseSummary from "$lib/components/host-action/HostPhaseSummary.svelte";
   import HostVotecountPanel from "$lib/components/host-action/HostVotecountPanel.svelte";
   import HostWorkQueueStrip from "$lib/components/host-action/HostWorkQueueStrip.svelte";
@@ -291,6 +292,8 @@
       commandContext={data.commandContext}
       onDispatch={handleDispatch}
     />
+
+    <HostPromptResolutionHistory {hostPrompts} />
 
     <HostVotecountPanel
       boundary={data.votecountBoundary}

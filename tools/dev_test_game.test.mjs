@@ -990,6 +990,8 @@ test("HostDecides browser proof has a standalone artifact contract", () => {
     targetAfterDecision: { actorAlive: false },
     hostOutcomePanel:
       "D01 Lynch\nSlot 2 was eliminated by official vote.\nHostDecides selected Slot 2 after the tied vote.",
+    hostPromptHistory:
+      "Host prompt history\nResolved prompt outcomes\nD01 official elimination\nSlot 2 selected after host decision",
     targetOutcomePanel:
       "D01 Lynch\nSlot 2 was eliminated by official vote.\nHostDecides selected Slot 2 after the tied vote.",
   };
@@ -12434,6 +12436,8 @@ test("session card and markdown include role credential URLs and tokens", async 
             phase: { id: "N03", locked: false },
             phaseActionsAfterReload: ["lock_thread", "resolve_phase"],
             promptActionsAfterReload: [],
+            resolutionHistoryText:
+              "Resolved prompt outcomes\nD03R2 -> N03\nNo majority no lynch recorded",
             apiPromptsAfterReload: [
               { prompt_id: "D03:revote:NoMajority", status: "resolved" },
               { prompt_id: "D03R1:revote:NoMajority", status: "resolved" },

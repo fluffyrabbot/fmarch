@@ -7955,6 +7955,9 @@ function buildCoreLoopSpineSummary({ session, verification }) {
                   (prompt.id ?? prompt.prompt_id) ===
                   d02VoteNight.d03R2RevotePrompt?.id,
               )?.status ?? null,
+          resolutionHistoryText:
+            d02VoteNight.d03R2StaleContinuePolicyRecovery
+              ?.staleHostPromptReloadAfterReject?.resolutionHistoryText ?? null,
         },
       ],
     },
@@ -8493,6 +8496,12 @@ function buildCoreLoopSpineSummary({ session, verification }) {
     cycles[2]?.checkpoints?.[12]?.reloadResolveControlVisible === true &&
     cycles[2]?.checkpoints?.[12]?.reloadStaleActionVisible === false &&
     cycles[2]?.checkpoints?.[12]?.apiPromptStatusAfterReload === "resolved" &&
+    String(cycles[2]?.checkpoints?.[12]?.resolutionHistoryText ?? "").includes(
+      "D03R2 -> N03",
+    ) &&
+    String(cycles[2]?.checkpoints?.[12]?.resolutionHistoryText ?? "").includes(
+      "No majority no lynch recorded",
+    ) &&
     cycles[3]?.id === "d03-n03" &&
     cycles[3]?.game === cycles[2]?.game &&
     cycles[3]?.roleUrls?.host === cycles[2]?.roleUrls?.host &&

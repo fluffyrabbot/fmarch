@@ -3658,6 +3658,9 @@ async function verifySeededHostDecidesTie({
     const hostOutcomePanel = await hostProofPage
       .getByTestId("host-day-vote-outcome-latest")
       .innerText();
+    const hostPromptHistory = await hostProofPage
+      .getByTestId("host-prompt-resolution-history")
+      .innerText();
     const targetOutcomePanel = await targetProofPage
       .getByTestId("player-day-vote-outcome-latest")
       .innerText();
@@ -3686,6 +3689,8 @@ async function verifySeededHostDecidesTie({
       ) ||
       targetAfterDecision?.actorAlive !== false ||
       !hostOutcomePanel.includes("HostDecides selected Slot 2") ||
+      !hostPromptHistory.includes("D01 official elimination") ||
+      !hostPromptHistory.includes("Slot 2 selected after host decision") ||
       !targetOutcomePanel.includes("HostDecides selected Slot 2")
     ) {
       throw new Error(
@@ -3703,6 +3708,7 @@ async function verifySeededHostDecidesTie({
           targetCommandStateAfterDecision,
           targetAfterDecision,
           hostOutcomePanel,
+          hostPromptHistory,
           targetOutcomePanel,
         })}`,
       );
@@ -3730,6 +3736,7 @@ async function verifySeededHostDecidesTie({
       targetBeforeDecision,
       targetAfterDecision,
       hostOutcomePanel,
+      hostPromptHistory,
       targetOutcomePanel,
       proof:
         "A disposable EpicMafia game used four player role URLs to cast a 2-2 plurality tie, the host role URL resolved D01 into a durable HostDecides PK prompt with one explicit control per contender, selected Slot 2, and both host plus selected-player surfaces rendered the finalized official Lynch outcome and HostDecides reason while the selected player converged from alive to dead.",
@@ -5970,6 +5977,10 @@ async function verifySeededD02VoteNightTransition({
           targetPhaseId: "N03",
           reason: "no_majority_no_lynch",
         },
+        expectedHistoryFragments: [
+          "D03R2 -> N03",
+          "No majority no lynch recorded",
+        ],
       });
 
     assertRevoteProgressionBrowserProof({
@@ -10046,6 +10057,7 @@ async function verifyStaleHostPromptRecovery({
         reason: "skip_next_day",
         skippedPhaseId: "D02",
       },
+      expectedHistoryFragments: ["D01 -> N02", "Skip next day recorded"],
     });
     return {
       status: "passed",
@@ -10673,6 +10685,7 @@ async function prepareStaleHostPromptRecovery({
         apiBaseUrl,
         expectedReloadPhase,
         expectedPublicResolution,
+        expectedHistoryFragments,
       } = {}) =>
         submitStaleHostPromptRecovery({
           stalePromptPage,
@@ -10685,6 +10698,7 @@ async function prepareStaleHostPromptRecovery({
           promptId,
           expectedReloadPhase,
           expectedPublicResolution,
+          expectedHistoryFragments,
         }),
       close: async () => {
         await stalePromptPage.close().catch(() => {});
@@ -10756,6 +10770,7 @@ async function submitStaleHostPromptRecovery({
   promptId,
   expectedReloadPhase,
   expectedPublicResolution,
+  expectedHistoryFragments,
 }) {
   const action = await confirmHostAction(stalePromptPage, actionId, "reject");
   await stalePromptPage
@@ -10837,6 +10852,9 @@ async function submitStaleHostPromptRecovery({
     stalePromptPage,
     "host-prompts",
   );
+  const resolutionHistoryText = await stalePromptPage
+    .getByTestId("host-prompt-resolution-history")
+    .innerText();
   const apiPromptsAfterReload = await fetchJson(
     `${apiBaseUrl}/games/${promptGame}/host-prompts?principal_user_id=host_h`,
   );
@@ -10849,6 +10867,7 @@ async function submitStaleHostPromptRecovery({
     phase: phaseAfterReload,
     phaseActionsAfterReload,
     promptActionsAfterReload,
+    resolutionHistoryText,
     apiPromptsAfterReload,
   };
   if (
@@ -10905,6 +10924,10 @@ async function submitStaleHostPromptRecovery({
           ),
           expectedPublicResolution,
         ))) ||
+    (expectedHistoryFragments !== undefined &&
+      !expectedHistoryFragments.every((fragment) =>
+        staleHostPromptReloadAfterReject.resolutionHistoryText.includes(fragment),
+      )) ||
     (expectedReloadPhase !== undefined &&
       ((staleHostPromptReloadAfterReject.phase?.id ??
         staleHostPromptReloadAfterReject.phase?.phase_id) !==
