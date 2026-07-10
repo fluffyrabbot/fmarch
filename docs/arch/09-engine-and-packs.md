@@ -960,10 +960,12 @@ with a minimum effective threshold of `1.0`. The mafiascum pack uses this for `l
 per-candidate thresholds used for dispute/audit. The pack linter rejects threshold
 adjustments on plurality vote methods because plurality has no threshold to modify.
 
-The vote policy validator now rejects malformed supermajority ratios, supermajorities that
+The vote policy validator rejects malformed supermajority ratios, supermajorities that
 are not stricter than simple majority, hammer enabled on plurality, empty or invalid
-`PerRole` weight tables, malformed dynamic effect weight policies, and `EarliestReached` tie
-breaking until the resolver implements that policy. `HostDecides`
+`PerRole` weight tables, and malformed dynamic effect weight policies. `EarliestReached`
+resolves a tied final tally to the contender that first reached that final tally in the
+resolver's deterministic `(submitted_at, action_id)` ballot order; later ballot changes and
+withdrawals contribute their resulting effective tallies. `HostDecides`
 ties are valid only when a `Tie` `day_vote_prompt_policy` has a matching `SelectSlot` /
 `PkKill` `host_prompt_resolution_effect`, so host-decided day ties always have an executable
 follow-up path. `NoElimination` and seeded `Random` are resolver-owned tie policies.

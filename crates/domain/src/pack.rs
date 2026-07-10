@@ -10718,12 +10718,9 @@ fn validate_vote_policy(
     }
 
     match policy.tie_breaker {
-        VoteTieBreaker::NoElimination | VoteTieBreaker::Random => {}
-        VoteTieBreaker::EarliestReached => issue(
-            issues,
-            "vote.tie_breaker",
-            "EarliestReached vote tie breaker is not implemented by the resolver yet",
-        ),
+        VoteTieBreaker::NoElimination
+        | VoteTieBreaker::Random
+        | VoteTieBreaker::EarliestReached => {}
         VoteTieBreaker::HostDecides => {
             validate_host_decided_vote_tie(issues, prompt_policies, prompt_effects)
         }

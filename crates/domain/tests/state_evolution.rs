@@ -1724,6 +1724,34 @@ fn day_vote_policy_matrix_covers_methods_and_tie_breakers() {
     assert_eq!(no_elimination.contenders, vec!["slot_2", "slot_3"]);
     assert_eq!(no_elimination.tiebreak.as_deref(), Some("NoElimination"));
 
+    let mut earliest_reached_pack = base_pack.clone();
+    earliest_reached_pack.vote.method = VoteMethod::Plurality;
+    earliest_reached_pack.vote.tie_breaker = VoteTieBreaker::EarliestReached;
+    // `earliest_a` must win the same-timestamp ordering despite appearing second.
+    let mut withdraw_slot_3 = vote("earliest_d", "slot_3", "slot_2", 3);
+    withdraw_slot_3.withdrawn = true;
+    let earliest_reached = resolve_outcome(
+        earliest_reached_pack,
+        vec![
+            vote("earliest_b", "slot_2", "slot_3", 1),
+            vote("earliest_a", "slot_1", "slot_2", 1),
+            vote("earliest_c", "slot_3", "slot_2", 2),
+            withdraw_slot_3,
+        ],
+        46,
+        "earliest-reached",
+    );
+    assert_eq!(earliest_reached.status, VoteStatus::Lynch);
+    assert_eq!(earliest_reached.winner.as_deref(), Some("slot_2"));
+    assert_eq!(
+        earliest_reached.tiebreak.as_deref(),
+        Some("EarliestReached")
+    );
+    assert_eq!(
+        earliest_reached.reason.as_deref(),
+        Some("earliest reached final tally selected slot_2")
+    );
+
     let mut host_decides_pack = base_pack.clone();
     host_decides_pack.vote.method = VoteMethod::Plurality;
     host_decides_pack.vote.tie_breaker = VoteTieBreaker::HostDecides;

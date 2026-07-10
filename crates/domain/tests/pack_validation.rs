@@ -7369,12 +7369,7 @@ fn vote_policy_combinations_are_strict() {
 
     let mut value = valid_pack_value();
     value["vote"]["tie_breaker"] = json!("EarliestReached");
-    let err = validate_pack(&pack_from_value(value)).unwrap_err();
-    assert_issue(
-        &err,
-        "vote.tie_breaker",
-        "EarliestReached vote tie breaker is not implemented",
-    );
+    validate_pack(&pack_from_value(value)).unwrap();
 
     let mut value = valid_pack_value();
     value["phases"]["cadence"] = json!(["Night"]);

@@ -9155,6 +9155,7 @@ fn resolve_day(input: &ResolutionInput) -> InnerResolution {
     }
 
     let mut votes: BTreeMap<SlotId, SlotId> = BTreeMap::new();
+    let mut tally_history: Vec<BTreeMap<SlotId, f64>> = Vec::new();
     let mut hammer_reached = false;
     let mut ordered: Vec<&Submission> = input
         .submissions
@@ -9177,37 +9178,37 @@ fn resolve_day(input: &ResolutionInput) -> InnerResolution {
     for sub in &ordered {
         if sub.withdrawn {
             votes.remove(&sub.actor);
-            continue;
-        }
-        if !weights.contains_key(&sub.actor) {
-            continue;
-        }
-        if let Some(target) = sub.targets.first() {
-            if valid_vote_targets.contains(target.as_str()) {
-                votes.insert(sub.actor.clone(), target.clone());
-                if policy.hammer {
-                    let mut hammer_votes = votes.clone();
-                    if let Some(duel) = &vote_duel {
-                        hammer_votes.retain(|_, target| duel.contains(target));
-                    }
-                    let hammer_tallies = tally_votes(&hammer_votes, &weights);
-                    let threshold = majority.and_then(|base| {
-                        if target == NO_LYNCH_TARGET {
-                            Some(base)
-                        } else {
-                            thresholds.get(target).copied().or(Some(base))
+        } else if weights.contains_key(&sub.actor) {
+            if let Some(target) = sub.targets.first() {
+                if valid_vote_targets.contains(target.as_str()) {
+                    votes.insert(sub.actor.clone(), target.clone());
+                    if policy.hammer {
+                        let mut hammer_votes = votes.clone();
+                        if let Some(duel) = &vote_duel {
+                            hammer_votes.retain(|_, target| duel.contains(target));
                         }
-                    });
-                    if let Some(threshold) = threshold {
-                        let tally = hammer_tallies.get(target).copied().unwrap_or(0.0);
-                        if tally >= threshold {
-                            votes = hammer_votes;
-                            hammer_reached = true;
-                            break;
+                        let hammer_tallies = tally_votes(&hammer_votes, &weights);
+                        let threshold = majority.and_then(|base| {
+                            if target == NO_LYNCH_TARGET {
+                                Some(base)
+                            } else {
+                                thresholds.get(target).copied().or(Some(base))
+                            }
+                        });
+                        if let Some(threshold) = threshold {
+                            let tally = hammer_tallies.get(target).copied().unwrap_or(0.0);
+                            if tally >= threshold {
+                                votes = hammer_votes;
+                                hammer_reached = true;
+                            }
                         }
                     }
                 }
             }
+        }
+        tally_history.push(tally_votes(&votes, &weights));
+        if hammer_reached {
+            break;
         }
     }
     if !hammer_reached {
@@ -9252,6 +9253,7 @@ fn resolve_day(input: &ResolutionInput) -> InnerResolution {
     };
     let role_tiebreaker_winner =
         role_tiebreaker_winner(&vote_state, &contenders, &policy.tiebreaker_roles);
+    let earliest_reached_winner = earliest_reached_winner(&tally_history, &contenders, max_tally);
 
     let (status, winner, contenders, tiebreak, reason) = decide_outcome(
         &tallies,
@@ -9261,6 +9263,7 @@ fn resolve_day(input: &ResolutionInput) -> InnerResolution {
         &thresholds,
         tie_breaker,
         role_tiebreaker_winner,
+        earliest_reached_winner,
         input.seed,
         NO_LYNCH_TARGET,
         duel_forced_elimination,
@@ -11730,6 +11733,22 @@ fn role_tiebreaker_winner(
     })
 }
 
+fn earliest_reached_winner(
+    tally_history: &[BTreeMap<SlotId, f64>],
+    contenders: &[SlotId],
+    final_tally: f64,
+) -> Option<SlotId> {
+    // History follows the resolver's deterministic (submitted_at, action_id) order.
+    tally_history.iter().find_map(|tallies| {
+        contenders.iter().find_map(|contender| {
+            (tallies
+                .get(contender)
+                .is_some_and(|tally| (*tally - final_tally).abs() < f64::EPSILON))
+            .then(|| contender.clone())
+        })
+    })
+}
+
 fn decide_outcome(
     tallies: &BTreeMap<SlotId, f64>,
     top_contenders: &[SlotId],
@@ -11738,6 +11757,7 @@ fn decide_outcome(
     thresholds: &BTreeMap<SlotId, f64>,
     tie_breaker: VoteTieBreaker,
     role_tiebreaker_winner: Option<SlotId>,
+    earliest_reached_winner: Option<SlotId>,
     seed: Seed,
     no_lynch_target: &str,
     force_top_contenders: bool,
@@ -11831,14 +11851,27 @@ fn decide_outcome(
                 )),
             )
         }
-        // Other tie-breakers are typed but not exercised by the v1 goldens.
-        VoteTieBreaker::EarliestReached => (
-            VoteStatus::Tie,
-            None,
-            contenders,
-            Some("EarliestReached".to_string()),
-            None,
-        ),
+        VoteTieBreaker::EarliestReached => {
+            let winner = earliest_reached_winner.unwrap_or_else(|| {
+                contenders
+                    .first()
+                    .expect("tied contenders must include an earliest fallback")
+                    .clone()
+            });
+            let status = if winner == no_lynch_target {
+                VoteStatus::NoLynch
+            } else {
+                VoteStatus::Lynch
+            };
+            let eliminated = (status == VoteStatus::Lynch).then_some(winner.clone());
+            (
+                status,
+                eliminated,
+                contenders,
+                Some("EarliestReached".to_string()),
+                Some(format!("earliest reached final tally selected {winner}")),
+            )
+        }
         VoteTieBreaker::HostDecides => (
             VoteStatus::Tie,
             None,

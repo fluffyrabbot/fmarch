@@ -369,7 +369,7 @@ The only identity that crosses into the engine is `SlotId`.
 - [x] Encode vote policy: majority, plurality, supermajority, hammer, no-lynch, self-vote, weighted voting, dynamic vote modifiers, and tie-break semantics. [proven:
   `validate_pack` now rejects malformed and non-super supermajority ratios,
   hammer on plurality, threshold modifiers on plurality, empty/invalid `PerRole` vote-weight
-  maps, malformed `Dynamic` effect weight policies, unsupported `EarliestReached` ties, and `HostDecides`
+  maps, malformed `Dynamic` effect weight policies, and `HostDecides`
   ties without a matching `Tie` prompt plus `SelectSlot`/`PkKill` resolution effect; shipped
   packs validate under these stricter rules; pure resolver test
   `no_lynch_votes_produce_no_lynch_outcome_without_death` proves pack-allowed `no_lynch` is an
