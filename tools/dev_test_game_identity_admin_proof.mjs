@@ -24,6 +24,7 @@ const evidencePath = path.join(repoRoot, devTestGameIdentityAdminProofPath);
 const requiredChecks = [
   "account-login",
   "account-lifecycle",
+  "local-delivery",
   "account-registration",
   "credential-attempt-throttling",
   "session-rotation",

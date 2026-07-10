@@ -434,24 +434,18 @@
       "order": 60,
       "title": "Invite and recovery delivery adapters",
       "execution_class": "code",
-      "status": "open",
-      "summary": "Invite and recovery credentials exist, but durable delivery-provider adapters, retry state, bounce/failure handling, and operator visibility are not implemented.",
+      "status": "complete",
+      "summary": "Invite and recovery issuance persists redacted typed delivery intents before a deterministic local adapter runs; the scratch-Postgres Chromium lane proves both credential kinds through forced first-attempt failure, declared backoff, GlobalAdmin retry, audit visibility, and the unchanged capability-derived role URL.",
       "complete_when": ["Invite and recovery delivery are provider-abstracted, retryable, auditable, redacted, and locally testable without claiming live provider traffic."],
       "depends_on": ["product.identity.account-login-invites", "product.identity.recovery"],
       "evidence": [
-        { "kind": "source", "value": "docs/arch/06-security.md" }
+        { "kind": "source", "value": "docs/arch/06-security.md" },
+        { "kind": "source", "value": "crates/api/src/lib.rs" },
+        { "kind": "source", "value": "crates/projections/migrations/0039_auth_delivery_intent.sql" },
+        { "kind": "command", "value": "npm run test:dev-test-game-identity:local" },
+        { "kind": "artifact", "value": "target/auth-invite-role-proof/invite-role-proof.json" }
       ],
-      "remaining": ["Implement delivery interfaces, queue/retry state, redacted operator audit, and local provider fakes." ],
-      "recommended_slice": {
-        "objective": "Add a local durable delivery outbox for invite and recovery messages: persist a typed delivery intent, provide deterministic local adapter outcomes with retry/backoff state, expose redacted operator audit rows, and prove a seeded role URL can follow the generated local delivery artifact without changing the capability adapter.",
-        "paths": ["crates/api/", "crates/projections/migrations/", "frontend/src/routes/auth/", "tools/auth_invite_role_proof.mjs", "docs/arch/06-security.md"],
-        "proof_commands": ["npm run test:frontend-contract", "npm run test:dev-test-game-identity:local", "npm run test:completeness-scorecard"],
-        "non_claims": [
-          "No real email, SMS, or third-party provider traffic claim.",
-          "No hosted delivery availability, bounce handling, or operator SLA claim.",
-          "No release or production-readiness promotion from local delivery proof."
-        ]
-      }
+      "remaining": []
     },
     {
       "id": "product.community.game-index",
@@ -467,7 +461,17 @@
         { "kind": "source", "value": "frontend/src/routes/+page.svelte" },
         { "kind": "source", "value": "docs/arch/02-event-sourcing.md" }
       ],
-      "remaining": ["Build the game-index projection/query and replace the board shell with its real paginated surface." ]
+      "remaining": ["Build the game-index projection/query and replace the board shell with its real paginated surface." ],
+      "recommended_slice": {
+        "objective": "Build the first public game-index vertical slice: add a durable capability-safe projection and paginated API query for active and completed games, replace the root board shell with the real index, and prove empty, active, completed, pagination, reload, and non-leakage states through the local browser lane.",
+        "paths": ["crates/projections/", "crates/api/", "frontend/src/routes/+page.server.js", "frontend/src/routes/+page.svelte", "tools/", "docs/arch/02-event-sourcing.md"],
+        "proof_commands": ["DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p projections -p api game_index -- --test-threads=1", "npm run test:frontend-contract", "npm run test:completeness-scorecard"],
+        "non_claims": [
+          "No non-game discussion, profile, search, ranking, or recommendation claim.",
+          "No hosted scale, cache, SEO, or public availability claim.",
+          "No release or production-readiness promotion from local index proof."
+        ]
+      }
     },
     {
       "id": "product.community.discussions",

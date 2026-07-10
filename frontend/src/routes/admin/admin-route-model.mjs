@@ -9412,6 +9412,7 @@ export function normalizeLocalIdentityAdapterAudit(identityAdapterProof, { game 
       "account-registration",
       identityAdapterProof.identityLifecycle?.accountRegistration?.status,
     ],
+    ["local-delivery", identityAdapterProof.identityLifecycle?.localDelivery?.status],
     ["session-rotation", identityAdapterProof.identityLifecycle?.sessionRotation?.status],
     [
       "session-age-rotation",

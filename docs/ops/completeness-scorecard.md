@@ -17,7 +17,7 @@ count is treated as product progress.
 
 | Execution class | Complete | Partial | Open | Blocked | Deferred | Total |
 |---|---:|---:|---:|---:|---:|---:|
-| code | 22 | 2 | 4 | 0 | 0 | 28 |
+| code | 23 | 2 | 3 | 0 | 0 | 28 |
 | external-evidence | 0 | 0 | 0 | 6 | 0 | 6 |
 | human | 0 | 0 | 1 | 1 | 0 | 2 |
 | optional | 0 | 0 | 0 | 0 | 1 | 1 |
@@ -28,23 +28,23 @@ Overall release closure complete: **no**.
 
 ## Next buildable coding slice
 
-### Invite and recovery delivery adapters `product.identity.delivery`
+### Public game index `product.community.game-index`
 
-Add a local durable delivery outbox for invite and recovery messages: persist a typed delivery intent, provide deterministic local adapter outcomes with retry/backoff state, expose redacted operator audit rows, and prove a seeded role URL can follow the generated local delivery artifact without changing the capability adapter.
+Build the first public game-index vertical slice: add a durable capability-safe projection and paginated API query for active and completed games, replace the root board shell with the real index, and prove empty, active, completed, pagination, reload, and non-leakage states through the local browser lane.
 
-Owned paths: `crates/api/`, `crates/projections/migrations/`, `frontend/src/routes/auth/`, `tools/auth_invite_role_proof.mjs`, `docs/arch/06-security.md`.
+Owned paths: `crates/projections/`, `crates/api/`, `frontend/src/routes/+page.server.js`, `frontend/src/routes/+page.svelte`, `tools/`, `docs/arch/02-event-sourcing.md`.
 
 Proof:
 
+- `DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p projections -p api game_index -- --test-threads=1`
 - `npm run test:frontend-contract`
-- `npm run test:dev-test-game-identity:local`
 - `npm run test:completeness-scorecard`
 
 Explicit non-claims:
 
-- No real email, SMS, or third-party provider traffic claim.
-- No hosted delivery availability, bounce handling, or operator SLA claim.
-- No release or production-readiness promotion from local delivery proof.
+- No non-game discussion, profile, search, ranking, or recommendation claim.
+- No hosted scale, cache, SEO, or public availability claim.
+- No release or production-readiness promotion from local index proof.
 
 ## Locally proven foundation
 
@@ -92,7 +92,7 @@ Explicit non-claims:
 | complete | Single-use account recovery<br>`product.identity.recovery` | `product.identity.password-security` | Only one valid recovery credential can replace a password and all invalid, expired, revoked, or replayed credentials fail safely. | Complete. | source: `frontend/src/routes/auth/account/recovery/+page.server.js`<br>command: `npm run test:dev-test-game-identity:local`<br>Recovery credentials support issue, revoke, consume, expiry, replay rejection, password replacement, and session revocation in the local identity proof. |
 | complete | Complete session lifecycle<br>`product.identity.session-lifecycle` | `product.identity.account-login-invites`<br>`product.identity.recovery` | Login, logout, privilege change, password change, recovery, disablement, expiry, and periodic rotation each enforce the declared session transition. | Complete. | source: `docs/arch/06-security.md`<br>source: `crates/api/src/lib.rs`<br>command: `npm run test:dev-test-game-identity:local`<br>artifact: `target/auth-invite-role-proof/invite-role-proof.json`<br>Opaque login, atomic rotation, authenticated logout, password/recovery/disablement invalidation, expiry, and reauthentication preserve the local capability-derived role surfaces and are proven through the scratch-Postgres Chromium identity lane. |
 | complete | Account registration<br>`product.identity.registration` | `product.identity.password-security`<br>`product.identity.session-lifecycle` | A bounded registration route creates an unprivileged account and opaque session, preserves the capability-derived role surface, and rejects duplicate or source-quota attempts with browser-visible recovery. | Complete. | source: `docs/arch/06-security.md`<br>source: `crates/api/src/lib.rs`<br>command: `npm run test:dev-test-game-identity:local`<br>artifact: `target/auth-invite-role-proof/invite-role-proof.json`<br>The local registration role URL validates an email-style identifier and password, atomically creates a server-generated unprivileged principal plus opaque session, reaches the seeded game URL in its explicit pending-authority state, and shows duplicate/rate-limit recovery without leaking credentials. |
-| open | Invite and recovery delivery adapters<br>`product.identity.delivery` | `product.identity.account-login-invites`<br>`product.identity.recovery` | Invite and recovery delivery are provider-abstracted, retryable, auditable, redacted, and locally testable without claiming live provider traffic. | Remaining: Implement delivery interfaces, queue/retry state, redacted operator audit, and local provider fakes. | source: `docs/arch/06-security.md`<br>Invite and recovery credentials exist, but durable delivery-provider adapters, retry state, bounce/failure handling, and operator visibility are not implemented. |
+| complete | Invite and recovery delivery adapters<br>`product.identity.delivery` | `product.identity.account-login-invites`<br>`product.identity.recovery` | Invite and recovery delivery are provider-abstracted, retryable, auditable, redacted, and locally testable without claiming live provider traffic. | Complete. | source: `docs/arch/06-security.md`<br>source: `crates/api/src/lib.rs`<br>source: `crates/projections/migrations/0039_auth_delivery_intent.sql`<br>command: `npm run test:dev-test-game-identity:local`<br>artifact: `target/auth-invite-role-proof/invite-role-proof.json`<br>Invite and recovery issuance persists redacted typed delivery intents before a deterministic local adapter runs; the scratch-Postgres Chromium lane proves both credential kinds through forced first-attempt failure, declared backoff, GlobalAdmin retry, audit visibility, and the unchanged capability-derived role URL. |
 
 ## Community and forum surface
 

@@ -20841,6 +20841,13 @@ function identityAdapterProofFixture(game) {
       devTestGameIdentityAdapterContractDiff(identityAdapterContract),
     identityLifecycle: {
       status: "passed",
+      localDelivery: {
+        status: "passed",
+        adapter: "local-deterministic",
+        invite: { deliveryKind: "invite", status: "delivered", attemptCount: 2 },
+        recovery: { deliveryKind: "recovery", status: "delivered", attemptCount: 2 },
+        rawCredentialsStored: false,
+      },
       accountRegistration: {
         status: "passed",
         registrationRoleUrl:
@@ -22623,6 +22630,7 @@ function identityAdminProofFixture() {
       visibleChecks: [
         "account-login",
         "account-lifecycle",
+        "local-delivery",
         "account-registration",
         "credential-attempt-throttling",
         "session-rotation",

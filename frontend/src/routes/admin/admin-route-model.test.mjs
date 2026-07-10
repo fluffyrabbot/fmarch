@@ -7448,6 +7448,7 @@ test("admin route data exposes local identity adapter proof as a native audit ro
       "credential-attempt-throttling",
       "account-lifecycle",
       "account-registration",
+      "local-delivery",
       "session-rotation",
       "session-age-rotation",
       "session-logout",
@@ -7649,7 +7650,7 @@ test("admin local identity adapter detail data carries lifecycle checks and role
   assert.equal(data.status, "available");
   assert.equal(data.surfaceHeader.title, "Local identity adapter");
   assert.equal(data.audit.id, localAdminAuditIds.identityAdapter);
-  assert.equal(data.audit.checks.length, 14);
+  assert.equal(data.audit.checks.length, 15);
   assert.equal(data.audit.sessions.length, 3);
   assert.deepEqual(
     data.audit.checks.map((check) => [check.id, check.status]),
@@ -7660,6 +7661,7 @@ test("admin local identity adapter detail data carries lifecycle checks and role
       ["credential-attempt-throttling", "passed"],
       ["account-lifecycle", "passed"],
       ["account-registration", "passed"],
+      ["local-delivery", "passed"],
       ["session-rotation", "passed"],
       ["session-age-rotation", "passed"],
       ["session-logout", "passed"],
@@ -13171,6 +13173,9 @@ function identityAdapterProofFixture() {
       devTestGameIdentityAdapterContractDiff(identityAdapterContract),
     identityLifecycle: {
       status: "passed",
+      localDelivery: {
+        status: "passed",
+      },
       accountRegistration: {
         status: "passed",
         registrationRoleUrl:

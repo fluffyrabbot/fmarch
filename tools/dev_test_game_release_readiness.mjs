@@ -6251,6 +6251,15 @@ export function validateDevTestGameIdentityAdapterProof(proof, options = {}) {
   assertDevTestGameIdentityAdapterContractPacket(proof.identityAdapterContract);
   if (
     proof.identityLifecycle?.status !== "passed" ||
+    proof.identityLifecycle?.localDelivery?.status !== "passed" ||
+    proof.identityLifecycle?.localDelivery?.adapter !== "local-deterministic" ||
+    proof.identityLifecycle?.localDelivery?.invite?.deliveryKind !== "invite" ||
+    proof.identityLifecycle?.localDelivery?.invite?.status !== "delivered" ||
+    proof.identityLifecycle?.localDelivery?.invite?.attemptCount !== 2 ||
+    proof.identityLifecycle?.localDelivery?.recovery?.deliveryKind !== "recovery" ||
+    proof.identityLifecycle?.localDelivery?.recovery?.status !== "delivered" ||
+    proof.identityLifecycle?.localDelivery?.recovery?.attemptCount !== 2 ||
+    proof.identityLifecycle?.localDelivery?.rawCredentialsStored !== false ||
     proof.identityLifecycle?.accountRegistration?.status !== "passed" ||
     proof.identityLifecycle?.accountRegistration?.registrationSurfaceTestId !==
       "auth-registration-surface" ||
@@ -6574,6 +6583,7 @@ export function validateDevTestGameIdentityAdminProof(proof, options = {}) {
   const requiredChecks = [
     "account-login",
     "account-lifecycle",
+    "local-delivery",
     "account-registration",
     "credential-attempt-throttling",
     "session-rotation",
