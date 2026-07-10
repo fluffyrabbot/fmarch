@@ -559,7 +559,7 @@ Inventory source: `docs/arch/im-human-engine-inventory.json`.
 | role_id | `mafiascum:universal_backup` | `universal_backup` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafiascum:vanilla_cop` | `vanilla_cop` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafiascum:vanillaiser` | `vanillaiser` | 1 | no | yes | yes | yes | yes |  |
-| role_id | `mafiascum:vanillizer` | `vanillizer` | 1 | no | yes | yes | no | yes |  |
+| role_id | `mafiascum:vanillizer` | `vanillizer` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafiascum:vengeful` | `vengeful` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafiascum:vigilante` | `vigilante` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafiascum:virgin` | `beloved_princess_policy` | 1 | no | yes | yes | yes | yes | im-human Virgin is an alias of Beloved Princess with public phase_skip_trigger on death; fmarch models it as a town passive role included in beloved_princess_policy with all_death_causes and host prompt/projection coverage. |

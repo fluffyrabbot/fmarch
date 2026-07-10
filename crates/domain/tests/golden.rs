@@ -4928,9 +4928,14 @@ fn trace_records_disloyal_action_suppression() {
 
 #[test]
 fn golden_vanillaize_mutates_role() {
-    let golden = load_golden("vanillaize_mutates_role.json");
-    let got = run(&golden["input"], load_pack());
-    assert_events_eq(&got, &expected_events(&golden), "vanillaize_mutates_role");
+    for fixture in [
+        "vanillaize_mutates_role.json",
+        "vanillizer_mutates_role.json",
+    ] {
+        let golden = load_golden(fixture);
+        let got = run(&golden["input"], load_pack());
+        assert_events_eq(&got, &expected_events(&golden), fixture);
+    }
 }
 
 #[test]

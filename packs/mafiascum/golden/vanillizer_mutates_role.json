@@ -1,0 +1,86 @@
+{
+  "description": "Vanillizer mutates a Cop into a Vanilla Townie through Convert::AssignRole while recording the Cop as the original role for later restoration.",
+  "input": {
+    "game_id": "game_demo_vanillizer_001",
+    "phase_id": "N01",
+    "state": {
+      "phase_kind": "Night",
+      "phase_number": 1,
+      "phase_id": "N01",
+      "phase_deadline": null,
+      "phase_policy": {
+        "cadence": ["Day", "Night"],
+        "subsegments": {
+          "Day": ["sod", "main", "eod"]
+        },
+        "twilight": false
+      },
+      "slots": [
+        {
+          "slot_id": "slot_1",
+          "role_key": "vanillizer",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_2",
+          "role_key": "cop",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_3",
+          "role_key": "mafia_goon",
+          "alignment": "mafia",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_4",
+          "role_key": "vanilla_townie",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        }
+      ]
+    },
+    "submissions": [
+      {
+        "action_id": "sub_001",
+        "actor": "slot_1",
+        "template_id": "vanillaize",
+        "targets": ["slot_2"],
+        "phase_id": "N01",
+        "submitted_at": 1,
+        "withdrawn": false,
+        "metadata": {}
+      }
+    ],
+    "pack": "mafiascum",
+    "seed": 616167
+  },
+  "expected_events": [
+    {
+      "index": 0,
+      "kind": "PlayerConverted",
+      "payload": {
+        "target": "slot_2",
+        "new_role": "vanilla_townie",
+        "new_alignment": "town",
+        "original_role": "cop",
+        "original_alignment": "town",
+        "source": "slot_1"
+      }
+    },
+    {
+      "index": 1,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "phase_id": "N01",
+        "deaths": []
+      }
+    }
+  ]
+}

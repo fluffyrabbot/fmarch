@@ -36,6 +36,17 @@ class ImHumanEngineInventoryTests(unittest.TestCase):
             self.assertTrue(row["covered_by_golden"], primitive)
             self.assertTrue(row["integrated_command_projection"], primitive)
 
+        vanillizer = next(
+            row
+            for row in rows
+            if row["category"] == "role_id"
+            and row["item"] == "mafiascum:vanillizer"
+        )
+        self.assertTrue(vanillizer["modeled_in_pack"])
+        self.assertTrue(vanillizer["implemented_in_resolver"])
+        self.assertTrue(vanillizer["covered_by_golden"])
+        self.assertTrue(vanillizer["integrated_command_projection"])
+
 
 if __name__ == "__main__":
     unittest.main()
