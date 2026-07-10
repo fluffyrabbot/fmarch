@@ -79,6 +79,15 @@
         <AdminAuditDescriptorRows rows={data.audit.earliestReachedProofRows} />
       </section>
     {/if}
+    {#if data.audit.hostDecidesProofRows?.length > 0}
+      <section
+        class="admin-audit-detail__group"
+        data-testid="admin-audit-detail-host-decides-proof"
+      >
+        <h2>Host-decided vote proof</h2>
+        <AdminAuditDescriptorRows rows={data.audit.hostDecidesProofRows} />
+      </section>
+    {/if}
     {#if data.audit.commandProofRoleUrlAuditRows?.length > 0}
       <section
         class="admin-audit-detail__group"

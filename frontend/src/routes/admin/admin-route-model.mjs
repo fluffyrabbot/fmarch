@@ -2354,6 +2354,9 @@ function withAdminAuditDetailDisplayRows(item, { game }) {
   const earliestReachedProofRows = buildEarliestReachedProofRows(
     item.earliestReachedProof,
   );
+  const hostDecidesProofRows = buildHostDecidesProofRows(
+    item.hostDecidesProof,
+  );
   const commandProofRoleUrlAuditRows = buildCoreLoopCommandProofRoleUrlAuditRows(
     item.commandProofRoleUrlAudit,
   );
@@ -2408,6 +2411,9 @@ function withAdminAuditDetailDisplayRows(item, { game }) {
     ...(earliestReachedProofRows.length === 0
       ? {}
       : { earliestReachedProofRows }),
+    ...(hostDecidesProofRows.length === 0
+      ? {}
+      : { hostDecidesProofRows }),
     ...(commandProofRoleUrlAuditRows.length === 0
       ? {}
       : { commandProofRoleUrlAuditRows }),
@@ -2541,6 +2547,35 @@ function buildEarliestReachedProofRows(summary) {
           text: summary.hostRoleUrl,
           href: summary.hostRoleUrl,
           testId: "admin-audit-earliest-reached-host-role-url",
+        },
+        { id: "proofBoundary", text: summary.proofBoundary },
+      ],
+    }),
+  ]);
+}
+
+function buildHostDecidesProofRows(summary) {
+  if (summary === null || typeof summary !== "object") {
+    return Object.freeze([]);
+  }
+  return Object.freeze([
+    artifactSummaryRow({
+      id: "host-decides-proof",
+      testId: "admin-audit-host-decides-proof",
+      values: [
+        { id: "status", text: summary.status, emphasized: true },
+        { id: "pack", text: summary.pack },
+        { id: "tieBreaker", text: summary.tieBreaker },
+        { id: "tally", text: summary.tally },
+        { id: "prompt", text: summary.promptId },
+        { id: "choices", text: String(summary.contenderCount) },
+        { id: "selected", text: summary.selectedSlot },
+        { id: "targetTransition", text: summary.targetTransition },
+        {
+          id: "hostRoleUrl",
+          text: summary.hostRoleUrl,
+          href: summary.hostRoleUrl,
+          testId: "admin-audit-host-decides-host-role-url",
         },
         { id: "proofBoundary", text: summary.proofBoundary },
       ],
@@ -8720,6 +8755,25 @@ export function normalizeLocalCoreLoopAudit(proofRun, { game }) {
             "Seeded local-game browser proof only. It does not prove hosted deployment, production identity, release readiness, or production readiness.",
         })
       : null;
+  const hostDecides = proofRun.hostDecidesTie;
+  const hostDecidesProof =
+    hostDecides?.status === "passed"
+      ? Object.freeze({
+          status: "passed",
+          pack: String(hostDecides.pack ?? ""),
+          tieBreaker: String(hostDecides.tieBreaker ?? ""),
+          tally: `${Number(hostDecides.outcome?.tallies?.["slot-1"] ?? 0)}-${Number(hostDecides.outcome?.tallies?.["slot-2"] ?? 0)}`,
+          promptId: String(hostDecides.promptId ?? ""),
+          contenderCount: Array.isArray(hostDecides.promptActions)
+            ? hostDecides.promptActions.length
+            : 0,
+          selectedSlot: String(hostDecides.selectedSlot ?? ""),
+          targetTransition: `${String(hostDecides.targetBeforeDecision?.actorAlive)} -> ${String(hostDecides.targetAfterDecision?.actorAlive)}`,
+          hostRoleUrl: String(hostDecides.sourceRoleUrls?.host ?? ""),
+          proofBoundary:
+            "Seeded local-game browser proof only. It does not prove hosted deployment, production identity, release readiness, or production readiness.",
+        })
+      : null;
   return Object.freeze({
     id: localAdminAuditIds.coreLoop,
     label: "Local core loop",
@@ -8755,6 +8809,7 @@ export function normalizeLocalCoreLoopAudit(proofRun, { game }) {
     ),
     spineCycles: normalizeCoreLoopSpineCycles(proofRun),
     ...(earliestReachedProof === null ? {} : { earliestReachedProof }),
+    ...(hostDecidesProof === null ? {} : { hostDecidesProof }),
     spineRecoveryHooks: normalizeCoreLoopSpineRecoveryHooks(proofRun),
     scenarioFamilies: coreLoopScenarioFamilyRows(),
     commandProofRoleUrlAudit: coreLoopCommandProofRoleUrlAuditExpectation,
@@ -8885,6 +8940,38 @@ function normalizeCoreLoopSpineCycles(proofRun) {
             status: [
               `winner ${String(earliestReached.outcome?.winner_slot ?? "unknown")}`,
               `tiebreak ${String(earliestReached.outcome?.tiebreak ?? "unknown")}`,
+            ].join(", "),
+          }),
+        ]),
+      }),
+    );
+  }
+  const hostDecides = proofRun?.hostDecidesTie;
+  if (
+    hostDecides?.status === "passed" &&
+    typeof hostDecides?.sourceRoleUrls?.host === "string"
+  ) {
+    normalized.push(
+      Object.freeze({
+        id: "host-decides",
+        label: "Host decides",
+        game: String(hostDecides.game ?? ""),
+        status: "1 checkpoint",
+        roleUrls: Object.freeze([
+          Object.freeze({
+            id: "host",
+            label: "Host",
+            href: String(hostDecides.sourceRoleUrls.host),
+          }),
+        ]),
+        checkpoints: Object.freeze([
+          Object.freeze({
+            id: "d01-pk-resolved",
+            label: "D01 PK resolved",
+            status: [
+              `prompt ${String(hostDecides.promptId ?? "unknown")}`,
+              `selected ${String(hostDecides.selectedSlot ?? "unknown")}`,
+              `target alive ${String(hostDecides.targetAfterDecision?.actorAlive ?? "unknown")}`,
             ].join(", "),
           }),
         ]),

@@ -1896,6 +1896,19 @@ test("admin audit detail page renders earliest-reached proof rows from route dat
   );
 });
 
+test("admin audit detail page renders HostDecides proof rows from route data", async () => {
+  const source = await readFile(
+    "frontend/src/routes/admin/audit/[audit]/+page.svelte",
+    "utf8",
+  );
+  assert.match(source, /admin-audit-detail-host-decides-proof/);
+  assert.match(source, /Host-decided vote proof/);
+  assert.match(
+    source,
+    /AdminAuditDescriptorRows rows=\{data\.audit\.hostDecidesProofRows\}/,
+  );
+});
+
 test("admin audit detail page renders hosted handoff operator rows from route data", async () => {
   const source = await readFile(
     "frontend/src/routes/admin/audit/[audit]/+page.svelte",
@@ -5220,6 +5233,19 @@ test("admin route data exposes local core loop proof as a native audit row", asy
     proofBoundary:
       "Seeded local-game browser proof only. It does not prove hosted deployment, production identity, release readiness, or production readiness.",
   });
+  assert.deepEqual(coreLoop.hostDecidesProof, {
+    status: "passed",
+    pack: "epicmafia",
+    tieBreaker: "HostDecides",
+    tally: "2-2",
+    promptId: "D01:pk:Tie",
+    contenderCount: 2,
+    selectedSlot: "slot-2",
+    targetTransition: "true -> false",
+    hostRoleUrl: "http://127.0.0.1:5173/g/game-host-decides/host",
+    proofBoundary:
+      "Seeded local-game browser proof only. It does not prove hosted deployment, production identity, release readiness, or production readiness.",
+  });
   assert.equal(coreLoop.inspectHref, localAdminAuditRoleUrl(localAdminAuditIds.coreLoop, { game: "midsummer" }));
   assert.deepEqual(
     coreLoop.checks.map((check) => check.id),
@@ -5520,6 +5546,17 @@ test("admin local core loop detail data carries lane rows", async () => {
           ],
         ],
       ],
+      [
+        "host-decides",
+        "game-host-decides",
+        [["host", "http://127.0.0.1:5173/g/game-host-decides/host"]],
+        [
+          [
+            "d01-pk-resolved",
+            "prompt D01:pk:Tie, selected slot-2, target alive false",
+          ],
+        ],
+      ],
     ],
   );
   assert.deepEqual(
@@ -5547,6 +5584,40 @@ test("admin local core loop detail data carries lane rows", async () => {
             false,
             "http://127.0.0.1:5173/g/game-earliest/host",
             "admin-audit-earliest-reached-host-role-url",
+          ],
+          [
+            "proofBoundary",
+            "Seeded local-game browser proof only. It does not prove hosted deployment, production identity, release readiness, or production readiness.",
+            false,
+            "",
+            "",
+          ],
+        ],
+        [],
+      ],
+    ],
+  );
+  assert.deepEqual(
+    descriptorRowsWithNestedLinksForAssertion(data.audit.hostDecidesProofRows),
+    [
+      [
+        "host-decides-proof",
+        "admin-audit-host-decides-proof",
+        [
+          ["status", "passed", true, "", ""],
+          ["pack", "epicmafia", false, "", ""],
+          ["tieBreaker", "HostDecides", false, "", ""],
+          ["tally", "2-2", false, "", ""],
+          ["prompt", "D01:pk:Tie", false, "", ""],
+          ["choices", "2", false, "", ""],
+          ["selected", "slot-2", false, "", ""],
+          ["targetTransition", "true -> false", false, "", ""],
+          [
+            "hostRoleUrl",
+            "http://127.0.0.1:5173/g/game-host-decides/host",
+            false,
+            "http://127.0.0.1:5173/g/game-host-decides/host",
+            "admin-audit-host-decides-host-role-url",
           ],
           [
             "proofBoundary",
@@ -8289,6 +8360,29 @@ function proofRunFixture() {
         tallies: { "slot-1": 2, "slot-2": 2 },
       },
       ballotProofs: [{}, {}, {}, {}],
+    },
+    hostDecidesTie: {
+      status: "passed",
+      game: "game-host-decides",
+      pack: "epicmafia",
+      tieBreaker: "HostDecides",
+      sourceRoleUrls: {
+        host: "http://127.0.0.1:5173/g/game-host-decides/host",
+      },
+      outcome: {
+        status: "Tie",
+        winner_slot: null,
+        tiebreak: "HostDecides",
+        tallies: { "slot-1": 2, "slot-2": 2 },
+      },
+      promptId: "D01:pk:Tie",
+      promptActions: [
+        "resolve_host_prompt-D01-pk-Tie-slot-1",
+        "resolve_host_prompt-D01-pk-Tie-slot-2",
+      ],
+      selectedSlot: "slot-2",
+      targetBeforeDecision: { actorAlive: true },
+      targetAfterDecision: { actorAlive: false },
     },
     completedGameHardeningCoverage: completedGameHardeningCoverageFixture(),
     hostStaleControlCoverage: hostStaleControlCoverageFixture(),

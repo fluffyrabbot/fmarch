@@ -165,6 +165,11 @@ import {
   devTestGameEarliestReachedProofSummary,
 } from "./dev_test_game_earliest_reached_proof_contract.mjs";
 import {
+  assertDevTestGameHostDecidesProof,
+  devTestGameHostDecidesProofPath,
+  devTestGameHostDecidesProofSummary,
+} from "./dev_test_game_host_decides_proof_contract.mjs";
+import {
   proveAdminAuditDetail,
   readJson,
   repoRoot,
@@ -186,6 +191,15 @@ const earliestReachedProofRelativePath = path.relative(
   repoRoot,
   earliestReachedProofPath,
 );
+const hostDecidesProofPath = path.resolve(
+  repoRoot,
+  process.env.FMARCH_DEV_TEST_GAME_HOST_DECIDES_PROOF ??
+    devTestGameHostDecidesProofPath,
+);
+const hostDecidesProofRelativePath = path.relative(
+  repoRoot,
+  hostDecidesProofPath,
+);
 const evidencePath = path.join(repoRoot, devTestGameCoreLoopAdminProofPath);
 const requiredChecks = coreLoopAdminCheckIds;
 
@@ -194,8 +208,13 @@ const requiredSpineRows = (proofRun, proofSurfaces = {}) => {
     ? proofRun.coreLoopSpine.cycles
     : [];
   const earliestReached = proofRun?.earliestReachedTie ?? {};
+  const hostDecides = proofRun?.hostDecidesTie ?? {};
   return {
-    cycles: [...cycles.map((cycle) => String(cycle.id)), "earliest-reached"],
+    cycles: [
+      ...cycles.map((cycle) => String(cycle.id)),
+      "earliest-reached",
+      "host-decides",
+    ],
     roleUrls: [
       ...cycles.flatMap((cycle) =>
       Object.keys(cycle.roleUrls ?? {}).map(
@@ -203,6 +222,7 @@ const requiredSpineRows = (proofRun, proofSurfaces = {}) => {
       ),
       ),
       "earliest-reached-host",
+      "host-decides-host",
     ],
     roleUrlHrefs: {
       ...Object.fromEntries(
@@ -214,6 +234,7 @@ const requiredSpineRows = (proofRun, proofSurfaces = {}) => {
       ),
       ),
       "earliest-reached-host": String(earliestReached.sourceRoleUrls?.host ?? ""),
+      "host-decides-host": String(hostDecides.sourceRoleUrls?.host ?? ""),
     },
     checkpoints: [
       ...cycles.flatMap((cycle) =>
@@ -222,6 +243,7 @@ const requiredSpineRows = (proofRun, proofSurfaces = {}) => {
       ),
       ),
       "earliest-reached-d01-tie-resolved",
+      "host-decides-d01-pk-resolved",
     ],
     roleSurfaceCheckpoints:
       coreLoopRoleSurfaceSpineCheckpointRows(proofSurfaces),
@@ -430,11 +452,16 @@ export function coreLoopAdminProofCase() {
       FMARCH_DEV_TEST_GAME_PROOF_RUN: proofRunRelativePath,
       FMARCH_DEV_TEST_GAME_EARLIEST_REACHED_PROOF:
         earliestReachedProofRelativePath,
+      FMARCH_DEV_TEST_GAME_HOST_DECIDES_PROOF:
+        hostDecidesProofRelativePath,
     },
     loadSource: async () => ({
       ...assertDevTestGameProofRun(await readJson(proofRunPath)),
       earliestReachedArtifact: assertDevTestGameEarliestReachedProof(
         await readJson(earliestReachedProofPath),
+      ),
+      hostDecidesArtifact: assertDevTestGameHostDecidesProof(
+        await readJson(hostDecidesProofPath),
       ),
     }),
     prove: async ({ browser, frontendBaseUrl, source: proofRun }) => {
@@ -462,6 +489,7 @@ export function coreLoopAdminProofCase() {
         },
         requiredText: [
           "Earliest reached vote proof",
+          "Host-decided vote proof",
           "Seeded local-game browser proof only. It does not prove hosted deployment, production identity, release readiness, or production readiness.",
         ],
       });
@@ -508,6 +536,10 @@ export function coreLoopAdminProofCase() {
             devTestGameEarliestReachedProofSummary(
               proofRun.earliestReachedArtifact,
             ),
+          hostDecidesProof: hostDecidesProofRelativePath,
+          hostDecidesProofSummary: devTestGameHostDecidesProofSummary(
+            proofRun.hostDecidesArtifact,
+          ),
           game: proofRun.session.game,
           coreLoopSpineStatus: coreLoopSpineStatus(proofRun),
           coreLoopSpineRows: requiredSpineRows(proofRun, surfaces),
