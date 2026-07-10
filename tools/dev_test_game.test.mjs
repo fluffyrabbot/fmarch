@@ -325,8 +325,11 @@ import {
   opsSpineReadinessEnv,
 } from "./dev_test_game_ops_spine.mjs";
 import {
+  assertDevTestGameFullLiveArtifactPlanOrder,
+  assertDevTestGameSpineArtifactDependencyGraph,
   assertDevTestGameOpsArtifactDependencyGraph,
   assertOpsArtifactPlanOrder,
+  devTestGameSpineArtifactDependencyGraph,
   devTestGameOpsArtifactDependencyGraph,
 } from "./dev_test_game_ops_artifact_dependencies.mjs";
 import {
@@ -1316,6 +1319,32 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
   assert.equal(
     assertDevTestGameOpsArtifactDependencyGraph(),
     devTestGameOpsArtifactDependencyGraph,
+  );
+  assert.equal(
+    assertDevTestGameSpineArtifactDependencyGraph(),
+    devTestGameSpineArtifactDependencyGraph,
+  );
+  assert.equal(
+    assertDevTestGameFullLiveArtifactPlanOrder({
+      livePlan: devTestGameLiveSpinePlan,
+      backupRestorePlan: devTestGameBackupRestoreSpinePlan,
+      identityPlan: devTestGameIdentitySpinePlan,
+      adminPlan: devTestGameAdminSpinePlan,
+    }),
+    devTestGameLiveSpinePlan,
+  );
+  assert.throws(
+    () =>
+      assertDevTestGameFullLiveArtifactPlanOrder({
+        livePlan: [
+          ...devTestGameLiveSpinePlan.slice(1),
+          devTestGameLiveSpinePlan[0],
+        ],
+        backupRestorePlan: devTestGameBackupRestoreSpinePlan,
+        identityPlan: devTestGameIdentitySpinePlan,
+        adminPlan: devTestGameAdminSpinePlan,
+      }),
+    /consumes target\/dev-test-game\/session\.json before its producer/,
   );
   assert.throws(
     () =>
@@ -9069,12 +9098,15 @@ test("readiness artifact loader filters mismatched defaults and rejects explicit
     artifactPath,
     `${JSON.stringify({ run: { game: "previous-game" } })}\n`,
   );
+  // Filesystem mtimes can land just ahead of Date.now() on this host.
+  const now = new Date(Date.now() + 1_000);
 
   try {
     assert.equal(
       await readOptionalReadinessArtifactDescriptor(descriptor, {
         env: {},
         expectedGame: "current-game",
+        now,
       }),
       undefined,
     );
@@ -9083,6 +9115,7 @@ test("readiness artifact loader filters mismatched defaults and rejects explicit
         readOptionalReadinessArtifactDescriptor(descriptor, {
           env: { [descriptor.envVar]: artifactPath },
           expectedGame: "current-game",
+          now,
         }),
       /does not match the current readiness proof/,
     );
@@ -9091,6 +9124,7 @@ test("readiness artifact loader filters mismatched defaults and rejects explicit
         await readOptionalReadinessArtifactDescriptor(descriptor, {
           env: {},
           expectedGame: "previous-game",
+          now,
         })
       ).testCurrentGameFilter.run.game,
       "previous-game",
