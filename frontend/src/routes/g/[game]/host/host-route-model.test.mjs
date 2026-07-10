@@ -53,6 +53,10 @@ test("host console route data is allowed for HostOf scoped to the current game",
     "json-ws-command-projection-deltas-with-resync-and-reconnect",
   );
   assert.equal(
+    data.projectionBoundary.resyncPolicy,
+    "single-flight-latest-trailing-refresh",
+  );
+  assert.equal(
     data.votecountBoundary.status,
     "json-ws-command-projection-deltas-with-resync-and-reconnect",
   );

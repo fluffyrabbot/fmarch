@@ -454,7 +454,7 @@ test("seed scenario cases classify passed role URL lanes against production feat
     ["stale-action-conflict", "night-action-loop"],
   ]);
   assert.equal(audit.status, "passed");
-  assert.equal(audit.passedRoleUrlLaneCount, 13);
+  assert.equal(audit.passedRoleUrlLaneCount, 14);
   assert.deepEqual(audit.aliasOnly, {
     count: 2,
     laneIds: ["host-setup-role", "stale-action-conflict"],

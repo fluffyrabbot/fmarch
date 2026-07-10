@@ -1098,7 +1098,7 @@ export function markdownSessionCard(card) {
         "",
         `Reconnect: attempt ${card.verification.multiplayerHardening.reconnect.reconnectRecoveryEvent.attempt} ${card.verification.multiplayerHardening.reconnect.reconnectRecoveryEvent.state}`,
         "",
-        `Live lag resync: ${card.verification.multiplayerHardening.liveProjectionLagResync.resyncEvent.state}, ${card.verification.multiplayerHardening.liveProjectionLagResync.continuationDeltaKind}, reconnects ${card.verification.multiplayerHardening.liveProjectionLagResync.reconnectEventCount}`,
+        `Live lag resync: ${card.verification.multiplayerHardening.liveProjectionLagResync.resyncRecoveryCount} recoveries, ${card.verification.multiplayerHardening.liveProjectionLagResync.recoveryEpisodes.map((episode) => episode.continuationDeltaKind).join("/")}, reconnects ${card.verification.multiplayerHardening.liveProjectionLagResync.reconnectEventCount}`,
         "",
         `Stale player vote: ${card.verification.multiplayerHardening.stalePlayerVote.reject.message}`,
         "",
@@ -18058,10 +18058,126 @@ async function verifyPlayerLagResyncRecovery({ playerPage, game, apiBaseUrl }) {
   const eventStart = await playerPage.evaluate(
     () => (window.__fmarchLiveProjectionEvents ?? []).length,
   );
+  const episodes = [];
+  for (let episode = 1; episode <= 2; episode += 1) {
+    episodes.push(
+      await verifyPlayerLagResyncEpisode({
+        playerPage,
+        game,
+        eventStart,
+        episode,
+      }),
+    );
+  }
+
+  const browserState = await playerPage.evaluate((start) => {
+    const events = (window.__fmarchLiveProjectionEvents ?? []).slice(start);
+    return {
+      resyncEvents: events.filter(
+        (event) =>
+          event?.kind === "resync-required" &&
+          event.fromSeq === 0 &&
+          event.state === "recovered",
+      ),
+      currentSubmitPostReceipts: (window.__fmarchPlayerCommandReceipts ?? []).filter(
+        (receipt) => receipt.actionId === "submit_post" && receipt.current === true,
+      ),
+      reconnectEvents: events.filter((event) =>
+        ["close", "reconnecting", "reconnect"].includes(event?.kind),
+      ),
+    };
+  }, eventStart);
+  const apiThread = await fetchJson(
+    `${apiBaseUrl}/games/${game}/channels/main/thread?principal_user_id=player-seed&limit=100`,
+  );
+  const apiContinuationPostCounts = episodes.map(
+    ({ continuationBody }) =>
+      apiThread.posts.filter((post) => post.body === continuationBody).length,
+  );
+  const burst = episodes.flatMap((episode) => episode.burst);
+  const burstPostCounts = Object.fromEntries(
+    burst.map(({ commandId, body }) => [
+      commandId,
+      apiThread.posts.filter((post) => post.body === body).length,
+    ]),
+  );
+  const allCommandIds = episodes.flatMap((episode) => [
+    ...episode.burst.map(({ commandId }) => commandId),
+    episode.continuationCommandId,
+  ]);
+  if (
+    episodes.length !== 2 ||
+    episodes.some(
+      (episode) =>
+        episode.resyncEvent?.kind !== "resync-required" ||
+        episode.resyncEvent.fromSeq !== 0 ||
+        episode.resyncEvent.state !== "recovered" ||
+        episode.continuationDeltaKind !== "ThreadPostsChanged" ||
+        episode.projectedPostCount !== 1 ||
+        episode.currentSubmitPostReceiptCount !== 1,
+    ) ||
+    browserState.resyncEvents.length !== 2 ||
+    episodes[0].eventIndex >= episodes[1].eventIndex ||
+    apiContinuationPostCounts.some((count) => count !== 1) ||
+    Object.values(burstPostCounts).some((count) => count !== 1) ||
+    new Set(allCommandIds).size !== allCommandIds.length ||
+    browserState.currentSubmitPostReceipts.length !== 1 ||
+    browserState.reconnectEvents.length !== 0
+  ) {
+    throw new Error(
+      `live projection lag recovery drifted: ${JSON.stringify({
+        eventStart,
+        episodes,
+        browserState,
+        apiContinuationPostCounts,
+        burstPostCounts,
+        allCommandIds,
+      })}`,
+    );
+  }
+  return {
+    status: "passed",
+    roleUrl: playerPage.url(),
+    configuredCapacity: Number(process.env.FMARCH_LIVE_PROJECTION_CAPACITY ?? 256),
+    configuredDeliveryDelayMs: Number(
+      process.env.FMARCH_LIVE_PROJECTION_DELIVERY_DELAY_MS ?? 0,
+    ),
+    recoveryEpisodes: episodes.map(({ burst: episodeBurst, ...episode }) => ({
+      ...episode,
+      burstCommandIds: episodeBurst.map(({ commandId }) => commandId),
+    })),
+    resyncRecoveryCount: browserState.resyncEvents.length,
+    resyncEvents: browserState.resyncEvents,
+    burstCommandIds: burst.map(({ commandId }) => commandId),
+    burstPostCounts,
+    apiContinuationPostCounts,
+    currentSubmitPostReceiptCount: browserState.currentSubmitPostReceipts.length,
+    reconnectEventCount: browserState.reconnectEvents.length,
+  };
+}
+
+async function verifyPlayerLagResyncEpisode({
+  playerPage,
+  game,
+  eventStart,
+  episode,
+}) {
+  const recoveryCountBefore = await playerPage.evaluate(
+    (start) =>
+      (window.__fmarchLiveProjectionEvents ?? [])
+        .slice(start)
+        .filter(
+          (event) =>
+            event?.kind === "resync-required" &&
+            event.fromSeq === 0 &&
+            event.state === "recovered",
+        ).length,
+    eventStart,
+  );
   const burst = [];
   for (let index = 0; index < 5; index += 1) {
     const commandId = crypto.randomUUID();
-    const body = `Live lag burst ${index} from dev:test-game ${commandId}.`;
+    const body = `Live lag episode ${episode} burst ${index} from dev:test-game ${commandId}.`;
     const result = await sendBrowserCommand(playerPage, {
       principalUserId: "player-seed",
       commandId,
@@ -18081,34 +18197,40 @@ async function verifyPlayerLagResyncRecovery({ playerPage, game, apiBaseUrl }) {
   }
 
   await playerPage.waitForFunction(
-    (start) =>
+    ({ start, expectedCount }) =>
       (window.__fmarchLiveProjectionEvents ?? [])
         .slice(start)
-        .some(
+        .filter(
           (event) =>
             event?.kind === "resync-required" &&
             event.fromSeq === 0 &&
             event.state === "recovered",
-        ),
-    eventStart,
+        ).length >= expectedCount,
+    { start: eventStart, expectedCount: recoveryCountBefore + 1 },
     { timeout: 20_000 },
   );
-  const recovery = await playerPage.evaluate((start) => {
-    const events = window.__fmarchLiveProjectionEvents ?? [];
-    const relativeIndex = events.slice(start).findIndex(
-      (event) =>
-        event?.kind === "resync-required" &&
-        event.fromSeq === 0 &&
-        event.state === "recovered",
-    );
-    return {
-      event: events[start + relativeIndex],
-      eventIndex: start + relativeIndex,
-      status: window.__fmarchLiveProjectionStatus,
-    };
-  }, eventStart);
+  const recovery = await playerPage.evaluate(
+    ({ start, recoveryIndex }) => {
+      const events = window.__fmarchLiveProjectionEvents ?? [];
+      const indexedRecoveries = events
+        .map((event, eventIndex) => ({ event, eventIndex }))
+        .slice(start)
+        .filter(
+          ({ event }) =>
+            event?.kind === "resync-required" &&
+            event.fromSeq === 0 &&
+            event.state === "recovered",
+        );
+      const recovered = indexedRecoveries[recoveryIndex];
+      return {
+        ...recovered,
+        status: window.__fmarchLiveProjectionStatus,
+      };
+    },
+    { start: eventStart, recoveryIndex: recoveryCountBefore },
+  );
 
-  const continuationBody = `Live post after lag resync from dev:test-game ${crypto.randomUUID()}.`;
+  const continuationBody = `Live episode ${episode} post after lag resync from dev:test-game ${crypto.randomUUID()}.`;
   await playerPage.locator("textarea").fill(continuationBody);
   await playerPage.locator('[data-action="submit_post"]').click();
   await playerPage.waitForFunction(
@@ -18131,91 +18253,41 @@ async function verifyPlayerLagResyncRecovery({ playerPage, game, apiBaseUrl }) {
     { expectedBody: continuationBody, eventIndex: recovery.eventIndex },
     { timeout: 20_000 },
   );
-
-  const browserState = await playerPage.evaluate(
-    ({ expectedBody, eventStart: start, eventIndex }) => {
-      const events = window.__fmarchLiveProjectionEvents ?? [];
-      return {
-        status: window.__fmarchLiveProjectionStatus,
-        continuationDelta: events.slice(eventIndex + 1).find(
+  const continuation = await playerPage.evaluate(
+    ({ expectedBody, eventIndex }) => {
+      const continuationDelta = (window.__fmarchLiveProjectionEvents ?? [])
+        .slice(eventIndex + 1)
+        .find(
           (event) =>
             event?.kind === "delta" &&
             event.delta?.kind === "ThreadPostsChanged" &&
             event.delta?.body?.posts?.some((post) => post.body === expectedBody),
-        ),
+        );
+      return {
+        continuationDeltaKind: continuationDelta?.delta?.kind ?? null,
         projectedPostCount:
           window.__fmarchPlayerProjection?.thread?.posts?.filter(
             (post) => post.body === expectedBody,
           ).length ?? 0,
-        currentSubmitPostReceipts: (window.__fmarchPlayerCommandReceipts ?? []).filter(
+        currentSubmitPostReceiptCount: (window.__fmarchPlayerCommandReceipts ?? []).filter(
           (receipt) => receipt.actionId === "submit_post" && receipt.current === true,
-        ),
-        reconnectEvents: events
-          .slice(start)
-          .filter((event) => ["close", "reconnecting", "reconnect"].includes(event?.kind)),
+        ).length,
         commandStatus: window.__fmarchPlayerCommandStatus,
       };
     },
-    {
-      expectedBody: continuationBody,
-      eventStart,
-      eventIndex: recovery.eventIndex,
-    },
+    { expectedBody: continuationBody, eventIndex: recovery.eventIndex },
   );
-  const apiThread = await fetchJson(
-    `${apiBaseUrl}/games/${game}/channels/main/thread?principal_user_id=player-seed&limit=100`,
-  );
-  const apiContinuationPostCount = apiThread.posts.filter(
-    (post) => post.body === continuationBody,
-  ).length;
-  const burstPostCounts = Object.fromEntries(
-    burst.map(({ commandId, body }) => [
-      commandId,
-      apiThread.posts.filter((post) => post.body === body).length,
-    ]),
-  );
-  if (
-    recovery.event?.kind !== "resync-required" ||
-    recovery.event.fromSeq !== 0 ||
-    recovery.event.state !== "recovered" ||
-    browserState.continuationDelta?.delta?.kind !== "ThreadPostsChanged" ||
-    browserState.projectedPostCount !== 1 ||
-    apiContinuationPostCount !== 1 ||
-    Object.values(burstPostCounts).some((count) => count !== 1) ||
-    browserState.currentSubmitPostReceipts.length !== 1 ||
-    browserState.commandStatus?.state !== "ack" ||
-    browserState.reconnectEvents.length !== 0
-  ) {
-    throw new Error(
-      `live projection lag recovery drifted: ${JSON.stringify({
-        eventStart,
-        burst,
-        recovery,
-        continuationBody,
-        browserState,
-        apiContinuationPostCount,
-        burstPostCounts,
-      })}`,
-    );
-  }
   return {
-    status: "passed",
-    roleUrl: playerPage.url(),
-    configuredCapacity: Number(process.env.FMARCH_LIVE_PROJECTION_CAPACITY ?? 256),
-    configuredDeliveryDelayMs: Number(
-      process.env.FMARCH_LIVE_PROJECTION_DELIVERY_DELAY_MS ?? 0,
-    ),
-    burstCommandIds: burst.map(({ commandId }) => commandId),
-    burstPostCounts,
+    episode,
+    burst,
     resyncEvent: recovery.event,
+    eventIndex: recovery.eventIndex,
     recoveredStatus: recovery.status,
     continuationBody,
-    continuationCommandId: browserState.commandStatus.commandId,
-    continuationDeltaKind: browserState.continuationDelta.delta.kind,
-    projectedPostCount: browserState.projectedPostCount,
-    apiContinuationPostCount,
-    currentSubmitPostReceiptCount: browserState.currentSubmitPostReceipts.length,
-    reconnectEventCount: browserState.reconnectEvents.length,
+    continuationCommandId: continuation.commandStatus.commandId,
+    continuationDeltaKind: continuation.continuationDeltaKind,
+    projectedPostCount: continuation.projectedPostCount,
+    currentSubmitPostReceiptCount: continuation.currentSubmitPostReceiptCount,
   };
 }
 

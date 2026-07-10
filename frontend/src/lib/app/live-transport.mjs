@@ -10,8 +10,9 @@ export const COLD_LOAD_TRANSPORT_BOUNDARY = Object.freeze({
 export const LIVE_TRANSPORT_BOUNDARY = Object.freeze({
   status: "json-ws-command-projection-deltas-with-resync-and-reconnect",
   protocol: "WebSocket JSON",
+  resyncPolicy: "single-flight-latest-trailing-refresh",
   proof:
-    "Initial WebSocket Hello plus command-following projection delta, ResyncRequired recovery frames, and reconnect refresh recovery are proven over the typed JSON websocket boundary.",
+    "Initial WebSocket Hello plus command-following projection delta, single-flight ResyncRequired recovery with one latest trailing refresh, and reconnect refresh recovery are proven over the typed JSON websocket boundary.",
 });
 
 export const LIVE_PROJECTION_CONNECTING_STATUS = Object.freeze({
@@ -144,6 +145,45 @@ export function connectLiveProjection({
     const openedSocket = new WebSocketCtor(resolvedUrl);
     socket = openedSocket;
     let closeHandled = false;
+    let pendingResyncMessage = null;
+    let resyncRecoveryPromise = null;
+
+    async function queueResyncRecovery(message) {
+      pendingResyncMessage = message;
+      if (resyncRecoveryPromise !== null) {
+        return await resyncRecoveryPromise;
+      }
+
+      resyncRecoveryPromise = (async () => {
+        while (pendingResyncMessage !== null) {
+          const nextMessage = pendingResyncMessage;
+          pendingResyncMessage = null;
+          try {
+            const recovery = await recoverLiveProjection({
+              projectionStore,
+              resyncKeys,
+              fetchImpl,
+              message: nextMessage,
+            });
+            if (openedSocket !== socket || stopped) {
+              return;
+            }
+            onEvent(recovery.message, recovery.snapshot);
+          } catch (error) {
+            if (openedSocket !== socket || stopped) {
+              return;
+            }
+            onEvent(Object.freeze({ kind: "error", message: error.message }), null);
+          }
+        }
+      })();
+      try {
+        return await resyncRecoveryPromise;
+      } finally {
+        resyncRecoveryPromise = null;
+      }
+    }
+
     handleSocketClose = () => {
       if (closeHandled) {
         return;
@@ -183,13 +223,7 @@ export function connectLiveProjection({
         const envelope = JSON.parse(String(event.data));
         const message = normalizeServerEnvelopeMessage(envelope);
         if (message?.kind === "resync-required") {
-          const recovery = await recoverLiveProjection({
-            projectionStore,
-            resyncKeys,
-            fetchImpl,
-            message,
-          });
-          onEvent(recovery.message, recovery.snapshot);
+          await queueResyncRecovery(message);
           return;
         }
         let snapshot = projectionStore.applyLiveEnvelope(envelope);

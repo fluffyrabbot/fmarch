@@ -209,7 +209,7 @@ export function hardeningLaneStatus(lane) {
     case "reconnect-recovery":
       return `${status}: ${String(evidence.reconnectingState ?? "unknown")} -> ${String(evidence.recoveryState ?? "unknown")}`;
     case playerLiveLagResyncLaneId:
-      return `${status}: resync ${String(evidence.resyncState ?? "unknown")}, continued ${String(evidence.continuationDeltaKind ?? "unknown")}, reconnects ${String(evidence.reconnectEventCount ?? "unknown")}`;
+      return `${status}: resyncs ${String(evidence.resyncRecoveryCount ?? "unknown")}, continued ${Array.isArray(evidence.continuationDeltaKinds) ? evidence.continuationDeltaKinds.join("/") : "unknown"}, reconnects ${String(evidence.reconnectEventCount ?? "unknown")}`;
     case staleSameActionRecoveryLaneId:
       return `${status}: Reject ${String(evidence.rejectError ?? "unknown")}, role URL ${typeof evidence.roleUrl === "string"}, visible ${String(evidence.actionVisibleAfterRefresh ?? "unknown")}`;
     case staleDeadActionConflictLaneId:

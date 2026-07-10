@@ -150,6 +150,10 @@ test("player route data exposes thread, channel, votecount, and touch command la
     data.projectionBoundary.status,
     "json-ws-command-projection-deltas-with-resync-and-reconnect",
   );
+  assert.equal(
+    data.projectionBoundary.resyncPolicy,
+    "single-flight-latest-trailing-refresh",
+  );
   assert.match(data.composer.transportBoundary, /command-following/);
   assert.equal(data.privateQueueBoundary.status, "principal-scoped-private-projections");
   assert.equal(data.privateQueueBoundary.count, 2);

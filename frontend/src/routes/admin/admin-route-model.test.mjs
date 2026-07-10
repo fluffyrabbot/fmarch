@@ -5869,7 +5869,7 @@ test("admin local player recovery detail data carries focused lane rows", async 
       ["reconnect-recovery", "passed: reconnecting -> recovered"],
       [
         "live-projection-lag-resync",
-        "passed: resync recovered, continued ThreadPostsChanged, reconnects 0",
+        "passed: resyncs 2, continued ThreadPostsChanged/ThreadPostsChanged, reconnects 0",
       ],
       ["stale-player-vote", "passed"],
       ["concurrent-vote-race", "passed"],
@@ -7704,8 +7704,8 @@ function proofRunFixture() {
       recoveredSnapshotContainsPost: true,
     },
     "live-projection-lag-resync": {
-      resyncState: "recovered",
-      continuationDeltaKind: "ThreadPostsChanged",
+      resyncRecoveryCount: 2,
+      continuationDeltaKinds: ["ThreadPostsChanged", "ThreadPostsChanged"],
       reconnectEventCount: 0,
     },
     "stale-same-action-recovery": {

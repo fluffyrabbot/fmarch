@@ -411,7 +411,10 @@ unambiguous controls with explicit confirmation for anything irreversible:
 - On reconnect: cold-load current projection state, resume the stream from the last `seq`
   seen ([03](03-backend.md)) — no gaps, no duplicates.
 - On `ResyncRequired`: cold-load the current projection keys in place and keep the existing
-  socket. The recovery refresh does not replay a command or append a second command receipt.
+  socket. Recovery is single-flight per socket: frames received during a refresh retain only
+  the latest request for one trailing refresh. This bounds REST work and prevents older refresh
+  completions from overwriting newer state. Recovery does not replay a command or append a
+  second command receipt.
 
 ## Performance & data-efficiency
 

@@ -2814,45 +2814,36 @@ export function buildDevTestGameProofRun(session, options = {}) {
     }),
     lane(
       playerLiveLagResyncLaneId,
-      "Lagged player live projection resyncs without reconnecting",
+      "Repeated player live projection lag resyncs without reconnecting",
       {
         roleUrl: hardening.liveProjectionLagResync?.roleUrl ?? null,
         configuredCapacity:
           hardening.liveProjectionLagResync?.configuredCapacity ?? null,
         configuredDeliveryDelayMs:
           hardening.liveProjectionLagResync?.configuredDeliveryDelayMs ?? null,
-        resyncState:
-          hardening.liveProjectionLagResync?.resyncEvent?.state ?? null,
-        continuationDeltaKind:
-          hardening.liveProjectionLagResync?.continuationDeltaKind ?? null,
-        projectedPostCount:
-          hardening.liveProjectionLagResync?.projectedPostCount ?? null,
-        apiContinuationPostCount:
-          hardening.liveProjectionLagResync?.apiContinuationPostCount ?? null,
+        resyncRecoveryCount:
+          hardening.liveProjectionLagResync?.resyncRecoveryCount ?? null,
+        recoveryEventIndices:
+          hardening.liveProjectionLagResync?.recoveryEpisodes?.map(
+            (episode) => episode.eventIndex,
+          ) ?? null,
+        continuationDeltaKinds:
+          hardening.liveProjectionLagResync?.recoveryEpisodes?.map(
+            (episode) => episode.continuationDeltaKind,
+          ) ?? null,
+        projectedPostCounts:
+          hardening.liveProjectionLagResync?.recoveryEpisodes?.map(
+            (episode) => episode.projectedPostCount,
+          ) ?? null,
+        apiContinuationPostCounts:
+          hardening.liveProjectionLagResync?.apiContinuationPostCounts ?? null,
         currentSubmitPostReceiptCount:
           hardening.liveProjectionLagResync?.currentSubmitPostReceiptCount ?? null,
         reconnectEventCount:
           hardening.liveProjectionLagResync?.reconnectEventCount ?? null,
-        passed:
-          hardening.liveProjectionLagResync?.status === "passed" &&
-          typeof hardening.liveProjectionLagResync?.roleUrl === "string" &&
-          hardening.liveProjectionLagResync.roleUrl.includes("/g/") &&
-          hardening.liveProjectionLagResync?.configuredCapacity === 1 &&
-          hardening.liveProjectionLagResync?.configuredDeliveryDelayMs > 0 &&
-          hardening.liveProjectionLagResync?.resyncEvent?.fromSeq === 0 &&
-          hardening.liveProjectionLagResync?.resyncEvent?.state === "recovered" &&
-          hardening.liveProjectionLagResync?.continuationDeltaKind ===
-            "ThreadPostsChanged" &&
-          hardening.liveProjectionLagResync?.projectedPostCount === 1 &&
-          hardening.liveProjectionLagResync?.apiContinuationPostCount === 1 &&
-          hardening.liveProjectionLagResync?.currentSubmitPostReceiptCount === 1 &&
-          hardening.liveProjectionLagResync?.reconnectEventCount === 0 &&
-          Array.isArray(hardening.liveProjectionLagResync?.burstCommandIds) &&
-          new Set(hardening.liveProjectionLagResync.burstCommandIds).size ===
-            hardening.liveProjectionLagResync.burstCommandIds.length &&
-          Object.values(
-            hardening.liveProjectionLagResync?.burstPostCounts ?? {},
-          ).every((count) => count === 1),
+        passed: liveProjectionLagResyncPassed(
+          hardening.liveProjectionLagResync,
+        ),
       },
     ),
     lane("stale-player-vote", "Stale player vote rejects and refreshes command state", {
@@ -8755,6 +8746,60 @@ function completedGameHardeningProofLanes({ hardening }) {
 function completedGameLane({ id, label, evidence }) {
   return lane(id, label, evidence);
 }
+
+function liveProjectionLagResyncPassed(proof) {
+  const episodes = proof?.recoveryEpisodes;
+  const resyncEvents = proof?.resyncEvents;
+  const burstCommandIds = proof?.burstCommandIds;
+  const continuationCommandIds = Array.isArray(episodes)
+    ? episodes.map((episode) => episode.continuationCommandId)
+    : [];
+  const allCommandIds = Array.isArray(burstCommandIds)
+    ? [...burstCommandIds, ...continuationCommandIds]
+    : [];
+  return (
+    proof?.status === "passed" &&
+    typeof proof.roleUrl === "string" &&
+    proof.roleUrl.includes("/g/") &&
+    proof.configuredCapacity === 1 &&
+    proof.configuredDeliveryDelayMs > 0 &&
+    proof.resyncRecoveryCount === 2 &&
+    Array.isArray(resyncEvents) &&
+    resyncEvents.length === 2 &&
+    resyncEvents.every(
+      (event) =>
+        event?.kind === "resync-required" &&
+        event.fromSeq === 0 &&
+        event.state === "recovered",
+    ) &&
+    Array.isArray(episodes) &&
+    episodes.length === 2 &&
+    episodes.every(
+      (episode, index) =>
+        episode?.episode === index + 1 &&
+        Number.isInteger(episode.eventIndex) &&
+        Array.isArray(episode.burstCommandIds) &&
+        episode.burstCommandIds.length > 1 &&
+        episode.resyncEvent?.fromSeq === 0 &&
+        episode.resyncEvent?.state === "recovered" &&
+        typeof episode.continuationCommandId === "string" &&
+        episode.continuationDeltaKind === "ThreadPostsChanged" &&
+        episode.projectedPostCount === 1 &&
+        episode.currentSubmitPostReceiptCount === 1,
+    ) &&
+    episodes[0].eventIndex < episodes[1].eventIndex &&
+    Array.isArray(proof.apiContinuationPostCounts) &&
+    proof.apiContinuationPostCounts.length === 2 &&
+    proof.apiContinuationPostCounts.every((count) => count === 1) &&
+    proof.currentSubmitPostReceiptCount === 1 &&
+    proof.reconnectEventCount === 0 &&
+    allCommandIds.length > 4 &&
+    new Set(allCommandIds).size === allCommandIds.length &&
+    Object.values(proof.burstPostCounts ?? {}).length === burstCommandIds.length &&
+    Object.values(proof.burstPostCounts ?? {}).every((count) => count === 1)
+  );
+}
+
 function lane(id, label, evidence) {
   const { passed, ...rest } = evidence;
   return {

@@ -13475,18 +13475,60 @@ test("session card and markdown include role credential URLs and tokens", async 
         roleUrl: `http://127.0.0.1:4102/g/${game}`,
         configuredCapacity: 1,
         configuredDeliveryDelayMs: 500,
+        recoveryEpisodes: [
+          {
+            episode: 1,
+            eventIndex: 100,
+            burstCommandIds: [
+              "10000000-0000-4000-8000-000000000001",
+              "10000000-0000-4000-8000-000000000002",
+            ],
+            resyncEvent: {
+              kind: "resync-required",
+              fromSeq: 0,
+              state: "recovered",
+            },
+            continuationCommandId: "20000000-0000-4000-8000-000000000001",
+            continuationDeltaKind: "ThreadPostsChanged",
+            projectedPostCount: 1,
+            currentSubmitPostReceiptCount: 1,
+          },
+          {
+            episode: 2,
+            eventIndex: 120,
+            burstCommandIds: [
+              "10000000-0000-4000-8000-000000000003",
+              "10000000-0000-4000-8000-000000000004",
+            ],
+            resyncEvent: {
+              kind: "resync-required",
+              fromSeq: 0,
+              state: "recovered",
+            },
+            continuationCommandId: "20000000-0000-4000-8000-000000000002",
+            continuationDeltaKind: "ThreadPostsChanged",
+            projectedPostCount: 1,
+            currentSubmitPostReceiptCount: 1,
+          },
+        ],
+        resyncRecoveryCount: 2,
+        resyncEvents: [
+          { kind: "resync-required", fromSeq: 0, state: "recovered" },
+          { kind: "resync-required", fromSeq: 0, state: "recovered" },
+        ],
         burstCommandIds: [
           "10000000-0000-4000-8000-000000000001",
           "10000000-0000-4000-8000-000000000002",
+          "10000000-0000-4000-8000-000000000003",
+          "10000000-0000-4000-8000-000000000004",
         ],
         burstPostCounts: {
           "10000000-0000-4000-8000-000000000001": 1,
           "10000000-0000-4000-8000-000000000002": 1,
+          "10000000-0000-4000-8000-000000000003": 1,
+          "10000000-0000-4000-8000-000000000004": 1,
         },
-        resyncEvent: { kind: "resync-required", fromSeq: 0, state: "recovered" },
-        continuationDeltaKind: "ThreadPostsChanged",
-        projectedPostCount: 1,
-        apiContinuationPostCount: 1,
+        apiContinuationPostCounts: [1, 1],
         currentSubmitPostReceiptCount: 1,
         reconnectEventCount: 0,
       },
@@ -17546,7 +17588,7 @@ test("session card and markdown include role credential URLs and tokens", async 
   assert(markdown.includes("Reconnect: attempt 1 recovered"));
   assert(
     markdown.includes(
-      "Live lag resync: recovered, ThreadPostsChanged, reconnects 0",
+      "Live lag resync: 2 recoveries, ThreadPostsChanged/ThreadPostsChanged, reconnects 0",
     ),
   );
   assert(markdown.includes("Stale player vote: Reject PhaseLocked"));

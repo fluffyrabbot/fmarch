@@ -713,10 +713,12 @@ player page replays one `SubmitPost` with the same durable `command_id` and
 verifies the original ACK plus exactly one projected post, drops and
 automatically reconnects the player live projection while a server-side post
 lands, forces a capacity-one live broadcast receiver to lag under the local
-`FMARCH_LIVE_PROJECTION_DELIVERY_DELAY_MS` pressure control, recovers the
-server `ResyncRequired` frame without reconnecting, and receives a later UI
-post on the same socket with one projected post and one current receipt. That
-lane is saved as `live-projection-lag-resync`. The harness then refreshes
+`FMARCH_LIVE_PROJECTION_DELIVERY_DELAY_MS` pressure control twice, recovers two
+ordered server `ResyncRequired` frames without reconnecting, and receives a
+unique later UI post after each recovery on the same socket with one projected
+post and one current receipt. The client collapses back-to-back resync frames
+into one in-flight refresh plus one latest trailing refresh. That lane is saved
+as `live-projection-lag-resync`. The harness then refreshes
 command state after a stale locked-phase vote reject, and
 asserts the refreshed player command state has no legal vote targets, no current
 vote, the old vote control removed, and Withdraw still disabled with

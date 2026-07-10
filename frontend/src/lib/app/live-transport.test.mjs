@@ -381,6 +381,107 @@ test("websocket resync frames refresh the projection store", async () => {
   connection.close();
 });
 
+test("back-to-back websocket resync frames collapse to one trailing refresh", async () => {
+  const events = [];
+  const refreshes = [];
+  const store = {
+    snapshot: { generation: 0 },
+    getSnapshot() {
+      return this.snapshot;
+    },
+    applyLiveEnvelope() {
+      return this.snapshot;
+    },
+    async refresh(keys) {
+      const pending = deferred();
+      refreshes.push({ keys, pending });
+      this.snapshot = await pending.promise;
+      return this.snapshot;
+    },
+  };
+  const connection = connectLiveProjection({
+    url: "/ws?game=midsummer",
+    projectionStore: store,
+    WebSocketCtor: FakeWebSocket,
+    fetchImpl: async () => jsonResponse({}),
+    resyncKeys: ["thread", "commandState"],
+    onEvent(message, snapshot) {
+      events.push({ message, snapshot });
+    },
+  });
+
+  const first = FakeWebSocket.last.emit("message", {
+    data: JSON.stringify(resyncEnvelope(8, 9)),
+  });
+  await Promise.resolve();
+  assert.equal(refreshes.length, 1);
+
+  const second = FakeWebSocket.last.emit("message", {
+    data: JSON.stringify(resyncEnvelope(9, 10)),
+  });
+  const third = FakeWebSocket.last.emit("message", {
+    data: JSON.stringify(resyncEnvelope(10, 11)),
+  });
+  assert.equal(refreshes.length, 1);
+
+  refreshes[0].pending.resolve({ generation: 1 });
+  await waitFor(() => refreshes.length === 2);
+  refreshes[1].pending.resolve({ generation: 3 });
+  await Promise.all([first, second, third]);
+
+  assert.equal(refreshes.length, 2);
+  assert.deepEqual(
+    refreshes.map((refresh) => refresh.keys),
+    [
+      ["thread", "commandState"],
+      ["thread", "commandState"],
+    ],
+  );
+  assert.deepEqual(
+    events.map(({ message, snapshot }) => ({ message, snapshot })),
+    [
+      {
+        message: { kind: "resync-required", fromSeq: 8, state: "recovered" },
+        snapshot: { generation: 1 },
+      },
+      {
+        message: { kind: "resync-required", fromSeq: 10, state: "recovered" },
+        snapshot: { generation: 3 },
+      },
+    ],
+  );
+  assert.deepEqual(store.getSnapshot(), { generation: 3 });
+  connection.close();
+});
+
+test("resync completion from a dropped websocket cannot publish stale state", async () => {
+  const events = [];
+  const pending = deferred();
+  const store = {
+    getSnapshot: () => ({ generation: 0 }),
+    applyLiveEnvelope: () => ({ generation: 0 }),
+    refresh: async () => await pending.promise,
+  };
+  const connection = connectLiveProjection({
+    url: "/ws?game=midsummer",
+    projectionStore: store,
+    WebSocketCtor: FakeWebSocket,
+    fetchImpl: async () => jsonResponse({}),
+    resyncKeys: ["thread"],
+    reconnect: false,
+    onEvent: (message, snapshot) => events.push({ message, snapshot }),
+  });
+  const recovery = FakeWebSocket.last.emit("message", {
+    data: JSON.stringify(resyncEnvelope(12, 13)),
+  });
+  await Promise.resolve();
+  connection.drop();
+  pending.resolve({ generation: 12 });
+  await recovery;
+
+  assert.deepEqual(events, [{ message: { kind: "close" }, snapshot: null }]);
+});
+
 test("websocket delta frames can refresh dependent cold-load keys", async () => {
   const store = fakeProjectionStore({
     thread: { posts: [] },
@@ -680,6 +781,40 @@ function jsonResponse(body) {
     ok: true,
     async json() {
       return body;
+    },
+  };
+}
+
+function deferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
+
+async function waitFor(predicate) {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    if (predicate()) {
+      return;
+    }
+    await Promise.resolve();
+  }
+  throw new Error("condition did not settle");
+}
+
+function resyncEnvelope(fromSeq, id) {
+  return {
+    v: 1,
+    id,
+    body: {
+      kind: "Delta",
+      body: {
+        kind: "ResyncRequired",
+        body: { from_seq: fromSeq },
+      },
     },
   };
 }

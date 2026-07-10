@@ -2894,22 +2894,39 @@ assert.equal(
   Number(process.env.FMARCH_LIVE_PROJECTION_DELIVERY_DELAY_MS ?? 500),
 );
 assert.deepEqual(
-  session.verification.multiplayerHardening.liveProjectionLagResync.resyncEvent,
-  { kind: "resync-required", fromSeq: 0, state: "recovered" },
+  session.verification.multiplayerHardening.liveProjectionLagResync.resyncEvents,
+  [
+    { kind: "resync-required", fromSeq: 0, state: "recovered" },
+    { kind: "resync-required", fromSeq: 0, state: "recovered" },
+  ],
 );
 assert.equal(
+  session.verification.multiplayerHardening.liveProjectionLagResync.resyncRecoveryCount,
+  2,
+);
+assert.deepEqual(
+  session.verification.multiplayerHardening.liveProjectionLagResync.recoveryEpisodes.map(
+    (episode) => episode.continuationDeltaKind,
+  ),
+  ["ThreadPostsChanged", "ThreadPostsChanged"],
+);
+assert.deepEqual(
   session.verification.multiplayerHardening.liveProjectionLagResync
-    .continuationDeltaKind,
-  "ThreadPostsChanged",
+    .apiContinuationPostCounts,
+  [1, 1],
+);
+assert.deepEqual(
+  session.verification.multiplayerHardening.liveProjectionLagResync.recoveryEpisodes.map(
+    (episode) => episode.projectedPostCount,
+  ),
+  [1, 1],
 );
 assert.equal(
-  session.verification.multiplayerHardening.liveProjectionLagResync.projectedPostCount,
-  1,
-);
-assert.equal(
-  session.verification.multiplayerHardening.liveProjectionLagResync
-    .apiContinuationPostCount,
-  1,
+  session.verification.multiplayerHardening.liveProjectionLagResync.recoveryEpisodes[0]
+    .eventIndex <
+    session.verification.multiplayerHardening.liveProjectionLagResync.recoveryEpisodes[1]
+      .eventIndex,
+  true,
 );
 assert.equal(
   session.verification.multiplayerHardening.liveProjectionLagResync
