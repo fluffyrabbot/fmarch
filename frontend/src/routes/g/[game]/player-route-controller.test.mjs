@@ -21,6 +21,7 @@ import {
   staleSlotOwnershipCommandState,
   submitPlayerRouteCommand,
   togglePrivateItemExpansion,
+  uploadPlayerPostMedia,
 } from "./player-route-controller.mjs";
 
 test("player route controller builds projection store boundaries from route data", () => {
@@ -143,6 +144,12 @@ test("player route controller builds typed player command requests", () => {
       }),
       action: "submit_post",
       composerBody: "private role note",
+      media: [
+        {
+          content_id: "a".repeat(64),
+          alt: "Night action diagram",
+        },
+      ],
     }),
     {
       principalUserId: "player_mira",
@@ -153,6 +160,12 @@ test("player route controller builds typed player command requests", () => {
           channel_id: "role-pm",
           actor_slot: "slot-7",
           body: "private role note",
+          media: [
+            {
+              content_id: "a".repeat(64),
+              alt: "Night action diagram",
+            },
+          ],
         },
       },
     },
@@ -178,6 +191,75 @@ test("player route controller builds typed player command requests", () => {
         },
       },
     },
+  );
+});
+
+test("player route controller uploads image bytes and returns only a canonical post handle", async () => {
+  const requests = [];
+  const file = { type: "image/png", size: 128, name: "receipt.png" };
+  const media = await uploadPlayerPostMedia({
+    data: fixtureData(),
+    file,
+    alt: "  Private vote receipt  ",
+    fetchImpl: async (url, init) => {
+      requests.push({ url, init });
+      return jsonResponse({ content_id: "b".repeat(64) });
+    },
+  });
+
+  assert.deepEqual(requests, [
+    {
+      url: "/media/uploads",
+      init: {
+        method: "POST",
+        headers: {
+          accept: "application/json",
+          "content-type": "image/png",
+        },
+        body: file,
+      },
+    },
+  ]);
+  assert.deepEqual(media, [
+    {
+      content_id: "b".repeat(64),
+      alt: "Private vote receipt",
+    },
+  ]);
+});
+
+test("player route controller rejects invalid media before dispatch", async () => {
+  const data = fixtureData();
+  const fetchImpl = async () => {
+    throw new Error("invalid media must not reach fetch");
+  };
+
+  await assert.rejects(
+    uploadPlayerPostMedia({
+      data,
+      file: { type: "image/gif", size: 128 },
+      alt: "Animated receipt",
+      fetchImpl,
+    }),
+    /Choose a PNG or JPEG image/,
+  );
+  await assert.rejects(
+    uploadPlayerPostMedia({
+      data,
+      file: { type: "image/png", size: 128 },
+      alt: "   ",
+      fetchImpl,
+    }),
+    /alt text must contain 1 to 1000 characters/,
+  );
+  await assert.rejects(
+    uploadPlayerPostMedia({
+      data,
+      file: { type: "image/png", size: 12 * 1024 * 1024 + 1 },
+      alt: "Oversized receipt",
+      fetchImpl,
+    }),
+    /no larger than 12 MiB/,
   );
 });
 
@@ -695,6 +777,9 @@ function fixtureData(overrides = {}) {
     player: { principalUserId: "player_mira", slotId: "slot-7" },
     composer: {
       commandEndpoint: "/commands",
+      mediaUploadEndpoint: "/media/uploads",
+      mediaUploadTypes: ["image/png", "image/jpeg"],
+      mediaMaxEncodedBytes: 12 * 1024 * 1024,
       voteTargetSlot: "slot-2",
       voteCommands: [
         {

@@ -167,11 +167,12 @@
       "title": "Reference-backed private media baseline",
       "execution_class": "code",
       "status": "complete",
-      "summary": "Generated tablet/small PNG references flow through SubmitPost, projection-backed serving, immutable headers, and member/non-member authorization; this does not prove upload, durable blob storage, metadata stripping, or transcoding.",
-      "complete_when": ["A command-backed private post serves referenced tablet/small bytes to a member and denies a non-member."],
+      "summary": "A command-backed private post reference is checked against the current projection and channel authority at serve time; members receive immutable variant bytes and non-members receive none. Canonical ingest and transcoding are closed by the downstream media capabilities.",
+      "complete_when": ["A command-backed private post serves referenced variant bytes to a member and denies a non-member."],
       "depends_on": ["product.game.core-loop"],
       "evidence": [
-        { "kind": "source", "value": "frontend/src/routes/media/live-stack/thread/[asset]/+server.js" },
+        { "kind": "source", "value": "crates/api/src/lib.rs" },
+        { "kind": "source", "value": "frontend/src/routes/media/thread/[game]/[channel]/[sourceSeq]/[contentId]/[asset]/+server.js" },
         { "kind": "source", "value": "docs/arch/07-images.md" },
         { "kind": "command", "value": "npm run test:host-console-live-stack-smoke" }
       ],
@@ -245,25 +246,22 @@
       "order": 50,
       "title": "Uploaded media through a private post",
       "execution_class": "code",
-      "status": "open",
-      "summary": "Carry a real upload handle through SubmitPost, persistent projection serving, responsive rendering, and private-channel denial in a seeded browser flow.",
+      "status": "complete",
+      "summary": "An enabled-account player uploads bounded PNG/JPEG bytes, submits only the canonical content id plus alt text, reloads manifest-backed AVIF/WebP from a private post, and a second enabled non-member account receives 403 with a zero-byte body for the exact same URL. This is local scratch-Postgres/filesystem proof, not hosted or object-store durability.",
       "complete_when": ["A seeded member uploads and posts media, receives the correct variant after reload, and a non-member receives no bytes."],
       "depends_on": ["product.media.authenticated-upload", "product.media.variant-generation", "product.media.reference-ingest-serving", "product.private.mafia-room"],
       "evidence": [
+        { "kind": "source", "value": "crates/api/src/lib.rs" },
+        { "kind": "source", "value": "crates/api/tests/vertical.rs" },
+        { "kind": "source", "value": "crates/wire/src/lib.rs" },
+        { "kind": "source", "value": "frontend/src/routes/media/thread/[game]/[channel]/[sourceSeq]/[contentId]/[asset]/+server.js" },
+        { "kind": "source", "value": "tools/host_console_live_stack_smoke.mjs" },
         { "kind": "source", "value": "docs/arch/07-images.md" },
-        { "kind": "planned-command", "value": "npm run test:dev-test-game-core-live:local" }
+        { "kind": "command", "value": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p api media -- --test-threads=1" },
+        { "kind": "command", "value": "npm run test:frontend-contract" },
+        { "kind": "command", "value": "npm run test:host-console-live-stack-smoke" }
       ],
-      "remaining": ["Wire upload, post attachment, persistent serving, responsive UI, and seeded browser authorization proof."],
-      "recommended_slice": {
-        "objective": "Replace client-authored post-media URL maps with a server-issued content-id attachment contract: accept only an uploaded content id plus alt text at SubmitPost, verify the canonical handle before command acceptance, persist and project that immutable reference, derive private AVIF/WebP URLs server-side, and serve only manifest-backed variants after both account-session and projected channel-membership checks. Update the player composer to upload then post and render a responsive picture, and prove with the seeded live stack that a member receives real variant bytes after reload while a non-member receives no media bytes.",
-        "paths": ["Cargo.lock", "crates/api/", "crates/commands/", "crates/media/", "crates/projections/", "crates/server/", "crates/wire/", "frontend/src/lib/components/player-thread/", "frontend/src/routes/g/[game]/", "frontend/src/routes/media/live-stack/thread/[asset]/", "tools/host_console_live_stack_smoke.mjs", "docs/arch/07-images.md"],
-        "proof_commands": ["cargo test -p media", "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p api media -- --test-threads=1", "npm run test:frontend-contract", "npm run test:dev-test-game-core-live:local"],
-        "non_claims": [
-          "No public or original-byte route, cross-post media library, gallery, profile-media, or moderation workflow.",
-          "No multipart/resumable upload, direct object-store upload, quotas/rate limits, orphan cleanup, or retention lifecycle.",
-          "No object-store/CDN integration, hosted durability, production performance, or production codec-quality claim."
-        ]
-      }
+      "remaining": []
     },
     {
       "id": "product.private.mafia-room",
@@ -294,7 +292,17 @@
       "evidence": [
         { "kind": "source", "value": "frontend/src/routes/g/[game]/c/[channel]/+page.svelte" }
       ],
-      "remaining": ["Add a seeded live role-PM lifecycle including replacement and stale-session boundaries." ]
+      "remaining": ["Add a seeded live role-PM lifecycle including replacement and stale-session boundaries."],
+      "recommended_slice": {
+        "objective": "Make each occupied slot's Role PM a first-class, engine-declared private channel instead of a frontend-conventional `role-pm` identifier: declare its stable channel identity and membership from authoritative slot assignment/start events, project and capability-gate it through the generic private-channel model, preserve slot-authored history while transferring current membership on replacement, and revoke the outgoing principal/session immediately. Extend the seeded real-stack lane to post through the incoming role URL, observe the command receipt and live delta, reload the same durable thread, then prove the replaced principal receives neither thread rows nor media bytes and cannot append a stale post.",
+        "paths": ["migrations/", "crates/domain/", "crates/commands/", "crates/projections/", "crates/caps/", "crates/api/", "crates/wire/", "frontend/src/lib/components/player-channel-rail/", "frontend/src/routes/g/[game]/", "tools/dev_test_game_core_loop_private_channel_recovery_scenarios.mjs", "tools/host_console_live_stack_smoke.mjs", "docs/arch/01-domain-model.md", "docs/arch/06-security.md"],
+        "proof_commands": ["cargo test -p commands -p projections -p caps", "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p api role_pm -- --test-threads=1", "npm run test:frontend-contract", "npm run test:dev-test-game-core-live:local"],
+        "non_claims": [
+          "No neighborhood, mason, dead, spectator, or arbitrary user-created room completion claim.",
+          "No cross-game direct messaging, inbox, notification-delivery, blocking, reporting, or moderation workflow.",
+          "No hosted deployment, hosted identity, production concurrency, or release-readiness promotion from the local seeded proof."
+        ]
+      }
     },
     {
       "id": "product.private.additional-rooms",

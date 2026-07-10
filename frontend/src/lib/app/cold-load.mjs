@@ -254,7 +254,7 @@ export function normalizeThreadPage(page, fallback) {
 }
 
 export function normalizeThreadPost(post, { fallbackMeta = "cold load" } = {}) {
-  const media = normalizeThreadPostMedia(post?.media ?? post?.attachments ?? post?.images);
+  const media = normalizeThreadPostMedia(post?.media);
   return Object.freeze({
     seq: post?.source_seq ?? post?.sourceSeq ?? post?.seq ?? null,
     streamSeq: post?.stream_seq ?? post?.streamSeq ?? null,
@@ -287,35 +287,28 @@ export function normalizeThreadPostMedia(value) {
   );
 }
 
-function normalizeThreadMediaItem(item, index) {
+function normalizeThreadMediaItem(item, _index) {
   if (item === null || typeof item !== "object") {
     return null;
   }
-  const variants = normalizeThreadMediaVariants(item.variants ?? item.sources ?? {});
+  const contentId = String(item.content_id ?? "");
+  if (!/^[0-9a-f]{64}$/u.test(contentId)) {
+    return null;
+  }
+  const variants = normalizeThreadMediaVariants(item.variants);
   if (Object.keys(variants).length === 0) {
     return null;
   }
   return Object.freeze({
-    id: String(item.id ?? item.media_id ?? item.mediaId ?? `media-${index + 1}`),
-    kind: String(item.kind ?? item.type ?? "image"),
-    alt: String(item.alt ?? item.alt_text ?? item.altText ?? "Thread image"),
+    id: contentId,
+    contentId,
+    kind: "image",
+    alt: String(item.alt ?? "Thread image"),
     variants,
   });
 }
 
 function normalizeThreadMediaVariants(value) {
-  if (Array.isArray(value)) {
-    return Object.freeze(
-      Object.fromEntries(
-        value
-          .map((variant) => [
-            variant?.name ?? variant?.variant ?? variant?.id,
-            normalizeThreadMediaVariant(variant),
-          ])
-          .filter(([name, variant]) => typeof name === "string" && variant !== null),
-      ),
-    );
-  }
   if (value === null || typeof value !== "object") {
     return Object.freeze({});
   }
@@ -329,18 +322,22 @@ function normalizeThreadMediaVariants(value) {
 }
 
 function normalizeThreadMediaVariant(variant) {
-  if (typeof variant === "string") {
-    return Object.freeze({ url: variant, width: null, height: null });
-  }
   if (variant === null || typeof variant !== "object") {
     return null;
   }
-  const url = variant.url ?? variant.href ?? variant.src;
-  if (typeof url !== "string" || url.trim() === "") {
+  const avifUrl = variant.avif_url;
+  const webpUrl = variant.webp_url;
+  if (
+    typeof avifUrl !== "string" ||
+    avifUrl.trim() === "" ||
+    typeof webpUrl !== "string" ||
+    webpUrl.trim() === ""
+  ) {
     return null;
   }
   return Object.freeze({
-    url,
+    avifUrl,
+    webpUrl,
     width: normalizePositiveNumber(variant.width ?? variant.w),
     height: normalizePositiveNumber(variant.height ?? variant.h),
   });

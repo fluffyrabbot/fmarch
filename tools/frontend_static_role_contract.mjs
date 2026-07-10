@@ -1520,14 +1520,17 @@ async function provePlayerSurface() {
     "/media/midsummer/thread/receipt-442-tablet.png",
   );
   assert.equal(
-    mediaPost.media.items[0].srcset.includes("/media/midsummer/thread/receipt-442-small.png"),
+    mediaPost.media.items[0].sources.some((source) =>
+      source.srcset?.includes("/media/midsummer/thread/receipt-442-small.png"),
+    ),
     true,
   );
   assert.equal(mediaPost.media.items[0].src.includes("original"), false);
-  assert.equal(mediaPost.media.items[0].srcset.includes("original"), false);
   assert.equal(
-    data.thread.posts[0].media[0].variants.original.url,
-    "/media/midsummer/thread/receipt-442-original.png",
+    mediaPost.media.items[0].sources.some((source) =>
+      source.srcset?.includes("original"),
+    ),
+    false,
   );
   const originalOnlyMedia = buildPlayerThreadViewModel({
     posts: [
@@ -1706,10 +1709,12 @@ async function provePlayerSurface() {
         component: PLAYER_THREAD_MEDIA_CONTRACT.component,
         preferredVariants: PLAYER_THREAD_MEDIA_CONTRACT.preferredVariants,
         forbiddenVariants: PLAYER_THREAD_MEDIA_CONTRACT.forbiddenVariants,
-        fixtureIncludesOriginalVariant: true,
+        fixtureIncludesOriginalVariant: false,
         renderedVariant: mediaPost.media.items[0].variant,
         renderedSrc: mediaPost.media.items[0].src,
-        renderedSrcset: mediaPost.media.items[0].srcset,
+        renderedSrcset: mediaPost.media.items[0].sources.find(
+          (source) => source.type === "image/webp",
+        )?.srcset,
         originalUrlRendered: false,
         originalOnlyWithheld: true,
       },

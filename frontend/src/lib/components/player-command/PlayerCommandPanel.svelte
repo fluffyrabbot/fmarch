@@ -14,6 +14,8 @@
   export let channel = {};
   export let player = {};
   export let body = "";
+  export let mediaFiles = undefined;
+  export let mediaAlt = "";
   export let onCommand = () => {};
   export let onSelectTarget = () => {};
   export let initialConfirmingAction = null;
@@ -115,6 +117,32 @@
       <span>{view.composer.label}</span>
       <textarea bind:value={body} rows="3"></textarea>
     </label>
+    <div
+      class="player-command-panel__media fm-well"
+      data-testid="player-media-composer"
+      data-max-encoded-bytes={composer.mediaMaxEncodedBytes}
+    >
+      <label class="fm-field">
+        <span>Attach image</span>
+        <input
+          data-testid="player-media-file"
+          type="file"
+          accept={(composer.mediaUploadTypes ?? ["image/png", "image/jpeg"]).join(",")}
+          bind:files={mediaFiles}
+        />
+      </label>
+      <label class="fm-field">
+        <span>Image description</span>
+        <input
+          data-testid="player-media-alt"
+          type="text"
+          maxlength="1000"
+          placeholder="Describe the image for players using assistive technology"
+          bind:value={mediaAlt}
+        />
+      </label>
+      <small>PNG or JPEG, up to 12 MiB. The server removes container metadata.</small>
+    </div>
     <div class="fm-touch-row">
       {#each view.composer.buttons as button}
         <button

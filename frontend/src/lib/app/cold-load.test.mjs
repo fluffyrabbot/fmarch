@@ -184,12 +184,15 @@ test("normalizes thread and votecount projection payloads for the player view", 
             occurred_at: 1781928000,
             media: [
               {
-                media_id: "receipt-13",
-                type: "image",
-                alt_text: "Vote receipt",
+                content_id: "a".repeat(64),
+                alt: "Vote receipt",
                 variants: {
-                  original: { url: "/media/original/receipt-13.jpg", width: 4000 },
-                  tablet: { url: "/media/tablet/receipt-13.jpg", width: 960 },
+                  tablet: {
+                    avif_url: "/media/thread/13/tablet.avif",
+                    webp_url: "/media/thread/13/tablet.webp",
+                    width: 960,
+                    height: 720,
+                  },
                 },
               },
             ],
@@ -210,19 +213,16 @@ test("normalizes thread and votecount projection payloads for the player view", 
           meta: "Jun 19, 2026, 9:00 PM",
           media: [
             {
-              id: "receipt-13",
+              id: "a".repeat(64),
+              contentId: "a".repeat(64),
               kind: "image",
               alt: "Vote receipt",
               variants: {
-                original: {
-                  url: "/media/original/receipt-13.jpg",
-                  width: 4000,
-                  height: null,
-                },
                 tablet: {
-                  url: "/media/tablet/receipt-13.jpg",
+                  avifUrl: "/media/thread/13/tablet.avif",
+                  webpUrl: "/media/thread/13/tablet.webp",
                   width: 960,
-                  height: null,
+                  height: 720,
                 },
               },
             },
@@ -337,15 +337,18 @@ test("normalizes live and cold thread posts through the same media contract", ()
         sourceSeq: 77,
         authorUser: "host",
         body: "visual receipt",
-        images: [
+        media: [
           {
-            id: "receipt-77",
-            kind: "image",
+            content_id: "b".repeat(64),
             alt: "Official receipt",
-            variants: [
-              { name: "thumb", url: "/media/thumb/receipt-77.jpg", width: 320 },
-              { name: "original", url: "/media/original/receipt-77.jpg", width: 4000 },
-            ],
+            variants: {
+              thumb: {
+                avif_url: "/media/thread/77/thumb.avif",
+                webp_url: "/media/thread/77/thumb.webp",
+                width: 256,
+                height: 192,
+              },
+            },
           },
         ],
       },
@@ -360,15 +363,16 @@ test("normalizes live and cold thread posts through the same media contract", ()
       meta: "live update",
       media: [
         {
-          id: "receipt-77",
+          id: "b".repeat(64),
+          contentId: "b".repeat(64),
           kind: "image",
           alt: "Official receipt",
           variants: {
-            thumb: { url: "/media/thumb/receipt-77.jpg", width: 320, height: null },
-            original: {
-              url: "/media/original/receipt-77.jpg",
-              width: 4000,
-              height: null,
+            thumb: {
+              avifUrl: "/media/thread/77/thumb.avif",
+              webpUrl: "/media/thread/77/thumb.webp",
+              width: 256,
+              height: 192,
             },
           },
         },

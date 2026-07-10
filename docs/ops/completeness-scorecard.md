@@ -17,7 +17,7 @@ count is treated as product progress.
 
 | Execution class | Complete | Partial | Open | Blocked | Deferred | Total |
 |---|---:|---:|---:|---:|---:|---:|
-| code | 17 | 5 | 6 | 0 | 0 | 28 |
+| code | 18 | 5 | 5 | 0 | 0 | 28 |
 | external-evidence | 0 | 0 | 0 | 6 | 0 | 6 |
 | human | 0 | 0 | 1 | 1 | 0 | 2 |
 | optional | 0 | 0 | 0 | 0 | 1 | 1 |
@@ -28,24 +28,24 @@ Overall release closure complete: **no**.
 
 ## Next buildable coding slice
 
-### Uploaded media through a private post `product.media.upload-to-private-post`
+### Role private-message lifecycle `product.private.role-pm`
 
-Replace client-authored post-media URL maps with a server-issued content-id attachment contract: accept only an uploaded content id plus alt text at SubmitPost, verify the canonical handle before command acceptance, persist and project that immutable reference, derive private AVIF/WebP URLs server-side, and serve only manifest-backed variants after both account-session and projected channel-membership checks. Update the player composer to upload then post and render a responsive picture, and prove with the seeded live stack that a member receives real variant bytes after reload while a non-member receives no media bytes.
+Make each occupied slot's Role PM a first-class, engine-declared private channel instead of a frontend-conventional `role-pm` identifier: declare its stable channel identity and membership from authoritative slot assignment/start events, project and capability-gate it through the generic private-channel model, preserve slot-authored history while transferring current membership on replacement, and revoke the outgoing principal/session immediately. Extend the seeded real-stack lane to post through the incoming role URL, observe the command receipt and live delta, reload the same durable thread, then prove the replaced principal receives neither thread rows nor media bytes and cannot append a stale post.
 
-Owned paths: `Cargo.lock`, `crates/api/`, `crates/commands/`, `crates/media/`, `crates/projections/`, `crates/server/`, `crates/wire/`, `frontend/src/lib/components/player-thread/`, `frontend/src/routes/g/[game]/`, `frontend/src/routes/media/live-stack/thread/[asset]/`, `tools/host_console_live_stack_smoke.mjs`, `docs/arch/07-images.md`.
+Owned paths: `migrations/`, `crates/domain/`, `crates/commands/`, `crates/projections/`, `crates/caps/`, `crates/api/`, `crates/wire/`, `frontend/src/lib/components/player-channel-rail/`, `frontend/src/routes/g/[game]/`, `tools/dev_test_game_core_loop_private_channel_recovery_scenarios.mjs`, `tools/host_console_live_stack_smoke.mjs`, `docs/arch/01-domain-model.md`, `docs/arch/06-security.md`.
 
 Proof:
 
-- `cargo test -p media`
-- `DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p api media -- --test-threads=1`
+- `cargo test -p commands -p projections -p caps`
+- `DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p api role_pm -- --test-threads=1`
 - `npm run test:frontend-contract`
 - `npm run test:dev-test-game-core-live:local`
 
 Explicit non-claims:
 
-- No public or original-byte route, cross-post media library, gallery, profile-media, or moderation workflow.
-- No multipart/resumable upload, direct object-store upload, quotas/rate limits, orphan cleanup, or retention lifecycle.
-- No object-store/CDN integration, hosted durability, production performance, or production codec-quality claim.
+- No neighborhood, mason, dead, spectator, or arbitrary user-created room completion claim.
+- No cross-game direct messaging, inbox, notification-delivery, blocking, reporting, or moderation workflow.
+- No hosted deployment, hosted identity, production concurrency, or release-readiness promotion from the local seeded proof.
 
 ## Locally proven foundation
 
@@ -70,11 +70,11 @@ Explicit non-claims:
 
 | Status | Capability | Depends on | Complete when | Current / remaining | Evidence / boundary |
 |---|---|---|---|---|---|
-| complete | Reference-backed private media baseline<br>`product.media.reference-ingest-serving` | `product.game.core-loop` | A command-backed private post serves referenced tablet/small bytes to a member and denies a non-member. | Complete. | source: `frontend/src/routes/media/live-stack/thread/[asset]/+server.js`<br>source: `docs/arch/07-images.md`<br>command: `npm run test:host-console-live-stack-smoke`<br>Generated tablet/small PNG references flow through SubmitPost, projection-backed serving, immutable headers, and member/non-member authorization; this does not prove upload, durable blob storage, metadata stripping, or transcoding. |
+| complete | Reference-backed private media baseline<br>`product.media.reference-ingest-serving` | `product.game.core-loop` | A command-backed private post serves referenced variant bytes to a member and denies a non-member. | Complete. | source: `crates/api/src/lib.rs`<br>source: `frontend/src/routes/media/thread/[game]/[channel]/[sourceSeq]/[contentId]/[asset]/+server.js`<br>source: `docs/arch/07-images.md`<br>command: `npm run test:host-console-live-stack-smoke`<br>A command-backed private post reference is checked against the current projection and channel authority at serve time; members receive immutable variant bytes and non-members receive none. Canonical ingest and transcoding are closed by the downstream media capabilities. |
 | complete | Canonical private media blob store<br>`product.media.canonical-blob-store` | `product.media.reference-ingest-serving` | Malformed and oversized inputs are rejected; metadata is stripped before BLAKE3 identity; equivalent images deduplicate; persistence is atomic and root-confined; restart lookup succeeds. | Complete. | source: `crates/media/src/lib.rs`<br>source: `docs/arch/07-images.md`<br>command: `cargo test -p media`<br>command: `cargo clippy -p media --all-targets -- -D warnings`<br>command: `cargo check -p server`<br>Bounded local PNG/JPEG ingest applies EXIF orientation, serializes decoder-produced RGBA8 into a versioned canonical record, strips container metadata, derives BLAKE3 identity, and persists it through private fd-relative atomic storage with verified restart lookup; it does not normalize ICC profiles or expose upload, serving, or variants. |
 | complete | AVIF/WebP variant generation<br>`product.media.variant-generation` | `product.media.canonical-blob-store` | The media core produces validated AVIF/WebP variants for every supported size and can regenerate them from canonical storage. | Complete. | source: `crates/media/src/variants.rs`<br>source: `docs/arch/07-images.md`<br>command: `cargo test -p media`<br>command: `cargo test -p media variant`<br>command: `cargo clippy -p media --all-targets -- -D warnings`<br>command: `cargo check -p server`<br>A pinned media recipe generates verified thumb, tablet, and full-bounded AVIF/WebP from canonical rasters, commits six private immutable members through a manifest installed last, and reproduces exact bytes across concurrency, restart, and explicit regeneration; this is local recipe proof, not a production codec-quality benchmark. |
 | complete | Authenticated bounded media upload<br>`product.media.authenticated-upload` | `product.media.canonical-blob-store`<br>`product.media.variant-generation`<br>`product.identity.account-login-invites` | Authorized uploads return a persistent handle while malformed, oversized, unsupported, and unauthorized requests fail without retained bytes. | Complete. | source: `crates/api/src/lib.rs`<br>source: `crates/api/tests/vertical.rs`<br>source: `crates/media/src/variants.rs`<br>source: `crates/server/src/main.rs`<br>source: `tools/dev_test_game.mjs`<br>source: `docs/arch/07-images.md`<br>command: `DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p api -- --test-threads=1`<br>command: `cargo test -p media`<br>command: `cargo check -p server`<br>Server startup now requires a pre-provisioned media root, and an active enabled account can submit bounded raw PNG/JPEG bytes to a prepare-before-persist endpoint that commits one canonical raster plus the fixed six-member variant set and returns only typed immutable handle metadata. Missing, non-account, expired, revoked, disabled, unsupported, mismatched, malformed, dimension-limited, body-limited, and variant-output-limited requests retain no canonical or variant bytes; this is local API/filesystem proof, not post serving, browser, hosted durability, or production upload readiness. |
-| open | Uploaded media through a private post<br>`product.media.upload-to-private-post` | `product.media.authenticated-upload`<br>`product.media.variant-generation`<br>`product.media.reference-ingest-serving`<br>`product.private.mafia-room` | A seeded member uploads and posts media, receives the correct variant after reload, and a non-member receives no bytes. | Remaining: Wire upload, post attachment, persistent serving, responsive UI, and seeded browser authorization proof. | source: `docs/arch/07-images.md`<br>planned-command: `npm run test:dev-test-game-core-live:local`<br>Carry a real upload handle through SubmitPost, persistent projection serving, responsive rendering, and private-channel denial in a seeded browser flow. |
+| complete | Uploaded media through a private post<br>`product.media.upload-to-private-post` | `product.media.authenticated-upload`<br>`product.media.variant-generation`<br>`product.media.reference-ingest-serving`<br>`product.private.mafia-room` | A seeded member uploads and posts media, receives the correct variant after reload, and a non-member receives no bytes. | Complete. | source: `crates/api/src/lib.rs`<br>source: `crates/api/tests/vertical.rs`<br>source: `crates/wire/src/lib.rs`<br>source: `frontend/src/routes/media/thread/[game]/[channel]/[sourceSeq]/[contentId]/[asset]/+server.js`<br>source: `tools/host_console_live_stack_smoke.mjs`<br>source: `docs/arch/07-images.md`<br>command: `DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p api media -- --test-threads=1`<br>command: `npm run test:frontend-contract`<br>command: `npm run test:host-console-live-stack-smoke`<br>An enabled-account player uploads bounded PNG/JPEG bytes, submits only the canonical content id plus alt text, reloads manifest-backed AVIF/WebP from a private post, and a second enabled non-member account receives 403 with a zero-byte body for the exact same URL. This is local scratch-Postgres/filesystem proof, not hosted or object-store durability. |
 
 ## Private-channel breadth
 

@@ -114,6 +114,9 @@ export async function buildGameRouteData({
       withdrawCommandLabel: "Withdraw vote",
       voteTargetSlot: "slot-2",
       commandEndpoint: "/commands",
+      mediaUploadEndpoint: "/media/uploads",
+      mediaUploadTypes: Object.freeze(["image/png", "image/jpeg"]),
+      mediaMaxEncodedBytes: 12 * 1024 * 1024,
       transportBoundary: LIVE_TRANSPORT_BOUNDARY.proof,
     },
     coldLoad.commandState,
@@ -581,24 +584,20 @@ const PLAYER_FIXTURE_COLD_LOAD = Object.freeze({
         meta: "2 min ago",
         media: Object.freeze([
           Object.freeze({
-            id: "receipt-442",
-            kind: "image",
+            content_id: "e".repeat(64),
             alt: "Tablet-safe vote receipt",
             variants: Object.freeze({
               tablet: Object.freeze({
-                url: "/media/midsummer/thread/receipt-442-tablet.png",
+                avif_url: "/media/midsummer/thread/receipt-442-tablet.png",
+                webp_url: "/media/midsummer/thread/receipt-442-tablet.png",
                 width: 960,
                 height: 720,
               }),
-              small: Object.freeze({
-                url: "/media/midsummer/thread/receipt-442-small.png",
+              thumb: Object.freeze({
+                avif_url: "/media/midsummer/thread/receipt-442-small.png",
+                webp_url: "/media/midsummer/thread/receipt-442-small.png",
                 width: 480,
                 height: 360,
-              }),
-              original: Object.freeze({
-                url: "/media/midsummer/thread/receipt-442-original.png",
-                width: 4000,
-                height: 3000,
               }),
             }),
           }),

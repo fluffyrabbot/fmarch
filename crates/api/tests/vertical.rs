@@ -3,7 +3,7 @@ use axum::body::{to_bytes, Body};
 use axum::http::{Request, StatusCode};
 use futures_util::StreamExt;
 use media::{MediaLimits, MediaStore, VariantLimits};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 use std::path::Path;
 use std::sync::OnceLock;
 use tempfile::TempDir;
@@ -11,8 +11,8 @@ use tower::ServiceExt;
 use uuid::Uuid;
 use wire::{
     ClientEnvelope, ClientMsg, Command, CommandMsg, PlayerInvestigationResult, PlayerNotification,
-    ProjectionDelta, RejectCode, RejectMsg, ServerEnvelope, ServerMsg, SlotLifecycle, ThreadPage,
-    ThreadPostMedia, ThreadPostMediaVariant, VoteTarget, PROTOCOL_VERSION,
+    ProjectionDelta, RejectCode, RejectMsg, ServerEnvelope, ServerMsg, SlotLifecycle,
+    SubmitPostMedia, ThreadPage, VoteTarget, PROTOCOL_VERSION,
 };
 
 fn router(pool: sqlx::PgPool) -> axum::Router {
@@ -345,6 +345,232 @@ async fn media_upload_rejects_type_malformed_dimension_and_body_limits_without_r
     .await;
     assert_eq!(rejected.status(), StatusCode::UNPROCESSABLE_ENTITY);
     assert_eq!(media_blob_entry_count(variant_root.path()), 0);
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn media_upload_posts_reloads_and_serves_only_to_private_channel_members(pool: sqlx::PgPool) {
+    let root = tempfile::tempdir().unwrap();
+    let store = MediaStore::open(root.path(), MediaLimits::default()).unwrap();
+    let app =
+        api::router_with_state(ApiState::new(pool.clone(), store.clone()).with_dev_auth(true));
+    let (member_token, member_principal) =
+        create_media_upload_account_session(&app, "private-post-member").await;
+    let (nonmember_token, _) =
+        create_media_upload_account_session(&app, "private-post-nonmember").await;
+    let game = Uuid::new_v4();
+
+    for (id, principal, command) in [
+        (
+            1,
+            "host_h",
+            Command::CreateGame {
+                game,
+                pack: "mafiascum".into(),
+            },
+        ),
+        (
+            2,
+            "host_h",
+            Command::AddSlot {
+                game,
+                slot: "slot_1".into(),
+            },
+        ),
+        (
+            3,
+            "host_h",
+            Command::AssignSlot {
+                game,
+                slot: "slot_1".into(),
+                user: member_principal.clone(),
+            },
+        ),
+        (
+            4,
+            "host_h",
+            Command::AssignRole {
+                game,
+                slot: "slot_1".into(),
+                role_key: "vanilla_townie".into(),
+            },
+        ),
+        (
+            5,
+            "host_h",
+            Command::StartGame {
+                game,
+                phase: "D01".into(),
+            },
+        ),
+    ] {
+        expect_ack(post_command(app.clone(), id, principal, command).await);
+    }
+    sqlx::query(
+        "INSERT INTO private_channel_member \
+         (game_id, channel_id, kind, slot_id, role_key, reveals_alignment, source) \
+         VALUES ($1, 'role-pm', 'role_pm', 'slot_1', 'vanilla_townie', 'never', 'test')",
+    )
+    .bind(game)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let upload = post_media_upload(
+        &app,
+        Some(&member_token),
+        "image/png",
+        media_upload_png(300, 225),
+    )
+    .await;
+    assert_eq!(upload.status(), StatusCode::CREATED);
+    let upload: MediaUploadResponse =
+        serde_json::from_slice(&to_bytes(upload.into_body(), usize::MAX).await.unwrap()).unwrap();
+
+    expect_ack(
+        post_command(
+            app.clone(),
+            6,
+            member_principal.as_str(),
+            Command::SubmitPost {
+                game,
+                channel_id: "role-pm".into(),
+                actor_slot: "slot_1".into(),
+                body: "private uploaded image".into(),
+                media: Some(vec![SubmitPostMedia {
+                    content_id: upload.content_id.clone(),
+                    alt: "Private uploaded receipt".into(),
+                }]),
+            },
+        )
+        .await,
+    );
+    let payload: serde_json::Value = sqlx::query_scalar(
+        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'PostSubmitted' ORDER BY seq DESC LIMIT 1",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(payload["media"][0]["content_id"], upload.content_id);
+    assert_eq!(payload["media"][0]["alt"], "Private uploaded receipt");
+    assert_eq!(
+        payload["media"][0]["variants"].as_object().unwrap().len(),
+        3
+    );
+    assert!(payload["media"][0].get("url").is_none());
+    assert!(payload["media"][0].get("kind").is_none());
+
+    let missing_handle = "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd";
+    let rejected = post_command(
+        app.clone(),
+        7,
+        member_principal.as_str(),
+        Command::SubmitPost {
+            game,
+            channel_id: "role-pm".into(),
+            actor_slot: "slot_1".into(),
+            body: "missing media must not post".into(),
+            media: Some(vec![SubmitPostMedia {
+                content_id: missing_handle.into(),
+                alt: "Missing image".into(),
+            }]),
+        },
+    )
+    .await;
+    expect_reject(rejected, RejectCode::InvalidTarget);
+
+    drop(app);
+    drop(store);
+    let restarted = MediaStore::open(root.path(), MediaLimits::default()).unwrap();
+    let app = api::router(pool.clone(), restarted);
+    let thread = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!(
+                    "/games/{game}/channels/role-pm/thread?principal_user_id={member_principal}&limit=10"
+                ))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(thread.status(), StatusCode::OK);
+    let thread: ThreadPage =
+        serde_json::from_slice(&to_bytes(thread.into_body(), usize::MAX).await.unwrap()).unwrap();
+    assert_eq!(thread.posts.len(), 1);
+    assert_eq!(thread.posts[0].body, "private uploaded image");
+    assert_eq!(thread.posts[0].media.len(), 1);
+    let media = &thread.posts[0].media[0];
+    assert_eq!(media.content_id, upload.content_id);
+    assert_eq!(media.alt, "Private uploaded receipt");
+    assert_eq!(media.variants.len(), 3);
+    let tablet = media.variants.get("tablet").unwrap();
+    assert_eq!((tablet.width, tablet.height), (300, 225));
+    assert!(tablet.avif_url.ends_with("/tablet.avif"));
+    assert!(tablet.webp_url.ends_with("/tablet.webp"));
+
+    let served = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(tablet.avif_url.as_str())
+                .header("authorization", format!("Bearer {member_token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(served.status(), StatusCode::OK);
+    assert_eq!(served.headers()["content-type"], "image/avif");
+    assert_eq!(
+        served.headers()["x-fmarch-media-content-address"],
+        upload.content_id
+    );
+    assert_eq!(served.headers()["x-fmarch-media-channel"], "role-pm");
+    assert_eq!(served.headers()["x-fmarch-media-variant"], "tablet");
+    assert_eq!(served.headers()["x-fmarch-media-format"], "avif");
+    assert_eq!(served.headers()["cache-control"], "private, no-cache");
+    let etag = served.headers()["etag"].to_str().unwrap().to_string();
+    assert!(!to_bytes(served.into_body(), usize::MAX)
+        .await
+        .unwrap()
+        .is_empty());
+
+    let not_modified = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(tablet.avif_url.as_str())
+                .header("authorization", format!("Bearer {member_token}"))
+                .header("if-none-match", etag.as_str())
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(not_modified.status(), StatusCode::NOT_MODIFIED);
+    assert_eq!(not_modified.headers()["etag"], etag);
+    assert!(to_bytes(not_modified.into_body(), usize::MAX)
+        .await
+        .unwrap()
+        .is_empty());
+
+    let denied = app
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(tablet.avif_url.as_str())
+                .header("authorization", format!("Bearer {nonmember_token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(denied.status(), StatusCode::FORBIDDEN);
 }
 
 fn stable_command_id(id: u64) -> Uuid {
@@ -2891,29 +3117,7 @@ async fn vertical_faction_day_chat_is_command_declared_and_channel_scoped(pool: 
                 channel_id: "private:mafia_day_chat".into(),
                 actor_slot: "slot_1".into(),
                 body: "day chat is live".into(),
-                media: Some(vec![ThreadPostMedia {
-                    id: "live-faction-day-chat-receipt".into(),
-                    kind: "image".into(),
-                    alt: "Live faction day chat tablet receipt".into(),
-                    variants: BTreeMap::from([
-                        (
-                            "tablet".into(),
-                            ThreadPostMediaVariant {
-                                url: "/media/live-stack/thread/live-faction-day-chat-receipt-tablet.png".into(),
-                                width: Some(960),
-                                height: Some(720),
-                            },
-                        ),
-                        (
-                            "small".into(),
-                            ThreadPostMediaVariant {
-                                url: "/media/live-stack/thread/live-faction-day-chat-receipt-small.png".into(),
-                                width: Some(480),
-                                height: Some(360),
-                            },
-                        ),
-                    ]),
-                }]),
+                media: None,
             },
         )
         .await,
@@ -2943,18 +3147,7 @@ async fn vertical_faction_day_chat_is_command_declared_and_channel_scoped(pool: 
             .collect::<Vec<_>>(),
         vec![("private:mafia_day_chat", "day chat is live")]
     );
-    assert_eq!(allowed_page.posts[0].media.len(), 1);
-    assert_eq!(
-        allowed_page.posts[0].media[0].id,
-        "live-faction-day-chat-receipt"
-    );
-    assert_eq!(
-        allowed_page.posts[0].media[0]
-            .variants
-            .get("tablet")
-            .map(|variant| variant.url.as_str()),
-        Some("/media/live-stack/thread/live-faction-day-chat-receipt-tablet.png"),
-    );
+    assert!(allowed_page.posts[0].media.is_empty());
 
     let denied_read = app
         .clone()

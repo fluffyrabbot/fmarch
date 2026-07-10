@@ -32,16 +32,18 @@ export function buildPlayerCommand({
 }) {
   const commandKind = actionConfig?.commandKind ?? action;
   switch (commandKind) {
-    case "submit_post":
+    case "submit_post": {
+      const normalizedMedia = submitPostMedia(media);
       return Object.freeze({
         SubmitPost: Object.freeze({
           game: requiredString(game, "game"),
           channel_id: requiredString(channelId, "channelId"),
           actor_slot: requiredString(actorSlot, "actorSlot"),
-          body: postBody(body, media, actionConfig),
-          ...(media.length > 0 ? { media } : {}),
+          body: postBody(body, normalizedMedia, actionConfig),
+          ...(normalizedMedia.length > 0 ? { media: normalizedMedia } : {}),
         }),
       });
+    }
     case "submit_vote":
       return Object.freeze({
         SubmitVote: Object.freeze({
@@ -299,6 +301,25 @@ function postBody(value, media, actionConfig) {
     return value;
   }
   throw new TypeError("body must be a non-empty string unless media-only posts are enabled");
+}
+
+function submitPostMedia(value) {
+  if (!Array.isArray(value)) {
+    throw new TypeError("media must be an array");
+  }
+  return Object.freeze(
+    value.map((item) => {
+      const contentId = requiredString(item?.content_id, "media.content_id");
+      if (!/^[0-9a-f]{64}$/u.test(contentId)) {
+        throw new TypeError("media.content_id must be 64 lowercase hexadecimal characters");
+      }
+      const alt = requiredString(item?.alt, "media.alt");
+      if (alt.length > 1_000) {
+        throw new TypeError("media.alt must not exceed 1000 characters");
+      }
+      return Object.freeze({ content_id: contentId, alt });
+    }),
+  );
 }
 
 function voteTargetWire(target) {

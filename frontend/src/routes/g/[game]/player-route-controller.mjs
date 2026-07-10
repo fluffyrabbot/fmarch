@@ -228,7 +228,7 @@ export function playerRefreshKeysForAction(action) {
   }
 }
 
-export function buildPlayerCommandRequest({ data, action, composerBody }) {
+export function buildPlayerCommandRequest({ data, action, composerBody, media = [] }) {
   const actionConfig = playerActionConfig(data, action);
   return Object.freeze({
     principalUserId: data.player.principalUserId,
@@ -239,6 +239,7 @@ export function buildPlayerCommandRequest({ data, action, composerBody }) {
       channelId: data.threadPager.channel,
       actorSlot: data.player.slotId,
       body: composerBody,
+      media,
       target: data.composer.voteTargetSlot,
       actionConfig,
     }),
@@ -249,6 +250,7 @@ export function buildPlayerCommandDispatchBridgePlan({
   data,
   action,
   composerBody,
+  media = [],
   optimisticStatus,
   finalStatus,
 }) {
@@ -261,6 +263,7 @@ export function buildPlayerCommandDispatchBridgePlan({
     data,
     action: trace.dispatchKind,
     composerBody,
+    media,
   });
   return buildDispatchBridgePlanFromRequest({
     role: "player",
@@ -279,6 +282,7 @@ export function buildPlayerCommandDispatchBridgePlan({
 export async function submitPlayerRouteCommand({
   action,
   composerBody,
+  media = [],
   commandIdFactory,
   data,
   fetchImpl,
@@ -286,7 +290,7 @@ export async function submitPlayerRouteCommand({
   sendCommandImpl = sendCommand,
 }) {
   const commandStatus = await sendCommandImpl({
-    ...buildPlayerCommandRequest({ data, action, composerBody }),
+    ...buildPlayerCommandRequest({ data, action, composerBody, media }),
     commandIdFactory,
     fetchImpl,
   });
@@ -311,6 +315,59 @@ export async function submitPlayerRouteCommand({
     commandStatus,
     snapshot: projectionStore.getSnapshot(),
   });
+}
+
+export async function uploadPlayerPostMedia({
+  data,
+  file,
+  alt,
+  fetchImpl,
+}) {
+  if (file === null || file === undefined) {
+    return Object.freeze([]);
+  }
+  if (typeof fetchImpl !== "function") {
+    throw new TypeError("media upload requires fetch");
+  }
+  const contentType = String(file.type ?? "").toLowerCase();
+  const allowedTypes = data.composer.mediaUploadTypes ?? ["image/png", "image/jpeg"];
+  if (!allowedTypes.includes(contentType)) {
+    throw new TypeError("Choose a PNG or JPEG image");
+  }
+  const size = Number(file.size);
+  if (
+    !Number.isFinite(size) ||
+    size <= 0 ||
+    size > Number(data.composer.mediaMaxEncodedBytes ?? 12 * 1024 * 1024)
+  ) {
+    throw new TypeError("Image must be non-empty and no larger than 12 MiB");
+  }
+  const normalizedAlt = String(alt ?? "").trim();
+  if (normalizedAlt === "" || normalizedAlt.length > 1_000) {
+    throw new TypeError("Image alt text must contain 1 to 1000 characters");
+  }
+  const response = await fetchImpl(data.composer.mediaUploadEndpoint, {
+    method: "POST",
+    headers: {
+      accept: "application/json",
+      "content-type": contentType,
+    },
+    body: file,
+  });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(payload?.message ?? `Media upload failed with ${response.status}`);
+  }
+  const contentId = String(payload?.content_id ?? "");
+  if (!/^[0-9a-f]{64}$/u.test(contentId)) {
+    throw new Error("Media upload returned an invalid content id");
+  }
+  return Object.freeze([
+    Object.freeze({
+      content_id: contentId,
+      alt: normalizedAlt,
+    }),
+  ]);
 }
 
 export function playerRefreshKeysForCommandOutcome({ data, action, commandStatus }) {

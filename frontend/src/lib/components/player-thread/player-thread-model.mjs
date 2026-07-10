@@ -1,7 +1,8 @@
 export const PLAYER_THREAD_MEDIA_CONTRACT = Object.freeze({
   component: "player-thread-media",
-  preferredVariants: Object.freeze(["tablet", "small", "thumb", "thumbnail"]),
-  forbiddenVariants: Object.freeze(["original", "full", "desktop"]),
+  preferredVariants: Object.freeze(["tablet", "thumb", "full-bounded"]),
+  responsiveVariants: Object.freeze(["thumb", "tablet", "full-bounded"]),
+  forbiddenVariants: Object.freeze(["original"]),
   imageSizes: "(max-width: 1180px) 100vw, 720px",
   unavailableLabel: "Image unavailable on tablet",
 });
@@ -124,7 +125,7 @@ export function buildPlayerThreadMedia(value) {
       withheld.push(
         Object.freeze({
           id: String(item?.id ?? `media-${withheld.length + 1}`),
-          reason: "missing tablet/small/thumb image variant",
+          reason: "missing manifest-backed responsive image variants",
         }),
       );
       continue;
@@ -132,10 +133,20 @@ export function buildPlayerThreadMedia(value) {
     items.push(
       Object.freeze({
         id: String(item.id ?? `media-${items.length + 1}`),
+        contentId: String(item.contentId ?? item.id ?? ""),
         kind: "image",
         alt: String(item.alt ?? "Thread image"),
-        src: selected.url,
-        srcset: tabletThreadMediaSrcset(item.variants),
+        src: selected.webpUrl,
+        sources: Object.freeze([
+          Object.freeze({
+            type: "image/avif",
+            srcset: threadMediaSrcset(item.variants, "avifUrl"),
+          }),
+          Object.freeze({
+            type: "image/webp",
+            srcset: threadMediaSrcset(item.variants, "webpUrl"),
+          }),
+        ]),
         sizes: PLAYER_THREAD_MEDIA_CONTRACT.imageSizes,
         width: selected.width,
         height: selected.height,
@@ -160,10 +171,16 @@ export function selectTabletThreadMediaVariant(variants = {}) {
     if (variant === null || typeof variant !== "object") {
       continue;
     }
-    if (typeof variant.url === "string" && variant.url.trim() !== "") {
+    if (
+      typeof variant.avifUrl === "string" &&
+      variant.avifUrl.trim() !== "" &&
+      typeof variant.webpUrl === "string" &&
+      variant.webpUrl.trim() !== ""
+    ) {
       return Object.freeze({
         name,
-        url: variant.url,
+        avifUrl: variant.avifUrl,
+        webpUrl: variant.webpUrl,
         width: Number.isFinite(Number(variant.width)) ? Number(variant.width) : null,
         height: Number.isFinite(Number(variant.height)) ? Number(variant.height) : null,
       });
@@ -172,18 +189,29 @@ export function selectTabletThreadMediaVariant(variants = {}) {
   return null;
 }
 
-function tabletThreadMediaSrcset(variants = {}) {
+function threadMediaSrcset(variants = {}, urlField) {
   if (variants === null || typeof variants !== "object") {
     return null;
   }
-  const entries = PLAYER_THREAD_MEDIA_CONTRACT.preferredVariants
-    .map((name) => [name, variants[name]])
-    .filter(([, variant]) => typeof variant?.url === "string" && variant.url.trim() !== "")
-    .map(([, variant]) => {
+  const byWidth = new Map();
+  for (const name of PLAYER_THREAD_MEDIA_CONTRACT.responsiveVariants) {
+    const variant = variants[name];
+    if (typeof variant?.[urlField] !== "string" || variant[urlField].trim() === "") {
+      continue;
+    }
+    const width = Number(variant.width);
+    const key = Number.isFinite(width) && width > 0 ? width : name;
+    if (!byWidth.has(key)) {
+      byWidth.set(key, variant);
+    }
+  }
+  const entries = [...byWidth.values()]
+    .sort((left, right) => Number(left.width ?? 0) - Number(right.width ?? 0))
+    .map((variant) => {
       const width = Number(variant.width);
       return Number.isFinite(width) && width > 0
-        ? `${variant.url} ${width}w`
-        : variant.url;
+        ? `${variant[urlField]} ${width}w`
+        : variant[urlField];
     });
   return entries.length === 0 ? null : entries.join(", ");
 }

@@ -1516,7 +1516,7 @@ async function proveRenderedPlayerSurface(bundle) {
   );
   assertIncludes(
     html,
-    'data-testid="thread-post-media-receipt-442"',
+    `data-testid="thread-post-media-${"e".repeat(64)}"`,
     "player thread media item",
   );
   assertIncludes(
@@ -1576,7 +1576,7 @@ async function proveRenderedPlayerSurface(bundle) {
     primaryControlsBeforeReceipts: true,
     media: {
       component: PLAYER_THREAD_MEDIA_CONTRACT.component,
-      renderedTestId: "thread-post-media-receipt-442",
+      renderedTestId: `thread-post-media-${"e".repeat(64)}`,
       renderedVariant: "tablet",
       renderedSrc: "/media/midsummer/thread/receipt-442-tablet.png",
       originalUrlRendered: false,

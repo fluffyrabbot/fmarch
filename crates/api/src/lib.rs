@@ -9,20 +9,22 @@ use argon2::Argon2;
 use axum::body::Bytes;
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::extract::{DefaultBodyLimit, Path, Query, State};
-use axum::http::header::{AUTHORIZATION, CONTENT_TYPE, RETRY_AFTER};
+use axum::http::header::{
+    AUTHORIZATION, CACHE_CONTROL, CONTENT_LENGTH, CONTENT_TYPE, ETAG, IF_NONE_MATCH, RETRY_AFTER,
+};
 use axum::http::{HeaderMap, HeaderValue, StatusCode};
-use axum::response::IntoResponse;
+use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use caps::{Capability, Principal};
 use media::{
-    IngestStatus, MediaError, MediaStore, VariantGenerationStatus, VariantLimits,
-    VARIANT_RECIPE_REVISION,
+    ContentId, IngestStatus, MediaError, MediaStore, VariantFormat, VariantGenerationStatus,
+    VariantKind, VariantLimits, VARIANT_RECIPE_REVISION,
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use sqlx::postgres::PgPool;
-use std::collections::{BTreeSet, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::path::Path as FsPath;
 use std::sync::OnceLock;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -191,6 +193,10 @@ pub fn router_with_state(state: ApiState) -> Router {
         .route(
             "/media/uploads",
             post(media_upload).layer(DefaultBodyLimit::max(media_upload_limit)),
+        )
+        .route(
+            "/media/thread/{game}/{channel}/{source_seq}/{content_id}/{asset}",
+            get(media_thread_variant),
         )
         .route(
             "/auth/identity-lifecycle-audit",
@@ -431,6 +437,198 @@ fn media_internal_error(message: String) -> ApiError {
         status: StatusCode::INTERNAL_SERVER_ERROR,
         error: RejectCode::Internal,
         message,
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct ThreadMediaAsset {
+    kind: VariantKind,
+    format: VariantFormat,
+}
+
+async fn media_thread_variant(
+    State(state): State<ApiState>,
+    Path((game, channel, source_seq, content_id, asset)): Path<(Uuid, String, i64, String, String)>,
+    headers: HeaderMap,
+) -> Result<Response, ApiError> {
+    let token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
+    let principal_user_id = require_active_enabled_account(&state, token).await?;
+    if channel != "main" {
+        require_channel_thread_access(
+            &state,
+            game,
+            channel.as_str(),
+            Some(principal_user_id.as_str()),
+        )
+        .await?;
+    }
+
+    let id = content_id
+        .parse::<ContentId>()
+        .map_err(|_| media_not_found("media reference unavailable"))?;
+    let asset = parse_thread_media_asset(asset.as_str())
+        .ok_or_else(|| media_not_found("media variant unavailable"))?;
+    let projected_media = sqlx::query_scalar::<_, serde_json::Value>(
+        r#"
+        SELECT media
+        FROM thread_view
+        WHERE game_id = $1
+          AND channel_id = $2
+          AND source_seq = $3
+        "#,
+    )
+    .bind(game)
+    .bind(channel.as_str())
+    .bind(source_seq)
+    .fetch_optional(&state.pool)
+    .await?
+    .ok_or_else(|| media_not_found("media reference unavailable"))?;
+    if !projected_media_references_variant(&projected_media, id, asset.kind) {
+        return Err(media_not_found(
+            "media variant is not referenced by this post",
+        ));
+    }
+
+    let store = state.media_store.clone();
+    let limits = state.variant_limits;
+    let stored = tokio::task::spawn_blocking(move || {
+        store.lookup_variant(id, asset.format, asset.kind, limits)
+    })
+    .await
+    .map_err(|error| {
+        tracing::error!(error = %error, "thread media lookup worker failed");
+        media_internal_error("thread media lookup failed".to_string())
+    })?
+    .map_err(|error| {
+        tracing::error!(error = %error, "thread media lookup failed");
+        media_internal_error("thread media lookup failed".to_string())
+    })?
+    .ok_or_else(|| media_not_found("media variant unavailable"))?;
+
+    let record = stored.record();
+    let etag = format!("\"{}\"", record.blake3());
+    let reference = format!("{game}/{channel}/{source_seq}/{id}");
+    let not_modified = if_none_match_matches(&headers, etag.as_str());
+    let mut response = if not_modified {
+        StatusCode::NOT_MODIFIED.into_response()
+    } else {
+        (
+            StatusCode::OK,
+            Bytes::copy_from_slice(stored.encoded_bytes()),
+        )
+            .into_response()
+    };
+    let response_headers = response.headers_mut();
+    response_headers.insert(
+        CONTENT_TYPE,
+        HeaderValue::from_static(asset.format.mime_type()),
+    );
+    response_headers.insert(CACHE_CONTROL, HeaderValue::from_static("private, no-cache"));
+    if !not_modified {
+        response_headers.insert(
+            CONTENT_LENGTH,
+            header_value(record.encoded_len().to_string(), "media content length")?,
+        );
+    }
+    response_headers.insert(ETAG, header_value(etag, "media etag")?);
+    response_headers.insert(
+        "x-fmarch-media-content-address",
+        header_value(id.to_string(), "media content address")?,
+    );
+    response_headers.insert(
+        "x-fmarch-media-channel",
+        header_value(channel, "media channel")?,
+    );
+    response_headers.insert(
+        "x-fmarch-media-post-seq",
+        header_value(source_seq.to_string(), "media post sequence")?,
+    );
+    response_headers.insert(
+        "x-fmarch-media-reference",
+        header_value(reference, "media reference")?,
+    );
+    response_headers.insert(
+        "x-fmarch-media-variant",
+        HeaderValue::from_static(match asset.kind {
+            VariantKind::Thumb => "thumb",
+            VariantKind::Tablet => "tablet",
+            VariantKind::FullBounded => "full-bounded",
+        }),
+    );
+    response_headers.insert(
+        "x-fmarch-media-format",
+        HeaderValue::from_static(match asset.format {
+            VariantFormat::Avif => "avif",
+            VariantFormat::Webp => "webp",
+        }),
+    );
+    Ok(response)
+}
+
+fn if_none_match_matches(headers: &HeaderMap, etag: &str) -> bool {
+    let Some(value) = headers
+        .get(IF_NONE_MATCH)
+        .and_then(|value| value.to_str().ok())
+    else {
+        return false;
+    };
+    value.split(',').any(|candidate| {
+        let candidate = candidate.trim();
+        candidate == "*" || candidate.strip_prefix("W/").unwrap_or(candidate) == etag
+    })
+}
+
+fn parse_thread_media_asset(value: &str) -> Option<ThreadMediaAsset> {
+    let (kind, format) = value.rsplit_once('.')?;
+    let kind = match kind {
+        "thumb" => VariantKind::Thumb,
+        "tablet" => VariantKind::Tablet,
+        "full-bounded" => VariantKind::FullBounded,
+        _ => return None,
+    };
+    let format = match format {
+        "avif" => VariantFormat::Avif,
+        "webp" => VariantFormat::Webp,
+        _ => return None,
+    };
+    Some(ThreadMediaAsset { kind, format })
+}
+
+fn projected_media_references_variant(
+    value: &serde_json::Value,
+    id: ContentId,
+    kind: VariantKind,
+) -> bool {
+    let Some(items) = value.as_array() else {
+        return false;
+    };
+    let kind = match kind {
+        VariantKind::Thumb => "thumb",
+        VariantKind::Tablet => "tablet",
+        VariantKind::FullBounded => "full-bounded",
+    };
+    let id = id.to_string();
+    items.iter().any(|item| {
+        item.get("content_id").and_then(serde_json::Value::as_str) == Some(id.as_str())
+            && item
+                .get("variants")
+                .and_then(|variants| variants.get(kind))
+                .is_some_and(serde_json::Value::is_object)
+    })
+}
+
+fn header_value(value: impl AsRef<str>, label: &'static str) -> Result<HeaderValue, ApiError> {
+    HeaderValue::from_str(value.as_ref()).map_err(|error| {
+        tracing::error!(error = %error, label, "invalid media response header");
+        media_internal_error("thread media response metadata is invalid".to_string())
+    })
+}
+
+fn media_not_found(message: impl Into<String>) -> ApiError {
+    ApiError::Reject {
+        status: StatusCode::NOT_FOUND,
+        error: RejectCode::Internal,
+        message: message.into(),
     }
 }
 
@@ -2826,6 +3024,111 @@ fn unix_now_seconds() -> i64 {
         .unwrap_or_default()
 }
 
+enum PostMediaPreparationError {
+    Invalid,
+    Store(MediaError),
+    Invariant(&'static str),
+}
+
+async fn prepare_command_media(
+    state: &ApiState,
+    mut command: commands::Command,
+) -> Result<commands::Command, commands::Reject> {
+    let commands::Command::SubmitPost { media, .. } = &mut command else {
+        return Ok(command);
+    };
+    if media.is_empty() {
+        return Ok(command);
+    }
+    if media.len() > 4 {
+        return Err(commands::Reject::InvalidTarget);
+    }
+    let requested = std::mem::take(media);
+    let store = state.media_store.clone();
+    let limits = state.variant_limits;
+    let prepared = tokio::task::spawn_blocking(move || {
+        let mut content_ids = BTreeSet::new();
+        let mut prepared = Vec::with_capacity(requested.len());
+        for item in requested {
+            if item.alt.trim().is_empty()
+                || item.alt.len() > 1_000
+                || !content_ids.insert(item.content_id.clone())
+            {
+                return Err(PostMediaPreparationError::Invalid);
+            }
+            let id = item
+                .content_id
+                .parse::<ContentId>()
+                .map_err(|_| PostMediaPreparationError::Invalid)?;
+            let set = store
+                .lookup_variant_set(id, limits)
+                .map_err(PostMediaPreparationError::Store)?
+                .ok_or(PostMediaPreparationError::Invalid)?;
+            let mut dimensions = BTreeMap::<String, (u32, u32, usize)>::new();
+            for record in set.variants() {
+                let key = record.key().kind().to_string();
+                let entry = dimensions
+                    .entry(key)
+                    .or_insert((record.width(), record.height(), 0));
+                if (entry.0, entry.1) != (record.width(), record.height()) {
+                    return Err(PostMediaPreparationError::Invariant(
+                        "variant formats disagree on dimensions",
+                    ));
+                }
+                entry.2 += 1;
+            }
+            let variants = ["thumb", "tablet", "full-bounded"]
+                .into_iter()
+                .map(|kind| {
+                    let Some((width, height, count)) = dimensions.remove(kind) else {
+                        return Err(PostMediaPreparationError::Invariant(
+                            "fixed variant role is missing",
+                        ));
+                    };
+                    if count != VariantFormat::ALL.len() {
+                        return Err(PostMediaPreparationError::Invariant(
+                            "fixed variant format is missing",
+                        ));
+                    }
+                    Ok((
+                        kind.to_string(),
+                        commands::ThreadPostMediaVariant { width, height },
+                    ))
+                })
+                .collect::<Result<BTreeMap<_, _>, _>>()?;
+            if !dimensions.is_empty() {
+                return Err(PostMediaPreparationError::Invariant(
+                    "unexpected variant role is present",
+                ));
+            }
+            prepared.push(commands::ThreadPostMedia {
+                content_id: id.to_string(),
+                alt: item.alt.trim().to_string(),
+                variants,
+            });
+        }
+        Ok(prepared)
+    })
+    .await
+    .map_err(|error| {
+        tracing::error!(error = %error, "post media preparation worker failed");
+        commands::Reject::Internal("post media preparation failed".to_string())
+    })?
+    .map_err(|error| match error {
+        PostMediaPreparationError::Invalid => commands::Reject::InvalidTarget,
+        PostMediaPreparationError::Store(error) => {
+            tracing::error!(error = %error, "post media lookup failed");
+            commands::Reject::Internal("post media lookup failed".to_string())
+        }
+        PostMediaPreparationError::Invariant(message) => {
+            tracing::error!(message, "post media invariant failed");
+            commands::Reject::Internal("post media lookup failed".to_string())
+        }
+    })?;
+    *media = prepared;
+    Ok(command)
+}
+
 async fn command(
     State(state): State<ApiState>,
     Json(envelope): Json<ClientEnvelope>,
@@ -2855,31 +3158,32 @@ async fn command(
         None => None,
     };
     let principal = Principal::user(msg.principal_user_id);
-    let body = match commands::handle_idempotent(
-        &state.pool,
-        &principal,
-        msg.command_id,
-        msg.command.into(),
-    )
-    .await
-    {
-        Ok(ack) => {
-            if let Some(game) = game {
-                publish_live_projection_change(
-                    &state,
-                    game,
-                    previous_votecount,
-                    thread_dirty,
-                    host_console_dirty,
-                    host_prompts_dirty,
-                    player_private_dirty,
-                    player_command_state_dirty,
-                )
-                .await;
-            }
-            ServerMsg::Ack(AckMsg::from(ack))
-        }
+    let prepared_command = prepare_command_media(&state, msg.command.into()).await;
+    let body = match prepared_command {
         Err(reject) => ServerMsg::Reject(RejectMsg::from(reject)),
+        Ok(command) => {
+            match commands::handle_idempotent(&state.pool, &principal, msg.command_id, command)
+                .await
+            {
+                Ok(ack) => {
+                    if let Some(game) = game {
+                        publish_live_projection_change(
+                            &state,
+                            game,
+                            previous_votecount,
+                            thread_dirty,
+                            host_console_dirty,
+                            host_prompts_dirty,
+                            player_private_dirty,
+                            player_command_state_dirty,
+                        )
+                        .await;
+                    }
+                    ServerMsg::Ack(AckMsg::from(ack))
+                }
+                Err(reject) => ServerMsg::Reject(RejectMsg::from(reject)),
+            }
+        }
     };
     Json(ServerEnvelope::new(envelope.id, body))
 }

@@ -23,6 +23,7 @@ import {
   buildSetupCommandEvidence,
   waitForHostSetupCommand,
 } from "./dev_test_game_setup_bootstrap_scenario.mjs";
+import { generatedThreadMediaPng } from "../frontend/src/lib/server/thread-media-png.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const frontendRoot = path.join(repoRoot, "frontend");
@@ -55,8 +56,19 @@ const grantedGlobalModToken = `session-grant-${adminCreatedGame}`;
 const factionDayChatChannel = "private:mafia_day_chat";
 const factionDayChatRoute = encodeURIComponent(factionDayChatChannel);
 const factionDayChatPostBody = "Faction day chat received from live-stack smoke";
-const factionDayChatSeedBody = "Faction day chat tablet media seed from live API";
-const factionDayChatMediaId = "live-faction-day-chat-receipt";
+const factionDayChatMediaAlt = "Private faction day chat vote receipt";
+const factionDayChatUploadAsset = Object.freeze({
+  contentAddress: "live-stack-private-upload-source",
+  variantName: "source",
+  width: 400,
+  height: 300,
+  palette: Object.freeze({
+    background: Object.freeze([250, 250, 247]),
+    accent: Object.freeze([93, 72, 59]),
+    secondary: Object.freeze([231, 226, 217]),
+    stripe: Object.freeze([133, 105, 83]),
+  }),
+});
 await preflightLocalhostBindOrExit({
   host,
   repoRoot,
@@ -589,30 +601,6 @@ async function seedActionGame() {
 }
 
 async function seedFactionDayChatFixture() {
-  const media = [
-    {
-      id: factionDayChatMediaId,
-      kind: "image",
-      alt: "Live faction day chat tablet receipt",
-      variants: {
-        tablet: {
-          url: liveStackThreadMediaUrl(factionDayChatMediaId, "tablet"),
-          width: 960,
-          height: 720,
-        },
-        small: {
-          url: liveStackThreadMediaUrl(factionDayChatMediaId, "small"),
-          width: 480,
-          height: 360,
-        },
-        original: {
-          url: liveStackThreadMediaUrl(factionDayChatMediaId, "original"),
-          width: 4000,
-          height: 3000,
-        },
-      },
-    },
-  ];
   const memberRows = await runSql(
     smokeDatabase.url,
     `SELECT channel_id, kind, slot_id, role_key, source
@@ -628,48 +616,14 @@ async function seedFactionDayChatFixture() {
   ) {
     throw new Error(`faction day chat membership was not command-declared:\n${memberRows}`);
   }
-  const mediaCommand = await sendCommand("player-mira", {
-    SubmitPost: {
-      game,
-      channel_id: factionDayChatChannel,
-      actor_slot: "slot-7",
-      body: factionDayChatSeedBody,
-      media,
-    },
-  });
-  const privateThreadPage = await fetchJson(
-    `${apiBaseUrl}/games/${game}/channels/${encodeURIComponent(
-      factionDayChatChannel,
-    )}/thread?principal_user_id=player-mira&limit=25`,
-  );
-  const mediaPost = privateThreadPage.posts?.find(
-    (post) =>
-      post.body === factionDayChatSeedBody &&
-      post.media?.some((item) => item.id === factionDayChatMediaId),
-  );
-  if (mediaPost === undefined) {
-    throw new Error(
-      `media SubmitPost did not project into private thread: ${JSON.stringify(privateThreadPage)}`,
-    );
-  }
-  const mediaPostSeq = Number(mediaPost.source_seq ?? mediaPost.sourceSeq);
-  const mediaPostStreamSeq = Number(mediaPost.stream_seq ?? mediaPost.streamSeq);
-  if (!Number.isFinite(mediaPostSeq) || mediaPostSeq <= 0) {
-    throw new Error(`projected media post missing source_seq: ${JSON.stringify(mediaPost)}`);
-  }
   return {
     channelId: factionDayChatChannel,
     roomType: "FactionDayChat",
     memberSlot: "slot-7",
     memberPrincipalUserId: "player-mira",
     commandDeclaredMembers: ["slot-7", "slot_4"],
-    mediaPostSeq,
-    mediaPostStreamSeq,
-    factionDayChatSeedBody,
-    media,
-    mediaCommand,
     boundary:
-      "membership is declared by mafiascum StartGame commands; the tablet/small media reference is ingested through a real SubmitPost /commands ACK and projected through the Rust ThreadPage before SvelteKit serves reference-checked bytes",
+      "membership is declared by mafiascum StartGame commands before the browser uploads or references media",
   };
 }
 
@@ -729,9 +683,10 @@ async function createGrantedSessions() {
       token: hostSessionToken,
       principalUserId: "host_h",
     }),
-    player: await createGrantedSession({
+    player: await createAccountSession({
       token: playerSessionToken,
       principalUserId: "player-mira",
+      label: "player-mira",
     }),
     actionPlayer: await createGrantedSession({
       token: actionPlayerSessionToken,
@@ -746,6 +701,43 @@ async function createGrantedSessions() {
       principalUserId: "cohost_c",
     }),
   };
+}
+
+async function createAccountSession({ token, principalUserId, label }) {
+  const accountId = `live-stack-${label}-${crypto.randomUUID()}@example.test`;
+  const password = `live-stack account password ${crypto.randomUUID()}`;
+  await createAuthAccount({ accountId, password, principalUserId });
+  const session = await fetchJson(`${apiBaseUrl}/auth/accounts/login`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      account_id: accountId,
+      password,
+      session_token: token,
+      expires_at: 4102444800,
+    }),
+  });
+  return {
+    accountId,
+    principalUserId: session.principal_user_id,
+    capabilityKinds: (session.capabilities ?? []).map((capability) => capability.kind),
+    authentication: "enabled-account-login",
+  };
+}
+
+async function createAuthAccount({ accountId, password, principalUserId }) {
+  await fetchJson(`${apiBaseUrl}/auth/accounts`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${rootAdminSessionToken}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      account_id: accountId,
+      password,
+      principal_user_id: principalUserId,
+    }),
+  });
 }
 
 async function createGrantedSession({ token, principalUserId, globalCapabilities = [] }) {
@@ -791,7 +783,10 @@ async function driveBrowser(frontendBaseUrl, privateChannelFixture) {
     const playerPrivateChannelEvidence =
       await drivePlayerPrivateChannelBrowser(frontendBaseUrl, privateChannelFixture);
     const privateChannelForbiddenEvidence =
-      await drivePrivateChannelForbiddenBrowser(frontendBaseUrl);
+      await drivePrivateChannelForbiddenBrowser(
+        frontendBaseUrl,
+        playerPrivateChannelEvidence.media.privateUrl,
+      );
     const hostVotecountConvergence = await proveHostVotecountConvergesAfterPlayerLoop(
       moderatorSession.page,
       { before: hostVotecountBeforePlayer },
@@ -820,7 +815,7 @@ async function drivePlayerPrivateChannelBrowser(frontendBaseUrl, privateChannelF
   const context = await browser.newContext({ viewport: smokeViewport });
   context.on("request", (request) => {
     const pathname = new URL(request.url()).pathname;
-    if (pathname.startsWith("/media/live-stack/thread/")) {
+    if (pathname.startsWith("/media/thread/")) {
       mediaRequests.push({
         url: request.url(),
         pathname,
@@ -830,7 +825,7 @@ async function drivePlayerPrivateChannelBrowser(frontendBaseUrl, privateChannelF
   });
   context.on("response", (response) => {
     const pathname = new URL(response.url()).pathname;
-    if (!pathname.startsWith("/media/live-stack/thread/")) {
+    if (!pathname.startsWith("/media/thread/")) {
       return;
     }
     mediaResponseTasks.push(
@@ -848,6 +843,7 @@ async function drivePlayerPrivateChannelBrowser(frontendBaseUrl, privateChannelF
           postSeq: headers["x-fmarch-media-post-seq"] ?? null,
           reference: headers["x-fmarch-media-reference"] ?? null,
           variant: headers["x-fmarch-media-variant"] ?? null,
+          format: headers["x-fmarch-media-format"] ?? null,
           etag: headers.etag ?? null,
           bodyBytes: body.byteLength,
         });
@@ -888,47 +884,16 @@ async function drivePlayerPrivateChannelBrowser(frontendBaseUrl, privateChannelF
   if ((await activeChannel.getAttribute("aria-current")) !== "page") {
     throw new Error("faction day chat channel rail item is not active");
   }
-  const seededPost = page.locator(
-    `[data-testid="thread-post-${privateChannelFixture.mediaPostSeq}"]`,
-  );
-  await seededPost.waitFor({ state: "visible" });
-  const seededPostText = await seededPost.innerText();
-  if (!seededPostText.includes(factionDayChatSeedBody)) {
-    throw new Error(`faction day chat live API seed post did not render: ${seededPostText}`);
+  if (privateChannelFixture.memberPrincipalUserId !== "player-mira") {
+    throw new Error(`private media fixture member drifted: ${JSON.stringify(privateChannelFixture)}`);
   }
-  const mediaBoundary = page.getByTestId(
-    `thread-post-media-boundary-${privateChannelFixture.mediaPostSeq}`,
-  );
-  await mediaBoundary.waitFor({ state: "visible" });
-  const mediaFigure = page.getByTestId(`thread-post-media-${factionDayChatMediaId}`);
-  await mediaFigure.waitFor({ state: "visible" });
-  assertVisibleBox(await mediaFigure.boundingBox(), "faction day chat tablet media figure");
-  await page.waitForFunction(
-    (mediaTestId) => {
-      const img = document.querySelector(`[data-testid="${mediaTestId}"] img`);
-      return img?.complete === true && img.naturalWidth > 0;
-    },
-    `thread-post-media-${factionDayChatMediaId}`,
-  );
-  const mediaAttributes = await page.evaluate((mediaTestId) => {
-    const img = document.querySelector(`[data-testid="${mediaTestId}"] img`);
-    return {
-      src: img?.getAttribute("src") ?? null,
-      srcset: img?.getAttribute("srcset") ?? null,
-      sizes: img?.getAttribute("sizes") ?? null,
-      naturalWidth: img?.naturalWidth ?? null,
-      naturalHeight: img?.naturalHeight ?? null,
-    };
-  }, `thread-post-media-${factionDayChatMediaId}`);
-  await Promise.allSettled(mediaResponseTasks);
-  assertTabletMediaEvidence({
-    mediaAttributes,
-    mediaRequests,
-    mediaResponses,
-    mediaPostSeq: privateChannelFixture.mediaPostSeq,
+  const upload = generatedThreadMediaPng(factionDayChatUploadAsset);
+  await page.getByTestId("player-media-file").setInputFiles({
+    name: "private-faction-receipt.png",
+    mimeType: "image/png",
+    buffer: upload.bytes,
   });
-  const mediaBoundaryStatus = await mediaBoundary.getAttribute("data-boundary-status");
-
+  await page.getByTestId("player-media-alt").fill(factionDayChatMediaAlt);
   const textarea = page.locator('[data-testid="player-composer"] textarea');
   await textarea.fill(factionDayChatPostBody);
   const postButton = page.locator('[data-action="submit_post"]');
@@ -941,52 +906,129 @@ async function drivePlayerPrivateChannelBrowser(frontendBaseUrl, privateChannelF
       document
         .querySelector('[data-testid="player-command-status"]')
         ?.getAttribute("data-state") === "ack",
+    null,
+    { timeout: 180_000 },
   );
   await page.waitForFunction((expectedBody) =>
     window.__fmarchPlayerProjection?.thread?.posts?.some(
       (post) => post.body === expectedBody,
     ),
     factionDayChatPostBody,
+    { timeout: 60_000 },
   );
   const submitPostOutcome = await page.evaluate(
     () => window.__fmarchPlayerCommandStatus,
   );
-  assertFactionDayChatSubmitPostOutcome(submitPostOutcome);
+  const commandStatus = await status.innerText();
+  const { contentId, attachment } = assertFactionDayChatSubmitPostOutcome(
+    submitPostOutcome,
+  );
   const privateThreadPage = await fetchJson(
     `${apiBaseUrl}/games/${game}/channels/${factionDayChatRoute}/thread?principal_user_id=player-mira&limit=50`,
   );
-  if (
-    !privateThreadPage.posts?.some(
-      (post) => post.body === factionDayChatPostBody,
-    )
-  ) {
+  const mediaPost = privateThreadPage.posts?.find(
+    (post) => post.body === factionDayChatPostBody,
+  );
+  if (mediaPost === undefined) {
     throw new Error(`faction day chat API thread missing submitted post: ${JSON.stringify(privateThreadPage)}`);
   }
+  const mediaPostSeq = Number(mediaPost.source_seq ?? mediaPost.sourceSeq);
+  if (!Number.isFinite(mediaPostSeq) || mediaPostSeq <= 0) {
+    throw new Error(`uploaded media post missing source sequence: ${JSON.stringify(mediaPost)}`);
+  }
+  const projectedMedia = mediaPost.media?.find(
+    (item) => item.content_id === contentId,
+  );
+  assertManifestBackedPrivateMedia({
+    projectedMedia,
+    contentId,
+    mediaPostSeq,
+  });
+
+  const reloadResponse = await page.reload({
+    waitUntil: "networkidle",
+    timeout: 180_000,
+  });
+  if (reloadResponse === null || !reloadResponse.ok()) {
+    throw new Error(
+      `private media reload failed with ${reloadResponse?.status() ?? "no response"}`,
+    );
+  }
+  await page.getByTestId("player-surface").waitFor({ state: "visible" });
+  const reloadedPost = page.locator(`[data-testid="thread-post-${mediaPostSeq}"]`);
+  await reloadedPost.waitFor({ state: "visible" });
+  const reloadedPostText = await reloadedPost.innerText();
+  if (!reloadedPostText.includes(factionDayChatPostBody)) {
+    throw new Error(`uploaded private post did not recover after reload: ${reloadedPostText}`);
+  }
+  const mediaBoundary = page.getByTestId(`thread-post-media-boundary-${mediaPostSeq}`);
+  await mediaBoundary.waitFor({ state: "visible" });
+  const mediaTestId = `thread-post-media-${contentId}`;
+  const mediaFigure = page.getByTestId(mediaTestId);
+  await mediaFigure.waitFor({ state: "visible" });
+  assertVisibleBox(await mediaFigure.boundingBox(), "uploaded private tablet media figure");
+  await page.waitForFunction(
+    (testId) => {
+      const img = document.querySelector(`[data-testid="${testId}"] img`);
+      return img?.complete === true && img.naturalWidth > 0;
+    },
+    mediaTestId,
+    { timeout: 120_000 },
+  );
+  const mediaAttributes = await page.evaluate((testId) => {
+    const picture = document.querySelector(`[data-testid="${testId}"] picture`);
+    const img = picture?.querySelector("img");
+    return {
+      src: img?.getAttribute("src") ?? null,
+      sizes: img?.getAttribute("sizes") ?? null,
+      naturalWidth: img?.naturalWidth ?? null,
+      naturalHeight: img?.naturalHeight ?? null,
+      sources: [...(picture?.querySelectorAll("source") ?? [])].map((source) => ({
+        type: source.getAttribute("type"),
+        srcset: source.getAttribute("srcset"),
+        sizes: source.getAttribute("sizes"),
+      })),
+    };
+  }, mediaTestId);
+  await Promise.allSettled(mediaResponseTasks);
+  assertTabletMediaEvidence({
+    mediaAttributes,
+    mediaRequests,
+    mediaResponses,
+    mediaPostSeq,
+    contentId,
+  });
+  const mediaBoundaryStatus = await mediaBoundary.getAttribute("data-boundary-status");
 
   const projection = await page.evaluate(() => window.__fmarchPlayerProjection);
-  const commandStatus = await status.innerText();
   const evidence = {
     url: pageUrl,
     channelContextId,
     channelContextText,
-    seededPostText,
     media: {
+      contentId,
+      attachment,
+      mediaPostSeq,
+      uploadedSourceBytes: upload.bytes.byteLength,
       boundaryStatus: mediaBoundaryStatus,
-      mediaTestId: `thread-post-media-${factionDayChatMediaId}`,
+      mediaTestId,
       renderedSrc: mediaAttributes.src,
-      renderedSrcset: mediaAttributes.srcset,
+      renderedSources: mediaAttributes.sources,
       renderedSizes: mediaAttributes.sizes,
       naturalWidth: mediaAttributes.naturalWidth,
       naturalHeight: mediaAttributes.naturalHeight,
+      projectedVariants: projectedMedia.variants,
+      privateUrl: projectedMedia.variants.tablet.avif_url,
       requests: mediaRequests,
       responses: mediaResponses,
       proof:
-        "Live-stack browser rendered tablet/small faction-day-chat media variants returned by the Rust thread API, requested and loaded the tablet PNG from the SvelteKit media endpoint at 1024px, observed immutable/content-addressed variant headers and real response bytes, and kept original/full/desktop URLs out of rendered attributes and request/response evidence.",
+        "An enabled-account member uploaded PNG bytes through the player composer, submitted only the returned content id plus alt text, reloaded the private channel, and rendered real manifest-backed AVIF/WebP variant bytes with content-address/reference headers and authorization-revalidating cache policy. No client-authored URL map or original-byte route participated.",
     },
     submitPost: {
       commandStatus,
       outcome: submitPostOutcome,
       apiThreadPostBodies: privateThreadPage.posts.map((post) => post.body),
+      recoveredAfterReload: true,
     },
     projection,
   };
@@ -994,11 +1036,12 @@ async function drivePlayerPrivateChannelBrowser(frontendBaseUrl, privateChannelF
   return evidence;
 }
 
-async function drivePrivateChannelForbiddenBrowser(frontendBaseUrl) {
+async function drivePrivateChannelForbiddenBrowser(frontendBaseUrl, privateMediaPath) {
   const deniedToken = `host-console-live-stack-denied-${crypto.randomUUID()}`;
-  await createGrantedSession({
+  const deniedSession = await createAccountSession({
     token: deniedToken,
     principalUserId: "player-target",
+    label: "private-media-nonmember",
   });
   const context = await browser.newContext({ viewport: smokeViewport });
   await context.addCookies([
@@ -1031,16 +1074,19 @@ async function drivePrivateChannelForbiddenBrowser(frontendBaseUrl) {
       `private channel 403 recovery drifted: ${JSON.stringify({ errorStatus, actionLabel, actionHref })}`,
     );
   }
-  const deniedMediaUrl = `${frontendBaseUrl}${liveStackThreadMediaUrl(
-    factionDayChatMediaId,
-    "tablet",
-  )}`;
+  const deniedMediaUrl = `${frontendBaseUrl}${privateMediaPath}`;
   const deniedMediaResponse = await context.request.get(deniedMediaUrl, {
-    headers: { accept: "image/png" },
+    headers: { accept: "image/avif" },
   });
   if (deniedMediaResponse.status() !== 403) {
     throw new Error(
       `private channel media expected 403 for non-member, got ${deniedMediaResponse.status()}: ${await deniedMediaResponse.text()}`,
+    );
+  }
+  const deniedMediaBytes = await deniedMediaResponse.body();
+  if (deniedMediaBytes.byteLength !== 0) {
+    throw new Error(
+      `private channel media leaked ${deniedMediaBytes.byteLength} bytes to a non-member`,
     );
   }
   assertHitTarget(await action.boundingBox(), "private-channel 403 Back to board");
@@ -1057,11 +1103,13 @@ async function drivePrivateChannelForbiddenBrowser(frontendBaseUrl) {
     actionLabel,
     actionHref,
     recoveredUrl,
+    deniedSession,
     media: {
       url: deniedMediaUrl,
       status: deniedMediaResponse.status(),
+      bodyBytes: deniedMediaBytes.byteLength,
       proof:
-        "Non-member session could render the private-channel 403 recovery page but could not fetch the referenced private-channel tablet media variant.",
+        "An enabled-account non-member received 403 with a zero-byte body for the exact manifest-backed private media URL recovered by the member after reload.",
     },
   };
 }
@@ -3117,12 +3165,32 @@ async function readPlayerInviteTarget(page) {
 
 async function rejectStalePlayerInviteFromBrowser(page) {
   const beforeSubmit = await readPlayerInviteTarget(page);
+  const invitedAccountId = `player-rowan-${game}@example.test`;
+  await createAuthAccount({
+    accountId: invitedAccountId,
+    password: `replacement account password ${crypto.randomUUID()}`,
+    principalUserId: "player-rowan",
+  });
+  await page.getByTestId("host-player-invite-account").fill(invitedAccountId);
   const submit = page.getByTestId("host-player-invite-submit");
   const submitBox = await submit.boundingBox();
   assertHitTarget(submitBox, "stale player invite submit");
   await submit.click();
   const status = page.getByTestId("host-player-invite-status");
-  await status.waitFor({ state: "visible" });
+  try {
+    await status.waitFor({ state: "visible" });
+  } catch (error) {
+    const diagnostic = {
+      url: page.url(),
+      title: await page.title(),
+      body: (await page.locator("body").innerText()).slice(0, 4_000),
+      beforeSubmit,
+    };
+    throw new Error(
+      `stale player invite status did not render: ${JSON.stringify(diagnostic)}`,
+      { cause: error },
+    );
+  }
   await page.waitForFunction(
     () =>
       document
@@ -3163,6 +3231,7 @@ async function rejectStalePlayerInviteFromBrowser(page) {
       `stale player invite retry did not target current occupant: ${JSON.stringify(retryTarget)}`,
     );
   }
+  await page.getByTestId("host-player-invite-retry-account").fill(invitedAccountId);
   await retry.click();
   await page.waitForFunction(
     () =>
@@ -3963,6 +4032,24 @@ function assertFactionDayChatSubmitPostOutcome(outcome) {
   if (command.body !== factionDayChatPostBody) {
     throw new Error(`faction day chat SubmitPost used wrong body: ${JSON.stringify(command)}`);
   }
+  if (!Array.isArray(command.media) || command.media.length !== 1) {
+    throw new Error(`faction day chat SubmitPost did not carry one media handle: ${JSON.stringify(command)}`);
+  }
+  const attachment = command.media[0];
+  const attachmentKeys = Object.keys(attachment).sort();
+  if (JSON.stringify(attachmentKeys) !== JSON.stringify(["alt", "content_id"])) {
+    throw new Error(`client media contract leaked non-handle fields: ${JSON.stringify(attachment)}`);
+  }
+  if (!/^[0-9a-f]{64}$/u.test(String(attachment.content_id ?? ""))) {
+    throw new Error(`client media handle was not canonical: ${JSON.stringify(attachment)}`);
+  }
+  if (attachment.alt !== factionDayChatMediaAlt) {
+    throw new Error(`client media alt text drifted: ${JSON.stringify(attachment)}`);
+  }
+  return Object.freeze({
+    contentId: attachment.content_id,
+    attachment,
+  });
 }
 
 function assertInvalidActionRecovery(outcome) {
@@ -4233,20 +4320,55 @@ function assertDuplicatePlayerSubmitReceipt({ commandId, receiptRows }) {
   }
 }
 
-function assertTabletMediaEvidence({ mediaAttributes, mediaRequests, mediaResponses, mediaPostSeq }) {
+function assertManifestBackedPrivateMedia({ projectedMedia, contentId, mediaPostSeq }) {
+  if (projectedMedia?.content_id !== contentId || projectedMedia.alt !== factionDayChatMediaAlt) {
+    throw new Error(`projected private media identity drifted: ${JSON.stringify(projectedMedia)}`);
+  }
+  const expectedRoles = ["full-bounded", "tablet", "thumb"];
+  const actualRoles = Object.keys(projectedMedia.variants ?? {}).sort();
+  if (JSON.stringify(actualRoles) !== JSON.stringify(expectedRoles)) {
+    throw new Error(`projected private media roles drifted: ${JSON.stringify(projectedMedia)}`);
+  }
+  const encodedChannel = encodeURIComponent(factionDayChatChannel);
+  for (const role of expectedRoles) {
+    const variant = projectedMedia.variants[role];
+    const prefix = `/media/thread/${game}/${encodedChannel}/${mediaPostSeq}/${contentId}/${role}`;
+    if (
+      variant?.avif_url !== `${prefix}.avif` ||
+      variant?.webp_url !== `${prefix}.webp` ||
+      Number(variant?.width ?? 0) <= 0 ||
+      Number(variant?.height ?? 0) <= 0
+    ) {
+      throw new Error(`projected ${role} media variant drifted: ${JSON.stringify(variant)}`);
+    }
+  }
+}
+
+function assertTabletMediaEvidence({
+  mediaAttributes,
+  mediaRequests,
+  mediaResponses,
+  mediaPostSeq,
+  contentId,
+}) {
+  const renderedSources = (mediaAttributes?.sources ?? []).flatMap((source) => [
+    source.type,
+    source.srcset,
+    source.sizes,
+  ]);
   const rendered = [
     mediaAttributes?.src,
-    mediaAttributes?.srcset,
+    ...renderedSources,
     ...mediaRequests.map((request) => request.pathname),
     ...mediaResponses.map((response) => response.pathname),
   ].join("\n");
-  if (!rendered.includes("live-faction-day-chat-receipt-tablet.png")) {
+  if (!rendered.includes(`/${contentId}/tablet.`)) {
     throw new Error(`tablet media variant was not rendered/requested: ${rendered}`);
   }
-  if (!rendered.includes("live-faction-day-chat-receipt-small.png")) {
-    throw new Error(`small media variant was not present in rendered/requested evidence: ${rendered}`);
+  if (!rendered.includes(`/${contentId}/thumb.`)) {
+    throw new Error(`thumb media variant was not present in responsive evidence: ${rendered}`);
   }
-  for (const forbidden of ["original", "full", "desktop"]) {
+  for (const forbidden of ["original", ".png", ".jpeg", ".jpg"]) {
     if (rendered.includes(forbidden)) {
       throw new Error(`forbidden media variant leaked into evidence (${forbidden}): ${rendered}`);
     }
@@ -4255,36 +4377,29 @@ function assertTabletMediaEvidence({ mediaAttributes, mediaRequests, mediaRespon
     throw new Error(`tablet media image did not load: ${JSON.stringify(mediaAttributes)}`);
   }
   const tabletResponse = mediaResponses.find((response) =>
-    response.pathname.endsWith("live-faction-day-chat-receipt-tablet.png"),
+    response.variant === "tablet" && response.status === 200,
   );
   if (tabletResponse === undefined) {
     throw new Error(`tablet media response was not observed: ${JSON.stringify(mediaResponses)}`);
   }
   if (
     tabletResponse.status !== 200 ||
-    tabletResponse.contentType !== "image/png" ||
+    tabletResponse.contentType !== `image/${tabletResponse.format}` ||
+    !["avif", "webp"].includes(tabletResponse.format) ||
     tabletResponse.variant !== "tablet" ||
-    tabletResponse.contentAddress !== "live-stack-thread-faction-day-chat-receipt-canonical-raster" ||
+    tabletResponse.contentAddress !== contentId ||
     tabletResponse.channel !== factionDayChatChannel ||
     tabletResponse.postSeq !== String(mediaPostSeq) ||
-    tabletResponse.reference !== `${game}/${factionDayChatChannel}/${mediaPostSeq}/${factionDayChatMediaId}`
+    tabletResponse.reference !== `${game}/${factionDayChatChannel}/${mediaPostSeq}/${contentId}`
   ) {
     throw new Error(`tablet media response metadata drifted: ${JSON.stringify(tabletResponse)}`);
   }
-  if (tabletResponse.cacheControl !== "private, max-age=31536000, immutable") {
+  if (tabletResponse.cacheControl !== "private, no-cache") {
     throw new Error(`tablet media cache policy drifted: ${JSON.stringify(tabletResponse)}`);
   }
-  if (Number(tabletResponse.bodyBytes ?? 0) <= 1000) {
-    throw new Error(`tablet media response still looks like a shim: ${JSON.stringify(tabletResponse)}`);
+  if (Number(tabletResponse.bodyBytes ?? 0) <= 0) {
+    throw new Error(`tablet media response contained no encoded bytes: ${JSON.stringify(tabletResponse)}`);
   }
-}
-
-function liveStackThreadMediaUrl(mediaId, variant) {
-  const params = new URLSearchParams({
-    game,
-    channel: factionDayChatChannel,
-  });
-  return `/media/live-stack/thread/${mediaId}-${variant}.png?${params}`;
 }
 
 function assertHitTarget(box, label) {

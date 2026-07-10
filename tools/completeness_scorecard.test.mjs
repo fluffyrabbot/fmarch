@@ -13,7 +13,7 @@ import {
   validateRegistry,
 } from "./completeness_scorecard.mjs";
 
-test("real completion registry validates and selects uploaded private-post media", async () => {
+test("real completion registry validates and selects the role-PM lifecycle", async () => {
   const registry = await loadCompletionRegistry();
   await validateRegistry(registry);
   const summary = summarizeRegistry(registry);
@@ -30,7 +30,7 @@ test("real completion registry validates and selects uploaded private-post media
   assert.equal(summary.releaseComplete, false);
   assert.equal(
     nextBuildableCodeItem(registry)?.id,
-    "product.media.upload-to-private-post",
+    "product.private.role-pm",
   );
 });
 
@@ -70,7 +70,7 @@ test("registry validation rejects dependency cycles", async () => {
   const registry = await loadCompletionRegistry();
   const cyclic = structuredClone(registry);
   const upload = cyclic.items.find(
-    (item) => item.id === "product.media.upload-to-private-post",
+    (item) => item.id === "product.private.role-pm",
   );
   const profiles = cyclic.items.find(
     (item) => item.id === "product.community.profiles",
@@ -113,7 +113,7 @@ test("registry validation rejects illegal completion and blocked states", async 
 
   const whitespaceRemaining = structuredClone(registry);
   whitespaceRemaining.items.find(
-    (item) => item.id === "product.media.upload-to-private-post",
+    (item) => item.id === "product.private.role-pm",
   ).remaining = ["   "];
   await assert.rejects(
     validateRegistry(whitespaceRemaining, { verifySourcePaths: false }),
@@ -123,7 +123,7 @@ test("registry validation rejects illegal completion and blocked states", async 
   const completeRecommendedSlice = structuredClone(registry);
   completeRecommendedSlice.items[0].recommended_slice = structuredClone(
     registry.items.find(
-      (item) => item.id === "product.media.upload-to-private-post",
+      (item) => item.id === "product.private.role-pm",
     ).recommended_slice,
   );
   await assert.rejects(

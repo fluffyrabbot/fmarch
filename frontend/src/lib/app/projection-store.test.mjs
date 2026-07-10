@@ -181,16 +181,14 @@ test("projection store applies live thread post envelopes into the player thread
               occurred_at: 1781928000,
               media: [
                 {
-                  id: "official-count-card",
-                  kind: "image",
+                  content_id: "d".repeat(64),
+                  alt: "Official count card",
                   variants: {
                     tablet: {
-                      url: "/media/tablet/official-count-card.jpg",
+                      avif_url: "/media/thread/43/tablet.avif",
+                      webp_url: "/media/thread/43/tablet.webp",
                       width: 960,
-                    },
-                    original: {
-                      url: "/media/original/official-count-card.jpg",
-                      width: 4000,
+                      height: 720,
                     },
                   },
                 },
@@ -211,12 +209,8 @@ test("projection store applies live thread post envelopes into the player thread
     ],
   );
   assert.equal(
-    snapshot.thread.posts[1].media[0].variants.tablet.url,
-    "/media/tablet/official-count-card.jpg",
-  );
-  assert.equal(
-    snapshot.thread.posts[1].media[0].variants.original.url,
-    "/media/original/official-count-card.jpg",
+    snapshot.thread.posts[1].media[0].variants.tablet.webpUrl,
+    "/media/thread/43/tablet.webp",
   );
 });
 

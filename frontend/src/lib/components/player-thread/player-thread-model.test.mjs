@@ -187,27 +187,49 @@ test("player thread media prefers tablet variants and excludes originals", () =>
       alt: "Vote receipt",
       variants: {
         original: { url: "/media/original/receipt-1.jpg", width: 4000 },
-        desktop: { url: "/media/desktop/receipt-1.jpg", width: 1600 },
-        tablet: { url: "/media/tablet/receipt-1.jpg", width: 960, height: 720 },
-        small: { url: "/media/small/receipt-1.jpg", width: 480, height: 360 },
+        thumb: {
+          avifUrl: "/media/thread/receipt-1/thumb.avif",
+          webpUrl: "/media/thread/receipt-1/thumb.webp",
+          width: 256,
+          height: 192,
+        },
+        tablet: {
+          avifUrl: "/media/thread/receipt-1/tablet.avif",
+          webpUrl: "/media/thread/receipt-1/tablet.webp",
+          width: 960,
+          height: 720,
+        },
+        "full-bounded": {
+          avifUrl: "/media/thread/receipt-1/full-bounded.avif",
+          webpUrl: "/media/thread/receipt-1/full-bounded.webp",
+          width: 1600,
+          height: 1200,
+        },
       },
     },
   ]);
 
   assert.equal(PLAYER_THREAD_MEDIA_CONTRACT.component, "player-thread-media");
-  assert.deepEqual(PLAYER_THREAD_MEDIA_CONTRACT.forbiddenVariants, [
-    "original",
-    "full",
-    "desktop",
-  ]);
+  assert.deepEqual(PLAYER_THREAD_MEDIA_CONTRACT.forbiddenVariants, ["original"]);
   assert.deepEqual(media.items, [
     {
       id: "receipt-1",
+      contentId: "receipt-1",
       kind: "image",
       alt: "Vote receipt",
-      src: "/media/tablet/receipt-1.jpg",
-      srcset:
-        "/media/tablet/receipt-1.jpg 960w, /media/small/receipt-1.jpg 480w",
+      src: "/media/thread/receipt-1/tablet.webp",
+      sources: [
+        {
+          type: "image/avif",
+          srcset:
+            "/media/thread/receipt-1/thumb.avif 256w, /media/thread/receipt-1/tablet.avif 960w, /media/thread/receipt-1/full-bounded.avif 1600w",
+        },
+        {
+          type: "image/webp",
+          srcset:
+            "/media/thread/receipt-1/thumb.webp 256w, /media/thread/receipt-1/tablet.webp 960w, /media/thread/receipt-1/full-bounded.webp 1600w",
+        },
+      ],
       sizes: "(max-width: 1180px) 100vw, 720px",
       width: 960,
       height: 720,
@@ -217,8 +239,7 @@ test("player thread media prefers tablet variants and excludes originals", () =>
   ]);
   assert.deepEqual(media.withheld, []);
   assert.equal(media.items[0].src.includes("original"), false);
-  assert.equal(media.items[0].srcset.includes("original"), false);
-  assert.equal(media.items[0].srcset.includes("desktop"), false);
+  assert.equal(media.items[0].sources.some((source) => source.srcset.includes("original")), false);
 });
 
 test("player thread media withholds original-only images", () => {
@@ -252,7 +273,7 @@ test("player thread media withholds original-only images", () => {
   assert.deepEqual(thread.posts[0].media.withheld, [
     {
       id: "unsafe-original",
-      reason: "missing tablet/small/thumb image variant",
+      reason: "missing manifest-backed responsive image variants",
     },
   ]);
   assert.equal(thread.posts[0].mediaBoundary.status, "tablet-variant-missing");

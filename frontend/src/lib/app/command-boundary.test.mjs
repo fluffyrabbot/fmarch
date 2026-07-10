@@ -87,21 +87,8 @@ test("player actions map to Rust wire command variants", () => {
       body: "private note with receipt",
       media: [
         {
-          id: "live-faction-day-chat-receipt",
-          kind: "image",
+          content_id: "a".repeat(64),
           alt: "Live faction day chat tablet receipt",
-          variants: {
-            tablet: {
-              url: "/media/live-stack/thread/live-faction-day-chat-receipt-tablet.png",
-              width: 960,
-              height: 720,
-            },
-            small: {
-              url: "/media/live-stack/thread/live-faction-day-chat-receipt-small.png",
-              width: 480,
-              height: 360,
-            },
-          },
         },
       ],
     }),
@@ -113,21 +100,8 @@ test("player actions map to Rust wire command variants", () => {
         body: "private note with receipt",
         media: [
           {
-            id: "live-faction-day-chat-receipt",
-            kind: "image",
+            content_id: "a".repeat(64),
             alt: "Live faction day chat tablet receipt",
-            variants: {
-              tablet: {
-                url: "/media/live-stack/thread/live-faction-day-chat-receipt-tablet.png",
-                width: 960,
-                height: 720,
-              },
-              small: {
-                url: "/media/live-stack/thread/live-faction-day-chat-receipt-small.png",
-                width: 480,
-                height: 360,
-              },
-            },
           },
         ],
       },
@@ -142,16 +116,8 @@ test("player actions map to Rust wire command variants", () => {
       body: "",
       media: [
         {
-          id: "tablet-canvas-sketch",
-          kind: "image",
+          content_id: "b".repeat(64),
           alt: "Tablet canvas sketch",
-          variants: {
-            original: {
-              url: "/media/thread/tablet-canvas-sketch.png",
-              width: 1024,
-              height: 768,
-            },
-          },
         },
       ],
       actionConfig: {
@@ -166,16 +132,8 @@ test("player actions map to Rust wire command variants", () => {
         body: "",
         media: [
           {
-            id: "tablet-canvas-sketch",
-            kind: "image",
+            content_id: "b".repeat(64),
             alt: "Tablet canvas sketch",
-            variants: {
-              original: {
-                url: "/media/thread/tablet-canvas-sketch.png",
-                width: 1024,
-                height: 768,
-              },
-            },
           },
         ],
       },
@@ -216,10 +174,8 @@ test("player post builder requires policy affordance for media-only posts", () =
         body: "",
         media: [
           {
-            id: "tablet-canvas-sketch",
-            kind: "image",
+            content_id: "c".repeat(64),
             alt: "Tablet canvas sketch",
-            variants: {},
           },
         ],
       }),

@@ -291,7 +291,7 @@ pub enum Command {
         body: String,
         #[serde(default)]
         #[ts(optional)]
-        media: Option<Vec<ThreadPostMedia>>,
+        media: Option<Vec<SubmitPostMedia>>,
     },
     ExtendDeadline {
         game: Uuid,
@@ -416,7 +416,11 @@ impl From<Command> for commands::Command {
                 media: media
                     .unwrap_or_default()
                     .into_iter()
-                    .map(commands::ThreadPostMedia::from)
+                    .map(|media| commands::ThreadPostMedia {
+                        content_id: media.content_id,
+                        alt: media.alt,
+                        variants: BTreeMap::new(),
+                    })
                     .collect(),
             },
             Command::ExtendDeadline { game, phase, at } => {
@@ -716,47 +720,35 @@ pub struct ThreadPost {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(deny_unknown_fields)]
+pub struct SubmitPostMedia {
+    pub content_id: String,
+    pub alt: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct ThreadPostMedia {
-    pub id: String,
-    pub kind: String,
+    pub content_id: String,
     pub alt: String,
     pub variants: BTreeMap<String, ThreadPostMediaVariant>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct ThreadPostMediaVariant {
-    pub url: String,
-    pub width: Option<i64>,
-    pub height: Option<i64>,
-}
-
-impl From<ThreadPostMedia> for commands::ThreadPostMedia {
-    fn from(media: ThreadPostMedia) -> Self {
-        commands::ThreadPostMedia {
-            id: media.id,
-            kind: media.kind,
-            alt: media.alt,
-            variants: media
-                .variants
-                .into_iter()
-                .map(|(name, variant)| (name, commands::ThreadPostMediaVariant::from(variant)))
-                .collect(),
-        }
-    }
-}
-
-impl From<ThreadPostMediaVariant> for commands::ThreadPostMediaVariant {
-    fn from(variant: ThreadPostMediaVariant) -> Self {
-        commands::ThreadPostMediaVariant {
-            url: variant.url,
-            width: variant.width,
-            height: variant.height,
-        }
-    }
+    pub avif_url: String,
+    pub webp_url: String,
+    pub width: u32,
+    pub height: u32,
 }
 
 impl From<projections::ThreadPostRow> for ThreadPost {
     fn from(row: projections::ThreadPostRow) -> Self {
+        let media = thread_post_media(
+            row.game_id,
+            row.source_seq,
+            row.channel_id.as_str(),
+            &row.media,
+        );
         ThreadPost {
             game: row.game_id,
             source_seq: row.source_seq,
@@ -766,69 +758,126 @@ impl From<projections::ThreadPostRow> for ThreadPost {
             author_user: row.author_user,
             phase_id: row.phase_id,
             body: row.body,
-            media: thread_post_media(row.media),
+            media,
             occurred_at: row.occurred_at,
         }
     }
 }
 
-fn thread_post_media(value: serde_json::Value) -> Vec<ThreadPostMedia> {
+fn thread_post_media(
+    game: Uuid,
+    source_seq: i64,
+    channel: &str,
+    value: &serde_json::Value,
+) -> Vec<ThreadPostMedia> {
     let serde_json::Value::Array(items) = value else {
         return Vec::new();
     };
     items
-        .into_iter()
-        .enumerate()
-        .filter_map(|(index, item)| thread_post_media_item(item, index))
+        .iter()
+        .filter_map(|item| thread_post_media_item(game, source_seq, channel, item))
         .collect()
 }
 
-fn thread_post_media_item(value: serde_json::Value, index: usize) -> Option<ThreadPostMedia> {
-    let serde_json::Value::Object(mut object) = value else {
+fn thread_post_media_item(
+    game: Uuid,
+    source_seq: i64,
+    channel: &str,
+    value: &serde_json::Value,
+) -> Option<ThreadPostMedia> {
+    let serde_json::Value::Object(object) = value else {
         return None;
     };
-    let variants = thread_post_media_variants(object.remove("variants")?);
-    if variants.is_empty() {
+    let content_id = object.get("content_id")?.as_str()?.to_string();
+    if !valid_media_content_id(content_id.as_str()) {
+        return None;
+    }
+    let alt = object.get("alt")?.as_str()?.to_string();
+    let variants = thread_post_media_variants(
+        game,
+        source_seq,
+        channel,
+        content_id.as_str(),
+        object.get("variants")?,
+    );
+    let required = ["thumb", "tablet", "full-bounded"];
+    if variants.len() != required.len() || required.iter().any(|kind| !variants.contains_key(*kind))
+    {
         return None;
     }
     Some(ThreadPostMedia {
-        id: object
-            .remove("id")
-            .and_then(|value| value.as_str().map(str::to_string))
-            .unwrap_or_else(|| format!("media-{}", index + 1)),
-        kind: object
-            .remove("kind")
-            .and_then(|value| value.as_str().map(str::to_string))
-            .unwrap_or_else(|| "image".to_string()),
-        alt: object
-            .remove("alt")
-            .and_then(|value| value.as_str().map(str::to_string))
-            .unwrap_or_else(|| "Thread image".to_string()),
+        content_id,
+        alt,
         variants,
     })
 }
 
+fn valid_media_content_id(value: &str) -> bool {
+    value.len() == 64
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+}
+
 fn thread_post_media_variants(
-    value: serde_json::Value,
+    game: Uuid,
+    source_seq: i64,
+    channel: &str,
+    content_id: &str,
+    value: &serde_json::Value,
 ) -> BTreeMap<String, ThreadPostMediaVariant> {
     let serde_json::Value::Object(variants) = value else {
         return BTreeMap::new();
     };
     variants
-        .into_iter()
-        .filter_map(|(name, value)| thread_post_media_variant(value).map(|variant| (name, variant)))
+        .iter()
+        .filter_map(|(name, value)| {
+            thread_post_media_variant(game, source_seq, channel, content_id, name, value)
+                .map(|variant| (name.clone(), variant))
+        })
         .collect()
 }
 
-fn thread_post_media_variant(value: serde_json::Value) -> Option<ThreadPostMediaVariant> {
-    let serde_json::Value::Object(mut object) = value else {
+fn thread_post_media_variant(
+    game: Uuid,
+    source_seq: i64,
+    channel: &str,
+    content_id: &str,
+    kind: &str,
+    value: &serde_json::Value,
+) -> Option<ThreadPostMediaVariant> {
+    let serde_json::Value::Object(object) = value else {
         return None;
     };
+    let width = u32::try_from(object.get("width")?.as_u64()?).ok()?;
+    let height = u32::try_from(object.get("height")?.as_u64()?).ok()?;
+    if width == 0 || height == 0 {
+        return None;
+    }
+    let prefix = format!(
+        "/media/thread/{game}/{}/{source_seq}/{content_id}/{kind}",
+        percent_encode_path_segment(channel),
+    );
     Some(ThreadPostMediaVariant {
-        url: object.remove("url")?.as_str()?.to_string(),
-        width: object.remove("width").and_then(|value| value.as_i64()),
-        height: object.remove("height").and_then(|value| value.as_i64()),
+        avif_url: format!("{prefix}.avif"),
+        webp_url: format!("{prefix}.webp"),
+        width,
+        height,
     })
+}
+
+fn percent_encode_path_segment(value: &str) -> String {
+    use std::fmt::Write as _;
+
+    let mut encoded = String::with_capacity(value.len());
+    for byte in value.bytes() {
+        if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.' | b'_' | b'~') {
+            encoded.push(char::from(byte));
+        } else {
+            write!(&mut encoded, "%{byte:02X}").expect("write to String");
+        }
+    }
+    encoded
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -1156,8 +1205,8 @@ pub mod typescript {
         ProjectionDelta, RejectCode, RejectMsg, ResolutionTraceDecisionRow, ResolutionTraceEdgeRow,
         ResolutionTraceEffectChangeRow, ResolutionTraceGeneratedRow,
         ResolutionTraceInspectionReport, ResolutionTraceInspectionRun, ResolutionTraceNoteRow,
-        ResolutionTraceVisibilityRow, ServerEnvelope, ServerMsg, SlotLifecycle, ThreadPage,
-        ThreadPost, ThreadPostMedia, ThreadPostMediaVariant, ThreadPostsDelta,
+        ResolutionTraceVisibilityRow, ServerEnvelope, ServerMsg, SlotLifecycle, SubmitPostMedia,
+        ThreadPage, ThreadPost, ThreadPostMedia, ThreadPostMediaVariant, ThreadPostsDelta,
         VoteCountClearedDelta, VoteCountDelta, VoteTarget,
     };
 
@@ -1168,6 +1217,7 @@ pub mod typescript {
         push::<VoteTarget>(&mut out);
         push::<HostPromptDecision>(&mut out);
         push::<SlotLifecycle>(&mut out);
+        push::<SubmitPostMedia>(&mut out);
         push::<Command>(&mut out);
         push::<CommandMsg>(&mut out);
         push::<ClientMsg>(&mut out);

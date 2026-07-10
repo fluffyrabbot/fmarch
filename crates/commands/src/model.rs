@@ -34,17 +34,15 @@ pub enum HostPromptDecision {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ThreadPostMedia {
-    pub id: String,
-    pub kind: String,
+    pub content_id: String,
     pub alt: String,
     pub variants: BTreeMap<String, ThreadPostMediaVariant>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ThreadPostMediaVariant {
-    pub url: String,
-    pub width: Option<i64>,
-    pub height: Option<i64>,
+    pub width: u32,
+    pub height: u32,
 }
 
 /// The commands the pipeline accepts. Slice commands + the minimal bootstrap

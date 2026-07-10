@@ -58,11 +58,14 @@
     playerThreadPendingStatus,
     submitPlayerRouteCommand,
     togglePrivateItemExpansion,
+    uploadPlayerPostMedia,
   } from "./player-route-controller.mjs";
 
   export let data;
 
   let composerBody = data.composer.defaultBody;
+  let composerMediaFiles = undefined;
+  let composerMediaAlt = "";
   let commandStatus = null;
   let commandReceipts = [];
   let thread = data.thread;
@@ -249,6 +252,7 @@
 
   async function submitPlayerCommand(action) {
     const dispatchData = currentData;
+    let dispatchedMedia = [];
     const optimisticStatus = playerCommandPendingStatus(action);
     commandStatus = optimisticStatus;
     commandReceipts = recordPlayerCommandReceipt(
@@ -257,9 +261,18 @@
       commandStatus,
     );
     try {
+      if (action === "submit_post") {
+        dispatchedMedia = await uploadPlayerPostMedia({
+          data: dispatchData,
+          file: composerMediaFiles?.[0] ?? null,
+          alt: composerMediaAlt,
+          fetchImpl: fetch,
+        });
+      }
       const result = await submitPlayerRouteCommand({
         action,
         composerBody,
+        media: dispatchedMedia,
         commandIdFactory:
           typeof window === "undefined"
             ? undefined
@@ -273,6 +286,7 @@
         data: dispatchData,
         action,
         composerBody,
+        media: dispatchedMedia,
         optimisticStatus,
         finalStatus: commandStatus,
       });
@@ -297,6 +311,7 @@
         data: dispatchData,
         action,
         composerBody,
+        media: dispatchedMedia,
         optimisticStatus,
         finalStatus: commandStatus,
       });
@@ -403,6 +418,8 @@
           channel={data.channel}
           {player}
           bind:body={composerBody}
+          bind:mediaFiles={composerMediaFiles}
+          bind:mediaAlt={composerMediaAlt}
           onCommand={submitPlayerCommand}
           onSelectTarget={selectActionTarget}
         />

@@ -45,6 +45,9 @@ pub use model::{
 
 pub const LARGE_ACTION_GRAPH_PERFORMANCE_SEED: u64 = 90_001;
 pub const LARGE_ACTION_GRAPH_PERFORMANCE_THRESHOLD_MS: u64 = 20_000;
+const MAX_THREAD_POST_MEDIA: usize = 4;
+const MAX_THREAD_POST_MEDIA_ALT_BYTES: usize = 1_000;
+const REQUIRED_THREAD_POST_MEDIA_VARIANTS: [&str; 3] = ["thumb", "tablet", "full-bounded"];
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct EngineSnapshotIdentityAudit {
@@ -634,7 +637,16 @@ async fn handle_command(
             media,
         } => {
             submit_post(
-                pool, principal, game, channel_id, actor_slot, body, media, receipt,
+                pool,
+                principal,
+                SubmitPostRequest {
+                    game,
+                    channel_id,
+                    actor_slot,
+                    body,
+                    media,
+                },
+                receipt,
             )
             .await
         }
@@ -1691,39 +1703,45 @@ async fn set_post_policy(
     persist(pool, game, &[ev], receipt).await
 }
 
-async fn submit_post(
-    pool: &PgPool,
-    principal: &Principal,
+struct SubmitPostRequest {
     game: Uuid,
     channel_id: String,
     actor_slot: String,
     body: String,
     media: Vec<model::ThreadPostMedia>,
+}
+
+async fn submit_post(
+    pool: &PgPool,
+    principal: &Principal,
+    request: SubmitPostRequest,
     receipt: Option<&ReceiptClaim>,
 ) -> Result<Ack, Reject> {
-    let mut lock = acquire_phase_boundary_lock(pool, game).await?;
-    let result = submit_post_locked(
-        pool, principal, game, channel_id, actor_slot, body, media, receipt,
-    )
-    .await;
+    let mut lock = acquire_phase_boundary_lock(pool, request.game).await?;
+    let game = request.game;
+    let result = submit_post_locked(pool, principal, request, receipt).await;
     release_phase_boundary_lock(&mut lock, game, result).await
 }
 
 async fn submit_post_locked(
     pool: &PgPool,
     principal: &Principal,
-    game: Uuid,
-    channel_id: String,
-    actor_slot: String,
-    body: String,
-    media: Vec<model::ThreadPostMedia>,
+    request: SubmitPostRequest,
     receipt: Option<&ReceiptClaim>,
 ) -> Result<Ack, Reject> {
+    let SubmitPostRequest {
+        game,
+        channel_id,
+        actor_slot,
+        body,
+        media,
+    } = request;
     require_game(pool, game).await?;
     let caps = caps::resolve(pool, principal, game).await?;
     require_slot_occupant(pool, game, &actor_slot, &caps).await?;
     require_channel_post_access(game, &channel_id, &caps)?;
     require_slot_can_post(pool, game, &actor_slot).await?;
+    validate_thread_post_media(&media)?;
     if body.trim().is_empty() {
         let policy = projections::post_policy(pool, game, &channel_id).await?;
         if media.is_empty() || !policy.allow_media_only {
@@ -1755,6 +1773,39 @@ async fn submit_post_locked(
         occurred_at,
     );
     persist(pool, game, &[ev], receipt).await
+}
+
+fn validate_thread_post_media(media: &[model::ThreadPostMedia]) -> Result<(), Reject> {
+    if media.len() > MAX_THREAD_POST_MEDIA {
+        return Err(Reject::InvalidTarget);
+    }
+    let mut content_ids = BTreeSet::new();
+    for item in media {
+        if !valid_media_content_id(&item.content_id)
+            || !content_ids.insert(item.content_id.as_str())
+            || item.alt.trim().is_empty()
+            || item.alt.len() > MAX_THREAD_POST_MEDIA_ALT_BYTES
+            || item.variants.len() != REQUIRED_THREAD_POST_MEDIA_VARIANTS.len()
+        {
+            return Err(Reject::InvalidTarget);
+        }
+        for kind in REQUIRED_THREAD_POST_MEDIA_VARIANTS {
+            let Some(variant) = item.variants.get(kind) else {
+                return Err(Reject::InvalidTarget);
+            };
+            if variant.width == 0 || variant.height == 0 {
+                return Err(Reject::InvalidTarget);
+            }
+        }
+    }
+    Ok(())
+}
+
+fn valid_media_content_id(value: &str) -> bool {
+    value.len() == 64
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 
 async fn publish_votecount(
@@ -5050,9 +5101,7 @@ async fn active_actions_for_actor_phase(
                                 .map(|targets| {
                                     targets
                                         .iter()
-                                        .filter_map(|target| {
-                                            target.as_str().map(str::to_string)
-                                        })
+                                        .filter_map(|target| target.as_str().map(str::to_string))
                                         .collect()
                                 })
                                 .unwrap_or_default(),
@@ -5118,16 +5167,18 @@ pub async fn active_actions_view_for_actor_phase(
     phase_id: &str,
     actor_slot: &str,
 ) -> Result<Vec<CurrentAction>, Reject> {
-    Ok(active_actions_for_actor_phase(pool, game, phase_id, actor_slot)
-        .await?
-        .into_iter()
-        .map(|(action_id, action)| CurrentAction {
-            action_id,
-            template_id: action.template_id,
-            targets: action.targets,
-            grant_id: action.grant_id,
-        })
-        .collect())
+    Ok(
+        active_actions_for_actor_phase(pool, game, phase_id, actor_slot)
+            .await?
+            .into_iter()
+            .map(|(action_id, action)| CurrentAction {
+                action_id,
+                template_id: action.template_id,
+                targets: action.targets,
+                grant_id: action.grant_id,
+            })
+            .collect(),
+    )
 }
 
 fn action_counter_id(template_id: &str) -> String {

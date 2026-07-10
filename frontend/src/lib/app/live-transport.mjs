@@ -510,7 +510,12 @@ function upsertThreadPosts(previousThread, posts) {
   const previous = previousThread ?? {};
   const previousPosts = Array.isArray(previous.posts) ? previous.posts : [];
   const nextBySeq = new Map();
-  for (const post of [...previousPosts, ...(Array.isArray(posts) ? posts : [])]) {
+  for (const post of previousPosts) {
+    if (post?.seq !== null && post?.seq !== undefined) {
+      nextBySeq.set(post.seq, post);
+    }
+  }
+  for (const post of Array.isArray(posts) ? posts : []) {
     const normalized = normalizeThreadPost(post);
     if (normalized.seq !== null) {
       nextBySeq.set(normalized.seq, normalized);

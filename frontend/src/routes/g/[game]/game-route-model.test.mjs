@@ -73,12 +73,12 @@ test("player route data exposes thread, channel, votecount, and touch command la
   });
   assert.equal(data.thread.posts[1].body, "##vote slot-2");
   assert.equal(
-    data.thread.posts[0].media[0].variants.tablet.url,
+    data.thread.posts[0].media[0].variants.tablet.webpUrl,
     "/media/midsummer/thread/receipt-442-tablet.png",
   );
   assert.equal(
-    data.thread.posts[0].media[0].variants.original.url,
-    "/media/midsummer/thread/receipt-442-original.png",
+    data.thread.posts[0].media[0].variants.thumb.webpUrl,
+    "/media/midsummer/thread/receipt-442-small.png",
   );
   assert.equal(data.composer.voteCommandLabel, "Vote slot-2");
   assert.deepEqual(data.composer.voteCommands, [
@@ -445,16 +445,16 @@ test("player route data uses REST projection cold-loads when available", async (
               author_user: "player-mira",
               body: "server thread post",
               occurred_at: 1781928000,
-              attachments: [
+              media: [
                 {
-                  id: "server-receipt",
-                  kind: "image",
+                  content_id: "f".repeat(64),
                   alt: "Server receipt",
                   variants: {
-                    small: { url: "/media/small/server-receipt.jpg", width: 480 },
-                    original: {
-                      url: "/media/original/server-receipt.jpg",
-                      width: 4000,
+                    tablet: {
+                      avif_url: "/media/thread/server/tablet.avif",
+                      webp_url: "/media/thread/server/tablet.webp",
+                      width: 480,
+                      height: 360,
                     },
                   },
                 },
@@ -570,12 +570,8 @@ test("player route data uses REST projection cold-loads when available", async (
   );
   assert.equal(data.thread.posts[0].body, "server thread post");
   assert.equal(
-    data.thread.posts[0].media[0].variants.small.url,
-    "/media/small/server-receipt.jpg",
-  );
-  assert.equal(
-    data.thread.posts[0].media[0].variants.original.url,
-    "/media/original/server-receipt.jpg",
+    data.thread.posts[0].media[0].variants.tablet.webpUrl,
+    "/media/thread/server/tablet.webp",
   );
   assert.deepEqual(data.votecount, [{ target: "slot-2", count: 5, needed: 7 }]);
   assert.deepEqual(data.dayVoteOutcomes, [

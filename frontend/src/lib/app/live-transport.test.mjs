@@ -269,16 +269,14 @@ test("creates thread patches from live thread post delta envelopes", () => {
               occurred_at: 1781928000,
               media: [
                 {
-                  id: "official-count-card",
-                  kind: "image",
+                  content_id: "c".repeat(64),
+                  alt: "Official count card",
                   variants: {
                     tablet: {
-                      url: "/media/tablet/official-count-card.jpg",
+                      avif_url: "/media/thread/43/tablet.avif",
+                      webp_url: "/media/thread/43/tablet.webp",
                       width: 960,
-                    },
-                    original: {
-                      url: "/media/original/official-count-card.jpg",
-                      width: 4000,
+                      height: 720,
                     },
                   },
                 },
@@ -292,7 +290,29 @@ test("creates thread patches from live thread post delta envelopes", () => {
     {
       thread: {
         nextBeforeSeq: 40,
-        posts: [{ seq: 42, body: "before", authorLabel: "Mira" }],
+        posts: [
+          {
+            seq: 42,
+            body: "before",
+            authorLabel: "Mira",
+            media: [
+              {
+                id: "b".repeat(64),
+                contentId: "b".repeat(64),
+                kind: "image",
+                alt: "Existing private image",
+                variants: {
+                  tablet: {
+                    avifUrl: "/media/thread/42/tablet.avif",
+                    webpUrl: "/media/thread/42/tablet.webp",
+                    width: 960,
+                    height: 720,
+                  },
+                },
+              },
+            ],
+          },
+        ],
       },
     },
   );
@@ -306,12 +326,12 @@ test("creates thread patches from live thread post delta envelopes", () => {
     ],
   );
   assert.equal(
-    patch.thread.posts[1].media[0].variants.tablet.url,
-    "/media/tablet/official-count-card.jpg",
+    patch.thread.posts[1].media[0].variants.tablet.avifUrl,
+    "/media/thread/43/tablet.avif",
   );
   assert.equal(
-    patch.thread.posts[1].media[0].variants.original.url,
-    "/media/original/official-count-card.jpg",
+    patch.thread.posts[0].media[0].variants.tablet.avifUrl,
+    "/media/thread/42/tablet.avif",
   );
 });
 

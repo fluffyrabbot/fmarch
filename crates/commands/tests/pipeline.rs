@@ -23,8 +23,7 @@ use eventstore::{ActorId, EventInput};
 use projections::{
     action_counters, action_grants, action_history, append_and_project, audit_rebuild,
     day_vote_outcomes, delayed_death_queues, game_result, host_prompts, investigation_memory,
-    phase_state,
-    player_info_results, player_notifications, player_notifications_for_slot, rebuild,
+    phase_state, player_info_results, player_notifications, player_notifications_for_slot, rebuild,
     sheriff_badges, slot_effects, slot_state, visit_history, votecount,
 };
 use sqlx::{PgPool, Row};
@@ -183,29 +182,33 @@ async fn add_vanilla_slot(pool: &PgPool, game: Uuid, host: &str, slot: &str) {
     .expect("assign vanilla role");
 }
 
-fn thread_media(
-    id: &str,
-    kind: &str,
-    alt: &str,
-    variants: &[(&str, &str, Option<i64>, Option<i64>)],
-) -> ThreadPostMedia {
+fn thread_media(content_id: &str, alt: &str) -> ThreadPostMedia {
     ThreadPostMedia {
-        id: id.into(),
-        kind: kind.into(),
+        content_id: content_id.into(),
         alt: alt.into(),
-        variants: variants
-            .iter()
-            .map(|(name, url, width, height)| {
-                (
-                    (*name).to_string(),
-                    ThreadPostMediaVariant {
-                        url: (*url).to_string(),
-                        width: *width,
-                        height: *height,
-                    },
-                )
-            })
-            .collect::<BTreeMap<_, _>>(),
+        variants: BTreeMap::from([
+            (
+                "thumb".to_string(),
+                ThreadPostMediaVariant {
+                    width: 256,
+                    height: 192,
+                },
+            ),
+            (
+                "tablet".to_string(),
+                ThreadPostMediaVariant {
+                    width: 1_024,
+                    height: 768,
+                },
+            ),
+            (
+                "full-bounded".to_string(),
+                ThreadPostMediaVariant {
+                    width: 1_600,
+                    height: 1_200,
+                },
+            ),
+        ]),
     }
 }
 
@@ -2967,38 +2970,10 @@ async fn submit_post_uses_stream_logical_time_and_preserves_empty_text_media_pag
     )
     .await
     .expect("host enables media-only posts");
-    let first_media = vec![
-        thread_media(
-            "canvas-sketch",
-            "image",
-            "tablet canvas drawing",
-            &[
-                (
-                    "tablet",
-                    "/media/live-stack/thread/canvas-sketch/tablet.png",
-                    Some(1024),
-                    Some(768),
-                ),
-                (
-                    "thumb",
-                    "/media/live-stack/thread/canvas-sketch/thumb.png",
-                    Some(320),
-                    Some(240),
-                ),
-            ],
-        ),
-        thread_media(
-            "embedded-clip",
-            "video",
-            "short embedded clip",
-            &[(
-                "poster",
-                "/media/live-stack/thread/embedded-clip/poster.png",
-                Some(640),
-                Some(360),
-            )],
-        ),
-    ];
+    let first_media = vec![thread_media(
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "tablet canvas drawing",
+    )];
 
     let first_ack = handle(
         &pool,
@@ -3056,11 +3031,12 @@ async fn submit_post_uses_stream_logical_time_and_preserves_empty_text_media_pag
         "post logical time should increase with game-local append order"
     );
     assert_eq!(first_payload["body"], "");
-    assert_eq!(first_payload["media"].as_array().unwrap().len(), 2);
-    assert_eq!(first_payload["media"][0]["id"], "canvas-sketch");
-    assert_eq!(first_payload["media"][0]["kind"], "image");
-    assert_eq!(first_payload["media"][1]["id"], "embedded-clip");
-    assert_eq!(first_payload["media"][1]["kind"], "video");
+    assert_eq!(first_payload["media"].as_array().unwrap().len(), 1);
+    assert_eq!(
+        first_payload["media"][0]["content_id"],
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    );
+    assert!(first_payload["media"][0].get("url").is_none());
 
     let latest = projections::thread_view(&pool, game, None, 1)
         .await
@@ -3074,24 +3050,19 @@ async fn submit_post_uses_stream_logical_time_and_preserves_empty_text_media_pag
     assert_eq!(older.posts[0].body, "");
     assert_eq!(older.posts[0].stream_seq, first_stream_seq);
     assert_eq!(older.posts[0].occurred_at, first_occurred_at);
-    assert_eq!(older.posts[0].media[0]["id"], "canvas-sketch");
+    assert_eq!(
+        older.posts[0].media[0]["content_id"],
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    );
     assert_eq!(older.posts[0].media[0]["variants"]["tablet"]["width"], 1024);
-    assert_eq!(older.posts[0].media[1]["kind"], "video");
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
 async fn submit_post_media_only_requires_enabled_post_policy(pool: PgPool) {
     let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
     let canvas_media = vec![thread_media(
-        "tablet-canvas-drawing",
-        "image",
+        "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
         "tablet canvas drawing",
-        &[(
-            "original",
-            "/media/live-stack/thread/tablet-canvas-drawing.png",
-            Some(2048),
-            Some(1536),
-        )],
     )];
 
     let default_policy = projections::post_policy(&pool, game, "main")
@@ -3165,8 +3136,10 @@ async fn submit_post_media_only_requires_enabled_post_policy(pool: PgPool) {
         .expect("thread view");
     assert_eq!(thread.posts.len(), 1);
     assert_eq!(thread.posts[0].body, "");
-    assert_eq!(thread.posts[0].media[0]["id"], "tablet-canvas-drawing");
-    assert_eq!(thread.posts[0].media[0]["kind"], "image");
+    assert_eq!(
+        thread.posts[0].media[0]["content_id"],
+        "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    );
 
     handle(
         &pool,
@@ -3282,15 +3255,8 @@ async fn private_submit_post_encrypts_body_but_preserves_logical_time_and_media(
     .expect("start declares encryptor private channel");
 
     let media = vec![thread_media(
-        "private-canvas",
-        "image",
+        "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
         "private tablet canvas drawing",
-        &[(
-            "tablet",
-            "/media/live-stack/thread/private-canvas/tablet.png",
-            Some(1024),
-            Some(768),
-        )],
     )];
     let ack = handle(
         &pool,
@@ -3325,7 +3291,10 @@ async fn private_submit_post_encrypts_body_but_preserves_logical_time_and_media(
         "private PostSubmitted body must not be stored in plaintext"
     );
     assert!(payload["body_private"]["ciphertext"].is_string());
-    assert_eq!(payload["media"][0]["id"], "private-canvas");
+    assert_eq!(
+        payload["media"][0]["content_id"],
+        "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    );
 
     let thread =
         projections::thread_view_for_channel(&pool, game, "private:mafia_day_chat", None, 10)
@@ -3334,7 +3303,10 @@ async fn private_submit_post_encrypts_body_but_preserves_logical_time_and_media(
     assert_eq!(thread.posts.len(), 1);
     assert_eq!(thread.posts[0].body, "private media body");
     assert_eq!(thread.posts[0].occurred_at, occurred_at);
-    assert_eq!(thread.posts[0].media[0]["id"], "private-canvas");
+    assert_eq!(
+        thread.posts[0].media[0]["content_id"],
+        "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    );
 
     rebuild(&pool, game).await.expect("projection rebuild");
     let rebuilt =

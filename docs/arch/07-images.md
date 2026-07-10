@@ -8,8 +8,8 @@ tablet-appropriate sizes**, and **privacy-stripped** on ingest.
 
 1. **Content addressing.** A blob's identity is the BLAKE3 hash of its exact canonical record:
    version, dimensions, and the image decoder's EXIF-orientation-normalized RGBA8 samples. Upload
-   containers deduplicate when those canonical bytes are identical; URLs are immutable and
-   cacheable forever.
+   containers deduplicate when those canonical bytes are identical; URL bytes are immutable,
+   while private responses revalidate current authorization before browser-cache reuse.
 2. **Transcode, don't serve originals.** Clients receive AVIF/WebP variants sized for the
    viewport, never the raw upload. This is most of the data-efficiency win on media.
 3. **Strip on ingest.** EXIF and other metadata are removed at upload — privacy (geotags,
@@ -64,7 +64,9 @@ blobs/
 - Clients request a **variant appropriate to their viewport** ([05](05-frontend.md)) — a
   tablet thread shows `tablet`, a lightbox shows `full-bounded`. Never the original.
 - Content negotiation / `<picture>` with AVIF primary and WebP fallback for older clients.
-- Immutable cache headers; CDN-friendly by construction.
+- Stable ETags and immutable bytes. Account-gated responses use `private, no-cache` so every
+  reuse revalidates current authorization; a future genuinely public route may opt into
+  long-lived shared caching without weakening private-channel revocation.
 
 Current implemented slice:
 
@@ -153,26 +155,45 @@ Current implemented slice:
 - A new upload returns `201`; an idempotent repeat returns `200`. The JSON response contains only
   the content id, intrinsic dimensions, recipe revision, and each immutable variant's typed role,
   format, MIME, dimensions, length, BLAKE3, and alpha flag—never paths or original bytes.
-- `frontend/src/routes/media/live-stack/thread/[asset]/+server.js` serves the live-stack
-  thread handles used by the browser proof as real generated PNG bytes for `tablet` and
-  `small` only. `original`, `full`, and unknown variants are not routable.
-- The serving route resolves the game/channel reference from the media request, resolves the
-  requester session for that game, fetches the live Rust `ThreadPage`, and serves the bytes
-  only when that projection still references the requested handle/variant. For private
-  channels, a matching `ChannelMember`/host/admin-style capability is required before the
-  route fetches and serves the media.
-- `SubmitPost` now accepts optional thread media metadata, so the live-stack proof ingests
-  the generated `tablet`/`small` proof handles through the real `/commands` path and lets
-  `PostSubmitted` fold into `ThreadPage.media`; it no longer inserts a scratch
-  `thread_view` row. This proves command-backed reference ingest, immutable/content-address
-  headers, tablet/small rendering, and 403 denial for a non-member private-channel media
-  request. That proof fixture is not yet wired to the `media` crate's canonical blob store.
+- `SubmitPost` accepts at most four attachments, each containing only a lowercase 64-hex
+  `content_id` and non-empty alt text. Unknown client fields are rejected. In particular,
+  clients cannot persist URLs, dimensions, MIME claims, variant names, or original-byte
+  locations into the event log.
+- Before command acceptance, the API parses each id as a typed `ContentId`, opens its committed
+  manifest-backed variant set, requires exactly `thumb`, `tablet`, and `full-bounded` in both
+  AVIF and WebP, and injects only the verified dimensions into the trusted command model.
+  Missing, corrupt, incomplete, duplicated, or non-canonical handles fail before
+  `PostSubmitted` is appended.
+- Events and `thread_view` persist the immutable content id, alt text, and verified role
+  dimensions—not URLs. `ThreadPage` derives canonical relative AVIF/WebP URLs from the game,
+  percent-encoded channel, post source sequence, content id, and role on every read. This keeps
+  route authority and storage layout out of client-authored event data.
+- `GET /media/thread/{game}/{channel}/{source_seq}/{content_id}/{role}.{format}` first requires
+  an unexpired, unrevoked session backed by an enabled account. Private channels then require
+  current projected channel membership before any blob lookup. The route verifies that the
+  exact post projection references the requested content id and role, performs a
+  manifest-backed `MediaStore` lookup, and returns only the transcoded member with a stable ETag,
+  `private, no-cache`, content-address, channel, post-sequence, reference, role, and format
+  headers. Conditional requests return `304` only after those account/reference checks. Unknown,
+  original, unreferenced, and unauthorized members never return media bytes.
+- SvelteKit exposes same-origin upload and serving proxies that forward the httpOnly account
+  session without exposing it to browser JavaScript. Failed media reads return a zero-length
+  body. The player composer uploads PNG/JPEG bytes first, then sends only the returned id and
+  alt text with `SubmitPost`; the thread renders AVIF-primary/WebP-fallback `<picture>` sources
+  across thumb/tablet/full-bounded widths.
+- The seeded live-stack proof creates enabled member and non-member accounts, uploads a real
+  PNG from the member browser, posts its canonical handle into the command-declared mafia day
+  chat, reloads the route, and observes real tablet AVIF bytes plus the content-address/reference
+  headers. The non-member requests that exact URL and must receive `403` with a zero-byte body.
+  Focused API proof also restarts the media store/router before serving to prove that the route
+  does not depend on an in-memory upload index.
 
 This slice deliberately does **not** claim ICC/profile color-space normalization, multipart or
-resumable upload, account quotas/rate limiting, orphan-retention cleanup, integration with
-thread-post commands or the live-stack serving route, browser UI/proof, production codec-quality
-or memory benchmarks, an object store/CDN, or hosted durability. Those remain separate vertical
-slices; the local upload and manifest-backed variant set are the durable core they can build on.
+resumable upload, direct object-store upload, account quotas/rate limiting, orphan-retention or
+garbage-collection policy, a cross-post media library, galleries, profile media, moderation
+workflow, production codec-quality or memory benchmarks, an object store/CDN, hosted durability,
+or production performance. The completed local vertical is upload → private post → durable
+manifest-backed serving → responsive browser reload → exact non-member byte denial.
 
 ## Access control
 

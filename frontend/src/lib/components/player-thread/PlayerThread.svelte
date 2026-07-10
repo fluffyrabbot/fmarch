@@ -92,16 +92,22 @@
               data-testid={item.testId}
               data-media-variant={item.variant}
             >
-              <img
-                src={item.src}
-                srcset={item.srcset}
-                sizes={item.sizes}
-                alt={item.alt}
-                width={item.width}
-                height={item.height}
-                loading="lazy"
-                decoding="async"
-              />
+              <picture>
+                {#each item.sources as source}
+                  {#if source.srcset !== null}
+                    <source type={source.type} srcset={source.srcset} sizes={item.sizes} />
+                  {/if}
+                {/each}
+                <img
+                  src={item.src}
+                  sizes={item.sizes}
+                  alt={item.alt}
+                  width={item.width}
+                  height={item.height}
+                  loading="lazy"
+                  decoding="async"
+                />
+              </picture>
             </figure>
           {/each}
           {#each post.media.withheld as item}
@@ -203,8 +209,12 @@
     margin: 0;
   }
 
+  .player-surface__media-item picture {
+    display: block;
+    inline-size: 100%;
+  }
+
   .player-surface__media-item img {
-    aspect-ratio: 4 / 3;
     background: var(--fm-surface-tint);
     border: 1px solid var(--fm-line);
     border-radius: 6px;
