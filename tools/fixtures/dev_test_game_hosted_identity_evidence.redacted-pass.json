@@ -256,6 +256,7 @@
         "account-recovery-credential-issuance",
         "account-recovery-credential-revocation",
         "account-recovery",
+        "credential-attempt-throttling",
         "session-rotation",
         "session-revocation",
         "invite-revocation"

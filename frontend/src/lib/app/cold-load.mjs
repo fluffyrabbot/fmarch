@@ -809,6 +809,7 @@ export function normalizeIdentityLifecycleAudit(payload, context = {}) {
     "account_recovery_credential_revoked",
     "account_recovery_rejected",
     "account_recovered",
+    "auth_attempt_rate_limited",
     "account_session_created",
     "invite_revoked",
     "session_revoked",

@@ -20187,6 +20187,7 @@ function identityAdapterProofFixture(game) {
       accountCredentialKind: "local-password-account",
       accountPasswordAlgorithm: "argon2id",
       accountRecoveryCredentialKind: "hashed-single-use-recovery-credential",
+      credentialAttemptPolicyKind: "shared-postgres-account-source-lockout",
       lifecycleControls: [
         "account-disable",
         "account-enable",
@@ -20194,6 +20195,7 @@ function identityAdapterProofFixture(game) {
         "account-recovery-credential-issuance",
         "account-recovery-credential-revocation",
         "account-recovery",
+        "credential-attempt-throttling",
         "session-rotation",
         "session-revocation",
         "invite-revocation",
@@ -20306,6 +20308,31 @@ function identityAdapterProofFixture(game) {
         usedCredentialCount: 1,
         revokedCredentialCount: 1,
       },
+      credentialAttemptThrottling: {
+        status: "passed",
+        policyKind: "shared-postgres-account-source-lockout",
+        loginUrl:
+          `http://127.0.0.1:5173/auth/login?returnTo=${encodeURIComponent(
+            `/g/${game}/host`,
+          )}&account=${encodeURIComponent("host@example.test")}`,
+        rejectionTestId: "auth-login-reject",
+        threshold: 5,
+        windowSeconds: 30,
+        lockoutSeconds: 2,
+        retryTimingVisible: true,
+        hashedScopeStored: true,
+        rawAccountOrSourceStored: false,
+        browserObservedOperation: "account-login",
+        coveredCredentialOperations: [
+          "account-login",
+          "invite-redemption",
+          "account-recovery",
+        ],
+        trustedSourceHeader: false,
+        postLockoutCapabilityKinds: ["HostOf"],
+        sameRoleSurface: true,
+        successfulLoginClearedFailures: true,
+      },
       accountLifecycle: {
         status: "passed",
         adminControlSurface: {
@@ -20346,6 +20373,7 @@ function identityAdapterProofFixture(game) {
           "account_recovery_credential_revoked",
           "account_recovery_rejected",
           "account_recovered",
+          "auth_attempt_rate_limited",
           "account_session_created",
           "invite_revoked",
           "session_revoked",
@@ -20371,6 +20399,7 @@ function identityAdapterProofFixture(game) {
           "account_recovery_credential_revoked",
           "account_recovery_rejected",
           "account_recovered",
+          "auth_attempt_rate_limited",
           "account_session_created",
           "session_rotated",
           "session_revoked",
@@ -20382,7 +20411,7 @@ function identityAdapterProofFixture(game) {
       nonClaims: [
         "hosted account recovery delivery or traffic",
         "email or out-of-band invite delivery",
-        "rate limiting or abuse controls",
+        "hosted distributed or edge abuse controls",
         "hosted audit retention or export policy",
       ],
     },
@@ -21827,6 +21856,7 @@ function identityAdminProofFixture() {
       visibleChecks: [
         "account-login",
         "account-lifecycle",
+        "credential-attempt-throttling",
         "session-rotation",
         "session-revocation",
         "invite-revocation",

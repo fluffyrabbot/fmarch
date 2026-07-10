@@ -3671,6 +3671,167 @@ async fn global_admin_account_login_creates_normal_role_session(pool: sqlx::PgPo
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+async fn public_credential_failures_share_a_hashed_retryable_lockout(pool: sqlx::PgPool) {
+    let app = router_with_dev_auth(pool.clone());
+    let admin_token = "credential-throttle-admin";
+    let account_id = "throttled-host@example.test";
+    let password = "correct horse battery";
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/auth/dev-session")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    serde_json::json!({
+                        "token": admin_token,
+                        "principal_user_id": "admin_a",
+                        "expires_at": 4_102_444_800i64,
+                        "global_capabilities": ["GlobalAdmin"]
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    create_test_auth_account(&app, admin_token, account_id, password, "host_h").await;
+
+    let failed_requests = [
+        (
+            "/auth/accounts/login",
+            serde_json::json!({
+                "account_id": account_id,
+                "password": "wrong password",
+                "session_token": "failed-login-session",
+                "expires_at": 4_102_444_800i64
+            }),
+        ),
+        (
+            "/auth/invites/redeem",
+            serde_json::json!({
+                "invite_token": "invalid-invite",
+                "account_id": account_id,
+                "password": "wrong password",
+                "session_token": "failed-invite-session"
+            }),
+        ),
+        (
+            "/auth/accounts/recoveries",
+            serde_json::json!({
+                "account_id": account_id,
+                "recovery_token": "invalid-recovery-1",
+                "new_password": "replacement password one"
+            }),
+        ),
+        (
+            "/auth/accounts/recoveries",
+            serde_json::json!({
+                "account_id": account_id,
+                "recovery_token": "invalid-recovery-2",
+                "new_password": "replacement password two"
+            }),
+        ),
+        (
+            "/auth/accounts/recoveries",
+            serde_json::json!({
+                "account_id": account_id,
+                "recovery_token": "invalid-recovery-3",
+                "new_password": "replacement password three"
+            }),
+        ),
+    ];
+    for (index, (uri, body)) in failed_requests.into_iter().enumerate() {
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri(uri)
+                    .header("content-type", "application/json")
+                    .body(Body::from(body.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        if index < 4 {
+            assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        } else {
+            assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
+            let retry_after = response
+                .headers()
+                .get("retry-after")
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .parse::<i64>()
+                .unwrap();
+            assert!(retry_after > 0 && retry_after <= 900);
+            let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+            let reject: RejectMsg = serde_json::from_slice(&bytes).unwrap();
+            assert_eq!(reject.error, RejectCode::NotAuthorized);
+            assert!(reject.retryable);
+        }
+    }
+
+    let attempt = sqlx::query_as::<_, (String, i32, Option<i64>)>(
+        "SELECT scope_hash, failure_count, blocked_until FROM auth_credential_attempt",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(attempt.0.len(), 64);
+    assert!(!attempt.0.contains(account_id));
+    assert_eq!(attempt.1, 5);
+    assert!(attempt.2.is_some());
+
+    let rate_limit_audit = sqlx::query_as::<_, (String, serde_json::Value)>(
+        "SELECT token_hash, metadata FROM identity_lifecycle_audit WHERE event_kind = 'auth_attempt_rate_limited'",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(rate_limit_audit.0, attempt.0);
+    assert_eq!(rate_limit_audit.1["operation"], "account-recovery");
+    assert_eq!(rate_limit_audit.1["trusted_source_header"], false);
+    assert!(!rate_limit_audit.1.to_string().contains("invalid-recovery"));
+
+    sqlx::query("UPDATE auth_credential_attempt SET blocked_until = 0, updated_at = 0")
+        .execute(&pool)
+        .await
+        .unwrap();
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/auth/accounts/login")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    serde_json::json!({
+                        "account_id": account_id,
+                        "password": password,
+                        "session_token": "post-lockout-session",
+                        "expires_at": 4_102_444_800i64
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let remaining_attempts =
+        sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM auth_credential_attempt")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(remaining_attempts, 0);
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
 async fn global_admin_invite_redeems_to_normal_role_session(pool: sqlx::PgPool) {
     let app = router_with_dev_auth(pool.clone());
     let game = Uuid::new_v4();

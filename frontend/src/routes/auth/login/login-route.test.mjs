@@ -270,6 +270,45 @@ test("login action rejects missing or revoked tokens without setting a cookie", 
   );
 });
 
+test("login and invite redemption surface credential lockout retry timing", async () => {
+  for (const fields of [
+    {
+      token: "",
+      accountId: "host@example.test",
+      password: "wrong password",
+      returnTo: "/g/midsummer/host",
+    },
+    {
+      token: "invite-token",
+      accountId: "host@example.test",
+      password: "wrong password",
+      returnTo: "/g/midsummer/host",
+    },
+  ]) {
+    const result = await actions.default({
+      cookies: forbiddenCookieJar(),
+      fetch: async (url) => {
+        if (url === "/auth/session") {
+          return jsonResponse({}, { ok: false, status: 401 });
+        }
+        return jsonResponse(
+          { retryable: true },
+          { ok: false, status: 429, headers: { "retry-after": "17" } },
+        );
+      },
+      request: formRequest(fields),
+      url: new URL("http://localhost/auth/login"),
+    });
+
+    assert.equal(result.status, 429);
+    assert.equal(result.data.state, "reject");
+    assert.equal(
+      result.data.message,
+      "Too many credential attempts. Try again in 17 seconds.",
+    );
+  }
+});
+
 function formRequest(fields) {
   const formData = new FormData();
   for (const [key, value] of Object.entries(fields)) {
@@ -281,10 +320,11 @@ function formRequest(fields) {
   });
 }
 
-function jsonResponse(body, { ok = true, status = 200 } = {}) {
+function jsonResponse(body, { ok = true, status = 200, headers = {} } = {}) {
   return {
     ok,
     status,
+    headers: new Headers(headers),
     async json() {
       return body;
     },

@@ -53,10 +53,13 @@ export const actions = {
       }),
     });
     if (!response.ok) {
-      return fail(response.status === 400 || response.status === 401 ? response.status : 502, {
+      const status = [400, 401, 429].includes(response.status) ? response.status : 502;
+      return fail(status, {
         state: "reject",
         message:
-          response.status === 401
+          response.status === 429
+            ? authRateLimitMessage(response)
+            : response.status === 401
             ? "Recovery credential is missing, expired, revoked, used, or invalid"
             : response.status === 400
               ? await rejectionMessage(response)
@@ -102,6 +105,13 @@ async function rejectionMessage(response) {
   return typeof body?.message === "string" && body.message.trim() !== ""
     ? body.message
     : "Account recovery was rejected";
+}
+
+function authRateLimitMessage(response) {
+  const retryAfter = Number.parseInt(response.headers?.get?.("retry-after") ?? "", 10);
+  return Number.isSafeInteger(retryAfter) && retryAfter > 0
+    ? `Too many credential attempts. Try again in ${retryAfter} seconds.`
+    : "Too many credential attempts. Try again shortly.";
 }
 
 function credentialField(value) {

@@ -8,8 +8,8 @@ use argon2::password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, Salt
 use argon2::Argon2;
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::extract::{Path, Query, State};
-use axum::http::header::AUTHORIZATION;
-use axum::http::{HeaderMap, StatusCode};
+use axum::http::header::{AUTHORIZATION, RETRY_AFTER};
+use axum::http::{HeaderMap, HeaderValue, StatusCode};
 use axum::response::IntoResponse;
 use axum::routing::{get, post};
 use axum::{Json, Router};
@@ -50,6 +50,22 @@ struct LiveProjectionUpdate {
     player_private_dirty: bool,
     player_command_state_dirty: bool,
 }
+
+#[derive(Debug, Clone)]
+struct AuthAttemptPolicy {
+    max_failures: i32,
+    window_seconds: i64,
+    lockout_seconds: i64,
+    trust_source_header: bool,
+}
+
+#[derive(Debug, Clone)]
+struct AuthAttemptScope {
+    scope_hash: String,
+    policy: AuthAttemptPolicy,
+}
+
+const AUTH_ATTEMPT_SOURCE_HEADER: &str = "x-fmarch-auth-source";
 
 impl ApiState {
     pub fn new(pool: PgPool) -> Self {
@@ -575,6 +591,7 @@ async fn create_auth_account(
 
 async fn login_auth_account(
     State(state): State<ApiState>,
+    headers: HeaderMap,
     Json(request): Json<LoginAuthAccount>,
 ) -> Result<Json<AuthSessionResponse>, ApiError> {
     let account_id = request.account_id.trim();
@@ -596,6 +613,7 @@ async fn login_auth_account(
             message: "account session expiry must be in the future".to_string(),
         });
     }
+    let attempt_scope = enforce_auth_attempt_limit(&state, &headers, account_id).await?;
 
     let account = sqlx::query_as::<_, (String, String, Vec<String>)>(
         r#"
@@ -607,10 +625,14 @@ async fn login_auth_account(
     )
     .bind(account_id)
     .fetch_optional(&state.pool)
-    .await?
-    .ok_or_else(unauthorized_account)?;
+    .await?;
+    let Some(account) = account else {
+        record_failed_auth_attempt(&state, &attempt_scope, account_id, "account-login").await?;
+        return Err(unauthorized_account());
+    };
 
     if !verify_account_password(account.1.as_str(), password).await? {
+        record_failed_auth_attempt(&state, &attempt_scope, account_id, "account-login").await?;
         return Err(unauthorized_account());
     }
 
@@ -669,6 +691,7 @@ async fn login_auth_account(
     )
     .execute(&mut *tx)
     .await?;
+    clear_auth_attempt_failures(&mut tx, &attempt_scope).await?;
     tx.commit().await?;
 
     Ok(Json(
@@ -959,6 +982,7 @@ async fn revoke_auth_account_recovery_credential(
 
 async fn recover_auth_account(
     State(state): State<ApiState>,
+    headers: HeaderMap,
     Json(request): Json<RecoverAuthAccount>,
 ) -> Result<Json<AuthAccountRecoveryResponse>, ApiError> {
     let account_id = request.account_id.trim();
@@ -980,9 +1004,9 @@ async fn recover_auth_account(
         });
     }
     validate_new_account_password(new_password)?;
+    let attempt_scope = enforce_auth_attempt_limit(&state, &headers, account_id).await?;
     let now = unix_now_seconds();
     let recovery_hash = hash_session_token(recovery_token);
-    let password_hash = hash_account_password(new_password).await?;
     let mut tx = state.pool.begin().await?;
     let credential = sqlx::query_as::<_, (Uuid, String)>(
         r#"
@@ -1009,9 +1033,11 @@ async fn recover_auth_account(
         tx.rollback().await?;
         record_account_recovery_rejection(&state.pool, account_id, recovery_hash.as_str(), now)
             .await?;
+        record_failed_auth_attempt(&state, &attempt_scope, account_id, "account-recovery").await?;
         return Err(unauthorized_account_recovery());
     };
 
+    let password_hash = hash_account_password(new_password).await?;
     sqlx::query(
         r#"
         UPDATE auth_account_recovery_credential
@@ -1071,6 +1097,7 @@ async fn recover_auth_account(
     )
     .execute(&mut *tx)
     .await?;
+    clear_auth_attempt_failures(&mut tx, &attempt_scope).await?;
     tx.commit().await?;
 
     Ok(Json(AuthAccountRecoveryResponse {
@@ -1566,6 +1593,7 @@ async fn create_auth_invite(
 
 async fn redeem_auth_invite(
     State(state): State<ApiState>,
+    headers: HeaderMap,
     Json(request): Json<RedeemAuthInvite>,
 ) -> Result<Json<AuthSessionResponse>, ApiError> {
     let invite_token = request.invite_token.trim();
@@ -1586,6 +1614,7 @@ async fn redeem_auth_invite(
         });
     }
     validate_account_password_input(password)?;
+    let attempt_scope = enforce_auth_attempt_limit(&state, &headers, account_id).await?;
 
     let now = unix_now_seconds();
     let invite_hash = hash_session_token(invite_token);
@@ -1614,10 +1643,16 @@ async fn redeem_auth_invite(
     .bind(account_id)
     .bind(now)
     .fetch_optional(&mut *tx)
-    .await?
-    .ok_or_else(unauthorized_invite)?;
+    .await?;
+    let Some(invite) = invite else {
+        tx.rollback().await?;
+        record_failed_auth_attempt(&state, &attempt_scope, account_id, "invite-redemption").await?;
+        return Err(unauthorized_invite());
+    };
 
     if !verify_account_password(invite.3.as_str(), password).await? {
+        tx.rollback().await?;
+        record_failed_auth_attempt(&state, &attempt_scope, account_id, "invite-redemption").await?;
         return Err(unauthorized_invite());
     }
 
@@ -1682,6 +1717,7 @@ async fn redeem_auth_invite(
     .bind(serde_json::json!({ "account_id": account_id }).to_string())
     .execute(&mut *tx)
     .await?;
+    clear_auth_attempt_failures(&mut tx, &attempt_scope).await?;
     tx.commit().await?;
 
     Ok(Json(
@@ -1858,6 +1894,188 @@ async fn active_session_principal_and_globals(
     .ok_or_else(unauthorized_session)
 }
 
+async fn enforce_auth_attempt_limit(
+    state: &ApiState,
+    headers: &HeaderMap,
+    account_id: &str,
+) -> Result<AuthAttemptScope, ApiError> {
+    let policy = auth_attempt_policy();
+    let source = if policy.trust_source_header {
+        headers
+            .get(AUTH_ATTEMPT_SOURCE_HEADER)
+            .and_then(|value| value.to_str().ok())
+            .map(str::trim)
+            .filter(|value| !value.is_empty() && value.len() <= 256)
+            .unwrap_or("direct")
+    } else {
+        "direct"
+    };
+    let scope_hash = hash_session_token(
+        format!(
+            "account:{}\0source:{}",
+            account_id.trim().to_ascii_lowercase(),
+            source
+        )
+        .as_str(),
+    );
+    let now = unix_now_seconds();
+    let blocked_until = sqlx::query_scalar::<_, Option<i64>>(
+        "SELECT blocked_until FROM auth_credential_attempt WHERE scope_hash = $1",
+    )
+    .bind(scope_hash.as_str())
+    .fetch_optional(&state.pool)
+    .await?
+    .flatten();
+    if let Some(blocked_until) = blocked_until.filter(|blocked_until| *blocked_until > now) {
+        return Err(rate_limited(blocked_until - now));
+    }
+    Ok(AuthAttemptScope { scope_hash, policy })
+}
+
+async fn record_failed_auth_attempt(
+    state: &ApiState,
+    scope: &AuthAttemptScope,
+    account_id: &str,
+    operation: &str,
+) -> Result<(), ApiError> {
+    let now = unix_now_seconds();
+    let (failure_count, blocked_until) = sqlx::query_as::<_, (i32, Option<i64>)>(
+        r#"
+        INSERT INTO auth_credential_attempt (
+            scope_hash,
+            window_started_at,
+            failure_count,
+            blocked_until,
+            updated_at
+        )
+        VALUES ($1, $2, 1, NULL, $2)
+        ON CONFLICT (scope_hash) DO UPDATE
+        SET window_started_at = CASE
+                WHEN auth_credential_attempt.window_started_at + $3 <= $2 THEN $2
+                ELSE auth_credential_attempt.window_started_at
+            END,
+            failure_count = CASE
+                WHEN auth_credential_attempt.window_started_at + $3 <= $2 THEN 1
+                ELSE auth_credential_attempt.failure_count + 1
+            END,
+            blocked_until = CASE
+                WHEN (
+                    CASE
+                        WHEN auth_credential_attempt.window_started_at + $3 <= $2 THEN 1
+                        ELSE auth_credential_attempt.failure_count + 1
+                    END
+                ) >= $4 THEN $2 + $5
+                ELSE NULL
+            END,
+            updated_at = $2
+        RETURNING failure_count, blocked_until
+        "#,
+    )
+    .bind(scope.scope_hash.as_str())
+    .bind(now)
+    .bind(scope.policy.window_seconds)
+    .bind(scope.policy.max_failures)
+    .bind(scope.policy.lockout_seconds)
+    .fetch_one(&state.pool)
+    .await?;
+    if let Some(blocked_until) = blocked_until.filter(|blocked_until| *blocked_until > now) {
+        if failure_count == scope.policy.max_failures {
+            record_auth_attempt_rate_limited(
+                &state.pool,
+                scope,
+                account_id,
+                operation,
+                now,
+                blocked_until,
+            )
+            .await?;
+        }
+        return Err(rate_limited(blocked_until - now));
+    }
+    Ok(())
+}
+
+async fn clear_auth_attempt_failures(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    scope: &AuthAttemptScope,
+) -> Result<(), ApiError> {
+    sqlx::query("DELETE FROM auth_credential_attempt WHERE scope_hash = $1")
+        .bind(scope.scope_hash.as_str())
+        .execute(&mut **tx)
+        .await?;
+    Ok(())
+}
+
+async fn record_auth_attempt_rate_limited(
+    pool: &PgPool,
+    scope: &AuthAttemptScope,
+    account_id: &str,
+    operation: &str,
+    now: i64,
+    blocked_until: i64,
+) -> Result<(), ApiError> {
+    sqlx::query(
+        r#"
+        INSERT INTO identity_lifecycle_audit (
+            event_at,
+            event_kind,
+            actor_user_id,
+            principal_user_id,
+            token_hash,
+            related_token_hash,
+            metadata
+        )
+        SELECT $1,
+               'auth_attempt_rate_limited',
+               NULL,
+               principal_user_id,
+               $2,
+               NULL,
+               $3::JSONB
+        FROM auth_account
+        WHERE account_id = $4
+        "#,
+    )
+    .bind(now)
+    .bind(scope.scope_hash.as_str())
+    .bind(
+        serde_json::json!({
+            "account_id": account_id,
+            "operation": operation,
+            "max_failures": scope.policy.max_failures,
+            "window_seconds": scope.policy.window_seconds,
+            "lockout_seconds": scope.policy.lockout_seconds,
+            "blocked_until": blocked_until,
+            "trusted_source_header": scope.policy.trust_source_header
+        })
+        .to_string(),
+    )
+    .bind(account_id)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+fn auth_attempt_policy() -> AuthAttemptPolicy {
+    AuthAttemptPolicy {
+        max_failures: env_i64("FMARCH_AUTH_RATE_LIMIT_MAX_FAILURES", 5, 2, 100) as i32,
+        window_seconds: env_i64("FMARCH_AUTH_RATE_LIMIT_WINDOW_SECONDS", 900, 1, 86_400),
+        lockout_seconds: env_i64("FMARCH_AUTH_RATE_LIMIT_LOCKOUT_SECONDS", 900, 1, 86_400),
+        trust_source_header: std::env::var("FMARCH_TRUST_AUTH_SOURCE_HEADER")
+            .ok()
+            .as_deref()
+            == Some("1"),
+    }
+}
+
+fn env_i64(name: &str, default: i64, minimum: i64, maximum: i64) -> i64 {
+    std::env::var(name)
+        .ok()
+        .and_then(|value| value.parse::<i64>().ok())
+        .unwrap_or(default)
+        .clamp(minimum, maximum)
+}
+
 async fn authenticated_account_principal_for_update(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     caller_hash: &str,
@@ -1995,6 +2213,13 @@ fn unauthorized_account_recovery() -> ApiError {
         error: RejectCode::NotAuthorized,
         message: "account recovery credential is missing, expired, revoked, used, or invalid"
             .to_string(),
+    }
+}
+
+fn rate_limited(retry_after_seconds: i64) -> ApiError {
+    ApiError::RateLimited {
+        retry_after_seconds,
+        message: "too many credential attempts; wait before trying again".to_string(),
     }
 }
 
@@ -4010,6 +4235,10 @@ pub enum ApiError {
         error: RejectCode,
         message: String,
     },
+    RateLimited {
+        retry_after_seconds: i64,
+        message: String,
+    },
 }
 
 impl From<projections::ProjectionError> for ApiError {
@@ -4050,7 +4279,31 @@ fn command_reject_api_error(reject: commands::Reject) -> ApiError {
 
 impl IntoResponse for ApiError {
     fn into_response(self) -> axum::response::Response {
-        let (status, error, message) = match self {
+        let self_ = match self {
+            ApiError::RateLimited {
+                retry_after_seconds,
+                message,
+            } => {
+                let retry_after_seconds = retry_after_seconds.max(1);
+                let mut response = (
+                    StatusCode::TOO_MANY_REQUESTS,
+                    Json(RejectMsg {
+                        error: RejectCode::NotAuthorized,
+                        retryable: true,
+                        message,
+                    }),
+                )
+                    .into_response();
+                response.headers_mut().insert(
+                    RETRY_AFTER,
+                    HeaderValue::from_str(retry_after_seconds.to_string().as_str())
+                        .unwrap_or_else(|_| HeaderValue::from_static("1")),
+                );
+                return response;
+            }
+            other => other,
+        };
+        let (status, error, message) = match self_ {
             ApiError::Projection(err) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 RejectCode::Internal,
@@ -4071,6 +4324,7 @@ impl IntoResponse for ApiError {
                 error,
                 message,
             } => (status, error, message),
+            ApiError::RateLimited { .. } => unreachable!(),
         };
         (
             status,

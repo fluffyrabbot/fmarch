@@ -108,6 +108,14 @@ test("admin audit detail load returns identity lifecycle rows through admin sess
               metadata: {},
             },
             {
+              id: 13,
+              event_at: 106,
+              event_kind: "auth_attempt_rate_limited",
+              actor_user_id: null,
+              principal_user_id: "host_h",
+              metadata: {},
+            },
+            {
               id: 9,
               event_at: 101,
               event_kind: "account_session_created",
@@ -159,6 +167,7 @@ test("admin audit detail load returns identity lifecycle rows through admin sess
       "account_recovery_credential_revoked",
       "account_recovery_rejected",
       "account_recovered",
+      "auth_attempt_rate_limited",
       "account_session_created",
       "session_rotated",
       "session_revoked",

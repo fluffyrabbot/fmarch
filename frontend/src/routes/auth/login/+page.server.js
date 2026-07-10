@@ -126,6 +126,9 @@ async function redeemInviteToken({ fetch, inviteToken, accountId, password }) {
     }),
   });
   if (!response.ok) {
+    if (response.status === 429) {
+      return authRateLimitRejection(response);
+    }
     return {
       status: "reject",
       statusCode: response.status === 401 ? 401 : 502,
@@ -159,6 +162,9 @@ async function loginAccount({ fetch, accountId, password }) {
     }),
   });
   if (!response.ok) {
+    if (response.status === 429) {
+      return authRateLimitRejection(response);
+    }
     return {
       status: "reject",
       statusCode: response.status === 401 ? 401 : 502,
@@ -174,6 +180,18 @@ async function loginAccount({ fetch, accountId, password }) {
     };
   }
   return { status: "ok", sessionToken, session: body };
+}
+
+function authRateLimitRejection(response) {
+  const retryAfter = Number.parseInt(response.headers?.get?.("retry-after") ?? "", 10);
+  return {
+    status: "reject",
+    statusCode: 429,
+    message:
+      Number.isSafeInteger(retryAfter) && retryAfter > 0
+        ? `Too many credential attempts. Try again in ${retryAfter} seconds.`
+        : "Too many credential attempts. Try again shortly.",
+  };
 }
 
 function requiredToken(formData, field) {

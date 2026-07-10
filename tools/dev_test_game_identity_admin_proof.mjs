@@ -24,6 +24,7 @@ const evidencePath = path.join(repoRoot, devTestGameIdentityAdminProofPath);
 const requiredChecks = [
   "account-login",
   "account-lifecycle",
+  "credential-attempt-throttling",
   "session-rotation",
   "session-revocation",
   "invite-revocation",
@@ -72,7 +73,7 @@ export function identityAdminProofCase() {
       productionReady: false,
       scope: "local-dev-test-game-identity-admin-surface",
       proofBoundary:
-        "Local SvelteKit admin role URL with fixture admin authority over the auth invite-role identity adapter proof. Proves the saved local identity-adapter evidence, including password rotation and hashed single-use account recovery, is discoverable from the seeded admin overview and inspectable in a native admin audit detail route with role surfaces and lifecycle checks visible; it does not prove hosted accounts, invite delivery, hosted recovery delivery or traffic, abuse controls, hosted audit retention/export, beta readiness, or production readiness.",
+        "Local SvelteKit admin role URL with fixture admin authority over the auth invite-role identity adapter proof. Proves the saved local identity-adapter evidence, including password rotation, hashed single-use account recovery, and shared local credential-attempt throttling, is discoverable from the seeded admin overview and inspectable in a native admin audit detail route with role surfaces and lifecycle checks visible; it does not prove hosted accounts, invite delivery, hosted recovery delivery or traffic, distributed or edge abuse controls, hosted audit retention/export, beta readiness, or production readiness.",
       generatedFrom: {
         identityAdapterProof: identityProofRelativePath,
         game: identityProof.game,

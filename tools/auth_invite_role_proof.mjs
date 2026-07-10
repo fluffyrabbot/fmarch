@@ -129,7 +129,7 @@ try {
     scope: "local-auth-invite-role-proof",
     productionReady: false,
     proofBoundary:
-      "Local scratch-Postgres plus local Rust API, SvelteKit login/account-security/account-recovery/host/admin-audit routes, and Chromium proof. Proves Argon2id account credentials, hashed single-use recovery credentials, account-bound invite redemption, and a local account credential lifecycle preserve the existing role-surface capability architecture for seeded admin, host, and player URLs, including authenticated password rotation and account recovery with session revocation, invalid/expired/revoked/replayed recovery rejection, recovered-password return to the same host role URL, host-role-surface game-scoped player invite issuance, GlobalAdmin account creation/disable/enable, stale account-session revocation, disabled-account login rejection, GlobalAdmin discovery, and inspection of local identity lifecycle audit rows from the admin overview; it does not prove hosted recovery delivery or traffic, email delivery, hosted identity, abuse controls, hosted password-parameter monitoring, hosted audit retention/export, or beta release readiness.",
+      "Local scratch-Postgres plus local Rust API, SvelteKit login/account-security/account-recovery/host/admin-audit routes, and Chromium proof. Proves Argon2id account credentials, hashed single-use recovery credentials, account-bound invite redemption, and a local account credential lifecycle preserve the existing role-surface capability architecture for seeded admin, host, and player URLs, including authenticated password rotation and account recovery with session revocation, invalid/expired/revoked/replayed recovery rejection, recovered-password return to the same host role URL, shared Postgres credential-attempt throttling with a visible retry state and post-lockout recovery to the same host role URL, host-role-surface game-scoped player invite issuance, GlobalAdmin account creation/disable/enable, stale account-session revocation, disabled-account login rejection, GlobalAdmin discovery, and inspection of local identity lifecycle audit rows from the admin overview; it does not prove hosted recovery delivery or traffic, email delivery, hosted identity, distributed or edge abuse controls, hosted password-parameter monitoring, hosted audit retention/export, or beta release readiness.",
     identityAdapter: {
       status: "passed",
       replacesDevTokensWithoutRoleSurfaceChange: true,
@@ -139,6 +139,7 @@ try {
       accountCredentialKind: "local-password-account",
       accountPasswordAlgorithm: "argon2id",
       accountRecoveryCredentialKind: "hashed-single-use-recovery-credential",
+      credentialAttemptPolicyKind: "shared-postgres-account-source-lockout",
       lifecycleControls: [
         "account-disable",
         "account-enable",
@@ -146,6 +147,7 @@ try {
         "account-recovery-credential-issuance",
         "account-recovery-credential-revocation",
         "account-recovery",
+        "credential-attempt-throttling",
         "session-rotation",
         "session-revocation",
         "invite-revocation",
@@ -483,6 +485,95 @@ async function driveAccountLogin({
         secure: sessionCookie.secure,
         valuePrefix: sessionCookie.value.slice(0, "account-session-".length),
       },
+    };
+  } finally {
+    await page.close();
+  }
+}
+
+async function proveCredentialAttemptThrottling({
+  frontendBaseUrl,
+  apiBaseUrl,
+  accountId,
+  password,
+  returnTo,
+}) {
+  const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
+  const loginUrl = `${frontendBaseUrl}/auth/login?returnTo=${encodeURIComponent(
+    returnTo,
+  )}&account=${encodeURIComponent(accountId)}`;
+  const wrongPassword = `throttled-wrong-password-${game}`;
+  try {
+    await page.goto(loginUrl, { waitUntil: "networkidle" });
+    await page.getByTestId("auth-login-surface").waitFor({ state: "visible" });
+    for (let attempt = 1; attempt <= 5; attempt += 1) {
+      await page.getByTestId("auth-login-password").fill(wrongPassword);
+      await page.getByTestId("auth-login-submit").click();
+      const rejection = page.getByTestId("auth-login-reject");
+      await rejection.waitFor({ state: "visible", timeout: 15000 });
+      const rejectionText = (await rejection.innerText()).trim();
+      if (
+        attempt < 5 &&
+        rejectionText !== "Account credentials are missing, disabled, or invalid"
+      ) {
+        throw new Error(`credential attempt ${attempt} rejected unexpectedly: ${rejectionText}`);
+      }
+      if (
+        attempt === 5 &&
+        !/^Too many credential attempts\. Try again in \d+ seconds\.$/.test(rejectionText)
+      ) {
+        throw new Error(`credential lockout did not expose retry timing: ${rejectionText}`);
+      }
+    }
+
+    const storedAttempts = await storedAuthAttemptRecords();
+    if (
+      storedAttempts.length !== 1 ||
+      storedAttempts[0].failureCount !== 5 ||
+      storedAttempts[0].blocked !== true ||
+      storedAttempts[0].scopeHash.length !== 64 ||
+      storedAttempts[0].scopeHash.includes(accountId)
+    ) {
+      throw new Error(
+        `credential attempt policy did not store one hashed lockout: ${JSON.stringify(storedAttempts)}`,
+      );
+    }
+
+    await delay(2500);
+    const recoveredLogin = await driveAccountLogin({
+      frontendBaseUrl,
+      apiBaseUrl,
+      accountId,
+      password,
+      returnTo,
+      expectedCapability: "HostOf",
+    });
+    const remainingAttempts = await storedAuthAttemptRecords();
+    if (remainingAttempts.length !== 0) {
+      throw new Error("successful post-lockout login did not clear credential attempts");
+    }
+    return {
+      status: "passed",
+      loginUrl,
+      rejectionTestId: "auth-login-reject",
+      threshold: 5,
+      windowSeconds: 30,
+      lockoutSeconds: 2,
+      retryTimingVisible: true,
+      hashedScopeStored: true,
+      rawAccountOrSourceStored: false,
+      browserObservedOperation: "account-login",
+      coveredCredentialOperations: [
+        "account-login",
+        "invite-redemption",
+        "account-recovery",
+      ],
+      trustedSourceHeader: false,
+      postLockoutCapabilityKinds: recoveredLogin.capabilityKinds,
+      sameRoleSurface:
+        new URL(recoveredLogin.loginUrl).searchParams.get("returnTo") === returnTo,
+      successfulLoginClearedFailures: true,
+      recoveredSessionToken: recoveredLogin.sessionToken,
     };
   } finally {
     await page.close();
@@ -1032,6 +1123,13 @@ async function proveIdentityLifecycle({
       returnTo: hostReturnTo,
       expectedText: game,
     });
+    const credentialAttemptThrottling = await proveCredentialAttemptThrottling({
+      frontendBaseUrl,
+      apiBaseUrl,
+      accountId: hostAccount.accountId,
+      password: recoveredHostPassword,
+      returnTo: hostReturnTo,
+    });
     return await finishIdentityLifecycleProof({
       apiBaseUrl,
       frontendBaseUrl,
@@ -1048,6 +1146,7 @@ async function proveIdentityLifecycle({
       rotatedHostPassword,
       recoveredPasswordLogin,
       recoveredHostPassword,
+      credentialAttemptThrottling,
       activeRecoveryCredential,
       revokedRecoveryCredential,
       expiredRecoveryCredential,
@@ -1094,6 +1193,7 @@ async function finishIdentityLifecycleProof({
   rotatedHostPassword,
   recoveredPasswordLogin,
   recoveredHostPassword,
+  credentialAttemptThrottling,
   activeRecoveryCredential,
   revokedRecoveryCredential,
   expiredRecoveryCredential,
@@ -1140,6 +1240,7 @@ async function finishIdentityLifecycleProof({
     "account_recovery_credential_revoked",
     "account_recovery_rejected",
     "account_recovered",
+    "auth_attempt_rate_limited",
     "invite_redeemed",
     "invite_revoked",
     "session_revoked",
@@ -1178,6 +1279,7 @@ async function finishIdentityLifecycleProof({
     accountRecoveryLogin.sessionToken,
     rotatedPasswordLogin.sessionToken,
     recoveredPasswordLogin.sessionToken,
+    credentialAttemptThrottling.recoveredSessionToken,
     hostAccount.password,
     rotatedHostPassword,
     recoveredHostPassword,
@@ -1199,6 +1301,7 @@ async function finishIdentityLifecycleProof({
       accountRecoveryLogin.sessionToken,
       rotatedPasswordLogin.sessionToken,
       recoveredPasswordLogin.sessionToken,
+      credentialAttemptThrottling.recoveredSessionToken,
       hostAccount.password,
       rotatedHostPassword,
       recoveredHostPassword,
@@ -1286,6 +1389,25 @@ async function finishIdentityLifecycleProof({
         (entry) => entry.revoked,
       ).length,
     },
+    credentialAttemptThrottling: {
+      status: credentialAttemptThrottling.status,
+      policyKind: "shared-postgres-account-source-lockout",
+      loginUrl: credentialAttemptThrottling.loginUrl,
+      rejectionTestId: credentialAttemptThrottling.rejectionTestId,
+      threshold: credentialAttemptThrottling.threshold,
+      windowSeconds: credentialAttemptThrottling.windowSeconds,
+      lockoutSeconds: credentialAttemptThrottling.lockoutSeconds,
+      retryTimingVisible: credentialAttemptThrottling.retryTimingVisible,
+      hashedScopeStored: credentialAttemptThrottling.hashedScopeStored,
+      rawAccountOrSourceStored: credentialAttemptThrottling.rawAccountOrSourceStored,
+      browserObservedOperation: credentialAttemptThrottling.browserObservedOperation,
+      coveredCredentialOperations: credentialAttemptThrottling.coveredCredentialOperations,
+      trustedSourceHeader: credentialAttemptThrottling.trustedSourceHeader,
+      postLockoutCapabilityKinds: credentialAttemptThrottling.postLockoutCapabilityKinds,
+      sameRoleSurface: credentialAttemptThrottling.sameRoleSurface,
+      successfulLoginClearedFailures:
+        credentialAttemptThrottling.successfulLoginClearedFailures,
+    },
     accountLifecycle: {
       status: "passed",
       disabledStatus: accountDisableControl.statusText,
@@ -1345,7 +1467,7 @@ async function finishIdentityLifecycleProof({
       "hosted password parameter monitoring or credential reset policy",
       "email or out-of-band invite delivery",
       "cross-game invite restrictions beyond recorded local game scope",
-      "rate limiting or abuse controls",
+      "hosted distributed or edge abuse controls",
       "hosted audit retention or export policy",
     ],
   };
@@ -1780,6 +1902,35 @@ async function storedRecoveryCredentialRecords() {
   return JSON.parse(output.trim() || "[]");
 }
 
+async function storedAuthAttemptRecords() {
+  if (proofDatabase === undefined) {
+    throw new Error("proof database is not available");
+  }
+  const output = await runProcess("psql", [
+    proofDatabase.url,
+    "-v",
+    "ON_ERROR_STOP=1",
+    "-t",
+    "-A",
+    "-c",
+    `
+      SELECT COALESCE(
+        json_agg(
+          json_build_object(
+            'scopeHash', scope_hash,
+            'failureCount', failure_count,
+            'blocked', blocked_until > EXTRACT(EPOCH FROM NOW())::BIGINT
+          )
+          ORDER BY scope_hash
+        ),
+        '[]'::JSON
+      )::TEXT
+      FROM auth_credential_attempt
+    `,
+  ]);
+  return JSON.parse(output.trim() || "[]");
+}
+
 async function driveAdminIdentityAuditSurface({
   frontendBaseUrl,
   adminSessionToken,
@@ -1841,6 +1992,7 @@ async function driveAdminIdentityAuditSurface({
       "account_recovery_credential_revoked",
       "account_recovery_rejected",
       "account_recovered",
+      "auth_attempt_rate_limited",
       "account_session_created",
       "invite_redeemed",
       "session_rotated",
@@ -2022,10 +2174,15 @@ function assertInviteProof(evidence) {
     evidence.identityAdapter?.accountPasswordAlgorithm !== "argon2id" ||
     evidence.identityAdapter?.accountRecoveryCredentialKind !==
       "hashed-single-use-recovery-credential" ||
+    evidence.identityAdapter?.credentialAttemptPolicyKind !==
+      "shared-postgres-account-source-lockout" ||
     !evidence.identityAdapter?.lifecycleControls?.includes(
       "account-password-rotation",
     ) ||
     !evidence.identityAdapter?.lifecycleControls?.includes("account-recovery") ||
+    !evidence.identityAdapter?.lifecycleControls?.includes(
+      "credential-attempt-throttling",
+    ) ||
     evidence.identityAdapterContractDiff?.status !== "passed" ||
     !evidence.identityAdapter?.delegatedIssuanceControls?.includes(
       "host-scoped-invite-issuance",
@@ -2111,6 +2268,28 @@ function assertInviteProof(evidence) {
     evidence.identityLifecycle?.accountRecovery?.storedCredentialCount !== 3 ||
     evidence.identityLifecycle?.accountRecovery?.usedCredentialCount !== 1 ||
     evidence.identityLifecycle?.accountRecovery?.revokedCredentialCount !== 1 ||
+    evidence.identityLifecycle?.credentialAttemptThrottling?.status !== "passed" ||
+    evidence.identityLifecycle?.credentialAttemptThrottling?.policyKind !==
+      "shared-postgres-account-source-lockout" ||
+    evidence.identityLifecycle?.credentialAttemptThrottling?.rejectionTestId !==
+      "auth-login-reject" ||
+    evidence.identityLifecycle?.credentialAttemptThrottling?.threshold !== 5 ||
+    evidence.identityLifecycle?.credentialAttemptThrottling?.retryTimingVisible !== true ||
+    evidence.identityLifecycle?.credentialAttemptThrottling?.hashedScopeStored !== true ||
+    evidence.identityLifecycle?.credentialAttemptThrottling?.rawAccountOrSourceStored !== false ||
+    evidence.identityLifecycle?.credentialAttemptThrottling?.trustedSourceHeader !== false ||
+    evidence.identityLifecycle?.credentialAttemptThrottling?.successfulLoginClearedFailures !==
+      true ||
+    !evidence.identityLifecycle?.credentialAttemptThrottling?.coveredCredentialOperations?.includes(
+      "invite-redemption",
+    ) ||
+    !evidence.identityLifecycle?.credentialAttemptThrottling?.coveredCredentialOperations?.includes(
+      "account-recovery",
+    ) ||
+    !evidence.identityLifecycle?.credentialAttemptThrottling?.postLockoutCapabilityKinds?.includes(
+      "HostOf",
+    ) ||
+    evidence.identityLifecycle?.credentialAttemptThrottling?.sameRoleSurface !== true ||
     evidence.identityLifecycle?.accountLifecycle?.status !== "passed" ||
     evidence.identityLifecycle?.accountLifecycle?.adminControlSurface?.status !== "passed" ||
     evidence.identityLifecycle?.accountLifecycle?.adminControlSurface?.detailRoleUrl !==
@@ -2178,6 +2357,9 @@ function assertInviteProof(evidence) {
     !evidence.identityLifecycle?.auditTrail?.eventKinds?.includes(
       "account_recovered",
     ) ||
+    !evidence.identityLifecycle?.auditTrail?.eventKinds?.includes(
+      "auth_attempt_rate_limited",
+    ) ||
     evidence.identityLifecycle?.adminAuditSurface?.status !== "passed" ||
     evidence.identityLifecycle?.adminAuditSurface?.clickedThroughFromOverview !== true ||
     evidence.identityLifecycle?.adminAuditSurface?.rawTokensVisible !== false ||
@@ -2216,6 +2398,9 @@ function assertInviteProof(evidence) {
     ) ||
     !evidence.identityLifecycle?.adminAuditSurface?.visibleEventKinds?.includes(
       "account_recovered",
+    ) ||
+    !evidence.identityLifecycle?.adminAuditSurface?.visibleEventKinds?.includes(
+      "auth_attempt_rate_limited",
     )
   ) {
     throw new Error("invite proof must preserve the role-surface identity adapter");
@@ -2286,6 +2471,10 @@ async function startApi(url) {
       ...process.env,
       DATABASE_URL: url,
       FMARCH_BIND: `${host}:${port}`,
+      FMARCH_AUTH_RATE_LIMIT_MAX_FAILURES: "5",
+      FMARCH_AUTH_RATE_LIMIT_WINDOW_SECONDS: "30",
+      FMARCH_AUTH_RATE_LIMIT_LOCKOUT_SECONDS: "2",
+      FMARCH_TRUST_AUTH_SOURCE_HEADER: "0",
       RUST_LOG: process.env.RUST_LOG ?? "warn",
     },
     stdio: ["ignore", "pipe", "pipe"],

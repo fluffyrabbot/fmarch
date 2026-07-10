@@ -6205,6 +6205,8 @@ export function validateDevTestGameIdentityAdapterProof(proof, options = {}) {
     proof.identityAdapter?.accountPasswordAlgorithm !== "argon2id" ||
     proof.identityAdapter?.accountRecoveryCredentialKind !==
       "hashed-single-use-recovery-credential" ||
+    proof.identityAdapter?.credentialAttemptPolicyKind !==
+      "shared-postgres-account-source-lockout" ||
     proof.identityAdapter?.sessionCredentialKind !== "opaque-session" ||
     !proof.identityAdapter?.lifecycleControls?.includes("account-disable") ||
     !proof.identityAdapter?.lifecycleControls?.includes("account-enable") ||
@@ -6212,6 +6214,9 @@ export function validateDevTestGameIdentityAdapterProof(proof, options = {}) {
       "account-password-rotation",
     ) ||
     !proof.identityAdapter?.lifecycleControls?.includes("account-recovery") ||
+    !proof.identityAdapter?.lifecycleControls?.includes(
+      "credential-attempt-throttling",
+    ) ||
     !proof.identityAdapter?.lifecycleControls?.includes("session-rotation") ||
     !proof.identityAdapter?.lifecycleControls?.includes("session-revocation") ||
     !proof.identityAdapter?.lifecycleControls?.includes("invite-revocation") ||
@@ -6298,6 +6303,26 @@ export function validateDevTestGameIdentityAdapterProof(proof, options = {}) {
     proof.identityLifecycle?.accountRecovery?.storedCredentialCount !== 3 ||
     proof.identityLifecycle?.accountRecovery?.usedCredentialCount !== 1 ||
     proof.identityLifecycle?.accountRecovery?.revokedCredentialCount !== 1 ||
+    proof.identityLifecycle?.credentialAttemptThrottling?.status !== "passed" ||
+    proof.identityLifecycle?.credentialAttemptThrottling?.policyKind !==
+      "shared-postgres-account-source-lockout" ||
+    proof.identityLifecycle?.credentialAttemptThrottling?.threshold !== 5 ||
+    proof.identityLifecycle?.credentialAttemptThrottling?.retryTimingVisible !== true ||
+    proof.identityLifecycle?.credentialAttemptThrottling?.hashedScopeStored !== true ||
+    proof.identityLifecycle?.credentialAttemptThrottling?.rawAccountOrSourceStored !== false ||
+    proof.identityLifecycle?.credentialAttemptThrottling?.trustedSourceHeader !== false ||
+    proof.identityLifecycle?.credentialAttemptThrottling?.successfulLoginClearedFailures !==
+      true ||
+    !proof.identityLifecycle?.credentialAttemptThrottling?.coveredCredentialOperations?.includes(
+      "invite-redemption",
+    ) ||
+    !proof.identityLifecycle?.credentialAttemptThrottling?.coveredCredentialOperations?.includes(
+      "account-recovery",
+    ) ||
+    !proof.identityLifecycle?.credentialAttemptThrottling?.postLockoutCapabilityKinds?.includes(
+      "HostOf",
+    ) ||
+    proof.identityLifecycle?.credentialAttemptThrottling?.sameRoleSurface !== true ||
     proof.identityLifecycle?.accountLifecycle?.status !== "passed" ||
     proof.identityLifecycle?.accountLifecycle?.adminControlSurface?.status !== "passed" ||
     proof.identityLifecycle?.accountLifecycle?.adminControlSurface?.detailRoleUrl !==
@@ -6361,6 +6386,9 @@ export function validateDevTestGameIdentityAdapterProof(proof, options = {}) {
     !proof.identityLifecycle?.auditTrail?.eventKinds?.includes(
       "account_recovered",
     ) ||
+    !proof.identityLifecycle?.auditTrail?.eventKinds?.includes(
+      "auth_attempt_rate_limited",
+    ) ||
     !proof.identityLifecycle?.auditTrail?.eventKinds?.includes("session_rotated") ||
     !proof.identityLifecycle?.auditTrail?.eventKinds?.includes("session_revoked") ||
     !proof.identityLifecycle?.auditTrail?.eventKinds?.includes("invite_revoked") ||
@@ -6393,6 +6421,9 @@ export function validateDevTestGameIdentityAdapterProof(proof, options = {}) {
     ) ||
     !proof.identityLifecycle?.adminAuditSurface?.visibleEventKinds?.includes(
       "account_recovered",
+    ) ||
+    !proof.identityLifecycle?.adminAuditSurface?.visibleEventKinds?.includes(
+      "auth_attempt_rate_limited",
     ) ||
     !proof.identityLifecycle?.adminAuditSurface?.visibleEventKinds?.includes(
       "session_rotated",
@@ -6461,6 +6492,7 @@ export function validateDevTestGameIdentityAdminProof(proof, options = {}) {
   const requiredChecks = [
     "account-login",
     "account-lifecycle",
+    "credential-attempt-throttling",
     "session-rotation",
     "session-revocation",
     "invite-revocation",

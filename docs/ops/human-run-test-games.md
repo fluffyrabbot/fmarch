@@ -911,9 +911,12 @@ local identity-adapter shape, including Argon2id credential storage and the seed
 flow plus hashed single-use recovery credential management, rejection of
 invalid/expired/revoked/replayed credentials, and
 `/auth/account/recovery?account=<account-id>&returnTo=<role-surface>` recovery back to
-the unchanged host role surface, and local backup/restore lanes. It does not prove
+the unchanged host role surface, plus a visible five-failure local credential lockout
+with `Retry-After`, hashed Postgres scope storage, successful lockout expiry, and return
+to that same host role surface, and local backup/restore lanes. It does not prove
 hosted production account lifecycle,
-invite delivery, hosted recovery delivery/traffic, hosted password-parameter monitoring, rate limits, abuse controls, production
+invite delivery, hosted recovery delivery/traffic, hosted password-parameter monitoring,
+distributed or edge rate limits and abuse controls, production
 session-secret policy, hosted deployment, hosted demo fixtures,
 production-like backup/PITR, exhaustive race coverage, hosted
 logs/metrics/traces, upload or transcode behavior, beta readiness, or
@@ -921,5 +924,5 @@ rollback/delete semantics for existing append-only games. The harness seeds a
 local root GlobalAdmin row directly into `auth_session` with `/auth/dev-session`
 disabled; every seeded browser role then enters through account login or
 account-bound invite redemption. Hosted production accounts, recovery,
-delivery, and abuse controls remain a later identity layer over the same role
+delivery, and distributed abuse controls remain a later identity layer over the same role
 surfaces.

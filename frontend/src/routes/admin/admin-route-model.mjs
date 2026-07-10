@@ -9233,6 +9233,10 @@ export function normalizeLocalIdentityAdapterAudit(identityAdapterProof, { game 
     ],
     ["account-recovery", identityAdapterProof.identityLifecycle?.accountRecovery?.status],
     [
+      "credential-attempt-throttling",
+      identityAdapterProof.identityLifecycle?.credentialAttemptThrottling?.status,
+    ],
+    [
       "account-lifecycle",
       identityAdapterProof.identityLifecycle?.accountLifecycle?.status,
     ],
@@ -9316,6 +9320,20 @@ export function normalizeLocalIdentityAdapterAudit(identityAdapterProof, { game 
       ?.recoveredPasswordCapabilityKinds?.includes("HostOf") ||
     identityAdapterProof.identityLifecycle?.accountRecovery?.sameRoleSurface !== true ||
     identityAdapterProof.identityLifecycle?.accountRecovery?.revokedSessionCount < 1 ||
+    identityAdapterProof.identityLifecycle?.credentialAttemptThrottling?.policyKind !==
+      "shared-postgres-account-source-lockout" ||
+    identityAdapterProof.identityLifecycle?.credentialAttemptThrottling
+      ?.retryTimingVisible !== true ||
+    identityAdapterProof.identityLifecycle?.credentialAttemptThrottling?.hashedScopeStored !==
+      true ||
+    identityAdapterProof.identityLifecycle?.credentialAttemptThrottling
+      ?.rawAccountOrSourceStored !== false ||
+    identityAdapterProof.identityLifecycle?.credentialAttemptThrottling
+      ?.successfulLoginClearedFailures !== true ||
+    !identityAdapterProof.identityLifecycle?.credentialAttemptThrottling
+      ?.postLockoutCapabilityKinds?.includes("HostOf") ||
+    identityAdapterProof.identityLifecycle?.credentialAttemptThrottling?.sameRoleSurface !==
+      true ||
     identityAdapterProof.identityLifecycle?.accountLifecycle?.adminControlSurface?.status !==
       "passed" ||
     identityAdapterProof.identityLifecycle?.accountLifecycle?.adminControlSurface
@@ -9377,6 +9395,9 @@ export function normalizeLocalIdentityAdapterAudit(identityAdapterProof, { game 
     ),
     accountRecoveryCredentialKind: String(
       identityAdapterProof.identityAdapter?.accountRecoveryCredentialKind ?? "",
+    ),
+    credentialAttemptPolicyKind: String(
+      identityAdapterProof.identityAdapter?.credentialAttemptPolicyKind ?? "",
     ),
     lifecycleControls: Object.freeze(controls.map((control) => String(control))),
     delegatedIssuanceControls: Object.freeze(
@@ -9483,6 +9504,30 @@ export function normalizeLocalIdentityAdapterAudit(identityAdapterProof, { game 
       rawCredentialStored:
         identityAdapterProof.identityLifecycle.accountRecovery?.rawCredentialStored ===
         true,
+    }),
+    credentialAttemptThrottling: Object.freeze({
+      policyKind: String(
+        identityAdapterProof.identityLifecycle.credentialAttemptThrottling?.policyKind ??
+          "",
+      ),
+      threshold:
+        identityAdapterProof.identityLifecycle.credentialAttemptThrottling?.threshold ??
+        null,
+      retryTimingVisible:
+        identityAdapterProof.identityLifecycle.credentialAttemptThrottling
+          ?.retryTimingVisible === true,
+      hashedScopeStored:
+        identityAdapterProof.identityLifecycle.credentialAttemptThrottling
+          ?.hashedScopeStored === true,
+      rawAccountOrSourceStored:
+        identityAdapterProof.identityLifecycle.credentialAttemptThrottling
+          ?.rawAccountOrSourceStored === true,
+      successfulLoginClearedFailures:
+        identityAdapterProof.identityLifecycle.credentialAttemptThrottling
+          ?.successfulLoginClearedFailures === true,
+      sameRoleSurface:
+        identityAdapterProof.identityLifecycle.credentialAttemptThrottling
+          ?.sameRoleSurface === true,
     }),
     accountLifecycle: Object.freeze({
       disabledStatus: String(

@@ -148,9 +148,10 @@ lifecycle are the biggest slice→launch gaps.*
   Argon2id password storage, authenticated password rotation with session
   revocation, hashed single-use recovery credential issuance/revocation/consumption,
   invalid/expired/revoked/replayed recovery rejection, opaque session
-  rotation/revocation, and account disable/enable work through the existing role
-  surfaces. Registration, hosted recovery delivery/traffic, hosted
-  password-parameter monitoring, invite delivery, and abuse controls remain unbuilt.
+  rotation/revocation, account disable/enable, and shared Postgres credential-attempt
+  throttling for login/invite/recovery work through the existing role surfaces. Registration,
+  hosted recovery delivery/traffic, hosted password-parameter monitoring, invite delivery,
+  distributed edge enforcement, and hosted abuse-control operations remain unbuilt.
 - [ ] **3.5 Archival & export.** `[Open]` Export a completed game as its own event stream —
   the natural payoff of an event-sourced core.
 - [ ] **3.6 Projection snapshots.** `[Optional]` Snapshot projections to cap replay cost on

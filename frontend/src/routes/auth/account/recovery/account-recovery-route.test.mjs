@@ -88,6 +88,32 @@ test("used or invalid recovery credentials stay on the recovery role URL", async
   assert.equal(result.data.returnTo, "/");
 });
 
+test("recovery surfaces credential lockout retry timing", async () => {
+  const result = await actions.default({
+    cookies: { delete() {} },
+    fetch: async () =>
+      jsonResponse(
+        { retryable: true },
+        { ok: false, status: 429, headers: { "retry-after": "11" } },
+      ),
+    request: formRequest({
+      accountId: "host@example.test",
+      recoveryToken: "invalid-recovery-token",
+      newPassword: "recovered correct horse battery",
+      confirmPassword: "recovered correct horse battery",
+      returnTo: "/g/game-1/host",
+    }),
+  });
+
+  assert.equal(result.status, 429);
+  assert.equal(result.data.state, "reject");
+  assert.equal(
+    result.data.message,
+    "Too many credential attempts. Try again in 11 seconds.",
+  );
+  assert.equal(result.data.returnTo, "/g/game-1/host");
+});
+
 function formRequest(fields) {
   const formData = new FormData();
   for (const [key, value] of Object.entries(fields)) {
@@ -99,10 +125,11 @@ function formRequest(fields) {
   });
 }
 
-function jsonResponse(body, { ok = true, status = 200 } = {}) {
+function jsonResponse(body, { ok = true, status = 200, headers = {} } = {}) {
   return {
     ok,
     status,
+    headers: new Headers(headers),
     async json() {
       return body;
     },

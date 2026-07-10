@@ -30,8 +30,13 @@ content (incompatible with moderation; out of scope by design).
   Rotation on privilege change and periodically remains future hardening; server-side
   revocation data is already in the table so logout and compromise response can be immediate
   once the logout endpoint lands.
-- **Brute-force defense:** rate limiting and backoff on auth endpoints; generic failure
-  messages (no "user exists" oracle).
+- **Brute-force defense:** account login, invite redemption, and account recovery share a
+  Postgres-backed account/source failure window. The default direct-source bucket locks after
+  five failures for 15 minutes, returns `429` with `Retry-After`, stores only a hashed scope,
+  and clears on successful credential use. `FMARCH_TRUST_AUTH_SOURCE_HEADER=1` is reserved for
+  deployments where a trusted edge overwrites `x-fmarch-auth-source`; never trust that header
+  from the public internet. Distributed edge enforcement, hosted policy tuning, and monitoring
+  remain deployment work. Credential failures stay generic to avoid a user-existence oracle.
 - **CSRF:** state-changing REST endpoints require an anti-CSRF token. The WebSocket is
   authenticated at handshake and bound to the session; commands carry no ambient cookie
   authority beyond that bound session.
