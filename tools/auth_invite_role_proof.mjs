@@ -369,6 +369,9 @@ async function createInvite(
     game: response.game,
     globalCapabilities: response.global_capabilities,
     invitedByUserId: response.invited_by_user_id,
+    deliveryId: response.delivery_id,
+    deliveryStatus: response.delivery_status,
+    deliveryAttemptCount: response.delivery_attempt_count,
   };
 }
 
@@ -1213,10 +1216,15 @@ async function proveIdentityLifecycle({
   });
 
   const recoveryInviteToken = `recovery-host-invite-${game}`;
-  await createInvite(apiBaseUrl, {
+  const recoveryInvite = await createInvite(apiBaseUrl, {
     inviteToken: recoveryInviteToken,
     accountId: hostAccount.accountId,
     principalUserId: "host_h",
+  });
+  const inviteDelivery = await retryFailedDelivery({
+    apiBaseUrl,
+    deliveryId: recoveryInvite.deliveryId,
+    expectedKind: "invite",
   });
   const recovery = await driveInviteLogin({
     frontendBaseUrl,
@@ -1338,6 +1346,11 @@ async function proveIdentityLifecycle({
       accountId: hostAccount.accountId,
       currentPassword: hostAccount.password,
       returnTo: hostReturnTo,
+    });
+    const recoveryDelivery = await retryFailedDeliveryForCredential({
+      apiBaseUrl,
+      credential: activeRecoveryCredential.recoveryToken,
+      expectedKind: "recovery",
     });
     const revokedRecoveryCredential = await driveAccountRecoveryCredentialIssuance({
       frontendBaseUrl,
@@ -1496,6 +1509,8 @@ async function proveIdentityLifecycle({
       hostReturnTo,
       hostAccount,
       accountRegistration,
+      inviteDelivery,
+      recoveryDelivery,
     });
   } finally {
     await staleAccountLifecyclePage.page.close();
@@ -1546,6 +1561,8 @@ async function finishIdentityLifecycleProof({
   hostReturnTo,
   hostAccount,
   accountRegistration,
+  inviteDelivery,
+  recoveryDelivery,
 }) {
   const auditTrail = await fetchIdentityLifecycleAudit({
     apiBaseUrl,
@@ -1664,6 +1681,13 @@ async function finishIdentityLifecycleProof({
 
   return {
     status: "passed",
+    localDelivery: {
+      status: "passed",
+      adapter: "local-deterministic",
+      invite: inviteDelivery,
+      recovery: recoveryDelivery,
+      rawCredentialsStored: false,
+    },
     accountRegistration: {
       status: "passed",
       registrationRoleUrl: accountRegistration.registrationRoleUrl,
@@ -2072,6 +2096,46 @@ async function revokeInvite({ apiBaseUrl, inviteToken }) {
   });
 }
 
+async function retryFailedDelivery({ apiBaseUrl, deliveryId, expectedKind }) {
+  if (typeof deliveryId !== "string" || deliveryId === "") {
+    throw new Error("delivery issuance did not return a delivery id");
+  }
+  await delay(1100);
+  const response = await fetchJson(
+    `${apiBaseUrl}/auth/delivery-intents/${encodeURIComponent(deliveryId)}/retry`,
+    {
+      method: "POST",
+      headers: { authorization: `Bearer ${rootAdminSessionToken}` },
+    },
+  );
+  if (
+    response.status !== "delivered" ||
+    response.delivery_id !== deliveryId ||
+    response.delivery_kind !== expectedKind ||
+    response.attempt_count !== 2
+  ) {
+    throw new Error(`delivery retry drifted: ${JSON.stringify(response)}`);
+  }
+  return {
+    deliveryId,
+    deliveryKind: expectedKind,
+    status: response.status,
+    attemptCount: response.attempt_count,
+  };
+}
+
+async function retryFailedDeliveryForCredential({ apiBaseUrl, credential, expectedKind }) {
+  const delivery = await storedDeliveryIntent(hashSessionToken(credential));
+  if (delivery.deliveryKind !== expectedKind || delivery.status !== "retryable_failed") {
+    throw new Error(`stored delivery intent drifted: ${JSON.stringify(delivery)}`);
+  }
+  return await retryFailedDelivery({
+    apiBaseUrl,
+    deliveryId: delivery.deliveryId,
+    expectedKind,
+  });
+}
+
 async function disableAccount({ apiBaseUrl, accountId }) {
   return await fetchJson(`${apiBaseUrl}/auth/accounts/disable`, {
     method: "POST",
@@ -2379,6 +2443,36 @@ async function storedRegistrationAttemptRecords() {
     `,
   ]);
   return JSON.parse(output.trim() || "[]");
+}
+
+async function storedDeliveryIntent(credentialHash) {
+  if (proofDatabase === undefined) {
+    throw new Error("proof database is not available");
+  }
+  const output = await runProcess("psql", [
+    proofDatabase.url,
+    "-v",
+    "ON_ERROR_STOP=1",
+    "-t",
+    "-A",
+    "-c",
+    `
+      SELECT json_build_object(
+        'deliveryId', delivery_id,
+        'deliveryKind', delivery_kind,
+        'status', status,
+        'attemptCount', attempt_count,
+        'credentialHash', credential_hash
+      )::TEXT
+      FROM auth_delivery_intent
+      WHERE credential_hash = ${sqlLiteral(credentialHash)}
+    `,
+  ]);
+  const trimmed = output.trim();
+  if (trimmed === "") {
+    throw new Error("delivery intent was not persisted");
+  }
+  return JSON.parse(trimmed);
 }
 
 async function insertStaleAuthAttemptRecord() {
@@ -3183,6 +3277,7 @@ async function startApi(url) {
       FMARCH_AUTH_RATE_LIMIT_WINDOW_SECONDS: "30",
       FMARCH_AUTH_RATE_LIMIT_LOCKOUT_SECONDS: "2",
       FMARCH_AUTH_RATE_LIMIT_RETENTION_SECONDS: "120",
+      FMARCH_LOCAL_DELIVERY_FAIL_FIRST_ATTEMPT: "1",
       FMARCH_TRUST_AUTH_SOURCE_HEADER: "0",
       RUST_LOG: process.env.RUST_LOG ?? "warn",
     },
