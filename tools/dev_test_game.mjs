@@ -108,6 +108,7 @@ export const defaultApiStartupTimeoutMs = 15 * 60 * 1000;
 const factionDayChatChannel = "private:mafia_day_chat";
 const factionDayChatPostBody = "Faction day chat post from dev:test-game.";
 const hardeningRetryChannel = "main";
+const liveProjectionProofCapacity = "4";
 const host = "127.0.0.1";
 const frontendRequire = createRequire(path.join(frontendRoot, "package.json"));
 
@@ -314,6 +315,9 @@ async function startApi() {
       ...process.env,
       DATABASE_URL: databaseUrl,
       FMARCH_BIND: `${host}:${port}`,
+      FMARCH_LIVE_PROJECTION_CAPACITY:
+        process.env.FMARCH_LIVE_PROJECTION_CAPACITY ??
+        liveProjectionProofCapacity,
       RUST_LOG: process.env.RUST_LOG ?? "warn",
     },
     stdio: ["ignore", "pipe", "pipe"],
@@ -18423,7 +18427,9 @@ async function verifyPlayerLagResyncRecovery({ playerPage, game, apiBaseUrl }) {
   return {
     status: "passed",
     roleUrl: playerPage.url(),
-    configuredCapacity: Number(process.env.FMARCH_LIVE_PROJECTION_CAPACITY ?? 256),
+    configuredCapacity: Number(
+      process.env.FMARCH_LIVE_PROJECTION_CAPACITY ?? liveProjectionProofCapacity,
+    ),
     configuredDeliveryDelayMs: Number(
       process.env.FMARCH_LIVE_PROJECTION_DELIVERY_DELAY_MS ?? 0,
     ),
