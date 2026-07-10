@@ -20185,9 +20185,11 @@ function identityAdapterProofFixture(game) {
       sessionCredentialKind: "opaque-session",
       inviteCredentialKind: "account-bound-single-use-invite",
       accountCredentialKind: "local-password-account",
+      accountPasswordAlgorithm: "argon2id",
       lifecycleControls: [
         "account-disable",
         "account-enable",
+        "account-password-rotation",
         "session-rotation",
         "session-revocation",
         "invite-revocation",
@@ -20195,6 +20197,8 @@ function identityAdapterProofFixture(game) {
       delegatedIssuanceControls: ["host-scoped-invite-issuance"],
       roleSurfacePattern: "/auth/login?returnTo=<role-surface>&invite=<token>",
       accountRoleSurfacePattern: "/auth/login?returnTo=<role-surface>&account=<account-id>",
+      accountSecurityRoleSurfacePattern:
+        "/auth/account/security?account=<account-id>&returnTo=<role-surface>",
       capabilityAuthority:
         "auth_session resolves principal_user_id and committed game/global capabilities at the API boundary",
     },
@@ -20248,6 +20252,22 @@ function identityAdapterProofFixture(game) {
         cookieValuePrefix: "account-session-",
         rawPasswordStored: false,
       },
+      accountPasswordRotation: {
+        status: "passed",
+        passwordAlgorithm: "argon2id",
+        securityRoleUrl:
+          `/auth/account/security?account=${encodeURIComponent(
+            "host@example.test",
+          )}&returnTo=${encodeURIComponent(`/g/${game}/host`)}`,
+        securitySurfaceTestId: "account-security-surface",
+        accountPrefilled: true,
+        staleSessionRejected: true,
+        oldPasswordRejected: true,
+        newPasswordCapabilityKinds: ["HostOf"],
+        sameRoleSurface: true,
+        revokedSessionCount: 2,
+        rawPasswordStored: false,
+      },
       accountLifecycle: {
         status: "passed",
         adminControlSurface: {
@@ -20283,6 +20303,7 @@ function identityAdapterProofFixture(game) {
           "account_created",
           "account_disabled",
           "account_enabled",
+          "account_password_rotated",
           "account_session_created",
           "invite_revoked",
           "session_revoked",
@@ -20303,6 +20324,7 @@ function identityAdapterProofFixture(game) {
           "account_created",
           "account_disabled",
           "account_enabled",
+          "account_password_rotated",
           "account_session_created",
           "session_rotated",
           "session_revoked",

@@ -118,7 +118,7 @@ test("host game is derived only from the tablet host route shape", () => {
   assert.equal(hostGameFromRequest(requestFor("/g/demo/player")), null);
 });
 
-test("session context covers game and admin surfaces", () => {
+test("session context covers game, admin, and account-security surfaces", () => {
   assert.deepEqual(sessionContextFromRequest(requestFor("/g/demo")), {
     kind: "game",
     game: "demo",
@@ -133,7 +133,28 @@ test("session context covers game and admin surfaces", () => {
   assert.deepEqual(sessionContextFromRequest(requestFor("/admin/audit/proof-runs")), {
     kind: "admin",
   });
+  assert.deepEqual(sessionContextFromRequest(requestFor("/auth/account/security")), {
+    kind: "account",
+  });
   assert.equal(sessionContextFromRequest(requestFor("/")), null);
+});
+
+test("account-security route resolves the active opaque session", async () => {
+  const session = await resolveAuthenticatedSession({
+    cookies: cookieJar("account-session-token"),
+    request: requestFor("/auth/account/security?account=host%40example.test"),
+    env: { FMARCH_API_BASE_URL: "http://127.0.0.1:4017/" },
+    fetchImpl: async (url, options) => {
+      assert.equal(url, "http://127.0.0.1:4017/auth/session");
+      assert.equal(options.headers.authorization, "Bearer account-session-token");
+      return jsonResponse({
+        principal_user_id: "host_h",
+        capabilities: [],
+      });
+    },
+  });
+
+  assert.equal(session.principalUserId, "host_h");
 });
 
 test("fixture sessions exercise admin, player, and host role routes", async () => {

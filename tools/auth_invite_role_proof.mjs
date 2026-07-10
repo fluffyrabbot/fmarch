@@ -129,7 +129,7 @@ try {
     scope: "local-auth-invite-role-proof",
     productionReady: false,
     proofBoundary:
-      "Local scratch-Postgres plus local Rust API, SvelteKit login/action/host/admin-audit routes, and Chromium proof. Proves account-bound invite redemption plus a local account credential lifecycle preserve the existing role-surface capability architecture for seeded admin, host, and player URLs, including host-role-surface game-scoped player invite issuance, GlobalAdmin account creation/disable/enable, stale account-session revocation, disabled-account login rejection, GlobalAdmin discovery, and inspection of local identity lifecycle audit rows from the admin overview; it does not prove production password hardening, account recovery, email delivery, hosted identity, abuse controls, hosted audit retention/export, or beta release readiness.",
+      "Local scratch-Postgres plus local Rust API, SvelteKit login/account-security/host/admin-audit routes, and Chromium proof. Proves Argon2id account credentials, account-bound invite redemption, and a local account credential lifecycle preserve the existing role-surface capability architecture for seeded admin, host, and player URLs, including authenticated password rotation with session revocation, old-password rejection, new-password recovery to the same host role URL, host-role-surface game-scoped player invite issuance, GlobalAdmin account creation/disable/enable, stale account-session revocation, disabled-account login rejection, GlobalAdmin discovery, and inspection of local identity lifecycle audit rows from the admin overview; it does not prove hosted account recovery, email delivery, hosted identity, abuse controls, hosted password-parameter monitoring, hosted audit retention/export, or beta release readiness.",
     identityAdapter: {
       status: "passed",
       replacesDevTokensWithoutRoleSurfaceChange: true,
@@ -137,9 +137,11 @@ try {
       sessionCredentialKind: "opaque-session",
       inviteCredentialKind: "account-bound-single-use-invite",
       accountCredentialKind: "local-password-account",
+      accountPasswordAlgorithm: "argon2id",
       lifecycleControls: [
         "account-disable",
         "account-enable",
+        "account-password-rotation",
         "session-rotation",
         "session-revocation",
         "invite-revocation",
@@ -148,6 +150,8 @@ try {
       roleSurfacePattern:
         "/auth/login?returnTo=<role-surface>&invite=<token>&account=<account-id>",
       accountRoleSurfacePattern: "/auth/login?returnTo=<role-surface>&account=<account-id>",
+      accountSecurityRoleSurfacePattern:
+        "/auth/account/security?account=<account-id>&returnTo=<role-surface>",
       capabilityAuthority:
         "auth_session resolves principal_user_id and committed game/global capabilities at the API boundary",
     },
@@ -479,6 +483,72 @@ async function driveAccountLogin({
   }
 }
 
+async function driveAccountPasswordRotation({
+  frontendBaseUrl,
+  sessionToken,
+  accountId,
+  currentPassword,
+  newPassword,
+  returnTo,
+}) {
+  const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
+  const securityRoleUrl = `/auth/account/security?account=${encodeURIComponent(
+    accountId,
+  )}&returnTo=${encodeURIComponent(returnTo)}`;
+  const expectedLoginUrl = `${frontendBaseUrl}/auth/login?returnTo=${encodeURIComponent(
+    returnTo,
+  )}&account=${encodeURIComponent(accountId)}`;
+  try {
+    await page.context().addCookies([
+      {
+        name: "fmarch_session",
+        value: sessionToken,
+        url: frontendBaseUrl,
+        httpOnly: true,
+        sameSite: "Lax",
+      },
+    ]);
+    await page.goto(`${frontendBaseUrl}${securityRoleUrl}`, {
+      waitUntil: "networkidle",
+    });
+    await page.getByTestId("account-security-surface").waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
+    const accountValue = await page
+      .getByTestId("account-security-account")
+      .inputValue();
+    if (accountValue !== accountId) {
+      throw new Error(`account security id was not prefilled: ${accountValue}`);
+    }
+    await page.getByTestId("account-security-current-password").fill(currentPassword);
+    await page.getByTestId("account-security-new-password").fill(newPassword);
+    await page.getByTestId("account-security-confirm-password").fill(newPassword);
+    await Promise.all([
+      page.waitForURL(expectedLoginUrl, { timeout: 15000 }),
+      page.getByTestId("account-security-submit").click(),
+    ]);
+    await page.getByTestId("auth-login-surface").waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
+    const cookies = await page.context().cookies(frontendBaseUrl);
+    if (cookies.some((cookie) => cookie.name === "fmarch_session")) {
+      throw new Error("password rotation did not clear the revoked browser session");
+    }
+    return {
+      status: "passed",
+      securityRoleUrl,
+      surfaceTestId: "account-security-surface",
+      accountPrefilled: true,
+      revokedCookieCleared: true,
+      loginReturnTo: returnTo,
+    };
+  } finally {
+    await page.close();
+  }
+}
+
 async function proveIdentityLifecycle({
   apiBaseUrl,
   frontendBaseUrl,
@@ -488,6 +558,7 @@ async function proveIdentityLifecycle({
   hostAccount,
 }) {
   const rotatedSessionToken = `rotated-host-session-${game}`;
+  const rotatedHostPassword = `rotated-host-password-${game}`;
   const rotation = await rotateSession({
     apiBaseUrl,
     oldSessionToken: hostSessionToken,
@@ -620,6 +691,35 @@ async function proveIdentityLifecycle({
       returnTo: hostReturnTo,
       expectedText: game,
     });
+    const accountPasswordRotation = await driveAccountPasswordRotation({
+      frontendBaseUrl,
+      sessionToken: accountRecoveryLogin.sessionToken,
+      accountId: hostAccount.accountId,
+      currentPassword: hostAccount.password,
+      newPassword: rotatedHostPassword,
+      returnTo: hostReturnTo,
+    });
+    await assertUnauthorizedSession(apiBaseUrl, accountRecoveryLogin.sessionToken);
+    const oldPasswordReject = await driveRejectedAccountLogin({
+      frontendBaseUrl,
+      accountId: hostAccount.accountId,
+      password: hostAccount.password,
+      returnTo: hostReturnTo,
+    });
+    const rotatedPasswordLogin = await driveAccountLogin({
+      frontendBaseUrl,
+      apiBaseUrl,
+      accountId: hostAccount.accountId,
+      password: rotatedHostPassword,
+      returnTo: hostReturnTo,
+      expectedCapability: "HostOf",
+    });
+    await assertBrowserSessionRendersRole({
+      frontendBaseUrl,
+      sessionToken: rotatedPasswordLogin.sessionToken,
+      returnTo: hostReturnTo,
+      expectedText: game,
+    });
     return await finishIdentityLifecycleProof({
       apiBaseUrl,
       frontendBaseUrl,
@@ -630,6 +730,10 @@ async function proveIdentityLifecycle({
       recoveryInviteToken,
       accountLogin,
       accountRecoveryLogin,
+      accountPasswordRotation,
+      oldPasswordReject,
+      rotatedPasswordLogin,
+      rotatedHostPassword,
       accountDisableControl,
       accountEnableControl,
       staleAccountLifecycleConflict,
@@ -660,6 +764,10 @@ async function finishIdentityLifecycleProof({
   recoveryInviteToken,
   accountLogin,
   accountRecoveryLogin,
+  accountPasswordRotation,
+  oldPasswordReject,
+  rotatedPasswordLogin,
+  rotatedHostPassword,
   accountDisableControl,
   accountEnableControl,
   staleAccountLifecycleConflict,
@@ -680,11 +788,15 @@ async function finishIdentityLifecycleProof({
     principalUserId: "host_h",
   });
   const auditEventKinds = auditTrail.entries.map((entry) => entry.event_kind).sort();
+  const passwordRotationAudit = auditTrail.entries.find(
+    (entry) => entry.event_kind === "account_password_rotated",
+  );
   for (const eventKind of [
     "account_created",
     "account_disabled",
     "account_enabled",
     "account_session_created",
+    "account_password_rotated",
     "invite_redeemed",
     "invite_revoked",
     "session_revoked",
@@ -694,6 +806,9 @@ async function finishIdentityLifecycleProof({
       throw new Error(`identity lifecycle audit missing ${eventKind}`);
     }
   }
+  if ((passwordRotationAudit?.metadata?.revoked_session_count ?? 0) < 1) {
+    throw new Error("password rotation audit did not record revoked sessions");
+  }
   const auditText = JSON.stringify(auditTrail);
   for (const rawToken of [
     hostSessionToken,
@@ -702,7 +817,9 @@ async function finishIdentityLifecycleProof({
     recoveryInviteToken,
     accountLogin.sessionToken,
     accountRecoveryLogin.sessionToken,
+    rotatedPasswordLogin.sessionToken,
     hostAccount.password,
+    rotatedHostPassword,
   ]) {
     if (auditText.includes(rawToken)) {
       throw new Error("identity lifecycle audit leaked a raw credential");
@@ -718,7 +835,9 @@ async function finishIdentityLifecycleProof({
       recoveryInviteToken,
       accountLogin.sessionToken,
       accountRecoveryLogin.sessionToken,
+      rotatedPasswordLogin.sessionToken,
       hostAccount.password,
+      rotatedHostPassword,
     ],
   });
 
@@ -754,6 +873,21 @@ async function finishIdentityLifecycleProof({
       sameRoleSurface:
         new URL(accountLogin.loginUrl).searchParams.get("returnTo") === hostReturnTo,
       cookieValuePrefix: accountLogin.cookie.valuePrefix,
+      rawPasswordStored: false,
+    },
+    accountPasswordRotation: {
+      status: "passed",
+      passwordAlgorithm: "argon2id",
+      securityRoleUrl: accountPasswordRotation.securityRoleUrl,
+      securitySurfaceTestId: accountPasswordRotation.surfaceTestId,
+      accountPrefilled: accountPasswordRotation.accountPrefilled,
+      staleSessionRejected: true,
+      oldPasswordRejected: oldPasswordReject.status === "reject",
+      newPasswordCapabilityKinds: rotatedPasswordLogin.capabilityKinds,
+      sameRoleSurface:
+        new URL(rotatedPasswordLogin.loginUrl).searchParams.get("returnTo") ===
+        hostReturnTo,
+      revokedSessionCount: passwordRotationAudit.metadata.revoked_session_count,
       rawPasswordStored: false,
     },
     accountLifecycle: {
@@ -812,7 +946,7 @@ async function finishIdentityLifecycleProof({
     adminAuditSurface,
     nonClaims: [
       "hosted account recovery",
-      "production password hardening or credential reset policy",
+      "hosted password parameter monitoring or credential reset policy",
       "email or out-of-band invite delivery",
       "cross-game invite restrictions beyond recorded local game scope",
       "rate limiting or abuse controls",
@@ -1264,18 +1398,31 @@ async function driveAdminIdentityAuditSurface({
       state: "visible",
       timeout: 15000,
     });
+    const renderedAuditText = await page.locator("body").innerText();
+    if (!(await page.getByTestId("admin-audit-detail-entries").isVisible())) {
+      throw new Error(
+        `admin identity lifecycle audit rendered no entries at ${page.url()}: ${renderedAuditText}`,
+      );
+    }
     const visibleEventKinds = [];
     for (const eventKind of [
       "account_created",
       "account_disabled",
       "account_enabled",
+      "account_password_rotated",
       "account_session_created",
       "invite_redeemed",
       "session_rotated",
       "session_revoked",
       "invite_revoked",
     ]) {
-      await page.getByTestId(`admin-audit-entry-${eventKind}`).first().waitFor({
+      const entry = page.getByTestId(`admin-audit-entry-${eventKind}`).first();
+      if ((await entry.count()) === 0) {
+        throw new Error(
+          `admin identity lifecycle audit missing ${eventKind} at ${page.url()}: ${renderedAuditText}`,
+        );
+      }
+      await entry.waitFor({
         state: "visible",
         timeout: 15000,
       });
@@ -1441,6 +1588,10 @@ function assertInviteProof(evidence) {
     evidence.identityAdapter?.inviteCredentialKind !==
       "account-bound-single-use-invite" ||
     evidence.identityAdapter?.accountCredentialKind !== "local-password-account" ||
+    evidence.identityAdapter?.accountPasswordAlgorithm !== "argon2id" ||
+    !evidence.identityAdapter?.lifecycleControls?.includes(
+      "account-password-rotation",
+    ) ||
     evidence.identityAdapterContractDiff?.status !== "passed" ||
     !evidence.identityAdapter?.delegatedIssuanceControls?.includes(
       "host-scoped-invite-issuance",
@@ -1482,6 +1633,24 @@ function assertInviteProof(evidence) {
     evidence.identityLifecycle?.accountLogin?.sameRoleSurface !== true ||
     evidence.identityLifecycle?.accountLogin?.cookieValuePrefix !== "account-session-" ||
     evidence.identityLifecycle?.accountLogin?.rawPasswordStored !== false ||
+    evidence.identityLifecycle?.accountPasswordRotation?.status !== "passed" ||
+    evidence.identityLifecycle?.accountPasswordRotation?.passwordAlgorithm !==
+      "argon2id" ||
+    evidence.identityLifecycle?.accountPasswordRotation?.securityRoleUrl !==
+      `/auth/account/security?account=${encodeURIComponent(
+        accountCredentials.host.accountId,
+      )}&returnTo=${encodeURIComponent(`/g/${game}/host`)}` ||
+    evidence.identityLifecycle?.accountPasswordRotation?.securitySurfaceTestId !==
+      "account-security-surface" ||
+    evidence.identityLifecycle?.accountPasswordRotation?.accountPrefilled !== true ||
+    evidence.identityLifecycle?.accountPasswordRotation?.staleSessionRejected !== true ||
+    evidence.identityLifecycle?.accountPasswordRotation?.oldPasswordRejected !== true ||
+    !evidence.identityLifecycle?.accountPasswordRotation?.newPasswordCapabilityKinds?.includes(
+      "HostOf",
+    ) ||
+    evidence.identityLifecycle?.accountPasswordRotation?.sameRoleSurface !== true ||
+    evidence.identityLifecycle?.accountPasswordRotation?.revokedSessionCount < 1 ||
+    evidence.identityLifecycle?.accountPasswordRotation?.rawPasswordStored !== false ||
     evidence.identityLifecycle?.accountLifecycle?.status !== "passed" ||
     evidence.identityLifecycle?.accountLifecycle?.adminControlSurface?.status !== "passed" ||
     evidence.identityLifecycle?.accountLifecycle?.adminControlSurface?.detailRoleUrl !==
@@ -1534,6 +1703,9 @@ function assertInviteProof(evidence) {
     !evidence.identityLifecycle?.auditTrail?.eventKinds?.includes(
       "account_session_created",
     ) ||
+    !evidence.identityLifecycle?.auditTrail?.eventKinds?.includes(
+      "account_password_rotated",
+    ) ||
     evidence.identityLifecycle?.adminAuditSurface?.status !== "passed" ||
     evidence.identityLifecycle?.adminAuditSurface?.clickedThroughFromOverview !== true ||
     evidence.identityLifecycle?.adminAuditSurface?.rawTokensVisible !== false ||
@@ -1557,6 +1729,9 @@ function assertInviteProof(evidence) {
     ) ||
     !evidence.identityLifecycle?.adminAuditSurface?.visibleEventKinds?.includes(
       "account_session_created",
+    ) ||
+    !evidence.identityLifecycle?.adminAuditSurface?.visibleEventKinds?.includes(
+      "account_password_rotated",
     )
   ) {
     throw new Error("invite proof must preserve the role-surface identity adapter");

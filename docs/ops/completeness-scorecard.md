@@ -145,9 +145,11 @@ lifecycle are the biggest slice→launch gaps.*
 - [ ] **3.3 Board / forum surface.** `[Open]` Game index, non-game discussion areas, and
   profiles. Only the home route and per-game routes exist today.
 - [ ] **3.4 Account lifecycle.** `[Partial]` Login, account-bound single-use invites,
-  opaque session rotation/revocation, and account disable/enable work through the
-  existing role surfaces. Registration, credential recovery, production password
-  hardening, invite delivery, and abuse controls remain unbuilt.
+  Argon2id password storage, authenticated password rotation with session
+  revocation, opaque session rotation/revocation, and account disable/enable work
+  through the existing role surfaces. Registration, hosted credential recovery,
+  hosted password-parameter monitoring, invite delivery, and abuse controls remain
+  unbuilt.
 - [ ] **3.5 Archival & export.** `[Open]` Export a completed game as its own event stream —
   the natural payoff of an event-sourced core.
 - [ ] **3.6 Projection snapshots.** `[Optional]` Snapshot projections to cap replay cost on

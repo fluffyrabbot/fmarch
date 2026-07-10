@@ -70,13 +70,21 @@ test("admin audit detail load returns identity lifecycle rows through admin sess
             {
               id: 4,
               event_at: 101,
+              event_kind: "account_password_rotated",
+              actor_user_id: "host_h",
+              principal_user_id: "host_h",
+              metadata: { password_algorithm: "argon2id" },
+            },
+            {
+              id: 5,
+              event_at: 101,
               event_kind: "account_session_created",
               actor_user_id: "host_h",
               principal_user_id: "host_h",
               metadata: {},
             },
             {
-              id: 5,
+              id: 6,
               event_at: 102,
               event_kind: "session_rotated",
               actor_user_id: "host_h",
@@ -84,7 +92,7 @@ test("admin audit detail load returns identity lifecycle rows through admin sess
               metadata: {},
             },
             {
-              id: 6,
+              id: 7,
               event_at: 103,
               event_kind: "session_revoked",
               actor_user_id: "admin_a",
@@ -92,7 +100,7 @@ test("admin audit detail load returns identity lifecycle rows through admin sess
               metadata: {},
             },
             {
-              id: 7,
+              id: 8,
               event_at: 104,
               event_kind: "invite_revoked",
               actor_user_id: "admin_a",
@@ -114,6 +122,7 @@ test("admin audit detail load returns identity lifecycle rows through admin sess
       "account_created",
       "account_disabled",
       "account_enabled",
+      "account_password_rotated",
       "account_session_created",
       "session_rotated",
       "session_revoked",

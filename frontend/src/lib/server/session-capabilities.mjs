@@ -56,6 +56,9 @@ export function sessionContextFromRequest(request) {
   if (/^\/admin(?:\/.*)?$/.test(pathname)) {
     return Object.freeze({ kind: "admin" });
   }
+  if (/^\/auth\/account\/security\/?$/.test(pathname)) {
+    return Object.freeze({ kind: "account" });
+  }
   return null;
 }
 

@@ -9228,6 +9228,10 @@ export function normalizeLocalIdentityAdapterAudit(identityAdapterProof, { game 
   const lifecycleChecks = [
     ["account-login", identityAdapterProof.identityLifecycle?.accountLogin?.status],
     [
+      "account-password-rotation",
+      identityAdapterProof.identityLifecycle?.accountPasswordRotation?.status,
+    ],
+    [
       "account-lifecycle",
       identityAdapterProof.identityLifecycle?.accountLifecycle?.status,
     ],
@@ -9269,6 +9273,22 @@ export function normalizeLocalIdentityAdapterAudit(identityAdapterProof, { game 
     ) ||
     identityAdapterProof.identityLifecycle?.accountLogin?.sameRoleSurface !== true ||
     identityAdapterProof.identityLifecycle?.accountLogin?.rawPasswordStored !== false ||
+    identityAdapterProof.identityLifecycle?.accountPasswordRotation?.passwordAlgorithm !==
+      "argon2id" ||
+    identityAdapterProof.identityLifecycle?.accountPasswordRotation
+      ?.securitySurfaceTestId !== "account-security-surface" ||
+    identityAdapterProof.identityLifecycle?.accountPasswordRotation
+      ?.staleSessionRejected !== true ||
+    identityAdapterProof.identityLifecycle?.accountPasswordRotation
+      ?.oldPasswordRejected !== true ||
+    !identityAdapterProof.identityLifecycle?.accountPasswordRotation
+      ?.newPasswordCapabilityKinds?.includes("HostOf") ||
+    identityAdapterProof.identityLifecycle?.accountPasswordRotation?.sameRoleSurface !==
+      true ||
+    identityAdapterProof.identityLifecycle?.accountPasswordRotation
+      ?.revokedSessionCount < 1 ||
+    identityAdapterProof.identityLifecycle?.accountPasswordRotation?.rawPasswordStored !==
+      false ||
     identityAdapterProof.identityLifecycle?.accountLifecycle?.adminControlSurface?.status !==
       "passed" ||
     identityAdapterProof.identityLifecycle?.accountLifecycle?.adminControlSurface
@@ -9325,6 +9345,9 @@ export function normalizeLocalIdentityAdapterAudit(identityAdapterProof, { game 
     accountCredentialKind: String(
       identityAdapterProof.identityAdapter?.accountCredentialKind ?? "",
     ),
+    accountPasswordAlgorithm: String(
+      identityAdapterProof.identityAdapter?.accountPasswordAlgorithm ?? "",
+    ),
     lifecycleControls: Object.freeze(controls.map((control) => String(control))),
     delegatedIssuanceControls: Object.freeze(
       (Array.isArray(identityAdapterProof.identityAdapter?.delegatedIssuanceControls)
@@ -9374,6 +9397,31 @@ export function normalizeLocalIdentityAdapterAudit(identityAdapterProof, { game 
       ),
       rawPasswordStored:
         identityAdapterProof.identityLifecycle.accountLogin?.rawPasswordStored === true,
+    }),
+    accountPasswordRotation: Object.freeze({
+      passwordAlgorithm: String(
+        identityAdapterProof.identityLifecycle.accountPasswordRotation
+          ?.passwordAlgorithm ?? "",
+      ),
+      securityRoleUrl: String(
+        identityAdapterProof.identityLifecycle.accountPasswordRotation
+          ?.securityRoleUrl ?? "",
+      ),
+      staleSessionRejected:
+        identityAdapterProof.identityLifecycle.accountPasswordRotation
+          ?.staleSessionRejected === true,
+      oldPasswordRejected:
+        identityAdapterProof.identityLifecycle.accountPasswordRotation
+          ?.oldPasswordRejected === true,
+      sameRoleSurface:
+        identityAdapterProof.identityLifecycle.accountPasswordRotation
+          ?.sameRoleSurface === true,
+      revokedSessionCount:
+        identityAdapterProof.identityLifecycle.accountPasswordRotation
+          ?.revokedSessionCount ?? null,
+      rawPasswordStored:
+        identityAdapterProof.identityLifecycle.accountPasswordRotation
+          ?.rawPasswordStored === true,
     }),
     accountLifecycle: Object.freeze({
       disabledStatus: String(

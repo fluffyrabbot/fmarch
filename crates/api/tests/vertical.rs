@@ -3336,6 +3336,93 @@ async fn global_admin_account_login_creates_normal_role_session(pool: sqlx::PgPo
     assert_eq!(reenabled_session["principal_user_id"], "host_h");
     assert_eq!(reenabled_session["capabilities"][0]["kind"], "HostOf");
 
+    let stored_password_hash = sqlx::query_scalar::<_, String>(
+        "SELECT password_hash FROM auth_account WHERE account_id = $1",
+    )
+    .bind("host@example.test")
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(stored_password_hash.starts_with("$argon2id$v=19$"));
+    assert!(!stored_password_hash.contains("correct horse battery"));
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/auth/accounts/password-rotations")
+                .header("content-type", "application/json")
+                .header("authorization", "Bearer reenabled-host-account-session")
+                .body(Body::from(
+                    serde_json::json!({
+                        "account_id": "host@example.test",
+                        "current_password": "correct horse battery",
+                        "new_password": "rotated correct horse battery"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let rotation: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(rotation["status"], "rotated");
+    assert_eq!(rotation["principal_user_id"], "host_h");
+    assert_eq!(rotation["password_algorithm"], "argon2id");
+    assert!(rotation["revoked_session_count"].as_i64().unwrap() >= 1);
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!("/auth/session?game={game}"))
+                .header("authorization", "Bearer reenabled-host-account-session")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+
+    for (password, session_token, expected_status) in [
+        (
+            "correct horse battery",
+            "old-password-host-account-session",
+            StatusCode::UNAUTHORIZED,
+        ),
+        (
+            "rotated correct horse battery",
+            "rotated-password-host-account-session",
+            StatusCode::OK,
+        ),
+    ] {
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/auth/accounts/login")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        serde_json::json!({
+                            "account_id": "host@example.test",
+                            "password": password,
+                            "session_token": session_token,
+                            "expires_at": 4_102_444_800i64
+                        })
+                        .to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), expected_status);
+    }
+
     let response = app
         .clone()
         .oneshot(
@@ -3356,10 +3443,15 @@ async fn global_admin_account_login_creates_normal_role_session(pool: sqlx::PgPo
     assert!(audit_text.contains("account_session_created"));
     assert!(audit_text.contains("account_disabled"));
     assert!(audit_text.contains("account_enabled"));
+    assert!(audit_text.contains("account_password_rotated"));
+    assert!(audit_text.contains("argon2id"));
     assert!(!audit_text.contains("correct horse battery"));
+    assert!(!audit_text.contains("rotated correct horse battery"));
     assert!(!audit_text.contains("host-account-session"));
     assert!(!audit_text.contains("disabled-host-account-session"));
     assert!(!audit_text.contains("reenabled-host-account-session"));
+    assert!(!audit_text.contains("old-password-host-account-session"));
+    assert!(!audit_text.contains("rotated-password-host-account-session"));
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]

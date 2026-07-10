@@ -6202,9 +6202,13 @@ export function validateDevTestGameIdentityAdapterProof(proof, options = {}) {
     proof.identityAdapter?.inviteCredentialKind !==
       "account-bound-single-use-invite" ||
     proof.identityAdapter?.accountCredentialKind !== "local-password-account" ||
+    proof.identityAdapter?.accountPasswordAlgorithm !== "argon2id" ||
     proof.identityAdapter?.sessionCredentialKind !== "opaque-session" ||
     !proof.identityAdapter?.lifecycleControls?.includes("account-disable") ||
     !proof.identityAdapter?.lifecycleControls?.includes("account-enable") ||
+    !proof.identityAdapter?.lifecycleControls?.includes(
+      "account-password-rotation",
+    ) ||
     !proof.identityAdapter?.lifecycleControls?.includes("session-rotation") ||
     !proof.identityAdapter?.lifecycleControls?.includes("session-revocation") ||
     !proof.identityAdapter?.lifecycleControls?.includes("invite-revocation") ||
@@ -6255,6 +6259,20 @@ export function validateDevTestGameIdentityAdapterProof(proof, options = {}) {
     proof.identityLifecycle?.accountLogin?.sameRoleSurface !== true ||
     proof.identityLifecycle?.accountLogin?.cookieValuePrefix !== "account-session-" ||
     proof.identityLifecycle?.accountLogin?.rawPasswordStored !== false ||
+    proof.identityLifecycle?.accountPasswordRotation?.status !== "passed" ||
+    proof.identityLifecycle?.accountPasswordRotation?.passwordAlgorithm !==
+      "argon2id" ||
+    proof.identityLifecycle?.accountPasswordRotation?.securitySurfaceTestId !==
+      "account-security-surface" ||
+    proof.identityLifecycle?.accountPasswordRotation?.accountPrefilled !== true ||
+    proof.identityLifecycle?.accountPasswordRotation?.staleSessionRejected !== true ||
+    proof.identityLifecycle?.accountPasswordRotation?.oldPasswordRejected !== true ||
+    !proof.identityLifecycle?.accountPasswordRotation?.newPasswordCapabilityKinds?.includes(
+      "HostOf",
+    ) ||
+    proof.identityLifecycle?.accountPasswordRotation?.sameRoleSurface !== true ||
+    proof.identityLifecycle?.accountPasswordRotation?.revokedSessionCount < 1 ||
+    proof.identityLifecycle?.accountPasswordRotation?.rawPasswordStored !== false ||
     proof.identityLifecycle?.accountLifecycle?.status !== "passed" ||
     proof.identityLifecycle?.accountLifecycle?.adminControlSurface?.status !== "passed" ||
     proof.identityLifecycle?.accountLifecycle?.adminControlSurface?.detailRoleUrl !==
@@ -6303,6 +6321,9 @@ export function validateDevTestGameIdentityAdapterProof(proof, options = {}) {
     !proof.identityLifecycle?.auditTrail?.eventKinds?.includes(
       "account_session_created",
     ) ||
+    !proof.identityLifecycle?.auditTrail?.eventKinds?.includes(
+      "account_password_rotated",
+    ) ||
     !proof.identityLifecycle?.auditTrail?.eventKinds?.includes("session_rotated") ||
     !proof.identityLifecycle?.auditTrail?.eventKinds?.includes("session_revoked") ||
     !proof.identityLifecycle?.auditTrail?.eventKinds?.includes("invite_revoked") ||
@@ -6320,6 +6341,9 @@ export function validateDevTestGameIdentityAdapterProof(proof, options = {}) {
     ) ||
     !proof.identityLifecycle?.adminAuditSurface?.visibleEventKinds?.includes(
       "account_session_created",
+    ) ||
+    !proof.identityLifecycle?.adminAuditSurface?.visibleEventKinds?.includes(
+      "account_password_rotated",
     ) ||
     !proof.identityLifecycle?.adminAuditSurface?.visibleEventKinds?.includes(
       "session_rotated",

@@ -804,6 +804,7 @@ export function normalizeIdentityLifecycleAudit(payload, context = {}) {
     "account_created",
     "account_disabled",
     "account_enabled",
+    "account_password_rotated",
     "account_session_created",
     "invite_revoked",
     "session_revoked",
@@ -910,7 +911,7 @@ function operatorStatusRows(proofStatus) {
 export function identityLifecycleAuditUrl({
   apiBaseUrl = "",
   principalUserId,
-  limit = 10,
+  limit = 50,
 }) {
   if (typeof principalUserId !== "string" || principalUserId.trim() === "") {
     throw new TypeError("principalUserId is required for identity lifecycle audit URLs");

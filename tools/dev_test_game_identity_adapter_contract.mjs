@@ -3,7 +3,7 @@ import {
   hostedIdentityRoleSurfaceContractDiff,
 } from "./dev_test_game_hosted_identity_evidence_cases.mjs";
 
-export const devTestGameIdentityAdapterProofVersion = 12;
+export const devTestGameIdentityAdapterProofVersion = 13;
 export const devTestGameIdentityAdapterContractId =
   "local-production-identity-adapter-v1";
 
@@ -17,10 +17,12 @@ export const devTestGameIdentityAdapterExpectedContract = deepFreeze({
     account: "local-password-account",
     session: "opaque-session",
   },
+  passwordAlgorithm: "argon2id",
   browserCookieName: "fmarch_session",
   lifecycleControls: [
     "account-disable",
     "account-enable",
+    "account-password-rotation",
     "session-rotation",
     "session-revocation",
     "invite-revocation",
@@ -59,6 +61,7 @@ export function devTestGameIdentityAdapterContractDiff(packet) {
           roleSurfaceArchitectureChanged: packet.roleSurfaceArchitectureChanged,
           roleSurfaceContract: packet.roleSurfaceContract,
           credentialKinds: packet.credentialKinds,
+          passwordAlgorithm: packet.passwordAlgorithm,
           browserCookieName: packet.browserCookieName,
           lifecycleControls: packet.lifecycleControls,
           delegatedIssuanceControls: packet.delegatedIssuanceControls,

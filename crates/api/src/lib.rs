@@ -4,6 +4,8 @@
 //! temporary dev-principal extraction, and mapping command outcomes into `wire`
 //! messages.
 
+use argon2::password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString};
+use argon2::Argon2;
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::extract::{Path, Query, State};
 use axum::http::header::AUTHORIZATION;
@@ -83,6 +85,10 @@ pub fn router_with_state(state: ApiState) -> Router {
         .route("/auth/session-grants", post(create_auth_session_grant))
         .route("/auth/accounts", post(create_auth_account))
         .route("/auth/accounts/login", post(login_auth_account))
+        .route(
+            "/auth/accounts/password-rotations",
+            post(rotate_auth_account_password),
+        )
         .route("/auth/accounts/disable", post(disable_auth_account))
         .route("/auth/accounts/enable", post(enable_auth_account))
         .route("/auth/session-rotations", post(rotate_auth_session))
@@ -183,6 +189,22 @@ struct LoginAuthAccount {
     password: String,
     session_token: String,
     expires_at: i64,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct RotateAuthAccountPassword {
+    account_id: String,
+    current_password: String,
+    new_password: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct AuthAccountPasswordRotationResponse {
+    status: String,
+    account_id: String,
+    principal_user_id: String,
+    revoked_session_count: i64,
+    password_algorithm: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -413,9 +435,9 @@ async fn create_auth_account(
     let actor_user_id = require_global_admin(&state, caller_token, "account creation").await?;
 
     let account_id = request.account_id.trim();
-    let password = request.password.trim();
+    let password = request.password.as_str();
     let principal_user_id = request.principal_user_id.trim();
-    if account_id.is_empty() || password.is_empty() || principal_user_id.is_empty() {
+    if account_id.is_empty() || password.trim().is_empty() || principal_user_id.is_empty() {
         return Err(ApiError::Reject {
             status: StatusCode::BAD_REQUEST,
             error: RejectCode::Internal,
@@ -423,29 +445,27 @@ async fn create_auth_account(
                 .to_string(),
         });
     }
+    validate_new_account_password(password)?;
     let global_capabilities = normalize_global_capabilities(&request.global_capabilities)?;
     let now = unix_now_seconds();
-    let password_salt = Uuid::new_v4().to_string();
-    let password_hash = hash_account_password(&password_salt, password);
+    let password_hash = hash_account_password(password).await?;
     let mut tx = state.pool.begin().await?;
     let inserted = sqlx::query(
         r#"
         INSERT INTO auth_account (
             account_id,
             principal_user_id,
-            password_salt,
             password_hash,
             created_at,
             disabled_at,
             global_capabilities
         )
-        VALUES ($1, $2, $3, $4, $5, NULL, $6)
+        VALUES ($1, $2, $3, $4, NULL, $5)
         ON CONFLICT (account_id) DO NOTHING
         "#,
     )
     .bind(account_id)
     .bind(principal_user_id)
-    .bind(&password_salt)
     .bind(&password_hash)
     .bind(now)
     .bind(&global_capabilities)
@@ -500,15 +520,16 @@ async fn login_auth_account(
     Json(request): Json<LoginAuthAccount>,
 ) -> Result<Json<AuthSessionResponse>, ApiError> {
     let account_id = request.account_id.trim();
-    let password = request.password.trim();
+    let password = request.password.as_str();
     let session_token = request.session_token.trim();
-    if account_id.is_empty() || password.is_empty() || session_token.is_empty() {
+    if account_id.is_empty() || password.trim().is_empty() || session_token.is_empty() {
         return Err(ApiError::Reject {
             status: StatusCode::BAD_REQUEST,
             error: RejectCode::Internal,
             message: "account login requires account_id, password, and session_token".to_string(),
         });
     }
+    validate_account_password_input(password)?;
     let now = unix_now_seconds();
     if request.expires_at <= now {
         return Err(ApiError::Reject {
@@ -518,9 +539,9 @@ async fn login_auth_account(
         });
     }
 
-    let account = sqlx::query_as::<_, (String, String, String, Vec<String>)>(
+    let account = sqlx::query_as::<_, (String, String, Vec<String>)>(
         r#"
-        SELECT principal_user_id, password_salt, password_hash, global_capabilities
+        SELECT principal_user_id, password_hash, global_capabilities
         FROM auth_account
         WHERE account_id = $1
           AND disabled_at IS NULL
@@ -531,7 +552,7 @@ async fn login_auth_account(
     .await?
     .ok_or_else(unauthorized_account)?;
 
-    if hash_account_password(account.1.as_str(), password) != account.2 {
+    if !verify_account_password(account.1.as_str(), password).await? {
         return Err(unauthorized_account());
     }
 
@@ -559,7 +580,7 @@ async fn login_auth_account(
     .bind(account.0.as_str())
     .bind(now)
     .bind(request.expires_at)
-    .bind(&account.3)
+    .bind(&account.2)
     .execute(&mut *tx)
     .await?;
     sqlx::query(
@@ -584,7 +605,7 @@ async fn login_auth_account(
         serde_json::json!({
             "account_id": account_id,
             "session_expires_at": request.expires_at,
-            "global_capability_count": account.3.len()
+            "global_capability_count": account.2.len()
         })
         .to_string(),
     )
@@ -593,8 +614,132 @@ async fn login_auth_account(
     tx.commit().await?;
 
     Ok(Json(
-        auth_session_response(&state, account.0, None, account.3).await?,
+        auth_session_response(&state, account.0, None, account.2).await?,
     ))
+}
+
+async fn rotate_auth_account_password(
+    State(state): State<ApiState>,
+    headers: HeaderMap,
+    Json(request): Json<RotateAuthAccountPassword>,
+) -> Result<Json<AuthAccountPasswordRotationResponse>, ApiError> {
+    let caller_token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
+    let account_id = request.account_id.trim();
+    let current_password = request.current_password.as_str();
+    let new_password = request.new_password.as_str();
+    if account_id.is_empty() || current_password.trim().is_empty() || new_password.trim().is_empty()
+    {
+        return Err(ApiError::Reject {
+            status: StatusCode::BAD_REQUEST,
+            error: RejectCode::Internal,
+            message: "password rotation requires account_id, current_password, and new_password"
+                .to_string(),
+        });
+    }
+    if current_password == new_password {
+        return Err(ApiError::Reject {
+            status: StatusCode::BAD_REQUEST,
+            error: RejectCode::Internal,
+            message: "password rotation requires a new password".to_string(),
+        });
+    }
+    validate_account_password_input(current_password)?;
+    validate_new_account_password(new_password)?;
+
+    let now = unix_now_seconds();
+    let caller_hash = hash_session_token(caller_token);
+    let mut tx = state.pool.begin().await?;
+    let caller_principal_user_id = sqlx::query_scalar::<_, String>(
+        r#"
+        SELECT principal_user_id
+        FROM auth_session
+        WHERE token_hash = $1
+          AND revoked_at IS NULL
+          AND expires_at > $2
+        FOR UPDATE
+        "#,
+    )
+    .bind(&caller_hash)
+    .bind(now)
+    .fetch_optional(&mut *tx)
+    .await?
+    .ok_or_else(unauthorized_session)?;
+    let account = sqlx::query_as::<_, (String, String)>(
+        r#"
+        SELECT principal_user_id, password_hash
+        FROM auth_account
+        WHERE account_id = $1
+          AND disabled_at IS NULL
+        FOR UPDATE
+        "#,
+    )
+    .bind(account_id)
+    .fetch_optional(&mut *tx)
+    .await?
+    .ok_or_else(unauthorized_account)?;
+    if account.0 != caller_principal_user_id
+        || !verify_account_password(account.1.as_str(), current_password).await?
+    {
+        return Err(unauthorized_account());
+    }
+
+    let password_hash = hash_account_password(new_password).await?;
+    sqlx::query("UPDATE auth_account SET password_hash = $2 WHERE account_id = $1")
+        .bind(account_id)
+        .bind(password_hash)
+        .execute(&mut *tx)
+        .await?;
+    let revoked_session_count = sqlx::query(
+        r#"
+        UPDATE auth_session
+        SET revoked_at = $1
+        WHERE principal_user_id = $2
+          AND revoked_at IS NULL
+          AND expires_at > $1
+        "#,
+    )
+    .bind(now)
+    .bind(caller_principal_user_id.as_str())
+    .execute(&mut *tx)
+    .await?
+    .rows_affected() as i64;
+    sqlx::query(
+        r#"
+        INSERT INTO identity_lifecycle_audit (
+            event_at,
+            event_kind,
+            actor_user_id,
+            principal_user_id,
+            token_hash,
+            related_token_hash,
+            metadata
+        )
+        VALUES ($1, 'account_password_rotated', $2, $3, $4, NULL, $5::JSONB)
+        "#,
+    )
+    .bind(now)
+    .bind(caller_principal_user_id.as_str())
+    .bind(caller_principal_user_id.as_str())
+    .bind(caller_hash)
+    .bind(
+        serde_json::json!({
+            "account_id": account_id,
+            "password_algorithm": "argon2id",
+            "revoked_session_count": revoked_session_count
+        })
+        .to_string(),
+    )
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+
+    Ok(Json(AuthAccountPasswordRotationResponse {
+        status: "rotated".to_string(),
+        account_id: account_id.to_string(),
+        principal_user_id: caller_principal_user_id,
+        revoked_session_count,
+        password_algorithm: "argon2id".to_string(),
+    }))
 }
 
 async fn disable_auth_account(
@@ -1084,11 +1229,11 @@ async fn redeem_auth_invite(
 ) -> Result<Json<AuthSessionResponse>, ApiError> {
     let invite_token = request.invite_token.trim();
     let account_id = request.account_id.trim();
-    let password = request.password.trim();
+    let password = request.password.as_str();
     let session_token = request.session_token.trim();
     if invite_token.is_empty()
         || account_id.is_empty()
-        || password.is_empty()
+        || password.trim().is_empty()
         || session_token.is_empty()
     {
         return Err(ApiError::Reject {
@@ -1099,17 +1244,17 @@ async fn redeem_auth_invite(
                     .to_string(),
         });
     }
+    validate_account_password_input(password)?;
 
     let now = unix_now_seconds();
     let invite_hash = hash_session_token(invite_token);
     let session_hash = hash_session_token(session_token);
     let mut tx = state.pool.begin().await?;
-    let invite = sqlx::query_as::<_, (String, i64, Vec<String>, String, String)>(
+    let invite = sqlx::query_as::<_, (String, i64, Vec<String>, String)>(
         r#"
         SELECT invite.principal_user_id,
                invite.expires_at,
                invite.global_capabilities,
-               account.password_salt,
                account.password_hash
         FROM auth_invite AS invite
         JOIN auth_account AS account
@@ -1131,7 +1276,7 @@ async fn redeem_auth_invite(
     .await?
     .ok_or_else(unauthorized_invite)?;
 
-    if hash_account_password(invite.3.as_str(), password) != invite.4 {
+    if !verify_account_password(invite.3.as_str(), password).await? {
         return Err(unauthorized_invite());
     }
 
@@ -1531,18 +1676,76 @@ fn hash_session_token(token: &str) -> String {
     out
 }
 
-fn hash_account_password(salt: &str, password: &str) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(salt.as_bytes());
-    hasher.update([0]);
-    hasher.update(password.as_bytes());
-    let digest = hasher.finalize();
-    let mut out = String::with_capacity(digest.len() * 2);
-    for byte in digest {
-        use std::fmt::Write as _;
-        let _ = write!(&mut out, "{byte:02x}");
+async fn hash_account_password(password: &str) -> Result<String, ApiError> {
+    let password = password.to_string();
+    tokio::task::spawn_blocking(move || hash_account_password_sync(password.as_str()))
+        .await
+        .map_err(|error| {
+            internal_auth_error(format!("account password hashing task failed: {error}"))
+        })?
+}
+
+fn hash_account_password_sync(password: &str) -> Result<String, ApiError> {
+    let salt = SaltString::encode_b64(Uuid::new_v4().as_bytes()).map_err(|error| {
+        internal_auth_error(format!("could not generate account password salt: {error}"))
+    })?;
+    Argon2::default()
+        .hash_password(password.as_bytes(), &salt)
+        .map(|hash| hash.to_string())
+        .map_err(|error| internal_auth_error(format!("could not hash account password: {error}")))
+}
+
+async fn verify_account_password(encoded_hash: &str, password: &str) -> Result<bool, ApiError> {
+    let encoded_hash = encoded_hash.to_string();
+    let password = password.to_string();
+    tokio::task::spawn_blocking(move || {
+        verify_account_password_sync(encoded_hash.as_str(), password.as_str())
+    })
+    .await
+    .map_err(|error| {
+        internal_auth_error(format!(
+            "account password verification task failed: {error}"
+        ))
+    })
+}
+
+fn verify_account_password_sync(encoded_hash: &str, password: &str) -> bool {
+    let Ok(parsed_hash) = PasswordHash::new(encoded_hash) else {
+        return false;
+    };
+    Argon2::default()
+        .verify_password(password.as_bytes(), &parsed_hash)
+        .is_ok()
+}
+
+fn validate_new_account_password(password: &str) -> Result<(), ApiError> {
+    if !(12..=1024).contains(&password.len()) {
+        return Err(ApiError::Reject {
+            status: StatusCode::BAD_REQUEST,
+            error: RejectCode::Internal,
+            message: "account passwords must contain 12 to 1024 bytes".to_string(),
+        });
     }
-    out
+    Ok(())
+}
+
+fn validate_account_password_input(password: &str) -> Result<(), ApiError> {
+    if password.len() > 1024 {
+        return Err(ApiError::Reject {
+            status: StatusCode::BAD_REQUEST,
+            error: RejectCode::Internal,
+            message: "account passwords cannot exceed 1024 bytes".to_string(),
+        });
+    }
+    Ok(())
+}
+
+fn internal_auth_error(message: String) -> ApiError {
+    ApiError::Reject {
+        status: StatusCode::INTERNAL_SERVER_ERROR,
+        error: RejectCode::Internal,
+        message,
+    }
 }
 
 fn unix_now_seconds() -> i64 {

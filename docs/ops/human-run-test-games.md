@@ -906,9 +906,11 @@ concurrent vote race, stale player vote, stale player vote-after-change recovery
 dead-current-vote cleanup with stale host publish-after-clear recovery, stale dead action conflict, stale action conflict, stale action conflict message, stale host control recovery,
 concurrent host resolve/advance/deadline-advance/lifecycle/complete-game/mixed-advance races, stale deadline advance recovery, stale host resolve recovery, stale host publish-after-change recovery, stale host publish recovery, stale host lifecycle recovery, stale host modkill recovery, stale host prompt recovery, stale host complete-game recovery, stale player completed-game recovery, stale host advance recovery, stale host deadline recovery, stale cohost deadline recovery,
 local artifact-bundle, local seed/demo fixture inventory,
-local identity-adapter shape, and local backup/restore lanes. It does not prove
+local identity-adapter shape, including Argon2id credential storage and the seeded
+`/auth/account/security?account=<account-id>&returnTo=<role-surface>` password-rotation
+flow back to the unchanged host role surface, and local backup/restore lanes. It does not prove
 hosted production account lifecycle,
-invite delivery, account recovery, rate limits, abuse controls, production
+invite delivery, account recovery, hosted password-parameter monitoring, rate limits, abuse controls, production
 session-secret policy, hosted deployment, hosted demo fixtures,
 production-like backup/PITR, exhaustive race coverage, hosted
 logs/metrics/traces, upload or transcode behavior, beta readiness, or

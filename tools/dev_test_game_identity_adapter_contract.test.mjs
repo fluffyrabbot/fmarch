@@ -10,7 +10,7 @@ import {
 
 test("identity adapter contract preserves shared role-surface architecture", () => {
   const packet = buildDevTestGameIdentityAdapterContractPacket();
-  assert.equal(devTestGameIdentityAdapterProofVersion, 12);
+  assert.equal(devTestGameIdentityAdapterProofVersion, 13);
   assert.equal(packet.status, "passed");
   assert.equal(packet.adapterId, "local-production-identity-adapter-v1");
   assert.equal(
@@ -43,5 +43,11 @@ test("identity adapter contract preserves shared role-surface architecture", () 
   assert.equal(
     devTestGameIdentityAdapterExpectedContract.browserCookieName,
     "fmarch_session",
+  );
+  assert.equal(devTestGameIdentityAdapterExpectedContract.passwordAlgorithm, "argon2id");
+  assert.ok(
+    devTestGameIdentityAdapterExpectedContract.lifecycleControls.includes(
+      "account-password-rotation",
+    ),
   );
 });

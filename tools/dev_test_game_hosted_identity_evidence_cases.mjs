@@ -1163,10 +1163,12 @@ function hostedIdentityEvidenceFixtureAdapterContract() {
       account: "local-password-account",
       session: "opaque-session",
     },
+    passwordAlgorithm: "argon2id",
     browserCookieName: "fmarch_session",
     lifecycleControls: [
       "account-disable",
       "account-enable",
+      "account-password-rotation",
       "session-rotation",
       "session-revocation",
       "invite-revocation",
