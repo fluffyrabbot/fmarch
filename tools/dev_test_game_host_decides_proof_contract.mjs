@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { matchesDayVoteElimination } from "./dev_test_game_host_prompt_public_resolution.mjs";
 
 export const devTestGameHostDecidesProofPath =
   "target/dev-test-game/host-decides-proof.json";
@@ -27,6 +28,11 @@ export function assertDevTestGameHostDecidesProof(proof) {
     proof?.selection?.commandStatus?.state !== "ack" ||
     proof?.resolvedPrompt?.status !== "resolved" ||
     proof?.resolvedPrompt?.decision?.slot !== "slot-2" ||
+    !matchesDayVoteElimination(proof?.resolvedPrompt, {
+      phaseId: "D01",
+      selectedSlot: "slot-2",
+      reason: "host_decides_tie",
+    }) ||
     proof?.targetBeforeDecision?.actorAlive !== true ||
     proof?.targetAfterDecision?.actorAlive !== false ||
     !proof?.hostOutcomePanel?.includes("HostDecides selected Slot 2") ||

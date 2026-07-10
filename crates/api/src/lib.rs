@@ -4121,6 +4121,7 @@ pub struct HostPrompt {
     pub metadata: serde_json::Value,
     pub status: String,
     pub decision: Option<serde_json::Value>,
+    pub public_resolution: Option<serde_json::Value>,
     pub resolved_by: Option<String>,
     pub resolved_at: Option<i64>,
 }
@@ -4140,6 +4141,7 @@ impl From<projections::HostPromptRow> for HostPrompt {
             metadata: row.metadata,
             status: row.status,
             decision: row.decision,
+            public_resolution: row.public_resolution,
             resolved_by: row.resolved_by,
             resolved_at: row.resolved_at,
         }

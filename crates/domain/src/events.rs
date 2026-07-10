@@ -535,6 +535,27 @@ pub struct DayVoteOutcome {
     pub reason: Option<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum HostPromptPublicResolution {
+    DayVoteElimination {
+        phase_id: String,
+        selected_slot: String,
+        reason: String,
+    },
+    PhaseAdvance {
+        source_phase_id: String,
+        target_phase_id: String,
+        reason: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        skipped_phase_id: Option<String>,
+    },
+    Acknowledged {
+        phase_id: String,
+        reason: String,
+    },
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct DayAnnouncement {

@@ -237,6 +237,12 @@ export function normalizeHostPrompts(rows, fallback) {
         subjectSlot: row.subject_slot ?? row.subjectSlot ?? null,
         decisionKind: decisionKindForPrompt(row),
         metadata: row.metadata ?? {},
+        ...(row.public_resolution != null || row.publicResolution != null
+          ? {
+              publicResolution:
+                row.public_resolution ?? row.publicResolution,
+            }
+          : {}),
       }),
     ),
   );

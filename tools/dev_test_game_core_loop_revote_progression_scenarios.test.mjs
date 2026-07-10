@@ -219,13 +219,31 @@ test("revote browser assertion owns repeated prompt and ballot proof shape", () 
 });
 
 function revoteBrowserProofFixture() {
-  const prompt = (id, status = "resolved") => ({
-    id,
-    prompt_id: id,
-    label: "revote",
-    status,
-    value: "no_majority",
-  });
+  const prompt = (id, status = "resolved") => {
+    const phase = id.split(":", 1)[0];
+    const terminal = phase === "D03R2";
+    return {
+      id,
+      prompt_id: id,
+      label: "revote",
+      status,
+      value: "no_majority",
+      ...(status === "resolved"
+        ? {
+            public_resolution: {
+              kind: "phase_advance",
+              source_phase_id: phase,
+              target_phase_id: terminal
+                ? "N03"
+                : phase === "D03"
+                  ? "D03R1"
+                  : "D03R2",
+              reason: terminal ? "no_majority_no_lynch" : "revote",
+            },
+          }
+        : {}),
+    };
+  };
   const promptResolution = ({ promptId, policy }) => ({
     commandStatus: {
       state: "ack",

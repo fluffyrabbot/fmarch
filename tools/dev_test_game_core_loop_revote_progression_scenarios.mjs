@@ -1,3 +1,5 @@
+import { matchesPhaseAdvance } from "./dev_test_game_host_prompt_public_resolution.mjs";
+
 export const revoteProgressionCycleId = "d03-n03";
 export const revoteProgressionAdminCheckId = "core-loop";
 export const dayVoteNoLynchLaneId = "day-vote-no-lynch";
@@ -195,6 +197,17 @@ export function assertRevoteProgressionBrowserProof({
       commandAckedWithTwoEvents(proof?.d03RevotePromptResolution),
       "first revote prompt resolution did not ack",
     ],
+    [
+      matchesPhaseAdvance(
+        promptById(proof?.apiPromptsAfterD03Revote, proof?.d03RevotePrompt?.id),
+        {
+          sourcePhaseId: "D03",
+          targetPhaseId: scenario.firstPhaseId,
+          reason: "revote",
+        },
+      ),
+      "first revote public resolution mismatch",
+    ],
     ...phaseOpenChecks({
       surface: proof?.hostAfterD03RevotePrompt,
       phaseId: scenario.firstPhaseId,
@@ -245,6 +258,20 @@ export function assertRevoteProgressionBrowserProof({
     [
       commandAckedWithTwoEvents(proof?.d03R1RevotePromptResolution),
       "second revote prompt resolution did not ack",
+    ],
+    [
+      matchesPhaseAdvance(
+        promptById(
+          proof?.apiPromptsAfterD03R1Revote,
+          proof?.d03R1RevotePrompt?.id,
+        ),
+        {
+          sourcePhaseId: scenario.firstPhaseId,
+          targetPhaseId: scenario.secondPhaseId,
+          reason: "revote",
+        },
+      ),
+      "second revote public resolution mismatch",
     ],
     ...phaseOpenChecks({
       surface: proof?.hostAfterD03R1RevotePrompt,
@@ -335,6 +362,20 @@ export function assertRevoteProgressionBrowserProof({
         proof?.d03R2RevotePrompt?.id,
       ) === "resolved",
       "terminal API prompt not resolved",
+    ],
+    [
+      matchesPhaseAdvance(
+        promptById(
+          proof?.apiPromptsAfterD03R2NoLynchPolicy,
+          proof?.d03R2RevotePrompt?.id,
+        ),
+        {
+          sourcePhaseId: scenario.secondPhaseId,
+          targetPhaseId: scenario.terminalPhaseId,
+          reason: "no_majority_no_lynch",
+        },
+      ),
+      "terminal no-lynch public resolution mismatch",
     ],
     [
       proof?.actionAfterD03R2NoLynchPolicy?.commandState?.phase?.phaseId ===
@@ -711,6 +752,12 @@ function promptStatus(prompts, promptId) {
   return Array.isArray(prompts)
     ? prompts.find((prompt) => (prompt.id ?? prompt.prompt_id) === promptId)
         ?.status
+    : undefined;
+}
+
+function promptById(prompts, promptId) {
+  return Array.isArray(prompts)
+    ? prompts.find((prompt) => (prompt.id ?? prompt.prompt_id) === promptId)
     : undefined;
 }
 

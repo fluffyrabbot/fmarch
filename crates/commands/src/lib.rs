@@ -230,6 +230,35 @@ enum HostPromptEffect {
     AcknowledgeOnly,
 }
 
+fn host_prompt_public_resolution(
+    prompt: &projections::HostPromptRow,
+    effect: &HostPromptEffect,
+) -> domain::HostPromptPublicResolution {
+    match effect {
+        HostPromptEffect::PkKill { selected, .. } => {
+            domain::HostPromptPublicResolution::DayVoteElimination {
+                phase_id: prompt.phase_id.clone(),
+                selected_slot: selected.clone(),
+                reason: prompt.reason.clone(),
+            }
+        }
+        HostPromptEffect::AdvancePhase {
+            phase_id,
+            reason,
+            skipped_phase_id,
+        } => domain::HostPromptPublicResolution::PhaseAdvance {
+            source_phase_id: prompt.phase_id.clone(),
+            target_phase_id: phase_id.clone(),
+            reason: (*reason).to_string(),
+            skipped_phase_id: skipped_phase_id.clone(),
+        },
+        HostPromptEffect::AcknowledgeOnly => domain::HostPromptPublicResolution::Acknowledged {
+            phase_id: prompt.phase_id.clone(),
+            reason: prompt.reason.clone(),
+        },
+    }
+}
+
 #[derive(Debug, Clone)]
 struct RebuiltResolutionEnvelope {
     applied: domain::ResolutionApplied,
@@ -3075,14 +3104,28 @@ fn rerun_stored_host_prompt(
         .map_err(|e| Reject::Internal(format!("malformed HostPromptResolved decision: {e}")))?;
     let resolved_by = str_payload(resolved, "resolved_by")?;
     let pack = load_pack(&pack_name_from_stream(prefix)?)?;
+    let stored_public_resolution: domain::HostPromptPublicResolution =
+        serde_json::from_value(resolved.payload["public_resolution"].clone()).map_err(|e| {
+            Reject::Internal(format!(
+                "malformed HostPromptResolved public_resolution: {e}"
+            ))
+        })?;
 
-    match host_prompt_effect(
+    let effect = host_prompt_effect(
         &pack.host_prompt_resolution_effects,
         &pack.phases,
         &prompt,
         &decision,
         prefix,
-    )? {
+    )?;
+    let rebuilt_public_resolution = host_prompt_public_resolution(&prompt, &effect);
+    if stored_public_resolution != rebuilt_public_resolution {
+        return Err(Reject::Internal(
+            "HostPromptResolved public_resolution does not match rebuilt prompt effect".to_string(),
+        ));
+    }
+
+    match effect {
         HostPromptEffect::PkKill {
             selected,
             contenders,
@@ -3130,6 +3173,7 @@ fn host_prompt_from_stream(
                 metadata: prompt.metadata,
                 status: "resolved".to_string(),
                 decision: None,
+                public_resolution: None,
                 resolved_by: None,
                 resolved_at: None,
             });
@@ -3265,6 +3309,14 @@ async fn resolve_host_prompt(
     let resolved_by = principal.user_id().to_string();
     let decision_json =
         serde_json::to_value(&decision).map_err(|e| Reject::Internal(e.to_string()))?;
+    let effect = host_prompt_effect(
+        &pack.host_prompt_resolution_effects,
+        &pack.phases,
+        &prompt,
+        &decision,
+        &stream,
+    )?;
+    let public_resolution = host_prompt_public_resolution(&prompt, &effect);
     let resolved_ev = EventInput::new(
         "HostPromptResolved",
         1,
@@ -3274,19 +3326,12 @@ async fn resolve_host_prompt(
             "kind": prompt.kind,
             "reason": prompt.reason,
             "decision": decision_json,
+            "public_resolution": public_resolution,
             "resolved_by": resolved_by,
         }),
         ActorId::Host,
         next_seq,
     );
-
-    let effect = host_prompt_effect(
-        &pack.host_prompt_resolution_effects,
-        &pack.phases,
-        &prompt,
-        &decision,
-        &stream,
-    )?;
 
     let mut events = vec![resolved_ev];
     match effect {
@@ -4671,6 +4716,7 @@ fn require_channel_post_access(
     }
 }
 
+
 /// The current phase must exist and be UNLOCKED. Returns the phase id.
 async fn require_open_phase(pool: &PgPool, game: Uuid) -> Result<String, Reject> {
     match projections::phase_state(pool, game).await? {
@@ -5622,6 +5668,7 @@ mod tests {
             metadata,
             status: "pending".to_string(),
             decision: None,
+            public_resolution: None,
             resolved_by: None,
             resolved_at: None,
         }
@@ -5661,6 +5708,75 @@ mod tests {
             twilight: kinds.contains(&domain::pack::PhaseKind::Twilight),
             cadence: kinds,
             subsegments: BTreeMap::new(),
+        }
+    }
+
+    #[test]
+    fn host_prompt_public_resolution_is_typed_for_every_effect_family() {
+        let cases = [
+            (
+                "day vote elimination",
+                prompt("pk", "D01", serde_json::json!({})),
+                HostPromptEffect::PkKill {
+                    selected: "slot_2".to_string(),
+                    contenders: vec!["slot_2".to_string(), "slot_4".to_string()],
+                },
+                serde_json::json!({
+                    "kind": "day_vote_elimination",
+                    "phase_id": "D01",
+                    "selected_slot": "slot_2",
+                    "reason": "test"
+                }),
+            ),
+            (
+                "phase advance",
+                prompt("revote", "D03R1", serde_json::json!({})),
+                HostPromptEffect::AdvancePhase {
+                    phase_id: "D03R2".to_string(),
+                    reason: "revote",
+                    skipped_phase_id: None,
+                },
+                serde_json::json!({
+                    "kind": "phase_advance",
+                    "source_phase_id": "D03R1",
+                    "target_phase_id": "D03R2",
+                    "reason": "revote"
+                }),
+            ),
+            (
+                "skipped phase advance",
+                prompt("skip_next_day", "D01", serde_json::json!({})),
+                HostPromptEffect::AdvancePhase {
+                    phase_id: "N02".to_string(),
+                    reason: "skip_next_day",
+                    skipped_phase_id: Some("D02".to_string()),
+                },
+                serde_json::json!({
+                    "kind": "phase_advance",
+                    "source_phase_id": "D01",
+                    "target_phase_id": "N02",
+                    "reason": "skip_next_day",
+                    "skipped_phase_id": "D02"
+                }),
+            ),
+            (
+                "acknowledgement",
+                prompt("notice", "N02", serde_json::json!({})),
+                HostPromptEffect::AcknowledgeOnly,
+                serde_json::json!({
+                    "kind": "acknowledged",
+                    "phase_id": "N02",
+                    "reason": "test"
+                }),
+            ),
+        ];
+
+        for (label, prompt, effect, expected) in cases {
+            assert_eq!(
+                serde_json::to_value(host_prompt_public_resolution(&prompt, &effect)).unwrap(),
+                expected,
+                "{label}"
+            );
         }
     }
 

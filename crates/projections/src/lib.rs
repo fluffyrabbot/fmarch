@@ -296,6 +296,7 @@ pub struct HostPromptRow {
     pub metadata: serde_json::Value,
     pub status: String,
     pub decision: Option<serde_json::Value>,
+    pub public_resolution: Option<serde_json::Value>,
     pub resolved_by: Option<String>,
     pub resolved_at: Option<i64>,
 }
@@ -724,37 +725,47 @@ async fn fold_event(
         "HostPromptResolved" => {
             let p = &ev.payload;
             let prompt_id = str_field(p, "prompt_id", &ev.kind)?;
-            let phase_id = str_field(p, "phase_id", &ev.kind)?;
             let resolved_by = str_field(p, "resolved_by", &ev.kind)?;
+            let public_resolution: domain::HostPromptPublicResolution =
+                serde_json::from_value(p["public_resolution"].clone()).map_err(|source| {
+                    ProjectionError::Payload {
+                        kind: ev.kind.clone(),
+                        source,
+                    }
+                })?;
             sqlx::query(
                 "UPDATE host_prompt SET \
-                 status = 'resolved', decision = $3, resolved_by = $4, resolved_at = $5 \
+                 status = 'resolved', decision = $3, public_resolution = $4, \
+                 resolved_by = $5, resolved_at = $6 \
                  WHERE game_id = $1 AND prompt_id = $2",
             )
             .bind(game_id)
             .bind(&prompt_id)
             .bind(&p["decision"])
+            .bind(&p["public_resolution"])
             .bind(&resolved_by)
             .bind(ev.occurred_at)
             .execute(&mut **tx)
             .await?;
 
-            if p["reason"].as_str() == Some("host_decides_tie")
-                && p["decision"]["kind"].as_str() == Some("select_slot")
+            if let domain::HostPromptPublicResolution::DayVoteElimination {
+                phase_id,
+                selected_slot,
+                reason,
+            } = public_resolution
             {
-                if let Some(selected_slot) = p["decision"]["slot"].as_str() {
-                    sqlx::query(
-                        "UPDATE day_vote_outcome SET \
-                         status = 'Lynch', winner_slot = $3, reason = 'host_decides_tie' \
-                         WHERE game_id = $1 AND phase_id = $2 \
-                           AND status = 'Tie' AND tiebreak = 'HostDecides'",
-                    )
-                    .bind(game_id)
-                    .bind(&phase_id)
-                    .bind(selected_slot)
-                    .execute(&mut **tx)
-                    .await?;
-                }
+                sqlx::query(
+                    "UPDATE day_vote_outcome SET \
+                     status = 'Lynch', winner_slot = $3, reason = $4 \
+                     WHERE game_id = $1 AND phase_id = $2 \
+                       AND status = 'Tie' AND tiebreak = 'HostDecides'",
+                )
+                .bind(game_id)
+                .bind(&phase_id)
+                .bind(&selected_slot)
+                .bind(&reason)
+                .execute(&mut **tx)
+                .await?;
             }
         }
 
@@ -2269,7 +2280,7 @@ pub async fn host_prompts(
     game_id: Uuid,
 ) -> Result<Vec<HostPromptRow>, ProjectionError> {
     let rows = sqlx::query(
-        "SELECT game_id, phase_id, event_index, prompt_id, kind, subject_slot, reason, phase_kind, phase_number, metadata, status, decision, resolved_by, resolved_at \
+        "SELECT game_id, phase_id, event_index, prompt_id, kind, subject_slot, reason, phase_kind, phase_number, metadata, status, decision, public_resolution, resolved_by, resolved_at \
          FROM host_prompt WHERE game_id = $1 \
          ORDER BY phase_id, event_index, prompt_id",
     )
@@ -2291,6 +2302,7 @@ pub async fn host_prompts(
             metadata: r.get("metadata"),
             status: r.get("status"),
             decision: r.get("decision"),
+            public_resolution: r.get("public_resolution"),
             resolved_by: r.get("resolved_by"),
             resolved_at: r.get("resolved_at"),
         })

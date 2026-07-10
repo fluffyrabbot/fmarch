@@ -772,6 +772,45 @@ test("host prompt normalization falls back when payload is not an array", () => 
   assert.equal(normalizeHostPrompts(null, FALLBACK.hostPrompts), FALLBACK.hostPrompts);
 });
 
+test("host prompt normalization preserves typed public resolution", () => {
+  assert.deepEqual(
+    normalizeHostPrompts([
+      {
+        prompt_id: "D01:pk:Tie",
+        kind: "pk",
+        reason: "host_decides_tie",
+        status: "resolved",
+        phase_id: "D01",
+        metadata: { contenders: ["slot-1", "slot-2"] },
+        public_resolution: {
+          kind: "day_vote_elimination",
+          phase_id: "D01",
+          selected_slot: "slot-2",
+          reason: "host_decides_tie",
+        },
+      },
+    ]),
+    [
+      {
+        id: "D01:pk:Tie",
+        label: "pk",
+        value: "host_decides_tie",
+        status: "resolved",
+        phaseId: "D01",
+        subjectSlot: null,
+        decisionKind: "select_slot",
+        metadata: { contenders: ["slot-1", "slot-2"] },
+        publicResolution: {
+          kind: "day_vote_elimination",
+          phase_id: "D01",
+          selected_slot: "slot-2",
+          reason: "host_decides_tie",
+        },
+      },
+    ],
+  );
+});
+
 function jsonResponse(body) {
   return {
     ok: true,

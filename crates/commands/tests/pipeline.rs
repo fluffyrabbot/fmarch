@@ -29146,6 +29146,12 @@ fn mafiascum_no_majority_revote_prompt_fixture_json() -> String {
                                 "operator_note": "minimizer revote"
                             }
                         },
+                        "public_resolution": {
+                            "kind": "phase_advance",
+                            "source_phase_id": "D01",
+                            "target_phase_id": "D01R1",
+                            "reason": "revote"
+                        },
                         "resolved_by": "fixture_host"
                     }
                 },
@@ -29276,6 +29282,13 @@ fn mafiascum_beloved_princess_skip_next_day_fixture_json() -> String {
                                 "operator_note": "minimizer skip next day"
                             }
                         },
+                        "public_resolution": {
+                            "kind": "phase_advance",
+                            "source_phase_id": "D01",
+                            "target_phase_id": "N02",
+                            "reason": "skip_next_day",
+                            "skipped_phase_id": "D02"
+                        },
                         "resolved_by": "fixture_host"
                     }
                 },
@@ -29385,6 +29398,13 @@ fn mafiascum_virgin_night_skip_next_day_fixture_json() -> String {
                             "metadata": {
                                 "operator_note": "minimizer virgin skip next day"
                             }
+                        },
+                        "public_resolution": {
+                            "kind": "phase_advance",
+                            "source_phase_id": "N01",
+                            "target_phase_id": "N02",
+                            "reason": "skip_next_day",
+                            "skipped_phase_id": "D02"
                         },
                         "resolved_by": "fixture_host"
                     }
@@ -29507,6 +29527,12 @@ fn dynamic_vote_no_majority_revote_prompt_fixture_json() -> String {
                             "metadata": {
                                 "operator_note": "minimizer dynamic revote"
                             }
+                        },
+                        "public_resolution": {
+                            "kind": "phase_advance",
+                            "source_phase_id": "D02",
+                            "target_phase_id": "D02R1",
+                            "reason": "revote"
                         },
                         "resolved_by": "fixture_host"
                     }
@@ -29643,6 +29669,12 @@ fn dynamic_vote_pk_prompt_fixture_json() -> String {
                         "decision": {
                             "kind": "select_slot",
                             "slot": "slot_3"
+                        },
+                        "public_resolution": {
+                            "kind": "day_vote_elimination",
+                            "phase_id": "D02",
+                            "selected_slot": "slot_3",
+                            "reason": "host_decides_tie"
                         },
                         "resolved_by": "fixture_host"
                     }
@@ -33414,6 +33446,15 @@ async fn host_resolve_phase_projects_epicmafia_pk_tie_prompt(pool: PgPool) {
     assert_eq!(resolved_payload["resolved_by"], host);
     assert_eq!(resolved_payload["decision"]["kind"], "select_slot");
     assert_eq!(resolved_payload["decision"]["slot"], "slot_4");
+    assert_eq!(
+        resolved_payload["public_resolution"],
+        serde_json::json!({
+            "kind": "day_vote_elimination",
+            "phase_id": "D01",
+            "selected_slot": "slot_4",
+            "reason": "host_decides_tie"
+        })
+    );
 
     let prompt_applied_payload = sqlx::query_scalar::<_, serde_json::Value>(
         "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
@@ -33777,6 +33818,23 @@ async fn host_resolve_phase_uses_dynamic_vote_weight_for_pk_tie_prompt(pool: PgP
         ack.stream_seqs.len(),
         3,
         "dynamic PK prompt resolution appends HostPromptResolved plus validated envelopes"
+    );
+
+    let resolved_payload = sqlx::query_scalar::<_, serde_json::Value>(
+        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'HostPromptResolved'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        resolved_payload["public_resolution"],
+        serde_json::json!({
+            "kind": "day_vote_elimination",
+            "phase_id": "D02",
+            "selected_slot": "slot_3",
+            "reason": "host_decides_tie"
+        })
     );
 
     let prompt_applied_payload = sqlx::query_scalar::<_, serde_json::Value>(

@@ -976,7 +976,16 @@ test("HostDecides browser proof has a standalone artifact contract", () => {
     ],
     selectedSlot: "slot-2",
     selection: { commandStatus: { state: "ack" } },
-    resolvedPrompt: { status: "resolved", decision: { slot: "slot-2" } },
+    resolvedPrompt: {
+      status: "resolved",
+      decision: { slot: "slot-2" },
+      public_resolution: {
+        kind: "day_vote_elimination",
+        phase_id: "D01",
+        selected_slot: "slot-2",
+        reason: "host_decides_tie",
+      },
+    },
     targetBeforeDecision: { actorAlive: true },
     targetAfterDecision: { actorAlive: false },
     hostOutcomePanel:
@@ -1021,6 +1030,12 @@ test("HostDecides race browser proof has a standalone artifact contract", () => 
     resolvedPrompt: {
       status: "resolved",
       decision: { kind: "select_slot", slot: "slot-2" },
+      public_resolution: {
+        kind: "day_vote_elimination",
+        phase_id: "D01",
+        selected_slot: "slot-2",
+        reason: "host_decides_tie",
+      },
     },
     playerStates: {
       "slot-1": { actorAlive: true },
@@ -1037,6 +1052,16 @@ test("HostDecides race browser proof has a standalone artifact contract", () => 
         "slot-2": { actorAlive: false },
       },
       playerOutcomeConvergence: hostDecidesPlayerOutcomeConvergenceFixture(),
+      resolvedPrompt: {
+        status: "resolved",
+        decision: { kind: "select_slot", slot: "slot-2" },
+        public_resolution: {
+          kind: "day_vote_elimination",
+          phase_id: "D01",
+          selected_slot: "slot-2",
+          reason: "host_decides_tie",
+        },
+      },
     },
   };
   assert.equal(assertDevTestGameHostDecidesRaceProof(proof), proof);

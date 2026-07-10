@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { matchesDayVoteElimination } from "./dev_test_game_host_prompt_public_resolution.mjs";
 
 export const devTestGameHostDecidesRaceProofPath =
   "target/dev-test-game/host-decides-race-proof.json";
@@ -18,6 +19,11 @@ export function assertDevTestGameHostDecidesRaceProof(proof) {
     !["slot-1", "slot-2"].includes(selectedSlot) ||
     proof?.resolvedPrompt?.status !== "resolved" ||
     proof?.resolvedPrompt?.decision?.slot !== selectedSlot ||
+    !matchesDayVoteElimination(proof?.resolvedPrompt, {
+      phaseId: "D01",
+      selectedSlot,
+      reason: "host_decides_tie",
+    }) ||
     proof?.playerStates?.[selectedSlot]?.actorAlive !== false ||
     Object.values(proof?.playerStates ?? {}).filter(
       (state) => state?.actorAlive === true,
@@ -38,6 +44,11 @@ export function assertDevTestGameHostDecidesRaceProof(proof) {
     !proof.roleReloadAfterRace.hostPromptActions?.every(
       (actions) => Array.isArray(actions) && actions.length === 0,
     ) ||
+    !matchesDayVoteElimination(proof?.roleReloadAfterRace?.resolvedPrompt, {
+      phaseId: "D01",
+      selectedSlot,
+      reason: "host_decides_tie",
+    }) ||
     proof.roleReloadAfterRace.playerStates?.[selectedSlot]?.actorAlive !== false ||
     !validPlayerOutcomeConvergence(
       proof?.roleReloadAfterRace?.playerOutcomeConvergence,

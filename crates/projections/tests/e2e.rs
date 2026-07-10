@@ -413,6 +413,12 @@ async fn host_decides_prompt_finalizes_official_day_vote_outcome(pool: sqlx::PgP
                     "kind": "pk",
                     "reason": "host_decides_tie",
                     "decision": { "kind": "select_slot", "slot": "slot-2" },
+                    "public_resolution": {
+                        "kind": "day_vote_elimination",
+                        "phase_id": "D01",
+                        "selected_slot": "slot-2",
+                        "reason": "host_decides_tie"
+                    },
                     "resolved_by": "host_h"
                 }),
                 ActorId::Host,
@@ -610,6 +616,13 @@ async fn host_prompt_projection_records_and_rebuilds(pool: sqlx::PgPool) {
                     "kind": "acknowledge",
                     "metadata": { "skip_phase": "D02" }
                 },
+                "public_resolution": {
+                    "kind": "phase_advance",
+                    "source_phase_id": "D01",
+                    "target_phase_id": "N02",
+                    "reason": "skip_next_day",
+                    "skipped_phase_id": "D02"
+                },
                 "resolved_by": "host_h"
             }),
             ActorId::Host,
@@ -624,6 +637,10 @@ async fn host_prompt_projection_records_and_rebuilds(pool: sqlx::PgPool) {
     assert_eq!(before[0].status, "resolved");
     assert_eq!(before[0].resolved_by.as_deref(), Some("host_h"));
     assert_eq!(before[0].resolved_at, Some(3));
+    assert_eq!(
+        before[0].public_resolution.as_ref().unwrap()["kind"],
+        "phase_advance"
+    );
     assert_eq!(
         before[0].decision.as_ref().unwrap()["metadata"]["skip_phase"],
         "D02"

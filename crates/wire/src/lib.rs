@@ -658,6 +658,8 @@ pub struct HostPromptDelta {
     pub status: String,
     #[ts(type = "unknown")]
     pub decision: Option<serde_json::Value>,
+    #[ts(type = "unknown")]
+    pub public_resolution: Option<serde_json::Value>,
     pub resolved_by: Option<String>,
     pub resolved_at: Option<i64>,
 }
@@ -677,6 +679,7 @@ impl From<projections::HostPromptRow> for HostPromptDelta {
             metadata: row.metadata,
             status: row.status,
             decision: row.decision,
+            public_resolution: row.public_resolution,
             resolved_by: row.resolved_by,
             resolved_at: row.resolved_at,
         }

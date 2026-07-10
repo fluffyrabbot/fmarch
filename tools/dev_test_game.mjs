@@ -90,6 +90,10 @@ import {
 import {
   devTestGameHostDecidesRaceProofPath,
 } from "./dev_test_game_host_decides_race_proof_contract.mjs";
+import {
+  matchesDayVoteElimination,
+  matchesPhaseAdvance,
+} from "./dev_test_game_host_prompt_public_resolution.mjs";
 
 export {
   seedPreSetupCommandPlanForGame,
@@ -3672,6 +3676,14 @@ async function verifySeededHostDecidesTie({
         ?.ResolveHostPrompt?.decision?.SelectSlot?.slot !== selectedSlot ||
       prompts.find((prompt) => prompt.prompt_id === promptId)?.status !== "resolved" ||
       prompts.find((prompt) => prompt.prompt_id === promptId)?.decision?.slot !== selectedSlot ||
+      !matchesDayVoteElimination(
+        prompts.find((prompt) => prompt.prompt_id === promptId),
+        {
+          phaseId: "D01",
+          selectedSlot,
+          reason: "host_decides_tie",
+        },
+      ) ||
       targetAfterDecision?.actorAlive !== false ||
       !hostOutcomePanel.includes("HostDecides selected Slot 2") ||
       !targetOutcomePanel.includes("HostDecides selected Slot 2")
@@ -5952,6 +5964,11 @@ async function verifySeededD02VoteNightTransition({
           id: "N03",
           locked: false,
           requiredPhaseActions: ["resolve_phase"],
+        },
+        expectedPublicResolution: {
+          sourcePhaseId: "D03R2",
+          targetPhaseId: "N03",
+          reason: "no_majority_no_lynch",
         },
       });
 
@@ -10023,6 +10040,12 @@ async function verifyStaleHostPromptRecovery({
     const staleRecovery = await stalePromptRecovery.submit({
       liveResolve,
       apiBaseUrl,
+      expectedPublicResolution: {
+        sourcePhaseId: "D01",
+        targetPhaseId: "N02",
+        reason: "skip_next_day",
+        skippedPhaseId: "D02",
+      },
     });
     return {
       status: "passed",
@@ -10272,6 +10295,11 @@ async function verifyConcurrentHostPromptSelectionRace({
       selectedSlot !== ackEntry?.slot ||
       resolvedPrompt?.status !== "resolved" ||
       resolvedPrompt?.decision?.kind !== "select_slot" ||
+      !matchesDayVoteElimination(resolvedPrompt, {
+        phaseId: "D01",
+        selectedSlot,
+        reason: "host_decides_tie",
+      }) ||
       Object.values(playerStates).filter((state) => state?.actorAlive === false)
         .length !== 1 ||
       playerStates[selectedSlot]?.actorAlive !== false ||
@@ -10435,6 +10463,11 @@ async function verifyConcurrentHostPromptSelectionRaceReload({
     hostPromptActions.some((actions) => actions.length !== 0) ||
     resolvedPrompt?.status !== "resolved" ||
     resolvedPrompt?.decision?.slot !== selectedSlot ||
+    !matchesDayVoteElimination(resolvedPrompt, {
+      phaseId: "D01",
+      selectedSlot,
+      reason: "host_decides_tie",
+    }) ||
     stateBySlot[selectedSlot]?.actorAlive !== false ||
     Object.entries(stateBySlot).find(([slot]) => slot !== selectedSlot)?.[1]
       ?.actorAlive !== true ||
@@ -10635,7 +10668,12 @@ async function prepareStaleHostPromptRecovery({
     return {
       stalePromptPage,
       setup,
-      submit: async ({ liveResolve, apiBaseUrl, expectedReloadPhase } = {}) =>
+      submit: async ({
+        liveResolve,
+        apiBaseUrl,
+        expectedReloadPhase,
+        expectedPublicResolution,
+      } = {}) =>
         submitStaleHostPromptRecovery({
           stalePromptPage,
           setup,
@@ -10646,6 +10684,7 @@ async function prepareStaleHostPromptRecovery({
           actionId,
           promptId,
           expectedReloadPhase,
+          expectedPublicResolution,
         }),
       close: async () => {
         await stalePromptPage.close().catch(() => {});
@@ -10716,6 +10755,7 @@ async function submitStaleHostPromptRecovery({
   actionId,
   promptId,
   expectedReloadPhase,
+  expectedPublicResolution,
 }) {
   const action = await confirmHostAction(stalePromptPage, actionId, "reject");
   await stalePromptPage
@@ -10852,6 +10892,19 @@ async function submitStaleHostPromptRecovery({
     staleHostPromptReloadAfterReject.apiPromptsAfterReload.find(
       (prompt) => (prompt.id ?? prompt.prompt_id) === promptId,
     )?.status !== "resolved" ||
+    (expectedPublicResolution !== undefined &&
+      (!matchesPhaseAdvance(
+        staleHostPromptReloadAfterReject.promptsAfterReload.find(
+          (prompt) => (prompt.id ?? prompt.prompt_id) === promptId,
+        ),
+        expectedPublicResolution,
+      ) ||
+        !matchesPhaseAdvance(
+          staleHostPromptReloadAfterReject.apiPromptsAfterReload.find(
+            (prompt) => (prompt.id ?? prompt.prompt_id) === promptId,
+          ),
+          expectedPublicResolution,
+        ))) ||
     (expectedReloadPhase !== undefined &&
       ((staleHostPromptReloadAfterReject.phase?.id ??
         staleHostPromptReloadAfterReject.phase?.phase_id) !==
