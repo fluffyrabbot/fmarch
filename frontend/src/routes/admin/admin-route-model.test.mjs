@@ -951,7 +951,7 @@ test("admin route data exposes local ops artifacts as a native audit row", async
 
   const ops = data.audit.find((item) => item.id === localAdminAuditIds.opsArtifacts);
   assert.equal(ops.label, "Local ops artifacts");
-  assert.equal(ops.status, "5 local ops checks passed");
+  assert.equal(ops.status, "6 local ops checks passed");
   assert.equal(ops.authority, "GlobalAdmin or GlobalMod");
   assert.equal(ops.inspectHref, localAdminAuditRoleUrl(localAdminAuditIds.opsArtifacts, { game: "midsummer" }));
   assert.deepEqual(
@@ -961,6 +961,7 @@ test("admin route data exposes local ops artifacts as a native audit row", async
       "role-entrypoints-redacted",
       "proof-lanes-summarized",
       "proof-stability-summarized",
+      "live-projection-lag-observability-summarized",
       "release-boundary-carried",
     ],
   );
@@ -971,6 +972,16 @@ test("admin route data exposes local ops artifacts as a native audit row", async
     releaseReady: false,
     productionReady: false,
   });
+
+  const legacy = await buildAdminRouteData({
+    principalUserId: "admin_a",
+    capabilities: [{ kind: "GlobalAdmin" }],
+    opsArtifacts: { ...localOpsArtifactsFixture(), version: 1 },
+  });
+  assert.equal(
+    legacy.audit.some((item) => item.id === localAdminAuditIds.opsArtifacts),
+    false,
+  );
 });
 
 test("admin route data exposes local hosted ops signals as a native audit row", async () => {
@@ -5869,7 +5880,7 @@ test("admin local player recovery detail data carries focused lane rows", async 
       ["reconnect-recovery", "passed: reconnecting -> recovered"],
       [
         "live-projection-lag-resync",
-        "passed: resyncs 2, continued ThreadPostsChanged/ThreadPostsChanged, reconnects 0",
+        "passed: frames 2, refreshes 2, coalesced 0, trailing 0, reconnects 0",
       ],
       ["stale-player-vote", "passed"],
       ["concurrent-vote-race", "passed"],
@@ -5978,7 +5989,7 @@ test("admin local ops artifact detail data carries check rows", async () => {
   assert.equal(data.status, "available");
   assert.equal(data.surfaceHeader.title, "Local ops artifacts");
   assert.equal(data.audit.id, localAdminAuditIds.opsArtifacts);
-  assert.equal(data.audit.checks.length, 5);
+  assert.equal(data.audit.checks.length, 6);
   assert.deepEqual(
     data.audit.checks.map((check) => [check.id, check.status]),
     [
@@ -5986,6 +5997,7 @@ test("admin local ops artifact detail data carries check rows", async () => {
       ["role-entrypoints-redacted", "passed"],
       ["proof-lanes-summarized", "passed"],
       ["proof-stability-summarized", "passed"],
+      ["live-projection-lag-observability-summarized", "passed"],
       ["release-boundary-carried", "passed"],
     ],
   );
@@ -7707,6 +7719,12 @@ function proofRunFixture() {
       resyncRecoveryCount: 2,
       continuationDeltaKinds: ["ThreadPostsChanged", "ThreadPostsChanged"],
       reconnectEventCount: 0,
+      clientMetrics: {
+        resyncFramesReceived: 2,
+        resyncRefreshesStarted: 2,
+        resyncFramesCoalesced: 0,
+        resyncTrailingRefreshesStarted: 0,
+      },
     },
     "stale-same-action-recovery": {
       roleUrl: "http://127.0.0.1:5173/g/midsummer",
@@ -8307,7 +8325,7 @@ function releaseReadinessCoverageStatus(
 
 function localOpsArtifactsFixture() {
   return {
-    version: 1,
+    version: 2,
     proof: "dev-test-game-ops-artifacts",
     status: "passed",
     releaseReady: false,
@@ -8326,6 +8344,10 @@ function localOpsArtifactsFixture() {
       { id: "role-entrypoints-redacted", status: "passed" },
       { id: "proof-lanes-summarized", status: "passed" },
       { id: "proof-stability-summarized", status: "passed" },
+      {
+        id: "live-projection-lag-observability-summarized",
+        status: "passed",
+      },
       { id: "release-boundary-carried", status: "passed" },
     ],
   };

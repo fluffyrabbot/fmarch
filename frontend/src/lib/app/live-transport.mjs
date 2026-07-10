@@ -20,6 +20,13 @@ export const LIVE_PROJECTION_CONNECTING_STATUS = Object.freeze({
   message: "Connecting live projection",
 });
 
+export const EMPTY_LIVE_PROJECTION_METRICS = Object.freeze({
+  resyncFramesReceived: 0,
+  resyncRefreshesStarted: 0,
+  resyncFramesCoalesced: 0,
+  resyncTrailingRefreshesStarted: 0,
+});
+
 export function buildLiveProjectionUrl({
   apiBaseUrl = "",
   game,
@@ -139,7 +146,12 @@ export function connectLiveProjection({
   let reconnectHandle = null;
   let reconnectAttempt = 0;
   let handleSocketClose = () => {};
+  const metrics = { ...EMPTY_LIVE_PROJECTION_METRICS };
   const resolvedUrl = resolveWebSocketUrl(url);
+
+  function currentMetrics() {
+    return Object.freeze({ ...metrics });
+  }
 
   function openSocket({ recoverOnOpen = false } = {}) {
     const openedSocket = new WebSocketCtor(resolvedUrl);
@@ -149,15 +161,24 @@ export function connectLiveProjection({
     let resyncRecoveryPromise = null;
 
     async function queueResyncRecovery(message) {
+      if (resyncRecoveryPromise !== null) {
+        metrics.resyncFramesCoalesced += 1;
+      }
       pendingResyncMessage = message;
       if (resyncRecoveryPromise !== null) {
         return await resyncRecoveryPromise;
       }
 
       resyncRecoveryPromise = (async () => {
+        let refreshIndex = 0;
         while (pendingResyncMessage !== null) {
           const nextMessage = pendingResyncMessage;
           pendingResyncMessage = null;
+          metrics.resyncRefreshesStarted += 1;
+          if (refreshIndex > 0) {
+            metrics.resyncTrailingRefreshesStarted += 1;
+          }
+          refreshIndex += 1;
           try {
             const recovery = await recoverLiveProjection({
               projectionStore,
@@ -223,6 +244,7 @@ export function connectLiveProjection({
         const envelope = JSON.parse(String(event.data));
         const message = normalizeServerEnvelopeMessage(envelope);
         if (message?.kind === "resync-required") {
+          metrics.resyncFramesReceived += 1;
           await queueResyncRecovery(message);
           return;
         }
@@ -283,6 +305,7 @@ export function connectLiveProjection({
       socket = null;
       droppedSocket?.close();
     },
+    metrics: currentMetrics,
   });
 }
 

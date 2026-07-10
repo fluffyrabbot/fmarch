@@ -90,6 +90,7 @@ async function provePlayerRouteSource() {
     eventRecorder: "recordPlayerLiveProjectionEvent",
     resyncTrigger: "triggerPlayerLiveProjectionResync",
     windowTrigger: "__fmarchTriggerPlayerResync",
+    metricsGetter: "__fmarchGetPlayerLiveProjectionMetrics",
   });
   assert.match(source, /buildPlayerProjectionInitialSnapshot\(data\)/);
   assert.match(source, /buildPlayerProjectionColdLoads\(data\)/);
@@ -112,6 +113,7 @@ async function proveModeratorRouteSource() {
     eventRecorder: "recordHostLiveProjectionEvent",
     resyncTrigger: "triggerHostLiveProjectionResync",
     windowTrigger: "__fmarchTriggerHostResync",
+    metricsGetter: "__fmarchGetHostLiveProjectionMetrics",
   });
   assert.match(source, /buildHostProjectionInitialSnapshot\(data\)/);
   assert.match(source, /buildHostProjectionColdLoads\(data\)/);
@@ -129,7 +131,7 @@ async function proveModeratorRouteSource() {
 
 function assertSourceOwnsLiveConnection(
   source,
-  { endpointExpression, eventRecorder, resyncTrigger, windowTrigger },
+  { endpointExpression, eventRecorder, resyncTrigger, windowTrigger, metricsGetter },
 ) {
   assert.match(source, /import \{ onMount \} from "svelte"/);
   assert.match(source, /connectLiveProjection/);
@@ -139,6 +141,7 @@ function assertSourceOwnsLiveConnection(
   assert.match(source, new RegExp(`${eventRecorder}\\(`));
   assert.match(source, new RegExp(`${resyncTrigger}\\(`));
   assert.match(source, new RegExp(`window\\.${escapeRegExp(windowTrigger)}`));
+  assert.match(source, new RegExp(`window\\.${escapeRegExp(metricsGetter)}`));
   assert.match(source, /return \(\) => \{/);
   assert.match(source, /connection\?\.close\(\)/);
 }

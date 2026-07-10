@@ -2841,6 +2841,8 @@ export function buildDevTestGameProofRun(session, options = {}) {
           hardening.liveProjectionLagResync?.currentSubmitPostReceiptCount ?? null,
         reconnectEventCount:
           hardening.liveProjectionLagResync?.reconnectEventCount ?? null,
+        clientMetrics:
+          hardening.liveProjectionLagResync?.clientMetrics ?? null,
         passed: liveProjectionLagResyncPassed(
           hardening.liveProjectionLagResync,
         ),
@@ -8793,6 +8795,10 @@ function liveProjectionLagResyncPassed(proof) {
     proof.apiContinuationPostCounts.every((count) => count === 1) &&
     proof.currentSubmitPostReceiptCount === 1 &&
     proof.reconnectEventCount === 0 &&
+    proof.clientMetrics?.resyncFramesReceived === 2 &&
+    proof.clientMetrics?.resyncRefreshesStarted === 2 &&
+    proof.clientMetrics?.resyncFramesCoalesced === 0 &&
+    proof.clientMetrics?.resyncTrailingRefreshesStarted === 0 &&
     allCommandIds.length > 4 &&
     new Set(allCommandIds).size === allCommandIds.length &&
     Object.values(proof.burstPostCounts ?? {}).length === burstCommandIds.length &&

@@ -18058,6 +18058,12 @@ async function verifyPlayerLagResyncRecovery({ playerPage, game, apiBaseUrl }) {
   const eventStart = await playerPage.evaluate(
     () => (window.__fmarchLiveProjectionEvents ?? []).length,
   );
+  const clientMetricsBefore = await playerPage.evaluate(
+    () => window.__fmarchGetPlayerLiveProjectionMetrics?.() ?? null,
+  );
+  if (clientMetricsBefore === null) {
+    throw new Error("player live projection metrics bridge is unavailable");
+  }
   const episodes = [];
   for (let episode = 1; episode <= 2; episode += 1) {
     episodes.push(
@@ -18085,8 +18091,14 @@ async function verifyPlayerLagResyncRecovery({ playerPage, game, apiBaseUrl }) {
       reconnectEvents: events.filter((event) =>
         ["close", "reconnecting", "reconnect"].includes(event?.kind),
       ),
+      clientMetricsAfter:
+        window.__fmarchGetPlayerLiveProjectionMetrics?.() ?? null,
     };
   }, eventStart);
+  const clientMetrics = liveProjectionMetricsDelta(
+    clientMetricsBefore,
+    browserState.clientMetricsAfter,
+  );
   const apiThread = await fetchJson(
     `${apiBaseUrl}/games/${game}/channels/main/thread?principal_user_id=player-seed&limit=100`,
   );
@@ -18122,7 +18134,11 @@ async function verifyPlayerLagResyncRecovery({ playerPage, game, apiBaseUrl }) {
     Object.values(burstPostCounts).some((count) => count !== 1) ||
     new Set(allCommandIds).size !== allCommandIds.length ||
     browserState.currentSubmitPostReceipts.length !== 1 ||
-    browserState.reconnectEvents.length !== 0
+    browserState.reconnectEvents.length !== 0 ||
+    clientMetrics.resyncFramesReceived !== 2 ||
+    clientMetrics.resyncRefreshesStarted !== 2 ||
+    clientMetrics.resyncFramesCoalesced !== 0 ||
+    clientMetrics.resyncTrailingRefreshesStarted !== 0
   ) {
     throw new Error(
       `live projection lag recovery drifted: ${JSON.stringify({
@@ -18132,6 +18148,8 @@ async function verifyPlayerLagResyncRecovery({ playerPage, game, apiBaseUrl }) {
         apiContinuationPostCounts,
         burstPostCounts,
         allCommandIds,
+        clientMetricsBefore,
+        clientMetrics,
       })}`,
     );
   }
@@ -18153,7 +18171,33 @@ async function verifyPlayerLagResyncRecovery({ playerPage, game, apiBaseUrl }) {
     apiContinuationPostCounts,
     currentSubmitPostReceiptCount: browserState.currentSubmitPostReceipts.length,
     reconnectEventCount: browserState.reconnectEvents.length,
+    clientMetricsBefore,
+    clientMetricsAfter: browserState.clientMetricsAfter,
+    clientMetrics,
   };
+}
+
+function liveProjectionMetricsDelta(before, after) {
+  if (after === null || typeof after !== "object") {
+    throw new Error("player live projection metrics snapshot is unavailable");
+  }
+  return Object.freeze(
+    Object.fromEntries(
+      [
+        "resyncFramesReceived",
+        "resyncRefreshesStarted",
+        "resyncFramesCoalesced",
+        "resyncTrailingRefreshesStarted",
+      ].map((key) => {
+        const beforeValue = Number(before?.[key]);
+        const afterValue = Number(after?.[key]);
+        if (!Number.isInteger(beforeValue) || !Number.isInteger(afterValue)) {
+          throw new Error(`player live projection metric ${key} is invalid`);
+        }
+        return [key, afterValue - beforeValue];
+      }),
+    ),
+  );
 }
 
 async function verifyPlayerLagResyncEpisode({

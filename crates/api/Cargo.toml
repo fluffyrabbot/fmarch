@@ -19,6 +19,7 @@ sqlx = { version = "0.8", default-features = false, features = [
     "postgres",
 ] }
 tokio = { version = "1", features = ["rt", "sync"] }
+tracing = "0.1"
 uuid = { version = "1", features = ["v4", "serde"] }
 
 [dev-dependencies]

@@ -39,6 +39,7 @@ import {
   validateDevTestGameAdminSpineTerminalBatches,
   validateDevTestGameHostedEvidenceLaneAdminProof,
   validateDevTestGameNextActionAdminProof,
+  validateDevTestGameOpsAdminProof,
   validateDevTestGameProofGraphAdminProof,
   validateDevTestGameHostSetupProof,
 } from "./dev_test_game_release_readiness.mjs";
@@ -127,6 +128,9 @@ import {
   buildDevTestGameOpsArtifacts,
   devTestGameOpsArtifactsPath,
 } from "./dev_test_game_ops_artifacts.mjs";
+import {
+  liveProjectionLagServerTraceContract,
+} from "./dev_test_game_live_projection_observability.mjs";
 import {
   devTestGameIdentityAdapterProofPath,
 } from "./dev_test_game_adjacent_artifact_paths.mjs";
@@ -865,6 +869,19 @@ test("dev test-game args expose reset reuse naming and verification controls", (
   );
 
   assert.throws(() => parseArgs(["--frontend-port", "nope"]), /positive integer/);
+});
+
+test("live projection lag observability contract matches the server trace", async () => {
+  const source = await readFile("crates/api/src/lib.rs", "utf8");
+  assert.deepEqual(liveProjectionLagServerTraceContract, {
+    event: "live_projection_receiver_lagged",
+    scopeFields: ["game_id", "connection_id"],
+    measurementField: "dropped_messages",
+  });
+  assert.match(source, /event = "live_projection_receiver_lagged"/);
+  assert.match(source, /game_id = %game/);
+  assert.match(source, /connection_id = %connection_id/);
+  assert.match(source, /dropped_messages,/);
 });
 
 test("session cards can target focused proof artifacts without clobbering canonical proof inputs", () => {
@@ -13531,6 +13548,24 @@ test("session card and markdown include role credential URLs and tokens", async 
         apiContinuationPostCounts: [1, 1],
         currentSubmitPostReceiptCount: 1,
         reconnectEventCount: 0,
+        clientMetricsBefore: {
+          resyncFramesReceived: 0,
+          resyncRefreshesStarted: 0,
+          resyncFramesCoalesced: 0,
+          resyncTrailingRefreshesStarted: 0,
+        },
+        clientMetricsAfter: {
+          resyncFramesReceived: 2,
+          resyncRefreshesStarted: 2,
+          resyncFramesCoalesced: 0,
+          resyncTrailingRefreshesStarted: 0,
+        },
+        clientMetrics: {
+          resyncFramesReceived: 2,
+          resyncRefreshesStarted: 2,
+          resyncFramesCoalesced: 0,
+          resyncTrailingRefreshesStarted: 0,
+        },
       },
       stalePlayerVote: {
         status: "passed",
@@ -18858,6 +18893,12 @@ test("session card and markdown include role credential URLs and tokens", async 
   assert.equal(opsArtifacts.run.seedCommandCount, 19);
   assert.equal(opsArtifacts.proofRun.laneCount, proofRun.lanes.length);
   assert.equal(opsArtifacts.proofStability.hostConfirmClicks.total, 5);
+  assert.deepEqual(opsArtifacts.liveProjectionLagObservability.clientMetrics, {
+    resyncFramesReceived: 2,
+    resyncRefreshesStarted: 2,
+    resyncFramesCoalesced: 0,
+    resyncTrailingRefreshesStarted: 0,
+  });
   assert.equal(
     opsArtifacts.checks.some(
       (check) =>
@@ -18883,6 +18924,15 @@ test("session card and markdown include role credential URLs and tokens", async 
   );
   assert.equal(JSON.stringify(opsArtifacts).includes("dev-test-card-host"), false);
   assert.equal(JSON.stringify(opsArtifacts).includes("dev-test-card-player"), false);
+  const missingLagObservabilityAdminProof = opsAdminProofFixture();
+  missingLagObservabilityAdminProof.adminRoleSurface.visibleChecks =
+    missingLagObservabilityAdminProof.adminRoleSurface.visibleChecks.filter(
+      (id) => id !== "live-projection-lag-observability-summarized",
+    );
+  assert.throws(
+    () => validateDevTestGameOpsAdminProof(missingLagObservabilityAdminProof),
+    /missing visible check: live-projection-lag-observability-summarized/,
+  );
   assert.equal(
     JSON.stringify(opsArtifacts).includes("replacement-session-refresh-token"),
     false,
@@ -20538,6 +20588,24 @@ function identityAdapterProofFixture(game) {
   };
 }
 
+function liveProjectionLagObservabilityFixture() {
+  return {
+    laneId: "live-projection-lag-resync",
+    status: "passed",
+    serverTraceContract: {
+      event: "live_projection_receiver_lagged",
+      scopeFields: ["game_id", "connection_id"],
+      measurementField: "dropped_messages",
+    },
+    clientMetrics: {
+      resyncFramesReceived: 2,
+      resyncRefreshesStarted: 2,
+      resyncFramesCoalesced: 0,
+      resyncTrailingRefreshesStarted: 0,
+    },
+  };
+}
+
 function devTestGameReleaseReadinessChecklistFixture({
   unproven,
   seedProofLaneCoverage = seedProofLaneCoverageFixture(),
@@ -20811,6 +20879,8 @@ function devTestGameReleaseReadinessChecklistFixture({
           status: "passed",
           evidence: "target/dev-test-game/proof-run.json",
           laneIds: hardeningAuditLaneIds,
+          liveProjectionLagObservability:
+            liveProjectionLagObservabilityFixture(),
           adminRoleSurface: {
             status: "passed",
             path: devTestGameHardeningAdminProofPath,
@@ -20830,6 +20900,8 @@ function devTestGameReleaseReadinessChecklistFixture({
                 status: "passed",
                 evidence: "target/dev-test-game/ops-artifacts.json",
                 proofBoundary: "Local ops artifact bundle.",
+                liveProjectionLagObservability:
+                  liveProjectionLagObservabilityFixture(),
                 adminRoleSurface: {
                   status: "passed",
                   detailRoleUrl:
@@ -21855,7 +21927,7 @@ function devTestGameOpsArtifactsFixture({
   },
 } = {}) {
   return {
-    version: 1,
+    version: 2,
     proof: "dev-test-game-ops-artifacts",
     status: "passed",
     releaseReady: false,
@@ -21883,6 +21955,7 @@ function devTestGameOpsArtifactsFixture({
       nonClaims: [],
     },
     proofStability,
+    liveProjectionLagObservability: liveProjectionLagObservabilityFixture(),
     readiness: {
       status: "not_ready",
       releaseReady: false,
@@ -21907,6 +21980,10 @@ function devTestGameOpsArtifactsFixture({
         retryClickCount: proofStability.hostConfirmClicks.retryClickCount,
         domFallbackCount: proofStability.hostConfirmClicks.domFallbackCount,
         forceFallbackCount: proofStability.hostConfirmClicks.forceFallbackCount,
+      },
+      {
+        id: "live-projection-lag-observability-summarized",
+        status: "passed",
       },
       {
         id: "release-boundary-carried",
@@ -23999,6 +24076,7 @@ function opsAdminProofFixture() {
         "role-entrypoints-redacted",
         "proof-lanes-summarized",
         "proof-stability-summarized",
+        "live-projection-lag-observability-summarized",
         "release-boundary-carried",
       ],
       rawInviteTokensVisible: false,

@@ -378,6 +378,12 @@ test("websocket resync frames refresh the projection store", async () => {
   assert.deepEqual(events.at(-1).snapshot.votecount, [
     { target: "slot-2", count: 4, needed: 7 },
   ]);
+  assert.deepEqual(connection.metrics(), {
+    resyncFramesReceived: 1,
+    resyncRefreshesStarted: 1,
+    resyncFramesCoalesced: 0,
+    resyncTrailingRefreshesStarted: 0,
+  });
   connection.close();
 });
 
@@ -451,6 +457,12 @@ test("back-to-back websocket resync frames collapse to one trailing refresh", as
     ],
   );
   assert.deepEqual(store.getSnapshot(), { generation: 3 });
+  assert.deepEqual(connection.metrics(), {
+    resyncFramesReceived: 3,
+    resyncRefreshesStarted: 2,
+    resyncFramesCoalesced: 2,
+    resyncTrailingRefreshesStarted: 1,
+  });
   connection.close();
 });
 
@@ -480,6 +492,12 @@ test("resync completion from a dropped websocket cannot publish stale state", as
   await recovery;
 
   assert.deepEqual(events, [{ message: { kind: "close" }, snapshot: null }]);
+  assert.deepEqual(connection.metrics(), {
+    resyncFramesReceived: 1,
+    resyncRefreshesStarted: 1,
+    resyncFramesCoalesced: 0,
+    resyncTrailingRefreshesStarted: 0,
+  });
 });
 
 test("websocket delta frames can refresh dependent cold-load keys", async () => {

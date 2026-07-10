@@ -87,7 +87,9 @@ it may see (a spectator never receives scumchat frames; the bytes don't leave th
 - Connection backpressure: the live projection broadcast is bounded. A receiver that falls
   behind gets `ResyncRequired`, cold-loads current REST projections, and continues on the same
   socket; only a failed socket send ends that delivery loop. This bounds memory without turning
-  a recoverable broadcast gap into an unnecessary reconnect.
+  a recoverable broadcast gap into an unnecessary reconnect. Each lag emits the structured
+  `live_projection_receiver_lagged` warning with `game_id`, an ephemeral `connection_id`, and
+  `dropped_messages`; it contains no principal credentials or projection payload.
 
 ## Cold loads & uploads over REST
 

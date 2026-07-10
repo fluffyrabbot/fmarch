@@ -718,8 +718,13 @@ ordered server `ResyncRequired` frames without reconnecting, and receives a
 unique later UI post after each recovery on the same socket with one projected
 post and one current receipt. The client collapses back-to-back resync frames
 into one in-flight refresh plus one latest trailing refresh. That lane is saved
-as `live-projection-lag-resync`. The harness then refreshes
-command state after a stale locked-phase vote reject, and
+as `live-projection-lag-resync` with measured client counters for received
+frames, started refreshes, coalesced frames, and trailing refreshes. The API
+emits `live_projection_receiver_lagged` with game/connection scope and dropped
+message count when `RUST_LOG` enables the warning; neither credentials nor
+projection payloads are logged. The same saved metrics feed the hardening admin
+row, release-readiness hardening check, and local ops artifact bundle. The
+harness then refreshes command state after a stale locked-phase vote reject, and
 asserts the refreshed player command state has no legal vote targets, no current
 vote, the old vote control removed, and Withdraw still disabled with
 current-state copy, submits two concurrent D02 votes from separate role pages

@@ -4031,6 +4031,7 @@ async fn ws(
 }
 
 async fn ws_session(mut socket: WebSocket, state: ApiState, params: WsParams) {
+    let connection_id = Uuid::new_v4();
     let hello = hello_for(&state, params.principal_user_id.as_deref(), params.game).await;
     if let Ok(text) = serde_json::to_string(&ServerEnvelope::new(0, ServerMsg::Hello(hello))) {
         let _ = socket.send(Message::Text(text.into())).await;
@@ -4074,7 +4075,15 @@ async fn ws_session(mut socket: WebSocket, state: ApiState, params: WsParams) {
     loop {
         let update = match receive_live_projection(&mut live_projection_rx).await {
             LiveProjectionReceive::Update(update) => update,
-            LiveProjectionReceive::Lagged => {
+            LiveProjectionReceive::Lagged { dropped_messages } => {
+                tracing::warn!(
+                    event = "live_projection_receiver_lagged",
+                    game_id = %game,
+                    connection_id = %connection_id,
+                    dropped_messages,
+                    next_envelope_id,
+                    "live projection receiver lagged; requesting client resync"
+                );
                 let sent_to = send_projection_deltas(
                     &mut socket,
                     next_envelope_id,
@@ -4175,7 +4184,7 @@ async fn ws_session(mut socket: WebSocket, state: ApiState, params: WsParams) {
 
 enum LiveProjectionReceive {
     Update(LiveProjectionUpdate),
-    Lagged,
+    Lagged { dropped_messages: u64 },
     Closed,
 }
 
@@ -4184,7 +4193,9 @@ async fn receive_live_projection(
 ) -> LiveProjectionReceive {
     match receiver.recv().await {
         Ok(update) => LiveProjectionReceive::Update(update),
-        Err(broadcast::error::RecvError::Lagged(_)) => LiveProjectionReceive::Lagged,
+        Err(broadcast::error::RecvError::Lagged(dropped_messages)) => {
+            LiveProjectionReceive::Lagged { dropped_messages }
+        }
         Err(broadcast::error::RecvError::Closed) => LiveProjectionReceive::Closed,
     }
 }
@@ -4428,7 +4439,9 @@ mod live_projection_tests {
 
         assert!(matches!(
             receive_live_projection(&mut receiver).await,
-            LiveProjectionReceive::Lagged
+            LiveProjectionReceive::Lagged {
+                dropped_messages: 1
+            }
         ));
         assert!(matches!(
             receive_live_projection(&mut receiver).await,

@@ -10,8 +10,12 @@ import {
 import {
   devTestGameOpsArtifactsPath,
 } from "./dev_test_game_adjacent_artifact_paths.mjs";
+import {
+  assertLiveProjectionLagObservability,
+  liveProjectionLagObservabilityFromProofRun,
+} from "./dev_test_game_live_projection_observability.mjs";
 
-export const DEV_TEST_GAME_OPS_ARTIFACTS_VERSION = 1;
+export const DEV_TEST_GAME_OPS_ARTIFACTS_VERSION = 2;
 export { devTestGameOpsArtifactsPath };
 export const devTestGameOpsArtifactsMarkdownPath =
   "target/dev-test-game/ops-artifacts.md";
@@ -54,6 +58,8 @@ export function buildDevTestGameOpsArtifacts({
   generatedAt = new Date().toISOString(),
 }) {
   const proof = assertDevTestGameProofRun(proofRun);
+  const liveProjectionLagObservability =
+    liveProjectionLagObservabilityFromProofRun(proof);
   assertDevTestGameReleaseReadiness(readiness);
   if (session?.game !== proof.session.game) {
     throw new Error(`ops artifact session/proof game mismatch: ${session?.game}`);
@@ -82,7 +88,7 @@ export function buildDevTestGameOpsArtifacts({
     generatedAt,
     scope: "local-dev-test-game-ops-artifacts",
     proofBoundary:
-      "Local artifact bundle for one dev-test-game run. It redacts role credentials and records checksums, command counts, proof lanes, and optional local backup/restore evidence; it does not prove hosted observability, centralized logs, paging, SLOs, production incident response, or release readiness.",
+      "Local artifact bundle for one dev-test-game run. It redacts role credentials and records checksums, command counts, proof lanes, measured live-projection lag recovery counters, and optional local backup/restore evidence; it does not prove hosted observability, centralized logs, paging, SLOs, production incident response, or release readiness.",
     generatedFrom: {
       sessionJson: artifacts.session.path,
       proofRun: artifacts.proofRun.path,
@@ -115,6 +121,7 @@ export function buildDevTestGameOpsArtifacts({
       nonClaims: proof.nonClaims,
     },
     proofStability: session.verification?.proofStability ?? null,
+    liveProjectionLagObservability,
     readiness: {
       status: readiness.status,
       releaseReady: readiness.releaseReady,
@@ -171,6 +178,13 @@ export function buildDevTestGameOpsArtifacts({
           session.verification?.proofStability?.hostConfirmClicks?.forceFallbackCount ?? 0,
       },
       {
+        id: "live-projection-lag-observability-summarized",
+        status: "passed",
+        serverTraceEvent:
+          liveProjectionLagObservability.serverTraceContract.event,
+        clientMetrics: liveProjectionLagObservability.clientMetrics,
+      },
+      {
         id: "release-boundary-carried",
         status: "passed",
         releaseReady: false,
@@ -215,12 +229,14 @@ export function assertDevTestGameOpsArtifacts(ops) {
     "role-entrypoints-redacted",
     "proof-lanes-summarized",
     "proof-stability-summarized",
+    "live-projection-lag-observability-summarized",
     "release-boundary-carried",
   ]) {
     if (checks.get(id) !== "passed") {
       throw new Error(`ops artifact missing passed check: ${id}`);
     }
   }
+  assertLiveProjectionLagObservability(ops.liveProjectionLagObservability);
   const serialized = JSON.stringify(ops);
   if (/invite=(?!REDACTED)/.test(serialized)) {
     throw new Error("ops artifact leaked an invite URL token");

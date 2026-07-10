@@ -2937,6 +2937,15 @@ assert.equal(
   session.verification.multiplayerHardening.liveProjectionLagResync.reconnectEventCount,
   0,
 );
+assert.deepEqual(
+  session.verification.multiplayerHardening.liveProjectionLagResync.clientMetrics,
+  {
+    resyncFramesReceived: 2,
+    resyncRefreshesStarted: 2,
+    resyncFramesCoalesced: 0,
+    resyncTrailingRefreshesStarted: 0,
+  },
+);
 assert.equal(
   proofRun.lanes.find((lane) => lane.id === playerLiveLagResyncLaneId)?.status,
   "passed",

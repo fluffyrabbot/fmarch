@@ -209,6 +209,7 @@
     });
     window.__fmarchPlayerColdLoadEndpoints = data.coldLoad;
     window.__fmarchPlayerResyncKeys = playerProjectionResyncKeys;
+    window.__fmarchGetPlayerLiveProjectionMetrics = () => connection?.metrics?.() ?? null;
     window.__fmarchTriggerPlayerResync = async (fromSeq = 0) => {
       const recovery = await triggerPlayerLiveProjectionResync({
         windowRef: window,
@@ -240,6 +241,7 @@
       delete window.__fmarchDropPlayerLiveProjection;
       delete window.__fmarchPlayerColdLoadEndpoints;
       delete window.__fmarchPlayerResyncKeys;
+      delete window.__fmarchGetPlayerLiveProjectionMetrics;
       activePhaseTheme.set(null);
       connection?.close();
     };

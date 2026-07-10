@@ -70,6 +70,10 @@ import {
   playerRecoveryAuditLaneIds,
 } from "./dev_test_game_player_recovery_scenarios.mjs";
 import {
+  assertLiveProjectionLagObservability,
+  liveProjectionLagObservabilityFromProofRun,
+} from "./dev_test_game_live_projection_observability.mjs";
+import {
   assertReplacementActionRecoveryCoverageSummary,
   replacementActionLaneIds,
 } from "./dev_test_game_replacement_action_scenario_cases.mjs";
@@ -690,6 +694,8 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
   const proof = assertDevTestGameProofRun(proofRun);
   const generatedAt = options.generatedAt ?? new Date().toISOString();
   const sourcePath = options.sourcePath ?? devTestGameProofRunPath;
+  const liveProjectionLagObservability =
+    liveProjectionLagObservabilityFromProofRun(proof);
   const recoveryMilestonesByGeneratedFromKey = {
     staleConflictMessageMilestone: buildStaleConflictMessageMilestone(proof, {
       sourcePath,
@@ -1211,6 +1217,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       status: "passed",
       evidence: sourcePath,
       laneIds: hardeningAuditLaneIds,
+      liveProjectionLagObservability,
       ...(hardeningAdminProofEvidence === undefined
         ? {}
         : {
@@ -1248,6 +1255,8 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       status: "passed",
       evidence: opsArtifactsEvidence.path,
       proofBoundary: opsArtifactsEvidence.proofBoundary,
+      liveProjectionLagObservability:
+        opsArtifactsEvidence.liveProjectionLagObservability,
       spineLane: {
         manifestCommandKey: "ops",
         command: "npm run test:dev-test-game-ops",
@@ -4931,9 +4940,10 @@ export function validateDevTestGameOpsArtifacts(ops, options = {}) {
     "role-entrypoints-redacted",
     "proof-lanes-summarized",
     "proof-stability-summarized",
+    "live-projection-lag-observability-summarized",
     "release-boundary-carried",
   ];
-  if (ops?.version !== 1) {
+  if (ops?.version !== 2) {
     throw new Error(`ops artifact version drifted: ${ops?.version}`);
   }
   if (ops.proof !== "dev-test-game-ops-artifacts") {
@@ -4957,6 +4967,9 @@ export function validateDevTestGameOpsArtifacts(ops, options = {}) {
   if (/invite=(?!REDACTED)/.test(JSON.stringify(ops))) {
     throw new Error("ops artifact leaked an invite URL token");
   }
+  const liveProjectionLagObservability = assertLiveProjectionLagObservability(
+    ops.liveProjectionLagObservability,
+  );
   return {
     status: "passed",
     path: options.path ?? devTestGameOpsArtifactsPath,
@@ -4964,6 +4977,7 @@ export function validateDevTestGameOpsArtifacts(ops, options = {}) {
     roleCount: ops.run?.roleCount ?? 0,
     laneCount: ops.proofRun?.laneCount ?? 0,
     proofBoundary: ops.proofBoundary,
+    liveProjectionLagObservability,
     scope: ops.scope,
     productionReady: ops.productionReady,
     ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
@@ -4976,6 +4990,7 @@ export function validateDevTestGameOpsAdminProof(proof, options = {}) {
     "role-entrypoints-redacted",
     "proof-lanes-summarized",
     "proof-stability-summarized",
+    "live-projection-lag-observability-summarized",
     "release-boundary-carried",
   ];
   if (proof?.version !== 1) {
@@ -9128,6 +9143,15 @@ export function assertDevTestGameReleaseReadiness(checklist) {
   const hardeningCheck = checklist.localDevelopmentSpine?.checks?.find(
     (check) => check.id === hardeningFeatureSpineSourceCheckId,
   );
+  try {
+    assertLiveProjectionLagObservability(
+      hardeningCheck?.liveProjectionLagObservability,
+    );
+  } catch {
+    throw new Error(
+      "dev-test-game hardening readiness check is missing live projection lag observability",
+    );
+  }
   if (
     hardeningCheck?.spineTargets !== undefined &&
     !validHardeningSpineTargets(hardeningCheck.spineTargets)

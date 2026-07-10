@@ -149,6 +149,7 @@
         });
       },
     });
+    window.__fmarchGetHostLiveProjectionMetrics = () => connection?.metrics?.() ?? null;
     window.__fmarchTriggerHostResync = async (fromSeq = 0) => {
       const recovery = await triggerHostLiveProjectionResync({
         windowRef: window,
@@ -177,6 +178,7 @@
     window.__fmarchDispatchHostAction = handleDispatch;
     return () => {
       delete window.__fmarchTriggerHostResync;
+      delete window.__fmarchGetHostLiveProjectionMetrics;
       delete window.__fmarchCloseHostLiveProjection;
       delete window.__fmarchDropHostLiveProjection;
       delete window.__fmarchDispatchHostAction;

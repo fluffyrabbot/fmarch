@@ -414,7 +414,9 @@ unambiguous controls with explicit confirmation for anything irreversible:
   socket. Recovery is single-flight per socket: frames received during a refresh retain only
   the latest request for one trailing refresh. This bounds REST work and prevents older refresh
   completions from overwriting newer state. Recovery does not replay a command or append a
-  second command receipt.
+  second command receipt. The transport exposes immutable counters for resync frames received,
+  refreshes started, frames coalesced, and trailing refreshes; role-page browser proofs consume
+  snapshots of those counters without making them visible product UI.
 
 ## Performance & data-efficiency
 
