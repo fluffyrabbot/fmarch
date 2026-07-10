@@ -6886,6 +6886,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
     },
     identityBootstrap: session?.identityBootstrap ?? null,
     earliestReachedTie: verification.earliestReachedTie ?? null,
+    hostDecidesTie: verification.hostDecidesTie ?? null,
     coreLoopSpine,
     completedGameHardeningCoverage,
     hostStaleControlCoverage,
@@ -6933,6 +6934,18 @@ export function assertDevTestGameProofRun(proof) {
       proof.earliestReachedTie.outcome?.tiebreak !== "EarliestReached")
   ) {
     throw new Error("dev-test-game proof is missing EarliestReached browser evidence");
+  }
+  if (
+    proof.hostDecidesTie !== null &&
+    proof.hostDecidesTie !== undefined &&
+    (proof.hostDecidesTie.status !== "passed" ||
+      proof.hostDecidesTie.pack !== "epicmafia" ||
+      proof.hostDecidesTie.outcome?.status !== "Tie" ||
+      proof.hostDecidesTie.outcome?.tiebreak !== "HostDecides" ||
+      proof.hostDecidesTie.selectedSlot !== "slot-2" ||
+      proof.hostDecidesTie.targetAfterDecision?.actorAlive !== false)
+  ) {
+    throw new Error("dev-test-game proof is missing HostDecides browser evidence");
   }
   if (
     proof.identityBootstrap?.status !== "passed" ||

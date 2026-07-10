@@ -616,6 +616,51 @@ test("host console prompt rows become confirmable typed host actions", () => {
   assert.match(promptAction.confirmationText, /acknowledge prompt/);
 });
 
+test("host console HostDecides prompt exposes one typed choice per contender", () => {
+  const actions = buildHostConsoleCriticalActions("game-a", {
+    hostPrompts: [
+      {
+        id: "D01:pk:Tie",
+        label: "pk",
+        value: "host_decides_tie",
+        status: "pending",
+        subjectSlot: null,
+        decisionKind: "select_slot",
+        metadata: {
+          policy: "pk_host_decides_tie",
+          contenders: ["slot-2", "slot-4"],
+        },
+      },
+    ],
+  });
+
+  const promptActions = actions.filter((action) =>
+    action.id.startsWith("resolve_host_prompt-D01-pk-Tie"),
+  );
+
+  assert.deepEqual(
+    promptActions.map((action) => [
+      action.id,
+      action.label,
+      action.payload.decision,
+    ]),
+    [
+      [
+        "resolve_host_prompt-D01-pk-Tie-slot-2",
+        "Eliminate slot-2",
+        { kind: "select_slot", slot: "slot-2" },
+      ],
+      [
+        "resolve_host_prompt-D01-pk-Tie-slot-4",
+        "Eliminate slot-4",
+        { kind: "select_slot", slot: "slot-4" },
+      ],
+    ],
+  );
+  assert.match(promptActions[0].confirmationText, /tied contenders/);
+  assert.match(promptActions[1].confirmationText, /tied contenders/);
+});
+
 test("host console no-majority revote prompt exposes explicit policy choices", () => {
   const actions = buildHostConsoleCriticalActions("game-a", {
     hostPrompts: [

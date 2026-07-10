@@ -84,6 +84,9 @@ import {
 import {
   devTestGameEarliestReachedProofPath,
 } from "./dev_test_game_earliest_reached_proof_contract.mjs";
+import {
+  devTestGameHostDecidesProofPath,
+} from "./dev_test_game_host_decides_proof_contract.mjs";
 
 export {
   seedPreSetupCommandPlanForGame,
@@ -106,6 +109,7 @@ const sessionJsonPath = path.join(artifactDir, "session.json");
 const sessionMdPath = path.join(artifactDir, "session.md");
 const proofRunJsonPath = path.join(artifactDir, "proof-run.json");
 const earliestReachedProofJsonPath = path.join(repoRoot, devTestGameEarliestReachedProofPath);
+const hostDecidesProofJsonPath = path.join(repoRoot, devTestGameHostDecidesProofPath);
 const hostSetupSessionJsonPath = path.join(artifactDir, "host-setup-session.json");
 const hostSetupSessionMdPath = path.join(artifactDir, "host-setup-session.md");
 const hostSetupProofJsonPath = path.join(artifactDir, "host-setup-proof.json");
@@ -170,7 +174,12 @@ export async function main(rawArgs = process.argv.slice(2), env = process.env) {
     return;
   }
   if (
-    [args.verify, args.verifyHostSetupOnly, args.verifyEarliestReachedOnly].filter(Boolean)
+    [
+      args.verify,
+      args.verifyHostSetupOnly,
+      args.verifyEarliestReachedOnly,
+      args.verifyHostDecidesOnly,
+    ].filter(Boolean)
       .length > 1
   ) {
     throw new Error("only one dev-test-game verification mode may be selected");
@@ -253,18 +262,31 @@ export async function main(rawArgs = process.argv.slice(2), env = process.env) {
   await writeNamedGame(gameName, card);
   printSessionCard(card);
 
-  if (args.verify || args.verifyHostSetupOnly || args.verifyEarliestReachedOnly) {
+  if (
+    args.verify ||
+    args.verifyHostSetupOnly ||
+    args.verifyEarliestReachedOnly ||
+    args.verifyHostDecidesOnly
+  ) {
     const verification = args.verifyHostSetupOnly
       ? await verifyHostSetupOnly(card)
       : args.verifyEarliestReachedOnly
         ? await verifyEarliestReachedOnly(card)
-      : await verifySessionCard(card);
+        : args.verifyHostDecidesOnly
+          ? await verifyHostDecidesOnly(card)
+          : await verifySessionCard(card);
     card.verification = verification;
     await writeSessionArtifacts(card, sessionArtifacts);
     if (verification.earliestReachedTie !== undefined) {
       await writeFile(
         earliestReachedProofJsonPath,
         `${JSON.stringify(verification.earliestReachedTie, null, 2)}\n`,
+      );
+    }
+    if (verification.hostDecidesTie !== undefined) {
+      await writeFile(
+        hostDecidesProofJsonPath,
+        `${JSON.stringify(verification.hostDecidesTie, null, 2)}\n`,
       );
     }
     const hostSetupProof = buildDevTestGameHostSetupProof(card, verification);
@@ -277,6 +299,10 @@ export async function main(rawArgs = process.argv.slice(2), env = process.env) {
     } else if (args.verifyEarliestReachedOnly) {
       console.log(
         `\nverified earliest reached browser proof: ${path.relative(repoRoot, earliestReachedProofJsonPath)}`,
+      );
+    } else if (args.verifyHostDecidesOnly) {
+      console.log(
+        `\nverified HostDecides browser proof: ${path.relative(repoRoot, hostDecidesProofJsonPath)}`,
       );
     } else {
       const proofRun = buildDevTestGameProofRun(card);
@@ -1253,6 +1279,7 @@ async function verifySessionCard(card) {
   let dayVoteResolution;
   let dayVoteNoLynch;
   let earliestReachedTie;
+  let hostDecidesTie;
   let vanillizerRoleAction;
   let privateChannel;
   let actionLoop;
@@ -1361,6 +1388,15 @@ async function verifySessionCard(card) {
       frontendBaseUrl: card.frontendBaseUrl,
     });
     earliestReachedTie = await verifySeededEarliestReachedTie({
+      browser,
+      hostPage: roleEntries.host.page,
+      playerPage: roleEntries.player.page,
+      actionPage: roleEntries.actionPlayer.page,
+      targetPage: roleEntries.deniedPlayer.page,
+      apiBaseUrl: card.apiBaseUrl,
+      frontendBaseUrl: card.frontendBaseUrl,
+    });
+    hostDecidesTie = await verifySeededHostDecidesTie({
       browser,
       hostPage: roleEntries.host.page,
       playerPage: roleEntries.player.page,
@@ -1479,6 +1515,7 @@ async function verifySessionCard(card) {
     dayVoteResolution,
     dayVoteNoLynch,
     earliestReachedTie,
+    hostDecidesTie,
     vanillizerRoleAction,
     privateChannel,
     actionLoop,
@@ -1569,6 +1606,45 @@ async function verifyEarliestReachedOnly(card) {
         Object.entries(entries).map(([role, entry]) => [role, entry.verification]),
       ),
       earliestReachedTie,
+    };
+  } finally {
+    await Promise.all(
+      Object.values(entries).map((entry) => entry.context.close().catch(() => {})),
+    );
+    await browser.close();
+  }
+}
+
+async function verifyHostDecidesOnly(card) {
+  const { chromium } = await import("playwright");
+  const browser = await chromium.launch();
+  const entries = {};
+  try {
+    for (const role of ["host", "player", "actionPlayer", "deniedPlayer"]) {
+      entries[role] = await openVerifiedRoleEntry({
+        browser,
+        session: card.sessions[role],
+        game: card.game,
+        apiBaseUrl: card.apiBaseUrl,
+        frontendBaseUrl: card.frontendBaseUrl,
+      });
+    }
+    const hostDecidesTie = await verifySeededHostDecidesTie({
+      browser,
+      hostPage: entries.host.page,
+      playerPage: entries.player.page,
+      actionPage: entries.actionPlayer.page,
+      targetPage: entries.deniedPlayer.page,
+      apiBaseUrl: card.apiBaseUrl,
+      frontendBaseUrl: card.frontendBaseUrl,
+    });
+    return {
+      status: "passed",
+      roles: ["host", "player", "actionPlayer", "deniedPlayer"],
+      sessions: Object.fromEntries(
+        Object.entries(entries).map(([role, entry]) => [role, entry.verification]),
+      ),
+      hostDecidesTie,
     };
   } finally {
     await Promise.all(
@@ -3408,6 +3484,223 @@ async function submitEarliestReachedBrowserVote({
       () => window.__fmarchPlayerProjection?.commandState?.currentVote ?? null,
     ),
   };
+}
+
+async function verifySeededHostDecidesTie({
+  browser,
+  hostPage,
+  playerPage,
+  actionPage,
+  targetPage,
+  apiBaseUrl,
+  frontendBaseUrl,
+}) {
+  const tieGame = crypto.randomUUID();
+  const seed = await seedHostDecidesTieGame({ game: tieGame });
+  const seedSession = await createAccountLoginCredential({
+    principalUserId: "player-seed",
+    returnTo: `/g/${tieGame}`,
+    expectedCapabilityKind: "SlotOccupant",
+  });
+  const seedEntry = await openVerifiedRoleEntry({
+    browser,
+    session: seedSession,
+    game: tieGame,
+    apiBaseUrl,
+    frontendBaseUrl,
+  });
+  const hostProofPage = await hostPage.context().newPage();
+  const miraProofPage = await playerPage.context().newPage();
+  const actionProofPage = await actionPage.context().newPage();
+  const targetProofPage = await targetPage.context().newPage();
+  const promptId = "D01:pk:Tie";
+  const selectedSlot = "slot-2";
+  const promptActionIds = [
+    "resolve_host_prompt-D01-pk-Tie-slot-1",
+    "resolve_host_prompt-D01-pk-Tie-slot-2",
+  ];
+  try {
+    await Promise.all([
+      gotoHostConsole(hostProofPage, tieGame),
+      gotoPlayerBoard(seedEntry.page, tieGame),
+      gotoPlayerBoard(miraProofPage, tieGame),
+      gotoPlayerBoard(actionProofPage, tieGame),
+      gotoPlayerBoard(targetProofPage, tieGame),
+    ]);
+
+    const votes = [
+      { page: seedEntry.page, actorSlot: "slot-4", targetSlot: "slot-2", count: 1 },
+      { page: miraProofPage, actorSlot: "slot-1", targetSlot: "slot-2", count: 2 },
+      { page: targetProofPage, actorSlot: "slot-2", targetSlot: "slot-1", count: 1 },
+      { page: actionProofPage, actorSlot: "slot-3", targetSlot: "slot-1", count: 2 },
+    ];
+    const ballotProofs = [];
+    for (const vote of votes) {
+      ballotProofs.push(await submitEarliestReachedBrowserVote(vote));
+    }
+
+    const resolve = await confirmHostAction(hostProofPage, "resolve_phase");
+    await hostProofPage.waitForFunction(
+      (expectedPromptId) =>
+        window.__fmarchHostPromptsProjection?.some(
+          (prompt) =>
+            prompt.id === expectedPromptId &&
+            prompt.status === "pending" &&
+            prompt.decisionKind === "select_slot" &&
+            prompt.metadata?.contenders?.length === 2,
+        ),
+      promptId,
+    );
+    for (const actionId of promptActionIds) {
+      await hostProofPage
+        .getByTestId(`critical-host-action-${actionId}`)
+        .waitFor({ state: "visible" });
+    }
+    const pendingPrompts = await hostProofPage.evaluate(
+      () => window.__fmarchHostPromptsProjection ?? [],
+    );
+    const promptActions = await visibleHostControlActions(
+      hostProofPage,
+      "host-prompts",
+    );
+    const targetBeforeDecision = await targetProofPage.evaluate(
+      () => window.__fmarchPlayerProjection?.commandState ?? null,
+    );
+    const selection = await confirmHostAction(
+      hostProofPage,
+      `resolve_host_prompt-D01-pk-Tie-${selectedSlot}`,
+    );
+    await hostProofPage.waitForFunction(
+      (expectedPromptId) =>
+        window.__fmarchHostPromptsProjection?.some(
+          (prompt) => prompt.id === expectedPromptId && prompt.status === "resolved",
+        ),
+      promptId,
+    );
+    await targetProofPage.waitForFunction(
+      () => window.__fmarchPlayerProjection?.commandState?.actorAlive === false,
+    );
+
+    const outcomes = await fetchJson(
+      `${apiBaseUrl}/games/${tieGame}/day-vote-outcomes`,
+    );
+    const outcome = outcomes.find((row) => row.kind === "DayVoteOutcomeApplied")?.body;
+    const prompts = await fetchJson(
+      `${apiBaseUrl}/games/${tieGame}/host-prompts?principal_user_id=host_h`,
+    );
+    const targetCommandStateAfterDecision = await fetchJson(
+      playerCommandStateEndpoint({
+        apiBaseUrl,
+        game: tieGame,
+        principalUserId: "player-target",
+        slotId: selectedSlot,
+      }),
+    );
+    const targetAfterDecision = {
+      actorAlive: targetCommandStateAfterDecision?.actor_alive,
+      actorStatus: targetCommandStateAfterDecision?.actor_status,
+      currentVote: targetCommandStateAfterDecision?.current_vote ?? null,
+    };
+    const hostOutcomePanel = await hostProofPage
+      .getByTestId("host-day-vote-outcome-latest")
+      .innerText();
+    const targetOutcomePanel = await targetProofPage
+      .getByTestId("player-day-vote-outcome-latest")
+      .innerText();
+    if (
+      resolve.commandStatus?.state !== "ack" ||
+      outcome?.status !== "Tie" ||
+      outcome?.winner_slot !== null ||
+      outcome?.tiebreak !== "HostDecides" ||
+      outcome?.tallies?.["slot-1"] !== 2 ||
+      outcome?.tallies?.["slot-2"] !== 2 ||
+      targetBeforeDecision?.actorAlive !== true ||
+      !promptActionIds.every((actionId) => promptActions.includes(actionId)) ||
+      selection.commandStatus?.state !== "ack" ||
+      selection.commandStatus?.requestEnvelope?.body?.body?.command
+        ?.ResolveHostPrompt?.decision?.SelectSlot?.slot !== selectedSlot ||
+      prompts.find((prompt) => prompt.prompt_id === promptId)?.status !== "resolved" ||
+      prompts.find((prompt) => prompt.prompt_id === promptId)?.decision?.slot !== selectedSlot ||
+      targetAfterDecision?.actorAlive !== false ||
+      !hostOutcomePanel.includes("Tie") ||
+      !targetOutcomePanel.includes("Tie")
+    ) {
+      throw new Error(
+        `host decides browser proof drifted: ${JSON.stringify({
+          tieGame,
+          seed,
+          ballotProofs,
+          resolve,
+          pendingPrompts,
+          promptActions,
+          targetBeforeDecision,
+          selection,
+          outcomes,
+          prompts,
+          targetCommandStateAfterDecision,
+          targetAfterDecision,
+          hostOutcomePanel,
+          targetOutcomePanel,
+        })}`,
+      );
+    }
+    return {
+      status: "passed",
+      game: tieGame,
+      pack: "epicmafia",
+      tieBreaker: "HostDecides",
+      sourceRoleUrls: {
+        host: `${frontendBaseUrl}/g/${tieGame}/host`,
+        chooser: `${frontendBaseUrl}/g/${tieGame}/host`,
+        target: `${frontendBaseUrl}/g/${tieGame}`,
+      },
+      seed,
+      ballotProofs,
+      resolve,
+      promptId,
+      pendingPrompts,
+      promptActions,
+      selectedSlot,
+      selection,
+      outcome,
+      resolvedPrompt: prompts.find((prompt) => prompt.prompt_id === promptId),
+      targetBeforeDecision,
+      targetAfterDecision,
+      hostOutcomePanel,
+      targetOutcomePanel,
+      proof:
+        "A disposable EpicMafia game used four player role URLs to cast a 2-2 plurality tie, the host role URL resolved D01 into a durable HostDecides PK prompt with one explicit control per contender, selected Slot 2, and the selected player role URL converged from alive to dead while the official tied vote outcome remained inspectable.",
+    };
+  } finally {
+    await hostProofPage.close().catch(() => {});
+    await miraProofPage.close().catch(() => {});
+    await actionProofPage.close().catch(() => {});
+    await targetProofPage.close().catch(() => {});
+    await seedEntry.context.close().catch(() => {});
+  }
+}
+
+async function seedHostDecidesTieGame({ game }) {
+  const roster = [
+    ["slot-1", "player-mira"],
+    ["slot-2", "player-target"],
+    ["slot-3", "player-goon-a"],
+    ["slot-4", "player-seed"],
+  ];
+  const plan = [
+    ["host_h", { CreateGame: { game, pack: "epicmafia" } }],
+    ...roster.flatMap(([slot, user]) => [
+      ["host_h", { AddSlot: { game, slot } }],
+      ["host_h", { AssignSlot: { game, slot, user } }],
+      ["host_h", { AssignRole: { game, slot, role_key: "villager" } }],
+    ]),
+    ["host_h", { StartGame: { game, phase: "D01" } }],
+  ];
+  const commands = [];
+  for (const [principalUserId, command] of plan) {
+    commands.push(await sendCommand(principalUserId, command));
+  }
+  return { game, commands: commands.length, roster };
 }
 
 async function seedEarliestReachedTieGame({ game }) {
@@ -26013,6 +26306,9 @@ export function parseArgs(values) {
       case "--verify-earliest-reached-only":
         parsed.verifyEarliestReachedOnly = true;
         break;
+      case "--verify-host-decides-only":
+        parsed.verifyHostDecidesOnly = true;
+        break;
       case "--no-keepalive":
         parsed.noKeepalive = true;
         break;
@@ -26084,6 +26380,7 @@ Options:
   --verify                 Verify host and player browser entry before returning
   --verify-host-setup-only Verify only the host setup role URL browser proof
   --verify-earliest-reached-only Verify only the disposable EarliestReached role URL browser proof
+  --verify-host-decides-only     Verify only the disposable HostDecides role URL browser proof
   --no-keepalive           Stop started servers after seeding and writing artifacts
   --help                   Show this help
 `);

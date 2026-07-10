@@ -27,6 +27,10 @@ import {
   devTestGameEarliestReachedProofSummary,
 } from "./dev_test_game_earliest_reached_proof_contract.mjs";
 import {
+  assertDevTestGameHostDecidesProof,
+  devTestGameHostDecidesProofSummary,
+} from "./dev_test_game_host_decides_proof_contract.mjs";
+import {
   buildVanillizerRoleActionProofFixture,
   vanillizerRoleActionLaneId,
 } from "./dev_test_game_vanillizer_scenario.mjs";
@@ -897,6 +901,10 @@ test("dev test-game args expose reset reuse naming and verification controls", (
   );
 
   assert.throws(() => parseArgs(["--frontend-port", "nope"]), /positive integer/);
+  assert.equal(
+    parseArgs(["--verify-host-decides-only"]).verifyHostDecidesOnly,
+    true,
+  );
 });
 
 test("live projection lag proof config always overflows its burst", () => {
@@ -939,6 +947,48 @@ test("EarliestReached browser proof has a standalone artifact contract", () => {
   });
   assert.throws(
     () => assertDevTestGameEarliestReachedProof({ ...proof, ballotProofs: [] }),
+    /contract drifted/,
+  );
+});
+
+test("HostDecides browser proof has a standalone artifact contract", () => {
+  const proof = {
+    status: "passed",
+    pack: "epicmafia",
+    tieBreaker: "HostDecides",
+    sourceRoleUrls: { host: "http://127.0.0.1:5173/g/game-a/host" },
+    outcome: {
+      status: "Tie",
+      winner_slot: null,
+      tiebreak: "HostDecides",
+      tallies: { "slot-1": 2, "slot-2": 2 },
+    },
+    ballotProofs: [{}, {}, {}, {}],
+    promptId: "D01:pk:Tie",
+    promptActions: [
+      "resolve_host_prompt-D01-pk-Tie-slot-1",
+      "resolve_host_prompt-D01-pk-Tie-slot-2",
+    ],
+    selectedSlot: "slot-2",
+    selection: { commandStatus: { state: "ack" } },
+    resolvedPrompt: { status: "resolved", decision: { slot: "slot-2" } },
+    targetBeforeDecision: { actorAlive: true },
+    targetAfterDecision: { actorAlive: false },
+  };
+  assert.equal(assertDevTestGameHostDecidesProof(proof), proof);
+  assert.deepEqual(devTestGameHostDecidesProofSummary(proof), {
+    status: "passed",
+    pack: "epicmafia",
+    tieBreaker: "HostDecides",
+    promptId: "D01:pk:Tie",
+    contenderCount: 2,
+    selectedSlot: "slot-2",
+    targetAliveBefore: true,
+    targetAliveAfter: false,
+    hostRoleUrl: "http://127.0.0.1:5173/g/game-a/host",
+  });
+  assert.throws(
+    () => assertDevTestGameHostDecidesProof({ ...proof, promptActions: [] }),
     /contract drifted/,
   );
 });
@@ -1118,6 +1168,10 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
   assert.equal(
     packageJson.scripts["test:dev-test-game-live:local"],
     "node tools/dev_test_game_local_spine.mjs --script test:dev-test-game-live",
+  );
+  assert.equal(
+    packageJson.scripts["test:dev-test-game-host-decides-proof"],
+    "node tools/dev_test_game.mjs --name host-decides-proof --reset --verify-host-decides-only --no-keepalive",
   );
   assert.equal(
     packageJson.scripts[selectedOperatorHandoffReceiptAdminProofCommand],
@@ -1948,6 +2002,10 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
       kind: "node",
       script: "tools/dev_test_game_earliest_reached_proof_contract.mjs",
     },
+    {
+      kind: "node",
+      script: "tools/dev_test_game_host_decides_proof_contract.mjs",
+    },
     { kind: "node", script: "tools/dev_test_game_proof_contract.mjs" },
     { kind: "node", script: "tools/dev_test_game_core_loop_admin_proof.mjs" },
     ...recoveryReceiptProofPlanSteps(coreLoopRecoveryReceiptSelector),
@@ -1960,6 +2018,7 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
       changedInputs: [
         "target/dev-test-game/proof-run.json",
         "target/dev-test-game/earliest-reached-proof.json",
+        "target/dev-test-game/host-decides-proof.json",
         devTestGameHostSetupProofPath,
         devTestGameCoreLoopAdminProofPath,
         ...recoveryReceiptProofTargets(coreLoopRecoveryReceiptSelector),

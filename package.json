@@ -14,6 +14,7 @@
     "test:dev-test-game-contract": "node --test tools/dev_test_game.test.mjs tools/dev_test_game_media_response_guard.test.mjs tools/dev_test_game_admin_audit_handoff_contract.test.mjs",
     "test:dev-test-game-artifact-path-contract": "node --test tools/dev_test_game_artifact_path_contract.test.mjs",
     "test:dev-test-game-proof": "node tools/dev_test_game_proof_contract.mjs",
+    "test:dev-test-game-host-decides-proof": "node tools/dev_test_game.mjs --name host-decides-proof --reset --verify-host-decides-only --no-keepalive",
     "test:dev-test-game-readiness": "node tools/dev_test_game_release_readiness.mjs",
     "test:dev-test-game-private-channel-recovery-receipt": "node tools/dev_test_game_private_channel_recovery_receipt.mjs",
     "test:dev-test-game-replacement-action-recovery-receipt": "node tools/dev_test_game_replacement_action_recovery_receipt.mjs",

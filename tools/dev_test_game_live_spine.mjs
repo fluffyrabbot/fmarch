@@ -13,6 +13,9 @@ import {
 import {
   devTestGameEarliestReachedProofPath,
 } from "./dev_test_game_earliest_reached_proof_contract.mjs";
+import {
+  devTestGameHostDecidesProofPath,
+} from "./dev_test_game_host_decides_proof_contract.mjs";
 import { runSpinePlan } from "./dev_test_game_spine_runner.mjs";
 import {
   recoveryReceiptProofPlanSteps,
@@ -33,6 +36,7 @@ export const devTestGameCoreLiveSpinePlan = [
   { kind: "npm", script: "dev:test-game:prebuild" },
   { kind: "node", script: "tools/dev_test_game_live_proof.mjs" },
   { kind: "node", script: "tools/dev_test_game_earliest_reached_proof_contract.mjs" },
+  { kind: "node", script: "tools/dev_test_game_host_decides_proof_contract.mjs" },
   { kind: "node", script: "tools/dev_test_game_proof_contract.mjs" },
   { kind: "node", script: "tools/dev_test_game_core_loop_admin_proof.mjs" },
   ...recoveryReceiptProofPlanSteps(coreLoopRecoveryReceiptSelector),
@@ -43,6 +47,7 @@ export const devTestGameCoreLiveSpinePlan = [
     changedInputs: [
       devTestGameProofRunPath,
       devTestGameEarliestReachedProofPath,
+      devTestGameHostDecidesProofPath,
       devTestGameHostSetupProofPath,
       devTestGameCoreLoopAdminProofPath,
       ...recoveryReceiptProofTargets(coreLoopRecoveryReceiptSelector),

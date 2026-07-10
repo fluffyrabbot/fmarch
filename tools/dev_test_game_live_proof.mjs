@@ -124,6 +124,29 @@ assert.equal(
   session.verification?.earliestReachedTie?.ballotProofs?.length,
   4,
 );
+assert.equal(session.verification?.hostDecidesTie?.status, "passed");
+assert.equal(session.verification?.hostDecidesTie?.pack, "epicmafia");
+assert.equal(
+  session.verification?.hostDecidesTie?.tieBreaker,
+  "HostDecides",
+);
+assert.equal(session.verification?.hostDecidesTie?.outcome?.status, "Tie");
+assert.equal(
+  session.verification?.hostDecidesTie?.outcome?.tiebreak,
+  "HostDecides",
+);
+assert.equal(session.verification?.hostDecidesTie?.selectedSlot, "slot-2");
+assert.equal(
+  session.verification?.hostDecidesTie?.targetAfterDecision?.actorAlive,
+  false,
+);
+assert.deepEqual(
+  session.verification?.hostDecidesTie?.promptActions,
+  [
+    "resolve_host_prompt-D01-pk-Tie-slot-1",
+    "resolve_host_prompt-D01-pk-Tie-slot-2",
+  ],
+);
 assert.equal(proofRun.proof, "dev-test-game-proof-run");
 assert.equal(proofRun.status, "passed");
 assert.equal(proofRun.session.game, session.game);

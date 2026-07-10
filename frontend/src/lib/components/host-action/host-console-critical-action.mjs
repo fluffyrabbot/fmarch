@@ -179,6 +179,25 @@ function buildHostPromptActions(gameId, prompt) {
       }),
     );
   }
+  if (prompt.decisionKind === "select_slot") {
+    return hostPromptSlotChoices(prompt).map((slot) =>
+      freezeHostAction({
+        id: `resolve_host_prompt-${stableActionId(prompt.id)}-${stableActionId(slot)}`,
+        label: `Eliminate ${slot}`,
+        objectLabel: prompt.label,
+        outcomeLabel: `select ${slot} from the tied contenders`,
+        confirmationText:
+          `Eliminate ${slot} for ${prompt.label}: select ${slot} from the tied contenders for ${prompt.label}.`,
+        irreversible: true,
+        payload: {
+          kind: "resolve_host_prompt",
+          gameId,
+          promptId: prompt.id,
+          decision: { kind: "select_slot", slot },
+        },
+      }),
+    );
+  }
   return [
     freezeHostAction({
       id: `resolve_host_prompt-${stableActionId(prompt.id)}`,
@@ -192,13 +211,23 @@ function buildHostPromptActions(gameId, prompt) {
         kind: "resolve_host_prompt",
         gameId,
         promptId: prompt.id,
-        decision:
-          prompt.decisionKind === "select_slot"
-            ? { kind: "select_slot", slot: prompt.subjectSlot }
-            : { kind: "acknowledge" },
+        decision: { kind: "acknowledge" },
       },
     }),
   ];
+}
+
+function hostPromptSlotChoices(prompt) {
+  const contenders = Array.isArray(prompt?.metadata?.contenders)
+    ? prompt.metadata.contenders
+        .map((slot) => String(slot).trim())
+        .filter((slot) => slot !== "")
+    : [];
+  if (contenders.length > 0) {
+    return [...new Set(contenders)];
+  }
+  const subjectSlot = String(prompt?.subjectSlot ?? "").trim();
+  return subjectSlot === "" ? [] : [subjectSlot];
 }
 
 const noMajorityRevotePolicyActions = Object.freeze([

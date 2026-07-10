@@ -1045,5 +1045,12 @@ function decisionKindForPrompt(row) {
   if (row?.decision_kind === "select_slot" || row?.decisionKind === "select_slot") {
     return "select_slot";
   }
+  if (
+    row?.reason === "host_decides_tie" &&
+    Array.isArray(row?.metadata?.contenders) &&
+    row.metadata.contenders.length > 0
+  ) {
+    return "select_slot";
+  }
   return "acknowledge";
 }

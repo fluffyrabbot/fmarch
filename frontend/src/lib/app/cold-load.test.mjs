@@ -725,6 +725,43 @@ test("host cold-load maps durable prompt rows and votecount for moderator contro
   ]);
 });
 
+test("host prompt cold-load infers slot selection from HostDecides contenders", () => {
+  assert.deepEqual(
+    normalizeHostPrompts(
+      [
+        {
+          prompt_id: "D01:pk:Tie",
+          kind: "pk",
+          reason: "host_decides_tie",
+          status: "pending",
+          phase_id: "D01",
+          subject_slot: null,
+          metadata: {
+            policy: "pk_host_decides_tie",
+            contenders: ["slot-2", "slot-4"],
+          },
+        },
+      ],
+      FALLBACK.hostPrompts,
+    ),
+    [
+      {
+        id: "D01:pk:Tie",
+        label: "pk",
+        value: "host_decides_tie",
+        status: "pending",
+        phaseId: "D01",
+        subjectSlot: null,
+        decisionKind: "select_slot",
+        metadata: {
+          policy: "pk_host_decides_tie",
+          contenders: ["slot-2", "slot-4"],
+        },
+      },
+    ],
+  );
+});
+
 test("host prompt normalization falls back when payload is not an array", () => {
   assert.equal(normalizeHostPrompts(null, FALLBACK.hostPrompts), FALLBACK.hostPrompts);
 });
