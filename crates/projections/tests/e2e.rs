@@ -21,6 +21,7 @@ use projections::{
     public_profile_by_handle, rebuild, rebuild_discussion_stream, rebuild_profile_stream,
     slot_effects, slot_state, votecount,
 };
+use sqlx::postgres::PgPoolOptions;
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -1857,4 +1858,62 @@ async fn profile_projection_keeps_owner_state_private_and_rebuildable(pool: sqlx
             .visibility,
         "members"
     );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn completed_game_export_import_rebuilds_and_audits_in_an_isolated_database(
+    pool: sqlx::PgPool,
+) {
+    let game = Uuid::new_v4();
+    append_and_project(
+        &pool,
+        game,
+        &[
+            EventInput::new(
+                "GameCreated",
+                1,
+                serde_json::json!({ "host": "export_host", "pack": "mafiascum" }),
+                ActorId::User("export_host".into()),
+                1,
+            ),
+            EventInput::new("GameCompleted", 1, serde_json::json!({}), ActorId::Host, 2),
+        ],
+    )
+    .await
+    .unwrap();
+    let export = projections::export_completed_game(&pool, game)
+        .await
+        .unwrap();
+    let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL for target import");
+    let (prefix, _) = database_url.rsplit_once('/').expect("database URL path");
+    let admin = PgPoolOptions::new()
+        .max_connections(1)
+        .connect(&format!("{prefix}/postgres"))
+        .await
+        .unwrap();
+    let target_name = format!("fmarch_projection_import_{}", Uuid::new_v4().simple());
+    sqlx::query(&format!("CREATE DATABASE \"{target_name}\""))
+        .execute(&admin)
+        .await
+        .unwrap();
+    let target = PgPoolOptions::new()
+        .max_connections(2)
+        .connect(&format!("{prefix}/{target_name}"))
+        .await
+        .unwrap();
+    sqlx::migrate!("./migrations").run(&target).await.unwrap();
+    let audit = projections::import_completed_game_export(&target, &export)
+        .await
+        .unwrap();
+    assert!(audit.ok);
+    drop(target);
+    sqlx::query("SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1")
+        .bind(&target_name)
+        .execute(&admin)
+        .await
+        .unwrap();
+    sqlx::query(&format!("DROP DATABASE \"{target_name}\""))
+        .execute(&admin)
+        .await
+        .unwrap();
 }
