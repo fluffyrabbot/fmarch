@@ -86,6 +86,8 @@
     "test:dev-test-game-game-index:local": "node tools/dev_test_game_local_spine.mjs --script test:dev-test-game-game-index",
     "test:dev-test-game-discussion": "node tools/discussion_role_proof.mjs",
     "test:dev-test-game-discussion:local": "node tools/dev_test_game_local_spine.mjs --script test:dev-test-game-discussion",
+    "test:dev-test-game-profile": "node tools/profile_role_proof.mjs",
+    "test:dev-test-game-profile:local": "node tools/dev_test_game_local_spine.mjs --script test:dev-test-game-profile",
     "test:dev-test-game-identity:hosted-evidence": "node tools/dev_test_game_hosted_identity_evidence_spine.mjs",
     "test:dev-test-game-backup-restore": "node tools/dev_test_game_backup_restore_spine.mjs",
     "test:dev-test-game-core-live": "node tools/dev_test_game_live_spine.mjs --core",

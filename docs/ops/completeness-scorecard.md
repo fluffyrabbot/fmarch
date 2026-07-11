@@ -17,7 +17,7 @@ count is treated as product progress.
 
 | Execution class | Complete | Partial | Open | Blocked | Deferred | Total |
 |---|---:|---:|---:|---:|---:|---:|
-| code | 25 | 1 | 2 | 0 | 0 | 28 |
+| code | 26 | 1 | 1 | 0 | 0 | 28 |
 | external-evidence | 0 | 0 | 0 | 6 | 0 | 6 |
 | human | 0 | 0 | 1 | 1 | 0 | 2 |
 | optional | 0 | 0 | 0 | 0 | 1 | 1 |
@@ -28,23 +28,23 @@ Overall release closure complete: **no**.
 
 ## Next buildable coding slice
 
-### User profiles `product.community.profiles`
+### Portable completed-game export `product.archive.completed-game-export`
 
-Build the first authorization-safe profile vertical: append profile-change events, project a public-safe profile view plus private editor state, add account-backed view/edit routes with explicit privacy controls, and prove anonymous view, owner edit, reload, and denied cross-account editing through a seeded browser lane.
+Build a portable completed-game export vertical: define a versioned export manifest with events, referenced projection and media metadata, checksum, and deterministic import/audit; expose a host or operator route; and prove export, validation, import, reload, and tamper rejection through a seeded browser or CLI lane.
 
-Owned paths: `crates/projections/`, `crates/api/`, `crates/wire/`, `frontend/src/routes/`, `tools/`, `docs/arch/02-event-sourcing.md`.
+Owned paths: `crates/eventstore/`, `crates/projections/`, `crates/api/`, `crates/wire/`, `frontend/src/routes/`, `tools/`, `docs/arch/02-event-sourcing.md`.
 
 Proof:
 
-- `DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p projections -p api profile -- --test-threads=1`
+- `DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p eventstore -p projections -p api export -- --test-threads=1`
 - `npm run test:frontend-contract`
 - `npm run test:completeness-scorecard`
 
 Explicit non-claims:
 
-- No direct messages, follower graph, search, ranking, or recommendation claim.
-- No hosted privacy, moderation, retention, or legal-policy claim.
-- No release or production-readiness promotion from local profile proof.
+- No hosted archive storage, legal retention, or production restore claim.
+- No public search, discovery, or long-term compatibility guarantee beyond the validated local manifest.
+- No release or production-readiness promotion from local export proof.
 
 ## Locally proven foundation
 
@@ -100,7 +100,7 @@ Explicit non-claims:
 |---|---|---|---|---|---|
 | complete | Public game index<br>`product.community.game-index` | `product.game.core-loop`<br>`product.identity.account-login-invites` | The public board lists capability-safe active and completed games from a real projection with pagination and browser proof. | Complete. | source: `frontend/src/routes/+page.svelte`<br>source: `crates/projections/migrations/0040_game_index.sql`<br>source: `docs/arch/02-event-sourcing.md`<br>command: `npm run test:dev-test-game-game-index:local`<br>artifact: `target/game-index-role-proof/game-index-proof.json`<br>The root board reads a durable public projection of active and completed games, pages by a stable keyset cursor, keeps setup and private lifecycle data out of the query, and is proven through the scratch-Postgres Chromium lane. |
 | complete | Non-game discussion areas<br>`product.community.discussions` | `product.community.game-index`<br>`product.identity.registration` | Users can browse, create, post in, and moderate capability-scoped non-game discussions through real routes and projections. | Complete. | source: `crates/projections/migrations/0041_discussion.sql`<br>source: `frontend/src/routes/discussions/[slug]/+page.svelte`<br>source: `docs/arch/02-event-sourcing.md`<br>command: `npm run test:dev-test-game-discussion:local`<br>artifact: `target/discussion-role-proof/discussion-proof.json`<br>Public non-game discussion areas use durable append-only area/topic streams, session-backed topic/post routes, GlobalMod moderation transitions, and a seeded Chromium proof. |
-| open | User profiles<br>`product.community.profiles` | `product.identity.registration` | A user can view and edit an authorization-safe profile, with durable projection state and browser proof. | Remaining: Design profile events/projections, routes, privacy controls, editing, and media integration. | source: `docs/arch/08-roadmap.md`<br>There is no public profile route or profile-editing lifecycle. |
+| complete | User profiles<br>`product.community.profiles` | `product.identity.registration` | A user can view and edit an authorization-safe profile, with durable projection state and browser proof. | Complete. | source: `crates/projections/migrations/0042_profile.sql`<br>source: `frontend/src/routes/u/[handle]/+page.svelte`<br>source: `docs/arch/02-event-sourcing.md`<br>command: `npm run test:dev-test-game-profile:local`<br>artifact: `target/profile-role-proof/profile-proof.json`<br>Profiles use durable public and owner-only projections, enabled-account editing, explicit public or members-only visibility, and a seeded Chromium proof. |
 
 ## Archival and export
 

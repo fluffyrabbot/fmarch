@@ -103,6 +103,9 @@ export function sessionContextFromRequest(request) {
   if (/^\/discussions(?:\/.*)?$/.test(pathname)) {
     return Object.freeze({ kind: "community" });
   }
+  if (/^\/u\/[^/]+(?:\/.*)?$/.test(pathname) || /^\/profile\/edit\/?$/.test(pathname)) {
+    return Object.freeze({ kind: "profile" });
+  }
   if (/^\/auth\/(?:account\/security|logout)\/?$/.test(pathname)) {
     return Object.freeze({ kind: "account" });
   }

@@ -37,9 +37,9 @@ use wire::{
     HostConsolePhaseStateDelta, HostConsoleSlotOccupancyDelta, HostConsoleStateDelta,
     HostConsoleThreadPostDelta, HostPhaseControl, HostPromptDelta, HostPromptsDelta,
     PlayerInvestigationResult, PlayerInvestigationResultsDelta, PlayerNotification,
-    PlayerNotificationsDelta, ProjectionDelta, RejectCode, RejectMsg, ServerEnvelope, ServerMsg,
-    ThreadPage, ThreadPost, ThreadPostsDelta, VoteCountClearedDelta, VoteCountDelta,
-    PROTOCOL_VERSION,
+    PlayerNotificationsDelta, ProfileEditor, ProjectionDelta, PublicProfile, RejectCode, RejectMsg,
+    ServerEnvelope, ServerMsg, ThreadPage, ThreadPost, ThreadPostsDelta, VoteCountClearedDelta,
+    VoteCountDelta, PROTOCOL_VERSION,
 };
 
 #[derive(Clone)]
@@ -233,6 +233,13 @@ pub fn router_with_state(state: ApiState) -> Router {
         .route(
             "/discussions/topics/{topic}/moderation",
             post(moderate_discussion_topic),
+        )
+        .route("/profiles", post(create_profile))
+        .route("/profiles/me/editor", get(current_profile_editor))
+        .route("/profiles/{handle}/editor", get(profile_editor))
+        .route(
+            "/profiles/{handle}",
+            get(public_profile).put(update_profile),
         )
         .route("/games/{game}/votecount", get(votecount))
         .route("/games/{game}/day-vote-outcomes", get(day_vote_outcomes))
@@ -4447,6 +4454,222 @@ fn discussion_not_found(resource: &str) -> ApiError {
 }
 
 fn discussion_conflict(message: &str) -> ApiError {
+    ApiError::Reject {
+        status: StatusCode::CONFLICT,
+        error: RejectCode::StreamConflict,
+        message: message.to_string(),
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct CreateProfileRequest {
+    handle: String,
+    display_name: String,
+    bio: String,
+    visibility: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct UpdateProfileRequest {
+    display_name: String,
+    bio: String,
+    visibility: String,
+}
+
+async fn public_profile(
+    State(state): State<ApiState>,
+    Path(handle): Path<String>,
+) -> Result<Json<PublicProfile>, ApiError> {
+    let profile = projections::public_profile_by_handle(&state.pool, handle.as_str())
+        .await?
+        .ok_or_else(|| profile_not_found())?;
+    Ok(Json(PublicProfile::from(profile)))
+}
+
+async fn current_profile_editor(
+    State(state): State<ApiState>,
+    headers: HeaderMap,
+) -> Result<Json<ProfileEditor>, ApiError> {
+    let principal_user_id = authenticated_profile_principal(&state, &headers).await?;
+    let profile = projections::profile_editor_by_principal(&state.pool, principal_user_id.as_str())
+        .await?
+        .ok_or_else(|| profile_not_found())?;
+    Ok(Json(ProfileEditor::from(profile)))
+}
+
+async fn profile_editor(
+    State(state): State<ApiState>,
+    Path(handle): Path<String>,
+    headers: HeaderMap,
+) -> Result<Json<ProfileEditor>, ApiError> {
+    let principal_user_id = authenticated_profile_principal(&state, &headers).await?;
+    let profile = projections::profile_editor_by_handle(&state.pool, handle.as_str())
+        .await?
+        .ok_or_else(|| profile_not_found())?;
+    require_profile_owner(&profile, principal_user_id.as_str())?;
+    Ok(Json(ProfileEditor::from(profile)))
+}
+
+async fn create_profile(
+    State(state): State<ApiState>,
+    headers: HeaderMap,
+    Json(request): Json<CreateProfileRequest>,
+) -> Result<(StatusCode, Json<ProfileEditor>), ApiError> {
+    let principal_user_id = authenticated_profile_principal(&state, &headers).await?;
+    if projections::profile_editor_by_principal(&state.pool, principal_user_id.as_str())
+        .await?
+        .is_some()
+    {
+        return Err(profile_conflict(
+            "this account already has a profile; edit its current profile",
+        ));
+    }
+    let handle = validate_profile_handle(request.handle.as_str())?;
+    if projections::profile_editor_by_handle(&state.pool, handle.as_str())
+        .await?
+        .is_some()
+    {
+        return Err(profile_conflict(
+            "profile handle is already in use; choose another handle",
+        ));
+    }
+    let display_name =
+        validate_profile_text(request.display_name.as_str(), "profile display name", 80)?;
+    let bio = validate_profile_text(request.bio.as_str(), "profile bio", 1_000)?;
+    let visibility = validate_profile_visibility(request.visibility.as_str())?;
+    let profile_id = Uuid::new_v4();
+    projections::append_profile_and_project(
+        &state.pool,
+        profile_id,
+        &[EventInput::new(
+            "ProfileCreated",
+            1,
+            serde_json::json!({
+                "principal_user_id": principal_user_id,
+                "handle": handle,
+                "display_name": display_name,
+                "bio": bio,
+                "visibility": visibility,
+            }),
+            ActorId::User(principal_user_id.clone()),
+            unix_now_seconds(),
+        )],
+    )
+    .await?;
+    let profile = projections::profile_editor_by_principal(&state.pool, principal_user_id.as_str())
+        .await?
+        .expect("projected profile editor is readable");
+    Ok((StatusCode::CREATED, Json(ProfileEditor::from(profile))))
+}
+
+async fn update_profile(
+    State(state): State<ApiState>,
+    Path(handle): Path<String>,
+    headers: HeaderMap,
+    Json(request): Json<UpdateProfileRequest>,
+) -> Result<Json<ProfileEditor>, ApiError> {
+    let principal_user_id = authenticated_profile_principal(&state, &headers).await?;
+    let profile = projections::profile_editor_by_handle(&state.pool, handle.as_str())
+        .await?
+        .ok_or_else(|| profile_not_found())?;
+    require_profile_owner(&profile, principal_user_id.as_str())?;
+    let display_name =
+        validate_profile_text(request.display_name.as_str(), "profile display name", 80)?;
+    let bio = validate_profile_text(request.bio.as_str(), "profile bio", 1_000)?;
+    let visibility = validate_profile_visibility(request.visibility.as_str())?;
+    projections::append_profile_and_project(
+        &state.pool,
+        profile.profile_id,
+        &[EventInput::new(
+            "ProfileUpdated",
+            1,
+            serde_json::json!({
+                "display_name": display_name,
+                "bio": bio,
+                "visibility": visibility,
+            }),
+            ActorId::User(principal_user_id),
+            unix_now_seconds(),
+        )],
+    )
+    .await?;
+    let profile = projections::profile_editor_by_handle(&state.pool, handle.as_str())
+        .await?
+        .expect("updated profile editor is readable");
+    Ok(Json(ProfileEditor::from(profile)))
+}
+
+async fn authenticated_profile_principal(
+    state: &ApiState,
+    headers: &HeaderMap,
+) -> Result<String, ApiError> {
+    let token = bearer_token(headers).ok_or_else(unauthorized_account)?;
+    require_active_enabled_account(state, token).await
+}
+
+fn require_profile_owner(
+    profile: &projections::ProfileEditorRow,
+    principal_user_id: &str,
+) -> Result<(), ApiError> {
+    if profile.principal_user_id == principal_user_id {
+        return Ok(());
+    }
+    Err(ApiError::Reject {
+        status: StatusCode::FORBIDDEN,
+        error: RejectCode::NotAuthorized,
+        message: "profile editing requires the owning account".to_string(),
+    })
+}
+
+fn validate_profile_handle(value: &str) -> Result<String, ApiError> {
+    let handle = value.trim().to_ascii_lowercase();
+    if !(3..=32).contains(&handle.len())
+        || !handle
+            .bytes()
+            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'_')
+    {
+        return Err(ApiError::Reject {
+            status: StatusCode::BAD_REQUEST,
+            error: RejectCode::Internal,
+            message: "profile handle must be 3 to 32 lowercase letters, digits, or underscores"
+                .to_string(),
+        });
+    }
+    Ok(handle)
+}
+
+fn validate_profile_text(value: &str, label: &str, max_len: usize) -> Result<String, ApiError> {
+    let text = value.trim();
+    if text.is_empty() || text.len() > max_len {
+        return Err(ApiError::Reject {
+            status: StatusCode::BAD_REQUEST,
+            error: RejectCode::Internal,
+            message: format!("{label} must contain 1 to {max_len} bytes"),
+        });
+    }
+    Ok(text.to_string())
+}
+
+fn validate_profile_visibility(value: &str) -> Result<String, ApiError> {
+    match value.trim() {
+        "public" | "members" => Ok(value.trim().to_string()),
+        _ => Err(ApiError::Reject {
+            status: StatusCode::BAD_REQUEST,
+            error: RejectCode::Internal,
+            message: "profile visibility must be public or members".to_string(),
+        }),
+    }
+}
+
+fn profile_not_found() -> ApiError {
+    ApiError::Reject {
+        status: StatusCode::NOT_FOUND,
+        error: RejectCode::NotAuthorized,
+        message: "profile was not found or is not public".to_string(),
+    }
+}
+
+fn profile_conflict(message: &str) -> ApiError {
     ApiError::Reject {
         status: StatusCode::CONFLICT,
         error: RejectCode::StreamConflict,

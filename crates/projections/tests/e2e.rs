@@ -15,10 +15,11 @@ use domain::{resolve, InnerEvent, ResolutionApplied, ResolutionInput};
 use eventstore::{ActorId, EventInput};
 use projections::{
     action_counters, action_grants, append_and_project, append_discussion_and_project,
-    audit_rebuild, day_vote_outcomes, discussion_area_by_slug, discussion_posts,
-    discussion_topic_by_id, discussion_topics, game_index, host_phase_controls, host_prompts,
-    phase_state, player_notifications, rebuild, rebuild_discussion_stream, slot_effects,
-    slot_state, votecount,
+    append_profile_and_project, audit_rebuild, day_vote_outcomes, discussion_area_by_slug,
+    discussion_posts, discussion_topic_by_id, discussion_topics, game_index, host_phase_controls,
+    host_prompts, phase_state, player_notifications, profile_editor_by_handle,
+    public_profile_by_handle, rebuild, rebuild_discussion_stream, rebuild_profile_stream,
+    slot_effects, slot_state, votecount,
 };
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -1800,4 +1801,60 @@ async fn discussion_projection_pages_visible_topics_and_hides_moderated_rows(poo
         .await
         .unwrap();
     assert_eq!(rebuilt_posts.posts[0].body, "First public post");
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn profile_projection_keeps_owner_state_private_and_rebuildable(pool: sqlx::PgPool) {
+    let profile = Uuid::from_u128(201);
+    append_profile_and_project(
+        &pool,
+        profile,
+        &[
+            EventInput::new(
+                "ProfileCreated",
+                1,
+                serde_json::json!({
+                    "principal_user_id": "owner_a",
+                    "handle": "owner_a",
+                    "display_name": "Owner A",
+                    "bio": "Opening profile",
+                    "visibility": "public"
+                }),
+                ActorId::User("owner_a".into()),
+                1,
+            ),
+            EventInput::new(
+                "ProfileUpdated",
+                1,
+                serde_json::json!({
+                    "display_name": "Owner A",
+                    "bio": "Updated profile",
+                    "visibility": "members"
+                }),
+                ActorId::User("owner_a".into()),
+                2,
+            ),
+        ],
+    )
+    .await
+    .unwrap();
+    assert!(public_profile_by_handle(&pool, "owner_a")
+        .await
+        .unwrap()
+        .is_none());
+    let editor = profile_editor_by_handle(&pool, "owner_a")
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(editor.principal_user_id, "owner_a");
+    assert_eq!(editor.bio, "Updated profile");
+    rebuild_profile_stream(&pool, profile).await.unwrap();
+    assert_eq!(
+        profile_editor_by_handle(&pool, "owner_a")
+            .await
+            .unwrap()
+            .unwrap()
+            .visibility,
+        "members"
+    );
 }

@@ -491,24 +491,18 @@
       "order": 30,
       "title": "User profiles",
       "execution_class": "code",
-      "status": "open",
-      "summary": "There is no public profile route or profile-editing lifecycle.",
+      "status": "complete",
+      "summary": "Profiles use durable public and owner-only projections, enabled-account editing, explicit public or members-only visibility, and a seeded Chromium proof.",
       "complete_when": ["A user can view and edit an authorization-safe profile, with durable projection state and browser proof."],
       "depends_on": ["product.identity.registration"],
       "evidence": [
-        { "kind": "source", "value": "docs/arch/08-roadmap.md" }
+        { "kind": "source", "value": "crates/projections/migrations/0042_profile.sql" },
+        { "kind": "source", "value": "frontend/src/routes/u/[handle]/+page.svelte" },
+        { "kind": "source", "value": "docs/arch/02-event-sourcing.md" },
+        { "kind": "command", "value": "npm run test:dev-test-game-profile:local" },
+        { "kind": "artifact", "value": "target/profile-role-proof/profile-proof.json" }
       ],
-      "remaining": ["Design profile events/projections, routes, privacy controls, editing, and media integration." ],
-      "recommended_slice": {
-        "objective": "Build the first authorization-safe profile vertical: append profile-change events, project a public-safe profile view plus private editor state, add account-backed view/edit routes with explicit privacy controls, and prove anonymous view, owner edit, reload, and denied cross-account editing through a seeded browser lane.",
-        "paths": ["crates/projections/", "crates/api/", "crates/wire/", "frontend/src/routes/", "tools/", "docs/arch/02-event-sourcing.md"],
-        "proof_commands": ["DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p projections -p api profile -- --test-threads=1", "npm run test:frontend-contract", "npm run test:completeness-scorecard"],
-        "non_claims": [
-          "No direct messages, follower graph, search, ranking, or recommendation claim.",
-          "No hosted privacy, moderation, retention, or legal-policy claim.",
-          "No release or production-readiness promotion from local profile proof."
-        ]
-      }
+      "remaining": []
     },
     {
       "id": "product.archive.completed-game-export",
@@ -524,7 +518,17 @@
         { "kind": "source", "value": "docs/arch/02-event-sourcing.md" },
         { "kind": "source", "value": "docs/arch/08-roadmap.md" }
       ],
-      "remaining": ["Specify and implement the portable event-stream export format, CLI/API, checksum, and round-trip audit." ]
+      "remaining": ["Specify and implement the portable event-stream export format, CLI/API, checksum, and round-trip audit." ],
+      "recommended_slice": {
+        "objective": "Build a portable completed-game export vertical: define a versioned export manifest with events, referenced projection and media metadata, checksum, and deterministic import/audit; expose a host or operator route; and prove export, validation, import, reload, and tamper rejection through a seeded browser or CLI lane.",
+        "paths": ["crates/eventstore/", "crates/projections/", "crates/api/", "crates/wire/", "frontend/src/routes/", "tools/", "docs/arch/02-event-sourcing.md"],
+        "proof_commands": ["DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p eventstore -p projections -p api export -- --test-threads=1", "npm run test:frontend-contract", "npm run test:completeness-scorecard"],
+        "non_claims": [
+          "No hosted archive storage, legal retention, or production restore claim.",
+          "No public search, discovery, or long-term compatibility guarantee beyond the validated local manifest.",
+          "No release or production-readiness promotion from local export proof."
+        ]
+      }
     },
     {
       "id": "hosted-production-identity",

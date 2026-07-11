@@ -13,7 +13,7 @@ import {
   validateRegistry,
 } from "./completeness_scorecard.mjs";
 
-test("real completion registry validates completed community slices and selects profiles", async () => {
+test("real completion registry validates completed community slices and selects completed-game export", async () => {
   const registry = await loadCompletionRegistry();
   await validateRegistry(registry);
   const summary = summarizeRegistry(registry);
@@ -29,11 +29,11 @@ test("real completion registry validates completed community slices and selects 
   assert.equal(summary.platformComplete, false);
   assert.equal(summary.releaseComplete, false);
   const nextItem = nextBuildableCodeItem(registry);
-  assert.equal(nextItem?.id, "product.community.profiles");
+  assert.equal(nextItem?.id, "product.archive.completed-game-export");
   assert.deepEqual(nextItem?.remaining, [
-    "Design profile events/projections, routes, privacy controls, editing, and media integration.",
+    "Specify and implement the portable event-stream export format, CLI/API, checksum, and round-trip audit.",
   ]);
-  assert.match(nextItem?.recommended_slice?.objective ?? "", /profile vertical/);
+  assert.match(nextItem?.recommended_slice?.objective ?? "", /portable completed-game export/);
 });
 
 test("generated scorecard exactly matches the canonical registry", async () => {
@@ -76,6 +76,11 @@ test("registry validation rejects dependency cycles", async () => {
   );
   discussions.status = "open";
   discussions.remaining = ["cyclic test dependency"];
+  const profiles = cyclic.items.find(
+    (item) => item.id === "product.community.profiles",
+  );
+  profiles.status = "open";
+  profiles.remaining = ["cyclic test dependency"];
   const registration = cyclic.items.find(
     (item) => item.id === "product.identity.registration",
   );
@@ -121,7 +126,7 @@ test("registry validation rejects illegal completion and blocked states", async 
   );
 
   const whitespaceRemaining = structuredClone(registry);
-  whitespaceRemaining.items.find((item) => item.id === "product.community.profiles").remaining = ["   "];
+  whitespaceRemaining.items.find((item) => item.id === "product.archive.completed-game-export").remaining = ["   "];
   await assert.rejects(
     validateRegistry(whitespaceRemaining, { verifySourcePaths: false }),
     /remaining must contain nonempty strings/,
@@ -129,7 +134,7 @@ test("registry validation rejects illegal completion and blocked states", async 
 
   const completeRecommendedSlice = structuredClone(registry);
   completeRecommendedSlice.items[0].recommended_slice = structuredClone(
-    registry.items.find((item) => item.id === "product.community.profiles")
+    registry.items.find((item) => item.id === "product.archive.completed-game-export")
       .recommended_slice,
   );
   await assert.rejects(

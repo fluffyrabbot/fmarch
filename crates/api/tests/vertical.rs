@@ -11,9 +11,9 @@ use tower::ServiceExt;
 use uuid::Uuid;
 use wire::{
     ClientEnvelope, ClientMsg, Command, CommandMsg, DiscussionThreadPage, DiscussionTopicPage,
-    GameIndexPage, PlayerInvestigationResult, PlayerNotification, ProjectionDelta, RejectCode,
-    RejectMsg, ServerEnvelope, ServerMsg, SlotLifecycle, SubmitPostMedia, ThreadPage, VoteTarget,
-    PROTOCOL_VERSION,
+    GameIndexPage, PlayerInvestigationResult, PlayerNotification, ProfileEditor, ProjectionDelta,
+    PublicProfile, RejectCode, RejectMsg, ServerEnvelope, ServerMsg, SlotLifecycle,
+    SubmitPostMedia, ThreadPage, VoteTarget, PROTOCOL_VERSION,
 };
 
 fn router(pool: sqlx::PgPool) -> axum::Router {
@@ -4482,6 +4482,91 @@ async fn discussion_api_requires_sessions_pages_public_topics_and_enforces_globa
     assert_eq!(thread.topic.status, "locked");
     assert_eq!(thread.posts.len(), 1);
     assert_eq!(thread.posts[0].body, "Second opening");
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn profile_api_uses_enabled_accounts_and_denies_cross_account_editing(pool: sqlx::PgPool) {
+    let app = router_with_dev_auth(pool);
+    let (owner_token, owner_principal) =
+        create_media_upload_account_session(&app, "profile-owner").await;
+    let (other_token, _) = create_media_upload_account_session(&app, "profile-other").await;
+    let created = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/profiles")
+                .header("authorization", format!("Bearer {owner_token}"))
+                .header("content-type", "application/json")
+                .body(Body::from(r#"{"handle":"owner_profile","display_name":"Owner Profile","bio":"Public bio","visibility":"public"}"#))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(created.status(), StatusCode::CREATED);
+    let editor: ProfileEditor =
+        serde_json::from_slice(&to_bytes(created.into_body(), usize::MAX).await.unwrap()).unwrap();
+    assert_eq!(editor.handle, "owner_profile");
+
+    let public = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/profiles/owner_profile")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(public.status(), StatusCode::OK);
+    let bytes = to_bytes(public.into_body(), usize::MAX).await.unwrap();
+    let public: PublicProfile = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(public.display_name, "Owner Profile");
+    assert!(!String::from_utf8_lossy(&bytes).contains(owner_principal.as_str()));
+
+    let denied = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("PUT")
+                .uri("/profiles/owner_profile")
+                .header("authorization", format!("Bearer {other_token}"))
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    r#"{"display_name":"Takeover","bio":"No","visibility":"public"}"#,
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(denied.status(), StatusCode::FORBIDDEN);
+
+    let updated = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("PUT")
+                .uri("/profiles/owner_profile")
+                .header("authorization", format!("Bearer {owner_token}"))
+                .header("content-type", "application/json")
+                .body(Body::from(r#"{"display_name":"Owner Profile","bio":"Private bio","visibility":"members"}"#))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(updated.status(), StatusCode::OK);
+    let hidden = app
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/profiles/owner_profile")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(hidden.status(), StatusCode::NOT_FOUND);
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]

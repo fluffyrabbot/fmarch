@@ -472,6 +472,31 @@ pub struct DiscussionPostPage {
     pub next_before_seq: Option<i64>,
 }
 
+/// Capability-safe public profile data. The owning principal is intentionally
+/// absent from this row and its wire representation.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PublicProfileRow {
+    pub profile_id: Uuid,
+    pub handle: String,
+    pub display_name: String,
+    pub bio: String,
+    pub visibility: String,
+    pub updated_seq: i64,
+}
+
+/// Owner-only profile editor state. This is never returned by public profile
+/// reads and is authorization-checked at the API boundary.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProfileEditorRow {
+    pub profile_id: Uuid,
+    pub principal_user_id: String,
+    pub handle: String,
+    pub display_name: String,
+    pub bio: String,
+    pub visibility: String,
+    pub updated_seq: i64,
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum ProjectionError {
     #[error(transparent)]
@@ -1672,6 +1697,114 @@ async fn fold_discussion_event(
             .bind(event.seq)
             .execute(&mut **tx)
             .await?;
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+/// Append a profile stream and synchronously fold its public and owner-only
+/// read models in the same transaction.
+pub async fn append_profile_and_project(
+    pool: &PgPool,
+    stream_id: Uuid,
+    events: &[EventInput],
+) -> Result<Vec<StoredEvent>, ProjectionError> {
+    let mut tx = pool.begin().await?;
+    let stored = append_profile_and_project_in_tx(&mut tx, stream_id, events).await?;
+    tx.commit().await?;
+    Ok(stored)
+}
+
+pub async fn append_profile_and_project_in_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    stream_id: Uuid,
+    events: &[EventInput],
+) -> Result<Vec<StoredEvent>, ProjectionError> {
+    let stored = append_in_tx(tx, stream_id, events).await?;
+    for event in &stored {
+        fold_profile_event(tx, stream_id, event).await?;
+    }
+    Ok(stored)
+}
+
+/// Rebuild one profile stream from its append-only events.
+pub async fn rebuild_profile_stream(pool: &PgPool, stream_id: Uuid) -> Result<(), ProjectionError> {
+    let events = eventstore::load_stream(pool, stream_id).await?;
+    if !events.iter().any(|event| event.kind == "ProfileCreated") {
+        return Ok(());
+    }
+    let mut tx = pool.begin().await?;
+    sqlx::query("DELETE FROM profile_editor WHERE profile_id = $1")
+        .bind(stream_id)
+        .execute(&mut *tx)
+        .await?;
+    sqlx::query("DELETE FROM profile_public WHERE profile_id = $1")
+        .bind(stream_id)
+        .execute(&mut *tx)
+        .await?;
+    for event in &events {
+        fold_profile_event(&mut tx, stream_id, event).await?;
+    }
+    tx.commit().await?;
+    Ok(())
+}
+
+async fn fold_profile_event(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    stream_id: Uuid,
+    event: &StoredEvent,
+) -> Result<(), ProjectionError> {
+    match event.kind.as_str() {
+        "ProfileCreated" => {
+            let principal_user_id = str_field(&event.payload, "principal_user_id", &event.kind)?;
+            let handle = str_field(&event.payload, "handle", &event.kind)?;
+            let display_name = str_field(&event.payload, "display_name", &event.kind)?;
+            let bio = str_field(&event.payload, "bio", &event.kind)?;
+            let visibility = str_field(&event.payload, "visibility", &event.kind)?;
+            sqlx::query(
+                r#"
+                INSERT INTO profile_public
+                    (profile_id, handle, display_name, bio, visibility, created_seq, updated_seq)
+                VALUES ($1, $2, $3, $4, $5, $6, $6)
+                "#,
+            )
+            .bind(stream_id)
+            .bind(&handle)
+            .bind(display_name)
+            .bind(bio)
+            .bind(visibility)
+            .bind(event.seq)
+            .execute(&mut **tx)
+            .await?;
+            sqlx::query(
+                "INSERT INTO profile_editor (profile_id, principal_user_id, last_edit_seq) VALUES ($1, $2, $3)",
+            )
+            .bind(stream_id)
+            .bind(principal_user_id)
+            .bind(event.seq)
+            .execute(&mut **tx)
+            .await?;
+        }
+        "ProfileUpdated" => {
+            let display_name = str_field(&event.payload, "display_name", &event.kind)?;
+            let bio = str_field(&event.payload, "bio", &event.kind)?;
+            let visibility = str_field(&event.payload, "visibility", &event.kind)?;
+            sqlx::query(
+                "UPDATE profile_public SET display_name = $2, bio = $3, visibility = $4, updated_seq = $5 WHERE profile_id = $1",
+            )
+            .bind(stream_id)
+            .bind(display_name)
+            .bind(bio)
+            .bind(visibility)
+            .bind(event.seq)
+            .execute(&mut **tx)
+            .await?;
+            sqlx::query("UPDATE profile_editor SET last_edit_seq = $2 WHERE profile_id = $1")
+                .bind(stream_id)
+                .bind(event.seq)
+                .execute(&mut **tx)
+                .await?;
         }
         _ => {}
     }
@@ -3045,6 +3178,89 @@ fn discussion_topic_row(row: sqlx::postgres::PgRow) -> DiscussionTopicRow {
         status: row.get("status"),
         post_count: row.get("post_count"),
         created_seq: row.get("created_seq"),
+        updated_seq: row.get("updated_seq"),
+    }
+}
+
+/// Read a public profile only when its owner explicitly selected public
+/// visibility. This query does not select the owning principal.
+pub async fn public_profile_by_handle(
+    pool: &PgPool,
+    handle: &str,
+) -> Result<Option<PublicProfileRow>, ProjectionError> {
+    let row = sqlx::query(
+        "SELECT profile_id, handle, display_name, bio, visibility, updated_seq FROM profile_public WHERE handle = $1 AND visibility = 'public'",
+    )
+    .bind(handle)
+    .fetch_optional(pool)
+    .await?;
+    Ok(row.map(public_profile_row))
+}
+
+/// Read owner-only editor state by its stable public handle.
+pub async fn profile_editor_by_handle(
+    pool: &PgPool,
+    handle: &str,
+) -> Result<Option<ProfileEditorRow>, ProjectionError> {
+    let row = sqlx::query(
+        r#"
+        SELECT public.profile_id, editor.principal_user_id, public.handle,
+               public.display_name, public.bio, public.visibility, public.updated_seq
+        FROM profile_public AS public
+        JOIN profile_editor AS editor ON editor.profile_id = public.profile_id
+        WHERE public.handle = $1
+        "#,
+    )
+    .bind(handle)
+    .fetch_optional(pool)
+    .await?;
+    Ok(row.map(|row| ProfileEditorRow {
+        profile_id: row.get("profile_id"),
+        principal_user_id: row.get("principal_user_id"),
+        handle: row.get("handle"),
+        display_name: row.get("display_name"),
+        bio: row.get("bio"),
+        visibility: row.get("visibility"),
+        updated_seq: row.get("updated_seq"),
+    }))
+}
+
+/// Read owner-only editor state for the authenticated principal's current
+/// profile, if they have created one.
+pub async fn profile_editor_by_principal(
+    pool: &PgPool,
+    principal_user_id: &str,
+) -> Result<Option<ProfileEditorRow>, ProjectionError> {
+    let row = sqlx::query(
+        r#"
+        SELECT public.profile_id, editor.principal_user_id, public.handle,
+               public.display_name, public.bio, public.visibility, public.updated_seq
+        FROM profile_editor AS editor
+        JOIN profile_public AS public ON public.profile_id = editor.profile_id
+        WHERE editor.principal_user_id = $1
+        "#,
+    )
+    .bind(principal_user_id)
+    .fetch_optional(pool)
+    .await?;
+    Ok(row.map(|row| ProfileEditorRow {
+        profile_id: row.get("profile_id"),
+        principal_user_id: row.get("principal_user_id"),
+        handle: row.get("handle"),
+        display_name: row.get("display_name"),
+        bio: row.get("bio"),
+        visibility: row.get("visibility"),
+        updated_seq: row.get("updated_seq"),
+    }))
+}
+
+fn public_profile_row(row: sqlx::postgres::PgRow) -> PublicProfileRow {
+    PublicProfileRow {
+        profile_id: row.get("profile_id"),
+        handle: row.get("handle"),
+        display_name: row.get("display_name"),
+        bio: row.get("bio"),
+        visibility: row.get("visibility"),
         updated_seq: row.get("updated_seq"),
     }
 }

@@ -65,6 +65,10 @@ export type DiscussionPost = { source_seq: bigint, body: string, };
 
 export type DiscussionThreadPage = { topic: DiscussionTopic, posts: Array<DiscussionPost>, next_before_seq: bigint | null, };
 
+export type PublicProfile = { handle: string, display_name: string, bio: string, updated_seq: bigint, };
+
+export type ProfileEditor = { handle: string, display_name: string, bio: string, visibility: string, updated_seq: bigint, };
+
 export type PlayerNotification = { game: string, phase_id: string, event_index: number, audience_slot: string, effect: string, status: string, };
 
 export type PlayerInvestigationResult = { game: string, phase_id: string, event_index: number, audience_slot: string, mode: string, target_slot: string, result: unknown, };

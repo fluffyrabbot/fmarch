@@ -168,6 +168,13 @@ boundary, hidden topics are excluded, and the topic index uses `(updated_seq, to
 pagination. Topic creation and posting require an authenticated opaque session; moderation state
 transitions require `GlobalMod` or `GlobalAdmin` resolved from that session at the API boundary.
 
+Profiles likewise use a dedicated append-only stream per profile. `ProfileCreated` and
+`ProfileUpdated` synchronously maintain two projections: `profile_public`, which never stores or
+returns the owner principal, and `profile_editor`, which binds that profile to its owner for
+authenticated editing. Public reads require `public` visibility; the owner-only editor read and
+write paths require a live enabled account session. This keeps the privacy control durable and
+replayable rather than treating it as frontend-only display state.
+
 ### Update strategy
 
 - **Synchronous, same transaction** for projections that must never lag the write a user
