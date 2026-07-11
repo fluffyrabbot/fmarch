@@ -1407,6 +1407,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       commandCount: spineManifestEvidence.commandCount,
       artifactCount: spineManifestEvidence.artifactCount,
       localLiveWrapperScripts: spineManifestEvidence.localLiveWrapperScripts,
+      adminSpinePhases: spineManifestEvidence.adminSpinePhases,
       phaseLocalNextActionSnapshots:
         spineManifestEvidence.phaseLocalNextActionSnapshots,
       ...(spineManifestAdminProofEvidence === undefined
@@ -8400,7 +8401,7 @@ export function validateDevTestGameSpineManifest(manifest, options = {}) {
     "evidence-env-wiring-recorded",
     "release-boundary-carried",
   ];
-  if (manifest?.version !== 1) {
+  if (manifest?.version !== 2) {
     throw new Error(`spine manifest version drifted: ${manifest?.version}`);
   }
   if (manifest.proof !== "dev-test-game-spine-manifest") {
@@ -8433,6 +8434,7 @@ export function validateDevTestGameSpineManifest(manifest, options = {}) {
   const localLiveWrapperScripts = validateLocalLiveWrapperScripts(manifest);
   const phaseLocalNextActionSnapshots =
     validatePhaseLocalNextActionSnapshots(manifest);
+  const adminSpinePhases = validateAdminSpinePhases(manifest);
   return {
     status: "passed",
     path: options.path ?? spineManifestPath,
@@ -8441,12 +8443,47 @@ export function validateDevTestGameSpineManifest(manifest, options = {}) {
     artifactCount: manifest.artifacts.length,
     localLiveWrapperScripts,
     phaseLocalNextActionSnapshots,
+    adminSpinePhases,
     proofBoundary: manifest.proofBoundary,
     scope: manifest.scope,
     productionReady: manifest.productionReady,
     releaseReady: manifest.releaseReady,
     ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
   };
+}
+
+function validateAdminSpinePhases(manifest) {
+  const phases = manifest.commands?.adminSpine?.phases;
+  if (!Array.isArray(phases) || phases.length === 0) {
+    throw new Error("spine manifest missing admin spine phases");
+  }
+  const ids = new Set();
+  let expectedStartStep = 1;
+  return phases.map((phase) => {
+    const id = String(phase?.id ?? "");
+    const label = String(phase?.label ?? "");
+    const steps = Array.isArray(phase?.steps) ? phase.steps : [];
+    if (id === "" || label === "" || ids.has(id)) {
+      throw new Error("spine manifest admin spine phase identity drifted");
+    }
+    if (
+      phase.startStep !== expectedStartStep ||
+      phase.stepCount !== steps.length ||
+      phase.endStep !== phase.startStep + phase.stepCount - 1
+    ) {
+      throw new Error(`spine manifest admin spine phase span drifted: ${id}`);
+    }
+    ids.add(id);
+    expectedStartStep = phase.endStep + 1;
+    return {
+      id,
+      label,
+      terminal: phase.terminal === true,
+      startStep: phase.startStep,
+      endStep: phase.endStep,
+      stepCount: phase.stepCount,
+    };
+  });
 }
 
 function validatePhaseLocalNextActionSnapshots(manifest) {

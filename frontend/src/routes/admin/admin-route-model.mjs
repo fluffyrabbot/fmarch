@@ -361,6 +361,73 @@ function buildSingleRowArtifactSummarySection({ id, heading, values }) {
   });
 }
 
+function buildAdminSpinePhaseSummarySections(phases) {
+  if (phases.length === 0) {
+    return Object.freeze([]);
+  }
+  return Object.freeze([
+    buildArtifactSummarySection({
+      id: "admin-spine-phases",
+      heading: "Admin spine phases",
+      rows: phases.map((phase) => ({
+        id: phase.id,
+        values: [
+          { id: "label", text: phase.label, emphasized: true },
+          {
+            id: "boundary",
+            text: phase.terminal ? "terminal" : "pre-graph",
+          },
+          { id: "steps", text: `${phase.stepCount} steps` },
+          {
+            id: "planSpan",
+            text: `plan steps ${phase.startStep}-${phase.endStep}`,
+          },
+        ],
+      })),
+    }),
+  ]);
+}
+
+function normalizeAdminSpineManifestPhases(phases) {
+  if (!Array.isArray(phases) || phases.length === 0) {
+    return null;
+  }
+  const ids = new Set();
+  let expectedStartStep = 1;
+  const normalized = [];
+  for (const phase of phases) {
+    const id = String(phase?.id ?? "");
+    const label = String(phase?.label ?? "");
+    if (
+      id === "" ||
+      label === "" ||
+      ids.has(id) ||
+      typeof phase?.terminal !== "boolean" ||
+      !Number.isInteger(phase.startStep) ||
+      !Number.isInteger(phase.endStep) ||
+      !Number.isInteger(phase.stepCount) ||
+      phase.stepCount <= 0 ||
+      phase.startStep !== expectedStartStep ||
+      phase.endStep !== phase.startStep + phase.stepCount - 1
+    ) {
+      return null;
+    }
+    ids.add(id);
+    expectedStartStep = phase.endStep + 1;
+    normalized.push(
+      Object.freeze({
+        id,
+        label,
+        terminal: phase.terminal,
+        startStep: phase.startStep,
+        endStep: phase.endStep,
+        stepCount: phase.stepCount,
+      }),
+    );
+  }
+  return Object.freeze(normalized);
+}
+
 function buildLocalNextActionSummarySections({
   game,
   nextActionHandoffPair,
@@ -7623,7 +7690,7 @@ export function normalizeLocalSpineManifestAudit(spineManifest, { game }) {
   if (
     spineManifest === null ||
     typeof spineManifest !== "object" ||
-    spineManifest.version !== 1 ||
+    spineManifest.version !== 2 ||
     spineManifest.proof !== "dev-test-game-spine-manifest" ||
     spineManifest.status !== "passed" ||
     spineManifest.scope !== "local-dev-test-game-spine-manifest" ||
@@ -7643,6 +7710,12 @@ export function normalizeLocalSpineManifestAudit(spineManifest, { game }) {
   const terminalArtifacts = Array.isArray(spineManifest.terminalArtifacts)
     ? spineManifest.terminalArtifacts
     : [];
+  const adminSpinePhases = normalizeAdminSpineManifestPhases(
+    spineManifest.commands?.adminSpine?.phases,
+  );
+  if (adminSpinePhases === null) {
+    return null;
+  }
   const artifactFreshness =
     spineManifest.artifactFreshness !== null &&
     typeof spineManifest.artifactFreshness === "object"
@@ -7698,12 +7771,22 @@ export function normalizeLocalSpineManifestAudit(spineManifest, { game }) {
       ],
     ),
     relatedLinks: spineManifestRelatedLinks,
+    artifactSummarySections:
+      buildAdminSpinePhaseSummarySections(adminSpinePhases),
     artifactSummary: Object.freeze({
       commandCount: commands.length,
       artifactCount: artifacts.length,
       terminalArtifactCount: terminalArtifacts.length,
-      adminSpineStepCount: Number(
+      adminProofStepCount: Number(
         spineManifest.commands?.adminSpine?.plan?.length ?? 0,
+      ),
+      adminSpinePhaseCount: adminSpinePhases.length,
+      adminSpineTerminalPhaseCount: adminSpinePhases.filter(
+        (phase) => phase.terminal,
+      ).length,
+      adminSpineStepCount: adminSpinePhases.reduce(
+        (count, phase) => count + phase.stepCount,
+        0,
       ),
       artifactFreshnessStatus: String(artifactFreshness.status ?? "unknown"),
       freshCount: Number(freshnessSummary.freshCount ?? 0),

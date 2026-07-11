@@ -280,14 +280,17 @@ import {
   devTestGameAdminSpineGraphBootstrapSteps,
   devTestGameAdminSpineHostedEvidenceChecklistHandoffSteps,
   devTestGameAdminSpineHostedIdentityHandoffSteps,
+  devTestGameAdminSpinePhaseRegistry,
   devTestGameAdminSpinePlan,
   devTestGameAdminSpinePreGraphAdminRollupSteps,
   devTestGameAdminSpinePreGraphHostedSteps,
   devTestGameAdminSpinePreGraphInputSteps,
+  devTestGameAdminSpinePreGraphPhaseRegistry,
   devTestGameAdminSpinePreGraphSteps,
   devTestGameAdminSpineReleaseValidationSteps,
   devTestGameAdminSpineTerminalReceiptBatchReadinessSteps,
   devTestGameAdminSpineTerminalRefreshRollupSteps,
+  devTestGameAdminSpineTerminalPhaseRegistry,
   devTestGameAdminSpineTerminalSteps,
   devTestGameHostedEvidenceOperatorChecklistHandoffPhase,
   devTestGameHostedEvidenceOperatorChecklistHandoffPhaseId,
@@ -2339,27 +2342,92 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     devTestGameHostedIdentityHandoffPhase,
   );
   assert.deepEqual(
-    devTestGameAdminSpineTerminalSteps,
+    devTestGameAdminSpinePhaseRegistry.map(
+      ({ id, label, terminal, steps }) => ({ id, label, terminal, steps }),
+    ),
     [
-      ...devTestGameAdminSpineGraphBootstrapSteps,
-      ...devTestGameAdminSpineHostedEvidenceChecklistHandoffSteps,
-      ...devTestGameAdminSpineTerminalReceiptBatchReadinessSteps,
-      ...devTestGameAdminSpineHostedIdentityHandoffSteps,
-      ...devTestGameAdminSpineTerminalRefreshRollupSteps,
-      ...devTestGameAdminSpineReleaseValidationSteps,
-      ...devTestGameAdminSpineFinalNextActionGuidanceSteps,
+      {
+        id: "pre-graph-inputs",
+        label: "Pre-graph inputs",
+        terminal: false,
+        steps: devTestGameAdminSpinePreGraphInputSteps,
+      },
+      {
+        id: "pre-graph-hosted-evidence",
+        label: "Pre-graph hosted evidence",
+        terminal: false,
+        steps: devTestGameAdminSpinePreGraphHostedSteps,
+      },
+      {
+        id: "pre-graph-admin-rollup",
+        label: "Pre-graph admin rollup",
+        terminal: false,
+        steps: devTestGameAdminSpinePreGraphAdminRollupSteps,
+      },
+      {
+        id: "graph-bootstrap",
+        label: "Graph bootstrap",
+        terminal: true,
+        steps: devTestGameAdminSpineGraphBootstrapSteps,
+      },
+      {
+        id: "hosted-evidence-checklist-handoff",
+        label: "Hosted-evidence checklist handoff",
+        terminal: true,
+        steps: devTestGameAdminSpineHostedEvidenceChecklistHandoffSteps,
+      },
+      {
+        id: "terminal-receipt-batch-readiness",
+        label: "Terminal receipt batch/readiness",
+        terminal: true,
+        steps: devTestGameAdminSpineTerminalReceiptBatchReadinessSteps,
+      },
+      {
+        id: "hosted-identity-handoff",
+        label: "Hosted-identity handoff",
+        terminal: true,
+        steps: devTestGameAdminSpineHostedIdentityHandoffSteps,
+      },
+      {
+        id: "terminal-refresh-rollup",
+        label: "Terminal refresh rollup",
+        terminal: true,
+        steps: devTestGameAdminSpineTerminalRefreshRollupSteps,
+      },
+      {
+        id: "release-validation",
+        label: "Release validation",
+        terminal: true,
+        steps: devTestGameAdminSpineReleaseValidationSteps,
+      },
+      {
+        id: "final-next-action-guidance",
+        label: "Final next-action guidance",
+        terminal: true,
+        steps: devTestGameAdminSpineFinalNextActionGuidanceSteps,
+      },
     ],
   );
-  assert.deepEqual(devTestGameAdminSpinePlan, [
-    ...devTestGameAdminSpinePreGraphSteps,
-    ...devTestGameAdminSpineGraphBootstrapSteps,
-    ...devTestGameAdminSpineHostedEvidenceChecklistHandoffSteps,
-    ...devTestGameAdminSpineTerminalReceiptBatchReadinessSteps,
-    ...devTestGameAdminSpineHostedIdentityHandoffSteps,
-    ...devTestGameAdminSpineTerminalRefreshRollupSteps,
-    ...devTestGameAdminSpineReleaseValidationSteps,
-    ...devTestGameAdminSpineFinalNextActionGuidanceSteps,
-  ]);
+  assert.deepEqual(
+    devTestGameAdminSpinePreGraphPhaseRegistry,
+    devTestGameAdminSpinePhaseRegistry.slice(0, 3),
+  );
+  assert.deepEqual(
+    devTestGameAdminSpineTerminalPhaseRegistry,
+    devTestGameAdminSpinePhaseRegistry.slice(3),
+  );
+  assert.deepEqual(
+    devTestGameAdminSpinePreGraphSteps,
+    devTestGameAdminSpinePreGraphPhaseRegistry.flatMap((phase) => phase.steps),
+  );
+  assert.deepEqual(
+    devTestGameAdminSpineTerminalSteps,
+    devTestGameAdminSpineTerminalPhaseRegistry.flatMap((phase) => phase.steps),
+  );
+  assert.deepEqual(
+    devTestGameAdminSpinePlan,
+    devTestGameAdminSpinePhaseRegistry.flatMap((phase) => phase.steps),
+  );
   assert.deepEqual(
     devTestGameAdminSpinePlan.slice(0, devTestGameAdminSpinePreGraphSteps.length),
     devTestGameAdminSpinePreGraphSteps,
@@ -3601,6 +3669,95 @@ test("dev test-game spine manifest records command order and evidence wiring", (
       script,
       path,
     })),
+  );
+  assert.deepEqual(
+    manifest.commands.adminSpine.phases.map(({ steps, ...phase }) => phase),
+    [
+      {
+        id: "pre-graph-inputs",
+        label: "Pre-graph inputs",
+        terminal: false,
+        startStep: 1,
+        endStep: 5,
+        stepCount: 5,
+      },
+      {
+        id: "pre-graph-hosted-evidence",
+        label: "Pre-graph hosted evidence",
+        terminal: false,
+        startStep: 6,
+        endStep: 14,
+        stepCount: 9,
+      },
+      {
+        id: "pre-graph-admin-rollup",
+        label: "Pre-graph admin rollup",
+        terminal: false,
+        startStep: 15,
+        endStep: 17,
+        stepCount: 3,
+      },
+      {
+        id: "graph-bootstrap",
+        label: "Graph bootstrap",
+        terminal: true,
+        startStep: 18,
+        endStep: 19,
+        stepCount: 2,
+      },
+      {
+        id: "hosted-evidence-checklist-handoff",
+        label: "Hosted-evidence checklist handoff",
+        terminal: true,
+        startStep: 20,
+        endStep: 23,
+        stepCount: 4,
+      },
+      {
+        id: "terminal-receipt-batch-readiness",
+        label: "Terminal receipt batch/readiness",
+        terminal: true,
+        startStep: 24,
+        endStep: 26,
+        stepCount: 3,
+      },
+      {
+        id: "hosted-identity-handoff",
+        label: "Hosted-identity handoff",
+        terminal: true,
+        startStep: 27,
+        endStep: 31,
+        stepCount: 5,
+      },
+      {
+        id: "terminal-refresh-rollup",
+        label: "Terminal refresh rollup",
+        terminal: true,
+        startStep: 32,
+        endStep: 38,
+        stepCount: 7,
+      },
+      {
+        id: "release-validation",
+        label: "Release validation",
+        terminal: true,
+        startStep: 39,
+        endStep: 44,
+        stepCount: 6,
+      },
+      {
+        id: "final-next-action-guidance",
+        label: "Final next-action guidance",
+        terminal: true,
+        startStep: 45,
+        endStep: 48,
+        stepCount: 4,
+      },
+    ],
+  );
+  assert.deepEqual(
+    manifest.commands.adminSpine.phases.flatMap((phase) => phase.steps),
+    devTestGameAdminSpinePlan,
   );
   assert.deepEqual(
     devTestGameAdminSpineProofPlan.map(({ id, caseFactory }) => [
@@ -20947,6 +21104,12 @@ test("session card and markdown include role credential URLs and tokens", async 
   assert.deepEqual(
     manifestReadiness.localDevelopmentSpine.checks.find(
       (item) => item.id === "local-spine-manifest",
+    ).adminSpinePhases,
+    adminSpineManifestPhasesFixture().map(({ steps, ...phase }) => phase),
+  );
+  assert.deepEqual(
+    manifestReadiness.localDevelopmentSpine.checks.find(
+      (item) => item.id === "local-spine-manifest",
     ).phaseLocalNextActionSnapshots,
     [
       {
@@ -27094,7 +27257,7 @@ function hostedConcurrentRaceMatrixAdminProofFixture() {
 
 function spineManifestFixture() {
   return {
-    version: 1,
+    version: 2,
     proof: "dev-test-game-spine-manifest",
     status: "passed",
     releaseReady: false,
@@ -27119,6 +27282,7 @@ function spineManifestFixture() {
         script: "test:dev-test-game-admin-spine",
         proofArtifact: "target/dev-test-game/admin-spine-proof.json",
         plan: [{ script: "tools/dev_test_game_spine_manifest_admin_proof.mjs" }],
+        phases: adminSpineManifestPhasesFixture(),
       },
       proofFreshness: {
         script: "test:dev-test-game-proof-freshness-admin-proof",
@@ -27232,6 +27396,25 @@ function spineManifestFixture() {
       },
     ],
   };
+}
+
+function adminSpineManifestPhasesFixture() {
+  let startStep = 1;
+  return devTestGameAdminSpinePhaseRegistry.map(
+    ({ id, label, terminal, steps }) => {
+      const phase = {
+        id,
+        label,
+        terminal,
+        startStep,
+        endStep: startStep + steps.length - 1,
+        stepCount: steps.length,
+        steps,
+      };
+      startStep = phase.endStep + 1;
+      return phase;
+    },
+  );
 }
 
 function freshSpineManifestFixture() {

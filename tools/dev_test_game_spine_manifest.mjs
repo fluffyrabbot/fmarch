@@ -11,8 +11,7 @@ import {
 } from "./dev_test_game_ops_artifact_dependencies.mjs";
 import {
   devTestGameAdminSpinePlan,
-} from "./dev_test_game_admin_spine.mjs";
-import {
+  devTestGameAdminSpinePhaseRegistry,
   adminSpineProofPath,
   adminSpineReadinessEvidenceEnv,
   adminSpineTerminalBatchProofPath,
@@ -209,7 +208,7 @@ import {
 } from "./dev_test_game_spine_artifact_paths.mjs";
 import { repoRoot } from "./dev_test_game_spine_runner.mjs";
 
-export const DEV_TEST_GAME_SPINE_MANIFEST_VERSION = 1;
+export const DEV_TEST_GAME_SPINE_MANIFEST_VERSION = 2;
 
 export {
   hostedEvidenceOperatorChecklistNextActionPath,
@@ -366,6 +365,7 @@ export function buildDevTestGameSpineManifest({
       adminSpine: {
         script: "test:dev-test-game-admin-spine",
         plan: cloneAdminProofPlan(devTestGameAdminSpineProofPlan),
+        phases: cloneAdminSpinePhases(devTestGameAdminSpinePhaseRegistry),
         proofArtifact: adminSpineProofPath,
         terminalBatchProofArtifact: adminSpineTerminalBatchProofPath,
         readinessEnv: { ...adminSpineTerminalBatchReadinessEvidenceEnv },
@@ -1085,6 +1085,7 @@ export function assertDevTestGameSpineManifest(manifest) {
     "tools/dev_test_game_real_hosted_observability_handoff_admin_proof.mjs",
     "tools/dev_test_game_spine_manifest_admin_proof.mjs",
   ]);
+  assertAdminSpinePhases(manifest.commands?.adminSpine?.phases);
   if (manifest.commands?.proofFreshness?.script !== proofFreshnessAdminProofCommand) {
     throw new Error(
       `spine manifest proof freshness command drifted: ${manifest.commands?.proofFreshness?.script}`,
@@ -1969,6 +1970,30 @@ function cloneAdminProofPlan(plan) {
   return plan.map(({ id, label, script, path }) => ({ id, label, script, path }));
 }
 
+function cloneAdminSpinePhases(phases) {
+  let startStep = 1;
+  return phases.map(({ id, label, terminal, steps }) => {
+    const phase = {
+      id,
+      label,
+      terminal,
+      startStep,
+      endStep: startStep + steps.length - 1,
+      stepCount: steps.length,
+      steps: clonePlan(steps),
+    };
+    startStep = phase.endStep + 1;
+    return phase;
+  });
+}
+
+function assertAdminSpinePhases(phases) {
+  const expected = cloneAdminSpinePhases(devTestGameAdminSpinePhaseRegistry);
+  if (JSON.stringify(phases) !== JSON.stringify(expected)) {
+    throw new Error("spine manifest admin spine phases drifted");
+  }
+}
+
 async function readJson(filePath) {
   return JSON.parse(await readFile(filePath, "utf8"));
 }
@@ -2280,6 +2305,18 @@ function markdownSpineManifest(manifest) {
   manifest.commands.live.plan.forEach((step, index) => {
     lines.push(`| ${index + 1} | ${step.kind} | ${step.script} |`);
   });
+  lines.push(
+    "",
+    "## Admin Spine Phases",
+    "",
+    "| Phase | Label | Terminal | Steps | Plan Span |",
+    "| --- | --- | --- | ---: | --- |",
+  );
+  for (const phase of manifest.commands.adminSpine.phases) {
+    lines.push(
+      `| ${phase.id} | ${phase.label} | ${phase.terminal} | ${phase.stepCount} | ${phase.startStep}-${phase.endStep} |`,
+    );
+  }
   lines.push(
     "",
     "## Terminal Artifacts",

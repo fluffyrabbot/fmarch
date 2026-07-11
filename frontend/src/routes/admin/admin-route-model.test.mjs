@@ -2284,7 +2284,10 @@ test("admin route data exposes local spine manifest as a native audit row", asyn
     commandCount: 13,
     artifactCount: 16,
     terminalArtifactCount: 4,
-    adminSpineStepCount: 8,
+    adminProofStepCount: 8,
+    adminSpinePhaseCount: 10,
+    adminSpineTerminalPhaseCount: 7,
+    adminSpineStepCount: 48,
     artifactFreshnessStatus: "blocked",
     freshCount: 1,
     staleCount: 1,
@@ -2296,6 +2299,21 @@ test("admin route data exposes local spine manifest as a native audit row", asyn
     releaseReady: false,
     productionReady: false,
   });
+});
+
+test("admin route rejects noncontiguous spine manifest phase progress", async () => {
+  const spineManifest = spineManifestFixture();
+  spineManifest.commands.adminSpine.phases[1].startStep += 1;
+  const data = await buildAdminRouteData({
+    principalUserId: "admin_a",
+    capabilities: [{ kind: "GlobalAdmin" }],
+    spineManifest,
+  });
+
+  assert.equal(
+    data.audit.some((item) => item.id === localAdminAuditIds.spineManifest),
+    false,
+  );
 });
 
 test("admin local spine manifest detail data carries manifest check rows", async () => {
@@ -2334,6 +2352,21 @@ test("admin local spine manifest detail data carries manifest check rows", async
       [localAdminAuditIds.proofFreshness, localAdminAuditRoleUrl(localAdminAuditIds.proofFreshness, { game: "midsummer" })],
       [localAdminAuditIds.nextAction, localAdminAuditRoleUrl(localAdminAuditIds.nextAction, { game: "midsummer" })],
     ],
+  );
+  assert.deepEqual(
+    data.audit.artifactSummarySections[0].rows.map((row) => ({
+      id: row.id,
+      values: row.values.map((value) => value.text),
+    })),
+    spineManifestPhaseFixture().map((phase) => ({
+      id: phase.id,
+      values: [
+        phase.label,
+        phase.terminal ? "terminal" : "pre-graph",
+        `${phase.stepCount} steps`,
+        `plan steps ${phase.startStep}-${phase.endStep}`,
+      ],
+    })),
   );
 });
 
@@ -9032,7 +9065,7 @@ function seedFixtureSummaryFixture() {
 
 function spineManifestFixture() {
   return {
-    version: 1,
+    version: 2,
     proof: "dev-test-game-spine-manifest",
     status: "passed",
     releaseReady: false,
@@ -9055,6 +9088,7 @@ function spineManifestFixture() {
           { script: "tools/dev_test_game_release_admin_proof.mjs" },
           { script: "tools/dev_test_game_spine_manifest_admin_proof.mjs" },
         ],
+        phases: spineManifestPhaseFixture(),
       },
       proofFreshness: {
         script: "test:dev-test-game-proof-freshness-admin-proof",
@@ -9196,6 +9230,80 @@ function spineManifestFixture() {
         productionReady: false,
       },
     ],
+  };
+}
+
+function spineManifestPhaseFixture() {
+  return [
+    spineManifestPhase("pre-graph-inputs", "Pre-graph inputs", false, 1, 5),
+    spineManifestPhase(
+      "pre-graph-hosted-evidence",
+      "Pre-graph hosted evidence",
+      false,
+      6,
+      14,
+    ),
+    spineManifestPhase(
+      "pre-graph-admin-rollup",
+      "Pre-graph admin rollup",
+      false,
+      15,
+      17,
+    ),
+    spineManifestPhase("graph-bootstrap", "Graph bootstrap", true, 18, 19),
+    spineManifestPhase(
+      "hosted-evidence-checklist-handoff",
+      "Hosted-evidence checklist handoff",
+      true,
+      20,
+      23,
+    ),
+    spineManifestPhase(
+      "terminal-receipt-batch-readiness",
+      "Terminal receipt batch/readiness",
+      true,
+      24,
+      26,
+    ),
+    spineManifestPhase(
+      "hosted-identity-handoff",
+      "Hosted-identity handoff",
+      true,
+      27,
+      31,
+    ),
+    spineManifestPhase(
+      "terminal-refresh-rollup",
+      "Terminal refresh rollup",
+      true,
+      32,
+      38,
+    ),
+    spineManifestPhase(
+      "release-validation",
+      "Release validation",
+      true,
+      39,
+      44,
+    ),
+    spineManifestPhase(
+      "final-next-action-guidance",
+      "Final next-action guidance",
+      true,
+      45,
+      48,
+    ),
+  ];
+}
+
+function spineManifestPhase(id, label, terminal, startStep, endStep) {
+  return {
+    id,
+    label,
+    terminal,
+    startStep,
+    endStep,
+    stepCount: endStep - startStep + 1,
   };
 }
 

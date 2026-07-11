@@ -360,12 +360,6 @@ export const devTestGameAdminSpinePreGraphAdminRollupSteps = Object.freeze([
   }),
 ]);
 
-export const devTestGameAdminSpinePreGraphSteps = Object.freeze([
-  ...devTestGameAdminSpinePreGraphInputSteps,
-  ...devTestGameAdminSpinePreGraphHostedSteps,
-  ...devTestGameAdminSpinePreGraphAdminRollupSteps,
-]);
-
 export const devTestGameAdminSpineGraphBootstrapSteps = Object.freeze([
   { kind: "node", script: "tools/dev_test_game_spine_manifest.mjs" },
   { kind: "node", script: "tools/dev_test_game_next_action.mjs" },
@@ -450,26 +444,116 @@ export const devTestGameAdminSpineFinalNextActionGuidanceSteps = Object.freeze([
   }),
 ]);
 
-export const devTestGameAdminSpineTerminalSteps = Object.freeze([
-  ...devTestGameAdminSpineGraphBootstrapSteps,
-  ...devTestGameAdminSpineHostedEvidenceChecklistHandoffSteps,
-  ...devTestGameAdminSpineTerminalReceiptBatchReadinessSteps,
-  ...devTestGameAdminSpineHostedIdentityHandoffSteps,
-  ...devTestGameAdminSpineTerminalRefreshRollupSteps,
-  ...devTestGameAdminSpineReleaseValidationSteps,
-  ...devTestGameAdminSpineFinalNextActionGuidanceSteps,
+function adminSpinePhase({ id, label, steps, terminal }) {
+  if (typeof id !== "string" || id === "") {
+    throw new Error("admin spine phase requires id");
+  }
+  if (typeof label !== "string" || label === "") {
+    throw new Error(`admin spine phase ${id} requires label`);
+  }
+  if (!Array.isArray(steps) || steps.length === 0) {
+    throw new Error(`admin spine phase ${id} requires steps`);
+  }
+  if (typeof terminal !== "boolean") {
+    throw new Error(`admin spine phase ${id} requires terminal boundary`);
+  }
+  return Object.freeze({ id, label, terminal, steps });
+}
+
+function adminSpinePhaseRegistry(phases) {
+  const ids = phases.map((phase) => phase.id);
+  if (new Set(ids).size !== ids.length) {
+    throw new Error("admin spine phase ids must be unique");
+  }
+  return Object.freeze(phases);
+}
+
+export const devTestGameAdminSpinePhaseRegistry = adminSpinePhaseRegistry([
+  adminSpinePhase({
+    id: "pre-graph-inputs",
+    label: "Pre-graph inputs",
+    terminal: false,
+    steps: devTestGameAdminSpinePreGraphInputSteps,
+  }),
+  adminSpinePhase({
+    id: "pre-graph-hosted-evidence",
+    label: "Pre-graph hosted evidence",
+    terminal: false,
+    steps: devTestGameAdminSpinePreGraphHostedSteps,
+  }),
+  adminSpinePhase({
+    id: "pre-graph-admin-rollup",
+    label: "Pre-graph admin rollup",
+    terminal: false,
+    steps: devTestGameAdminSpinePreGraphAdminRollupSteps,
+  }),
+  adminSpinePhase({
+    id: "graph-bootstrap",
+    label: "Graph bootstrap",
+    terminal: true,
+    steps: devTestGameAdminSpineGraphBootstrapSteps,
+  }),
+  adminSpinePhase({
+    id: "hosted-evidence-checklist-handoff",
+    label: "Hosted-evidence checklist handoff",
+    terminal: true,
+    steps: devTestGameAdminSpineHostedEvidenceChecklistHandoffSteps,
+  }),
+  adminSpinePhase({
+    id: "terminal-receipt-batch-readiness",
+    label: "Terminal receipt batch/readiness",
+    terminal: true,
+    steps: devTestGameAdminSpineTerminalReceiptBatchReadinessSteps,
+  }),
+  adminSpinePhase({
+    id: "hosted-identity-handoff",
+    label: "Hosted-identity handoff",
+    terminal: true,
+    steps: devTestGameAdminSpineHostedIdentityHandoffSteps,
+  }),
+  adminSpinePhase({
+    id: "terminal-refresh-rollup",
+    label: "Terminal refresh rollup",
+    terminal: true,
+    steps: devTestGameAdminSpineTerminalRefreshRollupSteps,
+  }),
+  adminSpinePhase({
+    id: "release-validation",
+    label: "Release validation",
+    terminal: true,
+    steps: devTestGameAdminSpineReleaseValidationSteps,
+  }),
+  adminSpinePhase({
+    id: "final-next-action-guidance",
+    label: "Final next-action guidance",
+    terminal: true,
+    steps: devTestGameAdminSpineFinalNextActionGuidanceSteps,
+  }),
 ]);
 
-export const devTestGameAdminSpinePlan = [
-  ...devTestGameAdminSpinePreGraphSteps,
-  ...devTestGameAdminSpineGraphBootstrapSteps,
-  ...devTestGameAdminSpineHostedEvidenceChecklistHandoffSteps,
-  ...devTestGameAdminSpineTerminalReceiptBatchReadinessSteps,
-  ...devTestGameAdminSpineHostedIdentityHandoffSteps,
-  ...devTestGameAdminSpineTerminalRefreshRollupSteps,
-  ...devTestGameAdminSpineReleaseValidationSteps,
-  ...devTestGameAdminSpineFinalNextActionGuidanceSteps,
-];
+export const devTestGameAdminSpinePreGraphPhaseRegistry = Object.freeze(
+  devTestGameAdminSpinePhaseRegistry.filter((phase) => !phase.terminal),
+);
+
+export const devTestGameAdminSpineTerminalPhaseRegistry = Object.freeze(
+  devTestGameAdminSpinePhaseRegistry.filter((phase) => phase.terminal),
+);
+
+function flattenAdminSpinePhases(phases) {
+  return Object.freeze(phases.flatMap((phase) => phase.steps));
+}
+
+export const devTestGameAdminSpinePreGraphSteps = flattenAdminSpinePhases(
+  devTestGameAdminSpinePreGraphPhaseRegistry,
+);
+
+export const devTestGameAdminSpineTerminalSteps = flattenAdminSpinePhases(
+  devTestGameAdminSpineTerminalPhaseRegistry,
+);
+
+export const devTestGameAdminSpinePlan = flattenAdminSpinePhases(
+  devTestGameAdminSpinePhaseRegistry,
+);
 
 function terminalAdminProofBatchPlanForScript(script) {
   const batch = terminalProofGraphReceiptBatchRegistry.find(
