@@ -219,6 +219,7 @@ pub fn router_with_state(state: ApiState) -> Router {
         )
         .route("/commands", post(command))
         .route("/games", get(game_index))
+        .route("/games/import", post(import_completed_game_export))
         .route("/discussions/areas", post(create_discussion_area))
         .route("/discussions/areas/{slug}", get(discussion_area_topics))
         .route(
@@ -4053,6 +4054,18 @@ async fn completed_game_export(
     }
     Ok(Json(
         projections::export_completed_game(&state.pool, game).await?,
+    ))
+}
+
+async fn import_completed_game_export(
+    State(state): State<ApiState>,
+    headers: HeaderMap,
+    Json(export): Json<eventstore::StreamExport>,
+) -> Result<Json<projections::ProjectionAuditReport>, ApiError> {
+    let token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
+    require_global_admin(&state, token, "completed-game import").await?;
+    Ok(Json(
+        projections::import_completed_game_export(&state.pool, &export).await?,
     ))
 }
 
