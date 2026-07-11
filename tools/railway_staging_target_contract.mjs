@@ -29,6 +29,7 @@ async function contract() {
 
   assert.match(source.Dockerfile, /cargo build --release --locked -p server/);
   assert.match(source.Dockerfile, /COPY docs \.\/docs/);
+  assert.match(source.Dockerfile, /install --directory --owner=fmarch --group=fmarch --mode=0700 \/var\/lib\/fmarch\/media/);
   assert.match(source.Dockerfile, /USER fmarch/);
   assert.match(source.Dockerfile, /CMD \["fmarch-server"\]/);
   assert.match(source[".dockerignore"], /^target$/m);

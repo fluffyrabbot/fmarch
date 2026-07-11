@@ -13,7 +13,8 @@ FROM debian:bookworm-slim AS runtime
 RUN apt-get update \
     && apt-get install --yes --no-install-recommends ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
-    && useradd --create-home --uid 10001 fmarch
+    && useradd --create-home --uid 10001 fmarch \
+    && install --directory --owner=fmarch --group=fmarch --mode=0700 /var/lib/fmarch/media
 
 COPY --from=builder /app/target/release/server /usr/local/bin/fmarch-server
 
