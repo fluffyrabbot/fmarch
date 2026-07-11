@@ -13,7 +13,7 @@ import {
   validateRegistry,
 } from "./completeness_scorecard.mjs";
 
-test("real completion registry validates completed community slices and selects completed-game export", async () => {
+test("real completion registry validates the completed product capability set", async () => {
   const registry = await loadCompletionRegistry();
   await validateRegistry(registry);
   const summary = summarizeRegistry(registry);
@@ -25,15 +25,10 @@ test("real completion registry validates completed community slices and selects 
     deferred: 0,
     total: 6,
   });
-  assert.equal(summary.productCapabilitiesComplete, false);
+  assert.equal(summary.productCapabilitiesComplete, true);
   assert.equal(summary.platformComplete, false);
   assert.equal(summary.releaseComplete, false);
-  const nextItem = nextBuildableCodeItem(registry);
-  assert.equal(nextItem?.id, "product.archive.completed-game-export");
-  assert.deepEqual(nextItem?.remaining, [
-    "Specify and implement the portable event-stream export format, CLI/API, checksum, and round-trip audit.",
-  ]);
-  assert.match(nextItem?.recommended_slice?.objective ?? "", /portable completed-game export/);
+  assert.equal(nextBuildableCodeItem(registry), undefined);
 });
 
 test("generated scorecard exactly matches the canonical registry", async () => {
@@ -126,17 +121,19 @@ test("registry validation rejects illegal completion and blocked states", async 
   );
 
   const whitespaceRemaining = structuredClone(registry);
-  whitespaceRemaining.items.find((item) => item.id === "product.archive.completed-game-export").remaining = ["   "];
+  whitespaceRemaining.items.find((item) => item.id === "housekeeping.vote-syntax-decision").remaining = ["   "];
   await assert.rejects(
     validateRegistry(whitespaceRemaining, { verifySourcePaths: false }),
     /remaining must contain nonempty strings/,
   );
 
   const completeRecommendedSlice = structuredClone(registry);
-  completeRecommendedSlice.items[0].recommended_slice = structuredClone(
-    registry.items.find((item) => item.id === "product.archive.completed-game-export")
-      .recommended_slice,
-  );
+  completeRecommendedSlice.items[0].recommended_slice = {
+    objective: "Exercise the complete-item recommendation guard.",
+    paths: ["tools/completeness_scorecard.test.mjs"],
+    proof_commands: ["npm run test:completeness-scorecard"],
+    non_claims: ["No product behavior changes."],
+  };
   await assert.rejects(
     validateRegistry(completeRecommendedSlice, { verifySourcePaths: false }),
     /invalid recommended slice owner/,

@@ -17,34 +17,18 @@ count is treated as product progress.
 
 | Execution class | Complete | Partial | Open | Blocked | Deferred | Total |
 |---|---:|---:|---:|---:|---:|---:|
-| code | 26 | 1 | 1 | 0 | 0 | 28 |
+| code | 27 | 1 | 0 | 0 | 0 | 28 |
 | external-evidence | 0 | 0 | 0 | 6 | 0 | 6 |
 | human | 0 | 0 | 1 | 1 | 0 | 2 |
 | optional | 0 | 0 | 0 | 0 | 1 | 1 |
 
-Product capabilities complete: **no**.
+Product capabilities complete: **yes**.
 Required platform scope complete: **no**.
 Overall release closure complete: **no**.
 
 ## Next buildable coding slice
 
-### Portable completed-game export `product.archive.completed-game-export`
-
-Build a portable completed-game export vertical: define a versioned export manifest with events, referenced projection and media metadata, checksum, and deterministic import/audit; expose a host or operator route; and prove export, validation, import, reload, and tamper rejection through a seeded browser or CLI lane.
-
-Owned paths: `crates/eventstore/`, `crates/projections/`, `crates/api/`, `crates/wire/`, `frontend/src/routes/`, `tools/`, `docs/arch/02-event-sourcing.md`.
-
-Proof:
-
-- `DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p eventstore -p projections -p api export -- --test-threads=1`
-- `npm run test:frontend-contract`
-- `npm run test:completeness-scorecard`
-
-Explicit non-claims:
-
-- No hosted archive storage, legal retention, or production restore claim.
-- No public search, discovery, or long-term compatibility guarantee beyond the validated local manifest.
-- No release or production-readiness promotion from local export proof.
+No dependency-satisfied incomplete coding slice is registered.
 
 ## Locally proven foundation
 
@@ -106,7 +90,7 @@ Explicit non-claims:
 
 | Status | Capability | Depends on | Complete when | Current / remaining | Evidence / boundary |
 |---|---|---|---|---|---|
-| open | Portable completed-game export<br>`product.archive.completed-game-export` | `foundation.event-store-projections`<br>`product.game.endgame-reveal-history` | A completed game exports its events, schema/version metadata, referenced projections/media manifest, checksum, and deterministic import/audit result. | Remaining: Specify and implement the portable event-stream export format, CLI/API, checksum, and round-trip audit. | source: `docs/arch/02-event-sourcing.md`<br>source: `docs/arch/08-roadmap.md`<br>Completed games are durable event streams but cannot yet be exported as a self-contained, validated archive. |
+| complete | Portable completed-game export<br>`product.archive.completed-game-export` | `foundation.event-store-projections`<br>`product.game.endgame-reveal-history` | A completed game exports its events, schema/version metadata, referenced projections/media manifest, checksum, and deterministic import/audit result. | Complete. | source: `crates/eventstore/src/lib.rs`<br>source: `frontend/src/routes/g/[game]/host/export/+page.svelte`<br>source: `docs/arch/02-event-sourcing.md`<br>command: `npm run test:dev-test-game-completed-export:local`<br>artifact: `target/completed-game-export-role-proof/completed-game-export-proof.json`<br>Completed games export a versioned checksum-bearing event manifest through a host role URL; isolated import, projection rebuild, replay audit, and tamper rejection are locally proven. |
 
 ## Release evidence and approval
 

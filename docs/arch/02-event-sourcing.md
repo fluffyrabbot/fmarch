@@ -175,6 +175,12 @@ authenticated editing. Public reads require `public` visibility; the owner-only 
 write paths require a live enabled account session. This keeps the privacy control durable and
 replayable rather than treating it as frontend-only display state.
 
+Completed game streams can be exported as versioned `StreamExport` manifests. The checksum covers
+the canonical manifest content, stream sequence positions must be contiguous, and imports refuse
+tampered manifests or non-empty target streams. A completed-game import rebuilds projections and
+runs the replay audit in an isolated migrated database; the host export route exposes only the
+validated manifest summary, not a public archive endpoint.
+
 ### Update strategy
 
 - **Synchronous, same transaction** for projections that must never lag the write a user

@@ -510,25 +510,18 @@
       "order": 10,
       "title": "Portable completed-game export",
       "execution_class": "code",
-      "status": "open",
-      "summary": "Completed games are durable event streams but cannot yet be exported as a self-contained, validated archive.",
+      "status": "complete",
+      "summary": "Completed games export a versioned checksum-bearing event manifest through a host role URL; isolated import, projection rebuild, replay audit, and tamper rejection are locally proven.",
       "complete_when": ["A completed game exports its events, schema/version metadata, referenced projections/media manifest, checksum, and deterministic import/audit result."],
       "depends_on": ["foundation.event-store-projections", "product.game.endgame-reveal-history"],
       "evidence": [
+        { "kind": "source", "value": "crates/eventstore/src/lib.rs" },
+        { "kind": "source", "value": "frontend/src/routes/g/[game]/host/export/+page.svelte" },
         { "kind": "source", "value": "docs/arch/02-event-sourcing.md" },
-        { "kind": "source", "value": "docs/arch/08-roadmap.md" }
+        { "kind": "command", "value": "npm run test:dev-test-game-completed-export:local" },
+        { "kind": "artifact", "value": "target/completed-game-export-role-proof/completed-game-export-proof.json" }
       ],
-      "remaining": ["Specify and implement the portable event-stream export format, CLI/API, checksum, and round-trip audit." ],
-      "recommended_slice": {
-        "objective": "Build a portable completed-game export vertical: define a versioned export manifest with events, referenced projection and media metadata, checksum, and deterministic import/audit; expose a host or operator route; and prove export, validation, import, reload, and tamper rejection through a seeded browser or CLI lane.",
-        "paths": ["crates/eventstore/", "crates/projections/", "crates/api/", "crates/wire/", "frontend/src/routes/", "tools/", "docs/arch/02-event-sourcing.md"],
-        "proof_commands": ["DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p eventstore -p projections -p api export -- --test-threads=1", "npm run test:frontend-contract", "npm run test:completeness-scorecard"],
-        "non_claims": [
-          "No hosted archive storage, legal retention, or production restore claim.",
-          "No public search, discovery, or long-term compatibility guarantee beyond the validated local manifest.",
-          "No release or production-readiness promotion from local export proof."
-        ]
-      }
+      "remaining": []
     },
     {
       "id": "hosted-production-identity",
