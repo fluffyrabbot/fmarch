@@ -10,9 +10,9 @@ use tempfile::TempDir;
 use tower::ServiceExt;
 use uuid::Uuid;
 use wire::{
-    ClientEnvelope, ClientMsg, Command, CommandMsg, PlayerInvestigationResult, PlayerNotification,
-    ProjectionDelta, RejectCode, RejectMsg, ServerEnvelope, ServerMsg, SlotLifecycle,
-    SubmitPostMedia, ThreadPage, VoteTarget, PROTOCOL_VERSION,
+    ClientEnvelope, ClientMsg, Command, CommandMsg, GameIndexPage, PlayerInvestigationResult,
+    PlayerNotification, ProjectionDelta, RejectCode, RejectMsg, ServerEnvelope, ServerMsg,
+    SlotLifecycle, SubmitPostMedia, ThreadPage, VoteTarget, PROTOCOL_VERSION,
 };
 
 fn router(pool: sqlx::PgPool) -> axum::Router {
@@ -4211,6 +4211,100 @@ async fn vertical_thread_cold_load_returns_paginated_posts(pool: sqlx::PgPool) {
     assert_eq!(older.posts.len(), 1);
     assert_eq!(older.posts[0].body, "one");
     assert_eq!(older.next_before_seq, None);
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn public_game_index_cold_load_pages_only_active_and_completed_rows(pool: sqlx::PgPool) {
+    let active_game = Uuid::from_u128(11);
+    let completed_game = Uuid::from_u128(12);
+    let setup_game = Uuid::from_u128(13);
+    for (game, pack, status, phase_id, updated_seq, completed_seq) in [
+        (
+            active_game,
+            "mafiascum",
+            "active",
+            Some("N01"),
+            120_i64,
+            None,
+        ),
+        (
+            completed_game,
+            "mafia_universe",
+            "completed",
+            Some("D01"),
+            130_i64,
+            Some(130_i64),
+        ),
+        (setup_game, "epicmafia", "setup", None, 140_i64, None),
+    ] {
+        sqlx::query(
+            "INSERT INTO game_index (game_id, pack, status, phase_id, created_seq, started_seq, completed_seq, updated_seq) VALUES ($1, $2, $3, $4, 1, 2, $5, $6)",
+        )
+        .bind(game)
+        .bind(pack)
+        .bind(status)
+        .bind(phase_id)
+        .bind(completed_seq)
+        .bind(updated_seq)
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+
+    let app = router(pool);
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/games?limit=1")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let latest: GameIndexPage = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(latest.games.len(), 1);
+    assert_eq!(latest.games[0].game, completed_game);
+    assert_eq!(latest.games[0].status, "completed");
+    assert_eq!(latest.games[0].phase_id.as_deref(), Some("D01"));
+    let cursor = latest.next_cursor.expect("older game cursor");
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!("/games?limit=1&cursor={cursor}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let older: GameIndexPage = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(older.games.len(), 1);
+    assert_eq!(older.games[0].game, active_game);
+    assert_eq!(older.games[0].status, "active");
+    assert_eq!(older.next_cursor, None);
+
+    let invalid = app
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/games?cursor=not-a-cursor")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(invalid.status(), StatusCode::BAD_REQUEST);
+    let bytes = to_bytes(invalid.into_body(), usize::MAX).await.unwrap();
+    let reject: RejectMsg = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(reject.error, RejectCode::StreamConflict);
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]

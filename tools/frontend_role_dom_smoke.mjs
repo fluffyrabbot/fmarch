@@ -20,6 +20,7 @@ import {
   HOST_CONTROL_SURFACE_CONTRACT,
 } from "../frontend/src/lib/components/host-action/host-control-surface.mjs";
 
+const FIXTURE_THREAD_MEDIA_TEST_ID = `thread-post-media-${"e".repeat(64)}`;
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const artifactDir = path.join(repoRoot, "target", "frontend-role-dom-smoke");
 const evidencePath = path.join(artifactDir, "dom-smoke.json");
@@ -243,11 +244,10 @@ function surfaceScenarios() {
       path: "/",
       render: "renderBoardSurface",
       surfaceTestId: "board-surface",
-      requiredText: ["Active games", "Midsummer Invitational"],
+      requiredText: ["Games", "Mafiascum game"],
       requiredTestIds: [
         "game-action-midsummer-player",
         "game-action-midsummer-moderator",
-        "workbench-action-admin",
       ],
       links: [
         {
@@ -257,10 +257,6 @@ function surfaceScenarios() {
         {
           testId: "game-action-midsummer-moderator",
           href: "/g/midsummer/host",
-        },
-        {
-          testId: "workbench-action-admin",
-          href: "/admin",
         },
       ],
       requiredAttributes: [],
@@ -273,14 +269,11 @@ function surfaceScenarios() {
       render: "renderBoardPlayerSurface",
       surfaceTestId: "board-surface",
       requiredText: [
-        "Active games",
-        "Midsummer Invitational",
+        "Games",
+        "Mafiascum game",
         "Requires HostOf(midsummer) or CohostOf(midsummer)",
-        "Requires GlobalAdmin or GlobalMod",
       ],
       requiredTestIds: [
-        "workbench-action-moderator",
-        "workbench-action-admin",
         "game-action-midsummer-moderator",
       ],
       links: [
@@ -291,7 +284,6 @@ function surfaceScenarios() {
       ],
       requiredAttributes: [
         'data-blocked-reason="Requires HostOf(midsummer) or CohostOf(midsummer)"',
-        'data-blocked-reason="Requires GlobalAdmin or GlobalMod"',
       ],
       forbiddenText: [],
     },
@@ -361,7 +353,7 @@ function surfaceScenarios() {
         PLAYER_THREAD_PAGER_CONTRACT.rootTestId,
         PLAYER_THREAD_PAGER_CONTRACT.buttonTestId,
         "player-votecount-deadline",
-        "thread-post-media-receipt-442",
+        FIXTURE_THREAD_MEDIA_TEST_ID,
         "thread-post-media-boundary-442",
         "player-private-link-notification-1",
         "player-live-status",
@@ -419,7 +411,7 @@ function surfaceScenarios() {
         "player-channel-private:role_pm:slot-7",
         PLAYER_COMMAND_PANEL_CONTRACT.channelContextTestId,
         "player-private-link-notification-1",
-        "thread-post-media-receipt-442",
+        FIXTURE_THREAD_MEDIA_TEST_ID,
       ],
       links: [
         {

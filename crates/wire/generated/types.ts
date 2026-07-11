@@ -51,6 +51,10 @@ export type ThreadPostMediaVariant = { avif_url: string, webp_url: string, width
 
 export type ThreadPage = { posts: Array<ThreadPost>, next_before_seq: bigint | null, };
 
+export type GameIndexEntry = { game: string, pack: string, status: string, phase_id: string | null, updated_seq: bigint, completed_seq: bigint | null, };
+
+export type GameIndexPage = { games: Array<GameIndexEntry>, next_cursor: string | null, };
+
 export type PlayerNotification = { game: string, phase_id: string, event_index: number, audience_slot: string, effect: string, status: string, };
 
 export type PlayerInvestigationResult = { game: string, phase_id: string, event_index: number, audience_slot: string, mode: string, target_slot: string, result: unknown, };

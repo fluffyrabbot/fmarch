@@ -8,6 +8,7 @@ import {
   buildNavigationPendingData,
   buildAppShell,
   buildBoardRouteData,
+  fixtureBoardGameIndexPage,
   buildRouteErrorData,
   buildRouteLoadingData,
   buildShellKeyboardOrder,
@@ -120,7 +121,7 @@ test("board route is an app surface with capability-gated role actions", () => {
   const data = buildBoardRouteData({
     principalUserId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
-    game: "midsummer",
+    gameIndexPage: fixtureBoardGameIndexPage("midsummer"),
   });
 
   assert.equal(data.shell.activeSurface, "board");
@@ -131,8 +132,8 @@ test("board route is an app surface with capability-gated role actions", () => {
     eyebrowClassName: "fm-eyebrow",
     statusStackClassName: "fm-status-stack",
     eyebrow: "Board",
-    title: "Active games",
-    summary: "Active games, role queues, and proof-linked operation paths.",
+    title: "Games",
+    summary: "Public active and completed games.",
     capability: { visible: false },
     liveStatus: { visible: false },
   });
@@ -140,10 +141,8 @@ test("board route is an app surface with capability-gated role actions", () => {
   assert.equal(data.board.games[0].actions[0].navigation, "blocked");
   assert.equal(data.board.games[0].actions[1].href, "/g/midsummer/host");
   assert.equal(data.board.games[0].actions[1].navigation, "blocked");
-  assert.equal(data.workbench[2].action.href, "/admin");
-  assert.equal(data.workbench[2].action.navigation, "link");
   assert.equal(BOARD_ROUTE_CONTRACT.surfaceTestId, "board-surface");
-  assert.equal(BOARD_ROUTE_CONTRACT.requiredText, "Active games");
+  assert.equal(BOARD_ROUTE_CONTRACT.requiredText, "Games");
   assert.equal(workbenchActionTestId("player"), "workbench-action-player");
   assert.equal(gameActionTestId("midsummer", "moderator"), "game-action-midsummer-moderator");
 });
@@ -152,21 +151,9 @@ test("board actions block denied role transitions without links", () => {
   const data = buildBoardRouteData({
     principalUserId: "player_mira",
     capabilities: [{ kind: "SlotOccupant", game: "midsummer", slot: "slot-7" }],
-    game: "midsummer",
+    gameIndexPage: fixtureBoardGameIndexPage("midsummer"),
   });
 
-  assert.deepEqual(
-    data.workbench.map((item) => [item.id, item.action.navigation]),
-    [
-      ["player", "link"],
-      ["moderator", "blocked"],
-      ["admin", "blocked"],
-    ],
-  );
-  assert.equal(
-    data.workbench[1].action.blockedReason,
-    "Requires HostOf(midsummer) or CohostOf(midsummer)",
-  );
   assert.deepEqual(
     data.board.games[0].actions.map((action) => [action.id, action.navigation]),
     [

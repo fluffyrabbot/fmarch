@@ -399,6 +399,32 @@ pub struct ThreadViewPage {
     pub next_before_seq: Option<i64>,
 }
 
+/// A capability-safe public game discovery row.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GameIndexRow {
+    pub game_id: Uuid,
+    pub pack: String,
+    pub status: String,
+    pub phase_id: Option<String>,
+    /// `events.seq` for the lifecycle event that last changed this public row.
+    pub updated_seq: i64,
+    pub completed_seq: Option<i64>,
+}
+
+/// Stable keyset cursor for the public game index.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GameIndexCursor {
+    pub updated_seq: i64,
+    pub game_id: Uuid,
+}
+
+/// A newest-first public game discovery page.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GameIndexPage {
+    pub games: Vec<GameIndexRow>,
+    pub next_cursor: Option<GameIndexCursor>,
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum ProjectionError {
     #[error(transparent)]
@@ -533,6 +559,8 @@ async fn fold_event(
         "GameCreated" => {
             let host = str_field(&ev.payload, "host", &ev.kind)?;
             upsert_authority(tx, game_id, &host, "host").await?;
+            let pack = str_field(&ev.payload, "pack", &ev.kind)?;
+            insert_game_index_setup(tx, game_id, &pack, ev.seq).await?;
         }
         "CohostAdded" => {
             let cohost = str_field(&ev.payload, "user_id", &ev.kind)?;
@@ -595,6 +623,7 @@ async fn fold_event(
             // Set the current phase; a new phase starts unlocked with no deadline.
             let phase_id = str_field(&ev.payload, "phase_id", &ev.kind)?;
             set_phase(tx, game_id, &phase_id).await?;
+            activate_game_index(tx, game_id, &phase_id, ev.seq).await?;
         }
         "PhaseAdvanced" => {
             // Set the current phase; a new phase starts unlocked with no deadline.
@@ -605,6 +634,7 @@ async fn fold_event(
                 insert_host_phase_control(tx, game_id, ev, &phase_control).await?;
             }
             set_phase(tx, game_id, &phase_control.phase_id).await?;
+            update_game_index_phase(tx, game_id, &phase_control.phase_id, ev.seq).await?;
         }
         "DeadlineSet" | "DeadlineExtended" => {
             let p = &ev.payload;
@@ -795,6 +825,7 @@ async fn fold_event(
             .bind(game_id)
             .execute(&mut **tx)
             .await?;
+            complete_game_index(tx, game_id, ev.seq).await?;
         }
 
         // Everything else (posts, channels) is not folded by THESE projections.
@@ -1496,6 +1527,7 @@ async fn rebuild_in_tx(
         "private_channel_member",
         "post_policy",
         "thread_view",
+        "game_index",
     ] {
         sqlx::query(&format!("DELETE FROM {table} WHERE game_id = $1"))
             .bind(game_id)
@@ -1639,6 +1671,10 @@ const AUDIT_PROJECTIONS: &[AuditProjection] = &[
     AuditProjection {
         table: "thread_view",
         order_by: "source_seq",
+    },
+    AuditProjection {
+        table: "game_index",
+        order_by: "game_id",
     },
 ];
 
@@ -2583,6 +2619,71 @@ pub async fn thread_view(
     thread_view_for_channel(pool, game_id, "main", before_seq, limit).await
 }
 
+/// Read public active and completed games newest-first. Setup rows are kept for
+/// rebuildability but never leave this public discovery boundary.
+pub async fn game_index(
+    pool: &PgPool,
+    cursor: Option<GameIndexCursor>,
+    limit: i64,
+) -> Result<GameIndexPage, ProjectionError> {
+    let limit = limit.clamp(1, 100);
+    let fetch_limit = limit + 1;
+    let rows = match cursor {
+        Some(cursor) => {
+            sqlx::query(
+                r#"
+                SELECT game_id, pack, status, phase_id, updated_seq, completed_seq
+                FROM game_index
+                WHERE status IN ('active', 'completed')
+                  AND (updated_seq < $1 OR (updated_seq = $1 AND game_id < $2))
+                ORDER BY updated_seq DESC, game_id DESC
+                LIMIT $3
+                "#,
+            )
+            .bind(cursor.updated_seq)
+            .bind(cursor.game_id)
+            .bind(fetch_limit)
+            .fetch_all(pool)
+            .await?
+        }
+        None => {
+            sqlx::query(
+                r#"
+                SELECT game_id, pack, status, phase_id, updated_seq, completed_seq
+                FROM game_index
+                WHERE status IN ('active', 'completed')
+                ORDER BY updated_seq DESC, game_id DESC
+                LIMIT $1
+                "#,
+            )
+            .bind(fetch_limit)
+            .fetch_all(pool)
+            .await?
+        }
+    };
+    let has_more = rows.len() as i64 > limit;
+    let games: Vec<_> = rows
+        .into_iter()
+        .take(limit as usize)
+        .map(|row| GameIndexRow {
+            game_id: row.get("game_id"),
+            pack: row.get("pack"),
+            status: row.get("status"),
+            phase_id: row.get("phase_id"),
+            updated_seq: row.get("updated_seq"),
+            completed_seq: row.get("completed_seq"),
+        })
+        .collect();
+    let next_cursor = has_more.then(|| {
+        let last = games.last().expect("full page has a final game");
+        GameIndexCursor {
+            updated_seq: last.updated_seq,
+            game_id: last.game_id,
+        }
+    });
+    Ok(GameIndexPage { games, next_cursor })
+}
+
 /// Read one channel's thread as a stable cold-load page. Results are returned
 /// oldest-to-newest for direct rendering. To page older, pass the previous
 /// response's `next_before_seq` as `before_seq`.
@@ -3083,6 +3184,76 @@ async fn set_phase(
     )
     .bind(game_id)
     .bind(phase_id)
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
+}
+
+async fn insert_game_index_setup(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    game_id: Uuid,
+    pack: &str,
+    event_seq: i64,
+) -> Result<(), ProjectionError> {
+    sqlx::query(
+        r#"
+        INSERT INTO game_index (game_id, pack, status, phase_id, created_seq, started_seq, completed_seq, updated_seq)
+        VALUES ($1, $2, 'setup', NULL, $3, NULL, NULL, $3)
+        ON CONFLICT (game_id) DO NOTHING
+        "#,
+    )
+    .bind(game_id)
+    .bind(pack)
+    .bind(event_seq)
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
+}
+
+async fn activate_game_index(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    game_id: Uuid,
+    phase_id: &str,
+    event_seq: i64,
+) -> Result<(), ProjectionError> {
+    sqlx::query(
+        "UPDATE game_index SET status = 'active', phase_id = $2, started_seq = COALESCE(started_seq, $3), updated_seq = $3 WHERE game_id = $1",
+    )
+    .bind(game_id)
+    .bind(phase_id)
+    .bind(event_seq)
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
+}
+
+async fn update_game_index_phase(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    game_id: Uuid,
+    phase_id: &str,
+    event_seq: i64,
+) -> Result<(), ProjectionError> {
+    sqlx::query(
+        "UPDATE game_index SET phase_id = $2, updated_seq = $3 WHERE game_id = $1 AND status = 'active'",
+    )
+    .bind(game_id)
+    .bind(phase_id)
+    .bind(event_seq)
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
+}
+
+async fn complete_game_index(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    game_id: Uuid,
+    event_seq: i64,
+) -> Result<(), ProjectionError> {
+    sqlx::query(
+        "UPDATE game_index SET status = 'completed', completed_seq = $2, updated_seq = $2 WHERE game_id = $1",
+    )
+    .bind(game_id)
+    .bind(event_seq)
     .execute(&mut **tx)
     .await?;
     Ok(())

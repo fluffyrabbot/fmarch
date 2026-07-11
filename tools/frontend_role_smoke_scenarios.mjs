@@ -9,9 +9,9 @@ import {
   buildAppShell,
   buildBoardRouteData,
   buildShellKeyboardOrder,
+  fixtureBoardGameIndexPage,
   gameActionTestId,
   roleNavTestId,
-  workbenchActionTestId,
 } from "../frontend/src/lib/app/app-shell-model.mjs";
 import {
   resolveFixtureSession,
@@ -435,17 +435,11 @@ function routeStatePath(path, state) {
 function buildBoardSmokeScenario({ id, token, game }) {
   const session = resolveFixtureSession({ token, game });
   const data = buildBoardRouteData({
-    game,
     principalUserId: session.principalUserId,
     capabilities: session.resolvedCapabilities,
+    gameIndexPage: fixtureBoardGameIndexPage(game),
   });
   const actions = Object.freeze([
-    ...data.workbench.map((item) =>
-      boardActionScenario({
-        testId: workbenchActionTestId(item.id),
-        action: item.action,
-      }),
-    ),
     ...data.board.games.flatMap((boardGame) =>
       boardGame.actions.map((action) =>
         boardActionScenario({

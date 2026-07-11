@@ -17,7 +17,7 @@ count is treated as product progress.
 
 | Execution class | Complete | Partial | Open | Blocked | Deferred | Total |
 |---|---:|---:|---:|---:|---:|---:|
-| code | 23 | 2 | 3 | 0 | 0 | 28 |
+| code | 24 | 1 | 3 | 0 | 0 | 28 |
 | external-evidence | 0 | 0 | 0 | 6 | 0 | 6 |
 | human | 0 | 0 | 1 | 1 | 0 | 2 |
 | optional | 0 | 0 | 0 | 0 | 1 | 1 |
@@ -28,23 +28,23 @@ Overall release closure complete: **no**.
 
 ## Next buildable coding slice
 
-### Public game index `product.community.game-index`
+### Non-game discussion areas `product.community.discussions`
 
-Build the first public game-index vertical slice: add a durable capability-safe projection and paginated API query for active and completed games, replace the root board shell with the real index, and prove empty, active, completed, pagination, reload, and non-leakage states through the local browser lane.
+Build the first non-game discussion vertical: create a public area aggregate and topic/post projection, add a paginated area route with account-backed topic creation and posting, define GlobalMod moderation transitions, and prove empty, create, post, pagination, reload, and denied moderation states through a seeded browser lane.
 
-Owned paths: `crates/projections/`, `crates/api/`, `frontend/src/routes/+page.server.js`, `frontend/src/routes/+page.svelte`, `tools/`, `docs/arch/02-event-sourcing.md`.
+Owned paths: `crates/eventstore/`, `crates/projections/`, `crates/api/`, `crates/wire/`, `frontend/src/routes/`, `tools/`, `docs/arch/02-event-sourcing.md`.
 
 Proof:
 
-- `DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p projections -p api game_index -- --test-threads=1`
+- `DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p projections -p api discussion -- --test-threads=1`
 - `npm run test:frontend-contract`
 - `npm run test:completeness-scorecard`
 
 Explicit non-claims:
 
-- No non-game discussion, profile, search, ranking, or recommendation claim.
-- No hosted scale, cache, SEO, or public availability claim.
-- No release or production-readiness promotion from local index proof.
+- No direct messages, user profiles, search, ranking, or recommendation claim.
+- No hosted moderation staffing, retention, or legal-policy claim.
+- No release or production-readiness promotion from local discussion proof.
 
 ## Locally proven foundation
 
@@ -98,7 +98,7 @@ Explicit non-claims:
 
 | Status | Capability | Depends on | Complete when | Current / remaining | Evidence / boundary |
 |---|---|---|---|---|---|
-| partial | Public game index<br>`product.community.game-index` | `product.game.core-loop`<br>`product.identity.account-login-invites` | The public board lists capability-safe active and completed games from a real projection with pagination and browser proof. | Remaining: Build the game-index projection/query and replace the board shell with its real paginated surface. | source: `frontend/src/routes/+page.svelte`<br>source: `docs/arch/02-event-sourcing.md`<br>The root board shell and per-game routes exist, but a durable public active/completed game index is not yet a complete product surface. |
+| complete | Public game index<br>`product.community.game-index` | `product.game.core-loop`<br>`product.identity.account-login-invites` | The public board lists capability-safe active and completed games from a real projection with pagination and browser proof. | Complete. | source: `frontend/src/routes/+page.svelte`<br>source: `crates/projections/migrations/0040_game_index.sql`<br>source: `docs/arch/02-event-sourcing.md`<br>command: `npm run test:dev-test-game-game-index:local`<br>artifact: `target/game-index-role-proof/game-index-proof.json`<br>The root board reads a durable public projection of active and completed games, pages by a stable keyset cursor, keeps setup and private lifecycle data out of the query, and is proven through the scratch-Postgres Chromium lane. |
 | open | Non-game discussion areas<br>`product.community.discussions` | `product.community.game-index`<br>`product.identity.registration` | Users can browse, create, post in, and moderate capability-scoped non-game discussions through real routes and projections. | Remaining: Define and implement non-game discussion aggregates, projections, routes, moderation, and proof. | source: `docs/arch/08-roadmap.md`<br>The product has game-scoped threads but no non-game discussion area, topic lifecycle, or moderation surface. |
 | open | User profiles<br>`product.community.profiles` | `product.identity.registration` | A user can view and edit an authorization-safe profile, with durable projection state and browser proof. | Remaining: Design profile events/projections, routes, privacy controls, editing, and media integration. | source: `docs/arch/08-roadmap.md`<br>There is no public profile route or profile-editing lifecycle. |
 

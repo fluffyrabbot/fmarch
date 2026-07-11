@@ -453,25 +453,18 @@
       "order": 10,
       "title": "Public game index",
       "execution_class": "code",
-      "status": "partial",
-      "summary": "The root board shell and per-game routes exist, but a durable public active/completed game index is not yet a complete product surface.",
+      "status": "complete",
+      "summary": "The root board reads a durable public projection of active and completed games, pages by a stable keyset cursor, keeps setup and private lifecycle data out of the query, and is proven through the scratch-Postgres Chromium lane.",
       "complete_when": ["The public board lists capability-safe active and completed games from a real projection with pagination and browser proof."],
       "depends_on": ["product.game.core-loop", "product.identity.account-login-invites"],
       "evidence": [
         { "kind": "source", "value": "frontend/src/routes/+page.svelte" },
-        { "kind": "source", "value": "docs/arch/02-event-sourcing.md" }
+        { "kind": "source", "value": "crates/projections/migrations/0040_game_index.sql" },
+        { "kind": "source", "value": "docs/arch/02-event-sourcing.md" },
+        { "kind": "command", "value": "npm run test:dev-test-game-game-index:local" },
+        { "kind": "artifact", "value": "target/game-index-role-proof/game-index-proof.json" }
       ],
-      "remaining": ["Build the game-index projection/query and replace the board shell with its real paginated surface." ],
-      "recommended_slice": {
-        "objective": "Build the first public game-index vertical slice: add a durable capability-safe projection and paginated API query for active and completed games, replace the root board shell with the real index, and prove empty, active, completed, pagination, reload, and non-leakage states through the local browser lane.",
-        "paths": ["crates/projections/", "crates/api/", "frontend/src/routes/+page.server.js", "frontend/src/routes/+page.svelte", "tools/", "docs/arch/02-event-sourcing.md"],
-        "proof_commands": ["DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p projections -p api game_index -- --test-threads=1", "npm run test:frontend-contract", "npm run test:completeness-scorecard"],
-        "non_claims": [
-          "No non-game discussion, profile, search, ranking, or recommendation claim.",
-          "No hosted scale, cache, SEO, or public availability claim.",
-          "No release or production-readiness promotion from local index proof."
-        ]
-      }
+      "remaining": []
     },
     {
       "id": "product.community.discussions",
@@ -486,7 +479,17 @@
       "evidence": [
         { "kind": "source", "value": "docs/arch/08-roadmap.md" }
       ],
-      "remaining": ["Define and implement non-game discussion aggregates, projections, routes, moderation, and proof." ]
+      "remaining": ["Define and implement non-game discussion aggregates, projections, routes, moderation, and proof." ],
+      "recommended_slice": {
+        "objective": "Build the first non-game discussion vertical: create a public area aggregate and topic/post projection, add a paginated area route with account-backed topic creation and posting, define GlobalMod moderation transitions, and prove empty, create, post, pagination, reload, and denied moderation states through a seeded browser lane.",
+        "paths": ["crates/eventstore/", "crates/projections/", "crates/api/", "crates/wire/", "frontend/src/routes/", "tools/", "docs/arch/02-event-sourcing.md"],
+        "proof_commands": ["DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p projections -p api discussion -- --test-threads=1", "npm run test:frontend-contract", "npm run test:completeness-scorecard"],
+        "non_claims": [
+          "No direct messages, user profiles, search, ranking, or recommendation claim.",
+          "No hosted moderation staffing, retention, or legal-policy claim.",
+          "No release or production-readiness promotion from local discussion proof."
+        ]
+      }
     },
     {
       "id": "product.community.profiles",

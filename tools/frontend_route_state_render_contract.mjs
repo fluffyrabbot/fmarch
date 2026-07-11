@@ -2287,7 +2287,10 @@ import {
 } from "../src/routes/g/[game]/game-route-model.mjs";
 import { buildHostConsoleRouteData } from "../src/routes/g/[game]/host/host-route-model.mjs";
 import { buildRouteStateRouteData } from "../src/lib/app/app-route-state-model.mjs";
-import { buildBoardRouteData } from "../src/lib/app/app-shell-model.mjs";
+import {
+  buildBoardRouteData,
+  fixtureBoardGameIndexPage,
+} from "../src/lib/app/app-shell-model.mjs";
 import { resolveFixtureSession } from "../src/lib/server/session-capabilities.mjs";
 import {
   buildPlayerPrivateQueueViewModel,
@@ -2364,14 +2367,15 @@ export async function renderBoardSurface() {
       { kind: "SlotOccupant", game: "midsummer", slot: "slot-7" },
       { kind: "ChannelMember", game: "midsummer", channel: "private:role_pm:slot-7" },
     ],
+		gameIndexPage: fixtureBoardGameIndexPage("midsummer"),
 	  });
 	  return renderWithRootLayout({ page: "board", data });
 	}
 
 export async function renderBoardPlayerSurface() {
 	  const data = buildBoardRouteData({
-    game: "midsummer",
     ...fixtureRouteInput({ token: "fixture-player" }),
+		gameIndexPage: fixtureBoardGameIndexPage("midsummer"),
 	  });
 	  return renderWithRootLayout({ page: "board", data });
 	}
@@ -2438,8 +2442,8 @@ export async function renderScenario(role, state) {
 	  if (role === "board") {
 	    const data = {
 	      ...buildBoardRouteData({
-	        game: "midsummer",
 	        ...fixtureRouteInput({ token: "fixture-player" }),
+	        gameIndexPage: fixtureBoardGameIndexPage("midsummer"),
 	      }),
 	      routeState: buildRouteStateRouteData({ surface: "board", state }),
 	    };

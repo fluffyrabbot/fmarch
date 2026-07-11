@@ -1,4 +1,4 @@
-import { resolveSurfaceAccess } from "./capabilities.mjs";
+import { normalizeCapabilities, resolveSurfaceAccess } from "./capabilities.mjs";
 import { phaseThemeKey } from "./phase-theme.mjs";
 import { buildAppSurfaceHeaderViewModel } from "./app-surface-header-model.mjs";
 import { buildRouteStateViewModel } from "./app-route-state-model.mjs";
@@ -26,7 +26,11 @@ export const APP_SHELL_CONTRACT = Object.freeze({
 
 export const BOARD_ROUTE_CONTRACT = Object.freeze({
   surfaceTestId: "board-surface",
-  requiredText: "Active games",
+  requiredText: "Games",
+  indexTestId: "board-game-index",
+  emptyTestId: "board-game-index-empty",
+  unavailableTestId: "board-game-index-unavailable",
+  olderTestId: "board-game-index-older",
 });
 
 export const APP_NAVIGATION_PENDING_CONTRACT = Object.freeze({
@@ -106,8 +110,10 @@ export function buildAppShell({
 export function buildBoardRouteData({
   principalUserId = null,
   capabilities = [],
-  game = "midsummer",
+  gameIndexPage = null,
 } = {}) {
+  const board = normalizeBoardGameIndexPage(gameIndexPage);
+  const game = preferredBoardGame({ capabilities, games: board.games });
   const shell = buildAppShell({
     game,
     activeSurface: "board",
@@ -120,74 +126,118 @@ export function buildBoardRouteData({
     surfaceHeader: buildAppSurfaceHeaderViewModel({
       surface: "board",
       eyebrow: "Board",
-      title: "Active games",
-      summary: "Active games, role queues, and proof-linked operation paths.",
+      title: "Games",
+      summary: "Public active and completed games.",
     }),
     board: Object.freeze({
-      label: "Active games",
-      games: Object.freeze([
-        Object.freeze({
-          id: game,
-          title: "Midsummer Invitational",
-          phase: "Day 2",
-          deadline: "Jun 19, 9:00 PM PT",
-          activity: "14 new posts",
-          actions: Object.freeze([
-            boardAction(shell, {
-              surface: "player",
-              label: "Play",
-              primary: true,
-            }),
-            boardAction(shell, {
-              surface: "moderator",
-              label: "Moderate",
-            }),
-          ]),
-        }),
-        Object.freeze({
-          id: "solstice",
-          title: "Solstice Minuet",
-          phase: "Complete",
-          deadline: "Final result posted",
-          activity: "Town wins — view result",
-          actions: Object.freeze([
-            Object.freeze({
-              id: "player",
-              label: "View result",
-              href: "/g/solstice",
-              allowed: true,
-              navigation: "link",
-              ariaDisabled: "false",
-              blockedReason: "",
-              blockedLabel: "",
-              capabilityLabel: "Public endgame result",
-              className: "fm-touch-button fm-touch-button--secondary",
-            }),
-          ]),
-        }),
-      ]),
+      ...board,
+      games: Object.freeze(
+        board.games.map((entry) => boardGameCard({ entry, principalUserId, capabilities })),
+      ),
     }),
-    workbench: Object.freeze([
+  });
+}
+
+export function normalizeBoardGameIndexPage(page) {
+  if (page === null || typeof page !== "object") {
+    return Object.freeze({
+      status: "unavailable",
+      games: Object.freeze([]),
+      nextCursor: null,
+      olderHref: null,
+    });
+  }
+  const sourceGames = Array.isArray(page.games) ? page.games : [];
+  const games = sourceGames
+    .map((entry) => normalizeBoardGameIndexEntry(entry))
+    .filter(Boolean);
+  const nextCursor = nonemptyString(page.next_cursor, page.nextCursor);
+  return Object.freeze({
+    status: "ready",
+    games: Object.freeze(games),
+    nextCursor,
+    olderHref:
+      nextCursor === null ? null : `/?cursor=${encodeURIComponent(nextCursor)}`,
+  });
+}
+
+export function fixtureBoardGameIndexPage(game = "midsummer") {
+  return Object.freeze({
+    games: Object.freeze([
       Object.freeze({
-        id: "player",
-        label: "Player queue",
-        value: "Vote pressure live",
-        action: boardAction(shell, { surface: "player", label: "Open" }),
+        game,
+        pack: "mafiascum",
+        status: "active",
+        phase_id: "D02",
+        updated_seq: 2,
+        completed_seq: null,
       }),
       Object.freeze({
-        id: "moderator",
-        label: "Moderator queue",
-        value: "Replacement pending",
-        action: boardAction(shell, { surface: "moderator", label: "Open" }),
-      }),
-      Object.freeze({
-        id: "admin",
-        label: "Admin queue",
-        value: "Proof runs ready",
-        action: boardAction(shell, { surface: "admin", label: "Open" }),
+        game: "solstice",
+        pack: "mafia_universe",
+        status: "completed",
+        phase_id: "D01",
+        updated_seq: 1,
+        completed_seq: 1,
       }),
     ]),
+    next_cursor: null,
   });
+}
+
+function normalizeBoardGameIndexEntry(entry) {
+  const id = nonemptyString(entry?.game, entry?.id);
+  const pack = nonemptyString(entry?.pack);
+  const status = nonemptyString(entry?.status);
+  if (id === null || pack === null || !["active", "completed"].includes(status)) {
+    return null;
+  }
+  const phaseId = nonemptyString(entry?.phase_id, entry?.phaseId);
+  return Object.freeze({
+    id,
+    pack,
+    title: `${packLabel(pack)} game`,
+    status,
+    statusLabel: status === "active" ? "Active" : "Completed",
+    phaseId,
+    phaseLabel:
+      status === "completed" ? "Completed" : phaseId === null ? "Opening" : phaseId,
+  });
+}
+
+function boardGameCard({ entry, principalUserId, capabilities }) {
+  const gameShell = buildAppShell({
+    game: entry.id,
+    activeSurface: "board",
+    principalUserId,
+    capabilities,
+  });
+  return Object.freeze({
+    ...entry,
+    actions: Object.freeze([
+      boardAction(gameShell, { surface: "player", label: "Open game", primary: true }),
+      boardAction(gameShell, { surface: "moderator", label: "Moderate" }),
+    ]),
+  });
+}
+
+function preferredBoardGame({ capabilities, games }) {
+  const normalized = normalizeCapabilities(capabilities);
+  const capabilityGame = normalized.find((capability) => typeof capability.game === "string")
+    ?.game;
+  return capabilityGame ?? games[0]?.id ?? null;
+}
+
+function packLabel(pack) {
+  return pack
+    .split(/[_-]/)
+    .filter(Boolean)
+    .map((part) => `${part.slice(0, 1).toUpperCase()}${part.slice(1)}`)
+    .join(" ");
+}
+
+function nonemptyString(...values) {
+  return values.find((value) => typeof value === "string" && value.trim() !== "") ?? null;
 }
 
 export function buildShellKeyboardOrder({

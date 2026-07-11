@@ -15,8 +15,8 @@ use domain::{resolve, InnerEvent, ResolutionApplied, ResolutionInput};
 use eventstore::{ActorId, EventInput};
 use projections::{
     action_counters, action_grants, append_and_project, audit_rebuild, day_vote_outcomes,
-    host_phase_controls, host_prompts, phase_state, player_notifications, rebuild, slot_effects,
-    slot_state, votecount,
+    game_index, host_phase_controls, host_prompts, phase_state, player_notifications, rebuild,
+    slot_effects, slot_state, votecount,
 };
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -1470,6 +1470,119 @@ async fn thread_view_pages_main_thread_posts(pool: sqlx::PgPool) {
             .map(|post| (post.channel_id.as_str(), post.body.as_str()))
             .collect::<Vec<_>>(),
         vec![("scum_chat", "private post")]
+    );
+}
+
+/// The public index is a durable lifecycle projection. Setup games are retained
+/// for rebuilds but excluded until started; active and completed rows page by a
+/// stable `(updated_seq, game_id)` cursor without carrying private game state.
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn game_index_pages_public_active_and_completed_lifecycle_rows(pool: sqlx::PgPool) {
+    let active_game = Uuid::from_u128(1);
+    let completed_game = Uuid::from_u128(2);
+    let setup_game = Uuid::from_u128(3);
+
+    append_and_project(
+        &pool,
+        active_game,
+        &[
+            EventInput::new(
+                "GameCreated",
+                1,
+                serde_json::json!({ "host": "host_active", "pack": "mafiascum" }),
+                ActorId::User("host_active".into()),
+                100,
+            ),
+            EventInput::new(
+                "GameStarted",
+                1,
+                serde_json::json!({ "phase_id": "D01" }),
+                ActorId::Host,
+                110,
+            ),
+            EventInput::new(
+                "PhaseAdvanced",
+                1,
+                serde_json::json!({ "phase_id": "N01" }),
+                ActorId::Host,
+                130,
+            ),
+        ],
+    )
+    .await
+    .unwrap();
+    append_and_project(
+        &pool,
+        completed_game,
+        &[
+            EventInput::new(
+                "GameCreated",
+                1,
+                serde_json::json!({ "host": "host_completed", "pack": "mafia_universe" }),
+                ActorId::User("host_completed".into()),
+                90,
+            ),
+            EventInput::new(
+                "GameStarted",
+                1,
+                serde_json::json!({ "phase_id": "D01" }),
+                ActorId::Host,
+                100,
+            ),
+            EventInput::new(
+                "GameCompleted",
+                1,
+                serde_json::json!({}),
+                ActorId::Host,
+                140,
+            ),
+        ],
+    )
+    .await
+    .unwrap();
+    append_and_project(
+        &pool,
+        setup_game,
+        &[EventInput::new(
+            "GameCreated",
+            1,
+            serde_json::json!({ "host": "host_setup", "pack": "epicmafia" }),
+            ActorId::User("host_setup".into()),
+            150,
+        )],
+    )
+    .await
+    .unwrap();
+
+    let latest = game_index(&pool, None, 1).await.unwrap();
+    assert_eq!(latest.games.len(), 1);
+    assert_eq!(latest.games[0].game_id, completed_game);
+    assert_eq!(latest.games[0].status, "completed");
+    assert_eq!(latest.games[0].phase_id.as_deref(), Some("D01"));
+    assert_eq!(latest.games[0].completed_seq, Some(6));
+    let cursor = latest.next_cursor.expect("older public row cursor");
+
+    let older = game_index(&pool, Some(cursor), 1).await.unwrap();
+    assert_eq!(older.games.len(), 1);
+    assert_eq!(older.games[0].game_id, active_game);
+    assert_eq!(older.games[0].status, "active");
+    assert_eq!(older.games[0].phase_id.as_deref(), Some("N01"));
+    assert_eq!(older.next_cursor, None);
+
+    rebuild(&pool, active_game).await.unwrap();
+    rebuild(&pool, completed_game).await.unwrap();
+    rebuild(&pool, setup_game).await.unwrap();
+    let rebuilt = game_index(&pool, None, 10).await.unwrap();
+    assert_eq!(
+        rebuilt
+            .games
+            .iter()
+            .map(|row| (row.game_id, row.status.as_str(), row.phase_id.as_deref()))
+            .collect::<Vec<_>>(),
+        vec![
+            (completed_game, "completed", Some("D01")),
+            (active_game, "active", Some("N01")),
+        ]
     );
 }
 

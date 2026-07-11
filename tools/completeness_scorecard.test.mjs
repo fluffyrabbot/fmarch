@@ -13,7 +13,7 @@ import {
   validateRegistry,
 } from "./completeness_scorecard.mjs";
 
-test("real completion registry validates completed identity delivery and selects game index", async () => {
+test("real completion registry validates completed game index and selects discussions", async () => {
   const registry = await loadCompletionRegistry();
   await validateRegistry(registry);
   const summary = summarizeRegistry(registry);
@@ -29,11 +29,11 @@ test("real completion registry validates completed identity delivery and selects
   assert.equal(summary.platformComplete, false);
   assert.equal(summary.releaseComplete, false);
   const nextItem = nextBuildableCodeItem(registry);
-  assert.equal(nextItem?.id, "product.community.game-index");
+  assert.equal(nextItem?.id, "product.community.discussions");
   assert.deepEqual(nextItem?.remaining, [
-    "Build the game-index projection/query and replace the board shell with its real paginated surface.",
+    "Define and implement non-game discussion aggregates, projections, routes, moderation, and proof.",
   ]);
-  assert.match(nextItem?.recommended_slice?.objective ?? "", /public game-index/);
+  assert.match(nextItem?.recommended_slice?.objective ?? "", /non-game discussion/);
 });
 
 test("generated scorecard exactly matches the canonical registry", async () => {
@@ -116,7 +116,7 @@ test("registry validation rejects illegal completion and blocked states", async 
   );
 
   const whitespaceRemaining = structuredClone(registry);
-  whitespaceRemaining.items.find((item) => item.id === "product.community.game-index").remaining = ["   "];
+  whitespaceRemaining.items.find((item) => item.id === "product.community.discussions").remaining = ["   "];
   await assert.rejects(
     validateRegistry(whitespaceRemaining, { verifySourcePaths: false }),
     /remaining must contain nonempty strings/,
@@ -124,7 +124,7 @@ test("registry validation rejects illegal completion and blocked states", async 
 
   const completeRecommendedSlice = structuredClone(registry);
   completeRecommendedSlice.items[0].recommended_slice = structuredClone(
-    registry.items.find((item) => item.id === "product.community.game-index")
+    registry.items.find((item) => item.id === "product.community.discussions")
       .recommended_slice,
   );
   await assert.rejects(

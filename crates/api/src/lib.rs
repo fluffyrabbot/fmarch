@@ -31,7 +31,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::broadcast;
 use uuid::Uuid;
 use wire::{
-    AckMsg, CapabilityGrant, ClientEnvelope, DayVoteOutcomeDelta, Hello,
+    AckMsg, CapabilityGrant, ClientEnvelope, DayVoteOutcomeDelta, GameIndexPage, Hello,
     HostConsolePhaseStateDelta, HostConsoleSlotOccupancyDelta, HostConsoleStateDelta,
     HostConsoleThreadPostDelta, HostPhaseControl, HostPromptDelta, HostPromptsDelta,
     PlayerInvestigationResult, PlayerInvestigationResultsDelta, PlayerNotification,
@@ -216,6 +216,7 @@ pub fn router_with_state(state: ApiState) -> Router {
             get(identity_lifecycle_audit),
         )
         .route("/commands", post(command))
+        .route("/games", get(game_index))
         .route("/games/{game}/votecount", get(votecount))
         .route("/games/{game}/day-vote-outcomes", get(day_vote_outcomes))
         .route("/games/{game}/endgame-summary", get(endgame_summary))
@@ -4037,6 +4038,50 @@ async fn day_vote_outcomes(
 struct ThreadQuery {
     before_seq: Option<i64>,
     limit: Option<i64>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct GameIndexQuery {
+    cursor: Option<String>,
+    limit: Option<i64>,
+}
+
+async fn game_index(
+    State(state): State<ApiState>,
+    Query(query): Query<GameIndexQuery>,
+) -> Result<Json<GameIndexPage>, ApiError> {
+    let cursor = query
+        .cursor
+        .as_deref()
+        .map(parse_game_index_cursor)
+        .transpose()?;
+    Ok(Json(
+        projections::game_index(&state.pool, cursor, query.limit.unwrap_or(12))
+            .await?
+            .into(),
+    ))
+}
+
+fn parse_game_index_cursor(value: &str) -> Result<projections::GameIndexCursor, ApiError> {
+    let (updated_seq, game_id) = value.split_once(':').ok_or_else(|| ApiError::Reject {
+        status: StatusCode::BAD_REQUEST,
+        error: RejectCode::StreamConflict,
+        message: "invalid game index cursor; refresh the board and try again".to_string(),
+    })?;
+    let updated_seq = updated_seq.parse::<i64>().map_err(|_| ApiError::Reject {
+        status: StatusCode::BAD_REQUEST,
+        error: RejectCode::StreamConflict,
+        message: "invalid game index cursor; refresh the board and try again".to_string(),
+    })?;
+    let game_id = Uuid::parse_str(game_id).map_err(|_| ApiError::Reject {
+        status: StatusCode::BAD_REQUEST,
+        error: RejectCode::StreamConflict,
+        message: "invalid game index cursor; refresh the board and try again".to_string(),
+    })?;
+    Ok(projections::GameIndexCursor {
+        updated_seq,
+        game_id,
+    })
 }
 
 #[derive(Debug, Clone, Deserialize)]

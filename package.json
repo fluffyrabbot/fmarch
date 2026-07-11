@@ -82,6 +82,8 @@
     "test:dev-test-game-identity:local": "node tools/dev_test_game_local_spine.mjs --script test:dev-test-game-identity",
     "test:dev-test-game-identity:operator": "node tools/dev_test_game_identity_spine.mjs --operator",
     "test:dev-test-game-identity:operator:local": "node tools/dev_test_game_local_spine.mjs --script test:dev-test-game-identity:operator",
+    "test:dev-test-game-game-index": "node tools/game_index_role_proof.mjs",
+    "test:dev-test-game-game-index:local": "node tools/dev_test_game_local_spine.mjs --script test:dev-test-game-game-index",
     "test:dev-test-game-identity:hosted-evidence": "node tools/dev_test_game_hosted_identity_evidence_spine.mjs",
     "test:dev-test-game-backup-restore": "node tools/dev_test_game_backup_restore_spine.mjs",
     "test:dev-test-game-core-live": "node tools/dev_test_game_live_spine.mjs --core",

@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import {
   buildBoardRouteData,
   buildShellKeyboardOrder,
+  fixtureBoardGameIndexPage,
 } from "../frontend/src/lib/app/app-shell-model.mjs";
 import {
   buildAppSurfaceHeaderViewModel,
@@ -88,9 +89,9 @@ const artifactDir = path.join(repoRoot, "target", "frontend-hydrated-surfaces");
 const evidencePath = path.join(artifactDir, "hydrated-surfaces.json");
 
 const boardData = buildBoardRouteData({
-  game: "midsummer",
   principalUserId: "player_mira",
   capabilities: [{ kind: "SlotOccupant", game: "midsummer", slot: "slot-7" }],
+  gameIndexPage: fixtureBoardGameIndexPage("midsummer"),
 });
 const adminData = await buildAdminRouteData({
   principalUserId: "admin_a",

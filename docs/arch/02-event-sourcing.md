@@ -150,7 +150,14 @@ Examples:
 | `player_notification` | one row per `EffectNotification` audience slot, including private engine notices such as Cupid lover knowledge |
 | `phase_state` | current phase, deadline, lock status per game |
 | `channel_membership` | who can read/post where (drives authz reads) |
-| `game_index` | board listing: active games, hosts, phase, deadline |
+| `game_index` | public board listing: active/completed games, pack, status, current phase, and stable page cursor |
+
+`game_index` folds `GameCreated`, `GameStarted`, `PhaseAdvanced`, and `GameCompleted`
+synchronously with the game stream. Setup rows remain rebuildable but are excluded from the
+public query until a game starts; the public row deliberately contains no host, slot, role,
+private-channel, command, or audit data. The board uses the event stream's
+`(updated_seq, game_id)` keyset cursor, so an older page remains stable while newer game
+lifecycle events arrive.
 
 ### Update strategy
 
@@ -159,8 +166,8 @@ Examples:
   appends events and updates these projections in **one DB transaction**. Strong
   read-your-writes, no eventual-consistency surprises in the hot path.
 - **Asynchronous listeners** can use Postgres `LISTEN/NOTIFY` on new `seq` for fan-out
-  work that can lag slightly: pushing deltas to other connected clients, the board index,
-  notifications. `NOTIFY` is only a wakeup optimization; the durable source of delivery
+  work that can lag slightly: pushing deltas to other connected clients and notifications.
+  `NOTIFY` is only a wakeup optimization; the durable source of delivery
   truth is the committed `events.seq` cursor. A listener that misses a notification catches
   up by querying events after its last delivered `seq`. See [03-backend](03-backend.md).
 
