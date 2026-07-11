@@ -5,7 +5,9 @@
 //! `DATABASE_URL` to be set (the compose Postgres, `:5544`); if it is unset the
 //! test FAILS to connect — it never silently passes without a DB.
 
-use eventstore::{append, append_in_tx, load_stream, ActorId, EventInput};
+use eventstore::{
+    append, append_in_tx, export_stream, load_stream, validate_stream_export, ActorId, EventInput,
+};
 use sqlx::Row;
 use std::sync::{Mutex, MutexGuard};
 use uuid::Uuid;
@@ -354,4 +356,15 @@ async fn events_table_is_append_only(pool: sqlx::PgPool) {
     let loaded = load_stream(&pool, g).await.unwrap();
     assert_eq!(loaded.len(), 1);
     assert_eq!(loaded[0].kind, "VoteSubmitted");
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn stream_export_checksum_rejects_tampered_event_data(pool: sqlx::PgPool) {
+    let stream = Uuid::new_v4();
+    append(&pool, stream, &[vote("slot_2", "D1")]).await.unwrap();
+    let export = export_stream(&pool, stream).await.unwrap();
+    validate_stream_export(&export).unwrap();
+    let mut tampered = export.clone();
+    tampered.events[0].payload["target"] = serde_json::json!("slot_9");
+    assert!(validate_stream_export(&tampered).is_err());
 }
