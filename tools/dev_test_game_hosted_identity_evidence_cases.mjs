@@ -1165,6 +1165,9 @@ function hostedIdentityEvidenceFixtureAdapterContract() {
       session: "opaque-session",
     },
     passwordAlgorithm: "argon2id",
+    credentialAttemptPolicyKind: "two-tier-postgres-account-source-lockout",
+    credentialAttemptSourceKind:
+      "sveltekit-client-address-to-trusted-api-header",
     browserCookieName: "fmarch_session",
     lifecycleControls: [
       "account-disable",
@@ -1173,7 +1176,11 @@ function hostedIdentityEvidenceFixtureAdapterContract() {
       "account-recovery-credential-issuance",
       "account-recovery-credential-revocation",
       "account-recovery",
+      "account-registration",
+      "credential-attempt-throttling",
       "session-rotation",
+      "session-age-rotation",
+      "session-logout",
       "session-revocation",
       "invite-revocation",
     ],
