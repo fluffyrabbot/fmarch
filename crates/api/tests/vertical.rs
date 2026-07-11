@@ -1,11 +1,17 @@
-use api::{ApiState, HostSetupStateResponse, MediaUploadResponse};
+use api::{
+    identity_delivery::{
+        IdentityDeliveryAttempt, IdentityDeliveryFailureCode, IdentityDeliveryGateway,
+        IdentityDeliveryOutcome, LocalDeterministicIdentityDeliveryGateway,
+    },
+    ApiState, HostSetupStateResponse, MediaUploadResponse,
+};
 use axum::body::{to_bytes, Body};
 use axum::http::{Request, StatusCode};
 use futures_util::StreamExt;
 use media::{MediaLimits, MediaStore, VariantLimits};
 use std::collections::BTreeSet;
 use std::path::Path;
-use std::sync::OnceLock;
+use std::sync::{Arc, OnceLock};
 use tempfile::TempDir;
 use tower::ServiceExt;
 use uuid::Uuid;
@@ -32,6 +38,19 @@ fn shared_test_media_store() -> MediaStore {
     static ROOT: OnceLock<TempDir> = OnceLock::new();
     let root = ROOT.get_or_init(|| tempfile::tempdir().expect("create shared API test media root"));
     MediaStore::open(root.path(), MediaLimits::default()).expect("open shared API test media store")
+}
+
+#[derive(Debug)]
+struct PermanentFailureIdentityDeliveryGateway;
+
+impl IdentityDeliveryGateway for PermanentFailureIdentityDeliveryGateway {
+    fn provider_id(&self) -> &'static str {
+        "fixture-permanent"
+    }
+
+    fn deliver(&self, _attempt: &IdentityDeliveryAttempt) -> IdentityDeliveryOutcome {
+        IdentityDeliveryOutcome::PermanentFailure(IdentityDeliveryFailureCode::RecipientRejected)
+    }
 }
 
 async fn create_test_auth_account(
@@ -5490,7 +5509,13 @@ async fn global_admin_can_issue_scoped_operator_session_grants(pool: sqlx::PgPoo
 
 #[sqlx::test(migrations = "../projections/migrations")]
 async fn identity_delivery_intent_is_redacted_and_retryable(pool: sqlx::PgPool) {
-    let app = router_with_dev_auth(pool.clone());
+    let app = api::router_with_state(
+        test_api_state(pool.clone())
+            .with_dev_auth(true)
+            .with_identity_delivery_gateway(Arc::new(
+                LocalDeterministicIdentityDeliveryGateway::new(true),
+            )),
+    );
     let admin_token = "delivery-admin-token";
     let response = app
         .clone()
@@ -5546,33 +5571,55 @@ async fn identity_delivery_intent_is_redacted_and_retryable(pool: sqlx::PgPool) 
     assert_eq!(response.status(), StatusCode::OK);
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let invite: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-    assert_eq!(invite["delivery_status"], "delivered");
+    assert_eq!(invite["delivery_status"], "retryable_failed");
     assert_eq!(invite["delivery_attempt_count"], 1);
+    assert_eq!(invite["delivery_provider_id"], "local-deterministic");
+    assert_eq!(invite["delivery_outcome_kind"], "retryable_failure");
+    assert_eq!(invite["delivery_outcome_code"], "local_transient");
     let delivery_id = Uuid::parse_str(invite["delivery_id"].as_str().expect("delivery id"))
         .expect("typed delivery id");
 
-    let (credential_hash, status, attempts, next_attempt_at, delivered_at, last_error) =
-        sqlx::query_as::<_, (String, String, i32, Option<i64>, Option<i64>, Option<String>)>(
-            "SELECT credential_hash, status, attempt_count, next_attempt_at, delivered_at, last_error FROM auth_delivery_intent WHERE delivery_id = $1",
+    let (
+        credential_hash,
+        status,
+        attempts,
+        next_attempt_at,
+        delivered_at,
+        last_error,
+        provider_id,
+        outcome_kind,
+        outcome_code,
+    ) = sqlx::query_as::<_, (
+        String,
+        String,
+        i32,
+        Option<i64>,
+        Option<i64>,
+        Option<String>,
+        String,
+        String,
+        Option<String>,
+    )>(
+            "SELECT credential_hash, status, attempt_count, next_attempt_at, delivered_at, last_error, provider_id, outcome_kind, outcome_code FROM auth_delivery_intent WHERE delivery_id = $1",
         )
         .bind(delivery_id)
         .fetch_one(&pool)
         .await
         .unwrap();
-    assert_eq!(status, "delivered");
+    assert_eq!(status, "retryable_failed");
     assert_eq!(attempts, 1);
-    assert!(next_attempt_at.is_none());
-    assert!(delivered_at.is_some());
-    assert!(last_error.is_none());
+    assert!(next_attempt_at.is_some());
+    assert!(delivered_at.is_none());
+    assert_eq!(last_error.as_deref(), Some("local_transient"));
+    assert_eq!(provider_id, "local-deterministic");
+    assert_eq!(outcome_kind, "retryable_failure");
+    assert_eq!(outcome_code.as_deref(), Some("local_transient"));
     assert!(!credential_hash.contains("delivery-invite-raw-token"));
-
-    sqlx::query(
-        "UPDATE auth_delivery_intent SET status = 'retryable_failed', next_attempt_at = 0, delivered_at = NULL, last_error = 'local-delivery-transient' WHERE delivery_id = $1",
-    )
-    .bind(delivery_id)
-    .execute(&pool)
-    .await
-    .unwrap();
+    sqlx::query("UPDATE auth_delivery_intent SET next_attempt_at = 0 WHERE delivery_id = $1")
+        .bind(delivery_id)
+        .execute(&pool)
+        .await
+        .unwrap();
     let response = app
         .oneshot(
             Request::builder()
@@ -5589,6 +5636,9 @@ async fn identity_delivery_intent_is_redacted_and_retryable(pool: sqlx::PgPool) 
     let retried: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     assert_eq!(retried["status"], "delivered");
     assert_eq!(retried["attempt_count"], 2);
+    assert_eq!(retried["delivery_provider_id"], "local-deterministic");
+    assert_eq!(retried["delivery_outcome_kind"], "delivered");
+    assert!(retried["delivery_outcome_code"].is_null());
     let audit_rows = sqlx::query_as::<_, (String, String)>(
         "SELECT event_kind, actor_user_id FROM identity_lifecycle_audit WHERE principal_user_id = 'delivery_user' ORDER BY id",
     )
@@ -5604,12 +5654,107 @@ async fn identity_delivery_intent_is_redacted_and_retryable(pool: sqlx::PgPool) 
                 "delivery_user".to_string()
             ),
             (
-                "auth_delivery_delivered".to_string(),
+                "auth_delivery_retryable_failed".to_string(),
                 "delivery_user".to_string()
             ),
             ("auth_delivery_retried".to_string(), "admin_a".to_string()),
         ]
     );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn identity_delivery_gateway_persists_terminal_provider_outcomes(pool: sqlx::PgPool) {
+    let app = api::router_with_state(
+        test_api_state(pool.clone())
+            .with_dev_auth(true)
+            .with_identity_delivery_gateway(Arc::new(PermanentFailureIdentityDeliveryGateway)),
+    );
+    let admin_token = "permanent-delivery-admin-token";
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/auth/dev-session")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    serde_json::json!({
+                        "token": admin_token,
+                        "principal_user_id": "permanent_admin",
+                        "expires_at": 4_102_444_800i64,
+                        "global_capabilities": ["GlobalAdmin"]
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    create_test_auth_account(
+        &app,
+        admin_token,
+        "permanent-delivery@example.test",
+        "correct horse battery",
+        "permanent_delivery_user",
+    )
+    .await;
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/auth/invites")
+                .header("content-type", "application/json")
+                .header("authorization", format!("Bearer {admin_token}"))
+                .body(Body::from(
+                    serde_json::json!({
+                        "invite_token": "permanent-delivery-invite-token",
+                        "account_id": "permanent-delivery@example.test",
+                        "expected_principal_user_id": "permanent_delivery_user",
+                        "expires_at": 4_102_444_800i64
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let invite: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(invite["delivery_status"], "permanent_failed");
+    assert_eq!(invite["delivery_provider_id"], "fixture-permanent");
+    assert_eq!(invite["delivery_outcome_kind"], "permanent_failure");
+    assert_eq!(invite["delivery_outcome_code"], "recipient_rejected");
+    let delivery_id = Uuid::parse_str(invite["delivery_id"].as_str().expect("delivery id"))
+        .expect("typed delivery id");
+
+    let persisted = sqlx::query_as::<_, (String, String, String, Option<String>)>(
+        "SELECT status, provider_id, outcome_kind, outcome_code FROM auth_delivery_intent WHERE delivery_id = $1",
+    )
+    .bind(delivery_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(persisted.0, "permanent_failed");
+    assert_eq!(persisted.1, "fixture-permanent");
+    assert_eq!(persisted.2, "permanent_failure");
+    assert_eq!(persisted.3.as_deref(), Some("recipient_rejected"));
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/auth/delivery-intents/{delivery_id}/retry"))
+                .header("authorization", format!("Bearer {admin_token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::CONFLICT);
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]

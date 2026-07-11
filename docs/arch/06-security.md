@@ -45,15 +45,18 @@ content (incompatible with moderation; out of scope by design).
   distributed abuse control, or a hosted identity provider.
 - **Local credential delivery:** invite and recovery issuance first persists a typed
   `auth_delivery_intent` containing only the existing credential hash, account/principal
-  identifiers, adapter state, attempt count, and retry timestamp. The deterministic local
-  adapter can be forced to fail its first attempt with
-  `FMARCH_LOCAL_DELIVERY_FAIL_FIRST_ATTEMPT=1`; a GlobalAdmin can retry an eligible intent
-  through `/auth/delivery-intents/{delivery_id}/retry`, and every queued, failed, delivered,
-  and retried transition is represented in the redacted identity lifecycle audit. The local
-  Chromium identity proof follows both an invite and recovery credential through failure,
-  backoff, retry, and the unchanged capability-derived role URL while confirming no raw
-  credential is stored in the delivery outbox. This is a provider seam and local fake, not
-  evidence of email/SMS traffic, bounce handling, hosted availability, or an operator SLA.
+  identifiers, provider id, typed outcome, attempt count, and retry timestamp. A
+  provider-neutral `IdentityDeliveryGateway` currently selects the deterministic
+  `local-deterministic` transport, which can be forced to fail its first attempt with
+  `FMARCH_LOCAL_DELIVERY_FAIL_FIRST_ATTEMPT=1`. A GlobalAdmin can retry an eligible intent
+  through `/auth/delivery-intents/{delivery_id}/retry`; queued, retryable failure, permanent
+  failure, delivered, and retried transitions retain provider/outcome audit metadata without
+  raw credentials. The local Chromium identity proof follows both an invite and recovery
+  credential through failure, backoff, retry, the rendered admin audit provider/outcome, and
+  the unchanged capability-derived role URL while confirming no raw credential is stored in
+  the delivery outbox. This is a provider seam and local fake, not evidence of email/SMS
+  traffic, bounce handling, hosted availability, or an operator SLA; a networked provider
+  still needs a committed outbox worker and real provider operational proof.
 - **Brute-force defense:** account login, invite redemption, and account recovery share a
   two-tier Postgres failure window. Known accounts lock their hashed account/source scope after
   five failures; unknown account identifiers only increment a hashed source-pressure scope, so

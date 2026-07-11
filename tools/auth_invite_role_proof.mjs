@@ -141,7 +141,7 @@ try {
     scope: "local-auth-invite-role-proof",
     productionReady: false,
     proofBoundary:
-      "Local scratch-Postgres plus local Rust API, SvelteKit registration/login/logout/account-security/account-recovery/host/admin-audit routes, and Chromium proof. Proves Argon2id account credentials, bounded self-service registration into an unprivileged opaque session and seeded game pending-authority surface, hashed single-use recovery credentials, account-bound invite redemption, and a local account credential lifecycle preserve the existing role-surface capability architecture for seeded admin, host, and player URLs. Both invite and recovery issuance persist redacted typed delivery intents, deterministically fail their first local-adapter attempt, observe the declared retry boundary, succeed through the GlobalAdmin retry transition, and then reach the unchanged role surface without storing a raw credential. The lane also proves authenticated logout with denied role back navigation, atomic overdue-session rotation with one concurrent winner and a cleared stale loser, authenticated password rotation and account recovery with session revocation, invalid/expired/revoked/replayed recovery rejection, recovered-password return to the same host role URL, two-tier Postgres credential-attempt throttling with hashed account/source scopes, bounded unknown-account traffic, stale-row pruning, timing-equalized missing credentials, visible retry states, and post-lockout recovery to the same host role URL, host-role-surface game-scoped player invite issuance, GlobalAdmin account creation/disable/enable, stale account-session revocation, disabled-account login rejection, GlobalAdmin discovery, and inspection of local identity lifecycle audit rows from the admin overview; it does not prove real email or SMS traffic, provider bounce handling, hosted delivery availability, hosted identity, distributed or edge abuse controls, hosted password-parameter monitoring, hosted audit retention/export, or beta release readiness.",
+      "Local scratch-Postgres plus local Rust API, SvelteKit registration/login/logout/account-security/account-recovery/host/admin-audit routes, and Chromium proof. Proves Argon2id account credentials, bounded self-service registration into an unprivileged opaque session and seeded game pending-authority surface, hashed single-use recovery credentials, account-bound invite redemption, and a local account credential lifecycle preserve the existing role-surface capability architecture for seeded admin, host, and player URLs. Both invite and recovery issuance persist redacted typed delivery intents through a provider-neutral gateway, deterministically fail their first local-adapter attempt, record typed provider outcomes, observe the declared retry boundary, succeed through the GlobalAdmin retry transition, render the provider/outcome in the admin audit, and then reach the unchanged role surface without storing a raw credential. The lane also proves authenticated logout with denied role back navigation, atomic overdue-session rotation with one concurrent winner and a cleared stale loser, authenticated password rotation and account recovery with session revocation, invalid/expired/revoked/replayed recovery rejection, recovered-password return to the same host role URL, two-tier Postgres credential-attempt throttling with hashed account/source scopes, bounded unknown-account traffic, stale-row pruning, timing-equalized missing credentials, visible retry states, and post-lockout recovery to the same host role URL, host-role-surface game-scoped player invite issuance, GlobalAdmin account creation/disable/enable, stale account-session revocation, disabled-account login rejection, GlobalAdmin discovery, and inspection of local identity lifecycle audit rows from the admin overview; it does not prove real email or SMS traffic, provider bounce handling, hosted delivery availability, hosted identity, distributed or edge abuse controls, hosted password-parameter monitoring, hosted audit retention/export, or beta release readiness.",
     identityAdapter: {
       status: "passed",
       replacesDevTokensWithoutRoleSurfaceChange: true,
@@ -372,6 +372,9 @@ async function createInvite(
     deliveryId: response.delivery_id,
     deliveryStatus: response.delivery_status,
     deliveryAttemptCount: response.delivery_attempt_count,
+    deliveryProviderId: response.delivery_provider_id,
+    deliveryOutcomeKind: response.delivery_outcome_kind,
+    deliveryOutcomeCode: response.delivery_outcome_code,
   };
 }
 
@@ -1693,6 +1696,9 @@ async function finishIdentityLifecycleProof({
     localDelivery: {
       status: "passed",
       adapter: "local-deterministic",
+      gateway: "provider-neutral-delivery-gateway-v1",
+      providerId: "local-deterministic",
+      typedOutcomes: true,
       invite: inviteDelivery,
       recovery: recoveryDelivery,
       retryActorUserId: deliveryRetryAudit.actor_user_id,
@@ -2122,7 +2128,10 @@ async function retryFailedDelivery({ apiBaseUrl, deliveryId, expectedKind }) {
     response.status !== "delivered" ||
     response.delivery_id !== deliveryId ||
     response.delivery_kind !== expectedKind ||
-    response.attempt_count !== 2
+    response.attempt_count !== 2 ||
+    response.delivery_provider_id !== "local-deterministic" ||
+    response.delivery_outcome_kind !== "delivered" ||
+    response.delivery_outcome_code !== null
   ) {
     throw new Error(`delivery retry drifted: ${JSON.stringify(response)}`);
   }
@@ -2131,12 +2140,21 @@ async function retryFailedDelivery({ apiBaseUrl, deliveryId, expectedKind }) {
     deliveryKind: expectedKind,
     status: response.status,
     attemptCount: response.attempt_count,
+    providerId: response.delivery_provider_id,
+    outcomeKind: response.delivery_outcome_kind,
+    outcomeCode: response.delivery_outcome_code,
   };
 }
 
 async function retryFailedDeliveryForCredential({ apiBaseUrl, credential, expectedKind }) {
   const delivery = await storedDeliveryIntent(hashSessionToken(credential));
-  if (delivery.deliveryKind !== expectedKind || delivery.status !== "retryable_failed") {
+  if (
+    delivery.deliveryKind !== expectedKind ||
+    delivery.status !== "retryable_failed" ||
+    delivery.providerId !== "local-deterministic" ||
+    delivery.outcomeKind !== "retryable_failure" ||
+    delivery.outcomeCode !== "local_transient"
+  ) {
     throw new Error(`stored delivery intent drifted: ${JSON.stringify(delivery)}`);
   }
   return await retryFailedDelivery({
@@ -2472,7 +2490,10 @@ async function storedDeliveryIntent(credentialHash) {
         'deliveryKind', delivery_kind,
         'status', status,
         'attemptCount', attempt_count,
-        'credentialHash', credential_hash
+        'credentialHash', credential_hash,
+        'providerId', provider_id,
+        'outcomeKind', outcome_kind,
+        'outcomeCode', outcome_code
       )::TEXT
       FROM auth_delivery_intent
       WHERE credential_hash = ${sqlLiteral(credentialHash)}
@@ -2596,6 +2617,30 @@ async function driveAdminIdentityAuditSurface({
         throw new Error("admin identity lifecycle audit leaked a raw credential");
       }
     }
+    const deliveryProvider = page
+      .getByTestId("admin-audit-entry-auth_delivery_retried-delivery-provider")
+      .first();
+    const deliveryOutcome = page
+      .getByTestId("admin-audit-entry-auth_delivery_retried-delivery-outcome")
+      .first();
+    const deliveryOutcomeCode = page
+      .getByTestId("admin-audit-entry-auth_delivery_retried-delivery-outcome-code")
+      .first();
+    await deliveryProvider.waitFor({ state: "visible", timeout: 15000 });
+    await deliveryOutcome.waitFor({ state: "visible", timeout: 15000 });
+    const deliveryProviderId = await deliveryProvider.innerText();
+    const deliveryOutcomeKind = await deliveryOutcome.innerText();
+    if (
+      deliveryProviderId !== "local-deterministic" ||
+      deliveryOutcomeKind !== "delivered"
+    ) {
+      throw new Error(
+        `admin identity lifecycle audit delivery outcome drifted: ${deliveryProviderId}/${deliveryOutcomeKind}`,
+      );
+    }
+    if ((await deliveryOutcomeCode.count()) !== 0) {
+      throw new Error("admin identity lifecycle audit rendered an absent delivery outcome code");
+    }
     return {
       status: "passed",
       overviewRoleUrl: "/admin?game=<seeded-game>",
@@ -2607,6 +2652,9 @@ async function driveAdminIdentityAuditSurface({
       visibleEventKinds,
       principalUserId: "host_h",
       rawTokensVisible: false,
+      deliveryProviderId,
+      deliveryOutcomeKind,
+      deliveryOutcomeCodeVisible: false,
     };
   } finally {
     await page.close();
@@ -2965,12 +3013,22 @@ function assertInviteProof(evidence) {
     evidence.identityLifecycle?.accountRegistration?.rawPasswordStored !== false ||
     evidence.identityLifecycle?.localDelivery?.status !== "passed" ||
     evidence.identityLifecycle?.localDelivery?.adapter !== "local-deterministic" ||
+    evidence.identityLifecycle?.localDelivery?.gateway !==
+      "provider-neutral-delivery-gateway-v1" ||
+    evidence.identityLifecycle?.localDelivery?.providerId !== "local-deterministic" ||
+    evidence.identityLifecycle?.localDelivery?.typedOutcomes !== true ||
     evidence.identityLifecycle?.localDelivery?.invite?.deliveryKind !== "invite" ||
     evidence.identityLifecycle?.localDelivery?.invite?.status !== "delivered" ||
     evidence.identityLifecycle?.localDelivery?.invite?.attemptCount !== 2 ||
+    evidence.identityLifecycle?.localDelivery?.invite?.providerId !== "local-deterministic" ||
+    evidence.identityLifecycle?.localDelivery?.invite?.outcomeKind !== "delivered" ||
+    evidence.identityLifecycle?.localDelivery?.invite?.outcomeCode !== null ||
     evidence.identityLifecycle?.localDelivery?.recovery?.deliveryKind !== "recovery" ||
     evidence.identityLifecycle?.localDelivery?.recovery?.status !== "delivered" ||
     evidence.identityLifecycle?.localDelivery?.recovery?.attemptCount !== 2 ||
+    evidence.identityLifecycle?.localDelivery?.recovery?.providerId !== "local-deterministic" ||
+    evidence.identityLifecycle?.localDelivery?.recovery?.outcomeKind !== "delivered" ||
+    evidence.identityLifecycle?.localDelivery?.recovery?.outcomeCode !== null ||
     evidence.identityLifecycle?.localDelivery?.retryActorUserId !== "root_admin" ||
     evidence.identityLifecycle?.localDelivery?.rawCredentialsStored !== false ||
     evidence.identityLifecycle?.sessionRotation?.oldSessionRejected !== true ||
@@ -3193,6 +3251,10 @@ function assertInviteProof(evidence) {
     evidence.identityLifecycle?.adminAuditSurface?.status !== "passed" ||
     evidence.identityLifecycle?.adminAuditSurface?.clickedThroughFromOverview !== true ||
     evidence.identityLifecycle?.adminAuditSurface?.rawTokensVisible !== false ||
+    evidence.identityLifecycle?.adminAuditSurface?.deliveryProviderId !==
+      "local-deterministic" ||
+    evidence.identityLifecycle?.adminAuditSurface?.deliveryOutcomeKind !== "delivered" ||
+    evidence.identityLifecycle?.adminAuditSurface?.deliveryOutcomeCodeVisible !== false ||
     !evidence.identityLifecycle?.adminAuditSurface?.visibleEventKinds?.includes(
       "session_rotated",
     ) ||

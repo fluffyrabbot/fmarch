@@ -4,6 +4,12 @@
 //! temporary dev-principal extraction, and mapping command outcomes into `wire`
 //! messages.
 
+pub mod identity_delivery;
+
+use crate::identity_delivery::{
+    IdentityDeliveryAttempt, IdentityDeliveryGateway, IdentityDeliveryKind,
+    IdentityDeliveryOutcome, LocalDeterministicIdentityDeliveryGateway,
+};
 use argon2::password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString};
 use argon2::Argon2;
 use axum::body::Bytes;
@@ -27,7 +33,7 @@ use sha2::{Digest, Sha256};
 use sqlx::postgres::PgPool;
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::path::Path as FsPath;
-use std::sync::OnceLock;
+use std::sync::{Arc, OnceLock};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::broadcast;
 use uuid::Uuid;
@@ -50,6 +56,7 @@ pub struct ApiState {
     server_name: String,
     dev_auth_enabled: bool,
     auth_attempt_policy: AuthAttemptPolicy,
+    identity_delivery_gateway: Arc<dyn IdentityDeliveryGateway>,
     live_projection_tx: broadcast::Sender<LiveProjectionUpdate>,
     live_projection_delivery_delay: Duration,
 }
@@ -103,6 +110,9 @@ impl ApiState {
             server_name: "fmarch-dev".to_string(),
             dev_auth_enabled: std::env::var("FMARCH_DEV_AUTH").ok().as_deref() == Some("1"),
             auth_attempt_policy: auth_attempt_policy_from_env(),
+            identity_delivery_gateway: Arc::new(
+                LocalDeterministicIdentityDeliveryGateway::from_env(),
+            ),
             live_projection_tx,
             live_projection_delivery_delay,
         }
@@ -146,6 +156,14 @@ impl ApiState {
 
     pub fn with_trusted_auth_attempt_source_header(mut self, trusted: bool) -> Self {
         self.auth_attempt_policy.trust_source_header = trusted;
+        self
+    }
+
+    pub fn with_identity_delivery_gateway(
+        mut self,
+        gateway: Arc<dyn IdentityDeliveryGateway>,
+    ) -> Self {
+        self.identity_delivery_gateway = gateway;
         self
     }
 
@@ -779,6 +797,9 @@ struct AuthAccountRecoveryCredentialResponse {
     delivery_id: Uuid,
     delivery_status: String,
     delivery_attempt_count: i32,
+    delivery_provider_id: String,
+    delivery_outcome_kind: String,
+    delivery_outcome_code: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -868,6 +889,9 @@ struct AuthInviteResponse {
     delivery_id: Uuid,
     delivery_status: String,
     delivery_attempt_count: i32,
+    delivery_provider_id: String,
+    delivery_outcome_kind: String,
+    delivery_outcome_code: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -875,6 +899,9 @@ struct AuthDeliveryReceipt {
     delivery_id: Uuid,
     status: String,
     attempt_count: i32,
+    provider_id: String,
+    outcome_kind: String,
+    outcome_code: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -883,6 +910,9 @@ struct AuthDeliveryRetryResponse {
     delivery_id: Uuid,
     delivery_kind: String,
     attempt_count: i32,
+    delivery_provider_id: String,
+    delivery_outcome_kind: String,
+    delivery_outcome_code: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -1563,9 +1593,10 @@ async fn issue_auth_account_recovery_credential(
     )
     .execute(&mut *tx)
     .await?;
-    let delivery = deliver_local_auth_credential(
+    let delivery = deliver_auth_credential(
+        &state,
         &mut tx,
-        "recovery",
+        IdentityDeliveryKind::Recovery,
         account_id,
         principal_user_id.as_str(),
         recovery_hash.as_str(),
@@ -1584,6 +1615,9 @@ async fn issue_auth_account_recovery_credential(
         delivery_id: delivery.delivery_id,
         delivery_status: delivery.status,
         delivery_attempt_count: delivery.attempt_count,
+        delivery_provider_id: delivery.provider_id,
+        delivery_outcome_kind: delivery.outcome_kind,
+        delivery_outcome_code: delivery.outcome_code,
     }))
 }
 
@@ -2324,9 +2358,10 @@ async fn create_auth_invite(
         });
     }
 
-    let delivery = deliver_local_auth_credential(
+    let delivery = deliver_auth_credential(
+        &state,
         &mut tx,
-        "invite",
+        IdentityDeliveryKind::Invite,
         account_id,
         account_principal_user_id.as_str(),
         invite_hash.as_str(),
@@ -2345,6 +2380,9 @@ async fn create_auth_invite(
         delivery_id: delivery.delivery_id,
         delivery_status: delivery.status,
         delivery_attempt_count: delivery.attempt_count,
+        delivery_provider_id: delivery.provider_id,
+        delivery_outcome_kind: delivery.outcome_kind,
+        delivery_outcome_code: delivery.outcome_code,
     }))
 }
 
@@ -2555,9 +2593,9 @@ async fn retry_auth_delivery_intent(
     let actor_user_id = require_global_admin(&state, caller_token, "delivery retry").await?;
     let now = unix_now_seconds();
     let mut tx = state.pool.begin().await?;
-    let intent = sqlx::query_as::<_, (String, String, String, String, i32)>(
+    let intent = sqlx::query_as::<_, (String, String, String, String, i32, String)>(
         r#"
-        SELECT delivery_kind, account_id, principal_user_id, credential_hash, attempt_count
+        SELECT delivery_kind, account_id, principal_user_id, credential_hash, attempt_count, provider_id
         FROM auth_delivery_intent
         WHERE delivery_id = $1
           AND status = 'retryable_failed'
@@ -2575,41 +2613,47 @@ async fn retry_auth_delivery_intent(
         message: "delivery intent is not ready for retry; refresh delivery status and try again"
             .to_string(),
     })?;
-    let attempt_count = sqlx::query_scalar::<_, i32>(
-        r#"
-        UPDATE auth_delivery_intent
-        SET status = 'delivered',
-            attempt_count = attempt_count + 1,
-            next_attempt_at = NULL,
-            delivered_at = $2,
-            last_error = NULL,
-            updated_at = $2
-        WHERE delivery_id = $1
-        RETURNING attempt_count
-        "#,
-    )
-    .bind(delivery_id)
-    .bind(now)
-    .fetch_one(&mut *tx)
-    .await?;
-    record_auth_delivery_audit(
+    let delivery_kind =
+        IdentityDeliveryKind::parse(intent.0.as_str()).ok_or_else(|| ApiError::Reject {
+            status: StatusCode::INTERNAL_SERVER_ERROR,
+            error: RejectCode::Internal,
+            message: "delivery intent has an unknown persisted delivery kind".to_string(),
+        })?;
+    if intent.5 != state.identity_delivery_gateway.provider_id() {
+        return Err(ApiError::Reject {
+            status: StatusCode::CONFLICT,
+            error: RejectCode::StreamConflict,
+            message: "delivery provider changed; refresh delivery status and try again".to_string(),
+        });
+    }
+    let delivery = AuthDeliveryIntent {
+        delivery_id,
+        kind: delivery_kind,
+        account_id: intent.1,
+        principal_user_id: intent.2,
+        credential_hash: intent.3,
+        attempt_count: intent.4,
+        provider_id: intent.5,
+    };
+    let outcome = state.identity_delivery_gateway.deliver(&delivery.attempt());
+    let receipt = apply_auth_delivery_outcome(
         &mut tx,
         "auth_delivery_retried",
-        intent.0.as_str(),
-        intent.1.as_str(),
+        &delivery,
         actor_user_id.as_str(),
-        intent.2.as_str(),
-        intent.3.as_str(),
-        delivery_id,
         now,
+        outcome,
     )
     .await?;
     tx.commit().await?;
     Ok(Json(AuthDeliveryRetryResponse {
-        status: "delivered".to_string(),
+        status: receipt.status,
         delivery_id,
-        delivery_kind: intent.0,
-        attempt_count,
+        delivery_kind: delivery.kind.as_str().to_string(),
+        attempt_count: receipt.attempt_count,
+        delivery_provider_id: receipt.provider_id,
+        delivery_outcome_kind: receipt.outcome_kind,
+        delivery_outcome_code: receipt.outcome_code,
     }))
 }
 
@@ -3105,13 +3149,6 @@ fn auth_session_rotation_max_age_seconds() -> i64 {
     )
 }
 
-fn local_delivery_fail_first_attempt() -> bool {
-    std::env::var("FMARCH_LOCAL_DELIVERY_FAIL_FIRST_ATTEMPT")
-        .ok()
-        .as_deref()
-        == Some("1")
-}
-
 fn env_i64(name: &str, default: i64, minimum: i64, maximum: i64) -> i64 {
     std::env::var(name)
         .ok()
@@ -3163,15 +3200,41 @@ async fn authenticated_account_principal_for_update(
     Ok(caller_principal_user_id)
 }
 
-async fn deliver_local_auth_credential(
+#[derive(Debug, Clone)]
+struct AuthDeliveryIntent {
+    delivery_id: Uuid,
+    kind: IdentityDeliveryKind,
+    account_id: String,
+    principal_user_id: String,
+    credential_hash: String,
+    attempt_count: i32,
+    provider_id: String,
+}
+
+impl AuthDeliveryIntent {
+    fn attempt(&self) -> IdentityDeliveryAttempt {
+        IdentityDeliveryAttempt {
+            delivery_id: self.delivery_id,
+            kind: self.kind,
+            account_id: self.account_id.clone(),
+            principal_user_id: self.principal_user_id.clone(),
+            credential_hash: self.credential_hash.clone(),
+            attempt_number: self.attempt_count + 1,
+        }
+    }
+}
+
+async fn deliver_auth_credential(
+    state: &ApiState,
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    delivery_kind: &str,
+    delivery_kind: IdentityDeliveryKind,
     account_id: &str,
     principal_user_id: &str,
     credential_hash: &str,
     now: i64,
 ) -> Result<AuthDeliveryReceipt, ApiError> {
     let delivery_id = Uuid::new_v4();
+    let provider_id = state.identity_delivery_gateway.provider_id().to_string();
     sqlx::query(
         r#"
         INSERT INTO auth_delivery_intent (
@@ -3181,6 +3244,9 @@ async fn deliver_local_auth_credential(
             principal_user_id,
             credential_hash,
             status,
+            provider_id,
+            outcome_kind,
+            outcome_code,
             attempt_count,
             next_attempt_at,
             delivered_at,
@@ -3188,104 +3254,109 @@ async fn deliver_local_auth_credential(
             created_at,
             updated_at
         )
-        VALUES ($1, $2, $3, $4, $5, 'queued', 0, $6, NULL, NULL, $6, $6)
+        VALUES ($1, $2, $3, $4, $5, 'queued', $6, 'queued', NULL, 0, $7, NULL, NULL, $7, $7)
         "#,
     )
     .bind(delivery_id)
-    .bind(delivery_kind)
+    .bind(delivery_kind.as_str())
     .bind(account_id)
     .bind(principal_user_id)
     .bind(credential_hash)
+    .bind(&provider_id)
     .bind(now)
     .execute(&mut **tx)
     .await?;
     record_auth_delivery_audit(
         tx,
         "auth_delivery_queued",
-        delivery_kind,
+        delivery_kind.as_str(),
         account_id,
         principal_user_id,
         principal_user_id,
         credential_hash,
         delivery_id,
         now,
+        provider_id.as_str(),
+        "queued",
+        None,
     )
     .await?;
+    let delivery = AuthDeliveryIntent {
+        delivery_id,
+        kind: delivery_kind,
+        account_id: account_id.to_string(),
+        principal_user_id: principal_user_id.to_string(),
+        credential_hash: credential_hash.to_string(),
+        attempt_count: 0,
+        provider_id,
+    };
+    let outcome = state.identity_delivery_gateway.deliver(&delivery.attempt());
+    let event_kind = match outcome {
+        IdentityDeliveryOutcome::Delivered => "auth_delivery_delivered",
+        IdentityDeliveryOutcome::RetryableFailure(_) => "auth_delivery_retryable_failed",
+        IdentityDeliveryOutcome::PermanentFailure(_) => "auth_delivery_permanent_failed",
+    };
+    apply_auth_delivery_outcome(tx, event_kind, &delivery, principal_user_id, now, outcome).await
+}
 
-    if local_delivery_fail_first_attempt() {
-        let attempt_count = sqlx::query_scalar::<_, i32>(
-            r#"
-            UPDATE auth_delivery_intent
-            SET status = 'retryable_failed',
-                attempt_count = attempt_count + 1,
-                next_attempt_at = $2 + 1,
-                delivered_at = NULL,
-                last_error = 'local-delivery-transient',
-                updated_at = $2
-            WHERE delivery_id = $1
-              AND status = 'queued'
-            RETURNING attempt_count
-            "#,
-        )
-        .bind(delivery_id)
-        .bind(now)
-        .fetch_one(&mut **tx)
-        .await?;
-        record_auth_delivery_audit(
-            tx,
-            "auth_delivery_retryable_failed",
-            delivery_kind,
-            account_id,
-            principal_user_id,
-            principal_user_id,
-            credential_hash,
-            delivery_id,
-            now,
-        )
-        .await?;
-        return Ok(AuthDeliveryReceipt {
-            delivery_id,
-            status: "retryable_failed".to_string(),
-            attempt_count,
-        });
-    }
-
-    // The local adapter has no network dependency: it deterministically accepts
-    // the redacted intent while retaining a conventional retry-capable schema.
+async fn apply_auth_delivery_outcome(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    event_kind: &str,
+    delivery: &AuthDeliveryIntent,
+    actor_user_id: &str,
+    now: i64,
+    outcome: IdentityDeliveryOutcome,
+) -> Result<AuthDeliveryReceipt, ApiError> {
+    let outcome_code = outcome.code().map(str::to_string);
+    let next_attempt_at = outcome.retry_after_seconds().map(|seconds| now + seconds);
+    let delivered_at = (outcome == IdentityDeliveryOutcome::Delivered).then_some(now);
     let attempt_count = sqlx::query_scalar::<_, i32>(
         r#"
         UPDATE auth_delivery_intent
-        SET status = 'delivered',
+        SET status = $2,
             attempt_count = attempt_count + 1,
-            next_attempt_at = NULL,
-            delivered_at = $2,
-            last_error = NULL,
-            updated_at = $2
+            next_attempt_at = $3,
+            delivered_at = $4,
+            last_error = $5,
+            outcome_kind = $6,
+            outcome_code = $5,
+            updated_at = $7
         WHERE delivery_id = $1
           AND status IN ('queued', 'retryable_failed')
         RETURNING attempt_count
         "#,
     )
-    .bind(delivery_id)
+    .bind(delivery.delivery_id)
+    .bind(outcome.status())
+    .bind(next_attempt_at)
+    .bind(delivered_at)
+    .bind(&outcome_code)
+    .bind(outcome.kind())
     .bind(now)
     .fetch_one(&mut **tx)
     .await?;
     record_auth_delivery_audit(
         tx,
-        "auth_delivery_delivered",
-        delivery_kind,
-        account_id,
-        principal_user_id,
-        principal_user_id,
-        credential_hash,
-        delivery_id,
+        event_kind,
+        delivery.kind.as_str(),
+        delivery.account_id.as_str(),
+        actor_user_id,
+        delivery.principal_user_id.as_str(),
+        delivery.credential_hash.as_str(),
+        delivery.delivery_id,
         now,
+        delivery.provider_id.as_str(),
+        outcome.kind(),
+        outcome.code(),
     )
     .await?;
     Ok(AuthDeliveryReceipt {
-        delivery_id,
-        status: "delivered".to_string(),
+        delivery_id: delivery.delivery_id,
+        status: outcome.status().to_string(),
         attempt_count,
+        provider_id: delivery.provider_id.clone(),
+        outcome_kind: outcome.kind().to_string(),
+        outcome_code,
     })
 }
 
@@ -3299,6 +3370,9 @@ async fn record_auth_delivery_audit(
     credential_hash: &str,
     delivery_id: Uuid,
     now: i64,
+    provider_id: &str,
+    outcome_kind: &str,
+    outcome_code: Option<&str>,
 ) -> Result<(), ApiError> {
     sqlx::query(
         r#"
@@ -3324,7 +3398,10 @@ async fn record_auth_delivery_audit(
             "delivery_id": delivery_id,
             "delivery_kind": delivery_kind,
             "account_id": account_id,
-            "adapter": "local-deterministic"
+            "adapter": provider_id,
+            "provider_id": provider_id,
+            "outcome_kind": outcome_kind,
+            "outcome_code": outcome_code
         })
         .to_string(),
     )

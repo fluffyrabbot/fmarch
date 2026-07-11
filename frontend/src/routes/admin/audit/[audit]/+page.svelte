@@ -121,6 +121,27 @@
             {#if entry.actorUserId}
               <span>{entry.actorUserId}</span>
             {/if}
+            {#if entry.metadata?.provider_id}
+              <span
+                data-testid={`admin-audit-entry-${entry.eventKind}-delivery-provider`}
+              >
+                {entry.metadata.provider_id}
+              </span>
+            {/if}
+            {#if entry.metadata?.outcome_kind}
+              <span
+                data-testid={`admin-audit-entry-${entry.eventKind}-delivery-outcome`}
+              >
+                {entry.metadata.outcome_kind}
+              </span>
+            {/if}
+            {#if entry.metadata?.outcome_code}
+              <span
+                data-testid={`admin-audit-entry-${entry.eventKind}-delivery-outcome-code`}
+              >
+                {entry.metadata.outcome_code}
+              </span>
+            {/if}
           </li>
         {/each}
       </ol>
