@@ -138,6 +138,11 @@ import {
   devTestGameHostedIdentityProgressionAdminProofBatchScript,
   hostedIdentityProgressionAdminProofBatchArtifactPaths,
 } from "./dev_test_game_hosted_identity_progression_admin_proof_batch.mjs";
+import {
+  adminSpineCustomPlanStep,
+  adminSpineProofCustomStep,
+  adminSpineTerminalValidationReceiptCustomStep,
+} from "./dev_test_game_admin_spine_custom_steps.mjs";
 
 export { adminSpineProofPath, adminSpineTerminalBatchProofPath };
 
@@ -326,7 +331,7 @@ export const devTestGameAdminSpinePlan = [
     script: "tools/dev_test_game_real_hosted_observability_handoff.mjs",
   },
   { kind: "node", script: "tools/dev_test_game_release_runbook.mjs" },
-  { kind: "custom", script: "admin-spine-proof", label: "Admin spine proof" },
+  adminSpineCustomPlanStep(adminSpineProofCustomStep),
   { kind: "node", script: "tools/dev_test_game_admin_spine_admin_proof.mjs" },
   releaseReadinessStep({
     reason: "pre-graph-admin-surface-rollup",
@@ -351,11 +356,7 @@ export const devTestGameAdminSpinePlan = [
   { kind: "node", script: "tools/dev_test_game_next_action.mjs" },
   ...devTestGameHostedEvidenceOperatorChecklistHandoffPhase,
   { kind: "node", script: "tools/dev_test_game_proof_graph.mjs" },
-  {
-    kind: "custom",
-    script: terminalAdminProofBatchPlan.script,
-    label: terminalAdminProofBatchPlan.label,
-  },
+  adminSpineCustomPlanStep(terminalAdminProofBatchPlan),
   releaseReadinessStep({
     reason: "terminal-graph-and-local-dependency-surfaces",
     changedInputs: [
@@ -390,11 +391,7 @@ export const devTestGameAdminSpinePlan = [
   }),
   { kind: "node", script: "tools/dev_test_game_release_admin_proof.mjs" },
   { kind: "node", script: "tools/dev_test_game_release_admin_proof_contract.mjs" },
-  {
-    kind: "custom",
-    script: "admin-spine-terminal-validation-receipt",
-    label: "Admin spine terminal validation receipt",
-  },
+  adminSpineCustomPlanStep(adminSpineTerminalValidationReceiptCustomStep),
   { kind: "node", script: "tools/dev_test_game_proof_graph.mjs" },
   { kind: "node", script: "tools/dev_test_game_proof_graph_admin_proof.mjs" },
   releaseReadinessStep({
@@ -450,7 +447,7 @@ export async function runDevTestGameAdminSpine() {
   await clearAdminSpineTerminalBatchProof();
   await runSpinePlan(devTestGameAdminSpinePlan, {
     custom: {
-      "admin-spine-proof": async () => {
+      [adminSpineProofCustomStep.script]: async () => {
         const evidence = await runAdminSpineProof();
         console.log(`wrote ${adminSpineProofPath} (${evidence.status})`);
       },
@@ -477,7 +474,7 @@ export async function runDevTestGameAdminSpine() {
           `wrote ${adminSpineTerminalBatchProofPath} (${evidence.status})`,
         );
       },
-      "admin-spine-terminal-validation-receipt": async () => {
+      [adminSpineTerminalValidationReceiptCustomStep.script]: async () => {
         const evidence = await writeAdminSpineTerminalBatchProof(
           terminalBatchEvidence,
           {

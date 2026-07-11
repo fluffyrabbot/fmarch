@@ -286,6 +286,12 @@ import {
   terminalRefreshAdminProofBatchPlan,
 } from "./dev_test_game_admin_spine.mjs";
 import {
+  adminSpineCustomPlanStep,
+  adminSpineCustomStepRegistry,
+  adminSpineProofCustomStep,
+  adminSpineTerminalValidationReceiptCustomStep,
+} from "./dev_test_game_admin_spine_custom_steps.mjs";
+import {
   backupAwareOpsEnv,
   backupRestoreEvidenceEnv,
   backupRestoreFinalReadinessEnv,
@@ -2176,7 +2182,7 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
       "tools/dev_test_game_hosted_ops_signals.mjs",
       "tools/dev_test_game_real_hosted_observability_handoff.mjs",
       "tools/dev_test_game_release_runbook.mjs",
-      "admin-spine-proof",
+      adminSpineProofCustomStep.script,
       "tools/dev_test_game_admin_spine_admin_proof.mjs",
       devTestGameReleaseReadinessScript,
       "tools/dev_test_game_spine_manifest.mjs",
@@ -2202,7 +2208,7 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
       devTestGameReleaseReadinessScript,
       "tools/dev_test_game_release_admin_proof.mjs",
       "tools/dev_test_game_release_admin_proof_contract.mjs",
-      "admin-spine-terminal-validation-receipt",
+      adminSpineTerminalValidationReceiptCustomStep.script,
       "tools/dev_test_game_proof_graph.mjs",
       "tools/dev_test_game_proof_graph_admin_proof.mjs",
       devTestGameReleaseReadinessScript,
@@ -2212,11 +2218,21 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
       devTestGameReleaseReadinessScript,
     ],
   );
-  assert.deepEqual(devTestGameAdminSpinePlan[14], {
-    kind: "custom",
-    script: "admin-spine-proof",
-    label: "Admin spine proof",
-  });
+  assert.deepEqual(
+    adminSpineCustomStepRegistry.map(adminSpineCustomPlanStep),
+    [
+      adminSpineCustomPlanStep(adminSpineProofCustomStep),
+      adminSpineCustomPlanStep(adminSpineTerminalValidationReceiptCustomStep),
+    ],
+  );
+  assert.throws(
+    () => adminSpineCustomPlanStep({ script: "", label: "Missing script" }),
+    /admin spine custom step requires script/,
+  );
+  assert.deepEqual(
+    devTestGameAdminSpinePlan[14],
+    adminSpineCustomPlanStep(adminSpineProofCustomStep),
+  );
   assert.deepEqual(
     devTestGameHostedEvidenceOperatorChecklistHandoffPhase.map((step) => ({
       script: step.script,
@@ -2286,11 +2302,10 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     devTestGameAdminSpinePlan.slice(19, 23),
     devTestGameHostedEvidenceOperatorChecklistHandoffPhase,
   );
-  assert.deepEqual(devTestGameAdminSpinePlan[24], {
-    kind: "custom",
-    script: terminalAdminProofBatch.script,
-    label: terminalAdminProofBatch.label,
-  });
+  assert.deepEqual(
+    devTestGameAdminSpinePlan[24],
+    adminSpineCustomPlanStep(terminalAdminProofBatch),
+  );
   assert.deepEqual(devTestGameAdminSpinePlan[25], {
     kind: "node",
     script: devTestGameReleaseReadinessScript,
@@ -2401,11 +2416,10 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
       step: devTestGameHostedIdentityTerminalRefreshReadinessHandoffStep.step,
     },
   });
-  assert.deepEqual(devTestGameAdminSpinePlan.at(-8), {
-    kind: "custom",
-    script: "admin-spine-terminal-validation-receipt",
-    label: "Admin spine terminal validation receipt",
-  });
+  assert.deepEqual(
+    devTestGameAdminSpinePlan.at(-8),
+    adminSpineCustomPlanStep(adminSpineTerminalValidationReceiptCustomStep),
+  );
   assert.deepEqual(devTestGameAdminSpinePlan.at(-5), {
     kind: "node",
     script: devTestGameReleaseReadinessScript,
