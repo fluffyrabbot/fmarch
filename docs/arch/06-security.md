@@ -60,7 +60,9 @@ content (incompatible with moderation; out of scope by design).
   the delivery outbox. This is a provider seam and local fake, not evidence of email/SMS
   traffic, bounce handling, hosted availability, or an operator SLA. A network provider still
   needs a sealed credential-payload/key-management design before it can send a useful invite or
-  recovery link from this deliberately redacted outbox.
+  recovery link from this deliberately redacted outbox. The local envelope uses the existing
+  authenticated XChaCha20-Poly1305/key-id boundary with delivery-specific AAD; production must
+  supply that key through the environment or a secrets manager, not source or audit metadata.
 - **Brute-force defense:** account login, invite redemption, and account recovery share a
   two-tier Postgres failure window. Known accounts lock their hashed account/source scope after
   five failures; unknown account identifiers only increment a hashed source-pressure scope, so

@@ -435,13 +435,14 @@
       "title": "Invite and recovery delivery adapters",
       "execution_class": "code",
       "status": "complete",
-      "summary": "Invite and recovery issuance persists redacted typed delivery intents before a deterministic local adapter runs; the scratch-Postgres Chromium lane proves both credential kinds through forced first-attempt failure, declared backoff, GlobalAdmin retry, audit visibility, and the unchanged capability-derived role URL.",
+      "summary": "Invite and recovery issuance seals one-time credentials into redacted typed delivery intents before a lease-claimed provider-neutral outbox worker runs; the scratch-Postgres Chromium lane proves both credential kinds through forced first-attempt failure, declared backoff, provider receipt persistence, GlobalAdmin retry, audit visibility, and the unchanged capability-derived role URL.",
       "complete_when": ["Invite and recovery delivery are provider-abstracted, retryable, auditable, redacted, and locally testable without claiming live provider traffic."],
       "depends_on": ["product.identity.account-login-invites", "product.identity.recovery"],
       "evidence": [
         { "kind": "source", "value": "docs/arch/06-security.md" },
         { "kind": "source", "value": "crates/api/src/lib.rs" },
         { "kind": "source", "value": "crates/projections/migrations/0039_auth_delivery_intent.sql" },
+        { "kind": "source", "value": "crates/projections/migrations/0045_auth_delivery_credential_envelope.sql" },
         { "kind": "command", "value": "npm run test:dev-test-game-identity:local" },
         { "kind": "artifact", "value": "target/auth-invite-role-proof/invite-role-proof.json" }
       ],

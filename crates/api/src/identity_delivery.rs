@@ -1,6 +1,10 @@
+use eventstore::decrypt_delivery_credential;
+use serde_json::Value;
 use sqlx::postgres::PgPool;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::{fmt, fmt::Formatter};
+use thiserror::Error;
 use uuid::Uuid;
 
 pub const LOCAL_DETERMINISTIC_PROVIDER_ID: &str = "local-deterministic";
@@ -28,14 +32,33 @@ impl IdentityDeliveryKind {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct IdentityDeliveryAttempt {
     pub delivery_id: Uuid,
     pub kind: IdentityDeliveryKind,
     pub account_id: String,
     pub principal_user_id: String,
     pub credential_hash: String,
+    pub credential_material: Option<String>,
     pub attempt_number: i32,
+}
+
+impl fmt::Debug for IdentityDeliveryAttempt {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("IdentityDeliveryAttempt")
+            .field("delivery_id", &self.delivery_id)
+            .field("kind", &self.kind)
+            .field("account_id", &self.account_id)
+            .field("principal_user_id", &self.principal_user_id)
+            .field("credential_hash", &self.credential_hash)
+            .field(
+                "credential_material",
+                &self.credential_material.as_ref().map(|_| "[sealed]"),
+            )
+            .field("attempt_number", &self.attempt_number)
+            .finish()
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -43,6 +66,7 @@ pub enum IdentityDeliveryFailureCode {
     LocalTransient,
     ProviderUnavailable,
     RecipientRejected,
+    CredentialUnavailable,
 }
 
 impl IdentityDeliveryFailureCode {
@@ -51,6 +75,7 @@ impl IdentityDeliveryFailureCode {
             Self::LocalTransient => "local_transient",
             Self::ProviderUnavailable => "provider_unavailable",
             Self::RecipientRejected => "recipient_rejected",
+            Self::CredentialUnavailable => "credential_unavailable",
         }
     }
 }
@@ -158,9 +183,18 @@ pub struct IdentityDeliveryReceipt {
     pub provider_receipt_id: Option<String>,
 }
 
+#[derive(Debug, Error)]
+pub enum IdentityDeliveryError {
+    #[error(transparent)]
+    Database(#[from] sqlx::Error),
+    #[error("delivery credential envelope error: {0}")]
+    Credential(String),
+}
+
 #[derive(Debug)]
 struct ClaimedIdentityDelivery {
     attempt: IdentityDeliveryAttempt,
+    credential_envelope: Option<Value>,
     provider_id: String,
     claim_token: Uuid,
 }
@@ -172,12 +206,13 @@ pub async fn process_identity_delivery_intent(
     actor_user_id: &str,
     event_kind: &str,
     now: i64,
-) -> Result<Option<IdentityDeliveryReceipt>, sqlx::Error> {
-    let Some(claim) = claim_delivery(pool, gateway.provider_id(), Some(delivery_id), now).await?
+) -> Result<Option<IdentityDeliveryReceipt>, IdentityDeliveryError> {
+    let Some(mut claim) =
+        claim_delivery(pool, gateway.provider_id(), Some(delivery_id), now).await?
     else {
         return Ok(None);
     };
-    let outcome = gateway.deliver(&claim.attempt);
+    let outcome = deliver_claim(&mut claim, gateway);
     finalize_delivery(pool, claim, outcome, actor_user_id, event_kind, now).await
 }
 
@@ -185,12 +220,12 @@ pub async fn process_next_identity_delivery(
     pool: &PgPool,
     gateway: &dyn IdentityDeliveryGateway,
     now: i64,
-) -> Result<Option<IdentityDeliveryReceipt>, sqlx::Error> {
-    let Some(claim) = claim_delivery(pool, gateway.provider_id(), None, now).await? else {
+) -> Result<Option<IdentityDeliveryReceipt>, IdentityDeliveryError> {
+    let Some(mut claim) = claim_delivery(pool, gateway.provider_id(), None, now).await? else {
         return Ok(None);
     };
     let actor_user_id = claim.attempt.principal_user_id.clone();
-    let outcome = gateway.deliver(&claim.attempt);
+    let outcome = deliver_claim(&mut claim, gateway);
     let event_kind = match &outcome {
         IdentityDeliveryOutcome::Delivered { .. } => "auth_delivery_delivered",
         IdentityDeliveryOutcome::RetryableFailure(_) => "auth_delivery_retryable_failed",
@@ -223,11 +258,11 @@ async fn claim_delivery(
     provider_id: &str,
     delivery_id: Option<Uuid>,
     now: i64,
-) -> Result<Option<ClaimedIdentityDelivery>, sqlx::Error> {
+) -> Result<Option<ClaimedIdentityDelivery>, IdentityDeliveryError> {
     let mut tx = pool.begin().await?;
-    let row = sqlx::query_as::<_, (Uuid, String, String, String, String, i32)>(
+    let row = sqlx::query_as::<_, (Uuid, String, String, String, String, i32, Option<Value>)>(
         r#"
-        SELECT delivery_id, delivery_kind, account_id, principal_user_id, credential_hash, attempt_count
+        SELECT delivery_id, delivery_kind, account_id, principal_user_id, credential_hash, attempt_count, credential_envelope
         FROM auth_delivery_intent
         WHERE provider_id = $1
           AND ($2::UUID IS NULL OR delivery_id = $2)
@@ -253,6 +288,7 @@ async fn claim_delivery(
         principal_user_id,
         credential_hash,
         attempt_count,
+        credential_envelope,
     )) = row
     else {
         tx.commit().await?;
@@ -291,11 +327,44 @@ async fn claim_delivery(
             account_id,
             principal_user_id,
             credential_hash,
+            credential_material: None,
             attempt_number: attempt_count + 1,
         },
+        credential_envelope,
         provider_id: provider_id.to_string(),
         claim_token,
     }))
+}
+
+fn deliver_claim(
+    claim: &mut ClaimedIdentityDelivery,
+    gateway: &dyn IdentityDeliveryGateway,
+) -> IdentityDeliveryOutcome {
+    let Some(envelope) = claim.credential_envelope.as_ref() else {
+        return IdentityDeliveryOutcome::PermanentFailure(
+            IdentityDeliveryFailureCode::CredentialUnavailable,
+        );
+    };
+    let credential_material = match decrypt_delivery_credential(
+        envelope,
+        &delivery_aad(claim.attempt.delivery_id, claim.attempt.kind),
+    ) {
+        Ok(material) => material,
+        Err(_) => {
+            return IdentityDeliveryOutcome::PermanentFailure(
+                IdentityDeliveryFailureCode::CredentialUnavailable,
+            )
+        }
+    };
+    claim.attempt.credential_material = Some(credential_material);
+    gateway.deliver(&claim.attempt)
+}
+
+pub fn delivery_aad(delivery_id: Uuid, kind: IdentityDeliveryKind) -> String {
+    format!(
+        "fmarch:identity-delivery:v1:{delivery_id}:{}",
+        kind.as_str()
+    )
 }
 
 async fn finalize_delivery(
@@ -305,7 +374,7 @@ async fn finalize_delivery(
     actor_user_id: &str,
     event_kind: &str,
     now: i64,
-) -> Result<Option<IdentityDeliveryReceipt>, sqlx::Error> {
+) -> Result<Option<IdentityDeliveryReceipt>, IdentityDeliveryError> {
     let outcome_code = outcome.code().map(str::to_string);
     let provider_receipt_id = outcome.provider_receipt_id().map(str::to_string);
     let next_attempt_at = outcome.retry_after_seconds().map(|seconds| now + seconds);
@@ -432,6 +501,7 @@ mod tests {
             account_id: "member@example.test".to_string(),
             principal_user_id: "member_a".to_string(),
             credential_hash: "redacted-hash".to_string(),
+            credential_material: None,
             attempt_number,
         }
     }

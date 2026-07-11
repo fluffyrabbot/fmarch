@@ -7,8 +7,8 @@
 pub mod identity_delivery;
 
 use crate::identity_delivery::{
-    process_identity_delivery_intent, IdentityDeliveryGateway, IdentityDeliveryKind,
-    LocalDeterministicIdentityDeliveryGateway,
+    delivery_aad, process_identity_delivery_intent, IdentityDeliveryError, IdentityDeliveryGateway,
+    IdentityDeliveryKind, LocalDeterministicIdentityDeliveryGateway,
 };
 use argon2::password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString};
 use argon2::Argon2;
@@ -1600,6 +1600,7 @@ async fn issue_auth_account_recovery_credential(
         account_id,
         principal_user_id.as_str(),
         recovery_hash.as_str(),
+        recovery_token.as_str(),
         now,
     )
     .await?;
@@ -2365,6 +2366,7 @@ async fn create_auth_invite(
         account_id,
         account_principal_user_id.as_str(),
         invite_hash.as_str(),
+        invite_token,
         now,
     )
     .await?;
@@ -3168,10 +3170,20 @@ async fn deliver_auth_credential(
     account_id: &str,
     principal_user_id: &str,
     credential_hash: &str,
+    credential_material: &str,
     now: i64,
 ) -> Result<AuthDeliveryReceipt, ApiError> {
     let delivery_id = Uuid::new_v4();
     let provider_id = state.identity_delivery_gateway.provider_id().to_string();
+    let credential_envelope = eventstore::encrypt_delivery_credential(
+        credential_material,
+        &delivery_aad(delivery_id, delivery_kind),
+    )
+    .map_err(|error| ApiError::Reject {
+        status: StatusCode::INTERNAL_SERVER_ERROR,
+        error: RejectCode::Internal,
+        message: format!("identity delivery payload could not be sealed: {error}"),
+    })?;
     sqlx::query(
         r#"
         INSERT INTO auth_delivery_intent (
@@ -3180,6 +3192,7 @@ async fn deliver_auth_credential(
             account_id,
             principal_user_id,
             credential_hash,
+            credential_envelope,
             status,
             provider_id,
             outcome_kind,
@@ -3191,7 +3204,7 @@ async fn deliver_auth_credential(
             created_at,
             updated_at
         )
-        VALUES ($1, $2, $3, $4, $5, 'queued', $6, 'queued', NULL, 0, $7, NULL, NULL, $7, $7)
+        VALUES ($1, $2, $3, $4, $5, $6::JSONB, 'queued', $7, 'queued', NULL, 0, $8, NULL, NULL, $8, $8)
         "#,
     )
     .bind(delivery_id)
@@ -3199,6 +3212,7 @@ async fn deliver_auth_credential(
     .bind(account_id)
     .bind(principal_user_id)
     .bind(credential_hash)
+    .bind(credential_envelope.to_string())
     .bind(&provider_id)
     .bind(now)
     .execute(&mut **tx)
@@ -6371,6 +6385,19 @@ impl From<caps::CapError> for ApiError {
 impl From<sqlx::Error> for ApiError {
     fn from(err: sqlx::Error) -> Self {
         ApiError::Db(err)
+    }
+}
+
+impl From<IdentityDeliveryError> for ApiError {
+    fn from(error: IdentityDeliveryError) -> Self {
+        match error {
+            IdentityDeliveryError::Database(error) => ApiError::Db(error),
+            IdentityDeliveryError::Credential(error) => ApiError::Reject {
+                status: StatusCode::INTERNAL_SERVER_ERROR,
+                error: RejectCode::Internal,
+                message: format!("identity delivery credential boundary failed: {error}"),
+            },
+        }
     }
 }
 

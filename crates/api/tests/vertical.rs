@@ -49,7 +49,11 @@ impl IdentityDeliveryGateway for PermanentFailureIdentityDeliveryGateway {
         "fixture-permanent"
     }
 
-    fn deliver(&self, _attempt: &IdentityDeliveryAttempt) -> IdentityDeliveryOutcome {
+    fn deliver(&self, attempt: &IdentityDeliveryAttempt) -> IdentityDeliveryOutcome {
+        assert_eq!(
+            attempt.credential_material.as_deref(),
+            Some("permanent-delivery-invite-token")
+        );
         IdentityDeliveryOutcome::PermanentFailure(IdentityDeliveryFailureCode::RecipientRejected)
     }
 }
@@ -5625,6 +5629,15 @@ async fn identity_delivery_intent_is_redacted_and_retryable(pool: sqlx::PgPool) 
     assert_eq!(outcome_kind, "retryable_failure");
     assert_eq!(outcome_code.as_deref(), Some("local_transient"));
     assert!(!credential_hash.contains("delivery-invite-raw-token"));
+    let credential_envelope = sqlx::query_scalar::<_, String>(
+        "SELECT credential_envelope::TEXT FROM auth_delivery_intent WHERE delivery_id = $1",
+    )
+    .bind(delivery_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(credential_envelope.contains("fmarch-event-aead-v1"));
+    assert!(!credential_envelope.contains("delivery-invite-raw-token"));
     sqlx::query("UPDATE auth_delivery_intent SET next_attempt_at = 0 WHERE delivery_id = $1")
         .bind(delivery_id)
         .execute(&pool)

@@ -585,6 +585,30 @@ fn encrypt_json(plaintext: serde_json::Value, aad: &[u8]) -> Result<serde_json::
     }))
 }
 
+/// Encrypts a one-time identity credential for a committed delivery intent.
+/// The caller supplies stable AAD so the envelope cannot be moved to another intent.
+pub fn encrypt_delivery_credential(
+    credential: &str,
+    aad: &str,
+) -> Result<serde_json::Value, StoreError> {
+    encrypt_json(
+        serde_json::json!({ "credential": credential }),
+        aad.as_bytes(),
+    )
+}
+
+/// Decrypts a delivery credential only at the provider boundary.
+pub fn decrypt_delivery_credential(
+    envelope: &serde_json::Value,
+    aad: &str,
+) -> Result<String, StoreError> {
+    decrypt_json(envelope, aad.as_bytes())?
+        .get("credential")
+        .and_then(serde_json::Value::as_str)
+        .map(str::to_owned)
+        .ok_or_else(|| StoreError::Crypto("delivery envelope missing credential".to_string()))
+}
+
 fn decrypt_json(envelope: &serde_json::Value, aad: &[u8]) -> Result<serde_json::Value, StoreError> {
     use base64::engine::general_purpose::STANDARD;
     use base64::Engine;
