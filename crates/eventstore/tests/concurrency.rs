@@ -6,8 +6,10 @@
 //! test FAILS to connect — it never silently passes without a DB.
 
 use eventstore::{
-    append, append_in_tx, export_stream, load_stream, validate_stream_export, ActorId, EventInput,
+    append, append_in_tx, export_stream, import_stream, load_stream, migrate,
+    validate_stream_export, ActorId, EventInput,
 };
+use sqlx::postgres::PgPoolOptions;
 use sqlx::Row;
 use std::sync::{Mutex, MutexGuard};
 use uuid::Uuid;
@@ -367,4 +369,38 @@ async fn stream_export_checksum_rejects_tampered_event_data(pool: sqlx::PgPool) 
     let mut tampered = export.clone();
     tampered.events[0].payload["target"] = serde_json::json!("slot_9");
     assert!(validate_stream_export(&tampered).is_err());
+}
+
+#[tokio::test]
+async fn stream_export_imports_into_an_isolated_database() {
+    let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL for isolated import");
+    let (prefix, _) = database_url.rsplit_once('/').expect("database URL path");
+    let admin_url = format!("{prefix}/postgres");
+    let source_name = format!("fmarch_export_source_{}", Uuid::new_v4().simple());
+    let target_name = format!("fmarch_export_target_{}", Uuid::new_v4().simple());
+    let admin = PgPoolOptions::new().max_connections(1).connect(&admin_url).await.unwrap();
+    for name in [&source_name, &target_name] {
+        sqlx::query(&format!("CREATE DATABASE \"{name}\""))
+            .execute(&admin)
+            .await
+            .unwrap();
+    }
+    let source_url = format!("{prefix}/{source_name}");
+    let target_url = format!("{prefix}/{target_name}");
+    let source = PgPoolOptions::new().max_connections(2).connect(&source_url).await.unwrap();
+    let target = PgPoolOptions::new().max_connections(2).connect(&target_url).await.unwrap();
+    migrate(&source).await.unwrap();
+    migrate(&target).await.unwrap();
+    let stream = Uuid::new_v4();
+    append(&source, stream, &[vote("slot_2", "D1"), vote("slot_3", "D1")]).await.unwrap();
+    let export = export_stream(&source, stream).await.unwrap();
+    import_stream(&target, &export).await.unwrap();
+    assert_eq!(load_stream(&source, stream).await.unwrap(), load_stream(&target, stream).await.unwrap());
+    drop(source); drop(target);
+    for name in [&source_name, &target_name] {
+        sqlx::query("SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1")
+            .bind(name).execute(&admin).await.unwrap();
+        sqlx::query(&format!("DROP DATABASE \"{name}\""))
+            .execute(&admin).await.unwrap();
+    }
 }
