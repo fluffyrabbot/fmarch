@@ -363,7 +363,9 @@ async fn events_table_is_append_only(pool: sqlx::PgPool) {
 #[sqlx::test(migrations = "./migrations")]
 async fn stream_export_checksum_rejects_tampered_event_data(pool: sqlx::PgPool) {
     let stream = Uuid::new_v4();
-    append(&pool, stream, &[vote("slot_2", "D1")]).await.unwrap();
+    append(&pool, stream, &[vote("slot_2", "D1")])
+        .await
+        .unwrap();
     let export = export_stream(&pool, stream).await.unwrap();
     validate_stream_export(&export).unwrap();
     let mut tampered = export.clone();
@@ -378,7 +380,11 @@ async fn stream_export_imports_into_an_isolated_database() {
     let admin_url = format!("{prefix}/postgres");
     let source_name = format!("fmarch_export_source_{}", Uuid::new_v4().simple());
     let target_name = format!("fmarch_export_target_{}", Uuid::new_v4().simple());
-    let admin = PgPoolOptions::new().max_connections(1).connect(&admin_url).await.unwrap();
+    let admin = PgPoolOptions::new()
+        .max_connections(1)
+        .connect(&admin_url)
+        .await
+        .unwrap();
     for name in [&source_name, &target_name] {
         sqlx::query(&format!("CREATE DATABASE \"{name}\""))
             .execute(&admin)
@@ -387,20 +393,43 @@ async fn stream_export_imports_into_an_isolated_database() {
     }
     let source_url = format!("{prefix}/{source_name}");
     let target_url = format!("{prefix}/{target_name}");
-    let source = PgPoolOptions::new().max_connections(2).connect(&source_url).await.unwrap();
-    let target = PgPoolOptions::new().max_connections(2).connect(&target_url).await.unwrap();
+    let source = PgPoolOptions::new()
+        .max_connections(2)
+        .connect(&source_url)
+        .await
+        .unwrap();
+    let target = PgPoolOptions::new()
+        .max_connections(2)
+        .connect(&target_url)
+        .await
+        .unwrap();
     migrate(&source).await.unwrap();
     migrate(&target).await.unwrap();
     let stream = Uuid::new_v4();
-    append(&source, stream, &[vote("slot_2", "D1"), vote("slot_3", "D1")]).await.unwrap();
+    append(
+        &source,
+        stream,
+        &[vote("slot_2", "D1"), vote("slot_3", "D1")],
+    )
+    .await
+    .unwrap();
     let export = export_stream(&source, stream).await.unwrap();
     import_stream(&target, &export).await.unwrap();
-    assert_eq!(load_stream(&source, stream).await.unwrap(), load_stream(&target, stream).await.unwrap());
-    drop(source); drop(target);
+    assert_eq!(
+        load_stream(&source, stream).await.unwrap(),
+        load_stream(&target, stream).await.unwrap()
+    );
+    drop(source);
+    drop(target);
     for name in [&source_name, &target_name] {
         sqlx::query("SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1")
-            .bind(name).execute(&admin).await.unwrap();
+            .bind(name)
+            .execute(&admin)
+            .await
+            .unwrap();
         sqlx::query(&format!("DROP DATABASE \"{name}\""))
-            .execute(&admin).await.unwrap();
+            .execute(&admin)
+            .await
+            .unwrap();
     }
 }
