@@ -244,6 +244,7 @@ pub fn router_with_state(state: ApiState) -> Router {
         .route("/games/{game}/votecount", get(votecount))
         .route("/games/{game}/day-vote-outcomes", get(day_vote_outcomes))
         .route("/games/{game}/endgame-summary", get(endgame_summary))
+        .route("/games/{game}/export", get(completed_game_export))
         .route("/games/{game}/thread", get(thread_view))
         .route(
             "/games/{game}/channels/{channel}/thread",
@@ -4024,6 +4025,35 @@ async fn endgame_summary(
                    WinReached."
             .to_string(),
     }))
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct CompletedGameExportQuery {
+    principal_user_id: Option<String>,
+}
+
+async fn completed_game_export(
+    State(state): State<ApiState>,
+    Path(game): Path<Uuid>,
+    Query(query): Query<CompletedGameExportQuery>,
+) -> Result<Json<eventstore::StreamExport>, ApiError> {
+    let principal_user_id = query.principal_user_id.ok_or_else(|| ApiError::Reject {
+        status: StatusCode::UNAUTHORIZED,
+        error: RejectCode::NotAuthorized,
+        message: "completed-game export requires a host session".to_string(),
+    })?;
+    let capabilities =
+        caps::resolve(&state.pool, &Principal::user(principal_user_id), game).await?;
+    if !capabilities.grants(&Capability::CohostOf(game)) {
+        return Err(ApiError::Reject {
+            status: StatusCode::FORBIDDEN,
+            error: RejectCode::NotAuthorized,
+            message: "completed-game export requires HostOf(game) or CohostOf(game)".to_string(),
+        });
+    }
+    Ok(Json(
+        projections::export_completed_game(&state.pool, game).await?,
+    ))
 }
 
 async fn current_votecount_deltas(
