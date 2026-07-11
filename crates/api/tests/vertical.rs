@@ -1,7 +1,8 @@
 use api::{
     identity_delivery::{
-        IdentityDeliveryAttempt, IdentityDeliveryFailureCode, IdentityDeliveryGateway,
-        IdentityDeliveryOutcome, LocalDeterministicIdentityDeliveryGateway,
+        process_next_identity_delivery, unix_now_seconds, IdentityDeliveryAttempt,
+        IdentityDeliveryFailureCode, IdentityDeliveryGateway, IdentityDeliveryOutcome,
+        LocalDeterministicIdentityDeliveryGateway,
     },
     ApiState, HostSetupStateResponse, MediaUploadResponse,
 };
@@ -5509,12 +5510,11 @@ async fn global_admin_can_issue_scoped_operator_session_grants(pool: sqlx::PgPoo
 
 #[sqlx::test(migrations = "../projections/migrations")]
 async fn identity_delivery_intent_is_redacted_and_retryable(pool: sqlx::PgPool) {
+    let gateway = Arc::new(LocalDeterministicIdentityDeliveryGateway::new(true));
     let app = api::router_with_state(
         test_api_state(pool.clone())
             .with_dev_auth(true)
-            .with_identity_delivery_gateway(Arc::new(
-                LocalDeterministicIdentityDeliveryGateway::new(true),
-            )),
+            .with_identity_delivery_gateway(gateway.clone()),
     );
     let admin_token = "delivery-admin-token";
     let response = app
@@ -5571,13 +5571,23 @@ async fn identity_delivery_intent_is_redacted_and_retryable(pool: sqlx::PgPool) 
     assert_eq!(response.status(), StatusCode::OK);
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let invite: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-    assert_eq!(invite["delivery_status"], "retryable_failed");
-    assert_eq!(invite["delivery_attempt_count"], 1);
+    assert_eq!(invite["delivery_status"], "queued");
+    assert_eq!(invite["delivery_attempt_count"], 0);
     assert_eq!(invite["delivery_provider_id"], "local-deterministic");
-    assert_eq!(invite["delivery_outcome_kind"], "retryable_failure");
-    assert_eq!(invite["delivery_outcome_code"], "local_transient");
+    assert_eq!(invite["delivery_outcome_kind"], "queued");
+    assert!(invite["delivery_outcome_code"].is_null());
     let delivery_id = Uuid::parse_str(invite["delivery_id"].as_str().expect("delivery id"))
         .expect("typed delivery id");
+    process_next_identity_delivery(&pool, gateway.as_ref(), unix_now_seconds())
+        .await
+        .unwrap()
+        .expect("queued delivery claimed");
+    assert!(
+        process_next_identity_delivery(&pool, gateway.as_ref(), unix_now_seconds())
+            .await
+            .unwrap()
+            .is_none()
+    );
 
     let (
         credential_hash,
@@ -5639,6 +5649,14 @@ async fn identity_delivery_intent_is_redacted_and_retryable(pool: sqlx::PgPool) 
     assert_eq!(retried["delivery_provider_id"], "local-deterministic");
     assert_eq!(retried["delivery_outcome_kind"], "delivered");
     assert!(retried["delivery_outcome_code"].is_null());
+    let provider_receipt_id = sqlx::query_scalar::<_, String>(
+        "SELECT provider_receipt_id FROM auth_delivery_intent WHERE delivery_id = $1",
+    )
+    .bind(delivery_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(provider_receipt_id, format!("local-{delivery_id}"));
     let audit_rows = sqlx::query_as::<_, (String, String)>(
         "SELECT event_kind, actor_user_id FROM identity_lifecycle_audit WHERE principal_user_id = 'delivery_user' ORDER BY id",
     )
@@ -5664,10 +5682,11 @@ async fn identity_delivery_intent_is_redacted_and_retryable(pool: sqlx::PgPool) 
 
 #[sqlx::test(migrations = "../projections/migrations")]
 async fn identity_delivery_gateway_persists_terminal_provider_outcomes(pool: sqlx::PgPool) {
+    let gateway = Arc::new(PermanentFailureIdentityDeliveryGateway);
     let app = api::router_with_state(
         test_api_state(pool.clone())
             .with_dev_auth(true)
-            .with_identity_delivery_gateway(Arc::new(PermanentFailureIdentityDeliveryGateway)),
+            .with_identity_delivery_gateway(gateway.clone()),
     );
     let admin_token = "permanent-delivery-admin-token";
     let response = app
@@ -5724,12 +5743,16 @@ async fn identity_delivery_gateway_persists_terminal_provider_outcomes(pool: sql
     assert_eq!(response.status(), StatusCode::OK);
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let invite: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-    assert_eq!(invite["delivery_status"], "permanent_failed");
+    assert_eq!(invite["delivery_status"], "queued");
     assert_eq!(invite["delivery_provider_id"], "fixture-permanent");
-    assert_eq!(invite["delivery_outcome_kind"], "permanent_failure");
-    assert_eq!(invite["delivery_outcome_code"], "recipient_rejected");
+    assert_eq!(invite["delivery_outcome_kind"], "queued");
+    assert!(invite["delivery_outcome_code"].is_null());
     let delivery_id = Uuid::parse_str(invite["delivery_id"].as_str().expect("delivery id"))
         .expect("typed delivery id");
+    process_next_identity_delivery(&pool, gateway.as_ref(), unix_now_seconds())
+        .await
+        .unwrap()
+        .expect("queued delivery claimed");
 
     let persisted = sqlx::query_as::<_, (String, String, String, Option<String>)>(
         "SELECT status, provider_id, outcome_kind, outcome_code FROM auth_delivery_intent WHERE delivery_id = $1",

@@ -67,6 +67,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .run(&pool)
         .await?;
 
+    api::identity_delivery::spawn_identity_delivery_worker(
+        pool.clone(),
+        std::sync::Arc::new(
+            api::identity_delivery::LocalDeterministicIdentityDeliveryGateway::from_env(),
+        ),
+    );
     let app = api::router(pool.clone(), media_store).merge(operator_api::router(pool));
     let listener = tokio::net::TcpListener::bind(config.bind).await?;
     tracing::info!(addr = %config.bind, "fmarch server listening");

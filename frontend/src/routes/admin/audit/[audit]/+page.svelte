@@ -142,6 +142,13 @@
                 {entry.metadata.outcome_code}
               </span>
             {/if}
+            {#if entry.metadata?.provider_receipt_id}
+              <span
+                data-testid={`admin-audit-entry-${entry.eventKind}-delivery-provider-receipt`}
+              >
+                {entry.metadata.provider_receipt_id}
+              </span>
+            {/if}
           </li>
         {/each}
       </ol>

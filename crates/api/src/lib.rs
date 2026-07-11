@@ -7,8 +7,8 @@
 pub mod identity_delivery;
 
 use crate::identity_delivery::{
-    IdentityDeliveryAttempt, IdentityDeliveryGateway, IdentityDeliveryKind,
-    IdentityDeliveryOutcome, LocalDeterministicIdentityDeliveryGateway,
+    process_identity_delivery_intent, IdentityDeliveryGateway, IdentityDeliveryKind,
+    LocalDeterministicIdentityDeliveryGateway,
 };
 use argon2::password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString};
 use argon2::Argon2;
@@ -2592,20 +2592,14 @@ async fn retry_auth_delivery_intent(
     let caller_token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
     let actor_user_id = require_global_admin(&state, caller_token, "delivery retry").await?;
     let now = unix_now_seconds();
-    let mut tx = state.pool.begin().await?;
-    let intent = sqlx::query_as::<_, (String, String, String, String, i32, String)>(
-        r#"
-        SELECT delivery_kind, account_id, principal_user_id, credential_hash, attempt_count, provider_id
-        FROM auth_delivery_intent
-        WHERE delivery_id = $1
-          AND status = 'retryable_failed'
-          AND next_attempt_at <= $2
-        FOR UPDATE
-        "#,
+    let receipt = process_identity_delivery_intent(
+        &state.pool,
+        state.identity_delivery_gateway.as_ref(),
+        delivery_id,
+        actor_user_id.as_str(),
+        "auth_delivery_retried",
+        now,
     )
-    .bind(delivery_id)
-    .bind(now)
-    .fetch_optional(&mut *tx)
     .await?
     .ok_or_else(|| ApiError::Reject {
         status: StatusCode::CONFLICT,
@@ -2613,43 +2607,10 @@ async fn retry_auth_delivery_intent(
         message: "delivery intent is not ready for retry; refresh delivery status and try again"
             .to_string(),
     })?;
-    let delivery_kind =
-        IdentityDeliveryKind::parse(intent.0.as_str()).ok_or_else(|| ApiError::Reject {
-            status: StatusCode::INTERNAL_SERVER_ERROR,
-            error: RejectCode::Internal,
-            message: "delivery intent has an unknown persisted delivery kind".to_string(),
-        })?;
-    if intent.5 != state.identity_delivery_gateway.provider_id() {
-        return Err(ApiError::Reject {
-            status: StatusCode::CONFLICT,
-            error: RejectCode::StreamConflict,
-            message: "delivery provider changed; refresh delivery status and try again".to_string(),
-        });
-    }
-    let delivery = AuthDeliveryIntent {
-        delivery_id,
-        kind: delivery_kind,
-        account_id: intent.1,
-        principal_user_id: intent.2,
-        credential_hash: intent.3,
-        attempt_count: intent.4,
-        provider_id: intent.5,
-    };
-    let outcome = state.identity_delivery_gateway.deliver(&delivery.attempt());
-    let receipt = apply_auth_delivery_outcome(
-        &mut tx,
-        "auth_delivery_retried",
-        &delivery,
-        actor_user_id.as_str(),
-        now,
-        outcome,
-    )
-    .await?;
-    tx.commit().await?;
     Ok(Json(AuthDeliveryRetryResponse {
         status: receipt.status,
         delivery_id,
-        delivery_kind: delivery.kind.as_str().to_string(),
+        delivery_kind: receipt.delivery_kind,
         attempt_count: receipt.attempt_count,
         delivery_provider_id: receipt.provider_id,
         delivery_outcome_kind: receipt.outcome_kind,
@@ -3200,30 +3161,6 @@ async fn authenticated_account_principal_for_update(
     Ok(caller_principal_user_id)
 }
 
-#[derive(Debug, Clone)]
-struct AuthDeliveryIntent {
-    delivery_id: Uuid,
-    kind: IdentityDeliveryKind,
-    account_id: String,
-    principal_user_id: String,
-    credential_hash: String,
-    attempt_count: i32,
-    provider_id: String,
-}
-
-impl AuthDeliveryIntent {
-    fn attempt(&self) -> IdentityDeliveryAttempt {
-        IdentityDeliveryAttempt {
-            delivery_id: self.delivery_id,
-            kind: self.kind,
-            account_id: self.account_id.clone(),
-            principal_user_id: self.principal_user_id.clone(),
-            credential_hash: self.credential_hash.clone(),
-            attempt_number: self.attempt_count + 1,
-        }
-    }
-}
-
 async fn deliver_auth_credential(
     state: &ApiState,
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
@@ -3281,82 +3218,13 @@ async fn deliver_auth_credential(
         None,
     )
     .await?;
-    let delivery = AuthDeliveryIntent {
+    Ok(AuthDeliveryReceipt {
         delivery_id,
-        kind: delivery_kind,
-        account_id: account_id.to_string(),
-        principal_user_id: principal_user_id.to_string(),
-        credential_hash: credential_hash.to_string(),
+        status: "queued".to_string(),
         attempt_count: 0,
         provider_id,
-    };
-    let outcome = state.identity_delivery_gateway.deliver(&delivery.attempt());
-    let event_kind = match outcome {
-        IdentityDeliveryOutcome::Delivered => "auth_delivery_delivered",
-        IdentityDeliveryOutcome::RetryableFailure(_) => "auth_delivery_retryable_failed",
-        IdentityDeliveryOutcome::PermanentFailure(_) => "auth_delivery_permanent_failed",
-    };
-    apply_auth_delivery_outcome(tx, event_kind, &delivery, principal_user_id, now, outcome).await
-}
-
-async fn apply_auth_delivery_outcome(
-    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    event_kind: &str,
-    delivery: &AuthDeliveryIntent,
-    actor_user_id: &str,
-    now: i64,
-    outcome: IdentityDeliveryOutcome,
-) -> Result<AuthDeliveryReceipt, ApiError> {
-    let outcome_code = outcome.code().map(str::to_string);
-    let next_attempt_at = outcome.retry_after_seconds().map(|seconds| now + seconds);
-    let delivered_at = (outcome == IdentityDeliveryOutcome::Delivered).then_some(now);
-    let attempt_count = sqlx::query_scalar::<_, i32>(
-        r#"
-        UPDATE auth_delivery_intent
-        SET status = $2,
-            attempt_count = attempt_count + 1,
-            next_attempt_at = $3,
-            delivered_at = $4,
-            last_error = $5,
-            outcome_kind = $6,
-            outcome_code = $5,
-            updated_at = $7
-        WHERE delivery_id = $1
-          AND status IN ('queued', 'retryable_failed')
-        RETURNING attempt_count
-        "#,
-    )
-    .bind(delivery.delivery_id)
-    .bind(outcome.status())
-    .bind(next_attempt_at)
-    .bind(delivered_at)
-    .bind(&outcome_code)
-    .bind(outcome.kind())
-    .bind(now)
-    .fetch_one(&mut **tx)
-    .await?;
-    record_auth_delivery_audit(
-        tx,
-        event_kind,
-        delivery.kind.as_str(),
-        delivery.account_id.as_str(),
-        actor_user_id,
-        delivery.principal_user_id.as_str(),
-        delivery.credential_hash.as_str(),
-        delivery.delivery_id,
-        now,
-        delivery.provider_id.as_str(),
-        outcome.kind(),
-        outcome.code(),
-    )
-    .await?;
-    Ok(AuthDeliveryReceipt {
-        delivery_id: delivery.delivery_id,
-        status: outcome.status().to_string(),
-        attempt_count,
-        provider_id: delivery.provider_id.clone(),
-        outcome_kind: outcome.kind().to_string(),
-        outcome_code,
+        outcome_kind: "queued".to_string(),
+        outcome_code: None,
     })
 }
 

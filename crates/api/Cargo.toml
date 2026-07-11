@@ -20,7 +20,7 @@ sqlx = { version = "0.8", default-features = false, features = [
     "runtime-tokio",
     "postgres",
 ] }
-tokio = { version = "1", features = ["rt", "sync"] }
+tokio = { version = "1", features = ["rt", "sync", "time"] }
 tracing = "0.1"
 uuid = { version = "1", features = ["v4", "serde"] }
 

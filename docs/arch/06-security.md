@@ -48,15 +48,19 @@ content (incompatible with moderation; out of scope by design).
   identifiers, provider id, typed outcome, attempt count, and retry timestamp. A
   provider-neutral `IdentityDeliveryGateway` currently selects the deterministic
   `local-deterministic` transport, which can be forced to fail its first attempt with
-  `FMARCH_LOCAL_DELIVERY_FAIL_FIRST_ATTEMPT=1`. A GlobalAdmin can retry an eligible intent
-  through `/auth/delivery-intents/{delivery_id}/retry`; queued, retryable failure, permanent
-  failure, delivered, and retried transitions retain provider/outcome audit metadata without
-  raw credentials. The local Chromium identity proof follows both an invite and recovery
+  `FMARCH_LOCAL_DELIVERY_FAIL_FIRST_ATTEMPT=1`. Issuance commits the redacted intent before an
+  independent lease-claimed outbox worker invokes the gateway; concurrent workers use the
+  delivery id as the stable provider idempotency key and persist a provider receipt before
+  releasing the claim. A GlobalAdmin can retry an eligible intent through
+  `/auth/delivery-intents/{delivery_id}/retry`; queued, processing, retryable failure,
+  permanent failure, delivered, and retried transitions retain provider/outcome audit metadata
+  without raw credentials. The local Chromium identity proof follows both an invite and recovery
   credential through failure, backoff, retry, the rendered admin audit provider/outcome, and
   the unchanged capability-derived role URL while confirming no raw credential is stored in
   the delivery outbox. This is a provider seam and local fake, not evidence of email/SMS
-  traffic, bounce handling, hosted availability, or an operator SLA; a networked provider
-  still needs a committed outbox worker and real provider operational proof.
+  traffic, bounce handling, hosted availability, or an operator SLA. A network provider still
+  needs a sealed credential-payload/key-management design before it can send a useful invite or
+  recovery link from this deliberately redacted outbox.
 - **Brute-force defense:** account login, invite redemption, and account recovery share a
   two-tier Postgres failure window. Known accounts lock their hashed account/source scope after
   five failures; unknown account identifiers only increment a hashed source-pressure scope, so

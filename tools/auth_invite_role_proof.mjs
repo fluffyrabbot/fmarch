@@ -2626,6 +2626,9 @@ async function driveAdminIdentityAuditSurface({
     const deliveryOutcomeCode = page
       .getByTestId("admin-audit-entry-auth_delivery_retried-delivery-outcome-code")
       .first();
+    const deliveryReceipt = page
+      .getByTestId("admin-audit-entry-auth_delivery_retried-delivery-provider-receipt")
+      .first();
     await deliveryProvider.waitFor({ state: "visible", timeout: 15000 });
     await deliveryOutcome.waitFor({ state: "visible", timeout: 15000 });
     const deliveryProviderId = await deliveryProvider.innerText();
@@ -2641,6 +2644,11 @@ async function driveAdminIdentityAuditSurface({
     if ((await deliveryOutcomeCode.count()) !== 0) {
       throw new Error("admin identity lifecycle audit rendered an absent delivery outcome code");
     }
+    await deliveryReceipt.waitFor({ state: "visible", timeout: 15000 });
+    const deliveryProviderReceiptId = await deliveryReceipt.innerText();
+    if (!deliveryProviderReceiptId.startsWith("local-")) {
+      throw new Error("admin identity lifecycle audit did not render the provider receipt");
+    }
     return {
       status: "passed",
       overviewRoleUrl: "/admin?game=<seeded-game>",
@@ -2655,6 +2663,7 @@ async function driveAdminIdentityAuditSurface({
       deliveryProviderId,
       deliveryOutcomeKind,
       deliveryOutcomeCodeVisible: false,
+      deliveryProviderReceiptId,
     };
   } finally {
     await page.close();
@@ -3255,6 +3264,9 @@ function assertInviteProof(evidence) {
       "local-deterministic" ||
     evidence.identityLifecycle?.adminAuditSurface?.deliveryOutcomeKind !== "delivered" ||
     evidence.identityLifecycle?.adminAuditSurface?.deliveryOutcomeCodeVisible !== false ||
+    !evidence.identityLifecycle?.adminAuditSurface?.deliveryProviderReceiptId?.startsWith(
+      "local-",
+    ) ||
     !evidence.identityLifecycle?.adminAuditSurface?.visibleEventKinds?.includes(
       "session_rotated",
     ) ||

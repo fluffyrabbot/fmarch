@@ -1,3 +1,6 @@
+use sqlx::postgres::PgPool;
+use std::sync::Arc;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
 
 pub const LOCAL_DETERMINISTIC_PROVIDER_ID: &str = "local-deterministic";
@@ -52,41 +55,50 @@ impl IdentityDeliveryFailureCode {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum IdentityDeliveryOutcome {
-    Delivered,
+    Delivered { provider_receipt_id: String },
     RetryableFailure(IdentityDeliveryFailureCode),
     PermanentFailure(IdentityDeliveryFailureCode),
 }
 
 impl IdentityDeliveryOutcome {
-    pub fn status(self) -> &'static str {
+    pub fn status(&self) -> &'static str {
         match self {
-            Self::Delivered => "delivered",
+            Self::Delivered { .. } => "delivered",
             Self::RetryableFailure(_) => "retryable_failed",
             Self::PermanentFailure(_) => "permanent_failed",
         }
     }
 
-    pub fn kind(self) -> &'static str {
+    pub fn kind(&self) -> &'static str {
         match self {
-            Self::Delivered => "delivered",
+            Self::Delivered { .. } => "delivered",
             Self::RetryableFailure(_) => "retryable_failure",
             Self::PermanentFailure(_) => "permanent_failure",
         }
     }
 
-    pub fn code(self) -> Option<&'static str> {
+    pub fn code(&self) -> Option<&'static str> {
         match self {
-            Self::Delivered => None,
+            Self::Delivered { .. } => None,
             Self::RetryableFailure(code) | Self::PermanentFailure(code) => Some(code.as_str()),
         }
     }
 
-    pub fn retry_after_seconds(self) -> Option<i64> {
+    pub fn retry_after_seconds(&self) -> Option<i64> {
         match self {
             Self::RetryableFailure(_) => Some(1),
-            Self::Delivered | Self::PermanentFailure(_) => None,
+            Self::Delivered { .. } | Self::PermanentFailure(_) => None,
+        }
+    }
+
+    pub fn provider_receipt_id(&self) -> Option<&str> {
+        match self {
+            Self::Delivered {
+                provider_receipt_id,
+            } => Some(provider_receipt_id.as_str()),
+            Self::RetryableFailure(_) | Self::PermanentFailure(_) => None,
         }
     }
 }
@@ -128,8 +140,280 @@ impl IdentityDeliveryGateway for LocalDeterministicIdentityDeliveryGateway {
                 IdentityDeliveryFailureCode::LocalTransient,
             );
         }
-        IdentityDeliveryOutcome::Delivered
+        IdentityDeliveryOutcome::Delivered {
+            provider_receipt_id: format!("local-{}", attempt.delivery_id),
+        }
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IdentityDeliveryReceipt {
+    pub delivery_id: Uuid,
+    pub delivery_kind: String,
+    pub status: String,
+    pub attempt_count: i32,
+    pub provider_id: String,
+    pub outcome_kind: String,
+    pub outcome_code: Option<String>,
+    pub provider_receipt_id: Option<String>,
+}
+
+#[derive(Debug)]
+struct ClaimedIdentityDelivery {
+    attempt: IdentityDeliveryAttempt,
+    provider_id: String,
+    claim_token: Uuid,
+}
+
+pub async fn process_identity_delivery_intent(
+    pool: &PgPool,
+    gateway: &dyn IdentityDeliveryGateway,
+    delivery_id: Uuid,
+    actor_user_id: &str,
+    event_kind: &str,
+    now: i64,
+) -> Result<Option<IdentityDeliveryReceipt>, sqlx::Error> {
+    let Some(claim) = claim_delivery(pool, gateway.provider_id(), Some(delivery_id), now).await?
+    else {
+        return Ok(None);
+    };
+    let outcome = gateway.deliver(&claim.attempt);
+    finalize_delivery(pool, claim, outcome, actor_user_id, event_kind, now).await
+}
+
+pub async fn process_next_identity_delivery(
+    pool: &PgPool,
+    gateway: &dyn IdentityDeliveryGateway,
+    now: i64,
+) -> Result<Option<IdentityDeliveryReceipt>, sqlx::Error> {
+    let Some(claim) = claim_delivery(pool, gateway.provider_id(), None, now).await? else {
+        return Ok(None);
+    };
+    let actor_user_id = claim.attempt.principal_user_id.clone();
+    let outcome = gateway.deliver(&claim.attempt);
+    let event_kind = match &outcome {
+        IdentityDeliveryOutcome::Delivered { .. } => "auth_delivery_delivered",
+        IdentityDeliveryOutcome::RetryableFailure(_) => "auth_delivery_retryable_failed",
+        IdentityDeliveryOutcome::PermanentFailure(_) => "auth_delivery_permanent_failed",
+    };
+    finalize_delivery(pool, claim, outcome, &actor_user_id, event_kind, now).await
+}
+
+pub fn spawn_identity_delivery_worker(
+    pool: PgPool,
+    gateway: Arc<dyn IdentityDeliveryGateway>,
+) -> tokio::task::JoinHandle<()> {
+    tokio::spawn(async move {
+        loop {
+            match process_next_identity_delivery(&pool, gateway.as_ref(), unix_now_seconds()).await
+            {
+                Ok(Some(_)) => continue,
+                Ok(None) => tokio::time::sleep(Duration::from_millis(100)).await,
+                Err(error) => {
+                    tracing::error!(error = %error, "identity delivery worker failed");
+                    tokio::time::sleep(Duration::from_secs(1)).await;
+                }
+            }
+        }
+    })
+}
+
+async fn claim_delivery(
+    pool: &PgPool,
+    provider_id: &str,
+    delivery_id: Option<Uuid>,
+    now: i64,
+) -> Result<Option<ClaimedIdentityDelivery>, sqlx::Error> {
+    let mut tx = pool.begin().await?;
+    let row = sqlx::query_as::<_, (Uuid, String, String, String, String, i32)>(
+        r#"
+        SELECT delivery_id, delivery_kind, account_id, principal_user_id, credential_hash, attempt_count
+        FROM auth_delivery_intent
+        WHERE provider_id = $1
+          AND ($2::UUID IS NULL OR delivery_id = $2)
+          AND (
+              (status = 'queued' AND next_attempt_at <= $3)
+              OR ($2::UUID IS NOT NULL AND status = 'retryable_failed' AND next_attempt_at <= $3)
+              OR (status = 'processing' AND claim_expires_at <= $3)
+          )
+        ORDER BY created_at, delivery_id
+        FOR UPDATE SKIP LOCKED
+        LIMIT 1
+        "#,
+    )
+    .bind(provider_id)
+    .bind(delivery_id)
+    .bind(now)
+    .fetch_optional(&mut *tx)
+    .await?;
+    let Some((
+        delivery_id,
+        delivery_kind,
+        account_id,
+        principal_user_id,
+        credential_hash,
+        attempt_count,
+    )) = row
+    else {
+        tx.commit().await?;
+        return Ok(None);
+    };
+    let kind = IdentityDeliveryKind::parse(&delivery_kind).expect("validated delivery kind");
+    let claim_token = Uuid::new_v4();
+    sqlx::query(
+        r#"
+        UPDATE auth_delivery_intent
+        SET status = 'processing',
+            outcome_kind = 'processing',
+            outcome_code = NULL,
+            next_attempt_at = NULL,
+            delivered_at = NULL,
+            last_error = NULL,
+            provider_receipt_id = NULL,
+            claim_token = $2,
+            claim_expires_at = $3,
+            attempt_count = attempt_count + 1,
+            updated_at = $4
+        WHERE delivery_id = $1
+        "#,
+    )
+    .bind(delivery_id)
+    .bind(claim_token)
+    .bind(now + 60)
+    .bind(now)
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    Ok(Some(ClaimedIdentityDelivery {
+        attempt: IdentityDeliveryAttempt {
+            delivery_id,
+            kind,
+            account_id,
+            principal_user_id,
+            credential_hash,
+            attempt_number: attempt_count + 1,
+        },
+        provider_id: provider_id.to_string(),
+        claim_token,
+    }))
+}
+
+async fn finalize_delivery(
+    pool: &PgPool,
+    claim: ClaimedIdentityDelivery,
+    outcome: IdentityDeliveryOutcome,
+    actor_user_id: &str,
+    event_kind: &str,
+    now: i64,
+) -> Result<Option<IdentityDeliveryReceipt>, sqlx::Error> {
+    let outcome_code = outcome.code().map(str::to_string);
+    let provider_receipt_id = outcome.provider_receipt_id().map(str::to_string);
+    let next_attempt_at = outcome.retry_after_seconds().map(|seconds| now + seconds);
+    let delivered_at = (outcome.status() == "delivered").then_some(now);
+    let mut tx = pool.begin().await?;
+    let attempt_count = sqlx::query_scalar::<_, i32>(
+        r#"
+        UPDATE auth_delivery_intent
+        SET status = $3,
+            outcome_kind = $4,
+            outcome_code = $5,
+            next_attempt_at = $6,
+            delivered_at = $7,
+            last_error = $5,
+            provider_receipt_id = $8,
+            claim_token = NULL,
+            claim_expires_at = NULL,
+            updated_at = $9
+        WHERE delivery_id = $1
+          AND status = 'processing'
+          AND claim_token = $2
+        RETURNING attempt_count
+        "#,
+    )
+    .bind(claim.attempt.delivery_id)
+    .bind(claim.claim_token)
+    .bind(outcome.status())
+    .bind(outcome.kind())
+    .bind(&outcome_code)
+    .bind(next_attempt_at)
+    .bind(delivered_at)
+    .bind(&provider_receipt_id)
+    .bind(now)
+    .fetch_optional(&mut *tx)
+    .await?;
+    let Some(attempt_count) = attempt_count else {
+        tx.commit().await?;
+        return Ok(None);
+    };
+    record_delivery_audit(
+        &mut tx,
+        event_kind,
+        &claim,
+        actor_user_id,
+        outcome.kind(),
+        outcome.code(),
+        provider_receipt_id.as_deref(),
+        now,
+    )
+    .await?;
+    tx.commit().await?;
+    Ok(Some(IdentityDeliveryReceipt {
+        delivery_id: claim.attempt.delivery_id,
+        delivery_kind: claim.attempt.kind.as_str().to_string(),
+        status: outcome.status().to_string(),
+        attempt_count,
+        provider_id: claim.provider_id,
+        outcome_kind: outcome.kind().to_string(),
+        outcome_code,
+        provider_receipt_id,
+    }))
+}
+
+async fn record_delivery_audit(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    event_kind: &str,
+    claim: &ClaimedIdentityDelivery,
+    actor_user_id: &str,
+    outcome_kind: &str,
+    outcome_code: Option<&str>,
+    provider_receipt_id: Option<&str>,
+    now: i64,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        r#"
+        INSERT INTO identity_lifecycle_audit (
+            event_at, event_kind, actor_user_id, principal_user_id, token_hash, related_token_hash, metadata
+        ) VALUES ($1, $2, $3, $4, $5, NULL, $6::JSONB)
+        "#,
+    )
+    .bind(now)
+    .bind(event_kind)
+    .bind(actor_user_id)
+    .bind(&claim.attempt.principal_user_id)
+    .bind(&claim.attempt.credential_hash)
+    .bind(
+        serde_json::json!({
+            "delivery_id": claim.attempt.delivery_id,
+            "delivery_kind": claim.attempt.kind.as_str(),
+            "account_id": claim.attempt.account_id,
+            "adapter": claim.provider_id,
+            "provider_id": claim.provider_id,
+            "outcome_kind": outcome_kind,
+            "outcome_code": outcome_code,
+            "provider_receipt_id": provider_receipt_id
+        })
+        .to_string(),
+    )
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
+}
+
+pub fn unix_now_seconds() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs() as i64
 }
 
 #[cfg(test)]
@@ -162,7 +446,9 @@ mod tests {
         );
         assert_eq!(
             gateway.deliver(&attempt(2)),
-            IdentityDeliveryOutcome::Delivered
+            IdentityDeliveryOutcome::Delivered {
+                provider_receipt_id: "local-00000000-0000-0000-0000-000000000000".to_string(),
+            }
         );
     }
 
