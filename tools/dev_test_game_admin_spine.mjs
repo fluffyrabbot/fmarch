@@ -126,10 +126,12 @@ import {
   buildSelectedLocalDependencyTerminalReceipt,
   buildSelectedOperatorHandoffTerminalReceipt,
 } from "./dev_test_game_terminal_receipts.mjs";
+import {
+  handoffDescriptorPlanStep,
+} from "./dev_test_game_handoff_phase_plan_builder.mjs";
 import { releaseReadinessStep } from "./dev_test_game_spine_readiness_steps.mjs";
 import {
   handoffPhaseSteps,
-  phaseLocalNextActionStep,
   runSpinePlan,
 } from "./dev_test_game_spine_runner.mjs";
 import {
@@ -268,6 +270,7 @@ export const devTestGameHostedEvidenceOperatorChecklistHandoffPhase =
       (descriptor) =>
         handoffDescriptorPlanStep(descriptor, {
           readinessEnv: adminSpineReadinessEvidenceEnv,
+          customPlanForScript: terminalAdminProofBatchPlanForScript,
         }),
     ),
   });
@@ -278,6 +281,7 @@ export const devTestGameHostedIdentityHandoffPhase = handoffPhaseSteps({
     (descriptor) =>
       handoffDescriptorPlanStep(descriptor, {
         readinessEnv: adminSpineTerminalBatchReadinessEvidenceEnv,
+        customPlanForScript: terminalAdminProofBatchPlanForScript,
       }),
   ),
 });
@@ -439,55 +443,6 @@ function terminalAdminProofBatchPlanForScript(script) {
       }),
     ),
   });
-}
-
-function handoffDescriptorPlanStep(descriptor, { readinessEnv } = {}) {
-  if (descriptor.phaseLocalNextAction !== undefined) {
-    return {
-      step: descriptor.step,
-      planStep: phaseLocalNextActionStep(descriptor.phaseLocalNextAction),
-    };
-  }
-  if (descriptor.readinessReason !== undefined) {
-    return {
-      step: descriptor.step,
-      planStep: releaseReadinessStep({
-        reason: descriptor.readinessReason,
-        changedInputs: descriptor.changedInputs,
-        env: readinessEnv,
-      }),
-    };
-  }
-  if (descriptor.kind === "custom") {
-    return terminalProofGraphHandoffBatchPlanStep(descriptor);
-  }
-  return {
-    step: descriptor.step,
-    planStep: {
-      kind: descriptor.kind,
-      script: descriptor.script,
-      ...(descriptor.env === undefined ? {} : { env: descriptor.env }),
-    },
-    outputs: descriptor.artifacts,
-  };
-}
-
-function terminalProofGraphHandoffBatchPlanStep(descriptor) {
-  const plan = terminalAdminProofBatchPlanForScript(descriptor.script);
-  if (plan.label !== descriptor.label) {
-    throw new Error(
-      `terminal handoff batch ${descriptor.step} label drifted from registry`,
-    );
-  }
-  return {
-    step: descriptor.step,
-    planStep: {
-      kind: descriptor.kind,
-      script: plan.script,
-      label: plan.label,
-    },
-    outputs: descriptor.artifacts,
-  };
 }
 
 export async function runDevTestGameAdminSpine() {

@@ -324,6 +324,9 @@ import {
   spinePlanStepEnv,
 } from "./dev_test_game_spine_runner.mjs";
 import {
+  handoffDescriptorPlanStep,
+} from "./dev_test_game_handoff_phase_plan_builder.mjs";
+import {
   devTestGameReadinessFreshnessScopeEnvVar,
   parseReadinessFreshnessScope,
   readinessFreshnessScopeEnv,
@@ -9546,6 +9549,123 @@ test("handoff phase spine steps require declared phase metadata and outputs", ()
     })),
   );
   assert.deepEqual(actualHandoffPhaseOutputs, devTestGameHandoffPhaseOutputs);
+  assert.deepEqual(
+    handoffDescriptorPlanStep({
+      step: "phase-local-next-action",
+      kind: "node",
+      script: devTestGameNextActionScript,
+      phaseLocalNextAction: {
+        id: "phase-a",
+        outputPath: "target/dev-test-game/phase-a-next-action.json",
+      },
+      artifacts: ["target/dev-test-game/phase-a-next-action.json"],
+    }),
+    {
+      step: "phase-local-next-action",
+      planStep: phaseLocalNextActionStep({
+        id: "phase-a",
+        outputPath: "target/dev-test-game/phase-a-next-action.json",
+      }),
+    },
+  );
+  assert.deepEqual(
+    handoffDescriptorPlanStep({
+      step: "admin-proof",
+      kind: "node",
+      script: "tools/example_admin_proof.mjs",
+      env: { FMARCH_DEV_TEST_GAME_NEXT_ACTION: nextActionPath },
+      artifacts: ["target/dev-test-game/example-admin-proof.json"],
+    }),
+    {
+      step: "admin-proof",
+      planStep: {
+        kind: "node",
+        script: "tools/example_admin_proof.mjs",
+        env: { FMARCH_DEV_TEST_GAME_NEXT_ACTION: nextActionPath },
+      },
+      outputs: ["target/dev-test-game/example-admin-proof.json"],
+    },
+  );
+  assert.deepEqual(
+    handoffDescriptorPlanStep(
+      {
+        step: "readiness-refresh",
+        kind: "node",
+        script: devTestGameReleaseReadinessScript,
+        readinessReason: "phase-a-test",
+        changedInputs: ["target/dev-test-game/example-admin-proof.json"],
+      },
+      {
+        readinessEnv: {
+          FMARCH_DEV_TEST_GAME_NEXT_ACTION: nextActionPath,
+        },
+      },
+    ),
+    {
+      step: "readiness-refresh",
+      planStep: {
+        kind: "node",
+        script: devTestGameReleaseReadinessScript,
+        env: { FMARCH_DEV_TEST_GAME_NEXT_ACTION: nextActionPath },
+        readinessReason: "phase-a-test",
+        changedInputs: ["target/dev-test-game/example-admin-proof.json"],
+      },
+    },
+  );
+  assert.deepEqual(
+    handoffDescriptorPlanStep(
+      {
+        step: "terminal-batch",
+        kind: "custom",
+        script: "terminal-batch",
+        label: "Terminal batch",
+        artifacts: ["target/dev-test-game/terminal-batch.json"],
+      },
+      {
+        customPlanForScript: (script) => ({
+          script,
+          label: "Terminal batch",
+        }),
+      },
+    ),
+    {
+      step: "terminal-batch",
+      planStep: {
+        kind: "custom",
+        script: "terminal-batch",
+        label: "Terminal batch",
+      },
+      outputs: ["target/dev-test-game/terminal-batch.json"],
+    },
+  );
+  assert.throws(
+    () =>
+      handoffDescriptorPlanStep({
+        step: "terminal-batch",
+        kind: "custom",
+        script: "terminal-batch",
+        label: "Terminal batch",
+      }),
+    /custom handoff descriptor terminal-batch is missing a plan resolver/,
+  );
+  assert.throws(
+    () =>
+      handoffDescriptorPlanStep(
+        {
+          step: "terminal-batch",
+          kind: "custom",
+          script: "terminal-batch",
+          label: "Terminal batch",
+        },
+        {
+          customPlanForScript: (script) => ({
+            script,
+            label: "Other batch",
+          }),
+        },
+      ),
+    /custom handoff descriptor terminal-batch label drifted from registry/,
+  );
   assert.deepEqual(
     handoffPhaseStep({
       phaseId: "hosted-evidence",
