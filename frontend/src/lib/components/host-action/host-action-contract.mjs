@@ -103,6 +103,24 @@ export function createHostActionController(config, dispatch) {
   };
 }
 
+export function shouldPreserveHostActionConfirmation(
+  previousConfig,
+  nextConfig,
+  confirmationOpen,
+) {
+  if (confirmationOpen !== true) {
+    return false;
+  }
+  const previous = normalizeHostActionConfig(previousConfig);
+  const next = normalizeHostActionConfig(nextConfig);
+  return (
+    previous.id === next.id &&
+    previous.requiresConfirmation &&
+    next.requiresConfirmation &&
+    next.disabled === false
+  );
+}
+
 export function hostConfirmationCommandTrace(action) {
   const normalized = normalizeHostActionConfig(action);
   return buildConfirmationCommandTrace({

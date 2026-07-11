@@ -26142,6 +26142,7 @@ function recordCriticalHostActionConfirmClick({
   roleLabel,
   method,
   attempts,
+  failureReason = null,
 }) {
   const audit = ensureProofStabilityAudit().hostConfirmClicks;
   audit.total += 1;
@@ -26165,7 +26166,13 @@ function recordCriticalHostActionConfirmClick({
     audit.failureCount += 1;
   }
   if (audit.events.length < 50) {
-    audit.events.push({ actionId, roleLabel, method, attempts });
+    audit.events.push({
+      actionId,
+      roleLabel,
+      method,
+      attempts,
+      ...(failureReason === null ? {} : { failureReason }),
+    });
   }
 }
 
@@ -26217,6 +26224,13 @@ async function clickCriticalHostActionConfirm(
       return confirmationMessage;
     } catch (error) {
       lastError = error;
+      recordCriticalHostActionConfirmClick({
+        actionId,
+        roleLabel,
+        method: "playwright-attempt-failed",
+        attempts: attempt + 1,
+        failureReason: criticalHostActionClickFailureReason(error),
+      });
       if (
         await recoverSettledCriticalHostActionClick(actionRoot, {
           actionId,
@@ -26272,18 +26286,22 @@ async function ensureCriticalHostActionConfirmation(
   confirm,
   { timeoutMs },
 ) {
-  if (await confirm.isVisible().catch(() => false)) {
-    return await actionRoot
-      .getByTestId("critical-host-action-confirmation-message")
-      .innerText({ timeout: timeoutMs });
+  if (!(await confirm.isVisible().catch(() => false))) {
+    const trigger = actionRoot.getByTestId("critical-host-action-trigger");
+    await trigger.waitFor({ state: "visible", timeout: timeoutMs });
+    await trigger.click({ timeout: timeoutMs });
   }
-  const trigger = actionRoot.getByTestId("critical-host-action-trigger");
-  await trigger.waitFor({ state: "visible", timeout: timeoutMs });
-  await trigger.click({ timeout: timeoutMs });
   await confirm.waitFor({ state: "visible", timeout: timeoutMs });
   return await actionRoot
     .getByTestId("critical-host-action-confirmation-message")
     .innerText({ timeout: timeoutMs });
+}
+
+function criticalHostActionClickFailureReason(error) {
+  return String(error?.message ?? error)
+    .replaceAll(/https?:\/\/\S+/g, "<url>")
+    .replaceAll(/(?:token|invite|password)=[^\s&]+/gi, "$1=<redacted>")
+    .slice(0, 500);
 }
 
 async function recoverSettledCriticalHostActionClick(

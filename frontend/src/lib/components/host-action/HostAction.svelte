@@ -4,7 +4,10 @@
   import {
     containTabWithinConfirmation,
   } from "$lib/app/confirmation-focus.mjs";
-  import { createHostActionController } from "./host-action-contract.mjs";
+  import {
+    createHostActionController,
+    shouldPreserveHostActionConfirmation,
+  } from "./host-action-contract.mjs";
   import "./touch-control.css";
 
   export let action;
@@ -18,8 +21,18 @@
   let confirmElement;
 
   $: if (action !== controllerAction) {
+    const preserveConfirmation =
+      controllerAction !== undefined &&
+      shouldPreserveHostActionConfirmation(
+        controllerAction,
+        action,
+        view?.confirmation !== null,
+      );
     controllerAction = action;
     controller = createHostActionController(action, onDispatch);
+    if (preserveConfirmation) {
+      controller.activate();
+    }
     if (
       initialConfirmationOpen === true &&
       (action?.requiresConfirmation === true || action?.irreversible === true)

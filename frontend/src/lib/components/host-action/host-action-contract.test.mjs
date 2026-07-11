@@ -6,6 +6,7 @@ import {
   TOUCH_CONTROL_CONTRACT,
   buildHostActionViewModel,
   createHostActionController,
+  shouldPreserveHostActionConfirmation,
 } from "./host-action-contract.mjs";
 import {
   buildHostConsoleActionGroups,
@@ -69,6 +70,35 @@ test("host action view model binds the shared touch-control contract", () => {
   assert.match(view.trigger.className, /\btouch-control\b/);
   assert.match(view.trigger.className, /\bhost-action__trigger\b/);
   assert.equal(view.confirmation, null);
+});
+
+test("host action keeps an open confirmation through an equivalent live refresh", () => {
+  const current = {
+    id: "resolve_phase",
+    label: "Resolve phase",
+    objectLabel: "Day 2",
+    outcomeLabel: "resolve the current phase",
+    confirmationText: "Resolve Day 2 and resolve the current phase.",
+    requiresConfirmation: true,
+    payload: { kind: "resolve_phase" },
+  };
+
+  assert.equal(
+    shouldPreserveHostActionConfirmation(current, { ...current }, true),
+    true,
+  );
+  assert.equal(
+    shouldPreserveHostActionConfirmation(
+      current,
+      { ...current, id: "advance_phase" },
+      true,
+    ),
+    false,
+  );
+  assert.equal(
+    shouldPreserveHostActionConfirmation(current, { ...current, disabled: true }, true),
+    false,
+  );
 });
 
 test("reversible host actions dispatch immediately", () => {
