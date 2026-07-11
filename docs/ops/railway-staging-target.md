@@ -21,7 +21,7 @@ Keep the API at one replica for this first target. `FMARCH_MEDIA_ROOT` is a moun
 1. Create a Railway project and add a managed PostgreSQL service named `Postgres`.
 2. Add an `api` service from this repository. Leave its root directory at the repository root and use the default `/railway.toml` config path.
 3. Add a Railway Volume to `api`, mounted at `/var/lib/fmarch/media`. The image creates that mount point as the non-root `fmarch` service user before Railway attaches the volume.
-4. Copy `deploy/railway/api.env.example` into Railway Variables. Set `DATABASE_URL` as the reference to `Postgres.DATABASE_URL`; do not paste the resolved URL into source control.
+4. Copy `deploy/railway/api.env.example` into Railway Variables. Set `DATABASE_URL` as the reference to `Postgres.DATABASE_URL`; do not paste the resolved URL into source control. When a real identity provider is ready, set `FMARCH_IDENTITY_DELIVERY_ENDPOINT` and `FMARCH_IDENTITY_DELIVERY_PROVIDER_ID`, and load `FMARCH_IDENTITY_DELIVERY_AUTH_TOKEN` from Railway's secret store; leaving the endpoint unset keeps the deterministic local transport and does not claim hosted delivery.
 5. Do not set `FMARCH_BIND`. When a platform supplies `PORT`, the server binds `0.0.0.0:$PORT`; local development still defaults to `127.0.0.1:4000`, and an explicit `FMARCH_BIND` overrides either behavior.
 6. Deploy `api`, generate a public Railway domain, and verify `GET /healthz` returns `{ "ok": true }`.
 7. Add a `frontend` service from the same repository. Leave its root directory at the repository root, then set its Config-as-Code path to `/deploy/railway/frontend.railway.toml`.

@@ -46,6 +46,18 @@ async function contract() {
 
   assert.match(source["deploy/railway/api.env.example"], /DATABASE_URL=\$\{\{Postgres\.DATABASE_URL\}\}/);
   assert.match(source["deploy/railway/api.env.example"], /FMARCH_MEDIA_ROOT=\/var\/lib\/fmarch\/media/);
+  assert.match(
+    source["deploy/railway/api.env.example"],
+    /FMARCH_IDENTITY_DELIVERY_ENDPOINT=https:\/\/.+/,
+  );
+  assert.match(
+    source["deploy/railway/api.env.example"],
+    /FMARCH_IDENTITY_DELIVERY_AUTH_TOKEN=\$\{\{IDENTITY_DELIVERY_AUTH_TOKEN\}\}/,
+  );
+  assert.doesNotMatch(
+    source["deploy/railway/api.env.example"],
+    /FMARCH_IDENTITY_DELIVERY_AUTH_TOKEN=(?!\$\{\{IDENTITY_DELIVERY_AUTH_TOKEN\}\})\S+/,
+  );
   assert.doesNotMatch(source["deploy/railway/api.env.example"], /FMARCH_DEV_AUTH/);
   assert.match(source["deploy/railway/frontend.env.example"], /^ORIGIN=https:\/\//m);
   assert.match(source["deploy/railway/frontend.env.example"], /^FMARCH_API_BASE_URL=https:\/\//m);
