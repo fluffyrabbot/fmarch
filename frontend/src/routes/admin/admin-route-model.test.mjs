@@ -209,6 +209,8 @@ import {
   proofGraphDiagnosticSummaryCheckIds,
 } from "../../../../tools/dev_test_game_proof_graph_diagnostic_summary.mjs";
 import {
+  devTestGameHostedEvidenceOperatorChecklistProofHandoffStep,
+  devTestGameHostedEvidenceOperatorChecklistPhaseLocalNextActionHandoffStep,
   devTestGameHostedIdentityHandoffPhaseId,
   devTestGameHostedIdentityPhaseLocalNextActionHandoffStep,
   devTestGameTerminalRefreshAdminProofBatchHandoffStep,
@@ -9850,9 +9852,14 @@ function phaseLocalNextActionSnapshotsFixture() {
       id: "next-action-hosted-evidence-operator-checklist",
       label: "Hosted evidence operator checklist next-action snapshot",
       artifact:
-        "target/dev-test-game/next-action-hosted-evidence-operator-checklist.json",
-      phaseLocalNextActionId: "hosted-evidence-operator-checklist",
-      sequenceStage: "",
+        devTestGameHostedEvidenceOperatorChecklistPhaseLocalNextActionHandoffStep
+          .phaseLocalNextAction.outputPath,
+      phaseLocalNextActionId:
+        devTestGameHostedEvidenceOperatorChecklistPhaseLocalNextActionHandoffStep
+          .phaseLocalNextAction.id,
+      sequenceStage:
+        devTestGameHostedEvidenceOperatorChecklistPhaseLocalNextActionHandoffStep
+          .phaseLocalNextAction.sequenceStage ?? "",
     },
     {
       id: "next-action-hosted-identity",
@@ -9883,21 +9890,25 @@ function phaseLocalNextActionSnapshotsFixture() {
 }
 
 function handoffPhaseOutputsFixture() {
+  const hostedEvidenceOperatorChecklistProofArtifact =
+    devTestGameHostedEvidenceOperatorChecklistProofHandoffStep.artifacts[0];
   const terminalRefreshTerminalBatchArtifact =
     devTestGameTerminalRefreshAdminProofBatchHandoffStep.artifacts.at(-1);
   return [
     {
-      id: "handoff-phase-output:hosted-evidence-operator-checklist-handoff-checklist-proof-target-dev-test-game-hosted-evidence-operator-checklist-proof-json",
+      id: `handoff-phase-output:${devTestGameHostedEvidenceOperatorChecklistProofHandoffStep.phaseId}-${devTestGameHostedEvidenceOperatorChecklistProofHandoffStep.step}-target-dev-test-game-hosted-evidence-operator-checklist-proof-json`,
       label:
-        "Handoff phase output hosted-evidence-operator-checklist-handoff checklist-proof",
+        `Handoff phase output ${devTestGameHostedEvidenceOperatorChecklistProofHandoffStep.phaseId} ${devTestGameHostedEvidenceOperatorChecklistProofHandoffStep.step}`,
       status: "recorded",
-      artifact:
-        "target/dev-test-game/hosted-evidence-operator-checklist-proof.json",
-      handoffPhaseId: "hosted-evidence-operator-checklist-handoff",
-      handoffPhaseStep: "checklist-proof",
+      artifact: hostedEvidenceOperatorChecklistProofArtifact,
+      handoffPhaseId:
+        devTestGameHostedEvidenceOperatorChecklistProofHandoffStep.phaseId,
+      handoffPhaseStep:
+        devTestGameHostedEvidenceOperatorChecklistProofHandoffStep.step,
       handoffPhaseOutputId:
-        "hosted-evidence-operator-checklist-handoff:checklist-proof:target/dev-test-game/hosted-evidence-operator-checklist-proof.json",
-      proofCommand: "tools/dev_test_game_hosted_evidence_operator_checklist.mjs",
+        `${devTestGameHostedEvidenceOperatorChecklistProofHandoffStep.phaseId}:${devTestGameHostedEvidenceOperatorChecklistProofHandoffStep.step}:${hostedEvidenceOperatorChecklistProofArtifact}`,
+      proofCommand:
+        devTestGameHostedEvidenceOperatorChecklistProofHandoffStep.script,
       proofBoundary:
         "Handoff phase output recorded from the spine manifest. It records local harness artifact wiring only; it does not prove hosted deployment, release readiness, or production readiness.",
     },

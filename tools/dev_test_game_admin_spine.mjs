@@ -113,6 +113,7 @@ import {
   devTestGameNextActionSequenceHandoffPair,
 } from "./dev_test_game_next_action_sequence_handoff_pair.mjs";
 import {
+  devTestGameHostedEvidenceOperatorChecklistHandoffPhaseSteps,
   devTestGameHostedEvidenceOperatorChecklistHandoffPhaseId,
   devTestGameHostedIdentityHandoffPhaseSteps,
   devTestGameHostedIdentityHandoffPhaseId,
@@ -263,54 +264,21 @@ export const terminalHostedIdentityNextActionAdminProofBatchPlan =
 export const devTestGameHostedEvidenceOperatorChecklistHandoffPhase =
   handoffPhaseSteps({
     phaseId: devTestGameHostedEvidenceOperatorChecklistHandoffPhaseId,
-    steps: [
-      {
-        step: "checklist-proof",
-        planStep: {
-          kind: "node",
-          script: "tools/dev_test_game_hosted_evidence_operator_checklist.mjs",
-        },
-        outputs: [devTestGameHostedEvidenceOperatorChecklistProofPath],
-      },
-      {
-        step: "phase-local-next-action",
-        planStep: phaseLocalNextActionStep({
-          id: "hosted-evidence-operator-checklist",
-          outputPath: hostedEvidenceOperatorChecklistNextActionPath,
+    steps: devTestGameHostedEvidenceOperatorChecklistHandoffPhaseSteps.map(
+      (descriptor) =>
+        handoffDescriptorPlanStep(descriptor, {
+          readinessEnv: adminSpineReadinessEvidenceEnv,
         }),
-      },
-      {
-        step: "admin-proof",
-        planStep: {
-          kind: "node",
-          script:
-            "tools/dev_test_game_hosted_evidence_operator_checklist_admin_proof.mjs",
-          env: {
-            FMARCH_DEV_TEST_GAME_NEXT_ACTION:
-              hostedEvidenceOperatorChecklistNextActionPath,
-          },
-        },
-        outputs: [devTestGameHostedEvidenceOperatorChecklistAdminProofPath],
-      },
-      {
-        step: "readiness-refresh",
-        planStep: releaseReadinessStep({
-          reason: "hosted-evidence-operator-checklist-handoff",
-          changedInputs: [
-            hostedEvidenceOperatorChecklistNextActionPath,
-            devTestGameHostedEvidenceOperatorChecklistProofPath,
-            devTestGameHostedEvidenceOperatorChecklistAdminProofPath,
-          ],
-          env: adminSpineReadinessEvidenceEnv,
-        }),
-      },
-    ],
+    ),
   });
 
 export const devTestGameHostedIdentityHandoffPhase = handoffPhaseSteps({
   phaseId: devTestGameHostedIdentityHandoffPhaseId,
   steps: devTestGameHostedIdentityHandoffPhaseSteps.map(
-    hostedIdentityHandoffPlanStep,
+    (descriptor) =>
+      handoffDescriptorPlanStep(descriptor, {
+        readinessEnv: adminSpineTerminalBatchReadinessEvidenceEnv,
+      }),
   ),
 });
 
@@ -473,7 +441,7 @@ function terminalAdminProofBatchPlanForScript(script) {
   });
 }
 
-function hostedIdentityHandoffPlanStep(descriptor) {
+function handoffDescriptorPlanStep(descriptor, { readinessEnv } = {}) {
   if (descriptor.phaseLocalNextAction !== undefined) {
     return {
       step: descriptor.step,
@@ -486,7 +454,7 @@ function hostedIdentityHandoffPlanStep(descriptor) {
       planStep: releaseReadinessStep({
         reason: descriptor.readinessReason,
         changedInputs: descriptor.changedInputs,
-        env: adminSpineTerminalBatchReadinessEvidenceEnv,
+        env: readinessEnv,
       }),
     };
   }
@@ -498,6 +466,7 @@ function hostedIdentityHandoffPlanStep(descriptor) {
     planStep: {
       kind: descriptor.kind,
       script: descriptor.script,
+      ...(descriptor.env === undefined ? {} : { env: descriptor.env }),
     },
     outputs: descriptor.artifacts,
   };

@@ -330,6 +330,10 @@ import {
 } from "./dev_test_game_readiness_freshness_scope.mjs";
 import {
   devTestGameHandoffPhaseOutputs,
+  devTestGameHostedEvidenceOperatorChecklistAdminProofHandoffStep,
+  devTestGameHostedEvidenceOperatorChecklistPhaseLocalNextActionHandoffStep,
+  devTestGameHostedEvidenceOperatorChecklistProofHandoffStep,
+  devTestGameHostedEvidenceOperatorChecklistReadinessHandoffStep,
   devTestGameHostedIdentityDefaultNextActionRefreshHandoffStep,
   devTestGameHostedIdentityNextActionAdminProofBatchHandoffStep,
   devTestGameHostedIdentityPhaseLocalNextActionHandoffStep,
@@ -2219,11 +2223,12 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     })),
     [
       {
-        script: "tools/dev_test_game_hosted_evidence_operator_checklist.mjs",
+        script: devTestGameHostedEvidenceOperatorChecklistProofHandoffStep.script,
         phase: {
           id: devTestGameHostedEvidenceOperatorChecklistHandoffPhaseId,
-          step: "checklist-proof",
-          outputs: [devTestGameHostedEvidenceOperatorChecklistProofPath],
+          step: devTestGameHostedEvidenceOperatorChecklistProofHandoffStep.step,
+          outputs:
+            devTestGameHostedEvidenceOperatorChecklistProofHandoffStep.artifacts,
         },
         readinessReason: null,
         outputPath: null,
@@ -2232,30 +2237,44 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
         script: devTestGameNextActionScript,
         phase: {
           id: devTestGameHostedEvidenceOperatorChecklistHandoffPhaseId,
-          step: "phase-local-next-action",
-          outputs: [hostedEvidenceOperatorChecklistNextActionPath],
+          step:
+            devTestGameHostedEvidenceOperatorChecklistPhaseLocalNextActionHandoffStep
+              .step,
+          outputs:
+            devTestGameHostedEvidenceOperatorChecklistPhaseLocalNextActionHandoffStep
+              .artifacts,
         },
         readinessReason: null,
-        outputPath: hostedEvidenceOperatorChecklistNextActionPath,
+        outputPath:
+          devTestGameHostedEvidenceOperatorChecklistPhaseLocalNextActionHandoffStep
+            .phaseLocalNextAction.outputPath,
       },
       {
         script:
-          "tools/dev_test_game_hosted_evidence_operator_checklist_admin_proof.mjs",
+          devTestGameHostedEvidenceOperatorChecklistAdminProofHandoffStep.script,
         phase: {
           id: devTestGameHostedEvidenceOperatorChecklistHandoffPhaseId,
-          step: "admin-proof",
-          outputs: [devTestGameHostedEvidenceOperatorChecklistAdminProofPath],
+          step:
+            devTestGameHostedEvidenceOperatorChecklistAdminProofHandoffStep.step,
+          outputs:
+            devTestGameHostedEvidenceOperatorChecklistAdminProofHandoffStep
+              .artifacts,
         },
         readinessReason: null,
-        outputPath: hostedEvidenceOperatorChecklistNextActionPath,
+        outputPath:
+          devTestGameHostedEvidenceOperatorChecklistPhaseLocalNextActionHandoffStep
+            .phaseLocalNextAction.outputPath,
       },
       {
         script: devTestGameReleaseReadinessScript,
         phase: {
           id: devTestGameHostedEvidenceOperatorChecklistHandoffPhaseId,
-          step: "readiness-refresh",
+          step:
+            devTestGameHostedEvidenceOperatorChecklistReadinessHandoffStep.step,
         },
-        readinessReason: "hosted-evidence-operator-checklist-handoff",
+        readinessReason:
+          devTestGameHostedEvidenceOperatorChecklistReadinessHandoffStep
+            .readinessReason,
         outputPath: null,
       },
     ],

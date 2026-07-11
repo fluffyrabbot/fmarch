@@ -37,6 +37,67 @@ export const proofGraphHandoffPhaseOutputSectionHeading =
 export const proofGraphHandoffPhaseOutputRowTestIdPrefix =
   "proof-graph-handoff-phase-output";
 
+export const devTestGameHostedEvidenceOperatorChecklistProofHandoffStep =
+  handoffStepDescriptor({
+    phaseId: devTestGameHostedEvidenceOperatorChecklistHandoffPhaseId,
+    step: "checklist-proof",
+    kind: "node",
+    script: "tools/dev_test_game_hosted_evidence_operator_checklist.mjs",
+    artifacts: [devTestGameHostedEvidenceOperatorChecklistProofPath],
+  });
+
+export const devTestGameHostedEvidenceOperatorChecklistPhaseLocalNextActionId =
+  "hosted-evidence-operator-checklist";
+
+export const devTestGameHostedEvidenceOperatorChecklistPhaseLocalNextActionHandoffStep =
+  handoffStepDescriptor({
+    phaseId: devTestGameHostedEvidenceOperatorChecklistHandoffPhaseId,
+    step: "phase-local-next-action",
+    kind: "node",
+    script: devTestGameHandoffPhaseNextActionScript,
+    phaseLocalNextAction: {
+      id: devTestGameHostedEvidenceOperatorChecklistPhaseLocalNextActionId,
+      outputPath: hostedEvidenceOperatorChecklistNextActionPath,
+    },
+    artifacts: [hostedEvidenceOperatorChecklistNextActionPath],
+  });
+
+export const devTestGameHostedEvidenceOperatorChecklistAdminProofHandoffStep =
+  handoffStepDescriptor({
+    phaseId: devTestGameHostedEvidenceOperatorChecklistHandoffPhaseId,
+    step: "admin-proof",
+    kind: "node",
+    script:
+      "tools/dev_test_game_hosted_evidence_operator_checklist_admin_proof.mjs",
+    env: {
+      FMARCH_DEV_TEST_GAME_NEXT_ACTION:
+        hostedEvidenceOperatorChecklistNextActionPath,
+    },
+    artifacts: [devTestGameHostedEvidenceOperatorChecklistAdminProofPath],
+  });
+
+export const devTestGameHostedEvidenceOperatorChecklistReadinessHandoffStep =
+  handoffStepDescriptor({
+    phaseId: devTestGameHostedEvidenceOperatorChecklistHandoffPhaseId,
+    step: "readiness-refresh",
+    kind: "node",
+    script: devTestGameReleaseReadinessScript,
+    readinessReason: "hosted-evidence-operator-checklist-handoff",
+    changedInputs: [
+      hostedEvidenceOperatorChecklistNextActionPath,
+      devTestGameHostedEvidenceOperatorChecklistProofPath,
+      devTestGameHostedEvidenceOperatorChecklistAdminProofPath,
+    ],
+  });
+
+export const devTestGameHostedEvidenceOperatorChecklistHandoffPhaseSteps =
+  Object.freeze([
+    devTestGameHostedEvidenceOperatorChecklistProofHandoffStep,
+    devTestGameHostedEvidenceOperatorChecklistPhaseLocalNextActionHandoffStep,
+    devTestGameHostedEvidenceOperatorChecklistAdminProofHandoffStep,
+    devTestGameHostedEvidenceOperatorChecklistReadinessHandoffStep,
+  ]);
+
 export const devTestGameHostedIdentityPhaseLocalNextActionHandoffStep =
   handoffStepDescriptor({
     phaseId: devTestGameHostedIdentityHandoffPhaseId,
@@ -116,28 +177,7 @@ export function proofGraphHandoffPhaseOutputArtifactTestId(rowId) {
 
 export const devTestGameHandoffPhaseOutputs = Object.freeze(
   [
-    {
-      phaseId: devTestGameHostedEvidenceOperatorChecklistHandoffPhaseId,
-      step: "checklist-proof",
-      kind: "node",
-      script: "tools/dev_test_game_hosted_evidence_operator_checklist.mjs",
-      artifacts: [devTestGameHostedEvidenceOperatorChecklistProofPath],
-    },
-    {
-      phaseId: devTestGameHostedEvidenceOperatorChecklistHandoffPhaseId,
-      step: "phase-local-next-action",
-      kind: "node",
-      script: devTestGameHandoffPhaseNextActionScript,
-      artifacts: [hostedEvidenceOperatorChecklistNextActionPath],
-    },
-    {
-      phaseId: devTestGameHostedEvidenceOperatorChecklistHandoffPhaseId,
-      step: "admin-proof",
-      kind: "node",
-      script:
-        "tools/dev_test_game_hosted_evidence_operator_checklist_admin_proof.mjs",
-      artifacts: [devTestGameHostedEvidenceOperatorChecklistAdminProofPath],
-    },
+    ...devTestGameHostedEvidenceOperatorChecklistHandoffPhaseSteps,
     ...devTestGameHostedIdentityHandoffPhaseSteps,
   ].flatMap((step) =>
     step.artifacts.map((artifact) =>
