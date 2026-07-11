@@ -472,24 +472,18 @@
       "order": 20,
       "title": "Non-game discussion areas",
       "execution_class": "code",
-      "status": "open",
-      "summary": "The product has game-scoped threads but no non-game discussion area, topic lifecycle, or moderation surface.",
+      "status": "complete",
+      "summary": "Public non-game discussion areas use durable append-only area/topic streams, session-backed topic/post routes, GlobalMod moderation transitions, and a seeded Chromium proof.",
       "complete_when": ["Users can browse, create, post in, and moderate capability-scoped non-game discussions through real routes and projections."],
       "depends_on": ["product.community.game-index", "product.identity.registration"],
       "evidence": [
-        { "kind": "source", "value": "docs/arch/08-roadmap.md" }
+        { "kind": "source", "value": "crates/projections/migrations/0041_discussion.sql" },
+        { "kind": "source", "value": "frontend/src/routes/discussions/[slug]/+page.svelte" },
+        { "kind": "source", "value": "docs/arch/02-event-sourcing.md" },
+        { "kind": "command", "value": "npm run test:dev-test-game-discussion:local" },
+        { "kind": "artifact", "value": "target/discussion-role-proof/discussion-proof.json" }
       ],
-      "remaining": ["Define and implement non-game discussion aggregates, projections, routes, moderation, and proof." ],
-      "recommended_slice": {
-        "objective": "Build the first non-game discussion vertical: create a public area aggregate and topic/post projection, add a paginated area route with account-backed topic creation and posting, define GlobalMod moderation transitions, and prove empty, create, post, pagination, reload, and denied moderation states through a seeded browser lane.",
-        "paths": ["crates/eventstore/", "crates/projections/", "crates/api/", "crates/wire/", "frontend/src/routes/", "tools/", "docs/arch/02-event-sourcing.md"],
-        "proof_commands": ["DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p projections -p api discussion -- --test-threads=1", "npm run test:frontend-contract", "npm run test:completeness-scorecard"],
-        "non_claims": [
-          "No direct messages, user profiles, search, ranking, or recommendation claim.",
-          "No hosted moderation staffing, retention, or legal-policy claim.",
-          "No release or production-readiness promotion from local discussion proof."
-        ]
-      }
+      "remaining": []
     },
     {
       "id": "product.community.profiles",
@@ -504,7 +498,17 @@
       "evidence": [
         { "kind": "source", "value": "docs/arch/08-roadmap.md" }
       ],
-      "remaining": ["Design profile events/projections, routes, privacy controls, editing, and media integration." ]
+      "remaining": ["Design profile events/projections, routes, privacy controls, editing, and media integration." ],
+      "recommended_slice": {
+        "objective": "Build the first authorization-safe profile vertical: append profile-change events, project a public-safe profile view plus private editor state, add account-backed view/edit routes with explicit privacy controls, and prove anonymous view, owner edit, reload, and denied cross-account editing through a seeded browser lane.",
+        "paths": ["crates/projections/", "crates/api/", "crates/wire/", "frontend/src/routes/", "tools/", "docs/arch/02-event-sourcing.md"],
+        "proof_commands": ["DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p projections -p api profile -- --test-threads=1", "npm run test:frontend-contract", "npm run test:completeness-scorecard"],
+        "non_claims": [
+          "No direct messages, follower graph, search, ranking, or recommendation claim.",
+          "No hosted privacy, moderation, retention, or legal-policy claim.",
+          "No release or production-readiness promotion from local profile proof."
+        ]
+      }
     },
     {
       "id": "product.archive.completed-game-export",

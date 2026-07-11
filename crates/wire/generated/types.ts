@@ -55,6 +55,16 @@ export type GameIndexEntry = { game: string, pack: string, status: string, phase
 
 export type GameIndexPage = { games: Array<GameIndexEntry>, next_cursor: string | null, };
 
+export type DiscussionArea = { slug: string, title: string, description: string, };
+
+export type DiscussionTopic = { topic: string, title: string, status: string, post_count: bigint, updated_seq: bigint, };
+
+export type DiscussionTopicPage = { area: DiscussionArea, topics: Array<DiscussionTopic>, next_cursor: string | null, };
+
+export type DiscussionPost = { source_seq: bigint, body: string, };
+
+export type DiscussionThreadPage = { topic: DiscussionTopic, posts: Array<DiscussionPost>, next_before_seq: bigint | null, };
+
 export type PlayerNotification = { game: string, phase_id: string, event_index: number, audience_slot: string, effect: string, status: string, };
 
 export type PlayerInvestigationResult = { game: string, phase_id: string, event_index: number, audience_slot: string, mode: string, target_slot: string, result: unknown, };

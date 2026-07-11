@@ -14,9 +14,11 @@ use domain::state::{RevealState, SlotLifecycle, SlotState, StateSnapshot, Submis
 use domain::{resolve, InnerEvent, ResolutionApplied, ResolutionInput};
 use eventstore::{ActorId, EventInput};
 use projections::{
-    action_counters, action_grants, append_and_project, audit_rebuild, day_vote_outcomes,
-    game_index, host_phase_controls, host_prompts, phase_state, player_notifications, rebuild,
-    slot_effects, slot_state, votecount,
+    action_counters, action_grants, append_and_project, append_discussion_and_project,
+    audit_rebuild, day_vote_outcomes, discussion_area_by_slug, discussion_posts,
+    discussion_topic_by_id, discussion_topics, game_index, host_phase_controls, host_prompts,
+    phase_state, player_notifications, rebuild, rebuild_discussion_stream, slot_effects,
+    slot_state, votecount,
 };
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -1688,4 +1690,114 @@ async fn projection_rolls_back_on_conflict(pool: sqlx::PgPool) {
     let slots = slot_state(&pool, game).await.unwrap();
     assert_eq!(slots.len(), 1);
     assert_eq!(slots[0].role_key.as_deref(), Some("doctor"));
+}
+
+/// Non-game discussion streams use the same append-only store but a separate,
+/// public-safe projection boundary from game streams.
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn discussion_projection_pages_visible_topics_and_hides_moderated_rows(pool: sqlx::PgPool) {
+    let area = Uuid::from_u128(101);
+    let visible_topic = Uuid::from_u128(102);
+    let hidden_topic = Uuid::from_u128(103);
+
+    append_discussion_and_project(
+        &pool,
+        area,
+        &[EventInput::new(
+            "DiscussionAreaCreated",
+            1,
+            serde_json::json!({
+                "slug": "general",
+                "title": "General",
+                "description": "Public discussion"
+            }),
+            ActorId::User("moderator".into()),
+            1,
+        )],
+    )
+    .await
+    .unwrap();
+    append_discussion_and_project(
+        &pool,
+        visible_topic,
+        &[
+            EventInput::new(
+                "DiscussionTopicCreated",
+                1,
+                serde_json::json!({
+                    "area_id": area,
+                    "title": "Welcome",
+                    "author_user_id": "member"
+                }),
+                ActorId::User("member".into()),
+                2,
+            ),
+            EventInput::new(
+                "DiscussionPostSubmitted",
+                1,
+                serde_json::json!({ "body": "First public post", "author_user_id": "member" }),
+                ActorId::User("member".into()),
+                3,
+            ),
+        ],
+    )
+    .await
+    .unwrap();
+    append_discussion_and_project(
+        &pool,
+        hidden_topic,
+        &[
+            EventInput::new(
+                "DiscussionTopicCreated",
+                1,
+                serde_json::json!({
+                    "area_id": area,
+                    "title": "Hidden",
+                    "author_user_id": "member"
+                }),
+                ActorId::User("member".into()),
+                4,
+            ),
+            EventInput::new(
+                "DiscussionTopicModerationChanged",
+                1,
+                serde_json::json!({ "status": "hidden" }),
+                ActorId::User("moderator".into()),
+                5,
+            ),
+        ],
+    )
+    .await
+    .unwrap();
+
+    let area_row = discussion_area_by_slug(&pool, "general")
+        .await
+        .unwrap()
+        .unwrap();
+    let page = discussion_topics(&pool, area_row.area_id, None, 10)
+        .await
+        .unwrap();
+    assert_eq!(page.topics.len(), 1);
+    assert_eq!(page.topics[0].topic_id, visible_topic);
+    assert_eq!(page.topics[0].post_count, 1);
+    assert_eq!(page.topics[0].status, "open");
+    let posts = discussion_posts(&pool, visible_topic, None, 10)
+        .await
+        .unwrap();
+    assert_eq!(posts.posts[0].body, "First public post");
+    assert_eq!(
+        discussion_topic_by_id(&pool, hidden_topic)
+            .await
+            .unwrap()
+            .unwrap()
+            .status,
+        "hidden"
+    );
+    rebuild_discussion_stream(&pool, visible_topic)
+        .await
+        .unwrap();
+    let rebuilt_posts = discussion_posts(&pool, visible_topic, None, 10)
+        .await
+        .unwrap();
+    assert_eq!(rebuilt_posts.posts[0].body, "First public post");
 }

@@ -17,6 +17,7 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use caps::{Capability, Principal};
+use eventstore::{ActorId, EventInput};
 use media::{
     ContentId, IngestStatus, MediaError, MediaStore, VariantFormat, VariantGenerationStatus,
     VariantKind, VariantLimits, VARIANT_RECIPE_REVISION,
@@ -31,7 +32,8 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::broadcast;
 use uuid::Uuid;
 use wire::{
-    AckMsg, CapabilityGrant, ClientEnvelope, DayVoteOutcomeDelta, GameIndexPage, Hello,
+    AckMsg, CapabilityGrant, ClientEnvelope, DayVoteOutcomeDelta, DiscussionArea, DiscussionPost,
+    DiscussionThreadPage, DiscussionTopic, DiscussionTopicPage, GameIndexPage, Hello,
     HostConsolePhaseStateDelta, HostConsoleSlotOccupancyDelta, HostConsoleStateDelta,
     HostConsoleThreadPostDelta, HostPhaseControl, HostPromptDelta, HostPromptsDelta,
     PlayerInvestigationResult, PlayerInvestigationResultsDelta, PlayerNotification,
@@ -217,6 +219,21 @@ pub fn router_with_state(state: ApiState) -> Router {
         )
         .route("/commands", post(command))
         .route("/games", get(game_index))
+        .route("/discussions/areas", post(create_discussion_area))
+        .route("/discussions/areas/{slug}", get(discussion_area_topics))
+        .route(
+            "/discussions/areas/{slug}/topics",
+            post(create_discussion_topic),
+        )
+        .route("/discussions/topics/{topic}", get(discussion_topic_thread))
+        .route(
+            "/discussions/topics/{topic}/posts",
+            post(create_discussion_post),
+        )
+        .route(
+            "/discussions/topics/{topic}/moderation",
+            post(moderate_discussion_topic),
+        )
         .route("/games/{game}/votecount", get(votecount))
         .route("/games/{game}/day-vote-outcomes", get(day_vote_outcomes))
         .route("/games/{game}/endgame-summary", get(endgame_summary))
@@ -4082,6 +4099,359 @@ fn parse_game_index_cursor(value: &str) -> Result<projections::GameIndexCursor, 
         updated_seq,
         game_id,
     })
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct DiscussionPageQuery {
+    cursor: Option<String>,
+    limit: Option<i64>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct DiscussionPostQuery {
+    before_seq: Option<i64>,
+    limit: Option<i64>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct CreateDiscussionAreaRequest {
+    slug: String,
+    title: String,
+    description: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct CreateDiscussionTopicRequest {
+    title: String,
+    body: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct CreateDiscussionPostRequest {
+    body: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct ModerateDiscussionTopicRequest {
+    status: String,
+}
+
+async fn discussion_area_topics(
+    State(state): State<ApiState>,
+    Path(slug): Path<String>,
+    Query(query): Query<DiscussionPageQuery>,
+) -> Result<Json<DiscussionTopicPage>, ApiError> {
+    let area = projections::discussion_area_by_slug(&state.pool, slug.as_str())
+        .await?
+        .ok_or_else(|| discussion_not_found("discussion area"))?;
+    let cursor = query
+        .cursor
+        .as_deref()
+        .map(parse_discussion_topic_cursor)
+        .transpose()?;
+    let page = projections::discussion_topics(
+        &state.pool,
+        area.area_id,
+        cursor,
+        query.limit.unwrap_or(20),
+    )
+    .await?;
+    Ok(Json(DiscussionTopicPage {
+        area: DiscussionArea::from(area),
+        topics: page.topics.into_iter().map(DiscussionTopic::from).collect(),
+        next_cursor: page
+            .next_cursor
+            .map(|cursor| format!("{}:{}", cursor.updated_seq, cursor.topic_id)),
+    }))
+}
+
+async fn discussion_topic_thread(
+    State(state): State<ApiState>,
+    Path(topic): Path<Uuid>,
+    Query(query): Query<DiscussionPostQuery>,
+) -> Result<Json<DiscussionThreadPage>, ApiError> {
+    let topic = visible_discussion_topic(&state, topic).await?;
+    let page = projections::discussion_posts(
+        &state.pool,
+        topic.topic_id,
+        query.before_seq,
+        query.limit.unwrap_or(50),
+    )
+    .await?;
+    Ok(Json(DiscussionThreadPage {
+        topic: DiscussionTopic::from(topic),
+        posts: page.posts.into_iter().map(DiscussionPost::from).collect(),
+        next_before_seq: page.next_before_seq,
+    }))
+}
+
+async fn create_discussion_area(
+    State(state): State<ApiState>,
+    headers: HeaderMap,
+    Json(request): Json<CreateDiscussionAreaRequest>,
+) -> Result<(StatusCode, Json<DiscussionArea>), ApiError> {
+    let token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
+    let principal_user_id = require_global_mod(&state, token, "discussion area creation").await?;
+    let slug = validate_discussion_slug(request.slug.as_str())?;
+    let title = validate_discussion_text(request.title.as_str(), "discussion area title", 160)?;
+    let description = validate_discussion_text(
+        request.description.as_str(),
+        "discussion area description",
+        500,
+    )?;
+    if projections::discussion_area_by_slug(&state.pool, slug.as_str())
+        .await?
+        .is_some()
+    {
+        return Err(discussion_conflict(
+            "discussion area already exists; choose a new area slug",
+        ));
+    }
+    let area_id = Uuid::new_v4();
+    projections::append_discussion_and_project(
+        &state.pool,
+        area_id,
+        &[EventInput::new(
+            "DiscussionAreaCreated",
+            1,
+            serde_json::json!({
+                "slug": slug,
+                "title": title,
+                "description": description,
+            }),
+            ActorId::User(principal_user_id),
+            unix_now_seconds(),
+        )],
+    )
+    .await?;
+    let area = projections::discussion_area_by_slug(&state.pool, slug.as_str())
+        .await?
+        .expect("projected discussion area is readable");
+    Ok((StatusCode::CREATED, Json(DiscussionArea::from(area))))
+}
+
+async fn create_discussion_topic(
+    State(state): State<ApiState>,
+    Path(slug): Path<String>,
+    headers: HeaderMap,
+    Json(request): Json<CreateDiscussionTopicRequest>,
+) -> Result<(StatusCode, Json<DiscussionTopic>), ApiError> {
+    let principal_user_id = authenticated_discussion_principal(&state, &headers).await?;
+    let area = projections::discussion_area_by_slug(&state.pool, slug.as_str())
+        .await?
+        .ok_or_else(|| discussion_not_found("discussion area"))?;
+    let title = validate_discussion_text(request.title.as_str(), "discussion topic title", 180)?;
+    let body = validate_discussion_text(request.body.as_str(), "discussion post", 10_000)?;
+    let topic_id = Uuid::new_v4();
+    projections::append_discussion_and_project(
+        &state.pool,
+        topic_id,
+        &[
+            EventInput::new(
+                "DiscussionTopicCreated",
+                1,
+                serde_json::json!({
+                    "area_id": area.area_id,
+                    "title": title,
+                    "author_user_id": principal_user_id,
+                }),
+                ActorId::User(principal_user_id.clone()),
+                unix_now_seconds(),
+            ),
+            EventInput::new(
+                "DiscussionPostSubmitted",
+                1,
+                serde_json::json!({ "body": body, "author_user_id": principal_user_id }),
+                ActorId::User(principal_user_id),
+                unix_now_seconds(),
+            ),
+        ],
+    )
+    .await?;
+    let topic = projections::discussion_topic_by_id(&state.pool, topic_id)
+        .await?
+        .expect("projected discussion topic is readable");
+    Ok((StatusCode::CREATED, Json(DiscussionTopic::from(topic))))
+}
+
+async fn create_discussion_post(
+    State(state): State<ApiState>,
+    Path(topic): Path<Uuid>,
+    headers: HeaderMap,
+    Json(request): Json<CreateDiscussionPostRequest>,
+) -> Result<(StatusCode, Json<DiscussionTopic>), ApiError> {
+    let principal_user_id = authenticated_discussion_principal(&state, &headers).await?;
+    let current = projections::discussion_topic_by_id(&state.pool, topic)
+        .await?
+        .ok_or_else(|| discussion_not_found("discussion topic"))?;
+    if current.status != "open" {
+        return Err(discussion_conflict(
+            "discussion topic is not open; refresh the discussion before posting",
+        ));
+    }
+    let body = validate_discussion_text(request.body.as_str(), "discussion post", 10_000)?;
+    projections::append_discussion_and_project(
+        &state.pool,
+        topic,
+        &[EventInput::new(
+            "DiscussionPostSubmitted",
+            1,
+            serde_json::json!({ "body": body, "author_user_id": principal_user_id }),
+            ActorId::User(principal_user_id),
+            unix_now_seconds(),
+        )],
+    )
+    .await?;
+    let topic = projections::discussion_topic_by_id(&state.pool, topic)
+        .await?
+        .expect("projected discussion topic is readable");
+    Ok((StatusCode::CREATED, Json(DiscussionTopic::from(topic))))
+}
+
+async fn moderate_discussion_topic(
+    State(state): State<ApiState>,
+    Path(topic): Path<Uuid>,
+    headers: HeaderMap,
+    Json(request): Json<ModerateDiscussionTopicRequest>,
+) -> Result<Json<DiscussionTopic>, ApiError> {
+    let token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
+    let principal_user_id = require_global_mod(&state, token, "discussion moderation").await?;
+    let status = validate_discussion_status(request.status.as_str())?;
+    projections::discussion_topic_by_id(&state.pool, topic)
+        .await?
+        .ok_or_else(|| discussion_not_found("discussion topic"))?;
+    projections::append_discussion_and_project(
+        &state.pool,
+        topic,
+        &[EventInput::new(
+            "DiscussionTopicModerationChanged",
+            1,
+            serde_json::json!({ "status": status }),
+            ActorId::User(principal_user_id),
+            unix_now_seconds(),
+        )],
+    )
+    .await?;
+    let topic = projections::discussion_topic_by_id(&state.pool, topic)
+        .await?
+        .expect("projected discussion topic is readable");
+    Ok(Json(DiscussionTopic::from(topic)))
+}
+
+async fn visible_discussion_topic(
+    state: &ApiState,
+    topic_id: Uuid,
+) -> Result<projections::DiscussionTopicRow, ApiError> {
+    let topic = projections::discussion_topic_by_id(&state.pool, topic_id)
+        .await?
+        .ok_or_else(|| discussion_not_found("discussion topic"))?;
+    if topic.status == "hidden" {
+        return Err(discussion_not_found("discussion topic"));
+    }
+    Ok(topic)
+}
+
+async fn authenticated_discussion_principal(
+    state: &ApiState,
+    headers: &HeaderMap,
+) -> Result<String, ApiError> {
+    let token = bearer_token(headers).ok_or_else(unauthorized_session)?;
+    Ok(active_session_principal_and_globals(state, token).await?.0)
+}
+
+async fn require_global_mod(
+    state: &ApiState,
+    token: &str,
+    action: &str,
+) -> Result<String, ApiError> {
+    let (principal_user_id, globals) = active_session_principal_and_globals(state, token).await?;
+    if globals
+        .iter()
+        .any(|capability| matches!(capability.as_str(), "GlobalAdmin" | "GlobalMod"))
+    {
+        return Ok(principal_user_id);
+    }
+    Err(ApiError::Reject {
+        status: StatusCode::FORBIDDEN,
+        error: RejectCode::NotAuthorized,
+        message: format!("{action} requires GlobalMod"),
+    })
+}
+
+fn parse_discussion_topic_cursor(
+    value: &str,
+) -> Result<projections::DiscussionTopicCursor, ApiError> {
+    let (updated_seq, topic_id) = value.split_once(':').ok_or_else(|| {
+        discussion_conflict("invalid discussion cursor; refresh the area and try again")
+    })?;
+    let updated_seq = updated_seq.parse::<i64>().map_err(|_| {
+        discussion_conflict("invalid discussion cursor; refresh the area and try again")
+    })?;
+    let topic_id = Uuid::parse_str(topic_id).map_err(|_| {
+        discussion_conflict("invalid discussion cursor; refresh the area and try again")
+    })?;
+    Ok(projections::DiscussionTopicCursor {
+        updated_seq,
+        topic_id,
+    })
+}
+
+fn validate_discussion_slug(value: &str) -> Result<String, ApiError> {
+    let slug = value.trim().to_ascii_lowercase();
+    if !(2..=48).contains(&slug.len())
+        || slug.starts_with('-')
+        || slug.ends_with('-')
+        || !slug
+            .bytes()
+            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
+    {
+        return Err(ApiError::Reject {
+            status: StatusCode::BAD_REQUEST,
+            error: RejectCode::Internal,
+            message: "discussion area slug must be 2 to 48 lowercase letters, digits, or hyphens"
+                .to_string(),
+        });
+    }
+    Ok(slug)
+}
+
+fn validate_discussion_text(value: &str, label: &str, max_len: usize) -> Result<String, ApiError> {
+    let text = value.trim();
+    if text.is_empty() || text.len() > max_len {
+        return Err(ApiError::Reject {
+            status: StatusCode::BAD_REQUEST,
+            error: RejectCode::Internal,
+            message: format!("{label} must contain 1 to {max_len} bytes"),
+        });
+    }
+    Ok(text.to_string())
+}
+
+fn validate_discussion_status(value: &str) -> Result<String, ApiError> {
+    match value.trim() {
+        "open" | "locked" | "hidden" => Ok(value.trim().to_string()),
+        _ => Err(ApiError::Reject {
+            status: StatusCode::BAD_REQUEST,
+            error: RejectCode::Internal,
+            message: "discussion moderation status must be open, locked, or hidden".to_string(),
+        }),
+    }
+}
+
+fn discussion_not_found(resource: &str) -> ApiError {
+    ApiError::Reject {
+        status: StatusCode::NOT_FOUND,
+        error: RejectCode::NotAuthorized,
+        message: format!("{resource} was not found"),
+    }
+}
+
+fn discussion_conflict(message: &str) -> ApiError {
+    ApiError::Reject {
+        status: StatusCode::CONFLICT,
+        error: RejectCode::StreamConflict,
+        message: message.to_string(),
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]

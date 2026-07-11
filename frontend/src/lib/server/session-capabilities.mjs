@@ -100,6 +100,9 @@ export function sessionContextFromRequest(request) {
   if (/^\/admin(?:\/.*)?$/.test(pathname)) {
     return Object.freeze({ kind: "admin" });
   }
+  if (/^\/discussions(?:\/.*)?$/.test(pathname)) {
+    return Object.freeze({ kind: "community" });
+  }
   if (/^\/auth\/(?:account\/security|logout)\/?$/.test(pathname)) {
     return Object.freeze({ kind: "account" });
   }

@@ -10,9 +10,10 @@ use tempfile::TempDir;
 use tower::ServiceExt;
 use uuid::Uuid;
 use wire::{
-    ClientEnvelope, ClientMsg, Command, CommandMsg, GameIndexPage, PlayerInvestigationResult,
-    PlayerNotification, ProjectionDelta, RejectCode, RejectMsg, ServerEnvelope, ServerMsg,
-    SlotLifecycle, SubmitPostMedia, ThreadPage, VoteTarget, PROTOCOL_VERSION,
+    ClientEnvelope, ClientMsg, Command, CommandMsg, DiscussionThreadPage, DiscussionTopicPage,
+    GameIndexPage, PlayerInvestigationResult, PlayerNotification, ProjectionDelta, RejectCode,
+    RejectMsg, ServerEnvelope, ServerMsg, SlotLifecycle, SubmitPostMedia, ThreadPage, VoteTarget,
+    PROTOCOL_VERSION,
 };
 
 fn router(pool: sqlx::PgPool) -> axum::Router {
@@ -4305,6 +4306,182 @@ async fn public_game_index_cold_load_pages_only_active_and_completed_rows(pool: 
     let bytes = to_bytes(invalid.into_body(), usize::MAX).await.unwrap();
     let reject: RejectMsg = serde_json::from_slice(&bytes).unwrap();
     assert_eq!(reject.error, RejectCode::StreamConflict);
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn discussion_api_requires_sessions_pages_public_topics_and_enforces_global_moderation(
+    pool: sqlx::PgPool,
+) {
+    let app = router_with_dev_auth(pool);
+    for (token, principal_user_id, globals) in [
+        (
+            "discussion-member",
+            "discussion_member",
+            serde_json::json!([]),
+        ),
+        (
+            "discussion-moderator",
+            "discussion_moderator",
+            serde_json::json!(["GlobalMod"]),
+        ),
+    ] {
+        let response = post_public_auth_json(
+            &app,
+            "/auth/dev-session",
+            serde_json::json!({
+                "token": token,
+                "principal_user_id": principal_user_id,
+                "expires_at": 4_102_444_800i64,
+                "global_capabilities": globals,
+            }),
+            None,
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    let create_area = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/discussions/areas")
+                .header("authorization", "Bearer discussion-moderator")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    serde_json::json!({
+                        "slug": "general",
+                        "title": "General discussion",
+                        "description": "Public member discussion"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(create_area.status(), StatusCode::CREATED);
+
+    for (title, body) in [
+        ("First topic", "First opening"),
+        ("Second topic", "Second opening"),
+    ] {
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/discussions/areas/general/topics")
+                    .header("authorization", "Bearer discussion-member")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        serde_json::json!({ "title": title, "body": body }).to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::CREATED);
+    }
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/discussions/areas/general?limit=1")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let page: DiscussionTopicPage =
+        serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap()).unwrap();
+    assert_eq!(page.topics.len(), 1);
+    assert_eq!(page.topics[0].title, "Second topic");
+    let topic = page.topics[0].topic;
+    let cursor = page.next_cursor.expect("topic page cursor");
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!(
+                    "/discussions/areas/general?limit=1&cursor={cursor}"
+                ))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let older: DiscussionTopicPage =
+        serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap()).unwrap();
+    assert_eq!(older.topics.len(), 1);
+    assert_eq!(older.topics[0].title, "First topic");
+
+    let denied = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/discussions/topics/{topic}/moderation"))
+                .header("authorization", "Bearer discussion-member")
+                .header("content-type", "application/json")
+                .body(Body::from(r#"{"status":"locked"}"#))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(denied.status(), StatusCode::FORBIDDEN);
+
+    let locked = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/discussions/topics/{topic}/moderation"))
+                .header("authorization", "Bearer discussion-moderator")
+                .header("content-type", "application/json")
+                .body(Body::from(r#"{"status":"locked"}"#))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(locked.status(), StatusCode::OK);
+
+    let rejected_post = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/discussions/topics/{topic}/posts"))
+                .header("authorization", "Bearer discussion-member")
+                .header("content-type", "application/json")
+                .body(Body::from(r#"{"body":"late reply"}"#))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(rejected_post.status(), StatusCode::CONFLICT);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!("/discussions/topics/{topic}?limit=10"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let thread: DiscussionThreadPage =
+        serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap()).unwrap();
+    assert_eq!(thread.topic.status, "locked");
+    assert_eq!(thread.posts.len(), 1);
+    assert_eq!(thread.posts[0].body, "Second opening");
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]

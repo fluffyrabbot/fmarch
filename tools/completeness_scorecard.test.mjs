@@ -13,7 +13,7 @@ import {
   validateRegistry,
 } from "./completeness_scorecard.mjs";
 
-test("real completion registry validates completed game index and selects discussions", async () => {
+test("real completion registry validates completed community slices and selects profiles", async () => {
   const registry = await loadCompletionRegistry();
   await validateRegistry(registry);
   const summary = summarizeRegistry(registry);
@@ -29,11 +29,11 @@ test("real completion registry validates completed game index and selects discus
   assert.equal(summary.platformComplete, false);
   assert.equal(summary.releaseComplete, false);
   const nextItem = nextBuildableCodeItem(registry);
-  assert.equal(nextItem?.id, "product.community.discussions");
+  assert.equal(nextItem?.id, "product.community.profiles");
   assert.deepEqual(nextItem?.remaining, [
-    "Define and implement non-game discussion aggregates, projections, routes, moderation, and proof.",
+    "Design profile events/projections, routes, privacy controls, editing, and media integration.",
   ]);
-  assert.match(nextItem?.recommended_slice?.objective ?? "", /non-game discussion/);
+  assert.match(nextItem?.recommended_slice?.objective ?? "", /profile vertical/);
 });
 
 test("generated scorecard exactly matches the canonical registry", async () => {
@@ -71,6 +71,11 @@ test("registry validation rejects duplicate ids and unknown dependencies", async
 test("registry validation rejects dependency cycles", async () => {
   const registry = await loadCompletionRegistry();
   const cyclic = structuredClone(registry);
+  const discussions = cyclic.items.find(
+    (item) => item.id === "product.community.discussions",
+  );
+  discussions.status = "open";
+  discussions.remaining = ["cyclic test dependency"];
   const registration = cyclic.items.find(
     (item) => item.id === "product.identity.registration",
   );
@@ -116,7 +121,7 @@ test("registry validation rejects illegal completion and blocked states", async 
   );
 
   const whitespaceRemaining = structuredClone(registry);
-  whitespaceRemaining.items.find((item) => item.id === "product.community.discussions").remaining = ["   "];
+  whitespaceRemaining.items.find((item) => item.id === "product.community.profiles").remaining = ["   "];
   await assert.rejects(
     validateRegistry(whitespaceRemaining, { verifySourcePaths: false }),
     /remaining must contain nonempty strings/,
@@ -124,7 +129,7 @@ test("registry validation rejects illegal completion and blocked states", async 
 
   const completeRecommendedSlice = structuredClone(registry);
   completeRecommendedSlice.items[0].recommended_slice = structuredClone(
-    registry.items.find((item) => item.id === "product.community.discussions")
+    registry.items.find((item) => item.id === "product.community.profiles")
       .recommended_slice,
   );
   await assert.rejects(

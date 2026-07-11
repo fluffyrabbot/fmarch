@@ -151,6 +151,7 @@ Examples:
 | `phase_state` | current phase, deadline, lock status per game |
 | `channel_membership` | who can read/post where (drives authz reads) |
 | `game_index` | public board listing: active/completed games, pack, status, current phase, and stable page cursor |
+| `discussion_area` / `discussion_topic` / `discussion_post` | public non-game areas, visible topic lifecycle, and paginated post threads |
 
 `game_index` folds `GameCreated`, `GameStarted`, `PhaseAdvanced`, and `GameCompleted`
 synchronously with the game stream. Setup rows remain rebuildable but are excluded from the
@@ -158,6 +159,14 @@ public query until a game starts; the public row deliberately contains no host, 
 private-channel, command, or audit data. The board uses the event stream's
 `(updated_seq, game_id)` keyset cursor, so an older page remains stable while newer game
 lifecycle events arrive.
+
+Non-game discussion uses independent area and topic streams in the same append-only event log.
+`DiscussionAreaCreated`, `DiscussionTopicCreated`, `DiscussionPostSubmitted`, and
+`DiscussionTopicModerationChanged` fold synchronously into their own projection tables. Public
+queries expose only area/topic/post display facts: account identifiers stay inside the projection
+boundary, hidden topics are excluded, and the topic index uses `(updated_seq, topic_id)` keyset
+pagination. Topic creation and posting require an authenticated opaque session; moderation state
+transitions require `GlobalMod` or `GlobalAdmin` resolved from that session at the API boundary.
 
 ### Update strategy
 

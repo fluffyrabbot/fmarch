@@ -78,6 +78,7 @@ dependencies = [
  "caps",
  "commands",
  "domain",
+ "eventstore",
  "futures-util",
  "media",
  "png",

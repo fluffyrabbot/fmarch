@@ -973,6 +973,73 @@ impl From<projections::GameIndexPage> for GameIndexPage {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct DiscussionArea {
+    pub slug: String,
+    pub title: String,
+    pub description: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct DiscussionTopic {
+    pub topic: Uuid,
+    pub title: String,
+    pub status: String,
+    pub post_count: i64,
+    pub updated_seq: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct DiscussionTopicPage {
+    pub area: DiscussionArea,
+    pub topics: Vec<DiscussionTopic>,
+    pub next_cursor: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct DiscussionPost {
+    pub source_seq: i64,
+    pub body: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct DiscussionThreadPage {
+    pub topic: DiscussionTopic,
+    pub posts: Vec<DiscussionPost>,
+    pub next_before_seq: Option<i64>,
+}
+
+impl From<projections::DiscussionAreaRow> for DiscussionArea {
+    fn from(area: projections::DiscussionAreaRow) -> Self {
+        DiscussionArea {
+            slug: area.slug,
+            title: area.title,
+            description: area.description,
+        }
+    }
+}
+
+impl From<projections::DiscussionTopicRow> for DiscussionTopic {
+    fn from(topic: projections::DiscussionTopicRow) -> Self {
+        DiscussionTopic {
+            topic: topic.topic_id,
+            title: topic.title,
+            status: topic.status,
+            post_count: topic.post_count,
+            updated_seq: topic.updated_seq,
+        }
+    }
+}
+
+impl From<projections::DiscussionPostRow> for DiscussionPost {
+    fn from(post: projections::DiscussionPostRow) -> Self {
+        DiscussionPost {
+            source_seq: post.source_seq,
+            body: post.body,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct PlayerNotification {
     pub game: Uuid,
     pub phase_id: String,
@@ -1277,7 +1344,8 @@ pub mod typescript {
 
     use crate::{
         AckMsg, CapabilityGrant, ClientEnvelope, ClientMsg, Command, CommandMsg,
-        DayVoteOutcomeDelta, GameIndexEntry, GameIndexPage, Hello, HostConsolePhaseStateDelta,
+        DayVoteOutcomeDelta, DiscussionArea, DiscussionPost, DiscussionThreadPage, DiscussionTopic,
+        DiscussionTopicPage, GameIndexEntry, GameIndexPage, Hello, HostConsolePhaseStateDelta,
         HostConsoleSlotOccupancyDelta, HostConsoleStateDelta, HostConsoleThreadPostDelta,
         HostPhaseControl, HostPromptDecision, HostPromptDelta, HostPromptsDelta,
         PlayerInvestigationResult, PlayerNotification, ProjectionDelta, RejectCode, RejectMsg,
@@ -1320,6 +1388,11 @@ pub mod typescript {
         push::<ThreadPage>(&mut out);
         push::<GameIndexEntry>(&mut out);
         push::<GameIndexPage>(&mut out);
+        push::<DiscussionArea>(&mut out);
+        push::<DiscussionTopic>(&mut out);
+        push::<DiscussionTopicPage>(&mut out);
+        push::<DiscussionPost>(&mut out);
+        push::<DiscussionThreadPage>(&mut out);
         push::<PlayerNotification>(&mut out);
         push::<PlayerInvestigationResult>(&mut out);
         push::<HostPhaseControl>(&mut out);

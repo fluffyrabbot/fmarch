@@ -425,6 +425,53 @@ pub struct GameIndexPage {
     pub next_cursor: Option<GameIndexCursor>,
 }
 
+/// A public non-game discussion area. Account identifiers never cross this
+/// read boundary.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DiscussionAreaRow {
+    pub area_id: Uuid,
+    pub slug: String,
+    pub title: String,
+    pub description: String,
+    pub created_seq: i64,
+}
+
+/// A public discussion topic row.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DiscussionTopicRow {
+    pub topic_id: Uuid,
+    pub area_id: Uuid,
+    pub title: String,
+    pub status: String,
+    pub post_count: i64,
+    pub created_seq: i64,
+    pub updated_seq: i64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DiscussionTopicCursor {
+    pub updated_seq: i64,
+    pub topic_id: Uuid,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DiscussionTopicPage {
+    pub topics: Vec<DiscussionTopicRow>,
+    pub next_cursor: Option<DiscussionTopicCursor>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DiscussionPostRow {
+    pub source_seq: i64,
+    pub body: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DiscussionPostPage {
+    pub posts: Vec<DiscussionPostRow>,
+    pub next_before_seq: Option<i64>,
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum ProjectionError {
     #[error(transparent)]
@@ -1486,6 +1533,149 @@ pub async fn append_and_project_in_tx(
         fold_event(tx, stream_id, ev).await?;
     }
     Ok(stored)
+}
+
+/// Append a non-game discussion event stream and fold its public projection in
+/// the same transaction. Discussion streams intentionally do not enter the
+/// game-only fold/rebuild path.
+pub async fn append_discussion_and_project(
+    pool: &PgPool,
+    stream_id: Uuid,
+    events: &[EventInput],
+) -> Result<Vec<StoredEvent>, ProjectionError> {
+    let mut tx = pool.begin().await?;
+    let stored = append_discussion_and_project_in_tx(&mut tx, stream_id, events).await?;
+    tx.commit().await?;
+    Ok(stored)
+}
+
+/// Transactional form of [`append_discussion_and_project`].
+pub async fn append_discussion_and_project_in_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    stream_id: Uuid,
+    events: &[EventInput],
+) -> Result<Vec<StoredEvent>, ProjectionError> {
+    let stored = append_in_tx(tx, stream_id, events).await?;
+    for event in &stored {
+        fold_discussion_event(tx, stream_id, event).await?;
+    }
+    Ok(stored)
+}
+
+/// Rebuild one non-game discussion stream. Topic streams replace their topic
+/// and post rows before replay; area streams upsert their immutable area row so
+/// rebuilding an area never invalidates existing topic foreign keys.
+pub async fn rebuild_discussion_stream(
+    pool: &PgPool,
+    stream_id: Uuid,
+) -> Result<(), ProjectionError> {
+    let events = eventstore::load_stream(pool, stream_id).await?;
+    let is_topic_stream = events
+        .iter()
+        .any(|event| event.kind == "DiscussionTopicCreated");
+    let is_area_stream = events
+        .iter()
+        .any(|event| event.kind == "DiscussionAreaCreated");
+    if !is_topic_stream && !is_area_stream {
+        return Ok(());
+    }
+    let mut tx = pool.begin().await?;
+    if is_topic_stream {
+        sqlx::query("DELETE FROM discussion_post WHERE topic_id = $1")
+            .bind(stream_id)
+            .execute(&mut *tx)
+            .await?;
+        sqlx::query("DELETE FROM discussion_topic WHERE topic_id = $1")
+            .bind(stream_id)
+            .execute(&mut *tx)
+            .await?;
+    }
+    for event in &events {
+        fold_discussion_event(&mut tx, stream_id, event).await?;
+    }
+    tx.commit().await?;
+    Ok(())
+}
+
+async fn fold_discussion_event(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    stream_id: Uuid,
+    event: &StoredEvent,
+) -> Result<(), ProjectionError> {
+    match event.kind.as_str() {
+        "DiscussionAreaCreated" => {
+            let slug = str_field(&event.payload, "slug", &event.kind)?;
+            let title = str_field(&event.payload, "title", &event.kind)?;
+            let description = str_field(&event.payload, "description", &event.kind)?;
+            sqlx::query(
+                "INSERT INTO discussion_area (area_id, slug, title, description, created_seq) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (area_id) DO UPDATE SET slug = EXCLUDED.slug, title = EXCLUDED.title, description = EXCLUDED.description, created_seq = EXCLUDED.created_seq",
+            )
+            .bind(stream_id)
+            .bind(slug)
+            .bind(title)
+            .bind(description)
+            .bind(event.seq)
+            .execute(&mut **tx)
+            .await?;
+        }
+        "DiscussionTopicCreated" => {
+            let area_id = uuid_field(&event.payload, "area_id", &event.kind)?;
+            let title = str_field(&event.payload, "title", &event.kind)?;
+            let author_user_id = str_field(&event.payload, "author_user_id", &event.kind)?;
+            sqlx::query(
+                r#"
+                INSERT INTO discussion_topic
+                    (topic_id, area_id, title, status, author_user_id, post_count, created_seq, updated_seq, moderated_seq)
+                VALUES ($1, $2, $3, 'open', $4, 0, $5, $5, NULL)
+                "#,
+            )
+            .bind(stream_id)
+            .bind(area_id)
+            .bind(title)
+            .bind(author_user_id)
+            .bind(event.seq)
+            .execute(&mut **tx)
+            .await?;
+        }
+        "DiscussionPostSubmitted" => {
+            let body = str_field(&event.payload, "body", &event.kind)?;
+            let author_user_id = str_field(&event.payload, "author_user_id", &event.kind)?;
+            sqlx::query(
+                "INSERT INTO discussion_post (source_seq, topic_id, author_user_id, body, created_seq) VALUES ($1, $2, $3, $4, $1)",
+            )
+            .bind(event.seq)
+            .bind(stream_id)
+            .bind(author_user_id)
+            .bind(body)
+            .execute(&mut **tx)
+            .await?;
+            sqlx::query(
+                "UPDATE discussion_topic SET post_count = post_count + 1, updated_seq = $2 WHERE topic_id = $1",
+            )
+            .bind(stream_id)
+            .bind(event.seq)
+            .execute(&mut **tx)
+            .await?;
+        }
+        "DiscussionTopicModerationChanged" => {
+            let status = str_field(&event.payload, "status", &event.kind)?;
+            if !matches!(status.as_str(), "open" | "locked" | "hidden") {
+                return Err(ProjectionError::Db(sqlx::Error::Protocol(
+                    "invalid discussion moderation status".to_string(),
+                )));
+            }
+            sqlx::query(
+                "UPDATE discussion_topic SET status = $2, updated_seq = $3, moderated_seq = $3 WHERE topic_id = $1",
+            )
+            .bind(stream_id)
+            .bind(status)
+            .bind(event.seq)
+            .execute(&mut **tx)
+            .await?;
+        }
+        _ => {}
+    }
+    Ok(())
 }
 
 /// Rebuild a game's projections from the log: truncate this game's projection
@@ -2684,6 +2874,181 @@ pub async fn game_index(
     Ok(GameIndexPage { games, next_cursor })
 }
 
+/// Resolve one public discussion area by its stable URL slug.
+pub async fn discussion_area_by_slug(
+    pool: &PgPool,
+    slug: &str,
+) -> Result<Option<DiscussionAreaRow>, ProjectionError> {
+    let row = sqlx::query(
+        "SELECT area_id, slug, title, description, created_seq FROM discussion_area WHERE slug = $1",
+    )
+    .bind(slug)
+    .fetch_optional(pool)
+    .await?;
+    Ok(row.map(|row| DiscussionAreaRow {
+        area_id: row.get("area_id"),
+        slug: row.get("slug"),
+        title: row.get("title"),
+        description: row.get("description"),
+        created_seq: row.get("created_seq"),
+    }))
+}
+
+/// Read visible discussion topics newest-first with a stable sequence keyset.
+pub async fn discussion_topics(
+    pool: &PgPool,
+    area_id: Uuid,
+    cursor: Option<DiscussionTopicCursor>,
+    limit: i64,
+) -> Result<DiscussionTopicPage, ProjectionError> {
+    let limit = limit.clamp(1, 100);
+    let fetch_limit = limit + 1;
+    let rows = match cursor {
+        Some(cursor) => {
+            sqlx::query(
+                r#"
+                SELECT topic_id, area_id, title, status, post_count, created_seq, updated_seq
+                FROM discussion_topic
+                WHERE area_id = $1
+                  AND status <> 'hidden'
+                  AND (updated_seq < $2 OR (updated_seq = $2 AND topic_id < $3))
+                ORDER BY updated_seq DESC, topic_id DESC
+                LIMIT $4
+                "#,
+            )
+            .bind(area_id)
+            .bind(cursor.updated_seq)
+            .bind(cursor.topic_id)
+            .bind(fetch_limit)
+            .fetch_all(pool)
+            .await?
+        }
+        None => {
+            sqlx::query(
+                r#"
+                SELECT topic_id, area_id, title, status, post_count, created_seq, updated_seq
+                FROM discussion_topic
+                WHERE area_id = $1 AND status <> 'hidden'
+                ORDER BY updated_seq DESC, topic_id DESC
+                LIMIT $2
+                "#,
+            )
+            .bind(area_id)
+            .bind(fetch_limit)
+            .fetch_all(pool)
+            .await?
+        }
+    };
+    let has_more = rows.len() as i64 > limit;
+    let topics: Vec<_> = rows
+        .into_iter()
+        .take(limit as usize)
+        .map(discussion_topic_row)
+        .collect();
+    let next_cursor = has_more.then(|| {
+        let last = topics
+            .last()
+            .expect("full discussion page has a final topic");
+        DiscussionTopicCursor {
+            updated_seq: last.updated_seq,
+            topic_id: last.topic_id,
+        }
+    });
+    Ok(DiscussionTopicPage {
+        topics,
+        next_cursor,
+    })
+}
+
+/// Read a topic regardless of its public visibility so authenticated mutation
+/// handlers can return an explicit locked/hidden rejection instead of racing a
+/// stale client-side view.
+pub async fn discussion_topic_by_id(
+    pool: &PgPool,
+    topic_id: Uuid,
+) -> Result<Option<DiscussionTopicRow>, ProjectionError> {
+    let row = sqlx::query(
+        "SELECT topic_id, area_id, title, status, post_count, created_seq, updated_seq FROM discussion_topic WHERE topic_id = $1",
+    )
+    .bind(topic_id)
+    .fetch_optional(pool)
+    .await?;
+    Ok(row.map(discussion_topic_row))
+}
+
+/// Read one visible topic's posts oldest-first. Callers can page older posts by
+/// passing the first row's sequence as `before_seq`.
+pub async fn discussion_posts(
+    pool: &PgPool,
+    topic_id: Uuid,
+    before_seq: Option<i64>,
+    limit: i64,
+) -> Result<DiscussionPostPage, ProjectionError> {
+    let limit = limit.clamp(1, 100);
+    let fetch_limit = limit + 1;
+    let rows = match before_seq {
+        Some(before_seq) => {
+            sqlx::query(
+                r#"
+                SELECT source_seq, body
+                FROM discussion_post
+                WHERE topic_id = $1 AND source_seq < $2
+                ORDER BY source_seq DESC
+                LIMIT $3
+                "#,
+            )
+            .bind(topic_id)
+            .bind(before_seq)
+            .bind(fetch_limit)
+            .fetch_all(pool)
+            .await?
+        }
+        None => {
+            sqlx::query(
+                r#"
+                SELECT source_seq, body
+                FROM discussion_post
+                WHERE topic_id = $1
+                ORDER BY source_seq DESC
+                LIMIT $2
+                "#,
+            )
+            .bind(topic_id)
+            .bind(fetch_limit)
+            .fetch_all(pool)
+            .await?
+        }
+    };
+    let has_more = rows.len() as i64 > limit;
+    let mut posts: Vec<_> = rows
+        .into_iter()
+        .take(limit as usize)
+        .map(|row| DiscussionPostRow {
+            source_seq: row.get("source_seq"),
+            body: row.get("body"),
+        })
+        .collect();
+    let next_before_seq =
+        has_more.then(|| posts.last().expect("full page has final post").source_seq);
+    posts.reverse();
+    Ok(DiscussionPostPage {
+        posts,
+        next_before_seq,
+    })
+}
+
+fn discussion_topic_row(row: sqlx::postgres::PgRow) -> DiscussionTopicRow {
+    DiscussionTopicRow {
+        topic_id: row.get("topic_id"),
+        area_id: row.get("area_id"),
+        title: row.get("title"),
+        status: row.get("status"),
+        post_count: row.get("post_count"),
+        created_seq: row.get("created_seq"),
+        updated_seq: row.get("updated_seq"),
+    }
+}
+
 /// Read one channel's thread as a stable cold-load page. Results are returned
 /// oldest-to-newest for direct rendering. To page older, pass the previous
 /// response's `next_before_seq` as `before_seq`.
@@ -3586,6 +3951,17 @@ fn str_field(p: &serde_json::Value, key: &str, kind: &str) -> Result<String, Pro
             kind: kind.to_string(),
             source: serde::de::Error::custom(format!("missing string field `{key}`")),
         })
+}
+
+fn uuid_field(p: &serde_json::Value, key: &str, kind: &str) -> Result<Uuid, ProjectionError> {
+    let value = str_field(p, key, kind)?;
+    Uuid::parse_str(&value).map_err(|source| ProjectionError::Payload {
+        kind: kind.to_string(),
+        source: serde_json::Error::io(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            source.to_string(),
+        )),
+    })
 }
 
 fn private_channel_members_field(

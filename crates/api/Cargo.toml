@@ -7,6 +7,7 @@ edition.workspace = true
 caps = { path = "../caps" }
 commands = { path = "../commands" }
 domain = { path = "../domain" }
+eventstore = { path = "../eventstore" }
 media = { path = "../media" }
 projections = { path = "../projections" }
 wire = { path = "../wire" }
