@@ -7,6 +7,7 @@
     "check:build-posture": "bash scripts/check-build-posture.sh",
     "dev:postgres": "node tools/dev_postgres.mjs",
     "dev:test-game:prebuild": "cargo build -p server",
+    "test:railway-staging-target": "node tools/railway_staging_target_contract.mjs",
     "dev:test-game:local": "node tools/dev_test_game_local.mjs",
     "test:dev-test-game-spine:local": "node tools/dev_test_game_local_spine.mjs",
     "dev:test-game": "node tools/dev_test_game.mjs",
