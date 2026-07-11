@@ -46,6 +46,19 @@ test("generated scorecard exactly matches the canonical registry", async () => {
   assert.doesNotMatch(rendered, /Last updated|main @|Proof surface|tools\/ file/);
 });
 
+test("governing docs record the typed vote-target contract", async () => {
+  const [domain, roadmap] = await Promise.all([
+    readFile(path.resolve(repoRoot, "docs/arch/01-domain-model.md"), "utf8"),
+    readFile(path.resolve(repoRoot, "docs/arch/08-roadmap.md"), "utf8"),
+  ]);
+
+  assert.match(domain, /Votes are never parsed from post text/);
+  assert.match(domain, /selection sends `SubmitVote` with `Slot\(slot_id\)` or `NoLynch`/);
+  assert.doesNotMatch(domain, /Open design call:\*\* strict tag syntax/);
+  assert.match(roadmap, /typed `SubmitVote`\/`WithdrawVote`/);
+  assert.doesNotMatch(roadmap, /\*\*Vote syntax\*\*/);
+});
+
 test("registry validation rejects duplicate ids and unknown dependencies", async () => {
   const registry = await loadCompletionRegistry();
   const duplicate = structuredClone(registry);
@@ -121,7 +134,7 @@ test("registry validation rejects illegal completion and blocked states", async 
   );
 
   const whitespaceRemaining = structuredClone(registry);
-  whitespaceRemaining.items.find((item) => item.id === "housekeeping.vote-syntax-decision").remaining = ["   "];
+  whitespaceRemaining.items.find((item) => item.id === "housekeeping.codename").remaining = ["   "];
   await assert.rejects(
     validateRegistry(whitespaceRemaining, { verifySourcePaths: false }),
     /remaining must contain nonempty strings/,

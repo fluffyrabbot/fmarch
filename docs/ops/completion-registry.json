@@ -654,15 +654,17 @@
       "order": 10,
       "title": "Record the strict vote-syntax decision",
       "execution_class": "code",
-      "status": "partial",
-      "summary": "The confirm-picker behavior is strict and shipped, but the architecture docs still describe strict tags versus freeform input as unresolved.",
+      "status": "complete",
+      "summary": "Player vote targets are server-supplied controls that emit typed vote commands; the governing docs record that posts are never parsed as votes.",
       "complete_when": ["The domain and roadmap docs record the shipped strict-target decision and remove the stale open call."],
       "depends_on": ["product.game.core-loop"],
       "evidence": [
         { "kind": "source", "value": "docs/arch/08-roadmap.md" },
-        { "kind": "source", "value": "docs/arch/01-domain-model.md" }
+        { "kind": "source", "value": "docs/arch/01-domain-model.md" },
+        { "kind": "source", "value": "frontend/src/routes/g/[game]/game-route-model.mjs" },
+        { "kind": "command", "value": "npm run test:completeness-scorecard" }
       ],
-      "remaining": ["Update the governing design docs to match the shipped strict-target UI and command contract." ]
+      "remaining": []
     },
     {
       "id": "housekeeping.codename",

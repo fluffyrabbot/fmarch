@@ -15,9 +15,10 @@ A single game, one channel, real votes, live, with the two irreversible mechanic
    ([02](02-event-sourcing.md)). Proves: the log, sync projections, replay determinism.
 
 2. **A game thread with phases + vote submissions + engine resolution.**
-   `PostSubmitted` events; phase gating ([01](01-domain-model.md)); the canonical vote-tag
-   parser emitting `VoteSubmitted`/`VoteWithdrawn`; and a **minimal mafiascum pack** driving
-   the engine's `DayVoteOutcome` at deadline ([09](09-engine-and-packs.md),
+   `PostSubmitted` events; phase gating ([01](01-domain-model.md)); server-supplied eligible
+   vote targets rendered as player controls that emit typed `SubmitVote`/`WithdrawVote`
+   commands; and a **minimal mafiascum pack** driving the engine's `DayVoteOutcome` at deadline
+   ([09](09-engine-and-packs.md),
    [10](10-event-schema.md)). Proves: phases partition content, the platform→engine
    submission seam, and that the official outcome is engine+pack resolved (not a forum
    projection).
@@ -146,12 +147,9 @@ Not committed; sequence as needs dictate.
 These are flagged across the docs and should be resolved as they're hit, not deferred
 indefinitely:
 
-1. **Vote syntax** — strict tags (`##vote`) vs. freeform legacy
-   ([01](01-domain-model.md)). Recommendation: strict tags + a client button that inserts
-   them. *Needs your call.*
-2. **Event-schema shape for slot/replacement** — the one irreversible modeling decision
+1. **Event-schema shape for slot/replacement** — the one irreversible modeling decision
    ([01](01-domain-model.md), [02](02-event-sourcing.md)). Draft and review before step 4.
-3. **Codename / project name** — currently "the platform" ([00](00-vision.md)).
+2. **Codename / project name** — currently "the platform" ([00](00-vision.md)).
 
 ## Suggested next concrete step
 

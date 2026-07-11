@@ -108,9 +108,12 @@ as events so the original is recoverable and "edited" is honest. May carry image
 attachments (see [07-images](07-images.md)).
 
 ### Vote
-A directed action: a slot votes *for* a slot (or for `no-lynch` / `unvote`). A vote may be
-**parsed from a post** (e.g. a `##vote` token) or cast as an explicit action. A vote is a
-[Submission](09-engine-and-packs.md) into the engine like any night action.
+A directed action: a slot votes *for* a slot or for `no-lynch`; a separate typed command
+withdraws that vote. Votes are never parsed from post text. The player command state supplies a
+closed, current target list under the pack's rules, the role surface renders those targets as
+controls, and selection sends `SubmitVote` with `Slot(slot_id)` or `NoLynch`. The freeform post
+body is only input to `SubmitPost`. A vote is a [Submission](09-engine-and-packs.md) into the
+engine like any night action.
 
 Two tallies exist on purpose. The **running votecount** is a cheap forum projection the
 server folds from vote submissions for live UX (clients only render — never reimplement the
@@ -119,12 +122,6 @@ the pack** ([09-engine-and-packs](09-engine-and-packs.md)), because vote weight,
 plurality, no-lynch, and tiebreak rules are *culture-specific* and must not be hardcoded.
 Hammer (threshold reached) is detected during resolution and can auto-advance the phase if
 the pack configures it.
-
-> **Open design call:** strict tag syntax (`##vote Alice`, `##unvote`) vs. freeform
-> (`[vote]Alice[/vote]` or bracket-and-bold legacy styles). This shapes both the parser
-> and the posting UX. Recommend **strict tags** for unambiguous parsing, with a
-> client-side affordance (a "Vote" button that inserts the tag) so players never type it
-> wrong. Recorded as unresolved pending your call.
 
 ## How they relate
 

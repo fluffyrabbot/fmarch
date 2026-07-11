@@ -17,7 +17,7 @@ count is treated as product progress.
 
 | Execution class | Complete | Partial | Open | Blocked | Deferred | Total |
 |---|---:|---:|---:|---:|---:|---:|
-| code | 27 | 1 | 0 | 0 | 0 | 28 |
+| code | 28 | 0 | 0 | 0 | 0 | 28 |
 | external-evidence | 0 | 0 | 0 | 6 | 0 | 6 |
 | human | 0 | 0 | 1 | 1 | 0 | 2 |
 | optional | 0 | 0 | 0 | 0 | 1 | 1 |
@@ -108,7 +108,7 @@ No dependency-satisfied incomplete coding slice is registered.
 
 | Status | Capability | Depends on | Complete when | Current / remaining | Evidence / boundary |
 |---|---|---|---|---|---|
-| partial | Record the strict vote-syntax decision<br>`housekeeping.vote-syntax-decision` | `product.game.core-loop` | The domain and roadmap docs record the shipped strict-target decision and remove the stale open call. | Remaining: Update the governing design docs to match the shipped strict-target UI and command contract. | source: `docs/arch/08-roadmap.md`<br>source: `docs/arch/01-domain-model.md`<br>The confirm-picker behavior is strict and shipped, but the architecture docs still describe strict tags versus freeform input as unresolved. |
+| complete | Record the strict vote-syntax decision<br>`housekeeping.vote-syntax-decision` | `product.game.core-loop` | The domain and roadmap docs record the shipped strict-target decision and remove the stale open call. | Complete. | source: `docs/arch/08-roadmap.md`<br>source: `docs/arch/01-domain-model.md`<br>source: `frontend/src/routes/g/[game]/game-route-model.mjs`<br>command: `npm run test:completeness-scorecard`<br>Player vote targets are server-supplied controls that emit typed vote commands; the governing docs record that posts are never parsed as votes. |
 | open | Ratify the fmarch codename<br>`housekeeping.codename` | — | The owner ratifies the name and the vision/index docs consistently use it. | Remaining: Obtain the naming decision and update the governing docs. | source: `docs/arch/README.md`<br>source: `docs/arch/00-vision.md`<br>The repository and packages use fmarch while the vision docs still call the product unnamed or TBD. |
 
 ## Optional optimization
