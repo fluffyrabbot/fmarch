@@ -276,11 +276,19 @@ import {
   adminSpineReadinessEvidenceEnv,
   adminSpineTerminalBatchProofPath,
   adminSpineTerminalBatchReadinessEvidenceEnv,
+  devTestGameAdminSpineFinalNextActionGuidanceSteps,
+  devTestGameAdminSpineGraphBootstrapSteps,
+  devTestGameAdminSpineHostedEvidenceChecklistHandoffSteps,
+  devTestGameAdminSpineHostedIdentityHandoffSteps,
   devTestGameAdminSpinePlan,
   devTestGameAdminSpinePreGraphAdminRollupSteps,
   devTestGameAdminSpinePreGraphHostedSteps,
   devTestGameAdminSpinePreGraphInputSteps,
   devTestGameAdminSpinePreGraphSteps,
+  devTestGameAdminSpineReleaseValidationSteps,
+  devTestGameAdminSpineTerminalReceiptBatchReadinessSteps,
+  devTestGameAdminSpineTerminalRefreshRollupSteps,
+  devTestGameAdminSpineTerminalSteps,
   devTestGameHostedEvidenceOperatorChecklistHandoffPhase,
   devTestGameHostedEvidenceOperatorChecklistHandoffPhaseId,
   devTestGameHostedIdentityHandoffPhase,
@@ -2306,10 +2314,54 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     ...devTestGameAdminSpinePreGraphAdminRollupSteps,
   ]);
   assert.deepEqual(
-    devTestGameAdminSpinePlan.slice(
-      0,
-      devTestGameAdminSpinePreGraphSteps.length,
+    devTestGameAdminSpineGraphBootstrapSteps.map((step) => step.script),
+    [
+      "tools/dev_test_game_spine_manifest.mjs",
+      "tools/dev_test_game_next_action.mjs",
+    ],
+  );
+  assert.deepEqual(
+    devTestGameAdminSpineHostedEvidenceChecklistHandoffSteps,
+    devTestGameHostedEvidenceOperatorChecklistHandoffPhase,
+  );
+  assert.deepEqual(
+    devTestGameAdminSpineTerminalReceiptBatchReadinessSteps.map(
+      (step) => step.script,
     ),
+    [
+      "tools/dev_test_game_proof_graph.mjs",
+      terminalAdminProofBatch.script,
+      devTestGameReleaseReadinessScript,
+    ],
+  );
+  assert.deepEqual(
+    devTestGameAdminSpineHostedIdentityHandoffSteps,
+    devTestGameHostedIdentityHandoffPhase,
+  );
+  assert.deepEqual(
+    devTestGameAdminSpineTerminalSteps,
+    [
+      ...devTestGameAdminSpineGraphBootstrapSteps,
+      ...devTestGameAdminSpineHostedEvidenceChecklistHandoffSteps,
+      ...devTestGameAdminSpineTerminalReceiptBatchReadinessSteps,
+      ...devTestGameAdminSpineHostedIdentityHandoffSteps,
+      ...devTestGameAdminSpineTerminalRefreshRollupSteps,
+      ...devTestGameAdminSpineReleaseValidationSteps,
+      ...devTestGameAdminSpineFinalNextActionGuidanceSteps,
+    ],
+  );
+  assert.deepEqual(devTestGameAdminSpinePlan, [
+    ...devTestGameAdminSpinePreGraphSteps,
+    ...devTestGameAdminSpineGraphBootstrapSteps,
+    ...devTestGameAdminSpineHostedEvidenceChecklistHandoffSteps,
+    ...devTestGameAdminSpineTerminalReceiptBatchReadinessSteps,
+    ...devTestGameAdminSpineHostedIdentityHandoffSteps,
+    ...devTestGameAdminSpineTerminalRefreshRollupSteps,
+    ...devTestGameAdminSpineReleaseValidationSteps,
+    ...devTestGameAdminSpineFinalNextActionGuidanceSteps,
+  ]);
+  assert.deepEqual(
+    devTestGameAdminSpinePlan.slice(0, devTestGameAdminSpinePreGraphSteps.length),
     devTestGameAdminSpinePreGraphSteps,
   );
   assert.deepEqual(

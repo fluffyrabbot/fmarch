@@ -366,26 +366,37 @@ export const devTestGameAdminSpinePreGraphSteps = Object.freeze([
   ...devTestGameAdminSpinePreGraphAdminRollupSteps,
 ]);
 
-export const devTestGameAdminSpinePlan = [
-  ...devTestGameAdminSpinePreGraphSteps,
+export const devTestGameAdminSpineGraphBootstrapSteps = Object.freeze([
   { kind: "node", script: "tools/dev_test_game_spine_manifest.mjs" },
   { kind: "node", script: "tools/dev_test_game_next_action.mjs" },
-  ...devTestGameHostedEvidenceOperatorChecklistHandoffPhase,
-  { kind: "node", script: "tools/dev_test_game_proof_graph.mjs" },
-  adminSpineCustomPlanStep(terminalAdminProofBatchPlan),
-  releaseReadinessStep({
-    reason: "terminal-graph-and-local-dependency-surfaces",
-    changedInputs: [
-      spineManifestPath,
-      nextActionPath,
-      devTestGameProofGraphPath,
-      devTestGameProofGraphAdminProofPath,
-      proofFreshnessAdminProofPath,
-      nextActionAdminProofPath,
-    ],
-    env: adminSpineReadinessEvidenceEnv,
-  }),
+]);
+
+export const devTestGameAdminSpineHostedEvidenceChecklistHandoffSteps =
+  Object.freeze([...devTestGameHostedEvidenceOperatorChecklistHandoffPhase]);
+
+export const devTestGameAdminSpineTerminalReceiptBatchReadinessSteps =
+  Object.freeze([
+    { kind: "node", script: "tools/dev_test_game_proof_graph.mjs" },
+    adminSpineCustomPlanStep(terminalAdminProofBatchPlan),
+    releaseReadinessStep({
+      reason: "terminal-graph-and-local-dependency-surfaces",
+      changedInputs: [
+        spineManifestPath,
+        nextActionPath,
+        devTestGameProofGraphPath,
+        devTestGameProofGraphAdminProofPath,
+        proofFreshnessAdminProofPath,
+        nextActionAdminProofPath,
+      ],
+      env: adminSpineReadinessEvidenceEnv,
+    }),
+  ]);
+
+export const devTestGameAdminSpineHostedIdentityHandoffSteps = Object.freeze([
   ...devTestGameHostedIdentityHandoffPhase,
+]);
+
+export const devTestGameAdminSpineTerminalRefreshRollupSteps = Object.freeze([
   { kind: "node", script: "tools/dev_test_game_next_action.mjs" },
   { kind: "node", script: "tools/dev_test_game_proof_graph.mjs" },
   { kind: "node", script: "tools/dev_test_game_proof_graph_admin_proof.mjs" },
@@ -405,6 +416,9 @@ export const devTestGameAdminSpinePlan = [
     ],
     env: adminSpineTerminalBatchReadinessEvidenceEnv,
   }),
+]);
+
+export const devTestGameAdminSpineReleaseValidationSteps = Object.freeze([
   { kind: "node", script: "tools/dev_test_game_release_admin_proof.mjs" },
   { kind: "node", script: "tools/dev_test_game_release_admin_proof_contract.mjs" },
   adminSpineCustomPlanStep(adminSpineTerminalValidationReceiptCustomStep),
@@ -419,6 +433,9 @@ export const devTestGameAdminSpinePlan = [
     ],
     env: adminSpineTerminalBatchReadinessEvidenceEnv,
   }),
+]);
+
+export const devTestGameAdminSpineFinalNextActionGuidanceSteps = Object.freeze([
   { kind: "node", script: "tools/dev_test_game_next_action.mjs" },
   { kind: "node", script: "tools/dev_test_game_proof_freshness_admin_proof.mjs" },
   { kind: "node", script: "tools/dev_test_game_next_action_admin_proof.mjs" },
@@ -431,6 +448,27 @@ export const devTestGameAdminSpinePlan = [
     ],
     env: adminSpineTerminalBatchReadinessEvidenceEnv,
   }),
+]);
+
+export const devTestGameAdminSpineTerminalSteps = Object.freeze([
+  ...devTestGameAdminSpineGraphBootstrapSteps,
+  ...devTestGameAdminSpineHostedEvidenceChecklistHandoffSteps,
+  ...devTestGameAdminSpineTerminalReceiptBatchReadinessSteps,
+  ...devTestGameAdminSpineHostedIdentityHandoffSteps,
+  ...devTestGameAdminSpineTerminalRefreshRollupSteps,
+  ...devTestGameAdminSpineReleaseValidationSteps,
+  ...devTestGameAdminSpineFinalNextActionGuidanceSteps,
+]);
+
+export const devTestGameAdminSpinePlan = [
+  ...devTestGameAdminSpinePreGraphSteps,
+  ...devTestGameAdminSpineGraphBootstrapSteps,
+  ...devTestGameAdminSpineHostedEvidenceChecklistHandoffSteps,
+  ...devTestGameAdminSpineTerminalReceiptBatchReadinessSteps,
+  ...devTestGameAdminSpineHostedIdentityHandoffSteps,
+  ...devTestGameAdminSpineTerminalRefreshRollupSteps,
+  ...devTestGameAdminSpineReleaseValidationSteps,
+  ...devTestGameAdminSpineFinalNextActionGuidanceSteps,
 ];
 
 function terminalAdminProofBatchPlanForScript(script) {
