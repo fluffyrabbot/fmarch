@@ -94,10 +94,6 @@ import {
   devTestGameHostedConcurrentRaceMatrixPath,
 } from "./dev_test_game_hosted_concurrent_race_matrix.mjs";
 import {
-  devTestGameHostedEvidenceOperatorChecklistAdminProofPath,
-  devTestGameHostedEvidenceOperatorChecklistProofPath,
-} from "./dev_test_game_adjacent_artifact_paths.mjs";
-import {
   devTestGameRealHostedObservabilityHandoffCommand,
   devTestGameRealHostedObservabilityHandoffPath,
 } from "./dev_test_game_real_hosted_observability_handoff_cases.mjs";
@@ -109,6 +105,9 @@ import {
 import {
   selectedOperatorHandoffFromNextAction,
 } from "./dev_test_game_terminal_receipts.mjs";
+import {
+  devTestGameHandoffPhaseOutputs,
+} from "./dev_test_game_handoff_phase_outputs.mjs";
 import {
   assertProofGraphDiagnosticProofSummary,
   buildProofGraphDiagnosticProofSummary,
@@ -1840,54 +1839,11 @@ export function assertDevTestGameProofGraphCoversHandoffPhaseOutputs(graph) {
   if (graph.summary?.handoffPhaseOutputCount !== outputs.length) {
     throw new Error("proof graph handoff phase output summary drifted");
   }
-  const expected = [
-    {
-      handoffPhaseId: "hosted-evidence-operator-checklist-handoff",
-      handoffPhaseStep: "checklist-proof",
-      artifact: devTestGameHostedEvidenceOperatorChecklistProofPath,
-    },
-    {
-      handoffPhaseId: "hosted-evidence-operator-checklist-handoff",
-      handoffPhaseStep: "phase-local-next-action",
-      artifact:
-        "target/dev-test-game/next-action-hosted-evidence-operator-checklist.json",
-    },
-    {
-      handoffPhaseId: "hosted-evidence-operator-checklist-handoff",
-      handoffPhaseStep: "admin-proof",
-      artifact: devTestGameHostedEvidenceOperatorChecklistAdminProofPath,
-    },
-    {
-      handoffPhaseId: "hosted-identity-handoff",
-      handoffPhaseStep: "phase-local-next-action",
-      artifact: "target/dev-test-game/next-action-hosted-identity.json",
-    },
-    {
-      handoffPhaseId: "hosted-identity-handoff",
-      handoffPhaseStep: "hosted-identity-next-action-admin-proof-batch",
-      artifact: "target/dev-test-game/hosted-identity-next-action-admin-proof.json",
-    },
-    {
-      handoffPhaseId: "hosted-identity-handoff",
-      handoffPhaseStep: "default-next-action-refresh",
-      artifact: "target/dev-test-game/next-action.json",
-    },
-    {
-      handoffPhaseId: "hosted-identity-handoff",
-      handoffPhaseStep: "terminal-refresh-admin-proof-batch",
-      artifact: "target/dev-test-game/proof-freshness-admin-proof.json",
-    },
-    {
-      handoffPhaseId: "hosted-identity-handoff",
-      handoffPhaseStep: "terminal-refresh-admin-proof-batch",
-      artifact: "target/dev-test-game/next-action-admin-proof.json",
-    },
-    {
-      handoffPhaseId: "hosted-identity-handoff",
-      handoffPhaseStep: "terminal-refresh-admin-proof-batch",
-      artifact: "target/dev-test-game/admin-spine-terminal-batches.json",
-    },
-  ];
+  const expected = devTestGameHandoffPhaseOutputs.map((output) => ({
+    handoffPhaseId: output.phaseId,
+    handoffPhaseStep: output.step,
+    artifact: output.artifact,
+  }));
   const actual = outputs.map((node) => ({
     handoffPhaseId: node.handoffPhaseId,
     handoffPhaseStep: node.handoffPhaseStep,

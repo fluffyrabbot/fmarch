@@ -114,7 +114,9 @@ import {
 } from "./dev_test_game_next_action_sequence_handoff_pair.mjs";
 import {
   devTestGameHostedEvidenceOperatorChecklistHandoffPhaseId,
+  devTestGameHostedIdentityNextActionAdminProofBatchHandoffStep,
   devTestGameHostedIdentityHandoffPhaseId,
+  devTestGameTerminalRefreshAdminProofBatchHandoffStep,
 } from "./dev_test_game_handoff_phase_outputs.mjs";
 export {
   devTestGameHostedEvidenceOperatorChecklistHandoffPhaseId,
@@ -319,33 +321,17 @@ export const devTestGameHostedIdentityHandoffPhase = handoffPhaseSteps({
         sequenceStage: devTestGameHostedIdentitySequenceStage,
       }),
     },
-    {
-      step: "hosted-identity-next-action-admin-proof-batch",
-      planStep: {
-        kind: "custom",
-        script: terminalHostedIdentityNextActionAdminProofBatchPlan.script,
-        label: terminalHostedIdentityNextActionAdminProofBatchPlan.label,
-      },
-      outputs: [hostedIdentityNextActionAdminProofPath],
-    },
+    terminalProofGraphHandoffBatchPlanStep(
+      devTestGameHostedIdentityNextActionAdminProofBatchHandoffStep,
+    ),
     {
       step: "default-next-action-refresh",
       planStep: { kind: "node", script: "tools/dev_test_game_next_action.mjs" },
       outputs: [nextActionPath],
     },
-    {
-      step: "terminal-refresh-admin-proof-batch",
-      planStep: {
-        kind: "custom",
-        script: terminalRefreshAdminProofBatchPlan.script,
-        label: terminalRefreshAdminProofBatchPlan.label,
-      },
-      outputs: [
-        proofFreshnessAdminProofPath,
-        nextActionAdminProofPath,
-        adminSpineTerminalBatchProofPath,
-      ],
-    },
+    terminalProofGraphHandoffBatchPlanStep(
+      devTestGameTerminalRefreshAdminProofBatchHandoffStep,
+    ),
     {
       step: "readiness-refresh",
       planStep: releaseReadinessStep({
@@ -518,6 +504,24 @@ function terminalAdminProofBatchPlanForScript(script) {
       }),
     ),
   });
+}
+
+function terminalProofGraphHandoffBatchPlanStep(descriptor) {
+  const plan = terminalAdminProofBatchPlanForScript(descriptor.script);
+  if (plan.label !== descriptor.label) {
+    throw new Error(
+      `terminal handoff batch ${descriptor.step} label drifted from registry`,
+    );
+  }
+  return {
+    step: descriptor.step,
+    planStep: {
+      kind: descriptor.kind,
+      script: plan.script,
+      label: plan.label,
+    },
+    outputs: descriptor.artifacts,
+  };
 }
 
 export async function runDevTestGameAdminSpine() {

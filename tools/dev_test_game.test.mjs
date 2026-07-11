@@ -330,6 +330,8 @@ import {
 } from "./dev_test_game_readiness_freshness_scope.mjs";
 import {
   devTestGameHandoffPhaseOutputs,
+  devTestGameHostedIdentityNextActionAdminProofBatchHandoffStep,
+  devTestGameTerminalRefreshAdminProofBatchHandoffStep,
   proofGraphHandoffPhaseOutputArtifactTestId,
 } from "./dev_test_game_handoff_phase_outputs.mjs";
 import {
@@ -2302,8 +2304,11 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
         script: terminalHostedIdentityNextActionProofBatch.script,
         phase: {
           id: devTestGameHostedIdentityHandoffPhaseId,
-          step: "hosted-identity-next-action-admin-proof-batch",
-          outputs: [hostedIdentityNextActionAdminProofPath],
+          step:
+            devTestGameHostedIdentityNextActionAdminProofBatchHandoffStep.step,
+          outputs:
+            devTestGameHostedIdentityNextActionAdminProofBatchHandoffStep
+              .artifacts,
         },
         readinessReason: null,
         outputPath: null,
@@ -2324,12 +2329,8 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
         script: terminalRefreshProofBatch.script,
         phase: {
           id: devTestGameHostedIdentityHandoffPhaseId,
-          step: "terminal-refresh-admin-proof-batch",
-          outputs: [
-            proofFreshnessAdminProofPath,
-            nextActionAdminProofPath,
-            adminSpineTerminalBatchProofPath,
-          ],
+          step: devTestGameTerminalRefreshAdminProofBatchHandoffStep.step,
+          outputs: devTestGameTerminalRefreshAdminProofBatchHandoffStep.artifacts,
         },
         readinessReason: null,
         outputPath: null,

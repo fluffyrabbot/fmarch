@@ -15,6 +15,7 @@ import {
 } from "./dev_test_game_adjacent_artifact_paths.mjs";
 import {
   terminalHostedIdentityNextActionAdminProofBatchScript,
+  terminalProofGraphReceiptBatchRegistry,
   terminalRefreshAdminProofBatchScript,
 } from "./dev_test_game_proof_graph_receipt_artifact_rows.mjs";
 
@@ -30,6 +31,30 @@ export const proofGraphHandoffPhaseOutputSectionHeading =
   "Handoff phase outputs";
 export const proofGraphHandoffPhaseOutputRowTestIdPrefix =
   "proof-graph-handoff-phase-output";
+
+export const devTestGameHostedIdentityNextActionAdminProofBatchHandoffStep =
+  terminalProofGraphHandoffBatchStep({
+    step: "hosted-identity-next-action-admin-proof-batch",
+    script: terminalHostedIdentityNextActionAdminProofBatchScript,
+    artifacts: [hostedIdentityNextActionAdminProofPath],
+  });
+
+export const devTestGameTerminalRefreshAdminProofBatchHandoffStep =
+  terminalProofGraphHandoffBatchStep({
+    step: "terminal-refresh-admin-proof-batch",
+    script: terminalRefreshAdminProofBatchScript,
+    artifacts: [
+      proofFreshnessAdminProofPath,
+      nextActionAdminProofPath,
+      adminSpineTerminalBatchProofPath,
+    ],
+  });
+
+export const devTestGameHostedIdentityTerminalProofBatchHandoffSteps =
+  Object.freeze([
+    devTestGameHostedIdentityNextActionAdminProofBatchHandoffStep,
+    devTestGameTerminalRefreshAdminProofBatchHandoffStep,
+  ]);
 
 export function proofGraphHandoffPhaseOutputRowTestId(rowId) {
   return `${proofGraphHandoffPhaseOutputRowTestIdPrefix}-${rowId}`;
@@ -70,13 +95,7 @@ export const devTestGameHandoffPhaseOutputs = Object.freeze(
       script: devTestGameHandoffPhaseNextActionScript,
       artifacts: [hostedIdentityNextActionPath],
     },
-    {
-      phaseId: devTestGameHostedIdentityHandoffPhaseId,
-      step: "hosted-identity-next-action-admin-proof-batch",
-      kind: "custom",
-      script: terminalHostedIdentityNextActionAdminProofBatchScript,
-      artifacts: [hostedIdentityNextActionAdminProofPath],
-    },
+    devTestGameHostedIdentityNextActionAdminProofBatchHandoffStep,
     {
       phaseId: devTestGameHostedIdentityHandoffPhaseId,
       step: "default-next-action-refresh",
@@ -84,17 +103,7 @@ export const devTestGameHandoffPhaseOutputs = Object.freeze(
       script: devTestGameHandoffPhaseNextActionScript,
       artifacts: [nextActionPath],
     },
-    {
-      phaseId: devTestGameHostedIdentityHandoffPhaseId,
-      step: "terminal-refresh-admin-proof-batch",
-      kind: "custom",
-      script: terminalRefreshAdminProofBatchScript,
-      artifacts: [
-        proofFreshnessAdminProofPath,
-        nextActionAdminProofPath,
-        adminSpineTerminalBatchProofPath,
-      ],
-    },
+    devTestGameTerminalRefreshAdminProofBatchHandoffStep,
   ].flatMap((step) =>
     step.artifacts.map((artifact) =>
       Object.freeze({
@@ -108,3 +117,21 @@ export const devTestGameHandoffPhaseOutputs = Object.freeze(
     ),
   ),
 );
+
+function terminalProofGraphHandoffBatchStep({ step, script, artifacts }) {
+  const batch = terminalProofGraphReceiptBatchRegistry.find(
+    (candidate) => candidate.script === script,
+  );
+  if (batch === undefined) {
+    throw new Error(`unknown terminal proof graph handoff batch: ${script}`);
+  }
+  return Object.freeze({
+    phaseId: devTestGameHostedIdentityHandoffPhaseId,
+    step,
+    kind: "custom",
+    script: batch.script,
+    label: batch.label,
+    proofIds: batch.proofIds,
+    artifacts: Object.freeze([...artifacts]),
+  });
+}

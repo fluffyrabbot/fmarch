@@ -209,6 +209,8 @@ import {
   proofGraphDiagnosticSummaryCheckIds,
 } from "../../../../tools/dev_test_game_proof_graph_diagnostic_summary.mjs";
 import {
+  devTestGameHostedIdentityHandoffPhaseId,
+  devTestGameTerminalRefreshAdminProofBatchHandoffStep,
   proofGraphHandoffPhaseOutputArtifactTestId,
 } from "../../../../tools/dev_test_game_handoff_phase_outputs.mjs";
 import {
@@ -9874,6 +9876,8 @@ function phaseLocalNextActionSnapshotsFixture() {
 }
 
 function handoffPhaseOutputsFixture() {
+  const terminalRefreshTerminalBatchArtifact =
+    devTestGameTerminalRefreshAdminProofBatchHandoffStep.artifacts.at(-1);
   return [
     {
       id: "handoff-phase-output:hosted-evidence-operator-checklist-handoff-checklist-proof-target-dev-test-game-hosted-evidence-operator-checklist-proof-json",
@@ -9891,16 +9895,17 @@ function handoffPhaseOutputsFixture() {
         "Handoff phase output recorded from the spine manifest. It records local harness artifact wiring only; it does not prove hosted deployment, release readiness, or production readiness.",
     },
     {
-      id: "handoff-phase-output:hosted-identity-handoff-terminal-refresh-admin-proof-batch-target-dev-test-game-admin-spine-terminal-batches-json",
+      id: `handoff-phase-output:${devTestGameHostedIdentityHandoffPhaseId}-${devTestGameTerminalRefreshAdminProofBatchHandoffStep.step}-target-dev-test-game-admin-spine-terminal-batches-json`,
       label:
-        "Handoff phase output hosted-identity-handoff terminal-refresh-admin-proof-batch",
+        `Handoff phase output ${devTestGameHostedIdentityHandoffPhaseId} ${devTestGameTerminalRefreshAdminProofBatchHandoffStep.step}`,
       status: "recorded",
-      artifact: "target/dev-test-game/admin-spine-terminal-batches.json",
-      handoffPhaseId: "hosted-identity-handoff",
-      handoffPhaseStep: "terminal-refresh-admin-proof-batch",
+      artifact: terminalRefreshTerminalBatchArtifact,
+      handoffPhaseId: devTestGameHostedIdentityHandoffPhaseId,
+      handoffPhaseStep: devTestGameTerminalRefreshAdminProofBatchHandoffStep.step,
       handoffPhaseOutputId:
-        "hosted-identity-handoff:terminal-refresh-admin-proof-batch:target/dev-test-game/admin-spine-terminal-batches.json",
-      proofCommand: "terminal refresh admin proof batch",
+        `${devTestGameHostedIdentityHandoffPhaseId}:${devTestGameTerminalRefreshAdminProofBatchHandoffStep.step}:${terminalRefreshTerminalBatchArtifact}`,
+      proofCommand:
+        devTestGameTerminalRefreshAdminProofBatchHandoffStep.label.toLowerCase(),
       proofBoundary:
         "Handoff phase output recorded from the spine manifest. It records local harness artifact wiring only; it does not prove hosted deployment, release readiness, or production readiness.",
     },
