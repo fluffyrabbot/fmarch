@@ -2142,6 +2142,11 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     { kind: "custom", script: "identity", label: "Identity spine" },
     { kind: "custom", script: "admin", label: "Admin spine" },
   ]);
+  const [
+    terminalAdminProofBatch,
+    terminalHostedIdentityNextActionProofBatch,
+    terminalRefreshProofBatch,
+  ] = terminalProofGraphReceiptBatchRegistry;
   assert.deepEqual(
     devTestGameAdminSpinePlan.map((step) => step.script),
     [
@@ -2169,12 +2174,12 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
       "tools/dev_test_game_hosted_evidence_operator_checklist_admin_proof.mjs",
       devTestGameReleaseReadinessScript,
       "tools/dev_test_game_proof_graph.mjs",
-      "terminal-admin-proof-batch",
+      terminalAdminProofBatch.script,
       devTestGameReleaseReadinessScript,
       "tools/dev_test_game_next_action.mjs",
-      "terminal-hosted-identity-next-action-admin-proof-batch",
+      terminalHostedIdentityNextActionProofBatch.script,
       "tools/dev_test_game_next_action.mjs",
-      "terminal-refresh-admin-proof-batch",
+      terminalRefreshProofBatch.script,
       devTestGameReleaseReadinessScript,
       "tools/dev_test_game_next_action.mjs",
       "tools/dev_test_game_proof_graph.mjs",
@@ -2256,8 +2261,8 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
   );
   assert.deepEqual(devTestGameAdminSpinePlan[24], {
     kind: "custom",
-    script: "terminal-admin-proof-batch",
-    label: "Terminal admin proof batch",
+    script: terminalAdminProofBatch.script,
+    label: terminalAdminProofBatch.label,
   });
   assert.deepEqual(devTestGameAdminSpinePlan[25], {
     kind: "node",
@@ -2294,7 +2299,7 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
         sequenceStage: devTestGameHostedIdentitySequenceStage,
       },
       {
-        script: "terminal-hosted-identity-next-action-admin-proof-batch",
+        script: terminalHostedIdentityNextActionProofBatch.script,
         phase: {
           id: devTestGameHostedIdentityHandoffPhaseId,
           step: "hosted-identity-next-action-admin-proof-batch",
@@ -2316,7 +2321,7 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
         sequenceStage: null,
       },
       {
-        script: "terminal-refresh-admin-proof-batch",
+        script: terminalRefreshProofBatch.script,
         phase: {
           id: devTestGameHostedIdentityHandoffPhaseId,
           step: "terminal-refresh-admin-proof-batch",
@@ -4853,6 +4858,8 @@ test("dev test-game next-action derives one local recovery command from the mani
       step.env?.FMARCH_DEV_TEST_GAME_SEQUENCE_STAGE ===
         devTestGameHostedIdentitySequenceStage,
   );
+  const hostedIdentityTerminalBatch = terminalProofGraphReceiptBatchRegistry[1];
+  const refreshTerminalBatch = terminalProofGraphReceiptBatchRegistry[2];
   assert.notEqual(hostedIdentityAdminSpinePhaseStart, -1);
   assert.deepEqual(
     devTestGameAdminSpinePlan
@@ -4883,7 +4890,7 @@ test("dev test-game next-action derives one local recovery command from the mani
           hostedIdentityHandoffChecklist.progressionSummary.batchProofCommand,
       },
       {
-        script: "terminal-hosted-identity-next-action-admin-proof-batch",
+        script: hostedIdentityTerminalBatch.script,
         sequenceStage: devTestGameDefaultSequenceStage,
         outputPath: nextActionPath,
         selectedCommand: null,
@@ -4895,7 +4902,7 @@ test("dev test-game next-action derives one local recovery command from the mani
         selectedCommand: proofFreshnessAdminProofCommand,
       },
       {
-        script: "terminal-refresh-admin-proof-batch",
+        script: refreshTerminalBatch.script,
         sequenceStage: devTestGameDefaultSequenceStage,
         outputPath: nextActionPath,
         selectedCommand: null,
@@ -7053,29 +7060,13 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
       batch.sharedFrontendSession,
       batch.sharedChromiumSession,
     ]),
-    [
-      [
-        "Terminal admin proof batch",
-        3,
-        ["proof-graph", "proof-freshness", "next-action"],
-        true,
-        true,
-      ],
-      [
-        "Terminal hosted identity next-action admin proof batch",
-        1,
-        ["hosted-identity-next-action"],
-        true,
-        true,
-      ],
-      [
-        "Terminal refresh admin proof batch",
-        2,
-        ["proof-freshness", "next-action"],
-        true,
-        true,
-      ],
-    ],
+    terminalProofGraphReceiptBatchRegistry.map((batch) => [
+      batch.label,
+      batch.proofIds.length,
+      batch.proofIds,
+      true,
+      true,
+    ]),
   );
   assert.throws(
     () =>

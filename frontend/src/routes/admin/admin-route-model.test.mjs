@@ -240,6 +240,7 @@ import {
 import {
   hostedIdentityTerminalReceiptArtifactCase,
   terminalProofGraphReceiptArtifacts,
+  terminalProofGraphReceiptBatchRegistry,
 } from "../../../../tools/dev_test_game_proof_graph_receipt_artifact_rows.mjs";
 import {
   proofGraphPrerequisiteDestinationProofTargetTestId,
@@ -2452,27 +2453,13 @@ test("admin local admin spine detail data carries aggregate proof rows", async (
         true,
         true,
       ],
-      [
-        "terminal-admin-proof-batch",
+      ...terminalProofGraphReceiptBatchRegistry.map((batch) => [
+        batch.script,
         "passed",
-        3,
+        batch.proofIds.length,
         true,
         true,
-      ],
-      [
-        "terminal-hosted-identity-next-action-admin-proof-batch",
-        "passed",
-        1,
-        true,
-        true,
-      ],
-      [
-        "terminal-refresh-admin-proof-batch",
-        "passed",
-        2,
-        true,
-        true,
-      ],
+      ]),
     ],
   );
   assert.deepEqual(
@@ -11407,7 +11394,7 @@ function adminSpineTerminalBatchesFixture() {
       hostedIdentityNextActionAdminProof:
         "target/dev-test-game/hosted-identity-next-action-admin-proof.json",
       releaseAdminProofContract: devTestGameReleaseAdminProofContractPath,
-      batchCount: 3,
+      batchCount: terminalProofGraphReceiptBatchRegistry.length,
       terminalValidationCount: 1,
     },
     nextActionHandoffPair: nextActionHandoffPairFixture(),
@@ -11432,70 +11419,49 @@ function adminSpineTerminalBatchesFixture() {
       },
     ],
     batches: [
-      {
-        label: "Terminal admin proof batch",
-        reason:
-          "terminal graph, freshness, and next-action admin surfaces share the generated proof graph inputs",
-        status: "passed",
-        caseCount: 3,
+      terminalProofGraphReceiptBatchFixture(0, {
         caseSmokeNames: [
           "dev-test-game-proof-graph-admin-proof",
           "dev-test-game-proof-freshness-admin-proof",
           "dev-test-game-next-action-admin-proof",
         ],
-        proofIds: ["proof-graph", "proof-freshness", "next-action"],
-        artifactPaths: [
-          "target/dev-test-game/proof-graph-admin-proof.json",
-          "target/dev-test-game/proof-freshness-admin-proof.json",
-          "target/dev-test-game/next-action-admin-proof.json",
-        ],
         elapsedMs: 2400,
-        sharedFrontendSession: true,
-        sharedChromiumSession: true,
-        releaseReady: false,
-        productionReady: false,
-      },
-      {
-        label: "Terminal hosted identity next-action admin proof batch",
-        reason:
-          "hosted identity next-action input proves the promoted operator-aware admin rows before the default next-action receipt is restored",
-        status: "passed",
-        caseCount: 1,
+      }),
+      terminalProofGraphReceiptBatchFixture(1, {
         caseSmokeNames: [
           "dev-test-game-hosted-identity-next-action-admin-proof",
         ],
-        proofIds: ["hosted-identity-next-action"],
-        artifactPaths: [
-          "target/dev-test-game/hosted-identity-next-action-admin-proof.json",
-        ],
         elapsedMs: 1200,
-        sharedFrontendSession: true,
-        sharedChromiumSession: true,
-        releaseReady: false,
-        productionReady: false,
-      },
-      {
-        label: "Terminal refresh admin proof batch",
-        reason:
-          "freshness and next-action admin surfaces share the refreshed next-action input",
-        status: "passed",
-        caseCount: 2,
+      }),
+      terminalProofGraphReceiptBatchFixture(2, {
         caseSmokeNames: [
           "dev-test-game-proof-freshness-admin-proof",
           "dev-test-game-next-action-admin-proof",
         ],
-        proofIds: ["proof-freshness", "next-action"],
-        artifactPaths: [
-          "target/dev-test-game/proof-freshness-admin-proof.json",
-          "target/dev-test-game/next-action-admin-proof.json",
-        ],
         elapsedMs: 1600,
-        sharedFrontendSession: true,
-        sharedChromiumSession: true,
-        releaseReady: false,
-        productionReady: false,
-      },
+      }),
     ],
+  };
+}
+
+function terminalProofGraphReceiptBatchFixture(
+  index,
+  { caseSmokeNames, elapsedMs },
+) {
+  const batch = terminalProofGraphReceiptBatchRegistry[index];
+  return {
+    label: batch.label,
+    reason: batch.reason,
+    status: "passed",
+    caseCount: batch.proofIds.length,
+    caseSmokeNames,
+    proofIds: [...batch.proofIds],
+    artifactPaths: [...batch.artifactPaths],
+    elapsedMs,
+    sharedFrontendSession: true,
+    sharedChromiumSession: true,
+    releaseReady: false,
+    productionReady: false,
   };
 }
 
