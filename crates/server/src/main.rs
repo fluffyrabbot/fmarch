@@ -67,13 +67,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .run(&pool)
         .await?;
 
-    api::identity_delivery::spawn_identity_delivery_worker(
-        pool.clone(),
-        std::sync::Arc::new(
-            api::identity_delivery::LocalDeterministicIdentityDeliveryGateway::from_env(),
-        ),
-    );
-    let app = api::router(pool.clone(), media_store).merge(operator_api::router(pool));
+    let gateway: std::sync::Arc<dyn api::identity_delivery::IdentityDeliveryGateway> =
+        match api::identity_delivery::HttpJsonIdentityDeliveryGateway::from_env()
+            .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidInput, error))?
+        {
+            Some(gateway) => std::sync::Arc::new(gateway),
+            None => std::sync::Arc::new(
+                api::identity_delivery::LocalDeterministicIdentityDeliveryGateway::from_env(),
+            ),
+        };
+    api::identity_delivery::spawn_identity_delivery_worker(pool.clone(), gateway.clone());
+    let app = api::router_with_state(
+        api::ApiState::new(pool.clone(), media_store).with_identity_delivery_gateway(gateway),
+    )
+    .merge(operator_api::router(pool));
     let listener = tokio::net::TcpListener::bind(config.bind).await?;
     tracing::info!(addr = %config.bind, "fmarch server listening");
     axum::serve(listener, app).await?;

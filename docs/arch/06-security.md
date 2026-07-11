@@ -63,6 +63,10 @@ content (incompatible with moderation; out of scope by design).
   recovery link from this deliberately redacted outbox. The local envelope uses the existing
   authenticated XChaCha20-Poly1305/key-id boundary with delivery-specific AAD; production must
   supply that key through the environment or a secrets manager, not source or audit metadata.
+  When `FMARCH_IDENTITY_DELIVERY_ENDPOINT` is configured, the server selects the typed HTTP/JSON
+  provider transport, sends the sealed credential only in memory, and maps its JSON receipt into
+  the same outcome contract; the default remains the deterministic local transport. This is a
+  provider contract and local HTTP-stub proof, not hosted provider, bounce, or delivery-SLA proof.
 - **Brute-force defense:** account login, invite redemption, and account recovery share a
   two-tier Postgres failure window. Known accounts lock their hashed account/source scope after
   five failures; unknown account identifiers only increment a hashed source-pressure scope, so

@@ -1,13 +1,16 @@
 use eventstore::decrypt_delivery_credential;
+use reqwest::{Client, StatusCode, Url};
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sqlx::postgres::PgPool;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use std::{fmt, fmt::Formatter};
+use std::{fmt, fmt::Formatter, future::Future, pin::Pin};
 use thiserror::Error;
 use uuid::Uuid;
 
 pub const LOCAL_DETERMINISTIC_PROVIDER_ID: &str = "local-deterministic";
+pub const HTTP_JSON_PROVIDER_DEFAULT_ID: &str = "http-json";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IdentityDeliveryKind {
@@ -70,6 +73,16 @@ pub enum IdentityDeliveryFailureCode {
 }
 
 impl IdentityDeliveryFailureCode {
+    fn from_provider_code(code: Option<&str>) -> Self {
+        match code {
+            Some("recipient_rejected") => Self::RecipientRejected,
+            Some("credential_unavailable") => Self::CredentialUnavailable,
+            _ => Self::ProviderUnavailable,
+        }
+    }
+}
+
+impl IdentityDeliveryFailureCode {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::LocalTransient => "local_transient",
@@ -128,10 +141,13 @@ impl IdentityDeliveryOutcome {
     }
 }
 
-pub trait IdentityDeliveryGateway: Send + Sync {
-    fn provider_id(&self) -> &'static str;
+pub type IdentityDeliveryFuture<'a> =
+    Pin<Box<dyn Future<Output = IdentityDeliveryOutcome> + Send + 'a>>;
 
-    fn deliver(&self, attempt: &IdentityDeliveryAttempt) -> IdentityDeliveryOutcome;
+pub trait IdentityDeliveryGateway: Send + Sync {
+    fn provider_id(&self) -> &str;
+
+    fn deliver<'a>(&'a self, attempt: &'a IdentityDeliveryAttempt) -> IdentityDeliveryFuture<'a>;
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -155,19 +171,177 @@ impl LocalDeterministicIdentityDeliveryGateway {
 }
 
 impl IdentityDeliveryGateway for LocalDeterministicIdentityDeliveryGateway {
-    fn provider_id(&self) -> &'static str {
+    fn provider_id(&self) -> &str {
         LOCAL_DETERMINISTIC_PROVIDER_ID
     }
 
-    fn deliver(&self, attempt: &IdentityDeliveryAttempt) -> IdentityDeliveryOutcome {
-        if self.fail_first_attempt && attempt.attempt_number == 1 {
-            return IdentityDeliveryOutcome::RetryableFailure(
-                IdentityDeliveryFailureCode::LocalTransient,
+    fn deliver<'a>(&'a self, attempt: &'a IdentityDeliveryAttempt) -> IdentityDeliveryFuture<'a> {
+        Box::pin(async move {
+            if self.fail_first_attempt && attempt.attempt_number == 1 {
+                return IdentityDeliveryOutcome::RetryableFailure(
+                    IdentityDeliveryFailureCode::LocalTransient,
+                );
+            }
+            IdentityDeliveryOutcome::Delivered {
+                provider_receipt_id: format!("local-{}", attempt.delivery_id),
+            }
+        })
+    }
+}
+
+#[derive(Clone)]
+pub struct HttpJsonIdentityDeliveryGateway {
+    provider_id: String,
+    endpoint: Url,
+    auth_token: Option<String>,
+    client: Client,
+}
+
+impl HttpJsonIdentityDeliveryGateway {
+    pub fn from_env() -> Result<Option<Self>, String> {
+        let Some(endpoint) = std::env::var("FMARCH_IDENTITY_DELIVERY_ENDPOINT")
+            .ok()
+            .filter(|value| !value.trim().is_empty())
+        else {
+            return Ok(None);
+        };
+        let endpoint = Url::parse(endpoint.trim())
+            .map_err(|error| format!("FMARCH_IDENTITY_DELIVERY_ENDPOINT is invalid: {error}"))?;
+        let local_host = matches!(endpoint.host_str(), Some("127.0.0.1" | "localhost"));
+        if endpoint.scheme() != "https" && !local_host {
+            return Err(
+                "FMARCH_IDENTITY_DELIVERY_ENDPOINT must use https outside localhost".to_string(),
             );
         }
-        IdentityDeliveryOutcome::Delivered {
-            provider_receipt_id: format!("local-{}", attempt.delivery_id),
+        let provider_id = std::env::var("FMARCH_IDENTITY_DELIVERY_PROVIDER_ID")
+            .ok()
+            .filter(|value| !value.trim().is_empty())
+            .unwrap_or_else(|| HTTP_JSON_PROVIDER_DEFAULT_ID.to_string());
+        let auth_token = std::env::var("FMARCH_IDENTITY_DELIVERY_AUTH_TOKEN")
+            .ok()
+            .filter(|value| !value.trim().is_empty());
+        Ok(Some(Self {
+            provider_id,
+            endpoint,
+            auth_token,
+            client: Client::new(),
+        }))
+    }
+
+    pub fn new(
+        provider_id: impl Into<String>,
+        endpoint: Url,
+        auth_token: Option<String>,
+        client: Client,
+    ) -> Self {
+        Self {
+            provider_id: provider_id.into(),
+            endpoint,
+            auth_token,
+            client,
         }
+    }
+
+    async fn deliver_http(&self, attempt: &IdentityDeliveryAttempt) -> IdentityDeliveryOutcome {
+        let Some(credential) = attempt.credential_material.as_deref() else {
+            return IdentityDeliveryOutcome::PermanentFailure(
+                IdentityDeliveryFailureCode::CredentialUnavailable,
+            );
+        };
+        let request = IdentityDeliveryProviderRequest {
+            schema: "fmarch.identity-delivery.v1",
+            delivery_id: attempt.delivery_id,
+            delivery_kind: attempt.kind.as_str(),
+            account_id: &attempt.account_id,
+            principal_user_id: &attempt.principal_user_id,
+            credential,
+            attempt_number: attempt.attempt_number,
+            idempotency_key: attempt.delivery_id,
+        };
+        let mut builder = self.client.post(self.endpoint.clone()).json(&request);
+        if let Some(auth_token) = self.auth_token.as_deref() {
+            builder = builder.bearer_auth(auth_token);
+        }
+        let response = match builder.send().await {
+            Ok(response) => response,
+            Err(_) => {
+                return IdentityDeliveryOutcome::RetryableFailure(
+                    IdentityDeliveryFailureCode::ProviderUnavailable,
+                )
+            }
+        };
+        let status = response.status();
+        if status == StatusCode::TOO_MANY_REQUESTS || status.is_server_error() {
+            return IdentityDeliveryOutcome::RetryableFailure(
+                IdentityDeliveryFailureCode::ProviderUnavailable,
+            );
+        }
+        if status.is_client_error() {
+            return IdentityDeliveryOutcome::PermanentFailure(
+                IdentityDeliveryFailureCode::RecipientRejected,
+            );
+        }
+        let provider_response = match response.json::<IdentityDeliveryProviderResponse>().await {
+            Ok(response) => response,
+            Err(_) => {
+                return IdentityDeliveryOutcome::RetryableFailure(
+                    IdentityDeliveryFailureCode::ProviderUnavailable,
+                )
+            }
+        };
+        match provider_response.status.as_str() {
+            "delivered" => provider_response
+                .provider_receipt_id
+                .filter(|receipt| !receipt.trim().is_empty())
+                .map(|provider_receipt_id| IdentityDeliveryOutcome::Delivered {
+                    provider_receipt_id,
+                })
+                .unwrap_or_else(|| {
+                    IdentityDeliveryOutcome::RetryableFailure(
+                        IdentityDeliveryFailureCode::ProviderUnavailable,
+                    )
+                }),
+            "retryable_failure" => IdentityDeliveryOutcome::RetryableFailure(
+                IdentityDeliveryFailureCode::from_provider_code(provider_response.code.as_deref()),
+            ),
+            "permanent_failure" => IdentityDeliveryOutcome::PermanentFailure(
+                IdentityDeliveryFailureCode::from_provider_code(provider_response.code.as_deref()),
+            ),
+            _ => IdentityDeliveryOutcome::RetryableFailure(
+                IdentityDeliveryFailureCode::ProviderUnavailable,
+            ),
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+struct IdentityDeliveryProviderRequest<'a> {
+    schema: &'static str,
+    delivery_id: Uuid,
+    delivery_kind: &'static str,
+    account_id: &'a str,
+    principal_user_id: &'a str,
+    credential: &'a str,
+    attempt_number: i32,
+    idempotency_key: Uuid,
+}
+
+#[derive(Debug, Deserialize)]
+struct IdentityDeliveryProviderResponse {
+    status: String,
+    #[serde(default)]
+    code: Option<String>,
+    #[serde(default)]
+    provider_receipt_id: Option<String>,
+}
+
+impl IdentityDeliveryGateway for HttpJsonIdentityDeliveryGateway {
+    fn provider_id(&self) -> &str {
+        self.provider_id.as_str()
+    }
+
+    fn deliver<'a>(&'a self, attempt: &'a IdentityDeliveryAttempt) -> IdentityDeliveryFuture<'a> {
+        Box::pin(self.deliver_http(attempt))
     }
 }
 
@@ -212,7 +386,7 @@ pub async fn process_identity_delivery_intent(
     else {
         return Ok(None);
     };
-    let outcome = deliver_claim(&mut claim, gateway);
+    let outcome = deliver_claim(&mut claim, gateway).await;
     finalize_delivery(pool, claim, outcome, actor_user_id, event_kind, now).await
 }
 
@@ -225,7 +399,7 @@ pub async fn process_next_identity_delivery(
         return Ok(None);
     };
     let actor_user_id = claim.attempt.principal_user_id.clone();
-    let outcome = deliver_claim(&mut claim, gateway);
+    let outcome = deliver_claim(&mut claim, gateway).await;
     let event_kind = match &outcome {
         IdentityDeliveryOutcome::Delivered { .. } => "auth_delivery_delivered",
         IdentityDeliveryOutcome::RetryableFailure(_) => "auth_delivery_retryable_failed",
@@ -336,7 +510,7 @@ async fn claim_delivery(
     }))
 }
 
-fn deliver_claim(
+async fn deliver_claim(
     claim: &mut ClaimedIdentityDelivery,
     gateway: &dyn IdentityDeliveryGateway,
 ) -> IdentityDeliveryOutcome {
@@ -357,7 +531,7 @@ fn deliver_claim(
         }
     };
     claim.attempt.credential_material = Some(credential_material);
-    gateway.deliver(&claim.attempt)
+    gateway.deliver(&claim.attempt).await
 }
 
 pub fn delivery_aad(delivery_id: Uuid, kind: IdentityDeliveryKind) -> String {
@@ -494,6 +668,43 @@ mod tests {
     };
     use uuid::Uuid;
 
+    #[tokio::test]
+    async fn http_json_gateway_maps_provider_receipts_and_sends_idempotency_key() {
+        let app = axum::Router::new().route(
+            "/delivery",
+            axum::routing::post(
+                |axum::Json(payload): axum::Json<serde_json::Value>| async move {
+                    assert_eq!(payload["credential"], "one-time-secret");
+                    assert_eq!(payload["idempotency_key"], payload["delivery_id"]);
+                    axum::Json(serde_json::json!({
+                        "status": "delivered",
+                        "provider_receipt_id": "provider-receipt-1"
+                    }))
+                },
+            ),
+        );
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            axum::serve(listener, app).await.unwrap();
+        });
+        let gateway = super::HttpJsonIdentityDeliveryGateway::new(
+            "fixture-http",
+            reqwest::Url::parse(&format!("http://{address}/delivery")).unwrap(),
+            None,
+            reqwest::Client::new(),
+        );
+        let mut delivery_attempt = attempt(1);
+        delivery_attempt.credential_material = Some("one-time-secret".to_string());
+        assert_eq!(gateway.provider_id(), "fixture-http");
+        assert_eq!(
+            gateway.deliver(&delivery_attempt).await,
+            IdentityDeliveryOutcome::Delivered {
+                provider_receipt_id: "provider-receipt-1".to_string()
+            }
+        );
+    }
+
     fn attempt(attempt_number: i32) -> IdentityDeliveryAttempt {
         IdentityDeliveryAttempt {
             delivery_id: Uuid::nil(),
@@ -506,16 +717,16 @@ mod tests {
         }
     }
 
-    #[test]
-    fn deterministic_gateway_fails_only_the_first_attempt_when_configured() {
+    #[tokio::test]
+    async fn deterministic_gateway_fails_only_the_first_attempt_when_configured() {
         let gateway = LocalDeterministicIdentityDeliveryGateway::new(true);
         assert_eq!(gateway.provider_id(), LOCAL_DETERMINISTIC_PROVIDER_ID);
         assert_eq!(
-            gateway.deliver(&attempt(1)),
+            gateway.deliver(&attempt(1)).await,
             IdentityDeliveryOutcome::RetryableFailure(IdentityDeliveryFailureCode::LocalTransient)
         );
         assert_eq!(
-            gateway.deliver(&attempt(2)),
+            gateway.deliver(&attempt(2)).await,
             IdentityDeliveryOutcome::Delivered {
                 provider_receipt_id: "local-00000000-0000-0000-0000-000000000000".to_string(),
             }

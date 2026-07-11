@@ -1,8 +1,8 @@
 use api::{
     identity_delivery::{
         process_next_identity_delivery, unix_now_seconds, IdentityDeliveryAttempt,
-        IdentityDeliveryFailureCode, IdentityDeliveryGateway, IdentityDeliveryOutcome,
-        LocalDeterministicIdentityDeliveryGateway,
+        IdentityDeliveryFailureCode, IdentityDeliveryFuture, IdentityDeliveryGateway,
+        IdentityDeliveryOutcome, LocalDeterministicIdentityDeliveryGateway,
     },
     ApiState, HostSetupStateResponse, MediaUploadResponse,
 };
@@ -49,12 +49,16 @@ impl IdentityDeliveryGateway for PermanentFailureIdentityDeliveryGateway {
         "fixture-permanent"
     }
 
-    fn deliver(&self, attempt: &IdentityDeliveryAttempt) -> IdentityDeliveryOutcome {
-        assert_eq!(
-            attempt.credential_material.as_deref(),
-            Some("permanent-delivery-invite-token")
-        );
-        IdentityDeliveryOutcome::PermanentFailure(IdentityDeliveryFailureCode::RecipientRejected)
+    fn deliver<'a>(&'a self, attempt: &'a IdentityDeliveryAttempt) -> IdentityDeliveryFuture<'a> {
+        Box::pin(async move {
+            assert_eq!(
+                attempt.credential_material.as_deref(),
+                Some("permanent-delivery-invite-token")
+            );
+            IdentityDeliveryOutcome::PermanentFailure(
+                IdentityDeliveryFailureCode::RecipientRejected,
+            )
+        })
     }
 }
 
