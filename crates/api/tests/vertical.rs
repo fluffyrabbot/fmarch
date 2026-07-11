@@ -4309,6 +4309,72 @@ async fn public_game_index_cold_load_pages_only_active_and_completed_rows(pool: 
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+async fn completed_game_export_is_host_gated_and_checksum_bearing(pool: sqlx::PgPool) {
+    let app = router(pool);
+    let game = Uuid::new_v4();
+    assert!(matches!(
+        post_command(
+            app.clone(),
+            91,
+            "export_host",
+            Command::CreateGame {
+                game,
+                pack: "mafiascum".into()
+            },
+        )
+        .await
+        .body,
+        ServerMsg::Ack(_)
+    ));
+    assert!(matches!(
+        post_command(
+            app.clone(),
+            92,
+            "export_host",
+            Command::CompleteGame { game }
+        )
+        .await
+        .body,
+        ServerMsg::Ack(_)
+    ));
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!(
+                    "/games/{game}/export?principal_user_id=export_host"
+                ))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let export: eventstore::StreamExport =
+        serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap()).unwrap();
+    assert_eq!(export.stream_id, game);
+    assert_eq!(export.checksum_sha256.len(), 64);
+    assert!(export
+        .events
+        .iter()
+        .any(|event| event.kind == "GameCompleted"));
+    assert_eq!(
+        app.oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!("/games/{game}/export?principal_user_id=not_host"))
+                .body(Body::empty())
+                .unwrap()
+        )
+        .await
+        .unwrap()
+        .status(),
+        StatusCode::FORBIDDEN,
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
 async fn discussion_api_requires_sessions_pages_public_topics_and_enforces_global_moderation(
     pool: sqlx::PgPool,
 ) {
