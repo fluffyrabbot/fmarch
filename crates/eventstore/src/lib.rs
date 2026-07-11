@@ -11,6 +11,7 @@
 //! trigger that rejects either at the database level (doc 02).
 
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use sqlx::postgres::PgPool;
 use sqlx::Row;
 use std::collections::HashMap;
@@ -91,6 +92,28 @@ pub struct StoredEvent {
     pub meta: serde_json::Value,
 }
 
+/// Versioned, portable representation of one aggregate stream. The checksum is
+/// over the canonical manifest content excluding the checksum field itself.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct StreamExport {
+    pub version: u16,
+    pub stream_id: Uuid,
+    pub events: Vec<ExportEvent>,
+    pub checksum_sha256: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ExportEvent {
+    pub stream_seq: i64,
+    pub kind: String,
+    pub version: i16,
+    pub payload: serde_json::Value,
+    pub actor: ActorId,
+    pub occurred_at: i64,
+    pub causation_id: Option<Uuid>,
+    pub meta: serde_json::Value,
+}
+
 /// Typed errors from the store.
 #[derive(Debug, thiserror::Error)]
 pub enum StoreError {
@@ -102,6 +125,8 @@ pub enum StoreError {
     Crypto(String),
     #[error(transparent)]
     Db(#[from] sqlx::Error),
+    #[error("invalid stream export: {0}")]
+    InvalidExport(String),
 }
 
 impl StoreError {
@@ -268,6 +293,92 @@ pub async fn load_stream(pool: &PgPool, stream_id: Uuid) -> Result<Vec<StoredEve
         out.push(upcast(decode_stored_payload(stored)?));
     }
     Ok(out)
+}
+
+/// Export one fully decoded stream into a self-validating portable manifest.
+pub async fn export_stream(pool: &PgPool, stream_id: Uuid) -> Result<StreamExport, StoreError> {
+    let events = load_stream(pool, stream_id).await?;
+    let mut export = StreamExport {
+        version: 1,
+        stream_id,
+        events: events
+            .into_iter()
+            .map(|event| ExportEvent {
+                stream_seq: event.stream_seq,
+                kind: event.kind,
+                version: event.version,
+                payload: event.payload,
+                actor: event.actor,
+                occurred_at: event.occurred_at,
+                causation_id: event.causation_id,
+                meta: event.meta,
+            })
+            .collect(),
+        checksum_sha256: String::new(),
+    };
+    export.checksum_sha256 = stream_export_checksum(&export)?;
+    Ok(export)
+}
+
+/// Verify version, sequence continuity, and canonical checksum before import.
+pub fn validate_stream_export(export: &StreamExport) -> Result<(), StoreError> {
+    if export.version != 1 {
+        return Err(StoreError::InvalidExport(
+            "unsupported manifest version".to_string(),
+        ));
+    }
+    for (index, event) in export.events.iter().enumerate() {
+        if event.stream_seq != index as i64 + 1 {
+            return Err(StoreError::InvalidExport(
+                "event stream sequences must begin at one and be contiguous".to_string(),
+            ));
+        }
+    }
+    let expected = stream_export_checksum(export)?;
+    if export.checksum_sha256 != expected {
+        return Err(StoreError::InvalidExport("checksum mismatch".to_string()));
+    }
+    Ok(())
+}
+
+/// Append a validated export to an empty stream. The caller chooses the target
+/// database and can synchronously rebuild projections immediately afterward.
+pub async fn import_stream(
+    pool: &PgPool,
+    export: &StreamExport,
+) -> Result<Vec<StoredEvent>, StoreError> {
+    validate_stream_export(export)?;
+    if !load_stream(pool, export.stream_id).await?.is_empty() {
+        return Err(StoreError::InvalidExport(
+            "target stream is not empty".to_string(),
+        ));
+    }
+    let events: Vec<_> = export
+        .events
+        .iter()
+        .map(|event| EventInput {
+            kind: event.kind.clone(),
+            version: event.version,
+            payload: event.payload.clone(),
+            actor: event.actor.clone(),
+            occurred_at: event.occurred_at,
+            causation_id: event.causation_id,
+            meta: event.meta.clone(),
+        })
+        .collect();
+    append(pool, export.stream_id, &events).await
+}
+
+fn stream_export_checksum(export: &StreamExport) -> Result<String, StoreError> {
+    let value = serde_json::json!({
+        "version": export.version,
+        "stream_id": export.stream_id,
+        "events": export.events,
+    });
+    let bytes = serde_json::to_vec(&value).map_err(|error| {
+        StoreError::InvalidExport(format!("cannot serialize manifest: {error}"))
+    })?;
+    Ok(format!("{:x}", Sha256::digest(bytes)))
 }
 
 /// Apply the schema migrations bundled in this crate to `pool`.

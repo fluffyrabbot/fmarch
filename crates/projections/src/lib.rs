@@ -1821,6 +1821,45 @@ pub async fn rebuild(pool: &PgPool, game_id: Uuid) -> Result<(), ProjectionError
     Ok(())
 }
 
+/// Export a completed game stream. The manifest is portable only after its
+/// checksum validates; setup or active streams are intentionally rejected.
+pub async fn export_completed_game(
+    pool: &PgPool,
+    game_id: Uuid,
+) -> Result<eventstore::StreamExport, ProjectionError> {
+    let export = eventstore::export_stream(pool, game_id).await?;
+    if !export
+        .events
+        .iter()
+        .any(|event| event.kind == "GameCompleted")
+    {
+        return Err(ProjectionError::Store(StoreError::InvalidExport(
+            "only completed games can be exported".to_string(),
+        )));
+    }
+    Ok(export)
+}
+
+/// Import a validated completed-game manifest into an empty database stream,
+/// rebuild all game projections, then prove that replay remains deterministic.
+pub async fn import_completed_game_export(
+    pool: &PgPool,
+    export: &eventstore::StreamExport,
+) -> Result<ProjectionAuditReport, ProjectionError> {
+    if !export
+        .events
+        .iter()
+        .any(|event| event.kind == "GameCompleted")
+    {
+        return Err(ProjectionError::Store(StoreError::InvalidExport(
+            "only completed-game manifests can be imported".to_string(),
+        )));
+    }
+    eventstore::import_stream(pool, export).await?;
+    rebuild(pool, export.stream_id).await?;
+    audit_rebuild(pool, export.stream_id).await
+}
+
 async fn rebuild_in_tx(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     game_id: Uuid,
