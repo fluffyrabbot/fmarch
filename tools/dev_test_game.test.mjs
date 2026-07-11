@@ -857,6 +857,7 @@ import {
   proofGraphReceiptArtifactRowId,
   proofGraphReceiptArtifactRowIds,
   proofGraphReceiptArtifactRowStatus,
+  proofGraphTerminalReceiptParentId,
   terminalProofGraphReceiptArtifacts,
   terminalProofGraphReceiptBatchRegistry,
   terminalProofGraphReceiptRegistry,
@@ -8256,11 +8257,19 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
   );
   assert.deepEqual(
     terminalBatchNode.receiptArtifacts.map((artifact) => [
+      artifact.parentId,
+      artifact.rowId,
+      artifact.status,
+      artifact.visibleStatusText,
       artifact.proofId,
       artifact.artifactPath,
       artifact.batchLabel,
     ]),
     terminalProofGraphReceiptArtifacts.map((artifact) => [
+      artifact.parentId,
+      artifact.rowId,
+      artifact.status,
+      artifact.visibleStatusText,
       artifact.proofId,
       artifact.artifactPath,
       artifact.batchLabel,
@@ -8285,11 +8294,10 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
       (artifact) =>
         artifact.proofId === hostedIdentityTerminalReceiptArtifactCase.proofId,
     ),
-    {
-      proofId: hostedIdentityTerminalReceiptArtifactCase.proofId,
-      artifactPath: hostedIdentityTerminalReceiptArtifactCase.artifactPath,
-      batchLabel: hostedIdentityTerminalReceiptArtifactCase.batchLabel,
-    },
+    terminalProofGraphReceiptArtifacts.find(
+      (artifact) =>
+        artifact.proofId === hostedIdentityTerminalReceiptArtifactCase.proofId,
+    ),
   );
   assert.deepEqual(terminalBatchNode.terminalValidations, [
     {
@@ -9633,51 +9641,48 @@ test("phase-local next-action receipts carry canonical artifact metadata", () =>
 });
 
 test("proof graph receipt artifact rows share one browser row id contract", () => {
+  const terminalAdminProofFreshnessEntry =
+    terminalProofGraphReceiptRegistry.find(
+      (entry) => entry.proofId === "proof-freshness" && entry.terminalGraphEdge,
+    );
+  const terminalRefreshProofFreshnessEntry =
+    terminalProofGraphReceiptRegistry.find(
+      (entry) =>
+        entry.proofId === terminalAdminProofFreshnessEntry.proofId &&
+        entry.batchLabel !== terminalAdminProofFreshnessEntry.batchLabel,
+    );
+  const terminalAdminNextActionEntry = terminalProofGraphReceiptRegistry.find(
+    (entry) => entry.proofId === "next-action" && entry.terminalGraphEdge,
+  );
+  const terminalRefreshNextActionEntry = terminalProofGraphReceiptRegistry.find(
+    (entry) =>
+      entry.proofId === terminalAdminNextActionEntry.proofId &&
+      entry.batchLabel !== terminalAdminNextActionEntry.batchLabel,
+  );
   assert.deepEqual(
     terminalProofGraphReceiptRegistry.map((entry) => [
+      entry.parentId,
       entry.proofId,
       entry.artifactPath,
       entry.batchLabel,
+      entry.rowId,
+      entry.status,
+      entry.visibleStatusText,
       entry.terminalGraphEdge,
     ]),
-    [
-      [
-        "proof-graph",
-        "target/dev-test-game/proof-graph-admin-proof.json",
-        "Terminal admin proof batch",
-        true,
-      ],
-      [
-        "proof-freshness",
-        "target/dev-test-game/proof-freshness-admin-proof.json",
-        "Terminal admin proof batch",
-        true,
-      ],
-      [
-        "next-action",
-        "target/dev-test-game/next-action-admin-proof.json",
-        "Terminal admin proof batch",
-        true,
-      ],
-      [
-        hostedIdentityTerminalReceiptArtifactCase.proofId,
-        hostedIdentityTerminalReceiptArtifactCase.artifactPath,
-        hostedIdentityTerminalReceiptArtifactCase.batchLabel,
-        false,
-      ],
-      [
-        "proof-freshness",
-        "target/dev-test-game/proof-freshness-admin-proof.json",
-        "Terminal refresh admin proof batch",
-        false,
-      ],
-      [
-        "next-action",
-        "target/dev-test-game/next-action-admin-proof.json",
-        "Terminal refresh admin proof batch",
-        false,
-      ],
-    ],
+    terminalProofGraphReceiptRegistry.map((entry) => [
+      proofGraphTerminalReceiptParentId,
+      entry.proofId,
+      entry.artifactPath,
+      entry.batchLabel,
+      proofGraphReceiptArtifactRowId({
+        parentId: proofGraphTerminalReceiptParentId,
+        artifact: entry,
+      }),
+      proofGraphReceiptArtifactRowStatus(entry),
+      `${entry.rowId}\n${entry.status}`,
+      entry.terminalGraphEdge,
+    ]),
   );
   assert.deepEqual(
     terminalProofGraphReceiptBatchRegistry.map((batch) => [
@@ -9687,53 +9692,27 @@ test("proof graph receipt artifact rows share one browser row id contract", () =
       batch.proofIds,
       batch.artifactPaths,
     ]),
-    [
-      [
-        "Terminal admin proof batch",
-        "terminal-admin-proof-batch",
-        "terminal graph, freshness, and next-action admin surfaces share the generated proof graph inputs",
-        ["proof-graph", "proof-freshness", "next-action"],
-        [
-          "target/dev-test-game/proof-graph-admin-proof.json",
-          "target/dev-test-game/proof-freshness-admin-proof.json",
-          "target/dev-test-game/next-action-admin-proof.json",
-        ],
-      ],
-      [
-        hostedIdentityTerminalReceiptArtifactCase.batchLabel,
-        "terminal-hosted-identity-next-action-admin-proof-batch",
-        "hosted identity next-action input proves the promoted operator-aware admin rows before the default next-action receipt is restored",
-        [hostedIdentityTerminalReceiptArtifactCase.proofId],
-        [hostedIdentityTerminalReceiptArtifactCase.artifactPath],
-      ],
-      [
-        "Terminal refresh admin proof batch",
-        "terminal-refresh-admin-proof-batch",
-        "freshness and next-action admin surfaces share the refreshed next-action input",
-        ["proof-freshness", "next-action"],
-        [
-          "target/dev-test-game/proof-freshness-admin-proof.json",
-          "target/dev-test-game/next-action-admin-proof.json",
-        ],
-      ],
-    ],
+    terminalProofGraphReceiptBatchRegistry.map((batch) => {
+      const entries = terminalProofGraphReceiptRegistry.filter(
+        (entry) => entry.batchLabel === batch.label,
+      );
+      return [
+        batch.label,
+        batch.script,
+        batch.reason,
+        entries.map((entry) => entry.proofId),
+        entries.map((entry) => entry.artifactPath),
+      ];
+    }),
   );
   const rows = normalizeProofGraphReceiptArtifactRows({
-    parentId: "admin-spine-terminal-batches",
+    parentId: proofGraphTerminalReceiptParentId,
     artifacts: [
+      terminalAdminProofFreshnessEntry,
+      terminalRefreshProofFreshnessEntry,
       {
-        proofId: "proof-freshness",
-        artifactPath: "target/dev-test-game/proof-freshness-admin-proof.json",
-        batchLabel: "Terminal admin proof batch",
-      },
-      {
-        proofId: "proof-freshness",
-        artifactPath: "target/dev-test-game/proof-freshness-admin-proof.json",
-        batchLabel: "Terminal refresh admin proof batch",
-      },
-      {
-        proofId: "next-action",
-        artifactPath: "target/dev-test-game/next-action-admin-proof.json",
+        proofId: terminalAdminNextActionEntry.proofId,
+        artifactPath: terminalAdminNextActionEntry.artifactPath,
         batchLabel: "",
       },
       {
@@ -9753,19 +9732,39 @@ test("proof graph receipt artifact rows share one browser row id contract", () =
     rows.map((row) => [row.id, row.rowId, row.status]),
     [
       [
-        "receipt-artifact:admin-spine-terminal-batches:proof-freshness:terminal-admin-proof-batch",
-        "receipt-artifact:admin-spine-terminal-batches:proof-freshness:terminal-admin-proof-batch",
-        "proof-freshness:Terminal admin proof batch:target/dev-test-game/proof-freshness-admin-proof.json",
+        terminalAdminProofFreshnessEntry.rowId,
+        terminalAdminProofFreshnessEntry.rowId,
+        terminalAdminProofFreshnessEntry.status,
       ],
       [
-        "receipt-artifact:admin-spine-terminal-batches:proof-freshness:terminal-refresh-admin-proof-batch",
-        "receipt-artifact:admin-spine-terminal-batches:proof-freshness:terminal-refresh-admin-proof-batch",
-        "proof-freshness:Terminal refresh admin proof batch:target/dev-test-game/proof-freshness-admin-proof.json",
+        terminalRefreshProofFreshnessEntry.rowId,
+        terminalRefreshProofFreshnessEntry.rowId,
+        terminalRefreshProofFreshnessEntry.status,
       ],
       [
-        "receipt-artifact:admin-spine-terminal-batches:next-action:2",
-        "receipt-artifact:admin-spine-terminal-batches:next-action:2",
-        "next-action::target/dev-test-game/next-action-admin-proof.json",
+        proofGraphReceiptArtifactRowId({
+          parentId: proofGraphTerminalReceiptParentId,
+          artifact: {
+            proofId: terminalAdminNextActionEntry.proofId,
+            artifactPath: terminalAdminNextActionEntry.artifactPath,
+            batchLabel: "",
+            fallbackSuffix: "2",
+          },
+        }),
+        proofGraphReceiptArtifactRowId({
+          parentId: proofGraphTerminalReceiptParentId,
+          artifact: {
+            proofId: terminalAdminNextActionEntry.proofId,
+            artifactPath: terminalAdminNextActionEntry.artifactPath,
+            batchLabel: "",
+            fallbackSuffix: "2",
+          },
+        }),
+        proofGraphReceiptArtifactRowStatus({
+          proofId: terminalAdminNextActionEntry.proofId,
+          artifactPath: terminalAdminNextActionEntry.artifactPath,
+          batchLabel: "",
+        }),
       ],
     ],
   );
@@ -9773,23 +9772,13 @@ test("proof graph receipt artifact rows share one browser row id contract", () =
     proofGraphReceiptArtifactRowIds({
       nodes: [
         {
-          id: "admin-spine-terminal-batches",
+          id: proofGraphTerminalReceiptParentId,
           receiptArtifacts: [
+            terminalAdminProofFreshnessEntry,
+            terminalRefreshProofFreshnessEntry,
             {
-              proofId: "proof-freshness",
-              artifactPath:
-                "target/dev-test-game/proof-freshness-admin-proof.json",
-              batchLabel: "Terminal admin proof batch",
-            },
-            {
-              proofId: "proof-freshness",
-              artifactPath:
-                "target/dev-test-game/proof-freshness-admin-proof.json",
-              batchLabel: "Terminal refresh admin proof batch",
-            },
-            {
-              proofId: "next-action",
-              artifactPath: "target/dev-test-game/next-action-admin-proof.json",
+              proofId: terminalAdminNextActionEntry.proofId,
+              artifactPath: terminalAdminNextActionEntry.artifactPath,
               batchLabel: "",
             },
           ],
@@ -9804,25 +9793,24 @@ test("proof graph receipt artifact rows share one browser row id contract", () =
   );
   assert.equal(
     hostedIdentityTerminalReceiptArtifactCase.visibleStatusText,
-    "receipt-artifact:admin-spine-terminal-batches:hosted-identity-next-action:terminal-hosted-identity-next-action-admin-proof-batch\nhosted-identity-next-action:Terminal hosted identity next-action admin proof batch:target/dev-test-game/hosted-identity-next-action-admin-proof.json",
+    `${hostedIdentityTerminalReceiptArtifactCase.rowId}\n${hostedIdentityTerminalReceiptArtifactCase.status}`,
   );
   assert.equal(
     proofGraphReceiptArtifactRowId({
-      parentId: "admin-spine-terminal-batches",
-      artifact: {
-        proofId: "proof-freshness",
-        batchLabel: "Terminal admin proof batch",
-      },
+      parentId: proofGraphTerminalReceiptParentId,
+      artifact: terminalAdminProofFreshnessEntry,
     }),
     rows[0].id,
   );
   assert.equal(
-    proofGraphReceiptArtifactRowStatus({
-      proofId: "proof-freshness",
-      artifactPath: "target/dev-test-game/proof-freshness-admin-proof.json",
-      batchLabel: "Terminal admin proof batch",
-    }),
+    proofGraphReceiptArtifactRowStatus(terminalAdminProofFreshnessEntry),
     rows[0].status,
+  );
+  assert.equal(
+    terminalRefreshNextActionEntry.status,
+    terminalProofGraphReceiptArtifacts.find(
+      (artifact) => artifact.rowId === terminalRefreshNextActionEntry.rowId,
+    ).status,
   );
 });
 

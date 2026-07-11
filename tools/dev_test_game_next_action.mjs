@@ -13,6 +13,10 @@ import {
   assertDevTestGameNextActionSequenceHandoffPair,
 } from "./dev_test_game_next_action_sequence_handoff_pair.mjs";
 import {
+  normalizeProofGraphReceiptArtifactRows,
+  proofGraphTerminalReceiptParentId,
+} from "./dev_test_game_proof_graph_receipt_artifact_rows.mjs";
+import {
   assertSelectedOperatorHandoffForNextAction,
   selectedOperatorHandoffFromNextAction,
 } from "./dev_test_game_terminal_receipts.mjs";
@@ -1684,11 +1688,10 @@ function terminalBatchGraphFromProofGraph(proofGraph) {
       ? node.proofIds.map((proofId) => String(proofId))
       : [],
     receiptArtifacts: Array.isArray(node.receiptArtifacts)
-      ? node.receiptArtifacts.map((artifact) => ({
-          proofId: String(artifact.proofId ?? ""),
-          artifactPath: String(artifact.artifactPath ?? ""),
-          batchLabel: String(artifact.batchLabel ?? ""),
-        }))
+      ? normalizeProofGraphReceiptArtifactRows({
+          parentId: proofGraphTerminalReceiptParentId,
+          artifacts: node.receiptArtifacts,
+        })
       : [],
     edgeCount: edges.length,
     edgeTargets: edges.map((edge) => String(edge.to ?? "")),

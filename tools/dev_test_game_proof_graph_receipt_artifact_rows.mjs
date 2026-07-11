@@ -29,11 +29,11 @@ export const terminalRefreshAdminProofBatchReason =
   "freshness and next-action admin surfaces share the refreshed next-action input";
 
 export const hostedIdentityTerminalReceiptArtifactCase =
-  terminalReceiptArtifactCase({
-    parentId: proofGraphTerminalReceiptParentId,
+  terminalReceiptRegistryEntry({
     proofId: "hosted-identity-next-action",
     artifactPath: hostedIdentityNextActionAdminProofPath,
     batchLabel: terminalHostedIdentityNextActionAdminProofBatchLabel,
+    terminalGraphEdge: false,
   });
 
 export const terminalProofGraphReceiptRegistry = Object.freeze([
@@ -131,26 +131,16 @@ export function normalizeProofGraphReceiptArtifactRows({
 }) {
   return Object.freeze(
     (Array.isArray(artifacts) ? artifacts : [])
-      .map((artifact, index) => ({
-        proofId: String(artifact?.proofId ?? ""),
-        artifactPath: String(artifact?.artifactPath ?? ""),
-        batchLabel: String(artifact?.batchLabel ?? ""),
-        fallbackSuffix: String(index),
-      }))
+      .map((artifact, index) =>
+        normalizeProofGraphReceiptArtifact({
+          parentId,
+          artifact,
+          fallbackSuffix: String(index),
+        }),
+      )
       .filter(
         (artifact) => artifact.proofId !== "" && artifact.artifactPath !== "",
       )
-      .map((artifact) => {
-        const id = proofGraphReceiptArtifactRowId({ parentId, artifact });
-        return Object.freeze({
-          id,
-          rowId: id,
-          status: proofGraphReceiptArtifactRowStatus(artifact),
-          proofId: artifact.proofId,
-          artifactPath: artifact.artifactPath,
-          batchLabel: artifact.batchLabel,
-        });
-      }),
   );
 }
 
@@ -206,6 +196,7 @@ function terminalReceiptArtifactCase({
   return Object.freeze({
     ...artifact,
     parentId,
+    id: rowId,
     rowId,
     status,
     visibleStatusText: `${rowId}\n${status}`,
@@ -219,18 +210,65 @@ function terminalReceiptRegistryEntry({
   terminalGraphEdge,
 }) {
   return Object.freeze({
-    proofId,
-    artifactPath,
-    batchLabel,
+    ...terminalReceiptArtifactCase({
+      parentId: proofGraphTerminalReceiptParentId,
+      proofId,
+      artifactPath,
+      batchLabel,
+    }),
     terminalGraphEdge,
   });
 }
 
 function receiptArtifactFromRegistryEntry(entry) {
   return Object.freeze({
+    parentId: entry.parentId,
+    id: entry.id,
+    rowId: entry.rowId,
+    status: entry.status,
+    visibleStatusText: entry.visibleStatusText,
     proofId: entry.proofId,
     artifactPath: entry.artifactPath,
     batchLabel: entry.batchLabel,
+  });
+}
+
+function normalizeProofGraphReceiptArtifact({
+  parentId,
+  artifact,
+  fallbackSuffix,
+}) {
+  const base = {
+    parentId: String(artifact?.parentId ?? parentId ?? ""),
+    proofId: String(artifact?.proofId ?? ""),
+    artifactPath: String(artifact?.artifactPath ?? ""),
+    batchLabel: String(artifact?.batchLabel ?? ""),
+    fallbackSuffix,
+  };
+  const rowId =
+    typeof artifact?.rowId === "string" && artifact.rowId.trim() !== ""
+      ? artifact.rowId
+      : proofGraphReceiptArtifactRowId({
+          parentId: base.parentId,
+          artifact: base,
+        });
+  const status =
+    typeof artifact?.status === "string" && artifact.status.trim() !== ""
+      ? artifact.status
+      : proofGraphReceiptArtifactRowStatus(base);
+  return Object.freeze({
+    parentId: base.parentId,
+    id: rowId,
+    rowId,
+    status,
+    visibleStatusText:
+      typeof artifact?.visibleStatusText === "string" &&
+      artifact.visibleStatusText.trim() !== ""
+        ? artifact.visibleStatusText
+        : `${rowId}\n${status}`,
+    proofId: base.proofId,
+    artifactPath: base.artifactPath,
+    batchLabel: base.batchLabel,
   });
 }
 

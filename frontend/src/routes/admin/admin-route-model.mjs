@@ -100,6 +100,7 @@ import {
 } from "../../../../tools/dev_test_game_admin_audit_handoff_path.mjs";
 import {
   normalizeProofGraphReceiptArtifactRows,
+  proofGraphTerminalReceiptParentId,
 } from "../../../../tools/dev_test_game_proof_graph_receipt_artifact_rows.mjs";
 import {
   proofGraphPrerequisiteDestinationProofTargetTestId,
@@ -6239,13 +6240,10 @@ function normalizeNextActionTerminalBatchGraph(terminalBatchGraph) {
     ),
     receiptArtifacts: Object.freeze(
       Array.isArray(terminalBatchGraph.receiptArtifacts)
-        ? terminalBatchGraph.receiptArtifacts.map((artifact) =>
-            Object.freeze({
-              proofId: String(artifact?.proofId ?? ""),
-              artifactPath: String(artifact?.artifactPath ?? ""),
-              batchLabel: String(artifact?.batchLabel ?? ""),
-            }),
-          )
+        ? normalizeProofGraphReceiptArtifactRows({
+            parentId: proofGraphTerminalReceiptParentId,
+            artifacts: terminalBatchGraph.receiptArtifacts,
+          })
         : [],
     ),
   });

@@ -1403,7 +1403,7 @@ function proofGraphAdminSpineTerminalReceiptDestination(
     return null;
   }
   return {
-    linkId: "admin-spine-terminal-batches",
+    linkId: proofGraphTerminalReceiptParentId,
     auditId: localAdminAuditIds.adminSpine,
     detailRoleUrl:
       `/admin/audit/${localAdminAuditIds.adminSpine}?game=<seeded-game>`,
@@ -1416,7 +1416,7 @@ function proofGraphAdminSpineTerminalReceiptDestination(
 
 function proofGraphSelectedOperatorHandoffReceiptDestination(receipt) {
   return {
-    linkId: "admin-spine-terminal-batches",
+    linkId: proofGraphTerminalReceiptParentId,
     auditId: localAdminAuditIds.adminSpine,
     detailRoleUrl:
       `/admin/audit/${localAdminAuditIds.adminSpine}?game=<seeded-game>`,
@@ -1495,7 +1495,7 @@ function proofGraphAdminSpineTerminalValidationDestination(
     return null;
   }
   return {
-    linkId: "admin-spine-terminal-batches",
+    linkId: proofGraphTerminalReceiptParentId,
     auditId: localAdminAuditIds.adminSpine,
     detailRoleUrl:
       `/admin/audit/${localAdminAuditIds.adminSpine}?game=<seeded-game>`,
@@ -1542,7 +1542,7 @@ function assertProofGraphAdminProofCoversSelectedOperatorHandoffReceipt(
     destination.selectedOperatorHandoffReceiptId !==
       selectedOperatorHandoffTerminalReceiptId ||
     destination.selectedOperatorHandoffReceiptStatus !== "passed" ||
-    destination.linkId !== "admin-spine-terminal-batches" ||
+    destination.linkId !== proofGraphTerminalReceiptParentId ||
     destination.auditId !== localAdminAuditIds.adminSpine
   ) {
     throw new Error(
@@ -1582,7 +1582,7 @@ function assertProofGraphAdminProofCoversAdminSpineTerminalValidations(evidence)
     return;
   }
   if (
-    destination.linkId !== "admin-spine-terminal-batches" ||
+    destination.linkId !== proofGraphTerminalReceiptParentId ||
     destination.auditId !== localAdminAuditIds.adminSpine ||
     destination.detailRoleUrl !==
       `/admin/audit/${localAdminAuditIds.adminSpine}?game=<seeded-game>` ||

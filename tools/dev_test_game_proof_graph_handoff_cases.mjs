@@ -99,13 +99,7 @@ export const terminalAdminProofBatchArtifactPaths = Object.freeze([
   ...terminalProofGraphUniqueReceiptTargets.map((target) => target.artifactPath),
 ]);
 export const terminalAdminProofBatchReceiptArtifacts = Object.freeze(
-  terminalProofGraphReceiptArtifacts.map((artifact) =>
-    Object.freeze({
-      proofId: artifact.proofId,
-      artifactPath: artifact.artifactPath,
-      batchLabel: artifact.batchLabel,
-    }),
-  ),
+  terminalProofGraphReceiptArtifacts.map((artifact) => Object.freeze(artifact)),
 );
 export const proofGraphDiagnosticProofNodes = Object.freeze([
   Object.freeze({

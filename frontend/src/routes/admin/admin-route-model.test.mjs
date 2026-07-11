@@ -3042,7 +3042,9 @@ test("admin local proof graph detail keeps duplicate terminal receipt proof ids 
   });
 
   const receiptRows = data.audit.checks.filter((check) =>
-    check.id.startsWith("receipt-artifact:admin-spine-terminal-batches:"),
+    terminalProofGraphReceiptArtifacts.some(
+      (artifact) => artifact.rowId === check.id,
+    ),
   );
   assert.equal(
     new Set(receiptRows.map((row) => row.id)).size,
@@ -3050,32 +3052,10 @@ test("admin local proof graph detail keeps duplicate terminal receipt proof ids 
   );
   assert.deepEqual(
     receiptRows.map((row) => [row.id, row.status]),
-    [
-      [
-        "receipt-artifact:admin-spine-terminal-batches:proof-graph:terminal-admin-proof-batch",
-        "proof-graph:Terminal admin proof batch:target/dev-test-game/proof-graph-admin-proof.json",
-      ],
-      [
-        "receipt-artifact:admin-spine-terminal-batches:proof-freshness:terminal-admin-proof-batch",
-        "proof-freshness:Terminal admin proof batch:target/dev-test-game/proof-freshness-admin-proof.json",
-      ],
-      [
-        "receipt-artifact:admin-spine-terminal-batches:next-action:terminal-admin-proof-batch",
-        "next-action:Terminal admin proof batch:target/dev-test-game/next-action-admin-proof.json",
-      ],
-      [
-        hostedIdentityTerminalReceiptArtifactCase.rowId,
-        hostedIdentityTerminalReceiptArtifactCase.status,
-      ],
-      [
-        "receipt-artifact:admin-spine-terminal-batches:proof-freshness:terminal-refresh-admin-proof-batch",
-        "proof-freshness:Terminal refresh admin proof batch:target/dev-test-game/proof-freshness-admin-proof.json",
-      ],
-      [
-        "receipt-artifact:admin-spine-terminal-batches:next-action:terminal-refresh-admin-proof-batch",
-        "next-action:Terminal refresh admin proof batch:target/dev-test-game/next-action-admin-proof.json",
-      ],
-    ],
+    terminalProofGraphReceiptArtifacts.map((artifact) => [
+      artifact.rowId,
+      artifact.status,
+    ]),
   );
 });
 

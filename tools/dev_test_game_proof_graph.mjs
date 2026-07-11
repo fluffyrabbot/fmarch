@@ -29,6 +29,9 @@ import {
 } from "./dev_test_game_production_feature_spine_resolver.mjs";
 import {
   hostedIdentityTerminalReceiptArtifactCase,
+  normalizeProofGraphReceiptArtifactRows,
+  proofGraphTerminalReceiptParentId,
+  terminalProofGraphEdgeTargetIds,
 } from "./dev_test_game_proof_graph_receipt_artifact_rows.mjs";
 import {
   assertHostedIdentityProofGraphDependency,
@@ -942,7 +945,7 @@ function rawEvidenceTemplateDiagnosticFieldsAreMissing(template) {
 
 export function assertDevTestGameProofGraphCoversTerminalBatches(graph) {
   const terminalNode = (graph?.nodes ?? []).find(
-    (node) => node.id === "admin-spine-terminal-batches",
+    (node) => node.id === proofGraphTerminalReceiptParentId,
   );
   if (graph?.generatedFrom?.adminSpineTerminalBatches === undefined) {
     if (terminalNode !== undefined || graph.summary?.terminalBatchCount !== 0) {
@@ -957,26 +960,23 @@ export function assertDevTestGameProofGraphCoversTerminalBatches(graph) {
     terminalNode.roleUrl !== localAdminAuditRoleUrl(localAdminAuditIds.adminSpine) ||
     terminalNode.batchCount !== graph.summary?.terminalBatchCount ||
     !Array.isArray(terminalNode.proofIds) ||
-    !terminalNode.proofIds.includes("proof-graph") ||
-    !terminalNode.proofIds.includes("proof-freshness") ||
-    !terminalNode.proofIds.includes("next-action") ||
+    !terminalProofGraphEdgeTargetIds.every((target) =>
+      terminalNode.proofIds.includes(target),
+    ) ||
     !Array.isArray(terminalNode.receiptArtifacts) ||
     !terminalNode.receiptArtifacts.some(
       (artifact) =>
-        artifact.proofId === hostedIdentityTerminalReceiptArtifactCase.proofId &&
-        artifact.artifactPath ===
-          hostedIdentityTerminalReceiptArtifactCase.artifactPath &&
-        artifact.batchLabel ===
-          hostedIdentityTerminalReceiptArtifactCase.batchLabel,
+        artifact.rowId === hostedIdentityTerminalReceiptArtifactCase.rowId &&
+        artifact.status === hostedIdentityTerminalReceiptArtifactCase.status,
     )
   ) {
     throw new Error("proof graph terminal batch node drifted");
   }
-  for (const target of ["proof-graph", "proof-freshness", "next-action"]) {
+  for (const target of terminalProofGraphEdgeTargetIds) {
     if (
       !(graph.edges ?? []).some(
         (edge) =>
-          edge.from === "admin-spine-terminal-batches" &&
+          edge.from === proofGraphTerminalReceiptParentId &&
           edge.to === target &&
           edge.relationship === "terminal-browser-proof",
       )
@@ -995,7 +995,7 @@ export function assertDevTestGameProofGraphCoversTerminalBatches(graph) {
         devTestGameReleaseAdminProofContractCommand ||
       !(graph.edges ?? []).some(
         (edge) =>
-          edge.from === "admin-spine-terminal-batches" &&
+          edge.from === proofGraphTerminalReceiptParentId &&
           edge.to === "release-admin-proof-contract" &&
           edge.relationship === "terminal-artifact-validation" &&
           edge.command === devTestGameReleaseAdminProofContractCommand &&
@@ -1452,7 +1452,7 @@ function buildProofGraphNodes({
       ? []
       : [
           {
-            id: "admin-spine-terminal-batches",
+            id: proofGraphTerminalReceiptParentId,
             label: "Admin spine terminal proof batches",
             kind: "terminal-proof-batch-receipt",
             status: adminSpineTerminalBatches.status,
@@ -2278,8 +2278,8 @@ function terminalBatchEdges(adminSpineTerminalBatches) {
     return [];
   }
   return [
-    ...["proof-graph", "proof-freshness", "next-action"].map((target) => [
-      "admin-spine-terminal-batches",
+    ...terminalProofGraphEdgeTargetIds.map((target) => [
+      proofGraphTerminalReceiptParentId,
       target,
       "terminal-browser-proof",
       {
@@ -2290,7 +2290,7 @@ function terminalBatchEdges(adminSpineTerminalBatches) {
     ]),
     ...(adminSpineTerminalBatches.terminalValidations ?? []).map(
       (validation) => [
-        "admin-spine-terminal-batches",
+        proofGraphTerminalReceiptParentId,
         validation.id,
         "terminal-artifact-validation",
         {
@@ -2304,13 +2304,16 @@ function terminalBatchEdges(adminSpineTerminalBatches) {
 }
 
 function terminalBatchReceiptArtifacts(adminSpineTerminalBatches) {
-  return adminSpineTerminalBatches.batches.flatMap((batch) =>
-    batch.proofIds.map((proofId, index) => ({
-      proofId,
-      artifactPath: batch.artifactPaths[index],
-      batchLabel: batch.label,
-    })),
-  );
+  return normalizeProofGraphReceiptArtifactRows({
+    parentId: proofGraphTerminalReceiptParentId,
+    artifacts: adminSpineTerminalBatches.batches.flatMap((batch) =>
+      batch.proofIds.map((proofId, index) => ({
+        proofId,
+        artifactPath: batch.artifactPaths[index],
+        batchLabel: batch.label,
+      })),
+    ),
+  });
 }
 
 async function readOptionalJson(filePath) {

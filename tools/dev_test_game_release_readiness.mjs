@@ -337,6 +337,7 @@ import {
 } from "./dev_test_game_admin_proof_batch_registry.mjs";
 import {
   hostedIdentityTerminalReceiptArtifactCase,
+  proofGraphTerminalReceiptParentId,
   terminalProofGraphReceiptBatchRegistry,
   terminalRefreshAdminProofBatchLabel,
 } from "./dev_test_game_proof_graph_receipt_artifact_rows.mjs";
@@ -7098,7 +7099,7 @@ function validateOptionalSelectedOperatorHandoffReceiptDestination(
     destination.selectedOperatorHandoffReceiptId !==
       selectedOperatorHandoffTerminalReceiptId ||
     destination.selectedOperatorHandoffReceiptStatus !== "passed" ||
-    destination.linkId !== "admin-spine-terminal-batches" ||
+    destination.linkId !== proofGraphTerminalReceiptParentId ||
     destination.auditId !== localAdminAuditIds.adminSpine ||
     destination.detailRoleUrl !== localAdminAuditRoleUrl(localAdminAuditIds.adminSpine)
   ) {
@@ -7171,7 +7172,7 @@ function validateOptionalAdminSpineTerminalValidationDestination(
     return null;
   }
   if (
-    destination.linkId !== "admin-spine-terminal-batches" ||
+    destination.linkId !== proofGraphTerminalReceiptParentId ||
     destination.auditId !== localAdminAuditIds.adminSpine ||
     destination.detailRoleUrl !== localAdminAuditRoleUrl(localAdminAuditIds.adminSpine)
   ) {
@@ -9555,7 +9556,7 @@ export function assertDevTestGameReleaseReadiness(checklist) {
   if (
     proofGraphTerminalValidationCheck !== undefined &&
     (proofGraphTerminalValidationCheck.linkId !==
-      "admin-spine-terminal-batches" ||
+      proofGraphTerminalReceiptParentId ||
       proofGraphTerminalValidationCheck.auditId !==
         localAdminAuditIds.adminSpine ||
       proofGraphTerminalValidationCheck.detailRoleUrl !==
@@ -9595,7 +9596,7 @@ export function assertDevTestGameReleaseReadiness(checklist) {
       selectedOperatorReceiptDiagnosticCheck
         .selectedOperatorHandoffReceiptStatus !== "passed" ||
       selectedOperatorReceiptDiagnosticCheck.destinationLinkId !==
-        "admin-spine-terminal-batches" ||
+        proofGraphTerminalReceiptParentId ||
       selectedOperatorReceiptDiagnosticCheck.destinationAuditId !==
         localAdminAuditIds.adminSpine ||
       !selectedOperatorReceiptDiagnosticCheck
