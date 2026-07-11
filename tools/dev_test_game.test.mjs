@@ -277,6 +277,10 @@ import {
   adminSpineTerminalBatchProofPath,
   adminSpineTerminalBatchReadinessEvidenceEnv,
   devTestGameAdminSpinePlan,
+  devTestGameAdminSpinePreGraphAdminRollupSteps,
+  devTestGameAdminSpinePreGraphHostedSteps,
+  devTestGameAdminSpinePreGraphInputSteps,
+  devTestGameAdminSpinePreGraphSteps,
   devTestGameHostedEvidenceOperatorChecklistHandoffPhase,
   devTestGameHostedEvidenceOperatorChecklistHandoffPhaseId,
   devTestGameHostedIdentityHandoffPhase,
@@ -2217,6 +2221,96 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
       "tools/dev_test_game_next_action_admin_proof.mjs",
       devTestGameReleaseReadinessScript,
     ],
+  );
+  assert.deepEqual(devTestGameAdminSpinePreGraphInputSteps, [
+    { kind: "node", script: "tools/dev_test_game_race_coverage.mjs" },
+    {
+      kind: "node",
+      script: devTestGameReleaseReadinessScript,
+      readinessReason: "race-coverage-for-hosted-matrix",
+      changedInputs: [devTestGameRaceCoveragePath],
+    },
+    {
+      kind: "node",
+      script: "tools/dev_test_game_hosted_concurrent_race_matrix.mjs",
+    },
+    { kind: "node", script: "tools/dev_test_game_ops_artifacts.mjs" },
+    {
+      kind: "node",
+      script: devTestGameReleaseReadinessScript,
+      readinessReason: "hosted-matrix-and-ops-inputs-for-hosted-signals",
+      changedInputs: [
+        devTestGameHostedConcurrentRaceMatrixPath,
+        devTestGameOpsArtifactsPath,
+      ],
+      env: adminSpineHostedOpsInputReadinessEnv,
+    },
+  ]);
+  assert.deepEqual(devTestGameAdminSpinePreGraphHostedSteps, [
+    {
+      kind: "node",
+      script: "tools/dev_test_game_hosted_identity_evidence.mjs",
+    },
+    {
+      kind: "node",
+      script: "tools/dev_test_game_hosted_identity_progression_summary.mjs",
+    },
+    {
+      kind: "node",
+      script: devTestGameHostedIdentityProgressionAdminProofBatchScript,
+    },
+    { kind: "node", script: "tools/dev_test_game_hosted_target_preflight.mjs" },
+    { kind: "node", script: "tools/dev_test_game_hosted_evidence_lane.mjs" },
+    {
+      kind: "node",
+      script: "tools/dev_test_game_hosted_evidence_lane_demo_proof.mjs",
+    },
+    { kind: "node", script: "tools/dev_test_game_hosted_ops_signals.mjs" },
+    {
+      kind: "node",
+      script: "tools/dev_test_game_real_hosted_observability_handoff.mjs",
+    },
+    { kind: "node", script: "tools/dev_test_game_release_runbook.mjs" },
+  ]);
+  assert.deepEqual(devTestGameAdminSpinePreGraphAdminRollupSteps, [
+    adminSpineCustomPlanStep(adminSpineProofCustomStep),
+    {
+      kind: "node",
+      script: "tools/dev_test_game_admin_spine_admin_proof.mjs",
+    },
+    {
+      kind: "node",
+      script: devTestGameReleaseReadinessScript,
+      readinessReason: "pre-graph-admin-surface-rollup",
+      changedInputs: [
+        devTestGameHostedConcurrentRaceMatrixPath,
+        devTestGameHostedIdentityEvidencePath,
+        devTestGameHostedIdentityProgressionSummaryPath,
+        ...hostedIdentityProgressionAdminProofBatchArtifactPaths,
+        devTestGameHostedTargetPreflightPath,
+        devTestGameHostedEvidenceLanePath,
+        devTestGameHostedEvidenceLaneDemoProofPath,
+        devTestGameHostedEvidenceLaneOperatorFixtureAdminProofPath,
+        devTestGameHostedOpsSignalsPath,
+        devTestGameRealHostedObservabilityHandoffPath,
+        devTestGameReleaseRunbookPath,
+        adminSpineProofPath,
+        devTestGameAdminSpineAdminProofPath,
+      ],
+      env: adminSpinePreGraphReadinessEvidenceEnv,
+    },
+  ]);
+  assert.deepEqual(devTestGameAdminSpinePreGraphSteps, [
+    ...devTestGameAdminSpinePreGraphInputSteps,
+    ...devTestGameAdminSpinePreGraphHostedSteps,
+    ...devTestGameAdminSpinePreGraphAdminRollupSteps,
+  ]);
+  assert.deepEqual(
+    devTestGameAdminSpinePlan.slice(
+      0,
+      devTestGameAdminSpinePreGraphSteps.length,
+    ),
+    devTestGameAdminSpinePreGraphSteps,
   );
   assert.deepEqual(
     adminSpineCustomStepRegistry.map(adminSpineCustomPlanStep),

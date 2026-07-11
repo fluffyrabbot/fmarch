@@ -291,7 +291,7 @@ export const devTestGameHostedIdentityHandoffPhase = handoffPhaseSteps({
   ),
 });
 
-export const devTestGameAdminSpinePlan = [
+export const devTestGameAdminSpinePreGraphInputSteps = Object.freeze([
   { kind: "node", script: "tools/dev_test_game_race_coverage.mjs" },
   releaseReadinessStep({
     reason: "race-coverage-for-hosted-matrix",
@@ -310,6 +310,9 @@ export const devTestGameAdminSpinePlan = [
     ],
     env: adminSpineHostedOpsInputReadinessEnv,
   }),
+]);
+
+export const devTestGameAdminSpinePreGraphHostedSteps = Object.freeze([
   { kind: "node", script: "tools/dev_test_game_hosted_identity_evidence.mjs" },
   {
     kind: "node",
@@ -331,6 +334,9 @@ export const devTestGameAdminSpinePlan = [
     script: "tools/dev_test_game_real_hosted_observability_handoff.mjs",
   },
   { kind: "node", script: "tools/dev_test_game_release_runbook.mjs" },
+]);
+
+export const devTestGameAdminSpinePreGraphAdminRollupSteps = Object.freeze([
   adminSpineCustomPlanStep(adminSpineProofCustomStep),
   { kind: "node", script: "tools/dev_test_game_admin_spine_admin_proof.mjs" },
   releaseReadinessStep({
@@ -352,6 +358,16 @@ export const devTestGameAdminSpinePlan = [
     ],
     env: adminSpinePreGraphReadinessEvidenceEnv,
   }),
+]);
+
+export const devTestGameAdminSpinePreGraphSteps = Object.freeze([
+  ...devTestGameAdminSpinePreGraphInputSteps,
+  ...devTestGameAdminSpinePreGraphHostedSteps,
+  ...devTestGameAdminSpinePreGraphAdminRollupSteps,
+]);
+
+export const devTestGameAdminSpinePlan = [
+  ...devTestGameAdminSpinePreGraphSteps,
   { kind: "node", script: "tools/dev_test_game_spine_manifest.mjs" },
   { kind: "node", script: "tools/dev_test_game_next_action.mjs" },
   ...devTestGameHostedEvidenceOperatorChecklistHandoffPhase,
