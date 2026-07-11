@@ -210,6 +210,7 @@ import {
 } from "../../../../tools/dev_test_game_proof_graph_diagnostic_summary.mjs";
 import {
   devTestGameHostedIdentityHandoffPhaseId,
+  devTestGameHostedIdentityPhaseLocalNextActionHandoffStep,
   devTestGameTerminalRefreshAdminProofBatchHandoffStep,
   proofGraphHandoffPhaseOutputArtifactTestId,
 } from "../../../../tools/dev_test_game_handoff_phase_outputs.mjs";
@@ -9856,9 +9857,15 @@ function phaseLocalNextActionSnapshotsFixture() {
     {
       id: "next-action-hosted-identity",
       label: "Hosted identity next-action snapshot",
-      artifact: "target/dev-test-game/next-action-hosted-identity.json",
-      phaseLocalNextActionId: "hosted-identity",
-      sequenceStage: "hosted-identity",
+      artifact:
+        devTestGameHostedIdentityPhaseLocalNextActionHandoffStep
+          .phaseLocalNextAction.outputPath,
+      phaseLocalNextActionId:
+        devTestGameHostedIdentityPhaseLocalNextActionHandoffStep
+          .phaseLocalNextAction.id,
+      sequenceStage:
+        devTestGameHostedIdentityPhaseLocalNextActionHandoffStep
+          .phaseLocalNextAction.sequenceStage,
     },
   ];
   return snapshots.map((snapshot) => ({

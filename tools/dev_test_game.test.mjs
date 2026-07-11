@@ -330,7 +330,10 @@ import {
 } from "./dev_test_game_readiness_freshness_scope.mjs";
 import {
   devTestGameHandoffPhaseOutputs,
+  devTestGameHostedIdentityDefaultNextActionRefreshHandoffStep,
   devTestGameHostedIdentityNextActionAdminProofBatchHandoffStep,
+  devTestGameHostedIdentityPhaseLocalNextActionHandoffStep,
+  devTestGameHostedIdentityTerminalRefreshReadinessHandoffStep,
   devTestGameTerminalRefreshAdminProofBatchHandoffStep,
   proofGraphHandoffPhaseOutputArtifactTestId,
 } from "./dev_test_game_handoff_phase_outputs.mjs";
@@ -2293,12 +2296,17 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
         script: devTestGameNextActionScript,
         phase: {
           id: devTestGameHostedIdentityHandoffPhaseId,
-          step: "phase-local-next-action",
-          outputs: [hostedIdentityNextActionPath],
+          step: devTestGameHostedIdentityPhaseLocalNextActionHandoffStep.step,
+          outputs:
+            devTestGameHostedIdentityPhaseLocalNextActionHandoffStep.artifacts,
         },
         readinessReason: null,
-        outputPath: hostedIdentityNextActionPath,
-        sequenceStage: devTestGameHostedIdentitySequenceStage,
+        outputPath:
+          devTestGameHostedIdentityPhaseLocalNextActionHandoffStep
+            .phaseLocalNextAction.outputPath,
+        sequenceStage:
+          devTestGameHostedIdentityPhaseLocalNextActionHandoffStep
+            .phaseLocalNextAction.sequenceStage,
       },
       {
         script: terminalHostedIdentityNextActionProofBatch.script,
@@ -2318,8 +2326,10 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
         script: devTestGameNextActionScript,
         phase: {
           id: devTestGameHostedIdentityHandoffPhaseId,
-          step: "default-next-action-refresh",
-          outputs: [nextActionPath],
+          step: devTestGameHostedIdentityDefaultNextActionRefreshHandoffStep.step,
+          outputs:
+            devTestGameHostedIdentityDefaultNextActionRefreshHandoffStep
+              .artifacts,
         },
         readinessReason: null,
         outputPath: null,
@@ -2340,9 +2350,12 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
         script: devTestGameReleaseReadinessScript,
         phase: {
           id: devTestGameHostedIdentityHandoffPhaseId,
-          step: "readiness-refresh",
+          step:
+            devTestGameHostedIdentityTerminalRefreshReadinessHandoffStep.step,
         },
-        readinessReason: "hosted-identity-handoff-terminal-refresh",
+        readinessReason:
+          devTestGameHostedIdentityTerminalRefreshReadinessHandoffStep
+            .readinessReason,
         outputPath: null,
         sequenceStage: null,
       },
@@ -2355,16 +2368,15 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
   assert.deepEqual(devTestGameHostedIdentityHandoffPhase.at(-1), {
     kind: "node",
     script: devTestGameReleaseReadinessScript,
-    readinessReason: "hosted-identity-handoff-terminal-refresh",
-    changedInputs: [
-      adminSpineTerminalBatchProofPath,
-      proofFreshnessAdminProofPath,
-      nextActionAdminProofPath,
-    ],
+    readinessReason:
+      devTestGameHostedIdentityTerminalRefreshReadinessHandoffStep
+        .readinessReason,
+    changedInputs:
+      devTestGameHostedIdentityTerminalRefreshReadinessHandoffStep.changedInputs,
     env: adminSpineTerminalBatchReadinessEvidenceEnv,
     handoffPhase: {
       id: devTestGameHostedIdentityHandoffPhaseId,
-      step: "readiness-refresh",
+      step: devTestGameHostedIdentityTerminalRefreshReadinessHandoffStep.step,
     },
   });
   assert.deepEqual(devTestGameAdminSpinePlan.at(-8), {
@@ -4855,9 +4867,12 @@ test("dev test-game next-action derives one local recovery command from the mani
   );
   const hostedIdentityAdminSpinePhaseStart = devTestGameAdminSpinePlan.findIndex(
     (step) =>
-      step.phaseLocalNextAction?.id === "hosted-identity" &&
+      step.phaseLocalNextAction?.id ===
+        devTestGameHostedIdentityPhaseLocalNextActionHandoffStep
+          .phaseLocalNextAction.id &&
       step.env?.FMARCH_DEV_TEST_GAME_SEQUENCE_STAGE ===
-        devTestGameHostedIdentitySequenceStage,
+        devTestGameHostedIdentityPhaseLocalNextActionHandoffStep
+          .phaseLocalNextAction.sequenceStage,
   );
   const hostedIdentityTerminalBatch = terminalProofGraphReceiptBatchRegistry[1];
   const refreshTerminalBatch = terminalProofGraphReceiptBatchRegistry[2];
@@ -4885,8 +4900,12 @@ test("dev test-game next-action derives one local recovery command from the mani
     [
       {
         script: "tools/dev_test_game_next_action.mjs",
-        sequenceStage: devTestGameHostedIdentitySequenceStage,
-        outputPath: hostedIdentityNextActionPath,
+        sequenceStage:
+          devTestGameHostedIdentityPhaseLocalNextActionHandoffStep
+            .phaseLocalNextAction.sequenceStage,
+        outputPath:
+          devTestGameHostedIdentityPhaseLocalNextActionHandoffStep
+            .phaseLocalNextAction.outputPath,
         selectedCommand:
           hostedIdentityHandoffChecklist.progressionSummary.batchProofCommand,
       },

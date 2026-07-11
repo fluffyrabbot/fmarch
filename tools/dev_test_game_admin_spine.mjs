@@ -114,9 +114,8 @@ import {
 } from "./dev_test_game_next_action_sequence_handoff_pair.mjs";
 import {
   devTestGameHostedEvidenceOperatorChecklistHandoffPhaseId,
-  devTestGameHostedIdentityNextActionAdminProofBatchHandoffStep,
+  devTestGameHostedIdentityHandoffPhaseSteps,
   devTestGameHostedIdentityHandoffPhaseId,
-  devTestGameTerminalRefreshAdminProofBatchHandoffStep,
 } from "./dev_test_game_handoff_phase_outputs.mjs";
 export {
   devTestGameHostedEvidenceOperatorChecklistHandoffPhaseId,
@@ -237,8 +236,6 @@ export const adminSpineHostedOpsInputReadinessEnv = {
     devTestGameHostedConcurrentRaceMatrixPath,
 };
 
-const devTestGameHostedIdentitySequenceStage = "hosted-identity";
-
 const terminalAdminProofCaseFactories = Object.freeze({
   "proof-graph": proofGraphAdminProofCase,
   "proof-freshness": proofFreshnessAdminProofCase,
@@ -312,39 +309,9 @@ export const devTestGameHostedEvidenceOperatorChecklistHandoffPhase =
 
 export const devTestGameHostedIdentityHandoffPhase = handoffPhaseSteps({
   phaseId: devTestGameHostedIdentityHandoffPhaseId,
-  steps: [
-    {
-      step: "phase-local-next-action",
-      planStep: phaseLocalNextActionStep({
-        id: "hosted-identity",
-        outputPath: hostedIdentityNextActionPath,
-        sequenceStage: devTestGameHostedIdentitySequenceStage,
-      }),
-    },
-    terminalProofGraphHandoffBatchPlanStep(
-      devTestGameHostedIdentityNextActionAdminProofBatchHandoffStep,
-    ),
-    {
-      step: "default-next-action-refresh",
-      planStep: { kind: "node", script: "tools/dev_test_game_next_action.mjs" },
-      outputs: [nextActionPath],
-    },
-    terminalProofGraphHandoffBatchPlanStep(
-      devTestGameTerminalRefreshAdminProofBatchHandoffStep,
-    ),
-    {
-      step: "readiness-refresh",
-      planStep: releaseReadinessStep({
-        reason: "hosted-identity-handoff-terminal-refresh",
-        changedInputs: [
-          adminSpineTerminalBatchProofPath,
-          proofFreshnessAdminProofPath,
-          nextActionAdminProofPath,
-        ],
-        env: adminSpineTerminalBatchReadinessEvidenceEnv,
-      }),
-    },
-  ],
+  steps: devTestGameHostedIdentityHandoffPhaseSteps.map(
+    hostedIdentityHandoffPlanStep,
+  ),
 });
 
 export const devTestGameAdminSpinePlan = [
@@ -504,6 +471,36 @@ function terminalAdminProofBatchPlanForScript(script) {
       }),
     ),
   });
+}
+
+function hostedIdentityHandoffPlanStep(descriptor) {
+  if (descriptor.phaseLocalNextAction !== undefined) {
+    return {
+      step: descriptor.step,
+      planStep: phaseLocalNextActionStep(descriptor.phaseLocalNextAction),
+    };
+  }
+  if (descriptor.readinessReason !== undefined) {
+    return {
+      step: descriptor.step,
+      planStep: releaseReadinessStep({
+        reason: descriptor.readinessReason,
+        changedInputs: descriptor.changedInputs,
+        env: adminSpineTerminalBatchReadinessEvidenceEnv,
+      }),
+    };
+  }
+  if (descriptor.kind === "custom") {
+    return terminalProofGraphHandoffBatchPlanStep(descriptor);
+  }
+  return {
+    step: descriptor.step,
+    planStep: {
+      kind: descriptor.kind,
+      script: descriptor.script,
+    },
+    outputs: descriptor.artifacts,
+  };
 }
 
 function terminalProofGraphHandoffBatchPlanStep(descriptor) {
