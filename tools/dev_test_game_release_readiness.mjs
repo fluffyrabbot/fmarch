@@ -2,6 +2,10 @@ import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import {
+  isSha256Hex,
+  sha256File,
+} from "./dev_test_game_artifact_digest.mjs";
+import {
   assertLocalReadinessDependencyChecks,
   buildNextActionAdminSurfaceReadinessCheck,
   buildProofFreshnessAdminSurfaceReadinessCheck,
@@ -10480,6 +10484,7 @@ const optionalReadinessArtifactRegistry = Object.freeze([
     envVar: hostedIdentityEvidenceAdminProofArtifact.envVar,
     defaultPath: defaultHostedIdentityEvidenceAdminProofPaths,
     outputKeys: hostedIdentityEvidenceAdminProofArtifact.outputKeys,
+    filter: hostedIdentityEvidenceAdminProofMatchesCurrentRawEvidence,
   }),
   optionalReadinessArtifact({
     id: "hostedIdentityCompleteAdminProof",
@@ -10975,7 +10980,11 @@ export async function readOptionalReadinessArtifactDescriptor(
   const relativePath = path.relative(repoRoot, artifactPath);
   if (
     descriptor.filter !== undefined &&
-    !descriptor.filter(payload, { expectedGame, path: relativePath, artifact })
+    !(await descriptor.filter(payload, {
+      expectedGame,
+      path: relativePath,
+      artifact,
+    }))
   ) {
     if (optionalArtifactEnvUnset(override)) {
       return undefined;
@@ -11007,6 +11016,31 @@ export async function readOptionalReadinessArtifactDescriptor(
 
 function optionalArtifactEnvUnset(value) {
   return value === undefined || value.trim() === "";
+}
+
+export async function hostedIdentityEvidenceAdminProofMatchesCurrentRawEvidence(
+  proof,
+) {
+  if (proof?.generatedFrom?.rawEvidenceStatus !== "passed") {
+    return true;
+  }
+  const rawEvidencePath = proof.generatedFrom.rawEvidencePath;
+  const expectedSha256 = proof.generatedFrom.rawEvidenceSha256;
+  if (
+    typeof rawEvidencePath !== "string" ||
+    rawEvidencePath.trim() === "" ||
+    !isSha256Hex(expectedSha256)
+  ) {
+    return false;
+  }
+  try {
+    return (
+      (await sha256File(path.resolve(repoRoot, rawEvidencePath))) ===
+      expectedSha256
+    );
+  } catch {
+    return false;
+  }
 }
 
 function defaultOpsArtifactsMatchesCurrentProof(

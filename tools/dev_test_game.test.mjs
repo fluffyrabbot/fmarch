@@ -44,6 +44,7 @@ import {
   buildDevTestGameReleaseReadiness,
   devTestGameIdentityAdapterSeedCommandKinds,
   hostedAdminHandoffProofReadinessDecision,
+  hostedIdentityEvidenceAdminProofMatchesCurrentRawEvidence,
   markdownChecklist,
   readOptionalReadinessArtifactDescriptor,
   readReadinessArtifactMetadata,
@@ -56,6 +57,7 @@ import {
   validateDevTestGameProofGraphAdminProof,
   validateDevTestGameHostSetupProof,
 } from "./dev_test_game_release_readiness.mjs";
+import { sha256Hex } from "./dev_test_game_artifact_digest.mjs";
 import {
   completedGameHardeningSpineCycleId,
   completedGameEndgameRecoveryFeatureSpineRows,
@@ -5222,6 +5224,8 @@ test("dev test-game next-action derives one local recovery command from the mani
     hostedIdentityOperatorEvidencePacketPath;
   completedHostedIdentityOperatorProof.generatedFrom.rawEvidenceStatus =
     "passed";
+  completedHostedIdentityOperatorProof.generatedFrom.rawEvidenceSha256 =
+    "0".repeat(64);
   completedHostedIdentityOperatorProof.operatorReadinessPredicate = {
     status: "passed",
     identityAdapterPrerequisiteStatus: "passed",
@@ -9911,6 +9915,69 @@ test("readiness artifact loader filters mismatched defaults and rejects explicit
         })
       ).testCurrentGameFilter.run.game,
       "previous-game",
+    );
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("hosted identity proof loader rejects changed raw packet digests", async () => {
+  const directory = path.resolve(
+    "target/dev-test-game/hosted-identity-digest-filter-test",
+  );
+  const rawEvidencePath = path.join(directory, "raw-packet.json");
+  const proofPath = path.join(directory, "identity-proof.json");
+  const descriptor = {
+    id: "testHostedIdentityDigestFilter",
+    envVar: "FMARCH_TEST_HOSTED_IDENTITY_DIGEST_FILTER",
+    defaultPath: proofPath,
+    outputKeys: {
+      data: "testHostedIdentityDigestFilter",
+      path: "testHostedIdentityDigestFilterPath",
+      freshnessMetadata: "testHostedIdentityDigestFilterArtifact",
+    },
+    filter: hostedIdentityEvidenceAdminProofMatchesCurrentRawEvidence,
+  };
+  const firstPacket = '{"packet":"v1"}\n';
+  await mkdir(directory, { recursive: true });
+  await writeFile(rawEvidencePath, firstPacket);
+  await writeFile(
+    proofPath,
+    `${JSON.stringify({
+      generatedFrom: {
+        rawEvidencePath,
+        rawEvidenceStatus: "passed",
+        rawEvidenceSha256: sha256Hex(firstPacket),
+      },
+    })}\n`,
+  );
+  const now = new Date(Date.now() + 1_000);
+
+  try {
+    assert.equal(
+      (
+        await readOptionalReadinessArtifactDescriptor(descriptor, {
+          env: {},
+          now,
+        })
+      ).testHostedIdentityDigestFilter.generatedFrom.rawEvidenceSha256,
+      sha256Hex(firstPacket),
+    );
+    await writeFile(rawEvidencePath, '{"packet":"v2"}\n');
+    assert.equal(
+      await readOptionalReadinessArtifactDescriptor(descriptor, {
+        env: {},
+        now,
+      }),
+      undefined,
+    );
+    await assert.rejects(
+      () =>
+        readOptionalReadinessArtifactDescriptor(descriptor, {
+          env: { [descriptor.envVar]: proofPath },
+          now,
+        }),
+      /does not match the current readiness proof/,
     );
   } finally {
     await rm(directory, { recursive: true, force: true });

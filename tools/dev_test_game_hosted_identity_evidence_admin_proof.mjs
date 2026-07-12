@@ -394,6 +394,12 @@ export function hostedIdentityEvidenceAdminProofCase({
         status: source.hostedIdentityEvidence.status,
         rawEvidencePath: source.hostedIdentityEvidence.target.rawEvidencePath,
         rawEvidenceStatus: source.hostedIdentityEvidence.target.rawEvidenceStatus,
+        ...(source.hostedIdentityEvidence.target.rawEvidenceSha256 === undefined
+          ? {}
+          : {
+              rawEvidenceSha256:
+                source.hostedIdentityEvidence.target.rawEvidenceSha256,
+            }),
         checkIds: source.hostedIdentityEvidence.checks.map((check) => check.id),
         checkStatuses: Object.fromEntries(
           source.hostedIdentityEvidence.checks.map((check) => [

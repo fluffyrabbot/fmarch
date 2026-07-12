@@ -1,6 +1,7 @@
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import { isSha256Hex, sha256Hex } from "./dev_test_game_artifact_digest.mjs";
 import { repoRoot } from "./dev_test_game_spine_runner.mjs";
 import {
   buildDevTestGameIdentityAdapterContractPacket,
@@ -217,6 +218,9 @@ export async function buildDevTestGameHostedIdentityEvidence({
     target: {
       rawEvidencePath,
       rawEvidenceStatus: rawEvidence.status,
+      ...(rawEvidence.evidence?.sha256 === undefined
+        ? {}
+        : { rawEvidenceSha256: rawEvidence.evidence.sha256 }),
       placeholderFixturePath: hostedIdentityEvidencePlaceholderFixturePath,
       placeholderSchema: hostedIdentityEvidencePlaceholderSchema,
       expectedRoleSurfaceContract: hostedIdentityExpectedRoleSurfaceContract,
@@ -268,6 +272,12 @@ export function assertDevTestGameHostedIdentityEvidence(evidence) {
   }
   if (evidence.status === "blocked" && allPassed) {
     throw new Error("hosted identity evidence blocked without blocked checks");
+  }
+  if (
+    evidence.target?.rawEvidenceStatus === "passed" &&
+    !isSha256Hex(evidence.target?.rawEvidenceSha256)
+  ) {
+    throw new Error("hosted identity evidence is missing its raw packet digest");
   }
   if (
     evidence.hostedHandoffChecklist?.command !==
@@ -525,7 +535,8 @@ async function readRawHostedIdentityEvidence(rawEvidencePath) {
   }
   const resolved = path.resolve(repoRoot, rawEvidencePath);
   try {
-    const source = JSON.parse(await readFile(resolved, "utf8"));
+    const rawText = await readFile(resolved, "utf8");
+    const source = JSON.parse(rawText);
     const metadata = await stat(resolved);
     const schemaErrors = validateHostedIdentityEvidencePlaceholder(source);
     if (schemaErrors.length > 0) {
@@ -543,6 +554,7 @@ async function readRawHostedIdentityEvidence(rawEvidencePath) {
         path: path.relative(repoRoot, resolved),
         mtime: metadata.mtime.toISOString(),
         sizeBytes: metadata.size,
+        sha256: sha256Hex(rawText),
       },
     };
   } catch (error) {

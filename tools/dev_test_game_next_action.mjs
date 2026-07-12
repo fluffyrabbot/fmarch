@@ -2,6 +2,10 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import {
+  isSha256Hex,
+  sha256File,
+} from "./dev_test_game_artifact_digest.mjs";
+import {
   assertDevTestGameSpineManifest,
   assertProductionFeatureProvenanceSummary,
   proofFreshnessAdminProofCommand,
@@ -1161,14 +1165,20 @@ export async function writeDevTestGameNextAction({
     await readOptionalJson(absoluteFrontendReadinessSummaryPath);
   const hostedIdentityProgressionProofs =
     await readHostedIdentityProgressionProofs();
-  const hostedIdentityOperatorProof = await readOptionalJson(
+  const hostedIdentityOperatorProofCandidate = await readOptionalJson(
     path.resolve(
       repoRoot,
       process.env.FMARCH_DEV_TEST_GAME_HOSTED_IDENTITY_OPERATOR_ADMIN_PROOF ??
         process.env.FMARCH_DEV_TEST_GAME_HOSTED_IDENTITY_EVIDENCE_ADMIN_PROOF ??
-        devTestGameHostedIdentityOperatorAdminProofPath,
+      devTestGameHostedIdentityOperatorAdminProofPath,
     ),
   );
+  const hostedIdentityOperatorProof =
+    await hostedIdentityOperatorProofMatchesCurrentPacket(
+      hostedIdentityOperatorProofCandidate,
+    )
+      ? hostedIdentityOperatorProofCandidate
+      : null;
   const spineManifestSource = path.relative(repoRoot, absoluteManifestPath);
   const releaseReadinessChecklistSource = path.relative(
     repoRoot,
@@ -1508,8 +1518,24 @@ function hostedIdentityOperatorProofIsCurrent(proof) {
     proof.operatorReadinessPredicate?.acceptedRawEvidencePathKind ===
       "operator-provided" &&
     proof.operatorReadinessPredicate?.acceptedRawEvidencePath ===
-      proof.generatedFrom.rawEvidencePath
+      proof.generatedFrom.rawEvidencePath &&
+    isSha256Hex(proof.generatedFrom?.rawEvidenceSha256)
   );
+}
+
+async function hostedIdentityOperatorProofMatchesCurrentPacket(proof) {
+  if (!hostedIdentityOperatorProofIsCurrent(proof)) {
+    return false;
+  }
+  try {
+    return (
+      (await sha256File(
+        path.resolve(repoRoot, proof.generatedFrom.rawEvidencePath),
+      )) === proof.generatedFrom.rawEvidenceSha256
+    );
+  } catch {
+    return false;
+  }
 }
 
 function hostedIdentityProgressionBuildableForChecklist({

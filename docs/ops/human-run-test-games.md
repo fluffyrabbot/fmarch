@@ -315,6 +315,10 @@ npm run test:dev-test-game-next-action:hosted-identity
 
 The selector rejects fixture-backed, path-mismatched, or incomplete operator
 proofs and returns to the operator predicate recovery command.
+Readable hosted packets are content-addressed with a SHA-256 recorded in the
+evidence and admin proof. Readiness skips a default proof when the current
+packet digest no longer matches; an explicitly supplied stale proof fails the
+lane instead of being silently promoted.
 The admin spine terminal batch receipt records the default next-action blocker
 and the opt-in hosted-identity predicate as one `next-action-sequence-handoff`
 pair, while still keeping their source artifacts separate:
