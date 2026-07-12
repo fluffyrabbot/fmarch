@@ -5212,6 +5212,63 @@ test("dev test-game next-action derives one local recovery command from the mani
       .hostedIdentityProofGraphEdges,
     hostedIdentityProofGraphEdges,
   );
+  const completedHostedIdentityOperatorProof =
+    hostedIdentityCompleteAdminProofFixture();
+  completedHostedIdentityOperatorProof.generatedFrom.hostedIdentityEvidence =
+    devTestGameHostedIdentityOperatorEvidencePath;
+  completedHostedIdentityOperatorProof.generatedFrom.proofArtifact =
+    devTestGameHostedIdentityOperatorAdminProofPath;
+  completedHostedIdentityOperatorProof.generatedFrom.rawEvidencePath =
+    hostedIdentityOperatorEvidencePacketPath;
+  completedHostedIdentityOperatorProof.generatedFrom.rawEvidenceStatus =
+    "passed";
+  completedHostedIdentityOperatorProof.operatorReadinessPredicate = {
+    status: "passed",
+    identityAdapterPrerequisiteStatus: "passed",
+    acceptedRawEvidencePathKind: "operator-provided",
+    acceptedRawEvidencePath: hostedIdentityOperatorEvidencePacketPath,
+  };
+  const hostedIdentityPacketIntakeAction = buildDevTestGameNextAction(
+    freshManifest,
+    {
+      generatedAt: "2026-06-26T00:00:01.000Z",
+      sequenceStage: devTestGameHostedIdentitySequenceStage,
+      opsArtifacts: devTestGameOpsArtifactsFixture(),
+      raceCoverage: devTestGameRaceCoverageFixture(),
+      proofGraph: hostedIdentityProofGraphFixture(),
+      hostedIdentityProgressionProofs: allProgressionProofs,
+      hostedIdentityOperatorProof: completedHostedIdentityOperatorProof,
+      releaseReadinessChecklist: devTestGameReleaseReadinessChecklistFixture({
+        includeOpsArtifactBundleCheck: true,
+        unproven: [
+          {
+            id: "hosted-production-identity",
+            status: "unproven",
+            requiredEvidence: "Hosted account lifecycle",
+          },
+        ],
+      }),
+    },
+  );
+  assertDevTestGameNextAction(hostedIdentityPacketIntakeAction);
+  assert.equal(
+    hostedIdentityPacketIntakeAction.nextAction.command,
+    `npm run ${devTestGameHostedIdentityEvidenceCommand}`,
+  );
+  assert.equal(
+    hostedIdentityPacketIntakeAction.nextAction.unproven.proofTarget,
+    devTestGameHostedIdentityEvidencePath,
+  );
+  assert.equal(
+    hostedIdentityPacketIntakeAction.nextAction.unproven
+      .hostedIdentityProgression,
+    undefined,
+  );
+  assert.equal(
+    hostedIdentityPacketIntakeAction.nextAction.unproven
+      .hostedIdentityFamilyBatch,
+    undefined,
+  );
   assert.deepEqual(
     hostedIdentityStageAction.nextAction.unproven.hostedHandoffChecklist
       .operatorProofDrilldowns,

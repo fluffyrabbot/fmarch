@@ -157,9 +157,11 @@ import {
 } from "./dev_test_game_hosted_handoff_proof_cases.mjs";
 import {
   devTestGameHostedIdentityOperatorAdminProofPath,
+  devTestGameHostedIdentityOperatorEvidencePath,
   devTestGameHostedIdentityProgressionAdminProofBatchCommand,
   hostedIdentityEvidenceFamilyProgressionCases,
   hostedIdentityEvidenceProgressionAdminProofPath,
+  hostedIdentityEvidenceRedactedPassFixturePath,
 } from "./dev_test_game_hosted_identity_evidence_cases.mjs";
 import {
   hostedIdentityProofGraphDependencyFromGraph,
@@ -243,6 +245,7 @@ export function buildDevTestGameNextAction(
     frontendReadinessSummary = null,
     frontendReadinessSummarySource = frontendReadinessSummaryPath,
     hostedIdentityProgressionProofs = {},
+    hostedIdentityOperatorProof = null,
   } = {},
 ) {
   const manifest = assertDevTestGameSpineManifest(spineManifest);
@@ -303,7 +306,10 @@ export function buildDevTestGameNextAction(
     sourceTargetsByCheckId,
     proofGraph: graph,
     hostedIdentityOperatorBuildable:
-      hostedIdentityOperatorBuildableForManifest(manifest, { sequenceStage }),
+      hostedIdentityOperatorBuildableForManifest(manifest, {
+        sequenceStage,
+        operatorProof: hostedIdentityOperatorProof,
+      }),
     hostedIdentityProgressionProofs,
   });
   const localReadinessDependencyCandidates =
@@ -1155,6 +1161,14 @@ export async function writeDevTestGameNextAction({
     await readOptionalJson(absoluteFrontendReadinessSummaryPath);
   const hostedIdentityProgressionProofs =
     await readHostedIdentityProgressionProofs();
+  const hostedIdentityOperatorProof = await readOptionalJson(
+    path.resolve(
+      repoRoot,
+      process.env.FMARCH_DEV_TEST_GAME_HOSTED_IDENTITY_OPERATOR_ADMIN_PROOF ??
+        process.env.FMARCH_DEV_TEST_GAME_HOSTED_IDENTITY_EVIDENCE_ADMIN_PROOF ??
+        devTestGameHostedIdentityOperatorAdminProofPath,
+    ),
+  );
   const spineManifestSource = path.relative(repoRoot, absoluteManifestPath);
   const releaseReadinessChecklistSource = path.relative(
     repoRoot,
@@ -1189,6 +1203,7 @@ export async function writeDevTestGameNextAction({
     frontendReadinessSummary,
     frontendReadinessSummarySource,
     hostedIdentityProgressionProofs,
+    hostedIdentityOperatorProof,
   });
   await mkdir(path.dirname(nextActionJsonPath), { recursive: true });
   await writeFile(nextActionJsonPath, `${JSON.stringify(evidence, null, 2)}\n`);
@@ -1440,7 +1455,7 @@ export function releaseReadinessFeatureTargetKindPriority(featureTargetKind) {
 
 function hostedIdentityOperatorBuildableForManifest(
   manifest,
-  { sequenceStage },
+  { sequenceStage, operatorProof = null },
 ) {
   if (sequenceStage !== devTestGameHostedIdentitySequenceStage) {
     return null;
@@ -1449,6 +1464,9 @@ function hostedIdentityOperatorBuildableForManifest(
     manifest.commands?.identityOperator?.script !==
     devTestGameHostedIdentityOperatorSpineScript
   ) {
+    return null;
+  }
+  if (hostedIdentityOperatorProofIsCurrent(operatorProof)) {
     return null;
   }
   return {
@@ -1463,6 +1481,35 @@ function hostedIdentityOperatorBuildableForManifest(
     proofBoundary:
       "Opt-in local operator predicate proof. The command proves that a non-fixture hosted identity packet path can clear the hosted-production-identity readiness item over the existing role-surface adapter; it does not prove live hosted account/session/invite traffic, release readiness, or production readiness.",
   };
+}
+
+function hostedIdentityOperatorProofIsCurrent(proof) {
+  return (
+    proof?.version === 1 &&
+    proof.proof === "dev-test-game-hosted-identity-evidence-admin-proof" &&
+    proof.status === "passed" &&
+    proof.releaseReady === false &&
+    proof.productionReady === false &&
+    proof.scope ===
+      "local-dev-test-game-hosted-identity-evidence-admin-surface" &&
+    proof.generatedFrom?.hostedIdentityEvidence ===
+      devTestGameHostedIdentityOperatorEvidencePath &&
+    proof.generatedFrom?.proofArtifact ===
+      devTestGameHostedIdentityOperatorAdminProofPath &&
+    proof.generatedFrom?.status === "passed" &&
+    proof.generatedFrom?.rawEvidenceStatus === "passed" &&
+    typeof proof.generatedFrom?.rawEvidencePath === "string" &&
+    proof.generatedFrom.rawEvidencePath.trim() !== "" &&
+    proof.generatedFrom.rawEvidencePath !==
+      hostedIdentityEvidenceRedactedPassFixturePath &&
+    proof.operatorReadinessPredicate?.status === "passed" &&
+    proof.operatorReadinessPredicate?.identityAdapterPrerequisiteStatus ===
+      "passed" &&
+    proof.operatorReadinessPredicate?.acceptedRawEvidencePathKind ===
+      "operator-provided" &&
+    proof.operatorReadinessPredicate?.acceptedRawEvidencePath ===
+      proof.generatedFrom.rawEvidencePath
+  );
 }
 
 function hostedIdentityProgressionBuildableForChecklist({
