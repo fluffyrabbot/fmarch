@@ -10654,6 +10654,7 @@ const optionalReadinessArtifactRegistry = Object.freeze([
       freshnessMetadata: "hostedEvidenceLaneArtifact",
     },
     validator: validateDevTestGameHostedEvidenceLane,
+    filter: hostedMatrixArtifactMatchesCurrentRawEvidence,
     ignoreInvalidDefault: true,
   }),
   optionalReadinessArtifact({
@@ -10723,6 +10724,7 @@ const optionalReadinessArtifactRegistry = Object.freeze([
       path: "realHostedMatrixRawCapturePath",
       freshnessMetadata: "realHostedMatrixRawCaptureArtifact",
     },
+    filter: hostedMatrixArtifactMatchesCurrentRawEvidence,
   }),
   optionalReadinessArtifact({
     id: "hostedEvidenceLaneDemoProof",
@@ -11037,6 +11039,28 @@ export async function hostedIdentityEvidenceAdminProofMatchesCurrentRawEvidence(
     return (
       (await sha256File(path.resolve(repoRoot, rawEvidencePath))) ===
       expectedSha256
+    );
+  } catch {
+    return false;
+  }
+}
+
+export async function hostedMatrixArtifactMatchesCurrentRawEvidence(artifact) {
+  const target = artifact?.target;
+  if (target?.rawEvidenceStatus !== "passed") {
+    return true;
+  }
+  if (
+    typeof target.rawEvidencePath !== "string" ||
+    target.rawEvidencePath.trim() === "" ||
+    !isSha256Hex(target.rawEvidenceSha256)
+  ) {
+    return false;
+  }
+  try {
+    return (
+      (await sha256File(path.resolve(repoRoot, target.rawEvidencePath))) ===
+      target.rawEvidenceSha256
     );
   } catch {
     return false;

@@ -252,6 +252,9 @@ tokens, and session cookies, and `capture.retention.policy`. A passed intake can
 advance hosted target preflight to external hosted-matrix normalization, but it
 still keeps `releaseReady` and `productionReady` false until the broader hosted
 deployment, operations, rollback, and release-readiness evidence exists.
+The raw-capture intake, target preflight, and hosted evidence lane carry a
+SHA-256 of the raw packet. If the packet changes, rerun capture, preflight, and
+the lane; readiness will not reuse the older hosted proof.
 
 The hosted identity evidence lane accepts a redacted operator packet through
 `FMARCH_HOSTED_IDENTITY_EVIDENCE_PATH`. To inspect the packet shape and admin

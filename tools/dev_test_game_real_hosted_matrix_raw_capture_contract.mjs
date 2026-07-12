@@ -1,6 +1,7 @@
 export {
   devTestGameRealHostedMatrixRawCapturePath,
 } from "./dev_test_game_adjacent_artifact_paths.mjs";
+import { isSha256Hex } from "./dev_test_game_artifact_digest.mjs";
 export const devTestGameRealHostedMatrixRawCaptureCommand =
   "test:dev-test-game-real-hosted-matrix-raw-capture";
 
@@ -39,7 +40,8 @@ export function assertDevTestGameRealHostedMatrixRawCapture(proof) {
     proof.status === "passed" &&
     (blockedCheckIds.length !== 0 ||
       proof.target.rawEvidenceFixture !== false ||
-      proof.target.rawEvidenceSyntheticExternalTarget !== false)
+      proof.target.rawEvidenceSyntheticExternalTarget !== false ||
+      !isSha256Hex(proof.target.rawEvidenceSha256))
   ) {
     throw new Error("real hosted matrix raw capture passed with blocked evidence");
   }

@@ -1,6 +1,7 @@
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import { sha256Hex } from "./dev_test_game_artifact_digest.mjs";
 import {
   assertDevTestGameHostedMatrixRawEvidence,
   defaultHostedMatrixRawGroupId,
@@ -198,6 +199,9 @@ export async function buildDevTestGameHostedTargetPreflight({
       groupId,
       rawEvidencePath,
       rawEvidenceStatus: rawEvidence.status,
+      ...(rawEvidence.evidence?.sha256 === undefined
+        ? {}
+        : { rawEvidenceSha256: rawEvidence.evidence.sha256 }),
       rawEvidenceSyntheticExternalTarget:
         rawEvidence.syntheticExternalTarget === true,
       rawEvidenceFixture: rawEvidence.fixtureEvidence === true,
@@ -355,7 +359,8 @@ async function readRawEvidence({ rawEvidencePath, frontendBaseUrl, apiBaseUrl, g
   }
   const resolved = path.resolve(repoRoot, rawEvidencePath);
   try {
-    const source = JSON.parse(await readFile(resolved, "utf8"));
+    const rawText = await readFile(resolved, "utf8");
+    const source = JSON.parse(rawText);
     if (frontendBaseUrl !== null && apiBaseUrl !== null) {
       assertDevTestGameHostedMatrixRawEvidence(source, {
         frontendBaseUrl,
@@ -374,6 +379,7 @@ async function readRawEvidence({ rawEvidencePath, frontendBaseUrl, apiBaseUrl, g
         path: path.relative(repoRoot, resolved),
         mtime: metadata.mtime.toISOString(),
         sizeBytes: metadata.size,
+        sha256: sha256Hex(rawText),
       },
     };
   } catch (error) {

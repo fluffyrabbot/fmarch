@@ -2,6 +2,10 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import {
+  isSha256Hex,
+  sha256File,
+} from "./dev_test_game_artifact_digest.mjs";
+import {
   assertDevTestGameHostedConcurrentRaceMatrixEvidence,
   devTestGameHostedConcurrentRaceMatrixPath,
 } from "./dev_test_game_hosted_concurrent_race_matrix.mjs";
@@ -31,6 +35,7 @@ export function buildDevTestGameHostedMatrixExternalEvidence({
   frontendBaseUrl,
   apiBaseUrl,
   allowSyntheticDemo = false,
+  rawEvidenceSha256 = null,
 } = {}) {
   const sourceMatrix = assertDevTestGameHostedConcurrentRaceMatrixEvidence(matrix);
   const source = assertRawHostedMatrixEvidence(rawEvidence, {
@@ -85,6 +90,9 @@ export function buildDevTestGameHostedMatrixExternalEvidence({
       hostedConcurrentRaceMatrixGeneratedAt: sourceMatrix.generatedAt,
       rawEvidence: rawEvidenceSource,
       rawEvidenceGeneratedAt: source.generatedAt ?? null,
+      ...(rawEvidenceSha256 === null
+        ? {}
+        : { rawEvidenceSha256 }),
       rawEvidenceSyntheticExternalTarget,
       rawEvidenceFixtureEvidence,
     },
@@ -133,6 +141,8 @@ export function assertDevTestGameHostedMatrixExternalEvidence(
     evidence.staleConflictMessages !== true ||
     evidence.rawRoleCredentialsRedacted !== true ||
     !["synthetic-demo", "raw-hosted-target"].includes(evidence.sourceMode) ||
+    (evidence.generatedFrom?.rawEvidenceSha256 !== undefined &&
+      !isSha256Hex(evidence.generatedFrom.rawEvidenceSha256)) ||
     typeof evidence.generatedFrom?.rawEvidenceSyntheticExternalTarget !== "boolean" ||
     !Array.isArray(evidence.observations) ||
     evidence.observations.length < cellIds.length
@@ -189,6 +199,9 @@ async function main() {
     readJson(path.join(repoRoot, devTestGameHostedConcurrentRaceMatrixPath)),
     readJson(path.resolve(repoRoot, rawEvidencePath)),
   ]);
+  const rawEvidenceSha256 = await sha256File(
+    path.resolve(repoRoot, rawEvidencePath),
+  );
   const evidence = buildDevTestGameHostedMatrixExternalEvidence({
     matrix,
     rawEvidence,
@@ -196,6 +209,7 @@ async function main() {
     apiBaseUrl,
     groupId,
     rawEvidenceSource: path.relative(repoRoot, path.resolve(repoRoot, rawEvidencePath)),
+    rawEvidenceSha256,
   });
   const absoluteOutputPath = path.resolve(repoRoot, outputPath);
   await mkdir(path.dirname(absoluteOutputPath), { recursive: true });

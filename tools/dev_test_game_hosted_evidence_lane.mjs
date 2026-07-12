@@ -64,6 +64,7 @@ export async function runDevTestGameHostedEvidenceLane({
     apiBaseUrl: preflight.target.apiBaseUrl,
     groupId: preflight.target.groupId,
     rawEvidenceSource: preflight.target.rawEvidencePath,
+    rawEvidenceSha256: preflight.target.rawEvidenceSha256,
   });
   await writeJson(externalEvidencePath, externalEvidence);
   const lane = buildPassedHostedEvidenceLane({

@@ -45,6 +45,7 @@ import {
   devTestGameIdentityAdapterSeedCommandKinds,
   hostedAdminHandoffProofReadinessDecision,
   hostedIdentityEvidenceAdminProofMatchesCurrentRawEvidence,
+  hostedMatrixArtifactMatchesCurrentRawEvidence,
   markdownChecklist,
   readOptionalReadinessArtifactDescriptor,
   readReadinessArtifactMetadata,
@@ -9984,6 +9985,69 @@ test("hosted identity proof loader rejects changed raw packet digests", async ()
   }
 });
 
+test("hosted matrix readiness loader rejects changed capture digests", async () => {
+  const directory = path.resolve(
+    "target/dev-test-game/hosted-matrix-digest-filter-test",
+  );
+  const rawEvidencePath = path.join(directory, "raw-capture.json");
+  const proofPath = path.join(directory, "raw-capture-proof.json");
+  const descriptor = {
+    id: "testHostedMatrixDigestFilter",
+    envVar: "FMARCH_TEST_HOSTED_MATRIX_DIGEST_FILTER",
+    defaultPath: proofPath,
+    outputKeys: {
+      data: "testHostedMatrixDigestFilter",
+      path: "testHostedMatrixDigestFilterPath",
+      freshnessMetadata: "testHostedMatrixDigestFilterArtifact",
+    },
+    filter: hostedMatrixArtifactMatchesCurrentRawEvidence,
+  };
+  const firstCapture = '{"capture":"v1"}\n';
+  await mkdir(directory, { recursive: true });
+  await writeFile(rawEvidencePath, firstCapture);
+  await writeFile(
+    proofPath,
+    `${JSON.stringify({
+      target: {
+        rawEvidencePath,
+        rawEvidenceStatus: "passed",
+        rawEvidenceSha256: sha256Hex(firstCapture),
+      },
+    })}\n`,
+  );
+  const now = new Date(Date.now() + 1_000);
+
+  try {
+    assert.equal(
+      (
+        await readOptionalReadinessArtifactDescriptor(descriptor, {
+          env: {},
+          now,
+        })
+      ).testHostedMatrixDigestFilter.target.rawEvidenceSha256,
+      sha256Hex(firstCapture),
+    );
+    await writeFile(rawEvidencePath, '{"capture":"v2"}\n');
+    assert.equal(
+      await readOptionalReadinessArtifactDescriptor(descriptor, {
+        env: {},
+        now,
+      }),
+      undefined,
+    );
+    await assert.rejects(
+      () =>
+        readOptionalReadinessArtifactDescriptor(descriptor, {
+          env: { [descriptor.envVar]: proofPath },
+          now,
+        }),
+      /does not match the current readiness proof/,
+    );
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("host confirmation click recovery requires a newly settled expected status", () => {
   const previousCommandStatus = {
     state: "ack",
@@ -19692,6 +19756,7 @@ test("session card and markdown include role credential URLs and tokens", async 
     frontendBaseUrl: laneFrontendBaseUrl,
     apiBaseUrl: laneApiBaseUrl,
   });
+  const laneRawEvidenceBytes = `${JSON.stringify(laneRawEvidence, null, 2)}\n`;
   await mkdir("target/dev-test-game", { recursive: true });
   await Promise.all([
     writeFile(
@@ -19700,7 +19765,7 @@ test("session card and markdown include role credential URLs and tokens", async 
     ),
     writeFile(
       devTestGameHostedMatrixRawEvidencePath,
-      `${JSON.stringify(laneRawEvidence, null, 2)}\n`,
+      laneRawEvidenceBytes,
     ),
   ]);
   const passedLaneExternalEvidencePath =
@@ -19757,6 +19822,7 @@ test("session card and markdown include role credential URLs and tokens", async 
     hostedConcurrentRaceMatrixGeneratedAt: hostedMatrix.generatedAt,
     rawEvidence: devTestGameHostedMatrixRawEvidencePath,
     rawEvidenceGeneratedAt: laneRawEvidence.generatedAt,
+    rawEvidenceSha256: sha256Hex(laneRawEvidenceBytes),
     rawEvidenceSyntheticExternalTarget: false,
     rawEvidenceFixtureEvidence: false,
   });
@@ -28541,6 +28607,7 @@ function realHostedMatrixRawCaptureFixture({ status = "blocked" } = {}) {
       groupId: "replacement-race-reload",
       rawEvidencePath,
       rawEvidenceStatus: "passed",
+      ...(passed ? { rawEvidenceSha256: "0".repeat(64) } : {}),
       rawEvidenceSyntheticExternalTarget: false,
       rawEvidenceFixture: !passed,
     },
