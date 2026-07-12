@@ -5269,6 +5269,63 @@ test("dev test-game next-action derives one local recovery command from the mani
       .hostedIdentityFamilyBatch,
     undefined,
   );
+  const invalidHostedIdentityOperatorProofCases = [
+    {
+      label: "fixture-backed raw evidence path",
+      mutate(proof) {
+        proof.generatedFrom.rawEvidencePath =
+          hostedIdentityEvidenceRedactedPassFixturePath;
+      },
+    },
+    {
+      label: "mismatched operator evidence artifact",
+      mutate(proof) {
+        proof.generatedFrom.hostedIdentityEvidence =
+          devTestGameHostedIdentityEvidencePath;
+      },
+    },
+    {
+      label: "incomplete operator readiness predicate",
+      mutate(proof) {
+        proof.operatorReadinessPredicate.status = "blocked";
+      },
+    },
+  ];
+  for (const { label, mutate } of invalidHostedIdentityOperatorProofCases) {
+    const invalidOperatorProof = JSON.parse(
+      JSON.stringify(completedHostedIdentityOperatorProof),
+    );
+    mutate(invalidOperatorProof);
+    const recoveryAction = buildDevTestGameNextAction(freshManifest, {
+      generatedAt: "2026-06-26T00:00:01.000Z",
+      sequenceStage: devTestGameHostedIdentitySequenceStage,
+      opsArtifacts: devTestGameOpsArtifactsFixture(),
+      raceCoverage: devTestGameRaceCoverageFixture(),
+      proofGraph: hostedIdentityProofGraphFixture(),
+      hostedIdentityProgressionProofs: allProgressionProofs,
+      hostedIdentityOperatorProof: invalidOperatorProof,
+      releaseReadinessChecklist: devTestGameReleaseReadinessChecklistFixture({
+        includeOpsArtifactBundleCheck: true,
+        unproven: [
+          {
+            id: "hosted-production-identity",
+            status: "unproven",
+            requiredEvidence: "Hosted account lifecycle",
+          },
+        ],
+      }),
+    });
+    assert.equal(
+      recoveryAction.nextAction.command,
+      devTestGameHostedIdentityOperatorSpineCommand,
+      `${label} must keep the operator recovery command`,
+    );
+    assert.equal(
+      recoveryAction.nextAction.unproven.proofTarget,
+      devTestGameHostedIdentityOperatorAdminProofPath,
+      `${label} must keep the operator proof target`,
+    );
+  }
   assert.deepEqual(
     hostedIdentityStageAction.nextAction.unproven.hostedHandoffChecklist
       .operatorProofDrilldowns,

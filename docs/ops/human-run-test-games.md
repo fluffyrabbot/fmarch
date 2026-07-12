@@ -303,6 +303,18 @@ seeded admin role URL, and records that the hosted-production-identity
 readiness item clears only for an operator-provided packet path. It is still a
 local predicate proof and does not prove live hosted identity traffic, release
 readiness, or production readiness.
+When the explicit hosted-identity next-action lane is run, this predicate is a
+one-way handoff: before the operator proof is current it selects the local
+operator predicate command; after a current operator proof it selects the real
+hosted packet-intake command instead of rerunning the predicate. Exercise that
+selector with:
+
+```sh
+npm run test:dev-test-game-next-action:hosted-identity
+```
+
+The selector rejects fixture-backed, path-mismatched, or incomplete operator
+proofs and returns to the operator predicate recovery command.
 The admin spine terminal batch receipt records the default next-action blocker
 and the opt-in hosted-identity predicate as one `next-action-sequence-handoff`
 pair, while still keeping their source artifacts separate:
