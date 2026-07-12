@@ -59,6 +59,8 @@ const registrationCredentials = Object.freeze({
   password: `registered-account-password-${game}`,
 });
 const frontendRequire = createRequire(path.join(frontendRoot, "package.json"));
+const deliveryIntentPollTimeoutMs = 5000;
+const deliveryIntentPollIntervalMs = 100;
 
 if (!databaseUrl) {
   throw new Error(
@@ -2147,7 +2149,10 @@ async function retryFailedDelivery({ apiBaseUrl, deliveryId, expectedKind }) {
 }
 
 async function retryFailedDeliveryForCredential({ apiBaseUrl, credential, expectedKind }) {
-  const delivery = await storedDeliveryIntent(hashSessionToken(credential));
+  const delivery = await waitForRetryableDeliveryIntent({
+    credentialHash: hashSessionToken(credential),
+    expectedKind,
+  });
   if (
     delivery.deliveryKind !== expectedKind ||
     delivery.status !== "retryable_failed" ||
@@ -2162,6 +2167,33 @@ async function retryFailedDeliveryForCredential({ apiBaseUrl, credential, expect
     deliveryId: delivery.deliveryId,
     expectedKind,
   });
+}
+
+async function waitForRetryableDeliveryIntent({ credentialHash, expectedKind }) {
+  const deadline = Date.now() + deliveryIntentPollTimeoutMs;
+  let lastDelivery;
+  let lastError;
+  while (Date.now() <= deadline) {
+    try {
+      lastDelivery = await storedDeliveryIntent(credentialHash);
+      if (
+        lastDelivery.deliveryKind === expectedKind &&
+        lastDelivery.status === "retryable_failed" &&
+        lastDelivery.providerId === "local-deterministic" &&
+        lastDelivery.outcomeKind === "retryable_failure" &&
+        lastDelivery.outcomeCode === "local_transient"
+      ) {
+        return lastDelivery;
+      }
+    } catch (error) {
+      lastError = error;
+    }
+    await delay(deliveryIntentPollIntervalMs);
+  }
+  if (lastDelivery !== undefined) {
+    return lastDelivery;
+  }
+  throw lastError ?? new Error("delivery intent was not persisted");
 }
 
 async function disableAccount({ apiBaseUrl, accountId }) {
