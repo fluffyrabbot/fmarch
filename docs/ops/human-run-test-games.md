@@ -454,6 +454,10 @@ issuance check clicks the seeded host console's player-invite control, verifies
 the stored local game scope, and redeems that invite through the existing player
 role URL. The live-stack proof also verifies the same player-invite panel
 retargets from the current host-console slot projection after replacement.
+Direct identity spine invocations refresh the existing ops and seed/demo spine
+artifacts before consuming them in identity readiness. The full live spine has
+already produced those prerequisites, so its embedded identity phase keeps the
+identity-only plan and does not repeat those producers.
 
 The local backup/restore drill for this spine is:
 

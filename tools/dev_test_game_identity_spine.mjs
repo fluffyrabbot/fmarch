@@ -1,6 +1,8 @@
 import { pathToFileURL } from "node:url";
+import { devTestGameOpsSpinePlan } from "./dev_test_game_ops_spine.mjs";
 import { readinessEvidenceEnv } from "./dev_test_game_ops_artifact_dependencies.mjs";
 import { releaseReadinessStep } from "./dev_test_game_spine_readiness_steps.mjs";
+import { devTestGameSeedFixtureSpinePlan } from "./dev_test_game_seed_fixture_spine.mjs";
 import { runSpinePlan } from "./dev_test_game_spine_runner.mjs";
 import {
   devTestGameProofGraphPath,
@@ -85,18 +87,37 @@ export const devTestGameIdentityOperatorSpinePlan = [
   }),
 ];
 
+const devTestGameIdentityStandalonePrerequisitePlan = [
+  ...devTestGameOpsSpinePlan,
+  ...devTestGameSeedFixtureSpinePlan,
+];
+
+export const devTestGameIdentityStandaloneSpinePlan = [
+  ...devTestGameIdentityStandalonePrerequisitePlan,
+  ...devTestGameIdentitySpinePlan,
+];
+
+export const devTestGameIdentityOperatorStandaloneSpinePlan = [
+  ...devTestGameIdentityStandalonePrerequisitePlan,
+  ...devTestGameIdentityOperatorSpinePlan,
+];
+
 export function devTestGameIdentitySpinePlanForArgs(
   args = process.argv.slice(2),
+  { standalone = false } = {},
 ) {
-  return args.includes("--operator")
+  const identityPlan = args.includes("--operator")
     ? devTestGameIdentityOperatorSpinePlan
     : devTestGameIdentitySpinePlan;
+  return standalone
+    ? [...devTestGameIdentityStandalonePrerequisitePlan, ...identityPlan]
+    : identityPlan;
 }
 
-export async function runDevTestGameIdentitySpine() {
-  await runSpinePlan(devTestGameIdentitySpinePlanForArgs());
+export async function runDevTestGameIdentitySpine({ standalone = false } = {}) {
+  await runSpinePlan(devTestGameIdentitySpinePlanForArgs(undefined, { standalone }));
 }
 
 if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
-  await runDevTestGameIdentitySpine();
+  await runDevTestGameIdentitySpine({ standalone: true });
 }

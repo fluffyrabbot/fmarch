@@ -315,8 +315,11 @@ import {
   seedReadinessEnv,
 } from "./dev_test_game_backup_restore_spine.mjs";
 import {
+  devTestGameIdentityOperatorStandaloneSpinePlan,
   devTestGameIdentityOperatorSpinePlan,
+  devTestGameIdentityStandaloneSpinePlan,
   devTestGameIdentitySpinePlan,
+  devTestGameIdentitySpinePlanForArgs,
   hostedIdentityOperatorProofGraphDependencyPrecondition,
   identityOperatorReadinessEnv,
   identityReadinessEnv,
@@ -1726,6 +1729,30 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
       "tools/dev_test_game_hosted_identity_operator_admin_proof.mjs",
       devTestGameReleaseReadinessScript,
     ],
+  );
+  assert.deepEqual(
+    devTestGameIdentityStandaloneSpinePlan,
+    [
+      ...devTestGameOpsSpinePlan,
+      ...devTestGameSeedFixtureSpinePlan,
+      ...devTestGameIdentitySpinePlan,
+    ],
+  );
+  assert.deepEqual(
+    devTestGameIdentityOperatorStandaloneSpinePlan,
+    [
+      ...devTestGameOpsSpinePlan,
+      ...devTestGameSeedFixtureSpinePlan,
+      ...devTestGameIdentityOperatorSpinePlan,
+    ],
+  );
+  assert.deepEqual(
+    devTestGameIdentitySpinePlanForArgs([], { standalone: true }),
+    devTestGameIdentityStandaloneSpinePlan,
+  );
+  assert.deepEqual(
+    devTestGameIdentitySpinePlanForArgs(["--operator"], { standalone: true }),
+    devTestGameIdentityOperatorStandaloneSpinePlan,
   );
   const identityOperatorBatchIndex = devTestGameIdentityOperatorSpinePlan.findIndex(
     (step) =>
