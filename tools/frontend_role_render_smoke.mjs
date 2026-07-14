@@ -187,7 +187,7 @@ function surfaceScenarios() {
       path: "/",
       render: "renderBoardSurface",
       surfaceTestId: "board-surface",
-      requiredText: ["Active games", "Midsummer Invitational"],
+      requiredText: ["Games", "Mafiascum game"],
       requiredSelectors: ['[data-testid="game-action-midsummer-player"]'],
     },
     {
@@ -219,7 +219,7 @@ function surfaceScenarios() {
       requiredSelectors: [
         '[data-testid="player-role-card"][data-role-state="unassigned"]',
         '[data-testid="player-private-link-notification-1"]',
-        '[data-testid="thread-post-media-receipt-442"][data-media-variant="tablet"]',
+        '[data-testid="thread-post-media-eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"][data-media-variant="tablet"]',
       ],
       thumbZones: roleById.get("player")?.thumbZones ?? [],
     },
@@ -245,7 +245,7 @@ function surfaceScenarios() {
       requiredSelectors: [
         '[data-testid="player-channel-private:role_pm:slot-7"][aria-current="page"]',
         '[data-testid="player-private-link-notification-1"][href="/g/midsummer/c/private%3Arole_pm%3Aslot-7?private=notification-1"]',
-        '[data-testid="thread-post-media-receipt-442"][data-media-variant="tablet"]',
+        '[data-testid="thread-post-media-eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"][data-media-variant="tablet"]',
       ],
     },
     {

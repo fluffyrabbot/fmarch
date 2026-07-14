@@ -99,7 +99,7 @@ export const COMMAND_SCENARIOS = Object.freeze([
     expectedText: "Post",
     media: {
       boundaryTestId: "thread-post-media-boundary-442",
-      mediaTestId: "thread-post-media-receipt-442",
+      mediaTestId: "thread-post-media-eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
       expectedVariant: "tablet",
     },
   },
@@ -120,7 +120,7 @@ export const COMMAND_SCENARIOS = Object.freeze([
     },
     media: {
       boundaryTestId: "thread-post-media-boundary-442",
-      mediaTestId: "thread-post-media-receipt-442",
+      mediaTestId: "thread-post-media-eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
       expectedVariant: "tablet",
     },
   },

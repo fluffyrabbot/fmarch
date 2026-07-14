@@ -4815,15 +4815,16 @@ async fn vertical_private_channel_submit_post_requires_channel_membership(pool: 
     ] {
         expect_ack(post_command(app.clone(), id, principal, command).await);
     }
-    sqlx::query(
-        "INSERT INTO private_channel_member \
-         (game_id, channel_id, kind, slot_id, role_key, reveals_alignment, source) \
-         VALUES ($1, 'private:role_pm:slot_1', 'role_pm', 'slot_1', 'vanilla_townie', 'never', 'test')",
+    let role_pm_member_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM private_channel_member \
+         WHERE game_id = $1 AND channel_id = 'private:role_pm:slot_1' \
+         AND kind = 'RolePm' AND slot_id = 'slot_1'",
     )
     .bind(game)
-    .execute(&pool)
+    .fetch_one(&pool)
     .await
     .unwrap();
+    assert_eq!(role_pm_member_count, 1);
 
     expect_ack(
         post_command(
@@ -7746,6 +7747,7 @@ async fn auth_lifecycle_rotates_sessions_and_revokes_invites(pool: sqlx::PgPool)
         event_kinds,
         BTreeSet::from([
             "account_created",
+            "auth_delivery_queued",
             "invite_redeemed",
             "invite_revoked",
             "session_revoked",

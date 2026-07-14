@@ -1276,7 +1276,7 @@ function playerBrowserMediaEvidenceComplete(roleSmoke) {
   }
   return playerEntries.every((entry) =>
     entry.commandResult?.media?.renderedVariant === "tablet" &&
-    entry.commandResult?.media?.mediaTestId === "thread-post-media-receipt-442" &&
+    entry.commandResult?.media?.mediaTestId === "thread-post-media-eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" &&
     entry.commandResult?.media?.requestedOriginal === false &&
     Array.isArray(entry.commandResult?.media?.requested) &&
     entry.commandResult.media.requested.length > 0 &&

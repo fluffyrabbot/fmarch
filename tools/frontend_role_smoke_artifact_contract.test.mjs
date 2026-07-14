@@ -346,8 +346,8 @@ test("static role contract artifact records shared nav focus and route state mat
     component: APP_SURFACE_HEADER_CONTRACT.component,
     surface: "board",
     eyebrow: "Board",
-    title: "Active games",
-    summary: "Active games, role queues, and proof-linked operation paths.",
+    title: "Games",
+    summary: "Public active and completed games.",
     capabilityTestId: null,
     capabilityMinTouchTargetPx: null,
     liveStatusTestId: null,
@@ -393,7 +393,7 @@ test("static role contract artifact records shared nav focus and route state mat
       entry.liveStatusTestId,
     ]),
     [
-      ["board", "Active games", null, null, null],
+      ["board", "Games", null, null, null],
       ["admin", "Operations", "admin-capability", 44, null],
       [
         "admin-audit-detail",
@@ -2016,7 +2016,7 @@ test("hydrated surface artifact records route-backed surface adapters without lo
       surface.liveStatusTestId,
     ]),
     [
-      ["board", "Active games", null, null],
+      ["board", "Games", null, null],
       ["admin", "Operations", "admin-capability", null],
       ["admin-audit-detail", "Proof runs", "admin-audit-detail-capability", null],
       ["player", "Day 2", "player-capability", "player-live-status"],
@@ -2382,7 +2382,7 @@ test("no-bind browser interaction artifact records click focus evidence or a Chr
     targetAction: "submit_post",
     media: {
       boundaryTestId: "thread-post-media-boundary-442",
-      mediaTestId: "thread-post-media-receipt-442",
+      mediaTestId: "thread-post-media-eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
       renderedVariant: "tablet",
       originalUrlRendered: false,
     },
@@ -2401,7 +2401,7 @@ test("no-bind browser interaction artifact records click focus evidence or a Chr
     },
     media: {
       boundaryTestId: "thread-post-media-boundary-442",
-      mediaTestId: "thread-post-media-receipt-442",
+      mediaTestId: "thread-post-media-eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
       renderedVariant: "tablet",
       originalUrlRendered: false,
     },
@@ -3071,7 +3071,7 @@ test("in-app browser interaction page fixture records role command targets", asy
       surface.liveStatusTestId,
     ]),
     [
-      ["board", "board", "Active games", null],
+      ["board", "board", "Games", null],
       ["admin", "admin", "Operations", null],
       ["admin-audit-detail", "admin", "Proof runs", null],
       ["player", "player", "Day 2", "player-live-status"],
@@ -6339,7 +6339,7 @@ function assertBrowserPlayerPrivateDisclosureEvidence(roleEntries) {
         ariaAtomic: "true",
       },
     });
-    assert.equal(entry.commandResult.media.mediaTestId, "thread-post-media-receipt-442");
+    assert.equal(entry.commandResult.media.mediaTestId, "thread-post-media-eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee");
     assert.equal(entry.commandResult.media.renderedVariant, "tablet");
     assert.equal(entry.commandResult.media.requestedOriginal, false);
     assert.equal(entry.commandResult.media.requested.length > 0, true);
@@ -6350,7 +6350,7 @@ function assertBrowserPlayerPrivateDisclosureEvidence(roleEntries) {
       true,
     );
     assert.equal(entry.commandResult.media.image.src.includes("original"), false);
-    assert.equal(entry.commandResult.media.image.srcset.includes("original"), false);
+    assert.equal(String(entry.commandResult.media.image.srcset ?? "").includes("original"), false);
     const disclosure = entry.commandResult.privateDisclosure;
     assert.equal(disclosure.reviewTestId, "player-private-review-notification-1");
     assert.equal(disclosure.reviewLinkTestId, "player-private-link-notification-1");
@@ -6445,7 +6445,7 @@ function assertBrowserPlayerPrivateChannelEvidence(entries) {
         ariaAtomic: "true",
       },
     });
-    assert.equal(entry.media.mediaTestId, "thread-post-media-receipt-442");
+    assert.equal(entry.media.mediaTestId, "thread-post-media-eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee");
     assert.equal(entry.media.renderedVariant, "tablet");
     assert.equal(entry.media.requestedOriginal, false);
     assert.equal(entry.media.requested.length > 0, true);
@@ -6697,7 +6697,7 @@ function assertNoBindInteractionEntries(entries, expected) {
         true,
       );
       assert.equal(entry.media.image.src.includes("original"), false);
-      assert.equal(entry.media.image.srcset.includes("original"), false);
+      assert.equal(String(entry.media.image.srcset ?? "").includes("original"), false);
     }
     if (expected.confirmation !== undefined) {
       assert.equal(entry.confirmation.actionId, expected.confirmation.actionId);

@@ -2230,7 +2230,7 @@ async function installPlayerMediaNetworkHarness(page) {
 async function assertPlayerMediaNetwork(page, { mediaRequests }) {
   const boundary = page.getByTestId("thread-post-media-boundary-442");
   await boundary.waitFor({ state: "visible" });
-  const media = page.getByTestId("thread-post-media-receipt-442");
+  const media = page.getByTestId("thread-post-media-eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee");
   await assertVisibleBox(media, "player thread tablet media figure");
   const image = media.locator("img");
   const renderedVariant = await media.getAttribute("data-media-variant");
@@ -2247,7 +2247,7 @@ async function assertPlayerMediaNetwork(page, { mediaRequests }) {
   assertNoForbiddenMediaUrl(initialImageAttrs.currentSrc, "player media currentSrc");
 
   await page.waitForFunction(() => {
-    const img = document.querySelector('[data-testid="thread-post-media-receipt-442"] img');
+    const img = document.querySelector('[data-testid="thread-post-media-eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"] img');
     return img?.complete === true && img.naturalWidth > 0;
   });
   const imageAttrs = await image.evaluate((node) => ({
@@ -2288,7 +2288,7 @@ async function assertPlayerMediaNetwork(page, { mediaRequests }) {
     boundary:
       "Browser smoke proves the player thread image element renders a tablet-safe variant and the browser requested only tablet/small/thumb image URLs from the mocked media route. Original, full, and desktop media URLs stay out of rendered attributes and request evidence.",
     boundaryTestId: "thread-post-media-boundary-442",
-    mediaTestId: "thread-post-media-receipt-442",
+    mediaTestId: "thread-post-media-eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
     renderedVariant,
     image: imageAttrs,
     requested: mediaRequests.map((request) => ({ ...request })),

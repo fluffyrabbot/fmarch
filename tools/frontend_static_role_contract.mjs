@@ -81,6 +81,7 @@ import {
 import {
   APP_SHELL_CONTRACT,
   buildBoardRouteData,
+  fixtureBoardGameIndexPage,
   roleNavTestId,
 } from "../frontend/src/lib/app/app-shell-model.mjs";
 import {
@@ -208,12 +209,13 @@ function proveBoardSurface() {
   const data = buildBoardRouteData({
     principalUserId: "player_mira",
     capabilities: [{ kind: "SlotOccupant", game: "midsummer", slot: "slot-7" }],
-    game: "midsummer",
+    gameIndexPage: fixtureBoardGameIndexPage(),
   });
   assert.equal(data.shell.activeSurface, "board");
   assert.deepEqual(
-    data.workbench.map((item) => [item.id, item.action.navigation]),
+    data.shell.surfaces.map((item) => [item.id, item.navigation]),
     [
+      ["board", "link"],
       ["player", "link"],
       ["moderator", "blocked"],
       ["admin", "blocked"],
@@ -229,9 +231,9 @@ function proveBoardSurface() {
   return {
     activeSurface: data.shell.activeSurface,
     surfaceHeader: surfaceHeaderSummary(data.surfaceHeader),
-    workbenchActions: data.workbench.map((item) => ({
+    navigationActions: data.shell.surfaces.map((item) => ({
       id: item.id,
-      navigation: item.action.navigation,
+      navigation: item.navigation,
     })),
     gameActions: data.board.games[0].actions.map((action) => ({
       id: action.id,
