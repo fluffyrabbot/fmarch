@@ -20,7 +20,7 @@ Keep the API at one replica for this first target. `FMARCH_MEDIA_ROOT` is a moun
 
 1. Create a Railway project and add a managed PostgreSQL service named `Postgres`.
 2. Add an `api` service from this repository. Leave its root directory at the repository root and use the default `/railway.toml` config path.
-3. Add a Railway Volume to `api`, mounted at `/var/lib/fmarch/media`. Railway mounts volumes as `root`, so set `RAILWAY_RUN_UID=0` on this first staging target; the current image otherwise cannot write the mounted filesystem. Treat this as a staging workaround until the image performs a root-only volume bootstrap and drops back to `fmarch`.
+3. Add a Railway Volume to `api`, mounted at `/var/lib/fmarch/media`. Railway mounts volumes as `root`; the image entrypoint creates or repairs that directory while privileged, then drops permanently to the unprivileged `fmarch` account (UID 10001) before starting the server. Do not set a Railway runtime UID override.
 4. Copy `deploy/railway/api.env.example` into Railway Variables. Set `DATABASE_URL` as the reference to `Postgres.DATABASE_URL`; do not paste the resolved URL into source control. When a real identity provider is ready, set `FMARCH_IDENTITY_DELIVERY_ENDPOINT` and `FMARCH_IDENTITY_DELIVERY_PROVIDER_ID`, and load `FMARCH_IDENTITY_DELIVERY_AUTH_TOKEN` from Railway's secret store; leaving the endpoint unset keeps the deterministic local transport and does not claim hosted delivery.
 5. Do not set `FMARCH_BIND`. When a platform supplies `PORT`, the server binds `0.0.0.0:$PORT`; local development still defaults to `127.0.0.1:4000`, and an explicit `FMARCH_BIND` overrides either behavior.
 6. Deploy `api`, generate a public Railway domain, and verify `GET /healthz` returns `{ "ok": true }`.
@@ -28,7 +28,7 @@ Keep the API at one replica for this first target. `FMARCH_MEDIA_ROOT` is a moun
 8. Generate the frontend public domain. Replace the example values in `deploy/railway/frontend.env.example` with the two real HTTPS URLs and add them as Railway Variables for `frontend`.
 9. Redeploy `frontend`, then verify its board, login, and a seeded role URL through an external browser. The frontend makes server-side API requests with `FMARCH_API_BASE_URL` and builds its live WebSocket URL from that same value.
 
-Never set `FMARCH_DEV_AUTH=1` or `FMARCH_FRONTEND_FIXTURE_SESSION=1` on either hosted service. They are local proof modes, not hosted-target configuration. `RAILWAY_RUN_UID=0` is also a staging-only workaround for the current volume permissions model, not a production security posture.
+Never set `FMARCH_DEV_AUTH=1` or `FMARCH_FRONTEND_FIXTURE_SESSION=1` on either hosted service. They are local proof modes, not hosted-target configuration. The API container must retain its default privileged entrypoint so it can prepare the mounted volume and drop to UID 10001; do not configure `RAILWAY_RUN_UID`.
 
 ## Secrets And Evidence
 

@@ -13,6 +13,7 @@ async function contract() {
     await Promise.all(
       [
         "Dockerfile",
+        "scripts/container-entrypoint.sh",
         ".dockerignore",
         "railway.toml",
         "Dockerfile.frontend",
@@ -30,8 +31,12 @@ async function contract() {
   assert.match(source.Dockerfile, /cargo build --release --locked -p server/);
   assert.match(source.Dockerfile, /COPY docs \.\/docs/);
   assert.match(source.Dockerfile, /install --directory --owner=fmarch --group=fmarch --mode=0700 \/var\/lib\/fmarch\/media/);
-  assert.match(source.Dockerfile, /USER fmarch/);
+  assert.match(source.Dockerfile, /apt-get install --yes --no-install-recommends ca-certificates gosu/);
+  assert.match(source.Dockerfile, /ENTRYPOINT \["fmarch-entrypoint"\]/);
+  assert.doesNotMatch(source.Dockerfile, /USER fmarch/);
   assert.match(source.Dockerfile, /CMD \["fmarch-server"\]/);
+  assert.match(source["scripts/container-entrypoint.sh"], /chown --recursive fmarch:fmarch/);
+  assert.match(source["scripts/container-entrypoint.sh"], /exec gosu fmarch "\$@"/);
   assert.match(source[".dockerignore"], /^target$/m);
   assert.match(source["railway.toml"], /healthcheckPath = "\/healthz"/);
 
@@ -46,6 +51,7 @@ async function contract() {
 
   assert.match(source["deploy/railway/api.env.example"], /DATABASE_URL=\$\{\{Postgres\.DATABASE_URL\}\}/);
   assert.match(source["deploy/railway/api.env.example"], /FMARCH_MEDIA_ROOT=\/var\/lib\/fmarch\/media/);
+  assert.doesNotMatch(source["deploy/railway/api.env.example"], /RAILWAY_RUN_UID/);
   assert.match(
     source["deploy/railway/api.env.example"],
     /FMARCH_IDENTITY_DELIVERY_ENDPOINT=https:\/\/.+/,
