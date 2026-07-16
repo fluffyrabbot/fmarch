@@ -313,6 +313,11 @@ denied actions stay visible as disabled touch controls.
 Generic touch buttons keep the same 44px floor for links and buttons, remove link
 underlines, and render disabled/aria-disabled actions with an inert visual state so denied
 or unavailable actions do not look tappable.
+The local [`UI workbench`](../ui-workbench.md) promotes the same fixture projections and
+real role routes used by the browser proof into a one-command visual iteration environment.
+It owns no parallel component implementations: role, persona, responsive, and route-state
+review stays on the production Svelte surfaces, while the launcher and fixture-session
+switcher return `404` outside explicit local fixture mode.
 Live transport, command, paging, and form outcomes use one shared status contract with
 stable `data-state` values and live-region metadata, so loading, ack, reject, and confirm
 states are announced consistently across admin, player, and moderator surfaces.

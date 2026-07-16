@@ -3,6 +3,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
+    "ui:dev": "FMARCH_FRONTEND_FIXTURE_SESSION=1 vite --host 127.0.0.1 --port 5173 --strictPort --open /_dev/ui",
     "build": "vite build",
     "check": "svelte-kit sync && vite --host 127.0.0.1 --version"
   },
