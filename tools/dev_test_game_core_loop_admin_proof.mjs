@@ -1592,13 +1592,13 @@ async function proveDayThreePlayerVoteSubmission({
       () =>
         window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "D03" &&
         document.querySelector(
-          '[data-testid="player-composer"] button[data-action="submit_vote"]',
+          '[data-testid="player-quick-vote-actions"] button[data-action="submit_vote"]',
         ) !== null,
       null,
       { timeout: 15000 },
     );
     const voteButton = page.locator(
-      '[data-testid="player-composer"] button[data-action="submit_vote"]',
+      '[data-testid="player-quick-vote-actions"] button[data-action="submit_vote"]',
     );
     await voteButton.waitFor({ state: "visible", timeout: 15000 });
     await voteButton.click();
@@ -2349,13 +2349,13 @@ async function proveDayFourNoLynchVoteSubmission({
       () =>
         window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "D04" &&
         document.querySelector(
-          '[data-testid="player-composer"] button[data-action="submit_vote:no_lynch"]',
+          '[data-testid="player-quick-vote-actions"] button[data-action="submit_vote:no_lynch"]',
         ) !== null,
       null,
       { timeout: 15000 },
     );
     const voteButton = page.locator(
-      '[data-testid="player-composer"] button[data-action="submit_vote:no_lynch"]',
+      '[data-testid="player-quick-vote-actions"] button[data-action="submit_vote:no_lynch"]',
     );
     await voteButton.waitFor({ state: "visible", timeout: 15000 });
     await voteButton.click();
@@ -2569,13 +2569,13 @@ async function proveDayFiveNoLynchVoteSubmission({
       () =>
         window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "D05" &&
         document.querySelector(
-          '[data-testid="player-composer"] button[data-action="submit_vote:no_lynch"]',
+          '[data-testid="player-quick-vote-actions"] button[data-action="submit_vote:no_lynch"]',
         ) !== null,
       null,
       { timeout: 15000 },
     );
     const voteButton = page.locator(
-      '[data-testid="player-composer"] button[data-action="submit_vote:no_lynch"]',
+      '[data-testid="player-quick-vote-actions"] button[data-action="submit_vote:no_lynch"]',
     );
     await voteButton.waitFor({ state: "visible", timeout: 15000 });
     await voteButton.click();
@@ -2787,13 +2787,13 @@ async function proveStaleDayFiveVoteRecovery({
       () =>
         window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "D05" &&
         document.querySelector(
-          '[data-testid="player-composer"] button[data-action="submit_vote:no_lynch"]',
+          '[data-testid="player-quick-vote-actions"] button[data-action="submit_vote:no_lynch"]',
         ) !== null,
       null,
       { timeout: 15000 },
     );
     const voteButton = page.locator(
-      '[data-testid="player-composer"] button[data-action="submit_vote:no_lynch"]',
+      '[data-testid="player-quick-vote-actions"] button[data-action="submit_vote:no_lynch"]',
     );
     await voteButton.waitFor({ state: "visible", timeout: 15000 });
     await voteButton.click();
@@ -3851,7 +3851,7 @@ async function provePostDayThreePlayerSurface({
       .getByTestId("player-private-boundary")
       .innerText();
     const voteButtonCount = await page.locator(
-      '[data-testid="player-composer"] button[data-action^="submit_vote"]',
+      '[data-testid="player-quick-vote-actions"] button[data-action^="submit_vote"]',
     ).count();
     if (voteButtonCount !== expectedVoteButtonCount) {
       throw new Error(
@@ -4777,13 +4777,13 @@ async function provePlayerStaleVoteAfterTransition({
     () =>
       window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "D02" &&
       document.querySelector(
-        '[data-testid="player-composer"] button[data-action="submit_vote"]',
+        '[data-testid="player-quick-vote-actions"] button[data-action="submit_vote"]',
       ) !== null,
     null,
     { timeout: 15000 },
   );
   const voteButton = page.locator(
-    '[data-testid="player-composer"] button[data-action="submit_vote"]',
+    '[data-testid="player-quick-vote-actions"] button[data-action="submit_vote"]',
   );
   await voteButton.waitFor({ state: "visible", timeout: 15000 });
   await voteButton.click();

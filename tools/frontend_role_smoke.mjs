@@ -2143,7 +2143,10 @@ async function drivePlayerReject(page, { viewport, baseUrl, commandRequests, med
   });
   await page.getByTestId("thread-post-440").waitFor({ state: "visible" });
   const composer = page.getByTestId("player-composer");
-  await composer.locator("button").first().click();
+  await page
+    .getByTestId("player-quick-vote-actions")
+    .locator('[data-action="submit_vote"]')
+    .click();
   const status = page.getByTestId("player-command-status");
   await status.waitFor({ state: "visible" });
   await page.waitForFunction(() => {

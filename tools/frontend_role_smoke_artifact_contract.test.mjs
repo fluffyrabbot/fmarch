@@ -606,11 +606,12 @@ test("static role contract artifact records shared nav focus and route state mat
     rootClassName: "fm-status-strip",
     itemClassName: "fm-status-strip__item",
     desktopColumns: 4,
-    tabletColumns: 2,
+    tabletColumns: "adaptive 200px minimum",
     mobileColumns: 1,
     tabletBreakpointPx: 1180,
     mobileBreakpointPx: 840,
     minBlockSizePx: 136,
+    tabletMinBlockSizePx: 112,
     minInlineSizeZero: true,
     overflowWrapAnywhere: true,
   });
@@ -635,8 +636,8 @@ test("static role contract artifact records shared nav focus and route state mat
         4,
         ["authority", "setup", "audit", "recovery"],
         [
-          ["tablet", 1024, 2],
-          ["tablet-wide", 1180, 2],
+          ["tablet", 1024, "adaptive"],
+          ["tablet-wide", 1180, "adaptive"],
           ["tablet-landscape", 1280, 4],
           ["desktop", 1440, 4],
         ],
@@ -648,8 +649,8 @@ test("static role contract artifact records shared nav focus and route state mat
         3,
         ["phase", "deadline", "private"],
         [
-          ["tablet", 1024, 2],
-          ["tablet-wide", 1180, 2],
+          ["tablet", 1024, "adaptive"],
+          ["tablet-wide", 1180, "adaptive"],
           ["tablet-landscape", 1280, 4],
           ["desktop", 1440, 4],
         ],
@@ -661,8 +662,8 @@ test("static role contract artifact records shared nav focus and route state mat
         4,
         ["phase", "votecount", "prompts", "lifecycle"],
         [
-          ["tablet", 1024, 2],
-          ["tablet-wide", 1180, 2],
+          ["tablet", 1024, "adaptive"],
+          ["tablet-wide", 1180, "adaptive"],
           ["tablet-landscape", 1280, 4],
           ["desktop", 1440, 4],
         ],
@@ -2534,9 +2535,14 @@ test("tablet interaction artifact proves tap-first source posture", async () => 
   });
   assert.deepEqual(tabletInteraction.sharedAppCss.scanStripColumns, {
     desktop: 4,
-    tablet: 2,
+    tablet: "adaptive 200px minimum",
     narrow: 1,
   });
+  assert.equal(tabletInteraction.sharedAppCss.tabletScanStripMinBlockSizePx, 112);
+  assert.equal(
+    tabletInteraction.sharedAppCss.tabletScanStripDetailMode,
+    "visually-hidden",
+  );
   assert.equal(tabletInteraction.sharedAppCss.appShellTouchTargetMinPx, 44);
   assert.equal(tabletInteraction.sharedAppCss.edgeToEdgeViewport, true);
   assert.deepEqual(tabletInteraction.sharedAppCss.safeAreaInsets, [

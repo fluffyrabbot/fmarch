@@ -249,6 +249,31 @@
   margin-block-start: 2px;
 }
 
+/* ---- action priority: shared first-viewport control grammar ---- */
+
+.fm-primary-action-zone {
+  border-block-start: 4px solid var(--fm-accent);
+  min-inline-size: 0;
+  padding-block-start: 14px;
+  scroll-margin-block-start: calc(
+    var(--fm-app-topbar-block-size, 76px) + var(--fm-app-sticky-rail-gap, 22px)
+  );
+}
+
+.fm-action-tray {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(
+    auto-fit,
+    minmax(min(var(--fm-action-tray-min, 140px), 100%), 1fr)
+  );
+  min-inline-size: 0;
+}
+
+.fm-action-tray > :is(button, a, .host-action, .host-console-critical-path__action-tile) {
+  min-inline-size: 0;
+}
+
 /* ---- rail: stacked nav of link tiles (channel rail) ---- */
 /* Capability grammar in the small line truncates on one line instead of
    letter-wrapping in narrow columns; the full string stays in the DOM. */

@@ -50,6 +50,7 @@ test("player command panel model exposes tablet touch command contracts", () => 
   assert.equal(view.root.data.component, "player-command-panel");
   assert.equal(view.root.data.thumbZone, "player-primary-actions");
   assert.equal(view.root.data.channelId, "private:role_pm:slot-7");
+  assert.equal(view.root.data.actionPriority, "primary");
   assert.equal(view.root.testId, "player-primary-action-zone");
   assert.deepEqual(view.composer.channelContext, {
     testId: PLAYER_COMMAND_PANEL_CONTRACT.channelContextTestId,
@@ -72,6 +73,19 @@ test("player command panel model exposes tablet touch command contracts", () => 
     isProjected: true,
   });
   assert.deepEqual(view.rows, [{ target: "slot-2 / Ilya", tally: "4/7" }]);
+  assert.equal(
+    view.quickActions.className,
+    "player-command-panel__quick-actions fm-action-tray",
+  );
+  assert.equal(view.quickActions.testId, "player-quick-vote-actions");
+  assert.deepEqual(
+    view.quickActions.buttons.map((button) => button.action),
+    [
+      "submit_vote",
+      "submit_vote:no_lynch",
+      "withdraw_vote",
+    ],
+  );
   assert.deepEqual(view.composer.currentVote, {
     testId: "player-current-vote",
     label: "Current vote",
@@ -87,27 +101,6 @@ test("player command panel model exposes tablet touch command contracts", () => 
       minTouchTargetPx: button.data.minTouchTargetPx,
     })),
     [
-      {
-        action: "submit_vote",
-        label: "Vote slot-2",
-        disabled: false,
-        reason: "",
-        minTouchTargetPx: 44,
-      },
-      {
-        action: "submit_vote:no_lynch",
-        label: "Vote no lynch",
-        disabled: false,
-        reason: "",
-        minTouchTargetPx: 44,
-      },
-      {
-        action: "withdraw_vote",
-        label: "Withdraw vote",
-        disabled: false,
-        reason: "",
-        minTouchTargetPx: 44,
-      },
       {
         action: "submit_post",
         label: "Post",
@@ -144,7 +137,7 @@ test("player command panel model exposes tablet touch command contracts", () => 
     ],
   );
   assert.deepEqual(view.composer.actionPicker.recoveryCommands, []);
-  assert.match(view.composer.buttons[1].className, /secondary/);
+  assert.match(view.quickActions.buttons[1].className, /secondary/);
 });
 
 test("player command panel model disables command controls for dead actors", () => {
@@ -177,12 +170,15 @@ test("player command panel model disables command controls for dead actors", () 
     audienceLabel: "Everyone at the table reads this",
   });
   assert.deepEqual(
-    view.composer.buttons.map((button) => [button.action, button.disabled]),
+    view.quickActions.buttons.map((button) => [button.action, button.disabled]),
     [
       ["submit_vote", true],
       ["withdraw_vote", true],
-      ["submit_post", true],
     ],
+  );
+  assert.deepEqual(
+    view.composer.buttons.map((button) => [button.action, button.disabled]),
+    [["submit_post", true]],
   );
   assert.deepEqual(view.composer.actionPicker.actions, []);
   assert.deepEqual(view.composer.actionPicker.recoveryCommands, []);
@@ -195,6 +191,8 @@ test("spectator command panel exposes public state without a composer", () => {
     phase: { label: "Day 1", state: "open" },
   });
   assert.equal(view.root.data.channelId, "spectator");
+  assert.equal(view.root.data.actionPriority, "primary");
+  assert.deepEqual(view.quickActions.buttons, []);
   assert.equal(view.composer.readOnly, true);
   assert.equal("buttons" in view.composer, false);
 });
@@ -230,12 +228,15 @@ test("dead chat enables only posting for a dead actor", () => {
   assert.equal(view.composer.channelContext.channelId, "dead");
   assert.equal(view.composer.channelContext.actorAlive, "false");
   assert.deepEqual(
-    view.composer.buttons.map((button) => [button.action, button.disabled]),
+    view.quickActions.buttons.map((button) => [button.action, button.disabled]),
     [
       ["submit_vote", true],
       ["withdraw_vote", true],
-      ["submit_post", false],
     ],
+  );
+  assert.deepEqual(
+    view.composer.buttons.map((button) => [button.action, button.disabled]),
+    [["submit_post", false]],
   );
   assert.equal(view.composer.actionPicker.actions[0].trigger.disabled, true);
 });
@@ -268,7 +269,7 @@ test("player command panel disables withdraw until command state has a current v
     hasVote: false,
   });
   assert.deepEqual(
-    view.composer.buttons.map((button) => [
+    view.quickActions.buttons.map((button) => [
       button.action,
       button.disabled,
       button.reason,
@@ -276,8 +277,15 @@ test("player command panel disables withdraw until command state has a current v
     [
       ["submit_vote", false, ""],
       ["withdraw_vote", true, "No current vote"],
-      ["submit_post", false, ""],
     ],
+  );
+  assert.deepEqual(
+    view.composer.buttons.map((button) => [
+      button.action,
+      button.disabled,
+      button.reason,
+    ]),
+    [["submit_post", false, ""]],
   );
 });
 
@@ -298,15 +306,22 @@ test("player command panel honors an explicitly empty live vote command list", (
   });
 
   assert.deepEqual(
-    view.composer.buttons.map((button) => [
+    view.quickActions.buttons.map((button) => [
       button.action,
       button.disabled,
       button.reason,
     ]),
     [
       ["withdraw_vote", true, "Phase locked"],
-      ["submit_post", false, ""],
     ],
+  );
+  assert.deepEqual(
+    view.composer.buttons.map((button) => [
+      button.action,
+      button.disabled,
+      button.reason,
+    ]),
+    [["submit_post", false, ""]],
   );
 });
 
@@ -329,12 +344,15 @@ test("player command panel model disables command controls after completion", ()
   });
 
   assert.deepEqual(
-    view.composer.buttons.map((button) => [button.action, button.disabled]),
+    view.quickActions.buttons.map((button) => [button.action, button.disabled]),
     [
       ["submit_vote", true],
       ["withdraw_vote", true],
-      ["submit_post", true],
     ],
+  );
+  assert.deepEqual(
+    view.composer.buttons.map((button) => [button.action, button.disabled]),
+    [["submit_post", true]],
   );
 });
 
@@ -372,12 +390,15 @@ test("player command panel model surfaces replaced slot recovery context", () =>
     audienceLabel: "Everyone at the table reads this",
   });
   assert.deepEqual(
-    view.composer.buttons.map((button) => [button.action, button.disabled]),
+    view.quickActions.buttons.map((button) => [button.action, button.disabled]),
     [
       ["submit_vote", true],
       ["withdraw_vote", true],
-      ["submit_post", true],
     ],
+  );
+  assert.deepEqual(
+    view.composer.buttons.map((button) => [button.action, button.disabled]),
+    [["submit_post", true]],
   );
 });
 
@@ -409,8 +430,12 @@ test("player command panel model normalizes missing row and label data", () => {
     isProjected: false,
   });
   assert.deepEqual(
+    view.quickActions.buttons.map((button) => button.label),
+    ["submit_vote", "withdraw_vote"],
+  );
+  assert.deepEqual(
     view.composer.buttons.map((button) => button.label),
-    ["submit_vote", "withdraw_vote", "submit_post"],
+    ["submit_post"],
   );
   assert.deepEqual(view.composer.actionPicker.actions, []);
   assert.deepEqual(view.composer.actionPicker.recoveryCommands, []);

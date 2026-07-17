@@ -512,7 +512,12 @@ async function proveFirstViewportLayoutContract(roleSurfaces) {
   assert.match(css, /@media \(min-width:\s*841px\) and \(max-width:\s*1180px\)/);
   assert.match(
     css,
-    /grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/,
+    /grid-template-columns:\s*repeat\(auto-fit,\s*minmax\(200px,\s*1fr\)\)/,
+  );
+  assert.match(css, /\.fm-status-strip__item\s*\{[^}]*min-block-size:\s*112px/s);
+  assert.match(
+    css,
+    /\.fm-status-strip__detail\s*\{[^}]*clip-path:\s*inset\(50%\)/s,
   );
 
   const roleEntries = new Map(roleSurfaces.map((role) => [role.id, role]));
@@ -565,16 +570,17 @@ async function proveFirstViewportLayoutContract(roleSurfaces) {
 
   return {
     boundary:
-      "Static model/CSS contract for tablet-first first-viewport scan strips. It proves stable four-item scan-strip models, responsive 4/2/1 CSS column rules, fixed minimum tile height, min-inline-size:0, and overflow-wrap guardrails. Browser smoke remains required for actual pixel geometry and overlap.",
+      "Static model/CSS contract for tablet-first first-viewport scan strips. It proves stable scan-strip models, adaptive compact tablet columns, 4-column desktop and 1-column mobile rules, minimum tile heights, min-inline-size:0, and overflow-wrap guardrails. Browser smoke remains required for actual pixel geometry and overlap.",
     css: {
       rootClassName: APP_STATUS_STRIP_CONTRACT.rootClassName,
       itemClassName: APP_STATUS_STRIP_CONTRACT.itemClassName,
       desktopColumns: 4,
-      tabletColumns: 2,
+      tabletColumns: "adaptive 200px minimum",
       mobileColumns: 1,
       tabletBreakpointPx: 1180,
       mobileBreakpointPx: 840,
       minBlockSizePx: 136,
+      tabletMinBlockSizePx: 112,
       minInlineSizeZero: true,
       overflowWrapAnywhere: true,
     },
@@ -587,7 +593,7 @@ function statusStripColumnsForWidth(width) {
     return 1;
   }
   if (width <= 1180) {
-    return 2;
+    return "adaptive";
   }
   return 4;
 }
@@ -1587,7 +1593,11 @@ async function provePlayerSurface() {
   );
   assert.equal(privateQueue.root.data.boundaryStatus, "principal-scoped-private-projections");
   assert.equal(channels.channels.every((channel) => channel.minTouchTargetPx >= 44), true);
-  assertTouchTargets(commandPanel.composer.buttons.map((button) => button.data.minTouchTargetPx));
+  assertTouchTargets(
+    [...commandPanel.quickActions.buttons, ...commandPanel.composer.buttons].map(
+      (button) => button.data.minTouchTargetPx,
+    ),
+  );
   assert.equal(privateQueue.items.every((item) => item.minTouchTargetPx >= 44), true);
   assert.equal(privateDisclosure.items[0].ariaExpanded, "false");
   assert.equal(privateDisclosure.items[0].reviewLabel, "Review Commuted");

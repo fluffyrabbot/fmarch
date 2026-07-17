@@ -22,6 +22,7 @@
   aria-label={view.root.ariaLabel}
   data-component={view.root.data.component}
   data-thumb-zone={view.root.data.thumbZone}
+  data-action-priority={view.root.data.actionPriority}
   data-control-rail-mode={view.root.data.controlRailMode}
   data-sticky-top-px={view.root.data.stickyTopPx}
   data-unstick-below-px={view.root.data.unstickBelowPx}

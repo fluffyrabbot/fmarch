@@ -30,7 +30,7 @@
     >
       <p class={eyebrowClassName}>{item.label}</p>
       <strong>{item.value}</strong>
-      <p>{item.detail}</p>
+      <p class="fm-status-strip__detail">{item.detail}</p>
       <AppStatus
         status={item.status}
         testId={item.statusTestId}

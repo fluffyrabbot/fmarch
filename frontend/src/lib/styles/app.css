@@ -576,7 +576,22 @@ body {
 
 @media (min-width: 841px) and (max-width: 1180px) {
   .fm-status-strip {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  }
+
+  .fm-status-strip__item {
+    gap: 6px;
+    min-block-size: 112px;
+    padding-block-start: 10px;
+  }
+
+  .fm-status-strip__detail {
+    block-size: 1px;
+    clip-path: inset(50%);
+    inline-size: 1px;
+    overflow: hidden;
+    position: absolute;
+    white-space: nowrap;
   }
 }
 

@@ -71,6 +71,7 @@
   data-component={view.root.data.component}
   data-thumb-zone={view.root.data.thumbZone}
   data-channel-id={view.root.data.channelId}
+  data-action-priority={view.root.data.actionPriority}
   data-testid={view.root.testId}
 >
   <h2>{view.heading}</h2>
@@ -90,6 +91,27 @@
       <strong>{row.tally}</strong>
     </div>
   {/each}
+  {#if view.quickActions.buttons.length > 0}
+    <div
+      class={view.quickActions.className}
+      aria-label="Quick vote actions"
+      data-testid={view.quickActions.testId}
+    >
+      {#each view.quickActions.buttons as button}
+        <button
+          type="button"
+          class={button.className}
+          data-action={button.data.action}
+          data-min-touch-target-px={button.data.minTouchTargetPx}
+          data-disabled-reason={button.reason}
+          disabled={button.disabled}
+          on:click={() => onCommand(button.action)}
+        >
+          {button.label}
+        </button>
+      {/each}
+    </div>
+  {/if}
   {#if view.composer.readOnly !== true}
   <div class="player-command-panel__composer" data-testid="player-composer">
     <div
@@ -315,6 +337,12 @@
     display: grid;
     gap: 10px;
     margin-block-start: 8px;
+  }
+
+  .player-command-panel__quick-actions {
+    --fm-action-tray-min: 104px;
+    border-block-start: 1px solid var(--fm-line-soft);
+    padding-block-start: 10px;
   }
 
   .player-command-panel__actions {

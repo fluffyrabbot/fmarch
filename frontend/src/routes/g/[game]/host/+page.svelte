@@ -280,17 +280,17 @@
       {hostPrompts}
     />
 
-    <HostWorkQueueStrip queues={workQueues} />
-
-    <HostLifecycleControlCheckpoint
-      checkpoint={hostLifecycleControlCheckpoint}
-    />
-
     <HostControlSurface
       groups={moderatorActionGroups}
       {commandStatuses}
       commandContext={data.commandContext}
       onDispatch={handleDispatch}
+    />
+
+    <HostWorkQueueStrip queues={workQueues} />
+
+    <HostLifecycleControlCheckpoint
+      checkpoint={hostLifecycleControlCheckpoint}
     />
 
     <HostPromptResolutionHistory {hostPrompts} />

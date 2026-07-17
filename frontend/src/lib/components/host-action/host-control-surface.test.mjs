@@ -37,6 +37,7 @@ test("host control surface model binds moderator control bays to action status",
   assert.equal(view.root.ariaLabel, "Moderator controls");
   assert.equal(view.root.data.component, "host-control-surface");
   assert.equal(view.root.data.thumbZone, "moderator-primary-actions");
+  assert.equal(view.root.data.actionPriority, "primary");
   assert.equal(view.root.data.controlRailMode, "flow-host-control-actions");
   assert.equal(view.root.data.stickyTopPx, 0);
   assert.equal(view.root.data.unstickBelowPx, 0);
@@ -83,7 +84,14 @@ test("host control surface model binds moderator control bays to action status",
     "host-command-status-floor-lock_thread",
   );
   assert.equal(phase.actions[1].statusFloorMinBlockSizePx, 44);
-  assert.equal(phase.classes.actionTile, "host-console-critical-path__action-tile");
+  assert.equal(
+    phase.classes.actionTile,
+    "host-console-critical-path__action-tile",
+  );
+  assert.equal(
+    phase.classes.actionBay,
+    "host-console-critical-path__action-bay fm-action-tray",
+  );
   assert.equal(
     phase.classes.commandStatusFloor,
     "host-console-critical-path__command-status-floor",

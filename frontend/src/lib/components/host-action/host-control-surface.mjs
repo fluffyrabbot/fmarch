@@ -1,6 +1,7 @@
 export const HOST_CONTROL_SURFACE_CONTRACT = Object.freeze({
-  rootClassName: "host-console-critical-path__moderator-controls",
+  rootClassName: "host-console-critical-path__moderator-controls fm-primary-action-zone",
   thumbZone: "moderator-primary-actions",
+  actionPriority: "primary",
   thumbZoneTestId: "moderator-primary-action-zone",
   commandContextTestId: "moderator-command-context",
   controlRail: Object.freeze({
@@ -9,7 +10,7 @@ export const HOST_CONTROL_SURFACE_CONTRACT = Object.freeze({
     unstickBelowPx: 0,
   }),
   controlBayClassName: "host-console-critical-path__control-bay fm-card",
-  actionBayClassName: "host-console-critical-path__action-bay",
+  actionBayClassName: "host-console-critical-path__action-bay fm-action-tray",
   actionTileClassName: "host-console-critical-path__action-tile",
   actionTileStabilityMode: "reserved-status-floor",
   commandStatusFloorClassName: "host-console-critical-path__command-status-floor",
@@ -33,6 +34,7 @@ export function buildHostControlSurfaceViewModel({
       data: Object.freeze({
         component: HOST_CONTROL_SURFACE_CONTRACT.componentName,
         thumbZone: HOST_CONTROL_SURFACE_CONTRACT.thumbZone,
+        actionPriority: HOST_CONTROL_SURFACE_CONTRACT.actionPriority,
         controlRailMode: HOST_CONTROL_SURFACE_CONTRACT.controlRail.mode,
         stickyTopPx: HOST_CONTROL_SURFACE_CONTRACT.controlRail.stickyTopPx,
         unstickBelowPx: HOST_CONTROL_SURFACE_CONTRACT.controlRail.unstickBelowPx,

@@ -1,8 +1,11 @@
 import { buildPlayerActionTargetPicker } from "./player-action-target-picker.mjs";
 
 export const PLAYER_COMMAND_PANEL_CONTRACT = Object.freeze({
-  rootClassName: "player-command-panel fm-card",
+  rootClassName: "player-command-panel fm-card fm-primary-action-zone",
   componentName: "player-command-panel",
+  actionPriority: "primary",
+  quickActionClassName: "player-command-panel__quick-actions fm-action-tray",
+  quickActionTestId: "player-quick-vote-actions",
   thumbZone: "player-primary-actions",
   thumbZoneTestId: "player-primary-action-zone",
   channelContextTestId: "player-command-channel-context",
@@ -27,6 +30,7 @@ export function buildPlayerCommandPanelViewModel({
           component: PLAYER_COMMAND_PANEL_CONTRACT.componentName,
           thumbZone: PLAYER_COMMAND_PANEL_CONTRACT.thumbZone,
           channelId: String(channel.channel ?? "spectator"),
+          actionPriority: PLAYER_COMMAND_PANEL_CONTRACT.actionPriority,
         }),
         testId: PLAYER_COMMAND_PANEL_CONTRACT.thumbZoneTestId,
       }),
@@ -34,6 +38,11 @@ export function buildPlayerCommandPanelViewModel({
       deadline: buildDeadlineViewModel(phase),
       rows: Object.freeze(votecount.map(normalizeVotecountRow)),
       composer: Object.freeze({ readOnly: true }),
+      quickActions: Object.freeze({
+        className: PLAYER_COMMAND_PANEL_CONTRACT.quickActionClassName,
+        testId: PLAYER_COMMAND_PANEL_CONTRACT.quickActionTestId,
+        buttons: Object.freeze([]),
+      }),
     });
   }
   const channelContext = buildChannelContextViewModel({ channel, player });
@@ -42,6 +51,19 @@ export function buildPlayerCommandPanelViewModel({
   const postCommandDisabled =
     player.gameCompleted === true ||
     (player.alive === false && channelContext.channelId !== "dead");
+  const voteButtons = voteCommandButtons({
+    composer,
+    disabled: playerCommandsDisabled,
+  });
+  const withdrawButton = commandButton({
+    action: "withdraw_vote",
+    label: composer.withdrawCommandLabel,
+    disabled: playerCommandsDisabled || composer.canWithdrawVote !== true,
+    reason:
+      playerCommandsDisabled || composer.canWithdrawVote === true
+        ? ""
+        : composer.withdrawDisabledReason,
+  });
   return Object.freeze({
     root: Object.freeze({
       className: PLAYER_COMMAND_PANEL_CONTRACT.rootClassName,
@@ -49,8 +71,14 @@ export function buildPlayerCommandPanelViewModel({
         component: PLAYER_COMMAND_PANEL_CONTRACT.componentName,
         thumbZone: PLAYER_COMMAND_PANEL_CONTRACT.thumbZone,
         channelId: channelContext.channelId,
+        actionPriority: PLAYER_COMMAND_PANEL_CONTRACT.actionPriority,
       }),
       testId: PLAYER_COMMAND_PANEL_CONTRACT.thumbZoneTestId,
+    }),
+    quickActions: Object.freeze({
+      className: PLAYER_COMMAND_PANEL_CONTRACT.quickActionClassName,
+      testId: PLAYER_COMMAND_PANEL_CONTRACT.quickActionTestId,
+      buttons: Object.freeze([...voteButtons, withdrawButton]),
     }),
     heading: "Votecount",
     deadline: buildDeadlineViewModel(phase),
@@ -61,19 +89,6 @@ export function buildPlayerCommandPanelViewModel({
       channelContext,
       currentVote: buildCurrentVoteViewModel(composer),
       buttons: Object.freeze([
-        ...voteCommandButtons({
-          composer,
-          disabled: playerCommandsDisabled,
-        }),
-        commandButton({
-          action: "withdraw_vote",
-          label: composer.withdrawCommandLabel,
-          disabled: playerCommandsDisabled || composer.canWithdrawVote !== true,
-          reason:
-            playerCommandsDisabled || composer.canWithdrawVote === true
-              ? ""
-              : composer.withdrawDisabledReason,
-        }),
         commandButton({
           action: "submit_post",
           label: composer.postCommandLabel,
@@ -151,7 +166,13 @@ function normalizeVotecountRow(row) {
   });
 }
 
-function commandButton({ action, label, primary = false, disabled = false, reason = "" }) {
+function commandButton({
+  action,
+  label,
+  primary = false,
+  disabled = false,
+  reason = "",
+}) {
   return Object.freeze({
     action,
     label: String(label ?? action),

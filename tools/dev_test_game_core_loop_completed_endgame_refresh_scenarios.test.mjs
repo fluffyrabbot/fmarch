@@ -15,9 +15,9 @@ test("completed player endgame refresh owns command, resync, and reveal expectat
     commandKind: "SubmitVote",
     commandSelector: "SubmitVote",
     commandButtonSelector:
-      '[data-testid="player-composer"] button[data-action="submit_vote:no_lynch"]',
+      '[data-testid="player-quick-vote-actions"] button[data-action="submit_vote:no_lynch"]',
     setupReadySelector:
-      '[data-testid="player-composer"] button[data-action="submit_vote:no_lynch"]',
+      '[data-testid="player-quick-vote-actions"] button[data-action="submit_vote:no_lynch"]',
     rejectedBoundary:
       "Seeded browser GameAlreadyCompleted stale D05 vote refreshed into completed endgame controls.",
     staleBoundary:

@@ -266,7 +266,12 @@ function proveSharedAppCss(css) {
   assert.match(css, /\.fm-touch-row\s*\{[^}]*flex-wrap:\s*wrap;/s);
   assert.match(css, /\.fm-status-strip\s*\{[^}]*grid-template-columns:\s*repeat\(4,\s*minmax\(0,\s*1fr\)\)/s);
   assert.match(css, /@media \(min-width:\s*841px\) and \(max-width:\s*1180px\)/);
-  assert.match(css, /grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/);
+  assert.match(css, /grid-template-columns:\s*repeat\(auto-fit,\s*minmax\(200px,\s*1fr\)\)/);
+  assert.match(css, /\.fm-status-strip__item\s*\{[^}]*min-block-size:\s*112px/s);
+  assert.match(
+    css,
+    /\.fm-status-strip__detail\s*\{[^}]*clip-path:\s*inset\(50%\)/s,
+  );
   assert.match(css, /@media \(max-width:\s*840px\)/);
   assert.match(css, /\.fm-status-strip\s*\{\s*grid-template-columns:\s*1fr/s);
   assert.match(css, /overflow-wrap:\s*anywhere/);
@@ -294,9 +299,11 @@ function proveSharedAppCss(css) {
     touchRowsWrap: true,
     scanStripColumns: {
       desktop: 4,
-      tablet: 2,
+      tablet: "adaptive 200px minimum",
       narrow: 1,
     },
+    tabletScanStripMinBlockSizePx: 112,
+    tabletScanStripDetailMode: "visually-hidden",
     textWrapGuardrail: "overflow-wrap:anywhere",
   };
 }
@@ -364,13 +371,17 @@ function provePlayerRouteLayoutCss(source) {
 
 function assertPlayerCommandPanelBeforeReceipts(source) {
   const panelIndex = source.indexOf("<PlayerCommandPanel");
+  const roleCardIndex = source.indexOf("<PlayerRoleCard");
+  const checkpointIndex = source.indexOf("<PlayerActionSubmissionCheckpoint");
   const receiptIndex = source.indexOf("<PlayerCommandReceipt");
   assert.notEqual(panelIndex, -1, "player route must render PlayerCommandPanel");
   assert.notEqual(receiptIndex, -1, "player route must render PlayerCommandReceipt");
   assert.equal(
-    panelIndex < receiptIndex,
+    panelIndex < roleCardIndex &&
+      panelIndex < checkpointIndex &&
+      panelIndex < receiptIndex,
     true,
-    "Player vote/post controls should render before live command receipts",
+    "Player vote/post controls should lead role evidence, checkpoints, and live receipts",
   );
 }
 
@@ -521,9 +532,16 @@ function assertHostControlBeforeStatusReadouts(route) {
   const workQueueIndex = route.indexOf("<HostWorkQueueStrip");
   assert.notEqual(workQueueIndex, -1, "host route must render <HostWorkQueueStrip");
   assert.equal(
-    workQueueIndex < controlIndex,
+    controlIndex < workQueueIndex,
     true,
-    "HostWorkQueueStrip floats above HostControlSurface so pending work leads the console",
+    "HostControlSurface leads the console before supporting queue readouts",
+  );
+  const checkpointIndex = route.indexOf("<HostLifecycleControlCheckpoint");
+  assert.notEqual(checkpointIndex, -1, "host route must render HostLifecycleControlCheckpoint");
+  assert.equal(
+    controlIndex < checkpointIndex,
+    true,
+    "HostControlSurface leads the lifecycle proof checkpoint",
   );
   for (const marker of [
     "<HostCommandActivity",
