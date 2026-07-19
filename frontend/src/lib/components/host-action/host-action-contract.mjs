@@ -156,7 +156,8 @@ export function buildHostActionViewModel(config, confirmation = null) {
       data: {
         danger: String(normalized.irreversible),
       },
-      label: normalized.label,
+      intent: normalized.label,
+      consequence: normalized.outcomeLabel,
     },
     confirmation:
       confirmation === null

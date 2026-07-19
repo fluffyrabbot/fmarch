@@ -30,11 +30,11 @@ export {
 export {
   buildPlayerChannels,
   resolvePlayerChannelAccess,
-} from "../../../lib/components/player-channel-rail/player-channel-rail-model.mjs";
+} from "../../../lib/components/player-channel-switcher/player-channel-switcher-model.mjs";
 import {
   buildPlayerChannels,
   resolvePlayerChannelAccess,
-} from "../../../lib/components/player-channel-rail/player-channel-rail-model.mjs";
+} from "../../../lib/components/player-channel-switcher/player-channel-switcher-model.mjs";
 import { buildLiveOfficialPost } from "../../../lib/components/player-thread/player-thread-model.mjs";
 import {
   buildPrivateQueue,
@@ -46,7 +46,7 @@ export const PLAYER_ROUTE_CONTRACT = Object.freeze({
   surfaceTestId: "player-surface",
   capabilityTestId: "player-capability",
   liveStatusTestId: "player-live-status",
-  requiredText: "Votecount",
+  requiredText: "Full votecount",
 });
 
 export async function buildGameRouteData({

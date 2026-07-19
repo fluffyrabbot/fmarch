@@ -30,6 +30,7 @@ const frontendRequire = createRequire(path.join(frontendRoot, "package.json"));
 const criticalActions = Object.freeze([
   Object.freeze({
     id: "extend_deadline",
+    label: "Extend deadline",
     objectLabel: "Day 2 deadline",
     outcomeLabel: "move the deadline to June 19, 2026 at 9:00 PM PT",
     commandVariant: "ExtendDeadline",
@@ -37,6 +38,7 @@ const criticalActions = Object.freeze([
   }),
   Object.freeze({
     id: "process_replacement",
+    label: "Process replacement",
     objectLabel: "Slot 7 / Mira",
     outcomeLabel: "replace Mira with Rowan and preserve slot history",
     commandVariant: "ProcessReplacement",
@@ -44,6 +46,7 @@ const criticalActions = Object.freeze([
   }),
   Object.freeze({
     id: "modkill_slot",
+    label: "Modkill slot",
     objectLabel: "Slot 7",
     outcomeLabel: "set lifecycle to modkilled",
     commandVariant: "SetSlotStatus",
@@ -216,29 +219,38 @@ try {
     );
     await commandStatus.waitFor({ state: "visible" });
     await page.waitForFunction(
-      ({ actionId, expectedResult }) => {
-        const status = document.querySelector(
-          `[data-testid="host-command-status-${actionId}"]`,
-        );
-        return status?.getAttribute("data-state") === expectedResult;
-      },
+      ({ outcomeIndex }) =>
+        window.__fmarchHostCommandOutcomes?.length > outcomeIndex,
       {
-        actionId: expectedAction.id,
-        expectedResult: expectedAction.expectedResult,
+        outcomeIndex: index,
       },
     );
-    const statusState = await commandStatus.getAttribute("data-state");
-    const statusMessage = await commandStatus.innerText();
+    const actionStatusVisible = (await commandStatus.count()) > 0;
+    const feedbackStatus = actionStatusVisible
+      ? commandStatus
+      : page.getByTestId(`host-command-activity-status-${expectedAction.id}`);
+    await feedbackStatus.waitFor({ state: "visible" });
+    await page.waitForFunction((actionId) => {
+      const status =
+        document.querySelector(`[data-testid="host-command-status-${actionId}"]`) ??
+        document.querySelector(
+          `[data-testid="host-command-activity-status-${actionId}"]`,
+        );
+      return ["ack", "reject"].includes(status?.getAttribute("data-state"));
+    }, expectedAction.id);
+    const statusState = await feedbackStatus.getAttribute("data-state");
+    const statusMessage = await feedbackStatus.innerText();
     if (statusState !== expectedAction.expectedResult) {
       throw new Error(
         `${expectedAction.id} rendered ${statusState}, expected ${expectedAction.expectedResult}: ${statusMessage}`,
       );
     }
     if (
+      actionStatusVisible &&
       expectedAction.expectedResult === "ack" &&
-      !/Ack: stream seqs \d+/.test(statusMessage)
+      statusMessage !== `${expectedAction.label} completed.`
     ) {
-      throw new Error(`${expectedAction.id} ack did not render stream seqs`);
+      throw new Error(`${expectedAction.id} ack did not render outcome copy`);
     }
 
     const commandOutcomes = await page.evaluate(
@@ -258,6 +270,7 @@ try {
       streamSeqs: commandOutcome.streamSeqs,
       statusState,
       statusMessage,
+      statusSurface: actionStatusVisible ? "action-bay" : "activity-ledger",
     });
   }
 
@@ -283,6 +296,12 @@ try {
   if (occupantLabel !== "player-rowan") {
     throw new Error(`replacement occupant did not update: ${occupantLabel}`);
   }
+  await page.waitForFunction(() => {
+    const lifecycle = document.querySelector(
+      '[data-testid="host-console-slot-lifecycle"]',
+    );
+    return lifecycle?.textContent?.trim() === "Modkilled";
+  });
   const lifecycleLabel = await page
     .getByTestId("host-console-slot-lifecycle")
     .innerText();

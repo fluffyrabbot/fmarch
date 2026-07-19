@@ -5,7 +5,7 @@
 </script>
 
 {#if checkpoint}
-  <section
+  <details
     class={checkpoint.root.className}
     data-component={checkpoint.root.data.component}
     data-proof-check-id={checkpoint.root.data.proofCheckId}
@@ -18,32 +18,35 @@
     data-receipt-state={checkpoint.root.data.receiptState}
     data-testid={checkpoint.root.testId}
   >
-    <header>
+    <summary>
       <div>
-        <p>{checkpoint.proofCheckId}</p>
-        <h2>{checkpoint.heading}</h2>
+        <span class="fm-eyebrow">Action readiness</span>
+        <strong>{checkpoint.heading}</strong>
       </div>
+      <span class="fm-chip">{checkpoint.phase.value}</span>
+    </summary>
+
+    <div class="fm-proof-disclosure__body">
       <AppStatus
         status={checkpoint.status}
         testId={checkpoint.status.testId}
         className="player-action-submission-checkpoint__status"
       />
-    </header>
-
-    <dl>
-      {#each [
-        checkpoint.phase,
-        checkpoint.actor,
-        checkpoint.actionState,
-        checkpoint.target,
-        checkpoint.receipt,
-        checkpoint.recovery,
-      ] as item}
-        <div class="fm-well" data-testid={item.testId}>
-          <dt>{item.label}</dt>
-          <dd>{item.value}</dd>
-        </div>
-      {/each}
-    </dl>
-  </section>
+      <dl>
+        {#each [
+          checkpoint.phase,
+          checkpoint.actor,
+          checkpoint.actionState,
+          checkpoint.target,
+          checkpoint.receipt,
+          checkpoint.recovery,
+        ] as item}
+          <div class="fm-well" data-testid={item.testId}>
+            <dt>{item.label}</dt>
+            <dd>{item.value}</dd>
+          </div>
+        {/each}
+      </dl>
+    </div>
+  </details>
 {/if}

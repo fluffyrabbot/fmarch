@@ -48,7 +48,8 @@ test("host control surface model binds moderator control bays to action status",
   assert.equal(view.root.testId, "moderator-primary-action-zone");
   assert.deepEqual(view.commandContext, {
     testId: HOST_CONTROL_SURFACE_CONTRACT.commandContextTestId,
-    label: "Command authority",
+    summary: "Acting as host_h",
+    label: "Moderator access",
     value: "HostOf(midsummer) as host_h",
     gameId: "midsummer",
     principalUserId: "host_h",
@@ -73,7 +74,7 @@ test("host control surface model binds moderator control bays to action status",
     phase.actions.map((action) => [action.config.id, action.statusMessage]),
     [
       ["resolve_phase", ""],
-      ["lock_thread", "Ack: stream seqs 42"],
+      ["lock_thread", "Lock thread completed."],
       ["unlock_thread", ""],
       ["advance_phase", ""],
     ],
@@ -83,6 +84,8 @@ test("host control surface model binds moderator control bays to action status",
     phase.actions[1].statusFloorTestId,
     "host-command-status-floor-lock_thread",
   );
+  assert.equal(phase.actions[1].status.message, "Lock thread completed.");
+  assert.equal(phase.actions[1].protocolStatusMessage, "Ack: stream seqs 42");
   assert.equal(phase.actions[1].statusFloorMinBlockSizePx, 44);
   assert.equal(
     phase.classes.actionTile,
@@ -96,6 +99,15 @@ test("host control surface model binds moderator control bays to action status",
     phase.classes.commandStatusFloor,
     "host-console-critical-path__command-status-floor",
   );
+  assert.deepEqual(phase.diagnostics, {
+    testId: "moderator-control-phase-diagnostics",
+    summary: "Technical details",
+    authority: "HostOf(game)",
+    boundary: "Typed commands",
+    protocol:
+      "ResolvePhase, LockThread, UnlockThread, AdvancePhase, AdvancePhaseByDeadline",
+    statuses: [{ action: "Lock thread", message: "Ack: stream seqs 42" }],
+  });
   assert.equal(
     view.groups.find((group) => group.id === "slot-lifecycle").actions[1].status.state,
     "reject",
@@ -124,8 +136,11 @@ test("host control surface status message is empty until an action reports", () 
   assert.equal(commandStatusMessage(undefined), "");
   assert.equal(commandStatusMessage(null), "");
   assert.equal(
-    commandStatusMessage({ state: "pending", message: "Sending command" }),
-    "Sending command",
+    commandStatusMessage(
+      { state: "pending", message: "Sending command" },
+      "Resolve phase",
+    ),
+    "Resolve phase is in progress.",
   );
 });
 
@@ -134,7 +149,8 @@ test("host control surface context falls back without claiming real authority", 
 
   assert.deepEqual(view.commandContext, {
     testId: HOST_CONTROL_SURFACE_CONTRACT.commandContextTestId,
-    label: "Command authority",
+    summary: "Acting as host",
+    label: "Moderator access",
     value: "HostOf(game) as host",
     gameId: "game",
     principalUserId: "host",

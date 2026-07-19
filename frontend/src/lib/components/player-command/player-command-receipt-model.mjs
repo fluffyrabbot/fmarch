@@ -1,6 +1,6 @@
 export const PLAYER_COMMAND_RECEIPT_CONTRACT = Object.freeze({
   componentName: "player-command-receipt",
-  rootClassName: "fm-ledger",
+  rootClassName: "player-command-receipt fm-proof-disclosure",
   listClassName: "fm-ledger__list",
   itemClassName: "fm-ledger__row",
   emptyClassName: "fm-ledger__empty",

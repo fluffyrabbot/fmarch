@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
-  buildPlayerChannelRailViewModel,
+  buildPlayerChannelSwitcherViewModel,
   buildPlayerChannels,
-  PLAYER_CHANNEL_RAIL_CONTRACT,
+  PLAYER_CHANNEL_SWITCHER_CONTRACT,
   resolvePlayerChannelAccess,
-} from "./player-channel-rail-model.mjs";
+} from "./player-channel-switcher-model.mjs";
 
-test("player channel rail filters channels to scoped capabilities", () => {
+test("player channel switcher filters channels to scoped capabilities", () => {
   assert.deepEqual(
     buildPlayerChannels({
       game: "midsummer",
@@ -35,7 +35,7 @@ test("player channel rail filters channels to scoped capabilities", () => {
   );
 });
 
-test("player channel rail gives spectators only the fixed read-only room", () => {
+test("player channel switcher gives spectators only the fixed read-only room", () => {
   const capabilities = [{ kind: "SpectatorOf", game: "midsummer" }];
   assert.deepEqual(
     buildPlayerChannels({ game: "midsummer", capabilities }),
@@ -55,17 +55,18 @@ test("player channel rail gives spectators only the fixed read-only room", () =>
   );
 });
 
-test("player channel rail model exposes active and touch contracts", () => {
-  const view = buildPlayerChannelRailViewModel({
+test("player channel switcher model exposes active and touch contracts", () => {
+  const view = buildPlayerChannelSwitcherViewModel({
     channels: buildPlayerChannels({
       game: "midsummer",
       capabilities: [{ kind: "SlotOccupant", game: "midsummer", slot: "slot-7" }],
     }),
   });
 
-  assert.equal(view.root.className, PLAYER_CHANNEL_RAIL_CONTRACT.rootClassName);
+  assert.equal(view.root.className, PLAYER_CHANNEL_SWITCHER_CONTRACT.rootClassName);
   assert.equal(view.root.ariaLabel, "Channels");
-  assert.equal(view.root.data.component, "player-channel-rail");
+  assert.equal(view.root.testId, "player-channel-switcher");
+  assert.equal(view.root.data.component, "player-channel-switcher");
   assert.deepEqual(view.channels, [
     {
       id: "main",
@@ -74,12 +75,13 @@ test("player channel rail model exposes active and touch contracts", () => {
       active: true,
       capabilityLabel: "SlotOccupant or ChannelMember(main)",
       ariaCurrent: "page",
+      stateLabel: "Current channel",
       minTouchTargetPx: 44,
     },
   ]);
 });
 
-test("player channel rail encodes game ids in channel hrefs", () => {
+test("player channel switcher encodes game ids in channel hrefs", () => {
   const channels = buildPlayerChannels({
     game: "game with spaces",
     capabilities: [{ kind: "ChannelMember", game: "game with spaces", channel: "private:role_pm:slot-7" }],
@@ -96,7 +98,7 @@ test("player channel rail encodes game ids in channel hrefs", () => {
   ]);
 });
 
-test("player channel rail marks the active private channel and resolves access", () => {
+test("player channel switcher marks the active private channel and resolves access", () => {
   const capabilities = [
     { kind: "ChannelMember", game: "midsummer", channel: "private:role_pm:slot-7" },
   ];
@@ -146,7 +148,7 @@ test("player channel rail marks the active private channel and resolves access",
   });
 });
 
-test("player channel rail exposes capability-derived private rooms", () => {
+test("player channel switcher exposes capability-derived private rooms", () => {
   const capabilities = [
     { kind: "SlotOccupant", game: "midsummer", slot: "slot_1" },
     {
@@ -194,7 +196,7 @@ test("player channel rail exposes capability-derived private rooms", () => {
   );
 });
 
-test("player channel rail derives Mason and Neighbor rooms from capabilities", () => {
+test("player channel switcher derives Mason and Neighbor rooms from capabilities", () => {
   const capabilities = [
     {
       kind: "ChannelMember",

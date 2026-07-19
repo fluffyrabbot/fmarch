@@ -86,7 +86,7 @@ export const COMMAND_SCENARIOS = Object.freeze([
     targetSelector: '[data-action="submit_vote"]',
     targetAction: "submit_vote",
     rootSelector: '[data-testid="player-surface"]',
-    expectedText: "Votecount",
+    expectedText: "Full votecount",
   },
   {
     id: "player-submit-post-click",

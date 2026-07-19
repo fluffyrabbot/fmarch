@@ -93,7 +93,7 @@ assert.equal(
 );
 assert.equal(
   artifacts.tabletInteraction.playerRouteLayoutCss.commandRailMode,
-  "sticky-tablet-command-rail",
+  "sticky-tablet-command-column",
 );
 assert.equal(artifacts.tabletInteraction.playerRouteLayoutCss.safeAreaAware, true);
 assert.equal(
@@ -369,7 +369,7 @@ const audit = {
         `The tablet interaction contract scanned ${tabletInteractionSourceSummary()} and found no ${tabletInteractionForbiddenSummary()}.`,
         "Shared app CSS proves edge-to-edge safe-area shell padding, a sticky safe-area role/session topbar, controlled overscroll, visible focus outlines, skip-link focus reveal, 44px app-shell/touch-button floors, touch-action: manipulation, wrapping touch rows, overflow-wrap guardrails, and 4/2/1 scan-strip columns.",
         "Admin route CSS proves a safe-area-aware sticky operator action rail offset below the shared app topbar, keeping setup and recovery controls together before command activity, audit, and escalation readouts.",
-        "Player route CSS proves a safe-area-aware sticky tablet command rail for the vote/post thumb zone, offset below the shared app topbar with primary controls rendered before live command receipts, internal scroll containment, and a normal-flow fallback below the tablet cockpit breakpoint.",
+        "Player route CSS proves a safe-area-aware sticky tablet command column for the vote/post thumb zone, offset below the shared app topbar with primary controls rendered before live command receipts, internal scroll containment, and a normal-flow fallback below 840px.",
         "Moderator route CSS proves a safe-area-aware sticky host control rail for the primary moderator action zone, offset below the shared app topbar with internal scroll containment, narrow fallback, and route order before status readouts.",
         "Host touch-control CSS proves the 44px target variable, 8px minimum gaps, touch-action: manipulation, visible focus outline, and wrapping confirmation actions used by moderator/admin-style destructive confirmations.",
         `Build-mode SSR proves admin setup/recovery, player vote/post, and all ${EXPECTED_COUNTS.moderatorCriticalActions} moderator critical host actions are descendants of explicit thumb-zone containers.`,

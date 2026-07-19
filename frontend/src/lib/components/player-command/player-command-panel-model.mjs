@@ -4,8 +4,11 @@ export const PLAYER_COMMAND_PANEL_CONTRACT = Object.freeze({
   rootClassName: "player-command-panel fm-card fm-primary-action-zone",
   componentName: "player-command-panel",
   actionPriority: "primary",
+  contextClassName: "player-command-panel__context",
   quickActionClassName: "player-command-panel__quick-actions fm-action-tray",
   quickActionTestId: "player-quick-vote-actions",
+  votecountClassName: "player-command-panel__votecount fm-proof-disclosure",
+  votecountTestId: "player-full-votecount",
   thumbZone: "player-primary-actions",
   thumbZoneTestId: "player-primary-action-zone",
   channelContextTestId: "player-command-channel-context",
@@ -34,9 +37,9 @@ export function buildPlayerCommandPanelViewModel({
         }),
         testId: PLAYER_COMMAND_PANEL_CONTRACT.thumbZoneTestId,
       }),
-      heading: "Votecount",
-      deadline: buildDeadlineViewModel(phase),
-      rows: Object.freeze(votecount.map(normalizeVotecountRow)),
+      heading: "Vote",
+      context: buildActionContextViewModel({ phase, composer }),
+      votecount: buildVotecountViewModel(votecount),
       composer: Object.freeze({ readOnly: true }),
       quickActions: Object.freeze({
         className: PLAYER_COMMAND_PANEL_CONTRACT.quickActionClassName,
@@ -80,14 +83,13 @@ export function buildPlayerCommandPanelViewModel({
       testId: PLAYER_COMMAND_PANEL_CONTRACT.quickActionTestId,
       buttons: Object.freeze([...voteButtons, withdrawButton]),
     }),
-    heading: "Votecount",
-    deadline: buildDeadlineViewModel(phase),
-    rows: Object.freeze(votecount.map(normalizeVotecountRow)),
+    heading: "Vote",
+    context: buildActionContextViewModel({ phase, composer }),
+    votecount: buildVotecountViewModel(votecount),
     composer: Object.freeze({
       label: "Post body",
       defaultBody: String(composer.defaultBody ?? ""),
       channelContext,
-      currentVote: buildCurrentVoteViewModel(composer),
       buttons: Object.freeze([
         commandButton({
           action: "submit_post",
@@ -102,6 +104,28 @@ export function buildPlayerCommandPanelViewModel({
         disabled: playerCommandsDisabled,
       }),
     }),
+  });
+}
+
+function buildActionContextViewModel({ phase = {}, composer = {} } = {}) {
+  return Object.freeze({
+    className: PLAYER_COMMAND_PANEL_CONTRACT.contextClassName,
+    deadline: buildDeadlineViewModel(phase),
+    currentVote: buildCurrentVoteViewModel(composer),
+  });
+}
+
+function buildVotecountViewModel(votecount = []) {
+  const rows = Object.freeze(votecount.map(normalizeVotecountRow));
+  return Object.freeze({
+    className: PLAYER_COMMAND_PANEL_CONTRACT.votecountClassName,
+    testId: PLAYER_COMMAND_PANEL_CONTRACT.votecountTestId,
+    summary:
+      rows.length === 1
+        ? "Full votecount · 1 target"
+        : `Full votecount · ${rows.length} targets`,
+    open: false,
+    rows,
   });
 }
 

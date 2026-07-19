@@ -13,7 +13,7 @@
   } from "$lib/app/live-transport.mjs";
   import { createProjectionStore } from "$lib/app/projection-store.mjs";
   import { activePhaseTheme, phaseThemeKey } from "$lib/app/phase-theme.mjs";
-  import PlayerChannelRail from "$lib/components/player-channel-rail/PlayerChannelRail.svelte";
+  import PlayerChannelSwitcher from "$lib/components/player-channel-switcher/PlayerChannelSwitcher.svelte";
   import PlayerActionSubmissionCheckpoint from "$lib/components/player-command/PlayerActionSubmissionCheckpoint.svelte";
   import PlayerCommandPanel from "$lib/components/player-command/PlayerCommandPanel.svelte";
   import PlayerCommandReceipt from "$lib/components/player-command/PlayerCommandReceipt.svelte";
@@ -380,22 +380,24 @@
       data-min-tablet-viewport-px={data.layout.root.data.minTabletViewportPx}
       data-collapse-below-px={data.layout.root.data.collapseBelowPx}
     >
-      <PlayerChannelRail channels={data.channels} />
+      <PlayerChannelSwitcher channels={data.channels} />
 
-      <PlayerThread
-        {phase}
-        {thread}
-        {liveOfficialPost}
-        {threadPageStatus}
-        onLoadOlder={loadOlderThread}
-      >
-        <PlayerPrivateQueue
-          boundary={privateQueueBoundary}
-          items={privateQueue}
-          expandedItems={expandedPrivateItems}
-          onToggle={togglePrivateItem}
-        />
-      </PlayerThread>
+      <div class="player-surface__thread-region">
+        <PlayerThread
+          {phase}
+          {thread}
+          {liveOfficialPost}
+          {threadPageStatus}
+          onLoadOlder={loadOlderThread}
+        >
+          <PlayerPrivateQueue
+            boundary={privateQueueBoundary}
+            items={privateQueue}
+            expandedItems={expandedPrivateItems}
+            onToggle={togglePrivateItem}
+          />
+        </PlayerThread>
+      </div>
 
       <div
         class={data.layout.commandRail.className}
@@ -445,14 +447,23 @@
   .player-surface__layout {
     display: grid;
     gap: 18px;
-    grid-template-columns: minmax(164px, 0.4fr) minmax(420px, 2.1fr) minmax(264px, 0.75fr);
+    grid-template-areas:
+      "channels channels"
+      "thread commands";
+    grid-template-columns: minmax(0, 1fr) minmax(288px, 320px);
     align-items: start;
+  }
+
+  .player-surface__thread-region {
+    grid-area: thread;
+    min-inline-size: 0;
   }
 
   .player-surface__command-stack {
     align-self: start;
     display: grid;
     gap: 12px;
+    grid-area: commands;
     max-block-size: calc(
       100svh - var(--fm-app-topbar-block-size) - var(--fm-app-sticky-rail-gap) -
         env(safe-area-inset-top) - env(safe-area-inset-bottom)
@@ -467,44 +478,15 @@
     );
   }
 
-  :global(.player-role-card header),
-  :global(.player-action-submission-checkpoint header) {
-    align-items: start;
-    display: grid;
-    gap: 12px;
-    grid-template-columns: minmax(0, 1fr) auto;
-  }
-
-  :global(.player-role-card header p) {
-    color: var(--fm-ink-subtle);
-    font-size: 12px;
-    font-weight: 800;
-    letter-spacing: 0;
-    line-height: 1.25;
-    margin: 0 0 4px;
-    text-transform: uppercase;
-  }
-
-  :global(.player-role-card h2) {
+  :global(.player-role-card__name),
+  :global(.player-action-submission-checkpoint summary strong) {
     color: var(--fm-ink);
-    font-size: 18px;
-    line-height: 1.2;
-    margin: 0;
-  }
-
-  :global(.player-role-card__identity) {
-    align-items: center;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-  }
-
-  :global(.player-role-card__name) {
-    color: var(--fm-ink);
-    font-size: 18px;
+    display: block;
+    font-size: 15px;
     font-weight: 800;
     line-height: 1.2;
-    margin: 0;
+    margin-block-start: 2px;
+    overflow-wrap: anywhere;
   }
 
   :global(.player-role-card__description) {
@@ -516,23 +498,6 @@
   }
 
   :global(.player-role-card__status) {
-    margin: 0;
-  }
-
-  :global(.player-action-submission-checkpoint header p) {
-    color: var(--fm-ink-subtle);
-    font-size: 12px;
-    font-weight: 800;
-    letter-spacing: 0;
-    line-height: 1.25;
-    margin: 0 0 4px;
-    text-transform: uppercase;
-  }
-
-  :global(.player-action-submission-checkpoint h2) {
-    color: var(--fm-ink);
-    font-size: 18px;
-    line-height: 1.2;
     margin: 0;
   }
 
@@ -662,12 +627,16 @@
 
   @media (min-width: 1280px) {
     .player-surface__layout {
-      grid-template-columns: 200px minmax(0, 1fr) 320px;
+      grid-template-columns: minmax(0, 1fr) 340px;
     }
   }
 
-  @media (max-width: 959px) {
+  @media (max-width: 840px) {
     .player-surface__layout {
+      grid-template-areas:
+        "channels"
+        "commands"
+        "thread";
       grid-template-columns: 1fr;
     }
 
@@ -677,7 +646,6 @@
       position: static;
     }
 
-    :global(.player-action-submission-checkpoint header),
     :global(.player-action-submission-checkpoint dl) {
       grid-template-columns: 1fr;
     }

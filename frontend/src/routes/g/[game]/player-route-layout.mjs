@@ -1,14 +1,14 @@
 export const PLAYER_ROUTE_LAYOUT_CONTRACT = Object.freeze({
   rootClassName: "player-surface__layout",
-  mode: "tablet-three-zone-cockpit",
+  mode: "tablet-two-zone-channel-switcher",
   minTabletViewportPx: 1024,
-  collapseBelowPx: 960,
+  collapseBelowPx: 840,
   regions: Object.freeze(["channels", "thread", "commands"]),
   commandRail: Object.freeze({
     className: "player-surface__command-stack",
-    mode: "sticky-tablet-command-rail",
+    mode: "sticky-tablet-command-column",
     stickyTopPx: 22,
-    unstickBelowPx: 960,
+    unstickBelowPx: 840,
     stabilityMode: "primary-controls-before-live-receipts",
   }),
 });

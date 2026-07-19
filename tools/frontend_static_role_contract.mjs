@@ -46,8 +46,8 @@ import {
   buildHostWorkQueueStripViewModel,
 } from "../frontend/src/lib/components/host-action/host-work-queue-strip.mjs";
 import {
-  buildPlayerChannelRailViewModel,
-} from "../frontend/src/lib/components/player-channel-rail/player-channel-rail-model.mjs";
+  buildPlayerChannelSwitcherViewModel,
+} from "../frontend/src/lib/components/player-channel-switcher/player-channel-switcher-model.mjs";
 import {
   PLAYER_THREAD_MEDIA_CONTRACT,
   PLAYER_THREAD_PAGER_CONTRACT,
@@ -1472,7 +1472,7 @@ async function provePlayerSurface() {
   assert.equal(Object.hasOwn(data, "moderatorActionGroups"), false);
   assert.equal(Object.hasOwn(data, "hostPrompts"), false);
 
-  const channels = buildPlayerChannelRailViewModel({ channels: data.channels });
+  const channels = buildPlayerChannelSwitcherViewModel({ channels: data.channels });
   const commandPanel = buildPlayerCommandPanelViewModel({
     composer: data.composer,
     phase: data.phase,
@@ -1575,11 +1575,11 @@ async function provePlayerSurface() {
     value: "Main thread as slot-7",
     audienceLabel: "Everyone at the table reads this",
   });
-  assert.equal(commandPanel.deadline.testId, "player-votecount-deadline");
-  assert.equal(commandPanel.deadline.value, data.phase.deadlineLabel);
-  assert.equal(commandPanel.deadline.phaseLabel, data.phase.label);
-  assert.equal(commandPanel.deadline.isProjected, true);
-  assert.equal(commandPanel.rows.length > 0, true);
+  assert.equal(commandPanel.context.deadline.testId, "player-votecount-deadline");
+  assert.equal(commandPanel.context.deadline.value, data.phase.deadlineLabel);
+  assert.equal(commandPanel.context.deadline.phaseLabel, data.phase.label);
+  assert.equal(commandPanel.context.deadline.isProjected, true);
+  assert.equal(commandPanel.votecount.rows.length > 0, true);
   assert.equal(commandReceipt.root.data.component, "player-command-receipt");
   assert.equal(commandReceipt.items[0].testId, "player-command-receipt-submit_vote");
   assert.equal(commandReceipt.items[0].statusTestId, "player-command-status");
@@ -1614,7 +1614,7 @@ async function provePlayerSurface() {
     privateDisclosure.items[0].detailTestId,
     "player-private-detail-notification-1",
   );
-  assert.equal(data.layout.root.data.mode, "tablet-three-zone-cockpit");
+  assert.equal(data.layout.root.data.mode, "tablet-two-zone-channel-switcher");
   assert.equal(data.layout.root.data.minTabletViewportPx, 1024);
   assert.equal(data.layout.root.data.collapseBelowPx < data.layout.root.data.minTabletViewportPx, true);
   assert.deepEqual(data.layout.regions, ["channels", "thread", "commands"]);
@@ -1730,12 +1730,12 @@ async function provePlayerSurface() {
         originalUrlRendered: false,
         originalOnlyWithheld: true,
       },
-      votecountRows: commandPanel.rows.length,
+      votecountRows: commandPanel.votecount.rows.length,
       deadline: {
-        testId: commandPanel.deadline.testId,
-        value: commandPanel.deadline.value,
-        phaseLabel: commandPanel.deadline.phaseLabel,
-        state: commandPanel.deadline.state,
+        testId: commandPanel.context.deadline.testId,
+        value: commandPanel.context.deadline.value,
+        phaseLabel: commandPanel.context.deadline.phaseLabel,
+        state: commandPanel.context.deadline.state,
       },
       privateBoundary: privateQueue.root.data.boundaryStatus,
         privateDisclosure: {
@@ -1859,7 +1859,8 @@ async function proveModeratorSurface() {
   assert.equal(controls.groups.length >= 6, true);
   assert.deepEqual(controls.commandContext, {
     testId: HOST_CONTROL_SURFACE_CONTRACT.commandContextTestId,
-    label: "Command authority",
+    summary: "Acting as host_h",
+    label: "Moderator access",
     value: "HostOf(midsummer) as host_h",
     gameId: "midsummer",
     principalUserId: "host_h",

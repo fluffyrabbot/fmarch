@@ -140,18 +140,11 @@
 }
 
 .host-console-critical-path__command-context {
-  background: var(--fm-wash-warm);
-  border: 1px solid var(--fm-line-warm);
-  border-radius: 8px;
-  display: grid;
-  gap: 2px;
   grid-column: 1 / -1;
-  min-block-size: 58px;
-  padding: 10px 12px;
 }
 
-.host-console-critical-path__command-context span,
-.host-console-critical-path__command-context small {
+.host-console-critical-path__command-context .fm-proof-disclosure__body span,
+.host-console-critical-path__command-context .fm-proof-disclosure__body small {
   color: var(--fm-ink-subtle);
   font-size: 12px;
   font-weight: 800;
@@ -160,7 +153,7 @@
   text-transform: uppercase;
 }
 
-.host-console-critical-path__command-context strong {
+.host-console-critical-path__command-context .fm-proof-disclosure__body strong {
   color: var(--fm-ink);
   font-size: 16px;
   line-height: 1.25;
@@ -244,12 +237,60 @@
   overflow-wrap: anywhere;
 }
 
+.host-console-critical-path__intent {
+  color: var(--fm-ink) !important;
+  font-weight: 700;
+}
+
 .host-console-critical-path__boundary,
 .host-console-critical-path__empty-action {
   background: var(--fm-surface-muted);
   border: 1px solid var(--fm-line-strong);
   border-radius: 8px;
   padding: 10px 12px;
+}
+
+.host-console-critical-path__diagnostics {
+  border-block-start: 1px solid var(--fm-line-soft);
+  color: var(--fm-ink-muted);
+  padding-block-start: 4px;
+}
+
+.host-console-critical-path__diagnostics summary {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  font-size: 13px;
+  font-weight: 800;
+  min-block-size: 44px;
+}
+
+.host-console-critical-path__diagnostics dl {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-block-end: 8px;
+}
+
+.host-console-critical-path__diagnostics dl > div {
+  background: var(--fm-surface-muted);
+  border: 1px solid var(--fm-line-strong);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.host-console-critical-path__diagnostics dt {
+  color: var(--fm-ink-subtle);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.host-console-critical-path__diagnostics dd {
+  color: var(--fm-ink-muted);
+  font-size: 13px;
+  margin: 2px 0 0;
+  overflow-wrap: anywhere;
 }
 
 .host-console-critical-path__empty-action {
@@ -281,7 +322,20 @@
 }
 
 .host-console-critical-path__action-bay .host-action__trigger {
+  align-items: start;
+  flex-direction: column;
   inline-size: 100%;
+  text-align: start;
+}
+
+.host-console-critical-path__action-bay .host-action__trigger span {
+  font-weight: 800;
+}
+
+.host-console-critical-path__action-bay .host-action__trigger small {
+  color: var(--fm-ink-muted);
+  font-size: 12px;
+  line-height: 1.3;
 }
 
 .host-console-critical-path__action-tile {

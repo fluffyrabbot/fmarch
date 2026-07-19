@@ -5,19 +5,19 @@ import {
   PLAYER_ROUTE_LAYOUT_CONTRACT,
 } from "./player-route-layout.mjs";
 
-test("player route layout preserves the three-zone tablet cockpit at 1024px", () => {
+test("player route layout uses a full-width channel switcher over two tablet zones", () => {
   const view = buildPlayerRouteLayoutViewModel();
 
   assert.equal(view.root.className, PLAYER_ROUTE_LAYOUT_CONTRACT.rootClassName);
-  assert.equal(view.root.data.mode, "tablet-three-zone-cockpit");
+  assert.equal(view.root.data.mode, "tablet-two-zone-channel-switcher");
   assert.equal(view.root.data.minTabletViewportPx, 1024);
-  assert.equal(view.root.data.collapseBelowPx, 960);
+  assert.equal(view.root.data.collapseBelowPx, 840);
   assert.deepEqual(view.commandRail, {
     className: "player-surface__command-stack",
     data: {
-      mode: "sticky-tablet-command-rail",
+      mode: "sticky-tablet-command-column",
       stickyTopPx: 22,
-      unstickBelowPx: 960,
+      unstickBelowPx: 840,
       stabilityMode: "primary-controls-before-live-receipts",
     },
   });

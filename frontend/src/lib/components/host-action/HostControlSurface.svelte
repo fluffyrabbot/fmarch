@@ -32,18 +32,21 @@
   data-capability-label={view.root.data.capabilityLabel}
   data-testid={view.root.testId}
 >
-  <div
-    class="host-console-critical-path__command-context"
+  <details
+    class="host-console-critical-path__command-context fm-proof-disclosure"
     data-testid={view.commandContext.testId}
     data-game-id={view.commandContext.gameId}
     data-principal-user-id={view.commandContext.principalUserId}
     data-capability-label={view.commandContext.capabilityLabel}
     data-command-endpoint={view.commandContext.commandEndpoint}
   >
-    <span>{view.commandContext.label}</span>
-    <strong>{view.commandContext.value}</strong>
-    <small>{view.commandContext.commandEndpoint}</small>
-  </div>
+    <summary>{view.commandContext.summary}</summary>
+    <div class="fm-proof-disclosure__body">
+      <span>{view.commandContext.label}</span>
+      <strong>{view.commandContext.value}</strong>
+      <small>{view.commandContext.commandEndpoint}</small>
+    </div>
+  </details>
 
   {#each view.groups as control}
     <article
@@ -52,15 +55,11 @@
     >
       <header>
         <div>
-          <p class="fm-eyebrow">{control.authority}</p>
+          <p class="fm-eyebrow">Moderator action</p>
           <h2>{control.label}</h2>
         </div>
-        <span class="fm-chip">{control.boundary}</span>
       </header>
-      <p>{control.value}</p>
-      <p class={control.classes.boundary}>
-        {control.boundaryDetail}
-      </p>
+      <p class="host-console-critical-path__intent">{control.value}</p>
       {#if control.actions.length === 0}
         <p class={control.classes.empty}>
           {control.emptyLabel}
@@ -91,6 +90,32 @@
           {/each}
         </div>
       {/if}
+      <details
+        class={control.classes.diagnostics}
+        data-testid={control.diagnostics.testId}
+      >
+        <summary>{control.diagnostics.summary}</summary>
+        <dl>
+          <div>
+            <dt>Required access</dt>
+            <dd>{control.diagnostics.authority}</dd>
+          </div>
+          <div>
+            <dt>Dispatch boundary</dt>
+            <dd>{control.diagnostics.boundary}</dd>
+          </div>
+          <div>
+            <dt>Protocol</dt>
+            <dd>{control.diagnostics.protocol}</dd>
+          </div>
+          {#each control.diagnostics.statuses as status}
+            <div>
+              <dt>{status.action} outcome</dt>
+              <dd>{status.message}</dd>
+            </div>
+          {/each}
+        </dl>
+      </details>
     </article>
   {/each}
 </section>

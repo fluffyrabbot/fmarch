@@ -1,8 +1,9 @@
 import { hasCapability } from "../../app/capabilities.mjs";
 
-export const PLAYER_CHANNEL_RAIL_CONTRACT = Object.freeze({
-  rootClassName: "player-channel-rail fm-rail",
-  componentName: "player-channel-rail",
+export const PLAYER_CHANNEL_SWITCHER_CONTRACT = Object.freeze({
+  rootClassName: "player-channel-switcher",
+  componentName: "player-channel-switcher",
+  rootTestId: "player-channel-switcher",
   minTouchTargetPx: 44,
 });
 
@@ -95,13 +96,14 @@ export function resolvePlayerChannelAccess({
   });
 }
 
-export function buildPlayerChannelRailViewModel({ channels = [] } = {}) {
+export function buildPlayerChannelSwitcherViewModel({ channels = [] } = {}) {
   return Object.freeze({
     root: Object.freeze({
-      className: PLAYER_CHANNEL_RAIL_CONTRACT.rootClassName,
+      className: PLAYER_CHANNEL_SWITCHER_CONTRACT.rootClassName,
       ariaLabel: "Channels",
+      testId: PLAYER_CHANNEL_SWITCHER_CONTRACT.rootTestId,
       data: Object.freeze({
-        component: PLAYER_CHANNEL_RAIL_CONTRACT.componentName,
+        component: PLAYER_CHANNEL_SWITCHER_CONTRACT.componentName,
       }),
     }),
     channels: Object.freeze(
@@ -109,7 +111,8 @@ export function buildPlayerChannelRailViewModel({ channels = [] } = {}) {
         Object.freeze({
           ...channel,
           ariaCurrent: channel.active ? "page" : undefined,
-          minTouchTargetPx: PLAYER_CHANNEL_RAIL_CONTRACT.minTouchTargetPx,
+          stateLabel: channel.active ? "Current channel" : "Open channel",
+          minTouchTargetPx: PLAYER_CHANNEL_SWITCHER_CONTRACT.minTouchTargetPx,
         }),
       ),
     ),

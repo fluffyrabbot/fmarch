@@ -102,7 +102,10 @@
       bind:this={triggerElement}
       on:click={activate}
     >
-      {view.trigger.label}
+      <span>{view.trigger.intent}</span>
+      {#if view.trigger.consequence}
+        <small>{view.trigger.consequence}</small>
+      {/if}
     </button>
 
     {#if view.confirmation}

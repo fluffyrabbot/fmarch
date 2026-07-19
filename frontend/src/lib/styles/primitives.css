@@ -274,6 +274,60 @@
   min-inline-size: 0;
 }
 
+/* ---- proof disclosure: compact summary with on-demand evidence ---- */
+
+.fm-proof-disclosure {
+  background: var(--fm-raised-veil);
+  border: 1px solid var(--fm-line);
+  border-radius: 8px;
+  min-inline-size: 0;
+  overflow: clip;
+}
+
+.fm-proof-disclosure > summary {
+  align-items: center;
+  color: var(--fm-ink);
+  cursor: pointer;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  list-style: none;
+  min-block-size: 52px;
+  min-inline-size: 0;
+  padding: 10px 14px;
+}
+
+.fm-proof-disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+
+.fm-proof-disclosure > summary::after {
+  color: var(--fm-ink-subtle);
+  content: "+";
+  flex: 0 0 auto;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.fm-proof-disclosure[open] > summary {
+  border-block-end: 1px solid var(--fm-line);
+}
+
+.fm-proof-disclosure[open] > summary::after {
+  content: "−";
+}
+
+.fm-proof-disclosure > summary > :first-child {
+  min-inline-size: 0;
+}
+
+.fm-proof-disclosure__body {
+  display: grid;
+  gap: 12px;
+  min-inline-size: 0;
+  padding: 14px;
+}
+
 /* ---- rail: stacked nav of link tiles (channel rail) ---- */
 /* Capability grammar in the small line truncates on one line instead of
    letter-wrapping in narrow columns; the full string stays in the DOM. */

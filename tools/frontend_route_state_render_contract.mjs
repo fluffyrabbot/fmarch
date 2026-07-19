@@ -1694,7 +1694,7 @@ async function proveRenderedModeratorSurface(bundle) {
     `data-testid="${HOST_CONTROL_SURFACE_CONTRACT.commandContextTestId}"`,
     "moderator command authority context",
   );
-  assertIncludes(html, "Command authority", "moderator command authority label");
+  assertIncludes(html, "Moderator access", "moderator command authority label");
   assertIncludes(
     html,
     "HostOf(midsummer) as host_h",

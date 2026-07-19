@@ -1,6 +1,6 @@
 export const PLAYER_ROLE_CARD_CONTRACT = Object.freeze({
   proofCheckId: "player-role-card",
-  rootClassName: "player-role-card fm-card",
+  rootClassName: "player-role-card fm-proof-disclosure",
   rootTestId: "player-role-card",
   nameTestId: "player-role-card-name",
   alignmentTestId: "player-role-card-alignment",

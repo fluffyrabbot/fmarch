@@ -344,7 +344,7 @@ function surfaceScenarios() {
       path: "/g/midsummer",
       render: "renderPlayerSurface",
       surfaceTestId: "player-surface",
-      requiredText: ["Votecount", "Private queue"],
+      requiredText: ["Full votecount", "Private queue"],
       requiredTestIds: [
         "player-command-receipt",
         "player-command-receipt-empty",

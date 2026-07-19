@@ -67,7 +67,7 @@
 
 <aside
   class={view.root.className}
-  aria-label="Votecount"
+  aria-label="Player actions"
   data-component={view.root.data.component}
   data-thumb-zone={view.root.data.thumbZone}
   data-channel-id={view.root.data.channelId}
@@ -75,22 +75,25 @@
   data-testid={view.root.testId}
 >
   <h2>{view.heading}</h2>
-  <div
-    class="player-command-panel__deadline fm-well"
-    data-testid={view.deadline.testId}
-    data-state={view.deadline.state}
-    data-projected={view.deadline.isProjected}
-  >
-    <span>{view.deadline.label}</span>
-    <strong>{view.deadline.value}</strong>
-    <small>{view.deadline.phaseLabel}</small>
-  </div>
-  {#each view.rows as row}
-    <div class="player-command-panel__vote-row">
-      <span>{row.target}</span>
-      <strong>{row.tally}</strong>
+  <div class={view.context.className} data-testid="player-vote-context">
+    <div
+      class="player-command-panel__deadline"
+      data-testid={view.context.deadline.testId}
+      data-state={view.context.deadline.state}
+      data-projected={view.context.deadline.isProjected}
+    >
+      <span>{view.context.deadline.label}</span>
+      <strong>{view.context.deadline.value}</strong>
     </div>
-  {/each}
+    <div
+      class="player-command-panel__current-vote"
+      data-testid={view.context.currentVote.testId}
+      data-has-vote={view.context.currentVote.hasVote}
+    >
+      <span>{view.context.currentVote.label}</span>
+      <strong>{view.context.currentVote.value}</strong>
+    </div>
+  </div>
   {#if view.quickActions.buttons.length > 0}
     <div
       class={view.quickActions.className}
@@ -112,6 +115,21 @@
       {/each}
     </div>
   {/if}
+  <details
+    class={view.votecount.className}
+    data-testid={view.votecount.testId}
+    open={view.votecount.open}
+  >
+    <summary>{view.votecount.summary}</summary>
+    <div class="fm-proof-disclosure__body">
+      {#each view.votecount.rows as row}
+        <div class="player-command-panel__vote-row">
+          <span>{row.target}</span>
+          <strong>{row.tally}</strong>
+        </div>
+      {/each}
+    </div>
+  </details>
   {#if view.composer.readOnly !== true}
   <div class="player-command-panel__composer" data-testid="player-composer">
     <div
@@ -127,14 +145,6 @@
       <span>{view.composer.channelContext.label}</span>
       <strong>{view.composer.channelContext.value}</strong>
       <small>{view.composer.channelContext.audienceLabel}</small>
-    </div>
-    <div
-      class="player-command-panel__current-vote fm-well"
-      data-testid={view.composer.currentVote.testId}
-      data-has-vote={view.composer.currentVote.hasVote}
-    >
-      <span>{view.composer.currentVote.label}</span>
-      <strong>{view.composer.currentVote.value}</strong>
     </div>
     <label class="fm-field">
       <span>{view.composer.label}</span>
@@ -308,12 +318,33 @@
     padding-block: 8px;
   }
 
-  .player-command-panel__deadline {
-    min-block-size: 72px;
+  .player-command-panel__context {
+    background: var(--fm-surface-muted);
+    border: 1px solid var(--fm-line-strong);
+    border-radius: 8px;
+    display: grid;
+    gap: 0;
+    padding: 4px 10px;
+    min-inline-size: 0;
+  }
+
+  .player-command-panel__deadline,
+  .player-command-panel__current-vote {
+    align-items: center;
+    display: grid;
+    gap: 8px;
+    grid-template-columns: auto minmax(0, 1fr);
+    min-block-size: 32px;
+    min-inline-size: 0;
+    padding: 3px 0;
+  }
+
+  .player-command-panel__current-vote {
+    border-block-start: 1px solid var(--fm-line-strong);
   }
 
   .player-command-panel__deadline span,
-  .player-command-panel__deadline small {
+  .player-command-panel__current-vote span {
     color: var(--fm-ink-subtle);
     font-size: 12px;
     font-weight: 800;
@@ -326,6 +357,15 @@
     font-size: 15px;
     line-height: 1.25;
     overflow-wrap: anywhere;
+    text-align: end;
+  }
+
+  .player-command-panel__current-vote strong {
+    color: var(--fm-ink);
+    font-size: 15px;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+    text-align: end;
   }
 
   .player-command-panel__vote-row span {
@@ -343,6 +383,10 @@
     --fm-action-tray-min: 104px;
     border-block-start: 1px solid var(--fm-line-soft);
     padding-block-start: 10px;
+  }
+
+  .player-command-panel__quick-actions button:disabled {
+    display: none;
   }
 
   .player-command-panel__actions {
@@ -375,13 +419,11 @@
     overflow-wrap: anywhere;
   }
 
-  .player-command-panel__channel-context,
-  .player-command-panel__current-vote {
+  .player-command-panel__channel-context {
     min-block-size: 58px;
   }
 
   .player-command-panel__composer label span,
-  .player-command-panel__current-vote span,
   .player-command-panel__channel-context span,
   .player-command-panel__channel-context small {
     color: var(--fm-ink-subtle);
@@ -390,13 +432,6 @@
     line-height: 1.25;
     overflow-wrap: anywhere;
     text-transform: uppercase;
-  }
-
-  .player-command-panel__current-vote strong {
-    color: var(--fm-ink);
-    font-size: 16px;
-    line-height: 1.25;
-    overflow-wrap: anywhere;
   }
 
   .player-command-panel__channel-context strong {

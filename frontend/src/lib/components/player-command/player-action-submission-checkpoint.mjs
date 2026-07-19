@@ -1,6 +1,6 @@
 export const PLAYER_ACTION_SUBMISSION_CHECKPOINT_CONTRACT = Object.freeze({
   proofCheckId: "player-action-submission",
-  rootClassName: "player-action-submission-checkpoint fm-card",
+  rootClassName: "player-action-submission-checkpoint fm-proof-disclosure",
   rootTestId: "player-action-submission-checkpoint",
   phaseTestId: "player-action-submission-phase",
   actorTestId: "player-action-submission-actor",

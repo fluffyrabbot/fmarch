@@ -848,7 +848,8 @@ test("static role contract artifact records shared nav focus and route state mat
   });
   assert.deepEqual(moderatorStaticRole.commandContext, {
     testId: HOST_CONTROL_SURFACE_CONTRACT.commandContextTestId,
-    label: "Command authority",
+    summary: "Acting as host_h",
+    label: "Moderator access",
     value: "HostOf(midsummer) as host_h",
     gameId: "midsummer",
     principalUserId: "host_h",
@@ -2576,13 +2577,13 @@ test("tablet interaction artifact proves tap-first source posture", async () => 
     primaryActionBeforeStatusFloor: true,
   });
   assert.deepEqual(tabletInteraction.playerRouteLayoutCss, {
-    commandRailMode: "sticky-tablet-command-rail",
+    commandRailMode: "sticky-tablet-command-column",
     stickyTopPx: 22,
     topbarOffsetPx: 76,
     safeAreaAware: true,
     internalScroll: true,
     overscroll: "contain",
-    unstickBelowPx: 960,
+    unstickBelowPx: 840,
     stabilityMode: "primary-controls-before-live-receipts",
     primaryControlsBeforeReceipts: true,
   });

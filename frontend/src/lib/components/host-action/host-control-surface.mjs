@@ -16,6 +16,7 @@ export const HOST_CONTROL_SURFACE_CONTRACT = Object.freeze({
   commandStatusFloorClassName: "host-console-critical-path__command-status-floor",
   commandStatusFloorMinBlockSizePx: 44,
   boundaryClassName: "host-console-critical-path__boundary",
+  diagnosticsClassName: "host-console-critical-path__diagnostics",
   emptyClassName: "host-console-critical-path__empty-action",
   commandStatusClassName: "host-console-critical-path__command-status",
   componentName: "host-control-surface",
@@ -51,11 +52,27 @@ export function buildHostControlSurfaceViewModel({
         Object.freeze({
           ...group,
           testId: `moderator-control-${group.id}`,
+          diagnostics: Object.freeze({
+            testId: `moderator-control-${group.id}-diagnostics`,
+            summary: "Technical details",
+            authority: group.authority,
+            boundary: group.boundary,
+            protocol: group.boundaryDetail,
+            statuses: Object.freeze(
+              group.actions
+                .map((action) => ({
+                  action: action.label,
+                  message: commandStatuses[action.id]?.message,
+                }))
+                .filter((status) => typeof status.message === "string"),
+            ),
+          }),
           classes: Object.freeze({
             controlBay: HOST_CONTROL_SURFACE_CONTRACT.controlBayClassName,
             actionBay: HOST_CONTROL_SURFACE_CONTRACT.actionBayClassName,
             actionTile: HOST_CONTROL_SURFACE_CONTRACT.actionTileClassName,
             boundary: HOST_CONTROL_SURFACE_CONTRACT.boundaryClassName,
+            diagnostics: HOST_CONTROL_SURFACE_CONTRACT.diagnosticsClassName,
             empty: HOST_CONTROL_SURFACE_CONTRACT.emptyClassName,
             commandStatusFloor: HOST_CONTROL_SURFACE_CONTRACT.commandStatusFloorClassName,
             commandStatus: HOST_CONTROL_SURFACE_CONTRACT.commandStatusClassName,
@@ -65,12 +82,20 @@ export function buildHostControlSurfaceViewModel({
               Object.freeze({
                 config: action,
                 testId: `critical-host-action-${action.id}`,
-                status: commandStatuses[action.id] ?? null,
+                status: visibleCommandStatus(
+                  commandStatuses[action.id],
+                  action.label,
+                ),
+                protocolStatusMessage:
+                  commandStatuses[action.id]?.message ?? "",
                 statusTestId: `host-command-status-${action.id}`,
                 statusFloorTestId: `host-command-status-floor-${action.id}`,
                 statusFloorMinBlockSizePx:
                   HOST_CONTROL_SURFACE_CONTRACT.commandStatusFloorMinBlockSizePx,
-                statusMessage: commandStatusMessage(commandStatuses[action.id]),
+                statusMessage: commandStatusMessage(
+                  commandStatuses[action.id],
+                  action.label,
+                ),
               }),
             ),
           ),
@@ -80,11 +105,32 @@ export function buildHostControlSurfaceViewModel({
   });
 }
 
-export function commandStatusMessage(status) {
+export function commandStatusMessage(status, actionLabel = "Action") {
   if (status === undefined || status === null) {
     return "";
   }
-  return status.message;
+  if (status.state === "pending") {
+    return `${actionLabel} is in progress.`;
+  }
+  if (status.state === "ack") {
+    return `${actionLabel} completed.`;
+  }
+  if (status.state === "reject") {
+    return status.retryable === true
+      ? `${actionLabel} could not be completed. Refresh and try again.`
+      : `${actionLabel} could not be completed.`;
+  }
+  return `${actionLabel} updated.`;
+}
+
+function visibleCommandStatus(status, actionLabel) {
+  if (status === undefined || status === null) {
+    return null;
+  }
+  return Object.freeze({
+    ...status,
+    message: commandStatusMessage(status, actionLabel),
+  });
 }
 
 function buildHostCommandContextViewModel({
@@ -98,7 +144,8 @@ function buildHostCommandContextViewModel({
   const normalizedCapability = String(capabilityLabel);
   return Object.freeze({
     testId: HOST_CONTROL_SURFACE_CONTRACT.commandContextTestId,
-    label: "Command authority",
+    summary: `Acting as ${normalizedPrincipal}`,
+    label: "Moderator access",
     value: `${normalizedCapability} as ${normalizedPrincipal}`,
     gameId: normalizedGameId,
     principalUserId: normalizedPrincipal,

@@ -215,7 +215,7 @@ function surfaceScenarios() {
       path: "/g/midsummer",
       render: "renderPlayerSurface",
       surfaceTestId: "player-surface",
-      requiredText: ["Votecount", "Private queue"],
+      requiredText: ["Full votecount", "Private queue"],
       requiredSelectors: [
         '[data-testid="player-role-card"][data-role-state="unassigned"]',
         '[data-testid="player-private-link-notification-1"]',

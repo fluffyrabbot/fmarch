@@ -64,7 +64,8 @@ test("player command panel model exposes tablet touch command contracts", () => 
     value: "Role PM as slot-7",
     audienceLabel: "Only this channel's members read this",
   });
-  assert.deepEqual(view.deadline, {
+  assert.equal(view.heading, "Vote");
+  assert.deepEqual(view.context.deadline, {
     testId: "player-votecount-deadline",
     label: "Deadline",
     phaseLabel: "Day 2",
@@ -72,7 +73,13 @@ test("player command panel model exposes tablet touch command contracts", () => 
     state: "open",
     isProjected: true,
   });
-  assert.deepEqual(view.rows, [{ target: "slot-2 / Ilya", tally: "4/7" }]);
+  assert.deepEqual(view.votecount, {
+    className: "player-command-panel__votecount fm-proof-disclosure",
+    testId: "player-full-votecount",
+    summary: "Full votecount · 1 target",
+    open: false,
+    rows: [{ target: "slot-2 / Ilya", tally: "4/7" }],
+  });
   assert.equal(
     view.quickActions.className,
     "player-command-panel__quick-actions fm-action-tray",
@@ -86,7 +93,7 @@ test("player command panel model exposes tablet touch command contracts", () => 
       "withdraw_vote",
     ],
   );
-  assert.deepEqual(view.composer.currentVote, {
+  assert.deepEqual(view.context.currentVote, {
     testId: "player-current-vote",
     label: "Current vote",
     value: "Slot 2",
@@ -262,7 +269,7 @@ test("player command panel disables withdraw until command state has a current v
     },
   });
 
-  assert.deepEqual(view.composer.currentVote, {
+  assert.deepEqual(view.context.currentVote, {
     testId: "player-current-vote",
     label: "Current vote",
     value: "No current vote",
@@ -408,7 +415,7 @@ test("player command panel model normalizes missing row and label data", () => {
     votecount: [{}],
   });
 
-  assert.deepEqual(view.rows, [{ target: "unknown", tally: "0/0" }]);
+  assert.deepEqual(view.votecount.rows, [{ target: "unknown", tally: "0/0" }]);
   assert.deepEqual(view.composer.channelContext, {
     testId: PLAYER_COMMAND_PANEL_CONTRACT.channelContextTestId,
     channelId: "main",
@@ -421,7 +428,7 @@ test("player command panel model normalizes missing row and label data", () => {
     value: "Main thread as slot",
     audienceLabel: "Everyone at the table reads this",
   });
-  assert.deepEqual(view.deadline, {
+  assert.deepEqual(view.context.deadline, {
     testId: "player-votecount-deadline",
     label: "Deadline",
     phaseLabel: "Current phase",

@@ -346,24 +346,24 @@ function provePlayerRouteLayoutCss(source) {
     source,
     /\.player-surface__command-stack\s*\{[^}]*overscroll-behavior:\s*contain;/s,
   );
-  assert.match(source, /@media \(max-width:\s*959px\)/);
+  assert.match(source, /@media \(max-width:\s*840px\)/);
   assert.match(
     source,
-    /@media \(max-width:\s*959px\)\s*\{[\s\S]*?\.player-surface__command-stack\s*\{[^}]*position:\s*static;/s,
+    /@media \(max-width:\s*840px\)\s*\{[\s\S]*?\.player-surface__command-stack\s*\{[^}]*position:\s*static;/s,
   );
   assert.match(
     source,
-    /@media \(max-width:\s*959px\)\s*\{[\s\S]*?\.player-surface__command-stack\s*\{[^}]*overflow:\s*visible;/s,
+    /@media \(max-width:\s*840px\)\s*\{[\s\S]*?\.player-surface__command-stack\s*\{[^}]*overflow:\s*visible;/s,
   );
 
   return {
-    commandRailMode: "sticky-tablet-command-rail",
+    commandRailMode: "sticky-tablet-command-column",
     stickyTopPx: 22,
     topbarOffsetPx: APP_SHELL_CONTRACT.topbarBlockSizePx,
     safeAreaAware: true,
     internalScroll: true,
     overscroll: "contain",
-    unstickBelowPx: 960,
+    unstickBelowPx: 840,
     stabilityMode: "primary-controls-before-live-receipts",
     primaryControlsBeforeReceipts: true,
   };

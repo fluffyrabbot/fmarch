@@ -259,7 +259,7 @@ export const roles = Object.freeze([
         zone: "player-primary-actions",
         targetSelectors: Object.freeze([
           '[data-action="submit_vote"]',
-          '[data-action="withdraw_vote"]',
+          '[data-action="submit_vote:no_lynch"]',
           '[data-action="submit_post"]',
         ]),
       }),

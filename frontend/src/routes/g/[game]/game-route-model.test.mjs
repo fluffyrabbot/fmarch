@@ -56,7 +56,7 @@ test("player route data exposes thread, channel, votecount, and touch command la
     surfaceTestId: "player-surface",
     capabilityTestId: "player-capability",
     liveStatusTestId: "player-live-status",
-    requiredText: "Votecount",
+    requiredText: "Full votecount",
   });
   assert.equal(data.player.slotId, "slot-7");
   assert.deepEqual(
@@ -184,15 +184,15 @@ test("player route data exposes thread, channel, votecount, and touch command la
   );
   assert.deepEqual(data.privateQueueExpandedItems, {});
   assert.equal(data.liveOfficialPost, null);
-  assert.equal(data.layout.root.data.mode, "tablet-three-zone-cockpit");
+  assert.equal(data.layout.root.data.mode, "tablet-two-zone-channel-switcher");
   assert.equal(data.layout.root.data.minTabletViewportPx, 1024);
-  assert.equal(data.layout.root.data.collapseBelowPx, 960);
+  assert.equal(data.layout.root.data.collapseBelowPx, 840);
   assert.deepEqual(data.layout.commandRail, {
     className: "player-surface__command-stack",
     data: {
-      mode: "sticky-tablet-command-rail",
+      mode: "sticky-tablet-command-column",
       stickyTopPx: 22,
-      unstickBelowPx: 960,
+      unstickBelowPx: 840,
       stabilityMode: "primary-controls-before-live-receipts",
     },
   });
