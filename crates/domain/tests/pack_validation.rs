@@ -1,9 +1,7 @@
 use std::path::PathBuf;
 
 use domain::pack::PhaseKind;
-use domain::{
-    load_pack_from_json, night_ability_order, upcast_pack_json, validate_pack, IrAbility, Pack,
-};
+use domain::{load_pack_from_json, night_ability_order, validate_pack, IrAbility, Pack};
 use serde_json::{json, Value};
 
 fn repo_root() -> PathBuf {
@@ -244,75 +242,35 @@ fn valid_pack_fixture_validates() {
 }
 
 #[test]
-fn pack_loader_upcasts_current_pack_before_validation() {
+fn pack_loader_validates_current_pack() {
     let raw = serde_json::to_string(&valid_pack_value()).unwrap();
-    let pack = load_pack_from_json(&raw).expect("current pack version should identity-upcast");
+    let pack = load_pack_from_json(&raw).expect("current pack should load and validate");
     assert_eq!(pack.version, domain::SUPPORTED_PACK_VERSION);
     assert_eq!(pack.name, "testpack");
     validate_pack(&pack).unwrap();
 }
 
 #[test]
-fn pack_loader_migrates_v0_legacy_shape_fixture() {
-    let raw = load_pack_raw("test_pack_v0_legacy_shape");
-    assert!(
-        serde_json::from_str::<Pack>(&raw).is_err(),
-        "legacy fixture should not deserialize without the upcast boundary"
-    );
-
-    let pack = load_pack_from_json(&raw).expect("v0 legacy fixture should upcast and validate");
-    assert_eq!(pack.version, domain::SUPPORTED_PACK_VERSION);
-    assert_eq!(pack.ir_version, domain::MIN_SUPPORTED_IR_VERSION);
-    assert_eq!(pack.name, "test_pack_v0_legacy_shape");
-    assert!(pack.roles["mafia_goon"]
-        .actions
-        .iter()
-        .any(|action| action.id == "factional_kill"));
-    validate_pack(&pack).unwrap();
-}
-
-#[test]
-fn pack_upcast_v0_renames_legacy_fields_without_decoding() {
-    let raw = load_pack_raw("test_pack_v0_legacy_shape");
-    let value: Value = serde_json::from_str(&raw).unwrap();
-    let value = upcast_pack_json(value).expect("v0 fixture should upcast");
-    assert_eq!(value["version"], json!(domain::SUPPORTED_PACK_VERSION));
-    assert_eq!(value["ir_version"], json!(domain::MIN_SUPPORTED_IR_VERSION));
-    assert!(value.get("vote_policy").is_none());
-    assert!(value.get("phase_policy").is_none());
-    assert!(value.get("action_order").is_none());
-    assert!(value.get("vote").is_some());
-    assert!(value.get("phases").is_some());
-    assert!(value.get("precedence").is_some());
-    assert!(value["roles"]["mafia_goon"]
-        .get("action_templates")
-        .is_none());
-    assert!(value["roles"]["mafia_goon"].get("actions").is_some());
-}
-
-#[test]
-fn pack_upcast_requires_version_field_before_decode() {
+fn pack_loader_requires_version_field() {
     let mut value = valid_pack_value();
     value.as_object_mut().unwrap().remove("version");
-    let err = upcast_pack_json(value).unwrap_err();
+    let raw = serde_json::to_string(&value).unwrap();
+    let err = load_pack_from_json(&raw).unwrap_err();
     assert!(
-        err.to_string().contains("version: missing required field"),
-        "unexpected migration error: {err}"
+        err.to_string().contains("missing field `version`"),
+        "unexpected decode error: {err}"
     );
 }
 
 #[test]
-fn pack_loader_rejects_pack_versions_without_registered_migration() {
+fn pack_loader_rejects_unsupported_pack_versions() {
     let mut value = valid_pack_value();
     value["version"] = json!(2);
     let raw = serde_json::to_string(&value).unwrap();
     let err = load_pack_from_json(&raw).unwrap_err();
-    assert!(
-        err.to_string().contains(
-            "unsupported pack version 2; supported version is 1; no migration path is registered"
-        ),
-        "unexpected pack load error: {err}"
-    );
+    assert!(err
+        .to_string()
+        .contains("unsupported pack version 2; supported version is 1"));
 }
 
 #[test]
@@ -1309,7 +1267,7 @@ fn night_order_reacts_to_pack_priorities_and_precedence_edges() {
 }
 
 #[test]
-fn precedence_order_contract_fixture_is_valid_and_non_legacy() {
+fn precedence_order_contract_fixture_is_valid() {
     let pack = load_pack_named("test_precedence_order_contract");
     validate_pack(&pack).unwrap();
     assert_eq!(
@@ -1319,7 +1277,7 @@ fn precedence_order_contract_fixture_is_valid_and_non_legacy() {
 }
 
 #[test]
-fn guard_witch_killtarget_fixture_is_valid_and_non_legacy() {
+fn guard_witch_killtarget_fixture_is_valid() {
     let pack = load_pack_named("test_guard_witch_killtarget");
     validate_pack(&pack).unwrap();
     assert_eq!(pack.ir_version, 46);
@@ -1327,7 +1285,7 @@ fn guard_witch_killtarget_fixture_is_valid_and_non_legacy() {
 }
 
 #[test]
-fn skip_next_day_day_only_fixture_is_valid_and_non_legacy() {
+fn skip_next_day_day_only_fixture_is_valid() {
     let pack = load_pack_named("test_skip_next_day_day_only");
     validate_pack(&pack).unwrap();
     assert_eq!(pack.ir_version, 46);
@@ -5539,7 +5497,7 @@ fn lover_policy_requires_v16_link_effect_and_night_cadence() {
 }
 
 #[test]
-fn backup_policy_requires_v17_declared_effect_and_role_refs() {
+fn backup_policy_requires_v68_declared_effect_role_refs_and_priority() {
     let mut value = valid_pack_value();
     value["ir_version"] = json!(16);
     value["effects"] = json!({
@@ -5554,14 +5512,16 @@ fn backup_policy_requires_v17_declared_effect_and_role_refs() {
     });
 
     let err = validate_pack(&pack_from_value(value.clone())).unwrap_err();
-    assert_issue(&err, "backup_policy", "requires ir_version >= 17");
+    assert_issue(&err, "backup_policy", "requires ir_version >= 68");
+    assert_issue(&err, "backup_policy.priority", "explicit priority");
     assert_issue(
         &err,
         "backup_policy.passive_effect_prefix",
         "unknown role `missing_role`",
     );
 
-    value["ir_version"] = json!(17);
+    value["ir_version"] = json!(68);
+    value["backup_policy"]["priority"] = json!("TargetedThenPassive");
     value["effects"] = json!({
         "backup:cop": { "duration": "Persistent", "visibility": "Hidden" }
     });
@@ -5578,6 +5538,8 @@ fn backup_policy_requires_v17_declared_effect_and_role_refs() {
         "backup:cop": { "duration": "Persistent", "visibility": "Hidden" }
     });
     set_effect_policy(&mut value, "doused", "Persistent", "ActorAndTarget");
+    value["visibility_families"] = json!(["EffectAudiences"]);
+    value["win_families"] = json!(["FactionElimination", "FactionParity"]);
     validate_pack(&pack_from_value(value)).unwrap();
 }
 
@@ -5608,7 +5570,7 @@ fn backup_priority_policy_is_explicit_and_versioned() {
 }
 
 #[test]
-fn backup_priority_defaults_to_targeted_then_passive_when_omitted() {
+fn backup_priority_is_required_when_enabled() {
     let mut value = valid_pack_value();
     value["ir_version"] = json!(17);
     value["effects"] = json!({
@@ -5622,12 +5584,8 @@ fn backup_priority_defaults_to_targeted_then_passive_when_omitted() {
         "targeted_effect": "backup_target"
     });
 
-    let pack = pack_from_value(value);
-    validate_pack(&pack).unwrap();
-    assert_eq!(
-        pack.backup_policy.effective_priority(),
-        domain::pack::BackupPriorityPolicy::TargetedThenPassive
-    );
+    let err = validate_pack(&pack_from_value(value)).unwrap_err();
+    assert_issue(&err, "backup_policy.priority", "explicit priority");
 }
 
 #[test]

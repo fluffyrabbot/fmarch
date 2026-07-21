@@ -894,18 +894,6 @@ pub enum BackupPriorityPolicy {
     PassiveThenTargeted,
 }
 
-impl Default for BackupPriorityPolicy {
-    fn default() -> Self {
-        Self::TargetedThenPassive
-    }
-}
-
-impl BackupPolicy {
-    pub fn effective_priority(&self) -> BackupPriorityPolicy {
-        self.priority.unwrap_or_default()
-    }
-}
-
 fn default_backup_passive_effect_prefix() -> String {
     "backup:".to_string()
 }
@@ -2016,138 +2004,32 @@ impl std::error::Error for PackValidationError {}
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PackLoadError {
     Json(String),
-    Migration(PackMigrationError),
     Decode(String),
     Validation(PackValidationError),
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum PackMigrationError {
-    NotObject,
-    MissingField { path: String },
-    InvalidField { path: String, message: String },
-    UnsupportedVersion { version: u32, supported: u32 },
 }
 
 impl std::fmt::Display for PackLoadError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             PackLoadError::Json(message) => write!(f, "pack JSON parse error: {message}"),
-            PackLoadError::Migration(err) => write!(f, "pack migration: {err}"),
             PackLoadError::Decode(message) => write!(f, "pack decode error: {message}"),
             PackLoadError::Validation(err) => write!(f, "pack validation: {err}"),
         }
     }
 }
 
-impl std::fmt::Display for PackMigrationError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            PackMigrationError::NotObject => write!(f, "pack root must be a JSON object"),
-            PackMigrationError::MissingField { path } => {
-                write!(f, "{path}: missing required field")
-            }
-            PackMigrationError::InvalidField { path, message } => {
-                write!(f, "{path}: {message}")
-            }
-            PackMigrationError::UnsupportedVersion { version, supported } => write!(
-                f,
-                "unsupported pack version {version}; supported version is {supported}; no migration path is registered"
-            ),
-        }
-    }
-}
-
 impl std::error::Error for PackLoadError {}
-impl std::error::Error for PackMigrationError {}
 
 pub fn load_pack_from_json(raw: &str) -> Result<Pack, PackLoadError> {
-    let value = serde_json::from_str(raw).map_err(|err| PackLoadError::Json(err.to_string()))?;
-    let value = upcast_pack_json(value).map_err(PackLoadError::Migration)?;
-    let pack: Pack =
-        serde_json::from_value(value).map_err(|err| PackLoadError::Decode(err.to_string()))?;
+    let pack: Pack = serde_json::from_str(raw).map_err(|err| {
+        if err.classify() == serde_json::error::Category::Data {
+            PackLoadError::Decode(err.to_string())
+        } else {
+            PackLoadError::Json(err.to_string())
+        }
+    })?;
     validate_pack(&pack).map_err(PackLoadError::Validation)?;
     Ok(pack)
-}
-
-pub fn upcast_pack_json(value: serde_json::Value) -> Result<serde_json::Value, PackMigrationError> {
-    let version = pack_json_version(&value)?;
-    if version == SUPPORTED_PACK_VERSION {
-        return Ok(value);
-    }
-    if version == 0 {
-        return upcast_pack_v0_to_v1(value);
-    }
-    Err(PackMigrationError::UnsupportedVersion {
-        version,
-        supported: SUPPORTED_PACK_VERSION,
-    })
-}
-
-fn upcast_pack_v0_to_v1(
-    mut value: serde_json::Value,
-) -> Result<serde_json::Value, PackMigrationError> {
-    let object = value.as_object_mut().ok_or(PackMigrationError::NotObject)?;
-    object.insert(
-        "version".to_string(),
-        serde_json::json!(SUPPORTED_PACK_VERSION),
-    );
-    object
-        .entry("ir_version".to_string())
-        .or_insert_with(|| serde_json::json!(MIN_SUPPORTED_IR_VERSION));
-    rename_object_field(object, "vote_policy", "vote");
-    rename_object_field(object, "phase_policy", "phases");
-    rename_object_field(object, "action_order", "precedence");
-
-    let roles = object
-        .get_mut("roles")
-        .and_then(serde_json::Value::as_object_mut)
-        .ok_or_else(|| PackMigrationError::MissingField {
-            path: "roles".to_string(),
-        })?;
-    for (role_key, role) in roles {
-        let role = role
-            .as_object_mut()
-            .ok_or_else(|| PackMigrationError::InvalidField {
-                path: format!("roles.{role_key}"),
-                message: "expected object".to_string(),
-            })?;
-        rename_object_field(role, "action_templates", "actions");
-    }
-
-    Ok(value)
-}
-
-fn rename_object_field(
-    object: &mut serde_json::Map<String, serde_json::Value>,
-    from: &str,
-    to: &str,
-) {
-    if object.contains_key(to) {
-        return;
-    }
-    if let Some(value) = object.remove(from) {
-        object.insert(to.to_string(), value);
-    }
-}
-
-fn pack_json_version(value: &serde_json::Value) -> Result<u32, PackMigrationError> {
-    let object = value.as_object().ok_or(PackMigrationError::NotObject)?;
-    let raw_version = object
-        .get("version")
-        .ok_or_else(|| PackMigrationError::MissingField {
-            path: "version".to_string(),
-        })?;
-    let version = raw_version
-        .as_u64()
-        .ok_or_else(|| PackMigrationError::InvalidField {
-            path: "version".to_string(),
-            message: "expected non-negative integer".to_string(),
-        })?;
-    u32::try_from(version).map_err(|_| PackMigrationError::InvalidField {
-        path: "version".to_string(),
-        message: "expected u32-compatible integer".to_string(),
-    })
 }
 
 pub fn validate_pack(pack: &Pack) -> Result<(), PackValidationError> {
@@ -7369,14 +7251,20 @@ fn validate_backup_policy(
     if !policy.enabled {
         return;
     }
-    if ir_version < 17 {
+    if ir_version < 68 {
         issue(
             issues,
             path,
-            "enabled backup policy requires ir_version >= 17",
+            "enabled backup policy requires ir_version >= 68",
         );
     }
-    if policy.priority.is_some() && ir_version < 68 {
+    if policy.priority.is_none() {
+        issue(
+            issues,
+            format!("{path}.priority"),
+            "enabled backup policy requires an explicit priority",
+        );
+    } else if ir_version < 68 {
         issue(
             issues,
             format!("{path}.priority"),
@@ -9625,9 +9513,6 @@ fn pack_required_ir_version(pack: &Pack) -> (u16, BTreeSet<&'static str>) {
         require_ir(&mut required, &mut reasons, 16, "lover_policy");
     }
     if pack.backup_policy.enabled {
-        require_ir(&mut required, &mut reasons, 17, "backup_policy");
-    }
-    if pack.backup_policy.priority.is_some() {
         require_ir(&mut required, &mut reasons, 68, "backup_policy.priority");
     }
     if pack.private_channels.enabled {
@@ -10254,10 +10139,6 @@ mod tests {
         let mut value = test_pack_value();
         value["lover_policy"] = json!({ "enabled": true });
         assert_versioned_pack_feature(value, 16, "lover_policy");
-
-        let mut value = test_pack_value();
-        value["backup_policy"] = json!({ "enabled": true });
-        assert_versioned_pack_feature(value, 17, "backup_policy");
 
         let mut value = test_pack_value();
         value["backup_policy"] = json!({

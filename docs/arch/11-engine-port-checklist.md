@@ -662,19 +662,12 @@ The only identity that crosses into the engine is `SlotId`.
   target-lynch, self-lynch, two-faction parity, and three-faction all-other wins through one
   shared role/alignment reveal assertion so every proven `WinReached` path covers the same
   projection contract]
-- [x] Provide pack-to-pack migration/upcast tools and golden fixture regeneration tools. [proven:
-  `domain::load_pack_from_json` routes every pack read through `upcast_pack_json` before
-  deserialize/validation, current v1 packs identity-upcast, `test_pack_v0_legacy_shape` proves a
-  real v0 legacy shape migrates old top-level/role-local field names into v1 before validation,
-  unsupported future pack versions fail with an explicit missing-migration-path error,
-  `commands::load_pack` uses that boundary before `ResolvePhase`, `upcast_pack --check` smokes
-  accepted current/v0 packs and rejected unsupported fixtures, Postgres test
-  `resolve_phase_loads_upcast_v0_pack_before_append` proves a migrated pack can submit, resolve,
-  validate, and project a kill, and `check_goldens --check` reruns 139 current fixtures through
-  the upcast/load boundary with fixture-local `pack_overrides` for the Cupid cascade-disabled
-  variant; `write_mode_regenerates_a_drifted_temp_fixture` proves `check_goldens --write`
-  regenerates a drifted copied fixture and that the rewritten copy passes check-mode. Future
-  historical pack shapes still require explicit registered migration steps.]
+- [x] Provide strict pack loading and golden fixture regeneration tools. [proven:
+  `domain::load_pack_from_json` accepts only the current pack shape and validates it before
+  `ResolvePhase`; unsupported pack versions fail at that boundary; `check_goldens --check`
+  reruns current fixtures with fixture-local `pack_overrides`; and
+  `write_mode_regenerates_a_drifted_temp_fixture` proves `check_goldens --write` regenerates a
+  drifted copied fixture whose rewritten copy immediately passes check-mode.]
 
 ### C. Day resolution
 
@@ -1892,7 +1885,7 @@ appends `ResolutionApplied`, kills the lynched slot, and rebuilds projections id
 2. Reject invalid template/mode/effect/target combinations.
 3. Enforce additive IR evolution and pack version compatibility.
 4. Move hardcoded resolver ordering toward pack-derived precedence tables.
-5. Route pack reads through an explicit upcast/load boundary before command-side resolution.
+5. Route pack reads through a strict load/validation boundary before command-side resolution.
 
 Exit proof: every shipped pack validates; intentionally malformed pack fixtures fail with
 actionable errors.

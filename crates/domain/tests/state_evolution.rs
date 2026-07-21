@@ -9,7 +9,7 @@ use std::path::PathBuf;
 
 use domain::events::{DayVoteOutcome, InnerEvent, VoteStatus};
 use domain::pack::{DeathRevealMode, GrantKind, Pack, PhaseKind, VoteMethod, VoteTieBreaker};
-use domain::resolver::{check_win, resolve, resolve_events, ResolutionInput};
+use domain::resolver::{check_win, resolve, ResolutionInput};
 use domain::state::{
     apply_events, RevealState, SlotLifecycle, SlotState, StateSnapshot, Submission,
 };
@@ -31,6 +31,15 @@ fn load_pack_named(name: &str) -> Pack {
     let p = repo_root().join("packs").join(name).join("pack.json");
     let raw = std::fs::read_to_string(&p).unwrap_or_else(|e| panic!("read {p:?}: {e}"));
     serde_json::from_str(&raw).unwrap_or_else(|e| panic!("deserialize {name}/pack.json: {e}"))
+}
+
+fn resolved_events(input: ResolutionInput) -> Vec<InnerEvent> {
+    resolve(input)
+        .applied
+        .events
+        .into_iter()
+        .map(|indexed| indexed.event)
+        .collect()
 }
 
 fn slot(id: &str, role: &str, alignment: &str, status: &str) -> SlotState {
@@ -2041,7 +2050,7 @@ fn multi_phase_state_carries_forward_and_win_fires_at_the_right_point() {
         badges: Vec::new(),
         buffered_ita_shots: Vec::new(),
     };
-    let night_events = resolve_events(ResolutionInput {
+    let night_events = resolved_events(ResolutionInput {
         game_id: "mp".to_string(),
         phase_id: "N01".to_string(),
         run_id: "mp:N01:1".to_string(),
@@ -2109,7 +2118,7 @@ fn multi_phase_state_carries_forward_and_win_fires_at_the_right_point() {
         badges: Vec::new(),
         buffered_ita_shots: Vec::new(),
     };
-    let night_safe = resolve_events(ResolutionInput {
+    let night_safe = resolved_events(ResolutionInput {
         game_id: "mp".to_string(),
         phase_id: "N01".to_string(),
         run_id: "mp:N01:safe".to_string(),
@@ -2144,7 +2153,7 @@ fn multi_phase_state_carries_forward_and_win_fires_at_the_right_point() {
     let mut d02 = after_safe.clone();
     d02.phase_kind = PhaseKind::Day;
     d02.phase_number = 2;
-    let day_events = resolve_events(ResolutionInput {
+    let day_events = resolved_events(ResolutionInput {
         game_id: "mp".to_string(),
         phase_id: "D02".to_string(),
         run_id: "mp:D02:1".to_string(),
@@ -2232,7 +2241,7 @@ fn arsonist_persistent_effect_carries_across_phases() {
     };
 
     // N01: douse slot_2.
-    let n01_events = resolve_events(ResolutionInput {
+    let n01_events = resolved_events(ResolutionInput {
         game_id: "arson".to_string(),
         phase_id: "N01".to_string(),
         run_id: "arson:N01:1".to_string(),
@@ -2278,7 +2287,7 @@ fn arsonist_persistent_effect_carries_across_phases() {
     // N02: douse slot_3, then ignite. Advance the phase cursor (engine's job).
     let mut n02 = after_n01.clone();
     n02.phase_number = 2;
-    let n02_events = resolve_events(ResolutionInput {
+    let n02_events = resolved_events(ResolutionInput {
         game_id: "arson".to_string(),
         phase_id: "N02".to_string(),
         run_id: "arson:N02:1".to_string(),

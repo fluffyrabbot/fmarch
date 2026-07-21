@@ -142,16 +142,10 @@ command-side resolution. `validate_pack_required_ir_version` derives the minimum
 `ir_version` implied by declared features, so lowering a rich pack below its additive
 feature floor fails even if individual fields deserialize.
 
-Pack reads now enter through `domain::load_pack_from_json`, which calls
-`domain::upcast_pack_json` before deserializing and validating the `Pack`. The current migration
-table has a v1 identity path and a v0-to-v1 path for the legacy `vote_policy` / `phase_policy` /
-`action_order` / role-local `action_templates` shape. Unsupported pack versions fail with an
-explicit "no migration path is registered" error before command-side resolution can append
-`ResolutionApplied`, `ResolutionTrace`, or `ThreadLocked`. The operational smoke tool is
-`cargo run -p commands --bin upcast_pack -- --check <packs/name/pack.json>`; the legacy fixture
-`packs/test_pack_v0_legacy_shape/pack.json` proves the migration normalizes to pack v1 / IR v1,
-and `resolve_phase_loads_upcast_v0_pack_before_append` proves the command path can submit,
-resolve, validate, and project through the migrated pack.
+Pack reads enter through `domain::load_pack_from_json`, which deserializes the current `Pack`
+shape and validates it before command-side resolution can append `ResolutionApplied`,
+`ResolutionTrace`, or `ThreadLocked`. Pack versions are exact: unsupported versions fail at this
+boundary instead of receiving an implicit migration or compatibility interpretation.
 
 Golden fixture checking/regeneration uses the same boundary: `domain::golden_events_from_input_value`
 reruns a fixture input, `domain::normalize_golden_event` strips only explicitly non-canonical
@@ -182,7 +176,6 @@ Current additive IR gates are:
 | 14 | `death_retaliation` |
 | 15 | `idiot_policy` |
 | 16 | `lover_policy` |
-| 17 | `backup_policy` |
 | 19 | `target_lynch_win_policies` |
 | 20 | `beloved_princess_policy` |
 | 21 | `day_vote_prompt_policies` |
@@ -204,7 +197,7 @@ Current additive IR gates are:
 | 37 | `InvestigateMode::Role` |
 | 38 | `InvestigateMode::FullRole` |
 | 39 | investigator-scoped / same-different `ActionTemplate.result_memory` |
-| 68 | explicit `backup_policy.priority` |
+| 68 | enabled `backup_policy`, including explicit `priority` |
 
 The guard tests are `pack_required_ir_version_covers_versioned_action_features`,
 `pack_required_ir_version_covers_versioned_policy_features`, and
@@ -212,7 +205,7 @@ The guard tests are `pack_required_ir_version_covers_versioned_action_features`,
 keeps the shipped packs honest against the same map. `unsupported_version_fixture_is_rejected_by_pack_linter`
 proves unsupported pack/IR versions are rejected at the pack boundary, and
 `resolve_phase_rejects_unsupported_pack_versions_before_append` proves command-side resolution now
-uses the upcast/load boundary and surfaces unsupported pack versions before appending
+uses the strict load boundary and surfaces unsupported pack versions before appending
 `ResolutionApplied`, `ResolutionTrace`, or `ThreadLocked`.
 
 ### Roles → action templates
@@ -575,9 +568,9 @@ such as `backup:`; when a matching role dies, the backup slot receives a normal
 configured `targeted_effect`; the resolver emits `BackupTargeted { backup, source_target,
 source_role, source_action, phase_id, phase_kind, phase_number }`, folds that source choice
 into `StateSnapshot.backup_targets`, and later inherits the chosen source target's current
-role when that source dies. v68 adds explicit `backup_policy.priority`: omitted priority keeps the
-legacy `TargetedThenPassive` order, while `PassiveThenTargeted` lets a culture pack prefer a passive
-role-specific backup tag when both passive and targeted source roles die in the same resolution.
+role when that source dies. Enabled backup policies require explicit `backup_policy.priority`:
+`TargetedThenPassive` prefers a targeted source, while `PassiveThenTargeted` lets a culture pack
+prefer a passive role-specific backup tag when both source roles die in the same resolution.
 `backup_priority_policy_is_explicit_and_versioned` proves explicit priority is gated behind v68,
 and `backup_priority_targeted_over_passive` proves the shipped Mafiascum policy plus the alternate
 passive-first resolver branch.

@@ -4707,17 +4707,6 @@ fn treestump_applies(
         && !slot.status_tags.iter().any(|tag| tag == &policy.status_tag)
 }
 
-/// Compatibility helper for callers that still compare only the inner event
-/// sequence. New code should use [`resolve`] and persist the full output.
-pub fn resolve_events(input: ResolutionInput) -> Vec<InnerEvent> {
-    resolve(input)
-        .applied
-        .events
-        .into_iter()
-        .map(|indexed| indexed.event)
-        .collect()
-}
-
 /// Resolve a window's submissions into ordered inner events.
 ///
 /// Canonical inner-event ordering: the phase's own results, then the single
@@ -6129,7 +6118,12 @@ fn apply_backup_inheritance(
                     )
                 })
         });
-        let candidate = match input.pack.backup_policy.effective_priority() {
+        let priority = input
+            .pack
+            .backup_policy
+            .priority
+            .expect("validated enabled backup policy must declare priority");
+        let candidate = match priority {
             BackupPriorityPolicy::TargetedThenPassive => targeted.or(passive),
             BackupPriorityPolicy::PassiveThenTargeted => passive.or(targeted),
         };

@@ -2,7 +2,7 @@ use serde::Deserialize;
 use serde_json::Value;
 
 use crate::pack::Window;
-use crate::resolver::{resolve_events, resolve_instant, DayPhaseInputs, ResolutionInput};
+use crate::resolver::{resolve, resolve_instant, DayPhaseInputs, ResolutionInput};
 use crate::state::{StateSnapshot, Submission};
 use crate::Pack;
 
@@ -74,19 +74,13 @@ pub fn golden_events_from_input_value(
             .collect();
     }
 
-    let events = resolve_events(resolution_input);
-
-    events
+    resolve(resolution_input)
+        .applied
+        .events
         .into_iter()
-        .enumerate()
-        .map(|(index, event)| {
-            let mut value = serde_json::to_value(&event)
-                .map_err(|err| GoldenFixtureError::Serialize(err.to_string()))?;
-            value
-                .as_object_mut()
-                .expect("serialized inner event should be an object")
-                .insert("index".to_string(), Value::from(index));
-            Ok(value)
+        .map(|event| {
+            serde_json::to_value(event)
+                .map_err(|err| GoldenFixtureError::Serialize(err.to_string()))
         })
         .collect()
 }

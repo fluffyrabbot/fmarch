@@ -1530,7 +1530,7 @@ async fn resolve_phase_rejects_unsupported_pack_versions_before_append(pool: PgP
             Reject::Internal(ref message)
                 if message.contains("load pack test_unsupported_ir_version")
                     && message.contains("unsupported pack version 2")
-                    && message.contains("no migration path is registered")
+                    && message.contains("supported version is 1")
         ),
         "unexpected unsupported-version rejection: {err:?}"
     );
@@ -1554,78 +1554,6 @@ async fn resolve_phase_rejects_unsupported_pack_versions_before_append(pool: PgP
     assert_eq!(
         resolution_events, 0,
         "unsupported pack resolve must not append resolution envelopes or lock the phase"
-    );
-}
-
-#[sqlx::test(migrations = "../projections/migrations")]
-async fn resolve_phase_loads_upcast_v0_pack_before_append(pool: PgPool) {
-    let host_id = "host_h";
-    let game = Uuid::new_v4();
-    seed_open_night_game_with_pack(
-        &pool,
-        game,
-        host_id,
-        "test_pack_v0_legacy_shape",
-        ("vanilla_townie", "town"),
-        ("mafia_goon", "mafia"),
-    )
-    .await
-    .expect("seed v0-pack open night stream");
-
-    handle(
-        &pool,
-        &user("user_2"),
-        Command::SubmitAction {
-            game,
-            action_id: "legacy_v0_kill_n01".into(),
-            actor_slot: "slot_2".into(),
-            template_id: "factional_kill".into(),
-            targets: vec!["slot_1".into()],
-            grant_id: None,
-        },
-    )
-    .await
-    .expect("v0-upcast pack action submits through command validation");
-
-    handle(
-        &pool,
-        &user(host_id),
-        Command::ResolvePhase { game, seed: 9909 },
-    )
-    .await
-    .expect("host resolves with upcast v0 pack");
-
-    let applied_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
-    let applied =
-        domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION).unwrap();
-    assert!(
-        applied.events.iter().any(|indexed| {
-            matches!(
-                &indexed.event,
-                domain::InnerEvent::PlayerKilled {
-                    slot_id,
-                    cause,
-                    attackers,
-                    ..
-                } if slot_id == "slot_1"
-                    && cause == "factional_kill"
-                    && attackers == &vec!["slot_2".to_string()]
-            )
-        }),
-        "upcast v0 pack should resolve and persist the submitted kill"
-    );
-
-    let slots = slot_state(&pool, game).await.unwrap();
-    let killed = slots.iter().find(|slot| slot.slot_id == "slot_1").unwrap();
-    assert!(
-        !killed.alive,
-        "ResolutionApplied from the upcast v0 pack should fold through projections"
     );
 }
 

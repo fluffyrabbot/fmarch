@@ -63,7 +63,7 @@ def default_lanes(root: Path) -> list[dict[str, Any]]:
         },
         {
             "name": "pack_validation_schema",
-            "description": "Runs strict pack schema, linter, additive IR, and compatibility tests.",
+            "description": "Runs strict pack schema, linter, and additive IR tests.",
             "command": ["cargo", "test", "-p", "domain", "--test", "pack_validation"],
         },
     ]
