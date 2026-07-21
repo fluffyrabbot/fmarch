@@ -347,10 +347,6 @@ test("replacement private live harness imports extracted scenario cases", async 
     source.includes("./dev_test_game_replacement_private_scenario_cases.mjs"),
     "dev-test-game live harness should import replacement private cases from the extracted case module",
   );
-  assert(
-    !source.includes("./dev_test_game_replacement_private_scenarios.mjs"),
-    "dev-test-game live harness should not import replacement private cases through the compatibility facade",
-  );
   assert(source.includes("replacementStalePrivatePostAfterResolveScenario"));
   assert(source.includes("replacementStalePrivatePostAfterCompleteScenario"));
   assert(source.includes("replacementConcurrentVoteRaceScenario"));

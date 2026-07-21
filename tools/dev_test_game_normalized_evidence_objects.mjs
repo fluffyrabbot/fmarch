@@ -4,7 +4,7 @@ import {
 } from "./dev_test_game_core_loop_private_channel_recovery_scenarios.mjs";
 import {
   replacementPrivatePostRecoveryLaneIds,
-} from "./dev_test_game_replacement_private_scenarios.mjs";
+} from "./dev_test_game_replacement_private_scenario_cases.mjs";
 
 export const privateChannelNormalizedEvidenceObjects = Object.freeze([
   Object.freeze({

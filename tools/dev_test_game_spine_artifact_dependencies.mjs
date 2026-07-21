@@ -217,11 +217,6 @@ export const devTestGameSpineArtifactDependencyGraph = Object.freeze(
   ),
 );
 
-// Legacy aliases keep the ops-focused callers source-compatible while the
-// registry now covers the entire local spine.
-export const devTestGameOpsArtifactDependencyGraph =
-  devTestGameSpineArtifactDependencyGraph;
-
 const readinessArtifactRegistry = Object.freeze([
   readinessArtifact({
     id: "coreLoopAdminProof",
@@ -355,9 +350,6 @@ export function assertDevTestGameSpineArtifactDependencyGraph() {
   return devTestGameSpineArtifactDependencyGraph;
 }
 
-export const assertDevTestGameOpsArtifactDependencyGraph =
-  assertDevTestGameSpineArtifactDependencyGraph;
-
 export function assertSpineArtifactPlanOrder(plan, { customPlans = {} } = {}) {
   assertDevTestGameSpineArtifactDependencyGraph();
   const steps = flattenPlan(plan, customPlans);
@@ -386,8 +378,6 @@ export function assertSpineArtifactPlanOrder(plan, { customPlans = {} } = {}) {
   });
   return plan;
 }
-
-export const assertOpsArtifactPlanOrder = assertSpineArtifactPlanOrder;
 
 export function assertDevTestGameFullLiveArtifactPlanOrder({
   livePlan,

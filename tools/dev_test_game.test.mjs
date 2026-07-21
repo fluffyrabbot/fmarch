@@ -249,7 +249,7 @@ import {
   replacementVoteRaceLaneIds,
   replacementStalePrivatePostAfterCompleteScenario,
   replacementStalePrivatePostAfterResolveScenario,
-} from "./dev_test_game_replacement_private_scenarios.mjs";
+} from "./dev_test_game_replacement_private_scenario_cases.mjs";
 import {
   replacementActionRecoveryCoverageFamilies,
   replacementActionLaneIds,
@@ -387,13 +387,11 @@ import {
 import {
   assertDevTestGameFullLiveArtifactPlanOrder,
   assertDevTestGameSpineArtifactDependencyGraph,
-  assertDevTestGameOpsArtifactDependencyGraph,
-  assertOpsArtifactPlanOrder,
+  assertSpineArtifactPlanOrder,
   devTestGameSpineArtifactDependencyGraph,
-  devTestGameOpsArtifactDependencyGraph,
   readinessArtifactPaths,
   readinessEvidenceEnv,
-} from "./dev_test_game_ops_artifact_dependencies.mjs";
+} from "./dev_test_game_spine_artifact_dependencies.mjs";
 import {
   devTestGameSeedFixtureSpinePlan,
   seedFixtureSpineEnv,
@@ -1568,20 +1566,16 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     env: opsSpineReadinessEnv,
   });
   assert.equal(
-    assertOpsArtifactPlanOrder(devTestGameOpsSpinePlan),
+    assertSpineArtifactPlanOrder(devTestGameOpsSpinePlan),
     devTestGameOpsSpinePlan,
   );
   assert.equal(
-    assertOpsArtifactPlanOrder(devTestGameBackupRestoreSpinePlan),
+    assertSpineArtifactPlanOrder(devTestGameBackupRestoreSpinePlan),
     devTestGameBackupRestoreSpinePlan,
   );
   assert.equal(
-    assertOpsArtifactPlanOrder(devTestGameAdminSpinePlan),
+    assertSpineArtifactPlanOrder(devTestGameAdminSpinePlan),
     devTestGameAdminSpinePlan,
-  );
-  assert.equal(
-    assertDevTestGameOpsArtifactDependencyGraph(),
-    devTestGameOpsArtifactDependencyGraph,
   );
   assert.equal(
     assertDevTestGameSpineArtifactDependencyGraph(),
@@ -1623,13 +1617,13 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
   );
   assert.throws(
     () =>
-      assertOpsArtifactPlanOrder([
+      assertSpineArtifactPlanOrder([
         devTestGameOpsSpinePlan[2],
         devTestGameOpsSpinePlan[0],
       ]),
     /consumes target\/dev-test-game\/ops-artifacts\.json before its producer/,
   );
-  const opsArtifactNode = devTestGameOpsArtifactDependencyGraph.find(
+  const opsArtifactNode = devTestGameSpineArtifactDependencyGraph.find(
     (node) => node.id === "ops-artifacts",
   );
   assert.equal(
@@ -10559,7 +10553,6 @@ test("terminal receipt contract registry covers browser proof consumers", () => 
       contract.id,
       contract.label,
       contract.terminalBatchesKey,
-      contract.diagnosticStatusKey,
       contract.summaryHeading,
       contract.adminRouteOrder,
       contract.adminAuditProofRowsParam,
@@ -10578,7 +10571,6 @@ test("terminal receipt contract registry covers browser proof consumers", () => 
         "selected-local-dependency-terminal-receipt",
         "selected-local-dependency",
         "selectedLocalDependencyTerminalReceipt",
-        "selectedLocalDependencyTerminalReceiptStatus",
         "Selected local dependency receipt",
         20,
         "requiredSelectedLocalDependencyTerminalReceiptRows",
@@ -10598,7 +10590,6 @@ test("terminal receipt contract registry covers browser proof consumers", () => 
         "selected-operator-handoff-terminal-receipt",
         "selected-operator-handoff",
         "selectedOperatorHandoffReceipt",
-        "selectedOperatorHandoffReceiptStatus",
         "Selected operator handoff receipt",
         10,
         "requiredSelectedOperatorHandoffTerminalReceiptRows",
@@ -10635,14 +10626,6 @@ test("terminal receipt contract registry covers browser proof consumers", () => 
     ).size,
     terminalReceiptContractRegistry.length,
   );
-  assert.equal(
-    new Set(
-      terminalReceiptContractRegistry.map(
-        (contract) => contract.diagnosticStatusKey,
-      ),
-    ).size,
-    terminalReceiptContractRegistry.length,
-  );
   for (const key of [
     "adminAuditProofRowsParam",
     "adminAuditProofRowStatusesParam",
@@ -10664,8 +10647,6 @@ test("terminal receipt contract registry covers browser proof consumers", () => 
     );
     assert.equal(typeof contract.terminalBatchesKey, "string");
     assert.notEqual(contract.terminalBatchesKey.trim(), "");
-    assert.equal(typeof contract.diagnosticStatusKey, "string");
-    assert.notEqual(contract.diagnosticStatusKey.trim(), "");
     assert.equal(typeof contract.summaryHeading, "string");
     assert.notEqual(contract.summaryHeading.trim(), "");
     assert.equal(typeof contract.adminRouteOrder, "number");
@@ -20932,7 +20913,6 @@ test("session card and markdown include role credential URLs and tokens", async 
         receipt.id,
         receipt.label,
         receipt.terminalBatchesKey,
-        receipt.diagnosticStatusKey,
         receipt.status,
         receipt.rowIds,
         receipt.browserProofConsumers.map((consumer) => [
@@ -20948,7 +20928,6 @@ test("session card and markdown include role credential URLs and tokens", async 
         contract.id,
         contract.label,
         contract.terminalBatchesKey,
-        contract.diagnosticStatusKey,
         receipt.status,
         Object.keys(rowStatuses),
         contract.browserProofConsumers.map((consumer) => [
@@ -20993,8 +20972,6 @@ test("session card and markdown include role credential URLs and tokens", async 
       diagnostic.nextActionHandoffPairStatus,
       diagnostic.terminalReceiptStatuses,
       diagnostic.terminalReceiptConsumerCommands,
-      diagnostic.selectedLocalDependencyTerminalReceiptStatus,
-      diagnostic.selectedOperatorHandoffReceiptStatus,
     ]),
     [
       [
@@ -21008,17 +20985,15 @@ test("session card and markdown include role credential URLs and tokens", async 
           terminalReceiptContractRegistry.map((contract) => {
             const receipt =
               adminSpineTerminalBatchesFixture()[contract.terminalBatchesKey];
-            return [contract.diagnosticStatusKey, receipt.status];
+            return [contract.id, receipt.status];
           }),
         ),
         Object.fromEntries(
           terminalReceiptContractRegistry.map((contract) => [
-            contract.diagnosticStatusKey,
+            contract.id,
             contract.browserProofConsumers.map((consumer) => consumer.command),
           ]),
         ),
-        "passed",
-        "not_applicable",
       ],
     ],
   );

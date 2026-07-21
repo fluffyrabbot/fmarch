@@ -4,7 +4,7 @@ export {
   devTestGameReleaseReadinessMarkdownPath,
   devTestGameReleaseReadinessPath,
 } from "./dev_test_game_spine_artifact_paths.mjs";
-import { readinessArtifactPaths } from "./dev_test_game_ops_artifact_dependencies.mjs";
+import { readinessArtifactPaths } from "./dev_test_game_spine_artifact_dependencies.mjs";
 
 export function releaseReadinessStep({
   reason,

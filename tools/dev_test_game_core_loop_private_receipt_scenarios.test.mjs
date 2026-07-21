@@ -365,13 +365,6 @@ test("private-channel production harness callers use shared scenario definitions
     "core-loop admin proof should import private-channel scenarios from the shared recovery family module",
   );
   assert(
-    !proofSource.includes(
-      "./dev_test_game_core_loop_private_channel_scenario_cases.mjs",
-    ) &&
-      !proofSource.includes("./dev_test_game_core_loop_private_channel_cases.mjs"),
-    "core-loop admin proof should not import private-channel scenarios through the compatibility facade",
-  );
-  assert(
     proofSource.includes("coreLoopPrivateChannelRecoveryScenarioFamily") &&
       proofSource.includes("completedPrivateChannelReloadScenario") &&
       proofSource.includes("staleCompletedPrivatePostScenario"),
@@ -406,15 +399,6 @@ test("private-channel production harness callers use shared scenario definitions
       "./dev_test_game_core_loop_private_channel_scenario_case_definitions.mjs",
     ),
     "private-channel assertion facade should import completed private-channel cases from the case-only module",
-  );
-  assert(
-    !assertionFacadeSource.includes(
-      "./dev_test_game_core_loop_private_channel_scenario_cases.mjs",
-    ) &&
-      !assertionFacadeSource.includes(
-        "./dev_test_game_core_loop_private_channel_cases.mjs",
-      ),
-    "private-channel assertion facade should not import cases through the compatibility facade",
   );
   assert(
     !readinessSource.includes("Completed private channel remains readable.") &&

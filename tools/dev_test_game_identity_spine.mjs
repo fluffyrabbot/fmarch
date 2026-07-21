@@ -1,6 +1,6 @@
 import { pathToFileURL } from "node:url";
 import { devTestGameOpsSpinePlan } from "./dev_test_game_ops_spine.mjs";
-import { readinessEvidenceEnv } from "./dev_test_game_ops_artifact_dependencies.mjs";
+import { readinessEvidenceEnv } from "./dev_test_game_spine_artifact_dependencies.mjs";
 import { releaseReadinessStep } from "./dev_test_game_spine_readiness_steps.mjs";
 import { devTestGameSeedFixtureSpinePlan } from "./dev_test_game_seed_fixture_spine.mjs";
 import { runSpinePlan } from "./dev_test_game_spine_runner.mjs";

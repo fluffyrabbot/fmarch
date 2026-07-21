@@ -87,7 +87,7 @@ import {
 } from "./dev_test_game_replacement_handoff_scenario_cases.mjs";
 import {
   assertReplacementPrivateChannelRecoveryCoverageSummary,
-} from "./dev_test_game_replacement_private_scenarios.mjs";
+} from "./dev_test_game_replacement_private_scenario_cases.mjs";
 import {
   assertStaleConflictMessageCoverageSummary,
   replacementStaleConflictMessageSpineLaneCase,
@@ -8996,7 +8996,6 @@ function adminSpineTerminalReceiptSummaries(proof) {
       id: contract.id,
       label: contract.label,
       terminalBatchesKey: contract.terminalBatchesKey,
-      diagnosticStatusKey: contract.diagnosticStatusKey,
       status:
         receipt === null || typeof receipt !== "object"
           ? "missing"
@@ -10175,41 +10174,28 @@ function buildLocalDevelopmentDiagnostics(
         batchCount: check.batchCount,
         batchIds: check.batchIds,
         nextActionHandoffPairStatus: check.nextActionHandoffPair?.status,
-        terminalReceiptStatuses: terminalReceiptStatusesByDiagnosticKey(
+        terminalReceiptStatuses: terminalReceiptStatusesById(
           check.terminalReceipts,
         ),
         terminalReceiptConsumerCommands: terminalReceiptConsumerCommands(
           check.terminalReceipts,
         ),
-        ...legacyTerminalReceiptStatusFields(check.terminalReceipts),
       }),
     }),
   ].filter((diagnostic) => diagnostic !== null);
 }
 
-function terminalReceiptStatusesByDiagnosticKey(terminalReceipts = []) {
+function terminalReceiptStatusesById(terminalReceipts = []) {
   return Object.fromEntries(
-    terminalReceipts.map((receipt) => [
-      receipt.diagnosticStatusKey,
-      receipt.status,
-    ]),
+    terminalReceipts.map((receipt) => [receipt.id, receipt.status]),
   );
 }
 
 function terminalReceiptConsumerCommands(terminalReceipts = []) {
   return Object.fromEntries(
     terminalReceipts.map((receipt) => [
-      receipt.diagnosticStatusKey,
+      receipt.id,
       receipt.browserProofConsumers.map((consumer) => consumer.command),
-    ]),
-  );
-}
-
-function legacyTerminalReceiptStatusFields(terminalReceipts = []) {
-  return Object.fromEntries(
-    terminalReceipts.map((receipt) => [
-      receipt.diagnosticStatusKey,
-      receipt.status,
     ]),
   );
 }
@@ -10337,19 +10323,15 @@ function assertLocalDevelopmentDiagnostics(localDevelopmentSpine) {
   if (terminalReceiptDiagnostic !== undefined) {
     for (const contract of terminalReceiptContractRegistry) {
       if (
-        terminalReceiptDiagnostic.terminalReceiptStatuses?.[
-          contract.diagnosticStatusKey
-        ] === undefined ||
-        terminalReceiptDiagnostic[contract.diagnosticStatusKey] === undefined
+        terminalReceiptDiagnostic.terminalReceiptStatuses?.[contract.id] ===
+        undefined
       ) {
         throw new Error(
           `dev-test-game terminal receipt diagnostic missing ${contract.id}`,
         );
       }
       const consumerCommands =
-        terminalReceiptDiagnostic.terminalReceiptConsumerCommands?.[
-          contract.diagnosticStatusKey
-        ];
+        terminalReceiptDiagnostic.terminalReceiptConsumerCommands?.[contract.id];
       if (
         !Array.isArray(consumerCommands) ||
         !sameStringArray(

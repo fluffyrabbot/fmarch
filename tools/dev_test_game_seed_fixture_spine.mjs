@@ -1,5 +1,5 @@
 import { pathToFileURL } from "node:url";
-import { readinessEvidenceEnv } from "./dev_test_game_ops_artifact_dependencies.mjs";
+import { readinessEvidenceEnv } from "./dev_test_game_spine_artifact_dependencies.mjs";
 import { releaseReadinessStep } from "./dev_test_game_spine_readiness_steps.mjs";
 import { runSpinePlan } from "./dev_test_game_spine_runner.mjs";
 

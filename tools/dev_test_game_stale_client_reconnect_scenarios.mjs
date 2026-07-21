@@ -3,7 +3,7 @@ import {
 } from "./dev_test_game_replacement_handoff_scenario_cases.mjs";
 import {
   replacementPrivatePostRecoveryLaneIds,
-} from "./dev_test_game_replacement_private_scenarios.mjs";
+} from "./dev_test_game_replacement_private_scenario_cases.mjs";
 import {
   hardeningReconnectRecoveryFeatureTargetKind,
 } from "./dev_test_game_hardening_feature_target_kinds.mjs";

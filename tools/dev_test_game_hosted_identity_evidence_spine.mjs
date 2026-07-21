@@ -1,7 +1,7 @@
 import { pathToFileURL } from "node:url";
 import {
   readinessEvidenceEnv,
-} from "./dev_test_game_ops_artifact_dependencies.mjs";
+} from "./dev_test_game_spine_artifact_dependencies.mjs";
 import {
   devTestGameHostedIdentityProgressionAdminProofBatchScript,
   hostedIdentityProgressionAdminProofBatchArtifactPaths,

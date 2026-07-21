@@ -33,7 +33,7 @@ import {
 } from "./dev_test_game_stale_conflict_scenarios.mjs";
 import {
   replacementRaceLaneIds,
-} from "./dev_test_game_replacement_private_scenarios.mjs";
+} from "./dev_test_game_replacement_private_scenario_cases.mjs";
 import {
   playerLiveLagResyncLaneId,
 } from "./dev_test_game_stale_client_reconnect_scenarios.mjs";

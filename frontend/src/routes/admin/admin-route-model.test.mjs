@@ -62,7 +62,7 @@ import {
 import {
   replacementPrivateChannelRecoveryCoverageFamilies,
   replacementPrivateChannelRecoveryLaneIds,
-} from "../../../../tools/dev_test_game_replacement_private_scenarios.mjs";
+} from "../../../../tools/dev_test_game_replacement_private_scenario_cases.mjs";
 import {
   replacementActionLaneIds,
   replacementActionRecoveryCoverageFamilies,

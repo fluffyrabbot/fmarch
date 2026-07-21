@@ -24,7 +24,7 @@ import {
 import {
   replacementPrivatePostRecoveryLaneIds,
   replacementRaceLaneIds,
-} from "./dev_test_game_replacement_private_scenarios.mjs";
+} from "./dev_test_game_replacement_private_scenario_cases.mjs";
 import {
   replacementHandoffHardeningLaneIds,
 } from "./dev_test_game_replacement_handoff_scenario_cases.mjs";

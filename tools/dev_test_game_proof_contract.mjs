@@ -117,7 +117,7 @@ import {
   replacementPrivatePostRecoveryLaneIds,
   replacementRaceLaneIds,
   replacementVoteRaceLaneIds,
-} from "./dev_test_game_replacement_private_scenarios.mjs";
+} from "./dev_test_game_replacement_private_scenario_cases.mjs";
 import {
   replacementConcurrentActionRaceScenario,
   replacementConcurrentPrivatePostRaceScenario,

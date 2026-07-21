@@ -7,8 +7,8 @@ import {
 } from "../frontend/src/lib/server/local-ops-artifacts.mjs";
 import {
   assertDevTestGameFullLiveArtifactPlanOrder,
-  assertOpsArtifactPlanOrder,
-} from "./dev_test_game_ops_artifact_dependencies.mjs";
+  assertSpineArtifactPlanOrder,
+} from "./dev_test_game_spine_artifact_dependencies.mjs";
 import {
   devTestGameAdminSpinePlan,
   devTestGameAdminSpinePhaseRegistry,
@@ -1025,8 +1025,8 @@ export function assertDevTestGameSpineManifest(manifest) {
     "tools/dev_test_game_ops_admin_proof.mjs",
     "tools/dev_test_game_release_readiness.mjs",
   ]);
-  assertOpsArtifactPlanOrder(manifest.commands?.backupRestore?.plan ?? []);
-  assertOpsArtifactPlanOrder(manifest.commands?.ops?.plan ?? []);
+  assertSpineArtifactPlanOrder(manifest.commands?.backupRestore?.plan ?? []);
+  assertSpineArtifactPlanOrder(manifest.commands?.ops?.plan ?? []);
   assertDevTestGameFullLiveArtifactPlanOrder({
     livePlan: manifest.commands?.live?.plan ?? [],
     backupRestorePlan: manifest.commands?.backupRestore?.plan ?? [],
