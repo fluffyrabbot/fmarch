@@ -4862,6 +4862,8 @@ async function openModeratorBrowser(frontendBaseUrl) {
       `host console route failed with ${response?.status() ?? "no response"}: ${await page.textContent("body")}`,
     );
   }
+  await openHostConsoleDrawer(page, "host-supporting-evidence");
+  await openHostConsoleDrawer(page, "host-invite-workflows");
   await page.getByTestId("host-console-votecount").waitFor({ state: "visible" });
   return { context, page, pageUrl };
 }
@@ -5196,8 +5198,18 @@ async function openStaleModeratorBrowser(pageUrl) {
       `stale host console route failed with ${response?.status() ?? "no response"}: ${await page.textContent("body")}`,
     );
   }
+  await openHostConsoleDrawer(page, "host-supporting-evidence");
+  await openHostConsoleDrawer(page, "host-invite-workflows");
   await page.getByTestId("host-console-votecount").waitFor({ state: "visible" });
   return { context, page };
+}
+
+async function openHostConsoleDrawer(page, testId) {
+  const drawer = page.getByTestId(testId);
+  await drawer.waitFor({ state: "visible" });
+  await drawer.evaluate((node) => {
+    node.open = true;
+  });
 }
 
 async function readPlayerInviteTarget(page) {

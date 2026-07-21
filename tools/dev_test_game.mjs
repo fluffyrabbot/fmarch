@@ -14224,6 +14224,7 @@ function withoutStaleReplacementEntry(replacementSessionRevocation) {
 }
 
 async function issueReplacementInviteFromHost({ hostPage, game, frontendBaseUrl }) {
+  await openHostConsoleDrawer(hostPage, "host-invite-workflows");
   await hostPage.getByTestId("host-replacement-invite-panel").waitFor({
     state: "visible",
   });
@@ -14318,6 +14319,7 @@ async function openStaleHostInvitePage({ browser, hostPage, game, frontendBaseUr
   const page = await context.newPage();
   try {
     await page.goto(`${frontendBaseUrl}/g/${game}/host`, { waitUntil: "networkidle" });
+    await openHostConsoleDrawer(page, "host-invite-workflows");
     await page.getByTestId("host-player-invite-panel").waitFor({ state: "visible" });
     await page
       .getByTestId("host-player-invite-account")
@@ -14337,6 +14339,14 @@ async function openStaleHostInvitePage({ browser, hostPage, game, frontendBaseUr
     await context.close().catch(() => {});
     throw error;
   }
+}
+
+async function openHostConsoleDrawer(page, testId) {
+  const drawer = page.getByTestId(testId);
+  await drawer.waitFor({ state: "visible" });
+  await drawer.evaluate((node) => {
+    node.open = true;
+  });
 }
 
 async function readPlayerInviteTarget(page) {

@@ -204,6 +204,31 @@ test("role smoke scenarios pin tablet thumb-zone target counts", () => {
   );
 });
 
+test("moderator smoke pins collapsed support and a mobile first-viewport budget", () => {
+  const moderator = roles.find((role) => role.id === "moderator");
+
+  assert.deepEqual(moderator.closedByDefault, [
+    '[data-testid="host-status-overview"]',
+    '[data-testid="moderator-action-queue-later"]',
+    '[data-testid="moderator-action-queue-endgame"]',
+    '[data-testid="host-supporting-evidence"]',
+    '[data-testid="host-invite-workflows"]',
+  ]);
+  assert.deepEqual(moderator.mobileViewportBudget, {
+    primaryActionSelector:
+      '[data-testid="critical-host-action-extend_deadline"] [data-testid="critical-host-action-trigger"]',
+    maxPrimaryActionBottomViewportRatio: 1,
+    maxDocumentHeightViewportRatio: 2.5,
+  });
+  assert.deepEqual(moderator.collapseBeforeCommands, [
+    '[data-testid="host-status-overview"]',
+    '[data-testid="host-supporting-evidence"]',
+    '[data-testid="host-invite-workflows"]',
+  ]);
+  assert.equal(Object.isFrozen(moderator.closedByDefault), true);
+  assert.equal(Object.isFrozen(moderator.mobileViewportBudget), true);
+});
+
 test("nav focus coverage is shared across static and browser smoke evidence", () => {
   assert.deepEqual(
     navFocusCoverage.surfaces.map((surface) => surface.id),

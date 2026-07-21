@@ -31,30 +31,6 @@
   data-capability-label={view.root.data.capabilityLabel}
   data-testid={view.root.testId}
 >
-  <header class="host-console-critical-path__control-heading">
-    <div>
-      <p class="fm-eyebrow">Host workspace</p>
-      <h2>Actions</h2>
-    </div>
-    <p>Make the next game change. Supporting evidence stays below.</p>
-  </header>
-
-  <details
-    class="host-console-critical-path__command-context fm-proof-disclosure"
-    data-testid={view.commandContext.testId}
-    data-game-id={view.commandContext.gameId}
-    data-principal-user-id={view.commandContext.principalUserId}
-    data-capability-label={view.commandContext.capabilityLabel}
-    data-command-endpoint={view.commandContext.commandEndpoint}
-  >
-    <summary>{view.commandContext.summary}</summary>
-    <div class="fm-proof-disclosure__body">
-      <span>{view.commandContext.label}</span>
-      <strong>{view.commandContext.value}</strong>
-      <small>{view.commandContext.commandEndpoint}</small>
-    </div>
-  </details>
-
   {#each view.queues as queue}
     {#if queue.collapsible}
       <details
@@ -93,4 +69,20 @@
       </section>
     {/if}
   {/each}
+
+  <details
+    class="host-console-critical-path__command-context fm-proof-disclosure"
+    data-testid={view.commandContext.testId}
+    data-game-id={view.commandContext.gameId}
+    data-principal-user-id={view.commandContext.principalUserId}
+    data-capability-label={view.commandContext.capabilityLabel}
+    data-command-endpoint={view.commandContext.commandEndpoint}
+  >
+    <summary>{view.commandContext.summary}</summary>
+    <div class="fm-proof-disclosure__body">
+      <span>{view.commandContext.label}</span>
+      <strong>{view.commandContext.value}</strong>
+      <small>{view.commandContext.commandEndpoint}</small>
+    </div>
+  </details>
 </section>

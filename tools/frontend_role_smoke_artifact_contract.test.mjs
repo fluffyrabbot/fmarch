@@ -6081,6 +6081,33 @@ function assertBrowserConfirmationFocusEvidence(roleEntries) {
   }
 
   for (const entry of moderatorEntries) {
+    const moderatorScenario = roles.find((role) => role.id === "moderator");
+    assert.deepEqual(
+      entry.disclosureDefaults,
+      moderatorScenario.closedByDefault.map((selector) => ({
+        selector,
+        open: false,
+      })),
+    );
+    if (entry.viewport.name === "mobile") {
+      assert.equal(entry.mobileViewportBudget.withinBudget, true);
+      assert.equal(
+        entry.mobileViewportBudget.primaryActionSelector,
+        moderatorScenario.mobileViewportBudget.primaryActionSelector,
+      );
+      assert.equal(
+        entry.mobileViewportBudget.actionBottom <=
+          entry.mobileViewportBudget.maxActionBottom,
+        true,
+      );
+      assert.equal(
+        entry.mobileViewportBudget.documentHeight <=
+          entry.mobileViewportBudget.maxDocumentHeight,
+        true,
+      );
+    } else {
+      assert.equal(entry.mobileViewportBudget, null);
+    }
     assert.deepEqual(
       entry.commandResult.focus.contract,
       {

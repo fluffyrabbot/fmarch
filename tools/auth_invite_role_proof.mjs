@@ -2028,6 +2028,11 @@ async function driveHostPlayerInviteSurface({
       },
     ]);
     await page.goto(`${frontendBaseUrl}${hostReturnTo}`, { waitUntil: "networkidle" });
+    const inviteDrawer = page.getByTestId("host-invite-workflows");
+    await inviteDrawer.waitFor({ state: "visible" });
+    await inviteDrawer.evaluate((node) => {
+      node.open = true;
+    });
     await page.getByTestId("host-player-invite-panel").waitFor({
       state: "visible",
       timeout: 15000,

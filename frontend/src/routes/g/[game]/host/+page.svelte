@@ -271,14 +271,25 @@
   {:else if moderatorSurfaceEmpty}
     <RouteState view={moderatorEmptyState} />
   {:else}
-    <HostOperationsStrip
-      access={data.access}
-      phase={data.phase}
-      {projection}
-      votecountBoundary={data.votecountBoundary}
-      {votecount}
-      {hostPrompts}
-    />
+    <details
+      class="host-console-critical-path__drawer"
+      data-testid="host-status-overview"
+    >
+      <summary>
+        <span>Game snapshot</span>
+        <small>Phase, votecount, prompts, and player status</small>
+      </summary>
+      <div class="host-console-critical-path__drawer-content">
+        <HostOperationsStrip
+          access={data.access}
+          phase={data.phase}
+          {projection}
+          votecountBoundary={data.votecountBoundary}
+          {votecount}
+          {hostPrompts}
+        />
+      </div>
+    </details>
 
     <HostControlSurface
       groups={moderatorActionGroups}
@@ -287,97 +298,66 @@
       onDispatch={handleDispatch}
     />
 
-    <HostWorkQueueStrip queues={workQueues} />
-
-    <HostLifecycleControlCheckpoint
-      checkpoint={hostLifecycleControlCheckpoint}
-    />
-
-    <HostPromptResolutionHistory {hostPrompts} />
-
-    <HostVotecountPanel
-      boundary={data.votecountBoundary}
-      rows={votecount}
-    />
-
-    <DayVoteOutcomePanel
-      outcomes={dayVoteOutcomes}
-      boundary={data.dayVoteOutcomeBoundary}
-      rootTestId="host-day-vote-outcome"
-    />
-
     <HostCommandActivity
       {commandStatuses}
       {commandOutcomes}
     />
 
-    <HostPhaseSummary phase={data.phase} {projection} />
+    <details
+      class="host-console-critical-path__drawer"
+      data-testid="host-supporting-evidence"
+    >
+      <summary>
+        <span>Supporting evidence</span>
+        <small>Game status, vote record, and lifecycle checks</small>
+      </summary>
+      <div class="host-console-critical-path__drawer-content">
+        <HostWorkQueueStrip queues={workQueues} />
 
-    {#each [
-      [inviteTargets.player, form?.playerInvite],
-      [inviteTargets.replacement, form?.replacementInvite],
-    ] as [inviteTarget, inviteResult]}
-      <section
-        class="host-console-critical-path__invite-panel fm-section"
-        data-testid={inviteTarget.panelTestId}
-      >
-        <header>
-          <p class="fm-eyebrow">{inviteTarget.eyebrow}</p>
-          <strong data-testid={inviteTarget.targetTestId}>{inviteTarget.targetLabel}</strong>
-        </header>
-        <form method="POST" action={inviteTarget.action}>
-          <label class="fm-field">
-            <span>Account</span>
-            <input
-              name="accountId"
-              type="text"
-              autocomplete="username"
-              required
-              data-testid={inviteTarget.accountTestId}
-            />
-          </label>
-          <input
-            type="hidden"
-            name="principalUserId"
-            value={inviteTarget.principalUserId}
-          />
-          <input type="hidden" name="slotId" value={inviteTarget.slotId} />
-          <input
-            type="hidden"
-            name="expectedOccupantUserId"
-            value={inviteTarget.expectedOccupantUserId}
-          />
-          <button
-            class="touch-control"
-            type="submit"
-            data-testid={inviteTarget.submitTestId}
+        <HostLifecycleControlCheckpoint
+          checkpoint={hostLifecycleControlCheckpoint}
+        />
+
+        <HostPromptResolutionHistory {hostPrompts} />
+
+        <HostVotecountPanel
+          boundary={data.votecountBoundary}
+          rows={votecount}
+        />
+
+        <DayVoteOutcomePanel
+          outcomes={dayVoteOutcomes}
+          boundary={data.dayVoteOutcomeBoundary}
+          rootTestId="host-day-vote-outcome"
+        />
+
+        <HostPhaseSummary phase={data.phase} {projection} />
+      </div>
+    </details>
+
+    <details
+      class="host-console-critical-path__drawer"
+      data-testid="host-invite-workflows"
+      open={form?.playerInvite !== undefined || form?.replacementInvite !== undefined}
+    >
+      <summary>
+        <span>Player access</span>
+        <small>Invite players and replacements</small>
+      </summary>
+      <div class="host-console-critical-path__invite-grid">
+        {#each [
+          [inviteTargets.player, form?.playerInvite],
+          [inviteTargets.replacement, form?.replacementInvite],
+        ] as [inviteTarget, inviteResult]}
+          <section
+            class="host-console-critical-path__invite-panel fm-section"
+            data-testid={inviteTarget.panelTestId}
           >
-            {inviteTarget.submitLabel}
-          </button>
-        </form>
-        {#if inviteResult}
-          <p
-            class="host-console-critical-path__invite-status"
-            data-state={inviteResult.state}
-            data-testid={inviteTarget.statusTestId}
-          >
-            {inviteResult.message}
-          </p>
-          {#if inviteResult.state === "ack"}
-            <a
-              class="host-console-critical-path__invite-url"
-              href={inviteResult.loginUrl}
-              data-testid={inviteTarget.urlTestId}
-            >
-              {inviteResult.loginUrl}
-            </a>
-          {:else if inviteTarget.id === "player" && inviteResult.currentOccupantUserId}
-            <form
-              class="host-console-critical-path__invite-retry"
-              method="POST"
-              action={inviteTarget.action}
-              data-testid="host-player-invite-retry"
-            >
+            <header>
+              <p class="fm-eyebrow">{inviteTarget.eyebrow}</p>
+              <strong data-testid={inviteTarget.targetTestId}>{inviteTarget.targetLabel}</strong>
+            </header>
+            <form method="POST" action={inviteTarget.action}>
               <label class="fm-field">
                 <span>Account</span>
                 <input
@@ -385,35 +365,89 @@
                   type="text"
                   autocomplete="username"
                   required
-                  data-testid="host-player-invite-retry-account"
+                  data-testid={inviteTarget.accountTestId}
                 />
               </label>
               <input
                 type="hidden"
                 name="principalUserId"
-                value={inviteResult.currentOccupantUserId}
+                value={inviteTarget.principalUserId}
               />
-              <input
-                type="hidden"
-                name="slotId"
-                value={inviteResult.slotId ?? inviteTarget.slotId}
-              />
+              <input type="hidden" name="slotId" value={inviteTarget.slotId} />
               <input
                 type="hidden"
                 name="expectedOccupantUserId"
-                value={inviteResult.currentOccupantUserId}
+                value={inviteTarget.expectedOccupantUserId}
               />
               <button
                 class="touch-control"
                 type="submit"
-                data-testid="host-player-invite-retry-submit"
+                data-testid={inviteTarget.submitTestId}
               >
-                Issue current player invite
+                {inviteTarget.submitLabel}
               </button>
             </form>
-          {/if}
-        {/if}
-      </section>
-    {/each}
+            {#if inviteResult}
+              <p
+                class="host-console-critical-path__invite-status"
+                data-state={inviteResult.state}
+                data-testid={inviteTarget.statusTestId}
+              >
+                {inviteResult.message}
+              </p>
+              {#if inviteResult.state === "ack"}
+                <a
+                  class="host-console-critical-path__invite-url"
+                  href={inviteResult.loginUrl}
+                  data-testid={inviteTarget.urlTestId}
+                >
+                  {inviteResult.loginUrl}
+                </a>
+              {:else if inviteTarget.id === "player" && inviteResult.currentOccupantUserId}
+                <form
+                  class="host-console-critical-path__invite-retry"
+                  method="POST"
+                  action={inviteTarget.action}
+                  data-testid="host-player-invite-retry"
+                >
+                  <label class="fm-field">
+                    <span>Account</span>
+                    <input
+                      name="accountId"
+                      type="text"
+                      autocomplete="username"
+                      required
+                      data-testid="host-player-invite-retry-account"
+                    />
+                  </label>
+                  <input
+                    type="hidden"
+                    name="principalUserId"
+                    value={inviteResult.currentOccupantUserId}
+                  />
+                  <input
+                    type="hidden"
+                    name="slotId"
+                    value={inviteResult.slotId ?? inviteTarget.slotId}
+                  />
+                  <input
+                    type="hidden"
+                    name="expectedOccupantUserId"
+                    value={inviteResult.currentOccupantUserId}
+                  />
+                  <button
+                    class="touch-control"
+                    type="submit"
+                    data-testid="host-player-invite-retry-submit"
+                  >
+                    Issue current player invite
+                  </button>
+                </form>
+              {/if}
+            {/if}
+          </section>
+        {/each}
+      </div>
+    </details>
   {/if}
 </main>

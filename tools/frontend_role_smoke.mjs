@@ -429,6 +429,15 @@ try {
         throw new Error(`${role.id} ${viewport.name} did not render ${role.requiredText}`);
       }
 
+      const disclosureDefaults = await assertDisclosuresClosed(
+        page,
+        role.closedByDefault,
+        { role: role.id, viewport: viewport.name },
+      );
+      const mobileViewportBudget = await assertMobileViewportBudget(page, {
+        role,
+        viewport,
+      });
       await setDisclosureState(page, role.expandBeforeChecks, true);
 
       await assertVisibleBox(surface, `${role.id} surface`);
@@ -513,6 +522,8 @@ try {
         ...role.focus,
       });
 
+      await setDisclosureState(page, role.collapseBeforeCommands, false);
+
       let commandResult = null;
       if (role.id === "admin") {
         commandResult = await driveAdminReject(page, { viewport });
@@ -559,6 +570,8 @@ try {
         capability,
         liveStatusRegion,
         statusRegions,
+        disclosureDefaults,
+        mobileViewportBudget,
         focusTraversal,
         commandResult,
         linkAffordances: linkAffordances.map((link) => ({
@@ -1519,6 +1532,70 @@ async function setDisclosureState(page, selectors = [], open) {
   }
 }
 
+async function assertDisclosuresClosed(page, selectors = [], context) {
+  const disclosures = [];
+  for (const selector of selectors ?? []) {
+    const disclosure = page.locator(selector);
+    if ((await disclosure.count()) !== 1) {
+      throw new Error(
+        `${context.role} ${context.viewport} disclosure selector ${selector} did not resolve exactly once`,
+      );
+    }
+    const open = await disclosure.evaluate((node) => node.open === true);
+    if (open) {
+      throw new Error(
+        `${context.role} ${context.viewport} disclosure ${selector} must be closed by default`,
+      );
+    }
+    disclosures.push({ selector, open });
+  }
+  return disclosures;
+}
+
+async function assertMobileViewportBudget(page, { role, viewport }) {
+  const budget = role.mobileViewportBudget;
+  if (budget === undefined || viewport.name !== "mobile") {
+    return null;
+  }
+  const action = page.locator(budget.primaryActionSelector).first();
+  const actionBox = await assertVisibleBox(
+    action,
+    `${role.id} mobile primary action viewport budget`,
+  );
+  const pageGeometry = await page.evaluate(() => ({
+    documentHeight: document.documentElement.scrollHeight,
+    scrollY: window.scrollY,
+  }));
+  const actionBottom = actionBox.y + actionBox.height;
+  const maxActionBottom =
+    viewport.height * budget.maxPrimaryActionBottomViewportRatio;
+  const maxDocumentHeight =
+    viewport.height * budget.maxDocumentHeightViewportRatio;
+  if (pageGeometry.scrollY !== 0) {
+    throw new Error(`${role.id} mobile viewport budget must run at the top of the page`);
+  }
+  if (actionBottom > maxActionBottom) {
+    throw new Error(
+      `${role.id} mobile primary action ends at ${actionBottom}px, beyond ${maxActionBottom}px first-viewport budget`,
+    );
+  }
+  if (pageGeometry.documentHeight > maxDocumentHeight) {
+    throw new Error(
+      `${role.id} mobile default document is ${pageGeometry.documentHeight}px, beyond ${maxDocumentHeight}px compact-page budget`,
+    );
+  }
+  return {
+    primaryActionSelector: budget.primaryActionSelector,
+    actionTop: actionBox.y,
+    actionBottom,
+    viewportHeight: viewport.height,
+    maxActionBottom,
+    documentHeight: pageGeometry.documentHeight,
+    maxDocumentHeight,
+    withinBudget: true,
+  };
+}
+
 async function driveModeratorHostPromptAck(page) {
   const actionId = "resolve_host_prompt-D01-skip_next_day-slot_1";
   const actionRoot = page.getByTestId(`critical-host-action-${actionId}`);
@@ -1652,6 +1729,11 @@ async function driveModeratorSlotLifecycleAck(page, { commandRequests = [] } = {
     );
     return node?.textContent?.includes("Modkilled");
   });
+  await setDisclosureState(
+    page,
+    ['[data-testid="host-supporting-evidence"]'],
+    true,
+  );
   const lifecycleLabel = await page
     .getByTestId("host-console-slot-lifecycle")
     .innerText();

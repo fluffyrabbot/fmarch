@@ -287,19 +287,44 @@ export const roles = Object.freeze([
     firstViewportSurface: HOST_OPERATIONS_STRIP_CONTRACT.surface,
     capabilityTestId: HOST_CONSOLE_ROUTE_CONTRACT.capabilityTestId,
     requiredText: HOST_CONSOLE_ROUTE_CONTRACT.requiredText,
-    expandBeforeChecks: Object.freeze([
+    mobileViewportBudget: Object.freeze({
+      primaryActionSelector:
+        '[data-testid="critical-host-action-extend_deadline"] [data-testid="critical-host-action-trigger"]',
+      maxPrimaryActionBottomViewportRatio: 1,
+      maxDocumentHeightViewportRatio: 2.5,
+    }),
+    closedByDefault: Object.freeze([
+      '[data-testid="host-status-overview"]',
       '[data-testid="moderator-action-queue-later"]',
       '[data-testid="moderator-action-queue-endgame"]',
+      '[data-testid="host-supporting-evidence"]',
+      '[data-testid="host-invite-workflows"]',
+    ]),
+    expandBeforeChecks: Object.freeze([
+      '[data-testid="host-status-overview"]',
+      '[data-testid="moderator-action-queue-later"]',
+      '[data-testid="moderator-action-queue-endgame"]',
+      '[data-testid="host-supporting-evidence"]',
+      '[data-testid="host-invite-workflows"]',
     ]),
     collapseBeforeScreenshot: Object.freeze([
+      '[data-testid="host-status-overview"]',
       '[data-testid="moderator-action-queue-later"]',
       '[data-testid="moderator-action-queue-endgame"]',
+      '[data-testid="host-supporting-evidence"]',
+      '[data-testid="host-invite-workflows"]',
+    ]),
+    collapseBeforeCommands: Object.freeze([
+      '[data-testid="host-status-overview"]',
+      '[data-testid="host-supporting-evidence"]',
+      '[data-testid="host-invite-workflows"]',
     ]),
     statusTestId: HOST_CONSOLE_ROUTE_CONTRACT.liveStatusTestId,
     visibleTestIds: hostOperationTargets.overlapTestIds,
     overlapTestIds: hostOperationTargets.overlapTestIds,
     statusRegions: hostOperationTargets.statusRegions,
     touchSelectors: [
+      '[data-testid="host-status-overview"] > summary',
       '[data-testid="critical-host-action-extend_deadline"] [data-testid="critical-host-action-trigger"]',
       '[data-testid="critical-host-action-resolve_phase"] [data-testid="critical-host-action-trigger"]',
       '[data-testid="critical-host-action-lock_thread"] [data-testid="critical-host-action-trigger"]',
@@ -310,6 +335,8 @@ export const roles = Object.freeze([
       '[data-testid="host-console-votecount-row-slot-2_Ilya"]',
       '[data-testid="moderator-control-phase"]',
       '[data-testid="moderator-control-roles"]',
+      '[data-testid="host-supporting-evidence"] > summary',
+      '[data-testid="host-invite-workflows"] > summary',
     ],
     thumbZones: Object.freeze([
       Object.freeze({
