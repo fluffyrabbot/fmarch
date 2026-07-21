@@ -13,8 +13,12 @@ const writeBaseline = process.argv.includes("--write");
 const selectedScreenshots = Object.freeze([
   "mobile-board-player.png",
   "mobile-admin.png",
+  "mobile-admin-confirmation.png",
   "mobile-player.png",
   "mobile-moderator.png",
+  "mobile-moderator-confirmation.png",
+  "mobile-route-state-player-reject.png",
+  "mobile-forbidden-player-signed-out.png",
   "tablet-player.png",
   "tablet-moderator.png",
   "desktop-admin.png",

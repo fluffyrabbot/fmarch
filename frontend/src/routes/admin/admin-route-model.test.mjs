@@ -450,8 +450,8 @@ test("admin route data exposes setup, audit, and escalation work surfaces", asyn
   assert.equal(data.gameSetup[2].boundary, "Authenticated session grant");
   assert.match(data.gameSetup[2].boundaryDetail, /GlobalAdmin session/);
   assert.match(data.gameSetup[3].boundaryDetail, /host-gated/);
-  assert.equal(data.gameSetup[2].confirmLabel, "Grant GlobalMod");
-  assert.equal(data.gameSetup[3].confirmLabel, "Delegate cohost_c");
+  assert.equal(data.gameSetup[2].confirmLabel, "Grant moderator access");
+  assert.equal(data.gameSetup[3].confirmLabel, "Delegate @cohost_c");
   assert.equal(
     data.audit[0].href,
     "/games/midsummer/operator/proof-runs?principal_user_id=admin_a",

@@ -70,7 +70,7 @@
     <article class="fm-panel" data-testid={item.testId}>
       <p class="fm-eyebrow">{item.displayAuthority}</p>
       <h2>{item.label}</h2>
-      <p>{item.value}</p>
+      <p>{item.displayValue}</p>
       <details class="fm-proof-disclosure admin-surface__technical-details">
         <summary>Technical details</summary>
         <p
@@ -171,7 +171,7 @@
                   checked={item.sessionGrant.globalCapabilities.includes("GlobalMod")}
                   data-testid="admin-session-grant-global-mod"
                 />
-                <span>GlobalMod</span>
+                <span>Community moderator</span>
               </label>
               <button
                 type="submit"
@@ -180,7 +180,7 @@
                 data-testid={item.confirmTestId}
                 bind:this={confirmButtonRefs[item.id]}
               >
-                {item.confirmLabel}
+                {item.displayConfirmLabel}
               </button>
               <button
                 type="button"
@@ -213,7 +213,7 @@
                 bind:this={confirmButtonRefs[item.id]}
                 on:click={() => confirmSetupAction(item)}
               >
-                {item.confirmLabel}
+                {item.displayConfirmLabel}
               </button>
               <button
                 type="button"

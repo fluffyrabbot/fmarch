@@ -191,7 +191,7 @@ function interactionScenarios(manifest) {
       rootSelector: '[data-iab-hydrated-scenario-id="admin-operational-forms"]',
       targetSelector: '[data-testid="iab-admin-session-grant-ack"]',
       targetTestId: "iab-admin-session-grant-ack",
-      expectedText: "Granted GlobalMod",
+      expectedText: "Session grants completed.",
       minTouchTargetPx: 44,
     },
     {

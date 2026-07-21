@@ -1,6 +1,5 @@
 <script>
-  import AppStatus from "$lib/app/AppStatus.svelte";
-  import HostAction from "./HostAction.svelte";
+  import HostControlGroup from "./HostControlGroup.svelte";
   import {
     buildHostControlSurfaceViewModel,
   } from "./host-control-surface.mjs";
@@ -56,77 +55,42 @@
     </div>
   </details>
 
-  {#each view.groups as control}
-    {#if control.sectionStart}
-      <h3 class="host-console-critical-path__control-section">{control.section}</h3>
-    {/if}
-    <article
-      class={control.classes.controlBay}
-      data-testid={control.testId}
-    >
-      <header>
-        <div>
-          <p class="fm-eyebrow">Host control</p>
-          <h2>{control.label}</h2>
-        </div>
-      </header>
-      <p class="host-console-critical-path__intent">{control.value}</p>
-      {#if control.actions.length === 0}
-        <p class={control.classes.empty}>
-          {control.emptyLabel}
-        </p>
-      {:else}
-        <div class={control.classes.actionBay}>
-          {#each control.actions as action}
-            <div
-              class={control.classes.actionTile}
-              data-testid={action.testId}
-            >
-              <HostAction action={action.config} onDispatch={onDispatch} />
-              <div
-                class={control.classes.commandStatusFloor}
-                data-testid={action.statusFloorTestId}
-                data-status-floor-min-px={action.statusFloorMinBlockSizePx}
-                aria-hidden={action.status ? undefined : "true"}
-              >
-                {#if action.status}
-                  <AppStatus
-                    status={action.status}
-                    testId={action.statusTestId}
-                    className={control.classes.commandStatus}
-                  />
-                {/if}
-              </div>
-            </div>
-          {/each}
-        </div>
-      {/if}
+  {#each view.queues as queue}
+    {#if queue.collapsible}
       <details
-        class={control.classes.diagnostics}
-        data-testid={control.diagnostics.testId}
+        class="host-console-critical-path__control-queue host-console-critical-path__control-queue--collapsible"
+        data-queue={queue.id}
+        data-testid={queue.testId}
       >
-        <summary>{control.diagnostics.summary}</summary>
-        <dl>
-          <div>
-            <dt>Required access</dt>
-            <dd>{control.diagnostics.authority}</dd>
-          </div>
-          <div>
-            <dt>Dispatch boundary</dt>
-            <dd>{control.diagnostics.boundary}</dd>
-          </div>
-          <div>
-            <dt>Protocol</dt>
-            <dd>{control.diagnostics.protocol}</dd>
-          </div>
-          {#each control.diagnostics.statuses as status}
-            <div>
-              <dt>{status.action} outcome</dt>
-              <dd>{status.message}</dd>
-            </div>
+        <summary>
+          <span>{queue.label}</span>
+          <small>{queue.countLabel} · {queue.summary}</small>
+        </summary>
+        <div class="host-console-critical-path__control-queue-groups">
+          {#each queue.groups as control}
+            <HostControlGroup {control} {onDispatch} />
           {/each}
-        </dl>
+        </div>
       </details>
-    </article>
+    {:else}
+      <section
+        class="host-console-critical-path__control-queue host-console-critical-path__control-queue--now"
+        data-queue={queue.id}
+        data-testid={queue.testId}
+      >
+        <header class="host-console-critical-path__control-queue-heading">
+          <div>
+            <p class="fm-eyebrow">Next decision</p>
+            <h3>{queue.label}</h3>
+          </div>
+          <p>{queue.summary}</p>
+        </header>
+        <div class="host-console-critical-path__control-queue-groups">
+          {#each queue.groups as control}
+            <HostControlGroup {control} {onDispatch} />
+          {/each}
+        </div>
+      </section>
+    {/if}
   {/each}
 </section>

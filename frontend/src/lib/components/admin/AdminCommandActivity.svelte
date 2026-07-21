@@ -44,6 +44,7 @@
           data-confirmation-action-id={item.confirmationTrace?.actionId}
           data-confirmation-status-key={item.confirmationTrace?.statusKey}
           data-confirmation-dispatch-kind={item.confirmationTrace?.dispatchKind}
+          data-protocol-message={item.rawMessage}
         >
           <strong>{item.label}</strong>
           <AppStatus

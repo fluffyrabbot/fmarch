@@ -166,11 +166,14 @@ export function buildAdminCommandActivityViewModel({
 function adminCommandActivityItem({ actionId, status }) {
   const normalizedActionId = String(actionId);
   const state = String(status?.state ?? "info");
+  const label = adminCommandActivityLabel(normalizedActionId);
+  const rawMessage = String(status?.message ?? status?.error ?? "Command updated");
   return Object.freeze({
     actionId: normalizedActionId,
     state,
-    label: adminCommandActivityLabel(normalizedActionId),
-    message: String(status?.message ?? status?.error ?? "Command updated"),
+    label,
+    message: activityStatusMessage({ label, state, rawMessage }),
+    rawMessage,
     testId: `admin-command-activity-${normalizedActionId}`,
     statusTestId: `admin-command-activity-status-${normalizedActionId}`,
     confirmationTrace: status?.confirmationTrace ?? null,
@@ -196,12 +199,19 @@ export function buildAdminSetupGridViewModel({
     items: Object.freeze(
       items.map((item) => {
         const status = commandStatuses[item.id] ?? null;
+        const visibleStatus = status === null
+          ? null
+          : Object.freeze({
+              ...status,
+              message: adminSetupStatusMessage(item, status),
+            });
         return Object.freeze({
           ...baseAdminItem(item, "admin-setup"),
           buttonLabel: item.buttonLabel,
           href: item.href ?? null,
           minTouchTargetPx: ADMIN_SURFACE_CONTRACT.minTouchTargetPx,
-          status,
+          status: visibleStatus,
+          protocolStatusMessage: status?.message ?? "",
           statusTestId: `admin-command-status-${item.id}`,
           statusFloorTestId: `admin-command-status-floor-${item.id}`,
           statusFloorMinBlockSizePx:
@@ -211,7 +221,7 @@ export function buildAdminSetupGridViewModel({
           confirmTestId: `admin-command-confirm-${item.id}`,
           cancelTestId: `admin-command-cancel-${item.id}`,
           triggerTestId: `admin-command-trigger-${item.id}`,
-          confirmation: adminConfirmationView(item, "admin-command", status),
+          confirmation: adminConfirmationView(item, "admin-command", visibleStatus),
           isSessionGrant: item.commandAction === "grant_session",
           sessionGrant,
         });
@@ -221,37 +231,54 @@ export function buildAdminSetupGridViewModel({
 }
 
 export function buildAdminAuditPanelViewModel({ audit = [] } = {}) {
+  const items = Object.freeze(
+    audit.map((item) => {
+      const state = adminAuditStatusState(item.status);
+      return Object.freeze({
+        ...item,
+        inspectHref: item.inspectHref ?? item.href,
+        testId: `admin-audit-${item.id}`,
+        linkTestId: `admin-audit-link-${item.id}`,
+        boundaryTestId: `admin-audit-boundary-${item.id}`,
+        evidenceTestId: `admin-audit-evidence-${item.id}`,
+        buttonLabel: state === "ack" ? "View details" : "Review check",
+        authority: item.authority ?? "GlobalAdmin or GlobalMod",
+        displayAuthority: humanizeCapabilityLabel(
+          item.authority ?? "GlobalAdmin or GlobalMod",
+        ),
+        boundary: item.boundary ?? "Read-only operator proof",
+        boundaryDetail:
+          item.boundaryDetail ?? "/operator/proof-runs machine-readable report",
+        statusView: Object.freeze({
+          state,
+          message: item.status,
+        }),
+        statusTestId: `admin-audit-status-${item.id}`,
+        minTouchTargetPx: ADMIN_SURFACE_CONTRACT.minTouchTargetPx,
+      });
+    }),
+  );
+  const attentionItems = Object.freeze(
+    items.filter((item) => item.statusView.state !== "ack"),
+  );
+  const healthyItems = Object.freeze(
+    items.filter((item) => item.statusView.state === "ack"),
+  );
   return Object.freeze({
     root: Object.freeze({
-      className: "fm-grid",
-      ariaLabel: "Audit",
+      className: "admin-audit-panel",
+      ariaLabel: "System checks",
     }),
-    items: Object.freeze(
-      audit.map((item) =>
-        Object.freeze({
-          ...item,
-          inspectHref: item.inspectHref ?? item.href,
-          testId: `admin-audit-${item.id}`,
-          linkTestId: `admin-audit-link-${item.id}`,
-          boundaryTestId: `admin-audit-boundary-${item.id}`,
-          evidenceTestId: `admin-audit-evidence-${item.id}`,
-          buttonLabel: "Inspect",
-          authority: item.authority ?? "GlobalAdmin or GlobalMod",
-          displayAuthority: humanizeCapabilityLabel(
-            item.authority ?? "GlobalAdmin or GlobalMod",
-          ),
-          boundary: item.boundary ?? "Read-only operator proof",
-          boundaryDetail:
-            item.boundaryDetail ?? "/operator/proof-runs machine-readable report",
-          statusView: Object.freeze({
-            state: adminAuditStatusState(item.status),
-            message: item.status,
-          }),
-          statusTestId: `admin-audit-status-${item.id}`,
-          minTouchTargetPx: ADMIN_SURFACE_CONTRACT.minTouchTargetPx,
-        }),
-      ),
-    ),
+    items,
+    attentionItems,
+    healthyItems,
+    allCurrentMessage:
+      attentionItems.length === 0 ? "No system checks need attention." : null,
+    healthyDisclosure: Object.freeze({
+      testId: "admin-current-system-checks",
+      label: countLabel(healthyItems.length, "current check", "current checks"),
+      summary: "Healthy diagnostics are collapsed by default.",
+    }),
   });
 }
 
@@ -343,6 +370,8 @@ export function buildAdminEscalationPanelViewModel({ escalations = [] } = {}) {
 function baseAdminItem(item, testIdPrefix) {
   return {
     ...item,
+    displayValue: adminSetupDisplayValue(item),
+    displayConfirmLabel: humanizeAdminMessage(item.confirmLabel),
     displayAuthority: humanizeCapabilityLabel(item.authority),
     testId: `${testIdPrefix}-${item.id}`,
     boundaryTestId:
@@ -368,6 +397,59 @@ function adminConfirmationView(item, testIdPrefix, status) {
     triggerTestId,
     tabContainment: ADMIN_CONFIRMATION_CONTRACT.tabContainment,
   });
+}
+
+function adminSetupDisplayValue(item) {
+  const value = String(item.value ?? "");
+  if (item.commandAction === "grant_session") {
+    return humanizeAdminMessage(value);
+  }
+  if (item.commandAction === "add_cohost") {
+    return value.startsWith("@") ? value : `@${value}`;
+  }
+  if (item.commandAction === "navigate") {
+    const game = value.match(/^\/g\/([^/]+)\/setup$/)?.[1];
+    return game ? `${game} setup` : value || "Open game setup";
+  }
+  return value;
+}
+
+function adminSetupStatusMessage(item, status) {
+  const state = String(status?.state ?? "info");
+  if (state === "confirm") {
+    return humanizeAdminMessage(status?.message ?? item.confirmMessage);
+  }
+  return activityStatusMessage({
+    label: item.label,
+    state,
+    rawMessage: String(status?.message ?? status?.error ?? "Action updated"),
+  });
+}
+
+function humanizeAdminMessage(message) {
+  if (message === null || message === undefined) {
+    return "Continue";
+  }
+  return String(message)
+    .replaceAll("Grant GlobalMod", "Grant community moderator access")
+    .replaceAll("GlobalMod for ", "Community moderator for @")
+    .replace(/\bto (mod_[A-Za-z0-9_-]+)\b/g, "to @$1")
+    .replace(/\bDelegate (cohost_[A-Za-z0-9_-]+)\b/g, "Delegate @$1");
+}
+
+function activityStatusMessage({ label, state, rawMessage }) {
+  if (state === "pending") {
+    return `${label} is in progress.`;
+  }
+  if (state === "ack") {
+    return `${label} completed.`;
+  }
+  if (state === "reject") {
+    return /conflict|stale/i.test(rawMessage)
+      ? `${label} needs refreshed information. Reload and try again.`
+      : `${label} could not be completed.`;
+  }
+  return humanizeAdminMessage(rawMessage);
 }
 
 function adminAuditStatusState(status) {
@@ -433,7 +515,8 @@ function isAdminAuthority(capabilityLabel) {
 }
 
 function adminCommandActivityLabel(actionId) {
-  return String(actionId).replaceAll("_", " ").replaceAll("-", " ");
+  const label = String(actionId).replaceAll("_", " ").replaceAll("-", " ");
+  return `${label.charAt(0).toUpperCase()}${label.slice(1)}`;
 }
 
 function joinLabels(items) {

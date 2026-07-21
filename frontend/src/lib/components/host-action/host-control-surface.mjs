@@ -28,6 +28,16 @@ export function buildHostControlSurfaceViewModel({
   commandContext = {},
 } = {}) {
   const context = buildHostCommandContextViewModel(commandContext);
+  const nextGroupId = groups.find(
+    (group) => group.id !== "roles" && group.actions.length > 0,
+  )?.id;
+  const controls = Object.freeze(
+    groups.map((group) => buildHostControlGroup({
+      group,
+      commandStatuses,
+      nextGroupId,
+    })),
+  );
   return Object.freeze({
     root: Object.freeze({
       className: HOST_CONTROL_SURFACE_CONTRACT.rootClassName,
@@ -47,60 +57,61 @@ export function buildHostControlSurfaceViewModel({
       testId: HOST_CONTROL_SURFACE_CONTRACT.thumbZoneTestId,
     }),
     commandContext: context,
-    groups: Object.freeze(
-      groups.map((group, index) =>
+    groups: controls,
+    queues: buildHostControlQueues(controls, nextGroupId),
+  });
+}
+
+function buildHostControlGroup({ group, commandStatuses, nextGroupId }) {
+  return Object.freeze({
+    ...group,
+    priority: group.id === nextGroupId ? "now" : group.id === "roles" ? "endgame" : "later",
+    testId: `moderator-control-${group.id}`,
+    diagnostics: Object.freeze({
+      testId: `moderator-control-${group.id}-diagnostics`,
+      summary: "Technical details",
+      authority: group.authority,
+      boundary: group.boundary,
+      protocol: group.boundaryDetail,
+      statuses: Object.freeze(
+        group.actions
+          .map((action) => ({
+            action: action.label,
+            message: commandStatuses[action.id]?.message,
+          }))
+          .filter((status) => typeof status.message === "string"),
+      ),
+    }),
+    classes: Object.freeze({
+      controlBay: HOST_CONTROL_SURFACE_CONTRACT.controlBayClassName,
+      actionBay: HOST_CONTROL_SURFACE_CONTRACT.actionBayClassName,
+      actionTile: HOST_CONTROL_SURFACE_CONTRACT.actionTileClassName,
+      boundary: HOST_CONTROL_SURFACE_CONTRACT.boundaryClassName,
+      diagnostics: HOST_CONTROL_SURFACE_CONTRACT.diagnosticsClassName,
+      empty: HOST_CONTROL_SURFACE_CONTRACT.emptyClassName,
+      commandStatusFloor: HOST_CONTROL_SURFACE_CONTRACT.commandStatusFloorClassName,
+      commandStatus: HOST_CONTROL_SURFACE_CONTRACT.commandStatusClassName,
+    }),
+    actions: Object.freeze(
+      group.actions.map((action, actionIndex) =>
         Object.freeze({
-          ...group,
-          section: hostControlSection(group.id),
-          sectionStart:
-            index === 0 || hostControlSection(groups[index - 1]?.id) !== hostControlSection(group.id),
-          testId: `moderator-control-${group.id}`,
-          diagnostics: Object.freeze({
-            testId: `moderator-control-${group.id}-diagnostics`,
-            summary: "Technical details",
-            authority: group.authority,
-            boundary: group.boundary,
-            protocol: group.boundaryDetail,
-            statuses: Object.freeze(
-              group.actions
-                .map((action) => ({
-                  action: action.label,
-                  message: commandStatuses[action.id]?.message,
-                }))
-                .filter((status) => typeof status.message === "string"),
-            ),
-          }),
-          classes: Object.freeze({
-            controlBay: HOST_CONTROL_SURFACE_CONTRACT.controlBayClassName,
-            actionBay: HOST_CONTROL_SURFACE_CONTRACT.actionBayClassName,
-            actionTile: HOST_CONTROL_SURFACE_CONTRACT.actionTileClassName,
-            boundary: HOST_CONTROL_SURFACE_CONTRACT.boundaryClassName,
-            diagnostics: HOST_CONTROL_SURFACE_CONTRACT.diagnosticsClassName,
-            empty: HOST_CONTROL_SURFACE_CONTRACT.emptyClassName,
-            commandStatusFloor: HOST_CONTROL_SURFACE_CONTRACT.commandStatusFloorClassName,
-            commandStatus: HOST_CONTROL_SURFACE_CONTRACT.commandStatusClassName,
-          }),
-          actions: Object.freeze(
-            group.actions.map((action) =>
-              Object.freeze({
-                config: action,
-                testId: `critical-host-action-${action.id}`,
-                status: visibleCommandStatus(
-                  commandStatuses[action.id],
-                  action.label,
-                ),
-                protocolStatusMessage:
-                  commandStatuses[action.id]?.message ?? "",
-                statusTestId: `host-command-status-${action.id}`,
-                statusFloorTestId: `host-command-status-floor-${action.id}`,
-                statusFloorMinBlockSizePx:
-                  HOST_CONTROL_SURFACE_CONTRACT.commandStatusFloorMinBlockSizePx,
-                statusMessage: commandStatusMessage(
-                  commandStatuses[action.id],
-                  action.label,
-                ),
-              }),
-            ),
+          config: action,
+          priority:
+            group.id === nextGroupId && actionIndex === 0 ? "primary" : "secondary",
+          testId: `critical-host-action-${action.id}`,
+          status: visibleCommandStatus(
+            commandStatuses[action.id],
+            action.label,
+          ),
+          protocolStatusMessage:
+            commandStatuses[action.id]?.message ?? "",
+          statusTestId: `host-command-status-${action.id}`,
+          statusFloorTestId: `host-command-status-floor-${action.id}`,
+          statusFloorMinBlockSizePx:
+            HOST_CONTROL_SURFACE_CONTRACT.commandStatusFloorMinBlockSizePx,
+          statusMessage: commandStatusMessage(
+            commandStatuses[action.id],
+            action.label,
           ),
         }),
       ),
@@ -108,14 +119,39 @@ export function buildHostControlSurfaceViewModel({
   });
 }
 
-function hostControlSection(id) {
-  if (["deadline", "phase", "votecount"].includes(id)) {
-    return "Game state";
-  }
-  if (["replacement", "host-prompts", "slot-lifecycle"].includes(id)) {
-    return "People and prompts";
-  }
-  return "Endgame";
+function buildHostControlQueues(groups, nextGroupId) {
+  const queueDefinitions = [
+    {
+      id: "now",
+      label: "Now",
+      summary: groups.find((group) => group.id === nextGroupId)?.value
+        ?? "No immediate host action is required.",
+      groups: groups.filter((group) => group.id === nextGroupId),
+      collapsible: false,
+    },
+    {
+      id: "later",
+      label: "Later",
+      summary: "Supporting game controls",
+      groups: groups.filter((group) => group.id !== nextGroupId && group.id !== "roles"),
+      collapsible: true,
+    },
+    {
+      id: "endgame",
+      label: "Endgame",
+      summary: "Reveal only when the game is complete",
+      groups: groups.filter((group) => group.id === "roles"),
+      collapsible: true,
+    },
+  ];
+  return Object.freeze(queueDefinitions
+    .filter((queue) => queue.groups.length > 0)
+    .map((queue) => Object.freeze({
+      ...queue,
+      groups: Object.freeze(queue.groups),
+      countLabel: `${queue.groups.length} ${queue.groups.length === 1 ? "area" : "areas"}`,
+      testId: `moderator-action-queue-${queue.id}`,
+    })));
 }
 
 export function commandStatusMessage(status, actionLabel = "Action") {

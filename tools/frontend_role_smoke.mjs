@@ -429,6 +429,8 @@ try {
         throw new Error(`${role.id} ${viewport.name} did not render ${role.requiredText}`);
       }
 
+      await setDisclosureState(page, role.expandBeforeChecks, true);
+
       await assertVisibleBox(surface, `${role.id} surface`);
       await assertVisibleBox(
         page.getByTestId(role.capabilityTestId),
@@ -513,7 +515,7 @@ try {
 
       let commandResult = null;
       if (role.id === "admin") {
-        commandResult = await driveAdminReject(page);
+        commandResult = await driveAdminReject(page, { viewport });
       }
       if (role.id === "player") {
         commandResult = await drivePlayerReject(page, {
@@ -524,8 +526,10 @@ try {
         });
       }
       if (role.id === "moderator") {
-        commandResult = await driveModeratorReject(page, { commandRequests });
+        commandResult = await driveModeratorReject(page, { commandRequests, viewport });
       }
+
+      await setDisclosureState(page, role.collapseBeforeScreenshot, false);
 
       const screenshot = path.join(
         artifactDir,
@@ -536,6 +540,7 @@ try {
         label: `${role.id} ${viewport.name}`,
         viewport,
       });
+      await setDisclosureState(page, role.expandBeforeChecks, true);
       const capability = await page.getByTestId(role.capabilityTestId).innerText();
       const linkClickProofs = [];
       if (role.id === "admin") {
@@ -1096,7 +1101,7 @@ async function assertHostSetupWorkbenchGeometry(page, { scenario, viewport }) {
   };
 }
 
-async function driveAdminReject(page) {
+async function driveAdminReject(page, { viewport } = {}) {
   const createSetup = page.getByTestId("admin-setup-create-game");
   await createSetup.locator("button").click();
   const createStatus = page.getByTestId("admin-command-status-create-game");
@@ -1142,6 +1147,15 @@ async function driveAdminReject(page) {
       "admin-session-grant-expires-at",
       "admin-session-grant-global-mod",
     ],
+  });
+  const confirmationScreenshot = path.join(
+    artifactDir,
+    `${viewport.name}-admin-confirmation.png`,
+  );
+  const confirmationScreenshotPixels = await captureScreenshotEvidence(page, {
+    path: confirmationScreenshot,
+    label: `admin confirmation ${viewport.name}`,
+    viewport,
   });
   const sessionGrantFocus = await assertAdminConfirmationFocus(page, {
     label: "admin session grant",
@@ -1231,6 +1245,8 @@ async function driveAdminReject(page) {
       statusRegion: sessionGrantRegion,
       focus: sessionGrantFocus,
       form: sessionGrantForm,
+      confirmationScreenshot: path.relative(repoRoot, confirmationScreenshot),
+      confirmationScreenshotPixels,
     },
     cohost: {
       state: await cohostStatus.getAttribute("data-state"),
@@ -1409,11 +1425,23 @@ async function driveAdminAuditDetailClick(page, { viewport, baseUrl }) {
   };
 }
 
-async function driveModeratorReject(page, { commandRequests = [] } = {}) {
+async function driveModeratorReject(
+  page,
+  { commandRequests = [], viewport } = {},
+) {
   const actionRoot = page.getByTestId("critical-host-action-extend_deadline");
   await actionRoot.getByTestId("critical-host-action-trigger").click();
   await actionRoot.getByTestId("critical-host-action-confirmation").waitFor({
     state: "visible",
+  });
+  const confirmationScreenshot = path.join(
+    artifactDir,
+    `${viewport.name}-moderator-confirmation.png`,
+  );
+  const confirmationScreenshotPixels = await captureScreenshotEvidence(page, {
+    path: confirmationScreenshot,
+    label: `moderator confirmation ${viewport.name}`,
+    viewport,
   });
   const focus = await assertHostConfirmationFocus(actionRoot, page, {
     label: "moderator extend deadline",
@@ -1472,9 +1500,23 @@ async function driveModeratorReject(page, { commandRequests = [] } = {}) {
       slotLifecycle: slotLifecycleActivity,
     },
     focus,
+    confirmationScreenshot: path.relative(repoRoot, confirmationScreenshot),
+    confirmationScreenshotPixels,
     hostPrompt,
     slotLifecycle,
   };
+}
+
+async function setDisclosureState(page, selectors = [], open) {
+  for (const selector of selectors ?? []) {
+    const disclosure = page.locator(selector);
+    if ((await disclosure.count()) !== 1) {
+      throw new Error(`disclosure selector ${selector} did not resolve exactly once`);
+    }
+    await disclosure.evaluate((node, expectedOpen) => {
+      node.open = expectedOpen;
+    }, open);
+  }
 }
 
 async function driveModeratorHostPromptAck(page) {

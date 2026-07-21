@@ -60,12 +60,15 @@ export function buildHostCommandActivityViewModel({
 function activityItem({ actionId, status, source }) {
   const normalizedActionId = String(actionId);
   const state = String(status?.state ?? "info");
+  const label = labelForAction(normalizedActionId);
+  const rawMessage = String(status?.message ?? status?.error ?? "Command updated");
   return Object.freeze({
     actionId: normalizedActionId,
     source,
     state,
-    label: labelForAction(normalizedActionId),
-    message: String(status?.message ?? status?.error ?? "Command updated"),
+    label,
+    message: activityStatusMessage({ label, state, rawMessage }),
+    rawMessage,
     testId: `host-command-activity-${normalizedActionId}`,
     statusTestId: `host-command-activity-status-${normalizedActionId}`,
     confirmationTrace: status?.confirmationTrace ?? null,
@@ -74,8 +77,27 @@ function activityItem({ actionId, status, source }) {
 }
 
 function labelForAction(actionId) {
-  return String(actionId)
-    .replace(/^resolve_host_prompt-/, "resolve prompt ")
+  const normalized = String(actionId);
+  if (normalized.startsWith("resolve_host_prompt-")) {
+    return "Resolve host prompt";
+  }
+  const label = normalized
     .replaceAll("_", " ")
     .replaceAll("-", " ");
+  return `${label.charAt(0).toUpperCase()}${label.slice(1)}`;
+}
+
+function activityStatusMessage({ label, state, rawMessage }) {
+  if (state === "pending") {
+    return `${label} is in progress.`;
+  }
+  if (state === "ack") {
+    return `${label} completed.`;
+  }
+  if (state === "reject") {
+    return /conflict|stale/i.test(rawMessage)
+      ? `${label} needs refreshed game state. Reload and try again.`
+      : `${label} could not be completed.`;
+  }
+  return "Host action updated.";
 }

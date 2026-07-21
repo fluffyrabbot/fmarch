@@ -69,17 +69,37 @@ test("host control surface model binds moderator control bays to action status",
     ],
   );
   assert.deepEqual(
-    view.groups.map((group) => [group.id, group.section, group.sectionStart]),
+    view.groups.map((group) => [group.id, group.priority]),
     [
-      ["deadline", "Game state", true],
-      ["phase", "Game state", false],
-      ["votecount", "Game state", false],
-      ["replacement", "People and prompts", true],
-      ["host-prompts", "People and prompts", false],
-      ["slot-lifecycle", "People and prompts", false],
-      ["roles", "Endgame", true],
+      ["deadline", "now"],
+      ["phase", "later"],
+      ["votecount", "later"],
+      ["replacement", "later"],
+      ["host-prompts", "later"],
+      ["slot-lifecycle", "later"],
+      ["roles", "endgame"],
     ],
   );
+  assert.deepEqual(
+    view.queues.map((queue) => [
+      queue.id,
+      queue.collapsible,
+      queue.countLabel,
+      queue.groups.map((group) => group.id),
+    ]),
+    [
+      ["now", false, "1 area", ["deadline"]],
+      [
+        "later",
+        true,
+        "5 areas",
+        ["phase", "votecount", "replacement", "host-prompts", "slot-lifecycle"],
+      ],
+      ["endgame", true, "1 area", ["roles"]],
+    ],
+  );
+  assert.equal(view.queues[0].groups[0].actions[0].priority, "primary");
+  assert.equal(view.queues[0].groups[0].actions[1].priority, "secondary");
 
   const phase = view.groups.find((group) => group.id === "phase");
   assert.deepEqual(

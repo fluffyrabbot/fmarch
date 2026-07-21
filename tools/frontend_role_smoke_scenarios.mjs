@@ -164,6 +164,12 @@ export const roles = Object.freeze([
     firstViewportSurface: ADMIN_READINESS_STRIP_CONTRACT.surface,
     capabilityTestId: ADMIN_ROUTE_CONTRACT.capabilityTestId,
     requiredText: ADMIN_ROUTE_CONTRACT.requiredText,
+    expandBeforeChecks: Object.freeze([
+      '[data-testid="admin-current-system-checks"]',
+    ]),
+    collapseBeforeScreenshot: Object.freeze([
+      '[data-testid="admin-current-system-checks"]',
+    ]),
     touchSelectors: [
       '[data-testid="admin-setup-create-game"] button',
       '[data-testid="admin-setup-session-grants"] summary',
@@ -281,6 +287,14 @@ export const roles = Object.freeze([
     firstViewportSurface: HOST_OPERATIONS_STRIP_CONTRACT.surface,
     capabilityTestId: HOST_CONSOLE_ROUTE_CONTRACT.capabilityTestId,
     requiredText: HOST_CONSOLE_ROUTE_CONTRACT.requiredText,
+    expandBeforeChecks: Object.freeze([
+      '[data-testid="moderator-action-queue-later"]',
+      '[data-testid="moderator-action-queue-endgame"]',
+    ]),
+    collapseBeforeScreenshot: Object.freeze([
+      '[data-testid="moderator-action-queue-later"]',
+      '[data-testid="moderator-action-queue-endgame"]',
+    ]),
     statusTestId: HOST_CONSOLE_ROUTE_CONTRACT.liveStatusTestId,
     visibleTestIds: hostOperationTargets.overlapTestIds,
     overlapTestIds: hostOperationTargets.overlapTestIds,

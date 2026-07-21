@@ -168,8 +168,8 @@ test("admin command activity summarizes recent setup and recovery status", () =>
       {
         actionId: "recovery-gate",
         state: "pending",
-        label: "recovery gate",
-        message: "Checking saved proof artifacts",
+        label: "Recovery gate",
+        message: "Recovery gate is in progress.",
         testId: "admin-command-activity-recovery-gate",
         statusTestId: "admin-command-activity-status-recovery-gate",
         confirmationTrace: null,
@@ -177,8 +177,8 @@ test("admin command activity summarizes recent setup and recovery status", () =>
       {
         actionId: "session-grants",
         state: "confirm",
-        label: "session grants",
-        message: "Grant GlobalMod to mod_a",
+        label: "Session grants",
+        message: "Grant community moderator access to @mod_a",
         testId: "admin-command-activity-session-grants",
         statusTestId: "admin-command-activity-status-session-grants",
         confirmationTrace: {
@@ -193,8 +193,8 @@ test("admin command activity summarizes recent setup and recovery status", () =>
       {
         actionId: "create-game",
         state: "reject",
-        label: "create game",
-        message: "Reject DuplicateGame: already exists",
+        label: "Create game",
+        message: "Create game could not be completed.",
         testId: "admin-command-activity-create-game",
         statusTestId: "admin-command-activity-status-create-game",
         confirmationTrace: null,
@@ -281,9 +281,10 @@ test("admin setup grid view model binds command status and confirmation metadata
   assert.equal(view.items[0].minTouchTargetPx, 44);
   assert.equal(view.items[0].isSessionGrant, true);
   assert.equal(view.items[0].sessionGrant, sessionGrant);
+  assert.equal(view.items[0].displayConfirmLabel, "Grant community moderator access");
   assert.deepEqual(view.items[0].status, {
     state: "confirm",
-    message: "Grant GlobalMod to mod_a",
+    message: "Grant community moderator access to @mod_a",
   });
   assert.deepEqual(view.items[0].confirmation, {
     kind: "confirmation-action",
@@ -293,7 +294,7 @@ test("admin setup grid view model binds command status and confirmation metadata
     ariaModal: ADMIN_CONFIRMATION_CONTRACT.ariaModal,
     ariaLabel: "Confirm Session grants",
     label: "Session grants",
-    message: "Grant GlobalMod to mod_a",
+    message: "Grant community moderator access to @mod_a",
     messageId: "admin-command-confirmation-message-session-grants",
     messageTestId: "admin-command-confirmation-message-session-grants",
     confirmationTestId: null,
@@ -394,7 +395,7 @@ test("admin audit and escalation models expose stable test ids", () => {
         linkTestId: "admin-audit-link-proof-runs",
         boundaryTestId: "admin-audit-boundary-proof-runs",
         evidenceTestId: "admin-audit-evidence-proof-runs",
-        buttonLabel: "Inspect",
+        buttonLabel: "View details",
         authority: "GlobalAdmin",
         displayAuthority: "Site administrator",
         boundary: "Machine proof",
@@ -475,6 +476,34 @@ test("admin audit and escalation models expose stable test ids", () => {
       },
     ],
   );
+});
+
+test("admin audit model exposes only non-current checks before disclosure", () => {
+  const view = buildAdminAuditPanelViewModel({
+    audit: [
+      {
+        id: "current",
+        label: "Current check",
+        status: "Current report available",
+        href: "/operator/current",
+      },
+      {
+        id: "review",
+        label: "Review check",
+        status: "blocked: needs review",
+        href: "/operator/review",
+      },
+    ],
+  });
+
+  assert.deepEqual(view.attentionItems.map((item) => item.id), ["review"]);
+  assert.deepEqual(view.healthyItems.map((item) => item.id), ["current"]);
+  assert.equal(view.allCurrentMessage, null);
+  assert.deepEqual(view.healthyDisclosure, {
+    testId: "admin-current-system-checks",
+    label: "1 current check",
+    summary: "Healthy diagnostics are collapsed by default.",
+  });
 });
 
 test("admin recovery model binds proof-gate form and status metadata", () => {

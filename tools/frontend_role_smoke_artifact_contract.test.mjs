@@ -1877,14 +1877,14 @@ test("hydrated handler artifact records DOM-facing command outcomes without loca
     ack: {
       actionId: "cohost",
       state: "ack",
-      message: "Ack: stream seqs 61",
+      message: "Cohost completed.",
       testId: "admin-command-activity-cohost",
       statusTestId: "admin-command-activity-status-cohost",
     },
     reject: {
       actionId: "cohost",
       state: "reject",
-      message: "Reject Unauthorized: cohost scope missing",
+      message: "Cohost could not be completed.",
       testId: "admin-command-activity-cohost",
       statusTestId: "admin-command-activity-status-cohost",
     },
@@ -1892,14 +1892,14 @@ test("hydrated handler artifact records DOM-facing command outcomes without loca
       sessionGrant: {
         actionId: "session-grants",
         state: "ack",
-        message: "Granted GlobalMod to mod_a",
+        message: "Session grants completed.",
         testId: "admin-command-activity-session-grants",
         statusTestId: "admin-command-activity-status-session-grants",
       },
       recoveryGate: {
         actionId: "recovery-gate",
         state: "ack",
-        message: "Recovery gate trusted: 3/3 production artifacts trusted",
+        message: "Recovery gate completed.",
         testId: "admin-command-activity-recovery-gate",
         statusTestId: "admin-command-activity-status-recovery-gate",
       },
@@ -1959,7 +1959,7 @@ test("hydrated handler artifact records DOM-facing command outcomes without loca
         ack: {
           actionId: "resolve_host_prompt-D01-skip_next_day-slot_1",
           state: "ack",
-          message: "Ack",
+          message: "Resolve host prompt completed.",
           testId:
             "host-command-activity-resolve_host_prompt-D01-skip_next_day-slot_1",
           statusTestId:
@@ -1968,7 +1968,7 @@ test("hydrated handler artifact records DOM-facing command outcomes without loca
         reject: {
           actionId: "resolve_host_prompt-D01-skip_next_day-slot_1",
           state: "reject",
-          message: "Reject PhaseLocked: prompt already resolved",
+          message: "Resolve host prompt could not be completed.",
           testId:
             "host-command-activity-resolve_host_prompt-D01-skip_next_day-slot_1",
           statusTestId:
@@ -1985,7 +1985,7 @@ test("hydrated handler artifact records DOM-facing command outcomes without loca
         ack: {
           actionId: "modkill_slot",
           state: "ack",
-          message: "Ack: stream seqs 73",
+          message: "Modkill slot completed.",
           testId: "host-command-activity-modkill_slot",
           statusTestId: "host-command-activity-status-modkill_slot",
         },
@@ -2043,7 +2043,7 @@ test("hydrated surface artifact records route-backed surface adapters without lo
       visible: {
         actionId: "session-grants",
         state: "ack",
-        message: "Granted GlobalMod to mod_a",
+        message: "Session grants completed.",
         testId: "admin-command-activity-session-grants",
         statusTestId: "admin-command-activity-status-session-grants",
       },
@@ -2054,7 +2054,7 @@ test("hydrated surface artifact records route-backed surface adapters without lo
       visible: {
         actionId: "recovery-gate",
         state: "ack",
-        message: "Recovery gate trusted: 3/3 production artifacts trusted",
+        message: "Recovery gate completed.",
         testId: "admin-command-activity-recovery-gate",
         statusTestId: "admin-command-activity-status-recovery-gate",
       },
@@ -2189,6 +2189,10 @@ test("component interaction artifact records no-bind command component wiring", 
       [
         "HostControlSurface",
         "frontend/src/lib/components/host-action/HostControlSurface.svelte",
+      ],
+      [
+        "HostControlGroup",
+        "frontend/src/lib/components/host-action/HostControlGroup.svelte",
       ],
       [
         "HostAction",
@@ -6034,7 +6038,7 @@ function assertBrowserConfirmationFocusEvidence(roleEntries) {
       activityItemTestId: "admin-command-activity-cohost",
       statusTestId: "admin-command-activity-status-cohost",
       state: "reject",
-      message: "Reject StreamConflict: reload and retry",
+      message: "Cohost needs refreshed information. Reload and try again.",
       statusRegion: {
         state: "reject",
         role: "status",
@@ -6057,7 +6061,7 @@ function assertBrowserConfirmationFocusEvidence(roleEntries) {
     assert.equal(entry.commandResult.activity.acknowledged.state, "ack");
     assert.match(
       entry.commandResult.activity.acknowledged.message,
-      /Recovery gate trusted:/,
+      /Recovery gate completed\./,
     );
     assert.deepEqual(entry.commandResult.activity.acknowledged.statusRegion, {
       state: "ack",
@@ -6107,7 +6111,7 @@ function assertBrowserConfirmationFocusEvidence(roleEntries) {
       activityItemTestId: "host-command-activity-extend_deadline",
       statusTestId: "host-command-activity-status-extend_deadline",
       state: "reject",
-      message: "Reject StreamConflict: reload and retry",
+      message: "Extend deadline needs refreshed game state. Reload and try again.",
       statusRegion: {
         state: "reject",
         role: "status",
@@ -6122,7 +6126,7 @@ function assertBrowserConfirmationFocusEvidence(roleEntries) {
       statusTestId:
         "host-command-activity-status-resolve_host_prompt-D01-skip_next_day-slot_1",
       state: "ack",
-      message: "Ack: stream seqs 91",
+      message: "Resolve host prompt completed.",
       statusRegion: {
         state: "ack",
         role: "status",
@@ -6135,7 +6139,7 @@ function assertBrowserConfirmationFocusEvidence(roleEntries) {
       activityItemTestId: "host-command-activity-modkill_slot",
       statusTestId: "host-command-activity-status-modkill_slot",
       state: "ack",
-      message: "Ack: stream seqs 73",
+      message: "Modkill slot completed.",
       statusRegion: {
         state: "ack",
         role: "status",

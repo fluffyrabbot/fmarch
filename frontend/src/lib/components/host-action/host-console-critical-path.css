@@ -144,7 +144,7 @@
 }
 
 .host-console-critical-path__control-heading,
-.host-console-critical-path__control-section {
+.host-console-critical-path__control-queue {
   grid-column: 1 / -1;
 }
 
@@ -160,11 +160,67 @@
   margin: 0;
 }
 
-.host-console-critical-path__control-section {
+.host-console-critical-path__control-queue {
+  display: grid;
+  gap: 12px;
+  min-inline-size: 0;
+}
+
+.host-console-critical-path__control-queue-heading {
+  align-items: end;
   border-block-end: 1px solid var(--fm-line);
-  color: var(--fm-ink-subtle);
-  font-size: 14px;
-  margin: 4px 0 -4px;
+  display: flex;
+  gap: 20px;
+  justify-content: space-between;
+  padding-block-end: 8px;
+}
+
+.host-console-critical-path__control-queue-heading h3 {
+  color: var(--fm-ink);
+  font-family: var(--fm-font-display);
+  font-size: 24px;
+  margin: 0;
+}
+
+.host-console-critical-path__control-queue-heading > p {
+  color: var(--fm-ink-muted);
+  margin: 0;
+  text-align: end;
+}
+
+.host-console-critical-path__control-queue-groups {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.host-console-critical-path__control-queue--collapsible {
+  border-block-start: 1px solid var(--fm-line-strong);
+}
+
+.host-console-critical-path__control-queue--collapsible > summary {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  min-block-size: 52px;
+}
+
+.host-console-critical-path__control-queue--collapsible > summary span {
+  color: var(--fm-ink);
+  font-family: var(--fm-font-display);
+  font-size: 21px;
+  font-weight: 700;
+}
+
+.host-console-critical-path__control-queue--collapsible > summary small {
+  color: var(--fm-ink-muted);
+  font-size: 13px;
+  text-align: end;
+}
+
+.host-console-critical-path__control-queue--collapsible[open] {
   padding-block-end: 8px;
 }
 
@@ -371,6 +427,14 @@
   min-inline-size: 0;
 }
 
+.host-console-critical-path__action-tile[data-action-priority="primary"] {
+  grid-column: 1 / -1;
+}
+
+.host-console-critical-path__action-tile[data-action-priority="primary"] .host-action__trigger {
+  min-block-size: 56px;
+}
+
 .host-console-critical-path__command-status-floor {
   align-items: start;
   display: grid;
@@ -406,6 +470,21 @@
     align-items: start;
     display: grid;
     gap: 4px;
+  }
+
+  .host-console-critical-path__control-queue-heading {
+    align-items: start;
+    display: grid;
+    gap: 4px;
+  }
+
+  .host-console-critical-path__control-queue-heading > p,
+  .host-console-critical-path__control-queue--collapsible > summary small {
+    text-align: start;
+  }
+
+  .host-console-critical-path__control-queue-groups {
+    grid-template-columns: 1fr;
   }
 
   .host-console-critical-path__votecount header {

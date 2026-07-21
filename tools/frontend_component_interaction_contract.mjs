@@ -117,6 +117,13 @@ async function proveSourceContracts() {
       component: "HostControlSurface",
       path: "frontend/src/lib/components/host-action/HostControlSurface.svelte",
       requiredSnippets: [
+        "<HostControlGroup {control} {onDispatch} />",
+      ],
+    }),
+    await proveSourceContract({
+      component: "HostControlGroup",
+      path: "frontend/src/lib/components/host-action/HostControlGroup.svelte",
+      requiredSnippets: [
         "<HostAction action={action.config} onDispatch={onDispatch} />",
       ],
     }),
@@ -153,7 +160,7 @@ async function proveAdminInteraction(bundle) {
   invoked.push(item.commandAction, sessionGrantItem.commandAction, recoveryGateItem.action);
 
   assertIncludes(confirm.html, 'data-testid="admin-command-confirm-cohost"', "admin confirm button");
-  assertIncludes(confirm.html, "Delegate cohost_c as cohost", "admin confirmation copy");
+  assertIncludes(confirm.html, "Delegate @cohost_c as cohost", "admin confirmation copy");
   assertIncludes(
     sessionGrantConfirm.html,
     'action="?/grantSession"',

@@ -105,6 +105,10 @@ const moderatorControlSurfaceCss = proveModeratorControlSurfaceCss({
     sources,
     "frontend/src/lib/components/host-action/HostControlSurface.svelte",
   ),
+  actionGroup: sourceText(
+    sources,
+    "frontend/src/lib/components/host-action/HostControlGroup.svelte",
+  ),
   route: sourceText(sources, "frontend/src/routes/g/[game]/host/+page.svelte"),
 });
 const hostTouchCss = proveHostTouchCss(touchControlCss);
@@ -459,7 +463,7 @@ function assertAdminOperatorRailBeforeStatusReadouts(source) {
   }
 }
 
-function proveModeratorControlSurfaceCss({ css, component, route }) {
+function proveModeratorControlSurfaceCss({ css, component, actionGroup, route }) {
   assert.match(
     component,
     /data-control-rail-mode=\{view\.root\.data\.controlRailMode\}/s,
@@ -473,7 +477,7 @@ function proveModeratorControlSurfaceCss({ css, component, route }) {
     component,
     /data-action-tile-stability-mode=\{view\.root\.data\.actionTileStabilityMode\}/s,
   );
-  assertHostActionBeforeStatusFloor(component);
+  assertHostActionBeforeStatusFloor(actionGroup);
   assertHostControlBeforeStatusReadouts(route);
   assert.match(
     css,
@@ -492,7 +496,7 @@ function proveModeratorControlSurfaceCss({ css, component, route }) {
     /\.host-console-critical-path__command-status-floor\s*\{[^}]*min-block-size:\s*44px;/s,
   );
   assert.match(
-    component,
+    actionGroup,
     /data-status-floor-min-px=\{action\.statusFloorMinBlockSizePx\}/s,
   );
   return {

@@ -28,7 +28,7 @@ export const COMMAND_SCENARIOS = Object.freeze([
     targetSelector: '[data-testid="admin-command-confirm-cohost"]',
     targetTestId: "admin-command-confirm-cohost",
     rootSelector: '[data-testid="admin-setup-cohost"]',
-    expectedText: "Delegate cohost_c as cohost",
+    expectedText: "Delegate @cohost_c as cohost",
   },
   {
     id: "admin-session-grant-confirm-click",
@@ -38,7 +38,7 @@ export const COMMAND_SCENARIOS = Object.freeze([
     targetSelector: '[data-testid="admin-command-confirm-session-grants"]',
     targetTestId: "admin-command-confirm-session-grants",
     rootSelector: '[data-testid="admin-setup-session-grants"]',
-    expectedText: "Grant GlobalMod",
+    expectedText: "Grant community moderator access",
     form: {
       action: "?/grantSession",
       noBind: "testIds",
