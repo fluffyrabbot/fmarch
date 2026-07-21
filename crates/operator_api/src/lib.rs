@@ -4,6 +4,7 @@
 //! operator pages and audit endpoints over committed proof/projection evidence.
 
 use axum::extract::{Path, Query, State};
+use axum::http::header::{HeaderValue, RETRY_AFTER};
 use axum::http::StatusCode;
 use axum::response::{Html, IntoResponse};
 use axum::routing::get;
@@ -4223,6 +4224,29 @@ impl From<sqlx::Error> for ApiError {
 
 impl IntoResponse for ApiError {
     fn into_response(self) -> axum::response::Response {
+        let capacity_exhausted = match &self {
+            ApiError::Projection(error) => projection_capacity_error(error),
+            ApiError::Capability(error) => capability_capacity_error(error),
+            ApiError::Db(error) => sqlx_capacity_error(error),
+            ApiError::Reject { .. } => false,
+        };
+        if capacity_exhausted {
+            let mut response = (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(RejectMsg {
+                    error: RejectCode::Internal,
+                    retryable: true,
+                    message: "database capacity is temporarily unavailable; retry shortly"
+                        .to_string(),
+                }),
+            )
+                .into_response();
+            response
+                .headers_mut()
+                .insert(RETRY_AFTER, HeaderValue::from_static("1"));
+            return response;
+        }
+
         let (status, error, message) = match self {
             ApiError::Projection(err) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -4257,6 +4281,31 @@ impl IntoResponse for ApiError {
     }
 }
 
+fn sqlx_capacity_error(error: &sqlx::Error) -> bool {
+    match error {
+        sqlx::Error::PoolTimedOut | sqlx::Error::PoolClosed => true,
+        sqlx::Error::Database(error) => matches!(error.code().as_deref(), Some("57014" | "55P03")),
+        _ => false,
+    }
+}
+
+fn projection_capacity_error(error: &projections::ProjectionError) -> bool {
+    match error {
+        projections::ProjectionError::Db(error) => sqlx_capacity_error(error),
+        projections::ProjectionError::Store(eventstore::StoreError::Db(error)) => {
+            sqlx_capacity_error(error)
+        }
+        _ => false,
+    }
+}
+
+fn capability_capacity_error(error: &caps::CapError) -> bool {
+    match error {
+        caps::CapError::Db(error) => sqlx_capacity_error(error),
+        caps::CapError::Projection(error) => projection_capacity_error(error),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -4268,6 +4317,17 @@ mod tests {
         OperatorProofRunStatusRow, ProofRunArtifactFreshness, ProofRunArtifactState,
         ProofRunManifest, ProofRunSpec, PROOF_RUN_STATUS_CONTRACT_VERSION,
     };
+
+    #[test]
+    fn database_pool_timeout_is_a_retryable_503() {
+        let response = ApiError::Projection(projections::ProjectionError::Store(
+            eventstore::StoreError::Db(sqlx::Error::PoolTimedOut),
+        ))
+        .into_response();
+
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(response.headers()[RETRY_AFTER], "1");
+    }
     use std::{collections::HashSet, env, fs, path::Path as FsPath, time::SystemTime};
 
     const COMMANDS_PIPELINE_RS: &str = include_str!("../../commands/tests/pipeline.rs");

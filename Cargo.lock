@@ -1749,6 +1749,7 @@ dependencies = [
  "axum",
  "caps",
  "commands",
+ "eventstore",
  "projections",
  "serde",
  "serde_json",
@@ -2479,6 +2480,7 @@ dependencies = [
  "operator_api",
  "sqlx",
  "tokio",
+ "tower",
  "tracing",
  "tracing-subscriber",
 ]

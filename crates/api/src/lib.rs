@@ -35,7 +35,7 @@ use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::path::Path as FsPath;
 use std::sync::{Arc, OnceLock};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use tokio::sync::broadcast;
+use tokio::sync::{broadcast, Semaphore};
 use uuid::Uuid;
 use wire::{
     AckMsg, AdvanceSubscriptionReadRequest, CapabilityGrant, ClientEnvelope, CommunityInboxPage,
@@ -61,6 +61,7 @@ pub struct ApiState {
     identity_delivery_gateway: Arc<dyn IdentityDeliveryGateway>,
     live_projection_tx: broadcast::Sender<LiveProjectionUpdate>,
     live_projection_delivery_delay: Duration,
+    live_connection_slots: Arc<Semaphore>,
 }
 
 #[derive(Debug, Clone)]
@@ -103,6 +104,7 @@ impl ApiState {
             Duration::from_millis(
                 env_i64("FMARCH_LIVE_PROJECTION_DELIVERY_DELAY_MS", 0, 0, 60_000) as u64,
             );
+        let live_connection_limit = env_i64("FMARCH_WS_MAX_CONNECTIONS", 512, 1, 65_536) as usize;
         let (live_projection_tx, _) = broadcast::channel(live_projection_capacity);
         let _ = dummy_account_password_hash();
         ApiState {
@@ -117,6 +119,7 @@ impl ApiState {
             ),
             live_projection_tx,
             live_projection_delivery_delay,
+            live_connection_slots: Arc::new(Semaphore::new(live_connection_limit)),
         }
     }
 
@@ -182,6 +185,11 @@ impl ApiState {
 
     pub fn with_live_projection_delivery_delay(mut self, delay: Duration) -> Self {
         self.live_projection_delivery_delay = delay.min(Duration::from_secs(60));
+        self
+    }
+
+    pub fn with_live_connection_limit(mut self, limit: usize) -> Self {
+        self.live_connection_slots = Arc::new(Semaphore::new(limit.clamp(1, 65_536)));
         self
     }
 }
@@ -6467,8 +6475,27 @@ async fn ws(
     State(state): State<ApiState>,
     Query(params): Query<WsParams>,
     upgrade: WebSocketUpgrade,
-) -> impl IntoResponse {
-    upgrade.on_upgrade(move |socket| ws_session(socket, state, params))
+) -> Response {
+    let permit = match state.live_connection_slots.clone().try_acquire_owned() {
+        Ok(permit) => permit,
+        Err(_) => {
+            tracing::warn!(
+                event = "live_connection_rejected",
+                reason = "connection_capacity_exhausted",
+                "live connection admission rejected"
+            );
+            return capacity_unavailable_response(
+                "live connection capacity is exhausted; retry shortly",
+                1,
+            );
+        }
+    };
+    upgrade
+        .on_upgrade(move |socket| async move {
+            let _permit = permit;
+            ws_session(socket, state, params).await;
+        })
+        .into_response()
 }
 
 async fn ws_session(mut socket: WebSocket, state: ApiState, params: WsParams) {
@@ -7002,6 +7029,10 @@ pub enum ApiError {
         retry_after_seconds: i64,
         message: String,
     },
+    Unavailable {
+        retry_after_seconds: i64,
+        message: String,
+    },
 }
 
 impl From<projections::ProjectionError> for ApiError {
@@ -7056,6 +7087,24 @@ fn command_reject_api_error(reject: commands::Reject) -> ApiError {
 impl IntoResponse for ApiError {
     fn into_response(self) -> axum::response::Response {
         let self_ = match self {
+            ApiError::Db(ref error) if sqlx_capacity_error(error) => {
+                return capacity_unavailable_response(
+                    "database capacity is temporarily unavailable; retry shortly",
+                    1,
+                );
+            }
+            ApiError::Projection(ref error) if projection_capacity_error(error) => {
+                return capacity_unavailable_response(
+                    "database capacity is temporarily unavailable; retry shortly",
+                    1,
+                );
+            }
+            ApiError::Capability(ref error) if capability_capacity_error(error) => {
+                return capacity_unavailable_response(
+                    "database capacity is temporarily unavailable; retry shortly",
+                    1,
+                );
+            }
             ApiError::RateLimited {
                 retry_after_seconds,
                 message,
@@ -7073,6 +7122,26 @@ impl IntoResponse for ApiError {
                 response.headers_mut().insert(
                     RETRY_AFTER,
                     HeaderValue::from_str(retry_after_seconds.to_string().as_str())
+                        .unwrap_or_else(|_| HeaderValue::from_static("1")),
+                );
+                return response;
+            }
+            ApiError::Unavailable {
+                retry_after_seconds,
+                message,
+            } => {
+                let mut response = (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(RejectMsg {
+                        error: RejectCode::Internal,
+                        retryable: true,
+                        message,
+                    }),
+                )
+                    .into_response();
+                response.headers_mut().insert(
+                    RETRY_AFTER,
+                    HeaderValue::from_str(retry_after_seconds.max(1).to_string().as_str())
                         .unwrap_or_else(|_| HeaderValue::from_static("1")),
                 );
                 return response;
@@ -7101,6 +7170,7 @@ impl IntoResponse for ApiError {
                 message,
             } => (status, error, message),
             ApiError::RateLimited { .. } => unreachable!(),
+            ApiError::Unavailable { .. } => unreachable!(),
         };
         (
             status,
@@ -7111,5 +7181,58 @@ impl IntoResponse for ApiError {
             }),
         )
             .into_response()
+    }
+}
+
+/// Shared overload response for the HTTP and WebSocket admission boundaries.
+/// This is deliberately distinct from caller-scoped `429` rate limiting.
+pub fn capacity_unavailable_response(
+    message: impl Into<String>,
+    retry_after_seconds: i64,
+) -> Response {
+    ApiError::Unavailable {
+        retry_after_seconds,
+        message: message.into(),
+    }
+    .into_response()
+}
+
+fn sqlx_capacity_error(error: &sqlx::Error) -> bool {
+    match error {
+        sqlx::Error::PoolTimedOut | sqlx::Error::PoolClosed => true,
+        sqlx::Error::Database(error) => matches!(error.code().as_deref(), Some("57014" | "55P03")),
+        _ => false,
+    }
+}
+
+fn projection_capacity_error(error: &projections::ProjectionError) -> bool {
+    match error {
+        projections::ProjectionError::Db(error) => sqlx_capacity_error(error),
+        projections::ProjectionError::Store(eventstore::StoreError::Db(error)) => {
+            sqlx_capacity_error(error)
+        }
+        _ => false,
+    }
+}
+
+fn capability_capacity_error(error: &caps::CapError) -> bool {
+    match error {
+        caps::CapError::Db(error) => sqlx_capacity_error(error),
+        caps::CapError::Projection(error) => projection_capacity_error(error),
+    }
+}
+
+#[cfg(test)]
+mod capacity_error_tests {
+    use super::*;
+
+    #[test]
+    fn database_pool_timeout_is_a_retryable_503() {
+        let response =
+            ApiError::Projection(projections::ProjectionError::Db(sqlx::Error::PoolTimedOut))
+                .into_response();
+
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(response.headers()[RETRY_AFTER], "1");
     }
 }

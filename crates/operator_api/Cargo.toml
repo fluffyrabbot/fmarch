@@ -6,6 +6,7 @@ edition.workspace = true
 [dependencies]
 caps = { path = "../caps" }
 commands = { path = "../commands" }
+eventstore = { path = "../eventstore" }
 projections = { path = "../projections" }
 wire = { path = "../wire" }
 axum = "0.8"

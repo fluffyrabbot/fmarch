@@ -148,7 +148,9 @@ crates/
   payload shape — that evolves in code via upcasters).
 - **Observability**: structured logging (`tracing`), one span per command with the
   capability used, request id, and resulting events; metrics on command latency, append
-  conflicts, fan-out lag, WS connection count.
+  conflicts, fan-out lag, WS connection count. HTTP admission, database waits, request
+  deadlines, live-connection limits, and overload responses follow the explicit contract in
+  [12-capacity-and-overload](12-capacity-and-overload.md).
 - **Determinism guard**: folds must not call `now()`/RNG/network; this is enforced by
   construction (the `domain` crate doesn't depend on anything that could).
 - **Test tiers**: the default `cargo test -p commands` is hermetic and parallel-safe.

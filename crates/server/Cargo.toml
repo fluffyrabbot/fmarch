@@ -13,6 +13,9 @@ sqlx = { version = "0.8", default-features = false, features = [
     "postgres",
     "migrate",
 ] }
-tokio = { version = "1", features = ["macros", "net", "rt-multi-thread"] }
+tokio = { version = "1", features = ["macros", "net", "rt-multi-thread", "sync", "time"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }
