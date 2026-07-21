@@ -2,6 +2,9 @@
   "name": "test_skip_next_day_day_only",
   "version": 1,
   "ir_version": 46,
+  "night_resolution": {
+    "mode": "Generic"
+  },
   "roles": {
     "beloved_princess": {
       "description": "Town-aligned test Beloved Princess for unsupported skip-next-day cadence proof.",

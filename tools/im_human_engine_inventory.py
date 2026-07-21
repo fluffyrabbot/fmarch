@@ -427,7 +427,7 @@ TEST_FAMILY_COVERAGE = {
         "notes": "effect modifiers map to death reveal, persistent effect, and notification result contracts",
     },
     "policy/conflict": {
-        "canonical": "standard_nar_precedence_goldens",
+        "canonical": "night_resolution_precedence_goldens",
         "modeled": True,
         "implemented": True,
         "golden": True,
@@ -436,10 +436,10 @@ TEST_FAMILY_COVERAGE = {
             {"path": "crates/domain/tests/golden.rs", "needle": "golden_kill_vs_doctor_base"},
             {
                 "path": "crates/domain/tests/pack_validation.rs",
-                "needle": "standard_nar",
+                "needle": "night_resolution",
             },
         ],
-        "notes": "conflict policy maps to standard-NAR precedence, protection, suppression, and pack validation",
+        "notes": "conflict policy maps to explicit night-resolution precedence, protection, suppression, and pack validation",
     },
     "policy/win": {
         "canonical": "win_policy_goldens",
@@ -865,9 +865,9 @@ def load_fmarch_context(fmarch_root: Path) -> dict[str, Any]:
     pack_abilities: set[str] = set()
     pack_modifiers: set[str] = set()
     pack_policies: set[str] = set()
-    pack_standard_nar_kill_cause_ids: set[str] = set()
-    pack_standard_nar_target_state_save_tags: set[str] = set()
-    pack_standard_nar_target_state_gate_tags: set[str] = set()
+    pack_night_resolution_kill_cause_ids: set[str] = set()
+    pack_night_resolution_target_state_save_tags: set[str] = set()
+    pack_night_resolution_target_state_gate_tags: set[str] = set()
     pack_vote_methods: dict[str, str] = {}
     pack_vote_weights: dict[str, float] = {}
     pack_dynamic_vote_effects: set[str] = set()
@@ -978,17 +978,17 @@ def load_fmarch_context(fmarch_root: Path) -> dict[str, Any]:
         method = vote.get("method") if isinstance(vote, dict) else None
         if isinstance(method, str):
             pack_vote_methods[pack_name] = method
-        standard_nar = pack.get("standard_nar")
-        if isinstance(standard_nar, dict):
-            for cause_id in standard_nar.get("kill_cause_ids") or []:
+        night_resolution = pack.get("night_resolution")
+        if isinstance(night_resolution, dict):
+            for cause_id in night_resolution.get("kill_cause_ids") or []:
                 if isinstance(cause_id, str):
-                    pack_standard_nar_kill_cause_ids.add(f"{pack_name}:{cause_id}")
-            for tag in standard_nar.get("target_state_save_tags") or []:
+                    pack_night_resolution_kill_cause_ids.add(f"{pack_name}:{cause_id}")
+            for tag in night_resolution.get("target_state_save_tags") or []:
                 if isinstance(tag, str):
-                    pack_standard_nar_target_state_save_tags.add(f"{pack_name}:{tag}")
-            for tag in standard_nar.get("target_state_gate_tags") or []:
+                    pack_night_resolution_target_state_save_tags.add(f"{pack_name}:{tag}")
+            for tag in night_resolution.get("target_state_gate_tags") or []:
                 if isinstance(tag, str):
-                    pack_standard_nar_target_state_gate_tags.add(f"{pack_name}:{tag}")
+                    pack_night_resolution_target_state_gate_tags.add(f"{pack_name}:{tag}")
         weights = vote.get("weights") if isinstance(vote, dict) else None
         if isinstance(weights, dict) and isinstance(weights.get("PerRole"), dict):
             for role_key, weight in weights["PerRole"].items():
@@ -1057,9 +1057,9 @@ def load_fmarch_context(fmarch_root: Path) -> dict[str, Any]:
         "pack_actions": pack_actions,
         "pack_action_alignment_failback": pack_action_alignment_failback,
         "pack_action_source_ids": pack_action_source_ids,
-        "pack_standard_nar_kill_cause_ids": pack_standard_nar_kill_cause_ids,
-        "pack_standard_nar_target_state_save_tags": pack_standard_nar_target_state_save_tags,
-        "pack_standard_nar_target_state_gate_tags": pack_standard_nar_target_state_gate_tags,
+        "pack_night_resolution_kill_cause_ids": pack_night_resolution_kill_cause_ids,
+        "pack_night_resolution_target_state_save_tags": pack_night_resolution_target_state_save_tags,
+        "pack_night_resolution_target_state_gate_tags": pack_night_resolution_target_state_gate_tags,
         "pack_abilities": pack_abilities,
         "pack_modifiers": pack_modifiers,
         "pack_policies": pack_policies,
@@ -1131,7 +1131,7 @@ def row(
     }
 
 
-STANDARD_NAR_PRIMITIVE_CAUSES = {
+NIGHT_RESOLUTION_PRIMITIVE_CAUSES = {
     "hunter": ["mafiascum:hunter_retaliate"],
     "ignite": ["mafiascum:ignite"],
     "kill": ["mafiascum:factional_kill", "mafiascum:night_kill"],
@@ -1145,24 +1145,24 @@ STANDARD_NAR_PRIMITIVE_CAUSES = {
 }
 
 
-def standard_nar_catalog_note_for_primitive(name: str, fmarch: dict[str, Any]) -> str:
-    required = STANDARD_NAR_PRIMITIVE_CAUSES.get(name)
+def night_resolution_catalog_note_for_primitive(name: str, fmarch: dict[str, Any]) -> str:
+    required = NIGHT_RESOLUTION_PRIMITIVE_CAUSES.get(name)
     if not required:
         return ""
-    catalog = fmarch["pack_standard_nar_kill_cause_ids"]
+    catalog = fmarch["pack_night_resolution_kill_cause_ids"]
     if all(cause in catalog for cause in required):
-        return "standard-NAR kill causes are catalog-owned through `standard_nar.kill_cause_ids`"
+        return "explicit night-resolution kill causes are catalog-owned through `night_resolution.kill_cause_ids`"
     return ""
 
 
-def standard_nar_catalog_note_for_modifier(name: str, fmarch: dict[str, Any]) -> str:
+def night_resolution_catalog_note_for_modifier(name: str, fmarch: dict[str, Any]) -> str:
     if name == "vengeful":
-        return standard_nar_catalog_note_for_primitive(name, fmarch)
+        return night_resolution_catalog_note_for_primitive(name, fmarch)
     scoped = f"mafiascum:{name}"
-    if scoped in fmarch["pack_standard_nar_target_state_save_tags"]:
-        return "standard-NAR target-state saves are catalog-owned through `standard_nar.target_state_save_tags`"
-    if scoped in fmarch["pack_standard_nar_target_state_gate_tags"]:
-        return "standard-NAR target-state gates are catalog-owned through `standard_nar.target_state_gate_tags`"
+    if scoped in fmarch["pack_night_resolution_target_state_save_tags"]:
+        return "explicit night-resolution target-state saves are catalog-owned through `night_resolution.target_state_save_tags`"
+    if scoped in fmarch["pack_night_resolution_target_state_gate_tags"]:
+        return "explicit night-resolution target-state gates are catalog-owned through `night_resolution.target_state_gate_tags`"
     return ""
 
 
@@ -1180,8 +1180,8 @@ def conversion_policy_note_for_primitive(name: str, fmarch: dict[str, Any]) -> s
 def target_state_gate_note_for_primitive(name: str, fmarch: dict[str, Any]) -> str:
     tags = {"commute": "commuted", "untargetable": "untargetable"}
     tag = tags.get(name)
-    if tag and f"mafiascum:{tag}" in fmarch["pack_standard_nar_target_state_gate_tags"]:
-        return "standard-NAR target-state gates are catalog-owned through `standard_nar.target_state_gate_tags`"
+    if tag and f"mafiascum:{tag}" in fmarch["pack_night_resolution_target_state_gate_tags"]:
+        return "explicit night-resolution target-state gates are catalog-owned through `night_resolution.target_state_gate_tags`"
     return ""
 
 
@@ -1189,7 +1189,7 @@ def trigger_policy_note_for_primitive(name: str, fmarch: dict[str, Any]) -> str:
     if name != "trigger":
         return ""
     if '"trigger_fixpoint_policy": {' in fmarch["pack_text"]:
-        return "pack trigger table and `standard_nar.trigger_fixpoint_policy` own generated-trigger fixpoints"
+        return "pack trigger table and `night_resolution.trigger_fixpoint_policy` own generated-trigger fixpoints"
     return ""
 
 
@@ -1288,7 +1288,7 @@ def build_matrix(inventory: dict[str, Any], fmarch: dict[str, Any]) -> list[dict
             canonical = f"target_state_gate:{gate_tag}"
             modeled = (
                 f"mafiascum:{gate_tag}"
-                in fmarch["pack_standard_nar_target_state_gate_tags"]
+                in fmarch["pack_night_resolution_target_state_gate_tags"]
                 and f'"{gate_tag}": {{' in fmarch["pack_text"]
                 and '"blocks": ["Kill", "Investigate"]' in fmarch["pack_text"]
             )
@@ -1652,7 +1652,7 @@ def build_matrix(inventory: dict[str, Any], fmarch: dict[str, Any]) -> list[dict
             integrated = "ActionSubmitted" in commands if implemented else False
         notes = append_note(
             append_note(
-                standard_nar_catalog_note_for_primitive(name, fmarch),
+                night_resolution_catalog_note_for_primitive(name, fmarch),
                 conversion_policy_note_for_primitive(name, fmarch),
             ),
             target_state_gate_note_for_primitive(name, fmarch),
@@ -2451,7 +2451,7 @@ def build_matrix(inventory: dict[str, Any], fmarch: dict[str, Any]) -> list[dict
                 and "ita_better_shielded" in goldens
             )
         )
-        notes = append_note(notes, standard_nar_catalog_note_for_modifier(name, fmarch))
+        notes = append_note(notes, night_resolution_catalog_note_for_modifier(name, fmarch))
         rows.append(
             row(
                 category,
@@ -3130,7 +3130,7 @@ def build_matrix(inventory: dict[str, Any], fmarch: dict[str, Any]) -> list[dict
             canonical = "ascetic"
             modeled = (
                 scoped_name in fmarch["pack_roles"]
-                and "mafiascum:ascetic" in fmarch["pack_standard_nar_target_state_gate_tags"]
+                and "mafiascum:ascetic" in fmarch["pack_night_resolution_target_state_gate_tags"]
                 and '"ascetic": {' in fmarch["pack_text"]
                 and '"Protect"' in fmarch["pack_text"]
                 and '"Investigate"' in fmarch["pack_text"]
@@ -3179,7 +3179,7 @@ def build_matrix(inventory: dict[str, Any], fmarch: dict[str, Any]) -> list[dict
             implemented = (
                 modeled
                 and "strongman_bypasses_protect" in resolver
-                and "standard_nar_strongman_bypasses" in resolver
+                and "night_resolution_strongman_bypasses" in resolver
             )
             golden = modeled and "town_strongman_pierces_doctor" in mu_golden_names
             integrated = (
@@ -3190,7 +3190,7 @@ def build_matrix(inventory: dict[str, Any], fmarch: dict[str, Any]) -> list[dict
             notes = (
                 "Mafia Universe Town Strongman is a town-aligned strongman_kill "
                 "role with kill,pierce semantics; fmarch maps it to the existing "
-                "Strongman kill modifier and standard-NAR protection bypass policy."
+                "Strongman kill modifier and explicit night-resolution protection bypass policy."
             )
         elif scoped_name == "core:jack_of_all_trades":
             mafiascum_golden_names = fmarch["golden_names_by_pack"].get("mafiascum", set())
@@ -3261,8 +3261,8 @@ def build_matrix(inventory: dict[str, Any], fmarch: dict[str, Any]) -> list[dict
             name.lower() in pack_goldens or canonical.lower() in pack_goldens
         )
         notes = ",".join(primitives)
-        if f"{item['culture']}:{canonical}" in fmarch["pack_standard_nar_kill_cause_ids"]:
-            notes = append_note(notes, "standard-NAR kill cause catalog")
+        if f"{item['culture']}:{canonical}" in fmarch["pack_night_resolution_kill_cause_ids"]:
+            notes = append_note(notes, "explicit night-resolution kill cause catalog")
         if f"{item['culture']}:{canonical}" in fmarch["pack_action_alignment_failback"]:
             notes = append_note(notes, "alignment_failback")
         rows.append(

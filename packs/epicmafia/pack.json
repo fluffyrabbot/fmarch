@@ -2,6 +2,9 @@
   "name": "epicmafia",
   "version": 1,
   "ir_version": 67,
+  "night_resolution": {
+    "mode": "Generic"
+  },
   "roles": {
     "villager": {
       "description": "Villager. No night action; wins with the town.",

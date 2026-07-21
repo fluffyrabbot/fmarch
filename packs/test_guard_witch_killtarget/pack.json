@@ -2,6 +2,9 @@
   "name": "test_guard_witch_killtarget",
   "version": 1,
   "ir_version": 46,
+  "night_resolution": {
+    "mode": "Generic"
+  },
   "roles": {
     "guard": {
       "description": "Guard for same-target Witch conflict tests.",

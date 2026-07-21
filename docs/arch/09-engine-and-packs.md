@@ -383,7 +383,7 @@ Chinese structured Cupid uses the same primitive for `link_lovers` during the se
 `PlayersLinked` is the canonical fmarch mapping for im-human `note.cupid.link`, and later
 lover death cascade is produced from folded link state by a shared post-death policy pass.
 The pass runs over both night deaths and day deaths, so night kills, Witch poison, lynches,
-and other day substep deaths all use the same folded state. Under standard NAR, if a linked
+and other day substep deaths all use the same folded state. Under `Generic` night resolution, if a linked
 slot already died directly in the same resolution, `lover_suicide` stacks onto that existing
 `PlayerKilled` event by adding the dead lover as an attacker and preserving a cascade trace
 decision. v16 `lover_policy` controls whether that folded link generates `lover_suicide`,
@@ -397,7 +397,7 @@ knowledge after replay. Private lover communication/rooms remain later platform 
 slot and emits `RetaliationArmed { retaliation_id, actor, target, source_action }`.
 `apply_events` folds that into `StateSnapshot.retaliations`; when the actor dies in a later
 resolution, the chosen target is killed by `source_action` through the normal generated-kill
-path. In standard-NAR packs, `standard_nar.chosen_retaliation_cause_policy` classifies each
+path. In explicit night-resolution packs, `night_resolution.chosen_retaliation_cause_policy` classifies each
 folded `Retaliate` source action as ordinary or Strongman-like before the chosen shot can fire.
 
 `IrAbility::Badge` is the first v7 rich-day addition. A `Badge` action carries `BadgeSpec {
@@ -533,7 +533,7 @@ semantic minimizer proof.
 `Modifier::Babysitter` is the first v5 modifier addition. It is legal only on `Protect`
 actions. The action protects its target normally; if the protecting actor dies during the
 same resolution, the ward receives a generated `PlayerKilled` with the pack-declared
-`standard_nar.guard_dependency_cause_policy` cause. This models im-human's mafiascum `babysit`
+`night_resolution.guard_dependency_cause_policy` cause. This models im-human's mafiascum `babysit`
 surface as pack data (`Protect` plus modifier) rather than a role-specific resolver branch. If
 the ward already has a same-resolution death when the Babysitter dependency fires, the dependency
 uses the standard stacking path: one `PlayerKilled` remains, the Babysitter is merged into
@@ -545,7 +545,7 @@ resolution-scoped `Mark` actions. The action records a same-resolution hide link
 hider; if the host has a known non-mafia alignment, the actor receives transient
 `untargetable` state for that resolution. If the host dies, the linked hider receives a
 generated, unstoppable `PlayerKilled` with the pack-declared
-`standard_nar.hide_dependency_cause_policy` cause. If that hider already has a same-resolution
+`night_resolution.hide_dependency_cause_policy` cause. If that hider already has a same-resolution
 death, the hide dependency uses the standard stacking path: one
 `PlayerKilled` remains, the host is merged into its `attackers`, `unstoppable` is ORed, and
 the trace records both `hider_dependency_death` and `kill_stacked_on_existing_death`.
@@ -658,11 +658,11 @@ struct PrecedenceRule {
 }
 ```
 
-`Pack.standard_nar` is the first linter-backed conflict catalog over those precedence
+`Pack.night_resolution` is the first linter-backed conflict catalog over those precedence
 edges. When enabled, it names the concrete pack action ids that participate in standard
 block/protect/kill interactions: Block actions, ordinary Protect actions, Bodyguard
 intercepts, Martyr intercepts, CPR Protect+Kill actions, Jailkeeper Block+Protect actions, and
-ordinary and Strongman submitted Kill actions. It also declares the standard-NAR kill-cause
+ordinary and Strongman submitted Kill actions. It also declares the explicit night-resolution kill-cause
 catalog used by protection and target-state save tables; validation checks that catalog against
 the pack's night Kill/Retaliate actions and kill-producing triggers, and generated-trigger gaps in
 protection/save and suppression classifiers are reported with the trigger id. Validation requires those ids to exist with the expected IR/modifier shape,
@@ -676,8 +676,8 @@ table; packs without the table continue to use the modifier vocabulary directly.
 Folded Hunter-style chosen retaliation causes are classified by
 `chosen_retaliation_cause_policy`, including whether the `source_action` bypasses protection as a
 Strongman-style kill; the resolver fails closed before consuming `RetaliationArmed` state when a
-standard-NAR Retaliate action is missing from that table.
-Trigger-produced Kill causes in standard-NAR packs are also classified by
+explicit night-resolution Retaliate action is missing from that table.
+Trigger-produced Kill causes in explicit night-resolution packs are also classified by
 `generated_kill_cause_policy`, including the trigger `on` discriminant, produced actor,
 produced target, and whether the generated cause bypasses protection as a Strongman-style kill;
 the resolver fails closed before night or day trigger fixpoints if a kill-producing trigger is
@@ -815,10 +815,10 @@ enum TargetRef { Actor, Target, Killer, Other }
 > then appends the final `WinReached` from the post-trigger state. Observation-local tags include
 > `win` and `winner:<winner>`, while shipped `win_witness_observes` proves the trigger path without
 > pretending win-triggered kills have protection semantics yet.
-> In standard-NAR packs, `standard_nar.trigger_fixpoint_policy` declares the observed trigger
+> In explicit night-resolution packs, `night_resolution.trigger_fixpoint_policy` declares the observed trigger
 > `on`, `produced_kill_reenters`, `loop_cap: RedirectLoopCap`, and `trace: true` contract for each
 > kill-producing trigger before the resolver enters the trigger loop. The linter requires this
-> entry to pair with the trigger's `standard_nar.generated_kill_cause_policy` entry. Non-kill triggers such as
+> entry to pair with the trigger's `night_resolution.generated_kill_cause_policy` entry. Non-kill triggers such as
 > `win_witness_observes` participate without generated-kill policy entries.
 > The mafiascum PGO source role is canonicalized as `paranoid_gun_owner` in fmarch; the
 > im-human `pgo` primitive maps to the role-carried `pgo` effect plus `pgo_shoots_visitor`
@@ -857,8 +857,8 @@ enum TargetRef { Actor, Target, Killer, Other }
 > Win triggers run before the final result event. Mafiascum's `win_witness_townie` carries
 > `win_witness`, and `win_witness_observes` proves a pack-owned `Win` trigger can emit a traceable
 > `Trigger` before the rebuilt `PhaseAnnouncement` while `WinReached` remains final.
-> In standard-NAR packs, every kill-producing trigger also needs a
-> `standard_nar.generated_kill_cause_policy` entry. The table owns the trigger `on`,
+> In explicit night-resolution packs, every kill-producing trigger also needs a
+> `night_resolution.generated_kill_cause_policy` entry. The table owns the trigger `on`,
 > produced actor, produced target, and whether that trigger id is an ordinary generated kill or a
 > Strongman-style protection bypass, so trigger-produced kills do not inherit source-shape or
 > bypass semantics directly from resolver-local checks.
@@ -1971,7 +1971,7 @@ Some common mafiascum mechanics are target-state policy, not new IR primitives:
   `duration: Resolution`; it is visible to later Kill/Investigate stages but does not persist.
 - `untargetable` is a role/slot effect tag. Kills aimed at `untargetable`/`commuted` targets
   do not land; investigations emit `ActionInterfered { reason: "untargetable" }`. In
-  standard-NAR packs, `standard_nar.target_state_gate_policy` declares which target-state tags
+  explicit night-resolution packs, `night_resolution.target_state_gate_policy` declares which target-state tags
   block `Kill`, `Investigate`, or both.
 - `poisoned` is a persistent `Mark` effect plus a `DelayedDeathQueued` record. Pending poison
   death reads only queued deaths carried into the resolution; `Clear("poisoned")` emits
@@ -1981,19 +1981,19 @@ Some common mafiascum mechanics are target-state policy, not new IR primitives:
 
 In the shipped mafiascum pack, Strongman bypasses `Protect`, `bulletproof`, and
 `bulletproof_vest`, but not `untargetable`/`commuted` target-state gates. The
-`standard_nar.target_state_save_tags` catalog plus `standard_nar.target_state_save_policy` table
+`night_resolution.target_state_save_tags` catalog plus `night_resolution.target_state_save_policy` table
 own the bulletproof/vest split: each save tag is first declared in the catalog, then classifies
-every standard-NAR kill-like cause as blocked or bypassed, and validation rejects missing,
+every explicit night-resolution kill-like cause as blocked or bypassed, and validation rejects missing,
 unknown, duplicate, or empty catalog tags, missing policy tags, unknown causes, ordinary kills in
 `bypasses`, or Strongman-style causes in
-`blocks`. The night resolver also rejects a standard-NAR pack that reaches resolution with a
+`blocks`. The night resolver also rejects a explicit night-resolution pack that reaches resolution with a
 missing save catalog or table, so a mutated or unvalidated pack cannot silently fall back to implicit
-Strongman/unstoppable save behavior. The `standard_nar.target_state_gate_tags` catalog plus
-`standard_nar.target_state_gate_policy` table owns the earlier commuted/untargetable gate: each
+Strongman/unstoppable save behavior. The `night_resolution.target_state_gate_tags` catalog plus
+`night_resolution.target_state_gate_policy` table owns the earlier commuted/untargetable gate: each
 gate tag is first declared in the catalog, then declares the blocked abilities, and validation
 rejects missing, unknown, duplicate, or empty catalog tags, missing policy tags, unknown policy
 tags, duplicate blocked abilities, empty policies, and abilities outside the currently
-implemented `Kill`/`Investigate` gate. The night resolver also rejects a standard-NAR pack that
+implemented `Kill`/`Investigate` gate. The night resolver also rejects a explicit night-resolution pack that
 reaches resolution with a missing gate catalog or table, so a mutated or unvalidated
 pack cannot silently fall back to hardcoded commute/untargetable behavior.
 
@@ -2216,7 +2216,7 @@ the **single responsibility of `Constraints.max_targets`** (e.g. the bus driver 
 `resolution.applied` envelope plus a `resolution.trace` event
 ([10-event-schema](10-event-schema.md)).
 
-> **v1 golden coverage.** The current baseline covers the standard-NAR single-actor cases plus
+> **v1 golden coverage.** The current baseline covers the explicit night-resolution single-actor cases plus
 > composed protection/blocking/strongman/bodyguard/redirect families through pack goldens and
 > command/projection replay artifacts. Exhaustive permutation coverage for every stacked
 > interaction remains outside the local saved-artifact baseline.
@@ -2240,20 +2240,20 @@ dispute resolution:
    explicit (pack-derived ability order, then priority, then stable id), never hash-map
    iteration order.
 4. **Bounded fixpoints.** Redirect and trigger chains have explicit `loop_cap`; on reaching
-   it the engine emits a diagnostic note and terminates deterministically. Standard-NAR packs
+   it the engine emits a diagnostic note and terminates deterministically. Explicit night-resolution packs
    declare trigger loop participation and trace expectations through
-   `standard_nar.trigger_fixpoint_policy`.
+   `night_resolution.trigger_fixpoint_policy`.
 5. **No hidden global state.** All transient resolution state (target maps, graph,
    effect pool, audits) lives in the resolution context and is reflected in the trace.
 6. **Explicit precedence evaluation order.** Night ability order is derived from pack
    `PrecedenceRule` edges plus each ability's maximum declared `Constraints.priority`; equal
    priorities without a precedence relation are invalid, and the resolver no longer falls back to
-   a legacy hardcoded order when pack-derived ordering fails. The canonical mafiascum pack order is
+   a hardcoded order when pack-derived ordering fails. The canonical mafiascum pack order is
    **Block → Redirect → Protect → Mark → Clear → Link → Grant → Retaliate → Kill → Convert
    → Investigate → Visit** for the currently shipped action set. Pack-validation test
    `night_order_reacts_to_pack_priorities_and_precedence_edges` mutates a small pack to prove both
    priority changes and precedence edges alter that derived order. Command test
-   `resolve_phase_uses_pack_derived_non_legacy_precedence_order` proves a valid Kill-before-Protect
+   `resolve_phase_uses_pack_derived_custom_precedence_order` proves a valid Kill-before-Protect
    pack persists `["Kill", "Protect"]` and kills a self-protecting target through projections.
    A rule's `unless_modifiers` inspects
    the modifiers of the **BEATEN** action (the one named in `beats`), never the beating action
@@ -2266,18 +2266,18 @@ dispute resolution:
    fixpoint and protection/bodyguard precedence path; the pack linter now requires that shape for
    any role-carried `pgo` effect and any role-carried `visitor_kill` effect without the
    target-filtered Visit trigger shape. The mafiascum pack also declares
-   `standard_nar`, a concrete action-id catalog for Block, Protect, ordinary Kill, Bodyguard, Martyr, CPR, Jailkeeper, and
-   Strongman, a concrete kill-cause catalog for submitted/chosen/generated standard-NAR kills, plus `kill_stacking: AggregateAttackers`. The validator rejects malformed
-   standard-NAR action shapes, missing supporting precedence edges, or missing kill-stacking
+   `night_resolution`, a concrete action-id catalog for Block, Protect, ordinary Kill, Bodyguard, Martyr, CPR, Jailkeeper, and
+   Strongman, a concrete kill-cause catalog for submitted/chosen/generated explicit night-resolution kills, plus `kill_stacking: AggregateAttackers`. The validator rejects malformed
+   explicit night-resolution action shapes, missing supporting precedence edges, or missing kill-stacking
    policy, and enabled packs classify submitted ordinary Kill/Bodyguard/Martyr/CPR/Strongman actions from that table
-   rather than from resolver-local role branches. It also rejects enabled standard-NAR packs whose
+   rather than from resolver-local role branches. It also rejects packs in `Explicit` night-resolution mode whose
    suppression policy can stop a night action unless Block has a precedence path before that
    action's ability; `resolve_phase_rejects_invalid_pack_precedence_before_append` proves the command
    path surfaces that pack validation failure before appending `ResolutionApplied`,
    `ResolutionTrace`, or `ThreadLocked`. Folded chosen-retaliation Kill causes are
-   classified through `standard_nar.chosen_retaliation_cause_policy` before the resolver consumes
+   classified through `night_resolution.chosen_retaliation_cause_policy` before the resolver consumes
    `RetaliationArmed` state. Trigger-produced Kill causes are classified
-   through `standard_nar.generated_kill_cause_policy`, which validates trigger shape and drives
+   through `night_resolution.generated_kill_cause_policy`, which validates trigger shape and drives
    ordinary-vs-Strongman protection behavior for generated kills before the trigger fixpoint runs.
    A stacked landed kill merges attribution into
    the first `PlayerKilled` and emits a `kill_stacked_on_existing_death` trace decision; night
@@ -2289,38 +2289,38 @@ dispute resolution:
    each emit their own `PlayerSaved` and `kill_prevented_by_protection` trace attribution, but
    never synthesize a `PlayerKilled` or death announcement. A protect carrying
    `Modifier::Bodyguard` or `Modifier::Martyr` emits the intercept death cause declared in
-   `standard_nar.intercept_cause_policy` for enabled standard-NAR packs, with the legacy
-   modifier-derived `bodyguard_intercept`/`martyr_intercept` fallback only for packs that do not
-   enable standard NAR. A Strongman kill bypasses the protect and therefore does not trigger the
+   `night_resolution.intercept_cause_policy` in `Explicit` mode. `Generic` mode defines the
+   modifier-derived `bodyguard_intercept`/`martyr_intercept` causes as part of its declared
+   semantics. A Strongman kill bypasses the protect and therefore does not trigger the
    save/intercept path. A protect carrying
    `Modifier::Cpr` records whether it actually saved a target; if no blockable attack is saved and
    the target is otherwise alive, the post-protection pass emits `PlayerKilled` with the
-   pack-declared `standard_nar.cpr_harm_cause_policy` cause and the CPR actor as attacker. CPR's
+   pack-declared `night_resolution.cpr_harm_cause_policy` cause and the CPR actor as attacker. CPR's
    Kill ability is intentionally ignored for ordinary night-stage ordering so deferred CPR harm
    cannot move generic Kill before Clear/read-effect preemption. A protect
    carrying `Modifier::Babysitter` also records a guard dependency: if the protector dies in the
    same resolution, the ward receives a generated, unstoppable `PlayerKilled` with the
-   pack-declared `standard_nar.guard_dependency_cause_policy` cause. Packs with
+   pack-declared `night_resolution.guard_dependency_cause_policy` cause. Packs with
    `guard_policy.enabled` may reserve specific kill causes for declared Guard actions; the
    shipped Chinese pack declares `protect_before_guard_blockable_kills` (`Protect` beats `Kill`)
    so `night_guard` blocks `poison_potion`, while Witch `heal_potion` alone does not. Enabled
    guard policies without that precedence edge fail pack validation.
 8. **Target-state gates.** Kill/Investigate stages consult role effects, slot effects, and
    same-resolution transient marks. `untargetable`/`commuted` gates run before kill saves;
-   bulletproof/vest saves run after ordinary Protect and before death. In standard-NAR packs,
+   bulletproof/vest saves run after ordinary Protect and before death. In explicit night-resolution packs,
   `untargetable`/`commuted` gate behavior is read from
-   `standard_nar.target_state_gate_tags` plus `standard_nar.target_state_gate_policy`, and bulletproof/vest save-vs-bypass behavior is read from
-   `standard_nar.target_state_save_tags` plus `standard_nar.target_state_save_policy`; standard-NAR resolution fails closed if either
-   target-state catalog or table is missing. Non-standard packs keep the legacy hardcoded
-   `commuted`/`untargetable` gate tags and Strongman `unstoppable` save fallback until they opt
-   into explicit tables. Vest consumption is expressed as `EffectsCleared`, so projection
+   `night_resolution.target_state_gate_tags` plus `night_resolution.target_state_gate_policy`, and bulletproof/vest save-vs-bypass behavior is read from
+   `night_resolution.target_state_save_tags` plus `night_resolution.target_state_save_policy`;
+   `Explicit` resolution fails closed if either target-state catalog or table is missing.
+   `Generic` mode defines the conventional `commuted`/`untargetable` gate tags and Strongman
+   `unstoppable` save behavior directly. Vest consumption is expressed as `EffectsCleared`, so projection
    rebuilds consume it through the same fold as any other cleared effect. A `Modifier::Hider` mark
    grants transient `untargetable` to the acting hider only when the chosen host is known
    non-mafia; the host itself is not made untargetable by the hide action. If the host dies while
    the hider is already dead from a
    direct same-resolution kill, the hide dependency merges into the hider's existing death and
    preserves the dependency in trace using the pack-declared
-   `standard_nar.hide_dependency_cause_policy` cause.
+   `night_resolution.hide_dependency_cause_policy` cause.
 
 ## The trace: cross-ruleset auditability
 

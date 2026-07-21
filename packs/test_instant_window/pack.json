@@ -2,6 +2,9 @@
   "name": "test_instant_window",
   "version": 1,
   "ir_version": 49,
+  "night_resolution": {
+    "mode": "Generic"
+  },
   "roles": {
     "instant_self_destructor": {
       "description": "Test role with a command-time instant self-destruct action.",

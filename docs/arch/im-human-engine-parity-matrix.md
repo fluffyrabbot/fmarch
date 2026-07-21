@@ -49,8 +49,8 @@ Inventory source: `docs/arch/im-human-engine-inventory.json`.
 | action_id | `mafia_universe:grant_item` | `grant_item` | 1 | no | yes | yes | yes | yes | schedule |
 | action_id | `mafia_universe:gunsmith` | `gunsmith` | 1 | no | yes | yes | yes | yes | investigate |
 | action_id | `mafia_universe:gunsmith` | `gunsmith` | 1 | no | yes | yes | yes | yes | investigate |
-| action_id | `mafia_universe:ignite` | `ignite` | 1 | no | yes | yes | yes | yes | ignite; standard-NAR kill cause catalog |
-| action_id | `mafia_universe:ignite` | `ignite` | 1 | no | yes | yes | yes | yes | ignite; standard-NAR kill cause catalog |
+| action_id | `mafia_universe:ignite` | `ignite` | 1 | no | yes | yes | yes | yes | ignite; explicit night-resolution kill cause catalog |
+| action_id | `mafia_universe:ignite` | `ignite` | 1 | no | yes | yes | yes | yes | ignite; explicit night-resolution kill cause catalog |
 | action_id | `mafia_universe:inherit_role` | `target_backup` | 1 | no | yes | yes | yes | yes | convert |
 | action_id | `mafia_universe:inherit_role` | `target_backup` | 1 | no | yes | yes | yes | yes | convert |
 | action_id | `mafia_universe:investigate` | `cop_investigate` | 1 | no | yes | yes | yes | yes | investigate |
@@ -63,16 +63,16 @@ Inventory source: `docs/arch/im-human-engine-inventory.json`.
 | action_id | `mafia_universe:investigate_vanilla` | `investigate_vanilla` | 1 | no | yes | yes | yes | yes | info |
 | action_id | `mafia_universe:jail` | `jail` | 1 | no | yes | yes | yes | yes | protect,block |
 | action_id | `mafia_universe:jail` | `jail` | 1 | no | yes | yes | yes | yes | protect,block |
-| action_id | `mafia_universe:janitor_kill` | `janitor_kill` | 1 | no | yes | yes | yes | yes | kill,conceal; standard-NAR kill cause catalog |
-| action_id | `mafia_universe:janitor_kill` | `janitor_kill` | 1 | no | yes | yes | yes | yes | kill,conceal; standard-NAR kill cause catalog |
+| action_id | `mafia_universe:janitor_kill` | `janitor_kill` | 1 | no | yes | yes | yes | yes | kill,conceal; explicit night-resolution kill cause catalog |
+| action_id | `mafia_universe:janitor_kill` | `janitor_kill` | 1 | no | yes | yes | yes | yes | kill,conceal; explicit night-resolution kill cause catalog |
 | action_id | `mafia_universe:kill` | `day_vigilante_kill` | 1 | no | yes | yes | yes | yes | kill |
-| action_id | `mafia_universe:kill` | `factional_kill` | 1 | no | yes | yes | yes | yes | kill; standard-NAR kill cause catalog |
-| action_id | `mafia_universe:kill` | `ninja_kill` | 1 | no | yes | yes | yes | yes | kill; standard-NAR kill cause catalog |
-| action_id | `mafia_universe:kill` | `vigilante_kill` | 1 | no | yes | yes | yes | yes | kill; standard-NAR kill cause catalog |
-| action_id | `mafia_universe:kill` | `serial_killer_kill` | 1 | no | yes | yes | yes | yes | kill; standard-NAR kill cause catalog |
+| action_id | `mafia_universe:kill` | `factional_kill` | 1 | no | yes | yes | yes | yes | kill; explicit night-resolution kill cause catalog |
+| action_id | `mafia_universe:kill` | `ninja_kill` | 1 | no | yes | yes | yes | yes | kill; explicit night-resolution kill cause catalog |
+| action_id | `mafia_universe:kill` | `vigilante_kill` | 1 | no | yes | yes | yes | yes | kill; explicit night-resolution kill cause catalog |
+| action_id | `mafia_universe:kill` | `serial_killer_kill` | 1 | no | yes | yes | yes | yes | kill; explicit night-resolution kill cause catalog |
 | action_id | `mafia_universe:kill` | `day_vigilante_kill` | 1 | no | yes | yes | yes | yes | kill |
-| action_id | `mafia_universe:kill` | `ninja_kill` | 1 | no | yes | yes | yes | yes | kill; standard-NAR kill cause catalog |
-| action_id | `mafia_universe:kill` | `vigilante_kill` | 1 | no | yes | yes | yes | yes | kill; standard-NAR kill cause catalog |
+| action_id | `mafia_universe:kill` | `ninja_kill` | 1 | no | yes | yes | yes | yes | kill; explicit night-resolution kill cause catalog |
+| action_id | `mafia_universe:kill` | `vigilante_kill` | 1 | no | yes | yes | yes | yes | kill; explicit night-resolution kill cause catalog |
 | action_id | `mafia_universe:mark_alignment` | `mark_alignment` | 1 | no | yes | yes | yes | yes | mark |
 | action_id | `mafia_universe:mark_alignment` | `mark_alignment` | 1 | no | yes | yes | yes | yes | mark |
 | action_id | `mafia_universe:mark_role` | `mark_role` | 1 | no | yes | yes | yes | yes | mark |
@@ -83,14 +83,14 @@ Inventory source: `docs/arch/im-human-engine-inventory.json`.
 | action_id | `mafia_universe:motivate` | `motivate` | 1 | no | yes | yes | yes | yes | schedule |
 | action_id | `mafia_universe:neapolitan` | `neapolitan` | 1 | no | yes | yes | yes | yes | investigate |
 | action_id | `mafia_universe:neapolitan` | `neapolitan` | 1 | no | yes | yes | yes | yes | investigate |
-| action_id | `mafia_universe:night_desperado` | `night_desperado` | 1 | no | yes | yes | yes | yes | kill; standard-NAR kill cause catalog; alignment_failback |
-| action_id | `mafia_universe:night_desperado` | `night_desperado` | 1 | no | yes | yes | yes | yes | kill; standard-NAR kill cause catalog; alignment_failback |
+| action_id | `mafia_universe:night_desperado` | `night_desperado` | 1 | no | yes | yes | yes | yes | kill; explicit night-resolution kill cause catalog; alignment_failback |
+| action_id | `mafia_universe:night_desperado` | `night_desperado` | 1 | no | yes | yes | yes | yes | kill; explicit night-resolution kill cause catalog; alignment_failback |
 | action_id | `mafia_universe:parity_scan` | `parity_scan` | 1 | no | yes | yes | yes | yes | investigate,parity |
 | action_id | `mafia_universe:parity_scan` | `parity_scan` | 1 | no | yes | yes | yes | yes | investigate,parity |
 | action_id | `mafia_universe:poison` | `poison` | 1 | no | yes | yes | yes | yes | mark |
 | action_id | `mafia_universe:poison` | `poison` | 1 | no | yes | yes | yes | yes | mark |
-| action_id | `mafia_universe:power_role_kill` | `power_role_kill` | 1 | no | yes | yes | yes | yes | kill; standard-NAR kill cause catalog |
-| action_id | `mafia_universe:power_role_kill` | `power_role_kill` | 1 | no | yes | yes | yes | yes | kill; standard-NAR kill cause catalog |
+| action_id | `mafia_universe:power_role_kill` | `power_role_kill` | 1 | no | yes | yes | yes | yes | kill; explicit night-resolution kill cause catalog |
+| action_id | `mafia_universe:power_role_kill` | `power_role_kill` | 1 | no | yes | yes | yes | yes | kill; explicit night-resolution kill cause catalog |
 | action_id | `mafia_universe:protect` | `doctor_protect` | 1 | no | yes | yes | yes | yes | protect |
 | action_id | `mafia_universe:protect` | `doctor_protect` | 1 | no | yes | yes | yes | yes | protect |
 | action_id | `mafia_universe:protect` | `doctor_protect` | 1 | no | yes | yes | yes | yes | protect |
@@ -106,8 +106,8 @@ Inventory source: `docs/arch/im-human-engine-inventory.json`.
 | action_id | `mafia_universe:rolestop` | `rolestop` | 1 | no | yes | yes | yes | yes | untargetable |
 | action_id | `mafia_universe:send_fruit` | `send_fruit` | 1 | no | yes | yes | yes | yes | info |
 | action_id | `mafia_universe:send_fruit` | `send_fruit` | 1 | no | yes | yes | yes | yes | info |
-| action_id | `mafia_universe:strongman_kill` | `strongman_kill` | 1 | no | yes | yes | yes | yes | kill,pierce; standard-NAR kill cause catalog |
-| action_id | `mafia_universe:strongman_kill` | `strongman_kill` | 1 | no | yes | yes | yes | yes | kill,pierce; standard-NAR kill cause catalog |
+| action_id | `mafia_universe:strongman_kill` | `strongman_kill` | 1 | no | yes | yes | yes | yes | kill,pierce; explicit night-resolution kill cause catalog |
+| action_id | `mafia_universe:strongman_kill` | `strongman_kill` | 1 | no | yes | yes | yes | yes | kill,pierce; explicit night-resolution kill cause catalog |
 | action_id | `mafia_universe:track` | `track` | 1 | no | yes | yes | yes | yes | investigate |
 | action_id | `mafia_universe:track` | `track` | 1 | no | yes | yes | yes | yes | investigate |
 | action_id | `mafia_universe:track` | `track` | 1 | no | yes | yes | yes | yes | investigate |
@@ -137,7 +137,7 @@ Inventory source: `docs/arch/im-human-engine-inventory.json`.
 | action_id | `mafiascum:guard_retaliate` | `huntsman_guard` | 1 | no | yes | yes | yes | yes | protect,guard,trigger |
 | action_id | `mafiascum:gunsmith` | `gunsmith` | 1 | no | yes | yes | yes | yes | investigate |
 | action_id | `mafiascum:hide` | `hide` | 1 | no | yes | yes | yes | yes | untargetable,trigger,mark |
-| action_id | `mafiascum:ignite` | `ignite` | 1 | no | yes | yes | yes | yes | kill; standard-NAR kill cause catalog |
+| action_id | `mafiascum:ignite` | `ignite` | 1 | no | yes | yes | yes | yes | kill; explicit night-resolution kill cause catalog |
 | action_id | `mafiascum:inherit_role` | `target_backup` | 1 | no | yes | yes | yes | yes | convert |
 | action_id | `mafiascum:inspect_corpse` | `inspect_corpse` | 1 | no | yes | yes | yes | yes | info |
 | action_id | `mafiascum:investigate_alignment` | `investigate_alignment` | 1 | no | yes | yes | yes | yes | investigate |
@@ -146,22 +146,22 @@ Inventory source: `docs/arch/im-human-engine-inventory.json`.
 | action_id | `mafiascum:investigate_specialist` | `investigate_specialist` | 1 | no | yes | yes | yes | yes | info |
 | action_id | `mafiascum:investigate_vanilla` | `investigate_vanilla` | 1 | no | yes | yes | yes | yes | info |
 | action_id | `mafiascum:jail` | `jail` | 1 | no | yes | yes | yes | yes | protect,block |
-| action_id | `mafiascum:janitor_kill` | `janitor_kill` | 1 | no | yes | yes | yes | yes | kill,conceal; standard-NAR kill cause catalog |
-| action_id | `mafiascum:janitor_kill` | `janitor_kill` | 1 | no | yes | yes | yes | yes | kill,conceal; standard-NAR kill cause catalog |
+| action_id | `mafiascum:janitor_kill` | `janitor_kill` | 1 | no | yes | yes | yes | yes | kill,conceal; explicit night-resolution kill cause catalog |
+| action_id | `mafiascum:janitor_kill` | `janitor_kill` | 1 | no | yes | yes | yes | yes | kill,conceal; explicit night-resolution kill cause catalog |
 | action_id | `mafiascum:kill` | `day_vigilante_kill` | 1 | no | yes | yes | yes | yes | kill |
-| action_id | `mafiascum:kill` | `factional_kill` | 1 | no | yes | yes | yes | yes | kill; standard-NAR kill cause catalog |
-| action_id | `mafiascum:kill` | `factional_kill` | 1 | no | yes | yes | yes | yes | kill; standard-NAR kill cause catalog |
-| action_id | `mafiascum:kill` | `factional_kill` | 1 | no | yes | yes | yes | yes | kill; standard-NAR kill cause catalog |
-| action_id | `mafiascum:kill` | `factional_kill` | 1 | no | yes | yes | yes | yes | kill; standard-NAR kill cause catalog |
-| action_id | `mafiascum:kill` | `night_kill` | 1 | no | yes | yes | yes | yes | kill; standard-NAR kill cause catalog |
-| action_id | `mafiascum:kill` | `night_kill` | 1 | no | yes | yes | yes | yes | kill; standard-NAR kill cause catalog |
-| action_id | `mafiascum:kill` | `factional_kill` | 1 | no | yes | yes | yes | yes | kill; standard-NAR kill cause catalog |
+| action_id | `mafiascum:kill` | `factional_kill` | 1 | no | yes | yes | yes | yes | kill; explicit night-resolution kill cause catalog |
+| action_id | `mafiascum:kill` | `factional_kill` | 1 | no | yes | yes | yes | yes | kill; explicit night-resolution kill cause catalog |
+| action_id | `mafiascum:kill` | `factional_kill` | 1 | no | yes | yes | yes | yes | kill; explicit night-resolution kill cause catalog |
+| action_id | `mafiascum:kill` | `factional_kill` | 1 | no | yes | yes | yes | yes | kill; explicit night-resolution kill cause catalog |
+| action_id | `mafiascum:kill` | `night_kill` | 1 | no | yes | yes | yes | yes | kill; explicit night-resolution kill cause catalog |
+| action_id | `mafiascum:kill` | `night_kill` | 1 | no | yes | yes | yes | yes | kill; explicit night-resolution kill cause catalog |
+| action_id | `mafiascum:kill` | `factional_kill` | 1 | no | yes | yes | yes | yes | kill; explicit night-resolution kill cause catalog |
 | action_id | `mafiascum:mailman` | `mailman` | 1 | no | yes | yes | yes | yes | info |
 | action_id | `mafiascum:motion_detector` | `motion_detector` | 1 | no | yes | yes | yes | yes | info |
 | action_id | `mafiascum:motivate` | `motivate` | 1 | no | yes | yes | yes | yes | schedule |
 | action_id | `mafiascum:neapolitan` | `neapolitan` | 1 | no | yes | yes | yes | yes | investigate |
 | action_id | `mafiascum:neighborize` | `neighborize` | 1 | no | yes | yes | yes | yes | info |
-| action_id | `mafiascum:night_kill` | `night_kill` | 1 | no | yes | yes | yes | yes | kill; standard-NAR kill cause catalog |
+| action_id | `mafiascum:night_kill` | `night_kill` | 1 | no | yes | yes | yes | yes | kill; explicit night-resolution kill cause catalog |
 | action_id | `mafiascum:observe` | `observe` | 1 | no | yes | yes | yes | yes | info |
 | action_id | `mafiascum:poison` | `poison` | 1 | no | yes | yes | yes | yes | mark |
 | action_id | `mafiascum:protect` | `doctor_protect` | 1 | no | yes | yes | yes | yes | protect |
@@ -178,8 +178,8 @@ Inventory source: `docs/arch/im-human-engine-inventory.json`.
 | action_id | `mafiascum:security_guard` | `security_guard` | 1 | no | yes | yes | yes | yes | investigate |
 | action_id | `mafiascum:send_fruit` | `send_fruit` | 1 | no | yes | yes | yes | yes | info |
 | action_id | `mafiascum:shield` | `shield` | 1 | no | yes | yes | yes | yes | protect,trigger |
-| action_id | `mafiascum:strongman_kill` | `strongman_kill` | 1 | no | yes | yes | yes | yes | kill,pierce; standard-NAR kill cause catalog |
-| action_id | `mafiascum:strongman_kill` | `strongman_kill` | 1 | no | yes | yes | yes | yes | kill,pierce; standard-NAR kill cause catalog |
+| action_id | `mafiascum:strongman_kill` | `strongman_kill` | 1 | no | yes | yes | yes | yes | kill,pierce; explicit night-resolution kill cause catalog |
+| action_id | `mafiascum:strongman_kill` | `strongman_kill` | 1 | no | yes | yes | yes | yes | kill,pierce; explicit night-resolution kill cause catalog |
 | action_id | `mafiascum:track` | `track` | 1 | no | yes | yes | yes | yes | investigate |
 | action_id | `mafiascum:traffic_analyst` | `prior_motion` | 1 | no | yes | yes | yes | yes | investigate |
 | action_id | `mafiascum:vanillaize` | `vanillaize` | 1 | no | yes | yes | yes | yes | info |
@@ -258,7 +258,7 @@ Inventory source: `docs/arch/im-human-engine-inventory.json`.
 | modifier:action | `treestump` | `treestump_policy` | 1 | no | yes | yes | yes | yes |  |
 | modifier:action | `triplevoter` | `vote.weight=3` | 1 | no | yes | yes | yes | yes |  |
 | modifier:action | `uncooperative` | `Uncooperative` | 1 | no | yes | yes | yes | yes |  |
-| modifier:action | `vengeful` | `TriggerOn::Kill+vengeful_retaliates` | 1 | no | yes | yes | yes | yes | standard-NAR kill causes are catalog-owned through `standard_nar.kill_cause_ids` |
+| modifier:action | `vengeful` | `TriggerOn::Kill+vengeful_retaliates` | 1 | no | yes | yes | yes | yes | explicit night-resolution kill causes are catalog-owned through `night_resolution.kill_cause_ids` |
 | modifier:action | `voteless` | `vote.weight=0` | 1 | no | yes | yes | yes | yes |  |
 | modifier:action | `weak` | `Weak` | 1 | no | yes | yes | yes | yes |  |
 | modifier:action | `worse_ita_chance` | `ita.modifier_components.hit_penalty` | 1 | no | yes | yes | yes | yes |  |
@@ -266,8 +266,8 @@ Inventory source: `docs/arch/im-human-engine-inventory.json`.
 | modifier:action | `x_shot` | `XShot` | 1 | no | yes | yes | yes | yes |  |
 | modifier:action | `x_voter` | `vote.weight=2` | 1 | no | yes | yes | yes | yes |  |
 | modifier:action | `xn_ita_shields` | `ita.modifier_components.shields` | 1 | no | yes | yes | yes | yes |  |
-| modifier:effect | `bulletproof` | `bulletproof` | 1 | no | yes | yes | yes | yes | standard-NAR target-state saves are catalog-owned through `standard_nar.target_state_save_tags` |
-| modifier:effect | `bulletproof_vest` | `bulletproof_vest` | 1 | no | yes | yes | yes | yes | standard-NAR target-state saves are catalog-owned through `standard_nar.target_state_save_tags` |
+| modifier:effect | `bulletproof` | `bulletproof` | 1 | no | yes | yes | yes | yes | explicit night-resolution target-state saves are catalog-owned through `night_resolution.target_state_save_tags` |
+| modifier:effect | `bulletproof_vest` | `bulletproof_vest` | 1 | no | yes | yes | yes | yes | explicit night-resolution target-state saves are catalog-owned through `night_resolution.target_state_save_tags` |
 | modifier:effect | `ninja` | `Ninja` | 1 | no | yes | yes | yes | yes | im-human effect modifier maps to fmarch Ninja action modifier plus visibility policy |
 | pack:action_window | `day` | `action_window:Day` | 1 | no | yes | yes | yes | yes | im-human action modifier maps to fmarch action window plus phase-cadence validation |
 | pack:action_window | `night_specific` | `action_window:Night` | 1 | no | yes | yes | yes | yes | im-human action modifier maps to fmarch action window plus phase-cadence validation |
@@ -277,9 +277,9 @@ Inventory source: `docs/arch/im-human-engine-inventory.json`.
 | policy:death_reveal | `conceal` | `death_reveal:Concealed` | 1 | no | yes | yes | yes | yes | pack `death_reveal` policy owns concealed death flips through cause/effect rules |
 | policy:death_reveal | `flipless` | `death_reveal:Concealed` | 1 | no | no | yes | yes | yes | im-human effect modifier maps to mafiascum death_reveal policy and PlayerKilled.death_reveal projection fold |
 | policy:death_reveal | `janitor` | `death_reveal:Concealed` | 1 | no | yes | yes | yes | yes | im-human effect modifier maps to mafiascum death_reveal policy and PlayerKilled.death_reveal projection fold |
-| policy:target_state_gate | `commute` | `target_state_gate:commuted` | 1 | no | yes | yes | yes | yes | standard-NAR target-state gates are catalog-owned through `standard_nar.target_state_gate_tags` |
-| policy:target_state_gate | `untargetable` | `target_state_gate:untargetable` | 1 | no | yes | yes | yes | yes | standard-NAR target-state gates are catalog-owned through `standard_nar.target_state_gate_tags` |
-| policy:trigger_fixpoint | `trigger` | `trigger_table+trigger_fixpoint_policy` | 1 | no | yes | yes | yes | yes | pack trigger table and `standard_nar.trigger_fixpoint_policy` own generated-trigger fixpoints |
+| policy:target_state_gate | `commute` | `target_state_gate:commuted` | 1 | no | yes | yes | yes | yes | explicit night-resolution target-state gates are catalog-owned through `night_resolution.target_state_gate_tags` |
+| policy:target_state_gate | `untargetable` | `target_state_gate:untargetable` | 1 | no | yes | yes | yes | yes | explicit night-resolution target-state gates are catalog-owned through `night_resolution.target_state_gate_tags` |
+| policy:trigger_fixpoint | `trigger` | `trigger_table+trigger_fixpoint_policy` | 1 | no | yes | yes | yes | yes | pack trigger table and `night_resolution.trigger_fixpoint_policy` own generated-trigger fixpoints |
 | policy:vote | `dynamic_effect_vote_weight` | `WeightPolicy::Dynamic(effect_rules+grant_rules)` | 5 | no | yes | yes | yes | yes | dynamic vote weight policy reads folded persistent slot effects created by legal Mark actions and folded VoteWeight grants created by legal Grant actions, applying the highest-priority matching rule; live SubmitVote hammer simulation, NoMajority revote prompt generation, and HostDecides PK prompt generation read the same folded grant state |
 | primitive | `babysitter` | `Protect+Babysitter` | 1 | no | yes | yes | yes | yes |  |
 | primitive | `beloved_princess` | `HostPromptIssued` | 1 | no | yes | yes | yes | yes |  |
@@ -298,17 +298,17 @@ Inventory source: `docs/arch/im-human-engine-inventory.json`.
 | primitive | `guard` | `Protect` | 1 | no | yes | yes | yes | yes |  |
 | primitive | `heal_poison` | `Clear` | 1 | no | yes | yes | yes | yes |  |
 | primitive | `hider` | `Mark+Hider` | 1 | no | yes | yes | yes | yes |  |
-| primitive | `hunter` | `Retaliate+RetaliationArmed` | 1 | no | yes | yes | yes | yes | standard-NAR kill causes are catalog-owned through `standard_nar.kill_cause_ids` |
-| primitive | `ignite` | `Kill` | 1 | no | yes | yes | yes | yes | standard-NAR kill causes are catalog-owned through `standard_nar.kill_cause_ids` |
+| primitive | `hunter` | `Retaliate+RetaliationArmed` | 1 | no | yes | yes | yes | yes | explicit night-resolution kill causes are catalog-owned through `night_resolution.kill_cause_ids` |
+| primitive | `ignite` | `Kill` | 1 | no | yes | yes | yes | yes | explicit night-resolution kill causes are catalog-owned through `night_resolution.kill_cause_ids` |
 | primitive | `info` | `InfoResult` | 1 | no | yes | yes | yes | yes |  |
 | primitive | `investigate` | `Investigate` | 1 | no | yes | yes | yes | yes |  |
-| primitive | `kill` | `Kill` | 1 | no | yes | yes | yes | yes | standard-NAR kill causes are catalog-owned through `standard_nar.kill_cause_ids` |
+| primitive | `kill` | `Kill` | 1 | no | yes | yes | yes | yes | explicit night-resolution kill causes are catalog-owned through `night_resolution.kill_cause_ids` |
 | primitive | `lynch_target_win` | `TargetLynchWinTargeted+WinReached` | 1 | no | yes | yes | yes | yes |  |
 | primitive | `mark` | `Mark` | 1 | no | yes | yes | yes | yes |  |
 | primitive | `mark_cleansed` | `EffectsCleared` | 1 | no | yes | yes | yes | yes | im-human emits `mark_cleansed` from Cleanse/HealPoison; fmarch's canonical `EffectsCleared` event carries the cleared effect, targets, actor, notifications, and rebuildable slot-effect removal |
 | primitive | `mirror` | `Redirect` | 1 | no | yes | yes | yes | yes |  |
 | primitive | `parity` | `Investigate` | 1 | no | yes | yes | yes | yes |  |
-| primitive | `pgo` | `TriggerOn::Visit+pgo_shoots_visitor` | 1 | no | yes | yes | yes | yes | standard-NAR kill causes are catalog-owned through `standard_nar.kill_cause_ids` |
+| primitive | `pgo` | `TriggerOn::Visit+pgo_shoots_visitor` | 1 | no | yes | yes | yes | yes | explicit night-resolution kill causes are catalog-owned through `night_resolution.kill_cause_ids` |
 | primitive | `phase_skip` | `HostPromptIssued+HostPromptResolved+PhaseAdvanced` | 1 | no | yes | yes | yes | yes |  |
 | primitive | `pierce` | `Kill` | 1 | no | yes | yes | yes | yes |  |
 | primitive | `poison` | `Mark` | 1 | no | yes | yes | yes | yes |  |
@@ -319,11 +319,11 @@ Inventory source: `docs/arch/im-human-engine-inventory.json`.
 | primitive | `retarget` | `Redirect` | 1 | no | yes | yes | yes | yes |  |
 | primitive | `roleblock` | `Block` | 1 | no | yes | yes | yes | yes |  |
 | primitive | `schedule` | `Grant+DelayedDeathQueued` | 1 | no | yes | yes | yes | yes |  |
-| primitive | `strongman` | `Kill` | 1 | no | yes | yes | yes | yes | standard-NAR kill causes are catalog-owned through `standard_nar.kill_cause_ids` |
-| primitive | `super_saint` | `TriggerOn::Lynch+super_saint_retaliates` | 1 | no | yes | yes | yes | yes | standard-NAR kill causes are catalog-owned through `standard_nar.kill_cause_ids` |
+| primitive | `strongman` | `Kill` | 1 | no | yes | yes | yes | yes | explicit night-resolution kill causes are catalog-owned through `night_resolution.kill_cause_ids` |
+| primitive | `super_saint` | `TriggerOn::Lynch+super_saint_retaliates` | 1 | no | yes | yes | yes | yes | explicit night-resolution kill causes are catalog-owned through `night_resolution.kill_cause_ids` |
 | primitive | `swap` | `Redirect` | 1 | no | yes | yes | yes | yes |  |
 | primitive | `vanillaize` | `Convert::AssignRole` | 1 | no | yes | yes | yes | yes | `conversion_policy` owns same-resolution dead-target and pending-death conversion blocks |
-| primitive | `vengeful` | `TriggerOn::Kill+vengeful_retaliates` | 1 | no | yes | yes | yes | yes | standard-NAR kill causes are catalog-owned through `standard_nar.kill_cause_ids` |
+| primitive | `vengeful` | `TriggerOn::Kill+vengeful_retaliates` | 1 | no | yes | yes | yes | yes | explicit night-resolution kill causes are catalog-owned through `night_resolution.kill_cause_ids` |
 | primitive | `visitor_kill` | `TriggerOn::Visit+TargetFilteredKill` | 1 | no | yes | yes | yes | yes |  |
 | result_event_kind | `day.vote.outcome` | `DayVoteOutcome` | 2 | no | yes | yes | yes | yes |  |
 | result_event_kind | `day.vote.recorded` | `DayVoteRecorded` | 2 | no | yes | yes | yes | yes |  |
@@ -462,7 +462,7 @@ Inventory source: `docs/arch/im-human-engine-inventory.json`.
 | role_id | `mafia_universe:town_role_oracle` | `town_role_oracle` | 1 | no | yes | yes | yes | yes | Mafia Universe town_role_oracle marks a target with hidden `role_oracle_mark` state; the family goldens cover the mark plus source-death public reveal, and the command vertical proves the folded mark/reveal/rebuild path. |
 | role_id | `mafia_universe:town_roleblocker` | `town_roleblocker` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafia_universe:town_rolestopper` | `town_rolestopper` | 1 | no | yes | yes | yes | yes |  |
-| role_id | `mafia_universe:town_strongman` | `town_strongman` | 1 | no | yes | yes | yes | yes | Mafia Universe Town Strongman is a town-aligned strongman_kill role with kill,pierce semantics; fmarch maps it to the existing Strongman kill modifier and standard-NAR protection bypass policy. |
+| role_id | `mafia_universe:town_strongman` | `town_strongman` | 1 | no | yes | yes | yes | yes | Mafia Universe Town Strongman is a town-aligned strongman_kill role with kill,pierce semantics; fmarch maps it to the existing Strongman kill modifier and explicit night-resolution protection bypass policy. |
 | role_id | `mafia_universe:town_tracker` | `town_tracker` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafia_universe:town_treestump` | `town_treestump` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafia_universe:town_universal_backup` | `town_universal_backup` | 1 | no | yes | yes | yes | yes |  |
@@ -585,7 +585,7 @@ Inventory source: `docs/arch/im-human-engine-inventory.json`.
 | test_family | `ita` | `ItaSession+ItaShot` | 1 | no | yes | yes | yes | yes | example test/engine_v4/ita/runtime_test.exs; ITA runtime coverage maps to ITA session/shot goldens and command/projection verticals |
 | test_family | `modifiers/action` | `primitive_modifier_interaction_report` | 53 | no | yes | yes | yes | yes | example test/engine_v4/modifiers/action/activated_test.exs; action modifier family coverage is checked by the primitive/modifier interaction report |
 | test_family | `modifiers/effect` | `death_reveal+effect_policy_goldens` | 6 | no | yes | yes | yes | yes | example test/engine_v4/modifiers/effect/alignment_only_flip_test.exs; effect modifiers map to death reveal, persistent effect, and notification result contracts |
-| test_family | `policy/conflict` | `standard_nar_precedence_goldens` | 2 | no | yes | yes | yes | yes | example test/engine_v4/policy/conflict/cn_langrensha_test.exs; conflict policy maps to standard-NAR precedence, protection, suppression, and pack validation |
+| test_family | `policy/conflict` | `night_resolution_precedence_goldens` | 2 | no | yes | yes | yes | yes | example test/engine_v4/policy/conflict/cn_langrensha_test.exs; conflict policy maps to explicit night-resolution precedence, protection, suppression, and pack validation |
 | test_family | `policy/win` | `win_policy_goldens` | 1 | no | yes | yes | yes | yes | example test/engine_v4/policy/win/standard_test.exs; win policy coverage maps to WinReached goldens and command/projection verticals |
 | test_family | `registry_role_api_test` | `pack_loader_validation` | 1 | no | yes | yes | yes | no | example test/engine_v4/registry_role_api_test.exs; role registry/API coverage maps to pack loading and shipped-pack validation |
 | test_family | `resolve` | `domain_golden_harness` | 34 | no | yes | yes | yes | yes | example test/engine_v4/resolve/commute_ignite_test.exs; general resolve families map to the domain golden harness plus ResolvePhase verticals |

@@ -2,6 +2,9 @@
   "name": "default_open",
   "version": 1,
   "ir_version": 46,
+  "night_resolution": {
+    "mode": "Generic"
+  },
   "roles": {
     "citizen": {
       "description": "Citizen. No night action; wins with town.",

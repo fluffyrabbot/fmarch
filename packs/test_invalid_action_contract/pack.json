@@ -2,6 +2,9 @@
   "name": "test_invalid_action_contract",
   "version": 1,
   "ir_version": 1,
+  "night_resolution": {
+    "mode": "Generic"
+  },
   "roles": {
     "malformed_investigator": {
       "description": "Test role with malformed action mode contracts.",

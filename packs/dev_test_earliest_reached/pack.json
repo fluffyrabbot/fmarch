@@ -2,6 +2,9 @@
   "name": "dev_test_earliest_reached",
   "version": 1,
   "ir_version": 46,
+  "night_resolution": {
+    "mode": "Generic"
+  },
   "roles": {
     "citizen": {
       "description": "Citizen. No night action; wins with town.",

@@ -2,6 +2,9 @@
   "name": "test_invalid_reference_contract",
   "version": 1,
   "ir_version": 13,
+  "night_resolution": {
+    "mode": "Generic"
+  },
   "roles": {
     "malformed_reference_user": {
       "description": "Test role with malformed references into pack-owned catalogs.",

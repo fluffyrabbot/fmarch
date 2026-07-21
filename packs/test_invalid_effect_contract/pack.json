@@ -2,6 +2,9 @@
   "name": "test_invalid_effect_contract",
   "version": 1,
   "ir_version": 1,
+  "night_resolution": {
+    "mode": "Generic"
+  },
   "roles": {
     "malformed_effect_user": {
       "description": "Test role with malformed effect/read-effect action contracts.",

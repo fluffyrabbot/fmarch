@@ -5207,7 +5207,7 @@ fn role_modifier_team_kill_rejected(
     let recluse = role.has_modifier(RoleModifier::Recluse);
     if (!lost && !recluse)
         || !pack
-            .standard_nar
+            .night_resolution
             .team_kill_action_ids
             .iter()
             .any(|id| id == &template.id)

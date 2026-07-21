@@ -131,8 +131,8 @@
       "visibility": "Hidden"
     }
   },
-  "standard_nar": {
-    "enabled": true,
+  "night_resolution": {
+    "mode": "Explicit",
     "kill_stacking": "AggregateAttackers",
     "block_action_ids": ["roleblocker_block"],
     "protect_action_ids": ["doctor_protect"],

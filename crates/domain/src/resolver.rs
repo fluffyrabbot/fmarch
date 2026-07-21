@@ -24,11 +24,10 @@ use crate::pack::{
     DeathRetaliationTiming, DeathRevealMode, EffectDuration, EffectSourceDeathRevealKind,
     EffectVisibility, FactionVoteTieBreaker, GrantKind, GrantSpec, GuardWitchSameTargetPolicy,
     ItaSessionControlKind, ItaSessionSpec, ItaTargetAlreadyDeadPolicy, ItaVoteConflictPolicy,
-    KillStackingPolicy, Pack, PhaseKind, PhaseParity, RedirectKind, ResultMemoryOutput,
-    ResultMemoryScope, RoleModifier, StandardNarConflictFamily, SuppressionScope, TargetRef,
-    TargetSpec, TieBreaker, TriggerEvent, TriggerLoopCapPolicy, TriggerOn, TriggerRule,
-    VisibilityFamily, VoteDuelTieBreaker, VoteMethod, VoteTieBreaker, WeightPolicy, WinCondition,
-    WinFamily, Window,
+    KillStackingPolicy, NightResolutionConflictFamily, Pack, PhaseKind, PhaseParity, RedirectKind,
+    ResultMemoryOutput, ResultMemoryScope, RoleModifier, SuppressionScope, TargetRef, TargetSpec,
+    TieBreaker, TriggerEvent, TriggerLoopCapPolicy, TriggerOn, TriggerRule, VisibilityFamily,
+    VoteDuelTieBreaker, VoteMethod, VoteTieBreaker, WeightPolicy, WinCondition, WinFamily, Window,
 };
 use crate::state::{
     apply_events, BackupTargetRecord, BadgeRecord, DelayedDeathRecord, LogicalTime, PhaseId,
@@ -295,7 +294,7 @@ fn resolve_one_kill(
 ) {
     // A slot already killed this resolution is not killed twice.
     if killed.contains(target) {
-        if standard_nar_aggregates_kill_attackers(pack) {
+        if night_resolution_aggregates_kill_attackers(pack) {
             let _ = merge_stacked_kill_attribution(
                 target,
                 attacker,
@@ -356,7 +355,7 @@ fn resolve_one_kill(
                 continue;
             };
             if killed.contains(&source.protector) {
-                if standard_nar_aggregates_kill_attackers(pack) {
+                if night_resolution_aggregates_kill_attackers(pack) {
                     let _ = merge_stacked_kill_attribution(
                         &source.protector,
                         attacker,
@@ -388,7 +387,7 @@ fn resolve_one_kill(
                 continue;
             };
             if killed.contains(attacker) {
-                if standard_nar_aggregates_kill_attackers(pack) {
+                if night_resolution_aggregates_kill_attackers(pack) {
                     let _ = merge_stacked_kill_attribution(
                         attacker,
                         &source.protector,
@@ -869,7 +868,7 @@ fn apply_trigger_fixpoint(
                 if trig.on != observation.on {
                     continue;
                 }
-                if !standard_nar_trigger_participates_in_fixpoint(pack, trig) {
+                if !night_resolution_trigger_participates_in_fixpoint(pack, trig) {
                     continue;
                 }
                 let Some(target_slot) = input
@@ -914,7 +913,7 @@ fn apply_trigger_fixpoint(
                     payload,
                 });
                 if trig.produces.ability == IrAbility::Kill {
-                    let strongman = standard_nar_generated_kill_bypasses_protect(pack, trig);
+                    let strongman = night_resolution_generated_kill_bypasses_protect(pack, trig);
                     let target_tags = target_tags(input, transient_effects, &produced_target);
                     if let Some(reason) =
                         target_state_gate_reason(pack, &target_tags, IrAbility::Kill)
@@ -1016,7 +1015,7 @@ fn apply_lover_suicides(
                 });
                 recorded_suicides.insert(slot_id.clone());
                 if killed_now.contains(slot_id) {
-                    if standard_nar_aggregates_kill_attackers(&input.pack) {
+                    if night_resolution_aggregates_kill_attackers(&input.pack) {
                         let _ = merge_stacked_kill_attribution(
                             slot_id,
                             &source_dead,
@@ -1091,7 +1090,7 @@ fn apply_chosen_retaliations(
         if !target_slot.is_alive() {
             continue;
         }
-        let strongman = standard_nar_chosen_retaliation_bypasses_protect(
+        let strongman = night_resolution_chosen_retaliation_bypasses_protect(
             &input.pack,
             &retaliation.source_action,
         );
@@ -1173,7 +1172,7 @@ fn apply_cpr_harms(
                 }),
             });
             if killed.contains(target) {
-                if standard_nar_aggregates_kill_attackers(&input.pack) {
+                if night_resolution_aggregates_kill_attackers(&input.pack) {
                     let _ = merge_stacked_kill_attribution(
                         target,
                         &source.protector,
@@ -1297,7 +1296,7 @@ fn apply_guard_dependency_deaths(
             }),
         });
         if killed.contains(&dependency.ward) {
-            if standard_nar_aggregates_kill_attackers(&input.pack) {
+            if night_resolution_aggregates_kill_attackers(&input.pack) {
                 if let Some(record) = merge_stacked_kill_attribution(
                     &dependency.ward,
                     &dependency.guard,
@@ -1370,7 +1369,7 @@ fn apply_hide_dependency_deaths(
             }),
         });
         if killed.contains(&dependency.hider) {
-            if standard_nar_aggregates_kill_attackers(&input.pack) {
+            if night_resolution_aggregates_kill_attackers(&input.pack) {
                 if let Some(record) = merge_stacked_kill_attribution(
                     &dependency.hider,
                     &dependency.host,
@@ -1586,9 +1585,9 @@ fn target_state_gate_reason<'a>(
     tags: &'a BTreeSet<String>,
     ability: IrAbility,
 ) -> Option<&'a str> {
-    if pack.standard_nar.enabled {
+    if pack.night_resolution.is_explicit() {
         let gate_tags = pack
-            .standard_nar
+            .night_resolution
             .target_state_gate_tags
             .iter()
             .map(String::as_str)
@@ -1597,7 +1596,7 @@ fn target_state_gate_reason<'a>(
             if !gate_tags.contains(tag.as_str()) {
                 return None;
             }
-            pack.standard_nar
+            pack.night_resolution
                 .target_state_gate_policy
                 .get(tag)
                 .is_some_and(|policy| policy.blocks.iter().any(|blocked| *blocked == ability))
@@ -1655,50 +1654,50 @@ fn emit_action_interfered_by_target_state(
     });
 }
 
-fn require_standard_nar_target_state_save_catalog(pack: &Pack) {
-    if !pack.standard_nar.enabled {
+fn require_night_resolution_target_state_save_catalog(pack: &Pack) {
+    if !pack.night_resolution.is_explicit() {
         return;
     }
-    let save_tags = standard_nar_derived_target_state_save_tags(pack);
-    if !save_tags.is_empty() && pack.standard_nar.target_state_save_tags.is_empty() {
+    let save_tags = night_resolution_derived_target_state_save_tags(pack);
+    if !save_tags.is_empty() && pack.night_resolution.target_state_save_tags.is_empty() {
         panic!(
-            "invalid standard_nar target-state save catalog: enabled standard_nar policy must declare target-state save tags"
+            "invalid night_resolution target-state save catalog: explicit night_resolution policy must declare target-state save tags"
         );
     }
 }
 
-fn require_standard_nar_target_state_save_policy(pack: &Pack) {
-    if !pack.standard_nar.enabled {
+fn require_night_resolution_target_state_save_policy(pack: &Pack) {
+    if !pack.night_resolution.is_explicit() {
         return;
     }
-    let save_tags = standard_nar_target_state_save_tags(pack);
+    let save_tags = night_resolution_target_state_save_tags(pack);
     if save_tags.is_empty() {
         return;
     }
     let kill_causes = pack
-        .standard_nar
+        .night_resolution
         .kill_cause_ids
         .iter()
         .map(String::as_str)
         .collect::<BTreeSet<_>>();
     for tag in &save_tags {
-        let Some(policy) = pack.standard_nar.target_state_save_policy.get(*tag) else {
+        let Some(policy) = pack.night_resolution.target_state_save_policy.get(*tag) else {
             panic!(
-                "invalid standard_nar target-state save policy: target-state save `{tag}` must classify every kill cause"
+                "invalid night_resolution target-state save policy: target-state save `{tag}` must classify every kill cause"
             );
         };
         if policy.blocks.is_empty() && policy.bypasses.is_empty() {
             panic!(
-                "invalid standard_nar target-state save policy: target-state save `{tag}` must classify kill causes"
+                "invalid night_resolution target-state save policy: target-state save `{tag}` must classify kill causes"
             );
         }
-        require_standard_nar_target_state_save_policy_causes(
+        require_night_resolution_target_state_save_policy_causes(
             tag,
             "blocks",
             &policy.blocks,
             &kill_causes,
         );
-        require_standard_nar_target_state_save_policy_causes(
+        require_night_resolution_target_state_save_policy_causes(
             tag,
             "bypasses",
             &policy.bypasses,
@@ -1712,26 +1711,26 @@ fn require_standard_nar_target_state_save_policy(pack: &Pack) {
         for cause in &policy.bypasses {
             if blocked.contains(cause.as_str()) {
                 panic!(
-                    "invalid standard_nar target-state save policy: target-state save `{tag}` kill cause `{cause}` cannot be both blocked and bypassed"
+                    "invalid night_resolution target-state save policy: target-state save `{tag}` kill cause `{cause}` cannot be both blocked and bypassed"
                 );
             }
         }
     }
-    for tag in pack.standard_nar.target_state_save_policy.keys() {
+    for tag in pack.night_resolution.target_state_save_policy.keys() {
         if tag.trim().is_empty() {
             panic!(
-                "invalid standard_nar target-state save policy: target-state save tag must not be empty"
+                "invalid night_resolution target-state save policy: target-state save tag must not be empty"
             );
         }
         if !save_tags.contains(tag.as_str()) {
             panic!(
-                "invalid standard_nar target-state save policy: unknown target-state save `{tag}`"
+                "invalid night_resolution target-state save policy: unknown target-state save `{tag}`"
             );
         }
     }
 }
 
-fn require_standard_nar_target_state_save_policy_causes(
+fn require_night_resolution_target_state_save_policy_causes(
     tag: &str,
     field: &str,
     causes: &[String],
@@ -1741,89 +1740,92 @@ fn require_standard_nar_target_state_save_policy_causes(
     for cause in causes {
         if cause.trim().is_empty() {
             panic!(
-                "invalid standard_nar target-state save policy: target-state save `{tag}` {field} contains empty kill cause"
+                "invalid night_resolution target-state save policy: target-state save `{tag}` {field} contains empty kill cause"
             );
         }
         if !seen.insert(cause.as_str()) {
             panic!(
-                "invalid standard_nar target-state save policy: target-state save `{tag}` {field} contains duplicate kill cause `{cause}`"
+                "invalid night_resolution target-state save policy: target-state save `{tag}` {field} contains duplicate kill cause `{cause}`"
             );
         }
         if !kill_causes.contains(cause.as_str()) {
             panic!(
-                "invalid standard_nar target-state save policy: target-state save `{tag}` {field} references unknown kill cause `{cause}`"
+                "invalid night_resolution target-state save policy: target-state save `{tag}` {field} references unknown kill cause `{cause}`"
             );
         }
     }
 }
 
-fn standard_nar_target_state_save_tags(pack: &Pack) -> BTreeSet<&str> {
-    if pack.standard_nar.enabled {
+fn night_resolution_target_state_save_tags(pack: &Pack) -> BTreeSet<&str> {
+    if pack.night_resolution.is_explicit() {
         return pack
-            .standard_nar
+            .night_resolution
             .target_state_save_tags
             .iter()
             .map(String::as_str)
             .collect();
     }
-    standard_nar_derived_target_state_save_tags(pack)
+    night_resolution_derived_target_state_save_tags(pack)
 }
 
-fn standard_nar_derived_target_state_save_tags(pack: &Pack) -> BTreeSet<&str> {
+fn night_resolution_derived_target_state_save_tags(pack: &Pack) -> BTreeSet<&str> {
     let mut tags = BTreeSet::new();
     for role in pack.roles.values() {
         for effect in &role.effects {
-            record_standard_nar_target_state_save_tag(&mut tags, effect);
+            record_night_resolution_target_state_save_tag(&mut tags, effect);
         }
     }
     for effect in pack.effects.keys() {
-        record_standard_nar_target_state_save_tag(&mut tags, effect);
+        record_night_resolution_target_state_save_tag(&mut tags, effect);
     }
     tags
 }
 
-fn record_standard_nar_target_state_save_tag<'a>(tags: &mut BTreeSet<&'a str>, effect: &'a str) {
+fn record_night_resolution_target_state_save_tag<'a>(
+    tags: &mut BTreeSet<&'a str>,
+    effect: &'a str,
+) {
     if effect == "bulletproof" || effect == "bulletproof_vest" {
         tags.insert(effect);
     }
 }
 
-fn require_standard_nar_target_state_gate_catalog(pack: &Pack) {
-    if !pack.standard_nar.enabled {
+fn require_night_resolution_target_state_gate_catalog(pack: &Pack) {
+    if !pack.night_resolution.is_explicit() {
         return;
     }
-    let gate_tags = standard_nar_derived_target_state_gate_tags(pack);
-    if !gate_tags.is_empty() && pack.standard_nar.target_state_gate_tags.is_empty() {
+    let gate_tags = night_resolution_derived_target_state_gate_tags(pack);
+    if !gate_tags.is_empty() && pack.night_resolution.target_state_gate_tags.is_empty() {
         panic!(
-            "invalid standard_nar target-state gate catalog: enabled standard_nar policy must declare target-state gate tags"
+            "invalid night_resolution target-state gate catalog: explicit night_resolution policy must declare target-state gate tags"
         );
     }
 }
 
-fn require_standard_nar_target_state_gate_policy(pack: &Pack) {
-    if !pack.standard_nar.enabled {
+fn require_night_resolution_target_state_gate_policy(pack: &Pack) {
+    if !pack.night_resolution.is_explicit() {
         return;
     }
-    let gate_tags = standard_nar_target_state_gate_tags(pack);
+    let gate_tags = night_resolution_target_state_gate_tags(pack);
     if gate_tags.is_empty() {
         return;
     }
     for tag in &gate_tags {
-        let Some(policy) = pack.standard_nar.target_state_gate_policy.get(*tag) else {
+        let Some(policy) = pack.night_resolution.target_state_gate_policy.get(*tag) else {
             panic!(
-                "invalid standard_nar target-state gate policy: target-state gate `{tag}` must classify blocked abilities"
+                "invalid night_resolution target-state gate policy: target-state gate `{tag}` must classify blocked abilities"
             );
         };
         if policy.blocks.is_empty() {
             panic!(
-                "invalid standard_nar target-state gate policy: target-state gate `{tag}` must declare blocked abilities"
+                "invalid night_resolution target-state gate policy: target-state gate `{tag}` must declare blocked abilities"
             );
         }
         let mut seen = BTreeSet::new();
         for ability in &policy.blocks {
             if !seen.insert(*ability) {
                 panic!(
-                    "invalid standard_nar target-state gate policy: target-state gate `{tag}` contains duplicate blocked ability `{ability:?}`"
+                    "invalid night_resolution target-state gate policy: target-state gate `{tag}` contains duplicate blocked ability `{ability:?}`"
                 );
             }
             if !matches!(
@@ -1835,82 +1837,82 @@ fn require_standard_nar_target_state_gate_policy(pack: &Pack) {
                     | IrAbility::Mark
             ) {
                 panic!(
-                    "invalid standard_nar target-state gate policy: target-state gate `{tag}` only supports Kill, Protect, Investigate, Convert, or Mark, got `{ability:?}`"
+                    "invalid night_resolution target-state gate policy: target-state gate `{tag}` only supports Kill, Protect, Investigate, Convert, or Mark, got `{ability:?}`"
                 );
             }
         }
     }
-    for tag in pack.standard_nar.target_state_gate_policy.keys() {
+    for tag in pack.night_resolution.target_state_gate_policy.keys() {
         if tag.trim().is_empty() {
             panic!(
-                "invalid standard_nar target-state gate policy: target-state gate tag must not be empty"
+                "invalid night_resolution target-state gate policy: target-state gate tag must not be empty"
             );
         }
         if !gate_tags.contains(tag.as_str()) {
             panic!(
-                "invalid standard_nar target-state gate policy: unknown target-state gate `{tag}`"
+                "invalid night_resolution target-state gate policy: unknown target-state gate `{tag}`"
             );
         }
     }
 }
 
-fn require_standard_nar_kill_stacking_policy(pack: &Pack) {
-    if !pack.standard_nar.enabled {
+fn require_night_resolution_kill_stacking_policy(pack: &Pack) {
+    if !pack.night_resolution.is_explicit() {
         return;
     }
     if !matches!(
-        pack.standard_nar.kill_stacking,
+        pack.night_resolution.kill_stacking,
         Some(KillStackingPolicy::AggregateAttackers)
     ) {
         panic!(
-            "invalid standard_nar kill stacking policy: enabled standard_nar policy requires kill_stacking AggregateAttackers"
+            "invalid night_resolution kill stacking policy: explicit night_resolution policy requires kill_stacking AggregateAttackers"
         );
     }
 }
 
-fn require_standard_nar_strongman_bypass_policy(pack: &Pack) {
-    if !pack.standard_nar.enabled {
+fn require_night_resolution_strongman_bypass_policy(pack: &Pack) {
+    if !pack.night_resolution.is_explicit() {
         return;
     }
-    if !pack.standard_nar.strongman_bypasses_protect {
+    if !pack.night_resolution.strongman_bypasses_protect {
         panic!(
-            "invalid standard_nar strongman bypass policy: enabled standard_nar policy requires strongman_bypasses_protect true"
+            "invalid night_resolution strongman bypass policy: explicit night_resolution policy requires strongman_bypasses_protect true"
         );
     }
 }
 
-fn require_standard_nar_protection_cause_policy(pack: &Pack) {
-    if !pack.standard_nar.enabled {
+fn require_night_resolution_protection_cause_policy(pack: &Pack) {
+    if !pack.night_resolution.is_explicit() {
         return;
     }
-    let protect_sources = standard_nar_protect_source_ids(pack);
+    let protect_sources = night_resolution_protect_source_ids(pack);
     if protect_sources.is_empty() {
         return;
     }
     let kill_causes = pack
-        .standard_nar
+        .night_resolution
         .kill_cause_ids
         .iter()
         .map(String::as_str)
         .collect::<BTreeSet<_>>();
     for source in &protect_sources {
-        let Some(policy) = pack.standard_nar.protection_cause_policy.get(*source) else {
+        let Some(policy) = pack.night_resolution.protection_cause_policy.get(*source) else {
             panic!(
-                "invalid standard_nar protection cause policy: protection source `{source}` must classify every kill cause"
+                "invalid night_resolution protection cause policy: protection source `{source}` must classify every kill cause"
             );
         };
         if policy.blocks.is_empty() && policy.bypasses.is_empty() {
             panic!(
-                "invalid standard_nar protection cause policy: protection source `{source}` must classify kill causes"
+                "invalid night_resolution protection cause policy: protection source `{source}` must classify kill causes"
             );
         }
-        require_standard_nar_protection_cause_policy_causes(
+        require_night_resolution_protection_cause_policy_causes(
             source,
             "blocks",
             &policy.blocks,
             &kill_causes,
         );
-        require_standard_nar_protection_cause_policy_causes(
+        require_night_resolution_protection_cause_policy_causes(
             source,
             "bypasses",
             &policy.bypasses,
@@ -1924,26 +1926,26 @@ fn require_standard_nar_protection_cause_policy(pack: &Pack) {
         for cause in &policy.bypasses {
             if blocked.contains(cause.as_str()) {
                 panic!(
-                    "invalid standard_nar protection cause policy: protection source `{source}` kill cause `{cause}` cannot be both blocked and bypassed"
+                    "invalid night_resolution protection cause policy: protection source `{source}` kill cause `{cause}` cannot be both blocked and bypassed"
                 );
             }
         }
     }
-    for source in pack.standard_nar.protection_cause_policy.keys() {
+    for source in pack.night_resolution.protection_cause_policy.keys() {
         if source.trim().is_empty() {
             panic!(
-                "invalid standard_nar protection cause policy: protection source id must not be empty"
+                "invalid night_resolution protection cause policy: protection source id must not be empty"
             );
         }
         if !protect_sources.contains(source.as_str()) {
             panic!(
-                "invalid standard_nar protection cause policy: unknown protection source `{source}`"
+                "invalid night_resolution protection cause policy: unknown protection source `{source}`"
             );
         }
     }
 }
 
-fn require_standard_nar_protection_cause_policy_causes(
+fn require_night_resolution_protection_cause_policy_causes(
     source: &str,
     field: &str,
     causes: &[String],
@@ -1953,47 +1955,49 @@ fn require_standard_nar_protection_cause_policy_causes(
     for cause in causes {
         if cause.trim().is_empty() {
             panic!(
-                "invalid standard_nar protection cause policy: protection source `{source}` {field} contains empty kill cause"
+                "invalid night_resolution protection cause policy: protection source `{source}` {field} contains empty kill cause"
             );
         }
         if !seen.insert(cause.as_str()) {
             panic!(
-                "invalid standard_nar protection cause policy: protection source `{source}` {field} contains duplicate kill cause `{cause}`"
+                "invalid night_resolution protection cause policy: protection source `{source}` {field} contains duplicate kill cause `{cause}`"
             );
         }
         if !kill_causes.contains(cause.as_str()) {
             panic!(
-                "invalid standard_nar protection cause policy: protection source `{source}` {field} references unknown kill cause `{cause}`"
+                "invalid night_resolution protection cause policy: protection source `{source}` {field} references unknown kill cause `{cause}`"
             );
         }
     }
 }
 
-fn require_standard_nar_suppression_policy_shape(pack: &Pack) {
-    if !pack.standard_nar.enabled {
+fn require_night_resolution_suppression_policy_shape(pack: &Pack) {
+    if !pack.night_resolution.is_explicit() {
         return;
     }
-    let block_sources = standard_nar_block_source_ids(pack);
-    let night_actions = standard_nar_night_action_roleblockability(pack);
-    for (source, policy) in &pack.standard_nar.suppression_policy {
+    let block_sources = night_resolution_block_source_ids(pack);
+    let night_actions = night_resolution_night_action_roleblockability(pack);
+    for (source, policy) in &pack.night_resolution.suppression_policy {
         if source.trim().is_empty() {
-            panic!("invalid standard_nar suppression policy: block source id must not be empty");
+            panic!(
+                "invalid night_resolution suppression policy: block source id must not be empty"
+            );
         }
         if !block_sources.contains(source.as_str()) {
-            panic!("invalid standard_nar suppression policy: unknown block source `{source}`");
+            panic!("invalid night_resolution suppression policy: unknown block source `{source}`");
         }
         if policy.scope.is_none() {
             panic!(
-                "invalid standard_nar suppression policy: Block action `{source}` must declare suppression scope"
+                "invalid night_resolution suppression policy: Block action `{source}` must declare suppression scope"
             );
         }
-        require_standard_nar_suppression_policy_actions(
+        require_night_resolution_suppression_policy_actions(
             source,
             "suppresses",
             &policy.suppresses,
             &night_actions,
         );
-        require_standard_nar_suppression_policy_actions(
+        require_night_resolution_suppression_policy_actions(
             source,
             "bypasses",
             &policy.bypasses,
@@ -2007,34 +2011,34 @@ fn require_standard_nar_suppression_policy_shape(pack: &Pack) {
         for action_id in &policy.bypasses {
             if suppressed.contains(action_id.as_str()) {
                 panic!(
-                    "invalid standard_nar suppression policy: night action `{action_id}` cannot be both suppressed and bypassed"
+                    "invalid night_resolution suppression policy: night action `{action_id}` cannot be both suppressed and bypassed"
                 );
             }
         }
     }
 }
 
-fn require_standard_nar_suppression_policy_actions(
+fn require_night_resolution_suppression_policy_actions(
     source: &str,
     field: &str,
     action_ids: &[String],
-    night_actions: &BTreeMap<&str, StandardNarNightAction>,
+    night_actions: &BTreeMap<&str, NightResolutionNightAction>,
 ) {
     let mut seen = BTreeSet::new();
     for action_id in action_ids {
         if action_id.trim().is_empty() {
             panic!(
-                "invalid standard_nar suppression policy: block source `{source}` {field} contains empty night action"
+                "invalid night_resolution suppression policy: block source `{source}` {field} contains empty night action"
             );
         }
         if !seen.insert(action_id.as_str()) {
             panic!(
-                "invalid standard_nar suppression policy: block source `{source}` {field} contains duplicate night action `{action_id}`"
+                "invalid night_resolution suppression policy: block source `{source}` {field} contains duplicate night action `{action_id}`"
             );
         }
         if !night_actions.contains_key(action_id.as_str()) {
             panic!(
-                "invalid standard_nar suppression policy: block source `{source}` {field} references unknown night action `{action_id}`"
+                "invalid night_resolution suppression policy: block source `{source}` {field} references unknown night action `{action_id}`"
             );
         }
     }
@@ -2064,143 +2068,145 @@ fn pack_has_convert_action(pack: &Pack) -> bool {
         .any(|action| action.has_ability(IrAbility::Convert))
 }
 
-fn require_standard_nar_intercept_cause_policy(pack: &Pack) {
-    if !pack.standard_nar.enabled {
+fn require_night_resolution_intercept_cause_policy(pack: &Pack) {
+    if !pack.night_resolution.is_explicit() {
         return;
     }
     let intercept_sources = pack
-        .standard_nar
+        .night_resolution
         .bodyguard_action_ids
         .iter()
-        .chain(pack.standard_nar.martyr_action_ids.iter())
+        .chain(pack.night_resolution.martyr_action_ids.iter())
         .map(String::as_str)
         .collect::<BTreeSet<_>>();
     let direct_kill_causes = pack
-        .standard_nar
+        .night_resolution
         .kill_cause_ids
         .iter()
         .map(String::as_str)
         .collect::<BTreeSet<_>>();
 
     for &action_id in &intercept_sources {
-        let Some(cause) = pack.standard_nar.intercept_cause_policy.get(action_id) else {
+        let Some(cause) = pack.night_resolution.intercept_cause_policy.get(action_id) else {
             panic!(
-                "invalid standard_nar intercept cause policy: intercept action `{action_id}` must declare intercept cause"
+                "invalid night_resolution intercept cause policy: intercept action `{action_id}` must declare intercept cause"
             );
         };
         if cause.trim().is_empty() {
             panic!(
-                "invalid standard_nar intercept cause policy: intercept action `{action_id}` must declare non-empty intercept cause"
+                "invalid night_resolution intercept cause policy: intercept action `{action_id}` must declare non-empty intercept cause"
             );
         }
         if direct_kill_causes.contains(cause.as_str()) {
             panic!(
-                "invalid standard_nar intercept cause policy: intercept action `{action_id}` cause `{cause}` must not reuse a direct kill cause"
+                "invalid night_resolution intercept cause policy: intercept action `{action_id}` cause `{cause}` must not reuse a direct kill cause"
             );
         }
     }
-    for source in pack.standard_nar.intercept_cause_policy.keys() {
+    for source in pack.night_resolution.intercept_cause_policy.keys() {
         if source.trim().is_empty() {
             panic!(
-                "invalid standard_nar intercept cause policy: intercept source id must not be empty"
+                "invalid night_resolution intercept cause policy: intercept source id must not be empty"
             );
         }
         if !intercept_sources.contains(source.as_str()) {
             panic!(
-                "invalid standard_nar intercept cause policy: unknown intercept source `{source}`"
+                "invalid night_resolution intercept cause policy: unknown intercept source `{source}`"
             );
         }
     }
 }
 
-fn require_standard_nar_guard_retaliation_cause_policy(pack: &Pack) {
-    if !pack.standard_nar.enabled {
+fn require_night_resolution_guard_retaliation_cause_policy(pack: &Pack) {
+    if !pack.night_resolution.is_explicit() {
         return;
     }
     let intercept_sources = pack
-        .standard_nar
+        .night_resolution
         .bodyguard_action_ids
         .iter()
-        .chain(pack.standard_nar.martyr_action_ids.iter())
+        .chain(pack.night_resolution.martyr_action_ids.iter())
         .map(String::as_str)
         .collect::<BTreeSet<_>>();
     let kill_causes = pack
-        .standard_nar
+        .night_resolution
         .kill_cause_ids
         .iter()
         .map(String::as_str)
         .collect::<BTreeSet<_>>();
 
-    for (source, cause) in &pack.standard_nar.guard_retaliation_cause_policy {
+    for (source, cause) in &pack.night_resolution.guard_retaliation_cause_policy {
         if source.trim().is_empty() {
             panic!(
-                "invalid standard_nar guard retaliation cause policy: source id must not be empty"
+                "invalid night_resolution guard retaliation cause policy: source id must not be empty"
             );
         }
         if !intercept_sources.contains(source.as_str()) {
             panic!(
-                "invalid standard_nar guard retaliation cause policy: source `{source}` must also be an intercept source"
+                "invalid night_resolution guard retaliation cause policy: source `{source}` must also be an intercept source"
             );
         }
         if cause.trim().is_empty() {
             panic!(
-                "invalid standard_nar guard retaliation cause policy: source `{source}` must declare non-empty retaliation cause"
+                "invalid night_resolution guard retaliation cause policy: source `{source}` must declare non-empty retaliation cause"
             );
         }
         if !kill_causes.contains(cause.as_str()) {
             panic!(
-                "invalid standard_nar guard retaliation cause policy: cause `{cause}` must be declared in kill_cause_ids"
+                "invalid night_resolution guard retaliation cause policy: cause `{cause}` must be declared in kill_cause_ids"
             );
         }
     }
 }
 
-fn require_standard_nar_cpr_harm_cause_policy(pack: &Pack) {
-    if !pack.standard_nar.enabled {
+fn require_night_resolution_cpr_harm_cause_policy(pack: &Pack) {
+    if !pack.night_resolution.is_explicit() {
         return;
     }
     let cpr_sources = pack
-        .standard_nar
+        .night_resolution
         .cpr_action_ids
         .iter()
         .map(String::as_str)
         .collect::<BTreeSet<_>>();
     let direct_kill_causes = pack
-        .standard_nar
+        .night_resolution
         .kill_cause_ids
         .iter()
         .map(String::as_str)
         .collect::<BTreeSet<_>>();
 
     for &action_id in &cpr_sources {
-        let Some(cause) = pack.standard_nar.cpr_harm_cause_policy.get(action_id) else {
+        let Some(cause) = pack.night_resolution.cpr_harm_cause_policy.get(action_id) else {
             panic!(
-                "invalid standard_nar CPR harm cause policy: CPR action `{action_id}` must declare harm cause"
+                "invalid night_resolution CPR harm cause policy: CPR action `{action_id}` must declare harm cause"
             );
         };
         if cause.trim().is_empty() {
             panic!(
-                "invalid standard_nar CPR harm cause policy: CPR action `{action_id}` must declare non-empty harm cause"
+                "invalid night_resolution CPR harm cause policy: CPR action `{action_id}` must declare non-empty harm cause"
             );
         }
         if direct_kill_causes.contains(cause.as_str()) {
             panic!(
-                "invalid standard_nar CPR harm cause policy: CPR action `{action_id}` cause `{cause}` must not reuse a direct kill cause"
+                "invalid night_resolution CPR harm cause policy: CPR action `{action_id}` cause `{cause}` must not reuse a direct kill cause"
             );
         }
     }
-    for source in pack.standard_nar.cpr_harm_cause_policy.keys() {
+    for source in pack.night_resolution.cpr_harm_cause_policy.keys() {
         if source.trim().is_empty() {
-            panic!("invalid standard_nar CPR harm cause policy: CPR source id must not be empty");
+            panic!(
+                "invalid night_resolution CPR harm cause policy: CPR source id must not be empty"
+            );
         }
         if !cpr_sources.contains(source.as_str()) {
-            panic!("invalid standard_nar CPR harm cause policy: unknown CPR source `{source}`");
+            panic!("invalid night_resolution CPR harm cause policy: unknown CPR source `{source}`");
         }
     }
 }
 
-fn require_standard_nar_guard_dependency_cause_policy(pack: &Pack) {
-    if !pack.standard_nar.enabled {
+fn require_night_resolution_guard_dependency_cause_policy(pack: &Pack) {
+    if !pack.night_resolution.is_explicit() {
         return;
     }
     let guard_sources = pack
@@ -2216,7 +2222,7 @@ fn require_standard_nar_guard_dependency_cause_policy(pack: &Pack) {
         .map(|action| action.id.as_str())
         .collect::<BTreeSet<_>>();
     let direct_kill_causes = pack
-        .standard_nar
+        .night_resolution
         .kill_cause_ids
         .iter()
         .map(String::as_str)
@@ -2224,48 +2230,48 @@ fn require_standard_nar_guard_dependency_cause_policy(pack: &Pack) {
 
     for &action_id in &guard_sources {
         let Some(cause) = pack
-            .standard_nar
+            .night_resolution
             .guard_dependency_cause_policy
             .get(action_id)
         else {
             panic!(
-                "invalid standard_nar guard dependency cause policy: guard dependency action `{action_id}` must declare dependency cause"
+                "invalid night_resolution guard dependency cause policy: guard dependency action `{action_id}` must declare dependency cause"
             );
         };
         if cause.trim().is_empty() {
             panic!(
-                "invalid standard_nar guard dependency cause policy: guard dependency action `{action_id}` must declare non-empty dependency cause"
+                "invalid night_resolution guard dependency cause policy: guard dependency action `{action_id}` must declare non-empty dependency cause"
             );
         }
         if direct_kill_causes.contains(cause.as_str()) {
             panic!(
-                "invalid standard_nar guard dependency cause policy: guard dependency action `{action_id}` cause `{cause}` must not reuse a direct kill cause"
+                "invalid night_resolution guard dependency cause policy: guard dependency action `{action_id}` cause `{cause}` must not reuse a direct kill cause"
             );
         }
     }
-    for source in pack.standard_nar.guard_dependency_cause_policy.keys() {
+    for source in pack.night_resolution.guard_dependency_cause_policy.keys() {
         if source.trim().is_empty() {
             panic!(
-                "invalid standard_nar guard dependency cause policy: guard dependency source id must not be empty"
+                "invalid night_resolution guard dependency cause policy: guard dependency source id must not be empty"
             );
         }
         if !guard_sources.contains(source.as_str()) {
             panic!(
-                "invalid standard_nar guard dependency cause policy: unknown guard dependency source `{source}`"
+                "invalid night_resolution guard dependency cause policy: unknown guard dependency source `{source}`"
             );
         }
     }
 }
 
-fn require_standard_nar_block_action_policy(pack: &Pack) {
-    if !pack.standard_nar.enabled {
+fn require_night_resolution_block_action_policy(pack: &Pack) {
+    if !pack.night_resolution.is_explicit() {
         return;
     }
     let declared_blocks = pack
-        .standard_nar
+        .night_resolution
         .block_action_ids
         .iter()
-        .chain(pack.standard_nar.jailkeep_action_ids.iter())
+        .chain(pack.night_resolution.jailkeep_action_ids.iter())
         .map(String::as_str)
         .collect::<BTreeSet<_>>();
     for action in pack
@@ -2279,25 +2285,25 @@ fn require_standard_nar_block_action_policy(pack: &Pack) {
     {
         if !declared_blocks.contains(action.id.as_str()) {
             panic!(
-                "invalid standard_nar block action policy: Block action `{}` must be declared in block_action_ids or jailkeep_action_ids",
+                "invalid night_resolution block action policy: Block action `{}` must be declared in block_action_ids or jailkeep_action_ids",
                 action.id
             );
         }
     }
 }
 
-fn require_standard_nar_protect_action_policy(pack: &Pack) {
-    if !pack.standard_nar.enabled {
+fn require_night_resolution_protect_action_policy(pack: &Pack) {
+    if !pack.night_resolution.is_explicit() {
         return;
     }
     let declared_protects = pack
-        .standard_nar
+        .night_resolution
         .protect_action_ids
         .iter()
-        .chain(pack.standard_nar.bodyguard_action_ids.iter())
-        .chain(pack.standard_nar.martyr_action_ids.iter())
-        .chain(pack.standard_nar.cpr_action_ids.iter())
-        .chain(pack.standard_nar.jailkeep_action_ids.iter())
+        .chain(pack.night_resolution.bodyguard_action_ids.iter())
+        .chain(pack.night_resolution.martyr_action_ids.iter())
+        .chain(pack.night_resolution.cpr_action_ids.iter())
+        .chain(pack.night_resolution.jailkeep_action_ids.iter())
         .map(String::as_str)
         .collect::<BTreeSet<_>>();
     for action in pack
@@ -2311,37 +2317,37 @@ fn require_standard_nar_protect_action_policy(pack: &Pack) {
     {
         if !declared_protects.contains(action.id.as_str()) {
             panic!(
-                "invalid standard_nar protect action policy: Protect action `{}` must be declared in protect_action_ids, bodyguard_action_ids, martyr_action_ids, cpr_action_ids, or jailkeep_action_ids",
+                "invalid night_resolution protect action policy: Protect action `{}` must be declared in protect_action_ids, bodyguard_action_ids, martyr_action_ids, cpr_action_ids, or jailkeep_action_ids",
                 action.id
             );
         }
     }
 }
 
-fn require_standard_nar_specialized_protect_action_policy(pack: &Pack) {
-    if !pack.standard_nar.enabled {
+fn require_night_resolution_specialized_protect_action_policy(pack: &Pack) {
+    if !pack.night_resolution.is_explicit() {
         return;
     }
     let bodyguards = pack
-        .standard_nar
+        .night_resolution
         .bodyguard_action_ids
         .iter()
         .map(String::as_str)
         .collect::<BTreeSet<_>>();
     let martyrs = pack
-        .standard_nar
+        .night_resolution
         .martyr_action_ids
         .iter()
         .map(String::as_str)
         .collect::<BTreeSet<_>>();
     let cpr_actions = pack
-        .standard_nar
+        .night_resolution
         .cpr_action_ids
         .iter()
         .map(String::as_str)
         .collect::<BTreeSet<_>>();
     let ordinary_protects = pack
-        .standard_nar
+        .night_resolution
         .protect_action_ids
         .iter()
         .map(String::as_str)
@@ -2358,13 +2364,13 @@ fn require_standard_nar_specialized_protect_action_policy(pack: &Pack) {
     {
         if action.has_modifier(Modifier::Bodyguard) && !bodyguards.contains(action.id.as_str()) {
             panic!(
-                "invalid standard_nar bodyguard action policy: Bodyguard Protect action `{}` must be declared in bodyguard_action_ids",
+                "invalid night_resolution bodyguard action policy: Bodyguard Protect action `{}` must be declared in bodyguard_action_ids",
                 action.id
             );
         }
         if action.has_modifier(Modifier::Martyr) && !martyrs.contains(action.id.as_str()) {
             panic!(
-                "invalid standard_nar martyr action policy: Martyr Protect action `{}` must be declared in martyr_action_ids",
+                "invalid night_resolution martyr action policy: Martyr Protect action `{}` must be declared in martyr_action_ids",
                 action.id
             );
         }
@@ -2373,7 +2379,7 @@ fn require_standard_nar_specialized_protect_action_policy(pack: &Pack) {
             && !cpr_actions.contains(action.id.as_str())
         {
             panic!(
-                "invalid standard_nar CPR action policy: CPR Protect+Kill action `{}` must be declared in cpr_action_ids",
+                "invalid night_resolution CPR action policy: CPR Protect+Kill action `{}` must be declared in cpr_action_ids",
                 action.id
             );
         }
@@ -2381,29 +2387,29 @@ fn require_standard_nar_specialized_protect_action_policy(pack: &Pack) {
             && !ordinary_protects.contains(action.id.as_str())
         {
             panic!(
-                "invalid standard_nar babysitter action policy: Babysitter Protect action `{}` must be declared in protect_action_ids",
+                "invalid night_resolution babysitter action policy: Babysitter Protect action `{}` must be declared in protect_action_ids",
                 action.id
             );
         }
     }
 }
 
-fn require_standard_nar_action_bucket_shapes(pack: &Pack) {
-    if !pack.standard_nar.enabled {
+fn require_night_resolution_action_bucket_shapes(pack: &Pack) {
+    if !pack.night_resolution.is_explicit() {
         return;
     }
-    require_standard_nar_action_bucket_shape(
+    require_night_resolution_action_bucket_shape(
         pack,
         "block_action_ids",
-        &pack.standard_nar.block_action_ids,
+        &pack.night_resolution.block_action_ids,
         "block",
         "Block",
         |action| action.has_ability(IrAbility::Block),
     );
-    require_standard_nar_action_bucket_shape(
+    require_night_resolution_action_bucket_shape(
         pack,
         "protect_action_ids",
-        &pack.standard_nar.protect_action_ids,
+        &pack.night_resolution.protect_action_ids,
         "protect",
         "Protect without Bodyguard/Martyr/Cpr",
         |action| {
@@ -2414,10 +2420,10 @@ fn require_standard_nar_action_bucket_shapes(pack: &Pack) {
                 && !action.has_modifier(Modifier::Cpr)
         },
     );
-    require_standard_nar_action_bucket_shape(
+    require_night_resolution_action_bucket_shape(
         pack,
         "kill_action_ids",
-        &pack.standard_nar.kill_action_ids,
+        &pack.night_resolution.kill_action_ids,
         "kill",
         "Kill without Strongman/Cpr",
         |action| {
@@ -2427,10 +2433,10 @@ fn require_standard_nar_action_bucket_shapes(pack: &Pack) {
                 && !action.has_modifier(Modifier::Cpr)
         },
     );
-    require_standard_nar_action_bucket_shape(
+    require_night_resolution_action_bucket_shape(
         pack,
         "bodyguard_action_ids",
-        &pack.standard_nar.bodyguard_action_ids,
+        &pack.night_resolution.bodyguard_action_ids,
         "bodyguard",
         "Protect with Bodyguard",
         |action| {
@@ -2439,10 +2445,10 @@ fn require_standard_nar_action_bucket_shapes(pack: &Pack) {
                 && action.has_modifier(Modifier::Bodyguard)
         },
     );
-    require_standard_nar_action_bucket_shape(
+    require_night_resolution_action_bucket_shape(
         pack,
         "martyr_action_ids",
-        &pack.standard_nar.martyr_action_ids,
+        &pack.night_resolution.martyr_action_ids,
         "martyr",
         "Protect with Martyr",
         |action| {
@@ -2451,10 +2457,10 @@ fn require_standard_nar_action_bucket_shapes(pack: &Pack) {
                 && action.has_modifier(Modifier::Martyr)
         },
     );
-    require_standard_nar_action_bucket_shape(
+    require_night_resolution_action_bucket_shape(
         pack,
         "cpr_action_ids",
-        &pack.standard_nar.cpr_action_ids,
+        &pack.night_resolution.cpr_action_ids,
         "CPR",
         "Protect plus Kill with Cpr",
         |action| {
@@ -2464,10 +2470,10 @@ fn require_standard_nar_action_bucket_shapes(pack: &Pack) {
                 && action.has_modifier(Modifier::Cpr)
         },
     );
-    require_standard_nar_action_bucket_shape(
+    require_night_resolution_action_bucket_shape(
         pack,
         "jailkeep_action_ids",
-        &pack.standard_nar.jailkeep_action_ids,
+        &pack.night_resolution.jailkeep_action_ids,
         "jailkeep",
         "Block plus Protect",
         |action| {
@@ -2476,10 +2482,10 @@ fn require_standard_nar_action_bucket_shapes(pack: &Pack) {
                 && action.has_ability(IrAbility::Protect)
         },
     );
-    require_standard_nar_action_bucket_shape(
+    require_night_resolution_action_bucket_shape(
         pack,
         "strongman_action_ids",
-        &pack.standard_nar.strongman_action_ids,
+        &pack.night_resolution.strongman_action_ids,
         "strongman",
         "Kill with Strongman",
         |action| {
@@ -2490,38 +2496,38 @@ fn require_standard_nar_action_bucket_shapes(pack: &Pack) {
     );
 }
 
-fn require_standard_nar_team_kill_action_policy(pack: &Pack) {
-    if !pack.standard_nar.enabled {
+fn require_night_resolution_team_kill_action_policy(pack: &Pack) {
+    if !pack.night_resolution.is_explicit() {
         return;
     }
     let mut seen = BTreeSet::new();
-    for action_id in &pack.standard_nar.team_kill_action_ids {
+    for action_id in &pack.night_resolution.team_kill_action_ids {
         if action_id.trim().is_empty() {
-            panic!("invalid standard_nar team kill action policy: team_kill_action_ids contains empty value");
+            panic!("invalid night_resolution team kill action policy: team_kill_action_ids contains empty value");
         }
         if !seen.insert(action_id.as_str()) {
             panic!(
-                "invalid standard_nar team kill action policy: team_kill_action_ids contains duplicate value `{action_id}`"
+                "invalid night_resolution team kill action policy: team_kill_action_ids contains duplicate value `{action_id}`"
             );
         }
-        let Some(action) = standard_nar_pack_action(pack, action_id) else {
+        let Some(action) = night_resolution_pack_action(pack, action_id) else {
             panic!(
-                "invalid standard_nar team kill action policy: team_kill_action_ids entry `{action_id}` references unknown action"
+                "invalid night_resolution team kill action policy: team_kill_action_ids entry `{action_id}` references unknown action"
             );
         };
         if !action.window.is_night_resolution_window() || !action.has_ability(IrAbility::Kill) {
             panic!(
-                "invalid standard_nar team kill action policy: team_kill_action_ids entry `{action_id}` must be a night/any Kill action"
+                "invalid night_resolution team kill action policy: team_kill_action_ids entry `{action_id}` must be a night/any Kill action"
             );
         }
         if !pack
-            .standard_nar
+            .night_resolution
             .kill_action_ids
             .iter()
             .any(|kill_id| kill_id == action_id)
         {
             panic!(
-                "invalid standard_nar team kill action policy: team_kill_action_ids entry `{action_id}` must also be declared in kill_action_ids"
+                "invalid night_resolution team kill action policy: team_kill_action_ids entry `{action_id}` must also be declared in kill_action_ids"
             );
         }
     }
@@ -2532,28 +2538,28 @@ fn require_standard_nar_team_kill_action_policy(pack: &Pack) {
         }
         if role.alignment.as_deref() != Some("mafia") {
             panic!(
-                "invalid standard_nar team kill action policy: team-kill restricted role `{role_key}` must be mafia-aligned"
+                "invalid night_resolution team kill action policy: team-kill restricted role `{role_key}` must be mafia-aligned"
             );
         }
-        if pack.standard_nar.team_kill_action_ids.is_empty() {
+        if pack.night_resolution.team_kill_action_ids.is_empty() {
             panic!(
-                "invalid standard_nar team kill action policy: team-kill restricted role `{role_key}` requires team_kill_action_ids"
+                "invalid night_resolution team kill action policy: team-kill restricted role `{role_key}` requires team_kill_action_ids"
             );
         }
         if !role.actions.iter().any(|action| {
-            pack.standard_nar
+            pack.night_resolution
                 .team_kill_action_ids
                 .iter()
                 .any(|team_kill| team_kill == &action.id)
         }) {
             panic!(
-                "invalid standard_nar team kill action policy: team-kill restricted role `{role_key}` must expose a team kill action"
+                "invalid night_resolution team kill action policy: team-kill restricted role `{role_key}` must expose a team kill action"
             );
         }
     }
 }
 
-fn require_standard_nar_action_bucket_shape(
+fn require_night_resolution_action_bucket_shape(
     pack: &Pack,
     bucket_name: &str,
     action_ids: &[String],
@@ -2563,35 +2569,35 @@ fn require_standard_nar_action_bucket_shape(
 ) {
     if action_ids.is_empty() {
         panic!(
-            "invalid standard_nar {policy_label} action policy: enabled standard_nar policy must declare {bucket_name}"
+            "invalid night_resolution {policy_label} action policy: explicit night_resolution policy must declare {bucket_name}"
         );
     }
     let mut seen = BTreeSet::new();
     for action_id in action_ids {
         if action_id.trim().is_empty() {
             panic!(
-                "invalid standard_nar {policy_label} action policy: {bucket_name} id must not be empty"
+                "invalid night_resolution {policy_label} action policy: {bucket_name} id must not be empty"
             );
         }
         if !seen.insert(action_id.as_str()) {
             panic!(
-                "invalid standard_nar {policy_label} action policy: {bucket_name} contains duplicate value `{action_id}`"
+                "invalid night_resolution {policy_label} action policy: {bucket_name} contains duplicate value `{action_id}`"
             );
         }
-        let Some(action) = standard_nar_pack_action(pack, action_id) else {
+        let Some(action) = night_resolution_pack_action(pack, action_id) else {
             panic!(
-                "invalid standard_nar {policy_label} action policy: {bucket_name} entry `{action_id}` references unknown action"
+                "invalid night_resolution {policy_label} action policy: {bucket_name} entry `{action_id}` references unknown action"
             );
         };
         if !action.window.is_night_resolution_window() || !matches_shape(action) {
             panic!(
-                "invalid standard_nar {policy_label} action policy: {bucket_name} entry `{action_id}` must be a night/any {expected_shape} action"
+                "invalid night_resolution {policy_label} action policy: {bucket_name} entry `{action_id}` must be a night/any {expected_shape} action"
             );
         }
     }
 }
 
-fn standard_nar_pack_action<'a>(pack: &'a Pack, action_id: &str) -> Option<&'a ActionTemplate> {
+fn night_resolution_pack_action<'a>(pack: &'a Pack, action_id: &str) -> Option<&'a ActionTemplate> {
     pack.roles
         .values()
         .flat_map(|role| role.actions.iter())
@@ -2599,38 +2605,38 @@ fn standard_nar_pack_action<'a>(pack: &'a Pack, action_id: &str) -> Option<&'a A
         .find(|action| action.id == action_id)
 }
 
-fn require_standard_nar_jailkeep_action_policy(pack: &Pack) {
-    if !pack.standard_nar.enabled {
+fn require_night_resolution_jailkeep_action_policy(pack: &Pack) {
+    if !pack.night_resolution.is_explicit() {
         return;
     }
     let block_ids = pack
-        .standard_nar
+        .night_resolution
         .block_action_ids
         .iter()
         .map(String::as_str)
         .collect::<BTreeSet<_>>();
     let protect_ids = pack
-        .standard_nar
+        .night_resolution
         .protect_action_ids
         .iter()
         .map(String::as_str)
         .collect::<BTreeSet<_>>();
-    for action_id in &pack.standard_nar.jailkeep_action_ids {
+    for action_id in &pack.night_resolution.jailkeep_action_ids {
         if !block_ids.contains(action_id.as_str()) {
             panic!(
-                "invalid standard_nar jailkeep action policy: Jailkeeper action `{action_id}` must also be declared in block_action_ids"
+                "invalid night_resolution jailkeep action policy: Jailkeeper action `{action_id}` must also be declared in block_action_ids"
             );
         }
         if !protect_ids.contains(action_id.as_str()) {
             panic!(
-                "invalid standard_nar jailkeep action policy: Jailkeeper action `{action_id}` must also be declared in protect_action_ids"
+                "invalid night_resolution jailkeep action policy: Jailkeeper action `{action_id}` must also be declared in protect_action_ids"
             );
         }
     }
 }
 
-fn require_standard_nar_kill_action_policy(pack: &Pack) {
-    if !pack.standard_nar.enabled {
+fn require_night_resolution_kill_action_policy(pack: &Pack) {
+    if !pack.night_resolution.is_explicit() {
         return;
     }
     for action in pack
@@ -2643,7 +2649,7 @@ fn require_standard_nar_kill_action_policy(pack: &Pack) {
         })
     {
         if pack
-            .standard_nar
+            .night_resolution
             .cpr_action_ids
             .iter()
             .any(|action_id| action_id == &action.id)
@@ -2651,26 +2657,26 @@ fn require_standard_nar_kill_action_policy(pack: &Pack) {
             continue;
         }
         let declared = pack
-            .standard_nar
+            .night_resolution
             .kill_action_ids
             .iter()
-            .chain(pack.standard_nar.strongman_action_ids.iter())
+            .chain(pack.night_resolution.strongman_action_ids.iter())
             .any(|action_id| action_id == &action.id);
         if !declared {
             panic!(
-                "invalid standard_nar kill action policy: Kill action `{}` must be declared in kill_action_ids or strongman_action_ids",
+                "invalid night_resolution kill action policy: Kill action `{}` must be declared in kill_action_ids or strongman_action_ids",
                 action.id
             );
         }
     }
 }
 
-fn require_standard_nar_strongman_action_policy(pack: &Pack) {
-    if !pack.standard_nar.enabled {
+fn require_night_resolution_strongman_action_policy(pack: &Pack) {
+    if !pack.night_resolution.is_explicit() {
         return;
     }
     let declared_strongman_kills = pack
-        .standard_nar
+        .night_resolution
         .strongman_action_ids
         .iter()
         .map(String::as_str)
@@ -2688,45 +2694,45 @@ fn require_standard_nar_strongman_action_policy(pack: &Pack) {
     {
         if !declared_strongman_kills.contains(action.id.as_str()) {
             panic!(
-                "invalid standard_nar strongman action policy: Strongman Kill action `{}` must be declared in strongman_action_ids",
+                "invalid night_resolution strongman action policy: Strongman Kill action `{}` must be declared in strongman_action_ids",
                 action.id
             );
         }
     }
 }
 
-fn require_standard_nar_kill_cause_catalog(pack: &Pack) {
-    if !pack.standard_nar.enabled {
+fn require_night_resolution_kill_cause_catalog(pack: &Pack) {
+    if !pack.night_resolution.is_explicit() {
         return;
     }
-    if pack.standard_nar.kill_cause_ids.is_empty() {
+    if pack.night_resolution.kill_cause_ids.is_empty() {
         panic!(
-            "invalid standard_nar kill cause catalog: enabled standard_nar policy must declare kill_cause_ids"
+            "invalid night_resolution kill cause catalog: explicit night_resolution policy must declare kill_cause_ids"
         );
     }
-    let expected = standard_nar_derived_kill_cause_ids(pack);
+    let expected = night_resolution_derived_kill_cause_ids(pack);
     let mut declared = BTreeSet::new();
-    for cause in &pack.standard_nar.kill_cause_ids {
+    for cause in &pack.night_resolution.kill_cause_ids {
         if cause.trim().is_empty() {
-            panic!("invalid standard_nar kill cause catalog: kill cause id must not be empty");
+            panic!("invalid night_resolution kill cause catalog: kill cause id must not be empty");
         }
         if !declared.insert(cause.as_str()) {
-            panic!("invalid standard_nar kill cause catalog: duplicate kill cause `{cause}`");
+            panic!("invalid night_resolution kill cause catalog: duplicate kill cause `{cause}`");
         }
         if !expected.contains(cause.as_str()) {
-            panic!("invalid standard_nar kill cause catalog: unknown kill cause `{cause}`");
+            panic!("invalid night_resolution kill cause catalog: unknown kill cause `{cause}`");
         }
     }
     for cause in expected {
         if !declared.contains(cause.as_str()) {
             panic!(
-                "invalid standard_nar kill cause catalog: kill_cause_ids must include `{cause}`"
+                "invalid night_resolution kill cause catalog: kill_cause_ids must include `{cause}`"
             );
         }
     }
 }
 
-fn standard_nar_derived_kill_cause_ids(pack: &Pack) -> BTreeSet<String> {
+fn night_resolution_derived_kill_cause_ids(pack: &Pack) -> BTreeSet<String> {
     let mut causes = BTreeSet::new();
     for action in pack
         .roles
@@ -2737,7 +2743,7 @@ fn standard_nar_derived_kill_cause_ids(pack: &Pack) -> BTreeSet<String> {
             action.window.is_night_resolution_window()
                 && (action.has_ability(IrAbility::Kill) || action.has_ability(IrAbility::Retaliate))
                 && !pack
-                    .standard_nar
+                    .night_resolution
                     .cpr_action_ids
                     .iter()
                     .any(|action_id| action_id == &action.id)
@@ -2753,7 +2759,7 @@ fn standard_nar_derived_kill_cause_ids(pack: &Pack) -> BTreeSet<String> {
         causes.insert(trigger.id.clone());
     }
     causes.extend(
-        pack.standard_nar
+        pack.night_resolution
             .guard_retaliation_cause_policy
             .values()
             .cloned(),
@@ -2761,8 +2767,8 @@ fn standard_nar_derived_kill_cause_ids(pack: &Pack) -> BTreeSet<String> {
     causes
 }
 
-fn require_standard_nar_chosen_retaliation_cause_policy(pack: &Pack) {
-    if !pack.standard_nar.enabled {
+fn require_night_resolution_chosen_retaliation_cause_policy(pack: &Pack) {
+    if !pack.night_resolution.is_explicit() {
         return;
     }
     let retaliation_sources = pack
@@ -2778,37 +2784,37 @@ fn require_standard_nar_chosen_retaliation_cause_policy(pack: &Pack) {
 
     for (&action_id, action) in &retaliation_sources {
         let Some(policy) = pack
-            .standard_nar
+            .night_resolution
             .chosen_retaliation_cause_policy
             .get(action_id)
         else {
             panic!(
-                "invalid standard_nar chosen retaliation cause policy: Retaliate action `{action_id}` must declare chosen retaliation cause policy"
+                "invalid night_resolution chosen retaliation cause policy: Retaliate action `{action_id}` must declare chosen retaliation cause policy"
             );
         };
         let action_is_strongman = action.has_modifier(Modifier::Strongman);
         if policy.strongman_bypasses_protect != action_is_strongman {
             panic!(
-                "invalid standard_nar chosen retaliation cause policy: Retaliate action `{action_id}` strongman_bypasses_protect must match Strongman modifier"
+                "invalid night_resolution chosen retaliation cause policy: Retaliate action `{action_id}` strongman_bypasses_protect must match Strongman modifier"
             );
         }
     }
-    for source in pack.standard_nar.chosen_retaliation_cause_policy.keys() {
+    for source in pack.night_resolution.chosen_retaliation_cause_policy.keys() {
         if source.trim().is_empty() {
             panic!(
-                "invalid standard_nar chosen retaliation cause policy: Retaliate source id must not be empty"
+                "invalid night_resolution chosen retaliation cause policy: Retaliate source id must not be empty"
             );
         }
         if !retaliation_sources.contains_key(source.as_str()) {
             panic!(
-                "invalid standard_nar chosen retaliation cause policy: unknown Retaliate action `{source}`"
+                "invalid night_resolution chosen retaliation cause policy: unknown Retaliate action `{source}`"
             );
         }
     }
 }
 
-fn require_standard_nar_generated_kill_cause_policy(pack: &Pack) {
-    if !pack.standard_nar.enabled {
+fn require_night_resolution_generated_kill_cause_policy(pack: &Pack) {
+    if !pack.night_resolution.is_explicit() {
         return;
     }
     let generated_sources = pack
@@ -2819,133 +2825,143 @@ fn require_standard_nar_generated_kill_cause_policy(pack: &Pack) {
         .collect::<BTreeMap<_, _>>();
     for (&trigger_id, trigger) in &generated_sources {
         let Some(policy) = pack
-            .standard_nar
+            .night_resolution
             .generated_kill_cause_policy
             .get(trigger_id)
         else {
             panic!(
-                "invalid standard_nar generated kill cause policy: generated kill trigger `{trigger_id}` must declare generated kill cause policy"
+                "invalid night_resolution generated kill cause policy: generated kill trigger `{trigger_id}` must declare generated kill cause policy"
             );
         };
         if policy.on.is_none() {
             panic!(
-                "invalid standard_nar generated kill cause policy: generated kill trigger `{trigger_id}` must declare trigger on"
+                "invalid night_resolution generated kill cause policy: generated kill trigger `{trigger_id}` must declare trigger on"
             );
         }
         if policy.on != Some(trigger.on) {
             panic!(
-                "invalid standard_nar generated kill cause policy: generated kill trigger `{trigger_id}` on must match trigger rule"
+                "invalid night_resolution generated kill cause policy: generated kill trigger `{trigger_id}` on must match trigger rule"
             );
         }
         if policy.actor.is_none() {
             panic!(
-                "invalid standard_nar generated kill cause policy: generated kill trigger `{trigger_id}` must declare produced actor"
+                "invalid night_resolution generated kill cause policy: generated kill trigger `{trigger_id}` must declare produced actor"
             );
         }
         if policy.actor != Some(trigger.produces.actor) {
             panic!(
-                "invalid standard_nar generated kill cause policy: generated kill trigger `{trigger_id}` actor must match trigger production"
+                "invalid night_resolution generated kill cause policy: generated kill trigger `{trigger_id}` actor must match trigger production"
             );
         }
         if policy.target.is_none() {
             panic!(
-                "invalid standard_nar generated kill cause policy: generated kill trigger `{trigger_id}` must declare produced target"
+                "invalid night_resolution generated kill cause policy: generated kill trigger `{trigger_id}` must declare produced target"
             );
         }
         if policy.target != Some(trigger.produces.target) {
             panic!(
-                "invalid standard_nar generated kill cause policy: generated kill trigger `{trigger_id}` target must match trigger production"
+                "invalid night_resolution generated kill cause policy: generated kill trigger `{trigger_id}` target must match trigger production"
             );
         }
         let trigger_is_strongman = trigger.produces.modifiers.contains(&Modifier::Strongman);
         if policy.strongman_bypasses_protect != trigger_is_strongman {
             panic!(
-                "invalid standard_nar generated kill cause policy: generated kill trigger `{trigger_id}` strongman_bypasses_protect must match produced Strongman modifier"
+                "invalid night_resolution generated kill cause policy: generated kill trigger `{trigger_id}` strongman_bypasses_protect must match produced Strongman modifier"
             );
         }
     }
-    for source in pack.standard_nar.generated_kill_cause_policy.keys() {
+    for source in pack.night_resolution.generated_kill_cause_policy.keys() {
         if source.trim().is_empty() {
             panic!(
-                "invalid standard_nar generated kill cause policy: generated kill trigger id must not be empty"
+                "invalid night_resolution generated kill cause policy: generated kill trigger id must not be empty"
             );
         }
         if !generated_sources.contains_key(source.as_str()) {
             panic!(
-                "invalid standard_nar generated kill cause policy: unknown generated kill trigger `{source}`"
+                "invalid night_resolution generated kill cause policy: unknown generated kill trigger `{source}`"
             );
         }
     }
 }
 
-fn require_standard_nar_generated_kill_ownership(pack: &Pack) {
-    if !pack.standard_nar.enabled {
+fn require_night_resolution_generated_kill_ownership(pack: &Pack) {
+    if !pack.night_resolution.is_explicit() {
         return;
     }
 
-    let generated_triggers = standard_nar_generated_kill_triggers(pack);
+    let generated_triggers = night_resolution_generated_kill_triggers(pack);
     if generated_triggers.is_empty() {
         return;
     }
 
     let kill_causes = pack
-        .standard_nar
+        .night_resolution
         .kill_cause_ids
         .iter()
         .map(String::as_str)
         .collect::<BTreeSet<_>>();
-    let protect_sources = standard_nar_protect_source_ids(pack);
-    let save_tags = standard_nar_target_state_save_tags(pack);
-    let block_sources = standard_nar_block_source_ids(pack);
-    let generated_trigger_feeds = standard_nar_generated_trigger_feed_actions(pack);
+    let protect_sources = night_resolution_protect_source_ids(pack);
+    let save_tags = night_resolution_target_state_save_tags(pack);
+    let block_sources = night_resolution_block_source_ids(pack);
+    let generated_trigger_feeds = night_resolution_generated_trigger_feed_actions(pack);
 
     for trigger in generated_triggers {
         let trigger_id = trigger.id.as_str();
         if !kill_causes.contains(trigger_id) {
             panic!(
-                "invalid standard_nar generated kill ownership: generated kill trigger `{trigger_id}` is missing from kill_cause_ids"
+                "invalid night_resolution generated kill ownership: generated kill trigger `{trigger_id}` is missing from kill_cause_ids"
             );
         }
 
         for protect_source in &protect_sources {
             let Some(policy) = pack
-                .standard_nar
+                .night_resolution
                 .protection_cause_policy
                 .get(*protect_source)
             else {
                 continue;
             };
-            if !standard_nar_blocks_bypasses_contains(&policy.blocks, &policy.bypasses, trigger_id)
-            {
+            if !night_resolution_blocks_bypasses_contains(
+                &policy.blocks,
+                &policy.bypasses,
+                trigger_id,
+            ) {
                 panic!(
-                    "invalid standard_nar generated kill ownership: generated kill trigger `{trigger_id}` is not owned by protection source `{protect_source}`"
+                    "invalid night_resolution generated kill ownership: generated kill trigger `{trigger_id}` is not owned by protection source `{protect_source}`"
                 );
             }
         }
 
         for save_tag in &save_tags {
-            let Some(policy) = pack.standard_nar.target_state_save_policy.get(*save_tag) else {
+            let Some(policy) = pack
+                .night_resolution
+                .target_state_save_policy
+                .get(*save_tag)
+            else {
                 continue;
             };
-            if !standard_nar_blocks_bypasses_contains(&policy.blocks, &policy.bypasses, trigger_id)
-            {
+            if !night_resolution_blocks_bypasses_contains(
+                &policy.blocks,
+                &policy.bypasses,
+                trigger_id,
+            ) {
                 panic!(
-                    "invalid standard_nar generated kill ownership: generated kill trigger `{trigger_id}` is not owned by target-state save `{save_tag}`"
+                    "invalid night_resolution generated kill ownership: generated kill trigger `{trigger_id}` is not owned by target-state save `{save_tag}`"
                 );
             }
         }
 
         for block_source in &block_sources {
-            let Some(policy) = pack.standard_nar.suppression_policy.get(*block_source) else {
+            let Some(policy) = pack.night_resolution.suppression_policy.get(*block_source) else {
                 continue;
             };
             for (action_id, trigger_ids) in &generated_trigger_feeds {
                 if !trigger_ids.contains(trigger_id) {
                     continue;
                 }
-                if !standard_nar_suppression_contains(policy, action_id) {
+                if !night_resolution_suppression_contains(policy, action_id) {
                     panic!(
-                        "invalid standard_nar generated kill ownership: generated kill trigger `{trigger_id}` feeder action `{action_id}` is not owned by block source `{block_source}`"
+                        "invalid night_resolution generated kill ownership: generated kill trigger `{trigger_id}` feeder action `{action_id}` is not owned by block source `{block_source}`"
                     );
                 }
             }
@@ -2953,12 +2969,12 @@ fn require_standard_nar_generated_kill_ownership(pack: &Pack) {
     }
 }
 
-fn require_standard_nar_kill_cause_classifiers(pack: &Pack) {
-    if !pack.standard_nar.enabled {
+fn require_night_resolution_kill_cause_classifiers(pack: &Pack) {
+    if !pack.night_resolution.is_explicit() {
         return;
     }
     let kill_causes = pack
-        .standard_nar
+        .night_resolution
         .kill_cause_ids
         .iter()
         .map(String::as_str)
@@ -2967,57 +2983,57 @@ fn require_standard_nar_kill_cause_classifiers(pack: &Pack) {
         return;
     }
 
-    for protect_source in standard_nar_protect_source_ids(pack) {
+    for protect_source in night_resolution_protect_source_ids(pack) {
         let Some(policy) = pack
-            .standard_nar
+            .night_resolution
             .protection_cause_policy
             .get(protect_source)
         else {
             panic!(
-                "invalid standard_nar protection cause policy: protection source `{protect_source}` must classify every kill cause"
+                "invalid night_resolution protection cause policy: protection source `{protect_source}` must classify every kill cause"
             );
         };
         for cause in &kill_causes {
-            if !standard_nar_blocks_bypasses_contains(&policy.blocks, &policy.bypasses, cause) {
+            if !night_resolution_blocks_bypasses_contains(&policy.blocks, &policy.bypasses, cause) {
                 panic!(
-                    "invalid standard_nar protection cause policy: protection source `{protect_source}` does not classify kill cause `{cause}`"
+                    "invalid night_resolution protection cause policy: protection source `{protect_source}` does not classify kill cause `{cause}`"
                 );
             }
         }
     }
 
-    for save_tag in standard_nar_target_state_save_tags(pack) {
-        let Some(policy) = pack.standard_nar.target_state_save_policy.get(save_tag) else {
+    for save_tag in night_resolution_target_state_save_tags(pack) {
+        let Some(policy) = pack.night_resolution.target_state_save_policy.get(save_tag) else {
             panic!(
-                "invalid standard_nar target-state save policy: target-state save `{save_tag}` must classify every kill cause"
+                "invalid night_resolution target-state save policy: target-state save `{save_tag}` must classify every kill cause"
             );
         };
         for cause in &kill_causes {
-            if !standard_nar_blocks_bypasses_contains(&policy.blocks, &policy.bypasses, cause) {
+            if !night_resolution_blocks_bypasses_contains(&policy.blocks, &policy.bypasses, cause) {
                 panic!(
-                    "invalid standard_nar target-state save policy: target-state save `{save_tag}` does not classify kill cause `{cause}`"
+                    "invalid night_resolution target-state save policy: target-state save `{save_tag}` does not classify kill cause `{cause}`"
                 );
             }
         }
     }
 }
 
-fn standard_nar_strongman_bypass_cause_ids(pack: &Pack) -> BTreeSet<&str> {
+fn night_resolution_strongman_bypass_cause_ids(pack: &Pack) -> BTreeSet<&str> {
     let mut causes = pack
-        .standard_nar
+        .night_resolution
         .strongman_action_ids
         .iter()
         .map(String::as_str)
         .collect::<BTreeSet<_>>();
     causes.extend(
-        pack.standard_nar
+        pack.night_resolution
             .chosen_retaliation_cause_policy
             .iter()
             .filter(|(_, policy)| policy.strongman_bypasses_protect)
             .map(|(cause, _)| cause.as_str()),
     );
     causes.extend(
-        pack.standard_nar
+        pack.night_resolution
             .generated_kill_cause_policy
             .iter()
             .filter(|(_, policy)| policy.strongman_bypasses_protect)
@@ -3026,18 +3042,18 @@ fn standard_nar_strongman_bypass_cause_ids(pack: &Pack) -> BTreeSet<&str> {
     causes
 }
 
-fn require_standard_nar_strongman_bypass_classifiers(pack: &Pack) {
-    if !pack.standard_nar.enabled {
+fn require_night_resolution_strongman_bypass_classifiers(pack: &Pack) {
+    if !pack.night_resolution.is_explicit() {
         return;
     }
-    let strongman_causes = standard_nar_strongman_bypass_cause_ids(pack);
+    let strongman_causes = night_resolution_strongman_bypass_cause_ids(pack);
     if strongman_causes.is_empty() {
         return;
     }
 
-    for protect_source in standard_nar_protect_source_ids(pack) {
+    for protect_source in night_resolution_protect_source_ids(pack) {
         let Some(policy) = pack
-            .standard_nar
+            .night_resolution
             .protection_cause_policy
             .get(protect_source)
         else {
@@ -3046,58 +3062,58 @@ fn require_standard_nar_strongman_bypass_classifiers(pack: &Pack) {
         for cause in &policy.blocks {
             if strongman_causes.contains(cause.as_str()) {
                 panic!(
-                    "invalid standard_nar protection cause policy: strongman bypass cause `{cause}` must be classified in bypasses"
+                    "invalid night_resolution protection cause policy: strongman bypass cause `{cause}` must be classified in bypasses"
                 );
             }
         }
         for cause in &policy.bypasses {
             if !strongman_causes.contains(cause.as_str()) {
                 panic!(
-                    "invalid standard_nar protection cause policy: bypassed kill cause `{cause}` must be a Strongman bypass cause"
+                    "invalid night_resolution protection cause policy: bypassed kill cause `{cause}` must be a Strongman bypass cause"
                 );
             }
         }
     }
 
-    for save_tag in standard_nar_target_state_save_tags(pack) {
-        let Some(policy) = pack.standard_nar.target_state_save_policy.get(save_tag) else {
+    for save_tag in night_resolution_target_state_save_tags(pack) {
+        let Some(policy) = pack.night_resolution.target_state_save_policy.get(save_tag) else {
             continue;
         };
         for cause in &policy.blocks {
             if strongman_causes.contains(cause.as_str()) {
                 panic!(
-                    "invalid standard_nar target-state save policy: strongman bypass cause `{cause}` must be classified in bypasses"
+                    "invalid night_resolution target-state save policy: strongman bypass cause `{cause}` must be classified in bypasses"
                 );
             }
         }
         for cause in &policy.bypasses {
             if !strongman_causes.contains(cause.as_str()) {
                 panic!(
-                    "invalid standard_nar target-state save policy: bypassed kill cause `{cause}` must be a Strongman bypass cause"
+                    "invalid night_resolution target-state save policy: bypassed kill cause `{cause}` must be a Strongman bypass cause"
                 );
             }
         }
     }
 }
 
-fn require_standard_nar_suppression_classifiers(pack: &Pack) {
-    if !pack.standard_nar.enabled {
+fn require_night_resolution_suppression_classifiers(pack: &Pack) {
+    if !pack.night_resolution.is_explicit() {
         return;
     }
-    let night_actions = standard_nar_night_action_roleblockability(pack);
+    let night_actions = night_resolution_night_action_roleblockability(pack);
     if night_actions.is_empty() {
         return;
     }
 
-    for block_source in standard_nar_block_source_ids(pack) {
-        let Some(policy) = pack.standard_nar.suppression_policy.get(block_source) else {
+    for block_source in night_resolution_block_source_ids(pack) {
+        let Some(policy) = pack.night_resolution.suppression_policy.get(block_source) else {
             panic!(
-                "invalid standard_nar suppression policy: Block action `{block_source}` must classify every night action"
+                "invalid night_resolution suppression policy: Block action `{block_source}` must classify every night action"
             );
         };
         if policy.scope.is_none() {
             panic!(
-                "invalid standard_nar suppression policy: Block action `{block_source}` must declare suppression scope"
+                "invalid night_resolution suppression policy: Block action `{block_source}` must declare suppression scope"
             );
         }
         for (action_id, action) in &night_actions {
@@ -3111,24 +3127,24 @@ fn require_standard_nar_suppression_classifiers(pack: &Pack) {
                 .any(|configured| configured == action_id);
             if !suppresses && !bypasses {
                 panic!(
-                    "invalid standard_nar suppression policy: block source `{block_source}` does not classify night action `{action_id}`"
+                    "invalid night_resolution suppression policy: block source `{block_source}` does not classify night action `{action_id}`"
                 );
             }
             if policy.scope == Some(SuppressionScope::FirstMatchingAction) {
                 if suppresses && (!action.roleblockable || action.strong_willed) {
                     panic!(
-                        "invalid standard_nar suppression policy: suppression-immune action `{action_id}` must be classified in bypasses"
+                        "invalid night_resolution suppression policy: suppression-immune action `{action_id}` must be classified in bypasses"
                     );
                 }
                 if bypasses && action.roleblockable && !action.strong_willed {
                     panic!(
-                        "invalid standard_nar suppression policy: roleblockable action `{action_id}` must be classified in suppresses"
+                        "invalid night_resolution suppression policy: roleblockable action `{action_id}` must be classified in suppresses"
                     );
                 }
             }
             if suppresses && bypasses {
                 panic!(
-                    "invalid standard_nar suppression policy: night action `{action_id}` cannot be both suppressed and bypassed"
+                    "invalid night_resolution suppression policy: night action `{action_id}` cannot be both suppressed and bypassed"
                 );
             }
         }
@@ -3140,19 +3156,19 @@ fn require_valid_night_ability_order(pack: &Pack) {
         .unwrap_or_else(|err| panic!("invalid pack precedence for night resolution: {err}"));
 }
 
-fn require_standard_nar_suppression_precedence(pack: &Pack) {
-    if !pack.standard_nar.enabled {
+fn require_night_resolution_suppression_precedence(pack: &Pack) {
+    if !pack.night_resolution.is_explicit() {
         return;
     }
-    let abilities = standard_nar_night_ability_set(pack);
+    let abilities = night_resolution_night_ability_set(pack);
     if !abilities.contains(&IrAbility::Block) {
         return;
     }
-    let edges = standard_nar_precedence_edges(pack, &abilities);
-    let action_abilities = standard_nar_night_action_abilities(pack);
+    let edges = night_resolution_precedence_edges(pack, &abilities);
+    let action_abilities = night_resolution_night_action_abilities(pack);
 
-    for block_source in standard_nar_block_source_ids(pack) {
-        let Some(policy) = pack.standard_nar.suppression_policy.get(block_source) else {
+    for block_source in night_resolution_block_source_ids(pack) {
+        let Some(policy) = pack.night_resolution.suppression_policy.get(block_source) else {
             continue;
         };
         for action_id in &policy.suppresses {
@@ -3164,10 +3180,10 @@ fn require_standard_nar_suppression_precedence(pack: &Pack) {
                     continue;
                 }
                 if abilities.contains(ability)
-                    && !standard_nar_has_precedence_path(IrAbility::Block, *ability, &edges)
+                    && !night_resolution_has_precedence_path(IrAbility::Block, *ability, &edges)
                 {
                     panic!(
-                        "invalid standard_nar suppression policy: block source `{block_source}` suppresses action `{action_id}` but standard_nar suppression policy requires Block precedence before suppressed ability `{ability:?}`"
+                        "invalid night_resolution suppression policy: block source `{block_source}` suppresses action `{action_id}` but night_resolution suppression policy requires Block precedence before suppressed ability `{ability:?}`"
                     );
                 }
             }
@@ -3176,14 +3192,14 @@ fn require_standard_nar_suppression_precedence(pack: &Pack) {
 }
 
 #[derive(Debug, Clone, Copy)]
-struct StandardNarNightAction {
+struct NightResolutionNightAction {
     roleblockable: bool,
     strong_willed: bool,
 }
 
-fn standard_nar_night_action_roleblockability(
+fn night_resolution_night_action_roleblockability(
     pack: &Pack,
-) -> BTreeMap<&str, StandardNarNightAction> {
+) -> BTreeMap<&str, NightResolutionNightAction> {
     let mut actions = BTreeMap::new();
     for action in pack
         .roles
@@ -3194,7 +3210,7 @@ fn standard_nar_night_action_roleblockability(
         if !action.window.is_night_resolution_window() {
             continue;
         }
-        let record = StandardNarNightAction {
+        let record = NightResolutionNightAction {
             roleblockable: action.constraints.roleblockable,
             strong_willed: action.has_modifier(Modifier::StrongWilled),
         };
@@ -3203,7 +3219,7 @@ fn standard_nar_night_action_roleblockability(
                 || existing.strong_willed != record.strong_willed
             {
                 panic!(
-                    "invalid standard_nar suppression policy: night action `{}` has inconsistent suppression traits",
+                    "invalid night_resolution suppression policy: night action `{}` has inconsistent suppression traits",
                     action.id
                 );
             }
@@ -3212,7 +3228,7 @@ fn standard_nar_night_action_roleblockability(
     actions
 }
 
-fn standard_nar_night_action_abilities(pack: &Pack) -> BTreeMap<&str, BTreeSet<IrAbility>> {
+fn night_resolution_night_action_abilities(pack: &Pack) -> BTreeMap<&str, BTreeSet<IrAbility>> {
     let mut actions = BTreeMap::new();
     for action in pack
         .roles
@@ -3226,26 +3242,26 @@ fn standard_nar_night_action_abilities(pack: &Pack) -> BTreeMap<&str, BTreeSet<I
         actions
             .entry(action.id.as_str())
             .or_insert_with(BTreeSet::new)
-            .extend(standard_nar_night_order_abilities(action));
+            .extend(night_resolution_night_order_abilities(action));
     }
     actions
 }
 
-fn standard_nar_night_ability_set(pack: &Pack) -> BTreeSet<IrAbility> {
-    standard_nar_night_action_abilities(pack)
+fn night_resolution_night_ability_set(pack: &Pack) -> BTreeSet<IrAbility> {
+    night_resolution_night_action_abilities(pack)
         .into_values()
         .flatten()
         .collect()
 }
 
-fn standard_nar_night_order_abilities(action: &ActionTemplate) -> Vec<IrAbility> {
+fn night_resolution_night_order_abilities(action: &ActionTemplate) -> Vec<IrAbility> {
     action
         .abilities()
         .filter(|ability| !(action.has_modifier(Modifier::Cpr) && *ability == IrAbility::Kill))
         .collect()
 }
 
-fn standard_nar_precedence_edges(
+fn night_resolution_precedence_edges(
     pack: &Pack,
     abilities: &BTreeSet<IrAbility>,
 ) -> Vec<(IrAbility, IrAbility)> {
@@ -3265,7 +3281,7 @@ fn standard_nar_precedence_edges(
     edges.into_iter().collect()
 }
 
-fn standard_nar_has_precedence_path(
+fn night_resolution_has_precedence_path(
     from: IrAbility,
     to: IrAbility,
     edges: &[(IrAbility, IrAbility)],
@@ -3286,36 +3302,36 @@ fn standard_nar_has_precedence_path(
     false
 }
 
-fn standard_nar_generated_kill_triggers(pack: &Pack) -> Vec<&TriggerRule> {
+fn night_resolution_generated_kill_triggers(pack: &Pack) -> Vec<&TriggerRule> {
     pack.triggers
         .iter()
         .filter(|trigger| trigger.produces.ability == IrAbility::Kill)
         .collect()
 }
 
-fn standard_nar_protect_source_ids(pack: &Pack) -> BTreeSet<&str> {
-    pack.standard_nar
+fn night_resolution_protect_source_ids(pack: &Pack) -> BTreeSet<&str> {
+    pack.night_resolution
         .protect_action_ids
         .iter()
-        .chain(pack.standard_nar.bodyguard_action_ids.iter())
-        .chain(pack.standard_nar.martyr_action_ids.iter())
-        .chain(pack.standard_nar.cpr_action_ids.iter())
-        .chain(pack.standard_nar.jailkeep_action_ids.iter())
+        .chain(pack.night_resolution.bodyguard_action_ids.iter())
+        .chain(pack.night_resolution.martyr_action_ids.iter())
+        .chain(pack.night_resolution.cpr_action_ids.iter())
+        .chain(pack.night_resolution.jailkeep_action_ids.iter())
         .map(String::as_str)
         .collect()
 }
 
-fn standard_nar_block_source_ids(pack: &Pack) -> BTreeSet<&str> {
-    pack.standard_nar
+fn night_resolution_block_source_ids(pack: &Pack) -> BTreeSet<&str> {
+    pack.night_resolution
         .block_action_ids
         .iter()
-        .chain(pack.standard_nar.jailkeep_action_ids.iter())
+        .chain(pack.night_resolution.jailkeep_action_ids.iter())
         .map(String::as_str)
         .collect()
 }
 
-fn standard_nar_generated_trigger_feed_actions(pack: &Pack) -> BTreeMap<&str, BTreeSet<&str>> {
-    let generated_triggers = standard_nar_generated_kill_triggers(pack);
+fn night_resolution_generated_trigger_feed_actions(pack: &Pack) -> BTreeMap<&str, BTreeSet<&str>> {
+    let generated_triggers = night_resolution_generated_kill_triggers(pack);
     let mut feeds: BTreeMap<&str, BTreeSet<&str>> = BTreeMap::new();
     for action in pack
         .roles
@@ -3353,7 +3369,7 @@ fn action_can_feed_trigger(action: &ActionTemplate, on: TriggerOn) -> bool {
     }
 }
 
-fn standard_nar_blocks_bypasses_contains(
+fn night_resolution_blocks_bypasses_contains(
     blocks: &[String],
     bypasses: &[String],
     cause: &str,
@@ -3361,7 +3377,7 @@ fn standard_nar_blocks_bypasses_contains(
     blocks.iter().any(|item| item == cause) || bypasses.iter().any(|item| item == cause)
 }
 
-fn standard_nar_suppression_contains(
+fn night_resolution_suppression_contains(
     policy: &crate::pack::SuppressionPolicy,
     action_id: &str,
 ) -> bool {
@@ -3369,8 +3385,8 @@ fn standard_nar_suppression_contains(
         || policy.bypasses.iter().any(|item| item == action_id)
 }
 
-fn require_standard_nar_trigger_fixpoint_policy(pack: &Pack) {
-    if !pack.standard_nar.enabled {
+fn require_night_resolution_trigger_fixpoint_policy(pack: &Pack) {
+    if !pack.night_resolution.is_explicit() {
         return;
     }
     let generated_sources = pack
@@ -3380,58 +3396,62 @@ fn require_standard_nar_trigger_fixpoint_policy(pack: &Pack) {
         .map(|trigger| (trigger.id.as_str(), trigger))
         .collect::<BTreeMap<_, _>>();
     for (&trigger_id, trigger) in &generated_sources {
-        let Some(policy) = pack.standard_nar.trigger_fixpoint_policy.get(trigger_id) else {
+        let Some(policy) = pack
+            .night_resolution
+            .trigger_fixpoint_policy
+            .get(trigger_id)
+        else {
             panic!(
-                "invalid standard_nar trigger fixpoint policy: generated kill trigger `{trigger_id}` must declare trigger fixpoint policy"
+                "invalid night_resolution trigger fixpoint policy: generated kill trigger `{trigger_id}` must declare trigger fixpoint policy"
             );
         };
         if policy.on.is_none() {
             panic!(
-                "invalid standard_nar trigger fixpoint policy: trigger `{trigger_id}` must declare observed trigger on"
+                "invalid night_resolution trigger fixpoint policy: trigger `{trigger_id}` must declare observed trigger on"
             );
         }
         if policy.on != Some(trigger.on) {
             panic!(
-                "invalid standard_nar trigger fixpoint policy: trigger `{trigger_id}` on must match trigger rule"
+                "invalid night_resolution trigger fixpoint policy: trigger `{trigger_id}` on must match trigger rule"
             );
         }
         if !policy.produced_kill_reenters {
             panic!(
-                "invalid standard_nar trigger fixpoint policy: generated kill trigger `{trigger_id}` must declare produced_kill_reenters true"
+                "invalid night_resolution trigger fixpoint policy: generated kill trigger `{trigger_id}` must declare produced_kill_reenters true"
             );
         }
         if policy.loop_cap.is_none() {
             panic!(
-                "invalid standard_nar trigger fixpoint policy: trigger `{trigger_id}` must declare loop_cap policy"
+                "invalid night_resolution trigger fixpoint policy: trigger `{trigger_id}` must declare loop_cap policy"
             );
         }
         if policy.loop_cap != Some(TriggerLoopCapPolicy::RedirectLoopCap) {
             panic!(
-                "invalid standard_nar trigger fixpoint policy: trigger `{trigger_id}` loop_cap must use RedirectLoopCap"
+                "invalid night_resolution trigger fixpoint policy: trigger `{trigger_id}` loop_cap must use RedirectLoopCap"
             );
         }
         if !policy.trace {
             panic!(
-                "invalid standard_nar trigger fixpoint policy: trigger `{trigger_id}` must declare trace true"
+                "invalid night_resolution trigger fixpoint policy: trigger `{trigger_id}` must declare trace true"
             );
         }
     }
-    for source in pack.standard_nar.trigger_fixpoint_policy.keys() {
+    for source in pack.night_resolution.trigger_fixpoint_policy.keys() {
         if source.trim().is_empty() {
             panic!(
-                "invalid standard_nar trigger fixpoint policy: trigger fixpoint source id must not be empty"
+                "invalid night_resolution trigger fixpoint policy: trigger fixpoint source id must not be empty"
             );
         }
         if !generated_sources.contains_key(source.as_str()) {
             panic!(
-                "invalid standard_nar trigger fixpoint policy: unknown trigger fixpoint source `{source}`"
+                "invalid night_resolution trigger fixpoint policy: unknown trigger fixpoint source `{source}`"
             );
         }
     }
 }
 
-fn require_standard_nar_hide_dependency_cause_policy(pack: &Pack) {
-    if !pack.standard_nar.enabled {
+fn require_night_resolution_hide_dependency_cause_policy(pack: &Pack) {
+    if !pack.night_resolution.is_explicit() {
         return;
     }
     let hide_sources = pack
@@ -3447,7 +3467,7 @@ fn require_standard_nar_hide_dependency_cause_policy(pack: &Pack) {
         .map(|action| action.id.as_str())
         .collect::<BTreeSet<_>>();
     let direct_kill_causes = pack
-        .standard_nar
+        .night_resolution
         .kill_cause_ids
         .iter()
         .map(String::as_str)
@@ -3455,70 +3475,73 @@ fn require_standard_nar_hide_dependency_cause_policy(pack: &Pack) {
 
     for &action_id in &hide_sources {
         let Some(cause) = pack
-            .standard_nar
+            .night_resolution
             .hide_dependency_cause_policy
             .get(action_id)
         else {
             panic!(
-                "invalid standard_nar hide dependency cause policy: hide dependency action `{action_id}` must declare dependency cause"
+                "invalid night_resolution hide dependency cause policy: hide dependency action `{action_id}` must declare dependency cause"
             );
         };
         if cause.trim().is_empty() {
             panic!(
-                "invalid standard_nar hide dependency cause policy: hide dependency action `{action_id}` must declare non-empty dependency cause"
+                "invalid night_resolution hide dependency cause policy: hide dependency action `{action_id}` must declare non-empty dependency cause"
             );
         }
         if direct_kill_causes.contains(cause.as_str()) {
             panic!(
-                "invalid standard_nar hide dependency cause policy: hide dependency action `{action_id}` cause `{cause}` must not reuse a direct kill cause"
+                "invalid night_resolution hide dependency cause policy: hide dependency action `{action_id}` cause `{cause}` must not reuse a direct kill cause"
             );
         }
     }
-    for source in pack.standard_nar.hide_dependency_cause_policy.keys() {
+    for source in pack.night_resolution.hide_dependency_cause_policy.keys() {
         if source.trim().is_empty() {
             panic!(
-                "invalid standard_nar hide dependency cause policy: hide dependency source id must not be empty"
+                "invalid night_resolution hide dependency cause policy: hide dependency source id must not be empty"
             );
         }
         if !hide_sources.contains(source.as_str()) {
             panic!(
-                "invalid standard_nar hide dependency cause policy: unknown hide dependency source `{source}`"
+                "invalid night_resolution hide dependency cause policy: unknown hide dependency source `{source}`"
             );
         }
     }
 }
 
-fn standard_nar_target_state_gate_tags(pack: &Pack) -> BTreeSet<&str> {
-    if pack.standard_nar.enabled {
+fn night_resolution_target_state_gate_tags(pack: &Pack) -> BTreeSet<&str> {
+    if pack.night_resolution.is_explicit() {
         return pack
-            .standard_nar
+            .night_resolution
             .target_state_gate_tags
             .iter()
             .map(String::as_str)
             .collect();
     }
-    standard_nar_derived_target_state_gate_tags(pack)
+    night_resolution_derived_target_state_gate_tags(pack)
 }
 
-fn standard_nar_derived_target_state_gate_tags(pack: &Pack) -> BTreeSet<&str> {
+fn night_resolution_derived_target_state_gate_tags(pack: &Pack) -> BTreeSet<&str> {
     let mut tags = BTreeSet::new();
     for role in pack.roles.values() {
         for effect in &role.effects {
-            record_standard_nar_target_state_gate_tag(&mut tags, effect);
+            record_night_resolution_target_state_gate_tag(&mut tags, effect);
         }
         for action in &role.actions {
             if let Some(effect) = action.effect.as_deref() {
-                record_standard_nar_target_state_gate_tag(&mut tags, effect);
+                record_night_resolution_target_state_gate_tag(&mut tags, effect);
             }
         }
     }
     for effect in pack.effects.keys() {
-        record_standard_nar_target_state_gate_tag(&mut tags, effect);
+        record_night_resolution_target_state_gate_tag(&mut tags, effect);
     }
     tags
 }
 
-fn record_standard_nar_target_state_gate_tag<'a>(tags: &mut BTreeSet<&'a str>, effect: &'a str) {
+fn record_night_resolution_target_state_gate_tag<'a>(
+    tags: &mut BTreeSet<&'a str>,
+    effect: &'a str,
+) {
     if effect == "ascetic" || effect == "commuted" || effect == "untargetable" {
         tags.insert(effect);
     }
@@ -4216,7 +4239,7 @@ fn base_role_submission(action: &Action<'_>) -> bool {
 fn role_modifier_team_kill_error(input: &ResolutionInput, action: &Action<'_>) -> bool {
     if !input
         .pack
-        .standard_nar
+        .night_resolution
         .team_kill_action_ids
         .iter()
         .any(|id| id == &action.template.id)
@@ -4715,27 +4738,27 @@ fn treestump_applies(
 /// at phase end, on the state produced by folding this resolution's events
 /// (`apply_events`); it never runs mid-resolution.
 fn resolve_inner(input: &ResolutionInput) -> InnerResolution {
-    require_standard_nar_kill_cause_catalog(&input.pack);
-    require_standard_nar_specialized_protect_action_policy(&input.pack);
-    require_standard_nar_team_kill_action_policy(&input.pack);
-    require_standard_nar_action_bucket_shapes(&input.pack);
-    require_standard_nar_block_action_policy(&input.pack);
-    require_standard_nar_target_state_save_catalog(&input.pack);
-    require_standard_nar_target_state_save_policy(&input.pack);
-    require_standard_nar_target_state_gate_catalog(&input.pack);
-    require_standard_nar_kill_stacking_policy(&input.pack);
-    require_standard_nar_strongman_bypass_policy(&input.pack);
-    require_standard_nar_protect_action_policy(&input.pack);
-    require_standard_nar_protection_cause_policy(&input.pack);
+    require_night_resolution_kill_cause_catalog(&input.pack);
+    require_night_resolution_specialized_protect_action_policy(&input.pack);
+    require_night_resolution_team_kill_action_policy(&input.pack);
+    require_night_resolution_action_bucket_shapes(&input.pack);
+    require_night_resolution_block_action_policy(&input.pack);
+    require_night_resolution_target_state_save_catalog(&input.pack);
+    require_night_resolution_target_state_save_policy(&input.pack);
+    require_night_resolution_target_state_gate_catalog(&input.pack);
+    require_night_resolution_kill_stacking_policy(&input.pack);
+    require_night_resolution_strongman_bypass_policy(&input.pack);
+    require_night_resolution_protect_action_policy(&input.pack);
+    require_night_resolution_protection_cause_policy(&input.pack);
     require_conversion_policy(&input.pack);
-    require_standard_nar_strongman_action_policy(&input.pack);
-    require_standard_nar_chosen_retaliation_cause_policy(&input.pack);
-    require_standard_nar_generated_kill_cause_policy(&input.pack);
-    require_standard_nar_suppression_policy_shape(&input.pack);
-    require_standard_nar_generated_kill_ownership(&input.pack);
-    require_standard_nar_strongman_bypass_classifiers(&input.pack);
-    require_standard_nar_kill_cause_classifiers(&input.pack);
-    require_standard_nar_trigger_fixpoint_policy(&input.pack);
+    require_night_resolution_strongman_action_policy(&input.pack);
+    require_night_resolution_chosen_retaliation_cause_policy(&input.pack);
+    require_night_resolution_generated_kill_cause_policy(&input.pack);
+    require_night_resolution_suppression_policy_shape(&input.pack);
+    require_night_resolution_generated_kill_ownership(&input.pack);
+    require_night_resolution_strongman_bypass_classifiers(&input.pack);
+    require_night_resolution_kill_cause_classifiers(&input.pack);
+    require_night_resolution_trigger_fixpoint_policy(&input.pack);
     let mut events = grant_consumption_events(input);
     let (mut ingest_events, mut ingest_decisions) = invalid_submission_ingest_halts(input);
     events.append(&mut ingest_events);
@@ -6171,38 +6194,38 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
     require_conversion_policy(pack);
     require_visibility_families(pack);
     require_ninja_visibility_policy(pack);
-    require_standard_nar_kill_cause_catalog(pack);
-    require_standard_nar_specialized_protect_action_policy(pack);
-    require_standard_nar_team_kill_action_policy(pack);
-    require_standard_nar_action_bucket_shapes(pack);
-    require_standard_nar_intercept_cause_policy(pack);
-    require_standard_nar_guard_retaliation_cause_policy(pack);
-    require_standard_nar_cpr_harm_cause_policy(pack);
-    require_standard_nar_guard_dependency_cause_policy(pack);
-    require_standard_nar_block_action_policy(pack);
-    require_standard_nar_protect_action_policy(pack);
-    require_standard_nar_jailkeep_action_policy(pack);
-    require_standard_nar_strongman_action_policy(pack);
-    require_standard_nar_kill_action_policy(pack);
-    require_standard_nar_chosen_retaliation_cause_policy(pack);
-    require_standard_nar_protection_cause_policy(pack);
-    require_standard_nar_action_chance_policy(pack);
-    require_standard_nar_suppression_policy_shape(pack);
-    require_standard_nar_generated_kill_ownership(pack);
-    require_standard_nar_strongman_bypass_classifiers(pack);
-    require_standard_nar_kill_cause_classifiers(pack);
-    require_standard_nar_hide_dependency_cause_policy(pack);
-    require_standard_nar_trigger_fixpoint_policy(pack);
-    require_standard_nar_target_state_save_catalog(pack);
-    require_standard_nar_target_state_save_policy(pack);
-    require_standard_nar_target_state_gate_catalog(pack);
-    require_standard_nar_target_state_gate_policy(pack);
-    require_standard_nar_conflict_families(pack);
-    require_standard_nar_kill_stacking_policy(pack);
-    require_standard_nar_strongman_bypass_policy(pack);
-    require_standard_nar_suppression_classifiers(pack);
+    require_night_resolution_kill_cause_catalog(pack);
+    require_night_resolution_specialized_protect_action_policy(pack);
+    require_night_resolution_team_kill_action_policy(pack);
+    require_night_resolution_action_bucket_shapes(pack);
+    require_night_resolution_intercept_cause_policy(pack);
+    require_night_resolution_guard_retaliation_cause_policy(pack);
+    require_night_resolution_cpr_harm_cause_policy(pack);
+    require_night_resolution_guard_dependency_cause_policy(pack);
+    require_night_resolution_block_action_policy(pack);
+    require_night_resolution_protect_action_policy(pack);
+    require_night_resolution_jailkeep_action_policy(pack);
+    require_night_resolution_strongman_action_policy(pack);
+    require_night_resolution_kill_action_policy(pack);
+    require_night_resolution_chosen_retaliation_cause_policy(pack);
+    require_night_resolution_protection_cause_policy(pack);
+    require_night_resolution_action_chance_policy(pack);
+    require_night_resolution_suppression_policy_shape(pack);
+    require_night_resolution_generated_kill_ownership(pack);
+    require_night_resolution_strongman_bypass_classifiers(pack);
+    require_night_resolution_kill_cause_classifiers(pack);
+    require_night_resolution_hide_dependency_cause_policy(pack);
+    require_night_resolution_trigger_fixpoint_policy(pack);
+    require_night_resolution_target_state_save_catalog(pack);
+    require_night_resolution_target_state_save_policy(pack);
+    require_night_resolution_target_state_gate_catalog(pack);
+    require_night_resolution_target_state_gate_policy(pack);
+    require_night_resolution_conflict_families(pack);
+    require_night_resolution_kill_stacking_policy(pack);
+    require_night_resolution_strongman_bypass_policy(pack);
+    require_night_resolution_suppression_classifiers(pack);
     require_valid_night_ability_order(pack);
-    require_standard_nar_suppression_precedence(pack);
+    require_night_resolution_suppression_precedence(pack);
 
     // Build the action list from non-withdrawn submissions, resolving each to
     // its role's action template. Submissions whose template can't be found are
@@ -6273,7 +6296,7 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                 let mut block_sources: BTreeMap<SlotId, Vec<BlockSource>> = BTreeMap::new();
                 for idx in ability_order(&actions, IrAbility::Block) {
                     if actions[idx].blocked
-                        || !standard_nar_block_participates(pack, actions[idx].template)
+                        || !night_resolution_block_participates(pack, actions[idx].template)
                     {
                         continue;
                     }
@@ -6299,7 +6322,7 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                         .into_iter()
                         .flat_map(|sources| sources.iter())
                         .filter_map(|source| {
-                            let scope = standard_nar_block_suppression_scope(
+                            let scope = night_resolution_block_suppression_scope(
                                 pack,
                                 source,
                                 action.template,
@@ -6342,13 +6365,13 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                     if empowered_slots.contains(&actions[idx].sub.actor) {
                         trace_decisions.push(DecisionTrace {
                             stage: "night:block".to_string(),
-                            source: "standard_nar.empower_effects".to_string(),
+                            source: "night_resolution.empower_effects".to_string(),
                             outcome: "action_suppression_bypassed".to_string(),
                             detail: serde_json::json!({
                                 "actor": actions[idx].sub.actor,
                                 "action_id": actions[idx].sub.action_id,
                                 "template_id": actions[idx].template.id,
-                                "empower_effects": pack.standard_nar.empower_effects.clone(),
+                                "empower_effects": pack.night_resolution.empower_effects.clone(),
                                 "block_sources": sources
                                     .iter()
                                     .map(BlockSource::trace_detail)
@@ -6434,14 +6457,14 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                                 if would_redirect {
                                     trace_decisions.push(DecisionTrace {
                                         stage: "night:redirect".to_string(),
-                                        source: "standard_nar.empower_effects".to_string(),
+                                        source: "night_resolution.empower_effects".to_string(),
                                         outcome: "action_redirect_bypassed".to_string(),
                                         detail: serde_json::json!({
                                             "actor": actor,
                                             "action_id": action_id,
                                             "template_id": template_id,
                                             "targets": action.targets.clone(),
-                                            "empower_effects": pack.standard_nar.empower_effects.clone(),
+                                            "empower_effects": pack.night_resolution.empower_effects.clone(),
                                         }),
                                     });
                                 }
@@ -6481,7 +6504,7 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                     };
                     let actor = actions[idx].sub.actor.clone();
                     let hide_dependency_cause =
-                        standard_nar_hide_dependency_cause(pack, actions[idx].template);
+                        night_resolution_hide_dependency_cause(pack, actions[idx].template);
                     for target in actions[idx].targets.clone() {
                         let tags = target_tags(input, &transient_effects, &target);
                         if let Some(reason) = target_state_gate_reason(pack, &tags, IrAbility::Mark)
@@ -6864,17 +6887,19 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
             IrAbility::Protect => {
                 for idx in ability_order(&actions, IrAbility::Protect) {
                     if actions[idx].blocked
-                        || !standard_nar_protect_participates(pack, actions[idx].template)
+                        || !night_resolution_protect_participates(pack, actions[idx].template)
                     {
                         continue;
                     }
                     let actor = actions[idx].sub.actor.clone();
-                    let intercept_cause = standard_nar_intercept_cause(pack, actions[idx].template);
+                    let intercept_cause =
+                        night_resolution_intercept_cause(pack, actions[idx].template);
                     let guard_retaliation_cause =
-                        standard_nar_guard_retaliation_cause(pack, actions[idx].template);
-                    let cpr_harm_cause = standard_nar_cpr_harm_cause(pack, actions[idx].template);
+                        night_resolution_guard_retaliation_cause(pack, actions[idx].template);
+                    let cpr_harm_cause =
+                        night_resolution_cpr_harm_cause(pack, actions[idx].template);
                     let guard_dependency_cause =
-                        standard_nar_guard_dependency_cause(pack, actions[idx].template);
+                        night_resolution_guard_dependency_cause(pack, actions[idx].template);
                     for t in actions[idx].targets.clone() {
                         let tags = target_tags(input, &transient_effects, &t);
                         if let Some(reason) =
@@ -6941,15 +6966,16 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                     if actions[idx].blocked {
                         continue;
                     }
-                    if standard_nar_cpr_harm_cause(pack, actions[idx].template).is_some() {
+                    if night_resolution_cpr_harm_cause(pack, actions[idx].template).is_some() {
                         continue;
                     }
-                    if !standard_nar_kill_participates(pack, actions[idx].template) {
+                    if !night_resolution_kill_participates(pack, actions[idx].template) {
                         continue;
                     }
                     let cause = actions[idx].template.id.clone();
                     let attacker = actions[idx].sub.actor.clone();
-                    let is_strongman = standard_nar_strongman_bypasses(pack, actions[idx].template);
+                    let is_strongman =
+                        night_resolution_strongman_bypasses(pack, actions[idx].template);
                     // An ignite-style Kill `reads_effect`: its targets are every
                     // alive slot carrying that persistent effect tag in the input state.
                     let mut targets: Vec<SlotId> = match &actions[idx].template.reads_effect {
@@ -7728,7 +7754,7 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                 if trig.on != observation.on {
                     continue;
                 }
-                if !standard_nar_trigger_participates_in_fixpoint(pack, trig) {
+                if !night_resolution_trigger_participates_in_fixpoint(pack, trig) {
                     continue;
                 }
                 let Some(target_slot) = input
@@ -7773,7 +7799,7 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                     payload,
                 });
                 if trig.produces.ability == IrAbility::Kill {
-                    let strongman = standard_nar_generated_kill_bypasses_protect(pack, trig);
+                    let strongman = night_resolution_generated_kill_bypasses_protect(pack, trig);
                     let target_tags = target_tags(input, &transient_effects, &produced_target);
                     if let Some(reason) =
                         target_state_gate_reason(pack, &target_tags, IrAbility::Kill)
@@ -7981,12 +8007,12 @@ fn collect_empowered_slots(
     pack: &Pack,
     blocked_action_idxs: &BTreeSet<usize>,
 ) -> BTreeSet<SlotId> {
-    if pack.standard_nar.empower_effects.is_empty() {
+    if pack.night_resolution.empower_effects.is_empty() {
         return BTreeSet::new();
     }
 
     let empower_effects = pack
-        .standard_nar
+        .night_resolution
         .empower_effects
         .iter()
         .map(String::as_str)
@@ -8393,8 +8419,8 @@ fn prior_investigation_result(
 
 /// Whether a Strongman kill removes Protect from its blockers at evaluation time.
 fn protect_beats_kill_unless_strongman(pack: &Pack) -> bool {
-    if pack.standard_nar.enabled {
-        return pack.standard_nar.strongman_bypasses_protect;
+    if pack.night_resolution.is_explicit() {
+        return pack.night_resolution.strongman_bypasses_protect;
     }
     pack.precedence.iter().any(|rule| {
         rule.when.effect == IrAbility::Protect
@@ -8403,29 +8429,29 @@ fn protect_beats_kill_unless_strongman(pack: &Pack) -> bool {
     })
 }
 
-fn standard_nar_block_participates(pack: &Pack, template: &ActionTemplate) -> bool {
-    if !pack.standard_nar.enabled {
+fn night_resolution_block_participates(pack: &Pack, template: &ActionTemplate) -> bool {
+    if !pack.night_resolution.is_explicit() {
         return true;
     }
-    pack.standard_nar
+    pack.night_resolution
         .block_action_ids
         .iter()
-        .chain(pack.standard_nar.jailkeep_action_ids.iter())
+        .chain(pack.night_resolution.jailkeep_action_ids.iter())
         .any(|action_id| action_id == &template.id)
 }
 
-fn standard_nar_block_suppression_scope(
+fn night_resolution_block_suppression_scope(
     pack: &Pack,
     source: &BlockSource,
     target: &ActionTemplate,
 ) -> Option<SuppressionScope> {
-    if !pack.standard_nar.enabled {
+    if !pack.night_resolution.is_explicit() {
         return target
             .constraints
             .roleblockable
             .then_some(SuppressionScope::AllMatchingActions);
     }
-    pack.standard_nar
+    pack.night_resolution
         .suppression_policy
         .get(&source.template_id)
         .and_then(|policy| {
@@ -8436,7 +8462,7 @@ fn standard_nar_block_suppression_scope(
                 .then(|| {
                     policy.scope.unwrap_or_else(|| {
                         panic!(
-                            "invalid standard_nar suppression policy: Block action `{}` must declare suppression scope",
+                            "invalid night_resolution suppression policy: Block action `{}` must declare suppression scope",
                             source.template_id
                         )
                     })
@@ -8444,17 +8470,17 @@ fn standard_nar_block_suppression_scope(
         })
 }
 
-fn standard_nar_protect_participates(pack: &Pack, template: &ActionTemplate) -> bool {
-    if !pack.standard_nar.enabled {
+fn night_resolution_protect_participates(pack: &Pack, template: &ActionTemplate) -> bool {
+    if !pack.night_resolution.is_explicit() {
         return true;
     }
-    pack.standard_nar
+    pack.night_resolution
         .protect_action_ids
         .iter()
-        .chain(pack.standard_nar.bodyguard_action_ids.iter())
-        .chain(pack.standard_nar.martyr_action_ids.iter())
-        .chain(pack.standard_nar.cpr_action_ids.iter())
-        .chain(pack.standard_nar.jailkeep_action_ids.iter())
+        .chain(pack.night_resolution.bodyguard_action_ids.iter())
+        .chain(pack.night_resolution.martyr_action_ids.iter())
+        .chain(pack.night_resolution.cpr_action_ids.iter())
+        .chain(pack.night_resolution.jailkeep_action_ids.iter())
         .any(|action_id| action_id == &template.id)
 }
 
@@ -8465,7 +8491,7 @@ fn action_chance_allows(
     rng: &mut DetRng,
     trace_decisions: &mut Vec<DecisionTrace>,
 ) -> bool {
-    let Some(policy) = pack.standard_nar.action_chance.get(&action.template.id) else {
+    let Some(policy) = pack.night_resolution.action_chance.get(&action.template.id) else {
         return true;
     };
     let roll = rng.next_f64();
@@ -8491,17 +8517,17 @@ fn action_chance_allows(
     allowed
 }
 
-fn require_standard_nar_action_chance_policy(pack: &Pack) {
-    if !pack.standard_nar.enabled {
+fn require_night_resolution_action_chance_policy(pack: &Pack) {
+    if !pack.night_resolution.is_explicit() {
         return;
     }
-    for (action_id, policy) in &pack.standard_nar.action_chance {
+    for (action_id, policy) in &pack.night_resolution.action_chance {
         if action_id.trim().is_empty() {
-            panic!("invalid standard_nar action chance policy: action id must not be empty");
+            panic!("invalid night_resolution action chance policy: action id must not be empty");
         }
         if !policy.chance.is_finite() || !(0.0..=1.0).contains(&policy.chance) {
             panic!(
-                "invalid standard_nar action chance policy: action `{action_id}` chance must be finite and between 0.0 and 1.0"
+                "invalid night_resolution action chance policy: action `{action_id}` chance must be finite and between 0.0 and 1.0"
             );
         }
         if !pack
@@ -8512,98 +8538,100 @@ fn require_standard_nar_action_chance_policy(pack: &Pack) {
             .any(|action| action.window.is_night_resolution_window() && action.id == *action_id)
         {
             panic!(
-                "invalid standard_nar action chance policy: unknown night/any action `{action_id}`"
+                "invalid night_resolution action chance policy: unknown night/any action `{action_id}`"
             );
         }
     }
 }
 
-fn require_standard_nar_conflict_families(pack: &Pack) {
-    if !pack.standard_nar.enabled {
+fn require_night_resolution_conflict_families(pack: &Pack) {
+    if !pack.night_resolution.is_explicit() {
         return;
     }
     let declared = pack
-        .standard_nar
+        .night_resolution
         .conflict_families
         .iter()
         .copied()
         .collect::<BTreeSet<_>>();
-    if declared.len() != pack.standard_nar.conflict_families.len() {
+    if declared.len() != pack.night_resolution.conflict_families.len() {
         panic!(
-            "invalid standard_nar conflict families: conflict_families must not contain duplicates"
+            "invalid night_resolution conflict families: conflict_families must not contain duplicates"
         );
     }
     if declared.is_empty() {
         panic!(
-            "invalid standard_nar conflict families: enabled standard_nar policy must declare conflict_families"
+            "invalid night_resolution conflict families: explicit night_resolution policy must declare conflict_families"
         );
     }
-    let required = standard_nar_required_conflict_families(pack);
+    let required = night_resolution_required_conflict_families(pack);
     for family in &required {
         if !declared.contains(family) {
             panic!(
-                "invalid standard_nar conflict families: conflict_families must include `{family:?}`"
+                "invalid night_resolution conflict families: conflict_families must include `{family:?}`"
             );
         }
     }
     for family in &declared {
         if !required.contains(family) {
             panic!(
-                "invalid standard_nar conflict families: declared conflict family `{family:?}` has no matching policy surface"
+                "invalid night_resolution conflict families: declared conflict family `{family:?}` has no matching policy surface"
             );
         }
     }
 }
 
-fn standard_nar_required_conflict_families(pack: &Pack) -> BTreeSet<StandardNarConflictFamily> {
-    let policy = &pack.standard_nar;
+fn night_resolution_required_conflict_families(
+    pack: &Pack,
+) -> BTreeSet<NightResolutionConflictFamily> {
+    let policy = &pack.night_resolution;
     let mut required = BTreeSet::from([
-        StandardNarConflictFamily::BlockSuppressesActions,
-        StandardNarConflictFamily::ProtectBlocksKills,
-        StandardNarConflictFamily::StrongmanBypassesProtect,
-        StandardNarConflictFamily::KillStacking,
+        NightResolutionConflictFamily::BlockSuppressesActions,
+        NightResolutionConflictFamily::ProtectBlocksKills,
+        NightResolutionConflictFamily::StrongmanBypassesProtect,
+        NightResolutionConflictFamily::KillStacking,
     ]);
     if !policy.intercept_cause_policy.is_empty()
         || !policy.bodyguard_action_ids.is_empty()
         || !policy.martyr_action_ids.is_empty()
     {
-        required.insert(StandardNarConflictFamily::InterceptProtection);
+        required.insert(NightResolutionConflictFamily::InterceptProtection);
     }
     if !policy.guard_retaliation_cause_policy.is_empty() {
-        required.insert(StandardNarConflictFamily::GuardRetaliation);
+        required.insert(NightResolutionConflictFamily::GuardRetaliation);
     }
     if !policy.cpr_action_ids.is_empty() || !policy.cpr_harm_cause_policy.is_empty() {
-        required.insert(StandardNarConflictFamily::CprProtection);
+        required.insert(NightResolutionConflictFamily::CprProtection);
     }
     if !policy.guard_dependency_cause_policy.is_empty() {
-        required.insert(StandardNarConflictFamily::GuardDependency);
+        required.insert(NightResolutionConflictFamily::GuardDependency);
     }
     if !policy.hide_dependency_cause_policy.is_empty() {
-        required.insert(StandardNarConflictFamily::HideDependency);
+        required.insert(NightResolutionConflictFamily::HideDependency);
     }
     if !policy.chosen_retaliation_cause_policy.is_empty() {
-        required.insert(StandardNarConflictFamily::ChosenRetaliation);
+        required.insert(NightResolutionConflictFamily::ChosenRetaliation);
     }
     if !policy.generated_kill_cause_policy.is_empty() || !policy.trigger_fixpoint_policy.is_empty()
     {
-        required.insert(StandardNarConflictFamily::GeneratedKillReentry);
+        required.insert(NightResolutionConflictFamily::GeneratedKillReentry);
     }
-    if !standard_nar_target_state_save_tags(pack).is_empty() {
-        required.insert(StandardNarConflictFamily::TargetStateSave);
+    if !night_resolution_target_state_save_tags(pack).is_empty() {
+        required.insert(NightResolutionConflictFamily::TargetStateSave);
     }
-    if !standard_nar_target_state_gate_tags(pack).is_empty() {
-        required.insert(StandardNarConflictFamily::TargetStateGate);
+    if !night_resolution_target_state_gate_tags(pack).is_empty() {
+        required.insert(NightResolutionConflictFamily::TargetStateGate);
     }
     if !policy.action_chance.is_empty() {
-        required.insert(StandardNarConflictFamily::ActionChance);
+        required.insert(NightResolutionConflictFamily::ActionChance);
     }
     required
 }
 
-fn standard_nar_cpr_harm_cause(pack: &Pack, template: &ActionTemplate) -> Option<String> {
-    if pack.standard_nar.enabled {
+fn night_resolution_cpr_harm_cause(pack: &Pack, template: &ActionTemplate) -> Option<String> {
+    if pack.night_resolution.is_explicit() {
         return pack
-            .standard_nar
+            .night_resolution
             .cpr_harm_cause_policy
             .get(&template.id)
             .cloned();
@@ -8614,10 +8642,13 @@ fn standard_nar_cpr_harm_cause(pack: &Pack, template: &ActionTemplate) -> Option
     None
 }
 
-fn standard_nar_guard_dependency_cause(pack: &Pack, template: &ActionTemplate) -> Option<String> {
-    if pack.standard_nar.enabled {
+fn night_resolution_guard_dependency_cause(
+    pack: &Pack,
+    template: &ActionTemplate,
+) -> Option<String> {
+    if pack.night_resolution.is_explicit() {
         return pack
-            .standard_nar
+            .night_resolution
             .guard_dependency_cause_policy
             .get(&template.id)
             .cloned();
@@ -8628,10 +8659,13 @@ fn standard_nar_guard_dependency_cause(pack: &Pack, template: &ActionTemplate) -
     None
 }
 
-fn standard_nar_hide_dependency_cause(pack: &Pack, template: &ActionTemplate) -> Option<String> {
-    if pack.standard_nar.enabled {
+fn night_resolution_hide_dependency_cause(
+    pack: &Pack,
+    template: &ActionTemplate,
+) -> Option<String> {
+    if pack.night_resolution.is_explicit() {
         return pack
-            .standard_nar
+            .night_resolution
             .hide_dependency_cause_policy
             .get(&template.id)
             .cloned();
@@ -8642,10 +8676,10 @@ fn standard_nar_hide_dependency_cause(pack: &Pack, template: &ActionTemplate) ->
     None
 }
 
-fn standard_nar_intercept_cause(pack: &Pack, template: &ActionTemplate) -> Option<String> {
-    if pack.standard_nar.enabled {
+fn night_resolution_intercept_cause(pack: &Pack, template: &ActionTemplate) -> Option<String> {
+    if pack.night_resolution.is_explicit() {
         return pack
-            .standard_nar
+            .night_resolution
             .intercept_cause_policy
             .get(&template.id)
             .cloned();
@@ -8659,10 +8693,13 @@ fn standard_nar_intercept_cause(pack: &Pack, template: &ActionTemplate) -> Optio
     None
 }
 
-fn standard_nar_guard_retaliation_cause(pack: &Pack, template: &ActionTemplate) -> Option<String> {
-    if pack.standard_nar.enabled {
+fn night_resolution_guard_retaliation_cause(
+    pack: &Pack,
+    template: &ActionTemplate,
+) -> Option<String> {
+    if pack.night_resolution.is_explicit() {
         return pack
-            .standard_nar
+            .night_resolution
             .guard_retaliation_cause_policy
             .get(&template.id)
             .cloned();
@@ -8670,10 +8707,10 @@ fn standard_nar_guard_retaliation_cause(pack: &Pack, template: &ActionTemplate) 
     None
 }
 
-fn standard_nar_strongman_bypasses(pack: &Pack, template: &ActionTemplate) -> bool {
-    if pack.standard_nar.enabled {
+fn night_resolution_strongman_bypasses(pack: &Pack, template: &ActionTemplate) -> bool {
+    if pack.night_resolution.is_explicit() {
         return pack
-            .standard_nar
+            .night_resolution
             .strongman_action_ids
             .iter()
             .any(|action_id| action_id == &template.id);
@@ -8681,43 +8718,43 @@ fn standard_nar_strongman_bypasses(pack: &Pack, template: &ActionTemplate) -> bo
     template.has_modifier(Modifier::Strongman)
 }
 
-fn standard_nar_kill_participates(pack: &Pack, template: &ActionTemplate) -> bool {
-    if !pack.standard_nar.enabled {
+fn night_resolution_kill_participates(pack: &Pack, template: &ActionTemplate) -> bool {
+    if !pack.night_resolution.is_explicit() {
         return true;
     }
-    pack.standard_nar
+    pack.night_resolution
         .kill_action_ids
         .iter()
-        .chain(pack.standard_nar.strongman_action_ids.iter())
+        .chain(pack.night_resolution.strongman_action_ids.iter())
         .any(|action_id| action_id == &template.id)
 }
 
-fn standard_nar_chosen_retaliation_bypasses_protect(pack: &Pack, source_action: &str) -> bool {
-    if pack.standard_nar.enabled {
+fn night_resolution_chosen_retaliation_bypasses_protect(pack: &Pack, source_action: &str) -> bool {
+    if pack.night_resolution.is_explicit() {
         return pack
-            .standard_nar
+            .night_resolution
             .chosen_retaliation_cause_policy
             .get(source_action)
             .map(|policy| policy.strongman_bypasses_protect)
             .unwrap_or_else(|| {
                 panic!(
-                    "invalid standard_nar chosen retaliation cause policy: Retaliate action `{source_action}` must declare chosen retaliation cause policy"
+                    "invalid night_resolution chosen retaliation cause policy: Retaliate action `{source_action}` must declare chosen retaliation cause policy"
                 )
             });
     }
     false
 }
 
-fn standard_nar_generated_kill_bypasses_protect(pack: &Pack, trigger: &TriggerRule) -> bool {
-    if pack.standard_nar.enabled {
+fn night_resolution_generated_kill_bypasses_protect(pack: &Pack, trigger: &TriggerRule) -> bool {
+    if pack.night_resolution.is_explicit() {
         return pack
-            .standard_nar
+            .night_resolution
             .generated_kill_cause_policy
             .get(&trigger.id)
             .map(|policy| policy.strongman_bypasses_protect)
             .unwrap_or_else(|| {
                 panic!(
-                    "invalid standard_nar generated kill cause policy: generated kill trigger `{}` must declare generated kill cause policy",
+                    "invalid night_resolution generated kill cause policy: generated kill trigger `{}` must declare generated kill cause policy",
                     trigger.id
                 )
             });
@@ -8725,19 +8762,19 @@ fn standard_nar_generated_kill_bypasses_protect(pack: &Pack, trigger: &TriggerRu
     trigger.produces.modifiers.contains(&Modifier::Strongman)
 }
 
-fn standard_nar_trigger_participates_in_fixpoint(pack: &Pack, trigger: &TriggerRule) -> bool {
+fn night_resolution_trigger_participates_in_fixpoint(pack: &Pack, trigger: &TriggerRule) -> bool {
     if trigger.produces.ability != IrAbility::Kill {
         return true;
     }
-    if pack.standard_nar.enabled {
+    if pack.night_resolution.is_explicit() {
         return pack
-            .standard_nar
+            .night_resolution
             .trigger_fixpoint_policy
             .get(&trigger.id)
             .map(|policy| policy.produced_kill_reenters)
             .unwrap_or_else(|| {
                 panic!(
-                    "invalid standard_nar trigger fixpoint policy: generated kill trigger `{}` must declare trigger fixpoint policy",
+                    "invalid night_resolution trigger fixpoint policy: generated kill trigger `{}` must declare trigger fixpoint policy",
                     trigger.id
                 )
             });
@@ -8745,18 +8782,18 @@ fn standard_nar_trigger_participates_in_fixpoint(pack: &Pack, trigger: &TriggerR
     true
 }
 
-fn standard_nar_aggregates_kill_attackers(pack: &Pack) -> bool {
-    pack.standard_nar.enabled
+fn night_resolution_aggregates_kill_attackers(pack: &Pack) -> bool {
+    pack.night_resolution.is_explicit()
         && matches!(
-            pack.standard_nar.kill_stacking,
+            pack.night_resolution.kill_stacking,
             Some(KillStackingPolicy::AggregateAttackers)
         )
 }
 
 fn protection_blocks_cause(pack: &Pack, cause: &str, source: &ProtectionSource) -> bool {
-    if pack.standard_nar.enabled {
+    if pack.night_resolution.is_explicit() {
         return pack
-            .standard_nar
+            .night_resolution
             .protection_cause_policy
             .get(&source.template_id)
             .is_some_and(|policy| {
@@ -8888,9 +8925,9 @@ fn target_state_save_blocks_cause(
     save_tag: &str,
     unstoppable: bool,
 ) -> bool {
-    if pack.standard_nar.enabled {
+    if pack.night_resolution.is_explicit() {
         if !pack
-            .standard_nar
+            .night_resolution
             .target_state_save_tags
             .iter()
             .any(|tag| tag == save_tag)
@@ -8898,7 +8935,7 @@ fn target_state_save_blocks_cause(
             return false;
         }
         return pack
-            .standard_nar
+            .night_resolution
             .target_state_save_policy
             .get(save_tag)
             .is_some_and(|policy| policy.blocks.iter().any(|blocked| blocked == cause));

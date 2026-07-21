@@ -68,7 +68,7 @@ test("host prompt history ignores unresolved and untyped prompts", () => {
   const view = buildHostPromptResolutionHistoryViewModel({
     hostPrompts: [
       { id: "D01:pending", status: "pending", publicResolution: {} },
-      { id: "D02:legacy", status: "resolved" },
+      { id: "D02:earlier", status: "resolved" },
     ],
   });
 

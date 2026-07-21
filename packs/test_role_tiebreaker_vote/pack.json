@@ -2,6 +2,9 @@
   "name": "test_role_tiebreaker_vote",
   "version": 1,
   "ir_version": 58,
+  "night_resolution": {
+    "mode": "Generic"
+  },
   "roles": {
     "tiebreaker": {
       "description": "Test role selected by vote.tiebreaker_roles when tied for elimination.",

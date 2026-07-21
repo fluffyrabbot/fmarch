@@ -2428,8 +2428,8 @@
       "notes": "A Kill removes the target unless the actor is blocked or the target is protected."
     }
   ],
-  "standard_nar": {
-    "enabled": true,
+  "night_resolution": {
+    "mode": "Explicit",
     "kill_stacking": "AggregateAttackers",
     "conflict_families": [
       "BlockSuppressesActions",

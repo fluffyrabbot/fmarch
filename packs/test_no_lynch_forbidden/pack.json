@@ -2,6 +2,9 @@
   "name": "test_no_lynch_forbidden",
   "version": 1,
   "ir_version": 1,
+  "night_resolution": {
+    "mode": "Generic"
+  },
   "roles": {
     "vanilla_townie": {
       "description": "Town-aligned test role with no actions.",

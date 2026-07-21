@@ -2,6 +2,9 @@
   "name": "test_ita_buffered",
   "version": 1,
   "ir_version": 62,
+  "night_resolution": {
+    "mode": "Generic"
+  },
   "roles": {
     "ita_shooter": {
       "description": "Test ITA participant whose session buffers shots before release.",

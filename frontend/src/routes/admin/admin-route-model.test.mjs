@@ -980,13 +980,13 @@ test("admin route data exposes local ops artifacts as a native audit row", async
     productionReady: false,
   });
 
-  const legacy = await buildAdminRouteData({
+  const unsupportedVersion = await buildAdminRouteData({
     principalUserId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     opsArtifacts: { ...localOpsArtifactsFixture(), version: 2 },
   });
   assert.equal(
-    legacy.audit.some((item) => item.id === localAdminAuditIds.opsArtifacts),
+    unsupportedVersion.audit.some((item) => item.id === localAdminAuditIds.opsArtifacts),
     false,
   );
 });

@@ -2914,8 +2914,8 @@
       "notes": "A Kill removes the target from play unless stopped by Block (roleblocked killer) or Protect (doctored target). Strongman is handled by protect_beats_kill's unless_modifiers, which removes Protect from this Kill's blocked_by at evaluation time."
     }
   ],
-  "standard_nar": {
-    "enabled": true,
+  "night_resolution": {
+    "mode": "Explicit",
     "kill_stacking": "AggregateAttackers",
     "conflict_families": [
       "BlockSuppressesActions",

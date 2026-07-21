@@ -419,7 +419,7 @@ Reviewer rulings applied; the loop is closed. One line per finding:
     `hider.hide` and hidden `hide_link`; the resolver records a same-resolution host-to-hider
     dependency, grants transient `untargetable` to the Hider only behind a known non-mafia host,
     and generates a `PlayerKilled` with the pack-declared
-    `standard_nar.hide_dependency_cause_policy` cause if the host dies. Goldens prove direct kill
+    `night_resolution.hide_dependency_cause_policy` cause if the host dies. Goldens prove direct kill
     suppression behind a town host and generated Hider death on host death; a command/projection
     test proves both through persisted `Command::ResolvePhase` plus rebuild. The generated hider
     death now emits structured `DecisionTrace` attribution carrying the submitted hide action id

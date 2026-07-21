@@ -2,6 +2,9 @@
   "name": "test_invalid_trigger_reference_contract",
   "version": 1,
   "ir_version": 24,
+  "night_resolution": {
+    "mode": "Generic"
+  },
   "roles": {
     "malformed_trigger_user": {
       "description": "Test role with trigger filter tags.",

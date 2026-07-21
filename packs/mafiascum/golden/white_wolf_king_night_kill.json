@@ -1,5 +1,5 @@
 {
-  "description": "Mafiascum White Wolf King uses its ordinary personal night kill through the standard-NAR night_kill lane.",
+  "description": "Mafiascum White Wolf King uses its ordinary personal night kill through the explicit night-resolution night_kill lane.",
   "input": {
     "game_id": "game_demo_mafiascum_white_wolf_king_night_001",
     "phase_id": "N01",

@@ -413,18 +413,18 @@ The only identity that crosses into the engine is `SlotId`.
   `DayAnnouncement`, `LastWordsRecorded`, and trailing `PhaseAnnouncement` inner events are
   published as a deterministic system `thread_view` row, rebuild identically, and do not move the
   phase cursor.]
-- [x] Encode conflict/precedence policy: standard NAR, mafiascum variants,
+- [x] Encode conflict/precedence policy: common night resolution, mafiascum variants,
   Mafia Universe constraints, and Chinese structured variants. [proven for the pack-schema
   contract: shipped
   pack night order is derived from pack `precedence` plus action priorities, malformed
   ambiguous/cyclic precedence fails validation, and `ResolvePhase`/pure resolver no longer falls
-  back to a legacy hardcoded order when night ordering is invalid; focused mafiascum goldens and
+  back to a hardcoded fallback order when night ordering is invalid; focused mafiascum goldens and
   command tests prove persisted pack-derived stage-order trace,
   `night_order_reacts_to_pack_priorities_and_precedence_edges` proves the derivation changes when
   pack priorities or precedence edges change,
-  `resolve_phase_uses_pack_derived_non_legacy_precedence_order` proves a valid
+  `resolve_phase_uses_pack_derived_custom_precedence_order` proves a valid
   Kill-before-Protect pack persists that order and folds the resulting kill through projections, and command test
-  `resolve_phase_rejects_invalid_pack_precedence_before_append` proves invalid standard-NAR
+  `resolve_phase_rejects_invalid_pack_precedence_before_append` proves invalid explicit night-resolution
   precedence rejects before `ResolutionApplied`/`ResolutionTrace`/`ThreadLocked` append; goldens prove
   roleblock suppression, doctor/bodyguard protection, Strongman bypasses, and PGO `Visit`
   triggers through the generated-kill/protection path; Chinese structured now declares
@@ -432,66 +432,66 @@ The only identity that crosses into the engine is `SlotId`.
   `Protect`-beats-`Kill` edge, and preserves Guard/Witch poison goldens; Mafia Universe ITA now
   declares `vote_conflict: ResolveShotsBeforeVote`, validates that `ItaShot` packs declare it,
   rejects missing policy at the pure resolver seam, and command/projection proof shows ITA target
-  death is folded before official vote outcome; mafiascum now declares `standard_nar` action-id
+  death is folded before official vote outcome; mafiascum now declares `night_resolution` action-id
   buckets for Block, Protect, ordinary Kill, Bodyguard, Martyr, Jailkeeper, and Strongman, validates action shapes and
-  required Block/Protect/Kill precedence edges, rejects enabled standard-NAR packs where night
+  required Block/Protect/Kill precedence edges, rejects packs in `Explicit` night-resolution mode where night
   Block/Protect/ordinary Kill actions are not declared in the corresponding buckets, and the resolver now gates
   Block/Protect/Kill stage participation through those pack-declared buckets with a fallback only for
-  non-standard-NAR packs; the pure night resolver now also fail-closes when in-memory standard-NAR
+  generic night-resolution packs; the pure night resolver now also fail-closes when in-memory explicit night-resolution
   packs omit `roleblocker_block`, `doctor_protect`, `bodyguard`, or Jailkeeper's explicit
-  block/protect bucket declarations, when any standard-NAR action bucket is empty or contains a
+  block/protect bucket declarations, when any explicit night-resolution action bucket is empty or contains a
   blank id, wrong ability/modifier/window shape, duplicate entry, or unknown action id, and when
   `team_kill_action_ids` contains a blank id, duplicate, unknown, wrong-shaped, or non-`kill_action_ids`
   entry or a Lost/Recluse role no longer exposes a declared team kill before resolution; when
   Bodyguard, Martyr, CPR, or Babysitter protect actions are moved into a bucket that would skip
   their specialized cause-policy path; mafiascum now declares Babysitter's `babysit` as a standard protect
-  action with `standard_nar.guard_dependency_cause_policy` owning the generated ward-death cause,
+  action with `night_resolution.guard_dependency_cause_policy` owning the generated ward-death cause,
   malformed guard dependency source/cause maps now fail closed, and golden plus command/projection
   proof preserves the Babysitter dependency outcome;
-  mafiascum also declares `strongman_bypasses_protect: true`, enabled standard-NAR packs reject a
+  mafiascum also declares `strongman_bypasses_protect: true`, packs in `Explicit` night-resolution mode reject a
   missing explicit bypass flag, and a domain regression proves Strongman bypass no longer depends
   on generic `precedence.unless_modifiers`; the pure resolver now also fail-closes when an in-memory
-  standard-NAR pack disables the explicit bypass flag; `resolve_phase_rejects_invalid_pack_precedence_before_append`
+  explicit night-resolution pack disables the explicit bypass flag; `resolve_phase_rejects_invalid_pack_precedence_before_append`
   proves the same missing explicit Strongman bypass policy rejects at the command seam before
   `ResolutionApplied`, `ResolutionTrace`, or `ThreadLocked` append; mafiascum now declares
-  `standard_nar.protection_cause_policy` for Doctor, Babysitter, Bodyguard, Martyr, and Jailkeeper
-  sources against every cataloged standard-NAR kill-like cause, mafiascum now declares
-  `standard_nar.kill_cause_ids` for submitted/chosen/generated kill causes, enabled standard-NAR
+  `night_resolution.protection_cause_policy` for Doctor, Babysitter, Bodyguard, Martyr, and Jailkeeper
+  sources against every cataloged explicit night-resolution kill-like cause, mafiascum now declares
+  `night_resolution.kill_cause_ids` for submitted/chosen/generated kill causes, enabled explicit night-resolution
   packs reject missing/unknown/duplicate/empty kill-cause catalog entries, the pure resolver now
   fails closed on the same malformed in-memory kill-cause catalog before resolution, and packs reject
   missing protection source maps, missing protection/cause classifications, malformed protection
   source keys, duplicate/unknown causes, causes classified as both blocked and bypassed, ordinary
   kills classified as bypasses, and Strongman causes classified as blocks, and the resolver now
   reads this table instead of the
-  generic `protection_blocks_cause` fallback for standard-NAR packs; the pure resolver now
-  fail-closes before resolution when in-memory standard-NAR protection/source tables omit or
+  generic `protection_blocks_cause` fallback for explicit night-resolution packs; the pure resolver now
+  fail-closes before resolution when in-memory explicit night-resolution protection/source tables omit or
   malform the protection source map or any declared ordinary, chosen-retaliation, or generated
   kill cause, when a Strongman Kill action is
-  missing from `standard_nar.strongman_action_ids`, when ordinary kill causes are classified as
+  missing from `night_resolution.strongman_action_ids`, when ordinary kill causes are classified as
   bypasses, or when submitted/generated Strongman bypass causes are classified as blocks; domain and
   command/projection proof preserves doctor, bodyguard, martyr, jailkeeper, PGO-generated kill, and
   Strongman bypass behavior through the table; mafiascum now declares
-  `standard_nar.suppression_policy` for Roleblocker and Jailkeeper sources against every
-  night-capable role/item action, enabled standard-NAR packs reject missing suppression source
+  `night_resolution.suppression_policy` for Roleblocker and Jailkeeper sources against every
+  night-capable role/item action, packs in `Explicit` night-resolution mode reject missing suppression source
   maps, missing suppression classifications, malformed block source keys, duplicate/unknown action
   ids, action ids classified as both suppressed and bypassed, roleblockable actions classified as
   bypasses, and
   non-roleblockable actions classified as suppressed; the pack linter now also rejects enabled
-  standard-NAR packs whose suppression table can stop a night action unless Block has a precedence
+  explicit night-resolution packs whose suppression table can stop a night action unless Block has a precedence
   path before that action's ability; `resolve_phase_rejects_invalid_pack_precedence_before_append`
   proves missing suppression `scope` rejects before append, and the resolver now fails closed
-  instead of defaulting missing standard-NAR scope; the pure resolver now also fail-closes before
-  night resolution when in-memory standard-NAR suppression tables omit a role action or item
+  instead of defaulting missing explicit night-resolution scope; the pure resolver now also fail-closes before
+  night resolution when in-memory explicit night-resolution suppression tables omit a role action or item
   action classifier, malform the block source map, contain empty/duplicate/unknown action ids,
   classify an action as both suppressed and bypassed, classify a suppression-immune action as
   suppressed, or classify a roleblockable action as bypassed, while generated-trigger feeder
   omissions still fail at the generated-kill ownership boundary; the resolver reads this table
   instead of the generic
-  `constraints.roleblockable` boolean for standard-NAR packs; domain goldens prove both
+  `constraints.roleblockable` boolean for explicit night-resolution packs; domain goldens prove both
   roleblockable suppression and non-roleblockable Roleblocker survival, while
   command/projection proof preserves `ActionInterfered` and structured suppression trace details;
-  `standard_nar.conflict_families` now declares the pack-level conflict families each shipped
-  standard-NAR pack actually relies on, requires v44 IR, rejects missing, duplicate, or
+  `night_resolution.conflict_families` now declares the pack-level conflict families each shipped
+  explicit night-resolution pack actually relies on, requires v44 IR, rejects missing, duplicate, or
   over-claimed family declarations, and the pure resolver fail-closes if an in-memory pack drops
   a required family before night resolution; this keeps the broad conflict/precedence schema as an
   explicit pack contract instead of an emergent consequence of many separate tables;
@@ -500,61 +500,61 @@ The only identity that crosses into the engine is `SlotId`.
   `block`; the JOAT roles carry one-shot parity investigate/protect/block/track bundles, with
   pure goldens proving town and mafia one-shot block counter consumption and Postgres
   command/projection proof that the mafia-aligned JOAT block suppresses a Doctor save through the
-  same standard-NAR table;
-  mafiascum `standard_nar` also
+  same explicit night-resolution table;
+  mafiascum `night_resolution` also
   declares `kill_stacking: AggregateAttackers`, with domain/command proof that simultaneous
   landed ordinary/Strongman kills merge attackers into one `PlayerKilled`, trace
   `kill_stacked_on_existing_death`, and rebuild the exact night `PhaseAnnouncement.deaths`
-  cause, and the pure resolver now fails closed when an in-memory standard-NAR pack omits
+  cause, and the pure resolver now fails closed when an in-memory explicit night-resolution pack omits
   `kill_stacking`; bodyguard-intercept generated kills that race the bodyguard's direct death use
   the same merge/trace path, with Bodyguard/Martyr intercept death causes declared in
-  `standard_nar.intercept_cause_policy`, validated as non-empty non-direct-kill causes with
+  `night_resolution.intercept_cause_policy`, validated as non-empty non-direct-kill causes with
   missing source maps and malformed source keys rejected, and read by the resolver/trace instead
   of hardcoded cause strings; mafiascum now declares explicit
-  `SuppressionScope::{FirstMatchingAction, AllMatchingActions}` for standard-NAR suppression,
+  `SuppressionScope::{FirstMatchingAction, AllMatchingActions}` for explicit night-resolution suppression,
   validates that every block source names a scope, preserves ordinary Roleblocker/Jailkeeper
   as single-action suppressors, and proves a catastrophic block source suppresses every submitted
   Inventor action through pure goldens, trace assertions, and command/projection rebuild proof;
-  the pure night resolver now also fail-closes when an in-memory standard-NAR suppression table says
+  the pure night resolver now also fail-closes when an in-memory explicit night-resolution suppression table says
   Roleblocker or catastrophic Block can suppress a Redirect-capable action but pack precedence no
   longer contains a Block-before-Redirect path;
-  mafiascum now declares `standard_nar.target_state_save_tags` plus
-  `standard_nar.target_state_save_policy` for `bulletproof` and `bulletproof_vest`, enabled
-  standard-NAR packs reject missing/unknown/duplicate/empty save-tag catalog entries, missing
+  mafiascum now declares `night_resolution.target_state_save_tags` plus
+  `night_resolution.target_state_save_policy` for `bulletproof` and `bulletproof_vest`, enabled
+  explicit night-resolution packs reject missing/unknown/duplicate/empty save-tag catalog entries, missing
   save-policy tags, missing save-policy source maps, empty/unknown policy keys, duplicate causes,
   unknown causes, causes classified as both blocked and bypassed, ordinary kills classified as
   target-state bypasses, and Strongman causes classified as target-state blocks; resolver
   regressions prove those malformed in-memory save classifications fail before
   Strongman-vs-bulletproof can rely on implicit
   `unstoppable` behavior; the pure night
-  resolver now rejects a standard-NAR pack that reaches resolution with missing target-state save
-  catalog, policy, or per-cause classifier instead of silently using legacy fallback behavior, and
+  resolver now rejects a explicit night-resolution pack that reaches resolution with missing target-state save
+  catalog, policy, or per-cause classifier instead of silently using implicit fallback behavior, and
   `test_invalid_target_state_policy` plus
   `resolve_phase_rejects_invalid_target_state_policy_before_append` prove missing `bulletproof`
   save policy rejects before `ResolutionApplied`, `ResolutionTrace`, or `ThreadLocked` append;
   mafiascum now
-  declares `standard_nar.target_state_gate_tags` plus `standard_nar.target_state_gate_policy` for
-  `commuted` and `untargetable`, enabled standard-NAR packs reject missing/unknown/duplicate/empty
+  declares `night_resolution.target_state_gate_tags` plus `night_resolution.target_state_gate_policy` for
+  `commuted` and `untargetable`, packs in `Explicit` night-resolution mode reject missing/unknown/duplicate/empty
   gate-tag catalog entries, missing gate-policy tags, missing gate-policy source maps, unknown
   policy tags, empty blocked-ability lists, duplicate abilities, and unsupported abilities, and a
   resolver regression proves commute-vs-kill/investigate behavior reads the target-state gate table
-  rather than hardcoded tag checks; the pure night resolver now rejects a standard-NAR pack that
+  rather than hardcoded tag checks; the pure night resolver now rejects a explicit night-resolution pack that
   reaches resolution
   with missing target-state gate policy, empty/unknown policy keys, duplicate blocked abilities,
-  or unsupported blocked abilities instead of silently using legacy fallback behavior, and the
+  or unsupported blocked abilities instead of silently using implicit fallback behavior, and the
   same invalid fixture/command proof covers missing `commuted` gate policy before append;
-  Strong-Willed roleblock immunity is modeled as a standard-NAR suppression bypass rather than a
+  Strong-Willed roleblock immunity is modeled as a explicit night-resolution suppression bypass rather than a
   bespoke resolver branch, with pack validation requiring `Modifier::StrongWilled` actions to be
   classified in bypasses, pure golden/trace proof that the investigation resolves through a
   roleblock, and command/projection proof that the persisted resolution/trace envelopes audit and
-  rebuild; standard-NAR validation now also rejects a night Strongman Kill action unless it is
+  rebuild; explicit night-resolution validation now also rejects a night Strongman Kill action unless it is
   explicitly declared in `strongman_action_ids`, keeping protect bypass semantics in the pack
   table instead of implicit modifier fallback; item actions now participate in the same
-  standard-NAR action scans, so an item-granted Strongman Kill must be declared as a Strongman
+  explicit night-resolution action scans, so an item-granted Strongman Kill must be declared as a Strongman
   source and classified in protection-cause, target-state save, and suppression tables before the
   pack validates; Strongman-producing triggers such as `unstoppable_vengeful_retaliates` also
   have explicit malformed-pack regression coverage proving they must be declared in
-  `standard_nar.generated_kill_cause_policy` with trigger `on`, produced actor, produced target,
+  `night_resolution.generated_kill_cause_policy` with trigger `on`, produced actor, produced target,
   and Strongman classification matching the trigger rule, and must stay classified in
   protection-cause and target-state save bypass policy, with malformed-pack tests now proving
   omitted generated triggers are named by the protection/source and target-state save classifiers;
@@ -563,9 +563,9 @@ The only identity that crosses into the engine is `SlotId`.
   declared generated kill trigger still rejects before `ResolutionApplied`, `ResolutionTrace`, or
   `ThreadLocked` append when the trigger is not owned by protection-cause, target-state save, and
   roleblock suppression tables; the pure resolver now also fail-closes before the trigger
-  fixpoint when an in-memory standard-NAR pack omits that generated trigger from protection,
+  fixpoint when an in-memory explicit night-resolution pack omits that generated trigger from protection,
   target-state save, or roleblock suppression ownership;
-  standard-NAR validation now also rejects
+  explicit night-resolution validation now also rejects
   generated-kill policy drift where `generated_kill_cause_policy` and `trigger_fixpoint_policy`
   do not both name the same kill-producing trigger, and the pure resolver rejects a missing
   `pgo_shoots_visitor` trigger-fixpoint source before trigger fixpoint; it also rejects
@@ -574,7 +574,7 @@ The only identity that crosses into the engine is `SlotId`.
   resolver's Kill stage by that pack table; the pure resolver now also rejects empty or unknown
   generated-kill cause-policy keys and empty or unknown trigger-fixpoint policy keys before trigger
   fixpoint entry, mirroring the pack linter's closed generated-trigger table.
-  Remaining breadth: standard NAR variants beyond the core
+  Remaining breadth: night-resolution variants beyond the core
   block/protect/kill family, Mafia Universe role-madness variants, and broader Chinese
   structured conflict variants.]
 - [x] Encode visibility policy: public, private, hidden, stealth/ninja, result tampering,
@@ -911,25 +911,25 @@ The only identity that crosses into the engine is `SlotId`.
   persistent/no-target/wrong-ability forms, pure goldens prove skipped kills plus investigation
   interference, and command/projection proof shows submitted actions persist trace decisions while
   temporary `untargetable` effects do not leak into durable `slot_effect` state]
-- [x] Jailkeep as block plus protect policy. [`standard_nar.jailkeep_action_ids` must also be
+- [x] Jailkeep as block plus protect policy. [`night_resolution.jailkeep_action_ids` must also be
   declared in both block and protect buckets; pure golden trace proves one submitted `jail`
   suppresses the jailed slot's action and protects the jailed slot from an ordinary kill, and
   Postgres command/projection proof persists `ResolutionApplied`/`ResolutionTrace` through rebuild]
-- [x] Guard/bodyguard intercept kill. [`standard_nar.bodyguard_action_ids` classifies the
-  submitted protect action and `standard_nar.intercept_cause_policy.bodyguard` owns the generated
+- [x] Guard/bodyguard intercept kill. [`night_resolution.bodyguard_action_ids` classifies the
+  submitted protect action and `night_resolution.intercept_cause_policy.bodyguard` owns the generated
   intercept death cause; pure resolver regression mutates the cause and proves trace attribution
   follows pack data, pure resolver now rejects Bodyguard misclassified into the generic protect
   bucket, while command/projection proof preserves the bodyguard-intercepted PGO path]
 - [x] Martyr/intercept variants beyond bodyguard. [`Modifier::Martyr` plus
-  `standard_nar.martyr_action_ids` makes non-Bodyguard self-sacrificing protection table-driven,
-  and `standard_nar.intercept_cause_policy.martyr_protect` owns its generated death cause; pure
+  `night_resolution.martyr_action_ids` makes non-Bodyguard self-sacrificing protection table-driven,
+  and `night_resolution.intercept_cause_policy.martyr_protect` owns its generated death cause; pure
   goldens prove ordinary `martyr_intercept`, generated Strongman bypass, and fail-closed rejection
   when `martyr_protect` is misclassified into the generic protect bucket, and a Postgres
   command/projection test proves submitted `martyr_protect` survives rebuild]
 - [x] CPR and post-death consequences. [`Modifier::Cpr` plus
-  `standard_nar.cpr_action_ids` models `cpr_protect` as a pack-owned Protect+Kill variant whose
+  `night_resolution.cpr_action_ids` models `cpr_protect` as a pack-owned Protect+Kill variant whose
   Kill is a deferred post-protection consequence rather than an ordinary Kill stage participant;
-  `standard_nar.cpr_harm_cause_policy` owns the generated harm death cause and fails closed if
+  `night_resolution.cpr_harm_cause_policy` owns the generated harm death cause and fails closed if
   a source is missing or the map is otherwise malformed at night resolution; pure goldens prove
   successful save, harmful unneeded CPR, a mutated pack-owned harm cause, fail-closed rejection
   when `cpr_protect` is misclassified into the generic
@@ -985,8 +985,8 @@ The only identity that crosses into the engine is `SlotId`.
   trigger; pack validation rejects `pgo` effects without a `Visit` trigger that produces
   `Kill { actor: Target, target: Actor }`; pure goldens cover lethal PGO, protected PGO, and
   Bodyguard-intercepted PGO generated kills, while command/projection tests rebuild the lethal,
-  protected, and bodyguard-intercepted paths. Standard-NAR validation now also requires
-  `pgo_shoots_visitor` to be classified by `standard_nar.generated_kill_cause_policy` with
+  protected, and bodyguard-intercepted paths. Explicit night-resolution validation now also requires
+  `pgo_shoots_visitor` to be classified by `night_resolution.generated_kill_cause_policy` with
   matching trigger shape, and the pure night resolver fails closed before the trigger fixpoint if
   that table entry is missing, malformed, or names a non-trigger source. Selective im-human
   `visitor_kill` maps to
@@ -1000,25 +1000,25 @@ The only identity that crosses into the engine is `SlotId`.
   `bomb_retaliates` `Kill` trigger; im-human `vengeful` maps to role-carried
   `vengeful`/`unstoppable_vengeful` effects plus pack-declared `Kill` triggers; pack validation
   rejects Bomb/Vengeful effects without the required generated-kill trigger shape, and
-  standard-NAR validation classifies mafiascum trigger-produced kill causes through
-  `standard_nar.generated_kill_cause_policy`, including trigger `on`, actor, target, and the
+  explicit night-resolution validation classifies mafiascum trigger-produced kill causes through
+  `night_resolution.generated_kill_cause_policy`, including trigger `on`, actor, target, and the
   Strongman-style `unstoppable_vengeful_retaliates` bypass. Landed kills now also emit a distinct
   `Death` trigger observation; mafiascum `death_cursed_townie` carries `death_curse`, and the
   pack-declared `death_curse_retaliates` `Death` trigger has pure golden/trace coverage plus a
   Postgres `ResolvePhase` projection-rebuild proof. Hunter chosen
-  retaliation reads folded `RetaliationArmed` state and mafiascum standard-NAR classifies the
+  retaliation reads folded `RetaliationArmed` state and mafiascum explicit night-resolution classifies the
   folded `hunter_retaliate` generated death through
-  `standard_nar.chosen_retaliation_cause_policy`; the resolver fails closed before consuming the
+  `night_resolution.chosen_retaliation_cause_policy`; the resolver fails closed before consuming the
   folded retaliation if that policy entry is missing or malformed. Chinese `death_retaliation` gates Hunter's
   chosen shot by death cause, allowing ordinary wolf kill and suppressing Witch poison. Mafiascum
   Babysitter uses `Protect` + `Modifier::Babysitter` to generate a ward death when the protector
   dies, and the resolver rejects `babysit` when it is moved out of the ordinary protect bucket;
   mafiascum Hider uses `Mark` + `Modifier::Hider` plus
-  `standard_nar.hide_dependency_cause_policy` to generate a hider death when the host dies, with
+  `night_resolution.hide_dependency_cause_policy` to generate a hider death when the host dies, with
   malformed hide dependency source/cause maps rejected before resolution;
   Chinese Cupid/lovers uses folded link state to generate lover suicide after night kills,
   Witch poison, and day lynches, with structured trace attribution for the generated lover death
-  and standard-NAR stacking when lover suicide races a direct death. Pure goldens and
+  and explicit night-resolution stacking when lover suicide races a direct death. Pure goldens and
   command/projection rebuild proofs cover Bomb, Vengeful, Hunter, Babysitter, Hider, and
   lover-suicide paths.]
 - [x] Lynch-triggered effects. [Chinese v15 `idiot_policy` saves the first
@@ -1094,19 +1094,19 @@ The only identity that crosses into the engine is `SlotId`.
   actor-private unique visitor roles, Role Guard sends unique visitor roles to the watched
   target, and Security Guard sends visible visitor identities to the watched target, with
   Ninja-hidden visits excluded by pure golden and Postgres projection/rebuild proof;
-  Mafia Universe `night_desperado` is modeled as a non-factional standard-NAR `Kill` for
+  Mafia Universe `night_desperado` is modeled as a non-factional explicit night-resolution `Kill` for
   `town_night_desperado` and `mafia_night_desperado`, with pack-owned
-  `alignment_failback` self-death on same-alignment targets, standard-NAR protection,
+  `alignment_failback` self-death on same-alignment targets, explicit night-resolution protection,
   suppression, kill-cause cataloging, pure success/failback golden coverage, and a Postgres
   trace/projection/rebuild vertical; Mafia Universe `power_role_kill` is modeled as an ordinary
-  standard-NAR `Kill` for `town_power_role_killer` and `mafia_power_role_killer`, constrained by
+  explicit night-resolution `Kill` for `town_power_role_killer` and `mafia_power_role_killer`, constrained by
   pack-owned `target_role_filter: PowerRole` against the vanilla role set, with pure
   kill/reject goldens and a Postgres submit/resolve/rebuild vertical; Mafia Universe
   `town_vigilante` and `mafia_vigilante` map their shared source `kill` action to canonical
-  `vigilante_kill` as ordinary non-factional standard-NAR night kills, with role-scoped
+  `vigilante_kill` as ordinary non-factional explicit night-resolution night kills, with role-scoped
   inventory aliases, pure alignment-variant golden coverage, and a Postgres kill/rebuild
   vertical; Mafia Universe `town_ninja` and `mafia_ninja` map their shared source `kill`
-  action to canonical `ninja_kill` as ordinary non-factional standard-NAR night kills hidden
+  action to canonical `ninja_kill` as ordinary non-factional explicit night-resolution night kills hidden
   from graph-derived visit results by `Modifier::Ninja`, with pure Watch/Motion golden
   coverage and a Postgres private-result/rebuild vertical; Mafia Universe `mark_alignment`
   is modeled for `town_alignment_oracle` and `mafia_alignment_oracle` as a hidden persistent
@@ -1119,7 +1119,7 @@ The only identity that crosses into the engine is `SlotId`.
   target when the Oracle source dies, with pure town/mafia mark plus source-death goldens and a
   Postgres N01 mark -> rebuild -> N02 source-death public role-reveal/thread/rebuild vertical;
   Mafia Universe `janitor_kill` is modeled for `town_janitor` and `mafia_janitor` as an
-  ordinary non-factional standard-NAR night kill cause with pack-owned
+  ordinary non-factional explicit night-resolution night kill cause with pack-owned
   `death_reveal.by_cause = Concealed`, pure town/mafia concealed-death golden coverage, shipped
   pack validation, and a Postgres kill/concealed-slot-state/rebuild vertical;
   Mafia Universe `inherit_role` maps to canonical `target_backup` for
@@ -1196,7 +1196,7 @@ The only identity that crosses into the engine is `SlotId`.
   validation plus the pure night resolver now fail closed if Ninja visibility policy is missing,
   and command/projection proof resolves a Ninja kill plus Watch/Motion submissions with rebuild-stable
   hidden-visit results. Mafia Universe now also declares `town_ninja` and `mafia_ninja` with
-  canonical `ninja_kill`, standard-NAR protection/block participation, pure town/mafia
+  canonical `ninja_kill`, explicit night-resolution protection/block participation, pure town/mafia
   Watch/Motion hidden-visit coverage, and a Postgres private-result/rebuild vertical.]
 - [x] Godfather / result override.
 - [x] Miller/framer-style result tampering.
@@ -1216,11 +1216,11 @@ The only identity that crosses into the engine is `SlotId`.
   `host_resolve_phase_macho_target_ignores_doctor_protection`, which proves `Command::ResolvePhase`
   kills a Doctor-protected Macho target and rebuild preserves slot state]
 - [x] Strong-willed. [mafiascum `strong_willed_cop` declares `Modifier::StrongWilled`;
-  standard-NAR suppression validation requires the action to bypass roleblocks, pure golden plus
+  explicit night-resolution suppression validation requires the action to bypass roleblocks, pure golden plus
   trace test prove the investigation resolves through an ordinary roleblock, and
   `host_resolve_phase_strong_willed_bypasses_roleblock` proves command submission, persisted
   `ResolutionApplied`/`ResolutionTrace`, envelope audit, and rebuild.]
-- [x] Roleblockable/non-roleblockable. [mafiascum `standard_nar.suppression_policy`
+- [x] Roleblockable/non-roleblockable. [mafiascum `night_resolution.suppression_policy`
   classifies every night-capable role/item action for Roleblocker and Jailkeeper block
   sources; validator rejects missing/typo/misclassified rows; goldens prove a roleblockable
   Cop is suppressed while non-roleblockable `roleblocker_block` survives a block. Mafiascum
@@ -1242,7 +1242,7 @@ The only identity that crosses into the engine is `SlotId`.
   `ResolvePhase` persistence, projection rebuild, and reject-before-append after exhaustion. The abstract
   `core:jack_of_all_trades` inventory row is represented by concrete culture-pack JOAT roles.]
 - [x] X-voter. [mafiascum `x_voter` is modeled as a pack-declared 2.0
-  `WeightPolicy::PerRole` role, matching im-human legacy voting behavior; pure golden and
+  `WeightPolicy::PerRole` role, matching im-human voting behavior; pure golden and
   command/projection `ResolvePhase` test prove the weighted `DayVoteOutcome` and rebuild-stable
   projections. Explicit `ActionGranted`-style vote-power grants are covered separately by
   `test_dynamic_vote_effect`'s `VoteWeight` grant proof.]
@@ -1323,7 +1323,7 @@ The only identity that crosses into the engine is `SlotId`.
   `host_resolve_phase_weak_cop_dies_on_scum_result`, which proves scum result, Weak Cop
   self-death, phase announcement, envelope audit, slot-state projection, and rebuild; other weak
   reads pending]
-- [x] Blocked. [im-human `blocked` maps to standard-NAR `Roleblockable` suppression;
+- [x] Blocked. [im-human `blocked` maps to explicit night-resolution `Roleblockable` suppression;
   mafiascum validation classifies every night action as suppressed or bypassed for each block
   source, pure goldens prove roleblockable Cop suppression and non-roleblockable Roleblocker
   bypass, and `host_resolve_phase_non_roleblockable_block_survives_roleblock` proves command
@@ -1334,17 +1334,17 @@ The only identity that crosses into the engine is `SlotId`.
   mafiascum `disabled_endgame_cop` blocks at three living players and resolves above that
   threshold in pure goldens, and command validation rejects threshold use before append.]
 - [x] Lost. [`RoleModifier::Lost` models the stored mafia modifier separately from action
-  modifiers; mafiascum declares `lost_mafia_goon` plus `standard_nar.team_kill_action_ids =
+  modifiers; mafiascum declares `lost_mafia_goon` plus `night_resolution.team_kill_action_ids =
   ["factional_kill"]`; validation requires Lost roles to be mafia-aligned and to expose a
-  declared team-kill action; the pure resolver now also rejects in-memory standard-NAR
+  declared team-kill action; the pure resolver now also rejects in-memory explicit night-resolution
   team-kill bucket drift before resolution; pure goldens prove blocked-with-teammate and
   allowed-when-solo resolution, and command validation rejects Lost factional kill before append
   when another mafia is alive.]
 - [x] Recluse. [`RoleModifier::Recluse` shares the stored role-modifier/team-kill seam
   with Lost; mafiascum declares `recluse_mafia_goon` and
-  `standard_nar.team_kill_action_ids = ["factional_kill"]`; validation requires
+  `night_resolution.team_kill_action_ids = ["factional_kill"]`; validation requires
   team-kill restricted role modifiers to be mafia-aligned and expose a declared team-kill action;
-  the pure resolver now also rejects in-memory standard-NAR team-kill bucket drift before
+  the pure resolver now also rejects in-memory explicit night-resolution team-kill bucket drift before
   resolution; pure goldens prove non-Recluse teammates block while all-Recluse living mafia teams
   may submit, and command validation rejects Recluse factional kill before append when a
   non-Recluse mafia teammate is alive.]
@@ -1352,7 +1352,7 @@ The only identity that crosses into the engine is `SlotId`.
   `allows_multiple_submissions` action metadata at the base role-action submission seam:
   non-granted duplicate same-template submissions now emit `ActionInterfered.reason =
   "duplicate_submission"` unless the template carries Simultaneous. Pack validation rejects
-  Simultaneous on `standard_nar.team_kill_action_ids`; mafiascum `simultaneous_vigilante`
+  Simultaneous on `night_resolution.team_kill_action_ids`; mafiascum `simultaneous_vigilante`
   proves duplicate same-template personal night kills in pure goldens and through command
   submission, resolution, projection, and rebuild.]
 - [x] Backup. [`backup_policy` maps im-human passive `backup:<role>` effects and targeted
@@ -1456,43 +1456,43 @@ The only identity that crosses into the engine is `SlotId`.
   protect, bodyguard intercept, babysitter dependency death, commute vs kill/investigate, untargetable vs
   kill/investigate, bulletproof saves, vest consumption, and Strongman vs
   bulletproof have mafiascum goldens; roleblock suppression, protect saves, and strongman
-  protection bypass now emit structured `DecisionTrace` details; `standard_nar` now makes the
+  protection bypass now emit structured `DecisionTrace` details; `night_resolution` now makes the
   mafiascum Block/Protect/ordinary Kill/Bodyguard/Martyr/CPR/Jailkeeper/Strongman action catalog linter-backed,
   blank/empty-bucket fail-closed, and table-driven for submitted ordinary Kill/Bodyguard/Martyr/CPR/Strongman classification, and
-  `standard_nar.kill_cause_ids` catalogs submitted/chosen/generated standard-NAR kill causes and
+  `night_resolution.kill_cause_ids` catalogs submitted/chosen/generated explicit night-resolution kill causes and
   now fails closed in the pure resolver when the catalog is missing, empty, duplicate, unknown, or
   omits a derived kill cause,
-  and `standard_nar.protection_cause_policy` classifies which
+  and `night_resolution.protection_cause_policy` classifies which
   Doctor/Babysitter/Bodyguard/Martyr/CPR/Jailkeeper sources block or are bypassed by every
-  cataloged standard-NAR kill-like cause and now fails closed when the in-memory protection map is
+  cataloged explicit night-resolution kill-like cause and now fails closed when the in-memory protection map is
   missing a source or otherwise malformed;
-  `standard_nar.suppression_policy`
+  `night_resolution.suppression_policy`
   classifies which Roleblocker/Jailkeeper block sources suppress or bypass every night-capable
   role/item action and now carries explicit scope so ordinary block sources suppress only the
   first matching submitted action while catastrophic block sources suppress all matching actions,
   and now fails closed when the in-memory suppression map is missing a source or otherwise
   malformed;
-  `standard_nar.target_state_save_tags` catalogs save tags, `standard_nar.target_state_save_policy`
-  classifies which cataloged standard-NAR kill-like causes are blocked or bypassed by
+  `night_resolution.target_state_save_tags` catalogs save tags, `night_resolution.target_state_save_policy`
+  classifies which cataloged explicit night-resolution kill-like causes are blocked or bypassed by
   `bulletproof` and `bulletproof_vest`, and resolver proof shows the catalog/table controls
   Strongman-vs-bulletproof and fails closed when either is missing, a save-policy source is
   omitted, or the save-policy map is malformed at night resolution;
-  `standard_nar.target_state_gate_tags` catalogs gate tags,
-  `standard_nar.target_state_gate_policy` classifies whether `commuted`/`untargetable` block
+  `night_resolution.target_state_gate_tags` catalogs gate tags,
+  `night_resolution.target_state_gate_policy` classifies whether `commuted`/`untargetable` block
   Kill, Investigate, or both, and resolver proof shows the catalog/table controls
   commute-vs-kill/investigate and fails closed when either is missing, a gate-policy source is
   omitted, or the gate-policy map is malformed at night resolution;
-  `standard_nar.kill_stacking:
+  `night_resolution.kill_stacking:
   AggregateAttackers` now merges simultaneous landed ordinary/Strongman kills into one
   `PlayerKilled`, ORs `unstoppable`, preserves both attackers, traces
   `kill_stacked_on_existing_death`, and carries exact night death causes through
   `PhaseAnnouncement`; bodyguard-intercept generated kills that race an existing direct
   bodyguard death now merge into that same `PlayerKilled` with trace attribution; the resolver now
-  fails closed before night resolution when an in-memory standard-NAR pack omits `kill_stacking`,
-  while `standard_nar.intercept_cause_policy` owns the Bodyguard/Martyr generated death cause
+  fails closed before night resolution when an in-memory explicit night-resolution pack omits `kill_stacking`,
+  while `night_resolution.intercept_cause_policy` owns the Bodyguard/Martyr generated death cause
   names and fails closed if a source is missing or the map is otherwise malformed at night
   resolution;
-  `standard_nar.cpr_harm_cause_policy` owns deferred CPR harm death cause names, fails closed if
+  `night_resolution.cpr_harm_cause_policy` owns deferred CPR harm death cause names, fails closed if
   a source is missing or the map is otherwise malformed at night resolution, and preserves save
   provenance so only unneeded CPR emits `PlayerKilled`;
   Hider
@@ -1501,11 +1501,11 @@ The only identity that crosses into the engine is `SlotId`.
   `hider_dependency_death` and `kill_stacked_on_existing_death`; Babysitter dependency deaths
   that race an existing direct ward death now merge into that same `PlayerKilled`, preserve the
   Babysitter as attacker, OR `unstoppable`, and trace both `babysitter_dependency_death` and
-  `kill_stacked_on_existing_death`; `standard_nar.guard_dependency_cause_policy` owns Babysitter
+  `kill_stacked_on_existing_death`; `night_resolution.guard_dependency_cause_policy` owns Babysitter
   generated ward-death cause names and fails closed if a source is missing or the map is
   otherwise malformed at night resolution; Babysitter and Hider dependency deaths now emit
   structured `DecisionTrace` attribution, and
-  `standard_nar.hide_dependency_cause_policy` owns Hider generated hider-death cause names and
+  `night_resolution.hide_dependency_cause_policy` owns Hider generated hider-death cause names and
   fails closed if a source is missing or the map is otherwise malformed at night resolution;
   multiple protected ordinary kill attempts on the same target now
   preserve one `PlayerSaved` and one `kill_prevented_by_protection` trace decision per blocked
@@ -1601,14 +1601,14 @@ The only identity that crosses into the engine is `SlotId`.
   with Postgres `ResolvePhase` proofs for PGO, including protected and Bodyguard-intercepted
   generated kills, selective visitor-kill, death, EffectMarked, PhaseEnd, Win, Super-Saint Lynch,
   ordinary protected Vengeful, Strongman Vengeful Doctor/Bodyguard bypasses, and Epicmafia Bomb
-  triggers that persist and rebuild-preserve generated rows, preserve standard-NAR generated-kill
+  triggers that persist and rebuild-preserve generated rows, preserve explicit night-resolution generated-kill
   cause policy, and Hunter
   retaliation uses its armed `source_action` with a persisted `chosen_retaliation`
   `ResolutionTrace.decisions` row tying folded target/source death cause to the generated kill;
   Babysitter dependency deaths use the pack-declared
-  `standard_nar.guard_dependency_cause_policy` cause while trace decisions carry stage/source,
+  `night_resolution.guard_dependency_cause_policy` cause while trace decisions carry stage/source,
   template/submitted action ids, attacker, protector, ward, and direct-death race merge details;
-  Hider dependency deaths use the pack-declared `standard_nar.hide_dependency_cause_policy` cause
+  Hider dependency deaths use the pack-declared `night_resolution.hide_dependency_cause_policy` cause
   while trace decisions carry stage/source, template/submitted action ids, attacker, host, hider,
   and direct-death race merge details;
   lover-suicide and Wolf Beauty drag generated deaths now carry helper-enforced stage/source/detail
@@ -1632,10 +1632,10 @@ The only identity that crosses into the engine is `SlotId`.
   `ResolvePhase` proofs, while pack-declared `unstoppable_vengeful_retaliates` generated kills
   carry `Strongman`, bypass Doctor, Bodyguard, Martyr, and CPR protection, emit the same structured
   protect-vs-kill `DecisionTrace` as submitted kills, and rebuild-preserves the persisted traces;
-  `standard_nar.generated_kill_cause_policy` now owns generated-trigger shape plus
+  `night_resolution.generated_kill_cause_policy` now owns generated-trigger shape plus
   ordinary-vs-Strongman classification and fails closed for both night and day trigger fixpoints
   when entries are missing, malformed, or outside the trigger table;
-  `standard_nar.trigger_fixpoint_policy` separately owns
+  `night_resolution.trigger_fixpoint_policy` separately owns
   generated-trigger fixpoint participation, produced-kill re-entry, loop-cap source, and trace
   expectations before the resolver enters the trigger loop, fails closed for empty or unknown
   trigger-fixpoint sources, and the pack linter requires both generated-kill policy entries to move
@@ -1646,7 +1646,7 @@ The only identity that crosses into the engine is `SlotId`.
   `resolve_phase_rejects_invalid_generated_kill_ownership_before_append` prove those cross-table
   ownership gaps reject before command/projection append, and focused resolver regressions prove
   the same ownership gaps fail closed before trigger fixpoint entry;
-  `standard_nar.chosen_retaliation_cause_policy`
+  `night_resolution.chosen_retaliation_cause_policy`
   separately owns folded Hunter-style chosen-retaliation causes before `RetaliationArmed` state is
   consumed, including unknown Retaliate sources and Strongman policy drift]
 - [x] Bomb, hunter, vengeful, super-saint, executioner, condemner, PGO, visitor-kill,
@@ -1660,7 +1660,7 @@ The only identity that crosses into the engine is `SlotId`.
   loop-cap trace notes; Postgres tests
   `host_resolve_phase_persists_redirect_loop_cap_trace_note` and
   `host_resolve_phase_persists_trigger_loop_cap_trace_note` prove those diagnostics persist and
-  survive rebuild; `standard_nar_trigger_fixpoint_policy_classifies_every_generated_kill_trigger`
+  survive rebuild; `night_resolution_trigger_fixpoint_policy_classifies_every_generated_kill_trigger`
   plus the `trigger_fixpoint_policy` resolver goldens prove generated-kill trigger policy fails
   closed before the fixpoint when missing, malformed, or unknown-source; seeded command-pipeline
   replay audits cover PGO trigger diagnostics, Babysitter/Hider generated-death dependency graphs,
@@ -1910,12 +1910,12 @@ Prioritize roles that stress the architecture:
    private-result/non-leakage/memory/rebuild vertical]
 2. Doctor/bodyguard/jailkeeper/roleblocker/strongman. [done for mafiascum protection/blocking
    goldens plus structured trace decisions for roleblock suppression, protect save, and
-   strongman protection bypass; `standard_nar` lints the concrete mafiascum action ids and drives
-   submitted Bodyguard/Strongman classification; `standard_nar.kill_stacking:
+   strongman protection bypass; `night_resolution` lints the concrete mafiascum action ids and drives
+   submitted Bodyguard/Strongman classification; `night_resolution.kill_stacking:
    AggregateAttackers` proves ordinary/Strongman stacked landed-kill attribution through domain
    and command/projection rebuild tests, with pure resolver fail-closed coverage for missing
    in-memory policy; Mafiascum `faith_healer` now maps source `protect` to
-   `faith_healer_protect`, declares pack-owned `standard_nar.action_chance: 0.5`, and has
+   `faith_healer_protect`, declares pack-owned `night_resolution.action_chance: 0.5`, and has
    deterministic save/miss goldens plus a Postgres command/projection/rebuild vertical]
 3. Tracker/watcher/motion with visit graph derivation. [done for mafiascum graph-info goldens;
    Mafia Universe town/mafia Tracker, Watcher, and Motion Detector variants now reuse the same
@@ -1970,7 +1970,7 @@ round-trip state folds.
 2. Mark/Clear with expiry and visibility. [done for current v1 `Persistent`/`Resolution`
    duration and `Hidden`/`Public`/`Actor`/`Target`/`ActorAndTarget` visibility now drive
    Mark/Clear notifications; Mafia Universe `town_empowerer`, `mafia_empowerer`, and `empower`
-   now use a hidden resolution-scoped `empowered` Mark plus `standard_nar.empower_effects`
+   now use a hidden resolution-scoped `empowered` Mark plus `night_resolution.empower_effects`
    to bypass same-night block and redirect for the empowered actor, with strict pack validation,
    pure town/mafia goldens, and a Postgres trace/rebuild vertical; Mafia Universe
    `town_fruit_vendor`, `mafia_fruit_vendor`, Mafia Universe `send_fruit`, and Mafiascum
@@ -2026,14 +2026,14 @@ round-trip state folds.
    structured generated-death and stacked-death trace attribution, and command/projection
    rebuild proof for night, day, Witch-poison, and direct-death-race cascades; Hunter uses
    `IrAbility::Retaliate`, folded `RetaliationArmed`,
-   `standard_nar.chosen_retaliation_cause_policy`, goldens,
+   `night_resolution.chosen_retaliation_cause_policy`, goldens,
    resolver fail-closed proof, and helper-enforced command/projection trace/rebuild proof; Chinese Hunter adds v14 cause-gated
    `death_retaliation` so `wolf_night_kill` and day-vote deaths fire the chosen shot while
    `poison_potion` suppresses it with structured trace attribution, with goldens plus
    command/projection rebuild proof for the wolf-kill, day-vote, and poison branches; Babysitter uses
    `Protect` + `Modifier::Babysitter` with a golden, structured dependency-death trace
    attribution, and command/projection rebuild proof; Hider uses `Mark` +
-   `Modifier::Hider` with pack-owned `standard_nar.hide_dependency_cause_policy` cause
+   `Modifier::Hider` with pack-owned `night_resolution.hide_dependency_cause_policy` cause
    attribution, goldens, structured dependency-death trace attribution, and command/projection
    rebuild proof; trigger-produced kills now cover ordinary Doctor protection,
    Bodyguard and Martyr interception, and pack-declared Strongman bypass of Doctor, Bodyguard, and Martyr through the
@@ -2179,7 +2179,7 @@ without recomputing rules client-side.
    `audit_resolution`, exact anchored ITA hit/miss generated rows in `inspect_trace`, and
    `audit_rebuild`; ITA better/worse chance, target evade, one-shot shields, and a composed
    evade+shield role are modeled as v32 modifier components/role refs with golden plus
-   command/projection coverage; basic standard-NAR roles/actions now cover `kill` ->
+   command/projection coverage; basic explicit night-resolution roles/actions now cover `kill` ->
    `factional_kill`, `protect` -> `doctor_protect`, `block` -> `roleblocker_block` for
    `town_roleblocker`, `mafia_roleblocker`, and the one-shot `town_jack_of_all_trades` /
    `mafia_jack_of_all_trades` bundles, `jail`, `bodyguard`, Martyr, CPR, and
@@ -2221,7 +2221,7 @@ without recomputing rules client-side.
    `effect_source_death_reveals.Role`, a hidden persistent `role_oracle_mark`, pure mark and
    source-death reveal goldens, and a Postgres N01 mark -> rebuild -> N02 Oracle death public
    role-reveal/thread/rebuild vertical; the MU Janitor set now covers `town_janitor`,
-   `mafia_janitor`, and `janitor_kill` through a standard-NAR kill cause plus pack-owned
+   `mafia_janitor`, and `janitor_kill` through a explicit night-resolution kill cause plus pack-owned
    `death_reveal.by_cause = Concealed`, pure town/mafia concealed-death golden coverage, shipped
    pack validation, and a Postgres kill/concealed-slot-state/rebuild vertical; the MU Backup set
    now covers `town_universal_backup`, `mafia_universal_backup`, and `inherit_role` through
@@ -2234,7 +2234,7 @@ without recomputing rules client-side.
    canonical pack actions with pure swap/cycle goldens plus a Postgres composed
    swap+retarget trace/rebuild vertical; the MU Empowerer set now covers `town_empowerer`,
    `mafia_empowerer`, and `empower` through a hidden resolution-scoped `empowered` Mark and
-   `standard_nar.empower_effects`, proving same-night block/redirect bypass in pure
+   `night_resolution.empower_effects`, proving same-night block/redirect bypass in pure
    town/mafia goldens plus a Postgres trace/rebuild vertical; the MU commute/rolestop set now covers
    `town_commuter`, `mafia_commuter`, `commute`, `town_rolestopper`,
    `mafia_rolestopper`, and `rolestop` through pack-owned target-state gates, pure
@@ -2264,16 +2264,16 @@ without recomputing rules client-side.
    rows and no persistent `slot_effects`, with pure culture-pack goldens and Postgres
    notification/rebuild verticals;
    MU `town_night_desperado`, `mafia_night_desperado`, and `night_desperado` are now modeled
-   as non-factional standard-NAR kills with pack-owned `alignment_failback` self-death on
+   as non-factional explicit night-resolution kills with pack-owned `alignment_failback` self-death on
    same-alignment targets, pure success/failback golden coverage, and a Postgres
    trace/projection/rebuild vertical; MU `town_power_role_killer`,
-   `mafia_power_role_killer`, and `power_role_kill` are now modeled as ordinary standard-NAR
+   `mafia_power_role_killer`, and `power_role_kill` are now modeled as ordinary explicit night-resolution
    kills gated by pack-owned `target_role_filter: PowerRole`, with command-time vanilla-target
    rejection, pure resolver `invalid_target_role` coverage, and a Postgres kill/rebuild
    vertical; MU `town_vigilante`, `mafia_vigilante`, and `vigilante_kill` are now modeled as
-   ordinary non-factional standard-NAR night kills with role-scoped source `kill` aliases, pure
+   ordinary non-factional explicit night-resolution night kills with role-scoped source `kill` aliases, pure
    alignment-variant golden coverage, and a Postgres kill/rebuild vertical; MU `town_ninja`,
-   `mafia_ninja`, and `ninja_kill` are now modeled as ordinary non-factional standard-NAR night
+   `mafia_ninja`, and `ninja_kill` are now modeled as ordinary non-factional explicit night-resolution night
    kills hidden from graph-derived visit results, with pure Watch/Motion coverage and a
    Postgres private-result/rebuild vertical; MU `town_day_vigilante`, `mafia_day_vigilante`,
    and `day_vigilante_kill` are now modeled as ordinary pre-vote Day kills with pure
@@ -3253,7 +3253,7 @@ coverage, and a playable vertical scenario through the command pipeline.
    `town_alignment_oracle`, `mafia_alignment_oracle`, `town_role_oracle`,
    `mafia_role_oracle`, `town_janitor`, `mafia_janitor`, `town_universal_backup`,
    `mafia_universal_backup`, and `serial_killer`; its
-   `serial_killer_kill` is a standard-NAR protectable/blockable kill cause, with pure golden and
+   `serial_killer_kill` is a explicit night-resolution protectable/blockable kill cause, with pure golden and
    Postgres private-result/rebuild proof covering the alias roles. Mafiascum `mailman`, `observe`, and `report` now map to v54
    `InfoResult` through canonical `Info` actions and the new `player_info_result` projection,
    covering the generic info scan/mail/report surface; Mafiascum source `result_mod` is now mapped for canonical Framer

@@ -1461,16 +1461,16 @@ async fn resolve_phase_rejects_invalid_pack_precedence_before_append(pool: PgPoo
             err,
             Reject::Internal(ref message)
                 if message.contains("load pack test_invalid_precedence")
-                    && message.contains("standard_nar.precedence")
+                    && message.contains("night_resolution.precedence")
                     && message.contains(
                         "requires Block precedence before suppressed ability `Protect`"
                     )
                     && message.contains("requires Block precedence before suppressed ability `Kill`")
-                    && message.contains("standard_nar.strongman_bypasses_protect")
+                    && message.contains("night_resolution.strongman_bypasses_protect")
                     && message.contains("requires strongman_bypasses_protect true")
-                    && message.contains("standard_nar.suppression_policy.roleblocker_block.scope")
+                    && message.contains("night_resolution.suppression_policy.roleblocker_block.scope")
                     && message
-                        .contains("standard_nar suppression policy must declare scope")
+                        .contains("night_resolution suppression policy must declare scope")
         ),
         "unexpected invalid-pack rejection: {err:?}"
     );
@@ -1773,25 +1773,25 @@ async fn resolve_phase_rejects_invalid_target_state_policy_before_append(pool: P
         Command::ResolvePhase { game, seed: 9906 },
     )
     .await
-    .expect_err("invalid target-state standard_nar policy must reject before resolving");
+    .expect_err("invalid target-state night_resolution policy must reject before resolving");
     assert!(
         matches!(
             err,
             Reject::Internal(ref message)
                 if message.contains("load pack test_invalid_target_state_policy")
-                    && message.contains("standard_nar.target_state_save_policy")
+                    && message.contains("night_resolution.target_state_save_policy")
                     && message.contains(
-                        "enabled standard_nar policy must classify target-state saves"
+                        "explicit night_resolution policy must classify target-state saves"
                     )
                     && message.contains(
-                        "standard_nar target-state save `bulletproof` must classify every kill cause"
+                        "night_resolution target-state save `bulletproof` must classify every kill cause"
                     )
-                    && message.contains("standard_nar.target_state_gate_policy")
+                    && message.contains("night_resolution.target_state_gate_policy")
                     && message.contains(
-                        "enabled standard_nar policy must classify target-state gates"
+                        "explicit night_resolution policy must classify target-state gates"
                     )
                     && message.contains(
-                        "standard_nar target-state gate `commuted` must classify blocked abilities"
+                        "night_resolution target-state gate `commuted` must classify blocked abilities"
                     )
         ),
         "unexpected invalid-target-state-policy rejection: {err:?}"
@@ -1852,7 +1852,7 @@ async fn resolve_phase_rejects_invalid_generated_kill_ownership_before_append(po
             Reject::Internal(ref message)
                 if message.contains("load pack test_invalid_generated_kill_ownership")
                     && message.contains(
-                        "standard_nar.generated_kill_ownership.pgo_shoots_visitor"
+                        "night_resolution.generated_kill_ownership.pgo_shoots_visitor"
                     )
                     && message.contains(
                         "generated kill trigger `pgo_shoots_visitor` is not owned by protection source `doctor_protect`"
@@ -2111,7 +2111,7 @@ async fn resolve_phase_rejects_invalid_win_policy_contract_before_append(pool: P
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
-async fn resolve_phase_uses_pack_derived_non_legacy_precedence_order(pool: PgPool) {
+async fn resolve_phase_uses_pack_derived_custom_precedence_order(pool: PgPool) {
     let host_id = "host_h";
     let game = Uuid::new_v4();
     seed_open_night_game_with_pack(
@@ -50432,7 +50432,7 @@ async fn host_resolve_phase_carries_mafia_universe_empower_bypass(pool: PgPool) 
         .expect("trace decisions");
     assert!(
         decisions.iter().any(|row| {
-            row["source"] == "standard_nar.empower_effects"
+            row["source"] == "night_resolution.empower_effects"
                 && row["outcome"] == "action_suppression_bypassed"
                 && row["detail"]["actor"] == "slot_2"
                 && row["detail"]["action_id"] == "mu_cop_empowered_n01"
@@ -50441,7 +50441,7 @@ async fn host_resolve_phase_carries_mafia_universe_empower_bypass(pool: PgPool) 
     );
     assert!(
         decisions.iter().any(|row| {
-            row["source"] == "standard_nar.empower_effects"
+            row["source"] == "night_resolution.empower_effects"
                 && row["outcome"] == "action_redirect_bypassed"
                 && row["detail"]["actor"] == "slot_2"
                 && row["detail"]["action_id"] == "mu_cop_empowered_n01"
@@ -64360,7 +64360,7 @@ async fn host_resolve_phase_strong_willed_bypasses_roleblock(pool: PgPool) {
         trace.decisions.iter().all(|decision| {
             decision.outcome != "action_suppressed" || decision.detail["actor"] != "slot_2"
         }),
-        "Strong-Willed action must bypass standard-NAR suppression trace decisions"
+        "Strong-Willed action must bypass explicit night-resolution suppression trace decisions"
     );
 
     let audit = audit_resolution_envelopes(&pool, game)
@@ -64556,7 +64556,7 @@ async fn host_resolve_phase_non_roleblockable_block_survives_roleblock(pool: PgP
         trace.decisions.iter().all(|decision| {
             decision.outcome != "action_suppressed" || decision.detail["actor"] != "slot_3"
         }),
-        "roleblocker_block must bypass standard-NAR suppression"
+        "roleblocker_block must bypass explicit night-resolution suppression"
     );
 
     let audit = audit_resolution_envelopes(&pool, game)

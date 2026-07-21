@@ -2,6 +2,9 @@
   "name": "test_dynamic_vote_effect",
   "version": 1,
   "ir_version": 46,
+  "night_resolution": {
+    "mode": "Generic"
+  },
   "roles": {
     "vanilla_townie": {
       "description": "Town-aligned test role with no actions.",

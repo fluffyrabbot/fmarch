@@ -43,6 +43,7 @@ fn valid_pack_value() -> Value {
         "name": "testpack",
         "version": 1,
         "ir_version": 1,
+        "night_resolution": { "mode": "Generic" },
         "roles": {
             "townie": {
                 "description": "Town.",
@@ -239,6 +240,35 @@ fn death_reveal_policy_requires_v26_known_causes_and_effects() {
 #[test]
 fn valid_pack_fixture_validates() {
     validate_pack(&pack_from_value(valid_pack_value())).unwrap();
+}
+
+#[test]
+fn night_resolution_mode_is_required() {
+    let mut missing_contract = valid_pack_value();
+    missing_contract
+        .as_object_mut()
+        .unwrap()
+        .remove("night_resolution");
+    let err = serde_json::from_value::<Pack>(missing_contract).unwrap_err();
+    assert!(err.to_string().contains("missing field `night_resolution`"));
+
+    let mut missing_mode = valid_pack_value();
+    missing_mode["night_resolution"] = json!({});
+    let err = serde_json::from_value::<Pack>(missing_mode).unwrap_err();
+    assert!(err.to_string().contains("missing field `mode`"));
+
+    let mut unknown_mode = valid_pack_value();
+    unknown_mode["night_resolution"] = json!({ "mode": "Compatibility" });
+    let err = serde_json::from_value::<Pack>(unknown_mode).unwrap_err();
+    assert!(err.to_string().contains("unknown variant `Compatibility`"));
+
+    let mut removed_switch = valid_pack_value();
+    removed_switch["night_resolution"] = json!({
+        "mode": "Generic",
+        "enabled": true
+    });
+    let err = serde_json::from_value::<Pack>(removed_switch).unwrap_err();
+    assert!(err.to_string().contains("unknown field `enabled`"));
 }
 
 #[test]
@@ -626,12 +656,12 @@ fn lost_role_modifier_matches_team_kill_contract() {
     );
 
     let mut malformed = value.clone();
-    malformed["standard_nar"]["team_kill_action_ids"] = json!([]);
+    malformed["night_resolution"]["team_kill_action_ids"] = json!([]);
     let err = validate_pack(&pack_from_value(malformed)).unwrap_err();
     assert_issue(
         &err,
-        "standard_nar.team_kill_action_ids",
-        "team-kill restricted role modifiers require standard_nar.team_kill_action_ids",
+        "night_resolution.team_kill_action_ids",
+        "team-kill restricted role modifiers require night_resolution.team_kill_action_ids",
     );
 
     let mut malformed = value.clone();
@@ -640,7 +670,7 @@ fn lost_role_modifier_matches_team_kill_contract() {
     assert_issue(
         &err,
         "roles.lost_mafia_goon",
-        "team-kill restricted role modifiers must expose a standard_nar team kill action",
+        "team-kill restricted role modifiers must expose a night_resolution team kill action",
     );
 
     let mut malformed = value.clone();
@@ -649,21 +679,21 @@ fn lost_role_modifier_matches_team_kill_contract() {
     assert_issue(
         &err,
         "roles.recluse_mafia_goon",
-        "team-kill restricted role modifiers must expose a standard_nar team kill action",
+        "team-kill restricted role modifiers must expose a night_resolution team kill action",
     );
 
     let mut malformed = value;
-    malformed["standard_nar"]["team_kill_action_ids"] = json!(["night_kill"]);
+    malformed["night_resolution"]["team_kill_action_ids"] = json!(["night_kill"]);
     let err = validate_pack(&pack_from_value(malformed)).unwrap_err();
     assert_issue(
         &err,
         "roles.lost_mafia_goon",
-        "team-kill restricted role modifiers must expose a standard_nar team kill action",
+        "team-kill restricted role modifiers must expose a night_resolution team kill action",
     );
     assert_issue(
         &err,
         "roles.recluse_mafia_goon",
-        "team-kill restricted role modifiers must expose a standard_nar team kill action",
+        "team-kill restricted role modifiers must expose a night_resolution team kill action",
     );
 }
 
@@ -678,7 +708,7 @@ fn simultaneous_modifier_is_not_legal_on_team_kills() {
     assert_issue(
         &err,
         "roles.mafia_goon.actions[0].modifiers",
-        "Simultaneous actions must not be standard_nar team kills",
+        "Simultaneous actions must not be night_resolution team kills",
     );
 }
 
@@ -1684,7 +1714,7 @@ fn invalid_win_policy_contract_fixture_is_rejected_by_pack_linter() {
 fn source_action_ids_are_validated() {
     let mut value = valid_pack_value();
     let action = &mut value["roles"]["cop"]["actions"][0];
-    action["source_ids"] = json!(["", "investigate", "legacy_scan", "legacy_scan"]);
+    action["source_ids"] = json!(["", "investigate", "duplicate_scan", "duplicate_scan"]);
 
     let err = validate_pack(&pack_from_value(value)).unwrap_err();
     assert_issue(
@@ -1700,7 +1730,7 @@ fn source_action_ids_are_validated() {
     assert_issue(
         &err,
         "roles.cop.actions[0].source_ids",
-        "duplicate source action id `legacy_scan`",
+        "duplicate source action id `duplicate_scan`",
     );
 }
 
@@ -2439,11 +2469,11 @@ fn effect_policy_tags_are_strict() {
 }
 
 #[test]
-fn standard_nar_empower_effects_are_strict() {
+fn night_resolution_empower_effects_are_strict() {
     let mut value = serde_json::to_value(load_pack_named("mafia_universe")).unwrap();
     validate_pack(&pack_from_value(value.clone())).unwrap();
 
-    value["standard_nar"]["empower_effects"] = json!([
+    value["night_resolution"]["empower_effects"] = json!([
         "",
         "missing_effect",
         "poisoned",
@@ -2454,32 +2484,32 @@ fn standard_nar_empower_effects_are_strict() {
     let err = validate_pack(&pack_from_value(value)).unwrap_err();
     assert_issue(
         &err,
-        "standard_nar.empower_effects",
+        "night_resolution.empower_effects",
         "empower effect tag must not be empty",
     );
     assert_issue(
         &err,
-        "standard_nar.empower_effects",
-        "unknown standard_nar empower effect `missing_effect`",
+        "night_resolution.empower_effects",
+        "unknown night_resolution empower effect `missing_effect`",
     );
     assert_issue(
         &err,
-        "standard_nar.empower_effects",
-        "standard_nar empower effect `poisoned` must be resolution-scoped",
+        "night_resolution.empower_effects",
+        "night_resolution empower effect `poisoned` must be resolution-scoped",
     );
     assert_issue(
         &err,
-        "standard_nar.empower_effects",
-        "standard_nar empower effect `godfather` must be resolution-scoped",
+        "night_resolution.empower_effects",
+        "night_resolution empower effect `godfather` must be resolution-scoped",
     );
     assert_issue(
         &err,
-        "standard_nar.empower_effects",
-        "standard_nar empower effect `godfather` must be produced by a night Mark action",
+        "night_resolution.empower_effects",
+        "night_resolution empower effect `godfather` must be produced by a night Mark action",
     );
     assert_issue(
         &err,
-        "standard_nar.empower_effects",
+        "night_resolution.empower_effects",
         "duplicate value `empowered`",
     );
 }
@@ -3888,171 +3918,171 @@ fn guard_policy_requires_v13_action_refs_and_supported_same_target_rule() {
 }
 
 #[test]
-fn standard_nar_policy_requires_action_shapes_and_precedence_edges() {
+fn night_resolution_policy_requires_action_shapes_and_precedence_edges() {
     let value = serde_json::to_value(load_pack_named("mafiascum")).unwrap();
     validate_pack(&pack_from_value(value.clone())).unwrap();
 
     let mut malformed = value;
-    malformed["standard_nar"]["kill_stacking"] = Value::Null;
-    malformed["standard_nar"]["block_action_ids"] = json!(["missing_block"]);
-    malformed["standard_nar"]["protect_action_ids"] = json!([]);
-    malformed["standard_nar"]["kill_action_ids"] = json!(["doctor_protect"]);
-    malformed["standard_nar"]["bodyguard_action_ids"] = json!(["doctor_protect"]);
-    malformed["standard_nar"]["martyr_action_ids"] = json!(["bodyguard"]);
-    malformed["standard_nar"]["cpr_action_ids"] = json!(["doctor_protect"]);
-    malformed["standard_nar"]["jailkeep_action_ids"] = json!(["roleblocker_block"]);
-    malformed["standard_nar"]["strongman_action_ids"] = json!(["factional_kill"]);
-    malformed["standard_nar"]["strongman_bypasses_protect"] = json!(false);
-    malformed["standard_nar"]["kill_cause_ids"] = json!([]);
-    malformed["standard_nar"]["target_state_save_tags"] = json!([]);
-    malformed["standard_nar"]["target_state_gate_tags"] = json!([]);
-    malformed["standard_nar"]["intercept_cause_policy"] = json!({});
-    malformed["standard_nar"]["cpr_harm_cause_policy"] = json!({});
-    malformed["standard_nar"]["guard_dependency_cause_policy"] = json!({});
-    malformed["standard_nar"]["hide_dependency_cause_policy"] = json!({});
-    malformed["standard_nar"]["chosen_retaliation_cause_policy"] = json!({});
-    malformed["standard_nar"]["generated_kill_cause_policy"] = json!({});
-    malformed["standard_nar"]["trigger_fixpoint_policy"] = json!({});
-    malformed["standard_nar"]["protection_cause_policy"] = json!({});
-    malformed["standard_nar"]["target_state_save_policy"] = json!({});
-    malformed["standard_nar"]["target_state_gate_policy"] = json!({});
-    malformed["standard_nar"]["suppression_policy"] = json!({});
+    malformed["night_resolution"]["kill_stacking"] = Value::Null;
+    malformed["night_resolution"]["block_action_ids"] = json!(["missing_block"]);
+    malformed["night_resolution"]["protect_action_ids"] = json!([]);
+    malformed["night_resolution"]["kill_action_ids"] = json!(["doctor_protect"]);
+    malformed["night_resolution"]["bodyguard_action_ids"] = json!(["doctor_protect"]);
+    malformed["night_resolution"]["martyr_action_ids"] = json!(["bodyguard"]);
+    malformed["night_resolution"]["cpr_action_ids"] = json!(["doctor_protect"]);
+    malformed["night_resolution"]["jailkeep_action_ids"] = json!(["roleblocker_block"]);
+    malformed["night_resolution"]["strongman_action_ids"] = json!(["factional_kill"]);
+    malformed["night_resolution"]["strongman_bypasses_protect"] = json!(false);
+    malformed["night_resolution"]["kill_cause_ids"] = json!([]);
+    malformed["night_resolution"]["target_state_save_tags"] = json!([]);
+    malformed["night_resolution"]["target_state_gate_tags"] = json!([]);
+    malformed["night_resolution"]["intercept_cause_policy"] = json!({});
+    malformed["night_resolution"]["cpr_harm_cause_policy"] = json!({});
+    malformed["night_resolution"]["guard_dependency_cause_policy"] = json!({});
+    malformed["night_resolution"]["hide_dependency_cause_policy"] = json!({});
+    malformed["night_resolution"]["chosen_retaliation_cause_policy"] = json!({});
+    malformed["night_resolution"]["generated_kill_cause_policy"] = json!({});
+    malformed["night_resolution"]["trigger_fixpoint_policy"] = json!({});
+    malformed["night_resolution"]["protection_cause_policy"] = json!({});
+    malformed["night_resolution"]["target_state_save_policy"] = json!({});
+    malformed["night_resolution"]["target_state_gate_policy"] = json!({});
+    malformed["night_resolution"]["suppression_policy"] = json!({});
     malformed["precedence"] = json!([]);
 
     let err = validate_pack(&pack_from_value(malformed)).unwrap_err();
     assert_issue(
         &err,
-        "standard_nar.kill_stacking",
+        "night_resolution.kill_stacking",
         "requires kill_stacking AggregateAttackers",
     );
     assert_issue(
         &err,
-        "standard_nar.block_action_ids",
-        "unknown standard_nar action `missing_block`",
+        "night_resolution.block_action_ids",
+        "unknown night_resolution action `missing_block`",
     );
     assert_issue(
         &err,
-        "standard_nar.protect_action_ids",
+        "night_resolution.protect_action_ids",
         "must declare protect_action_ids",
     );
     assert_issue(
         &err,
-        "standard_nar.kill_action_ids",
+        "night_resolution.kill_action_ids",
         "must be a night/any Kill without Strongman/Cpr action",
     );
     assert_issue(
         &err,
-        "standard_nar.bodyguard_action_ids",
+        "night_resolution.bodyguard_action_ids",
         "must be a night/any Protect with Bodyguard action",
     );
     assert_issue(
         &err,
-        "standard_nar.martyr_action_ids",
+        "night_resolution.martyr_action_ids",
         "must be a night/any Protect with Martyr action",
     );
     assert_issue(
         &err,
-        "standard_nar.cpr_action_ids",
+        "night_resolution.cpr_action_ids",
         "must be a night/any Protect plus Kill with Cpr action",
     );
     assert_issue(
         &err,
-        "standard_nar.jailkeep_action_ids",
+        "night_resolution.jailkeep_action_ids",
         "must be a night/any Block plus Protect action",
     );
     assert_issue(
         &err,
-        "standard_nar.strongman_action_ids",
+        "night_resolution.strongman_action_ids",
         "must be a night/any Kill with Strongman action",
     );
     assert_issue(
         &err,
-        "standard_nar.strongman_bypasses_protect",
+        "night_resolution.strongman_bypasses_protect",
         "requires strongman_bypasses_protect true",
     );
     assert_issue(
         &err,
-        "standard_nar.kill_cause_ids",
+        "night_resolution.kill_cause_ids",
         "must declare kill_cause_ids",
     );
     assert_issue(
         &err,
-        "standard_nar.target_state_save_tags",
+        "night_resolution.target_state_save_tags",
         "must declare target-state save tags",
     );
     assert_issue(
         &err,
-        "standard_nar.target_state_gate_tags",
+        "night_resolution.target_state_gate_tags",
         "must declare target-state gate tags",
     );
     assert_issue(
         &err,
-        "standard_nar.intercept_cause_policy",
+        "night_resolution.intercept_cause_policy",
         "must classify intercept causes",
     );
     assert_issue(
         &err,
-        "standard_nar.cpr_harm_cause_policy",
+        "night_resolution.cpr_harm_cause_policy",
         "must classify CPR harm causes",
     );
     assert_issue(
         &err,
-        "standard_nar.guard_dependency_cause_policy",
+        "night_resolution.guard_dependency_cause_policy",
         "must classify guard dependency causes",
     );
     assert_issue(
         &err,
-        "standard_nar.hide_dependency_cause_policy",
+        "night_resolution.hide_dependency_cause_policy",
         "must classify hide dependency causes",
     );
     assert_issue(
         &err,
-        "standard_nar.chosen_retaliation_cause_policy",
+        "night_resolution.chosen_retaliation_cause_policy",
         "must classify chosen retaliation causes",
     );
     assert_issue(
         &err,
-        "standard_nar.generated_kill_cause_policy",
+        "night_resolution.generated_kill_cause_policy",
         "must classify generated kill causes",
     );
     assert_issue(
         &err,
-        "standard_nar.trigger_fixpoint_policy",
+        "night_resolution.trigger_fixpoint_policy",
         "must classify trigger fixpoint participation",
     );
     assert_issue(
         &err,
-        "standard_nar.protection_cause_policy",
+        "night_resolution.protection_cause_policy",
         "must classify protection causes",
     );
     assert_issue(
         &err,
-        "standard_nar.suppression_policy",
+        "night_resolution.suppression_policy",
         "must classify roleblock suppression",
     );
     assert_issue(
         &err,
-        "standard_nar.precedence",
+        "night_resolution.precedence",
         "requires Block precedence over Protect and Kill",
     );
     assert_issue(
         &err,
-        "standard_nar.precedence",
+        "night_resolution.precedence",
         "requires Protect beats Kill and is blocked_by Block",
     );
     assert_issue(
         &err,
-        "standard_nar.precedence",
+        "night_resolution.precedence",
         "requires Kill blocked_by Block and Protect",
     );
 }
 
 #[test]
-fn standard_nar_kill_cause_catalog_matches_pack_sources() {
+fn night_resolution_kill_cause_catalog_matches_pack_sources() {
     let mut value = serde_json::to_value(load_pack_named("mafiascum")).unwrap();
     validate_pack(&pack_from_value(value.clone())).unwrap();
 
-    value["standard_nar"]["kill_cause_ids"] = json!([
+    value["night_resolution"]["kill_cause_ids"] = json!([
         "factional_kill",
         "hunter_retaliate",
         "ignite",
@@ -4070,290 +4100,290 @@ fn standard_nar_kill_cause_catalog_matches_pack_sources() {
     let err = validate_pack(&pack_from_value(value)).unwrap_err();
     assert_issue(
         &err,
-        "standard_nar.kill_cause_ids",
-        "standard_nar kill_cause_ids must include `pgo_shoots_visitor`",
+        "night_resolution.kill_cause_ids",
+        "night_resolution kill_cause_ids must include `pgo_shoots_visitor`",
     );
     assert_issue(
         &err,
-        "standard_nar.kill_cause_ids",
-        "unknown standard_nar kill cause `missing_cause`",
+        "night_resolution.kill_cause_ids",
+        "unknown night_resolution kill cause `missing_cause`",
     );
     assert_issue(
         &err,
-        "standard_nar.kill_cause_ids",
+        "night_resolution.kill_cause_ids",
         "duplicate value `night_kill`",
     );
     assert_issue(
         &err,
-        "standard_nar.kill_cause_ids",
-        "standard_nar kill cause id must not be empty",
+        "night_resolution.kill_cause_ids",
+        "night_resolution kill cause id must not be empty",
     );
 }
 
 #[test]
-fn standard_nar_target_state_tag_catalogs_match_pack_sources() {
+fn night_resolution_target_state_tag_catalogs_match_pack_sources() {
     let mut value = serde_json::to_value(load_pack_named("mafiascum")).unwrap();
     validate_pack(&pack_from_value(value.clone())).unwrap();
 
-    value["standard_nar"]["target_state_save_tags"] =
+    value["night_resolution"]["target_state_save_tags"] =
         json!(["bulletproof", "missing_save", "bulletproof", ""]);
-    value["standard_nar"]["target_state_gate_tags"] =
+    value["night_resolution"]["target_state_gate_tags"] =
         json!(["commuted", "missing_gate", "commuted", ""]);
 
     let err = validate_pack(&pack_from_value(value)).unwrap_err();
     assert_issue(
         &err,
-        "standard_nar.target_state_save_tags",
-        "standard_nar target_state_save_tags must include `bulletproof_vest`",
+        "night_resolution.target_state_save_tags",
+        "night_resolution target_state_save_tags must include `bulletproof_vest`",
     );
     assert_issue(
         &err,
-        "standard_nar.target_state_save_tags",
-        "unknown standard_nar target-state save tag `missing_save`",
+        "night_resolution.target_state_save_tags",
+        "unknown night_resolution target-state save tag `missing_save`",
     );
     assert_issue(
         &err,
-        "standard_nar.target_state_save_tags",
+        "night_resolution.target_state_save_tags",
         "duplicate value `bulletproof`",
     );
     assert_issue(
         &err,
-        "standard_nar.target_state_save_tags",
-        "standard_nar target-state save tag must not be empty",
+        "night_resolution.target_state_save_tags",
+        "night_resolution target-state save tag must not be empty",
     );
     assert_issue(
         &err,
-        "standard_nar.target_state_gate_tags",
-        "standard_nar target_state_gate_tags must include `untargetable`",
+        "night_resolution.target_state_gate_tags",
+        "night_resolution target_state_gate_tags must include `untargetable`",
     );
     assert_issue(
         &err,
-        "standard_nar.target_state_gate_tags",
-        "unknown standard_nar target-state gate tag `missing_gate`",
+        "night_resolution.target_state_gate_tags",
+        "unknown night_resolution target-state gate tag `missing_gate`",
     );
     assert_issue(
         &err,
-        "standard_nar.target_state_gate_tags",
+        "night_resolution.target_state_gate_tags",
         "duplicate value `commuted`",
     );
     assert_issue(
         &err,
-        "standard_nar.target_state_gate_tags",
-        "standard_nar target-state gate tag must not be empty",
+        "night_resolution.target_state_gate_tags",
+        "night_resolution target-state gate tag must not be empty",
     );
 }
 
 #[test]
-fn standard_nar_cpr_harm_cause_policy_classifies_every_cpr_action() {
+fn night_resolution_cpr_harm_cause_policy_classifies_every_cpr_action() {
     let mut value = serde_json::to_value(load_pack_named("mafiascum")).unwrap();
     validate_pack(&pack_from_value(value.clone())).unwrap();
 
-    value["standard_nar"]["cpr_harm_cause_policy"]["cpr_protect"] = json!("factional_kill");
-    value["standard_nar"]["cpr_harm_cause_policy"]["unknown_cpr"] = json!("custom_cpr_harm");
+    value["night_resolution"]["cpr_harm_cause_policy"]["cpr_protect"] = json!("factional_kill");
+    value["night_resolution"]["cpr_harm_cause_policy"]["unknown_cpr"] = json!("custom_cpr_harm");
 
     let err = validate_pack(&pack_from_value(value)).unwrap_err();
     assert_issue(
         &err,
-        "standard_nar.cpr_harm_cause_policy.cpr_protect",
+        "night_resolution.cpr_harm_cause_policy.cpr_protect",
         "must not reuse a direct kill cause",
     );
     assert_issue(
         &err,
-        "standard_nar.cpr_harm_cause_policy.unknown_cpr",
-        "unknown standard_nar CPR source",
+        "night_resolution.cpr_harm_cause_policy.unknown_cpr",
+        "unknown night_resolution CPR source",
     );
 
     let mut value = serde_json::to_value(load_pack_named("mafiascum")).unwrap();
-    value["standard_nar"]["cpr_harm_cause_policy"]["cpr_protect"] = json!("");
+    value["night_resolution"]["cpr_harm_cause_policy"]["cpr_protect"] = json!("");
     let err = validate_pack(&pack_from_value(value)).unwrap_err();
     assert_issue(
         &err,
-        "standard_nar.cpr_harm_cause_policy.cpr_protect",
+        "night_resolution.cpr_harm_cause_policy.cpr_protect",
         "CPR harm cause must not be empty",
     );
 
     let mut value = serde_json::to_value(load_pack_named("mafiascum")).unwrap();
-    value["standard_nar"]["cpr_harm_cause_policy"]
+    value["night_resolution"]["cpr_harm_cause_policy"]
         .as_object_mut()
         .unwrap()
         .remove("cpr_protect");
     let err = validate_pack(&pack_from_value(value)).unwrap_err();
     assert_issue(
         &err,
-        "standard_nar.cpr_harm_cause_policy",
+        "night_resolution.cpr_harm_cause_policy",
         "CPR action `cpr_protect` must declare harm cause",
     );
 }
 
 #[test]
-fn standard_nar_guard_dependency_cause_policy_classifies_every_babysitter_action() {
+fn night_resolution_guard_dependency_cause_policy_classifies_every_babysitter_action() {
     let mut value = serde_json::to_value(load_pack_named("mafiascum")).unwrap();
     validate_pack(&pack_from_value(value.clone())).unwrap();
 
-    value["standard_nar"]["guard_dependency_cause_policy"]["babysit"] = json!("factional_kill");
-    value["standard_nar"]["guard_dependency_cause_policy"]["unknown_guard"] =
+    value["night_resolution"]["guard_dependency_cause_policy"]["babysit"] = json!("factional_kill");
+    value["night_resolution"]["guard_dependency_cause_policy"]["unknown_guard"] =
         json!("custom_guard_dependency");
 
     let err = validate_pack(&pack_from_value(value)).unwrap_err();
     assert_issue(
         &err,
-        "standard_nar.guard_dependency_cause_policy.babysit",
+        "night_resolution.guard_dependency_cause_policy.babysit",
         "must not reuse a direct kill cause",
     );
     assert_issue(
         &err,
-        "standard_nar.guard_dependency_cause_policy.unknown_guard",
-        "unknown standard_nar guard dependency source",
+        "night_resolution.guard_dependency_cause_policy.unknown_guard",
+        "unknown night_resolution guard dependency source",
     );
 
     let mut value = serde_json::to_value(load_pack_named("mafiascum")).unwrap();
-    value["standard_nar"]["guard_dependency_cause_policy"]["babysit"] = json!("");
+    value["night_resolution"]["guard_dependency_cause_policy"]["babysit"] = json!("");
     let err = validate_pack(&pack_from_value(value)).unwrap_err();
     assert_issue(
         &err,
-        "standard_nar.guard_dependency_cause_policy.babysit",
+        "night_resolution.guard_dependency_cause_policy.babysit",
         "guard dependency cause must not be empty",
     );
 
     let mut value = serde_json::to_value(load_pack_named("mafiascum")).unwrap();
-    value["standard_nar"]["guard_dependency_cause_policy"]
+    value["night_resolution"]["guard_dependency_cause_policy"]
         .as_object_mut()
         .unwrap()
         .remove("babysit");
     let err = validate_pack(&pack_from_value(value)).unwrap_err();
     assert_issue(
         &err,
-        "standard_nar.guard_dependency_cause_policy",
+        "night_resolution.guard_dependency_cause_policy",
         "guard dependency action `babysit` must declare dependency cause",
     );
 }
 
 #[test]
-fn standard_nar_hide_dependency_cause_policy_classifies_every_hider_action() {
+fn night_resolution_hide_dependency_cause_policy_classifies_every_hider_action() {
     let mut value = serde_json::to_value(load_pack_named("mafiascum")).unwrap();
     validate_pack(&pack_from_value(value.clone())).unwrap();
 
-    value["standard_nar"]["hide_dependency_cause_policy"]["hide"] = json!("factional_kill");
-    value["standard_nar"]["hide_dependency_cause_policy"]["unknown_hide"] =
+    value["night_resolution"]["hide_dependency_cause_policy"]["hide"] = json!("factional_kill");
+    value["night_resolution"]["hide_dependency_cause_policy"]["unknown_hide"] =
         json!("custom_hide_dependency");
 
     let err = validate_pack(&pack_from_value(value)).unwrap_err();
     assert_issue(
         &err,
-        "standard_nar.hide_dependency_cause_policy.hide",
+        "night_resolution.hide_dependency_cause_policy.hide",
         "must not reuse a direct kill cause",
     );
     assert_issue(
         &err,
-        "standard_nar.hide_dependency_cause_policy.unknown_hide",
-        "unknown standard_nar hide dependency source",
+        "night_resolution.hide_dependency_cause_policy.unknown_hide",
+        "unknown night_resolution hide dependency source",
     );
 
     let mut value = serde_json::to_value(load_pack_named("mafiascum")).unwrap();
-    value["standard_nar"]["hide_dependency_cause_policy"]["hide"] = json!("");
+    value["night_resolution"]["hide_dependency_cause_policy"]["hide"] = json!("");
     let err = validate_pack(&pack_from_value(value)).unwrap_err();
     assert_issue(
         &err,
-        "standard_nar.hide_dependency_cause_policy.hide",
+        "night_resolution.hide_dependency_cause_policy.hide",
         "hide dependency cause must not be empty",
     );
 
     let mut value = serde_json::to_value(load_pack_named("mafiascum")).unwrap();
-    value["standard_nar"]["hide_dependency_cause_policy"]
+    value["night_resolution"]["hide_dependency_cause_policy"]
         .as_object_mut()
         .unwrap()
         .remove("hide");
     let err = validate_pack(&pack_from_value(value)).unwrap_err();
     assert_issue(
         &err,
-        "standard_nar.hide_dependency_cause_policy",
+        "night_resolution.hide_dependency_cause_policy",
         "hide dependency action `hide` must declare dependency cause",
     );
 }
 
 #[test]
-fn standard_nar_intercept_cause_policy_classifies_every_interceptor() {
+fn night_resolution_intercept_cause_policy_classifies_every_interceptor() {
     let mut value = serde_json::to_value(load_pack_named("mafiascum")).unwrap();
     validate_pack(&pack_from_value(value.clone())).unwrap();
 
-    value["standard_nar"]["intercept_cause_policy"]["bodyguard"] = json!("factional_kill");
-    value["standard_nar"]["intercept_cause_policy"]["unknown_interceptor"] =
+    value["night_resolution"]["intercept_cause_policy"]["bodyguard"] = json!("factional_kill");
+    value["night_resolution"]["intercept_cause_policy"]["unknown_interceptor"] =
         json!("custom_intercept");
-    value["standard_nar"]["intercept_cause_policy"]["martyr_protect"] = json!("");
+    value["night_resolution"]["intercept_cause_policy"]["martyr_protect"] = json!("");
 
     let err = validate_pack(&pack_from_value(value)).unwrap_err();
     assert_issue(
         &err,
-        "standard_nar.intercept_cause_policy.bodyguard",
+        "night_resolution.intercept_cause_policy.bodyguard",
         "must not reuse a direct kill cause",
     );
     assert_issue(
         &err,
-        "standard_nar.intercept_cause_policy.unknown_interceptor",
-        "unknown standard_nar intercept source",
+        "night_resolution.intercept_cause_policy.unknown_interceptor",
+        "unknown night_resolution intercept source",
     );
     assert_issue(
         &err,
-        "standard_nar.intercept_cause_policy.martyr_protect",
+        "night_resolution.intercept_cause_policy.martyr_protect",
         "intercept cause must not be empty",
     );
 
     let mut value = serde_json::to_value(load_pack_named("mafiascum")).unwrap();
-    value["standard_nar"]["intercept_cause_policy"]
+    value["night_resolution"]["intercept_cause_policy"]
         .as_object_mut()
         .unwrap()
         .remove("martyr_protect");
     let err = validate_pack(&pack_from_value(value)).unwrap_err();
     assert_issue(
         &err,
-        "standard_nar.intercept_cause_policy",
+        "night_resolution.intercept_cause_policy",
         "intercept action `martyr_protect` must declare intercept cause",
     );
 }
 
 #[test]
-fn standard_nar_guard_retaliation_policy_requires_intercept_source_and_kill_cause() {
+fn night_resolution_guard_retaliation_policy_requires_intercept_source_and_kill_cause() {
     let mut value = serde_json::to_value(load_pack_named("mafiascum")).unwrap();
     validate_pack(&pack_from_value(value.clone())).unwrap();
 
-    value["standard_nar"]["guard_retaliation_cause_policy"]["doctor_protect"] =
+    value["night_resolution"]["guard_retaliation_cause_policy"]["doctor_protect"] =
         json!("doctor_retaliates");
     let err = validate_pack(&pack_from_value(value.clone())).unwrap_err();
     assert_issue(
         &err,
-        "standard_nar.guard_retaliation_cause_policy.doctor_protect",
+        "night_resolution.guard_retaliation_cause_policy.doctor_protect",
         "must also be an intercept source",
     );
     assert_issue(
         &err,
-        "standard_nar.guard_retaliation_cause_policy.doctor_protect",
+        "night_resolution.guard_retaliation_cause_policy.doctor_protect",
         "must be declared in kill_cause_ids",
     );
 
     value = serde_json::to_value(load_pack_named("mafiascum")).unwrap();
-    value["standard_nar"]["guard_retaliation_cause_policy"]["huntsman_guard"] = json!("");
+    value["night_resolution"]["guard_retaliation_cause_policy"]["huntsman_guard"] = json!("");
     let err = validate_pack(&pack_from_value(value)).unwrap_err();
     assert_issue(
         &err,
-        "standard_nar.guard_retaliation_cause_policy.huntsman_guard",
+        "night_resolution.guard_retaliation_cause_policy.huntsman_guard",
         "guard retaliation cause must not be empty",
     );
 }
 
 #[test]
-fn standard_nar_protection_cause_policy_classifies_every_pair() {
+fn night_resolution_protection_cause_policy_classifies_every_pair() {
     let mut value = serde_json::to_value(load_pack_named("mafiascum")).unwrap();
     validate_pack(&pack_from_value(value.clone())).unwrap();
 
-    value["standard_nar"]["protection_cause_policy"]["doctor_protect"] = json!({
+    value["night_resolution"]["protection_cause_policy"]["doctor_protect"] = json!({
         "blocks": ["factional_kill", "hunter_retaliate", "missing_cause", "strongman_kill"],
         "bypasses": ["factional_kill", "night_kill"]
     });
-    value["standard_nar"]["protection_cause_policy"]["unknown_protect"] = json!({
+    value["night_resolution"]["protection_cause_policy"]["unknown_protect"] = json!({
         "blocks": ["factional_kill"],
         "bypasses": ["strongman_kill", "unstoppable_vengeful_retaliates"]
     });
-    value["standard_nar"]["protection_cause_policy"]
+    value["night_resolution"]["protection_cause_policy"]
         .as_object_mut()
         .unwrap()
         .remove("jail");
@@ -4361,60 +4391,60 @@ fn standard_nar_protection_cause_policy_classifies_every_pair() {
     let err = validate_pack(&pack_from_value(value)).unwrap_err();
     assert_issue(
         &err,
-        "standard_nar.protection_cause_policy",
+        "night_resolution.protection_cause_policy",
         "Protect action `jail` must classify every kill cause",
     );
     assert_issue(
         &err,
-        "standard_nar.protection_cause_policy.unknown_protect",
-        "unknown standard_nar protection source `unknown_protect`",
+        "night_resolution.protection_cause_policy.unknown_protect",
+        "unknown night_resolution protection source `unknown_protect`",
     );
     assert_issue(
         &err,
-        "standard_nar.protection_cause_policy.doctor_protect.blocks",
-        "unknown standard_nar kill cause `missing_cause`",
+        "night_resolution.protection_cause_policy.doctor_protect.blocks",
+        "unknown night_resolution kill cause `missing_cause`",
     );
     assert_issue(
         &err,
-        "standard_nar.protection_cause_policy.doctor_protect.blocks",
+        "night_resolution.protection_cause_policy.doctor_protect.blocks",
         "strongman bypass cause `strongman_kill` must be classified in bypasses",
     );
     assert_issue(
         &err,
-        "standard_nar.protection_cause_policy.doctor_protect.bypasses",
+        "night_resolution.protection_cause_policy.doctor_protect.bypasses",
         "bypassed kill cause `night_kill` must be a Strongman bypass cause",
     );
     assert_issue(
         &err,
-        "standard_nar.protection_cause_policy.doctor_protect",
+        "night_resolution.protection_cause_policy.doctor_protect",
         "kill cause `factional_kill` cannot be both blocked and bypassed",
     );
     assert_issue(
         &err,
-        "standard_nar.protection_cause_policy.doctor_protect",
+        "night_resolution.protection_cause_policy.doctor_protect",
         "does not classify kill cause `pgo_shoots_visitor`",
     );
     assert_issue(
         &err,
-        "standard_nar.protection_cause_policy.doctor_protect",
+        "night_resolution.protection_cause_policy.doctor_protect",
         "must classify generated kill trigger `pgo_shoots_visitor`",
     );
 }
 
 #[test]
-fn standard_nar_target_state_save_policy_classifies_every_pair() {
+fn night_resolution_target_state_save_policy_classifies_every_pair() {
     let mut value = serde_json::to_value(load_pack_named("mafiascum")).unwrap();
     validate_pack(&pack_from_value(value.clone())).unwrap();
 
-    value["standard_nar"]["target_state_save_policy"]["bulletproof"] = json!({
+    value["night_resolution"]["target_state_save_policy"]["bulletproof"] = json!({
         "blocks": ["factional_kill", "hunter_retaliate", "missing_cause", "strongman_kill"],
         "bypasses": ["factional_kill", "night_kill"]
     });
-    value["standard_nar"]["target_state_save_policy"]["unknown_save"] = json!({
+    value["night_resolution"]["target_state_save_policy"]["unknown_save"] = json!({
         "blocks": ["factional_kill"],
         "bypasses": ["strongman_kill", "unstoppable_vengeful_retaliates"]
     });
-    value["standard_nar"]["target_state_save_policy"]
+    value["night_resolution"]["target_state_save_policy"]
         .as_object_mut()
         .unwrap()
         .remove("bulletproof_vest");
@@ -4422,58 +4452,58 @@ fn standard_nar_target_state_save_policy_classifies_every_pair() {
     let err = validate_pack(&pack_from_value(value)).unwrap_err();
     assert_issue(
         &err,
-        "standard_nar.target_state_save_policy",
+        "night_resolution.target_state_save_policy",
         "target-state save `bulletproof_vest` must classify every kill cause",
     );
     assert_issue(
         &err,
-        "standard_nar.target_state_save_policy.unknown_save",
-        "unknown standard_nar target-state save `unknown_save`",
+        "night_resolution.target_state_save_policy.unknown_save",
+        "unknown night_resolution target-state save `unknown_save`",
     );
     assert_issue(
         &err,
-        "standard_nar.target_state_save_policy.bulletproof.blocks",
-        "unknown standard_nar kill cause `missing_cause`",
+        "night_resolution.target_state_save_policy.bulletproof.blocks",
+        "unknown night_resolution kill cause `missing_cause`",
     );
     assert_issue(
         &err,
-        "standard_nar.target_state_save_policy.bulletproof.blocks",
+        "night_resolution.target_state_save_policy.bulletproof.blocks",
         "strongman bypass cause `strongman_kill` must be classified in bypasses",
     );
     assert_issue(
         &err,
-        "standard_nar.target_state_save_policy.bulletproof.bypasses",
+        "night_resolution.target_state_save_policy.bulletproof.bypasses",
         "bypassed kill cause `night_kill` must be a Strongman bypass cause",
     );
     assert_issue(
         &err,
-        "standard_nar.target_state_save_policy.bulletproof",
+        "night_resolution.target_state_save_policy.bulletproof",
         "kill cause `factional_kill` cannot be both blocked and bypassed",
     );
     assert_issue(
         &err,
-        "standard_nar.target_state_save_policy.bulletproof",
+        "night_resolution.target_state_save_policy.bulletproof",
         "does not classify kill cause `pgo_shoots_visitor`",
     );
     assert_issue(
         &err,
-        "standard_nar.target_state_save_policy.bulletproof",
+        "night_resolution.target_state_save_policy.bulletproof",
         "must classify generated kill trigger `pgo_shoots_visitor`",
     );
 }
 
 #[test]
-fn standard_nar_target_state_gate_policy_classifies_supported_gates() {
+fn night_resolution_target_state_gate_policy_classifies_supported_gates() {
     let mut value = serde_json::to_value(load_pack_named("mafiascum")).unwrap();
     validate_pack(&pack_from_value(value.clone())).unwrap();
 
-    value["standard_nar"]["target_state_gate_policy"]["commuted"] = json!({
+    value["night_resolution"]["target_state_gate_policy"]["commuted"] = json!({
         "blocks": ["Kill", "Kill", "Protect"]
     });
-    value["standard_nar"]["target_state_gate_policy"]["unknown_gate"] = json!({
+    value["night_resolution"]["target_state_gate_policy"]["unknown_gate"] = json!({
         "blocks": []
     });
-    value["standard_nar"]["target_state_gate_policy"]
+    value["night_resolution"]["target_state_gate_policy"]
         .as_object_mut()
         .unwrap()
         .remove("untargetable");
@@ -4481,41 +4511,41 @@ fn standard_nar_target_state_gate_policy_classifies_supported_gates() {
     let err = validate_pack(&pack_from_value(value)).unwrap_err();
     assert_issue(
         &err,
-        "standard_nar.target_state_gate_policy",
+        "night_resolution.target_state_gate_policy",
         "target-state gate `untargetable` must classify blocked abilities",
     );
     assert_issue(
         &err,
-        "standard_nar.target_state_gate_policy.unknown_gate",
-        "unknown standard_nar target-state gate `unknown_gate`",
+        "night_resolution.target_state_gate_policy.unknown_gate",
+        "unknown night_resolution target-state gate `unknown_gate`",
     );
     assert_issue(
         &err,
-        "standard_nar.target_state_gate_policy.unknown_gate.blocks",
+        "night_resolution.target_state_gate_policy.unknown_gate.blocks",
         "must declare blocked abilities",
     );
     assert_issue(
         &err,
-        "standard_nar.target_state_gate_policy.commuted.blocks",
+        "night_resolution.target_state_gate_policy.commuted.blocks",
         "duplicate blocked ability `Kill`",
     );
 }
 
 #[test]
-fn standard_nar_suppression_policy_classifies_every_night_action() {
+fn night_resolution_suppression_policy_classifies_every_night_action() {
     let mut value = serde_json::to_value(load_pack_named("mafiascum")).unwrap();
     validate_pack(&pack_from_value(value.clone())).unwrap();
 
-    value["standard_nar"]["suppression_policy"]["roleblocker_block"] = json!({
+    value["night_resolution"]["suppression_policy"]["roleblocker_block"] = json!({
         "scope": "FirstMatchingAction",
         "suppresses": ["cop_investigate", "missing_action", "roleblocker_block", "strong_willed_investigate"],
         "bypasses": ["cop_investigate", "doctor_protect"]
     });
-    value["standard_nar"]["suppression_policy"]["unknown_block"] = json!({
+    value["night_resolution"]["suppression_policy"]["unknown_block"] = json!({
         "suppresses": ["cop_investigate"],
         "bypasses": ["roleblocker_block"]
     });
-    value["standard_nar"]["suppression_policy"]
+    value["night_resolution"]["suppression_policy"]
         .as_object_mut()
         .unwrap()
         .remove("jail");
@@ -4523,58 +4553,58 @@ fn standard_nar_suppression_policy_classifies_every_night_action() {
     let err = validate_pack(&pack_from_value(value)).unwrap_err();
     assert_issue(
         &err,
-        "standard_nar.suppression_policy",
+        "night_resolution.suppression_policy",
         "Block action `jail` must classify every night action",
     );
     assert_issue(
         &err,
-        "standard_nar.suppression_policy.unknown_block",
-        "unknown standard_nar block source `unknown_block`",
+        "night_resolution.suppression_policy.unknown_block",
+        "unknown night_resolution block source `unknown_block`",
     );
     assert_issue(
         &err,
-        "standard_nar.suppression_policy.unknown_block.scope",
+        "night_resolution.suppression_policy.unknown_block.scope",
         "must declare scope",
     );
     assert_issue(
         &err,
-        "standard_nar.suppression_policy.roleblocker_block.suppresses",
-        "unknown standard_nar night action `missing_action`",
+        "night_resolution.suppression_policy.roleblocker_block.suppresses",
+        "unknown night_resolution night action `missing_action`",
     );
     assert_issue(
         &err,
-        "standard_nar.suppression_policy.roleblocker_block.suppresses",
+        "night_resolution.suppression_policy.roleblocker_block.suppresses",
         "suppression-immune action `roleblocker_block` must be classified in bypasses",
     );
     assert_issue(
         &err,
-        "standard_nar.suppression_policy.roleblocker_block.suppresses",
+        "night_resolution.suppression_policy.roleblocker_block.suppresses",
         "suppression-immune action `strong_willed_investigate` must be classified in bypasses",
     );
     assert_issue(
         &err,
-        "standard_nar.suppression_policy.roleblocker_block.bypasses",
+        "night_resolution.suppression_policy.roleblocker_block.bypasses",
         "roleblockable action `doctor_protect` must be classified in suppresses",
     );
     assert_issue(
         &err,
-        "standard_nar.suppression_policy.roleblocker_block",
+        "night_resolution.suppression_policy.roleblocker_block",
         "night action `cop_investigate` cannot be both suppressed and bypassed",
     );
     assert_issue(
         &err,
-        "standard_nar.suppression_policy.roleblocker_block",
+        "night_resolution.suppression_policy.roleblocker_block",
         "does not classify night action `babysit`",
     );
     assert_issue(
         &err,
-        "standard_nar.suppression_policy.roleblocker_block",
+        "night_resolution.suppression_policy.roleblocker_block",
         "night action `babysit` that can feed generated kill trigger `pgo_shoots_visitor`",
     );
 }
 
 #[test]
-fn standard_nar_suppression_policy_requires_block_precedence_before_suppressed_abilities() {
+fn night_resolution_suppression_policy_requires_block_precedence_before_suppressed_abilities() {
     let mut value = serde_json::to_value(load_pack_named("mafiascum")).unwrap();
     validate_pack(&pack_from_value(value.clone())).unwrap();
 
@@ -4596,7 +4626,7 @@ fn standard_nar_suppression_policy_requires_block_precedence_before_suppressed_a
     let err = validate_pack(&pack_from_value(value)).unwrap_err();
     assert_issue(
         &err,
-        "standard_nar.precedence",
+        "night_resolution.precedence",
         "requires Block precedence before suppressed ability `Redirect`",
     );
 }
@@ -4607,23 +4637,23 @@ fn invalid_precedence_fixture_is_rejected_by_pack_linter() {
     let err = validate_pack(&pack).unwrap_err();
     assert_issue(
         &err,
-        "standard_nar.precedence",
+        "night_resolution.precedence",
         "requires Block precedence before suppressed ability `Protect`",
     );
     assert_issue(
         &err,
-        "standard_nar.precedence",
+        "night_resolution.precedence",
         "requires Block precedence before suppressed ability `Kill`",
     );
     assert_issue(
         &err,
-        "standard_nar.strongman_bypasses_protect",
+        "night_resolution.strongman_bypasses_protect",
         "requires strongman_bypasses_protect true",
     );
     assert_issue(
         &err,
-        "standard_nar.suppression_policy.roleblocker_block.scope",
-        "standard_nar suppression policy must declare scope",
+        "night_resolution.suppression_policy.roleblocker_block.scope",
+        "night_resolution suppression policy must declare scope",
     );
 }
 
@@ -4633,38 +4663,38 @@ fn invalid_generated_kill_ownership_fixture_is_rejected_by_pack_linter() {
     let err = validate_pack(&pack).unwrap_err();
     assert_issue(
         &err,
-        "standard_nar.generated_kill_ownership.pgo_shoots_visitor",
+        "night_resolution.generated_kill_ownership.pgo_shoots_visitor",
         "is not owned by protection source `doctor_protect`",
     );
     assert_issue(
         &err,
-        "standard_nar.generated_kill_ownership.pgo_shoots_visitor",
+        "night_resolution.generated_kill_ownership.pgo_shoots_visitor",
         "is not owned by target-state save `bulletproof`",
     );
     assert_issue(
         &err,
-        "standard_nar.generated_kill_ownership.pgo_shoots_visitor",
+        "night_resolution.generated_kill_ownership.pgo_shoots_visitor",
         "feeder action `visit` is not owned by block source `roleblocker_block`",
     );
 }
 
 #[test]
-fn standard_nar_policy_requires_every_block_and_protect_action_to_be_declared() {
+fn night_resolution_policy_requires_every_block_and_protect_action_to_be_declared() {
     let mut value = serde_json::to_value(load_pack_named("mafiascum")).unwrap();
     validate_pack(&pack_from_value(value.clone())).unwrap();
 
-    value["standard_nar"]["protect_action_ids"] = json!(["doctor_protect", "jail"]);
+    value["night_resolution"]["protect_action_ids"] = json!(["doctor_protect", "jail"]);
 
     let err = validate_pack(&pack_from_value(value)).unwrap_err();
     assert_issue(
         &err,
-        "standard_nar.protect_action_ids",
-        "standard_nar Protect action `babysit` on role `babysitter` must be declared",
+        "night_resolution.protect_action_ids",
+        "night_resolution Protect action `babysit` on role `babysitter` must be declared",
     );
 }
 
 #[test]
-fn standard_nar_action_chance_policy_is_strict_and_versioned() {
+fn night_resolution_action_chance_policy_is_strict_and_versioned() {
     let mut value = serde_json::to_value(load_pack_named("mafiascum")).unwrap();
     validate_pack(&pack_from_value(value.clone())).unwrap();
 
@@ -4677,38 +4707,38 @@ fn standard_nar_action_chance_policy_is_strict_and_versioned() {
     );
     assert_issue(
         &err,
-        "standard_nar.action_chance",
+        "night_resolution.action_chance",
         "requires ir_version >= 43",
     );
     assert_issue(
         &err,
-        "standard_nar.conflict_families",
+        "night_resolution.conflict_families",
         "requires ir_version >= 44",
     );
     assert_issue(&err, "visibility_families", "requires ir_version >= 45");
     assert_issue(&err, "win_families", "requires ir_version >= 46");
 
     value["ir_version"] = json!(47);
-    value["standard_nar"]["action_chance"]["faith_healer_protect"]["chance"] = json!(1.25);
+    value["night_resolution"]["action_chance"]["faith_healer_protect"]["chance"] = json!(1.25);
     let err = validate_pack(&pack_from_value(value.clone())).unwrap_err();
     assert_issue(
         &err,
-        "standard_nar.action_chance.faith_healer_protect.chance",
+        "night_resolution.action_chance.faith_healer_protect.chance",
         "between 0.0 and 1.0",
     );
 
-    value["standard_nar"]["action_chance"]["faith_healer_protect"]["chance"] = json!(0.5);
-    value["standard_nar"]["action_chance"]["missing_protect"] = json!({ "chance": 0.5 });
+    value["night_resolution"]["action_chance"]["faith_healer_protect"]["chance"] = json!(0.5);
+    value["night_resolution"]["action_chance"]["missing_protect"] = json!({ "chance": 0.5 });
     let err = validate_pack(&pack_from_value(value)).unwrap_err();
     assert_issue(
         &err,
-        "standard_nar.action_chance.missing_protect",
-        "unknown standard_nar action",
+        "night_resolution.action_chance.missing_protect",
+        "unknown night_resolution action",
     );
 }
 
 #[test]
-fn standard_nar_conflict_families_are_strict_and_versioned() {
+fn night_resolution_conflict_families_are_strict_and_versioned() {
     let mut value = serde_json::to_value(load_pack_named("mafiascum")).unwrap();
     validate_pack(&pack_from_value(value.clone())).unwrap();
 
@@ -4721,42 +4751,42 @@ fn standard_nar_conflict_families_are_strict_and_versioned() {
     );
     assert_issue(
         &err,
-        "standard_nar.conflict_families",
+        "night_resolution.conflict_families",
         "requires ir_version >= 44",
     );
     assert_issue(&err, "visibility_families", "requires ir_version >= 45");
     assert_issue(&err, "win_families", "requires ir_version >= 46");
 
     value["ir_version"] = json!(47);
-    value["standard_nar"]["conflict_families"]
+    value["night_resolution"]["conflict_families"]
         .as_array_mut()
         .unwrap()
         .retain(|family| family != "ProtectBlocksKills");
     let err = validate_pack(&pack_from_value(value.clone())).unwrap_err();
     assert_issue(
         &err,
-        "standard_nar.conflict_families",
+        "night_resolution.conflict_families",
         "must include `ProtectBlocksKills`",
     );
 
     value = serde_json::to_value(load_pack_named("mafiascum")).unwrap();
-    value["standard_nar"]["conflict_families"]
+    value["night_resolution"]["conflict_families"]
         .as_array_mut()
         .unwrap()
         .push(json!("ProtectBlocksKills"));
     let err = validate_pack(&pack_from_value(value.clone())).unwrap_err();
     assert_issue(
         &err,
-        "standard_nar.conflict_families",
+        "night_resolution.conflict_families",
         "duplicate conflict family `ProtectBlocksKills`",
     );
 
     value = serde_json::to_value(load_pack_named("mafiascum")).unwrap();
-    value["standard_nar"]["action_chance"] = json!({});
+    value["night_resolution"]["action_chance"] = json!({});
     let err = validate_pack(&pack_from_value(value)).unwrap_err();
     assert_issue(
         &err,
-        "standard_nar.conflict_families",
+        "night_resolution.conflict_families",
         "declared conflict family `ActionChance` has no matching policy surface",
     );
 }
@@ -4814,33 +4844,34 @@ fn visibility_families_are_strict_and_versioned() {
 }
 
 #[test]
-fn standard_nar_jailkeep_must_be_explicit_block_and_protect_policy() {
+fn night_resolution_jailkeep_must_be_explicit_block_and_protect_policy() {
     let mut value = serde_json::to_value(load_pack_named("mafiascum")).unwrap();
     validate_pack(&pack_from_value(value.clone())).unwrap();
 
-    value["standard_nar"]["block_action_ids"] = json!(["roleblocker_block", "catastrophic_block"]);
-    value["standard_nar"]["protect_action_ids"] = json!(["doctor_protect", "babysit"]);
+    value["night_resolution"]["block_action_ids"] =
+        json!(["roleblocker_block", "catastrophic_block"]);
+    value["night_resolution"]["protect_action_ids"] = json!(["doctor_protect", "babysit"]);
 
     let err = validate_pack(&pack_from_value(value)).unwrap_err();
     assert_issue(
         &err,
-        "standard_nar.jailkeep_action_ids",
+        "night_resolution.jailkeep_action_ids",
         "Jailkeeper action `jail` must also be declared in block_action_ids",
     );
     assert_issue(
         &err,
-        "standard_nar.jailkeep_action_ids",
+        "night_resolution.jailkeep_action_ids",
         "Jailkeeper action `jail` must also be declared in protect_action_ids",
     );
 }
 
 #[test]
-fn standard_nar_strongman_kills_must_be_explicit_bypass_policy() {
+fn night_resolution_strongman_kills_must_be_explicit_bypass_policy() {
     let mut value = serde_json::to_value(load_pack_named("mafiascum")).unwrap();
     validate_pack(&pack_from_value(value.clone())).unwrap();
 
-    value["standard_nar"]["strongman_action_ids"] = json!([]);
-    value["standard_nar"]["protection_cause_policy"]["doctor_protect"] = json!({
+    value["night_resolution"]["strongman_action_ids"] = json!([]);
+    value["night_resolution"]["protection_cause_policy"]["doctor_protect"] = json!({
         "blocks": ["factional_kill", "hunter_retaliate", "ignite", "night_kill", "pgo_shoots_visitor", "strongman_kill", "super_saint_retaliates", "vengeful_retaliates"],
         "bypasses": ["unstoppable_vengeful_retaliates"]
     });
@@ -4848,24 +4879,24 @@ fn standard_nar_strongman_kills_must_be_explicit_bypass_policy() {
     let err = validate_pack(&pack_from_value(value)).unwrap_err();
     assert_issue(
         &err,
-        "standard_nar.strongman_action_ids",
+        "night_resolution.strongman_action_ids",
         "Strongman Kill action `strongman_kill` on role `strongman` must be declared",
     );
 }
 
 #[test]
-fn standard_nar_kill_actions_must_be_explicit_conflict_policy() {
+fn night_resolution_kill_actions_must_be_explicit_conflict_policy() {
     let mut value = serde_json::to_value(load_pack_named("mafiascum")).unwrap();
     validate_pack(&pack_from_value(value.clone())).unwrap();
 
-    value["standard_nar"]["kill_action_ids"]
+    value["night_resolution"]["kill_action_ids"]
         .as_array_mut()
         .unwrap()
         .retain(|action_id| action_id != "night_kill");
     let err = validate_pack(&pack_from_value(value)).unwrap_err();
     assert_issue(
         &err,
-        "standard_nar.kill_action_ids",
+        "night_resolution.kill_action_ids",
         "Kill action `night_kill` on role `vigilante` must be declared",
     );
 
@@ -4888,20 +4919,20 @@ fn standard_nar_kill_actions_must_be_explicit_conflict_policy() {
     let err = validate_pack(&pack_from_value(value.clone())).unwrap_err();
     assert_issue(
         &err,
-        "standard_nar.kill_action_ids",
+        "night_resolution.kill_action_ids",
         "Kill action `ordinary_item_kill` on item_actions `ordinary_item_kill` must be declared",
     );
     assert_issue(
         &err,
-        "standard_nar.kill_cause_ids",
-        "standard_nar kill_cause_ids must include `ordinary_item_kill`",
+        "night_resolution.kill_cause_ids",
+        "night_resolution kill_cause_ids must include `ordinary_item_kill`",
     );
 
-    value["standard_nar"]["kill_action_ids"]
+    value["night_resolution"]["kill_action_ids"]
         .as_array_mut()
         .unwrap()
         .push(json!("ordinary_item_kill"));
-    value["standard_nar"]["kill_cause_ids"]
+    value["night_resolution"]["kill_cause_ids"]
         .as_array_mut()
         .unwrap()
         .push(json!("ordinary_item_kill"));
@@ -4915,19 +4946,19 @@ fn standard_nar_kill_actions_must_be_explicit_conflict_policy() {
         "jail",
         "huntsman_guard",
     ] {
-        value["standard_nar"]["protection_cause_policy"][source]["blocks"]
+        value["night_resolution"]["protection_cause_policy"][source]["blocks"]
             .as_array_mut()
             .unwrap()
             .push(json!("ordinary_item_kill"));
     }
     for save in ["bulletproof", "bulletproof_vest"] {
-        value["standard_nar"]["target_state_save_policy"][save]["blocks"]
+        value["night_resolution"]["target_state_save_policy"][save]["blocks"]
             .as_array_mut()
             .unwrap()
             .push(json!("ordinary_item_kill"));
     }
     for source in ["roleblocker_block", "jail", "catastrophic_block"] {
-        value["standard_nar"]["suppression_policy"][source]["suppresses"]
+        value["night_resolution"]["suppression_policy"][source]["suppresses"]
             .as_array_mut()
             .unwrap()
             .push(json!("ordinary_item_kill"));
@@ -4937,7 +4968,7 @@ fn standard_nar_kill_actions_must_be_explicit_conflict_policy() {
 }
 
 #[test]
-fn standard_nar_item_kill_causes_must_be_explicit_conflict_policy() {
+fn night_resolution_item_kill_causes_must_be_explicit_conflict_policy() {
     let mut value = serde_json::to_value(load_pack_named("mafiascum")).unwrap();
     validate_pack(&pack_from_value(value.clone())).unwrap();
 
@@ -4959,29 +4990,29 @@ fn standard_nar_item_kill_causes_must_be_explicit_conflict_policy() {
     let err = validate_pack(&pack_from_value(value.clone())).unwrap_err();
     assert_issue(
         &err,
-        "standard_nar.strongman_action_ids",
+        "night_resolution.strongman_action_ids",
         "Strongman Kill action `strongman_item_kill` on item_actions `strongman_item_kill` must be declared",
     );
     assert_issue(
         &err,
-        "standard_nar.kill_cause_ids",
-        "standard_nar kill_cause_ids must include `strongman_item_kill`",
+        "night_resolution.kill_cause_ids",
+        "night_resolution kill_cause_ids must include `strongman_item_kill`",
     );
     assert_issue(
         &err,
-        "standard_nar.suppression_policy.roleblocker_block",
+        "night_resolution.suppression_policy.roleblocker_block",
         "does not classify night action `strongman_item_kill`",
     );
 
-    value["standard_nar"]["strongman_action_ids"]
+    value["night_resolution"]["strongman_action_ids"]
         .as_array_mut()
         .unwrap()
         .push(json!("strongman_item_kill"));
-    value["standard_nar"]["kill_cause_ids"]
+    value["night_resolution"]["kill_cause_ids"]
         .as_array_mut()
         .unwrap()
         .push(json!("strongman_item_kill"));
-    for policy in value["standard_nar"]["protection_cause_policy"]
+    for policy in value["night_resolution"]["protection_cause_policy"]
         .as_object_mut()
         .unwrap()
         .values_mut()
@@ -4991,7 +5022,7 @@ fn standard_nar_item_kill_causes_must_be_explicit_conflict_policy() {
             .unwrap()
             .push(json!("strongman_item_kill"));
     }
-    for policy in value["standard_nar"]["target_state_save_policy"]
+    for policy in value["night_resolution"]["target_state_save_policy"]
         .as_object_mut()
         .unwrap()
         .values_mut()
@@ -5001,7 +5032,7 @@ fn standard_nar_item_kill_causes_must_be_explicit_conflict_policy() {
             .unwrap()
             .push(json!("strongman_item_kill"));
     }
-    for policy in value["standard_nar"]["suppression_policy"]
+    for policy in value["night_resolution"]["suppression_policy"]
         .as_object_mut()
         .unwrap()
         .values_mut()
@@ -5016,15 +5047,15 @@ fn standard_nar_item_kill_causes_must_be_explicit_conflict_policy() {
 }
 
 #[test]
-fn standard_nar_strongman_triggers_must_be_explicit_bypass_policy() {
+fn night_resolution_strongman_triggers_must_be_explicit_bypass_policy() {
     let mut value = serde_json::to_value(load_pack_named("mafiascum")).unwrap();
     validate_pack(&pack_from_value(value.clone())).unwrap();
 
-    value["standard_nar"]["protection_cause_policy"]["doctor_protect"]["bypasses"]
+    value["night_resolution"]["protection_cause_policy"]["doctor_protect"]["bypasses"]
         .as_array_mut()
         .unwrap()
         .retain(|cause| cause != "unstoppable_vengeful_retaliates");
-    value["standard_nar"]["target_state_save_policy"]["bulletproof"]["bypasses"]
+    value["night_resolution"]["target_state_save_policy"]["bulletproof"]["bypasses"]
         .as_array_mut()
         .unwrap()
         .retain(|cause| cause != "unstoppable_vengeful_retaliates");
@@ -5032,151 +5063,151 @@ fn standard_nar_strongman_triggers_must_be_explicit_bypass_policy() {
     let err = validate_pack(&pack_from_value(value)).unwrap_err();
     assert_issue(
         &err,
-        "standard_nar.protection_cause_policy.doctor_protect",
+        "night_resolution.protection_cause_policy.doctor_protect",
         "does not classify kill cause `unstoppable_vengeful_retaliates`",
     );
     assert_issue(
         &err,
-        "standard_nar.target_state_save_policy.bulletproof",
+        "night_resolution.target_state_save_policy.bulletproof",
         "does not classify kill cause `unstoppable_vengeful_retaliates`",
     );
 }
 
 #[test]
-fn standard_nar_chosen_retaliation_cause_policy_classifies_every_retaliate_action() {
+fn night_resolution_chosen_retaliation_cause_policy_classifies_every_retaliate_action() {
     let mut value = serde_json::to_value(load_pack_named("mafiascum")).unwrap();
     validate_pack(&pack_from_value(value.clone())).unwrap();
 
-    value["standard_nar"]["chosen_retaliation_cause_policy"]
+    value["night_resolution"]["chosen_retaliation_cause_policy"]
         .as_object_mut()
         .unwrap()
         .remove("hunter_retaliate");
-    value["standard_nar"]["chosen_retaliation_cause_policy"]["unknown_retaliate"] =
+    value["night_resolution"]["chosen_retaliation_cause_policy"]["unknown_retaliate"] =
         json!({ "strongman_bypasses_protect": false });
 
     let err = validate_pack(&pack_from_value(value)).unwrap_err();
     assert_issue(
         &err,
-        "standard_nar.chosen_retaliation_cause_policy",
+        "night_resolution.chosen_retaliation_cause_policy",
         "Retaliate action `hunter_retaliate` must declare chosen retaliation cause policy",
     );
     assert_issue(
         &err,
-        "standard_nar.chosen_retaliation_cause_policy.unknown_retaliate",
-        "unknown standard_nar Retaliate action",
+        "night_resolution.chosen_retaliation_cause_policy.unknown_retaliate",
+        "unknown night_resolution Retaliate action",
     );
 
     let mut value = serde_json::to_value(load_pack_named("mafiascum")).unwrap();
-    value["standard_nar"]["chosen_retaliation_cause_policy"]["hunter_retaliate"] =
+    value["night_resolution"]["chosen_retaliation_cause_policy"]["hunter_retaliate"] =
         json!({ "strongman_bypasses_protect": true });
 
     let err = validate_pack(&pack_from_value(value)).unwrap_err();
     assert_issue(
         &err,
-        "standard_nar.chosen_retaliation_cause_policy.hunter_retaliate.strongman_bypasses_protect",
+        "night_resolution.chosen_retaliation_cause_policy.hunter_retaliate.strongman_bypasses_protect",
         "must match Strongman modifier",
     );
 }
 
 #[test]
-fn standard_nar_generated_kill_cause_policy_classifies_every_kill_trigger() {
+fn night_resolution_generated_kill_cause_policy_classifies_every_kill_trigger() {
     let mut value = serde_json::to_value(load_pack_named("mafiascum")).unwrap();
     validate_pack(&pack_from_value(value.clone())).unwrap();
 
-    value["standard_nar"]["generated_kill_cause_policy"]
+    value["night_resolution"]["generated_kill_cause_policy"]
         .as_object_mut()
         .unwrap()
         .remove("pgo_shoots_visitor");
-    value["standard_nar"]["generated_kill_cause_policy"]["unknown_generated_kill"] = json!({ "on": "Kill", "actor": "Target", "target": "Actor", "strongman_bypasses_protect": false });
-    value["standard_nar"]["generated_kill_cause_policy"]["super_saint_retaliates"] =
+    value["night_resolution"]["generated_kill_cause_policy"]["unknown_generated_kill"] = json!({ "on": "Kill", "actor": "Target", "target": "Actor", "strongman_bypasses_protect": false });
+    value["night_resolution"]["generated_kill_cause_policy"]["super_saint_retaliates"] =
         json!({ "strongman_bypasses_protect": false });
-    value["standard_nar"]["generated_kill_cause_policy"]["vengeful_retaliates"] = json!({ "on": "Visit", "actor": "Actor", "target": "Killer", "strongman_bypasses_protect": true });
-    value["standard_nar"]["generated_kill_cause_policy"]["unstoppable_vengeful_retaliates"] = json!({ "on": "Kill", "actor": "Target", "target": "Actor", "strongman_bypasses_protect": false });
+    value["night_resolution"]["generated_kill_cause_policy"]["vengeful_retaliates"] = json!({ "on": "Visit", "actor": "Actor", "target": "Killer", "strongman_bypasses_protect": true });
+    value["night_resolution"]["generated_kill_cause_policy"]["unstoppable_vengeful_retaliates"] = json!({ "on": "Kill", "actor": "Target", "target": "Actor", "strongman_bypasses_protect": false });
 
     let err = validate_pack(&pack_from_value(value)).unwrap_err();
     assert_issue(
         &err,
-        "standard_nar.generated_kill_cause_policy",
+        "night_resolution.generated_kill_cause_policy",
         "generated kill trigger `pgo_shoots_visitor` must declare generated kill cause policy",
     );
     assert_issue(
         &err,
-        "standard_nar.trigger_fixpoint_policy.pgo_shoots_visitor",
+        "night_resolution.trigger_fixpoint_policy.pgo_shoots_visitor",
         "must also declare generated kill cause policy",
     );
     assert_issue(
         &err,
-        "standard_nar.generated_kill_cause_policy.unknown_generated_kill",
-        "unknown standard_nar generated kill trigger",
+        "night_resolution.generated_kill_cause_policy.unknown_generated_kill",
+        "unknown night_resolution generated kill trigger",
     );
     assert_issue(
         &err,
-        "standard_nar.generated_kill_cause_policy.super_saint_retaliates.on",
+        "night_resolution.generated_kill_cause_policy.super_saint_retaliates.on",
         "must declare trigger on",
     );
     assert_issue(
         &err,
-        "standard_nar.generated_kill_cause_policy.super_saint_retaliates.actor",
+        "night_resolution.generated_kill_cause_policy.super_saint_retaliates.actor",
         "must declare produced actor",
     );
     assert_issue(
         &err,
-        "standard_nar.generated_kill_cause_policy.super_saint_retaliates.target",
+        "night_resolution.generated_kill_cause_policy.super_saint_retaliates.target",
         "must declare produced target",
     );
     assert_issue(
         &err,
-        "standard_nar.generated_kill_cause_policy.vengeful_retaliates.on",
+        "night_resolution.generated_kill_cause_policy.vengeful_retaliates.on",
         "on must match trigger rule",
     );
     assert_issue(
         &err,
-        "standard_nar.generated_kill_cause_policy.vengeful_retaliates.actor",
+        "night_resolution.generated_kill_cause_policy.vengeful_retaliates.actor",
         "actor must match trigger production",
     );
     assert_issue(
         &err,
-        "standard_nar.generated_kill_cause_policy.vengeful_retaliates.target",
+        "night_resolution.generated_kill_cause_policy.vengeful_retaliates.target",
         "target must match trigger production",
     );
     assert_issue(
         &err,
-        "standard_nar.generated_kill_cause_policy.vengeful_retaliates.strongman_bypasses_protect",
+        "night_resolution.generated_kill_cause_policy.vengeful_retaliates.strongman_bypasses_protect",
         "must match produced Strongman modifier",
     );
     assert_issue(
         &err,
-        "standard_nar.generated_kill_cause_policy.unstoppable_vengeful_retaliates.strongman_bypasses_protect",
+        "night_resolution.generated_kill_cause_policy.unstoppable_vengeful_retaliates.strongman_bypasses_protect",
         "must match produced Strongman modifier",
     );
 }
 
 #[test]
-fn standard_nar_trigger_fixpoint_policy_classifies_every_generated_kill_trigger() {
+fn night_resolution_trigger_fixpoint_policy_classifies_every_generated_kill_trigger() {
     let mut value = serde_json::to_value(load_pack_named("mafiascum")).unwrap();
     validate_pack(&pack_from_value(value.clone())).unwrap();
 
-    value["standard_nar"]["trigger_fixpoint_policy"]
+    value["night_resolution"]["trigger_fixpoint_policy"]
         .as_object_mut()
         .unwrap()
         .remove("pgo_shoots_visitor");
-    value["standard_nar"]["trigger_fixpoint_policy"]["unknown_trigger"] = json!({
+    value["night_resolution"]["trigger_fixpoint_policy"]["unknown_trigger"] = json!({
         "on": "Kill",
         "produced_kill_reenters": true,
         "loop_cap": "RedirectLoopCap",
         "trace": true
     });
-    value["standard_nar"]["trigger_fixpoint_policy"]["super_saint_retaliates"] = json!({
+    value["night_resolution"]["trigger_fixpoint_policy"]["super_saint_retaliates"] = json!({
         "produced_kill_reenters": false,
         "loop_cap": "RedirectLoopCap",
         "trace": true
     });
-    value["standard_nar"]["trigger_fixpoint_policy"]["vengeful_retaliates"] = json!({
+    value["night_resolution"]["trigger_fixpoint_policy"]["vengeful_retaliates"] = json!({
         "on": "Visit",
         "produced_kill_reenters": true,
         "trace": true
     });
-    value["standard_nar"]["trigger_fixpoint_policy"]["unstoppable_vengeful_retaliates"] = json!({
+    value["night_resolution"]["trigger_fixpoint_policy"]["unstoppable_vengeful_retaliates"] = json!({
         "on": "Kill",
         "produced_kill_reenters": true,
         "loop_cap": "RedirectLoopCap",
@@ -5186,60 +5217,60 @@ fn standard_nar_trigger_fixpoint_policy_classifies_every_generated_kill_trigger(
     let err = validate_pack(&pack_from_value(value)).unwrap_err();
     assert_issue(
         &err,
-        "standard_nar.trigger_fixpoint_policy",
+        "night_resolution.trigger_fixpoint_policy",
         "generated kill trigger `pgo_shoots_visitor` must declare trigger fixpoint policy",
     );
     assert_issue(
         &err,
-        "standard_nar.generated_kill_cause_policy.pgo_shoots_visitor",
+        "night_resolution.generated_kill_cause_policy.pgo_shoots_visitor",
         "must also declare trigger fixpoint policy",
     );
     assert_issue(
         &err,
-        "standard_nar.trigger_fixpoint_policy.unknown_trigger",
-        "unknown standard_nar trigger fixpoint source",
+        "night_resolution.trigger_fixpoint_policy.unknown_trigger",
+        "unknown night_resolution trigger fixpoint source",
     );
     assert_issue(
         &err,
-        "standard_nar.trigger_fixpoint_policy.super_saint_retaliates.on",
+        "night_resolution.trigger_fixpoint_policy.super_saint_retaliates.on",
         "must declare observed trigger on",
     );
     assert_issue(
         &err,
-        "standard_nar.trigger_fixpoint_policy.super_saint_retaliates.produced_kill_reenters",
+        "night_resolution.trigger_fixpoint_policy.super_saint_retaliates.produced_kill_reenters",
         "must declare produced_kill_reenters true",
     );
     assert_issue(
         &err,
-        "standard_nar.trigger_fixpoint_policy.vengeful_retaliates.on",
+        "night_resolution.trigger_fixpoint_policy.vengeful_retaliates.on",
         "on must match trigger rule",
     );
     assert_issue(
         &err,
-        "standard_nar.trigger_fixpoint_policy.vengeful_retaliates.loop_cap",
+        "night_resolution.trigger_fixpoint_policy.vengeful_retaliates.loop_cap",
         "must declare loop_cap policy",
     );
     assert_issue(
         &err,
-        "standard_nar.trigger_fixpoint_policy.unstoppable_vengeful_retaliates.trace",
+        "night_resolution.trigger_fixpoint_policy.unstoppable_vengeful_retaliates.trace",
         "must declare trace true",
     );
 }
 
 #[test]
-fn standard_nar_generated_kill_ownership_matrix_tracks_cross_table_coverage() {
+fn night_resolution_generated_kill_ownership_matrix_tracks_cross_table_coverage() {
     let mut value = serde_json::to_value(load_pack_named("mafiascum")).unwrap();
     validate_pack(&pack_from_value(value.clone())).unwrap();
 
-    value["standard_nar"]["protection_cause_policy"]["doctor_protect"]["blocks"]
+    value["night_resolution"]["protection_cause_policy"]["doctor_protect"]["blocks"]
         .as_array_mut()
         .unwrap()
         .retain(|cause| cause != "pgo_shoots_visitor");
-    value["standard_nar"]["target_state_save_policy"]["bulletproof"]["blocks"]
+    value["night_resolution"]["target_state_save_policy"]["bulletproof"]["blocks"]
         .as_array_mut()
         .unwrap()
         .retain(|cause| cause != "pgo_shoots_visitor");
-    value["standard_nar"]["suppression_policy"]["roleblocker_block"]["suppresses"]
+    value["night_resolution"]["suppression_policy"]["roleblocker_block"]["suppresses"]
         .as_array_mut()
         .unwrap()
         .retain(|action_id| action_id != "visit");
@@ -5247,35 +5278,35 @@ fn standard_nar_generated_kill_ownership_matrix_tracks_cross_table_coverage() {
     let err = validate_pack(&pack_from_value(value)).unwrap_err();
     assert_issue(
         &err,
-        "standard_nar.generated_kill_ownership.pgo_shoots_visitor",
+        "night_resolution.generated_kill_ownership.pgo_shoots_visitor",
         "is not owned by protection source `doctor_protect`",
     );
     assert_issue(
         &err,
-        "standard_nar.generated_kill_ownership.pgo_shoots_visitor",
+        "night_resolution.generated_kill_ownership.pgo_shoots_visitor",
         "is not owned by target-state save `bulletproof`",
     );
     assert_issue(
         &err,
-        "standard_nar.generated_kill_ownership.pgo_shoots_visitor",
+        "night_resolution.generated_kill_ownership.pgo_shoots_visitor",
         "feeder action `visit` is not owned by block source `roleblocker_block`",
     );
 }
 
 #[test]
-fn standard_nar_strongman_bypass_is_explicit_policy_not_precedence_exception() {
+fn night_resolution_strongman_bypass_is_explicit_policy_not_precedence_exception() {
     let mut value = serde_json::to_value(load_pack_named("mafiascum")).unwrap();
     validate_pack(&pack_from_value(value.clone())).unwrap();
 
-    value["standard_nar"]["strongman_bypasses_protect"] = json!(false);
+    value["night_resolution"]["strongman_bypasses_protect"] = json!(false);
     let err = validate_pack(&pack_from_value(value.clone())).unwrap_err();
     assert_issue(
         &err,
-        "standard_nar.strongman_bypasses_protect",
+        "night_resolution.strongman_bypasses_protect",
         "requires strongman_bypasses_protect true",
     );
 
-    value["standard_nar"]["strongman_bypasses_protect"] = json!(true);
+    value["night_resolution"]["strongman_bypasses_protect"] = json!(true);
     for rule in value["precedence"].as_array_mut().unwrap() {
         if rule["when"]["effect"] == "Protect"
             && rule["beats"]
@@ -7052,23 +7083,23 @@ fn invalid_target_state_policy_fixture_is_rejected_by_pack_linter() {
     let err = validate_pack(&pack).unwrap_err();
     assert_issue(
         &err,
-        "standard_nar.target_state_save_policy",
-        "enabled standard_nar policy must classify target-state saves",
+        "night_resolution.target_state_save_policy",
+        "explicit night_resolution policy must classify target-state saves",
     );
     assert_issue(
         &err,
-        "standard_nar.target_state_save_policy",
-        "standard_nar target-state save `bulletproof` must classify every kill cause",
+        "night_resolution.target_state_save_policy",
+        "night_resolution target-state save `bulletproof` must classify every kill cause",
     );
     assert_issue(
         &err,
-        "standard_nar.target_state_gate_policy",
-        "enabled standard_nar policy must classify target-state gates",
+        "night_resolution.target_state_gate_policy",
+        "explicit night_resolution policy must classify target-state gates",
     );
     assert_issue(
         &err,
-        "standard_nar.target_state_gate_policy",
-        "standard_nar target-state gate `commuted` must classify blocked abilities",
+        "night_resolution.target_state_gate_policy",
+        "night_resolution target-state gate `commuted` must classify blocked abilities",
     );
 }
 

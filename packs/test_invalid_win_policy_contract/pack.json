@@ -2,6 +2,9 @@
   "name": "test_invalid_win_policy_contract",
   "version": 1,
   "ir_version": 25,
+  "night_resolution": {
+    "mode": "Generic"
+  },
   "roles": {
     "malformed_win_townie": {
       "description": "Town-aligned test role for malformed win policy contracts.",

@@ -2,6 +2,9 @@
   "name": "test_twilight_window",
   "version": 1,
   "ir_version": 48,
+  "night_resolution": {
+    "mode": "Generic"
+  },
   "roles": {
     "twilight_self_destructor": {
       "description": "Test role with a Twilight-only self-destruct action.",
