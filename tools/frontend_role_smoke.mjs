@@ -526,7 +526,10 @@ try {
 
       let commandResult = null;
       if (role.id === "admin") {
-        commandResult = await driveAdminReject(page, { viewport });
+        commandResult = await driveAdminReject(page, {
+          viewport,
+          interactionGeometryBudget: role.interactionGeometryBudget,
+        });
       }
       if (role.id === "player") {
         commandResult = await drivePlayerReject(page, {
@@ -534,10 +537,15 @@ try {
           baseUrl,
           commandRequests,
           mediaRequests: playerMediaRequests,
+          interactionGeometryBudget: role.interactionGeometryBudget,
         });
       }
       if (role.id === "moderator") {
-        commandResult = await driveModeratorReject(page, { commandRequests, viewport });
+        commandResult = await driveModeratorReject(page, {
+          commandRequests,
+          viewport,
+          interactionGeometryBudget: role.interactionGeometryBudget,
+        });
       }
 
       await setDisclosureState(page, role.collapseBeforeScreenshot, false);
@@ -1114,8 +1122,16 @@ async function assertHostSetupWorkbenchGeometry(page, { scenario, viewport }) {
   };
 }
 
-async function driveAdminReject(page, { viewport } = {}) {
+async function driveAdminReject(
+  page,
+  { viewport, interactionGeometryBudget } = {},
+) {
   const createSetup = page.getByTestId("admin-setup-create-game");
+  const createGeometryBaseline = await captureInteractionGeometryBaseline(page, {
+    budget: interactionGeometryBudget?.feedback,
+    viewport,
+    label: "admin create-game feedback",
+  });
   await createSetup.locator("button").click();
   const createStatus = page.getByTestId("admin-command-status-create-game");
   await createStatus.waitFor({ state: "visible" });
@@ -1135,7 +1151,19 @@ async function driveAdminReject(page, { viewport } = {}) {
     expectedState: "reject",
     expectedAriaLive: "assertive",
   });
+  const feedbackGeometry = await assertPostInteractionGeometry(page, {
+    baseline: createGeometryBaseline,
+    budget: interactionGeometryBudget?.feedback,
+    viewport,
+    label: "admin create-game feedback",
+  });
   const sessionGrantSetup = page.getByTestId("admin-setup-session-grants");
+  const confirmationGeometryBaseline =
+    await captureInteractionGeometryBaseline(page, {
+      budget: interactionGeometryBudget?.confirmation,
+      viewport,
+      label: "admin session grant confirmation",
+    });
   await sessionGrantSetup.locator("button").click();
   const sessionGrantStatus = page.getByTestId(
     "admin-command-status-session-grants",
@@ -1160,6 +1188,12 @@ async function driveAdminReject(page, { viewport } = {}) {
       "admin-session-grant-expires-at",
       "admin-session-grant-global-mod",
     ],
+  });
+  const confirmationGeometry = await assertPostInteractionGeometry(page, {
+    baseline: confirmationGeometryBaseline,
+    budget: interactionGeometryBudget?.confirmation,
+    viewport,
+    label: "admin session grant confirmation",
   });
   const confirmationScreenshot = path.join(
     artifactDir,
@@ -1334,6 +1368,10 @@ async function driveAdminReject(page, { viewport } = {}) {
     rejected: cohostActivity,
     acknowledged: recoveryActivity,
   };
+  result.interactionGeometry = {
+    confirmation: confirmationGeometry,
+    feedback: feedbackGeometry,
+  };
   return result;
 }
 
@@ -1440,12 +1478,30 @@ async function driveAdminAuditDetailClick(page, { viewport, baseUrl }) {
 
 async function driveModeratorReject(
   page,
-  { commandRequests = [], viewport } = {},
+  { commandRequests = [], viewport, interactionGeometryBudget } = {},
 ) {
   const actionRoot = page.getByTestId("critical-host-action-extend_deadline");
+  const interactionGeometryBaseline =
+    await captureInteractionGeometryBaseline(page, {
+      budget: interactionGeometryBudget?.confirmation,
+      viewport,
+      label: "moderator extend deadline confirmation",
+    });
+  const feedbackGeometryBaseline =
+    await captureInteractionGeometryBaseline(page, {
+      budget: interactionGeometryBudget?.feedback,
+      viewport,
+      label: "moderator extend deadline feedback",
+    });
   await actionRoot.getByTestId("critical-host-action-trigger").click();
   await actionRoot.getByTestId("critical-host-action-confirmation").waitFor({
     state: "visible",
+  });
+  const confirmationGeometry = await assertPostInteractionGeometry(page, {
+    baseline: interactionGeometryBaseline,
+    budget: interactionGeometryBudget?.confirmation,
+    viewport,
+    label: "moderator extend deadline confirmation",
   });
   const confirmationScreenshot = path.join(
     artifactDir,
@@ -1487,6 +1543,12 @@ async function driveModeratorReject(
     expectedState: "reject",
     expectedAriaLive: "assertive",
   });
+  const feedbackGeometry = await assertPostInteractionGeometry(page, {
+    baseline: feedbackGeometryBaseline,
+    budget: interactionGeometryBudget?.feedback,
+    viewport,
+    label: "moderator extend deadline feedback",
+  });
   const rejectedActivity = await assertHostCommandActivity(page, {
     actionId: "extend_deadline",
     expectedState: "reject",
@@ -1517,6 +1579,10 @@ async function driveModeratorReject(
     confirmationScreenshotPixels,
     hostPrompt,
     slotLifecycle,
+    interactionGeometry: {
+      confirmation: confirmationGeometry,
+      feedback: feedbackGeometry,
+    },
   };
 }
 
@@ -1594,6 +1660,101 @@ async function assertMobileViewportBudget(page, { role, viewport }) {
     maxDocumentHeight,
     withinBudget: true,
   };
+}
+
+async function captureInteractionGeometryBaseline(
+  page,
+  { budget, viewport, label },
+) {
+  if (budget === undefined || viewport?.name !== "mobile") {
+    return null;
+  }
+  const anchor = page.locator(budget.anchorSelector).first();
+  await assertVisibleBox(anchor, `${label} anchor`);
+  return {
+    anchor: await readDocumentBox(anchor),
+    documentHeight: await page.evaluate(
+      () => document.documentElement.scrollHeight,
+    ),
+  };
+}
+
+async function assertPostInteractionGeometry(
+  page,
+  { baseline, budget, viewport, label },
+) {
+  if (baseline === null || budget === undefined || viewport?.name !== "mobile") {
+    return null;
+  }
+  const anchor = page.locator(budget.anchorSelector).first();
+  const target = page.locator(budget.targetSelector).first();
+  await assertVisibleBox(anchor, `${label} anchor after interaction`);
+  await assertVisibleBox(target, `${label} target`);
+  const anchorAfter = await readDocumentBox(anchor);
+  const targetBox = await readDocumentBox(target);
+  const documentHeight = await page.evaluate(
+    () => document.documentElement.scrollHeight,
+  );
+  const anchorShift = Math.max(
+    Math.abs(anchorAfter.x - baseline.anchor.x),
+    Math.abs(anchorAfter.y - baseline.anchor.y),
+  );
+  const combinedTop = Math.min(anchorAfter.y, targetBox.y);
+  const combinedBottom = Math.max(
+    anchorAfter.y + anchorAfter.height,
+    targetBox.y + targetBox.height,
+  );
+  const combinedSpan = combinedBottom - combinedTop;
+  const documentGrowth = Math.max(0, documentHeight - baseline.documentHeight);
+  const maxCombinedSpan =
+    viewport.height * budget.maxCombinedSpanViewportRatio;
+  const maxDocumentGrowth =
+    viewport.height * budget.maxDocumentGrowthViewportRatio;
+
+  if (anchorShift > budget.maxAnchorShiftPx) {
+    throw new Error(
+      `${label} moved its action anchor ${anchorShift}px, beyond ${budget.maxAnchorShiftPx}px budget`,
+    );
+  }
+  if (combinedSpan > maxCombinedSpan) {
+    throw new Error(
+      `${label} action and target span ${combinedSpan}px, beyond ${maxCombinedSpan}px budget`,
+    );
+  }
+  if (documentGrowth > maxDocumentGrowth) {
+    throw new Error(
+      `${label} grew the document ${documentGrowth}px, beyond ${maxDocumentGrowth}px budget`,
+    );
+  }
+
+  return {
+    anchorSelector: budget.anchorSelector,
+    targetSelector: budget.targetSelector,
+    anchorBefore: baseline.anchor,
+    anchorAfter,
+    target: targetBox,
+    anchorShift,
+    maxAnchorShift: budget.maxAnchorShiftPx,
+    combinedSpan,
+    maxCombinedSpan,
+    documentHeightBefore: baseline.documentHeight,
+    documentHeightAfter: documentHeight,
+    documentGrowth,
+    maxDocumentGrowth,
+    withinBudget: true,
+  };
+}
+
+async function readDocumentBox(locator) {
+  return locator.evaluate((node) => {
+    const rect = node.getBoundingClientRect();
+    return {
+      x: rect.x + window.scrollX,
+      y: rect.y + window.scrollY,
+      width: rect.width,
+      height: rect.height,
+    };
+  });
 }
 
 async function driveModeratorHostPromptAck(page) {
@@ -2241,7 +2402,16 @@ async function drivePlayerPrivateChannelPost(page, { commandRequests }) {
   };
 }
 
-async function drivePlayerReject(page, { viewport, baseUrl, commandRequests, mediaRequests }) {
+async function drivePlayerReject(
+  page,
+  {
+    viewport,
+    baseUrl,
+    commandRequests,
+    mediaRequests,
+    interactionGeometryBudget,
+  },
+) {
   const media = await assertPlayerMediaNetwork(page, { mediaRequests });
   await emitPlayerOfficialThreadPost(page);
   const officialPost = page.getByTestId("player-live-official-post");
@@ -2267,6 +2437,12 @@ async function drivePlayerReject(page, { viewport, baseUrl, commandRequests, med
   });
   await page.getByTestId("thread-post-440").waitFor({ state: "visible" });
   const composer = page.getByTestId("player-composer");
+  const feedbackGeometryBaseline =
+    await captureInteractionGeometryBaseline(page, {
+      budget: interactionGeometryBudget?.feedback,
+      viewport,
+      label: "player vote receipt",
+    });
   await page
     .getByTestId("player-quick-vote-actions")
     .locator('[data-action="submit_vote"]')
@@ -2285,6 +2461,21 @@ async function drivePlayerReject(page, { viewport, baseUrl, commandRequests, med
   const commandReceipt = await assertPlayerCommandReceipt(page, {
     actionId: "submit_vote",
     expectedState: "reject",
+  });
+  const feedbackGeometry = await assertPostInteractionGeometry(page, {
+    baseline: feedbackGeometryBaseline,
+    budget: interactionGeometryBudget?.feedback,
+    viewport,
+    label: "player vote receipt",
+  });
+  const receiptScreenshot = path.join(
+    artifactDir,
+    `${viewport.name}-player-receipt.png`,
+  );
+  const receiptScreenshotPixels = await captureScreenshotEvidence(page, {
+    path: receiptScreenshot,
+    label: `player receipt ${viewport.name}`,
+    viewport,
   });
   await composer.locator("textarea").fill("Browser smoke player post");
   await composer.locator('[data-action="submit_post"]').click();
@@ -2324,6 +2515,12 @@ async function drivePlayerReject(page, { viewport, baseUrl, commandRequests, med
       statusRegion: commandStatusRegion,
     },
     commandReceipt,
+    interactionGeometry: {
+      confirmation: null,
+      feedback: feedbackGeometry,
+    },
+    receiptScreenshot: path.relative(repoRoot, receiptScreenshot),
+    receiptScreenshotPixels,
     postCommand: {
       state: await status.getAttribute("data-state"),
       message: await status.innerText(),

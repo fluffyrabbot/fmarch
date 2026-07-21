@@ -170,6 +170,22 @@ export const roles = Object.freeze([
       maxPrimaryActionBottomViewportRatio: 1,
       maxDocumentHeightViewportRatio: 2.6,
     }),
+    interactionGeometryBudget: Object.freeze({
+      confirmation: Object.freeze({
+        anchorSelector: '[data-testid="admin-command-trigger-session-grants"]',
+        targetSelector: '[data-testid="admin-session-grant-form"]',
+        maxAnchorShiftPx: 1,
+        maxCombinedSpanViewportRatio: 0.6,
+        maxDocumentGrowthViewportRatio: 0.5,
+      }),
+      feedback: Object.freeze({
+        anchorSelector: '[data-testid="admin-command-trigger-create-game"]',
+        targetSelector: '[data-testid="admin-command-status-create-game"]',
+        maxAnchorShiftPx: 1,
+        maxCombinedSpanViewportRatio: 0.35,
+        maxDocumentGrowthViewportRatio: 0.25,
+      }),
+    }),
     closedByDefault: Object.freeze([
       '[data-testid="admin-recovery-workflow"]',
       '[data-testid="admin-status-overview"]',
@@ -268,6 +284,15 @@ export const roles = Object.freeze([
       maxPrimaryActionBottomViewportRatio: 1,
       maxDocumentHeightViewportRatio: 3.5,
     }),
+    interactionGeometryBudget: Object.freeze({
+      feedback: Object.freeze({
+        anchorSelector: '[data-testid="player-primary-action-zone"]',
+        targetSelector: '[data-testid="player-command-receipt-submit_vote"]',
+        maxAnchorShiftPx: 1,
+        maxCombinedSpanViewportRatio: 0.9,
+        maxDocumentGrowthViewportRatio: 0.25,
+      }),
+    }),
     closedByDefault: Object.freeze([
       '[data-testid="player-media-composer"]',
       '[data-testid="player-status-overview"]',
@@ -342,6 +367,25 @@ export const roles = Object.freeze([
         '[data-testid="critical-host-action-extend_deadline"] [data-testid="critical-host-action-trigger"]',
       maxPrimaryActionBottomViewportRatio: 1,
       maxDocumentHeightViewportRatio: 2.5,
+    }),
+    interactionGeometryBudget: Object.freeze({
+      confirmation: Object.freeze({
+        anchorSelector:
+          '[data-testid="critical-host-action-extend_deadline"] [data-testid="critical-host-action-trigger"]',
+        targetSelector:
+          '[data-testid="critical-host-action-extend_deadline"] [data-testid="critical-host-action-confirmation"]',
+        maxAnchorShiftPx: 1,
+        maxCombinedSpanViewportRatio: 0.35,
+        maxDocumentGrowthViewportRatio: 0.25,
+      }),
+      feedback: Object.freeze({
+        anchorSelector:
+          '[data-testid="critical-host-action-extend_deadline"] [data-testid="critical-host-action-trigger"]',
+        targetSelector: '[data-testid="host-command-status-extend_deadline"]',
+        maxAnchorShiftPx: 1,
+        maxCombinedSpanViewportRatio: 0.5,
+        maxDocumentGrowthViewportRatio: 0.25,
+      }),
     }),
     closedByDefault: Object.freeze([
       '[data-testid="host-status-overview"]',

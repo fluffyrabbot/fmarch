@@ -6271,6 +6271,31 @@ function assertRoleMobileViewportEvidence(roleEntries) {
       } else {
         assert.equal(entry.mobileViewportBudget, null);
       }
+
+      const geometry = entry.commandResult.interactionGeometry;
+      for (const phase of ["confirmation", "feedback"]) {
+        const phaseBudget = scenario.interactionGeometryBudget[phase];
+        const phaseEvidence = geometry[phase];
+        if (entry.viewport.name !== "mobile" || phaseBudget === undefined) {
+          assert.equal(phaseEvidence, null);
+          continue;
+        }
+        assert.equal(phaseEvidence.withinBudget, true);
+        assert.equal(phaseEvidence.anchorSelector, phaseBudget.anchorSelector);
+        assert.equal(phaseEvidence.targetSelector, phaseBudget.targetSelector);
+        assert.equal(
+          phaseEvidence.anchorShift <= phaseEvidence.maxAnchorShift,
+          true,
+        );
+        assert.equal(
+          phaseEvidence.combinedSpan <= phaseEvidence.maxCombinedSpan,
+          true,
+        );
+        assert.equal(
+          phaseEvidence.documentGrowth <= phaseEvidence.maxDocumentGrowth,
+          true,
+        );
+      }
     }
   }
 }
@@ -6312,6 +6337,16 @@ function assertBrowserPlayerPrivateDisclosureEvidence(roleEntries) {
   assert.equal(playerEntries.length > 0, true, "player private disclosure evidence missing");
 
   for (const entry of playerEntries) {
+    assertPixelEvidence(
+      [
+        {
+          screenshot: entry.commandResult.receiptScreenshot,
+          screenshotPixels: entry.commandResult.receiptScreenshotPixels,
+          viewport: entry.viewport,
+        },
+      ],
+      "player command receipt screenshots",
+    );
     assert.deepEqual(entry.commandResult.commandReceipt, {
       receiptTestId: "player-command-receipt",
       receiptItemTestId: "player-command-receipt-submit_vote",

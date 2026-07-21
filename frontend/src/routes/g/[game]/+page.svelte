@@ -418,15 +418,15 @@
         />
 
         {#if player.readOnly !== true}
+          <PlayerCommandReceipt receipts={commandReceipts} />
+        {/if}
+
+        {#if player.readOnly !== true}
           <PlayerRoleCard card={playerRoleCard} />
 
           <PlayerActionSubmissionCheckpoint
             checkpoint={playerActionSubmissionCheckpoint}
           />
-        {/if}
-
-        {#if player.readOnly !== true}
-          <PlayerCommandReceipt receipts={commandReceipts} />
         {/if}
 
         <details class="fm-surface-drawer player-surface__drawer" data-testid="player-status-overview">

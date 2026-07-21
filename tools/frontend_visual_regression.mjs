@@ -15,6 +15,7 @@ const selectedScreenshots = Object.freeze([
   "mobile-admin.png",
   "mobile-admin-confirmation.png",
   "mobile-player.png",
+  "mobile-player-receipt.png",
   "mobile-moderator.png",
   "mobile-moderator-confirmation.png",
   "mobile-route-state-player-reject.png",

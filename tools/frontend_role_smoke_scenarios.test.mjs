@@ -232,6 +232,22 @@ test("role smoke pins collapsed support and mobile first-viewport budgets", () =
   }
 });
 
+test("role smoke pins confirmation and feedback geometry budgets", () => {
+  for (const role of roles) {
+    const budget = role.interactionGeometryBudget;
+    assert.equal(Object.isFrozen(budget), true);
+    assert.notEqual(budget.feedback, undefined);
+    for (const phase of Object.values(budget)) {
+      assert.equal(Object.isFrozen(phase), true);
+      assert.equal(typeof phase.anchorSelector, "string");
+      assert.equal(typeof phase.targetSelector, "string");
+      assert.equal(phase.maxAnchorShiftPx <= 1, true);
+      assert.equal(phase.maxCombinedSpanViewportRatio <= 1, true);
+      assert.equal(phase.maxDocumentGrowthViewportRatio <= 0.75, true);
+    }
+  }
+});
+
 test("nav focus coverage is shared across static and browser smoke evidence", () => {
   assert.deepEqual(
     navFocusCoverage.surfaces.map((surface) => surface.id),
