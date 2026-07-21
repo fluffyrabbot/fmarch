@@ -3,7 +3,8 @@
 -- This workspace has no deployed users or durable upgrade obligations. The
 -- schema is intentionally expressed as one current-state baseline; future
 -- pre-1.0 schema changes should keep this file current until migration history
--- becomes a product compatibility boundary.
+-- becomes a product compatibility boundary. The projection-baseline contract
+-- keeps this directory single-file and verifies the resulting catalog exactly.
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;

@@ -141,7 +141,25 @@ The no-server contract gate is:
 
 ```sh
 npm run test:dev-postgres-contract
+npm run test:projection-baseline:static
 npm run test:dev-test-game-contract
+```
+
+The projection-schema gate requires an already-running local Postgres. It
+asserts that the migration directory contains only the strict greenfield
+baseline, rejects transitional data/column migration statements, applies the
+baseline to a SQLx-provisioned scratch database, and checks the exact table,
+index, and constraint inventory:
+
+```sh
+DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:projection-baseline
+```
+
+The broader serial local database lane includes that contract plus every
+commands/projections test:
+
+```sh
+DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:local-postgres-ci
 ```
 
 The core gameplay live gate is the faster role-URL proof lane. The local command
