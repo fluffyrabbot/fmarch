@@ -17,7 +17,7 @@ export const LIVE_TRANSPORT_BOUNDARY = Object.freeze({
 
 export const LIVE_PROJECTION_CONNECTING_STATUS = Object.freeze({
   state: "connecting",
-  message: "Connecting live projection",
+  message: "Connecting live updates. Actions remain safe while we reconnect.",
 });
 
 export const EMPTY_LIVE_PROJECTION_METRICS = Object.freeze({
@@ -328,49 +328,49 @@ export function liveProjectionStatusForEvent(
   if (message?.kind === "open") {
     return Object.freeze({
       state: "connected",
-      message: "Live projection socket open",
+      message: "Live updates connected",
     });
   }
   if (message?.kind === "hello") {
     return Object.freeze({
       state: "connected",
-      message: "Live projection handshake received",
+      message: "Live updates connected",
     });
   }
   if (message?.kind === "delta") {
     return Object.freeze({
       state: "updated",
-      message: `Live projection updated: ${message.delta?.kind ?? "delta"}`,
+      message: "Game updated",
     });
   }
   if (message?.kind === "resync-required" && message.state === "recovered") {
     return Object.freeze({
       state: "recovered",
-      message: `Live projection resynced from ${message.fromSeq}`,
+      message: "Live updates restored",
     });
   }
   if (message?.kind === "reconnecting") {
     return Object.freeze({
       state: "reconnecting",
-      message: "Live projection reconnecting",
+      message: "Reconnecting live updates. Actions remain safe.",
     });
   }
   if (message?.kind === "reconnect" && message.state === "recovered") {
     return Object.freeze({
       state: "recovered",
-      message: "Live projection reconnected",
+      message: "Live updates restored",
     });
   }
   if (message?.kind === "error") {
     return Object.freeze({
       state: "error",
-      message: `Live projection error: ${message.message ?? "unknown"}`,
+      message: "Live updates paused. Refresh if this continues.",
     });
   }
   if (message?.kind === "close") {
     return Object.freeze({
       state: "closed",
-      message: "Live projection closed",
+      message: "Live updates paused. Reconnecting automatically.",
     });
   }
   return previous;

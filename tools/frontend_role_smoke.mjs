@@ -1327,7 +1327,7 @@ async function driveAdminAuditDetailClick(page, { viewport, baseUrl }) {
   const capabilityText = await page
     .getByTestId("admin-audit-detail-capability")
     .innerText();
-  if (!capabilityText.includes("GlobalAdmin")) {
+  if (!capabilityText.includes("Site administrator")) {
     throw new Error(`admin audit detail capability was ${capabilityText}`);
   }
   const bodyText = await page.textContent("body");

@@ -13,19 +13,17 @@
   {#each view.items as item}
     <article class="fm-panel" data-testid={item.testId}>
       <h2>{item.label}</h2>
-      <p
-        class="admin-surface__boundary fm-well fm-well--kv"
-        data-testid={item.boundaryTestId}
-      >
-        <strong>{item.authority}</strong>
-        <span>{item.boundary}</span>
-      </p>
-      <p
-        class="admin-surface__evidence"
-        data-testid={item.evidenceTestId}
-      >
-        {item.boundaryDetail}
-      </p>
+      <p class="admin-surface__summary">{item.boundary}</p>
+      <details class="fm-proof-disclosure admin-surface__technical-details">
+        <summary>Technical details</summary>
+        <p
+          class="admin-surface__boundary fm-well fm-well--kv"
+          data-testid={item.boundaryTestId}
+        >
+          <strong>{item.displayAuthority}</strong>
+          <span data-testid={item.evidenceTestId}>{item.boundaryDetail}</span>
+        </p>
+      </details>
       <AppStatus
         status={item.statusView}
         testId={item.statusTestId}
@@ -44,7 +42,7 @@
 </div>
 
 <style>
-  .admin-surface__boundary {
+  .admin-surface__summary {
     margin: 10px 0 0;
   }
 </style>

@@ -29,7 +29,7 @@ test("app shell builds role navigation from resolved capabilities", () => {
     phase: { id: "N02", label: "Night 2" },
   });
 
-  assert.equal(shell.sessionLabel, "player_mira");
+  assert.equal(shell.sessionLabel, "@player_mira");
   assert.equal(shell.phase, "night");
   assert.equal(
     buildAppShell({ activeSurface: "board" }).phase,
@@ -41,7 +41,9 @@ test("app shell builds role navigation from resolved capabilities", () => {
     capabilityTestId: "app-shell-session-capabilities",
     gameTestId: "app-shell-session-game",
     state: "signed-in",
-    principalLabel: "player_mira",
+    principalLabel: "@player_mira",
+    initials: "PM",
+    contextLabel: "Playing midsummer",
     gameLabel: "midsummer",
     capabilityCount: 2,
     capabilityKinds: ["HostOf", "SlotOccupant"],
@@ -52,7 +54,8 @@ test("app shell builds role navigation from resolved capabilities", () => {
     APP_SHELL_CONTRACT.surfaceOrder,
   );
   assert.equal(APP_SHELL_CONTRACT.component, "fm-app-shell");
-  assert.equal(APP_SHELL_CONTRACT.navLabel, "Role surfaces");
+  assert.equal(APP_SHELL_CONTRACT.navLabel, "Main navigation");
+  assert.equal(APP_SHELL_CONTRACT.workspaceNavLabel, "Your workspaces");
   assert.equal(APP_SHELL_CONTRACT.skipLinkLabel, "Skip to app content");
   assert.equal(APP_SHELL_CONTRACT.skipLinkTestId, "app-shell-skip-link");
   assert.equal(APP_SHELL_CONTRACT.mainTargetId, "fm-main");
@@ -62,10 +65,10 @@ test("app shell builds role navigation from resolved capabilities", () => {
   assert.equal(APP_SHELL_CONTRACT.sessionCapabilityTestId, "app-shell-session-capabilities");
   assert.equal(APP_SHELL_CONTRACT.sessionGameTestId, "app-shell-session-game");
   assert.equal(APP_SHELL_CONTRACT.topbarTestId, "app-shell-topbar");
-  assert.equal(APP_SHELL_CONTRACT.topbarMode, "sticky-safe-area-role-session-topbar");
+  assert.equal(APP_SHELL_CONTRACT.topbarMode, "compact-contextual-topbar");
   assert.equal(APP_SHELL_CONTRACT.topbarStickyTopPx, 0);
-  assert.equal(APP_SHELL_CONTRACT.topbarBlockSizePx, 76);
-  assert.equal(APP_SHELL_CONTRACT.stickyRailGapPx, 22);
+  assert.equal(APP_SHELL_CONTRACT.topbarBlockSizePx, 64);
+  assert.equal(APP_SHELL_CONTRACT.stickyRailGapPx, 16);
   assert.equal(APP_SHELL_CONTRACT.minTouchTargetPx, 44);
   assert.deepEqual(
     shell.surfaces.map((surface) => [
@@ -116,6 +119,8 @@ test("app shell session summary models signed-out and multi-capability states", 
     gameTestId: APP_SHELL_CONTRACT.sessionGameTestId,
     state: "signed-out",
     principalLabel: "Signed out",
+    initials: "?",
+    contextLabel: "Site admin",
     gameLabel: "No game",
     capabilityCount: 4,
     capabilityKinds: ["GlobalAdmin", "HostOf", "SlotOccupant"],
@@ -226,8 +231,8 @@ test("shared app CSS makes disabled touch actions visibly inert", async () => {
   assert.match(css, /env\(safe-area-inset-right\)/);
   assert.match(css, /env\(safe-area-inset-bottom\)/);
   assert.match(css, /env\(safe-area-inset-left\)/);
-  assert.match(css, /--fm-app-topbar-block-size:\s*76px/);
-  assert.match(css, /--fm-app-sticky-rail-gap:\s*22px/);
+  assert.match(css, /--fm-app-topbar-block-size:\s*64px/);
+  assert.match(css, /--fm-app-sticky-rail-gap:\s*16px/);
   assert.match(css, /\.fm-app-shell__topbar\s*\{[^}]*position:\s*sticky/s);
   assert.match(css, /\.fm-app-shell__topbar\s*\{[^}]*top:\s*env\(safe-area-inset-top\)/s);
   assert.match(css, /\.fm-app-shell__topbar\s*\{[^}]*min-block-size:\s*var\(--fm-app-topbar-block-size\)/s);
@@ -244,7 +249,7 @@ test("shared app CSS makes disabled touch actions visibly inert", async () => {
   assert.match(css, /opacity:\s*0\.[0-9]+/);
   assert.match(css, /touch-action:\s*manipulation/);
   assert.match(css, /text-decoration:\s*none/);
-  assert.match(css, /\.fm-app-shell__nav-reason\s*\{/);
+  assert.match(css, /\.fm-sr-only\s*\{/);
   assert.match(css, /font-weight:\s*800/);
   assert.match(css, /\.fm-touch-button__reason\s*\{/);
   assert.match(css, /\.fm-touch-button__label,\s*\.fm-touch-button__reason\s*\{[^}]*overflow-wrap:\s*anywhere/s);
@@ -289,7 +294,7 @@ test("route error state keeps failed paths inside the shared app shell", () => {
     ],
   });
   assert.equal(playerError.shell.activeSurface, "player");
-  assert.equal(playerError.shell.session.principalLabel, "player_mira");
+  assert.equal(playerError.shell.session.principalLabel, "@player_mira");
   assert.equal(playerError.shell.session.capabilitySummary, "ChannelMember + SlotOccupant");
   assert.equal(playerError.shell.surfaces.find((surface) => surface.id === "player").navigation, "link");
   assert.equal(playerError.error.title, "Route not found");
@@ -365,7 +370,7 @@ test("navigation pending data exposes route-aware status without a duplicate she
     "Fetching thread, channel, votecount, deadline, and private projection state.",
   );
   assert.equal(pending.activeNavTestId, "role-nav-player");
-  assert.equal(pending.sessionPrincipal, "player_mira");
+  assert.equal(pending.sessionPrincipal, "@player_mira");
   assert.equal(pending.capabilitySummary, "ChannelMember + SlotOccupant");
   assert.equal(pending.status.state, "pending");
   assert.equal(pending.status.testId, APP_NAVIGATION_PENDING_CONTRACT.statusTestId);

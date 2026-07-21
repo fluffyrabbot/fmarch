@@ -1,3 +1,5 @@
+import { humanizeCapabilityLabel } from "./presentation-copy.mjs";
+
 export const APP_SURFACE_HEADER_CONTRACT = Object.freeze({
   component: "fm-surface-header",
   capabilityClassName: "fm-capability-pill",
@@ -40,7 +42,7 @@ export function buildAppSurfaceHeaderViewModel({
         ? Object.freeze({ visible: false })
         : Object.freeze({
             visible: true,
-            label: requiredText(capabilityLabel, "capabilityLabel"),
+            label: humanizeCapabilityLabel(requiredText(capabilityLabel, "capabilityLabel")),
             testId: capabilityTestId,
             className: APP_SURFACE_HEADER_CONTRACT.capabilityClassName,
             minTouchTargetPx: APP_SURFACE_HEADER_CONTRACT.minTouchTargetPx,

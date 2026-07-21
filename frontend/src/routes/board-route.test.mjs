@@ -39,7 +39,7 @@ test("board load opts into the root-owned shell with an API-backed public index"
 
   assert.equal(data.shellOwner, "layout");
   assert.equal(data.shell.activeSurface, "board");
-  assert.equal(data.shell.session.principalLabel, "player_mira");
+  assert.equal(data.shell.session.principalLabel, "@player_mira");
   assert.equal(data.board.status, "ready");
   assert.deepEqual(
     data.board.games.map((game) => [game.id, game.status, game.phaseLabel]),

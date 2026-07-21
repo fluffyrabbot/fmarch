@@ -258,7 +258,8 @@ async function proveAppShellContract() {
   });
 
   assert.equal(APP_SHELL_CONTRACT.component, "fm-app-shell");
-  assert.equal(APP_SHELL_CONTRACT.navLabel, "Role surfaces");
+  assert.equal(APP_SHELL_CONTRACT.navLabel, "Main navigation");
+  assert.equal(APP_SHELL_CONTRACT.workspaceNavLabel, "Your workspaces");
   assert.equal(APP_SHELL_CONTRACT.skipLinkLabel, "Skip to app content");
   assert.equal(APP_SHELL_CONTRACT.skipLinkTestId, "app-shell-skip-link");
   assert.equal(APP_SHELL_CONTRACT.mainTargetId, "fm-main");
@@ -268,17 +269,19 @@ async function proveAppShellContract() {
   assert.equal(APP_SHELL_CONTRACT.sessionCapabilityTestId, "app-shell-session-capabilities");
   assert.equal(APP_SHELL_CONTRACT.sessionGameTestId, "app-shell-session-game");
   assert.equal(APP_SHELL_CONTRACT.topbarTestId, "app-shell-topbar");
-  assert.equal(APP_SHELL_CONTRACT.topbarMode, "sticky-safe-area-role-session-topbar");
+  assert.equal(APP_SHELL_CONTRACT.topbarMode, "compact-contextual-topbar");
   assert.equal(APP_SHELL_CONTRACT.topbarStickyTopPx, 0);
-  assert.equal(APP_SHELL_CONTRACT.topbarBlockSizePx, 76);
-  assert.equal(APP_SHELL_CONTRACT.stickyRailGapPx, 22);
+  assert.equal(APP_SHELL_CONTRACT.topbarBlockSizePx, 64);
+  assert.equal(APP_SHELL_CONTRACT.stickyRailGapPx, 16);
   assert.deepEqual(data.shell.session, {
     testId: APP_SHELL_CONTRACT.sessionTestId,
     principalTestId: APP_SHELL_CONTRACT.sessionPrincipalTestId,
     capabilityTestId: APP_SHELL_CONTRACT.sessionCapabilityTestId,
     gameTestId: APP_SHELL_CONTRACT.sessionGameTestId,
     state: "signed-in",
-    principalLabel: "player_mira",
+    principalLabel: "@player_mira",
+    initials: "PM",
+    contextLabel: "Playing midsummer",
     gameLabel: "midsummer",
     capabilityCount: 1,
     capabilityKinds: ["SlotOccupant"],
@@ -301,8 +304,8 @@ async function proveAppShellContract() {
     ]),
   );
   assert.match(css, /\.fm-app-shell__nav\s*\{/);
-  assert.match(css, /--fm-app-topbar-block-size:\s*76px/);
-  assert.match(css, /--fm-app-sticky-rail-gap:\s*22px/);
+  assert.match(css, /--fm-app-topbar-block-size:\s*64px/);
+  assert.match(css, /--fm-app-sticky-rail-gap:\s*16px/);
   assert.match(css, /\.fm-app-shell__topbar\s*\{[^}]*position:\s*sticky/s);
   assert.match(css, /\.fm-app-shell__topbar\s*\{[^}]*top:\s*env\(safe-area-inset-top\)/s);
   assert.match(css, /\.fm-app-shell__topbar\s*\{[^}]*z-index:\s*11/s);
@@ -315,7 +318,7 @@ async function proveAppShellContract() {
   assert.match(css, /\.fm-skip-link\s*\{/);
   assert.match(css, /\.fm-skip-link:focus-visible\s*\{/);
   assert.match(css, /\.fm-app-shell__nav-item\[data-allowed="false"\]/);
-  assert.match(css, /\.fm-app-shell__nav-reason\s*\{/);
+  assert.match(css, /\.fm-sr-only\s*\{/);
   assert.match(css, /\.fm-app-shell__session small\s*\{/);
   assert.match(css, /overflow-wrap:\s*anywhere/);
 
@@ -1863,9 +1866,9 @@ async function proveModeratorSurface() {
   assert.equal(controls.groups.length >= 6, true);
   assert.deepEqual(controls.commandContext, {
     testId: HOST_CONTROL_SURFACE_CONTRACT.commandContextTestId,
-    summary: "Acting as host_h",
-    label: "Moderator access",
-    value: "HostOf(midsummer) as host_h",
+    summary: "Hosting as @host_h",
+    label: "Technical access",
+    value: "HostOf(midsummer) · @host_h",
     gameId: "midsummer",
     principalUserId: "host_h",
     capabilityLabel: "HostOf(midsummer)",

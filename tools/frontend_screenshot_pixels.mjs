@@ -5,6 +5,8 @@ export async function captureScreenshotEvidence(
   page,
   { path: screenshotPath, label, viewport },
 ) {
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.waitForTimeout(50);
   const png = await page.screenshot({ fullPage: true });
   await writeFile(screenshotPath, png);
   const pixels = analyzePngScreenshot(png, label);
@@ -124,6 +126,79 @@ export function analyzePngScreenshot(png, label = "screenshot") {
     bitDepth,
     uniqueColorBuckets: colorBuckets.size,
     changedPixelRatio: Number((changedPixels / pixelCount).toFixed(6)),
+  };
+}
+
+export function samplePngScreenshot(png, { label = "screenshot", columns = 12, rows = 12 } = {}) {
+  const signature = "89504e470d0a1a0a";
+  if (png.subarray(0, 8).toString("hex") !== signature) {
+    throw new Error(`${label} screenshot is not a PNG`);
+  }
+
+  let offset = 8;
+  let width = null;
+  let height = null;
+  let bitDepth = null;
+  let colorType = null;
+  const idat = [];
+  while (offset < png.length) {
+    const length = png.readUInt32BE(offset);
+    const type = png.subarray(offset + 4, offset + 8).toString("ascii");
+    const data = png.subarray(offset + 8, offset + 8 + length);
+    offset += 12 + length;
+    if (type === "IHDR") {
+      width = data.readUInt32BE(0);
+      height = data.readUInt32BE(4);
+      bitDepth = data.readUInt8(8);
+      colorType = data.readUInt8(9);
+    } else if (type === "IDAT") {
+      idat.push(data);
+    } else if (type === "IEND") {
+      break;
+    }
+  }
+
+  if (width === null || height === null || bitDepth !== 8 || colorType === null) {
+    throw new Error(`${label} screenshot has an unsupported PNG header`);
+  }
+  const channels = pngChannels(colorType, label);
+  const stride = width * channels;
+  const inflated = inflateSync(Buffer.concat(idat));
+  const previous = Buffer.alloc(stride);
+  const current = Buffer.alloc(stride);
+  const buckets = Array.from({ length: columns * rows }, () => [0, 0, 0, 0]);
+  let sourceOffset = 0;
+
+  for (let row = 0; row < height; row += 1) {
+    const filter = inflated[sourceOffset];
+    sourceOffset += 1;
+    inflated.copy(current, 0, sourceOffset, sourceOffset + stride);
+    sourceOffset += stride;
+    defilterPngRow({ current, previous, filter, bytesPerPixel: channels });
+
+    for (let column = 0; column < width; column += 1) {
+      const rgb = readRgb(current, column * channels, colorType);
+      const bucketColumn = Math.min(columns - 1, Math.floor((column * columns) / width));
+      const bucketRow = Math.min(rows - 1, Math.floor((row * rows) / height));
+      const bucket = buckets[bucketRow * columns + bucketColumn];
+      bucket[0] += rgb[0];
+      bucket[1] += rgb[1];
+      bucket[2] += rgb[2];
+      bucket[3] += 1;
+    }
+    current.copy(previous);
+  }
+
+  return {
+    width,
+    height,
+    columns,
+    rows,
+    pixels: buckets.flatMap(([red, green, blue, count]) => [
+      Math.round(red / count),
+      Math.round(green / count),
+      Math.round(blue / count),
+    ]),
   };
 }
 

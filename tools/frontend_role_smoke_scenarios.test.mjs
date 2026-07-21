@@ -29,6 +29,7 @@ test("role smoke scenario matrix covers tablet-first acceptance viewports", () =
   assert.deepEqual(
     viewports.map((viewport) => [viewport.name, viewport.width, viewport.height]),
     [
+      ["mobile", 390, 844],
       ["tablet", 1024, 768],
       ["tablet-wide", 1180, 820],
       ["tablet-landscape", 1280, 900],

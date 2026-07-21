@@ -2052,7 +2052,7 @@ export async function buildAdminRouteData({
       eyebrow: "Admin",
       title: "Operations",
       summary:
-        "Game setup, scoped session grants, audit reports, and recovery queues.",
+        "Set up games, manage access, and review system health.",
       capabilityLabel: access.capabilityLabel,
       capabilityTestId: ADMIN_ROUTE_CONTRACT.capabilityTestId,
     }),

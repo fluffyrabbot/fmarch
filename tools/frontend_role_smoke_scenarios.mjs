@@ -48,6 +48,7 @@ import {
 } from "../frontend/src/lib/components/player-posture/player-posture-strip-model.mjs";
 
 export const viewports = Object.freeze([
+  Object.freeze({ name: "mobile", width: 390, height: 844 }),
   Object.freeze({ name: "tablet", width: 1024, height: 768 }),
   Object.freeze({ name: "tablet-wide", width: 1180, height: 820 }),
   Object.freeze({ name: "tablet-landscape", width: 1280, height: 900 }),
@@ -165,7 +166,7 @@ export const roles = Object.freeze([
     requiredText: ADMIN_ROUTE_CONTRACT.requiredText,
     touchSelectors: [
       '[data-testid="admin-setup-create-game"] button',
-      '[data-testid="admin-boundary-session-grants"]',
+      '[data-testid="admin-setup-session-grants"] summary',
       '[data-testid="admin-audit-link-proof-runs"]',
       '[data-testid="admin-recovery-recovery-gate"] button',
     ],
@@ -190,8 +191,6 @@ export const roles = Object.freeze([
     visibleTestIds: [
       ...adminReadinessTargets.overlapTestIds,
       "admin-audit-link-proof-runs",
-      "admin-audit-boundary-proof-runs",
-      "admin-audit-evidence-proof-runs",
     ],
     overlapTestIds: adminReadinessTargets.overlapTestIds,
     statusRegions: [

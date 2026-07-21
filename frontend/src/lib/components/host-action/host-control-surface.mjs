@@ -48,9 +48,12 @@ export function buildHostControlSurfaceViewModel({
     }),
     commandContext: context,
     groups: Object.freeze(
-      groups.map((group) =>
+      groups.map((group, index) =>
         Object.freeze({
           ...group,
+          section: hostControlSection(group.id),
+          sectionStart:
+            index === 0 || hostControlSection(groups[index - 1]?.id) !== hostControlSection(group.id),
           testId: `moderator-control-${group.id}`,
           diagnostics: Object.freeze({
             testId: `moderator-control-${group.id}-diagnostics`,
@@ -105,6 +108,16 @@ export function buildHostControlSurfaceViewModel({
   });
 }
 
+function hostControlSection(id) {
+  if (["deadline", "phase", "votecount"].includes(id)) {
+    return "Game state";
+  }
+  if (["replacement", "host-prompts", "slot-lifecycle"].includes(id)) {
+    return "People and prompts";
+  }
+  return "Endgame";
+}
+
 export function commandStatusMessage(status, actionLabel = "Action") {
   if (status === undefined || status === null) {
     return "";
@@ -144,9 +157,9 @@ function buildHostCommandContextViewModel({
   const normalizedCapability = String(capabilityLabel);
   return Object.freeze({
     testId: HOST_CONTROL_SURFACE_CONTRACT.commandContextTestId,
-    summary: `Acting as ${normalizedPrincipal}`,
-    label: "Moderator access",
-    value: `${normalizedCapability} as ${normalizedPrincipal}`,
+    summary: `Hosting as @${normalizedPrincipal}`,
+    label: "Technical access",
+    value: `${normalizedCapability} · @${normalizedPrincipal}`,
     gameId: normalizedGameId,
     principalUserId: normalizedPrincipal,
     capabilityLabel: normalizedCapability,

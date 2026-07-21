@@ -35,7 +35,7 @@
 
   <section class="fm-panel admin-audit-detail__panel">
     <p class="admin-surface__boundary fm-well fm-well--kv">
-      <strong>{auditView.authority}</strong>
+      <strong>{auditView.displayAuthority}</strong>
       <span>{auditView.boundary}</span>
     </p>
     <AppStatus

@@ -714,7 +714,7 @@ async function proveRenderedRouteErrorSurface(bundle) {
   );
   assertIncludes(
     html,
-    `data-testid="${APP_SHELL_CONTRACT.sessionPrincipalTestId}">player_mira`,
+    `data-testid="${APP_SHELL_CONTRACT.sessionPrincipalTestId}">@player_mira`,
     "route error session principal",
   );
   assertIncludes(
@@ -835,7 +835,7 @@ async function proveRenderedNavigationPendingLayer(bundle) {
   );
   assertIncludes(
     html,
-    'data-session-principal="player_mira"',
+    'data-session-principal="@player_mira"',
     "navigation pending session principal",
   );
   assertIncludes(
@@ -1694,10 +1694,11 @@ async function proveRenderedModeratorSurface(bundle) {
     `data-testid="${HOST_CONTROL_SURFACE_CONTRACT.commandContextTestId}"`,
     "moderator command authority context",
   );
-  assertIncludes(html, "Moderator access", "moderator command authority label");
+  assertIncludes(html, "Hosting as @host_h", "moderator command authority summary");
+  assertIncludes(html, "Technical access", "moderator command authority label");
   assertIncludes(
     html,
-    "HostOf(midsummer) as host_h",
+    "HostOf(midsummer) · @host_h",
     "moderator command authority value",
   );
   assertIncludes(html, 'data-game-id="midsummer"', "moderator command authority game");
@@ -1989,8 +1990,8 @@ function assertRenderedRoleNav({ html, scenario }) {
       );
       assertIncludes(
         html,
-        'class="fm-app-shell__nav-reason"',
-        `${scenario.id} blocked role visible reason class`,
+        'class="fm-sr-only"',
+        `${scenario.id} blocked role accessible reason class`,
       );
     }
   }
@@ -2021,8 +2022,8 @@ function assertRenderedShellNav({ id, render, html, expectedNav }) {
     if (rendered.navigation === "blocked") {
       assertIncludes(
         html,
-        `<small class="fm-app-shell__nav-reason">${navBlockedLabel(surface)}</small>`,
-        `${id} ${surface} shell nav visible blocked reason`,
+        `<small class="fm-sr-only">${navBlockedLabel(surface)}</small>`,
+        `${id} ${surface} shell nav accessible blocked reason`,
       );
       assert.match(
         String(rendered.blockedReason ?? ""),

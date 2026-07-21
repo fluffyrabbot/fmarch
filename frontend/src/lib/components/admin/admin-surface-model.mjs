@@ -2,6 +2,7 @@ import {
   CONFIRMATION_ACTION_CONTRACT,
   buildConfirmationActionViewModel,
 } from "../../app/confirmation-action-model.mjs";
+import { humanizeCapabilityLabel } from "../../app/presentation-copy.mjs";
 
 export const ADMIN_SURFACE_CONTRACT = Object.freeze({
   minTouchTargetPx: 44,
@@ -62,36 +63,38 @@ export function buildAdminReadinessStripViewModel({
     items: Object.freeze([
       Object.freeze({
         id: "authority",
-        label: "Authority",
-        value: operator.capabilityLabel ?? "No admin authority",
-        detail: operator.principalUserId ?? "No principal",
+        label: "Your access",
+        value: operator.capabilityLabel
+          ? humanizeCapabilityLabel(operator.capabilityLabel)
+          : "No administrator access",
+        detail: operator.principalUserId ? `Signed in as @${operator.principalUserId}` : "Signed out",
         status: Object.freeze({
           state: isAdminAuthority(operator.capabilityLabel) ? "ack" : "reject",
           message: isAdminAuthority(operator.capabilityLabel)
-            ? "Admin surface authority resolved"
-            : "Admin surface authority missing",
+            ? "Administrator access confirmed"
+            : "Administrator access is unavailable",
         }),
         testId: adminReadinessTestId("authority"),
         statusTestId: adminReadinessStatusTestId("authority"),
       }),
       Object.freeze({
         id: "setup",
-        label: "Setup",
-        value: countLabel(gameSetup.length, "gated action", "gated actions"),
+        label: "Actions",
+        value: countLabel(gameSetup.length, "available action", "available actions"),
         detail: joinLabels(gameSetup),
         status: Object.freeze({
           state: gameSetup.length > 0 ? "pending" : "reject",
           message:
             gameSetup.length > 0
-              ? "Explicit command boundaries staged"
-              : "No setup command boundaries available",
+              ? "Game and account actions are ready"
+              : "No administrator actions are available",
         }),
         testId: adminReadinessTestId("setup"),
         statusTestId: adminReadinessStatusTestId("setup"),
       }),
       Object.freeze({
         id: "audit",
-        label: "Audit",
+        label: "System checks",
         value: adminAuditRollupValue(audit),
         detail: adminAuditRollupDetail(audit),
         status: Object.freeze({
@@ -104,14 +107,14 @@ export function buildAdminReadinessStripViewModel({
       Object.freeze({
         id: "recovery",
         label: "Recovery",
-        value: countLabel(recoveryCount, "gated check", "gated checks"),
+        value: countLabel(recoveryCount, "check to review", "checks to review"),
         detail: joinLabels(recoveryTasks),
         status: Object.freeze({
           state: recoveryCount > 0 ? "pending" : "reject",
           message:
             recoveryCount > 0
-              ? "Recovery checks require explicit confirmation"
-              : "No recovery checks exposed",
+              ? "Review before making recovery changes"
+              : "No recovery checks are available",
         }),
         testId: adminReadinessTestId("recovery"),
         statusTestId: adminReadinessStatusTestId("recovery"),
@@ -182,7 +185,7 @@ export function buildAdminSetupGridViewModel({
 } = {}) {
   return Object.freeze({
     root: Object.freeze({
-      className: "fm-grid fm-grid--three",
+      className: "admin-action-grid",
       ariaLabel: "Game setup",
       testId: ADMIN_SURFACE_CONTRACT.setupThumbZoneTestId,
       data: Object.freeze({
@@ -234,6 +237,9 @@ export function buildAdminAuditPanelViewModel({ audit = [] } = {}) {
           evidenceTestId: `admin-audit-evidence-${item.id}`,
           buttonLabel: "Inspect",
           authority: item.authority ?? "GlobalAdmin or GlobalMod",
+          displayAuthority: humanizeCapabilityLabel(
+            item.authority ?? "GlobalAdmin or GlobalMod",
+          ),
           boundary: item.boundary ?? "Read-only operator proof",
           boundaryDetail:
             item.boundaryDetail ?? "/operator/proof-runs machine-readable report",
@@ -337,6 +343,7 @@ export function buildAdminEscalationPanelViewModel({ escalations = [] } = {}) {
 function baseAdminItem(item, testIdPrefix) {
   return {
     ...item,
+    displayAuthority: humanizeCapabilityLabel(item.authority),
     testId: `${testIdPrefix}-${item.id}`,
     boundaryTestId:
       testIdPrefix === "admin-recovery"
@@ -387,17 +394,17 @@ function adminAuditRollupState(audit) {
 
 function adminAuditRollupValue(audit) {
   if (audit.length === 0) {
-    return "No proof surfaces";
+    return "No checks available";
   }
   const trusted = audit.filter(
     (item) => adminAuditStatusState(item.status) === "ack",
   ).length;
-  return `${trusted}/${audit.length} proof surfaces current`;
+  return `${trusted} of ${audit.length} checks current`;
 }
 
 function adminAuditRollupDetail(audit) {
   if (audit.length === 0) {
-    return "Operator proof data unavailable";
+    return "System check data is unavailable";
   }
   const firstAttention = audit.find(
     (item) => adminAuditStatusState(item.status) !== "ack",
@@ -410,15 +417,15 @@ function adminAuditRollupDetail(audit) {
 
 function adminAuditRollupMessage(audit, state) {
   if (audit.length === 0) {
-    return "Audit proof surfaces unavailable";
+    return "System checks are unavailable";
   }
   if (state === "reject") {
-    return "Audit proof needs operator review";
+    return "A system check needs review";
   }
   if (state === "pending") {
-    return "Audit proof has pending evidence";
+    return "A system check is still running";
   }
-  return "Audit proof links are current";
+  return "System checks are current";
 }
 
 function isAdminAuthority(capabilityLabel) {

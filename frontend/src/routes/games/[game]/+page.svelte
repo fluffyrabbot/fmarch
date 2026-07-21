@@ -73,7 +73,7 @@
 
 <style>
   .public-game-summary { display: flex; flex-wrap: wrap; gap: 12px 28px; }
-  .public-game-post { border-block-start: 1px solid var(--fm-border); padding-block: 14px; scroll-margin-block-start: 88px; }
+  .public-game-post { border-block-start: 1px solid var(--fm-line); padding-block: 14px; scroll-margin-block-start: 88px; }
   .public-game-post header { align-items: baseline; display: flex; flex-wrap: wrap; gap: 8px 16px; justify-content: space-between; }
   .public-game-post p { margin-block-end: 0; white-space: pre-wrap; }
   .report-control { margin-block-start: 10px; }

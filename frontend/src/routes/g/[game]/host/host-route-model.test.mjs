@@ -29,7 +29,7 @@ test("host console route data is allowed for HostOf scoped to the current game",
     summary: "Day 2 deadline is active. Slot 7 / Mira has a pending replacement.",
     capability: {
       visible: true,
-      label: "HostOf(midsummer)",
+      label: "Hosting midsummer",
       testId: "host-console-capability",
       className: "fm-capability-pill",
       minTouchTargetPx: 44,

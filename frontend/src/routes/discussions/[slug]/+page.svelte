@@ -65,7 +65,5 @@
 
 <style>
   .discussion-form { display: grid; gap: 12px; }
-  .discussion-post { border-block-start: 1px solid var(--fm-border); padding-block: 12px; }
-  .discussion-post p { margin: 0; white-space: pre-wrap; }
   textarea { min-block-size: 112px; resize: vertical; }
 </style>

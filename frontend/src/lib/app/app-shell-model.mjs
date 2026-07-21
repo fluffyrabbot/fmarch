@@ -2,10 +2,16 @@ import { normalizeCapabilities, resolveSurfaceAccess } from "./capabilities.mjs"
 import { phaseThemeKey } from "./phase-theme.mjs";
 import { buildAppSurfaceHeaderViewModel } from "./app-surface-header-model.mjs";
 import { buildRouteStateViewModel } from "./app-route-state-model.mjs";
+import {
+  humanizePrincipal,
+  principalInitials,
+  sessionContextLabel,
+} from "./presentation-copy.mjs";
 
 export const APP_SHELL_CONTRACT = Object.freeze({
   component: "fm-app-shell",
-  navLabel: "Role surfaces",
+  navLabel: "Main navigation",
+  workspaceNavLabel: "Your workspaces",
   skipLinkLabel: "Skip to app content",
   skipLinkTestId: "app-shell-skip-link",
   mainTargetId: "fm-main",
@@ -15,10 +21,10 @@ export const APP_SHELL_CONTRACT = Object.freeze({
   sessionCapabilityTestId: "app-shell-session-capabilities",
   sessionGameTestId: "app-shell-session-game",
   topbarTestId: "app-shell-topbar",
-  topbarMode: "sticky-safe-area-role-session-topbar",
+  topbarMode: "compact-contextual-topbar",
   topbarStickyTopPx: 0,
-  topbarBlockSizePx: 76,
-  stickyRailGapPx: 22,
+  topbarBlockSizePx: 64,
+  stickyRailGapPx: 16,
   surfaceOrder: Object.freeze(["board", "community", "search", "inbox", "player", "moderator", "admin"]),
   navTestIdPrefix: "role-nav",
   minTouchTargetPx: 44,
@@ -76,6 +82,7 @@ export function buildAppShell({
       active: activeSurface === "board",
       allowed: true,
       capabilityLabel: "Public",
+      group: "primary",
     }),
     surfaceItem({
       id: "community",
@@ -84,6 +91,7 @@ export function buildAppShell({
       active: activeSurface === "community",
       allowed: true,
       capabilityLabel: "Public",
+      group: "primary",
     }),
     surfaceItem({
       id: "search",
@@ -92,6 +100,7 @@ export function buildAppShell({
       active: activeSurface === "search",
       allowed: true,
       capabilityLabel: "Public",
+      group: "primary",
     }),
     surfaceItem({
       id: "inbox",
@@ -100,6 +109,7 @@ export function buildAppShell({
       active: activeSurface === "inbox",
       allowed: typeof principalUserId === "string" && principalUserId.trim() !== "",
       capabilityLabel: "Authenticated account",
+      group: "primary",
     }),
     surfaceItem({
       id: "player",
@@ -107,15 +117,17 @@ export function buildAppShell({
       href: game === null ? "/" : `/g/${encodeURIComponent(game)}`,
       active: activeSurface === "player",
       ...surfaceSummary({ surface: "player", game, capabilities }),
+      group: "workspace",
     }),
     surfaceItem({
       id: "moderator",
-      label: "Moderate",
+      label: hasCommunityModeration ? "Moderate" : "Host",
       href: hasCommunityModeration
         ? "/moderation"
         : game === null ? "/" : `/g/${encodeURIComponent(game)}/host`,
       active: activeSurface === "moderator",
       ...surfaceSummary({ surface: "moderator", game, capabilities }),
+      group: "workspace",
     }),
     surfaceItem({
       id: "admin",
@@ -123,6 +135,7 @@ export function buildAppShell({
       href: "/admin",
       active: activeSurface === "admin",
       ...surfaceSummary({ surface: "admin", game: null, capabilities }),
+      group: "workspace",
     }),
   ]);
 
@@ -420,10 +433,7 @@ function buildSessionSummary({ game, principalUserId, capabilities }) {
         .filter((kind) => kind.length > 0),
     )].sort(),
   );
-  const principalLabel =
-    principalUserId === null || principalUserId === undefined
-      ? "Signed out"
-      : String(principalUserId);
+  const principalLabel = humanizePrincipal(principalUserId);
 
   return Object.freeze({
     testId: APP_SHELL_CONTRACT.sessionTestId,
@@ -435,6 +445,8 @@ function buildSessionSummary({ game, principalUserId, capabilities }) {
         ? "signed-out"
         : "signed-in",
     principalLabel,
+    initials: principalInitials(principalUserId),
+    contextLabel: sessionContextLabel({ game, capabilities: normalizedCapabilities }),
     gameLabel: game === null || game === undefined ? "No game" : String(game),
     capabilityCount: normalizedCapabilities.length,
     capabilityKinds,

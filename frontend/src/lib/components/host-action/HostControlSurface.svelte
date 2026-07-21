@@ -32,6 +32,14 @@
   data-capability-label={view.root.data.capabilityLabel}
   data-testid={view.root.testId}
 >
+  <header class="host-console-critical-path__control-heading">
+    <div>
+      <p class="fm-eyebrow">Host workspace</p>
+      <h2>Actions</h2>
+    </div>
+    <p>Make the next game change. Supporting evidence stays below.</p>
+  </header>
+
   <details
     class="host-console-critical-path__command-context fm-proof-disclosure"
     data-testid={view.commandContext.testId}
@@ -49,13 +57,16 @@
   </details>
 
   {#each view.groups as control}
+    {#if control.sectionStart}
+      <h3 class="host-console-critical-path__control-section">{control.section}</h3>
+    {/if}
     <article
       class={control.classes.controlBay}
       data-testid={control.testId}
     >
       <header>
         <div>
-          <p class="fm-eyebrow">Moderator action</p>
+          <p class="fm-eyebrow">Host control</p>
           <h2>{control.label}</h2>
         </div>
       </header>

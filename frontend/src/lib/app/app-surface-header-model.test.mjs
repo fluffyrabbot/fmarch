@@ -26,7 +26,7 @@ test("surface header owns role identity and capability touch metadata", () => {
   assert.equal(header.summary, "Seven votes to hammer. Thread is open.");
   assert.deepEqual(header.capability, {
     visible: true,
-    label: "SlotOccupant(slot-7)",
+    label: "Playing as slot 7",
     testId: "player-capability",
     className: "fm-capability-pill",
     minTouchTargetPx: 44,

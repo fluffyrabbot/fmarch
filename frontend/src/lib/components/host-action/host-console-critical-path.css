@@ -143,6 +143,31 @@
   grid-column: 1 / -1;
 }
 
+.host-console-critical-path__control-heading,
+.host-console-critical-path__control-section {
+  grid-column: 1 / -1;
+}
+
+.host-console-critical-path__control-heading {
+  align-items: end;
+  display: flex;
+  gap: 20px;
+  justify-content: space-between;
+}
+
+.host-console-critical-path__control-heading > p {
+  color: var(--fm-ink-muted);
+  margin: 0;
+}
+
+.host-console-critical-path__control-section {
+  border-block-end: 1px solid var(--fm-line);
+  color: var(--fm-ink-subtle);
+  font-size: 14px;
+  margin: 4px 0 -4px;
+  padding-block-end: 8px;
+}
+
 .host-console-critical-path__command-context .fm-proof-disclosure__body span,
 .host-console-critical-path__command-context .fm-proof-disclosure__body small {
   color: var(--fm-ink-subtle);
@@ -375,6 +400,12 @@
     max-block-size: none;
     overflow: visible;
     position: static;
+  }
+
+  .host-console-critical-path__control-heading {
+    align-items: start;
+    display: grid;
+    gap: 4px;
   }
 
   .host-console-critical-path__votecount header {

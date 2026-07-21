@@ -48,9 +48,9 @@ test("host control surface model binds moderator control bays to action status",
   assert.equal(view.root.testId, "moderator-primary-action-zone");
   assert.deepEqual(view.commandContext, {
     testId: HOST_CONTROL_SURFACE_CONTRACT.commandContextTestId,
-    summary: "Acting as host_h",
-    label: "Moderator access",
-    value: "HostOf(midsummer) as host_h",
+    summary: "Hosting as @host_h",
+    label: "Technical access",
+    value: "HostOf(midsummer) · @host_h",
     gameId: "midsummer",
     principalUserId: "host_h",
     capabilityLabel: "HostOf(midsummer)",
@@ -66,6 +66,18 @@ test("host control surface model binds moderator control bays to action status",
       "host-prompts",
       "slot-lifecycle",
       "roles",
+    ],
+  );
+  assert.deepEqual(
+    view.groups.map((group) => [group.id, group.section, group.sectionStart]),
+    [
+      ["deadline", "Game state", true],
+      ["phase", "Game state", false],
+      ["votecount", "Game state", false],
+      ["replacement", "People and prompts", true],
+      ["host-prompts", "People and prompts", false],
+      ["slot-lifecycle", "People and prompts", false],
+      ["roles", "Endgame", true],
     ],
   );
 
@@ -149,9 +161,9 @@ test("host control surface context falls back without claiming real authority", 
 
   assert.deepEqual(view.commandContext, {
     testId: HOST_CONTROL_SURFACE_CONTRACT.commandContextTestId,
-    summary: "Acting as host",
-    label: "Moderator access",
-    value: "HostOf(game) as host",
+    summary: "Hosting as @host",
+    label: "Technical access",
+    value: "HostOf(game) · @host",
     gameId: "game",
     principalUserId: "host",
     capabilityLabel: "HostOf(game)",

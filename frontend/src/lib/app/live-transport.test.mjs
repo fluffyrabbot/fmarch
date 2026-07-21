@@ -711,7 +711,7 @@ test("transport drop ignores late messages from the invalidated socket", async (
 test("live projection events map to visible status copy", () => {
   assert.deepEqual(liveProjectionStatusForEvent({ kind: "open" }), {
     state: "connected",
-    message: "Live projection socket open",
+    message: "Live updates connected",
   });
   assert.deepEqual(
     liveProjectionStatusForEvent({
@@ -720,7 +720,7 @@ test("live projection events map to visible status copy", () => {
     }),
     {
       state: "updated",
-      message: "Live projection updated: VoteCountChanged",
+      message: "Game updated",
     },
   );
   assert.deepEqual(
@@ -731,7 +731,7 @@ test("live projection events map to visible status copy", () => {
     }),
     {
       state: "recovered",
-      message: "Live projection resynced from 44",
+      message: "Live updates restored",
     },
   );
   assert.deepEqual(
@@ -741,7 +741,7 @@ test("live projection events map to visible status copy", () => {
     }),
     {
       state: "reconnecting",
-      message: "Live projection reconnecting",
+      message: "Reconnecting live updates. Actions remain safe.",
     },
   );
   assert.deepEqual(
@@ -752,16 +752,16 @@ test("live projection events map to visible status copy", () => {
     }),
     {
       state: "recovered",
-      message: "Live projection reconnected",
+      message: "Live updates restored",
     },
   );
   assert.deepEqual(liveProjectionStatusForEvent({ kind: "error", message: "boom" }), {
     state: "error",
-    message: "Live projection error: boom",
+    message: "Live updates paused. Refresh if this continues.",
   });
   assert.deepEqual(liveProjectionStatusForEvent({ kind: "close" }), {
     state: "closed",
-    message: "Live projection closed",
+    message: "Live updates paused. Reconnecting automatically.",
   });
 });
 

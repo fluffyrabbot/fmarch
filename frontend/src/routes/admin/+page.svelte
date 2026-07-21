@@ -180,44 +180,85 @@
       recoveryTasks={data.recoveryTasks}
     />
 
-    <section
-      class={ADMIN_SURFACE_CONTRACT.operatorRailClassName}
-      aria-label="Admin operator actions"
-      data-control-rail-mode={ADMIN_SURFACE_CONTRACT.operatorRailMode}
-      data-testid="admin-operator-action-rail"
-    >
-      <AdminSetupGrid
-        items={data.gameSetup}
-        {commandStatuses}
-        sessionGrant={data.command.sessionGrant}
-        onSetupAction={handleSetupAction}
-        onConfirmSetupAction={confirmSetupAction}
-        onCancelSetupAction={cancelSetupAction}
-      />
+    <section class="admin-surface__section" aria-labelledby="admin-next-actions-heading">
+      <header class="admin-surface__section-heading">
+        <div>
+          <p class="fm-eyebrow">Needs attention</p>
+          <h2 id="admin-next-actions-heading">Administrator actions</h2>
+        </div>
+        <p>Start with game setup, access, or recovery work.</p>
+      </header>
 
-      <AdminRecoveryPanel
-        tasks={data.recoveryTasks}
-        {commandStatuses}
-        game={data.shell.game}
-        principalUserId={data.operator.principalUserId}
-        onRecoveryTask={handleRecoveryTask}
-        onCancelRecoveryTask={cancelSetupAction}
-      />
+      <section
+        class={ADMIN_SURFACE_CONTRACT.operatorRailClassName}
+        aria-label="Admin operator actions"
+        data-control-rail-mode={ADMIN_SURFACE_CONTRACT.operatorRailMode}
+        data-testid="admin-operator-action-rail"
+      >
+        <AdminSetupGrid
+          items={data.gameSetup}
+          {commandStatuses}
+          sessionGrant={data.command.sessionGrant}
+          onSetupAction={handleSetupAction}
+          onConfirmSetupAction={confirmSetupAction}
+          onCancelSetupAction={cancelSetupAction}
+        />
+
+        <AdminRecoveryPanel
+          tasks={data.recoveryTasks}
+          {commandStatuses}
+          game={data.shell.game}
+          principalUserId={data.operator.principalUserId}
+          onRecoveryTask={handleRecoveryTask}
+          onCancelRecoveryTask={cancelSetupAction}
+        />
+      </section>
+
+      <AdminCommandActivity {commandStatuses} />
     </section>
 
-    <AdminCommandActivity {commandStatuses} />
+    <section class="admin-surface__section" aria-labelledby="admin-system-checks-heading">
+      <header class="admin-surface__section-heading">
+        <div>
+          <p class="fm-eyebrow">Supporting evidence</p>
+          <h2 id="admin-system-checks-heading">System checks</h2>
+        </div>
+        <p>Inspect system evidence and escalation queues when an action needs diagnosis.</p>
+      </header>
 
-    <section class="admin-surface__split">
-      <div class="admin-surface__audit-stack">
-        <AdminAuditPanel audit={data.audit} />
-      </div>
+      <section class="admin-surface__split">
+        <div class="admin-surface__audit-stack">
+          <AdminAuditPanel audit={data.audit} />
+        </div>
 
-      <AdminEscalationPanel escalations={data.escalations} />
+        <AdminEscalationPanel escalations={data.escalations} />
+      </section>
     </section>
   {/if}
 </main>
 
 <style>
+  .admin-surface__section {
+    display: grid;
+    gap: 18px;
+  }
+
+  .admin-surface__section-heading {
+    align-items: end;
+    border-block-end: 1px solid var(--fm-line);
+    display: flex;
+    gap: 24px;
+    justify-content: space-between;
+    padding-block-end: 12px;
+  }
+
+  .admin-surface__section-heading > p {
+    color: var(--fm-ink-muted);
+    margin: 0;
+    max-inline-size: 34rem;
+    text-align: end;
+  }
+
   .admin-surface__split {
     display: grid;
     gap: 18px;
@@ -245,6 +286,18 @@
 
     .admin-surface__operator-actions {
       grid-template-columns: 1fr;
+    }
+  }
+
+  @media (max-width: 760px) {
+    .admin-surface__section-heading {
+      align-items: start;
+      display: grid;
+      gap: 4px;
+    }
+
+    .admin-surface__section-heading > p {
+      text-align: start;
     }
   }
 

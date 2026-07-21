@@ -50,44 +50,44 @@ test("admin readiness strip summarizes authority and operator proof boundaries",
     [
       {
         id: "authority",
-        value: "GlobalAdmin",
-        detail: "admin_a",
+        value: "Site administrator",
+        detail: "Signed in as @admin_a",
         status: {
           state: "ack",
-          message: "Admin surface authority resolved",
+          message: "Administrator access confirmed",
         },
         testId: "admin-readiness-authority",
         statusTestId: "admin-readiness-status-authority",
       },
       {
         id: "setup",
-        value: "2 gated actions",
+        value: "2 available actions",
         detail: "Create game, Session grants",
         status: {
           state: "pending",
-          message: "Explicit command boundaries staged",
+          message: "Game and account actions are ready",
         },
         testId: "admin-readiness-setup",
         statusTestId: "admin-readiness-status-setup",
       },
       {
         id: "audit",
-        value: "2/2 proof surfaces current",
+        value: "2 of 2 checks current",
         detail: "Proof runs, Recovery queue",
         status: {
           state: "ack",
-          message: "Audit proof links are current",
+          message: "System checks are current",
         },
         testId: "admin-readiness-audit",
         statusTestId: "admin-readiness-status-audit",
       },
       {
         id: "recovery",
-        value: "1 gated check",
+        value: "1 check to review",
         detail: "Recovery go/no-go",
         status: {
           state: "pending",
-          message: "Recovery checks require explicit confirmation",
+          message: "Review before making recovery changes",
         },
         testId: "admin-readiness-recovery",
         statusTestId: "admin-readiness-status-recovery",
@@ -112,15 +112,15 @@ test("admin readiness strip fails closed when authority or proof data is missing
       ],
     }).items.map((item) => [item.id, item.status.state, item.value, item.detail]),
     [
-      ["authority", "reject", "HostOf(midsummer)", "host_h"],
-      ["setup", "reject", "0 gated actions", "None"],
+      ["authority", "reject", "Hosting midsummer", "Signed in as @host_h"],
+      ["setup", "reject", "0 available actions", "None"],
       [
         "audit",
         "reject",
-        "0/1 proof surfaces current",
+        "0 of 1 checks current",
         "Go/no-go: blocked: proof needs review",
       ],
-      ["recovery", "reject", "0 gated checks", "None"],
+      ["recovery", "reject", "0 checks to review", "None"],
     ],
   );
 });
@@ -396,6 +396,7 @@ test("admin audit and escalation models expose stable test ids", () => {
         evidenceTestId: "admin-audit-evidence-proof-runs",
         buttonLabel: "Inspect",
         authority: "GlobalAdmin",
+        displayAuthority: "Site administrator",
         boundary: "Machine proof",
         boundaryDetail: "/operator/proof-runs/status",
         statusView: {

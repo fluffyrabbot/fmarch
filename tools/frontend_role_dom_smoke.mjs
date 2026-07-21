@@ -256,7 +256,7 @@ function surfaceScenarios() {
         },
         {
           testId: "game-action-midsummer-moderator",
-          href: "/g/midsummer/host",
+          href: "/moderation",
         },
       ],
       requiredAttributes: [],
@@ -271,7 +271,7 @@ function surfaceScenarios() {
       requiredText: [
         "Games",
         "Mafiascum game",
-        "Requires HostOf(midsummer) or CohostOf(midsummer)",
+        "Hosts only",
       ],
       requiredTestIds: [
         "game-action-midsummer-moderator",
@@ -283,7 +283,7 @@ function surfaceScenarios() {
         },
       ],
       requiredAttributes: [
-        'data-blocked-reason="Requires HostOf(midsummer) or CohostOf(midsummer)"',
+        'data-blocked-reason="Requires GlobalAdmin(midsummer) or GlobalMod(midsummer) or HostOf(midsummer) or CohostOf(midsummer)"',
       ],
       forbiddenText: [],
     },

@@ -323,7 +323,9 @@ test("static role contract artifact records shared nav focus and route state mat
       capabilityTestId: APP_SHELL_CONTRACT.sessionCapabilityTestId,
       gameTestId: APP_SHELL_CONTRACT.sessionGameTestId,
       state: "signed-in",
-      principalLabel: "player_mira",
+      principalLabel: "@player_mira",
+      initials: "PM",
+      contextLabel: "Playing midsummer",
       gameLabel: "midsummer",
       capabilityCount: 1,
       capabilityKinds: ["SlotOccupant"],
@@ -636,6 +638,7 @@ test("static role contract artifact records shared nav focus and route state mat
         4,
         ["authority", "setup", "audit", "recovery"],
         [
+          ["mobile", 390, 1],
           ["tablet", 1024, "adaptive"],
           ["tablet-wide", 1180, "adaptive"],
           ["tablet-landscape", 1280, 4],
@@ -649,6 +652,7 @@ test("static role contract artifact records shared nav focus and route state mat
         3,
         ["phase", "deadline", "private"],
         [
+          ["mobile", 390, 1],
           ["tablet", 1024, "adaptive"],
           ["tablet-wide", 1180, "adaptive"],
           ["tablet-landscape", 1280, 4],
@@ -662,6 +666,7 @@ test("static role contract artifact records shared nav focus and route state mat
         4,
         ["phase", "votecount", "prompts", "lifecycle"],
         [
+          ["mobile", 390, 1],
           ["tablet", 1024, "adaptive"],
           ["tablet-wide", 1180, "adaptive"],
           ["tablet-landscape", 1280, 4],
@@ -848,9 +853,9 @@ test("static role contract artifact records shared nav focus and route state mat
   });
   assert.deepEqual(moderatorStaticRole.commandContext, {
     testId: HOST_CONTROL_SURFACE_CONTRACT.commandContextTestId,
-    summary: "Acting as host_h",
-    label: "Moderator access",
-    value: "HostOf(midsummer) as host_h",
+    summary: "Hosting as @host_h",
+    label: "Technical access",
+    value: "HostOf(midsummer) · @host_h",
     gameId: "midsummer",
     principalUserId: "host_h",
     capabilityLabel: "HostOf(midsummer)",
@@ -2557,16 +2562,16 @@ test("tablet interaction artifact proves tap-first source posture", async () => 
     body: "contain",
   });
   assert.deepEqual(tabletInteraction.sharedAppCss.stickyTopbar, {
-    mode: "sticky-safe-area-role-session-topbar",
+    mode: "compact-contextual-topbar",
     topPx: 0,
-    blockSizePx: 76,
-    railGapPx: 22,
+    blockSizePx: 64,
+    railGapPx: 16,
     safeAreaAware: true,
   });
   assert.deepEqual(tabletInteraction.adminOperatorSurfaceCss, {
     controlRailMode: "flow-admin-operator-actions",
     stickyTopPx: 0,
-    topbarOffsetPx: 76,
+    topbarOffsetPx: 64,
     safeAreaAware: false,
     internalScroll: false,
     overscroll: "visible",
@@ -2579,7 +2584,7 @@ test("tablet interaction artifact proves tap-first source posture", async () => 
   assert.deepEqual(tabletInteraction.playerRouteLayoutCss, {
     commandRailMode: "sticky-tablet-command-column",
     stickyTopPx: 22,
-    topbarOffsetPx: 76,
+    topbarOffsetPx: 64,
     safeAreaAware: true,
     internalScroll: true,
     overscroll: "contain",
@@ -2590,7 +2595,7 @@ test("tablet interaction artifact proves tap-first source posture", async () => 
   assert.deepEqual(tabletInteraction.moderatorControlSurfaceCss, {
     controlRailMode: "flow-host-control-actions",
     stickyTopPx: 0,
-    topbarOffsetPx: 76,
+    topbarOffsetPx: 64,
     safeAreaAware: false,
     internalScroll: false,
     overscroll: "visible",
@@ -6246,7 +6251,7 @@ function assertBrowserAdminAuditDetailClickEvidence(roleEntries) {
     assert.deepEqual(proof.searchParams, { game: "midsummer" });
     assert.equal(proof.surfaceTestId, "admin-audit-detail-surface");
     assert.equal(proof.auditId, "proof-runs");
-    assert.match(proof.capability, /GlobalAdmin/);
+    assert.equal(proof.capability, "Site administrator");
     assert.deepEqual(proof.statusRegion, {
       state: "ack",
       role: "status",
@@ -6461,6 +6466,9 @@ function assertBrowserPlayerPrivateChannelEvidence(entries) {
       [
         "app-shell-skip-link",
         "role-nav-board",
+        "role-nav-community",
+        "role-nav-search",
+        "role-nav-inbox",
         "role-nav-player",
         "player-channel-main",
         "player-channel-private:role_pm:slot-7",

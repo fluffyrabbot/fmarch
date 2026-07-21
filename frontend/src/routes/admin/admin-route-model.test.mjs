@@ -399,10 +399,10 @@ test("admin route data exposes setup, audit, and escalation work surfaces", asyn
     eyebrow: "Admin",
     title: "Operations",
     summary:
-      "Game setup, scoped session grants, audit reports, and recovery queues.",
+      "Set up games, manage access, and review system health.",
     capability: {
       visible: true,
-      label: "GlobalAdmin",
+      label: "Site administrator",
       testId: "admin-capability",
       className: "fm-capability-pill",
       minTouchTargetPx: 44,
@@ -532,7 +532,7 @@ test("admin audit detail data stays inside the admin SPA shell", async () => {
     summary: "/operator/proof-runs machine-readable report",
     capability: {
       visible: true,
-      label: "GlobalAdmin",
+      label: "Site administrator",
       testId: "admin-audit-detail-capability",
       className: "fm-capability-pill",
       minTouchTargetPx: 44,

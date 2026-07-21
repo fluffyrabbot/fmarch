@@ -41,7 +41,7 @@ test("player route data exposes thread, channel, votecount, and touch command la
     summary: "Seven votes to hammer. Thread is open.",
     capability: {
       visible: true,
-      label: "SlotOccupant(midsummer)",
+      label: "Playing midsummer",
       testId: "player-capability",
       className: "fm-capability-pill",
       minTouchTargetPx: 44,

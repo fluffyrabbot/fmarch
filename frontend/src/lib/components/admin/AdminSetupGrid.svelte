@@ -68,16 +68,19 @@
 >
   {#each view.items as item}
     <article class="fm-panel" data-testid={item.testId}>
-      <p class="fm-eyebrow">{item.authority}</p>
+      <p class="fm-eyebrow">{item.displayAuthority}</p>
       <h2>{item.label}</h2>
       <p>{item.value}</p>
-      <p
-        class="fm-well fm-well--kv"
-        data-testid={item.boundaryTestId}
-      >
-        <strong>{item.boundary}</strong>
-        <span>{item.boundaryDetail}</span>
-      </p>
+      <details class="fm-proof-disclosure admin-surface__technical-details">
+        <summary>Technical details</summary>
+        <p
+          class="fm-well fm-well--kv"
+          data-testid={item.boundaryTestId}
+        >
+          <strong>{item.boundary}</strong>
+          <span>{item.boundaryDetail}</span>
+        </p>
+      </details>
       <div class={item.actionTileClassName}>
         {#if item.href}
           <a
@@ -229,6 +232,16 @@
 </section>
 
 <style>
+  .admin-action-grid {
+    display: grid;
+    gap: 16px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-surface__technical-details > p {
+    margin: 0 12px 12px;
+  }
+
   .admin-surface__action-tile {
     align-content: start;
     display: grid;
@@ -258,6 +271,12 @@
     font-weight: 800;
     line-height: 1.35;
     overflow-wrap: anywhere;
+  }
+
+  @media (max-width: 760px) {
+    .admin-action-grid {
+      grid-template-columns: 1fr;
+    }
   }
 
   .admin-surface__checkbox span {
