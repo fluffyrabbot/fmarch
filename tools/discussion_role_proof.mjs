@@ -53,6 +53,7 @@ try {
   await setSessionCookie(member, frontendBaseUrl, sessions.memberToken);
   await setSessionCookie(moderator, frontendBaseUrl, sessions.moderatorToken);
   try {
+    const directory = await proveCommunityDirectory(member, frontendBaseUrl, area.slug);
     const empty = await proveEmptyArea(member, frontendBaseUrl);
     const browserTopic = await createTopicAndReply(member, frontendBaseUrl);
     const seeded = await seedTopics(apiBaseUrl, sessions.memberToken, area.slug);
@@ -77,14 +78,15 @@ try {
       releaseReady: false,
       productionReady: false,
       proofBoundary:
-        "Local scratch-Postgres, local Rust API, opaque local sessions, SvelteKit discussion route, and Chromium proof. It proves an empty area, session-backed topic and post forms, public keyset pagination and reload, GlobalMod moderation, denied member moderation, and locked-topic recovery. It does not prove hosted availability, moderation staffing, retention, legal policy, direct messages, profiles, search, ranking, recommendations, or release readiness.",
+        "Local scratch-Postgres, local Rust API, enabled accounts with public contribution profiles, canonical SvelteKit community routes, and Chromium proof. It proves the public area directory, profile-backed topic and post bylines, keyset pagination and reload, canonical post anchors, GlobalMod posting-state moderation, denied member moderation, and locked-topic recovery. It does not prove hosted availability, moderation staffing, retention, legal policy, direct messages, search, ranking, recommendations, or release readiness.",
       roleUrl: `${frontendBaseUrl}/discussions/${area.slug}`,
       api: {
         areaEndpoint: `${apiBaseUrl}/discussions/areas/${area.slug}`,
         pageSize,
-        publicTopicFieldNames: ["topic", "title", "status", "post_count", "updated_seq"],
-        publicPostFieldNames: ["source_seq", "body"],
+        publicTopicFieldNames: ["topic", "title", "author", "posting_state", "visibility", "post_count", "updated_seq", "created_at", "updated_at", "last_post_seq", "last_post_at"],
+        publicPostFieldNames: ["source_seq", "author", "body", "created_at"],
       },
+      directory,
       empty,
       browserTopic,
       seeded,
@@ -125,8 +127,38 @@ async function createSessions(apiBaseUrl) {
   const moderatorToken = "discussion-proof-moderator-session";
   const memberUserId = "discussion_member";
   await createDevSession(apiBaseUrl, memberToken, memberUserId, []);
-  await createDevSession(apiBaseUrl, moderatorToken, "discussion_moderator", ["GlobalMod"]);
+  await createDevSession(apiBaseUrl, moderatorToken, "discussion_moderator", ["GlobalAdmin", "GlobalMod"]);
+  await createAccount(apiBaseUrl, moderatorToken, "member@example.test", memberUserId, []);
+  await createAccount(apiBaseUrl, moderatorToken, "moderator@example.test", "discussion_moderator", ["GlobalAdmin", "GlobalMod"]);
+  await createProfile(apiBaseUrl, memberToken, "member_profile", "Discussion Member");
+  await createProfile(apiBaseUrl, moderatorToken, "moderator_profile", "Discussion Moderator");
   return { memberToken, moderatorToken, memberUserId };
+}
+
+async function createAccount(apiBaseUrl, adminToken, accountId, principalUserId, globalCapabilities) {
+  await fetchJson(`${apiBaseUrl}/auth/accounts`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${adminToken}`, "content-type": "application/json" },
+    body: JSON.stringify({
+      account_id: accountId,
+      password: "correct horse battery staple",
+      principal_user_id: principalUserId,
+      global_capabilities: globalCapabilities,
+    }),
+  });
+}
+
+async function createProfile(apiBaseUrl, token, handle, displayName) {
+  await fetchJson(`${apiBaseUrl}/profiles`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+    body: JSON.stringify({
+      handle,
+      display_name: displayName,
+      bio: "Local community proof profile.",
+      visibility: "public",
+    }),
+  });
 }
 
 async function createDevSession(apiBaseUrl, token, principalUserId, globalCapabilities) {
@@ -177,6 +209,22 @@ async function proveEmptyArea(context, frontendBaseUrl) {
   }
 }
 
+async function proveCommunityDirectory(context, frontendBaseUrl, slug) {
+  const page = await context.newPage({ viewport: { width: 1024, height: 768 } });
+  try {
+    await page.goto(`${frontendBaseUrl}/community`, { waitUntil: "networkidle" });
+    await page.getByTestId(`community-area-${slug}`).waitFor({ state: "visible" });
+    await page.getByTestId("role-nav-community").waitFor({ state: "visible" });
+    return {
+      status: "passed",
+      directoryTestId: "community-area-general",
+      navigationTestId: "role-nav-community",
+    };
+  } finally {
+    await page.close();
+  }
+}
+
 async function createTopicAndReply(context, frontendBaseUrl) {
   const page = await context.newPage({ viewport: { width: 1024, height: 768 } });
   try {
@@ -184,12 +232,12 @@ async function createTopicAndReply(context, frontendBaseUrl) {
     await page.getByTestId("discussion-topic-title").fill("Browser-created topic");
     await page.getByTestId("discussion-topic-body").fill("Opening post from the role URL.");
     await Promise.all([
-      page.waitForURL(/\?topic=/, { timeout: 15000 }),
+      page.waitForURL(/\/discussions\/general\/t\//, { timeout: 15000 }),
       page.getByTestId("discussion-create-topic-submit").click(),
     ]);
     await page.getByTestId("discussion-thread").waitFor({ state: "visible" });
-    const topic = new URL(page.url()).searchParams.get("topic");
-    if (topic === null) throw new Error("discussion topic form did not enter a topic role URL");
+    const topic = new URL(page.url()).pathname.split("/").at(-1);
+    if (typeof topic !== "string" || topic.length !== 36) throw new Error("discussion topic form did not enter a canonical topic URL");
     await page.getByTestId("discussion-post-body").fill("Browser reply from the authenticated member.");
     await Promise.all([
       page.waitForLoadState("networkidle"),
@@ -223,7 +271,7 @@ async function provePagination(context, frontendBaseUrl, apiBaseUrl, memberUserI
     if (firstCardCount !== pageSize) throw new Error(`expected ${pageSize} discussion topics, got ${firstCardCount}`);
     const apiPage = await fetchJson(`${apiBaseUrl}/discussions/areas/general?limit=${pageSize}`);
     assertPublicDiscussionPage(apiPage, memberUserId);
-    const thread = await fetchJson(`${apiBaseUrl}/discussions/topics/${browserTopic}?limit=50`);
+    const thread = await fetchJson(`${apiBaseUrl}/discussions/areas/general/topics/${browserTopic}?limit=50`);
     assertPublicDiscussionThread(thread, memberUserId);
     const older = page.getByTestId("discussion-topic-older");
     await Promise.all([page.waitForURL(/\?cursor=/, { timeout: 15000 }), older.click()]);
@@ -233,7 +281,7 @@ async function provePagination(context, frontendBaseUrl, apiBaseUrl, memberUserI
     await page.reload({ waitUntil: "networkidle" });
     const reloadCardCount = await page.locator('article[data-testid^="discussion-topic-"]').count();
     if (reloadCardCount !== 1) throw new Error(`older discussion page did not survive reload: ${reloadCardCount}`);
-    const body = await page.locator("body").innerText();
+    const body = await page.getByTestId("discussion-topic-index").innerText();
     if (body.includes(memberUserId) || body.includes("author_user_id")) {
       throw new Error("public discussion route leaked an account identifier");
     }
@@ -251,16 +299,22 @@ async function provePagination(context, frontendBaseUrl, apiBaseUrl, memberUserI
 }
 
 function assertPublicDiscussionThread(thread, memberUserId) {
-  const allowedTopic = new Set(["topic", "title", "status", "post_count", "updated_seq"]);
-  const allowedPost = new Set(["source_seq", "body"]);
+  const allowedArea = new Set(["slug", "title", "description"]);
+  const allowedAuthor = new Set(["handle", "display_name"]);
+  const allowedTopic = new Set(["topic", "title", "author", "posting_state", "visibility", "post_count", "updated_seq", "created_at", "updated_at", "last_post_seq", "last_post_at"]);
+  const allowedPost = new Set(["source_seq", "author", "body", "created_at"]);
   if (
+    thread?.area === null ||
+    Object.keys(thread.area).some((key) => !allowedArea.has(key)) ||
     thread?.topic === null ||
     typeof thread?.topic !== "object" ||
     !Array.isArray(thread?.posts) ||
     Object.keys(thread.topic).some((key) => !allowedTopic.has(key)) ||
+    Object.keys(thread.topic.author ?? {}).some((key) => !allowedAuthor.has(key)) ||
     thread.posts.some(
       (post) =>
         Object.keys(post).some((key) => !allowedPost.has(key)) ||
+        Object.keys(post.author ?? {}).some((key) => !allowedAuthor.has(key)) ||
         JSON.stringify(post).includes(memberUserId),
     )
   ) {
@@ -270,7 +324,8 @@ function assertPublicDiscussionThread(thread, memberUserId) {
 
 function assertPublicDiscussionPage(page, memberUserId) {
   const allowedArea = new Set(["slug", "title", "description"]);
-  const allowedTopic = new Set(["topic", "title", "status", "post_count", "updated_seq"]);
+  const allowedAuthor = new Set(["handle", "display_name"]);
+  const allowedTopic = new Set(["topic", "title", "author", "posting_state", "visibility", "post_count", "updated_seq", "created_at", "updated_at", "last_post_seq", "last_post_at"]);
   if (
     page?.area === null ||
     typeof page?.area !== "object" ||
@@ -279,6 +334,7 @@ function assertPublicDiscussionPage(page, memberUserId) {
     page.topics.some(
       (topic) =>
         Object.keys(topic).some((key) => !allowedTopic.has(key)) ||
+        Object.keys(topic.author ?? {}).some((key) => !allowedAuthor.has(key)) ||
         JSON.stringify(topic).includes(memberUserId),
     )
   ) {
@@ -290,15 +346,15 @@ async function proveModeration({ member, moderator, frontendBaseUrl, topic }) {
   const memberPage = await member.newPage({ viewport: { width: 1024, height: 768 } });
   const moderatorPage = await moderator.newPage({ viewport: { width: 1024, height: 768 } });
   try {
-    const topicUrl = `${frontendBaseUrl}/discussions/general?topic=${encodeURIComponent(topic)}`;
+    const topicUrl = `${frontendBaseUrl}/discussions/general/t/${encodeURIComponent(topic)}`;
     await memberPage.goto(topicUrl, { waitUntil: "networkidle" });
     await memberPage.getByTestId("discussion-moderation-denied").waitFor({ state: "visible" });
     await moderatorPage.goto(topicUrl, { waitUntil: "networkidle" });
-    await moderatorPage.getByTestId("discussion-moderation-form").waitFor({ state: "visible" });
-    await moderatorPage.getByTestId("discussion-moderation-status").selectOption("locked");
+    await moderatorPage.getByTestId("discussion-moderation-controls").waitFor({ state: "visible" });
+    await moderatorPage.getByTestId("discussion-posting-state").selectOption("locked");
     await Promise.all([
       moderatorPage.waitForLoadState("networkidle"),
-      moderatorPage.getByTestId("discussion-moderation-submit").click(),
+      moderatorPage.getByTestId("discussion-posting-state-submit").click(),
     ]);
     await moderatorPage.getByTestId("discussion-topic-locked").waitFor({ state: "visible" });
     await memberPage.reload({ waitUntil: "networkidle" });
@@ -309,7 +365,7 @@ async function proveModeration({ member, moderator, frontendBaseUrl, topic }) {
     return {
       status: "passed",
       deniedTestId: "discussion-moderation-denied",
-      moderatorFormTestId: "discussion-moderation-form",
+      moderatorFormTestId: "discussion-moderation-controls",
       lockedTestId: "discussion-topic-locked",
     };
   } finally {
@@ -323,6 +379,7 @@ function assertProof(evidence) {
     evidence.status !== "passed" ||
     evidence.releaseReady !== false ||
     evidence.productionReady !== false ||
+    evidence.directory?.status !== "passed" ||
     evidence.empty?.status !== "passed" ||
     evidence.browserTopic?.postCount !== 2 ||
     evidence.seeded?.count !== pageSize ||

@@ -12,14 +12,15 @@ use domain::events::{IndexedEvent, ResolutionCounts};
 use domain::pack::{GrantKind, Pack, PhaseKind};
 use domain::state::{RevealState, SlotLifecycle, SlotState, StateSnapshot, Submission};
 use domain::{resolve, InnerEvent, ResolutionApplied, ResolutionInput};
-use eventstore::{ActorId, EventInput};
+use eventstore::{ActorId, EventInput, StoreError};
 use projections::{
     action_counters, action_grants, append_and_project, append_discussion_and_project,
-    append_profile_and_project, audit_rebuild, day_vote_outcomes, discussion_area_by_slug,
-    discussion_posts, discussion_topic_by_id, discussion_topics, game_index, host_phase_controls,
-    host_prompts, phase_state, player_notifications, profile_editor_by_handle,
-    public_profile_by_handle, rebuild, rebuild_discussion_stream, rebuild_profile_stream,
-    slot_effects, slot_state, votecount,
+    append_discussion_and_project_expected, append_profile_and_project, audit_rebuild,
+    day_vote_outcomes, discussion_area_by_slug, discussion_posts, discussion_topic_by_id,
+    discussion_topics, game_index, host_phase_controls, host_prompts, phase_state,
+    player_notifications, profile_editor_by_handle, public_profile_by_handle, rebuild,
+    rebuild_discussion_stream, rebuild_profile_stream, slot_effects, slot_state, votecount,
+    ProjectionError,
 };
 use sqlx::postgres::PgPoolOptions;
 use sqlx::PgPool;
@@ -1698,10 +1699,30 @@ async fn projection_rolls_back_on_conflict(pool: sqlx::PgPool) {
 /// public-safe projection boundary from game streams.
 #[sqlx::test(migrations = "../projections/migrations")]
 async fn discussion_projection_pages_visible_topics_and_hides_moderated_rows(pool: sqlx::PgPool) {
+    let member_profile = Uuid::from_u128(100);
     let area = Uuid::from_u128(101);
     let visible_topic = Uuid::from_u128(102);
     let hidden_topic = Uuid::from_u128(103);
 
+    append_profile_and_project(
+        &pool,
+        member_profile,
+        &[EventInput::new(
+            "ProfileCreated",
+            1,
+            serde_json::json!({
+                "principal_user_id": "member",
+                "handle": "member",
+                "display_name": "Member",
+                "bio": "Community member",
+                "visibility": "public"
+            }),
+            ActorId::User("member".into()),
+            1,
+        )],
+    )
+    .await
+    .unwrap();
     append_discussion_and_project(
         &pool,
         area,
@@ -1729,7 +1750,7 @@ async fn discussion_projection_pages_visible_topics_and_hides_moderated_rows(poo
                 serde_json::json!({
                     "area_id": area,
                     "title": "Welcome",
-                    "author_user_id": "member"
+                    "author_profile_id": member_profile
                 }),
                 ActorId::User("member".into()),
                 2,
@@ -1737,7 +1758,7 @@ async fn discussion_projection_pages_visible_topics_and_hides_moderated_rows(poo
             EventInput::new(
                 "DiscussionPostSubmitted",
                 1,
-                serde_json::json!({ "body": "First public post", "author_user_id": "member" }),
+                serde_json::json!({ "body": "First public post", "author_profile_id": member_profile }),
                 ActorId::User("member".into()),
                 3,
             ),
@@ -1755,15 +1776,15 @@ async fn discussion_projection_pages_visible_topics_and_hides_moderated_rows(poo
                 serde_json::json!({
                     "area_id": area,
                     "title": "Hidden",
-                    "author_user_id": "member"
+                    "author_profile_id": member_profile
                 }),
                 ActorId::User("member".into()),
                 4,
             ),
             EventInput::new(
-                "DiscussionTopicModerationChanged",
+                "DiscussionTopicVisibilityChanged",
                 1,
-                serde_json::json!({ "status": "hidden" }),
+                serde_json::json!({ "visibility": "hidden" }),
                 ActorId::User("moderator".into()),
                 5,
             ),
@@ -1782,17 +1803,62 @@ async fn discussion_projection_pages_visible_topics_and_hides_moderated_rows(poo
     assert_eq!(page.topics.len(), 1);
     assert_eq!(page.topics[0].topic_id, visible_topic);
     assert_eq!(page.topics[0].post_count, 1);
-    assert_eq!(page.topics[0].status, "open");
+    assert_eq!(page.topics[0].posting_state, "open");
+    assert_eq!(page.topics[0].visibility, "visible");
+    assert_eq!(page.topics[0].author.as_ref().unwrap().handle, "member");
     let posts = discussion_posts(&pool, visible_topic, None, 10)
         .await
         .unwrap();
     assert_eq!(posts.posts[0].body, "First public post");
+    assert_eq!(posts.posts[0].author.as_ref().unwrap().handle, "member");
+
+    let stale_version = page.topics[0].version;
+    append_discussion_and_project_expected(
+        &pool,
+        visible_topic,
+        stale_version,
+        &[EventInput::new(
+            "DiscussionTopicPostingStateChanged",
+            1,
+            serde_json::json!({ "posting_state": "locked" }),
+            ActorId::User("moderator".into()),
+            6,
+        )],
+    )
+    .await
+    .unwrap();
+    let stale_post = append_discussion_and_project_expected(
+        &pool,
+        visible_topic,
+        stale_version,
+        &[EventInput::new(
+            "DiscussionPostSubmitted",
+            1,
+            serde_json::json!({ "body": "stale reply", "author_profile_id": member_profile }),
+            ActorId::User("member".into()),
+            7,
+        )],
+    )
+    .await
+    .unwrap_err();
+    assert!(matches!(
+        stale_post,
+        ProjectionError::Store(StoreError::Conflict { .. })
+    ));
+    assert_eq!(
+        discussion_posts(&pool, visible_topic, None, 10)
+            .await
+            .unwrap()
+            .posts
+            .len(),
+        1
+    );
     assert_eq!(
         discussion_topic_by_id(&pool, hidden_topic)
             .await
             .unwrap()
             .unwrap()
-            .status,
+            .visibility,
         "hidden"
     );
     rebuild_discussion_stream(&pool, visible_topic)
@@ -1802,6 +1868,26 @@ async fn discussion_projection_pages_visible_topics_and_hides_moderated_rows(poo
         .await
         .unwrap();
     assert_eq!(rebuilt_posts.posts[0].body, "First public post");
+    rebuild_profile_stream(&pool, member_profile).await.unwrap();
+    let profile_rebuilt_topic = discussion_topic_by_id(&pool, visible_topic)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        profile_rebuilt_topic.author.as_ref().unwrap().handle,
+        "member"
+    );
+    assert_eq!(
+        discussion_posts(&pool, visible_topic, None, 10)
+            .await
+            .unwrap()
+            .posts[0]
+            .author
+            .as_ref()
+            .unwrap()
+            .handle,
+        "member"
+    );
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]

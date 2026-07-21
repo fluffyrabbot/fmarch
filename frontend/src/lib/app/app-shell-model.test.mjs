@@ -76,18 +76,20 @@ test("app shell builds role navigation from resolved capabilities", () => {
     ]),
     [
       ["board", true, "role-nav-board", 44],
+      ["community", true, "role-nav-community", 44],
       ["player", true, "role-nav-player", 44],
       ["moderator", false, "role-nav-moderator", 44],
       ["admin", false, "role-nav-admin", 44],
     ],
   );
   assert.equal(roleNavTestId("moderator"), "role-nav-moderator");
-  assert.equal(shell.surfaces[1].href, "/g/midsummer");
+  assert.equal(shell.surfaces[1].href, "/community");
   assert.equal(shell.surfaces[1].navigation, "link");
-  assert.equal(shell.surfaces[2].navigation, "blocked");
-  assert.equal(shell.surfaces[2].ariaDisabled, "true");
-  assert.equal(shell.surfaces[2].blockedReason, "Requires HostOf(midsummer) or CohostOf(midsummer)");
+  assert.equal(shell.surfaces[2].href, "/g/midsummer");
   assert.equal(shell.surfaces[3].navigation, "blocked");
+  assert.equal(shell.surfaces[3].ariaDisabled, "true");
+  assert.equal(shell.surfaces[3].blockedReason, "Requires HostOf(midsummer) or CohostOf(midsummer)");
+  assert.equal(shell.surfaces[4].navigation, "blocked");
 });
 
 test("app shell session summary models signed-out and multi-capability states", () => {
@@ -180,10 +182,11 @@ test("shared shell keyboard order starts with skip link before allowed role navi
 
   assert.equal(focus.skipLinkTestId, APP_SHELL_CONTRACT.skipLinkTestId);
   assert.equal(focus.mainTargetTestId, APP_SHELL_CONTRACT.mainTargetTestId);
-  assert.deepEqual(focus.linkedNavTestIds, ["role-nav-board", "role-nav-player"]);
+  assert.deepEqual(focus.linkedNavTestIds, ["role-nav-board", "role-nav-community", "role-nav-player"]);
   assert.deepEqual(focus.expectedOrder, [
     "app-shell-skip-link",
     "role-nav-board",
+    "role-nav-community",
     "role-nav-player",
     "player-command-submit",
   ]);

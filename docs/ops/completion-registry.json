@@ -474,12 +474,15 @@
       "title": "Non-game discussion areas",
       "execution_class": "code",
       "status": "complete",
-      "summary": "Public non-game discussion areas use durable append-only area/topic streams, session-backed topic/post routes, GlobalMod moderation transitions, and a seeded Chromium proof.",
+      "summary": "Public non-game discussions use a typed community write model, expected-version appends, enabled-account and profile-backed authorship, independent posting/visibility moderation, canonical topic/post URLs, a public area directory, and a seeded Chromium proof.",
       "complete_when": ["Users can browse, create, post in, and moderate capability-scoped non-game discussions through real routes and projections."],
       "depends_on": ["product.community.game-index", "product.identity.registration"],
       "evidence": [
-        { "kind": "source", "value": "crates/projections/migrations/0041_discussion.sql" },
+        { "kind": "source", "value": "crates/community/src/lib.rs" },
+        { "kind": "source", "value": "crates/projections/migrations/0046_community_integrity.sql" },
+        { "kind": "source", "value": "frontend/src/routes/community/+page.svelte" },
         { "kind": "source", "value": "frontend/src/routes/discussions/[slug]/+page.svelte" },
+        { "kind": "source", "value": "frontend/src/routes/discussions/[slug]/t/[topic]/+page.svelte" },
         { "kind": "source", "value": "docs/arch/02-event-sourcing.md" },
         { "kind": "command", "value": "npm run test:dev-test-game-discussion:local" },
         { "kind": "artifact", "value": "target/discussion-role-proof/discussion-proof.json" }
@@ -504,6 +507,31 @@
         { "kind": "artifact", "value": "target/profile-role-proof/profile-proof.json" }
       ],
       "remaining": []
+    },
+    {
+      "id": "product.community.search",
+      "section": "community",
+      "order": 40,
+      "title": "Public community search",
+      "execution_class": "code",
+      "status": "open",
+      "summary": "The community now has stable public document identity, authorship, visibility, and canonical URLs, but no searchable document projection or search route.",
+      "complete_when": ["Users can search public discussions, public game threads, profiles, and games through visibility-safe ranked results with stable pagination and canonical result links."],
+      "depends_on": ["product.community.discussions", "product.community.profiles", "product.community.game-index"],
+      "evidence": [
+        { "kind": "source", "value": "docs/arch/02-event-sourcing.md" }
+      ],
+      "remaining": ["Add a rebuildable PostgreSQL full-text search document projection, visibility-safe query API, canonical result contract, filters, excerpts, pagination, tablet-first route, and local browser proof."],
+      "recommended_slice": {
+        "objective": "Build the first public-only search vertical over visible discussions, public profiles, game metadata, and public main-thread posts using a rebuildable PostgreSQL tsvector projection, weighted rank plus stable cursor, canonical result URLs, synchronous moderation removal, and a seeded Chromium proof.",
+        "paths": ["crates/projections/", "crates/api/", "crates/wire/", "frontend/src/routes/search/", "tools/", "docs/arch/02-event-sourcing.md"],
+        "proof_commands": ["DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p projections -p api search -- --test-threads=1", "npm run test:frontend-contract", "npm run test:completeness-scorecard"],
+        "non_claims": [
+          "No private-channel search until capability-scoped indexing has a separate proof lane.",
+          "No recommendation, reputation, or opaque engagement-ranking claim.",
+          "No hosted search availability or release-readiness claim from local proof."
+        ]
+      }
     },
     {
       "id": "product.archive.completed-game-export",

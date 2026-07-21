@@ -19,7 +19,7 @@ export const APP_SHELL_CONTRACT = Object.freeze({
   topbarStickyTopPx: 0,
   topbarBlockSizePx: 76,
   stickyRailGapPx: 22,
-  surfaceOrder: Object.freeze(["board", "player", "moderator", "admin"]),
+  surfaceOrder: Object.freeze(["board", "community", "player", "moderator", "admin"]),
   navTestIdPrefix: "role-nav",
   minTouchTargetPx: 44,
 });
@@ -71,6 +71,14 @@ export function buildAppShell({
       label: "Board",
       href: "/",
       active: activeSurface === "board",
+      allowed: true,
+      capabilityLabel: "Public",
+    }),
+    surfaceItem({
+      id: "community",
+      label: "Community",
+      href: "/community",
+      active: activeSurface === "community",
       allowed: true,
       capabilityLabel: "Public",
     }),
@@ -413,6 +421,7 @@ function summarizeCapabilityKinds(capabilityKinds) {
 
 const NAV_ACCESS_LABELS = Object.freeze({
   board: "Public",
+  community: "Public",
   player: "Your seat",
   moderator: "Your console",
   admin: "Operator access",

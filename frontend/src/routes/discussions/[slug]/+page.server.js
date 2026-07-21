@@ -1,9 +1,10 @@
 import { fail, redirect } from "@sveltejs/kit";
+import { buildAppShell } from "../../../lib/app/app-shell-model.mjs";
 import { buildAppSurfaceHeaderViewModel } from "../../../lib/app/app-surface-header-model.mjs";
 import { hasCapability } from "../../../lib/app/capabilities.mjs";
 import { SESSION_COOKIE_NAME } from "../../../lib/server/session-capabilities.mjs";
 
-export async function load({ params, locals, fetch, url }) {
+export async function load({ params, locals, cookies, fetch, url }) {
   const apiBaseUrl = process.env.FMARCH_API_BASE_URL ?? "";
   const search = new URLSearchParams({ limit: "12" });
   const cursor = optionalText(url.searchParams.get("cursor"));
@@ -15,13 +16,14 @@ export async function load({ params, locals, fetch, url }) {
   if (area === null) {
     return unavailableData(params.slug, locals);
   }
-  const selectedTopic = optionalId(url.searchParams.get("topic"));
-  const thread =
-    selectedTopic === null
-      ? null
-      : await loadJson(fetch, `${apiBaseUrl}/discussions/topics/${encodeURIComponent(selectedTopic)}?limit=50`);
+  const profile = await loadCurrentProfile({ cookies, fetch, apiBaseUrl });
   return {
     shellOwner: "layout",
+    shell: buildAppShell({
+      activeSurface: "community",
+      principalUserId: locals.principalUserId,
+      capabilities: locals.resolvedCapabilities,
+    }),
     surfaceHeader: buildAppSurfaceHeaderViewModel({
       surface: "board",
       eyebrow: "Community",
@@ -33,9 +35,8 @@ export async function load({ params, locals, fetch, url }) {
       area: area.area,
       topics: Array.isArray(area.topics) ? area.topics : [],
       nextCursor: optionalText(area.next_cursor),
-      selectedTopic,
-      thread: thread === null ? null : thread,
-      canPost: typeof locals.principalUserId === "string",
+      canPost: profile !== null,
+      hasSession: typeof locals.principalUserId === "string",
       canModerate: hasCapability({
         capabilities: locals.resolvedCapabilities,
         kind: "GlobalMod",
@@ -48,7 +49,7 @@ export async function load({ params, locals, fetch, url }) {
 }
 
 export const actions = {
-  createTopic: async ({ cookies, fetch, params, request, url }) => {
+  createTopic: async ({ cookies, fetch, params, request }) => {
     const form = await request.formData();
     const response = await discussionMutation({
       cookies,
@@ -58,39 +59,18 @@ export const actions = {
     });
     if (!response.ok) return mutationFailure(response, "Unable to create discussion topic");
     const topic = await response.json();
-    throw redirect(303, `${url.pathname}?topic=${encodeURIComponent(topic.topic)}`);
-  },
-  createPost: async ({ cookies, fetch, request, url }) => {
-    const form = await request.formData();
-    const topic = optionalId(form.get("topic"));
-    if (topic === null) return fail(400, mutationStatus("reject", "Choose a discussion topic before posting"));
-    const response = await discussionMutation({
-      cookies,
-      fetch,
-      path: `/discussions/topics/${encodeURIComponent(topic)}/posts`,
-      body: { body: text(form.get("body")) },
-    });
-    if (!response.ok) return mutationFailure(response, "Unable to post discussion reply");
-    throw redirect(303, `${url.pathname}?topic=${encodeURIComponent(topic)}`);
-  },
-  moderate: async ({ cookies, fetch, request, url }) => {
-    const form = await request.formData();
-    const topic = optionalId(form.get("topic"));
-    if (topic === null) return fail(400, mutationStatus("reject", "Choose a discussion topic before moderating"));
-    const response = await discussionMutation({
-      cookies,
-      fetch,
-      path: `/discussions/topics/${encodeURIComponent(topic)}/moderation`,
-      body: { status: text(form.get("status")) },
-    });
-    if (!response.ok) return mutationFailure(response, "Unable to update discussion moderation");
-    throw redirect(303, `${url.pathname}?topic=${encodeURIComponent(topic)}`);
+    throw redirect(303, `/discussions/${encodeURIComponent(params.slug)}/t/${encodeURIComponent(topic.topic)}`);
   },
 };
 
 function unavailableData(slug, locals) {
   return {
     shellOwner: "layout",
+    shell: buildAppShell({
+      activeSurface: "community",
+      principalUserId: locals.principalUserId,
+      capabilities: locals.resolvedCapabilities,
+    }),
     surfaceHeader: buildAppSurfaceHeaderViewModel({
       surface: "board",
       eyebrow: "Community",
@@ -102,9 +82,8 @@ function unavailableData(slug, locals) {
       area: { slug, title: "Discussion area", description: "" },
       topics: [],
       nextCursor: null,
-      selectedTopic: null,
-      thread: null,
-      canPost: typeof locals.principalUserId === "string",
+      canPost: false,
+      hasSession: typeof locals.principalUserId === "string",
       canModerate: false,
     },
   };
@@ -146,8 +125,14 @@ async function loadJson(fetch, url) {
   return value !== null && typeof value === "object" ? value : null;
 }
 
-function optionalId(value) {
-  return typeof value === "string" && /^[0-9a-f-]{36}$/iu.test(value) ? value : null;
+async function loadCurrentProfile({ cookies, fetch, apiBaseUrl }) {
+  const token = cookies.get(SESSION_COOKIE_NAME);
+  if (typeof token !== "string" || token.trim() === "") return null;
+  const response = await fetch(`${apiBaseUrl}/profiles/me/editor`, {
+    headers: { authorization: `Bearer ${token}`, accept: "application/json" },
+  });
+  const profile = response.ok ? await response.json().catch(() => null) : null;
+  return profile?.visibility === "public" ? profile : null;
 }
 
 function optionalText(value) {

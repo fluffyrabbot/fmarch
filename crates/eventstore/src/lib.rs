@@ -151,7 +151,7 @@ where
     .bind(stream_id)
     .fetch_one(exec)
     .await?;
-    Ok(row.try_get::<i64, _>("max_seq")?)
+    row.try_get::<i64, _>("max_seq")
 }
 
 /// Append `events` to `stream_id` at `current_max + 1..`, inside `tx`.
@@ -170,12 +170,41 @@ pub async fn append_in_tx(
     stream_id: Uuid,
     events: &[EventInput],
 ) -> Result<Vec<StoredEvent>, StoreError> {
+    append_in_tx_checked(tx, stream_id, None, events).await
+}
+
+/// Append only when the stream is still at `expected_stream_seq`.
+///
+/// The expected-version check runs after acquiring the stream advisory lock,
+/// making a projection read followed by this append a safe optimistic command
+/// boundary. A concurrent state change wins and the stale command conflicts.
+pub async fn append_expected_in_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    stream_id: Uuid,
+    expected_stream_seq: i64,
+    events: &[EventInput],
+) -> Result<Vec<StoredEvent>, StoreError> {
+    append_in_tx_checked(tx, stream_id, Some(expected_stream_seq), events).await
+}
+
+async fn append_in_tx_checked(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    stream_id: Uuid,
+    expected_stream_seq: Option<i64>,
+    events: &[EventInput],
+) -> Result<Vec<StoredEvent>, StoreError> {
     if events.is_empty() {
         return Ok(Vec::new());
     }
 
     acquire_stream_append_lock(tx, stream_id).await?;
     let base = current_stream_seq(&mut **tx, stream_id).await?;
+    if expected_stream_seq.is_some_and(|expected| expected != base) {
+        return Err(StoreError::Conflict {
+            stream_id,
+            stream_seq: base + 1,
+        });
+    }
     let mut out = Vec::with_capacity(events.len());
 
     for (i, ev) in events.iter().enumerate() {

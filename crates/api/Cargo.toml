@@ -5,6 +5,7 @@ edition.workspace = true
 
 [dependencies]
 caps = { path = "../caps" }
+community = { path = "../community" }
 commands = { path = "../commands" }
 domain = { path = "../domain" }
 eventstore = { path = "../eventstore" }

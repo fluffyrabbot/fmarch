@@ -4406,7 +4406,7 @@ async fn completed_game_export_is_host_gated_and_checksum_bearing(pool: sqlx::Pg
 async fn discussion_api_requires_sessions_pages_public_topics_and_enforces_global_moderation(
     pool: sqlx::PgPool,
 ) {
-    let app = router_with_dev_auth(pool);
+    let app = router_with_dev_auth(pool.clone());
     for (token, principal_user_id, globals) in [
         (
             "discussion-member",
@@ -4426,12 +4426,64 @@ async fn discussion_api_requires_sessions_pages_public_topics_and_enforces_globa
                 "token": token,
                 "principal_user_id": principal_user_id,
                 "expires_at": 4_102_444_800i64,
-                "global_capabilities": globals,
+                "global_capabilities": globals.clone(),
             }),
             None,
         )
         .await;
         assert_eq!(response.status(), StatusCode::OK);
+        sqlx::query(
+            "INSERT INTO auth_account (account_id, principal_user_id, password_hash, created_at, disabled_at, global_capabilities) VALUES ($1, $2, 'test-only', 1, NULL, $3)",
+        )
+        .bind(format!("{principal_user_id}@example.test"))
+        .bind(principal_user_id)
+        .bind(
+            globals
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|value| value.as_str().unwrap().to_string())
+                .collect::<Vec<_>>(),
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+
+    for (token, handle, display_name) in [
+        (
+            "discussion-member",
+            "discussion_member",
+            "Discussion Member",
+        ),
+        (
+            "discussion-moderator",
+            "discussion_moderator",
+            "Discussion Moderator",
+        ),
+    ] {
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/profiles")
+                    .header("authorization", format!("Bearer {token}"))
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        serde_json::json!({
+                            "handle": handle,
+                            "display_name": display_name,
+                            "bio": "Community profile",
+                            "visibility": "public"
+                        })
+                        .to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::CREATED);
     }
 
     let create_area = app
@@ -4523,7 +4575,7 @@ async fn discussion_api_requires_sessions_pages_public_topics_and_enforces_globa
                 .uri(format!("/discussions/topics/{topic}/moderation"))
                 .header("authorization", "Bearer discussion-member")
                 .header("content-type", "application/json")
-                .body(Body::from(r#"{"status":"locked"}"#))
+                .body(Body::from(r#"{"posting_state":"locked"}"#))
                 .unwrap(),
         )
         .await
@@ -4538,7 +4590,7 @@ async fn discussion_api_requires_sessions_pages_public_topics_and_enforces_globa
                 .uri(format!("/discussions/topics/{topic}/moderation"))
                 .header("authorization", "Bearer discussion-moderator")
                 .header("content-type", "application/json")
-                .body(Body::from(r#"{"status":"locked"}"#))
+                .body(Body::from(r#"{"posting_state":"locked"}"#))
                 .unwrap(),
         )
         .await
@@ -4560,11 +4612,34 @@ async fn discussion_api_requires_sessions_pages_public_topics_and_enforces_globa
         .unwrap();
     assert_eq!(rejected_post.status(), StatusCode::CONFLICT);
 
+    sqlx::query(
+        "UPDATE auth_account SET disabled_at = 2 WHERE principal_user_id = 'discussion_member'",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let disabled_post = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/discussions/topics/{topic}/posts"))
+                .header("authorization", "Bearer discussion-member")
+                .header("content-type", "application/json")
+                .body(Body::from(r#"{"body":"disabled reply"}"#))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(disabled_post.status(), StatusCode::UNAUTHORIZED);
+
     let response = app
         .oneshot(
             Request::builder()
                 .method("GET")
-                .uri(format!("/discussions/topics/{topic}?limit=10"))
+                .uri(format!(
+                    "/discussions/areas/general/topics/{topic}?limit=10"
+                ))
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -4573,7 +4648,12 @@ async fn discussion_api_requires_sessions_pages_public_topics_and_enforces_globa
     assert_eq!(response.status(), StatusCode::OK);
     let thread: DiscussionThreadPage =
         serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap()).unwrap();
-    assert_eq!(thread.topic.status, "locked");
+    assert_eq!(thread.topic.posting_state, "locked");
+    assert_eq!(thread.topic.visibility, "visible");
+    assert_eq!(
+        thread.posts[0].author.as_ref().unwrap().handle,
+        "discussion_member"
+    );
     assert_eq!(thread.posts.len(), 1);
     assert_eq!(thread.posts[0].body, "Second opening");
 }

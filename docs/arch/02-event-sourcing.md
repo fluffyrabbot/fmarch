@@ -162,11 +162,15 @@ lifecycle events arrive.
 
 Non-game discussion uses independent area and topic streams in the same append-only event log.
 `DiscussionAreaCreated`, `DiscussionTopicCreated`, `DiscussionPostSubmitted`, and
-`DiscussionTopicModerationChanged` fold synchronously into their own projection tables. Public
-queries expose only area/topic/post display facts: account identifiers stay inside the projection
-boundary, hidden topics are excluded, and the topic index uses `(updated_seq, topic_id)` keyset
-pagination. Topic creation and posting require an authenticated opaque session; moderation state
-transitions require `GlobalMod` or `GlobalAdmin` resolved from that session at the API boundary.
+the orthogonal `DiscussionTopicPostingStateChanged` / `DiscussionTopicVisibilityChanged` events
+fold synchronously into their own projection tables. The pure `community` write model decides
+those events from typed commands before the persistence adapter appends them against the topic's
+expected stream version. A concurrent lock or hide therefore invalidates a stale reply rather
+than allowing it across the moderation boundary. Public queries expose profile-backed authorship
+without credential principals; hidden topics are excluded, and the topic index uses
+`(updated_seq, topic_id)` keyset pagination. Topic creation and posting require an enabled account
+with a community profile. Moderation transitions require `GlobalMod` or `GlobalAdmin`, also backed
+by an enabled account, resolved at the API boundary.
 
 Profiles likewise use a dedicated append-only stream per profile. `ProfileCreated` and
 `ProfileUpdated` synchronously maintain two projections: `profile_public`, which never stores or

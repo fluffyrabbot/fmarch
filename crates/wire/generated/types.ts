@@ -57,13 +57,15 @@ export type GameIndexPage = { games: Array<GameIndexEntry>, next_cursor: string 
 
 export type DiscussionArea = { slug: string, title: string, description: string, };
 
-export type DiscussionTopic = { topic: string, title: string, status: string, post_count: bigint, updated_seq: bigint, };
+export type DiscussionAuthor = { handle: string, display_name: string, };
+
+export type DiscussionTopic = { topic: string, title: string, author: DiscussionAuthor | null, posting_state: string, visibility: string, post_count: bigint, updated_seq: bigint, created_at: bigint, updated_at: bigint, last_post_seq: bigint | null, last_post_at: bigint | null, };
 
 export type DiscussionTopicPage = { area: DiscussionArea, topics: Array<DiscussionTopic>, next_cursor: string | null, };
 
-export type DiscussionPost = { source_seq: bigint, body: string, };
+export type DiscussionPost = { source_seq: bigint, author: DiscussionAuthor | null, body: string, created_at: bigint, };
 
-export type DiscussionThreadPage = { topic: DiscussionTopic, posts: Array<DiscussionPost>, next_before_seq: bigint | null, };
+export type DiscussionThreadPage = { area: DiscussionArea, topic: DiscussionTopic, posts: Array<DiscussionPost>, next_before_seq: bigint | null, };
 
 export type PublicProfile = { handle: string, display_name: string, bio: string, updated_seq: bigint, };
 

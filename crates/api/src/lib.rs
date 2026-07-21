@@ -238,13 +238,19 @@ pub fn router_with_state(state: ApiState) -> Router {
         .route("/commands", post(command))
         .route("/games", get(game_index))
         .route("/games/import", post(import_completed_game_export))
-        .route("/discussions/areas", post(create_discussion_area))
+        .route(
+            "/discussions/areas",
+            get(discussion_areas).post(create_discussion_area),
+        )
         .route("/discussions/areas/{slug}", get(discussion_area_topics))
         .route(
             "/discussions/areas/{slug}/topics",
             post(create_discussion_topic),
         )
-        .route("/discussions/topics/{topic}", get(discussion_topic_thread))
+        .route(
+            "/discussions/areas/{slug}/topics/{topic}",
+            get(discussion_topic_thread),
+        )
         .route(
             "/discussions/topics/{topic}/posts",
             post(create_discussion_post),
@@ -4142,7 +4148,20 @@ struct CreateDiscussionPostRequest {
 
 #[derive(Debug, Clone, Deserialize)]
 struct ModerateDiscussionTopicRequest {
-    status: String,
+    posting_state: Option<String>,
+    visibility: Option<String>,
+}
+
+async fn discussion_areas(
+    State(state): State<ApiState>,
+) -> Result<Json<Vec<DiscussionArea>>, ApiError> {
+    Ok(Json(
+        projections::discussion_areas(&state.pool)
+            .await?
+            .into_iter()
+            .map(DiscussionArea::from)
+            .collect(),
+    ))
 }
 
 async fn discussion_area_topics(
@@ -4176,10 +4195,16 @@ async fn discussion_area_topics(
 
 async fn discussion_topic_thread(
     State(state): State<ApiState>,
-    Path(topic): Path<Uuid>,
+    Path((slug, topic)): Path<(String, Uuid)>,
     Query(query): Query<DiscussionPostQuery>,
 ) -> Result<Json<DiscussionThreadPage>, ApiError> {
+    let area = projections::discussion_area_by_slug(&state.pool, slug.as_str())
+        .await?
+        .ok_or_else(|| discussion_not_found("discussion area"))?;
     let topic = visible_discussion_topic(&state, topic).await?;
+    if topic.area_id != area.area_id {
+        return Err(discussion_not_found("discussion topic"));
+    }
     let page = projections::discussion_posts(
         &state.pool,
         topic.topic_id,
@@ -4188,6 +4213,7 @@ async fn discussion_topic_thread(
     )
     .await?;
     Ok(Json(DiscussionThreadPage {
+        area: DiscussionArea::from(area),
         topic: DiscussionTopic::from(topic),
         posts: page.posts.into_iter().map(DiscussionPost::from).collect(),
         next_before_seq: page.next_before_seq,
@@ -4217,17 +4243,18 @@ async fn create_discussion_area(
         ));
     }
     let area_id = Uuid::new_v4();
+    let created = community::AreaCreated {
+        slug: slug.clone(),
+        title,
+        description,
+    };
     projections::append_discussion_and_project(
         &state.pool,
         area_id,
         &[EventInput::new(
-            "DiscussionAreaCreated",
+            created.kind(),
             1,
-            serde_json::json!({
-                "slug": slug,
-                "title": title,
-                "description": description,
-            }),
+            created.payload(),
             ActorId::User(principal_user_id),
             unix_now_seconds(),
         )],
@@ -4245,38 +4272,25 @@ async fn create_discussion_topic(
     headers: HeaderMap,
     Json(request): Json<CreateDiscussionTopicRequest>,
 ) -> Result<(StatusCode, Json<DiscussionTopic>), ApiError> {
-    let principal_user_id = authenticated_discussion_principal(&state, &headers).await?;
+    let profile = authenticated_discussion_profile(&state, &headers).await?;
     let area = projections::discussion_area_by_slug(&state.pool, slug.as_str())
         .await?
         .ok_or_else(|| discussion_not_found("discussion area"))?;
     let title = validate_discussion_text(request.title.as_str(), "discussion topic title", 180)?;
     let body = validate_discussion_text(request.body.as_str(), "discussion post", 10_000)?;
     let topic_id = Uuid::new_v4();
-    projections::append_discussion_and_project(
-        &state.pool,
-        topic_id,
-        &[
-            EventInput::new(
-                "DiscussionTopicCreated",
-                1,
-                serde_json::json!({
-                    "area_id": area.area_id,
-                    "title": title,
-                    "author_user_id": principal_user_id,
-                }),
-                ActorId::User(principal_user_id.clone()),
-                unix_now_seconds(),
-            ),
-            EventInput::new(
-                "DiscussionPostSubmitted",
-                1,
-                serde_json::json!({ "body": body, "author_user_id": principal_user_id }),
-                ActorId::User(principal_user_id),
-                unix_now_seconds(),
-            ),
-        ],
+    let events = community::decide_topic(
+        None,
+        community::TopicCommand::Create {
+            topic_id,
+            area_id: area.area_id,
+            title,
+            opening_body: body,
+            author_profile_id: profile.profile_id,
+        },
     )
-    .await?;
+    .map_err(community_reject_api_error)?;
+    append_community_events(&state.pool, topic_id, 0, events, profile.principal_user_id).await?;
     let topic = projections::discussion_topic_by_id(&state.pool, topic_id)
         .await?
         .expect("projected discussion topic is readable");
@@ -4289,26 +4303,26 @@ async fn create_discussion_post(
     headers: HeaderMap,
     Json(request): Json<CreateDiscussionPostRequest>,
 ) -> Result<(StatusCode, Json<DiscussionTopic>), ApiError> {
-    let principal_user_id = authenticated_discussion_principal(&state, &headers).await?;
+    let profile = authenticated_discussion_profile(&state, &headers).await?;
     let current = projections::discussion_topic_by_id(&state.pool, topic)
         .await?
         .ok_or_else(|| discussion_not_found("discussion topic"))?;
-    if current.status != "open" {
-        return Err(discussion_conflict(
-            "discussion topic is not open; refresh the discussion before posting",
-        ));
-    }
     let body = validate_discussion_text(request.body.as_str(), "discussion post", 10_000)?;
-    projections::append_discussion_and_project(
+    let topic_state = community_topic_state(&current)?;
+    let events = community::decide_topic(
+        Some(&topic_state),
+        community::TopicCommand::SubmitPost {
+            body,
+            author_profile_id: profile.profile_id,
+        },
+    )
+    .map_err(community_reject_api_error)?;
+    append_community_events(
         &state.pool,
         topic,
-        &[EventInput::new(
-            "DiscussionPostSubmitted",
-            1,
-            serde_json::json!({ "body": body, "author_user_id": principal_user_id }),
-            ActorId::User(principal_user_id),
-            unix_now_seconds(),
-        )],
+        current.version,
+        events,
+        profile.principal_user_id,
     )
     .await?;
     let topic = projections::discussion_topic_by_id(&state.pool, topic)
@@ -4325,20 +4339,39 @@ async fn moderate_discussion_topic(
 ) -> Result<Json<DiscussionTopic>, ApiError> {
     let token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
     let principal_user_id = require_global_mod(&state, token, "discussion moderation").await?;
-    let status = validate_discussion_status(request.status.as_str())?;
-    projections::discussion_topic_by_id(&state.pool, topic)
+    let current = projections::discussion_topic_by_id(&state.pool, topic)
         .await?
         .ok_or_else(|| discussion_not_found("discussion topic"))?;
-    projections::append_discussion_and_project(
+    let topic_state = community_topic_state(&current)?;
+    let command =
+        match (
+            request.posting_state.as_deref(),
+            request.visibility.as_deref(),
+        ) {
+            (Some(posting_state), None) => community::TopicCommand::SetPostingState {
+                posting_state: community::PostingState::parse(posting_state)
+                    .map_err(community_reject_api_error)?,
+            },
+            (None, Some(visibility)) => community::TopicCommand::SetVisibility {
+                visibility: community::TopicVisibility::parse(visibility)
+                    .map_err(community_reject_api_error)?,
+            },
+            _ => return Err(ApiError::Reject {
+                status: StatusCode::BAD_REQUEST,
+                error: RejectCode::Internal,
+                message:
+                    "discussion moderation must change exactly one of posting_state or visibility"
+                        .to_string(),
+            }),
+        };
+    let events =
+        community::decide_topic(Some(&topic_state), command).map_err(community_reject_api_error)?;
+    append_community_events(
         &state.pool,
         topic,
-        &[EventInput::new(
-            "DiscussionTopicModerationChanged",
-            1,
-            serde_json::json!({ "status": status }),
-            ActorId::User(principal_user_id),
-            unix_now_seconds(),
-        )],
+        current.version,
+        events,
+        principal_user_id,
     )
     .await?;
     let topic = projections::discussion_topic_by_id(&state.pool, topic)
@@ -4354,18 +4387,27 @@ async fn visible_discussion_topic(
     let topic = projections::discussion_topic_by_id(&state.pool, topic_id)
         .await?
         .ok_or_else(|| discussion_not_found("discussion topic"))?;
-    if topic.status == "hidden" {
+    if topic.visibility != community::TopicVisibility::Visible.as_str() {
         return Err(discussion_not_found("discussion topic"));
     }
     Ok(topic)
 }
 
-async fn authenticated_discussion_principal(
+async fn authenticated_discussion_profile(
     state: &ApiState,
     headers: &HeaderMap,
-) -> Result<String, ApiError> {
-    let token = bearer_token(headers).ok_or_else(unauthorized_session)?;
-    Ok(active_session_principal_and_globals(state, token).await?.0)
+) -> Result<projections::ProfileEditorRow, ApiError> {
+    let token = bearer_token(headers).ok_or_else(unauthorized_account)?;
+    let principal_user_id = require_active_enabled_account(state, token).await?;
+    let profile = projections::profile_editor_by_principal(&state.pool, principal_user_id.as_str())
+        .await?
+        .ok_or_else(|| discussion_conflict("create a community profile before posting"))?;
+    if profile.visibility != "public" {
+        return Err(discussion_conflict(
+            "make the community profile public before posting publicly",
+        ));
+    }
+    Ok(profile)
 }
 
 async fn require_global_mod(
@@ -4373,7 +4415,8 @@ async fn require_global_mod(
     token: &str,
     action: &str,
 ) -> Result<String, ApiError> {
-    let (principal_user_id, globals) = active_session_principal_and_globals(state, token).await?;
+    let principal_user_id = require_active_enabled_account(state, token).await?;
+    let (_, globals) = active_session_principal_and_globals(state, token).await?;
     if globals
         .iter()
         .any(|capability| matches!(capability.as_str(), "GlobalAdmin" | "GlobalMod"))
@@ -4436,14 +4479,73 @@ fn validate_discussion_text(value: &str, label: &str, max_len: usize) -> Result<
     Ok(text.to_string())
 }
 
-fn validate_discussion_status(value: &str) -> Result<String, ApiError> {
-    match value.trim() {
-        "open" | "locked" | "hidden" => Ok(value.trim().to_string()),
-        _ => Err(ApiError::Reject {
-            status: StatusCode::BAD_REQUEST,
-            error: RejectCode::Internal,
-            message: "discussion moderation status must be open, locked, or hidden".to_string(),
-        }),
+fn community_topic_state(
+    topic: &projections::DiscussionTopicRow,
+) -> Result<community::TopicState, ApiError> {
+    Ok(community::TopicState {
+        topic_id: topic.topic_id,
+        area_id: topic.area_id,
+        posting_state: community::PostingState::parse(topic.posting_state.as_str())
+            .map_err(community_reject_api_error)?,
+        visibility: community::TopicVisibility::parse(topic.visibility.as_str())
+            .map_err(community_reject_api_error)?,
+        version: topic.version,
+    })
+}
+
+async fn append_community_events(
+    pool: &PgPool,
+    topic_id: Uuid,
+    expected_version: i64,
+    events: Vec<community::TopicEvent>,
+    principal_user_id: String,
+) -> Result<(), ApiError> {
+    let occurred_at = unix_now_seconds();
+    let events: Vec<_> = events
+        .into_iter()
+        .map(|event| {
+            EventInput::new(
+                event.kind(),
+                1,
+                event.payload(),
+                ActorId::User(principal_user_id.clone()),
+                occurred_at,
+            )
+        })
+        .collect();
+    match projections::append_discussion_and_project_expected(
+        pool,
+        topic_id,
+        expected_version,
+        events.as_slice(),
+    )
+    .await
+    {
+        Ok(_) => Ok(()),
+        Err(projections::ProjectionError::Store(eventstore::StoreError::Conflict { .. })) => Err(
+            discussion_conflict("discussion changed concurrently; refresh and try again"),
+        ),
+        Err(error) => Err(ApiError::Projection(error)),
+    }
+}
+
+fn community_reject_api_error(reject: community::CommunityReject) -> ApiError {
+    let status = match reject {
+        community::CommunityReject::InvalidPostingState
+        | community::CommunityReject::InvalidVisibility => StatusCode::BAD_REQUEST,
+        community::CommunityReject::TopicNotFound => StatusCode::NOT_FOUND,
+        _ => StatusCode::CONFLICT,
+    };
+    ApiError::Reject {
+        status,
+        error: if status == StatusCode::NOT_FOUND {
+            RejectCode::NotAuthorized
+        } else if status == StatusCode::BAD_REQUEST {
+            RejectCode::Internal
+        } else {
+            RejectCode::StreamConflict
+        },
+        message: reject.to_string(),
     }
 }
 

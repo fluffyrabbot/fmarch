@@ -13,7 +13,7 @@ import {
   validateRegistry,
 } from "./completeness_scorecard.mjs";
 
-test("real completion registry validates the completed product capability set", async () => {
+test("real completion registry exposes public search as the next product capability", async () => {
   const registry = await loadCompletionRegistry();
   await validateRegistry(registry);
   const summary = summarizeRegistry(registry);
@@ -25,10 +25,10 @@ test("real completion registry validates the completed product capability set", 
     deferred: 0,
     total: 6,
   });
-  assert.equal(summary.productCapabilitiesComplete, true);
+  assert.equal(summary.productCapabilitiesComplete, false);
   assert.equal(summary.platformComplete, false);
   assert.equal(summary.releaseComplete, false);
-  assert.equal(nextBuildableCodeItem(registry), undefined);
+  assert.equal(nextBuildableCodeItem(registry)?.id, "product.community.search");
 });
 
 test("generated scorecard exactly matches the canonical registry", async () => {

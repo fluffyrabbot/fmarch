@@ -980,12 +980,24 @@ pub struct DiscussionArea {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct DiscussionAuthor {
+    pub handle: String,
+    pub display_name: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct DiscussionTopic {
     pub topic: Uuid,
     pub title: String,
-    pub status: String,
+    pub author: Option<DiscussionAuthor>,
+    pub posting_state: String,
+    pub visibility: String,
     pub post_count: i64,
     pub updated_seq: i64,
+    pub created_at: i64,
+    pub updated_at: i64,
+    pub last_post_seq: Option<i64>,
+    pub last_post_at: Option<i64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -998,11 +1010,14 @@ pub struct DiscussionTopicPage {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct DiscussionPost {
     pub source_seq: i64,
+    pub author: Option<DiscussionAuthor>,
     pub body: String,
+    pub created_at: i64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct DiscussionThreadPage {
+    pub area: DiscussionArea,
     pub topic: DiscussionTopic,
     pub posts: Vec<DiscussionPost>,
     pub next_before_seq: Option<i64>,
@@ -1023,9 +1038,15 @@ impl From<projections::DiscussionTopicRow> for DiscussionTopic {
         DiscussionTopic {
             topic: topic.topic_id,
             title: topic.title,
-            status: topic.status,
+            author: topic.author.map(DiscussionAuthor::from),
+            posting_state: topic.posting_state,
+            visibility: topic.visibility,
             post_count: topic.post_count,
             updated_seq: topic.updated_seq,
+            created_at: topic.created_at,
+            updated_at: topic.updated_at,
+            last_post_seq: topic.last_post_seq,
+            last_post_at: topic.last_post_at,
         }
     }
 }
@@ -1034,7 +1055,18 @@ impl From<projections::DiscussionPostRow> for DiscussionPost {
     fn from(post: projections::DiscussionPostRow) -> Self {
         DiscussionPost {
             source_seq: post.source_seq,
+            author: post.author.map(DiscussionAuthor::from),
             body: post.body,
+            created_at: post.created_at,
+        }
+    }
+}
+
+impl From<projections::DiscussionAuthorRow> for DiscussionAuthor {
+    fn from(author: projections::DiscussionAuthorRow) -> Self {
+        DiscussionAuthor {
+            handle: author.handle,
+            display_name: author.display_name,
         }
     }
 }
@@ -1384,13 +1416,13 @@ pub mod typescript {
 
     use crate::{
         AckMsg, CapabilityGrant, ClientEnvelope, ClientMsg, Command, CommandMsg,
-        DayVoteOutcomeDelta, DiscussionArea, DiscussionPost, DiscussionThreadPage, DiscussionTopic,
-        DiscussionTopicPage, GameIndexEntry, GameIndexPage, Hello, HostConsolePhaseStateDelta,
-        HostConsoleSlotOccupancyDelta, HostConsoleStateDelta, HostConsoleThreadPostDelta,
-        HostPhaseControl, HostPromptDecision, HostPromptDelta, HostPromptsDelta,
-        PlayerInvestigationResult, PlayerNotification, ProfileEditor, ProjectionDelta,
-        PublicProfile, RejectCode, RejectMsg, ResolutionTraceDecisionRow, ResolutionTraceEdgeRow,
-        ResolutionTraceEffectChangeRow, ResolutionTraceGeneratedRow,
+        DayVoteOutcomeDelta, DiscussionArea, DiscussionAuthor, DiscussionPost,
+        DiscussionThreadPage, DiscussionTopic, DiscussionTopicPage, GameIndexEntry, GameIndexPage,
+        Hello, HostConsolePhaseStateDelta, HostConsoleSlotOccupancyDelta, HostConsoleStateDelta,
+        HostConsoleThreadPostDelta, HostPhaseControl, HostPromptDecision, HostPromptDelta,
+        HostPromptsDelta, PlayerInvestigationResult, PlayerNotification, ProfileEditor,
+        ProjectionDelta, PublicProfile, RejectCode, RejectMsg, ResolutionTraceDecisionRow,
+        ResolutionTraceEdgeRow, ResolutionTraceEffectChangeRow, ResolutionTraceGeneratedRow,
         ResolutionTraceInspectionReport, ResolutionTraceInspectionRun, ResolutionTraceNoteRow,
         ResolutionTraceVisibilityRow, ServerEnvelope, ServerMsg, SlotLifecycle, SubmitPostMedia,
         ThreadPage, ThreadPost, ThreadPostMedia, ThreadPostMediaVariant, ThreadPostsDelta,
@@ -1429,6 +1461,7 @@ pub mod typescript {
         push::<GameIndexEntry>(&mut out);
         push::<GameIndexPage>(&mut out);
         push::<DiscussionArea>(&mut out);
+        push::<DiscussionAuthor>(&mut out);
         push::<DiscussionTopic>(&mut out);
         push::<DiscussionTopicPage>(&mut out);
         push::<DiscussionPost>(&mut out);

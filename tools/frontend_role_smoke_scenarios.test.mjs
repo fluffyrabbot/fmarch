@@ -67,6 +67,7 @@ test("board smoke scenario keeps allowed and blocked navigation explicit", () =>
   assert.equal(boardScenario.surfaceTestId, "board-surface");
   assert.deepEqual(boardScenario.nav, {
     board: "link",
+    community: "link",
     player: "link",
     moderator: "blocked",
     admin: "blocked",
@@ -305,8 +306,9 @@ test("forbidden route scenarios cover denied admin, moderator, and signed-out pl
 });
 
 function assertRoleNav(nav, roleId) {
-  assert.deepEqual(Object.keys(nav).sort(), ["admin", "board", "moderator", "player"]);
+  assert.deepEqual(Object.keys(nav).sort(), ["admin", "board", "community", "moderator", "player"]);
   assert.equal(nav.board, "link");
+  assert.equal(nav.community, "link");
   assert.equal(nav[roleId], "link");
   assert.equal(Object.values(nav).includes("blocked"), true);
   for (const navigation of Object.values(nav)) {

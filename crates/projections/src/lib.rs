@@ -436,16 +436,33 @@ pub struct DiscussionAreaRow {
     pub created_seq: i64,
 }
 
+/// Public-safe author identity attached to a public contribution. Credential
+/// principals remain private even when the profile owner posts publicly.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DiscussionAuthorRow {
+    pub profile_id: Uuid,
+    pub handle: String,
+    pub display_name: String,
+}
+
 /// A public discussion topic row.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DiscussionTopicRow {
     pub topic_id: Uuid,
     pub area_id: Uuid,
     pub title: String,
-    pub status: String,
+    pub author: Option<DiscussionAuthorRow>,
+    pub posting_state: String,
+    pub visibility: String,
     pub post_count: i64,
     pub created_seq: i64,
     pub updated_seq: i64,
+    pub created_at: i64,
+    pub updated_at: i64,
+    pub last_post_seq: Option<i64>,
+    pub last_post_at: Option<i64>,
+    /// Current topic stream sequence used by optimistic community commands.
+    pub version: i64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -463,7 +480,9 @@ pub struct DiscussionTopicPage {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DiscussionPostRow {
     pub source_seq: i64,
+    pub author: Option<DiscussionAuthorRow>,
     pub body: String,
+    pub created_at: i64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1587,6 +1606,25 @@ pub async fn append_discussion_and_project_in_tx(
     Ok(stored)
 }
 
+/// Append a community command only if the topic stream is still at the version
+/// used to decide it. The expected-version check and projection fold commit in
+/// the same transaction.
+pub async fn append_discussion_and_project_expected(
+    pool: &PgPool,
+    stream_id: Uuid,
+    expected_stream_seq: i64,
+    events: &[EventInput],
+) -> Result<Vec<StoredEvent>, ProjectionError> {
+    let mut tx = pool.begin().await?;
+    let stored =
+        eventstore::append_expected_in_tx(&mut tx, stream_id, expected_stream_seq, events).await?;
+    for event in &stored {
+        fold_discussion_event(&mut tx, stream_id, event).await?;
+    }
+    tx.commit().await?;
+    Ok(stored)
+}
+
 /// Rebuild one non-game discussion stream. Topic streams replace their topic
 /// and post rows before replay; area streams upsert their immutable area row so
 /// rebuilding an area never invalidates existing topic foreign keys.
@@ -1597,10 +1635,10 @@ pub async fn rebuild_discussion_stream(
     let events = eventstore::load_stream(pool, stream_id).await?;
     let is_topic_stream = events
         .iter()
-        .any(|event| event.kind == "DiscussionTopicCreated");
+        .any(|event| event.kind == community::TOPIC_CREATED);
     let is_area_stream = events
         .iter()
-        .any(|event| event.kind == "DiscussionAreaCreated");
+        .any(|event| event.kind == community::AREA_CREATED);
     if !is_topic_stream && !is_area_stream {
         return Ok(());
     }
@@ -1628,7 +1666,7 @@ async fn fold_discussion_event(
     event: &StoredEvent,
 ) -> Result<(), ProjectionError> {
     match event.kind.as_str() {
-        "DiscussionAreaCreated" => {
+        community::AREA_CREATED => {
             let slug = str_field(&event.payload, "slug", &event.kind)?;
             let title = str_field(&event.payload, "title", &event.kind)?;
             let description = str_field(&event.payload, "description", &event.kind)?;
@@ -1643,64 +1681,107 @@ async fn fold_discussion_event(
             .execute(&mut **tx)
             .await?;
         }
-        "DiscussionTopicCreated" => {
+        community::TOPIC_CREATED => {
             let area_id = uuid_field(&event.payload, "area_id", &event.kind)?;
             let title = str_field(&event.payload, "title", &event.kind)?;
-            let author_user_id = str_field(&event.payload, "author_user_id", &event.kind)?;
+            let author_profile_id = discussion_author_profile_id(tx, event).await?;
             sqlx::query(
                 r#"
                 INSERT INTO discussion_topic
-                    (topic_id, area_id, title, status, author_user_id, post_count, created_seq, updated_seq, moderated_seq)
-                VALUES ($1, $2, $3, 'open', $4, 0, $5, $5, NULL)
+                    (topic_id, area_id, title, author_profile_id, posting_state, visibility,
+                     post_count, created_seq, updated_seq, moderated_seq, version,
+                     created_at, updated_at, last_post_seq, last_post_at)
+                VALUES ($1, $2, $3, $4, 'open', 'visible', 0, $5, $5, NULL, $6, $7, $7, NULL, NULL)
                 "#,
             )
             .bind(stream_id)
             .bind(area_id)
             .bind(title)
-            .bind(author_user_id)
+            .bind(author_profile_id)
             .bind(event.seq)
+            .bind(event.stream_seq)
+            .bind(event.occurred_at)
             .execute(&mut **tx)
             .await?;
         }
-        "DiscussionPostSubmitted" => {
+        community::POST_SUBMITTED => {
             let body = str_field(&event.payload, "body", &event.kind)?;
-            let author_user_id = str_field(&event.payload, "author_user_id", &event.kind)?;
+            let author_profile_id = discussion_author_profile_id(tx, event).await?;
             sqlx::query(
-                "INSERT INTO discussion_post (source_seq, topic_id, author_user_id, body, created_seq) VALUES ($1, $2, $3, $4, $1)",
+                "INSERT INTO discussion_post (source_seq, topic_id, author_profile_id, body, created_seq, created_at) VALUES ($1, $2, $3, $4, $1, $5)",
             )
             .bind(event.seq)
             .bind(stream_id)
-            .bind(author_user_id)
+            .bind(author_profile_id)
             .bind(body)
+            .bind(event.occurred_at)
             .execute(&mut **tx)
             .await?;
             sqlx::query(
-                "UPDATE discussion_topic SET post_count = post_count + 1, updated_seq = $2 WHERE topic_id = $1",
+                "UPDATE discussion_topic SET post_count = post_count + 1, updated_seq = $2, updated_at = $3, last_post_seq = $2, last_post_at = $3, version = $4 WHERE topic_id = $1",
             )
             .bind(stream_id)
             .bind(event.seq)
+            .bind(event.occurred_at)
+            .bind(event.stream_seq)
             .execute(&mut **tx)
             .await?;
         }
-        "DiscussionTopicModerationChanged" => {
-            let status = str_field(&event.payload, "status", &event.kind)?;
-            if !matches!(status.as_str(), "open" | "locked" | "hidden") {
-                return Err(ProjectionError::Db(sqlx::Error::Protocol(
-                    "invalid discussion moderation status".to_string(),
-                )));
-            }
+        community::POSTING_STATE_CHANGED => {
+            let posting_state = str_field(&event.payload, "posting_state", &event.kind)?;
+            community::PostingState::parse(posting_state.as_str())
+                .map_err(|error| ProjectionError::Db(sqlx::Error::Protocol(error.to_string())))?;
             sqlx::query(
-                "UPDATE discussion_topic SET status = $2, updated_seq = $3, moderated_seq = $3 WHERE topic_id = $1",
+                "UPDATE discussion_topic SET posting_state = $2, updated_seq = $3, updated_at = $4, moderated_seq = $3, version = $5 WHERE topic_id = $1",
             )
             .bind(stream_id)
-            .bind(status)
+            .bind(posting_state)
             .bind(event.seq)
+            .bind(event.occurred_at)
+            .bind(event.stream_seq)
+            .execute(&mut **tx)
+            .await?;
+        }
+        community::VISIBILITY_CHANGED => {
+            let visibility = str_field(&event.payload, "visibility", &event.kind)?;
+            community::TopicVisibility::parse(visibility.as_str())
+                .map_err(|error| ProjectionError::Db(sqlx::Error::Protocol(error.to_string())))?;
+            sqlx::query(
+                "UPDATE discussion_topic SET visibility = $2, updated_seq = $3, updated_at = $4, moderated_seq = $3, version = $5 WHERE topic_id = $1",
+            )
+            .bind(stream_id)
+            .bind(visibility)
+            .bind(event.seq)
+            .bind(event.occurred_at)
+            .bind(event.stream_seq)
             .execute(&mut **tx)
             .await?;
         }
         _ => {}
     }
     Ok(())
+}
+
+async fn discussion_author_profile_id(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    event: &StoredEvent,
+) -> Result<Option<Uuid>, ProjectionError> {
+    if event.payload.get("author_profile_id").is_some() {
+        return uuid_field(&event.payload, "author_profile_id", &event.kind).map(Some);
+    }
+    let Some(principal_user_id) = event
+        .payload
+        .get("author_user_id")
+        .and_then(serde_json::Value::as_str)
+    else {
+        return Ok(None);
+    };
+    Ok(
+        sqlx::query_scalar("SELECT profile_id FROM profile_editor WHERE principal_user_id = $1")
+            .bind(principal_user_id)
+            .fetch_optional(&mut **tx)
+            .await?,
+    )
 }
 
 /// Append a profile stream and synchronously fold its public and owner-only
@@ -3066,6 +3147,25 @@ pub async fn discussion_area_by_slug(
     }))
 }
 
+/// List public discussion areas in stable creation order.
+pub async fn discussion_areas(pool: &PgPool) -> Result<Vec<DiscussionAreaRow>, ProjectionError> {
+    let rows = sqlx::query(
+        "SELECT area_id, slug, title, description, created_seq FROM discussion_area ORDER BY created_seq, area_id",
+    )
+    .fetch_all(pool)
+    .await?;
+    Ok(rows
+        .into_iter()
+        .map(|row| DiscussionAreaRow {
+            area_id: row.get("area_id"),
+            slug: row.get("slug"),
+            title: row.get("title"),
+            description: row.get("description"),
+            created_seq: row.get("created_seq"),
+        })
+        .collect())
+}
+
 /// Read visible discussion topics newest-first with a stable sequence keyset.
 pub async fn discussion_topics(
     pool: &PgPool,
@@ -3079,12 +3179,18 @@ pub async fn discussion_topics(
         Some(cursor) => {
             sqlx::query(
                 r#"
-                SELECT topic_id, area_id, title, status, post_count, created_seq, updated_seq
-                FROM discussion_topic
-                WHERE area_id = $1
-                  AND status <> 'hidden'
-                  AND (updated_seq < $2 OR (updated_seq = $2 AND topic_id < $3))
-                ORDER BY updated_seq DESC, topic_id DESC
+                SELECT topic.topic_id, topic.area_id, topic.title,
+                       topic.posting_state, topic.visibility, topic.post_count,
+                       topic.created_seq, topic.updated_seq, topic.created_at,
+                       topic.updated_at, topic.last_post_seq, topic.last_post_at,
+                       topic.version, author.profile_id AS author_profile_id,
+                       author.handle AS author_handle, author.display_name AS author_display_name
+                FROM discussion_topic AS topic
+                LEFT JOIN profile_public AS author ON author.profile_id = topic.author_profile_id
+                WHERE topic.area_id = $1
+                  AND topic.visibility = 'visible'
+                  AND (topic.updated_seq < $2 OR (topic.updated_seq = $2 AND topic.topic_id < $3))
+                ORDER BY topic.updated_seq DESC, topic.topic_id DESC
                 LIMIT $4
                 "#,
             )
@@ -3098,10 +3204,16 @@ pub async fn discussion_topics(
         None => {
             sqlx::query(
                 r#"
-                SELECT topic_id, area_id, title, status, post_count, created_seq, updated_seq
-                FROM discussion_topic
-                WHERE area_id = $1 AND status <> 'hidden'
-                ORDER BY updated_seq DESC, topic_id DESC
+                SELECT topic.topic_id, topic.area_id, topic.title,
+                       topic.posting_state, topic.visibility, topic.post_count,
+                       topic.created_seq, topic.updated_seq, topic.created_at,
+                       topic.updated_at, topic.last_post_seq, topic.last_post_at,
+                       topic.version, author.profile_id AS author_profile_id,
+                       author.handle AS author_handle, author.display_name AS author_display_name
+                FROM discussion_topic AS topic
+                LEFT JOIN profile_public AS author ON author.profile_id = topic.author_profile_id
+                WHERE topic.area_id = $1 AND topic.visibility = 'visible'
+                ORDER BY topic.updated_seq DESC, topic.topic_id DESC
                 LIMIT $2
                 "#,
             )
@@ -3140,7 +3252,17 @@ pub async fn discussion_topic_by_id(
     topic_id: Uuid,
 ) -> Result<Option<DiscussionTopicRow>, ProjectionError> {
     let row = sqlx::query(
-        "SELECT topic_id, area_id, title, status, post_count, created_seq, updated_seq FROM discussion_topic WHERE topic_id = $1",
+        r#"
+        SELECT topic.topic_id, topic.area_id, topic.title,
+               topic.posting_state, topic.visibility, topic.post_count,
+               topic.created_seq, topic.updated_seq, topic.created_at,
+               topic.updated_at, topic.last_post_seq, topic.last_post_at,
+               topic.version, author.profile_id AS author_profile_id,
+               author.handle AS author_handle, author.display_name AS author_display_name
+        FROM discussion_topic AS topic
+        LEFT JOIN profile_public AS author ON author.profile_id = topic.author_profile_id
+        WHERE topic.topic_id = $1
+        "#,
     )
     .bind(topic_id)
     .fetch_optional(pool)
@@ -3162,10 +3284,13 @@ pub async fn discussion_posts(
         Some(before_seq) => {
             sqlx::query(
                 r#"
-                SELECT source_seq, body
-                FROM discussion_post
-                WHERE topic_id = $1 AND source_seq < $2
-                ORDER BY source_seq DESC
+                SELECT post.source_seq, post.body, post.created_at,
+                       author.profile_id AS author_profile_id,
+                       author.handle AS author_handle, author.display_name AS author_display_name
+                FROM discussion_post AS post
+                LEFT JOIN profile_public AS author ON author.profile_id = post.author_profile_id
+                WHERE post.topic_id = $1 AND post.source_seq < $2
+                ORDER BY post.source_seq DESC
                 LIMIT $3
                 "#,
             )
@@ -3178,10 +3303,13 @@ pub async fn discussion_posts(
         None => {
             sqlx::query(
                 r#"
-                SELECT source_seq, body
-                FROM discussion_post
-                WHERE topic_id = $1
-                ORDER BY source_seq DESC
+                SELECT post.source_seq, post.body, post.created_at,
+                       author.profile_id AS author_profile_id,
+                       author.handle AS author_handle, author.display_name AS author_display_name
+                FROM discussion_post AS post
+                LEFT JOIN profile_public AS author ON author.profile_id = post.author_profile_id
+                WHERE post.topic_id = $1
+                ORDER BY post.source_seq DESC
                 LIMIT $2
                 "#,
             )
@@ -3197,7 +3325,9 @@ pub async fn discussion_posts(
         .take(limit as usize)
         .map(|row| DiscussionPostRow {
             source_seq: row.get("source_seq"),
+            author: discussion_author_row(&row),
             body: row.get("body"),
+            created_at: row.get("created_at"),
         })
         .collect();
     let next_before_seq =
@@ -3214,11 +3344,29 @@ fn discussion_topic_row(row: sqlx::postgres::PgRow) -> DiscussionTopicRow {
         topic_id: row.get("topic_id"),
         area_id: row.get("area_id"),
         title: row.get("title"),
-        status: row.get("status"),
+        author: discussion_author_row(&row),
+        posting_state: row.get("posting_state"),
+        visibility: row.get("visibility"),
         post_count: row.get("post_count"),
         created_seq: row.get("created_seq"),
         updated_seq: row.get("updated_seq"),
+        created_at: row.get("created_at"),
+        updated_at: row.get("updated_at"),
+        last_post_seq: row.get("last_post_seq"),
+        last_post_at: row.get("last_post_at"),
+        version: row.get("version"),
     }
+}
+
+fn discussion_author_row(row: &sqlx::postgres::PgRow) -> Option<DiscussionAuthorRow> {
+    let profile_id: Option<Uuid> = row.try_get("author_profile_id").ok()?;
+    let handle: Option<String> = row.try_get("author_handle").ok()?;
+    let display_name: Option<String> = row.try_get("author_display_name").ok()?;
+    Some(DiscussionAuthorRow {
+        profile_id: profile_id?,
+        handle: handle?,
+        display_name: display_name?,
+    })
 }
 
 /// Read a public profile only when its owner explicitly selected public
