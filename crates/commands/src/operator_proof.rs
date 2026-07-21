@@ -4031,7 +4031,7 @@ mod tests {
             ProofRunArtifactState::CommandProjectionResolutionReportPresent {
                 artifact_version: COMMAND_PROJECTION_RESOLUTION_REPORT_ARTIFACT_VERSION,
                 game_id: command_projection_game,
-                table_count: 20,
+                table_count: 26,
                 phase_count: 1,
                 diff_count: 0,
                 freshness: ProofRunArtifactFreshness {
@@ -4052,7 +4052,7 @@ mod tests {
         );
         assert_eq!(
             command_projection["trusted_metadata"]["projection_table_count"],
-            20
+            26
         );
         assert_eq!(
             command_projection["trusted_metadata"]["resolution_phase_count"],

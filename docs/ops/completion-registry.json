@@ -322,7 +322,7 @@
         { "kind": "source", "value": "crates/commands/src/lib.rs" },
         { "kind": "source", "value": "crates/commands/tests/pipeline.rs" },
         { "kind": "source", "value": "crates/caps/src/lib.rs" },
-        { "kind": "source", "value": "crates/projections/migrations/0037_spectator_membership.sql" },
+        { "kind": "source", "value": "crates/projections/migrations/0001_baseline.sql" },
         { "kind": "source", "value": "crates/api/tests/vertical.rs" },
         { "kind": "source", "value": "crates/wire/src/lib.rs" },
         { "kind": "source", "value": "frontend/src/lib/app/cold-load.mjs" },
@@ -441,8 +441,7 @@
       "evidence": [
         { "kind": "source", "value": "docs/arch/06-security.md" },
         { "kind": "source", "value": "crates/api/src/lib.rs" },
-        { "kind": "source", "value": "crates/projections/migrations/0039_auth_delivery_intent.sql" },
-        { "kind": "source", "value": "crates/projections/migrations/0045_auth_delivery_credential_envelope.sql" },
+        { "kind": "source", "value": "crates/projections/migrations/0001_baseline.sql" },
         { "kind": "command", "value": "npm run test:dev-test-game-identity:local" },
         { "kind": "artifact", "value": "target/auth-invite-role-proof/invite-role-proof.json" }
       ],
@@ -460,7 +459,7 @@
       "depends_on": ["product.game.core-loop", "product.identity.account-login-invites"],
       "evidence": [
         { "kind": "source", "value": "frontend/src/routes/+page.svelte" },
-        { "kind": "source", "value": "crates/projections/migrations/0040_game_index.sql" },
+        { "kind": "source", "value": "crates/projections/migrations/0001_baseline.sql" },
         { "kind": "source", "value": "docs/arch/02-event-sourcing.md" },
         { "kind": "command", "value": "npm run test:dev-test-game-game-index:local" },
         { "kind": "artifact", "value": "target/game-index-role-proof/game-index-proof.json" }
@@ -479,7 +478,7 @@
       "depends_on": ["product.community.game-index", "product.identity.registration"],
       "evidence": [
         { "kind": "source", "value": "crates/community/src/lib.rs" },
-        { "kind": "source", "value": "crates/projections/migrations/0046_community_integrity.sql" },
+        { "kind": "source", "value": "crates/projections/migrations/0001_baseline.sql" },
         { "kind": "source", "value": "frontend/src/routes/community/+page.svelte" },
         { "kind": "source", "value": "frontend/src/routes/discussions/[slug]/+page.svelte" },
         { "kind": "source", "value": "frontend/src/routes/discussions/[slug]/t/[topic]/+page.svelte" },
@@ -500,7 +499,7 @@
       "complete_when": ["A user can view and edit an authorization-safe profile, with durable projection state and browser proof."],
       "depends_on": ["product.identity.registration"],
       "evidence": [
-        { "kind": "source", "value": "crates/projections/migrations/0042_profile.sql" },
+        { "kind": "source", "value": "crates/projections/migrations/0001_baseline.sql" },
         { "kind": "source", "value": "frontend/src/routes/u/[handle]/+page.svelte" },
         { "kind": "source", "value": "docs/arch/02-event-sourcing.md" },
         { "kind": "command", "value": "npm run test:dev-test-game-profile:local" },
@@ -519,7 +518,7 @@
       "complete_when": ["Users can search public discussions, public game threads, profiles, and games through visibility-safe ranked results with stable pagination and canonical result links."],
       "depends_on": ["product.community.discussions", "product.community.profiles", "product.community.game-index"],
       "evidence": [
-        { "kind": "source", "value": "crates/projections/migrations/0047_public_search.sql" },
+        { "kind": "source", "value": "crates/projections/migrations/0001_baseline.sql" },
         { "kind": "source", "value": "frontend/src/routes/search/+page.svelte" },
         { "kind": "source", "value": "frontend/src/routes/games/[game]/+page.svelte" },
         { "kind": "source", "value": "docs/arch/02-event-sourcing.md" },

@@ -1843,7 +1843,7 @@ The only identity that crosses into the engine is `SlotId`.
   crates/commands/fixtures/night-passing.json` seeds the checked fixture through
   `commands::handle`, runs `Command::ResolvePhase`, writes the saved report under
   `target/operator-proof`, and compares both audit surfaces; the checked run reported
-  `ok: true`, 20 matched projection-rebuild tables, one matched resolution envelope, zero
+  `ok: true`, 26 matched projection-rebuild tables, one matched resolution envelope, zero
   drifted tables, zero drifted phases, and zero diffs. This is local-Postgres-only proof.]
 
 ## Build order
@@ -3230,7 +3230,7 @@ coverage, and a playable vertical scenario through the command pipeline.
 	   against a scratch database on the local Postgres service and emitted `ok: true`, 20 matched
 	   projection tables, one matched resolution envelope, zero drifted tables, zero drifted phases, and
 	   zero diffs. The shared status/go-no-go/browser-smoke surfaces now require this trusted row and
-	   carry exact trusted metadata for `projection_table_count: 20` and `resolution_phase_count: 1`.
+	   carry exact trusted metadata for `projection_table_count: 26` and `resolution_phase_count: 1`.
    The API manifest unit test now mechanically checks those artifact doc-truth rows in both the
    engine note and this checklist: every manifest row with an `artifact_path` must have its artifact
    path, rendered command, exact proof boundary, current `trusted` artifact state, and production
@@ -3278,7 +3278,7 @@ coverage, and a playable vertical scenario through the command pipeline.
 	   result-contract tests, and 152 pack-validation tests. It also records `browser_smoke.ok: true`, 42 rendered HTML pages, one
 	   browser-fetched JSON surface, all 23 browser-smoke-required go/no-go metadata needles present,
 	   trusted metadata rows for large-action, determinism, generated shrink matrix, generated
-	   shrink gap-audit, and command/projection proof rows, including `projection_table_count: 20`
+	   shrink gap-audit, and command/projection proof rows, including `projection_table_count: 26`
 	   and `resolution_phase_count: 1` for command/projection. The bounded generated shrink lanes now include a deterministic multi-seed
    matrix report at `target/operator-proof/current-generated-shrink-matrix-report.tmp.json` with
    `ok: true`, 29 families, 58 cases, two representative seeds per PGO/PgoProjectionState/Babysitter/BabysitterProjectionState/Hider/HiderProjectionState/Hunter/HunterProjectionState/VengefulFixpoint/VengefulProjectionState/StrongmanVengefulFixpoint/StrongmanVengefulProjectionState/BodyguardStrongmanVengefulFixpoint/BodyguardStrongmanVengefulProjectionState/BackupInheritance/BackupProjectionState/ConversionDeprogramming/ConversionProjectionState/MarkClearVisibility/MarkClearExpiry/PoisonCure/Ignite/ExtraAction/ItemGrant/PrivateNotification/Lovers/LoversProjectionState/Bomb/BombProjectionState
@@ -3286,7 +3286,7 @@ coverage, and a playable vertical scenario through the command pipeline.
    and an explicit local-Postgres-only/non-exhaustive proof boundary; exhaustive randomized shrink
    breadth remains future work. The local-Postgres
    command/projection artifact reports `ok: true`, one matched `Command::ResolvePhase` resolution
-   envelope, 20 matched projection tables, zero drifted tables, zero drifted phases, and zero
+   envelope, 26 matched projection tables, zero drifted tables, zero drifted phases, and zero
    diffs, with proof boundary limited to a scratch database on the local Postgres service. Broader
    culture-pack generation, production benchmark coverage, and hosted/operator production capture
    remain future work]

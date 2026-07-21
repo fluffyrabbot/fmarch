@@ -1,8 +1,8 @@
 //! End-to-end + determinism integration tests against REAL Postgres.
 //!
-//! The migrations dir bundles BOTH the event-store schema (0001) and the
-//! projection tables (0002), so one `#[sqlx::test(migrations = ...)]` builds the
-//! full schema on an ephemeral DB. Requires `DATABASE_URL` (compose PG :5544);
+//! The migrations dir contains one greenfield baseline for the event store and
+//! every projection, so `#[sqlx::test(migrations = ...)]` builds the complete
+//! schema on an ephemeral DB. Requires `DATABASE_URL` (compose PG :5544);
 //! never silently passes without a DB.
 
 use std::collections::BTreeMap;

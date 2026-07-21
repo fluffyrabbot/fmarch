@@ -448,8 +448,8 @@ fn ensure_operator_proof_artifacts() {
                 "ok": true,
                 "game_id": "08d8a45f-6c3b-4401-8e31-8d7637f36a82",
                 "isolation": "rollback-only transaction",
-                "table_count": 20,
-                "matched_table_count": 20,
+                "table_count": 26,
+                "matched_table_count": 26,
                 "drifted_table_count": 0,
                 "tables": [
                     {
@@ -2012,7 +2012,7 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
     assert_eq!(command_projection_status_row["artifact"]["diff_count"], 0);
     assert_eq!(
         command_projection_status_row["artifact"]["trusted_metadata"]["projection_table_count"],
-        20
+        26
     );
     assert_eq!(
         command_projection_status_row["artifact"]["trusted_metadata"]["resolution_phase_count"],
@@ -2431,7 +2431,7 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
     );
     assert_eq!(
         go_no_go_command_projection_row["trusted_metadata"]["projection_table_count"],
-        20
+        26
     );
     assert_eq!(
         go_no_go_command_projection_row["trusted_metadata"]["resolution_phase_count"],
