@@ -204,29 +204,32 @@ test("role smoke scenarios pin tablet thumb-zone target counts", () => {
   );
 });
 
-test("moderator smoke pins collapsed support and a mobile first-viewport budget", () => {
-  const moderator = roles.find((role) => role.id === "moderator");
+test("role smoke pins collapsed support and mobile first-viewport budgets", () => {
+  const expected = {
+    admin: {
+      primaryActionSelector: '[data-testid="admin-command-trigger-create-game"]',
+      maxPrimaryActionBottomViewportRatio: 1,
+      maxDocumentHeightViewportRatio: 2.6,
+    },
+    player: {
+      primaryActionSelector: '[data-action="submit_vote"]',
+      maxPrimaryActionBottomViewportRatio: 1,
+      maxDocumentHeightViewportRatio: 3.5,
+    },
+    moderator: {
+      primaryActionSelector:
+        '[data-testid="critical-host-action-extend_deadline"] [data-testid="critical-host-action-trigger"]',
+      maxPrimaryActionBottomViewportRatio: 1,
+      maxDocumentHeightViewportRatio: 2.5,
+    },
+  };
 
-  assert.deepEqual(moderator.closedByDefault, [
-    '[data-testid="host-status-overview"]',
-    '[data-testid="moderator-action-queue-later"]',
-    '[data-testid="moderator-action-queue-endgame"]',
-    '[data-testid="host-supporting-evidence"]',
-    '[data-testid="host-invite-workflows"]',
-  ]);
-  assert.deepEqual(moderator.mobileViewportBudget, {
-    primaryActionSelector:
-      '[data-testid="critical-host-action-extend_deadline"] [data-testid="critical-host-action-trigger"]',
-    maxPrimaryActionBottomViewportRatio: 1,
-    maxDocumentHeightViewportRatio: 2.5,
-  });
-  assert.deepEqual(moderator.collapseBeforeCommands, [
-    '[data-testid="host-status-overview"]',
-    '[data-testid="host-supporting-evidence"]',
-    '[data-testid="host-invite-workflows"]',
-  ]);
-  assert.equal(Object.isFrozen(moderator.closedByDefault), true);
-  assert.equal(Object.isFrozen(moderator.mobileViewportBudget), true);
+  for (const role of roles) {
+    assert.deepEqual(role.mobileViewportBudget, expected[role.id]);
+    assert.equal(role.closedByDefault.length > 0, true);
+    assert.equal(Object.isFrozen(role.closedByDefault), true);
+    assert.equal(Object.isFrozen(role.mobileViewportBudget), true);
+  }
 });
 
 test("nav focus coverage is shared across static and browser smoke evidence", () => {

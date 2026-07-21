@@ -367,8 +367,6 @@
 <main class="fm-surface player-surface" data-testid={PLAYER_ROUTE_CONTRACT.surfaceTestId}>
   <AppSurfaceHeader header={surfaceHeader} {liveStatus} />
 
-  <PlayerPostureStrip {phase} {privateQueueBoundary} />
-
   {#if playerForcedRouteState}
     <RouteState view={playerForcedRouteState} />
   {:else if playerSurfaceEmpty}
@@ -406,8 +404,6 @@
         data-unstick-below-px={data.layout.commandRail.data.unstickBelowPx}
         data-stability-mode={data.layout.commandRail.data.stabilityMode}
       >
-        <PlayerEndgameSummary view={playerEndgameSummary} />
-
         <PlayerCommandPanel
           {composer}
           {phase}
@@ -433,11 +429,35 @@
           <PlayerCommandReceipt receipts={commandReceipts} />
         {/if}
 
-        <DayVoteOutcomePanel
-          outcomes={dayVoteOutcomes}
-          boundary={data.dayVoteOutcomeBoundary}
-          rootTestId="player-day-vote-outcome"
-        />
+        <details class="fm-surface-drawer player-surface__drawer" data-testid="player-status-overview">
+          <summary>
+            <span class="fm-surface-drawer__label">
+              <strong>Player snapshot</strong>
+              <small>Phase, deadline, and private queue posture</small>
+            </span>
+          </summary>
+          <div class="fm-surface-drawer__body">
+            <PlayerPostureStrip {phase} {privateQueueBoundary} />
+          </div>
+        </details>
+
+        <details class="fm-surface-drawer player-surface__drawer" data-testid="player-game-record">
+          <summary>
+            <span class="fm-surface-drawer__label">
+              <strong>Game record</strong>
+              <small>Endgame summary and completed vote outcomes</small>
+            </span>
+          </summary>
+          <div class="fm-surface-drawer__body">
+            <PlayerEndgameSummary view={playerEndgameSummary} />
+
+            <DayVoteOutcomePanel
+              outcomes={dayVoteOutcomes}
+              boundary={data.dayVoteOutcomeBoundary}
+              rootTestId="player-day-vote-outcome"
+            />
+          </div>
+        </details>
       </div>
     </section>
   {/if}
@@ -600,6 +620,10 @@
     line-height: 1.35;
     margin: 0;
     overflow-wrap: anywhere;
+  }
+
+  .player-surface__drawer :global(.fm-status-strip) {
+    grid-template-columns: 1fr;
   }
 
   :global(.player-action-target-picker__action) {

@@ -5934,6 +5934,7 @@ function assertBrowserSetupWorkbenchEvidence(setupEntries) {
 function assertBrowserConfirmationFocusEvidence(roleEntries) {
   const adminEntries = roleEntries.filter((entry) => entry.role === "admin");
   const moderatorEntries = roleEntries.filter((entry) => entry.role === "moderator");
+  assertRoleMobileViewportEvidence(roleEntries);
   assert.equal(adminEntries.length > 0, true, "admin browser focus evidence missing");
   assert.equal(
     moderatorEntries.length > 0,
@@ -6081,33 +6082,6 @@ function assertBrowserConfirmationFocusEvidence(roleEntries) {
   }
 
   for (const entry of moderatorEntries) {
-    const moderatorScenario = roles.find((role) => role.id === "moderator");
-    assert.deepEqual(
-      entry.disclosureDefaults,
-      moderatorScenario.closedByDefault.map((selector) => ({
-        selector,
-        open: false,
-      })),
-    );
-    if (entry.viewport.name === "mobile") {
-      assert.equal(entry.mobileViewportBudget.withinBudget, true);
-      assert.equal(
-        entry.mobileViewportBudget.primaryActionSelector,
-        moderatorScenario.mobileViewportBudget.primaryActionSelector,
-      );
-      assert.equal(
-        entry.mobileViewportBudget.actionBottom <=
-          entry.mobileViewportBudget.maxActionBottom,
-        true,
-      );
-      assert.equal(
-        entry.mobileViewportBudget.documentHeight <=
-          entry.mobileViewportBudget.maxDocumentHeight,
-        true,
-      );
-    } else {
-      assert.equal(entry.mobileViewportBudget, null);
-    }
     assert.deepEqual(
       entry.commandResult.focus.contract,
       {
@@ -6266,6 +6240,38 @@ function assertBrowserConfirmationFocusEvidence(roleEntries) {
       entry.commandResult.slotLifecycle.focus.escapeReturnFocus.testId,
       "critical-host-action-trigger",
     );
+  }
+}
+
+function assertRoleMobileViewportEvidence(roleEntries) {
+  for (const scenario of roles) {
+    const entries = roleEntries.filter((entry) => entry.role === scenario.id);
+    assert.equal(entries.length > 0, true, `${scenario.id} viewport evidence missing`);
+    for (const entry of entries) {
+      assert.deepEqual(
+        entry.disclosureDefaults,
+        scenario.closedByDefault.map((selector) => ({ selector, open: false })),
+      );
+      if (entry.viewport.name === "mobile") {
+        assert.equal(entry.mobileViewportBudget.withinBudget, true);
+        assert.equal(
+          entry.mobileViewportBudget.primaryActionSelector,
+          scenario.mobileViewportBudget.primaryActionSelector,
+        );
+        assert.equal(
+          entry.mobileViewportBudget.actionBottom <=
+            entry.mobileViewportBudget.maxActionBottom,
+          true,
+        );
+        assert.equal(
+          entry.mobileViewportBudget.documentHeight <=
+            entry.mobileViewportBudget.maxDocumentHeight,
+          true,
+        );
+      } else {
+        assert.equal(entry.mobileViewportBudget, null);
+      }
+    }
   }
 }
 

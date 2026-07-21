@@ -150,32 +150,35 @@
       <span>{view.composer.label}</span>
       <textarea bind:value={body} rows="3"></textarea>
     </label>
-    <div
-      class="player-command-panel__media fm-well"
+    <details
+      class="player-command-panel__media fm-proof-disclosure"
       data-testid="player-media-composer"
       data-max-encoded-bytes={composer.mediaMaxEncodedBytes}
     >
-      <label class="fm-field">
-        <span>Attach image</span>
-        <input
-          data-testid="player-media-file"
-          type="file"
-          accept={(composer.mediaUploadTypes ?? ["image/png", "image/jpeg"]).join(",")}
-          bind:files={mediaFiles}
-        />
-      </label>
-      <label class="fm-field">
-        <span>Image description</span>
-        <input
-          data-testid="player-media-alt"
-          type="text"
-          maxlength="1000"
-          placeholder="Describe the image for players using assistive technology"
-          bind:value={mediaAlt}
-        />
-      </label>
-      <small>PNG or JPEG, up to 12 MiB. The server removes container metadata.</small>
-    </div>
+      <summary>Attach an image</summary>
+      <div class="fm-proof-disclosure__body">
+        <label class="fm-field">
+          <span>Image file</span>
+          <input
+            data-testid="player-media-file"
+            type="file"
+            accept={(composer.mediaUploadTypes ?? ["image/png", "image/jpeg"]).join(",")}
+            bind:files={mediaFiles}
+          />
+        </label>
+        <label class="fm-field">
+          <span>Image description</span>
+          <input
+            data-testid="player-media-alt"
+            type="text"
+            maxlength="1000"
+            placeholder="Describe the image for players using assistive technology"
+            bind:value={mediaAlt}
+          />
+        </label>
+        <small>PNG or JPEG, up to 12 MiB. The server removes container metadata.</small>
+      </div>
+    </details>
     <div class="fm-touch-row">
       {#each view.composer.buttons as button}
         <button

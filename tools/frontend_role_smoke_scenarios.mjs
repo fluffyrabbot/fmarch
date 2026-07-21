@@ -164,10 +164,31 @@ export const roles = Object.freeze([
     firstViewportSurface: ADMIN_READINESS_STRIP_CONTRACT.surface,
     capabilityTestId: ADMIN_ROUTE_CONTRACT.capabilityTestId,
     requiredText: ADMIN_ROUTE_CONTRACT.requiredText,
+    mobileViewportBudget: Object.freeze({
+      primaryActionSelector:
+        '[data-testid="admin-command-trigger-create-game"]',
+      maxPrimaryActionBottomViewportRatio: 1,
+      maxDocumentHeightViewportRatio: 2.6,
+    }),
+    closedByDefault: Object.freeze([
+      '[data-testid="admin-recovery-workflow"]',
+      '[data-testid="admin-status-overview"]',
+      '[data-testid="admin-supporting-evidence"]',
+    ]),
     expandBeforeChecks: Object.freeze([
+      '[data-testid="admin-recovery-workflow"]',
+      '[data-testid="admin-status-overview"]',
+      '[data-testid="admin-supporting-evidence"]',
       '[data-testid="admin-current-system-checks"]',
     ]),
+    collapseBeforeCommands: Object.freeze([
+      '[data-testid="admin-status-overview"]',
+      '[data-testid="admin-supporting-evidence"]',
+    ]),
     collapseBeforeScreenshot: Object.freeze([
+      '[data-testid="admin-recovery-workflow"]',
+      '[data-testid="admin-status-overview"]',
+      '[data-testid="admin-supporting-evidence"]',
       '[data-testid="admin-current-system-checks"]',
     ]),
     touchSelectors: [
@@ -175,6 +196,8 @@ export const roles = Object.freeze([
       '[data-testid="admin-setup-session-grants"] summary',
       '[data-testid="admin-audit-link-proof-runs"]',
       '[data-testid="admin-recovery-recovery-gate"] button',
+      '[data-testid="admin-status-overview"] > summary',
+      '[data-testid="admin-supporting-evidence"] > summary',
     ],
     thumbZones: Object.freeze([
       Object.freeze({
@@ -240,6 +263,30 @@ export const roles = Object.freeze([
     capabilityTestId: PLAYER_ROUTE_CONTRACT.capabilityTestId,
     requiredText: PLAYER_ROUTE_CONTRACT.requiredText,
     statusTestId: PLAYER_ROUTE_CONTRACT.liveStatusTestId,
+    mobileViewportBudget: Object.freeze({
+      primaryActionSelector: '[data-action="submit_vote"]',
+      maxPrimaryActionBottomViewportRatio: 1,
+      maxDocumentHeightViewportRatio: 3.5,
+    }),
+    closedByDefault: Object.freeze([
+      '[data-testid="player-media-composer"]',
+      '[data-testid="player-status-overview"]',
+      '[data-testid="player-game-record"]',
+    ]),
+    expandBeforeChecks: Object.freeze([
+      '[data-testid="player-status-overview"]',
+      '[data-testid="player-game-record"]',
+    ]),
+    collapseBeforeCommands: Object.freeze([
+      '[data-testid="player-media-composer"]',
+      '[data-testid="player-status-overview"]',
+      '[data-testid="player-game-record"]',
+    ]),
+    collapseBeforeScreenshot: Object.freeze([
+      '[data-testid="player-media-composer"]',
+      '[data-testid="player-status-overview"]',
+      '[data-testid="player-game-record"]',
+    ]),
     visibleTestIds: [
       ...playerPostureTargets.overlapTestIds,
       "player-votecount-deadline",
@@ -257,6 +304,9 @@ export const roles = Object.freeze([
       '[data-testid="player-thread-load-older"]',
       '[data-testid="player-composer"] button',
       '[data-testid="player-private-link-notification-1"]',
+      '[data-testid="player-media-composer"] > summary',
+      '[data-testid="player-status-overview"] > summary',
+      '[data-testid="player-game-record"] > summary',
     ],
     thumbZones: Object.freeze([
       Object.freeze({

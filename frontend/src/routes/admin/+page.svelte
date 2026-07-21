@@ -34,6 +34,7 @@
 
   let commandStatuses = {};
   let lastFormStatusKey = "";
+  let recoveryWorkflowOpen = false;
 
   $: adminSurfaceEmpty = isAdminRouteEmpty(data);
   $: adminForcedRouteState = data.routeState
@@ -52,12 +53,16 @@
     });
     lastFormStatusKey = result.lastFormStatusKey;
     commandStatuses = result.commandStatuses;
+    if (form.id === "recovery-gate") {
+      recoveryWorkflowOpen = true;
+    }
     if (typeof window !== "undefined") {
       exposeAdminFormResult({ windowRef: window, form });
     }
   }
 
   function handleRecoveryTask(item) {
+    recoveryWorkflowOpen = true;
     commandStatuses = recordAdminCommandStatus(
       commandStatuses,
       item.id,
@@ -173,13 +178,6 @@
   {:else if adminSurfaceEmpty}
     <RouteState view={adminEmptyState} />
   {:else}
-    <AdminReadinessStrip
-      operator={data.operator}
-      gameSetup={data.gameSetup}
-      audit={data.audit}
-      recoveryTasks={data.recoveryTasks}
-    />
-
     <section class="admin-surface__section" aria-labelledby="admin-next-actions-heading">
       <header class="admin-surface__section-heading">
         <div>
@@ -204,36 +202,68 @@
           onCancelSetupAction={cancelSetupAction}
         />
 
-        <AdminRecoveryPanel
-          tasks={data.recoveryTasks}
-          {commandStatuses}
-          game={data.shell.game}
-          principalUserId={data.operator.principalUserId}
-          onRecoveryTask={handleRecoveryTask}
-          onCancelRecoveryTask={cancelSetupAction}
-        />
       </section>
+
+      <details
+        class="fm-surface-drawer"
+        data-testid="admin-recovery-workflow"
+        bind:open={recoveryWorkflowOpen}
+      >
+        <summary>
+          <span class="fm-surface-drawer__label">
+            <strong>Recovery workflow</strong>
+            <small>Run operator recovery checks when routine setup is not enough</small>
+          </span>
+        </summary>
+        <div class="fm-surface-drawer__body">
+          <AdminRecoveryPanel
+            tasks={data.recoveryTasks}
+            {commandStatuses}
+            game={data.shell.game}
+            principalUserId={data.operator.principalUserId}
+            onRecoveryTask={handleRecoveryTask}
+            onCancelRecoveryTask={cancelSetupAction}
+          />
+        </div>
+      </details>
 
       <AdminCommandActivity {commandStatuses} />
     </section>
 
-    <section class="admin-surface__section" aria-labelledby="admin-system-checks-heading">
-      <header class="admin-surface__section-heading">
-        <div>
-          <p class="fm-eyebrow">Supporting evidence</p>
-          <h2 id="admin-system-checks-heading">System checks</h2>
-        </div>
-        <p>Inspect system evidence and escalation queues when an action needs diagnosis.</p>
-      </header>
+    <details class="fm-surface-drawer" data-testid="admin-status-overview">
+      <summary>
+        <span class="fm-surface-drawer__label">
+          <strong>Admin snapshot</strong>
+          <small>Access, available actions, system checks, and recovery posture</small>
+        </span>
+      </summary>
+      <div class="fm-surface-drawer__body">
+        <AdminReadinessStrip
+          operator={data.operator}
+          gameSetup={data.gameSetup}
+          audit={data.audit}
+          recoveryTasks={data.recoveryTasks}
+        />
+      </div>
+    </details>
 
-      <section class="admin-surface__split">
-        <div class="admin-surface__audit-stack">
-          <AdminAuditPanel audit={data.audit} />
-        </div>
+    <details class="fm-surface-drawer" data-testid="admin-supporting-evidence">
+      <summary>
+        <span class="fm-surface-drawer__label">
+          <strong>System checks</strong>
+          <small>Inspect evidence and escalation queues when an action needs diagnosis</small>
+        </span>
+      </summary>
+      <div class="fm-surface-drawer__body">
+        <section class="admin-surface__split">
+          <div class="admin-surface__audit-stack">
+            <AdminAuditPanel audit={data.audit} />
+          </div>
 
-        <AdminEscalationPanel escalations={data.escalations} />
-      </section>
-    </section>
+          <AdminEscalationPanel escalations={data.escalations} />
+        </section>
+      </div>
+    </details>
   {/if}
 </main>
 

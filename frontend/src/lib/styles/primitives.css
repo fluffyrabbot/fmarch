@@ -328,6 +328,63 @@
   padding: 14px;
 }
 
+/* ---- surface drawer: a compact route-level summary for secondary context ---- */
+
+.fm-surface-drawer {
+  border-block-start: 1px solid var(--fm-line-strong);
+  min-inline-size: 0;
+}
+
+.fm-surface-drawer > summary {
+  cursor: pointer;
+  list-style-position: inside;
+  min-block-size: 56px;
+  padding-block: 8px;
+}
+
+.fm-surface-drawer__label {
+  align-items: baseline;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  margin-inline-start: 8px;
+}
+
+.fm-surface-drawer__label strong {
+  color: var(--fm-ink);
+  font-family: var(--fm-font-display);
+  font-size: 20px;
+  line-height: 1.2;
+}
+
+.fm-surface-drawer__label small {
+  color: var(--fm-ink-muted);
+  font-size: 13px;
+  line-height: 1.35;
+  text-align: end;
+}
+
+.fm-surface-drawer__body {
+  display: grid;
+  gap: 18px;
+  min-inline-size: 0;
+  padding-block: 8px 12px;
+}
+
+@media (max-width: 760px) {
+  .fm-surface-drawer__label {
+    align-items: start;
+    display: inline-grid;
+    gap: 2px;
+    justify-content: start;
+    vertical-align: middle;
+  }
+
+  .fm-surface-drawer__label small {
+    text-align: start;
+  }
+}
+
 /* ---- rail: stacked nav of link tiles (channel rail) ---- */
 /* Capability grammar in the small line truncates on one line instead of
    letter-wrapping in narrow columns; the full string stays in the DOM. */
