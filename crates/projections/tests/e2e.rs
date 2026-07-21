@@ -18,9 +18,9 @@ use projections::{
     append_discussion_and_project_expected, append_profile_and_project, audit_rebuild,
     day_vote_outcomes, discussion_area_by_slug, discussion_posts, discussion_topic_by_id,
     discussion_topics, game_index, host_phase_controls, host_prompts, phase_state,
-    player_notifications, profile_editor_by_handle, public_profile_by_handle, rebuild,
-    rebuild_discussion_stream, rebuild_profile_stream, slot_effects, slot_state, votecount,
-    ProjectionError,
+    player_notifications, profile_editor_by_handle, public_profile_by_handle, public_search,
+    rebuild, rebuild_discussion_stream, rebuild_profile_stream, slot_effects, slot_state,
+    votecount, ProjectionError, PublicSearchFilter,
 };
 use sqlx::postgres::PgPoolOptions;
 use sqlx::PgPool;
@@ -1589,6 +1589,205 @@ async fn game_index_pages_public_active_and_completed_lifecycle_rows(pool: sqlx:
             (active_game, "active", Some("N01")),
         ]
     );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn public_search_filters_visibility_private_channels_and_rebuilds(pool: sqlx::PgPool) {
+    let profile = Uuid::from_u128(41);
+    let area = Uuid::from_u128(42);
+    let topic = Uuid::from_u128(43);
+    let game = Uuid::from_u128(44);
+    append_profile_and_project(
+        &pool,
+        profile,
+        &[EventInput::new(
+            "ProfileCreated",
+            1,
+            serde_json::json!({
+                "principal_user_id": "signal_member",
+                "handle": "signal_member",
+                "display_name": "Signal Member",
+                "bio": "Studies public signals",
+                "visibility": "public"
+            }),
+            ActorId::User("signal_member".into()),
+            1,
+        )],
+    )
+    .await
+    .unwrap();
+    append_discussion_and_project(
+        &pool,
+        area,
+        &[EventInput::new(
+            "DiscussionAreaCreated",
+            1,
+            serde_json::json!({ "slug": "theory", "title": "Theory", "description": "Public analysis" }),
+            ActorId::User("moderator".into()),
+            2,
+        )],
+    )
+    .await
+    .unwrap();
+    append_discussion_and_project(
+        &pool,
+        topic,
+        &[
+            EventInput::new(
+                "DiscussionTopicCreated",
+                1,
+                serde_json::json!({ "area_id": area, "title": "Signal theory", "author_profile_id": profile }),
+                ActorId::User("signal_member".into()),
+                3,
+            ),
+            EventInput::new(
+                "DiscussionPostSubmitted",
+                1,
+                serde_json::json!({ "body": "Alpha signal analysis", "author_profile_id": profile }),
+                ActorId::User("signal_member".into()),
+                4,
+            ),
+        ],
+    )
+    .await
+    .unwrap();
+    append_and_project(
+        &pool,
+        game,
+        &[
+            EventInput::new(
+                "GameCreated",
+                1,
+                serde_json::json!({ "host": "host", "pack": "signal_pack" }),
+                ActorId::User("host".into()),
+                5,
+            ),
+            EventInput::new(
+                "GameStarted",
+                1,
+                serde_json::json!({ "phase_id": "D01" }),
+                ActorId::Host,
+                6,
+            ),
+            EventInput::new(
+                "PostSubmitted",
+                1,
+                serde_json::json!({
+                    "channel_id": "main",
+                    "slot_or_user": { "slot": "slot_1" },
+                    "body": "Public signal from the game",
+                    "phase_id": "D01"
+                }),
+                ActorId::Slot("slot_1".into()),
+                7,
+            ),
+            EventInput::new(
+                "PostSubmitted",
+                1,
+                serde_json::json!({
+                    "channel_id": "role_pm:slot_1",
+                    "slot_or_user": { "slot": "slot_1" },
+                    "body": "Private secret signal",
+                    "phase_id": "D01"
+                }),
+                ActorId::Slot("slot_1".into()),
+                8,
+            ),
+        ],
+    )
+    .await
+    .unwrap();
+
+    let first = public_search(&pool, "signal", PublicSearchFilter::All, None, 2)
+        .await
+        .unwrap();
+    assert_eq!(first.results.len(), 2);
+    let second = public_search(
+        &pool,
+        "signal",
+        PublicSearchFilter::All,
+        first.next_cursor,
+        10,
+    )
+    .await
+    .unwrap();
+    assert!(!second.results.is_empty());
+    let discussions = public_search(&pool, "signal", PublicSearchFilter::Discussions, None, 10)
+        .await
+        .unwrap();
+    assert!(discussions
+        .results
+        .iter()
+        .all(|row| row.kind.starts_with("discussion_")));
+    assert!(discussions
+        .results
+        .iter()
+        .any(|row| row.href.contains("/discussions/theory/t/") && row.href.contains("#post-")));
+    let private = public_search(&pool, "secret", PublicSearchFilter::All, None, 10)
+        .await
+        .unwrap();
+    assert!(private.results.is_empty());
+
+    append_discussion_and_project_expected(
+        &pool,
+        topic,
+        2,
+        &[EventInput::new(
+            "DiscussionTopicVisibilityChanged",
+            1,
+            serde_json::json!({ "visibility": "hidden" }),
+            ActorId::User("moderator".into()),
+            9,
+        )],
+    )
+    .await
+    .unwrap();
+    assert!(
+        public_search(&pool, "alpha", PublicSearchFilter::Discussions, None, 10)
+            .await
+            .unwrap()
+            .results
+            .is_empty()
+    );
+
+    append_profile_and_project(
+        &pool,
+        profile,
+        &[EventInput::new(
+            "ProfileUpdated",
+            1,
+            serde_json::json!({
+                "display_name": "Signal Member",
+                "bio": "Studies public signals",
+                "visibility": "members"
+            }),
+            ActorId::User("signal_member".into()),
+            10,
+        )],
+    )
+    .await
+    .unwrap();
+    assert!(
+        public_search(&pool, "signal", PublicSearchFilter::Profiles, None, 10)
+            .await
+            .unwrap()
+            .results
+            .is_empty()
+    );
+    rebuild_profile_stream(&pool, profile).await.unwrap();
+
+    rebuild(&pool, game).await.unwrap();
+    let rebuilt_games = public_search(&pool, "signal", PublicSearchFilter::Games, None, 10)
+        .await
+        .unwrap();
+    assert!(rebuilt_games
+        .results
+        .iter()
+        .any(|row| row.kind == "game_post"));
+    assert!(rebuilt_games
+        .results
+        .iter()
+        .all(|row| row.href.starts_with(&format!("/games/{game}"))));
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]

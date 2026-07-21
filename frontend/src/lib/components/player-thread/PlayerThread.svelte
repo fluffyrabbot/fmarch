@@ -73,7 +73,11 @@
   {/if}
 
   {#each threadView.posts as post}
-    <article class="player-surface__post fm-card" data-testid={`thread-post-${post.seq}`}>
+    <article
+      id={`thread-post-${post.seq}`}
+      class="player-surface__post fm-card"
+      data-testid={`thread-post-${post.seq}`}
+    >
       <header>
         <strong>{post.authorLabel}</strong>
         <span>{post.meta}</span>

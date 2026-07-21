@@ -950,24 +950,62 @@ pub struct GameIndexPage {
     pub next_cursor: Option<String>,
 }
 
+impl From<projections::GameIndexRow> for GameIndexEntry {
+    fn from(row: projections::GameIndexRow) -> Self {
+        GameIndexEntry {
+            game: row.game_id,
+            pack: row.pack,
+            status: row.status,
+            phase_id: row.phase_id,
+            updated_seq: row.updated_seq,
+            completed_seq: row.completed_seq,
+        }
+    }
+}
+
 impl From<projections::GameIndexPage> for GameIndexPage {
     fn from(page: projections::GameIndexPage) -> Self {
         GameIndexPage {
-            games: page
-                .games
-                .into_iter()
-                .map(|row| GameIndexEntry {
-                    game: row.game_id,
-                    pack: row.pack,
-                    status: row.status,
-                    phase_id: row.phase_id,
-                    updated_seq: row.updated_seq,
-                    completed_seq: row.completed_seq,
-                })
-                .collect(),
+            games: page.games.into_iter().map(GameIndexEntry::from).collect(),
             next_cursor: page
                 .next_cursor
                 .map(|cursor| format!("{}:{}", cursor.updated_seq, cursor.game_id)),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct PublicGameThreadPage {
+    pub game: GameIndexEntry,
+    pub posts: Vec<ThreadPost>,
+    pub next_before_seq: Option<i64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct PublicSearchResult {
+    pub kind: String,
+    pub title: String,
+    pub excerpt: String,
+    pub href: String,
+    pub published_at: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct PublicSearchPage {
+    pub query: String,
+    pub filter: String,
+    pub results: Vec<PublicSearchResult>,
+    pub next_cursor: Option<String>,
+}
+
+impl From<projections::PublicSearchRow> for PublicSearchResult {
+    fn from(row: projections::PublicSearchRow) -> Self {
+        PublicSearchResult {
+            kind: row.kind,
+            title: row.title,
+            excerpt: row.excerpt,
+            href: row.href,
+            published_at: row.published_at,
         }
     }
 }
@@ -1421,8 +1459,9 @@ pub mod typescript {
         Hello, HostConsolePhaseStateDelta, HostConsoleSlotOccupancyDelta, HostConsoleStateDelta,
         HostConsoleThreadPostDelta, HostPhaseControl, HostPromptDecision, HostPromptDelta,
         HostPromptsDelta, PlayerInvestigationResult, PlayerNotification, ProfileEditor,
-        ProjectionDelta, PublicProfile, RejectCode, RejectMsg, ResolutionTraceDecisionRow,
-        ResolutionTraceEdgeRow, ResolutionTraceEffectChangeRow, ResolutionTraceGeneratedRow,
+        ProjectionDelta, PublicGameThreadPage, PublicProfile, PublicSearchPage, PublicSearchResult,
+        RejectCode, RejectMsg, ResolutionTraceDecisionRow, ResolutionTraceEdgeRow,
+        ResolutionTraceEffectChangeRow, ResolutionTraceGeneratedRow,
         ResolutionTraceInspectionReport, ResolutionTraceInspectionRun, ResolutionTraceNoteRow,
         ResolutionTraceVisibilityRow, ServerEnvelope, ServerMsg, SlotLifecycle, SubmitPostMedia,
         ThreadPage, ThreadPost, ThreadPostMedia, ThreadPostMediaVariant, ThreadPostsDelta,
@@ -1460,6 +1499,9 @@ pub mod typescript {
         push::<ThreadPage>(&mut out);
         push::<GameIndexEntry>(&mut out);
         push::<GameIndexPage>(&mut out);
+        push::<PublicGameThreadPage>(&mut out);
+        push::<PublicSearchResult>(&mut out);
+        push::<PublicSearchPage>(&mut out);
         push::<DiscussionArea>(&mut out);
         push::<DiscussionAuthor>(&mut out);
         push::<DiscussionTopic>(&mut out);

@@ -19,8 +19,8 @@ use uuid::Uuid;
 use wire::{
     ClientEnvelope, ClientMsg, Command, CommandMsg, DiscussionThreadPage, DiscussionTopicPage,
     GameIndexPage, PlayerInvestigationResult, PlayerNotification, ProfileEditor, ProjectionDelta,
-    PublicProfile, RejectCode, RejectMsg, ServerEnvelope, ServerMsg, SlotLifecycle,
-    SubmitPostMedia, ThreadPage, VoteTarget, PROTOCOL_VERSION,
+    PublicProfile, PublicSearchPage, RejectCode, RejectMsg, ServerEnvelope, ServerMsg,
+    SlotLifecycle, SubmitPostMedia, ThreadPage, VoteTarget, PROTOCOL_VERSION,
 };
 
 fn router(pool: sqlx::PgPool) -> axum::Router {
@@ -4403,7 +4403,7 @@ async fn completed_game_export_is_host_gated_and_checksum_bearing(pool: sqlx::Pg
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
-async fn discussion_api_requires_sessions_pages_public_topics_and_enforces_global_moderation(
+async fn discussion_and_public_search_api_enforce_visibility_sessions_and_moderation(
     pool: sqlx::PgPool,
 ) {
     let app = router_with_dev_auth(pool.clone());
@@ -4634,6 +4634,7 @@ async fn discussion_api_requires_sessions_pages_public_topics_and_enforces_globa
     assert_eq!(disabled_post.status(), StatusCode::UNAUTHORIZED);
 
     let response = app
+        .clone()
         .oneshot(
             Request::builder()
                 .method("GET")
@@ -4656,6 +4657,60 @@ async fn discussion_api_requires_sessions_pages_public_topics_and_enforces_globa
     );
     assert_eq!(thread.posts.len(), 1);
     assert_eq!(thread.posts[0].body, "Second opening");
+
+    let search_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/search?q=second&filter=discussions&limit=1")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(search_response.status(), StatusCode::OK);
+    let search: PublicSearchPage = serde_json::from_slice(
+        &to_bytes(search_response.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(search.results.len(), 1);
+    assert!(search.results[0].href.contains("/discussions/general/t/"));
+    assert!(search.next_cursor.is_some());
+
+    let hidden = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/discussions/topics/{topic}/moderation"))
+                .header("authorization", "Bearer discussion-moderator")
+                .header("content-type", "application/json")
+                .body(Body::from(r#"{"visibility":"hidden"}"#))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(hidden.status(), StatusCode::OK);
+    let hidden_search = app
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/search?q=second&filter=discussions")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let hidden_search: PublicSearchPage = serde_json::from_slice(
+        &to_bytes(hidden_search.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert!(hidden_search.results.is_empty());
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]

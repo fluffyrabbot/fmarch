@@ -39,13 +39,14 @@ use tokio::sync::broadcast;
 use uuid::Uuid;
 use wire::{
     AckMsg, CapabilityGrant, ClientEnvelope, DayVoteOutcomeDelta, DiscussionArea, DiscussionPost,
-    DiscussionThreadPage, DiscussionTopic, DiscussionTopicPage, GameIndexPage, Hello,
-    HostConsolePhaseStateDelta, HostConsoleSlotOccupancyDelta, HostConsoleStateDelta,
+    DiscussionThreadPage, DiscussionTopic, DiscussionTopicPage, GameIndexEntry, GameIndexPage,
+    Hello, HostConsolePhaseStateDelta, HostConsoleSlotOccupancyDelta, HostConsoleStateDelta,
     HostConsoleThreadPostDelta, HostPhaseControl, HostPromptDelta, HostPromptsDelta,
     PlayerInvestigationResult, PlayerInvestigationResultsDelta, PlayerNotification,
-    PlayerNotificationsDelta, ProfileEditor, ProjectionDelta, PublicProfile, RejectCode, RejectMsg,
-    ServerEnvelope, ServerMsg, ThreadPage, ThreadPost, ThreadPostsDelta, VoteCountClearedDelta,
-    VoteCountDelta, PROTOCOL_VERSION,
+    PlayerNotificationsDelta, ProfileEditor, ProjectionDelta, PublicGameThreadPage, PublicProfile,
+    PublicSearchPage, PublicSearchResult, RejectCode, RejectMsg, ServerEnvelope, ServerMsg,
+    ThreadPage, ThreadPost, ThreadPostsDelta, VoteCountClearedDelta, VoteCountDelta,
+    PROTOCOL_VERSION,
 };
 
 #[derive(Clone)]
@@ -237,7 +238,9 @@ pub fn router_with_state(state: ApiState) -> Router {
         )
         .route("/commands", post(command))
         .route("/games", get(game_index))
+        .route("/games/{game}", get(public_game_thread))
         .route("/games/import", post(import_completed_game_export))
+        .route("/search", get(public_search))
         .route(
             "/discussions/areas",
             get(discussion_areas).post(create_discussion_area),
@@ -4078,6 +4081,14 @@ struct GameIndexQuery {
     limit: Option<i64>,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+struct PublicSearchQuery {
+    q: String,
+    filter: Option<String>,
+    cursor: Option<String>,
+    limit: Option<i64>,
+}
+
 async fn game_index(
     State(state): State<ApiState>,
     Query(query): Query<GameIndexQuery>,
@@ -4092,6 +4103,129 @@ async fn game_index(
             .await?
             .into(),
     ))
+}
+
+async fn public_game_thread(
+    State(state): State<ApiState>,
+    Path(game): Path<Uuid>,
+    Query(query): Query<ThreadQuery>,
+) -> Result<Json<PublicGameThreadPage>, ApiError> {
+    let game_row = projections::public_game_by_id(&state.pool, game)
+        .await?
+        .ok_or_else(|| ApiError::Reject {
+            status: StatusCode::NOT_FOUND,
+            error: RejectCode::UnknownGame,
+            message: "public game was not found".to_string(),
+        })?;
+    let page = projections::thread_view(
+        &state.pool,
+        game,
+        query.before_seq,
+        query.limit.unwrap_or(50),
+    )
+    .await?;
+    Ok(Json(PublicGameThreadPage {
+        game: GameIndexEntry::from(game_row),
+        posts: page.posts.into_iter().map(ThreadPost::from).collect(),
+        next_before_seq: page.next_before_seq,
+    }))
+}
+
+async fn public_search(
+    State(state): State<ApiState>,
+    Query(query): Query<PublicSearchQuery>,
+) -> Result<Json<PublicSearchPage>, ApiError> {
+    let normalized_query = query.q.trim();
+    if normalized_query.chars().count() < 2 || normalized_query.chars().count() > 200 {
+        return Err(ApiError::Reject {
+            status: StatusCode::BAD_REQUEST,
+            error: RejectCode::Internal,
+            message: "search query must contain between 2 and 200 characters".to_string(),
+        });
+    }
+    let (filter, filter_label) = match query.filter.as_deref().unwrap_or("all") {
+        "all" => (projections::PublicSearchFilter::All, "all"),
+        "discussions" => (projections::PublicSearchFilter::Discussions, "discussions"),
+        "profiles" => (projections::PublicSearchFilter::Profiles, "profiles"),
+        "games" => (projections::PublicSearchFilter::Games, "games"),
+        _ => {
+            return Err(ApiError::Reject {
+                status: StatusCode::BAD_REQUEST,
+                error: RejectCode::Internal,
+                message: "search filter must be all, discussions, profiles, or games".to_string(),
+            })
+        }
+    };
+    let cursor = query
+        .cursor
+        .as_deref()
+        .map(parse_public_search_cursor)
+        .transpose()?;
+    let page = projections::public_search(
+        &state.pool,
+        normalized_query,
+        filter,
+        cursor,
+        query.limit.unwrap_or(20),
+    )
+    .await?;
+    Ok(Json(PublicSearchPage {
+        query: normalized_query.to_string(),
+        filter: filter_label.to_string(),
+        results: page
+            .results
+            .into_iter()
+            .map(PublicSearchResult::from)
+            .collect(),
+        next_cursor: page.next_cursor.map(|cursor| {
+            format!(
+                "{}:{}:{}:{}",
+                cursor.rank, cursor.updated_seq, cursor.document_kind, cursor.document_key
+            )
+        }),
+    }))
+}
+
+fn parse_public_search_cursor(value: &str) -> Result<projections::PublicSearchCursor, ApiError> {
+    let mut parts = value.splitn(4, ':');
+    let rank = parts
+        .next()
+        .ok_or_else(invalid_public_search_cursor)?
+        .parse::<i64>()
+        .map_err(|_| invalid_public_search_cursor())?;
+    let updated_seq = parts
+        .next()
+        .ok_or_else(invalid_public_search_cursor)?
+        .parse::<i64>()
+        .map_err(|_| invalid_public_search_cursor())?;
+    let document_kind = parts
+        .next()
+        .ok_or_else(invalid_public_search_cursor)?
+        .to_string();
+    let document_key = parts
+        .next()
+        .filter(|part| !part.is_empty())
+        .ok_or_else(invalid_public_search_cursor)?;
+    if !matches!(
+        document_kind.as_str(),
+        "discussion_topic" | "discussion_post" | "profile" | "game" | "game_post"
+    ) {
+        return Err(invalid_public_search_cursor());
+    }
+    Ok(projections::PublicSearchCursor {
+        rank,
+        updated_seq,
+        document_kind,
+        document_key: document_key.to_string(),
+    })
+}
+
+fn invalid_public_search_cursor() -> ApiError {
+    ApiError::Reject {
+        status: StatusCode::BAD_REQUEST,
+        error: RejectCode::StreamConflict,
+        message: "invalid search cursor; restart the search and try again".to_string(),
+    }
 }
 
 fn parse_game_index_cursor(value: &str) -> Result<projections::GameIndexCursor, ApiError> {

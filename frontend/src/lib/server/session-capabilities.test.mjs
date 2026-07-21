@@ -118,7 +118,7 @@ test("host game is derived only from the tablet host route shape", () => {
   assert.equal(hostGameFromRequest(requestFor("/g/demo/player")), null);
 });
 
-test("session context covers game, community, admin, account-security, and logout surfaces", () => {
+test("session context covers game, public search, community, admin, account-security, and logout surfaces", () => {
   assert.deepEqual(sessionContextFromRequest(requestFor("/g/demo")), {
     kind: "game",
     game: "demo",
@@ -137,6 +137,12 @@ test("session context covers game, community, admin, account-security, and logou
     kind: "community",
   });
   assert.deepEqual(sessionContextFromRequest(requestFor("/discussions/general")), {
+    kind: "community",
+  });
+  assert.deepEqual(sessionContextFromRequest(requestFor("/search?q=mafia")), {
+    kind: "community",
+  });
+  assert.deepEqual(sessionContextFromRequest(requestFor("/games/demo")), {
     kind: "community",
   });
   assert.deepEqual(sessionContextFromRequest(requestFor("/auth/account/security")), {

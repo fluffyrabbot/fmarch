@@ -68,6 +68,7 @@ test("board smoke scenario keeps allowed and blocked navigation explicit", () =>
   assert.deepEqual(boardScenario.nav, {
     board: "link",
     community: "link",
+    search: "link",
     player: "link",
     moderator: "blocked",
     admin: "blocked",
@@ -75,8 +76,10 @@ test("board smoke scenario keeps allowed and blocked navigation explicit", () =>
   assert.deepEqual(
     boardScenario.actions.map((action) => [action.testId, action.navigation]),
     [
+      ["game-action-midsummer-public-thread", "link"],
       ["game-action-midsummer-player", "link"],
       ["game-action-midsummer-moderator", "blocked"],
+      ["game-action-solstice-public-thread", "link"],
       ["game-action-solstice-player", "blocked"],
       ["game-action-solstice-moderator", "blocked"],
     ],
@@ -85,7 +88,7 @@ test("board smoke scenario keeps allowed and blocked navigation explicit", () =>
     boardScenario.actions
       .filter((action) => action.navigation === "link")
       .map((action) => action.hrefPath),
-    ["/g/midsummer"],
+    ["/games/midsummer", "/g/midsummer", "/games/solstice"],
   );
   assert.deepEqual(
     boardScenario.actions
@@ -306,9 +309,10 @@ test("forbidden route scenarios cover denied admin, moderator, and signed-out pl
 });
 
 function assertRoleNav(nav, roleId) {
-  assert.deepEqual(Object.keys(nav).sort(), ["admin", "board", "community", "moderator", "player"]);
+  assert.deepEqual(Object.keys(nav).sort(), ["admin", "board", "community", "moderator", "player", "search"]);
   assert.equal(nav.board, "link");
   assert.equal(nav.community, "link");
+  assert.equal(nav.search, "link");
   assert.equal(nav[roleId], "link");
   assert.equal(Object.values(nav).includes("blocked"), true);
   for (const navigation of Object.values(nav)) {

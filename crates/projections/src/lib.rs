@@ -425,6 +425,40 @@ pub struct GameIndexPage {
     pub next_cursor: Option<GameIndexCursor>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum PublicSearchFilter {
+    All,
+    Discussions,
+    Profiles,
+    Games,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PublicSearchRow {
+    pub kind: String,
+    pub title: String,
+    pub excerpt: String,
+    pub href: String,
+    pub updated_seq: i64,
+    pub published_at: i64,
+    pub rank: i64,
+    pub document_key: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PublicSearchCursor {
+    pub rank: i64,
+    pub updated_seq: i64,
+    pub document_kind: String,
+    pub document_key: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PublicSearchPage {
+    pub results: Vec<PublicSearchRow>,
+    pub next_cursor: Option<PublicSearchCursor>,
+}
+
 /// A public non-game discussion area. Account identifiers never cross this
 /// read boundary.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -715,6 +749,7 @@ async fn fold_event(
             let phase_id = str_field(&ev.payload, "phase_id", &ev.kind)?;
             set_phase(tx, game_id, &phase_id).await?;
             activate_game_index(tx, game_id, &phase_id, ev.seq).await?;
+            sync_game_search_documents(tx, game_id).await?;
         }
         "PhaseAdvanced" => {
             // Set the current phase; a new phase starts unlocked with no deadline.
@@ -726,6 +761,7 @@ async fn fold_event(
             }
             set_phase(tx, game_id, &phase_control.phase_id).await?;
             update_game_index_phase(tx, game_id, &phase_control.phase_id, ev.seq).await?;
+            sync_game_search_documents(tx, game_id).await?;
         }
         "DeadlineSet" | "DeadlineExtended" => {
             let p = &ev.payload;
@@ -770,6 +806,7 @@ async fn fold_event(
             let phase_id = str_field(p, "phase_id", &ev.kind)?;
             let body = str_field(p, "body", &ev.kind)?;
             let media = thread_media_payload(p);
+            let public_main = channel_id == "main";
             insert_thread_post(
                 tx,
                 ThreadPostInsert {
@@ -786,6 +823,9 @@ async fn fold_event(
                 },
             )
             .await?;
+            if public_main {
+                insert_game_post_search_document(tx, game_id, ev.seq).await?;
+            }
         }
         "PrivateChannelDeclared" => {
             let p = &ev.payload;
@@ -850,6 +890,7 @@ async fn fold_event(
                     },
                 )
                 .await?;
+                insert_game_post_search_document(tx, game_id, ev.seq).await?;
             }
         }
         "ResolutionTrace" => {
@@ -917,6 +958,7 @@ async fn fold_event(
             .execute(&mut **tx)
             .await?;
             complete_game_index(tx, game_id, ev.seq).await?;
+            sync_game_search_documents(tx, game_id).await?;
         }
 
         // Everything else (posts, channels) is not folded by THESE projections.
@@ -1644,6 +1686,12 @@ pub async fn rebuild_discussion_stream(
     }
     let mut tx = pool.begin().await?;
     if is_topic_stream {
+        sqlx::query(
+            "DELETE FROM public_search_document WHERE scope_kind = 'discussion' AND scope_id = $1",
+        )
+        .bind(stream_id)
+        .execute(&mut *tx)
+        .await?;
         sqlx::query("DELETE FROM discussion_post WHERE topic_id = $1")
             .bind(stream_id)
             .execute(&mut *tx)
@@ -1665,6 +1713,13 @@ async fn fold_discussion_event(
     stream_id: Uuid,
     event: &StoredEvent,
 ) -> Result<(), ProjectionError> {
+    let is_topic_event = matches!(
+        event.kind.as_str(),
+        community::TOPIC_CREATED
+            | community::POST_SUBMITTED
+            | community::POSTING_STATE_CHANGED
+            | community::VISIBILITY_CHANGED
+    );
     match event.kind.as_str() {
         community::AREA_CREATED => {
             let slug = str_field(&event.payload, "slug", &event.kind)?;
@@ -1759,6 +1814,9 @@ async fn fold_discussion_event(
         }
         _ => {}
     }
+    if is_topic_event {
+        sync_discussion_search_documents(tx, stream_id).await?;
+    }
     Ok(())
 }
 
@@ -1824,6 +1882,12 @@ pub async fn rebuild_profile_stream(pool: &PgPool, stream_id: Uuid) -> Result<()
         .bind(stream_id)
         .execute(&mut *tx)
         .await?;
+    sqlx::query(
+        "DELETE FROM public_search_document WHERE scope_kind = 'profile' AND scope_id = $1",
+    )
+    .bind(stream_id)
+    .execute(&mut *tx)
+    .await?;
     for event in &events {
         fold_profile_event(&mut tx, stream_id, event).await?;
     }
@@ -1889,6 +1953,7 @@ async fn fold_profile_event(
         }
         _ => {}
     }
+    sync_profile_search_document(tx, stream_id).await?;
     Ok(())
 }
 
@@ -1977,6 +2042,10 @@ async fn rebuild_in_tx(
             .execute(&mut **tx)
             .await?;
     }
+    sqlx::query("DELETE FROM public_search_document WHERE scope_kind = 'game' AND scope_id = $1")
+        .bind(game_id)
+        .execute(&mut **tx)
+        .await?;
 
     // Load the stream in order (within this tx) and re-fold. We read inside the
     // tx so the rebuild is a consistent snapshot.
@@ -2119,6 +2188,10 @@ const AUDIT_PROJECTIONS: &[AuditProjection] = &[
         table: "game_index",
         order_by: "game_id",
     },
+    AuditProjection {
+        table: "public_search_document",
+        order_by: "document_kind, document_key",
+    },
 ];
 
 /// Replay one game's event stream inside a rollback-only transaction and compare
@@ -2157,11 +2230,17 @@ async fn projection_snapshot(
     projection: &AuditProjection,
     game_id: Uuid,
 ) -> Result<serde_json::Value, ProjectionError> {
+    let predicate = if projection.table == "public_search_document" {
+        "scope_kind = 'game' AND scope_id = $1"
+    } else {
+        "game_id = $1"
+    };
     let sql = format!(
         "SELECT COALESCE(jsonb_agg(to_jsonb(snapshot_rows) ORDER BY {order_by}), '[]'::jsonb) AS rows \
-         FROM (SELECT * FROM {table} WHERE game_id = $1) snapshot_rows",
+         FROM (SELECT * FROM {table} WHERE {predicate}) snapshot_rows",
         table = projection.table,
         order_by = projection.order_by,
+        predicate = predicate,
     );
     let row = sqlx::query(&sql).bind(game_id).fetch_one(&mut **tx).await?;
     Ok(row.get("rows"))
@@ -3127,6 +3206,157 @@ pub async fn game_index(
     Ok(GameIndexPage { games, next_cursor })
 }
 
+/// Resolve one active or completed game through the public discovery boundary.
+pub async fn public_game_by_id(
+    pool: &PgPool,
+    game_id: Uuid,
+) -> Result<Option<GameIndexRow>, ProjectionError> {
+    let row = sqlx::query(
+        r#"
+        SELECT game_id, pack, status, phase_id, updated_seq, completed_seq
+        FROM game_index
+        WHERE game_id = $1 AND status IN ('active', 'completed')
+        "#,
+    )
+    .bind(game_id)
+    .fetch_optional(pool)
+    .await?;
+    Ok(row.map(|row| GameIndexRow {
+        game_id: row.get("game_id"),
+        pack: row.get("pack"),
+        status: row.get("status"),
+        phase_id: row.get("phase_id"),
+        updated_seq: row.get("updated_seq"),
+        completed_seq: row.get("completed_seq"),
+    }))
+}
+
+/// Search the public-only document projection by weighted PostgreSQL full-text
+/// rank. The cursor repeats the complete deterministic ordering tuple.
+pub async fn public_search(
+    pool: &PgPool,
+    query: &str,
+    filter: PublicSearchFilter,
+    cursor: Option<PublicSearchCursor>,
+    limit: i64,
+) -> Result<PublicSearchPage, ProjectionError> {
+    let limit = limit.clamp(1, 50);
+    let fetch_limit = limit + 1;
+    let filter = match filter {
+        PublicSearchFilter::All => "all",
+        PublicSearchFilter::Discussions => "discussions",
+        PublicSearchFilter::Profiles => "profiles",
+        PublicSearchFilter::Games => "games",
+    };
+    let rows = match cursor {
+        Some(cursor) => {
+            sqlx::query(
+                r#"
+                WITH search_query AS (
+                    SELECT websearch_to_tsquery('english', $1) AS value
+                ), ranked AS (
+                    SELECT document_kind, document_key, title, href, updated_seq, published_at,
+                           ROUND(ts_rank_cd(search_vector, search_query.value)::numeric * 1000000)::BIGINT AS rank,
+                           regexp_replace(
+                               ts_headline(
+                                   'english', concat_ws(' ', title, body), search_query.value,
+                                   'MaxWords=24, MinWords=8'
+                               ),
+                               '</?b>', '', 'g'
+                           ) AS excerpt
+                    FROM public_search_document, search_query
+                    WHERE search_vector @@ search_query.value
+                      AND (
+                          $2 = 'all'
+                          OR ($2 = 'discussions' AND document_kind IN ('discussion_topic', 'discussion_post'))
+                          OR ($2 = 'profiles' AND document_kind = 'profile')
+                          OR ($2 = 'games' AND document_kind IN ('game', 'game_post'))
+                      )
+                )
+                SELECT document_kind, document_key, title, href, updated_seq, published_at, rank, excerpt
+                FROM ranked
+                WHERE rank < $3
+                   OR (rank = $3 AND updated_seq < $4)
+                   OR (rank = $3 AND updated_seq = $4 AND document_kind > $5)
+                   OR (rank = $3 AND updated_seq = $4 AND document_kind = $5 AND document_key > $6)
+                ORDER BY rank DESC, updated_seq DESC, document_kind, document_key
+                LIMIT $7
+                "#,
+            )
+            .bind(query)
+            .bind(filter)
+            .bind(cursor.rank)
+            .bind(cursor.updated_seq)
+            .bind(cursor.document_kind)
+            .bind(cursor.document_key)
+            .bind(fetch_limit)
+            .fetch_all(pool)
+            .await?
+        }
+        None => {
+            sqlx::query(
+                r#"
+                WITH search_query AS (
+                    SELECT websearch_to_tsquery('english', $1) AS value
+                )
+                SELECT document_kind, document_key, title, href, updated_seq, published_at,
+                       ROUND(ts_rank_cd(search_vector, search_query.value)::numeric * 1000000)::BIGINT AS rank,
+                       regexp_replace(
+                           ts_headline(
+                               'english', concat_ws(' ', title, body), search_query.value,
+                               'MaxWords=24, MinWords=8'
+                           ),
+                           '</?b>', '', 'g'
+                       ) AS excerpt
+                FROM public_search_document, search_query
+                WHERE search_vector @@ search_query.value
+                  AND (
+                      $2 = 'all'
+                      OR ($2 = 'discussions' AND document_kind IN ('discussion_topic', 'discussion_post'))
+                      OR ($2 = 'profiles' AND document_kind = 'profile')
+                      OR ($2 = 'games' AND document_kind IN ('game', 'game_post'))
+                  )
+                ORDER BY rank DESC, updated_seq DESC, document_kind, document_key
+                LIMIT $3
+                "#,
+            )
+            .bind(query)
+            .bind(filter)
+            .bind(fetch_limit)
+            .fetch_all(pool)
+            .await?
+        }
+    };
+    let has_more = rows.len() as i64 > limit;
+    let results: Vec<_> = rows
+        .into_iter()
+        .take(limit as usize)
+        .map(|row| PublicSearchRow {
+            kind: row.get("document_kind"),
+            title: row.get("title"),
+            excerpt: row.get("excerpt"),
+            href: row.get("href"),
+            updated_seq: row.get("updated_seq"),
+            published_at: row.get("published_at"),
+            rank: row.get("rank"),
+            document_key: row.get("document_key"),
+        })
+        .collect();
+    let next_cursor = has_more.then(|| {
+        let last = results.last().expect("full search page has a final result");
+        PublicSearchCursor {
+            rank: last.rank,
+            updated_seq: last.updated_seq,
+            document_kind: last.kind.clone(),
+            document_key: last.document_key.clone(),
+        }
+    });
+    Ok(PublicSearchPage {
+        results,
+        next_cursor,
+    })
+}
+
 /// Resolve one public discussion area by its stable URL slug.
 pub async fn discussion_area_by_slug(
     pool: &PgPool,
@@ -4022,6 +4252,174 @@ async fn complete_game_index(
     )
     .bind(game_id)
     .bind(event_seq)
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
+}
+
+async fn sync_game_search_documents(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    game_id: Uuid,
+) -> Result<(), ProjectionError> {
+    sqlx::query("DELETE FROM public_search_document WHERE scope_kind = 'game' AND scope_id = $1")
+        .bind(game_id)
+        .execute(&mut **tx)
+        .await?;
+    sqlx::query(
+        r#"
+        INSERT INTO public_search_document (
+            document_kind, document_key, scope_kind, scope_id, title, body,
+            href, updated_seq, published_at
+        )
+        SELECT 'game', game.game_id::text, 'game', game.game_id,
+               game.pack || ' game',
+               concat_ws(' ', game.pack, game.status, game.phase_id),
+               '/games/' || game.game_id::text,
+               game.updated_seq, event.occurred_at
+        FROM game_index AS game
+        JOIN events AS event ON event.seq = game.updated_seq
+        WHERE game.game_id = $1 AND game.status IN ('active', 'completed')
+        "#,
+    )
+    .bind(game_id)
+    .execute(&mut **tx)
+    .await?;
+    sqlx::query(
+        r#"
+        INSERT INTO public_search_document (
+            document_kind, document_key, scope_kind, scope_id, title, body,
+            href, updated_seq, published_at
+        )
+        SELECT 'game_post', post.game_id::text || '-' || post.source_seq::text,
+               'game', post.game_id,
+               'Post in ' || game.pack || ' game', post.body,
+               '/games/' || post.game_id::text || '#thread-post-' || post.source_seq::text,
+               post.source_seq, post.occurred_at
+        FROM thread_view AS post
+        JOIN game_index AS game ON game.game_id = post.game_id
+        WHERE post.game_id = $1
+          AND post.channel_id = 'main'
+          AND game.status IN ('active', 'completed')
+        "#,
+    )
+    .bind(game_id)
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
+}
+
+async fn insert_game_post_search_document(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    game_id: Uuid,
+    source_seq: i64,
+) -> Result<(), ProjectionError> {
+    sqlx::query(
+        r#"
+        INSERT INTO public_search_document (
+            document_kind, document_key, scope_kind, scope_id, title, body,
+            href, updated_seq, published_at
+        )
+        SELECT 'game_post', post.game_id::text || '-' || post.source_seq::text,
+               'game', post.game_id,
+               'Post in ' || game.pack || ' game', post.body,
+               '/games/' || post.game_id::text || '#thread-post-' || post.source_seq::text,
+               post.source_seq, post.occurred_at
+        FROM thread_view AS post
+        JOIN game_index AS game ON game.game_id = post.game_id
+        WHERE post.game_id = $1 AND post.source_seq = $2
+          AND post.channel_id = 'main'
+          AND game.status IN ('active', 'completed')
+        ON CONFLICT (document_kind, document_key) DO UPDATE SET
+            title = EXCLUDED.title,
+            body = EXCLUDED.body,
+            href = EXCLUDED.href,
+            updated_seq = EXCLUDED.updated_seq,
+            published_at = EXCLUDED.published_at
+        "#,
+    )
+    .bind(game_id)
+    .bind(source_seq)
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
+}
+
+async fn sync_profile_search_document(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    profile_id: Uuid,
+) -> Result<(), ProjectionError> {
+    sqlx::query(
+        "DELETE FROM public_search_document WHERE scope_kind = 'profile' AND scope_id = $1",
+    )
+    .bind(profile_id)
+    .execute(&mut **tx)
+    .await?;
+    sqlx::query(
+        r#"
+        INSERT INTO public_search_document (
+            document_kind, document_key, scope_kind, scope_id, title, body,
+            href, updated_seq, published_at
+        )
+        SELECT 'profile', profile.profile_id::text, 'profile', profile.profile_id,
+               profile.display_name, concat_ws(' ', profile.handle, profile.bio),
+               '/u/' || profile.handle, profile.updated_seq, event.occurred_at
+        FROM profile_public AS profile
+        JOIN events AS event ON event.seq = profile.updated_seq
+        WHERE profile.profile_id = $1 AND profile.visibility = 'public'
+        "#,
+    )
+    .bind(profile_id)
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
+}
+
+async fn sync_discussion_search_documents(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    topic_id: Uuid,
+) -> Result<(), ProjectionError> {
+    sqlx::query(
+        "DELETE FROM public_search_document WHERE scope_kind = 'discussion' AND scope_id = $1",
+    )
+    .bind(topic_id)
+    .execute(&mut **tx)
+    .await?;
+    sqlx::query(
+        r#"
+        INSERT INTO public_search_document (
+            document_kind, document_key, scope_kind, scope_id, title, body,
+            href, updated_seq, published_at
+        )
+        SELECT 'discussion_topic', topic.topic_id::text, 'discussion', topic.topic_id,
+               topic.title, area.title || ' ' || area.description,
+               '/discussions/' || area.slug || '/t/' || topic.topic_id::text,
+               topic.updated_seq, topic.updated_at
+        FROM discussion_topic AS topic
+        JOIN discussion_area AS area ON area.area_id = topic.area_id
+        WHERE topic.topic_id = $1 AND topic.visibility = 'visible'
+        "#,
+    )
+    .bind(topic_id)
+    .execute(&mut **tx)
+    .await?;
+    sqlx::query(
+        r#"
+        INSERT INTO public_search_document (
+            document_kind, document_key, scope_kind, scope_id, title, body,
+            href, updated_seq, published_at
+        )
+        SELECT 'discussion_post', post.topic_id::text || '-' || post.source_seq::text,
+               'discussion', post.topic_id, 'Reply in ' || topic.title, post.body,
+               '/discussions/' || area.slug || '/t/' || post.topic_id::text ||
+                   '#post-' || post.source_seq::text,
+               post.source_seq, post.created_at
+        FROM discussion_post AS post
+        JOIN discussion_topic AS topic ON topic.topic_id = post.topic_id
+        JOIN discussion_area AS area ON area.area_id = topic.area_id
+        WHERE post.topic_id = $1 AND topic.visibility = 'visible'
+        "#,
+    )
+    .bind(topic_id)
     .execute(&mut **tx)
     .await?;
     Ok(())

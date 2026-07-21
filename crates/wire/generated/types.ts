@@ -55,6 +55,12 @@ export type GameIndexEntry = { game: string, pack: string, status: string, phase
 
 export type GameIndexPage = { games: Array<GameIndexEntry>, next_cursor: string | null, };
 
+export type PublicGameThreadPage = { game: GameIndexEntry, posts: Array<ThreadPost>, next_before_seq: bigint | null, };
+
+export type PublicSearchResult = { kind: string, title: string, excerpt: string, href: string, published_at: bigint, };
+
+export type PublicSearchPage = { query: string, filter: string, results: Array<PublicSearchResult>, next_cursor: string | null, };
+
 export type DiscussionArea = { slug: string, title: string, description: string, };
 
 export type DiscussionAuthor = { handle: string, display_name: string, };

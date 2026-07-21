@@ -17,7 +17,7 @@ count is treated as product progress.
 
 | Execution class | Complete | Partial | Open | Blocked | Deferred | Total |
 |---|---:|---:|---:|---:|---:|---:|
-| code | 28 | 0 | 1 | 0 | 0 | 29 |
+| code | 29 | 0 | 1 | 0 | 0 | 30 |
 | external-evidence | 0 | 0 | 0 | 6 | 0 | 6 |
 | human | 0 | 0 | 1 | 1 | 0 | 2 |
 | optional | 0 | 0 | 0 | 0 | 1 | 1 |
@@ -28,23 +28,23 @@ Overall release closure complete: **no**.
 
 ## Next buildable coding slice
 
-### Public community search `product.community.search`
+### Community moderation operations `product.community.moderation-operations`
 
-Build the first public-only search vertical over visible discussions, public profiles, game metadata, and public main-thread posts using a rebuildable PostgreSQL tsvector projection, weighted rank plus stable cursor, canonical result URLs, synchronous moderation removal, and a seeded Chromium proof.
+Build a typed, durable moderation-case vertical for public discussion posts and public game-thread posts: authenticated reports with one active report per reporter/document/reason family, bounded submission rates, a GlobalMod review queue, reason-bearing hide/dismiss/restore decisions, append-only audit history, synchronous search removal/restoration, reporter receipts, and seeded member/moderator Chromium proof.
 
-Owned paths: `crates/projections/`, `crates/api/`, `crates/wire/`, `frontend/src/routes/search/`, `tools/`, `docs/arch/02-event-sourcing.md`.
+Owned paths: `crates/community/`, `crates/projections/`, `crates/api/`, `crates/wire/`, `frontend/src/routes/moderation/`, `frontend/src/routes/discussions/`, `frontend/src/routes/games/`, `tools/`, `docs/arch/02-event-sourcing.md`.
 
 Proof:
 
-- `DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p projections -p api search -- --test-threads=1`
+- `DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p community -p projections -p api moderation -- --test-threads=1`
 - `npm run test:frontend-contract`
 - `npm run test:completeness-scorecard`
 
 Explicit non-claims:
 
-- No private-channel search until capability-scoped indexing has a separate proof lane.
-- No recommendation, reputation, or opaque engagement-ranking claim.
-- No hosted search availability or release-readiness claim from local proof.
+- No automated guilt, toxicity, or reputation scoring.
+- No private-channel reporting until its audience and evidence-retention boundary is modeled separately.
+- No hosted moderation staffing, legal-response, or release-readiness claim from local proof.
 
 ## Locally proven foundation
 
@@ -101,7 +101,8 @@ Explicit non-claims:
 | complete | Public game index<br>`product.community.game-index` | `product.game.core-loop`<br>`product.identity.account-login-invites` | The public board lists capability-safe active and completed games from a real projection with pagination and browser proof. | Complete. | source: `frontend/src/routes/+page.svelte`<br>source: `crates/projections/migrations/0040_game_index.sql`<br>source: `docs/arch/02-event-sourcing.md`<br>command: `npm run test:dev-test-game-game-index:local`<br>artifact: `target/game-index-role-proof/game-index-proof.json`<br>The root board reads a durable public projection of active and completed games, pages by a stable keyset cursor, keeps setup and private lifecycle data out of the query, and is proven through the scratch-Postgres Chromium lane. |
 | complete | Non-game discussion areas<br>`product.community.discussions` | `product.community.game-index`<br>`product.identity.registration` | Users can browse, create, post in, and moderate capability-scoped non-game discussions through real routes and projections. | Complete. | source: `crates/community/src/lib.rs`<br>source: `crates/projections/migrations/0046_community_integrity.sql`<br>source: `frontend/src/routes/community/+page.svelte`<br>source: `frontend/src/routes/discussions/[slug]/+page.svelte`<br>source: `frontend/src/routes/discussions/[slug]/t/[topic]/+page.svelte`<br>source: `docs/arch/02-event-sourcing.md`<br>command: `npm run test:dev-test-game-discussion:local`<br>artifact: `target/discussion-role-proof/discussion-proof.json`<br>Public non-game discussions use a typed community write model, expected-version appends, enabled-account and profile-backed authorship, independent posting/visibility moderation, canonical topic/post URLs, a public area directory, and a seeded Chromium proof. |
 | complete | User profiles<br>`product.community.profiles` | `product.identity.registration` | A user can view and edit an authorization-safe profile, with durable projection state and browser proof. | Complete. | source: `crates/projections/migrations/0042_profile.sql`<br>source: `frontend/src/routes/u/[handle]/+page.svelte`<br>source: `docs/arch/02-event-sourcing.md`<br>command: `npm run test:dev-test-game-profile:local`<br>artifact: `target/profile-role-proof/profile-proof.json`<br>Profiles use durable public and owner-only projections, enabled-account editing, explicit public or members-only visibility, and a seeded Chromium proof. |
-| open | Public community search<br>`product.community.search` | `product.community.discussions`<br>`product.community.profiles`<br>`product.community.game-index` | Users can search public discussions, public game threads, profiles, and games through visibility-safe ranked results with stable pagination and canonical result links. | Remaining: Add a rebuildable PostgreSQL full-text search document projection, visibility-safe query API, canonical result contract, filters, excerpts, pagination, tablet-first route, and local browser proof. | source: `docs/arch/02-event-sourcing.md`<br>The community now has stable public document identity, authorship, visibility, and canonical URLs, but no searchable document projection or search route. |
+| complete | Public community search<br>`product.community.search` | `product.community.discussions`<br>`product.community.profiles`<br>`product.community.game-index` | Users can search public discussions, public game threads, profiles, and games through visibility-safe ranked results with stable pagination and canonical result links. | Complete. | source: `crates/projections/migrations/0047_public_search.sql`<br>source: `frontend/src/routes/search/+page.svelte`<br>source: `frontend/src/routes/games/[game]/+page.svelte`<br>source: `docs/arch/02-event-sourcing.md`<br>command: `npm run test:dev-test-game-search:local`<br>artifact: `target/public-search-role-proof/public-search-proof.json`<br>A rebuildable PostgreSQL full-text projection searches visible discussions, public profiles, active/completed games, and public main-thread posts with weighted rank, stable cursor pagination, typed filters, excerpts, canonical destinations, and synchronous visibility removal. |
+| open | Community moderation operations<br>`product.community.moderation-operations` | `product.community.discussions`<br>`product.community.search`<br>`product.identity.session-lifecycle` | Members can report public discussion and game-thread content into a durable deduplicated queue, and GlobalMod operators can review, reason, action, restore, and audit those reports through capability-safe routes. | Remaining: Add typed report and moderation-case streams, deduplication and abuse limits, a GlobalMod queue, reason-bearing hide/restore actions, reporter-safe receipts, search synchronization, and local browser proof. | source: `docs/arch/02-event-sourcing.md`<br>Topic visibility and posting controls are enforceable, but members cannot report public content and moderators have no durable review queue, reasoned action history, or restoration workflow. |
 
 ## Archival and export
 

@@ -514,22 +514,42 @@
       "order": 40,
       "title": "Public community search",
       "execution_class": "code",
-      "status": "open",
-      "summary": "The community now has stable public document identity, authorship, visibility, and canonical URLs, but no searchable document projection or search route.",
+      "status": "complete",
+      "summary": "A rebuildable PostgreSQL full-text projection searches visible discussions, public profiles, active/completed games, and public main-thread posts with weighted rank, stable cursor pagination, typed filters, excerpts, canonical destinations, and synchronous visibility removal.",
       "complete_when": ["Users can search public discussions, public game threads, profiles, and games through visibility-safe ranked results with stable pagination and canonical result links."],
       "depends_on": ["product.community.discussions", "product.community.profiles", "product.community.game-index"],
       "evidence": [
+        { "kind": "source", "value": "crates/projections/migrations/0047_public_search.sql" },
+        { "kind": "source", "value": "frontend/src/routes/search/+page.svelte" },
+        { "kind": "source", "value": "frontend/src/routes/games/[game]/+page.svelte" },
+        { "kind": "source", "value": "docs/arch/02-event-sourcing.md" },
+        { "kind": "command", "value": "npm run test:dev-test-game-search:local" },
+        { "kind": "artifact", "value": "target/public-search-role-proof/public-search-proof.json" }
+      ],
+      "remaining": []
+    },
+    {
+      "id": "product.community.moderation-operations",
+      "section": "community",
+      "order": 50,
+      "title": "Community moderation operations",
+      "execution_class": "code",
+      "status": "open",
+      "summary": "Topic visibility and posting controls are enforceable, but members cannot report public content and moderators have no durable review queue, reasoned action history, or restoration workflow.",
+      "complete_when": ["Members can report public discussion and game-thread content into a durable deduplicated queue, and GlobalMod operators can review, reason, action, restore, and audit those reports through capability-safe routes."],
+      "depends_on": ["product.community.discussions", "product.community.search", "product.identity.session-lifecycle"],
+      "evidence": [
         { "kind": "source", "value": "docs/arch/02-event-sourcing.md" }
       ],
-      "remaining": ["Add a rebuildable PostgreSQL full-text search document projection, visibility-safe query API, canonical result contract, filters, excerpts, pagination, tablet-first route, and local browser proof."],
+      "remaining": ["Add typed report and moderation-case streams, deduplication and abuse limits, a GlobalMod queue, reason-bearing hide/restore actions, reporter-safe receipts, search synchronization, and local browser proof."],
       "recommended_slice": {
-        "objective": "Build the first public-only search vertical over visible discussions, public profiles, game metadata, and public main-thread posts using a rebuildable PostgreSQL tsvector projection, weighted rank plus stable cursor, canonical result URLs, synchronous moderation removal, and a seeded Chromium proof.",
-        "paths": ["crates/projections/", "crates/api/", "crates/wire/", "frontend/src/routes/search/", "tools/", "docs/arch/02-event-sourcing.md"],
-        "proof_commands": ["DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p projections -p api search -- --test-threads=1", "npm run test:frontend-contract", "npm run test:completeness-scorecard"],
+        "objective": "Build a typed, durable moderation-case vertical for public discussion posts and public game-thread posts: authenticated reports with one active report per reporter/document/reason family, bounded submission rates, a GlobalMod review queue, reason-bearing hide/dismiss/restore decisions, append-only audit history, synchronous search removal/restoration, reporter receipts, and seeded member/moderator Chromium proof.",
+        "paths": ["crates/community/", "crates/projections/", "crates/api/", "crates/wire/", "frontend/src/routes/moderation/", "frontend/src/routes/discussions/", "frontend/src/routes/games/", "tools/", "docs/arch/02-event-sourcing.md"],
+        "proof_commands": ["DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p community -p projections -p api moderation -- --test-threads=1", "npm run test:frontend-contract", "npm run test:completeness-scorecard"],
         "non_claims": [
-          "No private-channel search until capability-scoped indexing has a separate proof lane.",
-          "No recommendation, reputation, or opaque engagement-ranking claim.",
-          "No hosted search availability or release-readiness claim from local proof."
+          "No automated guilt, toxicity, or reputation scoring.",
+          "No private-channel reporting until its audience and evidence-retention boundary is modeled separately.",
+          "No hosted moderation staffing, legal-response, or release-readiness claim from local proof."
         ]
       }
     },

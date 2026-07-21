@@ -152,6 +152,7 @@ Examples:
 | `channel_membership` | who can read/post where (drives authz reads) |
 | `game_index` | public board listing: active/completed games, pack, status, current phase, and stable page cursor |
 | `discussion_area` / `discussion_topic` / `discussion_post` | public non-game areas, visible topic lifecycle, and paginated post threads |
+| `public_search_document` | public-only weighted search documents with canonical links across discussions, profiles, games, and public main-thread posts |
 
 `game_index` folds `GameCreated`, `GameStarted`, `PhaseAdvanced`, and `GameCompleted`
 synchronously with the game stream. Setup rows remain rebuildable but are excluded from the
@@ -178,6 +179,17 @@ returns the owner principal, and `profile_editor`, which binds that profile to i
 authenticated editing. Public reads require `public` visibility; the owner-only editor read and
 write paths require a live enabled account session. This keeps the privacy control durable and
 replayable rather than treating it as frontend-only display state.
+
+Public search is a synchronous, rebuildable projection rather than an independent source of
+truth. Visible discussion topics/posts, public profiles, active/completed game metadata, and
+`main` game-thread posts fold into weighted PostgreSQL `tsvector` documents. Topic hiding and
+profile visibility changes remove the entire affected scope in the same transaction; game and
+profile rebuilds recreate identical documents. Queries use `websearch_to_tsquery`, weighted rank,
+and the full `(rank, updated_seq, document_kind, document_key)` ordering tuple as an opaque stable
+cursor. Search documents store only presentation-safe text and canonical public URLs. Private
+channels, credential principals, authorization state, and engagement signals never enter this
+projection. Public game-post results resolve through the read-only `/games/{game}` surface rather
+than a capability-scoped player route.
 
 Completed game streams can be exported as versioned `StreamExport` manifests. The checksum covers
 the canonical manifest content, stream sequence positions must be contiguous, and imports refuse

@@ -19,7 +19,7 @@ export const APP_SHELL_CONTRACT = Object.freeze({
   topbarStickyTopPx: 0,
   topbarBlockSizePx: 76,
   stickyRailGapPx: 22,
-  surfaceOrder: Object.freeze(["board", "community", "player", "moderator", "admin"]),
+  surfaceOrder: Object.freeze(["board", "community", "search", "player", "moderator", "admin"]),
   navTestIdPrefix: "role-nav",
   minTouchTargetPx: 44,
 });
@@ -79,6 +79,14 @@ export function buildAppShell({
       label: "Community",
       href: "/community",
       active: activeSurface === "community",
+      allowed: true,
+      capabilityLabel: "Public",
+    }),
+    surfaceItem({
+      id: "search",
+      label: "Search",
+      href: "/search",
+      active: activeSurface === "search",
       allowed: true,
       capabilityLabel: "Public",
     }),
@@ -223,7 +231,19 @@ function boardGameCard({ entry, principalUserId, capabilities }) {
   return Object.freeze({
     ...entry,
     actions: Object.freeze([
-      boardAction(gameShell, { surface: "player", label: "Open game", primary: true }),
+      Object.freeze({
+        id: "public-thread",
+        label: "View public thread",
+        href: `/games/${encodeURIComponent(entry.id)}`,
+        allowed: true,
+        navigation: "link",
+        ariaDisabled: undefined,
+        blockedReason: null,
+        blockedLabel: null,
+        capabilityLabel: "Public",
+        className: "fm-touch-button",
+      }),
+      boardAction(gameShell, { surface: "player", label: "Play" }),
       boardAction(gameShell, { surface: "moderator", label: "Moderate" }),
     ]),
   });
