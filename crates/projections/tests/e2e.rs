@@ -2089,6 +2089,374 @@ async fn moderation_report_submissions_are_bounded_per_reporter(pool: sqlx::PgPo
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+async fn subscriptions_fan_out_public_updates_suppress_moderation_and_rebuild(pool: PgPool) {
+    let profile = Uuid::new_v4();
+    let area = Uuid::new_v4();
+    let topic = Uuid::new_v4();
+    append_profile_and_project(
+        &pool,
+        profile,
+        &[EventInput::new(
+            "ProfileCreated",
+            1,
+            serde_json::json!({
+                "principal_user_id": "author_a",
+                "handle": "author_a",
+                "display_name": "Author A",
+                "bio": "",
+                "visibility": "public"
+            }),
+            ActorId::User("author_a".into()),
+            1,
+        )],
+    )
+    .await
+    .unwrap();
+    append_discussion_and_project(
+        &pool,
+        area,
+        &[EventInput::new(
+            "DiscussionAreaCreated",
+            1,
+            serde_json::json!({ "slug": "watch", "title": "Watch", "description": "Updates" }),
+            ActorId::User("moderator".into()),
+            2,
+        )],
+    )
+    .await
+    .unwrap();
+    append_discussion_and_project(
+        &pool,
+        topic,
+        &[
+            EventInput::new(
+                "DiscussionTopicCreated",
+                1,
+                serde_json::json!({ "area_id": area, "title": "Watched topic", "author_profile_id": profile }),
+                ActorId::User("author_a".into()),
+                3,
+            ),
+            EventInput::new(
+                "DiscussionPostSubmitted",
+                1,
+                serde_json::json!({ "body": "Opening post", "author_profile_id": profile }),
+                ActorId::User("author_a".into()),
+                4,
+            ),
+        ],
+    )
+    .await
+    .unwrap();
+    let target = community::SubscriptionTarget {
+        kind: community::SubscriptionTargetKind::DiscussionTopic,
+        scope_id: topic,
+    };
+    let watcher = projections::subscribe_to_public_target(&pool, target.clone(), "member_b", 5)
+        .await
+        .unwrap();
+    assert!(watcher.subscribed);
+    assert_eq!(watcher.unread_count, 0);
+    projections::subscribe_to_public_target(&pool, target.clone(), "author_a", 5)
+        .await
+        .unwrap();
+
+    let version = discussion_topic_by_id(&pool, topic)
+        .await
+        .unwrap()
+        .unwrap()
+        .version;
+    append_discussion_and_project_expected(
+        &pool,
+        topic,
+        version,
+        &[EventInput::new(
+            "DiscussionPostSubmitted",
+            1,
+            serde_json::json!({ "body": "First watched reply", "author_profile_id": profile }),
+            ActorId::User("author_a".into()),
+            6,
+        )],
+    )
+    .await
+    .unwrap();
+    let watched_seq = discussion_topic_by_id(&pool, topic)
+        .await
+        .unwrap()
+        .unwrap()
+        .last_post_seq
+        .unwrap();
+    let inbox = projections::community_inbox(&pool, "member_b", None, 20)
+        .await
+        .unwrap();
+    assert_eq!(inbox.unread_count, 1);
+    assert_eq!(inbox.items.len(), 1);
+    assert_eq!(inbox.items[0].title, "Watched topic");
+    assert!(inbox.items[0]
+        .href
+        .ends_with(&format!("#post-{watched_seq}")));
+    assert!(!inbox.items[0].href.contains("member_b"));
+    assert!(projections::community_inbox(&pool, "author_a", None, 20)
+        .await
+        .unwrap()
+        .items
+        .is_empty());
+
+    projections::advance_subscription_read_cursor(
+        &pool,
+        target.clone(),
+        "member_b",
+        watched_seq,
+        7,
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        projections::community_inbox(&pool, "member_b", None, 20)
+            .await
+            .unwrap()
+            .unread_count,
+        0
+    );
+
+    let version = discussion_topic_by_id(&pool, topic)
+        .await
+        .unwrap()
+        .unwrap()
+        .version;
+    append_discussion_and_project_expected(
+        &pool,
+        topic,
+        version,
+        &[EventInput::new(
+            "DiscussionPostSubmitted",
+            1,
+            serde_json::json!({ "body": "Moderated watched reply", "author_profile_id": profile }),
+            ActorId::User("author_a".into()),
+            8,
+        )],
+    )
+    .await
+    .unwrap();
+    let moderated_seq = discussion_topic_by_id(&pool, topic)
+        .await
+        .unwrap()
+        .unwrap()
+        .last_post_seq
+        .unwrap();
+    let moderation_target = community::ModerationTarget {
+        kind: community::ModerationTargetKind::DiscussionPost,
+        scope_id: topic,
+        source_seq: moderated_seq,
+    };
+    projections::submit_moderation_report(
+        &pool,
+        moderation_target,
+        Uuid::new_v4(),
+        "reporter",
+        community::ReportReasonFamily::Spam,
+        "spam".into(),
+        9,
+    )
+    .await
+    .unwrap();
+    let case = projections::moderation_cases(&pool, Some("open"), None, 10)
+        .await
+        .unwrap()
+        .cases
+        .into_iter()
+        .find(|case| case.source_seq == moderated_seq)
+        .unwrap();
+    let case_state = projections::moderation_case_state(&pool, case.case_id)
+        .await
+        .unwrap()
+        .unwrap();
+    let hidden = community::decide_moderation(
+        Some(&case_state),
+        community::ModerationCommand::Hide {
+            reason: "spam".into(),
+        },
+    )
+    .unwrap();
+    projections::append_moderation_and_project_expected(
+        &pool,
+        case.case_id,
+        case_state.version,
+        hidden,
+        "moderator",
+        10,
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        projections::community_inbox(&pool, "member_b", None, 20)
+            .await
+            .unwrap()
+            .unread_count,
+        0
+    );
+    let case_state = projections::moderation_case_state(&pool, case.case_id)
+        .await
+        .unwrap()
+        .unwrap();
+    let restored = community::decide_moderation(
+        Some(&case_state),
+        community::ModerationCommand::Restore {
+            reason: "restored".into(),
+        },
+    )
+    .unwrap();
+    projections::append_moderation_and_project_expected(
+        &pool,
+        case.case_id,
+        case_state.version,
+        restored,
+        "moderator",
+        11,
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        projections::community_inbox(&pool, "member_b", None, 20)
+            .await
+            .unwrap()
+            .unread_count,
+        1
+    );
+
+    projections::unsubscribe_from_public_target(&pool, target.clone(), "member_b", 12)
+        .await
+        .unwrap();
+    let version = discussion_topic_by_id(&pool, topic)
+        .await
+        .unwrap()
+        .unwrap()
+        .version;
+    append_discussion_and_project_expected(
+        &pool,
+        topic,
+        version,
+        &[EventInput::new(
+            "DiscussionPostSubmitted",
+            1,
+            serde_json::json!({ "body": "Unwatched reply", "author_profile_id": profile }),
+            ActorId::User("author_a".into()),
+            13,
+        )],
+    )
+    .await
+    .unwrap();
+    let before_resubscribe = projections::community_inbox(&pool, "member_b", None, 20)
+        .await
+        .unwrap()
+        .items
+        .len();
+    let resubscribed =
+        projections::subscribe_to_public_target(&pool, target.clone(), "member_b", 14)
+            .await
+            .unwrap();
+    assert_eq!(
+        resubscribed.read_through_seq,
+        resubscribed.latest_source_seq
+    );
+
+    rebuild_discussion_stream(&pool, topic).await.unwrap();
+    assert_eq!(
+        projections::community_inbox(&pool, "member_b", None, 20)
+            .await
+            .unwrap()
+            .items
+            .len(),
+        before_resubscribe
+    );
+    let subscription_id: Uuid = sqlx::query_scalar(
+        "SELECT subscription_id FROM community_subscription WHERE principal_user_id = 'member_b' AND target_kind = 'discussion_topic' AND scope_id = $1",
+    )
+    .bind(topic)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    projections::rebuild_subscription_stream(&pool, subscription_id)
+        .await
+        .unwrap();
+    assert_eq!(
+        projections::community_inbox(&pool, "member_b", None, 20)
+            .await
+            .unwrap()
+            .items
+            .len(),
+        before_resubscribe
+    );
+
+    let game = Uuid::new_v4();
+    append_and_project(
+        &pool,
+        game,
+        &[
+            EventInput::new(
+                "GameCreated",
+                1,
+                serde_json::json!({ "host": "host", "pack": "watch_pack" }),
+                ActorId::User("host".into()),
+                15,
+            ),
+            EventInput::new(
+                "GameStarted",
+                1,
+                serde_json::json!({ "phase_id": "D01" }),
+                ActorId::Host,
+                16,
+            ),
+        ],
+    )
+    .await
+    .unwrap();
+    let game_target = community::SubscriptionTarget {
+        kind: community::SubscriptionTargetKind::GameThread,
+        scope_id: game,
+    };
+    projections::subscribe_to_public_target(&pool, game_target, "member_b", 17)
+        .await
+        .unwrap();
+    append_and_project(
+        &pool,
+        game,
+        &[EventInput::new(
+            "PostSubmitted",
+            1,
+            serde_json::json!({
+                "channel_id": "main",
+                "slot_or_user": { "user": "game_author" },
+                "body": "Game update",
+                "phase_id": "D01"
+            }),
+            ActorId::User("game_author".into()),
+            18,
+        )],
+    )
+    .await
+    .unwrap();
+    let game_items = projections::community_inbox(&pool, "member_b", None, 20)
+        .await
+        .unwrap()
+        .items
+        .into_iter()
+        .filter(|item| item.target_kind == "game_thread")
+        .count();
+    assert_eq!(game_items, 1);
+    rebuild(&pool, game).await.unwrap();
+    assert_eq!(
+        projections::community_inbox(&pool, "member_b", None, 20)
+            .await
+            .unwrap()
+            .items
+            .into_iter()
+            .filter(|item| item.target_kind == "game_thread")
+            .count(),
+        1
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
 async fn encrypted_private_events_still_fold_and_rebuild(pool: sqlx::PgPool) {
     let game = Uuid::new_v4();
     let events = vec![

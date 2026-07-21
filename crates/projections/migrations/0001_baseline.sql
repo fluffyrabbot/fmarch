@@ -1658,5 +1658,60 @@ ALTER TABLE ONLY public.moderation_case_history
 
 
 --
+-- Community subscriptions: durable membership periods, monotonic read cursors,
+-- and privacy-safe in-app update references.
+--
+
+CREATE TABLE public.community_subscription (
+    subscription_id uuid NOT NULL,
+    principal_user_id text NOT NULL,
+    target_kind text NOT NULL,
+    scope_id uuid NOT NULL,
+    active boolean DEFAULT true NOT NULL,
+    read_through_seq bigint DEFAULT 0 NOT NULL,
+    created_seq bigint NOT NULL,
+    updated_seq bigint NOT NULL,
+    version bigint NOT NULL,
+    CONSTRAINT community_subscription_read_through_seq_check CHECK ((read_through_seq >= 0)),
+    CONSTRAINT community_subscription_target_kind_check CHECK ((target_kind = ANY (ARRAY['discussion_topic'::text, 'game_thread'::text])))
+);
+
+CREATE TABLE public.community_subscription_period (
+    subscription_id uuid NOT NULL,
+    started_seq bigint NOT NULL,
+    ended_seq bigint,
+    CONSTRAINT community_subscription_period_bounds_check CHECK (((ended_seq IS NULL) OR (ended_seq > started_seq)))
+);
+
+CREATE TABLE public.community_inbox_item (
+    subscription_id uuid NOT NULL,
+    source_seq bigint NOT NULL,
+    target_kind text NOT NULL,
+    scope_id uuid NOT NULL,
+    occurred_at bigint NOT NULL,
+    CONSTRAINT community_inbox_item_target_kind_check CHECK ((target_kind = ANY (ARRAY['discussion_topic'::text, 'game_thread'::text])))
+);
+
+ALTER TABLE ONLY public.community_subscription
+    ADD CONSTRAINT community_subscription_pkey PRIMARY KEY (subscription_id);
+ALTER TABLE ONLY public.community_subscription
+    ADD CONSTRAINT community_subscription_member_target_key UNIQUE (principal_user_id, target_kind, scope_id);
+ALTER TABLE ONLY public.community_subscription_period
+    ADD CONSTRAINT community_subscription_period_pkey PRIMARY KEY (subscription_id, started_seq);
+ALTER TABLE ONLY public.community_inbox_item
+    ADD CONSTRAINT community_inbox_item_pkey PRIMARY KEY (subscription_id, source_seq);
+
+CREATE INDEX community_subscription_member_idx ON public.community_subscription USING btree (principal_user_id, active, updated_seq DESC);
+CREATE INDEX community_subscription_target_idx ON public.community_subscription USING btree (target_kind, scope_id, active);
+CREATE INDEX community_subscription_period_lookup_idx ON public.community_subscription_period USING btree (subscription_id, started_seq, ended_seq);
+CREATE INDEX community_inbox_item_page_idx ON public.community_inbox_item USING btree (subscription_id, source_seq DESC);
+
+ALTER TABLE ONLY public.community_subscription_period
+    ADD CONSTRAINT community_subscription_period_subscription_id_fkey FOREIGN KEY (subscription_id) REFERENCES public.community_subscription(subscription_id) ON DELETE CASCADE;
+ALTER TABLE ONLY public.community_inbox_item
+    ADD CONSTRAINT community_inbox_item_subscription_id_fkey FOREIGN KEY (subscription_id) REFERENCES public.community_subscription(subscription_id) ON DELETE CASCADE;
+
+
+--
 -- PostgreSQL database dump complete
 --

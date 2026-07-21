@@ -37,6 +37,16 @@ test("canonical discussion topic keeps area scope, bylines, and older-post curso
           next_before_seq: 20,
         });
       }
+      if (url === `/subscriptions/discussion_topic/${topic}`) {
+        return Response.json({
+          target_kind: "discussion_topic",
+          scope_id: topic,
+          subscribed: true,
+          read_through_seq: 40,
+          latest_source_seq: 80,
+          unread_count: 1,
+        });
+      }
       assert.equal(url, "/profiles/me/editor");
       return Response.json({ handle: "member_a", visibility: "public" });
     },
@@ -46,11 +56,13 @@ test("canonical discussion topic keeps area scope, bylines, and older-post curso
   assert.deepEqual(requests, [
     `/discussions/areas/general/topics/${topic}?limit=50&before_seq=41`,
     "/profiles/me/editor",
+    `/subscriptions/discussion_topic/${topic}`,
   ]);
   assert.equal(data.discussion.thread.posts[0].author.handle, "member_a");
   assert.equal(data.discussion.thread.next_before_seq, 20);
   assert.equal(data.discussion.canPost, true);
   assert.equal(data.discussion.canModerate, true);
+  assert.equal(data.discussion.subscription.unread_count, 1);
 });
 
 test("canonical discussion topic keeps wrong-area and hidden responses unavailable", async () => {
@@ -88,4 +100,25 @@ test("discussion report action maps the canonical topic post and returns a priva
     details: "context",
   });
   assert.equal(result.reportId, "receipt-42");
+});
+
+test("discussion watch action uses the typed member-target endpoint", async () => {
+  let mutation;
+  const result = await actions.watch({
+    cookies: { get: () => "member-session" },
+    params: { slug: "general", topic },
+    request: new Request("http://localhost/discussions/general/t/topic?/watch", {
+      method: "POST",
+      body: new URLSearchParams({ watch_action: "subscribe" }),
+    }),
+    fetch: async (url, options) => {
+      mutation = { url, method: options.method };
+      return Response.json({ subscribed: true });
+    },
+  });
+  assert.deepEqual(mutation, {
+    url: `/subscriptions/discussion_topic/${topic}`,
+    method: "PUT",
+  });
+  assert.equal(result.subscribed, true);
 });

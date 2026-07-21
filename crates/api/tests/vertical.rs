@@ -17,11 +17,12 @@ use tempfile::TempDir;
 use tower::ServiceExt;
 use uuid::Uuid;
 use wire::{
-    ClientEnvelope, ClientMsg, Command, CommandMsg, DiscussionThreadPage, DiscussionTopicPage,
-    GameIndexPage, ModerationCaseDetail, ModerationCasePage, ModerationReportReceipt,
-    PlayerInvestigationResult, PlayerNotification, ProfileEditor, ProjectionDelta, PublicProfile,
-    PublicSearchPage, RejectCode, RejectMsg, ServerEnvelope, ServerMsg, SlotLifecycle,
-    SubmitPostMedia, ThreadPage, VoteTarget, PROTOCOL_VERSION,
+    ClientEnvelope, ClientMsg, Command, CommandMsg, CommunityInboxPage, DiscussionThreadPage,
+    DiscussionTopic, DiscussionTopicPage, GameIndexPage, ModerationCaseDetail, ModerationCasePage,
+    ModerationReportReceipt, PlayerInvestigationResult, PlayerNotification, ProfileEditor,
+    ProjectionDelta, PublicProfile, PublicSearchPage, RejectCode, RejectMsg, ServerEnvelope,
+    ServerMsg, SlotLifecycle, SubmitPostMedia, SubscriptionTargetState, ThreadPage, VoteTarget,
+    PROTOCOL_VERSION,
 };
 
 fn router(pool: sqlx::PgPool) -> axum::Router {
@@ -4732,6 +4733,190 @@ async fn discussion_and_public_search_api_enforce_visibility_sessions_and_modera
     )
     .unwrap();
     assert!(hidden_search.results.is_empty());
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn subscription_api_keeps_member_inboxes_private_and_cursors_monotonic(pool: sqlx::PgPool) {
+    let app = router_with_dev_auth(pool.clone());
+    let (author_token, author_principal) =
+        create_media_upload_account_session(&app, "subscription-author").await;
+    let (watcher_token, watcher_principal) =
+        create_media_upload_account_session(&app, "subscription-watcher").await;
+    let profile_response = post_bearer_json(
+        &app,
+        "/profiles",
+        serde_json::json!({
+            "handle": "subscription_author",
+            "display_name": "Subscription Author",
+            "bio": "Writes watched topics",
+            "visibility": "public"
+        }),
+        &author_token,
+    )
+    .await;
+    assert_eq!(profile_response.status(), StatusCode::CREATED);
+
+    let area = Uuid::new_v4();
+    projections::append_discussion_and_project(
+        &pool,
+        area,
+        &[eventstore::EventInput::new(
+            community::AREA_CREATED,
+            1,
+            serde_json::json!({
+                "slug": "subscription-api",
+                "title": "Subscription API",
+                "description": "Watched updates"
+            }),
+            eventstore::ActorId::User("moderator".into()),
+            1,
+        )],
+    )
+    .await
+    .unwrap();
+    let topic_response = post_bearer_json(
+        &app,
+        "/discussions/areas/subscription-api/topics",
+        serde_json::json!({ "title": "API watch", "body": "Opening" }),
+        &author_token,
+    )
+    .await;
+    assert_eq!(topic_response.status(), StatusCode::CREATED);
+    let topic: DiscussionTopic = serde_json::from_slice(
+        &to_bytes(topic_response.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+
+    let subscription_uri = format!("/subscriptions/discussion_topic/{}", topic.topic);
+    let missing = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("PUT")
+                .uri(&subscription_uri)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(missing.status(), StatusCode::UNAUTHORIZED);
+    let subscribed = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("PUT")
+                .uri(&subscription_uri)
+                .header("authorization", format!("Bearer {watcher_token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(subscribed.status(), StatusCode::OK);
+    let subscribed: SubscriptionTargetState =
+        serde_json::from_slice(&to_bytes(subscribed.into_body(), usize::MAX).await.unwrap())
+            .unwrap();
+    assert!(subscribed.subscribed);
+    assert_eq!(subscribed.unread_count, 0);
+
+    let reply = post_bearer_json(
+        &app,
+        &format!("/discussions/topics/{}/posts", topic.topic),
+        serde_json::json!({ "body": "Watched API reply" }),
+        &author_token,
+    )
+    .await;
+    assert_eq!(reply.status(), StatusCode::CREATED);
+    let inbox = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/inbox")
+                .header("authorization", format!("Bearer {watcher_token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(inbox.status(), StatusCode::OK);
+    let inbox: CommunityInboxPage =
+        serde_json::from_slice(&to_bytes(inbox.into_body(), usize::MAX).await.unwrap()).unwrap();
+    assert_eq!(inbox.unread_count, 1);
+    assert_eq!(inbox.items.len(), 1);
+    assert!(inbox.items[0]
+        .href
+        .contains("/discussions/subscription-api/t/"));
+    assert!(!serde_json::to_string(&inbox)
+        .unwrap()
+        .contains(&watcher_principal));
+    assert!(!serde_json::to_string(&inbox)
+        .unwrap()
+        .contains(&author_principal));
+
+    let author_inbox = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/inbox")
+                .header("authorization", format!("Bearer {author_token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let author_inbox: CommunityInboxPage = serde_json::from_slice(
+        &to_bytes(author_inbox.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert!(author_inbox.items.is_empty());
+
+    let source_seq = inbox.items[0].source_seq;
+    let read = post_bearer_json(
+        &app,
+        &format!("{subscription_uri}/read"),
+        serde_json::json!({ "read_through_seq": source_seq }),
+        &watcher_token,
+    )
+    .await;
+    assert_eq!(read.status(), StatusCode::OK);
+    let read: SubscriptionTargetState =
+        serde_json::from_slice(&to_bytes(read.into_body(), usize::MAX).await.unwrap()).unwrap();
+    assert_eq!(read.unread_count, 0);
+    let repeated = post_bearer_json(
+        &app,
+        &format!("{subscription_uri}/read"),
+        serde_json::json!({ "read_through_seq": source_seq }),
+        &watcher_token,
+    )
+    .await;
+    assert_eq!(repeated.status(), StatusCode::BAD_REQUEST);
+
+    let unsubscribed = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("DELETE")
+                .uri(&subscription_uri)
+                .header("authorization", format!("Bearer {watcher_token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(unsubscribed.status(), StatusCode::OK);
+    let unsubscribed: SubscriptionTargetState = serde_json::from_slice(
+        &to_bytes(unsubscribed.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert!(!unsubscribed.subscribed);
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]

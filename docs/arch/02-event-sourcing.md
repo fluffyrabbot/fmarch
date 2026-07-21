@@ -155,6 +155,8 @@ Examples:
 | `public_search_document` | public-only weighted search documents with canonical links across discussions, profiles, games, and public main-thread posts |
 | `moderation_case` / `moderation_report` / `moderation_case_history` | durable public-content reports, current GlobalMod review state, and append-only reasoned action history |
 | `moderation_target_state` | reversible public visibility overlay for individually moderated discussion and main-thread posts |
+| `community_subscription` / `community_subscription_period` | one member/target watch stream, current membership, monotonic read cursor, and historical active intervals |
+| `community_inbox_item` | privacy-safe per-member references to public posts published during active watch intervals |
 
 `game_index` folds `GameCreated`, `GameStarted`, `PhaseAdvanced`, and `GameCompleted`
 synchronously with the game stream. Setup rows remain rebuildable but are excluded from the
@@ -204,6 +206,22 @@ hide, dismiss, and restore commands use the case's expected version. Hide and re
 discussion and game-thread reads exclude only targets whose overlay is hidden. The original post
 and case events remain immutable, so rebuilding a case reproduces both audit history and final
 public/search visibility. Private-channel targets are rejected before a case can open.
+
+Community watches are also event-sourced. Each authenticated member and public target pair owns
+one durable subscription stream with explicit enable, disable, and read-cursor events. The current
+projection keeps one membership row plus append-only active periods, so unsubscribe/resubscribe
+gaps remain meaningful during replay. A watch begins at the target's current latest public post;
+it does not manufacture historical unread work. Read advancement is strictly monotonic and cannot
+move beyond the target's current public sequence.
+
+Public discussion and `main` game-thread post folds synchronously fan out a reference into
+`community_inbox_item` for every subscription period active at that global event sequence. Authors
+do not receive their own update. Inbox rows contain no post body, author identity, credential
+principal, private audience, or engagement signal: presentation resolves only the public target
+title and canonical post URL. Topic/game visibility and `moderation_target_state` are applied at
+read time, so hiding a post immediately suppresses its inbox entry and restoring it reveals the
+same immutable reference. Topic, game, and subscription rebuilds use the historical periods to
+reproduce exactly the updates that existed while each watch was active.
 
 Completed game streams can be exported as versioned `StreamExport` manifests. The checksum covers
 the canonical manifest content, stream sequence positions must be contiguous, and imports refuse

@@ -73,6 +73,14 @@ export type DiscussionPost = { source_seq: bigint, author: DiscussionAuthor | nu
 
 export type DiscussionThreadPage = { area: DiscussionArea, topic: DiscussionTopic, posts: Array<DiscussionPost>, next_before_seq: bigint | null, };
 
+export type SubscriptionTargetState = { target_kind: string, scope_id: string, subscribed: boolean, read_through_seq: bigint, latest_source_seq: bigint, unread_count: bigint, };
+
+export type AdvanceSubscriptionReadRequest = { read_through_seq: bigint, };
+
+export type CommunityInboxItem = { target_kind: string, scope_id: string, source_seq: bigint, title: string, href: string, occurred_at: bigint, unread: boolean, subscribed: boolean, };
+
+export type CommunityInboxPage = { items: Array<CommunityInboxItem>, unread_count: bigint, next_cursor: bigint | null, };
+
 export type ModerationReportReceipt = { report_id: string, status: string, submitted_at: bigint, };
 
 export type ModerationCase = { case_id: string, target_kind: string, scope_id: string, source_seq: bigint, target_href: string, target_body: string, status: string, report_count: bigint, opened_at: bigint, updated_at: bigint, updated_seq: bigint, action_reason: string | null, };

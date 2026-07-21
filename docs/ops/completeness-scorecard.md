@@ -17,7 +17,7 @@ count is treated as product progress.
 
 | Execution class | Complete | Partial | Open | Blocked | Deferred | Total |
 |---|---:|---:|---:|---:|---:|---:|
-| code | 30 | 0 | 1 | 0 | 0 | 31 |
+| code | 31 | 0 | 1 | 0 | 0 | 32 |
 | external-evidence | 0 | 0 | 0 | 6 | 0 | 6 |
 | human | 0 | 0 | 1 | 1 | 0 | 2 |
 | optional | 0 | 0 | 0 | 0 | 1 | 1 |
@@ -28,22 +28,22 @@ Overall release closure complete: **no**.
 
 ## Next buildable coding slice
 
-### Community subscriptions and unread inbox `product.community.subscriptions`
+### Personal community mute controls `product.community.member-mutes`
 
-Build a typed subscription and unread-inbox vertical for public discussion topics and public game threads: authenticated subscribe/unsubscribe commands, one durable subscription stream per member and target, monotonic read cursors, synchronous public-post notification fan-out, moderation-aware suppression, capability-safe inbox/watch controls, and seeded two-member Chromium proof.
+Build private, reversible member-to-profile mute controls: typed mute/unmute events, one durable relationship stream per member and public profile, a current-mute projection and bounded list, consistent personalized suppression across discussion threads, public search, and watched-update inboxes, plus profile/inbox controls and seeded two-member Chromium proof.
 
-Owned paths: `crates/community/`, `crates/projections/`, `crates/api/`, `crates/wire/`, `frontend/src/routes/inbox/`, `frontend/src/routes/discussions/`, `frontend/src/routes/games/`, `tools/`, `docs/arch/02-event-sourcing.md`.
+Owned paths: `crates/community/`, `crates/projections/`, `crates/api/`, `crates/wire/`, `frontend/src/routes/u/`, `frontend/src/routes/inbox/`, `frontend/src/routes/discussions/`, `frontend/src/routes/search/`, `tools/`, `docs/arch/02-event-sourcing.md`.
 
 Proof:
 
-- `DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p community -p projections -p api subscription -- --test-threads=1`
+- `DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p community -p projections -p api member_mute -- --test-threads=1`
 - `npm run test:frontend-contract`
 - `npm run test:completeness-scorecard`
 
 Explicit non-claims:
 
-- No email, SMS, mobile push, or hosted delivery guarantee.
-- No private-channel watches until audience-scoped notification retention is modeled separately.
+- No global content removal, moderation action, or effect on other members' views.
+- No direct-message, mention, or private-channel blocking semantics before those interaction surfaces exist.
 - No recommendation ranking, engagement optimization, or release-readiness claim from local proof.
 
 ## Locally proven foundation
@@ -103,7 +103,8 @@ Explicit non-claims:
 | complete | User profiles<br>`product.community.profiles` | `product.identity.registration` | A user can view and edit an authorization-safe profile, with durable projection state and browser proof. | Complete. | source: `crates/projections/migrations/0001_baseline.sql`<br>source: `frontend/src/routes/u/[handle]/+page.svelte`<br>source: `docs/arch/02-event-sourcing.md`<br>command: `npm run test:dev-test-game-profile:local`<br>artifact: `target/profile-role-proof/profile-proof.json`<br>Profiles use durable public and owner-only projections, enabled-account editing, explicit public or members-only visibility, and a seeded Chromium proof. |
 | complete | Public community search<br>`product.community.search` | `product.community.discussions`<br>`product.community.profiles`<br>`product.community.game-index` | Users can search public discussions, public game threads, profiles, and games through visibility-safe ranked results with stable pagination and canonical result links. | Complete. | source: `crates/projections/migrations/0001_baseline.sql`<br>source: `frontend/src/routes/search/+page.svelte`<br>source: `frontend/src/routes/games/[game]/+page.svelte`<br>source: `docs/arch/02-event-sourcing.md`<br>command: `npm run test:dev-test-game-search:local`<br>artifact: `target/public-search-role-proof/public-search-proof.json`<br>A rebuildable PostgreSQL full-text projection searches visible discussions, public profiles, active/completed games, and public main-thread posts with weighted rank, stable cursor pagination, typed filters, excerpts, canonical destinations, and synchronous visibility removal. |
 | complete | Community moderation operations<br>`product.community.moderation-operations` | `product.community.discussions`<br>`product.community.search`<br>`product.identity.session-lifecycle` | Members can report public discussion and game-thread content into a durable deduplicated queue, and GlobalMod operators can review, reason, action, restore, and audit those reports through capability-safe routes. | Complete. | source: `crates/projections/migrations/0001_baseline.sql`<br>source: `frontend/src/routes/moderation/+page.svelte`<br>source: `docs/arch/02-event-sourcing.md`<br>command: `npm run test:dev-test-game-community-moderation:local`<br>artifact: `target/community-moderation-role-proof/community-moderation-proof.json`<br>Authenticated members can report public discussion and game-thread posts into typed moderation-case streams with active-report deduplication and bounded daily submissions. GlobalMod operators have a capability-safe queue, reporter evidence, reasoned hide/dismiss/restore transitions, append-only history, and synchronous public-thread/search visibility updates. |
-| open | Community subscriptions and unread inbox<br>`product.community.subscriptions` | `product.community.discussions`<br>`product.community.search`<br>`product.community.moderation-operations`<br>`product.identity.session-lifecycle` | Authenticated members can subscribe and unsubscribe to public topics and public game threads, receive a durable privacy-safe in-app update inbox, and advance a per-subscription read cursor without polling private audiences or exposing credential principals. | Remaining: Add typed subscription streams, per-target membership and read-cursor projections, synchronous in-app update fan-out from public posts, an authenticated inbox and watch controls, moderation-aware suppression, and seeded member Chromium proof. | source: `docs/arch/02-event-sourcing.md`<br>Public discussions and game threads are discoverable and reportable, but members cannot subscribe to a conversation, receive durable in-app updates, or resume from a personal read position. |
+| complete | Community subscriptions and unread inbox<br>`product.community.subscriptions` | `product.community.discussions`<br>`product.community.search`<br>`product.community.moderation-operations`<br>`product.identity.session-lifecycle` | Authenticated members can subscribe and unsubscribe to public topics and public game threads, receive a durable privacy-safe in-app update inbox, and advance a per-subscription read cursor without polling private audiences or exposing credential principals. | Complete. | source: `crates/projections/migrations/0001_baseline.sql`<br>source: `frontend/src/routes/inbox/+page.svelte`<br>source: `docs/arch/02-event-sourcing.md`<br>command: `npm run test:dev-test-game-community-subscriptions:local`<br>artifact: `target/community-subscription-role-proof/community-subscription-proof.json`<br>Authenticated members can watch public discussion topics and public game threads through one durable member-target stream, receive privacy-safe in-app update references only for active watch periods, and advance a monotonic per-watch read cursor. Fanout is synchronous and rebuildable, author-self updates are excluded, and moderation hide/restore state suppresses and restores inbox entries without mutating history. |
+| open | Personal community mute controls<br>`product.community.member-mutes` | `product.community.profiles`<br>`product.community.discussions`<br>`product.community.search`<br>`product.community.subscriptions`<br>`product.identity.session-lifecycle` | Authenticated members can mute and unmute public profiles through a durable private relationship stream, inspect their bounded mute list, and have muted authors consistently suppressed from personalized discussion, search, and inbox reads without changing global visibility or exposing credential principals. | Remaining: Add typed member-profile mute streams, a private current-mute projection, personalized public-read overlays, profile and inbox controls, bounded list pagination, rebuild coverage, and two-member browser proof. | source: `docs/arch/02-event-sourcing.md`<br>Public community reads are globally moderated, but a member cannot create a reversible personal boundary around another public profile's contributions without affecting anyone else's view. |
 
 ## Archival and export
 

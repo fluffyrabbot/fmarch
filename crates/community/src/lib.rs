@@ -17,6 +17,151 @@ pub const MODERATION_REPORT_SUBMITTED: &str = "ModerationReportSubmitted";
 pub const MODERATION_CONTENT_HIDDEN: &str = "ModerationContentHidden";
 pub const MODERATION_CASE_DISMISSED: &str = "ModerationCaseDismissed";
 pub const MODERATION_CONTENT_RESTORED: &str = "ModerationContentRestored";
+pub const SUBSCRIPTION_ENABLED: &str = "CommunitySubscriptionEnabled";
+pub const SUBSCRIPTION_DISABLED: &str = "CommunitySubscriptionDisabled";
+pub const SUBSCRIPTION_READ_ADVANCED: &str = "CommunitySubscriptionReadAdvanced";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SubscriptionTargetKind {
+    DiscussionTopic,
+    GameThread,
+}
+
+impl SubscriptionTargetKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::DiscussionTopic => "discussion_topic",
+            Self::GameThread => "game_thread",
+        }
+    }
+
+    pub fn parse(value: &str) -> Result<Self, CommunityReject> {
+        match value.trim() {
+            "discussion_topic" => Ok(Self::DiscussionTopic),
+            "game_thread" => Ok(Self::GameThread),
+            _ => Err(CommunityReject::InvalidSubscriptionTarget),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SubscriptionTarget {
+    pub kind: SubscriptionTargetKind,
+    pub scope_id: Uuid,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SubscriptionState {
+    pub subscription_id: Uuid,
+    pub principal_user_id: String,
+    pub target: SubscriptionTarget,
+    pub active: bool,
+    pub read_through_seq: i64,
+    pub version: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SubscriptionCommand {
+    Subscribe {
+        target: SubscriptionTarget,
+        initial_read_through_seq: i64,
+    },
+    Unsubscribe,
+    AdvanceRead {
+        read_through_seq: i64,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SubscriptionEvent {
+    Enabled {
+        target: SubscriptionTarget,
+        initial_read_through_seq: i64,
+    },
+    Disabled,
+    ReadAdvanced {
+        read_through_seq: i64,
+    },
+}
+
+impl SubscriptionEvent {
+    pub fn kind(&self) -> &'static str {
+        match self {
+            Self::Enabled { .. } => SUBSCRIPTION_ENABLED,
+            Self::Disabled => SUBSCRIPTION_DISABLED,
+            Self::ReadAdvanced { .. } => SUBSCRIPTION_READ_ADVANCED,
+        }
+    }
+
+    pub fn payload(&self) -> serde_json::Value {
+        match self {
+            Self::Enabled {
+                target,
+                initial_read_through_seq,
+            } => serde_json::json!({
+                "target": target,
+                "initial_read_through_seq": initial_read_through_seq,
+            }),
+            Self::Disabled => serde_json::json!({}),
+            Self::ReadAdvanced { read_through_seq } => {
+                serde_json::json!({ "read_through_seq": read_through_seq })
+            }
+        }
+    }
+}
+
+pub fn decide_subscription(
+    state: Option<&SubscriptionState>,
+    command: SubscriptionCommand,
+) -> Result<Vec<SubscriptionEvent>, CommunityReject> {
+    match (state, command) {
+        (
+            None,
+            SubscriptionCommand::Subscribe {
+                target,
+                initial_read_through_seq,
+            },
+        ) => Ok(vec![SubscriptionEvent::Enabled {
+            target,
+            initial_read_through_seq,
+        }]),
+        (
+            Some(state),
+            SubscriptionCommand::Subscribe {
+                target,
+                initial_read_through_seq,
+            },
+        ) => {
+            if state.active {
+                return Err(CommunityReject::AlreadySubscribed);
+            }
+            if state.target != target {
+                return Err(CommunityReject::InvalidSubscriptionTarget);
+            }
+            Ok(vec![SubscriptionEvent::Enabled {
+                target,
+                initial_read_through_seq: initial_read_through_seq.max(state.read_through_seq),
+            }])
+        }
+        (None, _) => Err(CommunityReject::SubscriptionNotFound),
+        (Some(state), SubscriptionCommand::Unsubscribe) => {
+            if !state.active {
+                return Err(CommunityReject::NotSubscribed);
+            }
+            Ok(vec![SubscriptionEvent::Disabled])
+        }
+        (Some(state), SubscriptionCommand::AdvanceRead { read_through_seq }) => {
+            if !state.active {
+                return Err(CommunityReject::NotSubscribed);
+            }
+            if read_through_seq <= state.read_through_seq {
+                return Err(CommunityReject::ReadCursorMustAdvance);
+            }
+            Ok(vec![SubscriptionEvent::ReadAdvanced { read_through_seq }])
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -507,6 +652,16 @@ pub enum CommunityReject {
     ModerationTargetHidden,
     #[error("moderation action is invalid for the current case status")]
     InvalidModerationTransition,
+    #[error("subscription target must be a public discussion_topic or game_thread")]
+    InvalidSubscriptionTarget,
+    #[error("subscription was not found")]
+    SubscriptionNotFound,
+    #[error("member is already subscribed")]
+    AlreadySubscribed,
+    #[error("member is not subscribed")]
+    NotSubscribed,
+    #[error("subscription read cursor must advance monotonically")]
+    ReadCursorMustAdvance,
 }
 
 #[cfg(test)]
@@ -628,5 +783,66 @@ mod tests {
             ),
             Err(CommunityReject::InvalidModerationTransition)
         );
+    }
+
+    #[test]
+    fn subscription_membership_and_read_cursor_are_explicit() {
+        let target = SubscriptionTarget {
+            kind: SubscriptionTargetKind::DiscussionTopic,
+            scope_id: Uuid::from_u128(31),
+        };
+        assert!(matches!(
+            decide_subscription(
+                None,
+                SubscriptionCommand::Subscribe {
+                    target: target.clone(),
+                    initial_read_through_seq: 8,
+                },
+            ),
+            Ok(events) if matches!(events.as_slice(), [SubscriptionEvent::Enabled { initial_read_through_seq: 8, .. }])
+        ));
+
+        let mut state = SubscriptionState {
+            subscription_id: Uuid::from_u128(32),
+            principal_user_id: "member-a".into(),
+            target: target.clone(),
+            active: true,
+            read_through_seq: 8,
+            version: 1,
+        };
+        assert!(matches!(
+            decide_subscription(
+                Some(&state),
+                SubscriptionCommand::AdvanceRead {
+                    read_through_seq: 11,
+                },
+            ),
+            Ok(events) if matches!(events.as_slice(), [SubscriptionEvent::ReadAdvanced { read_through_seq: 11 }])
+        ));
+        assert_eq!(
+            decide_subscription(
+                Some(&state),
+                SubscriptionCommand::AdvanceRead {
+                    read_through_seq: 8
+                },
+            ),
+            Err(CommunityReject::ReadCursorMustAdvance)
+        );
+        assert!(matches!(
+            decide_subscription(Some(&state), SubscriptionCommand::Unsubscribe),
+            Ok(events) if matches!(events.as_slice(), [SubscriptionEvent::Disabled])
+        ));
+
+        state.active = false;
+        assert!(matches!(
+            decide_subscription(
+                Some(&state),
+                SubscriptionCommand::Subscribe {
+                    target,
+                    initial_read_through_seq: 14,
+                },
+            ),
+            Ok(events) if matches!(events.as_slice(), [SubscriptionEvent::Enabled { initial_read_through_seq: 14, .. }])
+        ));
     }
 }

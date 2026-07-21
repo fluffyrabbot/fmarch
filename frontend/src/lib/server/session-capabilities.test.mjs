@@ -148,6 +148,9 @@ test("session context covers game, public search, moderation, community, admin, 
   assert.deepEqual(sessionContextFromRequest(requestFor("/moderation?status=open")), {
     kind: "community",
   });
+  assert.deepEqual(sessionContextFromRequest(requestFor("/inbox")), {
+    kind: "community",
+  });
   assert.deepEqual(sessionContextFromRequest(requestFor("/auth/account/security")), {
     kind: "account",
   });

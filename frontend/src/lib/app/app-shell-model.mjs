@@ -19,7 +19,7 @@ export const APP_SHELL_CONTRACT = Object.freeze({
   topbarStickyTopPx: 0,
   topbarBlockSizePx: 76,
   stickyRailGapPx: 22,
-  surfaceOrder: Object.freeze(["board", "community", "search", "player", "moderator", "admin"]),
+  surfaceOrder: Object.freeze(["board", "community", "search", "inbox", "player", "moderator", "admin"]),
   navTestIdPrefix: "role-nav",
   minTouchTargetPx: 44,
 });
@@ -92,6 +92,14 @@ export function buildAppShell({
       active: activeSurface === "search",
       allowed: true,
       capabilityLabel: "Public",
+    }),
+    surfaceItem({
+      id: "inbox",
+      label: "Inbox",
+      href: "/inbox",
+      active: activeSurface === "inbox",
+      allowed: typeof principalUserId === "string" && principalUserId.trim() !== "",
+      capabilityLabel: "Authenticated account",
     }),
     surfaceItem({
       id: "player",
@@ -445,6 +453,7 @@ function summarizeCapabilityKinds(capabilityKinds) {
 }
 
 const NAV_ACCESS_LABELS = Object.freeze({
+  inbox: "Your updates",
   board: "Public",
   community: "Public",
   player: "Your seat",
@@ -453,6 +462,7 @@ const NAV_ACCESS_LABELS = Object.freeze({
 });
 
 const NAV_BLOCKED_LABELS = Object.freeze({
+  inbox: "Sign in",
   player: "Players only",
   moderator: "Hosts only",
   admin: "Operators only",
@@ -518,6 +528,13 @@ function classifyRoutePath(path) {
     return Object.freeze({
       path: normalizedPath,
       activeSurface: "moderator",
+      game: null,
+    });
+  }
+  if (normalizedPath.startsWith("/inbox")) {
+    return Object.freeze({
+      path: normalizedPath,
+      activeSurface: "inbox",
       game: null,
     });
   }

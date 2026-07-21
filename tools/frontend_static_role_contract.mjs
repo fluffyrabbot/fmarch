@@ -216,6 +216,9 @@ function proveBoardSurface() {
     data.shell.surfaces.map((item) => [item.id, item.navigation]),
     [
       ["board", "link"],
+      ["community", "link"],
+      ["search", "link"],
+      ["inbox", "link"],
       ["player", "link"],
       ["moderator", "blocked"],
       ["admin", "blocked"],
@@ -224,6 +227,7 @@ function proveBoardSurface() {
   assert.deepEqual(
     data.board.games[0].actions.map((action) => [action.id, action.navigation]),
     [
+      ["public-thread", "link"],
       ["player", "link"],
       ["moderator", "blocked"],
     ],

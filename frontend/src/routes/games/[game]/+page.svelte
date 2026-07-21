@@ -21,6 +21,17 @@
     <section class="fm-panel public-game-summary" data-testid="public-game-summary">
       <p><strong>Status:</strong> {data.publicGame.game.status}</p>
       <p><strong>Phase:</strong> {data.publicGame.game.phase_id ?? "Complete"}</p>
+      {#if data.publicGame.subscription !== null}
+        <form method="POST" action="?/watch" data-testid="public-game-watch-control">
+          <input type="hidden" name="watch_action" value={data.publicGame.subscription.subscribed ? "unsubscribe" : "subscribe"} />
+          <button class="fm-touch-button fm-touch-button--secondary" type="submit" data-testid="public-game-watch-submit">
+            {data.publicGame.subscription.subscribed ? "Stop watching" : "Watch this game"}
+          </button>
+        </form>
+        <a href="/inbox" class="fm-touch-button fm-touch-button--secondary" data-testid="public-game-inbox-link">
+          Inbox{data.publicGame.subscription.unread_count > 0 ? ` (${data.publicGame.subscription.unread_count})` : ""}
+        </a>
+      {/if}
     </section>
     <section class="fm-panel" aria-label="Public main thread" data-testid="public-game-thread">
       {#if data.publicGame.posts.length === 0}
@@ -53,6 +64,9 @@
     </section>
     {#if form?.id === "public-game-report"}
       <p role={form.state === "reject" ? "alert" : "status"} class="fm-panel" data-testid="public-game-report-result">{form.message}{form.reportId ? ` Receipt ${form.reportId}` : ""}</p>
+    {/if}
+    {#if form?.id === "public-game-watch"}
+      <p role={form.state === "reject" ? "alert" : "status"} class="fm-panel" data-testid="public-game-watch-result">{form.message}</p>
     {/if}
   {/if}
 </main>

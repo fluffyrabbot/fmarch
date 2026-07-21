@@ -100,7 +100,7 @@ export function sessionContextFromRequest(request) {
   if (/^\/admin(?:\/.*)?$/.test(pathname)) {
     return Object.freeze({ kind: "admin" });
   }
-  if (/^\/(?:community|discussions|search|games|moderation)(?:\/.*)?$/.test(pathname)) {
+  if (/^\/(?:community|discussions|search|games|moderation|inbox)(?:\/.*)?$/.test(pathname)) {
     return Object.freeze({ kind: "community" });
   }
   if (/^\/u\/[^/]+(?:\/.*)?$/.test(pathname) || /^\/profile\/edit\/?$/.test(pathname)) {

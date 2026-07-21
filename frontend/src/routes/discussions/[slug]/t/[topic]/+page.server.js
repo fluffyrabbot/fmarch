@@ -14,6 +14,15 @@ export async function load({ params, locals, cookies, fetch, url }) {
   );
   const thread = response.ok ? await response.json().catch(() => null) : null;
   const profile = await loadCurrentProfile({ cookies, fetch, apiBaseUrl });
+  const subscription = thread === null
+    ? null
+    : await loadSubscription({
+        cookies,
+        fetch,
+        apiBaseUrl,
+        targetKind: "discussion_topic",
+        scopeId: params.topic,
+      });
   return {
     shellOwner: "layout",
     shell: buildAppShell({
@@ -33,6 +42,7 @@ export async function load({ params, locals, cookies, fetch, url }) {
       thread,
       canPost: profile !== null,
       hasSession: typeof locals.principalUserId === "string",
+      subscription,
       canModerate: hasCapability({ capabilities: locals.resolvedCapabilities, kind: "GlobalMod" })
         || hasCapability({ capabilities: locals.resolvedCapabilities, kind: "GlobalAdmin" }),
     },
@@ -40,6 +50,33 @@ export async function load({ params, locals, cookies, fetch, url }) {
 }
 
 export const actions = {
+  watch: async ({ cookies, fetch, params, request }) => {
+    const form = await request.formData();
+    const action = text(form.get("watch_action"));
+    if (!["subscribe", "unsubscribe"].includes(action)) {
+      return fail(400, { id: "discussion-watch", state: "reject", message: "Invalid watch action" });
+    }
+    const response = await mutation({
+      cookies,
+      fetch,
+      path: `/subscriptions/discussion_topic/${encodeURIComponent(params.topic)}`,
+      method: action === "subscribe" ? "PUT" : "DELETE",
+    });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) {
+      return fail([400, 401, 404, 409].includes(response.status) ? response.status : 502, {
+        id: "discussion-watch",
+        state: "reject",
+        message: payload?.message ?? "Unable to update this watch",
+      });
+    }
+    return {
+      id: "discussion-watch",
+      state: "ack",
+      subscribed: payload.subscribed === true,
+      message: payload.subscribed === true ? "Watching this topic" : "Topic watch removed",
+    };
+  },
   report: async ({ cookies, fetch, params, request }) => {
     const form = await request.formData();
     const sourceSeq = optionalSequence(form.get("source_seq"));
@@ -124,20 +161,30 @@ async function loadCurrentProfile({ cookies, fetch, apiBaseUrl }) {
   return profile?.visibility === "public" ? profile : null;
 }
 
-async function mutation({ cookies, fetch, path, body }) {
+async function loadSubscription({ cookies, fetch, apiBaseUrl, targetKind, scopeId }) {
+  const token = cookies.get(SESSION_COOKIE_NAME);
+  if (typeof token !== "string" || token.trim() === "") return null;
+  const response = await fetch(
+    `${apiBaseUrl}/subscriptions/${encodeURIComponent(targetKind)}/${encodeURIComponent(scopeId)}`,
+    { headers: { authorization: `Bearer ${token}`, accept: "application/json" } },
+  );
+  return response.ok ? response.json().catch(() => null) : null;
+}
+
+async function mutation({ cookies, fetch, path, body = undefined, method = "POST" }) {
   const token = cookies.get(SESSION_COOKIE_NAME);
   if (typeof token !== "string" || token.trim() === "") {
     return { ok: false, status: 401, json: async () => null };
   }
   const apiBaseUrl = process.env.FMARCH_API_BASE_URL ?? "";
   return fetch(`${apiBaseUrl}${path}`, {
-    method: "POST",
+    method,
     headers: {
       authorization: `Bearer ${token}`,
       "content-type": "application/json",
       accept: "application/json",
     },
-    body: JSON.stringify(body),
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
 }
 

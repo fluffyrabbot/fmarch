@@ -78,6 +78,7 @@ test("app shell builds role navigation from resolved capabilities", () => {
       ["board", true, "role-nav-board", 44],
       ["community", true, "role-nav-community", 44],
       ["search", true, "role-nav-search", 44],
+      ["inbox", true, "role-nav-inbox", 44],
       ["player", true, "role-nav-player", 44],
       ["moderator", false, "role-nav-moderator", 44],
       ["admin", false, "role-nav-admin", 44],
@@ -87,11 +88,12 @@ test("app shell builds role navigation from resolved capabilities", () => {
   assert.equal(shell.surfaces[1].href, "/community");
   assert.equal(shell.surfaces[1].navigation, "link");
   assert.equal(shell.surfaces[2].href, "/search");
-  assert.equal(shell.surfaces[3].href, "/g/midsummer");
-  assert.equal(shell.surfaces[4].navigation, "blocked");
-  assert.equal(shell.surfaces[4].ariaDisabled, "true");
-  assert.equal(shell.surfaces[4].blockedReason, "Requires GlobalAdmin(midsummer) or GlobalMod(midsummer) or HostOf(midsummer) or CohostOf(midsummer)");
+  assert.equal(shell.surfaces[3].href, "/inbox");
+  assert.equal(shell.surfaces[4].href, "/g/midsummer");
   assert.equal(shell.surfaces[5].navigation, "blocked");
+  assert.equal(shell.surfaces[5].ariaDisabled, "true");
+  assert.equal(shell.surfaces[5].blockedReason, "Requires GlobalAdmin(midsummer) or GlobalMod(midsummer) or HostOf(midsummer) or CohostOf(midsummer)");
+  assert.equal(shell.surfaces[6].navigation, "blocked");
 });
 
 test("app shell session summary models signed-out and multi-capability states", () => {
@@ -187,12 +189,13 @@ test("shared shell keyboard order starts with skip link before allowed role navi
 
   assert.equal(focus.skipLinkTestId, APP_SHELL_CONTRACT.skipLinkTestId);
   assert.equal(focus.mainTargetTestId, APP_SHELL_CONTRACT.mainTargetTestId);
-  assert.deepEqual(focus.linkedNavTestIds, ["role-nav-board", "role-nav-community", "role-nav-search", "role-nav-player"]);
+  assert.deepEqual(focus.linkedNavTestIds, ["role-nav-board", "role-nav-community", "role-nav-search", "role-nav-inbox", "role-nav-player"]);
   assert.deepEqual(focus.expectedOrder, [
     "app-shell-skip-link",
     "role-nav-board",
     "role-nav-community",
     "role-nav-search",
+    "role-nav-inbox",
     "role-nav-player",
     "player-command-submit",
   ]);

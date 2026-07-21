@@ -31,6 +31,19 @@
     <section class="fm-panel" aria-label="Discussion thread" data-testid="discussion-thread">
       <p class="fm-eyebrow">{thread.topic.posting_state}</p>
       <h2>{thread.topic.title}</h2>
+      {#if discussion.subscription !== null}
+        <div class="discussion-watch" data-testid="discussion-watch-control">
+          <form method="POST" action="?/watch">
+            <input type="hidden" name="watch_action" value={discussion.subscription.subscribed ? "unsubscribe" : "subscribe"} />
+            <button class="fm-touch-button fm-touch-button--secondary" type="submit" data-testid="discussion-watch-submit">
+              {discussion.subscription.subscribed ? "Stop watching" : "Watch this topic"}
+            </button>
+          </form>
+          <a href="/inbox" class="fm-touch-button fm-touch-button--secondary" data-testid="discussion-inbox-link">
+            Inbox{discussion.subscription.unread_count > 0 ? ` (${discussion.subscription.unread_count})` : ""}
+          </a>
+        </div>
+      {/if}
       {#each thread.posts as post}
         <article id={`post-${post.source_seq}`} class="discussion-post" data-testid={`discussion-post-${post.source_seq}`}>
           <header>
@@ -98,11 +111,15 @@
     {#if form?.id === "discussion-report"}
       <p role={form.state === "reject" ? "alert" : "status"} class="fm-panel" data-testid="discussion-report-result">{form.message}{form.reportId ? ` Receipt ${form.reportId}` : ""}</p>
     {/if}
+    {#if form?.id === "discussion-watch"}
+      <p role={form.state === "reject" ? "alert" : "status"} class="fm-panel" data-testid="discussion-watch-result">{form.message}</p>
+    {/if}
   {/if}
 </main>
 
 <style>
   .discussion-form, .discussion-moderation { display: grid; gap: 12px; }
+  .discussion-watch { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; margin-block-end: 12px; }
   .discussion-post { border-block-start: 1px solid var(--fm-border); padding-block: 14px; scroll-margin-block-start: 88px; }
   .discussion-post header { align-items: baseline; display: flex; flex-wrap: wrap; gap: 8px 16px; justify-content: space-between; }
   .discussion-post p { margin-block-end: 0; white-space: pre-wrap; }

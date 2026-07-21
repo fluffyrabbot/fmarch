@@ -552,21 +552,40 @@
       "order": 60,
       "title": "Community subscriptions and unread inbox",
       "execution_class": "code",
-      "status": "open",
-      "summary": "Public discussions and game threads are discoverable and reportable, but members cannot subscribe to a conversation, receive durable in-app updates, or resume from a personal read position.",
+      "status": "complete",
+      "summary": "Authenticated members can watch public discussion topics and public game threads through one durable member-target stream, receive privacy-safe in-app update references only for active watch periods, and advance a monotonic per-watch read cursor. Fanout is synchronous and rebuildable, author-self updates are excluded, and moderation hide/restore state suppresses and restores inbox entries without mutating history.",
       "complete_when": ["Authenticated members can subscribe and unsubscribe to public topics and public game threads, receive a durable privacy-safe in-app update inbox, and advance a per-subscription read cursor without polling private audiences or exposing credential principals."],
       "depends_on": ["product.community.discussions", "product.community.search", "product.community.moderation-operations", "product.identity.session-lifecycle"],
       "evidence": [
+        { "kind": "source", "value": "crates/projections/migrations/0001_baseline.sql" },
+        { "kind": "source", "value": "frontend/src/routes/inbox/+page.svelte" },
+        { "kind": "source", "value": "docs/arch/02-event-sourcing.md" },
+        { "kind": "command", "value": "npm run test:dev-test-game-community-subscriptions:local" },
+        { "kind": "artifact", "value": "target/community-subscription-role-proof/community-subscription-proof.json" }
+      ],
+      "remaining": []
+    },
+    {
+      "id": "product.community.member-mutes",
+      "section": "community",
+      "order": 70,
+      "title": "Personal community mute controls",
+      "execution_class": "code",
+      "status": "open",
+      "summary": "Public community reads are globally moderated, but a member cannot create a reversible personal boundary around another public profile's contributions without affecting anyone else's view.",
+      "complete_when": ["Authenticated members can mute and unmute public profiles through a durable private relationship stream, inspect their bounded mute list, and have muted authors consistently suppressed from personalized discussion, search, and inbox reads without changing global visibility or exposing credential principals."],
+      "depends_on": ["product.community.profiles", "product.community.discussions", "product.community.search", "product.community.subscriptions", "product.identity.session-lifecycle"],
+      "evidence": [
         { "kind": "source", "value": "docs/arch/02-event-sourcing.md" }
       ],
-      "remaining": ["Add typed subscription streams, per-target membership and read-cursor projections, synchronous in-app update fan-out from public posts, an authenticated inbox and watch controls, moderation-aware suppression, and seeded member Chromium proof."],
+      "remaining": ["Add typed member-profile mute streams, a private current-mute projection, personalized public-read overlays, profile and inbox controls, bounded list pagination, rebuild coverage, and two-member browser proof."],
       "recommended_slice": {
-        "objective": "Build a typed subscription and unread-inbox vertical for public discussion topics and public game threads: authenticated subscribe/unsubscribe commands, one durable subscription stream per member and target, monotonic read cursors, synchronous public-post notification fan-out, moderation-aware suppression, capability-safe inbox/watch controls, and seeded two-member Chromium proof.",
-        "paths": ["crates/community/", "crates/projections/", "crates/api/", "crates/wire/", "frontend/src/routes/inbox/", "frontend/src/routes/discussions/", "frontend/src/routes/games/", "tools/", "docs/arch/02-event-sourcing.md"],
-        "proof_commands": ["DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p community -p projections -p api subscription -- --test-threads=1", "npm run test:frontend-contract", "npm run test:completeness-scorecard"],
+        "objective": "Build private, reversible member-to-profile mute controls: typed mute/unmute events, one durable relationship stream per member and public profile, a current-mute projection and bounded list, consistent personalized suppression across discussion threads, public search, and watched-update inboxes, plus profile/inbox controls and seeded two-member Chromium proof.",
+        "paths": ["crates/community/", "crates/projections/", "crates/api/", "crates/wire/", "frontend/src/routes/u/", "frontend/src/routes/inbox/", "frontend/src/routes/discussions/", "frontend/src/routes/search/", "tools/", "docs/arch/02-event-sourcing.md"],
+        "proof_commands": ["DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p community -p projections -p api member_mute -- --test-threads=1", "npm run test:frontend-contract", "npm run test:completeness-scorecard"],
         "non_claims": [
-          "No email, SMS, mobile push, or hosted delivery guarantee.",
-          "No private-channel watches until audience-scoped notification retention is modeled separately.",
+          "No global content removal, moderation action, or effect on other members' views.",
+          "No direct-message, mention, or private-channel blocking semantics before those interaction surfaces exist.",
           "No recommendation ranking, engagement optimization, or release-readiness claim from local proof."
         ]
       }

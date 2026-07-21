@@ -38,16 +38,16 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::broadcast;
 use uuid::Uuid;
 use wire::{
-    AckMsg, CapabilityGrant, ClientEnvelope, DayVoteOutcomeDelta, DiscussionArea, DiscussionPost,
-    DiscussionThreadPage, DiscussionTopic, DiscussionTopicPage, GameIndexEntry, GameIndexPage,
-    Hello, HostConsolePhaseStateDelta, HostConsoleSlotOccupancyDelta, HostConsoleStateDelta,
-    HostConsoleThreadPostDelta, HostPhaseControl, HostPromptDelta, HostPromptsDelta,
-    ModerationCase, ModerationCaseDetail, ModerationCasePage, ModerationReportReceipt,
-    PlayerInvestigationResult, PlayerInvestigationResultsDelta, PlayerNotification,
-    PlayerNotificationsDelta, ProfileEditor, ProjectionDelta, PublicGameThreadPage, PublicProfile,
-    PublicSearchPage, PublicSearchResult, RejectCode, RejectMsg, ServerEnvelope, ServerMsg,
-    ThreadPage, ThreadPost, ThreadPostsDelta, VoteCountClearedDelta, VoteCountDelta,
-    PROTOCOL_VERSION,
+    AckMsg, AdvanceSubscriptionReadRequest, CapabilityGrant, ClientEnvelope, CommunityInboxPage,
+    DayVoteOutcomeDelta, DiscussionArea, DiscussionPost, DiscussionThreadPage, DiscussionTopic,
+    DiscussionTopicPage, GameIndexEntry, GameIndexPage, Hello, HostConsolePhaseStateDelta,
+    HostConsoleSlotOccupancyDelta, HostConsoleStateDelta, HostConsoleThreadPostDelta,
+    HostPhaseControl, HostPromptDelta, HostPromptsDelta, ModerationCase, ModerationCaseDetail,
+    ModerationCasePage, ModerationReportReceipt, PlayerInvestigationResult,
+    PlayerInvestigationResultsDelta, PlayerNotification, PlayerNotificationsDelta, ProfileEditor,
+    ProjectionDelta, PublicGameThreadPage, PublicProfile, PublicSearchPage, PublicSearchResult,
+    RejectCode, RejectMsg, ServerEnvelope, ServerMsg, SubscriptionTargetState, ThreadPage,
+    ThreadPost, ThreadPostsDelta, VoteCountClearedDelta, VoteCountDelta, PROTOCOL_VERSION,
 };
 
 #[derive(Clone)]
@@ -242,6 +242,17 @@ pub fn router_with_state(state: ApiState) -> Router {
         .route("/games/{game}", get(public_game_thread))
         .route("/games/import", post(import_completed_game_export))
         .route("/search", get(public_search))
+        .route("/inbox", get(community_inbox))
+        .route(
+            "/subscriptions/{target_kind}/{scope_id}",
+            get(subscription_target_state)
+                .put(subscribe_to_target)
+                .delete(unsubscribe_from_target),
+        )
+        .route(
+            "/subscriptions/{target_kind}/{scope_id}/read",
+            post(advance_subscription_read),
+        )
         .route("/moderation/reports", post(submit_moderation_report))
         .route(
             "/moderation/reports/{report}",
@@ -4098,6 +4109,12 @@ struct PublicSearchQuery {
     limit: Option<i64>,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+struct CommunityInboxQuery {
+    before_seq: Option<i64>,
+    limit: Option<i64>,
+}
+
 async fn game_index(
     State(state): State<ApiState>,
     Query(query): Query<GameIndexQuery>,
@@ -4138,6 +4155,158 @@ async fn public_game_thread(
         posts: page.posts.into_iter().map(ThreadPost::from).collect(),
         next_before_seq: page.next_before_seq,
     }))
+}
+
+async fn subscription_target_state(
+    State(state): State<ApiState>,
+    Path((target_kind, scope_id)): Path<(String, Uuid)>,
+    headers: HeaderMap,
+) -> Result<Json<SubscriptionTargetState>, ApiError> {
+    let principal_user_id = authenticated_community_member(&state, &headers).await?;
+    let target = subscription_target(target_kind.as_str(), scope_id)?;
+    Ok(Json(
+        projections::subscription_target_state(&state.pool, principal_user_id.as_str(), target)
+            .await
+            .map_err(subscription_projection_api_error)?
+            .into(),
+    ))
+}
+
+async fn subscribe_to_target(
+    State(state): State<ApiState>,
+    Path((target_kind, scope_id)): Path<(String, Uuid)>,
+    headers: HeaderMap,
+) -> Result<Json<SubscriptionTargetState>, ApiError> {
+    let principal_user_id = authenticated_community_member(&state, &headers).await?;
+    let target = subscription_target(target_kind.as_str(), scope_id)?;
+    let state = projections::subscribe_to_public_target(
+        &state.pool,
+        target,
+        principal_user_id.as_str(),
+        unix_now_seconds(),
+    )
+    .await
+    .map_err(subscription_projection_api_error)?;
+    Ok(Json(state.into()))
+}
+
+async fn unsubscribe_from_target(
+    State(state): State<ApiState>,
+    Path((target_kind, scope_id)): Path<(String, Uuid)>,
+    headers: HeaderMap,
+) -> Result<Json<SubscriptionTargetState>, ApiError> {
+    let principal_user_id = authenticated_community_member(&state, &headers).await?;
+    let target = subscription_target(target_kind.as_str(), scope_id)?;
+    let state = projections::unsubscribe_from_public_target(
+        &state.pool,
+        target,
+        principal_user_id.as_str(),
+        unix_now_seconds(),
+    )
+    .await
+    .map_err(subscription_projection_api_error)?;
+    Ok(Json(state.into()))
+}
+
+async fn advance_subscription_read(
+    State(state): State<ApiState>,
+    Path((target_kind, scope_id)): Path<(String, Uuid)>,
+    headers: HeaderMap,
+    Json(request): Json<AdvanceSubscriptionReadRequest>,
+) -> Result<Json<SubscriptionTargetState>, ApiError> {
+    let principal_user_id = authenticated_community_member(&state, &headers).await?;
+    let target = subscription_target(target_kind.as_str(), scope_id)?;
+    let state = projections::advance_subscription_read_cursor(
+        &state.pool,
+        target,
+        principal_user_id.as_str(),
+        request.read_through_seq,
+        unix_now_seconds(),
+    )
+    .await
+    .map_err(subscription_projection_api_error)?;
+    Ok(Json(state.into()))
+}
+
+async fn community_inbox(
+    State(state): State<ApiState>,
+    Query(query): Query<CommunityInboxQuery>,
+    headers: HeaderMap,
+) -> Result<Json<CommunityInboxPage>, ApiError> {
+    let principal_user_id = authenticated_community_member(&state, &headers).await?;
+    if query.before_seq.is_some_and(|seq| seq <= 0) {
+        return Err(subscription_bad_request(
+            "inbox before_seq must be a positive event sequence",
+        ));
+    }
+    Ok(Json(
+        projections::community_inbox(
+            &state.pool,
+            principal_user_id.as_str(),
+            query.before_seq,
+            query.limit.unwrap_or(50),
+        )
+        .await?
+        .into(),
+    ))
+}
+
+async fn authenticated_community_member(
+    state: &ApiState,
+    headers: &HeaderMap,
+) -> Result<String, ApiError> {
+    let token = bearer_token(headers).ok_or_else(unauthorized_account)?;
+    require_active_enabled_account(state, token).await
+}
+
+fn subscription_target(
+    target_kind: &str,
+    scope_id: Uuid,
+) -> Result<community::SubscriptionTarget, ApiError> {
+    Ok(community::SubscriptionTarget {
+        kind: community::SubscriptionTargetKind::parse(target_kind)
+            .map_err(|_| subscription_bad_request("invalid subscription target kind"))?,
+        scope_id,
+    })
+}
+
+fn subscription_projection_api_error(error: projections::ProjectionError) -> ApiError {
+    match error {
+        projections::ProjectionError::SubscriptionTargetNotPublic => ApiError::Reject {
+            status: StatusCode::NOT_FOUND,
+            error: RejectCode::Internal,
+            message: "subscription target is not public".to_string(),
+        },
+        projections::ProjectionError::AlreadySubscribed => ApiError::Reject {
+            status: StatusCode::CONFLICT,
+            error: RejectCode::Internal,
+            message: "member is already subscribed to this target".to_string(),
+        },
+        projections::ProjectionError::NotSubscribed => ApiError::Reject {
+            status: StatusCode::CONFLICT,
+            error: RejectCode::Internal,
+            message: "member is not subscribed to this target".to_string(),
+        },
+        projections::ProjectionError::InvalidSubscriptionReadCursor => {
+            subscription_bad_request("read cursor must advance within the public target")
+        }
+        projections::ProjectionError::Store(eventstore::StoreError::Conflict { .. }) => {
+            ApiError::Reject {
+                status: StatusCode::CONFLICT,
+                error: RejectCode::StreamConflict,
+                message: "subscription changed concurrently; refresh and try again".to_string(),
+            }
+        }
+        error => ApiError::Projection(error),
+    }
+}
+
+fn subscription_bad_request(message: &str) -> ApiError {
+    ApiError::Reject {
+        status: StatusCode::BAD_REQUEST,
+        error: RejectCode::Internal,
+        message: message.to_string(),
+    }
 }
 
 async fn public_search(

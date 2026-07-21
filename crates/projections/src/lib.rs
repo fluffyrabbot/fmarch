@@ -587,6 +587,35 @@ pub struct ModerationCasePage {
     pub next_cursor: Option<ModerationCaseCursor>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SubscriptionTargetStateRow {
+    pub target_kind: String,
+    pub scope_id: Uuid,
+    pub subscribed: bool,
+    pub read_through_seq: i64,
+    pub latest_source_seq: i64,
+    pub unread_count: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CommunityInboxItemRow {
+    pub target_kind: String,
+    pub scope_id: Uuid,
+    pub source_seq: i64,
+    pub title: String,
+    pub href: String,
+    pub occurred_at: i64,
+    pub unread: bool,
+    pub subscribed: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CommunityInboxPage {
+    pub items: Vec<CommunityInboxItemRow>,
+    pub unread_count: i64,
+    pub next_cursor: Option<i64>,
+}
+
 /// Capability-safe public profile data. The owning principal is intentionally
 /// absent from this row and its wire representation.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -624,6 +653,14 @@ pub enum ProjectionError {
     ModerationReportRateLimited,
     #[error("the moderation target is not public")]
     ModerationTargetNotPublic,
+    #[error("the subscription target is not public")]
+    SubscriptionTargetNotPublic,
+    #[error("member is already subscribed")]
+    AlreadySubscribed,
+    #[error("member is not subscribed")]
+    NotSubscribed,
+    #[error("subscription read cursor is outside the current public target")]
+    InvalidSubscriptionReadCursor,
     #[error("malformed event payload for kind {kind}: {source}")]
     Payload {
         kind: String,
@@ -875,6 +912,7 @@ async fn fold_event(
             let body = str_field(p, "body", &ev.kind)?;
             let media = thread_media_payload(p);
             let public_main = channel_id == "main";
+            let notification_author = author_user.clone();
             insert_thread_post(
                 tx,
                 ThreadPostInsert {
@@ -893,6 +931,15 @@ async fn fold_event(
             .await?;
             if public_main {
                 insert_game_post_search_document(tx, game_id, ev.seq).await?;
+                fan_out_public_community_update(
+                    tx,
+                    community::SubscriptionTargetKind::GameThread,
+                    game_id,
+                    ev.seq,
+                    ev.occurred_at,
+                    notification_author.as_deref(),
+                )
+                .await?;
             }
         }
         "PrivateChannelDeclared" => {
@@ -959,6 +1006,15 @@ async fn fold_event(
                 )
                 .await?;
                 insert_game_post_search_document(tx, game_id, ev.seq).await?;
+                fan_out_public_community_update(
+                    tx,
+                    community::SubscriptionTargetKind::GameThread,
+                    game_id,
+                    ev.seq,
+                    ev.occurred_at,
+                    None,
+                )
+                .await?;
             }
         }
         "ResolutionTrace" => {
@@ -1857,6 +1913,240 @@ fn moderation_event_inputs(
         .collect()
 }
 
+pub async fn subscribe_to_public_target(
+    pool: &PgPool,
+    target: community::SubscriptionTarget,
+    principal_user_id: &str,
+    occurred_at: i64,
+) -> Result<SubscriptionTargetStateRow, ProjectionError> {
+    let mut tx = pool.begin().await?;
+    lock_subscription_target(&mut tx, principal_user_id, &target).await?;
+    let latest_source_seq = public_subscription_target_latest_seq(&mut tx, &target)
+        .await?
+        .ok_or(ProjectionError::SubscriptionTargetNotPublic)?;
+    let existing = subscription_domain_state(&mut tx, principal_user_id, &target).await?;
+    let subscription_id = existing
+        .as_ref()
+        .map_or_else(Uuid::new_v4, |state| state.subscription_id);
+    let events = community::decide_subscription(
+        existing.as_ref(),
+        community::SubscriptionCommand::Subscribe {
+            target: target.clone(),
+            initial_read_through_seq: latest_source_seq,
+        },
+    )
+    .map_err(subscription_domain_error)?;
+    append_subscription_events(
+        &mut tx,
+        subscription_id,
+        existing.as_ref().map_or(0, |state| state.version),
+        events,
+        principal_user_id,
+        occurred_at,
+    )
+    .await?;
+    tx.commit().await?;
+    subscription_target_state(pool, principal_user_id, target).await
+}
+
+pub async fn unsubscribe_from_public_target(
+    pool: &PgPool,
+    target: community::SubscriptionTarget,
+    principal_user_id: &str,
+    occurred_at: i64,
+) -> Result<SubscriptionTargetStateRow, ProjectionError> {
+    let mut tx = pool.begin().await?;
+    lock_subscription_target(&mut tx, principal_user_id, &target).await?;
+    let state = subscription_domain_state(&mut tx, principal_user_id, &target)
+        .await?
+        .ok_or(ProjectionError::NotSubscribed)?;
+    let events =
+        community::decide_subscription(Some(&state), community::SubscriptionCommand::Unsubscribe)
+            .map_err(subscription_domain_error)?;
+    append_subscription_events(
+        &mut tx,
+        state.subscription_id,
+        state.version,
+        events,
+        principal_user_id,
+        occurred_at,
+    )
+    .await?;
+    tx.commit().await?;
+    subscription_target_state(pool, principal_user_id, target).await
+}
+
+pub async fn advance_subscription_read_cursor(
+    pool: &PgPool,
+    target: community::SubscriptionTarget,
+    principal_user_id: &str,
+    read_through_seq: i64,
+    occurred_at: i64,
+) -> Result<SubscriptionTargetStateRow, ProjectionError> {
+    let mut tx = pool.begin().await?;
+    lock_subscription_target(&mut tx, principal_user_id, &target).await?;
+    let latest_source_seq = public_subscription_target_latest_seq(&mut tx, &target)
+        .await?
+        .ok_or(ProjectionError::SubscriptionTargetNotPublic)?;
+    if read_through_seq <= 0 || read_through_seq > latest_source_seq {
+        return Err(ProjectionError::InvalidSubscriptionReadCursor);
+    }
+    let state = subscription_domain_state(&mut tx, principal_user_id, &target)
+        .await?
+        .ok_or(ProjectionError::NotSubscribed)?;
+    let events = community::decide_subscription(
+        Some(&state),
+        community::SubscriptionCommand::AdvanceRead { read_through_seq },
+    )
+    .map_err(subscription_domain_error)?;
+    append_subscription_events(
+        &mut tx,
+        state.subscription_id,
+        state.version,
+        events,
+        principal_user_id,
+        occurred_at,
+    )
+    .await?;
+    tx.commit().await?;
+    subscription_target_state(pool, principal_user_id, target).await
+}
+
+async fn lock_subscription_target(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    principal_user_id: &str,
+    target: &community::SubscriptionTarget,
+) -> Result<(), ProjectionError> {
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
+        .bind(format!(
+            "subscription:{principal_user_id}:{}:{}",
+            target.kind.as_str(),
+            target.scope_id
+        ))
+        .execute(&mut **tx)
+        .await?;
+    Ok(())
+}
+
+async fn append_subscription_events(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    subscription_id: Uuid,
+    expected_stream_seq: i64,
+    events: Vec<community::SubscriptionEvent>,
+    principal_user_id: &str,
+    occurred_at: i64,
+) -> Result<(), ProjectionError> {
+    let inputs: Vec<_> = events
+        .into_iter()
+        .map(|event| {
+            EventInput::new(
+                event.kind(),
+                1,
+                event.payload(),
+                eventstore::ActorId::User(principal_user_id.to_string()),
+                occurred_at,
+            )
+        })
+        .collect();
+    let stored =
+        eventstore::append_expected_in_tx(tx, subscription_id, expected_stream_seq, &inputs)
+            .await?;
+    for event in &stored {
+        fold_subscription_event(tx, subscription_id, event).await?;
+    }
+    Ok(())
+}
+
+fn subscription_domain_error(reject: community::CommunityReject) -> ProjectionError {
+    match reject {
+        community::CommunityReject::AlreadySubscribed => ProjectionError::AlreadySubscribed,
+        community::CommunityReject::NotSubscribed
+        | community::CommunityReject::SubscriptionNotFound => ProjectionError::NotSubscribed,
+        community::CommunityReject::ReadCursorMustAdvance => {
+            ProjectionError::InvalidSubscriptionReadCursor
+        }
+        _ => ProjectionError::Payload {
+            kind: "community subscription".to_string(),
+            source: serde::de::Error::custom(reject.to_string()),
+        },
+    }
+}
+
+async fn subscription_domain_state(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    principal_user_id: &str,
+    target: &community::SubscriptionTarget,
+) -> Result<Option<community::SubscriptionState>, ProjectionError> {
+    let row = sqlx::query(
+        "SELECT subscription_id, active, read_through_seq, version FROM community_subscription WHERE principal_user_id = $1 AND target_kind = $2 AND scope_id = $3",
+    )
+    .bind(principal_user_id)
+    .bind(target.kind.as_str())
+    .bind(target.scope_id)
+    .fetch_optional(&mut **tx)
+    .await?;
+    Ok(row.map(|row| community::SubscriptionState {
+        subscription_id: row.get("subscription_id"),
+        principal_user_id: principal_user_id.to_string(),
+        target: target.clone(),
+        active: row.get("active"),
+        read_through_seq: row.get("read_through_seq"),
+        version: row.get("version"),
+    }))
+}
+
+async fn public_subscription_target_latest_seq(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    target: &community::SubscriptionTarget,
+) -> Result<Option<i64>, ProjectionError> {
+    let latest = match target.kind {
+        community::SubscriptionTargetKind::DiscussionTopic => {
+            sqlx::query_scalar(
+                r#"
+                SELECT COALESCE(MAX(post.source_seq), 0)::bigint
+                FROM discussion_topic AS topic
+                LEFT JOIN discussion_post AS post ON post.topic_id = topic.topic_id
+                  AND NOT EXISTS (
+                      SELECT 1 FROM moderation_target_state AS moderation
+                      WHERE moderation.target_kind = 'discussion_post'
+                        AND moderation.scope_id = post.topic_id
+                        AND moderation.source_seq = post.source_seq
+                        AND moderation.visibility = 'hidden'
+                  )
+                WHERE topic.topic_id = $1 AND topic.visibility = 'visible'
+                GROUP BY topic.topic_id
+                "#,
+            )
+            .bind(target.scope_id)
+            .fetch_optional(&mut **tx)
+            .await?
+        }
+        community::SubscriptionTargetKind::GameThread => {
+            sqlx::query_scalar(
+                r#"
+                SELECT COALESCE(MAX(post.source_seq), 0)::bigint
+                FROM game_index AS game
+                LEFT JOIN thread_view AS post ON post.game_id = game.game_id
+                  AND post.channel_id = 'main'
+                  AND NOT EXISTS (
+                      SELECT 1 FROM moderation_target_state AS moderation
+                      WHERE moderation.target_kind = 'game_post'
+                        AND moderation.scope_id = post.game_id
+                        AND moderation.source_seq = post.source_seq
+                        AND moderation.visibility = 'hidden'
+                  )
+                WHERE game.game_id = $1 AND game.status IN ('active', 'completed')
+                GROUP BY game.game_id
+                "#,
+            )
+            .bind(target.scope_id)
+            .fetch_optional(&mut **tx)
+            .await?
+        }
+    };
+    Ok(latest)
+}
+
 fn moderation_domain_error(reject: community::CommunityReject, action: &str) -> ProjectionError {
     ProjectionError::Payload {
         kind: format!("moderation {action}"),
@@ -1944,6 +2234,145 @@ async fn moderation_target_is_public(
         }
     };
     Ok(visible)
+}
+
+async fn fold_subscription_event(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    subscription_id: Uuid,
+    event: &StoredEvent,
+) -> Result<(), ProjectionError> {
+    let principal_user_id = match &event.actor {
+        eventstore::ActorId::User(principal) => principal,
+        _ => {
+            return Err(ProjectionError::Payload {
+                kind: event.kind.clone(),
+                source: serde::de::Error::custom("subscription events require a user actor"),
+            })
+        }
+    };
+    match event.kind.as_str() {
+        community::SUBSCRIPTION_ENABLED => {
+            #[derive(Deserialize)]
+            struct Payload {
+                target: community::SubscriptionTarget,
+                initial_read_through_seq: i64,
+            }
+            let payload: Payload =
+                serde_json::from_value(event.payload.clone()).map_err(|source| {
+                    ProjectionError::Payload {
+                        kind: event.kind.clone(),
+                        source,
+                    }
+                })?;
+            sqlx::query(
+                r#"
+                INSERT INTO community_subscription (
+                    subscription_id, principal_user_id, target_kind, scope_id,
+                    active, read_through_seq, created_seq, updated_seq, version
+                ) VALUES ($1, $2, $3, $4, TRUE, $5, $6, $6, $7)
+                ON CONFLICT (subscription_id) DO UPDATE SET
+                    active = TRUE,
+                    read_through_seq = GREATEST(
+                        community_subscription.read_through_seq,
+                        EXCLUDED.read_through_seq
+                    ),
+                    updated_seq = EXCLUDED.updated_seq,
+                    version = EXCLUDED.version
+                "#,
+            )
+            .bind(subscription_id)
+            .bind(principal_user_id)
+            .bind(payload.target.kind.as_str())
+            .bind(payload.target.scope_id)
+            .bind(payload.initial_read_through_seq)
+            .bind(event.seq)
+            .bind(event.stream_seq)
+            .execute(&mut **tx)
+            .await?;
+            sqlx::query(
+                "INSERT INTO community_subscription_period (subscription_id, started_seq, ended_seq) VALUES ($1, $2, NULL)",
+            )
+            .bind(subscription_id)
+            .bind(event.seq)
+            .execute(&mut **tx)
+            .await?;
+        }
+        community::SUBSCRIPTION_DISABLED => {
+            sqlx::query(
+                "UPDATE community_subscription SET active = FALSE, updated_seq = $2, version = $3 WHERE subscription_id = $1",
+            )
+            .bind(subscription_id)
+            .bind(event.seq)
+            .bind(event.stream_seq)
+            .execute(&mut **tx)
+            .await?;
+            sqlx::query(
+                "UPDATE community_subscription_period SET ended_seq = $2 WHERE subscription_id = $1 AND ended_seq IS NULL",
+            )
+            .bind(subscription_id)
+            .bind(event.seq)
+            .execute(&mut **tx)
+            .await?;
+        }
+        community::SUBSCRIPTION_READ_ADVANCED => {
+            let read_through_seq = event
+                .payload
+                .get("read_through_seq")
+                .and_then(serde_json::Value::as_i64)
+                .ok_or_else(|| ProjectionError::Payload {
+                    kind: event.kind.clone(),
+                    source: serde::de::Error::custom(
+                        "subscription read event requires read_through_seq",
+                    ),
+                })?;
+            sqlx::query(
+                "UPDATE community_subscription SET read_through_seq = GREATEST(read_through_seq, $2), updated_seq = $3, version = $4 WHERE subscription_id = $1",
+            )
+            .bind(subscription_id)
+            .bind(read_through_seq)
+            .bind(event.seq)
+            .bind(event.stream_seq)
+            .execute(&mut **tx)
+            .await?;
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+async fn fan_out_public_community_update(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    target_kind: community::SubscriptionTargetKind,
+    scope_id: Uuid,
+    source_seq: i64,
+    occurred_at: i64,
+    author_principal_id: Option<&str>,
+) -> Result<(), ProjectionError> {
+    sqlx::query(
+        r#"
+        INSERT INTO community_inbox_item (
+            subscription_id, source_seq, target_kind, scope_id, occurred_at
+        )
+        SELECT subscription.subscription_id, $3, $1, $2, $4
+        FROM community_subscription AS subscription
+        JOIN community_subscription_period AS period
+          ON period.subscription_id = subscription.subscription_id
+         AND period.started_seq < $3
+         AND (period.ended_seq IS NULL OR period.ended_seq > $3)
+        WHERE subscription.target_kind = $1
+          AND subscription.scope_id = $2
+          AND ($5::text IS NULL OR subscription.principal_user_id <> $5)
+        ON CONFLICT (subscription_id, source_seq) DO NOTHING
+        "#,
+    )
+    .bind(target_kind.as_str())
+    .bind(scope_id)
+    .bind(source_seq)
+    .bind(occurred_at)
+    .bind(author_principal_id)
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
 }
 
 async fn fold_moderation_event(
@@ -2197,6 +2626,12 @@ pub async fn rebuild_discussion_stream(
     let mut tx = pool.begin().await?;
     if is_topic_stream {
         sqlx::query(
+            "DELETE FROM community_inbox_item WHERE target_kind = 'discussion_topic' AND scope_id = $1",
+        )
+        .bind(stream_id)
+        .execute(&mut *tx)
+        .await?;
+        sqlx::query(
             "DELETE FROM public_search_document WHERE scope_kind = 'discussion' AND scope_id = $1",
         )
         .bind(stream_id)
@@ -2268,6 +2703,92 @@ pub async fn rebuild_moderation_stream(
     )
     .await?;
     tx.commit().await?;
+    Ok(())
+}
+
+/// Rebuild one member/target subscription stream, including its active periods,
+/// monotonic cursor, and privacy-safe inbox references derived from public post
+/// projections. The backfill applies the historical membership periods, so a
+/// resubscription never manufactures updates from an inactive interval.
+pub async fn rebuild_subscription_stream(
+    pool: &PgPool,
+    subscription_id: Uuid,
+) -> Result<(), ProjectionError> {
+    let events = eventstore::load_stream(pool, subscription_id).await?;
+    if !events
+        .iter()
+        .any(|event| event.kind == community::SUBSCRIPTION_ENABLED)
+    {
+        return Ok(());
+    }
+    let mut tx = pool.begin().await?;
+    sqlx::query("DELETE FROM community_subscription WHERE subscription_id = $1")
+        .bind(subscription_id)
+        .execute(&mut *tx)
+        .await?;
+    for event in &events {
+        fold_subscription_event(&mut tx, subscription_id, event).await?;
+    }
+    backfill_subscription_inbox(&mut tx, subscription_id).await?;
+    tx.commit().await?;
+    Ok(())
+}
+
+async fn backfill_subscription_inbox(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    subscription_id: Uuid,
+) -> Result<(), ProjectionError> {
+    sqlx::query(
+        r#"
+        INSERT INTO community_inbox_item (
+            subscription_id, source_seq, target_kind, scope_id, occurred_at
+        )
+        SELECT subscription.subscription_id, post.source_seq,
+               subscription.target_kind, subscription.scope_id, post.created_at
+        FROM community_subscription AS subscription
+        JOIN community_subscription_period AS period
+          ON period.subscription_id = subscription.subscription_id
+        JOIN discussion_post AS post
+          ON subscription.target_kind = 'discussion_topic'
+         AND post.topic_id = subscription.scope_id
+         AND period.started_seq < post.source_seq
+         AND (period.ended_seq IS NULL OR period.ended_seq > post.source_seq)
+        LEFT JOIN profile_editor AS author
+          ON author.profile_id = post.author_profile_id
+        WHERE subscription.subscription_id = $1
+          AND (author.principal_user_id IS NULL
+               OR author.principal_user_id <> subscription.principal_user_id)
+        ON CONFLICT (subscription_id, source_seq) DO NOTHING
+        "#,
+    )
+    .bind(subscription_id)
+    .execute(&mut **tx)
+    .await?;
+    sqlx::query(
+        r#"
+        INSERT INTO community_inbox_item (
+            subscription_id, source_seq, target_kind, scope_id, occurred_at
+        )
+        SELECT subscription.subscription_id, post.source_seq,
+               subscription.target_kind, subscription.scope_id, post.occurred_at
+        FROM community_subscription AS subscription
+        JOIN community_subscription_period AS period
+          ON period.subscription_id = subscription.subscription_id
+        JOIN thread_view AS post
+          ON subscription.target_kind = 'game_thread'
+         AND post.game_id = subscription.scope_id
+         AND post.channel_id = 'main'
+         AND period.started_seq < post.source_seq
+         AND (period.ended_seq IS NULL OR period.ended_seq > post.source_seq)
+        WHERE subscription.subscription_id = $1
+          AND (post.author_user IS NULL
+               OR post.author_user <> subscription.principal_user_id)
+        ON CONFLICT (subscription_id, source_seq) DO NOTHING
+        "#,
+    )
+    .bind(subscription_id)
+    .execute(&mut **tx)
+    .await?;
     Ok(())
 }
 
@@ -2343,6 +2864,19 @@ async fn fold_discussion_event(
             .bind(event.occurred_at)
             .bind(event.stream_seq)
             .execute(&mut **tx)
+            .await?;
+            let author_principal_id = match &event.actor {
+                eventstore::ActorId::User(principal) => Some(principal.as_str()),
+                _ => None,
+            };
+            fan_out_public_community_update(
+                tx,
+                community::SubscriptionTargetKind::DiscussionTopic,
+                stream_id,
+                event.seq,
+                event.occurred_at,
+                author_principal_id,
+            )
             .await?;
         }
         community::POSTING_STATE_CHANGED => {
@@ -2573,6 +3107,12 @@ async fn rebuild_in_tx(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     game_id: Uuid,
 ) -> Result<(), ProjectionError> {
+    sqlx::query(
+        "DELETE FROM community_inbox_item WHERE target_kind = 'game_thread' AND scope_id = $1",
+    )
+    .bind(game_id)
+    .execute(&mut **tx)
+    .await?;
     for table in [
         "vote_ballot",
         "day_vote_outcome",
@@ -4153,6 +4693,192 @@ pub async fn discussion_posts(
     Ok(DiscussionPostPage {
         posts,
         next_before_seq,
+    })
+}
+
+pub async fn subscription_target_state(
+    pool: &PgPool,
+    principal_user_id: &str,
+    target: community::SubscriptionTarget,
+) -> Result<SubscriptionTargetStateRow, ProjectionError> {
+    let mut tx = pool.begin().await?;
+    let latest_source_seq = public_subscription_target_latest_seq(&mut tx, &target).await?;
+    let state = subscription_domain_state(&mut tx, principal_user_id, &target).await?;
+    if latest_source_seq.is_none() && state.is_none() {
+        return Err(ProjectionError::SubscriptionTargetNotPublic);
+    }
+    let (subscribed, read_through_seq, unread_count) = match state {
+        Some(state) => {
+            let unread_count = visible_subscription_inbox_count(
+                &mut tx,
+                state.subscription_id,
+                state.read_through_seq,
+            )
+            .await?;
+            (state.active, state.read_through_seq, unread_count)
+        }
+        None => (false, 0, 0),
+    };
+    tx.commit().await?;
+    Ok(SubscriptionTargetStateRow {
+        target_kind: target.kind.as_str().to_string(),
+        scope_id: target.scope_id,
+        subscribed,
+        read_through_seq,
+        latest_source_seq: latest_source_seq.unwrap_or(read_through_seq),
+        unread_count,
+    })
+}
+
+async fn visible_subscription_inbox_count(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    subscription_id: Uuid,
+    after_seq: i64,
+) -> Result<i64, ProjectionError> {
+    Ok(sqlx::query_scalar(
+        r#"
+        SELECT COUNT(*)
+        FROM community_inbox_item AS item
+        LEFT JOIN discussion_topic AS topic
+          ON item.target_kind = 'discussion_topic' AND topic.topic_id = item.scope_id
+        LEFT JOIN game_index AS game
+          ON item.target_kind = 'game_thread' AND game.game_id = item.scope_id
+        WHERE item.subscription_id = $1 AND item.source_seq > $2
+          AND (
+            (item.target_kind = 'discussion_topic' AND topic.visibility = 'visible')
+            OR
+            (item.target_kind = 'game_thread' AND game.status IN ('active', 'completed'))
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM moderation_target_state AS moderation
+            WHERE moderation.target_kind = CASE item.target_kind
+                    WHEN 'discussion_topic' THEN 'discussion_post'
+                    ELSE 'game_post'
+                  END
+              AND moderation.scope_id = item.scope_id
+              AND moderation.source_seq = item.source_seq
+              AND moderation.visibility = 'hidden'
+          )
+        "#,
+    )
+    .bind(subscription_id)
+    .bind(after_seq)
+    .fetch_one(&mut **tx)
+    .await?)
+}
+
+pub async fn community_inbox(
+    pool: &PgPool,
+    principal_user_id: &str,
+    before_seq: Option<i64>,
+    limit: i64,
+) -> Result<CommunityInboxPage, ProjectionError> {
+    let limit = limit.clamp(1, 100);
+    let fetch_limit = limit + 1;
+    let rows = sqlx::query(
+        r#"
+        SELECT item.target_kind, item.scope_id, item.source_seq, item.occurred_at,
+               item.source_seq > subscription.read_through_seq AS unread,
+               subscription.active AS subscribed,
+               CASE item.target_kind
+                 WHEN 'discussion_topic' THEN topic.title
+                 ELSE game.pack || ' game'
+               END AS title,
+               CASE item.target_kind
+                 WHEN 'discussion_topic' THEN '/discussions/' || area.slug || '/t/' || item.scope_id::text || '#post-' || item.source_seq::text
+                 ELSE '/games/' || item.scope_id::text || '#thread-post-' || item.source_seq::text
+               END AS href
+        FROM community_inbox_item AS item
+        JOIN community_subscription AS subscription
+          ON subscription.subscription_id = item.subscription_id
+        LEFT JOIN discussion_topic AS topic
+          ON item.target_kind = 'discussion_topic' AND topic.topic_id = item.scope_id
+        LEFT JOIN discussion_area AS area ON area.area_id = topic.area_id
+        LEFT JOIN game_index AS game
+          ON item.target_kind = 'game_thread' AND game.game_id = item.scope_id
+        WHERE subscription.principal_user_id = $1
+          AND ($2::bigint IS NULL OR item.source_seq < $2)
+          AND (
+            (item.target_kind = 'discussion_topic' AND topic.visibility = 'visible')
+            OR
+            (item.target_kind = 'game_thread' AND game.status IN ('active', 'completed'))
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM moderation_target_state AS moderation
+            WHERE moderation.target_kind = CASE item.target_kind
+                    WHEN 'discussion_topic' THEN 'discussion_post'
+                    ELSE 'game_post'
+                  END
+              AND moderation.scope_id = item.scope_id
+              AND moderation.source_seq = item.source_seq
+              AND moderation.visibility = 'hidden'
+          )
+        ORDER BY item.source_seq DESC
+        LIMIT $3
+        "#,
+    )
+    .bind(principal_user_id)
+    .bind(before_seq)
+    .bind(fetch_limit)
+    .fetch_all(pool)
+    .await?;
+    let has_more = rows.len() as i64 > limit;
+    let items: Vec<_> = rows
+        .into_iter()
+        .take(limit as usize)
+        .map(|row| CommunityInboxItemRow {
+            target_kind: row.get("target_kind"),
+            scope_id: row.get("scope_id"),
+            source_seq: row.get("source_seq"),
+            title: row.get("title"),
+            href: row.get("href"),
+            occurred_at: row.get("occurred_at"),
+            unread: row.get("unread"),
+            subscribed: row.get("subscribed"),
+        })
+        .collect();
+    let unread_count: i64 = sqlx::query_scalar(
+        r#"
+        SELECT COUNT(*)
+        FROM community_inbox_item AS item
+        JOIN community_subscription AS subscription
+          ON subscription.subscription_id = item.subscription_id
+        LEFT JOIN discussion_topic AS topic
+          ON item.target_kind = 'discussion_topic' AND topic.topic_id = item.scope_id
+        LEFT JOIN game_index AS game
+          ON item.target_kind = 'game_thread' AND game.game_id = item.scope_id
+        WHERE subscription.principal_user_id = $1
+          AND item.source_seq > subscription.read_through_seq
+          AND (
+            (item.target_kind = 'discussion_topic' AND topic.visibility = 'visible')
+            OR
+            (item.target_kind = 'game_thread' AND game.status IN ('active', 'completed'))
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM moderation_target_state AS moderation
+            WHERE moderation.target_kind = CASE item.target_kind
+                    WHEN 'discussion_topic' THEN 'discussion_post'
+                    ELSE 'game_post'
+                  END
+              AND moderation.scope_id = item.scope_id
+              AND moderation.source_seq = item.source_seq
+              AND moderation.visibility = 'hidden'
+          )
+        "#,
+    )
+    .bind(principal_user_id)
+    .fetch_one(pool)
+    .await?;
+    let next_cursor = has_more.then(|| {
+        items
+            .last()
+            .expect("full inbox page has a final item")
+            .source_seq
+    });
+    Ok(CommunityInboxPage {
+        items,
+        unread_count,
+        next_cursor,
     })
 }
 

@@ -6,6 +6,7 @@ test("public game route exposes only canonical public thread data", async () => 
   const data = await load({
     params: { game: "00000000-0000-0000-0000-000000000001" },
     locals: { principalUserId: null, resolvedCapabilities: [] },
+    cookies: { get: () => undefined },
     url: new URL("http://localhost/games/00000000-0000-0000-0000-000000000001"),
     fetch: async () => ({
       ok: true,
@@ -44,4 +45,25 @@ test("signed-in public game report maps only the canonical public post target", 
     details: "repeated link",
   });
   assert.equal(result.reportId, "report-1");
+});
+
+test("signed-in public game watch uses the typed game-thread endpoint", async () => {
+  let mutation;
+  const result = await actions.watch({
+    cookies: { get: () => "member-session" },
+    params: { game: "00000000-0000-0000-0000-000000000001" },
+    request: new Request("http://localhost/games/demo?/watch", {
+      method: "POST",
+      body: new URLSearchParams({ watch_action: "subscribe" }),
+    }),
+    fetch: async (url, options) => {
+      mutation = { url, method: options.method };
+      return Response.json({ subscribed: true });
+    },
+  });
+  assert.deepEqual(mutation, {
+    url: "/subscriptions/game_thread/00000000-0000-0000-0000-000000000001",
+    method: "PUT",
+  });
+  assert.equal(result.subscribed, true);
 });

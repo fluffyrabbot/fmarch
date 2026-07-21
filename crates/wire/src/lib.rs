@@ -1061,6 +1061,82 @@ pub struct DiscussionThreadPage {
     pub next_before_seq: Option<i64>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct SubscriptionTargetState {
+    pub target_kind: String,
+    pub scope_id: Uuid,
+    pub subscribed: bool,
+    pub read_through_seq: i64,
+    pub latest_source_seq: i64,
+    pub unread_count: i64,
+}
+
+impl From<projections::SubscriptionTargetStateRow> for SubscriptionTargetState {
+    fn from(row: projections::SubscriptionTargetStateRow) -> Self {
+        Self {
+            target_kind: row.target_kind,
+            scope_id: row.scope_id,
+            subscribed: row.subscribed,
+            read_through_seq: row.read_through_seq,
+            latest_source_seq: row.latest_source_seq,
+            unread_count: row.unread_count,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct AdvanceSubscriptionReadRequest {
+    pub read_through_seq: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct CommunityInboxItem {
+    pub target_kind: String,
+    pub scope_id: Uuid,
+    pub source_seq: i64,
+    pub title: String,
+    pub href: String,
+    pub occurred_at: i64,
+    pub unread: bool,
+    pub subscribed: bool,
+}
+
+impl From<projections::CommunityInboxItemRow> for CommunityInboxItem {
+    fn from(row: projections::CommunityInboxItemRow) -> Self {
+        Self {
+            target_kind: row.target_kind,
+            scope_id: row.scope_id,
+            source_seq: row.source_seq,
+            title: row.title,
+            href: row.href,
+            occurred_at: row.occurred_at,
+            unread: row.unread,
+            subscribed: row.subscribed,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct CommunityInboxPage {
+    pub items: Vec<CommunityInboxItem>,
+    pub unread_count: i64,
+    pub next_cursor: Option<i64>,
+}
+
+impl From<projections::CommunityInboxPage> for CommunityInboxPage {
+    fn from(page: projections::CommunityInboxPage) -> Self {
+        Self {
+            items: page
+                .items
+                .into_iter()
+                .map(CommunityInboxItem::from)
+                .collect(),
+            unread_count: page.unread_count,
+            next_cursor: page.next_cursor,
+        }
+    }
+}
+
 impl From<projections::DiscussionAreaRow> for DiscussionArea {
     fn from(area: projections::DiscussionAreaRow) -> Self {
         DiscussionArea {
@@ -1572,20 +1648,21 @@ pub mod typescript {
     use ts_rs::TS;
 
     use crate::{
-        AckMsg, CapabilityGrant, ClientEnvelope, ClientMsg, Command, CommandMsg,
-        DayVoteOutcomeDelta, DiscussionArea, DiscussionAuthor, DiscussionPost,
-        DiscussionThreadPage, DiscussionTopic, DiscussionTopicPage, GameIndexEntry, GameIndexPage,
-        Hello, HostConsolePhaseStateDelta, HostConsoleSlotOccupancyDelta, HostConsoleStateDelta,
-        HostConsoleThreadPostDelta, HostPhaseControl, HostPromptDecision, HostPromptDelta,
-        HostPromptsDelta, ModerationCase, ModerationCaseDetail, ModerationCasePage,
-        ModerationHistory, ModerationReport, ModerationReportReceipt, PlayerInvestigationResult,
-        PlayerNotification, ProfileEditor, ProjectionDelta, PublicGameThreadPage, PublicProfile,
-        PublicSearchPage, PublicSearchResult, RejectCode, RejectMsg, ResolutionTraceDecisionRow,
-        ResolutionTraceEdgeRow, ResolutionTraceEffectChangeRow, ResolutionTraceGeneratedRow,
+        AckMsg, AdvanceSubscriptionReadRequest, CapabilityGrant, ClientEnvelope, ClientMsg,
+        Command, CommandMsg, CommunityInboxItem, CommunityInboxPage, DayVoteOutcomeDelta,
+        DiscussionArea, DiscussionAuthor, DiscussionPost, DiscussionThreadPage, DiscussionTopic,
+        DiscussionTopicPage, GameIndexEntry, GameIndexPage, Hello, HostConsolePhaseStateDelta,
+        HostConsoleSlotOccupancyDelta, HostConsoleStateDelta, HostConsoleThreadPostDelta,
+        HostPhaseControl, HostPromptDecision, HostPromptDelta, HostPromptsDelta, ModerationCase,
+        ModerationCaseDetail, ModerationCasePage, ModerationHistory, ModerationReport,
+        ModerationReportReceipt, PlayerInvestigationResult, PlayerNotification, ProfileEditor,
+        ProjectionDelta, PublicGameThreadPage, PublicProfile, PublicSearchPage, PublicSearchResult,
+        RejectCode, RejectMsg, ResolutionTraceDecisionRow, ResolutionTraceEdgeRow,
+        ResolutionTraceEffectChangeRow, ResolutionTraceGeneratedRow,
         ResolutionTraceInspectionReport, ResolutionTraceInspectionRun, ResolutionTraceNoteRow,
         ResolutionTraceVisibilityRow, ServerEnvelope, ServerMsg, SlotLifecycle, SubmitPostMedia,
-        ThreadPage, ThreadPost, ThreadPostMedia, ThreadPostMediaVariant, ThreadPostsDelta,
-        VoteCountClearedDelta, VoteCountDelta, VoteTarget,
+        SubscriptionTargetState, ThreadPage, ThreadPost, ThreadPostMedia, ThreadPostMediaVariant,
+        ThreadPostsDelta, VoteCountClearedDelta, VoteCountDelta, VoteTarget,
     };
 
     const HEADER: &str = "// This file is @generated by wire::typescript::render.\n// Run `cargo run -p wire --bin export_types` to regenerate.\n\n";
@@ -1628,6 +1705,10 @@ pub mod typescript {
         push::<DiscussionTopicPage>(&mut out);
         push::<DiscussionPost>(&mut out);
         push::<DiscussionThreadPage>(&mut out);
+        push::<SubscriptionTargetState>(&mut out);
+        push::<AdvanceSubscriptionReadRequest>(&mut out);
+        push::<CommunityInboxItem>(&mut out);
+        push::<CommunityInboxPage>(&mut out);
         push::<ModerationReportReceipt>(&mut out);
         push::<ModerationCase>(&mut out);
         push::<ModerationReport>(&mut out);
