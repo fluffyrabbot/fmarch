@@ -533,22 +533,41 @@
       "order": 50,
       "title": "Community moderation operations",
       "execution_class": "code",
-      "status": "open",
-      "summary": "Topic visibility and posting controls are enforceable, but members cannot report public content and moderators have no durable review queue, reasoned action history, or restoration workflow.",
+      "status": "complete",
+      "summary": "Authenticated members can report public discussion and game-thread posts into typed moderation-case streams with active-report deduplication and bounded daily submissions. GlobalMod operators have a capability-safe queue, reporter evidence, reasoned hide/dismiss/restore transitions, append-only history, and synchronous public-thread/search visibility updates.",
       "complete_when": ["Members can report public discussion and game-thread content into a durable deduplicated queue, and GlobalMod operators can review, reason, action, restore, and audit those reports through capability-safe routes."],
       "depends_on": ["product.community.discussions", "product.community.search", "product.identity.session-lifecycle"],
       "evidence": [
+        { "kind": "source", "value": "crates/projections/migrations/0001_baseline.sql" },
+        { "kind": "source", "value": "frontend/src/routes/moderation/+page.svelte" },
+        { "kind": "source", "value": "docs/arch/02-event-sourcing.md" },
+        { "kind": "command", "value": "npm run test:dev-test-game-community-moderation:local" },
+        { "kind": "artifact", "value": "target/community-moderation-role-proof/community-moderation-proof.json" }
+      ],
+      "remaining": []
+    },
+    {
+      "id": "product.community.subscriptions",
+      "section": "community",
+      "order": 60,
+      "title": "Community subscriptions and unread inbox",
+      "execution_class": "code",
+      "status": "open",
+      "summary": "Public discussions and game threads are discoverable and reportable, but members cannot subscribe to a conversation, receive durable in-app updates, or resume from a personal read position.",
+      "complete_when": ["Authenticated members can subscribe and unsubscribe to public topics and public game threads, receive a durable privacy-safe in-app update inbox, and advance a per-subscription read cursor without polling private audiences or exposing credential principals."],
+      "depends_on": ["product.community.discussions", "product.community.search", "product.community.moderation-operations", "product.identity.session-lifecycle"],
+      "evidence": [
         { "kind": "source", "value": "docs/arch/02-event-sourcing.md" }
       ],
-      "remaining": ["Add typed report and moderation-case streams, deduplication and abuse limits, a GlobalMod queue, reason-bearing hide/restore actions, reporter-safe receipts, search synchronization, and local browser proof."],
+      "remaining": ["Add typed subscription streams, per-target membership and read-cursor projections, synchronous in-app update fan-out from public posts, an authenticated inbox and watch controls, moderation-aware suppression, and seeded member Chromium proof."],
       "recommended_slice": {
-        "objective": "Build a typed, durable moderation-case vertical for public discussion posts and public game-thread posts: authenticated reports with one active report per reporter/document/reason family, bounded submission rates, a GlobalMod review queue, reason-bearing hide/dismiss/restore decisions, append-only audit history, synchronous search removal/restoration, reporter receipts, and seeded member/moderator Chromium proof.",
-        "paths": ["crates/community/", "crates/projections/", "crates/api/", "crates/wire/", "frontend/src/routes/moderation/", "frontend/src/routes/discussions/", "frontend/src/routes/games/", "tools/", "docs/arch/02-event-sourcing.md"],
-        "proof_commands": ["DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p community -p projections -p api moderation -- --test-threads=1", "npm run test:frontend-contract", "npm run test:completeness-scorecard"],
+        "objective": "Build a typed subscription and unread-inbox vertical for public discussion topics and public game threads: authenticated subscribe/unsubscribe commands, one durable subscription stream per member and target, monotonic read cursors, synchronous public-post notification fan-out, moderation-aware suppression, capability-safe inbox/watch controls, and seeded two-member Chromium proof.",
+        "paths": ["crates/community/", "crates/projections/", "crates/api/", "crates/wire/", "frontend/src/routes/inbox/", "frontend/src/routes/discussions/", "frontend/src/routes/games/", "tools/", "docs/arch/02-event-sourcing.md"],
+        "proof_commands": ["DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p community -p projections -p api subscription -- --test-threads=1", "npm run test:frontend-contract", "npm run test:completeness-scorecard"],
         "non_claims": [
-          "No automated guilt, toxicity, or reputation scoring.",
-          "No private-channel reporting until its audience and evidence-retention boundary is modeled separately.",
-          "No hosted moderation staffing, legal-response, or release-readiness claim from local proof."
+          "No email, SMS, mobile push, or hosted delivery guarantee.",
+          "No private-channel watches until audience-scoped notification retention is modeled separately.",
+          "No recommendation ranking, engagement optimization, or release-readiness claim from local proof."
         ]
       }
     },

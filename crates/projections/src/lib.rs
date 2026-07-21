@@ -525,6 +525,68 @@ pub struct DiscussionPostPage {
     pub next_before_seq: Option<i64>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ModerationReportReceiptRow {
+    pub report_id: Uuid,
+    pub status: String,
+    pub submitted_at: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ModerationCaseRow {
+    pub case_id: Uuid,
+    pub target_kind: String,
+    pub scope_id: Uuid,
+    pub source_seq: i64,
+    pub target_href: String,
+    pub target_body: String,
+    pub status: String,
+    pub report_count: i64,
+    pub opened_at: i64,
+    pub updated_at: i64,
+    pub updated_seq: i64,
+    pub version: i64,
+    pub action_reason: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ModerationReportRow {
+    pub report_id: Uuid,
+    pub reporter_principal_id: String,
+    pub reason_family: String,
+    pub details: String,
+    pub active: bool,
+    pub submitted_at: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ModerationHistoryRow {
+    pub source_seq: i64,
+    pub event_kind: String,
+    pub actor_principal_id: String,
+    pub reason: Option<String>,
+    pub occurred_at: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ModerationCaseDetailRow {
+    pub case: ModerationCaseRow,
+    pub reports: Vec<ModerationReportRow>,
+    pub history: Vec<ModerationHistoryRow>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ModerationCaseCursor {
+    pub updated_seq: i64,
+    pub case_id: Uuid,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ModerationCasePage {
+    pub cases: Vec<ModerationCaseRow>,
+    pub next_cursor: Option<ModerationCaseCursor>,
+}
+
 /// Capability-safe public profile data. The owning principal is intentionally
 /// absent from this row and its wire representation.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -556,6 +618,12 @@ pub enum ProjectionError {
     Store(#[from] StoreError),
     #[error(transparent)]
     Db(#[from] sqlx::Error),
+    #[error("this active report already exists")]
+    DuplicateModerationReport,
+    #[error("the reporter submission limit has been reached")]
+    ModerationReportRateLimited,
+    #[error("the moderation target is not public")]
+    ModerationTargetNotPublic,
     #[error("malformed event payload for kind {kind}: {source}")]
     Payload {
         kind: String,
@@ -1667,6 +1735,448 @@ pub async fn append_discussion_and_project_expected(
     Ok(stored)
 }
 
+/// Submit a public-content report under one transaction-scoped target lock.
+/// The lock makes case creation, active-report deduplication, and the bounded
+/// per-reporter rate check one atomic decision.
+pub async fn submit_moderation_report(
+    pool: &PgPool,
+    target: community::ModerationTarget,
+    report_id: Uuid,
+    reporter_principal_id: &str,
+    reason: community::ReportReasonFamily,
+    details: String,
+    occurred_at: i64,
+) -> Result<ModerationReportReceiptRow, ProjectionError> {
+    let mut tx = pool.begin().await?;
+    let lock_key = format!(
+        "{}:{}:{}",
+        target.kind.as_str(),
+        target.scope_id,
+        target.source_seq
+    );
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
+        .bind(lock_key)
+        .execute(&mut *tx)
+        .await?;
+    if !moderation_target_is_public(&mut tx, &target).await? {
+        return Err(ProjectionError::ModerationTargetNotPublic);
+    }
+    let recent: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM moderation_report WHERE reporter_principal_id = $1 AND submitted_at >= $2",
+    )
+    .bind(reporter_principal_id)
+    .bind(occurred_at.saturating_sub(86_400))
+    .fetch_one(&mut *tx)
+    .await?;
+    if recent >= 10 {
+        return Err(ProjectionError::ModerationReportRateLimited);
+    }
+
+    let existing = moderation_case_state_for_target(&mut tx, &target).await?;
+    if let Some(state) = &existing {
+        let duplicate: bool = sqlx::query_scalar(
+            "SELECT EXISTS(SELECT 1 FROM moderation_report WHERE case_id = $1 AND reporter_principal_id = $2 AND reason_family = $3 AND active)",
+        )
+        .bind(state.case_id)
+        .bind(reporter_principal_id)
+        .bind(reason.as_str())
+        .fetch_one(&mut *tx)
+        .await?;
+        if duplicate {
+            return Err(ProjectionError::DuplicateModerationReport);
+        }
+    }
+
+    let case_id = existing
+        .as_ref()
+        .map_or_else(Uuid::new_v4, |state| state.case_id);
+    let command = match &existing {
+        Some(_) => community::ModerationCommand::SubmitReport {
+            report_id,
+            reason,
+            details,
+        },
+        None => community::ModerationCommand::OpenReport {
+            target,
+            report_id,
+            reason,
+            details,
+        },
+    };
+    let events = community::decide_moderation(existing.as_ref(), command)
+        .map_err(|reject| moderation_domain_error(reject, "submit report"))?;
+    let inputs = moderation_event_inputs(events, reporter_principal_id, occurred_at);
+    let expected = existing.as_ref().map_or(0, |state| state.version);
+    let stored = eventstore::append_expected_in_tx(&mut tx, case_id, expected, &inputs).await?;
+    for event in &stored {
+        fold_moderation_event(&mut tx, case_id, event).await?;
+    }
+    tx.commit().await?;
+    Ok(ModerationReportReceiptRow {
+        report_id,
+        status: "received".to_string(),
+        submitted_at: occurred_at,
+    })
+}
+
+pub async fn append_moderation_and_project_expected(
+    pool: &PgPool,
+    case_id: Uuid,
+    expected_stream_seq: i64,
+    events: Vec<community::ModerationEvent>,
+    actor_principal_id: &str,
+    occurred_at: i64,
+) -> Result<(), ProjectionError> {
+    let inputs = moderation_event_inputs(events, actor_principal_id, occurred_at);
+    let mut tx = pool.begin().await?;
+    let stored =
+        eventstore::append_expected_in_tx(&mut tx, case_id, expected_stream_seq, &inputs).await?;
+    for event in &stored {
+        fold_moderation_event(&mut tx, case_id, event).await?;
+    }
+    tx.commit().await?;
+    Ok(())
+}
+
+fn moderation_event_inputs(
+    events: Vec<community::ModerationEvent>,
+    actor_principal_id: &str,
+    occurred_at: i64,
+) -> Vec<EventInput> {
+    events
+        .into_iter()
+        .map(|event| {
+            EventInput::new(
+                event.kind(),
+                1,
+                event.payload(),
+                eventstore::ActorId::User(actor_principal_id.to_string()),
+                occurred_at,
+            )
+        })
+        .collect()
+}
+
+fn moderation_domain_error(reject: community::CommunityReject, action: &str) -> ProjectionError {
+    ProjectionError::Payload {
+        kind: format!("moderation {action}"),
+        source: serde::de::Error::custom(reject.to_string()),
+    }
+}
+
+async fn moderation_case_state_for_target(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    target: &community::ModerationTarget,
+) -> Result<Option<community::ModerationCaseState>, ProjectionError> {
+    let row = sqlx::query(
+        "SELECT case_id, status, version FROM moderation_case WHERE target_kind = $1 AND scope_id = $2 AND source_seq = $3",
+    )
+    .bind(target.kind.as_str())
+    .bind(target.scope_id)
+    .bind(target.source_seq)
+    .fetch_optional(&mut **tx)
+    .await?;
+    row.map(|row| {
+        Ok(community::ModerationCaseState {
+            case_id: row.get("case_id"),
+            target: target.clone(),
+            status: community::ModerationCaseStatus::parse(row.get::<String, _>("status").as_str())
+                .map_err(|reject| moderation_domain_error(reject, "load case"))?,
+            version: row.get("version"),
+        })
+    })
+    .transpose()
+}
+
+async fn moderation_target_is_public(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    target: &community::ModerationTarget,
+) -> Result<bool, ProjectionError> {
+    let visible: bool = match target.kind {
+        community::ModerationTargetKind::DiscussionPost => {
+            sqlx::query_scalar(
+                r#"
+            SELECT EXISTS(
+                SELECT 1
+                FROM discussion_post AS post
+                JOIN discussion_topic AS topic ON topic.topic_id = post.topic_id
+                WHERE post.topic_id = $1 AND post.source_seq = $2
+                  AND topic.visibility = 'visible'
+                  AND NOT EXISTS (
+                      SELECT 1 FROM moderation_target_state AS moderation
+                      WHERE moderation.target_kind = 'discussion_post'
+                        AND moderation.scope_id = post.topic_id
+                        AND moderation.source_seq = post.source_seq
+                        AND moderation.visibility = 'hidden'
+                  )
+            )
+            "#,
+            )
+            .bind(target.scope_id)
+            .bind(target.source_seq)
+            .fetch_one(&mut **tx)
+            .await?
+        }
+        community::ModerationTargetKind::GamePost => {
+            sqlx::query_scalar(
+                r#"
+            SELECT EXISTS(
+                SELECT 1
+                FROM thread_view AS post
+                JOIN game_index AS game ON game.game_id = post.game_id
+                WHERE post.game_id = $1 AND post.source_seq = $2
+                  AND post.channel_id = 'main'
+                  AND game.status IN ('active', 'completed')
+                  AND NOT EXISTS (
+                      SELECT 1 FROM moderation_target_state AS moderation
+                      WHERE moderation.target_kind = 'game_post'
+                        AND moderation.scope_id = post.game_id
+                        AND moderation.source_seq = post.source_seq
+                        AND moderation.visibility = 'hidden'
+                  )
+            )
+            "#,
+            )
+            .bind(target.scope_id)
+            .bind(target.source_seq)
+            .fetch_one(&mut **tx)
+            .await?
+        }
+    };
+    Ok(visible)
+}
+
+async fn fold_moderation_event(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    case_id: Uuid,
+    event: &StoredEvent,
+) -> Result<(), ProjectionError> {
+    let actor = match &event.actor {
+        eventstore::ActorId::User(principal) => principal.clone(),
+        _ => {
+            return Err(ProjectionError::Payload {
+                kind: event.kind.clone(),
+                source: serde::de::Error::custom("moderation events require a user actor"),
+            })
+        }
+    };
+    let mut history_reason = None;
+    match event.kind.as_str() {
+        community::MODERATION_CASE_OPENED => {
+            #[derive(Deserialize)]
+            struct Payload {
+                target: community::ModerationTarget,
+            }
+            let payload: Payload =
+                serde_json::from_value(event.payload.clone()).map_err(|source| {
+                    ProjectionError::Payload {
+                        kind: event.kind.clone(),
+                        source,
+                    }
+                })?;
+            sqlx::query(
+                r#"
+                INSERT INTO moderation_case (
+                    case_id, target_kind, scope_id, source_seq, status,
+                    opened_at, updated_at, updated_seq, version
+                ) VALUES ($1, $2, $3, $4, 'open', $5, $5, $6, $7)
+                "#,
+            )
+            .bind(case_id)
+            .bind(payload.target.kind.as_str())
+            .bind(payload.target.scope_id)
+            .bind(payload.target.source_seq)
+            .bind(event.occurred_at)
+            .bind(event.seq)
+            .bind(event.stream_seq)
+            .execute(&mut **tx)
+            .await?;
+        }
+        community::MODERATION_REPORT_SUBMITTED => {
+            #[derive(Deserialize)]
+            struct Payload {
+                report_id: Uuid,
+                reason: String,
+                details: String,
+            }
+            let payload: Payload =
+                serde_json::from_value(event.payload.clone()).map_err(|source| {
+                    ProjectionError::Payload {
+                        kind: event.kind.clone(),
+                        source,
+                    }
+                })?;
+            community::ReportReasonFamily::parse(payload.reason.as_str())
+                .map_err(|reject| moderation_domain_error(reject, "fold report"))?;
+            sqlx::query(
+                r#"
+                INSERT INTO moderation_report (
+                    report_id, case_id, reporter_principal_id, reason_family,
+                    details, submitted_seq, submitted_at
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+                "#,
+            )
+            .bind(payload.report_id)
+            .bind(case_id)
+            .bind(&actor)
+            .bind(&payload.reason)
+            .bind(payload.details)
+            .bind(event.seq)
+            .bind(event.occurred_at)
+            .execute(&mut **tx)
+            .await?;
+            sqlx::query(
+                "UPDATE moderation_case SET status = 'open', report_count = report_count + 1, updated_at = $2, updated_seq = $3, version = $4, action_reason = NULL WHERE case_id = $1",
+            )
+            .bind(case_id)
+            .bind(event.occurred_at)
+            .bind(event.seq)
+            .bind(event.stream_seq)
+            .execute(&mut **tx)
+            .await?;
+            history_reason = Some(payload.reason);
+        }
+        community::MODERATION_CONTENT_HIDDEN
+        | community::MODERATION_CASE_DISMISSED
+        | community::MODERATION_CONTENT_RESTORED => {
+            #[derive(Deserialize)]
+            struct Payload {
+                reason: String,
+            }
+            let payload: Payload =
+                serde_json::from_value(event.payload.clone()).map_err(|source| {
+                    ProjectionError::Payload {
+                        kind: event.kind.clone(),
+                        source,
+                    }
+                })?;
+            let status = match event.kind.as_str() {
+                community::MODERATION_CONTENT_HIDDEN => "hidden",
+                community::MODERATION_CASE_DISMISSED => "dismissed",
+                _ => "restored",
+            };
+            sqlx::query(
+                "UPDATE moderation_case SET status = $2, updated_at = $3, updated_seq = $4, version = $5, action_reason = $6 WHERE case_id = $1",
+            )
+            .bind(case_id)
+            .bind(status)
+            .bind(event.occurred_at)
+            .bind(event.seq)
+            .bind(event.stream_seq)
+            .bind(&payload.reason)
+            .execute(&mut **tx)
+            .await?;
+            sqlx::query(
+                "UPDATE moderation_report SET active = FALSE WHERE case_id = $1 AND active",
+            )
+            .bind(case_id)
+            .execute(&mut **tx)
+            .await?;
+            if event.kind == community::MODERATION_CONTENT_HIDDEN {
+                set_moderation_target_visibility(
+                    tx,
+                    case_id,
+                    "hidden",
+                    &payload.reason,
+                    &actor,
+                    event.seq,
+                )
+                .await?;
+            } else if event.kind == community::MODERATION_CONTENT_RESTORED {
+                set_moderation_target_visibility(
+                    tx,
+                    case_id,
+                    "visible",
+                    &payload.reason,
+                    &actor,
+                    event.seq,
+                )
+                .await?;
+            }
+            history_reason = Some(payload.reason);
+        }
+        _ => return Ok(()),
+    }
+    sqlx::query(
+        "INSERT INTO moderation_case_history (source_seq, case_id, event_kind, actor_principal_id, reason, occurred_at) VALUES ($1, $2, $3, $4, $5, $6)",
+    )
+    .bind(event.seq)
+    .bind(case_id)
+    .bind(&event.kind)
+    .bind(actor)
+    .bind(history_reason)
+    .bind(event.occurred_at)
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
+}
+
+async fn set_moderation_target_visibility(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    case_id: Uuid,
+    visibility: &str,
+    reason: &str,
+    moderator_principal_id: &str,
+    updated_seq: i64,
+) -> Result<(), ProjectionError> {
+    let row = sqlx::query(
+        "SELECT target_kind, scope_id, source_seq FROM moderation_case WHERE case_id = $1",
+    )
+    .bind(case_id)
+    .fetch_one(&mut **tx)
+    .await?;
+    let target_kind: String = row.get("target_kind");
+    let scope_id: Uuid = row.get("scope_id");
+    let source_seq: i64 = row.get("source_seq");
+    sqlx::query(
+        r#"
+        INSERT INTO moderation_target_state (
+            target_kind, scope_id, source_seq, visibility, reason,
+            moderator_principal_id, updated_seq
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+        ON CONFLICT (target_kind, scope_id, source_seq) DO UPDATE SET
+            visibility = EXCLUDED.visibility,
+            reason = EXCLUDED.reason,
+            moderator_principal_id = EXCLUDED.moderator_principal_id,
+            updated_seq = EXCLUDED.updated_seq
+        "#,
+    )
+    .bind(&target_kind)
+    .bind(scope_id)
+    .bind(source_seq)
+    .bind(visibility)
+    .bind(reason)
+    .bind(moderator_principal_id)
+    .bind(updated_seq)
+    .execute(&mut **tx)
+    .await?;
+    sync_moderated_target_search_document(tx, &target_kind, scope_id, source_seq).await?;
+    Ok(())
+}
+
+async fn sync_moderated_target_search_document(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    target_kind: &str,
+    scope_id: Uuid,
+    source_seq: i64,
+) -> Result<(), ProjectionError> {
+    let document_kind = target_kind;
+    let document_key = format!("{scope_id}-{source_seq}");
+    sqlx::query(
+        "DELETE FROM public_search_document WHERE document_kind = $1 AND document_key = $2",
+    )
+    .bind(document_kind)
+    .bind(&document_key)
+    .execute(&mut **tx)
+    .await?;
+    if target_kind == "discussion_post" {
+        insert_discussion_post_search_document(tx, scope_id, source_seq).await?;
+    } else if target_kind == "game_post" {
+        insert_game_post_search_document(tx, scope_id, source_seq).await?;
+    }
+    Ok(())
+}
+
 /// Rebuild one non-game discussion stream. Topic streams replace their topic
 /// and post rows before replay; area streams upsert their immutable area row so
 /// rebuilding an area never invalidates existing topic foreign keys.
@@ -1704,6 +2214,59 @@ pub async fn rebuild_discussion_stream(
     for event in &events {
         fold_discussion_event(&mut tx, stream_id, event).await?;
     }
+    tx.commit().await?;
+    Ok(())
+}
+
+/// Rebuild one moderation case stream and its target visibility/search state.
+pub async fn rebuild_moderation_stream(
+    pool: &PgPool,
+    case_id: Uuid,
+) -> Result<(), ProjectionError> {
+    let events = eventstore::load_stream(pool, case_id).await?;
+    if !events
+        .iter()
+        .any(|event| event.kind == community::MODERATION_CASE_OPENED)
+    {
+        return Ok(());
+    }
+    #[derive(Deserialize)]
+    struct Payload {
+        target: community::ModerationTarget,
+    }
+    let opened = events
+        .iter()
+        .find(|event| event.kind == community::MODERATION_CASE_OPENED)
+        .expect("moderation stream has opening event");
+    let payload: Payload = serde_json::from_value(opened.payload.clone()).map_err(|source| {
+        ProjectionError::Payload {
+            kind: opened.kind.clone(),
+            source,
+        }
+    })?;
+    let mut tx = pool.begin().await?;
+    sqlx::query(
+        "DELETE FROM moderation_target_state WHERE target_kind = $1 AND scope_id = $2 AND source_seq = $3",
+    )
+    .bind(payload.target.kind.as_str())
+    .bind(payload.target.scope_id)
+    .bind(payload.target.source_seq)
+    .execute(&mut *tx)
+    .await?;
+    sqlx::query("DELETE FROM moderation_case WHERE case_id = $1")
+        .bind(case_id)
+        .execute(&mut *tx)
+        .await?;
+    for event in &events {
+        fold_moderation_event(&mut tx, case_id, event).await?;
+    }
+    sync_moderated_target_search_document(
+        &mut tx,
+        payload.target.kind.as_str(),
+        payload.target.scope_id,
+        payload.target.source_seq,
+    )
+    .await?;
     tx.commit().await?;
     Ok(())
 }
@@ -3141,6 +3704,16 @@ pub async fn thread_view(
     thread_view_for_channel(pool, game_id, "main", before_seq, limit).await
 }
 
+/// Read the public main thread with globally moderated posts removed.
+pub async fn public_thread_view(
+    pool: &PgPool,
+    game_id: Uuid,
+    before_seq: Option<i64>,
+    limit: i64,
+) -> Result<ThreadViewPage, ProjectionError> {
+    thread_view_for_channel_with_visibility(pool, game_id, "main", before_seq, limit, true).await
+}
+
 /// Read public active and completed games newest-first. Setup rows are kept for
 /// rebuildability but never leave this public discovery boundary.
 pub async fn game_index(
@@ -3520,6 +4093,13 @@ pub async fn discussion_posts(
                 FROM discussion_post AS post
                 LEFT JOIN profile_public AS author ON author.profile_id = post.author_profile_id
                 WHERE post.topic_id = $1 AND post.source_seq < $2
+                  AND NOT EXISTS (
+                      SELECT 1 FROM moderation_target_state AS moderation
+                      WHERE moderation.target_kind = 'discussion_post'
+                        AND moderation.scope_id = post.topic_id
+                        AND moderation.source_seq = post.source_seq
+                        AND moderation.visibility = 'hidden'
+                  )
                 ORDER BY post.source_seq DESC
                 LIMIT $3
                 "#,
@@ -3539,6 +4119,13 @@ pub async fn discussion_posts(
                 FROM discussion_post AS post
                 LEFT JOIN profile_public AS author ON author.profile_id = post.author_profile_id
                 WHERE post.topic_id = $1
+                  AND NOT EXISTS (
+                      SELECT 1 FROM moderation_target_state AS moderation
+                      WHERE moderation.target_kind = 'discussion_post'
+                        AND moderation.scope_id = post.topic_id
+                        AND moderation.source_seq = post.source_seq
+                        AND moderation.visibility = 'hidden'
+                  )
                 ORDER BY post.source_seq DESC
                 LIMIT $2
                 "#,
@@ -3567,6 +4154,204 @@ pub async fn discussion_posts(
         posts,
         next_before_seq,
     })
+}
+
+pub async fn moderation_report_receipt(
+    pool: &PgPool,
+    report_id: Uuid,
+    reporter_principal_id: &str,
+) -> Result<Option<ModerationReportReceiptRow>, ProjectionError> {
+    let row = sqlx::query(
+        r#"
+        SELECT report.report_id, report.submitted_at,
+               CASE WHEN report.active THEN 'received' ELSE item.status END AS status
+        FROM moderation_report AS report
+        JOIN moderation_case AS item ON item.case_id = report.case_id
+        WHERE report.report_id = $1 AND report.reporter_principal_id = $2
+        "#,
+    )
+    .bind(report_id)
+    .bind(reporter_principal_id)
+    .fetch_optional(pool)
+    .await?;
+    Ok(row.map(|row| ModerationReportReceiptRow {
+        report_id: row.get("report_id"),
+        status: row.get("status"),
+        submitted_at: row.get("submitted_at"),
+    }))
+}
+
+pub async fn moderation_cases(
+    pool: &PgPool,
+    status: Option<&str>,
+    cursor: Option<ModerationCaseCursor>,
+    limit: i64,
+) -> Result<ModerationCasePage, ProjectionError> {
+    let limit = limit.clamp(1, 100);
+    let rows = sqlx::query(
+        r#"
+        SELECT item.case_id, item.target_kind, item.scope_id, item.source_seq,
+               item.status, item.report_count, item.opened_at, item.updated_at,
+               item.updated_seq, item.version, item.action_reason,
+               COALESCE(discussion.body, game_post.body, '') AS target_body,
+               CASE item.target_kind
+                   WHEN 'discussion_post' THEN '/discussions/' || area.slug || '/t/' ||
+                       item.scope_id::text || '#post-' || item.source_seq::text
+                   ELSE '/games/' || item.scope_id::text || '#thread-post-' || item.source_seq::text
+               END AS target_href
+        FROM moderation_case AS item
+        LEFT JOIN discussion_post AS discussion
+          ON item.target_kind = 'discussion_post'
+         AND discussion.topic_id = item.scope_id AND discussion.source_seq = item.source_seq
+        LEFT JOIN discussion_topic AS topic ON topic.topic_id = discussion.topic_id
+        LEFT JOIN discussion_area AS area ON area.area_id = topic.area_id
+        LEFT JOIN thread_view AS game_post
+          ON item.target_kind = 'game_post'
+         AND game_post.game_id = item.scope_id AND game_post.source_seq = item.source_seq
+        WHERE ($1::TEXT IS NULL OR item.status = $1)
+          AND ($2::BIGINT IS NULL OR item.updated_seq < $2
+               OR (item.updated_seq = $2 AND item.case_id < $3))
+        ORDER BY item.updated_seq DESC, item.case_id DESC
+        LIMIT $4
+        "#,
+    )
+    .bind(status)
+    .bind(cursor.map(|value| value.updated_seq))
+    .bind(cursor.map(|value| value.case_id))
+    .bind(limit + 1)
+    .fetch_all(pool)
+    .await?;
+    let has_more = rows.len() as i64 > limit;
+    let cases: Vec<_> = rows
+        .into_iter()
+        .take(limit as usize)
+        .map(moderation_case_row)
+        .collect();
+    let next_cursor = has_more.then(|| {
+        let last = cases.last().expect("full moderation page has a final case");
+        ModerationCaseCursor {
+            updated_seq: last.updated_seq,
+            case_id: last.case_id,
+        }
+    });
+    Ok(ModerationCasePage { cases, next_cursor })
+}
+
+pub async fn moderation_case_by_id(
+    pool: &PgPool,
+    case_id: Uuid,
+) -> Result<Option<ModerationCaseDetailRow>, ProjectionError> {
+    let case = sqlx::query(
+        r#"
+        SELECT item.case_id, item.target_kind, item.scope_id, item.source_seq,
+               item.status, item.report_count, item.opened_at, item.updated_at,
+               item.updated_seq, item.version, item.action_reason,
+               COALESCE(discussion.body, game_post.body, '') AS target_body,
+               CASE item.target_kind
+                   WHEN 'discussion_post' THEN '/discussions/' || area.slug || '/t/' ||
+                       item.scope_id::text || '#post-' || item.source_seq::text
+                   ELSE '/games/' || item.scope_id::text || '#thread-post-' || item.source_seq::text
+               END AS target_href
+        FROM moderation_case AS item
+        LEFT JOIN discussion_post AS discussion
+          ON item.target_kind = 'discussion_post'
+         AND discussion.topic_id = item.scope_id AND discussion.source_seq = item.source_seq
+        LEFT JOIN discussion_topic AS topic ON topic.topic_id = discussion.topic_id
+        LEFT JOIN discussion_area AS area ON area.area_id = topic.area_id
+        LEFT JOIN thread_view AS game_post
+          ON item.target_kind = 'game_post'
+         AND game_post.game_id = item.scope_id AND game_post.source_seq = item.source_seq
+        WHERE item.case_id = $1
+        "#,
+    )
+    .bind(case_id)
+    .fetch_optional(pool)
+    .await?
+    .map(moderation_case_row);
+    let Some(case) = case else { return Ok(None) };
+    let reports = sqlx::query(
+        "SELECT report_id, reporter_principal_id, reason_family, details, active, submitted_at FROM moderation_report WHERE case_id = $1 ORDER BY submitted_seq",
+    )
+    .bind(case_id)
+    .fetch_all(pool)
+    .await?
+    .into_iter()
+    .map(|row| ModerationReportRow {
+        report_id: row.get("report_id"),
+        reporter_principal_id: row.get("reporter_principal_id"),
+        reason_family: row.get("reason_family"),
+        details: row.get("details"),
+        active: row.get("active"),
+        submitted_at: row.get("submitted_at"),
+    })
+    .collect();
+    let history = sqlx::query(
+        "SELECT source_seq, event_kind, actor_principal_id, reason, occurred_at FROM moderation_case_history WHERE case_id = $1 ORDER BY source_seq",
+    )
+    .bind(case_id)
+    .fetch_all(pool)
+    .await?
+    .into_iter()
+    .map(|row| ModerationHistoryRow {
+        source_seq: row.get("source_seq"),
+        event_kind: row.get("event_kind"),
+        actor_principal_id: row.get("actor_principal_id"),
+        reason: row.get("reason"),
+        occurred_at: row.get("occurred_at"),
+    })
+    .collect();
+    Ok(Some(ModerationCaseDetailRow {
+        case,
+        reports,
+        history,
+    }))
+}
+
+pub async fn moderation_case_state(
+    pool: &PgPool,
+    case_id: Uuid,
+) -> Result<Option<community::ModerationCaseState>, ProjectionError> {
+    let row = sqlx::query(
+        "SELECT target_kind, scope_id, source_seq, status, version FROM moderation_case WHERE case_id = $1",
+    )
+    .bind(case_id)
+    .fetch_optional(pool)
+    .await?;
+    row.map(|row| {
+        Ok(community::ModerationCaseState {
+            case_id,
+            target: community::ModerationTarget {
+                kind: community::ModerationTargetKind::parse(
+                    row.get::<String, _>("target_kind").as_str(),
+                )
+                .map_err(|reject| moderation_domain_error(reject, "load case"))?,
+                scope_id: row.get("scope_id"),
+                source_seq: row.get("source_seq"),
+            },
+            status: community::ModerationCaseStatus::parse(row.get::<String, _>("status").as_str())
+                .map_err(|reject| moderation_domain_error(reject, "load case"))?,
+            version: row.get("version"),
+        })
+    })
+    .transpose()
+}
+
+fn moderation_case_row(row: sqlx::postgres::PgRow) -> ModerationCaseRow {
+    ModerationCaseRow {
+        case_id: row.get("case_id"),
+        target_kind: row.get("target_kind"),
+        scope_id: row.get("scope_id"),
+        source_seq: row.get("source_seq"),
+        target_href: row.get("target_href"),
+        target_body: row.get("target_body"),
+        status: row.get("status"),
+        report_count: row.get("report_count"),
+        opened_at: row.get("opened_at"),
+        updated_at: row.get("updated_at"),
+        updated_seq: row.get("updated_seq"),
+        version: row.get("version"),
+        action_reason: row.get("action_reason"),
+    }
 }
 
 fn discussion_topic_row(row: sqlx::postgres::PgRow) -> DiscussionTopicRow {
@@ -3692,6 +4477,18 @@ pub async fn thread_view_for_channel(
     before_seq: Option<i64>,
     limit: i64,
 ) -> Result<ThreadViewPage, ProjectionError> {
+    thread_view_for_channel_with_visibility(pool, game_id, channel_id, before_seq, limit, false)
+        .await
+}
+
+async fn thread_view_for_channel_with_visibility(
+    pool: &PgPool,
+    game_id: Uuid,
+    channel_id: &str,
+    before_seq: Option<i64>,
+    limit: i64,
+    public_only: bool,
+) -> Result<ThreadViewPage, ProjectionError> {
     let limit = limit.clamp(1, 100);
     let fetch_limit = limit + 1;
     let rows = sqlx::query(
@@ -3702,6 +4499,15 @@ pub async fn thread_view_for_channel(
         WHERE game_id = $1
           AND channel_id = $2
           AND ($3::BIGINT IS NULL OR source_seq < $3)
+          AND (
+              NOT $5::BOOLEAN OR NOT EXISTS (
+                  SELECT 1 FROM moderation_target_state AS moderation
+                  WHERE moderation.target_kind = 'game_post'
+                    AND moderation.scope_id = thread_view.game_id
+                    AND moderation.source_seq = thread_view.source_seq
+                    AND moderation.visibility = 'hidden'
+              )
+          )
         ORDER BY source_seq DESC
         LIMIT $4
         "#,
@@ -3710,6 +4516,7 @@ pub async fn thread_view_for_channel(
     .bind(channel_id)
     .bind(before_seq)
     .bind(fetch_limit)
+    .bind(public_only)
     .fetch_all(pool)
     .await?;
 
@@ -4300,6 +5107,13 @@ async fn sync_game_search_documents(
         WHERE post.game_id = $1
           AND post.channel_id = 'main'
           AND game.status IN ('active', 'completed')
+          AND NOT EXISTS (
+              SELECT 1 FROM moderation_target_state AS moderation
+              WHERE moderation.target_kind = 'game_post'
+                AND moderation.scope_id = post.game_id
+                AND moderation.source_seq = post.source_seq
+                AND moderation.visibility = 'hidden'
+          )
         "#,
     )
     .bind(game_id)
@@ -4329,6 +5143,13 @@ async fn insert_game_post_search_document(
         WHERE post.game_id = $1 AND post.source_seq = $2
           AND post.channel_id = 'main'
           AND game.status IN ('active', 'completed')
+          AND NOT EXISTS (
+              SELECT 1 FROM moderation_target_state AS moderation
+              WHERE moderation.target_kind = 'game_post'
+                AND moderation.scope_id = post.game_id
+                AND moderation.source_seq = post.source_seq
+                AND moderation.visibility = 'hidden'
+          )
         ON CONFLICT (document_kind, document_key) DO UPDATE SET
             title = EXCLUDED.title,
             body = EXCLUDED.body,
@@ -4417,9 +5238,59 @@ async fn sync_discussion_search_documents(
         JOIN discussion_topic AS topic ON topic.topic_id = post.topic_id
         JOIN discussion_area AS area ON area.area_id = topic.area_id
         WHERE post.topic_id = $1 AND topic.visibility = 'visible'
+          AND NOT EXISTS (
+              SELECT 1 FROM moderation_target_state AS moderation
+              WHERE moderation.target_kind = 'discussion_post'
+                AND moderation.scope_id = post.topic_id
+                AND moderation.source_seq = post.source_seq
+                AND moderation.visibility = 'hidden'
+          )
         "#,
     )
     .bind(topic_id)
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
+}
+
+async fn insert_discussion_post_search_document(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    topic_id: Uuid,
+    source_seq: i64,
+) -> Result<(), ProjectionError> {
+    sqlx::query(
+        r#"
+        INSERT INTO public_search_document (
+            document_kind, document_key, scope_kind, scope_id, title, body,
+            href, updated_seq, published_at
+        )
+        SELECT 'discussion_post', post.topic_id::text || '-' || post.source_seq::text,
+               'discussion', post.topic_id, 'Reply in ' || topic.title, post.body,
+               '/discussions/' || area.slug || '/t/' || post.topic_id::text ||
+                   '#post-' || post.source_seq::text,
+               post.source_seq, post.created_at
+        FROM discussion_post AS post
+        JOIN discussion_topic AS topic ON topic.topic_id = post.topic_id
+        JOIN discussion_area AS area ON area.area_id = topic.area_id
+        WHERE post.topic_id = $1 AND post.source_seq = $2
+          AND topic.visibility = 'visible'
+          AND NOT EXISTS (
+              SELECT 1 FROM moderation_target_state AS moderation
+              WHERE moderation.target_kind = 'discussion_post'
+                AND moderation.scope_id = post.topic_id
+                AND moderation.source_seq = post.source_seq
+                AND moderation.visibility = 'hidden'
+          )
+        ON CONFLICT (document_kind, document_key) DO UPDATE SET
+            title = EXCLUDED.title,
+            body = EXCLUDED.body,
+            href = EXCLUDED.href,
+            updated_seq = EXCLUDED.updated_seq,
+            published_at = EXCLUDED.published_at
+        "#,
+    )
+    .bind(topic_id)
+    .bind(source_seq)
     .execute(&mut **tx)
     .await?;
     Ok(())

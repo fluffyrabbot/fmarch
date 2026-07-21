@@ -153,6 +153,8 @@ Examples:
 | `game_index` | public board listing: active/completed games, pack, status, current phase, and stable page cursor |
 | `discussion_area` / `discussion_topic` / `discussion_post` | public non-game areas, visible topic lifecycle, and paginated post threads |
 | `public_search_document` | public-only weighted search documents with canonical links across discussions, profiles, games, and public main-thread posts |
+| `moderation_case` / `moderation_report` / `moderation_case_history` | durable public-content reports, current GlobalMod review state, and append-only reasoned action history |
+| `moderation_target_state` | reversible public visibility overlay for individually moderated discussion and main-thread posts |
 
 `game_index` folds `GameCreated`, `GameStarted`, `PhaseAdvanced`, and `GameCompleted`
 synchronously with the game stream. Setup rows remain rebuildable but are excluded from the
@@ -190,6 +192,18 @@ cursor. Search documents store only presentation-safe text and canonical public 
 channels, credential principals, authorization state, and engagement signals never enter this
 projection. Public game-post results resolve through the read-only `/games/{game}` surface rather
 than a capability-scoped player route.
+
+Community moderation is event-sourced rather than implemented as destructive post edits. An
+authenticated report opens or appends to one target-keyed moderation case stream; one active
+report per reporter, target, and reason family is enforced under a transaction-scoped target lock,
+and each reporter is bounded to ten submissions per rolling day. Reporter receipts reveal only the
+report id, submission time, and current disposition. `GlobalMod`/`GlobalAdmin` reads expose the
+review evidence and append-only case history through a separate capability boundary. Reason-bearing
+hide, dismiss, and restore commands use the case's expected version. Hide and restore update the
+`moderation_target_state` overlay and exact public search document in the same transaction; public
+discussion and game-thread reads exclude only targets whose overlay is hidden. The original post
+and case events remain immutable, so rebuilding a case reproduces both audit history and final
+public/search visibility. Private-channel targets are rejected before a case can open.
 
 Completed game streams can be exported as versioned `StreamExport` manifests. The checksum covers
 the canonical manifest content, stream sequence positions must be contiguous, and imports refuse

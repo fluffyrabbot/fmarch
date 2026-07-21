@@ -1582,5 +1582,81 @@ ALTER TABLE ONLY public.profile_editor
 
 
 --
+-- Community moderation: typed cases, reports, audit history, and visibility overlay.
+--
+
+CREATE TABLE public.moderation_case (
+    case_id uuid NOT NULL,
+    target_kind text NOT NULL,
+    scope_id uuid NOT NULL,
+    source_seq bigint NOT NULL,
+    status text NOT NULL,
+    report_count bigint DEFAULT 0 NOT NULL,
+    opened_at bigint NOT NULL,
+    updated_at bigint NOT NULL,
+    updated_seq bigint NOT NULL,
+    version bigint NOT NULL,
+    action_reason text,
+    CONSTRAINT moderation_case_report_count_check CHECK ((report_count >= 0)),
+    CONSTRAINT moderation_case_status_check CHECK ((status = ANY (ARRAY['open'::text, 'hidden'::text, 'dismissed'::text, 'restored'::text]))),
+    CONSTRAINT moderation_case_target_kind_check CHECK ((target_kind = ANY (ARRAY['discussion_post'::text, 'game_post'::text])))
+);
+
+CREATE TABLE public.moderation_report (
+    report_id uuid NOT NULL,
+    case_id uuid NOT NULL,
+    reporter_principal_id text NOT NULL,
+    reason_family text NOT NULL,
+    details text NOT NULL,
+    active boolean DEFAULT true NOT NULL,
+    submitted_seq bigint NOT NULL,
+    submitted_at bigint NOT NULL,
+    CONSTRAINT moderation_report_reason_family_check CHECK ((reason_family = ANY (ARRAY['spam'::text, 'harassment'::text, 'hate'::text, 'sexual_content'::text, 'self_harm'::text, 'other'::text])))
+);
+
+CREATE TABLE public.moderation_case_history (
+    source_seq bigint NOT NULL,
+    case_id uuid NOT NULL,
+    event_kind text NOT NULL,
+    actor_principal_id text NOT NULL,
+    reason text,
+    occurred_at bigint NOT NULL
+);
+
+CREATE TABLE public.moderation_target_state (
+    target_kind text NOT NULL,
+    scope_id uuid NOT NULL,
+    source_seq bigint NOT NULL,
+    visibility text NOT NULL,
+    reason text NOT NULL,
+    moderator_principal_id text NOT NULL,
+    updated_seq bigint NOT NULL,
+    CONSTRAINT moderation_target_state_target_kind_check CHECK ((target_kind = ANY (ARRAY['discussion_post'::text, 'game_post'::text]))),
+    CONSTRAINT moderation_target_state_visibility_check CHECK ((visibility = ANY (ARRAY['visible'::text, 'hidden'::text])))
+);
+
+ALTER TABLE ONLY public.moderation_case
+    ADD CONSTRAINT moderation_case_pkey PRIMARY KEY (case_id);
+ALTER TABLE ONLY public.moderation_case
+    ADD CONSTRAINT moderation_case_target_key UNIQUE (target_kind, scope_id, source_seq);
+ALTER TABLE ONLY public.moderation_report
+    ADD CONSTRAINT moderation_report_pkey PRIMARY KEY (report_id);
+ALTER TABLE ONLY public.moderation_case_history
+    ADD CONSTRAINT moderation_case_history_pkey PRIMARY KEY (source_seq);
+ALTER TABLE ONLY public.moderation_target_state
+    ADD CONSTRAINT moderation_target_state_pkey PRIMARY KEY (target_kind, scope_id, source_seq);
+
+CREATE INDEX moderation_case_queue_idx ON public.moderation_case USING btree (status, updated_seq DESC, case_id DESC);
+CREATE INDEX moderation_report_rate_idx ON public.moderation_report USING btree (reporter_principal_id, submitted_at DESC);
+CREATE UNIQUE INDEX moderation_report_active_dedupe_idx ON public.moderation_report USING btree (case_id, reporter_principal_id, reason_family) WHERE active;
+CREATE INDEX moderation_case_history_case_idx ON public.moderation_case_history USING btree (case_id, source_seq);
+
+ALTER TABLE ONLY public.moderation_report
+    ADD CONSTRAINT moderation_report_case_id_fkey FOREIGN KEY (case_id) REFERENCES public.moderation_case(case_id) ON DELETE CASCADE;
+ALTER TABLE ONLY public.moderation_case_history
+    ADD CONSTRAINT moderation_case_history_case_id_fkey FOREIGN KEY (case_id) REFERENCES public.moderation_case(case_id) ON DELETE CASCADE;
+
+
+--
 -- PostgreSQL database dump complete
 --

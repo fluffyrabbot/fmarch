@@ -17,7 +17,7 @@ count is treated as product progress.
 
 | Execution class | Complete | Partial | Open | Blocked | Deferred | Total |
 |---|---:|---:|---:|---:|---:|---:|
-| code | 29 | 0 | 1 | 0 | 0 | 30 |
+| code | 30 | 0 | 1 | 0 | 0 | 31 |
 | external-evidence | 0 | 0 | 0 | 6 | 0 | 6 |
 | human | 0 | 0 | 1 | 1 | 0 | 2 |
 | optional | 0 | 0 | 0 | 0 | 1 | 1 |
@@ -28,23 +28,23 @@ Overall release closure complete: **no**.
 
 ## Next buildable coding slice
 
-### Community moderation operations `product.community.moderation-operations`
+### Community subscriptions and unread inbox `product.community.subscriptions`
 
-Build a typed, durable moderation-case vertical for public discussion posts and public game-thread posts: authenticated reports with one active report per reporter/document/reason family, bounded submission rates, a GlobalMod review queue, reason-bearing hide/dismiss/restore decisions, append-only audit history, synchronous search removal/restoration, reporter receipts, and seeded member/moderator Chromium proof.
+Build a typed subscription and unread-inbox vertical for public discussion topics and public game threads: authenticated subscribe/unsubscribe commands, one durable subscription stream per member and target, monotonic read cursors, synchronous public-post notification fan-out, moderation-aware suppression, capability-safe inbox/watch controls, and seeded two-member Chromium proof.
 
-Owned paths: `crates/community/`, `crates/projections/`, `crates/api/`, `crates/wire/`, `frontend/src/routes/moderation/`, `frontend/src/routes/discussions/`, `frontend/src/routes/games/`, `tools/`, `docs/arch/02-event-sourcing.md`.
+Owned paths: `crates/community/`, `crates/projections/`, `crates/api/`, `crates/wire/`, `frontend/src/routes/inbox/`, `frontend/src/routes/discussions/`, `frontend/src/routes/games/`, `tools/`, `docs/arch/02-event-sourcing.md`.
 
 Proof:
 
-- `DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p community -p projections -p api moderation -- --test-threads=1`
+- `DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p community -p projections -p api subscription -- --test-threads=1`
 - `npm run test:frontend-contract`
 - `npm run test:completeness-scorecard`
 
 Explicit non-claims:
 
-- No automated guilt, toxicity, or reputation scoring.
-- No private-channel reporting until its audience and evidence-retention boundary is modeled separately.
-- No hosted moderation staffing, legal-response, or release-readiness claim from local proof.
+- No email, SMS, mobile push, or hosted delivery guarantee.
+- No private-channel watches until audience-scoped notification retention is modeled separately.
+- No recommendation ranking, engagement optimization, or release-readiness claim from local proof.
 
 ## Locally proven foundation
 
@@ -102,7 +102,8 @@ Explicit non-claims:
 | complete | Non-game discussion areas<br>`product.community.discussions` | `product.community.game-index`<br>`product.identity.registration` | Users can browse, create, post in, and moderate capability-scoped non-game discussions through real routes and projections. | Complete. | source: `crates/community/src/lib.rs`<br>source: `crates/projections/migrations/0001_baseline.sql`<br>source: `frontend/src/routes/community/+page.svelte`<br>source: `frontend/src/routes/discussions/[slug]/+page.svelte`<br>source: `frontend/src/routes/discussions/[slug]/t/[topic]/+page.svelte`<br>source: `docs/arch/02-event-sourcing.md`<br>command: `npm run test:dev-test-game-discussion:local`<br>artifact: `target/discussion-role-proof/discussion-proof.json`<br>Public non-game discussions use a typed community write model, expected-version appends, enabled-account and profile-backed authorship, independent posting/visibility moderation, canonical topic/post URLs, a public area directory, and a seeded Chromium proof. |
 | complete | User profiles<br>`product.community.profiles` | `product.identity.registration` | A user can view and edit an authorization-safe profile, with durable projection state and browser proof. | Complete. | source: `crates/projections/migrations/0001_baseline.sql`<br>source: `frontend/src/routes/u/[handle]/+page.svelte`<br>source: `docs/arch/02-event-sourcing.md`<br>command: `npm run test:dev-test-game-profile:local`<br>artifact: `target/profile-role-proof/profile-proof.json`<br>Profiles use durable public and owner-only projections, enabled-account editing, explicit public or members-only visibility, and a seeded Chromium proof. |
 | complete | Public community search<br>`product.community.search` | `product.community.discussions`<br>`product.community.profiles`<br>`product.community.game-index` | Users can search public discussions, public game threads, profiles, and games through visibility-safe ranked results with stable pagination and canonical result links. | Complete. | source: `crates/projections/migrations/0001_baseline.sql`<br>source: `frontend/src/routes/search/+page.svelte`<br>source: `frontend/src/routes/games/[game]/+page.svelte`<br>source: `docs/arch/02-event-sourcing.md`<br>command: `npm run test:dev-test-game-search:local`<br>artifact: `target/public-search-role-proof/public-search-proof.json`<br>A rebuildable PostgreSQL full-text projection searches visible discussions, public profiles, active/completed games, and public main-thread posts with weighted rank, stable cursor pagination, typed filters, excerpts, canonical destinations, and synchronous visibility removal. |
-| open | Community moderation operations<br>`product.community.moderation-operations` | `product.community.discussions`<br>`product.community.search`<br>`product.identity.session-lifecycle` | Members can report public discussion and game-thread content into a durable deduplicated queue, and GlobalMod operators can review, reason, action, restore, and audit those reports through capability-safe routes. | Remaining: Add typed report and moderation-case streams, deduplication and abuse limits, a GlobalMod queue, reason-bearing hide/restore actions, reporter-safe receipts, search synchronization, and local browser proof. | source: `docs/arch/02-event-sourcing.md`<br>Topic visibility and posting controls are enforceable, but members cannot report public content and moderators have no durable review queue, reasoned action history, or restoration workflow. |
+| complete | Community moderation operations<br>`product.community.moderation-operations` | `product.community.discussions`<br>`product.community.search`<br>`product.identity.session-lifecycle` | Members can report public discussion and game-thread content into a durable deduplicated queue, and GlobalMod operators can review, reason, action, restore, and audit those reports through capability-safe routes. | Complete. | source: `crates/projections/migrations/0001_baseline.sql`<br>source: `frontend/src/routes/moderation/+page.svelte`<br>source: `docs/arch/02-event-sourcing.md`<br>command: `npm run test:dev-test-game-community-moderation:local`<br>artifact: `target/community-moderation-role-proof/community-moderation-proof.json`<br>Authenticated members can report public discussion and game-thread posts into typed moderation-case streams with active-report deduplication and bounded daily submissions. GlobalMod operators have a capability-safe queue, reporter evidence, reasoned hide/dismiss/restore transitions, append-only history, and synchronous public-thread/search visibility updates. |
+| open | Community subscriptions and unread inbox<br>`product.community.subscriptions` | `product.community.discussions`<br>`product.community.search`<br>`product.community.moderation-operations`<br>`product.identity.session-lifecycle` | Authenticated members can subscribe and unsubscribe to public topics and public game threads, receive a durable privacy-safe in-app update inbox, and advance a per-subscription read cursor without polling private audiences or exposing credential principals. | Remaining: Add typed subscription streams, per-target membership and read-cursor projections, synchronous in-app update fan-out from public posts, an authenticated inbox and watch controls, moderation-aware suppression, and seeded member Chromium proof. | source: `docs/arch/02-event-sourcing.md`<br>Public discussions and game threads are discoverable and reportable, but members cannot subscribe to a conversation, receive durable in-app updates, or resume from a personal read position. |
 
 ## Archival and export
 

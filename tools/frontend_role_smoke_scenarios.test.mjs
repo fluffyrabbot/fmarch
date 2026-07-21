@@ -97,10 +97,10 @@ test("board smoke scenario keeps allowed and blocked navigation explicit", () =>
     [
       [
         "game-action-midsummer-moderator",
-        "Requires HostOf(midsummer) or CohostOf(midsummer)",
+        "Requires GlobalAdmin(midsummer) or GlobalMod(midsummer) or HostOf(midsummer) or CohostOf(midsummer)",
       ],
       ["game-action-solstice-player", "Requires SlotOccupant(solstice) or ChannelMember(solstice) or DeadViewer(solstice) or SpectatorOf(solstice)"],
-      ["game-action-solstice-moderator", "Requires HostOf(solstice) or CohostOf(solstice)"],
+      ["game-action-solstice-moderator", "Requires GlobalAdmin(solstice) or GlobalMod(solstice) or HostOf(solstice) or CohostOf(solstice)"],
     ],
   );
   assertFocusScenario(boardScenario.focus, "board");

@@ -13,7 +13,7 @@ import {
   validateRegistry,
 } from "./completeness_scorecard.mjs";
 
-test("real completion registry exposes moderation operations after public search", async () => {
+test("real completion registry exposes subscriptions after moderation operations", async () => {
   const registry = await loadCompletionRegistry();
   await validateRegistry(registry);
   const summary = summarizeRegistry(registry);
@@ -28,7 +28,7 @@ test("real completion registry exposes moderation operations after public search
   assert.equal(summary.productCapabilitiesComplete, false);
   assert.equal(summary.platformComplete, false);
   assert.equal(summary.releaseComplete, false);
-  assert.equal(nextBuildableCodeItem(registry)?.id, "product.community.moderation-operations");
+  assert.equal(nextBuildableCodeItem(registry)?.id, "product.community.subscriptions");
 });
 
 test("generated scorecard exactly matches the canonical registry", async () => {
@@ -92,6 +92,11 @@ test("registry validation rejects dependency cycles", async () => {
   const search = cyclic.items.find((item) => item.id === "product.community.search");
   search.status = "open";
   search.remaining = ["cyclic test dependency"];
+  const moderation = cyclic.items.find(
+    (item) => item.id === "product.community.moderation-operations",
+  );
+  moderation.status = "open";
+  moderation.remaining = ["cyclic test dependency"];
   const registration = cyclic.items.find(
     (item) => item.id === "product.identity.registration",
   );

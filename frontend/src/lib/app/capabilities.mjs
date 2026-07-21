@@ -17,7 +17,7 @@ export const ROLE_SURFACES = Object.freeze({
   moderator: Object.freeze({
     id: "moderator",
     label: "Moderator",
-    capabilityKinds: Object.freeze(["HostOf", "CohostOf"]),
+    capabilityKinds: Object.freeze(["GlobalAdmin", "GlobalMod", "HostOf", "CohostOf"]),
   }),
 });
 

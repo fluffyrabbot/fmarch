@@ -73,6 +73,18 @@ export type DiscussionPost = { source_seq: bigint, author: DiscussionAuthor | nu
 
 export type DiscussionThreadPage = { area: DiscussionArea, topic: DiscussionTopic, posts: Array<DiscussionPost>, next_before_seq: bigint | null, };
 
+export type ModerationReportReceipt = { report_id: string, status: string, submitted_at: bigint, };
+
+export type ModerationCase = { case_id: string, target_kind: string, scope_id: string, source_seq: bigint, target_href: string, target_body: string, status: string, report_count: bigint, opened_at: bigint, updated_at: bigint, updated_seq: bigint, action_reason: string | null, };
+
+export type ModerationReport = { report_id: string, reporter_principal_id: string, reason_family: string, details: string, active: boolean, submitted_at: bigint, };
+
+export type ModerationHistory = { source_seq: bigint, event_kind: string, actor_principal_id: string, reason: string | null, occurred_at: bigint, };
+
+export type ModerationCaseDetail = { case: ModerationCase, reports: Array<ModerationReport>, history: Array<ModerationHistory>, };
+
+export type ModerationCasePage = { cases: Array<ModerationCase>, next_cursor: string | null, };
+
 export type PublicProfile = { handle: string, display_name: string, bio: string, updated_seq: bigint, };
 
 export type ProfileEditor = { handle: string, display_name: string, bio: string, visibility: string, updated_seq: bigint, };

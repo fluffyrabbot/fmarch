@@ -59,6 +59,9 @@ export function buildAppShell({
   capabilities = [],
   phase = null,
 }) {
+  const hasCommunityModeration = Array.isArray(capabilities)
+    && capabilities.some((capability) =>
+      capability?.kind === "GlobalAdmin" || capability?.kind === "GlobalMod");
   const session = buildSessionSummary({
     game,
     principalUserId,
@@ -100,7 +103,9 @@ export function buildAppShell({
     surfaceItem({
       id: "moderator",
       label: "Moderate",
-      href: game === null ? "/" : `/g/${encodeURIComponent(game)}/host`,
+      href: hasCommunityModeration
+        ? "/moderation"
+        : game === null ? "/" : `/g/${encodeURIComponent(game)}/host`,
       active: activeSurface === "moderator",
       ...surfaceSummary({ surface: "moderator", game, capabilities }),
     }),
@@ -506,6 +511,13 @@ function classifyRoutePath(path) {
     return Object.freeze({
       path: normalizedPath,
       activeSurface: "admin",
+      game: null,
+    });
+  }
+  if (normalizedPath.startsWith("/moderation")) {
+    return Object.freeze({
+      path: normalizedPath,
+      activeSurface: "moderator",
       game: null,
     });
   }

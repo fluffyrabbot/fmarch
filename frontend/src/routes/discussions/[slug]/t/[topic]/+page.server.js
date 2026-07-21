@@ -40,6 +40,40 @@ export async function load({ params, locals, cookies, fetch, url }) {
 }
 
 export const actions = {
+  report: async ({ cookies, fetch, params, request }) => {
+    const form = await request.formData();
+    const sourceSeq = optionalSequence(form.get("source_seq"));
+    if (sourceSeq === null) {
+      return fail(400, { id: "discussion-report", state: "reject", message: "Invalid discussion post" });
+    }
+    const response = await mutation({
+      cookies,
+      fetch,
+      path: "/moderation/reports",
+      body: {
+        target_kind: "discussion_post",
+        scope_id: params.topic,
+        source_seq: Number(sourceSeq),
+        reason_family: text(form.get("reason_family")),
+        details: text(form.get("details")),
+      },
+    });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) {
+      return fail([400, 401, 404, 409, 429].includes(response.status) ? response.status : 502, {
+        id: "discussion-report",
+        state: "reject",
+        message: payload?.message ?? "Unable to submit report",
+      });
+    }
+    return {
+      id: "discussion-report",
+      state: "ack",
+      reportId: payload.report_id,
+      sourceSeq,
+      message: "Report received. Your receipt is private to this account.",
+    };
+  },
   createPost: async ({ cookies, fetch, params, request }) => {
     const form = await request.formData();
     const response = await mutation({

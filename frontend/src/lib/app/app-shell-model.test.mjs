@@ -90,7 +90,7 @@ test("app shell builds role navigation from resolved capabilities", () => {
   assert.equal(shell.surfaces[3].href, "/g/midsummer");
   assert.equal(shell.surfaces[4].navigation, "blocked");
   assert.equal(shell.surfaces[4].ariaDisabled, "true");
-  assert.equal(shell.surfaces[4].blockedReason, "Requires HostOf(midsummer) or CohostOf(midsummer)");
+  assert.equal(shell.surfaces[4].blockedReason, "Requires GlobalAdmin(midsummer) or GlobalMod(midsummer) or HostOf(midsummer) or CohostOf(midsummer)");
   assert.equal(shell.surfaces[5].navigation, "blocked");
 });
 
@@ -145,8 +145,8 @@ test("board route is an app surface with capability-gated role actions", () => {
   assert.equal(data.board.games[0].actions[0].navigation, "link");
   assert.equal(data.board.games[0].actions[1].href, "/g/midsummer");
   assert.equal(data.board.games[0].actions[1].navigation, "blocked");
-  assert.equal(data.board.games[0].actions[2].href, "/g/midsummer/host");
-  assert.equal(data.board.games[0].actions[2].navigation, "blocked");
+  assert.equal(data.board.games[0].actions[2].href, "/moderation");
+  assert.equal(data.board.games[0].actions[2].navigation, "link");
   assert.equal(BOARD_ROUTE_CONTRACT.surfaceTestId, "board-surface");
   assert.equal(BOARD_ROUTE_CONTRACT.requiredText, "Games");
   assert.equal(workbenchActionTestId("player"), "workbench-action-player");

@@ -18,9 +18,10 @@ use tower::ServiceExt;
 use uuid::Uuid;
 use wire::{
     ClientEnvelope, ClientMsg, Command, CommandMsg, DiscussionThreadPage, DiscussionTopicPage,
-    GameIndexPage, PlayerInvestigationResult, PlayerNotification, ProfileEditor, ProjectionDelta,
-    PublicProfile, PublicSearchPage, RejectCode, RejectMsg, ServerEnvelope, ServerMsg,
-    SlotLifecycle, SubmitPostMedia, ThreadPage, VoteTarget, PROTOCOL_VERSION,
+    GameIndexPage, ModerationCaseDetail, ModerationCasePage, ModerationReportReceipt,
+    PlayerInvestigationResult, PlayerNotification, ProfileEditor, ProjectionDelta, PublicProfile,
+    PublicSearchPage, RejectCode, RejectMsg, ServerEnvelope, ServerMsg, SlotLifecycle,
+    SubmitPostMedia, ThreadPage, VoteTarget, PROTOCOL_VERSION,
 };
 
 fn router(pool: sqlx::PgPool) -> axum::Router {
@@ -204,6 +205,26 @@ async fn post_public_auth_json(
     }
     app.clone()
         .oneshot(request.body(Body::from(body.to_string())).unwrap())
+        .await
+        .unwrap()
+}
+
+async fn post_bearer_json(
+    app: &axum::Router,
+    uri: &str,
+    body: serde_json::Value,
+    token: &str,
+) -> axum::response::Response {
+    app.clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(uri)
+                .header("authorization", format!("Bearer {token}"))
+                .header("content-type", "application/json")
+                .body(Body::from(body.to_string()))
+                .unwrap(),
+        )
         .await
         .unwrap()
 }
@@ -4711,6 +4732,272 @@ async fn discussion_and_public_search_api_enforce_visibility_sessions_and_modera
     )
     .unwrap();
     assert!(hidden_search.results.is_empty());
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn moderation_api_keeps_receipts_private_and_actions_public_content_synchronously(
+    pool: sqlx::PgPool,
+) {
+    let app = router_with_dev_auth(pool.clone());
+    let (member_token, member_principal) =
+        create_media_upload_account_session(&app, "moderation-member").await;
+    let moderator_token = "community-moderator-token";
+    let moderator_principal = "community_moderator";
+    let response = post_public_auth_json(
+        &app,
+        "/auth/dev-session",
+        serde_json::json!({
+            "token": moderator_token,
+            "principal_user_id": moderator_principal,
+            "expires_at": 4_102_444_800i64,
+            "global_capabilities": ["GlobalMod"]
+        }),
+        None,
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    sqlx::query(
+        "INSERT INTO auth_account (account_id, principal_user_id, password_hash, created_at, disabled_at, global_capabilities) VALUES ($1, $2, 'test-only', 1, NULL, ARRAY['GlobalMod'])",
+    )
+    .bind("community-moderator@example.test")
+    .bind(moderator_principal)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let game = Uuid::new_v4();
+    projections::append_and_project(
+        &pool,
+        game,
+        &[
+            eventstore::EventInput::new(
+                "GameCreated",
+                1,
+                serde_json::json!({ "host": "host", "pack": "moderation_api" }),
+                eventstore::ActorId::User("host".into()),
+                1,
+            ),
+            eventstore::EventInput::new(
+                "GameStarted",
+                1,
+                serde_json::json!({ "phase_id": "D01" }),
+                eventstore::ActorId::Host,
+                2,
+            ),
+            eventstore::EventInput::new(
+                "PostSubmitted",
+                1,
+                serde_json::json!({
+                    "channel_id": "main",
+                    "slot_or_user": { "slot": "slot_1" },
+                    "body": "reportable cobalt content",
+                    "phase_id": "D01"
+                }),
+                eventstore::ActorId::Slot("slot_1".into()),
+                3,
+            ),
+            eventstore::EventInput::new(
+                "PostSubmitted",
+                1,
+                serde_json::json!({
+                    "channel_id": "private:role_pm:slot_1",
+                    "slot_or_user": { "slot": "slot_1" },
+                    "body": "private evidence is out of scope",
+                    "phase_id": "D01"
+                }),
+                eventstore::ActorId::Slot("slot_1".into()),
+                4,
+            ),
+        ],
+    )
+    .await
+    .unwrap();
+    let thread = projections::thread_view(&pool, game, None, 10)
+        .await
+        .unwrap();
+    let public_source_seq = thread
+        .posts
+        .iter()
+        .find(|post| post.channel_id == "main")
+        .unwrap()
+        .source_seq;
+    let private_source_seq =
+        projections::thread_view_for_channel(&pool, game, "private:role_pm:slot_1", None, 10)
+            .await
+            .unwrap()
+            .posts[0]
+            .source_seq;
+
+    let report_body = serde_json::json!({
+        "target_kind": "game_post",
+        "scope_id": game,
+        "source_seq": public_source_seq,
+        "reason_family": "harassment",
+        "details": "member supplied context"
+    });
+    let response = post_bearer_json(
+        &app,
+        "/moderation/reports",
+        report_body.clone(),
+        member_token.as_str(),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let receipt: ModerationReportReceipt =
+        serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap()).unwrap();
+    assert_eq!(receipt.status, "received");
+    let duplicate = post_bearer_json(
+        &app,
+        "/moderation/reports",
+        report_body,
+        member_token.as_str(),
+    )
+    .await;
+    assert_eq!(duplicate.status(), StatusCode::CONFLICT);
+    let private_target = post_bearer_json(
+        &app,
+        "/moderation/reports",
+        serde_json::json!({
+            "target_kind": "game_post",
+            "scope_id": game,
+            "source_seq": private_source_seq,
+            "reason_family": "other"
+        }),
+        member_token.as_str(),
+    )
+    .await;
+    assert_eq!(private_target.status(), StatusCode::NOT_FOUND);
+
+    let denied_queue = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/moderation/cases")
+                .header("authorization", format!("Bearer {member_token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(denied_queue.status(), StatusCode::FORBIDDEN);
+    let queue = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/moderation/cases")
+                .header("authorization", format!("Bearer {moderator_token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(queue.status(), StatusCode::OK);
+    let queue: ModerationCasePage =
+        serde_json::from_slice(&to_bytes(queue.into_body(), usize::MAX).await.unwrap()).unwrap();
+    assert_eq!(queue.cases.len(), 1);
+    assert_eq!(queue.cases[0].target_body, "reportable cobalt content");
+    let case_id = queue.cases[0].case_id;
+    let detail = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!("/moderation/cases/{case_id}"))
+                .header("authorization", format!("Bearer {moderator_token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let detail: ModerationCaseDetail =
+        serde_json::from_slice(&to_bytes(detail.into_body(), usize::MAX).await.unwrap()).unwrap();
+    assert_eq!(detail.reports[0].reporter_principal_id, member_principal);
+
+    let hidden = post_bearer_json(
+        &app,
+        format!("/moderation/cases/{case_id}/actions").as_str(),
+        serde_json::json!({ "action": "hide", "reason": "confirmed harassment" }),
+        moderator_token,
+    )
+    .await;
+    assert_eq!(hidden.status(), StatusCode::OK);
+    let public = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!("/games/{game}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let public: wire::PublicGameThreadPage =
+        serde_json::from_slice(&to_bytes(public.into_body(), usize::MAX).await.unwrap()).unwrap();
+    assert!(public.posts.is_empty());
+    let search = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/search?q=cobalt&filter=games")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let search: PublicSearchPage =
+        serde_json::from_slice(&to_bytes(search.into_body(), usize::MAX).await.unwrap()).unwrap();
+    assert!(search.results.is_empty());
+
+    let receipt_lookup = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!("/moderation/reports/{}", receipt.report_id))
+                .header("authorization", format!("Bearer {member_token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let receipt_lookup: ModerationReportReceipt = serde_json::from_slice(
+        &to_bytes(receipt_lookup.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(receipt_lookup.status, "hidden");
+    let moderator_receipt = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!("/moderation/reports/{}", receipt.report_id))
+                .header("authorization", format!("Bearer {moderator_token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(moderator_receipt.status(), StatusCode::NOT_FOUND);
+
+    let restored = post_bearer_json(
+        &app,
+        format!("/moderation/cases/{case_id}/actions").as_str(),
+        serde_json::json!({ "action": "restore", "reason": "appeal accepted" }),
+        moderator_token,
+    )
+    .await;
+    assert_eq!(restored.status(), StatusCode::OK);
+    let public = app
+        .oneshot(
+            Request::builder()
+                .uri(format!("/games/{game}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let public: wire::PublicGameThreadPage =
+        serde_json::from_slice(&to_bytes(public.into_body(), usize::MAX).await.unwrap()).unwrap();
+    assert_eq!(public.posts.len(), 1);
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]

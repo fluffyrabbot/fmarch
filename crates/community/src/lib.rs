@@ -12,6 +12,254 @@ pub const TOPIC_CREATED: &str = "DiscussionTopicCreated";
 pub const POST_SUBMITTED: &str = "DiscussionPostSubmitted";
 pub const POSTING_STATE_CHANGED: &str = "DiscussionTopicPostingStateChanged";
 pub const VISIBILITY_CHANGED: &str = "DiscussionTopicVisibilityChanged";
+pub const MODERATION_CASE_OPENED: &str = "ModerationCaseOpened";
+pub const MODERATION_REPORT_SUBMITTED: &str = "ModerationReportSubmitted";
+pub const MODERATION_CONTENT_HIDDEN: &str = "ModerationContentHidden";
+pub const MODERATION_CASE_DISMISSED: &str = "ModerationCaseDismissed";
+pub const MODERATION_CONTENT_RESTORED: &str = "ModerationContentRestored";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ModerationTargetKind {
+    DiscussionPost,
+    GamePost,
+}
+
+impl ModerationTargetKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::DiscussionPost => "discussion_post",
+            Self::GamePost => "game_post",
+        }
+    }
+
+    pub fn parse(value: &str) -> Result<Self, CommunityReject> {
+        match value.trim() {
+            "discussion_post" => Ok(Self::DiscussionPost),
+            "game_post" => Ok(Self::GamePost),
+            _ => Err(CommunityReject::InvalidModerationTarget),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ModerationTarget {
+    pub kind: ModerationTargetKind,
+    pub scope_id: Uuid,
+    pub source_seq: i64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ReportReasonFamily {
+    Spam,
+    Harassment,
+    Hate,
+    SexualContent,
+    SelfHarm,
+    Other,
+}
+
+impl ReportReasonFamily {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Spam => "spam",
+            Self::Harassment => "harassment",
+            Self::Hate => "hate",
+            Self::SexualContent => "sexual_content",
+            Self::SelfHarm => "self_harm",
+            Self::Other => "other",
+        }
+    }
+
+    pub fn parse(value: &str) -> Result<Self, CommunityReject> {
+        match value.trim() {
+            "spam" => Ok(Self::Spam),
+            "harassment" => Ok(Self::Harassment),
+            "hate" => Ok(Self::Hate),
+            "sexual_content" => Ok(Self::SexualContent),
+            "self_harm" => Ok(Self::SelfHarm),
+            "other" => Ok(Self::Other),
+            _ => Err(CommunityReject::InvalidReportReason),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ModerationCaseStatus {
+    Open,
+    Hidden,
+    Dismissed,
+    Restored,
+}
+
+impl ModerationCaseStatus {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Open => "open",
+            Self::Hidden => "hidden",
+            Self::Dismissed => "dismissed",
+            Self::Restored => "restored",
+        }
+    }
+
+    pub fn parse(value: &str) -> Result<Self, CommunityReject> {
+        match value {
+            "open" => Ok(Self::Open),
+            "hidden" => Ok(Self::Hidden),
+            "dismissed" => Ok(Self::Dismissed),
+            "restored" => Ok(Self::Restored),
+            _ => Err(CommunityReject::InvalidModerationCaseStatus),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ModerationCaseState {
+    pub case_id: Uuid,
+    pub target: ModerationTarget,
+    pub status: ModerationCaseStatus,
+    pub version: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ModerationCommand {
+    OpenReport {
+        target: ModerationTarget,
+        report_id: Uuid,
+        reason: ReportReasonFamily,
+        details: String,
+    },
+    SubmitReport {
+        report_id: Uuid,
+        reason: ReportReasonFamily,
+        details: String,
+    },
+    Hide {
+        reason: String,
+    },
+    Dismiss {
+        reason: String,
+    },
+    Restore {
+        reason: String,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ModerationEvent {
+    CaseOpened {
+        target: ModerationTarget,
+    },
+    ReportSubmitted {
+        report_id: Uuid,
+        reason: ReportReasonFamily,
+        details: String,
+    },
+    ContentHidden {
+        reason: String,
+    },
+    CaseDismissed {
+        reason: String,
+    },
+    ContentRestored {
+        reason: String,
+    },
+}
+
+impl ModerationEvent {
+    pub fn kind(&self) -> &'static str {
+        match self {
+            Self::CaseOpened { .. } => MODERATION_CASE_OPENED,
+            Self::ReportSubmitted { .. } => MODERATION_REPORT_SUBMITTED,
+            Self::ContentHidden { .. } => MODERATION_CONTENT_HIDDEN,
+            Self::CaseDismissed { .. } => MODERATION_CASE_DISMISSED,
+            Self::ContentRestored { .. } => MODERATION_CONTENT_RESTORED,
+        }
+    }
+
+    pub fn payload(&self) -> serde_json::Value {
+        match self {
+            Self::CaseOpened { target } => serde_json::json!({ "target": target }),
+            Self::ReportSubmitted {
+                report_id,
+                reason,
+                details,
+            } => serde_json::json!({
+                "report_id": report_id,
+                "reason": reason.as_str(),
+                "details": details,
+            }),
+            Self::ContentHidden { reason }
+            | Self::CaseDismissed { reason }
+            | Self::ContentRestored { reason } => serde_json::json!({ "reason": reason }),
+        }
+    }
+}
+
+pub fn decide_moderation(
+    state: Option<&ModerationCaseState>,
+    command: ModerationCommand,
+) -> Result<Vec<ModerationEvent>, CommunityReject> {
+    match (state, command) {
+        (
+            None,
+            ModerationCommand::OpenReport {
+                target,
+                report_id,
+                reason,
+                details,
+            },
+        ) => Ok(vec![
+            ModerationEvent::CaseOpened { target },
+            ModerationEvent::ReportSubmitted {
+                report_id,
+                reason,
+                details,
+            },
+        ]),
+        (Some(_), ModerationCommand::OpenReport { .. }) => {
+            Err(CommunityReject::ModerationCaseAlreadyExists)
+        }
+        (None, _) => Err(CommunityReject::ModerationCaseNotFound),
+        (
+            Some(state),
+            ModerationCommand::SubmitReport {
+                report_id,
+                reason,
+                details,
+            },
+        ) => {
+            if state.status == ModerationCaseStatus::Hidden {
+                return Err(CommunityReject::ModerationTargetHidden);
+            }
+            Ok(vec![ModerationEvent::ReportSubmitted {
+                report_id,
+                reason,
+                details,
+            }])
+        }
+        (Some(state), ModerationCommand::Hide { reason }) => {
+            if state.status != ModerationCaseStatus::Open {
+                return Err(CommunityReject::InvalidModerationTransition);
+            }
+            Ok(vec![ModerationEvent::ContentHidden { reason }])
+        }
+        (Some(state), ModerationCommand::Dismiss { reason }) => {
+            if state.status != ModerationCaseStatus::Open {
+                return Err(CommunityReject::InvalidModerationTransition);
+            }
+            Ok(vec![ModerationEvent::CaseDismissed { reason }])
+        }
+        (Some(state), ModerationCommand::Restore { reason }) => {
+            if state.status != ModerationCaseStatus::Hidden {
+                return Err(CommunityReject::InvalidModerationTransition);
+            }
+            Ok(vec![ModerationEvent::ContentRestored { reason }])
+        }
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AreaCreated {
@@ -245,6 +493,20 @@ pub enum CommunityReject {
     InvalidPostingState,
     #[error("discussion visibility must be visible or hidden")]
     InvalidVisibility,
+    #[error("moderation target must be a public discussion_post or game_post")]
+    InvalidModerationTarget,
+    #[error("report reason family is invalid")]
+    InvalidReportReason,
+    #[error("moderation case status is invalid")]
+    InvalidModerationCaseStatus,
+    #[error("moderation case already exists")]
+    ModerationCaseAlreadyExists,
+    #[error("moderation case was not found")]
+    ModerationCaseNotFound,
+    #[error("moderation target is already hidden")]
+    ModerationTargetHidden,
+    #[error("moderation action is invalid for the current case status")]
+    InvalidModerationTransition,
 }
 
 #[cfg(test)]
@@ -315,5 +577,56 @@ mod tests {
             .as_slice(),
             [TopicEvent::VisibilityChanged { .. }]
         ));
+    }
+
+    #[test]
+    fn moderation_case_transitions_are_explicit_and_restorable() {
+        let target = ModerationTarget {
+            kind: ModerationTargetKind::DiscussionPost,
+            scope_id: Uuid::from_u128(20),
+            source_seq: 9,
+        };
+        let opened = decide_moderation(
+            None,
+            ModerationCommand::OpenReport {
+                target: target.clone(),
+                report_id: Uuid::from_u128(22),
+                reason: ReportReasonFamily::Spam,
+                details: "repeated links".into(),
+            },
+        )
+        .unwrap();
+        assert!(matches!(
+            opened.as_slice(),
+            [
+                ModerationEvent::CaseOpened { .. },
+                ModerationEvent::ReportSubmitted { .. }
+            ]
+        ));
+
+        let mut state = ModerationCaseState {
+            case_id: Uuid::from_u128(21),
+            target,
+            status: ModerationCaseStatus::Open,
+            version: 2,
+        };
+        assert!(matches!(
+            decide_moderation(Some(&state), ModerationCommand::Hide { reason: "spam".into() }),
+            Ok(events) if matches!(events.as_slice(), [ModerationEvent::ContentHidden { .. }])
+        ));
+        state.status = ModerationCaseStatus::Hidden;
+        assert!(matches!(
+            decide_moderation(Some(&state), ModerationCommand::Restore { reason: "appeal accepted".into() }),
+            Ok(events) if matches!(events.as_slice(), [ModerationEvent::ContentRestored { .. }])
+        ));
+        assert_eq!(
+            decide_moderation(
+                Some(&state),
+                ModerationCommand::Dismiss {
+                    reason: "no violation".into()
+                }
+            ),
+            Err(CommunityReject::InvalidModerationTransition)
+        );
     }
 }

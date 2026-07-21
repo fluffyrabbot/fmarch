@@ -5,7 +5,7 @@
 
   $: discussion = data.discussion;
   $: thread = discussion.thread;
-  $: rejection = form?.state === "reject" ? form.message : null;
+  $: rejection = form?.id === "discussion-mutation" && form?.state === "reject" ? form.message : null;
 
   function occurredAt(value) {
     const seconds = Number(value);
@@ -44,6 +44,17 @@
             </a>
           </header>
           <p>{post.body}</p>
+          {#if discussion.hasSession}
+            <details class="discussion-report" data-testid={`discussion-report-${post.source_seq}`}>
+              <summary>Report this post</summary>
+              <form method="POST" action="?/report" class="discussion-form">
+                <input type="hidden" name="source_seq" value={post.source_seq} />
+                <label class="fm-field"><span>Reason</span><select name="reason_family" required><option value="spam">Spam</option><option value="harassment">Harassment</option><option value="hate">Hate</option><option value="sexual_content">Sexual content</option><option value="self_harm">Self-harm</option><option value="other">Other</option></select></label>
+                <label class="fm-field"><span>Context (optional)</span><textarea name="details" maxlength="1000"></textarea></label>
+                <button class="fm-touch-button fm-touch-button--secondary" type="submit">Submit report</button>
+              </form>
+            </details>
+          {/if}
         </article>
       {/each}
 
@@ -84,6 +95,9 @@
     </section>
 
     {#if rejection}<p role="alert" data-testid="discussion-mutation-reject">{rejection}</p>{/if}
+    {#if form?.id === "discussion-report"}
+      <p role={form.state === "reject" ? "alert" : "status"} class="fm-panel" data-testid="discussion-report-result">{form.message}{form.reportId ? ` Receipt ${form.reportId}` : ""}</p>
+    {/if}
   {/if}
 </main>
 
@@ -93,6 +107,7 @@
   .discussion-post header { align-items: baseline; display: flex; flex-wrap: wrap; gap: 8px 16px; justify-content: space-between; }
   .discussion-post p { margin-block-end: 0; white-space: pre-wrap; }
   .discussion-post__permalink { color: var(--fm-ink-muted); font-size: 13px; }
+  .discussion-report { margin-block-start: 10px; }
   .discussion-pagination { display: flex; flex-wrap: wrap; gap: 8px; margin-block: 16px; }
   textarea { min-block-size: 112px; resize: vertical; }
 </style>

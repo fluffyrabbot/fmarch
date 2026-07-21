@@ -1110,6 +1110,125 @@ impl From<projections::DiscussionAuthorRow> for DiscussionAuthor {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct ModerationReportReceipt {
+    pub report_id: Uuid,
+    pub status: String,
+    pub submitted_at: i64,
+}
+
+impl From<projections::ModerationReportReceiptRow> for ModerationReportReceipt {
+    fn from(row: projections::ModerationReportReceiptRow) -> Self {
+        Self {
+            report_id: row.report_id,
+            status: row.status,
+            submitted_at: row.submitted_at,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct ModerationCase {
+    pub case_id: Uuid,
+    pub target_kind: String,
+    pub scope_id: Uuid,
+    pub source_seq: i64,
+    pub target_href: String,
+    pub target_body: String,
+    pub status: String,
+    pub report_count: i64,
+    pub opened_at: i64,
+    pub updated_at: i64,
+    pub updated_seq: i64,
+    pub action_reason: Option<String>,
+}
+
+impl From<projections::ModerationCaseRow> for ModerationCase {
+    fn from(row: projections::ModerationCaseRow) -> Self {
+        Self {
+            case_id: row.case_id,
+            target_kind: row.target_kind,
+            scope_id: row.scope_id,
+            source_seq: row.source_seq,
+            target_href: row.target_href,
+            target_body: row.target_body,
+            status: row.status,
+            report_count: row.report_count,
+            opened_at: row.opened_at,
+            updated_at: row.updated_at,
+            updated_seq: row.updated_seq,
+            action_reason: row.action_reason,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct ModerationReport {
+    pub report_id: Uuid,
+    pub reporter_principal_id: String,
+    pub reason_family: String,
+    pub details: String,
+    pub active: bool,
+    pub submitted_at: i64,
+}
+
+impl From<projections::ModerationReportRow> for ModerationReport {
+    fn from(row: projections::ModerationReportRow) -> Self {
+        Self {
+            report_id: row.report_id,
+            reporter_principal_id: row.reporter_principal_id,
+            reason_family: row.reason_family,
+            details: row.details,
+            active: row.active,
+            submitted_at: row.submitted_at,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct ModerationHistory {
+    pub source_seq: i64,
+    pub event_kind: String,
+    pub actor_principal_id: String,
+    pub reason: Option<String>,
+    pub occurred_at: i64,
+}
+
+impl From<projections::ModerationHistoryRow> for ModerationHistory {
+    fn from(row: projections::ModerationHistoryRow) -> Self {
+        Self {
+            source_seq: row.source_seq,
+            event_kind: row.event_kind,
+            actor_principal_id: row.actor_principal_id,
+            reason: row.reason,
+            occurred_at: row.occurred_at,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct ModerationCaseDetail {
+    pub case: ModerationCase,
+    pub reports: Vec<ModerationReport>,
+    pub history: Vec<ModerationHistory>,
+}
+
+impl From<projections::ModerationCaseDetailRow> for ModerationCaseDetail {
+    fn from(row: projections::ModerationCaseDetailRow) -> Self {
+        Self {
+            case: row.case.into(),
+            reports: row.reports.into_iter().map(Into::into).collect(),
+            history: row.history.into_iter().map(Into::into).collect(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct ModerationCasePage {
+    pub cases: Vec<ModerationCase>,
+    pub next_cursor: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct PublicProfile {
     pub handle: String,
     pub display_name: String,
@@ -1458,10 +1577,11 @@ pub mod typescript {
         DiscussionThreadPage, DiscussionTopic, DiscussionTopicPage, GameIndexEntry, GameIndexPage,
         Hello, HostConsolePhaseStateDelta, HostConsoleSlotOccupancyDelta, HostConsoleStateDelta,
         HostConsoleThreadPostDelta, HostPhaseControl, HostPromptDecision, HostPromptDelta,
-        HostPromptsDelta, PlayerInvestigationResult, PlayerNotification, ProfileEditor,
-        ProjectionDelta, PublicGameThreadPage, PublicProfile, PublicSearchPage, PublicSearchResult,
-        RejectCode, RejectMsg, ResolutionTraceDecisionRow, ResolutionTraceEdgeRow,
-        ResolutionTraceEffectChangeRow, ResolutionTraceGeneratedRow,
+        HostPromptsDelta, ModerationCase, ModerationCaseDetail, ModerationCasePage,
+        ModerationHistory, ModerationReport, ModerationReportReceipt, PlayerInvestigationResult,
+        PlayerNotification, ProfileEditor, ProjectionDelta, PublicGameThreadPage, PublicProfile,
+        PublicSearchPage, PublicSearchResult, RejectCode, RejectMsg, ResolutionTraceDecisionRow,
+        ResolutionTraceEdgeRow, ResolutionTraceEffectChangeRow, ResolutionTraceGeneratedRow,
         ResolutionTraceInspectionReport, ResolutionTraceInspectionRun, ResolutionTraceNoteRow,
         ResolutionTraceVisibilityRow, ServerEnvelope, ServerMsg, SlotLifecycle, SubmitPostMedia,
         ThreadPage, ThreadPost, ThreadPostMedia, ThreadPostMediaVariant, ThreadPostsDelta,
@@ -1508,6 +1628,12 @@ pub mod typescript {
         push::<DiscussionTopicPage>(&mut out);
         push::<DiscussionPost>(&mut out);
         push::<DiscussionThreadPage>(&mut out);
+        push::<ModerationReportReceipt>(&mut out);
+        push::<ModerationCase>(&mut out);
+        push::<ModerationReport>(&mut out);
+        push::<ModerationHistory>(&mut out);
+        push::<ModerationCaseDetail>(&mut out);
+        push::<ModerationCasePage>(&mut out);
         push::<PublicProfile>(&mut out);
         push::<ProfileEditor>(&mut out);
         push::<PlayerNotification>(&mut out);

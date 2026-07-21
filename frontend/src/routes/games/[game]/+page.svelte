@@ -1,6 +1,7 @@
 <script>
   import AppSurfaceHeader from "$lib/app/AppSurfaceHeader.svelte";
   export let data;
+  export let form;
 
   function occurredAt(value) {
     const seconds = Number(value);
@@ -32,6 +33,17 @@
               <a href={`#thread-post-${post.source_seq}`}>#{post.source_seq} · {occurredAt(post.occurred_at)}</a>
             </header>
             <p>{post.body}</p>
+            {#if data.publicGame.hasSession}
+              <details class="report-control" data-testid={`public-game-report-${post.source_seq}`}>
+                <summary>Report this post</summary>
+                <form method="POST" action="?/report">
+                  <input type="hidden" name="source_seq" value={post.source_seq} />
+                  <label class="fm-field"><span>Reason</span><select name="reason_family" required><option value="spam">Spam</option><option value="harassment">Harassment</option><option value="hate">Hate</option><option value="sexual_content">Sexual content</option><option value="self_harm">Self-harm</option><option value="other">Other</option></select></label>
+                  <label class="fm-field"><span>Context (optional)</span><textarea name="details" maxlength="1000"></textarea></label>
+                  <button class="fm-touch-button fm-touch-button--secondary" type="submit">Submit report</button>
+                </form>
+              </details>
+            {/if}
           </article>
         {/each}
       {/if}
@@ -39,6 +51,9 @@
         <a class="fm-touch-button fm-touch-button--secondary" href={`?before_seq=${data.publicGame.nextBeforeSeq}`} data-testid="public-game-older">Older posts</a>
       {/if}
     </section>
+    {#if form?.id === "public-game-report"}
+      <p role={form.state === "reject" ? "alert" : "status"} class="fm-panel" data-testid="public-game-report-result">{form.message}{form.reportId ? ` Receipt ${form.reportId}` : ""}</p>
+    {/if}
   {/if}
 </main>
 
@@ -47,4 +62,7 @@
   .public-game-post { border-block-start: 1px solid var(--fm-border); padding-block: 14px; scroll-margin-block-start: 88px; }
   .public-game-post header { align-items: baseline; display: flex; flex-wrap: wrap; gap: 8px 16px; justify-content: space-between; }
   .public-game-post p { margin-block-end: 0; white-space: pre-wrap; }
+  .report-control { margin-block-start: 10px; }
+  .report-control form { display: grid; gap: 10px; margin-block-start: 10px; }
+  .report-control textarea { min-block-size: 72px; resize: vertical; }
 </style>

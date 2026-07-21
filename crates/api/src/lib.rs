@@ -42,6 +42,7 @@ use wire::{
     DiscussionThreadPage, DiscussionTopic, DiscussionTopicPage, GameIndexEntry, GameIndexPage,
     Hello, HostConsolePhaseStateDelta, HostConsoleSlotOccupancyDelta, HostConsoleStateDelta,
     HostConsoleThreadPostDelta, HostPhaseControl, HostPromptDelta, HostPromptsDelta,
+    ModerationCase, ModerationCaseDetail, ModerationCasePage, ModerationReportReceipt,
     PlayerInvestigationResult, PlayerInvestigationResultsDelta, PlayerNotification,
     PlayerNotificationsDelta, ProfileEditor, ProjectionDelta, PublicGameThreadPage, PublicProfile,
     PublicSearchPage, PublicSearchResult, RejectCode, RejectMsg, ServerEnvelope, ServerMsg,
@@ -241,6 +242,14 @@ pub fn router_with_state(state: ApiState) -> Router {
         .route("/games/{game}", get(public_game_thread))
         .route("/games/import", post(import_completed_game_export))
         .route("/search", get(public_search))
+        .route("/moderation/reports", post(submit_moderation_report))
+        .route(
+            "/moderation/reports/{report}",
+            get(moderation_report_receipt),
+        )
+        .route("/moderation/cases", get(moderation_cases))
+        .route("/moderation/cases/{case}", get(moderation_case))
+        .route("/moderation/cases/{case}/actions", post(moderate_case))
         .route(
             "/discussions/areas",
             get(discussion_areas).post(create_discussion_area),
@@ -4117,7 +4126,7 @@ async fn public_game_thread(
             error: RejectCode::UnknownGame,
             message: "public game was not found".to_string(),
         })?;
-    let page = projections::thread_view(
+    let page = projections::public_thread_view(
         &state.pool,
         game,
         query.before_seq,
@@ -4284,6 +4293,29 @@ struct CreateDiscussionPostRequest {
 struct ModerateDiscussionTopicRequest {
     posting_state: Option<String>,
     visibility: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct SubmitModerationReportRequest {
+    target_kind: String,
+    scope_id: Uuid,
+    source_seq: i64,
+    reason_family: String,
+    #[serde(default)]
+    details: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct ModerationCaseQuery {
+    status: Option<String>,
+    cursor: Option<String>,
+    limit: Option<i64>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct ModerateCaseRequest {
+    action: String,
+    reason: String,
 }
 
 async fn discussion_areas(
@@ -4512,6 +4544,203 @@ async fn moderate_discussion_topic(
         .await?
         .expect("projected discussion topic is readable");
     Ok(Json(DiscussionTopic::from(topic)))
+}
+
+async fn submit_moderation_report(
+    State(state): State<ApiState>,
+    headers: HeaderMap,
+    Json(request): Json<SubmitModerationReportRequest>,
+) -> Result<(StatusCode, Json<ModerationReportReceipt>), ApiError> {
+    let token = bearer_token(&headers).ok_or_else(unauthorized_account)?;
+    let principal_user_id = require_active_enabled_account(&state, token).await?;
+    if request.source_seq <= 0 {
+        return Err(moderation_bad_request("report source_seq must be positive"));
+    }
+    let details = request.details.trim();
+    if details.len() > 1_000 {
+        return Err(moderation_bad_request(
+            "report details must contain at most 1000 bytes",
+        ));
+    }
+    let target = community::ModerationTarget {
+        kind: community::ModerationTargetKind::parse(request.target_kind.as_str())
+            .map_err(moderation_reject_api_error)?,
+        scope_id: request.scope_id,
+        source_seq: request.source_seq,
+    };
+    let reason = community::ReportReasonFamily::parse(request.reason_family.as_str())
+        .map_err(moderation_reject_api_error)?;
+    let receipt = projections::submit_moderation_report(
+        &state.pool,
+        target,
+        Uuid::new_v4(),
+        principal_user_id.as_str(),
+        reason,
+        details.to_string(),
+        unix_now_seconds(),
+    )
+    .await
+    .map_err(moderation_projection_api_error)?;
+    Ok((StatusCode::CREATED, Json(receipt.into())))
+}
+
+async fn moderation_report_receipt(
+    State(state): State<ApiState>,
+    Path(report): Path<Uuid>,
+    headers: HeaderMap,
+) -> Result<Json<ModerationReportReceipt>, ApiError> {
+    let token = bearer_token(&headers).ok_or_else(unauthorized_account)?;
+    let principal_user_id = require_active_enabled_account(&state, token).await?;
+    let receipt =
+        projections::moderation_report_receipt(&state.pool, report, principal_user_id.as_str())
+            .await?
+            .ok_or_else(|| discussion_not_found("moderation report receipt"))?;
+    Ok(Json(receipt.into()))
+}
+
+async fn moderation_cases(
+    State(state): State<ApiState>,
+    Query(query): Query<ModerationCaseQuery>,
+    headers: HeaderMap,
+) -> Result<Json<ModerationCasePage>, ApiError> {
+    let token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
+    require_global_mod(&state, token, "moderation queue access").await?;
+    let status = match query.status.as_deref().unwrap_or("open") {
+        "all" => None,
+        value => {
+            community::ModerationCaseStatus::parse(value).map_err(moderation_reject_api_error)?;
+            Some(value)
+        }
+    };
+    let cursor = query
+        .cursor
+        .as_deref()
+        .map(parse_moderation_case_cursor)
+        .transpose()?;
+    let page =
+        projections::moderation_cases(&state.pool, status, cursor, query.limit.unwrap_or(25))
+            .await?;
+    Ok(Json(ModerationCasePage {
+        cases: page.cases.into_iter().map(ModerationCase::from).collect(),
+        next_cursor: page
+            .next_cursor
+            .map(|cursor| format!("{}:{}", cursor.updated_seq, cursor.case_id)),
+    }))
+}
+
+async fn moderation_case(
+    State(state): State<ApiState>,
+    Path(case): Path<Uuid>,
+    headers: HeaderMap,
+) -> Result<Json<ModerationCaseDetail>, ApiError> {
+    let token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
+    require_global_mod(&state, token, "moderation case access").await?;
+    let detail = projections::moderation_case_by_id(&state.pool, case)
+        .await?
+        .ok_or_else(|| discussion_not_found("moderation case"))?;
+    Ok(Json(detail.into()))
+}
+
+async fn moderate_case(
+    State(state): State<ApiState>,
+    Path(case): Path<Uuid>,
+    headers: HeaderMap,
+    Json(request): Json<ModerateCaseRequest>,
+) -> Result<Json<ModerationCaseDetail>, ApiError> {
+    let token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
+    let principal_user_id = require_global_mod(&state, token, "moderation case action").await?;
+    let reason = validate_discussion_text(request.reason.as_str(), "moderation reason", 500)?;
+    let current = projections::moderation_case_state(&state.pool, case)
+        .await?
+        .ok_or_else(|| discussion_not_found("moderation case"))?;
+    let command = match request.action.as_str() {
+        "hide" => community::ModerationCommand::Hide { reason },
+        "dismiss" => community::ModerationCommand::Dismiss { reason },
+        "restore" => community::ModerationCommand::Restore { reason },
+        _ => {
+            return Err(moderation_bad_request(
+                "moderation action must be hide, dismiss, or restore",
+            ))
+        }
+    };
+    let events = community::decide_moderation(Some(&current), command)
+        .map_err(moderation_reject_api_error)?;
+    match projections::append_moderation_and_project_expected(
+        &state.pool,
+        case,
+        current.version,
+        events,
+        principal_user_id.as_str(),
+        unix_now_seconds(),
+    )
+    .await
+    {
+        Ok(()) => {}
+        Err(projections::ProjectionError::Store(eventstore::StoreError::Conflict { .. })) => {
+            return Err(discussion_conflict(
+                "moderation case changed concurrently; refresh and try again",
+            ));
+        }
+        Err(error) => return Err(ApiError::Projection(error)),
+    }
+    let detail = projections::moderation_case_by_id(&state.pool, case)
+        .await?
+        .expect("actioned moderation case is readable");
+    Ok(Json(detail.into()))
+}
+
+fn parse_moderation_case_cursor(
+    value: &str,
+) -> Result<projections::ModerationCaseCursor, ApiError> {
+    let (updated_seq, case_id) = value
+        .split_once(':')
+        .ok_or_else(|| moderation_bad_request("invalid moderation cursor"))?;
+    Ok(projections::ModerationCaseCursor {
+        updated_seq: updated_seq
+            .parse()
+            .map_err(|_| moderation_bad_request("invalid moderation cursor"))?,
+        case_id: Uuid::parse_str(case_id)
+            .map_err(|_| moderation_bad_request("invalid moderation cursor"))?,
+    })
+}
+
+fn moderation_projection_api_error(error: projections::ProjectionError) -> ApiError {
+    match error {
+        projections::ProjectionError::DuplicateModerationReport => ApiError::Reject {
+            status: StatusCode::CONFLICT,
+            error: RejectCode::StreamConflict,
+            message: "this active report already exists".to_string(),
+        },
+        projections::ProjectionError::ModerationReportRateLimited => ApiError::RateLimited {
+            retry_after_seconds: 86_400,
+            message: "the reporter submission limit has been reached".to_string(),
+        },
+        projections::ProjectionError::ModerationTargetNotPublic => ApiError::Reject {
+            status: StatusCode::NOT_FOUND,
+            error: RejectCode::NotAuthorized,
+            message: "the moderation target is not public".to_string(),
+        },
+        error => ApiError::Projection(error),
+    }
+}
+
+fn moderation_reject_api_error(reject: community::CommunityReject) -> ApiError {
+    match reject {
+        community::CommunityReject::InvalidModerationTarget
+        | community::CommunityReject::InvalidReportReason
+        | community::CommunityReject::InvalidModerationCaseStatus => {
+            moderation_bad_request(reject.to_string())
+        }
+        _ => discussion_conflict(reject.to_string().as_str()),
+    }
+}
+
+fn moderation_bad_request(message: impl Into<String>) -> ApiError {
+    ApiError::Reject {
+        status: StatusCode::BAD_REQUEST,
+        error: RejectCode::Internal,
+        message: message.into(),
+    }
 }
 
 async fn visible_discussion_topic(

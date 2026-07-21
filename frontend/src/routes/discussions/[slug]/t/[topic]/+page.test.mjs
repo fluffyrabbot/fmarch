@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { load } from "./+page.server.js";
+import { actions, load } from "./+page.server.js";
 
 const topic = "00000000-0000-0000-0000-000000000111";
 
@@ -63,4 +63,29 @@ test("canonical discussion topic keeps wrong-area and hidden responses unavailab
   });
   assert.equal(data.discussion.status, "unavailable");
   assert.equal(data.discussion.canPost, false);
+});
+
+test("discussion report action maps the canonical topic post and returns a private receipt", async () => {
+  let mutation;
+  const result = await actions.report({
+    cookies: { get: () => "member-session" },
+    params: { slug: "general", topic },
+    request: new Request("http://localhost/discussions/general/t/topic?/report", {
+      method: "POST",
+      body: new URLSearchParams({ source_seq: "42", reason_family: "harassment", details: "context" }),
+    }),
+    fetch: async (url, options) => {
+      mutation = { url, body: JSON.parse(options.body) };
+      return Response.json({ report_id: "receipt-42", status: "received", submitted_at: 1 }, { status: 201 });
+    },
+  });
+  assert.equal(mutation.url, "/moderation/reports");
+  assert.deepEqual(mutation.body, {
+    target_kind: "discussion_post",
+    scope_id: topic,
+    source_seq: 42,
+    reason_family: "harassment",
+    details: "context",
+  });
+  assert.equal(result.reportId, "receipt-42");
 });

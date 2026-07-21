@@ -19,8 +19,8 @@ use projections::{
     day_vote_outcomes, discussion_area_by_slug, discussion_posts, discussion_topic_by_id,
     discussion_topics, game_index, host_phase_controls, host_prompts, phase_state,
     player_notifications, profile_editor_by_handle, public_profile_by_handle, public_search,
-    rebuild, rebuild_discussion_stream, rebuild_profile_stream, slot_effects, slot_state,
-    votecount, ProjectionError, PublicSearchFilter,
+    rebuild, rebuild_discussion_stream, rebuild_moderation_stream, rebuild_profile_stream,
+    slot_effects, slot_state, votecount, ProjectionError, PublicSearchFilter,
 };
 use sqlx::postgres::PgPoolOptions;
 use sqlx::PgPool;
@@ -1788,6 +1788,304 @@ async fn public_search_filters_visibility_private_channels_and_rebuilds(pool: sq
         .results
         .iter()
         .all(|row| row.href.starts_with(&format!("/games/{game}"))));
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn moderation_reports_dedupe_hide_restore_audit_and_rebuild(pool: sqlx::PgPool) {
+    let game = Uuid::new_v4();
+    append_and_project(
+        &pool,
+        game,
+        &[
+            EventInput::new(
+                "GameCreated",
+                1,
+                serde_json::json!({ "host": "host", "pack": "moderation_pack" }),
+                ActorId::User("host".into()),
+                1,
+            ),
+            EventInput::new(
+                "GameStarted",
+                1,
+                serde_json::json!({ "phase_id": "D01" }),
+                ActorId::Host,
+                2,
+            ),
+            EventInput::new(
+                "PostSubmitted",
+                1,
+                serde_json::json!({
+                    "channel_id": "main",
+                    "slot_or_user": { "slot": "slot_1" },
+                    "body": "abusive zebra message",
+                    "phase_id": "D01"
+                }),
+                ActorId::Slot("slot_1".into()),
+                3,
+            ),
+        ],
+    )
+    .await
+    .unwrap();
+    let source_seq = projections::thread_view(&pool, game, None, 10)
+        .await
+        .unwrap()
+        .posts[0]
+        .source_seq;
+    let target = community::ModerationTarget {
+        kind: community::ModerationTargetKind::GamePost,
+        scope_id: game,
+        source_seq,
+    };
+    let report_id = Uuid::new_v4();
+    let receipt = projections::submit_moderation_report(
+        &pool,
+        target.clone(),
+        report_id,
+        "reporter_a",
+        community::ReportReasonFamily::Harassment,
+        "direct abuse".into(),
+        10,
+    )
+    .await
+    .unwrap();
+    assert_eq!(receipt.status, "received");
+    assert!(matches!(
+        projections::submit_moderation_report(
+            &pool,
+            target.clone(),
+            Uuid::new_v4(),
+            "reporter_a",
+            community::ReportReasonFamily::Harassment,
+            "duplicate".into(),
+            11,
+        )
+        .await,
+        Err(ProjectionError::DuplicateModerationReport)
+    ));
+    assert!(
+        projections::moderation_report_receipt(&pool, report_id, "other_member")
+            .await
+            .unwrap()
+            .is_none()
+    );
+
+    let page = projections::moderation_cases(&pool, Some("open"), None, 10)
+        .await
+        .unwrap();
+    assert_eq!(page.cases.len(), 1);
+    let case_id = page.cases[0].case_id;
+    let state = projections::moderation_case_state(&pool, case_id)
+        .await
+        .unwrap()
+        .unwrap();
+    let hidden = community::decide_moderation(
+        Some(&state),
+        community::ModerationCommand::Hide {
+            reason: "harassing content".into(),
+        },
+    )
+    .unwrap();
+    projections::append_moderation_and_project_expected(
+        &pool,
+        case_id,
+        state.version,
+        hidden,
+        "moderator",
+        12,
+    )
+    .await
+    .unwrap();
+    assert!(projections::public_thread_view(&pool, game, None, 10)
+        .await
+        .unwrap()
+        .posts
+        .is_empty());
+    assert!(
+        public_search(&pool, "zebra", PublicSearchFilter::Games, None, 10)
+            .await
+            .unwrap()
+            .results
+            .is_empty()
+    );
+    assert_eq!(
+        projections::moderation_report_receipt(&pool, report_id, "reporter_a")
+            .await
+            .unwrap()
+            .unwrap()
+            .status,
+        "hidden"
+    );
+
+    let state = projections::moderation_case_state(&pool, case_id)
+        .await
+        .unwrap()
+        .unwrap();
+    let restored = community::decide_moderation(
+        Some(&state),
+        community::ModerationCommand::Restore {
+            reason: "appeal accepted".into(),
+        },
+    )
+    .unwrap();
+    projections::append_moderation_and_project_expected(
+        &pool,
+        case_id,
+        state.version,
+        restored,
+        "moderator",
+        13,
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        projections::public_thread_view(&pool, game, None, 10)
+            .await
+            .unwrap()
+            .posts
+            .len(),
+        1
+    );
+    assert_eq!(
+        public_search(&pool, "zebra", PublicSearchFilter::Games, None, 10)
+            .await
+            .unwrap()
+            .results
+            .len(),
+        1
+    );
+
+    projections::submit_moderation_report(
+        &pool,
+        target,
+        Uuid::new_v4(),
+        "reporter_a",
+        community::ReportReasonFamily::Harassment,
+        "new report after restoration".into(),
+        14,
+    )
+    .await
+    .unwrap();
+    let state = projections::moderation_case_state(&pool, case_id)
+        .await
+        .unwrap()
+        .unwrap();
+    let dismissed = community::decide_moderation(
+        Some(&state),
+        community::ModerationCommand::Dismiss {
+            reason: "not a violation".into(),
+        },
+    )
+    .unwrap();
+    projections::append_moderation_and_project_expected(
+        &pool,
+        case_id,
+        state.version,
+        dismissed,
+        "moderator",
+        15,
+    )
+    .await
+    .unwrap();
+    let detail = projections::moderation_case_by_id(&pool, case_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(detail.case.status, "dismissed");
+    assert_eq!(detail.reports.len(), 2);
+    assert_eq!(detail.history.len(), 6);
+
+    rebuild_moderation_stream(&pool, case_id).await.unwrap();
+    let rebuilt = projections::moderation_case_by_id(&pool, case_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(rebuilt.case.status, "dismissed");
+    assert_eq!(rebuilt.history, detail.history);
+    assert_eq!(
+        public_search(&pool, "zebra", PublicSearchFilter::Games, None, 10)
+            .await
+            .unwrap()
+            .results
+            .len(),
+        1
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn moderation_report_submissions_are_bounded_per_reporter(pool: sqlx::PgPool) {
+    let game = Uuid::new_v4();
+    let mut events = vec![
+        EventInput::new(
+            "GameCreated",
+            1,
+            serde_json::json!({ "host": "host", "pack": "moderation_limit" }),
+            ActorId::User("host".into()),
+            1,
+        ),
+        EventInput::new(
+            "GameStarted",
+            1,
+            serde_json::json!({ "phase_id": "D01" }),
+            ActorId::Host,
+            2,
+        ),
+    ];
+    for index in 0..11 {
+        events.push(EventInput::new(
+            "PostSubmitted",
+            1,
+            serde_json::json!({
+                "channel_id": "main",
+                "slot_or_user": { "slot": "slot_1" },
+                "body": format!("report target {index}"),
+                "phase_id": "D01"
+            }),
+            ActorId::Slot("slot_1".into()),
+            3 + index,
+        ));
+    }
+    append_and_project(&pool, game, &events).await.unwrap();
+    let posts = projections::public_thread_view(&pool, game, None, 20)
+        .await
+        .unwrap()
+        .posts;
+    assert_eq!(posts.len(), 11);
+    for (index, post) in posts.iter().take(10).enumerate() {
+        projections::submit_moderation_report(
+            &pool,
+            community::ModerationTarget {
+                kind: community::ModerationTargetKind::GamePost,
+                scope_id: game,
+                source_seq: post.source_seq,
+            },
+            Uuid::new_v4(),
+            "bounded_reporter",
+            community::ReportReasonFamily::Other,
+            String::new(),
+            100 + index as i64,
+        )
+        .await
+        .unwrap();
+    }
+    let rejected = projections::submit_moderation_report(
+        &pool,
+        community::ModerationTarget {
+            kind: community::ModerationTargetKind::GamePost,
+            scope_id: game,
+            source_seq: posts[10].source_seq,
+        },
+        Uuid::new_v4(),
+        "bounded_reporter",
+        community::ReportReasonFamily::Other,
+        String::new(),
+        111,
+    )
+    .await;
+    assert!(matches!(
+        rejected,
+        Err(ProjectionError::ModerationReportRateLimited)
+    ));
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
