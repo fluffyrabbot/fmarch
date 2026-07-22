@@ -191,6 +191,34 @@ test("player command panel model disables command controls for dead actors", () 
   assert.deepEqual(view.composer.actionPicker.recoveryCommands, []);
 });
 
+test("player command panel disables every dispatch path while a command is pending", () => {
+  const view = buildPlayerCommandPanelViewModel({
+    composer: {
+      voteCommandLabel: "Vote slot-2",
+      withdrawCommandLabel: "Withdraw vote",
+      postCommandLabel: "Post",
+      canWithdrawVote: true,
+      actionCommands: [{
+        action: "submit_action",
+        label: "Submit action",
+        templateId: "investigate",
+        targets: ["slot-2"],
+      }],
+    },
+    channel: { channel: "main", label: "Main thread" },
+    player: { slotId: "slot-7", alive: true },
+    commandPending: true,
+  });
+
+  assert.equal(view.root.ariaBusy, "true");
+  assert.equal(view.quickActions.buttons.every((button) => button.disabled), true);
+  assert.equal(view.composer.buttons.every((button) => button.disabled), true);
+  assert.equal(
+    view.composer.actionPicker.actions.every((action) => action.trigger.disabled),
+    true,
+  );
+});
+
 test("spectator command panel exposes public state without a composer", () => {
   const view = buildPlayerCommandPanelViewModel({
     player: { readOnly: true },

@@ -19,6 +19,7 @@
   let view;
   let triggerElement;
   let confirmElement;
+  let dispatchPromise = null;
 
   $: if (action !== controllerAction) {
     const preserveConfirmation =
@@ -29,7 +30,10 @@
         view?.confirmation !== null,
       );
     controllerAction = action;
-    controller = createHostActionController(action, onDispatch);
+    controller = createHostActionController(action, (event) => {
+      dispatchPromise = Promise.resolve(onDispatch(event));
+      return dispatchPromise;
+    });
     if (preserveConfirmation) {
       controller.activate();
     }
@@ -58,6 +62,7 @@
   async function confirm() {
     controller.confirm();
     refresh();
+    await dispatchPromise;
     await tick();
     triggerElement?.focus();
   }

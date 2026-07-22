@@ -29,6 +29,7 @@
           class={control.classes.actionTile}
           data-action-priority={action.priority}
           data-testid={action.testId}
+          aria-busy={action.status?.state === "pending" ? "true" : undefined}
         >
           <HostAction action={action.config} onDispatch={onDispatch} />
           <div

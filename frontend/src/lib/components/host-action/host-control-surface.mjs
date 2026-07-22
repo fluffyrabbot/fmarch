@@ -95,7 +95,12 @@ function buildHostControlGroup({ group, commandStatuses, nextGroupId }) {
     actions: Object.freeze(
       group.actions.map((action, actionIndex) =>
         Object.freeze({
-          config: action,
+          config: Object.freeze({
+            ...action,
+            disabled:
+              action.disabled === true ||
+              commandStatuses[action.id]?.state === "pending",
+          }),
           priority:
             group.id === nextGroupId && actionIndex === 0 ? "primary" : "secondary",
           testId: `critical-host-action-${action.id}`,

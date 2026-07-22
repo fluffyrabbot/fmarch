@@ -199,6 +199,7 @@ export function buildAdminSetupGridViewModel({
     items: Object.freeze(
       items.map((item) => {
         const status = commandStatuses[item.id] ?? null;
+        const commandPending = status?.state === "pending";
         const visibleStatus = status === null
           ? null
           : Object.freeze({
@@ -210,6 +211,8 @@ export function buildAdminSetupGridViewModel({
           buttonLabel: item.buttonLabel,
           href: item.href ?? null,
           minTouchTargetPx: ADMIN_SURFACE_CONTRACT.minTouchTargetPx,
+          commandPending,
+          triggerDisabled: commandPending,
           status: visibleStatus,
           protocolStatusMessage: status?.message ?? "",
           statusTestId: `admin-command-status-${item.id}`,

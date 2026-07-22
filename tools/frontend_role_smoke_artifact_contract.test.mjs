@@ -6333,7 +6333,60 @@ function assertRoleMobileViewportEvidence(roleEntries) {
         assert.equal(continuity.statusRegion.role, "status");
         assert.equal(continuity.statusRegion.ariaAtomic, "true");
       }
-    }
+
+      const pending = entry.commandResult.pendingState;
+      const pendingBudget = scenario.pendingStateBudget;
+      assert.equal(pending.state, "pending");
+      assert.equal(pending.latencyMode, "controlled-request-gate");
+      assert.equal(pending.releasePolicy, "after-contract-capture");
+      assert.equal(pending.inputBoundary, pendingBudget.inputBoundary);
+      assert.equal(pending.triggerSelector, pendingBudget.triggerSelector);
+      assert.equal(pending.enterPendingMs <= pending.maxEnterPendingMs, true);
+      assert.equal(pending.maxEnterPendingMs, pendingBudget.maxEnterPendingMs);
+      assert.equal(pending.disabled, true);
+      assert.equal(pending.ariaDisabled, "true");
+      assert.equal(pending.busySelector, pendingBudget.busySelector);
+      assert.equal(pending.ariaBusy, "true");
+      assert.equal(pending.duplicatePrevented, true);
+      assert.equal(
+        pending.requestCountWhilePending,
+        pending.requestCountBefore + 1,
+      );
+      assert.equal(
+        pending.requestCountAfterDuplicateAttempt,
+        pending.requestCountBefore + 1,
+      );
+      assert.notEqual(pending.blockedCommand, null);
+      assert.deepEqual(pending.statusRegion, {
+        state: "pending",
+        role: "status",
+        ariaLive: "polite",
+        ariaAtomic: "true",
+      });
+      if (entry.viewport.name === "mobile") {
+        assert.equal(pending.geometry.withinBudget, true);
+        assert.equal(pending.geometry.anchorSelector, pendingBudget.anchorSelector);
+        assert.equal(pending.geometry.targetSelector, pendingBudget.targetSelector);
+        assert.equal(
+          pending.geometry.anchorShift <= pending.geometry.maxAnchorShift,
+          true,
+        );
+        assert.equal(
+          pending.geometry.documentGrowth <= pending.geometry.maxDocumentGrowth,
+          true,
+        );
+      } else {
+        assert.equal(pending.geometry, null);
+      }
+      assertPixelEvidence(
+        [{
+          screenshot: pending.screenshot,
+          screenshotPixels: pending.screenshotPixels,
+          viewport: entry.viewport,
+        }],
+        `${scenario.id} pending-state screenshots`,
+      );
+      }
   }
 }
 

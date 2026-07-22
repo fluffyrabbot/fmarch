@@ -198,6 +198,18 @@ export const roles = Object.freeze([
       maxVisualViewportDeltaPx: 1,
       inputBoundary: "confirmation-control",
     }),
+    pendingStateBudget: Object.freeze({
+      triggerSelector: '[data-testid="admin-command-trigger-create-game"]',
+      statusSelector: '[data-testid="admin-command-status-create-game"]',
+      busySelector: '[data-testid="admin-setup-create-game"]',
+      anchorSelector: '[data-testid="admin-command-trigger-create-game"]',
+      targetSelector: '[data-testid="admin-command-status-create-game"]',
+      maxAnchorShiftPx: 1,
+      maxCombinedSpanViewportRatio: 0.35,
+      maxDocumentGrowthViewportRatio: 0.25,
+      maxEnterPendingMs: 500,
+      inputBoundary: "confirmed-admin-command",
+    }),
     closedByDefault: Object.freeze([
       '[data-testid="admin-recovery-workflow"]',
       '[data-testid="admin-status-overview"]',
@@ -316,6 +328,19 @@ export const roles = Object.freeze([
       maxVisualViewportDeltaPx: 1,
       inputBoundary: "emulated-mobile-textarea-visual-viewport",
     }),
+    pendingStateBudget: Object.freeze({
+      triggerSelector:
+        '[data-testid="player-composer"] [data-action="submit_post"]',
+      statusSelector: '[data-testid="player-command-status"]',
+      busySelector: '[data-testid="player-primary-action-zone"]',
+      anchorSelector: '[data-testid="player-primary-action-zone"]',
+      targetSelector: '[data-testid="player-command-status"]',
+      maxAnchorShiftPx: 1,
+      maxCombinedSpanViewportRatio: 0.9,
+      maxDocumentGrowthViewportRatio: 0.25,
+      maxEnterPendingMs: 500,
+      inputBoundary: "player-command-surface",
+    }),
     closedByDefault: Object.freeze([
       '[data-testid="player-media-composer"]',
       '[data-testid="player-status-overview"]',
@@ -421,6 +446,20 @@ export const roles = Object.freeze([
       maxFocusSettleMs: 500,
       maxVisualViewportDeltaPx: 1,
       inputBoundary: "confirmation-control",
+    }),
+    pendingStateBudget: Object.freeze({
+      triggerSelector:
+        '[data-testid="critical-host-action-extend_deadline"] [data-testid="critical-host-action-trigger"]',
+      statusSelector: '[data-testid="host-command-status-extend_deadline"]',
+      busySelector: '[data-testid="critical-host-action-extend_deadline"]',
+      anchorSelector:
+        '[data-testid="critical-host-action-extend_deadline"] [data-testid="critical-host-action-trigger"]',
+      targetSelector: '[data-testid="host-command-status-extend_deadline"]',
+      maxAnchorShiftPx: 1,
+      maxCombinedSpanViewportRatio: 0.5,
+      maxDocumentGrowthViewportRatio: 0.25,
+      maxEnterPendingMs: 500,
+      inputBoundary: "confirmed-moderator-command",
     }),
     closedByDefault: Object.freeze([
       '[data-testid="host-status-overview"]',

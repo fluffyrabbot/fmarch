@@ -13,6 +13,7 @@
   export let votecount = [];
   export let channel = {};
   export let player = {};
+  export let commandPending = false;
   export let body = "";
   export let mediaFiles = undefined;
   export let mediaAlt = "";
@@ -30,6 +31,7 @@
     votecount,
     channel,
     player,
+    commandPending,
     confirmingAction,
   });
 
@@ -39,11 +41,15 @@
     confirmElements[pickerAction.action]?.focus();
   }
 
+  async function dispatchCommand(action) {
+    await onCommand(action);
+    await tick();
+    triggerElements[action]?.focus();
+  }
+
   async function confirmPickerAction(pickerAction) {
     confirmingAction = null;
-    onCommand(pickerAction.action);
-    await tick();
-    triggerElements[pickerAction.action]?.focus();
+    await dispatchCommand(pickerAction.action);
   }
 
   async function cancelConfirmation(pickerAction) {
@@ -73,6 +79,7 @@
   data-channel-id={view.root.data.channelId}
   data-action-priority={view.root.data.actionPriority}
   data-testid={view.root.testId}
+  aria-busy={view.root.ariaBusy}
 >
   <h2>{view.heading}</h2>
   <div class={view.context.className} data-testid="player-vote-context">
@@ -108,7 +115,9 @@
           data-min-touch-target-px={button.data.minTouchTargetPx}
           data-disabled-reason={button.reason}
           disabled={button.disabled}
-          on:click={() => onCommand(button.action)}
+          aria-disabled={button.disabled ? "true" : undefined}
+          bind:this={triggerElements[button.action]}
+          on:click={() => dispatchCommand(button.action)}
         >
           {button.label}
         </button>
@@ -188,7 +197,9 @@
           data-min-touch-target-px={button.data.minTouchTargetPx}
           data-disabled-reason={button.reason}
           disabled={button.disabled}
-          on:click={() => onCommand(button.action)}
+          aria-disabled={button.disabled ? "true" : undefined}
+          bind:this={triggerElements[button.action]}
+          on:click={() => dispatchCommand(button.action)}
         >
           {button.label}
         </button>
@@ -241,6 +252,7 @@
             data-target-slots={pickerAction.trigger.data.targetSlots.join(",")}
             data-min-touch-target-px={pickerAction.trigger.data.minTouchTargetPx}
             disabled={pickerAction.trigger.disabled}
+            aria-disabled={pickerAction.trigger.disabled ? "true" : undefined}
             aria-expanded={pickerAction.trigger.ariaExpanded}
             bind:this={triggerElements[pickerAction.action]}
             on:click={() => activateConfirmation(pickerAction)}
@@ -297,7 +309,9 @@
           data-target-slots={button.data.targetSlots.join(",")}
           data-min-touch-target-px={button.data.minTouchTargetPx}
           disabled={button.disabled}
-          on:click={() => onCommand(button.action)}
+          aria-disabled={button.disabled ? "true" : undefined}
+          bind:this={triggerElements[button.action]}
+          on:click={() => dispatchCommand(button.action)}
         >
           <span>{button.label}</span>
           {#if button.detail}

@@ -109,7 +109,8 @@ async function proveSourceContracts() {
       component: "PlayerCommandPanel",
       path: "frontend/src/lib/components/player-command/PlayerCommandPanel.svelte",
       requiredSnippets: [
-        "on:click={() => onCommand(button.action)}",
+        "await onCommand(action)",
+        "on:click={() => dispatchCommand(button.action)}",
         "data-action={button.data.action}",
       ],
     }),

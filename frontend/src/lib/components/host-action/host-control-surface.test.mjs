@@ -176,6 +176,26 @@ test("host control surface status message is empty until an action reports", () 
   );
 });
 
+test("host control surface disables only the command that is pending", () => {
+  const groups = buildHostConsoleActionGroups({
+    actions: buildHostConsoleCriticalActions("midsummer", { hostPrompts: [] }),
+    pendingPromptCount: 0,
+    votecountCount: 2,
+  });
+  const view = buildHostControlSurfaceViewModel({
+    groups,
+    commandStatuses: {
+      extend_deadline: { state: "pending", message: "Sending command" },
+    },
+  });
+  const deadline = view.groups.find((group) => group.id === "deadline");
+
+  assert.equal(deadline.actions[0].config.id, "extend_deadline");
+  assert.equal(deadline.actions[0].config.disabled, true);
+  assert.equal(deadline.actions[0].status.state, "pending");
+  assert.equal(deadline.actions[1].config.disabled, false);
+});
+
 test("host control surface context falls back without claiming real authority", () => {
   const view = buildHostControlSurfaceViewModel();
 

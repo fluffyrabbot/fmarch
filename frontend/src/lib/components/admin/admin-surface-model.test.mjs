@@ -368,6 +368,27 @@ test("admin setup grid treats create-game as an explicit confirmation action", (
   });
 });
 
+test("admin setup grid disables a command while its request is pending", () => {
+  const view = buildAdminSetupGridViewModel({
+    items: [{
+      id: "create-game",
+      label: "Create game",
+      authority: "GlobalAdmin",
+      boundary: "Command pipeline",
+      boundaryDetail: "/commands CreateGame",
+      commandAction: "create_game",
+      buttonLabel: "Review",
+    }],
+    commandStatuses: {
+      "create-game": { state: "pending", message: "Sending command" },
+    },
+  });
+
+  assert.equal(view.items[0].commandPending, true);
+  assert.equal(view.items[0].triggerDisabled, true);
+  assert.equal(view.items[0].status.state, "pending");
+});
+
 test("admin audit and escalation models expose stable test ids", () => {
   assert.deepEqual(
     buildAdminAuditPanelViewModel({

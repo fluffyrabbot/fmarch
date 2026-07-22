@@ -67,6 +67,7 @@
   let composerMediaFiles = undefined;
   let composerMediaAlt = "";
   let commandStatus = null;
+  $: commandPending = commandStatus?.state === "pending";
   let commandReceipts = [];
   let thread = data.thread;
   let votecount = data.votecount;
@@ -252,6 +253,9 @@
   });
 
   async function submitPlayerCommand(action) {
+    if (commandPending) {
+      return;
+    }
     const dispatchData = currentData;
     let dispatchedMedia = [];
     const optimisticStatus = playerCommandPendingStatus(action);
@@ -410,6 +414,7 @@
           {votecount}
           channel={data.channel}
           {player}
+          {commandPending}
           bind:body={composerBody}
           bind:mediaFiles={composerMediaFiles}
           bind:mediaAlt={composerMediaAlt}

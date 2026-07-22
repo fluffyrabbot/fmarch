@@ -102,6 +102,9 @@
   }
 
   async function submitAdminSetupCommand(item) {
+    if (commandStatuses[item.id]?.state === "pending") {
+      return;
+    }
     const confirmationStatus =
       commandStatuses[item.id]?.confirmationTrace == null
         ? null

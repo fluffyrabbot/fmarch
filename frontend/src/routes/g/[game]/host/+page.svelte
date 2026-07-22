@@ -189,6 +189,9 @@
   });
 
   async function handleDispatch(event) {
+    if (commandStatuses[event.actionId]?.state === "pending") {
+      return;
+    }
     dispatched = appendHostActionEvent(dispatched, event);
     const optimisticStatus = hostCommandPendingStatus(event);
     recordCommandStatus(event.actionId, optimisticStatus);

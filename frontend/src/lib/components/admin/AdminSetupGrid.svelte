@@ -44,7 +44,7 @@
   }
 
   async function confirmSetupAction(item) {
-    onConfirmSetupAction(item);
+    await onConfirmSetupAction(item);
     await returnFocusToTrigger({ item, triggerButtonRefs, tick });
   }
 
@@ -67,7 +67,11 @@
   data-testid={view.root.testId}
 >
   {#each view.items as item}
-    <article class="fm-panel" data-testid={item.testId}>
+    <article
+      class="fm-panel"
+      data-testid={item.testId}
+      aria-busy={item.commandPending ? "true" : undefined}
+    >
       <p class="fm-eyebrow">{item.displayAuthority}</p>
       <h2>{item.label}</h2>
       <p>{item.displayValue}</p>
@@ -97,6 +101,8 @@
             class="fm-touch-button fm-touch-button--secondary"
             data-min-touch-target-px={item.minTouchTargetPx}
             data-testid={item.triggerTestId}
+            disabled={item.triggerDisabled}
+            aria-disabled={item.triggerDisabled ? "true" : undefined}
             bind:this={triggerButtonRefs[item.id]}
             on:click={() => onSetupAction(item)}
           >

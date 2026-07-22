@@ -23,6 +23,7 @@ export function buildPlayerCommandPanelViewModel({
   votecount = [],
   channel = {},
   player = {},
+  commandPending = false,
   confirmingAction = null,
 }) {
   if (player.readOnly === true) {
@@ -50,9 +51,9 @@ export function buildPlayerCommandPanelViewModel({
   }
   const channelContext = buildChannelContextViewModel({ channel, player });
   const playerCommandsDisabled =
-    player.alive === false || player.gameCompleted === true;
+    commandPending || player.alive === false || player.gameCompleted === true;
   const postCommandDisabled =
-    player.gameCompleted === true ||
+    commandPending || player.gameCompleted === true ||
     (player.alive === false && channelContext.channelId !== "dead");
   const voteButtons = voteCommandButtons({
     composer,
@@ -76,6 +77,7 @@ export function buildPlayerCommandPanelViewModel({
         channelId: channelContext.channelId,
         actionPriority: PLAYER_COMMAND_PANEL_CONTRACT.actionPriority,
       }),
+      ariaBusy: commandPending ? "true" : undefined,
       testId: PLAYER_COMMAND_PANEL_CONTRACT.thumbZoneTestId,
     }),
     quickActions: Object.freeze({

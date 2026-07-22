@@ -175,6 +175,7 @@ try {
         await installLiveProjectionHarness(page);
       }
       const commandRequests = [];
+      const commandLatency = createDeterministicCommandLatencyHarness();
       const hostSlotState = {
         status: "alive",
         alive: true,
@@ -184,6 +185,7 @@ try {
         const commandEnvelope = route.request().postDataJSON();
         const command = commandEnvelope?.body?.body?.command;
         commandRequests.push(command);
+        await commandLatency.holdNext(command);
         if (command?.ResolveHostPrompt !== undefined) {
           hostPromptPending = false;
           await route.fulfill({
@@ -530,6 +532,9 @@ try {
           viewport,
           interactionGeometryBudget: role.interactionGeometryBudget,
           commandContinuityBudget: role.commandContinuityBudget,
+          pendingStateBudget: role.pendingStateBudget,
+          commandLatency,
+          commandRequests,
         });
       }
       if (role.id === "player") {
@@ -540,6 +545,8 @@ try {
           mediaRequests: playerMediaRequests,
           interactionGeometryBudget: role.interactionGeometryBudget,
           commandContinuityBudget: role.commandContinuityBudget,
+          pendingStateBudget: role.pendingStateBudget,
+          commandLatency,
         });
       }
       if (role.id === "moderator") {
@@ -548,6 +555,8 @@ try {
           viewport,
           interactionGeometryBudget: role.interactionGeometryBudget,
           commandContinuityBudget: role.commandContinuityBudget,
+          pendingStateBudget: role.pendingStateBudget,
+          commandLatency,
         });
       }
 
@@ -1127,7 +1136,14 @@ async function assertHostSetupWorkbenchGeometry(page, { scenario, viewport }) {
 
 async function driveAdminReject(
   page,
-  { viewport, interactionGeometryBudget, commandContinuityBudget } = {},
+  {
+    viewport,
+    interactionGeometryBudget,
+    commandContinuityBudget,
+    pendingStateBudget,
+    commandLatency,
+    commandRequests = [],
+  } = {},
 ) {
   const createSetup = page.getByTestId("admin-setup-create-game");
   const createGeometryBaseline = await captureInteractionGeometryBaseline(page, {
@@ -1147,8 +1163,26 @@ async function driveAdminReject(
     viewport,
     label: "admin create-game command continuity",
   });
+  const pendingGeometryBaseline = await captureInteractionGeometryBaseline(page, {
+    budget: pendingStateBudget,
+    viewport,
+    label: "admin create-game pending state",
+  });
   const createDispatchedAtMs = performance.now();
+  commandLatency.armNext("admin create-game command");
+  const requestCountBefore = commandRequests.length;
   await createConfirm.click();
+  const pendingState = await capturePendingCommandState(page, {
+    role: "admin",
+    viewport,
+    budget: pendingStateBudget,
+    geometryBaseline: pendingGeometryBaseline,
+    geometryBudget: pendingStateBudget,
+    commandLatency,
+    commandRequests,
+    requestCountBefore,
+    dispatchedAtMs: createDispatchedAtMs,
+  });
   await page.waitForFunction(() => {
     const node = document.querySelector(
       '[data-testid="admin-command-status-create-game"]',
@@ -1390,6 +1424,7 @@ async function driveAdminReject(
     feedback: feedbackGeometry,
   };
   result.commandContinuity = commandContinuity;
+  result.pendingState = pendingState;
   return result;
 }
 
@@ -1501,6 +1536,8 @@ async function driveModeratorReject(
     viewport,
     interactionGeometryBudget,
     commandContinuityBudget,
+    pendingStateBudget,
+    commandLatency,
   } = {},
 ) {
   const actionRoot = page.getByTestId("critical-host-action-extend_deadline");
@@ -1557,8 +1594,26 @@ async function driveModeratorReject(
     viewport,
     label: "moderator extend deadline command continuity",
   });
+  const pendingGeometryBaseline = await captureInteractionGeometryBaseline(page, {
+    budget: pendingStateBudget,
+    viewport,
+    label: "moderator extend deadline pending state",
+  });
   const extendDeadlineDispatchedAtMs = performance.now();
+  commandLatency.armNext("moderator extend-deadline command");
+  const requestCountBefore = commandRequests.length;
   await actionRoot.getByTestId("critical-host-action-confirm").click();
+  const pendingState = await capturePendingCommandState(page, {
+    role: "moderator",
+    viewport,
+    budget: pendingStateBudget,
+    geometryBaseline: pendingGeometryBaseline,
+    geometryBudget: pendingStateBudget,
+    commandLatency,
+    commandRequests,
+    requestCountBefore,
+    dispatchedAtMs: extendDeadlineDispatchedAtMs,
+  });
   const status = page.getByTestId("host-command-status-extend_deadline");
   await status.waitFor({ state: "visible" });
   await page.waitForFunction(() => {
@@ -1621,7 +1676,173 @@ async function driveModeratorReject(
       feedback: feedbackGeometry,
     },
     commandContinuity,
+    pendingState,
   };
+}
+
+function createDeterministicCommandLatencyHarness() {
+  let activeGate = null;
+
+  return Object.freeze({
+    armNext(label) {
+      if (activeGate !== null) {
+        throw new Error(`command latency gate is already armed for ${activeGate.label}`);
+      }
+      let markBlocked;
+      let releaseRequest;
+      activeGate = {
+        label,
+        blocked: new Promise((resolve) => {
+          markBlocked = resolve;
+        }),
+        released: new Promise((resolve) => {
+          releaseRequest = resolve;
+        }),
+        markBlocked,
+        releaseRequest,
+        command: null,
+      };
+    },
+
+    async holdNext(command) {
+      const gate = activeGate;
+      if (gate === null) {
+        return;
+      }
+      gate.command = command;
+      gate.markBlocked(command);
+      await gate.released;
+      if (activeGate === gate) {
+        activeGate = null;
+      }
+    },
+
+    async waitUntilBlocked() {
+      const gate = activeGate;
+      if (gate === null) {
+        throw new Error("command latency gate must be armed before waiting");
+      }
+      await Promise.race([
+        gate.blocked,
+        new Promise((_, reject) => {
+          setTimeout(
+            () => reject(new Error(`${gate.label} did not reach the request gate`)),
+            2_000,
+          );
+        }),
+      ]);
+      return gate.command;
+    },
+
+    release() {
+      activeGate?.releaseRequest();
+    },
+  });
+}
+
+async function capturePendingCommandState(
+  page,
+  {
+    role,
+    viewport,
+    budget,
+    geometryBaseline,
+    geometryBudget,
+    commandLatency,
+    commandRequests,
+    requestCountBefore,
+    dispatchedAtMs,
+  },
+) {
+  try {
+    const blockedCommand = await commandLatency.waitUntilBlocked();
+    const status = page.locator(budget.statusSelector).first();
+    await status.waitFor({ state: "visible" });
+    await page.waitForFunction(
+      (selector) =>
+        document.querySelector(selector)?.getAttribute("data-state") === "pending",
+      budget.statusSelector,
+    );
+    const enteredPendingAtMs = performance.now();
+    const enterPendingMs = enteredPendingAtMs - dispatchedAtMs;
+    if (enterPendingMs > budget.maxEnterPendingMs) {
+      throw new Error(
+        `${role} entered pending after ${enterPendingMs}ms, beyond ${budget.maxEnterPendingMs}ms budget`,
+      );
+    }
+
+    const statusRegion = await assertStatusLiveRegion(status, {
+      label: `${role} pending command status`,
+      expectedState: "pending",
+      expectedAriaLive: "polite",
+    });
+    const trigger = page.locator(budget.triggerSelector).first();
+    const disabled = await trigger.isDisabled();
+    const ariaDisabled = await trigger.getAttribute("aria-disabled");
+    if (!disabled || ariaDisabled !== "true") {
+      throw new Error(
+        `${role} pending command trigger must be disabled and expose aria-disabled=true`,
+      );
+    }
+    const busy = await page.locator(budget.busySelector).first().getAttribute("aria-busy");
+    if (busy !== "true") {
+      throw new Error(`${role} pending command surface must expose aria-busy=true`);
+    }
+    if (commandRequests.length !== requestCountBefore + 1) {
+      throw new Error(
+        `${role} pending command emitted ${commandRequests.length - requestCountBefore} requests before duplicate proof`,
+      );
+    }
+    await trigger.evaluate((node) => node.click());
+    await page.evaluate(() => Promise.resolve());
+    const requestCountAfterDuplicateAttempt = commandRequests.length;
+    if (requestCountAfterDuplicateAttempt !== requestCountBefore + 1) {
+      throw new Error(`${role} pending command allowed a duplicate request`);
+    }
+
+    const geometry = await assertPostInteractionGeometry(page, {
+      baseline: geometryBaseline,
+      budget: geometryBudget,
+      viewport,
+      label: `${role} pending command state`,
+    });
+    const screenshot = path.join(
+      artifactDir,
+      `${viewport.name}-${role}-pending.png`,
+    );
+    const scrollBeforeScreenshot = await page.evaluate(() => window.scrollY);
+    const screenshotPixels = await captureScreenshotEvidence(page, {
+      path: screenshot,
+      label: `${role} pending state ${viewport.name}`,
+      viewport,
+    });
+    await page.evaluate((scrollY) => window.scrollTo(0, scrollY), scrollBeforeScreenshot);
+
+    return {
+      state: "pending",
+      latencyMode: "controlled-request-gate",
+      releasePolicy: "after-contract-capture",
+      inputBoundary: budget.inputBoundary,
+      enterPendingMs,
+      maxEnterPendingMs: budget.maxEnterPendingMs,
+      triggerSelector: budget.triggerSelector,
+      disabled,
+      ariaDisabled,
+      busySelector: budget.busySelector,
+      ariaBusy: busy,
+      requestCountBefore,
+      requestCountWhilePending: commandRequests.length,
+      requestCountAfterDuplicateAttempt,
+      duplicatePrevented: true,
+      blockedCommand,
+      statusRegion,
+      geometry,
+      screenshot: path.relative(repoRoot, screenshot),
+      screenshotPixels,
+    };
+  } finally {
+    commandLatency.release();
+  }
 }
 
 async function setDisclosureState(page, selectors = [], open) {
@@ -2555,6 +2776,8 @@ async function drivePlayerReject(
     mediaRequests,
     interactionGeometryBudget,
     commandContinuityBudget,
+    pendingStateBudget,
+    commandLatency,
   },
 ) {
   const media = await assertPlayerMediaNetwork(page, { mediaRequests });
@@ -2629,8 +2852,26 @@ async function drivePlayerReject(
     viewport,
     label: "player composer command continuity",
   });
+  const pendingGeometryBaseline = await captureInteractionGeometryBaseline(page, {
+    budget: pendingStateBudget,
+    viewport,
+    label: "player submit-post pending state",
+  });
   const postDispatchedAtMs = performance.now();
+  commandLatency.armNext("player submit-post command");
+  const requestCountBefore = commandRequests.length;
   await composer.locator('[data-action="submit_post"]').click();
+  const pendingState = await capturePendingCommandState(page, {
+    role: "player",
+    viewport,
+    budget: pendingStateBudget,
+    geometryBaseline: pendingGeometryBaseline,
+    geometryBudget: pendingStateBudget,
+    commandLatency,
+    commandRequests,
+    requestCountBefore,
+    dispatchedAtMs: postDispatchedAtMs,
+  });
   await page.waitForFunction(() => {
     const node = document.querySelector('[data-testid="player-command-status"]');
     return node?.getAttribute("data-state") === "ack";
@@ -2689,6 +2930,7 @@ async function drivePlayerReject(
       feedback: feedbackGeometry,
     },
     commandContinuity,
+    pendingState,
     receiptScreenshot: path.relative(repoRoot, receiptScreenshot),
     receiptScreenshotPixels,
     composerAckScreenshot: path.relative(repoRoot, composerAckScreenshot),
