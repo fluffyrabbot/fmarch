@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "lanes": {
+    "test:proof-lane-contract": {
+      "seconds": 0.2,
+      "measured_at": "2026-07-22T19:17:52.474Z",
+      "command": "npm run test:proof-lane-contract"
+    },
+    "test:completeness-scorecard": {
+      "seconds": 0.3,
+      "measured_at": "2026-07-22T19:17:52.818Z",
+      "command": "npm run test:completeness-scorecard"
+    },
+    "test:dev-postgres-contract": {
+      "seconds": 0.2,
+      "measured_at": "2026-07-22T19:17:53.336Z",
+      "command": "npm run test:dev-postgres-contract"
+    },
+    "test:dev-test-game-contract": {
+      "seconds": 1,
+      "measured_at": "2026-07-22T19:17:54.408Z",
+      "command": "npm run test:dev-test-game-contract"
+    },
+    "test:projection-baseline:static": {
+      "seconds": 0.5,
+      "measured_at": "2026-07-22T19:17:54.918Z",
+      "command": "npm run test:projection-baseline:static"
+    },
+    "check:build-posture": {
+      "seconds": 0.1,
+      "measured_at": "2026-07-22T19:17:55.089Z",
+      "command": "npm run check:build-posture"
+    }
+  }
+}

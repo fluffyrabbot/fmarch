@@ -4,6 +4,8 @@
   "scripts": {
     "generate:completeness-scorecard": "node tools/completeness_scorecard.mjs --write",
     "test:completeness-scorecard": "node --test tools/completeness_scorecard.test.mjs && node tools/completeness_scorecard.mjs --check",
+    "proof:lanes": "node tools/proof_lane_select.mjs",
+    "test:proof-lane-contract": "node --test tools/proof_lane_select.test.mjs",
     "check:build-posture": "bash scripts/check-build-posture.sh",
     "dev:postgres": "node tools/dev_postgres.mjs",
     "dev:test-game:prebuild": "cargo build -p server",

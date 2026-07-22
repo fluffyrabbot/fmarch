@@ -1,0 +1,254 @@
+{
+  "version": 1,
+  "base_ref": "main",
+  "notes": [
+    "Maps changed paths to the narrowest truthful proof-lane set. Consumed by tools/proof_lane_select.mjs.",
+    "Tier semantics: 'frozen' areas are trusted between full sweeps and excluded from push-mode defaults; tier NEVER exempts an area from diff-triggered selection — touching a frozen area (directly, via crate closure, or via also_triggers) re-arms its lanes for that run.",
+    "Re-declare tiers at sprint boundaries: the current frontier's areas are 'active', completed-and-untouched surfaces are 'frozen'. Frozen areas must cite registry capabilities that are all status=complete (validated by test:proof-lane-contract).",
+    "Path matching: entries ending in '/' or '.' are prefixes; anything else is an exact file match. Longest match wins.",
+    "also_triggers encodes cross-boundary blast radius the crate DAG cannot see (e.g. strict-wire change 32e8623b broke ~10 proof tools and frontend transport)."
+  ],
+  "push_always": ["test:completeness-scorecard", "test:proof-lane-contract"],
+  "lanes": {
+    "cargo:domain": { "kind": "shell", "command": "cargo test -p domain" },
+    "cargo:eventstore": { "kind": "shell", "command": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p eventstore -- --test-threads=1" },
+    "cargo:projections": { "kind": "shell", "command": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p projections -- --test-threads=1" },
+    "cargo:caps": { "kind": "shell", "command": "cargo test -p caps" },
+    "cargo:commands": { "kind": "shell", "command": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p commands -- --test-threads=1" },
+    "cargo:wire": { "kind": "shell", "command": "cargo test -p wire" },
+    "cargo:community": { "kind": "shell", "command": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p community -- --test-threads=1" },
+    "cargo:identity": { "kind": "shell", "command": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p identity -- --test-threads=1" },
+    "cargo:media": { "kind": "shell", "command": "cargo test -p media" },
+    "cargo:api": { "kind": "shell", "command": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p api -- --test-threads=1" },
+    "cargo:operator_api": { "kind": "shell", "command": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p operator_api -- --test-threads=1" },
+    "cargo:server": { "kind": "shell", "command": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p server -- --test-threads=1" },
+    "test:frontend-contract": { "kind": "npm" },
+    "test:frontend-static-role-contract": { "kind": "npm" },
+    "test:frontend-role-smoke": { "kind": "npm" },
+    "test:frontend-role-proof:quick": { "kind": "npm" },
+    "test:frontend-visual-regression": { "kind": "npm" },
+    "test:auth-invite-role-proof": { "kind": "npm" },
+    "test:projection-baseline:static": { "kind": "npm" },
+    "test:dev-test-game-contract": { "kind": "npm" },
+    "test:dev-postgres-contract": { "kind": "npm" },
+    "test:completeness-scorecard": { "kind": "npm" },
+    "test:proof-lane-contract": { "kind": "npm" },
+    "test:railway-staging-target": { "kind": "npm" },
+    "test:local-postgres-ci": { "kind": "npm" },
+    "check:build-posture": { "kind": "npm" }
+  },
+  "areas": [
+    {
+      "id": "crate:domain",
+      "tier": "frozen",
+      "paths": ["crates/domain/"],
+      "crate": "domain",
+      "lanes": ["cargo:domain"],
+      "capabilities": ["foundation.resolution-engine-parity"]
+    },
+    {
+      "id": "crate:eventstore",
+      "tier": "frozen",
+      "paths": ["crates/eventstore/"],
+      "crate": "eventstore",
+      "lanes": ["cargo:eventstore"],
+      "capabilities": ["foundation.event-store-projections"]
+    },
+    {
+      "id": "crate:projections",
+      "tier": "frozen",
+      "paths": ["crates/projections/"],
+      "crate": "projections",
+      "lanes": ["cargo:projections", "test:projection-baseline:static"],
+      "capabilities": ["foundation.event-store-projections"]
+    },
+    {
+      "id": "crate:caps",
+      "tier": "frozen",
+      "paths": ["crates/caps/"],
+      "crate": "caps",
+      "lanes": ["cargo:caps"],
+      "capabilities": ["foundation.command-capability-runtime"]
+    },
+    {
+      "id": "crate:commands",
+      "tier": "frozen",
+      "paths": ["crates/commands/"],
+      "crate": "commands",
+      "lanes": ["cargo:commands"],
+      "capabilities": ["foundation.command-capability-runtime", "foundation.resolution-engine-parity"]
+    },
+    {
+      "id": "crate:wire",
+      "tier": "frozen",
+      "paths": ["crates/wire/"],
+      "crate": "wire",
+      "lanes": ["cargo:wire"],
+      "capabilities": ["foundation.wire-live-delivery"],
+      "also_triggers": ["frontend:game", "tools:proof-infra"]
+    },
+    {
+      "id": "crate:community",
+      "tier": "frozen",
+      "paths": ["crates/community/"],
+      "crate": "community",
+      "lanes": ["cargo:community"],
+      "capabilities": [
+        "product.community.game-index",
+        "product.community.discussions",
+        "product.community.profiles",
+        "product.community.search",
+        "product.community.moderation-operations",
+        "product.community.subscriptions"
+      ]
+    },
+    {
+      "id": "crate:identity",
+      "tier": "active",
+      "paths": ["crates/identity/"],
+      "crate": "identity",
+      "lanes": ["cargo:identity", "test:auth-invite-role-proof"]
+    },
+    {
+      "id": "crate:media",
+      "tier": "frozen",
+      "paths": ["crates/media/"],
+      "crate": "media",
+      "lanes": ["cargo:media"],
+      "capabilities": [
+        "product.media.reference-ingest-serving",
+        "product.media.canonical-blob-store",
+        "product.media.variant-generation",
+        "product.media.authenticated-upload",
+        "product.media.upload-to-private-post"
+      ]
+    },
+    {
+      "id": "crate:api",
+      "tier": "active",
+      "paths": ["crates/api/"],
+      "crate": "api",
+      "lanes": ["cargo:api"],
+      "also_triggers": ["frontend:identity"]
+    },
+    {
+      "id": "crate:operator_api",
+      "tier": "frozen",
+      "paths": ["crates/operator_api/"],
+      "crate": "operator_api",
+      "lanes": ["cargo:operator_api"],
+      "capabilities": ["product.archive.completed-game-export"]
+    },
+    {
+      "id": "crate:server",
+      "tier": "active",
+      "paths": ["crates/server/"],
+      "crate": "server",
+      "lanes": ["cargo:server"]
+    },
+    {
+      "id": "packs",
+      "tier": "frozen",
+      "paths": ["packs/"],
+      "lanes": ["cargo:domain", "cargo:commands"],
+      "capabilities": ["foundation.resolution-engine-parity"]
+    },
+    {
+      "id": "frontend:identity",
+      "tier": "active",
+      "paths": ["frontend/src/routes/auth/", "frontend/src/lib/server/", "frontend/src/hooks.server."],
+      "lanes": ["test:frontend-contract", "test:auth-invite-role-proof"]
+    },
+    {
+      "id": "frontend:admin",
+      "tier": "active",
+      "paths": ["frontend/src/routes/admin/", "frontend/src/lib/components/admin/"],
+      "lanes": ["test:frontend-contract"]
+    },
+    {
+      "id": "frontend:game",
+      "tier": "frozen",
+      "paths": [
+        "frontend/src/routes/g/",
+        "frontend/src/routes/games/",
+        "frontend/src/lib/components/",
+        "frontend/src/lib/app/"
+      ],
+      "lanes": [
+        "test:frontend-contract",
+        "test:frontend-role-smoke",
+        "test:frontend-role-proof:quick",
+        "test:frontend-visual-regression"
+      ],
+      "capabilities": [
+        "foundation.wire-live-delivery",
+        "product.game.setup",
+        "product.game.core-loop",
+        "product.game.host-moderation",
+        "product.game.replacement-continuity",
+        "product.game.endgame-reveal-history"
+      ]
+    },
+    {
+      "id": "frontend:community",
+      "tier": "frozen",
+      "paths": [
+        "frontend/src/routes/discussions/",
+        "frontend/src/routes/search/",
+        "frontend/src/routes/inbox/",
+        "frontend/src/routes/u/",
+        "frontend/src/routes/moderation/"
+      ],
+      "lanes": ["test:frontend-contract"],
+      "capabilities": [
+        "product.community.game-index",
+        "product.community.discussions",
+        "product.community.profiles",
+        "product.community.search",
+        "product.community.moderation-operations",
+        "product.community.subscriptions"
+      ]
+    },
+    {
+      "id": "frontend:infra",
+      "tier": "active",
+      "paths": ["frontend/"],
+      "lanes": ["test:frontend-contract"]
+    },
+    {
+      "id": "tools:proof-infra",
+      "tier": "active",
+      "paths": ["tools/"],
+      "lanes": [
+        "test:proof-lane-contract",
+        "test:dev-postgres-contract",
+        "test:dev-test-game-contract",
+        "test:frontend-static-role-contract"
+      ]
+    },
+    {
+      "id": "ops:scorecard",
+      "tier": "active",
+      "paths": ["docs/ops/"],
+      "lanes": ["test:completeness-scorecard", "test:proof-lane-contract"]
+    },
+    {
+      "id": "docs",
+      "tier": "active",
+      "paths": ["docs/", "AGENTS.md"],
+      "lanes": []
+    },
+    {
+      "id": "deploy:infra",
+      "tier": "active",
+      "paths": ["deploy/", "railway.toml", "docker-compose.yml", "Dockerfile", "Dockerfile.frontend"],
+      "lanes": ["check:build-posture", "test:railway-staging-target"]
+    },
+    {
+      "id": "workspace:manifests",
+      "tier": "active",
+      "paths": ["scripts/", "Cargo.toml", "Cargo.lock", "package.json", "package-lock.json"],
+      "lanes": ["check:build-posture", "test:local-postgres-ci"]
+    }
+  ]
+}
