@@ -20,7 +20,12 @@
 //! re-derives authority (confused-deputy defense, doc 06).
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::future::pending;
 use std::path::Path;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
 use std::time::{Duration, Instant};
 
 use caps::{Capability, CapabilitySet, Principal};
@@ -51,6 +56,69 @@ pub const LARGE_ACTION_GRAPH_PERFORMANCE_THRESHOLD_MS: u64 = 20_000;
 const MAX_THREAD_POST_MEDIA: usize = 4;
 const MAX_THREAD_POST_MEDIA_ALT_BYTES: usize = 1_000;
 const REQUIRED_THREAD_POST_MEDIA_VARIANTS: [&str; 3] = ["thumb", "tablet", "full-bounded"];
+
+/// Deterministic suspension points used by the command-runtime cancellation
+/// contract tests. Production callers should use [`handle`] or
+/// [`handle_idempotent`]; this surface exists so tests can abort a task after a
+/// resource-bearing await without timing races.
+#[doc(hidden)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CommandRuntimeCheckpoint {
+    TransactionBegun,
+    ReceiptClaimed,
+    StreamLocked,
+    CompletionChecked,
+    GameValidated,
+    CapabilityResolved,
+    EventsProjected,
+    CommandApplied,
+    ReceiptStored,
+    Committed,
+}
+
+/// One-shot controller for a deterministic command-runtime suspension point.
+#[doc(hidden)]
+#[derive(Debug, Clone)]
+pub struct CommandRuntimeTestControl {
+    target: CommandRuntimeCheckpoint,
+    reached: Arc<AtomicBool>,
+}
+
+impl CommandRuntimeTestControl {
+    pub fn new(target: CommandRuntimeCheckpoint) -> Self {
+        Self {
+            target,
+            reached: Arc::new(AtomicBool::new(false)),
+        }
+    }
+
+    pub async fn wait_until_reached(&self) {
+        while !self.reached.load(Ordering::Acquire) {
+            tokio::task::yield_now().await;
+        }
+    }
+
+    async fn suspend_if_target(&self, checkpoint: CommandRuntimeCheckpoint) {
+        if self.target == checkpoint {
+            self.reached.store(true, Ordering::Release);
+            pending::<()>().await;
+        }
+    }
+}
+
+tokio::task_local! {
+    static COMMAND_RUNTIME_TEST_CONTROL: Option<CommandRuntimeTestControl>;
+}
+
+async fn command_runtime_checkpoint(checkpoint: CommandRuntimeCheckpoint) {
+    let control = COMMAND_RUNTIME_TEST_CONTROL
+        .try_with(Clone::clone)
+        .ok()
+        .flatten();
+    if let Some(control) = control {
+        control.suspend_if_target(checkpoint).await;
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct EngineSnapshotIdentityAudit {
@@ -487,7 +555,9 @@ impl Ack {
 
 /// Handle one command end-to-end. The single entry point Phase 4 will wrap.
 pub async fn handle(pool: &PgPool, principal: &Principal, command: Command) -> Result<Ack, Reject> {
-    handle_inner(pool, principal, command, None).await
+    COMMAND_RUNTIME_TEST_CONTROL
+        .scope(None, handle_inner(pool, principal, command, None))
+        .await
 }
 
 /// Handle a network command with durable idempotency. If `(principal,
@@ -501,7 +571,28 @@ pub async fn handle_idempotent(
     command: Command,
 ) -> Result<Ack, Reject> {
     let receipt = ReceiptClaim::new(principal, command_id, &command)?;
-    handle_inner(pool, principal, command, Some(&receipt)).await
+    COMMAND_RUNTIME_TEST_CONTROL
+        .scope(None, handle_inner(pool, principal, command, Some(&receipt)))
+        .await
+}
+
+/// Run an idempotent command with a deterministic cancellation checkpoint.
+/// This is intentionally hidden from the production API documentation.
+#[doc(hidden)]
+pub async fn handle_idempotent_with_test_control(
+    pool: &PgPool,
+    principal: &Principal,
+    command_id: Uuid,
+    command: Command,
+    control: CommandRuntimeTestControl,
+) -> Result<Ack, Reject> {
+    let receipt = ReceiptClaim::new(principal, command_id, &command)?;
+    COMMAND_RUNTIME_TEST_CONTROL
+        .scope(
+            Some(control),
+            handle_inner(pool, principal, command, Some(&receipt)),
+        )
+        .await
 }
 
 async fn handle_inner(
@@ -515,12 +606,16 @@ async fn handle_inner(
         .begin()
         .await
         .map_err(|error| Reject::Internal(error.to_string()))?;
+    command_runtime_checkpoint(CommandRuntimeCheckpoint::TransactionBegun).await;
 
     if let Some(receipt) = receipt {
-        if let Some(ack) = claim_or_replay_receipt_in_tx(&mut tx, game, receipt).await? {
+        let replay = claim_or_replay_receipt_in_tx(&mut tx, game, receipt).await?;
+        command_runtime_checkpoint(CommandRuntimeCheckpoint::ReceiptClaimed).await;
+        if let Some(ack) = replay {
             tx.commit()
                 .await
                 .map_err(|error| Reject::Internal(error.to_string()))?;
+            command_runtime_checkpoint(CommandRuntimeCheckpoint::Committed).await;
             return Ok(ack);
         }
     }
@@ -528,17 +623,22 @@ async fn handle_inner(
     eventstore::lock_stream_in_tx(&mut tx, game)
         .await
         .map_err(|error| Reject::Internal(error.to_string()))?;
+    command_runtime_checkpoint(CommandRuntimeCheckpoint::StreamLocked).await;
     if game_closed_by_completion(&command).is_some() {
         require_game_not_completed(&mut tx, game).await?;
+        command_runtime_checkpoint(CommandRuntimeCheckpoint::CompletionChecked).await;
     }
     let ack = handle_command(&mut tx, principal, command).await?;
+    command_runtime_checkpoint(CommandRuntimeCheckpoint::CommandApplied).await;
 
     if let Some(receipt) = receipt {
         store_receipt_ack_in_tx(&mut tx, receipt, &ack).await?;
+        command_runtime_checkpoint(CommandRuntimeCheckpoint::ReceiptStored).await;
     }
     tx.commit()
         .await
         .map_err(|error| Reject::Internal(error.to_string()))?;
+    command_runtime_checkpoint(CommandRuntimeCheckpoint::Committed).await;
     Ok(ack)
 }
 
@@ -842,7 +942,7 @@ async fn host_lifecycle(
     actor: ActorId,
 ) -> Result<Ack, Reject> {
     require_game(tx, game).await?;
-    let caps = caps::resolve_in_tx(tx, principal, game).await?;
+    let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
     require(&caps, &Capability::HostOf(game), Reject::NotHost)?;
     persist(tx, game, &[EventInput::new(kind, 1, payload, actor, 0)]).await
 }
@@ -854,7 +954,7 @@ async fn grant_spectator(
     user: String,
 ) -> Result<Ack, Reject> {
     require_game(tx, game).await?;
-    let caps = caps::resolve_in_tx(tx, principal, game).await?;
+    let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
     require(&caps, &Capability::HostOf(game), Reject::NotHost)?;
     if user.trim().is_empty() {
         return Err(Reject::InvalidTarget);
@@ -888,7 +988,7 @@ async fn revoke_spectator(
     user: String,
 ) -> Result<Ack, Reject> {
     require_game(tx, game).await?;
-    let caps = caps::resolve_in_tx(tx, principal, game).await?;
+    let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
     require(&caps, &Capability::HostOf(game), Reject::NotHost)?;
     if user.trim().is_empty() {
         return Err(Reject::InvalidTarget);
@@ -917,7 +1017,7 @@ async fn add_slot(
     slot: String,
 ) -> Result<Ack, Reject> {
     require_game(tx, game).await?;
-    let caps = caps::resolve_in_tx(tx, principal, game).await?;
+    let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
     require(&caps, &Capability::HostOf(game), Reject::NotHost)?;
     if projections::slot_exists(&mut **tx, game, &slot).await? {
         return Err(Reject::InvalidTarget);
@@ -942,7 +1042,7 @@ async fn complete_game(
     game: Uuid,
 ) -> Result<Ack, Reject> {
     require_game(tx, game).await?;
-    let caps = caps::resolve_in_tx(tx, principal, game).await?;
+    let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
     require(&caps, &Capability::HostOf(game), Reject::NotHost)?;
 
     let stream = eventstore::load_stream_in_tx(tx, game)
@@ -974,7 +1074,7 @@ async fn host_phase_lifecycle(
     phase: String,
 ) -> Result<Ack, Reject> {
     require_game(tx, game).await?;
-    let caps = caps::resolve_in_tx(tx, principal, game).await?;
+    let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
     require(&caps, &Capability::HostOf(game), Reject::NotHost)?;
 
     let stream = eventstore::load_stream_in_tx(tx, game)
@@ -1004,7 +1104,7 @@ async fn lock_thread(
     game: Uuid,
 ) -> Result<Ack, Reject> {
     require_game(tx, game).await?;
-    let caps = caps::resolve_in_tx(tx, principal, game).await?;
+    let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
     require(&caps, &Capability::HostOf(game), Reject::NotHost)?;
     require_thread_lock_state(tx, game, false).await?;
     persist(
@@ -1027,7 +1127,7 @@ async fn unlock_thread(
     game: Uuid,
 ) -> Result<Ack, Reject> {
     require_game(tx, game).await?;
-    let caps = caps::resolve_in_tx(tx, principal, game).await?;
+    let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
     require(&caps, &Capability::HostOf(game), Reject::NotHost)?;
     require_thread_lock_state(tx, game, true).await?;
     persist(
@@ -1066,7 +1166,7 @@ async fn start_game(
     phase: String,
 ) -> Result<Ack, Reject> {
     require_game(tx, game).await?;
-    let caps = caps::resolve_in_tx(tx, principal, game).await?;
+    let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
     require(&caps, &Capability::HostOf(game), Reject::NotHost)?;
 
     let stream = eventstore::load_stream_in_tx(tx, game)
@@ -1094,7 +1194,7 @@ async fn advance_phase(
     game: Uuid,
 ) -> Result<Ack, Reject> {
     require_game(tx, game).await?;
-    let caps = caps::resolve_in_tx(tx, principal, game).await?;
+    let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
     require(&caps, &Capability::HostOf(game), Reject::NotHost)?;
 
     let (phase, stream) = resolved_locked_phase_stream(tx, game).await?;
@@ -1129,7 +1229,7 @@ async fn advance_phase_by_deadline(
     observed_at: i64,
 ) -> Result<Ack, Reject> {
     require_game(tx, game).await?;
-    let caps = caps::resolve_in_tx(tx, principal, game).await?;
+    let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
     require(&caps, &Capability::HostOf(game), Reject::NotHost)?;
 
     let (phase, stream) = resolved_locked_phase_stream(tx, game).await?;
@@ -1210,7 +1310,7 @@ async fn host_slot_lifecycle(
 ) -> Result<Ack, Reject> {
     let mut payload = payload;
     require_game(tx, game).await?;
-    let caps = caps::resolve_in_tx(tx, principal, game).await?;
+    let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
     require(&caps, &Capability::HostOf(game), Reject::NotHost)?;
     let current_status = current_slot_lifecycle_status(tx, game, &slot)
         .await?
@@ -1255,7 +1355,7 @@ async fn assign_slot(
     user: String,
 ) -> Result<Ack, Reject> {
     require_game(tx, game).await?;
-    let caps = caps::resolve_in_tx(tx, principal, game).await?;
+    let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
     require(&caps, &Capability::HostOf(game), Reject::NotHost)?;
     if !projections::slot_exists(&mut **tx, game, &slot).await? {
         return Err(Reject::UnknownSlot);
@@ -1289,7 +1389,7 @@ async fn assign_role(
     role_key: String,
 ) -> Result<Ack, Reject> {
     require_game(tx, game).await?;
-    let caps = caps::resolve_in_tx(tx, principal, game).await?;
+    let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
     require(&caps, &Capability::HostOf(game), Reject::NotHost)?;
     if !projections::slot_exists(&mut **tx, game, &slot).await? {
         return Err(Reject::UnknownSlot);
@@ -1336,7 +1436,7 @@ async fn submit_vote(
     require_game(tx, game).await?;
 
     // 1. resolve capability (boundary) and require the NARROWEST one.
-    let caps = caps::resolve_in_tx(tx, principal, game).await?;
+    let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
     require_slot_occupant(tx, game, &actor_slot, &caps).await?;
 
     // 2. validate domain rules.
@@ -1374,7 +1474,7 @@ async fn withdraw_vote(
     actor_slot: String,
 ) -> Result<Ack, Reject> {
     require_game(tx, game).await?;
-    let caps = caps::resolve_in_tx(tx, principal, game).await?;
+    let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
     require_slot_occupant(tx, game, &actor_slot, &caps).await?;
     // RULING: withdraw is gated on the SAME open-phase rule as submit — you may
     // only change your ballot while the phase is votable (doc 01 phases partition
@@ -1411,7 +1511,7 @@ async fn submit_action(
         return Err(Reject::InvalidTarget);
     }
 
-    let caps = caps::resolve_in_tx(tx, principal, game).await?;
+    let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
     require_slot_occupant(tx, game, &actor_slot, &caps).await?;
     let phase = require_open_phase(tx, game).await?;
     require_slot_alive(tx, game, &actor_slot).await?;
@@ -1504,7 +1604,7 @@ async fn withdraw_action(
         return Err(Reject::InvalidTarget);
     }
 
-    let caps = caps::resolve_in_tx(tx, principal, game).await?;
+    let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
     require_slot_occupant(tx, game, &actor_slot, &caps).await?;
     let phase = require_open_phase(tx, game).await?;
     require_slot_alive(tx, game, &actor_slot).await?;
@@ -1537,7 +1637,7 @@ async fn set_post_policy(
     if channel_id.trim().is_empty() {
         return Err(Reject::InvalidTarget);
     }
-    let caps = caps::resolve_in_tx(tx, principal, game).await?;
+    let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
     require(&caps, &Capability::HostOf(game), Reject::NotHost)?;
     let stream = eventstore::load_stream_in_tx(tx, game)
         .await
@@ -1577,7 +1677,7 @@ async fn submit_post(
         media,
     } = request;
     require_game(tx, game).await?;
-    let caps = caps::resolve_in_tx(tx, principal, game).await?;
+    let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
     // The fixed spectator room has no player-authoring path. It only accepts
     // host-authored notices through PublishSpectatorPost, before any
     // client-supplied slot or capability is inspected.
@@ -1629,7 +1729,7 @@ async fn publish_spectator_post(
     media: Vec<ThreadPostMedia>,
 ) -> Result<Ack, Reject> {
     require_game(tx, game).await?;
-    let caps = caps::resolve_in_tx(tx, principal, game).await?;
+    let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
     require(&caps, &Capability::HostOf(game), Reject::NotHost)?;
     validate_thread_post_media(&media)?;
     if body.trim().is_empty() {
@@ -1702,7 +1802,7 @@ async fn publish_votecount(
     game: Uuid,
 ) -> Result<Ack, Reject> {
     require_game(tx, game).await?;
-    let caps = caps::resolve_in_tx(tx, principal, game).await?;
+    let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
     require(&caps, &Capability::HostOf(game), Reject::NotHost)?;
     let phase = current_phase(tx, game).await?.ok_or(Reject::PhaseLocked)?;
     let rows = projections::votecount(&mut **tx, game)
@@ -1773,7 +1873,7 @@ async fn extend_deadline(
     at: i64,
 ) -> Result<Ack, Reject> {
     require_game(tx, game).await?;
-    let caps = caps::resolve_in_tx(tx, principal, game).await?;
+    let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
     // Requires HostOf|CohostOf — the narrowest is CohostOf (host subsumes it).
     require(&caps, &Capability::CohostOf(game), Reject::NotHost)?;
     let current_phase = require_open_phase(tx, game).await?;
@@ -1803,7 +1903,7 @@ async fn process_replacement(
     incoming_user: String,
 ) -> Result<Ack, Reject> {
     require_game(tx, game).await?;
-    let caps = caps::resolve_in_tx(tx, principal, game).await?;
+    let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
     require(&caps, &Capability::HostOf(game), Reject::NotHost)?;
 
     if !projections::slot_exists(&mut **tx, game, &slot).await? {
@@ -1845,7 +1945,7 @@ async fn resolve_phase(
     seed: u64,
 ) -> Result<Ack, Reject> {
     require_game(tx, game).await?;
-    let caps = caps::resolve_in_tx(tx, principal, game).await?;
+    let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
     require(&caps, &Capability::HostOf(game), Reject::NotHost)?;
 
     let phase = projections::phase_state(&mut **tx, game)
@@ -1924,7 +2024,7 @@ async fn control_ita_session(
     if message.as_deref().is_some_and(|msg| msg.trim().is_empty()) {
         return Err(Reject::InvalidTarget);
     }
-    let caps = caps::resolve_in_tx(tx, principal, game).await?;
+    let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
     require(&caps, &Capability::HostOf(game), Reject::NotHost)?;
     let phase = require_open_day_phase(tx, game).await?;
     let phase_number = phase_number(&phase)?;
@@ -3030,7 +3130,7 @@ async fn resolve_host_prompt(
     decision: HostPromptDecision,
 ) -> Result<Ack, Reject> {
     require_game(tx, game).await?;
-    let caps = caps::resolve_in_tx(tx, principal, game).await?;
+    let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
     require(&caps, &Capability::HostOf(game), Reject::NotHost)?;
 
     let prompt = projections::host_prompts(&mut **tx, game)
@@ -4410,10 +4510,21 @@ fn slot_lifecycle_payload(
 /// Reject if the game does not exist (no `GameCreated` yet).
 async fn require_game(tx: &mut Transaction<'_, Postgres>, game: Uuid) -> Result<(), Reject> {
     if projections::game_exists(&mut **tx, game).await? {
+        command_runtime_checkpoint(CommandRuntimeCheckpoint::GameValidated).await;
         Ok(())
     } else {
         Err(Reject::UnknownGame)
     }
+}
+
+async fn resolve_capabilities_in_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    principal: &Principal,
+    game: Uuid,
+) -> Result<CapabilitySet, Reject> {
+    let capabilities = caps::resolve_in_tx(tx, principal, game).await?;
+    command_runtime_checkpoint(CommandRuntimeCheckpoint::CapabilityResolved).await;
+    Ok(capabilities)
 }
 
 /// Least-authority gate: require `cap`, mapping a miss to `deny`.
@@ -5360,6 +5471,7 @@ async fn persist(
         }
         Err(e) => return Err(Reject::Internal(e.to_string())),
     };
+    command_runtime_checkpoint(CommandRuntimeCheckpoint::EventsProjected).await;
     Ok(Ack::from_seqs(
         stored.iter().map(|stored| stored.stream_seq).collect(),
     ))
