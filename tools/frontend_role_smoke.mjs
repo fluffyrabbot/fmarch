@@ -19,6 +19,16 @@ import {
   setupViewports,
   viewports,
 } from "./frontend_role_smoke_scenarios.mjs";
+import {
+  commandMockFallback,
+  commandMockScenarios,
+  createRoleMockState,
+  fixtureApiRoutes,
+  mockStateProjections,
+  privateChannelCommandMockFallback,
+  privateChannelCommandMockScenarios,
+  privateChannelFixtureApiRoutes,
+} from "./frontend_role_smoke_flows.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const frontendRoot = path.join(repoRoot, "frontend");
@@ -178,249 +188,21 @@ try {
       const commandEnvelopes = [];
       const commandLatency = createDeterministicCommandLatencyHarness();
       const commandInterruption = createDeterministicCommandInterruptionHarness();
-      const hostSlotState = {
-        status: "alive",
-        alive: true,
-      };
-      let hostPromptPending = true;
-      await page.route("**/commands", async (route) => {
-        const commandEnvelope = route.request().postDataJSON();
-        const command = commandEnvelope?.body?.body?.command;
-        commandRequests.push(command);
-        commandEnvelopes.push(commandEnvelope);
-        await commandLatency.holdNext(command);
-        if (await commandInterruption.interruptNext(route, commandEnvelope)) {
-          return;
-        }
-        if (command?.ResolveHostPrompt !== undefined) {
-          hostPromptPending = false;
-          await route.fulfill({
-            status: 200,
-            contentType: "application/json",
-            body: JSON.stringify({
-              v: 1,
-              id: commandEnvelope.id,
-              body: {
-                kind: "Ack",
-                body: {
-                  stream_seqs: [91],
-                },
-              },
-            }),
-          });
-          return;
-        }
-        if (command?.SetSlotStatus !== undefined) {
-          hostSlotState.status = command.SetSlotStatus.status;
-          hostSlotState.alive = command.SetSlotStatus.status === "alive";
-          await route.fulfill({
-            status: 200,
-            contentType: "application/json",
-            body: JSON.stringify({
-              v: 1,
-              id: commandEnvelope.id,
-              body: {
-                kind: "Ack",
-                body: {
-                  stream_seqs: [73],
-                },
-              },
-            }),
-          });
-          return;
-        }
-        if (command?.SubmitPost !== undefined) {
-          await route.fulfill({
-            status: 200,
-            contentType: "application/json",
-            body: JSON.stringify({
-              v: 1,
-              id: commandEnvelope.id,
-              body: {
-                kind: "Ack",
-                body: {
-                  stream_seqs: [72],
-                },
-              },
-            }),
-          });
-          return;
-        }
-
-        await route.fulfill({
-          status: 409,
-          contentType: "application/json",
-          body: JSON.stringify({
-            v: 1,
-            id: 1,
-            body: {
-              kind: "Reject",
-              body: {
-                error: "StreamConflict",
-                retryable: true,
-                message: "reload and retry",
-              },
-            },
-          }),
-        });
+      const mockState = createRoleMockState();
+      await installCommandMock(page, {
+        scenarios: commandMockScenarios,
+        fallback: commandMockFallback,
+        state: mockState,
+        commandRequests,
+        commandEnvelopes,
+        commandLatency,
+        commandInterruption,
       });
-      await page.route("**/games/*/thread?*", async (route) => {
-        if (route.request().url().includes("before_seq=")) {
-          await route.fallback();
-          return;
-        }
-        await route.fulfill({
-          status: 200,
-          contentType: "application/json",
-          body: JSON.stringify({
-            next_before_seq: 440,
-            posts: [
-              {
-                source_seq: 445,
-                stream_seq: 92,
-                author_slot: "slot-7",
-                author_user: "Mira",
-                body: "Browser smoke refreshed player post.",
-                occurred_at: 1781938800,
-                media: [
-                  {
-                    id: "browser-refresh-445",
-                    kind: "image",
-                    alt: "Browser refreshed post receipt",
-                    variants: {
-                      tablet: {
-                        url: "/media/midsummer/thread/browser-refresh-445-tablet.jpg",
-                        width: 960,
-                        height: 720,
-                      },
-                      small: {
-                        url: "/media/midsummer/thread/browser-refresh-445-small.jpg",
-                        width: 480,
-                        height: 360,
-                      },
-                      original: {
-                        url: "/media/midsummer/thread/browser-refresh-445-original.jpg",
-                        width: 4000,
-                        height: 3000,
-                      },
-                    },
-                  },
-                ],
-              },
-              {
-                source_seq: 444,
-                stream_seq: 91,
-                author_slot: "host",
-                author_user: "Host",
-                body: "Official votecount for D01\n- slot_2: 1",
-                occurred_at: 1781935200,
-              },
-            ],
-          }),
-        });
+      await installFixtureApiRoutes(page, {
+        routes: fixtureApiRoutes,
+        projections: mockStateProjections,
+        state: mockState,
       });
-      await page.route(/\/games\/[^/]+\/votecount(?:\?.*)?$/, async (route) => {
-        await route.fulfill({
-          status: 200,
-          contentType: "application/json",
-          body: JSON.stringify([
-            {
-              target: "slot-2 / Ilya",
-              count: 3,
-              needed: 5,
-            },
-          ]),
-        });
-      });
-      await page.route(/\/games\/[^/]+\/day-vote-outcomes(?:\?.*)?$/, async (route) => {
-        await route.fulfill({
-          status: 200,
-          contentType: "application/json",
-          body: JSON.stringify([]),
-        });
-      });
-      await page.route(/\/games\/[^/]+\/player-command-state(?:\?.*)?$/, async (route) => {
-        await route.fulfill({
-          status: 200,
-          contentType: "application/json",
-          body: JSON.stringify({
-            game: "midsummer",
-            actor_slot: "slot-7",
-            actor_alive: true,
-            actor_status: "alive",
-            phase: {
-              phase_id: "D01",
-              phase_kind: "Day",
-              phase_number: 1,
-              locked: false,
-            },
-            actions: [],
-            vote_targets: [],
-          }),
-        });
-      });
-      await page.route(/\/games\/[^/]+\/host-console-state(?:\?.*)?$/, async (route) => {
-        await route.fulfill({
-          status: 200,
-          contentType: "application/json",
-          body: JSON.stringify({
-            phase: {
-              phase_id: "D01",
-              locked: false,
-              deadline: 1782000000,
-            },
-            slots: [
-              {
-                slot_id: "slot-7",
-                occupant_user_id: "player-mira",
-                status: hostSlotState.status,
-                alive: hostSlotState.alive,
-              },
-            ],
-            thread_posts: [
-              {
-                author_slot: "slot-7",
-              },
-            ],
-          }),
-        });
-      });
-      await page.route(/\/games\/[^/]+\/host-prompts(?:\?.*)?$/, async (route) => {
-        await route.fulfill({
-          status: 200,
-          contentType: "application/json",
-          body: JSON.stringify(hostPromptPending
-            ? [
-                {
-                  id: "D01:skip_next_day:slot_1",
-                  label: "skip_next_day",
-                  status: "pending",
-                  decisionKind: "acknowledge",
-                },
-              ]
-            : []),
-        });
-      });
-      await page.route("**/games/*/thread?*before_seq=*", async (route) => {
-        await route.fulfill({
-          status: 200,
-          contentType: "application/json",
-          body: JSON.stringify({
-            next_before_seq: null,
-            posts: [
-              {
-                source_seq: 440,
-                stream_seq: 88,
-                author_slot: "slot-3",
-                author_user: "Tamsin",
-                body: "Older context for the live thread.",
-                occurred_at: 1781924400,
-              },
-            ],
-          }),
-        });
-      });
-
       const response = await page.goto(`${baseUrl}${role.path}`, {
         waitUntil: "networkidle",
       });
@@ -2617,104 +2399,96 @@ async function assertPlayerCommandReceipt(page, { actionId, expectedState }) {
 }
 
 async function installPrivateChannelBrowserRoutes(page, { commandRequests }) {
+  await installCommandMock(page, {
+    scenarios: privateChannelCommandMockScenarios,
+    fallback: privateChannelCommandMockFallback,
+    commandRequests,
+  });
+  await installFixtureApiRoutes(page, { routes: privateChannelFixtureApiRoutes });
+}
+
+async function installCommandMock(
+  page,
+  {
+    scenarios,
+    fallback,
+    state = {},
+    commandRequests,
+    commandEnvelopes = null,
+    commandLatency = null,
+    commandInterruption = null,
+  },
+) {
   await page.route("**/commands", async (route) => {
     const commandEnvelope = route.request().postDataJSON();
     const command = commandEnvelope?.body?.body?.command;
     commandRequests.push(command);
-    if (command?.SubmitPost !== undefined) {
+    commandEnvelopes?.push(commandEnvelope);
+    if (commandLatency !== null) {
+      await commandLatency.holdNext(command);
+    }
+    if (
+      commandInterruption !== null &&
+      (await commandInterruption.interruptNext(route, commandEnvelope))
+    ) {
+      return;
+    }
+    const scenario = scenarios.find(
+      (candidate) => command?.[candidate.command] !== undefined,
+    );
+    if (scenario !== undefined) {
+      for (const effect of scenario.effects ?? []) {
+        state[effect.set] =
+          effect.fromCommandField === undefined
+            ? effect.value
+            : command[scenario.command][effect.fromCommandField];
+      }
       await route.fulfill({
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({
           v: 1,
           id: commandEnvelope.id,
-          body: {
-            kind: "Ack",
-            body: {
-              stream_seqs: [172],
-            },
-          },
+          body: scenario.respond,
         }),
       });
       return;
     }
-
     await route.fulfill({
-      status: 409,
+      status: fallback.status,
       contentType: "application/json",
       body: JSON.stringify({
         v: 1,
-        id: commandEnvelope?.id ?? 1,
-        body: {
-          kind: "Reject",
-          body: {
-            error: "WrongPrivateChannelCommand",
-            retryable: false,
-            message: "private-channel smoke only accepts SubmitPost",
-          },
-        },
+        id: fallback.id.fromEnvelope
+          ? commandEnvelope?.id ?? fallback.id.fallback
+          : fallback.id.literal,
+        body: fallback.respond,
       }),
     });
   });
-  await page.route("**/games/*/channels/*/thread?*", async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({
-        next_before_seq: 440,
-        posts: [
-          {
-            source_seq: 446,
-            stream_seq: 172,
-            author_slot: "slot-7",
-            author_user: "Mira",
-            body: "Browser smoke refreshed private channel post.",
-            occurred_at: 1781939100,
-          },
-        ],
-      }),
+}
+
+async function installFixtureApiRoutes(page, { routes, projections = {}, state = {} }) {
+  for (const fixtureRoute of routes) {
+    await page.route(fixtureRoute.pattern, async (route) => {
+      if (
+        fixtureRoute.passthroughWhen?.urlIncludes !== undefined &&
+        route.request().url().includes(fixtureRoute.passthroughWhen.urlIncludes)
+      ) {
+        await route.fallback();
+        return;
+      }
+      const body =
+        fixtureRoute.bodyFrom === undefined
+          ? fixtureRoute.body
+          : projections[fixtureRoute.bodyFrom](state);
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(body),
+      });
     });
-  });
-  await page.route(/\/games\/[^/]+\/votecount(?:\?.*)?$/, async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify([
-        {
-          target: "slot-2 / Ilya",
-          count: 3,
-          needed: 5,
-        },
-      ]),
-    });
-  });
-  await page.route(/\/games\/[^/]+\/day-vote-outcomes(?:\?.*)?$/, async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify([]),
-    });
-  });
-  await page.route(/\/games\/[^/]+\/player-command-state(?:\?.*)?$/, async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({
-        game: "midsummer",
-        actor_slot: "slot-7",
-        actor_alive: true,
-        actor_status: "alive",
-        phase: {
-          phase_id: "D01",
-          phase_kind: "Day",
-          phase_number: 1,
-          locked: false,
-        },
-        actions: [],
-        vote_targets: [],
-      }),
-    });
-  });
+  }
 }
 
 async function assertAdminConfirmationFocus(
