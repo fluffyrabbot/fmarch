@@ -618,6 +618,7 @@ async fn run_fixture(pool: &PgPool, fixture: &NightFixture) -> RunReport {
         Command::CreateGame {
             game,
             pack: fixture.pack.clone(),
+            cohost_denied: vec![],
         },
     )
     .await

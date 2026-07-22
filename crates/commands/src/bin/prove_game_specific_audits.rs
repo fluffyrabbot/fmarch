@@ -275,6 +275,7 @@ async fn seed_fixture_game(
         Command::CreateGame {
             game,
             pack: fixture.pack.clone(),
+            cohost_denied: vec![],
         },
     )
     .await?;

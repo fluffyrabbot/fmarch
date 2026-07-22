@@ -175,7 +175,8 @@ async fn command_boundary_derives_identity_and_rejects_every_stale_session_witho
             Command::CreateGame {
                 game: Uuid::new_v4(),
                 pack: "mafiascum".into(),
-            },
+            cohost_denied: vec![],
+        },
         )
         .await;
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
@@ -202,6 +203,7 @@ async fn command_boundary_derives_identity_and_rejects_every_stale_session_witho
         Command::CreateGame {
             game: Uuid::new_v4(),
             pack: "mafiascum".into(),
+            cohost_denied: vec![],
         },
     )
     .await;
@@ -256,6 +258,7 @@ async fn command_boundary_derives_identity_and_rejects_every_stale_session_witho
         Command::CreateGame {
             game,
             pack: "mafiascum".into(),
+            cohost_denied: vec![],
         },
     )
     .await;
@@ -295,6 +298,7 @@ async fn websocket_ticket_is_short_lived_one_time_and_session_bound(pool: sqlx::
         Command::CreateGame {
             game,
             pack: "mafiascum".into(),
+            cohost_denied: vec![],
         },
     )
     .await;
@@ -485,7 +489,8 @@ async fn open_socket_rechecks_revoked_session_before_delayed_private_delivery(po
             Command::CreateGame {
                 game,
                 pack: "mafiascum".into(),
-            },
+            cohost_denied: vec![],
+        },
         )
         .await
         .status(),
@@ -670,8 +675,9 @@ async fn command_on_instance_a_wakes_socket_b_and_reconnect_hydrates_durable_sta
             Some("host-token"),
             Command::CreateGame {
                 game,
-                pack: "mafiascum".into()
-            }
+                pack: "mafiascum".into(),
+            cohost_denied: vec![],
+        }
         )
         .await
         .status(),

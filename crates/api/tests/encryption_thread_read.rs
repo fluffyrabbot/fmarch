@@ -175,7 +175,8 @@ async fn mixed_kid_private_payloads_survive_rebuild_and_private_thread_api_read(
             Command::CreateGame {
                 game,
                 pack: "mafiascum".into(),
-            },
+            cohost_denied: vec![],
+        },
         )
         .await,
     );
