@@ -27,9 +27,9 @@ import {
   HOST_ACTION_CONTRACT,
 } from "../frontend/src/lib/components/host-action/host-action-contract.mjs";
 import {
-  HOST_CONTROL_SURFACE_CONTRACT,
-  buildHostControlSurfaceViewModel,
-} from "../frontend/src/lib/components/host-action/host-control-surface.mjs";
+  HOST_TASK_WORKSPACE_CONTRACT,
+  buildHostTaskWorkspaceViewModel,
+} from "../frontend/src/lib/components/host-action/host-task-workspace.mjs";
 import {
   buildHostCommandActivityViewModel,
 } from "../frontend/src/lib/components/host-action/host-command-activity.mjs";
@@ -450,20 +450,24 @@ function proveFirstViewportSmokeCoverage(roleSurfaces) {
     assert.equal(items.length >= 3, true);
     assert.equal(items.length, roleConfig.overlapTestIds.length);
     const overlapTestIds = items.map((item) => item.testId);
-    const statusRegions = items.map((item) => ({
-      testId: item.statusTestId,
-      state: item.state,
-    }));
+    const statusRegions = items
+      .filter((item) => typeof item.statusTestId === "string")
+      .map((item) => ({
+        testId: item.statusTestId,
+        state: item.state,
+      }));
     assertUnique(
       overlapTestIds,
       `${roleConfig.id} ${roleConfig.firstViewportSurface} tile test ids`,
     );
-    assertUnique(
-      statusRegions.map((statusRegion) => statusRegion.testId),
-      `${roleConfig.id} ${roleConfig.firstViewportSurface} status test ids`,
-    );
+    if (statusRegions.length > 0) {
+      assertUnique(
+        statusRegions.map((statusRegion) => statusRegion.testId),
+        `${roleConfig.id} ${roleConfig.firstViewportSurface} status test ids`,
+      );
+    }
     assert.equal(
-      items.every((item) => item.testId.length > 0 && item.statusTestId.length > 0),
+      items.every((item) => item.testId.length > 0),
       true,
     );
     assert.deepEqual(roleConfig.overlapTestIds, overlapTestIds);
@@ -557,10 +561,15 @@ async function proveFirstViewportLayoutContract(roleSurfaces) {
       normalizedItems.map((item) => item.testId),
       `${roleConfig.id} layout tile test ids`,
     );
-    assertUnique(
-      normalizedItems.map((item) => item.statusTestId),
-      `${roleConfig.id} layout tile status ids`,
-    );
+    const normalizedStatusIds = normalizedItems
+      .map((item) => item.statusTestId)
+      .filter((statusTestId) => typeof statusTestId === "string");
+    if (normalizedStatusIds.length > 0) {
+      assertUnique(
+        normalizedStatusIds,
+        `${roleConfig.id} layout tile status ids`,
+      );
+    }
 
     return {
       role: roleConfig.id,
@@ -572,7 +581,14 @@ async function proveFirstViewportLayoutContract(roleSurfaces) {
       viewportColumns: viewports.map((viewport) => ({
         name: viewport.name,
         width: viewport.width,
-        expectedColumns: statusStripColumnsForWidth(viewport.width),
+        expectedColumns:
+          roleConfig.firstViewportSurface === "workspace"
+            ? "reading-lane"
+            : roleConfig.firstViewportSurface === "tasks"
+              ? viewport.width <= 760
+                ? "stacked"
+                : "queue-canvas"
+            : statusStripColumnsForWidth(viewport.width),
       })),
     };
   });
@@ -681,6 +697,12 @@ function firstViewportItemsForRole(role, surface) {
   if (surface === "posture") {
     return role.posture;
   }
+  if (surface === "workspace") {
+    return role.workspaceLandmarks;
+  }
+  if (surface === "tasks") {
+    return role.taskLandmarks;
+  }
   if (surface === "operations") {
     return role.operations;
   }
@@ -691,7 +713,7 @@ function textFitSummary(item) {
   const label = String(item.label);
   const value = String(item.value);
   const detail = String(item.detail);
-  const statusMessage = String(item.status.message);
+  const statusMessage = String(item.status?.message ?? "");
   for (const [name, text] of [
     ["label", label],
     ["value", value],
@@ -727,7 +749,7 @@ function proveLinkAffordanceCoverage(roleSurfaces) {
             assert.equal(proofRuns.inspectHref, `${link.hrefPath}?game=midsummer`);
             assert.equal(
               proofRuns.href,
-              "/games/midsummer/operator/proof-runs?principal_user_id=admin_a",
+              "/games/midsummer/operator/proof-runs",
             );
           }
           return {
@@ -1623,10 +1645,18 @@ async function provePlayerSurface() {
     privateDisclosure.items[0].detailTestId,
     "player-private-detail-notification-1",
   );
-  assert.equal(data.layout.root.data.mode, "tablet-two-zone-channel-switcher");
+  assert.equal(data.layout.root.data.mode, "reading-first-action-dock");
   assert.equal(data.layout.root.data.minTabletViewportPx, 1024);
-  assert.equal(data.layout.root.data.collapseBelowPx < data.layout.root.data.minTabletViewportPx, true);
-  assert.deepEqual(data.layout.regions, ["channels", "thread", "commands"]);
+  assert.equal(data.layout.root.data.collapseBelowPx, null);
+  assert.deepEqual(data.layout.regions, [
+    "game-bar",
+    "channels",
+    "thread",
+    "composer",
+    "actions",
+    "context",
+    "dock",
+  ]);
   const rolePmRoute = await buildGameRouteData({
     game: "midsummer",
     activeChannel: "private:role_pm:slot-7",
@@ -1710,6 +1740,47 @@ async function provePlayerSurface() {
         statusTestId: item.statusTestId,
         ...textFitSummary(item),
       })),
+      workspaceLandmarks: [
+        {
+          id: "game-context",
+          testId: "player-game-bar",
+          label: "Game context",
+          value: data.phase.label,
+          detail: data.phase.deadlineLabel,
+          ...textFitSummary({
+            id: "game-context",
+            label: "Game context",
+            value: data.phase.label,
+            detail: data.phase.deadlineLabel,
+          }),
+        },
+        {
+          id: "channels",
+          testId: "player-channel-switcher",
+          label: "Channels",
+          value: `${channels.channels.length} available`,
+          detail: channels.channels.map((channel) => channel.label).join(", "),
+          ...textFitSummary({
+            id: "channels",
+            label: "Channels",
+            value: `${channels.channels.length} available`,
+            detail: channels.channels.map((channel) => channel.label).join(", "),
+          }),
+        },
+        {
+          id: "action-dock",
+          testId: "player-primary-action-zone",
+          label: "Player actions",
+          value: `${commandPanel.quickActions.buttons.filter((button) => !button.disabled).length} immediate`,
+          detail: "Vote, reply, count, and private context remain reachable while reading.",
+          ...textFitSummary({
+            id: "action-dock",
+            label: "Player actions",
+            value: `${commandPanel.quickActions.buttons.filter((button) => !button.disabled).length} immediate`,
+            detail: "Vote, reply, count, and private context remain reachable while reading.",
+          }),
+        },
+      ],
       channels: channels.channels.map((channel) => channel.id),
       threadPosts: data.thread.posts.length,
       threadPager: {
@@ -1833,9 +1904,13 @@ async function proveModeratorSurface() {
     actionId: "extend_deadline",
     confirmationTrace: extendDeadlineTrace,
   };
-  const controls = buildHostControlSurfaceViewModel({
+  const controls = buildHostTaskWorkspaceViewModel({
     groups: derived.moderatorActionGroups,
     commandContext: data.commandContext,
+    phase: derived.projection.phase,
+    replacement: derived.projection.replacement,
+    hostPrompts: derived.hostPrompts,
+    votecount: derived.votecount,
     commandStatuses: {
       extend_deadline: hostCommandPendingStatus(extendDeadlineEvent),
     },
@@ -1865,9 +1940,9 @@ async function proveModeratorSurface() {
   );
   assert.equal(queues.queues.length >= 3, true);
   assert.equal(votecount.rows.length > 0, true);
-  assert.equal(controls.groups.length >= 6, true);
+  assert.equal(controls.tasks.length >= 6, true);
   assert.deepEqual(controls.commandContext, {
-    testId: HOST_CONTROL_SURFACE_CONTRACT.commandContextTestId,
+    testId: HOST_TASK_WORKSPACE_CONTRACT.commandContextTestId,
     summary: "Hosting as @host_h",
     label: "Technical access",
     value: "HostOf(midsummer) · @host_h",
@@ -1890,8 +1965,8 @@ async function proveModeratorSurface() {
   assert.equal(queues.queues.every((queue) => queue.minBlockPx >= 112), true);
   assert.equal(votecount.rows.every((row) => row.minTargetPx >= 44), true);
   assert.equal(
-    controls.groups.some((group) =>
-      group.actions.some((action) => action.config.id.startsWith("resolve_host_prompt-")),
+    controls.tasks.some((task) =>
+      task.actions.some((action) => action.config.id.startsWith("resolve_host_prompt-")),
     ),
     true,
   );
@@ -2042,6 +2117,44 @@ async function proveModeratorSurface() {
         statusTestId: item.statusTestId,
         ...textFitSummary(item),
       })),
+      taskLandmarks: [
+        {
+          id: "attention",
+          testId: "host-console-attention",
+          label: "Attention",
+          value: `${controls.queue.attentionCount} tasks`,
+          detail: controls.queue.summary,
+          ...textFitSummary({
+            label: "Attention",
+            value: `${controls.queue.attentionCount} tasks`,
+            detail: controls.queue.summary,
+          }),
+        },
+        {
+          id: "queue-summary",
+          testId: "host-task-queue-summary",
+          label: "Host queue",
+          value: controls.queue.summary,
+          detail: controls.tasks.map((task) => task.label).join(", "),
+          ...textFitSummary({
+            label: "Host queue",
+            value: controls.queue.summary,
+            detail: controls.tasks.map((task) => task.label).join(", "),
+          }),
+        },
+        {
+          id: "decision-canvas",
+          testId: HOST_TASK_WORKSPACE_CONTRACT.canvasTestId,
+          label: "Selected decision",
+          value: controls.selectedTask.label,
+          detail: controls.selectedTask.consequence,
+          ...textFitSummary({
+            label: "Selected decision",
+            value: controls.selectedTask.label,
+            detail: controls.selectedTask.consequence,
+          }),
+        },
+      ],
       phaseFacts: phase.facts.map((fact) => fact.testId),
       queues: queues.queues.map((queue) => queue.id),
       votecountRows: votecount.rows.length,
@@ -2055,7 +2168,7 @@ async function proveModeratorSurface() {
           trace: item.confirmationTrace,
         })),
       },
-      controls: controls.groups.map((group) => group.id),
+      controls: controls.tasks.map((task) => task.id),
       commandContext: controls.commandContext,
       touchTargetFloorPx: 44,
     },

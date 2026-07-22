@@ -25,12 +25,8 @@ import {
   adminReadinessTestId,
 } from "../frontend/src/lib/components/admin/admin-surface-model.mjs";
 import {
-  HOST_CONTROL_SURFACE_CONTRACT,
-} from "../frontend/src/lib/components/host-action/host-control-surface.mjs";
-import {
-  hostOperationStatusTestId,
-  hostOperationTestId,
-} from "../frontend/src/lib/components/host-action/host-operations-strip.mjs";
+  HOST_TASK_WORKSPACE_CONTRACT,
+} from "../frontend/src/lib/components/host-action/host-task-workspace.mjs";
 import {
   boardScenario,
   roles,
@@ -1396,7 +1392,7 @@ async function proveRenderedAdminAuditDetailSurface(bundle) {
   );
   assertIncludes(
     html,
-    'href="/games/midsummer/operator/proof-runs?principal_user_id=admin_a"',
+    'href="/games/midsummer/operator/proof-runs"',
     "admin audit detail machine evidence href",
   );
   assertIncludes(
@@ -1420,7 +1416,7 @@ async function proveRenderedAdminAuditDetailSurface(bundle) {
     statusTestId: "admin-audit-detail-status",
     statusState: "ack",
     evidenceTestId: "admin-audit-detail-evidence",
-    evidenceHref: "/games/midsummer/operator/proof-runs?principal_user_id=admin_a",
+    evidenceHref: "/games/midsummer/operator/proof-runs",
     backTestId: "admin-audit-detail-back",
     backHref: "/admin?game=midsummer",
     htmlBytes: Buffer.byteLength(html),
@@ -1436,7 +1432,7 @@ async function proveRenderedPlayerSurface(bundle) {
   assertIncludes(html, 'data-testid="player-surface"', "player route surface");
   assertIncludes(
     html,
-    `data-testid="${PLAYER_COMMAND_PANEL_CONTRACT.deadlineTestId}"`,
+    'data-testid="player-game-bar-deadline"',
     "player deadline test id",
   );
   assertIncludes(html, 'data-state="open"', "player deadline phase state");
@@ -1444,22 +1440,11 @@ async function proveRenderedPlayerSurface(bundle) {
   assertIncludes(html, "Jun 19, 2026, 9:00 PM", "player deadline label");
   assertIncludes(html, "Day 2", "player deadline phase label");
   assertIncludes(html, "player-command-panel__vote-row", "player votecount rows");
-  assertIncludes(
+  assertExcludes(
     html,
     'data-component="player-command-receipt"',
-    "player command receipt component",
+    "empty player command receipt",
   );
-  assertIncludes(
-    html,
-    'data-testid="player-command-receipt"',
-    "player command receipt surface",
-  );
-  assertIncludes(
-    html,
-    'data-testid="player-command-receipt-empty"',
-    "player command receipt empty state",
-  );
-  assertIncludes(html, "Ready for player commands", "player command receipt summary");
   assertIncludes(html, 'data-testid="player-composer"', "player composer");
   assertIncludes(
     html,
@@ -1475,12 +1460,6 @@ async function proveRenderedPlayerSurface(bundle) {
     "player command channel capability",
   );
   assertIncludes(html, 'data-min-touch-target-px="44"', "player command touch floor");
-  assertRenderedOrder({
-    html,
-    before: 'data-testid="player-primary-action-zone"',
-    after: 'data-testid="player-command-receipt"',
-    label: "player command controls before live receipts",
-  });
   assertIncludes(
     html,
     `data-component="${PLAYER_THREAD_MEDIA_CONTRACT.component}"`,
@@ -1544,12 +1523,12 @@ async function proveRenderedPlayerSurface(bundle) {
     role: "player",
     path: "/g/midsummer",
     surfaceTestId: "player-surface",
-    deadlineTestId: PLAYER_COMMAND_PANEL_CONTRACT.deadlineTestId,
+    deadlineTestId: "player-game-bar-deadline",
     deadlineValue: "Jun 19, 2026, 9:00 PM",
     deadlineState: "open",
     deadlineProjected: true,
     commandReceiptTestId: "player-command-receipt",
-    commandReceiptEmptyTestId: "player-command-receipt-empty",
+    commandReceiptEmptyTestId: null,
     commandReceiptCurrentStatusTestId:
       PLAYER_COMMAND_RECEIPT_CONTRACT.currentStatusTestId,
     commandChannelContext: {
@@ -1573,7 +1552,7 @@ async function proveRenderedPlayerSurface(bundle) {
       minTouchTargetPx: PLAYER_THREAD_PAGER_CONTRACT.minTouchTargetPx,
       nextBeforeSeq: 441,
     },
-    primaryControlsBeforeReceipts: true,
+    primaryControlsBeforeReceipts: null,
     media: {
       component: PLAYER_THREAD_MEDIA_CONTRACT.component,
       renderedTestId: `thread-post-media-${"e".repeat(64)}`,
@@ -1691,7 +1670,7 @@ async function proveRenderedModeratorSurface(bundle) {
   assertIncludes(html, "HostOf(midsummer)", "moderator capability label");
   assertIncludes(
     html,
-    `data-testid="${HOST_CONTROL_SURFACE_CONTRACT.commandContextTestId}"`,
+    `data-testid="${HOST_TASK_WORKSPACE_CONTRACT.commandContextTestId}"`,
     "moderator command authority context",
   );
   assertIncludes(html, "Hosting as @host_h", "moderator command authority summary");
@@ -1717,16 +1696,27 @@ async function proveRenderedModeratorSurface(bundle) {
     'data-command-endpoint="/commands"',
     "moderator command authority endpoint",
   );
-  for (const id of ["phase", "votecount", "prompts", "lifecycle"]) {
+  assertIncludes(html, 'data-testid="host-console-bar"', "moderator game bar");
+  assertIncludes(html, 'data-testid="host-task-queue"', "moderator task queue");
+  assertIncludes(html, 'data-testid="host-decision-canvas"', "moderator decision canvas");
+  assertIncludes(
+    html,
+    'data-workspace-mode="exception-queue-decision-canvas"',
+    "moderator workspace mode",
+  );
+  for (const id of [
+    "deadline",
+    "host-prompts",
+    "replacement",
+    "phase",
+    "votecount",
+    "slot-lifecycle",
+    "roles",
+  ]) {
     assertIncludes(
       html,
-      `data-testid="${hostOperationTestId(id)}"`,
-      `moderator operation ${id}`,
-    );
-    assertIncludes(
-      html,
-      `data-testid="${hostOperationStatusTestId(id)}"`,
-      `moderator operation status ${id}`,
+      `data-testid="host-task-${id}"`,
+      `moderator task ${id}`,
     );
   }
   for (const actionId of [
@@ -1780,9 +1770,17 @@ async function proveRenderedModeratorSurface(bundle) {
     role: "moderator",
     path: "/g/midsummer/host",
     surfaceTestId: "host-console-surface",
-    operationTestIds: ["phase", "votecount", "prompts", "lifecycle"].map((id) =>
-      hostOperationTestId(id),
-    ),
+    workspaceMode: "exception-queue-decision-canvas",
+    taskTestIds: [
+      "deadline",
+      "host-prompts",
+      "replacement",
+      "phase",
+      "votecount",
+      "slot-lifecycle",
+      "roles",
+    ].map((id) => `host-task-${id}`),
+    selectedTaskId: "deadline",
     criticalActionTestIds: [
       "critical-host-action-extend_deadline",
       "critical-host-action-resolve_phase",
@@ -1798,7 +1796,7 @@ async function proveRenderedModeratorSurface(bundle) {
     hostPromptActionTestId:
       "critical-host-action-resolve_host_prompt-D01-skip_next_day-slot_1",
     commandContext: {
-      testId: HOST_CONTROL_SURFACE_CONTRACT.commandContextTestId,
+      testId: HOST_TASK_WORKSPACE_CONTRACT.commandContextTestId,
       gameId: "midsummer",
       principalUserId: "host_h",
       capabilityLabel: "HostOf(midsummer)",

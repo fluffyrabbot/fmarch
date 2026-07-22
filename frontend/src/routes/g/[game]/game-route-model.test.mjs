@@ -184,19 +184,27 @@ test("player route data exposes thread, channel, votecount, and touch command la
   );
   assert.deepEqual(data.privateQueueExpandedItems, {});
   assert.equal(data.liveOfficialPost, null);
-  assert.equal(data.layout.root.data.mode, "tablet-two-zone-channel-switcher");
+  assert.equal(data.layout.root.data.mode, "reading-first-action-dock");
   assert.equal(data.layout.root.data.minTabletViewportPx, 1024);
-  assert.equal(data.layout.root.data.collapseBelowPx, 840);
+  assert.equal(data.layout.root.data.collapseBelowPx, null);
   assert.deepEqual(data.layout.commandRail, {
-    className: "player-surface__command-stack",
+    className: "action-dock",
     data: {
-      mode: "sticky-tablet-command-column",
-      stickyTopPx: 22,
-      unstickBelowPx: 840,
-      stabilityMode: "primary-controls-before-live-receipts",
+      mode: "fixed-context-navigation",
+      stickyTopPx: null,
+      unstickBelowPx: null,
+      stabilityMode: "thread-width-stable",
     },
   });
-  assert.deepEqual(data.layout.regions, ["channels", "thread", "commands"]);
+  assert.deepEqual(data.layout.regions, [
+    "game-bar",
+    "channels",
+    "thread",
+    "composer",
+    "actions",
+    "context",
+    "dock",
+  ]);
 });
 
 test("player route data exposes action-open state for seeded UUID role URLs", async () => {

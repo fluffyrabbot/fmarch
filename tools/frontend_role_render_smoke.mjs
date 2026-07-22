@@ -196,7 +196,7 @@ function surfaceScenarios() {
       path: "/admin",
       render: "renderAdminSurface",
       surfaceTestId: "admin-surface",
-      requiredText: ["Game setup", "Recovery"],
+      requiredText: ["Host setup workflow", "Recovery"],
       requiredSelectors: ['[data-testid="admin-setup-session-grants"]'],
       thumbZones: roleById.get("admin")?.thumbZones ?? [],
     },
@@ -267,7 +267,7 @@ function surfaceScenarios() {
       path: "/g/midsummer/host",
       render: "renderModeratorSurface",
       surfaceTestId: "host-console-surface",
-      requiredText: ["Host console", "Votecount"],
+      requiredText: ["Host queue", "Votecount"],
       requiredSelectors: ['[data-testid="critical-host-action-extend_deadline"]'],
       thumbZones: roleById.get("moderator")?.thumbZones ?? [],
     },
@@ -284,7 +284,7 @@ function feedbackRailScenarios() {
       itemTestId: "admin-command-activity-recovery-gate",
       statusTestId: "admin-command-activity-status-recovery-gate",
       statusState: "ack",
-      requiredText: ["Recovery gate trusted"],
+      requiredText: ["Recovery gate completed."],
     },
     {
       id: "player-command-receipt-active",
@@ -305,7 +305,7 @@ function feedbackRailScenarios() {
       statusTestId:
         "host-command-activity-status-resolve_host_prompt-D01-skip_next_day-slot_1",
       statusState: "ack",
-      requiredText: ["Ack: host prompt resolved"],
+      requiredText: ["Resolve host prompt completed."],
     },
   ];
 }

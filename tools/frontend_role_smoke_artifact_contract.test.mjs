@@ -55,11 +55,8 @@ import {
   adminReadinessTestId,
 } from "../frontend/src/lib/components/admin/admin-surface-model.mjs";
 import {
-  HOST_CONTROL_SURFACE_CONTRACT,
-} from "../frontend/src/lib/components/host-action/host-control-surface.mjs";
-import {
-  hostOperationTestId,
-} from "../frontend/src/lib/components/host-action/host-operations-strip.mjs";
+  HOST_TASK_WORKSPACE_CONTRACT,
+} from "../frontend/src/lib/components/host-action/host-task-workspace.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const staticContractPath = path.join(
@@ -323,6 +320,8 @@ test("static role contract artifact records shared nav focus and route state mat
       capabilityTestId: APP_SHELL_CONTRACT.sessionCapabilityTestId,
       gameTestId: APP_SHELL_CONTRACT.sessionGameTestId,
       state: "signed-in",
+      href: "/auth/account/security",
+      actionLabel: "Manage account security",
       principalLabel: "@player_mira",
       initials: "PM",
       contextLabel: "Playing midsummer",
@@ -648,29 +647,29 @@ test("static role contract artifact records shared nav focus and route state mat
       [
         "player",
         "/g/midsummer",
-        "posture",
+        "workspace",
         3,
-        ["phase", "deadline", "private"],
+        ["game-context", "channels", "action-dock"],
         [
-          ["mobile", 390, 1],
-          ["tablet", 1024, "adaptive"],
-          ["tablet-wide", 1180, "adaptive"],
-          ["tablet-landscape", 1280, 4],
-          ["desktop", 1440, 4],
+          ["mobile", 390, "reading-lane"],
+          ["tablet", 1024, "reading-lane"],
+          ["tablet-wide", 1180, "reading-lane"],
+          ["tablet-landscape", 1280, "reading-lane"],
+          ["desktop", 1440, "reading-lane"],
         ],
       ],
       [
         "moderator",
         "/g/midsummer/host",
-        "operations",
-        4,
-        ["phase", "votecount", "prompts", "lifecycle"],
+        "tasks",
+        3,
+        ["attention", "queue-summary", "decision-canvas"],
         [
-          ["mobile", 390, 1],
-          ["tablet", 1024, "adaptive"],
-          ["tablet-wide", 1180, "adaptive"],
-          ["tablet-landscape", 1280, 4],
-          ["desktop", 1440, 4],
+          ["mobile", 390, "stacked"],
+          ["tablet", 1024, "queue-canvas"],
+          ["tablet-wide", 1180, "queue-canvas"],
+          ["tablet-landscape", 1280, "queue-canvas"],
+          ["desktop", 1440, "queue-canvas"],
         ],
       ],
     ],
@@ -691,7 +690,7 @@ test("static role contract artifact records shared nav focus and route state mat
     statusState: "ack",
     statusTestId: "admin-audit-status-proof-runs",
     linkTestId: "admin-audit-link-proof-runs",
-    href: "/games/midsummer/operator/proof-runs?principal_user_id=admin_a",
+    href: "/games/midsummer/operator/proof-runs",
     inspectHref: "/admin/audit/proof-runs?game=midsummer",
     boundaryTestId: "admin-audit-boundary-proof-runs",
     evidenceTestId: "admin-audit-evidence-proof-runs",
@@ -761,7 +760,7 @@ test("static role contract artifact records shared nav focus and route state mat
   const playerStaticRole = staticContract.roles.find((role) => role.id === "player");
   assert.equal(
     playerStaticRole.commandRailStabilityMode,
-    "primary-controls-before-live-receipts",
+    "thread-width-stable",
   );
   assert.deepEqual(playerStaticRole.commandChannelContext, {
     testId: PLAYER_COMMAND_PANEL_CONTRACT.channelContextTestId,
@@ -852,7 +851,7 @@ test("static role contract artifact records shared nav focus and route state mat
     ],
   });
   assert.deepEqual(moderatorStaticRole.commandContext, {
-    testId: HOST_CONTROL_SURFACE_CONTRACT.commandContextTestId,
+    testId: HOST_TASK_WORKSPACE_CONTRACT.commandContextTestId,
     summary: "Hosting as @host_h",
     label: "Technical access",
     value: "HostOf(midsummer) · @host_h",
@@ -1265,12 +1264,12 @@ test("route-state render artifact covers every forced board and role page state"
     role: "player",
     path: "/g/midsummer",
     surfaceTestId: "player-surface",
-    deadlineTestId: PLAYER_COMMAND_PANEL_CONTRACT.deadlineTestId,
+    deadlineTestId: "player-game-bar-deadline",
     deadlineValue: "Jun 19, 2026, 9:00 PM",
     deadlineState: "open",
     deadlineProjected: true,
     commandReceiptTestId: "player-command-receipt",
-    commandReceiptEmptyTestId: "player-command-receipt-empty",
+    commandReceiptEmptyTestId: null,
     commandReceiptCurrentStatusTestId:
       PLAYER_COMMAND_RECEIPT_CONTRACT.currentStatusTestId,
     commandChannelContext: {
@@ -1294,7 +1293,7 @@ test("route-state render artifact covers every forced board and role page state"
       minTouchTargetPx: PLAYER_THREAD_PAGER_CONTRACT.minTouchTargetPx,
       nextBeforeSeq: 441,
     },
-    primaryControlsBeforeReceipts: true,
+    primaryControlsBeforeReceipts: null,
     media: {
       component: PLAYER_THREAD_MEDIA_CONTRACT.component,
       renderedTestId: `thread-post-media-${"e".repeat(64)}`,
@@ -1443,7 +1442,7 @@ test("route-state render artifact covers every forced board and role page state"
     statusTestId: "admin-audit-detail-status",
     statusState: "ack",
     evidenceTestId: "admin-audit-detail-evidence",
-    evidenceHref: "/games/midsummer/operator/proof-runs?principal_user_id=admin_a",
+    evidenceHref: "/games/midsummer/operator/proof-runs",
     backTestId: "admin-audit-detail-back",
     backHref: "/admin?game=midsummer",
     htmlBytes: routeStateRender.adminAuditDetailSurface.htmlBytes,
@@ -1453,9 +1452,17 @@ test("route-state render artifact covers every forced board and role page state"
     role: "moderator",
     path: "/g/midsummer/host",
     surfaceTestId: "host-console-surface",
-    operationTestIds: ["phase", "votecount", "prompts", "lifecycle"].map((id) =>
-      hostOperationTestId(id),
-    ),
+    workspaceMode: "exception-queue-decision-canvas",
+    taskTestIds: [
+      "deadline",
+      "host-prompts",
+      "replacement",
+      "phase",
+      "votecount",
+      "slot-lifecycle",
+      "roles",
+    ].map((id) => `host-task-${id}`),
+    selectedTaskId: "deadline",
     criticalActionTestIds: [
       "critical-host-action-extend_deadline",
       "critical-host-action-resolve_phase",
@@ -1471,7 +1478,7 @@ test("route-state render artifact covers every forced board and role page state"
     hostPromptActionTestId:
       "critical-host-action-resolve_host_prompt-D01-skip_next_day-slot_1",
     commandContext: {
-      testId: HOST_CONTROL_SURFACE_CONTRACT.commandContextTestId,
+      testId: HOST_TASK_WORKSPACE_CONTRACT.commandContextTestId,
       gameId: "midsummer",
       principalUserId: "host_h",
       capabilityLabel: "HostOf(midsummer)",
@@ -2191,12 +2198,8 @@ test("component interaction artifact records no-bind command component wiring", 
         "frontend/src/lib/components/player-command/PlayerCommandReceipt.svelte",
       ],
       [
-        "HostControlSurface",
-        "frontend/src/lib/components/host-action/HostControlSurface.svelte",
-      ],
-      [
-        "HostControlGroup",
-        "frontend/src/lib/components/host-action/HostControlGroup.svelte",
+        "HostTaskWorkspace",
+        "frontend/src/lib/components/host-action/HostTaskWorkspace.svelte",
       ],
       [
         "HostAction",
@@ -2590,28 +2593,31 @@ test("tablet interaction artifact proves tap-first source posture", async () => 
     primaryActionBeforeStatusFloor: true,
   });
   assert.deepEqual(tabletInteraction.playerRouteLayoutCss, {
-    commandRailMode: "sticky-tablet-command-column",
-    stickyTopPx: 22,
+    commandRailMode: "fixed-context-navigation",
+    stickyTopPx: null,
     topbarOffsetPx: 64,
     safeAreaAware: true,
-    internalScroll: true,
-    overscroll: "contain",
-    unstickBelowPx: 840,
-    stabilityMode: "primary-controls-before-live-receipts",
-    primaryControlsBeforeReceipts: true,
+    internalScroll: false,
+    overscroll: "document",
+    unstickBelowPx: null,
+    stabilityMode: "thread-width-stable",
+    readingMeasurePx: 760,
+    threadBeforeComposer: true,
   });
   assert.deepEqual(tabletInteraction.moderatorControlSurfaceCss, {
-    controlRailMode: "flow-host-control-actions",
-    stickyTopPx: 0,
+    controlRailMode: "exception-queue-decision-canvas",
+    stickyTopPx: null,
     topbarOffsetPx: 64,
     safeAreaAware: false,
     internalScroll: false,
-    overscroll: "visible",
-    unstickBelowPx: 0,
+    overscroll: "document",
+    unstickBelowPx: null,
     primaryControlsBeforeStatusReadouts: true,
     actionTileStabilityMode: "reserved-status-floor",
     actionTileStatusFloorMinBlockSizePx: 44,
     primaryActionBeforeStatusFloor: true,
+    desktopComposition: "queue-canvas",
+    mobileComposition: "stacked-horizontal-queue",
   });
   assert.equal(tabletInteraction.sharedAppCss.touchButtonMinInlinePx, 44);
   assert.equal(tabletInteraction.sharedAppCss.touchAction, "manipulation");
@@ -2639,7 +2645,7 @@ test("tablet interaction artifact proves tap-first source posture", async () => 
       [
         "player-primary-action-zone",
         "player-primary-actions",
-        ["submit_vote", "submit_vote:no_lynch", "withdraw_vote", "submit_post"],
+        ["submit_vote", "submit_vote:no_lynch", "player-dock-reply"],
       ],
     ],
   );
@@ -5947,6 +5953,9 @@ function assertBrowserConfirmationFocusEvidence(roleEntries) {
   );
 
   for (const entry of adminEntries) {
+    if (entry.commandResult === null) {
+      continue;
+    }
     assert.deepEqual(
       entry.commandResult.sessionGrant.focus.contract,
       {
@@ -6249,18 +6258,21 @@ function assertBrowserConfirmationFocusEvidence(roleEntries) {
 
 function assertRoleMobileViewportEvidence(roleEntries) {
   for (const scenario of roles) {
+    const runtimeScenario = scenario.live === undefined
+      ? scenario
+      : { ...scenario, ...scenario.live };
     const entries = roleEntries.filter((entry) => entry.role === scenario.id);
     assert.equal(entries.length > 0, true, `${scenario.id} viewport evidence missing`);
     for (const entry of entries) {
       assert.deepEqual(
         entry.disclosureDefaults,
-        scenario.closedByDefault.map((selector) => ({ selector, open: false })),
+        runtimeScenario.closedByDefault.map((selector) => ({ selector, open: false })),
       );
       if (entry.viewport.name === "mobile") {
         assert.equal(entry.mobileViewportBudget.withinBudget, true);
         assert.equal(
           entry.mobileViewportBudget.primaryActionSelector,
-          scenario.mobileViewportBudget.primaryActionSelector,
+          runtimeScenario.mobileViewportBudget.primaryActionSelector,
         );
         assert.equal(
           entry.mobileViewportBudget.actionBottom <=
@@ -6276,9 +6288,14 @@ function assertRoleMobileViewportEvidence(roleEntries) {
         assert.equal(entry.mobileViewportBudget, null);
       }
 
+      if (entry.commandResult === null) {
+        assert.equal(scenario.id, "admin");
+        continue;
+      }
+
       const geometry = entry.commandResult.interactionGeometry;
       for (const phase of ["confirmation", "feedback"]) {
-        const phaseBudget = scenario.interactionGeometryBudget[phase];
+        const phaseBudget = runtimeScenario.interactionGeometryBudget[phase];
         const phaseEvidence = geometry[phase];
         if (entry.viewport.name !== "mobile" || phaseBudget === undefined) {
           assert.equal(phaseEvidence, null);
@@ -6305,7 +6322,7 @@ function assertRoleMobileViewportEvidence(roleEntries) {
       if (entry.viewport.name !== "mobile") {
         assert.equal(continuity, null);
       } else {
-        const continuityBudget = scenario.commandContinuityBudget;
+        const continuityBudget = runtimeScenario.commandContinuityBudget;
         assert.equal(continuity.withinBudget, true);
         assert.equal(
           continuity.beforeFocusSelector,
@@ -6339,7 +6356,7 @@ function assertRoleMobileViewportEvidence(roleEntries) {
       }
 
       const pending = entry.commandResult.pendingState;
-      const pendingBudget = scenario.pendingStateBudget;
+      const pendingBudget = runtimeScenario.pendingStateBudget;
       assert.equal(pending.state, "pending");
       assert.equal(pending.latencyMode, "controlled-request-gate");
       assert.equal(pending.releasePolicy, "after-contract-capture");
@@ -6392,7 +6409,7 @@ function assertRoleMobileViewportEvidence(roleEntries) {
       );
 
       const interrupted = entry.commandResult.interruptedState;
-      const interruptedBudget = scenario.interruptedStateBudget;
+      const interruptedBudget = runtimeScenario.interruptedStateBudget;
       assert.equal(interrupted.state, "interrupted");
       assert.equal(interrupted.interruption, "connection_lost");
       assert.equal(interrupted.actionId, interruptedBudget.actionId);
@@ -6470,7 +6487,7 @@ function assertBrowserAdminAuditDetailClickEvidence(roleEntries) {
     assert.equal(proof.evidenceTestId, "admin-audit-detail-evidence");
     assert.equal(
       proof.evidenceHref,
-      "/games/midsummer/operator/proof-runs?principal_user_id=admin_a",
+      "/games/midsummer/operator/proof-runs",
     );
     assert.equal(proof.backTestId, "admin-audit-detail-back");
     assert.equal(proof.backHref, "/admin?game=midsummer");
@@ -6692,17 +6709,25 @@ function assertBrowserPlayerPrivateChannelEvidence(entries) {
     assert.equal(entry.media.requested.length > 0, true);
     assert.deepEqual(
       entry.focusTraversal.expectedOrder,
-      [
-        "app-shell-skip-link",
-        "role-nav-board",
-        "role-nav-community",
-        "role-nav-search",
-        "role-nav-inbox",
-        "role-nav-player",
-        "player-channel-main",
-        "player-channel-private:role_pm:slot-7",
-        "player-thread-load-older",
-      ],
+      entry.viewport.name === "mobile"
+        ? [
+            "app-shell-skip-link",
+            "role-nav-player",
+            "player-channel-main",
+            "player-channel-private:role_pm:slot-7",
+            "player-thread-load-older",
+          ]
+        : [
+            "app-shell-skip-link",
+            "role-nav-board",
+            "role-nav-community",
+            "role-nav-search",
+            "role-nav-inbox",
+            "role-nav-player",
+            "player-channel-main",
+            "player-channel-private:role_pm:slot-7",
+            "player-thread-load-older",
+          ],
     );
     assert.equal(entry.overlapCheckedTargets >= 3, true);
     assertPixelEvidence([entry], "player private-channel screenshots");

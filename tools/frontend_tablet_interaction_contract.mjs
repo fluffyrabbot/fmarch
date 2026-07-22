@@ -11,11 +11,8 @@ import {
   APP_SHELL_CONTRACT,
 } from "../frontend/src/lib/app/app-shell-model.mjs";
 import {
-  HOST_CONTROL_SURFACE_CONTRACT,
-} from "../frontend/src/lib/components/host-action/host-control-surface.mjs";
-import {
-  PLAYER_COMMAND_PANEL_CONTRACT,
-} from "../frontend/src/lib/components/player-command/player-command-panel-model.mjs";
+  HOST_TASK_WORKSPACE_CONTRACT,
+} from "../frontend/src/lib/components/host-action/host-task-workspace.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const frontendRoot = path.join(repoRoot, "frontend", "src");
@@ -93,9 +90,17 @@ const adminOperatorSurfaceCss = proveAdminOperatorSurfaceCss(
     ),
   },
 );
-const playerRouteLayoutCss = provePlayerRouteLayoutCss(
-  sourceText(sources, "frontend/src/routes/g/[game]/+page.svelte"),
-);
+const playerRouteLayoutCss = provePlayerRouteLayoutCss({
+  route: sourceText(sources, "frontend/src/routes/g/[game]/+page.svelte"),
+  frame: sourceText(
+    sources,
+    "frontend/src/lib/components/gameplay/GameFrame.svelte",
+  ),
+  dock: sourceText(
+    sources,
+    "frontend/src/lib/components/gameplay/ActionDock.svelte",
+  ),
+});
 const moderatorControlSurfaceCss = proveModeratorControlSurfaceCss({
   css: sourceText(
     sources,
@@ -103,11 +108,7 @@ const moderatorControlSurfaceCss = proveModeratorControlSurfaceCss({
   ),
   component: sourceText(
     sources,
-    "frontend/src/lib/components/host-action/HostControlSurface.svelte",
-  ),
-  actionGroup: sourceText(
-    sources,
-    "frontend/src/lib/components/host-action/HostControlGroup.svelte",
+    "frontend/src/lib/components/host-action/HostTaskWorkspace.svelte",
   ),
   route: sourceText(sources, "frontend/src/routes/g/[game]/host/+page.svelte"),
 });
@@ -312,80 +313,50 @@ function proveSharedAppCss(css) {
   };
 }
 
-function provePlayerRouteLayoutCss(source) {
-  assert.match(
-    source,
-    /<div\s+class=\{data\.layout\.commandRail\.className\}[^>]*data-command-rail-mode=\{data\.layout\.commandRail\.data\.mode\}/s,
-  );
-  assert.match(
-    source,
-    /data-sticky-top-px=\{data\.layout\.commandRail\.data\.stickyTopPx\}/s,
-  );
-  assert.match(
-    source,
-    /data-unstick-below-px=\{data\.layout\.commandRail\.data\.unstickBelowPx\}/s,
-  );
-  assert.match(
-    source,
-    /data-stability-mode=\{data\.layout\.commandRail\.data\.stabilityMode\}/s,
-  );
-  assertPlayerCommandPanelBeforeReceipts(source);
-  assert.match(
-    source,
-    /\.player-surface__command-stack\s*\{[^}]*position:\s*sticky;/s,
-  );
-  assert.match(
-    source,
-    /\.player-surface__command-stack\s*\{[^}]*top:\s*calc\(\s*var\(--fm-app-topbar-block-size\) \+ var\(--fm-app-sticky-rail-gap\) \+\s*env\(safe-area-inset-top\)\s*\);/s,
-  );
-  assert.match(
-    source,
-    /\.player-surface__command-stack\s*\{[^}]*max-block-size:\s*calc\(\s*100svh - var\(--fm-app-topbar-block-size\) - var\(--fm-app-sticky-rail-gap\) -\s*env\(safe-area-inset-top\) - env\(safe-area-inset-bottom\)\s*\);/s,
-  );
-  assert.match(
-    source,
-    /\.player-surface__command-stack\s*\{[^}]*overflow:\s*auto;/s,
-  );
-  assert.match(
-    source,
-    /\.player-surface__command-stack\s*\{[^}]*overscroll-behavior:\s*contain;/s,
-  );
-  assert.match(source, /@media \(max-width:\s*840px\)/);
-  assert.match(
-    source,
-    /@media \(max-width:\s*840px\)\s*\{[\s\S]*?\.player-surface__command-stack\s*\{[^}]*position:\s*static;/s,
-  );
-  assert.match(
-    source,
-    /@media \(max-width:\s*840px\)\s*\{[\s\S]*?\.player-surface__command-stack\s*\{[^}]*overflow:\s*visible;/s,
-  );
+function provePlayerRouteLayoutCss({ route, frame, dock }) {
+  assertPlayerReadingOrder(route);
+  assert.doesNotMatch(route, /<PlayerCommandPanel\b/u);
+  assert.doesNotMatch(route, /player-surface__command-stack/u);
+  assert.match(frame, /max-inline-size:\s*760px/u);
+  assert.match(frame, /padding-block-end:\s*calc\(76px \+ env\(safe-area-inset-bottom\)\)/u);
+  assert.match(dock, /data-component="player-action-dock"/u);
+  assert.match(dock, /data-thumb-zone="player-primary-actions"/u);
+  assert.match(dock, /position:\s*fixed/u);
+  assert.match(dock, /bottom:\s*calc\(10px \+ env\(safe-area-inset-bottom\)\)/u);
 
   return {
-    commandRailMode: "sticky-tablet-command-column",
-    stickyTopPx: 22,
+    commandRailMode: "fixed-context-navigation",
+    stickyTopPx: null,
     topbarOffsetPx: APP_SHELL_CONTRACT.topbarBlockSizePx,
     safeAreaAware: true,
-    internalScroll: true,
-    overscroll: "contain",
-    unstickBelowPx: 840,
-    stabilityMode: "primary-controls-before-live-receipts",
-    primaryControlsBeforeReceipts: true,
+    internalScroll: false,
+    overscroll: "document",
+    unstickBelowPx: null,
+    stabilityMode: "thread-width-stable",
+    readingMeasurePx: 760,
+    threadBeforeComposer: true,
   };
 }
 
-function assertPlayerCommandPanelBeforeReceipts(source) {
-  const panelIndex = source.indexOf("<PlayerCommandPanel");
-  const roleCardIndex = source.indexOf("<PlayerRoleCard");
-  const checkpointIndex = source.indexOf("<PlayerActionSubmissionCheckpoint");
-  const receiptIndex = source.indexOf("<PlayerCommandReceipt");
-  assert.notEqual(panelIndex, -1, "player route must render PlayerCommandPanel");
-  assert.notEqual(receiptIndex, -1, "player route must render PlayerCommandReceipt");
+function assertPlayerReadingOrder(source) {
+  const threadIndex = source.indexOf("<PlayerThread");
+  const composerIndex = source.indexOf("<ComposeSheet");
+  const voteIndex = source.indexOf("<VoteSheet");
+  const contextIndex = source.indexOf("<ContextSheet");
+  const dockIndex = source.indexOf("<ActionDock");
+  for (const [label, index] of [
+    ["thread", threadIndex],
+    ["composer", composerIndex],
+    ["vote detail", voteIndex],
+    ["context", contextIndex],
+    ["dock", dockIndex],
+  ]) {
+    assert.notEqual(index, -1, `player route must render ${label}`);
+  }
   assert.equal(
-    panelIndex < roleCardIndex &&
-      panelIndex < checkpointIndex &&
-      panelIndex < receiptIndex,
+    threadIndex < composerIndex && composerIndex < voteIndex && voteIndex < contextIndex,
     true,
-    "Player vote/post controls should lead role evidence, checkpoints, and live receipts",
+    "player document order must keep thread content ahead of command and evidence surfaces",
   );
 }
 
@@ -463,54 +434,50 @@ function assertAdminOperatorRailBeforeStatusReadouts(source) {
   }
 }
 
-function proveModeratorControlSurfaceCss({ css, component, actionGroup, route }) {
+function proveModeratorControlSurfaceCss({ css, component, route }) {
   assert.match(
     component,
-    /data-control-rail-mode=\{view\.root\.data\.controlRailMode\}/s,
+    /data-workspace-mode=\{view\.root\.data\.mode\}/s,
   );
-  assert.match(component, /data-sticky-top-px=\{view\.root\.data\.stickyTopPx\}/s);
-  assert.match(
-    component,
-    /data-unstick-below-px=\{view\.root\.data\.unstickBelowPx\}/s,
-  );
-  assert.match(
-    component,
-    /data-action-tile-stability-mode=\{view\.root\.data\.actionTileStabilityMode\}/s,
-  );
-  assertHostActionBeforeStatusFloor(actionGroup);
+  assert.match(component, /data-testid=\{view\.queue\.testId\}/s);
+  assert.match(component, /data-testid=\{view\.canvas\.testId\}/s);
+  assert.match(component, /hidden=\{task\.id !== view\.selectedTaskId\}/s);
+  assertHostActionBeforeStatusFloor(component);
   assertHostControlBeforeStatusReadouts(route);
   assert.match(
     css,
-    /\.host-console-critical-path__moderator-controls\s*\{[^}]*position:\s*static;/s,
+    /\.host-task-workspace\s*\{[^}]*grid-template-columns:\s*minmax\(220px,\s*280px\) minmax\(0,\s*1fr\);/s,
   );
   assert.match(
     css,
-    /\.host-console-critical-path__moderator-controls\s*\{[^}]*overflow:\s*visible;/s,
+    /@media \(max-width:\s*760px\)[\s\S]*?\.host-task-workspace\s*\{[^}]*grid-template-columns:\s*1fr;/s,
   );
   assert.match(
     css,
-    /\.host-console-critical-path__action-tile\s*\{[^}]*grid-template-rows:\s*auto minmax\(44px,\s*auto\);/s,
+    /\.host-task-workspace__task-list\s*\{[^}]*display:\s*flex;[^}]*overflow-x:\s*auto;/s,
   );
   assert.match(
     css,
-    /\.host-console-critical-path__command-status-floor\s*\{[^}]*min-block-size:\s*44px;/s,
+    /\.host-task-workspace__action\s*\{[^}]*grid-template-rows:\s*auto minmax\(44px,\s*auto\);/s,
   );
   assert.match(
-    actionGroup,
+    component,
     /data-status-floor-min-px=\{action\.statusFloorMinBlockSizePx\}/s,
   );
   return {
-    controlRailMode: "flow-host-control-actions",
-    stickyTopPx: 0,
+    controlRailMode: "exception-queue-decision-canvas",
+    stickyTopPx: null,
     topbarOffsetPx: APP_SHELL_CONTRACT.topbarBlockSizePx,
     safeAreaAware: false,
     internalScroll: false,
-    overscroll: "visible",
-    unstickBelowPx: 0,
+    overscroll: "document",
+    unstickBelowPx: null,
     primaryControlsBeforeStatusReadouts: true,
     actionTileStabilityMode: "reserved-status-floor",
     actionTileStatusFloorMinBlockSizePx: 44,
     primaryActionBeforeStatusFloor: true,
+    desktopComposition: "queue-canvas",
+    mobileComposition: "stacked-horizontal-queue",
   };
 }
 
@@ -531,21 +498,21 @@ function assertHostActionBeforeStatusFloor(component) {
 }
 
 function assertHostControlBeforeStatusReadouts(route) {
-  const controlIndex = route.indexOf("<HostControlSurface");
-  assert.notEqual(controlIndex, -1, "host route must render HostControlSurface");
+  const controlIndex = route.indexOf("<HostTaskWorkspace");
+  assert.notEqual(controlIndex, -1, "host route must render HostTaskWorkspace");
   const workQueueIndex = route.indexOf("<HostWorkQueueStrip");
   assert.notEqual(workQueueIndex, -1, "host route must render <HostWorkQueueStrip");
   assert.equal(
     controlIndex < workQueueIndex,
     true,
-    "HostControlSurface leads the console before supporting queue readouts",
+    "HostTaskWorkspace leads the console before supporting queue readouts",
   );
   const checkpointIndex = route.indexOf("<HostLifecycleControlCheckpoint");
   assert.notEqual(checkpointIndex, -1, "host route must render HostLifecycleControlCheckpoint");
   assert.equal(
     controlIndex < checkpointIndex,
     true,
-    "HostControlSurface leads the lifecycle proof checkpoint",
+    "HostTaskWorkspace leads the lifecycle proof checkpoint",
   );
   for (const marker of [
     "<HostCommandActivity",
@@ -557,7 +524,7 @@ function assertHostControlBeforeStatusReadouts(route) {
     assert.equal(
       controlIndex < index,
       true,
-      `HostControlSurface should render before ${marker} for first-viewport moderator actions`,
+      `HostTaskWorkspace should render before ${marker} for first-viewport moderator actions`,
     );
   }
 }
@@ -635,12 +602,13 @@ async function proveThumbZonePlacement(bundle) {
       html: (await bundle.renderPlayerSurface()).html,
       zones: [
         {
-          testId: PLAYER_COMMAND_PANEL_CONTRACT.thumbZoneTestId,
-          zone: PLAYER_COMMAND_PANEL_CONTRACT.thumbZone,
-          requiredDescendants: PLAYER_COMMAND_PANEL_CONTRACT.actions.map((action) => ({
-            kind: "data-action",
-            value: action,
-          })),
+          testId: "player-primary-action-zone",
+          zone: "player-primary-actions",
+          requiredDescendants: [
+            { kind: "data-action", value: "submit_vote" },
+            { kind: "data-action", value: "submit_vote:no_lynch" },
+            { kind: "testId", value: "player-dock-reply" },
+          ],
         },
       ],
     }),
@@ -649,8 +617,8 @@ async function proveThumbZonePlacement(bundle) {
       html: (await bundle.renderModeratorSurface()).html,
       zones: [
         {
-          testId: HOST_CONTROL_SURFACE_CONTRACT.thumbZoneTestId,
-          zone: HOST_CONTROL_SURFACE_CONTRACT.thumbZone,
+          testId: HOST_TASK_WORKSPACE_CONTRACT.thumbZoneTestId,
+          zone: HOST_TASK_WORKSPACE_CONTRACT.thumbZone,
           requiredDescendants: MODERATOR_CRITICAL_ACTION_IDS.map((id) => ({
             kind: "testId",
             value: `critical-host-action-${id}`,

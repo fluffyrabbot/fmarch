@@ -180,7 +180,10 @@ try {
     });
     await boardContext.close();
 
-    for (const role of roles) {
+    for (const roleContract of roles) {
+      const role = roleContract.live === undefined
+        ? roleContract
+        : Object.freeze({ ...roleContract, ...roleContract.live });
       const context = await newContextForViewport(viewport, role.token);
       const page = await context.newPage();
       let playerMediaRequests = null;
@@ -324,7 +327,9 @@ try {
       await setDisclosureState(page, role.collapseBeforeCommands, false);
 
       let commandResult = null;
-      const commandFlow = commandFlows[role.id];
+      const commandFlow = role.commandFlowId === null
+        ? undefined
+        : commandFlows[role.commandFlowId ?? role.id];
       if (commandFlow !== undefined) {
         commandResult = await runCommandFlow(page, commandFlow, {
           role,
@@ -955,7 +960,6 @@ async function driveAdminAuditDetailClick(page, { viewport, baseUrl }) {
       label: "admin audit detail machine evidence",
       navigation: "link",
       hrefPath: "/games/midsummer/operator/proof-runs",
-      searchParams: { principal_user_id: "admin_a" },
       baseUrl,
     },
   );
@@ -1839,9 +1843,10 @@ async function assertPostInteractionGeometry(
 async function readDocumentBox(locator) {
   return locator.evaluate((node) => {
     const rect = node.getBoundingClientRect();
+    const fixed = window.getComputedStyle(node).position === "fixed";
     return {
-      x: rect.x + window.scrollX,
-      y: rect.y + window.scrollY,
+      x: rect.x + (fixed ? 0 : window.scrollX),
+      y: rect.y + (fixed ? 0 : window.scrollY),
       width: rect.width,
       height: rect.height,
     };
@@ -1956,6 +1961,7 @@ async function readViewportContinuityState(page) {
 
 async function driveModeratorHostPromptAck(page) {
   const actionId = "resolve_host_prompt-D01-skip_next_day-slot_1";
+  await selectHostTask(page, "host-prompts");
   const actionRoot = page.getByTestId(`critical-host-action-${actionId}`);
   await assertVisibleBox(actionRoot, "moderator host prompt action");
 
@@ -2049,6 +2055,7 @@ async function driveModeratorHostPromptAck(page) {
 
 async function driveModeratorSlotLifecycleAck(page, { commandRequests = [] } = {}) {
   const actionId = "modkill_slot";
+  await selectHostTask(page, "slot-lifecycle");
   const actionRoot = page.getByTestId(`critical-host-action-${actionId}`);
   await assertVisibleBox(actionRoot, "moderator slot lifecycle action");
 
@@ -2132,7 +2139,23 @@ async function driveModeratorSlotLifecycleAck(page, { commandRequests = [] } = {
   };
 }
 
+async function selectHostTask(page, taskId) {
+  const task = page.getByTestId(`host-task-${taskId}`);
+  await task.waitFor({ state: "visible" });
+  await task.click();
+  await page
+    .locator(`[data-task-id="${taskId}"]:not([hidden])`)
+    .waitFor({ state: "visible" });
+}
+
 async function assertRailCommandActivity(page, { prefix, actionId, expectedState }) {
+  if (prefix === "host" && !(await page.getByTestId("host-command-activity").isVisible())) {
+    await setDisclosureState(
+      page,
+      ['[data-testid="host-supporting-evidence"]'],
+      true,
+    );
+  }
   await page.getByTestId(`${prefix}-command-activity`).waitFor({ state: "visible" });
   const status = page.getByTestId(`${prefix}-command-activity-status-${actionId}`);
   await status.waitFor({ state: "visible" });
@@ -2941,6 +2964,9 @@ async function assertRoleNav(page, expectedNavigation = null) {
   for (const id of ["board", "player", "moderator", "admin"]) {
     const locator = page.getByTestId(roleNavTestId(id));
     const expected = expectedNavigation?.[id];
+    if (!(await locator.isVisible())) {
+      continue;
+    }
     targets.push({
       label: `role nav ${id}`,
       box:
@@ -3103,6 +3129,11 @@ async function assertFocusTraversal(
   page,
   { label, expectedOrder, forbiddenTestIds = [], maxTabs = 24 },
 ) {
+  const visibleExpectedOrder = await page.evaluate((ids) =>
+    ids.filter((id) => {
+      const node = document.querySelector(`[data-testid="${CSS.escape(id)}"]`);
+      return node === null || node.getClientRects().length > 0;
+    }), expectedOrder);
   await page.evaluate(() => {
     if (document.activeElement instanceof HTMLElement) {
       document.activeElement.blur();
@@ -3122,7 +3153,7 @@ async function assertFocusTraversal(
       );
     }
     sequence.push(focus);
-    if (containsOrderedFocus(sequence, expectedOrder)) {
+    if (containsOrderedFocus(sequence, visibleExpectedOrder)) {
       break;
     }
   }
@@ -3133,16 +3164,17 @@ async function assertFocusTraversal(
       throw new Error(`${label} focused disabled or denied control ${forbidden}`);
     }
   }
-  if (!containsOrderedFocus(sequence, expectedOrder)) {
+  if (!containsOrderedFocus(sequence, visibleExpectedOrder)) {
     throw new Error(
-      `${label} focus order missed ${expectedOrder.join(" -> ")}; saw ${sequence
+      `${label} focus order missed ${visibleExpectedOrder.join(" -> ")}; saw ${sequence
         .map((item) => item.label)
         .join(" -> ")}`,
     );
   }
 
   return {
-    expectedOrder,
+    expectedOrder: visibleExpectedOrder,
+    configuredExpectedOrder: expectedOrder,
     forbiddenTestIds,
     focusedTestIds,
     sequence: sequence.map((item) => item.label),

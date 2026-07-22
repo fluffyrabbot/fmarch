@@ -1,6 +1,5 @@
 <script>
   import { onMount } from "svelte";
-  import AppSurfaceHeader from "$lib/app/AppSurfaceHeader.svelte";
   import DayVoteOutcomePanel from "$lib/components/day-vote-outcome/DayVoteOutcomePanel.svelte";
   import RouteState from "$lib/app/RouteState.svelte";
   import {
@@ -8,9 +7,9 @@
     isModeratorRouteEmpty,
   } from "$lib/app/app-route-state-model.mjs";
   import HostCommandActivity from "$lib/components/host-action/HostCommandActivity.svelte";
-  import HostControlSurface from "$lib/components/host-action/HostControlSurface.svelte";
+  import HostConsoleBar from "$lib/components/host-action/HostConsoleBar.svelte";
+  import HostTaskWorkspace from "$lib/components/host-action/HostTaskWorkspace.svelte";
   import HostLifecycleControlCheckpoint from "$lib/components/host-action/HostLifecycleControlCheckpoint.svelte";
-  import HostOperationsStrip from "$lib/components/host-action/HostOperationsStrip.svelte";
   import HostPromptResolutionHistory from "$lib/components/host-action/HostPromptResolutionHistory.svelte";
   import HostPhaseSummary from "$lib/components/host-action/HostPhaseSummary.svelte";
   import HostVotecountPanel from "$lib/components/host-action/HostVotecountPanel.svelte";
@@ -97,6 +96,9 @@
     votecountCount: votecount.length,
     nowSeconds: data.deadlineClock?.nowSeconds,
   });
+  $: hostAttentionCount = moderatorActionGroups.filter(
+    (group) => ["deadline", "host-prompts", "replacement"].includes(group.id) && group.actions.length > 0,
+  ).length;
   $: if (typeof window !== "undefined") {
     activePhaseTheme.set(phaseThemeKey(projection.phase ?? data.phase));
   }
@@ -321,97 +323,88 @@
   data-game={data.game.id}
   data-testid={HOST_CONSOLE_ROUTE_CONTRACT.surfaceTestId}
 >
-  <AppSurfaceHeader header={data.surfaceHeader} {liveStatus} />
+  <HostConsoleBar
+    game={data.game}
+    phase={projection.phase ?? data.phase}
+    capabilityLabel={data.access.capabilityLabel}
+    {liveStatus}
+    attentionCount={hostAttentionCount}
+  />
 
-  {#if moderatorForcedRouteState}
-    <RouteState view={moderatorForcedRouteState} />
-  {:else if moderatorSurfaceEmpty}
-    <RouteState view={moderatorEmptyState} />
-  {:else}
-    <details
-      class="host-console-critical-path__drawer"
-      data-testid="host-status-overview"
-    >
-      <summary>
-        <span>Game snapshot</span>
-        <small>Phase, votecount, prompts, and player status</small>
-      </summary>
-      <div class="host-console-critical-path__drawer-content">
-        <HostOperationsStrip
-          access={data.access}
-          phase={data.phase}
-          {projection}
-          votecountBoundary={data.votecountBoundary}
-          {votecount}
-          {hostPrompts}
-        />
-      </div>
-    </details>
+  <div class="host-console-critical-path__body">
+    {#if moderatorForcedRouteState}
+      <RouteState view={moderatorForcedRouteState} />
+    {:else if moderatorSurfaceEmpty}
+      <RouteState view={moderatorEmptyState} />
+    {:else}
+      <HostTaskWorkspace
+        groups={moderatorActionGroups}
+        {commandStatuses}
+        commandContext={data.commandContext}
+        phase={projection.phase ?? data.phase}
+        replacement={projection.replacement ?? data.replacement}
+        {hostPrompts}
+        {votecount}
+        onDispatch={handleDispatch}
+        onRetry={retryHostCommand}
+        onCancel={cancelHostCommandRecovery}
+      />
 
-    <HostControlSurface
-      groups={moderatorActionGroups}
-      {commandStatuses}
-      commandContext={data.commandContext}
-      onDispatch={handleDispatch}
-      onRetry={retryHostCommand}
-      onCancel={cancelHostCommandRecovery}
-    />
+      <details
+        class="host-console-critical-path__drawer"
+        data-testid="host-supporting-evidence"
+      >
+        <summary>
+          <span>Evidence and activity</span>
+          <small>Receipts, game state, vote record, and lifecycle checks</small>
+        </summary>
+        <div class="host-console-critical-path__drawer-content">
+          <HostCommandActivity
+            {commandStatuses}
+            {commandOutcomes}
+          />
 
-    <HostCommandActivity
-      {commandStatuses}
-      {commandOutcomes}
-    />
+          <HostWorkQueueStrip queues={workQueues} />
 
-    <details
-      class="host-console-critical-path__drawer"
-      data-testid="host-supporting-evidence"
-    >
-      <summary>
-        <span>Supporting evidence</span>
-        <small>Game status, vote record, and lifecycle checks</small>
-      </summary>
-      <div class="host-console-critical-path__drawer-content">
-        <HostWorkQueueStrip queues={workQueues} />
+          <HostLifecycleControlCheckpoint
+            checkpoint={hostLifecycleControlCheckpoint}
+          />
 
-        <HostLifecycleControlCheckpoint
-          checkpoint={hostLifecycleControlCheckpoint}
-        />
+          <HostPromptResolutionHistory {hostPrompts} />
 
-        <HostPromptResolutionHistory {hostPrompts} />
+          <HostVotecountPanel
+            boundary={data.votecountBoundary}
+            rows={votecount}
+          />
 
-        <HostVotecountPanel
-          boundary={data.votecountBoundary}
-          rows={votecount}
-        />
+          <DayVoteOutcomePanel
+            outcomes={dayVoteOutcomes}
+            boundary={data.dayVoteOutcomeBoundary}
+            rootTestId="host-day-vote-outcome"
+          />
 
-        <DayVoteOutcomePanel
-          outcomes={dayVoteOutcomes}
-          boundary={data.dayVoteOutcomeBoundary}
-          rootTestId="host-day-vote-outcome"
-        />
+          <HostPhaseSummary phase={data.phase} {projection} />
+        </div>
+      </details>
 
-        <HostPhaseSummary phase={data.phase} {projection} />
-      </div>
-    </details>
-
-    <details
-      class="host-console-critical-path__drawer"
-      data-testid="host-invite-workflows"
-      open={form?.playerInvite !== undefined || form?.replacementInvite !== undefined}
-    >
-      <summary>
-        <span>Player access</span>
-        <small>Invite players and replacements</small>
-      </summary>
-      <div class="host-console-critical-path__invite-grid">
-        {#each [
-          [inviteTargets.player, form?.playerInvite],
-          [inviteTargets.replacement, form?.replacementInvite],
-        ] as [inviteTarget, inviteResult]}
-          <section
-            class="host-console-critical-path__invite-panel fm-section"
-            data-testid={inviteTarget.panelTestId}
-          >
+      <details
+        class="host-console-critical-path__drawer"
+        data-testid="host-invite-workflows"
+        open={form?.playerInvite !== undefined || form?.replacementInvite !== undefined}
+      >
+        <summary>
+          <span>Player access</span>
+          <small>Invite players and replacements</small>
+        </summary>
+        <div class="host-console-critical-path__invite-grid">
+          {#each [
+            [inviteTargets.player, form?.playerInvite],
+            [inviteTargets.replacement, form?.replacementInvite],
+          ] as [inviteTarget, inviteResult]}
+            <section
+              class="host-console-critical-path__invite-panel fm-section"
+              data-testid={inviteTarget.panelTestId}
+            >
             <header>
               <p class="fm-eyebrow">{inviteTarget.eyebrow}</p>
               <strong data-testid={inviteTarget.targetTestId}>{inviteTarget.targetLabel}</strong>
@@ -504,9 +497,10 @@
                 </form>
               {/if}
             {/if}
-          </section>
-        {/each}
-      </div>
-    </details>
-  {/if}
+            </section>
+          {/each}
+        </div>
+      </details>
+    {/if}
+  </div>
 </main>

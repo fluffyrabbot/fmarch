@@ -5,7 +5,6 @@
     buildPlayerThreadViewModel,
   } from "./player-thread-model.mjs";
 
-  export let phase;
   export let thread;
   export let liveOfficialPost = null;
   export let threadPageStatus = null;
@@ -15,12 +14,6 @@
 </script>
 
 <section class="player-surface__thread" aria-label="Thread">
-  {#if phase.deadlineLabel}
-    <div class="player-surface__deadline fm-card" data-testid="player-deadline">
-      {phase.deadlineLabel}
-    </div>
-  {/if}
-
   {#if liveOfficialPost !== null}
     <aside
       class="player-surface__official-post fm-card"
@@ -33,7 +26,7 @@
   {/if}
 
   <div
-    class="player-surface__pager fm-card"
+    class="player-surface__pager"
     aria-busy={threadView.pager.root.busy}
     data-component={threadView.pager.root.component}
     data-state={threadView.pager.root.state}
@@ -75,7 +68,7 @@
   {#each threadView.posts as post}
     <article
       id={`thread-post-${post.seq}`}
-      class="player-surface__post fm-card"
+      class="player-surface__post"
       data-testid={`thread-post-${post.seq}`}
     >
       <header>
@@ -133,15 +126,8 @@
 <style>
   .player-surface__thread {
     display: grid;
-    gap: 12px;
+    gap: 0;
     min-inline-size: 0;
-  }
-
-  .player-surface__deadline {
-    color: var(--fm-accent-ink);
-    font-size: 18px;
-    font-weight: 800;
-    min-block-size: 52px;
   }
 
   .player-surface__official-post {
@@ -149,6 +135,7 @@
     border-inline-start: 6px solid var(--fm-accent);
     gap: 4px;
     min-block-size: 72px;
+    margin-block: 12px;
   }
 
   .player-surface__official-post span,
@@ -168,8 +155,12 @@
 
   .player-surface__pager {
     align-items: center;
+    border-block-end: 1px solid var(--fm-line-soft);
+    display: grid;
+    gap: 12px;
     grid-template-columns: minmax(0, 1fr) auto;
-    min-block-size: 64px;
+    min-block-size: 52px;
+    padding-block: 4px;
   }
 
   .player-surface__pager span {
@@ -191,6 +182,13 @@
     display: grid;
     gap: 12px;
     grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .player-surface__post {
+    border-block-end: 1px solid var(--fm-line-soft);
+    display: grid;
+    gap: 12px;
+    padding-block: 6px 22px;
   }
 
   .player-surface__post span {
@@ -237,5 +235,25 @@
     font-weight: 800;
     min-block-size: 44px;
     padding: 12px;
+  }
+
+  @media (max-width: 560px) {
+    .player-surface__pager {
+      min-block-size: 48px;
+      padding-block-end: 6px;
+    }
+
+    .player-surface__pager > div {
+      block-size: 1px;
+      clip-path: inset(50%);
+      inline-size: 1px;
+      overflow: hidden;
+      position: absolute;
+      white-space: nowrap;
+    }
+
+    .player-surface__pager button {
+      justify-self: start;
+    }
   }
 </style>

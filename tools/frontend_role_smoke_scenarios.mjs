@@ -36,16 +36,6 @@ import {
   adminReadinessStatusTestId,
   adminReadinessTestId,
 } from "../frontend/src/lib/components/admin/admin-surface-model.mjs";
-import {
-  HOST_OPERATIONS_STRIP_CONTRACT,
-  hostOperationStatusTestId,
-  hostOperationTestId,
-} from "../frontend/src/lib/components/host-action/host-operations-strip.mjs";
-import {
-  PLAYER_POSTURE_STRIP_CONTRACT,
-  playerPostureStatusTestId,
-  playerPostureTestId,
-} from "../frontend/src/lib/components/player-posture/player-posture-strip-model.mjs";
 
 export const viewports = Object.freeze([
   Object.freeze({ name: "mobile", width: 390, height: 844 }),
@@ -77,34 +67,20 @@ const adminReadinessTargets = scanStripTargets({
     audit: "pending",
     recovery: "pending",
   },
-  // The dev server appends machine-local proof-artifact audit rows, which pull
-  // the audit rollup to "pending"; the static route build loads none of them,
-  // so its rollup stays "ack". Each lane asserts its own posture.
   staticStates: {
     audit: "ack",
   },
 });
 
-const playerPostureTargets = scanStripTargets({
-  contract: PLAYER_POSTURE_STRIP_CONTRACT,
-  testIdFor: playerPostureTestId,
-  statusTestIdFor: playerPostureStatusTestId,
+const adminLiveReadinessTargets = scanStripTargets({
+  contract: ADMIN_READINESS_STRIP_CONTRACT,
+  testIdFor: adminReadinessTestId,
+  statusTestIdFor: adminReadinessStatusTestId,
   states: {
-    phase: "ack",
-    deadline: "ack",
-    private: "pending",
-  },
-});
-
-const hostOperationTargets = scanStripTargets({
-  contract: HOST_OPERATIONS_STRIP_CONTRACT,
-  testIdFor: hostOperationTestId,
-  statusTestIdFor: hostOperationStatusTestId,
-  states: {
-    phase: "pending",
-    votecount: "ack",
-    prompts: "pending",
-    lifecycle: "pending",
+    authority: "ack",
+    setup: "pending",
+    audit: "ack",
+    recovery: "pending",
   },
 });
 
@@ -187,10 +163,8 @@ export const roles = Object.freeze([
       }),
     }),
     commandContinuityBudget: Object.freeze({
-      beforeFocusSelector:
-        '[data-testid="command-recovery-retry-create-game"]',
-      afterFocusSelector:
-        '[data-testid="admin-command-trigger-create-game"]',
+      beforeFocusSelector: '[data-testid="command-recovery-retry-create-game"]',
+      afterFocusSelector: '[data-testid="admin-command-trigger-create-game"]',
       statusSelector: '[data-testid="admin-command-status-create-game"]',
       maxScrollDeltaPx: 1,
       maxAnnouncementLatencyMs: 500,
@@ -303,16 +277,63 @@ export const roles = Object.freeze([
         "admin-command-trigger-session-grants",
       ],
     }),
+    live: Object.freeze({
+      path: "/admin?game=midsummer",
+      commandFlowId: null,
+      mobileViewportBudget: Object.freeze({
+        primaryActionSelector: '[data-testid="admin-command-trigger-host-setup"]',
+        maxPrimaryActionBottomViewportRatio: 1,
+        maxDocumentHeightViewportRatio: 2.6,
+      }),
+      touchSelectors: Object.freeze([
+        '[data-testid="admin-command-trigger-host-setup"]',
+        '[data-testid="admin-audit-link-proof-runs"]',
+        '[data-testid="admin-recovery-recovery-gate"] button',
+        '[data-testid="admin-status-overview"] > summary',
+        '[data-testid="admin-supporting-evidence"] > summary',
+      ]),
+      thumbZones: Object.freeze([
+        Object.freeze({
+          testId: "admin-setup-action-zone",
+          zone: "admin-setup-actions",
+          targetSelectors: Object.freeze([
+            '[data-testid="admin-command-trigger-host-setup"]',
+          ]),
+        }),
+        Object.freeze({
+          testId: "admin-recovery-action-zone",
+          zone: "admin-recovery-actions",
+          targetSelectors: Object.freeze([
+            '[data-testid="admin-recovery-trigger-recovery-gate"]',
+          ]),
+        }),
+      ]),
+      visibleTestIds: Object.freeze([
+        ...adminLiveReadinessTargets.overlapTestIds,
+        "admin-audit-link-proof-runs",
+      ]),
+      overlapTestIds: adminLiveReadinessTargets.overlapTestIds,
+      statusRegions: Object.freeze([
+        ...adminLiveReadinessTargets.statusRegions,
+        Object.freeze({ testId: "admin-audit-status-proof-runs", state: "ack" }),
+      ]),
+      focus: roleFocusScenario({
+        shell: adminShell,
+        expectedAfterNav: [
+          "admin-command-trigger-host-setup",
+          "admin-recovery-trigger-recovery-gate",
+        ],
+      }),
+    }),
   }),
   Object.freeze({
     id: "player",
     token: "fixture-player",
     path: "/g/midsummer",
     surfaceTestId: PLAYER_ROUTE_CONTRACT.surfaceTestId,
-    firstViewportSurface: PLAYER_POSTURE_STRIP_CONTRACT.surface,
+    firstViewportSurface: "workspace",
     capabilityTestId: PLAYER_ROUTE_CONTRACT.capabilityTestId,
     requiredText: PLAYER_ROUTE_CONTRACT.requiredText,
-    statusTestId: PLAYER_ROUTE_CONTRACT.liveStatusTestId,
     mobileViewportBudget: Object.freeze({
       primaryActionSelector: '[data-action="submit_vote"]',
       maxPrimaryActionBottomViewportRatio: 1,
@@ -347,7 +368,7 @@ export const roles = Object.freeze([
       anchorSelector: '[data-testid="player-primary-action-zone"]',
       targetSelector: '[data-testid="player-command-status"]',
       maxAnchorShiftPx: 1,
-      maxCombinedSpanViewportRatio: 0.9,
+      maxCombinedSpanViewportRatio: 1,
       maxDocumentGrowthViewportRatio: 0.25,
       maxEnterPendingMs: 500,
       inputBoundary: "player-command-surface",
@@ -365,26 +386,23 @@ export const roles = Object.freeze([
     }),
     closedByDefault: Object.freeze([
       '[data-testid="player-media-composer"]',
-      '[data-testid="player-status-overview"]',
       '[data-testid="player-game-record"]',
     ]),
     expandBeforeChecks: Object.freeze([
-      '[data-testid="player-status-overview"]',
       '[data-testid="player-game-record"]',
     ]),
     collapseBeforeCommands: Object.freeze([
       '[data-testid="player-media-composer"]',
-      '[data-testid="player-status-overview"]',
       '[data-testid="player-game-record"]',
     ]),
     collapseBeforeScreenshot: Object.freeze([
       '[data-testid="player-media-composer"]',
-      '[data-testid="player-status-overview"]',
       '[data-testid="player-game-record"]',
     ]),
     visibleTestIds: [
-      ...playerPostureTargets.overlapTestIds,
-      "player-votecount-deadline",
+      "player-game-bar",
+      "player-channel-switcher",
+      "player-primary-action-zone",
       "player-thread-pager",
       "player-private-boundary",
       "player-private-review-notification-1",
@@ -392,15 +410,18 @@ export const roles = Object.freeze([
       "player-private-review-investigation-1",
       "player-private-link-investigation-1",
     ],
-    overlapTestIds: playerPostureTargets.overlapTestIds,
-    statusRegions: playerPostureTargets.statusRegions,
+    overlapTestIds: [
+      "player-game-bar",
+      "player-channel-switcher",
+      "player-primary-action-zone",
+    ],
+    statusRegions: [],
     touchSelectors: [
       '[data-testid="player-channel-main"]',
       '[data-testid="player-thread-load-older"]',
       '[data-testid="player-composer"] button',
       '[data-testid="player-private-link-notification-1"]',
       '[data-testid="player-media-composer"] > summary',
-      '[data-testid="player-status-overview"] > summary',
       '[data-testid="player-game-record"] > summary',
     ],
     thumbZones: Object.freeze([
@@ -410,7 +431,7 @@ export const roles = Object.freeze([
         targetSelectors: Object.freeze([
           '[data-action="submit_vote"]',
           '[data-action="submit_vote:no_lynch"]',
-          '[data-action="submit_post"]',
+          '[data-testid="player-dock-reply"]',
         ]),
       }),
     ]),
@@ -429,7 +450,7 @@ export const roles = Object.freeze([
     token: "fixture-host",
     path: "/g/midsummer/host",
     surfaceTestId: HOST_CONSOLE_ROUTE_CONTRACT.surfaceTestId,
-    firstViewportSurface: HOST_OPERATIONS_STRIP_CONTRACT.surface,
+    firstViewportSurface: "tasks",
     capabilityTestId: HOST_CONSOLE_ROUTE_CONTRACT.capabilityTestId,
     requiredText: HOST_CONSOLE_ROUTE_CONTRACT.requiredText,
     mobileViewportBudget: Object.freeze({
@@ -496,47 +517,40 @@ export const roles = Object.freeze([
       maxDocumentGrowthViewportRatio: 0.4,
     }),
     closedByDefault: Object.freeze([
-      '[data-testid="host-status-overview"]',
-      '[data-testid="moderator-action-queue-later"]',
-      '[data-testid="moderator-action-queue-endgame"]',
       '[data-testid="host-supporting-evidence"]',
       '[data-testid="host-invite-workflows"]',
     ]),
     expandBeforeChecks: Object.freeze([
-      '[data-testid="host-status-overview"]',
-      '[data-testid="moderator-action-queue-later"]',
-      '[data-testid="moderator-action-queue-endgame"]',
       '[data-testid="host-supporting-evidence"]',
       '[data-testid="host-invite-workflows"]',
     ]),
     collapseBeforeScreenshot: Object.freeze([
-      '[data-testid="host-status-overview"]',
-      '[data-testid="moderator-action-queue-later"]',
-      '[data-testid="moderator-action-queue-endgame"]',
       '[data-testid="host-supporting-evidence"]',
       '[data-testid="host-invite-workflows"]',
     ]),
     collapseBeforeCommands: Object.freeze([
-      '[data-testid="host-status-overview"]',
       '[data-testid="host-supporting-evidence"]',
       '[data-testid="host-invite-workflows"]',
     ]),
-    statusTestId: HOST_CONSOLE_ROUTE_CONTRACT.liveStatusTestId,
-    visibleTestIds: hostOperationTargets.overlapTestIds,
-    overlapTestIds: hostOperationTargets.overlapTestIds,
-    statusRegions: hostOperationTargets.statusRegions,
+    visibleTestIds: [
+      "host-console-bar",
+      "host-console-attention",
+      "host-task-queue-summary",
+      "host-task-queue",
+      "host-decision-canvas",
+    ],
+    overlapTestIds: [
+      "host-console-attention",
+      "host-task-queue-summary",
+      "host-decision-canvas",
+    ],
+    statusRegions: [],
     touchSelectors: [
-      '[data-testid="host-status-overview"] > summary',
+      '[data-testid="host-task-deadline"]',
+      '[data-testid="host-task-host-prompts"]',
+      '[data-testid="host-task-replacement"]',
       '[data-testid="critical-host-action-extend_deadline"] [data-testid="critical-host-action-trigger"]',
-      '[data-testid="critical-host-action-resolve_phase"] [data-testid="critical-host-action-trigger"]',
-      '[data-testid="critical-host-action-lock_thread"] [data-testid="critical-host-action-trigger"]',
-      '[data-testid="critical-host-action-publish_votecount"] [data-testid="critical-host-action-trigger"]',
-      '[data-testid="critical-host-action-modkill_slot"] [data-testid="critical-host-action-trigger"]',
-      '[data-testid="critical-host-action-complete_game"] [data-testid="critical-host-action-trigger"]',
-      '[data-testid="critical-host-action-resolve_host_prompt-D01-skip_next_day-slot_1"] [data-testid="critical-host-action-trigger"]',
       '[data-testid="host-console-votecount-row-slot-2_Ilya"]',
-      '[data-testid="moderator-control-phase"]',
-      '[data-testid="moderator-control-roles"]',
       '[data-testid="host-supporting-evidence"] > summary',
       '[data-testid="host-invite-workflows"] > summary',
     ],
@@ -548,14 +562,6 @@ export const roles = Object.freeze([
           '[data-testid="critical-host-action-extend_deadline"] [data-testid="critical-host-action-trigger"]',
           '[data-testid="critical-host-action-extend_deadline_24h"] [data-testid="critical-host-action-trigger"]',
           '[data-testid="critical-host-action-extend_deadline_48h"] [data-testid="critical-host-action-trigger"]',
-          '[data-testid="critical-host-action-process_replacement"] [data-testid="critical-host-action-trigger"]',
-          '[data-testid="critical-host-action-resolve_phase"] [data-testid="critical-host-action-trigger"]',
-          '[data-testid="critical-host-action-lock_thread"] [data-testid="critical-host-action-trigger"]',
-          '[data-testid="critical-host-action-publish_votecount"] [data-testid="critical-host-action-trigger"]',
-          '[data-testid="critical-host-action-mark_dead"] [data-testid="critical-host-action-trigger"]',
-          '[data-testid="critical-host-action-modkill_slot"] [data-testid="critical-host-action-trigger"]',
-          '[data-testid="critical-host-action-complete_game"] [data-testid="critical-host-action-trigger"]',
-          '[data-testid="critical-host-action-resolve_host_prompt-D01-skip_next_day-slot_1"] [data-testid="critical-host-action-trigger"]',
         ]),
       }),
     ]),

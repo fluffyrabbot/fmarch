@@ -1,6 +1,5 @@
 <script>
   import { onMount } from "svelte";
-  import AppSurfaceHeader from "$lib/app/AppSurfaceHeader.svelte";
   import DayVoteOutcomePanel from "$lib/components/day-vote-outcome/DayVoteOutcomePanel.svelte";
   import RouteState from "$lib/app/RouteState.svelte";
   import {
@@ -13,16 +12,20 @@
   } from "$lib/app/live-transport.mjs";
   import { createProjectionStore } from "$lib/app/projection-store.mjs";
   import { activePhaseTheme, phaseThemeKey } from "$lib/app/phase-theme.mjs";
-  import PlayerChannelSwitcher from "$lib/components/player-channel-switcher/PlayerChannelSwitcher.svelte";
-  import PlayerActionSubmissionCheckpoint from "$lib/components/player-command/PlayerActionSubmissionCheckpoint.svelte";
-  import PlayerCommandPanel from "$lib/components/player-command/PlayerCommandPanel.svelte";
   import PlayerCommandReceipt from "$lib/components/player-command/PlayerCommandReceipt.svelte";
-  import PlayerPostureStrip from "$lib/components/player-posture/PlayerPostureStrip.svelte";
   import PlayerEndgameSummary from "$lib/components/player-endgame-summary/PlayerEndgameSummary.svelte";
   import { buildPlayerEndgameSummaryViewModel } from "$lib/components/player-endgame-summary/player-endgame-summary-model.mjs";
   import PlayerRoleCard from "$lib/components/player-role-card/PlayerRoleCard.svelte";
   import PlayerPrivateQueue from "$lib/components/player-private-queue/PlayerPrivateQueue.svelte";
   import PlayerThread from "$lib/components/player-thread/PlayerThread.svelte";
+  import GameFrame from "$lib/components/gameplay/GameFrame.svelte";
+  import GameBar from "$lib/components/gameplay/GameBar.svelte";
+  import ChannelTabs from "$lib/components/gameplay/ChannelTabs.svelte";
+  import ActionDock from "$lib/components/gameplay/ActionDock.svelte";
+  import ComposeSheet from "$lib/components/gameplay/ComposeSheet.svelte";
+  import VoteSheet from "$lib/components/gameplay/VoteSheet.svelte";
+  import ContextSheet from "$lib/components/gameplay/ContextSheet.svelte";
+  import { buildPlayerCommandPanelViewModel } from "$lib/components/player-command/player-command-panel-model.mjs";
   import {
     PLAYER_ROUTE_CONTRACT,
     buildPlayerComposerView,
@@ -31,9 +34,6 @@
     buildPrivateQueueBoundary,
     buildPrivateQueueRouteItems,
   } from "./game-route-model.mjs";
-  import {
-    buildPlayerActionSubmissionCheckpoint,
-  } from "$lib/components/player-command/player-action-submission-checkpoint.mjs";
   import { buildPlayerRoleCardViewModel } from "$lib/components/player-role-card/player-role-card-model.mjs";
   import {
     exposePlayerCommandReceipts,
@@ -137,11 +137,14 @@
     composer,
     surfaceHeader,
   });
-  $: playerActionSubmissionCheckpoint = buildPlayerActionSubmissionCheckpoint({
-    commandState,
+  $: playerActionView = buildPlayerCommandPanelViewModel({
     composer,
+    phase,
+    votecount,
+    channel: data.channel,
     player,
-    commandStatus,
+    commandPending,
+    commandInterrupted,
   });
   $: playerRoleCard = buildPlayerRoleCardViewModel({ commandState, player });
   $: playerEndgameSummary = buildPlayerEndgameSummaryViewModel({
@@ -429,149 +432,109 @@
   <title>{data.game.label} player view</title>
 </svelte:head>
 
-<main class="fm-surface player-surface" data-testid={PLAYER_ROUTE_CONTRACT.surfaceTestId}>
-  <AppSurfaceHeader header={surfaceHeader} {liveStatus} />
-
-  {#if playerForcedRouteState}
+{#if playerForcedRouteState}
+  <main class="fm-surface player-surface" data-testid={PLAYER_ROUTE_CONTRACT.surfaceTestId}>
     <RouteState view={playerForcedRouteState} />
-  {:else if playerSurfaceEmpty}
+  </main>
+{:else if playerSurfaceEmpty}
+  <main class="fm-surface player-surface" data-testid={PLAYER_ROUTE_CONTRACT.surfaceTestId}>
     <RouteState view={playerEmptyState} />
-  {:else}
-    <section
-      class={data.layout.root.className}
-      data-layout-mode={data.layout.root.data.mode}
-      data-min-tablet-viewport-px={data.layout.root.data.minTabletViewportPx}
-      data-collapse-below-px={data.layout.root.data.collapseBelowPx}
-    >
-      <PlayerChannelSwitcher channels={data.channels} />
+  </main>
+{:else}
+  <GameFrame>
+    <GameBar
+      slot="bar"
+      game={data.game}
+      {phase}
+      {composer}
+      {votecount}
+      {liveStatus}
+      {player}
+    />
+    <ChannelTabs slot="channels" channels={data.channels} />
 
-      <div class="player-surface__thread-region">
-        <PlayerThread
-          {phase}
-          {thread}
-          {liveOfficialPost}
-          {threadPageStatus}
-          onLoadOlder={loadOlderThread}
-        >
-          <PlayerPrivateQueue
-            boundary={privateQueueBoundary}
-            items={privateQueue}
-            expandedItems={expandedPrivateItems}
-            onToggle={togglePrivateItem}
+    <PlayerThread
+      {thread}
+      {liveOfficialPost}
+      {threadPageStatus}
+      onLoadOlder={loadOlderThread}
+    />
+
+    <ComposeSheet
+      view={playerActionView.composer}
+      {composer}
+      bind:body={composerBody}
+      bind:mediaFiles={composerMediaFiles}
+      bind:mediaAlt={composerMediaAlt}
+      onCommand={submitPlayerCommand}
+    />
+
+    <VoteSheet
+      view={playerActionView}
+      onCommand={submitPlayerCommand}
+      onSelectTarget={selectActionTarget}
+    />
+
+    <ContextSheet>
+      <PlayerPrivateQueue
+        boundary={privateQueueBoundary}
+        items={privateQueue}
+        expandedItems={expandedPrivateItems}
+        onToggle={togglePrivateItem}
+      />
+
+      {#if player.readOnly !== true}
+        <PlayerRoleCard card={playerRoleCard} />
+      {/if}
+
+      <details class="fm-surface-drawer player-surface__drawer" data-testid="player-game-record">
+        <summary>
+          <span class="fm-surface-drawer__label">
+            <strong>Game history</strong>
+            <small>Completed outcomes and endgame record</small>
+          </span>
+        </summary>
+        <div class="fm-surface-drawer__body">
+          <PlayerEndgameSummary view={playerEndgameSummary} />
+          <DayVoteOutcomePanel
+            outcomes={dayVoteOutcomes}
+            boundary={data.dayVoteOutcomeBoundary}
+            rootTestId="player-day-vote-outcome"
           />
-        </PlayerThread>
-      </div>
+        </div>
+      </details>
+    </ContextSheet>
 
-      <div
-        class={data.layout.commandRail.className}
-        data-command-rail-mode={data.layout.commandRail.data.mode}
-        data-sticky-top-px={data.layout.commandRail.data.stickyTopPx}
-        data-unstick-below-px={data.layout.commandRail.data.unstickBelowPx}
-        data-stability-mode={data.layout.commandRail.data.stabilityMode}
-      >
-        <PlayerCommandPanel
-          {composer}
-          {phase}
-          {votecount}
-          channel={data.channel}
-          {player}
-          {commandPending}
-          {commandInterrupted}
-          bind:body={composerBody}
-          bind:mediaFiles={composerMediaFiles}
-          bind:mediaAlt={composerMediaAlt}
-          onCommand={submitPlayerCommand}
-          onSelectTarget={selectActionTarget}
+    {#if player.readOnly !== true && commandReceipts.length > 0}
+      <div class="player-command-feedback">
+        <PlayerCommandReceipt
+          receipts={commandReceipts}
+          currentStatus={commandStatus}
+          onRetry={retryPlayerCommand}
+          onCancel={cancelPlayerCommandRecovery}
         />
-
-        {#if player.readOnly !== true}
-          <PlayerCommandReceipt
-            receipts={commandReceipts}
-            currentStatus={commandStatus}
-            onRetry={retryPlayerCommand}
-            onCancel={cancelPlayerCommandRecovery}
-          />
-        {/if}
-
-        {#if player.readOnly !== true}
-          <PlayerRoleCard card={playerRoleCard} />
-
-          <PlayerActionSubmissionCheckpoint
-            checkpoint={playerActionSubmissionCheckpoint}
-          />
-        {/if}
-
-        <details class="fm-surface-drawer player-surface__drawer" data-testid="player-status-overview">
-          <summary>
-            <span class="fm-surface-drawer__label">
-              <strong>Player snapshot</strong>
-              <small>Phase, deadline, and private queue posture</small>
-            </span>
-          </summary>
-          <div class="fm-surface-drawer__body">
-            <PlayerPostureStrip {phase} {privateQueueBoundary} />
-          </div>
-        </details>
-
-        <details class="fm-surface-drawer player-surface__drawer" data-testid="player-game-record">
-          <summary>
-            <span class="fm-surface-drawer__label">
-              <strong>Game record</strong>
-              <small>Endgame summary and completed vote outcomes</small>
-            </span>
-          </summary>
-          <div class="fm-surface-drawer__body">
-            <PlayerEndgameSummary view={playerEndgameSummary} />
-
-            <DayVoteOutcomePanel
-              outcomes={dayVoteOutcomes}
-              boundary={data.dayVoteOutcomeBoundary}
-              rootTestId="player-day-vote-outcome"
-            />
-          </div>
-        </details>
       </div>
-    </section>
-  {/if}
-</main>
+    {/if}
+
+    <ActionDock
+      slot="dock"
+      view={playerActionView}
+      privateCount={privateQueueBoundary.count ?? privateQueue.length}
+      onCommand={submitPlayerCommand}
+    />
+  </GameFrame>
+{/if}
 
 <style>
-  .player-surface__layout {
-    display: grid;
-    gap: 18px;
-    grid-template-areas:
-      "channels channels"
-      "thread commands";
-    grid-template-columns: minmax(0, 1fr) minmax(288px, 320px);
-    align-items: start;
+  .player-command-feedback {
+    bottom: calc(82px + env(safe-area-inset-bottom));
+    inset-inline-end: max(14px, calc((100vw - 920px) / 2));
+    max-inline-size: min(360px, calc(100vw - 28px));
+    position: fixed;
+    z-index: 13;
   }
 
-  .player-surface__thread-region {
-    grid-area: thread;
-    min-inline-size: 0;
-  }
-
-  .player-surface__command-stack {
-    align-self: start;
-    display: grid;
-    gap: 12px;
-    grid-area: commands;
-    max-block-size: calc(
-      100svh - var(--fm-app-topbar-block-size) - var(--fm-app-sticky-rail-gap) -
-        env(safe-area-inset-top) - env(safe-area-inset-bottom)
-    );
-    min-inline-size: 0;
-    overflow: auto;
-    overscroll-behavior: contain;
-    position: sticky;
-    top: calc(
-      var(--fm-app-topbar-block-size) + var(--fm-app-sticky-rail-gap) +
-        env(safe-area-inset-top)
-    );
-  }
-
-  :global(.player-role-card__name),
-  :global(.player-action-submission-checkpoint summary strong) {
+  :global(.player-role-card__name) {
     color: var(--fm-ink);
     display: block;
     font-size: 15px;
@@ -590,34 +553,6 @@
   }
 
   :global(.player-role-card__status) {
-    margin: 0;
-  }
-
-  :global(.player-action-submission-checkpoint dl) {
-    display: grid;
-    gap: 8px;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    margin: 0;
-  }
-
-  :global(.player-action-submission-checkpoint dt) {
-    color: var(--fm-ink-subtle);
-    font-size: 12px;
-    font-weight: 800;
-    line-height: 1.25;
-    margin: 0 0 4px;
-    text-transform: uppercase;
-  }
-
-  :global(.player-action-submission-checkpoint dd) {
-    color: var(--fm-ink);
-    font-size: 14px;
-    line-height: 1.3;
-    margin: 0;
-    overflow-wrap: anywhere;
-  }
-
-  :global(.player-action-submission-checkpoint__status) {
     margin: 0;
   }
 
@@ -694,10 +629,6 @@
     overflow-wrap: anywhere;
   }
 
-  .player-surface__drawer :global(.fm-status-strip) {
-    grid-template-columns: 1fr;
-  }
-
   :global(.player-action-target-picker__action) {
     display: grid;
     gap: 8px;
@@ -719,31 +650,5 @@
     line-height: 1.4;
     margin: 0;
     overflow-wrap: anywhere;
-  }
-
-  @media (min-width: 1280px) {
-    .player-surface__layout {
-      grid-template-columns: minmax(0, 1fr) 340px;
-    }
-  }
-
-  @media (max-width: 840px) {
-    .player-surface__layout {
-      grid-template-areas:
-        "channels"
-        "commands"
-        "thread";
-      grid-template-columns: 1fr;
-    }
-
-    .player-surface__command-stack {
-      max-block-size: none;
-      overflow: visible;
-      position: static;
-    }
-
-    :global(.player-action-submission-checkpoint dl) {
-      grid-template-columns: 1fr;
-    }
   }
 </style>

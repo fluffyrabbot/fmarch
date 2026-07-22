@@ -5,26 +5,29 @@ import {
   PLAYER_ROUTE_LAYOUT_CONTRACT,
 } from "./player-route-layout.mjs";
 
-test("player route layout uses a full-width channel switcher over two tablet zones", () => {
+test("player route layout keeps a stable reading lane with a fixed action dock", () => {
   const view = buildPlayerRouteLayoutViewModel();
 
   assert.equal(view.root.className, PLAYER_ROUTE_LAYOUT_CONTRACT.rootClassName);
-  assert.equal(view.root.data.mode, "tablet-two-zone-channel-switcher");
+  assert.equal(view.root.data.mode, "reading-first-action-dock");
   assert.equal(view.root.data.minTabletViewportPx, 1024);
-  assert.equal(view.root.data.collapseBelowPx, 840);
+  assert.equal(view.root.data.collapseBelowPx, null);
   assert.deepEqual(view.commandRail, {
-    className: "player-surface__command-stack",
+    className: "action-dock",
     data: {
-      mode: "sticky-tablet-command-column",
-      stickyTopPx: 22,
-      unstickBelowPx: 840,
-      stabilityMode: "primary-controls-before-live-receipts",
+      mode: "fixed-context-navigation",
+      stickyTopPx: null,
+      unstickBelowPx: null,
+      stabilityMode: "thread-width-stable",
     },
   });
-  assert.deepEqual(view.regions, ["channels", "thread", "commands"]);
-  assert.equal(view.root.data.collapseBelowPx < view.root.data.minTabletViewportPx, true);
-  assert.equal(
-    view.commandRail.data.unstickBelowPx,
-    view.root.data.collapseBelowPx,
-  );
+  assert.deepEqual(view.regions, [
+    "game-bar",
+    "channels",
+    "thread",
+    "composer",
+    "actions",
+    "context",
+    "dock",
+  ]);
 });

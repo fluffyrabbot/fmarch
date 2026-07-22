@@ -1,15 +1,15 @@
 export const PLAYER_ROUTE_LAYOUT_CONTRACT = Object.freeze({
-  rootClassName: "player-surface__layout",
-  mode: "tablet-two-zone-channel-switcher",
+  rootClassName: "game-frame__workspace",
+  mode: "reading-first-action-dock",
   minTabletViewportPx: 1024,
-  collapseBelowPx: 840,
-  regions: Object.freeze(["channels", "thread", "commands"]),
+  collapseBelowPx: null,
+  regions: Object.freeze(["game-bar", "channels", "thread", "composer", "actions", "context", "dock"]),
   commandRail: Object.freeze({
-    className: "player-surface__command-stack",
-    mode: "sticky-tablet-command-column",
-    stickyTopPx: 22,
-    unstickBelowPx: 840,
-    stabilityMode: "primary-controls-before-live-receipts",
+    className: "action-dock",
+    mode: "fixed-context-navigation",
+    stickyTopPx: null,
+    unstickBelowPx: null,
+    stabilityMode: "thread-width-stable",
   }),
 });
 

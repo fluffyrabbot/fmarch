@@ -17,8 +17,8 @@ import {
   PLAYER_THREAD_PAGER_CONTRACT,
 } from "../frontend/src/lib/components/player-thread/player-thread-model.mjs";
 import {
-  HOST_CONTROL_SURFACE_CONTRACT,
-} from "../frontend/src/lib/components/host-action/host-control-surface.mjs";
+  HOST_TASK_WORKSPACE_CONTRACT,
+} from "../frontend/src/lib/components/host-action/host-task-workspace.mjs";
 
 const FIXTURE_THREAD_MEDIA_TEST_ID = `thread-post-media-${"e".repeat(64)}`;
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -328,7 +328,7 @@ function surfaceScenarios() {
         },
         {
           testId: "admin-audit-detail-evidence",
-          href: "/games/midsummer/operator/proof-runs?principal_user_id=admin_a",
+          href: "/games/midsummer/operator/proof-runs",
         },
       ],
       requiredAttributes: [
@@ -346,13 +346,11 @@ function surfaceScenarios() {
       surfaceTestId: "player-surface",
       requiredText: ["Full votecount", "Private queue"],
       requiredTestIds: [
-        "player-command-receipt",
-        "player-command-receipt-empty",
         "player-composer",
         PLAYER_COMMAND_PANEL_CONTRACT.channelContextTestId,
         PLAYER_THREAD_PAGER_CONTRACT.rootTestId,
         PLAYER_THREAD_PAGER_CONTRACT.buttonTestId,
-        "player-votecount-deadline",
+        "player-game-bar-deadline",
         FIXTURE_THREAD_MEDIA_TEST_ID,
         "thread-post-media-boundary-442",
         "player-private-link-notification-1",
@@ -366,7 +364,6 @@ function surfaceScenarios() {
       ],
       requiredAttributes: [
         'data-boundary-status="principal-scoped-private-projections"',
-        'data-component="player-command-receipt"',
         'data-channel-id="main"',
         'data-capability-label="SlotOccupant or ChannelMember(main)"',
         `data-component="${PLAYER_THREAD_PAGER_CONTRACT.component}"`,
@@ -439,11 +436,14 @@ function surfaceScenarios() {
       path: "/g/midsummer/host",
       render: "renderModeratorSurface",
       surfaceTestId: "host-console-surface",
-      requiredText: ["Host console", "Votecount"],
+      requiredText: ["Host queue", "Votecount"],
       requiredTestIds: [
+        "host-console-bar",
+        HOST_TASK_WORKSPACE_CONTRACT.queueTestId,
+        HOST_TASK_WORKSPACE_CONTRACT.canvasTestId,
         "host-command-activity",
         "host-command-activity-empty",
-        HOST_CONTROL_SURFACE_CONTRACT.commandContextTestId,
+        HOST_TASK_WORKSPACE_CONTRACT.commandContextTestId,
         "critical-host-action-extend_deadline",
         "critical-host-action-resolve_host_prompt-D01-skip_next_day-slot_1",
         "host-console-votecount",
@@ -451,6 +451,7 @@ function surfaceScenarios() {
       links: [],
       requiredAttributes: [
         'data-component="host-console-route"',
+        'data-component="host-task-workspace"',
         'data-component="host-command-activity"',
         'data-game-id="midsummer"',
         'data-principal-user-id="host_h"',

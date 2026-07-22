@@ -121,18 +121,13 @@ async function proveSourceContracts() {
       requiredSnippets: ["<CommandRecovery", "status={currentStatus}"],
     }),
     await proveSourceContract({
-      component: "HostControlSurface",
-      path: "frontend/src/lib/components/host-action/HostControlSurface.svelte",
-      requiredSnippets: [
-        "<HostControlGroup {control} {onDispatch} {onRetry} {onCancel} />",
-      ],
-    }),
-    await proveSourceContract({
-      component: "HostControlGroup",
-      path: "frontend/src/lib/components/host-action/HostControlGroup.svelte",
+      component: "HostTaskWorkspace",
+      path: "frontend/src/lib/components/host-action/HostTaskWorkspace.svelte",
       requiredSnippets: [
         "<HostAction action={action.config} onDispatch={onDispatch} />",
         "<CommandRecovery",
+        "data-testid={view.queue.testId}",
+        "data-testid={view.canvas.testId}",
       ],
     }),
     await proveSourceContract({
