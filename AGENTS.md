@@ -12,6 +12,9 @@ direct `main` work, and atomic history over PR ceremony.
   change.
 - Work directly on `main` unless the user explicitly asks for a branch.
 - Push directly to `main` after the relevant local proof is green.
+- Treat `main` as the sole development trunk. Railway staging follows `main`;
+  Railway production follows only the explicit `production` release pointer.
+  Never use a long-lived pre-production development branch.
 - Treat GitHub primarily as remote backup/history, not as the source of truth for
   CI/CD, until the project is ready for beta/1.0 release discipline.
 
@@ -38,6 +41,18 @@ direct `main` work, and atomic history over PR ceremony.
 
 - Open a PR only when it is useful as a reviewable checkpoint or backup marker.
 - Prefer fast-forward-only integration. Avoid merge commits for normal solo flow.
+
+## Deployment promotion
+
+- A push to `main` is allowed to deploy staging automatically. It must not deploy
+  production.
+- Promote production only from a clean, pushed `main` commit after the required
+  local proof, both staging health checks, and commit-attribution checks pass.
+- Advance the remote `production` branch to that exact commit as the explicit
+  release action. Do not develop on `production`, merge production back into
+  `main`, or use it as a compatibility branch.
+- Keep staging and production state isolated: separate Railway environments,
+  Postgres instances, volumes, domains, variables, and WorkOS environments.
 
 ## Followup habit
 

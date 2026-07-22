@@ -39,12 +39,31 @@ async function contract() {
   assert.match(source["scripts/container-entrypoint.sh"], /exec gosu fmarch "\$@"/);
   assert.match(source[".dockerignore"], /^target$/m);
   assert.match(source["railway.toml"], /healthcheckPath = "\/healthz"/);
+  for (const requiredWatchPath of [
+    "Cargo.toml",
+    "Cargo.lock",
+    "crates/**",
+    "docs/**",
+    "scripts/container-entrypoint.sh",
+    "Dockerfile",
+    "railway.toml",
+  ]) {
+    assert.ok(
+      source["railway.toml"].includes(`"${requiredWatchPath}"`),
+      `API Railway config missing watch path ${requiredWatchPath}`,
+    );
+  }
 
   assert.match(source["frontend/svelte.config.js"], /@sveltejs\/adapter-node/);
   assert.match(source["frontend/package.json"], /"@sveltejs\/adapter-node": "5\.5\.7"/);
   assert.match(source["Dockerfile.frontend"], /COPY frontend\/package\.json frontend\/package-lock\.json/);
   assert.match(source["Dockerfile.frontend"], /COPY \. \./);
   assert.match(source["Dockerfile.frontend"], /npm ci/);
+  assert.match(source["Dockerfile.frontend"], /npm prune --omit=dev/);
+  assert.match(
+    source["Dockerfile.frontend"],
+    /COPY --from=builder \/app\/frontend\/node_modules \.\/node_modules/,
+  );
   assert.match(source["Dockerfile.frontend"], /CMD \["node", "build"\]/);
   assert.match(source["deploy/railway/frontend.railway.toml"], /dockerfilePath = "Dockerfile\.frontend"/);
   assert.match(source["deploy/railway/frontend.railway.toml"], /healthcheckPath = "\/healthz"/);
@@ -90,6 +109,10 @@ async function contract() {
     "FMARCH_HOSTED_IDENTITY_EVIDENCE_PATH",
     "FMARCH_DEV_AUTH=1",
     "test:dev-test-game-real-hosted-matrix-raw-capture",
+    "`main` is the only development trunk",
+    "`production` branch is a release pointer",
+    "production services must watch `production`, never `main`.",
+    "separate Postgres service instances",
   ]) {
     assert.ok(runbook.includes(requiredText), `runbook missing ${requiredText}`);
   }
