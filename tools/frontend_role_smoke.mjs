@@ -20,6 +20,7 @@ import {
   viewports,
 } from "./frontend_role_smoke_scenarios.mjs";
 import {
+  commandFlows,
   commandMockFallback,
   commandMockScenarios,
   createRoleMockState,
@@ -343,17 +344,17 @@ try {
           commandInterruption,
         });
       }
-      if (role.id === "moderator") {
-        commandResult = await driveModeratorReject(page, {
-          commandRequests,
+      const commandFlow = commandFlows[role.id];
+      if (commandFlow !== undefined) {
+        commandResult = await runCommandFlow(page, commandFlow, {
+          role,
           viewport,
-          interactionGeometryBudget: role.interactionGeometryBudget,
-          commandContinuityBudget: role.commandContinuityBudget,
-          pendingStateBudget: role.pendingStateBudget,
-          interruptedStateBudget: role.interruptedStateBudget,
-          commandLatency,
+          baseUrl,
+          commandRequests,
           commandEnvelopes,
+          commandLatency,
           commandInterruption,
+          mediaRequests: playerMediaRequests,
         });
       }
 
@@ -1139,7 +1140,8 @@ async function driveAdminReject(
     expectedState: "reject",
     expectedAriaLive: "assertive",
   });
-  const cohostActivity = await assertAdminCommandActivity(page, {
+  const cohostActivity = await assertRailCommandActivity(page, {
+    prefix: "admin",
     actionId: "cohost",
     expectedState: "reject",
   });
@@ -1215,7 +1217,8 @@ async function driveAdminReject(
     expectedState: "ack",
     expectedAriaLive: "polite",
   });
-  const recoveryActivity = await assertAdminCommandActivity(page, {
+  const recoveryActivity = await assertRailCommandActivity(page, {
+    prefix: "admin",
     actionId: "recovery-gate",
     expectedState: "ack",
   });
@@ -1342,173 +1345,308 @@ async function driveAdminAuditDetailClick(page, { viewport, baseUrl }) {
   };
 }
 
-async function driveModeratorReject(
-  page,
-  {
-    commandRequests = [],
-    viewport,
-    interactionGeometryBudget,
-    commandContinuityBudget,
-    pendingStateBudget,
-    interruptedStateBudget,
-    commandLatency,
-    commandEnvelopes = [],
-    commandInterruption,
-  } = {},
-) {
-  const actionRoot = page.getByTestId("critical-host-action-extend_deadline");
-  const interactionGeometryBaseline =
-    await captureInteractionGeometryBaseline(page, {
-      budget: interactionGeometryBudget?.confirmation,
-      viewport,
-      label: "moderator extend deadline confirmation",
-    });
-  const feedbackGeometryBaseline =
-    await captureInteractionGeometryBaseline(page, {
-      budget: interactionGeometryBudget?.feedback,
-      viewport,
-      label: "moderator extend deadline feedback",
-    });
-  await actionRoot.getByTestId("critical-host-action-trigger").click();
-  await actionRoot.getByTestId("critical-host-action-confirmation").waitFor({
-    state: "visible",
-  });
-  const confirmationGeometry = await assertPostInteractionGeometry(page, {
-    baseline: interactionGeometryBaseline,
-    budget: interactionGeometryBudget?.confirmation,
-    viewport,
-    label: "moderator extend deadline confirmation",
-  });
-  const confirmationScreenshot = path.join(
-    artifactDir,
-    `${viewport.name}-moderator-confirmation.png`,
-  );
-  const confirmationScreenshotPixels = await captureScreenshotEvidence(page, {
-    path: confirmationScreenshot,
-    label: `moderator confirmation ${viewport.name}`,
-    viewport,
-  });
-  const focus = await assertHostConfirmationFocus(actionRoot, page, {
-    label: "moderator extend deadline",
-    escapeCancels: true,
-    tabSequenceTestIds: [
-      "critical-host-action-cancel",
-      "critical-host-action-confirm",
-      "critical-host-action-cancel",
-    ],
-  });
-  await actionRoot.getByTestId("critical-host-action-trigger").click();
-  await actionRoot.getByTestId("critical-host-action-confirmation").waitFor({
-    state: "visible",
-  });
-  await assertHitTarget(
-    actionRoot.getByTestId("critical-host-action-confirm"),
-    "moderator confirm",
-  );
-  const pendingGeometryBaseline = await captureInteractionGeometryBaseline(page, {
-    budget: pendingStateBudget,
-    viewport,
-    label: "moderator extend deadline pending state",
-  });
-  const extendDeadlineDispatchedAtMs = performance.now();
-  commandLatency.armNext("moderator extend-deadline command");
-  commandInterruption.armNext("moderator extend-deadline connection loss");
-  const requestCountBefore = commandRequests.length;
-  await actionRoot.getByTestId("critical-host-action-confirm").click();
-  const pendingState = await capturePendingCommandState(page, {
-    role: "moderator",
-    viewport,
-    budget: pendingStateBudget,
-    geometryBaseline: pendingGeometryBaseline,
-    geometryBudget: pendingStateBudget,
-    commandLatency,
-    commandRequests,
-    requestCountBefore,
-    dispatchedAtMs: extendDeadlineDispatchedAtMs,
-  });
-  const interruptedState = await captureInterruptedCommandRecovery(page, {
-    role: "moderator",
-    viewport,
-    budget: interruptedStateBudget,
-    geometryBaseline: pendingGeometryBaseline,
-    commandLatency,
-    commandInterruption,
-    commandEnvelopes,
-    requestCountBefore,
-    commandContinuityBudget,
-    restartAfterCancel: async () => {
-      await actionRoot.getByTestId("critical-host-action-trigger").click();
-      await actionRoot.getByTestId("critical-host-action-confirmation").waitFor({
-        state: "visible",
-      });
-      await actionRoot.getByTestId("critical-host-action-confirm").click();
-    },
-  });
-  const status = page.getByTestId("host-command-status-extend_deadline");
-  await status.waitFor({ state: "visible" });
-  await page.waitForFunction(() => {
-    const node = document.querySelector(
-      '[data-testid="host-command-status-extend_deadline"]',
-    );
-    return node?.getAttribute("data-state") === "reject";
-  });
-  const statusRegion = await assertStatusLiveRegion(status, {
-    label: "moderator extend-deadline reject status",
-    expectedState: "reject",
-    expectedAriaLive: "assertive",
-  });
-  const commandContinuity = await assertCommandContinuity(page, {
-    baseline: interruptedState.commandContinuityBaseline,
-    budget: commandContinuityBudget,
-    viewport,
-    label: "moderator extend deadline command continuity",
-    dispatchedAtMs: interruptedState.retryDispatchedAtMs,
-    statusRegion,
-  });
-  const feedbackGeometry = await assertPostInteractionGeometry(page, {
-    baseline: feedbackGeometryBaseline,
-    budget: interactionGeometryBudget?.feedback,
-    viewport,
-    label: "moderator extend deadline feedback",
-  });
-  const rejectedActivity = await assertHostCommandActivity(page, {
-    actionId: "extend_deadline",
-    expectedState: "reject",
-  });
-  const hostPrompt = await driveModeratorHostPromptAck(page);
-  const acknowledgedActivity = await assertHostCommandActivity(page, {
-    actionId: hostPrompt.actionId,
-    expectedState: "ack",
-  });
-  const slotLifecycle = await driveModeratorSlotLifecycleAck(page, {
-    commandRequests,
-  });
-  const slotLifecycleActivity = await assertHostCommandActivity(page, {
-    actionId: slotLifecycle.actionId,
-    expectedState: "ack",
-  });
-  return {
-    state: await status.getAttribute("data-state"),
-    message: await status.innerText(),
-    statusRegion,
-    activity: {
-      rejected: rejectedActivity,
-      acknowledged: acknowledgedActivity,
-      slotLifecycle: slotLifecycleActivity,
-    },
-    focus,
-    confirmationScreenshot: path.relative(repoRoot, confirmationScreenshot),
-    confirmationScreenshotPixels,
-    hostPrompt,
-    slotLifecycle,
-    interactionGeometry: {
-      confirmation: confirmationGeometry,
-      feedback: feedbackGeometry,
-    },
-    commandContinuity,
-    pendingState,
-    interruptedState,
+function resolveFlowHook(name) {
+  const hooks = {
+    moderatorHostPromptAck: (page) => driveModeratorHostPromptAck(page),
+    moderatorSlotLifecycleAck: (page, ctx) =>
+      driveModeratorSlotLifecycleAck(page, { commandRequests: ctx.commandRequests }),
   };
+  const hook = hooks[name];
+  if (hook === undefined) {
+    throw new Error(`flow hook ${name} is not registered`);
+  }
+  return hook;
+}
+
+function resolveFlowTarget(page, target) {
+  const scope = target.within === undefined ? page : page.getByTestId(target.within);
+  return target.testId === undefined
+    ? scope.locator(target.selector)
+    : scope.getByTestId(target.testId);
+}
+
+function resolveBudgetRef(role, budgetRef) {
+  if (budgetRef === undefined) {
+    return undefined;
+  }
+  let value = role;
+  for (const key of budgetRef.split(".")) {
+    value = value?.[key];
+  }
+  return value;
+}
+
+function readFlowValue(value, valuePath) {
+  if (valuePath === undefined) {
+    return value;
+  }
+  let node = value;
+  for (const key of valuePath.split(".")) {
+    node = node?.[key];
+  }
+  return node;
+}
+
+function setFlowResultPath(result, resultPath, value) {
+  const keys = resultPath.split(".");
+  let node = result;
+  for (const key of keys.slice(0, -1)) {
+    node[key] ??= {};
+    node = node[key];
+  }
+  node[keys.at(-1)] = value;
+}
+
+async function runCommandFlow(page, flow, ctx) {
+  const values = new Map();
+  const result = {};
+  let lastDispatch = null;
+  const store = (step, value) => {
+    if (step.id !== undefined) {
+      values.set(step.id, value);
+    }
+    return value;
+  };
+  const recall = (id) => {
+    if (!values.has(id)) {
+      throw new Error(`${ctx.role.id} flow references unknown step id ${id}`);
+    }
+    return values.get(id);
+  };
+
+  const runStep = async (step) => {
+    switch (step.type) {
+      case "capture-geometry-baseline":
+        store(
+          step,
+          await captureInteractionGeometryBaseline(page, {
+            budget: resolveBudgetRef(ctx.role, step.budgetRef),
+            viewport: ctx.viewport,
+            label: step.label,
+          }),
+        );
+        return;
+      case "click":
+        await resolveFlowTarget(page, step.target).click();
+        return;
+      case "fill":
+        await resolveFlowTarget(page, step.target).fill(step.value);
+        return;
+      case "wait-visible":
+        await resolveFlowTarget(page, step.target).waitFor({ state: "visible" });
+        return;
+      case "wait-data-state":
+        await page.waitForFunction(
+          ({ testId, state }) => {
+            const node = document.querySelector(`[data-testid="${testId}"]`);
+            return node?.getAttribute("data-state") === state;
+          },
+          { testId: step.target.testId, state: step.state },
+        );
+        return;
+      case "assert-data-state-now": {
+        const state = await resolveFlowTarget(page, step.target).getAttribute(
+          "data-state",
+        );
+        if (state !== step.state) {
+          throw new Error(step.errorMessage);
+        }
+        return;
+      }
+      case "assert-visible-box":
+        await assertVisibleBox(resolveFlowTarget(page, step.target), step.label);
+        return;
+      case "assert-post-geometry":
+        store(
+          step,
+          await assertPostInteractionGeometry(page, {
+            baseline: recall(step.baselineId),
+            budget: resolveBudgetRef(ctx.role, step.budgetRef),
+            viewport: ctx.viewport,
+            label: step.label,
+          }),
+        );
+        return;
+      case "screenshot": {
+        const screenshot = path.join(
+          artifactDir,
+          `${ctx.viewport.name}-${step.name}.png`,
+        );
+        const pixels = await captureScreenshotEvidence(page, {
+          path: screenshot,
+          label: `${step.labelPrefix} ${ctx.viewport.name}`,
+          viewport: ctx.viewport,
+        });
+        store(step, { screenshot: path.relative(repoRoot, screenshot), pixels });
+        return;
+      }
+      case "assert-confirmation-focus":
+        store(
+          step,
+          step.variant === "host"
+            ? await assertHostConfirmationFocus(
+                page.getByTestId(step.within),
+                page,
+                step.options,
+              )
+            : await assertAdminConfirmationFocus(page, step.options),
+        );
+        return;
+      case "assert-hit-target":
+        await assertHitTarget(resolveFlowTarget(page, step.target), step.label);
+        return;
+      case "assert-status-region":
+        store(
+          step,
+          await assertStatusLiveRegion(
+            resolveFlowTarget(page, step.target),
+            step.options,
+          ),
+        );
+        return;
+      case "assert-form-contract":
+        store(step, await assertFormContract(page, step.options));
+        return;
+      case "assert-focused":
+        await assertFocusedTestId(page, step.testId, step.label);
+        return;
+      case "dispatch-command": {
+        const trigger = resolveFlowTarget(page, step.click);
+        const dispatchedAtMs = performance.now();
+        ctx.commandLatency.armNext(step.latencyLabel);
+        if (step.interruptionLabel !== undefined) {
+          ctx.commandInterruption.armNext(step.interruptionLabel);
+        }
+        lastDispatch = {
+          dispatchedAtMs,
+          requestCountBefore: ctx.commandRequests.length,
+        };
+        await trigger.click();
+        return;
+      }
+      case "capture-pending-state": {
+        const budget = resolveBudgetRef(ctx.role, step.budgetRef);
+        store(
+          step,
+          await capturePendingCommandState(page, {
+            role: ctx.role.id,
+            viewport: ctx.viewport,
+            budget,
+            geometryBaseline: recall(step.geometryBaselineId),
+            geometryBudget: budget,
+            commandLatency: ctx.commandLatency,
+            commandRequests: ctx.commandRequests,
+            requestCountBefore: lastDispatch.requestCountBefore,
+            dispatchedAtMs: lastDispatch.dispatchedAtMs,
+          }),
+        );
+        return;
+      }
+      case "capture-interrupted-recovery":
+        store(
+          step,
+          await captureInterruptedCommandRecovery(page, {
+            role: ctx.role.id,
+            viewport: ctx.viewport,
+            budget: resolveBudgetRef(ctx.role, step.budgetRef),
+            geometryBaseline: recall(step.geometryBaselineId),
+            commandLatency: ctx.commandLatency,
+            commandInterruption: ctx.commandInterruption,
+            commandEnvelopes: ctx.commandEnvelopes,
+            requestCountBefore: lastDispatch.requestCountBefore,
+            commandContinuityBudget: resolveBudgetRef(
+              ctx.role,
+              step.continuityBudgetRef,
+            ),
+            restartAfterCancel: async () => {
+              for (const restartStep of step.restartSteps) {
+                await runStep(restartStep);
+              }
+            },
+          }),
+        );
+        return;
+      case "assert-command-continuity": {
+        const interrupted = recall(step.interruptedId);
+        store(
+          step,
+          await assertCommandContinuity(page, {
+            baseline: interrupted.commandContinuityBaseline,
+            budget: resolveBudgetRef(ctx.role, step.budgetRef),
+            viewport: ctx.viewport,
+            label: step.label,
+            dispatchedAtMs: interrupted.retryDispatchedAtMs,
+            statusRegion: recall(step.statusRegionId),
+          }),
+        );
+        return;
+      }
+      case "assert-command-activity":
+        store(
+          step,
+          await assertRailCommandActivity(page, {
+            prefix: step.prefix,
+            actionId:
+              step.actionIdFrom === undefined
+                ? step.actionId
+                : readFlowValue(recall(step.actionIdFrom.id), step.actionIdFrom.path),
+            expectedState: step.expectedState,
+          }),
+        );
+        return;
+      case "assert-command-receipt":
+        store(
+          step,
+          await assertPlayerCommandReceipt(page, {
+            actionId: step.actionId,
+            expectedState: step.expectedState,
+          }),
+        );
+        return;
+      case "hook":
+        store(step, await resolveFlowHook(step.name)(page, ctx));
+        return;
+      case "find-request-command":
+        store(
+          step,
+          ctx.commandRequests.find(
+            (command) => command?.[step.commandKey] !== undefined,
+          )?.[step.commandKey],
+        );
+        return;
+      case "read-attr":
+        setFlowResultPath(
+          result,
+          step.resultPath,
+          await resolveFlowTarget(page, step.target).getAttribute(step.attr),
+        );
+        return;
+      case "read-text":
+        setFlowResultPath(
+          result,
+          step.resultPath,
+          await resolveFlowTarget(page, step.target).innerText(),
+        );
+        return;
+      case "set-from-value":
+        setFlowResultPath(
+          result,
+          step.resultPath,
+          readFlowValue(recall(step.from.id), step.from.path),
+        );
+        return;
+      case "set-result":
+        setFlowResultPath(result, step.resultPath, step.value);
+        return;
+      default:
+        throw new Error(`${ctx.role.id} flow has unknown step type ${step.type}`);
+    }
+  };
+
+  for (const step of flow.steps) {
+    await runStep(step);
+  }
+  return result;
 }
 
 function createDeterministicCommandLatencyHarness() {
@@ -2307,9 +2445,9 @@ async function driveModeratorSlotLifecycleAck(page, { commandRequests = [] } = {
   };
 }
 
-async function assertHostCommandActivity(page, { actionId, expectedState }) {
-  await page.getByTestId("host-command-activity").waitFor({ state: "visible" });
-  const status = page.getByTestId(`host-command-activity-status-${actionId}`);
+async function assertRailCommandActivity(page, { prefix, actionId, expectedState }) {
+  await page.getByTestId(`${prefix}-command-activity`).waitFor({ state: "visible" });
+  const status = page.getByTestId(`${prefix}-command-activity-status-${actionId}`);
   await status.waitFor({ state: "visible" });
   await page.waitForFunction(
     ({ testId, state }) => {
@@ -2317,48 +2455,19 @@ async function assertHostCommandActivity(page, { actionId, expectedState }) {
       return node?.getAttribute("data-state") === state;
     },
     {
-      testId: `host-command-activity-status-${actionId}`,
+      testId: `${prefix}-command-activity-status-${actionId}`,
       state: expectedState,
     },
   );
   const statusRegion = await assertStatusLiveRegion(status, {
-    label: `host command activity ${actionId}`,
+    label: `${prefix} command activity ${actionId}`,
     expectedState,
     expectedAriaLive: expectedState === "reject" ? "assertive" : "polite",
   });
   return {
-    activityTestId: "host-command-activity",
-    activityItemTestId: `host-command-activity-${actionId}`,
-    statusTestId: `host-command-activity-status-${actionId}`,
-    state: await status.getAttribute("data-state"),
-    message: await status.innerText(),
-    statusRegion,
-  };
-}
-
-async function assertAdminCommandActivity(page, { actionId, expectedState }) {
-  await page.getByTestId("admin-command-activity").waitFor({ state: "visible" });
-  const status = page.getByTestId(`admin-command-activity-status-${actionId}`);
-  await status.waitFor({ state: "visible" });
-  await page.waitForFunction(
-    ({ testId, state }) => {
-      const node = document.querySelector(`[data-testid="${testId}"]`);
-      return node?.getAttribute("data-state") === state;
-    },
-    {
-      testId: `admin-command-activity-status-${actionId}`,
-      state: expectedState,
-    },
-  );
-  const statusRegion = await assertStatusLiveRegion(status, {
-    label: `admin command activity ${actionId}`,
-    expectedState,
-    expectedAriaLive: expectedState === "reject" ? "assertive" : "polite",
-  });
-  return {
-    activityTestId: "admin-command-activity",
-    activityItemTestId: `admin-command-activity-${actionId}`,
-    statusTestId: `admin-command-activity-status-${actionId}`,
+    activityTestId: `${prefix}-command-activity`,
+    activityItemTestId: `${prefix}-command-activity-${actionId}`,
+    statusTestId: `${prefix}-command-activity-status-${actionId}`,
     state: await status.getAttribute("data-state"),
     message: await status.innerText(),
     statusRegion,

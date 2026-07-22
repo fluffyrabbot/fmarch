@@ -2,6 +2,46 @@
 // should extend these tables (and the scenario module) instead of adding
 // bespoke code to tools/frontend_role_smoke.mjs.
 
+// Step types the runner's flow executor implements. Interaction types may
+// also appear inside restartSteps.
+export const flowStepTypes = Object.freeze([
+  "capture-geometry-baseline",
+  "click",
+  "fill",
+  "wait-visible",
+  "wait-data-state",
+  "assert-data-state-now",
+  "assert-visible-box",
+  "assert-post-geometry",
+  "screenshot",
+  "assert-confirmation-focus",
+  "assert-hit-target",
+  "assert-status-region",
+  "assert-form-contract",
+  "assert-focused",
+  "dispatch-command",
+  "capture-pending-state",
+  "capture-interrupted-recovery",
+  "assert-command-continuity",
+  "assert-command-activity",
+  "assert-command-receipt",
+  "hook",
+  "find-request-command",
+  "read-attr",
+  "read-text",
+  "set-from-value",
+  "set-result",
+]);
+
+export const flowRestartStepTypes = Object.freeze(["click", "fill", "wait-visible"]);
+
+// Hook names the runner registers for steps that read page globals or run
+// bespoke sub-proofs that are not worth expressing as generic steps.
+export const flowHookNames = Object.freeze([
+  "moderatorHostPromptAck",
+  "moderatorSlotLifecycleAck",
+]);
+
 export const commandMockScenarios = Object.freeze([
   Object.freeze({
     command: "ResolveHostPrompt",
@@ -267,3 +307,218 @@ export const privateChannelFixtureApiRoutes = Object.freeze([
     }),
   }),
 ]);
+
+// Command flows keyed by role id. Steps run in order; a step with an `id`
+// stores its output for later steps (`baselineId`, `actionIdFrom`,
+// `set-from-value`, ...). Trailing read/set steps assemble the flow result in
+// the exact key order the artifact contract expects. `budgetRef` and
+// `actionRootTestId`-style selectors resolve against the role object from
+// frontend_role_smoke_scenarios.mjs, so budgets stay single-sourced there.
+const moderatorActionTarget = (testId) =>
+  Object.freeze({ within: "critical-host-action-extend_deadline", testId });
+
+export const commandFlows = Object.freeze({
+  moderator: Object.freeze({
+    steps: Object.freeze([
+      {
+        type: "capture-geometry-baseline",
+        id: "confirmationGeometryBaseline",
+        budgetRef: "interactionGeometryBudget.confirmation",
+        label: "moderator extend deadline confirmation",
+      },
+      {
+        type: "capture-geometry-baseline",
+        id: "feedbackGeometryBaseline",
+        budgetRef: "interactionGeometryBudget.feedback",
+        label: "moderator extend deadline feedback",
+      },
+      { type: "click", target: moderatorActionTarget("critical-host-action-trigger") },
+      {
+        type: "wait-visible",
+        target: moderatorActionTarget("critical-host-action-confirmation"),
+      },
+      {
+        type: "assert-post-geometry",
+        id: "confirmationGeometry",
+        baselineId: "confirmationGeometryBaseline",
+        budgetRef: "interactionGeometryBudget.confirmation",
+        label: "moderator extend deadline confirmation",
+      },
+      {
+        type: "screenshot",
+        id: "confirmationShot",
+        name: "moderator-confirmation",
+        labelPrefix: "moderator confirmation",
+      },
+      {
+        type: "assert-confirmation-focus",
+        id: "focus",
+        variant: "host",
+        within: "critical-host-action-extend_deadline",
+        options: {
+          label: "moderator extend deadline",
+          escapeCancels: true,
+          tabSequenceTestIds: [
+            "critical-host-action-cancel",
+            "critical-host-action-confirm",
+            "critical-host-action-cancel",
+          ],
+        },
+      },
+      { type: "click", target: moderatorActionTarget("critical-host-action-trigger") },
+      {
+        type: "wait-visible",
+        target: moderatorActionTarget("critical-host-action-confirmation"),
+      },
+      {
+        type: "assert-hit-target",
+        target: moderatorActionTarget("critical-host-action-confirm"),
+        label: "moderator confirm",
+      },
+      {
+        type: "capture-geometry-baseline",
+        id: "pendingGeometryBaseline",
+        budgetRef: "pendingStateBudget",
+        label: "moderator extend deadline pending state",
+      },
+      {
+        type: "dispatch-command",
+        latencyLabel: "moderator extend-deadline command",
+        interruptionLabel: "moderator extend-deadline connection loss",
+        click: moderatorActionTarget("critical-host-action-confirm"),
+      },
+      {
+        type: "capture-pending-state",
+        id: "pendingState",
+        budgetRef: "pendingStateBudget",
+        geometryBaselineId: "pendingGeometryBaseline",
+      },
+      {
+        type: "capture-interrupted-recovery",
+        id: "interruptedState",
+        budgetRef: "interruptedStateBudget",
+        geometryBaselineId: "pendingGeometryBaseline",
+        continuityBudgetRef: "commandContinuityBudget",
+        restartSteps: [
+          { type: "click", target: moderatorActionTarget("critical-host-action-trigger") },
+          {
+            type: "wait-visible",
+            target: moderatorActionTarget("critical-host-action-confirmation"),
+          },
+          { type: "click", target: moderatorActionTarget("critical-host-action-confirm") },
+        ],
+      },
+      { type: "wait-visible", target: { testId: "host-command-status-extend_deadline" } },
+      {
+        type: "wait-data-state",
+        target: { testId: "host-command-status-extend_deadline" },
+        state: "reject",
+      },
+      {
+        type: "assert-status-region",
+        id: "statusRegion",
+        target: { testId: "host-command-status-extend_deadline" },
+        options: {
+          label: "moderator extend-deadline reject status",
+          expectedState: "reject",
+          expectedAriaLive: "assertive",
+        },
+      },
+      {
+        type: "assert-command-continuity",
+        id: "commandContinuity",
+        budgetRef: "commandContinuityBudget",
+        interruptedId: "interruptedState",
+        statusRegionId: "statusRegion",
+        label: "moderator extend deadline command continuity",
+      },
+      {
+        type: "assert-post-geometry",
+        id: "feedbackGeometry",
+        baselineId: "feedbackGeometryBaseline",
+        budgetRef: "interactionGeometryBudget.feedback",
+        label: "moderator extend deadline feedback",
+      },
+      {
+        type: "assert-command-activity",
+        id: "rejectedActivity",
+        prefix: "host",
+        actionId: "extend_deadline",
+        expectedState: "reject",
+      },
+      { type: "hook", id: "hostPrompt", name: "moderatorHostPromptAck" },
+      {
+        type: "assert-command-activity",
+        id: "acknowledgedActivity",
+        prefix: "host",
+        actionIdFrom: { id: "hostPrompt", path: "actionId" },
+        expectedState: "ack",
+      },
+      { type: "hook", id: "slotLifecycle", name: "moderatorSlotLifecycleAck" },
+      {
+        type: "assert-command-activity",
+        id: "slotLifecycleActivity",
+        prefix: "host",
+        actionIdFrom: { id: "slotLifecycle", path: "actionId" },
+        expectedState: "ack",
+      },
+      {
+        type: "read-attr",
+        target: { testId: "host-command-status-extend_deadline" },
+        attr: "data-state",
+        resultPath: "state",
+      },
+      {
+        type: "read-text",
+        target: { testId: "host-command-status-extend_deadline" },
+        resultPath: "message",
+      },
+      { type: "set-from-value", from: { id: "statusRegion" }, resultPath: "statusRegion" },
+      { type: "set-from-value", from: { id: "rejectedActivity" }, resultPath: "activity.rejected" },
+      {
+        type: "set-from-value",
+        from: { id: "acknowledgedActivity" },
+        resultPath: "activity.acknowledged",
+      },
+      {
+        type: "set-from-value",
+        from: { id: "slotLifecycleActivity" },
+        resultPath: "activity.slotLifecycle",
+      },
+      { type: "set-from-value", from: { id: "focus" }, resultPath: "focus" },
+      {
+        type: "set-from-value",
+        from: { id: "confirmationShot", path: "screenshot" },
+        resultPath: "confirmationScreenshot",
+      },
+      {
+        type: "set-from-value",
+        from: { id: "confirmationShot", path: "pixels" },
+        resultPath: "confirmationScreenshotPixels",
+      },
+      { type: "set-from-value", from: { id: "hostPrompt" }, resultPath: "hostPrompt" },
+      { type: "set-from-value", from: { id: "slotLifecycle" }, resultPath: "slotLifecycle" },
+      {
+        type: "set-from-value",
+        from: { id: "confirmationGeometry" },
+        resultPath: "interactionGeometry.confirmation",
+      },
+      {
+        type: "set-from-value",
+        from: { id: "feedbackGeometry" },
+        resultPath: "interactionGeometry.feedback",
+      },
+      {
+        type: "set-from-value",
+        from: { id: "commandContinuity" },
+        resultPath: "commandContinuity",
+      },
+      { type: "set-from-value", from: { id: "pendingState" }, resultPath: "pendingState" },
+      {
+        type: "set-from-value",
+        from: { id: "interruptedState" },
+        resultPath: "interruptedState",
+      },
+    ]),
+  }),
+});
