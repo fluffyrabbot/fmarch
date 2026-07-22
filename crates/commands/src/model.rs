@@ -79,6 +79,21 @@ pub enum CohostPermissionClass {
 }
 
 impl CohostPermissionClass {
+    pub const ALL: [Self; 12] = [
+        Self::Setup,
+        Self::PhaseResolve,
+        Self::HostPromptResolve,
+        Self::Lifecycle,
+        Self::Replacement,
+        Self::Deadline,
+        Self::Narrative,
+        Self::ItaControl,
+        Self::EffectSpec,
+        Self::DayEventOps,
+        Self::DayEventResolve,
+        Self::ProgramAttach,
+    ];
+
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Setup => "setup",

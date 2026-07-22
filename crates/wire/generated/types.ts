@@ -33,13 +33,17 @@ export type ThreadPostsDelta = { game: string, posts: Array<ThreadPost>, };
 
 export type DayVoteOutcomeDelta = { game: string, phase_id: string, source_seq: bigint, event_index: number, status: string, winner_slot: string | null, contenders: unknown, tallies: unknown, votes: unknown, weights: unknown, majority: number | null, thresholds: unknown, total_weight: number, tiebreak: string | null, reason: string | null, };
 
+export type HostConsoleAuthorityKind = "HostOf" | "CohostOf" | "GlobalOperator";
+
+export type HostConsoleAuthorityDelta = { principal_user_id: string, capability: HostConsoleAuthorityKind, allowed_classes: Array<CohostPermissionClass>, denied_classes: Array<CohostPermissionClass>, };
+
 export type HostConsolePhaseStateDelta = { phase_id: string, locked: boolean, deadline: bigint | null, };
 
 export type HostConsoleSlotOccupancyDelta = { slot_id: string, occupant_user_id: string, alive: boolean, status: string, status_tags: Array<string>, role_key: string | null, alignment: string | null, role_revealed: boolean, alignment_revealed: boolean, };
 
 export type HostConsoleThreadPostDelta = { stream_seq: bigint, author_slot: string | null, author_user: string | null, phase_id: string, body: string, };
 
-export type HostConsoleStateDelta = { game: string, completed: boolean, phase: HostConsolePhaseStateDelta | null, slots: Array<HostConsoleSlotOccupancyDelta>, thread_posts: Array<HostConsoleThreadPostDelta>, };
+export type HostConsoleStateDelta = { game: string, authority: HostConsoleAuthorityDelta, completed: boolean, phase: HostConsolePhaseStateDelta | null, slots: Array<HostConsoleSlotOccupancyDelta>, thread_posts: Array<HostConsoleThreadPostDelta>, };
 
 export type HostPromptDelta = { game: string, phase_id: string, event_index: number, prompt_id: string, kind: string, subject_slot: string | null, reason: string, phase_kind: string, phase_number: number, metadata: unknown, status: string, decision: unknown, public_resolution: unknown, resolved_by: string | null, resolved_at: bigint | null, };
 

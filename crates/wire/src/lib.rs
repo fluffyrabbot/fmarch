@@ -227,6 +227,25 @@ impl From<CohostPermissionClass> for commands::CohostPermissionClass {
     }
 }
 
+impl From<commands::CohostPermissionClass> for CohostPermissionClass {
+    fn from(value: commands::CohostPermissionClass) -> Self {
+        match value {
+            commands::CohostPermissionClass::Setup => Self::Setup,
+            commands::CohostPermissionClass::PhaseResolve => Self::PhaseResolve,
+            commands::CohostPermissionClass::HostPromptResolve => Self::HostPromptResolve,
+            commands::CohostPermissionClass::Lifecycle => Self::Lifecycle,
+            commands::CohostPermissionClass::Replacement => Self::Replacement,
+            commands::CohostPermissionClass::Deadline => Self::Deadline,
+            commands::CohostPermissionClass::Narrative => Self::Narrative,
+            commands::CohostPermissionClass::ItaControl => Self::ItaControl,
+            commands::CohostPermissionClass::EffectSpec => Self::EffectSpec,
+            commands::CohostPermissionClass::DayEventOps => Self::DayEventOps,
+            commands::CohostPermissionClass::DayEventResolve => Self::DayEventResolve,
+            commands::CohostPermissionClass::ProgramAttach => Self::ProgramAttach,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 pub enum Command {
     CreateGame {
@@ -363,13 +382,14 @@ pub enum Command {
 impl From<Command> for commands::Command {
     fn from(command: Command) -> Self {
         match command {
-            Command::CreateGame { game, pack, cohost_denied } => commands::Command::CreateGame {
+            Command::CreateGame {
                 game,
                 pack,
-                cohost_denied: cohost_denied
-                    .into_iter()
-                    .map(Into::into)
-                    .collect(),
+                cohost_denied,
+            } => commands::Command::CreateGame {
+                game,
+                pack,
+                cohost_denied: cohost_denied.into_iter().map(Into::into).collect(),
             },
             Command::AddSlot { game, slot } => commands::Command::AddSlot { game, slot },
             Command::AssignSlot { game, slot, user } => {
@@ -687,10 +707,26 @@ pub struct DayVoteOutcomeDelta {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 pub struct HostConsoleStateDelta {
     pub game: Uuid,
+    pub authority: HostConsoleAuthorityDelta,
     pub completed: bool,
     pub phase: Option<HostConsolePhaseStateDelta>,
     pub slots: Vec<HostConsoleSlotOccupancyDelta>,
     pub thread_posts: Vec<HostConsoleThreadPostDelta>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub enum HostConsoleAuthorityKind {
+    HostOf,
+    CohostOf,
+    GlobalOperator,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct HostConsoleAuthorityDelta {
+    pub principal_user_id: String,
+    pub capability: HostConsoleAuthorityKind,
+    pub allowed_classes: Vec<CohostPermissionClass>,
+    pub denied_classes: Vec<CohostPermissionClass>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -1699,12 +1735,12 @@ pub mod typescript {
 
     use crate::{
         AckMsg, AdvanceSubscriptionReadRequest, CapabilityGrant, ClientEnvelope, ClientMsg,
-        Command, CommandMsg, CommunityInboxItem, CommunityInboxPage, DayVoteOutcomeDelta,
-        DiscussionArea, DiscussionAuthor, DiscussionPost, DiscussionThreadPage, DiscussionTopic,
-        DiscussionTopicPage, GameIndexEntry, GameIndexPage, Hello, HostConsolePhaseStateDelta,
-        CohostPermissionClass, HostConsoleSlotOccupancyDelta, HostConsoleStateDelta,
-        HostConsoleThreadPostDelta, HostPhaseControl, HostPromptDecision, HostPromptDelta,
-        HostPromptsDelta, ModerationCase,
+        CohostPermissionClass, Command, CommandMsg, CommunityInboxItem, CommunityInboxPage,
+        DayVoteOutcomeDelta, DiscussionArea, DiscussionAuthor, DiscussionPost,
+        DiscussionThreadPage, DiscussionTopic, DiscussionTopicPage, GameIndexEntry, GameIndexPage,
+        Hello, HostConsoleAuthorityDelta, HostConsoleAuthorityKind, HostConsolePhaseStateDelta,
+        HostConsoleSlotOccupancyDelta, HostConsoleStateDelta, HostConsoleThreadPostDelta,
+        HostPhaseControl, HostPromptDecision, HostPromptDelta, HostPromptsDelta, ModerationCase,
         ModerationCaseDetail, ModerationCasePage, ModerationHistory, ModerationReport,
         ModerationReportReceipt, PlayerInvestigationResult, PlayerNotification, ProfileEditor,
         ProjectionDelta, PublicGameThreadPage, PublicProfile, PublicSearchPage, PublicSearchResult,
@@ -1736,6 +1772,8 @@ pub mod typescript {
         push::<VoteCountClearedDelta>(&mut out);
         push::<ThreadPostsDelta>(&mut out);
         push::<DayVoteOutcomeDelta>(&mut out);
+        push::<HostConsoleAuthorityKind>(&mut out);
+        push::<HostConsoleAuthorityDelta>(&mut out);
         push::<HostConsolePhaseStateDelta>(&mut out);
         push::<HostConsoleSlotOccupancyDelta>(&mut out);
         push::<HostConsoleThreadPostDelta>(&mut out);

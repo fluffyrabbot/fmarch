@@ -5,7 +5,10 @@ import {
 import {
   buildHostLifecycleControlCheckpoint,
 } from "../../../../lib/components/host-action/host-lifecycle-control-checkpoint.mjs";
-import { buildHostConsoleStateEndpoint } from "../../../../lib/components/host-action/host-command-boundary.mjs";
+import {
+  buildHostConsoleStateEndpoint,
+  projectHostConsoleState,
+} from "../../../../lib/components/host-action/host-command-boundary.mjs";
 import {
   formatDeadlineCountdown,
 } from "../../../../lib/components/host-action/host-work-queue-strip.mjs";
@@ -50,42 +53,61 @@ export async function buildHostConsoleRouteData({
     game: gameId,
     capabilities,
   });
-  const coldLoad = await loadHostColdData({
-    game: gameId,
-    principalUserId: commandPrincipalUserId,
-    fetchImpl,
-    apiBaseUrl,
-    fallback: HOST_FIXTURE_COLD_LOAD,
-  });
-  const pendingPromptCount = coldLoad.hostPrompts.filter(
-    (prompt) => prompt.status === "pending",
-  ).length;
   const replacement = Object.freeze({
     slotId: "slot-7",
     occupantLabel: "player-mira",
     lifecycleLabel: "Alive",
     historyLabel: "Waiting for replacement command proof",
   });
-
+  const authorityFallback = buildHostAuthorityFallback({
+    access,
+    principalUserId: commandPrincipalUserId,
+  });
+  const serverHostConsoleStateEndpoint = buildHostConsoleStateEndpoint({
+    gameId,
+    slotId: replacement.slotId,
+    apiBaseUrl,
+  });
+  const coldLoad = await loadHostColdData({
+    game: gameId,
+    principalUserId: commandPrincipalUserId,
+    fetchImpl,
+    apiBaseUrl,
+    hostConsoleStateEndpoint: serverHostConsoleStateEndpoint,
+    fallback: HOST_FIXTURE_COLD_LOAD,
+  });
+  const hostProjection = projectHostConsoleState(
+    coldLoad.hostConsoleState,
+    Object.freeze({
+      authority: authorityFallback,
+      completed: false,
+      phase: HOST_FIXTURE_PHASE,
+      replacement,
+    }),
+  );
+  const pendingPromptCount = coldLoad.hostPrompts.filter(
+    (prompt) => prompt.status === "pending",
+  ).length;
   const criticalActions = buildHostConsoleCriticalActions(gameId, {
     hostPrompts: coldLoad.hostPrompts,
-    phase: HOST_FIXTURE_PHASE,
-    replacement,
-    capabilityKind: access.capability?.kind,
-  });
-  const moderatorControls = buildModeratorControls({
-    capabilityKind: access.capability?.kind,
-    pendingPromptCount,
+    phase: hostProjection.phase,
+    replacement: hostProjection.replacement,
+    completed: hostProjection.completed,
+    capabilityKind: hostProjection.authority.capabilityKind,
+    allowedPermissionClasses: hostProjection.authority.allowedClasses,
   });
   const moderatorActionGroups = buildHostConsoleActionGroups({
     actions: criticalActions,
     pendingPromptCount,
     votecountCount: coldLoad.votecount.length,
-    capabilityKind: access.capability?.kind,
+    capabilityKind: hostProjection.authority.capabilityKind,
+  });
+  const moderatorControls = buildModeratorControls({
+    actionGroups: moderatorActionGroups,
   });
   const hostLifecycleControlCheckpoint = buildHostLifecycleControlCheckpoint({
-    phase: HOST_FIXTURE_PHASE,
-    replacement,
+    phase: hostProjection.phase,
+    replacement: hostProjection.replacement,
     actionGroups: moderatorActionGroups,
     commandContext: {
       gameId,
@@ -101,7 +123,7 @@ export async function buildHostConsoleRouteData({
       activeSurface: "moderator",
       principalUserId: commandPrincipalUserId,
       capabilities,
-      phase: HOST_FIXTURE_PHASE,
+      phase: hostProjection.phase,
     }),
     game: Object.freeze({
       id: gameId,
@@ -129,8 +151,8 @@ export async function buildHostConsoleRouteData({
     }),
     hostConsoleStateEndpoint: buildHostConsoleStateEndpoint({
       gameId,
-      principalUserId: commandPrincipalUserId,
-      slotId: "slot-7",
+      slotId: replacement.slotId,
+      apiBaseUrl: publicApiBaseUrl ?? apiBaseUrl,
     }),
     hostPromptEndpoint: hostPromptsUrl({
       game: gameId,
@@ -155,8 +177,10 @@ export async function buildHostConsoleRouteData({
     }),
     projectionBoundary: LIVE_TRANSPORT_BOUNDARY,
     access,
-    phase: HOST_FIXTURE_PHASE,
-    replacement,
+    authority: hostProjection.authority,
+    completed: hostProjection.completed,
+    phase: hostProjection.phase,
+    replacement: hostProjection.replacement,
     inviteTargets: buildHostInviteTargets({
       replacement: {
         slotId: "slot-7",
@@ -176,7 +200,7 @@ export async function buildHostConsoleRouteData({
     moderatorControls,
     deadlineClock: HOST_FIXTURE_DEADLINE_CLOCK,
     workQueues: buildHostWorkQueues({
-      phase: HOST_FIXTURE_PHASE,
+      phase: hostProjection.phase,
       votecountCount: coldLoad.votecount.length,
       nowSeconds: HOST_FIXTURE_DEADLINE_CLOCK.nowSeconds,
     }),
@@ -257,46 +281,35 @@ export function buildHostInviteTargets({
   });
 }
 
-function buildModeratorControls({ capabilityKind, pendingPromptCount }) {
-  const deadline = Object.freeze({
-    id: "deadline",
-    label: "Deadline",
-    value: "Extend the active phase deadline",
-    authority: "CohostOf(game)",
-  });
-  if (capabilityKind === "CohostOf") {
-    return Object.freeze([deadline]);
-  }
-  return Object.freeze([
-    deadline,
-    Object.freeze({
-      id: "phase",
-      label: "Phase",
-      value: "Advance, lock, or unlock",
-      authority: "HostOf(game)",
-    }),
-    Object.freeze({
-      id: "host-prompts",
-      label: "Host prompts",
-      value:
-        pendingPromptCount === 1
-          ? "1 durable prompt pending"
-          : `${pendingPromptCount} durable prompts pending`,
-      authority: "HostOf(game)",
-    }),
-    Object.freeze({
-      id: "slot-lifecycle",
-      label: "Slot lifecycle",
-      value: "Alive, dead, modkill",
-      authority: "HostOf(game)",
-    }),
-    Object.freeze({
-      id: "roles",
-      label: "Roles",
-      value: "Bulk reveal after completion",
-      authority: "HostOf(game)",
-    }),
+function buildModeratorControls({ actionGroups }) {
+  const controlIds = new Set([
+    "deadline",
+    "phase",
+    "host-prompts",
+    "slot-lifecycle",
+    "roles",
   ]);
+  return Object.freeze(
+    actionGroups
+      .filter((group) => controlIds.has(group.id))
+      .map((group) =>
+        Object.freeze({
+          id: group.id,
+          label: group.label,
+          value: group.value,
+          authority: group.authority,
+        }),
+      ),
+  );
+}
+
+function buildHostAuthorityFallback({ access, principalUserId }) {
+  return Object.freeze({
+    principalUserId,
+    capabilityKind: access.capability?.kind === "CohostOf" ? "CohostOf" : "HostOf",
+    allowedClasses: Object.freeze([]),
+    deniedClasses: Object.freeze([]),
+  });
 }
 
 export function resolveHostConsoleAccess({ game, capabilities = [] }) {
@@ -348,6 +361,7 @@ export function hostConsoleForbiddenMessage(game) {
 }
 
 const HOST_FIXTURE_COLD_LOAD = Object.freeze({
+  hostConsoleState: null,
   votecount: Object.freeze([
     Object.freeze({ target: "slot-2 / Ilya", count: 4, needed: 7 }),
     Object.freeze({ target: "slot-7 / Mira", count: 2, needed: 7 }),

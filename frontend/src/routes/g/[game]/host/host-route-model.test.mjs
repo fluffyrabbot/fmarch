@@ -273,6 +273,24 @@ test("host console route data uses host prompt and votecount cold-loads when ava
           },
         ]);
       }
+      if (
+        url ===
+        "/api/gameplay/games/midsummer/host-console-state?slot_id=slot-7"
+      ) {
+        return jsonResponse({
+          game: "midsummer",
+          authority: {
+            principal_user_id: "host_h",
+            capability: "HostOf",
+            allowed_classes: ["phase_resolve", "deadline"],
+            denied_classes: [],
+          },
+          completed: false,
+          phase: null,
+          slots: [],
+          thread_posts: [],
+        });
+      }
       return jsonResponse([
         {
           prompt_id: "D01:tie:slot_2",
@@ -287,9 +305,10 @@ test("host console route data uses host prompt and votecount cold-loads when ava
   });
 
   assert.deepEqual(seen, [
-      "/api/gameplay/games/midsummer/host-prompts",
+    "/api/gameplay/games/midsummer/host-prompts",
     "/games/midsummer/votecount",
     "/games/midsummer/day-vote-outcomes",
+    "/api/gameplay/games/midsummer/host-console-state?slot_id=slot-7",
   ]);
   assert.deepEqual(data.hostPrompts, [
     {
@@ -347,6 +366,26 @@ test("host console route data is allowed for CohostOf scoped to the current game
     game: "midsummer",
     principalUserId: "cohost_c",
     capabilities: [{ kind: "CohostOf", game: "midsummer" }],
+    fetchImpl: async (url) =>
+      url.endsWith("/host-console-state?slot_id=slot-7")
+        ? jsonResponse({
+            game: "midsummer",
+            authority: {
+              principal_user_id: "cohost_c",
+              capability: "CohostOf",
+              allowed_classes: [
+                "deadline",
+                "replacement",
+                "host_prompt_resolve",
+              ],
+              denied_classes: ["phase_resolve", "lifecycle"],
+            },
+            completed: false,
+            phase: null,
+            slots: [],
+            thread_posts: [],
+          })
+        : jsonResponse(null),
   });
   const access = resolveHostConsoleAccess({
     game: "midsummer",
@@ -359,15 +398,34 @@ test("host console route data is allowed for CohostOf scoped to the current game
   assert.equal(data.access.capabilityLabel, "CohostOf(midsummer)");
   assert.deepEqual(
     data.criticalActions.map((action) => action.id),
-    ["extend_deadline", "extend_deadline_24h", "extend_deadline_48h"],
+    [
+      "extend_deadline",
+      "extend_deadline_24h",
+      "extend_deadline_48h",
+      "process_replacement",
+      "resolve_host_prompt-D01-skip_next_day-slot_1",
+    ],
   );
+  assert.deepEqual(data.authority, {
+    principalUserId: "cohost_c",
+    capabilityKind: "CohostOf",
+    allowedClasses: ["deadline", "host_prompt_resolve", "replacement"],
+    deniedClasses: ["lifecycle", "phase_resolve"],
+  });
   assert.deepEqual(
     data.moderatorControls.map((control) => [control.id, control.authority]),
-    [["deadline", "CohostOf(game)"]],
+    [
+      ["deadline", "CohostOf(game) · deadline"],
+      ["host-prompts", "CohostOf(game) · host_prompt_resolve"],
+    ],
   );
   assert.deepEqual(
     data.moderatorActionGroups.map((group) => [group.id, group.authority]),
-    [["deadline", "CohostOf(game)"]],
+    [
+      ["deadline", "CohostOf(game) · deadline"],
+      ["replacement", "CohostOf(game) · replacement"],
+      ["host-prompts", "CohostOf(game) · host_prompt_resolve"],
+    ],
   );
   assert.deepEqual(data.commandContext, {
     gameId: "midsummer",

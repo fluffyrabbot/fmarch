@@ -67,6 +67,7 @@ const FALLBACK = Object.freeze({
     }),
   ]),
   hostPrompts: Object.freeze([]),
+  hostConsoleState: null,
   commandState: Object.freeze({
     game: null,
     actorSlot: null,
@@ -682,6 +683,8 @@ test("host cold-load maps durable prompt rows and votecount for moderator contro
   const data = await loadHostColdData({
     game: "midsummer",
     principalUserId: "host_h",
+    hostConsoleStateEndpoint:
+      "/api/gameplay/games/midsummer/host-console-state?slot_id=slot-7",
     fallback: FALLBACK,
     fetchImpl: async (url) => {
       seen.push(url);
@@ -710,6 +713,16 @@ test("host cold-load maps durable prompt rows and votecount for moderator contro
           },
         ]);
       }
+      if (url.includes("host-console-state")) {
+        return jsonResponse({
+          authority: {
+            principal_user_id: "host_h",
+            capability: "HostOf",
+            allowed_classes: ["phase_resolve", "deadline"],
+            denied_classes: [],
+          },
+        });
+      }
       return jsonResponse([
         {
           prompt_id: "D01:skip_next_day:slot_1",
@@ -728,6 +741,7 @@ test("host cold-load maps durable prompt rows and votecount for moderator contro
     "/api/gameplay/games/midsummer/host-prompts",
     "/games/midsummer/votecount",
     "/games/midsummer/day-vote-outcomes",
+    "/api/gameplay/games/midsummer/host-console-state?slot_id=slot-7",
   ]);
   assert.deepEqual(data.hostPrompts, [
     {
@@ -757,6 +771,7 @@ test("host cold-load maps durable prompt rows and votecount for moderator contro
       reason: null,
     },
   ]);
+  assert.equal(data.hostConsoleState.authority.capability, "HostOf");
 });
 
 test("host prompt cold-load infers slot selection from HostDecides contenders", () => {

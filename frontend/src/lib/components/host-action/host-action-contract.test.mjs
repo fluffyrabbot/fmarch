@@ -595,6 +595,7 @@ test("host console action groups turn typed commands into moderator control bays
 
   const cohostActions = buildHostConsoleCriticalActions("midsummer", {
     capabilityKind: "CohostOf",
+    allowedPermissionClasses: ["deadline", "host_prompt_resolve"],
     hostPrompts: [
       {
         id: "D01:tie:slot_2",
@@ -606,7 +607,12 @@ test("host console action groups turn typed commands into moderator control bays
   });
   assert.deepEqual(
     cohostActions.map((action) => action.id),
-    ["extend_deadline", "extend_deadline_24h", "extend_deadline_48h"],
+    [
+      "extend_deadline",
+      "extend_deadline_24h",
+      "extend_deadline_48h",
+      "resolve_host_prompt-D01-tie-slot_2",
+    ],
   );
   const cohostGroups = buildHostConsoleActionGroups({
     actions: cohostActions,
@@ -616,7 +622,25 @@ test("host console action groups turn typed commands into moderator control bays
   });
   assert.deepEqual(
     cohostGroups.map((group) => [group.id, group.authority]),
-    [["deadline", "CohostOf(game)"]],
+    [
+      ["deadline", "CohostOf(game) · deadline"],
+      ["host-prompts", "CohostOf(game) · host_prompt_resolve"],
+    ],
+  );
+
+  assert.deepEqual(
+    buildHostConsoleCriticalActions("midsummer", {
+      capabilityKind: "CohostOf",
+      allowedPermissionClasses: ["replacement"],
+    }).map((action) => action.id),
+    ["process_replacement"],
+  );
+  assert.deepEqual(
+    buildHostConsoleCriticalActions("midsummer", {
+      capabilityKind: "GlobalOperator",
+      allowedPermissionClasses: ["phase_resolve", "deadline"],
+    }),
+    [],
   );
 });
 

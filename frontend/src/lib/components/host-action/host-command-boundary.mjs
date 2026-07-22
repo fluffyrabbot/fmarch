@@ -297,6 +297,7 @@ export function projectHostConsoleState(state, fallback) {
     slot !== null && posts.some((post) => post?.author_slot === slot.slot_id);
 
   return Object.freeze({
+    authority: normalizeHostConsoleAuthority(state.authority, fallback.authority),
     completed:
       typeof state.completed === "boolean"
         ? state.completed
@@ -348,6 +349,48 @@ export function projectHostConsoleState(state, fallback) {
     }),
     slots: Object.freeze(slots),
   });
+}
+
+export function normalizeHostConsoleAuthority(authority, fallback = {}) {
+  const source = authority !== null && typeof authority === "object" ? authority : {};
+  const fallbackCapabilityKind = ["HostOf", "CohostOf", "GlobalOperator"].includes(
+    fallback.capabilityKind,
+  )
+    ? fallback.capabilityKind
+    : "GlobalOperator";
+  const capabilityKind =
+    source.capability === "HostOf" ||
+    source.capability === "CohostOf" ||
+    source.capability === "GlobalOperator"
+      ? source.capability
+      : fallbackCapabilityKind;
+  const allowedClasses = normalizePermissionClasses(
+    source.allowed_classes ?? source.allowedClasses,
+    fallback.allowedClasses,
+  );
+  const deniedClasses = normalizePermissionClasses(
+    source.denied_classes ?? source.deniedClasses,
+    fallback.deniedClasses,
+  );
+
+  return Object.freeze({
+    principalUserId: String(
+      source.principal_user_id ??
+        source.principalUserId ??
+        fallback.principalUserId ??
+        "",
+    ),
+    capabilityKind,
+    allowedClasses,
+    deniedClasses,
+  });
+}
+
+function normalizePermissionClasses(classes, fallback = []) {
+  const values = Array.isArray(classes) ? classes : fallback;
+  return Object.freeze(
+    [...new Set(Array.isArray(values) ? values.map(String) : [])].sort(),
+  );
 }
 
 function normalizeHostConsoleSlot(slot) {
