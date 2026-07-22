@@ -71,8 +71,8 @@ async fn authenticate_operator_fixture(
     let token = format!("vertical-operator-session:{principal_user_id}");
     sqlx::query(
         "INSERT INTO auth_session \
-         (token_hash, principal_user_id, created_at, expires_at, global_capabilities) \
-         VALUES ($1, $2, 0, 4102444800, ARRAY[]::TEXT[]) \
+         (token_hash, principal_user_id, created_at, expires_at, global_capabilities, authenticated_at) \
+         VALUES ($1, $2, 0, 4102444800, ARRAY[]::TEXT[], 0) \
          ON CONFLICT (token_hash) DO UPDATE SET \
            principal_user_id = EXCLUDED.principal_user_id, \
            expires_at = EXCLUDED.expires_at, \
@@ -1200,8 +1200,8 @@ async fn vertical_projection_audit_is_host_audit_only_and_reports_drift(pool: sq
             Command::CreateGame {
                 game,
                 pack: "mafiascum".into(),
-            cohost_denied: vec![],
-        },
+                cohost_denied: vec![],
+            },
         )
         .await,
     );
@@ -1521,8 +1521,8 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
             Command::CreateGame {
                 game,
                 pack: "mafiascum".into(),
-            cohost_denied: vec![],
-        },
+                cohost_denied: vec![],
+            },
         )
         .await,
     );
@@ -3445,8 +3445,8 @@ async fn vertical_host_phase_controls_are_host_audit_only(pool: sqlx::PgPool) {
             Command::CreateGame {
                 game,
                 pack: "mafiascum".into(),
-            cohost_denied: vec![],
-        },
+                cohost_denied: vec![],
+            },
         )
         .await,
     );
@@ -3641,8 +3641,8 @@ async fn vertical_resolution_traces_are_host_audit_only(pool: sqlx::PgPool) {
             Command::CreateGame {
                 game,
                 pack: "mafiascum".into(),
-            cohost_denied: vec![],
-        },
+                cohost_denied: vec![],
+            },
         )
         .await,
     );
@@ -4026,8 +4026,8 @@ async fn vertical_resolution_audit_is_host_audit_only_and_reports_drift(pool: sq
             Command::CreateGame {
                 game,
                 pack: "mafiascum".into(),
-            cohost_denied: vec![],
-        },
+                cohost_denied: vec![],
+            },
         )
         .await,
     );
@@ -4309,8 +4309,8 @@ async fn vertical_operator_html_surfaces_render_from_seeded_http_server(pool: sq
             Command::CreateGame {
                 game,
                 pack: "mafiascum".into(),
-            cohost_denied: vec![],
-        },
+                cohost_denied: vec![],
+            },
         )
         .await,
     );

@@ -18,7 +18,8 @@ export async function GET(event) {
   if (!workosAuthKitConfigured()) {
     throw redirect(302, "/auth/login");
   }
-  const returnTo = safeReturnTo(event.url.searchParams.get("returnTo"));
+  const callbackTarget = safeCallbackTarget(event.url.searchParams.get("returnTo"));
+  const link = workosLinkTarget(callbackTarget);
   const discardAuthKitCookie = () =>
     event.cookies.delete(WORKOS_SESSION_COOKIE_NAME, { path: "/" });
 
@@ -26,6 +27,38 @@ export async function GET(event) {
   if (typeof accessToken !== "string" || accessToken.trim() === "") {
     discardAuthKitCookie();
     throw redirect(303, "/auth/login?error=workos_exchange_failed");
+  }
+
+  if (link !== null) {
+    const appSession = event.cookies.get(SESSION_COOKIE_NAME);
+    if (typeof appSession !== "string" || appSession.trim() === "") {
+      discardAuthKitCookie();
+      throw redirect(303, "/auth/login?error=workos_link_requires_session");
+    }
+    let linkResponse;
+    try {
+      linkResponse = await event.fetch(
+        `${serverApiBaseUrl(process.env)}/auth/account/methods/workos`,
+        {
+          method: "POST",
+          headers: {
+            authorization: `Bearer ${appSession}`,
+            "content-type": "application/json",
+            accept: "application/json",
+          },
+          body: JSON.stringify({ provider_assertion: accessToken }),
+        },
+      );
+    } catch {
+      discardAuthKitCookie();
+      throw redirect(303, `${link.securityPath}&workosError=unavailable`);
+    }
+    discardAuthKitCookie();
+    if (!linkResponse.ok) {
+      const reason = linkResponse.status === 403 ? "step_up_required" : "rejected";
+      throw redirect(303, `${link.securityPath}&workosError=${reason}`);
+    }
+    throw redirect(303, `${link.securityPath}&workosLinked=1`);
   }
 
   let response;
@@ -64,7 +97,27 @@ export async function GET(event) {
     browserSessionCookieOptions(event.url),
   );
   discardAuthKitCookie();
-  throw redirect(303, returnTo);
+  throw redirect(303, safeReturnTo(callbackTarget));
+}
+
+function safeCallbackTarget(value) {
+  if (typeof value !== "string") return "/";
+  const trimmed = value.trim();
+  return trimmed.startsWith("/") && !trimmed.startsWith("//") ? trimmed : "/";
+}
+
+function workosLinkTarget(value) {
+  const url = new URL(value, "http://fmarch.invalid");
+  if (
+    url.pathname !== "/auth/account/security" ||
+    url.searchParams.get("fmarchWorkosFlow") !== "link"
+  ) {
+    return null;
+  }
+  const returnTo = safeReturnTo(url.searchParams.get("returnTo"));
+  return {
+    securityPath: `/auth/account/security?returnTo=${encodeURIComponent(returnTo)}`,
+  };
 }
 
 function safeReturnTo(value) {

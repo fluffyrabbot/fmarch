@@ -311,6 +311,7 @@ pub fn router_with_state(state: ApiState) -> Router {
         .route("/auth/sessions", post(create_auth_session))
         .route("/auth/account/methods", get(list_account_methods))
         .route("/auth/account/methods/classic", post(add_classic_method))
+        .route("/auth/account/methods/workos", post(add_workos_method))
         .route(
             "/auth/account/methods/{method_id}/disable",
             post(disable_account_method),
@@ -532,6 +533,7 @@ struct AuthenticatedIdentity {
     auth_kind: &'static str,
     session_reference: String,
     created_at: Option<i64>,
+    authenticated_at: Option<i64>,
     expires_at: i64,
     idle_expires_at: Option<i64>,
 }
@@ -563,6 +565,7 @@ async fn authenticate_token(
             global_capabilities: session.global_capabilities,
             session_reference: session.token_hash,
             created_at: Some(session.created_at),
+            authenticated_at: Some(session.authenticated_at),
             expires_at: session.expires_at,
             idle_expires_at: session.idle_expires_at,
         });
@@ -597,6 +600,7 @@ async fn resolve_workos_principal(
         auth_kind: "workos",
         session_reference: verified.session_id,
         created_at: None,
+        authenticated_at: None,
         expires_at: verified.expires_at,
         idle_expires_at: None,
     })
@@ -609,10 +613,10 @@ async fn authenticate_legacy_token(
     let token_hash = hash_session_token(token);
     let now = unix_now_seconds();
     let session = if state.dev_auth_enabled {
-        sqlx::query_as::<_, (String, Vec<String>, i64, i64)>(
+        sqlx::query_as::<_, (String, Vec<String>, i64, i64, i64)>(
             r#"
             SELECT session.principal_user_id, session.global_capabilities, session.expires_at,
-                   session.created_at
+                   session.created_at, session.authenticated_at
             FROM auth_session AS session
             WHERE session.token_hash = $1
               AND session.revoked_at IS NULL
@@ -635,10 +639,10 @@ async fn authenticate_legacy_token(
         .fetch_optional(&state.pool)
         .await?
     } else {
-        sqlx::query_as::<_, (String, Vec<String>, i64, i64)>(
+        sqlx::query_as::<_, (String, Vec<String>, i64, i64, i64)>(
             r#"
             SELECT session.principal_user_id, session.global_capabilities, session.expires_at,
-                   session.created_at
+                   session.created_at, session.authenticated_at
             FROM auth_session AS session
             WHERE session.token_hash = $1
               AND session.revoked_at IS NULL
@@ -662,6 +666,7 @@ async fn authenticate_legacy_token(
         auth_kind: "legacy-dev",
         session_reference: token_hash,
         created_at: Some(session.3),
+        authenticated_at: Some(session.4),
         expires_at: session.2,
         idle_expires_at: None,
     })
@@ -1529,9 +1534,10 @@ async fn create_dev_auth_session(
         &mut conn,
         identity::SessionSpec {
             principal_user_id: request.principal_user_id.as_str(),
-            global_capabilities: &global_capabilities,
+            session_capabilities: &global_capabilities,
             authenticated_via_method_id: None,
             assurance: identity::Assurance::Dev,
+            authenticated_at: now,
             expires_at: request.expires_at,
             idle_expires_at: None,
             client_supplied_token: client_token,
@@ -1587,9 +1593,10 @@ async fn create_auth_session_grant(
         &mut conn,
         identity::SessionSpec {
             principal_user_id: request.principal_user_id.as_str(),
-            global_capabilities: &global_capabilities,
+            session_capabilities: &global_capabilities,
             authenticated_via_method_id: None,
             assurance: identity::Assurance::AdminGrant,
+            authenticated_at: now,
             expires_at: request.expires_at,
             idle_expires_at: None,
             client_supplied_token: client_token,
@@ -1766,9 +1773,10 @@ async fn register_auth_account(
         &mut *tx,
         identity::SessionSpec {
             principal_user_id: principal_user_id.as_str(),
-            global_capabilities: &[],
+            session_capabilities: &[],
             authenticated_via_method_id: Some(method_id),
             assurance: identity::Assurance::Password,
+            authenticated_at: now,
             expires_at,
             idle_expires_at: None,
             client_supplied_token: client_token,
@@ -1911,13 +1919,21 @@ async fn classic_password_session(
         now,
     )
     .await?;
+    let principal_global_capabilities = sqlx::query_scalar::<_, Vec<String>>(
+        "SELECT global_capabilities FROM platform_principal WHERE principal_user_id = $1 AND status = 'active'",
+    )
+    .bind(account.0.as_str())
+    .fetch_optional(&mut *tx)
+    .await?
+    .ok_or_else(unauthorized_account)?;
     let issued = identity::session::issue_session(
         &mut *tx,
         identity::SessionSpec {
             principal_user_id: account.0.as_str(),
-            global_capabilities: &account.2,
+            session_capabilities: &[],
             authenticated_via_method_id: Some(method_id),
             assurance: identity::Assurance::Password,
+            authenticated_at: now,
             expires_at,
             idle_expires_at: Some(
                 now.saturating_add(state.session_policy.idle_ttl_seconds)
@@ -1951,7 +1967,7 @@ async fn classic_password_session(
         serde_json::json!({
             "account_id": account_id,
             "session_expires_at": expires_at,
-            "global_capability_count": account.2.len()
+            "global_capability_count": principal_global_capabilities.len()
         })
         .to_string(),
     )
@@ -1960,7 +1976,8 @@ async fn classic_password_session(
     clear_auth_attempt_failures(&mut tx, &attempt_scope).await?;
     tx.commit().await?;
 
-    let mut response = auth_session_response(state, account.0, None, account.2).await?;
+    let mut response =
+        auth_session_response(state, account.0, None, principal_global_capabilities).await?;
     response.session_token = Some(issued.session_token);
     response.expires_at = Some(issued.expires_at);
     response.idle_expires_at = issued.idle_expires_at;
@@ -1971,7 +1988,10 @@ async fn classic_password_session(
 #[serde(tag = "method")]
 enum CreateAuthSessionRequest {
     #[serde(rename = "classic")]
-    Classic { login_name: String, password: String },
+    Classic {
+        login_name: String,
+        password: String,
+    },
     #[serde(rename = "workos")]
     Workos,
 }
@@ -1998,13 +2018,15 @@ async fn create_auth_session(
             Ok(Json(response))
         }
         CreateAuthSessionRequest::Workos => {
-            let verifier = state.access_token_verifier.as_ref().ok_or_else(|| {
-                ApiError::Reject {
-                    status: StatusCode::NOT_FOUND,
-                    error: RejectCode::NotAuthorized,
-                    message: "workos authentication is not configured".to_string(),
-                }
-            })?;
+            let verifier =
+                state
+                    .access_token_verifier
+                    .as_ref()
+                    .ok_or_else(|| ApiError::Reject {
+                        status: StatusCode::NOT_FOUND,
+                        error: RejectCode::NotAuthorized,
+                        message: "workos authentication is not configured".to_string(),
+                    })?;
             let token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
             let verified = verifier.verify(token).await.map_err(identity_api_error)?;
             let now = unix_now_seconds();
@@ -2020,9 +2042,10 @@ async fn create_auth_session(
                 &mut *tx,
                 identity::SessionSpec {
                     principal_user_id: resolution.principal_user_id.as_str(),
-                    global_capabilities: &resolution.global_capabilities,
+                    session_capabilities: &[],
                     authenticated_via_method_id: Some(resolution.method_id),
                     assurance: identity::Assurance::ExternalSso,
+                    authenticated_at: now,
                     expires_at,
                     idle_expires_at: Some(
                         now.saturating_add(state.session_policy.idle_ttl_seconds)
@@ -2131,6 +2154,8 @@ struct AddClassicMethodResponse {
     principal_user_id: String,
     recovery_codes: Vec<String>,
     recovery_codes_expire_at: i64,
+    session_token: String,
+    session_expires_at: i64,
 }
 
 const METHOD_RECOVERY_CODE_COUNT: usize = 3;
@@ -2151,37 +2176,59 @@ async fn add_classic_method(
     let password_hash = hash_account_password(request.password.as_str()).await?;
 
     let mut tx = state.pool.begin().await?;
-    let inserted = sqlx::query(
-        r#"
-        INSERT INTO auth_account (
-            account_id, principal_user_id, password_hash, created_at, disabled_at,
-            global_capabilities
-        )
-        VALUES ($1, $2, $3, $4, NULL, '{}')
-        ON CONFLICT (account_id) DO NOTHING
-        "#,
-    )
-    .bind(login_name.as_str())
-    .bind(identity.principal_user_id.as_str())
-    .bind(&password_hash)
-    .bind(now)
-    .execute(&mut *tx)
-    .await?;
-    if inserted.rows_affected() != 1 {
-        return Err(ApiError::Reject {
-            status: StatusCode::CONFLICT,
-            error: RejectCode::Internal,
-            message: "account already exists".to_string(),
-        });
-    }
-    let method_id = identity::methods::link_classic_method(
+    let reactivated = identity::methods::reactivate_classic_method(
         &mut *tx,
-        login_name.as_str(),
         identity.principal_user_id.as_str(),
-        &[],
+        login_name.as_str(),
+        password_hash.as_str(),
         now,
     )
     .await?;
+    let method_id = match reactivated {
+        Some(method_id) => {
+            sqlx::query(
+                "UPDATE auth_account_recovery_credential SET revoked_at = $2 WHERE account_id = $1 AND used_at IS NULL AND revoked_at IS NULL",
+            )
+            .bind(login_name.as_str())
+            .bind(now)
+            .execute(&mut *tx)
+            .await?;
+            method_id
+        }
+        None => {
+            let inserted = sqlx::query(
+                r#"
+                INSERT INTO auth_account (
+                    account_id, principal_user_id, password_hash, created_at, disabled_at,
+                    global_capabilities
+                )
+                VALUES ($1, $2, $3, $4, NULL, '{}')
+                ON CONFLICT (account_id) DO NOTHING
+                "#,
+            )
+            .bind(login_name.as_str())
+            .bind(identity.principal_user_id.as_str())
+            .bind(&password_hash)
+            .bind(now)
+            .execute(&mut *tx)
+            .await?;
+            if inserted.rows_affected() != 1 {
+                return Err(ApiError::Reject {
+                    status: StatusCode::CONFLICT,
+                    error: RejectCode::Internal,
+                    message: "account already exists".to_string(),
+                });
+            }
+            identity::methods::link_classic_method(
+                &mut *tx,
+                login_name.as_str(),
+                identity.principal_user_id.as_str(),
+                &[],
+                now,
+            )
+            .await?
+        }
+    };
 
     let recovery_expires_at = now + METHOD_RECOVERY_CODE_TTL_SECONDS;
     let mut recovery_codes = Vec::with_capacity(METHOD_RECOVERY_CODE_COUNT);
@@ -2209,19 +2256,44 @@ async fn add_classic_method(
         recovery_codes.push(code);
     }
 
+    let session_expires_at = state.session_policy.classic_expiry(now);
+    let issued = identity::session::issue_session(
+        &mut *tx,
+        identity::SessionSpec {
+            principal_user_id: identity.principal_user_id.as_str(),
+            session_capabilities: &[],
+            authenticated_via_method_id: Some(method_id),
+            assurance: identity::Assurance::Password,
+            authenticated_at: now,
+            expires_at: session_expires_at,
+            idle_expires_at: Some(
+                now.saturating_add(state.session_policy.idle_ttl_seconds)
+                    .min(session_expires_at),
+            ),
+            client_supplied_token: None,
+        },
+        now,
+    )
+    .await?;
+
     sqlx::query(
         r#"
         INSERT INTO identity_lifecycle_audit (
             event_at, event_kind, actor_user_id, principal_user_id,
             token_hash, related_token_hash, metadata
         )
-        VALUES ($1, 'method_added', $2, $3, $4, NULL, $5::JSONB)
+        VALUES ($1, $2, $3, $4, $5, NULL, $6::JSONB)
         "#,
     )
     .bind(now)
+    .bind(if reactivated.is_some() {
+        "method_reactivated"
+    } else {
+        "method_added"
+    })
     .bind(identity.principal_user_id.as_str())
     .bind(identity.principal_user_id.as_str())
-    .bind(identity.session_reference.as_str())
+    .bind(issued.token_hash.as_str())
     .bind(
         serde_json::json!({
             "method_kind": "classic_password",
@@ -2241,6 +2313,87 @@ async fn add_classic_method(
         principal_user_id: identity.principal_user_id,
         recovery_codes,
         recovery_codes_expire_at: recovery_expires_at,
+        session_token: issued.session_token,
+        session_expires_at,
+    }))
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct AddWorkosMethod {
+    provider_assertion: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct AddWorkosMethodResponse {
+    status: String,
+    method_id: Uuid,
+    principal_user_id: String,
+}
+
+async fn add_workos_method(
+    State(state): State<ApiState>,
+    headers: HeaderMap,
+    Json(request): Json<AddWorkosMethod>,
+) -> Result<Json<AddWorkosMethodResponse>, ApiError> {
+    let verifier = state
+        .access_token_verifier
+        .as_ref()
+        .ok_or_else(|| ApiError::Reject {
+            status: StatusCode::NOT_FOUND,
+            error: RejectCode::NotAuthorized,
+            message: "workos authentication is not configured".to_string(),
+        })?;
+    let token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
+    let identity = authenticate_token(&state, token).await?;
+    let now = unix_now_seconds();
+    require_recent_authentication(&identity, now)?;
+    let provider_assertion = request.provider_assertion.trim();
+    if provider_assertion.is_empty() {
+        return Err(ApiError::Reject {
+            status: StatusCode::BAD_REQUEST,
+            error: RejectCode::Internal,
+            message: "a WorkOS provider assertion is required".to_string(),
+        });
+    }
+    let verified = verifier
+        .verify(provider_assertion)
+        .await
+        .map_err(identity_api_error)?;
+    let mut tx = state.pool.begin().await?;
+    let resolution = identity::workos::attach_subject(
+        &mut tx,
+        &verified,
+        identity.principal_user_id.as_str(),
+        now,
+    )
+    .await?;
+    sqlx::query(
+        r#"
+        INSERT INTO identity_lifecycle_audit (
+            event_at, event_kind, actor_user_id, principal_user_id,
+            token_hash, related_token_hash, metadata
+        )
+        VALUES ($1, 'method_attached', $2, $3, $4, NULL, $5::JSONB)
+        "#,
+    )
+    .bind(now)
+    .bind(identity.principal_user_id.as_str())
+    .bind(identity.principal_user_id.as_str())
+    .bind(identity.session_reference.as_str())
+    .bind(
+        serde_json::json!({
+            "method_kind": "workos",
+            "provider": "workos"
+        })
+        .to_string(),
+    )
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    Ok(Json(AddWorkosMethodResponse {
+        status: "attached".to_string(),
+        method_id: resolution.method_id,
+        principal_user_id: resolution.principal_user_id,
     }))
 }
 
@@ -2851,9 +3004,10 @@ async fn recover_auth_account(
         &mut *tx,
         identity::SessionSpec {
             principal_user_id: principal_user_id.as_str(),
-            global_capabilities: &account_global_capabilities,
+            session_capabilities: &[],
             authenticated_via_method_id: Some(method_id),
             assurance: identity::Assurance::Password,
+            authenticated_at: now,
             expires_at: state.session_policy.classic_expiry(now),
             idle_expires_at: None,
             client_supplied_token: None,
@@ -3127,7 +3281,18 @@ async fn rotate_auth_session(
 
     let now = unix_now_seconds();
     let mut tx = state.pool.begin().await?;
-    let session = sqlx::query_as::<_, (String, i64, Vec<String>, Option<Uuid>, Option<i64>, Option<String>)>(
+    let session = sqlx::query_as::<
+        _,
+        (
+            String,
+            i64,
+            Vec<String>,
+            Option<Uuid>,
+            Option<i64>,
+            Option<String>,
+            i64,
+        ),
+    >(
         r#"
         UPDATE auth_session
         SET revoked_at = $1
@@ -3135,7 +3300,8 @@ async fn rotate_auth_session(
           AND revoked_at IS NULL
           AND expires_at > $1
         RETURNING principal_user_id, expires_at, global_capabilities,
-                  authenticated_via_method_id, idle_expires_at, assurance
+                  authenticated_via_method_id, idle_expires_at, assurance,
+                  authenticated_at
         "#,
     )
     .bind(now)
@@ -3155,9 +3321,10 @@ async fn rotate_auth_session(
             global_capabilities,
             authenticated_via_method_id,
             idle_expires_at,
-            assurance
+            assurance,
+            authenticated_at
         )
-        VALUES ($1, $2, $3, $4, NULL, $5, $6, $7, $8)
+        VALUES ($1, $2, $3, $4, NULL, $5, $6, $7, $8, $9)
         "#,
     )
     .bind(&new_hash)
@@ -3168,6 +3335,7 @@ async fn rotate_auth_session(
     .bind(session.3)
     .bind(session.4)
     .bind(session.5.as_deref())
+    .bind(session.6)
     .execute(&mut *tx)
     .await?;
     sqlx::query(
@@ -3549,9 +3717,10 @@ async fn redeem_auth_invite(
         &mut *tx,
         identity::SessionSpec {
             principal_user_id: invite.0.as_str(),
-            global_capabilities: &invite.2,
+            session_capabilities: &invite.2,
             authenticated_via_method_id: Some(method_id),
             assurance: identity::Assurance::Password,
+            authenticated_at: now,
             expires_at: invite.1,
             idle_expires_at: None,
             client_supplied_token: client_token,
@@ -4322,14 +4491,18 @@ fn require_classic_enabled(state: &ApiState) -> Result<(), ApiError> {
     }
 }
 
-fn require_recent_authentication(identity: &AuthenticatedIdentity, now: i64) -> Result<(), ApiError> {
-    if let Some(created_at) = identity.created_at {
-        identity::methods::require_recent_authentication(
-            created_at,
-            now,
-            auth_recent_max_age_seconds(),
-        )?;
-    }
+fn require_recent_authentication(
+    identity: &AuthenticatedIdentity,
+    now: i64,
+) -> Result<(), ApiError> {
+    let authenticated_at = identity
+        .authenticated_at
+        .ok_or(identity::IdentityFlowError::RecentAuthRequired)?;
+    identity::methods::require_recent_authentication(
+        authenticated_at,
+        now,
+        auth_recent_max_age_seconds(),
+    )?;
     Ok(())
 }
 

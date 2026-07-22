@@ -37,7 +37,15 @@ pub async fn list_methods(
 ) -> Result<Vec<MethodSummary>, IdentityFlowError> {
     let rows = sqlx::query_as::<
         _,
-        (Uuid, String, String, i64, Option<i64>, Option<String>, Option<String>),
+        (
+            Uuid,
+            String,
+            String,
+            i64,
+            Option<i64>,
+            Option<String>,
+            Option<String>,
+        ),
     >(
         r#"
         SELECT method.method_id,
@@ -130,11 +138,13 @@ pub async fn disable_method(
     .execute(&mut *conn)
     .await?;
     if kind == MethodKind::ClassicPassword {
-        sqlx::query("UPDATE auth_account SET disabled_at = $2 WHERE method_id = $1 AND disabled_at IS NULL")
-            .bind(method_id)
-            .bind(now)
-            .execute(&mut *conn)
-            .await?;
+        sqlx::query(
+            "UPDATE auth_account SET disabled_at = $2 WHERE method_id = $1 AND disabled_at IS NULL",
+        )
+        .bind(method_id)
+        .bind(now)
+        .execute(&mut *conn)
+        .await?;
     }
     let revoked_session_count = revoke_sessions_for_method(&mut *conn, method_id, now).await?;
     Ok(DisabledMethod {
@@ -221,14 +231,63 @@ pub async fn touch_method(
     method_id: Uuid,
     now: i64,
 ) -> Result<(), IdentityFlowError> {
+    sqlx::query("UPDATE authentication_method SET last_authenticated_at = $2 WHERE method_id = $1")
+        .bind(method_id)
+        .bind(now)
+        .execute(&mut *conn)
+        .await?;
+    Ok(())
+}
+
+/// Reactivate the caller's existing classic method with a newly established
+/// password. The login name remains stable so recovery and invite history keep
+/// an unambiguous account key. Returns None when the principal has no disabled
+/// classic method with this login name.
+pub async fn reactivate_classic_method(
+    conn: &mut PgConnection,
+    principal_user_id: &str,
+    account_id: &str,
+    password_hash: &str,
+    now: i64,
+) -> Result<Option<Uuid>, IdentityFlowError> {
+    let method = sqlx::query_as::<_, (Uuid, String)>(
+        r#"
+        SELECT method.method_id, method.status
+        FROM authentication_method AS method
+        JOIN auth_account AS account ON account.method_id = method.method_id
+        WHERE method.principal_user_id = $1
+          AND method.kind = 'classic_password'
+          AND account.account_id = $2
+        FOR UPDATE OF method, account
+        "#,
+    )
+    .bind(principal_user_id)
+    .bind(account_id)
+    .fetch_optional(&mut *conn)
+    .await?;
+    let Some((method_id, status)) = method else {
+        return Ok(None);
+    };
+    if status == "active" {
+        return Err(IdentityFlowError::AlreadyExists(
+            "a classic authentication method for this principal",
+        ));
+    }
     sqlx::query(
-        "UPDATE authentication_method SET last_authenticated_at = $2 WHERE method_id = $1",
+        "UPDATE authentication_method SET status = 'active', disabled_at = NULL, last_authenticated_at = $2 WHERE method_id = $1",
     )
     .bind(method_id)
     .bind(now)
     .execute(&mut *conn)
     .await?;
-    Ok(())
+    sqlx::query(
+        "UPDATE auth_account SET password_hash = $2, disabled_at = NULL WHERE method_id = $1",
+    )
+    .bind(method_id)
+    .bind(password_hash)
+    .execute(&mut *conn)
+    .await?;
+    Ok(Some(method_id))
 }
 
 /// Resolve the workos method for an external identity, lazily upgrading rows
@@ -240,15 +299,29 @@ pub async fn link_workos_method(
     principal_user_id: &str,
     now: i64,
 ) -> Result<Uuid, IdentityFlowError> {
-    if let Some(method_id) = sqlx::query_scalar::<_, Option<Uuid>>(
-        "SELECT method_id FROM external_identity WHERE provider = 'workos' AND subject = $1",
-    )
-    .bind(subject)
-    .fetch_one(&mut *conn)
-    .await?
+    if let Some((method_id, status, linked_principal)) =
+        sqlx::query_as::<_, (Option<Uuid>, Option<String>, String)>(
+            r#"
+        SELECT identity.method_id, method.status, identity.principal_user_id
+        FROM external_identity AS identity
+        LEFT JOIN authentication_method AS method ON method.method_id = identity.method_id
+        WHERE identity.provider = 'workos' AND identity.subject = $1
+        "#,
+        )
+        .bind(subject)
+        .fetch_optional(&mut *conn)
+        .await?
     {
-        touch_method(conn, method_id, now).await?;
-        return Ok(method_id);
+        if linked_principal != principal_user_id {
+            return Err(IdentityFlowError::Unauthorized);
+        }
+        if let Some(method_id) = method_id {
+            if status.as_deref() != Some("active") {
+                return Err(IdentityFlowError::Unauthorized);
+            }
+            touch_method(conn, method_id, now).await?;
+            return Ok(method_id);
+        }
     }
     let method_id = create_method(conn, principal_user_id, MethodKind::Workos, now).await?;
     sqlx::query(
@@ -284,7 +357,8 @@ pub async fn link_classic_method(
         return Ok(method_id);
     }
     ensure_principal(conn, principal_user_id, global_capabilities, now).await?;
-    let method_id = create_method(conn, principal_user_id, MethodKind::ClassicPassword, now).await?;
+    let method_id =
+        create_method(conn, principal_user_id, MethodKind::ClassicPassword, now).await?;
     sqlx::query("UPDATE auth_account SET method_id = $2 WHERE account_id = $1")
         .bind(account_id)
         .bind(method_id)

@@ -5,9 +5,9 @@
 
 use std::sync::Arc;
 
+use api::ApiState;
 use axum::body::{to_bytes, Body};
 use axum::http::{Request, StatusCode};
-use api::ApiState;
 use identity::{StaticAccessTokenVerifier, VerifiedIdentity};
 use media::{MediaLimits, MediaStore};
 use tempfile::TempDir;
@@ -105,7 +105,9 @@ async fn registration_issues_backend_token_and_method_rows(pool: sqlx::PgPool) {
     assert_eq!(response.status(), StatusCode::OK);
     let body = json_body(response).await;
     let session_token = body["session_token"].as_str().unwrap().to_string();
-    assert!(identity::token::is_app_session_token(session_token.as_str()));
+    assert!(identity::token::is_app_session_token(
+        session_token.as_str()
+    ));
     let principal_user_id = body["principal_user_id"].as_str().unwrap().to_string();
 
     let (principal_status, method_id, method_kind, method_status) =
@@ -121,7 +123,10 @@ async fn registration_issues_backend_token_and_method_rows(pool: sqlx::PgPool) {
     let response = get_session(&app, session_token.as_str()).await;
     assert_eq!(response.status(), StatusCode::OK);
     let body = json_body(response).await;
-    assert_eq!(body["principal_user_id"].as_str(), Some(principal_user_id.as_str()));
+    assert_eq!(
+        body["principal_user_id"].as_str(),
+        Some(principal_user_id.as_str())
+    );
     assert!(body.get("session_token").is_none());
 }
 
@@ -155,7 +160,9 @@ async fn login_issues_backend_token_and_lazily_upgrades_legacy_accounts(pool: sq
     assert_eq!(response.status(), StatusCode::OK);
     let body = json_body(response).await;
     let session_token = body["session_token"].as_str().unwrap().to_string();
-    assert!(identity::token::is_app_session_token(session_token.as_str()));
+    assert!(identity::token::is_app_session_token(
+        session_token.as_str()
+    ));
     assert!(body["expires_at"].as_i64().unwrap() > 0);
 
     let (principal_status, method_id, method_kind, _) =
@@ -222,7 +229,9 @@ async fn dev_session_grant_and_rotation_issue_backend_tokens(pool: sqlx::PgPool)
     assert_eq!(response.status(), StatusCode::OK);
     let body = json_body(response).await;
     let granted_token = body["session_token"].as_str().unwrap().to_string();
-    assert!(identity::token::is_app_session_token(granted_token.as_str()));
+    assert!(identity::token::is_app_session_token(
+        granted_token.as_str()
+    ));
     let (method, assurance) = session_row(&pool, granted_token.as_str()).await;
     assert_eq!(method, None);
     assert_eq!(assurance.as_deref(), Some("admin_grant"));
@@ -237,7 +246,9 @@ async fn dev_session_grant_and_rotation_issue_backend_tokens(pool: sqlx::PgPool)
     assert_eq!(response.status(), StatusCode::OK);
     let body = json_body(response).await;
     let rotated_token = body["session_token"].as_str().unwrap().to_string();
-    assert!(identity::token::is_app_session_token(rotated_token.as_str()));
+    assert!(identity::token::is_app_session_token(
+        rotated_token.as_str()
+    ));
     assert_ne!(rotated_token, granted_token);
 
     let stale = get_session(&app, granted_token.as_str()).await;
@@ -312,7 +323,10 @@ async fn one_principal_survives_workos_to_classic_conversion(pool: sqlx::PgPool)
     .unwrap();
     let (status, session_a) = get_json(&app, "/auth/session", workos_session.as_str()).await;
     assert_eq!(status, StatusCode::OK);
-    assert_eq!(session_a["principal_user_id"].as_str().unwrap(), principal_user_id);
+    assert_eq!(
+        session_a["principal_user_id"].as_str().unwrap(),
+        principal_user_id
+    );
 
     // Add a classic sign-in method to the same principal (recent session).
     let response = post_json(
@@ -327,14 +341,22 @@ async fn one_principal_survives_workos_to_classic_conversion(pool: sqlx::PgPool)
     .await;
     assert_eq!(response.status(), StatusCode::OK);
     let added = json_body(response).await;
-    assert_eq!(added["principal_user_id"].as_str().unwrap(), principal_user_id);
-    let recovery_codes: Vec<String> = added["recovery_codes"]
+    assert_eq!(
+        added["principal_user_id"].as_str().unwrap(),
+        principal_user_id
+    );
+    let mut recovery_codes: Vec<String> = added["recovery_codes"]
         .as_array()
         .unwrap()
         .iter()
         .map(|code| code.as_str().unwrap().to_string())
         .collect();
     assert_eq!(recovery_codes.len(), 3);
+    let mut classic_session = added["session_token"].as_str().unwrap().to_string();
+    assert!(identity::token::is_app_session_token(&classic_session));
+    let (classic_session_method, classic_session_assurance) =
+        session_row(&pool, &classic_session).await;
+    assert_eq!(classic_session_assurance.as_deref(), Some("password"));
 
     // A second classic method on the same principal is rejected.
     let response = post_json(
@@ -349,30 +371,18 @@ async fn one_principal_survives_workos_to_classic_conversion(pool: sqlx::PgPool)
     .await;
     assert_eq!(response.status(), StatusCode::CONFLICT);
 
-    // Sign in through classic: same principal, identical capabilities.
-    let response = post_json(
-        &app,
-        "/auth/sessions",
-        None,
-        serde_json::json!({
-            "method": "classic",
-            "login_name": "converted@example.test",
-            "password": "correct horse battery staple"
-        }),
-    )
-    .await;
-    assert_eq!(response.status(), StatusCode::OK);
-    let body = json_body(response).await;
-    let classic_session = body["session_token"].as_str().unwrap().to_string();
-    assert_eq!(body["principal_user_id"].as_str().unwrap(), principal_user_id);
+    // The conversion response itself switches to a Classic-authenticated
+    // session: same principal and current durable capabilities.
     let (status, session_b) = get_json(&app, "/auth/session", classic_session.as_str()).await;
     assert_eq!(status, StatusCode::OK);
-    assert_eq!(session_a["principal_user_id"], session_b["principal_user_id"]);
+    assert_eq!(
+        session_a["principal_user_id"],
+        session_b["principal_user_id"]
+    );
     assert_eq!(session_a["capabilities"], session_b["capabilities"]);
 
     // Enumerate methods, then disconnect WorkOS under the classic session.
-    let (status, methods) =
-        get_json(&app, "/auth/account/methods", classic_session.as_str()).await;
+    let (status, methods) = get_json(&app, "/auth/account/methods", classic_session.as_str()).await;
     assert_eq!(status, StatusCode::OK);
     let methods = methods["methods"].as_array().unwrap().clone();
     assert_eq!(methods.len(), 2);
@@ -390,6 +400,50 @@ async fn one_principal_survives_workos_to_classic_conversion(pool: sqlx::PgPool)
         .as_str()
         .unwrap()
         .to_string();
+    assert_eq!(
+        classic_session_method.map(|id| id.to_string()),
+        Some(classic_method_id.clone())
+    );
+
+    // Disabled methods are recoverable identities, not tombstones. Removing
+    // and re-adding the same Classic login reactivates the same method row,
+    // rotates its password/recovery material, and returns a fresh Classic
+    // session for the browser to adopt.
+    let response = post_json(
+        &app,
+        format!("/auth/account/methods/{classic_method_id}/disable").as_str(),
+        Some(&workos_session),
+        serde_json::json!({}),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        get_json(&app, "/auth/session", &classic_session).await.0,
+        StatusCode::UNAUTHORIZED
+    );
+    let response = post_json(
+        &app,
+        "/auth/account/methods/classic",
+        Some(&workos_session),
+        serde_json::json!({
+            "login_name": "converted@example.test",
+            "password": "replacement correct horse battery"
+        }),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let reactivated = json_body(response).await;
+    assert_eq!(
+        reactivated["method_id"].as_str(),
+        Some(classic_method_id.as_str())
+    );
+    classic_session = reactivated["session_token"].as_str().unwrap().to_string();
+    recovery_codes = reactivated["recovery_codes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|code| code.as_str().unwrap().to_string())
+        .collect();
 
     let response = post_json(
         &app,
@@ -450,15 +504,221 @@ async fn one_principal_survives_workos_to_classic_conversion(pool: sqlx::PgPool)
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+async fn rotation_cannot_refresh_recent_authentication(pool: sqlx::PgPool) {
+    let root = TempDir::new().unwrap();
+    let state = test_state(pool.clone(), &root)
+        .with_access_token_verifier(Arc::new(workos_verifier("workos-old", "user_old")));
+    let app = api::router_with_state(state);
+
+    let response = post_json(
+        &app,
+        "/auth/sessions",
+        Some("workos-old"),
+        serde_json::json!({ "method": "workos" }),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let old_token = json_body(response).await["session_token"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    sqlx::query(
+        "UPDATE auth_session SET created_at = created_at - 10000, authenticated_at = authenticated_at - 10000 WHERE token_hash = $1",
+    )
+    .bind(identity::token::hash_token(&old_token))
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let response = post_json(
+        &app,
+        "/auth/session-rotations",
+        Some(&old_token),
+        serde_json::json!({}),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let rotated_token = json_body(response).await["session_token"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    let response = post_json(
+        &app,
+        "/auth/account/methods/classic",
+        Some(&rotated_token),
+        serde_json::json!({
+            "login_name": "too-late@example.test",
+            "password": "correct horse battery staple"
+        }),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+
+    let (authenticated_at, created_at) = sqlx::query_as::<_, (i64, i64)>(
+        "SELECT authenticated_at, created_at FROM auth_session WHERE token_hash = $1",
+    )
+    .bind(identity::token::hash_token(&rotated_token))
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(created_at > authenticated_at);
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn ordinary_sessions_do_not_preserve_revoked_principal_capabilities(pool: sqlx::PgPool) {
+    let root = TempDir::new().unwrap();
+    let app = api::router_with_state(test_state(pool.clone(), &root));
+    let password = "correct horse battery staple";
+
+    let response = post_json(
+        &app,
+        "/auth/accounts/registrations",
+        None,
+        serde_json::json!({ "account_id": "revoked@example.test", "password": password }),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let principal = json_body(response).await["principal_user_id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    sqlx::query(
+        "UPDATE platform_principal SET global_capabilities = ARRAY['GlobalAdmin'] WHERE principal_user_id = $1",
+    )
+    .bind(&principal)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let response = post_json(
+        &app,
+        "/auth/sessions",
+        None,
+        serde_json::json!({
+            "method": "classic",
+            "login_name": "revoked@example.test",
+            "password": password
+        }),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let token = json_body(response).await["session_token"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    sqlx::query(
+        "UPDATE platform_principal SET global_capabilities = '{}' WHERE principal_user_id = $1",
+    )
+    .bind(&principal)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let (status, session) = get_json(&app, "/auth/session", &token).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(session["capabilities"], serde_json::json!([]));
+    let stored_grants: Vec<String> =
+        sqlx::query_scalar("SELECT global_capabilities FROM auth_session WHERE token_hash = $1")
+            .bind(identity::token::hash_token(&token))
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert!(stored_grants.is_empty());
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn workos_attachment_is_symmetric_and_reactivates_in_place(pool: sqlx::PgPool) {
+    let root = TempDir::new().unwrap();
+    let state = test_state(pool.clone(), &root)
+        .with_access_token_verifier(Arc::new(workos_verifier("attach-proof", "user_attach")));
+    let app = api::router_with_state(state);
+
+    let response = post_json(
+        &app,
+        "/auth/accounts/registrations",
+        None,
+        serde_json::json!({
+            "account_id": "classic-first@example.test",
+            "password": "correct horse battery staple"
+        }),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let registered = json_body(response).await;
+    let classic_session = registered["session_token"].as_str().unwrap().to_string();
+    let principal = registered["principal_user_id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    let response = post_json(
+        &app,
+        "/auth/account/methods/workos",
+        Some(&classic_session),
+        serde_json::json!({ "provider_assertion": "attach-proof" }),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let attached = json_body(response).await;
+    let method_id = attached["method_id"].as_str().unwrap().to_string();
+    assert_eq!(
+        attached["principal_user_id"].as_str(),
+        Some(principal.as_str())
+    );
+
+    let response = post_json(
+        &app,
+        format!("/auth/account/methods/{method_id}/disable").as_str(),
+        Some(&classic_session),
+        serde_json::json!({}),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let response = post_json(
+        &app,
+        "/auth/account/methods/workos",
+        Some(&classic_session),
+        serde_json::json!({ "provider_assertion": "attach-proof" }),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let reattached = json_body(response).await;
+    assert_eq!(reattached["method_id"].as_str(), Some(method_id.as_str()));
+
+    let (status, methods) = get_json(&app, "/auth/account/methods", &classic_session).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(methods["methods"].as_array().unwrap().len(), 2);
+    assert_eq!(
+        methods["methods"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|method| method["method_id"] == method_id)
+            .unwrap()["status"],
+        "active"
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
 async fn provider_jwts_and_random_bearers_are_never_general_credentials(pool: sqlx::PgPool) {
     let root = TempDir::new().unwrap();
     let state = test_state(pool.clone(), &root)
         .with_access_token_verifier(Arc::new(workos_verifier("workos-token", "user_dispatch")));
     let app = api::router_with_state(state);
 
-    for bearer in ["workos-token", "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ1In0.sig", "fmss_unknown"] {
+    for bearer in [
+        "workos-token",
+        "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ1In0.sig",
+        "fmss_unknown",
+    ] {
         let (status, _) = get_json(&app, "/auth/session", bearer).await;
-        assert_eq!(status, StatusCode::UNAUTHORIZED, "bearer {bearer} must not authenticate");
+        assert_eq!(
+            status,
+            StatusCode::UNAUTHORIZED,
+            "bearer {bearer} must not authenticate"
+        );
         let response = post_json(
             &app,
             "/auth/websocket-tickets",

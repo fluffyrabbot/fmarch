@@ -65,6 +65,9 @@ test("security load exposes the principal's sign-in methods", async () => {
           displayLabel: "host@corp.example",
         },
       ],
+      workosAvailable: false,
+      workosLinked: false,
+      workosError: "",
     },
   });
 });
@@ -89,15 +92,18 @@ test("security load sends an unauthenticated browser through account login", asy
 });
 
 test("adding a classic method surfaces the display-once recovery codes", async () => {
-  let observed;
+  const observed = { request: null, cookie: null };
   const result = await actions.addClassic({
     cookies: {
       get(name) {
         return name === "fmarch_session" ? "fmss_workos-session" : undefined;
       },
+      set(name, value, options) {
+        observed.cookie = { name, value, options };
+      },
     },
     fetch: async (url, init) => {
-      observed = {
+      observed.request = {
         url,
         authorization: init.headers.authorization,
         body: JSON.parse(init.body),
@@ -109,6 +115,8 @@ test("adding a classic method surfaces the display-once recovery codes", async (
         principal_user_id: "host_h",
         recovery_codes: ["fmrc-one", "fmrc-two", "fmrc-three"],
         recovery_codes_expire_at: 4_102_444_800,
+        session_token: "fmss_classic-session",
+        session_expires_at: 4_102_444_800,
       });
     },
     request: formRequest({
@@ -117,16 +125,28 @@ test("adding a classic method surfaces the display-once recovery codes", async (
       confirmPassword: "correct horse battery",
       returnTo: "/g/game-1/host",
     }),
+    url: new URL("https://fmarch.example/auth/account/security"),
   });
 
-  assert.equal(observed.url, "/auth/account/methods/classic");
-  assert.equal(observed.authorization, "Bearer fmss_workos-session");
-  assert.deepEqual(observed.body, {
+  assert.equal(observed.request.url, "/auth/account/methods/classic");
+  assert.equal(observed.request.authorization, "Bearer fmss_workos-session");
+  assert.deepEqual(observed.request.body, {
     login_name: "converted@example.test",
     password: "correct horse battery",
   });
+  assert.deepEqual(observed.cookie, {
+    name: "fmarch_session",
+    value: "fmss_classic-session",
+    options: {
+      path: "/",
+      httpOnly: true,
+      sameSite: "lax",
+      secure: true,
+    },
+  });
   assert.equal(result.state, "ack");
   assert.equal(result.id, "account-method-add-classic");
+  assert.equal(result.sessionSwitchedToClassic, true);
   assert.deepEqual(result.recoveryCodes, ["fmrc-one", "fmrc-two", "fmrc-three"]);
 });
 

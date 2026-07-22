@@ -48,17 +48,25 @@ removing a sign-in method never rewrites a principal.
   generated `platform_principal` through `external_identity` (`(provider, subject)` is the
   identity key; email is display metadata, never a primary key, authorization input, or
   auto-linking signal). Session validation rechecks that the principal and the
-  authenticating method are still active on every request, then derives global and per-game
-  capabilities from local state. Disabling a principal revokes every method and session.
+  authenticating method are still active on every request. Durable global capabilities are
+  read from the principal on every validation; the session row stores only intentionally
+  session-scoped grants, so removing a principal capability takes effect immediately.
+  Per-game capabilities are likewise derived from local state. Disabling a principal
+  revokes every method and session.
 - **Method lifecycle:** `GET /auth/account/methods` lists a principal's methods;
   `POST /auth/account/methods/classic` attaches classic sign-in to (for example) a
-  WorkOS-only principal, returning one-time recovery codes shown exactly once;
+  WorkOS-only principal, returns one-time recovery codes shown exactly once, and replaces
+  the browser cookie with a Classic-authenticated session before WorkOS can be removed;
+  `POST /auth/account/methods/workos` symmetrically attaches a verified WorkOS subject to an
+  authenticated Classic principal without moving or auto-linking identities;
   `POST /auth/account/methods/{id}/disable` removes a method. Adding or removing a method
   requires a recently authenticated session (`FMARCH_AUTH_RECENT_SECONDS`, rejected with
-  `recent_authentication_required`), an active principal must retain at least one active
-  method, at most one classic method exists per principal, removal revokes the sessions
-  authenticated through that method, and every transition writes
-  `identity_lifecycle_audit`.
+  `recent_authentication_required`). Recent authentication is the immutable time of the
+  credential ceremony and is preserved by session rotation; rotating an old session cannot
+  manufacture step-up authority. An active principal must retain at least one active method,
+  at most one classic method exists per principal, removal revokes the sessions authenticated
+  through that method, and re-adding the same disabled identity reactivates its stable method
+  row with fresh credentials. Every transition writes `identity_lifecycle_audit`.
 - **WorkOS adapter policy (recorded tradeoff):** there is no AuthKit refresh loop and no
   provider webhook; provider-side revocation takes effect when the local session expires,
   which is why WorkOS-exchanged sessions default to a shorter absolute TTL

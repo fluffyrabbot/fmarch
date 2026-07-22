@@ -7,9 +7,13 @@ export async function GET({ url }) {
   }
   const authKit = await loadAuthKit();
   const returnTo = safeReturnTo(url.searchParams.get("returnTo"));
+  const providerReturnTo =
+    url.searchParams.get("flow") === "link"
+      ? `/auth/account/security?fmarchWorkosFlow=link&returnTo=${encodeURIComponent(returnTo)}`
+      : returnTo;
   const loginHint = optionalValue(url.searchParams.get("loginHint"));
   const signInUrl = await authKit.getSignInUrl({
-    returnTo,
+    returnTo: providerReturnTo,
     ...(loginHint === null ? {} : { loginHint }),
   });
   throw redirect(302, signInUrl);

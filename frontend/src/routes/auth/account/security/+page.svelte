@@ -6,6 +6,7 @@
   $: methods = security.methods ?? [];
   $: activeMethods = methods.filter((method) => method.status === "active");
   $: classicMethod = activeMethods.find((method) => method.kind === "classic_password") ?? null;
+  $: workosMethod = activeMethods.find((method) => method.kind === "workos") ?? null;
   $: accountId = form?.accountId ?? security.accountId ?? classicMethod?.loginName ?? "";
   $: returnTo = form?.returnTo ?? security.returnTo ?? "/";
   $: addClassicResult = form?.id === "account-method-add-classic" ? form : null;
@@ -53,6 +54,15 @@
 
   <section class="account-security__panel fm-panel" aria-label="Sign-in methods">
     <h2>Sign-in methods</h2>
+    {#if security.workosLinked}
+      <p class="account-security__status" data-testid="account-method-workos-linked">
+        WorkOS is now linked to this principal.
+      </p>
+    {:else if security.workosError}
+      <p class="account-security__reject" role="alert" data-testid="account-method-workos-error">
+        WorkOS could not be linked ({security.workosError.replaceAll("_", " ")}).
+      </p>
+    {/if}
     <ul class="account-security__methods" data-testid="account-security-methods">
       {#each methods as method (method.methodId)}
         <li class="account-security__method" data-testid={`account-method-${method.kind}`}>
@@ -143,6 +153,23 @@
       </form>
     {/if}
 
+    {#if workosMethod === null && security.workosAvailable}
+      <div class="account-security__form" data-testid="account-method-add-workos">
+        <h3>Add WorkOS — managed sign-in</h3>
+        <p class="account-security__hint">
+          Link a WorkOS identity to this same principal. Your games, profile,
+          capabilities, and Classic sign-in remain unchanged.
+        </p>
+        <a
+          class="fm-touch-button fm-touch-button--secondary"
+          href={`/auth/login/workos?flow=link&returnTo=${encodeURIComponent(returnTo)}`}
+          data-testid="account-method-add-workos-link"
+        >
+          Link WorkOS
+        </a>
+      </div>
+    {/if}
+
     {#if addClassicResult?.state === "ack"}
       <div class="account-security__credential" data-testid="account-method-add-classic-ack">
         <strong>{addClassicResult.message}</strong>
@@ -151,7 +178,11 @@
             <li><code>{code}</code></li>
           {/each}
         </ul>
-        <small>Each code can be used once to recover this account.</small>
+        <small>
+          Each code can be used once to recover this account. This browser is
+          now authenticated through Classic, so WorkOS can be removed without
+          signing you out.
+        </small>
       </div>
     {:else if addClassicResult?.state === "step-up"}
       <div class="account-security__reject" role="alert" data-testid="account-method-add-classic-step-up">

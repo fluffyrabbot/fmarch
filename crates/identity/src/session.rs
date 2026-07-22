@@ -59,9 +59,14 @@ fn bounded_env_i64(name: &str, default: i64, min: i64, max: i64) -> i64 {
 #[derive(Debug, Clone)]
 pub struct SessionSpec<'a> {
     pub principal_user_id: &'a str,
-    pub global_capabilities: &'a [String],
+    /// Capabilities granted only for this session (for example an invite or
+    /// explicit admin session grant). Durable principal capabilities are
+    /// always read from platform_principal during validation and must never be
+    /// copied here by an ordinary sign-in.
+    pub session_capabilities: &'a [String],
     pub authenticated_via_method_id: Option<Uuid>,
     pub assurance: Assurance,
+    pub authenticated_at: i64,
     pub expires_at: i64,
     pub idle_expires_at: Option<i64>,
     /// Transitional: pre-refactor clients choose their own session token. When
@@ -106,9 +111,10 @@ pub async fn issue_session(
             global_capabilities,
             authenticated_via_method_id,
             idle_expires_at,
-            assurance
+            assurance,
+            authenticated_at
         )
-        VALUES ($1, $2, $3, $4, NULL, $5, $6, $7, $8)
+        VALUES ($1, $2, $3, $4, NULL, $5, $6, $7, $8, $9)
         ON CONFLICT (token_hash) DO UPDATE
         SET principal_user_id = EXCLUDED.principal_user_id,
             created_at = EXCLUDED.created_at,
@@ -117,17 +123,19 @@ pub async fn issue_session(
             global_capabilities = EXCLUDED.global_capabilities,
             authenticated_via_method_id = EXCLUDED.authenticated_via_method_id,
             idle_expires_at = EXCLUDED.idle_expires_at,
-            assurance = EXCLUDED.assurance
+            assurance = EXCLUDED.assurance,
+            authenticated_at = EXCLUDED.authenticated_at
         "#,
     )
     .bind(&token_hash)
     .bind(spec.principal_user_id)
     .bind(now)
     .bind(spec.expires_at)
-    .bind(spec.global_capabilities)
+    .bind(spec.session_capabilities)
     .bind(spec.authenticated_via_method_id)
     .bind(spec.idle_expires_at)
     .bind(spec.assurance.as_str())
+    .bind(spec.authenticated_at)
     .execute(&mut *conn)
     .await?;
     Ok(IssuedSession {
@@ -148,6 +156,7 @@ pub struct SessionIdentity {
     pub assurance: Option<Assurance>,
     pub token_hash: String,
     pub created_at: i64,
+    pub authenticated_at: i64,
     pub expires_at: i64,
     pub idle_expires_at: Option<i64>,
 }
@@ -155,8 +164,8 @@ pub struct SessionIdentity {
 /// Validate an app-session bearer: liveness, idle window, and — defense in
 /// depth beyond explicit revocation — the backing method and principal must
 /// still be active. Global capabilities are the union of the principal's
-/// durable capabilities and the session snapshot: the principal row is
-/// canonical authority, while the snapshot preserves session-scoped
+/// durable capabilities and the session-scoped grants: the principal row is
+/// canonical authority, while the session grants preserve intentional
 /// elevations (invite-granted and admin-granted capabilities) that
 /// intentionally live only as long as the session. The idle window slides:
 /// once a quarter of it has elapsed, a successful validation extends it,
@@ -182,6 +191,7 @@ pub async fn validate_session(
             Option<String>,
             Option<String>,
             Option<Vec<String>>,
+            i64,
         ),
     >(
         r#"
@@ -195,7 +205,8 @@ pub async fn validate_session(
                method.kind,
                method.status,
                principal.status,
-               principal.global_capabilities
+               principal.global_capabilities,
+               session.authenticated_at
         FROM auth_session AS session
         LEFT JOIN authentication_method AS method
           ON method.method_id = session.authenticated_via_method_id
@@ -225,6 +236,7 @@ pub async fn validate_session(
         method_status,
         principal_status,
         principal_globals,
+        authenticated_at,
     ) = row;
     if let Some(status) = method_status.as_deref() {
         if status != "active" {
@@ -236,7 +248,10 @@ pub async fn validate_session(
             return Err(IdentityFlowError::Unauthorized);
         }
     }
-    let method = match (method_id, method_kind.as_deref().and_then(MethodKind::parse)) {
+    let method = match (
+        method_id,
+        method_kind.as_deref().and_then(MethodKind::parse),
+    ) {
         (Some(method_id), Some(kind)) => Some((method_id, kind)),
         _ => None,
     };
@@ -275,6 +290,7 @@ pub async fn validate_session(
         assurance: assurance.as_deref().and_then(Assurance::parse),
         token_hash,
         created_at,
+        authenticated_at,
         expires_at,
         idle_expires_at,
     })

@@ -39,8 +39,10 @@ test("checked-in projection schema preserves its baseline and append-only sequen
     baselineFilename,
     "0002_runtime_identity.sql",
     "0003_authentication_methods.sql",
+    "0004_game_cohost_policy.sql",
+    "0005_identity_method_hardening.sql",
   ]);
-  assert.equal(report.migration_file_count, 3);
+  assert.equal(report.migration_file_count, 5);
   assert.ok(report.statement_count > 100);
 });
 

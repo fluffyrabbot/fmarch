@@ -303,6 +303,118 @@ pub async fn resolve_subject(
     })
 }
 
+/// Attach or reactivate a verified WorkOS identity on an already-authenticated
+/// principal. Unlike first-sight sign-in this never provisions a new
+/// principal and never moves an identity between principals.
+pub async fn attach_subject(
+    conn: &mut PgConnection,
+    verified: &VerifiedIdentity,
+    principal_user_id: &str,
+    now: i64,
+) -> Result<WorkosResolution, IdentityFlowError> {
+    if verified.expires_at <= now {
+        return Err(IdentityFlowError::Unauthorized);
+    }
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
+        .bind(format!("workos:{}", verified.subject))
+        .execute(&mut *conn)
+        .await?;
+    let principal = sqlx::query_as::<_, (String, Vec<String>)>(
+        "SELECT status, global_capabilities FROM platform_principal WHERE principal_user_id = $1 FOR UPDATE",
+    )
+    .bind(principal_user_id)
+    .fetch_optional(&mut *conn)
+    .await?
+    .ok_or(IdentityFlowError::Unauthorized)?;
+    if principal.0 != "active" {
+        return Err(IdentityFlowError::Unauthorized);
+    }
+
+    let existing = sqlx::query_as::<_, (String, Option<Uuid>, Option<String>)>(
+        r#"
+        SELECT identity.principal_user_id, identity.method_id, method.status
+        FROM external_identity AS identity
+        LEFT JOIN authentication_method AS method ON method.method_id = identity.method_id
+        WHERE identity.provider = 'workos' AND identity.subject = $1
+        FOR UPDATE OF identity
+        "#,
+    )
+    .bind(verified.subject.as_str())
+    .fetch_optional(&mut *conn)
+    .await?;
+
+    let method_id = match existing {
+        Some((linked_principal, _, _)) if linked_principal != principal_user_id => {
+            return Err(IdentityFlowError::AlreadyExists(
+                "this WorkOS identity is linked to another principal",
+            ));
+        }
+        Some((_, Some(method_id), Some(status))) => {
+            if status == "active" {
+                return Err(IdentityFlowError::AlreadyExists(
+                    "a WorkOS authentication method for this principal",
+                ));
+            }
+            sqlx::query(
+                "UPDATE authentication_method SET status = 'active', disabled_at = NULL, last_authenticated_at = $2 WHERE method_id = $1",
+            )
+            .bind(method_id)
+            .bind(now)
+            .execute(&mut *conn)
+            .await?;
+            method_id
+        }
+        Some((_, None, _)) => {
+            let method_id =
+                methods::create_method(conn, principal_user_id, crate::MethodKind::Workos, now)
+                    .await?;
+            sqlx::query(
+                "UPDATE external_identity SET method_id = $2 WHERE provider = 'workos' AND subject = $1",
+            )
+            .bind(verified.subject.as_str())
+            .bind(method_id)
+            .execute(&mut *conn)
+            .await?;
+            method_id
+        }
+        Some((_, Some(_), None)) => {
+            return Err(IdentityFlowError::Internal(
+                "WorkOS identity references a missing authentication method".to_string(),
+            ));
+        }
+        None => {
+            let method_id =
+                methods::create_method(conn, principal_user_id, crate::MethodKind::Workos, now)
+                    .await?;
+            sqlx::query(
+                "INSERT INTO external_identity (provider, subject, principal_user_id, display_label, created_at, last_seen_at, method_id) VALUES ('workos', $1, $2, $3, $4, $4, $5)",
+            )
+            .bind(verified.subject.as_str())
+            .bind(principal_user_id)
+            .bind(verified.email.as_deref())
+            .bind(now)
+            .bind(method_id)
+            .execute(&mut *conn)
+            .await?;
+            method_id
+        }
+    };
+    sqlx::query(
+        "UPDATE external_identity SET last_seen_at = $1, display_label = COALESCE($2, display_label) WHERE provider = 'workos' AND subject = $3",
+    )
+    .bind(now)
+    .bind(verified.email.as_deref())
+    .bind(verified.subject.as_str())
+    .execute(&mut *conn)
+    .await?;
+    methods::touch_method(conn, method_id, now).await?;
+    Ok(WorkosResolution {
+        principal_user_id: principal_user_id.to_string(),
+        global_capabilities: principal.1,
+        method_id,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
