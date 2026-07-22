@@ -6296,6 +6296,43 @@ function assertRoleMobileViewportEvidence(roleEntries) {
           true,
         );
       }
+
+      const continuity = entry.commandResult.commandContinuity;
+      if (entry.viewport.name !== "mobile") {
+        assert.equal(continuity, null);
+      } else {
+        const continuityBudget = scenario.commandContinuityBudget;
+        assert.equal(continuity.withinBudget, true);
+        assert.equal(
+          continuity.beforeFocusSelector,
+          continuityBudget.beforeFocusSelector,
+        );
+        assert.equal(
+          continuity.afterFocusSelector,
+          continuityBudget.afterFocusSelector,
+        );
+        assert.equal(continuity.statusSelector, continuityBudget.statusSelector);
+        assert.equal(continuity.inputBoundary, continuityBudget.inputBoundary);
+        assert.notEqual(continuity.before.focusedElement, null);
+        assert.notEqual(continuity.after.focusedElement, null);
+        assert.equal(continuity.scrollDelta <= continuity.maxScrollDelta, true);
+        assert.equal(
+          continuity.announcementLatencyMs <=
+            continuity.maxAnnouncementLatencyMs,
+          true,
+        );
+        assert.equal(
+          continuity.focusSettleMs <= continuity.maxFocusSettleMs,
+          true,
+        );
+        assert.equal(
+          continuity.visualViewportDelta <=
+            continuity.maxVisualViewportDelta,
+          true,
+        );
+        assert.equal(continuity.statusRegion.role, "status");
+        assert.equal(continuity.statusRegion.ariaAtomic, "true");
+      }
     }
   }
 }
@@ -6346,6 +6383,16 @@ function assertBrowserPlayerPrivateDisclosureEvidence(roleEntries) {
         },
       ],
       "player command receipt screenshots",
+    );
+    assertPixelEvidence(
+      [
+        {
+          screenshot: entry.commandResult.composerAckScreenshot,
+          screenshotPixels: entry.commandResult.composerAckScreenshotPixels,
+          viewport: entry.viewport,
+        },
+      ],
+      "player composer acknowledgement screenshots",
     );
     assert.deepEqual(entry.commandResult.commandReceipt, {
       receiptTestId: "player-command-receipt",

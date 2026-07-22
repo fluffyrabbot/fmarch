@@ -529,6 +529,7 @@ try {
         commandResult = await driveAdminReject(page, {
           viewport,
           interactionGeometryBudget: role.interactionGeometryBudget,
+          commandContinuityBudget: role.commandContinuityBudget,
         });
       }
       if (role.id === "player") {
@@ -538,6 +539,7 @@ try {
           commandRequests,
           mediaRequests: playerMediaRequests,
           interactionGeometryBudget: role.interactionGeometryBudget,
+          commandContinuityBudget: role.commandContinuityBudget,
         });
       }
       if (role.id === "moderator") {
@@ -545,6 +547,7 @@ try {
           commandRequests,
           viewport,
           interactionGeometryBudget: role.interactionGeometryBudget,
+          commandContinuityBudget: role.commandContinuityBudget,
         });
       }
 
@@ -1124,7 +1127,7 @@ async function assertHostSetupWorkbenchGeometry(page, { scenario, viewport }) {
 
 async function driveAdminReject(
   page,
-  { viewport, interactionGeometryBudget } = {},
+  { viewport, interactionGeometryBudget, commandContinuityBudget } = {},
 ) {
   const createSetup = page.getByTestId("admin-setup-create-game");
   const createGeometryBaseline = await captureInteractionGeometryBaseline(page, {
@@ -1139,6 +1142,12 @@ async function driveAdminReject(
     throw new Error("admin create-game did not require confirmation");
   }
   const createConfirm = page.getByTestId("admin-command-confirm-create-game");
+  const commandContinuityBaseline = await captureCommandContinuityBaseline(page, {
+    budget: commandContinuityBudget,
+    viewport,
+    label: "admin create-game command continuity",
+  });
+  const createDispatchedAtMs = performance.now();
   await createConfirm.click();
   await page.waitForFunction(() => {
     const node = document.querySelector(
@@ -1150,6 +1159,14 @@ async function driveAdminReject(
     label: "admin create-game reject status",
     expectedState: "reject",
     expectedAriaLive: "assertive",
+  });
+  const commandContinuity = await assertCommandContinuity(page, {
+    baseline: commandContinuityBaseline,
+    budget: commandContinuityBudget,
+    viewport,
+    label: "admin create-game command continuity",
+    dispatchedAtMs: createDispatchedAtMs,
+    statusRegion: createRegion,
   });
   const feedbackGeometry = await assertPostInteractionGeometry(page, {
     baseline: createGeometryBaseline,
@@ -1372,6 +1389,7 @@ async function driveAdminReject(
     confirmation: confirmationGeometry,
     feedback: feedbackGeometry,
   };
+  result.commandContinuity = commandContinuity;
   return result;
 }
 
@@ -1478,7 +1496,12 @@ async function driveAdminAuditDetailClick(page, { viewport, baseUrl }) {
 
 async function driveModeratorReject(
   page,
-  { commandRequests = [], viewport, interactionGeometryBudget } = {},
+  {
+    commandRequests = [],
+    viewport,
+    interactionGeometryBudget,
+    commandContinuityBudget,
+  } = {},
 ) {
   const actionRoot = page.getByTestId("critical-host-action-extend_deadline");
   const interactionGeometryBaseline =
@@ -1529,6 +1552,12 @@ async function driveModeratorReject(
     actionRoot.getByTestId("critical-host-action-confirm"),
     "moderator confirm",
   );
+  const commandContinuityBaseline = await captureCommandContinuityBaseline(page, {
+    budget: commandContinuityBudget,
+    viewport,
+    label: "moderator extend deadline command continuity",
+  });
+  const extendDeadlineDispatchedAtMs = performance.now();
   await actionRoot.getByTestId("critical-host-action-confirm").click();
   const status = page.getByTestId("host-command-status-extend_deadline");
   await status.waitFor({ state: "visible" });
@@ -1542,6 +1571,14 @@ async function driveModeratorReject(
     label: "moderator extend-deadline reject status",
     expectedState: "reject",
     expectedAriaLive: "assertive",
+  });
+  const commandContinuity = await assertCommandContinuity(page, {
+    baseline: commandContinuityBaseline,
+    budget: commandContinuityBudget,
+    viewport,
+    label: "moderator extend deadline command continuity",
+    dispatchedAtMs: extendDeadlineDispatchedAtMs,
+    statusRegion,
   });
   const feedbackGeometry = await assertPostInteractionGeometry(page, {
     baseline: feedbackGeometryBaseline,
@@ -1583,6 +1620,7 @@ async function driveModeratorReject(
       confirmation: confirmationGeometry,
       feedback: feedbackGeometry,
     },
+    commandContinuity,
   };
 }
 
@@ -1755,6 +1793,112 @@ async function readDocumentBox(locator) {
       height: rect.height,
     };
   });
+}
+
+async function captureCommandContinuityBaseline(
+  page,
+  { budget, viewport, label },
+) {
+  if (budget === undefined || viewport?.name !== "mobile") {
+    return null;
+  }
+  const focusTarget = page.locator(budget.beforeFocusSelector).first();
+  await assertVisibleBox(focusTarget, `${label} before-focus target`);
+  await focusTarget.focus();
+  await page.waitForFunction(
+    (selector) => document.activeElement?.matches(selector) === true,
+    budget.beforeFocusSelector,
+    { timeout: budget.maxFocusSettleMs },
+  );
+  return {
+    focusedElement: await readFocusedElement(page),
+    ...(await readViewportContinuityState(page)),
+  };
+}
+
+async function assertCommandContinuity(
+  page,
+  {
+    baseline,
+    budget,
+    viewport,
+    label,
+    dispatchedAtMs,
+    statusRegion,
+  },
+) {
+  if (baseline === null || budget === undefined || viewport?.name !== "mobile") {
+    return null;
+  }
+  const announcedAtMs = performance.now();
+  await page.waitForFunction(
+    (selector) => document.activeElement?.matches(selector) === true,
+    budget.afterFocusSelector,
+    { timeout: budget.maxFocusSettleMs },
+  );
+  const focusSettledAtMs = performance.now();
+  const after = {
+    focusedElement: await readFocusedElement(page),
+    ...(await readViewportContinuityState(page)),
+  };
+  const status = page.locator(budget.statusSelector).first();
+  await assertVisibleBox(status, `${label} announcement status`);
+  const scrollDelta = Math.abs(after.scrollY - baseline.scrollY);
+  const announcementLatencyMs = announcedAtMs - dispatchedAtMs;
+  const focusSettleMs = focusSettledAtMs - dispatchedAtMs;
+  const visualViewportDelta = Math.abs(
+    after.visualViewportHeight - baseline.visualViewportHeight,
+  );
+
+  if (scrollDelta > budget.maxScrollDeltaPx) {
+    throw new Error(
+      `${label} moved scroll ${scrollDelta}px, beyond ${budget.maxScrollDeltaPx}px budget`,
+    );
+  }
+  if (announcementLatencyMs > budget.maxAnnouncementLatencyMs) {
+    throw new Error(
+      `${label} announced after ${announcementLatencyMs}ms, beyond ${budget.maxAnnouncementLatencyMs}ms budget`,
+    );
+  }
+  if (focusSettleMs > budget.maxFocusSettleMs) {
+    throw new Error(
+      `${label} restored focus after ${focusSettleMs}ms, beyond ${budget.maxFocusSettleMs}ms budget`,
+    );
+  }
+  if (visualViewportDelta > budget.maxVisualViewportDeltaPx) {
+    throw new Error(
+      `${label} changed visual viewport ${visualViewportDelta}px, beyond ${budget.maxVisualViewportDeltaPx}px budget`,
+    );
+  }
+
+  return {
+    beforeFocusSelector: budget.beforeFocusSelector,
+    afterFocusSelector: budget.afterFocusSelector,
+    statusSelector: budget.statusSelector,
+    inputBoundary: budget.inputBoundary,
+    before: baseline,
+    after,
+    scrollDelta,
+    maxScrollDelta: budget.maxScrollDeltaPx,
+    announcementLatencyMs,
+    maxAnnouncementLatencyMs: budget.maxAnnouncementLatencyMs,
+    focusSettleMs,
+    maxFocusSettleMs: budget.maxFocusSettleMs,
+    visualViewportDelta,
+    maxVisualViewportDelta: budget.maxVisualViewportDeltaPx,
+    statusRegion,
+    withinBudget: true,
+  };
+}
+
+async function readViewportContinuityState(page) {
+  return page.evaluate(() => ({
+    scrollY: window.scrollY,
+    innerHeight: window.innerHeight,
+    visualViewportHeight: window.visualViewport?.height ?? window.innerHeight,
+    visualViewportOffsetTop: window.visualViewport?.offsetTop ?? 0,
+    visualViewportScale: window.visualViewport?.scale ?? 1,
+  }));
 }
 
 async function driveModeratorHostPromptAck(page) {
@@ -2410,6 +2554,7 @@ async function drivePlayerReject(
     commandRequests,
     mediaRequests,
     interactionGeometryBudget,
+    commandContinuityBudget,
   },
 ) {
   const media = await assertPlayerMediaNetwork(page, { mediaRequests });
@@ -2477,7 +2622,14 @@ async function drivePlayerReject(
     label: `player receipt ${viewport.name}`,
     viewport,
   });
-  await composer.locator("textarea").fill("Browser smoke player post");
+  const composerTextarea = composer.locator("textarea");
+  await composerTextarea.fill("Browser smoke player post");
+  const commandContinuityBaseline = await captureCommandContinuityBaseline(page, {
+    budget: commandContinuityBudget,
+    viewport,
+    label: "player composer command continuity",
+  });
+  const postDispatchedAtMs = performance.now();
   await composer.locator('[data-action="submit_post"]').click();
   await page.waitForFunction(() => {
     const node = document.querySelector('[data-testid="player-command-status"]');
@@ -2488,9 +2640,26 @@ async function drivePlayerReject(
     expectedState: "ack",
     expectedAriaLive: "polite",
   });
+  const commandContinuity = await assertCommandContinuity(page, {
+    baseline: commandContinuityBaseline,
+    budget: commandContinuityBudget,
+    viewport,
+    label: "player composer command continuity",
+    dispatchedAtMs: postDispatchedAtMs,
+    statusRegion: postCommandStatusRegion,
+  });
   const postCommandReceipt = await assertPlayerCommandReceipt(page, {
     actionId: "submit_post",
     expectedState: "ack",
+  });
+  const composerAckScreenshot = path.join(
+    artifactDir,
+    `${viewport.name}-player-composer-ack.png`,
+  );
+  const composerAckScreenshotPixels = await captureScreenshotEvidence(page, {
+    path: composerAckScreenshot,
+    label: `player composer acknowledgement ${viewport.name}`,
+    viewport,
   });
   await page.getByTestId("thread-post-445").waitFor({ state: "visible" });
   const postRequest = commandRequests.find(
@@ -2519,8 +2688,11 @@ async function drivePlayerReject(
       confirmation: null,
       feedback: feedbackGeometry,
     },
+    commandContinuity,
     receiptScreenshot: path.relative(repoRoot, receiptScreenshot),
     receiptScreenshotPixels,
+    composerAckScreenshot: path.relative(repoRoot, composerAckScreenshot),
+    composerAckScreenshotPixels,
     postCommand: {
       state: await status.getAttribute("data-state"),
       message: await status.innerText(),

@@ -248,6 +248,21 @@ test("role smoke pins confirmation and feedback geometry budgets", () => {
   }
 });
 
+test("role smoke pins post-command scroll focus and announcement budgets", () => {
+  for (const role of roles) {
+    const budget = role.commandContinuityBudget;
+    assert.equal(Object.isFrozen(budget), true);
+    assert.equal(typeof budget.beforeFocusSelector, "string");
+    assert.equal(typeof budget.afterFocusSelector, "string");
+    assert.equal(typeof budget.statusSelector, "string");
+    assert.equal(budget.maxScrollDeltaPx <= 1, true);
+    assert.equal(budget.maxAnnouncementLatencyMs <= 500, true);
+    assert.equal(budget.maxFocusSettleMs <= 500, true);
+    assert.equal(budget.maxVisualViewportDeltaPx <= 1, true);
+    assert.equal(typeof budget.inputBoundary, "string");
+  }
+});
+
 test("nav focus coverage is shared across static and browser smoke evidence", () => {
   assert.deepEqual(
     navFocusCoverage.surfaces.map((surface) => surface.id),

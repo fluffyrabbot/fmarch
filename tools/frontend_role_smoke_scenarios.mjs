@@ -186,6 +186,18 @@ export const roles = Object.freeze([
         maxDocumentGrowthViewportRatio: 0.25,
       }),
     }),
+    commandContinuityBudget: Object.freeze({
+      beforeFocusSelector:
+        '[data-testid="admin-command-confirm-create-game"]',
+      afterFocusSelector:
+        '[data-testid="admin-command-trigger-create-game"]',
+      statusSelector: '[data-testid="admin-command-status-create-game"]',
+      maxScrollDeltaPx: 1,
+      maxAnnouncementLatencyMs: 500,
+      maxFocusSettleMs: 500,
+      maxVisualViewportDeltaPx: 1,
+      inputBoundary: "confirmation-control",
+    }),
     closedByDefault: Object.freeze([
       '[data-testid="admin-recovery-workflow"]',
       '[data-testid="admin-status-overview"]',
@@ -293,6 +305,17 @@ export const roles = Object.freeze([
         maxDocumentGrowthViewportRatio: 0.25,
       }),
     }),
+    commandContinuityBudget: Object.freeze({
+      beforeFocusSelector: '[data-testid="player-composer"] textarea',
+      afterFocusSelector:
+        '[data-testid="player-composer"] [data-action="submit_post"]',
+      statusSelector: '[data-testid="player-command-status"]',
+      maxScrollDeltaPx: 1,
+      maxAnnouncementLatencyMs: 500,
+      maxFocusSettleMs: 500,
+      maxVisualViewportDeltaPx: 1,
+      inputBoundary: "emulated-mobile-textarea-visual-viewport",
+    }),
     closedByDefault: Object.freeze([
       '[data-testid="player-media-composer"]',
       '[data-testid="player-status-overview"]',
@@ -386,6 +409,18 @@ export const roles = Object.freeze([
         maxCombinedSpanViewportRatio: 0.5,
         maxDocumentGrowthViewportRatio: 0.25,
       }),
+    }),
+    commandContinuityBudget: Object.freeze({
+      beforeFocusSelector:
+        '[data-testid="critical-host-action-extend_deadline"] [data-testid="critical-host-action-confirm"]',
+      afterFocusSelector:
+        '[data-testid="critical-host-action-extend_deadline"] [data-testid="critical-host-action-trigger"]',
+      statusSelector: '[data-testid="host-command-status-extend_deadline"]',
+      maxScrollDeltaPx: 1,
+      maxAnnouncementLatencyMs: 500,
+      maxFocusSettleMs: 500,
+      maxVisualViewportDeltaPx: 1,
+      inputBoundary: "confirmation-control",
     }),
     closedByDefault: Object.freeze([
       '[data-testid="host-status-overview"]',
