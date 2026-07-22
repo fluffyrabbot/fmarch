@@ -79,7 +79,10 @@ export async function buildAdminRuntimeRouteData({
         buttonLabel: "Open setup",
       }),
     ]),
-    audit: withRuntimeAuditLinks(coldData.audit, { game: selectedGame }),
+    audit: Object.freeze([
+      authDeliveryQueueAudit(),
+      ...withRuntimeAuditLinks(coldData.audit, { game: selectedGame }),
+    ]),
     recoveryTasks: Object.freeze([
       Object.freeze({
         id: "recovery-gate",
@@ -261,6 +264,19 @@ function withRuntimeAuditLinks(audit, { game }) {
       }),
     ),
   );
+}
+
+function authDeliveryQueueAudit() {
+  return Object.freeze({
+    id: "auth-deliveries",
+    label: "Identity deliveries",
+    status: "Review exceptions",
+    authority: "GlobalAdmin or GlobalMod",
+    boundary: "Credential-safe operator queue",
+    boundaryDetail: "Failures and cancellations are visible without credential material",
+    href: "/admin/deliveries",
+    inspectHref: "/admin/deliveries",
+  });
 }
 
 function adminOverviewHref(game) {

@@ -233,6 +233,7 @@ pub fn router_with_state(state: ApiState) -> Router {
         .route("/auth/invites", post(create_auth_invite))
         .route("/auth/invites/redeem", post(redeem_auth_invite))
         .route("/auth/invite-revocations", post(revoke_auth_invite))
+        .route("/admin/auth-deliveries", get(admin_auth_delivery_queue))
         .route(
             "/auth/delivery-intents/{delivery_id}/retry",
             post(retry_auth_delivery_intent),
@@ -965,6 +966,34 @@ struct AuthDeliveryRetryResponse {
     delivery_provider_id: String,
     delivery_outcome_kind: String,
     delivery_outcome_code: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct AuthDeliveryQueueQuery {
+    limit: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+struct AuthDeliveryQueueEntry {
+    delivery_id: Uuid,
+    delivery_kind: String,
+    account_id: String,
+    principal_user_id: String,
+    status: String,
+    attempt_count: i32,
+    provider_id: String,
+    outcome_kind: String,
+    outcome_code: Option<String>,
+    next_attempt_at: Option<i64>,
+    credential_expires_at: i64,
+    created_at: i64,
+    updated_at: i64,
+    retry_eligible: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct AuthDeliveryQueueResponse {
+    deliveries: Vec<AuthDeliveryQueueEntry>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -1707,7 +1736,7 @@ async fn request_auth_account_recovery(
     let recovery_token = format!("account-recovery-{}-{}", Uuid::new_v4(), Uuid::new_v4());
     let recovery_hash = hash_session_token(recovery_token.as_str());
     let mut tx = state.pool.begin().await?;
-    sqlx::query(
+    let rotated_recovery_hashes = sqlx::query_scalar::<_, String>(
         r#"
         UPDATE auth_account_recovery_credential
         SET revoked_at = $2
@@ -1715,12 +1744,23 @@ async fn request_auth_account_recovery(
           AND used_at IS NULL
           AND revoked_at IS NULL
           AND expires_at > $2
+        RETURNING token_hash
         "#,
     )
     .bind(account_id.as_str())
     .bind(now)
-    .execute(&mut *tx)
+    .fetch_all(&mut *tx)
     .await?;
+    for rotated_recovery_hash in rotated_recovery_hashes {
+        cancel_auth_delivery_intent(
+            &mut tx,
+            rotated_recovery_hash.as_str(),
+            None,
+            "credential_rotated",
+            now,
+        )
+        .await?;
+    }
     sqlx::query(
         r#"
         INSERT INTO auth_account_recovery_credential (
@@ -1834,6 +1874,14 @@ async fn revoke_auth_account_recovery_credential(
     .fetch_optional(&mut *tx)
     .await?
     .ok_or_else(unauthorized_account_recovery)?;
+    cancel_auth_delivery_intent(
+        &mut tx,
+        recovery_hash.as_str(),
+        Some(principal_user_id.as_str()),
+        "credential_revoked",
+        now,
+    )
+    .await?;
     sqlx::query(
         r#"
         INSERT INTO identity_lifecycle_audit (
@@ -1940,6 +1988,14 @@ async fn recover_auth_account(
     .bind(now)
     .bind(recovery_id)
     .execute(&mut *tx)
+    .await?;
+    cancel_auth_delivery_intent(
+        &mut tx,
+        recovery_hash.as_str(),
+        Some(principal_user_id.as_str()),
+        "credential_consumed",
+        now,
+    )
     .await?;
     sqlx::query("UPDATE auth_account SET password_hash = $2 WHERE account_id = $1")
         .bind(account_id)
@@ -2635,6 +2691,14 @@ async fn redeem_auth_invite(
     .bind(&invite_hash)
     .execute(&mut *tx)
     .await?;
+    cancel_auth_delivery_intent(
+        &mut tx,
+        invite_hash.as_str(),
+        Some(invite.0.as_str()),
+        "invite_redeemed",
+        now,
+    )
+    .await?;
 
     sqlx::query(
         r#"
@@ -2726,6 +2790,14 @@ async fn revoke_auth_invite(
     .fetch_optional(&mut *tx)
     .await?
     .ok_or_else(unauthorized_invite)?;
+    cancel_auth_delivery_intent(
+        &mut tx,
+        invite_hash.as_str(),
+        Some(actor_user_id.as_str()),
+        "invite_revoked",
+        now,
+    )
+    .await?;
     sqlx::query(
         r#"
         INSERT INTO identity_lifecycle_audit (
@@ -2752,6 +2824,72 @@ async fn revoke_auth_invite(
         status: "revoked".to_string(),
         principal_user_id,
     }))
+}
+
+async fn admin_auth_delivery_queue(
+    State(state): State<ApiState>,
+    Query(query): Query<AuthDeliveryQueueQuery>,
+    headers: HeaderMap,
+) -> Result<Json<AuthDeliveryQueueResponse>, ApiError> {
+    let caller_token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
+    require_global_operator(&state, caller_token, "auth delivery queue").await?;
+    let now = unix_now_seconds();
+    let limit = query.limit.unwrap_or(100).clamp(1, 200);
+    let deliveries = sqlx::query_as::<_, AuthDeliveryQueueEntry>(
+        r#"
+        SELECT delivery.delivery_id,
+               delivery.delivery_kind,
+               delivery.account_id,
+               delivery.principal_user_id,
+               delivery.status,
+               delivery.attempt_count,
+               delivery.provider_id,
+               delivery.outcome_kind,
+               delivery.outcome_code,
+               delivery.next_attempt_at,
+               delivery.credential_expires_at,
+               delivery.created_at,
+               delivery.updated_at,
+               (
+                   delivery.status = 'retryable_failed'
+                   AND delivery.next_attempt_at <= $1
+                   AND delivery.credential_expires_at > $1
+                   AND CASE delivery.delivery_kind
+                       WHEN 'invite' THEN EXISTS (
+                           SELECT 1 FROM auth_invite
+                           WHERE token_hash = delivery.credential_hash
+                             AND redeemed_at IS NULL
+                             AND revoked_at IS NULL
+                       )
+                       WHEN 'recovery' THEN EXISTS (
+                           SELECT 1 FROM auth_account_recovery_credential
+                           WHERE token_hash = delivery.credential_hash
+                             AND used_at IS NULL
+                             AND revoked_at IS NULL
+                       )
+                       ELSE FALSE
+                   END
+               ) AS retry_eligible
+        FROM auth_delivery_intent AS delivery
+        WHERE delivery.status IN ('retryable_failed', 'permanent_failed', 'cancelled')
+        ORDER BY
+            CASE delivery.status
+                WHEN 'retryable_failed' THEN 0
+                WHEN 'permanent_failed' THEN 1
+                WHEN 'cancelled' THEN 2
+                WHEN 'processing' THEN 3
+                ELSE 4
+            END,
+            delivery.updated_at DESC,
+            delivery.delivery_id DESC
+        LIMIT $2
+        "#,
+    )
+    .bind(now)
+    .bind(limit)
+    .fetch_all(&state.pool)
+    .await?;
+    Ok(Json(AuthDeliveryQueueResponse { deliveries }))
 }
 
 async fn retry_auth_delivery_intent(
@@ -3450,6 +3588,57 @@ async fn deliver_auth_credential(
         outcome_kind: "queued".to_string(),
         outcome_code: None,
     })
+}
+
+async fn cancel_auth_delivery_intent(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    credential_hash: &str,
+    actor_user_id: Option<&str>,
+    outcome_code: &str,
+    now: i64,
+) -> Result<i64, ApiError> {
+    let cancelled = sqlx::query_as::<_, (Uuid, String, String, String, String)>(
+        r#"
+        UPDATE auth_delivery_intent
+        SET status = 'cancelled',
+            outcome_kind = 'cancelled',
+            outcome_code = $2,
+            next_attempt_at = NULL,
+            delivered_at = NULL,
+            last_error = $2,
+            provider_receipt_id = NULL,
+            claim_token = NULL,
+            claim_expires_at = NULL,
+            credential_envelope = NULL,
+            updated_at = $3
+        WHERE credential_hash = $1
+          AND status IN ('queued', 'retryable_failed', 'processing')
+        RETURNING delivery_id, delivery_kind, account_id, principal_user_id, provider_id
+        "#,
+    )
+    .bind(credential_hash)
+    .bind(outcome_code)
+    .bind(now)
+    .fetch_all(&mut **tx)
+    .await?;
+    for (delivery_id, delivery_kind, account_id, principal_user_id, provider_id) in &cancelled {
+        record_auth_delivery_audit(
+            tx,
+            "auth_delivery_cancelled",
+            delivery_kind.as_str(),
+            account_id.as_str(),
+            actor_user_id.unwrap_or(principal_user_id.as_str()),
+            principal_user_id.as_str(),
+            credential_hash,
+            *delivery_id,
+            now,
+            provider_id.as_str(),
+            "cancelled",
+            Some(outcome_code),
+        )
+        .await?;
+    }
+    Ok(cancelled.len() as i64)
 }
 
 async fn record_auth_delivery_audit(

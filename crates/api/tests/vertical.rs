@@ -6361,6 +6361,29 @@ async fn identity_delivery_intent_is_redacted_and_retryable(pool: sqlx::PgPool) 
         .await
         .unwrap();
     let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/admin/auth-deliveries")
+                .header("authorization", format!("Bearer {admin_token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let queue: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(
+        queue["deliveries"][0]["delivery_id"],
+        delivery_id.to_string()
+    );
+    assert_eq!(queue["deliveries"][0]["retry_eligible"], true);
+    assert!(queue["deliveries"][0].get("credential_hash").is_none());
+    assert!(queue["deliveries"][0].get("credential_envelope").is_none());
+    assert!(!String::from_utf8_lossy(&bytes).contains("delivery-invite-raw-token"));
+    let response = app
         .oneshot(
             Request::builder()
                 .method("POST")
@@ -7178,6 +7201,22 @@ async fn global_admin_account_login_creates_normal_role_session(pool: sqlx::PgPo
     assert_eq!(recovery["status"], "recovered");
     assert_eq!(recovery["password_algorithm"], "argon2id");
     assert!(recovery["revoked_session_count"].as_i64().unwrap() >= 1);
+    for (credential, expected_code) in [
+        (&recovery_credentials[0], "credential_consumed"),
+        (&recovery_credentials[1], "credential_revoked"),
+    ] {
+        let delivery_id = Uuid::parse_str(credential["delivery_id"].as_str().unwrap()).unwrap();
+        let delivery = sqlx::query_as::<_, (String, String, Option<String>)>(
+            "SELECT status, outcome_code, credential_envelope::TEXT FROM auth_delivery_intent WHERE delivery_id = $1",
+        )
+        .bind(delivery_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(delivery.0, "cancelled");
+        assert_eq!(delivery.1, expected_code);
+        assert!(delivery.2.is_none());
+    }
 
     for recovery_token in [&active_recovery_token, &revoked_recovery_token] {
         let response = app
@@ -7386,6 +7425,45 @@ async fn public_recovery_request_is_non_enumerating_and_rotates_credentials(pool
     .await
     .unwrap();
     assert_eq!(delivery_count, 2);
+    let deliveries = sqlx::query_as::<_, (Uuid, String, String, Option<String>, Option<i64>)>(
+        r#"
+        SELECT delivery.delivery_id,
+               delivery.status,
+               delivery.outcome_kind,
+               delivery.credential_envelope::TEXT,
+               recovery.revoked_at
+        FROM auth_delivery_intent AS delivery
+        JOIN auth_account_recovery_credential AS recovery
+          ON recovery.token_hash = delivery.credential_hash
+        WHERE delivery.account_id = $1 AND delivery.delivery_kind = 'recovery'
+        "#,
+    )
+    .bind(account_id)
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    let cancelled = deliveries
+        .iter()
+        .find(|delivery| delivery.4.is_some())
+        .expect("rotated credential delivery");
+    let active = deliveries
+        .iter()
+        .find(|delivery| delivery.4.is_none())
+        .expect("active credential delivery");
+    assert_eq!(cancelled.1, "cancelled");
+    assert_eq!(cancelled.2, "cancelled");
+    assert!(cancelled.3.is_none());
+    assert_eq!(active.1, "queued");
+
+    let receipt = process_next_identity_delivery(&pool, gateway.as_ref(), unix_now_seconds())
+        .await
+        .unwrap()
+        .expect("active rotated credential remains deliverable");
+    assert_eq!(receipt.delivery_id, active.0);
+    let attempts = gateway.attempts();
+    assert_eq!(attempts.len(), 1);
+    assert_eq!(attempts[0].0, active.0);
+    assert_ne!(attempts[0].0, cancelled.0);
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
@@ -8631,6 +8709,10 @@ async fn auth_lifecycle_rotates_sessions_and_revokes_invites(pool: sqlx::PgPool)
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let revoked_invite: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    let revoked_delivery_id =
+        Uuid::parse_str(revoked_invite["delivery_id"].as_str().unwrap()).unwrap();
 
     let response = app
         .clone()
@@ -8696,6 +8778,10 @@ async fn auth_lifecycle_rotates_sessions_and_revokes_invites(pool: sqlx::PgPool)
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let replacement_invite: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    let replacement_delivery_id =
+        Uuid::parse_str(replacement_invite["delivery_id"].as_str().unwrap()).unwrap();
 
     let response = app
         .clone()
@@ -8718,6 +8804,21 @@ async fn auth_lifecycle_rotates_sessions_and_revokes_invites(pool: sqlx::PgPool)
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
+    for (delivery_id, expected_code) in [
+        (revoked_delivery_id, "invite_revoked"),
+        (replacement_delivery_id, "invite_redeemed"),
+    ] {
+        let delivery = sqlx::query_as::<_, (String, String, Option<String>)>(
+            "SELECT status, outcome_code, credential_envelope::TEXT FROM auth_delivery_intent WHERE delivery_id = $1",
+        )
+        .bind(delivery_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(delivery.0, "cancelled");
+        assert_eq!(delivery.1, expected_code);
+        assert!(delivery.2.is_none());
+    }
 
     let response = app
         .clone()
@@ -8743,6 +8844,7 @@ async fn auth_lifecycle_rotates_sessions_and_revokes_invites(pool: sqlx::PgPool)
         event_kinds,
         BTreeSet::from([
             "account_created",
+            "auth_delivery_cancelled",
             "auth_delivery_queued",
             "invite_redeemed",
             "invite_revoked",
