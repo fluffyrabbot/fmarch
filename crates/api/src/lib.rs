@@ -10,8 +10,6 @@ use crate::identity_delivery::{
     delivery_aad, process_identity_delivery_intent, IdentityDeliveryError, IdentityDeliveryGateway,
     IdentityDeliveryKind, LocalDeterministicIdentityDeliveryGateway,
 };
-use argon2::password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString};
-use argon2::Argon2;
 use axum::body::Bytes;
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::extract::{DefaultBodyLimit, Path, Query, State};
@@ -30,11 +28,10 @@ use media::{
     VariantKind, VariantLimits, VARIANT_RECIPE_REVISION,
 };
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 use sqlx::postgres::PgPool;
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::path::Path as FsPath;
-use std::sync::{Arc, OnceLock};
+use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::{broadcast, Semaphore};
 use uuid::Uuid;
@@ -67,6 +64,7 @@ pub struct ApiState {
     websocket_ticket_ttl: Duration,
     websocket_poll_interval: Duration,
     access_token_verifier: Option<Arc<dyn AccessTokenVerifier>>,
+    session_policy: identity::SessionPolicy,
 }
 
 #[derive(Debug, Clone)]
@@ -142,6 +140,7 @@ impl ApiState {
                 5_000,
             ) as u64),
             access_token_verifier: None,
+            session_policy: identity::SessionPolicy::from_env(),
         }
     }
 
@@ -585,6 +584,13 @@ async fn resolve_workos_principal(
     .bind(verified.subject.as_str())
     .execute(&mut *tx)
     .await?;
+    identity::methods::link_workos_method(
+        &mut *tx,
+        verified.subject.as_str(),
+        principal_user_id.as_str(),
+        now,
+    )
+    .await?;
     let principal = sqlx::query_as::<_, (String, Vec<String>)>(
         "SELECT status, global_capabilities FROM platform_principal WHERE principal_user_id = $1",
     )
@@ -969,16 +975,20 @@ struct AuthSessionResponse {
     principal_user_id: String,
     capabilities: Vec<CapabilityGrant>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    session_token: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     created_at: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     expires_at: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    idle_expires_at: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     rotation_required: Option<bool>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
 struct CreateDevAuthSession {
-    token: String,
+    token: Option<String>,
     principal_user_id: String,
     expires_at: i64,
     #[serde(default)]
@@ -987,7 +997,7 @@ struct CreateDevAuthSession {
 
 #[derive(Debug, Clone, Deserialize)]
 struct CreateAuthSessionGrant {
-    token: String,
+    token: Option<String>,
     principal_user_id: String,
     expires_at: i64,
     #[serde(default)]
@@ -1109,13 +1119,14 @@ pub async fn bootstrap_workos_global_admin(
 struct RegisterAuthAccount {
     account_id: String,
     password: String,
-    session_token: String,
+    session_token: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct AuthAccountRegistrationResponse {
     account_id: String,
     principal_user_id: String,
+    session_token: String,
     expires_at: i64,
 }
 
@@ -1123,8 +1134,8 @@ struct AuthAccountRegistrationResponse {
 struct LoginAuthAccount {
     account_id: String,
     password: String,
-    session_token: String,
-    expires_at: i64,
+    session_token: Option<String>,
+    expires_at: Option<i64>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -1206,6 +1217,8 @@ struct AuthAccountRecoveryResponse {
     principal_user_id: String,
     revoked_session_count: i64,
     password_algorithm: String,
+    session_token: String,
+    session_expires_at: i64,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -1231,9 +1244,9 @@ struct AuthAccountLifecycleResponse {
     revoked_session_count: i64,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Default)]
 struct RotateAuthSession {
-    session_token: String,
+    session_token: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -1322,7 +1335,7 @@ struct RedeemAuthInvite {
     invite_token: String,
     account_id: String,
     password: String,
-    session_token: String,
+    session_token: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -1399,46 +1412,43 @@ async fn create_dev_auth_session(
         });
     }
 
-    let token = request.token.trim();
-    if token.is_empty() || request.principal_user_id.trim().is_empty() {
+    let client_token = request
+        .token
+        .as_deref()
+        .map(str::trim)
+        .filter(|token| !token.is_empty());
+    if request.principal_user_id.trim().is_empty() {
         return Err(ApiError::Reject {
             status: StatusCode::BAD_REQUEST,
             error: RejectCode::Internal,
-            message: "dev auth session requires token and principal_user_id".to_string(),
+            message: "dev auth session requires principal_user_id".to_string(),
         });
     }
     let global_capabilities = normalize_dev_global_capabilities(&request.global_capabilities)?;
 
     let now = unix_now_seconds();
-    sqlx::query(
-        r#"
-        INSERT INTO auth_session (
-            token_hash,
-            principal_user_id,
-            created_at,
-            expires_at,
-            revoked_at,
-            global_capabilities
-        )
-        VALUES ($1, $2, $3, $4, NULL, $5)
-        ON CONFLICT (token_hash) DO UPDATE
-        SET principal_user_id = EXCLUDED.principal_user_id,
-            expires_at = EXCLUDED.expires_at,
-            revoked_at = NULL,
-            global_capabilities = EXCLUDED.global_capabilities
-        "#,
+    let mut conn = state.pool.acquire().await?;
+    let issued = identity::session::issue_session(
+        &mut conn,
+        identity::SessionSpec {
+            principal_user_id: request.principal_user_id.as_str(),
+            global_capabilities: &global_capabilities,
+            authenticated_via_method_id: None,
+            assurance: identity::Assurance::Dev,
+            expires_at: request.expires_at,
+            idle_expires_at: None,
+            client_supplied_token: client_token,
+        },
+        now,
     )
-    .bind(hash_session_token(token))
-    .bind(request.principal_user_id.as_str())
-    .bind(now)
-    .bind(request.expires_at)
-    .bind(&global_capabilities)
-    .execute(&state.pool)
     .await?;
+    drop(conn);
 
-    Ok(Json(
-        auth_session_response(&state, request.principal_user_id, None, global_capabilities).await?,
-    ))
+    let mut response =
+        auth_session_response(&state, request.principal_user_id, None, global_capabilities).await?;
+    response.session_token = Some(issued.session_token);
+    response.expires_at = Some(issued.expires_at);
+    Ok(Json(response))
 }
 
 async fn create_auth_session_grant(
@@ -1460,28 +1470,43 @@ async fn create_auth_session_grant(
         });
     }
 
-    let token = request.token.trim();
-    if token.is_empty() || request.principal_user_id.trim().is_empty() {
+    let client_token = request
+        .token
+        .as_deref()
+        .map(str::trim)
+        .filter(|token| !token.is_empty());
+    if request.principal_user_id.trim().is_empty() {
         return Err(ApiError::Reject {
             status: StatusCode::BAD_REQUEST,
             error: RejectCode::Internal,
-            message: "session grant requires token and principal_user_id".to_string(),
+            message: "session grant requires principal_user_id".to_string(),
         });
     }
     let global_capabilities = normalize_global_capabilities(&request.global_capabilities)?;
 
-    upsert_auth_session(
-        &state,
-        token,
-        request.principal_user_id.as_str(),
-        request.expires_at,
-        &global_capabilities,
+    let now = unix_now_seconds();
+    let mut conn = state.pool.acquire().await?;
+    let issued = identity::session::issue_session(
+        &mut conn,
+        identity::SessionSpec {
+            principal_user_id: request.principal_user_id.as_str(),
+            global_capabilities: &global_capabilities,
+            authenticated_via_method_id: None,
+            assurance: identity::Assurance::AdminGrant,
+            expires_at: request.expires_at,
+            idle_expires_at: None,
+            client_supplied_token: client_token,
+        },
+        now,
     )
     .await?;
+    drop(conn);
 
-    Ok(Json(
-        auth_session_response(&state, request.principal_user_id, None, global_capabilities).await?,
-    ))
+    let mut response =
+        auth_session_response(&state, request.principal_user_id, None, global_capabilities).await?;
+    response.session_token = Some(issued.session_token);
+    response.expires_at = Some(issued.expires_at);
+    Ok(Json(response))
 }
 
 async fn create_auth_account(
@@ -1538,6 +1563,15 @@ async fn create_auth_account(
         });
     }
 
+    identity::methods::link_classic_method(
+        &mut *tx,
+        account_id,
+        principal_user_id,
+        &global_capabilities,
+        now,
+    )
+    .await?;
+
     sqlx::query(
         r#"
         INSERT INTO identity_lifecycle_audit (
@@ -1580,14 +1614,11 @@ async fn register_auth_account(
 ) -> Result<Json<AuthAccountRegistrationResponse>, ApiError> {
     let account_id = normalize_registration_account_id(request.account_id.as_str())?;
     let password = request.password.as_str();
-    let session_token = request.session_token.trim();
-    if session_token.is_empty() {
-        return Err(ApiError::Reject {
-            status: StatusCode::BAD_REQUEST,
-            error: RejectCode::Internal,
-            message: "account registration requires a session_token".to_string(),
-        });
-    }
+    let client_token = request
+        .session_token
+        .as_deref()
+        .map(str::trim)
+        .filter(|token| !token.is_empty());
     validate_new_account_password(password)?;
     enforce_registration_source_limit(&state, &headers).await?;
 
@@ -1595,7 +1626,6 @@ async fn register_auth_account(
     let expires_at = now + REGISTRATION_SESSION_TTL_SECONDS;
     let principal_user_id = format!("registered-{}", Uuid::new_v4());
     let password_hash = hash_account_password(password).await?;
-    let session_hash = hash_session_token(session_token);
     let mut tx = state.pool.begin().await?;
     let inserted = sqlx::query(
         r#"
@@ -1625,25 +1655,29 @@ async fn register_auth_account(
         });
     }
 
-    sqlx::query(
-        r#"
-        INSERT INTO auth_session (
-            token_hash,
-            principal_user_id,
-            created_at,
-            expires_at,
-            revoked_at,
-            global_capabilities
-        )
-        VALUES ($1, $2, $3, $4, NULL, '{}')
-        "#,
+    let method_id = identity::methods::link_classic_method(
+        &mut *tx,
+        account_id.as_str(),
+        principal_user_id.as_str(),
+        &[],
+        now,
     )
-    .bind(&session_hash)
-    .bind(principal_user_id.as_str())
-    .bind(now)
-    .bind(expires_at)
-    .execute(&mut *tx)
     .await?;
+    let issued = identity::session::issue_session(
+        &mut *tx,
+        identity::SessionSpec {
+            principal_user_id: principal_user_id.as_str(),
+            global_capabilities: &[],
+            authenticated_via_method_id: Some(method_id),
+            assurance: identity::Assurance::Password,
+            expires_at,
+            idle_expires_at: None,
+            client_supplied_token: client_token,
+        },
+        now,
+    )
+    .await?;
+    let session_hash = issued.token_hash.clone();
     for (event_kind, metadata) in [
         (
             "account_registered",
@@ -1690,6 +1724,7 @@ async fn register_auth_account(
     Ok(Json(AuthAccountRegistrationResponse {
         account_id,
         principal_user_id,
+        session_token: issued.session_token,
         expires_at,
     }))
 }
@@ -1701,23 +1736,31 @@ async fn login_auth_account(
 ) -> Result<Json<AuthSessionResponse>, ApiError> {
     let account_id = request.account_id.trim();
     let password = request.password.as_str();
-    let session_token = request.session_token.trim();
-    if account_id.is_empty() || password.trim().is_empty() || session_token.is_empty() {
+    let client_token = request
+        .session_token
+        .as_deref()
+        .map(str::trim)
+        .filter(|token| !token.is_empty());
+    if account_id.is_empty() || password.trim().is_empty() {
         return Err(ApiError::Reject {
             status: StatusCode::BAD_REQUEST,
             error: RejectCode::Internal,
-            message: "account login requires account_id, password, and session_token".to_string(),
+            message: "account login requires account_id and password".to_string(),
         });
     }
     validate_account_password_input(password)?;
     let now = unix_now_seconds();
-    if request.expires_at <= now {
-        return Err(ApiError::Reject {
-            status: StatusCode::BAD_REQUEST,
-            error: RejectCode::Internal,
-            message: "account session expiry must be in the future".to_string(),
-        });
-    }
+    let expires_at = match request.expires_at {
+        Some(expires_at) if expires_at <= now => {
+            return Err(ApiError::Reject {
+                status: StatusCode::BAD_REQUEST,
+                error: RejectCode::Internal,
+                message: "account session expiry must be in the future".to_string(),
+            });
+        }
+        Some(expires_at) => expires_at,
+        None => state.session_policy.classic_expiry(now),
+    };
     let attempt_scope = enforce_auth_attempt_limit(&state, &headers, account_id).await?;
 
     let account = sqlx::query_as::<_, (String, String, Vec<String>)>(
@@ -1742,33 +1785,30 @@ async fn login_auth_account(
         return Err(unauthorized_account());
     }
 
-    let session_hash = hash_session_token(session_token);
     let mut tx = state.pool.begin().await?;
-    sqlx::query(
-        r#"
-        INSERT INTO auth_session (
-            token_hash,
-            principal_user_id,
-            created_at,
-            expires_at,
-            revoked_at,
-            global_capabilities
-        )
-        VALUES ($1, $2, $3, $4, NULL, $5)
-        ON CONFLICT (token_hash) DO UPDATE
-        SET principal_user_id = EXCLUDED.principal_user_id,
-            expires_at = EXCLUDED.expires_at,
-            revoked_at = NULL,
-            global_capabilities = EXCLUDED.global_capabilities
-        "#,
+    let method_id = identity::methods::link_classic_method(
+        &mut *tx,
+        account_id,
+        account.0.as_str(),
+        &account.2,
+        now,
     )
-    .bind(&session_hash)
-    .bind(account.0.as_str())
-    .bind(now)
-    .bind(request.expires_at)
-    .bind(&account.2)
-    .execute(&mut *tx)
     .await?;
+    let issued = identity::session::issue_session(
+        &mut *tx,
+        identity::SessionSpec {
+            principal_user_id: account.0.as_str(),
+            global_capabilities: &account.2,
+            authenticated_via_method_id: Some(method_id),
+            assurance: identity::Assurance::Password,
+            expires_at,
+            idle_expires_at: None,
+            client_supplied_token: client_token,
+        },
+        now,
+    )
+    .await?;
+    let session_hash = issued.token_hash.clone();
     sqlx::query(
         r#"
         INSERT INTO identity_lifecycle_audit (
@@ -1790,7 +1830,7 @@ async fn login_auth_account(
     .bind(
         serde_json::json!({
             "account_id": account_id,
-            "session_expires_at": request.expires_at,
+            "session_expires_at": expires_at,
             "global_capability_count": account.2.len()
         })
         .to_string(),
@@ -1800,9 +1840,10 @@ async fn login_auth_account(
     clear_auth_attempt_failures(&mut tx, &attempt_scope).await?;
     tx.commit().await?;
 
-    Ok(Json(
-        auth_session_response(&state, account.0, None, account.2).await?,
-    ))
+    let mut response = auth_session_response(&state, account.0, None, account.2).await?;
+    response.session_token = Some(issued.session_token);
+    response.expires_at = Some(issued.expires_at);
+    Ok(Json(response))
 }
 
 async fn rotate_auth_account_password(
@@ -2265,10 +2306,11 @@ async fn recover_auth_account(
     let now = unix_now_seconds();
     let recovery_hash = hash_session_token(recovery_token);
     let mut tx = state.pool.begin().await?;
-    let credential = sqlx::query_as::<_, (Uuid, String)>(
+    let credential = sqlx::query_as::<_, (Uuid, String, Vec<String>)>(
         r#"
         SELECT recovery.recovery_id,
-               account.principal_user_id
+               account.principal_user_id,
+               account.global_capabilities
         FROM auth_account_recovery_credential AS recovery
         JOIN auth_account AS account
           ON account.account_id = recovery.account_id
@@ -2286,7 +2328,7 @@ async fn recover_auth_account(
     .bind(now)
     .fetch_optional(&mut *tx)
     .await?;
-    let Some((recovery_id, principal_user_id)) = credential else {
+    let Some((recovery_id, principal_user_id, account_global_capabilities)) = credential else {
         tx.rollback().await?;
         consume_dummy_password_verification(new_password).await?;
         record_account_recovery_rejection(&state.pool, account_id, recovery_hash.as_str(), now)
@@ -2334,6 +2376,28 @@ async fn recover_auth_account(
     .execute(&mut *tx)
     .await?
     .rows_affected() as i64;
+    let method_id = identity::methods::link_classic_method(
+        &mut *tx,
+        account_id,
+        principal_user_id.as_str(),
+        &account_global_capabilities,
+        now,
+    )
+    .await?;
+    let issued = identity::session::issue_session(
+        &mut *tx,
+        identity::SessionSpec {
+            principal_user_id: principal_user_id.as_str(),
+            global_capabilities: &account_global_capabilities,
+            authenticated_via_method_id: Some(method_id),
+            assurance: identity::Assurance::Password,
+            expires_at: state.session_policy.classic_expiry(now),
+            idle_expires_at: None,
+            client_supplied_token: None,
+        },
+        now,
+    )
+    .await?;
     sqlx::query(
         r#"
         INSERT INTO identity_lifecycle_audit (
@@ -2373,6 +2437,8 @@ async fn recover_auth_account(
         principal_user_id,
         revoked_session_count,
         password_algorithm: "argon2id".to_string(),
+        session_token: issued.session_token,
+        session_expires_at: issued.expires_at,
     }))
 }
 
@@ -2575,16 +2641,17 @@ async fn rotate_auth_session(
     Json(request): Json<RotateAuthSession>,
 ) -> Result<Json<AuthSessionResponse>, ApiError> {
     let caller_token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
-    let new_token = request.session_token.trim();
-    if new_token.is_empty() {
-        return Err(ApiError::Reject {
-            status: StatusCode::BAD_REQUEST,
-            error: RejectCode::Internal,
-            message: "session rotation requires session_token".to_string(),
-        });
-    }
+    let new_token = match request
+        .session_token
+        .as_deref()
+        .map(str::trim)
+        .filter(|token| !token.is_empty())
+    {
+        Some(client_token) => client_token.to_string(),
+        None => identity::token::generate_session_token(),
+    };
     let old_hash = hash_session_token(caller_token);
-    let new_hash = hash_session_token(new_token);
+    let new_hash = hash_session_token(new_token.as_str());
     if old_hash == new_hash {
         return Err(ApiError::Reject {
             status: StatusCode::BAD_REQUEST,
@@ -2595,14 +2662,15 @@ async fn rotate_auth_session(
 
     let now = unix_now_seconds();
     let mut tx = state.pool.begin().await?;
-    let session = sqlx::query_as::<_, (String, i64, Vec<String>)>(
+    let session = sqlx::query_as::<_, (String, i64, Vec<String>, Option<Uuid>, Option<i64>, Option<String>)>(
         r#"
         UPDATE auth_session
         SET revoked_at = $1
         WHERE token_hash = $2
           AND revoked_at IS NULL
           AND expires_at > $1
-        RETURNING principal_user_id, expires_at, global_capabilities
+        RETURNING principal_user_id, expires_at, global_capabilities,
+                  authenticated_via_method_id, idle_expires_at, assurance
         "#,
     )
     .bind(now)
@@ -2619,9 +2687,12 @@ async fn rotate_auth_session(
             created_at,
             expires_at,
             revoked_at,
-            global_capabilities
+            global_capabilities,
+            authenticated_via_method_id,
+            idle_expires_at,
+            assurance
         )
-        VALUES ($1, $2, $3, $4, NULL, $5)
+        VALUES ($1, $2, $3, $4, NULL, $5, $6, $7, $8)
         "#,
     )
     .bind(&new_hash)
@@ -2629,6 +2700,9 @@ async fn rotate_auth_session(
     .bind(now)
     .bind(session.1)
     .bind(&session.2)
+    .bind(session.3)
+    .bind(session.4)
+    .bind(session.5.as_deref())
     .execute(&mut *tx)
     .await?;
     sqlx::query(
@@ -2661,9 +2735,11 @@ async fn rotate_auth_session(
     .await?;
     tx.commit().await?;
 
-    Ok(Json(
-        auth_session_response(&state, session.0, None, session.2).await?,
-    ))
+    let mut response = auth_session_response(&state, session.0, None, session.2).await?;
+    response.session_token = Some(new_token);
+    response.expires_at = Some(session.1);
+    response.idle_expires_at = session.4;
+    Ok(Json(response))
 }
 
 async fn logout_auth_session(
@@ -2938,18 +3014,17 @@ async fn redeem_auth_invite(
     let invite_token = request.invite_token.trim();
     let account_id = request.account_id.trim();
     let password = request.password.as_str();
-    let session_token = request.session_token.trim();
-    if invite_token.is_empty()
-        || account_id.is_empty()
-        || password.trim().is_empty()
-        || session_token.is_empty()
-    {
+    let client_token = request
+        .session_token
+        .as_deref()
+        .map(str::trim)
+        .filter(|token| !token.is_empty());
+    if invite_token.is_empty() || account_id.is_empty() || password.trim().is_empty() {
         return Err(ApiError::Reject {
             status: StatusCode::BAD_REQUEST,
             error: RejectCode::Internal,
-            message:
-                "invite redemption requires invite_token, account_id, password, and session_token"
-                    .to_string(),
+            message: "invite redemption requires invite_token, account_id, and password"
+                .to_string(),
         });
     }
     validate_account_password_input(password)?;
@@ -2957,7 +3032,6 @@ async fn redeem_auth_invite(
 
     let now = unix_now_seconds();
     let invite_hash = hash_session_token(invite_token);
-    let session_hash = hash_session_token(session_token);
     let mut tx = state.pool.begin().await?;
     let invite = sqlx::query_as::<_, (String, i64, Vec<String>, String)>(
         r#"
@@ -2996,6 +3070,30 @@ async fn redeem_auth_invite(
         return Err(unauthorized_invite());
     }
 
+    let method_id = identity::methods::link_classic_method(
+        &mut *tx,
+        account_id,
+        invite.0.as_str(),
+        &invite.2,
+        now,
+    )
+    .await?;
+    let issued = identity::session::issue_session(
+        &mut *tx,
+        identity::SessionSpec {
+            principal_user_id: invite.0.as_str(),
+            global_capabilities: &invite.2,
+            authenticated_via_method_id: Some(method_id),
+            assurance: identity::Assurance::Password,
+            expires_at: invite.1,
+            idle_expires_at: None,
+            client_supplied_token: client_token,
+        },
+        now,
+    )
+    .await?;
+    let session_hash = issued.token_hash.clone();
+
     sqlx::query(
         r#"
         UPDATE auth_invite
@@ -3016,32 +3114,6 @@ async fn redeem_auth_invite(
         "invite_redeemed",
         now,
     )
-    .await?;
-
-    sqlx::query(
-        r#"
-        INSERT INTO auth_session (
-            token_hash,
-            principal_user_id,
-            created_at,
-            expires_at,
-            revoked_at,
-            global_capabilities
-        )
-        VALUES ($1, $2, $3, $4, NULL, $5)
-        ON CONFLICT (token_hash) DO UPDATE
-        SET principal_user_id = EXCLUDED.principal_user_id,
-            expires_at = EXCLUDED.expires_at,
-            revoked_at = NULL,
-            global_capabilities = EXCLUDED.global_capabilities
-        "#,
-    )
-    .bind(&session_hash)
-    .bind(invite.0.as_str())
-    .bind(now)
-    .bind(invite.1)
-    .bind(&invite.2)
-    .execute(&mut *tx)
     .await?;
     sqlx::query(
         r#"
@@ -3068,9 +3140,10 @@ async fn redeem_auth_invite(
     clear_auth_attempt_failures(&mut tx, &attempt_scope).await?;
     tx.commit().await?;
 
-    Ok(Json(
-        auth_session_response(&state, invite.0, None, invite.2).await?,
-    ))
+    let mut response = auth_session_response(&state, invite.0, None, invite.2).await?;
+    response.session_token = Some(issued.session_token);
+    response.expires_at = Some(issued.expires_at);
+    Ok(Json(response))
 }
 
 async fn revoke_auth_invite(
@@ -3315,8 +3388,10 @@ async fn auth_session_response(
     Ok(AuthSessionResponse {
         principal_user_id,
         capabilities,
+        session_token: None,
         created_at: None,
         expires_at: None,
+        idle_expires_at: None,
         rotation_required: None,
     })
 }
@@ -4177,42 +4252,6 @@ fn normalize_global_capabilities(values: &[String]) -> Result<Vec<String>, ApiEr
     Ok(normalized)
 }
 
-async fn upsert_auth_session(
-    state: &ApiState,
-    token: &str,
-    principal_user_id: &str,
-    expires_at: i64,
-    global_capabilities: &[String],
-) -> Result<(), ApiError> {
-    let now = unix_now_seconds();
-    sqlx::query(
-        r#"
-        INSERT INTO auth_session (
-            token_hash,
-            principal_user_id,
-            created_at,
-            expires_at,
-            revoked_at,
-            global_capabilities
-        )
-        VALUES ($1, $2, $3, $4, NULL, $5)
-        ON CONFLICT (token_hash) DO UPDATE
-        SET principal_user_id = EXCLUDED.principal_user_id,
-            expires_at = EXCLUDED.expires_at,
-            revoked_at = NULL,
-            global_capabilities = EXCLUDED.global_capabilities
-        "#,
-    )
-    .bind(hash_session_token(token))
-    .bind(principal_user_id)
-    .bind(now)
-    .bind(expires_at)
-    .bind(global_capabilities)
-    .execute(&state.pool)
-    .await?;
-    Ok(())
-}
-
 fn global_capability_grants(values: &[String]) -> Vec<CapabilityGrant> {
     values
         .iter()
@@ -4225,39 +4264,25 @@ fn global_capability_grants(values: &[String]) -> Vec<CapabilityGrant> {
 }
 
 fn hash_session_token(token: &str) -> String {
-    let digest = Sha256::digest(token.as_bytes());
-    let mut out = String::with_capacity(digest.len() * 2);
-    for byte in digest {
-        use std::fmt::Write as _;
-        let _ = write!(&mut out, "{byte:02x}");
-    }
-    out
+    identity::token::hash_token(token)
 }
 
 async fn hash_account_password(password: &str) -> Result<String, ApiError> {
     let password = password.to_string();
-    tokio::task::spawn_blocking(move || hash_account_password_sync(password.as_str()))
-        .await
-        .map_err(|error| {
-            internal_auth_error(format!("account password hashing task failed: {error}"))
-        })?
-}
-
-fn hash_account_password_sync(password: &str) -> Result<String, ApiError> {
-    let salt = SaltString::encode_b64(Uuid::new_v4().as_bytes()).map_err(|error| {
-        internal_auth_error(format!("could not generate account password salt: {error}"))
-    })?;
-    Argon2::default()
-        .hash_password(password.as_bytes(), &salt)
-        .map(|hash| hash.to_string())
-        .map_err(|error| internal_auth_error(format!("could not hash account password: {error}")))
+    tokio::task::spawn_blocking(move || {
+        identity::password::hash_password_sync(password.as_str()).map_err(ApiError::from)
+    })
+    .await
+    .map_err(|error| {
+        internal_auth_error(format!("account password hashing task failed: {error}"))
+    })?
 }
 
 async fn verify_account_password(encoded_hash: &str, password: &str) -> Result<bool, ApiError> {
     let encoded_hash = encoded_hash.to_string();
     let password = password.to_string();
     tokio::task::spawn_blocking(move || {
-        verify_account_password_sync(encoded_hash.as_str(), password.as_str())
+        identity::password::verify_password_sync(encoded_hash.as_str(), password.as_str())
     })
     .await
     .map_err(|error| {
@@ -4267,23 +4292,8 @@ async fn verify_account_password(encoded_hash: &str, password: &str) -> Result<b
     })
 }
 
-fn verify_account_password_sync(encoded_hash: &str, password: &str) -> bool {
-    let Ok(parsed_hash) = PasswordHash::new(encoded_hash) else {
-        return false;
-    };
-    Argon2::default()
-        .verify_password(password.as_bytes(), &parsed_hash)
-        .is_ok()
-}
-
 fn dummy_account_password_hash() -> &'static str {
-    static DUMMY_HASH: OnceLock<String> = OnceLock::new();
-    DUMMY_HASH
-        .get_or_init(|| {
-            hash_account_password_sync("fmarch-dummy-account-password")
-                .expect("dummy account password hash must initialize")
-        })
-        .as_str()
+    identity::password::dummy_password_hash()
 }
 
 async fn consume_dummy_password_verification(password: &str) -> Result<(), ApiError> {
@@ -8378,6 +8388,38 @@ impl From<caps::CapError> for ApiError {
 impl From<sqlx::Error> for ApiError {
     fn from(err: sqlx::Error) -> Self {
         ApiError::Db(err)
+    }
+}
+
+impl From<identity::IdentityFlowError> for ApiError {
+    fn from(error: identity::IdentityFlowError) -> Self {
+        use identity::IdentityFlowError;
+        match error {
+            IdentityFlowError::Unauthorized => unauthorized_session(),
+            IdentityFlowError::RecentAuthRequired => ApiError::Reject {
+                status: StatusCode::FORBIDDEN,
+                error: RejectCode::NotAuthorized,
+                message: "recent_authentication_required".to_string(),
+            },
+            IdentityFlowError::AlreadyExists(subject) => ApiError::Reject {
+                status: StatusCode::CONFLICT,
+                error: RejectCode::Internal,
+                message: format!("{subject} already exists"),
+            },
+            IdentityFlowError::LastActiveMethod => ApiError::Reject {
+                status: StatusCode::CONFLICT,
+                error: RejectCode::Internal,
+                message: "an active principal must retain at least one active authentication method"
+                    .to_string(),
+            },
+            IdentityFlowError::Invalid(message) => ApiError::Reject {
+                status: StatusCode::BAD_REQUEST,
+                error: RejectCode::Internal,
+                message,
+            },
+            IdentityFlowError::Internal(message) => internal_auth_error(message),
+            IdentityFlowError::Db(error) => ApiError::Db(error),
+        }
     }
 }
 

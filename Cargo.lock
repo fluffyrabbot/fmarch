@@ -73,7 +73,6 @@ checksum = "7f202df86484c868dbad7eaa557ef785d5c66295e41b460ef922eca0723b842c"
 name = "api"
 version = "0.1.0"
 dependencies = [
- "argon2",
  "axum",
  "caps",
  "commands",
@@ -1290,13 +1289,18 @@ checksum = "3d3067d79b975e8844ca9eb072e16b31c3c1c36928edf9c6789548c524d0d954"
 name = "identity"
 version = "0.1.0"
 dependencies = [
+ "argon2",
  "async-trait",
  "jsonwebtoken",
+ "rand 0.8.6",
  "reqwest",
  "serde",
  "serde_json",
+ "sha2",
+ "sqlx",
  "thiserror 1.0.69",
  "tokio",
+ "uuid",
 ]
 
 [[package]]
