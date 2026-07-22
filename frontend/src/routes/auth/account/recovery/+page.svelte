@@ -61,7 +61,7 @@
 
     <div class="account-recovery__divider" role="separator">Already have a credential?</div>
 
-    <form method="POST" class="account-recovery__form" data-testid="account-recovery-form">
+    <form method="POST" action="?/recover" class="account-recovery__form" data-testid="account-recovery-form">
       <input type="hidden" name="returnTo" value={returnTo} />
       <label class="fm-field">
         <span>Account</span>

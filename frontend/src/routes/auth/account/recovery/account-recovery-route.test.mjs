@@ -63,7 +63,7 @@ test("recovery request is non-enumerating and uses the private API base", async 
 test("successful recovery clears a stale cookie and redirects through account login", async () => {
   const observed = { deleted: null, request: null };
   await assert.rejects(
-    actions.default({
+    actions.recover({
       cookies: {
         delete(name, options) {
           observed.deleted = { name, options };
@@ -115,7 +115,7 @@ test("successful recovery clears a stale cookie and redirects through account lo
 });
 
 test("used or invalid recovery credentials stay on the recovery role URL", async () => {
-  const result = await actions.default({
+  const result = await actions.recover({
     cookies: { delete() {} },
     fetch: async () => jsonResponse({}, { ok: false, status: 401 }),
     request: formRequest({
@@ -137,7 +137,7 @@ test("used or invalid recovery credentials stay on the recovery role URL", async
 });
 
 test("recovery surfaces credential lockout retry timing", async () => {
-  const result = await actions.default({
+  const result = await actions.recover({
     cookies: { delete() {} },
     fetch: async () =>
       jsonResponse(

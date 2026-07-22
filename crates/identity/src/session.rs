@@ -154,10 +154,13 @@ pub struct SessionIdentity {
 
 /// Validate an app-session bearer: liveness, idle window, and — defense in
 /// depth beyond explicit revocation — the backing method and principal must
-/// still be active. Global capabilities come from the principal row when one
-/// exists, else from the session snapshot (dev / admin-grant sessions). The
-/// idle window slides: once a quarter of it has elapsed, a successful
-/// validation extends it, bounding write amplification.
+/// still be active. Global capabilities are the union of the principal's
+/// durable capabilities and the session snapshot: the principal row is
+/// canonical authority, while the snapshot preserves session-scoped
+/// elevations (invite-granted and admin-granted capabilities) that
+/// intentionally live only as long as the session. The idle window slides:
+/// once a quarter of it has elapsed, a successful validation extends it,
+/// bounding write amplification.
 pub async fn validate_session(
     pool: &PgPool,
     token: &str,
@@ -258,9 +261,16 @@ pub async fn validate_session(
         }
     }
 
+    let mut global_capabilities = principal_globals.unwrap_or_default();
+    for capability in snapshot_globals {
+        if !global_capabilities.contains(&capability) {
+            global_capabilities.push(capability);
+        }
+    }
+
     Ok(SessionIdentity {
         principal_user_id,
-        global_capabilities: principal_globals.unwrap_or(snapshot_globals),
+        global_capabilities,
         method,
         assurance: assurance.as_deref().and_then(Assurance::parse),
         token_hash,

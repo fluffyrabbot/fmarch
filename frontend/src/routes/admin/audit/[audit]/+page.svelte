@@ -1,4 +1,5 @@
 <script>
+  import { page } from "$app/stores";
   import AppSurfaceHeader from "$lib/app/AppSurfaceHeader.svelte";
   import AppStatus from "$lib/app/AppStatus.svelte";
   import AdminAuditDescriptorRows from "$lib/components/admin/AdminAuditDescriptorRows.svelte";
@@ -8,6 +9,14 @@
 
   export let data;
   export let form;
+
+  // A bare "?/action" form target would drop the page's own query
+  // (game, principal_user_id) and strand the post-action render.
+  function lifecycleActionHref(action) {
+    const query = new URLSearchParams($page.url.searchParams).toString();
+    const name = action.replace(/^\?\//u, "");
+    return query === "" ? `?/${name}` : `?${query}&/${name}`;
+  }
 
   const surfaceTestId = "admin-audit-detail-surface";
   const statusTestId = "admin-audit-detail-status";
@@ -162,7 +171,7 @@
         <div class="admin-audit-detail__controls">
           <form
             method="POST"
-            action={data.audit.accountControls.disableAction}
+            action={lifecycleActionHref(data.audit.accountControls.disableAction)}
             data-testid="admin-identity-account-disable-form"
           >
             <input
@@ -186,7 +195,7 @@
           </form>
           <form
             method="POST"
-            action={data.audit.accountControls.enableAction}
+            action={lifecycleActionHref(data.audit.accountControls.enableAction)}
             data-testid="admin-identity-account-enable-form"
           >
             <input

@@ -178,6 +178,7 @@ let apiStartupTimeoutMs = defaultApiStartupTimeoutMs;
 let proofStabilityAudit;
 let identityBootstrap;
 let localAccounts;
+let seedSessionTokens;
 
 export async function main(rawArgs = process.argv.slice(2), env = process.env) {
   args = parseArgs(rawArgs);
@@ -214,6 +215,7 @@ export async function main(rawArgs = process.argv.slice(2), env = process.env) {
   apiServerExit = undefined;
   identityBootstrap = undefined;
   localAccounts = new Map();
+  seedSessionTokens = new Map();
 
   await mkdir(artifactDir, { recursive: true });
   if (apiBaseUrl === undefined) {
@@ -223,6 +225,7 @@ export async function main(rawArgs = process.argv.slice(2), env = process.env) {
     await waitForHealth(apiBaseUrl);
   }
 
+  identityBootstrap = await seedRootAdminSession();
   const seedResult = await seedGame();
   const sessions = await createSessions();
   const sessionArtifacts = args.verifyHostSetupOnly
@@ -534,7 +537,7 @@ async function seedPostSetupGameplayCommands() {
 }
 
 async function createSessions() {
-  identityBootstrap = await seedRootAdminSession();
+  identityBootstrap ??= await seedRootAdminSession();
   await ensureLocalAccount({ principalUserId: "player-rowan" });
 
   return {
@@ -585,6 +588,25 @@ async function createSessions() {
 }
 
 async function seedRootAdminSession() {
+  await runSql(databaseUrl, `
+    INSERT INTO auth_account (
+      account_id,
+      principal_user_id,
+      password_hash,
+      created_at,
+      disabled_at,
+      global_capabilities
+    )
+    VALUES (
+      'root-admin-seed@local.fmarch.test',
+      'root_admin',
+      'seed-only-not-a-real-hash',
+      0,
+      NULL,
+      ARRAY['GlobalAdmin']::TEXT[]
+    )
+    ON CONFLICT (account_id) DO NOTHING;
+  `);
   await runSql(databaseUrl, `
     INSERT INTO auth_session (
       token_hash,
@@ -699,11 +721,15 @@ async function ensureLocalAccount({ principalUserId, globalCapabilities = [] }) 
   if (existing !== undefined) {
     return existing;
   }
+  // One deterministic classic account per principal: the shared scratch
+  // database persists across runs and a principal keeps at most one classic
+  // method, so reruns must reuse the same credential instead of minting a
+  // fresh account each time.
   const account = {
-    accountId: `${principalUserId}-${crypto.randomUUID()}@local.fmarch.test`,
-    password: `${tokenPrefix}-account-${principalUserId}`,
+    accountId: `${principalUserId}@local.fmarch.test`,
+    password: `dev-test-game-account-${principalUserId}`,
   };
-  const created = await fetchJson(`${apiBaseUrl}/auth/accounts`, {
+  const response = await fetch(`${apiBaseUrl}/auth/accounts`, {
     method: "POST",
     headers: {
       authorization: `Bearer ${tokens.rootAdmin}`,
@@ -716,6 +742,18 @@ async function ensureLocalAccount({ principalUserId, globalCapabilities = [] }) 
       global_capabilities: globalCapabilities,
     }),
   });
+  if (response.status === 409) {
+    // Account already exists from an earlier run; the deterministic
+    // credential still matches.
+    localAccounts.set(principalUserId, account);
+    return account;
+  }
+  if (!response.ok) {
+    throw new Error(
+      `HTTP ${response.status} from ${apiBaseUrl}/auth/accounts: ${await response.text()}`,
+    );
+  }
+  const created = await response.json();
   if (created.principal_user_id !== principalUserId) {
     throw new Error(`local account principal drifted for ${principalUserId}`);
   }
@@ -767,6 +805,7 @@ function roleLoginUrl({ frontendBaseUrl, session }) {
       params.set("account", session.accountId);
     }
   } else if (session.credentialKind === "account") {
+    route = "/auth/login/classic";
     params.set("account", session.accountId);
   } else if (typeof session.token === "string" && session.token !== "") {
     route = "/auth/invite";
@@ -782,10 +821,70 @@ async function sendCommand(principalUserId, command) {
   return commandSummary(principalUserId, command, response);
 }
 
+// The strict wire rejects any actor field in the envelope; seed commands act
+// as a principal by presenting a session for that principal instead. Seed
+// sessions are inserted directly into scratch-Postgres, exactly like the root
+// admin session, so browser roles still enter only through accounts and
+// invites.
+async function seedSessionToken(principalUserId) {
+  if (principalUserId === "root_admin") {
+    return tokens.rootAdmin;
+  }
+  const cached = seedSessionTokens.get(principalUserId);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const token = `${tokenPrefix}-seed-${principalUserId}`;
+  await runSql(databaseUrl, `
+    INSERT INTO auth_account (
+      account_id,
+      principal_user_id,
+      password_hash,
+      created_at,
+      disabled_at,
+      global_capabilities
+    )
+    VALUES (
+      ${sqlLiteral(`${principalUserId}-seed@local.fmarch.test`)},
+      ${sqlLiteral(principalUserId)},
+      'seed-only-not-a-real-hash',
+      0,
+      NULL,
+      ARRAY['GlobalAdmin']::TEXT[]
+    )
+    ON CONFLICT (account_id) DO NOTHING;
+  `);
+  await runSql(databaseUrl, `
+    INSERT INTO auth_session (
+      token_hash,
+      principal_user_id,
+      created_at,
+      expires_at,
+      revoked_at,
+      global_capabilities
+    )
+    VALUES (
+      ${sqlLiteral(hashSessionToken(token))},
+      ${sqlLiteral(principalUserId)},
+      0,
+      ${Number(expiresAt)},
+      NULL,
+      ARRAY['GlobalAdmin']::TEXT[]
+    )
+    ON CONFLICT (token_hash) DO NOTHING;
+  `);
+  seedSessionTokens.set(principalUserId, token);
+  return token;
+}
+
 async function sendCommandResult(principalUserId, command) {
+  const sessionToken = await seedSessionToken(principalUserId);
   return await fetchJson(`${apiBaseUrl}/commands`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: {
+      authorization: `Bearer ${sessionToken}`,
+      "content-type": "application/json",
+    },
     body: JSON.stringify({
       v: 1,
       id: commandEnvelopeId++,
@@ -793,7 +892,6 @@ async function sendCommandResult(principalUserId, command) {
         kind: "Command",
         body: {
           command_id: crypto.randomUUID(),
-          principal_user_id: principalUserId,
           command,
         },
       },
@@ -2096,7 +2194,9 @@ async function openVerifiedRoleEntry({
     await page.goto(session.loginUrl, { waitUntil: "networkidle" });
     const credential = session.inviteToken ?? session.token;
     const usesIssuedCredential = typeof credential === "string" && credential !== "";
-    const surfaceTestId = usesIssuedCredential ? "auth-invite-surface" : "auth-login-surface";
+    const surfaceTestId = usesIssuedCredential
+      ? "auth-invite-surface"
+      : "auth-login-classic-surface";
     const submitTestId = usesIssuedCredential ? "auth-invite-submit" : "auth-login-submit";
     await page.getByTestId(surfaceTestId).waitFor({ state: "visible" });
     if (usesIssuedCredential) {
