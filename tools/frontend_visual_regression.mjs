@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { samplePngScreenshot } from "./frontend_screenshot_pixels.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const artifactDir = path.join(repoRoot, "target", "frontend-role-smoke");
-const baselinePath = path.join(repoRoot, "tools", "fixtures", "frontend-visual-baselines.json");
+const baselineDir = path.join(repoRoot, "tools", "fixtures", "frontend-visual-baselines");
 const reportDir = path.join(repoRoot, "target", "frontend-visual-regression");
 const reportPath = path.join(reportDir, "visual-regression.json");
 const writeBaseline = process.argv.includes("--write");
@@ -29,6 +29,33 @@ const selectedScreenshots = Object.freeze([
   "desktop-admin.png",
 ]);
 
+function baselineFileName(screenshotName) {
+  return `${screenshotName.replace(/\.png$/, "")}.json`;
+}
+
+function serializeBaselineSample(screenshotName, sample) {
+  const intsPerRow = sample.columns * 3;
+  const pixelRows = [];
+  for (let row = 0; row < sample.rows; row += 1) {
+    const start = row * intsPerRow;
+    pixelRows.push(`    ${sample.pixels.slice(start, start + intsPerRow).join(", ")}`);
+  }
+  return [
+    "{",
+    '  "version": 1,',
+    `  "screenshot": ${JSON.stringify(screenshotName)},`,
+    `  "width": ${sample.width},`,
+    `  "height": ${sample.height},`,
+    `  "columns": ${sample.columns},`,
+    `  "rows": ${sample.rows},`,
+    '  "pixels": [',
+    pixelRows.join(",\n"),
+    "  ]",
+    "}",
+    "",
+  ].join("\n");
+}
+
 const current = Object.fromEntries(
   await Promise.all(
     selectedScreenshots.map(async (name) => {
@@ -39,17 +66,36 @@ const current = Object.fromEntries(
 );
 
 if (writeBaseline) {
-  await writeFile(
-    baselinePath,
-    `${JSON.stringify({ version: 1, selectedScreenshots, samples: current }, null, 2)}\n`,
-  );
-  console.log(`wrote ${path.relative(repoRoot, baselinePath)}`);
+  await mkdir(baselineDir, { recursive: true });
+  const expectedFiles = new Set(selectedScreenshots.map(baselineFileName));
+  for (const name of selectedScreenshots) {
+    await writeFile(path.join(baselineDir, baselineFileName(name)), serializeBaselineSample(name, current[name]));
+  }
+  for (const entry of await readdir(baselineDir)) {
+    if (entry.endsWith(".json") && !expectedFiles.has(entry)) {
+      await unlink(path.join(baselineDir, entry));
+    }
+  }
+  console.log(`wrote ${expectedFiles.size} baselines under ${path.relative(repoRoot, baselineDir)}`);
   process.exit(0);
 }
 
-const baseline = JSON.parse(await readFile(baselinePath, "utf8"));
-assert.deepEqual(baseline.selectedScreenshots, selectedScreenshots);
-const comparisons = selectedScreenshots.map((name) => compareSamples(name, baseline.samples[name], current[name]));
+const baselineFiles = (await readdir(baselineDir)).filter((entry) => entry.endsWith(".json"));
+assert.deepEqual(
+  [...baselineFiles].sort(),
+  selectedScreenshots.map(baselineFileName).sort(),
+  "baseline directory must contain exactly one file per selected screenshot; rerun write:frontend-visual-baseline",
+);
+const baseline = Object.fromEntries(
+  await Promise.all(
+    selectedScreenshots.map(async (name) => {
+      const sample = JSON.parse(await readFile(path.join(baselineDir, baselineFileName(name)), "utf8"));
+      assert.equal(sample.screenshot, name, `${baselineFileName(name)} names screenshot ${sample.screenshot}`);
+      return [name, sample];
+    }),
+  ),
+);
+const comparisons = selectedScreenshots.map((name) => compareSamples(name, baseline[name], current[name]));
 const failed = comparisons.filter((comparison) => comparison.status !== "passed");
 await mkdir(reportDir, { recursive: true });
 await writeFile(
