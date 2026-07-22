@@ -26793,7 +26793,7 @@ async function assertPostgresReachable(url) {
   const port = Number.parseInt(parsed.port || "5432", 10);
   const hostname = parsed.hostname || "localhost";
   const hint =
-    "Start Postgres with `docker compose up -d postgres` or a repo-local cluster, then rerun dev:test-game.";
+    "Start Postgres with `podman compose up -d postgres` or a repo-local cluster, then rerun dev:test-game.";
   try {
     await assertTcpReachable({
       hostname,
