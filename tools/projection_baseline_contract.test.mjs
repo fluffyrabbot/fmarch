@@ -1,15 +1,20 @@
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 import {
   baselineFilename,
+  baselineSha256,
   inspectProjectionBaseline,
   migrationDirectory,
+  repoRoot,
 } from "./projection_baseline_contract.mjs";
 
-const header = "-- 0001_baseline.sql — complete greenfield test schema.\n";
+const checkedBaseline = await readFile(
+  path.join(repoRoot, migrationDirectory, baselineFilename),
+  "utf8",
+);
 
 async function withMigrationDirectory(files, run) {
   const root = await mkdtemp(path.join(os.tmpdir(), "fmarch-projection-baseline-"));
@@ -25,30 +30,41 @@ async function withMigrationDirectory(files, run) {
   }
 }
 
-test("checked-in projection schema is one strict greenfield baseline", async () => {
+test("checked-in projection schema preserves its baseline and append-only sequence", async () => {
   const report = await inspectProjectionBaseline();
   assert.equal(report.ok, true);
   assert.equal(report.baseline, baselineFilename);
-  assert.equal(report.migration_file_count, 1);
+  assert.equal(report.baseline_sha256, baselineSha256);
+  assert.deepEqual(report.migrations, [baselineFilename, "0002_workos_identity.sql"]);
+  assert.equal(report.migration_file_count, 2);
   assert.ok(report.statement_count > 100);
 });
 
-test("projection baseline rejects incremental migration files", async () => {
+test("projection migrations reject sequence gaps", async () => {
   await withMigrationDirectory(
     {
-      [baselineFilename]: `${header}CREATE TABLE public.example (id bigint);`,
-      "0002_incremental.sql": "ALTER TABLE public.example ADD COLUMN name text;",
+      [baselineFilename]: checkedBaseline,
+      "0003_gap.sql": "-- 0003_gap.sql — invalid gap.\nCREATE TABLE public.example (id bigint);",
     },
     async (root) => {
       await assert.rejects(
         inspectProjectionBaseline({ root }),
-        /must contain only 0001_baseline\.sql/,
+        /contiguous append-only sequence; expected version 0002/,
       );
     },
   );
 });
 
-test("projection baseline rejects transitional data and column mutations", async () => {
+test("projection baseline rejects checksum drift", async () => {
+  await withMigrationDirectory(
+    { [baselineFilename]: `${checkedBaseline}\n-- rewritten after release\n` },
+    async (root) => {
+      await assert.rejects(inspectProjectionBaseline({ root }), /baseline is immutable/);
+    },
+  );
+});
+
+test("projection migrations reject transitional data and column mutations", async () => {
   const forbidden = [
     "INSERT INTO public.example VALUES (1);",
     "UPDATE public.example SET id = 2;",
@@ -61,7 +77,10 @@ test("projection baseline rejects transitional data and column mutations", async
 
   for (const statement of forbidden) {
     await withMigrationDirectory(
-      { [baselineFilename]: `${header}${statement}` },
+      {
+        [baselineFilename]: checkedBaseline,
+        "0002_invalid.sql": `-- 0002_invalid.sql — invalid mutation.\n${statement}`,
+      },
       async (root) => {
         await assert.rejects(inspectProjectionBaseline({ root }));
       },
@@ -69,15 +88,17 @@ test("projection baseline rejects transitional data and column mutations", async
   }
 });
 
-test("projection baseline permits constructive constraints", async () => {
+test("projection migrations permit constructive schema additions", async () => {
   await withMigrationDirectory(
     {
-      [baselineFilename]: `${header}CREATE TABLE public.example (id bigint);\nALTER TABLE ONLY public.example ADD CONSTRAINT example_pkey PRIMARY KEY (id);`,
+      [baselineFilename]: checkedBaseline,
+      "0002_constructive.sql": "-- 0002_constructive.sql — additive schema.\nCREATE TABLE public.example (id bigint);\nALTER TABLE ONLY public.example ADD CONSTRAINT example_pkey PRIMARY KEY (id);",
     },
     async (root) => {
       const report = await inspectProjectionBaseline({ root });
       assert.equal(report.ok, true);
-      assert.equal(report.statement_count, 2);
+      assert.equal(report.migration_file_count, 2);
+      assert.ok(report.statement_count > 100);
     },
   );
 });

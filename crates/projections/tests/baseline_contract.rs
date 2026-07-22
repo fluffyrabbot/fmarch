@@ -1,4 +1,4 @@
-//! Exact catalog contract for the pre-1.0 greenfield projection baseline.
+//! Exact catalog contract after applying the append-only projection migrations.
 
 use sqlx::PgPool;
 
@@ -308,7 +308,7 @@ fn assert_inventory(kind: &str, actual: &[String], expected: &[&str]) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
-async fn greenfield_baseline_has_exact_catalog_inventory(pool: PgPool) {
+async fn migrated_projection_schema_has_exact_catalog_inventory(pool: PgPool) {
     let tables: Vec<String> = sqlx::query_scalar(
         "SELECT table_name \
          FROM information_schema.tables \
