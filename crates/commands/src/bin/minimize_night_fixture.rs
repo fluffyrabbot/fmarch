@@ -262,10 +262,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse(env::args().skip(1))?;
     let fixture = read_fixture(&args.fixture_path)?;
     let database_url = env::var("DATABASE_URL")?;
-    // Fixture replay is sequential, but a command can hold three advisory-lock
-    // sessions before acquiring its work/transaction connection. Four is the
-    // measured lower bound; keeping it below the general test-pool size lets
-    // independent fixture proofs run in parallel without exhausting Postgres.
+    // Each command uses one connection for its transaction-scoped lock, reads,
+    // append, projections, receipt, and commit. Keep modest headroom for the
+    // fixture harness and independent proofs sharing Postgres.
     let pool = PgPoolOptions::new()
         .max_connections(4)
         .connect(&database_url)

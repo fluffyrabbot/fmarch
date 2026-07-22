@@ -197,7 +197,7 @@ async fn append_in_tx_checked(
         return Ok(Vec::new());
     }
 
-    acquire_stream_append_lock(tx, stream_id).await?;
+    lock_stream_in_tx(tx, stream_id).await?;
     let base = current_stream_seq(&mut **tx, stream_id).await?;
     if expected_stream_seq.is_some_and(|expected| expected != base) {
         return Err(StoreError::Conflict {
@@ -266,7 +266,11 @@ async fn append_in_tx_checked(
     Ok(out)
 }
 
-async fn acquire_stream_append_lock(
+/// Serialize all decisions and writes for one stream for the lifetime of `tx`.
+/// Command runtimes acquire this before reading; append reacquires the same
+/// transaction-scoped lock defensively and therefore cannot drift to a
+/// different lock namespace.
+pub async fn lock_stream_in_tx(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     stream_id: Uuid,
 ) -> Result<(), StoreError> {
@@ -292,6 +296,25 @@ pub async fn append(
 /// Load a full stream in canonical order (`stream_seq` ascending), each row
 /// passed through the upcaster seam (identity in v1).
 pub async fn load_stream(pool: &PgPool, stream_id: Uuid) -> Result<Vec<StoredEvent>, StoreError> {
+    load_stream_with(pool, stream_id).await
+}
+
+/// Transactional stream read used by command runtimes whose validation and
+/// append must share one cancellation-safe transaction.
+pub async fn load_stream_in_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    stream_id: Uuid,
+) -> Result<Vec<StoredEvent>, StoreError> {
+    load_stream_with(&mut **tx, stream_id).await
+}
+
+async fn load_stream_with<'e, E>(
+    executor: E,
+    stream_id: Uuid,
+) -> Result<Vec<StoredEvent>, StoreError>
+where
+    E: sqlx::PgExecutor<'e>,
+{
     let rows = sqlx::query(
         r#"
         SELECT seq, stream_id, stream_seq, kind, version, payload, actor, occurred_at, causation_id, meta
@@ -301,7 +324,7 @@ pub async fn load_stream(pool: &PgPool, stream_id: Uuid) -> Result<Vec<StoredEve
         "#,
     )
     .bind(stream_id)
-    .fetch_all(pool)
+    .fetch_all(executor)
     .await?;
 
     let mut out = Vec::with_capacity(rows.len());

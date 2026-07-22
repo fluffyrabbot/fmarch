@@ -4129,6 +4129,7 @@ fn internal_api_error(message: impl Into<String>) -> ApiError {
 fn command_api_error(reject: commands::Reject) -> ApiError {
     let status = match reject {
         commands::Reject::NotAuthorized | commands::Reject::NotHost => StatusCode::FORBIDDEN,
+        commands::Reject::CommandIdConflict => StatusCode::CONFLICT,
         commands::Reject::UnknownGame
         | commands::Reject::UnknownSlot
         | commands::Reject::UnknownPrompt => StatusCode::NOT_FOUND,

@@ -24,12 +24,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .map(|path| path.to_string_lossy().to_string())
         .unwrap_or_default();
     let database_url = env::var("DATABASE_URL")?;
-    // This proof drives SubmitAction/ResolvePhase, which take per-game advisory
-    // locks on dedicated pooled connections and then acquire further connections
-    // for their reads and the persist tx. A single-connection pool therefore
-    // self-deadlocks (the lock holder can never get its work connection) and
-    // trips the acquire timeout. Give it enough headroom for those concurrent
-    // holds — matching the `#[sqlx::test]` convention of 5.
+    // SubmitAction/ResolvePhase now keep their transaction-scoped lock, reads,
+    // append, projections, and commit on one connection. Retain normal proof
+    // headroom for harness queries and future parallel checks.
     let pool = PgPoolOptions::new()
         .max_connections(5)
         .connect(&database_url)

@@ -3373,14 +3373,20 @@ fn json_array_len(value: &serde_json::Value) -> usize {
 
 /// Read a game's running votecount: COUNT of current ballots per candidate,
 /// ordered deterministically. Candidates with zero ballots are absent.
-pub async fn votecount(pool: &PgPool, game_id: Uuid) -> Result<Vec<VoteCountRow>, ProjectionError> {
+pub async fn votecount<'e, E>(
+    executor: E,
+    game_id: Uuid,
+) -> Result<Vec<VoteCountRow>, ProjectionError>
+where
+    E: sqlx::PgExecutor<'e>,
+{
     let rows = sqlx::query(
         "SELECT phase_id, target AS candidate_slot, COUNT(*) AS n \
          FROM vote_ballot WHERE game_id = $1 \
          GROUP BY phase_id, target ORDER BY phase_id, target",
     )
     .bind(game_id)
-    .fetch_all(pool)
+    .fetch_all(executor)
     .await?;
     Ok(rows
         .into_iter()
@@ -3489,34 +3495,37 @@ pub async fn game_result(
 }
 
 /// Read a game's slot_state rows, ordered deterministically.
-pub async fn slot_state(
-    pool: &PgPool,
+pub async fn slot_state<'e, E>(
+    executor: E,
     game_id: Uuid,
-) -> Result<Vec<SlotStateRow>, ProjectionError> {
+) -> Result<Vec<SlotStateRow>, ProjectionError>
+where
+    E: sqlx::PgExecutor<'e>,
+{
     let rows = sqlx::query(
         "SELECT game_id, slot_id, alive, status, role_key, alignment, role_revealed, \
-         alignment_revealed FROM slot_state \
+         alignment_revealed, ARRAY(SELECT tag FROM slot_status_tag t \
+             WHERE t.game_id = slot_state.game_id AND t.slot_id = slot_state.slot_id \
+             ORDER BY tag) AS status_tags FROM slot_state \
          WHERE game_id = $1 ORDER BY slot_id",
     )
     .bind(game_id)
-    .fetch_all(pool)
+    .fetch_all(executor)
     .await?;
-    let mut out = Vec::new();
-    for r in rows {
-        let slot_id: String = r.get("slot_id");
-        out.push(SlotStateRow {
+    Ok(rows
+        .into_iter()
+        .map(|r| SlotStateRow {
             game_id: r.get("game_id"),
-            status_tags: slot_status_tags(pool, game_id, &slot_id).await?,
-            slot_id,
+            status_tags: r.get("status_tags"),
+            slot_id: r.get("slot_id"),
             alive: r.get("alive"),
             status: r.get("status"),
             role_key: r.get("role_key"),
             alignment: r.get("alignment"),
             role_revealed: r.get("role_revealed"),
             alignment_revealed: r.get("alignment_revealed"),
-        });
-    }
-    Ok(out)
+        })
+        .collect())
 }
 
 /// Read persistent engine effects, ordered deterministically.
@@ -3549,34 +3558,40 @@ pub async fn slot_effects(
         .collect())
 }
 
-pub async fn slot_status_tags(
-    pool: &PgPool,
+pub async fn slot_status_tags<'e, E>(
+    executor: E,
     game_id: Uuid,
     slot_id: &str,
-) -> Result<Vec<String>, ProjectionError> {
+) -> Result<Vec<String>, ProjectionError>
+where
+    E: sqlx::PgExecutor<'e>,
+{
     let rows = sqlx::query(
         "SELECT tag FROM slot_status_tag \
          WHERE game_id = $1 AND slot_id = $2 ORDER BY tag",
     )
     .bind(game_id)
     .bind(slot_id)
-    .fetch_all(pool)
+    .fetch_all(executor)
     .await?;
     Ok(rows.into_iter().map(|r| r.get("tag")).collect())
 }
 
 /// Read folded action history, ordered deterministically.
-pub async fn action_history(
-    pool: &PgPool,
+pub async fn action_history<'e, E>(
+    executor: E,
     game_id: Uuid,
-) -> Result<Vec<ActionHistoryRow>, ProjectionError> {
+) -> Result<Vec<ActionHistoryRow>, ProjectionError>
+where
+    E: sqlx::PgExecutor<'e>,
+{
     let rows = sqlx::query(
         "SELECT game_id, slot_id, template_id, phase_id, phase_kind, phase_number, targets, status \
          FROM action_history WHERE game_id = $1 \
          ORDER BY phase_number, phase_id, slot_id, template_id",
     )
     .bind(game_id)
-    .fetch_all(pool)
+    .fetch_all(executor)
     .await?;
     Ok(rows
         .into_iter()
@@ -3597,10 +3612,13 @@ pub async fn action_history(
 }
 
 /// Read folded action counters, ordered deterministically.
-pub async fn action_counters(
-    pool: &PgPool,
+pub async fn action_counters<'e, E>(
+    executor: E,
     game_id: Uuid,
-) -> Result<Vec<ActionCounterRow>, ProjectionError> {
+) -> Result<Vec<ActionCounterRow>, ProjectionError>
+where
+    E: sqlx::PgExecutor<'e>,
+{
     let rows = sqlx::query(
         "SELECT game_id, slot_id, counter_id, template_id, consumed_action, cadence_policy, \
          phase_scope, limit_count, used_count, remaining_count, phase_id, phase_kind, phase_number \
@@ -3608,7 +3626,7 @@ pub async fn action_counters(
          ORDER BY phase_number, phase_id, slot_id, counter_id",
     )
     .bind(game_id)
-    .fetch_all(pool)
+    .fetch_all(executor)
     .await?;
     Ok(rows
         .into_iter()
@@ -3721,17 +3739,20 @@ pub async fn visit_history(
 }
 
 /// Read folded action grants, ordered deterministically.
-pub async fn action_grants(
-    pool: &PgPool,
+pub async fn action_grants<'e, E>(
+    executor: E,
     game_id: Uuid,
-) -> Result<Vec<ActionGrantRow>, ProjectionError> {
+) -> Result<Vec<ActionGrantRow>, ProjectionError>
+where
+    E: sqlx::PgExecutor<'e>,
+{
     let rows = sqlx::query(
         "SELECT game_id, slot_id, grant_id, grant_option, kind, source_slot, source_action, phase_id, phase_kind, phase_number, uses, vote_weight \
          FROM action_grant WHERE game_id = $1 \
          ORDER BY phase_number, phase_id, slot_id, grant_id, source_action, source_slot",
     )
     .bind(game_id)
-    .fetch_all(pool)
+    .fetch_all(executor)
     .await?;
     Ok(rows
         .into_iter()
@@ -3958,17 +3979,20 @@ pub async fn player_info_results_for_slot(
 }
 
 /// Read folded host/admin prompts, ordered deterministically.
-pub async fn host_prompts(
-    pool: &PgPool,
+pub async fn host_prompts<'e, E>(
+    executor: E,
     game_id: Uuid,
-) -> Result<Vec<HostPromptRow>, ProjectionError> {
+) -> Result<Vec<HostPromptRow>, ProjectionError>
+where
+    E: sqlx::PgExecutor<'e>,
+{
     let rows = sqlx::query(
         "SELECT game_id, phase_id, event_index, prompt_id, kind, subject_slot, reason, phase_kind, phase_number, metadata, status, decision, public_resolution, resolved_by, resolved_at \
          FROM host_prompt WHERE game_id = $1 \
          ORDER BY phase_id, event_index, prompt_id",
     )
     .bind(game_id)
-    .fetch_all(pool)
+    .fetch_all(executor)
     .await?;
     Ok(rows
         .into_iter()
@@ -4053,16 +4077,19 @@ pub async fn game_authority(
 }
 
 /// Whether a user currently holds the explicit spectator grant for this game.
-pub async fn spectator_membership(
-    pool: &PgPool,
+pub async fn spectator_membership<'e, E>(
+    executor: E,
     game_id: Uuid,
     user_id: &str,
-) -> Result<bool, ProjectionError> {
+) -> Result<bool, ProjectionError>
+where
+    E: sqlx::PgExecutor<'e>,
+{
     let row =
         sqlx::query("SELECT 1 AS x FROM spectator_membership WHERE game_id = $1 AND user_id = $2")
             .bind(game_id)
             .bind(user_id)
-            .fetch_optional(pool)
+            .fetch_optional(executor)
             .await?;
     Ok(row.is_some())
 }
@@ -4088,32 +4115,38 @@ pub async fn spectator_memberships(
 }
 
 /// The CURRENT occupant of a slot, if any (the live mapping for `caps`).
-pub async fn slot_occupant(
-    pool: &PgPool,
+pub async fn slot_occupant<'e, E>(
+    executor: E,
     game_id: Uuid,
     slot_id: &str,
-) -> Result<Option<String>, ProjectionError> {
+) -> Result<Option<String>, ProjectionError>
+where
+    E: sqlx::PgExecutor<'e>,
+{
     let row = sqlx::query(
         "SELECT occupant_user_id FROM slot_occupancy WHERE game_id = $1 AND slot_id = $2",
     )
     .bind(game_id)
     .bind(slot_id)
-    .fetch_optional(pool)
+    .fetch_optional(executor)
     .await?;
     Ok(row.map(|r| r.get("occupant_user_id")))
 }
 
 /// Read a game's slot_occupancy rows, ordered deterministically.
-pub async fn slot_occupancy(
-    pool: &PgPool,
+pub async fn slot_occupancy<'e, E>(
+    executor: E,
     game_id: Uuid,
-) -> Result<Vec<SlotOccupancyRow>, ProjectionError> {
+) -> Result<Vec<SlotOccupancyRow>, ProjectionError>
+where
+    E: sqlx::PgExecutor<'e>,
+{
     let rows = sqlx::query(
         "SELECT game_id, slot_id, occupant_user_id FROM slot_occupancy \
          WHERE game_id = $1 ORDER BY slot_id",
     )
     .bind(game_id)
-    .fetch_all(pool)
+    .fetch_all(executor)
     .await?;
     Ok(rows
         .into_iter()
@@ -4126,15 +4159,18 @@ pub async fn slot_occupancy(
 }
 
 /// The game's current phase window, if a phase has started.
-pub async fn phase_state(
-    pool: &PgPool,
+pub async fn phase_state<'e, E>(
+    executor: E,
     game_id: Uuid,
-) -> Result<Option<PhaseStateRow>, ProjectionError> {
+) -> Result<Option<PhaseStateRow>, ProjectionError>
+where
+    E: sqlx::PgExecutor<'e>,
+{
     let row = sqlx::query(
         "SELECT game_id, phase_id, locked, deadline FROM phase_state WHERE game_id = $1",
     )
     .bind(game_id)
-    .fetch_optional(pool)
+    .fetch_optional(executor)
     .await?;
     Ok(row.map(|r| PhaseStateRow {
         game_id: r.get("game_id"),
@@ -4169,18 +4205,21 @@ pub async fn private_channel_members(
         .collect())
 }
 
-pub async fn post_policy(
-    pool: &PgPool,
+pub async fn post_policy<'e, E>(
+    executor: E,
     game_id: Uuid,
     channel_id: &str,
-) -> Result<PostPolicyRow, ProjectionError> {
+) -> Result<PostPolicyRow, ProjectionError>
+where
+    E: sqlx::PgExecutor<'e>,
+{
     let row = sqlx::query(
         "SELECT game_id, channel_id, allow_media_only \
          FROM post_policy WHERE game_id = $1 AND channel_id = $2",
     )
     .bind(game_id)
     .bind(channel_id)
-    .fetch_optional(pool)
+    .fetch_optional(executor)
     .await?;
     Ok(row
         .map(|r| PostPolicyRow {
@@ -4196,38 +4235,47 @@ pub async fn post_policy(
 }
 
 /// Whether a slot exists in the game (has a `slot_state` row).
-pub async fn slot_exists(
-    pool: &PgPool,
+pub async fn slot_exists<'e, E>(
+    executor: E,
     game_id: Uuid,
     slot_id: &str,
-) -> Result<bool, ProjectionError> {
+) -> Result<bool, ProjectionError>
+where
+    E: sqlx::PgExecutor<'e>,
+{
     let row = sqlx::query("SELECT 1 AS x FROM slot_state WHERE game_id = $1 AND slot_id = $2")
         .bind(game_id)
         .bind(slot_id)
-        .fetch_optional(pool)
+        .fetch_optional(executor)
         .await?;
     Ok(row.is_some())
 }
 
 /// Whether a slot is alive (`true`), dead (`false`), or absent (`None`).
-pub async fn slot_alive(
-    pool: &PgPool,
+pub async fn slot_alive<'e, E>(
+    executor: E,
     game_id: Uuid,
     slot_id: &str,
-) -> Result<Option<bool>, ProjectionError> {
+) -> Result<Option<bool>, ProjectionError>
+where
+    E: sqlx::PgExecutor<'e>,
+{
     let row = sqlx::query("SELECT alive FROM slot_state WHERE game_id = $1 AND slot_id = $2")
         .bind(game_id)
         .bind(slot_id)
-        .fetch_optional(pool)
+        .fetch_optional(executor)
         .await?;
     Ok(row.map(|r| r.get("alive")))
 }
 
 /// Whether a game exists (has a `game_authority` host row).
-pub async fn game_exists(pool: &PgPool, game_id: Uuid) -> Result<bool, ProjectionError> {
+pub async fn game_exists<'e, E>(executor: E, game_id: Uuid) -> Result<bool, ProjectionError>
+where
+    E: sqlx::PgExecutor<'e>,
+{
     let row = sqlx::query("SELECT 1 AS x FROM game_authority WHERE game_id = $1 LIMIT 1")
         .bind(game_id)
-        .fetch_optional(pool)
+        .fetch_optional(executor)
         .await?;
     Ok(row.is_some())
 }

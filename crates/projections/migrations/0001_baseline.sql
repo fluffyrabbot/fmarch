@@ -227,8 +227,10 @@ CREATE TABLE public.auth_session (
 CREATE TABLE public.command_receipt (
     principal_user_id text NOT NULL,
     command_id uuid NOT NULL,
+    command_fingerprint bytea NOT NULL,
     stream_id uuid NOT NULL,
-    stream_seqs bigint[] NOT NULL
+    stream_seqs bigint[] NOT NULL,
+    CONSTRAINT command_receipt_fingerprint_check CHECK ((octet_length(command_fingerprint) = 32))
 );
 
 

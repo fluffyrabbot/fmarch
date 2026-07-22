@@ -19,7 +19,7 @@ export type ClientEnvelope = { v: number, id: bigint, body: ClientMsg, };
 
 export type AckMsg = { stream_seqs: Array<bigint>, };
 
-export type RejectCode = "NotAuthorized" | "NotYourSlot" | "NotHost" | "PhaseLocked" | "SlotNotAlive" | "VoteNotAllowed" | "InvalidTarget" | "ActionAlreadySubmitted" | "InvalidRole" | "StreamConflict" | "UnknownGame" | "UnknownSlot" | "UnknownPrompt" | "PromptAlreadyResolved" | "GameAlreadyCompleted" | "InvalidPromptDecision" | "Internal";
+export type RejectCode = "NotAuthorized" | "NotYourSlot" | "NotHost" | "PhaseLocked" | "SlotNotAlive" | "VoteNotAllowed" | "InvalidTarget" | "ActionAlreadySubmitted" | "InvalidRole" | "StreamConflict" | "CommandIdConflict" | "UnknownGame" | "UnknownSlot" | "UnknownPrompt" | "PromptAlreadyResolved" | "GameAlreadyCompleted" | "InvalidPromptDecision" | "Internal";
 
 export type RejectMsg = { error: RejectCode, retryable: boolean, message: string, };
 

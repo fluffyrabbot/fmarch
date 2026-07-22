@@ -231,6 +231,9 @@ pub enum Reject {
     /// Optimistic-concurrency conflict — reload, revalidate, RETRY (bounded).
     #[error("stream conflict (retryable)")]
     StreamConflict,
+    /// The command id was already committed for a different command payload.
+    #[error("command id already used for a different payload")]
+    CommandIdConflict,
     /// The referenced game does not exist.
     #[error("unknown game")]
     UnknownGame,

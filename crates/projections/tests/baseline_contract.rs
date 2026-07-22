@@ -202,6 +202,7 @@ const EXPECTED_CONSTRAINTS: &[&str] = &[
     "auth_registration_attempt_check:c",
     "auth_registration_attempt_pkey:p",
     "auth_session_pkey:p",
+    "command_receipt_fingerprint_check:c",
     "command_receipt_pkey:p",
     "community_inbox_item_pkey:p",
     "community_inbox_item_subscription_id_fkey:f",

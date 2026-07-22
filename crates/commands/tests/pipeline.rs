@@ -12,7 +12,7 @@
 use caps::Principal;
 use commands::operator_process::{run_bounded_process, ProcessLimits};
 use commands::{
-    audit_engine_snapshot_identity_boundary, audit_resolution_envelopes, handle,
+    audit_engine_snapshot_identity_boundary, audit_resolution_envelopes, handle, handle_idempotent,
     inspect_resolution_traces, load_engine_phase_input, load_engine_snapshot,
     run_large_action_graph_performance_proof, Ack, Command, HostPromptDecision, Reject,
     ResolutionEnvelopeAuditEnvelope, ResolutionEnvelopeAuditStatus, ThreadPostMedia,
@@ -73778,13 +73778,8 @@ async fn concurrent_submit_action_revalidates_after_winning_action(pool: PgPool)
     let lock_key = 41_005_i64;
     install_action_insert_blocker(&pool, game, lock_key).await;
 
-    // `#[sqlx::test]` caps the handler pool at 5 connections. Each in-flight
-    // `submit_action` holds three (phase-boundary lock + submit-action lock +
-    // the persist tx that parks in the insert trigger), so the racing `first`
-    // and `second` handlers alone can hold 4. Run the harness's own blocker and
-    // advisory-wait poller on a separate pool against the same per-test DB so
-    // they never contend for the handler budget (which otherwise deadlocks the
-    // count-of-2 wait against the 5-connection cap).
+    // Run the harness blocker and advisory-wait poller on a separate pool so
+    // they cannot contend with the command transactions under test.
     let aux_pool = sqlx::postgres::PgPoolOptions::new()
         .max_connections(4)
         .connect_with((*pool.connect_options()).clone())
@@ -73916,6 +73911,261 @@ async fn wait_for_advisory_wait_count(pool: &PgPool, min_waiting: i64) {
     })
     .await
     .expect("handler reached the advisory-lock gate before timing out");
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn command_receipt_replays_only_an_identical_payload(pool: PgPool) {
+    let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
+    let command_id = Uuid::new_v4();
+    let command = Command::SubmitPost {
+        game,
+        channel_id: "main".into(),
+        actor_slot: "slot_1".into(),
+        body: "stable idempotent body".into(),
+        media: Vec::new(),
+    };
+
+    let first = handle_idempotent(&pool, &user("user_a"), command_id, command.clone())
+        .await
+        .expect("first command commits");
+    let replay = handle_idempotent(&pool, &user("user_a"), command_id, command)
+        .await
+        .expect("same id and payload replays");
+    assert_eq!(replay, first);
+
+    let conflict = handle_idempotent(
+        &pool,
+        &user("user_a"),
+        command_id,
+        Command::SubmitPost {
+            game,
+            channel_id: "main".into(),
+            actor_slot: "slot_1".into(),
+            body: "different body under the same id".into(),
+            media: Vec::new(),
+        },
+    )
+    .await
+    .expect_err("same id with a different payload conflicts");
+    assert_eq!(conflict, Reject::CommandIdConflict);
+
+    let receipt = sqlx::query(
+        "SELECT octet_length(command_fingerprint) AS fingerprint_bytes, stream_seqs \
+         FROM command_receipt WHERE principal_user_id = $1 AND command_id = $2",
+    )
+    .bind("user_a")
+    .bind(command_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(receipt.get::<i32, _>("fingerprint_bytes"), 32);
+    assert_eq!(receipt.get::<Vec<i64>, _>("stream_seqs"), first.stream_seqs);
+
+    let posts: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM events WHERE stream_id = $1 AND kind = 'PostSubmitted'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(posts, 1, "replay and conflict append no additional event");
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn cancellation_while_waiting_for_command_lock_rolls_back_receipt_and_transaction(
+    pool: PgPool,
+) {
+    let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
+    let command_id = Uuid::new_v4();
+    let command = Command::SubmitPost {
+        game,
+        channel_id: "main".into(),
+        actor_slot: "slot_1".into(),
+        body: "cancelled at command lock".into(),
+        media: Vec::new(),
+    };
+
+    let mut blocker = pool.begin().await.unwrap();
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))")
+        .bind(game)
+        .execute(&mut *blocker)
+        .await
+        .unwrap();
+
+    let task_pool = pool.clone();
+    let task_command = command.clone();
+    let task = tokio::spawn(async move {
+        handle_idempotent(&task_pool, &user("user_a"), command_id, task_command).await
+    });
+    wait_for_advisory_wait_count(&pool, 1).await;
+    task.abort();
+    assert!(task.await.unwrap_err().is_cancelled());
+    blocker.commit().await.unwrap();
+
+    wait_for_cancelled_command_cleanup(&pool, game, command_id, "cancelled at command lock").await;
+    let ack = handle_idempotent(&pool, &user("user_a"), command_id, command)
+        .await
+        .expect("same id retries after cancellation rollback");
+    assert_eq!(ack.stream_seqs.len(), 1);
+    wait_for_no_command_runtime_resources(&pool).await;
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn cancellation_during_projection_rolls_back_event_projection_receipt_and_locks(
+    pool: PgPool,
+) {
+    let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
+    let command_id = Uuid::new_v4();
+    let body = "cancelled during projection";
+    let command = Command::SubmitPost {
+        game,
+        channel_id: "main".into(),
+        actor_slot: "slot_1".into(),
+        body: body.into(),
+        media: Vec::new(),
+    };
+    let lock_key = 41_009_i64;
+    install_thread_view_insert_blocker(&pool, game, lock_key).await;
+    let mut blocker = pool.acquire().await.unwrap();
+    sqlx::query("SELECT pg_advisory_lock($1)")
+        .bind(lock_key)
+        .execute(&mut *blocker)
+        .await
+        .unwrap();
+
+    let task_pool = pool.clone();
+    let task_command = command.clone();
+    let task = tokio::spawn(async move {
+        handle_idempotent(&task_pool, &user("user_a"), command_id, task_command).await
+    });
+    wait_for_advisory_wait_count(&pool, 1).await;
+    task.abort();
+    assert!(task.await.unwrap_err().is_cancelled());
+
+    sqlx::query("SELECT pg_advisory_unlock($1)")
+        .bind(lock_key)
+        .execute(&mut *blocker)
+        .await
+        .unwrap();
+    drop(blocker);
+    drop_thread_view_insert_blocker(&pool).await;
+
+    wait_for_cancelled_command_cleanup(&pool, game, command_id, body).await;
+    let ack = handle_idempotent(&pool, &user("user_a"), command_id, command)
+        .await
+        .expect("cancelled projection leaves the command retryable");
+    assert_eq!(ack.stream_seqs.len(), 1);
+    wait_for_no_command_runtime_resources(&pool).await;
+}
+
+async fn install_thread_view_insert_blocker(pool: &PgPool, game: Uuid, lock_key: i64) {
+    let function_sql = format!(
+        r#"
+        CREATE OR REPLACE FUNCTION test_block_thread_view_insert() RETURNS trigger AS $$
+        BEGIN
+            IF NEW.game_id = '{game}'::uuid THEN
+                PERFORM pg_advisory_lock({lock_key});
+                PERFORM pg_advisory_unlock({lock_key});
+            END IF;
+            RETURN NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+        "#
+    );
+    sqlx::query(&function_sql).execute(pool).await.unwrap();
+    sqlx::query("DROP TRIGGER IF EXISTS test_block_thread_view_insert ON thread_view")
+        .execute(pool)
+        .await
+        .unwrap();
+    sqlx::query(
+        "CREATE TRIGGER test_block_thread_view_insert AFTER INSERT ON thread_view \
+         FOR EACH ROW EXECUTE FUNCTION test_block_thread_view_insert()",
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+async fn drop_thread_view_insert_blocker(pool: &PgPool) {
+    sqlx::query("DROP TRIGGER IF EXISTS test_block_thread_view_insert ON thread_view")
+        .execute(pool)
+        .await
+        .unwrap();
+    sqlx::query("DROP FUNCTION IF EXISTS test_block_thread_view_insert()")
+        .execute(pool)
+        .await
+        .unwrap();
+}
+
+async fn wait_for_cancelled_command_cleanup(
+    pool: &PgPool,
+    game: Uuid,
+    command_id: Uuid,
+    body: &str,
+) {
+    tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            let receipt_count: i64 = sqlx::query_scalar(
+                "SELECT count(*) FROM command_receipt WHERE principal_user_id = $1 AND command_id = $2",
+            )
+            .bind("user_a")
+            .bind(command_id)
+            .fetch_one(pool)
+            .await
+            .unwrap();
+            let event_count: i64 = sqlx::query_scalar(
+                "SELECT count(*) FROM events WHERE stream_id = $1 AND kind = 'PostSubmitted' AND payload->>'body' = $2",
+            )
+            .bind(game)
+            .bind(body)
+            .fetch_one(pool)
+            .await
+            .unwrap();
+            let projection_count: i64 = sqlx::query_scalar(
+                "SELECT count(*) FROM thread_view WHERE game_id = $1 AND body = $2",
+            )
+            .bind(game)
+            .bind(body)
+            .fetch_one(pool)
+            .await
+            .unwrap();
+            if receipt_count == 0 && event_count == 0 && projection_count == 0 {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("cancelled command transaction rolled back");
+    wait_for_no_command_runtime_resources(pool).await;
+}
+
+async fn wait_for_no_command_runtime_resources(pool: &PgPool) {
+    tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            let idle_transactions: i64 = sqlx::query_scalar(
+                "SELECT count(*) FROM pg_stat_activity \
+                 WHERE datname = current_database() AND state = 'idle in transaction'",
+            )
+            .fetch_one(pool)
+            .await
+            .unwrap();
+            let advisory_locks: i64 = sqlx::query_scalar(
+                "SELECT count(*) FROM pg_locks \
+                 WHERE locktype = 'advisory' AND granted \
+                   AND database = (SELECT oid FROM pg_database WHERE datname = current_database())",
+            )
+            .fetch_one(pool)
+            .await
+            .unwrap();
+            if idle_transactions == 0 && advisory_locks == 0 {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("command cancellation left no advisory lock or idle transaction");
 }
 
 // A trivial Ack sanity helper kept to ensure the type is exercised.

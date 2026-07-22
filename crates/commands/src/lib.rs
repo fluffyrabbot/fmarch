@@ -4,14 +4,16 @@
 //!
 //! Pipeline per command (doc 03 §"Command handling pipeline"):
 //!
-//! 1. **resolve capability** — once, at the boundary, via [`caps::resolve`]
-//!    reading projections (never ambient globals).
-//! 2. **validate** — domain rules: phase open/unlocked, slot alive, the actor IS
+//! 1. **begin + lock** — open one transaction and take the game's
+//!    transaction-scoped advisory lock.
+//! 2. **resolve capability** — once, from that transaction via
+//!    [`caps::resolve_in_tx`] (never ambient globals).
+//! 3. **validate** — domain rules: phase open/unlocked, slot alive, the actor IS
 //!    the slot's current occupant, target valid, host-gating.
-//! 3. **produce events** — the platform [`eventstore::EventInput`]s.
-//! 4. **persist** — [`projections::append_and_project`] in one tx; an eventstore
+//! 4. **produce events** — the platform [`eventstore::EventInput`]s.
+//! 5. **persist** — [`projections::append_and_project_in_tx`] in that tx; an eventstore
 //!    `Conflict` surfaces as the retryable [`Reject::StreamConflict`].
-//! 5. **ack** — [`Ack`] or a TYPED [`Reject`].
+//! 6. **commit** — receipt and ack commit with the events and projections.
 //!
 //! Authority is RESOLVED once and PASSED INWARD: validation receives a
 //! [`caps::CapabilitySet`] and asks `grants(required)`. Inner code never
@@ -33,7 +35,8 @@ use domain::{
 use eventstore::{ActorId, EventInput};
 use projections::{append_and_project_in_tx, audit_rebuild, ProjectionError};
 use serde::Serialize;
-use sqlx::{pool::PoolConnection, postgres::PgPool, Postgres, Row};
+use sha2::{Digest, Sha256};
+use sqlx::{postgres::PgPool, Postgres, Row, Transaction};
 use uuid::Uuid;
 
 mod model;
@@ -201,6 +204,7 @@ impl EnginePhaseInput {
 struct ReceiptClaim {
     principal_user_id: String,
     command_id: Uuid,
+    command_fingerprint: Vec<u8>,
 }
 
 #[derive(Debug, Clone)]
@@ -460,11 +464,17 @@ pub struct ResolutionTraceNoteRow {
 }
 
 impl ReceiptClaim {
-    fn new(principal: &Principal, command_id: Uuid) -> Self {
-        ReceiptClaim {
+    fn new(principal: &Principal, command_id: Uuid, command: &Command) -> Result<Self, Reject> {
+        let payload = serde_json::to_vec(command)
+            .map_err(|error| Reject::Internal(format!("command fingerprint failed: {error}")))?;
+        let mut fingerprint = Sha256::new();
+        fingerprint.update(b"fmarch-command-payload:v1\0");
+        fingerprint.update(payload);
+        Ok(ReceiptClaim {
             principal_user_id: principal.user_id().to_string(),
             command_id,
-        }
+            command_fingerprint: fingerprint.finalize().to_vec(),
+        })
     }
 }
 
@@ -482,17 +492,15 @@ pub async fn handle(pool: &PgPool, principal: &Principal, command: Command) -> R
 
 /// Handle a network command with durable idempotency. If `(principal,
 /// command_id)` has already committed, return the original ack without
-/// revalidating against current state or appending new events.
+/// revalidating against current state or appending new events. Reusing that id
+/// for a different command fingerprint is a typed conflict.
 pub async fn handle_idempotent(
     pool: &PgPool,
     principal: &Principal,
     command_id: Uuid,
     command: Command,
 ) -> Result<Ack, Reject> {
-    let receipt = ReceiptClaim::new(principal, command_id);
-    if let Some(ack) = load_receipt(pool, &receipt).await? {
-        return Ok(ack);
-    }
+    let receipt = ReceiptClaim::new(principal, command_id, &command)?;
     handle_inner(pool, principal, command, Some(&receipt)).await
 }
 
@@ -502,144 +510,146 @@ async fn handle_inner(
     command: Command,
     receipt: Option<&ReceiptClaim>,
 ) -> Result<Ack, Reject> {
-    if let Some(game) = game_closed_by_completion(&command) {
-        let mut lock = acquire_completed_game_boundary_lock(pool, game).await?;
-        let result = async {
-            require_game_not_completed(pool, game).await?;
-            handle_command(pool, principal, command, receipt).await
+    let game = command_game(&command);
+    let mut tx = pool
+        .begin()
+        .await
+        .map_err(|error| Reject::Internal(error.to_string()))?;
+
+    if let Some(receipt) = receipt {
+        if let Some(ack) = claim_or_replay_receipt_in_tx(&mut tx, game, receipt).await? {
+            tx.commit()
+                .await
+                .map_err(|error| Reject::Internal(error.to_string()))?;
+            return Ok(ack);
         }
-        .await;
-        return release_completed_game_boundary_lock(&mut lock, game, result).await;
     }
 
-    handle_command(pool, principal, command, receipt).await
+    eventstore::lock_stream_in_tx(&mut tx, game)
+        .await
+        .map_err(|error| Reject::Internal(error.to_string()))?;
+    if game_closed_by_completion(&command).is_some() {
+        require_game_not_completed(&mut tx, game).await?;
+    }
+    let ack = handle_command(&mut tx, principal, command).await?;
+
+    if let Some(receipt) = receipt {
+        store_receipt_ack_in_tx(&mut tx, receipt, &ack).await?;
+    }
+    tx.commit()
+        .await
+        .map_err(|error| Reject::Internal(error.to_string()))?;
+    Ok(ack)
 }
 
 async fn handle_command(
-    pool: &PgPool,
+    tx: &mut Transaction<'_, Postgres>,
     principal: &Principal,
     command: Command,
-    receipt: Option<&ReceiptClaim>,
 ) -> Result<Ack, Reject> {
     match command {
         // ── bootstrap lifecycle (minimal, host-gated where appropriate) ──
-        Command::CreateGame { game, pack } => {
-            create_game(pool, principal, game, pack, receipt).await
-        }
-        Command::AddSlot { game, slot } => add_slot(pool, principal, game, slot, receipt).await,
+        Command::CreateGame { game, pack } => create_game(tx, principal, game, pack).await,
+        Command::AddSlot { game, slot } => add_slot(tx, principal, game, slot).await,
         Command::AssignSlot { game, slot, user } => {
-            assign_slot(pool, principal, game, slot, user, receipt).await
+            assign_slot(tx, principal, game, slot, user).await
         }
         Command::AssignRole {
             game,
             slot,
             role_key,
-        } => assign_role(pool, principal, game, slot, role_key, receipt).await,
+        } => assign_role(tx, principal, game, slot, role_key).await,
         Command::SetSlotStatus { game, slot, status } => {
             host_slot_lifecycle(
-                pool,
+                tx,
                 principal,
                 game,
                 slot,
                 "SlotStatusChanged",
                 serde_json::json!({ "status": status }),
-                receipt,
             )
             .await
         }
         Command::AddSlotStatusTag { game, slot, tag } => {
             host_slot_lifecycle(
-                pool,
+                tx,
                 principal,
                 game,
                 slot,
                 "SlotStatusTagged",
                 serde_json::json!({ "tag": tag }),
-                receipt,
             )
             .await
         }
         Command::RemoveSlotStatusTag { game, slot, tag } => {
             host_slot_lifecycle(
-                pool,
+                tx,
                 principal,
                 game,
                 slot,
                 "SlotStatusUntagged",
                 serde_json::json!({ "tag": tag }),
-                receipt,
             )
             .await
         }
         Command::AddCohost { game, user } => {
             host_lifecycle(
-                pool,
+                tx,
                 principal,
                 game,
                 "CohostAdded",
                 serde_json::json!({ "user_id": user }),
                 ActorId::Host,
-                receipt,
             )
             .await
         }
-        Command::GrantSpectator { game, user } => {
-            grant_spectator(pool, principal, game, user, receipt).await
-        }
+        Command::GrantSpectator { game, user } => grant_spectator(tx, principal, game, user).await,
         Command::RevokeSpectator { game, user } => {
-            revoke_spectator(pool, principal, game, user, receipt).await
+            revoke_spectator(tx, principal, game, user).await
         }
-        Command::StartGame { game, phase } => {
-            start_game(pool, principal, game, phase, receipt).await
-        }
+        Command::StartGame { game, phase } => start_game(tx, principal, game, phase).await,
         Command::OpenDayPhase { game, phase } => {
-            host_phase_lifecycle(pool, principal, game, "PhaseAdvanced", phase, receipt).await
+            host_phase_lifecycle(tx, principal, game, "PhaseAdvanced", phase).await
         }
-        Command::AdvancePhase { game } => advance_phase(pool, principal, game, receipt).await,
+        Command::AdvancePhase { game } => advance_phase(tx, principal, game).await,
         Command::AdvancePhaseByDeadline {
             game,
             phase,
             observed_at,
-        } => advance_phase_by_deadline(pool, principal, game, phase, observed_at, receipt).await,
-        Command::LockThread { game } => lock_thread(pool, principal, game, receipt).await,
-        Command::UnlockThread { game } => unlock_thread(pool, principal, game, receipt).await,
-        Command::ResolvePhase { game, seed } => {
-            resolve_phase(pool, principal, game, seed, receipt).await
-        }
-        Command::CompleteGame { game } => complete_game(pool, principal, game, receipt).await,
-        Command::PublishVotecount { game } => {
-            publish_votecount(pool, principal, game, receipt).await
-        }
+        } => advance_phase_by_deadline(tx, principal, game, phase, observed_at).await,
+        Command::LockThread { game } => lock_thread(tx, principal, game).await,
+        Command::UnlockThread { game } => unlock_thread(tx, principal, game).await,
+        Command::ResolvePhase { game, seed } => resolve_phase(tx, principal, game, seed).await,
+        Command::CompleteGame { game } => complete_game(tx, principal, game).await,
+        Command::PublishVotecount { game } => publish_votecount(tx, principal, game).await,
         Command::ResolveHostPrompt {
             game,
             prompt_id,
             decision,
-        } => resolve_host_prompt(pool, principal, game, prompt_id, decision, receipt).await,
+        } => resolve_host_prompt(tx, principal, game, prompt_id, decision).await,
         Command::SetPostPolicy {
             game,
             channel_id,
             allow_media_only,
-        } => set_post_policy(pool, principal, game, channel_id, allow_media_only, receipt).await,
+        } => set_post_policy(tx, principal, game, channel_id, allow_media_only).await,
         Command::PublishSpectatorPost { game, body, media } => {
-            publish_spectator_post(pool, principal, game, body, media, receipt).await
+            publish_spectator_post(tx, principal, game, body, media).await
         }
         Command::ControlItaSession {
             game,
             session_id,
             control,
             message,
-        } => {
-            control_ita_session(pool, principal, game, session_id, control, message, receipt).await
-        }
+        } => control_ita_session(tx, principal, game, session_id, control, message).await,
 
         // ── slice commands ──
         Command::SubmitVote {
             game,
             actor_slot,
             target,
-        } => submit_vote(pool, principal, game, actor_slot, target, receipt).await,
+        } => submit_vote(tx, principal, game, actor_slot, target).await,
         Command::WithdrawVote { game, actor_slot } => {
-            withdraw_vote(pool, principal, game, actor_slot, receipt).await
+            withdraw_vote(tx, principal, game, actor_slot).await
         }
         Command::SubmitAction {
             game,
@@ -650,7 +660,7 @@ async fn handle_command(
             grant_id,
         } => {
             submit_action(
-                pool,
+                tx,
                 principal,
                 game,
                 action_id,
@@ -658,7 +668,6 @@ async fn handle_command(
                 template_id,
                 targets,
                 grant_id,
-                receipt,
             )
             .await
         }
@@ -666,7 +675,7 @@ async fn handle_command(
             game,
             action_id,
             actor_slot,
-        } => withdraw_action(pool, principal, game, action_id, actor_slot, receipt).await,
+        } => withdraw_action(tx, principal, game, action_id, actor_slot).await,
         Command::SubmitPost {
             game,
             channel_id,
@@ -675,7 +684,7 @@ async fn handle_command(
             media,
         } => {
             submit_post(
-                pool,
+                tx,
                 principal,
                 SubmitPostRequest {
                     game,
@@ -684,34 +693,57 @@ async fn handle_command(
                     body,
                     media,
                 },
-                receipt,
             )
             .await
         }
         Command::ExtendDeadline { game, phase, at } => {
-            extend_deadline(pool, principal, game, phase, at, receipt).await
+            extend_deadline(tx, principal, game, phase, at).await
         }
         Command::ProcessReplacement {
             game,
             slot,
             outgoing_user,
             incoming_user,
-        } => {
-            process_replacement(
-                pool,
-                principal,
-                game,
-                slot,
-                outgoing_user,
-                incoming_user,
-                receipt,
-            )
-            .await
-        }
+        } => process_replacement(tx, principal, game, slot, outgoing_user, incoming_user).await,
     }
 }
 
 // ───────────────────────── bootstrap handlers ─────────────────────────
+
+fn command_game(command: &Command) -> Uuid {
+    match command {
+        Command::CreateGame { game, .. }
+        | Command::AddSlot { game, .. }
+        | Command::AssignSlot { game, .. }
+        | Command::AssignRole { game, .. }
+        | Command::SetSlotStatus { game, .. }
+        | Command::AddSlotStatusTag { game, .. }
+        | Command::RemoveSlotStatusTag { game, .. }
+        | Command::AddCohost { game, .. }
+        | Command::GrantSpectator { game, .. }
+        | Command::RevokeSpectator { game, .. }
+        | Command::StartGame { game, .. }
+        | Command::OpenDayPhase { game, .. }
+        | Command::AdvancePhase { game }
+        | Command::AdvancePhaseByDeadline { game, .. }
+        | Command::LockThread { game }
+        | Command::UnlockThread { game }
+        | Command::ResolvePhase { game, .. }
+        | Command::CompleteGame { game }
+        | Command::PublishVotecount { game }
+        | Command::ResolveHostPrompt { game, .. }
+        | Command::SetPostPolicy { game, .. }
+        | Command::PublishSpectatorPost { game, .. }
+        | Command::ControlItaSession { game, .. }
+        | Command::SubmitVote { game, .. }
+        | Command::WithdrawVote { game, .. }
+        | Command::SubmitAction { game, .. }
+        | Command::WithdrawAction { game, .. }
+        | Command::SubmitPost { game, .. }
+        | Command::ExtendDeadline { game, .. }
+        | Command::ProcessReplacement { game, .. } => *game,
+    }
+}
 
 fn game_closed_by_completion(command: &Command) -> Option<Uuid> {
     match command {
@@ -747,8 +779,18 @@ fn game_closed_by_completion(command: &Command) -> Option<Uuid> {
     }
 }
 
-async fn require_game_not_completed(pool: &PgPool, game: Uuid) -> Result<(), Reject> {
-    if game_completed(pool, game).await? {
+async fn require_game_not_completed(
+    tx: &mut Transaction<'_, Postgres>,
+    game: Uuid,
+) -> Result<(), Reject> {
+    let completed: bool = sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM events WHERE stream_id = $1 AND kind = 'GameCompleted')",
+    )
+    .bind(game)
+    .fetch_one(&mut **tx)
+    .await
+    .map_err(|error| Reject::Internal(error.to_string()))?;
+    if completed {
         Err(Reject::GameAlreadyCompleted)
     } else {
         Ok(())
@@ -769,15 +811,15 @@ pub async fn game_completed(pool: &PgPool, game: Uuid) -> Result<bool, Reject> {
 /// creating principal BECOMES the host (the `GameCreated.host` field), which is
 /// what every subsequent host-gated command resolves against.
 async fn create_game(
-    pool: &PgPool,
+    tx: &mut Transaction<'_, Postgres>,
     principal: &Principal,
     game: Uuid,
     pack: String,
-    receipt: Option<&ReceiptClaim>,
 ) -> Result<Ack, Reject> {
-    if projections::game_exists(pool, game).await? {
+    if projections::game_exists(&mut **tx, game).await? {
         return Err(Reject::UnknownGame); // already exists → treat as bad request
     }
+    load_pack(&pack)?;
     let host = principal.user_id().to_string();
     let ev = EventInput::new(
         "GameCreated",
@@ -786,55 +828,47 @@ async fn create_game(
         ActorId::User(host.clone()),
         0,
     );
-    persist(pool, game, &[ev], receipt).await
+    persist(tx, game, &[ev]).await
 }
 
 /// A host-gated lifecycle command that appends a single event. Resolves
 /// `HostOf(game)` (cohost/global may escalate via `grants`) then appends.
 async fn host_lifecycle(
-    pool: &PgPool,
+    tx: &mut Transaction<'_, Postgres>,
     principal: &Principal,
     game: Uuid,
     kind: &str,
     payload: serde_json::Value,
     actor: ActorId,
-    receipt: Option<&ReceiptClaim>,
 ) -> Result<Ack, Reject> {
-    require_game(pool, game).await?;
-    let caps = caps::resolve(pool, principal, game).await?;
+    require_game(tx, game).await?;
+    let caps = caps::resolve_in_tx(tx, principal, game).await?;
     require(&caps, &Capability::HostOf(game), Reject::NotHost)?;
-    persist(
-        pool,
-        game,
-        &[EventInput::new(kind, 1, payload, actor, 0)],
-        receipt,
-    )
-    .await
+    persist(tx, game, &[EventInput::new(kind, 1, payload, actor, 0)]).await
 }
 
 async fn grant_spectator(
-    pool: &PgPool,
+    tx: &mut Transaction<'_, Postgres>,
     principal: &Principal,
     game: Uuid,
     user: String,
-    receipt: Option<&ReceiptClaim>,
 ) -> Result<Ack, Reject> {
-    require_game(pool, game).await?;
-    let caps = caps::resolve(pool, principal, game).await?;
+    require_game(tx, game).await?;
+    let caps = caps::resolve_in_tx(tx, principal, game).await?;
     require(&caps, &Capability::HostOf(game), Reject::NotHost)?;
     if user.trim().is_empty() {
         return Err(Reject::InvalidTarget);
     }
-    if projections::slot_occupancy(pool, game)
+    if projections::slot_occupancy(&mut **tx, game)
         .await?
         .into_iter()
         .any(|row| row.occupant_user_id == user)
-        || projections::spectator_membership(pool, game, &user).await?
+        || projections::spectator_membership(&mut **tx, game, &user).await?
     {
         return Err(Reject::InvalidTarget);
     }
     persist(
-        pool,
+        tx,
         game,
         &[EventInput::new(
             "SpectatorGranted",
@@ -843,29 +877,27 @@ async fn grant_spectator(
             ActorId::Host,
             0,
         )],
-        receipt,
     )
     .await
 }
 
 async fn revoke_spectator(
-    pool: &PgPool,
+    tx: &mut Transaction<'_, Postgres>,
     principal: &Principal,
     game: Uuid,
     user: String,
-    receipt: Option<&ReceiptClaim>,
 ) -> Result<Ack, Reject> {
-    require_game(pool, game).await?;
-    let caps = caps::resolve(pool, principal, game).await?;
+    require_game(tx, game).await?;
+    let caps = caps::resolve_in_tx(tx, principal, game).await?;
     require(&caps, &Capability::HostOf(game), Reject::NotHost)?;
     if user.trim().is_empty() {
         return Err(Reject::InvalidTarget);
     }
-    if !projections::spectator_membership(pool, game, &user).await? {
+    if !projections::spectator_membership(&mut **tx, game, &user).await? {
         return Err(Reject::InvalidTarget);
     }
     persist(
-        pool,
+        tx,
         game,
         &[EventInput::new(
             "SpectatorRevoked",
@@ -874,26 +906,24 @@ async fn revoke_spectator(
             ActorId::Host,
             0,
         )],
-        receipt,
     )
     .await
 }
 
 async fn add_slot(
-    pool: &PgPool,
+    tx: &mut Transaction<'_, Postgres>,
     principal: &Principal,
     game: Uuid,
     slot: String,
-    receipt: Option<&ReceiptClaim>,
 ) -> Result<Ack, Reject> {
-    require_game(pool, game).await?;
-    let caps = caps::resolve(pool, principal, game).await?;
+    require_game(tx, game).await?;
+    let caps = caps::resolve_in_tx(tx, principal, game).await?;
     require(&caps, &Capability::HostOf(game), Reject::NotHost)?;
-    if projections::slot_exists(pool, game, &slot).await? {
+    if projections::slot_exists(&mut **tx, game, &slot).await? {
         return Err(Reject::InvalidTarget);
     }
     persist(
-        pool,
+        tx,
         game,
         &[EventInput::new(
             "SlotAdded",
@@ -902,33 +932,20 @@ async fn add_slot(
             ActorId::Host,
             0,
         )],
-        receipt,
     )
     .await
 }
 
 async fn complete_game(
-    pool: &PgPool,
+    tx: &mut Transaction<'_, Postgres>,
     principal: &Principal,
     game: Uuid,
-    receipt: Option<&ReceiptClaim>,
 ) -> Result<Ack, Reject> {
-    let mut lock = acquire_completed_game_boundary_lock(pool, game).await?;
-    let result = complete_game_locked(pool, principal, game, receipt).await;
-    release_completed_game_boundary_lock(&mut lock, game, result).await
-}
-
-async fn complete_game_locked(
-    pool: &PgPool,
-    principal: &Principal,
-    game: Uuid,
-    receipt: Option<&ReceiptClaim>,
-) -> Result<Ack, Reject> {
-    require_game(pool, game).await?;
-    let caps = caps::resolve(pool, principal, game).await?;
+    require_game(tx, game).await?;
+    let caps = caps::resolve_in_tx(tx, principal, game).await?;
     require(&caps, &Capability::HostOf(game), Reject::NotHost)?;
 
-    let stream = eventstore::load_stream(pool, game)
+    let stream = eventstore::load_stream_in_tx(tx, game)
         .await
         .map_err(|e| Reject::Internal(e.to_string()))?;
     if stream.iter().any(|event| event.kind == "GameCompleted") {
@@ -936,7 +953,7 @@ async fn complete_game_locked(
     }
 
     persist(
-        pool,
+        tx,
         game,
         &[EventInput::new(
             "GameCompleted",
@@ -945,69 +962,22 @@ async fn complete_game_locked(
             ActorId::Host,
             0,
         )],
-        receipt,
     )
     .await
 }
 
-async fn acquire_completed_game_boundary_lock(
-    pool: &PgPool,
-    game: Uuid,
-) -> Result<PoolConnection<Postgres>, Reject> {
-    let mut conn = pool
-        .acquire()
-        .await
-        .map_err(|e| Reject::Internal(e.to_string()))?;
-    sqlx::query("SELECT pg_advisory_lock($1)")
-        .bind(completed_game_boundary_lock_key(game))
-        .execute(&mut *conn)
-        .await
-        .map_err(|e| Reject::Internal(e.to_string()))?;
-    Ok(conn)
-}
-
-async fn release_completed_game_boundary_lock(
-    conn: &mut PoolConnection<Postgres>,
-    game: Uuid,
-    result: Result<Ack, Reject>,
-) -> Result<Ack, Reject> {
-    let released = sqlx::query_scalar::<_, bool>("SELECT pg_advisory_unlock($1)")
-        .bind(completed_game_boundary_lock_key(game))
-        .fetch_one(&mut **conn)
-        .await
-        .map_err(|e| Reject::Internal(e.to_string()))?;
-    if !released {
-        return Err(Reject::Internal(
-            "completed game boundary lock was not held at release".to_string(),
-        ));
-    }
-    result
-}
-
-fn completed_game_boundary_lock_key(game: Uuid) -> i64 {
-    let bytes = game.as_bytes();
-    let high = u64::from_be_bytes([
-        bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7],
-    ]);
-    let low = u64::from_be_bytes([
-        bytes[8], bytes[9], bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15],
-    ]);
-    (high ^ low ^ 0x6d66_6172_6368_0005) as i64
-}
-
 async fn host_phase_lifecycle(
-    pool: &PgPool,
+    tx: &mut Transaction<'_, Postgres>,
     principal: &Principal,
     game: Uuid,
     kind: &str,
     phase: String,
-    receipt: Option<&ReceiptClaim>,
 ) -> Result<Ack, Reject> {
-    require_game(pool, game).await?;
-    let caps = caps::resolve(pool, principal, game).await?;
+    require_game(tx, game).await?;
+    let caps = caps::resolve_in_tx(tx, principal, game).await?;
     require(&caps, &Capability::HostOf(game), Reject::NotHost)?;
 
-    let stream = eventstore::load_stream(pool, game)
+    let stream = eventstore::load_stream_in_tx(tx, game)
         .await
         .map_err(|e| Reject::Internal(e.to_string()))?;
     let pack_name = pack_name_from_stream(&stream)?;
@@ -1015,7 +985,7 @@ async fn host_phase_lifecycle(
     validate_pack_phase_id(&pack, &phase)?;
 
     persist(
-        pool,
+        tx,
         game,
         &[EventInput::new(
             kind,
@@ -1024,23 +994,21 @@ async fn host_phase_lifecycle(
             ActorId::Host,
             0,
         )],
-        receipt,
     )
     .await
 }
 
 async fn lock_thread(
-    pool: &PgPool,
+    tx: &mut Transaction<'_, Postgres>,
     principal: &Principal,
     game: Uuid,
-    receipt: Option<&ReceiptClaim>,
 ) -> Result<Ack, Reject> {
-    require_game(pool, game).await?;
-    let caps = caps::resolve(pool, principal, game).await?;
+    require_game(tx, game).await?;
+    let caps = caps::resolve_in_tx(tx, principal, game).await?;
     require(&caps, &Capability::HostOf(game), Reject::NotHost)?;
-    require_thread_lock_state(pool, game, false).await?;
+    require_thread_lock_state(tx, game, false).await?;
     persist(
-        pool,
+        tx,
         game,
         &[EventInput::new(
             "ThreadLocked",
@@ -1049,23 +1017,21 @@ async fn lock_thread(
             ActorId::Host,
             0,
         )],
-        receipt,
     )
     .await
 }
 
 async fn unlock_thread(
-    pool: &PgPool,
+    tx: &mut Transaction<'_, Postgres>,
     principal: &Principal,
     game: Uuid,
-    receipt: Option<&ReceiptClaim>,
 ) -> Result<Ack, Reject> {
-    require_game(pool, game).await?;
-    let caps = caps::resolve(pool, principal, game).await?;
+    require_game(tx, game).await?;
+    let caps = caps::resolve_in_tx(tx, principal, game).await?;
     require(&caps, &Capability::HostOf(game), Reject::NotHost)?;
-    require_thread_lock_state(pool, game, true).await?;
+    require_thread_lock_state(tx, game, true).await?;
     persist(
-        pool,
+        tx,
         game,
         &[EventInput::new(
             "ThreadUnlocked",
@@ -1074,17 +1040,16 @@ async fn unlock_thread(
             ActorId::Host,
             0,
         )],
-        receipt,
     )
     .await
 }
 
 async fn require_thread_lock_state(
-    pool: &PgPool,
+    tx: &mut Transaction<'_, Postgres>,
     game: Uuid,
     expected_locked: bool,
 ) -> Result<(), Reject> {
-    let Some(phase) = projections::phase_state(pool, game).await? else {
+    let Some(phase) = projections::phase_state(&mut **tx, game).await? else {
         return Err(Reject::PhaseLocked);
     };
     if phase.locked == expected_locked {
@@ -1095,17 +1060,16 @@ async fn require_thread_lock_state(
 }
 
 async fn start_game(
-    pool: &PgPool,
+    tx: &mut Transaction<'_, Postgres>,
     principal: &Principal,
     game: Uuid,
     phase: String,
-    receipt: Option<&ReceiptClaim>,
 ) -> Result<Ack, Reject> {
-    require_game(pool, game).await?;
-    let caps = caps::resolve(pool, principal, game).await?;
+    require_game(tx, game).await?;
+    let caps = caps::resolve_in_tx(tx, principal, game).await?;
     require(&caps, &Capability::HostOf(game), Reject::NotHost)?;
 
-    let stream = eventstore::load_stream(pool, game)
+    let stream = eventstore::load_stream_in_tx(tx, game)
         .await
         .map_err(|e| Reject::Internal(e.to_string()))?;
     let pack_name = pack_name_from_stream(&stream)?;
@@ -1121,31 +1085,19 @@ async fn start_game(
     )];
     events.extend(role_pm_declarations(&stream)?);
     events.extend(pack_private_channel_declarations(&pack, &stream)?);
-    persist(pool, game, &events, receipt).await
+    persist(tx, game, &events).await
 }
 
 async fn advance_phase(
-    pool: &PgPool,
+    tx: &mut Transaction<'_, Postgres>,
     principal: &Principal,
     game: Uuid,
-    receipt: Option<&ReceiptClaim>,
 ) -> Result<Ack, Reject> {
-    let mut lock = acquire_phase_boundary_lock(pool, game).await?;
-    let result = advance_phase_locked(pool, principal, game, receipt).await;
-    release_phase_boundary_lock(&mut lock, game, result).await
-}
-
-async fn advance_phase_locked(
-    pool: &PgPool,
-    principal: &Principal,
-    game: Uuid,
-    receipt: Option<&ReceiptClaim>,
-) -> Result<Ack, Reject> {
-    require_game(pool, game).await?;
-    let caps = caps::resolve(pool, principal, game).await?;
+    require_game(tx, game).await?;
+    let caps = caps::resolve_in_tx(tx, principal, game).await?;
     require(&caps, &Capability::HostOf(game), Reject::NotHost)?;
 
-    let (phase, stream) = resolved_locked_phase_stream(pool, game).await?;
+    let (phase, stream) = resolved_locked_phase_stream(tx, game).await?;
     let source_phase_id = phase.phase_id.clone();
     let pack_name = pack_name_from_stream(&stream)?;
     let pack = load_pack(&pack_name)?;
@@ -1156,7 +1108,7 @@ async fn advance_phase_locked(
         "reason": "resolved_phase",
     });
     persist(
-        pool,
+        tx,
         game,
         &[EventInput::new(
             "PhaseAdvanced",
@@ -1165,39 +1117,22 @@ async fn advance_phase_locked(
             ActorId::Host,
             0,
         )],
-        receipt,
     )
     .await
 }
 
 async fn advance_phase_by_deadline(
-    pool: &PgPool,
+    tx: &mut Transaction<'_, Postgres>,
     principal: &Principal,
     game: Uuid,
     phase_id: String,
     observed_at: i64,
-    receipt: Option<&ReceiptClaim>,
 ) -> Result<Ack, Reject> {
-    let mut lock = acquire_phase_boundary_lock(pool, game).await?;
-    let result =
-        advance_phase_by_deadline_locked(pool, principal, game, phase_id, observed_at, receipt)
-            .await;
-    release_phase_boundary_lock(&mut lock, game, result).await
-}
-
-async fn advance_phase_by_deadline_locked(
-    pool: &PgPool,
-    principal: &Principal,
-    game: Uuid,
-    phase_id: String,
-    observed_at: i64,
-    receipt: Option<&ReceiptClaim>,
-) -> Result<Ack, Reject> {
-    require_game(pool, game).await?;
-    let caps = caps::resolve(pool, principal, game).await?;
+    require_game(tx, game).await?;
+    let caps = caps::resolve_in_tx(tx, principal, game).await?;
     require(&caps, &Capability::HostOf(game), Reject::NotHost)?;
 
-    let (phase, stream) = resolved_locked_phase_stream(pool, game).await?;
+    let (phase, stream) = resolved_locked_phase_stream(tx, game).await?;
     if phase.phase_id != phase_id {
         return Err(Reject::InvalidTarget);
     }
@@ -1238,21 +1173,21 @@ async fn advance_phase_by_deadline_locked(
         ActorId::System,
         observed_at,
     );
-    persist(pool, game, &[deadline_ev, advance_ev], receipt).await
+    persist(tx, game, &[deadline_ev, advance_ev]).await
 }
 
 async fn resolved_locked_phase_stream(
-    pool: &PgPool,
+    tx: &mut Transaction<'_, Postgres>,
     game: Uuid,
 ) -> Result<(projections::PhaseStateRow, Vec<eventstore::StoredEvent>), Reject> {
-    let phase = projections::phase_state(pool, game)
+    let phase = projections::phase_state(&mut **tx, game)
         .await?
         .ok_or(Reject::PhaseLocked)?;
-    if !phase.locked || phase_has_pending_prompt(pool, game, &phase.phase_id).await? {
+    if !phase.locked || phase_has_pending_prompt(tx, game, &phase.phase_id).await? {
         return Err(Reject::InvalidTarget);
     }
 
-    let stream = eventstore::load_stream(pool, game)
+    let stream = eventstore::load_stream_in_tx(tx, game)
         .await
         .map_err(|e| Reject::Internal(e.to_string()))?;
     if !stream.iter().any(|event| {
@@ -1266,34 +1201,18 @@ async fn resolved_locked_phase_stream(
 }
 
 async fn host_slot_lifecycle(
-    pool: &PgPool,
+    tx: &mut Transaction<'_, Postgres>,
     principal: &Principal,
     game: Uuid,
     slot: String,
     kind: &str,
     payload: serde_json::Value,
-    receipt: Option<&ReceiptClaim>,
 ) -> Result<Ack, Reject> {
-    let lock_key = slot_lifecycle_lock_key(game, &slot);
-    let mut lock = acquire_slot_lifecycle_lock(pool, lock_key).await?;
-    let result =
-        host_slot_lifecycle_locked(pool, principal, game, slot, kind, payload, receipt).await;
-    release_slot_lifecycle_lock(&mut lock, lock_key, result).await
-}
-
-async fn host_slot_lifecycle_locked(
-    pool: &PgPool,
-    principal: &Principal,
-    game: Uuid,
-    slot: String,
-    kind: &str,
-    mut payload: serde_json::Value,
-    receipt: Option<&ReceiptClaim>,
-) -> Result<Ack, Reject> {
-    require_game(pool, game).await?;
-    let caps = caps::resolve(pool, principal, game).await?;
+    let mut payload = payload;
+    require_game(tx, game).await?;
+    let caps = caps::resolve_in_tx(tx, principal, game).await?;
     require(&caps, &Capability::HostOf(game), Reject::NotHost)?;
-    let current_status = current_slot_lifecycle_status(pool, game, &slot)
+    let current_status = current_slot_lifecycle_status(tx, game, &slot)
         .await?
         .ok_or(Reject::UnknownSlot)?;
     if kind == "SlotStatusChanged" {
@@ -1306,66 +1225,15 @@ async fn host_slot_lifecycle_locked(
     }
     payload["slot_id"] = serde_json::Value::String(slot);
     persist(
-        pool,
+        tx,
         game,
         &[EventInput::new(kind, 1, payload, ActorId::Host, 0)],
-        receipt,
     )
     .await
 }
 
-async fn acquire_slot_lifecycle_lock(
-    pool: &PgPool,
-    lock_key: i64,
-) -> Result<PoolConnection<Postgres>, Reject> {
-    let mut conn = pool
-        .acquire()
-        .await
-        .map_err(|e| Reject::Internal(e.to_string()))?;
-    sqlx::query("SELECT pg_advisory_lock($1)")
-        .bind(lock_key)
-        .execute(&mut *conn)
-        .await
-        .map_err(|e| Reject::Internal(e.to_string()))?;
-    Ok(conn)
-}
-
-async fn release_slot_lifecycle_lock(
-    conn: &mut PoolConnection<Postgres>,
-    lock_key: i64,
-    result: Result<Ack, Reject>,
-) -> Result<Ack, Reject> {
-    let released = sqlx::query_scalar::<_, bool>("SELECT pg_advisory_unlock($1)")
-        .bind(lock_key)
-        .fetch_one(&mut **conn)
-        .await
-        .map_err(|e| Reject::Internal(e.to_string()))?;
-    if !released {
-        return Err(Reject::Internal(
-            "slot lifecycle lock was not held at release".to_string(),
-        ));
-    }
-    result
-}
-
-fn slot_lifecycle_lock_key(game: Uuid, slot: &str) -> i64 {
-    let bytes = game.as_bytes();
-    let high = u64::from_be_bytes([
-        bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7],
-    ]);
-    let low = u64::from_be_bytes([
-        bytes[8], bytes[9], bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15],
-    ]);
-    let mut slot_hash = 0xcbf2_9ce4_8422_2325_u64;
-    for byte in slot.as_bytes() {
-        slot_hash ^= u64::from(*byte);
-        slot_hash = slot_hash.wrapping_mul(0x0000_0100_0000_01b3);
-    }
-    (high ^ low ^ slot_hash ^ 0x6d66_6172_6368_0004) as i64
-}
-
 async fn current_slot_lifecycle_status(
-    pool: &PgPool,
+    tx: &mut Transaction<'_, Postgres>,
     game: Uuid,
     slot: &str,
 ) -> Result<Option<String>, Reject> {
@@ -1374,29 +1242,28 @@ async fn current_slot_lifecycle_status(
     )
     .bind(game)
     .bind(slot)
-    .fetch_optional(pool)
+    .fetch_optional(&mut **tx)
     .await
     .map_err(|e| Reject::Internal(e.to_string()))
 }
 
 async fn assign_slot(
-    pool: &PgPool,
+    tx: &mut Transaction<'_, Postgres>,
     principal: &Principal,
     game: Uuid,
     slot: String,
     user: String,
-    receipt: Option<&ReceiptClaim>,
 ) -> Result<Ack, Reject> {
-    require_game(pool, game).await?;
-    let caps = caps::resolve(pool, principal, game).await?;
+    require_game(tx, game).await?;
+    let caps = caps::resolve_in_tx(tx, principal, game).await?;
     require(&caps, &Capability::HostOf(game), Reject::NotHost)?;
-    if !projections::slot_exists(pool, game, &slot).await? {
+    if !projections::slot_exists(&mut **tx, game, &slot).await? {
         return Err(Reject::UnknownSlot);
     }
-    if projections::spectator_membership(pool, game, &user).await? {
+    if projections::spectator_membership(&mut **tx, game, &user).await? {
         return Err(Reject::InvalidTarget);
     }
-    let stream = eventstore::load_stream(pool, game)
+    let stream = eventstore::load_stream_in_tx(tx, game)
         .await
         .map_err(|e| Reject::Internal(e.to_string()))?;
     let mut events = vec![EventInput::new(
@@ -1411,24 +1278,23 @@ async fn assign_slot(
             events.push(role_pm_declaration(&slot, role_key));
         }
     }
-    persist(pool, game, &events, receipt).await
+    persist(tx, game, &events).await
 }
 
 async fn assign_role(
-    pool: &PgPool,
+    tx: &mut Transaction<'_, Postgres>,
     principal: &Principal,
     game: Uuid,
     slot: String,
     role_key: String,
-    receipt: Option<&ReceiptClaim>,
 ) -> Result<Ack, Reject> {
-    require_game(pool, game).await?;
-    let caps = caps::resolve(pool, principal, game).await?;
+    require_game(tx, game).await?;
+    let caps = caps::resolve_in_tx(tx, principal, game).await?;
     require(&caps, &Capability::HostOf(game), Reject::NotHost)?;
-    if !projections::slot_exists(pool, game, &slot).await? {
+    if !projections::slot_exists(&mut **tx, game, &slot).await? {
         return Err(Reject::UnknownSlot);
     }
-    let stream = eventstore::load_stream(pool, game)
+    let stream = eventstore::load_stream_in_tx(tx, game)
         .await
         .map_err(|e| Reject::Internal(e.to_string()))?;
     let pack = load_pack(&pack_name_from_stream(&stream)?)?;
@@ -1449,54 +1315,40 @@ async fn assign_role(
         0,
     )];
     if stream.iter().any(|event| event.kind == "GameStarted")
-        && projections::slot_occupant(pool, game, &slot)
+        && projections::slot_occupant(&mut **tx, game, &slot)
             .await?
             .is_some()
     {
         events.push(role_pm_declaration(&slot, &role_key));
     }
-    persist(pool, game, &events, receipt).await
+    persist(tx, game, &events).await
 }
 
 // ───────────────────────── slice handlers ─────────────────────────
 
 async fn submit_vote(
-    pool: &PgPool,
+    tx: &mut Transaction<'_, Postgres>,
     principal: &Principal,
     game: Uuid,
     actor_slot: String,
     target: VoteTarget,
-    receipt: Option<&ReceiptClaim>,
 ) -> Result<Ack, Reject> {
-    let mut lock = acquire_phase_boundary_lock(pool, game).await?;
-    let result = submit_vote_locked(pool, principal, game, actor_slot, target, receipt).await;
-    release_phase_boundary_lock(&mut lock, game, result).await
-}
-
-async fn submit_vote_locked(
-    pool: &PgPool,
-    principal: &Principal,
-    game: Uuid,
-    actor_slot: String,
-    target: VoteTarget,
-    receipt: Option<&ReceiptClaim>,
-) -> Result<Ack, Reject> {
-    require_game(pool, game).await?;
+    require_game(tx, game).await?;
 
     // 1. resolve capability (boundary) and require the NARROWEST one.
-    let caps = caps::resolve(pool, principal, game).await?;
-    require_slot_occupant(pool, game, &actor_slot, &caps).await?;
+    let caps = caps::resolve_in_tx(tx, principal, game).await?;
+    require_slot_occupant(tx, game, &actor_slot, &caps).await?;
 
     // 2. validate domain rules.
-    let phase = require_open_day_phase(pool, game).await?;
-    require_slot_alive(pool, game, &actor_slot).await?;
-    let stream = eventstore::load_stream(pool, game)
+    let phase = require_open_day_phase(tx, game).await?;
+    require_slot_alive(tx, game, &actor_slot).await?;
+    let stream = eventstore::load_stream_in_tx(tx, game)
         .await
         .map_err(|e| Reject::Internal(e.to_string()))?;
     let phase_input = EngineInputBuilder::new(game, &stream, &phase).build()?;
     validate_vote_actor_policy(&phase_input.pack, &phase_input.state, &actor_slot)?;
     validate_vote_policy_target(&phase_input.pack.vote, &actor_slot, &target)?;
-    let target_str = validate_target(pool, game, &target).await?;
+    let target_str = validate_target(tx, game, &target).await?;
 
     // 3. produce events.
     let ev = EventInput::new(
@@ -1512,38 +1364,25 @@ async fn submit_vote_locked(
     }
 
     // 4. persist (one tx; Conflict → StreamConflict).
-    persist(pool, game, &events, receipt).await
+    persist(tx, game, &events).await
 }
 
 async fn withdraw_vote(
-    pool: &PgPool,
+    tx: &mut Transaction<'_, Postgres>,
     principal: &Principal,
     game: Uuid,
     actor_slot: String,
-    receipt: Option<&ReceiptClaim>,
 ) -> Result<Ack, Reject> {
-    let mut lock = acquire_phase_boundary_lock(pool, game).await?;
-    let result = withdraw_vote_locked(pool, principal, game, actor_slot, receipt).await;
-    release_phase_boundary_lock(&mut lock, game, result).await
-}
-
-async fn withdraw_vote_locked(
-    pool: &PgPool,
-    principal: &Principal,
-    game: Uuid,
-    actor_slot: String,
-    receipt: Option<&ReceiptClaim>,
-) -> Result<Ack, Reject> {
-    require_game(pool, game).await?;
-    let caps = caps::resolve(pool, principal, game).await?;
-    require_slot_occupant(pool, game, &actor_slot, &caps).await?;
+    require_game(tx, game).await?;
+    let caps = caps::resolve_in_tx(tx, principal, game).await?;
+    require_slot_occupant(tx, game, &actor_slot, &caps).await?;
     // RULING: withdraw is gated on the SAME open-phase rule as submit — you may
     // only change your ballot while the phase is votable (doc 01 phases partition
     // votes; doc under-specifies, decided here). The withdrawal carries
     // { actor, phase_id } (doc 10 says { action_id } but the running tally is
     // ballot-keyed per the Phase-3 ruling, so actor+phase is the correct key).
-    let phase = require_open_day_phase(pool, game).await?;
-    require_slot_alive(pool, game, &actor_slot).await?;
+    let phase = require_open_day_phase(tx, game).await?;
+    require_slot_alive(tx, game, &actor_slot).await?;
     let ev = EventInput::new(
         "VoteWithdrawn",
         1,
@@ -1551,11 +1390,11 @@ async fn withdraw_vote_locked(
         ActorId::Slot(actor_slot.clone()),
         0,
     );
-    persist(pool, game, &[ev], receipt).await
+    persist(tx, game, &[ev]).await
 }
 
 async fn submit_action(
-    pool: &PgPool,
+    tx: &mut Transaction<'_, Postgres>,
     principal: &Principal,
     game: Uuid,
     action_id: String,
@@ -1563,63 +1402,8 @@ async fn submit_action(
     template_id: String,
     targets: Vec<String>,
     grant_id: Option<String>,
-    receipt: Option<&ReceiptClaim>,
 ) -> Result<Ack, Reject> {
-    let mut phase_lock = acquire_phase_boundary_lock(pool, game).await?;
-    let result = submit_action_with_action_lock(
-        pool,
-        principal,
-        game,
-        action_id,
-        actor_slot,
-        template_id,
-        targets,
-        grant_id,
-        receipt,
-    )
-    .await;
-    release_phase_boundary_lock(&mut phase_lock, game, result).await
-}
-
-async fn submit_action_with_action_lock(
-    pool: &PgPool,
-    principal: &Principal,
-    game: Uuid,
-    action_id: String,
-    actor_slot: String,
-    template_id: String,
-    targets: Vec<String>,
-    grant_id: Option<String>,
-    receipt: Option<&ReceiptClaim>,
-) -> Result<Ack, Reject> {
-    let mut lock = acquire_submit_action_lock(pool, game).await?;
-    let result = submit_action_locked(
-        pool,
-        principal,
-        game,
-        action_id,
-        actor_slot,
-        template_id,
-        targets,
-        grant_id,
-        receipt,
-    )
-    .await;
-    release_submit_action_lock(&mut lock, game, result).await
-}
-
-async fn submit_action_locked(
-    pool: &PgPool,
-    principal: &Principal,
-    game: Uuid,
-    action_id: String,
-    actor_slot: String,
-    template_id: String,
-    targets: Vec<String>,
-    grant_id: Option<String>,
-    receipt: Option<&ReceiptClaim>,
-) -> Result<Ack, Reject> {
-    require_game(pool, game).await?;
+    require_game(tx, game).await?;
     if action_id.trim().is_empty() || template_id.trim().is_empty() {
         return Err(Reject::InvalidTarget);
     }
@@ -1627,17 +1411,17 @@ async fn submit_action_locked(
         return Err(Reject::InvalidTarget);
     }
 
-    let caps = caps::resolve(pool, principal, game).await?;
-    require_slot_occupant(pool, game, &actor_slot, &caps).await?;
-    let phase = require_open_phase(pool, game).await?;
-    require_slot_alive(pool, game, &actor_slot).await?;
-    let stream = eventstore::load_stream(pool, game)
+    let caps = caps::resolve_in_tx(tx, principal, game).await?;
+    require_slot_occupant(tx, game, &actor_slot, &caps).await?;
+    let phase = require_open_phase(tx, game).await?;
+    require_slot_alive(tx, game, &actor_slot).await?;
+    let stream = eventstore::load_stream_in_tx(tx, game)
         .await
         .map_err(|e| Reject::Internal(e.to_string()))?;
     let pack_name = pack_name_from_stream(&stream)?;
     let pack = load_pack(&pack_name)?;
     let action_window = validate_action_submission(
-        pool,
+        tx,
         game,
         &pack,
         &phase,
@@ -1705,86 +1489,26 @@ async fn submit_action_locked(
             phase_input.next_stream_seq + 2,
         ));
     }
-    persist(pool, game, &events, receipt).await
-}
-
-async fn acquire_submit_action_lock(
-    pool: &PgPool,
-    game: Uuid,
-) -> Result<PoolConnection<Postgres>, Reject> {
-    let mut conn = pool
-        .acquire()
-        .await
-        .map_err(|e| Reject::Internal(e.to_string()))?;
-    sqlx::query("SELECT pg_advisory_lock($1)")
-        .bind(submit_action_lock_key(game))
-        .execute(&mut *conn)
-        .await
-        .map_err(|e| Reject::Internal(e.to_string()))?;
-    Ok(conn)
-}
-
-async fn release_submit_action_lock(
-    conn: &mut PoolConnection<Postgres>,
-    game: Uuid,
-    result: Result<Ack, Reject>,
-) -> Result<Ack, Reject> {
-    let released = sqlx::query_scalar::<_, bool>("SELECT pg_advisory_unlock($1)")
-        .bind(submit_action_lock_key(game))
-        .fetch_one(&mut **conn)
-        .await
-        .map_err(|e| Reject::Internal(e.to_string()))?;
-    if !released {
-        return Err(Reject::Internal(
-            "submit action lock was not held at release".to_string(),
-        ));
-    }
-    result
-}
-
-fn submit_action_lock_key(game: Uuid) -> i64 {
-    let bytes = game.as_bytes();
-    let high = u64::from_be_bytes([
-        bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7],
-    ]);
-    let low = u64::from_be_bytes([
-        bytes[8], bytes[9], bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15],
-    ]);
-    (high ^ low ^ 0x6d66_6172_6368_0001) as i64
+    persist(tx, game, &events).await
 }
 
 async fn withdraw_action(
-    pool: &PgPool,
+    tx: &mut Transaction<'_, Postgres>,
     principal: &Principal,
     game: Uuid,
     action_id: String,
     actor_slot: String,
-    receipt: Option<&ReceiptClaim>,
 ) -> Result<Ack, Reject> {
-    let mut lock = acquire_phase_boundary_lock(pool, game).await?;
-    let result =
-        withdraw_action_locked(pool, principal, game, action_id, actor_slot, receipt).await;
-    release_phase_boundary_lock(&mut lock, game, result).await
-}
-
-async fn withdraw_action_locked(
-    pool: &PgPool,
-    principal: &Principal,
-    game: Uuid,
-    action_id: String,
-    actor_slot: String,
-    receipt: Option<&ReceiptClaim>,
-) -> Result<Ack, Reject> {
-    require_game(pool, game).await?;
+    require_game(tx, game).await?;
     if action_id.trim().is_empty() {
         return Err(Reject::InvalidTarget);
     }
 
-    let caps = caps::resolve(pool, principal, game).await?;
-    require_slot_occupant(pool, game, &actor_slot, &caps).await?;
-    let phase = require_open_phase(pool, game).await?;
-    require_slot_alive(pool, game, &actor_slot).await?;
-    if !active_action_exists(pool, game, &phase, &actor_slot, &action_id).await? {
+    let caps = caps::resolve_in_tx(tx, principal, game).await?;
+    require_slot_occupant(tx, game, &actor_slot, &caps).await?;
+    let phase = require_open_phase(tx, game).await?;
+    require_slot_alive(tx, game, &actor_slot).await?;
+    if !active_action_exists(tx, game, &phase, &actor_slot, &action_id).await? {
         return Err(Reject::InvalidTarget);
     }
 
@@ -1799,24 +1523,23 @@ async fn withdraw_action_locked(
         ActorId::Slot(actor_slot.clone()),
         0,
     );
-    persist(pool, game, &[ev], receipt).await
+    persist(tx, game, &[ev]).await
 }
 
 async fn set_post_policy(
-    pool: &PgPool,
+    tx: &mut Transaction<'_, Postgres>,
     principal: &Principal,
     game: Uuid,
     channel_id: String,
     allow_media_only: bool,
-    receipt: Option<&ReceiptClaim>,
 ) -> Result<Ack, Reject> {
-    require_game(pool, game).await?;
+    require_game(tx, game).await?;
     if channel_id.trim().is_empty() {
         return Err(Reject::InvalidTarget);
     }
-    let caps = caps::resolve(pool, principal, game).await?;
+    let caps = caps::resolve_in_tx(tx, principal, game).await?;
     require(&caps, &Capability::HostOf(game), Reject::NotHost)?;
-    let stream = eventstore::load_stream(pool, game)
+    let stream = eventstore::load_stream_in_tx(tx, game)
         .await
         .map_err(|e| Reject::Internal(e.to_string()))?;
     let occurred_at = next_stream_logical_time(&stream);
@@ -1830,7 +1553,7 @@ async fn set_post_policy(
         ActorId::Host,
         occurred_at,
     );
-    persist(pool, game, &[ev], receipt).await
+    persist(tx, game, &[ev]).await
 }
 
 struct SubmitPostRequest {
@@ -1842,22 +1565,9 @@ struct SubmitPostRequest {
 }
 
 async fn submit_post(
-    pool: &PgPool,
+    tx: &mut Transaction<'_, Postgres>,
     principal: &Principal,
     request: SubmitPostRequest,
-    receipt: Option<&ReceiptClaim>,
-) -> Result<Ack, Reject> {
-    let mut lock = acquire_phase_boundary_lock(pool, request.game).await?;
-    let game = request.game;
-    let result = submit_post_locked(pool, principal, request, receipt).await;
-    release_phase_boundary_lock(&mut lock, game, result).await
-}
-
-async fn submit_post_locked(
-    pool: &PgPool,
-    principal: &Principal,
-    request: SubmitPostRequest,
-    receipt: Option<&ReceiptClaim>,
 ) -> Result<Ack, Reject> {
     let SubmitPostRequest {
         game,
@@ -1866,20 +1576,20 @@ async fn submit_post_locked(
         body,
         media,
     } = request;
-    require_game(pool, game).await?;
-    let caps = caps::resolve(pool, principal, game).await?;
+    require_game(tx, game).await?;
+    let caps = caps::resolve_in_tx(tx, principal, game).await?;
     // The fixed spectator room has no player-authoring path. It only accepts
     // host-authored notices through PublishSpectatorPost, before any
     // client-supplied slot or capability is inspected.
     if channel_id == "spectator" {
         return Err(Reject::NotAuthorized);
     }
-    require_slot_occupant(pool, game, &actor_slot, &caps).await?;
+    require_slot_occupant(tx, game, &actor_slot, &caps).await?;
     require_channel_post_access(game, &channel_id, &caps)?;
-    require_channel_actor_can_post(pool, game, &channel_id, &actor_slot).await?;
+    require_channel_actor_can_post(tx, game, &channel_id, &actor_slot).await?;
     validate_thread_post_media(&media)?;
     if body.trim().is_empty() {
-        let policy = projections::post_policy(pool, game, &channel_id).await?;
+        let policy = projections::post_policy(&mut **tx, game, &channel_id).await?;
         if media.is_empty() || !policy.allow_media_only {
             return Err(Reject::InvalidTarget);
         }
@@ -1887,8 +1597,8 @@ async fn submit_post_locked(
     // A post is attributed to the SLOT (doc 01: post authorship attaches to the
     // slot, not the user). `slot_or_user` carries the slot id so authorship
     // survives a replacement. Phase id is recorded for partitioning.
-    let phase = current_phase(pool, game).await?.unwrap_or_default();
-    let stream = eventstore::load_stream(pool, game)
+    let phase = current_phase(tx, game).await?.unwrap_or_default();
+    let stream = eventstore::load_stream_in_tx(tx, game)
         .await
         .map_err(|e| Reject::Internal(e.to_string()))?;
     let occurred_at = next_stream_logical_time(&stream);
@@ -1908,26 +1618,25 @@ async fn submit_post_locked(
         ActorId::Slot(actor_slot.clone()),
         occurred_at,
     );
-    persist(pool, game, &[ev], receipt).await
+    persist(tx, game, &[ev]).await
 }
 
 async fn publish_spectator_post(
-    pool: &PgPool,
+    tx: &mut Transaction<'_, Postgres>,
     principal: &Principal,
     game: Uuid,
     body: String,
     media: Vec<ThreadPostMedia>,
-    receipt: Option<&ReceiptClaim>,
 ) -> Result<Ack, Reject> {
-    require_game(pool, game).await?;
-    let caps = caps::resolve(pool, principal, game).await?;
+    require_game(tx, game).await?;
+    let caps = caps::resolve_in_tx(tx, principal, game).await?;
     require(&caps, &Capability::HostOf(game), Reject::NotHost)?;
     validate_thread_post_media(&media)?;
     if body.trim().is_empty() {
         return Err(Reject::InvalidTarget);
     }
-    let phase = current_phase(pool, game).await?.unwrap_or_default();
-    let stream = eventstore::load_stream(pool, game)
+    let phase = current_phase(tx, game).await?.unwrap_or_default();
+    let stream = eventstore::load_stream_in_tx(tx, game)
         .await
         .map_err(|e| Reject::Internal(e.to_string()))?;
     let occurred_at = next_stream_logical_time(&stream);
@@ -1941,7 +1650,7 @@ async fn publish_spectator_post(
         payload["media"] = serde_json::to_value(media).expect("thread post media serializes");
     }
     persist(
-        pool,
+        tx,
         game,
         &[EventInput::new(
             "PostSubmitted",
@@ -1950,7 +1659,6 @@ async fn publish_spectator_post(
             ActorId::Host,
             occurred_at,
         )],
-        receipt,
     )
     .await
 }
@@ -1989,24 +1697,21 @@ fn valid_media_content_id(value: &str) -> bool {
 }
 
 async fn publish_votecount(
-    pool: &PgPool,
+    tx: &mut Transaction<'_, Postgres>,
     principal: &Principal,
     game: Uuid,
-    receipt: Option<&ReceiptClaim>,
 ) -> Result<Ack, Reject> {
-    require_game(pool, game).await?;
-    let caps = caps::resolve(pool, principal, game).await?;
+    require_game(tx, game).await?;
+    let caps = caps::resolve_in_tx(tx, principal, game).await?;
     require(&caps, &Capability::HostOf(game), Reject::NotHost)?;
-    let phase = current_phase(pool, game)
-        .await?
-        .ok_or(Reject::PhaseLocked)?;
-    let rows = projections::votecount(pool, game)
+    let phase = current_phase(tx, game).await?.ok_or(Reject::PhaseLocked)?;
+    let rows = projections::votecount(&mut **tx, game)
         .await?
         .into_iter()
         .filter(|row| row.phase_id == phase)
         .collect::<Vec<_>>();
     let body = official_votecount_body(&phase, &rows);
-    if official_votecount_already_published(pool, game, &phase, &body).await? {
+    if official_votecount_already_published(tx, game, &phase, &body).await? {
         return Err(Reject::InvalidTarget);
     }
     let ev = EventInput::new(
@@ -2021,11 +1726,11 @@ async fn publish_votecount(
         ActorId::Host,
         0,
     );
-    persist(pool, game, &[ev], receipt).await
+    persist(tx, game, &[ev]).await
 }
 
 async fn official_votecount_already_published(
-    pool: &PgPool,
+    tx: &mut Transaction<'_, Postgres>,
     game: Uuid,
     phase: &str,
     body: &str,
@@ -2041,7 +1746,7 @@ async fn official_votecount_already_published(
     .bind(game)
     .bind(phase)
     .bind(body)
-    .fetch_one(pool)
+    .fetch_one(&mut **tx)
     .await
     .map_err(|e| Reject::Internal(e.to_string()))?;
     Ok(count > 0)
@@ -2061,31 +1766,17 @@ fn official_votecount_body(phase: &str, rows: &[projections::VoteCountRow]) -> S
 }
 
 async fn extend_deadline(
-    pool: &PgPool,
+    tx: &mut Transaction<'_, Postgres>,
     principal: &Principal,
     game: Uuid,
     phase: String,
     at: i64,
-    receipt: Option<&ReceiptClaim>,
 ) -> Result<Ack, Reject> {
-    let mut lock = acquire_phase_boundary_lock(pool, game).await?;
-    let result = extend_deadline_locked(pool, principal, game, phase, at, receipt).await;
-    release_phase_boundary_lock(&mut lock, game, result).await
-}
-
-async fn extend_deadline_locked(
-    pool: &PgPool,
-    principal: &Principal,
-    game: Uuid,
-    phase: String,
-    at: i64,
-    receipt: Option<&ReceiptClaim>,
-) -> Result<Ack, Reject> {
-    require_game(pool, game).await?;
-    let caps = caps::resolve(pool, principal, game).await?;
+    require_game(tx, game).await?;
+    let caps = caps::resolve_in_tx(tx, principal, game).await?;
     // Requires HostOf|CohostOf — the narrowest is CohostOf (host subsumes it).
     require(&caps, &Capability::CohostOf(game), Reject::NotHost)?;
-    let current_phase = require_open_phase(pool, game).await?;
+    let current_phase = require_open_phase(tx, game).await?;
     if current_phase != phase {
         return Err(Reject::PhaseLocked);
     }
@@ -2096,7 +1787,7 @@ async fn extend_deadline_locked(
         ActorId::Host,
         0,
     );
-    persist(pool, game, &[ev], receipt).await
+    persist(tx, game, &[ev]).await
 }
 
 /// The irreversible mechanic: swap the human behind a STABLE `SlotId`. The slot
@@ -2104,52 +1795,28 @@ async fn extend_deadline_locked(
 /// posts, role, and lifecycle (all keyed by slot_id) are preserved. Requires
 /// `HostOf` (doc 06: replacements are host authority).
 async fn process_replacement(
-    pool: &PgPool,
+    tx: &mut Transaction<'_, Postgres>,
     principal: &Principal,
     game: Uuid,
     slot: String,
     outgoing_user: String,
     incoming_user: String,
-    receipt: Option<&ReceiptClaim>,
 ) -> Result<Ack, Reject> {
-    let mut lock = acquire_phase_boundary_lock(pool, game).await?;
-    let result = process_replacement_locked(
-        pool,
-        principal,
-        game,
-        slot,
-        outgoing_user,
-        incoming_user,
-        receipt,
-    )
-    .await;
-    release_phase_boundary_lock(&mut lock, game, result).await
-}
-
-async fn process_replacement_locked(
-    pool: &PgPool,
-    principal: &Principal,
-    game: Uuid,
-    slot: String,
-    outgoing_user: String,
-    incoming_user: String,
-    receipt: Option<&ReceiptClaim>,
-) -> Result<Ack, Reject> {
-    require_game(pool, game).await?;
-    let caps = caps::resolve(pool, principal, game).await?;
+    require_game(tx, game).await?;
+    let caps = caps::resolve_in_tx(tx, principal, game).await?;
     require(&caps, &Capability::HostOf(game), Reject::NotHost)?;
 
-    if !projections::slot_exists(pool, game, &slot).await? {
+    if !projections::slot_exists(&mut **tx, game, &slot).await? {
         return Err(Reject::UnknownSlot);
     }
     // Validate the outgoing user really is the CURRENT occupant (an honest,
     // auditable replacement). If not, the request is targeting a stale mapping.
-    match projections::slot_occupant(pool, game, &slot).await? {
+    match projections::slot_occupant(&mut **tx, game, &slot).await? {
         Some(current) if current == outgoing_user => {}
         Some(_) => return Err(Reject::InvalidTarget),
         None => return Err(Reject::InvalidTarget),
     }
-    if projections::spectator_membership(pool, game, &incoming_user).await? {
+    if projections::spectator_membership(&mut **tx, game, &incoming_user).await? {
         return Err(Reject::InvalidTarget);
     }
 
@@ -2164,7 +1831,7 @@ async fn process_replacement_locked(
         ActorId::Host,
         0,
     );
-    persist(pool, game, &[ev], receipt).await
+    persist(tx, game, &[ev]).await
 }
 
 /// Host command: close the current phase by reconstructing the engine input from
@@ -2172,36 +1839,23 @@ async fn process_replacement_locked(
 /// `ResolutionApplied` / `ResolutionTrace` plus a durable phase lock through
 /// the normal append+projection tx.
 async fn resolve_phase(
-    pool: &PgPool,
+    tx: &mut Transaction<'_, Postgres>,
     principal: &Principal,
     game: Uuid,
     seed: u64,
-    receipt: Option<&ReceiptClaim>,
 ) -> Result<Ack, Reject> {
-    let mut lock = acquire_phase_boundary_lock(pool, game).await?;
-    let result = resolve_phase_locked(pool, principal, game, seed, receipt).await;
-    release_phase_boundary_lock(&mut lock, game, result).await
-}
-
-async fn resolve_phase_locked(
-    pool: &PgPool,
-    principal: &Principal,
-    game: Uuid,
-    seed: u64,
-    receipt: Option<&ReceiptClaim>,
-) -> Result<Ack, Reject> {
-    require_game(pool, game).await?;
-    let caps = caps::resolve(pool, principal, game).await?;
+    require_game(tx, game).await?;
+    let caps = caps::resolve_in_tx(tx, principal, game).await?;
     require(&caps, &Capability::HostOf(game), Reject::NotHost)?;
 
-    let phase = projections::phase_state(pool, game)
+    let phase = projections::phase_state(&mut **tx, game)
         .await?
         .ok_or(Reject::PhaseLocked)?;
     if phase.locked {
         return Err(Reject::PhaseLocked);
     }
 
-    let stream = eventstore::load_stream(pool, game)
+    let stream = eventstore::load_stream_in_tx(tx, game)
         .await
         .map_err(|e| Reject::Internal(e.to_string()))?;
     if stream.iter().any(|ev| {
@@ -2252,76 +1906,30 @@ async fn resolve_phase_locked(
         &output.post_state,
     ));
     events.push(lock_ev);
-    persist(pool, game, &events, receipt).await
-}
-
-async fn acquire_phase_boundary_lock(
-    pool: &PgPool,
-    game: Uuid,
-) -> Result<PoolConnection<Postgres>, Reject> {
-    let mut conn = pool
-        .acquire()
-        .await
-        .map_err(|e| Reject::Internal(e.to_string()))?;
-    sqlx::query("SELECT pg_advisory_lock($1)")
-        .bind(phase_boundary_lock_key(game))
-        .execute(&mut *conn)
-        .await
-        .map_err(|e| Reject::Internal(e.to_string()))?;
-    Ok(conn)
-}
-
-async fn release_phase_boundary_lock(
-    conn: &mut PoolConnection<Postgres>,
-    game: Uuid,
-    result: Result<Ack, Reject>,
-) -> Result<Ack, Reject> {
-    let released = sqlx::query_scalar::<_, bool>("SELECT pg_advisory_unlock($1)")
-        .bind(phase_boundary_lock_key(game))
-        .fetch_one(&mut **conn)
-        .await
-        .map_err(|e| Reject::Internal(e.to_string()))?;
-    if !released {
-        return Err(Reject::Internal(
-            "phase boundary lock was not held at release".to_string(),
-        ));
-    }
-    result
-}
-
-fn phase_boundary_lock_key(game: Uuid) -> i64 {
-    let bytes = game.as_bytes();
-    let high = u64::from_be_bytes([
-        bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7],
-    ]);
-    let low = u64::from_be_bytes([
-        bytes[8], bytes[9], bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15],
-    ]);
-    (high ^ low ^ 0x6d66_6172_6368_0002) as i64
+    persist(tx, game, &events).await
 }
 
 async fn control_ita_session(
-    pool: &PgPool,
+    tx: &mut Transaction<'_, Postgres>,
     principal: &Principal,
     game: Uuid,
     session_id: String,
     control: ItaSessionControlKind,
     message: Option<String>,
-    receipt: Option<&ReceiptClaim>,
 ) -> Result<Ack, Reject> {
-    require_game(pool, game).await?;
+    require_game(tx, game).await?;
     if session_id.trim().is_empty() {
         return Err(Reject::InvalidTarget);
     }
     if message.as_deref().is_some_and(|msg| msg.trim().is_empty()) {
         return Err(Reject::InvalidTarget);
     }
-    let caps = caps::resolve(pool, principal, game).await?;
+    let caps = caps::resolve_in_tx(tx, principal, game).await?;
     require(&caps, &Capability::HostOf(game), Reject::NotHost)?;
-    let phase = require_open_day_phase(pool, game).await?;
+    let phase = require_open_day_phase(tx, game).await?;
     let phase_number = phase_number(&phase)?;
 
-    let pack = load_pack(&current_pack_name(pool, game).await?)?;
+    let pack = load_pack(&current_pack_name(tx, game).await?)?;
     if !pack.ita.lifecycle.allows(control) {
         return Err(Reject::InvalidTarget);
     }
@@ -2346,7 +1954,7 @@ async fn control_ita_session(
         payload["message"] = serde_json::Value::String(message);
     }
     persist(
-        pool,
+        tx,
         game,
         &[EventInput::new(
             "ItaSessionControlRecorded",
@@ -2355,7 +1963,6 @@ async fn control_ita_session(
             ActorId::Host,
             0,
         )],
-        receipt,
     )
     .await
 }
@@ -3416,18 +3023,17 @@ fn build_pk_prompt_resolution(
 /// decision has engine consequences, append those consequences through the same
 /// validated `ResolutionApplied` envelope used by ordinary phase resolution.
 async fn resolve_host_prompt(
-    pool: &PgPool,
+    tx: &mut Transaction<'_, Postgres>,
     principal: &Principal,
     game: Uuid,
     prompt_id: String,
     decision: HostPromptDecision,
-    receipt: Option<&ReceiptClaim>,
 ) -> Result<Ack, Reject> {
-    require_game(pool, game).await?;
-    let caps = caps::resolve(pool, principal, game).await?;
+    require_game(tx, game).await?;
+    let caps = caps::resolve_in_tx(tx, principal, game).await?;
     require(&caps, &Capability::HostOf(game), Reject::NotHost)?;
 
-    let prompt = projections::host_prompts(pool, game)
+    let prompt = projections::host_prompts(&mut **tx, game)
         .await?
         .into_iter()
         .find(|prompt| prompt.prompt_id == prompt_id)
@@ -3436,7 +3042,7 @@ async fn resolve_host_prompt(
         return Err(Reject::PromptAlreadyResolved);
     }
 
-    let stream = eventstore::load_stream(pool, game)
+    let stream = eventstore::load_stream_in_tx(tx, game)
         .await
         .map_err(|e| Reject::Internal(e.to_string()))?;
     let pack = load_pack(&pack_name_from_stream(&stream)?)?;
@@ -3474,7 +3080,7 @@ async fn resolve_host_prompt(
             selected,
             contenders,
         } => {
-            require_slot_alive(pool, game, &selected).await?;
+            require_slot_alive(tx, game, &selected).await?;
             let rebuilt = build_pk_prompt_resolution(
                 &pack,
                 game,
@@ -3518,7 +3124,7 @@ async fn resolve_host_prompt(
         HostPromptEffect::AcknowledgeOnly => {}
     }
 
-    persist(pool, game, &events, receipt).await
+    persist(tx, game, &events).await
 }
 
 fn host_prompt_effect(
@@ -3958,8 +3564,11 @@ fn load_pack(name: &str) -> Result<domain::Pack, Reject> {
         .map_err(|e| Reject::Internal(format!("load pack {name}: {e}")))
 }
 
-async fn current_pack_name(pool: &PgPool, game: Uuid) -> Result<String, Reject> {
-    let stream = eventstore::load_stream(pool, game)
+async fn current_pack_name(
+    tx: &mut Transaction<'_, Postgres>,
+    game: Uuid,
+) -> Result<String, Reject> {
+    let stream = eventstore::load_stream_in_tx(tx, game)
         .await
         .map_err(|e| Reject::Internal(e.to_string()))?;
     pack_name_from_stream(&stream)
@@ -4799,8 +4408,8 @@ fn slot_lifecycle_payload(
 // ───────────────────────── shared validation helpers ─────────────────────────
 
 /// Reject if the game does not exist (no `GameCreated` yet).
-async fn require_game(pool: &PgPool, game: Uuid) -> Result<(), Reject> {
-    if projections::game_exists(pool, game).await? {
+async fn require_game(tx: &mut Transaction<'_, Postgres>, game: Uuid) -> Result<(), Reject> {
+    if projections::game_exists(&mut **tx, game).await? {
         Ok(())
     } else {
         Err(Reject::UnknownGame)
@@ -4820,12 +4429,12 @@ fn require(caps: &CapabilitySet, cap: &Capability, deny: Reject) -> Result<(), R
 /// isn't yours" (`NotYourSlot`) from "no such slot" (`UnknownSlot`): if the slot
 /// exists but the capability is absent it is `NotYourSlot`.
 async fn require_slot_occupant(
-    pool: &PgPool,
+    tx: &mut Transaction<'_, Postgres>,
     game: Uuid,
     slot: &str,
     caps: &CapabilitySet,
 ) -> Result<(), Reject> {
-    if !projections::slot_exists(pool, game, slot).await? {
+    if !projections::slot_exists(&mut **tx, game, slot).await? {
         return Err(Reject::UnknownSlot);
     }
     if caps.grants(&Capability::SlotOccupant(slot.to_string())) {
@@ -4853,28 +4462,31 @@ fn require_channel_post_access(
 }
 
 async fn require_channel_actor_can_post(
-    pool: &PgPool,
+    tx: &mut Transaction<'_, Postgres>,
     game: Uuid,
     channel_id: &str,
     slot: &str,
 ) -> Result<(), Reject> {
     if channel_id == "dead" {
-        return match projections::slot_alive(pool, game, slot).await? {
+        return match projections::slot_alive(&mut **tx, game, slot).await? {
             Some(false) => Ok(()),
             Some(true) => Err(Reject::NotAuthorized),
             None => Err(Reject::UnknownSlot),
         };
     }
 
-    require_slot_can_post(pool, game, slot).await
+    require_slot_can_post(tx, game, slot).await
 }
 
 /// The current phase must exist and be UNLOCKED. Returns the phase id.
-async fn require_open_phase(pool: &PgPool, game: Uuid) -> Result<String, Reject> {
-    match projections::phase_state(pool, game).await? {
+async fn require_open_phase(
+    tx: &mut Transaction<'_, Postgres>,
+    game: Uuid,
+) -> Result<String, Reject> {
+    match projections::phase_state(&mut **tx, game).await? {
         Some(ps) if ps.locked => Err(Reject::PhaseLocked),
         Some(ps) => {
-            if phase_has_pending_prompt(pool, game, &ps.phase_id).await? {
+            if phase_has_pending_prompt(tx, game, &ps.phase_id).await? {
                 Err(Reject::PhaseLocked)
             } else {
                 Ok(ps.phase_id)
@@ -4885,19 +4497,22 @@ async fn require_open_phase(pool: &PgPool, game: Uuid) -> Result<String, Reject>
 }
 
 async fn phase_has_pending_prompt(
-    pool: &PgPool,
+    tx: &mut Transaction<'_, Postgres>,
     game: Uuid,
     phase_id: &str,
 ) -> Result<bool, Reject> {
-    Ok(projections::host_prompts(pool, game)
+    Ok(projections::host_prompts(&mut **tx, game)
         .await?
         .into_iter()
         .any(|prompt| prompt.phase_id == phase_id && prompt.status == "pending"))
 }
 
 /// Votes are legal only while the current open phase is a Day window.
-async fn require_open_day_phase(pool: &PgPool, game: Uuid) -> Result<String, Reject> {
-    let phase = require_open_phase(pool, game).await?;
+async fn require_open_day_phase(
+    tx: &mut Transaction<'_, Postgres>,
+    game: Uuid,
+) -> Result<String, Reject> {
+    let phase = require_open_phase(tx, game).await?;
     if phase_kind(&phase)? != domain::pack::PhaseKind::Day {
         return Err(Reject::PhaseLocked);
     }
@@ -4905,29 +4520,40 @@ async fn require_open_day_phase(pool: &PgPool, game: Uuid) -> Result<String, Rej
 }
 
 /// The current phase id, if any (no lock check — for post attribution).
-async fn current_phase(pool: &PgPool, game: Uuid) -> Result<Option<String>, Reject> {
-    Ok(projections::phase_state(pool, game)
+async fn current_phase(
+    tx: &mut Transaction<'_, Postgres>,
+    game: Uuid,
+) -> Result<Option<String>, Reject> {
+    Ok(projections::phase_state(&mut **tx, game)
         .await?
         .map(|p| p.phase_id))
 }
 
-async fn require_slot_alive(pool: &PgPool, game: Uuid, slot: &str) -> Result<(), Reject> {
-    match projections::slot_alive(pool, game, slot).await? {
+async fn require_slot_alive(
+    tx: &mut Transaction<'_, Postgres>,
+    game: Uuid,
+    slot: &str,
+) -> Result<(), Reject> {
+    match projections::slot_alive(&mut **tx, game, slot).await? {
         Some(true) => Ok(()),
         Some(false) => Err(Reject::SlotNotAlive),
         None => Err(Reject::UnknownSlot),
     }
 }
 
-async fn require_slot_can_post(pool: &PgPool, game: Uuid, slot: &str) -> Result<(), Reject> {
-    match projections::slot_alive(pool, game, slot).await? {
+async fn require_slot_can_post(
+    tx: &mut Transaction<'_, Postgres>,
+    game: Uuid,
+    slot: &str,
+) -> Result<(), Reject> {
+    match projections::slot_alive(&mut **tx, game, slot).await? {
         Some(true) => Ok(()),
         Some(false) => {
-            let pack = load_pack(&current_pack_name(pool, game).await?)?;
+            let pack = load_pack(&current_pack_name(tx, game).await?)?;
             if !pack.treestump_policy.enabled {
                 return Err(Reject::SlotNotAlive);
             }
-            let tags = projections::slot_status_tags(pool, game, slot).await?;
+            let tags = projections::slot_status_tags(&mut **tx, game, slot).await?;
             if tags
                 .iter()
                 .any(|tag| tag == &pack.treestump_policy.status_tag)
@@ -4942,7 +4568,7 @@ async fn require_slot_can_post(pool: &PgPool, game: Uuid, slot: &str) -> Result<
 }
 
 async fn validate_action_submission(
-    pool: &PgPool,
+    tx: &mut Transaction<'_, Postgres>,
     game: Uuid,
     pack: &domain::Pack,
     phase_id: &str,
@@ -4953,7 +4579,7 @@ async fn validate_action_submission(
 ) -> Result<Window, Reject> {
     let phase_kind = phase_kind(phase_id)?;
     let phase_number = phase_number(phase_id)?;
-    let slots = projections::slot_state(pool, game).await?;
+    let slots = projections::slot_state(&mut **tx, game).await?;
     let actor = slots
         .iter()
         .find(|slot| slot.slot_id == actor_slot)
@@ -5055,7 +4681,7 @@ async fn validate_action_submission(
     }
     if template.constraints.x_shots.is_some() {
         let counter_id = action_counter_id(&template.id);
-        let exhausted = projections::action_counters(pool, game)
+        let exhausted = projections::action_counters(&mut **tx, game)
             .await?
             .iter()
             .any(|counter| {
@@ -5069,7 +4695,7 @@ async fn validate_action_submission(
     }
     if let Some(cooldown_cycles) = template.constraints.cooldown_cycles {
         let counter_id = cooldown_counter_id(&template.id);
-        let on_cooldown = projections::action_counters(pool, game)
+        let on_cooldown = projections::action_counters(&mut **tx, game)
             .await?
             .iter()
             .any(|counter| {
@@ -5086,7 +4712,7 @@ async fn validate_action_submission(
         let session = ita_session_for_phase(pack, phase_number).ok_or(Reject::InvalidTarget)?;
         if session.shot_limit.is_some() {
             let counter_id = day_session_counter_id(&session.session_id, &template.id);
-            let exhausted = projections::action_counters(pool, game)
+            let exhausted = projections::action_counters(&mut **tx, game)
                 .await?
                 .iter()
                 .any(|counter| {
@@ -5102,7 +4728,7 @@ async fn validate_action_submission(
     if source == ActionSource::ItemGrant {
         let grant_id = grant_id.ok_or(Reject::InvalidTarget)?;
         let counter_id = inventory_counter_id(grant_id);
-        let exhausted = projections::action_counters(pool, game)
+        let exhausted = projections::action_counters(&mut **tx, game)
             .await?
             .iter()
             .any(|counter| {
@@ -5118,7 +4744,7 @@ async fn validate_action_submission(
         || template.has_modifier(Modifier::Indecisive)
         || template.has_modifier(Modifier::Roaming)
     {
-        let repeated = projections::action_history(pool, game)
+        let repeated = projections::action_history(&mut **tx, game)
             .await?
             .iter()
             .any(|record| {
@@ -5138,7 +4764,7 @@ async fn validate_action_submission(
         }
     }
     validate_action_slot_capacity(
-        pool,
+        tx,
         game,
         phase_id,
         phase_number,
@@ -5154,7 +4780,7 @@ async fn validate_action_submission(
         .target_state
         .unwrap_or(TargetState::Alive);
     for target in targets {
-        let alive = projections::slot_alive(pool, game, target)
+        let alive = projections::slot_alive(&mut **tx, game, target)
             .await?
             .ok_or(Reject::InvalidTarget)?;
         match target_state {
@@ -5264,7 +4890,7 @@ fn selected_grant_option<'a>(
 }
 
 async fn validate_action_slot_capacity(
-    pool: &PgPool,
+    tx: &mut Transaction<'_, Postgres>,
     game: Uuid,
     phase_id: &str,
     phase_number: u32,
@@ -5274,7 +4900,7 @@ async fn validate_action_slot_capacity(
     grant_id: Option<&str>,
     source: ActionSource,
 ) -> Result<(), Reject> {
-    let active = active_actions_for_actor_phase(pool, game, phase_id, actor_slot).await?;
+    let active = active_actions_for_actor_phase_in_tx(tx, game, phase_id, actor_slot).await?;
     let uses_grant_option = matches!(source, ActionSource::Role)
         && grant_id
             .and_then(|id| selected_grant_option(template, id))
@@ -5301,7 +4927,7 @@ async fn validate_action_slot_capacity(
                 ActionSource::Role => GrantKind::ExtraAction,
                 ActionSource::ItemGrant => GrantKind::Item,
             };
-            let granted_uses = projections::action_grants(pool, game)
+            let granted_uses = projections::action_grants(&mut **tx, game)
                 .await?
                 .into_iter()
                 .filter(|grant| {
@@ -5333,6 +4959,18 @@ fn grant_kind_name(kind: GrantKind) -> &'static str {
     }
 }
 
+async fn active_actions_for_actor_phase_in_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    game: Uuid,
+    phase_id: &str,
+    actor_slot: &str,
+) -> Result<BTreeMap<String, ActiveAction>, Reject> {
+    let stream = eventstore::load_stream_in_tx(tx, game)
+        .await
+        .map_err(|e| Reject::Internal(e.to_string()))?;
+    Ok(active_actions_from_stream(stream, phase_id, actor_slot))
+}
+
 async fn active_actions_for_actor_phase(
     pool: &PgPool,
     game: Uuid,
@@ -5342,6 +4980,14 @@ async fn active_actions_for_actor_phase(
     let stream = eventstore::load_stream(pool, game)
         .await
         .map_err(|e| Reject::Internal(e.to_string()))?;
+    Ok(active_actions_from_stream(stream, phase_id, actor_slot))
+}
+
+fn active_actions_from_stream(
+    stream: Vec<eventstore::StoredEvent>,
+    phase_id: &str,
+    actor_slot: &str,
+) -> BTreeMap<String, ActiveAction> {
     let mut active = BTreeMap::new();
     for ev in stream {
         match ev.kind.as_str() {
@@ -5392,7 +5038,7 @@ async fn active_actions_for_actor_phase(
             _ => {}
         }
     }
-    Ok(active)
+    active
 }
 
 pub async fn active_action_templates_for_actor_phase(
@@ -5493,13 +5139,13 @@ fn activation_gate_reason(
 }
 
 async fn active_action_exists(
-    pool: &PgPool,
+    tx: &mut Transaction<'_, Postgres>,
     game: Uuid,
     phase_id: &str,
     actor_slot: &str,
     action_id: &str,
 ) -> Result<bool, Reject> {
-    let stream = eventstore::load_stream(pool, game)
+    let stream = eventstore::load_stream_in_tx(tx, game)
         .await
         .map_err(|e| Reject::Internal(e.to_string()))?;
     let mut active = false;
@@ -5536,10 +5182,14 @@ async fn active_action_exists(
 }
 
 /// A vote target is `no_lynch` or a currently alive slot in this game.
-async fn validate_target(pool: &PgPool, game: Uuid, target: &VoteTarget) -> Result<String, Reject> {
+async fn validate_target(
+    tx: &mut Transaction<'_, Postgres>,
+    game: Uuid,
+    target: &VoteTarget,
+) -> Result<String, Reject> {
     match target {
         VoteTarget::NoLynch => Ok("no_lynch".to_string()),
-        VoteTarget::Slot(s) => match projections::slot_alive(pool, game, s).await? {
+        VoteTarget::Slot(s) => match projections::slot_alive(&mut **tx, game, s).await? {
             Some(true) => Ok(s.clone()),
             Some(false) | None => Err(Reject::InvalidTarget),
         },
@@ -5636,49 +5286,30 @@ fn hammer_lock_event(
     }))
 }
 
-async fn load_receipt(pool: &PgPool, receipt: &ReceiptClaim) -> Result<Option<Ack>, Reject> {
-    let row = sqlx::query(
-        "SELECT stream_seqs FROM command_receipt \
-         WHERE principal_user_id = $1 AND command_id = $2",
-    )
-    .bind(&receipt.principal_user_id)
-    .bind(receipt.command_id)
-    .fetch_optional(pool)
-    .await
-    .map_err(|e| Reject::Internal(e.to_string()))?;
-
-    Ok(row.map(|row| Ack {
-        stream_seqs: row.get("stream_seqs"),
-    }))
-}
-
-async fn claim_receipt_in_tx(
-    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+async fn claim_or_replay_receipt_in_tx(
+    tx: &mut Transaction<'_, Postgres>,
     game: Uuid,
     receipt: &ReceiptClaim,
-) -> Result<bool, Reject> {
+) -> Result<Option<Ack>, Reject> {
     let result = sqlx::query(
         "INSERT INTO command_receipt \
-         (principal_user_id, command_id, stream_id, stream_seqs) \
-         VALUES ($1, $2, $3, ARRAY[]::BIGINT[]) \
+         (principal_user_id, command_id, command_fingerprint, stream_id, stream_seqs) \
+         VALUES ($1, $2, $3, $4, ARRAY[]::BIGINT[]) \
          ON CONFLICT (principal_user_id, command_id) DO NOTHING",
     )
     .bind(&receipt.principal_user_id)
     .bind(receipt.command_id)
+    .bind(&receipt.command_fingerprint)
     .bind(game)
     .execute(&mut **tx)
     .await
     .map_err(|e| Reject::Internal(e.to_string()))?;
 
-    Ok(result.rows_affected() == 1)
-}
-
-async fn load_receipt_in_tx(
-    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    receipt: &ReceiptClaim,
-) -> Result<Ack, Reject> {
+    if result.rows_affected() == 1 {
+        return Ok(None);
+    }
     let row = sqlx::query(
-        "SELECT stream_seqs FROM command_receipt \
+        "SELECT command_fingerprint, stream_seqs FROM command_receipt \
          WHERE principal_user_id = $1 AND command_id = $2",
     )
     .bind(&receipt.principal_user_id)
@@ -5687,13 +5318,17 @@ async fn load_receipt_in_tx(
     .await
     .map_err(|e| Reject::Internal(e.to_string()))?;
 
-    Ok(Ack {
+    let fingerprint: Vec<u8> = row.get("command_fingerprint");
+    if fingerprint != receipt.command_fingerprint {
+        return Err(Reject::CommandIdConflict);
+    }
+    Ok(Some(Ack {
         stream_seqs: row.get("stream_seqs"),
-    })
+    }))
 }
 
 async fn store_receipt_ack_in_tx(
-    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    tx: &mut Transaction<'_, Postgres>,
     receipt: &ReceiptClaim,
     ack: &Ack,
 ) -> Result<(), Reject> {
@@ -5711,52 +5346,23 @@ async fn store_receipt_ack_in_tx(
     Ok(())
 }
 
-/// Persist via `append_and_project_in_tx`; when a receipt claim is present, the
-/// claim, event append, projection fold, and ack storage are atomic. A duplicate
-/// `(principal, command_id)` returns the stored ack and appends nothing.
+/// Append and synchronously fold projections inside the command transaction.
+/// The caller owns receipt claim/ack storage and the single final commit.
 async fn persist(
-    pool: &PgPool,
+    tx: &mut Transaction<'_, Postgres>,
     game: Uuid,
     events: &[EventInput],
-    receipt: Option<&ReceiptClaim>,
 ) -> Result<Ack, Reject> {
-    let mut tx = pool
-        .begin()
-        .await
-        .map_err(|e| Reject::Internal(e.to_string()))?;
-
-    let owns_receipt = if let Some(receipt) = receipt {
-        if !claim_receipt_in_tx(&mut tx, game, receipt).await? {
-            let ack = load_receipt_in_tx(&mut tx, receipt).await?;
-            tx.commit()
-                .await
-                .map_err(|e| Reject::Internal(e.to_string()))?;
-            return Ok(ack);
-        }
-        true
-    } else {
-        false
-    };
-
-    let stored = match append_and_project_in_tx(&mut tx, game, events).await {
+    let stored = match append_and_project_in_tx(tx, game, events).await {
         Ok(stored) => stored,
         Err(ProjectionError::Store(eventstore::StoreError::Conflict { .. })) => {
             return Err(Reject::StreamConflict);
         }
         Err(e) => return Err(Reject::Internal(e.to_string())),
     };
-    let ack = Ack::from_seqs(stored.iter().map(|s| s.stream_seq).collect());
-
-    if owns_receipt {
-        if let Some(receipt) = receipt {
-            store_receipt_ack_in_tx(&mut tx, receipt, &ack).await?;
-        }
-    }
-
-    tx.commit()
-        .await
-        .map_err(|e| Reject::Internal(e.to_string()))?;
-    Ok(ack)
+    Ok(Ack::from_seqs(
+        stored.iter().map(|stored| stored.stream_seq).collect(),
+    ))
 }
 
 impl From<ProjectionError> for Reject {

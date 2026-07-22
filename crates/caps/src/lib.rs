@@ -22,7 +22,7 @@
 use std::collections::BTreeSet;
 
 use serde::{Deserialize, Serialize};
-use sqlx::postgres::PgPool;
+use sqlx::{postgres::PgPool, PgConnection, Postgres, Row, Transaction};
 use uuid::Uuid;
 
 // Re-export the id aliases so callers speak one vocabulary.
@@ -169,60 +169,95 @@ pub async fn resolve(
     principal: &Principal,
     game: GameId,
 ) -> Result<CapabilitySet, CapError> {
+    let mut conn = pool.acquire().await?;
+    resolve_with(&mut conn, principal, game).await
+}
+
+/// Resolve capabilities from the caller's command transaction. This keeps the
+/// authority snapshot in the same atomic unit as validation, append, projection
+/// folding, and receipt commit.
+pub async fn resolve_in_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    principal: &Principal,
+    game: GameId,
+) -> Result<CapabilitySet, CapError> {
+    resolve_with(&mut **tx, principal, game).await
+}
+
+async fn resolve_with(
+    conn: &mut PgConnection,
+    principal: &Principal,
+    game: GameId,
+) -> Result<CapabilitySet, CapError> {
     let user = principal.user_id();
     let mut set = CapabilitySet::new();
 
-    // Host / cohost from game_authority.
-    for row in projections::game_authority(pool, game).await? {
-        if row.user_id == user {
-            match row.role.as_str() {
-                "host" => set.insert(Capability::HostOf(game)),
-                "cohost" => set.insert(Capability::CohostOf(game)),
-                _ => {}
-            }
+    let authority = sqlx::query(
+        "SELECT role FROM game_authority WHERE game_id = $1 AND user_id = $2 ORDER BY role",
+    )
+    .bind(game)
+    .bind(user)
+    .fetch_all(&mut *conn)
+    .await?;
+    for row in authority {
+        match row.get::<String, _>("role").as_str() {
+            "host" => set.insert(Capability::HostOf(game)),
+            "cohost" => set.insert(Capability::CohostOf(game)),
+            _ => {}
         }
     }
 
-    if projections::spectator_membership(pool, game, user).await? {
+    let spectator: bool = sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM spectator_membership WHERE game_id = $1 AND user_id = $2)",
+    )
+    .bind(game)
+    .bind(user)
+    .fetch_one(&mut *conn)
+    .await?;
+    if spectator {
         set.insert(Capability::SpectatorOf(game));
     }
 
-    let occupied_slots: BTreeSet<_> = projections::slot_occupancy(pool, game)
-        .await?
-        .into_iter()
-        .filter_map(|occ| {
-            if occ.occupant_user_id == user {
-                Some(occ.slot_id)
-            } else {
-                None
-            }
-        })
-        .collect();
-
-    // SlotOccupant for every slot this user CURRENTLY occupies (live mapping).
+    let occupied_slots: BTreeSet<String> = sqlx::query(
+        "SELECT slot_id FROM slot_occupancy WHERE game_id = $1 AND occupant_user_id = $2 ORDER BY slot_id",
+    )
+    .bind(game)
+    .bind(user)
+    .fetch_all(&mut *conn)
+    .await?
+    .into_iter()
+    .map(|row| row.get("slot_id"))
+    .collect();
     for slot_id in &occupied_slots {
         set.insert(Capability::SlotOccupant(slot_id.clone()));
     }
 
-    // DeadViewer follows the CURRENT occupant of any dead slot. It is derived
-    // from the same stable-slot/current-occupancy join as SlotOccupant, so a
-    // replacement transfers dead-chat authority and an alive restoration
-    // revokes it without a separate mutable grant.
-    if projections::slot_state(pool, game)
-        .await?
-        .into_iter()
-        .any(|slot| !slot.alive && occupied_slots.contains(&slot.slot_id))
-    {
+    let dead_occupant: bool = sqlx::query_scalar(
+        "SELECT EXISTS(\
+            SELECT 1 FROM slot_occupancy o \
+            JOIN slot_state s ON s.game_id = o.game_id AND s.slot_id = o.slot_id \
+            WHERE o.game_id = $1 AND o.occupant_user_id = $2 AND NOT s.alive\
+         )",
+    )
+    .bind(game)
+    .bind(user)
+    .fetch_one(&mut *conn)
+    .await?;
+    if dead_occupant {
         set.insert(Capability::DeadViewer(game));
     }
 
-    // ChannelMember from private channel membership projections for the
-    // principal's current slot(s). This keeps private channel authority derived
-    // from committed game state, not client-selected channel ids.
-    for member in projections::private_channel_members(pool, game).await? {
-        if occupied_slots.contains(&member.slot_id) {
-            set.insert(Capability::ChannelMember(member.channel_id));
-        }
+    let channels = sqlx::query(
+        "SELECT DISTINCT m.channel_id FROM private_channel_member m \
+         JOIN slot_occupancy o ON o.game_id = m.game_id AND o.slot_id = m.slot_id \
+         WHERE m.game_id = $1 AND o.occupant_user_id = $2 ORDER BY m.channel_id",
+    )
+    .bind(game)
+    .bind(user)
+    .fetch_all(&mut *conn)
+    .await?;
+    for row in channels {
+        set.insert(Capability::ChannelMember(row.get("channel_id")));
     }
 
     Ok(set)
