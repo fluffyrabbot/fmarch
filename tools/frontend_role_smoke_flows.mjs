@@ -149,6 +149,13 @@ export const mockStateProjections = Object.freeze({
 // generic thread entry, which passes paginated requests through to it.
 export const fixtureApiRoutes = Object.freeze([
   Object.freeze({
+    pattern: "**/live/tickets?*",
+    body: Object.freeze({
+      url: "/ws?ticket=fmarch-smoke-ticket&audience=fmarch-live",
+      expires_at: 4_102_444_800,
+    }),
+  }),
+  Object.freeze({
     pattern: "**/games/*/thread?*",
     passthroughWhen: Object.freeze({ urlIncludes: "before_seq=" }),
     body: Object.freeze({

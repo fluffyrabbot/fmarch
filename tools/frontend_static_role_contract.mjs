@@ -1984,7 +1984,7 @@ async function proveModeratorSurface() {
     fetchImpl: async () => null,
     projectionStore,
     sendHostActionCommandImpl: async (request) => {
-      assert.equal(request.principalUserId, "host_h");
+      assert.equal("principalUserId" in request, false);
       return {
         state: "ack",
         actionId: request.actionEvent.actionId,
@@ -2016,7 +2016,7 @@ async function proveModeratorSurface() {
     fetchImpl: async () => null,
     projectionStore: promptProjectionStore,
     sendHostActionCommandImpl: async (request) => {
-      assert.equal(request.principalUserId, "host_h");
+      assert.equal("principalUserId" in request, false);
       assert.equal(request.actionEvent.payload.kind, "resolve_host_prompt");
       assert.equal(request.actionEvent.payload.promptId, "D01:skip_next_day:slot_1");
       return {
@@ -2059,7 +2059,7 @@ async function proveModeratorSurface() {
     fetchImpl: async () => null,
     projectionStore: hydratedPromptProjectionStore,
     sendHostActionCommandImpl: async (request) => {
-      assert.equal(request.principalUserId, "host_h");
+      assert.equal("principalUserId" in request, false);
       assert.equal(request.actionEvent.payload.kind, "resolve_host_prompt");
       return {
         state: "ack",
