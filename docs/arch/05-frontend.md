@@ -133,9 +133,9 @@ checklist before they are called done:
   `/commands` envelopes, and post-ACK projection rendering. `npm run
   test:host-console-live-stack-smoke` is the stronger boundary proof: it creates a temporary
   Postgres database, starts the Rust API and SvelteKit dev server together, seeds the game
-  through `/commands`, disables `/auth/dev-session`, issues browser session tokens through
-  `/auth/session-grants`, submits one granted token through `/auth/login` to write
-  `fmarch_session`, resolves sessions through `/auth/session`, drives both host actions
+  through `/commands`, disables `/auth/dev-session`, issues backend-generated browser session
+  tokens through `/auth/session-grants`, submits one granted token through `/auth/invite` to
+  write `fmarch_session`, resolves sessions through `/auth/session`, drives both host actions
   in Chromium, verifies the UI refreshes from the real `host-console-state` API, then drives
   the player private-channel route through the same live stack. That live-stack lane now
   records a `private:mafia_day_chat` `SubmitPost` ACK from the real `/commands` API after

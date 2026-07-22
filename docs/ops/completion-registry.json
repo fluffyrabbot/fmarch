@@ -3,16 +3,76 @@
   "boundary": "This is the canonical overall inventory for capability status, dependency order, and assignment. It separates durable product capabilities from operator-owned external evidence, human decisions, and optional optimization; release-readiness authorities remain the delegated validators for their evidence gates. Local or fixture proof can complete a code capability, but it cannot promote hosted, release, or production evidence.",
   "status_boundary": "Capability status is a reviewed source-control judgment. Validation checks dependency shape, source anchors, release authority, and package commands without executing proofs or treating ignored target artifacts as fresh evidence.",
   "sections": [
-    { "id": "foundation", "title": "Locally proven foundation", "kind": "foundation", "required_for": "platform", "order": 10 },
-    { "id": "game", "title": "Game product capabilities", "kind": "product-capability", "required_for": "platform", "order": 20 },
-    { "id": "media", "title": "Media pipeline", "kind": "product-capability", "required_for": "platform", "order": 30 },
-    { "id": "private-channels", "title": "Private-channel breadth", "kind": "product-capability", "required_for": "platform", "order": 40 },
-    { "id": "identity", "title": "Account and identity lifecycle", "kind": "product-capability", "required_for": "platform", "order": 50 },
-    { "id": "community", "title": "Community and forum surface", "kind": "product-capability", "required_for": "platform", "order": 60 },
-    { "id": "archive", "title": "Archival and export", "kind": "product-capability", "required_for": "platform", "order": 70 },
-    { "id": "release-evidence", "title": "Release evidence and approval", "kind": "release-gate", "required_for": "release", "order": 80 },
-    { "id": "housekeeping", "title": "Housekeeping decisions", "kind": "housekeeping", "required_for": "platform", "order": 90 },
-    { "id": "optional", "title": "Optional optimization", "kind": "optimization", "required_for": "optional", "order": 100 }
+    {
+      "id": "foundation",
+      "title": "Locally proven foundation",
+      "kind": "foundation",
+      "required_for": "platform",
+      "order": 10
+    },
+    {
+      "id": "game",
+      "title": "Game product capabilities",
+      "kind": "product-capability",
+      "required_for": "platform",
+      "order": 20
+    },
+    {
+      "id": "media",
+      "title": "Media pipeline",
+      "kind": "product-capability",
+      "required_for": "platform",
+      "order": 30
+    },
+    {
+      "id": "private-channels",
+      "title": "Private-channel breadth",
+      "kind": "product-capability",
+      "required_for": "platform",
+      "order": 40
+    },
+    {
+      "id": "identity",
+      "title": "Account and identity lifecycle",
+      "kind": "product-capability",
+      "required_for": "platform",
+      "order": 50
+    },
+    {
+      "id": "community",
+      "title": "Community and forum surface",
+      "kind": "product-capability",
+      "required_for": "platform",
+      "order": 60
+    },
+    {
+      "id": "archive",
+      "title": "Archival and export",
+      "kind": "product-capability",
+      "required_for": "platform",
+      "order": 70
+    },
+    {
+      "id": "release-evidence",
+      "title": "Release evidence and approval",
+      "kind": "release-gate",
+      "required_for": "release",
+      "order": 80
+    },
+    {
+      "id": "housekeeping",
+      "title": "Housekeeping decisions",
+      "kind": "housekeeping",
+      "required_for": "platform",
+      "order": 90
+    },
+    {
+      "id": "optional",
+      "title": "Optional optimization",
+      "kind": "optimization",
+      "required_for": "optional",
+      "order": 100
+    }
   ],
   "items": [
     {
@@ -23,11 +83,19 @@
       "execution_class": "code",
       "status": "complete",
       "summary": "Append-only Postgres streams, optimistic concurrency, synchronous projections, and deterministic rebuild audits form the durable state boundary.",
-      "complete_when": ["Committed events rebuild every declared projection without drift."],
+      "complete_when": [
+        "Committed events rebuild every declared projection without drift."
+      ],
       "depends_on": [],
       "evidence": [
-        { "kind": "source", "value": "crates/eventstore/src/lib.rs" },
-        { "kind": "source", "value": "crates/projections/src/lib.rs" }
+        {
+          "kind": "source",
+          "value": "crates/eventstore/src/lib.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/projections/src/lib.rs"
+        }
       ],
       "remaining": []
     },
@@ -39,12 +107,23 @@
       "execution_class": "code",
       "status": "complete",
       "summary": "The closed rules IR and deterministic resolver cover the full source-derived engine inventory; this is local engine parity, not hosted product readiness.",
-      "complete_when": ["Every actionable in-scope engine inventory row is supported and validated, and every remaining unsupported row is explicitly classified out of scope."],
+      "complete_when": [
+        "Every actionable in-scope engine inventory row is supported and validated, and every remaining unsupported row is explicitly classified out of scope."
+      ],
       "depends_on": [],
       "evidence": [
-        { "kind": "source", "value": "docs/arch/11-engine-port-checklist.md" },
-        { "kind": "source", "value": "docs/arch/im-human-engine-parity-matrix.md" },
-        { "kind": "source", "value": "tools/engine_port_completion_audit.py" }
+        {
+          "kind": "source",
+          "value": "docs/arch/11-engine-port-checklist.md"
+        },
+        {
+          "kind": "source",
+          "value": "docs/arch/im-human-engine-parity-matrix.md"
+        },
+        {
+          "kind": "source",
+          "value": "tools/engine_port_completion_audit.py"
+        }
       ],
       "remaining": []
     },
@@ -56,11 +135,22 @@
       "execution_class": "code",
       "status": "complete",
       "summary": "Typed commands resolve authority at the boundary, append events transactionally, update projections, and return idempotent acknowledgements.",
-      "complete_when": ["Commands preserve capability, concurrency, idempotency, and event-log invariants through the Postgres pipeline."],
-      "depends_on": ["foundation.event-store-projections", "foundation.resolution-engine-parity"],
+      "complete_when": [
+        "Commands preserve capability, concurrency, idempotency, and event-log invariants through the Postgres pipeline."
+      ],
+      "depends_on": [
+        "foundation.event-store-projections",
+        "foundation.resolution-engine-parity"
+      ],
       "evidence": [
-        { "kind": "source", "value": "crates/commands/src/lib.rs" },
-        { "kind": "source", "value": "crates/caps/src/lib.rs" }
+        {
+          "kind": "source",
+          "value": "crates/commands/src/lib.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/caps/src/lib.rs"
+        }
       ],
       "remaining": []
     },
@@ -72,11 +162,21 @@
       "execution_class": "code",
       "status": "complete",
       "summary": "Versioned wire types, REST cold loads, WebSocket projection delivery, lag resync, and frontend hydration recovery are locally proven.",
-      "complete_when": ["A seeded client can cold-load, receive live updates, recover from lag, and retain capability-filtered state."],
-      "depends_on": ["foundation.command-capability-runtime"],
+      "complete_when": [
+        "A seeded client can cold-load, receive live updates, recover from lag, and retain capability-filtered state."
+      ],
+      "depends_on": [
+        "foundation.command-capability-runtime"
+      ],
       "evidence": [
-        { "kind": "source", "value": "crates/wire/src/lib.rs" },
-        { "kind": "source", "value": "frontend/src/lib/app/live-transport.mjs" }
+        {
+          "kind": "source",
+          "value": "crates/wire/src/lib.rs"
+        },
+        {
+          "kind": "source",
+          "value": "frontend/src/lib/app/live-transport.mjs"
+        }
       ],
       "remaining": []
     },
@@ -88,11 +188,22 @@
       "execution_class": "code",
       "status": "complete",
       "summary": "The host setup role URL drives roster, role, policy, start-phase, stale-command rejection, and recovery through the real command path.",
-      "complete_when": ["A seeded host can configure and start a valid game from the setup role URL and recover from a stale mutation."],
-      "depends_on": ["foundation.command-capability-runtime", "foundation.wire-live-delivery"],
+      "complete_when": [
+        "A seeded host can configure and start a valid game from the setup role URL and recover from a stale mutation."
+      ],
+      "depends_on": [
+        "foundation.command-capability-runtime",
+        "foundation.wire-live-delivery"
+      ],
       "evidence": [
-        { "kind": "command", "value": "npm run dev:test-game -- --verify-host-setup-only" },
-        { "kind": "artifact", "value": "target/dev-test-game/host-setup-proof.json" }
+        {
+          "kind": "command",
+          "value": "npm run dev:test-game -- --verify-host-setup-only"
+        },
+        {
+          "kind": "artifact",
+          "value": "target/dev-test-game/host-setup-proof.json"
+        }
       ],
       "remaining": []
     },
@@ -104,11 +215,21 @@
       "execution_class": "code",
       "status": "complete",
       "summary": "Seeded host and player role URLs exercise posting, voting, actions, phase resolution, stale recovery, and completion in a real local game.",
-      "complete_when": ["The core live spine completes through browser role surfaces with its saved proof contract green."],
-      "depends_on": ["product.game.setup"],
+      "complete_when": [
+        "The core live spine completes through browser role surfaces with its saved proof contract green."
+      ],
+      "depends_on": [
+        "product.game.setup"
+      ],
       "evidence": [
-        { "kind": "command", "value": "npm run test:dev-test-game-core-live:local" },
-        { "kind": "artifact", "value": "target/dev-test-game/proof-run.json" }
+        {
+          "kind": "command",
+          "value": "npm run test:dev-test-game-core-live:local"
+        },
+        {
+          "kind": "artifact",
+          "value": "target/dev-test-game/proof-run.json"
+        }
       ],
       "remaining": []
     },
@@ -120,11 +241,21 @@
       "execution_class": "code",
       "status": "complete",
       "summary": "Host and delegated cohost controls cover deadlines, phases, prompts, publication, lifecycle changes, completion, conflict rejection, and reload recovery.",
-      "complete_when": ["Every shipped critical moderation control has a typed command, projection result, rejection boundary, and seeded role-surface proof."],
-      "depends_on": ["product.game.core-loop"],
+      "complete_when": [
+        "Every shipped critical moderation control has a typed command, projection result, rejection boundary, and seeded role-surface proof."
+      ],
+      "depends_on": [
+        "product.game.core-loop"
+      ],
       "evidence": [
-        { "kind": "source", "value": "tools/dev_test_game_core_loop_host_control_scenarios.mjs" },
-        { "kind": "artifact", "value": "target/dev-test-game/core-loop-admin-proof.json" }
+        {
+          "kind": "source",
+          "value": "tools/dev_test_game_core_loop_host_control_scenarios.mjs"
+        },
+        {
+          "kind": "artifact",
+          "value": "target/dev-test-game/core-loop-admin-proof.json"
+        }
       ],
       "remaining": []
     },
@@ -136,11 +267,21 @@
       "execution_class": "code",
       "status": "complete",
       "summary": "Replacement preserves slot history while transferring role URLs, sessions, actions, votes, and private-channel authority with stale outgoing denial.",
-      "complete_when": ["Incoming authority recovers across reconnect/reload and outgoing credentials cannot retain current slot capabilities."],
-      "depends_on": ["product.game.core-loop"],
+      "complete_when": [
+        "Incoming authority recovers across reconnect/reload and outgoing credentials cannot retain current slot capabilities."
+      ],
+      "depends_on": [
+        "product.game.core-loop"
+      ],
       "evidence": [
-        { "kind": "source", "value": "tools/dev_test_game_replacement_feature_spine_targets.mjs" },
-        { "kind": "artifact", "value": "target/dev-test-game/proof-run.json" }
+        {
+          "kind": "source",
+          "value": "tools/dev_test_game_replacement_feature_spine_targets.mjs"
+        },
+        {
+          "kind": "artifact",
+          "value": "target/dev-test-game/proof-run.json"
+        }
       ],
       "remaining": []
     },
@@ -152,11 +293,21 @@
       "execution_class": "code",
       "status": "complete",
       "summary": "Completed games reveal roles and resolved vote history only after completion and preserve them through stale recovery, resync, and reload.",
-      "complete_when": ["Normal and stale player surfaces converge on the same reveal-gated endgame summary and durable vote history."],
-      "depends_on": ["product.game.core-loop"],
+      "complete_when": [
+        "Normal and stale player surfaces converge on the same reveal-gated endgame summary and durable vote history."
+      ],
+      "depends_on": [
+        "product.game.core-loop"
+      ],
       "evidence": [
-        { "kind": "source", "value": "tools/dev_test_game_core_loop_completed_terminal_scenario_assertions.mjs" },
-        { "kind": "artifact", "value": "target/dev-test-game/proof-run.json" }
+        {
+          "kind": "source",
+          "value": "tools/dev_test_game_core_loop_completed_terminal_scenario_assertions.mjs"
+        },
+        {
+          "kind": "artifact",
+          "value": "target/dev-test-game/proof-run.json"
+        }
       ],
       "remaining": []
     },
@@ -168,13 +319,29 @@
       "execution_class": "code",
       "status": "complete",
       "summary": "A command-backed private post reference is checked against the current projection and channel authority at serve time; members receive immutable variant bytes and non-members receive none. Canonical ingest and transcoding are closed by the downstream media capabilities.",
-      "complete_when": ["A command-backed private post serves referenced variant bytes to a member and denies a non-member."],
-      "depends_on": ["product.game.core-loop"],
+      "complete_when": [
+        "A command-backed private post serves referenced variant bytes to a member and denies a non-member."
+      ],
+      "depends_on": [
+        "product.game.core-loop"
+      ],
       "evidence": [
-        { "kind": "source", "value": "crates/api/src/lib.rs" },
-        { "kind": "source", "value": "frontend/src/routes/media/thread/[game]/[channel]/[sourceSeq]/[contentId]/[asset]/+server.js" },
-        { "kind": "source", "value": "docs/arch/07-images.md" },
-        { "kind": "command", "value": "npm run test:host-console-live-stack-smoke" }
+        {
+          "kind": "source",
+          "value": "crates/api/src/lib.rs"
+        },
+        {
+          "kind": "source",
+          "value": "frontend/src/routes/media/thread/[game]/[channel]/[sourceSeq]/[contentId]/[asset]/+server.js"
+        },
+        {
+          "kind": "source",
+          "value": "docs/arch/07-images.md"
+        },
+        {
+          "kind": "command",
+          "value": "npm run test:host-console-live-stack-smoke"
+        }
       ],
       "remaining": []
     },
@@ -186,14 +353,33 @@
       "execution_class": "code",
       "status": "complete",
       "summary": "Bounded local PNG/JPEG ingest applies EXIF orientation, serializes decoder-produced RGBA8 into a versioned canonical record, strips container metadata, derives BLAKE3 identity, and persists it through private fd-relative atomic storage with verified restart lookup; it does not normalize ICC profiles or expose upload, serving, or variants.",
-      "complete_when": ["Malformed and oversized inputs are rejected; metadata is stripped before BLAKE3 identity; equivalent images deduplicate; persistence is atomic and root-confined; restart lookup succeeds."],
-      "depends_on": ["product.media.reference-ingest-serving"],
+      "complete_when": [
+        "Malformed and oversized inputs are rejected; metadata is stripped before BLAKE3 identity; equivalent images deduplicate; persistence is atomic and root-confined; restart lookup succeeds."
+      ],
+      "depends_on": [
+        "product.media.reference-ingest-serving"
+      ],
       "evidence": [
-        { "kind": "source", "value": "crates/media/src/lib.rs" },
-        { "kind": "source", "value": "docs/arch/07-images.md" },
-        { "kind": "command", "value": "cargo test -p media" },
-        { "kind": "command", "value": "cargo clippy -p media --all-targets -- -D warnings" },
-        { "kind": "command", "value": "cargo check -p server" }
+        {
+          "kind": "source",
+          "value": "crates/media/src/lib.rs"
+        },
+        {
+          "kind": "source",
+          "value": "docs/arch/07-images.md"
+        },
+        {
+          "kind": "command",
+          "value": "cargo test -p media"
+        },
+        {
+          "kind": "command",
+          "value": "cargo clippy -p media --all-targets -- -D warnings"
+        },
+        {
+          "kind": "command",
+          "value": "cargo check -p server"
+        }
       ],
       "remaining": []
     },
@@ -205,15 +391,37 @@
       "execution_class": "code",
       "status": "complete",
       "summary": "A pinned media recipe generates verified thumb, tablet, and full-bounded AVIF/WebP from canonical rasters, commits six private immutable members through a manifest installed last, and reproduces exact bytes across concurrency, restart, and explicit regeneration; this is local recipe proof, not a production codec-quality benchmark.",
-      "complete_when": ["The media core produces validated AVIF/WebP variants for every supported size and can regenerate them from canonical storage."],
-      "depends_on": ["product.media.canonical-blob-store"],
+      "complete_when": [
+        "The media core produces validated AVIF/WebP variants for every supported size and can regenerate them from canonical storage."
+      ],
+      "depends_on": [
+        "product.media.canonical-blob-store"
+      ],
       "evidence": [
-        { "kind": "source", "value": "crates/media/src/variants.rs" },
-        { "kind": "source", "value": "docs/arch/07-images.md" },
-        { "kind": "command", "value": "cargo test -p media" },
-        { "kind": "command", "value": "cargo test -p media variant" },
-        { "kind": "command", "value": "cargo clippy -p media --all-targets -- -D warnings" },
-        { "kind": "command", "value": "cargo check -p server" }
+        {
+          "kind": "source",
+          "value": "crates/media/src/variants.rs"
+        },
+        {
+          "kind": "source",
+          "value": "docs/arch/07-images.md"
+        },
+        {
+          "kind": "command",
+          "value": "cargo test -p media"
+        },
+        {
+          "kind": "command",
+          "value": "cargo test -p media variant"
+        },
+        {
+          "kind": "command",
+          "value": "cargo clippy -p media --all-targets -- -D warnings"
+        },
+        {
+          "kind": "command",
+          "value": "cargo check -p server"
+        }
       ],
       "remaining": []
     },
@@ -225,18 +433,51 @@
       "execution_class": "code",
       "status": "complete",
       "summary": "Server startup now requires a pre-provisioned media root, and an active enabled account can submit bounded raw PNG/JPEG bytes to a prepare-before-persist endpoint that commits one canonical raster plus the fixed six-member variant set and returns only typed immutable handle metadata. Missing, non-account, expired, revoked, disabled, unsupported, mismatched, malformed, dimension-limited, body-limited, and variant-output-limited requests retain no canonical or variant bytes; this is local API/filesystem proof, not post serving, browser, hosted durability, or production upload readiness.",
-      "complete_when": ["Authorized uploads return a persistent handle while malformed, oversized, unsupported, and unauthorized requests fail without retained bytes."],
-      "depends_on": ["product.media.canonical-blob-store", "product.media.variant-generation", "product.identity.account-login-invites"],
+      "complete_when": [
+        "Authorized uploads return a persistent handle while malformed, oversized, unsupported, and unauthorized requests fail without retained bytes."
+      ],
+      "depends_on": [
+        "product.media.canonical-blob-store",
+        "product.media.variant-generation",
+        "product.identity.account-login-invites"
+      ],
       "evidence": [
-        { "kind": "source", "value": "crates/api/src/lib.rs" },
-        { "kind": "source", "value": "crates/api/tests/vertical.rs" },
-        { "kind": "source", "value": "crates/media/src/variants.rs" },
-        { "kind": "source", "value": "crates/server/src/main.rs" },
-        { "kind": "source", "value": "tools/dev_test_game.mjs" },
-        { "kind": "source", "value": "docs/arch/07-images.md" },
-        { "kind": "command", "value": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p api -- --test-threads=1" },
-        { "kind": "command", "value": "cargo test -p media" },
-        { "kind": "command", "value": "cargo check -p server" }
+        {
+          "kind": "source",
+          "value": "crates/api/src/lib.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/api/tests/vertical.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/media/src/variants.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/server/src/main.rs"
+        },
+        {
+          "kind": "source",
+          "value": "tools/dev_test_game.mjs"
+        },
+        {
+          "kind": "source",
+          "value": "docs/arch/07-images.md"
+        },
+        {
+          "kind": "command",
+          "value": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p api -- --test-threads=1"
+        },
+        {
+          "kind": "command",
+          "value": "cargo test -p media"
+        },
+        {
+          "kind": "command",
+          "value": "cargo check -p server"
+        }
       ],
       "remaining": []
     },
@@ -248,18 +489,52 @@
       "execution_class": "code",
       "status": "complete",
       "summary": "An enabled-account player uploads bounded PNG/JPEG bytes, submits only the canonical content id plus alt text, reloads manifest-backed AVIF/WebP from a private post, and a second enabled non-member account receives 403 with a zero-byte body for the exact same URL. This is local scratch-Postgres/filesystem proof, not hosted or object-store durability.",
-      "complete_when": ["A seeded member uploads and posts media, receives the correct variant after reload, and a non-member receives no bytes."],
-      "depends_on": ["product.media.authenticated-upload", "product.media.variant-generation", "product.media.reference-ingest-serving", "product.private.mafia-room"],
+      "complete_when": [
+        "A seeded member uploads and posts media, receives the correct variant after reload, and a non-member receives no bytes."
+      ],
+      "depends_on": [
+        "product.media.authenticated-upload",
+        "product.media.variant-generation",
+        "product.media.reference-ingest-serving",
+        "product.private.mafia-room"
+      ],
       "evidence": [
-        { "kind": "source", "value": "crates/api/src/lib.rs" },
-        { "kind": "source", "value": "crates/api/tests/vertical.rs" },
-        { "kind": "source", "value": "crates/wire/src/lib.rs" },
-        { "kind": "source", "value": "frontend/src/routes/media/thread/[game]/[channel]/[sourceSeq]/[contentId]/[asset]/+server.js" },
-        { "kind": "source", "value": "tools/host_console_live_stack_smoke.mjs" },
-        { "kind": "source", "value": "docs/arch/07-images.md" },
-        { "kind": "command", "value": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p api media -- --test-threads=1" },
-        { "kind": "command", "value": "npm run test:frontend-contract" },
-        { "kind": "command", "value": "npm run test:host-console-live-stack-smoke" }
+        {
+          "kind": "source",
+          "value": "crates/api/src/lib.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/api/tests/vertical.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/wire/src/lib.rs"
+        },
+        {
+          "kind": "source",
+          "value": "frontend/src/routes/media/thread/[game]/[channel]/[sourceSeq]/[contentId]/[asset]/+server.js"
+        },
+        {
+          "kind": "source",
+          "value": "tools/host_console_live_stack_smoke.mjs"
+        },
+        {
+          "kind": "source",
+          "value": "docs/arch/07-images.md"
+        },
+        {
+          "kind": "command",
+          "value": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p api media -- --test-threads=1"
+        },
+        {
+          "kind": "command",
+          "value": "npm run test:frontend-contract"
+        },
+        {
+          "kind": "command",
+          "value": "npm run test:host-console-live-stack-smoke"
+        }
       ],
       "remaining": []
     },
@@ -271,11 +546,21 @@
       "execution_class": "code",
       "status": "complete",
       "summary": "A real private mafia day-chat room is pack-created, capability-filtered, command-backed, live, reloadable, and denied to non-members.",
-      "complete_when": ["Members can post and recover through the private role URL while non-members never receive room data."],
-      "depends_on": ["product.game.core-loop"],
+      "complete_when": [
+        "Members can post and recover through the private role URL while non-members never receive room data."
+      ],
+      "depends_on": [
+        "product.game.core-loop"
+      ],
       "evidence": [
-        { "kind": "source", "value": "tools/dev_test_game_core_loop_private_channel_recovery_scenarios.mjs" },
-        { "kind": "artifact", "value": "target/dev-test-game/proof-run.json" }
+        {
+          "kind": "source",
+          "value": "tools/dev_test_game_core_loop_private_channel_recovery_scenarios.mjs"
+        },
+        {
+          "kind": "artifact",
+          "value": "target/dev-test-game/proof-run.json"
+        }
       ],
       "remaining": []
     },
@@ -287,23 +572,70 @@
       "execution_class": "code",
       "status": "complete",
       "summary": "The engine declares one slot-stable Role PM per occupied slot; generic private-channel projections and capabilities transfer access on replacement, the incoming account receives private live deltas and durable history/media after reload, and the stale outgoing account receives no thread or media data and cannot append.",
-      "complete_when": ["Role PM creation, membership, posting, receipts, reload, replacement transfer, and stale outgoing denial pass through the real stack."],
-      "depends_on": ["product.private.mafia-room", "product.identity.account-login-invites"],
+      "complete_when": [
+        "Role PM creation, membership, posting, receipts, reload, replacement transfer, and stale outgoing denial pass through the real stack."
+      ],
+      "depends_on": [
+        "product.private.mafia-room",
+        "product.identity.account-login-invites"
+      ],
       "evidence": [
-        { "kind": "source", "value": "crates/domain/src/state.rs" },
-        { "kind": "source", "value": "crates/commands/src/lib.rs" },
-        { "kind": "source", "value": "crates/commands/tests/pipeline.rs" },
-        { "kind": "source", "value": "crates/projections/src/lib.rs" },
-        { "kind": "source", "value": "crates/caps/src/lib.rs" },
-        { "kind": "source", "value": "crates/api/src/lib.rs" },
-        { "kind": "source", "value": "crates/api/tests/vertical.rs" },
-        { "kind": "source", "value": "frontend/src/lib/components/player-channel-switcher/player-channel-switcher-model.mjs" },
-        { "kind": "source", "value": "tools/host_console_live_stack_smoke.mjs" },
-        { "kind": "artifact", "value": "target/host-console-live-stack-smoke/live-stack-proof.json" },
-        { "kind": "command", "value": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p commands -p projections -p caps" },
-        { "kind": "command", "value": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p api role_pm -- --test-threads=1" },
-        { "kind": "command", "value": "npm run test:frontend-contract" },
-        { "kind": "command", "value": "npm run test:dev-test-game-core-live:local" }
+        {
+          "kind": "source",
+          "value": "crates/domain/src/state.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/commands/src/lib.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/commands/tests/pipeline.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/projections/src/lib.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/caps/src/lib.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/api/src/lib.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/api/tests/vertical.rs"
+        },
+        {
+          "kind": "source",
+          "value": "frontend/src/lib/components/player-channel-switcher/player-channel-switcher-model.mjs"
+        },
+        {
+          "kind": "source",
+          "value": "tools/host_console_live_stack_smoke.mjs"
+        },
+        {
+          "kind": "artifact",
+          "value": "target/host-console-live-stack-smoke/live-stack-proof.json"
+        },
+        {
+          "kind": "command",
+          "value": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p commands -p projections -p caps"
+        },
+        {
+          "kind": "command",
+          "value": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p api role_pm -- --test-threads=1"
+        },
+        {
+          "kind": "command",
+          "value": "npm run test:frontend-contract"
+        },
+        {
+          "kind": "command",
+          "value": "npm run test:dev-test-game-core-live:local"
+        }
       ],
       "remaining": []
     },
@@ -315,34 +647,103 @@
       "execution_class": "code",
       "status": "complete",
       "summary": "All supported additional room families are locally complete: pack-declared Mason and Neighbor rooms transfer with stable slots, dead chat follows dead-slot lifecycle authority, and explicit slot-disjoint SpectatorOf grants expose a fixed read-only host-authored room. Each family is encrypted, capability-filtered, live/reload proven, media-authorized, and closed at its stale, non-member, or revoked boundary.",
-      "complete_when": ["Every supported private room family is pack/config-created, encrypted at rest, capability-filtered, replacement-safe, and live/reload proven."],
-      "depends_on": ["product.private.role-pm"],
-      "evidence": [
-        { "kind": "source", "value": "packs/mafiascum/pack.json" },
-        { "kind": "source", "value": "crates/commands/src/lib.rs" },
-        { "kind": "source", "value": "crates/commands/tests/pipeline.rs" },
-        { "kind": "source", "value": "crates/caps/src/lib.rs" },
-        { "kind": "source", "value": "crates/projections/migrations/0001_baseline.sql" },
-        { "kind": "source", "value": "crates/api/tests/vertical.rs" },
-        { "kind": "source", "value": "crates/wire/src/lib.rs" },
-        { "kind": "source", "value": "frontend/src/lib/app/cold-load.mjs" },
-        { "kind": "source", "value": "frontend/src/lib/app/app-route-state-model.mjs" },
-        { "kind": "source", "value": "frontend/src/lib/components/player-channel-switcher/player-channel-switcher-model.mjs" },
-        { "kind": "source", "value": "frontend/src/lib/components/player-command/player-command-panel-model.mjs" },
-        { "kind": "source", "value": "frontend/src/routes/g/[game]/+page.server.js" },
-        { "kind": "source", "value": "tools/host_console_live_stack_smoke.mjs" },
-        { "kind": "source", "value": "tools/live_stack_readiness_contract.mjs" },
-        { "kind": "source", "value": "docs/arch/01-domain-model.md" },
-        { "kind": "source", "value": "docs/arch/06-security.md" },
-        { "kind": "artifact", "value": "target/host-console-live-stack-smoke/live-stack-proof.json" },
-        { "kind": "command", "value": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p commands -p projections -p caps" },
-        { "kind": "command", "value": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p api mason_neighbor -- --test-threads=1" },
-        { "kind": "command", "value": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p api dead_chat -- --test-threads=1" },
-        { "kind": "command", "value": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch npm run test:host-console-live-stack-smoke" },
-        { "kind": "command", "value": "npm run test:frontend-contract" }
+      "complete_when": [
+        "Every supported private room family is pack/config-created, encrypted at rest, capability-filtered, replacement-safe, and live/reload proven."
       ],
-      "remaining": [
-      ]
+      "depends_on": [
+        "product.private.role-pm"
+      ],
+      "evidence": [
+        {
+          "kind": "source",
+          "value": "packs/mafiascum/pack.json"
+        },
+        {
+          "kind": "source",
+          "value": "crates/commands/src/lib.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/commands/tests/pipeline.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/caps/src/lib.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/projections/migrations/0001_baseline.sql"
+        },
+        {
+          "kind": "source",
+          "value": "crates/api/tests/vertical.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/wire/src/lib.rs"
+        },
+        {
+          "kind": "source",
+          "value": "frontend/src/lib/app/cold-load.mjs"
+        },
+        {
+          "kind": "source",
+          "value": "frontend/src/lib/app/app-route-state-model.mjs"
+        },
+        {
+          "kind": "source",
+          "value": "frontend/src/lib/components/player-channel-switcher/player-channel-switcher-model.mjs"
+        },
+        {
+          "kind": "source",
+          "value": "frontend/src/lib/components/player-command/player-command-panel-model.mjs"
+        },
+        {
+          "kind": "source",
+          "value": "frontend/src/routes/g/[game]/+page.server.js"
+        },
+        {
+          "kind": "source",
+          "value": "tools/host_console_live_stack_smoke.mjs"
+        },
+        {
+          "kind": "source",
+          "value": "tools/live_stack_readiness_contract.mjs"
+        },
+        {
+          "kind": "source",
+          "value": "docs/arch/01-domain-model.md"
+        },
+        {
+          "kind": "source",
+          "value": "docs/arch/06-security.md"
+        },
+        {
+          "kind": "artifact",
+          "value": "target/host-console-live-stack-smoke/live-stack-proof.json"
+        },
+        {
+          "kind": "command",
+          "value": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p commands -p projections -p caps"
+        },
+        {
+          "kind": "command",
+          "value": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p api mason_neighbor -- --test-threads=1"
+        },
+        {
+          "kind": "command",
+          "value": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p api dead_chat -- --test-threads=1"
+        },
+        {
+          "kind": "command",
+          "value": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch npm run test:host-console-live-stack-smoke"
+        },
+        {
+          "kind": "command",
+          "value": "npm run test:frontend-contract"
+        }
+      ],
+      "remaining": []
     },
     {
       "id": "product.identity.account-login-invites",
@@ -352,11 +753,21 @@
       "execution_class": "code",
       "status": "complete",
       "summary": "Local accounts, opaque sessions, account-bound single-use invites, admin lifecycle controls, and the preserved role-surface adapter are locally proven.",
-      "complete_when": ["A real local account can log in, redeem only its invite, reach the intended role URL, and lose access when disabled or revoked."],
-      "depends_on": ["foundation.command-capability-runtime"],
+      "complete_when": [
+        "A real local account can log in, redeem only its invite, reach the intended role URL, and lose access when disabled or revoked."
+      ],
+      "depends_on": [
+        "foundation.command-capability-runtime"
+      ],
       "evidence": [
-        { "kind": "command", "value": "npm run test:dev-test-game-identity:local" },
-        { "kind": "artifact", "value": "target/auth-invite-role-proof/invite-role-proof.json" }
+        {
+          "kind": "command",
+          "value": "npm run test:dev-test-game-identity:local"
+        },
+        {
+          "kind": "artifact",
+          "value": "target/auth-invite-role-proof/invite-role-proof.json"
+        }
       ],
       "remaining": []
     },
@@ -368,11 +779,21 @@
       "execution_class": "code",
       "status": "complete",
       "summary": "Argon2id storage, authenticated password rotation, session revocation, timing equalization, and bounded credential-attempt state are locally proven.",
-      "complete_when": ["Password verification and rotation preserve equalized failure work, revoke old sessions, and recover after bounded throttling."],
-      "depends_on": ["product.identity.account-login-invites"],
+      "complete_when": [
+        "Password verification and rotation preserve equalized failure work, revoke old sessions, and recover after bounded throttling."
+      ],
+      "depends_on": [
+        "product.identity.account-login-invites"
+      ],
       "evidence": [
-        { "kind": "source", "value": "frontend/src/routes/auth/account/security/+page.server.js" },
-        { "kind": "command", "value": "npm run test:dev-test-game-identity:local" }
+        {
+          "kind": "source",
+          "value": "frontend/src/routes/auth/account/security/+page.server.js"
+        },
+        {
+          "kind": "command",
+          "value": "npm run test:dev-test-game-identity:local"
+        }
       ],
       "remaining": []
     },
@@ -384,11 +805,21 @@
       "execution_class": "code",
       "status": "complete",
       "summary": "Recovery credentials support issue, revoke, consume, expiry, replay rejection, password replacement, and session revocation in the local identity proof.",
-      "complete_when": ["Only one valid recovery credential can replace a password and all invalid, expired, revoked, or replayed credentials fail safely."],
-      "depends_on": ["product.identity.password-security"],
+      "complete_when": [
+        "Only one valid recovery credential can replace a password and all invalid, expired, revoked, or replayed credentials fail safely."
+      ],
+      "depends_on": [
+        "product.identity.password-security"
+      ],
       "evidence": [
-        { "kind": "source", "value": "frontend/src/routes/auth/account/recovery/+page.server.js" },
-        { "kind": "command", "value": "npm run test:dev-test-game-identity:local" }
+        {
+          "kind": "source",
+          "value": "frontend/src/routes/auth/account/recovery/+page.server.js"
+        },
+        {
+          "kind": "command",
+          "value": "npm run test:dev-test-game-identity:local"
+        }
       ],
       "remaining": []
     },
@@ -400,13 +831,30 @@
       "execution_class": "code",
       "status": "complete",
       "summary": "Opaque login, atomic rotation, authenticated logout, password/recovery/disablement invalidation, expiry, and reauthentication preserve the local capability-derived role surfaces and are proven through the scratch-Postgres Chromium identity lane.",
-      "complete_when": ["Login, logout, privilege change, password change, recovery, disablement, expiry, and periodic rotation each enforce the declared session transition."],
-      "depends_on": ["product.identity.account-login-invites", "product.identity.recovery"],
+      "complete_when": [
+        "Login, logout, privilege change, password change, recovery, disablement, expiry, and periodic rotation each enforce the declared session transition."
+      ],
+      "depends_on": [
+        "product.identity.account-login-invites",
+        "product.identity.recovery"
+      ],
       "evidence": [
-        { "kind": "source", "value": "docs/arch/06-security.md" },
-        { "kind": "source", "value": "crates/api/src/lib.rs" },
-        { "kind": "command", "value": "npm run test:dev-test-game-identity:local" },
-        { "kind": "artifact", "value": "target/auth-invite-role-proof/invite-role-proof.json" }
+        {
+          "kind": "source",
+          "value": "docs/arch/06-security.md"
+        },
+        {
+          "kind": "source",
+          "value": "crates/api/src/lib.rs"
+        },
+        {
+          "kind": "command",
+          "value": "npm run test:dev-test-game-identity:local"
+        },
+        {
+          "kind": "artifact",
+          "value": "target/auth-invite-role-proof/invite-role-proof.json"
+        }
       ],
       "remaining": []
     },
@@ -418,13 +866,77 @@
       "execution_class": "code",
       "status": "complete",
       "summary": "The local registration role URL validates an email-style identifier and password, atomically creates a server-generated unprivileged principal plus opaque session, reaches the seeded game URL in its explicit pending-authority state, and shows duplicate/rate-limit recovery without leaking credentials.",
-      "complete_when": ["A bounded registration route creates an unprivileged account and opaque session, preserves the capability-derived role surface, and rejects duplicate or source-quota attempts with browser-visible recovery."],
-      "depends_on": ["product.identity.password-security", "product.identity.session-lifecycle"],
+      "complete_when": [
+        "A bounded registration route creates an unprivileged account and opaque session, preserves the capability-derived role surface, and rejects duplicate or source-quota attempts with browser-visible recovery."
+      ],
+      "depends_on": [
+        "product.identity.password-security",
+        "product.identity.session-lifecycle"
+      ],
       "evidence": [
-        { "kind": "source", "value": "docs/arch/06-security.md" },
-        { "kind": "source", "value": "crates/api/src/lib.rs" },
-        { "kind": "command", "value": "npm run test:dev-test-game-identity:local" },
-        { "kind": "artifact", "value": "target/auth-invite-role-proof/invite-role-proof.json" }
+        {
+          "kind": "source",
+          "value": "docs/arch/06-security.md"
+        },
+        {
+          "kind": "source",
+          "value": "crates/api/src/lib.rs"
+        },
+        {
+          "kind": "command",
+          "value": "npm run test:dev-test-game-identity:local"
+        },
+        {
+          "kind": "artifact",
+          "value": "target/auth-invite-role-proof/invite-role-proof.json"
+        }
+      ],
+      "remaining": []
+    },
+    {
+      "id": "product.identity.method-coexistence",
+      "section": "identity",
+      "order": 59,
+      "title": "Coexisting classic and WorkOS sign-in methods",
+      "execution_class": "code",
+      "status": "complete",
+      "summary": "The authentication-method model (principal, methods, one backend-owned app session) is DB-proven end to end: the WorkOS assertion is exchanged once for the same opaque fmss_ session classic uses, a classic method attaches to a WorkOS principal with display-once recovery codes and identical capabilities, removing a method revokes only that method's sessions, the last active method cannot be removed, provider JWTs are rejected as general bearers, and every transition writes identity lifecycle audit rows.",
+      "complete_when": [
+        "One platform principal can authenticate through classic and WorkOS methods interchangeably, convert between them without losing capabilities, and manage methods under recent-authentication, last-active-method, and per-method session-revocation invariants."
+      ],
+      "depends_on": [
+        "product.identity.account-login-invites",
+        "product.identity.session-lifecycle"
+      ],
+      "evidence": [
+        {
+          "kind": "source",
+          "value": "crates/identity/src/methods.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/identity/src/session.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/identity/src/workos.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/api/tests/auth_methods.rs"
+        },
+        {
+          "kind": "source",
+          "value": "frontend/src/routes/auth/account/security/+page.server.js"
+        },
+        {
+          "kind": "source",
+          "value": "docs/arch/06-security.md"
+        },
+        {
+          "kind": "command",
+          "value": "npm run test:projection-baseline:static"
+        }
       ],
       "remaining": []
     },
@@ -436,14 +948,34 @@
       "execution_class": "code",
       "status": "complete",
       "summary": "Invite and recovery issuance seals one-time credentials into redacted typed delivery intents before a lease-claimed provider-neutral outbox worker runs; the scratch-Postgres Chromium lane proves both credential kinds through forced first-attempt failure, declared backoff, provider receipt persistence, GlobalAdmin retry, audit visibility, and the unchanged capability-derived role URL.",
-      "complete_when": ["Invite and recovery delivery are provider-abstracted, retryable, auditable, redacted, and locally testable without claiming live provider traffic."],
-      "depends_on": ["product.identity.account-login-invites", "product.identity.recovery"],
+      "complete_when": [
+        "Invite and recovery delivery are provider-abstracted, retryable, auditable, redacted, and locally testable without claiming live provider traffic."
+      ],
+      "depends_on": [
+        "product.identity.account-login-invites",
+        "product.identity.recovery"
+      ],
       "evidence": [
-        { "kind": "source", "value": "docs/arch/06-security.md" },
-        { "kind": "source", "value": "crates/api/src/lib.rs" },
-        { "kind": "source", "value": "crates/projections/migrations/0001_baseline.sql" },
-        { "kind": "command", "value": "npm run test:dev-test-game-identity:local" },
-        { "kind": "artifact", "value": "target/auth-invite-role-proof/invite-role-proof.json" }
+        {
+          "kind": "source",
+          "value": "docs/arch/06-security.md"
+        },
+        {
+          "kind": "source",
+          "value": "crates/api/src/lib.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/projections/migrations/0001_baseline.sql"
+        },
+        {
+          "kind": "command",
+          "value": "npm run test:dev-test-game-identity:local"
+        },
+        {
+          "kind": "artifact",
+          "value": "target/auth-invite-role-proof/invite-role-proof.json"
+        }
       ],
       "remaining": []
     },
@@ -455,14 +987,34 @@
       "execution_class": "code",
       "status": "complete",
       "summary": "The root board reads a durable public projection of active and completed games, pages by a stable keyset cursor, keeps setup and private lifecycle data out of the query, and is proven through the scratch-Postgres Chromium lane.",
-      "complete_when": ["The public board lists capability-safe active and completed games from a real projection with pagination and browser proof."],
-      "depends_on": ["product.game.core-loop", "product.identity.account-login-invites"],
+      "complete_when": [
+        "The public board lists capability-safe active and completed games from a real projection with pagination and browser proof."
+      ],
+      "depends_on": [
+        "product.game.core-loop",
+        "product.identity.account-login-invites"
+      ],
       "evidence": [
-        { "kind": "source", "value": "frontend/src/routes/+page.svelte" },
-        { "kind": "source", "value": "crates/projections/migrations/0001_baseline.sql" },
-        { "kind": "source", "value": "docs/arch/02-event-sourcing.md" },
-        { "kind": "command", "value": "npm run test:dev-test-game-game-index:local" },
-        { "kind": "artifact", "value": "target/game-index-role-proof/game-index-proof.json" }
+        {
+          "kind": "source",
+          "value": "frontend/src/routes/+page.svelte"
+        },
+        {
+          "kind": "source",
+          "value": "crates/projections/migrations/0001_baseline.sql"
+        },
+        {
+          "kind": "source",
+          "value": "docs/arch/02-event-sourcing.md"
+        },
+        {
+          "kind": "command",
+          "value": "npm run test:dev-test-game-game-index:local"
+        },
+        {
+          "kind": "artifact",
+          "value": "target/game-index-role-proof/game-index-proof.json"
+        }
       ],
       "remaining": []
     },
@@ -474,17 +1026,46 @@
       "execution_class": "code",
       "status": "complete",
       "summary": "Public non-game discussions use a typed community write model, expected-version appends, enabled-account and profile-backed authorship, independent posting/visibility moderation, canonical topic/post URLs, a public area directory, and a seeded Chromium proof.",
-      "complete_when": ["Users can browse, create, post in, and moderate capability-scoped non-game discussions through real routes and projections."],
-      "depends_on": ["product.community.game-index", "product.identity.registration"],
+      "complete_when": [
+        "Users can browse, create, post in, and moderate capability-scoped non-game discussions through real routes and projections."
+      ],
+      "depends_on": [
+        "product.community.game-index",
+        "product.identity.registration"
+      ],
       "evidence": [
-        { "kind": "source", "value": "crates/community/src/lib.rs" },
-        { "kind": "source", "value": "crates/projections/migrations/0001_baseline.sql" },
-        { "kind": "source", "value": "frontend/src/routes/community/+page.svelte" },
-        { "kind": "source", "value": "frontend/src/routes/discussions/[slug]/+page.svelte" },
-        { "kind": "source", "value": "frontend/src/routes/discussions/[slug]/t/[topic]/+page.svelte" },
-        { "kind": "source", "value": "docs/arch/02-event-sourcing.md" },
-        { "kind": "command", "value": "npm run test:dev-test-game-discussion:local" },
-        { "kind": "artifact", "value": "target/discussion-role-proof/discussion-proof.json" }
+        {
+          "kind": "source",
+          "value": "crates/community/src/lib.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/projections/migrations/0001_baseline.sql"
+        },
+        {
+          "kind": "source",
+          "value": "frontend/src/routes/community/+page.svelte"
+        },
+        {
+          "kind": "source",
+          "value": "frontend/src/routes/discussions/[slug]/+page.svelte"
+        },
+        {
+          "kind": "source",
+          "value": "frontend/src/routes/discussions/[slug]/t/[topic]/+page.svelte"
+        },
+        {
+          "kind": "source",
+          "value": "docs/arch/02-event-sourcing.md"
+        },
+        {
+          "kind": "command",
+          "value": "npm run test:dev-test-game-discussion:local"
+        },
+        {
+          "kind": "artifact",
+          "value": "target/discussion-role-proof/discussion-proof.json"
+        }
       ],
       "remaining": []
     },
@@ -496,14 +1077,33 @@
       "execution_class": "code",
       "status": "complete",
       "summary": "Profiles use durable public and owner-only projections, enabled-account editing, explicit public or members-only visibility, and a seeded Chromium proof.",
-      "complete_when": ["A user can view and edit an authorization-safe profile, with durable projection state and browser proof."],
-      "depends_on": ["product.identity.registration"],
+      "complete_when": [
+        "A user can view and edit an authorization-safe profile, with durable projection state and browser proof."
+      ],
+      "depends_on": [
+        "product.identity.registration"
+      ],
       "evidence": [
-        { "kind": "source", "value": "crates/projections/migrations/0001_baseline.sql" },
-        { "kind": "source", "value": "frontend/src/routes/u/[handle]/+page.svelte" },
-        { "kind": "source", "value": "docs/arch/02-event-sourcing.md" },
-        { "kind": "command", "value": "npm run test:dev-test-game-profile:local" },
-        { "kind": "artifact", "value": "target/profile-role-proof/profile-proof.json" }
+        {
+          "kind": "source",
+          "value": "crates/projections/migrations/0001_baseline.sql"
+        },
+        {
+          "kind": "source",
+          "value": "frontend/src/routes/u/[handle]/+page.svelte"
+        },
+        {
+          "kind": "source",
+          "value": "docs/arch/02-event-sourcing.md"
+        },
+        {
+          "kind": "command",
+          "value": "npm run test:dev-test-game-profile:local"
+        },
+        {
+          "kind": "artifact",
+          "value": "target/profile-role-proof/profile-proof.json"
+        }
       ],
       "remaining": []
     },
@@ -515,15 +1115,39 @@
       "execution_class": "code",
       "status": "complete",
       "summary": "A rebuildable PostgreSQL full-text projection searches visible discussions, public profiles, active/completed games, and public main-thread posts with weighted rank, stable cursor pagination, typed filters, excerpts, canonical destinations, and synchronous visibility removal.",
-      "complete_when": ["Users can search public discussions, public game threads, profiles, and games through visibility-safe ranked results with stable pagination and canonical result links."],
-      "depends_on": ["product.community.discussions", "product.community.profiles", "product.community.game-index"],
+      "complete_when": [
+        "Users can search public discussions, public game threads, profiles, and games through visibility-safe ranked results with stable pagination and canonical result links."
+      ],
+      "depends_on": [
+        "product.community.discussions",
+        "product.community.profiles",
+        "product.community.game-index"
+      ],
       "evidence": [
-        { "kind": "source", "value": "crates/projections/migrations/0001_baseline.sql" },
-        { "kind": "source", "value": "frontend/src/routes/search/+page.svelte" },
-        { "kind": "source", "value": "frontend/src/routes/games/[game]/+page.svelte" },
-        { "kind": "source", "value": "docs/arch/02-event-sourcing.md" },
-        { "kind": "command", "value": "npm run test:dev-test-game-search:local" },
-        { "kind": "artifact", "value": "target/public-search-role-proof/public-search-proof.json" }
+        {
+          "kind": "source",
+          "value": "crates/projections/migrations/0001_baseline.sql"
+        },
+        {
+          "kind": "source",
+          "value": "frontend/src/routes/search/+page.svelte"
+        },
+        {
+          "kind": "source",
+          "value": "frontend/src/routes/games/[game]/+page.svelte"
+        },
+        {
+          "kind": "source",
+          "value": "docs/arch/02-event-sourcing.md"
+        },
+        {
+          "kind": "command",
+          "value": "npm run test:dev-test-game-search:local"
+        },
+        {
+          "kind": "artifact",
+          "value": "target/public-search-role-proof/public-search-proof.json"
+        }
       ],
       "remaining": []
     },
@@ -535,14 +1159,35 @@
       "execution_class": "code",
       "status": "complete",
       "summary": "Authenticated members can report public discussion and game-thread posts into typed moderation-case streams with active-report deduplication and bounded daily submissions. GlobalMod operators have a capability-safe queue, reporter evidence, reasoned hide/dismiss/restore transitions, append-only history, and synchronous public-thread/search visibility updates.",
-      "complete_when": ["Members can report public discussion and game-thread content into a durable deduplicated queue, and GlobalMod operators can review, reason, action, restore, and audit those reports through capability-safe routes."],
-      "depends_on": ["product.community.discussions", "product.community.search", "product.identity.session-lifecycle"],
+      "complete_when": [
+        "Members can report public discussion and game-thread content into a durable deduplicated queue, and GlobalMod operators can review, reason, action, restore, and audit those reports through capability-safe routes."
+      ],
+      "depends_on": [
+        "product.community.discussions",
+        "product.community.search",
+        "product.identity.session-lifecycle"
+      ],
       "evidence": [
-        { "kind": "source", "value": "crates/projections/migrations/0001_baseline.sql" },
-        { "kind": "source", "value": "frontend/src/routes/moderation/+page.svelte" },
-        { "kind": "source", "value": "docs/arch/02-event-sourcing.md" },
-        { "kind": "command", "value": "npm run test:dev-test-game-community-moderation:local" },
-        { "kind": "artifact", "value": "target/community-moderation-role-proof/community-moderation-proof.json" }
+        {
+          "kind": "source",
+          "value": "crates/projections/migrations/0001_baseline.sql"
+        },
+        {
+          "kind": "source",
+          "value": "frontend/src/routes/moderation/+page.svelte"
+        },
+        {
+          "kind": "source",
+          "value": "docs/arch/02-event-sourcing.md"
+        },
+        {
+          "kind": "command",
+          "value": "npm run test:dev-test-game-community-moderation:local"
+        },
+        {
+          "kind": "artifact",
+          "value": "target/community-moderation-role-proof/community-moderation-proof.json"
+        }
       ],
       "remaining": []
     },
@@ -554,14 +1199,36 @@
       "execution_class": "code",
       "status": "complete",
       "summary": "Authenticated members can watch public discussion topics and public game threads through one durable member-target stream, receive privacy-safe in-app update references only for active watch periods, and advance a monotonic per-watch read cursor. Fanout is synchronous and rebuildable, author-self updates are excluded, and moderation hide/restore state suppresses and restores inbox entries without mutating history.",
-      "complete_when": ["Authenticated members can subscribe and unsubscribe to public topics and public game threads, receive a durable privacy-safe in-app update inbox, and advance a per-subscription read cursor without polling private audiences or exposing credential principals."],
-      "depends_on": ["product.community.discussions", "product.community.search", "product.community.moderation-operations", "product.identity.session-lifecycle"],
+      "complete_when": [
+        "Authenticated members can subscribe and unsubscribe to public topics and public game threads, receive a durable privacy-safe in-app update inbox, and advance a per-subscription read cursor without polling private audiences or exposing credential principals."
+      ],
+      "depends_on": [
+        "product.community.discussions",
+        "product.community.search",
+        "product.community.moderation-operations",
+        "product.identity.session-lifecycle"
+      ],
       "evidence": [
-        { "kind": "source", "value": "crates/projections/migrations/0001_baseline.sql" },
-        { "kind": "source", "value": "frontend/src/routes/inbox/+page.svelte" },
-        { "kind": "source", "value": "docs/arch/02-event-sourcing.md" },
-        { "kind": "command", "value": "npm run test:dev-test-game-community-subscriptions:local" },
-        { "kind": "artifact", "value": "target/community-subscription-role-proof/community-subscription-proof.json" }
+        {
+          "kind": "source",
+          "value": "crates/projections/migrations/0001_baseline.sql"
+        },
+        {
+          "kind": "source",
+          "value": "frontend/src/routes/inbox/+page.svelte"
+        },
+        {
+          "kind": "source",
+          "value": "docs/arch/02-event-sourcing.md"
+        },
+        {
+          "kind": "command",
+          "value": "npm run test:dev-test-game-community-subscriptions:local"
+        },
+        {
+          "kind": "artifact",
+          "value": "target/community-subscription-role-proof/community-subscription-proof.json"
+        }
       ],
       "remaining": []
     },
@@ -573,16 +1240,44 @@
       "execution_class": "code",
       "status": "open",
       "summary": "Public community reads are globally moderated, but a member cannot create a reversible personal boundary around another public profile's contributions without affecting anyone else's view.",
-      "complete_when": ["Authenticated members can mute and unmute public profiles through a durable private relationship stream, inspect their bounded mute list, and have muted authors consistently suppressed from personalized discussion, search, and inbox reads without changing global visibility or exposing credential principals."],
-      "depends_on": ["product.community.profiles", "product.community.discussions", "product.community.search", "product.community.subscriptions", "product.identity.session-lifecycle"],
-      "evidence": [
-        { "kind": "source", "value": "docs/arch/02-event-sourcing.md" }
+      "complete_when": [
+        "Authenticated members can mute and unmute public profiles through a durable private relationship stream, inspect their bounded mute list, and have muted authors consistently suppressed from personalized discussion, search, and inbox reads without changing global visibility or exposing credential principals."
       ],
-      "remaining": ["Add typed member-profile mute streams, a private current-mute projection, personalized public-read overlays, profile and inbox controls, bounded list pagination, rebuild coverage, and two-member browser proof."],
+      "depends_on": [
+        "product.community.profiles",
+        "product.community.discussions",
+        "product.community.search",
+        "product.community.subscriptions",
+        "product.identity.session-lifecycle"
+      ],
+      "evidence": [
+        {
+          "kind": "source",
+          "value": "docs/arch/02-event-sourcing.md"
+        }
+      ],
+      "remaining": [
+        "Add typed member-profile mute streams, a private current-mute projection, personalized public-read overlays, profile and inbox controls, bounded list pagination, rebuild coverage, and two-member browser proof."
+      ],
       "recommended_slice": {
         "objective": "Build private, reversible member-to-profile mute controls: typed mute/unmute events, one durable relationship stream per member and public profile, a current-mute projection and bounded list, consistent personalized suppression across discussion threads, public search, and watched-update inboxes, plus profile/inbox controls and seeded two-member Chromium proof.",
-        "paths": ["crates/community/", "crates/projections/", "crates/api/", "crates/wire/", "frontend/src/routes/u/", "frontend/src/routes/inbox/", "frontend/src/routes/discussions/", "frontend/src/routes/search/", "tools/", "docs/arch/02-event-sourcing.md"],
-        "proof_commands": ["DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p community -p projections -p api member_mute -- --test-threads=1", "npm run test:frontend-contract", "npm run test:completeness-scorecard"],
+        "paths": [
+          "crates/community/",
+          "crates/projections/",
+          "crates/api/",
+          "crates/wire/",
+          "frontend/src/routes/u/",
+          "frontend/src/routes/inbox/",
+          "frontend/src/routes/discussions/",
+          "frontend/src/routes/search/",
+          "tools/",
+          "docs/arch/02-event-sourcing.md"
+        ],
+        "proof_commands": [
+          "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p community -p projections -p api member_mute -- --test-threads=1",
+          "npm run test:frontend-contract",
+          "npm run test:completeness-scorecard"
+        ],
         "non_claims": [
           "No global content removal, moderation action, or effect on other members' views.",
           "No direct-message, mention, or private-channel blocking semantics before those interaction surfaces exist.",
@@ -598,14 +1293,34 @@
       "execution_class": "code",
       "status": "complete",
       "summary": "Completed games export a versioned checksum-bearing event manifest through a host role URL; isolated import, projection rebuild, replay audit, and tamper rejection are locally proven.",
-      "complete_when": ["A completed game exports its events, schema/version metadata, referenced projections/media manifest, checksum, and deterministic import/audit result."],
-      "depends_on": ["foundation.event-store-projections", "product.game.endgame-reveal-history"],
+      "complete_when": [
+        "A completed game exports its events, schema/version metadata, referenced projections/media manifest, checksum, and deterministic import/audit result."
+      ],
+      "depends_on": [
+        "foundation.event-store-projections",
+        "product.game.endgame-reveal-history"
+      ],
       "evidence": [
-        { "kind": "source", "value": "crates/eventstore/src/lib.rs" },
-        { "kind": "source", "value": "frontend/src/routes/g/[game]/host/export/+page.svelte" },
-        { "kind": "source", "value": "docs/arch/02-event-sourcing.md" },
-        { "kind": "command", "value": "npm run test:dev-test-game-completed-export:local" },
-        { "kind": "artifact", "value": "target/completed-game-export-role-proof/completed-game-export-proof.json" }
+        {
+          "kind": "source",
+          "value": "crates/eventstore/src/lib.rs"
+        },
+        {
+          "kind": "source",
+          "value": "frontend/src/routes/g/[game]/host/export/+page.svelte"
+        },
+        {
+          "kind": "source",
+          "value": "docs/arch/02-event-sourcing.md"
+        },
+        {
+          "kind": "command",
+          "value": "npm run test:dev-test-game-completed-export:local"
+        },
+        {
+          "kind": "artifact",
+          "value": "target/completed-game-export-role-proof/completed-game-export-proof.json"
+        }
       ],
       "remaining": []
     },
@@ -617,15 +1332,34 @@
       "execution_class": "external-evidence",
       "status": "blocked",
       "summary": "Local identity code and packet validators are not live hosted account, invite, recovery, abuse-control, session-secret, or retention evidence.",
-      "complete_when": ["A non-fixture redacted operator packet records passed real hosted identity lifecycle and role-surface evidence for every required family."],
-      "depends_on": ["product.identity.registration", "product.identity.delivery", "product.identity.session-lifecycle"],
-      "evidence": [
-        { "kind": "command", "value": "npm run test:dev-test-game-identity:hosted-evidence" },
-        { "kind": "source", "value": "tools/dev_test_game_hosted_identity_real_evidence_guard.mjs" }
+      "complete_when": [
+        "A non-fixture redacted operator packet records passed real hosted identity lifecycle and role-surface evidence for every required family."
       ],
-      "remaining": ["Deploy the identity lifecycle and attach real redacted retained/exportable evidence for every hosted family."],
-      "blocked_on": ["Real hosted identity target and operator evidence packet"],
-      "authority": { "kind": "release-readiness", "id": "hosted-production-identity" }
+      "depends_on": [
+        "product.identity.registration",
+        "product.identity.delivery",
+        "product.identity.session-lifecycle"
+      ],
+      "evidence": [
+        {
+          "kind": "command",
+          "value": "npm run test:dev-test-game-identity:hosted-evidence"
+        },
+        {
+          "kind": "source",
+          "value": "tools/dev_test_game_hosted_identity_real_evidence_guard.mjs"
+        }
+      ],
+      "remaining": [
+        "Deploy the identity lifecycle and attach real redacted retained/exportable evidence for every hosted family."
+      ],
+      "blocked_on": [
+        "Real hosted identity target and operator evidence packet"
+      ],
+      "authority": {
+        "kind": "release-readiness",
+        "id": "hosted-production-identity"
+      }
     },
     {
       "id": "hosted-deployment",
@@ -635,15 +1369,32 @@
       "execution_class": "external-evidence",
       "status": "blocked",
       "summary": "Local and hosted-like proof cannot establish an externally reachable deployment or external health checks.",
-      "complete_when": ["Externally reachable API and frontend targets pass the real-hosted preflight and raw-capture contract without fixture or synthetic inputs."],
-      "depends_on": ["product.game.core-loop"],
-      "evidence": [
-        { "kind": "command", "value": "npm run test:dev-test-game-real-hosted-matrix-raw-capture" },
-        { "kind": "source", "value": "docs/dev-test-game-hosted-evidence-operator-checklist.md" }
+      "complete_when": [
+        "Externally reachable API and frontend targets pass the real-hosted preflight and raw-capture contract without fixture or synthetic inputs."
       ],
-      "remaining": ["Provision the hosted target and capture non-synthetic external frontend/API health and flow evidence."],
-      "blocked_on": ["Externally reachable deployment and raw operator capture"],
-      "authority": { "kind": "release-readiness", "id": "hosted-deployment" }
+      "depends_on": [
+        "product.game.core-loop"
+      ],
+      "evidence": [
+        {
+          "kind": "command",
+          "value": "npm run test:dev-test-game-real-hosted-matrix-raw-capture"
+        },
+        {
+          "kind": "source",
+          "value": "docs/dev-test-game-hosted-evidence-operator-checklist.md"
+        }
+      ],
+      "remaining": [
+        "Provision the hosted target and capture non-synthetic external frontend/API health and flow evidence."
+      ],
+      "blocked_on": [
+        "Externally reachable deployment and raw operator capture"
+      ],
+      "authority": {
+        "kind": "release-readiness",
+        "id": "hosted-deployment"
+      }
     },
     {
       "id": "hosted-demo-fixtures",
@@ -653,14 +1404,29 @@
       "execution_class": "external-evidence",
       "status": "blocked",
       "summary": "Local seed fixtures do not prove a hosted demo environment, sanitized data policy, or release-safe invite delivery.",
-      "complete_when": ["The hosted demo target is reproducibly seeded from sanitized policy-approved data and its invite delivery is release-safe."],
-      "depends_on": ["hosted-deployment", "product.identity.delivery"],
-      "evidence": [
-        { "kind": "source", "value": "tools/dev_test_game_release_readiness_cases.mjs" }
+      "complete_when": [
+        "The hosted demo target is reproducibly seeded from sanitized policy-approved data and its invite delivery is release-safe."
       ],
-      "remaining": ["Provision and audit hosted demo data, reset policy, and invite delivery."],
-      "blocked_on": ["Hosted demo environment and operator-approved sanitized-data policy"],
-      "authority": { "kind": "release-readiness", "id": "hosted-demo-fixtures" }
+      "depends_on": [
+        "hosted-deployment",
+        "product.identity.delivery"
+      ],
+      "evidence": [
+        {
+          "kind": "source",
+          "value": "tools/dev_test_game_release_readiness_cases.mjs"
+        }
+      ],
+      "remaining": [
+        "Provision and audit hosted demo data, reset policy, and invite delivery."
+      ],
+      "blocked_on": [
+        "Hosted demo environment and operator-approved sanitized-data policy"
+      ],
+      "authority": {
+        "kind": "release-readiness",
+        "id": "hosted-demo-fixtures"
+      }
     },
     {
       "id": "production-backup-recovery",
@@ -670,15 +1436,32 @@
       "execution_class": "external-evidence",
       "status": "blocked",
       "summary": "The local backup/restore drill is baseline proof only; it does not establish production storage, PITR, key escrow, or secret rotation.",
-      "complete_when": ["A production-like backup, PITR restore, key escrow, and secret-rotation drill produces retained operator evidence."],
-      "depends_on": ["hosted-deployment"],
-      "evidence": [
-        { "kind": "command", "value": "npm run test:dev-test-game-backup-restore" },
-        { "kind": "source", "value": "tools/dev_test_game_release_readiness_cases.mjs" }
+      "complete_when": [
+        "A production-like backup, PITR restore, key escrow, and secret-rotation drill produces retained operator evidence."
       ],
-      "remaining": ["Run and retain the production-like backup/PITR, escrow, and rotation drill."],
-      "blocked_on": ["Production-like storage, keys, secrets, and operator access"],
-      "authority": { "kind": "release-readiness", "id": "production-backup-recovery" }
+      "depends_on": [
+        "hosted-deployment"
+      ],
+      "evidence": [
+        {
+          "kind": "command",
+          "value": "npm run test:dev-test-game-backup-restore"
+        },
+        {
+          "kind": "source",
+          "value": "tools/dev_test_game_release_readiness_cases.mjs"
+        }
+      ],
+      "remaining": [
+        "Run and retain the production-like backup/PITR, escrow, and rotation drill."
+      ],
+      "blocked_on": [
+        "Production-like storage, keys, secrets, and operator access"
+      ],
+      "authority": {
+        "kind": "release-readiness",
+        "id": "production-backup-recovery"
+      }
     },
     {
       "id": "real-hosted-concurrent-race-matrix",
@@ -688,15 +1471,32 @@
       "execution_class": "external-evidence",
       "status": "blocked",
       "summary": "The promoted local race matrix does not prove multi-node hosted races, reload/reconnect convergence, or hosted stale-client behavior.",
-      "complete_when": ["The real hosted matrix executes concurrent commands across the deployed topology and records reload, reconnect, and stale-conflict convergence."],
-      "depends_on": ["hosted-deployment"],
-      "evidence": [
-        { "kind": "command", "value": "npm run test:dev-test-game-hosted-matrix-external-evidence" },
-        { "kind": "source", "value": "tools/dev_test_game_release_readiness_cases.mjs" }
+      "complete_when": [
+        "The real hosted matrix executes concurrent commands across the deployed topology and records reload, reconnect, and stale-conflict convergence."
       ],
-      "remaining": ["Execute and retain the non-fixture multi-node hosted race matrix."],
-      "blocked_on": ["Stable real hosted topology and external race capture"],
-      "authority": { "kind": "release-readiness", "id": "real-hosted-concurrent-race-matrix" }
+      "depends_on": [
+        "hosted-deployment"
+      ],
+      "evidence": [
+        {
+          "kind": "command",
+          "value": "npm run test:dev-test-game-hosted-matrix-external-evidence"
+        },
+        {
+          "kind": "source",
+          "value": "tools/dev_test_game_release_readiness_cases.mjs"
+        }
+      ],
+      "remaining": [
+        "Execute and retain the non-fixture multi-node hosted race matrix."
+      ],
+      "blocked_on": [
+        "Stable real hosted topology and external race capture"
+      ],
+      "authority": {
+        "kind": "release-readiness",
+        "id": "real-hosted-concurrent-race-matrix"
+      }
     },
     {
       "id": "real-hosted-observability-and-operations",
@@ -706,15 +1506,32 @@
       "execution_class": "external-evidence",
       "status": "blocked",
       "summary": "Local structured logs and hosted-like signal bundles do not prove hosted logs, metrics, traces, paging/SLOs, or incident response.",
-      "complete_when": ["The deployed target emits retained logs, metrics, traces, alerts/SLO evidence, and an exercised incident-response receipt."],
-      "depends_on": ["hosted-deployment"],
-      "evidence": [
-        { "kind": "command", "value": "npm run test:dev-test-game-real-hosted-observability-handoff" },
-        { "kind": "source", "value": "tools/dev_test_game_real_hosted_observability_handoff.mjs" }
+      "complete_when": [
+        "The deployed target emits retained logs, metrics, traces, alerts/SLO evidence, and an exercised incident-response receipt."
       ],
-      "remaining": ["Capture real hosted telemetry, alerting/SLO, paging, and incident-response evidence."],
-      "blocked_on": ["Hosted telemetry stack and operator incident-response exercise"],
-      "authority": { "kind": "release-readiness", "id": "real-hosted-observability-and-operations" }
+      "depends_on": [
+        "hosted-deployment"
+      ],
+      "evidence": [
+        {
+          "kind": "command",
+          "value": "npm run test:dev-test-game-real-hosted-observability-handoff"
+        },
+        {
+          "kind": "source",
+          "value": "tools/dev_test_game_real_hosted_observability_handoff.mjs"
+        }
+      ],
+      "remaining": [
+        "Capture real hosted telemetry, alerting/SLO, paging, and incident-response evidence."
+      ],
+      "blocked_on": [
+        "Hosted telemetry stack and operator incident-response exercise"
+      ],
+      "authority": {
+        "kind": "release-readiness",
+        "id": "real-hosted-observability-and-operations"
+      }
     },
     {
       "id": "human-release-approval",
@@ -724,15 +1541,37 @@
       "execution_class": "human",
       "status": "blocked",
       "summary": "No coding agent or generated artifact can approve release ownership, rollback readiness, or support staffing.",
-      "complete_when": ["The release owner reviews product scope and all external evidence, verifies rollback/support staffing, and records explicit approval."],
-      "depends_on": ["hosted-production-identity", "hosted-deployment", "hosted-demo-fixtures", "production-backup-recovery", "real-hosted-concurrent-race-matrix", "real-hosted-observability-and-operations"],
-      "evidence": [
-        { "kind": "command", "value": "npm run test:dev-test-game-release-runbook" },
-        { "kind": "source", "value": "docs/ops/human-run-test-games.md" }
+      "complete_when": [
+        "The release owner reviews product scope and all external evidence, verifies rollback/support staffing, and records explicit approval."
       ],
-      "remaining": ["Obtain and record explicit human release-owner approval after all prerequisites close."],
-      "blocked_on": ["All required product capabilities and operator-owned release evidence"],
-      "authority": { "kind": "release-readiness", "id": "human-release-approval" }
+      "depends_on": [
+        "hosted-production-identity",
+        "hosted-deployment",
+        "hosted-demo-fixtures",
+        "production-backup-recovery",
+        "real-hosted-concurrent-race-matrix",
+        "real-hosted-observability-and-operations"
+      ],
+      "evidence": [
+        {
+          "kind": "command",
+          "value": "npm run test:dev-test-game-release-runbook"
+        },
+        {
+          "kind": "source",
+          "value": "docs/ops/human-run-test-games.md"
+        }
+      ],
+      "remaining": [
+        "Obtain and record explicit human release-owner approval after all prerequisites close."
+      ],
+      "blocked_on": [
+        "All required product capabilities and operator-owned release evidence"
+      ],
+      "authority": {
+        "kind": "release-readiness",
+        "id": "human-release-approval"
+      }
     },
     {
       "id": "housekeeping.vote-syntax-decision",
@@ -742,13 +1581,29 @@
       "execution_class": "code",
       "status": "complete",
       "summary": "Player vote targets are server-supplied controls that emit typed vote commands; the governing docs record that posts are never parsed as votes.",
-      "complete_when": ["The domain and roadmap docs record the shipped strict-target decision and remove the stale open call."],
-      "depends_on": ["product.game.core-loop"],
+      "complete_when": [
+        "The domain and roadmap docs record the shipped strict-target decision and remove the stale open call."
+      ],
+      "depends_on": [
+        "product.game.core-loop"
+      ],
       "evidence": [
-        { "kind": "source", "value": "docs/arch/08-roadmap.md" },
-        { "kind": "source", "value": "docs/arch/01-domain-model.md" },
-        { "kind": "source", "value": "frontend/src/routes/g/[game]/game-route-model.mjs" },
-        { "kind": "command", "value": "npm run test:completeness-scorecard" }
+        {
+          "kind": "source",
+          "value": "docs/arch/08-roadmap.md"
+        },
+        {
+          "kind": "source",
+          "value": "docs/arch/01-domain-model.md"
+        },
+        {
+          "kind": "source",
+          "value": "frontend/src/routes/g/[game]/game-route-model.mjs"
+        },
+        {
+          "kind": "command",
+          "value": "npm run test:completeness-scorecard"
+        }
       ],
       "remaining": []
     },
@@ -760,13 +1615,23 @@
       "execution_class": "human",
       "status": "open",
       "summary": "The repository and packages use fmarch while the vision docs still call the product unnamed or TBD.",
-      "complete_when": ["The owner ratifies the name and the vision/index docs consistently use it."],
+      "complete_when": [
+        "The owner ratifies the name and the vision/index docs consistently use it."
+      ],
       "depends_on": [],
       "evidence": [
-        { "kind": "source", "value": "docs/arch/README.md" },
-        { "kind": "source", "value": "docs/arch/00-vision.md" }
+        {
+          "kind": "source",
+          "value": "docs/arch/README.md"
+        },
+        {
+          "kind": "source",
+          "value": "docs/arch/00-vision.md"
+        }
       ],
-      "remaining": ["Obtain the naming decision and update the governing docs." ]
+      "remaining": [
+        "Obtain the naming decision and update the governing docs."
+      ]
     },
     {
       "id": "optional.projection-snapshots",
@@ -776,12 +1641,21 @@
       "execution_class": "optional",
       "status": "deferred",
       "summary": "Snapshots are a discardable replay optimization and are excluded from required completion until measured replay cost demands them.",
-      "complete_when": ["A measured replay SLO breach is addressed by versioned discardable snapshots with deterministic fallback to full replay."],
-      "depends_on": ["foundation.event-store-projections"],
-      "evidence": [
-        { "kind": "source", "value": "docs/arch/02-event-sourcing.md" }
+      "complete_when": [
+        "A measured replay SLO breach is addressed by versioned discardable snapshots with deterministic fallback to full replay."
       ],
-      "remaining": ["Define a replay benchmark and SLO before deciding whether snapshot implementation is warranted."],
+      "depends_on": [
+        "foundation.event-store-projections"
+      ],
+      "evidence": [
+        {
+          "kind": "source",
+          "value": "docs/arch/02-event-sourcing.md"
+        }
+      ],
+      "remaining": [
+        "Define a replay benchmark and SLO before deciding whether snapshot implementation is warranted."
+      ],
       "decision_trigger": "Promote only when a representative long-game replay benchmark exceeds the declared latency or resource SLO."
     }
   ],

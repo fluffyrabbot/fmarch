@@ -173,13 +173,13 @@ try {
       delegatedIssuanceControls: ["host-scoped-invite-issuance"],
       roleSurfacePattern:
         "/auth/invite?returnTo=<role-surface>&invite=<token>&account=<account-id>",
-      accountRoleSurfacePattern: "/auth/login?returnTo=<role-surface>&account=<account-id>",
+      accountRoleSurfacePattern: "/auth/login/classic?returnTo=<role-surface>&account=<account-id>",
       accountSecurityRoleSurfacePattern:
         "/auth/account/security?account=<account-id>&returnTo=<role-surface>",
       accountRecoveryRoleSurfacePattern:
         "/auth/account/recovery?account=<account-id>&returnTo=<role-surface>",
       accountRegistrationRoleSurfacePattern:
-        "/auth/register?account=<account-id>&returnTo=<role-surface>",
+        "/auth/register/classic?account=<account-id>&returnTo=<role-surface>",
       capabilityAuthority:
         "auth_session resolves principal_user_id and committed game/global capabilities at the API boundary",
     },
@@ -461,12 +461,12 @@ async function driveAccountLogin({
   expectedCapability,
 }) {
   const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
-  const loginUrl = `${frontendBaseUrl}/auth/login?returnTo=${encodeURIComponent(
+  const loginUrl = `${frontendBaseUrl}/auth/login/classic?returnTo=${encodeURIComponent(
     returnTo,
   )}&account=${encodeURIComponent(accountId)}`;
   try {
     await page.goto(loginUrl, { waitUntil: "networkidle" });
-    await page.getByTestId("auth-login-surface").waitFor({ state: "visible" });
+    await page.getByTestId("auth-login-classic-surface").waitFor({ state: "visible" });
     const accountValue = await page.getByTestId("auth-login-account").inputValue();
     if (accountValue !== accountId) {
       throw new Error(`account login id was not prefilled: ${accountValue}`);
@@ -523,7 +523,7 @@ async function driveAccountRegistration({
   accountCredential,
   returnTo,
 }) {
-  const registrationRoleUrl = `/auth/register?account=${encodeURIComponent(
+  const registrationRoleUrl = `/auth/register/classic?account=${encodeURIComponent(
     accountCredential.accountId,
   )}&returnTo=${encodeURIComponent(returnTo)}`;
   const securityRoleUrl = `/auth/account/security?account=${encodeURIComponent(
@@ -536,7 +536,7 @@ async function driveAccountRegistration({
     await page.goto(`${frontendBaseUrl}${registrationRoleUrl}`, {
       waitUntil: "networkidle",
     });
-    await page.getByTestId("auth-registration-surface").waitFor({
+    await page.getByTestId("auth-registration-classic-surface").waitFor({
       state: "visible",
       timeout: 15000,
     });
@@ -610,7 +610,7 @@ async function driveAccountRegistration({
   try {
     const rateLimitPage = await rateLimitContext.newPage();
     await rateLimitPage.goto(
-      `${frontendBaseUrl}/auth/register?account=${encodeURIComponent(
+      `${frontendBaseUrl}/auth/register/classic?account=${encodeURIComponent(
         `rate-limit-${game}@example.test`,
       )}&returnTo=${encodeURIComponent(returnTo)}`,
       { waitUntil: "networkidle" },
@@ -646,7 +646,7 @@ async function driveAccountRegistration({
   return {
     registrationRoleUrl,
     securityRoleUrl,
-    registrationSurfaceTestId: "auth-registration-surface",
+    registrationSurfaceTestId: "auth-registration-classic-surface",
     securitySurfaceTestId: "account-security-surface",
     accountId: accountCredential.accountId,
     principalUserId,
@@ -671,13 +671,13 @@ async function proveCredentialAttemptThrottling({
   returnTo,
 }) {
   const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
-  const loginUrl = `${frontendBaseUrl}/auth/login?returnTo=${encodeURIComponent(
+  const loginUrl = `${frontendBaseUrl}/auth/login/classic?returnTo=${encodeURIComponent(
     returnTo,
   )}&account=${encodeURIComponent(accountId)}`;
   const wrongPassword = `throttled-wrong-password-${game}`;
   try {
     await page.goto(loginUrl, { waitUntil: "networkidle" });
-    await page.getByTestId("auth-login-surface").waitFor({ state: "visible" });
+    await page.getByTestId("auth-login-classic-surface").waitFor({ state: "visible" });
     for (let attempt = 1; attempt <= 5; attempt += 1) {
       await page.getByTestId("auth-login-password").fill(wrongPassword);
       await page.getByTestId("auth-login-submit").click();
@@ -2973,12 +2973,12 @@ async function driveRejectedAccountLogin({
   returnTo,
 }) {
   const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
-  const loginUrl = `${frontendBaseUrl}/auth/login?returnTo=${encodeURIComponent(
+  const loginUrl = `${frontendBaseUrl}/auth/login/classic?returnTo=${encodeURIComponent(
     returnTo,
   )}&account=${encodeURIComponent(accountId)}`;
   try {
     await page.goto(loginUrl, { waitUntil: "networkidle" });
-    await page.getByTestId("auth-login-surface").waitFor({ state: "visible" });
+    await page.getByTestId("auth-login-classic-surface").waitFor({ state: "visible" });
     await page.getByTestId("auth-login-password").fill(password);
     await page.getByTestId("auth-login-submit").click();
     await page.getByText("Account credentials are missing, disabled, or invalid").waitFor({
