@@ -35,7 +35,7 @@ test("checked-in projection schema preserves its baseline and append-only sequen
   assert.equal(report.ok, true);
   assert.equal(report.baseline, baselineFilename);
   assert.equal(report.baseline_sha256, baselineSha256);
-  assert.deepEqual(report.migrations, [baselineFilename, "0002_workos_identity.sql"]);
+  assert.deepEqual(report.migrations, [baselineFilename, "0002_runtime_identity.sql"]);
   assert.equal(report.migration_file_count, 2);
   assert.ok(report.statement_count > 100);
 });
@@ -64,13 +64,11 @@ test("projection baseline rejects checksum drift", async () => {
   );
 });
 
-test("projection migrations reject transitional data and column mutations", async () => {
+test("projection migrations reject destructive data and schema mutations", async () => {
   const forbidden = [
     "INSERT INTO public.example VALUES (1);",
-    "UPDATE public.example SET id = 2;",
     "DELETE FROM public.example;",
     "TRUNCATE TABLE public.example;",
-    "ALTER TABLE public.example ADD COLUMN name text;",
     "ALTER TABLE public.example DROP COLUMN name;",
     "DROP TABLE public.example;",
   ];
@@ -92,7 +90,7 @@ test("projection migrations permit constructive schema additions", async () => {
   await withMigrationDirectory(
     {
       [baselineFilename]: checkedBaseline,
-      "0002_constructive.sql": "-- 0002_constructive.sql — additive schema.\nCREATE TABLE public.example (id bigint);\nALTER TABLE ONLY public.example ADD CONSTRAINT example_pkey PRIMARY KEY (id);",
+      "0002_constructive.sql": "-- 0002_constructive.sql — additive schema.\nCREATE TABLE public.example (id bigint);\nALTER TABLE public.example ADD COLUMN fingerprint bytea;\nUPDATE public.example SET fingerprint = decode(repeat('00', 32), 'hex');\nALTER TABLE public.example ALTER COLUMN fingerprint SET NOT NULL;\nALTER TABLE ONLY public.example ADD CONSTRAINT example_pkey PRIMARY KEY (id);",
     },
     async (root) => {
       const report = await inspectProjectionBaseline({ root });

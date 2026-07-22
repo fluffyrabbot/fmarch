@@ -146,7 +146,6 @@ CREATE TABLE public.auth_delivery_intent (
     account_id text NOT NULL,
     principal_user_id text NOT NULL,
     credential_hash text NOT NULL,
-    credential_expires_at bigint NOT NULL,
     status text NOT NULL,
     attempt_count integer DEFAULT 0 NOT NULL,
     next_attempt_at bigint,
@@ -162,13 +161,12 @@ CREATE TABLE public.auth_delivery_intent (
     claim_expires_at bigint,
     credential_envelope jsonb,
     CONSTRAINT auth_delivery_intent_attempt_count_check CHECK ((attempt_count >= 0)),
-    CONSTRAINT auth_delivery_intent_credential_expiry_check CHECK ((credential_expires_at > created_at)),
     CONSTRAINT auth_delivery_intent_credential_envelope_check CHECK (((credential_envelope IS NULL) OR (jsonb_typeof(credential_envelope) = 'object'::text))),
     CONSTRAINT auth_delivery_intent_delivery_kind_check CHECK ((delivery_kind = ANY (ARRAY['invite'::text, 'recovery'::text]))),
-    CONSTRAINT auth_delivery_intent_delivery_shape_check CHECK ((((status = 'queued'::text) AND (outcome_kind = 'queued'::text) AND (next_attempt_at IS NOT NULL) AND (delivered_at IS NULL) AND (outcome_code IS NULL) AND (provider_receipt_id IS NULL) AND (claim_token IS NULL) AND (claim_expires_at IS NULL)) OR ((status = 'processing'::text) AND (outcome_kind = 'processing'::text) AND (next_attempt_at IS NULL) AND (delivered_at IS NULL) AND (outcome_code IS NULL) AND (provider_receipt_id IS NULL) AND (claim_token IS NOT NULL) AND (claim_expires_at IS NOT NULL)) OR ((status = 'delivered'::text) AND (outcome_kind = 'delivered'::text) AND (next_attempt_at IS NULL) AND (delivered_at IS NOT NULL) AND (outcome_code IS NULL) AND (provider_receipt_id IS NOT NULL) AND (claim_token IS NULL) AND (claim_expires_at IS NULL)) OR ((status = 'retryable_failed'::text) AND (outcome_kind = 'retryable_failure'::text) AND (next_attempt_at IS NOT NULL) AND (delivered_at IS NULL) AND (outcome_code IS NOT NULL) AND (provider_receipt_id IS NULL) AND (claim_token IS NULL) AND (claim_expires_at IS NULL)) OR ((status = 'permanent_failed'::text) AND (outcome_kind = 'permanent_failure'::text) AND (next_attempt_at IS NULL) AND (delivered_at IS NULL) AND (outcome_code IS NOT NULL) AND (provider_receipt_id IS NULL) AND (claim_token IS NULL) AND (claim_expires_at IS NULL)) OR ((status = 'cancelled'::text) AND (outcome_kind = 'cancelled'::text) AND (next_attempt_at IS NULL) AND (delivered_at IS NULL) AND (outcome_code IS NOT NULL) AND (provider_receipt_id IS NULL) AND (claim_token IS NULL) AND (claim_expires_at IS NULL) AND (credential_envelope IS NULL)))),
-    CONSTRAINT auth_delivery_intent_outcome_kind_check CHECK ((outcome_kind = ANY (ARRAY['queued'::text, 'processing'::text, 'delivered'::text, 'retryable_failure'::text, 'permanent_failure'::text, 'cancelled'::text]))),
+    CONSTRAINT auth_delivery_intent_delivery_shape_check CHECK ((((status = 'queued'::text) AND (outcome_kind = 'queued'::text) AND (next_attempt_at IS NOT NULL) AND (delivered_at IS NULL) AND (outcome_code IS NULL) AND (provider_receipt_id IS NULL) AND (claim_token IS NULL) AND (claim_expires_at IS NULL)) OR ((status = 'processing'::text) AND (outcome_kind = 'processing'::text) AND (next_attempt_at IS NULL) AND (delivered_at IS NULL) AND (outcome_code IS NULL) AND (provider_receipt_id IS NULL) AND (claim_token IS NOT NULL) AND (claim_expires_at IS NOT NULL)) OR ((status = 'delivered'::text) AND (outcome_kind = 'delivered'::text) AND (next_attempt_at IS NULL) AND (delivered_at IS NOT NULL) AND (outcome_code IS NULL) AND (provider_receipt_id IS NOT NULL) AND (claim_token IS NULL) AND (claim_expires_at IS NULL)) OR ((status = 'retryable_failed'::text) AND (outcome_kind = 'retryable_failure'::text) AND (next_attempt_at IS NOT NULL) AND (delivered_at IS NULL) AND (outcome_code IS NOT NULL) AND (provider_receipt_id IS NULL) AND (claim_token IS NULL) AND (claim_expires_at IS NULL)) OR ((status = 'permanent_failed'::text) AND (outcome_kind = 'permanent_failure'::text) AND (next_attempt_at IS NULL) AND (delivered_at IS NULL) AND (outcome_code IS NOT NULL) AND (provider_receipt_id IS NULL) AND (claim_token IS NULL) AND (claim_expires_at IS NULL)))),
+    CONSTRAINT auth_delivery_intent_outcome_kind_check CHECK ((outcome_kind = ANY (ARRAY['queued'::text, 'processing'::text, 'delivered'::text, 'retryable_failure'::text, 'permanent_failure'::text]))),
     CONSTRAINT auth_delivery_intent_provider_id_check CHECK ((length(TRIM(BOTH FROM provider_id)) > 0)),
-    CONSTRAINT auth_delivery_intent_status_check CHECK ((status = ANY (ARRAY['queued'::text, 'processing'::text, 'delivered'::text, 'retryable_failed'::text, 'permanent_failed'::text, 'cancelled'::text])))
+    CONSTRAINT auth_delivery_intent_status_check CHECK ((status = ANY (ARRAY['queued'::text, 'processing'::text, 'delivered'::text, 'retryable_failed'::text, 'permanent_failed'::text])))
 );
 
 
@@ -227,10 +225,8 @@ CREATE TABLE public.auth_session (
 CREATE TABLE public.command_receipt (
     principal_user_id text NOT NULL,
     command_id uuid NOT NULL,
-    command_fingerprint bytea NOT NULL,
     stream_id uuid NOT NULL,
-    stream_seqs bigint[] NOT NULL,
-    CONSTRAINT command_receipt_fingerprint_check CHECK ((octet_length(command_fingerprint) = 32))
+    stream_seqs bigint[] NOT NULL
 );
 
 

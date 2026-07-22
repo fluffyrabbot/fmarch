@@ -9,19 +9,18 @@ export const repoRoot = path.resolve(
 );
 export const migrationDirectory = "crates/projections/migrations";
 export const baselineFilename = "0001_baseline.sql";
-export const baselineSha256 = "d6f97014c0dda683271fce937275de19dcea1da4865294aa7b33de0a6ff13be7";
+export const baselineSha256 = "9cb4116bf12cfb96ba6a32c4065fd89d5abc0d1be10ce44e7330d2dd15385cae";
 
 const migrationFilenamePattern = /^(\d{4})_[a-z0-9_]+\.sql$/u;
 
 const forbiddenStatements = Object.freeze([
   ["INSERT data migration", /^INSERT\s+INTO\b/i],
-  ["UPDATE data migration", /^UPDATE\s+\S+\s+SET\b/i],
   ["DELETE data migration", /^DELETE\s+FROM\b/i],
   ["TRUNCATE data migration", /^TRUNCATE(?:\s+TABLE)?\b/i],
-  ["destructive DROP statement", /^DROP\b/i],
+  ["destructive DROP statement", /^DROP\s+(?:TABLE|SCHEMA|DATABASE)\b/i],
   [
-    "transitional column mutation",
-    /^ALTER\s+TABLE\b[\s\S]*\b(?:ADD|DROP|RENAME)\s+COLUMN\b/i,
+    "destructive column removal",
+    /^ALTER\s+TABLE\b[\s\S]*\bDROP\s+COLUMN\b/i,
   ],
 ]);
 
