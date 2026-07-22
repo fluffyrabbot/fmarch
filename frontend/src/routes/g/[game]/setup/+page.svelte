@@ -22,6 +22,7 @@
     buildHostSetupReadiness,
     occupiedSetupInviteTargets,
   } from "./setup-route-model.mjs";
+  import { buildHostSetupWorkflow } from "./setup-workflow-model.mjs";
 
   export let data;
   export let form;
@@ -32,6 +33,7 @@
   let setupState = data.setupState;
   let readiness = data.readiness;
   let pendingStartFormData = null;
+  let preferredStageId = null;
 
   $: forcedRouteState = data.routeState
     ? buildRouteStateViewModel(data.routeState)
@@ -39,6 +41,11 @@
   $: inviteTargets = occupiedSetupInviteTargets(setupState);
   $: mainPolicy = readiness.mainPolicy;
   $: roleKeys = setupState.pack.roleKeys;
+  $: workflow = buildHostSetupWorkflow({
+    setupState,
+    readiness,
+    selectedStageId: preferredStageId,
+  });
 
   $: if (form?.playerInvite && setupFormKey(form.playerInvite) !== lastInviteFormKey) {
     lastInviteFormKey = setupFormKey(form.playerInvite);
@@ -95,6 +102,10 @@
   function cancelStart() {
     pendingStartFormData = null;
     commandStatuses = clearSetupCommandStatus(commandStatuses, "start-game");
+  }
+
+  function selectStage(stageId) {
+    preferredStageId = stageId;
   }
 
   async function submitSetupCommand(actionId, formData) {
@@ -157,21 +168,6 @@
     }
   }
 
-  function slotSetupStatus(slot) {
-    const hasOccupant =
-      typeof slot.occupantUserId === "string" && slot.occupantUserId.trim() !== "";
-    const hasRole = typeof slot.roleKey === "string" && slot.roleKey.trim() !== "";
-    if (hasOccupant && hasRole) {
-      return { state: "ready", label: "ready" };
-    }
-    if (!hasOccupant && !hasRole) {
-      return { state: "blocked", label: "needs occupant + role" };
-    }
-    if (!hasOccupant) {
-      return { state: "blocked", label: "needs occupant" };
-    }
-    return { state: "blocked", label: "needs role" };
-  }
   </script>
 
 <svelte:head>
@@ -188,264 +184,222 @@
   {#if forcedRouteState}
     <RouteState view={forcedRouteState} />
   {:else}
-    <section class="host-setup__identity" aria-label="Game identity">
-      <div>
-        <p class="fm-eyebrow">Game</p>
-        <h2>{setupState.game}</h2>
-      </div>
-      <div>
-        <p class="fm-eyebrow">Pack</p>
-        <h2>{setupState.pack.key}</h2>
-        <p>{setupState.pack.name}</p>
-      </div>
-      <a class="fm-touch-button fm-touch-button--secondary" href={`/g/${data.game.id}/host`}>
-        Host console
-      </a>
-    </section>
-
-    <section class="host-setup__band" aria-label="Slot setup">
-      <header class="host-setup__section-header">
-        <div>
-          <p class="fm-eyebrow">Roster</p>
-          <h2>Slots and roles</h2>
-          <p>{roleKeys.length} known role keys</p>
+    <section
+      class="host-setup__workflow"
+      data-component={workflow.root.data.component}
+      data-workflow-mode={workflow.root.data.mode}
+      data-testid={workflow.root.testId}
+    >
+      <nav
+        class="host-setup__stepper"
+        aria-label="Setup stages"
+        data-testid={workflow.stepper.testId}
+      >
+        <header>
+          <div>
+            <p class="fm-eyebrow">Guided setup</p>
+            <h2>{workflow.stepper.label}</h2>
+          </div>
+          <strong>{workflow.stepper.progress}</strong>
+        </header>
+        <div class="host-setup__step-list">
+          {#each workflow.stages as stage}
+            <button
+              type="button"
+              data-state={stage.state}
+              data-testid={stage.testId}
+              aria-current={stage.id === workflow.selectedStageId ? "step" : undefined}
+              aria-controls={stage.panelTestId}
+              on:click={() => selectStage(stage.id)}
+            >
+              <span>{stage.number}</span>
+              <strong>{stage.label}</strong>
+              <small>{stage.statusLabel}</small>
+            </button>
+          {/each}
         </div>
-        <form
-          class="host-setup__inline-form"
-          data-testid="host-setup-add-slot-form"
-          on:submit={(event) => handleSetupSubmit(event, "add-slot")}
-        >
-          <label class="fm-field">
-            <span>Slot</span>
-            <input name="slotId" value={`slot_${setupState.slots.length + 1}`} />
-          </label>
-          <button class="fm-touch-button" type="submit">Add slot</button>
-        </form>
-      </header>
+        <a class="fm-touch-button fm-touch-button--secondary" href={`/g/${data.game.id}/host`}>
+          Host console
+        </a>
+      </nav>
 
-      <div class="host-setup__table" data-testid="host-setup-roster">
-        <div class="host-setup__slot-workbench" data-testid="host-setup-roles">
-        {#each setupState.slots as slot}
-          <article
-            class="host-setup__slot-card"
-            data-state={slotSetupStatus(slot).state}
-            data-testid={`host-setup-slot-${slot.slotId}`}
+      <section class="host-setup__canvas" data-testid={workflow.canvas.testId}>
+        {#each workflow.stages as stage}
+          <section
+            class="host-setup__stage"
+            id={stage.panelTestId}
+            data-stage-id={stage.id}
+            data-state={stage.state}
+            data-testid={stage.panelTestId}
+            hidden={stage.id !== workflow.selectedStageId}
           >
-            <div class="host-setup__slot-summary">
-              <div>
-                <p class="fm-eyebrow">Slot</p>
-                <h3>{slot.slotId}</h3>
-              </div>
-              <span
-                class="host-setup__slot-state"
-                data-state={slotSetupStatus(slot).state}
-              >
-                {slotSetupStatus(slot).label}
-              </span>
-            </div>
-
-            <form
-              class="host-setup__slot-form"
-              on:submit={(event) => handleSetupSubmit(event, "assign-slot")}
-            >
-              <input type="hidden" name="slotId" value={slot.slotId} />
-              <label class="fm-field">
-                <span>Principal</span>
-                <input
-                  name="principalUserId"
-                  value={slot.occupantUserId ?? ""}
-                  placeholder="player_user"
-                />
-              </label>
-              <button class="fm-touch-button fm-touch-button--secondary" type="submit">
-                Assign
-              </button>
-            </form>
-
-            <div
-              class="host-setup__role-cell"
-              data-testid={`host-setup-role-${slot.slotId}`}
-            >
-              <div>
-                <p class="fm-eyebrow">Current role</p>
-                <strong>{slot.roleKey ?? "No role assigned"}</strong>
-              </div>
+            {#if stage.id === "pack"}
+              <header class="host-setup__stage-header">
+                <div><p class="fm-eyebrow">Stage 1</p><h2>Confirm the game pack</h2></div>
+                <span data-state={stage.state}>{stage.statusLabel}</span>
+              </header>
+              <p>The pack defines the available roles and valid opening phases.</p>
+              <dl class="host-setup__facts" data-testid="host-setup-pack">
+                <div><dt>Game</dt><dd>{setupState.game}</dd></div>
+                <div><dt>Pack</dt><dd>{setupState.pack.name}</dd></div>
+                <div><dt>Pack key</dt><dd>{setupState.pack.key}</dd></div>
+                <div><dt>Opening phases</dt><dd>{setupState.pack.startPhaseOptions.join(", ")}</dd></div>
+              </dl>
+            {:else if stage.id === "roster"}
+              <header class="host-setup__stage-header">
+                <div><p class="fm-eyebrow">Stage 2</p><h2>Seat the roster</h2></div>
+                <span data-state={stage.state}>{stage.statusLabel}</span>
+              </header>
+              <p>Add the required slots and bind each seat to one player account.</p>
               <form
-                class="host-setup__slot-form"
-                on:submit={(event) => handleSetupSubmit(event, "assign-role")}
+                class="host-setup__inline-form"
+                data-testid="host-setup-add-slot-form"
+                on:submit={(event) => handleSetupSubmit(event, "add-slot")}
               >
-                <input type="hidden" name="slotId" value={slot.slotId} />
                 <label class="fm-field">
-                  <span>Role</span>
-                  <select name="roleKey">
-                    {#each roleKeys as roleKey}
-                      <option value={roleKey} selected={slot.roleKey === roleKey}>
-                        {roleKey}
-                      </option>
+                  <span>Slot</span>
+                  <input name="slotId" value={`slot_${setupState.slots.length + 1}`} />
+                </label>
+                <button class="fm-touch-button" type="submit">Add slot</button>
+              </form>
+              <div class="host-setup__card-list" data-testid="host-setup-roster">
+                {#each setupState.slots as slot}
+                  <article
+                    class="host-setup__slot-card"
+                    data-state={slot.occupantUserId ? "ready" : "blocked"}
+                    data-testid={`host-setup-slot-${slot.slotId}`}
+                  >
+                    <div class="host-setup__slot-summary">
+                      <div><p class="fm-eyebrow">Slot</p><h3>{slot.slotId}</h3></div>
+                      <span class="host-setup__slot-state" data-state={slot.occupantUserId ? "ready" : "blocked"}>
+                        {slot.occupantUserId ? "seated" : "needs player"}
+                      </span>
+                    </div>
+                    <form class="host-setup__slot-form" on:submit={(event) => handleSetupSubmit(event, "assign-slot")}>
+                      <input type="hidden" name="slotId" value={slot.slotId} />
+                      <label class="fm-field">
+                        <span>Player account</span>
+                        <input name="principalUserId" value={slot.occupantUserId ?? ""} placeholder="player_user" />
+                      </label>
+                      <button class="fm-touch-button fm-touch-button--secondary" type="submit">Assign player</button>
+                    </form>
+                  </article>
+                {/each}
+              </div>
+              {#if commandStatuses["add-slot"]}<AppStatus status={commandStatuses["add-slot"]} testId="host-setup-add-slot-status" />{/if}
+              {#if commandStatuses["assign-slot"]}<AppStatus status={commandStatuses["assign-slot"]} testId="host-setup-assign-slot-status" />{/if}
+              <div class="host-setup__invite-list">
+                <h3>Player access</h3>
+                {#each inviteTargets as target}
+                  <form class="host-setup__invite" method="POST" action="?/issuePlayerInvite" data-testid={`host-setup-invite-${target.slotId}`}>
+                    <input type="hidden" name="principalUserId" value={target.principalUserId} />
+                    <input type="hidden" name="slotId" value={target.slotId} />
+                    <input type="hidden" name="expectedOccupantUserId" value={target.expectedOccupantUserId} />
+                    <span>{target.targetLabel}</span>
+                    <button class="fm-touch-button fm-touch-button--secondary" type="submit">Issue invite</button>
+                  </form>
+                {/each}
+                {#if form?.playerInvite}
+                  <p class="host-setup__invite-status" data-state={form.playerInvite.state} data-testid="host-setup-player-invite-status">{form.playerInvite.message}</p>
+                  {#if form.playerInvite.loginUrl}
+                    <a href={form.playerInvite.loginUrl} data-testid="host-setup-player-invite-url">{form.playerInvite.loginUrl}</a>
+                  {:else if form.playerInvite.currentOccupantUserId}
+                    <form method="POST" action="?/issuePlayerInvite">
+                      <input type="hidden" name="principalUserId" value={form.playerInvite.currentOccupantUserId} />
+                      <input type="hidden" name="slotId" value={form.playerInvite.slotId} />
+                      <input type="hidden" name="expectedOccupantUserId" value={form.playerInvite.currentOccupantUserId} />
+                      <button class="fm-touch-button" type="submit">Issue current player invite</button>
+                    </form>
+                  {/if}
+                {/if}
+              </div>
+            {:else if stage.id === "roles"}
+              <header class="host-setup__stage-header">
+                <div><p class="fm-eyebrow">Stage 3</p><h2>Assign the roles</h2></div>
+                <span data-state={stage.state}>{stage.statusLabel}</span>
+              </header>
+              <p>Choose one pack-defined role for every slot. These assignments stay host-private.</p>
+              <div class="host-setup__card-list" data-testid="host-setup-roles">
+                {#each setupState.slots as slot}
+                  <article class="host-setup__role-card" data-testid={`host-setup-role-${slot.slotId}`}>
+                    <div><p class="fm-eyebrow">{slot.slotId}</p><h3>{slot.roleKey ?? "No role assigned"}</h3></div>
+                    <form class="host-setup__slot-form" on:submit={(event) => handleSetupSubmit(event, "assign-role")}>
+                      <input type="hidden" name="slotId" value={slot.slotId} />
+                      <label class="fm-field">
+                        <span>Role</span>
+                        <select name="roleKey">
+                          {#each roleKeys as roleKey}
+                            <option value={roleKey} selected={slot.roleKey === roleKey}>{roleKey}</option>
+                          {/each}
+                        </select>
+                      </label>
+                      <button class="fm-touch-button fm-touch-button--secondary" type="submit">Assign role</button>
+                    </form>
+                  </article>
+                {/each}
+              </div>
+              {#if commandStatuses["assign-role"]}<AppStatus status={commandStatuses["assign-role"]} testId="host-setup-assign-role-status" />{/if}
+            {:else if stage.id === "rules"}
+              <header class="host-setup__stage-header">
+                <div><p class="fm-eyebrow">Stage 4</p><h2>Set game rules</h2></div>
+                <span data-state={stage.state}>{stage.statusLabel}</span>
+              </header>
+              <p>Confirm the posting policy players will use in the main channel.</p>
+              <div class="host-setup__rule-card">
+                <p class="fm-eyebrow">Main channel posts</p>
+                <h3 data-testid="host-setup-main-policy">Media-only posts are {mainPolicy.allowMediaOnly ? "enabled" : "disabled"}.</h3>
+                <form on:submit={(event) => handleSetupSubmit(event, "set-post-policy")}>
+                  <input type="hidden" name="channelId" value="main" />
+                  <input type="hidden" name="allowMediaOnly" value={mainPolicy.allowMediaOnly ? "false" : "true"} />
+                  <button class="fm-touch-button" type="submit">{mainPolicy.allowMediaOnly ? "Disable media-only" : "Enable media-only"}</button>
+                </form>
+                {#if commandStatuses["set-post-policy"]}<AppStatus status={commandStatuses["set-post-policy"]} testId="host-setup-policy-status" />{/if}
+              </div>
+            {:else}
+              <header class="host-setup__stage-header">
+                <div><p class="fm-eyebrow">Stage 5</p><h2>Review and start</h2></div>
+                <span data-state={stage.state}>{stage.statusLabel}</span>
+              </header>
+              <h3 data-testid="host-setup-readiness-summary">{readiness.summary}</h3>
+              <ul class="host-setup__checklist">
+                {#each readiness.checks as check}
+                  <li data-state={check.state} data-testid={`host-setup-readiness-${check.id}`}>
+                    <span>{check.label}</span>
+                    {#if check.state === "ready"}
+                      <strong>ready</strong>
+                    {:else}
+                      <button type="button" data-testid={`host-setup-correction-${check.id}`} on:click={() => selectStage(workflow.corrections.find((item) => item.checkId === check.id)?.stageId ?? "review")}>Fix in {workflow.stages.find((item) => item.id === (workflow.corrections.find((correction) => correction.checkId === check.id)?.stageId ?? "review"))?.label}</button>
+                    {/if}
+                  </li>
+                {/each}
+              </ul>
+              <form class="host-setup__start-form" on:submit={reviewStart}>
+                <label class="fm-field">
+                  <span>Start phase</span>
+                  <select name="phase">
+                    {#each setupState.pack.startPhaseOptions as phase}
+                      <option value={phase} selected={phase === data.start.defaultPhase}>{phase}</option>
                     {/each}
                   </select>
                 </label>
-                <button class="fm-touch-button fm-touch-button--secondary" type="submit">
-                  Assign role
-                </button>
+                <button class="fm-touch-button" type="submit" disabled={!readiness.startAvailable} aria-disabled={!readiness.startAvailable} data-testid="host-setup-start-review">Review start</button>
               </form>
-            </div>
-          </article>
+              {#if commandStatuses["start-game"]?.state === "confirm"}
+                <div class="host-setup__confirm" data-testid="host-setup-start-confirmation">
+                  <span>{commandStatuses["start-game"].message}</span>
+                  <button class="fm-touch-button" type="button" on:click={confirmStart}>Start game</button>
+                  <button class="fm-touch-button fm-touch-button--secondary" type="button" on:click={cancelStart}>Cancel</button>
+                </div>
+              {:else if commandStatuses["start-game"]}
+                <AppStatus status={commandStatuses["start-game"]} testId="host-setup-start-status" />
+              {/if}
+              {#if setupState.phase}
+                <a class="fm-touch-button fm-touch-button--secondary" href={data.start.hostHref}>Open host console</a>
+              {/if}
+            {/if}
+          </section>
         {/each}
-        </div>
-      </div>
-      {#if commandStatuses["add-slot"]}
-        <AppStatus status={commandStatuses["add-slot"]} testId="host-setup-add-slot-status" />
-      {/if}
-      {#if commandStatuses["assign-slot"]}
-        <AppStatus status={commandStatuses["assign-slot"]} testId="host-setup-assign-slot-status" />
-      {/if}
-      {#if commandStatuses["assign-role"]}
-        <AppStatus status={commandStatuses["assign-role"]} testId="host-setup-assign-role-status" />
-      {/if}
-    </section>
-
-    <section class="host-setup__band host-setup__two-column" aria-label="Policy and invites">
-      <div>
-        <p class="fm-eyebrow">Policy</p>
-        <h2>Main channel posts</h2>
-        <p data-testid="host-setup-main-policy">
-          Media-only posts are {mainPolicy.allowMediaOnly ? "enabled" : "disabled"}.
-        </p>
-        <form on:submit={(event) => handleSetupSubmit(event, "set-post-policy")}>
-          <input type="hidden" name="channelId" value="main" />
-          <input
-            type="hidden"
-            name="allowMediaOnly"
-            value={mainPolicy.allowMediaOnly ? "false" : "true"}
-          />
-          <button class="fm-touch-button" type="submit">
-            {mainPolicy.allowMediaOnly ? "Disable media-only" : "Enable media-only"}
-          </button>
-        </form>
-        {#if commandStatuses["set-post-policy"]}
-          <AppStatus status={commandStatuses["set-post-policy"]} testId="host-setup-policy-status" />
-        {/if}
-      </div>
-
-      <div>
-        <p class="fm-eyebrow">Invites</p>
-        <h2>Occupied slot invites</h2>
-        <div class="host-setup__invite-list">
-          {#each inviteTargets as target}
-            <form
-              class="host-setup__invite"
-              method="POST"
-              action="?/issuePlayerInvite"
-              data-testid={`host-setup-invite-${target.slotId}`}
-            >
-              <input type="hidden" name="principalUserId" value={target.principalUserId} />
-              <input type="hidden" name="slotId" value={target.slotId} />
-              <input
-                type="hidden"
-                name="expectedOccupantUserId"
-                value={target.expectedOccupantUserId}
-              />
-              <span>{target.targetLabel}</span>
-              <button class="fm-touch-button fm-touch-button--secondary" type="submit">
-                Issue invite
-              </button>
-            </form>
-          {/each}
-        </div>
-        {#if form?.playerInvite}
-          <p
-            class="host-setup__invite-status"
-            data-state={form.playerInvite.state}
-            data-testid="host-setup-player-invite-status"
-          >
-            {form.playerInvite.message}
-          </p>
-          {#if form.playerInvite.loginUrl}
-            <a href={form.playerInvite.loginUrl} data-testid="host-setup-player-invite-url">
-              {form.playerInvite.loginUrl}
-            </a>
-          {:else if form.playerInvite.currentOccupantUserId}
-            <form method="POST" action="?/issuePlayerInvite">
-              <input
-                type="hidden"
-                name="principalUserId"
-                value={form.playerInvite.currentOccupantUserId}
-              />
-              <input type="hidden" name="slotId" value={form.playerInvite.slotId} />
-              <input
-                type="hidden"
-                name="expectedOccupantUserId"
-                value={form.playerInvite.currentOccupantUserId}
-              />
-              <button class="fm-touch-button" type="submit">
-                Issue current player invite
-              </button>
-            </form>
-          {/if}
-        {/if}
-      </div>
-    </section>
-
-    <section class="host-setup__band host-setup__two-column" aria-label="Readiness and start">
-      <div>
-        <p class="fm-eyebrow">Readiness</p>
-        <h2 data-testid="host-setup-readiness-summary">{readiness.summary}</h2>
-        <ul class="host-setup__checklist">
-          {#each readiness.checks as check}
-            <li data-state={check.state} data-testid={`host-setup-readiness-${check.id}`}>
-              <span>{check.label}</span>
-              <strong>{check.state}</strong>
-            </li>
-          {/each}
-        </ul>
-      </div>
-
-      <div>
-        <p class="fm-eyebrow">Start</p>
-        <h2>Start game</h2>
-        <form on:submit={reviewStart}>
-          <label class="fm-field">
-            <span>Start phase</span>
-            <select name="phase">
-              {#each setupState.pack.startPhaseOptions as phase}
-                <option value={phase} selected={phase === data.start.defaultPhase}>{phase}</option>
-              {/each}
-            </select>
-          </label>
-          <button
-            class="fm-touch-button"
-            type="submit"
-            disabled={!readiness.startAvailable}
-            aria-disabled={!readiness.startAvailable}
-            data-testid="host-setup-start-review"
-          >
-            Review start
-          </button>
-        </form>
-        {#if commandStatuses["start-game"]?.state === "confirm"}
-          <div class="host-setup__confirm" data-testid="host-setup-start-confirmation">
-            <span>{commandStatuses["start-game"].message}</span>
-            <button class="fm-touch-button" type="button" on:click={confirmStart}>
-              Start game
-            </button>
-            <button
-              class="fm-touch-button fm-touch-button--secondary"
-              type="button"
-              on:click={cancelStart}
-            >
-              Cancel
-            </button>
-          </div>
-        {:else if commandStatuses["start-game"]}
-          <AppStatus status={commandStatuses["start-game"]} testId="host-setup-start-status" />
-        {/if}
-        {#if setupState.phase}
-          <a class="fm-touch-button fm-touch-button--secondary" href={data.start.hostHref}>
-            Open host console
-          </a>
-        {/if}
-      </div>
+      </section>
     </section>
   {/if}
 </main>
@@ -456,94 +410,206 @@
     gap: 18px;
   }
 
-  .host-setup__identity,
-  .host-setup__band {
+  .host-setup__workflow {
+    align-items: start;
+    display: grid;
+    gap: 28px;
+    grid-template-columns: 260px minmax(0, 1fr);
+    margin-inline: auto;
+    max-inline-size: 1180px;
+    padding: 0 clamp(16px, 4vw, 34px) 48px;
+    width: 100%;
+  }
+
+  .host-setup__stepper,
+  .host-setup__canvas {
     background: var(--fm-surface-tint);
     border: 1px solid var(--fm-line-soft);
-    border-radius: 8px;
+    border-radius: 12px;
+  }
+
+  .host-setup__stepper {
     display: grid;
-    gap: 16px;
+    gap: 14px;
     padding: 16px;
+    position: sticky;
+    top: calc(var(--fm-app-topbar-block-size) + 16px);
   }
 
-  .host-setup__identity {
-    align-items: end;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
-  }
-
-  .host-setup__section-header,
+  .host-setup__stepper header,
+  .host-setup__stage-header,
   .host-setup__inline-form,
   .host-setup__slot-form,
   .host-setup__invite,
-  .host-setup__confirm {
-    align-items: end;
+  .host-setup__confirm,
+  .host-setup__start-form {
+    align-items: center;
     display: flex;
     flex-wrap: wrap;
     gap: 12px;
   }
 
-  .host-setup__section-header {
+  .host-setup__stepper header,
+  .host-setup__stage-header {
     justify-content: space-between;
   }
 
-  .host-setup__table,
+  .host-setup__stepper h2,
+  .host-setup__stage h2,
+  .host-setup__stage h3,
+  .host-setup__stage p {
+    margin: 0;
+  }
+
+  .host-setup__stepper header > strong {
+    color: var(--fm-ink-muted);
+    font-size: 12px;
+  }
+
+  .host-setup__step-list {
+    display: grid;
+    gap: 6px;
+  }
+
+  .host-setup__step-list button {
+    align-items: center;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 9px;
+    color: var(--fm-ink);
+    display: grid;
+    gap: 8px;
+    grid-template-columns: 30px minmax(0, 1fr) auto;
+    min-block-size: 52px;
+    padding: 7px 9px;
+    text-align: start;
+  }
+
+  .host-setup__step-list button:hover,
+  .host-setup__step-list button[aria-current="step"] {
+    background: var(--fm-raised);
+    border-color: var(--fm-line-strong);
+  }
+
+  .host-setup__step-list button > span {
+    align-items: center;
+    border: 1px solid var(--fm-line-strong);
+    border-radius: 999px;
+    display: inline-flex;
+    font-weight: 850;
+    justify-content: center;
+    min-block-size: 30px;
+    min-inline-size: 30px;
+  }
+
+  .host-setup__step-list button[data-state="ready"] > span,
+  .host-setup__step-list button[data-state="complete"] > span {
+    background: var(--fm-accent-wash);
+    border-color: var(--fm-accent-soft);
+    color: var(--fm-accent-ink);
+  }
+
+  .host-setup__step-list small {
+    color: var(--fm-ink-muted);
+    font-weight: 750;
+  }
+
+  .host-setup__canvas {
+    min-inline-size: 0;
+    padding: clamp(18px, 3vw, 30px);
+  }
+
+  .host-setup__stage {
+    display: grid;
+    gap: 20px;
+  }
+
+  .host-setup__stage[hidden] {
+    display: none;
+  }
+
+  .host-setup__stage-header {
+    border-block-end: 1px solid var(--fm-line-soft);
+    padding-block-end: 16px;
+  }
+
+  .host-setup__stage-header > span,
+  .host-setup__slot-state {
+    border: 1px solid var(--fm-line);
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 850;
+    padding: 7px 10px;
+  }
+
+  .host-setup__stage-header > span[data-state="ready"],
+  .host-setup__stage-header > span[data-state="complete"],
+  .host-setup__slot-state[data-state="ready"] {
+    background: var(--fm-accent-wash);
+    border-color: var(--fm-accent-soft);
+    color: var(--fm-accent-ink);
+  }
+
+  .host-setup__facts,
+  .host-setup__card-list,
   .host-setup__invite-list,
-  .host-setup__slot-workbench {
+  .host-setup__checklist {
     display: grid;
     gap: 10px;
   }
 
+  .host-setup__facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin: 0;
+  }
+
+  .host-setup__facts > div,
   .host-setup__slot-card,
+  .host-setup__role-card,
+  .host-setup__rule-card,
   .host-setup__invite {
     background: var(--fm-raised);
     border: 1px solid var(--fm-line-soft);
-    border-radius: 8px;
-    min-block-size: 68px;
+    border-radius: 10px;
     padding: 12px;
   }
 
-  .host-setup__slot-card {
-    align-items: stretch;
+  .host-setup__facts > div {
     display: grid;
-    gap: 12px;
-    grid-template-columns: minmax(160px, 0.55fr) minmax(260px, 0.8fr) minmax(320px, 1fr);
+    gap: 3px;
+  }
+
+  .host-setup__facts dt {
+    color: var(--fm-ink-muted);
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+  }
+
+  .host-setup__facts dd {
+    font-weight: 800;
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .host-setup__slot-card,
+  .host-setup__role-card {
+    align-items: center;
+    display: grid;
+    gap: 16px;
+    grid-template-columns: minmax(150px, 0.45fr) minmax(280px, 1fr);
+    min-inline-size: 0;
   }
 
   .host-setup__slot-card[data-state="blocked"] {
     border-color: var(--fm-line-warm);
   }
 
-  .host-setup__slot-summary,
-  .host-setup__role-cell {
+  .host-setup__slot-summary {
     align-items: center;
-    display: grid;
+    display: flex;
     gap: 10px;
-    grid-template-columns: minmax(0, 1fr) auto;
-    min-inline-size: 0;
-  }
-
-  .host-setup__slot-summary h3,
-  .host-setup__role-cell strong {
-    margin: 0;
-    overflow-wrap: anywhere;
-  }
-
-  .host-setup__slot-state {
-    align-items: center;
-    border: 1px solid var(--fm-line);
-    border-radius: 8px;
-    display: inline-flex;
-    font-size: 13px;
-    font-weight: 800;
-    min-block-size: 36px;
-    padding-inline: 10px;
-    text-align: center;
-  }
-
-  .host-setup__slot-state[data-state="ready"] {
-    background: var(--fm-accent-wash);
-    border-color: var(--fm-accent-soft);
-    color: var(--fm-accent-ink);
+    justify-content: space-between;
   }
 
   .host-setup__slot-state[data-state="blocked"] {
@@ -556,8 +622,8 @@
     min-inline-size: 0;
   }
 
-  .host-setup__invite-list {
-    min-inline-size: min(100%, 260px);
+  .host-setup__slot-form .fm-field {
+    flex: 1 1 220px;
   }
 
   .host-setup__invite span,
@@ -566,13 +632,7 @@
     overflow-wrap: anywhere;
   }
 
-  .host-setup__two-column {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  }
-
   .host-setup__checklist {
-    display: grid;
-    gap: 8px;
     list-style: none;
     margin: 0;
     padding: 0;
@@ -589,6 +649,16 @@
     padding: 8px 10px;
   }
 
+  .host-setup__checklist button {
+    background: transparent;
+    border: 0;
+    color: var(--fm-accent-ink);
+    font: inherit;
+    font-weight: 850;
+    min-block-size: 44px;
+    padding-inline: 10px;
+  }
+
   .host-setup__checklist li[data-state="ready"] strong {
     color: var(--fm-ok);
   }
@@ -598,14 +668,36 @@
   }
 
   @media (max-width: 820px) {
-    .host-setup__identity,
-    .host-setup__two-column,
+    .host-setup__workflow,
     .host-setup__slot-card {
       grid-template-columns: 1fr;
     }
 
-    .host-setup__slot-summary,
-    .host-setup__role-cell {
+    .host-setup__workflow {
+      gap: 18px;
+    }
+
+    .host-setup__stepper {
+      position: static;
+    }
+
+    .host-setup__step-list {
+      display: flex;
+      margin-inline: -16px;
+      overflow-x: auto;
+      padding-inline: 16px;
+    }
+
+    .host-setup__step-list button {
+      flex: 0 0 150px;
+    }
+
+    .host-setup__facts {
+      grid-template-columns: 1fr;
+    }
+
+    .host-setup__role-card {
+      align-items: stretch;
       grid-template-columns: 1fr;
     }
   }

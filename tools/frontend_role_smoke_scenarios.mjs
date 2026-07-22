@@ -127,7 +127,7 @@ export const hostSetupScenario = Object.freeze({
   path: "/g/midsummer/setup",
   surfaceTestId: HOST_SETUP_ROUTE_CONTRACT.surfaceTestId,
   capabilityTestId: HOST_SETUP_ROUTE_CONTRACT.capabilityTestId,
-  requiredText: "Setup still needs attention",
+  requiredText: HOST_SETUP_ROUTE_CONTRACT.requiredText,
   slotIds: Object.freeze(["slot_1", "slot_2"]),
 });
 

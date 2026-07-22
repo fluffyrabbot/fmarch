@@ -787,22 +787,88 @@ async function assertHostSetupWorkbenchGeometry(page, { scenario, viewport }) {
     page.getByTestId(scenario.capabilityTestId),
     `${scenario.id} capability`,
   );
-  const rosterBox = await assertVisibleBox(
-    page.getByTestId("host-setup-roster"),
-    `${scenario.id} roster`,
+  const workflowBox = await assertVisibleBox(
+    page.getByTestId("host-setup-workflow"),
+    `${scenario.id} workflow`,
   );
-  const workbenchBox = await assertVisibleBox(
-    page.getByTestId("host-setup-roles"),
-    `${scenario.id} slot workbench`,
+  const stepperBox = await assertVisibleBox(
+    page.getByTestId("host-setup-stepper"),
+    `${scenario.id} stepper`,
   );
+  const canvasBox = await assertVisibleBox(
+    page.getByTestId("host-setup-stage-canvas"),
+    `${scenario.id} canvas`,
+  );
+  const stageIds = ["pack", "roster", "roles", "rules", "review"];
+  for (const stageId of stageIds) {
+    await assertHitTarget(
+      page.getByTestId(`host-setup-step-${stageId}`),
+      `${scenario.id} ${stageId} step`,
+    );
+  }
+  const defaultSelectedStageId = await page.evaluate(() =>
+    document.querySelector('[data-testid="host-setup-stage-canvas"] > [data-stage-id]:not([hidden])')
+      ?.getAttribute("data-stage-id"));
+  if (defaultSelectedStageId !== "roster") {
+    throw new Error(`${scenario.id} selected ${defaultSelectedStageId}, expected first blocker roster`);
+  }
+  const rosterBox = await assertVisibleBox(page.getByTestId("host-setup-roster"), `${scenario.id} roster`);
   const addSlotBox = await assertHitTarget(
     page.locator(".host-setup__inline-form button").first(),
     `${scenario.id} add slot`,
   );
-  const startReviewBox = await assertHitTarget(
+  const rosterCards = [];
+  for (const slotId of scenario.slotIds) {
+    const card = page.getByTestId(`host-setup-slot-${slotId}`);
+    const cardBox = await assertVisibleBox(card, `${scenario.id} ${slotId} roster card`);
+    const assignment = card.locator(".host-setup__slot-form");
+    await assertHitTarget(assignment.locator("button"), `${scenario.id} ${slotId} assign player`);
+    rosterCards.push({ slotId, cardBox });
+  }
+
+  await page.getByTestId("host-setup-step-roles").click();
+  const rolesBox = await assertVisibleBox(page.getByTestId("host-setup-roles"), `${scenario.id} roles`);
+  const roleCards = [];
+  for (const slotId of scenario.slotIds) {
+    const card = page.getByTestId(`host-setup-role-${slotId}`);
+    const cardBox = await assertVisibleBox(card, `${scenario.id} ${slotId} role card`);
+    await assertHitTarget(card.locator("button"), `${scenario.id} ${slotId} assign role`);
+    roleCards.push({ slotId, cardBox });
+  }
+
+  await page.getByTestId("host-setup-step-rules").click();
+  await assertVisibleBox(page.getByTestId("host-setup-main-policy"), `${scenario.id} policy`);
+  await assertHitTarget(
+    page.getByTestId("host-setup-stage-rules").locator("button"),
+    `${scenario.id} policy action`,
+  );
+
+  await page.getByTestId("host-setup-step-review").click();
+  const reviewBox = await assertVisibleBox(
+    page.getByTestId("host-setup-readiness-summary"),
+    `${scenario.id} readiness summary`,
+  );
+  const startReviewBox = await assertVisibleBox(
     page.getByTestId("host-setup-start-review"),
     `${scenario.id} start review`,
   );
+  const correctionTargets = [];
+  for (const checkId of ["slots-occupied", "roles-assigned"]) {
+    const correction = page.getByTestId(`host-setup-correction-${checkId}`);
+    await assertHitTarget(correction, `${scenario.id} ${checkId} correction`);
+    correctionTargets.push({
+      checkId,
+      stageId: checkId === "slots-occupied" ? "roster" : "roles",
+    });
+  }
+  await page.getByTestId("host-setup-correction-roles-assigned").click();
+  const correctedStageId = await page.evaluate(() =>
+    document.querySelector('[data-testid="host-setup-stage-canvas"] > [data-stage-id]:not([hidden])')
+      ?.getAttribute("data-stage-id"));
+  if (correctedStageId !== "roles") {
+    throw new Error(`${scenario.id} readiness correction selected ${correctedStageId}`);
+  }
+  await page.getByTestId("host-setup-step-roster").click();
   const overflow = await page.evaluate(() => {
     const root = document.documentElement;
     const body = document.body;
@@ -817,86 +883,18 @@ async function assertHostSetupWorkbenchGeometry(page, { scenario, viewport }) {
     );
   }
 
-  const expectedLayout = viewport.width <= 820 ? "stacked" : "co-located-columns";
-  const slotCards = [];
-  const overlapTargets = [
-    { label: `${scenario.id} surface`, box: surfaceBox },
-    { label: `${scenario.id} roster`, box: rosterBox },
-    { label: `${scenario.id} workbench`, box: workbenchBox },
-    { label: `${scenario.id} add slot`, box: addSlotBox },
-    { label: `${scenario.id} start review`, box: startReviewBox },
-  ];
-  for (const slotId of scenario.slotIds) {
-    const card = page.getByTestId(`host-setup-slot-${slotId}`);
-    const roleCell = page.getByTestId(`host-setup-role-${slotId}`);
-    const summary = card.locator(".host-setup__slot-summary");
-    const assignmentForm = card.locator(".host-setup__slot-form").first();
-    const roleForm = card.locator(".host-setup__role-cell .host-setup__slot-form");
-    const cardBox = await assertVisibleBox(card, `${scenario.id} ${slotId} card`);
-    const summaryBox = await assertVisibleBox(
-      summary,
-      `${scenario.id} ${slotId} summary`,
-    );
-    const assignmentBox = await assertVisibleBox(
-      assignmentForm,
-      `${scenario.id} ${slotId} assignment`,
-    );
-    const roleCellBox = await assertVisibleBox(
-      roleCell,
-      `${scenario.id} ${slotId} role cell`,
-    );
-    const roleFormBox = await assertVisibleBox(
-      roleForm,
-      `${scenario.id} ${slotId} role form`,
-    );
-    await assertHitTarget(
-      assignmentForm.locator("button").first(),
-      `${scenario.id} ${slotId} assign occupant`,
-    );
-    await assertHitTarget(
-      roleForm.locator("button").first(),
-      `${scenario.id} ${slotId} assign role`,
-    );
-    if (!containsBox(cardBox, roleCellBox)) {
-      throw new Error(`${scenario.id} ${viewport.name} ${slotId} role cell escaped slot card`);
-    }
-    if (!containsBox(cardBox, assignmentBox)) {
-      throw new Error(`${scenario.id} ${viewport.name} ${slotId} assignment escaped slot card`);
-    }
-
-    const actualLayout =
-      roleCellBox.y > summaryBox.y + summaryBox.height - 1
-        ? "stacked"
-        : "co-located-columns";
-    if (actualLayout !== expectedLayout) {
-      throw new Error(
-        `${scenario.id} ${viewport.name} ${slotId} layout ${actualLayout}, expected ${expectedLayout}`,
-      );
-    }
-    if (expectedLayout === "co-located-columns" && roleCellBox.x <= summaryBox.x) {
-      throw new Error(
-        `${scenario.id} ${viewport.name} ${slotId} role cell is not to the right of the slot summary`,
-      );
-    }
-
-    overlapTargets.push(
-      { label: `${scenario.id} ${slotId} summary`, box: summaryBox },
-      { label: `${scenario.id} ${slotId} assignment`, box: assignmentBox },
-      { label: `${scenario.id} ${slotId} role`, box: roleCellBox },
-    );
-    slotCards.push({
-      slotId,
-      state: await card.getAttribute("data-state"),
-      layout: actualLayout,
-      roleCellContainedInCard: true,
-      assignmentContainedInCard: true,
-      cardBox,
-      summaryBox,
-      assignmentBox,
-      roleCellBox,
-      roleFormBox,
-    });
+  const expectedLayout = viewport.width <= 820 ? "stacked" : "stepper-canvas";
+  const actualLayout = canvasBox.y > stepperBox.y + stepperBox.height - 1
+    ? "stacked"
+    : "stepper-canvas";
+  if (actualLayout !== expectedLayout) {
+    throw new Error(`${scenario.id} ${viewport.name} layout ${actualLayout}, expected ${expectedLayout}`);
   }
+  const overlapTargets = [
+    { label: `${scenario.id} stepper`, box: stepperBox },
+    { label: `${scenario.id} canvas`, box: canvasBox },
+    { label: `${scenario.id} add slot`, box: addSlotBox },
+  ];
   await assertNoObviousOverlap(overlapTargets, {
     role: scenario.id,
     viewport: viewport.name,
@@ -908,14 +906,25 @@ async function assertHostSetupWorkbenchGeometry(page, { scenario, viewport }) {
     path: scenario.path,
     surfaceTestId: scenario.surfaceTestId,
     capabilityTestId: scenario.capabilityTestId,
-    layout: expectedLayout,
+    layout: actualLayout,
+    workflowMode: await page.getByTestId("host-setup-workflow").getAttribute("data-workflow-mode"),
+    stageIds,
+    defaultSelectedStageId,
+    correctedStageId,
+    correctionTargets,
     noHorizontalOverflow: true,
     overflow,
     surfaceBox,
     capabilityBox,
+    workflowBox,
+    stepperBox,
+    canvasBox,
     rosterBox,
-    workbenchBox,
-    slotCards,
+    rolesBox,
+    reviewBox,
+    startReviewBox,
+    rosterCards,
+    roleCards,
     overlapCheckedTargets: overlapTargets.length,
   };
 }

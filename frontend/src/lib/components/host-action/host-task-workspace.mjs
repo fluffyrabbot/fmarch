@@ -1,4 +1,4 @@
-import { commandStatusMessage } from "./host-control-surface.mjs";
+import { visibleHostCommandStatus } from "./host-command-status.mjs";
 
 export const HOST_TASK_WORKSPACE_CONTRACT = Object.freeze({
   rootClassName: "host-task-workspace fm-primary-action-zone",
@@ -8,6 +8,7 @@ export const HOST_TASK_WORKSPACE_CONTRACT = Object.freeze({
   queueTestId: "host-task-queue",
   canvasTestId: "host-decision-canvas",
   commandContextTestId: "moderator-command-context",
+  actionTileStabilityMode: "reserved-status-floor",
   statusFloorMinBlockSizePx: 44,
 });
 
@@ -111,7 +112,7 @@ function buildTask({
       }),
       priority: actionIndex === 0 ? "primary" : "secondary",
       testId: `critical-host-action-${action.id}`,
-      status: visibleStatus(status, action.label),
+      status: visibleHostCommandStatus(status, action.label),
       statusTestId: `host-command-status-${action.id}`,
       statusFloorTestId: `host-command-status-floor-${action.id}`,
       statusFloorMinBlockSizePx: HOST_TASK_WORKSPACE_CONTRACT.statusFloorMinBlockSizePx,
@@ -155,14 +156,6 @@ function stateLabel(state, fallback) {
   if (state === "pending") return "In progress";
   if (state === "updated") return "Updated";
   return fallback;
-}
-
-function visibleStatus(status, actionLabel) {
-  if (status === null) return null;
-  return Object.freeze({
-    ...status,
-    message: commandStatusMessage(status, actionLabel),
-  });
 }
 
 function taskMeta({ groupId, phase, replacement, hostPrompts, votecount }) {

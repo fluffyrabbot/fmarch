@@ -270,7 +270,7 @@
   min-inline-size: 0;
 }
 
-.fm-action-tray > :is(button, a, .host-action, .host-console-critical-path__action-tile) {
+.fm-action-tray > :is(button, a, .host-action) {
   min-inline-size: 0;
 }
 

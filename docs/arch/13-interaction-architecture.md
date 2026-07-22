@@ -63,16 +63,22 @@ activity disclosure.
 
 ## Host workspace
 
-The host console will present a queue of unresolved or time-sensitive tasks and
-one selected decision. Full controls, projection evidence, and audit activity
-remain available in secondary drawers. An available command is not automatically
-a task.
+The host console presents a queue of unresolved or time-sensitive tasks and one
+selected decision canvas. Full projection evidence and audit activity remain
+available in secondary drawers. An available command is not automatically a
+task. Command feedback uses a shared status selector and each action reserves a
+stable status floor, so pending and recovery messages do not move neighboring
+controls.
 
 ## Setup workflow
 
-Setup will be organized as Pack, Roster, Roles, Rules and invitations, then
-Review and start. Readiness drives step badges and direct recovery links. Starting
-the game remains an explicit, consequence-previewed confirmation.
+Setup is a five-stage workflow: Pack, Roster, Roles, Rules, then Review and
+start. A persistent stepper shows readiness for every stage while exactly one
+working canvas is visible. Roster owns slot creation, occupant assignment, and
+invitations; Roles owns role assignment; Rules owns posting policy. Review turns
+blocked readiness checks into correction links that select the stage where the
+problem can be fixed. Starting the game remains an explicit,
+consequence-previewed confirmation.
 
 ## Responsive rules
 
@@ -112,6 +118,6 @@ gesture. Document order remains useful without client-side enhancement.
    frame, game bar, channel tabs, content-following sheets, and action dock.
 2. Replace the host wall of controls with `HostTask` navigation and a decision
    canvas.
-3. Convert setup to the guided workflow.
+3. Convert setup to the guided workflow. Complete.
 4. Reassess public and admin surfaces independently; do not force either through
    the gameplay composition.

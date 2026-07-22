@@ -18,8 +18,8 @@ import {
   ADMIN_SURFACE_CONTRACT,
 } from "../frontend/src/lib/components/admin/admin-surface-model.mjs";
 import {
-  HOST_CONTROL_SURFACE_CONTRACT,
-} from "../frontend/src/lib/components/host-action/host-control-surface.mjs";
+  HOST_TASK_WORKSPACE_CONTRACT,
+} from "../frontend/src/lib/components/host-action/host-task-workspace.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const artifactDir = path.join(
@@ -249,9 +249,9 @@ function buildStabilityChecks(moderatorActionManifest) {
       role: "moderator",
       surfaceId: "moderator",
       rootSelector: '[data-testid="iab-surface-moderator"]',
-      mode: HOST_CONTROL_SURFACE_CONTRACT.actionTileStabilityMode,
+      mode: HOST_TASK_WORKSPACE_CONTRACT.actionTileStabilityMode,
       statusFloorMinBlockSizePx:
-        HOST_CONTROL_SURFACE_CONTRACT.commandStatusFloorMinBlockSizePx,
+        HOST_TASK_WORKSPACE_CONTRACT.statusFloorMinBlockSizePx,
       tiles: moderatorActionManifest.actions.map((action) => ({
         id: `moderator-${action.id}`,
         tileSelector: `[data-testid="critical-host-action-${action.id}"]`,

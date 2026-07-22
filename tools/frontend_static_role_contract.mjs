@@ -34,9 +34,6 @@ import {
   buildHostCommandActivityViewModel,
 } from "../frontend/src/lib/components/host-action/host-command-activity.mjs";
 import {
-  buildHostOperationsStripViewModel,
-} from "../frontend/src/lib/components/host-action/host-operations-strip.mjs";
-import {
   buildHostPhaseSummaryViewModel,
 } from "../frontend/src/lib/components/host-action/host-phase-summary.mjs";
 import {
@@ -702,9 +699,6 @@ function firstViewportItemsForRole(role, surface) {
   }
   if (surface === "tasks") {
     return role.taskLandmarks;
-  }
-  if (surface === "operations") {
-    return role.operations;
   }
   throw new Error(`unknown first viewport surface ${surface}`);
 }
@@ -1883,14 +1877,6 @@ async function proveModeratorSurface() {
     phase: data.phase,
     projection: derived.projection,
   });
-  const operations = buildHostOperationsStripViewModel({
-    access: data.access,
-    phase: data.phase,
-    projection: derived.projection,
-    votecountBoundary: data.votecountBoundary,
-    votecount: derived.votecount,
-    hostPrompts: derived.hostPrompts,
-  });
   const queues = buildHostWorkQueueStripViewModel({ queues: data.workQueues });
   const votecount = buildHostVotecountPanelViewModel({
     boundary: data.votecountBoundary,
@@ -1929,15 +1915,6 @@ async function proveModeratorSurface() {
   });
 
   assert.equal(phase.facts.length >= 5, true);
-  assert.deepEqual(
-    operations.items.map((item) => [item.id, item.status.state]),
-    [
-      ["phase", "pending"],
-      ["votecount", "ack"],
-      ["prompts", "pending"],
-      ["lifecycle", "pending"],
-    ],
-  );
   assert.equal(queues.queues.length >= 3, true);
   assert.equal(votecount.rows.length > 0, true);
   assert.equal(controls.tasks.length >= 6, true);
@@ -2110,13 +2087,6 @@ async function proveModeratorSurface() {
       activeSurface: data.shell.activeSurface,
       capability: data.access.capabilityLabel,
       surfaceHeader: surfaceHeaderSummary(data.surfaceHeader),
-      operations: operations.items.map((item) => ({
-        id: item.id,
-        state: item.status.state,
-        testId: item.testId,
-        statusTestId: item.statusTestId,
-        ...textFitSummary(item),
-      })),
       taskLandmarks: [
         {
           id: "attention",

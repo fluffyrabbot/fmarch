@@ -21,6 +21,7 @@ import {
 } from "./live_stack_proof_summary.mjs";
 import {
   buildSetupCommandEvidence,
+  selectHostSetupStage,
   waitForHostSetupCommand,
 } from "./dev_test_game_setup_bootstrap_scenario.mjs";
 import { generatedThreadMediaPng } from "../frontend/src/lib/server/thread-media-png.mjs";
@@ -3422,6 +3423,7 @@ async function driveHostSetupBrowser(page, frontendBaseUrl) {
       ),
   });
 
+  await selectHostSetupStage(page, "roles");
   const roleRow = page.getByTestId(`host-setup-role-${slotId}`);
   await roleRow.waitFor({ state: "visible" });
   await roleRow.locator('select[name="roleKey"]').selectOption(roleKey);
@@ -3446,6 +3448,7 @@ async function driveHostSetupBrowser(page, frontendBaseUrl) {
       ),
   });
 
+  await selectHostSetupStage(page, "rules");
   const policyBefore = await page.getByTestId("host-setup-main-policy").innerText();
   if (!policyBefore.includes("disabled")) {
     throw new Error(`host setup policy did not start disabled: ${policyBefore}`);
@@ -3479,6 +3482,7 @@ async function driveHostSetupBrowser(page, frontendBaseUrl) {
   if (readyReadiness.summary !== "Ready to start") {
     throw new Error(`host setup did not become ready: ${JSON.stringify(readyReadiness)}`);
   }
+  await selectHostSetupStage(page, "review");
   const reviewStart = page.getByTestId("host-setup-start-review");
   const reviewStartBox = await reviewStart.boundingBox();
   assertHitTarget(reviewStartBox, "host setup review start");

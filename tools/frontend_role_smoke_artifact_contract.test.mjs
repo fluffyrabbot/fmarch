@@ -5916,26 +5916,28 @@ function assertBrowserSetupWorkbenchEvidence(setupEntries) {
 
   for (const entry of setupEntries) {
     const expectedLayout =
-      entry.viewport.width <= 820 ? "stacked" : "co-located-columns";
+      entry.viewport.width <= 820 ? "stacked" : "stepper-canvas";
     assert.equal(entry.surfaceTestId, hostSetupScenario.surfaceTestId);
     assert.equal(entry.capabilityTestId, hostSetupScenario.capabilityTestId);
     assert.equal(entry.layout, expectedLayout);
+    assert.equal(entry.workflowMode, "guided-stage-canvas");
+    assert.deepEqual(entry.stageIds, ["pack", "roster", "roles", "rules", "review"]);
+    assert.equal(entry.defaultSelectedStageId, "roster");
+    assert.equal(entry.correctedStageId, "roles");
+    assert.deepEqual(entry.correctionTargets, [
+      { checkId: "slots-occupied", stageId: "roster" },
+      { checkId: "roles-assigned", stageId: "roles" },
+    ]);
     assert.equal(entry.noHorizontalOverflow, true);
     assert.equal(entry.overflow.scrollWidth <= entry.overflow.clientWidth + 1, true);
-    assert.equal(entry.overlapCheckedTargets >= 11, true);
+    assert.equal(entry.overlapCheckedTargets >= 3, true);
     assert.deepEqual(
-      entry.slotCards.map((slot) => [
-        slot.slotId,
-        slot.layout,
-        slot.roleCellContainedInCard,
-        slot.assignmentContainedInCard,
-      ]),
-      hostSetupScenario.slotIds.map((slotId) => [
-        slotId,
-        expectedLayout,
-        true,
-        true,
-      ]),
+      entry.rosterCards.map((slot) => slot.slotId),
+      hostSetupScenario.slotIds,
+    );
+    assert.deepEqual(
+      entry.roleCards.map((slot) => slot.slotId),
+      hostSetupScenario.slotIds,
     );
     assertPixelEvidence([entry], "host setup workbench screenshots");
   }

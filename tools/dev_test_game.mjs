@@ -71,6 +71,7 @@ import {
 import {
   buildSetupCommandEvidence,
   runSeededSetupBootstrapScenario,
+  selectHostSetupStage,
   seedPreSetupCommandPlanForGame,
   seedSetupCommandPlanForGame,
   verifyHostSetupPolicyCommandRoundTrip,
@@ -1734,10 +1735,16 @@ async function verifySeededHostSetupRoute({
     state: "visible",
     timeout: 15000,
   });
+  await selectHostSetupStage(setupPage, "roles");
   await setupPage.getByTestId("host-setup-roles").waitFor({
     state: "visible",
     timeout: 15000,
   });
+  await selectHostSetupStage(setupPage, "rules");
+  const mainPolicyText = await setupPage
+    .getByTestId("host-setup-main-policy")
+    .innerText();
+  await selectHostSetupStage(setupPage, "review");
   await setupPage.getByTestId("host-setup-readiness-summary").waitFor({
     state: "visible",
     timeout: 15000,
@@ -1751,7 +1758,6 @@ async function verifySeededHostSetupRoute({
     surfaceGame,
     capabilityLabel,
     readinessSummary,
-    mainPolicyText,
     startDisabled,
     hostHref,
     windowState,
@@ -1759,7 +1765,6 @@ async function verifySeededHostSetupRoute({
     setupPage.getByTestId("host-setup-surface").getAttribute("data-game"),
     setupPage.getByTestId("host-setup-capability").innerText(),
     setupPage.getByTestId("host-setup-readiness-summary").innerText(),
-    setupPage.getByTestId("host-setup-main-policy").innerText(),
     setupPage.getByTestId("host-setup-start-review").isDisabled(),
     setupPage.locator(`a[href="/g/${game}/host"]`).first().getAttribute("href"),
     setupPage.evaluate(() => ({

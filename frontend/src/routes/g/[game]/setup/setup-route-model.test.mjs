@@ -65,6 +65,14 @@ test("host setup route data derives identity, roster, policy, invites, and readi
   assert.equal(data.readiness.startAvailable, true);
   assert.equal(data.readiness.summary, "Ready to start");
   assert.equal(data.readiness.mainPolicy.allowMediaOnly, true);
+  assert.equal(data.workflow.selectedStageId, "review");
+  assert.deepEqual(data.workflow.stages.map((stage) => stage.id), [
+    "pack",
+    "roster",
+    "roles",
+    "rules",
+    "review",
+  ]);
   assert.deepEqual(
     occupiedSetupInviteTargets(data.setupState).map((target) => target.targetLabel),
     ["Slot 1 / player_mira", "Slot 2 / player_goon"],

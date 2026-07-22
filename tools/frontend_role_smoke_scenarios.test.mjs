@@ -56,7 +56,7 @@ test("host setup scenario pins mobile stacking and workbench route identity", ()
     path: "/g/midsummer/setup",
     surfaceTestId: "host-setup-surface",
     capabilityTestId: "host-setup-capability",
-    requiredText: "Setup still needs attention",
+    requiredText: "Setup workflow",
     slotIds: ["slot_1", "slot_2"],
   });
   assert.equal(Object.isFrozen(hostSetupScenario), true);

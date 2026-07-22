@@ -235,7 +235,19 @@ export function hasCompleteSetupCommandEvidence(evidence) {
   });
 }
 
+export async function selectHostSetupStage(setupPage, stageId) {
+  const step = setupPage.getByTestId(`host-setup-step-${stageId}`);
+  if ((await step.getAttribute("aria-current")) !== "step") {
+    await step.click();
+  }
+  await setupPage.getByTestId(`host-setup-stage-${stageId}`).waitFor({
+    state: "visible",
+    timeout: 15000,
+  });
+}
+
 export async function addSetupSlot({ setupPage, slotId }) {
+  await selectHostSetupStage(setupPage, "roster");
   const form = setupPage.getByTestId("host-setup-add-slot-form");
   await form.locator('input[name="slotId"]').fill(slotId);
   await form.getByRole("button", { name: "Add slot" }).click();
@@ -254,6 +266,7 @@ export async function assignSetupSlot({
   slotId,
   principalUserId,
 }) {
+  await selectHostSetupStage(setupPage, "roster");
   const row = setupPage.getByTestId(`host-setup-slot-${slotId}`);
   await row.locator('input[name="principalUserId"]').fill(principalUserId);
   await row.getByRole("button", { name: "Assign", exact: true }).click();
@@ -272,6 +285,7 @@ export async function assignSetupSlot({
 }
 
 export async function assignSetupRole({ setupPage, slotId, roleKey }) {
+  await selectHostSetupStage(setupPage, "roles");
   const row = setupPage.getByTestId(`host-setup-role-${slotId}`);
   await row.locator('select[name="roleKey"]').selectOption(roleKey);
   await row.getByRole("button", { name: "Assign role", exact: true }).click();
@@ -289,6 +303,7 @@ export async function assignSetupRole({ setupPage, slotId, roleKey }) {
 }
 
 export async function startSetupGame(setupPage) {
+  await selectHostSetupStage(setupPage, "review");
   await setupPage.getByTestId("host-setup-start-review").click();
   await setupPage.getByTestId("host-setup-start-confirmation").waitFor({
     state: "visible",
@@ -426,6 +441,7 @@ export async function waitForHostSetupCommand({
 }
 
 export async function verifyHostSetupPolicyCommandRoundTrip(setupPage) {
+  await selectHostSetupStage(setupPage, "rules");
   await setupPage.getByRole("button", { name: "Enable media-only" }).click();
   const enabled = await waitForHostSetupPolicyCommand({
     setupPage,

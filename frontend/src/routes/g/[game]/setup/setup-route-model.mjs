@@ -2,11 +2,12 @@ import { buildAppShell } from "../../../../lib/app/app-shell-model.mjs";
 import { buildAppSurfaceHeaderViewModel } from "../../../../lib/app/app-surface-header-model.mjs";
 import { fetchJson } from "../../../../lib/app/cold-load.mjs";
 import { resolveHostConsoleAccess } from "../host/host-route-model.mjs";
+import { buildHostSetupWorkflow } from "./setup-workflow-model.mjs";
 
 export const HOST_SETUP_ROUTE_CONTRACT = Object.freeze({
   surfaceTestId: "host-setup-surface",
   capabilityTestId: "host-setup-capability",
-  requiredText: "Ready to start",
+  requiredText: "Setup workflow",
 });
 
 export async function buildHostSetupRouteData({
@@ -65,6 +66,7 @@ export async function buildHostSetupRouteData({
     setupStateEndpoint: browserSetupStateEndpoint,
     setupState,
     readiness,
+    workflow: buildHostSetupWorkflow({ setupState, readiness }),
     start: Object.freeze({
       defaultPhase: readiness.defaultStartPhase,
       available: readiness.startAvailable,
