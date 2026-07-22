@@ -20,72 +20,58 @@ content (incompatible with moderation; out of scope by design).
 
 ## Authentication
 
-- **Passwords:** argon2id with sane params; never anything reversible. Never logged.
-- **Sessions:** opaque, rotating session tokens in an **httpOnly, Secure, SameSite** cookie.
-  `auth_session` stores token hashes and revocation/expiry data; `/auth/session` resolves
-  bearer tokens into server-derived principals/capabilities and reports a server-declared
-  refresh boundary after `FMARCH_AUTH_SESSION_ROTATION_MAX_AGE_SECONDS` (24 hours by default).
-  The SvelteKit request hook atomically exchanges an overdue browser token before rendering;
-  a concurrent loser clears its stale cookie. `/auth/session-logout` revokes only the presented
-  active token and writes a redacted lifecycle audit row before the browser clears
-  `fmarch_session`. Password rotation, recovery, and account disablement revoke active sessions;
-  game-role capability changes are resolved from committed projections on every request rather
-  than being copied into a browser token. `/auth/session-grants` remains the GlobalAdmin operator
-  issuance boundary. Local HTTP development omits `Secure` only because localhost is not TLS.
-- **Local registration:** `/auth/register` posts a validated email-style account identifier,
-  a 12+ byte password, and a server-generated opaque token to the public registration endpoint.
-  The API creates a server-generated principal, an unprivileged Argon2id account, its initial
-  seven-day opaque session, and redacted `account_registered`/`account_session_created` audit
-  rows in one transaction. A separate hashed source-only registration quota counts successful
-  attempts as well as failures, so fresh account identifiers cannot bypass the bounded local
-  rate limit. Registration reaches the seeded game role URL only in its explicit pending-authority
-  state; it never creates `SlotOccupant`, channel, host, or global capability. Duplicate and
-  rate-limited registrations keep the browser unauthenticated and expose a recoverable response.
-  This is local browser proof only: it does not claim email verification, OAuth, passkeys, MFA,
-  distributed abuse control, or a hosted identity provider.
-- **Local credential delivery:** invite and recovery issuance first persists a typed
-  `auth_delivery_intent` containing only the existing credential hash, account/principal
-  identifiers, provider id, typed outcome, attempt count, and retry timestamp. A
-  provider-neutral `IdentityDeliveryGateway` currently selects the deterministic
-  `local-deterministic` transport, which can be forced to fail its first attempt with
-  `FMARCH_LOCAL_DELIVERY_FAIL_FIRST_ATTEMPT=1`. Issuance commits the redacted intent before an
-  independent lease-claimed outbox worker invokes the gateway; concurrent workers use the
-  delivery id as the stable provider idempotency key and persist a provider receipt before
-  releasing the claim. A GlobalAdmin can retry an eligible intent through
-  `/auth/delivery-intents/{delivery_id}/retry`; queued, processing, retryable failure,
-  permanent failure, delivered, and retried transitions retain provider/outcome audit metadata
-  without raw credentials. The local Chromium identity proof follows both an invite and recovery
-  credential through failure, backoff, retry, the rendered admin audit provider/outcome, and
-  the unchanged capability-derived role URL while confirming no raw credential is stored in
-  the delivery outbox. This is a provider seam and local fake, not evidence of email/SMS
-  traffic, bounce handling, hosted availability, or an operator SLA. A network provider still
-  needs a sealed credential-payload/key-management design before it can send a useful invite or
-  recovery link from this deliberately redacted outbox. The local envelope uses the existing
-  authenticated XChaCha20-Poly1305/key-id boundary with delivery-specific AAD; production must
-  supply that key through the environment or a secrets manager, not source or audit metadata.
-  When `FMARCH_IDENTITY_DELIVERY_ENDPOINT` is configured, the server selects the typed HTTP/JSON
-  provider transport, sends the sealed credential only in memory, and maps its JSON receipt into
-  the same outcome contract; the default remains the deterministic local transport. This is a
-  provider contract and local HTTP-stub proof, not hosted provider, bounce, or delivery-SLA proof.
-- **Brute-force defense:** account login, invite redemption, and account recovery share a
-  two-tier Postgres failure window. Known accounts lock their hashed account/source scope after
-  five failures; unknown account identifiers only increment a hashed source-pressure scope, so
-  random identifiers cannot allocate one row each. The source tier defaults to 50 failures,
-  both tiers return `429` with `Retry-After`, stale rows are pruned, successful credential use
-  clears the relevant tiers, and missing account/invite/recovery paths consume a dummy Argon2id
-  verification. Policy is read once into `ApiState`; the account/source thresholds, window,
-  lockout, and retention are configurable through `FMARCH_AUTH_RATE_LIMIT_MAX_FAILURES`,
-  `FMARCH_AUTH_SOURCE_RATE_LIMIT_MAX_FAILURES`, `FMARCH_AUTH_RATE_LIMIT_WINDOW_SECONDS`,
-  `FMARCH_AUTH_RATE_LIMIT_LOCKOUT_SECONDS`, and `FMARCH_AUTH_RATE_LIMIT_RETENTION_SECONDS`.
-  SvelteKit auth actions derive `x-fmarch-auth-source` from server-side
-  `getClientAddress()`. `FMARCH_TRUST_AUTH_SOURCE_HEADER=1` is reserved for deployments where
-  that trusted frontend or edge is the API's only caller and overwrites the header; never expose
-  a trusting API directly to the public internet or forward a browser-supplied source value.
-  Distributed edge enforcement, hosted policy tuning, and monitoring remain deployment work.
-  Credential failures stay generic to avoid a user-existence oracle.
-- **CSRF:** state-changing REST endpoints require an anti-CSRF token. The WebSocket is
-  authenticated at handshake and bound to the session; commands carry no ambient cookie
-  authority beyond that bound session.
+- **Identity provider:** WorkOS AuthKit owns signup, email verification, passwords, passkeys,
+  MFA, recovery, abuse controls, and browser-session refresh. SvelteKit stores the AuthKit
+  session in its encrypted, httpOnly cookie; raw WorkOS access tokens are available only to
+  server hooks and same-origin server endpoints.
+- **API verification:** the Rust `identity` crate accepts RS256 only, selects the WorkOS JWKS
+  key by `kid`, refreshes the key set once on an unknown key, validates `exp`, `iss`, and `sub`,
+  and requires a WorkOS session id. The client-specific JWKS URL is configuration, not a token
+  claim. The API receives public verification metadata,
+  never the WorkOS API key or AuthKit cookie-encryption secret. Provider failures fail closed.
+- **Stable local authority:** the immutable WorkOS `sub` is bound exactly once to a generated
+  `platform_principal` through `external_identity`. Email is display metadata, never a primary
+  key or authorization input. Each request rechecks that the local principal is active, then
+  derives global and per-game capabilities from local state. Disabling a local principal cuts
+  off HTTP and live transport without mutating the WorkOS user.
+- **Bootstrap:** `FMARCH_BOOTSTRAP_ADMIN_WORKOS_USER_ID` may bind and grant the first
+  `GlobalAdmin` on a fresh database. A transaction-wide advisory lock and the existing-admin
+  check make this a one-time root-of-authority operation. Remove the variable after bootstrap.
+- **Surface separation:** when WorkOS verification is configured, local password, registration,
+  recovery, session-grant, credential-delivery, and legacy invite endpoints are not mounted.
+  `/auth/login`, `/auth/register`, and `/auth/logout` become compatibility aliases for AuthKit
+  sign-in, sign-up, and sign-out. Hosts share a WorkOS sign-in link for a locally authorized game
+  principal; game membership remains a domain grant and is never modeled as a WorkOS organization.
+- **Local proof mode:** `FMARCH_DEV_AUTH=1` deliberately restores the legacy Argon2id account,
+  opaque-session, invite/recovery, and deterministic delivery machinery for hermetic browser and
+  Postgres proof lanes. The server refuses to start without either the complete WorkOS verifier
+  configuration or this explicit local-only switch. Local proof tables remain in the greenfield
+  baseline so those tests are reproducible, but they are not a production identity fallback.
+- **CSRF:** AuthKit's OAuth callback uses PKCE and state validation. Authenticated API calls carry
+  explicit bearer authority from server-side SvelteKit code rather than ambient API cookies.
+  The WebSocket uses a one-time, audience-bound ticket rather than a bearer token in its URL.
+
+### Gameplay transport authentication
+
+- Browser commands and private projection reads go through allowlisted same-origin SvelteKit
+  endpoints. Those endpoints obtain the access token from AuthKit server locals and attach it as
+  an API bearer credential; they reject a missing identity before making a privileged upstream call.
+  Command wire bodies contain only a durable command id and the typed command. Any legacy or
+  forged actor field is rejected by strict deserialization, and the API derives the actor from
+  the enabled, unexpired, unrevoked session before it reads or writes gameplay state.
+- Split-domain WebSockets use `POST /auth/websocket-tickets`. The API stores only a hash of each
+  random ticket and binds it to the WorkOS session id, local principal, configured audience, game,
+  channel, optional slot, durable `after_seq`, and the earlier of the local ticket TTL or access-token
+  expiry. Redemption is an atomic one-time consume. Wrong-audience attempts do not consume the
+  ticket; expired, replayed, forged, or locally disabled-principal tickets are rejected before
+  upgrade, so no Hello frame or private byte is emitted. Local status and token expiry are checked
+  again while the socket remains open.
+- In-process broadcast remains the low-latency path, while every API instance polls the durable
+  game event sequence. A commit on instance A therefore wakes a socket on B. Sequence movement or
+  broadcast lag produces `ResyncRequired` followed by capability-filtered snapshots, and a fresh
+  reconnect ticket hydrates projections from durable state even if the client cursor is stale.
+- Query-supplied principals and the legacy direct WebSocket form exist only behind explicit local
+  dev-auth mode for old fixtures. Production routes have no such fallback.
 
 ## Authorization: capabilities, not ambient roles
 

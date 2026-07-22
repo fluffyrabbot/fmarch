@@ -94,7 +94,7 @@ test("cold-load URLs match existing API route contracts", () => {
       limit: 25,
       beforeSeq: 441,
     }),
-    "/games/game%20a/channels/private%3Arole_pm%3Aslot-7/thread?limit=25&before_seq=441&principal_user_id=player_a",
+    "/api/gameplay/games/game%20a/channels/private%3Arole_pm%3Aslot-7/thread?limit=25&before_seq=441",
   );
   assert.equal(
     principalScopedGameUrl({
@@ -102,23 +102,22 @@ test("cold-load URLs match existing API route contracts", () => {
       path: "notifications",
       principalUserId: "player_a",
     }),
-    "/games/game-a/notifications?principal_user_id=player_a",
+    "/api/gameplay/games/game-a/notifications",
   );
-  assert.throws(
-    () =>
-      principalScopedGameUrl({
-        game: "game-a",
-        path: "notifications",
-        principalUserId: "",
-      }),
-    /principalUserId is required/,
+  assert.equal(
+    principalScopedGameUrl({
+      game: "game-a",
+      path: "notifications",
+      principalUserId: "forged-user",
+    }),
+    "/api/gameplay/games/game-a/notifications",
   );
   assert.equal(
     hostPromptsUrl({
       game: "game-a",
       principalUserId: "host_h",
     }),
-    "/games/game-a/host-prompts?principal_user_id=host_h",
+    "/api/gameplay/games/game-a/host-prompts",
   );
   assert.equal(hostVotecountUrl({ game: "game-a" }), "/games/game-a/votecount");
   assert.equal(
@@ -131,7 +130,7 @@ test("cold-load URLs match existing API route contracts", () => {
       principalUserId: "player_a",
       slotId: "slot_4",
     }),
-    "/games/game-a/player-command-state?principal_user_id=player_a&slot_id=slot_4",
+    "/api/gameplay/games/game-a/player-command-state?slot_id=slot_4",
   );
   assert.equal(
     operatorProofRunUrl({
@@ -158,13 +157,13 @@ test("player cold-load uses channel-scoped thread endpoint for private channel r
   });
 
   assert.deepEqual(seen, [
-    "/games/midsummer/channels/private%3Arole_pm%3Aslot-7/thread?limit=50&principal_user_id=player_mira",
+    "/api/gameplay/games/midsummer/channels/private%3Arole_pm%3Aslot-7/thread?limit=50",
     "/games/midsummer/votecount",
     "/games/midsummer/day-vote-outcomes",
     "/games/midsummer/endgame-summary",
-    "/games/midsummer/notifications?principal_user_id=player_mira",
-    "/games/midsummer/investigation-results?principal_user_id=player_mira",
-    "/games/midsummer/player-command-state?principal_user_id=player_mira&slot_id=slot-7",
+    "/api/gameplay/games/midsummer/notifications",
+    "/api/gameplay/games/midsummer/investigation-results",
+    "/api/gameplay/games/midsummer/player-command-state?slot_id=slot-7",
   ]);
 });
 
@@ -441,9 +440,9 @@ test("player cold-load fetches real endpoints and falls back per endpoint", asyn
     "/games/midsummer/votecount",
     "/games/midsummer/day-vote-outcomes",
     "/games/midsummer/endgame-summary",
-    "/games/midsummer/notifications?principal_user_id=player_mira",
-    "/games/midsummer/investigation-results?principal_user_id=player_mira",
-    "/games/midsummer/player-command-state?principal_user_id=player_mira&slot_id=slot_4",
+    "/api/gameplay/games/midsummer/notifications",
+    "/api/gameplay/games/midsummer/investigation-results",
+    "/api/gameplay/games/midsummer/player-command-state?slot_id=slot_4",
   ]);
   assert.equal(data.thread.posts[0].body, "hello");
   assert.deepEqual(data.votecount, FALLBACK.votecount);
@@ -594,7 +593,7 @@ test("player cold-load skips player-private endpoints without an actor slot", as
   });
 
   assert.deepEqual(seen, [
-    "/games/midsummer/channels/spectator/thread?limit=50&principal_user_id=spectator_s",
+    "/api/gameplay/games/midsummer/channels/spectator/thread?limit=50",
     "/games/midsummer/votecount",
     "/games/midsummer/day-vote-outcomes",
     "/games/midsummer/endgame-summary",
@@ -726,7 +725,7 @@ test("host cold-load maps durable prompt rows and votecount for moderator contro
   });
 
   assert.deepEqual(seen, [
-    "/games/midsummer/host-prompts?principal_user_id=host_h",
+    "/api/gameplay/games/midsummer/host-prompts",
     "/games/midsummer/votecount",
     "/games/midsummer/day-vote-outcomes",
   ]);

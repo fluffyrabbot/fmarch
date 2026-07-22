@@ -1,7 +1,6 @@
 export const WIRE_PROTOCOL_VERSION = 1;
 
 export function buildCommandEnvelope({
-  principalUserId,
   command,
   commandId,
   envelopeId,
@@ -13,7 +12,6 @@ export function buildCommandEnvelope({
       kind: "Command",
       body: Object.freeze({
         command_id: requiredString(commandId, "commandId"),
-        principal_user_id: requiredString(principalUserId, "principalUserId"),
         command,
       }),
     }),
@@ -162,7 +160,6 @@ export function buildAdminCommand({
 }
 
 export async function sendCommand({
-  principalUserId,
   command,
   endpoint = "/commands",
   fetchImpl = fetch,
@@ -173,7 +170,6 @@ export async function sendCommand({
   const commandId = commandIdFactory();
   const envelopeId = envelopeIdFactory();
   const requestEnvelope = buildCommandEnvelope({
-    principalUserId,
     command,
     commandId,
     envelopeId,

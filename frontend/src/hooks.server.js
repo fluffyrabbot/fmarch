@@ -1,11 +1,52 @@
+import { sequence } from "@sveltejs/kit/hooks";
 import {
   rotateAuthenticatedBrowserSession,
   resolveAuthenticatedSession,
   resolveAuthenticatedSessionCached,
 } from "./lib/server/session-capabilities.mjs";
+import { loadWorkosAuthKitModule } from "./lib/server/workos-authkit.mjs";
 
-export async function handle({ event, resolve }) {
+const workosConfigured = [
+  "WORKOS_CLIENT_ID",
+  "WORKOS_API_KEY",
+  "WORKOS_REDIRECT_URI",
+  "WORKOS_COOKIE_PASSWORD",
+].every((name) => typeof process.env[name] === "string" && process.env[name].trim() !== "");
+
+let configuredWorkosHandlePromise = null;
+
+const workosHandle = workosConfigured
+  ? async (input) => await (await configuredWorkosHandle())(input)
+  : async ({ event, resolve }) => {
+      event.locals.auth = {
+        user: null,
+        organizationId: null,
+        role: null,
+        permissions: [],
+        impersonator: null,
+      };
+      return resolve(event);
+    };
+
+function configuredWorkosHandle() {
+  configuredWorkosHandlePromise ??= loadWorkosAuthKitModule().then(
+    ({ authKitHandle, configureAuthKit }) => {
+      configureAuthKit({
+        clientId: process.env.WORKOS_CLIENT_ID,
+        apiKey: process.env.WORKOS_API_KEY,
+        redirectUri: process.env.WORKOS_REDIRECT_URI,
+        cookiePassword: process.env.WORKOS_COOKIE_PASSWORD,
+      });
+      return authKitHandle();
+    },
+  );
+  return configuredWorkosHandlePromise;
+}
+
+export async function fmarchIdentityHandle({ event, resolve }) {
+  const accessToken = event.locals.auth?.accessToken;
   let session = await resolveAuthenticatedSessionCached({
+    accessToken,
     cookies: event.cookies,
     fetchImpl: event.fetch,
     request: event.request,
@@ -19,6 +60,7 @@ export async function handle({ event, resolve }) {
     });
     if (rotation.status === "rotated") {
       session = await resolveAuthenticatedSession({
+        accessToken,
         cookies: event.cookies,
         fetchImpl: event.fetch,
         request: event.request,
@@ -38,3 +80,5 @@ export async function handle({ event, resolve }) {
 
   return resolve(event);
 }
+
+export const handle = sequence(workosHandle, fmarchIdentityHandle);

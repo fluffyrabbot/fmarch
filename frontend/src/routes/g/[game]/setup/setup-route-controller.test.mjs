@@ -98,7 +98,7 @@ test("setup command sender dispatches Rust wire command envelopes", async () => 
   });
 
   assert.equal(outcome.state, "ack");
-  assert.equal(captured.principalUserId, "host_h");
+  assert.equal("principalUserId" in captured, false);
   assert.equal(captured.endpoint, "/commands");
   assert.deepEqual(captured.command, {
     AssignRole: {
@@ -114,8 +114,7 @@ test("setup state refresh bypasses cached browser state after command ack", asyn
   const refreshed = await refreshSetupState({
     data: {
       ...data,
-      setupStateEndpoint:
-        `/games/${data.game.id}/setup-state?principal_user_id=host_h`,
+      setupStateEndpoint: `/api/gameplay/games/${data.game.id}/setup-state`,
     },
     fetchImpl: async (url, init) => {
       captured = { url, init };
@@ -147,7 +146,7 @@ test("setup state refresh bypasses cached browser state after command ack", asyn
 
   assert.equal(
     captured.url,
-    `/games/${data.game.id}/setup-state?principal_user_id=host_h`,
+    `/api/gameplay/games/${data.game.id}/setup-state`,
   );
   assert.equal(captured.init.cache, "no-store");
   assert.deepEqual(captured.init.headers, { accept: "application/json" });
@@ -167,7 +166,7 @@ test("setup dispatch bridge plan records StartGame and setup refresh", () => {
   assert.equal(plan.role, "host-setup");
   assert.equal(plan.commandKind, "StartGame");
   assert.equal(plan.commandEndpoint, "/commands");
-  assert.equal(plan.principalUserId, "host_h");
+  assert.equal("principalUserId" in plan, false);
   assert.deepEqual(plan.projectionRefreshKeys, ["setupState"]);
 });
 

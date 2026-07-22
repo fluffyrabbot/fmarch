@@ -20,12 +20,14 @@ export function load({ locals, url }) {
       accountId,
       principalUserId: locals.principalUserId,
       returnTo,
+      managedByWorkos: workosEnabled(process.env),
     },
   };
 }
 
 export const actions = {
   rotatePassword: async ({ cookies, fetch, request, url }) => {
+    if (workosEnabled(process.env)) return managedIdentityRejection();
     const formData = await request.formData();
     const accountId = optionalField(formData.get("accountId"));
     const currentPassword = passwordField(formData.get("currentPassword"));
@@ -106,6 +108,7 @@ export const actions = {
     throw redirect(303, loginPath({ accountId, returnTo }));
   },
   issueRecovery: async ({ cookies, fetch, request }) => {
+    if (workosEnabled(process.env)) return managedIdentityRejection();
     const formData = await request.formData();
     const accountId = optionalField(formData.get("accountId"));
     const currentPassword = passwordField(formData.get("currentPassword"));
@@ -178,6 +181,7 @@ export const actions = {
     };
   },
   revokeRecovery: async ({ cookies, fetch, request }) => {
+    if (workosEnabled(process.env)) return managedIdentityRejection();
     const formData = await request.formData();
     const accountId = optionalField(formData.get("accountId"));
     const recoveryId = optionalField(formData.get("recoveryId"));
@@ -259,6 +263,17 @@ function accountRecoveryCredentialRevocationUrl(env) {
 
 function authBaseUrl(env) {
   return serverApiBaseUrl(env);
+}
+
+function workosEnabled(env) {
+  return typeof env?.WORKOS_CLIENT_ID === "string" && env.WORKOS_CLIENT_ID.trim() !== "";
+}
+
+function managedIdentityRejection() {
+  return fail(409, {
+    state: "reject",
+    message: "Password and recovery settings are managed by WorkOS",
+  });
 }
 
 function loginPath({ accountId, returnTo }) {

@@ -40,7 +40,7 @@
     : null;
   $: inviteTargets = occupiedSetupInviteTargets(setupState);
   $: mainPolicy = readiness.mainPolicy;
-  $: roleKeys = setupState.pack.roleKeys;
+  $: roleOptions = setupState.pack.roles;
   $: workflow = buildHostSetupWorkflow({
     setupState,
     readiness,
@@ -106,6 +106,20 @@
 
   function selectStage(stageId) {
     preferredStageId = stageId;
+  }
+
+  function accountLabel(principalUserId) {
+    return setupState.accounts.find((account) => account.principalUserId === principalUserId)?.label
+      ?? "No account selected";
+  }
+
+  function accountIdForPrincipal(principalUserId) {
+    return setupState.accounts.find((account) => account.principalUserId === principalUserId)?.accountId
+      ?? "";
+  }
+
+  function roleLabel(roleKey) {
+    return roleOptions.find((role) => role.key === roleKey)?.label ?? "No role assigned";
   }
 
   async function submitSetupCommand(actionId, formData) {
@@ -256,11 +270,9 @@
                 data-testid="host-setup-add-slot-form"
                 on:submit={(event) => handleSetupSubmit(event, "add-slot")}
               >
-                <label class="fm-field">
-                  <span>Slot</span>
-                  <input name="slotId" value={`slot_${setupState.slots.length + 1}`} />
-                </label>
-                <button class="fm-touch-button" type="submit">Add slot</button>
+                <input type="hidden" name="slotId" value={`slot_${setupState.slots.length + 1}`} />
+                <p>The next seat will be added as Slot {setupState.slots.length + 1}.</p>
+                <button class="fm-touch-button" type="submit">Add next seat</button>
               </form>
               <div class="host-setup__card-list" data-testid="host-setup-roster">
                 {#each setupState.slots as slot}
@@ -270,7 +282,7 @@
                     data-testid={`host-setup-slot-${slot.slotId}`}
                   >
                     <div class="host-setup__slot-summary">
-                      <div><p class="fm-eyebrow">Slot</p><h3>{slot.slotId}</h3></div>
+                      <div><p class="fm-eyebrow">Seat</p><h3>{slot.slotId.replace(/^slot[-_]?/i, "Slot ")}</h3></div>
                       <span class="host-setup__slot-state" data-state={slot.occupantUserId ? "ready" : "blocked"}>
                         {slot.occupantUserId ? "seated" : "needs player"}
                       </span>
@@ -279,7 +291,14 @@
                       <input type="hidden" name="slotId" value={slot.slotId} />
                       <label class="fm-field">
                         <span>Player account</span>
-                        <input name="principalUserId" value={slot.occupantUserId ?? ""} placeholder="player_user" />
+                        <select name="principalUserId" required>
+                          <option value="" selected={slot.occupantUserId === null} disabled>Choose an account</option>
+                          {#each setupState.accounts as account}
+                            <option value={account.principalUserId} selected={slot.occupantUserId === account.principalUserId}>
+                              {account.label}
+                            </option>
+                          {/each}
+                        </select>
                       </label>
                       <button class="fm-touch-button fm-touch-button--secondary" type="submit">Assign player</button>
                     </form>
@@ -293,6 +312,7 @@
                 {#each inviteTargets as target}
                   <form class="host-setup__invite" method="POST" action="?/issuePlayerInvite" data-testid={`host-setup-invite-${target.slotId}`}>
                     <input type="hidden" name="principalUserId" value={target.principalUserId} />
+                    <input type="hidden" name="accountId" value={target.accountId} />
                     <input type="hidden" name="slotId" value={target.slotId} />
                     <input type="hidden" name="expectedOccupantUserId" value={target.expectedOccupantUserId} />
                     <span>{target.targetLabel}</span>
@@ -301,11 +321,15 @@
                 {/each}
                 {#if form?.playerInvite}
                   <p class="host-setup__invite-status" data-state={form.playerInvite.state} data-testid="host-setup-player-invite-status">{form.playerInvite.message}</p>
+                  {#if form.playerInvite.deliveryStatus}
+                    <p data-testid="host-setup-player-invite-delivery">Delivery: {form.playerInvite.deliveryStatus}</p>
+                  {/if}
                   {#if form.playerInvite.loginUrl}
                     <a href={form.playerInvite.loginUrl} data-testid="host-setup-player-invite-url">{form.playerInvite.loginUrl}</a>
                   {:else if form.playerInvite.currentOccupantUserId}
                     <form method="POST" action="?/issuePlayerInvite">
                       <input type="hidden" name="principalUserId" value={form.playerInvite.currentOccupantUserId} />
+                      <input type="hidden" name="accountId" value={accountIdForPrincipal(form.playerInvite.currentOccupantUserId)} />
                       <input type="hidden" name="slotId" value={form.playerInvite.slotId} />
                       <input type="hidden" name="expectedOccupantUserId" value={form.playerInvite.currentOccupantUserId} />
                       <button class="fm-touch-button" type="submit">Issue current player invite</button>
@@ -322,14 +346,14 @@
               <div class="host-setup__card-list" data-testid="host-setup-roles">
                 {#each setupState.slots as slot}
                   <article class="host-setup__role-card" data-testid={`host-setup-role-${slot.slotId}`}>
-                    <div><p class="fm-eyebrow">{slot.slotId}</p><h3>{slot.roleKey ?? "No role assigned"}</h3></div>
+                    <div><p class="fm-eyebrow">{accountLabel(slot.occupantUserId)}</p><h3>{roleLabel(slot.roleKey)}</h3></div>
                     <form class="host-setup__slot-form" on:submit={(event) => handleSetupSubmit(event, "assign-role")}>
                       <input type="hidden" name="slotId" value={slot.slotId} />
                       <label class="fm-field">
                         <span>Role</span>
                         <select name="roleKey">
-                          {#each roleKeys as roleKey}
-                            <option value={roleKey} selected={slot.roleKey === roleKey}>{roleKey}</option>
+                          {#each roleOptions as role}
+                            <option value={role.key} selected={slot.roleKey === role.key}>{role.label}</option>
                           {/each}
                         </select>
                       </label>
@@ -395,6 +419,7 @@
               {/if}
               {#if setupState.phase}
                 <a class="fm-touch-button fm-touch-button--secondary" href={data.start.hostHref}>Open host console</a>
+                <a class="fm-touch-button" href="/" data-testid="host-setup-view-board">View game on board</a>
               {/if}
             {/if}
           </section>

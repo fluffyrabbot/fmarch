@@ -1,6 +1,6 @@
 import { fail } from "@sveltejs/kit";
 import { buildAppShell } from "../../../lib/app/app-shell-model.mjs";
-import { SESSION_COOKIE_NAME } from "../../../lib/server/session-capabilities.mjs";
+import { accessTokenForRequest } from "../../../lib/server/session-capabilities.mjs";
 import { buildPublicGamePublication } from "./public-game-publication.mjs";
 
 export async function load({ params, locals, cookies, fetch, url }) {
@@ -17,7 +17,7 @@ export async function load({ params, locals, cookies, fetch, url }) {
     : response.ok ? await response.json().catch(() => null) : null;
   const available = page !== null && typeof page === "object";
   const subscription = available
-    ? await loadSubscription({ cookies, fetch, apiBaseUrl, game: params.game })
+    ? await loadSubscription({ locals, cookies, fetch, apiBaseUrl, game: params.game })
     : null;
   return {
     shellOwner: "layout",
@@ -42,8 +42,8 @@ export async function load({ params, locals, cookies, fetch, url }) {
 }
 
 export const actions = {
-  watch: async ({ cookies, fetch, params, request }) => {
-    const token = cookies.get(SESSION_COOKIE_NAME);
+  watch: async ({ locals, cookies, fetch, params, request }) => {
+    const token = accessTokenForRequest({ locals, cookies });
     if (typeof token !== "string" || token.trim() === "") {
       return fail(401, { id: "public-game-watch", state: "reject", message: "Sign in to watch public games" });
     }
@@ -75,8 +75,8 @@ export const actions = {
       message: payload.subscribed === true ? "Watching this public game" : "Game watch removed",
     };
   },
-  report: async ({ cookies, fetch, params, request }) => {
-    const token = cookies.get(SESSION_COOKIE_NAME);
+  report: async ({ locals, cookies, fetch, params, request }) => {
+    const token = accessTokenForRequest({ locals, cookies });
     if (typeof token !== "string" || token.trim() === "") {
       return fail(401, { id: "public-game-report", state: "reject", message: "Sign in to report public content" });
     }
@@ -119,8 +119,8 @@ export const actions = {
   },
 };
 
-async function loadSubscription({ cookies, fetch, apiBaseUrl, game }) {
-  const token = cookies.get(SESSION_COOKIE_NAME);
+async function loadSubscription({ locals, cookies, fetch, apiBaseUrl, game }) {
+  const token = accessTokenForRequest({ locals, cookies });
   if (typeof token !== "string" || token.trim() === "") return null;
   const response = await fetch(
     `${apiBaseUrl}/subscriptions/game_thread/${encodeURIComponent(game)}`,

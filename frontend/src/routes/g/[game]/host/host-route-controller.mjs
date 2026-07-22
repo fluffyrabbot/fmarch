@@ -158,7 +158,6 @@ export function buildHostCommandDispatchBridgePlan({
     role: "moderator",
     trace,
     request: {
-      principalUserId: data.session.principalUserId,
       endpoint: data.commandEndpoint,
       command: mapHostActionToWireCommand(event),
     },
@@ -186,7 +185,6 @@ export async function sendHostRouteAction({
 }) {
   const outcome = await sendHostActionCommandImpl({
     actionEvent: event,
-    principalUserId: data.session.principalUserId,
     endpoint: data.commandEndpoint,
     stateEndpoint: data.hostConsoleStateEndpoint,
     fetchImpl,

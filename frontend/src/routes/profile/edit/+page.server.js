@@ -1,9 +1,9 @@
 import { error, fail, redirect } from "@sveltejs/kit";
-import { SESSION_COOKIE_NAME } from "../../../lib/server/session-capabilities.mjs";
+import { accessTokenForRequest } from "../../../lib/server/session-capabilities.mjs";
 
 export async function load({ locals, cookies, fetch }) {
   if (!locals.principalUserId) throw redirect(303, "/auth/login?returnTo=/profile/edit");
-  const response = await _profileRequest({ cookies, fetch, path: "/profiles/me/editor" });
+  const response = await _profileRequest({ locals, cookies, fetch, path: "/profiles/me/editor" });
   if (response.status === 404) return { profile: null };
   if (!response.ok) throw error(response.status === 401 || response.status === 403 ? 403 : 502, "Profile editor is unavailable");
   const profile = await response.json();
@@ -11,10 +11,11 @@ export async function load({ locals, cookies, fetch }) {
 }
 
 export const actions = {
-  create: async ({ cookies, fetch, request }) => {
+  create: async ({ locals, cookies, fetch, request }) => {
     const form = await request.formData();
     const response = await _profileRequest({
       cookies,
+      locals,
       fetch,
       path: "/profiles",
       method: "POST",
@@ -35,8 +36,8 @@ export function _profileBody(form) {
   };
 }
 
-export async function _profileRequest({ cookies, fetch, path, method = "GET", body = null }) {
-  const token = cookies.get(SESSION_COOKIE_NAME);
+export async function _profileRequest({ locals, cookies, fetch, path, method = "GET", body = null }) {
+  const token = accessTokenForRequest({ locals, cookies });
   if (typeof token !== "string" || token.trim() === "") return new Response(null, { status: 401 });
   const apiBaseUrl = process.env.FMARCH_API_BASE_URL ?? "";
   return fetch(`${apiBaseUrl}${path}`, {

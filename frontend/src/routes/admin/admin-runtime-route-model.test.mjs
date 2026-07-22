@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   buildAdminRuntimeRouteData,
+  loadAdminGameBootstrap,
   loadAdminGameIndex,
   normalizeAdminGameSelection,
 } from "./admin-runtime-route-model.mjs";
@@ -53,4 +54,39 @@ test("admin game discovery uses the authenticated operator boundary", async () =
   assert.equal(observed.url, "http://api.internal/admin/games?limit=100");
   assert.equal(observed.headers.authorization, "Bearer admin-session");
   assert.deepEqual(page, gameIndexPage);
+});
+
+test("fresh-install admin receives a pack catalog without inventing a game workspace", async () => {
+  const data = await buildAdminRuntimeRouteData({
+    principalUserId: "admin_a",
+    capabilities: [{ kind: "GlobalAdmin" }],
+    gameIndexPage: { games: [], next_cursor: null },
+    bootstrapCatalog: {
+      packs: [
+        { key: "mafiascum", name: "Mafiascum" },
+        { key: "mafia_universe", name: "Mafia Universe" },
+      ],
+    },
+  });
+  assert.equal(data.gameSelection.selectedGame, null);
+  assert.equal(data.bootstrap.available, true);
+  assert.equal(data.bootstrap.defaultPack, "mafiascum");
+  assert.deepEqual(data.bootstrap.packs.map((pack) => pack.name), ["Mafiascum", "Mafia Universe"]);
+  assert.deepEqual(data.gameSetup, []);
+});
+
+test("admin bootstrap catalog uses the authenticated GlobalAdmin boundary", async () => {
+  const observed = {};
+  const catalog = await loadAdminGameBootstrap({
+    apiBaseUrl: "http://api.internal",
+    sessionToken: "admin-session",
+    fetchImpl: async (url, init) => {
+      observed.url = url;
+      observed.authorization = init.headers.authorization;
+      return Response.json({ packs: [{ key: "mafiascum", name: "Mafiascum" }] });
+    },
+  });
+  assert.equal(observed.url, "http://api.internal/admin/game-bootstrap");
+  assert.equal(observed.authorization, "Bearer admin-session");
+  assert.equal(catalog.packs[0].key, "mafiascum");
 });

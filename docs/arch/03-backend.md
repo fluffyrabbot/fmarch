@@ -97,22 +97,22 @@ Not everything is a live delta. Initial page load, deep history pagination, and 
 upload go over plain HTTP:
 
 - `GET` endpoints read projections, paginated, capability-filtered.
-- `GET /games/{game}/notifications?principal_user_id=...` returns projected
+- Authenticated `GET /games/{game}/notifications` returns projected
   `player_notification` rows. Hosts/cohosts read all rows for audit; slot occupants read only
   rows addressed to their current slot; unrelated principals receive `NotAuthorized`.
-- `GET /games/{game}/host-phase-controls?principal_user_id=...` returns projected
+- Authenticated `GET /games/{game}/host-phase-controls` returns projected
   `host_phase_control` audit rows for host/admin prompt decisions that moved phase state.
   Hosts/cohosts may read it; unrelated principals receive `NotAuthorized`.
-- `GET /games/{game}/resolution-traces?principal_user_id=...&run_id=...` returns host/cohost-only
+- Authenticated `GET /games/{game}/resolution-traces?run_id=...` returns host/cohost-only
   stored `ResolutionTrace` inspection rows, with each decision/edge/generated/effect/visibility
   row anchored to the persisted `ResolutionApplied` stream sequence when one exists.
-- `GET /auth/session` resolves an opaque bearer token against the `auth_session` table and
-  returns only server-derived principal/capability data. `POST /auth/session-grants` lets an
-  active `GlobalAdmin` issue scoped operator tokens; the SvelteKit `/auth/login` action now
-  verifies one of those tokens before writing the browser's `fmarch_session` cookie. The
-  live-stack browser proof keeps `/auth/dev-session` disabled and uses a scratch-database
-  root admin only to issue browser tokens through `/auth/session-grants`; `/auth/dev-session`
-  remains gated by `FMARCH_DEV_AUTH=1` for explicit local-only setup.
+- `GET /auth/session` verifies a WorkOS access token, maps its immutable `sub` to one stable
+  local `platform_principal`, and returns only server-derived principal/capability data.
+  SvelteKit AuthKit owns the encrypted browser session and forwards its short-lived access
+  token to the API. Passwords, MFA, recovery, verification, and session refresh do not cross
+  the API boundary. Legacy account/session endpoints are absent whenever WorkOS verification
+  is configured; they remain available only behind `FMARCH_DEV_AUTH=1` for deterministic
+  scratch-database proof lanes.
 - Image upload is a `POST` that runs the ingest pipeline ([07](07-images.md)) and returns
   a content-addressed handle.
 - A reconnecting client cold-loads the current projection state, then resumes the live

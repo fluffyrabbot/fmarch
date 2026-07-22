@@ -13,6 +13,8 @@ export async function buildAdminRuntimeRouteData({
   sessionToken = null,
   identityPrincipalUserId = "host_h",
   gameIndexPage = null,
+  bootstrapCatalog = null,
+  includeLegacyIdentityOps = true,
 }) {
   const gameSelection = normalizeAdminGameSelection(gameIndexPage, game);
   const selectedGame = gameSelection.selectedGame;
@@ -36,6 +38,7 @@ export async function buildAdminRuntimeRouteData({
       access,
       operator,
       gameSelection,
+      bootstrap: normalizeAdminBootstrap(bootstrapCatalog, { access, capabilities }),
       command: emptyAdminCommand(),
       gameSetup: Object.freeze([]),
       audit: Object.freeze([]),
@@ -60,6 +63,7 @@ export async function buildAdminRuntimeRouteData({
     access,
     operator,
     gameSelection,
+    bootstrap: normalizeAdminBootstrap(bootstrapCatalog, { access, capabilities }),
     command: Object.freeze({
       endpoint: "/commands",
       createGame: Object.freeze({ action: "create_game", game: selectedGame, pack: "mafiascum" }),
@@ -80,7 +84,7 @@ export async function buildAdminRuntimeRouteData({
       }),
     ]),
     audit: Object.freeze([
-      authDeliveryQueueAudit(),
+      ...(includeLegacyIdentityOps ? [authDeliveryQueueAudit()] : []),
       ...withRuntimeAuditLinks(coldData.audit, { game: selectedGame }),
     ]),
     recoveryTasks: Object.freeze([
@@ -139,6 +143,34 @@ export async function loadAdminGameIndex({
     if (!response.ok) {
       return fallback;
     }
+    const body = await response.json();
+    return body !== null && typeof body === "object" ? body : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+export async function loadAdminGameBootstrap({
+  fetchImpl,
+  apiBaseUrl = "",
+  sessionToken = null,
+  fallback = null,
+}) {
+  if (
+    typeof fetchImpl !== "function" ||
+    typeof sessionToken !== "string" ||
+    sessionToken.trim() === ""
+  ) {
+    return fallback;
+  }
+  try {
+    const response = await fetchImpl(`${apiBaseUrl}/admin/game-bootstrap`, {
+      headers: {
+        accept: "application/json",
+        authorization: `Bearer ${sessionToken}`,
+      },
+    });
+    if (!response.ok) return fallback;
     const body = await response.json();
     return body !== null && typeof body === "object" ? body : fallback;
   } catch {
@@ -234,6 +266,23 @@ function adminSurfaceHeader(capabilityLabel) {
 
 function emptyAdminCommand() {
   return Object.freeze({ endpoint: "/commands", sessionGrant: null });
+}
+
+function normalizeAdminBootstrap(catalog, { access, capabilities }) {
+  const isGlobalAdmin = Array.isArray(capabilities)
+    && capabilities.some((capability) => capability?.kind === "GlobalAdmin");
+  const packs = (Array.isArray(catalog?.packs) ? catalog.packs : [])
+    .map((pack) => {
+      const key = nonemptyString(pack?.key);
+      const name = nonemptyString(pack?.name, key);
+      return key === null || name === null ? null : Object.freeze({ key, name });
+    })
+    .filter(Boolean);
+  return Object.freeze({
+    available: access.allowed && isGlobalAdmin && packs.length > 0,
+    packs: Object.freeze(packs),
+    defaultPack: packs[0]?.key ?? null,
+  });
 }
 
 function runtimeAuditFallback({ game }) {

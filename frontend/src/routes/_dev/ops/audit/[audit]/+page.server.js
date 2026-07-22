@@ -24,7 +24,7 @@ import {
   readLocalSpineManifest,
   readLocalProofFreshness,
 } from "../../../../../lib/server/local-ops-artifacts.mjs";
-import { SESSION_COOKIE_NAME } from "../../../../../lib/server/session-capabilities.mjs";
+import { accessTokenForRequest } from "../../../../../lib/server/session-capabilities.mjs";
 import {
   adminForbiddenMessage,
   buildAdminAuditDetailData,
@@ -44,7 +44,7 @@ export async function load({ cookies, locals, fetch, params, url }) {
     game,
     fetchImpl: apiBaseUrl === "" ? null : fetch,
     apiBaseUrl,
-    sessionToken: cookies?.get?.(SESSION_COOKIE_NAME) ?? null,
+    sessionToken: accessTokenForRequest({ locals, cookies }),
     identityPrincipalUserId: url.searchParams.get("principal_user_id") ?? "host_h",
     proofRun: await readLocalDevTestGameProofRun(),
     opsArtifacts: await readLocalOpsArtifacts(),

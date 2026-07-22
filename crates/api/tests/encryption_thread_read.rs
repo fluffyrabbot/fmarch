@@ -85,20 +85,47 @@ async fn post_command(
     principal_user_id: &str,
     command: Command,
 ) -> ServerEnvelope {
+    let global_capabilities = if matches!(&command, Command::CreateGame { .. }) {
+        vec!["GlobalAdmin"]
+    } else {
+        Vec::new()
+    };
     let body = serde_json::to_vec(&ClientEnvelope::new(
         id,
         ClientMsg::Command(CommandMsg {
             command_id: stable_command_id(id),
-            principal_user_id: principal_user_id.to_string(),
             command,
         }),
     ))
     .unwrap();
+    let token = format!("encryption-command-session:{principal_user_id}");
+    let session = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/auth/dev-session")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    serde_json::json!({
+                        "token": token,
+                        "principal_user_id": principal_user_id,
+                        "expires_at": 4_102_444_800i64,
+                        "global_capabilities": global_capabilities
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(session.status(), StatusCode::OK);
     let response = app
         .oneshot(
             Request::builder()
                 .method("POST")
                 .uri("/commands")
+                .header("authorization", format!("Bearer {token}"))
                 .header("content-type", "application/json")
                 .body(Body::from(body))
                 .unwrap(),
@@ -131,7 +158,8 @@ async fn mixed_kid_private_payloads_survive_rebuild_and_private_thread_api_read(
     let env = EncryptionEnvGuard::new();
     let media_root = tempfile::tempdir().unwrap();
     let media_store = MediaStore::open(media_root.path(), MediaLimits::default()).unwrap();
-    let app = api::router(pool.clone(), media_store);
+    let app =
+        api::router_with_state(api::ApiState::new(pool.clone(), media_store).with_dev_auth(true));
     let game = Uuid::new_v4();
     let old_kid = "old-kid";
     let old_key = "old private event encryption key";

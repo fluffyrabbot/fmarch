@@ -1028,10 +1028,7 @@ export function playerThreadUrl({
     params.set("before_seq", String(beforeSeq));
   }
   if (channel !== "main") {
-    if (typeof principalUserId === "string" && principalUserId.trim() !== "") {
-      params.set("principal_user_id", principalUserId);
-    }
-    return `${apiBaseUrl}/games/${encodeURIComponent(game)}/channels/${encodeURIComponent(channel)}/thread?${params.toString()}`;
+    return `${privateGameplayBase(apiBaseUrl)}/games/${encodeURIComponent(game)}/channels/${encodeURIComponent(channel)}/thread?${params.toString()}`;
   }
   return `${apiBaseUrl}/games/${encodeURIComponent(game)}/thread?${params.toString()}`;
 }
@@ -1051,14 +1048,10 @@ export function endgameSummaryUrl({ apiBaseUrl = "", game }) {
 export function playerCommandStateUrl({
   apiBaseUrl = "",
   game,
-  principalUserId,
   slotId,
 }) {
-  const params = new URLSearchParams({
-    principal_user_id: principalUserId,
-    slot_id: slotId,
-  });
-  return `${apiBaseUrl}/games/${encodeURIComponent(game)}/player-command-state?${params.toString()}`;
+  const params = new URLSearchParams({ slot_id: slotId });
+  return `${privateGameplayBase(apiBaseUrl)}/games/${encodeURIComponent(game)}/player-command-state?${params.toString()}`;
 }
 
 export function hostVotecountUrl({ apiBaseUrl = "", game }) {
@@ -1069,15 +1062,12 @@ export function principalScopedGameUrl({
   apiBaseUrl = "",
   game,
   path,
-  principalUserId,
 }) {
-  if (typeof principalUserId !== "string" || principalUserId.trim() === "") {
-    throw new TypeError("principalUserId is required for principal-scoped game URLs");
-  }
-  const params = new URLSearchParams({
-    principal_user_id: principalUserId,
-  });
-  return `${apiBaseUrl}/games/${encodeURIComponent(game)}/${path}?${params.toString()}`;
+  return `${privateGameplayBase(apiBaseUrl)}/games/${encodeURIComponent(game)}/${path}`;
+}
+
+function privateGameplayBase(apiBaseUrl) {
+  return apiBaseUrl === "" ? "/api/gameplay" : apiBaseUrl;
 }
 
 export function hostPromptsUrl({ apiBaseUrl = "", game, principalUserId }) {

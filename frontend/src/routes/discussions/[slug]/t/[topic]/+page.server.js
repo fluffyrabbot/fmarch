@@ -2,7 +2,7 @@ import { fail, redirect } from "@sveltejs/kit";
 import { buildAppShell } from "../../../../../lib/app/app-shell-model.mjs";
 import { buildAppSurfaceHeaderViewModel } from "../../../../../lib/app/app-surface-header-model.mjs";
 import { hasCapability } from "../../../../../lib/app/capabilities.mjs";
-import { SESSION_COOKIE_NAME } from "../../../../../lib/server/session-capabilities.mjs";
+import { accessTokenForRequest } from "../../../../../lib/server/session-capabilities.mjs";
 
 export async function load({ params, locals, cookies, fetch, url }) {
   const apiBaseUrl = process.env.FMARCH_API_BASE_URL ?? "";
@@ -13,11 +13,12 @@ export async function load({ params, locals, cookies, fetch, url }) {
     `${apiBaseUrl}/discussions/areas/${encodeURIComponent(params.slug)}/topics/${encodeURIComponent(params.topic)}?${search}`,
   );
   const thread = response.ok ? await response.json().catch(() => null) : null;
-  const profile = await loadCurrentProfile({ cookies, fetch, apiBaseUrl });
+  const profile = await loadCurrentProfile({ locals, cookies, fetch, apiBaseUrl });
   const subscription = thread === null
     ? null
     : await loadSubscription({
         cookies,
+        locals,
         fetch,
         apiBaseUrl,
         targetKind: "discussion_topic",
@@ -50,7 +51,7 @@ export async function load({ params, locals, cookies, fetch, url }) {
 }
 
 export const actions = {
-  watch: async ({ cookies, fetch, params, request }) => {
+  watch: async ({ locals, cookies, fetch, params, request }) => {
     const form = await request.formData();
     const action = text(form.get("watch_action"));
     if (!["subscribe", "unsubscribe"].includes(action)) {
@@ -58,6 +59,7 @@ export const actions = {
     }
     const response = await mutation({
       cookies,
+      locals,
       fetch,
       path: `/subscriptions/discussion_topic/${encodeURIComponent(params.topic)}`,
       method: action === "subscribe" ? "PUT" : "DELETE",
@@ -77,7 +79,7 @@ export const actions = {
       message: payload.subscribed === true ? "Watching this topic" : "Topic watch removed",
     };
   },
-  report: async ({ cookies, fetch, params, request }) => {
+  report: async ({ locals, cookies, fetch, params, request }) => {
     const form = await request.formData();
     const sourceSeq = optionalSequence(form.get("source_seq"));
     if (sourceSeq === null) {
@@ -85,6 +87,7 @@ export const actions = {
     }
     const response = await mutation({
       cookies,
+      locals,
       fetch,
       path: "/moderation/reports",
       body: {
@@ -111,10 +114,11 @@ export const actions = {
       message: "Report received. Your receipt is private to this account.",
     };
   },
-  createPost: async ({ cookies, fetch, params, request }) => {
+  createPost: async ({ locals, cookies, fetch, params, request }) => {
     const form = await request.formData();
     const response = await mutation({
       cookies,
+      locals,
       fetch,
       path: `/discussions/topics/${encodeURIComponent(params.topic)}/posts`,
       body: { body: text(form.get("body")) },
@@ -124,10 +128,11 @@ export const actions = {
     const anchor = topic.last_post_seq === null ? "" : `#post-${topic.last_post_seq}`;
     throw redirect(303, `/discussions/${encodeURIComponent(params.slug)}/t/${encodeURIComponent(params.topic)}${anchor}`);
   },
-  postingState: async ({ cookies, fetch, params, request }) => {
+  postingState: async ({ locals, cookies, fetch, params, request }) => {
     const form = await request.formData();
     const response = await mutation({
       cookies,
+      locals,
       fetch,
       path: `/discussions/topics/${encodeURIComponent(params.topic)}/moderation`,
       body: { posting_state: text(form.get("posting_state")) },
@@ -135,11 +140,12 @@ export const actions = {
     if (!response.ok) return mutationFailure(response, "Unable to update topic posting state");
     throw redirect(303, `/discussions/${encodeURIComponent(params.slug)}/t/${encodeURIComponent(params.topic)}`);
   },
-  visibility: async ({ cookies, fetch, params, request }) => {
+  visibility: async ({ locals, cookies, fetch, params, request }) => {
     const form = await request.formData();
     const visibility = text(form.get("visibility"));
     const response = await mutation({
       cookies,
+      locals,
       fetch,
       path: `/discussions/topics/${encodeURIComponent(params.topic)}/moderation`,
       body: { visibility },
@@ -151,8 +157,8 @@ export const actions = {
   },
 };
 
-async function loadCurrentProfile({ cookies, fetch, apiBaseUrl }) {
-  const token = cookies.get(SESSION_COOKIE_NAME);
+async function loadCurrentProfile({ locals, cookies, fetch, apiBaseUrl }) {
+  const token = accessTokenForRequest({ locals, cookies });
   if (typeof token !== "string" || token.trim() === "") return null;
   const response = await fetch(`${apiBaseUrl}/profiles/me/editor`, {
     headers: { authorization: `Bearer ${token}`, accept: "application/json" },
@@ -161,8 +167,8 @@ async function loadCurrentProfile({ cookies, fetch, apiBaseUrl }) {
   return profile?.visibility === "public" ? profile : null;
 }
 
-async function loadSubscription({ cookies, fetch, apiBaseUrl, targetKind, scopeId }) {
-  const token = cookies.get(SESSION_COOKIE_NAME);
+async function loadSubscription({ locals, cookies, fetch, apiBaseUrl, targetKind, scopeId }) {
+  const token = accessTokenForRequest({ locals, cookies });
   if (typeof token !== "string" || token.trim() === "") return null;
   const response = await fetch(
     `${apiBaseUrl}/subscriptions/${encodeURIComponent(targetKind)}/${encodeURIComponent(scopeId)}`,
@@ -171,8 +177,8 @@ async function loadSubscription({ cookies, fetch, apiBaseUrl, targetKind, scopeI
   return response.ok ? response.json().catch(() => null) : null;
 }
 
-async function mutation({ cookies, fetch, path, body = undefined, method = "POST" }) {
-  const token = cookies.get(SESSION_COOKIE_NAME);
+async function mutation({ locals, cookies, fetch, path, body = undefined, method = "POST" }) {
+  const token = accessTokenForRequest({ locals, cookies });
   if (typeof token !== "string" || token.trim() === "") {
     return { ok: false, status: 401, json: async () => null };
   }

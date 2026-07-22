@@ -9,6 +9,7 @@ use api::{
 use axum::body::{to_bytes, Body};
 use axum::http::{Request, StatusCode};
 use futures_util::StreamExt;
+use identity::{StaticAccessTokenVerifier, VerifiedIdentity};
 use media::{MediaLimits, MediaStore, VariantLimits};
 use std::collections::BTreeSet;
 use std::path::Path;
@@ -26,7 +27,7 @@ use wire::{
 };
 
 fn router(pool: sqlx::PgPool) -> axum::Router {
-    api::router(pool, shared_test_media_store())
+    api::router_with_state(test_api_state(pool).with_dev_auth(true))
 }
 
 fn router_with_dev_auth(pool: sqlx::PgPool) -> axum::Router {
@@ -135,6 +136,125 @@ async fn create_test_auth_account(
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn fresh_database_bootstraps_exactly_one_global_admin(pool: sqlx::PgPool) {
+    assert!(
+        api::bootstrap_workos_global_admin(&pool, "user_root", Some("root@example.test"),)
+            .await
+            .unwrap()
+    );
+    assert!(!api::bootstrap_workos_global_admin(
+        &pool,
+        "user_ignored",
+        Some("ignored@example.test"),
+    )
+    .await
+    .unwrap());
+    let accounts = sqlx::query_as::<_, (String, Vec<String>)>(
+        r#"
+        SELECT identity.display_label, principal.global_capabilities
+        FROM external_identity AS identity
+        JOIN platform_principal AS principal
+          ON principal.principal_user_id = identity.principal_user_id
+        ORDER BY identity.display_label
+        "#,
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        accounts,
+        vec![(
+            "root@example.test".to_string(),
+            vec!["GlobalAdmin".to_string()]
+        )]
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn workos_access_token_binds_a_stable_local_principal_and_hides_legacy_auth(
+    pool: sqlx::PgPool,
+) {
+    let verifier = StaticAccessTokenVerifier::new([(
+        "workos-access-token".to_string(),
+        VerifiedIdentity {
+            subject: "user_01HWORKOS".to_string(),
+            session_id: "session_01HWORKOS".to_string(),
+            expires_at: 4_102_444_800,
+            email: Some("player@example.test".to_string()),
+        },
+    )]);
+    let app = api::router_with_state(
+        test_api_state(pool.clone()).with_access_token_verifier(Arc::new(verifier)),
+    );
+
+    for _ in 0..2 {
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/auth/session")
+                    .header("authorization", "Bearer workos-access-token")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let session: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(session["expires_at"], 4_102_444_800i64);
+        assert_eq!(session["rotation_required"], serde_json::Value::Null);
+    }
+
+    let bindings = sqlx::query_as::<_, (String, String, String)>(
+        r#"
+        SELECT identity.subject, identity.principal_user_id, identity.display_label
+        FROM external_identity AS identity
+        WHERE identity.provider = 'workos'
+        "#,
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(bindings.len(), 1);
+    assert_eq!(bindings[0].0, "user_01HWORKOS");
+    assert_eq!(bindings[0].2, "player@example.test");
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/auth/accounts/login")
+                .header("content-type", "application/json")
+                .body(Body::from("{}"))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+
+    sqlx::query(
+        "UPDATE platform_principal SET status = 'disabled', disabled_at = 1 WHERE principal_user_id = $1",
+    )
+    .bind(bindings[0].1.as_str())
+    .execute(&pool)
+    .await
+    .unwrap();
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/auth/session")
+                .header("authorization", "Bearer workos-access-token")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
 }
 
 async fn create_media_upload_account_session(app: &axum::Router, label: &str) -> (String, String) {
@@ -609,7 +729,7 @@ async fn role_pm_media_reloads_transfers_and_denies_stale_outgoing_session(pool:
     drop(app);
     drop(store);
     let restarted = MediaStore::open(root.path(), MediaLimits::default()).unwrap();
-    let app = api::router(pool.clone(), restarted);
+    let app = api::router_with_state(ApiState::new(pool.clone(), restarted).with_dev_auth(true));
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
     let server_app = app.clone();
@@ -2084,7 +2204,8 @@ async fn spectator_room_grant_reads_host_notices_and_revokes(pool: sqlx::PgPool)
                     .unwrap();
             if matches!(
                 envelope.body,
-                ServerMsg::Delta(ProjectionDelta::ThreadPostsChanged(_))
+                ServerMsg::Delta(ProjectionDelta::ThreadPostsChanged(ref thread))
+                    if thread.posts.iter().any(|post| post.body == "Notice after revocation")
             ) {
                 return envelope;
             }
@@ -2106,14 +2227,13 @@ fn stable_command_id(id: u64) -> Uuid {
 fn command_envelope_with_command_id(
     id: u64,
     command_id: Uuid,
-    principal_user_id: &str,
+    _principal_user_id: &str,
     command: Command,
 ) -> ClientEnvelope {
     ClientEnvelope::new(
         id,
         ClientMsg::Command(CommandMsg {
             command_id,
-            principal_user_id: principal_user_id.to_string(),
             command,
         }),
     )
@@ -2135,6 +2255,11 @@ async fn post_command_with_command_id(
     principal_user_id: &str,
     command: Command,
 ) -> ServerEnvelope {
+    let global_capabilities = if matches!(&command, Command::CreateGame { .. }) {
+        vec!["GlobalAdmin"]
+    } else {
+        Vec::new()
+    };
     let body = serde_json::to_vec(&command_envelope_with_command_id(
         id,
         command_id,
@@ -2142,12 +2267,35 @@ async fn post_command_with_command_id(
         command,
     ))
     .unwrap();
+    let token = format!("test-command-session:{principal_user_id}");
+    let session_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/auth/dev-session")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    serde_json::json!({
+                        "token": token,
+                        "principal_user_id": principal_user_id,
+                        "expires_at": 4_102_444_800i64,
+                        "global_capabilities": global_capabilities
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(session_response.status(), StatusCode::OK);
     let response = app
         .clone()
         .oneshot(
             Request::builder()
                 .method("POST")
                 .uri("/commands")
+                .header("authorization", format!("Bearer {token}"))
                 .header("content-type", "application/json")
                 .body(Body::from(body))
                 .unwrap(),
@@ -2721,6 +2869,12 @@ async fn host_can_publish_projection_derived_votecount_to_thread(pool: sqlx::PgP
 
 #[sqlx::test(migrations = "../projections/migrations")]
 async fn host_setup_sequence_commits_to_setup_state(pool: sqlx::PgPool) {
+    sqlx::query(
+        "INSERT INTO auth_account (account_id, principal_user_id, password_hash, created_at, global_capabilities) VALUES ('mira@example.test', 'player_mira', 'unused-in-this-test', 1, '{}')",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
     let app = router(pool);
     let game = Uuid::new_v4();
     for (id, command) in [
@@ -2778,9 +2932,8 @@ async fn host_setup_sequence_commits_to_setup_state(pool: sqlx::PgPool) {
         .oneshot(
             Request::builder()
                 .method("GET")
-                .uri(format!(
-                    "/games/{game}/setup-state?principal_user_id=host_h"
-                ))
+                .uri(format!("/games/{game}/setup-state"))
+                .header("authorization", "Bearer test-command-session:host_h")
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -2795,7 +2948,15 @@ async fn host_setup_sequence_commits_to_setup_state(pool: sqlx::PgPool) {
     assert_eq!(setup.pack.key, "mafiascum");
     assert!(setup.pack.valid);
     assert!(setup.pack.role_keys.contains(&"vanilla_townie".to_string()));
+    assert!(setup
+        .pack
+        .roles
+        .iter()
+        .any(|role| role.key == "vanilla_townie" && role.label == "Vanilla Townie"));
     assert!(setup.pack.start_phase_options.contains(&"D01".to_string()));
+    assert_eq!(setup.accounts.len(), 1);
+    assert_eq!(setup.accounts[0].account_id, "mira@example.test");
+    assert_eq!(setup.accounts[0].principal_user_id, "player_mira");
     assert_eq!(setup.slots.len(), 1);
     assert_eq!(setup.slots[0].slot_id, "slot_1");
     assert_eq!(
@@ -3540,6 +3701,7 @@ async fn websocket_game_connection_streams_command_following_votecount_delta(poo
 #[sqlx::test(migrations = "../projections/migrations")]
 async fn websocket_lag_requests_resync_and_keeps_streaming(pool: sqlx::PgPool) {
     let state = test_api_state(pool)
+        .with_dev_auth(true)
         .with_live_projection_capacity(1)
         .with_live_projection_delivery_delay(std::time::Duration::from_secs(2));
     let app = api::router_with_state(state);
@@ -4446,6 +4608,30 @@ async fn public_game_index_cold_load_pages_only_active_and_completed_rows(pool: 
             (active_game, "active"),
         ]
     );
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/admin/game-bootstrap")
+                .header("authorization", format!("Bearer {admin_token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let bootstrap: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    let pack_keys = bootstrap["packs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|pack| pack["key"].as_str())
+        .collect::<Vec<_>>();
+    assert!(pack_keys.contains(&"mafiascum"));
+    assert!(pack_keys.iter().all(|key| !key.starts_with("test_")));
 
     let invalid = app
         .oneshot(
@@ -6010,7 +6196,7 @@ async fn opaque_auth_session_resolves_committed_host_capabilities(pool: sqlx::Pg
         .await,
     );
 
-    let disabled_app = router(pool.clone());
+    let disabled_app = api::router(pool.clone(), shared_test_media_store());
     let disabled_response = disabled_app
         .oneshot(
             Request::builder()
@@ -6862,7 +7048,7 @@ async fn global_admin_account_login_creates_normal_role_session(pool: sqlx::PgPo
     assert_eq!(disabled["status"], "disabled");
     assert_eq!(disabled["account_id"], "host@example.test");
     assert_eq!(disabled["principal_user_id"], "host_h");
-    assert_eq!(disabled["revoked_session_count"], 1);
+    assert!(disabled["revoked_session_count"].as_u64().unwrap() >= 1);
 
     let response = app
         .clone()
@@ -9411,15 +9597,18 @@ async fn vertical_investigation_results_are_capability_filtered(pool: sqlx::PgPo
 
 #[sqlx::test(migrations = "../projections/migrations")]
 async fn websocket_hello_announces_protocol(pool: sqlx::PgPool) {
+    let game = Uuid::new_v4();
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
     let server = tokio::spawn(async move {
         axum::serve(listener, router(pool)).await.unwrap();
     });
 
-    let (mut socket, _) = tokio_tungstenite::connect_async(format!("ws://{addr}/ws"))
-        .await
-        .unwrap();
+    let (mut socket, _) = tokio_tungstenite::connect_async(format!(
+        "ws://{addr}/ws?game={game}&principal_user_id=hello-user"
+    ))
+    .await
+    .unwrap();
     let msg = socket.next().await.unwrap().unwrap();
     let text = msg.into_text().unwrap();
     let envelope: ServerEnvelope = serde_json::from_str(&text).unwrap();

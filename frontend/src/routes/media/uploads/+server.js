@@ -1,15 +1,16 @@
-import { SESSION_COOKIE_NAME } from "../../../lib/server/session-capabilities.mjs";
+import { accessTokenForRequest } from "../../../lib/server/session-capabilities.mjs";
 
 const MAX_ENCODED_BYTES = 12 * 1024 * 1024;
 const ALLOWED_CONTENT_TYPES = new Set(["image/png", "image/jpeg"]);
 
 export async function POST({
   request,
+  locals,
   cookies,
   fetch: fetchImpl = fetch,
   env = process.env,
 }) {
-  const token = cookies?.get?.(SESSION_COOKIE_NAME);
+  const token = accessTokenForRequest({ locals, cookies });
   if (typeof token !== "string" || token.trim() === "") {
     return emptyResponse(401);
   }

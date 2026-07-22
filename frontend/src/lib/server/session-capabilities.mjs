@@ -28,7 +28,28 @@ export function clearSessionCache() {
   sessionCache.clear();
 }
 
+export function accessTokenForRequest({ accessToken, locals, cookies } = {}) {
+  const workosToken = accessToken ?? locals?.auth?.accessToken;
+  if (typeof workosToken === "string" && workosToken.trim() !== "") {
+    return workosToken;
+  }
+  const legacyToken = cookies?.get?.(SESSION_COOKIE_NAME);
+  return typeof legacyToken === "string" && legacyToken.trim() !== "" ? legacyToken : null;
+}
+
+export function authenticatedApiFetch({ accessToken, locals, cookies, fetchImpl = fetch } = {}) {
+  const token = accessTokenForRequest({ accessToken, locals, cookies });
+  return async (input, init = {}) => {
+    const headers = new Headers(init.headers ?? {});
+    if (typeof token === "string" && token.trim() !== "") {
+      headers.set("authorization", `Bearer ${token}`);
+    }
+    return await fetchImpl(input, { ...init, headers });
+  };
+}
+
 export async function resolveAuthenticatedSessionCached({
+  accessToken,
   cookies,
   request,
   fetchImpl = fetch,
@@ -36,7 +57,7 @@ export async function resolveAuthenticatedSessionCached({
   now = Date.now,
 } = {}) {
   const ttlMs = sessionCacheTtlMs(env);
-  const token = cookies?.get?.(SESSION_COOKIE_NAME);
+  const token = accessTokenForRequest({ accessToken, cookies });
   const context = sessionContextFromRequest(request);
   const cacheable =
     ttlMs > 0 &&
@@ -45,7 +66,7 @@ export async function resolveAuthenticatedSessionCached({
     token.trim() !== "" &&
     context !== null;
   if (!cacheable) {
-    return resolveAuthenticatedSession({ cookies, request, fetchImpl, env });
+    return resolveAuthenticatedSession({ accessToken, cookies, request, fetchImpl, env });
   }
 
   const key = `${token}|${context.kind}|${context.kind === "game" ? context.game : ""}`;
@@ -55,7 +76,7 @@ export async function resolveAuthenticatedSessionCached({
     return cached.session;
   }
 
-  const session = await resolveAuthenticatedSession({ cookies, request, fetchImpl, env });
+  const session = await resolveAuthenticatedSession({ accessToken, cookies, request, fetchImpl, env });
   // Rotation-required sessions must re-resolve, and empty sessions may just
   // be an API blip — caching either would pin a worse state for a full TTL.
   if (session.rotationRequired !== true && session.principalUserId !== null) {
@@ -70,12 +91,13 @@ export async function resolveAuthenticatedSessionCached({
 }
 
 export async function resolveAuthenticatedSession({
+  accessToken,
   cookies,
   request,
   fetchImpl = fetch,
   env = process.env,
 } = {}) {
-  const token = cookies?.get?.(SESSION_COOKIE_NAME);
+  const token = accessTokenForRequest({ accessToken, cookies });
   const context = sessionContextFromRequest(request);
   if (env?.FMARCH_FRONTEND_FIXTURE_SESSION === "1") {
     return fixtureSession({

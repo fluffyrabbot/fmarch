@@ -14,12 +14,14 @@ test("host setup route data derives identity, roster, policy, invites, and readi
   const data = await buildHostSetupRouteData({
     game,
     principalUserId: "host_h",
+    sessionToken: "host-session",
     capabilities: [{ kind: "HostOf", game }],
-    fetchImpl: async (url) => {
+    fetchImpl: async (url, init) => {
       assert.equal(
         url,
-        `/games/${game}/setup-state?principal_user_id=host_h`,
+        `/api/gameplay/games/${game}/setup-state`,
       );
+      assert.equal(init.headers.authorization, "Bearer host-session");
       return jsonResponse({
         game,
         created: true,
@@ -28,8 +30,16 @@ test("host setup route data derives identity, roster, policy, invites, and readi
           name: "Mafiascum",
           valid: true,
           role_keys: ["vanilla_townie", "mafia_goon"],
+          roles: [
+            { key: "vanilla_townie", label: "Vanilla Townie", description: "No night action." },
+            { key: "mafia_goon", label: "Mafia Goon", description: "Shares the factional kill." },
+          ],
           start_phase_options: ["D01", "N01"],
         },
+        accounts: [
+          { account_id: "mira@example.test", principal_user_id: "player_mira", label: "mira@example.test" },
+          { account_id: "goon@example.test", principal_user_id: "player_goon", label: "goon@example.test" },
+        ],
         phase: null,
         slots: [
           {
@@ -62,6 +72,10 @@ test("host setup route data derives identity, roster, policy, invites, and readi
     "mafia_goon",
     "vanilla_townie",
   ]);
+  assert.deepEqual(
+    data.setupState.pack.roles.map((role) => [role.key, role.label]),
+    [["vanilla_townie", "Vanilla Townie"], ["mafia_goon", "Mafia Goon"]],
+  );
   assert.equal(data.readiness.startAvailable, true);
   assert.equal(data.readiness.summary, "Ready to start");
   assert.equal(data.readiness.mainPolicy.allowMediaOnly, true);
@@ -75,7 +89,11 @@ test("host setup route data derives identity, roster, policy, invites, and readi
   ]);
   assert.deepEqual(
     occupiedSetupInviteTargets(data.setupState).map((target) => target.targetLabel),
-    ["Slot 1 / player_mira", "Slot 2 / player_goon"],
+    ["Slot 1 / mira@example.test", "Slot 2 / goon@example.test"],
+  );
+  assert.deepEqual(
+    occupiedSetupInviteTargets(data.setupState).map((target) => target.accountId),
+    ["mira@example.test", "goon@example.test"],
   );
 });
 
@@ -132,14 +150,14 @@ test("host setup readiness blocks StartGame until slots have occupants and roles
   );
 });
 
-test("host setup state URL is principal scoped", () => {
+test("host setup state URL uses the authenticated gameplay boundary", () => {
   assert.equal(
     hostSetupStateUrl({
       apiBaseUrl: "http://127.0.0.1:8787",
       game,
       principalUserId: "host_h",
     }),
-    `http://127.0.0.1:8787/games/${game}/setup-state?principal_user_id=host_h`,
+    `http://127.0.0.1:8787/games/${game}/setup-state`,
   );
 });
 
@@ -170,11 +188,11 @@ test("host setup route data exposes same-origin browser refresh URL", async () =
   });
 
   assert.deepEqual(fetched, [
-    `http://127.0.0.1:8787/games/${game}/setup-state?principal_user_id=host_h`,
+    `http://127.0.0.1:8787/games/${game}/setup-state`,
   ]);
   assert.equal(
     data.setupStateEndpoint,
-    `/games/${game}/setup-state?principal_user_id=host_h`,
+    `/api/gameplay/games/${game}/setup-state`,
   );
 });
 

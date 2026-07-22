@@ -1,11 +1,14 @@
+import { randomUUID } from "node:crypto";
 import { error, fail, redirect } from "@sveltejs/kit";
+import { buildAdminCommand, buildCommandEnvelope } from "../../lib/app/command-boundary.mjs";
 import { operatorProofRunUrl } from "../../lib/app/cold-load.mjs";
 import { resolveFixtureRouteState } from "../../lib/app/app-route-state-model.mjs";
 import { serverApiBaseUrl } from "../../lib/server/api-base.mjs";
-import { SESSION_COOKIE_NAME } from "../../lib/server/session-capabilities.mjs";
+import { accessTokenForRequest } from "../../lib/server/session-capabilities.mjs";
 import {
   adminForbiddenMessage,
   buildAdminRuntimeRouteData,
+  loadAdminGameBootstrap,
   loadAdminGameIndex,
   summarizeRecoveryGate,
 } from "./admin-runtime-route-model.mjs";
@@ -16,12 +19,18 @@ export async function load({ cookies, locals, fetch, url }) {
   }
   const apiBaseUrl = serverApiBaseUrl();
   const fixtureMode = process.env.FMARCH_FRONTEND_FIXTURE_SESSION === "1";
-  const sessionToken = cookies?.get?.(SESSION_COOKIE_NAME) ?? null;
+  const sessionToken = accessTokenForRequest({ locals, cookies });
   const gameIndexPage = await loadAdminGameIndex({
     fetchImpl: fixtureMode && apiBaseUrl === "" ? null : fetch,
     apiBaseUrl,
     sessionToken,
     fallback: fixtureMode && apiBaseUrl === "" ? fixtureAdminGameIndex() : null,
+  });
+  const bootstrapCatalog = await loadAdminGameBootstrap({
+    fetchImpl: fixtureMode && apiBaseUrl === "" ? null : fetch,
+    apiBaseUrl,
+    sessionToken,
+    fallback: fixtureMode && apiBaseUrl === "" ? fixtureAdminBootstrapCatalog() : null,
   });
   const data = await buildAdminRuntimeRouteData({
     principalUserId: locals.principalUserId,
@@ -31,6 +40,8 @@ export async function load({ cookies, locals, fetch, url }) {
     apiBaseUrl,
     sessionToken,
     gameIndexPage,
+    bootstrapCatalog,
+    includeLegacyIdentityOps: !workosEnabled(process.env),
     identityPrincipalUserId: url.searchParams.get("identity_principal_user_id") ?? "host_h",
   });
 
@@ -60,6 +71,15 @@ function fixtureAdminGameIndex() {
   });
 }
 
+function fixtureAdminBootstrapCatalog() {
+  return Object.freeze({
+    packs: Object.freeze([
+      Object.freeze({ key: "mafiascum", name: "Mafiascum" }),
+      Object.freeze({ key: "mafia_universe", name: "Mafia Universe" }),
+    ]),
+  });
+}
+
 function optionalGame(value) {
   return typeof value === "string" && value.trim() !== "" ? value.trim() : null;
 }
@@ -70,6 +90,46 @@ function loginHref(url) {
 }
 
 export const actions = {
+  createGame: async ({ cookies, fetch, locals, request }) => {
+    const capabilities = Array.isArray(locals.resolvedCapabilities)
+      ? locals.resolvedCapabilities
+      : [];
+    if (!capabilities.some((capability) => capability?.kind === "GlobalAdmin")) {
+      return fail(403, { bootstrap: { state: "reject", message: "Game creation requires GlobalAdmin" } });
+    }
+    const sessionToken = accessTokenForRequest({ locals, cookies });
+    if (!sessionToken || typeof locals.principalUserId !== "string") {
+      return fail(401, { bootstrap: { state: "reject", message: "Authenticated admin session required" } });
+    }
+    const formData = await request.formData();
+    const pack = requiredFormString(formData, "pack");
+    const game = randomUUID();
+    const envelope = buildCommandEnvelope({
+      command: buildAdminCommand({ action: "create_game", game, pack }),
+      commandId: randomUUID(),
+      envelopeId: Date.now(),
+    });
+    const response = await fetch(`${serverApiBaseUrl()}/commands`, {
+      method: "POST",
+      headers: {
+        accept: "application/json",
+        authorization: `Bearer ${sessionToken}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(envelope),
+    });
+    const body = await response.json();
+    if (!response.ok || body?.body?.kind !== "Ack") {
+      return fail(response.ok ? 409 : response.status, {
+        bootstrap: {
+          state: "reject",
+          message: body?.body?.body?.message ?? "Game creation was rejected",
+        },
+      });
+    }
+    throw redirect(303, `/g/${game}/setup`);
+  },
+
   checkRecoveryGate: async ({ cookies, fetch, locals, request }) => {
     const apiBaseUrl = serverApiBaseUrl();
     const fixtureMode = process.env.FMARCH_FRONTEND_FIXTURE_SESSION === "1";
@@ -99,7 +159,7 @@ export const actions = {
       };
     }
 
-    const sessionToken = cookies.get(SESSION_COOKIE_NAME);
+    const sessionToken = accessTokenForRequest({ locals, cookies });
     if (!sessionToken) {
       return fail(401, {
         id: "recovery-gate",
@@ -152,7 +212,7 @@ export const actions = {
       });
     }
 
-    const sessionToken = cookies.get(SESSION_COOKIE_NAME);
+    const sessionToken = accessTokenForRequest({ locals, cookies });
     if (!sessionToken) {
       return fail(401, {
         id: "session-grants",
@@ -200,6 +260,10 @@ export const actions = {
     };
   },
 };
+
+function workosEnabled(env) {
+  return typeof env?.WORKOS_CLIENT_ID === "string" && env.WORKOS_CLIENT_ID.trim() !== "";
+}
 
 function requiredFormString(formData, field) {
   const value = formData.get(field);

@@ -136,7 +136,6 @@ export async function sendHostSetupCommand({
     setupCommandConfigForAction({ actionId, data, formData }),
   );
   return await sendCommandImpl({
-    principalUserId: data.session.principalUserId,
     endpoint: data.commandEndpoint,
     command,
     fetchImpl,
@@ -156,7 +155,6 @@ export function buildSetupCommandDispatchBridgePlan({
     role: "host-setup",
     trace,
     request: {
-      principalUserId: data.session.principalUserId,
       endpoint: data.commandEndpoint,
       command: buildAdminCommand(
         setupCommandConfigForAction({ actionId, data, formData }),

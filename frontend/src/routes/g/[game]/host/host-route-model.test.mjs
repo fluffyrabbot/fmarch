@@ -71,7 +71,7 @@ test("host console route data is allowed for HostOf scoped to the current game",
   });
   assert.equal(
     data.liveProjection.endpoint,
-    "/ws?game=midsummer&principal_user_id=host_h&slot_id=slot-7",
+    "/live/tickets?game=midsummer&slot_id=slot-7",
   );
   assert.deepEqual(data.votecount, [
     { target: "slot-2 / Ilya", count: 4, needed: 7 },
@@ -287,7 +287,7 @@ test("host console route data uses host prompt and votecount cold-loads when ava
   });
 
   assert.deepEqual(seen, [
-    "/games/midsummer/host-prompts?principal_user_id=host_h",
+      "/api/gameplay/games/midsummer/host-prompts",
     "/games/midsummer/votecount",
     "/games/midsummer/day-vote-outcomes",
   ]);
@@ -526,7 +526,7 @@ test("host action issues a replacement invite through the authenticated host ses
         accept: init.headers.accept,
         body: init.body === undefined ? undefined : JSON.parse(init.body),
       });
-      if (url === "/games/midsummer/host-console-state?principal_user_id=host_h&slot_id=slot-7") {
+      if (url === "/games/midsummer/host-console-state?slot_id=slot-7") {
         return jsonResponse({
           slots: [{ slot_id: "slot-7", occupant_user_id: "player-mira" }],
         });
@@ -556,7 +556,7 @@ test("host action issues a replacement invite through the authenticated host ses
 
   assert.equal(
     observed[0].url,
-    "/games/midsummer/host-console-state?principal_user_id=host_h&slot_id=slot-7",
+    "/games/midsummer/host-console-state?slot_id=slot-7",
   );
   assert.equal(observed[0].authorization, "Bearer host-session-token");
   assert.equal(observed[0].accept, "application/json");
@@ -599,7 +599,7 @@ test("host action issues a player invite through the authenticated host session"
         accept: init.headers.accept,
         body: init.body === undefined ? undefined : JSON.parse(init.body),
       });
-      if (url === "/games/midsummer/host-console-state?principal_user_id=host_h&slot_id=slot-7") {
+      if (url === "/games/midsummer/host-console-state?slot_id=slot-7") {
         return jsonResponse({
           slots: [{ slot_id: "slot-7", occupant_user_id: "player-mira" }],
         });
@@ -629,7 +629,7 @@ test("host action issues a player invite through the authenticated host session"
 
   assert.equal(
     observed[0].url,
-    "/games/midsummer/host-console-state?principal_user_id=host_h&slot_id=slot-7",
+    "/games/midsummer/host-console-state?slot_id=slot-7",
   );
   assert.equal(observed[0].authorization, "Bearer host-session-token");
   assert.equal(observed[0].accept, "application/json");
@@ -654,6 +654,49 @@ test("host action issues a player invite through the authenticated host session"
     loginPath: `/auth/invite?returnTo=%2Fg%2Fmidsummer&invite=${observed[1].body.invite_token}&account=mira%40example.test`,
     expiresAt: observed[1].body.expires_at,
   });
+});
+
+test("WorkOS host invite returns an account-addressed sign-in link through the verified session", async () => {
+  const previousClientId = process.env.WORKOS_CLIENT_ID;
+  process.env.WORKOS_CLIENT_ID = "client_test";
+  const observed = [];
+  try {
+    const result = await actions.issuePlayerInvite({
+      cookies: { get: () => undefined },
+      fetch: async (url, init) => {
+        observed.push({ url, authorization: init.headers.authorization });
+        return jsonResponse({
+          slots: [{ slot_id: "slot-7", occupant_user_id: "player-mira" }],
+        });
+      },
+      locals: {
+        auth: { accessToken: "signed-workos-access-token" },
+        principalUserId: "host_h",
+        resolvedCapabilities: [{ kind: "HostOf", game: "midsummer" }],
+      },
+      params: { game: "midsummer" },
+      request: formRequest({
+        accountId: "mira@example.test",
+        principalUserId: "player-mira",
+        slotId: "slot-7",
+        expectedOccupantUserId: "player-mira",
+      }),
+      url: new URL("https://fmarch.example.test/g/midsummer/host"),
+    });
+
+    assert.deepEqual(observed, [{
+      url: "/games/midsummer/host-console-state?slot_id=slot-7",
+      authorization: "Bearer signed-workos-access-token",
+    }]);
+    assert.equal(result.playerInvite.identityProvider, "workos");
+    assert.equal(
+      result.playerInvite.loginPath,
+      "/auth/sign-in?returnTo=%2Fg%2Fmidsummer&loginHint=mira%40example.test",
+    );
+  } finally {
+    if (previousClientId === undefined) delete process.env.WORKOS_CLIENT_ID;
+    else process.env.WORKOS_CLIENT_ID = previousClientId;
+  }
 });
 
 test("host action rejects stale player invite targets before issuing an invite", async () => {
@@ -695,7 +738,7 @@ test("host action rejects stale player invite targets before issuing an invite",
   assert.equal(result.data.playerInvite.currentOccupantUserId, "player-rowan");
   assert.deepEqual(observed, [
     {
-      url: "/games/midsummer/host-console-state?principal_user_id=host_h&slot_id=slot-7",
+      url: "/games/midsummer/host-console-state?slot_id=slot-7",
       method: undefined,
       authorization: "Bearer host-session-token",
       accept: "application/json",
@@ -719,7 +762,7 @@ test("host action retries stale player invites against the current occupant", as
         accept: init.headers.accept,
         body: init.body === undefined ? undefined : JSON.parse(init.body),
       });
-      if (url === "/games/midsummer/host-console-state?principal_user_id=host_h&slot_id=slot-7") {
+      if (url === "/games/midsummer/host-console-state?slot_id=slot-7") {
         return jsonResponse({
           slots: [{ slot_id: "slot-7", occupant_user_id: "player-rowan" }],
         });
@@ -813,6 +856,6 @@ test("host live projection endpoint uses the public API base when a private base
   });
   assert.equal(
     data.liveProjection.endpoint,
-    "wss://api.example.test/ws?game=midsummer&principal_user_id=host_h&slot_id=slot-7",
+    "/live/tickets?game=midsummer&slot_id=slot-7",
   );
 });

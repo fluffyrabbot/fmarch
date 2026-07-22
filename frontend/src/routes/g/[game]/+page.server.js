@@ -1,20 +1,24 @@
 import { error } from "@sveltejs/kit";
 import { resolveFixtureRouteState } from "../../../lib/app/app-route-state-model.mjs";
 import { publicApiBaseUrl, serverApiBaseUrl } from "../../../lib/server/api-base.mjs";
+import { authenticatedApiFetch } from "../../../lib/server/session-capabilities.mjs";
 import {
   buildGameRouteData,
   playerChannelForbiddenMessage,
   playerForbiddenMessage,
 } from "./game-route-model.mjs";
 
-export async function load({ params, locals, fetch, url }) {
+export async function load({ params, locals, fetch, url, cookies }) {
   const apiBaseUrl = serverApiBaseUrl();
   const fixtureMode = process.env.FMARCH_FRONTEND_FIXTURE_SESSION === "1";
   const data = await buildGameRouteData({
     game: params.game,
     principalUserId: locals.principalUserId,
     capabilities: locals.resolvedCapabilities,
-    fetchImpl: fixtureMode && apiBaseUrl === "" ? null : fetch,
+    fetchImpl:
+      fixtureMode && apiBaseUrl === ""
+        ? null
+        : authenticatedApiFetch({ locals, cookies, fetchImpl: fetch }),
     apiBaseUrl,
     publicApiBaseUrl: publicApiBaseUrl(),
     privateItem: url?.searchParams.get("private") ?? null,

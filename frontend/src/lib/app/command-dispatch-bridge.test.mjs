@@ -85,7 +85,6 @@ test("command dispatch bridge builds a role dispatch plan", () => {
     },
     commandKind: "SubmitVote",
     commandEndpoint: "/commands",
-    principalUserId: "player_mira",
     optimisticState: "pending",
     finalState: "ack",
     projectionRefreshKeys: ["votecount"],
@@ -110,7 +109,6 @@ test("command dispatch bridge derives plans from typed command requests", () => 
     },
     request: {
       endpoint: "/commands",
-      principalUserId: "player_mira",
       command: {
         SubmitVote: {
           game: "midsummer",
@@ -157,7 +155,6 @@ test("command dispatch bridge rejects incomplete or wrong-kind metadata", () => 
         trace: {},
         commandKind: "Watch",
         commandEndpoint: "/commands",
-        principalUserId: "viewer",
         optimisticState: "pending",
         finalState: "ack",
       }),
@@ -176,7 +173,6 @@ test("command dispatch bridge rejects incomplete or wrong-kind metadata", () => 
           projectionRefreshKeys: ["votecount"],
         },
         request: {
-          principalUserId: "player_mira",
           command: {},
         },
         optimisticStatus: { state: "pending" },

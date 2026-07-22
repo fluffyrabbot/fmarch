@@ -1,6 +1,6 @@
 use axum::body::{to_bytes, Body};
 use axum::extract::State;
-use axum::http::{header::AUTHORIZATION, HeaderValue, Request, StatusCode};
+use axum::http::{header::AUTHORIZATION, HeaderMap, HeaderValue, Request, StatusCode};
 use axum::middleware::{self, Next};
 use axum::response::Response;
 use axum::routing::post;
@@ -111,6 +111,7 @@ fn command_router(pool: sqlx::PgPool) -> Router {
 
 async fn test_command(
     State(state): State<CommandRouteState>,
+    headers: HeaderMap,
     Json(envelope): Json<ClientEnvelope>,
 ) -> Json<ServerEnvelope> {
     let ClientMsg::Command(msg) = envelope.body else {
@@ -123,7 +124,13 @@ async fn test_command(
             }),
         ));
     };
-    let principal = Principal::user(msg.principal_user_id);
+    let principal = Principal::user(
+        headers
+            .get("authorization")
+            .and_then(|value| value.to_str().ok())
+            .and_then(|value| value.strip_prefix("Bearer "))
+            .unwrap_or("missing-session"),
+    );
     let body = match commands::handle_idempotent(
         &state.pool,
         &principal,
@@ -145,14 +152,13 @@ fn stable_command_id(id: u64) -> Uuid {
 fn command_envelope_with_command_id(
     id: u64,
     command_id: Uuid,
-    principal_user_id: &str,
+    _principal_user_id: &str,
     command: Command,
 ) -> ClientEnvelope {
     ClientEnvelope::new(
         id,
         ClientMsg::Command(wire::CommandMsg {
             command_id,
-            principal_user_id: principal_user_id.to_string(),
             command,
         }),
     )
@@ -177,6 +183,7 @@ async fn post_command(
             Request::builder()
                 .method("POST")
                 .uri("/commands")
+                .header("authorization", format!("Bearer {principal_user_id}"))
                 .header("content-type", "application/json")
                 .body(Body::from(body))
                 .unwrap(),

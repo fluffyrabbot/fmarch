@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { handle } from "./hooks.server.js";
+import { fmarchIdentityHandle as handle } from "./hooks.server.js";
 import { clearSessionCache } from "./lib/server/session-capabilities.mjs";
 
 test("handle rotates an overdue browser session before resolving the route", async () => {

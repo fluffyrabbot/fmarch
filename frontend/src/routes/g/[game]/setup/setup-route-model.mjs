@@ -16,6 +16,7 @@ export async function buildHostSetupRouteData({
   principalUserId = "host_h",
   fetchImpl = null,
   apiBaseUrl = "",
+  sessionToken = null,
 }) {
   const gameId = normalizeId(game, "game");
   const principal = normalizeId(principalUserId, "principalUserId");
@@ -34,6 +35,7 @@ export async function buildHostSetupRouteData({
       fetchImpl,
       fallback: hostSetupFixtureState({ game: gameId }),
       url: serverSetupStateEndpoint,
+      headers: authenticatedReadHeaders(sessionToken),
     }),
     { game: gameId },
   );
@@ -76,12 +78,11 @@ export async function buildHostSetupRouteData({
 }
 
 export function hostSetupStateUrl({ apiBaseUrl = "", game, principalUserId }) {
-  const params = new URLSearchParams({
-    principal_user_id: normalizeId(principalUserId, "principalUserId"),
-  });
-  return `${apiBaseUrl}/games/${encodeURIComponent(
+  normalizeId(principalUserId, "principalUserId");
+  const base = apiBaseUrl === "" ? "/api/gameplay" : apiBaseUrl;
+  return `${base}/games/${encodeURIComponent(
     normalizeId(game, "game"),
-  )}/setup-state?${params.toString()}`;
+  )}/setup-state`;
 }
 
 export function normalizeHostSetupState(raw, { game }) {
@@ -100,12 +101,37 @@ export function normalizeHostSetupState(raw, { game }) {
           ? pack.role_keys.map((role) => String(role)).sort()
           : [],
       ),
+      roles: Object.freeze(
+        Array.isArray(pack.roles) && pack.roles.length > 0
+          ? pack.roles.map((role) => Object.freeze({
+              key: normalizeId(role.key, "pack.roles.key"),
+              label: normalizeOptionalText(role.label) ?? humanizeIdentifier(role.key),
+              description: normalizeOptionalText(role.description) ?? "",
+            }))
+          : (Array.isArray(pack.role_keys) ? pack.role_keys : []).map((key) => Object.freeze({
+              key: String(key),
+              label: humanizeIdentifier(key),
+              description: "",
+            })),
+      ),
       startPhaseOptions: Object.freeze(
         Array.isArray(pack.start_phase_options) && pack.start_phase_options.length > 0
           ? pack.start_phase_options.map((phase) => String(phase))
           : ["D01"],
       ),
     }),
+    accounts: Object.freeze(
+      (Array.isArray(raw?.accounts) ? raw.accounts : []).map((account) =>
+        Object.freeze({
+          accountId: normalizeId(account.account_id, "accounts.account_id"),
+          principalUserId: normalizeId(
+            account.principal_user_id,
+            "accounts.principal_user_id",
+          ),
+          label: normalizeOptionalText(account.label) ?? String(account.account_id),
+        }),
+      ),
+    ),
     phase: raw?.phase
       ? Object.freeze({
           phaseId: String(raw.phase.phase_id),
@@ -181,7 +207,10 @@ export function occupiedSetupInviteTargets(setupState) {
           slotId: slot.slotId,
           principalUserId: slot.occupantUserId,
           expectedOccupantUserId: slot.occupantUserId,
-          targetLabel: `${slotLabel(slot.slotId)} / ${slot.occupantUserId}`,
+          accountId: setupState.accounts.find(
+            (account) => account.principalUserId === slot.occupantUserId,
+          )?.accountId ?? "",
+          targetLabel: `${slotLabel(slot.slotId)} / ${accountLabel(setupState, slot.occupantUserId)}`,
         }),
       ),
   );
@@ -204,8 +233,15 @@ function hostSetupFixtureState({ game }) {
       name: "Mafiascum",
       valid: true,
       role_keys: Object.freeze(["mafia_goon", "vanilla_townie"]),
+      roles: Object.freeze([
+        Object.freeze({ key: "mafia_goon", label: "Mafia Goon", description: "Mafia Goon." }),
+        Object.freeze({ key: "vanilla_townie", label: "Vanilla Townie", description: "Vanilla Townie." }),
+      ]),
       start_phase_options: Object.freeze(["D01", "N01"]),
     }),
+    accounts: Object.freeze([
+      Object.freeze({ account_id: "mira@example.test", principal_user_id: "player_mira", label: "mira@example.test" }),
+    ]),
     phase: null,
     slots: Object.freeze([
       Object.freeze({
@@ -236,6 +272,25 @@ function hostSetupFixtureState({ game }) {
 
 function slotLabel(slotId) {
   return String(slotId).replace(/^slot[-_]?/i, "Slot ");
+}
+
+function accountLabel(setupState, principalUserId) {
+  return setupState.accounts.find((account) => account.principalUserId === principalUserId)?.label
+    ?? "Assigned account";
+}
+
+function authenticatedReadHeaders(sessionToken) {
+  return typeof sessionToken === "string" && sessionToken.trim() !== ""
+    ? Object.freeze({ authorization: `Bearer ${sessionToken}` })
+    : null;
+}
+
+function humanizeIdentifier(value) {
+  return String(value)
+    .split(/[_-]/u)
+    .filter(Boolean)
+    .map((part) => `${part.slice(0, 1).toUpperCase()}${part.slice(1)}`)
+    .join(" ");
 }
 
 function normalizeOptionalText(value) {

@@ -103,15 +103,15 @@ test("player route data exposes thread, channel, votecount, and touch command la
   assert.equal(data.coldLoad.threadEndpoint, "/games/midsummer/thread?limit=50");
   assert.equal(
     data.coldLoad.notificationsEndpoint,
-    "/games/midsummer/notifications?principal_user_id=player_mira",
+    "/api/gameplay/games/midsummer/notifications",
   );
   assert.equal(
     data.coldLoad.investigationResultsEndpoint,
-    "/games/midsummer/investigation-results?principal_user_id=player_mira",
+    "/api/gameplay/games/midsummer/investigation-results",
   );
   assert.equal(
     data.coldLoad.commandStateEndpoint,
-    "/games/midsummer/player-command-state?principal_user_id=player_mira&slot_id=slot-7",
+    "/api/gameplay/games/midsummer/player-command-state?slot_id=slot-7",
   );
   assert.deepEqual(data.threadPager, {
     pageSize: 50,
@@ -144,7 +144,7 @@ test("player route data exposes thread, channel, votecount, and touch command la
   ]);
   assert.equal(
     data.liveProjection.endpoint,
-    "/ws?game=midsummer&principal_user_id=player_mira",
+    "/live/tickets?game=midsummer",
   );
   assert.equal(
     data.projectionBoundary.status,
@@ -268,7 +268,7 @@ test("spectator role URLs load only the spectator room without player-private co
   assert.equal(data.coldLoad.commandStateEndpoint, null);
   assert.equal(
     data.coldLoad.threadEndpoint,
-    "/games/midsummer/channels/spectator/thread?limit=50&principal_user_id=spectator_s",
+    "/api/gameplay/games/midsummer/channels/spectator/thread?limit=50",
   );
 });
 
@@ -385,15 +385,15 @@ test("player route data marks active private channel access without host data", 
   ]);
   assert.equal(
     data.coldLoad.threadEndpoint,
-    "/games/midsummer/channels/private%3Arole_pm%3Aslot-7/thread?limit=50&principal_user_id=player_mira",
+    "/api/gameplay/games/midsummer/channels/private%3Arole_pm%3Aslot-7/thread?limit=50",
   );
   assert.equal(
     data.threadPager.olderEndpoint,
-    "/games/midsummer/channels/private%3Arole_pm%3Aslot-7/thread?limit=50&before_seq=441&principal_user_id=player_mira",
+    "/api/gameplay/games/midsummer/channels/private%3Arole_pm%3Aslot-7/thread?limit=50&before_seq=441",
   );
   assert.equal(
     data.liveProjection.endpoint,
-    "/ws?game=midsummer&principal_user_id=player_mira&channel=private%3Arole_pm%3Aslot-7",
+    "/live/tickets?game=midsummer&channel=private%3Arole_pm%3Aslot-7",
   );
   assert.equal(Object.hasOwn(data, "hostPrompts"), false);
 });
@@ -975,7 +975,7 @@ function jsonResponse(body) {
   };
 }
 
-test("live projection endpoint uses the public API base even when SSR fetches ride the private network", async () => {
+test("live projection endpoint always uses the same-origin ticket broker", async () => {
   const data = await buildGameRouteData({
     game: "midsummer",
     principalUserId: "player_mira",
@@ -988,6 +988,6 @@ test("live projection endpoint uses the public API base even when SSR fetches ri
   });
   assert.equal(
     data.liveProjection.endpoint,
-    "wss://api.example.test/ws?game=midsummer&principal_user_id=player_mira",
+    "/live/tickets?game=midsummer",
   );
 });

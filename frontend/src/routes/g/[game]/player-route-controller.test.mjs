@@ -122,7 +122,6 @@ test("player route controller builds typed player command requests", () => {
       composerBody: "ignored for vote",
     }),
     {
-      principalUserId: "player_mira",
       endpoint: "/commands",
       command: {
         SubmitVote: {
@@ -141,7 +140,6 @@ test("player route controller builds typed player command requests", () => {
       composerBody: "ignored for no lynch vote",
     }),
     {
-      principalUserId: "player_mira",
       endpoint: "/commands",
       command: {
         SubmitVote: {
@@ -168,7 +166,6 @@ test("player route controller builds typed player command requests", () => {
       ],
     }),
     {
-      principalUserId: "player_mira",
       endpoint: "/commands",
       command: {
         SubmitPost: {
@@ -194,7 +191,6 @@ test("player route controller builds typed player command requests", () => {
       composerBody: "ignored for action",
     }),
     {
-      principalUserId: "player_mira",
       endpoint: "/commands",
       command: {
         SubmitAction: {
@@ -306,7 +302,6 @@ test("player route controller derives dispatch bridge plans from command request
     },
     commandKind: "SubmitVote",
     commandEndpoint: "/commands",
-    principalUserId: "player_mira",
     optimisticState: "pending",
     finalState: "ack",
     projectionRefreshKeys: ["votecount", "commandState"],
@@ -635,7 +630,7 @@ test("player route controller pages older posts from the active private channel"
   });
 
   assert.deepEqual(seenUrls, [
-    "/games/midsummer/channels/private%3Arole_pm%3Aslot-7/thread?limit=50&before_seq=41&principal_user_id=player_mira",
+    "/api/gameplay/games/midsummer/channels/private%3Arole_pm%3Aslot-7/thread?limit=50&before_seq=41",
   ]);
 });
 
@@ -844,12 +839,9 @@ function fixtureData(overrides = {}) {
       votecountEndpoint: "/games/midsummer/votecount",
       dayVoteOutcomesEndpoint: "/games/midsummer/day-vote-outcomes",
       endgameSummaryEndpoint: "/games/midsummer/endgame-summary",
-      notificationsEndpoint:
-        "/games/midsummer/notifications?principal_user_id=player_mira",
-      investigationResultsEndpoint:
-        "/games/midsummer/investigation-results?principal_user_id=player_mira",
-      commandStateEndpoint:
-        "/games/midsummer/player-command-state?principal_user_id=player_mira&slot_id=slot-7",
+      notificationsEndpoint: "/api/gameplay/games/midsummer/notifications",
+      investigationResultsEndpoint: "/api/gameplay/games/midsummer/investigation-results",
+      commandStateEndpoint: "/api/gameplay/games/midsummer/player-command-state?slot_id=slot-7",
     },
     ...overrides,
   };

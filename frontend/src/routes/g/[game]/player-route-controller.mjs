@@ -248,7 +248,6 @@ export function playerRefreshKeysForAction(action) {
 export function buildPlayerCommandRequest({ data, action, composerBody, media = [] }) {
   const actionConfig = playerActionConfig(data, action);
   return Object.freeze({
-    principalUserId: data.player.principalUserId,
     endpoint: data.composer.commandEndpoint,
     command: buildPlayerCommand({
       action,
@@ -507,7 +506,6 @@ export async function loadOlderPlayerThreadPage({
     playerThreadUrl({
       game: data.game.id,
       channel: data.threadPager.channel,
-      principalUserId: data.player.principalUserId,
       limit: data.threadPager.pageSize,
       beforeSeq: thread.nextBeforeSeq,
     }),

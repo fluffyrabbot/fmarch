@@ -11,9 +11,11 @@ import {
 import {
   _issueHostScopedInvite,
 } from "../host/+page.server.js";
+import { accessTokenForRequest } from "../../../../lib/server/session-capabilities.mjs";
+import { serverApiBaseUrl } from "../../../../lib/server/api-base.mjs";
 
-export async function load({ params, locals, fetch, url }) {
-  const apiBaseUrl = process.env.FMARCH_API_BASE_URL ?? "";
+export async function load({ params, locals, fetch, url, cookies }) {
+  const apiBaseUrl = serverApiBaseUrl();
   const fixtureMode = process.env.FMARCH_FRONTEND_FIXTURE_SESSION === "1";
   const capabilities = resolveHostRouteCapabilities({
     game: params.game,
@@ -23,6 +25,7 @@ export async function load({ params, locals, fetch, url }) {
     game: params.game,
     locals,
   });
+  const sessionToken = accessTokenForRequest({ locals, cookies });
   if (principalUserId === "") {
     throw error(403, "Host setup requires an authenticated host session.");
   }
@@ -33,6 +36,7 @@ export async function load({ params, locals, fetch, url }) {
     principalUserId,
     fetchImpl: fixtureMode && apiBaseUrl === "" ? null : fetch,
     apiBaseUrl,
+    sessionToken,
   });
 
   if (!routeData.access.allowed) {

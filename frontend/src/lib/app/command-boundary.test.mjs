@@ -215,7 +215,6 @@ test("generic command envelope uses the Rust ClientEnvelope shape", () => {
       kind: "Command",
       body: {
         command_id: "11111111-1111-4111-8111-111111111111",
-        principal_user_id: "player_mira",
         command: {
           WithdrawVote: {
             game: "00000000-0000-0000-0000-000000000001",

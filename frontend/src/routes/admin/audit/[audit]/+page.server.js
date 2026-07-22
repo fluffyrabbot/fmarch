@@ -1,6 +1,6 @@
 import { error, fail } from "@sveltejs/kit";
 import { serverApiBaseUrl } from "../../../../lib/server/api-base.mjs";
-import { SESSION_COOKIE_NAME } from "../../../../lib/server/session-capabilities.mjs";
+import { accessTokenForRequest } from "../../../../lib/server/session-capabilities.mjs";
 import {
   adminForbiddenMessage,
   buildAdminRuntimeAuditDetailData,
@@ -15,7 +15,7 @@ export async function load({ cookies, locals, fetch, params, url }) {
     game: url.searchParams.get("game"),
     fetchImpl: fetch,
     apiBaseUrl,
-    sessionToken: cookies?.get?.(SESSION_COOKIE_NAME) ?? null,
+    sessionToken: accessTokenForRequest({ locals, cookies }),
     identityPrincipalUserId: url.searchParams.get("principal_user_id") ?? "host_h",
   });
 
@@ -90,7 +90,7 @@ async function submitAccountLifecycleAction({
     });
   }
 
-  const sessionToken = cookies.get(SESSION_COOKIE_NAME);
+  const sessionToken = accessTokenForRequest({ locals, cookies });
   if (!sessionToken) {
     return fail(401, {
       id: actionId,

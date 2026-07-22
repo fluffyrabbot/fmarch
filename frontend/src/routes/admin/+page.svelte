@@ -290,6 +290,28 @@
 
   {#if adminForcedRouteState}
     <RouteState view={adminForcedRouteState} />
+  {:else if data.bootstrap?.available && data.gameSelection?.selectedGame === null}
+    <section class="admin-bootstrap fm-panel" data-testid="admin-game-bootstrap">
+      <div>
+        <p class="fm-eyebrow">Fresh install</p>
+        <h2>Create the first game</h2>
+        <p>Choose the rules pack. You will continue directly into host setup.</p>
+      </div>
+      <form method="POST" action="?/createGame">
+        <label class="fm-field">
+          <span>Game pack</span>
+          <select name="pack" required data-testid="admin-game-bootstrap-pack">
+            {#each data.bootstrap.packs as pack}
+              <option value={pack.key} selected={pack.key === data.bootstrap.defaultPack}>{pack.name}</option>
+            {/each}
+          </select>
+        </label>
+        <button class="fm-touch-button" type="submit" data-testid="admin-game-bootstrap-submit">Create game and continue</button>
+      </form>
+      {#if form?.bootstrap}
+        <AppStatus status={form.bootstrap} testId="admin-game-bootstrap-status" />
+      {/if}
+    </section>
   {:else if adminSurfaceEmpty}
     <RouteState view={adminEmptyState} />
   {:else}
@@ -456,6 +478,11 @@
     width: 100%;
   }
 
+  .admin-bootstrap { display: grid; gap: 20px; padding: clamp(20px, 4vw, 36px); }
+  .admin-bootstrap h2, .admin-bootstrap p { margin-block: 0; }
+  .admin-bootstrap > div { display: grid; gap: 8px; }
+  .admin-bootstrap form { align-items: end; display: grid; gap: 12px; grid-template-columns: minmax(220px, 1fr) auto; }
+
   .admin-operator-inbox { align-items: start; display: grid; gap: 22px; grid-template-columns: 260px minmax(0, 1fr); }
   .admin-operator-inbox__queue, .admin-operator-inbox__canvas { background: var(--fm-surface-tint); border: 1px solid var(--fm-line-soft); border-radius: 12px; min-inline-size: 0; }
   .admin-operator-inbox__queue { display: grid; gap: 12px; padding: 14px; }
@@ -508,6 +535,7 @@
     .admin-operator-inbox { gap: 8px; }
     .admin-operator-inbox__tasks a > small { display: none; }
     .admin-operator-inbox__canvas-heading { align-items: start; display: grid; gap: 8px; }
+    .admin-bootstrap form { align-items: stretch; grid-template-columns: 1fr; }
   }
 
   @media (prefers-reduced-motion: reduce) {

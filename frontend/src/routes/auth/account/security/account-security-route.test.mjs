@@ -15,6 +15,7 @@ test("security load exposes the authenticated account role URL", () => {
         accountId: "host@example.test",
         principalUserId: "host_h",
         returnTo: "/g/game-1/host",
+        managedByWorkos: false,
       },
     },
   );

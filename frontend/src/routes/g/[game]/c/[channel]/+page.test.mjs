@@ -27,7 +27,7 @@ test("player channel route loads an allowed role PM channel", async () => {
   ]);
   assert.equal(
     seen[0],
-    "/games/midsummer/channels/private%3Arole_pm%3Aslot-7/thread?limit=50&principal_user_id=player_mira",
+    "/api/gameplay/games/midsummer/channels/private%3Arole_pm%3Aslot-7/thread?limit=50",
   );
 });
 

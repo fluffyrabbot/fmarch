@@ -2,7 +2,7 @@ import { error, fail, redirect } from "@sveltejs/kit";
 import { buildAppShell } from "../../lib/app/app-shell-model.mjs";
 import { buildAppSurfaceHeaderViewModel } from "../../lib/app/app-surface-header-model.mjs";
 import { hasCapability } from "../../lib/app/capabilities.mjs";
-import { SESSION_COOKIE_NAME } from "../../lib/server/session-capabilities.mjs";
+import { accessTokenForRequest } from "../../lib/server/session-capabilities.mjs";
 
 export async function load({ cookies, locals, fetch, url }) {
   const capabilities = Array.isArray(locals.resolvedCapabilities)
@@ -11,7 +11,7 @@ export async function load({ cookies, locals, fetch, url }) {
   const allowed = hasCapability({ capabilities, kind: "GlobalMod" })
     || hasCapability({ capabilities, kind: "GlobalAdmin" });
   if (!allowed) throw error(403, "Community moderation requires GlobalMod");
-  const token = cookies.get(SESSION_COOKIE_NAME);
+  const token = accessTokenForRequest({ locals, cookies });
   if (typeof token !== "string" || token.trim() === "") {
     throw error(401, "Community moderation requires an authenticated session");
   }
@@ -58,8 +58,8 @@ export async function load({ cookies, locals, fetch, url }) {
 }
 
 export const actions = {
-  caseAction: async ({ cookies, fetch, request, url }) => {
-    const token = cookies.get(SESSION_COOKIE_NAME);
+  caseAction: async ({ locals, cookies, fetch, request, url }) => {
+    const token = accessTokenForRequest({ locals, cookies });
     if (typeof token !== "string" || token.trim() === "") {
       return fail(401, { id: "moderation-action", state: "reject", message: "Sign in again" });
     }

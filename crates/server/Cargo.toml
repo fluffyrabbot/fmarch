@@ -5,6 +5,7 @@ edition.workspace = true
 
 [dependencies]
 api = { path = "../api" }
+identity = { path = "../identity" }
 media = { path = "../media" }
 operator_api = { path = "../operator_api" }
 axum = "0.8"

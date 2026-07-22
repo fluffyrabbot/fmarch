@@ -1,4 +1,4 @@
-import { SESSION_COOKIE_NAME } from "../../../../../../../../lib/server/session-capabilities.mjs";
+import { accessTokenForRequest } from "../../../../../../../../lib/server/session-capabilities.mjs";
 
 const FORWARDED_HEADERS = Object.freeze([
   "cache-control",
@@ -15,11 +15,12 @@ const FORWARDED_HEADERS = Object.freeze([
 export async function GET({
   params,
   request,
+  locals,
   cookies,
   fetch: fetchImpl = fetch,
   env = process.env,
 }) {
-  const token = cookies?.get?.(SESSION_COOKIE_NAME);
+  const token = accessTokenForRequest({ locals, cookies });
   if (typeof token !== "string" || token.trim() === "") {
     return emptyResponse(401);
   }

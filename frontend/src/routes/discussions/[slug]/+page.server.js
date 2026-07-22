@@ -2,7 +2,7 @@ import { fail, redirect } from "@sveltejs/kit";
 import { buildAppShell } from "../../../lib/app/app-shell-model.mjs";
 import { buildAppSurfaceHeaderViewModel } from "../../../lib/app/app-surface-header-model.mjs";
 import { hasCapability } from "../../../lib/app/capabilities.mjs";
-import { SESSION_COOKIE_NAME } from "../../../lib/server/session-capabilities.mjs";
+import { accessTokenForRequest } from "../../../lib/server/session-capabilities.mjs";
 
 export async function load({ params, locals, cookies, fetch, url }) {
   const apiBaseUrl = process.env.FMARCH_API_BASE_URL ?? "";
@@ -16,7 +16,7 @@ export async function load({ params, locals, cookies, fetch, url }) {
   if (area === null) {
     return unavailableData(params.slug, locals);
   }
-  const profile = await loadCurrentProfile({ cookies, fetch, apiBaseUrl });
+  const profile = await loadCurrentProfile({ locals, cookies, fetch, apiBaseUrl });
   return {
     shellOwner: "layout",
     shell: buildAppShell({
@@ -49,10 +49,11 @@ export async function load({ params, locals, cookies, fetch, url }) {
 }
 
 export const actions = {
-  createTopic: async ({ cookies, fetch, params, request }) => {
+  createTopic: async ({ locals, cookies, fetch, params, request }) => {
     const form = await request.formData();
     const response = await discussionMutation({
       cookies,
+      locals,
       fetch,
       path: `/discussions/areas/${encodeURIComponent(params.slug)}/topics`,
       body: { title: text(form.get("title")), body: text(form.get("body")) },
@@ -89,8 +90,8 @@ function unavailableData(slug, locals) {
   };
 }
 
-async function discussionMutation({ cookies, fetch, path, body }) {
-  const token = cookies.get(SESSION_COOKIE_NAME);
+async function discussionMutation({ locals, cookies, fetch, path, body }) {
+  const token = accessTokenForRequest({ locals, cookies });
   if (typeof token !== "string" || token.trim() === "") {
     return { ok: false, status: 401, json: async () => null };
   }
@@ -125,8 +126,8 @@ async function loadJson(fetch, url) {
   return value !== null && typeof value === "object" ? value : null;
 }
 
-async function loadCurrentProfile({ cookies, fetch, apiBaseUrl }) {
-  const token = cookies.get(SESSION_COOKIE_NAME);
+async function loadCurrentProfile({ locals, cookies, fetch, apiBaseUrl }) {
+  const token = accessTokenForRequest({ locals, cookies });
   if (typeof token !== "string" || token.trim() === "") return null;
   const response = await fetch(`${apiBaseUrl}/profiles/me/editor`, {
     headers: { authorization: `Bearer ${token}`, accept: "application/json" },

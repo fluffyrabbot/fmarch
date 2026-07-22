@@ -7,6 +7,12 @@ import {
 } from "../../../lib/server/session-capabilities.mjs";
 
 export function load({ locals, url }) {
+  if (workosConfigured()) {
+    const query = new URLSearchParams({ returnTo: safeReturnTo(url.searchParams.get("returnTo")) });
+    const account = optionalToken(url.searchParams.get("account"));
+    if (account !== "") query.set("loginHint", account);
+    throw redirect(302, `/auth/sign-in?${query}`);
+  }
   return {
     login: {
       principalUserId:
@@ -15,6 +21,10 @@ export function load({ locals, url }) {
       returnTo: safeReturnTo(url.searchParams.get("returnTo")),
     },
   };
+}
+
+function workosConfigured(env = process.env) {
+  return typeof env.WORKOS_CLIENT_ID === "string" && env.WORKOS_CLIENT_ID.trim() !== "";
 }
 
 export const actions = {

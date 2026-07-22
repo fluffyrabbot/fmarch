@@ -24,6 +24,7 @@ use axum::routing::{get, post};
 use axum::{Json, Router};
 use caps::{Capability, Principal};
 use eventstore::{ActorId, EventInput};
+use identity::{AccessTokenVerifier, IdentityError, VerifiedIdentity};
 use media::{
     ContentId, IngestStatus, MediaError, MediaStore, VariantFormat, VariantGenerationStatus,
     VariantKind, VariantLimits, VARIANT_RECIPE_REVISION,
@@ -62,6 +63,10 @@ pub struct ApiState {
     live_projection_tx: broadcast::Sender<LiveProjectionUpdate>,
     live_projection_delivery_delay: Duration,
     live_connection_slots: Arc<Semaphore>,
+    websocket_audience: String,
+    websocket_ticket_ttl: Duration,
+    websocket_poll_interval: Duration,
+    access_token_verifier: Option<Arc<dyn AccessTokenVerifier>>,
 }
 
 #[derive(Debug, Clone)]
@@ -120,6 +125,23 @@ impl ApiState {
             live_projection_tx,
             live_projection_delivery_delay,
             live_connection_slots: Arc::new(Semaphore::new(live_connection_limit)),
+            websocket_audience: std::env::var("FMARCH_WS_AUDIENCE")
+                .ok()
+                .filter(|value| !value.trim().is_empty())
+                .unwrap_or_else(|| "fmarch-live".to_string()),
+            websocket_ticket_ttl: Duration::from_secs(env_i64(
+                "FMARCH_WS_TICKET_TTL_SECONDS",
+                30,
+                5,
+                120,
+            ) as u64),
+            websocket_poll_interval: Duration::from_millis(env_i64(
+                "FMARCH_WS_POLL_INTERVAL_MS",
+                250,
+                25,
+                5_000,
+            ) as u64),
+            access_token_verifier: None,
         }
     }
 
@@ -192,6 +214,31 @@ impl ApiState {
         self.live_connection_slots = Arc::new(Semaphore::new(limit.clamp(1, 65_536)));
         self
     }
+
+    pub fn with_websocket_audience(mut self, audience: impl Into<String>) -> Self {
+        self.websocket_audience = audience.into();
+        self
+    }
+
+    pub fn with_websocket_ticket_ttl(mut self, ttl: Duration) -> Self {
+        self.websocket_ticket_ttl = ttl.clamp(Duration::from_secs(1), Duration::from_secs(120));
+        self
+    }
+
+    pub fn with_websocket_poll_interval(mut self, interval: Duration) -> Self {
+        self.websocket_poll_interval =
+            interval.clamp(Duration::from_millis(10), Duration::from_secs(5));
+        self
+    }
+
+    pub fn with_access_token_verifier(mut self, verifier: Arc<dyn AccessTokenVerifier>) -> Self {
+        self.access_token_verifier = Some(verifier);
+        self
+    }
+
+    pub fn uses_external_identity(&self) -> bool {
+        self.access_token_verifier.is_some()
+    }
 }
 
 pub fn router(pool: PgPool, media_store: MediaStore) -> Router {
@@ -200,9 +247,8 @@ pub fn router(pool: PgPool, media_store: MediaStore) -> Router {
 
 pub fn router_with_state(state: ApiState) -> Router {
     let media_upload_limit = state.media_store.limits().max_encoded_bytes();
-    Router::new()
-        .route("/healthz", get(healthz))
-        .route("/auth/session", get(auth_session))
+    let external_identity = state.uses_external_identity();
+    let legacy_identity_routes = Router::new()
         .route("/auth/dev-session", post(create_dev_auth_session))
         .route("/auth/session-grants", post(create_auth_session_grant))
         .route("/auth/accounts", post(create_auth_account))
@@ -237,7 +283,11 @@ pub fn router_with_state(state: ApiState) -> Router {
         .route(
             "/auth/delivery-intents/{delivery_id}/retry",
             post(retry_auth_delivery_intent),
-        )
+        );
+    let app = Router::new()
+        .route("/healthz", get(healthz))
+        .route("/auth/session", get(auth_session))
+        .route("/auth/websocket-tickets", post(create_websocket_ticket))
         .route(
             "/media/uploads",
             post(media_upload).layer(DefaultBodyLimit::max(media_upload_limit)),
@@ -252,6 +302,7 @@ pub fn router_with_state(state: ApiState) -> Router {
         )
         .route("/commands", post(command))
         .route("/admin/games", get(admin_game_index))
+        .route("/admin/game-bootstrap", get(admin_game_bootstrap))
         .route("/games", get(game_index))
         .route("/games/{game}", get(public_game_thread))
         .route("/games/import", post(import_completed_game_export))
@@ -328,8 +379,13 @@ pub fn router_with_state(state: ApiState) -> Router {
         .route("/games/{game}/host-prompts", get(host_prompts))
         .route("/games/{game}/host-console-state", get(host_console_state))
         .route("/games/{game}/setup-state", get(host_setup_state))
-        .route("/ws", get(ws))
-        .with_state(state)
+        .route("/ws", get(ws));
+    let app = if external_identity {
+        app
+    } else {
+        app.merge(legacy_identity_routes)
+    };
+    app.with_state(state)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -445,29 +501,199 @@ async fn media_upload(
     Ok((status, Json(response)))
 }
 
-async fn require_active_enabled_account(state: &ApiState, token: &str) -> Result<String, ApiError> {
+#[derive(Debug, Clone)]
+struct AuthenticatedIdentity {
+    principal_user_id: String,
+    global_capabilities: Vec<String>,
+    auth_kind: &'static str,
+    session_reference: String,
+    expires_at: i64,
+}
+
+async fn authenticate_token(
+    state: &ApiState,
+    token: &str,
+) -> Result<AuthenticatedIdentity, ApiError> {
+    if let Some(verifier) = state.access_token_verifier.as_ref() {
+        let verified = verifier.verify(token).await.map_err(identity_api_error)?;
+        return resolve_workos_principal(state, verified).await;
+    }
+    authenticate_legacy_token(state, token).await
+}
+
+async fn resolve_workos_principal(
+    state: &ApiState,
+    verified: VerifiedIdentity,
+) -> Result<AuthenticatedIdentity, ApiError> {
+    let now = unix_now_seconds();
+    if verified.expires_at <= now {
+        return Err(unauthorized_session());
+    }
+    let mut tx = state.pool.begin().await?;
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
+        .bind(format!("workos:{}", verified.subject))
+        .execute(&mut *tx)
+        .await?;
+    let existing = sqlx::query_scalar::<_, String>(
+        "SELECT principal_user_id FROM external_identity WHERE provider = 'workos' AND subject = $1",
+    )
+    .bind(verified.subject.as_str())
+    .fetch_optional(&mut *tx)
+    .await?;
+    let principal_user_id = match existing {
+        Some(principal_user_id) => principal_user_id,
+        None => {
+            let principal_user_id = format!("principal-{}", Uuid::new_v4());
+            sqlx::query(
+                "INSERT INTO platform_principal (principal_user_id, status, global_capabilities, created_at, disabled_at) VALUES ($1, 'active', '{}'::TEXT[], $2, NULL)",
+            )
+            .bind(principal_user_id.as_str())
+            .bind(now)
+            .execute(&mut *tx)
+            .await?;
+            sqlx::query(
+                "INSERT INTO external_identity (provider, subject, principal_user_id, display_label, created_at, last_seen_at) VALUES ('workos', $1, $2, $3, $4, $4)",
+            )
+            .bind(verified.subject.as_str())
+            .bind(principal_user_id.as_str())
+            .bind(verified.email.as_deref())
+            .bind(now)
+            .execute(&mut *tx)
+            .await?;
+            sqlx::query(
+                r#"
+                INSERT INTO identity_lifecycle_audit (
+                    event_at, event_kind, actor_user_id, principal_user_id,
+                    token_hash, related_token_hash, metadata
+                )
+                VALUES ($1, 'external_identity_bound', NULL, $2, NULL, NULL, $3::JSONB)
+                "#,
+            )
+            .bind(now)
+            .bind(principal_user_id.as_str())
+            .bind(serde_json::json!({ "provider": "workos" }).to_string())
+            .execute(&mut *tx)
+            .await?;
+            principal_user_id
+        }
+    };
+    sqlx::query(
+        "UPDATE external_identity SET last_seen_at = $1, display_label = COALESCE($2, display_label) WHERE provider = 'workos' AND subject = $3",
+    )
+    .bind(now)
+    .bind(verified.email.as_deref())
+    .bind(verified.subject.as_str())
+    .execute(&mut *tx)
+    .await?;
+    let principal = sqlx::query_as::<_, (String, Vec<String>)>(
+        "SELECT status, global_capabilities FROM platform_principal WHERE principal_user_id = $1",
+    )
+    .bind(principal_user_id.as_str())
+    .fetch_optional(&mut *tx)
+    .await?
+    .ok_or_else(unauthorized_account)?;
+    if principal.0 != "active" {
+        return Err(unauthorized_account());
+    }
+    tx.commit().await?;
+    Ok(AuthenticatedIdentity {
+        principal_user_id,
+        global_capabilities: principal.1,
+        auth_kind: "workos",
+        session_reference: verified.session_id,
+        expires_at: verified.expires_at,
+    })
+}
+
+async fn authenticate_legacy_token(
+    state: &ApiState,
+    token: &str,
+) -> Result<AuthenticatedIdentity, ApiError> {
     let token_hash = hash_session_token(token);
     let now = unix_now_seconds();
-    sqlx::query_scalar::<_, String>(
-        r#"
-        SELECT session.principal_user_id
-        FROM auth_session AS session
-        WHERE session.token_hash = $1
-          AND session.revoked_at IS NULL
-          AND session.expires_at > $2
-          AND EXISTS (
-              SELECT 1
-              FROM auth_account AS account
-              WHERE account.principal_user_id = session.principal_user_id
-                AND account.disabled_at IS NULL
-          )
-        "#,
-    )
-    .bind(token_hash)
-    .bind(now)
-    .fetch_optional(&state.pool)
-    .await?
-    .ok_or_else(unauthorized_account)
+    let session = if state.dev_auth_enabled {
+        sqlx::query_as::<_, (String, Vec<String>, i64)>(
+            r#"
+            SELECT session.principal_user_id, session.global_capabilities, session.expires_at
+            FROM auth_session AS session
+            WHERE session.token_hash = $1
+              AND session.revoked_at IS NULL
+              AND session.expires_at > $2
+              AND (
+                  NOT EXISTS (
+                      SELECT 1 FROM auth_account AS account
+                      WHERE account.principal_user_id = session.principal_user_id
+                  )
+                  OR EXISTS (
+                      SELECT 1 FROM auth_account AS account
+                      WHERE account.principal_user_id = session.principal_user_id
+                        AND account.disabled_at IS NULL
+                  )
+              )
+            "#,
+        )
+        .bind(token_hash.as_str())
+        .bind(now)
+        .fetch_optional(&state.pool)
+        .await?
+    } else {
+        sqlx::query_as::<_, (String, Vec<String>, i64)>(
+            r#"
+            SELECT session.principal_user_id, session.global_capabilities, session.expires_at
+            FROM auth_session AS session
+            WHERE session.token_hash = $1
+              AND session.revoked_at IS NULL
+              AND session.expires_at > $2
+              AND EXISTS (
+                  SELECT 1 FROM auth_account AS account
+                  WHERE account.principal_user_id = session.principal_user_id
+                    AND account.disabled_at IS NULL
+              )
+            "#,
+        )
+        .bind(token_hash.as_str())
+        .bind(now)
+        .fetch_optional(&state.pool)
+        .await?
+    }
+    .ok_or_else(unauthorized_account)?;
+    Ok(AuthenticatedIdentity {
+        principal_user_id: session.0,
+        global_capabilities: session.1,
+        auth_kind: "legacy-dev",
+        session_reference: token_hash,
+        expires_at: session.2,
+    })
+}
+
+fn identity_api_error(error: IdentityError) -> ApiError {
+    match error {
+        IdentityError::ProviderUnavailable(message) => {
+            tracing::warn!(error = %message, "WorkOS token verification dependency unavailable");
+            ApiError::Reject {
+                status: StatusCode::SERVICE_UNAVAILABLE,
+                error: RejectCode::Internal,
+                message: "identity verification is temporarily unavailable".to_string(),
+            }
+        }
+        _ => unauthorized_session(),
+    }
+}
+
+async fn require_active_enabled_account(state: &ApiState, token: &str) -> Result<String, ApiError> {
+    let identity = authenticate_token(state, token).await?;
+    if identity.auth_kind == "legacy-dev" {
+        let enabled = sqlx::query_scalar::<_, bool>(
+            "SELECT EXISTS (SELECT 1 FROM auth_account WHERE principal_user_id = $1 AND disabled_at IS NULL)",
+        )
+        .bind(identity.principal_user_id.as_str())
+        .fetch_one(&state.pool)
+        .await?;
+        if !enabled {
+            return Err(unauthorized_account());
+        }
+    }
+    Ok(identity.principal_user_id)
 }
 
 fn declared_upload_format(headers: &HeaderMap) -> Result<DeclaredUploadFormat, ApiError> {
@@ -784,6 +1010,101 @@ struct AuthAccountResponse {
     global_capabilities: Vec<String>,
 }
 
+pub async fn bootstrap_workos_global_admin(
+    pool: &PgPool,
+    workos_user_id: &str,
+    display_label: Option<&str>,
+) -> Result<bool, String> {
+    let workos_user_id = workos_user_id.trim();
+    if workos_user_id.is_empty() {
+        return Err("bootstrap WorkOS user id must not be empty".to_string());
+    }
+    let now = unix_now_seconds();
+    let mut tx = pool.begin().await.map_err(|error| error.to_string())?;
+    sqlx::query("SELECT pg_advisory_xact_lock($1)")
+        .bind(0x6d66_6172_6368_0007_i64)
+        .execute(&mut *tx)
+        .await
+        .map_err(|error| error.to_string())?;
+    let admin_exists = sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS (SELECT 1 FROM platform_principal WHERE status = 'active' AND global_capabilities @> ARRAY['GlobalAdmin']::TEXT[])",
+    )
+    .fetch_one(&mut *tx)
+    .await
+    .map_err(|error| error.to_string())?;
+    if admin_exists {
+        tx.commit().await.map_err(|error| error.to_string())?;
+        return Ok(false);
+    }
+    let existing = sqlx::query_as::<_, (String, bool)>(
+        r#"
+        SELECT identity.principal_user_id,
+               principal.global_capabilities @> ARRAY['GlobalAdmin']::TEXT[]
+        FROM external_identity AS identity
+        JOIN platform_principal AS principal
+          ON principal.principal_user_id = identity.principal_user_id
+        WHERE identity.provider = 'workos' AND identity.subject = $1
+        "#,
+    )
+    .bind(workos_user_id)
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(|error| error.to_string())?;
+    let (principal_user_id, already_admin) = match existing {
+        Some(existing) => existing,
+        None => {
+            let principal_user_id = format!("principal-{}", Uuid::new_v4());
+            sqlx::query(
+                "INSERT INTO platform_principal (principal_user_id, status, global_capabilities, created_at, disabled_at) VALUES ($1, 'active', '{}'::TEXT[], $2, NULL)",
+            )
+            .bind(principal_user_id.as_str())
+            .bind(now)
+            .execute(&mut *tx)
+            .await
+            .map_err(|error| error.to_string())?;
+            sqlx::query(
+                "INSERT INTO external_identity (provider, subject, principal_user_id, display_label, created_at, last_seen_at) VALUES ('workos', $1, $2, $3, $4, $4)",
+            )
+            .bind(workos_user_id)
+            .bind(principal_user_id.as_str())
+            .bind(display_label.map(str::trim).filter(|label| !label.is_empty()))
+            .bind(now)
+            .execute(&mut *tx)
+            .await
+            .map_err(|error| error.to_string())?;
+            (principal_user_id, false)
+        }
+    };
+    if already_admin {
+        tx.commit().await.map_err(|error| error.to_string())?;
+        return Ok(false);
+    }
+    sqlx::query(
+        "UPDATE platform_principal SET global_capabilities = array_append(global_capabilities, 'GlobalAdmin') WHERE principal_user_id = $1",
+    )
+    .bind(principal_user_id.as_str())
+    .execute(&mut *tx)
+    .await
+    .map_err(|error| error.to_string())?;
+    sqlx::query(
+        r#"
+        INSERT INTO identity_lifecycle_audit (
+            event_at, event_kind, actor_user_id, principal_user_id,
+            token_hash, related_token_hash, metadata
+        )
+        VALUES ($1, 'workos_admin_bootstrapped', NULL, $2, NULL, NULL, $3::JSONB)
+        "#,
+    )
+    .bind(now)
+    .bind(principal_user_id)
+    .bind(serde_json::json!({ "provider": "workos", "subject": workos_user_id }).to_string())
+    .execute(&mut *tx)
+    .await
+    .map_err(|error| error.to_string())?;
+    tx.commit().await.map_err(|error| error.to_string())?;
+    Ok(true)
+}
+
 #[derive(Debug, Clone, Deserialize)]
 struct RegisterAuthAccount {
     account_id: String,
@@ -1042,30 +1363,27 @@ async fn auth_session(
     headers: HeaderMap,
 ) -> Result<Json<AuthSessionResponse>, ApiError> {
     let token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
-    let token_hash = hash_session_token(token);
     let now = unix_now_seconds();
-    let (principal_user_id, created_at, expires_at, global_capabilities) =
-        sqlx::query_as::<_, (String, i64, i64, Vec<String>)>(
-            r#"
-        SELECT principal_user_id, created_at, expires_at, global_capabilities
-        FROM auth_session
-        WHERE token_hash = $1
-          AND revoked_at IS NULL
-          AND expires_at > $2
-        "#,
+    let identity = authenticate_token(&state, token).await?;
+    let mut response = auth_session_response(
+        &state,
+        identity.principal_user_id,
+        query.game,
+        identity.global_capabilities,
+    )
+    .await?;
+    response.expires_at = Some(identity.expires_at);
+    if identity.auth_kind == "legacy-dev" {
+        let created_at = sqlx::query_scalar::<_, i64>(
+            "SELECT created_at FROM auth_session WHERE token_hash = $1",
         )
-        .bind(token_hash)
-        .bind(now)
-        .fetch_optional(&state.pool)
-        .await?
-        .ok_or_else(unauthorized_session)?;
-
-    let mut response =
-        auth_session_response(&state, principal_user_id, query.game, global_capabilities).await?;
-    response.created_at = Some(created_at);
-    response.expires_at = Some(expires_at);
-    response.rotation_required =
-        Some(now.saturating_sub(created_at) >= auth_session_rotation_max_age_seconds());
+        .bind(identity.session_reference)
+        .fetch_one(&state.pool)
+        .await?;
+        response.created_at = Some(created_at);
+        response.rotation_required =
+            Some(now.saturating_sub(created_at) >= auth_session_rotation_max_age_seconds());
+    }
     Ok(Json(response))
 }
 
@@ -3017,22 +3335,8 @@ async fn active_session_principal_and_globals(
     state: &ApiState,
     token: &str,
 ) -> Result<(String, Vec<String>), ApiError> {
-    let token_hash = hash_session_token(token);
-    let now = unix_now_seconds();
-    sqlx::query_as::<_, (String, Vec<String>)>(
-        r#"
-        SELECT principal_user_id, global_capabilities
-        FROM auth_session
-        WHERE token_hash = $1
-          AND revoked_at IS NULL
-          AND expires_at > $2
-        "#,
-    )
-    .bind(token_hash)
-    .bind(now)
-    .fetch_optional(&state.pool)
-    .await?
-    .ok_or_else(unauthorized_session)
+    let identity = authenticate_token(state, token).await?;
+    Ok((identity.principal_user_id, identity.global_capabilities))
 }
 
 async fn enforce_auth_attempt_limit(
@@ -4174,21 +4478,35 @@ async fn prepare_command_media(
 
 async fn command(
     State(state): State<ApiState>,
+    headers: HeaderMap,
     Json(envelope): Json<ClientEnvelope>,
-) -> impl IntoResponse {
+) -> Response {
     if envelope.v != PROTOCOL_VERSION {
         return Json(ServerEnvelope::new(
             envelope.id,
             ServerMsg::Reject(protocol_reject("unsupported protocol version")),
-        ));
+        ))
+        .into_response();
     }
 
     let wire::ClientMsg::Command(msg) = envelope.body else {
         return Json(ServerEnvelope::new(
             envelope.id,
             ServerMsg::Reject(protocol_reject("expected command message")),
-        ));
+        ))
+        .into_response();
     };
+
+    let principal_user_id = match authenticated_transport_principal(&state, &headers).await {
+        Ok(principal_user_id) => principal_user_id,
+        Err(error) => return command_api_error_response(envelope.id, error),
+    };
+    if matches!(&msg.command, wire::Command::CreateGame { .. }) {
+        let token = bearer_token(&headers).expect("authenticated command has bearer token");
+        if let Err(error) = require_global_admin(&state, token, "game creation").await {
+            return command_api_error_response(envelope.id, error);
+        }
+    }
 
     let game = command_game(&msg.command);
     let thread_dirty = command_affects_thread(&msg.command);
@@ -4200,7 +4518,7 @@ async fn command(
         Some(game) => current_votecount_rows(&state, game).await.ok(),
         None => None,
     };
-    let principal = Principal::user(msg.principal_user_id);
+    let principal = Principal::user(principal_user_id);
     let prepared_command = prepare_command_media(&state, msg.command.into()).await;
     let body = match prepared_command {
         Err(reject) => ServerMsg::Reject(RejectMsg::from(reject)),
@@ -4228,7 +4546,30 @@ async fn command(
             }
         }
     };
-    Json(ServerEnvelope::new(envelope.id, body))
+    Json(ServerEnvelope::new(envelope.id, body)).into_response()
+}
+
+fn command_api_error_response(id: u64, error: ApiError) -> Response {
+    let (status, error_code, message) = match error {
+        ApiError::Reject {
+            status,
+            error,
+            message,
+        } => (status, error, message),
+        other => return other.into_response(),
+    };
+    (
+        status,
+        Json(ServerEnvelope::new(
+            id,
+            ServerMsg::Reject(RejectMsg {
+                error: error_code,
+                retryable: false,
+                message,
+            }),
+        )),
+    )
+        .into_response()
 }
 
 async fn publish_live_projection_change(
@@ -4406,21 +4747,15 @@ async fn endgame_summary(
     }))
 }
 
-#[derive(Debug, Clone, Deserialize)]
-struct CompletedGameExportQuery {
-    principal_user_id: Option<String>,
-}
-
 async fn completed_game_export(
     State(state): State<ApiState>,
     Path(game): Path<Uuid>,
-    Query(query): Query<CompletedGameExportQuery>,
+    Query(query): Query<LegacyPrincipalQuery>,
+    headers: HeaderMap,
 ) -> Result<Json<eventstore::StreamExport>, ApiError> {
-    let principal_user_id = query.principal_user_id.ok_or_else(|| ApiError::Reject {
-        status: StatusCode::UNAUTHORIZED,
-        error: RejectCode::NotAuthorized,
-        message: "completed-game export requires a host session".to_string(),
-    })?;
+    let principal_user_id =
+        authenticated_or_dev_query_principal(&state, &headers, query.principal_user_id.as_deref())
+            .await?;
     let capabilities =
         caps::resolve(&state.pool, &Principal::user(principal_user_id), game).await?;
     if !capabilities.grants(&Capability::CohostOf(game)) {
@@ -4491,6 +4826,17 @@ struct GameIndexQuery {
     limit: Option<i64>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+struct AdminGameBootstrapResponse {
+    packs: Vec<AdminGameBootstrapPack>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+struct AdminGameBootstrapPack {
+    key: String,
+    name: String,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 struct PublicSearchQuery {
     q: String,
@@ -4538,6 +4884,17 @@ async fn admin_game_index(
             .await?
             .into(),
     ))
+}
+
+async fn admin_game_bootstrap(
+    State(state): State<ApiState>,
+    headers: HeaderMap,
+) -> Result<Json<AdminGameBootstrapResponse>, ApiError> {
+    let token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
+    require_global_admin(&state, token, "game bootstrap").await?;
+    Ok(Json(AdminGameBootstrapResponse {
+        packs: product_pack_catalog()?,
+    }))
 }
 
 async fn public_game_thread(
@@ -5726,6 +6083,7 @@ fn profile_conflict(message: &str) -> ApiError {
 struct ChannelThreadQuery {
     before_seq: Option<i64>,
     limit: Option<i64>,
+    #[serde(default)]
     principal_user_id: Option<String>,
 }
 
@@ -5748,13 +6106,20 @@ async fn channel_thread_view(
     State(state): State<ApiState>,
     Path((game, channel)): Path<(Uuid, String)>,
     Query(query): Query<ChannelThreadQuery>,
+    headers: HeaderMap,
 ) -> Result<Json<ThreadPage>, ApiError> {
     if channel != "main" {
+        let principal_user_id = authenticated_or_dev_query_principal(
+            &state,
+            &headers,
+            query.principal_user_id.as_deref(),
+        )
+        .await?;
         require_channel_thread_access(
             &state,
             game,
             channel.as_str(),
-            query.principal_user_id.as_deref(),
+            Some(principal_user_id.as_str()),
         )
         .await?;
     }
@@ -5816,28 +6181,31 @@ async fn require_channel_thread_access(
     })
 }
 
-#[derive(Debug, Clone, Deserialize)]
-struct NotificationQuery {
-    principal_user_id: String,
-}
-
 async fn player_notifications(
     State(state): State<ApiState>,
     Path(game): Path<Uuid>,
-    Query(query): Query<NotificationQuery>,
+    Query(query): Query<LegacyPrincipalQuery>,
+    headers: HeaderMap,
 ) -> Result<Json<Vec<PlayerNotification>>, ApiError> {
+    let principal_user_id =
+        authenticated_or_dev_query_principal(&state, &headers, query.principal_user_id.as_deref())
+            .await?;
     Ok(Json(
-        player_notifications_for_principal(&state, game, query.principal_user_id.as_str()).await?,
+        player_notifications_for_principal(&state, game, principal_user_id.as_str()).await?,
     ))
 }
 
 async fn player_investigation_results(
     State(state): State<ApiState>,
     Path(game): Path<Uuid>,
-    Query(query): Query<NotificationQuery>,
+    Query(query): Query<LegacyPrincipalQuery>,
+    headers: HeaderMap,
 ) -> Result<Json<Vec<PlayerInvestigationResult>>, ApiError> {
+    let principal_user_id =
+        authenticated_or_dev_query_principal(&state, &headers, query.principal_user_id.as_deref())
+            .await?;
     Ok(Json(
-        player_investigation_results_for_principal(&state, game, query.principal_user_id.as_str())
+        player_investigation_results_for_principal(&state, game, principal_user_id.as_str())
             .await?,
     ))
 }
@@ -5911,7 +6279,8 @@ async fn player_investigation_results_for_principal(
 
 #[derive(Debug, Clone, Deserialize)]
 struct PlayerCommandStateQuery {
-    principal_user_id: String,
+    #[serde(default)]
+    principal_user_id: Option<String>,
     #[serde(default)]
     slot_id: Option<String>,
 }
@@ -5984,10 +6353,14 @@ async fn player_command_state(
     State(state): State<ApiState>,
     Path(game): Path<Uuid>,
     Query(query): Query<PlayerCommandStateQuery>,
+    headers: HeaderMap,
 ) -> Result<Json<PlayerCommandStateResponse>, ApiError> {
+    let principal_user_id =
+        authenticated_or_dev_query_principal(&state, &headers, query.principal_user_id.as_deref())
+            .await?;
     let caps = caps::resolve(
         &state.pool,
-        &Principal::user(query.principal_user_id.as_str()),
+        &Principal::user(principal_user_id.as_str()),
         game,
     )
     .await?;
@@ -6425,11 +6798,6 @@ async fn load_pack_for_game(state: &ApiState, game: Uuid) -> Result<domain::Pack
     })
 }
 
-#[derive(Debug, Clone, Deserialize)]
-struct HostPhaseControlQuery {
-    principal_user_id: String,
-}
-
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct HostPrompt {
     pub game: Uuid,
@@ -6473,7 +6841,8 @@ impl From<projections::HostPromptRow> for HostPrompt {
 
 #[derive(Debug, Clone, Deserialize)]
 struct HostConsoleStateQuery {
-    principal_user_id: String,
+    #[serde(default)]
+    principal_user_id: Option<String>,
     #[serde(default)]
     slot_id: Option<String>,
     #[serde(default)]
@@ -6518,16 +6887,12 @@ pub struct HostConsoleThreadPost {
     pub body: String,
 }
 
-#[derive(Debug, Clone, Deserialize)]
-struct HostSetupStateQuery {
-    principal_user_id: String,
-}
-
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct HostSetupStateResponse {
     pub game: Uuid,
     pub created: bool,
     pub pack: HostSetupPackState,
+    pub accounts: Vec<HostSetupAccountState>,
     pub phase: Option<HostConsolePhaseState>,
     pub slots: Vec<HostSetupSlotState>,
     pub post_policies: Vec<HostSetupPostPolicyState>,
@@ -6539,7 +6904,22 @@ pub struct HostSetupPackState {
     pub name: String,
     pub valid: bool,
     pub role_keys: Vec<String>,
+    pub roles: Vec<HostSetupRoleOption>,
     pub start_phase_options: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HostSetupRoleOption {
+    pub key: String,
+    pub label: String,
+    pub description: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HostSetupAccountState {
+    pub account_id: String,
+    pub principal_user_id: String,
+    pub label: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -6619,12 +6999,16 @@ impl From<HostConsoleThreadPost> for HostConsoleThreadPostDelta {
 async fn host_phase_controls(
     State(state): State<ApiState>,
     Path(game): Path<Uuid>,
-    Query(query): Query<HostPhaseControlQuery>,
+    Query(query): Query<LegacyPrincipalQuery>,
+    headers: HeaderMap,
 ) -> Result<Json<Vec<HostPhaseControl>>, ApiError> {
+    let principal_user_id =
+        authenticated_or_dev_query_principal(&state, &headers, query.principal_user_id.as_deref())
+            .await?;
     require_host_audit_access(
         &state,
         game,
-        query.principal_user_id.as_str(),
+        principal_user_id.as_str(),
         "principal cannot read host phase-control audit for this game",
     )
     .await?;
@@ -6641,12 +7025,16 @@ async fn host_phase_controls(
 async fn host_prompts(
     State(state): State<ApiState>,
     Path(game): Path<Uuid>,
-    Query(query): Query<HostPhaseControlQuery>,
+    Query(query): Query<LegacyPrincipalQuery>,
+    headers: HeaderMap,
 ) -> Result<Json<Vec<HostPrompt>>, ApiError> {
+    let principal_user_id =
+        authenticated_or_dev_query_principal(&state, &headers, query.principal_user_id.as_deref())
+            .await?;
     require_host_audit_access(
         &state,
         game,
-        query.principal_user_id.as_str(),
+        principal_user_id.as_str(),
         "principal cannot read host prompts for this game",
     )
     .await?;
@@ -6664,11 +7052,15 @@ async fn host_console_state(
     State(state): State<ApiState>,
     Path(game): Path<Uuid>,
     Query(query): Query<HostConsoleStateQuery>,
+    headers: HeaderMap,
 ) -> Result<Json<HostConsoleStateResponse>, ApiError> {
+    let principal_user_id =
+        authenticated_or_dev_query_principal(&state, &headers, query.principal_user_id.as_deref())
+            .await?;
     require_host_audit_access(
         &state,
         game,
-        query.principal_user_id.as_str(),
+        principal_user_id.as_str(),
         "principal cannot read host console state for this game",
     )
     .await?;
@@ -6681,12 +7073,16 @@ async fn host_console_state(
 async fn host_setup_state(
     State(state): State<ApiState>,
     Path(game): Path<Uuid>,
-    Query(query): Query<HostSetupStateQuery>,
+    Query(query): Query<LegacyPrincipalQuery>,
+    headers: HeaderMap,
 ) -> Result<Json<HostSetupStateResponse>, ApiError> {
+    let principal_user_id =
+        authenticated_or_dev_query_principal(&state, &headers, query.principal_user_id.as_deref())
+            .await?;
     require_host_audit_access(
         &state,
         game,
-        query.principal_user_id.as_str(),
+        principal_user_id.as_str(),
         "principal cannot read host setup state for this game",
     )
     .await?;
@@ -6796,6 +7192,44 @@ async fn load_host_setup_state(
         })
         .collect();
     let main_policy = projections::post_policy(&state.pool, game, "main").await?;
+    let accounts = sqlx::query_as::<_, (String, String)>(
+        r#"
+        SELECT label, principal_user_id
+        FROM (
+            SELECT COALESCE(identity.display_label, identity.subject) AS label,
+                   identity.principal_user_id
+            FROM external_identity AS identity
+            JOIN platform_principal AS principal
+              ON principal.principal_user_id = identity.principal_user_id
+            WHERE identity.provider = 'workos'
+              AND principal.status = 'active'
+              AND principal.disabled_at IS NULL
+            UNION ALL
+            SELECT account_id AS label, principal_user_id
+            FROM auth_account
+            WHERE disabled_at IS NULL
+        ) AS available_account
+        ORDER BY lower(label), label
+        "#,
+    )
+    .fetch_all(&state.pool)
+    .await?
+    .into_iter()
+    .map(|(account_id, principal_user_id)| HostSetupAccountState {
+        label: account_id.clone(),
+        account_id,
+        principal_user_id,
+    })
+    .collect();
+    let roles = pack
+        .roles
+        .iter()
+        .map(|(key, role)| HostSetupRoleOption {
+            key: key.clone(),
+            label: role_label(key, role.description.as_str()),
+            description: role.description.clone(),
+        })
+        .collect();
 
     Ok(HostSetupStateResponse {
         game,
@@ -6805,8 +7239,10 @@ async fn load_host_setup_state(
             name: pack.name,
             valid: true,
             role_keys: pack.roles.keys().cloned().collect(),
+            roles,
             start_phase_options: start_phase_options(&pack.phases),
         },
+        accounts,
         phase,
         slots,
         post_policies: vec![HostSetupPostPolicyState {
@@ -6848,6 +7284,59 @@ fn load_pack_by_name(pack_name: &str) -> Result<domain::Pack, ApiError> {
     })
 }
 
+fn product_pack_catalog() -> Result<Vec<AdminGameBootstrapPack>, ApiError> {
+    let root = FsPath::new(env!("CARGO_MANIFEST_DIR")).join("../../packs");
+    let entries = std::fs::read_dir(&root).map_err(|err| ApiError::Reject {
+        status: StatusCode::INTERNAL_SERVER_ERROR,
+        error: RejectCode::Internal,
+        message: format!("read pack catalog {}: {err}", root.display()),
+    })?;
+    let mut packs = Vec::new();
+    for entry in entries {
+        let entry = entry.map_err(|err| ApiError::Reject {
+            status: StatusCode::INTERNAL_SERVER_ERROR,
+            error: RejectCode::Internal,
+            message: format!("read pack catalog entry: {err}"),
+        })?;
+        let key = entry.file_name().to_string_lossy().to_string();
+        if key.starts_with("test_") || key.starts_with("dev_") || !entry.path().is_dir() {
+            continue;
+        }
+        let pack = load_pack_by_name(key.as_str())?;
+        packs.push(AdminGameBootstrapPack {
+            key,
+            name: humanize_identifier(pack.name.as_str()),
+        });
+    }
+    packs.sort_by(|left, right| left.name.cmp(&right.name).then(left.key.cmp(&right.key)));
+    Ok(packs)
+}
+
+fn role_label(key: &str, description: &str) -> String {
+    description
+        .split('.')
+        .next()
+        .map(str::trim)
+        .filter(|value| !value.is_empty() && value.len() <= 80)
+        .map(str::to_string)
+        .unwrap_or_else(|| humanize_identifier(key))
+}
+
+fn humanize_identifier(value: &str) -> String {
+    value
+        .split(['_', '-'])
+        .filter(|part| !part.is_empty())
+        .map(|part| {
+            let mut characters = part.chars();
+            match characters.next() {
+                Some(first) => first.to_uppercase().chain(characters).collect(),
+                None => String::new(),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 fn start_phase_options(phases: &domain::pack::PhasePolicy) -> Vec<String> {
     let mut options = BTreeSet::new();
     for kind in &phases.cadence {
@@ -6865,11 +7354,277 @@ fn start_phase_options(phases: &domain::pack::PhasePolicy) -> Vec<String> {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-struct WsParams {
-    principal_user_id: Option<String>,
-    game: Option<Uuid>,
+struct CreateWebsocketTicket {
+    audience: String,
+    game: Uuid,
+    #[serde(default = "default_live_channel")]
+    channel: String,
+    #[serde(default)]
     slot_id: Option<String>,
+    #[serde(default)]
+    after_seq: i64,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+struct LegacyPrincipalQuery {
+    #[serde(default)]
+    principal_user_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WebsocketTicketResponse {
+    pub ticket: String,
+    pub audience: String,
+    pub expires_at: i64,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct WsParams {
+    #[serde(default)]
+    ticket: Option<String>,
+    #[serde(default)]
+    audience: Option<String>,
+    #[serde(default)]
+    principal_user_id: Option<String>,
+    #[serde(default)]
+    game: Option<Uuid>,
+    #[serde(default)]
+    slot_id: Option<String>,
+    #[serde(default)]
     channel: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+struct WebsocketTicketClaim {
+    auth_kind: String,
+    session_reference: String,
+    access_expires_at: i64,
+    principal_user_id: String,
+    game: Uuid,
+    channel: String,
+    slot_id: Option<String>,
+    after_seq: i64,
+}
+
+fn default_live_channel() -> String {
+    "main".to_string()
+}
+
+async fn authenticated_transport_principal(
+    state: &ApiState,
+    headers: &HeaderMap,
+) -> Result<String, ApiError> {
+    let token = bearer_token(headers).ok_or_else(unauthorized_session)?;
+    Ok(authenticate_token(state, token).await?.principal_user_id)
+}
+
+async fn authenticated_or_dev_query_principal(
+    state: &ApiState,
+    headers: &HeaderMap,
+    legacy_principal_user_id: Option<&str>,
+) -> Result<String, ApiError> {
+    if bearer_token(headers).is_some() {
+        return authenticated_transport_principal(state, headers).await;
+    }
+    if state.dev_auth_enabled {
+        if let Some(principal_user_id) = legacy_principal_user_id
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        {
+            return Ok(principal_user_id.to_string());
+        }
+    }
+    Err(unauthorized_session())
+}
+
+async fn create_websocket_ticket(
+    State(state): State<ApiState>,
+    headers: HeaderMap,
+    Json(request): Json<CreateWebsocketTicket>,
+) -> Result<Json<WebsocketTicketResponse>, ApiError> {
+    let token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
+    let identity = authenticate_token(&state, token).await?;
+    let principal_user_id = identity.principal_user_id.clone();
+    let audience = request.audience.trim();
+    let channel = request.channel.trim();
+    if audience != state.websocket_audience
+        || channel.is_empty()
+        || channel.len() > 256
+        || request.after_seq < 0
+        || request
+            .slot_id
+            .as_deref()
+            .is_some_and(|slot| slot.trim().is_empty() || slot.len() > 256)
+    {
+        return Err(ApiError::Reject {
+            status: StatusCode::BAD_REQUEST,
+            error: RejectCode::NotAuthorized,
+            message: "invalid websocket ticket scope".to_string(),
+        });
+    }
+
+    // Validate the requested private scope before minting bearer authority.
+    if channel != "main" {
+        require_channel_thread_access(
+            &state,
+            request.game,
+            channel,
+            Some(principal_user_id.as_str()),
+        )
+        .await?;
+    }
+    if let Some(slot_id) = request.slot_id.as_deref() {
+        let capabilities = caps::resolve(
+            &state.pool,
+            &Principal::user(principal_user_id.as_str()),
+            request.game,
+        )
+        .await?;
+        if !capabilities.grants(&Capability::SlotOccupant(slot_id.to_string()))
+            && !capabilities.grants(&Capability::HostOf(request.game))
+            && !capabilities.grants(&Capability::CohostOf(request.game))
+        {
+            return Err(ApiError::Reject {
+                status: StatusCode::FORBIDDEN,
+                error: RejectCode::NotAuthorized,
+                message: "principal cannot mint the requested websocket scope".to_string(),
+            });
+        }
+    }
+
+    let issued_at = unix_now_seconds();
+    if identity.expires_at <= issued_at {
+        return Err(unauthorized_session());
+    }
+    let expires_at = issued_at
+        .saturating_add(state.websocket_ticket_ttl.as_secs() as i64)
+        .min(identity.expires_at);
+    let ticket = format!("ws-ticket-{}-{}", Uuid::new_v4(), Uuid::new_v4());
+    sqlx::query(
+        r#"
+        INSERT INTO auth_websocket_ticket (
+            token_hash, auth_kind, session_reference, access_expires_at,
+            principal_user_id, audience,
+            game_id, channel_id, slot_id, after_seq, issued_at, expires_at, consumed_at
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NULL)
+        "#,
+    )
+    .bind(hash_session_token(ticket.as_str()))
+    .bind(identity.auth_kind)
+    .bind(identity.session_reference)
+    .bind(identity.expires_at)
+    .bind(principal_user_id)
+    .bind(audience)
+    .bind(request.game)
+    .bind(channel)
+    .bind(request.slot_id.as_deref().map(str::trim))
+    .bind(request.after_seq)
+    .bind(issued_at)
+    .bind(expires_at)
+    .execute(&state.pool)
+    .await?;
+
+    Ok(Json(WebsocketTicketResponse {
+        ticket,
+        audience: audience.to_string(),
+        expires_at,
+    }))
+}
+
+async fn redeem_websocket_ticket(
+    state: &ApiState,
+    params: &WsParams,
+) -> Result<WebsocketTicketClaim, ApiError> {
+    let ticket = params.ticket.as_deref().ok_or_else(unauthorized_session)?;
+    let audience = params
+        .audience
+        .as_deref()
+        .ok_or_else(unauthorized_session)?;
+    if audience != state.websocket_audience || ticket.trim().is_empty() {
+        return Err(unauthorized_session());
+    }
+    let now = unix_now_seconds();
+    let row = sqlx::query_as::<
+        _,
+        (
+            String,
+            String,
+            i64,
+            String,
+            Uuid,
+            String,
+            Option<String>,
+            i64,
+        ),
+    >(
+        r#"
+        UPDATE auth_websocket_ticket AS ticket
+        SET consumed_at = $3
+        WHERE ticket.token_hash = $1
+          AND ticket.audience = $2
+          AND ticket.consumed_at IS NULL
+          AND ticket.expires_at > $3
+          AND ticket.access_expires_at > $3
+        RETURNING ticket.auth_kind, ticket.session_reference, ticket.access_expires_at,
+                  ticket.principal_user_id,
+                  ticket.game_id, ticket.channel_id, ticket.slot_id, ticket.after_seq
+        "#,
+    )
+    .bind(hash_session_token(ticket))
+    .bind(audience)
+    .bind(now)
+    .fetch_optional(&state.pool)
+    .await?
+    .ok_or_else(unauthorized_session)?;
+    let claim = WebsocketTicketClaim {
+        auth_kind: row.0,
+        session_reference: row.1,
+        access_expires_at: row.2,
+        principal_user_id: row.3,
+        game: row.4,
+        channel: row.5,
+        slot_id: row.6,
+        after_seq: row.7,
+    };
+    if !websocket_session_active(state, &claim).await {
+        return Err(unauthorized_session());
+    }
+    Ok(claim)
+}
+
+async fn websocket_session_active(state: &ApiState, claim: &WebsocketTicketClaim) -> bool {
+    if state.dev_auth_enabled && claim.session_reference == "dev-legacy" {
+        return true;
+    }
+    let now = unix_now_seconds();
+    if claim.access_expires_at <= now {
+        return false;
+    }
+    if claim.auth_kind == "workos" {
+        return sqlx::query_scalar::<_, bool>(
+            "SELECT EXISTS (SELECT 1 FROM platform_principal WHERE principal_user_id = $1 AND status = 'active' AND disabled_at IS NULL)",
+        )
+        .bind(claim.principal_user_id.as_str())
+        .fetch_one(&state.pool)
+        .await
+        .unwrap_or(false);
+    }
+    let account_predicate = if state.dev_auth_enabled {
+        "TRUE"
+    } else {
+        "EXISTS (SELECT 1 FROM auth_account WHERE auth_account.principal_user_id = auth_session.principal_user_id AND auth_account.disabled_at IS NULL)"
+    };
+    let query = format!(
+        "SELECT EXISTS (SELECT 1 FROM auth_session WHERE token_hash = $1 AND principal_user_id = $2 AND revoked_at IS NULL AND expires_at > $3 AND {account_predicate})"
+    );
+    sqlx::query_scalar::<_, bool>(query.as_str())
+        .bind(claim.session_reference.as_str())
+        .bind(claim.principal_user_id.as_str())
+        .bind(now)
+        .fetch_one(&state.pool)
+        .await
+        .unwrap_or(false)
 }
 
 async fn ws(
@@ -6877,6 +7632,29 @@ async fn ws(
     Query(params): Query<WsParams>,
     upgrade: WebSocketUpgrade,
 ) -> Response {
+    let claim = if params.ticket.is_some() || params.audience.is_some() {
+        match redeem_websocket_ticket(&state, &params).await {
+            Ok(claim) => claim,
+            Err(error) => return error.into_response(),
+        }
+    } else if state.dev_auth_enabled {
+        let (Some(principal_user_id), Some(game)) = (params.principal_user_id.clone(), params.game)
+        else {
+            return unauthorized_session().into_response();
+        };
+        WebsocketTicketClaim {
+            auth_kind: "legacy-dev".to_string(),
+            session_reference: "dev-legacy".to_string(),
+            access_expires_at: i64::MAX,
+            principal_user_id,
+            game,
+            channel: params.channel.clone().unwrap_or_else(default_live_channel),
+            slot_id: params.slot_id.clone(),
+            after_seq: 0,
+        }
+    } else {
+        return unauthorized_session().into_response();
+    };
     let permit = match state.live_connection_slots.clone().try_acquire_owned() {
         Ok(permit) => permit,
         Err(_) => {
@@ -6894,62 +7672,126 @@ async fn ws(
     upgrade
         .on_upgrade(move |socket| async move {
             let _permit = permit;
-            ws_session(socket, state, params).await;
+            ws_session(socket, state, claim).await;
         })
         .into_response()
 }
 
-async fn ws_session(mut socket: WebSocket, state: ApiState, params: WsParams) {
+async fn ws_session(mut socket: WebSocket, state: ApiState, claim: WebsocketTicketClaim) {
     let connection_id = Uuid::new_v4();
-    let hello = hello_for(&state, params.principal_user_id.as_deref(), params.game).await;
+    if !websocket_session_active(&state, &claim).await {
+        return;
+    }
+    let hello = hello_for(
+        &state,
+        Some(claim.principal_user_id.as_str()),
+        Some(claim.game),
+    )
+    .await;
+    if !websocket_session_active(&state, &claim).await {
+        return;
+    }
     if let Ok(text) = serde_json::to_string(&ServerEnvelope::new(0, ServerMsg::Hello(hello))) {
         let _ = socket.send(Message::Text(text.into())).await;
     }
 
-    let Some(game) = params.game else {
-        return;
-    };
+    let game = claim.game;
 
     // Subscribe before hydration so commands cannot publish into a handshake gap.
     let mut live_projection_rx = state.live_projection_tx.subscribe();
+    let mut durable_poll = tokio::time::interval(state.websocket_poll_interval);
+    durable_poll.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    let mut observed_seq = current_game_event_seq(&state, game)
+        .await
+        .unwrap_or(claim.after_seq);
     let mut next_envelope_id = 1;
     if let Ok(deltas) = current_votecount_deltas(&state, game).await {
+        if !websocket_session_active(&state, &claim).await {
+            return;
+        }
         next_envelope_id = send_projection_deltas(&mut socket, next_envelope_id, deltas).await;
     }
     if let Some(delta) = thread_posts_delta_for_ws(
         &state,
         game,
-        params.principal_user_id.as_deref(),
-        params.channel.as_deref().unwrap_or("main"),
+        Some(claim.principal_user_id.as_str()),
+        claim.channel.as_str(),
     )
     .await
     {
+        if !websocket_session_active(&state, &claim).await {
+            return;
+        }
         next_envelope_id = send_projection_deltas(&mut socket, next_envelope_id, vec![delta]).await;
     }
     if let Some(delta) = host_console_state_delta_for_ws(
         &state,
         game,
-        params.principal_user_id.as_deref(),
-        params.slot_id.as_deref(),
+        Some(claim.principal_user_id.as_str()),
+        claim.slot_id.as_deref(),
     )
     .await
     {
+        if !websocket_session_active(&state, &claim).await {
+            return;
+        }
         next_envelope_id = send_projection_deltas(&mut socket, next_envelope_id, vec![delta]).await;
     }
     if let Some(delta) =
-        host_prompts_delta_for_ws(&state, game, params.principal_user_id.as_deref()).await
+        host_prompts_delta_for_ws(&state, game, Some(claim.principal_user_id.as_str())).await
     {
+        if !websocket_session_active(&state, &claim).await {
+            return;
+        }
         next_envelope_id = send_projection_deltas(&mut socket, next_envelope_id, vec![delta]).await;
     }
     let private_deltas =
-        player_private_deltas_for_ws(&state, game, params.principal_user_id.as_deref()).await;
+        player_private_deltas_for_ws(&state, game, Some(claim.principal_user_id.as_str())).await;
     if !private_deltas.is_empty() {
+        if !websocket_session_active(&state, &claim).await {
+            return;
+        }
         next_envelope_id =
             send_projection_deltas(&mut socket, next_envelope_id, private_deltas).await;
     }
 
     loop {
-        let update = match receive_live_projection(&mut live_projection_rx).await {
+        let receive = tokio::select! {
+            update = receive_live_projection(&mut live_projection_rx) => Some(update),
+            _ = durable_poll.tick() => None,
+        };
+        if !websocket_session_active(&state, &claim).await {
+            break;
+        }
+        let Some(receive) = receive else {
+            let latest_seq = current_game_event_seq(&state, game)
+                .await
+                .unwrap_or(observed_seq);
+            if latest_seq <= observed_seq {
+                continue;
+            }
+            observed_seq = latest_seq;
+            let sent_to = send_projection_deltas(
+                &mut socket,
+                next_envelope_id,
+                vec![ProjectionDelta::ResyncRequired {
+                    from_seq: claim.after_seq,
+                }],
+            )
+            .await;
+            if sent_to == next_envelope_id {
+                break;
+            }
+            next_envelope_id = sent_to;
+            next_envelope_id =
+                send_current_projection_snapshot(&mut socket, &state, &claim, next_envelope_id)
+                    .await;
+            continue;
+        };
+        observed_seq = current_game_event_seq(&state, game)
+            .await
+            .unwrap_or(observed_seq);
+        let update = match receive {
             LiveProjectionReceive::Update(update) => update,
             LiveProjectionReceive::Lagged { dropped_messages } => {
                 tracing::warn!(
@@ -6980,6 +7822,9 @@ async fn ws_session(mut socket: WebSocket, state: ApiState, params: WsParams) {
         if update.game != game {
             continue;
         }
+        if !websocket_session_active(&state, &claim).await {
+            break;
+        }
         let sent_to = send_projection_deltas(&mut socket, next_envelope_id, update.deltas).await;
         if sent_to == next_envelope_id
             && !update.thread_dirty
@@ -6995,13 +7840,16 @@ async fn ws_session(mut socket: WebSocket, state: ApiState, params: WsParams) {
             let Some(delta) = thread_posts_delta_for_ws(
                 &state,
                 game,
-                params.principal_user_id.as_deref(),
-                params.channel.as_deref().unwrap_or("main"),
+                Some(claim.principal_user_id.as_str()),
+                claim.channel.as_str(),
             )
             .await
             else {
                 continue;
             };
+            if !websocket_session_active(&state, &claim).await {
+                break;
+            }
             let sent_to = send_projection_deltas(&mut socket, next_envelope_id, vec![delta]).await;
             if sent_to == next_envelope_id {
                 break;
@@ -7012,11 +7860,14 @@ async fn ws_session(mut socket: WebSocket, state: ApiState, params: WsParams) {
             if let Some(delta) = host_console_state_delta_for_ws(
                 &state,
                 game,
-                params.principal_user_id.as_deref(),
-                params.slot_id.as_deref(),
+                Some(claim.principal_user_id.as_str()),
+                claim.slot_id.as_deref(),
             )
             .await
             {
+                if !websocket_session_active(&state, &claim).await {
+                    break;
+                }
                 let sent_to =
                     send_projection_deltas(&mut socket, next_envelope_id, vec![delta]).await;
                 if sent_to == next_envelope_id {
@@ -7027,8 +7878,12 @@ async fn ws_session(mut socket: WebSocket, state: ApiState, params: WsParams) {
         }
         if update.host_prompts_dirty {
             if let Some(delta) =
-                host_prompts_delta_for_ws(&state, game, params.principal_user_id.as_deref()).await
+                host_prompts_delta_for_ws(&state, game, Some(claim.principal_user_id.as_str()))
+                    .await
             {
+                if !websocket_session_active(&state, &claim).await {
+                    break;
+                }
                 let sent_to =
                     send_projection_deltas(&mut socket, next_envelope_id, vec![delta]).await;
                 if sent_to == next_envelope_id {
@@ -7039,10 +7894,13 @@ async fn ws_session(mut socket: WebSocket, state: ApiState, params: WsParams) {
         }
         if update.player_private_dirty {
             let deltas =
-                player_private_deltas_for_ws(&state, game, params.principal_user_id.as_deref())
+                player_private_deltas_for_ws(&state, game, Some(claim.principal_user_id.as_str()))
                     .await;
             if deltas.is_empty() {
                 continue;
+            }
+            if !websocket_session_active(&state, &claim).await {
+                break;
             }
             let sent_to = send_projection_deltas(&mut socket, next_envelope_id, deltas).await;
             if sent_to == next_envelope_id {
@@ -7063,6 +7921,68 @@ async fn ws_session(mut socket: WebSocket, state: ApiState, params: WsParams) {
             next_envelope_id = sent_to;
         }
     }
+}
+
+async fn current_game_event_seq(state: &ApiState, game: Uuid) -> Result<i64, sqlx::Error> {
+    sqlx::query_scalar::<_, i64>("SELECT COALESCE(MAX(seq), 0) FROM events WHERE stream_id = $1")
+        .bind(game)
+        .fetch_one(&state.pool)
+        .await
+}
+
+async fn send_current_projection_snapshot(
+    socket: &mut WebSocket,
+    state: &ApiState,
+    claim: &WebsocketTicketClaim,
+    mut next_envelope_id: u64,
+) -> u64 {
+    if let Ok(deltas) = current_votecount_deltas(state, claim.game).await {
+        if !websocket_session_active(state, claim).await {
+            return next_envelope_id;
+        }
+        next_envelope_id = send_projection_deltas(socket, next_envelope_id, deltas).await;
+    }
+    if let Some(delta) = thread_posts_delta_for_ws(
+        state,
+        claim.game,
+        Some(claim.principal_user_id.as_str()),
+        claim.channel.as_str(),
+    )
+    .await
+    {
+        if !websocket_session_active(state, claim).await {
+            return next_envelope_id;
+        }
+        next_envelope_id = send_projection_deltas(socket, next_envelope_id, vec![delta]).await;
+    }
+    if let Some(delta) = host_console_state_delta_for_ws(
+        state,
+        claim.game,
+        Some(claim.principal_user_id.as_str()),
+        claim.slot_id.as_deref(),
+    )
+    .await
+    {
+        if !websocket_session_active(state, claim).await {
+            return next_envelope_id;
+        }
+        next_envelope_id = send_projection_deltas(socket, next_envelope_id, vec![delta]).await;
+    }
+    if let Some(delta) =
+        host_prompts_delta_for_ws(state, claim.game, Some(claim.principal_user_id.as_str())).await
+    {
+        if !websocket_session_active(state, claim).await {
+            return next_envelope_id;
+        }
+        next_envelope_id = send_projection_deltas(socket, next_envelope_id, vec![delta]).await;
+    }
+    let deltas =
+        player_private_deltas_for_ws(state, claim.game, Some(claim.principal_user_id.as_str()))
+            .await;
+    if !websocket_session_active(state, claim).await {
+        return next_envelope_id;
+    }
+    send_projection_deltas(socket, next_envelope_id, deltas).await
 }
 
 async fn thread_posts_delta_for_ws(
@@ -7397,6 +8317,13 @@ async fn active_global_operator(pool: &PgPool, principal_user_id: &str) -> Resul
             WHERE principal_user_id = $1
               AND revoked_at IS NULL
               AND expires_at > $2
+              AND global_capabilities && ARRAY['GlobalAdmin', 'GlobalMod']::TEXT[]
+            UNION ALL
+            SELECT 1
+            FROM platform_principal
+            WHERE principal_user_id = $1
+              AND status = 'active'
+              AND disabled_at IS NULL
               AND global_capabilities && ARRAY['GlobalAdmin', 'GlobalMod']::TEXT[]
         )
         "#,

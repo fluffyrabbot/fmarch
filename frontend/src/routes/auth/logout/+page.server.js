@@ -4,10 +4,17 @@ import { SESSION_COOKIE_NAME } from "../../../lib/server/session-capabilities.mj
 
 export function load({ locals, url }) {
   const returnTo = safeReturnTo(url.searchParams.get("returnTo"));
+  if (workosConfigured()) {
+    throw redirect(302, `/auth/sign-out?${new URLSearchParams({ returnTo })}`);
+  }
   if (typeof locals.principalUserId !== "string" || locals.principalUserId.trim() === "") {
     throw redirect(303, loginPath(returnTo));
   }
   return { logout: { principalUserId: locals.principalUserId, returnTo } };
+}
+
+function workosConfigured(env = process.env) {
+  return typeof env.WORKOS_CLIENT_ID === "string" && env.WORKOS_CLIENT_ID.trim() !== "";
 }
 
 export const actions = {

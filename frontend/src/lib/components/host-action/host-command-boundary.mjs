@@ -3,7 +3,6 @@ export const WIRE_PROTOCOL_VERSION = 1;
 
 export function buildHostCommandEnvelope({
   actionEvent,
-  principalUserId,
   commandId,
   envelopeId,
 }) {
@@ -14,7 +13,6 @@ export function buildHostCommandEnvelope({
       kind: "Command",
       body: Object.freeze({
         command_id: commandId,
-        principal_user_id: requiredString(principalUserId, "principalUserId"),
         command: mapHostActionToWireCommand(actionEvent),
       }),
     }),
@@ -23,7 +21,6 @@ export function buildHostCommandEnvelope({
 
 export async function sendHostActionCommand({
   actionEvent,
-  principalUserId,
   endpoint = HOST_COMMAND_ENDPOINT,
   stateEndpoint,
   fetchImpl = fetch,
@@ -35,7 +32,6 @@ export async function sendHostActionCommand({
   const envelopeId = envelopeIdFactory();
   const envelope = buildHostCommandEnvelope({
     actionEvent,
-    principalUserId,
     commandId,
     envelopeId,
   });
@@ -271,17 +267,15 @@ function rejectMessage(reject, retryable, { requestEnvelope } = {}) {
 
 export function buildHostConsoleStateEndpoint({
   gameId,
-  principalUserId,
   slotId,
   apiBaseUrl = "",
 }) {
-  const params = new URLSearchParams({
-    principal_user_id: requiredString(principalUserId, "principalUserId"),
-  });
+  const params = new URLSearchParams();
   if (slotId !== undefined && slotId !== null) {
     params.set("slot_id", requiredString(slotId, "slotId"));
   }
-  return `${apiBaseUrl}/games/${encodeURIComponent(
+  const base = apiBaseUrl === "" ? "/api/gameplay" : apiBaseUrl;
+  return `${base}/games/${encodeURIComponent(
     requiredString(gameId, "gameId"),
   )}/host-console-state?${params.toString()}`;
 }

@@ -1,10 +1,10 @@
 import { error, fail, redirect } from "@sveltejs/kit";
 import { buildAppShell } from "../../lib/app/app-shell-model.mjs";
 import { buildAppSurfaceHeaderViewModel } from "../../lib/app/app-surface-header-model.mjs";
-import { SESSION_COOKIE_NAME } from "../../lib/server/session-capabilities.mjs";
+import { accessTokenForRequest } from "../../lib/server/session-capabilities.mjs";
 
 export async function load({ cookies, locals, fetch, url }) {
-  const token = cookies.get(SESSION_COOKIE_NAME);
+  const token = accessTokenForRequest({ locals, cookies });
   if (typeof token !== "string" || token.trim() === "" || typeof locals.principalUserId !== "string") {
     throw error(401, "Inbox requires an authenticated account");
   }
@@ -39,7 +39,7 @@ export async function load({ cookies, locals, fetch, url }) {
 }
 
 export const actions = {
-  markRead: async ({ cookies, fetch, request }) => {
+  markRead: async ({ locals, cookies, fetch, request }) => {
     const form = await request.formData();
     const targetKind = subscriptionTargetKind(form.get("target_kind"));
     const scopeId = text(form.get("scope_id"));
@@ -49,6 +49,7 @@ export const actions = {
     }
     const response = await mutation({
       cookies,
+      locals,
       fetch,
       path: `/subscriptions/${targetKind}/${encodeURIComponent(scopeId)}/read`,
       method: "POST",
@@ -57,7 +58,7 @@ export const actions = {
     if (!response.ok) return mutationFailure(response, "Unable to mark this update read");
     throw redirect(303, "/inbox");
   },
-  unwatch: async ({ cookies, fetch, request }) => {
+  unwatch: async ({ locals, cookies, fetch, request }) => {
     const form = await request.formData();
     const targetKind = subscriptionTargetKind(form.get("target_kind"));
     const scopeId = text(form.get("scope_id"));
@@ -66,6 +67,7 @@ export const actions = {
     }
     const response = await mutation({
       cookies,
+      locals,
       fetch,
       path: `/subscriptions/${targetKind}/${encodeURIComponent(scopeId)}`,
       method: "DELETE",
@@ -75,8 +77,8 @@ export const actions = {
   },
 };
 
-async function mutation({ cookies, fetch, path, method, body = undefined }) {
-  const token = cookies.get(SESSION_COOKIE_NAME);
+async function mutation({ locals, cookies, fetch, path, method, body = undefined }) {
+  const token = accessTokenForRequest({ locals, cookies });
   if (typeof token !== "string" || token.trim() === "") {
     return { ok: false, status: 401, json: async () => null };
   }

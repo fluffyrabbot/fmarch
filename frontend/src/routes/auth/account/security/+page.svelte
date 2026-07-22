@@ -35,6 +35,12 @@
     </a>
   </section>
 
+  {#if security.managedByWorkos}
+    <section class="account-security__panel fm-panel" aria-label="Managed account security">
+      <h2>Identity managed by WorkOS</h2>
+      <p>Password, passkey, multi-factor authentication, and recovery controls are managed by your identity provider.</p>
+    </section>
+  {:else}
   <section class="account-security__panel fm-panel" aria-label="Password rotation">
     <form
       method="POST"
@@ -183,6 +189,7 @@
       </p>
     {/if}
   </section>
+  {/if}
 </main>
 
 <style>

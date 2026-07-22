@@ -5472,6 +5472,45 @@ mod tests {
             }),
         );
         write_workspace_json(
+            "target/operator-proof/current-command-projection-resolution-report.json",
+            serde_json::json!({
+                "artifact_version": COMMAND_PROJECTION_RESOLUTION_REPORT_ARTIFACT_VERSION,
+                "artifact_path": "target/operator-proof/current-command-projection-resolution-report.json",
+                "ok": true,
+                "game_id": "08d8a45f-6c3b-4401-8e31-8d7637f36a82",
+                "fixture_path": "crates/commands/fixtures/night-passing.json",
+                "pack": "mafiascum",
+                "phase": "N01",
+                "resolve_seed": 1,
+                "proof_boundary": "test fixture",
+                "projection_rebuild": {
+                    "artifact_version": PROJECTION_REBUILD_AUDIT_REPORT_ARTIFACT_VERSION,
+                    "artifact_path": "target/operator-proof/current-command-projection-resolution-report.json",
+                    "ok": true,
+                    "game_id": "08d8a45f-6c3b-4401-8e31-8d7637f36a82",
+                    "isolation": "rollback-only transaction",
+                    "table_count": 26,
+                    "matched_table_count": 26,
+                    "drifted_table_count": 0,
+                    "tables": []
+                },
+                "resolution_diff": {
+                    "artifact_version": RESOLUTION_DIFF_REPORT_ARTIFACT_VERSION,
+                    "artifact_path": "target/operator-proof/current-command-projection-resolution-report.json",
+                    "ok": true,
+                    "game_id": "08d8a45f-6c3b-4401-8e31-8d7637f36a82",
+                    "normalized_fields": [],
+                    "audited_phase_count": 1,
+                    "matched_phase_count": 1,
+                    "drifted_phase_count": 0,
+                    "skipped_phase_count": 0,
+                    "diff_count": 0,
+                    "first_drift_paths": [],
+                    "phases": []
+                }
+            }),
+        );
+        write_workspace_json(
             "target/operator-proof/current-trace-inspection-report.json",
             serde_json::json!({
                 "artifact_version": TRACE_INSPECTION_REPORT_ARTIFACT_VERSION,

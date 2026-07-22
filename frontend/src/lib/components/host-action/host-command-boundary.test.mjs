@@ -247,7 +247,6 @@ test("host command envelope uses the Rust wire ClientEnvelope shape", () => {
       kind: "Command",
       body: {
         command_id: "11111111-1111-4111-8111-111111111111",
-        principal_user_id: "host_h",
         command: {
           ExtendDeadline: {
             game: "00000000-0000-0000-0000-000000000001",
@@ -554,7 +553,7 @@ test("host command sender can refresh projected host console state after ack", a
     principalUserId: "host_h",
     endpoint: "/commands",
     stateEndpoint:
-      "/games/00000000-0000-0000-0000-000000000001/host-console-state?principal_user_id=host_h&slot_id=slot-7",
+      "/api/gameplay/games/00000000-0000-0000-0000-000000000001/host-console-state?slot_id=slot-7",
     commandIdFactory: () => "33333333-3333-4333-8333-333333333333",
     envelopeIdFactory: () => 9,
     fetchImpl: async (url, init = {}) => {
@@ -727,14 +726,14 @@ test("host console projection preserves fallback labels for unchanged phase ids"
   assert.equal(projection.phase.label, "Day 2");
 });
 
-test("host console state endpoint is scoped by principal and slot", () => {
+test("host console state endpoint is session-authenticated and scoped by slot", () => {
   assert.equal(
     buildHostConsoleStateEndpoint({
       gameId: "00000000-0000-0000-0000-000000000001",
       principalUserId: "host_h",
       slotId: "slot-7",
     }),
-    "/games/00000000-0000-0000-0000-000000000001/host-console-state?principal_user_id=host_h&slot_id=slot-7",
+    "/api/gameplay/games/00000000-0000-0000-0000-000000000001/host-console-state?slot_id=slot-7",
   );
 });
 

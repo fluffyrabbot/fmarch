@@ -3,11 +3,31 @@ import { test } from "node:test";
 import {
   FIXTURE_SESSION_COOKIE_NAME,
   SESSION_COOKIE_NAME,
+  accessTokenForRequest,
+  authenticatedApiFetch,
   hostGameFromRequest,
   resolveAuthenticatedSession,
   resolveFixtureSession,
   sessionContextFromRequest,
 } from "./session-capabilities.mjs";
+
+test("WorkOS access tokens take precedence over the legacy development cookie", async () => {
+  const locals = { auth: { accessToken: "workos-access-token" } };
+  const cookies = cookieJar("legacy-session-token");
+  assert.equal(accessTokenForRequest({ locals, cookies }), "workos-access-token");
+
+  const seen = [];
+  const request = authenticatedApiFetch({
+    locals,
+    cookies,
+    fetchImpl: async (url, init) => {
+      seen.push({ url, init });
+      return new Response(null, { status: 204 });
+    },
+  });
+  await request("/commands", { headers: { accept: "application/json" } });
+  assert.equal(new Headers(seen[0].init.headers).get("authorization"), "Bearer workos-access-token");
+});
 
 test("opaque session cookie resolves principal and scoped host capabilities through the API", async () => {
   const seen = [];

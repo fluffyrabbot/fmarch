@@ -46,7 +46,9 @@ Envelope {
 - **Client → Server: Commands.** `id` lets the client correlate the `Ack`/`Reject` to the
   command it sent. Each command body also carries a durable `command_id` used for
   idempotency across reconnects and lost acks; retrying the same `(principal, command_id)`
-  returns the original ack and appends no duplicate events.
+  returns the original ack and appends no duplicate events. The command envelope deliberately
+  carries no principal or actor-account field: the API derives the principal from the current
+  enabled current session before authorization, idempotency lookup, or event handling.
 - **Server → Client: Events / Deltas / Acks.** Projection deltas ([03](03-backend.md)),
   command acknowledgements, and errors.
 
@@ -57,6 +59,12 @@ Command  (C→S):  SubmitVote { slot, target } | WithdrawVote | SubmitAction { s
 ServerMsg (S→C): Ack { id } | Reject { id, error } | Delta { projection, change }
                  | Hello { protocol_v, server_v, caps } | Resync { from_seq } | ...
 ```
+
+Browser commands and private reads cross same-origin SvelteKit endpoints, which attach the
+httpOnly session server-side. A live connection first obtains a short-lived, one-time ticket
+from that same-origin boundary. Only the opaque ticket and its configured audience cross the
+split-domain WebSocket URL; the principal, session token, game authority, and private scope do
+not become browser-authored WebSocket query claims.
 
 `Reject` carries a **typed, actionable error** (cf. [03](03-backend.md)) — `PhaseLocked`,
 `NotYourSlot`, `AlreadyVoted`, `StreamConflict` — not a string the client must parse.

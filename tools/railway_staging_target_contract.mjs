@@ -47,11 +47,18 @@ async function contract() {
   assert.match(source["Dockerfile.frontend"], /npm ci/);
   assert.match(source["Dockerfile.frontend"], /CMD \["node", "build"\]/);
   assert.match(source["deploy/railway/frontend.railway.toml"], /dockerfilePath = "Dockerfile\.frontend"/);
-  assert.match(source["deploy/railway/frontend.railway.toml"], /healthcheckPath = "\/"/);
+  assert.match(source["deploy/railway/frontend.railway.toml"], /healthcheckPath = "\/healthz"/);
 
   assert.match(source["deploy/railway/api.env.example"], /DATABASE_URL=\$\{\{Postgres\.DATABASE_URL\}\}/);
   assert.match(source["deploy/railway/api.env.example"], /FMARCH_MEDIA_ROOT=\/var\/lib\/fmarch\/media/);
-  assert.doesNotMatch(source["deploy/railway/api.env.example"], /RAILWAY_RUN_UID/);
+  assert.doesNotMatch(source["deploy/railway/api.env.example"], /^RAILWAY_RUN_UID=/m);
+  assert.match(source["deploy/railway/api.env.example"], /^WORKOS_CLIENT_ID=/m);
+  assert.match(source["deploy/railway/api.env.example"], /^WORKOS_ISSUER=https:\/\//m);
+  assert.match(source["deploy/railway/api.env.example"], /^WORKOS_JWKS_URL=https:\/\//m);
+  assert.match(
+    source["deploy/railway/api.env.example"],
+    /FMARCH_BOOTSTRAP_ADMIN_WORKOS_USER_ID=/,
+  );
   assert.match(
     source["deploy/railway/api.env.example"],
     /FMARCH_IDENTITY_DELIVERY_ENDPOINT=https:\/\/.+/,
@@ -67,6 +74,10 @@ async function contract() {
   assert.doesNotMatch(source["deploy/railway/api.env.example"], /FMARCH_DEV_AUTH/);
   assert.match(source["deploy/railway/frontend.env.example"], /^ORIGIN=https:\/\//m);
   assert.match(source["deploy/railway/frontend.env.example"], /^FMARCH_API_BASE_URL=https:\/\//m);
+  assert.match(source["deploy/railway/frontend.env.example"], /^WORKOS_CLIENT_ID=/m);
+  assert.match(source["deploy/railway/frontend.env.example"], /^WORKOS_API_KEY=/m);
+  assert.match(source["deploy/railway/frontend.env.example"], /^WORKOS_REDIRECT_URI=https:\/\//m);
+  assert.match(source["deploy/railway/frontend.env.example"], /^WORKOS_COOKIE_PASSWORD=/m);
 
   assert.match(source["crates/server/src/main.rs"], /platform_port/);
   assert.match(source["crates/server/src/main.rs"], /format!\("0\.0\.0\.0:\{port\}"\)/);

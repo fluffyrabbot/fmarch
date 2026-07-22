@@ -308,7 +308,6 @@ test("host route controller derives dispatch bridge plans from host actions", ()
     },
     commandKind: "ResolveHostPrompt",
     commandEndpoint: "/commands",
-    principalUserId: "host_h",
     optimisticState: "pending",
     finalState: "ack",
     projectionRefreshKeys: ["hostPrompts"],
@@ -374,7 +373,7 @@ test("host route controller sends commands and applies acked host projection sta
   });
 
   assert.equal(sent.length, 1);
-  assert.equal(sent[0].principalUserId, "host_h");
+  assert.equal("principalUserId" in sent[0], false);
   assert.equal(sent[0].endpoint, "/commands");
   assert.equal(sent[0].stateEndpoint, "/games/midsummer/host-console-state");
   assert.equal(result.outcome.state, "ack");

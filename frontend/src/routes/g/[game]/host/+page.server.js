@@ -2,7 +2,10 @@ import { randomUUID } from "node:crypto";
 import { error, fail } from "@sveltejs/kit";
 import { resolveFixtureRouteState } from "../../../../lib/app/app-route-state-model.mjs";
 import { publicApiBaseUrl, serverApiBaseUrl } from "../../../../lib/server/api-base.mjs";
-import { SESSION_COOKIE_NAME } from "../../../../lib/server/session-capabilities.mjs";
+import {
+  authenticatedApiFetch,
+  accessTokenForRequest,
+} from "../../../../lib/server/session-capabilities.mjs";
 import {
   buildHostConsoleRouteData,
   hostConsoleForbiddenMessage,
@@ -10,7 +13,7 @@ import {
   resolveHostRoutePrincipal,
 } from "./host-route-model.mjs";
 
-export async function load({ params, locals, fetch, url }) {
+export async function load({ params, locals, fetch, url, cookies }) {
   const apiBaseUrl = serverApiBaseUrl();
   const fixtureMode = process.env.FMARCH_FRONTEND_FIXTURE_SESSION === "1";
   const capabilities = resolveHostRouteCapabilities({
@@ -29,7 +32,10 @@ export async function load({ params, locals, fetch, url }) {
     game: params.game,
     capabilities,
     principalUserId,
-    fetchImpl: fixtureMode && apiBaseUrl === "" ? null : fetch,
+    fetchImpl:
+      fixtureMode && apiBaseUrl === ""
+        ? null
+        : authenticatedApiFetch({ locals, cookies, fetchImpl: fetch }),
     apiBaseUrl,
     publicApiBaseUrl: publicApiBaseUrl(),
   });
@@ -93,8 +99,8 @@ export async function _issueHostScopedInvite({
   ackMessage,
   rejectMessage,
 }) {
-  const sessionToken = cookies.get(SESSION_COOKIE_NAME);
-  if (sessionToken === undefined || sessionToken.trim() === "") {
+  const sessionToken = accessTokenForRequest({ locals, cookies });
+  if (sessionToken === null) {
     return fail(401, inviteForm(field, {
       state: "reject",
       message: "Host session is required",
@@ -147,6 +153,21 @@ export async function _issueHostScopedInvite({
     }));
   }
   const returnTo = `/g/${params.game}`;
+  if (workosEnabled(process.env)) {
+    const loginPath = workosInviteLoginPath({ returnTo, loginHint: accountId });
+    return inviteForm(field, {
+      state: "ack",
+      message: ackMessage,
+      principalUserId,
+      accountId,
+      invitedByUserId: principalForProjection,
+      game: params.game,
+      returnTo,
+      loginUrl: `${url.origin}${loginPath}`,
+      loginPath,
+      identityProvider: "workos",
+    });
+  }
   const inviteToken = `${tokenPrefix}-${params.game}-${randomUUID()}`;
   const expiresAt = Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 7;
   const response = await fetch(authInvitesUrl(process.env), {
@@ -189,6 +210,14 @@ export async function _issueHostScopedInvite({
     loginUrl: `${url.origin}${loginPath}`,
     loginPath,
     expiresAt: invite.expires_at,
+    ...(typeof invite.delivery_status === "string"
+      ? {
+          deliveryId: invite.delivery_id,
+          deliveryStatus: invite.delivery_status,
+          deliveryProviderId: invite.delivery_provider_id,
+          deliveryOutcomeKind: invite.delivery_outcome_kind,
+        }
+      : {}),
   });
 }
 
@@ -217,6 +246,16 @@ function inviteLoginPath({ returnTo, inviteToken, accountId }) {
     account: accountId,
   });
   return `/auth/invite?${params.toString()}`;
+}
+
+function workosInviteLoginPath({ returnTo, loginHint }) {
+  const params = new URLSearchParams({ returnTo });
+  if (loginHint.includes("@")) params.set("loginHint", loginHint);
+  return `/auth/sign-in?${params.toString()}`;
+}
+
+function workosEnabled(env) {
+  return typeof env?.WORKOS_CLIENT_ID === "string" && env.WORKOS_CLIENT_ID.trim() !== "";
 }
 
 async function currentInviteTargetOccupant({
@@ -252,11 +291,8 @@ function authInvitesUrl(env) {
   return `${serverApiBaseUrl(env)}/auth/invites`;
 }
 
-function hostConsoleStateUrl(env, { game, principalUserId, slotId }) {
+function hostConsoleStateUrl(env, { game, slotId }) {
   const baseUrl = serverApiBaseUrl(env);
-  const params = new URLSearchParams({
-    principal_user_id: principalUserId,
-    slot_id: slotId,
-  });
+  const params = new URLSearchParams({ slot_id: slotId });
   return `${baseUrl}/games/${encodeURIComponent(game)}/host-console-state?${params.toString()}`;
 }

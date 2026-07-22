@@ -28,15 +28,12 @@ export const EMPTY_LIVE_PROJECTION_METRICS = Object.freeze({
 });
 
 export function buildLiveProjectionUrl({
-  apiBaseUrl = "",
   game,
-  principalUserId,
   slotId = null,
   channel = "main",
 }) {
   const params = new URLSearchParams({
     game: requiredString(game, "game"),
-    principal_user_id: requiredString(principalUserId, "principalUserId"),
   });
   if (slotId !== null && slotId !== undefined) {
     params.set("slot_id", requiredString(slotId, "slotId"));
@@ -44,14 +41,7 @@ export function buildLiveProjectionUrl({
   if (channel !== "main") {
     params.set("channel", requiredString(channel, "channel"));
   }
-  if (apiBaseUrl === "") {
-    return `/ws?${params.toString()}`;
-  }
-
-  const url = new URL("/ws", apiBaseUrl);
-  url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
-  url.search = params.toString();
-  return url.toString();
+  return `/live/tickets?${params.toString()}`;
 }
 
 export function resolveWebSocketUrl(url, locationHref = globalThis.location?.href) {
@@ -151,14 +141,37 @@ export function connectLiveProjection({
   let reconnectAttempt = 0;
   let handleSocketClose = () => {};
   const metrics = { ...EMPTY_LIVE_PROJECTION_METRICS };
-  const resolvedUrl = resolveWebSocketUrl(url);
+  const ticketEndpoint = requiredString(url, "url");
 
   function currentMetrics() {
     return Object.freeze({ ...metrics });
   }
 
-  function openSocket({ recoverOnOpen = false } = {}) {
-    const openedSocket = new WebSocketCtor(resolvedUrl);
+  async function openSocket({ recoverOnOpen = false } = {}) {
+    let socketUrl = ticketEndpoint;
+    if (!ticketEndpoint.startsWith("ws://") && !ticketEndpoint.startsWith("wss://") && !ticketEndpoint.startsWith("/ws?")) {
+      try {
+        const ticketResponse = await fetchImpl(ticketEndpoint, {
+          method: "POST",
+          headers: { accept: "application/json" },
+        });
+        if (!ticketResponse.ok) {
+          throw new Error(`live ticket request failed with HTTP ${ticketResponse.status}`);
+        }
+        const ticket = await ticketResponse.json();
+        socketUrl = requiredString(ticket?.url, "ticket.url");
+      } catch (error) {
+        if (!stopped) {
+          onEvent(Object.freeze({ kind: "error", message: error.message }), null);
+          queueReconnect();
+        }
+        return null;
+      }
+    }
+    if (stopped) {
+      return null;
+    }
+    const openedSocket = new WebSocketCtor(resolveWebSocketUrl(socketUrl));
     socket = openedSocket;
     let closeHandled = false;
     let pendingResyncMessage = null;
@@ -292,7 +305,7 @@ export function connectLiveProjection({
     }, reconnectDelayMs);
   }
 
-  openSocket();
+  void openSocket();
 
   return Object.freeze({
     close() {

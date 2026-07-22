@@ -88,7 +88,6 @@ export function buildDispatchBridgePlan({
   trace,
   commandKind,
   commandEndpoint,
-  principalUserId,
   optimisticState,
   finalState,
   projectionRefreshKeys = [],
@@ -100,7 +99,6 @@ export function buildDispatchBridgePlan({
     trace: Object.freeze({ ...trace }),
     commandKind: requiredString(commandKind, "commandKind"),
     commandEndpoint: requiredString(commandEndpoint, "commandEndpoint"),
-    principalUserId: requiredString(principalUserId, "principalUserId"),
     optimisticState: requiredString(optimisticState, "optimisticState"),
     finalState: requiredString(finalState, "finalState"),
     projectionRefreshKeys: Object.freeze(
@@ -122,7 +120,6 @@ export function buildDispatchBridgePlanFromRequest({
     trace,
     commandKind: commandKindForCommand(request?.command),
     commandEndpoint: request?.endpoint ?? "/commands",
-    principalUserId: request?.principalUserId,
     optimisticState: statusState(optimisticStatus, "optimisticStatus"),
     finalState: statusState(finalStatus, "finalStatus"),
     projectionRefreshKeys,

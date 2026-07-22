@@ -17,14 +17,14 @@ test("builds websocket URLs from API bases and relative app origins", () => {
       game: "00000000-0000-0000-0000-000000000001",
       principalUserId: "player-mira",
     }),
-    "ws://127.0.0.1:4100/ws?game=00000000-0000-0000-0000-000000000001&principal_user_id=player-mira",
+    "/live/tickets?game=00000000-0000-0000-0000-000000000001",
   );
   assert.equal(
     buildLiveProjectionUrl({
       game: "midsummer",
       principalUserId: "player-mira",
     }),
-    "/ws?game=midsummer&principal_user_id=player-mira",
+    "/live/tickets?game=midsummer",
   );
   assert.equal(
     buildLiveProjectionUrl({
@@ -32,7 +32,7 @@ test("builds websocket URLs from API bases and relative app origins", () => {
       principalUserId: "host_h",
       slotId: "slot-7",
     }),
-    "/ws?game=midsummer&principal_user_id=host_h&slot_id=slot-7",
+    "/live/tickets?game=midsummer&slot_id=slot-7",
   );
   assert.equal(
     buildLiveProjectionUrl({
@@ -40,7 +40,7 @@ test("builds websocket URLs from API bases and relative app origins", () => {
       principalUserId: "player-mira",
       channel: "private:role_pm:slot-7",
     }),
-    "/ws?game=midsummer&principal_user_id=player-mira&channel=private%3Arole_pm%3Aslot-7",
+    "/live/tickets?game=midsummer&channel=private%3Arole_pm%3Aslot-7",
   );
   assert.equal(
     resolveWebSocketUrl("/ws?game=midsummer", "https://app.example/g/midsummer"),
@@ -366,6 +366,31 @@ test("recovers live projections by refreshing registered cold-load keys", async 
   assert.deepEqual(recovery.snapshot.votecount, [
     { target: "slot-2", count: 3, needed: 7 },
   ]);
+});
+
+test("ticket endpoints mint a fresh audience-bound socket URL before opening", async () => {
+  FakeWebSocket.instances = [];
+  const requests = [];
+  const connection = connectLiveProjection({
+    url: "/live/tickets?game=midsummer",
+    projectionStore: fakeProjectionStore({}),
+    WebSocketCtor: FakeWebSocket,
+    fetchImpl: async (url, init) => {
+      requests.push({ url, init });
+      return jsonResponse({
+        url: "wss://api.example/ws?ticket=opaque&audience=fmarch-live",
+      });
+    },
+  });
+
+  await waitFor(() => FakeWebSocket.instances.length === 1);
+  assert.equal(requests[0].url, "/live/tickets?game=midsummer");
+  assert.equal(requests[0].init.method, "POST");
+  assert.equal(
+    FakeWebSocket.instances[0].url,
+    "wss://api.example/ws?ticket=opaque&audience=fmarch-live",
+  );
+  connection.close();
 });
 
 test("websocket resync frames refresh the projection store", async () => {
