@@ -25,10 +25,13 @@ import {
   commandMockScenarios,
   createRoleMockState,
   fixtureApiRoutes,
+  linkClickProofHooks,
   mockStateProjections,
+  phaseContrastRoles,
   privateChannelCommandMockFallback,
   privateChannelCommandMockScenarios,
   privateChannelFixtureApiRoutes,
+  roleHarnesses,
 } from "./frontend_role_smoke_flows.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -180,10 +183,15 @@ try {
     for (const role of roles) {
       const context = await newContextForViewport(viewport, role.token);
       const page = await context.newPage();
-      const playerMediaRequests =
-        role.id === "player" ? await installPlayerMediaNetworkHarness(page) : null;
-      if (role.id === "player") {
-        await installLiveProjectionHarness(page);
+      let playerMediaRequests = null;
+      for (const harnessName of roleHarnesses[role.id] ?? []) {
+        if (harnessName === "playerMedia") {
+          playerMediaRequests = await installPlayerMediaNetworkHarness(page);
+        } else if (harnessName === "liveProjection") {
+          await installLiveProjectionHarness(page);
+        } else {
+          throw new Error(`role harness ${harnessName} is not registered`);
+        }
       }
       const commandRequests = [];
       const commandEnvelopes = [];
@@ -316,34 +324,6 @@ try {
       await setDisclosureState(page, role.collapseBeforeCommands, false);
 
       let commandResult = null;
-      if (role.id === "admin") {
-        commandResult = await driveAdminReject(page, {
-          viewport,
-          interactionGeometryBudget: role.interactionGeometryBudget,
-          commandContinuityBudget: role.commandContinuityBudget,
-          pendingStateBudget: role.pendingStateBudget,
-          interruptedStateBudget: role.interruptedStateBudget,
-          commandLatency,
-          commandRequests,
-          commandEnvelopes,
-          commandInterruption,
-        });
-      }
-      if (role.id === "player") {
-        commandResult = await drivePlayerReject(page, {
-          viewport,
-          baseUrl,
-          commandRequests,
-          mediaRequests: playerMediaRequests,
-          interactionGeometryBudget: role.interactionGeometryBudget,
-          commandContinuityBudget: role.commandContinuityBudget,
-          pendingStateBudget: role.pendingStateBudget,
-          interruptedStateBudget: role.interruptedStateBudget,
-          commandLatency,
-          commandEnvelopes,
-          commandInterruption,
-        });
-      }
       const commandFlow = commandFlows[role.id];
       if (commandFlow !== undefined) {
         commandResult = await runCommandFlow(page, commandFlow, {
@@ -372,12 +352,15 @@ try {
       await setDisclosureState(page, role.expandBeforeChecks, true);
       const capability = await page.getByTestId(role.capabilityTestId).innerText();
       const linkClickProofs = [];
-      if (role.id === "admin") {
+      for (const hookName of linkClickProofHooks[role.id] ?? []) {
         linkClickProofs.push(
-          await driveAdminAuditDetailClick(page, { viewport, baseUrl }),
+          await resolveFlowHook(hookName)(page, { role, viewport, baseUrl }),
         );
       }
-      if (role.id === "moderator" && evidence.phaseContrast === undefined) {
+      if (
+        phaseContrastRoles.includes(role.id) &&
+        evidence.phaseContrast === undefined
+      ) {
         evidence.phaseContrast = await provePhaseGroundContrast(page);
       }
 
@@ -932,318 +915,6 @@ async function assertHostSetupWorkbenchGeometry(page, { scenario, viewport }) {
   };
 }
 
-async function driveAdminReject(
-  page,
-  {
-    viewport,
-    interactionGeometryBudget,
-    commandContinuityBudget,
-    pendingStateBudget,
-    interruptedStateBudget,
-    commandLatency,
-    commandRequests = [],
-    commandEnvelopes = [],
-    commandInterruption,
-  } = {},
-) {
-  const createSetup = page.getByTestId("admin-setup-create-game");
-  const createGeometryBaseline = await captureInteractionGeometryBaseline(page, {
-    budget: interactionGeometryBudget?.feedback,
-    viewport,
-    label: "admin create-game feedback",
-  });
-  await createSetup.locator("button").click();
-  const createStatus = page.getByTestId("admin-command-status-create-game");
-  await createStatus.waitFor({ state: "visible" });
-  if ((await createStatus.getAttribute("data-state")) !== "confirm") {
-    throw new Error("admin create-game did not require confirmation");
-  }
-  const createConfirm = page.getByTestId("admin-command-confirm-create-game");
-  const pendingGeometryBaseline = await captureInteractionGeometryBaseline(page, {
-    budget: pendingStateBudget,
-    viewport,
-    label: "admin create-game pending state",
-  });
-  const createDispatchedAtMs = performance.now();
-  commandLatency.armNext("admin create-game command");
-  commandInterruption.armNext("admin create-game connection loss");
-  const requestCountBefore = commandRequests.length;
-  await createConfirm.click();
-  const pendingState = await capturePendingCommandState(page, {
-    role: "admin",
-    viewport,
-    budget: pendingStateBudget,
-    geometryBaseline: pendingGeometryBaseline,
-    geometryBudget: pendingStateBudget,
-    commandLatency,
-    commandRequests,
-    requestCountBefore,
-    dispatchedAtMs: createDispatchedAtMs,
-  });
-  const interruptedState = await captureInterruptedCommandRecovery(page, {
-    role: "admin",
-    viewport,
-    budget: interruptedStateBudget,
-    geometryBaseline: pendingGeometryBaseline,
-    commandLatency,
-    commandInterruption,
-    commandEnvelopes,
-    requestCountBefore,
-    commandContinuityBudget,
-    restartAfterCancel: async () => {
-      await createSetup.locator("button").click();
-      await createConfirm.waitFor({ state: "visible" });
-      await createConfirm.click();
-    },
-  });
-  await page.waitForFunction(() => {
-    const node = document.querySelector(
-      '[data-testid="admin-command-status-create-game"]',
-    );
-    return node?.getAttribute("data-state") === "reject";
-  });
-  const createRegion = await assertStatusLiveRegion(createStatus, {
-    label: "admin create-game reject status",
-    expectedState: "reject",
-    expectedAriaLive: "assertive",
-  });
-  const commandContinuity = await assertCommandContinuity(page, {
-    baseline: interruptedState.commandContinuityBaseline,
-    budget: commandContinuityBudget,
-    viewport,
-    label: "admin create-game command continuity",
-    dispatchedAtMs: interruptedState.retryDispatchedAtMs,
-    statusRegion: createRegion,
-  });
-  const feedbackGeometry = await assertPostInteractionGeometry(page, {
-    baseline: createGeometryBaseline,
-    budget: interactionGeometryBudget?.feedback,
-    viewport,
-    label: "admin create-game feedback",
-  });
-  const sessionGrantSetup = page.getByTestId("admin-setup-session-grants");
-  const confirmationGeometryBaseline =
-    await captureInteractionGeometryBaseline(page, {
-      budget: interactionGeometryBudget?.confirmation,
-      viewport,
-      label: "admin session grant confirmation",
-    });
-  await sessionGrantSetup.locator("button").click();
-  const sessionGrantStatus = page.getByTestId(
-    "admin-command-status-session-grants",
-  );
-  await sessionGrantStatus.waitFor({ state: "visible" });
-  if ((await sessionGrantStatus.getAttribute("data-state")) !== "confirm") {
-    throw new Error("session grant did not require confirmation");
-  }
-  const sessionGrantRegion = await assertStatusLiveRegion(sessionGrantStatus, {
-    label: "admin session-grants confirm status",
-    expectedState: "confirm",
-    expectedAriaLive: "polite",
-  });
-  const sessionGrantMessage = await sessionGrantStatus.innerText();
-  const sessionGrantForm = await assertFormContract(page, {
-    label: "admin session grant form",
-    formTestId: "admin-session-grant-form",
-    action: "?/grantSession",
-    fieldTestIds: [
-      "admin-session-grant-token",
-      "admin-session-grant-principal",
-      "admin-session-grant-expires-at",
-      "admin-session-grant-global-mod",
-    ],
-  });
-  const confirmationGeometry = await assertPostInteractionGeometry(page, {
-    baseline: confirmationGeometryBaseline,
-    budget: interactionGeometryBudget?.confirmation,
-    viewport,
-    label: "admin session grant confirmation",
-  });
-  const confirmationScreenshot = path.join(
-    artifactDir,
-    `${viewport.name}-admin-confirmation.png`,
-  );
-  const confirmationScreenshotPixels = await captureScreenshotEvidence(page, {
-    path: confirmationScreenshot,
-    label: `admin confirmation ${viewport.name}`,
-    viewport,
-  });
-  const sessionGrantFocus = await assertAdminConfirmationFocus(page, {
-    label: "admin session grant",
-    dialogTestId: "admin-session-grant-form",
-    confirmTestId: "admin-command-confirm-session-grants",
-    cancelTestId: "admin-command-cancel-session-grants",
-    returnFocusTestId: "admin-command-trigger-session-grants",
-    escapeCancels: true,
-    tabSequenceTestIds: [
-      "admin-command-cancel-session-grants",
-      "admin-session-grant-token",
-      "admin-session-grant-principal",
-      "admin-session-grant-expires-at",
-      "admin-session-grant-global-mod",
-      "admin-command-confirm-session-grants",
-    ],
-    shiftTabFromFirstTestId: "admin-session-grant-token",
-    shiftTabReturnTestId: "admin-command-cancel-session-grants",
-  });
-  await sessionGrantSetup.locator("button").click();
-  await sessionGrantStatus.waitFor({ state: "visible" });
-  await assertHitTarget(
-    page.getByTestId("admin-command-confirm-session-grants"),
-    "admin session grant confirm",
-  );
-  await page.getByTestId("admin-command-cancel-session-grants").click();
-  await assertFocusedTestId(
-    page,
-    "admin-command-trigger-session-grants",
-    "admin session grant cancel focus return",
-  );
-  const cohostSetup = page.getByTestId("admin-setup-cohost");
-  await cohostSetup.locator("button").click();
-  const cohostStatus = page.getByTestId("admin-command-status-cohost");
-  await cohostStatus.waitFor({ state: "visible" });
-  if ((await cohostStatus.getAttribute("data-state")) !== "confirm") {
-    throw new Error("cohost delegation did not require confirmation");
-  }
-  const cohostConfirmRegion = await assertStatusLiveRegion(cohostStatus, {
-    label: "admin cohost confirm status",
-    expectedState: "confirm",
-    expectedAriaLive: "polite",
-  });
-  const cohostFocus = await assertAdminConfirmationFocus(page, {
-    label: "admin cohost",
-    confirmTestId: "admin-command-confirm-cohost",
-    cancelTestId: "admin-command-cancel-cohost",
-    returnFocusTestId: "admin-command-trigger-cohost",
-    escapeCancels: true,
-    tabSequenceTestIds: [
-      "admin-command-cancel-cohost",
-      "admin-command-confirm-cohost",
-      "admin-command-cancel-cohost",
-    ],
-  });
-  await cohostSetup.locator("button").click();
-  await cohostStatus.waitFor({ state: "visible" });
-  await assertHitTarget(
-    page.getByTestId("admin-command-confirm-cohost"),
-    "admin cohost confirm",
-  );
-  await page.getByTestId("admin-command-confirm-cohost").click();
-  await page.waitForFunction(() => {
-    const node = document.querySelector(
-      '[data-testid="admin-command-status-cohost"]',
-    );
-    return node?.getAttribute("data-state") === "reject";
-  });
-  const cohostRejectRegion = await assertStatusLiveRegion(cohostStatus, {
-    label: "admin cohost reject status",
-    expectedState: "reject",
-    expectedAriaLive: "assertive",
-  });
-  const cohostActivity = await assertRailCommandActivity(page, {
-    prefix: "admin",
-    actionId: "cohost",
-    expectedState: "reject",
-  });
-  const result = {
-    create: {
-      state: await createStatus.getAttribute("data-state"),
-      message: await createStatus.innerText(),
-      statusRegion: createRegion,
-    },
-    sessionGrant: {
-      state: sessionGrantRegion.state,
-      message: sessionGrantMessage,
-      statusRegion: sessionGrantRegion,
-      focus: sessionGrantFocus,
-      form: sessionGrantForm,
-      confirmationScreenshot: path.relative(repoRoot, confirmationScreenshot),
-      confirmationScreenshotPixels,
-    },
-    cohost: {
-      state: await cohostStatus.getAttribute("data-state"),
-      message: await cohostStatus.innerText(),
-      confirmStatusRegion: cohostConfirmRegion,
-      rejectStatusRegion: cohostRejectRegion,
-      focus: cohostFocus,
-    },
-  };
-  const recovery = page.getByTestId("admin-recovery-recovery-gate");
-  await recovery.locator("button").click();
-  const recoveryStatus = page.getByTestId("admin-recovery-status-recovery-gate");
-  await recoveryStatus.waitFor({ state: "visible" });
-  if ((await recoveryStatus.getAttribute("data-state")) !== "confirm") {
-    throw new Error("recovery gate did not require confirmation");
-  }
-  const recoveryConfirmRegion = await assertStatusLiveRegion(recoveryStatus, {
-    label: "admin recovery confirm status",
-    expectedState: "confirm",
-    expectedAriaLive: "polite",
-  });
-  const recoveryForm = await assertFormContract(page, {
-    label: "admin recovery gate form",
-    formTestId: "admin-recovery-form-recovery-gate",
-    action: "?/checkRecoveryGate",
-    fieldNames: ["game", "principalUserId"],
-  });
-  const recoveryFocus = await assertAdminConfirmationFocus(page, {
-    label: "admin recovery gate",
-    dialogTestId: "admin-recovery-form-recovery-gate",
-    confirmTestId: "admin-recovery-confirm-recovery-gate",
-    cancelTestId: "admin-recovery-cancel-recovery-gate",
-    returnFocusTestId: "admin-recovery-trigger-recovery-gate",
-    escapeCancels: true,
-    tabSequenceTestIds: [
-      "admin-recovery-cancel-recovery-gate",
-      "admin-recovery-confirm-recovery-gate",
-      "admin-recovery-cancel-recovery-gate",
-    ],
-  });
-  await recovery.locator("button").click();
-  await recoveryStatus.waitFor({ state: "visible" });
-  await assertHitTarget(
-    page.getByTestId("admin-recovery-confirm-recovery-gate"),
-    "admin recovery gate confirm",
-  );
-  await page.getByTestId("admin-recovery-confirm-recovery-gate").click();
-  await page.waitForFunction(() => {
-    const node = document.querySelector(
-      '[data-testid="admin-recovery-status-recovery-gate"]',
-    );
-    return node?.getAttribute("data-state") === "ack";
-  });
-  const recoveryAckRegion = await assertStatusLiveRegion(recoveryStatus, {
-    label: "admin recovery ack status",
-    expectedState: "ack",
-    expectedAriaLive: "polite",
-  });
-  const recoveryActivity = await assertRailCommandActivity(page, {
-    prefix: "admin",
-    actionId: "recovery-gate",
-    expectedState: "ack",
-  });
-  result.recovery = {
-    state: await recoveryStatus.getAttribute("data-state"),
-    message: await recoveryStatus.innerText(),
-    confirmStatusRegion: recoveryConfirmRegion,
-    ackStatusRegion: recoveryAckRegion,
-    focus: recoveryFocus,
-    form: recoveryForm,
-  };
-  result.activity = {
-    rejected: cohostActivity,
-    acknowledged: recoveryActivity,
-  };
-  result.interactionGeometry = {
-    confirmation: confirmationGeometry,
-    feedback: feedbackGeometry,
-  };
-  result.commandContinuity = commandContinuity;
-  result.pendingState = pendingState;
-  result.interruptedState = interruptedState;
-  return result;
-}
-
 async function driveAdminAuditDetailClick(page, { viewport, baseUrl }) {
   await page.getByTestId("admin-audit-link-proof-runs").click();
   await page.waitForURL((url) => {
@@ -1350,6 +1021,19 @@ function resolveFlowHook(name) {
     moderatorHostPromptAck: (page) => driveModeratorHostPromptAck(page),
     moderatorSlotLifecycleAck: (page, ctx) =>
       driveModeratorSlotLifecycleAck(page, { commandRequests: ctx.commandRequests }),
+    playerMediaNetwork: (page, ctx) =>
+      assertPlayerMediaNetwork(page, { mediaRequests: ctx.mediaRequests }),
+    playerLiveThreadEmit: (page) => emitPlayerOfficialThreadPost(page),
+    playerPrivateDisclosure: (page, ctx) =>
+      drivePlayerPrivateDisclosure(page, {
+        viewport: ctx.viewport,
+        baseUrl: ctx.baseUrl,
+      }),
+    adminAuditDetail: (page, ctx) =>
+      driveAdminAuditDetailClick(page, {
+        viewport: ctx.viewport,
+        baseUrl: ctx.baseUrl,
+      }),
   };
   const hook = hooks[name];
   if (hook === undefined) {
@@ -1613,6 +1297,9 @@ async function runCommandFlow(page, flow, ctx) {
             (command) => command?.[step.commandKey] !== undefined,
           )?.[step.commandKey],
         );
+        return;
+      case "capture-text":
+        store(step, await resolveFlowTarget(page, step.target).innerText());
         return;
       case "read-attr":
         setFlowResultPath(
@@ -2875,198 +2562,6 @@ async function drivePlayerPrivateChannelPost(page, { commandRequests }) {
   };
 }
 
-async function drivePlayerReject(
-  page,
-  {
-    viewport,
-    baseUrl,
-    commandRequests,
-    mediaRequests,
-    interactionGeometryBudget,
-    commandContinuityBudget,
-    pendingStateBudget,
-    interruptedStateBudget,
-    commandLatency,
-    commandEnvelopes,
-    commandInterruption,
-  },
-) {
-  const media = await assertPlayerMediaNetwork(page, { mediaRequests });
-  await emitPlayerOfficialThreadPost(page);
-  const officialPost = page.getByTestId("player-live-official-post");
-  await officialPost.waitFor({ state: "visible" });
-  await assertVisibleBox(officialPost, "player live official post");
-  await page.getByTestId("thread-post-444").waitFor({ state: "visible" });
-  const privateDisclosure = await drivePlayerPrivateDisclosure(page, {
-    viewport,
-    baseUrl,
-  });
-
-  await page.getByTestId("player-thread-load-older").click();
-  const pageStatus = page.getByTestId("player-thread-page-status");
-  await pageStatus.waitFor({ state: "visible" });
-  await page.waitForFunction(() => {
-    const node = document.querySelector('[data-testid="player-thread-page-status"]');
-    return node?.getAttribute("data-state") === "ack";
-  });
-  const pageStatusRegion = await assertStatusLiveRegion(pageStatus, {
-    label: "player thread page ack status",
-    expectedState: "ack",
-    expectedAriaLive: "polite",
-  });
-  await page.getByTestId("thread-post-440").waitFor({ state: "visible" });
-  const composer = page.getByTestId("player-composer");
-  const feedbackGeometryBaseline =
-    await captureInteractionGeometryBaseline(page, {
-      budget: interactionGeometryBudget?.feedback,
-      viewport,
-      label: "player vote receipt",
-    });
-  await page
-    .getByTestId("player-quick-vote-actions")
-    .locator('[data-action="submit_vote"]')
-    .click();
-  const status = page.getByTestId("player-command-status");
-  await status.waitFor({ state: "visible" });
-  await page.waitForFunction(() => {
-    const node = document.querySelector('[data-testid="player-command-status"]');
-    return node?.getAttribute("data-state") === "reject";
-  });
-  const commandStatusRegion = await assertStatusLiveRegion(status, {
-    label: "player command reject status",
-    expectedState: "reject",
-    expectedAriaLive: "assertive",
-  });
-  const commandReceipt = await assertPlayerCommandReceipt(page, {
-    actionId: "submit_vote",
-    expectedState: "reject",
-  });
-  const feedbackGeometry = await assertPostInteractionGeometry(page, {
-    baseline: feedbackGeometryBaseline,
-    budget: interactionGeometryBudget?.feedback,
-    viewport,
-    label: "player vote receipt",
-  });
-  const receiptScreenshot = path.join(
-    artifactDir,
-    `${viewport.name}-player-receipt.png`,
-  );
-  const receiptScreenshotPixels = await captureScreenshotEvidence(page, {
-    path: receiptScreenshot,
-    label: `player receipt ${viewport.name}`,
-    viewport,
-  });
-  const composerTextarea = composer.locator("textarea");
-  await composerTextarea.fill("Browser smoke player post");
-  const pendingGeometryBaseline = await captureInteractionGeometryBaseline(page, {
-    budget: pendingStateBudget,
-    viewport,
-    label: "player submit-post pending state",
-  });
-  const postDispatchedAtMs = performance.now();
-  commandLatency.armNext("player submit-post command");
-  commandInterruption.armNext("player submit-post connection loss");
-  const requestCountBefore = commandRequests.length;
-  await composer.locator('[data-action="submit_post"]').click();
-  const pendingState = await capturePendingCommandState(page, {
-    role: "player",
-    viewport,
-    budget: pendingStateBudget,
-    geometryBaseline: pendingGeometryBaseline,
-    geometryBudget: pendingStateBudget,
-    commandLatency,
-    commandRequests,
-    requestCountBefore,
-    dispatchedAtMs: postDispatchedAtMs,
-  });
-  const interruptedState = await captureInterruptedCommandRecovery(page, {
-    role: "player",
-    viewport,
-    budget: interruptedStateBudget,
-    geometryBaseline: pendingGeometryBaseline,
-    commandLatency,
-    commandInterruption,
-    commandEnvelopes,
-    requestCountBefore,
-    commandContinuityBudget,
-    restartAfterCancel: async () => {
-      await composer.locator('[data-action="submit_post"]').click();
-    },
-  });
-  await page.waitForFunction(() => {
-    const node = document.querySelector('[data-testid="player-command-status"]');
-    return node?.getAttribute("data-state") === "ack";
-  });
-  const postCommandStatusRegion = await assertStatusLiveRegion(status, {
-    label: "player post command ack status",
-    expectedState: "ack",
-    expectedAriaLive: "polite",
-  });
-  const commandContinuity = await assertCommandContinuity(page, {
-    baseline: interruptedState.commandContinuityBaseline,
-    budget: commandContinuityBudget,
-    viewport,
-    label: "player composer command continuity",
-    dispatchedAtMs: interruptedState.retryDispatchedAtMs,
-    statusRegion: postCommandStatusRegion,
-  });
-  const postCommandReceipt = await assertPlayerCommandReceipt(page, {
-    actionId: "submit_post",
-    expectedState: "ack",
-  });
-  const composerAckScreenshot = path.join(
-    artifactDir,
-    `${viewport.name}-player-composer-ack.png`,
-  );
-  const composerAckScreenshotPixels = await captureScreenshotEvidence(page, {
-    path: composerAckScreenshot,
-    label: `player composer acknowledgement ${viewport.name}`,
-    viewport,
-  });
-  await page.getByTestId("thread-post-445").waitFor({ state: "visible" });
-  const postRequest = commandRequests.find(
-    (command) => command?.SubmitPost !== undefined,
-  )?.SubmitPost;
-  return {
-    media,
-    liveThread: {
-      officialPost: await officialPost.innerText(),
-      renderedPost: await page.getByTestId("thread-post-444").innerText(),
-      refreshedPost: await page.getByTestId("thread-post-445").innerText(),
-    },
-    privateDisclosure,
-    page: {
-      state: await pageStatus.getAttribute("data-state"),
-      message: await pageStatus.innerText(),
-      statusRegion: pageStatusRegion,
-    },
-    command: {
-      state: await status.getAttribute("data-state"),
-      message: await status.innerText(),
-      statusRegion: commandStatusRegion,
-    },
-    commandReceipt,
-    interactionGeometry: {
-      confirmation: null,
-      feedback: feedbackGeometry,
-    },
-    commandContinuity,
-    pendingState,
-    interruptedState,
-    receiptScreenshot: path.relative(repoRoot, receiptScreenshot),
-    receiptScreenshotPixels,
-    composerAckScreenshot: path.relative(repoRoot, composerAckScreenshot),
-    composerAckScreenshotPixels,
-    postCommand: {
-      state: await status.getAttribute("data-state"),
-      message: await status.innerText(),
-      statusRegion: postCommandStatusRegion,
-      requestCommand: postRequest,
-      refreshedPostTestId: "thread-post-445",
-    },
-    postCommandReceipt,
-  };
-}
 
 async function installPlayerMediaNetworkHarness(page) {
   const requests = [];

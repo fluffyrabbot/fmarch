@@ -71,7 +71,17 @@ checklist before they are called done:
   with `page.setContent` instead of opening a TCP listener. If Chromium launch is allowed,
   that no-bind render artifact records nonblank screenshots, visible geometry, touch target
   checks, and obvious-overlap checks; if Chromium launch itself is denied, it records a
-  `chromium-launch-blocked` boundary instead. `npm run
+  `chromium-launch-blocked` boundary instead.
+- **Flow data drives the browser role smoke** — the dev-server role-smoke runner
+  (`tools/frontend_role_smoke.mjs`) is a generic interpreter: per-role command interaction
+  sequences, network command mocks, fixture API payloads, role network harnesses, and
+  post-screenshot link-click proofs are declarative tables in
+  `tools/frontend_role_smoke_flows.mjs`, validated by
+  `tools/frontend_role_smoke_flows.test.mjs` inside `npm run test:frontend-role-artifacts`.
+  A new feature proof extends the flow/mock tables (plus role selectors and budgets in
+  `tools/frontend_role_smoke_scenarios.mjs`) instead of adding bespoke runner code; only
+  steps that read page globals or run bespoke sub-proofs register named hooks in the
+  runner. `npm run
   test:frontend-static-focusability` parses the same SSR bundle without Chromium and proves
   the modeled focus ids own real enabled focusable elements while denied ids stay inert.
   `npm run
