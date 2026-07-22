@@ -20,57 +20,92 @@ content (incompatible with moderation; out of scope by design).
 
 ## Authentication
 
-- **Identity provider:** WorkOS AuthKit owns signup, email verification, passwords, passkeys,
-  MFA, recovery, abuse controls, and browser-session refresh. SvelteKit stores the AuthKit
-  session in its encrypted, httpOnly cookie; raw WorkOS access tokens are available only to
-  server hooks and same-origin server endpoints.
-- **API verification:** the Rust `identity` crate accepts RS256 only, selects the WorkOS JWKS
-  key by `kid`, refreshes the key set once on an unknown key, validates `exp`, `iss`, and `sub`,
-  and requires a WorkOS session id. The client-specific JWKS URL is configuration, not a token
-  claim. The API receives public verification metadata,
-  never the WorkOS API key or AuthKit cookie-encryption secret. Provider failures fail closed.
-- **Stable local authority:** the immutable WorkOS `sub` is bound exactly once to a generated
-  `platform_principal` through `external_identity`. Email is display metadata, never a primary
-  key or authorization input. Each request rechecks that the local principal is active, then
-  derives global and per-game capabilities from local state. Disabling a local principal cuts
-  off HTTP and live transport without mutating the WorkOS user.
-- **Bootstrap:** `FMARCH_BOOTSTRAP_ADMIN_WORKOS_USER_ID` may bind and grant the first
-  `GlobalAdmin` on a fresh database. A transaction-wide advisory lock and the existing-admin
-  check make this a one-time root-of-authority operation. Remove the variable after bootstrap.
-- **Surface separation:** when WorkOS verification is configured, local password, registration,
-  recovery, session-grant, credential-delivery, and legacy invite endpoints are not mounted.
-  `/auth/login`, `/auth/register`, and `/auth/logout` become compatibility aliases for AuthKit
-  sign-in, sign-up, and sign-out. Hosts share a WorkOS sign-in link for a locally authorized game
-  principal; game membership remains a domain grant and is never modeled as a WorkOS organization.
-- **Local proof mode:** `FMARCH_DEV_AUTH=1` deliberately restores the legacy Argon2id account,
-  opaque-session, invite/recovery, and deterministic delivery machinery for hermetic browser and
-  Postgres proof lanes. The server refuses to start without either the complete WorkOS verifier
-  configuration or this explicit local-only switch. Local proof tables remain in the greenfield
-  baseline so those tests are reproducible, but they are not a production identity fallback.
-- **CSRF:** AuthKit's OAuth callback uses PKCE and state validation. Authenticated API calls carry
-  explicit bearer authority from server-side SvelteKit code rather than ambient API cookies.
-  The WebSocket uses a one-time, audience-bound ticket rather than a bearer token in its URL.
+**The governing decision: a sign-in method authenticates a principal; it never owns the
+principal or the application session.** Identity is a `platform_principal` with one or more
+`authentication_method` rows (`classic_password` or `workos`). Every method ends at the same
+backend-owned opaque app session (`auth_session`, `fmss_`-prefixed token, SHA-256 hash
+stored, absolute and idle expiry, bound to the method that authenticated it). Authorization,
+memberships, profiles, and game history reference only `principal_user_id` — adding or
+removing a sign-in method never rewrites a principal.
+
+- **Classic — direct sign-in (first-class, on by default):** Argon2id credentials, invites,
+  recovery credentials, and login throttling, all server-local. Product promise: *your
+  credentials and sessions stay on this server; no third-party identity provider is
+  contacted.* A classic-only deployment has zero outbound identity dependencies.
+  `FMARCH_CLASSIC_AUTH=0` disables it for a WorkOS-only deployment; startup requires at
+  least one enabled method.
+- **WorkOS — managed sign-in (additive):** AuthKit owns the interactive ceremony (signup,
+  email verification, passkeys, MFA, provider-side recovery). The frontend confines AuthKit
+  middleware and its sealed cookie to the start and callback routes; after the OAuth
+  callback, the WorkOS access token is exchanged **exactly once** at `POST /auth/sessions`
+  for the same opaque app session, and the AuthKit cookie is discarded. Provider JWTs are
+  never per-request bearers.
+- **API verification (exchange only):** the Rust `identity::workos` adapter accepts RS256
+  only, selects the WorkOS JWKS key by `kid`, refreshes the key set once on an unknown key,
+  validates `exp`, `iss`, and `sub`, and requires a WorkOS session id. The client-specific
+  JWKS URL is configuration, not a token claim. Provider failures fail closed.
+- **Stable local authority:** the immutable WorkOS `sub` is bound exactly once to a
+  generated `platform_principal` through `external_identity` (`(provider, subject)` is the
+  identity key; email is display metadata, never a primary key, authorization input, or
+  auto-linking signal). Session validation rechecks that the principal and the
+  authenticating method are still active on every request, then derives global and per-game
+  capabilities from local state. Disabling a principal revokes every method and session.
+- **Method lifecycle:** `GET /auth/account/methods` lists a principal's methods;
+  `POST /auth/account/methods/classic` attaches classic sign-in to (for example) a
+  WorkOS-only principal, returning one-time recovery codes shown exactly once;
+  `POST /auth/account/methods/{id}/disable` removes a method. Adding or removing a method
+  requires a recently authenticated session (`FMARCH_AUTH_RECENT_SECONDS`, rejected with
+  `recent_authentication_required`), an active principal must retain at least one active
+  method, at most one classic method exists per principal, removal revokes the sessions
+  authenticated through that method, and every transition writes
+  `identity_lifecycle_audit`.
+- **WorkOS adapter policy (recorded tradeoff):** there is no AuthKit refresh loop and no
+  provider webhook; provider-side revocation takes effect when the local session expires,
+  which is why WorkOS-exchanged sessions default to a shorter absolute TTL
+  (`FMARCH_WORKOS_SESSION_TTL_SECONDS`, 24h) than classic ones
+  (`FMARCH_SESSION_TTL_SECONDS`, 30d). A signed-out user cannot escape a WorkOS outage
+  unless they added classic or recovery credentials beforehand — the security page
+  therefore prompts WorkOS-only principals to add classic sign-in proactively.
+- **Bootstrap (provider-neutral):** `FMARCH_BOOTSTRAP_ADMIN_METHOD=classic|workos` with
+  `FMARCH_BOOTSTRAP_ADMIN_LOGIN_NAME`/`FMARCH_BOOTSTRAP_ADMIN_PASSWORD` or
+  `FMARCH_BOOTSTRAP_ADMIN_WORKOS_USER_ID` creates the first principal, attaches the chosen
+  method, and grants `GlobalAdmin`. A transaction-wide advisory lock and the
+  existing-admin check make this a one-time root-of-authority operation. Remove the
+  variables after bootstrap.
+- **Login surface:** `/auth/login` and `/auth/register` are real choosers — classic is the
+  primary/direct option and WorkOS appears only when its complete configuration is present
+  (`workosAuthKitConfigured` is the single availability predicate). Every route is always
+  mounted; classic availability is a runtime policy check, not a compile-or-mount fork.
+- **Dev shortcuts:** `FMARCH_DEV_AUTH=1` gates only the dev-session endpoint and the
+  query-param WebSocket form used by hermetic proof lanes. It is orthogonal to classic
+  availability, which is production identity.
+- **CSRF:** AuthKit's OAuth callback uses PKCE and state validation. Authenticated API
+  calls carry explicit bearer authority from server-side SvelteKit code rather than ambient
+  API cookies. The WebSocket uses a one-time, audience-bound ticket rather than a bearer
+  token in its URL.
 
 ### Gameplay transport authentication
 
 - Browser commands and private projection reads go through allowlisted same-origin SvelteKit
-  endpoints. Those endpoints obtain the access token from AuthKit server locals and attach it as
-  an API bearer credential; they reject a missing identity before making a privileged upstream call.
-  Command wire bodies contain only a durable command id and the typed command. Any legacy or
-  forged actor field is rejected by strict deserialization, and the API derives the actor from
-  the enabled, unexpired, unrevoked session before it reads or writes gameplay state.
-- Split-domain WebSockets use `POST /auth/websocket-tickets`. The API stores only a hash of each
-  random ticket and binds it to the WorkOS session id, local principal, configured audience, game,
-  channel, optional slot, durable `after_seq`, and the earlier of the local ticket TTL or access-token
-  expiry. Redemption is an atomic one-time consume. Wrong-audience attempts do not consume the
-  ticket; expired, replayed, forged, or locally disabled-principal tickets are rejected before
-  upgrade, so no Hello frame or private byte is emitted. Local status and token expiry are checked
-  again while the socket remains open.
+  endpoints. Those endpoints attach the app-session token from the `fmarch_session` cookie as
+  the API bearer credential; they reject a missing identity before making a privileged
+  upstream call. Command wire bodies contain only a durable command id and the typed command.
+  Any legacy or forged actor field is rejected by strict deserialization, and the API derives
+  the actor from the enabled, unexpired, unrevoked session before it reads or writes gameplay
+  state.
+- Split-domain WebSockets use `POST /auth/websocket-tickets`. The API stores only a hash of
+  each random ticket and binds it to the app session (its hash, method kind, principal),
+  configured audience, game, channel, optional slot, durable `after_seq`, and the earlier of
+  the local ticket TTL or session expiry. Redemption is an atomic one-time consume.
+  Wrong-audience attempts do not consume the ticket; expired, replayed, forged, or
+  disabled-principal/disabled-method tickets are rejected before upgrade, so no Hello frame
+  or private byte is emitted. Session, method, and principal liveness are checked again while
+  the socket remains open.
 - In-process broadcast remains the low-latency path, while every API instance polls the durable
   game event sequence. A commit on instance A therefore wakes a socket on B. Sequence movement or
   broadcast lag produces `ResyncRequired` followed by capability-filtered snapshots, and a fresh
   reconnect ticket hydrates projections from durable state even if the client cursor is stale.
-- Query-supplied principals and the legacy direct WebSocket form exist only behind explicit local
+- Query-supplied principals and the direct WebSocket form exist only behind explicit
   dev-auth mode for old fixtures. Production routes have no such fallback.
 
 ## Authorization: capabilities, not ambient roles
