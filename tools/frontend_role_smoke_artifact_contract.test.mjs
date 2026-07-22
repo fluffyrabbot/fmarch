@@ -10,6 +10,7 @@ import {
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  accessibilitySurfaceContract,
   boardScenario,
   forbiddenRoutes,
   hostSetupScenario,
@@ -1423,6 +1424,7 @@ test("route-state render artifact covers every forced board and role page state"
     surfaceTestId: "admin-surface",
     inboxTestId: "admin-operator-inbox",
     inboxMode: "exception-inbox-decision-canvas",
+    inboxSelectionMode: "url-addressable-roving-tablist",
     initialCanvasCount: 1,
     decisionCanvasTestId: "admin-operator-decision-canvas",
     readinessTestIds: ["authority", "setup", "audit", "recovery"].map((id) =>
@@ -4346,6 +4348,7 @@ test("role smoke artifact carries the same static matrices as its proof source",
     assertBrowserSetupWorkbenchEvidence(roleSmoke.setup);
     assertBrowserPublicGamePublicationEvidence(roleSmoke.publications);
     assertBrowserAdminOperatorInboxEvidence(roleSmoke.roles);
+    assertBrowserAccessibilitySurfaceEvidence(roleSmoke.accessibility);
     assertBrowserConfirmationFocusEvidence(roleSmoke.roles);
     assertBrowserPlayerPrivateDisclosureEvidence(roleSmoke.roles);
     assertBrowserPlayerPrivateChannelEvidence(roleSmoke.playerPrivateChannel);
@@ -5987,6 +5990,34 @@ function assertBrowserAdminOperatorInboxEvidence(roleEntries) {
     assert.equal(entry.roleParadigm.layout, entry.viewport.width <= 820 ? "stacked" : "queue-canvas");
     assert.equal(entry.roleParadigm.noHorizontalOverflow, true);
   }
+}
+
+function assertBrowserAccessibilitySurfaceEvidence(entries) {
+  assert.equal(Array.isArray(entries), true, "accessibility surface evidence missing");
+  assert.equal(entries.length, 1);
+  const [entry] = entries;
+  assert.deepEqual(entry.viewport, accessibilitySurfaceContract.viewport);
+  assert.deepEqual(entry.media, accessibilitySurfaceContract.media);
+  assert.equal(entry.admin.initialSelection.taskId, accessibilitySurfaceContract.admin.selectedTaskId);
+  assert.equal(entry.admin.keyboardSelection.selectionMode, accessibilitySurfaceContract.admin.selectionMode);
+  assert.equal(entry.admin.keyboardSelection.activeTestId, entry.admin.keyboardSelection.selectedTestId);
+  assert.equal(entry.admin.keyboardSelection.panelLabelledBy, entry.admin.keyboardSelection.selectedTestId);
+  assert.equal(entry.admin.keyboardSelection.selectedTabStops, 1);
+  assert.equal(entry.admin.keyboardSelection.visiblePanels, 1);
+  assert.equal(entry.admin.keyboardSelection.reducedMotion, true);
+  assert.equal(entry.admin.keyboardSelection.forcedColors, true);
+  assert.equal(entry.admin.keyboardSelection.horizontalOverflow, false);
+  assert.equal(entry.admin.activationFocusTestId.startsWith("admin-inbox-panel-"), true);
+  assert.equal(entry.publication.semantics.headingId, accessibilitySurfaceContract.publication.readingHeadingId);
+  assert.equal(entry.publication.semantics.headingResolved, true);
+  assert.equal(entry.publication.semantics.firstPostLabelsResolved, true);
+  assert.equal(entry.publication.semantics.olderHash, `#${accessibilitySurfaceContract.publication.readingHeadingId}`);
+  assert.equal(entry.publication.semantics.reducedMotion, true);
+  assert.equal(entry.publication.semantics.forcedColors, true);
+  assert.equal(entry.publication.semantics.horizontalOverflow, false);
+  assert.equal(entry.publication.skipFocusTestId, accessibilitySurfaceContract.publication.firstPostTestId);
+  assertPixelEvidence([{ ...entry.admin, viewport: entry.viewport }], "admin accessibility screenshot");
+  assertPixelEvidence([{ ...entry.publication, viewport: entry.viewport }], "publication accessibility screenshot");
 }
 
 function assertBrowserConfirmationFocusEvidence(roleEntries) {

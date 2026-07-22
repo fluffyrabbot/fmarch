@@ -21,6 +21,9 @@ import {
   adminForbiddenMessage,
 } from "../frontend/src/routes/admin/admin-route-model.mjs";
 import {
+  ADMIN_OPERATOR_INBOX_CONTRACT,
+} from "../frontend/src/routes/admin/admin-operator-inbox.mjs";
+import {
   PLAYER_ROUTE_CONTRACT,
   playerForbiddenMessage,
 } from "../frontend/src/routes/g/[game]/game-route-model.mjs";
@@ -36,6 +39,9 @@ import {
   adminReadinessStatusTestId,
   adminReadinessTestId,
 } from "../frontend/src/lib/components/admin/admin-surface-model.mjs";
+import {
+  PUBLIC_GAME_PUBLICATION_CONTRACT,
+} from "../frontend/src/routes/games/[game]/public-game-publication.mjs";
 
 export const viewports = Object.freeze([
   Object.freeze({ name: "mobile", width: 390, height: 844 }),
@@ -52,6 +58,30 @@ export const setupViewports = Object.freeze([
 ]);
 
 export const publicationViewports = setupViewports;
+
+export const accessibilitySurfaceContract = Object.freeze({
+  viewport: Object.freeze({
+    name: "desktop-200-percent-reflow",
+    width: 720,
+    height: 450,
+    equivalentBaseWidth: 1440,
+    zoomPercent: PUBLIC_GAME_PUBLICATION_CONTRACT.reflowZoomPercent,
+  }),
+  media: Object.freeze({ reducedMotion: "reduce", forcedColors: "active" }),
+  admin: Object.freeze({
+    token: "fixture-admin",
+    path: "/admin?task=recovery%3Arecovery-gate",
+    selectedTaskId: "recovery:recovery-gate",
+    selectionMode: ADMIN_OPERATOR_INBOX_CONTRACT.selectionMode,
+  }),
+  publication: Object.freeze({
+    token: null,
+    path: "/games/midsummer",
+    skipTestId: PUBLIC_GAME_PUBLICATION_CONTRACT.skipPostsTestId,
+    firstPostTestId: "public-game-post-42",
+    readingHeadingId: PUBLIC_GAME_PUBLICATION_CONTRACT.threadHeadingId,
+  }),
+});
 
 export const publicGameScenario = Object.freeze({
   id: "public-game-publication",
@@ -94,7 +124,7 @@ const adminLiveReadinessTargets = scanStripTargets({
   states: {
     authority: "ack",
     setup: "pending",
-    audit: "ack",
+    audit: "pending",
     recovery: "pending",
   },
 });

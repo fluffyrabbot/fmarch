@@ -2,6 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   ADMIN_OPERATOR_INBOX_CONTRACT,
+  adjacentAdminInboxTaskId,
+  adminInboxTaskHref,
+  adminInboxTaskId,
   buildAdminOperatorInbox,
 } from "./admin-operator-inbox.mjs";
 
@@ -44,4 +47,26 @@ test("interrupted commands move their operator task to the front", () => {
   });
   assert.equal(view.tasks[0].id, "recovery:recovery-gate");
   assert.equal(view.tasks[0].badge, "Needs recovery");
+});
+
+test("task selection round-trips through the admin URL without dropping workspace state", () => {
+  const href = adminInboxTaskHref({
+    url: "https://fmarch.test/admin?game=midsummer#operator",
+    taskId: "recovery:recovery-gate",
+  });
+  assert.equal(
+    href,
+    "/admin?game=midsummer&task=recovery%3Arecovery-gate#operator",
+  );
+  assert.equal(adminInboxTaskId(href), "recovery:recovery-gate");
+  assert.equal(ADMIN_OPERATOR_INBOX_CONTRACT.selectionMode, "url-addressable-roving-tablist");
+});
+
+test("roving task navigation wraps and supports both axis key families", () => {
+  const tasks = ["audit:proof", "setup:game", "recovery:gate"].map((id) => ({ id }));
+  assert.equal(adjacentAdminInboxTaskId({ tasks, selectedTaskId: tasks[0].id, key: "ArrowUp" }), tasks[2].id);
+  assert.equal(adjacentAdminInboxTaskId({ tasks, selectedTaskId: tasks[2].id, key: "ArrowRight" }), tasks[0].id);
+  assert.equal(adjacentAdminInboxTaskId({ tasks, selectedTaskId: tasks[1].id, key: "Home" }), tasks[0].id);
+  assert.equal(adjacentAdminInboxTaskId({ tasks, selectedTaskId: tasks[1].id, key: "End" }), tasks[2].id);
+  assert.equal(adjacentAdminInboxTaskId({ tasks, selectedTaskId: tasks[1].id, key: "Enter" }), null);
 });

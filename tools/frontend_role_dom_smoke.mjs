@@ -311,7 +311,10 @@ function surfaceScenarios() {
       ],
       requiredAttributes: [
         'data-inbox-mode="exception-inbox-decision-canvas"',
+        'data-selection-mode="url-addressable-roving-tablist"',
         'data-initial-canvas-count="1"',
+        'role="tablist"',
+        'role="tabpanel"',
         'data-component="admin-command-activity"',
       ],
       forbiddenText: [],

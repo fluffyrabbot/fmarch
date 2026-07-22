@@ -46,24 +46,36 @@
         {/if}
       </header>
 
+      {#if data.publicGame.posts.length > 0}
+        <a class="public-game-skip-posts" href={`#thread-post-${data.publicGame.posts[0].source_seq}`} data-testid={data.publication.readingLane.skipPostsTestId}>
+          Skip to first public post
+        </a>
+      {/if}
+
       <section
         class="public-game-reading-lane"
-        aria-label="Public main thread"
+        aria-labelledby={data.publication.readingLane.headingId}
         data-testid={data.publication.readingLane.testId}
         style={`--public-game-reading-measure: ${data.publication.readingLane.maxMeasurePx}px`}
       >
         <header class="public-game-thread-heading" data-testid="public-game-thread">
-          <h2>{data.publication.readingLane.heading}</h2>
+          <h2 id={data.publication.readingLane.headingId} tabindex="-1">{data.publication.readingLane.heading}</h2>
           <span>{data.publication.readingLane.postCountLabel}</span>
         </header>
         {#if data.publicGame.posts.length === 0}
           <p class="public-game-empty" data-testid="public-game-thread-empty">No public main-thread posts yet.</p>
         {:else}
           {#each data.publicGame.posts as post}
-            <article id={`thread-post-${post.source_seq}`} class="public-game-post" data-testid={`public-game-post-${post.source_seq}`}>
+            <article
+              id={`thread-post-${post.source_seq}`}
+              class="public-game-post"
+              aria-labelledby={`public-game-post-author-${post.source_seq} public-game-post-meta-${post.source_seq}`}
+              tabindex="-1"
+              data-testid={`public-game-post-${post.source_seq}`}
+            >
               <header>
-                <strong>{post.author_slot ?? post.author_user ?? "System"}</strong>
-                <a href={`#thread-post-${post.source_seq}`}>#{post.source_seq} · {occurredAt(post.occurred_at)}</a>
+                <strong id={`public-game-post-author-${post.source_seq}`}>{post.author_slot ?? post.author_user ?? "System"}</strong>
+                <a id={`public-game-post-meta-${post.source_seq}`} href={`#thread-post-${post.source_seq}`}>#{post.source_seq} · {occurredAt(post.occurred_at)}</a>
               </header>
               <p>{post.body}</p>
               {#if data.publicGame.hasSession}
@@ -81,7 +93,7 @@
           {/each}
         {/if}
         {#if data.publicGame.nextBeforeSeq !== null}
-          <a class="fm-touch-button fm-touch-button--secondary public-game-older" href={`?before_seq=${data.publicGame.nextBeforeSeq}`} data-testid="public-game-older">Older posts</a>
+          <a class="fm-touch-button fm-touch-button--secondary public-game-older" href={`?before_seq=${data.publicGame.nextBeforeSeq}#${data.publication.readingLane.headingId}`} data-testid="public-game-older">Older posts</a>
         {/if}
       </section>
 
@@ -108,13 +120,15 @@
   .public-game-meta span + span { border-inline-start: 1px solid var(--fm-line); padding-inline-start: 18px; }
   .public-game-actions form { margin: 0; }
   .public-game-reading-lane { margin-inline: auto; max-inline-size: var(--public-game-reading-measure, 760px); width: 100%; }
+  .public-game-skip-posts { block-size: 1px; clip-path: inset(50%); inline-size: 1px; overflow: hidden; position: absolute; white-space: nowrap; }
+  .public-game-skip-posts:focus { block-size: auto; clip-path: none; inline-size: auto; inset-inline-start: 16px; padding: 10px 14px; position: fixed; top: 80px; z-index: 20; }
   .public-game-thread-heading { align-items: baseline; display: flex; justify-content: space-between; padding-block-end: 12px; }
   .public-game-thread-heading h2 { font-family: var(--fm-font-display); font-size: 28px; margin: 0; }
   .public-game-thread-heading span { color: var(--fm-ink-muted); font-size: 13px; font-weight: 750; }
   .public-game-post { border-block-start: 1px solid var(--fm-line); padding-block: 20px 24px; scroll-margin-block-start: 88px; }
   .public-game-post header { align-items: baseline; display: flex; flex-wrap: wrap; gap: 8px 16px; justify-content: space-between; }
   .public-game-post header a { color: var(--fm-ink-muted); font-size: 13px; }
-  .public-game-post p { font-size: 17px; line-height: 1.65; margin-block-end: 0; white-space: pre-wrap; }
+  .public-game-post p { font-size: 17px; line-height: 1.65; margin-block-end: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
   .report-control { margin-block-start: 10px; }
   .report-control summary { min-block-size: 44px; }
   .report-control form { display: grid; gap: 10px; margin-block-start: 10px; }
@@ -128,5 +142,14 @@
     .public-game-masthead h2 { font-size: 34px; }
     .public-game-meta span + span { border: 0; padding: 0; }
     .public-game-post p { font-size: 16px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .public-game-post, #public-game-thread-title { scroll-behavior: auto; }
+  }
+
+  @media (forced-colors: active) {
+    .public-game-masthead, .public-game-post, .public-game-colophon { border-color: CanvasText; }
+    .public-game-skip-posts:focus { border: 2px solid Highlight; }
   }
 </style>

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { EXPECTED_COUNTS } from "./frontend_proof_expectations.mjs";
 import {
+  accessibilitySurfaceContract,
   boardScenario,
   forbiddenRoutes,
   hostSetupScenario,
@@ -54,6 +55,23 @@ test("public game scenario pins publication density across responsive viewports"
     desktop: 390,
   });
   assert.equal(publicGameScenario.maxReadingMeasurePx, 760);
+});
+
+test("accessibility surface contract models 200 percent reflow and user media preferences", () => {
+  assert.deepEqual(accessibilitySurfaceContract.viewport, {
+    name: "desktop-200-percent-reflow",
+    width: 720,
+    height: 450,
+    equivalentBaseWidth: 1440,
+    zoomPercent: 200,
+  });
+  assert.deepEqual(accessibilitySurfaceContract.media, {
+    reducedMotion: "reduce",
+    forcedColors: "active",
+  });
+  assert.equal(accessibilitySurfaceContract.admin.selectedTaskId, "recovery:recovery-gate");
+  assert.equal(accessibilitySurfaceContract.admin.selectionMode, "url-addressable-roving-tablist");
+  assert.equal(accessibilitySurfaceContract.publication.readingHeadingId, "public-game-thread-title");
 });
 
 test("host setup scenario pins mobile stacking and workbench route identity", () => {

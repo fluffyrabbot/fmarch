@@ -1,6 +1,8 @@
 export const ADMIN_OPERATOR_INBOX_CONTRACT = Object.freeze({
   componentName: "admin-operator-inbox",
   mode: "exception-inbox-decision-canvas",
+  selectionMode: "url-addressable-roving-tablist",
+  queryParam: "task",
   rootTestId: "admin-operator-inbox",
   queueTestId: "admin-operator-inbox-queue",
   canvasTestId: "admin-operator-decision-canvas",
@@ -32,6 +34,7 @@ export function buildAdminOperatorInbox({
       data: Object.freeze({
         component: ADMIN_OPERATOR_INBOX_CONTRACT.componentName,
         mode: ADMIN_OPERATOR_INBOX_CONTRACT.mode,
+        selectionMode: ADMIN_OPERATOR_INBOX_CONTRACT.selectionMode,
         initialCanvasCount: String(ADMIN_OPERATOR_INBOX_CONTRACT.initialCanvasCount),
       }),
     }),
@@ -48,6 +51,44 @@ export function buildAdminOperatorInbox({
     selectedTaskId: resolvedSelectedTaskId,
     selectedTask,
   });
+}
+
+export function adminInboxTaskId(url) {
+  const value = parseAdminInboxUrl(url).searchParams.get(
+    ADMIN_OPERATOR_INBOX_CONTRACT.queryParam,
+  );
+  return typeof value === "string" && value.trim() !== "" ? value.trim() : null;
+}
+
+export function adminInboxTaskHref({ url, taskId }) {
+  const parsed = parseAdminInboxUrl(url);
+  const normalizedTaskId = String(taskId ?? "").trim();
+  if (normalizedTaskId === "") {
+    parsed.searchParams.delete(ADMIN_OPERATOR_INBOX_CONTRACT.queryParam);
+  } else {
+    parsed.searchParams.set(
+      ADMIN_OPERATOR_INBOX_CONTRACT.queryParam,
+      normalizedTaskId,
+    );
+  }
+  return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+}
+
+export function adjacentAdminInboxTaskId({ tasks = [], selectedTaskId, key }) {
+  if (tasks.length === 0) return null;
+  if (key === "Home") return tasks[0].id;
+  if (key === "End") return tasks.at(-1).id;
+  const delta = ["ArrowRight", "ArrowDown"].includes(key)
+    ? 1
+    : ["ArrowLeft", "ArrowUp"].includes(key)
+      ? -1
+      : 0;
+  if (delta === 0) return null;
+  const selectedIndex = Math.max(
+    0,
+    tasks.findIndex((task) => task.id === selectedTaskId),
+  );
+  return tasks[(selectedIndex + delta + tasks.length) % tasks.length].id;
 }
 
 function setupTask(item, sourceIndex, status) {
@@ -124,4 +165,10 @@ function auditNeedsAttention(status) {
   if (value === "") return true;
   return ["unavailable", "blocked", "fail", "missing", "stale", "reject", "error"]
     .some((marker) => value.includes(marker));
+}
+
+function parseAdminInboxUrl(url) {
+  return url instanceof URL
+    ? new URL(url.href)
+    : new URL(String(url ?? "/admin"), "http://fmarch.local");
 }

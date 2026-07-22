@@ -1,4 +1,7 @@
 <script>
+  import { goto } from "$app/navigation";
+  import { page } from "$app/stores";
+  import { tick } from "svelte";
   import AppSurfaceHeader from "$lib/app/AppSurfaceHeader.svelte";
   import RouteState from "$lib/app/RouteState.svelte";
   import {
@@ -28,7 +31,12 @@
     sendAdminSetupCommand,
   } from "./admin-route-controller.mjs";
   import { ADMIN_ROUTE_CONTRACT } from "./admin-route-contract.mjs";
-  import { buildAdminOperatorInbox } from "./admin-operator-inbox.mjs";
+  import {
+    adjacentAdminInboxTaskId,
+    adminInboxTaskHref,
+    adminInboxTaskId,
+    buildAdminOperatorInbox,
+  } from "./admin-operator-inbox.mjs";
   import {
     commandAttemptId,
     commandAttemptTimeoutMs,
@@ -42,7 +50,6 @@
   let lastFormStatusKey = "";
   let recoveryWorkflowOpen = false;
   let commandRecoveryAttempts = {};
-  let preferredAdminTaskId = null;
 
   $: adminSurfaceEmpty = isAdminRouteEmpty(data);
   $: adminForcedRouteState = data.routeState
@@ -57,7 +64,7 @@
     audit: data.audit,
     recoveryTasks: data.recoveryTasks,
     commandStatuses,
-    selectedTaskId: preferredAdminTaskId,
+    selectedTaskId: adminInboxTaskId($page.url),
   });
 
   $: if (form?.id && `${form.id}:${form.state}:${form.message}` !== lastFormStatusKey) {
@@ -85,8 +92,39 @@
     );
   }
 
-  function selectAdminTask(taskId) {
-    preferredAdminTaskId = taskId;
+  async function selectAdminTask(taskId, { focus = "canvas", replaceState = false } = {}) {
+    await goto(adminInboxTaskHref({ url: $page.url, taskId }), {
+      keepFocus: true,
+      noScroll: true,
+      replaceState,
+    });
+    await tick();
+    const targetTestId = focus === "task"
+      ? operatorInbox.selectedTask?.testId
+      : operatorInbox.selectedTask?.panelTestId;
+    document.getElementById(targetTestId)?.focus({ preventScroll: true });
+  }
+
+  function activateAdminTask(event, taskId) {
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    void selectAdminTask(taskId);
+  }
+
+  function handleAdminTaskKeydown(event, taskId) {
+    if (["Enter", " "].includes(event.key)) {
+      event.preventDefault();
+      void selectAdminTask(taskId);
+      return;
+    }
+    const nextTaskId = adjacentAdminInboxTaskId({
+      tasks: operatorInbox.tasks,
+      selectedTaskId: taskId,
+      key: event.key,
+    });
+    if (nextTaskId === null) return;
+    event.preventDefault();
+    void selectAdminTask(nextTaskId, { focus: "task", replaceState: true });
   }
 
   async function handleSetupAction(item) {
@@ -259,6 +297,7 @@
       class="admin-operator-inbox"
       data-component={operatorInbox.root.data.component}
       data-inbox-mode={operatorInbox.root.data.mode}
+      data-selection-mode={operatorInbox.root.data.selectionMode}
       data-initial-canvas-count={operatorInbox.root.data.initialCanvasCount}
       data-testid={operatorInbox.root.testId}
     >
@@ -268,28 +307,38 @@
           <strong>{operatorInbox.queue.attentionCount}</strong>
         </header>
         <p>{operatorInbox.queue.summary}</p>
-        <div class="admin-operator-inbox__tasks">
+        <div class="admin-operator-inbox__tasks" role="tablist" aria-label="Operator tasks">
           {#each operatorInbox.tasks as task}
-            <button
-              type="button"
+            <a
+              id={task.testId}
+              href={adminInboxTaskHref({ url: $page.url, taskId: task.id })}
+              role="tab"
               data-state={task.state}
               data-kind={task.kind}
               data-testid={task.testId}
-              aria-current={task.id === operatorInbox.selectedTaskId ? "true" : undefined}
+              aria-selected={task.id === operatorInbox.selectedTaskId ? "true" : "false"}
               aria-controls={task.panelTestId}
-              on:click={() => selectAdminTask(task.id)}
+              tabindex={task.id === operatorInbox.selectedTaskId ? 0 : -1}
+              on:click={(event) => activateAdminTask(event, task.id)}
+              on:keydown={(event) => handleAdminTaskKeydown(event, task.id)}
             >
               <span>{task.badge}</span>
               <strong>{task.label}</strong>
               <small>{task.summary}</small>
-            </button>
+            </a>
           {/each}
         </div>
       </nav>
 
       <section class="admin-operator-inbox__canvas" data-testid={operatorInbox.canvas.testId}>
         {#if operatorInbox.selectedTask}
-          <article id={operatorInbox.selectedTask.panelTestId} data-testid={operatorInbox.selectedTask.panelTestId}>
+          <div
+            id={operatorInbox.selectedTask.panelTestId}
+            role="tabpanel"
+            aria-labelledby={operatorInbox.selectedTask.testId}
+            tabindex="-1"
+            data-testid={operatorInbox.selectedTask.panelTestId}
+          >
             {#if operatorInbox.selectedTask.kind === "setup"}
               <AdminSetupGrid
                 items={[operatorInbox.selectedTask.item]}
@@ -324,7 +373,7 @@
                 on:click={() => handleRecoveryTask(operatorInbox.selectedTask.item)}
               >Open recovery check</button>
             {/if}
-          </article>
+          </div>
         {/if}
       </section>
     </section>
@@ -415,13 +464,13 @@
   .admin-operator-inbox__queue > header > strong { align-items: center; background: var(--fm-accent-wash); border-radius: 999px; color: var(--fm-accent-ink); display: inline-flex; justify-content: center; min-block-size: 36px; min-inline-size: 36px; }
   .admin-operator-inbox__queue > p { color: var(--fm-ink-muted); font-size: 13px; line-height: 1.4; }
   .admin-operator-inbox__tasks { display: grid; gap: 6px; }
-  .admin-operator-inbox__tasks button { background: transparent; border: 1px solid transparent; border-radius: 9px; color: var(--fm-ink); display: grid; gap: 3px; min-block-size: 64px; padding: 9px 10px; text-align: start; }
-  .admin-operator-inbox__tasks button:hover, .admin-operator-inbox__tasks button[aria-current="true"] { background: var(--fm-raised); border-color: var(--fm-line-strong); }
-  .admin-operator-inbox__tasks button > span { color: var(--fm-ink-muted); font-size: 10px; font-weight: 850; text-transform: uppercase; }
-  .admin-operator-inbox__tasks button[data-state="blocked"] > span, .admin-operator-inbox__tasks button[data-state="interrupted"] > span { color: var(--fm-danger-ink); }
-  .admin-operator-inbox__tasks button > small { color: var(--fm-ink-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .admin-operator-inbox__tasks a { background: transparent; border: 1px solid transparent; border-radius: 9px; color: var(--fm-ink); display: grid; gap: 3px; min-block-size: 64px; padding: 9px 10px; text-align: start; text-decoration: none; }
+  .admin-operator-inbox__tasks a:hover, .admin-operator-inbox__tasks a[aria-selected="true"] { background: var(--fm-raised); border-color: var(--fm-line-strong); }
+  .admin-operator-inbox__tasks a > span { color: var(--fm-ink-muted); font-size: 10px; font-weight: 850; text-transform: uppercase; }
+  .admin-operator-inbox__tasks a[data-state="blocked"] > span, .admin-operator-inbox__tasks a[data-state="interrupted"] > span { color: var(--fm-danger-ink); }
+  .admin-operator-inbox__tasks a > small { color: var(--fm-ink-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .admin-operator-inbox__canvas { padding: clamp(18px, 3vw, 28px); }
-  .admin-operator-inbox__canvas > article { display: grid; gap: 18px; }
+  .admin-operator-inbox__canvas > [role="tabpanel"] { display: grid; gap: 18px; }
   .admin-operator-inbox__canvas-heading { align-items: center; border-block-end: 1px solid var(--fm-line); display: flex; gap: 16px; justify-content: space-between; padding-block-end: 14px; }
   .admin-operator-inbox__canvas-heading > span { border: 1px solid var(--fm-line); border-radius: 999px; font-size: 11px; font-weight: 850; padding: 7px 10px; text-transform: uppercase; }
 
@@ -448,7 +497,7 @@
     .admin-operator-inbox__queue { gap: 6px; padding: 10px; }
     .admin-operator-inbox__queue > p { display: none; }
     .admin-operator-inbox__tasks { display: flex; margin-inline: -10px; overflow-x: auto; padding-inline: 10px; }
-    .admin-operator-inbox__tasks button { flex: 0 0 160px; min-block-size: 56px; padding-block: 6px; }
+    .admin-operator-inbox__tasks a { flex: 0 0 160px; min-block-size: 56px; padding-block: 6px; }
     .admin-operator-inbox__canvas { padding: 12px; }
   }
 
@@ -456,7 +505,18 @@
     .admin-surface { gap: 10px; }
     .admin-game-picker { gap: 8px; padding: 8px; }
     .admin-game-picker .fm-field > span { block-size: 1px; clip-path: inset(50%); inline-size: 1px; overflow: hidden; position: absolute; white-space: nowrap; }
+    .admin-operator-inbox { gap: 8px; }
+    .admin-operator-inbox__tasks a > small { display: none; }
     .admin-operator-inbox__canvas-heading { align-items: start; display: grid; gap: 8px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .admin-operator-inbox__tasks { scroll-behavior: auto; }
+  }
+
+  @media (forced-colors: active) {
+    .admin-operator-inbox__queue, .admin-operator-inbox__canvas { border-color: CanvasText; }
+    .admin-operator-inbox__tasks a[aria-selected="true"] { border-color: Highlight; outline: 2px solid Highlight; }
   }
 
 </style>

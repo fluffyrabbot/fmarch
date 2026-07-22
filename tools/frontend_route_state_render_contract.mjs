@@ -63,9 +63,11 @@ await mkdir(artifactDir, { recursive: true });
 
 const entryPath = path.join(tempEntryDir, "entry.mjs");
 const appStoresPath = path.join(tempEntryDir, "app-stores.mjs");
+const appNavigationPath = path.join(tempEntryDir, "app-navigation.mjs");
 const appRootShellPath = path.join(tempEntryDir, "AppRootShell.svelte");
 await writeFile(entryPath, renderEntrySource());
 await writeFile(appStoresPath, renderAppStoresSource());
+await writeFile(appNavigationPath, "export async function goto() {}\n");
 await writeFile(appRootShellPath, renderAppRootShellSource());
 
 try {
@@ -81,6 +83,7 @@ try {
       alias: {
         $lib: path.join(frontendRoot, "src", "lib"),
         "$app/stores": appStoresPath,
+        "$app/navigation": appNavigationPath,
       },
     },
     logLevel: "error",
@@ -1288,6 +1291,14 @@ async function proveRenderedAdminSurface(bundle) {
   );
   assertIncludes(
     html,
+    'data-selection-mode="url-addressable-roving-tablist"',
+    "admin URL-addressable selection paradigm",
+  );
+  assertIncludes(html, 'role="tablist"', "admin operator task tablist");
+  assertIncludes(html, 'role="tab"', "admin operator task tab");
+  assertIncludes(html, 'role="tabpanel"', "admin operator decision tabpanel");
+  assertIncludes(
+    html,
     'data-initial-canvas-count="1"',
     "admin single-canvas contract",
   );
@@ -1368,6 +1379,7 @@ async function proveRenderedAdminSurface(bundle) {
     setupTestId: "admin-setup-create-game",
     inboxTestId: "admin-operator-inbox",
     inboxMode: "exception-inbox-decision-canvas",
+    inboxSelectionMode: "url-addressable-roving-tablist",
     initialCanvasCount: 1,
     decisionCanvasTestId: "admin-operator-decision-canvas",
     auditLinkTestId: "admin-audit-link-proof-runs",

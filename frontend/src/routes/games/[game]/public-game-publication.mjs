@@ -4,7 +4,11 @@ export const PUBLIC_GAME_PUBLICATION_CONTRACT = Object.freeze({
   rootTestId: "public-game-publication",
   metadataTestId: "public-game-metadata",
   readingLaneTestId: "public-game-reading-lane",
+  skipPostsTestId: "public-game-skip-posts",
+  threadHeadingId: "public-game-thread-title",
   maxReadingMeasurePx: 760,
+  reflowZoomPercent: 200,
+  preferenceMedia: Object.freeze(["prefers-reduced-motion", "forced-colors"]),
   threadStartBudgetPx: Object.freeze({ mobile: 420, tablet: 380, desktop: 390 }),
 });
 
@@ -37,6 +41,8 @@ export function buildPublicGamePublication({ game = null, posts = [] } = {}) {
     }),
     readingLane: Object.freeze({
       testId: PUBLIC_GAME_PUBLICATION_CONTRACT.readingLaneTestId,
+      skipPostsTestId: PUBLIC_GAME_PUBLICATION_CONTRACT.skipPostsTestId,
+      headingId: PUBLIC_GAME_PUBLICATION_CONTRACT.threadHeadingId,
       heading: "Main thread",
       postCountLabel: countLabel(normalizedPosts.length, "public post", "public posts"),
       maxMeasurePx: PUBLIC_GAME_PUBLICATION_CONTRACT.maxReadingMeasurePx,

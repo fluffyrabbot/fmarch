@@ -111,6 +111,20 @@ routes remain the durable place for evidence review.
 Primary controls have a 44px minimum target. No action depends on hover or a
 gesture. Document order remains useful without client-side enhancement.
 
+## Accessibility interaction contract
+
+The admin queue is a URL-addressable tablist. Every task has a durable `task`
+query value, exactly one task is in the tab sequence, arrow keys and Home/End
+move selection, and direct activation moves focus into the newly selected
+decision canvas. A copied URL therefore restores both the selected work and its
+accessible relationship without client-only state.
+
+The public publication names its thread and each post, provides a
+keyboard-visible skip link to the first post, and returns paginated readers to
+the thread heading. Both paradigms reflow without horizontal scrolling at a
+200% desktop zoom equivalent and retain explicit boundaries in forced-colors
+mode. Reduced-motion preference removes any authored scrolling behavior.
+
 ## Visual hierarchy
 
 - Use cards for discrete objects or temporary work, not as the default section
@@ -133,6 +147,11 @@ gesture. Document order remains useful without client-side enhancement.
   at most a 760px reading measure, and contains no panel-card stack.
 - The admin overview renders one decision canvas, with its queue stacked below
   820px and beside the canvas above that breakpoint.
+- At a 720px CSS viewport (the 200% reflow equivalent of a 1440px desktop), the
+  public and admin paradigms have no horizontal overflow under reduced-motion
+  and forced-colors emulation.
+- Admin task activation preserves a single tab stop and moves focus to the
+  labelled decision canvas; public skip navigation focuses the first post.
 - Proof lanes exercise player and host tasks rather than requiring legacy panel
   topology.
 

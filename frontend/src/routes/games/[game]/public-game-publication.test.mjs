@@ -16,6 +16,8 @@ test("public game publication creates a reading-first live record", () => {
   assert.equal(view.metadata.phaseLabel, "Day 2");
   assert.equal(view.readingLane.postCountLabel, "2 public posts");
   assert.equal(view.readingLane.maxMeasurePx, 760);
+  assert.equal(view.readingLane.skipPostsTestId, "public-game-skip-posts");
+  assert.equal(view.readingLane.headingId, "public-game-thread-title");
 });
 
 test("completed publications and unavailable games remain explicit", () => {
@@ -32,4 +34,9 @@ test("completed publications and unavailable games remain explicit", () => {
     tablet: 380,
     desktop: 390,
   });
+  assert.equal(PUBLIC_GAME_PUBLICATION_CONTRACT.reflowZoomPercent, 200);
+  assert.deepEqual(PUBLIC_GAME_PUBLICATION_CONTRACT.preferenceMedia, [
+    "prefers-reduced-motion",
+    "forced-colors",
+  ]);
 });

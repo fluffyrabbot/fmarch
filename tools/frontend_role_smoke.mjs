@@ -10,6 +10,7 @@ import {
   preflightLocalhostBindOrExit,
 } from "./frontend_smoke_bind_preflight.mjs";
 import {
+  accessibilitySurfaceContract,
   boardScenario,
   forbiddenRoutes,
   hostSetupScenario,
@@ -103,6 +104,7 @@ try {
     forbidden: [],
     playerPrivateChannel: [],
     routeStates: [],
+    accessibility: [],
   };
 
   for (const viewport of viewports) {
@@ -653,6 +655,10 @@ try {
     await context.close();
   }
 
+  evidence.accessibility.push(
+    await assertAccessibilitySurfaceContracts({ baseUrl, artifactDir }),
+  );
+
   await writeFile(evidencePath, `${JSON.stringify(evidence, null, 2)}\n`);
   console.log(`wrote ${path.relative(repoRoot, evidencePath)}`);
 } catch (error) {
@@ -699,8 +705,8 @@ async function prepareRoleDecisionCanvas(page, role, viewport) {
   const snapshot = await page.evaluate(() => ({
     mode: document.querySelector('[data-testid="admin-operator-inbox"]')?.getAttribute("data-inbox-mode"),
     initialCanvasCount: document.querySelector('[data-testid="admin-operator-inbox"]')?.getAttribute("data-initial-canvas-count"),
-    selectedTaskId: document.querySelector('[data-testid="admin-operator-inbox-queue"] [aria-current="true"]')?.getAttribute("data-testid"),
-    visibleCanvasCount: document.querySelectorAll('[data-testid="admin-operator-decision-canvas"] > article').length,
+    selectedTaskId: document.querySelector('[data-testid="admin-operator-inbox-queue"] [aria-selected="true"]')?.getAttribute("data-testid"),
+    visibleCanvasCount: document.querySelectorAll('[data-testid="admin-operator-decision-canvas"] > [role="tabpanel"]').length,
     taskCount: document.querySelectorAll('[data-testid^="admin-inbox-task-"]').length,
     overflow: Math.max(document.documentElement.scrollWidth, document.body.scrollWidth) - document.documentElement.clientWidth,
   }));
@@ -805,6 +811,156 @@ async function assertPublicGamePublicationGeometry(page, { scenario, viewport })
     posts,
     olderBox,
     overlapCheckedTargets: posts.length + 3,
+  };
+}
+
+async function assertAccessibilitySurfaceContracts({ baseUrl, artifactDir }) {
+  const contract = accessibilitySurfaceContract;
+  const viewport = contract.viewport;
+  const adminContext = await newContextForViewport(viewport, contract.admin.token);
+  const adminPage = await adminContext.newPage();
+  await adminPage.emulateMedia(contract.media);
+  const adminResponse = await adminPage.goto(`${baseUrl}${contract.admin.path}`, {
+    waitUntil: "networkidle",
+  });
+  if (!adminResponse?.ok()) {
+    throw new Error(`accessibility admin surface returned ${adminResponse?.status()}`);
+  }
+  const selectedTab = adminPage.locator('[role="tab"][aria-selected="true"]');
+  await selectedTab.waitFor({ state: "visible" });
+  const initialSelection = await selectedTab.evaluate((element) => ({
+    taskId: new URL(element.href).searchParams.get("task"),
+    testId: element.getAttribute("data-testid"),
+    controls: element.getAttribute("aria-controls"),
+  }));
+  if (initialSelection.taskId !== contract.admin.selectedTaskId) {
+    throw new Error(`admin deep link selected ${initialSelection.taskId}`);
+  }
+  const taskLinks = await adminPage.locator('[role="tab"]');
+  const taskCount = await taskLinks.count();
+  const selectedIndex = await taskLinks.evaluateAll((elements) =>
+    elements.findIndex((element) => element.getAttribute("aria-selected") === "true")
+  );
+  const expectedKeyboardTaskId = await taskLinks.nth((selectedIndex + 1) % taskCount).evaluate(
+    (element) => new URL(element.href).searchParams.get("task"),
+  );
+  await selectedTab.focus();
+  await selectedTab.press("ArrowRight");
+  await adminPage.waitForFunction(
+    (taskId) => new URL(window.location.href).searchParams.get("task") === taskId,
+    expectedKeyboardTaskId,
+  );
+  const keyboardSelection = await adminPage.evaluate(() => ({
+    activeTestId: document.activeElement?.getAttribute("data-testid"),
+    selectedTestId: document.querySelector('[role="tab"][aria-selected="true"]')?.getAttribute("data-testid"),
+    selectedTabStops: document.querySelectorAll('[role="tab"][tabindex="0"]').length,
+    visiblePanels: document.querySelectorAll('[role="tabpanel"]').length,
+    panelLabelledBy: document.querySelector('[role="tabpanel"]')?.getAttribute("aria-labelledby"),
+    selectionMode: document.querySelector('[data-testid="admin-operator-inbox"]')?.getAttribute("data-selection-mode"),
+    reducedMotion: matchMedia("(prefers-reduced-motion: reduce)").matches,
+    forcedColors: matchMedia("(forced-colors: active)").matches,
+    horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
+  }));
+  if (
+    keyboardSelection.activeTestId !== keyboardSelection.selectedTestId ||
+    keyboardSelection.panelLabelledBy !== keyboardSelection.selectedTestId ||
+    keyboardSelection.selectedTabStops !== 1 ||
+    keyboardSelection.visiblePanels !== 1 ||
+    keyboardSelection.selectionMode !== contract.admin.selectionMode ||
+    !keyboardSelection.reducedMotion ||
+    !keyboardSelection.forcedColors ||
+    keyboardSelection.horizontalOverflow
+  ) {
+    throw new Error(`admin accessibility contract drifted: ${JSON.stringify(keyboardSelection)}`);
+  }
+  await adminPage.locator(`[data-testid="${keyboardSelection.selectedTestId}"]`).press("Enter");
+  await adminPage.waitForFunction(
+    (testId) => document.activeElement?.getAttribute("aria-labelledby") === testId,
+    keyboardSelection.selectedTestId,
+  );
+  const activationFocusTestId = await adminPage.evaluate(() =>
+    document.activeElement?.getAttribute("data-testid")
+  );
+  const adminScreenshot = path.join(artifactDir, "accessibility-admin-forced-colors.png");
+  const adminScreenshotPixels = await captureScreenshotEvidence(adminPage, {
+    path: adminScreenshot,
+    label: "admin accessibility surface",
+    viewport,
+  });
+  await adminContext.close();
+
+  const publicationContext = await newContextForViewport(viewport, contract.publication.token);
+  const publicationPage = await publicationContext.newPage();
+  await publicationPage.emulateMedia(contract.media);
+  const publicationResponse = await publicationPage.goto(
+    `${baseUrl}${contract.publication.path}`,
+    { waitUntil: "networkidle" },
+  );
+  if (!publicationResponse?.ok()) {
+    throw new Error(`accessibility publication surface returned ${publicationResponse?.status()}`);
+  }
+  const skipLink = publicationPage.getByTestId(contract.publication.skipTestId);
+  const publicationSemantics = await publicationPage.evaluate(() => {
+    const readingLane = document.querySelector('[data-testid="public-game-reading-lane"]');
+    const headingId = readingLane?.getAttribute("aria-labelledby");
+    const firstPost = document.querySelector('[data-testid="public-game-post-42"]');
+    const postLabels = firstPost?.getAttribute("aria-labelledby")?.split(/\s+/) ?? [];
+    return {
+      headingId,
+      headingResolved: headingId !== null && document.getElementById(headingId) !== null,
+      firstPostLabelsResolved: postLabels.length === 2 && postLabels.every((id) => document.getElementById(id) !== null),
+      olderHash: new URL(document.querySelector('[data-testid="public-game-older"]')?.href ?? location.href).hash,
+      reducedMotion: matchMedia("(prefers-reduced-motion: reduce)").matches,
+      forcedColors: matchMedia("(forced-colors: active)").matches,
+      horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
+    };
+  });
+  await skipLink.focus();
+  await skipLink.press("Enter");
+  await publicationPage.waitForFunction(
+    (testId) => document.activeElement?.getAttribute("data-testid") === testId,
+    contract.publication.firstPostTestId,
+  );
+  const skipFocusTestId = await publicationPage.evaluate(() =>
+    document.activeElement?.getAttribute("data-testid")
+  );
+  if (
+    publicationSemantics.headingId !== contract.publication.readingHeadingId ||
+    !publicationSemantics.headingResolved ||
+    !publicationSemantics.firstPostLabelsResolved ||
+    publicationSemantics.olderHash !== `#${contract.publication.readingHeadingId}` ||
+    !publicationSemantics.reducedMotion ||
+    !publicationSemantics.forcedColors ||
+    publicationSemantics.horizontalOverflow ||
+    skipFocusTestId !== contract.publication.firstPostTestId
+  ) {
+    throw new Error(`publication accessibility contract drifted: ${JSON.stringify({ publicationSemantics, skipFocusTestId })}`);
+  }
+  const publicationScreenshot = path.join(artifactDir, "accessibility-publication-forced-colors.png");
+  const publicationScreenshotPixels = await captureScreenshotEvidence(publicationPage, {
+    path: publicationScreenshot,
+    label: "publication accessibility surface",
+    viewport,
+  });
+  await publicationContext.close();
+
+  return {
+    viewport,
+    media: contract.media,
+    admin: {
+      initialSelection,
+      keyboardSelection,
+      keyboardTaskId: expectedKeyboardTaskId,
+      activationFocusTestId,
+      screenshot: path.relative(repoRoot, adminScreenshot),
+      screenshotPixels: adminScreenshotPixels,
+    },
+    publication: {
+      semantics: publicationSemantics,
+      skipFocusTestId,
+      screenshot: path.relative(repoRoot, publicationScreenshot),
+      screenshotPixels: publicationScreenshotPixels,
+    },
   };
 }
 
