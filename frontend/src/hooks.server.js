@@ -4,14 +4,12 @@ import {
   resolveAuthenticatedSession,
   resolveAuthenticatedSessionCached,
 } from "./lib/server/session-capabilities.mjs";
-import { loadWorkosAuthKitModule } from "./lib/server/workos-authkit.mjs";
+import {
+  loadWorkosAuthKitModule,
+  workosAuthKitConfigured,
+} from "./lib/server/workos-authkit.mjs";
 
-const workosConfigured = [
-  "WORKOS_CLIENT_ID",
-  "WORKOS_API_KEY",
-  "WORKOS_REDIRECT_URI",
-  "WORKOS_COOKIE_PASSWORD",
-].every((name) => typeof process.env[name] === "string" && process.env[name].trim() !== "");
+const workosConfigured = workosAuthKitConfigured(process.env);
 
 let configuredWorkosHandlePromise = null;
 
