@@ -577,8 +577,8 @@ test("host action issues a replacement invite through the authenticated host ses
     invitedByUserId: "host_h",
     game: "midsummer",
     returnTo: "/g/midsummer",
-    loginUrl: `http://localhost/auth/login?returnTo=%2Fg%2Fmidsummer&invite=${observed[1].body.invite_token}&account=rowan%40example.test`,
-    loginPath: `/auth/login?returnTo=%2Fg%2Fmidsummer&invite=${observed[1].body.invite_token}&account=rowan%40example.test`,
+    loginUrl: `http://localhost/auth/invite?returnTo=%2Fg%2Fmidsummer&invite=${observed[1].body.invite_token}&account=rowan%40example.test`,
+    loginPath: `/auth/invite?returnTo=%2Fg%2Fmidsummer&invite=${observed[1].body.invite_token}&account=rowan%40example.test`,
     expiresAt: observed[1].body.expires_at,
   });
 });
@@ -650,8 +650,8 @@ test("host action issues a player invite through the authenticated host session"
     invitedByUserId: "host_h",
     game: "midsummer",
     returnTo: "/g/midsummer",
-    loginUrl: `http://localhost/auth/login?returnTo=%2Fg%2Fmidsummer&invite=${observed[1].body.invite_token}&account=mira%40example.test`,
-    loginPath: `/auth/login?returnTo=%2Fg%2Fmidsummer&invite=${observed[1].body.invite_token}&account=mira%40example.test`,
+    loginUrl: `http://localhost/auth/invite?returnTo=%2Fg%2Fmidsummer&invite=${observed[1].body.invite_token}&account=mira%40example.test`,
+    loginPath: `/auth/invite?returnTo=%2Fg%2Fmidsummer&invite=${observed[1].body.invite_token}&account=mira%40example.test`,
     expiresAt: observed[1].body.expires_at,
   });
 });

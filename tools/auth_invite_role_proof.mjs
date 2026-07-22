@@ -172,7 +172,7 @@ try {
       ],
       delegatedIssuanceControls: ["host-scoped-invite-issuance"],
       roleSurfacePattern:
-        "/auth/login?returnTo=<role-surface>&invite=<token>&account=<account-id>",
+        "/auth/invite?returnTo=<role-surface>&invite=<token>&account=<account-id>",
       accountRoleSurfacePattern: "/auth/login?returnTo=<role-surface>&account=<account-id>",
       accountSecurityRoleSurfacePattern:
         "/auth/account/security?account=<account-id>&returnTo=<role-surface>",
@@ -390,26 +390,26 @@ async function driveInviteLogin({
   expectedCapability,
 }) {
   const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
-  const loginUrl = `${frontendBaseUrl}/auth/login?returnTo=${encodeURIComponent(
+  const loginUrl = `${frontendBaseUrl}/auth/invite?returnTo=${encodeURIComponent(
     returnTo,
   )}&invite=${encodeURIComponent(inviteToken)}&account=${encodeURIComponent(
     accountCredential.accountId,
   )}`;
   try {
     await page.goto(loginUrl, { waitUntil: "networkidle" });
-    await page.getByTestId("auth-login-surface").waitFor({ state: "visible" });
-    const tokenValue = await page.getByTestId("auth-login-token").inputValue();
+    await page.getByTestId("auth-invite-surface").waitFor({ state: "visible" });
+    const tokenValue = await page.getByTestId("auth-invite-token").inputValue();
     if (tokenValue !== inviteToken) {
       throw new Error(`${role} invite token was not prefilled`);
     }
-    const accountValue = await page.getByTestId("auth-login-account").inputValue();
+    const accountValue = await page.getByTestId("auth-invite-account").inputValue();
     if (accountValue !== accountCredential.accountId) {
       throw new Error(`${role} invite account was not prefilled`);
     }
-    await page.getByTestId("auth-login-password").fill(accountCredential.password);
+    await page.getByTestId("auth-invite-password").fill(accountCredential.password);
     await Promise.all([
       page.waitForURL(`${frontendBaseUrl}${returnTo}`, { timeout: 15000 }),
-      page.getByTestId("auth-login-submit").click(),
+      page.getByTestId("auth-invite-submit").click(),
     ]);
     await page.waitForLoadState("networkidle");
     const cookies = await page.context().cookies(frontendBaseUrl);
@@ -2059,7 +2059,7 @@ async function driveHostPlayerInviteSurface({
     const returnTo = loginUrl.searchParams.get("returnTo");
     const accountId = loginUrl.searchParams.get("account");
     if (
-      loginUrl.pathname !== "/auth/login" ||
+      loginUrl.pathname !== "/auth/invite" ||
       inviteToken === null ||
       !inviteToken.startsWith(`player-${game}-`) ||
       returnTo !== `/g/${game}` ||
@@ -2942,17 +2942,17 @@ async function driveRejectedInviteLogin({
   returnTo,
 }) {
   const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
-  const loginUrl = `${frontendBaseUrl}/auth/login?returnTo=${encodeURIComponent(
+  const loginUrl = `${frontendBaseUrl}/auth/invite?returnTo=${encodeURIComponent(
     returnTo,
   )}&invite=${encodeURIComponent(inviteToken)}&account=${encodeURIComponent(
     accountCredential.accountId,
   )}`;
   try {
     await page.goto(loginUrl, { waitUntil: "networkidle" });
-    await page.getByTestId("auth-login-surface").waitFor({ state: "visible" });
-    await page.getByTestId("auth-login-password").fill(accountCredential.password);
-    await page.getByTestId("auth-login-submit").click();
-    await page.getByText("Session or invite token is missing, expired, or revoked").waitFor({
+    await page.getByTestId("auth-invite-surface").waitFor({ state: "visible" });
+    await page.getByTestId("auth-invite-password").fill(accountCredential.password);
+    await page.getByTestId("auth-invite-submit").click();
+    await page.getByText("Invitation is missing, expired, revoked, or already used").waitFor({
       state: "visible",
       timeout: 15000,
     });

@@ -3576,18 +3576,18 @@ async function driveGrantedGlobalModLogin(frontendBaseUrl) {
   const context = await browser.newContext({ viewport: smokeViewport });
   const page = await context.newPage();
   const returnTo = `/admin?game=${adminCreatedGame}`;
-  const loginUrl = `${frontendBaseUrl}/auth/login?returnTo=${encodeURIComponent(returnTo)}`;
+  const loginUrl = `${frontendBaseUrl}/auth/invite?returnTo=${encodeURIComponent(returnTo)}`;
   const response = await page.goto(loginUrl, { waitUntil: "networkidle" });
   if (response === null || !response.ok()) {
     throw new Error(
       `auth login route failed with ${response?.status() ?? "no response"}: ${await page.textContent("body")}`,
     );
   }
-  await page.getByTestId("auth-login-surface").waitFor({ state: "visible" });
-  await page.getByTestId("auth-login-token").fill(grantedGlobalModToken);
+  await page.getByTestId("auth-invite-surface").waitFor({ state: "visible" });
+  await page.getByTestId("auth-invite-token").fill(grantedGlobalModToken);
   await Promise.all([
     page.waitForURL(`${frontendBaseUrl}${returnTo}`, { waitUntil: "networkidle" }),
-    page.getByTestId("auth-login-submit").click(),
+    page.getByTestId("auth-invite-submit").click(),
   ]);
   await page.getByTestId("admin-surface").waitFor({ state: "visible" });
   const capability = await page.getByTestId("admin-capability").innerText();
@@ -3623,7 +3623,7 @@ async function driveGrantedGlobalModLogin(frontendBaseUrl) {
     },
     proofCardText,
     proof:
-      "A GlobalAdmin-issued /auth/session-grants token was submitted through /auth/login, the SvelteKit action verified it with /auth/session, wrote the httpOnly fmarch_session cookie, redirected to /admin, and rendered the authenticated GlobalMod UI without a pre-seeded browser cookie.",
+      "A GlobalAdmin-issued /auth/session-grants token was submitted through /auth/invite, the SvelteKit action verified it with /auth/session, wrote the httpOnly fmarch_session cookie, redirected to /admin, and rendered the authenticated GlobalMod UI without a pre-seeded browser cookie.",
   };
 }
 

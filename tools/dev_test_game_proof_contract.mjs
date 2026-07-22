@@ -1742,7 +1742,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
       passed:
         verification.replacementConsole?.redeemedInviteRecovery?.status === "passed" &&
         verification.replacementConsole?.redeemedInviteRecovery?.message ===
-          "Session or invite token is missing, expired, or revoked" &&
+          "Invitation is missing, expired, revoked, or already used" &&
         verification.replacementConsole?.redeemedInviteRecovery
           ?.prefilledInviteToken === true &&
         verification.replacementConsole?.redeemedInviteRecovery

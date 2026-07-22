@@ -11775,7 +11775,7 @@ test("session card and markdown include role credential URLs and tokens", async 
   assert.equal(card.identityBootstrap.browserSessionGrantUsage, false);
   assert.equal(
     card.sessions.host.loginUrl,
-    `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=dev-test-card-host&account=host_h%40local.fmarch.test`,
+    `http://127.0.0.1:4102/auth/invite?returnTo=%2Fg%2F${game}%2Fhost&invite=dev-test-card-host&account=host_h%40local.fmarch.test`,
   );
   assert.equal(card.sessions.host.credentialKind, "invite");
   assert.equal(card.sessions.host.inviteToken, "dev-test-card-host");
@@ -13966,7 +13966,7 @@ test("session card and markdown include role credential URLs and tokens", async 
         status: "passed",
         targetLabel: "Slot 7 / player-rowan",
         statusText: "Replacement invite issued",
-        loginUrl: `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}&invite=replacement-${game}-fixture`,
+        loginUrl: `http://127.0.0.1:4102/auth/invite?returnTo=%2Fg%2F${game}&invite=replacement-${game}-fixture`,
         returnTo: `/g/${game}`,
         inviteTokenPrefix: `replacement-${game}-`,
         tokenPresent: true,
@@ -13975,7 +13975,7 @@ test("session card and markdown include role credential URLs and tokens", async 
           credentialKind: "invite",
           token: `replacement-${game}-fixture`,
           inviteToken: `replacement-${game}-fixture`,
-          loginUrl: `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}&invite=replacement-${game}-fixture`,
+          loginUrl: `http://127.0.0.1:4102/auth/invite?returnTo=%2Fg%2F${game}&invite=replacement-${game}-fixture`,
           directUrl: `http://127.0.0.1:4102/g/${game}`,
           returnTo: `/g/${game}`,
           expectedCapabilityKind: "SlotOccupant",
@@ -14011,7 +14011,7 @@ test("session card and markdown include role credential URLs and tokens", async 
       },
       redeemedInviteRecovery: {
         status: "passed",
-        message: "Session or invite token is missing, expired, or revoked",
+        message: "Invitation is missing, expired, revoked, or already used",
         prefilledInviteToken: true,
         sessionCookiePresent: false,
         stayedOnLogin: true,
@@ -14313,7 +14313,7 @@ test("session card and markdown include role credential URLs and tokens", async 
             slotId: "slot-7",
           },
           message: "Player invite issued",
-          loginUrl: `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}&invite=player-${game}-fixture`,
+          loginUrl: `http://127.0.0.1:4102/auth/invite?returnTo=%2Fg%2F${game}&invite=player-${game}-fixture`,
         },
       },
       staleOutgoingPlayer: {
@@ -18784,7 +18784,7 @@ test("session card and markdown include role credential URLs and tokens", async 
   assert(markdown.includes("Host-issued invite: Replacement invite issued"));
   assert(
     markdown.includes(
-      "Redeemed invite recovery: Session or invite token is missing, expired, or revoked",
+      "Redeemed invite recovery: Invitation is missing, expired, revoked, or already used",
     ),
   );
   assert(markdown.includes("Invalid replacement recovery: InvalidTarget"));
@@ -20122,7 +20122,7 @@ test("session card and markdown include role credential URLs and tokens", async 
   );
   assert.equal(
     opsArtifacts.roles.host.loginUrlRedacted,
-    `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED&account=REDACTED`,
+    `http://127.0.0.1:4102/auth/invite?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED&account=REDACTED`,
   );
   assert.equal(opsArtifacts.roles.replacementPlayer.credentialKind, "account");
   assert.equal(
@@ -20543,7 +20543,7 @@ test("session card and markdown include role credential URLs and tokens", async 
   assert.equal(seedFixture.fixture.slots.length, 5);
   assert.equal(
     seedFixture.fixture.roles.host.loginUrlRedacted,
-    `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED&account=REDACTED`,
+    `http://127.0.0.1:4102/auth/invite?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED&account=REDACTED`,
   );
   assert.equal(seedFixture.fixture.roles.replacementPlayer.credentialKind, "account");
   assert.equal(
@@ -21535,7 +21535,7 @@ function identityAdapterProofFixture(game) {
         "invite-revocation",
       ],
       delegatedIssuanceControls: ["host-scoped-invite-issuance"],
-      roleSurfacePattern: "/auth/login?returnTo=<role-surface>&invite=<token>",
+      roleSurfacePattern: "/auth/invite?returnTo=<role-surface>&invite=<token>",
       accountRoleSurfacePattern: "/auth/login?returnTo=<role-surface>&account=<account-id>",
       accountSecurityRoleSurfacePattern:
         "/auth/account/security?account=<account-id>&returnTo=<role-surface>",
@@ -21834,19 +21834,19 @@ function identityAdapterProofFixture(game) {
     roles: {
       admin: identityRole({
         role: "admin",
-        loginUrl: "http://127.0.0.1:5173/auth/login?returnTo=%2Fadmin&invite=admin-invite-token",
+        loginUrl: "http://127.0.0.1:5173/auth/invite?returnTo=%2Fadmin&invite=admin-invite-token",
         principalUserId: "admin_a",
         capabilityKinds: ["GlobalAdmin"],
       }),
       host: identityRole({
         role: "host",
-        loginUrl: `http://127.0.0.1:5173/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=host-invite-token`,
+        loginUrl: `http://127.0.0.1:5173/auth/invite?returnTo=%2Fg%2F${game}%2Fhost&invite=host-invite-token`,
         principalUserId: "host_h",
         capabilityKinds: ["HostOf"],
       }),
       player: identityRole({
         role: "player",
-        loginUrl: `http://127.0.0.1:5173/auth/login?returnTo=%2Fg%2F${game}&invite=player-invite-token`,
+        loginUrl: `http://127.0.0.1:5173/auth/invite?returnTo=%2Fg%2F${game}&invite=player-invite-token`,
         principalUserId: "player-mira",
         capabilityKinds: ["SlotOccupant"],
       }),

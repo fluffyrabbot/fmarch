@@ -5,7 +5,6 @@
   $: login = data?.login ?? {};
   $: returnTo = form?.returnTo ?? login.returnTo ?? "/";
   $: rejection = form?.state === "reject" ? form.message : null;
-  $: tokenValue = login.inviteToken ?? "";
   $: accountValue = login.accountId ?? "";
 </script>
 
@@ -19,12 +18,12 @@
       <p class="fm-eyebrow">Auth</p>
       <h1>Sign in</h1>
       <p class="fm-summary">
-        Sign in with account credentials, or use a session or invitation issued to you.
+        Sign in with your account and password.
       </p>
     </div>
   </section>
 
-  <section class="auth-login__panel fm-panel" aria-label="Session token login">
+  <section class="auth-login__panel fm-panel" aria-label="Account login">
     {#if login.principalUserId}
       <p class="auth-login__status" data-testid="auth-login-current-session">
         Current session: {login.principalUserId}
@@ -33,17 +32,6 @@
 
     <form method="POST" class="auth-login__form" data-testid="auth-login-form">
       <input type="hidden" name="returnTo" value={returnTo} />
-      <label class="auth-login__field fm-field">
-        <span>Session or invitation</span>
-        <input
-          name="token"
-          type="password"
-          autocomplete="current-password"
-          data-testid="auth-login-token"
-          value={tokenValue}
-        />
-      </label>
-
       <label class="auth-login__field fm-field">
         <span>Account</span>
         <input
@@ -82,6 +70,7 @@
     <nav class="auth-login__links" aria-label="Account help">
       <a href={`/auth/account/recovery?returnTo=${encodeURIComponent(returnTo)}`}>Forgot password?</a>
       <a href={`/auth/register?returnTo=${encodeURIComponent(returnTo)}`}>Create account</a>
+      <a href={`/auth/invite?returnTo=${encodeURIComponent(returnTo)}`}>Use an invitation</a>
     </nav>
   </section>
 </main>

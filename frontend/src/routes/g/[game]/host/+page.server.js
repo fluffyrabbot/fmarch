@@ -216,7 +216,7 @@ function inviteLoginPath({ returnTo, inviteToken, accountId }) {
     invite: inviteToken,
     account: accountId,
   });
-  return `/auth/login?${params.toString()}`;
+  return `/auth/invite?${params.toString()}`;
 }
 
 async function currentInviteTargetOccupant({

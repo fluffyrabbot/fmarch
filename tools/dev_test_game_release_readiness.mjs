@@ -6547,8 +6547,8 @@ export function validateDevTestGameIdentityAdapterProof(proof, options = {}) {
       throw new Error(`identity adapter proof role ${role} did not use invite session`);
     }
     const loginUrl = typeof entry.loginUrl === "string" ? new URL(entry.loginUrl) : null;
-    if (loginUrl?.pathname !== "/auth/login") {
-      throw new Error(`identity adapter proof role ${role} did not use /auth/login`);
+    if (loginUrl?.pathname !== "/auth/invite") {
+      throw new Error(`identity adapter proof role ${role} did not use /auth/invite`);
     }
     if (!loginUrl.searchParams.has("returnTo") || !loginUrl.searchParams.has("invite")) {
       throw new Error(`identity adapter proof role ${role} missing role URL params`);

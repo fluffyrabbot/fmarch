@@ -758,15 +758,19 @@ async function createAccountLoginCredential({
 
 function roleLoginUrl({ frontendBaseUrl, session }) {
   const params = new URLSearchParams({ returnTo: session.returnTo });
+  let route = "/auth/login";
   if (session.credentialKind === "invite" || session.inviteToken !== undefined) {
+    route = "/auth/invite";
     params.set("invite", session.inviteToken);
     if (session.accountId !== undefined) {
       params.set("account", session.accountId);
     }
   } else if (session.credentialKind === "account") {
     params.set("account", session.accountId);
+  } else if (typeof session.token === "string" && session.token !== "") {
+    route = "/auth/invite";
   }
-  return `${frontendBaseUrl}/auth/login?${params.toString()}`;
+  return `${frontendBaseUrl}${route}?${params.toString()}`;
 }
 
 async function sendCommand(principalUserId, command) {
@@ -2085,19 +2089,27 @@ async function openVerifiedRoleEntry({
   const page = await context.newPage();
   try {
     await page.goto(session.loginUrl, { waitUntil: "networkidle" });
-    await page.getByTestId("auth-login-surface").waitFor({ state: "visible" });
     const credential = session.inviteToken ?? session.token;
-    const prefilled = await page.getByTestId("auth-login-token").inputValue();
-    if (typeof credential === "string" && prefilled !== credential) {
-      await page.getByTestId("auth-login-token").fill(credential);
+    const usesIssuedCredential = typeof credential === "string" && credential !== "";
+    const surfaceTestId = usesIssuedCredential ? "auth-invite-surface" : "auth-login-surface";
+    const submitTestId = usesIssuedCredential ? "auth-invite-submit" : "auth-login-submit";
+    await page.getByTestId(surfaceTestId).waitFor({ state: "visible" });
+    if (usesIssuedCredential) {
+      const prefilled = await page.getByTestId("auth-invite-token").inputValue();
+      if (prefilled !== credential) {
+        await page.getByTestId("auth-invite-token").fill(credential);
+      }
     }
-    if (session.accountId !== undefined) {
+    if (session.accountId !== undefined && usesIssuedCredential) {
+      await page.getByTestId("auth-invite-account").fill(session.accountId);
+      await page.getByTestId("auth-invite-password").fill(session.password);
+    } else if (session.accountId !== undefined) {
       await page.getByTestId("auth-login-account").fill(session.accountId);
       await page.getByTestId("auth-login-password").fill(session.password);
     }
     await Promise.all([
       page.waitForURL(session.directUrl, { timeout: 15000 }),
-      page.getByTestId("auth-login-submit").click(),
+      page.getByTestId(submitTestId).click(),
     ]);
     await page.waitForLoadState("networkidle");
     const cookies = await page.context().cookies(frontendBaseUrl);
@@ -14041,7 +14053,7 @@ async function verifySeededReplacementConsole({
       pendingIncomingPlayer?.controlCounts?.primaryButtons !== 0 ||
       redeemedInviteRecovery?.status !== "passed" ||
       redeemedInviteRecovery?.message !==
-        "Session or invite token is missing, expired, or revoked" ||
+        "Invitation is missing, expired, revoked, or already used" ||
       redeemedInviteRecovery?.sessionCookiePresent !== false ||
       invalidReplacementRecovery?.status !== "passed" ||
       invalidReplacementRecovery?.reject?.error !== "InvalidTarget" ||
@@ -14448,16 +14460,16 @@ async function verifyPendingReplacementPlayer({
   const page = await context.newPage();
   try {
     await page.goto(replacementSession.loginUrl, { waitUntil: "networkidle" });
-    await page.getByTestId("auth-login-surface").waitFor({ state: "visible" });
-    const prefilled = await page.getByTestId("auth-login-token").inputValue();
+    await page.getByTestId("auth-invite-surface").waitFor({ state: "visible" });
+    const prefilled = await page.getByTestId("auth-invite-token").inputValue();
     if (prefilled !== replacementSession.inviteToken) {
-      await page.getByTestId("auth-login-token").fill(replacementSession.inviteToken);
+      await page.getByTestId("auth-invite-token").fill(replacementSession.inviteToken);
     }
-    await page.getByTestId("auth-login-account").fill(replacementSession.accountId);
-    await page.getByTestId("auth-login-password").fill(replacementSession.password);
+    await page.getByTestId("auth-invite-account").fill(replacementSession.accountId);
+    await page.getByTestId("auth-invite-password").fill(replacementSession.password);
     await Promise.all([
       page.waitForURL(replacementSession.directUrl, { timeout: 15000 }),
-      page.getByTestId("auth-login-submit").click(),
+      page.getByTestId("auth-invite-submit").click(),
     ]);
     await page.waitForLoadState("networkidle");
     await page.getByTestId("player-surface").waitFor({ state: "visible" });
@@ -14503,22 +14515,22 @@ async function verifyRedeemedReplacementInviteRecovery({
   const page = await context.newPage();
   try {
     await page.goto(replacementSession.loginUrl, { waitUntil: "networkidle" });
-    await page.getByTestId("auth-login-surface").waitFor({ state: "visible" });
-    const prefilled = await page.getByTestId("auth-login-token").inputValue();
-    await page.getByTestId("auth-login-account").fill(replacementSession.accountId);
-    await page.getByTestId("auth-login-password").fill(replacementSession.password);
-    await page.getByTestId("auth-login-submit").click();
-    await page.getByTestId("auth-login-reject").waitFor({
+    await page.getByTestId("auth-invite-surface").waitFor({ state: "visible" });
+    const prefilled = await page.getByTestId("auth-invite-token").inputValue();
+    await page.getByTestId("auth-invite-account").fill(replacementSession.accountId);
+    await page.getByTestId("auth-invite-password").fill(replacementSession.password);
+    await page.getByTestId("auth-invite-submit").click();
+    await page.getByTestId("auth-invite-reject").waitFor({
       state: "visible",
       timeout: 15000,
     });
-    const message = await page.getByTestId("auth-login-reject").innerText();
+    const message = await page.getByTestId("auth-invite-reject").innerText();
     const cookies = await context.cookies(frontendBaseUrl);
     const sessionCookie = cookies.find((cookie) => cookie.name === "fmarch_session");
     const currentUrl = page.url();
     if (
       prefilled !== replacementSession.inviteToken ||
-      message !== "Session or invite token is missing, expired, or revoked" ||
+      message !== "Invitation is missing, expired, revoked, or already used" ||
       sessionCookie !== undefined ||
       currentUrl === replacementSession.directUrl
     ) {
@@ -15668,7 +15680,7 @@ async function verifyReplacementSessionRefreshRecovery({
   });
   await page.goto(session.loginUrl, { waitUntil: "networkidle" });
   await page.getByTestId("auth-login-surface").waitFor({ state: "visible" });
-  const prefilledToken = await page.getByTestId("auth-login-token").inputValue();
+  const tokenFieldCount = await page.getByTestId("auth-login-token").count();
   const prefilledAccountId = await page.getByTestId("auth-login-account").inputValue();
   await page.getByTestId("auth-login-password").fill(session.password);
   await Promise.all([
@@ -15764,7 +15776,7 @@ async function verifyReplacementSessionRefreshRecovery({
   if (
     session.credentialKind !== "account" ||
     session.principalUserId !== "player-rowan" ||
-    prefilledToken !== "" ||
+    tokenFieldCount !== 0 ||
     prefilledAccountId !== session.accountId ||
     browserEntry.principalUserId !== "player-rowan" ||
     !browserEntry.capabilityKinds.includes("SlotOccupant") ||
@@ -15786,7 +15798,7 @@ async function verifyReplacementSessionRefreshRecovery({
           ...session,
           password: "<redacted>",
         },
-        prefilledToken,
+        tokenFieldCount,
         prefilledAccountId,
         browserEntry,
         commandState,

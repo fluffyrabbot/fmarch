@@ -2061,7 +2061,7 @@ assert.equal(
 );
 assert.equal(
   session.verification.replacementConsole.redeemedInviteRecovery.message,
-  "Session or invite token is missing, expired, or revoked",
+  "Invitation is missing, expired, revoked, or already used",
 );
 assert.equal(
   session.verification.replacementConsole.redeemedInviteRecovery.prefilledInviteToken,
