@@ -17,8 +17,8 @@ fn token_hash(token: &str) -> String {
 async fn create_session(pool: &sqlx::PgPool, token: &str, user: &str, globals: &[&str]) {
     sqlx::query(
         "INSERT INTO auth_session \
-         (token_hash, principal_user_id, created_at, expires_at, global_capabilities) \
-         VALUES ($1, $2, 0, 4102444800, $3)",
+         (token_hash, principal_user_id, created_at, expires_at, global_capabilities, authenticated_at) \
+         VALUES ($1, $2, 0, 4102444800, $3, 0)",
     )
     .bind(token_hash(token))
     .bind(user)

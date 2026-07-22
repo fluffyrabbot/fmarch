@@ -273,7 +273,8 @@ async function seedRootAdminSession(url) {
       created_at,
       expires_at,
       revoked_at,
-      global_capabilities
+      global_capabilities,
+      authenticated_at
     )
     VALUES (
       ${sqlLiteral(hashSessionToken(rootAdminSessionToken))},
@@ -281,7 +282,8 @@ async function seedRootAdminSession(url) {
       0,
       4102444800,
       NULL,
-      ARRAY['GlobalAdmin']::TEXT[]
+      ARRAY['GlobalAdmin']::TEXT[],
+      0
     );
   `);
 }
@@ -2883,7 +2885,8 @@ async function driveOverdueBrowserSessionRotation({
     proofDatabase.url,
     `
       UPDATE auth_session
-      SET created_at = 0
+      SET created_at = 0,
+          authenticated_at = 0
       WHERE token_hash = ${sqlLiteral(hashSessionToken(sessionToken))}
     `,
   );

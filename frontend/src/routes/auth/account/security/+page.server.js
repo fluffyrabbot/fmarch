@@ -1,6 +1,11 @@
 import { fail, redirect } from "@sveltejs/kit";
 import { serverApiBaseUrl } from "../../../../lib/server/api-base.mjs";
-import { SESSION_COOKIE_NAME } from "../../../../lib/server/session-capabilities.mjs";
+import {
+  browserSessionCookieOptions,
+  evictSessionCacheForToken,
+  SESSION_COOKIE_NAME,
+} from "../../../../lib/server/session-capabilities.mjs";
+import { workosAuthKitConfigured } from "../../../../lib/server/workos-authkit.mjs";
 
 export async function load({ cookies, fetch, locals, url }) {
   const accountId = optionalField(url.searchParams.get("account"));
@@ -21,6 +26,9 @@ export async function load({ cookies, fetch, locals, url }) {
       principalUserId: locals.principalUserId,
       returnTo,
       methods: await accountMethods({ cookies, fetch }),
+      workosAvailable: workosAuthKitConfigured(),
+      workosLinked: url.searchParams.get("workosLinked") === "1",
+      workosError: optionalField(url.searchParams.get("workosError")),
     },
   };
 }
@@ -71,7 +79,7 @@ async function accountMethods({ cookies, fetch }) {
 }
 
 export const actions = {
-  addClassic: async ({ cookies, fetch, request }) => {
+  addClassic: async ({ cookies, fetch, request, url }) => {
     const formData = await request.formData();
     const loginName = optionalField(formData.get("loginName"));
     const password = passwordField(formData.get("password"));
@@ -145,7 +153,9 @@ export const actions = {
       typeof body?.method_id !== "string" ||
       typeof body?.login_name !== "string" ||
       !Array.isArray(body?.recovery_codes) ||
-      body.recovery_codes.some((code) => typeof code !== "string" || code.trim() === "")
+      body.recovery_codes.some((code) => typeof code !== "string" || code.trim() === "") ||
+      typeof body?.session_token !== "string" ||
+      !body.session_token.startsWith("fmss_")
     ) {
       return fail(502, {
         id: "account-method-add-classic",
@@ -156,6 +166,13 @@ export const actions = {
       });
     }
 
+    evictSessionCacheForToken(sessionToken);
+    cookies.set(
+      SESSION_COOKIE_NAME,
+      body.session_token,
+      browserSessionCookieOptions(url),
+    );
+
     return {
       id: "account-method-add-classic",
       state: "ack",
@@ -165,6 +182,7 @@ export const actions = {
       methodId: body.method_id,
       recoveryCodes: body.recovery_codes,
       recoveryCodesExpireAt: body.recovery_codes_expire_at ?? null,
+      sessionSwitchedToClassic: true,
     };
   },
   disableMethod: async ({ cookies, fetch, request }) => {

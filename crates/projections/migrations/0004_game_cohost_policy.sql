@@ -1,3 +1,4 @@
+-- 0004_game_cohost_policy.sql — per-game cohost permission policy.
 -- Per-game cohost permission denylist (doc 14 / 06).
 -- Empty denied list = full co-GM mutator parity with host for game-run acts.
 -- Primary host is never subject to this list; structural acts stay HostOf-only.

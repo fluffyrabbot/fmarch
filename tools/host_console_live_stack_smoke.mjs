@@ -930,7 +930,8 @@ async function seedRootAdminSession() {
       created_at,
       expires_at,
       revoked_at,
-      global_capabilities
+      global_capabilities,
+      authenticated_at
     )
     VALUES (
       ${sqlLiteral(hashSessionToken(rootAdminSessionToken))},
@@ -938,7 +939,8 @@ async function seedRootAdminSession() {
       0,
       4102444800,
       NULL,
-      ARRAY['GlobalAdmin']::TEXT[]
+      ARRAY['GlobalAdmin']::TEXT[],
+      0
     )
     ON CONFLICT (token_hash) DO UPDATE SET
       principal_user_id = EXCLUDED.principal_user_id,

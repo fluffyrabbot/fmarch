@@ -45,7 +45,7 @@ async fn insert_account_session(
     .await
     .unwrap();
     sqlx::query(
-        "INSERT INTO auth_session (token_hash, principal_user_id, created_at, expires_at, revoked_at, global_capabilities) VALUES ($1, $2, 1, $3, $4, ARRAY['GlobalAdmin'])",
+        "INSERT INTO auth_session (token_hash, principal_user_id, created_at, expires_at, revoked_at, global_capabilities, authenticated_at) VALUES ($1, $2, 1, $3, $4, ARRAY['GlobalAdmin'], 1)",
     )
     .bind(token_hash(token))
     .bind(principal)
@@ -154,7 +154,7 @@ async fn command_boundary_derives_identity_and_rejects_every_stale_session_witho
     .await
     .unwrap();
     sqlx::query(
-        "INSERT INTO auth_session (token_hash, principal_user_id, created_at, expires_at, revoked_at, global_capabilities) VALUES ($1, 'member', 1, 4102444800, NULL, ARRAY[]::TEXT[])",
+        "INSERT INTO auth_session (token_hash, principal_user_id, created_at, expires_at, revoked_at, global_capabilities, authenticated_at) VALUES ($1, 'member', 1, 4102444800, NULL, ARRAY[]::TEXT[], 1)",
     )
     .bind(token_hash("member-token"))
     .execute(&pool)
@@ -175,8 +175,8 @@ async fn command_boundary_derives_identity_and_rejects_every_stale_session_witho
             Command::CreateGame {
                 game: Uuid::new_v4(),
                 pack: "mafiascum".into(),
-            cohost_denied: vec![],
-        },
+                cohost_denied: vec![],
+            },
         )
         .await;
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
@@ -489,8 +489,8 @@ async fn open_socket_rechecks_revoked_session_before_delayed_private_delivery(po
             Command::CreateGame {
                 game,
                 pack: "mafiascum".into(),
-            cohost_denied: vec![],
-        },
+                cohost_denied: vec![],
+            },
         )
         .await
         .status(),
@@ -598,10 +598,7 @@ async fn external_identity_ticket_is_bound_to_the_enabled_platform_principal(poo
     assert_eq!(exchange.status(), StatusCode::OK);
     let exchange_body = to_bytes(exchange.into_body(), usize::MAX).await.unwrap();
     let exchange_json: serde_json::Value = serde_json::from_slice(&exchange_body).unwrap();
-    let session_token = exchange_json["session_token"]
-        .as_str()
-        .unwrap()
-        .to_string();
+    let session_token = exchange_json["session_token"].as_str().unwrap().to_string();
     assert!(session_token.starts_with("fmss_"));
 
     let (_, valid_ticket) = issue_ticket(&app, session_token.as_str(), game, 0).await;
@@ -676,8 +673,8 @@ async fn command_on_instance_a_wakes_socket_b_and_reconnect_hydrates_durable_sta
             Command::CreateGame {
                 game,
                 pack: "mafiascum".into(),
-            cohost_denied: vec![],
-        }
+                cohost_denied: vec![],
+            }
         )
         .await
         .status(),
