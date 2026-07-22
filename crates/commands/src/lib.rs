@@ -109,6 +109,7 @@ impl CommandRuntimeTestControl {
 
 tokio::task_local! {
     static COMMAND_RUNTIME_TEST_CONTROL: Option<CommandRuntimeTestControl>;
+    static COMMAND_AUDIT_CONTEXT: CommandAuditContext;
 }
 
 async fn command_runtime_checkpoint(checkpoint: CommandRuntimeCheckpoint) {
@@ -274,6 +275,21 @@ struct ReceiptClaim {
     principal_user_id: String,
     command_id: Uuid,
     command_fingerprint: Vec<u8>,
+}
+
+/// Audit facts shared by every event emitted from one accepted command.
+///
+/// `ActorId` describes the effective game actor (`Host`, `Slot`, `System`);
+/// this context preserves the authenticated initiating principal and the exact
+/// authority exercised. Keeping the stamping at the append boundary prevents
+/// individual handlers from silently omitting cohost attribution.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct CommandAuditContext {
+    principal_user_id: String,
+    command_id: Uuid,
+    command_kind: String,
+    authority_used: String,
+    request_source: &'static str,
 }
 
 #[derive(Debug, Clone)]
@@ -556,8 +572,12 @@ impl Ack {
 
 /// Handle one command end-to-end. The single entry point Phase 4 will wrap.
 pub async fn handle(pool: &PgPool, principal: &Principal, command: Command) -> Result<Ack, Reject> {
+    let command_id = Uuid::new_v4();
     COMMAND_RUNTIME_TEST_CONTROL
-        .scope(None, handle_inner(pool, principal, command, None))
+        .scope(
+            None,
+            handle_inner(pool, principal, command_id, command, None),
+        )
         .await
 }
 
@@ -573,7 +593,10 @@ pub async fn handle_idempotent(
 ) -> Result<Ack, Reject> {
     let receipt = ReceiptClaim::new(principal, command_id, &command)?;
     COMMAND_RUNTIME_TEST_CONTROL
-        .scope(None, handle_inner(pool, principal, command, Some(&receipt)))
+        .scope(
+            None,
+            handle_inner(pool, principal, command_id, command, Some(&receipt)),
+        )
         .await
 }
 
@@ -591,7 +614,7 @@ pub async fn handle_idempotent_with_test_control(
     COMMAND_RUNTIME_TEST_CONTROL
         .scope(
             Some(control),
-            handle_inner(pool, principal, command, Some(&receipt)),
+            handle_inner(pool, principal, command_id, command, Some(&receipt)),
         )
         .await
 }
@@ -599,6 +622,7 @@ pub async fn handle_idempotent_with_test_control(
 async fn handle_inner(
     pool: &PgPool,
     principal: &Principal,
+    command_id: Uuid,
     command: Command,
     receipt: Option<&ReceiptClaim>,
 ) -> Result<Ack, Reject> {
@@ -629,7 +653,10 @@ async fn handle_inner(
         require_game_not_completed(&mut tx, game).await?;
         command_runtime_checkpoint(CommandRuntimeCheckpoint::CompletionChecked).await;
     }
-    let ack = handle_command(&mut tx, principal, command).await?;
+    let audit_context = command_audit_context(&mut tx, principal, command_id, &command).await?;
+    let ack = COMMAND_AUDIT_CONTEXT
+        .scope(audit_context, handle_command(&mut tx, principal, command))
+        .await?;
     command_runtime_checkpoint(CommandRuntimeCheckpoint::CommandApplied).await;
 
     if let Some(receipt) = receipt {
@@ -814,6 +841,121 @@ async fn handle_command(
 }
 
 // ───────────────────────── bootstrap handlers ─────────────────────────
+
+enum CommandAuditAuthority<'a> {
+    GameCreator,
+    HostTeam,
+    SlotOccupant(&'a str),
+}
+
+async fn command_audit_context(
+    tx: &mut Transaction<'_, Postgres>,
+    principal: &Principal,
+    command_id: Uuid,
+    command: &Command,
+) -> Result<CommandAuditContext, Reject> {
+    let (command_kind, authority) = command_audit_shape(command);
+    let game = command_game(command);
+    let (authority_used, request_source) = match authority {
+        CommandAuditAuthority::GameCreator => ("GameCreator".to_string(), "game_creation"),
+        CommandAuditAuthority::SlotOccupant(slot) => {
+            (format!("SlotOccupant({slot})"), "player_command")
+        }
+        CommandAuditAuthority::HostTeam => {
+            // This is attribution, not a second capability resolution. The
+            // handler still resolves and validates its CapabilitySet exactly
+            // once; here we read the committed authority role that an accepted
+            // host-team command will have exercised.
+            let role: Option<String> = sqlx::query_scalar(
+                "SELECT role FROM game_authority \
+                 WHERE game_id = $1 AND user_id = $2 \
+                 ORDER BY CASE role WHEN 'host' THEN 0 ELSE 1 END LIMIT 1",
+            )
+            .bind(game)
+            .bind(principal.user_id())
+            .fetch_optional(&mut **tx)
+            .await
+            .map_err(|error| Reject::Internal(error.to_string()))?;
+            let authority = match role.as_deref() {
+                Some("host") => format!("HostOf({game})"),
+                Some("cohost") => format!("CohostOf({game})"),
+                _ => {
+                    // Accepted commands cannot retain this value: the handler's
+                    // capability gate rejects before append. Keeping it explicit
+                    // makes any future missing gate visible in event audits.
+                    format!("UnresolvedHostTeam({game})")
+                }
+            };
+            (authority, "host_command")
+        }
+    };
+
+    Ok(CommandAuditContext {
+        principal_user_id: principal.user_id().to_string(),
+        command_id,
+        command_kind: command_kind.to_string(),
+        authority_used,
+        request_source,
+    })
+}
+
+fn command_audit_shape(command: &Command) -> (&'static str, CommandAuditAuthority<'_>) {
+    match command {
+        Command::CreateGame { .. } => ("CreateGame", CommandAuditAuthority::GameCreator),
+        Command::SubmitVote { actor_slot, .. } => (
+            "SubmitVote",
+            CommandAuditAuthority::SlotOccupant(actor_slot),
+        ),
+        Command::WithdrawVote { actor_slot, .. } => (
+            "WithdrawVote",
+            CommandAuditAuthority::SlotOccupant(actor_slot),
+        ),
+        Command::SubmitAction { actor_slot, .. } => (
+            "SubmitAction",
+            CommandAuditAuthority::SlotOccupant(actor_slot),
+        ),
+        Command::WithdrawAction { actor_slot, .. } => (
+            "WithdrawAction",
+            CommandAuditAuthority::SlotOccupant(actor_slot),
+        ),
+        Command::SubmitPost { actor_slot, .. } => (
+            "SubmitPost",
+            CommandAuditAuthority::SlotOccupant(actor_slot),
+        ),
+        Command::AddSlot { .. } => ("AddSlot", CommandAuditAuthority::HostTeam),
+        Command::AssignSlot { .. } => ("AssignSlot", CommandAuditAuthority::HostTeam),
+        Command::AssignRole { .. } => ("AssignRole", CommandAuditAuthority::HostTeam),
+        Command::SetSlotStatus { .. } => ("SetSlotStatus", CommandAuditAuthority::HostTeam),
+        Command::AddSlotStatusTag { .. } => ("AddSlotStatusTag", CommandAuditAuthority::HostTeam),
+        Command::RemoveSlotStatusTag { .. } => {
+            ("RemoveSlotStatusTag", CommandAuditAuthority::HostTeam)
+        }
+        Command::AddCohost { .. } => ("AddCohost", CommandAuditAuthority::HostTeam),
+        Command::GrantSpectator { .. } => ("GrantSpectator", CommandAuditAuthority::HostTeam),
+        Command::RevokeSpectator { .. } => ("RevokeSpectator", CommandAuditAuthority::HostTeam),
+        Command::StartGame { .. } => ("StartGame", CommandAuditAuthority::HostTeam),
+        Command::OpenDayPhase { .. } => ("OpenDayPhase", CommandAuditAuthority::HostTeam),
+        Command::AdvancePhase { .. } => ("AdvancePhase", CommandAuditAuthority::HostTeam),
+        Command::AdvancePhaseByDeadline { .. } => {
+            ("AdvancePhaseByDeadline", CommandAuditAuthority::HostTeam)
+        }
+        Command::LockThread { .. } => ("LockThread", CommandAuditAuthority::HostTeam),
+        Command::UnlockThread { .. } => ("UnlockThread", CommandAuditAuthority::HostTeam),
+        Command::ResolvePhase { .. } => ("ResolvePhase", CommandAuditAuthority::HostTeam),
+        Command::CompleteGame { .. } => ("CompleteGame", CommandAuditAuthority::HostTeam),
+        Command::PublishVotecount { .. } => ("PublishVotecount", CommandAuditAuthority::HostTeam),
+        Command::ResolveHostPrompt { .. } => ("ResolveHostPrompt", CommandAuditAuthority::HostTeam),
+        Command::SetPostPolicy { .. } => ("SetPostPolicy", CommandAuditAuthority::HostTeam),
+        Command::PublishSpectatorPost { .. } => {
+            ("PublishSpectatorPost", CommandAuditAuthority::HostTeam)
+        }
+        Command::ControlItaSession { .. } => ("ControlItaSession", CommandAuditAuthority::HostTeam),
+        Command::ExtendDeadline { .. } => ("ExtendDeadline", CommandAuditAuthority::HostTeam),
+        Command::ProcessReplacement { .. } => {
+            ("ProcessReplacement", CommandAuditAuthority::HostTeam)
+        }
+    }
+}
 
 fn command_game(command: &Command) -> Uuid {
     match command {
@@ -5499,7 +5641,38 @@ async fn persist(
     game: Uuid,
     events: &[EventInput],
 ) -> Result<Ack, Reject> {
-    let stored = match append_and_project_in_tx(tx, game, events).await {
+    let audit = COMMAND_AUDIT_CONTEXT
+        .try_with(Clone::clone)
+        .map_err(|_| Reject::Internal("command audit context missing at append".to_string()))?;
+    let mut stamped = Vec::with_capacity(events.len());
+    for event in events {
+        let mut event = event.clone();
+        event.causation_id.get_or_insert(audit.command_id);
+        let meta = event.meta.as_object_mut().ok_or_else(|| {
+            Reject::Internal(format!("event {} audit meta must be an object", event.kind))
+        })?;
+        meta.insert(
+            "principal_user_id".to_string(),
+            serde_json::Value::String(audit.principal_user_id.clone()),
+        );
+        meta.insert(
+            "command_id".to_string(),
+            serde_json::Value::String(audit.command_id.to_string()),
+        );
+        meta.insert(
+            "command_kind".to_string(),
+            serde_json::Value::String(audit.command_kind.clone()),
+        );
+        meta.insert(
+            "authority_used".to_string(),
+            serde_json::Value::String(audit.authority_used.clone()),
+        );
+        meta.entry("source".to_string())
+            .or_insert_with(|| serde_json::Value::String(audit.request_source.to_string()));
+        stamped.push(event);
+    }
+
+    let stored = match append_and_project_in_tx(tx, game, &stamped).await {
         Ok(stored) => stored,
         Err(ProjectionError::Store(eventstore::StoreError::Conflict { .. })) => {
             return Err(Reject::StreamConflict);
