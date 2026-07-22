@@ -570,7 +570,36 @@ async fn external_identity_ticket_is_bound_to_the_enabled_platform_principal(poo
     let state = test_state(pool.clone(), &root).with_access_token_verifier(Arc::new(verifier));
     let app = api::router_with_state(state);
     let game = Uuid::new_v4();
-    let (_, valid_ticket) = issue_ticket(&app, "workos-token", game, 0).await;
+
+    // The provider JWT is never a general bearer: it must be exchanged once
+    // for a backend-owned app session.
+    let (rejected, _) = issue_ticket(&app, "workos-token", game, 0).await;
+    assert_eq!(rejected, StatusCode::UNAUTHORIZED);
+    let exchange = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/auth/sessions")
+                .header("authorization", "Bearer workos-token")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    serde_json::json!({ "method": "workos" }).to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(exchange.status(), StatusCode::OK);
+    let exchange_body = to_bytes(exchange.into_body(), usize::MAX).await.unwrap();
+    let exchange_json: serde_json::Value = serde_json::from_slice(&exchange_body).unwrap();
+    let session_token = exchange_json["session_token"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    assert!(session_token.starts_with("fmss_"));
+
+    let (_, valid_ticket) = issue_ticket(&app, session_token.as_str(), game, 0).await;
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
@@ -591,7 +620,7 @@ async fn external_identity_ticket_is_bound_to_the_enabled_platform_principal(poo
     let client = reqwest::Client::new();
     let disabled_ticket: WebsocketTicketResponse = client
         .post(format!("http://{addr}/auth/websocket-tickets"))
-        .bearer_auth("workos-token")
+        .bearer_auth(session_token.as_str())
         .json(&serde_json::json!({
             "audience": "transport-proof",
             "game": game,

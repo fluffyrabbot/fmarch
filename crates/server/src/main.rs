@@ -21,18 +21,34 @@ struct Config {
 }
 
 #[derive(Clone)]
-struct BootstrapAdminConfig {
-    workos_user_id: String,
-    display_label: Option<String>,
+enum BootstrapAdminConfig {
+    Workos {
+        workos_user_id: String,
+        display_label: Option<String>,
+    },
+    Classic {
+        login_name: String,
+        password: String,
+    },
 }
 
 impl std::fmt::Debug for BootstrapAdminConfig {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter
-            .debug_struct("BootstrapAdminConfig")
-            .field("workos_user_id", &self.workos_user_id)
-            .field("display_label", &self.display_label)
-            .finish()
+        match self {
+            BootstrapAdminConfig::Workos {
+                workos_user_id,
+                display_label,
+            } => formatter
+                .debug_struct("BootstrapAdminConfig::Workos")
+                .field("workos_user_id", &workos_user_id)
+                .field("display_label", &display_label)
+                .finish(),
+            BootstrapAdminConfig::Classic { login_name, .. } => formatter
+                .debug_struct("BootstrapAdminConfig::Classic")
+                .field("login_name", &login_name)
+                .field("password", &"<redacted>")
+                .finish(),
+        }
     }
 }
 
@@ -102,7 +118,10 @@ impl Config {
                     as i64,
             },
             bootstrap_admin: bootstrap_admin_from_values(
+                env::var("FMARCH_BOOTSTRAP_ADMIN_METHOD").ok(),
                 env::var("FMARCH_BOOTSTRAP_ADMIN_WORKOS_USER_ID").ok(),
+                env::var("FMARCH_BOOTSTRAP_ADMIN_LOGIN_NAME").ok(),
+                env::var("FMARCH_BOOTSTRAP_ADMIN_PASSWORD").ok(),
                 env::var("FMARCH_BOOTSTRAP_ADMIN_LABEL").ok(),
             )?,
         })
@@ -110,22 +129,64 @@ impl Config {
 }
 
 fn bootstrap_admin_from_values(
+    method: Option<String>,
     workos_user_id: Option<String>,
+    login_name: Option<String>,
+    password: Option<String>,
     display_label: Option<String>,
 ) -> Result<Option<BootstrapAdminConfig>, std::io::Error> {
-    match workos_user_id {
-        None if display_label.is_none() => Ok(None),
-        Some(workos_user_id) if !workos_user_id.trim().is_empty() => {
-            Ok(Some(BootstrapAdminConfig {
-                workos_user_id: workos_user_id.trim().to_string(),
-                display_label: display_label
-                    .map(|label| label.trim().to_string())
-                    .filter(|label| !label.is_empty()),
-            }))
+    let non_empty = |value: Option<String>| {
+        value
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty())
+    };
+    let workos_user_id = non_empty(workos_user_id);
+    let login_name = non_empty(login_name);
+    // Passwords keep their exact bytes; only presence is checked.
+    let password = password.filter(|value| !value.trim().is_empty());
+    let display_label = non_empty(display_label);
+    // Absent an explicit method, a configured WorkOS user id keeps its
+    // pre-method-model meaning.
+    let method = non_empty(method).unwrap_or_else(|| {
+        if workos_user_id.is_some() {
+            "workos".to_string()
+        } else {
+            String::new()
         }
-        _ => Err(std::io::Error::new(
+    });
+    match method.as_str() {
+        "" => {
+            if login_name.is_some() || password.is_some() || display_label.is_some() {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    "admin bootstrap requires FMARCH_BOOTSTRAP_ADMIN_METHOD=classic|workos",
+                ));
+            }
+            Ok(None)
+        }
+        "workos" => match workos_user_id {
+            Some(workos_user_id) => Ok(Some(BootstrapAdminConfig::Workos {
+                workos_user_id,
+                display_label,
+            })),
+            None => Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "workos admin bootstrap requires FMARCH_BOOTSTRAP_ADMIN_WORKOS_USER_ID",
+            )),
+        },
+        "classic" => match (login_name, password) {
+            (Some(login_name), Some(password)) => Ok(Some(BootstrapAdminConfig::Classic {
+                login_name,
+                password,
+            })),
+            _ => Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "classic admin bootstrap requires FMARCH_BOOTSTRAP_ADMIN_LOGIN_NAME and FMARCH_BOOTSTRAP_ADMIN_PASSWORD",
+            )),
+        },
+        other => Err(std::io::Error::new(
             std::io::ErrorKind::InvalidInput,
-            "FMARCH_BOOTSTRAP_ADMIN_WORKOS_USER_ID must be non-empty and is required when FMARCH_BOOTSTRAP_ADMIN_LABEL is set",
+            format!("unknown admin bootstrap method: {other}; expected classic or workos"),
         )),
     }
 }
@@ -213,43 +274,80 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let workos_verifier = identity::WorkosAccessTokenVerifier::from_env()
         .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidInput, error))?;
+    // Classic is a first-class method, enabled by default; WorkOS is additive.
+    // Startup requires at least one enabled sign-in method. FMARCH_DEV_AUTH
+    // only unlocks dev shortcuts (dev-session endpoint, query-param sockets).
+    let classic_enabled = env::var("FMARCH_CLASSIC_AUTH").ok().as_deref() != Some("0");
     let dev_auth_enabled = env::var("FMARCH_DEV_AUTH").ok().as_deref() == Some("1");
-    if workos_verifier.is_none() && !dev_auth_enabled {
+    if !classic_enabled && workos_verifier.is_none() {
         return Err(std::io::Error::new(
             std::io::ErrorKind::InvalidInput,
-            "WorkOS identity is required: set WORKOS_CLIENT_ID, WORKOS_ISSUER, and WORKOS_JWKS_URL (or explicitly enable FMARCH_DEV_AUTH=1 for local proof)",
+            "no authentication method is enabled: leave FMARCH_CLASSIC_AUTH on or configure WORKOS_CLIENT_ID, WORKOS_ISSUER, and WORKOS_JWKS_URL",
         )
         .into());
     }
 
     if let Some(bootstrap_admin) = &config.bootstrap_admin {
-        if workos_verifier.is_none() {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::InvalidInput,
-                "WorkOS admin bootstrap requires WorkOS identity configuration",
-            )
-            .into());
+        match bootstrap_admin {
+            BootstrapAdminConfig::Workos {
+                workos_user_id,
+                display_label,
+            } => {
+                if workos_verifier.is_none() {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::InvalidInput,
+                        "WorkOS admin bootstrap requires WorkOS identity configuration",
+                    )
+                    .into());
+                }
+                let created = api::bootstrap_workos_global_admin(
+                    &pool,
+                    workos_user_id.as_str(),
+                    display_label.as_deref(),
+                )
+                .await
+                .map_err(|message| {
+                    std::io::Error::new(std::io::ErrorKind::InvalidInput, message)
+                })?;
+                tracing::info!(
+                    workos_user_id = %workos_user_id,
+                    created,
+                    "WorkOS global admin bootstrap checked"
+                );
+            }
+            BootstrapAdminConfig::Classic {
+                login_name,
+                password,
+            } => {
+                if !classic_enabled {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::InvalidInput,
+                        "classic admin bootstrap requires classic authentication to be enabled",
+                    )
+                    .into());
+                }
+                let created = api::bootstrap_classic_global_admin(
+                    &pool,
+                    login_name.as_str(),
+                    password.as_str(),
+                )
+                .await
+                .map_err(|message| {
+                    std::io::Error::new(std::io::ErrorKind::InvalidInput, message)
+                })?;
+                tracing::info!(
+                    login_name = %login_name,
+                    created,
+                    "classic global admin bootstrap checked"
+                );
+            }
         }
-        let created = api::bootstrap_workos_global_admin(
-            &pool,
-            bootstrap_admin.workos_user_id.as_str(),
-            bootstrap_admin.display_label.as_deref(),
-        )
-        .await
-        .map_err(|message| std::io::Error::new(std::io::ErrorKind::InvalidInput, message))?;
-        tracing::info!(
-            workos_user_id = %bootstrap_admin.workos_user_id,
-            created,
-            "WorkOS global admin bootstrap checked"
-        );
     }
 
+    // Delivery transport is a classic-method concern (invite and recovery
+    // credentials), independent of whether WorkOS is also configured.
     let gateway: std::sync::Arc<dyn api::identity_delivery::IdentityDeliveryGateway> =
-        if workos_verifier.is_some() {
-            std::sync::Arc::new(
-                api::identity_delivery::LocalDeterministicIdentityDeliveryGateway::new(false),
-            )
-        } else {
+        if classic_enabled {
             match api::identity_delivery::HttpJsonIdentityDeliveryGateway::from_env()
                 .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidInput, error))?
             {
@@ -258,11 +356,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     api::identity_delivery::LocalDeterministicIdentityDeliveryGateway::from_env(),
                 ),
             }
+        } else {
+            std::sync::Arc::new(
+                api::identity_delivery::LocalDeterministicIdentityDeliveryGateway::new(false),
+            )
         };
-    if dev_auth_enabled {
+    if classic_enabled {
         api::identity_delivery::spawn_identity_delivery_worker(pool.clone(), gateway.clone());
     }
     let mut api_state = api::ApiState::new(pool.clone(), media_store)
+        .with_classic_auth(classic_enabled)
         .with_dev_auth(dev_auth_enabled)
         .with_identity_delivery_gateway(gateway);
     if let Some(verifier) = workos_verifier {
@@ -324,16 +427,74 @@ mod tests {
     }
 
     #[test]
-    fn bootstrap_admin_configuration_requires_a_complete_secret_pair() {
-        assert!(bootstrap_admin_from_values(None, None).unwrap().is_none());
+    fn bootstrap_admin_configuration_is_method_neutral() {
+        use super::BootstrapAdminConfig;
+
+        assert!(bootstrap_admin_from_values(None, None, None, None, None)
+            .unwrap()
+            .is_none());
+
+        // A bare WorkOS user id keeps its pre-method-model meaning.
         let configured = bootstrap_admin_from_values(
+            None,
             Some("user_01HXYZ".to_string()),
+            None,
+            None,
             Some("Root operator".to_string()),
         )
         .unwrap()
         .unwrap();
-        assert_eq!(configured.workos_user_id, "user_01HXYZ");
-        assert_eq!(configured.display_label.as_deref(), Some("Root operator"));
-        assert!(bootstrap_admin_from_values(None, Some("Root operator".to_string())).is_err());
+        match configured {
+            BootstrapAdminConfig::Workos {
+                workos_user_id,
+                display_label,
+            } => {
+                assert_eq!(workos_user_id, "user_01HXYZ");
+                assert_eq!(display_label.as_deref(), Some("Root operator"));
+            }
+            other => panic!("expected workos bootstrap, got {other:?}"),
+        }
+
+        let configured = bootstrap_admin_from_values(
+            Some("classic".to_string()),
+            None,
+            Some("root@example.test".to_string()),
+            Some("correct horse battery staple".to_string()),
+            None,
+        )
+        .unwrap()
+        .unwrap();
+        match configured {
+            BootstrapAdminConfig::Classic {
+                login_name,
+                password,
+            } => {
+                assert_eq!(login_name, "root@example.test");
+                assert_eq!(password, "correct horse battery staple");
+            }
+            other => panic!("expected classic bootstrap, got {other:?}"),
+        }
+
+        // Incomplete or contradictory configurations fail closed.
+        assert!(bootstrap_admin_from_values(None, None, None, None, Some("label".to_string()))
+            .is_err());
+        assert!(bootstrap_admin_from_values(
+            Some("classic".to_string()),
+            None,
+            Some("root@example.test".to_string()),
+            None,
+            None
+        )
+        .is_err());
+        assert!(bootstrap_admin_from_values(Some("workos".to_string()), None, None, None, None)
+            .is_err());
+        assert!(bootstrap_admin_from_values(
+            Some("saml".to_string()),
+            Some("user".to_string()),
+            None,
+            None,
+            None
+        )
+        .is_err());
     }
 }
