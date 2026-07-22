@@ -1,5 +1,4 @@
 import { fail, redirect } from "@sveltejs/kit";
-import { randomUUID } from "node:crypto";
 import { serverApiBaseUrl } from "../../../lib/server/api-base.mjs";
 import {
   browserSessionCookieOptions,
@@ -97,7 +96,6 @@ async function verifySessionToken({ fetch, token }) {
 }
 
 async function redeemInviteToken({ fetch, inviteToken, accountId, password, authSource }) {
-  const sessionToken = `invite-session-${randomUUID()}`;
   const response = await fetch(`${serverApiBaseUrl()}/auth/invites/redeem`, {
     method: "POST",
     headers: {
@@ -109,7 +107,6 @@ async function redeemInviteToken({ fetch, inviteToken, accountId, password, auth
       invite_token: inviteToken,
       account_id: accountId,
       password,
-      session_token: sessionToken,
     }),
   });
   if (!response.ok) {
@@ -122,8 +119,8 @@ async function redeemInviteToken({ fetch, inviteToken, accountId, password, auth
         };
   }
   const body = await response.json().catch(() => null);
-  return validSessionBody(body)
-    ? { status: "ok", sessionToken }
+  return validSessionBody(body) && typeof body.session_token === "string" && body.session_token.trim() !== ""
+    ? { status: "ok", sessionToken: body.session_token }
     : {
         status: "reject",
         statusCode: 502,

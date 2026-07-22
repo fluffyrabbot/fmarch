@@ -9,9 +9,8 @@ test("GlobalAdmin creates the first game through the authenticated command bound
   try {
     await assert.rejects(
       actions.createGame({
-        cookies: { get: () => null },
+        cookies: { get: (name) => (name === "fmarch_session" ? "fmss_admin-session" : null) },
         locals: {
-          auth: { accessToken: "signed-workos-access-token" },
           principalUserId: "admin_a",
           resolvedCapabilities: [{ kind: "GlobalAdmin" }],
         },
@@ -34,7 +33,7 @@ test("GlobalAdmin creates the first game through the authenticated command bound
       },
     );
     assert.equal(observed.url, "http://api.internal/commands");
-    assert.equal(observed.authorization, "Bearer signed-workos-access-token");
+    assert.equal(observed.authorization, "Bearer fmss_admin-session");
     assert.equal(observed.envelope.body.kind, "Command");
     assert.equal(observed.envelope.body.body.command.CreateGame.pack, "mafiascum");
     assert.equal("principal_user_id" in observed.envelope.body.body, false);

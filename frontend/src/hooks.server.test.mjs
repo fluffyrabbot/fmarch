@@ -13,9 +13,9 @@ test("handle rotates an overdue browser session before resolving the route", asy
   assert.equal(await response.text(), "ok");
   assert.equal(observed.requests[0].url, "/auth/session?game=game-1");
   assert.equal(observed.requests[1].url, "/auth/session-rotations");
-  assert.match(JSON.parse(observed.requests[1].init.body).session_token, /^account-session-/);
+  assert.deepEqual(JSON.parse(observed.requests[1].init.body), {});
   assert.equal(observed.requests[2].url, "/auth/session?game=game-1");
-  assert.match(observed.set.value, /^account-session-/);
+  assert.equal(observed.set.value, "fmss_rotated-token");
   assert.equal(event.locals.principalUserId, "host_h");
   assert.equal(event.locals.resolvedCapabilities[0].kind, "HostOf");
 });
@@ -73,6 +73,7 @@ function eventFor(observed, sessions, { rotation = sessionResponse({ rotationReq
       }
       return sessions.shift() ?? sessionResponse({ rotationRequired: false });
     },
+    url: new URL("http://localhost/g/game-1/host"),
     request: new Request("http://localhost/g/game-1/host"),
     locals: {},
   };
@@ -86,6 +87,7 @@ function sessionResponse({ rotationRequired }) {
       return {
         principal_user_id: "host_h",
         rotation_required: rotationRequired,
+        session_token: "fmss_rotated-token",
         capabilities: [{ kind: "HostOf", body: { game: "game-1" } }],
       };
     },

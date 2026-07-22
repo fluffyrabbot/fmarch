@@ -11,20 +11,31 @@ import {
 
 const workosConfigured = workosAuthKitConfigured(process.env);
 
+// AuthKit middleware is confined to the WorkOS sign-in ceremony: the start
+// routes (which mint provider URLs and PKCE cookies), the OAuth callback, and
+// the one-time exchange that trades the provider token for the backend-owned
+// fmarch_session. Every other request never touches WorkOS.
+const WORKOS_CEREMONY_ROUTES = [
+  "/auth/login/workos",
+  "/auth/register/workos",
+  "/auth/callback",
+  "/auth/workos/complete",
+];
+
 let configuredWorkosHandlePromise = null;
 
-const workosHandle = workosConfigured
-  ? async (input) => await (await configuredWorkosHandle())(input)
-  : async ({ event, resolve }) => {
-      event.locals.auth = {
-        user: null,
-        organizationId: null,
-        role: null,
-        permissions: [],
-        impersonator: null,
-      };
-      return resolve(event);
-    };
+function workosCeremonyRoute(pathname) {
+  return WORKOS_CEREMONY_ROUTES.some(
+    (route) => pathname === route || pathname.startsWith(`${route}/`),
+  );
+}
+
+async function workosCeremonyHandle({ event, resolve }) {
+  if (!workosConfigured || !workosCeremonyRoute(event.url.pathname)) {
+    return resolve(event);
+  }
+  return (await configuredWorkosHandle())({ event, resolve });
+}
 
 function configuredWorkosHandle() {
   configuredWorkosHandlePromise ??= loadWorkosAuthKitModule().then(
@@ -41,10 +52,10 @@ function configuredWorkosHandle() {
   return configuredWorkosHandlePromise;
 }
 
+// The backend-owned app session in the fmarch_session cookie is the only
+// per-request identity for the application itself.
 export async function fmarchIdentityHandle({ event, resolve }) {
-  const accessToken = event.locals.auth?.accessToken;
   let session = await resolveAuthenticatedSessionCached({
-    accessToken,
     cookies: event.cookies,
     fetchImpl: event.fetch,
     request: event.request,
@@ -58,7 +69,6 @@ export async function fmarchIdentityHandle({ event, resolve }) {
     });
     if (rotation.status === "rotated") {
       session = await resolveAuthenticatedSession({
-        accessToken,
         cookies: event.cookies,
         fetchImpl: event.fetch,
         request: event.request,
@@ -79,4 +89,4 @@ export async function fmarchIdentityHandle({ event, resolve }) {
   return resolve(event);
 }
 
-export const handle = sequence(workosHandle, fmarchIdentityHandle);
+export const handle = sequence(workosCeremonyHandle, fmarchIdentityHandle);

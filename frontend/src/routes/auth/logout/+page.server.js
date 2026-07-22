@@ -1,13 +1,13 @@
 import { fail, redirect } from "@sveltejs/kit";
 import { serverApiBaseUrl } from "../../../lib/server/api-base.mjs";
-import { SESSION_COOKIE_NAME } from "../../../lib/server/session-capabilities.mjs";
-import { workosAuthKitConfigured } from "../../../lib/server/workos-authkit.mjs";
+import {
+  evictSessionCacheForToken,
+  SESSION_COOKIE_NAME,
+} from "../../../lib/server/session-capabilities.mjs";
+import { WORKOS_SESSION_COOKIE_NAME } from "../../../lib/server/workos-authkit.mjs";
 
 export function load({ locals, url }) {
   const returnTo = safeReturnTo(url.searchParams.get("returnTo"));
-  if (workosAuthKitConfigured()) {
-    throw redirect(302, `/auth/sign-out?${new URLSearchParams({ returnTo })}`);
-  }
   if (typeof locals.principalUserId !== "string" || locals.principalUserId.trim() === "") {
     throw redirect(303, loginPath(returnTo));
   }
@@ -28,7 +28,7 @@ export const actions = {
     });
     if (!response.ok) {
       if (response.status === 401) {
-        cookies.delete(SESSION_COOKIE_NAME, { path: "/" });
+        discardBrowserSession({ cookies, token });
         throw redirect(303, loginPath(returnTo));
       }
       return fail(502, {
@@ -46,10 +46,18 @@ export const actions = {
       });
     }
 
-    cookies.delete(SESSION_COOKIE_NAME, { path: "/" });
+    discardBrowserSession({ cookies, token });
     throw redirect(303, loginPath(returnTo));
   },
 };
+
+function discardBrowserSession({ cookies, token }) {
+  evictSessionCacheForToken(token);
+  cookies.delete(SESSION_COOKIE_NAME, { path: "/" });
+  // Defensive: an interrupted WorkOS exchange may have stranded the AuthKit
+  // cookie; a signed-out browser must not keep any identity state.
+  cookies.delete(WORKOS_SESSION_COOKIE_NAME, { path: "/" });
+}
 
 function logoutUrl(env) {
   return `${serverApiBaseUrl(env)}/auth/session-logout`;

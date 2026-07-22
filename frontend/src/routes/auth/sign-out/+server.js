@@ -1,11 +1,10 @@
-import { loadAuthKit } from "$lib/server/workos-authkit.mjs";
+import { redirect } from "@sveltejs/kit";
 
-export async function GET(event) {
-  const authKit = await loadAuthKit();
-  return authKit.signOut(event);
+// Compatibility alias: sign-out is unified on /auth/logout for every method.
+export function GET({ url }) {
+  throw redirect(302, `/auth/logout?${url.searchParams}`);
 }
 
-export async function POST(event) {
-  const authKit = await loadAuthKit();
-  return authKit.signOut(event);
+export function POST({ url }) {
+  throw redirect(303, `/auth/logout?${url.searchParams}`);
 }

@@ -19,8 +19,8 @@ test("logout load redirects an unauthenticated browser through login", () => {
   );
 });
 
-test("logout revokes the presented opaque token before clearing its cookie", async () => {
-  const observed = { deleted: null, request: null };
+test("logout revokes the presented opaque token before clearing every identity cookie", async () => {
+  const observed = { deleted: [], request: null };
   await assert.rejects(
     actions.default({
       cookies: cookieJar("active-host-session", observed),
@@ -39,11 +39,14 @@ test("logout revokes the presented opaque token before clearing its cookie", asy
     method: "POST",
     authorization: "Bearer active-host-session",
   });
-  assert.deepEqual(observed.deleted, { name: "fmarch_session", options: { path: "/" } });
+  assert.deepEqual(observed.deleted, [
+    { name: "fmarch_session", options: { path: "/" } },
+    { name: "wos-session", options: { path: "/" } },
+  ]);
 });
 
 test("logout preserves the cookie when the auth service is unavailable", async () => {
-  const observed = { deleted: null };
+  const observed = { deleted: [] };
   const result = await actions.default({
     cookies: cookieJar("active-host-session", observed),
     fetch: async () => ({ ok: false, status: 503 }),
@@ -51,7 +54,7 @@ test("logout preserves the cookie when the auth service is unavailable", async (
   });
   assert.equal(result.status, 502);
   assert.equal(result.data.state, "reject");
-  assert.equal(observed.deleted, null);
+  assert.deepEqual(observed.deleted, []);
 });
 
 function cookieJar(token, observed) {
@@ -60,7 +63,7 @@ function cookieJar(token, observed) {
       return name === "fmarch_session" ? token : undefined;
     },
     delete(name, options) {
-      observed.deleted = { name, options };
+      observed.deleted.push({ name, options });
     },
   };
 }

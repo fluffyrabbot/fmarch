@@ -6,6 +6,7 @@ import {
   authenticatedApiFetch,
   accessTokenForRequest,
 } from "../../../../lib/server/session-capabilities.mjs";
+import { workosAuthKitConfigured } from "../../../../lib/server/workos-authkit.mjs";
 import {
   buildHostConsoleRouteData,
   hostConsoleForbiddenMessage,
@@ -99,7 +100,7 @@ export async function _issueHostScopedInvite({
   ackMessage,
   rejectMessage,
 }) {
-  const sessionToken = accessTokenForRequest({ locals, cookies });
+  const sessionToken = accessTokenForRequest({ cookies });
   if (sessionToken === null) {
     return fail(401, inviteForm(field, {
       state: "reject",
@@ -153,7 +154,7 @@ export async function _issueHostScopedInvite({
     }));
   }
   const returnTo = `/g/${params.game}`;
-  if (workosEnabled(process.env)) {
+  if (workosAuthKitConfigured(process.env)) {
     const loginPath = workosInviteLoginPath({ returnTo, loginHint: accountId });
     return inviteForm(field, {
       state: "ack",
@@ -251,11 +252,7 @@ function inviteLoginPath({ returnTo, inviteToken, accountId }) {
 function workosInviteLoginPath({ returnTo, loginHint }) {
   const params = new URLSearchParams({ returnTo });
   if (loginHint.includes("@")) params.set("loginHint", loginHint);
-  return `/auth/sign-in?${params.toString()}`;
-}
-
-function workosEnabled(env) {
-  return typeof env?.WORKOS_CLIENT_ID === "string" && env.WORKOS_CLIENT_ID.trim() !== "";
+  return `/auth/login/workos?${params.toString()}`;
 }
 
 async function currentInviteTargetOccupant({

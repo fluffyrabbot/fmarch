@@ -67,6 +67,7 @@ test("invitation route redeems an account-bound invitation", async () => {
             ? jsonResponse({}, { ok: false, status: 401 })
             : jsonResponse({
                 principal_user_id: "host_h",
+                session_token: "fmss_invite-issued-session",
                 capabilities: [{ kind: "HostOf" }],
               });
         },
@@ -85,11 +86,12 @@ test("invitation route redeems an account-bound invitation", async () => {
   assert.equal(observed.requests[0].url, "/auth/session");
   assert.equal(observed.requests[1].url, "/auth/invites/redeem");
   assert.equal(observed.requests[1].authSource, "203.0.113.17");
-  assert.equal(observed.requests[1].body.invite_token, "host-invite-token");
-  assert.equal(observed.requests[1].body.account_id, "host@example.test");
-  assert.equal(observed.requests[1].body.password, "invited account password");
-  assert.match(observed.requests[1].body.session_token, /^invite-session-/);
-  assert.equal(observed.cookie.value, observed.requests[1].body.session_token);
+  assert.deepEqual(observed.requests[1].body, {
+    invite_token: "host-invite-token",
+    account_id: "host@example.test",
+    password: "invited account password",
+  });
+  assert.equal(observed.cookie.value, "fmss_invite-issued-session");
 });
 
 test("invitation route keeps failures and retry timing explicit", async () => {
