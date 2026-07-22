@@ -4509,9 +4509,11 @@ async fn non_host_extend_deadline_is_rejected_host_acks(pool: PgPool) {
     )
     .await
     .unwrap();
-    handle(
+    let cohost_command_id = Uuid::new_v4();
+    handle_idempotent(
         &pool,
         &user("user_c"),
+        cohost_command_id,
         Command::ExtendDeadline {
             game,
             phase: "D01".into(),
@@ -4520,6 +4522,19 @@ async fn non_host_extend_deadline_is_rejected_host_acks(pool: PgPool) {
     )
     .await
     .expect("cohost extends deadline");
+
+    let event = eventstore::load_stream(&pool, game)
+        .await
+        .unwrap()
+        .into_iter()
+        .find(|event| event.kind == "DeadlineExtended" && event.payload["at"] == 1000)
+        .expect("cohost deadline event");
+    assert_eq!(event.causation_id, Some(cohost_command_id));
+    assert_eq!(event.meta["command_id"], cohost_command_id.to_string());
+    assert_eq!(event.meta["principal_user_id"], "user_c");
+    assert_eq!(event.meta["command_kind"], "ExtendDeadline");
+    assert_eq!(event.meta["authority_used"], format!("CohostOf({game})"));
+    assert_eq!(event.meta["source"], "host_command");
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
@@ -4544,6 +4559,22 @@ async fn cohost_default_full_game_run_and_structural_stays_host_only(pool: PgPoo
     )
     .await
     .expect("cohost resolves phase under default co-GM parity");
+
+    let resolved = eventstore::load_stream(&pool, game)
+        .await
+        .unwrap()
+        .into_iter()
+        .find(|event| event.kind == "ResolutionApplied")
+        .expect("cohost resolution event");
+    assert_eq!(resolved.meta["principal_user_id"], "user_c");
+    assert_eq!(resolved.meta["command_kind"], "ResolvePhase");
+    assert_eq!(resolved.meta["authority_used"], format!("CohostOf({game})"));
+    assert_eq!(resolved.meta["source"], "host_command");
+    let causation_id = resolved
+        .causation_id
+        .expect("accepted command events carry causation id")
+        .to_string();
+    assert_eq!(resolved.meta["command_id"], causation_id);
 
     // Structural: cohost cannot grant another cohost.
     let err = handle(
