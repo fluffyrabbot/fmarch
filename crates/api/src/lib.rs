@@ -65,6 +65,8 @@ pub struct ApiState {
     websocket_poll_interval: Duration,
     access_token_verifier: Option<Arc<dyn AccessTokenVerifier>>,
     session_policy: identity::SessionPolicy,
+    classic_enabled: bool,
+    allow_jwt_bearer: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -141,7 +143,25 @@ impl ApiState {
             ) as u64),
             access_token_verifier: None,
             session_policy: identity::SessionPolicy::from_env(),
+            classic_enabled: std::env::var("FMARCH_CLASSIC_AUTH").ok().as_deref() != Some("0"),
+            allow_jwt_bearer: std::env::var("FMARCH_ALLOW_JWT_BEARER").ok().as_deref()
+                == Some("1"),
         }
+    }
+
+    /// Classic (username + password) sign-in is a first-class method, enabled
+    /// by default; a WorkOS-only deployment can switch it off.
+    pub fn with_classic_auth(mut self, enabled: bool) -> Self {
+        self.classic_enabled = enabled;
+        self
+    }
+
+    /// Transitional: accept provider JWTs as general request bearers while
+    /// clients migrate to the one-time session exchange. Removed once the
+    /// frontend exchanges WorkOS tokens for app sessions.
+    pub fn with_jwt_bearer_transition(mut self, enabled: bool) -> Self {
+        self.allow_jwt_bearer = enabled;
+        self
     }
 
     pub fn with_server_name(mut self, name: impl Into<String>) -> Self {
@@ -246,8 +266,10 @@ pub fn router(pool: PgPool, media_store: MediaStore) -> Router {
 
 pub fn router_with_state(state: ApiState) -> Router {
     let media_upload_limit = state.media_store.limits().max_encoded_bytes();
-    let external_identity = state.uses_external_identity();
-    let legacy_identity_routes = Router::new()
+    // Classic and WorkOS coexist: every route is always mounted, and per-route
+    // availability (classic disabled, dev-only, workos unconfigured) is a
+    // runtime policy check inside the handler.
+    let classic_identity_routes = Router::new()
         .route("/auth/dev-session", post(create_dev_auth_session))
         .route("/auth/session-grants", post(create_auth_session_grant))
         .route("/auth/accounts", post(create_auth_account))
@@ -286,6 +308,13 @@ pub fn router_with_state(state: ApiState) -> Router {
     let app = Router::new()
         .route("/healthz", get(healthz))
         .route("/auth/session", get(auth_session))
+        .route("/auth/sessions", post(create_auth_session))
+        .route("/auth/account/methods", get(list_account_methods))
+        .route("/auth/account/methods/classic", post(add_classic_method))
+        .route(
+            "/auth/account/methods/{method_id}/disable",
+            post(disable_account_method),
+        )
         .route("/auth/websocket-tickets", post(create_websocket_ticket))
         .route(
             "/media/uploads",
@@ -379,11 +408,7 @@ pub fn router_with_state(state: ApiState) -> Router {
         .route("/games/{game}/host-console-state", get(host_console_state))
         .route("/games/{game}/setup-state", get(host_setup_state))
         .route("/ws", get(ws));
-    let app = if external_identity {
-        app
-    } else {
-        app.merge(legacy_identity_routes)
-    };
+    let app = app.merge(classic_identity_routes);
     app.with_state(state)
 }
 
@@ -506,108 +531,74 @@ struct AuthenticatedIdentity {
     global_capabilities: Vec<String>,
     auth_kind: &'static str,
     session_reference: String,
+    created_at: Option<i64>,
     expires_at: i64,
+    idle_expires_at: Option<i64>,
+}
+
+fn session_auth_kind(session: &identity::session::SessionIdentity) -> &'static str {
+    match session.method {
+        Some((_, identity::MethodKind::ClassicPassword)) => "classic",
+        Some((_, identity::MethodKind::Workos)) => "workos",
+        None => "dev",
+    }
 }
 
 async fn authenticate_token(
     state: &ApiState,
     token: &str,
 ) -> Result<AuthenticatedIdentity, ApiError> {
-    if let Some(verifier) = state.access_token_verifier.as_ref() {
-        let verified = verifier.verify(token).await.map_err(identity_api_error)?;
-        return resolve_workos_principal(state, verified).await;
+    if identity::token::is_app_session_token(token) {
+        let session = identity::session::validate_session(
+            &state.pool,
+            token,
+            &state.session_policy,
+            unix_now_seconds(),
+        )
+        .await?;
+        let auth_kind = session_auth_kind(&session);
+        return Ok(AuthenticatedIdentity {
+            auth_kind,
+            principal_user_id: session.principal_user_id,
+            global_capabilities: session.global_capabilities,
+            session_reference: session.token_hash,
+            created_at: Some(session.created_at),
+            expires_at: session.expires_at,
+            idle_expires_at: session.idle_expires_at,
+        });
+    }
+    if state.allow_jwt_bearer {
+        if let Some(verifier) = state.access_token_verifier.as_ref() {
+            let verified = verifier.verify(token).await.map_err(identity_api_error)?;
+            return resolve_workos_principal(state, verified).await;
+        }
     }
     authenticate_legacy_token(state, token).await
 }
 
+/// Transitional: a provider JWT presented as a general request bearer. The
+/// go-forward path exchanges it once at POST /auth/sessions instead.
 async fn resolve_workos_principal(
     state: &ApiState,
     verified: VerifiedIdentity,
 ) -> Result<AuthenticatedIdentity, ApiError> {
     let now = unix_now_seconds();
-    if verified.expires_at <= now {
-        return Err(unauthorized_session());
-    }
     let mut tx = state.pool.begin().await?;
-    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
-        .bind(format!("workos:{}", verified.subject))
-        .execute(&mut *tx)
-        .await?;
-    let existing = sqlx::query_scalar::<_, String>(
-        "SELECT principal_user_id FROM external_identity WHERE provider = 'workos' AND subject = $1",
-    )
-    .bind(verified.subject.as_str())
-    .fetch_optional(&mut *tx)
-    .await?;
-    let principal_user_id = match existing {
-        Some(principal_user_id) => principal_user_id,
-        None => {
-            let principal_user_id = format!("principal-{}", Uuid::new_v4());
-            sqlx::query(
-                "INSERT INTO platform_principal (principal_user_id, status, global_capabilities, created_at, disabled_at) VALUES ($1, 'active', '{}'::TEXT[], $2, NULL)",
-            )
-            .bind(principal_user_id.as_str())
-            .bind(now)
-            .execute(&mut *tx)
-            .await?;
-            sqlx::query(
-                "INSERT INTO external_identity (provider, subject, principal_user_id, display_label, created_at, last_seen_at) VALUES ('workos', $1, $2, $3, $4, $4)",
-            )
-            .bind(verified.subject.as_str())
-            .bind(principal_user_id.as_str())
-            .bind(verified.email.as_deref())
-            .bind(now)
-            .execute(&mut *tx)
-            .await?;
-            sqlx::query(
-                r#"
-                INSERT INTO identity_lifecycle_audit (
-                    event_at, event_kind, actor_user_id, principal_user_id,
-                    token_hash, related_token_hash, metadata
-                )
-                VALUES ($1, 'external_identity_bound', NULL, $2, NULL, NULL, $3::JSONB)
-                "#,
-            )
-            .bind(now)
-            .bind(principal_user_id.as_str())
-            .bind(serde_json::json!({ "provider": "workos" }).to_string())
-            .execute(&mut *tx)
-            .await?;
-            principal_user_id
-        }
-    };
-    sqlx::query(
-        "UPDATE external_identity SET last_seen_at = $1, display_label = COALESCE($2, display_label) WHERE provider = 'workos' AND subject = $3",
-    )
-    .bind(now)
-    .bind(verified.email.as_deref())
-    .bind(verified.subject.as_str())
-    .execute(&mut *tx)
-    .await?;
-    identity::methods::link_workos_method(
-        &mut *tx,
-        verified.subject.as_str(),
-        principal_user_id.as_str(),
-        now,
-    )
-    .await?;
-    let principal = sqlx::query_as::<_, (String, Vec<String>)>(
-        "SELECT status, global_capabilities FROM platform_principal WHERE principal_user_id = $1",
-    )
-    .bind(principal_user_id.as_str())
-    .fetch_optional(&mut *tx)
-    .await?
-    .ok_or_else(unauthorized_account)?;
-    if principal.0 != "active" {
-        return Err(unauthorized_account());
-    }
+    let resolution = identity::workos::resolve_subject(&mut tx, &verified, now)
+        .await
+        .map_err(|error| match error {
+            identity::IdentityFlowError::Unauthorized => unauthorized_account(),
+            other => ApiError::from(other),
+        })?;
     tx.commit().await?;
     Ok(AuthenticatedIdentity {
-        principal_user_id,
-        global_capabilities: principal.1,
+        principal_user_id: resolution.principal_user_id,
+        global_capabilities: resolution.global_capabilities,
         auth_kind: "workos",
         session_reference: verified.session_id,
+        created_at: None,
         expires_at: verified.expires_at,
+        idle_expires_at: None,
     })
 }
 
@@ -618,9 +609,10 @@ async fn authenticate_legacy_token(
     let token_hash = hash_session_token(token);
     let now = unix_now_seconds();
     let session = if state.dev_auth_enabled {
-        sqlx::query_as::<_, (String, Vec<String>, i64)>(
+        sqlx::query_as::<_, (String, Vec<String>, i64, i64)>(
             r#"
-            SELECT session.principal_user_id, session.global_capabilities, session.expires_at
+            SELECT session.principal_user_id, session.global_capabilities, session.expires_at,
+                   session.created_at
             FROM auth_session AS session
             WHERE session.token_hash = $1
               AND session.revoked_at IS NULL
@@ -643,9 +635,10 @@ async fn authenticate_legacy_token(
         .fetch_optional(&state.pool)
         .await?
     } else {
-        sqlx::query_as::<_, (String, Vec<String>, i64)>(
+        sqlx::query_as::<_, (String, Vec<String>, i64, i64)>(
             r#"
-            SELECT session.principal_user_id, session.global_capabilities, session.expires_at
+            SELECT session.principal_user_id, session.global_capabilities, session.expires_at,
+                   session.created_at
             FROM auth_session AS session
             WHERE session.token_hash = $1
               AND session.revoked_at IS NULL
@@ -668,7 +661,9 @@ async fn authenticate_legacy_token(
         global_capabilities: session.1,
         auth_kind: "legacy-dev",
         session_reference: token_hash,
+        created_at: Some(session.3),
         expires_at: session.2,
+        idle_expires_at: None,
     })
 }
 
@@ -1115,6 +1110,113 @@ pub async fn bootstrap_workos_global_admin(
     Ok(true)
 }
 
+/// Provider-neutral first-admin bootstrap for the classic method: create (or
+/// find) the account, attach it to a principal with a classic authentication
+/// method, and grant GlobalAdmin. No-ops when any active GlobalAdmin exists.
+pub async fn bootstrap_classic_global_admin(
+    pool: &PgPool,
+    login_name: &str,
+    password: &str,
+) -> Result<bool, String> {
+    let login_name = login_name.trim();
+    if login_name.is_empty() {
+        return Err("bootstrap admin login name must not be empty".to_string());
+    }
+    if password.trim().is_empty() {
+        return Err("bootstrap admin password must not be empty".to_string());
+    }
+    let password_hash =
+        identity::password::hash_password_sync(password).map_err(|error| error.to_string())?;
+    let now = unix_now_seconds();
+    let mut tx = pool.begin().await.map_err(|error| error.to_string())?;
+    sqlx::query("SELECT pg_advisory_xact_lock($1)")
+        .bind(0x6d66_6172_6368_0007_i64)
+        .execute(&mut *tx)
+        .await
+        .map_err(|error| error.to_string())?;
+    let admin_exists = sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS (SELECT 1 FROM platform_principal WHERE status = 'active' AND global_capabilities @> ARRAY['GlobalAdmin']::TEXT[])",
+    )
+    .fetch_one(&mut *tx)
+    .await
+    .map_err(|error| error.to_string())?;
+    if admin_exists {
+        tx.commit().await.map_err(|error| error.to_string())?;
+        return Ok(false);
+    }
+    let existing = sqlx::query_scalar::<_, String>(
+        "SELECT principal_user_id FROM auth_account WHERE account_id = $1 AND disabled_at IS NULL",
+    )
+    .bind(login_name)
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(|error| error.to_string())?;
+    let principal_user_id = match existing {
+        Some(principal_user_id) => principal_user_id,
+        None => {
+            let principal_user_id = format!("principal-{}", Uuid::new_v4());
+            sqlx::query(
+                r#"
+                INSERT INTO auth_account (
+                    account_id, principal_user_id, password_hash, created_at, disabled_at,
+                    global_capabilities
+                )
+                VALUES ($1, $2, $3, $4, NULL, ARRAY['GlobalAdmin'])
+                "#,
+            )
+            .bind(login_name)
+            .bind(principal_user_id.as_str())
+            .bind(&password_hash)
+            .bind(now)
+            .execute(&mut *tx)
+            .await
+            .map_err(|error| error.to_string())?;
+            principal_user_id
+        }
+    };
+    identity::methods::link_classic_method(
+        &mut *tx,
+        login_name,
+        principal_user_id.as_str(),
+        &["GlobalAdmin".to_string()],
+        now,
+    )
+    .await
+    .map_err(|error| error.to_string())?;
+    sqlx::query(
+        r#"
+        UPDATE platform_principal
+        SET global_capabilities = array_append(global_capabilities, 'GlobalAdmin')
+        WHERE principal_user_id = $1
+          AND NOT (global_capabilities @> ARRAY['GlobalAdmin']::TEXT[])
+        "#,
+    )
+    .bind(principal_user_id.as_str())
+    .execute(&mut *tx)
+    .await
+    .map_err(|error| error.to_string())?;
+    sqlx::query(
+        r#"
+        INSERT INTO identity_lifecycle_audit (
+            event_at, event_kind, actor_user_id, principal_user_id,
+            token_hash, related_token_hash, metadata
+        )
+        VALUES ($1, 'admin_bootstrapped', NULL, $2, NULL, NULL, $3::JSONB)
+        "#,
+    )
+    .bind(now)
+    .bind(principal_user_id.as_str())
+    .bind(
+        serde_json::json!({ "method_kind": "classic_password", "account_id": login_name })
+            .to_string(),
+    )
+    .execute(&mut *tx)
+    .await
+    .map_err(|error| error.to_string())?;
+    tx.commit().await.map_err(|error| error.to_string())?;
+    Ok(true)
+}
+
 #[derive(Debug, Clone, Deserialize)]
 struct RegisterAuthAccount {
     account_id: String,
@@ -1386,13 +1488,8 @@ async fn auth_session(
     )
     .await?;
     response.expires_at = Some(identity.expires_at);
-    if identity.auth_kind == "legacy-dev" {
-        let created_at = sqlx::query_scalar::<_, i64>(
-            "SELECT created_at FROM auth_session WHERE token_hash = $1",
-        )
-        .bind(identity.session_reference)
-        .fetch_one(&state.pool)
-        .await?;
+    response.idle_expires_at = identity.idle_expires_at;
+    if let Some(created_at) = identity.created_at {
         response.created_at = Some(created_at);
         response.rotation_required =
             Some(now.saturating_sub(created_at) >= auth_session_rotation_max_age_seconds());
@@ -1514,6 +1611,7 @@ async fn create_auth_account(
     headers: HeaderMap,
     Json(request): Json<CreateAuthAccount>,
 ) -> Result<Json<AuthAccountResponse>, ApiError> {
+    require_classic_enabled(&state)?;
     let caller_token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
     let actor_user_id = require_global_admin(&state, caller_token, "account creation").await?;
 
@@ -1612,6 +1710,7 @@ async fn register_auth_account(
     headers: HeaderMap,
     Json(request): Json<RegisterAuthAccount>,
 ) -> Result<Json<AuthAccountRegistrationResponse>, ApiError> {
+    require_classic_enabled(&state)?;
     let account_id = normalize_registration_account_id(request.account_id.as_str())?;
     let password = request.password.as_str();
     let client_token = request
@@ -1734,13 +1833,31 @@ async fn login_auth_account(
     headers: HeaderMap,
     Json(request): Json<LoginAuthAccount>,
 ) -> Result<Json<AuthSessionResponse>, ApiError> {
-    let account_id = request.account_id.trim();
-    let password = request.password.as_str();
-    let client_token = request
-        .session_token
-        .as_deref()
-        .map(str::trim)
-        .filter(|token| !token.is_empty());
+    let client_token = request.session_token.clone();
+    let response = classic_password_session(
+        &state,
+        &headers,
+        request.account_id.trim(),
+        request.password.as_str(),
+        client_token
+            .as_deref()
+            .map(str::trim)
+            .filter(|token| !token.is_empty()),
+        request.expires_at,
+    )
+    .await?;
+    Ok(Json(response))
+}
+
+async fn classic_password_session(
+    state: &ApiState,
+    headers: &HeaderMap,
+    account_id: &str,
+    password: &str,
+    client_token: Option<&str>,
+    requested_expires_at: Option<i64>,
+) -> Result<AuthSessionResponse, ApiError> {
+    require_classic_enabled(state)?;
     if account_id.is_empty() || password.trim().is_empty() {
         return Err(ApiError::Reject {
             status: StatusCode::BAD_REQUEST,
@@ -1750,7 +1867,7 @@ async fn login_auth_account(
     }
     validate_account_password_input(password)?;
     let now = unix_now_seconds();
-    let expires_at = match request.expires_at {
+    let expires_at = match requested_expires_at {
         Some(expires_at) if expires_at <= now => {
             return Err(ApiError::Reject {
                 status: StatusCode::BAD_REQUEST,
@@ -1761,7 +1878,7 @@ async fn login_auth_account(
         Some(expires_at) => expires_at,
         None => state.session_policy.classic_expiry(now),
     };
-    let attempt_scope = enforce_auth_attempt_limit(&state, &headers, account_id).await?;
+    let attempt_scope = enforce_auth_attempt_limit(state, headers, account_id).await?;
 
     let account = sqlx::query_as::<_, (String, String, Vec<String>)>(
         r#"
@@ -1776,12 +1893,12 @@ async fn login_auth_account(
     .await?;
     let Some(account) = account else {
         consume_dummy_password_verification(password).await?;
-        record_failed_auth_attempt(&state, &attempt_scope, account_id, "account-login").await?;
+        record_failed_auth_attempt(state, &attempt_scope, account_id, "account-login").await?;
         return Err(unauthorized_account());
     };
 
     if !verify_account_password(account.1.as_str(), password).await? {
-        record_failed_auth_attempt(&state, &attempt_scope, account_id, "account-login").await?;
+        record_failed_auth_attempt(state, &attempt_scope, account_id, "account-login").await?;
         return Err(unauthorized_account());
     }
 
@@ -1802,7 +1919,10 @@ async fn login_auth_account(
             authenticated_via_method_id: Some(method_id),
             assurance: identity::Assurance::Password,
             expires_at,
-            idle_expires_at: None,
+            idle_expires_at: Some(
+                now.saturating_add(state.session_policy.idle_ttl_seconds)
+                    .min(expires_at.max(now + 1)),
+            ),
             client_supplied_token: client_token,
         },
         now,
@@ -1840,10 +1960,348 @@ async fn login_auth_account(
     clear_auth_attempt_failures(&mut tx, &attempt_scope).await?;
     tx.commit().await?;
 
-    let mut response = auth_session_response(&state, account.0, None, account.2).await?;
+    let mut response = auth_session_response(state, account.0, None, account.2).await?;
     response.session_token = Some(issued.session_token);
     response.expires_at = Some(issued.expires_at);
-    Ok(Json(response))
+    response.idle_expires_at = issued.idle_expires_at;
+    Ok(response)
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(tag = "method")]
+enum CreateAuthSessionRequest {
+    #[serde(rename = "classic")]
+    Classic { login_name: String, password: String },
+    #[serde(rename = "workos")]
+    Workos,
+}
+
+async fn create_auth_session(
+    State(state): State<ApiState>,
+    headers: HeaderMap,
+    Json(request): Json<CreateAuthSessionRequest>,
+) -> Result<Json<AuthSessionResponse>, ApiError> {
+    match request {
+        CreateAuthSessionRequest::Classic {
+            login_name,
+            password,
+        } => {
+            let response = classic_password_session(
+                &state,
+                &headers,
+                login_name.trim(),
+                password.as_str(),
+                None,
+                None,
+            )
+            .await?;
+            Ok(Json(response))
+        }
+        CreateAuthSessionRequest::Workos => {
+            let verifier = state.access_token_verifier.as_ref().ok_or_else(|| {
+                ApiError::Reject {
+                    status: StatusCode::NOT_FOUND,
+                    error: RejectCode::NotAuthorized,
+                    message: "workos authentication is not configured".to_string(),
+                }
+            })?;
+            let token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
+            let verified = verifier.verify(token).await.map_err(identity_api_error)?;
+            let now = unix_now_seconds();
+            let mut tx = state.pool.begin().await?;
+            let resolution = identity::workos::resolve_subject(&mut tx, &verified, now)
+                .await
+                .map_err(|error| match error {
+                    identity::IdentityFlowError::Unauthorized => unauthorized_account(),
+                    other => ApiError::from(other),
+                })?;
+            let expires_at = state.session_policy.workos_expiry(now);
+            let issued = identity::session::issue_session(
+                &mut *tx,
+                identity::SessionSpec {
+                    principal_user_id: resolution.principal_user_id.as_str(),
+                    global_capabilities: &resolution.global_capabilities,
+                    authenticated_via_method_id: Some(resolution.method_id),
+                    assurance: identity::Assurance::ExternalSso,
+                    expires_at,
+                    idle_expires_at: Some(
+                        now.saturating_add(state.session_policy.idle_ttl_seconds)
+                            .min(expires_at),
+                    ),
+                    client_supplied_token: None,
+                },
+                now,
+            )
+            .await?;
+            sqlx::query(
+                r#"
+                INSERT INTO identity_lifecycle_audit (
+                    event_at, event_kind, actor_user_id, principal_user_id,
+                    token_hash, related_token_hash, metadata
+                )
+                VALUES ($1, 'session_created', $2, $3, $4, NULL, $5::JSONB)
+                "#,
+            )
+            .bind(now)
+            .bind(resolution.principal_user_id.as_str())
+            .bind(resolution.principal_user_id.as_str())
+            .bind(issued.token_hash.as_str())
+            .bind(
+                serde_json::json!({
+                    "method_kind": "workos",
+                    "session_expires_at": issued.expires_at
+                })
+                .to_string(),
+            )
+            .execute(&mut *tx)
+            .await?;
+            tx.commit().await?;
+
+            let mut response = auth_session_response(
+                &state,
+                resolution.principal_user_id,
+                None,
+                resolution.global_capabilities,
+            )
+            .await?;
+            response.session_token = Some(issued.session_token);
+            response.expires_at = Some(issued.expires_at);
+            response.idle_expires_at = issued.idle_expires_at;
+            Ok(Json(response))
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct AccountMethodEntry {
+    method_id: Uuid,
+    kind: String,
+    status: String,
+    created_at: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    last_authenticated_at: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    login_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    display_label: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct AccountMethodsResponse {
+    principal_user_id: String,
+    methods: Vec<AccountMethodEntry>,
+}
+
+async fn list_account_methods(
+    State(state): State<ApiState>,
+    headers: HeaderMap,
+) -> Result<Json<AccountMethodsResponse>, ApiError> {
+    let token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
+    let identity = authenticate_token(&state, token).await?;
+    let methods = identity::methods::list_methods(&state.pool, identity.principal_user_id.as_str())
+        .await?
+        .into_iter()
+        .map(|method| AccountMethodEntry {
+            method_id: method.method_id,
+            kind: method.kind.as_str().to_string(),
+            status: method.status,
+            created_at: method.created_at,
+            last_authenticated_at: method.last_authenticated_at,
+            login_name: method.login_name,
+            display_label: method.display_label,
+        })
+        .collect();
+    Ok(Json(AccountMethodsResponse {
+        principal_user_id: identity.principal_user_id,
+        methods,
+    }))
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct AddClassicMethod {
+    login_name: String,
+    password: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct AddClassicMethodResponse {
+    status: String,
+    method_id: Uuid,
+    login_name: String,
+    principal_user_id: String,
+    recovery_codes: Vec<String>,
+    recovery_codes_expire_at: i64,
+}
+
+const METHOD_RECOVERY_CODE_COUNT: usize = 3;
+const METHOD_RECOVERY_CODE_TTL_SECONDS: i64 = 60 * 60 * 24 * 180;
+
+async fn add_classic_method(
+    State(state): State<ApiState>,
+    headers: HeaderMap,
+    Json(request): Json<AddClassicMethod>,
+) -> Result<Json<AddClassicMethodResponse>, ApiError> {
+    require_classic_enabled(&state)?;
+    let token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
+    let identity = authenticate_token(&state, token).await?;
+    let now = unix_now_seconds();
+    require_recent_authentication(&identity, now)?;
+    let login_name = normalize_registration_account_id(request.login_name.as_str())?;
+    validate_new_account_password(request.password.as_str())?;
+    let password_hash = hash_account_password(request.password.as_str()).await?;
+
+    let mut tx = state.pool.begin().await?;
+    let inserted = sqlx::query(
+        r#"
+        INSERT INTO auth_account (
+            account_id, principal_user_id, password_hash, created_at, disabled_at,
+            global_capabilities
+        )
+        VALUES ($1, $2, $3, $4, NULL, '{}')
+        ON CONFLICT (account_id) DO NOTHING
+        "#,
+    )
+    .bind(login_name.as_str())
+    .bind(identity.principal_user_id.as_str())
+    .bind(&password_hash)
+    .bind(now)
+    .execute(&mut *tx)
+    .await?;
+    if inserted.rows_affected() != 1 {
+        return Err(ApiError::Reject {
+            status: StatusCode::CONFLICT,
+            error: RejectCode::Internal,
+            message: "account already exists".to_string(),
+        });
+    }
+    let method_id = identity::methods::link_classic_method(
+        &mut *tx,
+        login_name.as_str(),
+        identity.principal_user_id.as_str(),
+        &[],
+        now,
+    )
+    .await?;
+
+    let recovery_expires_at = now + METHOD_RECOVERY_CODE_TTL_SECONDS;
+    let mut recovery_codes = Vec::with_capacity(METHOD_RECOVERY_CODE_COUNT);
+    for _ in 0..METHOD_RECOVERY_CODE_COUNT {
+        let code = format!(
+            "fmrc-{}-{}",
+            Uuid::new_v4().simple(),
+            Uuid::new_v4().simple()
+        );
+        sqlx::query(
+            r#"
+            INSERT INTO auth_account_recovery_credential (
+                recovery_id, account_id, token_hash, created_at, expires_at, used_at, revoked_at
+            )
+            VALUES ($1, $2, $3, $4, $5, NULL, NULL)
+            "#,
+        )
+        .bind(Uuid::new_v4())
+        .bind(login_name.as_str())
+        .bind(hash_session_token(code.as_str()))
+        .bind(now)
+        .bind(recovery_expires_at)
+        .execute(&mut *tx)
+        .await?;
+        recovery_codes.push(code);
+    }
+
+    sqlx::query(
+        r#"
+        INSERT INTO identity_lifecycle_audit (
+            event_at, event_kind, actor_user_id, principal_user_id,
+            token_hash, related_token_hash, metadata
+        )
+        VALUES ($1, 'method_added', $2, $3, $4, NULL, $5::JSONB)
+        "#,
+    )
+    .bind(now)
+    .bind(identity.principal_user_id.as_str())
+    .bind(identity.principal_user_id.as_str())
+    .bind(identity.session_reference.as_str())
+    .bind(
+        serde_json::json!({
+            "method_kind": "classic_password",
+            "account_id": login_name.as_str(),
+            "recovery_code_count": METHOD_RECOVERY_CODE_COUNT
+        })
+        .to_string(),
+    )
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+
+    Ok(Json(AddClassicMethodResponse {
+        status: "added".to_string(),
+        method_id,
+        login_name,
+        principal_user_id: identity.principal_user_id,
+        recovery_codes,
+        recovery_codes_expire_at: recovery_expires_at,
+    }))
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct DisableMethodResponse {
+    status: String,
+    method_id: Uuid,
+    kind: String,
+    principal_user_id: String,
+    revoked_session_count: i64,
+}
+
+async fn disable_account_method(
+    State(state): State<ApiState>,
+    Path(method_id): Path<Uuid>,
+    headers: HeaderMap,
+) -> Result<Json<DisableMethodResponse>, ApiError> {
+    let token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
+    let identity = authenticate_token(&state, token).await?;
+    let now = unix_now_seconds();
+    require_recent_authentication(&identity, now)?;
+
+    let mut tx = state.pool.begin().await?;
+    let disabled = identity::methods::disable_method(
+        &mut *tx,
+        identity.principal_user_id.as_str(),
+        method_id,
+        now,
+    )
+    .await?;
+    sqlx::query(
+        r#"
+        INSERT INTO identity_lifecycle_audit (
+            event_at, event_kind, actor_user_id, principal_user_id,
+            token_hash, related_token_hash, metadata
+        )
+        VALUES ($1, 'method_disabled', $2, $3, $4, NULL, $5::JSONB)
+        "#,
+    )
+    .bind(now)
+    .bind(identity.principal_user_id.as_str())
+    .bind(identity.principal_user_id.as_str())
+    .bind(identity.session_reference.as_str())
+    .bind(
+        serde_json::json!({
+            "method_kind": disabled.kind.as_str(),
+            "revoked_session_count": disabled.revoked_session_count
+        })
+        .to_string(),
+    )
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+
+    Ok(Json(DisableMethodResponse {
+        status: "disabled".to_string(),
+        method_id: disabled.method_id,
+        kind: disabled.kind.as_str().to_string(),
+        principal_user_id: identity.principal_user_id,
+        revoked_session_count: disabled.revoked_session_count as i64,
+    }))
 }
 
 async fn rotate_auth_account_password(
@@ -1851,6 +2309,7 @@ async fn rotate_auth_account_password(
     headers: HeaderMap,
     Json(request): Json<RotateAuthAccountPassword>,
 ) -> Result<Json<AuthAccountPasswordRotationResponse>, ApiError> {
+    require_classic_enabled(&state)?;
     let caller_token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
     let account_id = request.account_id.trim();
     let current_password = request.current_password.as_str();
@@ -1950,6 +2409,7 @@ async fn issue_auth_account_recovery_credential(
     headers: HeaderMap,
     Json(request): Json<IssueAuthAccountRecoveryCredential>,
 ) -> Result<Json<AuthAccountRecoveryCredentialResponse>, ApiError> {
+    require_classic_enabled(&state)?;
     let caller_token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
     let account_id = request.account_id.trim();
     let current_password = request.current_password.as_str();
@@ -2068,6 +2528,7 @@ async fn request_auth_account_recovery(
     headers: HeaderMap,
     Json(request): Json<RequestAuthAccountRecovery>,
 ) -> Result<Json<AuthAccountRecoveryRequestResponse>, ApiError> {
+    require_classic_enabled(&state)?;
     let account_id = normalize_registration_account_id(request.account_id.as_str())?;
     enforce_recovery_request_limit(&state, &headers, account_id.as_str()).await?;
 
@@ -2193,6 +2654,7 @@ async fn revoke_auth_account_recovery_credential(
     headers: HeaderMap,
     Json(request): Json<RevokeAuthAccountRecoveryCredential>,
 ) -> Result<Json<AuthAccountRecoveryCredentialLifecycleResponse>, ApiError> {
+    require_classic_enabled(&state)?;
     let caller_token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
     let account_id = request.account_id.trim();
     let current_password = request.current_password.as_str();
@@ -2283,6 +2745,7 @@ async fn recover_auth_account(
     headers: HeaderMap,
     Json(request): Json<RecoverAuthAccount>,
 ) -> Result<Json<AuthAccountRecoveryResponse>, ApiError> {
+    require_classic_enabled(&state)?;
     let account_id = request.account_id.trim();
     let recovery_token = request.recovery_token.trim();
     let new_password = request.new_password.as_str();
@@ -2447,6 +2910,7 @@ async fn disable_auth_account(
     headers: HeaderMap,
     Json(request): Json<DisableAuthAccount>,
 ) -> Result<Json<AuthAccountLifecycleResponse>, ApiError> {
+    require_classic_enabled(&state)?;
     let caller_token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
     let actor_user_id = require_global_admin(&state, caller_token, "account disable").await?;
     let account_id = request.account_id.trim();
@@ -2555,6 +3019,7 @@ async fn enable_auth_account(
     headers: HeaderMap,
     Json(request): Json<EnableAuthAccount>,
 ) -> Result<Json<AuthAccountLifecycleResponse>, ApiError> {
+    require_classic_enabled(&state)?;
     let caller_token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
     let actor_user_id = require_global_admin(&state, caller_token, "account enable").await?;
     let account_id = request.account_id.trim();
@@ -2860,6 +3325,7 @@ async fn create_auth_invite(
     headers: HeaderMap,
     Json(request): Json<CreateAuthInvite>,
 ) -> Result<Json<AuthInviteResponse>, ApiError> {
+    require_classic_enabled(&state)?;
     let caller_token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
     let (invited_by_user_id, caller_global_capabilities) =
         active_session_principal_and_globals(&state, caller_token).await?;
@@ -3011,6 +3477,7 @@ async fn redeem_auth_invite(
     headers: HeaderMap,
     Json(request): Json<RedeemAuthInvite>,
 ) -> Result<Json<AuthSessionResponse>, ApiError> {
+    require_classic_enabled(&state)?;
     let invite_token = request.invite_token.trim();
     let account_id = request.account_id.trim();
     let password = request.password.as_str();
@@ -3151,6 +3618,7 @@ async fn revoke_auth_invite(
     headers: HeaderMap,
     Json(request): Json<RevokeAuthInvite>,
 ) -> Result<Json<AuthLifecycleResponse>, ApiError> {
+    require_classic_enabled(&state)?;
     let caller_token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
     let actor_user_id = require_global_admin(&state, caller_token, "invite revocation").await?;
 
@@ -3222,6 +3690,7 @@ async fn admin_auth_delivery_queue(
     Query(query): Query<AuthDeliveryQueueQuery>,
     headers: HeaderMap,
 ) -> Result<Json<AuthDeliveryQueueResponse>, ApiError> {
+    require_classic_enabled(&state)?;
     let caller_token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
     require_global_operator(&state, caller_token, "auth delivery queue").await?;
     let now = unix_now_seconds();
@@ -3288,6 +3757,7 @@ async fn retry_auth_delivery_intent(
     headers: HeaderMap,
     Path(delivery_id): Path<Uuid>,
 ) -> Result<Json<AuthDeliveryRetryResponse>, ApiError> {
+    require_classic_enabled(&state)?;
     let caller_token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
     let actor_user_id = require_global_admin(&state, caller_token, "delivery retry").await?;
     let now = unix_now_seconds();
@@ -3834,6 +4304,33 @@ fn auth_session_rotation_max_age_seconds() -> i64 {
         60,
         604_800,
     )
+}
+
+fn auth_recent_max_age_seconds() -> i64 {
+    env_i64("FMARCH_AUTH_RECENT_SECONDS", 600, 60, 86_400)
+}
+
+fn require_classic_enabled(state: &ApiState) -> Result<(), ApiError> {
+    if state.classic_enabled {
+        Ok(())
+    } else {
+        Err(ApiError::Reject {
+            status: StatusCode::NOT_FOUND,
+            error: RejectCode::NotAuthorized,
+            message: "classic authentication is disabled".to_string(),
+        })
+    }
+}
+
+fn require_recent_authentication(identity: &AuthenticatedIdentity, now: i64) -> Result<(), ApiError> {
+    if let Some(created_at) = identity.created_at {
+        identity::methods::require_recent_authentication(
+            created_at,
+            now,
+            auth_recent_max_age_seconds(),
+        )?;
+    }
+    Ok(())
 }
 
 fn env_i64(name: &str, default: i64, minimum: i64, maximum: i64) -> i64 {
@@ -7523,7 +8020,11 @@ async fn create_websocket_ticket(
     .bind(hash_session_token(ticket.as_str()))
     .bind(identity.auth_kind)
     .bind(identity.session_reference)
-    .bind(identity.expires_at)
+    .bind(
+        identity
+            .idle_expires_at
+            .map_or(identity.expires_at, |idle| idle.min(identity.expires_at)),
+    )
     .bind(principal_user_id)
     .bind(audience)
     .bind(request.game)
@@ -7611,30 +8112,73 @@ async fn websocket_session_active(state: &ApiState, claim: &WebsocketTicketClaim
     if claim.access_expires_at <= now {
         return false;
     }
-    if claim.auth_kind == "workos" {
-        return sqlx::query_scalar::<_, bool>(
-            "SELECT EXISTS (SELECT 1 FROM platform_principal WHERE principal_user_id = $1 AND status = 'active' AND disabled_at IS NULL)",
-        )
-        .bind(claim.principal_user_id.as_str())
-        .fetch_one(&state.pool)
-        .await
-        .unwrap_or(false);
+    match claim.auth_kind.as_str() {
+        "classic" | "dev" => {
+            app_session_live(state, claim, now).await == Some(true)
+        }
+        "workos" => match app_session_live(state, claim, now).await {
+            Some(live) => live,
+            // Transitional: JWT-bearer tickets reference the provider session
+            // id rather than an app session; the principal's status is the
+            // only revocation signal available for them.
+            None => sqlx::query_scalar::<_, bool>(
+                "SELECT EXISTS (SELECT 1 FROM platform_principal WHERE principal_user_id = $1 AND status = 'active' AND disabled_at IS NULL)",
+            )
+            .bind(claim.principal_user_id.as_str())
+            .fetch_one(&state.pool)
+            .await
+            .unwrap_or(false),
+        },
+        _ => {
+            let account_predicate = if state.dev_auth_enabled {
+                "TRUE"
+            } else {
+                "EXISTS (SELECT 1 FROM auth_account WHERE auth_account.principal_user_id = auth_session.principal_user_id AND auth_account.disabled_at IS NULL)"
+            };
+            let query = format!(
+                "SELECT EXISTS (SELECT 1 FROM auth_session WHERE token_hash = $1 AND principal_user_id = $2 AND revoked_at IS NULL AND expires_at > $3 AND {account_predicate})"
+            );
+            sqlx::query_scalar::<_, bool>(query.as_str())
+                .bind(claim.session_reference.as_str())
+                .bind(claim.principal_user_id.as_str())
+                .bind(now)
+                .fetch_one(&state.pool)
+                .await
+                .unwrap_or(false)
+        }
     }
-    let account_predicate = if state.dev_auth_enabled {
-        "TRUE"
-    } else {
-        "EXISTS (SELECT 1 FROM auth_account WHERE auth_account.principal_user_id = auth_session.principal_user_id AND auth_account.disabled_at IS NULL)"
-    };
-    let query = format!(
-        "SELECT EXISTS (SELECT 1 FROM auth_session WHERE token_hash = $1 AND principal_user_id = $2 AND revoked_at IS NULL AND expires_at > $3 AND {account_predicate})"
-    );
-    sqlx::query_scalar::<_, bool>(query.as_str())
-        .bind(claim.session_reference.as_str())
-        .bind(claim.principal_user_id.as_str())
-        .bind(now)
-        .fetch_one(&state.pool)
-        .await
-        .unwrap_or(false)
+}
+
+/// Liveness of the app session a ticket references: Some(live) when a session
+/// row matches the reference, None when the reference is not an app session.
+async fn app_session_live(
+    state: &ApiState,
+    claim: &WebsocketTicketClaim,
+    now: i64,
+) -> Option<bool> {
+    sqlx::query_scalar::<_, bool>(
+        r#"
+        SELECT (session.revoked_at IS NULL
+            AND session.expires_at > $3
+            AND (session.idle_expires_at IS NULL OR session.idle_expires_at > $3)
+            AND (method.method_id IS NULL OR method.status = 'active')
+            AND (principal.principal_user_id IS NULL OR principal.status = 'active'))
+        FROM auth_session AS session
+        LEFT JOIN authentication_method AS method
+          ON method.method_id = session.authenticated_via_method_id
+        LEFT JOIN platform_principal AS principal
+          ON principal.principal_user_id = session.principal_user_id
+        WHERE session.token_hash = $1
+          AND session.principal_user_id = $2
+        "#,
+    )
+    .bind(claim.session_reference.as_str())
+    .bind(claim.principal_user_id.as_str())
+    .bind(now)
+    .fetch_optional(&state.pool)
+    .await
+    .ok()
+    .flatten()
 }
 
 async fn ws(

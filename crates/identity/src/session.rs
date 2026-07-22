@@ -1,9 +1,9 @@
-use sqlx::PgConnection;
+use sqlx::{PgConnection, PgPool};
 use uuid::Uuid;
 
 use crate::error::IdentityFlowError;
 use crate::token::{generate_session_token, hash_token};
-use crate::Assurance;
+use crate::{Assurance, MethodKind};
 
 /// Backend-owned session lifetimes. Classic and WorkOS sessions share one
 /// storage shape; WorkOS sessions default shorter because provider revocation
@@ -136,6 +136,137 @@ pub async fn issue_session(
         principal_user_id: spec.principal_user_id.to_string(),
         expires_at: spec.expires_at,
         idle_expires_at: spec.idle_expires_at,
+    })
+}
+
+/// The authenticated identity behind a backend-issued app-session token.
+#[derive(Debug, Clone)]
+pub struct SessionIdentity {
+    pub principal_user_id: String,
+    pub global_capabilities: Vec<String>,
+    pub method: Option<(Uuid, MethodKind)>,
+    pub assurance: Option<Assurance>,
+    pub token_hash: String,
+    pub created_at: i64,
+    pub expires_at: i64,
+    pub idle_expires_at: Option<i64>,
+}
+
+/// Validate an app-session bearer: liveness, idle window, and — defense in
+/// depth beyond explicit revocation — the backing method and principal must
+/// still be active. Global capabilities come from the principal row when one
+/// exists, else from the session snapshot (dev / admin-grant sessions). The
+/// idle window slides: once a quarter of it has elapsed, a successful
+/// validation extends it, bounding write amplification.
+pub async fn validate_session(
+    pool: &PgPool,
+    token: &str,
+    policy: &SessionPolicy,
+    now: i64,
+) -> Result<SessionIdentity, IdentityFlowError> {
+    let token_hash = hash_token(token);
+    let row = sqlx::query_as::<
+        _,
+        (
+            String,
+            Vec<String>,
+            i64,
+            i64,
+            Option<i64>,
+            Option<String>,
+            Option<Uuid>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<Vec<String>>,
+        ),
+    >(
+        r#"
+        SELECT session.principal_user_id,
+               session.global_capabilities,
+               session.created_at,
+               session.expires_at,
+               session.idle_expires_at,
+               session.assurance,
+               session.authenticated_via_method_id,
+               method.kind,
+               method.status,
+               principal.status,
+               principal.global_capabilities
+        FROM auth_session AS session
+        LEFT JOIN authentication_method AS method
+          ON method.method_id = session.authenticated_via_method_id
+        LEFT JOIN platform_principal AS principal
+          ON principal.principal_user_id = session.principal_user_id
+        WHERE session.token_hash = $1
+          AND session.revoked_at IS NULL
+          AND session.expires_at > $2
+          AND (session.idle_expires_at IS NULL OR session.idle_expires_at > $2)
+        "#,
+    )
+    .bind(token_hash.as_str())
+    .bind(now)
+    .fetch_optional(pool)
+    .await?
+    .ok_or(IdentityFlowError::Unauthorized)?;
+
+    let (
+        principal_user_id,
+        snapshot_globals,
+        created_at,
+        expires_at,
+        idle_expires_at,
+        assurance,
+        method_id,
+        method_kind,
+        method_status,
+        principal_status,
+        principal_globals,
+    ) = row;
+    if let Some(status) = method_status.as_deref() {
+        if status != "active" {
+            return Err(IdentityFlowError::Unauthorized);
+        }
+    }
+    if let Some(status) = principal_status.as_deref() {
+        if status != "active" {
+            return Err(IdentityFlowError::Unauthorized);
+        }
+    }
+    let method = match (method_id, method_kind.as_deref().and_then(MethodKind::parse)) {
+        (Some(method_id), Some(kind)) => Some((method_id, kind)),
+        _ => None,
+    };
+
+    if let Some(idle_expires_at) = idle_expires_at {
+        let elapsed = policy
+            .idle_ttl_seconds
+            .saturating_sub(idle_expires_at.saturating_sub(now));
+        if elapsed > policy.idle_ttl_seconds / 4 {
+            sqlx::query(
+                r#"
+                UPDATE auth_session
+                SET idle_expires_at = $2
+                WHERE token_hash = $1
+                  AND revoked_at IS NULL
+                "#,
+            )
+            .bind(token_hash.as_str())
+            .bind(now.saturating_add(policy.idle_ttl_seconds))
+            .execute(pool)
+            .await?;
+        }
+    }
+
+    Ok(SessionIdentity {
+        principal_user_id,
+        global_capabilities: principal_globals.unwrap_or(snapshot_globals),
+        method,
+        assurance: assurance.as_deref().and_then(Assurance::parse),
+        token_hash,
+        created_at,
+        expires_at,
+        idle_expires_at,
     })
 }
 

@@ -174,7 +174,7 @@ async fn fresh_database_bootstraps_exactly_one_global_admin(pool: sqlx::PgPool) 
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
-async fn workos_access_token_binds_a_stable_local_principal_and_hides_legacy_auth(
+async fn workos_exchange_binds_a_stable_local_principal_and_coexists_with_classic(
     pool: sqlx::PgPool,
 ) {
     let verifier = StaticAccessTokenVerifier::new([(
@@ -190,14 +190,21 @@ async fn workos_access_token_binds_a_stable_local_principal_and_hides_legacy_aut
         test_api_state(pool.clone()).with_access_token_verifier(Arc::new(verifier)),
     );
 
+    // The WorkOS access token is exchanged once per sign-in for a backend
+    // session; repeating the exchange rebinds the same principal.
+    let mut session_token = String::new();
     for _ in 0..2 {
         let response = app
             .clone()
             .oneshot(
                 Request::builder()
-                    .uri("/auth/session")
+                    .method("POST")
+                    .uri("/auth/sessions")
                     .header("authorization", "Bearer workos-access-token")
-                    .body(Body::empty())
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        serde_json::json!({ "method": "workos" }).to_string(),
+                    ))
                     .unwrap(),
             )
             .await
@@ -205,9 +212,37 @@ async fn workos_access_token_binds_a_stable_local_principal_and_hides_legacy_aut
         assert_eq!(response.status(), StatusCode::OK);
         let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let session: serde_json::Value = serde_json::from_slice(&body).unwrap();
-        assert_eq!(session["expires_at"], 4_102_444_800i64);
-        assert_eq!(session["rotation_required"], serde_json::Value::Null);
+        session_token = session["session_token"].as_str().unwrap().to_string();
+        assert!(session_token.starts_with("fmss_"));
+        assert!(session["expires_at"].as_i64().unwrap() > 0);
     }
+
+    // The app session is the bearer; the provider JWT is rejected outside the
+    // exchange.
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/auth/session")
+                .header("authorization", format!("Bearer {session_token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/auth/session")
+                .header("authorization", "Bearer workos-access-token")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
 
     let bindings = sqlx::query_as::<_, (String, String, String)>(
         r#"
@@ -223,6 +258,8 @@ async fn workos_access_token_binds_a_stable_local_principal_and_hides_legacy_aut
     assert_eq!(bindings[0].0, "user_01HWORKOS");
     assert_eq!(bindings[0].2, "player@example.test");
 
+    // Classic routes stay mounted alongside WorkOS; malformed input is a
+    // validation reject, not a hidden surface.
     let response = app
         .clone()
         .oneshot(
@@ -230,13 +267,17 @@ async fn workos_access_token_binds_a_stable_local_principal_and_hides_legacy_aut
                 .method("POST")
                 .uri("/auth/accounts/login")
                 .header("content-type", "application/json")
-                .body(Body::from("{}"))
+                .body(Body::from(
+                    serde_json::json!({ "account_id": "", "password": "" }).to_string(),
+                ))
                 .unwrap(),
         )
         .await
         .unwrap();
-    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 
+    // Disabling the principal kills both the existing session and any future
+    // exchange.
     sqlx::query(
         "UPDATE platform_principal SET status = 'disabled', disabled_at = 1 WHERE principal_user_id = $1",
     )
@@ -245,11 +286,27 @@ async fn workos_access_token_binds_a_stable_local_principal_and_hides_legacy_aut
     .await
     .unwrap();
     let response = app
+        .clone()
         .oneshot(
             Request::builder()
                 .uri("/auth/session")
-                .header("authorization", "Bearer workos-access-token")
+                .header("authorization", format!("Bearer {session_token}"))
                 .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/auth/sessions")
+                .header("authorization", "Bearer workos-access-token")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    serde_json::json!({ "method": "workos" }).to_string(),
+                ))
                 .unwrap(),
         )
         .await
