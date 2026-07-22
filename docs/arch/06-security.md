@@ -130,8 +130,10 @@ is the wrong shape and the source of endless privilege-creep bugs.
 ```
 GlobalAdmin                 platform operations
 GlobalMod                   cross-game moderation / escalation
-HostOf(game)                run this game (deadlines, phases, reveals, replacements)
-CohostOf(game)              delegated host authority for this game
+HostOf(game)                primary host: run this game + structural acts (cohost grant/revoke, cohost policy, host transfer)
+CohostOf(game)              co-GM for this game: by default same game-run mutators as host;
+                            optional per-game denylist (set at create) may strip permission classes;
+                            host subsumes cohost; cohost never satisfies HostOf
 SlotOccupant(slot)          act as this slot: post, vote (bound to current occupant)
 ChannelMember(channel)      read/post in this channel
 DeadViewer(game)            read dead-visible content; dead slot may post in dead chat
