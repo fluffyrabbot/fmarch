@@ -41,7 +41,7 @@ export async function load({ cookies, locals, fetch, url }) {
     sessionToken,
     gameIndexPage,
     bootstrapCatalog,
-    includeLegacyIdentityOps: !workosEnabled(process.env),
+    includeLegacyIdentityOps: classicAuthEnabled(process.env),
     identityPrincipalUserId: url.searchParams.get("identity_principal_user_id") ?? "host_h",
   });
 
@@ -261,8 +261,10 @@ export const actions = {
   },
 };
 
-function workosEnabled(env) {
-  return typeof env?.WORKOS_CLIENT_ID === "string" && env.WORKOS_CLIENT_ID.trim() !== "";
+// Classic identity operations are first-class whenever the classic sign-in
+// method is enabled, independent of whether WorkOS is also configured.
+function classicAuthEnabled(env) {
+  return env?.FMARCH_CLASSIC_AUTH !== "0";
 }
 
 function requiredFormString(formData, field) {

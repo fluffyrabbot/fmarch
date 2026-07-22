@@ -35,6 +35,7 @@ const databaseUrl = process.env.DATABASE_URL;
 const host = "127.0.0.1";
 const game = randomUUID();
 const rootAdminSessionToken = `invite-proof-root-admin-${game}`;
+const seedSessionTokens = new Map();
 const inviteTokens = Object.freeze({
   admin: `invite-proof-admin-${game}`,
   host: `invite-proof-host-${game}`,
@@ -247,6 +248,25 @@ async function seedGame(apiBaseUrl) {
 
 async function seedRootAdminSession(url) {
   await runSql(url, `
+    INSERT INTO auth_account (
+      account_id,
+      principal_user_id,
+      password_hash,
+      created_at,
+      disabled_at,
+      global_capabilities
+    )
+    VALUES (
+      'root-admin-seed@local.fmarch.test',
+      'root_admin',
+      'seed-only-not-a-real-hash',
+      0,
+      NULL,
+      ARRAY['GlobalAdmin']::TEXT[]
+    )
+    ON CONFLICT (account_id) DO NOTHING;
+  `);
+  await runSql(url, `
     INSERT INTO auth_session (
       token_hash,
       principal_user_id,
@@ -444,7 +464,7 @@ async function driveInviteLogin({
         httpOnly: sessionCookie.httpOnly,
         sameSite: sessionCookie.sameSite,
         secure: sessionCookie.secure,
-        valuePrefix: sessionCookie.value.slice(0, "invite-session-".length),
+        valuePrefix: sessionCookie.value.slice(0, "fmss_".length),
       },
     };
   } finally {
@@ -509,7 +529,7 @@ async function driveAccountLogin({
         httpOnly: sessionCookie.httpOnly,
         sameSite: sessionCookie.sameSite,
         secure: sessionCookie.secure,
-        valuePrefix: sessionCookie.value.slice(0, "account-session-".length),
+        valuePrefix: sessionCookie.value.slice(0, "fmss_".length),
       },
     };
   } finally {
@@ -554,7 +574,7 @@ async function driveAccountRegistration({
     });
     const cookies = await page.context().cookies(frontendBaseUrl);
     const sessionCookie = cookies.find((cookie) => cookie.name === "fmarch_session");
-    if (sessionCookie === undefined || !sessionCookie.value.startsWith("registration-session-")) {
+    if (sessionCookie === undefined || !sessionCookie.value.startsWith("fmss_")) {
       throw new Error("account registration did not establish an opaque registration session");
     }
     sessionToken = sessionCookie.value;
@@ -651,7 +671,7 @@ async function driveAccountRegistration({
     accountId: accountCredential.accountId,
     principalUserId,
     sessionToken,
-    sessionCookiePrefix: "registration-session-",
+    sessionCookiePrefix: "fmss_",
     sessionHasNoGameCapabilities: true,
     gameRolePendingReplacement: true,
     gameRoleRecoveryTestId: "route-state-player-empty",
@@ -2587,10 +2607,32 @@ async function driveAdminIdentityAuditSurface({
       state: "visible",
       timeout: 15000,
     });
-    await page.getByTestId("admin-audit-link-identity-lifecycle").waitFor({
-      state: "visible",
-      timeout: 15000,
+    // Healthy diagnostics collapse by default; the identity-lifecycle card may
+    // sit inside collapsed disclosures. Force every ancestor open.
+    const identityAuditLink = page.getByTestId("admin-audit-link-identity-lifecycle");
+    await identityAuditLink.waitFor({ state: "attached", timeout: 15000 });
+    await identityAuditLink.evaluate((node) => {
+      for (let element = node.parentElement; element; element = element.parentElement) {
+        if (element.tagName === "DETAILS") {
+          element.open = true;
+        }
+      }
     });
+    try {
+      await identityAuditLink.waitFor({ state: "visible", timeout: 15000 });
+    } catch (error) {
+      const diagnostics = await identityAuditLink.evaluate((node) => {
+        const chain = [];
+        for (let element = node; element; element = element.parentElement) {
+          const style = getComputedStyle(element);
+          chain.push(
+            `${element.tagName}.${element.className} display=${style.display} visibility=${style.visibility} open=${element.open ?? "-"}`,
+          );
+        }
+        return chain.join(" | ");
+      });
+      throw new Error(`identity audit link stayed hidden: ${diagnostics}`, { cause: error });
+    }
     await page
       .getByTestId("admin-audit-link-identity-lifecycle")
       .evaluate((element) => {
@@ -3044,11 +3086,11 @@ function assertInviteProof(evidence) {
     evidence.identityLifecycle?.status !== "passed" ||
     evidence.identityLifecycle?.accountRegistration?.status !== "passed" ||
     evidence.identityLifecycle?.accountRegistration?.registrationSurfaceTestId !==
-      "auth-registration-surface" ||
+      "auth-registration-classic-surface" ||
     evidence.identityLifecycle?.accountRegistration?.securitySurfaceTestId !==
       "account-security-surface" ||
     evidence.identityLifecycle?.accountRegistration?.sessionCookiePrefix !==
-      "registration-session-" ||
+      "fmss_" ||
     evidence.identityLifecycle?.accountRegistration?.sessionHasNoGameCapabilities !== true ||
     evidence.identityLifecycle?.accountRegistration?.gameRolePendingReplacement !== true ||
     evidence.identityLifecycle?.accountRegistration?.gameRoleRecoveryTestId !==
@@ -3123,7 +3165,7 @@ function assertInviteProof(evidence) {
       accountCredentials.host.accountId ||
     !evidence.identityLifecycle?.accountLogin?.capabilityKinds?.includes("HostOf") ||
     evidence.identityLifecycle?.accountLogin?.sameRoleSurface !== true ||
-    evidence.identityLifecycle?.accountLogin?.cookieValuePrefix !== "account-session-" ||
+    evidence.identityLifecycle?.accountLogin?.cookieValuePrefix !== "fmss_" ||
     evidence.identityLifecycle?.accountLogin?.rawPasswordStored !== false ||
     evidence.identityLifecycle?.accountPasswordRotation?.status !== "passed" ||
     evidence.identityLifecycle?.accountPasswordRotation?.passwordAlgorithm !==
@@ -3371,7 +3413,7 @@ function assertInviteProof(evidence) {
     if (!evidence.roles[role].capabilityKinds.includes(capability)) {
       throw new Error(`${role} invite proof missing ${capability}`);
     }
-    if (evidence.roles[role].cookie.valuePrefix !== "invite-session-") {
+    if (evidence.roles[role].cookie.valuePrefix !== "fmss_") {
       throw new Error(`${role} invite proof did not use an invite-issued session`);
     }
   }
@@ -3447,6 +3489,10 @@ async function startApi(url) {
 
 async function startFrontend(apiBaseUrl) {
   process.env.FMARCH_API_BASE_URL = apiBaseUrl;
+  // This lane proves session-freshness semantics (rotation races, revocation,
+  // disablement) against out-of-band state changes; the SSR resolution cache
+  // would mask them for up to its TTL, so the proof runs cache-disabled.
+  process.env.FMARCH_SESSION_CACHE_TTL_MS = "0";
   const previousCwd = process.cwd();
   process.chdir(frontendRoot);
   try {
@@ -3481,10 +3527,43 @@ async function startFrontend(apiBaseUrl) {
   return `http://${host}:${address.port}`;
 }
 
+// The strict wire rejects any actor field in the envelope; seed commands act
+// as a principal by presenting a granted session for that principal instead.
+async function seedSessionToken(apiBaseUrl, principalUserId) {
+  if (principalUserId === "root_admin") {
+    return rootAdminSessionToken;
+  }
+  const cached = seedSessionTokens.get(principalUserId);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const granted = await fetchJson(`${apiBaseUrl}/auth/session-grants`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${rootAdminSessionToken}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      principal_user_id: principalUserId,
+      expires_at: 4102444800,
+      global_capabilities: ["GlobalAdmin"],
+    }),
+  });
+  if (typeof granted.session_token !== "string" || granted.session_token === "") {
+    throw new Error(`session grant for ${principalUserId} returned no session_token`);
+  }
+  seedSessionTokens.set(principalUserId, granted.session_token);
+  return granted.session_token;
+}
+
 async function sendCommand(apiBaseUrl, id, principalUserId, command) {
+  const sessionToken = await seedSessionToken(apiBaseUrl, principalUserId);
   const result = await fetchJson(`${apiBaseUrl}/commands`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: {
+      authorization: `Bearer ${sessionToken}`,
+      "content-type": "application/json",
+    },
     body: JSON.stringify({
       v: 1,
       id,
@@ -3492,7 +3571,6 @@ async function sendCommand(apiBaseUrl, id, principalUserId, command) {
         kind: "Command",
         body: {
           command_id: randomUUID(),
-          principal_user_id: principalUserId,
           command,
         },
       },

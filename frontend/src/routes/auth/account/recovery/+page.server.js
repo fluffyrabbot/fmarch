@@ -65,7 +65,7 @@ export const actions = {
     };
   },
 
-  default: async ({ cookies, fetch, getClientAddress, request }) => {
+  recover: async ({ cookies, fetch, getClientAddress, request }) => {
     const formData = await request.formData();
     const accountId = optionalField(formData.get("accountId"));
     const recoveryToken = credentialField(formData.get("recoveryToken"));

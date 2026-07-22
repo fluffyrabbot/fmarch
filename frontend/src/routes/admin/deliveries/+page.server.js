@@ -3,7 +3,7 @@ import { serverApiBaseUrl } from "../../../lib/server/api-base.mjs";
 import { accessTokenForRequest } from "../../../lib/server/session-capabilities.mjs";
 
 export async function load({ cookies, fetch, locals, url }) {
-  if (workosEnabled(process.env)) throw redirect(303, "/admin");
+  if (!classicAuthEnabled(process.env)) throw redirect(303, "/admin");
   if (typeof locals.principalUserId !== "string" || locals.principalUserId.trim() === "") {
     throw redirect(303, `/auth/login?returnTo=${encodeURIComponent(`${url.pathname}${url.search}`)}`);
   }
@@ -26,8 +26,8 @@ export async function load({ cookies, fetch, locals, url }) {
 
 export const actions = {
   retry: async ({ cookies, fetch, locals, request }) => {
-    if (workosEnabled(process.env)) {
-      return fail(404, { state: "reject", message: "WorkOS owns production identity delivery" });
+    if (!classicAuthEnabled(process.env)) {
+      return fail(404, { state: "reject", message: "Classic identity delivery is disabled on this deployment" });
     }
     const capabilities = capabilityKinds(locals.resolvedCapabilities);
     if (!capabilities.has("GlobalAdmin")) {
@@ -65,8 +65,10 @@ export const actions = {
   },
 };
 
-function workosEnabled(env) {
-  return typeof env?.WORKOS_CLIENT_ID === "string" && env.WORKOS_CLIENT_ID.trim() !== "";
+// Delivery operations belong to the classic sign-in method; they are gated by
+// classic availability, not by whether WorkOS is also configured.
+function classicAuthEnabled(env) {
+  return env?.FMARCH_CLASSIC_AUTH !== "0";
 }
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
