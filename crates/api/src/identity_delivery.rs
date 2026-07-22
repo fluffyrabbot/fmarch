@@ -42,6 +42,7 @@ pub struct IdentityDeliveryAttempt {
     pub account_id: String,
     pub principal_user_id: String,
     pub credential_hash: String,
+    pub credential_expires_at: i64,
     pub credential_material: Option<String>,
     pub attempt_number: i32,
 }
@@ -55,6 +56,7 @@ impl fmt::Debug for IdentityDeliveryAttempt {
             .field("account_id", &self.account_id)
             .field("principal_user_id", &self.principal_user_id)
             .field("credential_hash", &self.credential_hash)
+            .field("credential_expires_at", &self.credential_expires_at)
             .field(
                 "credential_material",
                 &self.credential_material.as_ref().map(|_| "[sealed]"),
@@ -70,6 +72,7 @@ pub enum IdentityDeliveryFailureCode {
     ProviderUnavailable,
     RecipientRejected,
     CredentialUnavailable,
+    CredentialExpired,
 }
 
 impl IdentityDeliveryFailureCode {
@@ -77,6 +80,7 @@ impl IdentityDeliveryFailureCode {
         match code {
             Some("recipient_rejected") => Self::RecipientRejected,
             Some("credential_unavailable") => Self::CredentialUnavailable,
+            Some("credential_expired") => Self::CredentialExpired,
             _ => Self::ProviderUnavailable,
         }
     }
@@ -89,6 +93,7 @@ impl IdentityDeliveryFailureCode {
             Self::ProviderUnavailable => "provider_unavailable",
             Self::RecipientRejected => "recipient_rejected",
             Self::CredentialUnavailable => "credential_unavailable",
+            Self::CredentialExpired => "credential_expired",
         }
     }
 }
@@ -386,7 +391,7 @@ pub async fn process_identity_delivery_intent(
     else {
         return Ok(None);
     };
-    let outcome = deliver_claim(&mut claim, gateway).await;
+    let outcome = deliver_claim(&mut claim, gateway, now).await;
     finalize_delivery(pool, claim, outcome, actor_user_id, event_kind, now).await
 }
 
@@ -399,7 +404,7 @@ pub async fn process_next_identity_delivery(
         return Ok(None);
     };
     let actor_user_id = claim.attempt.principal_user_id.clone();
-    let outcome = deliver_claim(&mut claim, gateway).await;
+    let outcome = deliver_claim(&mut claim, gateway, now).await;
     let event_kind = match &outcome {
         IdentityDeliveryOutcome::Delivered { .. } => "auth_delivery_delivered",
         IdentityDeliveryOutcome::RetryableFailure(_) => "auth_delivery_retryable_failed",
@@ -434,9 +439,9 @@ async fn claim_delivery(
     now: i64,
 ) -> Result<Option<ClaimedIdentityDelivery>, IdentityDeliveryError> {
     let mut tx = pool.begin().await?;
-    let row = sqlx::query_as::<_, (Uuid, String, String, String, String, i32, Option<Value>)>(
+    let row = sqlx::query_as::<_, (Uuid, String, String, String, String, i64, i32, Option<Value>)>(
         r#"
-        SELECT delivery_id, delivery_kind, account_id, principal_user_id, credential_hash, attempt_count, credential_envelope
+        SELECT delivery_id, delivery_kind, account_id, principal_user_id, credential_hash, credential_expires_at, attempt_count, credential_envelope
         FROM auth_delivery_intent
         WHERE provider_id = $1
           AND ($2::UUID IS NULL OR delivery_id = $2)
@@ -461,6 +466,7 @@ async fn claim_delivery(
         account_id,
         principal_user_id,
         credential_hash,
+        credential_expires_at,
         attempt_count,
         credential_envelope,
     )) = row
@@ -501,6 +507,7 @@ async fn claim_delivery(
             account_id,
             principal_user_id,
             credential_hash,
+            credential_expires_at,
             credential_material: None,
             attempt_number: attempt_count + 1,
         },
@@ -513,7 +520,13 @@ async fn claim_delivery(
 async fn deliver_claim(
     claim: &mut ClaimedIdentityDelivery,
     gateway: &dyn IdentityDeliveryGateway,
+    now: i64,
 ) -> IdentityDeliveryOutcome {
+    if claim.attempt.credential_expires_at <= now {
+        return IdentityDeliveryOutcome::PermanentFailure(
+            IdentityDeliveryFailureCode::CredentialExpired,
+        );
+    }
     let Some(envelope) = claim.credential_envelope.as_ref() else {
         return IdentityDeliveryOutcome::PermanentFailure(
             IdentityDeliveryFailureCode::CredentialUnavailable,

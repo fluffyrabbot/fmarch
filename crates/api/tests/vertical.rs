@@ -12,7 +12,7 @@ use futures_util::StreamExt;
 use media::{MediaLimits, MediaStore, VariantLimits};
 use std::collections::BTreeSet;
 use std::path::Path;
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 use tempfile::TempDir;
 use tower::ServiceExt;
 use uuid::Uuid;
@@ -60,6 +60,49 @@ impl IdentityDeliveryGateway for PermanentFailureIdentityDeliveryGateway {
             IdentityDeliveryOutcome::PermanentFailure(
                 IdentityDeliveryFailureCode::RecipientRejected,
             )
+        })
+    }
+}
+
+#[derive(Debug, Default)]
+struct RecoveryProofIdentityDeliveryGateway {
+    attempts: Mutex<Vec<(Uuid, i32, String)>>,
+}
+
+impl RecoveryProofIdentityDeliveryGateway {
+    fn attempts(&self) -> Vec<(Uuid, i32, String)> {
+        self.attempts
+            .lock()
+            .expect("recovery proof attempts")
+            .clone()
+    }
+}
+
+impl IdentityDeliveryGateway for RecoveryProofIdentityDeliveryGateway {
+    fn provider_id(&self) -> &'static str {
+        "fixture-recovery-proof"
+    }
+
+    fn deliver<'a>(&'a self, attempt: &'a IdentityDeliveryAttempt) -> IdentityDeliveryFuture<'a> {
+        Box::pin(async move {
+            let credential = attempt
+                .credential_material
+                .as_deref()
+                .expect("recovery delivery credential remains available only at the gateway")
+                .to_string();
+            self.attempts
+                .lock()
+                .expect("record recovery proof attempt")
+                .push((attempt.delivery_id, attempt.attempt_number, credential));
+            if attempt.attempt_number == 1 {
+                IdentityDeliveryOutcome::RetryableFailure(
+                    IdentityDeliveryFailureCode::LocalTransient,
+                )
+            } else {
+                IdentityDeliveryOutcome::Delivered {
+                    provider_receipt_id: format!("recovery-proof-{}", attempt.delivery_id),
+                }
+            }
         })
     }
 }
@@ -7263,7 +7306,12 @@ async fn global_admin_account_login_creates_normal_role_session(pool: sqlx::PgPo
 
 #[sqlx::test(migrations = "../projections/migrations")]
 async fn public_recovery_request_is_non_enumerating_and_rotates_credentials(pool: sqlx::PgPool) {
-    let app = router_with_dev_auth(pool.clone());
+    let gateway = Arc::new(RecoveryProofIdentityDeliveryGateway::default());
+    let app = api::router_with_state(
+        test_api_state(pool.clone())
+            .with_dev_auth(true)
+            .with_identity_delivery_gateway(gateway.clone()),
+    );
     let admin_token = "recovery-request-admin";
     let account_id = "recovery-request@example.test";
     let response = app
@@ -7338,6 +7386,206 @@ async fn public_recovery_request_is_non_enumerating_and_rotates_credentials(pool
     .await
     .unwrap();
     assert_eq!(delivery_count, 2);
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn recovery_delivery_is_expiry_bound_redacted_retryable_and_replay_safe(pool: sqlx::PgPool) {
+    let gateway = Arc::new(RecoveryProofIdentityDeliveryGateway::default());
+    let app = api::router_with_state(
+        test_api_state(pool.clone())
+            .with_dev_auth(true)
+            .with_identity_delivery_gateway(gateway.clone()),
+    );
+    let admin_token = "recovery-delivery-admin";
+    let account_id = "recovery-delivery@example.test";
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/auth/dev-session")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    serde_json::json!({
+                        "token": admin_token,
+                        "principal_user_id": "recovery_delivery_admin",
+                        "expires_at": 4_102_444_800i64,
+                        "global_capabilities": ["GlobalAdmin"]
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    create_test_auth_account(
+        &app,
+        admin_token,
+        account_id,
+        "correct horse battery",
+        "recovery_delivery_user",
+    )
+    .await;
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/auth/accounts/recovery-requests")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    serde_json::json!({ "account_id": account_id }).to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let response_bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    assert_eq!(
+        serde_json::from_slice::<serde_json::Value>(&response_bytes).unwrap(),
+        serde_json::json!({ "status": "accepted" })
+    );
+
+    let (delivery_id, expires_at, envelope_text) = sqlx::query_as::<_, (Uuid, i64, String)>(
+        r#"
+        SELECT delivery_id, credential_expires_at, credential_envelope::TEXT
+        FROM auth_delivery_intent
+        WHERE account_id = $1 AND delivery_kind = 'recovery'
+        ORDER BY created_at DESC, delivery_id DESC
+        LIMIT 1
+        "#,
+    )
+    .bind(account_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let first = process_next_identity_delivery(&pool, gateway.as_ref(), unix_now_seconds())
+        .await
+        .unwrap()
+        .expect("first recovery delivery attempt");
+    assert_eq!(first.status, "retryable_failed");
+    assert_eq!(first.outcome_code.as_deref(), Some("local_transient"));
+    let attempts = gateway.attempts();
+    assert_eq!(attempts.len(), 1);
+    let recovery_token = attempts[0].2.clone();
+    assert!(recovery_token.starts_with("account-recovery-"));
+    assert!(!String::from_utf8_lossy(&response_bytes).contains(&recovery_token));
+    assert!(!envelope_text.contains(&recovery_token));
+    let debug_attempt = format!(
+        "{:?}",
+        IdentityDeliveryAttempt {
+            delivery_id,
+            kind: api::identity_delivery::IdentityDeliveryKind::Recovery,
+            account_id: account_id.to_string(),
+            principal_user_id: "recovery_delivery_user".to_string(),
+            credential_hash: "redacted-hash".to_string(),
+            credential_expires_at: expires_at,
+            credential_material: Some(recovery_token.clone()),
+            attempt_number: 1,
+        }
+    );
+    assert!(!debug_attempt.contains(&recovery_token));
+    assert!(debug_attempt.contains("[sealed]"));
+
+    sqlx::query("UPDATE auth_delivery_intent SET next_attempt_at = 0 WHERE delivery_id = $1")
+        .bind(delivery_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/auth/delivery-intents/{delivery_id}/retry"))
+                .header("authorization", format!("Bearer {admin_token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let attempts = gateway.attempts();
+    assert_eq!(attempts.len(), 2);
+    assert_eq!(attempts[0].2, attempts[1].2);
+
+    for expected_status in [StatusCode::OK, StatusCode::UNAUTHORIZED] {
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/auth/accounts/recoveries")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        serde_json::json!({
+                            "account_id": account_id,
+                            "recovery_token": recovery_token,
+                            "new_password": "new correct horse battery"
+                        })
+                        .to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), expected_status);
+    }
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/auth/delivery-intents/{delivery_id}/retry"))
+                .header("authorization", format!("Bearer {admin_token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::CONFLICT);
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/auth/accounts/recovery-requests")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    serde_json::json!({ "account_id": account_id }).to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let (expiring_delivery_id, expiring_at) = sqlx::query_as::<_, (Uuid, i64)>(
+        r#"
+        SELECT delivery_id, credential_expires_at
+        FROM auth_delivery_intent
+        WHERE account_id = $1 AND delivery_kind = 'recovery' AND delivery_id <> $2
+        ORDER BY created_at DESC, delivery_id DESC
+        LIMIT 1
+        "#,
+    )
+    .bind(account_id)
+    .bind(delivery_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let expired = process_next_identity_delivery(&pool, gateway.as_ref(), expiring_at)
+        .await
+        .unwrap()
+        .expect("expired recovery delivery is finalized");
+    assert_eq!(expired.delivery_id, expiring_delivery_id);
+    assert_eq!(expired.status, "permanent_failed");
+    assert_eq!(expired.outcome_code.as_deref(), Some("credential_expired"));
+    assert_eq!(gateway.attempts().len(), 2);
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]

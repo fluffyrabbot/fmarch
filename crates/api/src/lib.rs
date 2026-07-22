@@ -1653,6 +1653,7 @@ async fn issue_auth_account_recovery_credential(
         principal_user_id.as_str(),
         recovery_hash.as_str(),
         recovery_token.as_str(),
+        request.expires_at,
         now,
     )
     .await?;
@@ -1777,6 +1778,7 @@ async fn request_auth_account_recovery(
         principal_user_id.as_str(),
         recovery_hash.as_str(),
         recovery_token.as_str(),
+        expires_at,
         now,
     )
     .await?;
@@ -2532,6 +2534,7 @@ async fn create_auth_invite(
         account_principal_user_id.as_str(),
         invite_hash.as_str(),
         invite_token,
+        request.expires_at,
         now,
     )
     .await?;
@@ -3375,6 +3378,7 @@ async fn deliver_auth_credential(
     principal_user_id: &str,
     credential_hash: &str,
     credential_material: &str,
+    credential_expires_at: i64,
     now: i64,
 ) -> Result<AuthDeliveryReceipt, ApiError> {
     let delivery_id = Uuid::new_v4();
@@ -3396,6 +3400,7 @@ async fn deliver_auth_credential(
             account_id,
             principal_user_id,
             credential_hash,
+            credential_expires_at,
             credential_envelope,
             status,
             provider_id,
@@ -3408,7 +3413,7 @@ async fn deliver_auth_credential(
             created_at,
             updated_at
         )
-        VALUES ($1, $2, $3, $4, $5, $6::JSONB, 'queued', $7, 'queued', NULL, 0, $8, NULL, NULL, $8, $8)
+        VALUES ($1, $2, $3, $4, $5, $6, $7::JSONB, 'queued', $8, 'queued', NULL, 0, $9, NULL, NULL, $9, $9)
         "#,
     )
     .bind(delivery_id)
@@ -3416,6 +3421,7 @@ async fn deliver_auth_credential(
     .bind(account_id)
     .bind(principal_user_id)
     .bind(credential_hash)
+    .bind(credential_expires_at)
     .bind(credential_envelope.to_string())
     .bind(&provider_id)
     .bind(now)

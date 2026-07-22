@@ -188,6 +188,7 @@ const EXPECTED_CONSTRAINTS: &[&str] = &[
     "auth_delivery_intent_account_id_fkey:f",
     "auth_delivery_intent_attempt_count_check:c",
     "auth_delivery_intent_credential_envelope_check:c",
+    "auth_delivery_intent_credential_expiry_check:c",
     "auth_delivery_intent_credential_hash_key:u",
     "auth_delivery_intent_delivery_kind_check:c",
     "auth_delivery_intent_delivery_shape_check:c",
