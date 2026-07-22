@@ -2,6 +2,7 @@
   import { tick } from "svelte";
   import ConfirmationShell from "$lib/app/ConfirmationShell.svelte";
   import AppStatus from "$lib/app/AppStatus.svelte";
+  import CommandRecovery from "$lib/app/CommandRecovery.svelte";
   import {
     containTabWithinConfirmation,
     focusFirstNewConfirmation,
@@ -17,6 +18,7 @@
   export let onSetupAction = () => {};
   export let onConfirmSetupAction = () => {};
   export let onCancelSetupAction = () => {};
+  export let onRetrySetupAction = () => {};
 
   let confirmButtonRefs = {};
   let triggerButtonRefs = {};
@@ -45,6 +47,11 @@
 
   async function confirmSetupAction(item) {
     await onConfirmSetupAction(item);
+    await returnFocusToTrigger({ item, triggerButtonRefs, tick });
+  }
+
+  async function retrySetupAction(item) {
+    await onRetrySetupAction(item);
     await returnFocusToTrigger({ item, triggerButtonRefs, tick });
   }
 
@@ -92,6 +99,7 @@
             href={item.href}
             data-min-touch-target-px={item.minTouchTargetPx}
             data-testid={item.triggerTestId}
+            data-command-recovery-return={item.id}
           >
             {item.buttonLabel}
           </a>
@@ -120,6 +128,11 @@
               status={item.status}
               testId={item.statusTestId}
               className="admin-surface__command-status"
+            />
+            <CommandRecovery
+              status={item.status}
+              onRetry={() => retrySetupAction(item)}
+              onCancel={() => cancelSetupAction(item)}
             />
           {/if}
         </div>

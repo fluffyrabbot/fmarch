@@ -8,6 +8,7 @@ import {
   exposeAdminFormResult,
   adminFormStatusKey,
   adminPendingStatus,
+  adminInterruptedStatus,
   adminReadOnlyStatus,
   adminRejectStatus,
   adminSetupActionMode,
@@ -19,6 +20,7 @@ import {
   recordAdminFormStatus,
   sendAdminSetupCommand,
 } from "./admin-route-controller.mjs";
+import { CommandInterruptedError } from "../../lib/app/command-interruption.mjs";
 
 test("admin route controller records server form results once per status key", () => {
   const form = {
@@ -124,6 +126,23 @@ test("admin route controller updates immutable command status maps", () => {
     "create-game": { state: "pending" },
   });
   assert.deepEqual(clearAdminCommandStatus(statuses, "create-game"), {});
+});
+
+test("admin interruption status preserves confirmation and retry identity", () => {
+  const item = {
+    id: "create-game",
+    commandAction: "create_game",
+    confirmMessage: "Create midsummer",
+  };
+  const confirmationStatus = adminConfirmStatus(item);
+  const status = adminInterruptedStatus(
+    new CommandInterruptedError("timeout"),
+    { item, commandId: "admin-command-1", confirmationStatus },
+  );
+
+  assert.equal(status.state, "interrupted");
+  assert.equal(status.commandId, "admin-command-1");
+  assert.equal(status.confirmationTrace.actionId, "create-game");
 });
 
 test("admin route controller selects typed admin command config without ambient authority", () => {

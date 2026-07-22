@@ -43,6 +43,7 @@ function receiptItem(receipt) {
   const state = String(receipt?.state ?? "info");
   return Object.freeze({
     actionId,
+    current: receipt?.current === true,
     state,
     label: labelForAction(actionId),
     message: String(receipt?.message ?? "Command updated"),

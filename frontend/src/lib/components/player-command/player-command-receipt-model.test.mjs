@@ -43,6 +43,7 @@ test("player command receipt model renders the current command status", () => {
   assert.equal(view.summary, "1 recent player command receipt");
   assert.deepEqual(view.items[0], {
     actionId: "submit_vote",
+    current: true,
     state: "reject",
     label: "submit vote",
     message: "Reject PhaseLocked: reload and retry",

@@ -22,6 +22,7 @@ import {
   mergeThreadPage,
   threadPageStatusForResult,
 } from "../../../lib/components/player-thread/player-thread-model.mjs";
+import { commandInterruptionStatus } from "../../../lib/app/command-interruption.mjs";
 
 export function buildPlayerProjectionInitialSnapshot(data) {
   return Object.freeze({
@@ -138,6 +139,16 @@ export function playerCommandErrorStatus(error, action = null) {
     : attachCommandTrace(status, playerCommandTrace(action));
 }
 
+export function playerCommandInterruptedStatus(error, { action, commandId }) {
+  const status = commandInterruptionStatus(error, {
+    actionId: action,
+    commandId,
+  });
+  return status === null
+    ? null
+    : attachCommandTrace(status, playerCommandTrace(action));
+}
+
 export function recordPlayerCommandReceipt(
   commandReceipts,
   action,
@@ -165,6 +176,12 @@ export function recordPlayerCommandReceipt(
       .map((item) => Object.freeze({ ...item, current: false })),
     receipt,
   ]);
+}
+
+export function clearPlayerCommandReceipt(commandReceipts, action) {
+  return Object.freeze(
+    commandReceipts.filter((item) => item.actionId !== String(action)),
+  );
 }
 
 export function playerThreadPendingStatus() {
@@ -284,6 +301,7 @@ export async function submitPlayerRouteCommand({
   composerBody,
   media = [],
   commandIdFactory,
+  signal,
   data,
   fetchImpl,
   projectionStore,
@@ -293,6 +311,7 @@ export async function submitPlayerRouteCommand({
     ...buildPlayerCommandRequest({ data, action, composerBody, media }),
     commandIdFactory,
     fetchImpl,
+    signal,
   });
   if (commandStatus?.state === "reject" && commandStatus?.error === "NotYourSlot") {
     projectionStore.applySnapshot({
@@ -309,7 +328,7 @@ export async function submitPlayerRouteCommand({
     commandStatus,
   });
   if (refreshKeys.length > 0) {
-    await projectionStore.refresh(refreshKeys, { fetchImpl });
+    await projectionStore.refresh(refreshKeys, { fetchImpl, signal });
   }
   return Object.freeze({
     commandStatus,

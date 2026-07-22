@@ -8,6 +8,7 @@ import {
   loadOlderPlayerThreadPage,
   normalizePrivateRows,
   playerCommandErrorStatus,
+  playerCommandInterruptedStatus,
   playerCommandPendingStatus,
   playerCommandTrace,
   playerRefreshKeysForAction,
@@ -15,6 +16,7 @@ import {
   playerRefreshKeysForLiveDelta,
   playerResyncKeys,
   recordPlayerCommandReceipt,
+  clearPlayerCommandReceipt,
   playerThreadErrorStatus,
   playerThreadNoOlderStatus,
   playerThreadPendingStatus,
@@ -23,6 +25,20 @@ import {
   togglePrivateItemExpansion,
   uploadPlayerPostMedia,
 } from "./player-route-controller.mjs";
+import { CommandInterruptedError } from "../../../lib/app/command-interruption.mjs";
+
+test("player interrupted command keeps one retry identity and can be dismissed", () => {
+  const status = playerCommandInterruptedStatus(
+    new CommandInterruptedError("connection_lost"),
+    { action: "submit_post", commandId: "player-command-1" },
+  );
+  const receipts = recordPlayerCommandReceipt([], "submit_post", status);
+
+  assert.equal(status.state, "interrupted");
+  assert.equal(status.commandId, "player-command-1");
+  assert.equal(status.commandTrace.actionId, "submit_post");
+  assert.deepEqual(clearPlayerCommandReceipt(receipts, "submit_post"), []);
+});
 
 test("player route controller builds projection store boundaries from route data", () => {
   const data = fixtureData();

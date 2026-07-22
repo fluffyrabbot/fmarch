@@ -99,7 +99,8 @@ function buildHostControlGroup({ group, commandStatuses, nextGroupId }) {
             ...action,
             disabled:
               action.disabled === true ||
-              commandStatuses[action.id]?.state === "pending",
+              commandStatuses[action.id]?.state === "pending" ||
+              commandStatuses[action.id]?.state === "interrupted",
           }),
           priority:
             group.id === nextGroupId && actionIndex === 0 ? "primary" : "secondary",
@@ -165,6 +166,9 @@ export function commandStatusMessage(status, actionLabel = "Action") {
   }
   if (status.state === "pending") {
     return `${actionLabel} is in progress.`;
+  }
+  if (status.state === "interrupted") {
+    return String(status.message ?? `${actionLabel} was interrupted.`);
   }
   if (status.state === "ack") {
     return `${actionLabel} completed.`;

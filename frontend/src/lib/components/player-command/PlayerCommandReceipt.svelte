@@ -1,10 +1,14 @@
 <script>
   import AppStatus from "$lib/app/AppStatus.svelte";
+  import CommandRecovery from "$lib/app/CommandRecovery.svelte";
   import {
     buildPlayerCommandReceiptViewModel,
   } from "./player-command-receipt-model.mjs";
 
   export let receipts = [];
+  export let currentStatus = null;
+  export let onRetry = () => {};
+  export let onCancel = () => {};
 
   $: view = buildPlayerCommandReceiptViewModel({ receipts });
 </script>
@@ -53,6 +57,13 @@
               testId={item.statusTestId}
               className="fm-ledger__status"
             />
+            {#if item.current}
+              <CommandRecovery
+                status={currentStatus}
+                {onRetry}
+                {onCancel}
+              />
+            {/if}
           </article>
         {/each}
       </div>

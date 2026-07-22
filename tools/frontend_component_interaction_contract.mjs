@@ -94,6 +94,7 @@ async function proveSourceContracts() {
         "onConfirmSetupAction(item)",
         'action="?/grantSession"',
         'data-testid="admin-session-grant-token"',
+        "<CommandRecovery",
       ],
     }),
     await proveSourceContract({
@@ -115,10 +116,15 @@ async function proveSourceContracts() {
       ],
     }),
     await proveSourceContract({
+      component: "PlayerCommandReceipt",
+      path: "frontend/src/lib/components/player-command/PlayerCommandReceipt.svelte",
+      requiredSnippets: ["<CommandRecovery", "status={currentStatus}"],
+    }),
+    await proveSourceContract({
       component: "HostControlSurface",
       path: "frontend/src/lib/components/host-action/HostControlSurface.svelte",
       requiredSnippets: [
-        "<HostControlGroup {control} {onDispatch} />",
+        "<HostControlGroup {control} {onDispatch} {onRetry} {onCancel} />",
       ],
     }),
     await proveSourceContract({
@@ -126,6 +132,7 @@ async function proveSourceContracts() {
       path: "frontend/src/lib/components/host-action/HostControlGroup.svelte",
       requiredSnippets: [
         "<HostAction action={action.config} onDispatch={onDispatch} />",
+        "<CommandRecovery",
       ],
     }),
     await proveSourceContract({

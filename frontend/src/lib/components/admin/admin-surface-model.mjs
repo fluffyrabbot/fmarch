@@ -3,6 +3,7 @@ import {
   buildConfirmationActionViewModel,
 } from "../../app/confirmation-action-model.mjs";
 import { humanizeCapabilityLabel } from "../../app/presentation-copy.mjs";
+import { isCommandInterruptionStatus } from "../../app/command-interruption.mjs";
 
 export const ADMIN_SURFACE_CONTRACT = Object.freeze({
   minTouchTargetPx: 44,
@@ -200,6 +201,7 @@ export function buildAdminSetupGridViewModel({
       items.map((item) => {
         const status = commandStatuses[item.id] ?? null;
         const commandPending = status?.state === "pending";
+        const commandInterrupted = isCommandInterruptionStatus(status);
         const visibleStatus = status === null
           ? null
           : Object.freeze({
@@ -212,7 +214,8 @@ export function buildAdminSetupGridViewModel({
           href: item.href ?? null,
           minTouchTargetPx: ADMIN_SURFACE_CONTRACT.minTouchTargetPx,
           commandPending,
-          triggerDisabled: commandPending,
+          commandInterrupted,
+          triggerDisabled: commandPending || commandInterrupted,
           status: visibleStatus,
           protocolStatusMessage: status?.message ?? "",
           statusTestId: `admin-command-status-${item.id}`,

@@ -9,6 +9,7 @@ import {
 test("projection store refreshes cold-load keys and preserves failed projections", async () => {
   const snapshots = [];
   const fetchRequests = [];
+  const abortController = new AbortController();
   const store = createProjectionStore({
     initialSnapshot: {
       thread: { posts: [] },
@@ -29,6 +30,7 @@ test("projection store refreshes cold-load keys and preserves failed projections
 
   const unsubscribe = store.subscribe((snapshot) => snapshots.push(snapshot));
   const refreshed = await store.refresh(["thread", "votecount"], {
+    signal: abortController.signal,
     fetchImpl: async (url, options) => {
       fetchRequests.push({ url, options });
       if (url.startsWith("/thread?")) {
@@ -49,11 +51,19 @@ test("projection store refreshes cold-load keys and preserves failed projections
   assert.deepEqual(fetchRequests, [
     {
       url: "/thread?_fmarch_projection_refresh=1",
-      options: { cache: "no-store", headers: { accept: "application/json" } },
+      options: {
+        cache: "no-store",
+        headers: { accept: "application/json" },
+        signal: abortController.signal,
+      },
     },
     {
       url: "/votecount?_fmarch_projection_refresh=2",
-      options: { cache: "no-store", headers: { accept: "application/json" } },
+      options: {
+        cache: "no-store",
+        headers: { accept: "application/json" },
+        signal: abortController.signal,
+      },
     },
   ]);
 });

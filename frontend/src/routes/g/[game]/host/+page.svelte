@@ -39,9 +39,11 @@
     buildHostProjectionColdLoads,
     buildHostProjectionInitialSnapshot,
     hostCommandErrorOutcome,
+    hostCommandInterruptedOutcome,
     hostCommandPendingStatus,
     hostProjectionResyncKeys,
     recordHostCommandStatus,
+    clearHostCommandStatus,
     sendHostRouteAction,
   } from "./host-route-controller.mjs";
   import {
@@ -51,6 +53,11 @@
   } from "./host-route-model.mjs";
   import { activePhaseTheme, phaseThemeKey } from "$lib/app/phase-theme.mjs";
   import { createProjectionStore } from "$lib/app/projection-store.mjs";
+  import {
+    commandAttemptId,
+    commandAttemptTimeoutMs,
+    executeCommandAttempt,
+  } from "$lib/app/command-interruption.mjs";
   import "$lib/components/host-action/host-console-critical-path.css";
 
   export let data;
@@ -59,6 +66,7 @@
   let dispatched = [];
   let commandOutcomes = [];
   let commandStatuses = {};
+  let commandRecoveryAttempts = {};
   let projection = {
     phase: data.phase,
     replacement: data.replacement,
@@ -188,21 +196,37 @@
     };
   });
 
-  async function handleDispatch(event) {
+  async function handleDispatch(event, recoveredAttempt = null) {
     if (commandStatuses[event.actionId]?.state === "pending") {
       return;
     }
-    dispatched = appendHostActionEvent(dispatched, event);
+    if (recoveredAttempt === null) {
+      dispatched = appendHostActionEvent(dispatched, event);
+    }
+    const attempt = recoveredAttempt ?? Object.freeze({
+      event,
+      commandId: commandAttemptId(),
+    });
     const optimisticStatus = hostCommandPendingStatus(event);
     recordCommandStatus(event.actionId, optimisticStatus);
 
     try {
-      const result = await sendHostRouteAction({
-        event,
-        data,
-        fetchImpl: fetch,
-        projectionStore,
+      const result = await executeCommandAttempt({
+        timeoutMs: commandAttemptTimeoutMs(
+          typeof window === "undefined" ? null : window,
+        ),
+        operation: ({ signal }) => sendHostRouteAction({
+          event,
+          data,
+          fetchImpl: fetch,
+          commandIdFactory: () => attempt.commandId,
+          signal,
+          projectionStore,
+        }),
       });
+      const nextAttempts = { ...commandRecoveryAttempts };
+      delete nextAttempts[event.actionId];
+      commandRecoveryAttempts = nextAttempts;
       const outcome = result.outcome;
       const tracedOutcome = attachEventConfirmationTrace(outcome, event);
       commandOutcomes = appendHostCommandOutcome(commandOutcomes, tracedOutcome);
@@ -227,12 +251,28 @@
         outcome,
       });
     } catch (error) {
-      const outcome = hostCommandErrorOutcome({
+      const interruptedOutcome = hostCommandInterruptedOutcome({
+        actionId: event.actionId,
+        commandId: attempt.commandId,
+        error,
+        event,
+      });
+      const outcome = interruptedOutcome ?? hostCommandErrorOutcome({
         actionId: event.actionId,
         error,
         event,
       });
-      commandOutcomes = appendHostCommandOutcome(commandOutcomes, outcome);
+      if (interruptedOutcome !== null) {
+        commandRecoveryAttempts = {
+          ...commandRecoveryAttempts,
+          [event.actionId]: attempt,
+        };
+      } else {
+        const nextAttempts = { ...commandRecoveryAttempts };
+        delete nextAttempts[event.actionId];
+        commandRecoveryAttempts = nextAttempts;
+        commandOutcomes = appendHostCommandOutcome(commandOutcomes, outcome);
+      }
       recordCommandStatus(event.actionId, outcome);
       if (
         typeof window !== "undefined" &&
@@ -250,6 +290,20 @@
         });
       }
     }
+  }
+
+  async function retryHostCommand(actionId) {
+    const attempt = commandRecoveryAttempts[actionId];
+    if (attempt !== undefined) {
+      await handleDispatch(attempt.event, attempt);
+    }
+  }
+
+  function cancelHostCommandRecovery(actionId) {
+    const nextAttempts = { ...commandRecoveryAttempts };
+    delete nextAttempts[actionId];
+    commandRecoveryAttempts = nextAttempts;
+    commandStatuses = clearHostCommandStatus(commandStatuses, actionId);
   }
 
   function recordCommandStatus(actionId, status) {
@@ -299,6 +353,8 @@
       {commandStatuses}
       commandContext={data.commandContext}
       onDispatch={handleDispatch}
+      onRetry={retryHostCommand}
+      onCancel={cancelHostCommandRecovery}
     />
 
     <HostCommandActivity

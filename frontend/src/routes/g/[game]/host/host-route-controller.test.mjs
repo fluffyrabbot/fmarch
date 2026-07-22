@@ -8,13 +8,44 @@ import {
   buildHostProjectionColdLoads,
   buildHostProjectionInitialSnapshot,
   hostCommandErrorOutcome,
+  hostCommandInterruptedOutcome,
   hostCommandPendingStatus,
   hostPostAckRefreshKeys,
   hostPostCommandRefreshKeys,
   hostProjectionResyncKeys,
   recordHostCommandStatus,
+  clearHostCommandStatus,
   sendHostRouteAction,
 } from "./host-route-controller.mjs";
+import { CommandInterruptedError } from "../../../../lib/app/command-interruption.mjs";
+
+test("host interrupted command keeps confirmation and can be dismissed", () => {
+  const event = {
+    actionId: "extend_deadline",
+    confirmationTrace: {
+      kind: "confirmation-command-trace",
+      confirmationKind: "confirmation-action",
+      surface: "moderator-host",
+      actionId: "extend_deadline",
+      statusKey: "extend_deadline",
+      dispatchKind: "extend_deadline",
+    },
+  };
+  const status = hostCommandInterruptedOutcome({
+    actionId: event.actionId,
+    commandId: "host-command-1",
+    error: new CommandInterruptedError("timeout"),
+    event,
+  });
+
+  assert.equal(status.state, "interrupted");
+  assert.equal(status.commandId, "host-command-1");
+  assert.equal(status.confirmationTrace.actionId, event.actionId);
+  assert.deepEqual(
+    clearHostCommandStatus({ [event.actionId]: status }, event.actionId),
+    {},
+  );
+});
 
 test("host route controller builds projection store boundaries from route data", () => {
   const data = fixtureData();

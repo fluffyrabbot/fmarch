@@ -168,6 +168,7 @@ export async function sendCommand({
   fetchImpl = fetch,
   commandIdFactory = defaultCommandId,
   envelopeIdFactory = defaultEnvelopeId,
+  signal,
 }) {
   const commandId = commandIdFactory();
   const envelopeId = envelopeIdFactory();
@@ -182,6 +183,7 @@ export async function sendCommand({
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(requestEnvelope),
+    signal,
   });
   const serverEnvelope = await response.json();
   return normalizeCommandResponse({

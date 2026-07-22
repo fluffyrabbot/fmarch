@@ -8,6 +8,8 @@
   export let commandStatuses = {};
   export let commandContext = {};
   export let onDispatch = () => {};
+  export let onRetry = () => {};
+  export let onCancel = () => {};
 
   $: view = buildHostControlSurfaceViewModel({
     groups,
@@ -44,7 +46,7 @@
         </summary>
         <div class="host-console-critical-path__control-queue-groups">
           {#each queue.groups as control}
-            <HostControlGroup {control} {onDispatch} />
+            <HostControlGroup {control} {onDispatch} {onRetry} {onCancel} />
           {/each}
         </div>
       </details>
@@ -63,7 +65,7 @@
         </header>
         <div class="host-console-critical-path__control-queue-groups">
           {#each queue.groups as control}
-            <HostControlGroup {control} {onDispatch} />
+            <HostControlGroup {control} {onDispatch} {onRetry} {onCancel} />
           {/each}
         </div>
       </section>

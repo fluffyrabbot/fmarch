@@ -12,7 +12,9 @@ export function buildHostCommandActivityViewModel({
   commandOutcomes = [],
 } = {}) {
   const pending = Object.entries(commandStatuses)
-    .filter(([, status]) => status?.state === "pending")
+    .filter(([, status]) =>
+      status?.state === "pending" || status?.state === "interrupted"
+    )
     .map(([actionId, status]) => activityItem({
       actionId,
       status,
@@ -90,6 +92,9 @@ function labelForAction(actionId) {
 function activityStatusMessage({ label, state, rawMessage }) {
   if (state === "pending") {
     return `${label} is in progress.`;
+  }
+  if (state === "interrupted") {
+    return rawMessage;
   }
   if (state === "ack") {
     return `${label} completed.`;

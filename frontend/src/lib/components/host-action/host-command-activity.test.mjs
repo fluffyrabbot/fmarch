@@ -133,3 +133,20 @@ test("host command activity caps recent rows and labels host prompt decisions", 
     ],
   );
 });
+
+test("host command activity keeps interrupted commands visible for recovery", () => {
+  const message =
+    "Connection lost before confirmation. The command may still have reached the server.";
+  const view = buildHostCommandActivityViewModel({
+    commandStatuses: {
+      extend_deadline: {
+        state: "interrupted",
+        message,
+      },
+    },
+  });
+
+  assert.equal(view.summary, "1 recent host command event");
+  assert.equal(view.items[0].state, "interrupted");
+  assert.equal(view.items[0].message, message);
+});

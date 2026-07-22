@@ -14,6 +14,7 @@
   export let channel = {};
   export let player = {};
   export let commandPending = false;
+  export let commandInterrupted = false;
   export let body = "";
   export let mediaFiles = undefined;
   export let mediaAlt = "";
@@ -32,6 +33,7 @@
     channel,
     player,
     commandPending,
+    commandInterrupted,
     confirmingAction,
   });
 
@@ -112,6 +114,7 @@
           type="button"
           class={button.className}
           data-action={button.data.action}
+          data-command-recovery-return={button.action}
           data-min-touch-target-px={button.data.minTouchTargetPx}
           data-disabled-reason={button.reason}
           disabled={button.disabled}
@@ -194,6 +197,7 @@
           type="button"
           class={button.className}
           data-action={button.data.action}
+          data-command-recovery-return={button.action}
           data-min-touch-target-px={button.data.minTouchTargetPx}
           data-disabled-reason={button.reason}
           disabled={button.disabled}
@@ -248,6 +252,7 @@
             class={pickerAction.trigger.className}
             data-testid={pickerAction.trigger.testId}
             data-action={pickerAction.trigger.data.action}
+            data-command-recovery-return={pickerAction.action}
             data-template-id={pickerAction.trigger.data.templateId}
             data-target-slots={pickerAction.trigger.data.targetSlots.join(",")}
             data-min-touch-target-px={pickerAction.trigger.data.minTouchTargetPx}
@@ -305,6 +310,7 @@
           type="button"
           class={button.className}
           data-action={button.data.action}
+          data-command-recovery-return={button.action}
           data-template-id={button.data.templateId}
           data-target-slots={button.data.targetSlots.join(",")}
           data-min-touch-target-px={button.data.minTouchTargetPx}

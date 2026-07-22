@@ -14,6 +14,7 @@
   import {
     adminConfirmStatus,
     adminPendingStatus,
+    adminInterruptedStatus,
     adminReadOnlyStatus,
     adminRejectStatus,
     adminSetupActionMode,
@@ -28,6 +29,11 @@
   } from "./admin-route-controller.mjs";
   import { ADMIN_SURFACE_CONTRACT } from "$lib/components/admin/admin-surface-model.mjs";
   import { ADMIN_ROUTE_CONTRACT } from "./admin-route-contract.mjs";
+  import {
+    commandAttemptId,
+    commandAttemptTimeoutMs,
+    executeCommandAttempt,
+  } from "$lib/app/command-interruption.mjs";
 
   export let data;
   export let form;
@@ -35,6 +41,7 @@
   let commandStatuses = {};
   let lastFormStatusKey = "";
   let recoveryWorkflowOpen = false;
+  let commandRecoveryAttempts = {};
 
   $: adminSurfaceEmpty = isAdminRouteEmpty(data);
   $: adminForcedRouteState = data.routeState
@@ -98,17 +105,31 @@
   }
 
   function cancelSetupAction(item) {
+    const nextAttempts = { ...commandRecoveryAttempts };
+    delete nextAttempts[item.id];
+    commandRecoveryAttempts = nextAttempts;
     commandStatuses = clearAdminCommandStatus(commandStatuses, item.id);
   }
 
-  async function submitAdminSetupCommand(item) {
+  async function retrySetupAction(item) {
+    const attempt = commandRecoveryAttempts[item.id];
+    if (attempt !== undefined) {
+      await submitAdminSetupCommand(item, { attempt });
+    }
+  }
+
+  async function submitAdminSetupCommand(item, { attempt: recoveredAttempt } = {}) {
     if (commandStatuses[item.id]?.state === "pending") {
       return;
     }
-    const confirmationStatus =
-      commandStatuses[item.id]?.confirmationTrace == null
+    const confirmationStatus = recoveredAttempt?.confirmationStatus ??
+      (commandStatuses[item.id]?.confirmationTrace == null
         ? null
-        : commandStatuses[item.id];
+        : commandStatuses[item.id]);
+    const attempt = recoveredAttempt ?? Object.freeze({
+      commandId: commandAttemptId(),
+      confirmationStatus,
+    });
     const optimisticStatus = adminPendingStatus();
     commandStatuses = recordAdminCommandStatus(
       commandStatuses,
@@ -117,11 +138,21 @@
     );
 
     try {
-      const result = await sendAdminSetupCommand({
-        item,
-        data,
-        fetchImpl: fetch,
+      const result = await executeCommandAttempt({
+        timeoutMs: commandAttemptTimeoutMs(
+          typeof window === "undefined" ? null : window,
+        ),
+        operation: ({ signal }) => sendAdminSetupCommand({
+          item,
+          data,
+          fetchImpl: fetch,
+          commandIdFactory: () => attempt.commandId,
+          signal,
+        }),
       });
+      const nextAttempts = { ...commandRecoveryAttempts };
+      delete nextAttempts[item.id];
+      commandRecoveryAttempts = nextAttempts;
       commandStatuses = recordAdminCommandStatus(
         commandStatuses,
         item.id,
@@ -147,7 +178,24 @@
         });
       }
     } catch (error) {
-      const finalStatus = adminRejectStatus(error);
+      const interruptedStatus = confirmationStatus === null
+        ? null
+        : adminInterruptedStatus(error, {
+            item,
+            commandId: attempt.commandId,
+            confirmationStatus,
+          });
+      const finalStatus = interruptedStatus ?? adminRejectStatus(error);
+      if (interruptedStatus !== null) {
+        commandRecoveryAttempts = {
+          ...commandRecoveryAttempts,
+          [item.id]: attempt,
+        };
+      } else {
+        const nextAttempts = { ...commandRecoveryAttempts };
+        delete nextAttempts[item.id];
+        commandRecoveryAttempts = nextAttempts;
+      }
       commandStatuses = recordAdminCommandStatus(
         commandStatuses,
         item.id,
@@ -203,6 +251,7 @@
           onSetupAction={handleSetupAction}
           onConfirmSetupAction={confirmSetupAction}
           onCancelSetupAction={cancelSetupAction}
+          onRetrySetupAction={retrySetupAction}
         />
 
       </section>

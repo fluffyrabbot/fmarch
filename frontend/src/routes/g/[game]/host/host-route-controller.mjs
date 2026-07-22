@@ -19,6 +19,7 @@ import {
   projectHostConsoleState,
   sendHostActionCommand,
 } from "../../../../lib/components/host-action/host-command-boundary.mjs";
+import { commandInterruptionStatus } from "../../../../lib/app/command-interruption.mjs";
 
 export const HOST_PROJECTION_RESYNC_KEYS = Object.freeze([
   "host",
@@ -114,6 +115,12 @@ export function recordHostCommandStatus(commandStatuses, actionId, status) {
   });
 }
 
+export function clearHostCommandStatus(commandStatuses, actionId) {
+  const next = { ...commandStatuses };
+  delete next[actionId];
+  return Object.freeze(next);
+}
+
 export function hostCommandPendingStatus(event = null) {
   return attachEventConfirmationTrace({
     state: "pending",
@@ -129,6 +136,11 @@ export function hostCommandErrorOutcome({ actionId, error, event = null }) {
     retryable: false,
     message: errorMessage(error),
   }, event);
+}
+
+export function hostCommandInterruptedOutcome({ actionId, commandId, error, event = null }) {
+  const status = commandInterruptionStatus(error, { actionId, commandId });
+  return status === null ? null : attachEventConfirmationTrace(status, event);
 }
 
 export function buildHostCommandDispatchBridgePlan({
@@ -167,6 +179,8 @@ export async function sendHostRouteAction({
   event,
   data,
   fetchImpl,
+  commandIdFactory,
+  signal,
   projectionStore,
   sendHostActionCommandImpl = sendHostActionCommand,
 }) {
@@ -176,6 +190,8 @@ export async function sendHostRouteAction({
     endpoint: data.commandEndpoint,
     stateEndpoint: data.hostConsoleStateEndpoint,
     fetchImpl,
+    commandIdFactory,
+    signal,
   });
   if (outcome.projectionState) {
     projectionStore.applyPayload("host", outcome.projectionState);
@@ -191,7 +207,7 @@ export async function sendHostRouteAction({
     outcome,
   });
   if (postOutcomeRefreshKeys.length > 0) {
-    await projectionStore.refresh(postOutcomeRefreshKeys, { fetchImpl });
+    await projectionStore.refresh(postOutcomeRefreshKeys, { fetchImpl, signal });
   }
   return Object.freeze({
     outcome,

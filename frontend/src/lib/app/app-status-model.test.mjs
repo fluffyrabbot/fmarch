@@ -32,3 +32,13 @@ test("reject status announces assertively without changing role semantics", () =
   assert.equal(view.ariaLive, "assertive");
   assert.equal(view.message, "Reject Forbidden");
 });
+
+test("interrupted command status announces assertively", () => {
+  const view = buildAppStatusViewModel({
+    status: { state: "interrupted", message: "Connection lost" },
+  });
+
+  assert.equal(view.role, "status");
+  assert.equal(view.ariaLive, "assertive");
+  assert.equal(view.ariaAtomic, "true");
+});

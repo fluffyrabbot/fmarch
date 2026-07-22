@@ -50,8 +50,10 @@
     buildPlayerProjectionInitialSnapshot,
     loadOlderPlayerThreadPage,
     playerCommandErrorStatus,
+    playerCommandInterruptedStatus,
     playerCommandPendingStatus,
     recordPlayerCommandReceipt,
+    clearPlayerCommandReceipt,
     playerRefreshKeysForLiveDelta,
     playerResyncKeys,
     playerThreadErrorStatus,
@@ -60,6 +62,11 @@
     togglePrivateItemExpansion,
     uploadPlayerPostMedia,
   } from "./player-route-controller.mjs";
+  import {
+    commandAttemptId,
+    commandAttemptTimeoutMs,
+    executeCommandAttempt,
+  } from "$lib/app/command-interruption.mjs";
 
   export let data;
 
@@ -68,7 +75,9 @@
   let composerMediaAlt = "";
   let commandStatus = null;
   $: commandPending = commandStatus?.state === "pending";
+  $: commandInterrupted = commandStatus?.state === "interrupted";
   let commandReceipts = [];
+  let commandRecoveryAttempts = {};
   let thread = data.thread;
   let votecount = data.votecount;
   let dayVoteOutcomes = data.dayVoteOutcomes;
@@ -252,12 +261,13 @@
     };
   });
 
-  async function submitPlayerCommand(action) {
-    if (commandPending) {
+  async function submitPlayerCommand(action, recoveredAttempt = null) {
+    if (commandPending || (commandInterrupted && recoveredAttempt === null)) {
       return;
     }
-    const dispatchData = currentData;
-    let dispatchedMedia = [];
+    const dispatchData = recoveredAttempt?.data ?? currentData;
+    let dispatchedMedia = recoveredAttempt?.media ?? [];
+    let attempt = recoveredAttempt;
     const optimisticStatus = playerCommandPendingStatus(action);
     commandStatus = optimisticStatus;
     commandReceipts = recordPlayerCommandReceipt(
@@ -267,30 +277,50 @@
     );
     try {
       if (action === "submit_post") {
-        dispatchedMedia = await uploadPlayerPostMedia({
-          data: dispatchData,
-          file: composerMediaFiles?.[0] ?? null,
-          alt: composerMediaAlt,
-          fetchImpl: fetch,
-        });
+        if (recoveredAttempt === null) {
+          dispatchedMedia = await uploadPlayerPostMedia({
+            data: dispatchData,
+            file: composerMediaFiles?.[0] ?? null,
+            alt: composerMediaAlt,
+            fetchImpl: fetch,
+          });
+        }
       }
-      const result = await submitPlayerRouteCommand({
+      attempt = attempt ?? Object.freeze({
         action,
         composerBody,
         media: dispatchedMedia,
-        commandIdFactory:
-          typeof window === "undefined"
-            ? undefined
-            : window.__fmarchPlayerCommandIdFactory,
         data: dispatchData,
-        fetchImpl: fetch,
-        projectionStore,
+        commandId: commandAttemptId(
+          typeof window !== "undefined" &&
+            typeof window.__fmarchPlayerCommandIdFactory === "function"
+            ? window.__fmarchPlayerCommandIdFactory
+            : undefined,
+        ),
       });
+      const result = await executeCommandAttempt({
+        timeoutMs: commandAttemptTimeoutMs(
+          typeof window === "undefined" ? null : window,
+        ),
+        operation: ({ signal }) => submitPlayerRouteCommand({
+          action,
+          composerBody: attempt.composerBody,
+          media: attempt.media,
+          commandIdFactory: () => attempt.commandId,
+          signal,
+          data: dispatchData,
+          fetchImpl: fetch,
+          projectionStore,
+        }),
+      });
+      const nextAttempts = { ...commandRecoveryAttempts };
+      delete nextAttempts[action];
+      commandRecoveryAttempts = nextAttempts;
       commandStatus = result.commandStatus;
       const bridgePlan = buildPlayerCommandDispatchBridgePlan({
         data: dispatchData,
         action,
-        composerBody,
+        composerBody: attempt.composerBody,
         media: dispatchedMedia,
         optimisticStatus,
         finalStatus: commandStatus,
@@ -311,11 +341,27 @@
         exposePlayerProjection({ windowRef: window, snapshot: result.snapshot });
       }
     } catch (error) {
-      commandStatus = playerCommandErrorStatus(error, action);
+      const interruptedStatus = attempt === null
+        ? null
+        : playerCommandInterruptedStatus(error, {
+            action,
+            commandId: attempt.commandId,
+          });
+      commandStatus = interruptedStatus ?? playerCommandErrorStatus(error, action);
+      if (interruptedStatus !== null) {
+        commandRecoveryAttempts = {
+          ...commandRecoveryAttempts,
+          [action]: attempt,
+        };
+      } else {
+        const nextAttempts = { ...commandRecoveryAttempts };
+        delete nextAttempts[action];
+        commandRecoveryAttempts = nextAttempts;
+      }
       const bridgePlan = buildPlayerCommandDispatchBridgePlan({
         data: dispatchData,
         action,
-        composerBody,
+        composerBody: attempt?.composerBody ?? composerBody,
         media: dispatchedMedia,
         optimisticStatus,
         finalStatus: commandStatus,
@@ -335,6 +381,21 @@
         exposePlayerCommandReceipts({ windowRef: window, commandReceipts });
       }
     }
+  }
+
+  async function retryPlayerCommand(action) {
+    const attempt = commandRecoveryAttempts[action];
+    if (attempt !== undefined) {
+      await submitPlayerCommand(action, attempt);
+    }
+  }
+
+  function cancelPlayerCommandRecovery(action) {
+    const nextAttempts = { ...commandRecoveryAttempts };
+    delete nextAttempts[action];
+    commandRecoveryAttempts = nextAttempts;
+    commandReceipts = clearPlayerCommandReceipt(commandReceipts, action);
+    commandStatus = null;
   }
 
   async function loadOlderThread() {
@@ -415,6 +476,7 @@
           channel={data.channel}
           {player}
           {commandPending}
+          {commandInterrupted}
           bind:body={composerBody}
           bind:mediaFiles={composerMediaFiles}
           bind:mediaAlt={composerMediaAlt}
@@ -423,7 +485,12 @@
         />
 
         {#if player.readOnly !== true}
-          <PlayerCommandReceipt receipts={commandReceipts} />
+          <PlayerCommandReceipt
+            receipts={commandReceipts}
+            currentStatus={commandStatus}
+            onRetry={retryPlayerCommand}
+            onCancel={cancelPlayerCommandRecovery}
+          />
         {/if}
 
         {#if player.readOnly !== true}

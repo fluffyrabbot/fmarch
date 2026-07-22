@@ -18,7 +18,10 @@ export function buildAppStatusViewModel({
     message: String(status.message ?? ""),
     testId,
     role: "status",
-    ariaLive: state === "reject" || state === "error" ? "assertive" : politeness,
+    ariaLive:
+      state === "reject" || state === "error" || state === "interrupted"
+        ? "assertive"
+        : politeness,
     ariaAtomic: "true",
   });
 }

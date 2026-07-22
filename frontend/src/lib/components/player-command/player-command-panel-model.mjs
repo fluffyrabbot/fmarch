@@ -24,6 +24,7 @@ export function buildPlayerCommandPanelViewModel({
   channel = {},
   player = {},
   commandPending = false,
+  commandInterrupted = false,
   confirmingAction = null,
 }) {
   if (player.readOnly === true) {
@@ -50,10 +51,11 @@ export function buildPlayerCommandPanelViewModel({
     });
   }
   const channelContext = buildChannelContextViewModel({ channel, player });
+  const commandUnavailable = commandPending || commandInterrupted;
   const playerCommandsDisabled =
-    commandPending || player.alive === false || player.gameCompleted === true;
+    commandUnavailable || player.alive === false || player.gameCompleted === true;
   const postCommandDisabled =
-    commandPending || player.gameCompleted === true ||
+    commandUnavailable || player.gameCompleted === true ||
     (player.alive === false && channelContext.channelId !== "dead");
   const voteButtons = voteCommandButtons({
     composer,

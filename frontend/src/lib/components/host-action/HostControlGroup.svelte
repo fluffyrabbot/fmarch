@@ -1,9 +1,12 @@
 <script>
   import AppStatus from "$lib/app/AppStatus.svelte";
+  import CommandRecovery from "$lib/app/CommandRecovery.svelte";
   import HostAction from "./HostAction.svelte";
 
   export let control;
   export let onDispatch = () => {};
+  export let onRetry = () => {};
+  export let onCancel = () => {};
 </script>
 
 <article
@@ -43,6 +46,11 @@
                 status={action.status}
                 testId={action.statusTestId}
                 className={control.classes.commandStatus}
+              />
+              <CommandRecovery
+                status={action.status}
+                {onRetry}
+                {onCancel}
               />
             {/if}
           </div>

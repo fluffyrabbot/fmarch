@@ -2187,6 +2187,10 @@ test("component interaction artifact records no-bind command component wiring", 
         "frontend/src/lib/components/player-command/PlayerCommandPanel.svelte",
       ],
       [
+        "PlayerCommandReceipt",
+        "frontend/src/lib/components/player-command/PlayerCommandReceipt.svelte",
+      ],
+      [
         "HostControlSurface",
         "frontend/src/lib/components/host-action/HostControlSurface.svelte",
       ],
@@ -6385,6 +6389,59 @@ function assertRoleMobileViewportEvidence(roleEntries) {
           viewport: entry.viewport,
         }],
         `${scenario.id} pending-state screenshots`,
+      );
+
+      const interrupted = entry.commandResult.interruptedState;
+      const interruptedBudget = scenario.interruptedStateBudget;
+      assert.equal(interrupted.state, "interrupted");
+      assert.equal(interrupted.interruption, "connection_lost");
+      assert.equal(interrupted.actionId, interruptedBudget.actionId);
+      assert.equal(interrupted.commandId, interrupted.firstCommandId);
+      assert.notEqual(interrupted.canceledCommandId, interrupted.commandId);
+      assert.equal(interrupted.retryCommandId, interrupted.firstCommandId);
+      assert.equal(interrupted.idempotentRetry, true);
+      assert.equal(interrupted.cancelClearedStaleAttempt, true);
+      assert.equal(interrupted.cancelReturnedFocus, true);
+      assert.equal(interrupted.staleRecoveryClearedOnRetry, true);
+      assert.equal(
+        interrupted.retryTestId,
+        `command-recovery-retry-${interruptedBudget.actionId}`,
+      );
+      assert.equal(
+        interrupted.cancelTestId,
+        `command-recovery-cancel-${interruptedBudget.actionId}`,
+      );
+      assert.equal(interrupted.focusTestId, interrupted.retryTestId);
+      assert.deepEqual(interrupted.statusRegion, {
+        state: "interrupted",
+        role: "status",
+        ariaLive: "assertive",
+        ariaAtomic: "true",
+      });
+      if (entry.viewport.name === "mobile") {
+        assert.equal(interrupted.geometry.withinBudget, true);
+        assert.equal(
+          interrupted.geometry.anchorSelector,
+          interruptedBudget.anchorSelector,
+        );
+        assert.equal(
+          interrupted.geometry.targetSelector,
+          interruptedBudget.targetSelector,
+        );
+        assert.equal(
+          interrupted.geometry.anchorShift <= interrupted.geometry.maxAnchorShift,
+          true,
+        );
+      } else {
+        assert.equal(interrupted.geometry, null);
+      }
+      assertPixelEvidence(
+        [{
+          screenshot: interrupted.screenshot,
+          screenshotPixels: interrupted.screenshotPixels,
+          viewport: entry.viewport,
+        }],
+        `${scenario.id} interrupted-state screenshots`,
       );
       }
   }

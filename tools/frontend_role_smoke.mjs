@@ -175,7 +175,9 @@ try {
         await installLiveProjectionHarness(page);
       }
       const commandRequests = [];
+      const commandEnvelopes = [];
       const commandLatency = createDeterministicCommandLatencyHarness();
+      const commandInterruption = createDeterministicCommandInterruptionHarness();
       const hostSlotState = {
         status: "alive",
         alive: true,
@@ -185,7 +187,11 @@ try {
         const commandEnvelope = route.request().postDataJSON();
         const command = commandEnvelope?.body?.body?.command;
         commandRequests.push(command);
+        commandEnvelopes.push(commandEnvelope);
         await commandLatency.holdNext(command);
+        if (await commandInterruption.interruptNext(route, commandEnvelope)) {
+          return;
+        }
         if (command?.ResolveHostPrompt !== undefined) {
           hostPromptPending = false;
           await route.fulfill({
@@ -533,8 +539,11 @@ try {
           interactionGeometryBudget: role.interactionGeometryBudget,
           commandContinuityBudget: role.commandContinuityBudget,
           pendingStateBudget: role.pendingStateBudget,
+          interruptedStateBudget: role.interruptedStateBudget,
           commandLatency,
           commandRequests,
+          commandEnvelopes,
+          commandInterruption,
         });
       }
       if (role.id === "player") {
@@ -546,7 +555,10 @@ try {
           interactionGeometryBudget: role.interactionGeometryBudget,
           commandContinuityBudget: role.commandContinuityBudget,
           pendingStateBudget: role.pendingStateBudget,
+          interruptedStateBudget: role.interruptedStateBudget,
           commandLatency,
+          commandEnvelopes,
+          commandInterruption,
         });
       }
       if (role.id === "moderator") {
@@ -556,7 +568,10 @@ try {
           interactionGeometryBudget: role.interactionGeometryBudget,
           commandContinuityBudget: role.commandContinuityBudget,
           pendingStateBudget: role.pendingStateBudget,
+          interruptedStateBudget: role.interruptedStateBudget,
           commandLatency,
+          commandEnvelopes,
+          commandInterruption,
         });
       }
 
@@ -1141,8 +1156,11 @@ async function driveAdminReject(
     interactionGeometryBudget,
     commandContinuityBudget,
     pendingStateBudget,
+    interruptedStateBudget,
     commandLatency,
     commandRequests = [],
+    commandEnvelopes = [],
+    commandInterruption,
   } = {},
 ) {
   const createSetup = page.getByTestId("admin-setup-create-game");
@@ -1158,11 +1176,6 @@ async function driveAdminReject(
     throw new Error("admin create-game did not require confirmation");
   }
   const createConfirm = page.getByTestId("admin-command-confirm-create-game");
-  const commandContinuityBaseline = await captureCommandContinuityBaseline(page, {
-    budget: commandContinuityBudget,
-    viewport,
-    label: "admin create-game command continuity",
-  });
   const pendingGeometryBaseline = await captureInteractionGeometryBaseline(page, {
     budget: pendingStateBudget,
     viewport,
@@ -1170,6 +1183,7 @@ async function driveAdminReject(
   });
   const createDispatchedAtMs = performance.now();
   commandLatency.armNext("admin create-game command");
+  commandInterruption.armNext("admin create-game connection loss");
   const requestCountBefore = commandRequests.length;
   await createConfirm.click();
   const pendingState = await capturePendingCommandState(page, {
@@ -1183,6 +1197,22 @@ async function driveAdminReject(
     requestCountBefore,
     dispatchedAtMs: createDispatchedAtMs,
   });
+  const interruptedState = await captureInterruptedCommandRecovery(page, {
+    role: "admin",
+    viewport,
+    budget: interruptedStateBudget,
+    geometryBaseline: pendingGeometryBaseline,
+    commandLatency,
+    commandInterruption,
+    commandEnvelopes,
+    requestCountBefore,
+    commandContinuityBudget,
+    restartAfterCancel: async () => {
+      await createSetup.locator("button").click();
+      await createConfirm.waitFor({ state: "visible" });
+      await createConfirm.click();
+    },
+  });
   await page.waitForFunction(() => {
     const node = document.querySelector(
       '[data-testid="admin-command-status-create-game"]',
@@ -1195,11 +1225,11 @@ async function driveAdminReject(
     expectedAriaLive: "assertive",
   });
   const commandContinuity = await assertCommandContinuity(page, {
-    baseline: commandContinuityBaseline,
+    baseline: interruptedState.commandContinuityBaseline,
     budget: commandContinuityBudget,
     viewport,
     label: "admin create-game command continuity",
-    dispatchedAtMs: createDispatchedAtMs,
+    dispatchedAtMs: interruptedState.retryDispatchedAtMs,
     statusRegion: createRegion,
   });
   const feedbackGeometry = await assertPostInteractionGeometry(page, {
@@ -1425,6 +1455,7 @@ async function driveAdminReject(
   };
   result.commandContinuity = commandContinuity;
   result.pendingState = pendingState;
+  result.interruptedState = interruptedState;
   return result;
 }
 
@@ -1537,7 +1568,10 @@ async function driveModeratorReject(
     interactionGeometryBudget,
     commandContinuityBudget,
     pendingStateBudget,
+    interruptedStateBudget,
     commandLatency,
+    commandEnvelopes = [],
+    commandInterruption,
   } = {},
 ) {
   const actionRoot = page.getByTestId("critical-host-action-extend_deadline");
@@ -1589,11 +1623,6 @@ async function driveModeratorReject(
     actionRoot.getByTestId("critical-host-action-confirm"),
     "moderator confirm",
   );
-  const commandContinuityBaseline = await captureCommandContinuityBaseline(page, {
-    budget: commandContinuityBudget,
-    viewport,
-    label: "moderator extend deadline command continuity",
-  });
   const pendingGeometryBaseline = await captureInteractionGeometryBaseline(page, {
     budget: pendingStateBudget,
     viewport,
@@ -1601,6 +1630,7 @@ async function driveModeratorReject(
   });
   const extendDeadlineDispatchedAtMs = performance.now();
   commandLatency.armNext("moderator extend-deadline command");
+  commandInterruption.armNext("moderator extend-deadline connection loss");
   const requestCountBefore = commandRequests.length;
   await actionRoot.getByTestId("critical-host-action-confirm").click();
   const pendingState = await capturePendingCommandState(page, {
@@ -1613,6 +1643,24 @@ async function driveModeratorReject(
     commandRequests,
     requestCountBefore,
     dispatchedAtMs: extendDeadlineDispatchedAtMs,
+  });
+  const interruptedState = await captureInterruptedCommandRecovery(page, {
+    role: "moderator",
+    viewport,
+    budget: interruptedStateBudget,
+    geometryBaseline: pendingGeometryBaseline,
+    commandLatency,
+    commandInterruption,
+    commandEnvelopes,
+    requestCountBefore,
+    commandContinuityBudget,
+    restartAfterCancel: async () => {
+      await actionRoot.getByTestId("critical-host-action-trigger").click();
+      await actionRoot.getByTestId("critical-host-action-confirmation").waitFor({
+        state: "visible",
+      });
+      await actionRoot.getByTestId("critical-host-action-confirm").click();
+    },
   });
   const status = page.getByTestId("host-command-status-extend_deadline");
   await status.waitFor({ state: "visible" });
@@ -1628,11 +1676,11 @@ async function driveModeratorReject(
     expectedAriaLive: "assertive",
   });
   const commandContinuity = await assertCommandContinuity(page, {
-    baseline: commandContinuityBaseline,
+    baseline: interruptedState.commandContinuityBaseline,
     budget: commandContinuityBudget,
     viewport,
     label: "moderator extend deadline command continuity",
-    dispatchedAtMs: extendDeadlineDispatchedAtMs,
+    dispatchedAtMs: interruptedState.retryDispatchedAtMs,
     statusRegion,
   });
   const feedbackGeometry = await assertPostInteractionGeometry(page, {
@@ -1677,6 +1725,7 @@ async function driveModeratorReject(
     },
     commandContinuity,
     pendingState,
+    interruptedState,
   };
 }
 
@@ -1736,6 +1785,33 @@ function createDeterministicCommandLatencyHarness() {
 
     release() {
       activeGate?.releaseRequest();
+    },
+  });
+}
+
+function createDeterministicCommandInterruptionHarness() {
+  let activeInterruption = null;
+
+  return Object.freeze({
+    armNext(label, kind = "connection_lost") {
+      if (activeInterruption !== null) {
+        throw new Error(
+          `command interruption is already armed for ${activeInterruption.label}`,
+        );
+      }
+      if (kind !== "connection_lost") {
+        throw new Error(`unsupported browser command interruption: ${kind}`);
+      }
+      activeInterruption = { label, kind };
+    },
+
+    async interruptNext(route) {
+      if (activeInterruption === null) {
+        return false;
+      }
+      activeInterruption = null;
+      await route.abort("failed");
+      return true;
     },
   });
 }
@@ -1843,6 +1919,155 @@ async function capturePendingCommandState(
   } finally {
     commandLatency.release();
   }
+}
+
+async function captureInterruptedCommandRecovery(
+  page,
+  {
+    role,
+    viewport,
+    budget,
+    geometryBaseline,
+    commandLatency,
+    commandInterruption,
+    commandEnvelopes,
+    requestCountBefore,
+    commandContinuityBudget,
+    restartAfterCancel,
+  },
+) {
+  const status = page.locator(budget.statusSelector).first();
+  await page.waitForFunction(
+    (selector) =>
+      document.querySelector(selector)?.getAttribute("data-state") === "interrupted",
+    budget.statusSelector,
+  );
+  const statusRegion = await assertStatusLiveRegion(status, {
+    label: `${role} interrupted command status`,
+    expectedState: "interrupted",
+    expectedAriaLive: "assertive",
+  });
+  const recovery = page.getByTestId(`command-recovery-${budget.actionId}`);
+  await recovery.waitFor({ state: "visible" });
+  const interruption = await recovery.getAttribute("data-interruption");
+  const commandId = await recovery.getAttribute("data-command-id");
+  if (interruption !== "connection_lost") {
+    throw new Error(`${role} recovery classified interruption as ${interruption}`);
+  }
+  const firstEnvelope = commandEnvelopes[requestCountBefore];
+  const firstCommandId = firstEnvelope?.body?.body?.command_id;
+  if (commandId === null || commandId !== firstCommandId) {
+    throw new Error(`${role} recovery did not preserve its first command identity`);
+  }
+
+  const retry = page.getByTestId(`command-recovery-retry-${budget.actionId}`);
+  const cancel = page.getByTestId(`command-recovery-cancel-${budget.actionId}`);
+  await assertHitTarget(retry, `${role} safe retry`);
+  await assertHitTarget(cancel, `${role} cancel retry`);
+  await page.waitForFunction(
+    (testId) => document.activeElement?.getAttribute("data-testid") === testId,
+    `command-recovery-retry-${budget.actionId}`,
+  );
+
+  const geometry = await assertPostInteractionGeometry(page, {
+    baseline: geometryBaseline,
+    budget,
+    viewport,
+    label: `${role} interrupted command recovery`,
+  });
+  const screenshot = path.join(
+    artifactDir,
+    `${viewport.name}-${role}-interrupted.png`,
+  );
+  const scrollBeforeScreenshot = await page.evaluate(() => window.scrollY);
+  const screenshotPixels = await captureScreenshotEvidence(page, {
+    path: screenshot,
+    label: `${role} interrupted state ${viewport.name}`,
+    viewport,
+  });
+  await page.evaluate((scrollY) => window.scrollTo(0, scrollY), scrollBeforeScreenshot);
+
+  await cancel.click();
+  await recovery.waitFor({ state: "detached" });
+  await page.waitForFunction(
+    (selector) => document.querySelector(selector) === null,
+    budget.statusSelector,
+  );
+  await page.waitForFunction(
+    (selector) => document.activeElement?.matches(selector) === true,
+    budget.returnFocusSelector,
+  );
+
+  commandLatency.armNext(`${role} restarted command after cancel`);
+  commandInterruption.armNext(`${role} restarted command connection loss`);
+  try {
+    await restartAfterCancel();
+    await commandLatency.waitUntilBlocked();
+  } finally {
+    commandLatency.release();
+  }
+  await page.waitForFunction(
+    (selector) =>
+      document.querySelector(selector)?.getAttribute("data-state") === "interrupted",
+    budget.statusSelector,
+  );
+  await recovery.waitFor({ state: "visible" });
+  const restartedEnvelope = commandEnvelopes[requestCountBefore + 1];
+  const restartedCommandId = restartedEnvelope?.body?.body?.command_id;
+  if (restartedCommandId === firstCommandId) {
+    throw new Error(`${role} cancel did not clear the stale command identity`);
+  }
+
+  const commandContinuityBaseline = await captureCommandContinuityBaseline(page, {
+    budget: commandContinuityBudget,
+    viewport,
+    label: `${role} recovery command continuity`,
+  });
+
+  commandLatency.armNext(`${role} idempotent command retry`);
+  const retryDispatchedAtMs = performance.now();
+  try {
+    await retry.click();
+    await commandLatency.waitUntilBlocked();
+    const retryEnvelope = commandEnvelopes[requestCountBefore + 2];
+    const retryCommandId = retryEnvelope?.body?.body?.command_id;
+    if (retryCommandId !== restartedCommandId) {
+      throw new Error(
+        `${role} retry changed command id from ${restartedCommandId} to ${retryCommandId}`,
+      );
+    }
+    await recovery.waitFor({ state: "detached" });
+    await page.waitForFunction(
+      (selector) =>
+        document.querySelector(selector)?.getAttribute("data-state") === "pending",
+      budget.statusSelector,
+    );
+  } finally {
+    commandLatency.release();
+  }
+
+  return {
+    state: "interrupted",
+    interruption,
+    statusRegion,
+    actionId: budget.actionId,
+    commandId: restartedCommandId,
+    canceledCommandId: commandId,
+    firstCommandId: restartedCommandId,
+    retryCommandId: restartedCommandId,
+    retryDispatchedAtMs,
+    commandContinuityBaseline,
+    idempotentRetry: true,
+    cancelClearedStaleAttempt: true,
+    cancelReturnedFocus: true,
+    staleRecoveryClearedOnRetry: true,
+    retryTestId: `command-recovery-retry-${budget.actionId}`,
+    cancelTestId: `command-recovery-cancel-${budget.actionId}`,
+    focusTestId: `command-recovery-retry-${budget.actionId}`,
+    geometry,
+    screenshot: path.relative(repoRoot, screenshot),
+    screenshotPixels,
+  };
 }
 
 async function setDisclosureState(page, selectors = [], open) {
@@ -2777,7 +3002,10 @@ async function drivePlayerReject(
     interactionGeometryBudget,
     commandContinuityBudget,
     pendingStateBudget,
+    interruptedStateBudget,
     commandLatency,
+    commandEnvelopes,
+    commandInterruption,
   },
 ) {
   const media = await assertPlayerMediaNetwork(page, { mediaRequests });
@@ -2847,11 +3075,6 @@ async function drivePlayerReject(
   });
   const composerTextarea = composer.locator("textarea");
   await composerTextarea.fill("Browser smoke player post");
-  const commandContinuityBaseline = await captureCommandContinuityBaseline(page, {
-    budget: commandContinuityBudget,
-    viewport,
-    label: "player composer command continuity",
-  });
   const pendingGeometryBaseline = await captureInteractionGeometryBaseline(page, {
     budget: pendingStateBudget,
     viewport,
@@ -2859,6 +3082,7 @@ async function drivePlayerReject(
   });
   const postDispatchedAtMs = performance.now();
   commandLatency.armNext("player submit-post command");
+  commandInterruption.armNext("player submit-post connection loss");
   const requestCountBefore = commandRequests.length;
   await composer.locator('[data-action="submit_post"]').click();
   const pendingState = await capturePendingCommandState(page, {
@@ -2872,6 +3096,20 @@ async function drivePlayerReject(
     requestCountBefore,
     dispatchedAtMs: postDispatchedAtMs,
   });
+  const interruptedState = await captureInterruptedCommandRecovery(page, {
+    role: "player",
+    viewport,
+    budget: interruptedStateBudget,
+    geometryBaseline: pendingGeometryBaseline,
+    commandLatency,
+    commandInterruption,
+    commandEnvelopes,
+    requestCountBefore,
+    commandContinuityBudget,
+    restartAfterCancel: async () => {
+      await composer.locator('[data-action="submit_post"]').click();
+    },
+  });
   await page.waitForFunction(() => {
     const node = document.querySelector('[data-testid="player-command-status"]');
     return node?.getAttribute("data-state") === "ack";
@@ -2882,11 +3120,11 @@ async function drivePlayerReject(
     expectedAriaLive: "polite",
   });
   const commandContinuity = await assertCommandContinuity(page, {
-    baseline: commandContinuityBaseline,
+    baseline: interruptedState.commandContinuityBaseline,
     budget: commandContinuityBudget,
     viewport,
     label: "player composer command continuity",
-    dispatchedAtMs: postDispatchedAtMs,
+    dispatchedAtMs: interruptedState.retryDispatchedAtMs,
     statusRegion: postCommandStatusRegion,
   });
   const postCommandReceipt = await assertPlayerCommandReceipt(page, {
@@ -2931,6 +3169,7 @@ async function drivePlayerReject(
     },
     commandContinuity,
     pendingState,
+    interruptedState,
     receiptScreenshot: path.relative(repoRoot, receiptScreenshot),
     receiptScreenshotPixels,
     composerAckScreenshot: path.relative(repoRoot, composerAckScreenshot),

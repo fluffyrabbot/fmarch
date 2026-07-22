@@ -188,7 +188,7 @@ export const roles = Object.freeze([
     }),
     commandContinuityBudget: Object.freeze({
       beforeFocusSelector:
-        '[data-testid="admin-command-confirm-create-game"]',
+        '[data-testid="command-recovery-retry-create-game"]',
       afterFocusSelector:
         '[data-testid="admin-command-trigger-create-game"]',
       statusSelector: '[data-testid="admin-command-status-create-game"]',
@@ -196,7 +196,7 @@ export const roles = Object.freeze([
       maxAnnouncementLatencyMs: 500,
       maxFocusSettleMs: 500,
       maxVisualViewportDeltaPx: 1,
-      inputBoundary: "confirmation-control",
+      inputBoundary: "interrupted-command-recovery-control",
     }),
     pendingStateBudget: Object.freeze({
       triggerSelector: '[data-testid="admin-command-trigger-create-game"]',
@@ -209,6 +209,16 @@ export const roles = Object.freeze([
       maxDocumentGrowthViewportRatio: 0.25,
       maxEnterPendingMs: 500,
       inputBoundary: "confirmed-admin-command",
+    }),
+    interruptedStateBudget: Object.freeze({
+      actionId: "create-game",
+      statusSelector: '[data-testid="admin-command-status-create-game"]',
+      anchorSelector: '[data-testid="admin-command-trigger-create-game"]',
+      targetSelector: '[data-testid="command-recovery-create-game"]',
+      returnFocusSelector: '[data-testid="admin-command-trigger-create-game"]',
+      maxAnchorShiftPx: 1,
+      maxCombinedSpanViewportRatio: 0.55,
+      maxDocumentGrowthViewportRatio: 0.4,
     }),
     closedByDefault: Object.freeze([
       '[data-testid="admin-recovery-workflow"]',
@@ -318,7 +328,8 @@ export const roles = Object.freeze([
       }),
     }),
     commandContinuityBudget: Object.freeze({
-      beforeFocusSelector: '[data-testid="player-composer"] textarea',
+      beforeFocusSelector:
+        '[data-testid="command-recovery-retry-submit_post"]',
       afterFocusSelector:
         '[data-testid="player-composer"] [data-action="submit_post"]',
       statusSelector: '[data-testid="player-command-status"]',
@@ -326,7 +337,7 @@ export const roles = Object.freeze([
       maxAnnouncementLatencyMs: 500,
       maxFocusSettleMs: 500,
       maxVisualViewportDeltaPx: 1,
-      inputBoundary: "emulated-mobile-textarea-visual-viewport",
+      inputBoundary: "interrupted-command-recovery-control",
     }),
     pendingStateBudget: Object.freeze({
       triggerSelector:
@@ -340,6 +351,17 @@ export const roles = Object.freeze([
       maxDocumentGrowthViewportRatio: 0.25,
       maxEnterPendingMs: 500,
       inputBoundary: "player-command-surface",
+    }),
+    interruptedStateBudget: Object.freeze({
+      actionId: "submit_post",
+      statusSelector: '[data-testid="player-command-status"]',
+      anchorSelector: '[data-testid="player-primary-action-zone"]',
+      targetSelector: '[data-testid="command-recovery-submit_post"]',
+      returnFocusSelector:
+        '[data-testid="player-composer"] [data-action="submit_post"]',
+      maxAnchorShiftPx: 1,
+      maxCombinedSpanViewportRatio: 1.1,
+      maxDocumentGrowthViewportRatio: 0.4,
     }),
     closedByDefault: Object.freeze([
       '[data-testid="player-media-composer"]',
@@ -437,7 +459,7 @@ export const roles = Object.freeze([
     }),
     commandContinuityBudget: Object.freeze({
       beforeFocusSelector:
-        '[data-testid="critical-host-action-extend_deadline"] [data-testid="critical-host-action-confirm"]',
+        '[data-testid="command-recovery-retry-extend_deadline"]',
       afterFocusSelector:
         '[data-testid="critical-host-action-extend_deadline"] [data-testid="critical-host-action-trigger"]',
       statusSelector: '[data-testid="host-command-status-extend_deadline"]',
@@ -445,7 +467,7 @@ export const roles = Object.freeze([
       maxAnnouncementLatencyMs: 500,
       maxFocusSettleMs: 500,
       maxVisualViewportDeltaPx: 1,
-      inputBoundary: "confirmation-control",
+      inputBoundary: "interrupted-command-recovery-control",
     }),
     pendingStateBudget: Object.freeze({
       triggerSelector:
@@ -460,6 +482,18 @@ export const roles = Object.freeze([
       maxDocumentGrowthViewportRatio: 0.25,
       maxEnterPendingMs: 500,
       inputBoundary: "confirmed-moderator-command",
+    }),
+    interruptedStateBudget: Object.freeze({
+      actionId: "extend_deadline",
+      statusSelector: '[data-testid="host-command-status-extend_deadline"]',
+      anchorSelector:
+        '[data-testid="critical-host-action-extend_deadline"] [data-testid="critical-host-action-trigger"]',
+      targetSelector: '[data-testid="command-recovery-extend_deadline"]',
+      returnFocusSelector:
+        '[data-testid="critical-host-action-extend_deadline"] [data-testid="critical-host-action-trigger"]',
+      maxAnchorShiftPx: 1,
+      maxCombinedSpanViewportRatio: 0.7,
+      maxDocumentGrowthViewportRatio: 0.4,
     }),
     closedByDefault: Object.freeze([
       '[data-testid="host-status-overview"]',

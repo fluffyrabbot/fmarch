@@ -29,7 +29,10 @@ export function createProjectionStore({
     return snapshot;
   }
 
-  async function refresh(keys = Object.keys(coldLoads), { fetchImpl = globalThis.fetch } = {}) {
+  async function refresh(
+    keys = Object.keys(coldLoads),
+    { fetchImpl = globalThis.fetch, signal } = {},
+  ) {
     if (typeof fetchImpl !== "function") {
       throw new TypeError("projection store refresh requires a fetch implementation");
     }
@@ -46,6 +49,7 @@ export function createProjectionStore({
           {
             cache: "no-store",
             headers: { accept: "application/json" },
+            signal,
           },
         );
         if (!response?.ok) {

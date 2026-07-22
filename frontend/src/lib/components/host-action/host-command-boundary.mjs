@@ -29,6 +29,7 @@ export async function sendHostActionCommand({
   fetchImpl = fetch,
   commandIdFactory = defaultCommandId,
   envelopeIdFactory = defaultEnvelopeId,
+  signal,
 }) {
   const commandId = commandIdFactory();
   const envelopeId = envelopeIdFactory();
@@ -45,6 +46,7 @@ export async function sendHostActionCommand({
       "content-type": "application/json",
     },
     body: JSON.stringify(envelope),
+    signal,
   });
   const serverEnvelope = await response.json();
   const outcome = normalizeServerCommandEnvelope({
@@ -58,7 +60,7 @@ export async function sendHostActionCommand({
     return outcome;
   }
 
-  const stateResponse = await fetchImpl(stateEndpoint);
+  const stateResponse = await fetchImpl(stateEndpoint, { signal });
   if (!stateResponse.ok) {
     return Object.freeze({
       ...outcome,

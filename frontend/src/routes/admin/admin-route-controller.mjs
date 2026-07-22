@@ -10,6 +10,7 @@ import {
   buildAdminCommand,
   sendCommand,
 } from "../../lib/app/command-boundary.mjs";
+import { commandInterruptionStatus } from "../../lib/app/command-interruption.mjs";
 
 export function adminFormStatusKey(form) {
   if (form?.id === undefined || form?.id === null) {
@@ -94,6 +95,16 @@ export function adminRejectStatus(error) {
   });
 }
 
+export function adminInterruptedStatus(error, { item, commandId, confirmationStatus }) {
+  const status = commandInterruptionStatus(error, {
+    actionId: item.id,
+    commandId,
+  });
+  return status === null
+    ? null
+    : attachConfirmationCommandTrace(status, confirmationStatus.confirmationTrace);
+}
+
 export function recordAdminCommandStatus(commandStatuses, id, status) {
   return Object.freeze({
     ...commandStatuses,
@@ -149,6 +160,8 @@ export async function sendAdminSetupCommand({
   item,
   data,
   fetchImpl,
+  commandIdFactory,
+  signal,
   sendCommandImpl = sendCommand,
 }) {
   const outcome = await sendCommandImpl({
@@ -156,6 +169,8 @@ export async function sendAdminSetupCommand({
     endpoint: data.command.endpoint,
     command: buildAdminCommand(commandConfigForAdminItem({ item, data })),
     fetchImpl,
+    commandIdFactory,
+    signal,
   });
   return Object.freeze({
     outcome,

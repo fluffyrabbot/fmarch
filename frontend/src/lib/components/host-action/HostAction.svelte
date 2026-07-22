@@ -101,6 +101,7 @@
       class={view.trigger.className}
       data-testid={view.confirmation?.triggerTestId ?? "critical-host-action-trigger"}
       data-danger={view.trigger.data.danger}
+      data-command-recovery-return={action.id}
       disabled={view.trigger.disabled}
       aria-disabled={view.trigger.ariaDisabled}
       aria-expanded={view.trigger.ariaExpanded}
