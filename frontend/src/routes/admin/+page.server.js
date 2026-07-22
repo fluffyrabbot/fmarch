@@ -6,6 +6,7 @@ import { SESSION_COOKIE_NAME } from "../../lib/server/session-capabilities.mjs";
 import {
   adminForbiddenMessage,
   buildAdminRuntimeRouteData,
+  loadAdminGameIndex,
   summarizeRecoveryGate,
 } from "./admin-runtime-route-model.mjs";
 
@@ -15,13 +16,21 @@ export async function load({ cookies, locals, fetch, url }) {
   }
   const apiBaseUrl = serverApiBaseUrl();
   const fixtureMode = process.env.FMARCH_FRONTEND_FIXTURE_SESSION === "1";
+  const sessionToken = cookies?.get?.(SESSION_COOKIE_NAME) ?? null;
+  const gameIndexPage = await loadAdminGameIndex({
+    fetchImpl: fixtureMode && apiBaseUrl === "" ? null : fetch,
+    apiBaseUrl,
+    sessionToken,
+    fallback: fixtureMode && apiBaseUrl === "" ? fixtureAdminGameIndex() : null,
+  });
   const data = await buildAdminRuntimeRouteData({
     principalUserId: locals.principalUserId,
     capabilities: locals.resolvedCapabilities,
     game: optionalGame(url.searchParams.get("game")),
     fetchImpl: fixtureMode && apiBaseUrl === "" ? null : fetch,
     apiBaseUrl,
-    sessionToken: cookies?.get?.(SESSION_COOKIE_NAME) ?? null,
+    sessionToken,
+    gameIndexPage,
     identityPrincipalUserId: url.searchParams.get("identity_principal_user_id") ?? "host_h",
   });
 
@@ -38,6 +47,17 @@ export async function load({ cookies, locals, fetch, url }) {
       fixtureMode,
     }),
   };
+}
+
+function fixtureAdminGameIndex() {
+  return Object.freeze({
+    games: Object.freeze([
+      Object.freeze({ game: "midsummer", pack: "mafiascum", status: "active", phase_id: "D02" }),
+      Object.freeze({ game: "solstice", pack: "mafia_universe", status: "completed", phase_id: "D01" }),
+      Object.freeze({ game: "new-moon", pack: "mafiascum", status: "setup", phase_id: null }),
+    ]),
+    next_cursor: null,
+  });
 }
 
 function optionalGame(value) {

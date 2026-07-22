@@ -4319,6 +4319,69 @@ pub async fn game_index(
     Ok(GameIndexPage { games, next_cursor })
 }
 
+/// Read every game visible to global operators, including setup rows that are
+/// intentionally excluded from the public discovery index.
+pub async fn operator_game_index(
+    pool: &PgPool,
+    cursor: Option<GameIndexCursor>,
+    limit: i64,
+) -> Result<GameIndexPage, ProjectionError> {
+    let limit = limit.clamp(1, 100);
+    let fetch_limit = limit + 1;
+    let rows = match cursor {
+        Some(cursor) => {
+            sqlx::query(
+                r#"
+                SELECT game_id, pack, status, phase_id, updated_seq, completed_seq
+                FROM game_index
+                WHERE updated_seq < $1 OR (updated_seq = $1 AND game_id < $2)
+                ORDER BY updated_seq DESC, game_id DESC
+                LIMIT $3
+                "#,
+            )
+            .bind(cursor.updated_seq)
+            .bind(cursor.game_id)
+            .bind(fetch_limit)
+            .fetch_all(pool)
+            .await?
+        }
+        None => {
+            sqlx::query(
+                r#"
+                SELECT game_id, pack, status, phase_id, updated_seq, completed_seq
+                FROM game_index
+                ORDER BY updated_seq DESC, game_id DESC
+                LIMIT $1
+                "#,
+            )
+            .bind(fetch_limit)
+            .fetch_all(pool)
+            .await?
+        }
+    };
+    let has_more = rows.len() as i64 > limit;
+    let games: Vec<_> = rows
+        .into_iter()
+        .take(limit as usize)
+        .map(|row| GameIndexRow {
+            game_id: row.get("game_id"),
+            pack: row.get("pack"),
+            status: row.get("status"),
+            phase_id: row.get("phase_id"),
+            updated_seq: row.get("updated_seq"),
+            completed_seq: row.get("completed_seq"),
+        })
+        .collect();
+    let next_cursor = has_more.then(|| {
+        let last = games.last().expect("full operator page has a final game");
+        GameIndexCursor {
+            updated_seq: last.updated_seq,
+            game_id: last.game_id,
+        }
+    });
+    Ok(GameIndexPage { games, next_cursor })
+}
+
 /// Resolve one active or completed game through the public discovery boundary.
 pub async fn public_game_by_id(
     pool: &PgPool,

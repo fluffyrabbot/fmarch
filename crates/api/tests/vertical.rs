@@ -4302,7 +4302,7 @@ async fn public_game_index_cold_load_pages_only_active_and_completed_rows(pool: 
         .unwrap();
     }
 
-    let app = router(pool);
+    let app = router_with_dev_auth(pool.clone());
     let response = app
         .clone()
         .oneshot(
@@ -4341,6 +4341,68 @@ async fn public_game_index_cold_load_pages_only_active_and_completed_rows(pool: 
     assert_eq!(older.games[0].game, active_game);
     assert_eq!(older.games[0].status, "active");
     assert_eq!(older.next_cursor, None);
+
+    let unauthorized = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/admin/games")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(unauthorized.status(), StatusCode::UNAUTHORIZED);
+    let admin_token = "admin-game-index-token";
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/auth/dev-session")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    serde_json::json!({
+                        "token": admin_token,
+                        "principal_user_id": "game_index_admin",
+                        "expires_at": 4_102_444_800i64,
+                        "global_capabilities": ["GlobalAdmin"]
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/admin/games?limit=100")
+                .header("authorization", format!("Bearer {admin_token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let operator_page: GameIndexPage = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(
+        operator_page
+            .games
+            .iter()
+            .map(|game| (game.game, game.status.as_str()))
+            .collect::<Vec<_>>(),
+        vec![
+            (setup_game, "setup"),
+            (completed_game, "completed"),
+            (active_game, "active"),
+        ]
+    );
 
     let invalid = app
         .oneshot(

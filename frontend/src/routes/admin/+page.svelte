@@ -224,6 +224,20 @@
 <main class="fm-surface admin-surface" data-testid={ADMIN_ROUTE_CONTRACT.surfaceTestId}>
   <AppSurfaceHeader header={data.surfaceHeader} />
 
+  {#if data.gameSelection?.options?.length > 0}
+    <form method="GET" class="admin-game-picker fm-panel" data-testid="admin-game-picker">
+      <label class="fm-field" for="admin-game-picker-select">
+        <span>Game workspace</span>
+        <select id="admin-game-picker-select" name="game" data-testid="admin-game-picker-select">
+          {#each data.gameSelection.options as game}
+            <option value={game.id} selected={game.selected}>{game.label}</option>
+          {/each}
+        </select>
+      </label>
+      <button class="fm-touch-button fm-touch-button--secondary" type="submit">Open game</button>
+    </form>
+  {/if}
+
   {#if adminForcedRouteState}
     <RouteState view={adminForcedRouteState} />
   {:else if adminSurfaceEmpty}
@@ -320,6 +334,18 @@
 </main>
 
 <style>
+  .admin-game-picker {
+    align-items: end;
+    display: grid;
+    gap: 12px;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .admin-game-picker select {
+    min-block-size: var(--fm-touch-target);
+    width: 100%;
+  }
+
   .admin-surface__section {
     display: grid;
     gap: 18px;
@@ -372,6 +398,11 @@
   }
 
   @media (max-width: 760px) {
+    .admin-game-picker {
+      align-items: stretch;
+      grid-template-columns: 1fr;
+    }
+
     .admin-surface__section-heading {
       align-items: start;
       display: grid;

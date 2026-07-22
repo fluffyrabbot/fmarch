@@ -17,10 +17,11 @@ use projections::{
     action_counters, action_grants, append_and_project, append_discussion_and_project,
     append_discussion_and_project_expected, append_profile_and_project, audit_rebuild,
     day_vote_outcomes, discussion_area_by_slug, discussion_posts, discussion_topic_by_id,
-    discussion_topics, game_index, host_phase_controls, host_prompts, phase_state,
-    player_notifications, profile_editor_by_handle, public_profile_by_handle, public_search,
-    rebuild, rebuild_discussion_stream, rebuild_moderation_stream, rebuild_profile_stream,
-    slot_effects, slot_state, votecount, ProjectionError, PublicSearchFilter,
+    discussion_topics, game_index, host_phase_controls, host_prompts, operator_game_index,
+    phase_state, player_notifications, profile_editor_by_handle, public_profile_by_handle,
+    public_search, rebuild, rebuild_discussion_stream, rebuild_moderation_stream,
+    rebuild_profile_stream, slot_effects, slot_state, votecount, ProjectionError,
+    PublicSearchFilter,
 };
 use sqlx::postgres::PgPoolOptions;
 use sqlx::PgPool;
@@ -1587,6 +1588,19 @@ async fn game_index_pages_public_active_and_completed_lifecycle_rows(pool: sqlx:
         vec![
             (completed_game, "completed", Some("D01")),
             (active_game, "active", Some("N01")),
+        ]
+    );
+    let operator_rows = operator_game_index(&pool, None, 10).await.unwrap();
+    assert_eq!(
+        operator_rows
+            .games
+            .iter()
+            .map(|row| (row.game_id, row.status.as_str()))
+            .collect::<Vec<_>>(),
+        vec![
+            (setup_game, "setup"),
+            (completed_game, "completed"),
+            (active_game, "active"),
         ]
     );
 }

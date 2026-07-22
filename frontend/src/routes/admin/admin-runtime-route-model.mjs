@@ -12,10 +12,13 @@ export async function buildAdminRuntimeRouteData({
   apiBaseUrl = "",
   sessionToken = null,
   identityPrincipalUserId = "host_h",
+  gameIndexPage = null,
 }) {
+  const gameSelection = normalizeAdminGameSelection(gameIndexPage, game);
+  const selectedGame = gameSelection.selectedGame;
   const access = resolveSurfaceAccess({ surface: "admin", game: null, capabilities });
   const shell = buildAppShell({
-    game,
+    game: selectedGame,
     activeSurface: "admin",
     principalUserId,
     capabilities,
@@ -26,12 +29,13 @@ export async function buildAdminRuntimeRouteData({
     capabilityLabel: access.capabilityLabel,
   });
 
-  if (!access.allowed || game === null) {
+  if (!access.allowed || selectedGame === null) {
     return Object.freeze({
       shell,
       surfaceHeader,
       access,
       operator,
+      gameSelection,
       command: emptyAdminCommand(),
       gameSetup: Object.freeze([]),
       audit: Object.freeze([]),
@@ -41,13 +45,13 @@ export async function buildAdminRuntimeRouteData({
   }
 
   const coldData = await loadAdminColdData({
-    game,
+    game: selectedGame,
     principalUserId,
     fetchImpl,
     apiBaseUrl,
     sessionToken,
     identityPrincipalUserId,
-    fallback: runtimeAuditFallback({ game }),
+    fallback: runtimeAuditFallback({ game: selectedGame }),
   });
 
   return Object.freeze({
@@ -55,26 +59,27 @@ export async function buildAdminRuntimeRouteData({
     surfaceHeader,
     access,
     operator,
+    gameSelection,
     command: Object.freeze({
       endpoint: "/commands",
-      createGame: Object.freeze({ action: "create_game", game, pack: "mafiascum" }),
-      cohost: Object.freeze({ action: "add_cohost", game, user: "cohost_c" }),
+      createGame: Object.freeze({ action: "create_game", game: selectedGame, pack: "mafiascum" }),
+      cohost: Object.freeze({ action: "add_cohost", game: selectedGame, user: "cohost_c" }),
       sessionGrant: null,
     }),
     gameSetup: Object.freeze([
       Object.freeze({
         id: "host-setup",
         label: "Host setup workflow",
-        value: `${game} setup`,
+        value: `${selectedGame} setup`,
         authority: "HostOf(game)",
         boundary: "Game-specific setup",
         boundaryDetail: "Roster, roles, policy, invites, and StartGame readiness",
         commandAction: "navigate",
-        href: `/g/${encodeURIComponent(game)}/setup`,
+        href: `/g/${encodeURIComponent(selectedGame)}/setup`,
         buttonLabel: "Open setup",
       }),
     ]),
-    audit: withRuntimeAuditLinks(coldData.audit, { game }),
+    audit: withRuntimeAuditLinks(coldData.audit, { game: selectedGame }),
     recoveryTasks: Object.freeze([
       Object.freeze({
         id: "recovery-gate",
@@ -88,7 +93,7 @@ export async function buildAdminRuntimeRouteData({
         confirmLabel: "Run check",
         confirmMessage: "Read saved go/no-go proof artifacts for this game",
         endpoint: operatorProofRunUrl({
-          game,
+          game: selectedGame,
           path: "operator/proof-runs/go-no-go",
         }),
       }),
@@ -105,6 +110,58 @@ export async function buildAdminRuntimeRouteData({
         value: "GlobalMod only",
       }),
     ]),
+  });
+}
+
+export async function loadAdminGameIndex({
+  fetchImpl,
+  apiBaseUrl = "",
+  sessionToken = null,
+  fallback = null,
+}) {
+  if (
+    typeof fetchImpl !== "function" ||
+    typeof sessionToken !== "string" ||
+    sessionToken.trim() === ""
+  ) {
+    return fallback;
+  }
+  try {
+    const response = await fetchImpl(`${apiBaseUrl}/admin/games?limit=100`, {
+      headers: {
+        accept: "application/json",
+        authorization: `Bearer ${sessionToken}`,
+      },
+    });
+    if (!response.ok) {
+      return fallback;
+    }
+    const body = await response.json();
+    return body !== null && typeof body === "object" ? body : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+export function normalizeAdminGameSelection(page, requestedGame = null) {
+  const games = Array.isArray(page?.games)
+    ? page.games.map(normalizeAdminGameOption).filter(Boolean)
+    : [];
+  const requested = nonemptyString(requestedGame);
+  const selected = games.find((entry) => entry.id === requested) ??
+    games.find((entry) => entry.status !== "completed") ??
+    games[0] ??
+    null;
+  return Object.freeze({
+    status: page === null ? "unavailable" : "ready",
+    selectedGame: selected?.id ?? requested,
+    options: Object.freeze(
+      games.map((entry) => Object.freeze({
+        ...entry,
+        selected: entry.id === selected?.id,
+        href: `/admin?game=${encodeURIComponent(entry.id)}`,
+      })),
+    ),
   });
 }
 
@@ -210,4 +267,29 @@ function adminOverviewHref(game) {
   return game === null
     ? "/admin"
     : `/admin?game=${encodeURIComponent(game)}`;
+}
+
+function normalizeAdminGameOption(entry) {
+  const id = nonemptyString(entry?.game, entry?.id);
+  const pack = nonemptyString(entry?.pack);
+  const status = nonemptyString(entry?.status);
+  if (id === null || pack === null || !["setup", "active", "completed"].includes(status)) {
+    return null;
+  }
+  const phase = nonemptyString(entry?.phase_id, entry?.phaseId);
+  return Object.freeze({
+    id,
+    pack,
+    status,
+    label: `${pack} · ${status}${phase === null ? "" : ` · ${phase}`}`,
+  });
+}
+
+function nonemptyString(...values) {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim() !== "") {
+      return value.trim();
+    }
+  }
+  return null;
 }

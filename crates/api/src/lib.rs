@@ -250,6 +250,7 @@ pub fn router_with_state(state: ApiState) -> Router {
             get(identity_lifecycle_audit),
         )
         .route("/commands", post(command))
+        .route("/admin/games", get(admin_game_index))
         .route("/games", get(game_index))
         .route("/games/{game}", get(public_game_thread))
         .route("/games/import", post(import_completed_game_export))
@@ -3559,6 +3560,26 @@ async fn require_global_admin(
     Ok(principal_user_id)
 }
 
+async fn require_global_operator(
+    state: &ApiState,
+    token: &str,
+    action: &str,
+) -> Result<String, ApiError> {
+    let (principal_user_id, global_capabilities) =
+        active_session_principal_and_globals(state, token).await?;
+    if !global_capabilities
+        .iter()
+        .any(|capability| matches!(capability.as_str(), "GlobalAdmin" | "GlobalMod"))
+    {
+        return Err(ApiError::Reject {
+            status: StatusCode::FORBIDDEN,
+            error: RejectCode::NotAuthorized,
+            message: format!("{action} requires GlobalAdmin or GlobalMod"),
+        });
+    }
+    Ok(principal_user_id)
+}
+
 fn unauthorized_session() -> ApiError {
     ApiError::Reject {
         status: StatusCode::UNAUTHORIZED,
@@ -4300,6 +4321,25 @@ async fn game_index(
         .transpose()?;
     Ok(Json(
         projections::game_index(&state.pool, cursor, query.limit.unwrap_or(12))
+            .await?
+            .into(),
+    ))
+}
+
+async fn admin_game_index(
+    State(state): State<ApiState>,
+    Query(query): Query<GameIndexQuery>,
+    headers: HeaderMap,
+) -> Result<Json<GameIndexPage>, ApiError> {
+    let token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
+    require_global_operator(&state, token, "admin game discovery").await?;
+    let cursor = query
+        .cursor
+        .as_deref()
+        .map(parse_game_index_cursor)
+        .transpose()?;
+    Ok(Json(
+        projections::operator_game_index(&state.pool, cursor, query.limit.unwrap_or(100))
             .await?
             .into(),
     ))
