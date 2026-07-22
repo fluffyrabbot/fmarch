@@ -640,7 +640,8 @@ async fn role_pm_media_reloads_transfers_and_denies_stale_outgoing_session(pool:
             Command::CreateGame {
                 game,
                 pack: "mafiascum".into(),
-            },
+            cohost_denied: vec![],
+        },
         ),
         (
             2,
@@ -1043,7 +1044,8 @@ async fn mason_neighbor_rooms_encrypt_reload_transfer_and_deny_nonmembers(pool: 
             Command::CreateGame {
                 game,
                 pack: "mafiascum".into(),
-            },
+            cohost_denied: vec![],
+        },
         )
         .await,
     );
@@ -1480,7 +1482,8 @@ async fn dead_chat_lifecycle_encrypts_streams_transfers_and_revokes(pool: sqlx::
             Command::CreateGame {
                 game,
                 pack: "mafiascum".into(),
-            },
+            cohost_denied: vec![],
+        },
         )
         .await,
     );
@@ -1906,7 +1909,8 @@ async fn spectator_room_grant_reads_host_notices_and_revokes(pool: sqlx::PgPool)
             Command::CreateGame {
                 game,
                 pack: "mafiascum".into(),
-            },
+            cohost_denied: vec![],
+        },
         )
         .await,
     );
@@ -2390,7 +2394,8 @@ async fn seed_single_vote_game(app: axum::Router, game: Uuid) {
             Command::CreateGame {
                 game,
                 pack: "mafiascum".into(),
-            },
+            cohost_denied: vec![],
+        },
         )
         .await,
     );
@@ -2531,7 +2536,8 @@ async fn seed_beloved_princess_ready_to_resolve(app: axum::Router, game: Uuid) {
             Command::CreateGame {
                 game,
                 pack: "mafiascum".into(),
-            },
+            cohost_denied: vec![],
+        },
         )
         .await,
     );
@@ -2677,7 +2683,8 @@ async fn endgame_summary_reveals_winner_only_after_terminal_win(pool: sqlx::PgPo
             Command::CreateGame {
                 game,
                 pack: "default_open".into(),
-            },
+            cohost_denied: vec![],
+        },
         )
         .await,
     );
@@ -2940,7 +2947,8 @@ async fn host_setup_sequence_commits_to_setup_state(pool: sqlx::PgPool) {
             Command::CreateGame {
                 game,
                 pack: "mafiascum".into(),
-            },
+            cohost_denied: vec![],
+        },
         ),
         (
             2,
@@ -3041,7 +3049,8 @@ async fn player_command_state_derives_phase_valid_role_actions(pool: sqlx::PgPoo
             Command::CreateGame {
                 game,
                 pack: "mafiascum".into(),
-            },
+            cohost_denied: vec![],
+        },
         ),
         (
             2,
@@ -3416,7 +3425,8 @@ async fn player_command_state_exposes_day_vote_targets(pool: sqlx::PgPool) {
             Command::CreateGame {
                 game,
                 pack: "mafiascum".into(),
-            },
+            cohost_denied: vec![],
+        },
         ),
         (
             2,
@@ -4109,7 +4119,8 @@ async fn websocket_player_connection_streams_scoped_private_notification_delta(p
             Command::CreateGame {
                 game,
                 pack: "chinese_structured".into(),
-            },
+            cohost_denied: vec![],
+        },
         )
         .await,
     );
@@ -4287,7 +4298,8 @@ async fn vertical_day_vote_outcomes_returns_canonical_engine_result(pool: sqlx::
             Command::CreateGame {
                 game,
                 pack: "mafiascum".into(),
-            },
+            cohost_denied: vec![],
+        },
         )
         .await,
     );
@@ -4411,7 +4423,8 @@ async fn vertical_thread_cold_load_returns_paginated_posts(pool: sqlx::PgPool) {
             Command::CreateGame {
                 game,
                 pack: "mafiascum".into(),
-            },
+            cohost_denied: vec![],
+        },
         )
         .await,
     );
@@ -4717,8 +4730,9 @@ async fn completed_game_export_is_host_gated_and_checksum_bearing(pool: sqlx::Pg
             "export_host",
             Command::CreateGame {
                 game,
-                pack: "mafiascum".into()
-            },
+                pack: "mafiascum".into(),
+            cohost_denied: vec![],
+        },
         )
         .await
         .body,
@@ -5731,7 +5745,8 @@ async fn vertical_private_channel_submit_post_requires_channel_membership(pool: 
             Command::CreateGame {
                 game,
                 pack: "mafiascum".into(),
-            },
+            cohost_denied: vec![],
+        },
         ),
         (
             2,
@@ -5859,7 +5874,8 @@ async fn vertical_faction_day_chat_is_command_declared_and_channel_scoped(pool: 
             Command::CreateGame {
                 game,
                 pack: "mafiascum".into(),
-            },
+            cohost_denied: vec![],
+        },
         )
         .await,
     );
@@ -6031,7 +6047,8 @@ async fn host_action_commands_are_capability_gated_and_projected(pool: sqlx::PgP
             Command::CreateGame {
                 game,
                 pack: "mafiascum".into(),
-            },
+            cohost_denied: vec![],
+        },
         )
         .await,
     );
@@ -6248,7 +6265,8 @@ async fn opaque_auth_session_resolves_committed_host_capabilities(pool: sqlx::Pg
             Command::CreateGame {
                 game,
                 pack: "mafiascum".into(),
-            },
+            cohost_denied: vec![],
+        },
         )
         .await,
     );
@@ -6959,7 +6977,8 @@ async fn global_admin_account_login_creates_normal_role_session(pool: sqlx::PgPo
             Command::CreateGame {
                 game,
                 pack: "mafiascum".into(),
-            },
+            cohost_denied: vec![],
+        },
         )
         .await,
     );
@@ -8296,7 +8315,8 @@ async fn global_admin_invite_redeems_to_normal_role_session(pool: sqlx::PgPool) 
             Command::CreateGame {
                 game,
                 pack: "mafiascum".into(),
-            },
+            cohost_denied: vec![],
+        },
         )
         .await,
     );
@@ -8464,7 +8484,8 @@ async fn host_issued_invite_redeems_through_game_role_projection(pool: sqlx::PgP
             Command::CreateGame {
                 game,
                 pack: "mafiascum".into(),
-            },
+            cohost_denied: vec![],
+        },
         )
         .await,
     );
@@ -8784,7 +8805,8 @@ async fn auth_lifecycle_rotates_sessions_and_revokes_invites(pool: sqlx::PgPool)
             Command::CreateGame {
                 game,
                 pack: "mafiascum".into(),
-            },
+            cohost_denied: vec![],
+        },
         )
         .await,
     );
@@ -9137,7 +9159,8 @@ async fn duplicate_command_id_returns_original_ack_without_duplicate_post(pool: 
             Command::CreateGame {
                 game,
                 pack: "mafiascum".into(),
-            },
+            cohost_denied: vec![],
+        },
         )
         .await,
     );
@@ -9218,7 +9241,8 @@ async fn vertical_notifications_are_capability_filtered(pool: sqlx::PgPool) {
             Command::CreateGame {
                 game,
                 pack: "chinese_structured".into(),
-            },
+            cohost_denied: vec![],
+        },
         )
         .await,
     );
@@ -9399,7 +9423,8 @@ async fn vertical_investigation_results_are_capability_filtered(pool: sqlx::PgPo
             Command::CreateGame {
                 game,
                 pack: "mafiascum".into(),
-            },
+            cohost_denied: vec![],
+        },
         )
         .await,
     );

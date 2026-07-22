@@ -45,6 +45,76 @@ pub struct ThreadPostMediaVariant {
     pub height: u32,
 }
 
+/// Permission classes a primary host may deny to cohosts at game creation
+/// (doc 14). Empty denylist = full co-GM parity for game-run mutators.
+/// Structural acts (grant cohost, edit denylist, transfer host) are never
+/// grantable via this enum — they require [`Capability::HostOf`](caps::Capability).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CohostPermissionClass {
+    /// Roster, roles, spectators, post policy during setup/run.
+    Setup,
+    /// Start/advance/resolve/complete phases, lock thread, publish votecount.
+    PhaseResolve,
+    /// Engine `ResolveHostPrompt`.
+    HostPromptResolve,
+    /// Slot lifecycle + status tags.
+    Lifecycle,
+    /// `ProcessReplacement`.
+    Replacement,
+    /// `ExtendDeadline`.
+    Deadline,
+    /// Host-authored narrative (spectator posts today; PublishNarrative later).
+    Narrative,
+    /// ITA session control.
+    ItaControl,
+    /// Future `ApplyEffectSpec` / mechanical fiat.
+    EffectSpec,
+    /// Future day-event open/lock/cancel.
+    DayEventOps,
+    /// Future day-event resolve with rewards.
+    DayEventResolve,
+    /// Future day-program attach.
+    ProgramAttach,
+}
+
+impl CohostPermissionClass {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Setup => "setup",
+            Self::PhaseResolve => "phase_resolve",
+            Self::HostPromptResolve => "host_prompt_resolve",
+            Self::Lifecycle => "lifecycle",
+            Self::Replacement => "replacement",
+            Self::Deadline => "deadline",
+            Self::Narrative => "narrative",
+            Self::ItaControl => "ita_control",
+            Self::EffectSpec => "effect_spec",
+            Self::DayEventOps => "day_event_ops",
+            Self::DayEventResolve => "day_event_resolve",
+            Self::ProgramAttach => "program_attach",
+        }
+    }
+
+    pub fn parse(raw: &str) -> Option<Self> {
+        match raw {
+            "setup" => Some(Self::Setup),
+            "phase_resolve" => Some(Self::PhaseResolve),
+            "host_prompt_resolve" => Some(Self::HostPromptResolve),
+            "lifecycle" => Some(Self::Lifecycle),
+            "replacement" => Some(Self::Replacement),
+            "deadline" => Some(Self::Deadline),
+            "narrative" => Some(Self::Narrative),
+            "ita_control" => Some(Self::ItaControl),
+            "effect_spec" => Some(Self::EffectSpec),
+            "day_event_ops" => Some(Self::DayEventOps),
+            "day_event_resolve" => Some(Self::DayEventResolve),
+            "program_attach" => Some(Self::ProgramAttach),
+            _ => None,
+        }
+    }
+}
+
 /// The commands the pipeline accepts. Slice commands + the minimal bootstrap
 /// lifecycle needed to stand a game up in tests (kept minimal, host-gated where
 /// appropriate). `game` is the stream id (= game id).
@@ -52,91 +122,97 @@ pub struct ThreadPostMediaVariant {
 pub enum Command {
     // ── bootstrap lifecycle ──
     /// Create a game; the issuing principal becomes the host. No prior authority.
-    CreateGame { game: Uuid, pack: String },
-    /// Add an (empty) slot to the game. Host-gated.
+    /// Optional `cohost_denied` limits cohost game-run classes (default empty = full co-GM).
+    CreateGame {
+        game: Uuid,
+        pack: String,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        cohost_denied: Vec<CohostPermissionClass>,
+    },
+    /// Add an (empty) slot to the game. Host-team (Setup class).
     AddSlot { game: Uuid, slot: String },
-    /// Assign a user into a slot (occupancy begins). Host-gated.
+    /// Assign a user into a slot (occupancy begins). Host-team (Setup class).
     AssignSlot {
         game: Uuid,
         slot: String,
         user: String,
     },
-    /// Assign a role to a slot. Host-gated.
+    /// Assign a role to a slot. Host-team (Setup class).
     AssignRole {
         game: Uuid,
         slot: String,
         role_key: String,
     },
-    /// Set a slot's resolver-visible lifecycle. Host-gated.
+    /// Set a slot's resolver-visible lifecycle. Host-team (Lifecycle class).
     SetSlotStatus {
         game: Uuid,
         slot: String,
         status: domain::SlotLifecycle,
     },
-    /// Add a pack-visible status tag to a slot. Host-gated.
+    /// Add a pack-visible status tag to a slot. Host-team (Lifecycle class).
     AddSlotStatusTag {
         game: Uuid,
         slot: String,
         tag: String,
     },
-    /// Remove a pack-visible status tag from a slot. Host-gated.
+    /// Remove a pack-visible status tag from a slot. Host-team (Lifecycle class).
     RemoveSlotStatusTag {
         game: Uuid,
         slot: String,
         tag: String,
     },
-    /// Delegate cohost authority to a user. Host-gated.
+    /// Delegate cohost authority to a user. **Primary host only** (structural).
     AddCohost { game: Uuid, user: String },
-    /// Grant read-only access to the fixed spectator room. Host-gated.
+    /// Grant read-only access to the fixed spectator room. Host-team (Setup class).
     GrantSpectator { game: Uuid, user: String },
-    /// Revoke read-only access to the fixed spectator room. Host-gated.
+    /// Revoke read-only access to the fixed spectator room. Host-team (Setup class).
     RevokeSpectator { game: Uuid, user: String },
-    /// Freeze the roster and start the game at `phase`. Host-gated.
+    /// Freeze the roster and start the game at `phase`. Host-team (PhaseResolve).
     StartGame { game: Uuid, phase: String },
-    /// Open a Day phase (the votable window). Host-gated.
+    /// Open a Day phase (the votable window). Host-team (PhaseResolve).
     OpenDayPhase { game: Uuid, phase: String },
     /// Advance from a resolved, locked phase to the next phase declared by the
-    /// pack cadence. Host-gated.
+    /// pack cadence. Host-team (PhaseResolve).
     AdvancePhase { game: Uuid },
     /// Record deadline-expiry evidence and advance from a resolved, locked
-    /// phase through the same pack-cadence derivation. Host-gated until a
+    /// phase through the same pack-cadence derivation. Host-team until a
     /// scheduler principal exists.
     AdvancePhaseByDeadline {
         game: Uuid,
         phase: String,
         observed_at: i64,
     },
-    /// Lock the main thread (votes/posts blocked). Host-gated.
+    /// Lock the main thread (votes/posts blocked). Host-team (PhaseResolve).
     LockThread { game: Uuid },
-    /// Unlock the main thread. Host-gated.
+    /// Unlock the main thread. Host-team (PhaseResolve).
     UnlockThread { game: Uuid },
     /// Resolve the current phase by loading snapshot + submissions and applying
-    /// the domain resolver. Host-gated.
+    /// the domain resolver. Host-team (PhaseResolve).
     ResolvePhase { game: Uuid, seed: u64 },
-    /// Mark the game complete and reveal final role/alignment facts. Host-gated.
+    /// Mark the game complete and reveal final role/alignment facts. Host-team (PhaseResolve).
     CompleteGame { game: Uuid },
-    /// Publish an official current-phase votecount post derived from projections. Host-gated.
+    /// Publish an official current-phase votecount post derived from projections. Host-team (PhaseResolve).
     PublishVotecount { game: Uuid },
-    /// Resolve a durable host/admin prompt emitted by the engine. Host-gated.
+    /// Resolve a durable host/admin prompt emitted by the engine. Host-team (HostPromptResolve).
     ResolveHostPrompt {
         game: Uuid,
         prompt_id: String,
         decision: HostPromptDecision,
     },
-    /// Toggle channel-level post policy. Host-gated.
+    /// Toggle channel-level post policy. Host-team (Setup class).
     SetPostPolicy {
         game: Uuid,
         channel_id: String,
         allow_media_only: bool,
     },
-    /// Publish a host-authored post into the fixed spectator room. Host-gated.
+    /// Publish a host-authored post into the fixed spectator room. Host-team (Narrative).
     PublishSpectatorPost {
         game: Uuid,
         body: String,
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         media: Vec<ThreadPostMedia>,
     },
-    /// Record a host/admin ITA session lifecycle control for the current Day phase. Host-gated.
+    /// Record a host/admin ITA session lifecycle control for the current Day phase. Host-team (ItaControl).
     ControlItaSession {
         game: Uuid,
         session_id: String,
@@ -180,9 +256,9 @@ pub enum Command {
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         media: Vec<ThreadPostMedia>,
     },
-    /// Extend a phase deadline. Requires `HostOf|CohostOf`.
+    /// Extend a phase deadline. Host-team (Deadline class).
     ExtendDeadline { game: Uuid, phase: String, at: i64 },
-    /// Replace the human behind a slot (seat id unchanged). Requires `HostOf`.
+    /// Replace the human behind a slot (seat id unchanged). Host-team (Replacement class).
     ProcessReplacement {
         game: Uuid,
         slot: String,
@@ -210,6 +286,9 @@ pub enum Reject {
     /// The action needs host (or cohost) authority the principal lacks.
     #[error("not host")]
     NotHost,
+    /// Principal is a cohost but this permission class is denied on the game.
+    #[error("cohost permission denied: {0}")]
+    CohostPermissionDenied(String),
     /// The phase is locked (or no votable phase is open).
     #[error("phase locked")]
     PhaseLocked,

@@ -1200,7 +1200,8 @@ async fn vertical_projection_audit_is_host_audit_only_and_reports_drift(pool: sq
             Command::CreateGame {
                 game,
                 pack: "mafiascum".into(),
-            },
+            cohost_denied: vec![],
+        },
         )
         .await,
     );
@@ -1520,7 +1521,8 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
             Command::CreateGame {
                 game,
                 pack: "mafiascum".into(),
-            },
+            cohost_denied: vec![],
+        },
         )
         .await,
     );
@@ -3443,7 +3445,8 @@ async fn vertical_host_phase_controls_are_host_audit_only(pool: sqlx::PgPool) {
             Command::CreateGame {
                 game,
                 pack: "mafiascum".into(),
-            },
+            cohost_denied: vec![],
+        },
         )
         .await,
     );
@@ -3638,7 +3641,8 @@ async fn vertical_resolution_traces_are_host_audit_only(pool: sqlx::PgPool) {
             Command::CreateGame {
                 game,
                 pack: "mafiascum".into(),
-            },
+            cohost_denied: vec![],
+        },
         )
         .await,
     );
@@ -4022,7 +4026,8 @@ async fn vertical_resolution_audit_is_host_audit_only_and_reports_drift(pool: sq
             Command::CreateGame {
                 game,
                 pack: "mafiascum".into(),
-            },
+            cohost_denied: vec![],
+        },
         )
         .await,
     );
@@ -4304,7 +4309,8 @@ async fn vertical_operator_html_surfaces_render_from_seeded_http_server(pool: sq
             Command::CreateGame {
                 game,
                 pack: "mafiascum".into(),
-            },
+            cohost_denied: vec![],
+        },
         )
         .await,
     );

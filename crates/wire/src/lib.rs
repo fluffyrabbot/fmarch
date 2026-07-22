@@ -190,11 +190,50 @@ impl From<SlotLifecycle> for domain::SlotLifecycle {
     }
 }
 
+/// Permission classes a primary host may deny to cohosts at game creation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum CohostPermissionClass {
+    Setup,
+    PhaseResolve,
+    HostPromptResolve,
+    Lifecycle,
+    Replacement,
+    Deadline,
+    Narrative,
+    ItaControl,
+    EffectSpec,
+    DayEventOps,
+    DayEventResolve,
+    ProgramAttach,
+}
+
+impl From<CohostPermissionClass> for commands::CohostPermissionClass {
+    fn from(value: CohostPermissionClass) -> Self {
+        match value {
+            CohostPermissionClass::Setup => Self::Setup,
+            CohostPermissionClass::PhaseResolve => Self::PhaseResolve,
+            CohostPermissionClass::HostPromptResolve => Self::HostPromptResolve,
+            CohostPermissionClass::Lifecycle => Self::Lifecycle,
+            CohostPermissionClass::Replacement => Self::Replacement,
+            CohostPermissionClass::Deadline => Self::Deadline,
+            CohostPermissionClass::Narrative => Self::Narrative,
+            CohostPermissionClass::ItaControl => Self::ItaControl,
+            CohostPermissionClass::EffectSpec => Self::EffectSpec,
+            CohostPermissionClass::DayEventOps => Self::DayEventOps,
+            CohostPermissionClass::DayEventResolve => Self::DayEventResolve,
+            CohostPermissionClass::ProgramAttach => Self::ProgramAttach,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 pub enum Command {
     CreateGame {
         game: Uuid,
         pack: String,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        cohost_denied: Vec<CohostPermissionClass>,
     },
     AddSlot {
         game: Uuid,
@@ -324,7 +363,14 @@ pub enum Command {
 impl From<Command> for commands::Command {
     fn from(command: Command) -> Self {
         match command {
-            Command::CreateGame { game, pack } => commands::Command::CreateGame { game, pack },
+            Command::CreateGame { game, pack, cohost_denied } => commands::Command::CreateGame {
+                game,
+                pack,
+                cohost_denied: cohost_denied
+                    .into_iter()
+                    .map(Into::into)
+                    .collect(),
+            },
             Command::AddSlot { game, slot } => commands::Command::AddSlot { game, slot },
             Command::AssignSlot { game, slot, user } => {
                 commands::Command::AssignSlot { game, slot, user }
@@ -514,6 +560,7 @@ pub enum RejectCode {
     NotAuthorized,
     NotYourSlot,
     NotHost,
+    CohostPermissionDenied,
     PhaseLocked,
     SlotNotAlive,
     VoteNotAllowed,
@@ -537,6 +584,7 @@ impl From<&commands::Reject> for RejectCode {
             commands::Reject::NotAuthorized => RejectCode::NotAuthorized,
             commands::Reject::NotYourSlot => RejectCode::NotYourSlot,
             commands::Reject::NotHost => RejectCode::NotHost,
+            commands::Reject::CohostPermissionDenied(_) => RejectCode::CohostPermissionDenied,
             commands::Reject::PhaseLocked => RejectCode::PhaseLocked,
             commands::Reject::SlotNotAlive => RejectCode::SlotNotAlive,
             commands::Reject::VoteNotAllowed => RejectCode::VoteNotAllowed,
@@ -1654,8 +1702,9 @@ pub mod typescript {
         Command, CommandMsg, CommunityInboxItem, CommunityInboxPage, DayVoteOutcomeDelta,
         DiscussionArea, DiscussionAuthor, DiscussionPost, DiscussionThreadPage, DiscussionTopic,
         DiscussionTopicPage, GameIndexEntry, GameIndexPage, Hello, HostConsolePhaseStateDelta,
-        HostConsoleSlotOccupancyDelta, HostConsoleStateDelta, HostConsoleThreadPostDelta,
-        HostPhaseControl, HostPromptDecision, HostPromptDelta, HostPromptsDelta, ModerationCase,
+        CohostPermissionClass, HostConsoleSlotOccupancyDelta, HostConsoleStateDelta,
+        HostConsoleThreadPostDelta, HostPhaseControl, HostPromptDecision, HostPromptDelta,
+        HostPromptsDelta, ModerationCase,
         ModerationCaseDetail, ModerationCasePage, ModerationHistory, ModerationReport,
         ModerationReportReceipt, PlayerInvestigationResult, PlayerNotification, ProfileEditor,
         ProjectionDelta, PublicGameThreadPage, PublicProfile, PublicSearchPage, PublicSearchResult,
@@ -1675,6 +1724,7 @@ pub mod typescript {
         push::<HostPromptDecision>(&mut out);
         push::<SlotLifecycle>(&mut out);
         push::<SubmitPostMedia>(&mut out);
+        push::<CohostPermissionClass>(&mut out);
         push::<Command>(&mut out);
         push::<CommandMsg>(&mut out);
         push::<ClientMsg>(&mut out);

@@ -791,6 +791,8 @@ async fn fold_event(
             upsert_authority(tx, game_id, &host, "host").await?;
             let pack = str_field(&ev.payload, "pack", &ev.kind)?;
             insert_game_index_setup(tx, game_id, &pack, ev.seq).await?;
+            let denied = cohost_denied_from_payload(&ev.payload);
+            upsert_cohost_policy(tx, game_id, &denied, ev.seq).await?;
         }
         "CohostAdded" => {
             let cohost = str_field(&ev.payload, "user_id", &ev.kind)?;
@@ -3132,6 +3134,7 @@ async fn rebuild_in_tx(
         "slot_effect",
         "slot_state",
         "game_authority",
+        "game_cohost_policy",
         "spectator_membership",
         "slot_occupancy",
         "phase_state",
@@ -3262,6 +3265,10 @@ const AUDIT_PROJECTIONS: &[AuditProjection] = &[
     AuditProjection {
         table: "game_authority",
         order_by: "role, user_id",
+    },
+    AuditProjection {
+        table: "game_cohost_policy",
+        order_by: "game_id",
     },
     AuditProjection {
         table: "spectator_membership",
@@ -5520,6 +5527,52 @@ async fn upsert_authority(
     .execute(&mut **tx)
     .await?;
     Ok(())
+}
+
+fn cohost_denied_from_payload(payload: &serde_json::Value) -> Vec<String> {
+    payload
+        .get("cohost_denied")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+async fn upsert_cohost_policy(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    game_id: Uuid,
+    denied: &[String],
+    source_seq: i64,
+) -> Result<(), ProjectionError> {
+    sqlx::query(
+        "INSERT INTO game_cohost_policy (game_id, denied, source_seq) VALUES ($1, $2, $3) \
+         ON CONFLICT (game_id) DO UPDATE SET denied = EXCLUDED.denied, source_seq = EXCLUDED.source_seq",
+    )
+    .bind(game_id)
+    .bind(denied)
+    .bind(source_seq)
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
+}
+
+/// Denied cohost permission class names for this game (empty = full co-GM parity).
+pub async fn cohost_denied_classes<'e, E>(
+    executor: E,
+    game_id: Uuid,
+) -> Result<Vec<String>, ProjectionError>
+where
+    E: sqlx::Executor<'e, Database = sqlx::Postgres>,
+{
+    let denied: Option<Vec<String>> =
+        sqlx::query_scalar("SELECT denied FROM game_cohost_policy WHERE game_id = $1")
+            .bind(game_id)
+            .fetch_optional(executor)
+            .await?;
+    Ok(denied.unwrap_or_default())
 }
 
 async fn insert_spectator_membership(

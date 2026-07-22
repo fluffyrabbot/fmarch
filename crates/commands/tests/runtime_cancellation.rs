@@ -24,6 +24,7 @@ async fn setup_game(pool: &PgPool) -> Uuid {
         Command::CreateGame {
             game,
             pack: "mafiascum".into(),
+            cohost_denied: vec![],
         },
         Command::AddSlot {
             game,

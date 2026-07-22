@@ -48,7 +48,8 @@ mod model;
 pub mod operator_process;
 pub mod operator_proof;
 pub use model::{
-    Ack, Command, HostPromptDecision, Reject, ThreadPostMedia, ThreadPostMediaVariant, VoteTarget,
+    Ack, CohostPermissionClass, Command, HostPromptDecision, Reject, ThreadPostMedia,
+    ThreadPostMediaVariant, VoteTarget,
 };
 
 pub const LARGE_ACTION_GRAPH_PERFORMANCE_SEED: u64 = 90_001;
@@ -649,7 +650,11 @@ async fn handle_command(
 ) -> Result<Ack, Reject> {
     match command {
         // ── bootstrap lifecycle (minimal, host-gated where appropriate) ──
-        Command::CreateGame { game, pack } => create_game(tx, principal, game, pack).await,
+        Command::CreateGame {
+            game,
+            pack,
+            cohost_denied,
+        } => create_game(tx, principal, game, pack, cohost_denied).await,
         Command::AddSlot { game, slot } => add_slot(tx, principal, game, slot).await,
         Command::AssignSlot { game, slot, user } => {
             assign_slot(tx, principal, game, slot, user).await
@@ -693,7 +698,7 @@ async fn handle_command(
             .await
         }
         Command::AddCohost { game, user } => {
-            host_lifecycle(
+            host_structural_lifecycle(
                 tx,
                 principal,
                 game,
@@ -915,25 +920,30 @@ async fn create_game(
     principal: &Principal,
     game: Uuid,
     pack: String,
+    cohost_denied: Vec<CohostPermissionClass>,
 ) -> Result<Ack, Reject> {
     if projections::game_exists(&mut **tx, game).await? {
         return Err(Reject::UnknownGame); // already exists → treat as bad request
     }
     load_pack(&pack)?;
     let host = principal.user_id().to_string();
+    let denied: Vec<&str> = cohost_denied.iter().map(|c| c.as_str()).collect();
     let ev = EventInput::new(
         "GameCreated",
         1,
-        serde_json::json!({ "host": host, "pack": pack }),
+        serde_json::json!({
+            "host": host,
+            "pack": pack,
+            "cohost_denied": denied,
+        }),
         ActorId::User(host.clone()),
         0,
     );
     persist(tx, game, &[ev]).await
 }
 
-/// A host-gated lifecycle command that appends a single event. Resolves
-/// `HostOf(game)` (cohost/global may escalate via `grants`) then appends.
-async fn host_lifecycle(
+/// Structural host-only lifecycle (e.g. `AddCohost`). Primary host / global only.
+async fn host_structural_lifecycle(
     tx: &mut Transaction<'_, Postgres>,
     principal: &Principal,
     game: Uuid,
@@ -943,7 +953,7 @@ async fn host_lifecycle(
 ) -> Result<Ack, Reject> {
     require_game(tx, game).await?;
     let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
-    require(&caps, &Capability::HostOf(game), Reject::NotHost)?;
+    require_host_structural(&caps, game)?;
     persist(tx, game, &[EventInput::new(kind, 1, payload, actor, 0)]).await
 }
 
@@ -955,7 +965,7 @@ async fn grant_spectator(
 ) -> Result<Ack, Reject> {
     require_game(tx, game).await?;
     let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
-    require(&caps, &Capability::HostOf(game), Reject::NotHost)?;
+    require_game_run(tx, &caps, game, CohostPermissionClass::Setup).await?;
     if user.trim().is_empty() {
         return Err(Reject::InvalidTarget);
     }
@@ -989,7 +999,7 @@ async fn revoke_spectator(
 ) -> Result<Ack, Reject> {
     require_game(tx, game).await?;
     let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
-    require(&caps, &Capability::HostOf(game), Reject::NotHost)?;
+    require_game_run(tx, &caps, game, CohostPermissionClass::Setup).await?;
     if user.trim().is_empty() {
         return Err(Reject::InvalidTarget);
     }
@@ -1018,7 +1028,7 @@ async fn add_slot(
 ) -> Result<Ack, Reject> {
     require_game(tx, game).await?;
     let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
-    require(&caps, &Capability::HostOf(game), Reject::NotHost)?;
+    require_game_run(tx, &caps, game, CohostPermissionClass::Setup).await?;
     if projections::slot_exists(&mut **tx, game, &slot).await? {
         return Err(Reject::InvalidTarget);
     }
@@ -1043,7 +1053,7 @@ async fn complete_game(
 ) -> Result<Ack, Reject> {
     require_game(tx, game).await?;
     let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
-    require(&caps, &Capability::HostOf(game), Reject::NotHost)?;
+    require_game_run(tx, &caps, game, CohostPermissionClass::PhaseResolve).await?;
 
     let stream = eventstore::load_stream_in_tx(tx, game)
         .await
@@ -1075,7 +1085,7 @@ async fn host_phase_lifecycle(
 ) -> Result<Ack, Reject> {
     require_game(tx, game).await?;
     let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
-    require(&caps, &Capability::HostOf(game), Reject::NotHost)?;
+    require_game_run(tx, &caps, game, CohostPermissionClass::PhaseResolve).await?;
 
     let stream = eventstore::load_stream_in_tx(tx, game)
         .await
@@ -1105,7 +1115,7 @@ async fn lock_thread(
 ) -> Result<Ack, Reject> {
     require_game(tx, game).await?;
     let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
-    require(&caps, &Capability::HostOf(game), Reject::NotHost)?;
+    require_game_run(tx, &caps, game, CohostPermissionClass::PhaseResolve).await?;
     require_thread_lock_state(tx, game, false).await?;
     persist(
         tx,
@@ -1128,7 +1138,7 @@ async fn unlock_thread(
 ) -> Result<Ack, Reject> {
     require_game(tx, game).await?;
     let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
-    require(&caps, &Capability::HostOf(game), Reject::NotHost)?;
+    require_game_run(tx, &caps, game, CohostPermissionClass::PhaseResolve).await?;
     require_thread_lock_state(tx, game, true).await?;
     persist(
         tx,
@@ -1167,7 +1177,7 @@ async fn start_game(
 ) -> Result<Ack, Reject> {
     require_game(tx, game).await?;
     let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
-    require(&caps, &Capability::HostOf(game), Reject::NotHost)?;
+    require_game_run(tx, &caps, game, CohostPermissionClass::PhaseResolve).await?;
 
     let stream = eventstore::load_stream_in_tx(tx, game)
         .await
@@ -1195,7 +1205,7 @@ async fn advance_phase(
 ) -> Result<Ack, Reject> {
     require_game(tx, game).await?;
     let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
-    require(&caps, &Capability::HostOf(game), Reject::NotHost)?;
+    require_game_run(tx, &caps, game, CohostPermissionClass::PhaseResolve).await?;
 
     let (phase, stream) = resolved_locked_phase_stream(tx, game).await?;
     let source_phase_id = phase.phase_id.clone();
@@ -1230,7 +1240,7 @@ async fn advance_phase_by_deadline(
 ) -> Result<Ack, Reject> {
     require_game(tx, game).await?;
     let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
-    require(&caps, &Capability::HostOf(game), Reject::NotHost)?;
+    require_game_run(tx, &caps, game, CohostPermissionClass::PhaseResolve).await?;
 
     let (phase, stream) = resolved_locked_phase_stream(tx, game).await?;
     if phase.phase_id != phase_id {
@@ -1311,7 +1321,7 @@ async fn host_slot_lifecycle(
     let mut payload = payload;
     require_game(tx, game).await?;
     let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
-    require(&caps, &Capability::HostOf(game), Reject::NotHost)?;
+    require_game_run(tx, &caps, game, CohostPermissionClass::Lifecycle).await?;
     let current_status = current_slot_lifecycle_status(tx, game, &slot)
         .await?
         .ok_or(Reject::UnknownSlot)?;
@@ -1356,7 +1366,7 @@ async fn assign_slot(
 ) -> Result<Ack, Reject> {
     require_game(tx, game).await?;
     let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
-    require(&caps, &Capability::HostOf(game), Reject::NotHost)?;
+    require_game_run(tx, &caps, game, CohostPermissionClass::Setup).await?;
     if !projections::slot_exists(&mut **tx, game, &slot).await? {
         return Err(Reject::UnknownSlot);
     }
@@ -1390,7 +1400,7 @@ async fn assign_role(
 ) -> Result<Ack, Reject> {
     require_game(tx, game).await?;
     let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
-    require(&caps, &Capability::HostOf(game), Reject::NotHost)?;
+    require_game_run(tx, &caps, game, CohostPermissionClass::Setup).await?;
     if !projections::slot_exists(&mut **tx, game, &slot).await? {
         return Err(Reject::UnknownSlot);
     }
@@ -1638,7 +1648,7 @@ async fn set_post_policy(
         return Err(Reject::InvalidTarget);
     }
     let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
-    require(&caps, &Capability::HostOf(game), Reject::NotHost)?;
+    require_game_run(tx, &caps, game, CohostPermissionClass::Setup).await?;
     let stream = eventstore::load_stream_in_tx(tx, game)
         .await
         .map_err(|e| Reject::Internal(e.to_string()))?;
@@ -1730,7 +1740,7 @@ async fn publish_spectator_post(
 ) -> Result<Ack, Reject> {
     require_game(tx, game).await?;
     let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
-    require(&caps, &Capability::HostOf(game), Reject::NotHost)?;
+    require_game_run(tx, &caps, game, CohostPermissionClass::Narrative).await?;
     validate_thread_post_media(&media)?;
     if body.trim().is_empty() {
         return Err(Reject::InvalidTarget);
@@ -1803,7 +1813,7 @@ async fn publish_votecount(
 ) -> Result<Ack, Reject> {
     require_game(tx, game).await?;
     let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
-    require(&caps, &Capability::HostOf(game), Reject::NotHost)?;
+    require_game_run(tx, &caps, game, CohostPermissionClass::PhaseResolve).await?;
     let phase = current_phase(tx, game).await?.ok_or(Reject::PhaseLocked)?;
     let rows = projections::votecount(&mut **tx, game)
         .await?
@@ -1874,8 +1884,7 @@ async fn extend_deadline(
 ) -> Result<Ack, Reject> {
     require_game(tx, game).await?;
     let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
-    // Requires HostOf|CohostOf — the narrowest is CohostOf (host subsumes it).
-    require(&caps, &Capability::CohostOf(game), Reject::NotHost)?;
+    require_game_run(tx, &caps, game, CohostPermissionClass::Deadline).await?;
     let current_phase = require_open_phase(tx, game).await?;
     if current_phase != phase {
         return Err(Reject::PhaseLocked);
@@ -1892,8 +1901,8 @@ async fn extend_deadline(
 
 /// The irreversible mechanic: swap the human behind a STABLE `SlotId`. The slot
 /// id is UNCHANGED — only the occupant mapping moves — so the slot's votes,
-/// posts, role, and lifecycle (all keyed by slot_id) are preserved. Requires
-/// `HostOf` (doc 06: replacements are host authority).
+/// posts, role, and lifecycle (all keyed by slot_id) are preserved. Host-team
+/// (Replacement class); primary host always allowed.
 async fn process_replacement(
     tx: &mut Transaction<'_, Postgres>,
     principal: &Principal,
@@ -1904,7 +1913,7 @@ async fn process_replacement(
 ) -> Result<Ack, Reject> {
     require_game(tx, game).await?;
     let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
-    require(&caps, &Capability::HostOf(game), Reject::NotHost)?;
+    require_game_run(tx, &caps, game, CohostPermissionClass::Replacement).await?;
 
     if !projections::slot_exists(&mut **tx, game, &slot).await? {
         return Err(Reject::UnknownSlot);
@@ -1946,7 +1955,7 @@ async fn resolve_phase(
 ) -> Result<Ack, Reject> {
     require_game(tx, game).await?;
     let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
-    require(&caps, &Capability::HostOf(game), Reject::NotHost)?;
+    require_game_run(tx, &caps, game, CohostPermissionClass::PhaseResolve).await?;
 
     let phase = projections::phase_state(&mut **tx, game)
         .await?
@@ -2025,7 +2034,7 @@ async fn control_ita_session(
         return Err(Reject::InvalidTarget);
     }
     let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
-    require(&caps, &Capability::HostOf(game), Reject::NotHost)?;
+    require_game_run(tx, &caps, game, CohostPermissionClass::ItaControl).await?;
     let phase = require_open_day_phase(tx, game).await?;
     let phase_number = phase_number(&phase)?;
 
@@ -2526,6 +2535,7 @@ pub async fn run_large_action_graph_performance_proof(
         Command::CreateGame {
             game,
             pack: "mafiascum".into(),
+            cohost_denied: vec![],
         },
     )
     .await?;
@@ -3131,7 +3141,7 @@ async fn resolve_host_prompt(
 ) -> Result<Ack, Reject> {
     require_game(tx, game).await?;
     let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
-    require(&caps, &Capability::HostOf(game), Reject::NotHost)?;
+    require_game_run(tx, &caps, game, CohostPermissionClass::HostPromptResolve).await?;
 
     let prompt = projections::host_prompts(&mut **tx, game)
         .await?
@@ -4534,6 +4544,31 @@ fn require(caps: &CapabilitySet, cap: &Capability, deny: Reject) -> Result<(), R
     } else {
         Err(deny)
     }
+}
+
+/// Primary host (or global operator via HostOf grant). Never subject to cohost denylist.
+fn require_host_structural(caps: &CapabilitySet, game: Uuid) -> Result<(), Reject> {
+    require(caps, &Capability::HostOf(game), Reject::NotHost)
+}
+
+/// Game-run mutator: host always; cohost unless `class` is in the game's create-time denylist.
+async fn require_game_run(
+    tx: &mut Transaction<'_, Postgres>,
+    caps: &CapabilitySet,
+    game: Uuid,
+    class: CohostPermissionClass,
+) -> Result<(), Reject> {
+    if caps.grants(&Capability::HostOf(game)) {
+        return Ok(());
+    }
+    if caps.grants(&Capability::CohostOf(game)) {
+        let denied = projections::cohost_denied_classes(&mut **tx, game).await?;
+        if denied.iter().any(|d| d == class.as_str()) {
+            return Err(Reject::CohostPermissionDenied(class.as_str().to_string()));
+        }
+        return Ok(());
+    }
+    Err(Reject::NotHost)
 }
 
 /// The principal must be the slot's CURRENT occupant. We distinguish "this slot

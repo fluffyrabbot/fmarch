@@ -8986,6 +8986,7 @@ fn command_reject_api_error(reject: commands::Reject) -> ApiError {
         commands::Reject::UnknownGame | commands::Reject::UnknownSlot => StatusCode::NOT_FOUND,
         commands::Reject::NotAuthorized
         | commands::Reject::NotHost
+        | commands::Reject::CohostPermissionDenied(_)
         | commands::Reject::NotYourSlot => StatusCode::FORBIDDEN,
         _ => StatusCode::CONFLICT,
     };
