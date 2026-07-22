@@ -24,7 +24,7 @@ direct `main` work, and atomic history over PR ceremony.
   contract lanes before pushing.
 - For Postgres-backed Rust work, use a local `DATABASE_URL` proof lane and run
   SQLx-heavy tests serially when needed.
-- If Docker is unavailable, a repo-local Postgres under `target/` is an
+- If podman is unavailable, a repo-local Postgres under `target/` is an
   acceptable local proof substitute.
 
 ## Publishing
