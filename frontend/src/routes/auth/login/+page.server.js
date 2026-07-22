@@ -1,5 +1,6 @@
 import { fail, redirect } from "@sveltejs/kit";
 import { randomUUID } from "node:crypto";
+import { serverApiBaseUrl } from "../../../lib/server/api-base.mjs";
 import {
   browserSessionCookieOptions,
   SESSION_COOKIE_NAME,
@@ -236,27 +237,15 @@ function optionalToken(value) {
 }
 
 function authSessionUrl(env) {
-  const baseUrl =
-    typeof env.FMARCH_API_BASE_URL === "string"
-      ? env.FMARCH_API_BASE_URL.replace(/\/$/, "")
-      : "";
-  return `${baseUrl}/auth/session`;
+  return `${serverApiBaseUrl(env)}/auth/session`;
 }
 
 function authInviteRedeemUrl(env) {
-  const baseUrl =
-    typeof env.FMARCH_API_BASE_URL === "string"
-      ? env.FMARCH_API_BASE_URL.replace(/\/$/, "")
-      : "";
-  return `${baseUrl}/auth/invites/redeem`;
+  return `${serverApiBaseUrl(env)}/auth/invites/redeem`;
 }
 
 function authAccountLoginUrl(env) {
-  const baseUrl =
-    typeof env.FMARCH_API_BASE_URL === "string"
-      ? env.FMARCH_API_BASE_URL.replace(/\/$/, "")
-      : "";
-  return `${baseUrl}/auth/accounts/login`;
+  return `${serverApiBaseUrl(env)}/auth/accounts/login`;
 }
 
 function validSessionBody(body) {

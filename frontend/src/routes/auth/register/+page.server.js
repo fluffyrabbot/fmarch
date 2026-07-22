@@ -1,5 +1,6 @@
 import { fail, redirect } from "@sveltejs/kit";
 import { randomUUID } from "node:crypto";
+import { serverApiBaseUrl } from "../../../lib/server/api-base.mjs";
 import {
   browserSessionCookieOptions,
   SESSION_COOKIE_NAME,
@@ -109,11 +110,7 @@ function accountSecurityPath({ accountId, returnTo }) {
 }
 
 function authRegistrationUrl(env) {
-  const baseUrl =
-    typeof env.FMARCH_API_BASE_URL === "string"
-      ? env.FMARCH_API_BASE_URL.replace(/\/$/, "")
-      : "";
-  return `${baseUrl}/auth/accounts/registrations`;
+  return `${serverApiBaseUrl(env)}/auth/accounts/registrations`;
 }
 
 function clientAuthSource(getClientAddress) {

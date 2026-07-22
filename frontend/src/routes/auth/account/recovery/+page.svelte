@@ -5,7 +5,11 @@
   $: recovery = data?.accountRecovery ?? {};
   $: accountId = form?.accountId ?? recovery.accountId ?? "";
   $: returnTo = form?.returnTo ?? recovery.returnTo ?? "/";
-  $: rejection = form?.state === "reject" ? form.message : null;
+  $: requestRejection =
+    form?.id === "request" && form?.state === "reject" ? form.message : null;
+  $: recoveryRejection =
+    form?.id !== "request" && form?.state === "reject" ? form.message : null;
+  $: requestAccepted = form?.id === "request" && form?.state === "ack";
 </script>
 
 <svelte:head>
@@ -21,6 +25,42 @@
   </section>
 
   <section class="account-recovery__panel fm-panel" aria-label="Account recovery">
+    <form
+      method="POST"
+      action="?/request"
+      class="account-recovery__form account-recovery__request"
+      data-testid="account-recovery-request-form"
+    >
+      <input type="hidden" name="returnTo" value={returnTo} />
+      <h2>Request a recovery credential</h2>
+      <p>Enter your account. The response is the same whether or not it can be recovered.</p>
+      <label class="fm-field">
+        <span>Account</span>
+        <input
+          name="accountId"
+          type="text"
+          autocomplete="username"
+          data-testid="account-recovery-request-account"
+          value={accountId}
+        />
+      </label>
+      {#if requestAccepted}
+        <p class="account-recovery__ack" role="status" data-testid="account-recovery-request-ack">
+          {form.message}
+        </p>
+      {/if}
+      {#if requestRejection}
+        <p class="account-recovery__reject" role="alert" data-testid="account-recovery-request-reject">
+          {requestRejection}
+        </p>
+      {/if}
+      <button type="submit" class="fm-touch-button" data-testid="account-recovery-request-submit">
+        Send recovery credential
+      </button>
+    </form>
+
+    <div class="account-recovery__divider" role="separator">Already have a credential?</div>
+
     <form method="POST" class="account-recovery__form" data-testid="account-recovery-form">
       <input type="hidden" name="returnTo" value={returnTo} />
       <label class="fm-field">
@@ -66,9 +106,9 @@
         />
       </label>
 
-      {#if rejection}
+      {#if recoveryRejection}
         <p class="account-recovery__reject" role="alert" data-testid="account-recovery-reject">
-          {rejection}
+          {recoveryRejection}
         </p>
       {/if}
 
@@ -76,6 +116,7 @@
         Recover account
       </button>
     </form>
+    <a href={`/auth/login?returnTo=${encodeURIComponent(returnTo)}`}>Back to sign in</a>
   </section>
 </main>
 
@@ -95,6 +136,36 @@
   .account-recovery__form {
     display: grid;
     gap: 14px;
+  }
+
+  .account-recovery__form h2,
+  .account-recovery__form p {
+    margin: 0;
+  }
+
+  .account-recovery__divider {
+    align-items: center;
+    color: var(--fm-ink-muted);
+    display: flex;
+    gap: 12px;
+    margin-block: 22px;
+  }
+
+  .account-recovery__divider::before,
+  .account-recovery__divider::after {
+    background: var(--fm-line);
+    block-size: 1px;
+    content: "";
+    flex: 1;
+  }
+
+  .account-recovery__ack {
+    background: var(--fm-accent-wash);
+    border: 1px solid var(--fm-accent-soft);
+    border-radius: 8px;
+    color: var(--fm-accent-ink);
+    font-weight: 800;
+    padding: 10px 12px;
   }
 
   .account-recovery__reject {

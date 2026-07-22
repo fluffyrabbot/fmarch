@@ -19,7 +19,7 @@
       <p class="fm-eyebrow">Auth</p>
       <h1>Sign in</h1>
       <p class="fm-summary">
-        Use an opaque session or account credential. Invitations require the invited account password.
+        Sign in with account credentials, or use a session or invitation issued to you.
       </p>
     </div>
   </section>
@@ -79,6 +79,10 @@
         Sign in
       </button>
     </form>
+    <nav class="auth-login__links" aria-label="Account help">
+      <a href={`/auth/account/recovery?returnTo=${encodeURIComponent(returnTo)}`}>Forgot password?</a>
+      <a href={`/auth/register?returnTo=${encodeURIComponent(returnTo)}`}>Create account</a>
+    </nav>
   </section>
 </main>
 
@@ -108,6 +112,13 @@
     line-height: 1.3;
     margin: 0 0 14px;
     padding: 10px 12px;
+  }
+
+  .auth-login__links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px 20px;
+    margin-block-start: 18px;
   }
 
   .auth-login__status {

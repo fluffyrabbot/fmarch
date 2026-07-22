@@ -217,6 +217,10 @@ pub fn router_with_state(state: ApiState) -> Router {
             post(issue_auth_account_recovery_credential),
         )
         .route(
+            "/auth/accounts/recovery-requests",
+            post(request_auth_account_recovery),
+        )
+        .route(
             "/auth/accounts/recovery-credential-revocations",
             post(revoke_auth_account_recovery_credential),
         )
@@ -821,6 +825,16 @@ struct IssueAuthAccountRecoveryCredential {
     account_id: String,
     current_password: String,
     expires_at: i64,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct RequestAuthAccountRecovery {
+    account_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct AuthAccountRecoveryRequestResponse {
+    status: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1656,6 +1670,119 @@ async fn issue_auth_account_recovery_credential(
         delivery_provider_id: delivery.provider_id,
         delivery_outcome_kind: delivery.outcome_kind,
         delivery_outcome_code: delivery.outcome_code,
+    }))
+}
+
+async fn request_auth_account_recovery(
+    State(state): State<ApiState>,
+    headers: HeaderMap,
+    Json(request): Json<RequestAuthAccountRecovery>,
+) -> Result<Json<AuthAccountRecoveryRequestResponse>, ApiError> {
+    let account_id = normalize_registration_account_id(request.account_id.as_str())?;
+    enforce_recovery_request_limit(&state, &headers, account_id.as_str()).await?;
+
+    let account = sqlx::query_as::<_, (String, String)>(
+        r#"
+        SELECT account_id, principal_user_id
+        FROM auth_account
+        WHERE account_id = $1
+          AND disabled_at IS NULL
+        "#,
+    )
+    .bind(account_id.as_str())
+    .fetch_optional(&state.pool)
+    .await?;
+
+    let Some((account_id, principal_user_id)) = account else {
+        return Ok(Json(AuthAccountRecoveryRequestResponse {
+            status: "accepted".to_string(),
+        }));
+    };
+
+    let now = unix_now_seconds();
+    let expires_at = now + 60 * 60;
+    let recovery_id = Uuid::new_v4();
+    let recovery_token = format!("account-recovery-{}-{}", Uuid::new_v4(), Uuid::new_v4());
+    let recovery_hash = hash_session_token(recovery_token.as_str());
+    let mut tx = state.pool.begin().await?;
+    sqlx::query(
+        r#"
+        UPDATE auth_account_recovery_credential
+        SET revoked_at = $2
+        WHERE account_id = $1
+          AND used_at IS NULL
+          AND revoked_at IS NULL
+          AND expires_at > $2
+        "#,
+    )
+    .bind(account_id.as_str())
+    .bind(now)
+    .execute(&mut *tx)
+    .await?;
+    sqlx::query(
+        r#"
+        INSERT INTO auth_account_recovery_credential (
+            recovery_id,
+            account_id,
+            token_hash,
+            created_at,
+            expires_at,
+            used_at,
+            revoked_at
+        )
+        VALUES ($1, $2, $3, $4, $5, NULL, NULL)
+        "#,
+    )
+    .bind(recovery_id)
+    .bind(account_id.as_str())
+    .bind(recovery_hash.as_str())
+    .bind(now)
+    .bind(expires_at)
+    .execute(&mut *tx)
+    .await?;
+    sqlx::query(
+        r#"
+        INSERT INTO identity_lifecycle_audit (
+            event_at,
+            event_kind,
+            actor_user_id,
+            principal_user_id,
+            token_hash,
+            related_token_hash,
+            metadata
+        )
+        VALUES ($1, 'account_recovery_credential_issued', NULL, $2, $3, NULL, $4::JSONB)
+        "#,
+    )
+    .bind(now)
+    .bind(principal_user_id.as_str())
+    .bind(recovery_hash.as_str())
+    .bind(
+        serde_json::json!({
+            "account_id": account_id,
+            "recovery_id": recovery_id,
+            "expires_at": expires_at,
+            "request_kind": "forgot-password"
+        })
+        .to_string(),
+    )
+    .execute(&mut *tx)
+    .await?;
+    deliver_auth_credential(
+        &state,
+        &mut tx,
+        IdentityDeliveryKind::Recovery,
+        account_id.as_str(),
+        principal_user_id.as_str(),
+        recovery_hash.as_str(),
+        recovery_token.as_str(),
+        now,
+    )
+    .await?;
+    tx.commit().await?;
+
+    Ok(Json(AuthAccountRecoveryRequestResponse {
+        status: "accepted".to_string(),
     }))
 }
 
@@ -2820,6 +2947,45 @@ async fn enforce_registration_source_limit(
     let normalized_source = normalized_auth_attempt_source(headers, &policy);
     let source_hash =
         hash_session_token(format!("account-registration-source:\0{normalized_source}").as_str());
+    enforce_public_request_limit(
+        state,
+        source_hash.as_str(),
+        policy.registration_max_per_source,
+        &policy,
+    )
+    .await
+}
+
+async fn enforce_recovery_request_limit(
+    state: &ApiState,
+    headers: &HeaderMap,
+    account_id: &str,
+) -> Result<(), ApiError> {
+    let policy = state.auth_attempt_policy.clone();
+    let normalized_source = normalized_auth_attempt_source(headers, &policy);
+    let scope_hash = hash_session_token(
+        format!(
+            "account-recovery-request:{}\0source:{}",
+            account_id.trim().to_ascii_lowercase(),
+            normalized_source
+        )
+        .as_str(),
+    );
+    enforce_public_request_limit(
+        state,
+        scope_hash.as_str(),
+        policy.account_max_failures,
+        &policy,
+    )
+    .await
+}
+
+async fn enforce_public_request_limit(
+    state: &ApiState,
+    scope_hash: &str,
+    max_attempts: i32,
+    policy: &AuthAttemptPolicy,
+) -> Result<(), ApiError> {
     let now = unix_now_seconds();
     let mut tx = state.pool.begin().await?;
     sqlx::query(
@@ -2832,7 +2998,7 @@ async fn enforce_registration_source_limit(
     let blocked_until = sqlx::query_scalar::<_, Option<i64>>(
         "SELECT blocked_until FROM auth_registration_attempt WHERE scope_hash = $1 FOR UPDATE",
     )
-    .bind(source_hash.as_str())
+    .bind(scope_hash)
     .fetch_optional(&mut *tx)
     .await?
     .flatten();
@@ -2873,10 +3039,10 @@ async fn enforce_registration_source_limit(
         RETURNING attempt_count, blocked_until
         "#,
     )
-    .bind(source_hash.as_str())
+    .bind(scope_hash)
     .bind(now)
     .bind(policy.window_seconds)
-    .bind(policy.registration_max_per_source)
+    .bind(max_attempts)
     .bind(policy.lockout_seconds)
     .fetch_one(&mut *tx)
     .await?;

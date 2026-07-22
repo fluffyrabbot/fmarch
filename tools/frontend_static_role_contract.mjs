@@ -279,6 +279,8 @@ async function proveAppShellContract() {
     capabilityTestId: APP_SHELL_CONTRACT.sessionCapabilityTestId,
     gameTestId: APP_SHELL_CONTRACT.sessionGameTestId,
     state: "signed-in",
+    href: "/auth/account/security",
+    actionLabel: "Manage account security",
     principalLabel: "@player_mira",
     initials: "PM",
     contextLabel: "Playing midsummer",

@@ -7200,6 +7200,85 @@ async fn global_admin_account_login_creates_normal_role_session(pool: sqlx::PgPo
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+async fn public_recovery_request_is_non_enumerating_and_rotates_credentials(pool: sqlx::PgPool) {
+    let app = router_with_dev_auth(pool.clone());
+    let admin_token = "recovery-request-admin";
+    let account_id = "recovery-request@example.test";
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/auth/dev-session")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    serde_json::json!({
+                        "token": admin_token,
+                        "principal_user_id": "recovery_request_admin",
+                        "expires_at": 4_102_444_800i64,
+                        "global_capabilities": ["GlobalAdmin"]
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    create_test_auth_account(
+        &app,
+        admin_token,
+        account_id,
+        "correct horse battery",
+        "recovery_request_user",
+    )
+    .await;
+
+    for requested_account in [account_id, "missing-recovery@example.test", account_id] {
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/auth/accounts/recovery-requests")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        serde_json::json!({ "account_id": requested_account }).to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(body, serde_json::json!({ "status": "accepted" }));
+    }
+
+    let credentials = sqlx::query_as::<_, (i64, i64)>(
+        r#"
+        SELECT COUNT(*)::BIGINT,
+               COUNT(*) FILTER (WHERE revoked_at IS NULL)::BIGINT
+        FROM auth_account_recovery_credential
+        WHERE account_id = $1
+        "#,
+    )
+    .bind(account_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(credentials, (2, 1));
+    let delivery_count = sqlx::query_scalar::<_, i64>(
+        "SELECT COUNT(*) FROM auth_delivery_intent WHERE account_id = $1 AND delivery_kind = 'recovery'",
+    )
+    .bind(account_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(delivery_count, 2);
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
 async fn public_credential_failures_share_a_hashed_retryable_lockout(pool: sqlx::PgPool) {
     let app = router_with_dev_auth(pool.clone());
     let admin_token = "credential-throttle-admin";

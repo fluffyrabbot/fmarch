@@ -97,11 +97,13 @@
         {/if}
       {/each}
     </nav>
-    <div
+    <a
       class="fm-app-shell__session"
+      href={shell.session.href}
       data-testid={shell.session.testId}
       data-state={shell.session.state}
       data-capability-count={shell.session.capabilityCount}
+      aria-label={shell.session.actionLabel}
     >
       <span class="fm-app-shell__avatar" aria-hidden="true">{shell.session.initials}</span>
       <span class="fm-app-shell__session-copy">
@@ -110,7 +112,7 @@
       </span>
       <span class="fm-sr-only" data-testid={shell.session.gameTestId}>{shell.session.gameLabel}</span>
       <span class="fm-sr-only" data-testid={shell.session.capabilityTestId}>{shell.session.capabilitySummary}</span>
-    </div>
+    </a>
   </header>
 
   <div

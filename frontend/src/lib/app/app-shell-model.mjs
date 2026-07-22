@@ -444,6 +444,14 @@ function buildSessionSummary({ game, principalUserId, capabilities }) {
       principalUserId === null || principalUserId === undefined
         ? "signed-out"
         : "signed-in",
+    href:
+      principalUserId === null || principalUserId === undefined
+        ? "/auth/login"
+        : "/auth/account/security",
+    actionLabel:
+      principalUserId === null || principalUserId === undefined
+        ? "Sign in"
+        : "Manage account security",
     principalLabel,
     initials: principalInitials(principalUserId),
     contextLabel: sessionContextLabel({ game, capabilities: normalizedCapabilities }),

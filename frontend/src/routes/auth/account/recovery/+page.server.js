@@ -1,4 +1,5 @@
 import { fail, redirect } from "@sveltejs/kit";
+import { serverApiBaseUrl } from "../../../../lib/server/api-base.mjs";
 import { SESSION_COOKIE_NAME } from "../../../../lib/server/session-capabilities.mjs";
 
 export function load({ url }) {
@@ -11,6 +12,59 @@ export function load({ url }) {
 }
 
 export const actions = {
+  request: async ({ fetch, getClientAddress, request }) => {
+    const formData = await request.formData();
+    const accountId = optionalField(formData.get("accountId"));
+    const returnTo = safeReturnTo(formData.get("returnTo"));
+    if (accountId === "") {
+      return fail(400, {
+        id: "request",
+        state: "reject",
+        message: "Account is required",
+        accountId,
+        returnTo,
+      });
+    }
+    const response = await fetch(`${serverApiBaseUrl()}/auth/accounts/recovery-requests`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        accept: "application/json",
+        ...authSourceHeader(clientAuthSource(getClientAddress)),
+      },
+      body: JSON.stringify({ account_id: accountId }),
+    });
+    if (!response.ok) {
+      return fail(response.status === 429 ? 429 : 502, {
+        id: "request",
+        state: "reject",
+        message:
+          response.status === 429
+            ? authRateLimitMessage(response)
+            : "Recovery service is temporarily unavailable",
+        accountId,
+        returnTo,
+      });
+    }
+    const body = await response.json().catch(() => null);
+    if (body?.status !== "accepted") {
+      return fail(502, {
+        id: "request",
+        state: "reject",
+        message: "Recovery service returned a malformed response",
+        accountId,
+        returnTo,
+      });
+    }
+    return {
+      id: "request",
+      state: "ack",
+      message: "If that account can be recovered, a recovery credential has been sent.",
+      accountId,
+      returnTo,
+    };
+  },
+
   default: async ({ cookies, fetch, getClientAddress, request }) => {
     const formData = await request.formData();
     const accountId = optionalField(formData.get("accountId"));
@@ -89,10 +143,7 @@ export const actions = {
 };
 
 function accountRecoveryUrl(env) {
-  const baseUrl =
-    typeof env.FMARCH_API_BASE_URL === "string"
-      ? env.FMARCH_API_BASE_URL.replace(/\/$/, "")
-      : "";
+  const baseUrl = serverApiBaseUrl(env);
   return `${baseUrl}/auth/accounts/recoveries`;
 }
 

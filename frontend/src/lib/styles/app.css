@@ -173,6 +173,7 @@ body {
   max-inline-size: 190px;
   min-inline-size: 0;
   padding-inline: 8px 0;
+  text-decoration: none;
 }
 
 .fm-app-shell__session-copy {
@@ -618,6 +619,15 @@ body {
   }
 
   .fm-app-shell__session-copy {
+    display: none;
+  }
+
+  .fm-app-shell[data-surface="player"] .fm-app-shell__topbar {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    min-block-size: 60px;
+  }
+
+  .fm-app-shell[data-surface="player"] .fm-app-shell__nav--primary {
     display: none;
   }
 

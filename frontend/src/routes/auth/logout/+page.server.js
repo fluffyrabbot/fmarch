@@ -1,4 +1,5 @@
 import { fail, redirect } from "@sveltejs/kit";
+import { serverApiBaseUrl } from "../../../lib/server/api-base.mjs";
 import { SESSION_COOKIE_NAME } from "../../../lib/server/session-capabilities.mjs";
 
 export function load({ locals, url }) {
@@ -47,11 +48,7 @@ export const actions = {
 };
 
 function logoutUrl(env) {
-  const baseUrl =
-    typeof env.FMARCH_API_BASE_URL === "string"
-      ? env.FMARCH_API_BASE_URL.replace(/\/$/, "")
-      : "";
-  return `${baseUrl}/auth/session-logout`;
+  return `${serverApiBaseUrl(env)}/auth/session-logout`;
 }
 
 function loginPath(returnTo) {
