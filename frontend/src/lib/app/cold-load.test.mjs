@@ -137,10 +137,9 @@ test("cold-load URLs match existing API route contracts", () => {
     operatorProofRunUrl({
       apiBaseUrl: "http://api.test",
       game: "game-a",
-      principalUserId: "admin_a",
       path: "operator/proof-runs/go-no-go/view",
     }),
-    "http://api.test/games/game-a/operator/proof-runs/go-no-go/view?principal_user_id=admin_a",
+    "http://api.test/games/game-a/operator/proof-runs/go-no-go/view",
   );
 });
 
@@ -608,12 +607,14 @@ test("admin cold-load maps operator proof status when available", async () => {
   const data = await loadAdminColdData({
     game: "midsummer",
     principalUserId: "admin_a",
+    sessionToken: "session-token",
     fallback: FALLBACK,
-    fetchImpl: async (url) => {
+    fetchImpl: async (url, init) => {
       assert.equal(
         url,
-        "/games/midsummer/operator/proof-runs/status?principal_user_id=admin_a",
+        "/games/midsummer/operator/proof-runs/status",
       );
+      assert.equal(init.headers.authorization, "Bearer session-token");
       return jsonResponse({
         rows: [
           {
@@ -637,7 +638,7 @@ test("admin cold-load maps operator proof status when available", async () => {
       authority: "GlobalAdmin",
       boundary: "Machine proof",
       boundaryDetail: "/operator/proof-runs/domain-ci",
-      href: "/games/midsummer/operator/proof-runs?principal_user_id=admin_a",
+      href: "/games/midsummer/operator/proof-runs",
     },
   ]);
 });
@@ -672,7 +673,7 @@ test("admin cold-load maps real operator proof status families", async () => {
       authority: "GlobalAdmin or GlobalMod",
       boundary: "Read-only operator proof",
       boundaryDetail: "/operator/proof-runs machine-readable report",
-      href: "/games/midsummer/operator/proof-runs?principal_user_id=admin_a",
+      href: "/games/midsummer/operator/proof-runs",
     },
   ]);
 });

@@ -1753,6 +1753,7 @@ dependencies = [
  "projections",
  "serde",
  "serde_json",
+ "sha2",
  "sqlx",
  "tokio",
  "tower",

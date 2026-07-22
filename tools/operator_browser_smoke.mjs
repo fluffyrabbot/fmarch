@@ -65,6 +65,8 @@ const commandProjectionResolutionReport =
   "target/operator-proof/current-command-projection-resolution-report.json";
 const proofRunSelectors = await proofRunAnchorSelectors();
 const checkedAuditGame = "08d8a45f-6c3b-4401-8e31-8d7637f36a82";
+const hostSessionToken = `operator-browser-host-${process.pid}`;
+const fixtureHostSessionToken = `operator-browser-fixture-host-${process.pid}`;
 
 if (!databaseUrl) {
   throw new Error("DATABASE_URL is required, e.g. postgres://fmarch:fmarch@localhost:5544/fmarch");
@@ -80,7 +82,7 @@ let commandId = 1;
 const pages = [
   {
     name: "operator-index",
-    path: `/games/${game}/operator?principal_user_id=host_h`,
+    path: `/games/${game}/operator`,
     checks: [
       "Operator Index",
       "Host Phase-Control View",
@@ -97,7 +99,7 @@ const pages = [
   },
   {
     name: "operator-proof-runs",
-    path: `/games/${game}/operator/proof-runs?principal_user_id=host_h&fixture=artifact-provenance`,
+    path: `/games/${game}/operator/proof-runs?fixture=artifact-provenance`,
     checks: [
       "Operator Proof-Run Index",
       "Local-Only Regression Lanes",
@@ -252,17 +254,17 @@ const pages = [
   },
   {
     name: "projection-audit",
-    path: `/games/${game}/projection-audit/view?principal_user_id=host_h`,
+    path: `/games/${game}/projection-audit/view`,
     checks: ["Projection Rebuild Audit", "matched"],
   },
   {
     name: "resolution-audit",
-    path: `/games/${game}/resolution-audit/view?principal_user_id=host_h`,
+    path: `/games/${game}/resolution-audit/view`,
     checks: ["Resolution Replay Audit", "D01"],
   },
   {
     name: "resolution-traces",
-    path: `/games/${game}/resolution-traces/view?principal_user_id=host_h`,
+    path: `/games/${game}/resolution-traces/view`,
     checks: [
       "Resolution Trace Inspection",
       "D01",
@@ -274,12 +276,12 @@ const pages = [
   },
   {
     name: "host-phase-control",
-    path: `/games/${game}/host-phase-controls/view?principal_user_id=host_h`,
+    path: `/games/${game}/host-phase-controls/view`,
     checks: ["Host Phase-Control Audit", "D01:skip_next_day:slot_1"],
   },
   {
     name: "operator-proof-status-audit",
-    path: `/games/${game}/operator/proof-runs/status-audit/view?principal_user_id=host_h`,
+    path: `/games/${game}/operator/proof-runs/status-audit/view`,
     checks: [
       "Operator Proof-Run Status Audit",
       "matched",
@@ -295,7 +297,7 @@ const pages = [
   },
   {
     name: "operator-proof-status-audit-drift",
-    path: `/games/${game}/operator/proof-runs/status-audit/view?principal_user_id=host_h&fixture=artifact-state-drift`,
+    path: `/games/${game}/operator/proof-runs/status-audit/view?fixture=artifact-state-drift`,
     checks: [
       "Operator Proof-Run Status Audit",
       "drifted",
@@ -309,22 +311,22 @@ const pages = [
   },
   {
     name: "operator-proof-status-audit-malformed-report",
-    path: `/games/${game}/operator/proof-runs/status-audit/view?principal_user_id=host_h&fixture=saved-report-malformed`,
+    path: `/games/${game}/operator/proof-runs/status-audit/view?fixture=saved-report-malformed`,
     checks: ["Operator Proof-Run Status Audit", "artifact metadata unreadable"],
   },
   {
     name: "operator-proof-status-audit-stale-report",
-    path: `/games/${game}/operator/proof-runs/status-audit/view?principal_user_id=host_h&fixture=saved-report-stale`,
+    path: `/games/${game}/operator/proof-runs/status-audit/view?fixture=saved-report-stale`,
     checks: ["Operator Proof-Run Status Audit", "artifact stale"],
   },
   {
     name: "operator-proof-status-audit-drifted-report",
-    path: `/games/${game}/operator/proof-runs/status-audit/view?principal_user_id=host_h&fixture=saved-report-drifted`,
+    path: `/games/${game}/operator/proof-runs/status-audit/view?fixture=saved-report-drifted`,
     checks: ["Operator Proof-Run Status Audit", "artifact drifted"],
   },
   {
     name: "operator-proof-go-no-go",
-    path: `/games/${game}/operator/proof-runs/go-no-go/view?principal_user_id=host_h`,
+    path: `/games/${game}/operator/proof-runs/go-no-go/view`,
     checks: [
       "Operator Proof Artifact Go/No-Go",
       "go",
@@ -367,7 +369,7 @@ const pages = [
   },
   {
     name: "operator-proof-retention",
-    path: `/games/${game}/operator/proof-runs/retention/view?principal_user_id=host_h`,
+    path: `/games/${game}/operator/proof-runs/retention/view`,
     checks: [
       "Operator Proof Artifact Retention",
       "matched",
@@ -378,22 +380,22 @@ const pages = [
   },
   {
     name: "operator-proof-retention-newly-missing",
-    path: `/games/${game}/operator/proof-runs/retention/view?principal_user_id=host_h&fixture=newly-missing-artifact`,
+    path: `/games/${game}/operator/proof-runs/retention/view?fixture=newly-missing-artifact`,
     checks: ["Operator Proof Artifact Retention", "regressed", "newly-missing-artifact", "missing"],
   },
   {
     name: "operator-proof-retention-stale",
-    path: `/games/${game}/operator/proof-runs/retention/view?principal_user_id=host_h&fixture=stale-previously-trusted`,
+    path: `/games/${game}/operator/proof-runs/retention/view?fixture=stale-previously-trusted`,
     checks: ["Operator Proof Artifact Retention", "regressed", "stale-previously-trusted", "stale"],
   },
   {
     name: "operator-proof-retention-recovered",
-    path: `/games/${game}/operator/proof-runs/retention/view?principal_user_id=host_h&fixture=recovered-artifact`,
+    path: `/games/${game}/operator/proof-runs/retention/view?fixture=recovered-artifact`,
     checks: ["Operator Proof Artifact Retention", "matched", "recovered-artifact", "trusted"],
   },
   {
     name: "operator-proof-projection-rebuild",
-    path: `/games/${game}/operator/proof-runs/projection-rebuild/view?principal_user_id=host_h`,
+    path: `/games/${game}/operator/proof-runs/projection-rebuild/view`,
     checks: [
       "Operator Projection Rebuild Report",
       "matched",
@@ -404,27 +406,27 @@ const pages = [
   },
   {
     name: "operator-proof-projection-rebuild-missing",
-    path: `/games/${game}/operator/proof-runs/projection-rebuild/view?principal_user_id=host_h&fixture=missing-report`,
+    path: `/games/${game}/operator/proof-runs/projection-rebuild/view?fixture=missing-report`,
     checks: ["Operator Projection Rebuild Report", "missing-report", "missing", "No table rows."],
   },
   {
     name: "operator-proof-projection-rebuild-stale",
-    path: `/games/${game}/operator/proof-runs/projection-rebuild/view?principal_user_id=host_h&fixture=stale-report`,
+    path: `/games/${game}/operator/proof-runs/projection-rebuild/view?fixture=stale-report`,
     checks: ["Operator Projection Rebuild Report", "stale-report", "stale"],
   },
   {
     name: "operator-proof-projection-rebuild-drifted",
-    path: `/games/${game}/operator/proof-runs/projection-rebuild/view?principal_user_id=host_h&fixture=drifted-report`,
+    path: `/games/${game}/operator/proof-runs/projection-rebuild/view?fixture=drifted-report`,
     checks: ["Operator Projection Rebuild Report", "drifted-report", "drifted", "slot_state"],
   },
   {
     name: "operator-proof-projection-rebuild-recovered",
-    path: `/games/${game}/operator/proof-runs/projection-rebuild/view?principal_user_id=host_h&fixture=recovered-report`,
+    path: `/games/${game}/operator/proof-runs/projection-rebuild/view?fixture=recovered-report`,
     checks: ["Operator Projection Rebuild Report", "recovered-report", "trusted"],
   },
   {
     name: "operator-proof-resolution-diff",
-    path: `/games/${game}/operator/proof-runs/resolution-diff/view?principal_user_id=host_h`,
+    path: `/games/${game}/operator/proof-runs/resolution-diff/view`,
     checks: [
       "Operator Resolution Diff Report",
       "matched",
@@ -434,27 +436,27 @@ const pages = [
   },
   {
     name: "operator-proof-resolution-diff-missing",
-    path: `/games/${game}/operator/proof-runs/resolution-diff/view?principal_user_id=host_h&fixture=missing-report`,
+    path: `/games/${game}/operator/proof-runs/resolution-diff/view?fixture=missing-report`,
     checks: ["Operator Resolution Diff Report", "missing-report", "missing", "No phase rows."],
   },
   {
     name: "operator-proof-resolution-diff-stale",
-    path: `/games/${game}/operator/proof-runs/resolution-diff/view?principal_user_id=host_h&fixture=stale-report`,
+    path: `/games/${game}/operator/proof-runs/resolution-diff/view?fixture=stale-report`,
     checks: ["Operator Resolution Diff Report", "stale-report", "stale"],
   },
   {
     name: "operator-proof-resolution-diff-drifted",
-    path: `/games/${game}/operator/proof-runs/resolution-diff/view?principal_user_id=host_h&fixture=drifted-report`,
+    path: `/games/${game}/operator/proof-runs/resolution-diff/view?fixture=drifted-report`,
     checks: ["Operator Resolution Diff Report", "drifted-report", "drifted", "$.winner"],
   },
   {
     name: "operator-proof-resolution-diff-matched",
-    path: `/games/${game}/operator/proof-runs/resolution-diff/view?principal_user_id=host_h&fixture=matched-report`,
+    path: `/games/${game}/operator/proof-runs/resolution-diff/view?fixture=matched-report`,
     checks: ["Operator Resolution Diff Report", "matched-report", "trusted"],
   },
   {
     name: "operator-proof-trace-inspection",
-    path: `/games/${game}/operator/proof-runs/trace-inspection/view?principal_user_id=host_h`,
+    path: `/games/${game}/operator/proof-runs/trace-inspection/view`,
     checks: [
       "Operator Trace Inspection Report",
       "available",
@@ -464,32 +466,32 @@ const pages = [
   },
   {
     name: "operator-proof-trace-inspection-missing",
-    path: `/games/${game}/operator/proof-runs/trace-inspection/view?principal_user_id=host_h&fixture=missing-report`,
+    path: `/games/${game}/operator/proof-runs/trace-inspection/view?fixture=missing-report`,
     checks: ["Operator Trace Inspection Report", "missing-report", "missing", "No trace rows."],
   },
   {
     name: "operator-proof-trace-inspection-stale",
-    path: `/games/${game}/operator/proof-runs/trace-inspection/view?principal_user_id=host_h&fixture=stale-report`,
+    path: `/games/${game}/operator/proof-runs/trace-inspection/view?fixture=stale-report`,
     checks: ["Operator Trace Inspection Report", "stale-report", "stale"],
   },
   {
     name: "operator-proof-trace-inspection-malformed",
-    path: `/games/${game}/operator/proof-runs/trace-inspection/view?principal_user_id=host_h&fixture=malformed-report`,
+    path: `/games/${game}/operator/proof-runs/trace-inspection/view?fixture=malformed-report`,
     checks: ["Operator Trace Inspection Report", "malformed-report", "malformed"],
   },
   {
     name: "operator-proof-trace-inspection-filtered",
-    path: `/games/${game}/operator/proof-runs/trace-inspection/view?principal_user_id=host_h&fixture=filtered-run`,
+    path: `/games/${game}/operator/proof-runs/trace-inspection/view?fixture=filtered-run`,
     checks: ["Operator Trace Inspection Report", "filtered-run", "trusted", "filtered:run"],
   },
   {
     name: "operator-proof-trace-inspection-empty",
-    path: `/games/${game}/operator/proof-runs/trace-inspection/view?principal_user_id=host_h&fixture=empty-trace`,
+    path: `/games/${game}/operator/proof-runs/trace-inspection/view?fixture=empty-trace`,
     checks: ["Operator Trace Inspection Report", "empty-trace", "drifted", "No trace rows."],
   },
   {
     name: "operator-proof-large-action-graph-performance",
-    path: `/games/${game}/operator/proof-runs/large-action-graph-performance/view?principal_user_id=host_h`,
+    path: `/games/${game}/operator/proof-runs/large-action-graph-performance/view`,
     checks: [
       "Operator Large Action Graph Performance Report",
       "within ceiling",
@@ -499,27 +501,27 @@ const pages = [
   },
   {
     name: "operator-proof-large-action-graph-performance-missing",
-    path: `/games/${game}/operator/proof-runs/large-action-graph-performance/view?principal_user_id=host_h&fixture=missing-report`,
+    path: `/games/${game}/operator/proof-runs/large-action-graph-performance/view?fixture=missing-report`,
     checks: ["Operator Large Action Graph Performance Report", "missing-report", "missing"],
   },
   {
     name: "operator-proof-large-action-graph-performance-stale",
-    path: `/games/${game}/operator/proof-runs/large-action-graph-performance/view?principal_user_id=host_h&fixture=stale-report`,
+    path: `/games/${game}/operator/proof-runs/large-action-graph-performance/view?fixture=stale-report`,
     checks: ["Operator Large Action Graph Performance Report", "stale-report", "stale"],
   },
   {
     name: "operator-proof-large-action-graph-performance-regressed",
-    path: `/games/${game}/operator/proof-runs/large-action-graph-performance/view?principal_user_id=host_h&fixture=threshold-regressed`,
+    path: `/games/${game}/operator/proof-runs/large-action-graph-performance/view?fixture=threshold-regressed`,
     checks: ["Operator Large Action Graph Performance Report", "threshold-regressed", "drifted", "regressed"],
   },
   {
     name: "operator-proof-large-action-graph-performance-recovered",
-    path: `/games/${game}/operator/proof-runs/large-action-graph-performance/view?principal_user_id=host_h&fixture=recovered-report`,
+    path: `/games/${game}/operator/proof-runs/large-action-graph-performance/view?fixture=recovered-report`,
     checks: ["Operator Large Action Graph Performance Report", "recovered-report", "trusted"],
   },
   {
     name: "operator-proof-determinism-fuzz",
-    path: `/games/${game}/operator/proof-runs/determinism-fuzz/view?principal_user_id=host_h`,
+    path: `/games/${game}/operator/proof-runs/determinism-fuzz/view`,
     checks: [
       "Operator Determinism Fuzz Report",
       "passed",
@@ -529,22 +531,22 @@ const pages = [
   },
   {
     name: "operator-proof-determinism-fuzz-failed",
-    path: `/games/${game}/operator/proof-runs/determinism-fuzz/view?principal_user_id=host_h&fixture=failed-seed`,
+    path: `/games/${game}/operator/proof-runs/determinism-fuzz/view?fixture=failed-seed`,
     checks: ["Operator Determinism Fuzz Report", "failed-seed", "drifted", "FIRST FAILING SEED"],
   },
   {
     name: "operator-proof-go-no-go-missing",
-    path: `/games/${game}/operator/proof-runs/go-no-go/view?principal_user_id=host_h&fixture=missing-production-artifact`,
+    path: `/games/${game}/operator/proof-runs/go-no-go/view?fixture=missing-production-artifact`,
     checks: ["Operator Proof Artifact Go/No-Go", "no-go", "missing", "non_trusted 1"],
   },
   {
     name: "operator-proof-go-no-go-stale",
-    path: `/games/${game}/operator/proof-runs/go-no-go/view?principal_user_id=host_h&fixture=stale-production-artifact`,
+    path: `/games/${game}/operator/proof-runs/go-no-go/view?fixture=stale-production-artifact`,
     checks: ["Operator Proof Artifact Go/No-Go", "no-go", "stale", "non_trusted 1"],
   },
   {
     name: "operator-proof-go-no-go-drifted",
-    path: `/games/${game}/operator/proof-runs/go-no-go/view?principal_user_id=host_h&fixture=drifted-production-artifact`,
+    path: `/games/${game}/operator/proof-runs/go-no-go/view?fixture=drifted-production-artifact`,
     checks: ["Operator Proof Artifact Go/No-Go", "no-go", "drifted", "non_trusted 1"],
   },
 ];
@@ -552,7 +554,7 @@ const pages = [
 const jsonPages = [
   {
     name: "operator-proof-run-status",
-    path: `/games/${game}/operator/proof-runs/status?principal_user_id=host_h&fixture=artifact-provenance`,
+    path: `/games/${game}/operator/proof-runs/status?fixture=artifact-provenance`,
     contractVersion: 1,
     summary: {
       production: {
@@ -1222,6 +1224,9 @@ function assertProofRunStatusContract(name, body, expectedContractVersion) {
 
 async function main() {
   await mkdir(artifactDir, { recursive: true });
+  if (configuredMediaRoot === undefined) {
+    await rm(mediaRoot, { recursive: true, force: true });
+  }
   await mkdir(mediaRoot, { recursive: true, mode: 0o700 });
   await writeSmokeProgress({ stage: "write-provenance-proof-artifacts" });
   await writeProvenanceProofArtifacts();
@@ -1237,6 +1242,7 @@ async function main() {
       DATABASE_URL: databaseUrl,
       FMARCH_BIND: `${host}:${port}`,
       FMARCH_MEDIA_ROOT: mediaRoot,
+      FMARCH_DEV_AUTH: "1",
       RUST_LOG: process.env.RUST_LOG ?? "warn",
     },
     stdio: ["ignore", "pipe", "pipe"],
@@ -1253,6 +1259,8 @@ async function main() {
   try {
     await writeSmokeProgress({ stage: "wait-for-health", port });
     await waitForHealth();
+    await createOperatorSession(hostSessionToken, "host_h");
+    await createOperatorSession(fixtureHostSessionToken, "fixture_host");
     await writeSmokeProgress({ stage: "seed-checked-audit-game" });
     await seedCheckedAuditGame();
     await writeSmokeProgress({ stage: "write-operator-reports" });
@@ -1923,10 +1931,39 @@ async function sendCommand(principalUserId, command) {
   }
 }
 
+async function createOperatorSession(token, principalUserId) {
+  const deadline = Date.now() + 15_000;
+  while (Date.now() < deadline) {
+    const response = await fetchWithTimeout(
+      `${baseUrl}/auth/dev-session`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          token,
+          principal_user_id: principalUserId,
+          expires_at: 4_102_444_800,
+          global_capabilities: [],
+        }),
+      },
+      5000,
+    );
+    if (response.ok) {
+      return;
+    }
+    const body = await response.text();
+    if (response.status !== 503) {
+      throw new Error(`operator fixture session rejected: ${body}`);
+    }
+    await delay(100);
+  }
+  throw new Error(`operator fixture session remained unavailable for ${principalUserId}`);
+}
+
 async function checkedAuditGameHasTrace() {
   const response = await fetchWithTimeout(
-    `${baseUrl}/games/${checkedAuditGame}/resolution-traces?principal_user_id=fixture_host`,
-    {},
+    `${baseUrl}/games/${checkedAuditGame}/resolution-traces`,
+    { headers: { authorization: `Bearer ${fixtureHostSessionToken}` } },
     5000,
   );
   if (!response.ok) {
@@ -2045,7 +2082,12 @@ async function runBrowserProof() {
   );
   try {
     const page = await withTimeout(
-      browser.newPage({ viewport: { width: 1280, height: 720 } }),
+      browser.newPage({
+        viewport: { width: 1280, height: 720 },
+        extraHTTPHeaders: {
+          authorization: `Bearer ${hostSessionToken}`,
+        },
+      }),
       15000,
       "create playwright page",
     );

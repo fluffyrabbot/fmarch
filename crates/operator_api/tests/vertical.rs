@@ -1,6 +1,8 @@
 use axum::body::{to_bytes, Body};
 use axum::extract::State;
-use axum::http::{Request, StatusCode};
+use axum::http::{header::AUTHORIZATION, HeaderValue, Request, StatusCode};
+use axum::middleware::{self, Next};
+use axum::response::Response;
 use axum::routing::post;
 use axum::{Json, Router};
 use caps::Principal;
@@ -22,6 +24,7 @@ use commands::operator_proof::{
     PROOF_RUN_STATUS_AUDIT_REPORT_ARTIFACT_VERSION, RESOLUTION_DIFF_REPORT_ARTIFACT_VERSION,
     TRACE_INSPECTION_REPORT_ARTIFACT_VERSION,
 };
+use sha2::{Digest, Sha256};
 use std::net::SocketAddr;
 use std::process::Command as ProcessCommand;
 use std::{fs, path::Path};
@@ -39,7 +42,65 @@ struct CommandRouteState {
 }
 
 fn router(pool: sqlx::PgPool) -> Router {
-    command_router(pool.clone()).merge(operator_api::router(pool))
+    let operator = operator_api::router(pool.clone()).layer(middleware::from_fn_with_state(
+        pool.clone(),
+        authenticate_operator_fixture,
+    ));
+    command_router(pool).merge(operator)
+}
+
+/// The vertical suite predates HTTP session auth and uses query principals to
+/// select fixture actors. Translate that fixture selector into a real,
+/// database-backed bearer session before the production router sees the
+/// request. Authorization is still resolved by the production session and
+/// capability path; dedicated route tests prove query principals are ignored.
+async fn authenticate_operator_fixture(
+    State(pool): State<sqlx::PgPool>,
+    mut request: Request<Body>,
+    next: Next,
+) -> Response {
+    let Some(principal_user_id) = request
+        .uri()
+        .query()
+        .and_then(fixture_principal_user_id)
+        .map(str::to_owned)
+    else {
+        return next.run(request).await;
+    };
+
+    let token = format!("vertical-operator-session:{principal_user_id}");
+    sqlx::query(
+        "INSERT INTO auth_session \
+         (token_hash, principal_user_id, created_at, expires_at, global_capabilities) \
+         VALUES ($1, $2, 0, 4102444800, ARRAY[]::TEXT[]) \
+         ON CONFLICT (token_hash) DO UPDATE SET \
+           principal_user_id = EXCLUDED.principal_user_id, \
+           expires_at = EXCLUDED.expires_at, \
+           revoked_at = NULL",
+    )
+    .bind(session_token_hash(&token))
+    .bind(&principal_user_id)
+    .execute(&pool)
+    .await
+    .expect("insert vertical operator fixture session");
+    request.headers_mut().insert(
+        AUTHORIZATION,
+        HeaderValue::from_str(&format!("Bearer {token}"))
+            .expect("vertical operator fixture token is a valid header"),
+    );
+    next.run(request).await
+}
+
+fn fixture_principal_user_id(query: &str) -> Option<&str> {
+    query
+        .split('&')
+        .find_map(|part| part.strip_prefix("principal_user_id="))
+        .filter(|principal| !principal.is_empty())
+}
+
+fn session_token_hash(token: &str) -> String {
+    let digest = Sha256::digest(token.as_bytes());
+    digest.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
 fn command_router(pool: sqlx::PgPool) -> Router {
@@ -1495,44 +1556,30 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
     assert!(html.contains("Operator Projection Rebuild Report"));
     assert!(html.contains("Operator Resolution Diff Report"));
     assert!(html.contains("Operator Trace Inspection Report"));
+    assert!(html.contains(&format!("/games/{game}/projection-audit/view")));
+    assert!(html.contains(&format!("/games/{game}/resolution-audit/view")));
+    assert!(html.contains(&format!("/games/{game}/resolution-traces/view")));
+    assert!(html.contains(&format!("/games/{game}/host-phase-controls")));
+    assert!(html.contains(&format!("/games/{game}/operator/proof-runs")));
     assert!(html.contains(&format!(
-        "/games/{game}/projection-audit/view?principal_user_id=host_h"
+        "/games/{game}/operator/proof-runs/status-audit/view"
+    )));
+    assert!(html.contains(&format!("/games/{game}/operator/proof-runs/go-no-go/view")));
+    assert!(html.contains(&format!("/games/{game}/operator/proof-runs/retention/view")));
+    assert!(html.contains(&format!(
+        "/games/{game}/operator/proof-runs/projection-rebuild/view"
     )));
     assert!(html.contains(&format!(
-        "/games/{game}/resolution-audit/view?principal_user_id=host_h"
+        "/games/{game}/operator/proof-runs/resolution-diff/view"
     )));
     assert!(html.contains(&format!(
-        "/games/{game}/resolution-traces/view?principal_user_id=host_h"
+        "/games/{game}/operator/proof-runs/trace-inspection/view"
     )));
     assert!(html.contains(&format!(
-        "/games/{game}/host-phase-controls?principal_user_id=host_h"
+        "/games/{game}/operator/proof-runs/large-action-graph-performance/view"
     )));
     assert!(html.contains(&format!(
-        "/games/{game}/operator/proof-runs?principal_user_id=host_h"
-    )));
-    assert!(html.contains(&format!(
-        "/games/{game}/operator/proof-runs/status-audit/view?principal_user_id=host_h"
-    )));
-    assert!(html.contains(&format!(
-        "/games/{game}/operator/proof-runs/go-no-go/view?principal_user_id=host_h"
-    )));
-    assert!(html.contains(&format!(
-        "/games/{game}/operator/proof-runs/retention/view?principal_user_id=host_h"
-    )));
-    assert!(html.contains(&format!(
-        "/games/{game}/operator/proof-runs/projection-rebuild/view?principal_user_id=host_h"
-    )));
-    assert!(html.contains(&format!(
-        "/games/{game}/operator/proof-runs/resolution-diff/view?principal_user_id=host_h"
-    )));
-    assert!(html.contains(&format!(
-        "/games/{game}/operator/proof-runs/trace-inspection/view?principal_user_id=host_h"
-    )));
-    assert!(html.contains(&format!(
-        "/games/{game}/operator/proof-runs/large-action-graph-performance/view?principal_user_id=host_h"
-    )));
-    assert!(html.contains(&format!(
-        "/games/{game}/operator/proof-runs/determinism-fuzz/view?principal_user_id=host_h"
+        "/games/{game}/operator/proof-runs/determinism-fuzz/view"
     )));
 
     let response = app
@@ -3254,7 +3301,7 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let cohost_html = String::from_utf8(bytes.to_vec()).unwrap();
     assert!(cohost_html.contains("Operator Index"));
-    assert!(cohost_html.contains("principal_user_id=cohost_c"));
+    assert!(!cohost_html.contains("principal_user_id="));
 
     let response = app
         .clone()

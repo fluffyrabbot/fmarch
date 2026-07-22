@@ -83,7 +83,7 @@ export async function load({ cookies, locals, fetch, url }) {
 }
 
 export const actions = {
-  checkRecoveryGate: async ({ fetch, locals, request }) => {
+  checkRecoveryGate: async ({ cookies, fetch, locals, request }) => {
     const apiBaseUrl = serverApiBaseUrl();
     const fixtureMode = process.env.FMARCH_FRONTEND_FIXTURE_SESSION === "1";
     const capabilities = Array.isArray(locals.resolvedCapabilities)
@@ -103,10 +103,6 @@ export const actions = {
 
     const formData = await request.formData();
     const game = requiredFormString(formData, "game");
-    const principalUserId =
-      typeof locals.principalUserId === "string" && locals.principalUserId.trim() !== ""
-        ? locals.principalUserId
-        : requiredFormString(formData, "principalUserId");
 
     if (fixtureMode && apiBaseUrl === "") {
       return {
@@ -116,14 +112,27 @@ export const actions = {
       };
     }
 
+    const sessionToken = cookies.get(SESSION_COOKIE_NAME);
+    if (!sessionToken) {
+      return fail(401, {
+        id: "recovery-gate",
+        state: "reject",
+        message: "Missing authenticated operator session",
+      });
+    }
+
     const response = await fetch(
       operatorProofRunUrl({
         apiBaseUrl,
         game,
-        principalUserId,
         path: "operator/proof-runs/go-no-go",
       }),
-      { headers: { accept: "application/json" } },
+      {
+        headers: {
+          accept: "application/json",
+          authorization: `Bearer ${sessionToken}`,
+        },
+      },
     );
     const body = await response.json();
     if (!response.ok) {

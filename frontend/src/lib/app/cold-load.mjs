@@ -160,12 +160,17 @@ export async function loadAdminColdData({
       fetchImpl,
       timeoutMs,
       fallback: null,
-      url: principalScopedGameUrl({
+      url: operatorProofRunUrl({
         apiBaseUrl,
         game,
         path: "operator/proof-runs/status",
-        principalUserId,
       }),
+      headers:
+        sessionToken === null ||
+        sessionToken === undefined ||
+        sessionToken.trim() === ""
+          ? undefined
+          : { authorization: `Bearer ${sessionToken}` },
     }),
     sessionToken === null || sessionToken === undefined || sessionToken.trim() === ""
       ? null
@@ -831,7 +836,6 @@ export function normalizeAdminAudit(proofStatus, fallback, context = {}) {
             ? row.href
             : operatorProofRunUrl({
                 game: context.game,
-                principalUserId: context.principalUserId,
               }),
       }),
     ),
@@ -997,15 +1001,9 @@ export function adminIdentityLifecycleAuditHref({ game, principalUserId }) {
 export function operatorProofRunUrl({
   apiBaseUrl = "",
   game,
-  principalUserId,
   path = "operator/proof-runs",
 }) {
-  return principalScopedGameUrl({
-    apiBaseUrl,
-    game,
-    principalUserId,
-    path,
-  });
+  return `${apiBaseUrl}/games/${encodeURIComponent(game)}/${path}`;
 }
 
 function firstNonEmptyString(...values) {

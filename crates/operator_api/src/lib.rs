@@ -4,8 +4,9 @@
 //! operator pages and audit endpoints over committed proof/projection evidence.
 
 use axum::extract::{Path, Query, State};
+use axum::http::header::AUTHORIZATION;
 use axum::http::header::{HeaderValue, RETRY_AFTER};
-use axum::http::StatusCode;
+use axum::http::{HeaderMap, StatusCode};
 use axum::response::{Html, IntoResponse};
 use axum::routing::get;
 use axum::{Json, Router};
@@ -39,8 +40,8 @@ use commands::operator_proof::{
     ProofRunArtifactState,
 };
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use sqlx::postgres::PgPool;
-use std::time::{SystemTime, UNIX_EPOCH};
 use std::{fs, path::Path as FsPath};
 use uuid::Uuid;
 use wire::{HostPhaseControl, RejectCode, RejectMsg, ResolutionTraceInspectionReport};
@@ -48,20 +49,11 @@ use wire::{HostPhaseControl, RejectCode, RejectMsg, ResolutionTraceInspectionRep
 #[derive(Clone)]
 pub struct OperatorApiState {
     pool: PgPool,
-    dev_auth_enabled: bool,
 }
 
 impl OperatorApiState {
     pub fn new(pool: PgPool) -> Self {
-        OperatorApiState {
-            pool,
-            dev_auth_enabled: std::env::var("FMARCH_DEV_AUTH").ok().as_deref() == Some("1"),
-        }
-    }
-
-    pub fn with_dev_auth(mut self, enabled: bool) -> Self {
-        self.dev_auth_enabled = enabled;
-        self
+        OperatorApiState { pool }
     }
 }
 
@@ -167,74 +159,55 @@ pub fn router_with_state(state: OperatorApiState) -> Router {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-struct HostPhaseControlQuery {
-    principal_user_id: String,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-struct OperatorIndexQuery {
-    principal_user_id: String,
-}
-
-#[derive(Debug, Clone, Deserialize)]
 struct OperatorProofRunsQuery {
-    principal_user_id: String,
     #[serde(default)]
     fixture: Option<OperatorProofRunFixture>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
 struct OperatorProofStatusAuditQuery {
-    principal_user_id: String,
     #[serde(default)]
     fixture: Option<OperatorProofStatusAuditFixture>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
 struct OperatorProofGoNoGoQuery {
-    principal_user_id: String,
     #[serde(default)]
     fixture: Option<OperatorProofGoNoGoFixture>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
 struct OperatorProofRetentionQuery {
-    principal_user_id: String,
     #[serde(default)]
     fixture: Option<OperatorProofRetentionFixture>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
 struct OperatorProofProjectionRebuildQuery {
-    principal_user_id: String,
     #[serde(default)]
     fixture: Option<OperatorProofProjectionRebuildFixture>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
 struct OperatorProofResolutionDiffQuery {
-    principal_user_id: String,
     #[serde(default)]
     fixture: Option<OperatorProofResolutionDiffFixture>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
 struct OperatorProofTraceInspectionQuery {
-    principal_user_id: String,
     #[serde(default)]
     fixture: Option<OperatorProofTraceInspectionFixture>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
 struct OperatorProofLargeActionGraphPerformanceQuery {
-    principal_user_id: String,
     #[serde(default)]
     fixture: Option<OperatorProofLargeActionGraphPerformanceFixture>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
 struct OperatorProofDeterminismFuzzQuery {
-    principal_user_id: String,
     #[serde(default)]
     fixture: Option<OperatorProofDeterminismFuzzFixture>,
 }
@@ -374,38 +347,36 @@ struct OperatorProofDeterminismFuzzResponse {
 async fn operator_index(
     State(state): State<OperatorApiState>,
     Path(game): Path<Uuid>,
-    Query(query): Query<OperatorIndexQuery>,
+    headers: HeaderMap,
 ) -> Result<Html<String>, ApiError> {
-    require_host_audit_access(
+    let principal_user_id = require_host_audit_access(
         &state,
+        &headers,
         game,
-        query.principal_user_id.as_str(),
         "principal cannot read operator index for this game",
     )
     .await?;
 
-    Ok(Html(render_operator_index_html(
-        game,
-        query.principal_user_id.as_str(),
-    )))
+    Ok(Html(render_operator_index_html(game, &principal_user_id)))
 }
 
 async fn operator_proof_runs(
     State(state): State<OperatorApiState>,
     Path(game): Path<Uuid>,
+    headers: HeaderMap,
     Query(query): Query<OperatorProofRunsQuery>,
 ) -> Result<Html<String>, ApiError> {
-    require_host_audit_access(
+    let principal_user_id = require_host_audit_access(
         &state,
+        &headers,
         game,
-        query.principal_user_id.as_str(),
         "principal cannot read operator proof-run index for this game",
     )
     .await?;
 
     Ok(Html(render_operator_proof_runs_html(
         game,
-        query.principal_user_id.as_str(),
+        &principal_user_id,
         query.fixture,
     )))
 }
@@ -413,12 +384,13 @@ async fn operator_proof_runs(
 async fn operator_proof_runs_status(
     State(state): State<OperatorApiState>,
     Path(game): Path<Uuid>,
+    headers: HeaderMap,
     Query(query): Query<OperatorProofRunsQuery>,
 ) -> Result<Json<SharedOperatorProofRunStatus>, ApiError> {
     require_host_audit_access(
         &state,
+        &headers,
         game,
-        query.principal_user_id.as_str(),
         "principal cannot read operator proof-run status for this game",
     )
     .await?;
@@ -432,12 +404,13 @@ async fn operator_proof_runs_status(
 async fn operator_proof_run_status_audit(
     State(state): State<OperatorApiState>,
     Path(game): Path<Uuid>,
+    headers: HeaderMap,
     Query(query): Query<OperatorProofStatusAuditQuery>,
 ) -> Result<Json<OperatorProofStatusAuditResponse>, ApiError> {
     require_host_audit_access(
         &state,
+        &headers,
         game,
-        query.principal_user_id.as_str(),
         "principal cannot read operator proof-run status audit for this game",
     )
     .await?;
@@ -450,12 +423,13 @@ async fn operator_proof_run_status_audit(
 async fn operator_proof_run_status_audit_view(
     State(state): State<OperatorApiState>,
     Path(game): Path<Uuid>,
+    headers: HeaderMap,
     Query(query): Query<OperatorProofStatusAuditQuery>,
 ) -> Result<Html<String>, ApiError> {
-    require_host_audit_access(
+    let principal_user_id = require_host_audit_access(
         &state,
+        &headers,
         game,
-        query.principal_user_id.as_str(),
         "principal cannot read operator proof-run status audit view for this game",
     )
     .await?;
@@ -463,7 +437,7 @@ async fn operator_proof_run_status_audit_view(
     let response = load_operator_proof_status_audit_response(query.fixture)?;
     Ok(Html(render_operator_proof_status_audit_html(
         game,
-        query.principal_user_id.as_str(),
+        &principal_user_id,
         query.fixture,
         &response,
     )))
@@ -472,12 +446,13 @@ async fn operator_proof_run_status_audit_view(
 async fn operator_proof_run_go_no_go(
     State(state): State<OperatorApiState>,
     Path(game): Path<Uuid>,
+    headers: HeaderMap,
     Query(query): Query<OperatorProofGoNoGoQuery>,
 ) -> Result<Json<OperatorProofGoNoGoResponse>, ApiError> {
     require_host_audit_access(
         &state,
+        &headers,
         game,
-        query.principal_user_id.as_str(),
         "principal cannot read operator proof artifact go/no-go for this game",
     )
     .await?;
@@ -488,12 +463,13 @@ async fn operator_proof_run_go_no_go(
 async fn operator_proof_run_go_no_go_view(
     State(state): State<OperatorApiState>,
     Path(game): Path<Uuid>,
+    headers: HeaderMap,
     Query(query): Query<OperatorProofGoNoGoQuery>,
 ) -> Result<Html<String>, ApiError> {
-    require_host_audit_access(
+    let principal_user_id = require_host_audit_access(
         &state,
+        &headers,
         game,
-        query.principal_user_id.as_str(),
         "principal cannot read operator proof artifact go/no-go view for this game",
     )
     .await?;
@@ -501,7 +477,7 @@ async fn operator_proof_run_go_no_go_view(
     let response = load_operator_proof_go_no_go_response(query.fixture)?;
     Ok(Html(render_operator_proof_go_no_go_html(
         game,
-        query.principal_user_id.as_str(),
+        &principal_user_id,
         &response,
     )))
 }
@@ -509,12 +485,13 @@ async fn operator_proof_run_go_no_go_view(
 async fn operator_proof_run_retention(
     State(state): State<OperatorApiState>,
     Path(game): Path<Uuid>,
+    headers: HeaderMap,
     Query(query): Query<OperatorProofRetentionQuery>,
 ) -> Result<Json<OperatorProofRetentionResponse>, ApiError> {
     require_host_audit_access(
         &state,
+        &headers,
         game,
-        query.principal_user_id.as_str(),
         "principal cannot read operator proof artifact retention for this game",
     )
     .await?;
@@ -525,12 +502,13 @@ async fn operator_proof_run_retention(
 async fn operator_proof_run_retention_view(
     State(state): State<OperatorApiState>,
     Path(game): Path<Uuid>,
+    headers: HeaderMap,
     Query(query): Query<OperatorProofRetentionQuery>,
 ) -> Result<Html<String>, ApiError> {
-    require_host_audit_access(
+    let principal_user_id = require_host_audit_access(
         &state,
+        &headers,
         game,
-        query.principal_user_id.as_str(),
         "principal cannot read operator proof artifact retention view for this game",
     )
     .await?;
@@ -538,7 +516,7 @@ async fn operator_proof_run_retention_view(
     let response = load_operator_proof_retention_response(query.fixture)?;
     Ok(Html(render_operator_proof_retention_html(
         game,
-        query.principal_user_id.as_str(),
+        &principal_user_id,
         &response,
     )))
 }
@@ -546,12 +524,13 @@ async fn operator_proof_run_retention_view(
 async fn operator_proof_run_projection_rebuild(
     State(state): State<OperatorApiState>,
     Path(game): Path<Uuid>,
+    headers: HeaderMap,
     Query(query): Query<OperatorProofProjectionRebuildQuery>,
 ) -> Result<Json<OperatorProofProjectionRebuildResponse>, ApiError> {
     require_host_audit_access(
         &state,
+        &headers,
         game,
-        query.principal_user_id.as_str(),
         "principal cannot read operator projection rebuild artifact for this game",
     )
     .await?;
@@ -564,12 +543,13 @@ async fn operator_proof_run_projection_rebuild(
 async fn operator_proof_run_projection_rebuild_view(
     State(state): State<OperatorApiState>,
     Path(game): Path<Uuid>,
+    headers: HeaderMap,
     Query(query): Query<OperatorProofProjectionRebuildQuery>,
 ) -> Result<Html<String>, ApiError> {
-    require_host_audit_access(
+    let principal_user_id = require_host_audit_access(
         &state,
+        &headers,
         game,
-        query.principal_user_id.as_str(),
         "principal cannot read operator projection rebuild artifact view for this game",
     )
     .await?;
@@ -577,7 +557,7 @@ async fn operator_proof_run_projection_rebuild_view(
     let response = load_operator_proof_projection_rebuild_response(query.fixture)?;
     Ok(Html(render_operator_proof_projection_rebuild_html(
         game,
-        query.principal_user_id.as_str(),
+        &principal_user_id,
         &response,
     )))
 }
@@ -585,12 +565,13 @@ async fn operator_proof_run_projection_rebuild_view(
 async fn operator_proof_run_resolution_diff(
     State(state): State<OperatorApiState>,
     Path(game): Path<Uuid>,
+    headers: HeaderMap,
     Query(query): Query<OperatorProofResolutionDiffQuery>,
 ) -> Result<Json<OperatorProofResolutionDiffResponse>, ApiError> {
     require_host_audit_access(
         &state,
+        &headers,
         game,
-        query.principal_user_id.as_str(),
         "principal cannot read operator resolution diff artifact for this game",
     )
     .await?;
@@ -603,12 +584,13 @@ async fn operator_proof_run_resolution_diff(
 async fn operator_proof_run_resolution_diff_view(
     State(state): State<OperatorApiState>,
     Path(game): Path<Uuid>,
+    headers: HeaderMap,
     Query(query): Query<OperatorProofResolutionDiffQuery>,
 ) -> Result<Html<String>, ApiError> {
-    require_host_audit_access(
+    let principal_user_id = require_host_audit_access(
         &state,
+        &headers,
         game,
-        query.principal_user_id.as_str(),
         "principal cannot read operator resolution diff artifact view for this game",
     )
     .await?;
@@ -616,7 +598,7 @@ async fn operator_proof_run_resolution_diff_view(
     let response = load_operator_proof_resolution_diff_response(query.fixture)?;
     Ok(Html(render_operator_proof_resolution_diff_html(
         game,
-        query.principal_user_id.as_str(),
+        &principal_user_id,
         &response,
     )))
 }
@@ -624,12 +606,13 @@ async fn operator_proof_run_resolution_diff_view(
 async fn operator_proof_run_trace_inspection(
     State(state): State<OperatorApiState>,
     Path(game): Path<Uuid>,
+    headers: HeaderMap,
     Query(query): Query<OperatorProofTraceInspectionQuery>,
 ) -> Result<Json<OperatorProofTraceInspectionResponse>, ApiError> {
     require_host_audit_access(
         &state,
+        &headers,
         game,
-        query.principal_user_id.as_str(),
         "principal cannot read operator trace inspection artifact for this game",
     )
     .await?;
@@ -642,12 +625,13 @@ async fn operator_proof_run_trace_inspection(
 async fn operator_proof_run_trace_inspection_view(
     State(state): State<OperatorApiState>,
     Path(game): Path<Uuid>,
+    headers: HeaderMap,
     Query(query): Query<OperatorProofTraceInspectionQuery>,
 ) -> Result<Html<String>, ApiError> {
-    require_host_audit_access(
+    let principal_user_id = require_host_audit_access(
         &state,
+        &headers,
         game,
-        query.principal_user_id.as_str(),
         "principal cannot read operator trace inspection artifact view for this game",
     )
     .await?;
@@ -655,7 +639,7 @@ async fn operator_proof_run_trace_inspection_view(
     let response = load_operator_proof_trace_inspection_response(query.fixture)?;
     Ok(Html(render_operator_proof_trace_inspection_html(
         game,
-        query.principal_user_id.as_str(),
+        &principal_user_id,
         &response,
     )))
 }
@@ -663,12 +647,13 @@ async fn operator_proof_run_trace_inspection_view(
 async fn operator_proof_run_large_action_graph_performance(
     State(state): State<OperatorApiState>,
     Path(game): Path<Uuid>,
+    headers: HeaderMap,
     Query(query): Query<OperatorProofLargeActionGraphPerformanceQuery>,
 ) -> Result<Json<OperatorProofLargeActionGraphPerformanceResponse>, ApiError> {
     require_host_audit_access(
         &state,
+        &headers,
         game,
-        query.principal_user_id.as_str(),
         "principal cannot read operator large action graph performance artifact for this game",
     )
     .await?;
@@ -681,12 +666,13 @@ async fn operator_proof_run_large_action_graph_performance(
 async fn operator_proof_run_large_action_graph_performance_view(
     State(state): State<OperatorApiState>,
     Path(game): Path<Uuid>,
+    headers: HeaderMap,
     Query(query): Query<OperatorProofLargeActionGraphPerformanceQuery>,
 ) -> Result<Html<String>, ApiError> {
-    require_host_audit_access(
+    let principal_user_id = require_host_audit_access(
         &state,
+        &headers,
         game,
-        query.principal_user_id.as_str(),
         "principal cannot read operator large action graph performance artifact view for this game",
     )
     .await?;
@@ -695,7 +681,7 @@ async fn operator_proof_run_large_action_graph_performance_view(
     Ok(Html(
         render_operator_proof_large_action_graph_performance_html(
             game,
-            query.principal_user_id.as_str(),
+            &principal_user_id,
             &response,
         ),
     ))
@@ -704,12 +690,13 @@ async fn operator_proof_run_large_action_graph_performance_view(
 async fn operator_proof_run_determinism_fuzz(
     State(state): State<OperatorApiState>,
     Path(game): Path<Uuid>,
+    headers: HeaderMap,
     Query(query): Query<OperatorProofDeterminismFuzzQuery>,
 ) -> Result<Json<OperatorProofDeterminismFuzzResponse>, ApiError> {
     require_host_audit_access(
         &state,
+        &headers,
         game,
-        query.principal_user_id.as_str(),
         "principal cannot read operator determinism fuzz artifact for this game",
     )
     .await?;
@@ -722,12 +709,13 @@ async fn operator_proof_run_determinism_fuzz(
 async fn operator_proof_run_determinism_fuzz_view(
     State(state): State<OperatorApiState>,
     Path(game): Path<Uuid>,
+    headers: HeaderMap,
     Query(query): Query<OperatorProofDeterminismFuzzQuery>,
 ) -> Result<Html<String>, ApiError> {
-    require_host_audit_access(
+    let principal_user_id = require_host_audit_access(
         &state,
+        &headers,
         game,
-        query.principal_user_id.as_str(),
         "principal cannot read operator determinism fuzz artifact view for this game",
     )
     .await?;
@@ -735,7 +723,7 @@ async fn operator_proof_run_determinism_fuzz_view(
     let response = load_operator_proof_determinism_fuzz_response(query.fixture)?;
     Ok(Html(render_operator_proof_determinism_fuzz_html(
         game,
-        query.principal_user_id.as_str(),
+        &principal_user_id,
         &response,
     )))
 }
@@ -743,12 +731,12 @@ async fn operator_proof_run_determinism_fuzz_view(
 async fn host_phase_controls_view(
     State(state): State<OperatorApiState>,
     Path(game): Path<Uuid>,
-    Query(query): Query<HostPhaseControlQuery>,
+    headers: HeaderMap,
 ) -> Result<Html<String>, ApiError> {
     require_host_audit_access(
         &state,
+        &headers,
         game,
-        query.principal_user_id.as_str(),
         "principal cannot read host phase-control audit for this game",
     )
     .await?;
@@ -761,20 +749,15 @@ async fn host_phase_controls_view(
     Ok(Html(render_host_phase_controls_html(game, &controls)))
 }
 
-#[derive(Debug, Clone, Deserialize)]
-struct ProjectionAuditQuery {
-    principal_user_id: String,
-}
-
 async fn projection_audit(
     State(state): State<OperatorApiState>,
     Path(game): Path<Uuid>,
-    Query(query): Query<ProjectionAuditQuery>,
+    headers: HeaderMap,
 ) -> Result<Json<projections::ProjectionAuditReport>, ApiError> {
     require_host_audit_access(
         &state,
+        &headers,
         game,
-        query.principal_user_id.as_str(),
         "principal cannot read projection rebuild audit for this game",
     )
     .await?;
@@ -785,12 +768,12 @@ async fn projection_audit(
 async fn projection_audit_view(
     State(state): State<OperatorApiState>,
     Path(game): Path<Uuid>,
-    Query(query): Query<ProjectionAuditQuery>,
+    headers: HeaderMap,
 ) -> Result<Html<String>, ApiError> {
     require_host_audit_access(
         &state,
+        &headers,
         game,
-        query.principal_user_id.as_str(),
         "principal cannot read projection rebuild audit for this game",
     )
     .await?;
@@ -799,20 +782,15 @@ async fn projection_audit_view(
     Ok(Html(render_projection_audit_html(&report)))
 }
 
-#[derive(Debug, Clone, Deserialize)]
-struct ResolutionAuditQuery {
-    principal_user_id: String,
-}
-
 async fn resolution_audit(
     State(state): State<OperatorApiState>,
     Path(game): Path<Uuid>,
-    Query(query): Query<ResolutionAuditQuery>,
+    headers: HeaderMap,
 ) -> Result<Json<commands::ResolutionEnvelopeAuditReport>, ApiError> {
     require_host_audit_access(
         &state,
+        &headers,
         game,
-        query.principal_user_id.as_str(),
         "principal cannot read resolution replay audit for this game",
     )
     .await?;
@@ -827,12 +805,12 @@ async fn resolution_audit(
 async fn resolution_audit_view(
     State(state): State<OperatorApiState>,
     Path(game): Path<Uuid>,
-    Query(query): Query<ResolutionAuditQuery>,
+    headers: HeaderMap,
 ) -> Result<Html<String>, ApiError> {
     require_host_audit_access(
         &state,
+        &headers,
         game,
-        query.principal_user_id.as_str(),
         "principal cannot read resolution replay audit for this game",
     )
     .await?;
@@ -845,19 +823,19 @@ async fn resolution_audit_view(
 
 #[derive(Debug, Clone, Deserialize)]
 struct ResolutionTraceQuery {
-    principal_user_id: String,
     run_id: Option<String>,
 }
 
 async fn resolution_traces(
     State(state): State<OperatorApiState>,
     Path(game): Path<Uuid>,
+    headers: HeaderMap,
     Query(query): Query<ResolutionTraceQuery>,
 ) -> Result<Json<ResolutionTraceInspectionReport>, ApiError> {
     require_host_audit_access(
         &state,
+        &headers,
         game,
-        query.principal_user_id.as_str(),
         "principal cannot read resolution traces for this game",
     )
     .await?;
@@ -873,12 +851,13 @@ async fn resolution_traces(
 async fn resolution_traces_view(
     State(state): State<OperatorApiState>,
     Path(game): Path<Uuid>,
+    headers: HeaderMap,
     Query(query): Query<ResolutionTraceQuery>,
 ) -> Result<Html<String>, ApiError> {
     require_host_audit_access(
         &state,
+        &headers,
         game,
-        query.principal_user_id.as_str(),
         "principal cannot read resolution traces for this game",
     )
     .await?;
@@ -891,16 +870,27 @@ async fn resolution_traces_view(
 
 async fn require_host_audit_access(
     state: &OperatorApiState,
+    headers: &HeaderMap,
     game: Uuid,
-    principal_user_id: &str,
     message: &'static str,
-) -> Result<(), ApiError> {
-    let caps = caps::resolve(&state.pool, &Principal::user(principal_user_id), game).await?;
+) -> Result<String, ApiError> {
+    let token = bearer_token(headers).ok_or_else(unauthorized_operator_session)?;
+    let (principal_user_id, global_capabilities) =
+        active_operator_session(&state.pool, token).await?;
+    let caps = caps::resolve(
+        &state.pool,
+        &Principal::user(principal_user_id.as_str()),
+        game,
+    )
+    .await?;
     if caps.grants(&Capability::HostOf(game)) || caps.grants(&Capability::CohostOf(game)) {
-        return Ok(());
+        return Ok(principal_user_id);
     }
-    if active_global_operator(&state.pool, principal_user_id).await? {
-        return Ok(());
+    if global_capabilities
+        .iter()
+        .any(|capability| capability == "GlobalAdmin" || capability == "GlobalMod")
+    {
+        return Ok(principal_user_id);
     }
 
     Err(ApiError::Reject {
@@ -910,32 +900,46 @@ async fn require_host_audit_access(
     })
 }
 
-fn unix_now_seconds() -> i64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|duration| duration.as_secs() as i64)
-        .unwrap_or_default()
-}
-
-async fn active_global_operator(pool: &PgPool, principal_user_id: &str) -> Result<bool, ApiError> {
-    let now = unix_now_seconds();
-    let has_global = sqlx::query_scalar::<_, bool>(
+async fn active_operator_session(
+    pool: &PgPool,
+    token: &str,
+) -> Result<(String, Vec<String>), ApiError> {
+    sqlx::query_as::<_, (String, Vec<String>)>(
         r#"
-        SELECT EXISTS (
-            SELECT 1
-            FROM auth_session
-            WHERE principal_user_id = $1
-              AND revoked_at IS NULL
-              AND expires_at > $2
-              AND global_capabilities && ARRAY['GlobalAdmin', 'GlobalMod']::TEXT[]
-        )
+        SELECT principal_user_id, global_capabilities
+        FROM auth_session
+        WHERE token_hash = $1
+          AND revoked_at IS NULL
+          AND expires_at > EXTRACT(EPOCH FROM CURRENT_TIMESTAMP)::BIGINT
         "#,
     )
-    .bind(principal_user_id)
-    .bind(now)
-    .fetch_one(pool)
-    .await?;
-    Ok(has_global)
+    .bind(hash_session_token(token))
+    .fetch_optional(pool)
+    .await?
+    .ok_or_else(unauthorized_operator_session)
+}
+
+fn bearer_token(headers: &HeaderMap) -> Option<&str> {
+    headers
+        .get(AUTHORIZATION)?
+        .to_str()
+        .ok()?
+        .strip_prefix("Bearer ")
+        .map(str::trim)
+        .filter(|token| !token.is_empty())
+}
+
+fn hash_session_token(token: &str) -> String {
+    let digest = Sha256::digest(token.as_bytes());
+    digest.iter().map(|byte| format!("{byte:02x}")).collect()
+}
+
+fn unauthorized_operator_session() -> ApiError {
+    ApiError::Reject {
+        status: StatusCode::UNAUTHORIZED,
+        error: RejectCode::NotAuthorized,
+        message: "operator session token is missing, expired, or revoked".to_string(),
+    }
 }
 
 fn render_operator_index_html(game: Uuid, principal_user_id: &str) -> String {
@@ -945,173 +949,132 @@ fn render_operator_index_html(game: Uuid, principal_user_id: &str) -> String {
         href: String,
     }
 
-    let principal_query = url_query_escape(principal_user_id);
     let links = [
         Link {
             label: "Projection Rebuild Audit",
             detail: "HTML drift report for rebuildable read models.",
-            href: format!(
-                "/games/{game}/projection-audit/view?principal_user_id={principal_query}"
-            ),
+            href: format!("/games/{game}/projection-audit/view"),
         },
         Link {
             label: "Projection Rebuild JSON",
             detail: "Machine-readable rollback rebuild audit.",
-            href: format!("/games/{game}/projection-audit?principal_user_id={principal_query}"),
+            href: format!("/games/{game}/projection-audit"),
         },
         Link {
             label: "Resolution Replay Audit",
             detail: "HTML comparison of stored and replayed resolution envelopes.",
-            href: format!(
-                "/games/{game}/resolution-audit/view?principal_user_id={principal_query}"
-            ),
+            href: format!("/games/{game}/resolution-audit/view"),
         },
         Link {
             label: "Resolution Replay JSON",
             detail: "Machine-readable replay audit with compact diff paths.",
-            href: format!("/games/{game}/resolution-audit?principal_user_id={principal_query}"),
+            href: format!("/games/{game}/resolution-audit"),
         },
         Link {
             label: "Resolution Trace Inspection",
             detail:
                 "HTML trace browser for decisions, edges, generated actions, effects, and notes.",
-            href: format!(
-                "/games/{game}/resolution-traces/view?principal_user_id={principal_query}"
-            ),
+            href: format!("/games/{game}/resolution-traces/view"),
         },
         Link {
             label: "Resolution Trace JSON",
             detail: "Machine-readable trace inspection, optionally filtered by run_id.",
-            href: format!("/games/{game}/resolution-traces?principal_user_id={principal_query}"),
+            href: format!("/games/{game}/resolution-traces"),
         },
         Link {
             label: "Host Phase-Control Audit",
             detail: "Machine-readable prompt-driven phase movement audit rows.",
-            href: format!("/games/{game}/host-phase-controls?principal_user_id={principal_query}"),
+            href: format!("/games/{game}/host-phase-controls"),
         },
         Link {
             label: "Host Phase-Control View",
             detail: "HTML inspection of prompt-driven phase movement audit rows.",
-            href: format!(
-                "/games/{game}/host-phase-controls/view?principal_user_id={principal_query}"
-            ),
+            href: format!("/games/{game}/host-phase-controls/view"),
         },
         Link {
             label: "Operator Proof-Run Index",
             detail: "Read-only local command index for Phase 7 proof lanes.",
-            href: format!("/games/{game}/operator/proof-runs?principal_user_id={principal_query}"),
+            href: format!("/games/{game}/operator/proof-runs"),
         },
         Link {
             label: "Operator Proof-Run Status Audit",
             detail: "HTML status-contract audit over saved local proof-run evidence.",
-            href: format!(
-                "/games/{game}/operator/proof-runs/status-audit/view?principal_user_id={principal_query}"
-            ),
+            href: format!("/games/{game}/operator/proof-runs/status-audit/view"),
         },
         Link {
             label: "Operator Proof-Run Status Audit JSON",
             detail: "Machine-readable status-contract audit over saved local proof-run evidence.",
-            href: format!(
-                "/games/{game}/operator/proof-runs/status-audit?principal_user_id={principal_query}"
-            ),
+            href: format!("/games/{game}/operator/proof-runs/status-audit"),
         },
         Link {
             label: "Operator Proof Artifact Go/No-Go",
             detail: "HTML go/no-go report for saved local proof-run artifacts.",
-            href: format!(
-                "/games/{game}/operator/proof-runs/go-no-go/view?principal_user_id={principal_query}"
-            ),
+            href: format!("/games/{game}/operator/proof-runs/go-no-go/view"),
         },
         Link {
             label: "Operator Proof Artifact Go/No-Go JSON",
             detail: "Machine-readable go/no-go report for saved local proof-run artifacts.",
-            href: format!(
-                "/games/{game}/operator/proof-runs/go-no-go?principal_user_id={principal_query}"
-            ),
+            href: format!("/games/{game}/operator/proof-runs/go-no-go"),
         },
         Link {
             label: "Operator Proof Artifact Retention",
             detail: "HTML retention comparison for saved local proof-run artifacts.",
-            href: format!(
-                "/games/{game}/operator/proof-runs/retention/view?principal_user_id={principal_query}"
-            ),
+            href: format!("/games/{game}/operator/proof-runs/retention/view"),
         },
         Link {
             label: "Operator Proof Artifact Retention JSON",
             detail: "Machine-readable retention comparison for saved local proof-run artifacts.",
-            href: format!(
-                "/games/{game}/operator/proof-runs/retention?principal_user_id={principal_query}"
-            ),
+            href: format!("/games/{game}/operator/proof-runs/retention"),
         },
         Link {
             label: "Operator Projection Rebuild Report",
             detail: "HTML projection rebuild report for a saved local artifact.",
-            href: format!(
-                "/games/{game}/operator/proof-runs/projection-rebuild/view?principal_user_id={principal_query}"
-            ),
+            href: format!("/games/{game}/operator/proof-runs/projection-rebuild/view"),
         },
         Link {
             label: "Operator Projection Rebuild Report JSON",
             detail: "Machine-readable projection rebuild report for a saved local artifact.",
-            href: format!(
-                "/games/{game}/operator/proof-runs/projection-rebuild?principal_user_id={principal_query}"
-            ),
+            href: format!("/games/{game}/operator/proof-runs/projection-rebuild"),
         },
         Link {
             label: "Operator Resolution Diff Report",
             detail: "HTML resolution replay diff report for a saved local artifact.",
-            href: format!(
-                "/games/{game}/operator/proof-runs/resolution-diff/view?principal_user_id={principal_query}"
-            ),
+            href: format!("/games/{game}/operator/proof-runs/resolution-diff/view"),
         },
         Link {
             label: "Operator Resolution Diff Report JSON",
             detail: "Machine-readable resolution replay diff report for a saved local artifact.",
-            href: format!(
-                "/games/{game}/operator/proof-runs/resolution-diff?principal_user_id={principal_query}"
-            ),
+            href: format!("/games/{game}/operator/proof-runs/resolution-diff"),
         },
         Link {
             label: "Operator Trace Inspection Report",
             detail: "HTML trace inspection report for a saved local artifact.",
-            href: format!(
-                "/games/{game}/operator/proof-runs/trace-inspection/view?principal_user_id={principal_query}"
-            ),
+            href: format!("/games/{game}/operator/proof-runs/trace-inspection/view"),
         },
         Link {
             label: "Operator Trace Inspection Report JSON",
             detail: "Machine-readable trace inspection report for a saved local artifact.",
-            href: format!(
-                "/games/{game}/operator/proof-runs/trace-inspection?principal_user_id={principal_query}"
-            ),
+            href: format!("/games/{game}/operator/proof-runs/trace-inspection"),
         },
         Link {
             label: "Operator Large Action Graph Performance Report",
             detail: "HTML performance report for the saved dense local action graph artifact.",
-            href: format!(
-                "/games/{game}/operator/proof-runs/large-action-graph-performance/view?principal_user_id={principal_query}"
-            ),
+            href: format!("/games/{game}/operator/proof-runs/large-action-graph-performance/view"),
         },
         Link {
             label: "Operator Large Action Graph Performance Report JSON",
             detail: "Machine-readable dense action graph performance report.",
-            href: format!(
-                "/games/{game}/operator/proof-runs/large-action-graph-performance?principal_user_id={principal_query}"
-            ),
+            href: format!("/games/{game}/operator/proof-runs/large-action-graph-performance"),
         },
         Link {
             label: "Operator Determinism Fuzz Report",
             detail: "HTML seeded scenario-family determinism report for saved local evidence.",
-            href: format!(
-                "/games/{game}/operator/proof-runs/determinism-fuzz/view?principal_user_id={principal_query}"
-            ),
+            href: format!("/games/{game}/operator/proof-runs/determinism-fuzz/view"),
         },
         Link {
             label: "Operator Determinism Fuzz Report JSON",
             detail: "Machine-readable seeded determinism report.",
-            href: format!(
-                "/games/{game}/operator/proof-runs/determinism-fuzz?principal_user_id={principal_query}"
-            ),
+            href: format!("/games/{game}/operator/proof-runs/determinism-fuzz"),
         },
     ];
 
@@ -4153,19 +4116,6 @@ fn html_escape_into(out: &mut String, input: &str) {
             _ => out.push(ch),
         }
     }
-}
-
-fn url_query_escape(input: &str) -> String {
-    let mut out = String::new();
-    for byte in input.bytes() {
-        match byte {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' => {
-                out.push(byte as char);
-            }
-            _ => out.push_str(&format!("%{byte:02X}")),
-        }
-    }
-    out
 }
 
 fn internal_api_error(message: impl Into<String>) -> ApiError {

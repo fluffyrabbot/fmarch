@@ -25,7 +25,7 @@ test("admin audit detail load returns the native SPA audit surface", async () =>
   assert.equal(data.audit.inspectHref, "/admin/audit/proof-runs?game=midsummer");
   assert.equal(
     data.audit.href,
-    "/games/midsummer/operator/proof-runs?principal_user_id=admin_a",
+    "/games/midsummer/operator/proof-runs",
   );
 });
 

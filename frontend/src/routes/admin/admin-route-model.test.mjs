@@ -454,19 +454,19 @@ test("admin route data exposes setup, audit, and escalation work surfaces", asyn
   assert.equal(data.gameSetup[3].confirmLabel, "Delegate @cohost_c");
   assert.equal(
     data.audit[0].href,
-    "/games/midsummer/operator/proof-runs?principal_user_id=admin_a",
+    "/games/midsummer/operator/proof-runs",
   );
   assert.equal(data.audit[0].inspectHref, "/admin/audit/proof-runs?game=midsummer");
   assert.equal(
     data.audit[2].href,
-    "/games/midsummer/operator/proof-runs/go-no-go/view?principal_user_id=admin_a",
+    "/games/midsummer/operator/proof-runs/go-no-go/view",
   );
   assert.equal(data.audit[2].inspectHref, "/admin/audit/recovery?game=midsummer");
   assert.deepEqual(data.recoveryTasks.map((item) => item.id), ["recovery-gate"]);
   assert.equal(data.recoveryTasks[0].action, "check_recovery_gate");
   assert.equal(
     data.recoveryTasks[0].endpoint,
-    "/games/midsummer/operator/proof-runs/go-no-go?principal_user_id=admin_a",
+    "/games/midsummer/operator/proof-runs/go-no-go",
   );
   assert.match(data.recoveryTasks[0].boundaryDetail, /go-no-go/);
 });
@@ -545,7 +545,7 @@ test("admin audit detail data stays inside the admin SPA shell", async () => {
   assert.equal(data.audit.inspectHref, "/admin/audit/proof-runs?game=midsummer");
   assert.equal(
     data.audit.href,
-    "/games/midsummer/operator/proof-runs?principal_user_id=admin_a",
+    "/games/midsummer/operator/proof-runs",
   );
 });
 
@@ -561,7 +561,7 @@ test("admin audit detail overview href preserves the inspected game", async () =
   assert.equal(data.audit.inspectHref, "/admin/audit/proof-runs?game=solstice");
   assert.equal(
     data.audit.href,
-    "/games/solstice/operator/proof-runs?principal_user_id=admin_a",
+    "/games/solstice/operator/proof-runs",
   );
 });
 
@@ -581,8 +581,13 @@ test("admin audit detail data fails closed for unknown audit rows", async () => 
 test("admin recovery gate action reads the machine operator report", async () => {
   let observedUrl = null;
   const result = await actions.checkRecoveryGate({
+    cookies: { get: () => "admin-session" },
     fetch: async (url, init) => {
-      observedUrl = { url, accept: init.headers.accept };
+      observedUrl = {
+        url,
+        accept: init.headers.accept,
+        authorization: init.headers.authorization,
+      };
       return jsonResponse({
         ok: true,
         production: {
@@ -603,8 +608,9 @@ test("admin recovery gate action reads the machine operator report", async () =>
   });
 
   assert.deepEqual(observedUrl, {
-    url: "/games/midsummer/operator/proof-runs/go-no-go?principal_user_id=admin_a",
+    url: "/games/midsummer/operator/proof-runs/go-no-go",
     accept: "application/json",
+    authorization: "Bearer admin-session",
   });
   assert.equal(result.id, "recovery-gate");
   assert.equal(result.state, "ack");
@@ -613,6 +619,7 @@ test("admin recovery gate action reads the machine operator report", async () =>
 
 test("admin recovery gate action surfaces backend rejection", async () => {
   const result = await actions.checkRecoveryGate({
+    cookies: { get: () => "admin-session" },
     fetch: async () =>
       jsonResponse(
         { message: "principal cannot read operator proof artifact go/no-go for this game" },
@@ -818,7 +825,7 @@ test("admin route data uses operator proof status when available", async () => {
       authority: "GlobalAdmin or GlobalMod",
       boundary: "Read-only operator proof",
       boundaryDetail: "/operator/proof-runs machine-readable report",
-      href: "/games/midsummer/operator/proof-runs?principal_user_id=admin_a",
+      href: "/games/midsummer/operator/proof-runs",
       inspectHref: "/admin/audit/proof-a?game=midsummer",
     },
   ]);

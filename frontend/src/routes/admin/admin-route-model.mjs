@@ -2066,7 +2066,7 @@ export async function buildAdminRouteData({
     apiBaseUrl,
     sessionToken,
     identityPrincipalUserId,
-    fallback: adminFixtureColdLoad({ game, principalUserId }),
+    fallback: adminFixtureColdLoad({ game }),
   });
 
   return Object.freeze({
@@ -2262,7 +2262,6 @@ export async function buildAdminRouteData({
         confirmMessage: "Read saved go/no-go proof artifacts for this game",
         endpoint: operatorProofRunUrl({
           game,
-          principalUserId,
           path: "operator/proof-runs/go-no-go",
         }),
       }),
@@ -2997,7 +2996,7 @@ export function summarizeRecoveryGate(body) {
   });
 }
 
-function adminFixtureColdLoad({ game, principalUserId }) {
+function adminFixtureColdLoad({ game }) {
   return Object.freeze({
     audit: Object.freeze([
       Object.freeze({
@@ -3007,7 +3006,7 @@ function adminFixtureColdLoad({ game, principalUserId }) {
         authority: "GlobalAdmin or GlobalMod",
         boundary: "Read-only operator proof",
         boundaryDetail: "/operator/proof-runs machine-readable report",
-        href: operatorProofRunUrl({ game, principalUserId }),
+        href: operatorProofRunUrl({ game }),
       }),
       Object.freeze({
         id: "command-receipts",
@@ -3018,7 +3017,6 @@ function adminFixtureColdLoad({ game, principalUserId }) {
         boundaryDetail: "/operator command receipt inspection",
         href: operatorProofRunUrl({
           game,
-          principalUserId,
           path: "operator",
         }),
       }),
@@ -3031,7 +3029,6 @@ function adminFixtureColdLoad({ game, principalUserId }) {
         boundaryDetail: "/operator/proof-runs/go-no-go/view saved report",
         href: operatorProofRunUrl({
           game,
-          principalUserId,
           path: "operator/proof-runs/go-no-go/view",
         }),
       }),
