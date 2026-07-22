@@ -3,14 +3,30 @@
   export let form;
 
   $: security = data?.accountSecurity ?? {};
-  $: accountId = form?.accountId ?? security.accountId ?? "";
+  $: methods = security.methods ?? [];
+  $: activeMethods = methods.filter((method) => method.status === "active");
+  $: classicMethod = activeMethods.find((method) => method.kind === "classic_password") ?? null;
+  $: accountId = form?.accountId ?? security.accountId ?? classicMethod?.loginName ?? "";
   $: returnTo = form?.returnTo ?? security.returnTo ?? "/";
+  $: addClassicResult = form?.id === "account-method-add-classic" ? form : null;
+  $: disableResult = form?.id === "account-method-disable" ? form : null;
   $: rotationRejection =
     form?.id === "account-password-rotation" && form?.state === "reject"
       ? form.message
       : null;
   $: recoveryIssue = form?.id === "account-recovery-issue" ? form : null;
   $: recoveryRevocation = form?.id === "account-recovery-revoke" ? form : null;
+
+  function methodTitle(method) {
+    return method.kind === "classic_password" ? "Classic — direct sign-in" : "WorkOS — managed sign-in";
+  }
+
+  function methodDetail(method) {
+    if (method.kind === "classic_password") {
+      return method.loginName ?? "account and password";
+    }
+    return method.displayLabel ?? "external identity";
+  }
 </script>
 
 <svelte:head>
@@ -35,12 +51,123 @@
     </a>
   </section>
 
-  {#if security.managedByWorkos}
-    <section class="account-security__panel fm-panel" aria-label="Managed account security">
-      <h2>Identity managed by WorkOS</h2>
-      <p>Password, passkey, multi-factor authentication, and recovery controls are managed by your identity provider.</p>
-    </section>
-  {:else}
+  <section class="account-security__panel fm-panel" aria-label="Sign-in methods">
+    <h2>Sign-in methods</h2>
+    <ul class="account-security__methods" data-testid="account-security-methods">
+      {#each methods as method (method.methodId)}
+        <li class="account-security__method" data-testid={`account-method-${method.kind}`}>
+          <div>
+            <strong>{methodTitle(method)}</strong>
+            <small>{methodDetail(method)}</small>
+            {#if method.status !== "active"}
+              <small class="account-security__method-disabled">disabled</small>
+            {/if}
+          </div>
+          {#if method.status === "active"}
+            <form method="POST" action="?/disableMethod">
+              <input type="hidden" name="methodId" value={method.methodId} />
+              <input type="hidden" name="returnTo" value={returnTo} />
+              <button
+                type="submit"
+                class="fm-touch-button fm-touch-button--secondary"
+                data-testid={`account-method-disable-${method.kind}`}
+                disabled={activeMethods.length < 2}
+                title={activeMethods.length < 2
+                  ? "Add another sign-in method before removing this one"
+                  : null}
+              >
+                Remove
+              </button>
+            </form>
+          {/if}
+        </li>
+      {/each}
+    </ul>
+    {#if disableResult?.state === "ack"}
+      <p class="account-security__status" data-testid="account-method-disable-status">
+        {disableResult.message}
+      </p>
+    {:else if disableResult}
+      <p class="account-security__reject" role="alert" data-testid="account-method-disable-reject">
+        {disableResult.message}
+      </p>
+    {/if}
+
+    {#if classicMethod === null}
+      <form
+        method="POST"
+        action="?/addClassic"
+        class="account-security__form"
+        data-testid="account-method-add-classic-form"
+      >
+        <h3>Add Classic — direct sign-in</h3>
+        <p class="account-security__hint">
+          Your credentials and sessions stay on this server. No third-party
+          identity provider is contacted. Adding Classic keeps this account
+          reachable even if the identity provider is unavailable.
+        </p>
+        <input type="hidden" name="returnTo" value={returnTo} />
+        <label class="fm-field">
+          <span>Login name</span>
+          <input
+            name="loginName"
+            type="email"
+            autocomplete="username"
+            data-testid="account-method-add-classic-login"
+            value={addClassicResult?.accountId ?? ""}
+          />
+        </label>
+        <label class="fm-field">
+          <span>Password</span>
+          <input
+            name="password"
+            type="password"
+            autocomplete="new-password"
+            minlength="12"
+            data-testid="account-method-add-classic-password"
+          />
+        </label>
+        <label class="fm-field">
+          <span>Confirm password</span>
+          <input
+            name="confirmPassword"
+            type="password"
+            autocomplete="new-password"
+            minlength="12"
+            data-testid="account-method-add-classic-confirm"
+          />
+        </label>
+        <button type="submit" class="fm-touch-button" data-testid="account-method-add-classic-submit">
+          Add classic sign-in
+        </button>
+      </form>
+    {/if}
+
+    {#if addClassicResult?.state === "ack"}
+      <div class="account-security__credential" data-testid="account-method-add-classic-ack">
+        <strong>{addClassicResult.message}</strong>
+        <ul class="account-security__recovery-codes" data-testid="account-method-recovery-codes">
+          {#each addClassicResult.recoveryCodes as code}
+            <li><code>{code}</code></li>
+          {/each}
+        </ul>
+        <small>Each code can be used once to recover this account.</small>
+      </div>
+    {:else if addClassicResult?.state === "step-up"}
+      <div class="account-security__reject" role="alert" data-testid="account-method-add-classic-step-up">
+        <p>{addClassicResult.message}</p>
+        <a href={`/auth/login?returnTo=${encodeURIComponent("/auth/account/security")}`}>
+          Re-authenticate
+        </a>
+      </div>
+    {:else if addClassicResult?.state === "reject"}
+      <p class="account-security__reject" role="alert" data-testid="account-method-add-classic-reject">
+        {addClassicResult.message}
+      </p>
+    {/if}
+  </section>
+
+  {#if classicMethod !== null}
   <section class="account-security__panel fm-panel" aria-label="Password rotation">
     <form
       method="POST"
@@ -217,6 +344,58 @@
     gap: 14px;
   }
 
+  .account-security__form h3 {
+    font-size: 15px;
+    margin: 0;
+  }
+
+  .account-security__hint {
+    font-size: 13px;
+    line-height: 1.4;
+    margin: 0;
+  }
+
+  .account-security__methods {
+    display: grid;
+    gap: 12px;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .account-security__method {
+    align-items: center;
+    border: 1px solid var(--fm-line-soft);
+    border-radius: 10px;
+    display: flex;
+    gap: 12px;
+    justify-content: space-between;
+    padding: 12px 14px;
+  }
+
+  .account-security__method div {
+    display: grid;
+    gap: 4px;
+  }
+
+  .account-security__method small {
+    font-size: 12px;
+  }
+
+  .account-security__method-disabled {
+    color: var(--fm-danger-ink);
+    font-weight: 800;
+    text-transform: uppercase;
+  }
+
+  .account-security__recovery-codes {
+    display: grid;
+    gap: 6px;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
   .account-security__reject {
     background: var(--fm-danger-wash);
     border: 1px solid var(--fm-danger-soft);
@@ -227,6 +406,10 @@
     line-height: 1.3;
     margin: 0;
     padding: 10px 12px;
+  }
+
+  .account-security__reject p {
+    margin: 0 0 6px;
   }
 
   .account-security__credential,

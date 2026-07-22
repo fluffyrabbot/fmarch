@@ -657,12 +657,23 @@ test("host action issues a player invite through the authenticated host session"
 });
 
 test("WorkOS host invite returns an account-addressed sign-in link through the verified session", async () => {
-  const previousClientId = process.env.WORKOS_CLIENT_ID;
-  process.env.WORKOS_CLIENT_ID = "client_test";
+  const workosEnv = {
+    WORKOS_CLIENT_ID: "client_test",
+    WORKOS_API_KEY: "sk_test",
+    WORKOS_REDIRECT_URI: "https://fmarch.example.test/auth/callback",
+    WORKOS_COOKIE_PASSWORD: "0123456789abcdef0123456789abcdef",
+  };
+  const previous = {};
+  for (const [name, value] of Object.entries(workosEnv)) {
+    previous[name] = process.env[name];
+    process.env[name] = value;
+  }
   const observed = [];
   try {
     const result = await actions.issuePlayerInvite({
-      cookies: { get: () => undefined },
+      cookies: {
+        get: (name) => (name === "fmarch_session" ? "fmss_host-session" : undefined),
+      },
       fetch: async (url, init) => {
         observed.push({ url, authorization: init.headers.authorization });
         return jsonResponse({
@@ -670,7 +681,6 @@ test("WorkOS host invite returns an account-addressed sign-in link through the v
         });
       },
       locals: {
-        auth: { accessToken: "signed-workos-access-token" },
         principalUserId: "host_h",
         resolvedCapabilities: [{ kind: "HostOf", game: "midsummer" }],
       },
@@ -686,16 +696,18 @@ test("WorkOS host invite returns an account-addressed sign-in link through the v
 
     assert.deepEqual(observed, [{
       url: "/games/midsummer/host-console-state?slot_id=slot-7",
-      authorization: "Bearer signed-workos-access-token",
+      authorization: "Bearer fmss_host-session",
     }]);
     assert.equal(result.playerInvite.identityProvider, "workos");
     assert.equal(
       result.playerInvite.loginPath,
-      "/auth/sign-in?returnTo=%2Fg%2Fmidsummer&loginHint=mira%40example.test",
+      "/auth/login/workos?returnTo=%2Fg%2Fmidsummer&loginHint=mira%40example.test",
     );
   } finally {
-    if (previousClientId === undefined) delete process.env.WORKOS_CLIENT_ID;
-    else process.env.WORKOS_CLIENT_ID = previousClientId;
+    for (const [name, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
   }
 });
 

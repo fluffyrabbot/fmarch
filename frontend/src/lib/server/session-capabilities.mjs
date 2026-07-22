@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import { normalizeCapabilities } from "../app/capabilities.mjs";
 import { fetchTimeoutSignal, ssrFetchTimeoutMs } from "../app/cold-load.mjs";
 
@@ -28,17 +27,27 @@ export function clearSessionCache() {
   sessionCache.clear();
 }
 
-export function accessTokenForRequest({ accessToken, locals, cookies } = {}) {
-  const workosToken = accessToken ?? locals?.auth?.accessToken;
-  if (typeof workosToken === "string" && workosToken.trim() !== "") {
-    return workosToken;
+// Drop any cached resolutions for a token that was just logged out or
+// revoked, so a stale entry cannot serve capabilities for up to a full TTL.
+export function evictSessionCacheForToken(token) {
+  if (typeof token !== "string" || token.trim() === "") return;
+  for (const key of sessionCache.keys()) {
+    if (key.startsWith(`${token}|`)) {
+      sessionCache.delete(key);
+    }
   }
-  const legacyToken = cookies?.get?.(SESSION_COOKIE_NAME);
-  return typeof legacyToken === "string" && legacyToken.trim() !== "" ? legacyToken : null;
 }
 
-export function authenticatedApiFetch({ accessToken, locals, cookies, fetchImpl = fetch } = {}) {
-  const token = accessTokenForRequest({ accessToken, locals, cookies });
+// The backend-owned app session in the fmarch_session cookie is the only
+// per-request identity; provider tokens are exchanged once at sign-in and
+// never appear here.
+export function accessTokenForRequest({ cookies } = {}) {
+  const sessionToken = cookies?.get?.(SESSION_COOKIE_NAME);
+  return typeof sessionToken === "string" && sessionToken.trim() !== "" ? sessionToken : null;
+}
+
+export function authenticatedApiFetch({ cookies, fetchImpl = fetch } = {}) {
+  const token = accessTokenForRequest({ cookies });
   return async (input, init = {}) => {
     const headers = new Headers(init.headers ?? {});
     if (typeof token === "string" && token.trim() !== "") {
@@ -49,7 +58,6 @@ export function authenticatedApiFetch({ accessToken, locals, cookies, fetchImpl 
 }
 
 export async function resolveAuthenticatedSessionCached({
-  accessToken,
   cookies,
   request,
   fetchImpl = fetch,
@@ -57,7 +65,7 @@ export async function resolveAuthenticatedSessionCached({
   now = Date.now,
 } = {}) {
   const ttlMs = sessionCacheTtlMs(env);
-  const token = accessTokenForRequest({ accessToken, cookies });
+  const token = accessTokenForRequest({ cookies });
   const context = sessionContextFromRequest(request);
   const cacheable =
     ttlMs > 0 &&
@@ -66,7 +74,7 @@ export async function resolveAuthenticatedSessionCached({
     token.trim() !== "" &&
     context !== null;
   if (!cacheable) {
-    return resolveAuthenticatedSession({ accessToken, cookies, request, fetchImpl, env });
+    return resolveAuthenticatedSession({ cookies, request, fetchImpl, env });
   }
 
   const key = `${token}|${context.kind}|${context.kind === "game" ? context.game : ""}`;
@@ -76,7 +84,7 @@ export async function resolveAuthenticatedSessionCached({
     return cached.session;
   }
 
-  const session = await resolveAuthenticatedSession({ accessToken, cookies, request, fetchImpl, env });
+  const session = await resolveAuthenticatedSession({ cookies, request, fetchImpl, env });
   // Rotation-required sessions must re-resolve, and empty sessions may just
   // be an API blip — caching either would pin a worse state for a full TTL.
   if (session.rotationRequired !== true && session.principalUserId !== null) {
@@ -91,13 +99,12 @@ export async function resolveAuthenticatedSessionCached({
 }
 
 export async function resolveAuthenticatedSession({
-  accessToken,
   cookies,
   request,
   fetchImpl = fetch,
   env = process.env,
 } = {}) {
-  const token = accessTokenForRequest({ accessToken, cookies });
+  const token = accessTokenForRequest({ cookies });
   const context = sessionContextFromRequest(request);
   if (env?.FMARCH_FRONTEND_FIXTURE_SESSION === "1") {
     return fixtureSession({
@@ -142,7 +149,6 @@ export async function rotateAuthenticatedBrowserSession({
     return { status: "missing" };
   }
 
-  const sessionToken = `account-session-${randomUUID()}`;
   let response;
   try {
     const signal = fetchTimeoutSignal(ssrFetchTimeoutMs(env));
@@ -153,7 +159,7 @@ export async function rotateAuthenticatedBrowserSession({
         "content-type": "application/json",
         accept: "application/json",
       },
-      body: JSON.stringify({ session_token: sessionToken }),
+      body: JSON.stringify({}),
       ...(signal === undefined ? {} : { signal }),
     });
   } catch {
@@ -164,11 +170,12 @@ export async function rotateAuthenticatedBrowserSession({
   }
 
   const body = await response.json().catch(() => null);
-  if (!validSessionPayload(body)) {
+  if (!validSessionPayload(body) || !validIssuedSessionToken(body.session_token)) {
     return { status: "unavailable" };
   }
+  evictSessionCacheForToken(token);
   const url = new URL(typeof request?.url === "string" ? request.url : "http://localhost/");
-  cookies?.set?.(SESSION_COOKIE_NAME, sessionToken, browserSessionCookieOptions(url));
+  cookies?.set?.(SESSION_COOKIE_NAME, body.session_token, browserSessionCookieOptions(url));
   return { status: "rotated" };
 }
 
@@ -390,6 +397,10 @@ function validSessionPayload(payload) {
     payload.principal_user_id.trim() !== "" &&
     Array.isArray(payload.capabilities)
   );
+}
+
+function validIssuedSessionToken(token) {
+  return typeof token === "string" && token.trim() !== "";
 }
 
 function firstString(...values) {

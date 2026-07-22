@@ -2,7 +2,7 @@ import { fail, redirect } from "@sveltejs/kit";
 import { serverApiBaseUrl } from "../../../../lib/server/api-base.mjs";
 import { SESSION_COOKIE_NAME } from "../../../../lib/server/session-capabilities.mjs";
 
-export function load({ locals, url }) {
+export async function load({ cookies, fetch, locals, url }) {
   const accountId = optionalField(url.searchParams.get("account"));
   const returnTo = safeReturnTo(url.searchParams.get("returnTo"));
   if (typeof locals.principalUserId !== "string" || locals.principalUserId.trim() === "") {
@@ -20,14 +20,222 @@ export function load({ locals, url }) {
       accountId,
       principalUserId: locals.principalUserId,
       returnTo,
-      managedByWorkos: workosEnabled(process.env),
+      methods: await accountMethods({ cookies, fetch }),
     },
   };
 }
 
+async function accountMethods({ cookies, fetch }) {
+  const sessionToken = cookies.get(SESSION_COOKIE_NAME);
+  if (typeof sessionToken !== "string" || sessionToken.trim() === "") {
+    return [];
+  }
+  let response;
+  try {
+    response = await fetch(accountMethodsUrl(process.env), {
+      method: "GET",
+      headers: {
+        authorization: `Bearer ${sessionToken}`,
+        accept: "application/json",
+      },
+    });
+  } catch {
+    return [];
+  }
+  if (!response.ok) {
+    return [];
+  }
+  const body = await response.json().catch(() => null);
+  if (body === null || typeof body !== "object" || !Array.isArray(body.methods)) {
+    return [];
+  }
+  return body.methods
+    .filter(
+      (method) =>
+        method !== null &&
+        typeof method === "object" &&
+        typeof method.method_id === "string" &&
+        (method.kind === "classic_password" || method.kind === "workos"),
+    )
+    .map((method) => ({
+      methodId: method.method_id,
+      kind: method.kind,
+      status: typeof method.status === "string" ? method.status : "active",
+      createdAt: Number.isSafeInteger(method.created_at) ? method.created_at : null,
+      lastAuthenticatedAt: Number.isSafeInteger(method.last_authenticated_at)
+        ? method.last_authenticated_at
+        : null,
+      loginName: typeof method.login_name === "string" ? method.login_name : null,
+      displayLabel: typeof method.display_label === "string" ? method.display_label : null,
+    }));
+}
+
 export const actions = {
+  addClassic: async ({ cookies, fetch, request }) => {
+    const formData = await request.formData();
+    const loginName = optionalField(formData.get("loginName"));
+    const password = passwordField(formData.get("password"));
+    const confirmPassword = passwordField(formData.get("confirmPassword"));
+    const returnTo = safeReturnTo(formData.get("returnTo"));
+    const sessionToken = cookies.get(SESSION_COOKIE_NAME);
+    if (
+      loginName === "" ||
+      password === null ||
+      confirmPassword === null ||
+      typeof sessionToken !== "string" ||
+      sessionToken.trim() === ""
+    ) {
+      return fail(400, {
+        id: "account-method-add-classic",
+        state: "reject",
+        message: "Login name, password, and confirmation are required",
+        accountId: loginName,
+        returnTo,
+      });
+    }
+    if (password !== confirmPassword) {
+      return fail(400, {
+        id: "account-method-add-classic",
+        state: "reject",
+        message: "Password confirmation does not match",
+        accountId: loginName,
+        returnTo,
+      });
+    }
+
+    const response = await fetch(addClassicMethodUrl(process.env), {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${sessionToken}`,
+        "content-type": "application/json",
+        accept: "application/json",
+      },
+      body: JSON.stringify({ login_name: loginName, password }),
+    });
+    if (!response.ok) {
+      if (response.status === 403 && (await isStepUpRejection(response))) {
+        return fail(403, {
+          id: "account-method-add-classic",
+          state: "step-up",
+          message:
+            "Confirm your identity again to add a sign-in method: sign in once more, then retry.",
+          accountId: loginName,
+          returnTo,
+        });
+      }
+      return fail(
+        response.status === 400 || response.status === 409 ? response.status : 502,
+        {
+          id: "account-method-add-classic",
+          state: "reject",
+          message:
+            response.status === 409
+              ? "This principal already has a classic sign-in, or the login name is taken"
+              : response.status === 400
+                ? await rejectionMessage(response, "Adding a classic sign-in was rejected")
+                : "Auth service could not add the classic sign-in method",
+          accountId: loginName,
+          returnTo,
+        },
+      );
+    }
+    const body = await response.json().catch(() => null);
+    if (
+      body?.status !== "added" ||
+      typeof body?.method_id !== "string" ||
+      typeof body?.login_name !== "string" ||
+      !Array.isArray(body?.recovery_codes) ||
+      body.recovery_codes.some((code) => typeof code !== "string" || code.trim() === "")
+    ) {
+      return fail(502, {
+        id: "account-method-add-classic",
+        state: "reject",
+        message: "Auth service returned a malformed method addition",
+        accountId: loginName,
+        returnTo,
+      });
+    }
+
+    return {
+      id: "account-method-add-classic",
+      state: "ack",
+      message: "Classic sign-in added. Save these recovery codes now — they are shown only once.",
+      accountId: body.login_name,
+      returnTo,
+      methodId: body.method_id,
+      recoveryCodes: body.recovery_codes,
+      recoveryCodesExpireAt: body.recovery_codes_expire_at ?? null,
+    };
+  },
+  disableMethod: async ({ cookies, fetch, request }) => {
+    const formData = await request.formData();
+    const methodId = optionalField(formData.get("methodId"));
+    const returnTo = safeReturnTo(formData.get("returnTo"));
+    const sessionToken = cookies.get(SESSION_COOKIE_NAME);
+    if (methodId === "" || typeof sessionToken !== "string" || sessionToken.trim() === "") {
+      return fail(400, {
+        id: "account-method-disable",
+        state: "reject",
+        message: "A sign-in method is required",
+        returnTo,
+      });
+    }
+
+    const response = await fetch(disableMethodUrl(process.env, methodId), {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${sessionToken}`,
+        "content-type": "application/json",
+        accept: "application/json",
+      },
+      body: JSON.stringify({}),
+    });
+    if (!response.ok) {
+      if (response.status === 403 && (await isStepUpRejection(response))) {
+        return fail(403, {
+          id: "account-method-disable",
+          state: "step-up",
+          message:
+            "Confirm your identity again to remove a sign-in method: sign in once more, then retry.",
+          returnTo,
+        });
+      }
+      return fail(
+        response.status === 400 || response.status === 401 || response.status === 409
+          ? response.status
+          : 502,
+        {
+          id: "account-method-disable",
+          state: "reject",
+          message:
+            response.status === 409
+              ? "Add another sign-in method before removing this one"
+              : "Auth service could not remove the sign-in method",
+          returnTo,
+        },
+      );
+    }
+    const body = await response.json().catch(() => null);
+    if (body?.status !== "disabled" || body?.method_id !== methodId) {
+      return fail(502, {
+        id: "account-method-disable",
+        state: "reject",
+        message: "Auth service returned a malformed method removal",
+        returnTo,
+      });
+    }
+
+    return {
+      id: "account-method-disable",
+      state: "ack",
+      message:
+        "Sign-in method removed. Sessions signed in through it were signed out everywhere.",
+      returnTo,
+      methodId,
+      methodKind: typeof body.kind === "string" ? body.kind : null,
+    };
+  },
   rotatePassword: async ({ cookies, fetch, request, url }) => {
-    if (workosEnabled(process.env)) return managedIdentityRejection();
     const formData = await request.formData();
     const accountId = optionalField(formData.get("accountId"));
     const currentPassword = passwordField(formData.get("currentPassword"));
@@ -83,7 +291,7 @@ export const actions = {
           response.status === 401
             ? "Account credentials are missing, disabled, or invalid"
             : response.status === 400
-              ? await rejectionMessage(response)
+              ? await rejectionMessage(response, "Password rotation was rejected")
               : "Auth service could not rotate the account password",
         accountId,
         returnTo,
@@ -108,7 +316,6 @@ export const actions = {
     throw redirect(303, loginPath({ accountId, returnTo }));
   },
   issueRecovery: async ({ cookies, fetch, request }) => {
-    if (workosEnabled(process.env)) return managedIdentityRejection();
     const formData = await request.formData();
     const accountId = optionalField(formData.get("accountId"));
     const currentPassword = passwordField(formData.get("currentPassword"));
@@ -181,7 +388,6 @@ export const actions = {
     };
   },
   revokeRecovery: async ({ cookies, fetch, request }) => {
-    if (workosEnabled(process.env)) return managedIdentityRejection();
     const formData = await request.formData();
     const accountId = optionalField(formData.get("accountId"));
     const recoveryId = optionalField(formData.get("recoveryId"));
@@ -249,6 +455,26 @@ export const actions = {
   },
 };
 
+async function isStepUpRejection(response) {
+  const body = await response
+    .clone()
+    .json()
+    .catch(() => null);
+  return typeof body?.message === "string" && body.message.includes("recent_authentication_required");
+}
+
+function accountMethodsUrl(env) {
+  return `${authBaseUrl(env)}/auth/account/methods`;
+}
+
+function addClassicMethodUrl(env) {
+  return `${authBaseUrl(env)}/auth/account/methods/classic`;
+}
+
+function disableMethodUrl(env, methodId) {
+  return `${authBaseUrl(env)}/auth/account/methods/${encodeURIComponent(methodId)}/disable`;
+}
+
 function accountPasswordRotationUrl(env) {
   return `${authBaseUrl(env)}/auth/accounts/password-rotations`;
 }
@@ -265,17 +491,6 @@ function authBaseUrl(env) {
   return serverApiBaseUrl(env);
 }
 
-function workosEnabled(env) {
-  return typeof env?.WORKOS_CLIENT_ID === "string" && env.WORKOS_CLIENT_ID.trim() !== "";
-}
-
-function managedIdentityRejection() {
-  return fail(409, {
-    state: "reject",
-    message: "Password and recovery settings are managed by WorkOS",
-  });
-}
-
 function loginPath({ accountId, returnTo }) {
   const query = new URLSearchParams({ returnTo });
   if (accountId !== "") {
@@ -284,11 +499,9 @@ function loginPath({ accountId, returnTo }) {
   return `/auth/login?${query}`;
 }
 
-async function rejectionMessage(response) {
+async function rejectionMessage(response, fallback) {
   const body = await response.json().catch(() => null);
-  return typeof body?.message === "string" && body.message.trim() !== ""
-    ? body.message
-    : "Password rotation was rejected";
+  return typeof body?.message === "string" && body.message.trim() !== "" ? body.message : fallback;
 }
 
 function passwordField(value) {

@@ -11,14 +11,12 @@ import {
   sessionContextFromRequest,
 } from "./session-capabilities.mjs";
 
-test("WorkOS access tokens take precedence over the legacy development cookie", async () => {
-  const locals = { auth: { accessToken: "workos-access-token" } };
-  const cookies = cookieJar("legacy-session-token");
-  assert.equal(accessTokenForRequest({ locals, cookies }), "workos-access-token");
+test("the fmarch_session cookie is the only per-request bearer", async () => {
+  const cookies = cookieJar("fmss_app-session-token");
+  assert.equal(accessTokenForRequest({ cookies }), "fmss_app-session-token");
 
   const seen = [];
   const request = authenticatedApiFetch({
-    locals,
     cookies,
     fetchImpl: async (url, init) => {
       seen.push({ url, init });
@@ -26,7 +24,10 @@ test("WorkOS access tokens take precedence over the legacy development cookie", 
     },
   });
   await request("/commands", { headers: { accept: "application/json" } });
-  assert.equal(new Headers(seen[0].init.headers).get("authorization"), "Bearer workos-access-token");
+  assert.equal(
+    new Headers(seen[0].init.headers).get("authorization"),
+    "Bearer fmss_app-session-token",
+  );
 });
 
 test("opaque session cookie resolves principal and scoped host capabilities through the API", async () => {

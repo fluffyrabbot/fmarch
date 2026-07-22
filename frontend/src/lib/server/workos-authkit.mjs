@@ -19,11 +19,31 @@ export function workosAuthKitConfigured(env = process.env) {
   return true;
 }
 
+// AuthKit's sealed session cookie only exists between the WorkOS redirect and
+// the one-time exchange at /auth/workos/complete; nothing else may read it.
+export const WORKOS_SESSION_COOKIE_NAME = "wos-session";
+
+let configuredAuthKitPromise;
+
 export function loadWorkosAuthKitModule() {
   authKitModulePromise ??= import("@workos/authkit-sveltekit");
   return authKitModulePromise;
 }
 
-export function loadAuthKit() {
-  return loadWorkosAuthKitModule().then(({ authKit }) => authKit);
+export function loadAuthKit(env = process.env) {
+  if (!workosAuthKitConfigured(env)) {
+    throw new Error("WorkOS AuthKit is not configured");
+  }
+  configuredAuthKitPromise ??= loadWorkosAuthKitModule().then(
+    ({ authKit, configureAuthKit }) => {
+      configureAuthKit({
+        clientId: env.WORKOS_CLIENT_ID,
+        apiKey: env.WORKOS_API_KEY,
+        redirectUri: env.WORKOS_REDIRECT_URI,
+        cookiePassword: env.WORKOS_COOKIE_PASSWORD,
+      });
+      return authKit;
+    },
+  );
+  return configuredAuthKitPromise;
 }
