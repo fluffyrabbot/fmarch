@@ -38,14 +38,15 @@ use uuid::Uuid;
 use wire::{
     AckMsg, AdvanceSubscriptionReadRequest, CapabilityGrant, ClientEnvelope, CommunityInboxPage,
     DayVoteOutcomeDelta, DiscussionArea, DiscussionPost, DiscussionThreadPage, DiscussionTopic,
-    DiscussionTopicPage, GameIndexEntry, GameIndexPage, Hello, HostConsolePhaseStateDelta,
-    HostConsoleSlotOccupancyDelta, HostConsoleStateDelta, HostConsoleThreadPostDelta,
-    HostPhaseControl, HostPromptDelta, HostPromptsDelta, ModerationCase, ModerationCaseDetail,
-    ModerationCasePage, ModerationReportReceipt, PlayerInvestigationResult,
-    PlayerInvestigationResultsDelta, PlayerNotification, PlayerNotificationsDelta, ProfileEditor,
-    ProjectionDelta, PublicGameThreadPage, PublicProfile, PublicSearchPage, PublicSearchResult,
-    RejectCode, RejectMsg, ServerEnvelope, ServerMsg, SubscriptionTargetState, ThreadPage,
-    ThreadPost, ThreadPostsDelta, VoteCountClearedDelta, VoteCountDelta, PROTOCOL_VERSION,
+    DiscussionTopicPage, GameIndexEntry, GameIndexPage, Hello, HostConsoleAuthorityDelta,
+    HostConsoleAuthorityKind, HostConsolePhaseStateDelta, HostConsoleSlotOccupancyDelta,
+    HostConsoleStateDelta, HostConsoleThreadPostDelta, HostPhaseControl, HostPromptDelta,
+    HostPromptsDelta, ModerationCase, ModerationCaseDetail, ModerationCasePage,
+    ModerationReportReceipt, PlayerInvestigationResult, PlayerInvestigationResultsDelta,
+    PlayerNotification, PlayerNotificationsDelta, ProfileEditor, ProjectionDelta,
+    PublicGameThreadPage, PublicProfile, PublicSearchPage, PublicSearchResult, RejectCode,
+    RejectMsg, ServerEnvelope, ServerMsg, SubscriptionTargetState, ThreadPage, ThreadPost,
+    ThreadPostsDelta, VoteCountClearedDelta, VoteCountDelta, PROTOCOL_VERSION,
 };
 
 #[derive(Clone)]
@@ -7447,6 +7448,45 @@ mod tests {
         // separator-agnostic so mixed hyphen/underscore ids interleave by ordinal.
         assert_eq!(slots, ["slot_1", "slot-2", "slot-3", "slot_10"]);
     }
+
+    #[test]
+    fn host_console_authority_exposes_effective_cohost_policy() {
+        let authority = build_host_console_authority(
+            "cohost_c",
+            false,
+            BTreeSet::from([
+                commands::CohostPermissionClass::Lifecycle,
+                commands::CohostPermissionClass::PhaseResolve,
+            ]),
+        );
+
+        assert_eq!(authority.capability, HostConsoleAuthorityKind::CohostOf);
+        assert_eq!(
+            authority.denied_classes,
+            [
+                wire::CohostPermissionClass::PhaseResolve,
+                wire::CohostPermissionClass::Lifecycle,
+            ]
+        );
+        assert!(!authority
+            .allowed_classes
+            .contains(&wire::CohostPermissionClass::PhaseResolve));
+        assert!(authority
+            .allowed_classes
+            .contains(&wire::CohostPermissionClass::Deadline));
+
+        let host = build_host_console_authority("host_h", true, BTreeSet::new());
+        assert_eq!(host.capability, HostConsoleAuthorityKind::HostOf);
+        assert_eq!(host.allowed_classes.len(), 12);
+        assert!(host.denied_classes.is_empty());
+
+        let operator = build_host_console_operator_authority("operator_o");
+        assert_eq!(
+            operator.capability,
+            HostConsoleAuthorityKind::GlobalOperator
+        );
+        assert!(operator.allowed_classes.is_empty());
+    }
 }
 
 async fn load_pack_for_game(state: &ApiState, game: Uuid) -> Result<domain::Pack, ApiError> {
@@ -7532,6 +7572,7 @@ struct HostConsoleStateQuery {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct HostConsoleStateResponse {
     pub game: Uuid,
+    pub authority: HostConsoleAuthorityDelta,
     pub completed: bool,
     pub phase: Option<HostConsolePhaseState>,
     pub slots: Vec<HostConsoleSlotOccupancy>,
@@ -7622,6 +7663,7 @@ impl From<HostConsoleStateResponse> for HostConsoleStateDelta {
     fn from(response: HostConsoleStateResponse) -> Self {
         HostConsoleStateDelta {
             game: response.game,
+            authority: response.authority,
             completed: response.completed,
             phase: response.phase.map(HostConsolePhaseStateDelta::from),
             slots: response
@@ -7737,16 +7779,23 @@ async fn host_console_state(
     let principal_user_id =
         authenticated_or_dev_query_principal(&state, &headers, query.principal_user_id.as_deref())
             .await?;
-    require_host_audit_access(
-        &state,
-        game,
-        principal_user_id.as_str(),
-        "principal cannot read host console state for this game",
-    )
-    .await?;
+    let authority = resolve_host_console_authority(&state, game, principal_user_id.as_str())
+        .await?
+        .ok_or_else(|| ApiError::Reject {
+            status: StatusCode::FORBIDDEN,
+            error: RejectCode::NotAuthorized,
+            message: "principal cannot read host console state for this game".to_string(),
+        })?;
 
     Ok(Json(
-        load_host_console_state(&state, game, query.slot_id.as_deref(), query.limit).await?,
+        load_host_console_state(
+            &state,
+            game,
+            authority,
+            query.slot_id.as_deref(),
+            query.limit,
+        )
+        .await?,
     ))
 }
 
@@ -7773,6 +7822,7 @@ async fn host_setup_state(
 async fn load_host_console_state(
     state: &ApiState,
     game: Uuid,
+    authority: HostConsoleAuthorityDelta,
     slot_id: Option<&str>,
     limit: Option<i64>,
 ) -> Result<HostConsoleStateResponse, ApiError> {
@@ -7832,11 +7882,86 @@ async fn load_host_console_state(
 
     Ok(HostConsoleStateResponse {
         game,
+        authority,
         completed,
         phase,
         slots,
         thread_posts,
     })
+}
+
+async fn resolve_host_console_authority(
+    state: &ApiState,
+    game: Uuid,
+    principal_user_id: &str,
+) -> Result<Option<HostConsoleAuthorityDelta>, ApiError> {
+    let capabilities =
+        caps::resolve(&state.pool, &Principal::user(principal_user_id), game).await?;
+    let is_host = capabilities
+        .iter()
+        .any(|cap| cap == &Capability::HostOf(game));
+    let is_cohost = capabilities
+        .iter()
+        .any(|cap| cap == &Capability::CohostOf(game));
+    if !is_host && !is_cohost {
+        return if active_global_operator(&state.pool, principal_user_id).await? {
+            Ok(Some(build_host_console_operator_authority(
+                principal_user_id,
+            )))
+        } else {
+            Ok(None)
+        };
+    }
+    let denied = if is_host {
+        BTreeSet::new()
+    } else {
+        projections::cohost_denied_classes(&state.pool, game)
+            .await?
+            .into_iter()
+            .filter_map(|class| commands::CohostPermissionClass::parse(&class))
+            .collect()
+    };
+    Ok(Some(build_host_console_authority(
+        principal_user_id,
+        is_host,
+        denied,
+    )))
+}
+
+fn build_host_console_authority(
+    principal_user_id: &str,
+    is_host: bool,
+    denied: BTreeSet<commands::CohostPermissionClass>,
+) -> HostConsoleAuthorityDelta {
+    let allowed_classes = commands::CohostPermissionClass::ALL
+        .into_iter()
+        .filter(|class| !denied.contains(class))
+        .map(wire::CohostPermissionClass::from)
+        .collect();
+    let denied_classes = denied
+        .into_iter()
+        .map(wire::CohostPermissionClass::from)
+        .collect();
+
+    HostConsoleAuthorityDelta {
+        principal_user_id: principal_user_id.to_string(),
+        capability: if is_host {
+            HostConsoleAuthorityKind::HostOf
+        } else {
+            HostConsoleAuthorityKind::CohostOf
+        },
+        allowed_classes,
+        denied_classes,
+    }
+}
+
+fn build_host_console_operator_authority(principal_user_id: &str) -> HostConsoleAuthorityDelta {
+    HostConsoleAuthorityDelta {
+        principal_user_id: principal_user_id.to_string(),
+        capability: HostConsoleAuthorityKind::GlobalOperator,
+        allowed_classes: Vec::new(),
+        denied_classes: Vec::new(),
+    }
 }
 
 async fn load_host_setup_state(
@@ -8752,15 +8877,10 @@ async fn host_console_state_delta_for_ws(
     slot_id: Option<&str>,
 ) -> Option<ProjectionDelta> {
     let principal_user_id = principal_user_id?;
-    require_host_audit_access(
-        state,
-        game,
-        principal_user_id,
-        "principal cannot read host console state for this game",
-    )
-    .await
-    .ok()?;
-    load_host_console_state(state, game, slot_id, Some(25))
+    let authority = resolve_host_console_authority(state, game, principal_user_id)
+        .await
+        .ok()??;
+    load_host_console_state(state, game, authority, slot_id, Some(25))
         .await
         .ok()
         .map(HostConsoleStateDelta::from)

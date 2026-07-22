@@ -5,6 +5,21 @@ export const EXTEND_DEADLINE_PRESETS = Object.freeze([
 
 const FIXTURE_DEADLINE_SECONDS = 1781841600;
 
+export const HOST_ACTION_PERMISSION_CLASS = Object.freeze({
+  process_replacement: "replacement",
+  publish_votecount: "phase_resolve",
+  complete_game: "phase_resolve",
+  extend_deadline: "deadline",
+  resolve_host_prompt: "host_prompt_resolve",
+  mark_dead: "lifecycle",
+  modkill_slot: "lifecycle",
+  unlock_thread: "phase_resolve",
+  advance_phase: "phase_resolve",
+  resolve_phase: "phase_resolve",
+  lock_thread: "phase_resolve",
+  advance_phase_by_deadline: "phase_resolve",
+});
+
 export function buildHostConsoleCriticalActions(
   gameId,
   {
@@ -13,6 +28,7 @@ export function buildHostConsoleCriticalActions(
     replacement = null,
     completed = false,
     capabilityKind = "HostOf",
+    allowedPermissionClasses = [],
   } = {},
 ) {
   if (completed === true) {
@@ -73,7 +89,11 @@ export function buildHostConsoleCriticalActions(
   ];
   return Object.freeze(
     actions.filter((action) =>
-      hostActionAllowedForCapability(action, capabilityKind),
+      hostActionAllowedForCapability(
+        action,
+        capabilityKind,
+        allowedPermissionClasses,
+      ),
     ),
   );
 }
@@ -413,7 +433,8 @@ export function buildHostConsoleActionGroups({
     freezeHostActionGroup({
       id: "deadline",
       label: "Deadline",
-      authority: "CohostOf(game)",
+      authority: hostActionAuthority(capabilityKind, "deadline"),
+      permissionClass: "deadline",
       value: "Extend the active phase deadline",
       boundary: "Typed command",
       boundaryDetail: "ExtendDeadline /commands Ack or Reject",
@@ -426,7 +447,8 @@ export function buildHostConsoleActionGroups({
     freezeHostActionGroup({
       id: "phase",
       label: "Phase and thread",
-      authority: "HostOf(game)",
+      authority: hostActionAuthority(capabilityKind, "phase_resolve"),
+      permissionClass: "phase_resolve",
       value: "Advance phase or lock the public thread",
       boundary: "Typed commands",
       boundaryDetail:
@@ -443,7 +465,8 @@ export function buildHostConsoleActionGroups({
     freezeHostActionGroup({
       id: "votecount",
       label: "Votecount",
-      authority: "HostOf(game)",
+      authority: hostActionAuthority(capabilityKind, "phase_resolve"),
+      permissionClass: "phase_resolve",
       value:
         votecountCount === 0
           ? "No active projected ballots"
@@ -456,7 +479,8 @@ export function buildHostConsoleActionGroups({
     freezeHostActionGroup({
       id: "replacement",
       label: "Replacement",
-      authority: "HostOf(game)",
+      authority: hostActionAuthority(capabilityKind, "replacement"),
+      permissionClass: "replacement",
       value: "Swap occupant while preserving slot history",
       boundary: "Typed command",
       boundaryDetail: "ProcessReplacement /commands Ack or Reject",
@@ -466,7 +490,8 @@ export function buildHostConsoleActionGroups({
     freezeHostActionGroup({
       id: "host-prompts",
       label: "Host prompts",
-      authority: "HostOf(game)",
+      authority: hostActionAuthority(capabilityKind, "host_prompt_resolve"),
+      permissionClass: "host_prompt_resolve",
       value:
         pendingPromptCount === 1
           ? "1 durable prompt pending"
@@ -482,7 +507,8 @@ export function buildHostConsoleActionGroups({
     freezeHostActionGroup({
       id: "slot-lifecycle",
       label: "Slot lifecycle",
-      authority: "HostOf(game)",
+      authority: hostActionAuthority(capabilityKind, "lifecycle"),
+      permissionClass: "lifecycle",
       value: "Mark dead or modkill the active slot",
       boundary: "Typed command",
       boundaryDetail: "SetSlotStatus /commands Ack or Reject",
@@ -492,7 +518,8 @@ export function buildHostConsoleActionGroups({
     freezeHostActionGroup({
       id: "roles",
       label: "Roles",
-      authority: "HostOf(game)",
+      authority: hostActionAuthority(capabilityKind, "phase_resolve"),
+      permissionClass: "phase_resolve",
       value: "Bulk reveal after completion",
       boundary: "Typed command",
       boundaryDetail: "CompleteGame flips final role and alignment reveal state",
@@ -510,12 +537,22 @@ export function buildHostConsoleActionGroups({
 export const HOST_CONSOLE_CRITICAL_ACTIONS =
   buildHostConsoleCriticalActions("game-tablet-smoke");
 
-export function hostActionAllowedForCapability(action, capabilityKind) {
+export function hostActionAllowedForCapability(
+  action,
+  capabilityKind,
+  allowedPermissionClasses = [],
+) {
   const normalizedCapabilityKind = normalizeHostCapabilityKind(capabilityKind);
   if (normalizedCapabilityKind === "HostOf") {
     return true;
   }
-  return action?.payload?.kind === "extend_deadline";
+  if (normalizedCapabilityKind !== "CohostOf") {
+    return false;
+  }
+  const allowed = new Set(
+    Array.isArray(allowedPermissionClasses) ? allowedPermissionClasses : [],
+  );
+  return allowed.has(HOST_ACTION_PERMISSION_CLASS[action?.payload?.kind]);
 }
 
 function hostActionGroupAllowedForCapability(group, capabilityKind) {
@@ -523,11 +560,20 @@ function hostActionGroupAllowedForCapability(group, capabilityKind) {
   if (normalizedCapabilityKind === "HostOf") {
     return true;
   }
-  return group?.id === "deadline";
+  return Array.isArray(group?.actions) && group.actions.length > 0;
+}
+
+function hostActionAuthority(capabilityKind, permissionClass) {
+  return normalizeHostCapabilityKind(capabilityKind) === "CohostOf"
+    ? `CohostOf(game) · ${permissionClass}`
+    : "HostOf(game)";
 }
 
 function normalizeHostCapabilityKind(capabilityKind) {
-  return capabilityKind === "CohostOf" ? "CohostOf" : "HostOf";
+  if (capabilityKind === "HostOf" || capabilityKind === "CohostOf") {
+    return capabilityKind;
+  }
+  return "GlobalOperator";
 }
 
 function freezeHostAction(action) {
@@ -541,6 +587,7 @@ function freezeHostActionGroup({
   id,
   label,
   authority,
+  permissionClass,
   value,
   boundary,
   boundaryDetail,
@@ -556,6 +603,7 @@ function freezeHostActionGroup({
     id,
     label,
     authority,
+    permissionClass,
     value,
     boundary,
     boundaryDetail,

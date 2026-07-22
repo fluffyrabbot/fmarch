@@ -31,6 +31,7 @@ export const HOST_PROJECTION_RESYNC_KEYS = Object.freeze([
 export function buildHostProjectionInitialSnapshot(data) {
   return Object.freeze({
     host: Object.freeze({
+      authority: data.authority,
       completed: data.completed ?? false,
       phase: data.phase,
       replacement: data.replacement,
@@ -68,6 +69,8 @@ export function hostProjectionResyncKeys() {
 
 export function buildHostDerivedState({ gameId, snapshot, capabilityKind = "HostOf" }) {
   const projection = snapshot.host;
+  const effectiveCapabilityKind =
+    projection.authority?.capabilityKind ?? capabilityKind;
   const votecount = snapshot.votecount;
   const dayVoteOutcomes = Array.isArray(snapshot.dayVoteOutcomes)
     ? snapshot.dayVoteOutcomes
@@ -78,13 +81,14 @@ export function buildHostDerivedState({ gameId, snapshot, capabilityKind = "Host
     phase: projection.phase,
     replacement: projection.replacement,
     completed: projection.completed,
-    capabilityKind,
+    capabilityKind: effectiveCapabilityKind,
+    allowedPermissionClasses: projection.authority?.allowedClasses ?? [],
   });
   const moderatorActionGroups = buildHostConsoleActionGroups({
     actions: criticalActions,
     pendingPromptCount: pendingPromptCount(hostPrompts),
     votecountCount: votecount.length,
-    capabilityKind,
+    capabilityKind: effectiveCapabilityKind,
   });
 
   return Object.freeze({

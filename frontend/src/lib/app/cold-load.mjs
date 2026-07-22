@@ -205,10 +205,11 @@ export async function loadHostColdData({
   principalUserId,
   fetchImpl,
   apiBaseUrl = "",
+  hostConsoleStateEndpoint = null,
   fallback,
   timeoutMs = ssrFetchTimeoutMs(),
 }) {
-  const [hostPrompts, votecount, dayVoteOutcomes] = await Promise.all([
+  const [hostPrompts, votecount, dayVoteOutcomes, hostConsoleState] = await Promise.all([
     fetchJson({
       fetchImpl,
       timeoutMs,
@@ -231,6 +232,14 @@ export async function loadHostColdData({
       fallback: fallback.dayVoteOutcomes ?? [],
       url: dayVoteOutcomesUrl({ apiBaseUrl, game }),
     }),
+    hostConsoleStateEndpoint === null
+      ? Promise.resolve(fallback.hostConsoleState ?? null)
+      : fetchJson({
+          fetchImpl,
+          timeoutMs,
+          fallback: fallback.hostConsoleState ?? null,
+          url: hostConsoleStateEndpoint,
+        }),
   ]);
 
   return Object.freeze({
@@ -240,6 +249,7 @@ export async function loadHostColdData({
       dayVoteOutcomes,
       fallback.dayVoteOutcomes ?? [],
     ),
+    hostConsoleState,
   });
 }
 

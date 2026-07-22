@@ -52,6 +52,7 @@ test("host route controller builds projection store boundaries from route data",
 
   assert.deepEqual(buildHostProjectionInitialSnapshot(data), {
     host: {
+      authority: data.authority,
       completed: false,
       phase: data.phase,
       replacement: data.replacement,
@@ -158,6 +159,11 @@ test("host route controller derives action groups from live host projections", (
     capabilityKind: "CohostOf",
     snapshot: {
       host: {
+        authority: {
+          capabilityKind: "CohostOf",
+          allowedClasses: ["deadline"],
+          deniedClasses: ["phase_resolve"],
+        },
         phase: {
           id: "D03R2",
           label: "Day 3 revote 2",
@@ -724,6 +730,12 @@ function fixtureData(overrides = {}) {
     hostVotecountEndpoint: "/games/midsummer/votecount",
     dayVoteOutcomesEndpoint: "/games/midsummer/day-vote-outcomes",
     hostPromptEndpoint: "/games/midsummer/host-prompts",
+    authority: {
+      principalUserId: "host_h",
+      capabilityKind: "HostOf",
+      allowedClasses: [],
+      deniedClasses: [],
+    },
     phase: { id: "D01", label: "Day 1", locked: false, state: "open" },
     replacement: null,
     votecount: [],
