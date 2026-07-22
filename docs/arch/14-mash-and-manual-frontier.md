@@ -5,7 +5,7 @@
 | **Document** | `docs/arch/14-mash-and-manual-frontier.md` (proposed) |
 | **Author** | TBD |
 | **Date** | 2026-07-22 |
-| **Status** | Draft (rev 3 — design-review consensus; landed in tree) |
+| **Status** | Draft (rev 4 — prerequisite and vertical-slice review) |
 | **Depends on** | [00](00-vision.md), [01](01-domain-model.md), [02](02-event-sourcing.md), [06](06-security.md), [09](09-engine-and-packs.md), [10](10-event-schema.md), [13](13-interaction-architecture.md) |
 
 > **Landing note (PR1):** index both this doc and [13](13-interaction-architecture.md) in `docs/arch/README.md` (13 is settled interaction architecture but is not yet in the README index).
@@ -18,7 +18,7 @@
 
 The product trajectory is clear and intentionally long: eventually, an authoring surface robust enough to **design** these games so they **run with full automation**. Ceiling customization is high; that destination is years of culture learning, not a single IR sprint. Therefore this architecture treats a **permanent manual frontier** as a first-class product invariant, not temporary tech debt:
 
-> **Manual frontier invariant (narrowed).** Every mechanical outcome a **Day program / DayEvent** can apply is drawn from a closed **platform reward/effect catalog** (`MechanicalEffectSpec`). For every catalog entry, the host can apply the **same** entry by fiat through the **same adapters** (same stream event kinds, same snapshot rebuild, same projections). Automation removes host work from the queue; it does not invent catalog powers the host cannot emit, and it does not create a parallel ruleset. **This is catalog parity, not full IR parity** — night blocks, investigation results, ITA shots, duels, etc. remain engine/pack resolution paths (or existing dedicated host commands), not mandatory EffectSpec entries.
+> **Manual frontier invariant (narrowed).** Every mechanical outcome a **Day program / DayEvent** can apply compiles from a closed reward-template catalog into a fully bound `ConcreteEffect`. The host can apply the **same concrete operation** by fiat through the **same adapters** (same stream event kinds, same snapshot rebuild, same projections). Automation removes host work from the queue; it does not invent catalog powers the host cannot emit, and it does not create a parallel ruleset. **This is catalog parity, not full IR parity** — night blocks, investigation results, ITA shots, duels, etc. remain engine/pack resolution paths (or existing dedicated host commands), not mandatory concrete-effect entries.
 
 This document defines mash as a culture target on top of the existing platform/engine split, introduces **DayEvent** as a first-class platform domain object (commands = authority; posts = narrative), and describes a progressive automation ladder that recedes the manual frontier without ever erasing it.
 
@@ -28,13 +28,14 @@ This document defines mash as a culture target on top of the existing platform/e
 
 Before any DayEvent reward is “real,” all of the following must hold:
 
-1. **`MechanicalEffectSpec`** is a closed, versioned enum in the **platform** layer (`crates/commands` and/or a thin shared module that is **not** the pure resolver), mirrored on wire.
+1. A small pure **game-platform model** module owns typed DayEvent payloads, reward templates, concrete effects, and deadline newtypes. `commands`, `projections`, `wire`, and `api` consume it; the pure resolver does not.
 2. **Adapter matrix** (this doc) maps every v1 variant → exact event kind(s), actor/provenance defaults, snapshot rebuild arm, projection fold, audit `meta.source`.
-3. **`ApplyEffectSpec`** and **`ResolveDayEvent` (reward path)** call the **same internal append helpers**; partial batch failure is forbidden (all-or-nothing transaction).
+3. **Reward templates** compile to fully bound **concrete effects**. `ApplyEffectPlan` and `ResolveDayEvent` call the same concrete-effect planner and append helpers; partial batch failure is forbidden (all-or-nothing transaction).
 4. Mutating DayEvent + EffectSpec commands (and other game-run mutators) admit **host or cohost** by default — gate as **`CohostOf(game)`** so `HostOf` subsumes. Optional **cohost denylist** set at game creation may strip specific permission classes from cohosts only; primary host is never restricted by that denylist. See [Cohost authority](#cohost-authority-co-gm-default).
-5. Engine **`HostPromptIssued` / `ResolveHostPrompt`** stay pack-declared; DayEvent host decisions are **platform HostTasks** with separate commands.
-6. Post-fiat **`audit_rebuild`** and a subsequent **`ResolvePhase`** both observe the same marks/grants/lifecycle (dual-truth forbidden).
-7. Normative v1 event kinds in [Appendix C](#appendix-c--normative-v1-contracts) are documented in [10-event-schema](10-event-schema.md) when implemented.
+5. Every accepted command stamps actual principal, command id, authority used, and request source into event audit metadata. `ActorId::Host` alone is not sufficient attribution for co-GMs or fiat.
+6. Engine **`HostPromptIssued` / `ResolveHostPrompt`** stay pack-declared; DayEvent host decisions are **platform HostTasks** with separate commands.
+7. Post-fiat **`audit_rebuild`** and a subsequent **`ResolvePhase`** both observe the same marks/grants/lifecycle (dual-truth forbidden).
+8. Normative v1 event kinds in [Appendix C](#appendix-c--normative-v1-contracts) are documented in [10-event-schema](10-event-schema.md) when implemented.
 
 ---
 
@@ -50,7 +51,7 @@ The spine is solid for mini/standard games and night-resolution culture:
 | User ≠ Slot; engine user-agnostic | Shipped | [01](01-domain-model.md), [09](09-engine-and-packs.md) |
 | Closed IR + declarative packs | Shipped; shipped culture packs pin high additive `ir_version` (e.g. mafiascum at 68 in tree; culture packs commonly mid-40s+) | `crates/domain`, `packs/mafiascum`, `packs/mafia_universe`, `packs/chinese_structured` |
 | Host prompts from engine policy | Shipped | Inner `HostPromptIssued` inside `ResolutionApplied`; `ResolveHostPrompt`; pack `host_prompt_resolution_effects` (`PkKill`, `AdvanceRevote`, `AdvanceNight`, `SkipNextDay`, `AcknowledgeOnly`). Beloved Princess uses `beloved_princess_policy` → skip_next_day prompt — not a separate command |
-| Host lifecycle **mutators** | Shipped, **mostly `HostOf`-only today** | `SetSlotStatus` → `SlotStatusChanged`; tags; `ResolvePhase`; `ControlItaSession`; `PublishSpectatorPost`; etc. (`crates/commands/src/model.rs`, `lib.rs`). **`ExtendDeadline` is already CohostOf-gated**. **Target:** co-GM default — migrate game-run mutators to `CohostOf` + optional create-time denylist; structural acts stay `HostOf` |
+| Host lifecycle **mutators** | Backend co-GM gates shipped; delivery followup required | `SetSlotStatus` → `SlotStatusChanged`; tags; `ResolvePhase`; `ControlItaSession`; `PublishSpectatorPost`; etc. use `require_game_run` + create-time denylist. The host UI still exposes only deadline controls to cohosts and events still need centrally stamped principal/authority metadata. Structural acts stay `HostOf` |
 | Host console as exception queue | Interaction contract settled | [13](13-interaction-architecture.md); `frontend/.../host-task-workspace.mjs` `buildHostTaskWorkspaceViewModel` + `TASK_POSTURE` |
 | Setup workflow | Pack → Roster → Roles → Rules → Review | [13](13-interaction-architecture.md); `setup-workflow-model.mjs` stageIds |
 | Scoped channels | Role PM, faction rooms, mason/neighbor, dead, spectator | [01](01-domain-model.md) |
@@ -61,7 +62,7 @@ What is **not** yet modeled:
 - Mid-day **game events** with independent clocks (raffles, mini-games, theme quests, public challenges).
 - **Rewards** as first-class effects that are theme-named but engine-real (vote-weight grants, item grants, marks, channel access, narrative).
 - A **program** authoring surface distinct from pack IR — mash designers compose day schedules without forking a giant mash pack per game.
-- A unified **host fiat catalog** for the **reward/mechanical subset** automation will emit (hosts already have lifecycle/control commands and prompt resolution; they lack catalog-parity `ApplyEffectSpec` for day-program rewards).
+- A unified **host fiat catalog** for the **reward/mechanical subset** automation will emit (hosts already have lifecycle/control commands and prompt resolution; they lack catalog-parity `ApplyEffectPlan` for day-program rewards).
 - Scale UX for **30+** seats: attention rails, projection costs, reading-first event participation.
 
 ### Pain points if we do nothing
@@ -87,9 +88,9 @@ That is the wrong seam. Mash wants pack + program + theme + manual override as f
 ### Goals
 
 1. **Encode mash culture** as a supported product target: 30+ seats, custom roles, 12/12 cadence, themed day events and rewards.
-2. **Permanent manual frontier (catalog parity):** host fiat through the **same MechanicalEffectSpec adapters** as DayEvent automation, always available, capability-gated with **`HostOf(game)`** for mutators by default.
+2. **Permanent manual frontier (catalog parity):** host fiat through the **same concrete-effect adapters** as DayEvent automation, always available to the authorized host team.
 3. **Four-layer content model:** Theme / Day program / Engine pack IR / Manual frontier — clear ownership and compile targets.
-4. **DayEvent as first-class platform domain:** identity, schedule/trigger, participation, state machine, resolution mode, rewards as `MechanicalEffectSpec`s, narrative templates — not “special posts.”
+4. **DayEvent as first-class platform domain:** identity, schedule/trigger, participation, state machine, resolution mode, reward templates, narrative templates — not “special posts.”
 5. **Progressive automation ladder** (L0–L4) per interaction class, with promotion criteria.
 6. **Preserve existing invariants:** event log truth, slot-only engine, closed versioned IR, capability authority, exception-driven host console.
 7. **Incremental PR path** realistic for a one-developer greenfield project that already has mini/night foundations.
@@ -117,8 +118,8 @@ A **mash** is a large-format forum mafia game with:
 | Roles | High custom-role density over a base pack (often mafiascum-shaped) | Roles remain pack IR / custom pack profiles |
 | Theme | One narrative umbrella (images, names, public copy) | Theme is presentation + reward naming, not rules authority |
 | Day program | Scheduled/triggered daytime interactions with participation | The mash signature |
-| Rewards | Theme-named, mechanically real effects | Theme label → `MechanicalEffectSpec` → shared adapters |
-| Cadence | Commonly **12h day / 12h night** | Platform **DeadlineInstant** deadlines; DayEvent open/lock use the same deadline family, independent of phase resolve |
+| Rewards | Theme-named, mechanically real effects | Theme label → reward template → concrete effect → shared adapters |
+| Cadence | Commonly **12h day / 12h night** | Platform `UnixSeconds` deadlines; DayEvent open/lock use the same deadline family, independent of phase resolve |
 | Hosting culture | Heavy host presence early; automation recedes work over years | Manual frontier never goes away |
 
 **Not mash:** a 13-player mini with vanilla roles and no day events. Those games use the existing path unchanged.
@@ -134,19 +135,18 @@ A **mash** is a large-format forum mafia game with:
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │              SHARED REWARD / MECHANICAL EFFECT CATALOG              │
-│  MechanicalEffectSpec (platform)                                    │
+│  ConcreteEffect (pure game-platform model)                          │
 │    → same internal adapters                                         │
 │    → same stream event kinds                                        │
 │    → same StateSnapshot rebuild + projections                       │
-│  v1: Mark, Clear, Grant (incl. VoteWeight/Item/ExtraAction),        │
-│      SlotLifecycle (via SlotStatusChanged), ChannelMember,          │
-│      PublishNarrative, Convert, Link (as adapters mature)           │
+│  v1: persistent Mark, Clear, Grant (VoteWeight/Item/ExtraAction),   │
+│      SlotLifecycle (via SlotStatusChanged), authoritative reveal    │
 │  NOT in catalog: full IrAbility surface (Block, Investigate, …)     │
 └───────────────▲──────────────────────────────▲──────────────────────┘
                 │                              │
      ┌──────────┴──────────┐        ┌──────────┴──────────┐
      │  Automation paths   │        │  Host fiat paths    │
-     │  - DayEvent resolve │        │  - ApplyEffectSpec  │
+     │  - DayEvent resolve │        │  - ApplyEffectPlan  │
      │  - (optional later  │        │  - override palette │
      │    auto policies)   │        │  - force cancel/    │
      │                     │        │    lock/resolve     │
@@ -160,12 +160,13 @@ Existing SEPARATE paths (not replaced by EffectSpec):
 
 **Rules:**
 
-1. **Catalog parity only.** If a Day program can emit `MechanicalEffectSpec::X`, the host can emit `X` via `ApplyEffectSpec` (or a thin dedicated command that is a **documented façade** over the same adapter). DayEvent rewards **may only bind** to catalog entries.
+1. **Catalog parity only.** If a Day program can compile a concrete effect `X`, the host can emit the same concrete `X` via `ApplyEffectPlan` (or a thin dedicated command that is a **documented façade** over the same adapter). DayEvent rewards **may only bind** to catalog operations.
 2. **Not full IR parity.** Engine-only outcomes (investigation payloads, night interference graph, ITA session queues, Knight duel resolution, etc.) are **out of EffectSpec scope**. Hosts continue to use existing commands / wait for resolution. Promoting a culture-stable fragment to L4 pack IR is how those become first-class play, not fiat-forging IR results.
 3. **Automation is queue subtraction.** Promoting L0→L3 means fewer platform `HostTask`s, not a different rules engine.
 4. **Override always wins on process, not on physics.** Hosts inject logged inputs; they do not mute the log. Compensating effects correct mistakes (`Clear` after bad `Mark`, revive via `SetSlotStatus` / lifecycle EffectSpec) — [02](02-event-sourcing.md).
-5. **Capability gate (co-GM default).** DayEvent mutators, `ApplyEffectSpec`, and other game-run mutators admit **host or cohost** (require `CohostOf`; host subsumes). Product stance: cohosts are **trusted co-GMs** — people do not invite cohosts they do not trust — so **full mutator parity is the default**. Hosts **may** narrow cohost power via an optional **permission denylist at game creation** (see [Cohost authority](#cohost-authority-co-gm-default)). Structural acts (grant/revoke cohost, change cohost policy, transfer primary host) stay primary-host-only.
+5. **Capability gate (co-GM default).** DayEvent mutators, `ApplyEffectPlan`, and other game-run mutators admit **host or cohost** (require `CohostOf`; host subsumes). Product stance: cohosts are **trusted co-GMs** — people do not invite cohosts they do not trust — so **full mutator parity is the default**. Hosts **may** narrow cohost power via an optional **permission denylist at game creation** (see [Cohost authority](#cohost-authority-co-gm-default)). Structural acts (grant/revoke cohost, change cohost policy, transfer primary host) stay primary-host-only.
 6. **Single adapter path.** Fiat and DayEvent never invent alternate event shapes for the same mechanical fact. Who applies (host vs cohost) is capability + policy; the event kinds and adapters are identical (`meta.actor` / principal still audited).
+7. **Template/concrete split.** Programs store recipient selectors and operation templates; they never embed a winner slot before resolution. Resolution produces a fully bound, auditable `EffectPlan` before any event is appended.
 
 This generalizes patterns already present:
 
@@ -182,13 +183,13 @@ flowchart TB
   end
   subgraph L2["2. Day program (semi-declarative, mash-specific)"]
     P[DayEvent schedules, participation, scoring, platform HostTasks]
-    P --> C[Compiles to MechanicalEffectSpecs + narrative posts + HostTasks]
+    P --> C[Compiles reward templates to concrete effects + HostTasks]
   end
   subgraph L3["3. Engine / pack IR (closed, deterministic)"]
     E[Roles, night graph, vote policy, wincons, IrAbility]
   end
   subgraph L4["4. Manual frontier (always on)"]
-    M[Host ApplyEffectSpec + existing phase/thread commands]
+    M[Host ApplyEffectPlan + existing phase/thread commands]
   end
   L1 --> PlayerUX[Player thread + event rail]
   L2 --> Stream[Game event stream]
@@ -200,9 +201,9 @@ flowchart TB
 | Layer | Authority | Mutability per game | Compile target |
 |---|---|---|---|
 | **Theme** | Presentation only | High (assets, copy) | Posts, media refs, display labels — **never** game outcomes alone |
-| **Day program** | Semi-declarative schedule/triggers | Per-game or per-series template | DayEvent platform events, platform HostTasks, MechanicalEffectSpecs |
+| **Day program** | Semi-declarative schedule/triggers | Per-game or per-series template | DayEvent platform events, platform HostTasks, reward templates that compile to concrete effects |
 | **Pack IR** | Closed deterministic rules | Pack version pin at game create | Existing `resolve` / submissions path ([09](09-engine-and-packs.md)) |
-| **Manual frontier** | Host fiat (HostOf) | Always | Same MechanicalEffectSpec adapters + **existing** phase/thread commands (not re-encoded as EffectSpecs) |
+| **Manual frontier** | Host fiat (host-team) | Always | Same concrete-effect adapters + **existing** phase/thread commands (not re-encoded as effects) |
 
 **Pack vs program boundary (hard rule):**
 
@@ -228,26 +229,27 @@ struct DayEvent {
     participation: ParticipationSpec,
     state: DayEventState,           // projection fold
     resolution: DayEventResolutionMode,
-    rewards: Vec<RewardBinding>,
+    rewards: Vec<RewardBinding>,    // operation templates; no unresolved concrete SlotId
     narrative: NarrativeTemplates,
     channel_policy: EventChannelPolicy,
 }
 
-/// Platform deadline instants — same family as phase DeadlineSet/ExtendDeadline
-/// (`at: i64` captured data). NOT engine LogicalTime (u64 monotonic, never wall).
-type DeadlineInstant = i64;
+/// Platform wall-clock values are explicit and unit-safe. They are never engine
+/// LogicalTime and never inferred from an event envelope's occurred_at field.
+struct UnixSeconds(i64);
+struct DurationSeconds(i64);
 
 enum DayEventSchedule {
     Absolute {
-        open_at: DeadlineInstant,
-        lock_at: Option<DeadlineInstant>,
+        open_at: UnixSeconds,
+        lock_at: Option<UnixSeconds>,
     },
     RelativeToPhase {
         phase_id: PhaseId,
         /// Offset from the phase's open instant (when PhaseAdvanced/OpenDayPhase
         /// established the phase window), not from engine LogicalTime.
-        open_offset_ms: i64,
-        lock_offset_ms: Option<i64>,
+        open_offset: DurationSeconds,
+        lock_offset: Option<DurationSeconds>,
     },
     HostOpened,
     OnTrigger { trigger: ProgramTrigger },
@@ -265,10 +267,7 @@ enum DayEventState {
 enum DayEventResolutionMode {
     Auto { policy: AutoResolvePolicy },       // L3
     HostDecision,                             // L1: platform HostTask + ResolveDayEvent
-    Hybrid {
-        auto: AutoResolvePolicy,
-        host_may_override: bool,
-    },
+    // Hybrid is deferred until auto proposal / host acceptance semantics exist.
 }
 
 struct ParticipationSpec {
@@ -280,8 +279,18 @@ struct ParticipationSpec {
 struct RewardBinding {
     reward_key: String,
     display_name_theme_key: String,
-    effects: Vec<MechanicalEffectSpec>, // catalog only
-    audience: RewardAudience,           // Winners | AllParticipants | HostChosen
+    effects: Vec<RewardEffectTemplate>, // catalog operations + recipient selectors
+}
+
+struct RewardEffectTemplate {
+    recipient: RecipientSelector,       // Winner | Participant | HostChosen | ExplicitSlot
+    operation: EffectOperationTemplate, // no concrete target before resolution
+}
+
+struct EffectPlan {
+    origin: EffectOrigin,
+    effects: Vec<ConcreteEffect>,       // every target and pack binding resolved
+    reason: String,
 }
 ```
 
@@ -295,27 +304,26 @@ stateDiagram-v2
   Open --> Locked: evidence_due_then_command|host_lock|capacity
   Open --> Cancelled: host_cancel
   Locked --> Resolved: auto|host_resolve|hybrid
-  Locked --> Open: host_reopen_audited
   Locked --> Cancelled: host_cancel
   Resolved --> [*]
   Cancelled --> [*]
 ```
 
-#### Mid-day clocks vs phase deadline (DeadlineInstant ≠ LogicalTime)
+#### Mid-day clocks vs phase deadline (wall-clock newtypes ≠ LogicalTime)
 
 | Concept | Type / events | Role |
 |---|---|---|
 | Engine `LogicalTime` | `u64` on engine envelopes | Deterministic resolver ordering; never wall-clock ([09](09-engine-and-packs.md), [10](10-event-schema.md)) |
-| Platform **DeadlineInstant** | `i64` captured on `DeadlineSet` / `ExtendDeadline` / `PhaseDeadlineElapsed` | Phase resolve clock — comparison data stored at write time |
-| DayEvent open/lock schedule | **DeadlineInstant** (absolute or relative-to-phase-open) | Independent of phase resolve; may fire mid-day |
+| Platform `UnixSeconds` | captured on `DeadlineSet` / `ExtendDeadline` / `PhaseDeadlineElapsed` | Phase resolve clock — comparison data stored at write time |
+| DayEvent open/lock schedule | `UnixSeconds` absolute or `DurationSeconds` relative to phase open | Independent of phase resolve; may fire mid-day |
 
-**Scheduler pattern (mirror `PhaseDeadlineElapsed` + `AdvancePhaseByDeadline`):**
+**Scheduler pattern (mirror the implemented atomic `PhaseDeadlineElapsed` + `AdvancePhaseByDeadline` command):**
 
-1. Emit inert evidence: `DayEventOpenDue` / `DayEventLockDue` with `{ event_id, due_at, observed_at, source: "scheduler"|"host" }`.
-2. Separately, host-or-system command `OpenDayEvent` / `LockDayEvent` validates evidence or host authority and appends `DayEventOpened` / `DayEventLocked`.
+1. A host-or-system deadline command validates `observed_at >= due_at` against committed schedule state.
+2. In one transaction it appends inert evidence (`DayEventOpenDue` / `DayEventLockDue`) and the corresponding `DayEventOpened` / `DayEventLocked` transition.
 3. Projection folds **must not** call wall-clock APIs; they only read captured fields.
 
-**RelativeToPhase base:** offset from the stream fact that opened the phase window (`PhaseAdvanced` / `OpenDayPhase` payload time or associated `DeadlineSet` for that phase — implementation pins one canonical base and documents it in schema). Until a **scheduler principal** exists, open/lock-by-due remain host-gated like today’s `AdvancePhaseByDeadline`.
+**RelativeToPhase base:** a future phase event/projection field `phase_opened_at: UnixSeconds`. Existing `PhaseAdvanced.occurred_at` values are logical/legacy data and are not a wall-clock base. Relative schedules do not ship until the phase-open instant is explicit. Until a **scheduler principal** exists, open/lock-by-due remain host-gated like today’s `AdvancePhaseByDeadline`.
 
 Default product posture for mash: **12h day / 12h night** phase cadence, with zero or more DayEvents scheduled inside each day window.
 
@@ -326,7 +334,7 @@ Default product posture for mash: **12h day / 12h night** phase cadence, with ze
 | Origin | Inner `HostPromptIssued` inside `ResolutionApplied` | Platform DayEvent state (`Locked` + `HostDecision` / hybrid) |
 | Projection | `host_prompt` | `day_event` (+ host-console task selector) |
 | Resolve command | `ResolveHostPrompt` | `ResolveDayEvent` |
-| Effect table | Pack `host_prompt_resolution_effects` (closed: PkKill, AdvanceRevote, …) | MechanicalEffectSpec adapter matrix |
+| Effect table | Pack `host_prompt_resolution_effects` (closed: PkKill, AdvanceRevote, …) | Reward templates compiled to the concrete-effect adapter matrix |
 | UX | Exception queue task family `"host-prompts"` | Task families `"day-event-resolve"`, `"day-event-open"` |
 
 **“Compose with” means:** both appear in the same host exception queue and `TASK_POSTURE` ranking — **not** shared decision schema, not jamming raffle winners through `ResolveHostPrompt` or fake pack prompt kinds.
@@ -340,18 +348,18 @@ Default product posture for mash: **12h day / 12h night** phase cadence, with ze
 
 (`"host-prompts"` remains rank 2; same urgency band is intentional.)
 
-### Shared MechanicalEffectSpec catalog (platform layer)
+### Shared concrete-effect catalog (game-platform layer)
 
-**Placement:** `MechanicalEffectSpec` lives in the **platform** layer — `crates/commands` (canonical) and `crates/wire` (export), optionally a thin non-resolver shared crate if needed. It must **not** pollute the pure resolver / `domain` resolve path. Pack-tag validation may call pure helpers already in `domain` (effect policy tables, `GrantSpec` shape) without moving the catalog enum into pure resolve.
+**Placement:** typed reward templates, concrete effects, DayEvent state, and their event payloads live in a small pure game-platform model crate/module. This avoids making `commands` canonical for types that `projections` must also consume (`commands` already depends on `projections`). The model may reuse pure identifiers and `GrantSpec` from `domain`, but it must not enter the resolver path.
 
 **Split from phase control:** phase/thread motion stays on **existing commands** (`ExtendDeadline`, `AdvancePhase`, `ResolvePhase`, `LockThread`, `UnlockThread`). Those are **not** EffectSpec variants. Host palette UI may group them as “controls” next to “effects,” but they do not share the EffectSpec enum.
 
-#### v1 catalog sketch
+#### v1 concrete catalog sketch
 
 ```rust
-/// Platform closed enum, versioned (`effect_spec_version`).
-/// DayEvent rewards and ApplyEffectSpec only.
-enum MechanicalEffectSpec {
+/// Fully bound platform operation. Program documents store the corresponding
+/// EffectOperationTemplate plus RecipientSelector, not this concrete target.
+enum ConcreteEffect {
     /// Lifecycle death/modkill/alive — adapter uses SlotStatusChanged (existing host path).
     /// Status only: does **not** apply death_reveal / RoleRevealed / AlignmentRevealed.
     /// Pair with RevealRole / RevealAlignment when a public role/alignment flip is intended.
@@ -362,7 +370,8 @@ enum MechanicalEffectSpec {
     Mark {
         target: SlotId,
         effect: Tag,              // must exist in pack.effects when pack-gated
-        duration: EffectDuration, // Persistent | Resolution
+        // Platform v1 supports Persistent only. Resolution effects exist only
+        // inside one pure resolver invocation and cannot be injected mid-phase.
     },
     Clear {
         target: SlotId,
@@ -373,42 +382,18 @@ enum MechanicalEffectSpec {
         target: SlotId,
         grant: GrantSpec, // domain::GrantSpec; kind VoteWeight | Item | ExtraAction
     },
-    Convert {
-        target: SlotId,
-        conversion: ConversionSpec,
-    },
-    Link {
-        slots: Vec<SlotId>,
-        link_id: String,
-    },
-    EnsureChannelMember {
-        channel_id: ChannelId,
-        slot: SlotId,
-    },
-    RevokeChannelMember {
-        channel_id: ChannelId,
-        slot: SlotId,
-    },
-    /// Narrative only — no mechanical game outcome.
-    /// v1 authoring path: host-authored notice (spectator-style), not player SubmitPost.
-    PublishNarrative {
-        channel_id: ChannelId,
-        template_id: String,
-        bindings: NarrativeBindings,
-    },
     /// Reveal-class only: fold the same reveal flags as resolution death_reveal /
     /// GameCompleted paths. Never implied by SetSlotLifecycle alone.
     RevealAlignment {
         target: SlotId,
-        alignment: AlignmentKey,
     },
     RevealRole {
         target: SlotId,
-        role_key: RoleKey,
     },
 }
 // Explicitly NOT catalog: SetVoteWeight (use Grant VoteWeight),
-// ExtendDeadline, RequestPhaseAdvance, free-floating InvestigateResult, ItaShot, …
+// ExtendDeadline, RequestPhaseAdvance, Convert, Link, channel membership,
+// PublishNarrative, free-floating InvestigateResult, ItaShot, …
 ```
 
 #### Effect application adapter matrix (normative intent)
@@ -420,21 +405,17 @@ Provenance defaults for all fiat/day-event adapters:
 | Stream `actor` | `ActorId::Host` for fiat; `ActorId::System` for pure auto DayEvent resolve |
 | `meta.source` | `host_fiat` \| `day_event` \| `resolution` (engine) \| `host_prompt` (engine prompt path only) |
 | `meta.command_id` | Existing wire command idempotency key — **not** a second client_request_id field |
-| Engine-shaped `actor: SlotId` on EffectsMarked | Synthetic / reserved: `"host"` or pack-local system slot string — **pinned in schema**; never a real player seat |
+| Engine-shaped source slot | Explicit `Some(slot)` for slot-sourced effects; `None` / `External` for host and DayEvent effects. A synthetic playable-looking `"host"` slot is forbidden |
 | `source_action` | `"host_fiat:{effect_spec_variant}"` or `"day_event:{event_id}:{reward_key}"` |
 | `phase_id` / kind / number | Current phase projection at apply time (captured into event) |
 
-| MechanicalEffectSpec | Stream event(s) | Envelope? | Snapshot rebuild | Projection | Notes |
+| ConcreteEffect | Stream event(s) | Envelope? | Snapshot rebuild | Projection | Notes |
 |---|---|---|---|---|---|
 | `SetSlotLifecycle` | `SlotStatusChanged` (existing) | No | Existing `"SlotStatusChanged"` arm | `slot_state` **status only** | Same helper as `SetSlotStatus`. **Not** free-floating `PlayerKilled`. **Does not** flip `death_reveal` / role / alignment reveal flags (parity with today's host lifecycle) |
-| `Mark` | Top-level `EffectsMarked` (platform outer kind, already hydrated as inner-shaped fields) | No | Existing `"EffectsMarked"` arm | `slot_effect`; optional `EffectNotification` | Duration Persistent vs Resolution as today |
+| `Mark` | Top-level `EffectsMarked` (platform outer kind, already hydrated as inner-shaped fields) | No | Existing `"EffectsMarked"` arm | `slot_effect`; optional `EffectNotification` | Platform v1 is Persistent only; source slot is optional/typed, never synthetic |
 | `Clear` | Top-level `EffectsCleared` | No | Existing arm | `slot_effect` | |
 | `Grant` | **Platform grant fact** that snapshot **and** projections both fold — see below | No **or** mini-envelope | **Must extend** snapshot rebuild (today ActionGranted only via ResolutionApplied) | `action_grant` (+ counters if Item) | **Must not** append naked `ActionGranted` that projections see but snapshot misses |
-| `Convert` | Prefer validated mini-`ResolutionApplied` **or** platform `RoleConverted`-style fact with original role memory | TBD mini-envelope | Must update role_key/alignment + conversion origin like engine | `slot_state` | v1 may defer Convert behind Mark/Grant/Lifecycle |
-| `Link` | `PlayersLinked`-equivalent platform fact or mini-envelope | TBD | Must fold `linked_slots` | link projection / snapshot | v1 may defer |
-| `EnsureChannelMember` / `Revoke` | Existing channel membership events | No | N/A to engine snapshot (platform) | `channel_membership` / private channel tables | Seat-stable membership |
-| `PublishNarrative` | Host-authored `PostSubmitted` via **host-notice adapter** (see below) | No | N/A | `thread_view` | **Not** player `SubmitPost`. No mechanical power alone |
-| `RevealAlignment` / `RevealRole` | Reveal events folding same flags as resolution `death_reveal` / `GameCompleted` paths | No | Reveal flags in snapshot if engine-visible | `slot_state` reveal flags | **Only** reveal-class specs; never implied by `SetSlotLifecycle` |
+| `RevealAlignment` / `RevealRole` | Reveal events folding the authoritative current assignment and the same flags as resolution `death_reveal` / `GameCompleted` paths | No | Reveal flags in snapshot if engine-visible | `slot_state` reveal flags | Command supplies target only; never accepts a contradictory role/alignment value |
 
 **Grant adapter decision (locked for design):**
 
@@ -452,18 +433,18 @@ Provenance defaults for all fiat/day-event adapters:
 - If a DayEvent reward or host fiat must **publicly reveal** role/alignment after a status kill, the batch (or a follow-up command) must include explicit **`RevealRole` / `RevealAlignment`** EffectSpecs. Optional future: a non-default `death_reveal` field on lifecycle that extends `SlotStatusChanged` + projections — **not v1**; would break pure façade parity until implemented deliberately.
 - Engine kills (lynch, night, PK prompt) continue via `ResolutionApplied` + `PlayerKilled` / prompt builders (`build_pk_prompt_resolution`).
 
-**PublishNarrative adapter decision (locked for design):**
+**Narrative decision (separate from mechanical catalog):**
 
 Today only **spectator** host authoring is first-class: `PublishSpectatorPost` → `PostSubmitted` with `ActorId::Host` and host user attribution into the fixed spectator room. Player `SubmitPost` requires `SlotOccupant` and a seat — **not** a silent host→`main` path.
 
-v1 `PublishNarrative` therefore:
+v1 host-authored narrative therefore:
 
 1. **Does not** call or reuse player `SubmitPost` validation.
 2. **Does** reuse/generalize the **spectator-style host-notice helper**: append `PostSubmitted` with `ActorId::Host`, host attribution (`slot_or_user.user: "host"` or equivalent), `channel_id` from the spec, body from theme template + bindings, post-policy checks for that channel.
 3. **v1 channel allow-list (default):** start with channels that already accept host posts (**`spectator`**). Extending to **`main`** (and optional event channels) is an explicit host-notice capability in **PR13** — same helper, broader allow-list + policy gates — not an implicit claim that main already works.
-4. Until main is allow-listed, DayEvent open/resolve templates that target `main` either reject at validation (`NarrativeChannelNotAllowed`) or no-op narrative while still applying mechanical rewards (product default: **reject binding at program attach / resolve** so hosts are not surprised).
+4. Narrative validation happens at program attach. A narrative publishing failure must not create a mechanically false `DayEventResolved`; narrative is not an effect-catalog entry.
 
-**Required proof for every adapter:** after ApplyEffectSpec / ResolveDayEvent rewards, `audit_rebuild` is clean **and** a following `ResolvePhase` input snapshot includes the mark/grant/lifecycle.
+**Required proof for every adapter:** after ApplyEffectPlan / ResolveDayEvent rewards, `audit_rebuild` is clean **and** a following `ResolvePhase` input snapshot includes the mark/grant/lifecycle.
 
 ```mermaid
 sequenceDiagram
@@ -473,7 +454,7 @@ sequenceDiagram
   participant P as projections
   participant R as ResolvePhase snapshot
 
-  H->>C: ApplyEffectSpec | ResolveDayEvent rewards
+  H->>C: ApplyEffectPlan | ResolveDayEvent rewards
   Note over C: meta.source = host_fiat | day_event
   C->>S: append same event kinds (EffectsMarked, SlotStatusChanged, grant fact, …)
   C->>P: sync fold in same transaction
@@ -488,9 +469,9 @@ Per **interaction class** (not per whole game):
 
 | Level | Name | Host work | Example |
 |---|---|---|---|
-| **L0** | Fiat | Host uses ApplyEffectSpec + existing phase commands + narrative | One-off theme gimmick |
+| **L0** | Fiat | Host uses ApplyEffectPlan + existing phase commands + narrative | One-off theme gimmick |
 | **L1** | Structured platform HostTask | System opens/locks participation; host `ResolveDayEvent` | “Pick raffle winner from entrants” |
-| **L2** | Scheduled program | Open/lock on DeadlineInstant evidence; resolve host or simple auto | Sign-up closes at T+6h; host picks |
+| **L2** | Scheduled program | Open/lock on captured wall-clock evidence; resolve host or simple auto | Sign-up closes at T+6h; host picks |
 | **L3** | Auto-resolve | Deterministic policy (recorded seed, score, first-N) | Seeded raffle among entrants |
 | **L4** | Pack-native IR | Behavior stable enough for pack roles/actions/triggers | Culture-stable day duel already in IR |
 
@@ -510,18 +491,18 @@ flowchart LR
 **Promotion criteria (defaults):**
 
 1. Same host pattern appears in ≥N games or is published as a reusable program template.
-2. Inputs/outputs are fully describable as participation + MechanicalEffectSpecs (no irreducible taste).
+2. Inputs/outputs are fully describable as participation + reward templates (no irreducible taste).
 3. Deterministic or seed-recorded randomness only.
 4. Optional L4 only if culture-stable across series.
 
-**Demotion:** host may force any event to L0/L1 mid-game (cancel + fiat, or force HostDecision). Feature, not failure.
+**Demotion:** host may cancel an event and finish through L0 fiat. Reopen and mid-flight mode mutation are deferred until participation-generation semantics exist.
 
 ### Authoring vs runtime
 
 | Actor | Surface | Primary objects |
 |---|---|---|
 | **Mash designer** | Setup + optional **Program** stage | Pack/profile pin, roster, custom roles, day program document, reward bindings, 12/12 deadlines, theme assets |
-| **Host runtime** | Exception queue ([13](13-interaction-architecture.md)) | Engine `host-prompts` + platform `day-event-*` tasks; **effect palette** (`ApplyEffectSpec`); phase controls as existing commands; secondary evidence drawers |
+| **Host runtime** | Exception queue ([13](13-interaction-architecture.md)) | Engine `host-prompts` + platform `day-event-*` tasks; **effect palette** (`ApplyEffectPlan`); phase controls as existing commands; secondary evidence drawers |
 | **Player** | Reading-first workspace ([13](13-interaction-architecture.md)) | Thread, votes, night actions, **event attention rail**, participation controls |
 | **System** | Scheduler evidence + resolve | Phase deadline evidence, DayEvent open/lock due evidence, auto-resolve with recorded seed |
 
@@ -547,7 +528,7 @@ Per [13](13-interaction-architecture.md), healthy projections are evidence, not 
 | Existing engine host-prompts | Unresolved `host_prompt` rows | `ResolveHostPrompt` | host-team (`CohostOf` + denylist) |
 | `day-event-resolve` | Locked + HostDecision/hybrid needs host | `ResolveDayEvent` | host-team (`CohostOf` + denylist) |
 | `day-event-open` | HostOpened schedule or due+pending | `OpenDayEvent` | host-team (`CohostOf` + denylist) |
-| Fiat palette | Always in secondary drawer | `ApplyEffectSpec` | host-team (`CohostOf` + denylist) |
+| Fiat palette | Always in secondary drawer | `ApplyEffectPlan` | host-team (`CohostOf` + denylist) |
 | Phase controls | Existing posture | `ExtendDeadline`, `ResolvePhase`, … | host-team (`CohostOf` + denylist) |
 
 ### Engine / pack relationship
@@ -567,7 +548,7 @@ Mash does **not** replace packs. A mash game still pins a pack, uses `SubmitVote
 | Event UX | Event rail + optional scoped event channel |
 | Host UX | Exception queue only |
 | Projections | Rebuildable `day_*` tables; keyset pagination |
-| Determinism | Seeds and DeadlineInstants captured as event data |
+| Determinism | Seeds and unit-safe wall-clock instants captured as event data |
 | Capacity | [12](12-capacity-and-overload.md) budgets; optimistic concurrency on game stream |
 
 **Numeric acceptance checks (PR12; microbench earlier in PR4/PR6):**
@@ -586,13 +567,13 @@ Rough storage: 40 players × 20 events × 40 participations ≈ 800 participatio
 | Capability | Use |
 |---|---|
 | **`HostOf(game)`** | Primary host: all game-run mutators **plus** structural acts (grant/revoke cohost, edit cohost denylist, transfer host). Never limited by cohost denylist. |
-| **`CohostOf(game)`** | **Default co-GM:** same game-run mutators as host (DayEvent, `ApplyEffectSpec`, phase resolve, prompts, replacement, program attach, narrative, …) unless a creation-time **denylist** removes specific permission classes. Console reads included. |
+| **`CohostOf(game)`** | **Default co-GM:** same game-run mutators as host (DayEvent, `ApplyEffectPlan`, phase resolve, prompts, replacement, program attach, narrative, …) unless a creation-time **denylist** removes specific permission classes. Console reads included. |
 | `SlotOccupant` | Participation submit/withdraw when filter allows |
 | `ChannelMember` | Event-scoped channels ([06](06-security.md)) |
 
 Gate pattern for game-run mutators: `require(CohostOf)` (host subsumes), then if principal is cohost-only, reject classes present in `game.cohost_denied`. Empty denylist = full parity.
 
-**ApplyEffectSpec batch semantics:** `effects: Vec<MechanicalEffectSpec>` is **all-or-nothing** in one command transaction. Any validation failure rejects the whole command; no partial append.
+**ApplyEffectPlan batch semantics:** concrete effects are **all-or-nothing** in one command transaction. The planner validates against a rolling candidate state, rejects contradictory operations, and appends once; no partial append.
 
 **Reveal-class effects** are **only** `RevealRole` and `RevealAlignment` (plus any future dedicated reveal specs — not lifecycle):
 
@@ -625,7 +606,7 @@ Visibility: private rewards use private notification / channel patterns — neve
 - Lifecycle: `SetSlotStatus`, tags, modkill-class actions
 - Replacement
 - Day program: attach (while policy allows mid-game), open/lock/cancel/resolve DayEvents
-- Fiat: `ApplyEffectSpec` (full catalog the host can use)
+- Fiat: `ApplyEffectPlan` (full concrete catalog the host can use)
 - Narrative: host-notice `PublishNarrative` on allow-listed channels
 - ITA control and other existing host mutators as they exist today
 
@@ -635,7 +616,7 @@ Visibility: private rewards use private notification / channel patterns — neve
 CohostPermissionClass =
   | PhaseResolve          // ResolvePhase / deadline-driven advance
   | HostPromptResolve     // ResolveHostPrompt
-  | EffectSpec            // ApplyEffectSpec / mechanical fiat
+  | EffectSpec            // ApplyEffectPlan / mechanical fiat
   | DayEventOps           // open / lock / cancel (no reward apply)
   | DayEventResolve       // ResolveDayEvent with rewards
   | ProgramAttach         // attach/replace day program
@@ -681,10 +662,10 @@ Wire/commands that today use `require(HostOf)` for pure game-run work **migrate*
 ### Commands (additive sketches)
 
 ```rust
-// Program lifecycle — HostOf
+// Program lifecycle — host-team / ProgramAttach
 AttachDayProgram { game, program_ref: ContentHash /* or inline small doc */ },
 
-// Event lifecycle — HostOf
+// Event lifecycle — host-team / DayEventOps
 OpenDayEvent { game, event_id },
 LockDayEvent { game, event_id },
 CancelDayEvent { game, event_id },
@@ -703,23 +684,23 @@ SubmitDayEventParticipation {
 },
 WithdrawDayEventParticipation { game, event_id, actor_slot },
 
-// Manual frontier spine — HostOf
-ApplyEffectSpec {
+// Manual frontier spine — host-team / EffectSpec
+ApplyEffectPlan {
     game,
-    effects: Vec<MechanicalEffectSpec>, // all-or-nothing
+    effects: Vec<ConcreteEffect>, // all-or-nothing; every recipient already bound
     reason: String,                     // required audit prose
 },
 // Idempotency: existing wire command_id / handle_idempotent — no extra client_request_id
 ```
 
-**Façade rule:** `ApplyEffectSpec::SetSlotLifecycle` dispatches to the **same internal helper** as `SetSlotStatus`. Do not invent a second lifecycle event shape. Phase motion is **not** on this command — use `ExtendDeadline`, `AdvancePhase`, `ResolvePhase`, etc.
+**Façade rule:** `ConcreteEffect::SetSlotLifecycle` dispatches to the **same internal planner** as `SetSlotStatus`. Do not invent a second lifecycle event shape. Phase motion is **not** on this command — use `ExtendDeadline`, `AdvancePhase`, `ResolvePhase`, etc.
 
 Wire: extend `wire::Command` / TS generation per [04](04-wire-protocol.md). Closed enums for specs and decisions.
 
 ### Host console
 
 - Task families `day-event-resolve` / `day-event-open` (platform) alongside engine `host-prompts`.
-- Override palette: MechanicalEffectSpec applicator with confirmation shell.
+- Override palette: concrete EffectPlan applicator with confirmation shell.
 - Phase controls remain existing command tiles (not EffectSpec).
 - Evidence drawer: schedule, participation keyset table, effect application history (`meta.source`).
 
@@ -825,14 +806,14 @@ Greenfield, solo-dev, local proof. Feature “on” = program attached + command
 | Stage | What ships | Rollback |
 |---|---|---|
 | **0** | Design doc in `docs/arch/`; README index 13+14 | N/A |
-| **1** | MechanicalEffectSpec + adapters (Mark/Clear/Lifecycle/Grant snapshot) + ApplyEffectSpec | Disable command |
-| **2** | DayEvent state machine host open/lock/cancel; resolve **records decision only** (no rewards) | Cancel events |
-| **3** | Player participation + attention | Withdraw; lock |
-| **4** | ResolveDayEvent applies rewards via same adapters | Host cancel + fiat |
-| **5** | DeadlineInstant schedules + evidence events | Host force open/lock |
-| **6** | L3 auto-resolve + seed | Force HostDecision |
-| **7** | Program setup stage + theme binding | Empty program |
-| **8** | Scale checks (30+) + templates | N/A |
+| **1** | Complete co-GM UI/effective permissions + centrally stamped command audit context | Commands remain server-gated |
+| **2** | Pure game-platform model + persistent Mark/Clear/Grant concrete planner + ApplyEffectPlan | Disable command |
+| **3** | HostTask instance model proven on existing host prompts | Existing grouped prompt surface |
+| **4** | Minimal inline DayEvent definition + host open/lock + opt-in participation + atomic host decision/reward resolution | Host cancel + fiat |
+| **5** | AttachDayProgram compiler + optional setup Program stage | Inline single-event definition |
+| **6** | Absolute schedules; then relative schedules after explicit phase-open instant | Host force open/lock |
+| **7** | L3 auto-resolve + recorded seed | Cancel + fiat |
+| **8** | Theme narrative, broader catalog, templates, and scale checks | N/A |
 
 ---
 
@@ -842,10 +823,10 @@ Greenfield, solo-dev, local proof. Feature “on” = program attached + command
    Rationale: ceiling customization exceeds automation horizon; dual rulesets are worse than an honest fiat palette.
 
 2. **Invariant is catalog parity, not full IR parity.**  
-   Rationale: full IrAbility fiat is unbounded and false for shipped engine; DayEvent rewards bind only to MechanicalEffectSpec; L4 pack IR covers culture-stable rest.
+   Rationale: full IrAbility fiat is unbounded and false for shipped engine; DayEvent rewards bind only to catalog templates; L4 pack IR covers culture-stable rest.
 
-3. **MechanicalEffectSpec is platform-layer; pure resolve stays clean.**  
-   Rationale: [09](09-engine-and-packs.md) two-layer spine; catalog mixes channel/narrative with seat effects — belongs in commands/wire, not pure domain resolve.
+3. **Reward templates and concrete effects are separate pure game-platform types; pure resolve stays clean.**
+   Rationale: programs do not know winners at authoring time, projections cannot depend on commands, and narrative/access control are not mechanical effects.
 
 4. **Single adapter matrix: fiat and DayEvent emit the same event kinds with different `meta.source`.**  
    Rationale: dual-truth prevention; auditability.
@@ -871,23 +852,26 @@ Greenfield, solo-dev, local proof. Feature “on” = program attached + command
 11. **Engine stays user-agnostic and closed-IR.** Rewards fold into existing slot-visible state via adapters.  
     Rationale: [09](09-engine-and-packs.md); replacement remains platform-only.
 
-12. **DayEvent clocks use platform DeadlineInstant (i64 family), not engine LogicalTime.** Evidence-then-command scheduler.  
-    Rationale: match DeadlineSet / PhaseDeadlineElapsed; forbid wall-clock folds.
+12. **DayEvent clocks use `UnixSeconds` / `DurationSeconds`, not engine LogicalTime.** Deadline commands append evidence + transition atomically.
+    Rationale: make units and the phase-relative base explicit; forbid wall-clock folds.
 
 13. **Vote weight only via GrantKind::VoteWeight; death/lifecycle via SlotStatusChanged (status only).**  
     Rationale: one durable representation each; no SetVoteWeight; no forged PlayerKilled for host rewards by default. Lifecycle façade matches `SetSlotStatus` and does **not** auto-apply death_reveal.
 
 14. **Cohost = co-GM by default; optional denylist at game creation.**  
-    Rationale: hosts invite trusted co-GMs, not least-trust helpers. Full game-run mutator parity (including DayEvent + ApplyEffectSpec) is the default; primary host may deny specific `CohostPermissionClass` values at create. Structural acts (grant/revoke cohost, edit denylist, transfer host) stay primary-host-only. Migrates today’s HostOf-only command gates toward `CohostOf` + policy check.
+    Rationale: hosts invite trusted co-GMs, not least-trust helpers. Full game-run mutator parity (including DayEvent + ApplyEffectPlan) is the default; primary host may deny specific `CohostPermissionClass` values at create. Structural acts (grant/revoke cohost, edit denylist, transfer host) stay primary-host-only. Migrates today’s HostOf-only command gates toward `CohostOf` + policy check.
 
 15. **Setup gains optional Program stage; non-mash path unchanged.**  
     Rationale: zero tax on minis.
 
-16. **ApplyEffectSpec is all-or-nothing; reveal-class is only RevealRole/RevealAlignment (real reveal projections).**  
-    Rationale: no partial mechanical state; no UI-only reveals; status kill and public reveal stay composable, not coupled.
+16. **ApplyEffectPlan is all-or-nothing; reveal-class accepts a target only and reads authoritative role/alignment state.**
+    Rationale: no partial mechanical state, client-supplied contradictory reveals, or UI-only reveals.
 
-17. **PublishNarrative uses host-notice authoring (spectator-style), never player SubmitPost; main-thread is PR13 allow-list work.**  
-    Rationale: only spectator host posts are shipped today; claiming silent main `PostSubmitted` would invent a dual path.
+17. **Narrative is separate from the mechanical catalog and uses host-notice authoring (spectator-style), never player SubmitPost.**
+    Rationale: only spectator host posts are shipped today; presentation and authorization failures are not mechanical effects.
+
+18. **A DayEvent is never `Resolved` before its concrete effect plan commits.**
+    Rationale: a decision-only resolved state contradicts event-log truth; keep it Locked until the atomic resolve slice exists.
 
 ---
 
@@ -898,23 +882,22 @@ Incremental backlog for solo greenfield. Multi-day depth expected on adapter PRs
 | PR | Title | Primary files / components | Depends on | Description |
 |---|---|---|---|---|
 | **PR1** | docs: arch 14 + index 13/14 in README | `docs/arch/14-….md`, `docs/arch/README.md` | — | Land design; index interaction + mash docs |
-| **PR2a** | cohost co-GM gates + optional denylist | `crates/commands` authorize helper, game create/setup projection, caps tests, host-console “who can do what” | PR1 | Default: `CohostOf` admits game-run mutators; empty denylist; host-only structural acts; migrate existing HostOf-only run commands onto the helper |
-| **PR2** | platform: MechanicalEffectSpec v0 enum + validation | `crates/commands` (or thin platform module), `crates/wire`, pure **helpers only** in `domain` for tag/grant checks | PR1 | Closed catalog; **not** pure resolve pollution |
-| **PR3** | adapters: Mark/Clear/Lifecycle + snapshot/projection parity | `crates/commands` snapshot rebuild, projections, pipeline tests, `audit_rebuild` list | PR2 | ApplyEffectSpec for Mark/Clear/SetSlotLifecycle; reuse SetSlotStatus helper (**status only, no reveal**); prove snapshot ≡ projection |
-| **PR4** | adapters: Grant (incl. VoteWeight) snapshot rebuild | commands snapshot arm, `action_grant` projection, ResolvePhase goldens post-fiat | PR3 | Fix ActionGranted-only-via-ResolutionApplied gap for platform grants |
-| **PR5** | schema docs: event kinds in 10-event-schema + wire export | `docs/arch/10-event-schema.md`, wire TS gen notes | PR3–4 | Upcaster/version discipline |
-| **PR6** | DayEvent lifecycle shell (host open/lock/cancel) | domain event payloads if shared types, commands, projections, migrations | PR2, PR5 | **Resolve records decision only — no MechanicalEffectSpec application yet** |
-| **PR7** | HostTask selectors for day-event-open/resolve | API host-console-state, `host-task-workspace.mjs` TASK_POSTURE | PR6 | Platform tasks peer with host-prompts; HostOf gate |
-| **PR8** | player participation + attention | commands, projections, player models | PR6–7 | Submit/withdraw; attention debounce; optional microbench 30-slot participation fold |
-| **PR9** | ResolveDayEvent applies rewards via PR3–4 adapters | commands only calling shared adapters | PR4, PR7–8 | First mechanical teeth on resolve; all-or-nothing |
-| **PR10** | DeadlineInstant schedules + OpenDue/LockDue evidence | commands scheduler seam (still host-gated until scheduler principal) | PR6 | RelativeToPhase base documented; no wall-clock folds |
-| **PR11** | L3 auto-resolve + recorded seed | pure policy module (platform or domain-pure helper), command | PR9–10 | |
-| **PR12** | setup Program stage + attach validation | frontend setup workflow, AttachDayProgram | PR2–4, PR6 | Depends on EffectSpec + DayEvent shell; validates reward bindings vs pack |
-| **PR13** | theme narrative + host-notice PublishNarrative (main allow-list) | theme refs; generalize `PublishSpectatorPost` helper to host-notice adapter; channel allow-list (`spectator` first, then `main`); media | PR9, PR12 | **Not** player `SubmitPost`. Prove host-authored `PostSubmitted` on allowed channels only; reject `NarrativeChannelNotAllowed` for others until allow-listed |
-| **PR14** | scale acceptance checks (30+) | ops smoke / projection bench artifacts | PR8–11 | Numeric checks listed in Scale section |
-| **PR15** | program templates library (data) | `programs/` or pack-adjacent | PR12–13 | raffle, opt-in quest, host-judged showcase |
+| **PR2a-followup** | finish co-GM delivery + command audit context | command entry/persist metadata; API effective permission classes; host UI; role proofs | PR1 | Distinguish host/cohost principals in the log and render exactly the server-authorized game-run surface |
+| **PR2** | pure game-platform model | new thin pure crate/module, wire export | PR2a-followup | Reward templates ≠ concrete effects; typed DayEvent payloads and clock newtypes; no SQLx/Tokio |
+| **PR3** | concrete planner: persistent Mark/Clear/Lifecycle | commands planner, snapshot rebuild, projections, pipeline tests, `audit_rebuild` | PR2 | ApplyEffectPlan reuses lifecycle semantics; explicit external source; prove snapshot ≡ projection |
+| **PR4** | concrete planner: Grant (incl. VoteWeight) | commands snapshot arm, `action_grant` projection, ResolvePhase goldens post-fiat | PR3 | Fix ActionGranted-only-via-ResolutionApplied gap for platform grants |
+| **PR5** | HostTask instance contract | API selector + wire + host workspace, first migrate host prompts | PR2a-followup | Stable task id separate from task kind; allowed commands come from effective permissions |
+| **PR6** | minimal DayEvent vertical | inline definition command, lifecycle, participation, projection, host/player API | PR3–5 | HostOpened + OptIn + HostDecision; `DayEventResolved` and concrete effects commit atomically |
+| **PR7** | host/player DayEvent surfaces | host task canvas, player attention and participation | PR6 | End-to-end usable slice before program authoring |
+| **PR8** | AttachDayProgram compiler + setup stage | program validation/materialization, setup workflow | PR6–7 | Program attachment creates immutable future DayEvent definitions; existing/open events never mutate |
+| **PR9** | explicit phase-open time + absolute scheduling | phase event/projection, atomic due commands | PR6 | `UnixSeconds`; no wall-clock folds |
+| **PR10** | relative scheduling | DayEvent schedule compiler | PR9 | Uses committed `phase_opened_at`, never envelope logical time |
+| **PR11** | L3 auto-resolve + recorded seed | pure platform policy module, command | PR6, PR9 | |
+| **PR12** | theme narrative + host-notice main allow-list | theme refs; generalized host-notice adapter; channel allow-list | PR8 | Separate from concrete-effect enum; **not** player SubmitPost |
+| **PR13** | scale acceptance checks (30+) | ops smoke / projection bench artifacts | PR7, PR9–11 | Numeric checks listed in Scale section |
+| **PR14** | program templates library (data) | `programs/` or content store | PR8, PR12 | raffle, opt-in quest, host-judged showcase |
 
-**Deferred:** scheduler principal; Convert/Link if not in early adapter set; L4 promotion tooling; mid-game cohost denylist edits (v1 = create-time only unless product reopens).
+**Deferred:** scheduler principal; Convert/Link/channel-membership effects; reopen/hybrid semantics; L4 promotion tooling; mid-game cohost denylist edits (v1 = create-time only unless product reopens).
 
 ---
 
@@ -972,9 +955,9 @@ Incremental backlog for solo greenfield. Multi-day depth expected on adapter PRs
 
 | Level | Behavior |
 |---|---|
-| L0 | Host `ApplyEffectSpec` + optional `PublishNarrative` |
+| L0 | Host `ApplyEffectPlan` + optional host-authored narrative |
 | L1 | Open → participate → lock → platform HostTask → `ResolveDayEvent` → adapters |
-| L2 | Open/lock via DeadlineInstant evidence + commands |
+| L2 | Open/lock via captured wall-clock evidence + atomic deadline commands |
 | L3 | Auto draw with seed on resolve event |
 | L4 | Only if culture-stable item/role in pack IR |
 
@@ -984,7 +967,7 @@ Assumes program already attached; event `ev_cookie_d2` scheduled HostOpened.
 
 1. Host `OpenDayEvent { event_id: ev_cookie_d2 }`  
    → `DayEventOpened { event_id, phase_id, opened_at, … }`  
-   → optional narrative via **host-notice** `PublishNarrative` (host-authored `PostSubmitted` on allow-listed channel — v1 often `spectator` until PR13 enables `main`)  
+   → optional narrative via **host-notice** authoring (host-authored `PostSubmitted` on an allow-listed channel)
 
 2. Players (×N) `SubmitDayEventParticipation { actor_slot, payload: OptIn }`  
    → `DayEventParticipationSubmitted { … }` each  
@@ -1006,9 +989,9 @@ Assumes program already attached; event `ev_cookie_d2` scheduled HostOpened.
 The pure resolver (`domain` resolve path) remains free of:
 
 - Users, replacements, post bodies, theme assets  
-- DayEvent scheduling and DeadlineInstant comparisons  
+- DayEvent scheduling and wall-clock comparisons
 - Host UI task ranking  
-- `MechanicalEffectSpec` enum (platform)
+- reward-template and concrete-effect types (pure game-platform model)
 
 It continues to consume slot state, submissions, and folded effects — including those applied by DayEvent/fiat **adapters** into stream facts the snapshot rebuild already understands. That preserves the [09](09-engine-and-packs.md) two-layer spine.
 
@@ -1022,7 +1005,7 @@ It continues to consume slot state, submissions, and folded effects — includin
 |---|---|---|---|
 | `DayProgramAttached` | 1 | `program_id`, `content_hash`, `theme_ref?` | |
 | `DayEventScheduled` | 1 | `event_id`, `program_id`, `template_key`, `schedule`, `resolution_mode`, `rewards_ref` | Materialize from program |
-| `DayEventOpened` | 1 | `event_id`, `phase_id`, `opened_at: DeadlineInstant` | |
+| `DayEventOpened` | 1 | `event_id`, `phase_id`, `opened_at: UnixSeconds` | |
 | `DayEventLocked` | 1 | `event_id`, `locked_at` | |
 | `DayEventCancelled` | 1 | `event_id`, `reason` | |
 | `DayEventOpenDue` / `DayEventLockDue` | 1 | `event_id`, `due_at`, `observed_at`, `source` | Inert evidence |
@@ -1064,10 +1047,10 @@ PR6 resolve-without-rewards: may append `DayEventResolved` with `rewards_applied
 
 ### C.5 Idempotency
 
-Use existing command envelope `command_id` / `handle_idempotent`. Do not add `client_request_id` on ApplyEffectSpec.
+Use existing command envelope `command_id` / `handle_idempotent`. Do not add `client_request_id` on ApplyEffectPlan.
 
 ### C.6 Program document
 
 - JSON schema version field `program_schema_version`
 - Content hash algorithm: **BLAKE3** hex of canonical JSON bytes (document exact canonicalization at implement time)
-- Validation: every `RewardBinding.effects[]` deserializes as MechanicalEffectSpec; Mark tags ⊆ pack.effects (or explicit allow-list); Grant grant_ids ⊆ pack item_actions / grant policy as applicable
+- Validation: every `RewardBinding.effects[]` deserializes as a reward template; recipient selectors are valid for the resolution mode; Mark tags ⊆ pack.effects (or explicit allow-list); Grant grant_ids ⊆ pack item_actions / grant policy as applicable
