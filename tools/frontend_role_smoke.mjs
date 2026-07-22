@@ -3237,7 +3237,7 @@ async function installLiveProjectionHarness(page) {
     }
 
     window.WebSocket = function WebSocket(url, protocols) {
-      if (String(url).includes("/ws?game=")) {
+      if (String(url).includes("/ws?")) {
         return new FmarchSmokeWebSocket(url);
       }
       return new NativeWebSocket(url, protocols);
