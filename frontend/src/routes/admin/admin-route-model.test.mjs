@@ -13452,3 +13452,12 @@ function formRequest(fields) {
     body: formData,
   });
 }
+
+test("anonymous admin access resolves a forbidden route instead of throwing", async () => {
+  const data = await buildAdminRouteData({
+    principalUserId: null,
+    capabilities: [],
+  });
+  assert.equal(data.access.allowed, false);
+  assert.deepEqual(data.audit, []);
+});

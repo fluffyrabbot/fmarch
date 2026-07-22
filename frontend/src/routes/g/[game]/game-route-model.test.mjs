@@ -966,3 +966,20 @@ function jsonResponse(body) {
     },
   };
 }
+
+test("live projection endpoint uses the public API base even when SSR fetches ride the private network", async () => {
+  const data = await buildGameRouteData({
+    game: "midsummer",
+    principalUserId: "player_mira",
+    capabilities: [
+      { kind: "SlotOccupant", game: "midsummer", slot: "slot-7", source: "fixture" },
+    ],
+    fetchImpl: null,
+    apiBaseUrl: "http://fmarch.railway.internal:8080",
+    publicApiBaseUrl: "https://api.example.test",
+  });
+  assert.equal(
+    data.liveProjection.endpoint,
+    "wss://api.example.test/ws?game=midsummer&principal_user_id=player_mira",
+  );
+});

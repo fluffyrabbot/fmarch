@@ -28,7 +28,9 @@ export async function GET({
   )}/${encodeURIComponent(params.sourceSeq)}/${encodeURIComponent(
     params.contentId,
   )}/${encodeURIComponent(params.asset)}`;
-  const base = String(env?.FMARCH_API_BASE_URL ?? "").replace(/\/$/u, "");
+  const base = String(
+    env?.FMARCH_API_INTERNAL_URL ?? env?.FMARCH_API_BASE_URL ?? "",
+  ).replace(/\/$/u, "");
   const headers = {
     authorization: `Bearer ${token}`,
     accept: "image/avif,image/webp",

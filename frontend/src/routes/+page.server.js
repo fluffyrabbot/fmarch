@@ -3,9 +3,10 @@ import {
   buildBoardRouteData,
   fixtureBoardGameIndexPage,
 } from "../lib/app/app-shell-model.mjs";
+import { serverApiBaseUrl } from "../lib/server/api-base.mjs";
 
 export async function load({ locals, fetch, url }) {
-  const apiBaseUrl = process.env.FMARCH_API_BASE_URL ?? "";
+  const apiBaseUrl = serverApiBaseUrl();
   const fixtureMode = process.env.FMARCH_FRONTEND_FIXTURE_SESSION === "1";
   const gameIndexPage =
     fixtureMode && apiBaseUrl === ""

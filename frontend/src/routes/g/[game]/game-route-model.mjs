@@ -55,6 +55,7 @@ export async function buildGameRouteData({
   capabilities = [],
   fetchImpl = null,
   apiBaseUrl = "",
+  publicApiBaseUrl = null,
   activeChannel = "main",
   privateItem = null,
 }) {
@@ -239,7 +240,9 @@ export async function buildGameRouteData({
     liveProjection: Object.freeze({
       endpoint: hasPrincipal
         ? buildLiveProjectionUrl({
-            apiBaseUrl,
+            // The browser opens this socket; it must use the public base even
+            // when SSR fetches ride the private network.
+            apiBaseUrl: publicApiBaseUrl ?? apiBaseUrl,
             game: gameId,
             principalUserId,
             channel: channelId,

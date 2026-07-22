@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { handle } from "./hooks.server.js";
+import { clearSessionCache } from "./lib/server/session-capabilities.mjs";
 
 test("handle rotates an overdue browser session before resolving the route", async () => {
   const observed = { requests: [], set: null, deleted: null };
@@ -28,6 +29,25 @@ test("handle clears a concurrently stale browser session instead of serving it",
   assert.deepEqual(observed.deleted, { name: "fmarch_session", options: { path: "/" } });
   assert.equal(event.locals.principalUserId, null);
   assert.deepEqual(event.locals.resolvedCapabilities, []);
+});
+
+
+test("handle serves repeat requests from the session cache within the TTL", async () => {
+  clearSessionCache();
+  const observed = { requests: [], set: null, deleted: null };
+  const event = eventFor(observed, [
+    sessionResponse({ rotationRequired: false }),
+    sessionResponse({ rotationRequired: false }),
+  ]);
+  event.cookies.get = (name) => (name === "fmarch_session" ? "cached-hook-token" : undefined);
+  await handle({ event, resolve: async () => new Response("ok") });
+  await handle({ event, resolve: async () => new Response("ok") });
+  assert.equal(
+    observed.requests.filter((request) => request.url.startsWith("/auth/session?")).length,
+    1,
+  );
+  assert.equal(event.locals.principalUserId, "host_h");
+  clearSessionCache();
 });
 
 function eventFor(observed, sessions, { rotation = sessionResponse({ rotationRequired: false }) } = {}) {

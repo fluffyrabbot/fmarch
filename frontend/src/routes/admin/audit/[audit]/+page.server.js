@@ -1,4 +1,5 @@
 import { error, fail } from "@sveltejs/kit";
+import { serverApiBaseUrl } from "../../../../lib/server/api-base.mjs";
 import {
   readLocalBackupRestoreProof,
   readLocalAdminSpineProof,
@@ -30,7 +31,7 @@ import {
 } from "../../admin-route-model.mjs";
 
 export async function load({ cookies, locals, fetch, params, url }) {
-  const apiBaseUrl = process.env.FMARCH_API_BASE_URL ?? "";
+  const apiBaseUrl = serverApiBaseUrl();
   const fixtureMode = process.env.FMARCH_FRONTEND_FIXTURE_SESSION === "1";
   const data = await buildAdminAuditDetailData({
     audit: params.audit,
@@ -158,7 +159,7 @@ async function submitAccountLifecycleAction({
     });
   }
 
-  const apiBaseUrl = process.env.FMARCH_API_BASE_URL ?? "";
+  const apiBaseUrl = serverApiBaseUrl();
   const payload = buildPayload(accountId);
   if (expectedDisabled !== null) {
     payload.expected_disabled = expectedDisabled;

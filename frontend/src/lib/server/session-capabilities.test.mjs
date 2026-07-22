@@ -373,3 +373,141 @@ function jsonResponse(body) {
 async function unreachableFetch() {
   throw new Error("session lookup should not fetch");
 }
+
+test("session resolution prefers the private-network API base when configured", async () => {
+  const { resolveAuthenticatedSession: resolve } = await import("./session-capabilities.mjs");
+  const seen = [];
+  await resolve({
+    cookies: cookieJar("opaque-token"),
+    request: requestFor("/g/game-1/host"),
+    env: {
+      FMARCH_API_BASE_URL: "https://api.example.test",
+      FMARCH_API_INTERNAL_URL: "http://fmarch.railway.internal:8080/",
+    },
+    fetchImpl: async (url) => {
+      seen.push(url);
+      return jsonResponse({ principal_user_id: "host_h", capabilities: [] });
+    },
+  });
+  assert.equal(seen[0], "http://fmarch.railway.internal:8080/auth/session?game=game-1");
+});
+
+test("session resolution degrades to an empty session when the API fetch fails", async () => {
+  const session = await resolveAuthenticatedSession({
+    cookies: cookieJar("opaque-token"),
+    request: requestFor("/g/game-1/host"),
+    env: { FMARCH_API_BASE_URL: "http://127.0.0.1:1/" },
+    fetchImpl: async () => {
+      throw new Error("connect ECONNREFUSED");
+    },
+  });
+  assert.equal(session.principalUserId, null);
+  assert.deepEqual(session.resolvedCapabilities, []);
+});
+
+test("session resolution passes an abort signal from the SSR fetch budget", async () => {
+  const observed = [];
+  await resolveAuthenticatedSession({
+    cookies: cookieJar("opaque-token"),
+    request: requestFor("/g/game-1/host"),
+    env: { FMARCH_API_BASE_URL: "http://127.0.0.1:4017/" },
+    fetchImpl: async (url, options) => {
+      observed.push(options);
+      return jsonResponse({ principal_user_id: "host_h", capabilities: [] });
+    },
+  });
+  assert.ok(observed[0].signal instanceof AbortSignal);
+});
+
+test("cached session resolution reuses a live entry and refetches after the TTL", async () => {
+  const { resolveAuthenticatedSessionCached, clearSessionCache } = await import(
+    "./session-capabilities.mjs"
+  );
+  clearSessionCache();
+  let fetches = 0;
+  let clock = 1_000;
+  const args = {
+    cookies: cookieJar("cache-token"),
+    request: requestFor("/g/game-1/host"),
+    env: { FMARCH_API_BASE_URL: "http://127.0.0.1:4017/" },
+    fetchImpl: async () => {
+      fetches += 1;
+      return jsonResponse({ principal_user_id: "host_h", capabilities: [] });
+    },
+    now: () => clock,
+  };
+
+  const first = await resolveAuthenticatedSessionCached(args);
+  const second = await resolveAuthenticatedSessionCached(args);
+  assert.equal(fetches, 1);
+  assert.equal(first, second);
+  assert.equal(second.principalUserId, "host_h");
+
+  clock += 30_001;
+  await resolveAuthenticatedSessionCached(args);
+  assert.equal(fetches, 2);
+  clearSessionCache();
+});
+
+test("cached session resolution never caches empty or rotation-required sessions", async () => {
+  const { resolveAuthenticatedSessionCached, clearSessionCache } = await import(
+    "./session-capabilities.mjs"
+  );
+  clearSessionCache();
+  let fetches = 0;
+  const emptyArgs = {
+    cookies: cookieJar("missing-token"),
+    request: requestFor("/g/game-1/host"),
+    env: { FMARCH_API_BASE_URL: "http://127.0.0.1:4017/" },
+    fetchImpl: async () => {
+      fetches += 1;
+      return { ok: false, status: 401, async json() { return {}; } };
+    },
+    now: () => 1_000,
+  };
+  await resolveAuthenticatedSessionCached(emptyArgs);
+  await resolveAuthenticatedSessionCached(emptyArgs);
+  assert.equal(fetches, 2);
+
+  fetches = 0;
+  const rotationArgs = {
+    ...emptyArgs,
+    cookies: cookieJar("rotation-token"),
+    fetchImpl: async () => {
+      fetches += 1;
+      return jsonResponse({
+        principal_user_id: "host_h",
+        rotation_required: true,
+        capabilities: [],
+      });
+    },
+  };
+  await resolveAuthenticatedSessionCached(rotationArgs);
+  await resolveAuthenticatedSessionCached(rotationArgs);
+  assert.equal(fetches, 2);
+  clearSessionCache();
+});
+
+test("cached session resolution can be disabled with a zero TTL", async () => {
+  const { resolveAuthenticatedSessionCached, clearSessionCache } = await import(
+    "./session-capabilities.mjs"
+  );
+  clearSessionCache();
+  let fetches = 0;
+  const args = {
+    cookies: cookieJar("no-cache-token"),
+    request: requestFor("/g/game-1/host"),
+    env: {
+      FMARCH_API_BASE_URL: "http://127.0.0.1:4017/",
+      FMARCH_SESSION_CACHE_TTL_MS: "0",
+    },
+    fetchImpl: async () => {
+      fetches += 1;
+      return jsonResponse({ principal_user_id: "host_h", capabilities: [] });
+    },
+    now: () => 1_000,
+  };
+  await resolveAuthenticatedSessionCached(args);
+  await resolveAuthenticatedSessionCached(args);
+  assert.equal(fetches, 2);
+});

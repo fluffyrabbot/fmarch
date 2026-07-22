@@ -2030,6 +2030,35 @@ export async function buildAdminRouteData({
     game: null,
     capabilities,
   });
+  if (!access.allowed) {
+    // Forbidden visitors only need the access gate the routes 403 on;
+    // the full operator payload requires a principal for its
+    // principal-scoped URLs and would throw before that gate runs.
+    return Object.freeze({
+      shell: buildAppShell({
+        game,
+        activeSurface: "admin",
+        principalUserId,
+        capabilities,
+      }),
+      surfaceHeader: buildAppSurfaceHeaderViewModel({
+        surface: "admin",
+        eyebrow: "Admin",
+        title: "Operations",
+        summary:
+          "Set up games, manage access, and review system health.",
+        capabilityLabel: access.capabilityLabel,
+        capabilityTestId: ADMIN_ROUTE_CONTRACT.capabilityTestId,
+      }),
+      access,
+      operator: Object.freeze({
+        principalUserId,
+        capabilityLabel: access.capabilityLabel,
+      }),
+      audit: Object.freeze([]),
+    });
+  }
+
   const coldData = await loadAdminColdData({
     game,
     principalUserId,

@@ -847,3 +847,75 @@ function jsonResponse(body) {
     },
   };
 }
+
+test("ssrFetchTimeoutMs defaults, honors overrides, and lets 0 disable the budget", async () => {
+  const { ssrFetchTimeoutMs, DEFAULT_SSR_FETCH_TIMEOUT_MS } = await import("./cold-load.mjs");
+  assert.equal(ssrFetchTimeoutMs({}), DEFAULT_SSR_FETCH_TIMEOUT_MS);
+  assert.equal(ssrFetchTimeoutMs(undefined), DEFAULT_SSR_FETCH_TIMEOUT_MS);
+  assert.equal(ssrFetchTimeoutMs({ FMARCH_SSR_FETCH_TIMEOUT_MS: "750" }), 750);
+  assert.equal(ssrFetchTimeoutMs({ FMARCH_SSR_FETCH_TIMEOUT_MS: "0" }), 0);
+  assert.equal(
+    ssrFetchTimeoutMs({ FMARCH_SSR_FETCH_TIMEOUT_MS: "not-a-number" }),
+    DEFAULT_SSR_FETCH_TIMEOUT_MS,
+  );
+  assert.equal(
+    ssrFetchTimeoutMs({ FMARCH_SSR_FETCH_TIMEOUT_MS: "-5" }),
+    DEFAULT_SSR_FETCH_TIMEOUT_MS,
+  );
+});
+
+test("fetchJson forwards an abort signal when a timeout budget is set", async () => {
+  const { fetchJson } = await import("./cold-load.mjs");
+  const observed = { inits: [] };
+  const fetchImpl = async (url, init) => {
+    observed.inits.push(init);
+    return { ok: true, async json() { return { fine: true }; } };
+  };
+  const withBudget = await fetchJson({ fetchImpl, url: "/x", fallback: null, timeoutMs: 500 });
+  assert.deepEqual(withBudget, { fine: true });
+  assert.ok(observed.inits[0].signal instanceof AbortSignal);
+
+  const withoutBudget = await fetchJson({ fetchImpl, url: "/x", fallback: null });
+  assert.deepEqual(withoutBudget, { fine: true });
+  assert.equal(observed.inits[1].signal, undefined);
+});
+
+test("fetchJson returns the fallback when the timeout budget aborts the fetch", async () => {
+  const { fetchJson } = await import("./cold-load.mjs");
+  const fetchImpl = (url, init) =>
+    new Promise((resolvePromise, rejectPromise) => {
+      init.signal.addEventListener("abort", () => rejectPromise(init.signal.reason));
+    });
+  const result = await fetchJson({
+    fetchImpl,
+    url: "/hung-endpoint",
+    fallback: { fallback: true },
+    timeoutMs: 20,
+  });
+  assert.deepEqual(result, { fallback: true });
+});
+
+test("loadPlayerColdData threads the timeout budget into every projection fetch", async () => {
+  const { loadPlayerColdData } = await import("./cold-load.mjs");
+  const observed = { signals: [] };
+  const fetchImpl = async (url, init) => {
+    observed.signals.push(init.signal);
+    return { ok: true, async json() { return null; } };
+  };
+  await loadPlayerColdData({
+    game: "midsummer",
+    principalUserId: "player_mira",
+    actorSlot: "slot-7",
+    fetchImpl,
+    apiBaseUrl: "",
+    timeoutMs: 500,
+    fallback: {
+      thread: { nextBeforeSeq: null, posts: [] },
+      votecount: [],
+    },
+  });
+  assert.equal(observed.signals.length, 7);
+  for (const signal of observed.signals) {
+    assert.ok(signal instanceof AbortSignal);
+  }
+});

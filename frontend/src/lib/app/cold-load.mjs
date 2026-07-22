@@ -1,3 +1,31 @@
+export const DEFAULT_SSR_FETCH_TIMEOUT_MS = 2000;
+
+// Budget for one server-side projection fetch. Every cold-load call has a
+// fallback payload, so a slow or dead API must degrade the page quickly
+// instead of holding SSR until the upstream (or the Railway edge, ~15s)
+// gives up. 0 disables the budget.
+export function ssrFetchTimeoutMs(env = globalThis.process?.env) {
+  const raw = env?.FMARCH_SSR_FETCH_TIMEOUT_MS;
+  if (raw === undefined || raw === null || String(raw).trim() === "") {
+    return DEFAULT_SSR_FETCH_TIMEOUT_MS;
+  }
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return DEFAULT_SSR_FETCH_TIMEOUT_MS;
+  }
+  return parsed;
+}
+
+export function fetchTimeoutSignal(timeoutMs) {
+  if (typeof timeoutMs !== "number" || !(timeoutMs > 0)) {
+    return undefined;
+  }
+  if (typeof AbortSignal === "undefined" || typeof AbortSignal.timeout !== "function") {
+    return undefined;
+  }
+  return AbortSignal.timeout(timeoutMs);
+}
+
 export async function loadPlayerColdData({
   game,
   activeChannel = "main",
@@ -6,6 +34,7 @@ export async function loadPlayerColdData({
   fetchImpl,
   apiBaseUrl = "",
   fallback,
+  timeoutMs = ssrFetchTimeoutMs(),
 }) {
   const canLoadPrivate =
     typeof principalUserId === "string" && principalUserId.trim() !== "";
@@ -23,6 +52,7 @@ export async function loadPlayerColdData({
   ] = await Promise.all([
     fetchJson({
       fetchImpl,
+      timeoutMs,
       fallback: fallback.thread,
       url: playerThreadUrl({
         apiBaseUrl,
@@ -34,22 +64,26 @@ export async function loadPlayerColdData({
     }),
     fetchJson({
       fetchImpl,
+      timeoutMs,
       fallback: fallback.votecount,
       url: playerVotecountUrl({ apiBaseUrl, game }),
     }),
     fetchJson({
       fetchImpl,
+      timeoutMs,
       fallback: fallback.dayVoteOutcomes ?? [],
       url: dayVoteOutcomesUrl({ apiBaseUrl, game }),
     }),
     fetchJson({
       fetchImpl,
+      timeoutMs,
       fallback: fallback.endgameSummary ?? null,
       url: endgameSummaryUrl({ apiBaseUrl, game }),
     }),
     canLoadPlayerPrivate
       ? fetchJson({
           fetchImpl,
+          timeoutMs,
           fallback: fallback.notifications ?? [],
           url: principalScopedGameUrl({
             apiBaseUrl,
@@ -62,6 +96,7 @@ export async function loadPlayerColdData({
     canLoadPlayerPrivate
       ? fetchJson({
           fetchImpl,
+          timeoutMs,
           fallback: fallback.investigationResults ?? [],
           url: principalScopedGameUrl({
             apiBaseUrl,
@@ -74,6 +109,7 @@ export async function loadPlayerColdData({
     canLoadCommandState
       ? fetchJson({
           fetchImpl,
+          timeoutMs,
           fallback: fallback.commandState ?? EMPTY_PLAYER_COMMAND_STATE,
           url: playerCommandStateUrl({
             apiBaseUrl,
@@ -117,10 +153,12 @@ export async function loadAdminColdData({
   sessionToken = null,
   identityPrincipalUserId = "host_h",
   fallback,
+  timeoutMs = ssrFetchTimeoutMs(),
 }) {
   const [proofStatus, identityLifecycleAudit] = await Promise.all([
     fetchJson({
       fetchImpl,
+      timeoutMs,
       fallback: null,
       url: principalScopedGameUrl({
         apiBaseUrl,
@@ -133,6 +171,7 @@ export async function loadAdminColdData({
       ? null
       : fetchJson({
           fetchImpl,
+          timeoutMs,
           fallback: null,
           url: identityLifecycleAuditUrl({
             apiBaseUrl,
@@ -162,10 +201,12 @@ export async function loadHostColdData({
   fetchImpl,
   apiBaseUrl = "",
   fallback,
+  timeoutMs = ssrFetchTimeoutMs(),
 }) {
   const [hostPrompts, votecount, dayVoteOutcomes] = await Promise.all([
     fetchJson({
       fetchImpl,
+      timeoutMs,
       fallback: fallback.hostPrompts,
       url: hostPromptsUrl({
         apiBaseUrl,
@@ -175,11 +216,13 @@ export async function loadHostColdData({
     }),
     fetchJson({
       fetchImpl,
+      timeoutMs,
       fallback: fallback.votecount,
       url: hostVotecountUrl({ apiBaseUrl, game }),
     }),
     fetchJson({
       fetchImpl,
+      timeoutMs,
       fallback: fallback.dayVoteOutcomes ?? [],
       url: dayVoteOutcomesUrl({ apiBaseUrl, game }),
     }),
@@ -195,21 +238,29 @@ export async function loadHostColdData({
   });
 }
 
-export async function fetchJson({ fetchImpl, url, fallback, headers = null }) {
-  return await fetchJsonWithInit({ fetchImpl, url, fallback, headers });
+export async function fetchJson({ fetchImpl, url, fallback, headers = null, timeoutMs = null }) {
+  return await fetchJsonWithInit({ fetchImpl, url, fallback, headers, timeoutMs });
 }
 
-export async function fetchJsonWithInit({ fetchImpl, url, fallback, headers = null }) {
+export async function fetchJsonWithInit({
+  fetchImpl,
+  url,
+  fallback,
+  headers = null,
+  timeoutMs = null,
+}) {
   if (typeof fetchImpl !== "function") {
     return fallback;
   }
 
   try {
+    const signal = fetchTimeoutSignal(timeoutMs);
     const response = await fetchImpl(url, {
       headers: {
         accept: "application/json",
         ...(headers ?? {}),
       },
+      ...(signal === undefined ? {} : { signal }),
     });
     if (!response?.ok) {
       return fallback;

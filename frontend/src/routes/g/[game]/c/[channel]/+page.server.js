@@ -1,5 +1,6 @@
 import { error } from "@sveltejs/kit";
 import { resolveFixtureRouteState } from "../../../../../lib/app/app-route-state-model.mjs";
+import { publicApiBaseUrl, serverApiBaseUrl } from "../../../../../lib/server/api-base.mjs";
 import {
   buildGameRouteData,
   playerChannelForbiddenMessage,
@@ -8,7 +9,7 @@ import {
 } from "../../game-route-model.mjs";
 
 export async function load({ params, locals, fetch, url }) {
-  const apiBaseUrl = process.env.FMARCH_API_BASE_URL ?? "";
+  const apiBaseUrl = serverApiBaseUrl();
   const fixtureMode = process.env.FMARCH_FRONTEND_FIXTURE_SESSION === "1";
   const data = await buildGameRouteData({
     game: params.game,
@@ -17,6 +18,7 @@ export async function load({ params, locals, fetch, url }) {
     capabilities: locals.resolvedCapabilities,
     fetchImpl: fixtureMode && apiBaseUrl === "" ? null : fetch,
     apiBaseUrl,
+    publicApiBaseUrl: publicApiBaseUrl(),
     privateItem: url?.searchParams.get("private") ?? null,
   });
 

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { error, fail } from "@sveltejs/kit";
 import { resolveFixtureRouteState } from "../../../../lib/app/app-route-state-model.mjs";
+import { publicApiBaseUrl, serverApiBaseUrl } from "../../../../lib/server/api-base.mjs";
 import { SESSION_COOKIE_NAME } from "../../../../lib/server/session-capabilities.mjs";
 import {
   buildHostConsoleRouteData,
@@ -10,7 +11,7 @@ import {
 } from "./host-route-model.mjs";
 
 export async function load({ params, locals, fetch, url }) {
-  const apiBaseUrl = process.env.FMARCH_API_BASE_URL ?? "";
+  const apiBaseUrl = serverApiBaseUrl();
   const fixtureMode = process.env.FMARCH_FRONTEND_FIXTURE_SESSION === "1";
   const capabilities = resolveHostRouteCapabilities({
     game: params.game,
@@ -30,6 +31,7 @@ export async function load({ params, locals, fetch, url }) {
     principalUserId,
     fetchImpl: fixtureMode && apiBaseUrl === "" ? null : fetch,
     apiBaseUrl,
+    publicApiBaseUrl: publicApiBaseUrl(),
   });
 
   if (!routeData.access.allowed) {
@@ -247,18 +249,11 @@ async function currentInviteTargetOccupant({
 }
 
 function authInvitesUrl(env) {
-  const baseUrl =
-    typeof env.FMARCH_API_BASE_URL === "string"
-      ? env.FMARCH_API_BASE_URL.replace(/\/$/, "")
-      : "";
-  return `${baseUrl}/auth/invites`;
+  return `${serverApiBaseUrl(env)}/auth/invites`;
 }
 
 function hostConsoleStateUrl(env, { game, principalUserId, slotId }) {
-  const baseUrl =
-    typeof env.FMARCH_API_BASE_URL === "string"
-      ? env.FMARCH_API_BASE_URL.replace(/\/$/, "")
-      : "";
+  const baseUrl = serverApiBaseUrl(env);
   const params = new URLSearchParams({
     principal_user_id: principalUserId,
     slot_id: slotId,

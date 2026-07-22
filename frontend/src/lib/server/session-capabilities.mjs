@@ -1,8 +1,73 @@
 import { randomUUID } from "node:crypto";
 import { normalizeCapabilities } from "../app/capabilities.mjs";
+import { fetchTimeoutSignal, ssrFetchTimeoutMs } from "../app/cold-load.mjs";
 
 export const SESSION_COOKIE_NAME = "fmarch_session";
 export const FIXTURE_SESSION_COOKIE_NAME = "fmarch_fixture_session";
+export const DEFAULT_SESSION_CACHE_TTL_MS = 30_000;
+
+const SESSION_CACHE_MAX_ENTRIES = 1000;
+const sessionCache = new Map();
+
+// TTL for cached auth-session resolutions. Bounds capability-change lag; the
+// win is removing one serial API round trip from almost every SSR request.
+// 0 disables caching.
+export function sessionCacheTtlMs(env = globalThis.process?.env) {
+  const raw = env?.FMARCH_SESSION_CACHE_TTL_MS;
+  if (raw === undefined || raw === null || String(raw).trim() === "") {
+    return DEFAULT_SESSION_CACHE_TTL_MS;
+  }
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return DEFAULT_SESSION_CACHE_TTL_MS;
+  }
+  return parsed;
+}
+
+export function clearSessionCache() {
+  sessionCache.clear();
+}
+
+export async function resolveAuthenticatedSessionCached({
+  cookies,
+  request,
+  fetchImpl = fetch,
+  env = process.env,
+  now = Date.now,
+} = {}) {
+  const ttlMs = sessionCacheTtlMs(env);
+  const token = cookies?.get?.(SESSION_COOKIE_NAME);
+  const context = sessionContextFromRequest(request);
+  const cacheable =
+    ttlMs > 0 &&
+    env?.FMARCH_FRONTEND_FIXTURE_SESSION !== "1" &&
+    typeof token === "string" &&
+    token.trim() !== "" &&
+    context !== null;
+  if (!cacheable) {
+    return resolveAuthenticatedSession({ cookies, request, fetchImpl, env });
+  }
+
+  const key = `${token}|${context.kind}|${context.kind === "game" ? context.game : ""}`;
+  const timestamp = now();
+  const cached = sessionCache.get(key);
+  if (cached !== undefined && cached.expiresAt > timestamp) {
+    return cached.session;
+  }
+
+  const session = await resolveAuthenticatedSession({ cookies, request, fetchImpl, env });
+  // Rotation-required sessions must re-resolve, and empty sessions may just
+  // be an API blip — caching either would pin a worse state for a full TTL.
+  if (session.rotationRequired !== true && session.principalUserId !== null) {
+    if (sessionCache.size >= SESSION_CACHE_MAX_ENTRIES) {
+      sessionCache.delete(sessionCache.keys().next().value);
+    }
+    sessionCache.set(key, { session, expiresAt: timestamp + ttlMs });
+  } else {
+    sessionCache.delete(key);
+  }
+  return session;
+}
 
 export async function resolveAuthenticatedSession({
   cookies,
@@ -23,13 +88,20 @@ export async function resolveAuthenticatedSession({
     return emptySession();
   }
 
-  const response = await fetchImpl(authSessionUrl({ env, context }), {
-    method: "GET",
-    headers: {
-      authorization: `Bearer ${token}`,
-      accept: "application/json",
-    },
-  });
+  let response;
+  try {
+    const signal = fetchTimeoutSignal(ssrFetchTimeoutMs(env));
+    response = await fetchImpl(authSessionUrl({ env, context }), {
+      method: "GET",
+      headers: {
+        authorization: `Bearer ${token}`,
+        accept: "application/json",
+      },
+      ...(signal === undefined ? {} : { signal }),
+    });
+  } catch {
+    return emptySession();
+  }
   if (!response.ok) {
     return emptySession();
   }
@@ -49,15 +121,22 @@ export async function rotateAuthenticatedBrowserSession({
   }
 
   const sessionToken = `account-session-${randomUUID()}`;
-  const response = await fetchImpl(`${authApiBaseUrl(env)}/auth/session-rotations`, {
-    method: "POST",
-    headers: {
-      authorization: `Bearer ${token}`,
-      "content-type": "application/json",
-      accept: "application/json",
-    },
-    body: JSON.stringify({ session_token: sessionToken }),
-  });
+  let response;
+  try {
+    const signal = fetchTimeoutSignal(ssrFetchTimeoutMs(env));
+    response = await fetchImpl(`${authApiBaseUrl(env)}/auth/session-rotations`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${token}`,
+        "content-type": "application/json",
+        accept: "application/json",
+      },
+      body: JSON.stringify({ session_token: sessionToken }),
+      ...(signal === undefined ? {} : { signal }),
+    });
+  } catch {
+    return { status: "unavailable" };
+  }
   if (!response.ok) {
     return { status: response.status === 401 ? "stale" : "unavailable" };
   }
@@ -129,9 +208,13 @@ function authSessionUrl({ env, context }) {
 }
 
 function authApiBaseUrl(env) {
-  return typeof env?.FMARCH_API_BASE_URL === "string"
-    ? env.FMARCH_API_BASE_URL.replace(/\/$/, "")
-    : "";
+  const base =
+    typeof env?.FMARCH_API_INTERNAL_URL === "string" && env.FMARCH_API_INTERNAL_URL.trim() !== ""
+      ? env.FMARCH_API_INTERNAL_URL
+      : typeof env?.FMARCH_API_BASE_URL === "string"
+        ? env.FMARCH_API_BASE_URL
+        : "";
+  return base.replace(/\/$/, "");
 }
 
 function normalizeSessionPayload(payload, context = null) {

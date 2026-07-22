@@ -4,7 +4,9 @@ dockerfilePath = "Dockerfile.frontend"
 watchPatterns = ["frontend/**", "tools/**", "docs/**", "Dockerfile.frontend"]
 
 [deploy]
-healthcheckPath = "/"
+# /healthz never touches the API, so frontend deploys stay possible during an
+# API outage ("/" SSR-blocks on API fetches and fails the healthcheck window).
+healthcheckPath = "/healthz"
 healthcheckTimeout = 120
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 3

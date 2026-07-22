@@ -42,6 +42,7 @@ export async function buildHostConsoleRouteData({
   principalUserId = "host_h",
   fetchImpl = null,
   apiBaseUrl = "",
+  publicApiBaseUrl = null,
 }) {
   const gameId = normalizeGame(game);
   const commandPrincipalUserId = normalizePrincipal(principalUserId);
@@ -139,7 +140,9 @@ export async function buildHostConsoleRouteData({
     dayVoteOutcomesEndpoint: dayVoteOutcomesUrl({ game: gameId }),
     liveProjection: Object.freeze({
       endpoint: buildLiveProjectionUrl({
-        apiBaseUrl,
+        // Browser-facing socket URL: must stay on the public base even when
+        // SSR fetches ride the private network.
+        apiBaseUrl: publicApiBaseUrl ?? apiBaseUrl,
         game: gameId,
         principalUserId: commandPrincipalUserId,
         slotId: "slot-7",

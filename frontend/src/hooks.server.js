@@ -1,10 +1,11 @@
 import {
   rotateAuthenticatedBrowserSession,
   resolveAuthenticatedSession,
+  resolveAuthenticatedSessionCached,
 } from "./lib/server/session-capabilities.mjs";
 
 export async function handle({ event, resolve }) {
-  let session = await resolveAuthenticatedSession({
+  let session = await resolveAuthenticatedSessionCached({
     cookies: event.cookies,
     fetchImpl: event.fetch,
     request: event.request,

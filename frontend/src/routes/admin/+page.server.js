@@ -1,6 +1,7 @@
 import { error, fail } from "@sveltejs/kit";
 import { operatorProofRunUrl } from "../../lib/app/cold-load.mjs";
 import { resolveFixtureRouteState } from "../../lib/app/app-route-state-model.mjs";
+import { serverApiBaseUrl } from "../../lib/server/api-base.mjs";
 import {
   readLocalBackupRestoreProof,
   readLocalAdminSpineProof,
@@ -32,7 +33,7 @@ import {
 } from "./admin-route-model.mjs";
 
 export async function load({ cookies, locals, fetch, url }) {
-  const apiBaseUrl = process.env.FMARCH_API_BASE_URL ?? "";
+  const apiBaseUrl = serverApiBaseUrl();
   const fixtureMode = process.env.FMARCH_FRONTEND_FIXTURE_SESSION === "1";
   const data = await buildAdminRouteData({
     principalUserId: locals.principalUserId,
@@ -83,7 +84,7 @@ export async function load({ cookies, locals, fetch, url }) {
 
 export const actions = {
   checkRecoveryGate: async ({ fetch, locals, request }) => {
-    const apiBaseUrl = process.env.FMARCH_API_BASE_URL ?? "";
+    const apiBaseUrl = serverApiBaseUrl();
     const fixtureMode = process.env.FMARCH_FRONTEND_FIXTURE_SESSION === "1";
     const capabilities = Array.isArray(locals.resolvedCapabilities)
       ? locals.resolvedCapabilities
@@ -140,7 +141,7 @@ export const actions = {
   },
 
   grantSession: async ({ cookies, fetch, locals, request }) => {
-    const apiBaseUrl = process.env.FMARCH_API_BASE_URL ?? "";
+    const apiBaseUrl = serverApiBaseUrl();
     const capabilities = Array.isArray(locals.resolvedCapabilities)
       ? locals.resolvedCapabilities
       : [];

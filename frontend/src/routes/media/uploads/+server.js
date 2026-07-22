@@ -47,7 +47,9 @@ export async function POST({
 }
 
 function mediaApiUrl(env, pathname) {
-  const base = String(env?.FMARCH_API_BASE_URL ?? "").replace(/\/$/u, "");
+  const base = String(
+    env?.FMARCH_API_INTERNAL_URL ?? env?.FMARCH_API_BASE_URL ?? "",
+  ).replace(/\/$/u, "");
   return `${base}${pathname}`;
 }
 
