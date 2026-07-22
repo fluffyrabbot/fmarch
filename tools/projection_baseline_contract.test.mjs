@@ -35,8 +35,12 @@ test("checked-in projection schema preserves its baseline and append-only sequen
   assert.equal(report.ok, true);
   assert.equal(report.baseline, baselineFilename);
   assert.equal(report.baseline_sha256, baselineSha256);
-  assert.deepEqual(report.migrations, [baselineFilename, "0002_runtime_identity.sql"]);
-  assert.equal(report.migration_file_count, 2);
+  assert.deepEqual(report.migrations, [
+    baselineFilename,
+    "0002_runtime_identity.sql",
+    "0003_authentication_methods.sql",
+  ]);
+  assert.equal(report.migration_file_count, 3);
   assert.ok(report.statement_count > 100);
 });
 
