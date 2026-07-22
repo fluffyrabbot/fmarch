@@ -14,6 +14,8 @@ import {
   forbiddenRoutes,
   hostSetupScenario,
   navFocusCoverage,
+  publicGameScenario,
+  publicationViewports,
   routeStateScenarios,
   roles,
   setupViewports,
@@ -96,6 +98,7 @@ try {
     },
     board: [],
     roles: [],
+    publications: [],
     setup: [],
     forbidden: [],
     playerPrivateChannel: [],
@@ -230,6 +233,8 @@ try {
       if (!bodyText?.includes(role.requiredText)) {
         throw new Error(`${role.id} ${viewport.name} did not render ${role.requiredText}`);
       }
+
+      const roleParadigm = await prepareRoleDecisionCanvas(page, role, viewport);
 
       const disclosureDefaults = await assertDisclosuresClosed(
         page,
@@ -380,6 +385,7 @@ try {
         mobileViewportBudget,
         focusTraversal,
         commandResult,
+        roleParadigm,
         linkAffordances: linkAffordances.map((link) => ({
           testId: link.testId,
           hrefPath: link.hrefPath,
@@ -615,6 +621,38 @@ try {
     await context.close();
   }
 
+  for (const viewport of publicationViewports) {
+    const context = await newContextForViewport(viewport, null);
+    const page = await context.newPage();
+    const response = await page.goto(`${baseUrl}${publicGameScenario.path}`, {
+      waitUntil: "networkidle",
+    });
+    if (!response?.ok()) {
+      throw new Error(
+        `${publicGameScenario.id} ${viewport.name} returned ${response?.status()} for ${publicGameScenario.path}`,
+      );
+    }
+    const publicationGeometry = await assertPublicGamePublicationGeometry(page, {
+      scenario: publicGameScenario,
+      viewport,
+    });
+    const screenshot = path.join(
+      artifactDir,
+      `${viewport.name}-${publicGameScenario.id}.png`,
+    );
+    const screenshotPixels = await captureScreenshotEvidence(page, {
+      path: screenshot,
+      label: `${publicGameScenario.id} ${viewport.name}`,
+      viewport,
+    });
+    evidence.publications.push({
+      ...publicationGeometry,
+      screenshot: path.relative(repoRoot, screenshot),
+      screenshotPixels,
+    });
+    await context.close();
+  }
+
   await writeFile(evidencePath, `${JSON.stringify(evidence, null, 2)}\n`);
   console.log(`wrote ${path.relative(repoRoot, evidencePath)}`);
 } catch (error) {
@@ -641,6 +679,133 @@ try {
   } else {
     process.env.FMARCH_FRONTEND_FIXTURE_SESSION = previousFixtureEnv;
   }
+}
+
+async function prepareRoleDecisionCanvas(page, role, viewport) {
+  if (role.id !== "admin") return null;
+  const setupTask = page.getByTestId("admin-inbox-task-setup-host-setup");
+  if (await setupTask.count() > 0) {
+    await setupTask.click();
+    await page.getByTestId("admin-inbox-panel-setup-host-setup").waitFor({ state: "visible" });
+  }
+  const inbox = page.getByTestId("admin-operator-inbox");
+  const queue = page.getByTestId("admin-operator-inbox-queue");
+  const canvas = page.getByTestId("admin-operator-decision-canvas");
+  const [inboxBox, queueBox, canvasBox] = await Promise.all([
+    assertVisibleBox(inbox, "admin operator inbox"),
+    assertVisibleBox(queue, "admin operator inbox queue"),
+    assertVisibleBox(canvas, "admin operator decision canvas"),
+  ]);
+  const snapshot = await page.evaluate(() => ({
+    mode: document.querySelector('[data-testid="admin-operator-inbox"]')?.getAttribute("data-inbox-mode"),
+    initialCanvasCount: document.querySelector('[data-testid="admin-operator-inbox"]')?.getAttribute("data-initial-canvas-count"),
+    selectedTaskId: document.querySelector('[data-testid="admin-operator-inbox-queue"] [aria-current="true"]')?.getAttribute("data-testid"),
+    visibleCanvasCount: document.querySelectorAll('[data-testid="admin-operator-decision-canvas"] > article').length,
+    taskCount: document.querySelectorAll('[data-testid^="admin-inbox-task-"]').length,
+    overflow: Math.max(document.documentElement.scrollWidth, document.body.scrollWidth) - document.documentElement.clientWidth,
+  }));
+  const layout = canvasBox.y > queueBox.y + queueBox.height - 1 ? "stacked" : "queue-canvas";
+  const expectedLayout = viewport.width <= 820 ? "stacked" : "queue-canvas";
+  if (
+    snapshot.mode !== "exception-inbox-decision-canvas" ||
+    snapshot.initialCanvasCount !== "1" ||
+    snapshot.visibleCanvasCount !== 1 ||
+    snapshot.overflow > 1 ||
+    layout !== expectedLayout
+  ) {
+    throw new Error(`admin operator inbox drifted: ${JSON.stringify({ snapshot, layout, expectedLayout })}`);
+  }
+  return {
+    mode: snapshot.mode,
+    initialCanvasCount: Number(snapshot.initialCanvasCount),
+    visibleCanvasCount: snapshot.visibleCanvasCount,
+    selectedTaskId: snapshot.selectedTaskId,
+    taskCount: snapshot.taskCount,
+    layout,
+    expectedLayout,
+    noHorizontalOverflow: true,
+    inboxBox,
+    queueBox,
+    canvasBox,
+  };
+}
+
+async function assertPublicGamePublicationGeometry(page, { scenario, viewport }) {
+  const surface = page.getByTestId(scenario.surfaceTestId);
+  const publication = page.getByTestId(scenario.publicationTestId);
+  const metadata = page.getByTestId(scenario.metadataTestId);
+  const readingLane = page.getByTestId(scenario.readingLaneTestId);
+  await surface.waitFor({ state: "visible" });
+  const [surfaceBox, publicationBox, metadataBox, readingLaneBox] = await Promise.all([
+    assertVisibleBox(surface, `${scenario.id} surface`),
+    assertVisibleBox(publication, `${scenario.id} publication`),
+    assertVisibleBox(metadata, `${scenario.id} metadata`),
+    assertVisibleBox(readingLane, `${scenario.id} reading lane`),
+  ]);
+  const mode = await publication.getAttribute("data-publication-mode");
+  if (mode !== scenario.publicationMode) {
+    throw new Error(`${scenario.id} rendered publication mode ${mode}`);
+  }
+  const budget = scenario.threadStartBudgetPx[viewport.name];
+  if (readingLaneBox.y > budget) {
+    throw new Error(
+      `${scenario.id} ${viewport.name} thread starts at ${readingLaneBox.y}px, beyond ${budget}px budget`,
+    );
+  }
+  if (readingLaneBox.width > scenario.maxReadingMeasurePx + 1) {
+    throw new Error(
+      `${scenario.id} ${viewport.name} reading measure ${readingLaneBox.width}px exceeds ${scenario.maxReadingMeasurePx}px`,
+    );
+  }
+  const posts = [];
+  for (const postId of scenario.postIds) {
+    posts.push({
+      postId,
+      box: await assertVisibleBox(
+        page.getByTestId(`public-game-post-${postId}`),
+        `${scenario.id} post ${postId}`,
+      ),
+    });
+  }
+  const olderBox = await assertHitTarget(
+    page.getByTestId("public-game-older"),
+    `${scenario.id} older posts`,
+  );
+  const density = await page.evaluate(() => ({
+    panelCount: document.querySelectorAll('[data-testid="public-game-publication"] .fm-panel').length,
+    overflow: Math.max(document.documentElement.scrollWidth, document.body.scrollWidth) - document.documentElement.clientWidth,
+  }));
+  if (density.panelCount !== 0 || density.overflow > 1) {
+    throw new Error(`${scenario.id} density drifted: ${JSON.stringify(density)}`);
+  }
+  await assertNoObviousOverlap(
+    [
+      { label: `${scenario.id} metadata`, box: metadataBox },
+      { label: `${scenario.id} reading lane`, box: readingLaneBox },
+      ...posts.map((post) => ({ label: `${scenario.id} post ${post.postId}`, box: post.box })),
+      { label: `${scenario.id} older posts`, box: olderBox },
+    ],
+    { role: scenario.id, viewport: viewport.name },
+  );
+  return {
+    scenario: scenario.id,
+    viewport,
+    path: scenario.path,
+    publicationMode: mode,
+    threadStartPx: readingLaneBox.y,
+    threadStartBudgetPx: budget,
+    readingMeasurePx: readingLaneBox.width,
+    maxReadingMeasurePx: scenario.maxReadingMeasurePx,
+    panelCount: density.panelCount,
+    noHorizontalOverflow: true,
+    surfaceBox,
+    publicationBox,
+    metadataBox,
+    readingLaneBox,
+    posts,
+    olderBox,
+    overlapCheckedTargets: posts.length + 3,
+  };
 }
 
 async function newContextForViewport(viewport, token) {

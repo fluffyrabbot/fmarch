@@ -14,6 +14,8 @@ import {
   forbiddenRoutes,
   hostSetupScenario,
   navFocusCoverage,
+  publicGameScenario,
+  publicationViewports,
   routeStateScenarios,
   roles,
   setupViewports,
@@ -1419,6 +1421,10 @@ test("route-state render artifact covers every forced board and role page state"
     role: "admin",
     path: "/admin",
     surfaceTestId: "admin-surface",
+    inboxTestId: "admin-operator-inbox",
+    inboxMode: "exception-inbox-decision-canvas",
+    initialCanvasCount: 1,
+    decisionCanvasTestId: "admin-operator-decision-canvas",
     readinessTestIds: ["authority", "setup", "audit", "recovery"].map((id) =>
       adminReadinessTestId(id),
     ),
@@ -2580,13 +2586,14 @@ test("tablet interaction artifact proves tap-first source posture", async () => 
     safeAreaAware: true,
   });
   assert.deepEqual(tabletInteraction.adminOperatorSurfaceCss, {
-    controlRailMode: "flow-admin-operator-actions",
-    stickyTopPx: 0,
+    controlRailMode: "exception-inbox-decision-canvas",
+    stickyTopPx: null,
     topbarOffsetPx: 64,
     safeAreaAware: false,
     internalScroll: false,
-    overscroll: "visible",
-    unstickBelowPx: 0,
+    overscroll: "document",
+    unstickBelowPx: 820,
+    initialCanvasCount: 1,
     setupAndRecoveryBeforeStatusReadouts: true,
     actionTileStabilityMode: "reserved-status-floor",
     actionTileStatusFloorMinBlockSizePx: 44,
@@ -2631,7 +2638,7 @@ test("tablet interaction artifact proves tap-first source posture", async () => 
       zone.descendantCount,
     ]),
     [
-      ["admin-setup-action-zone", "admin-setup-actions", 3],
+      ["admin-setup-action-zone", "admin-setup-actions", 1],
       ["admin-recovery-action-zone", "admin-recovery-actions", 1],
     ],
   );
@@ -4337,6 +4344,8 @@ test("role smoke artifact carries the same static matrices as its proof source",
     assertPixelEvidence(roleSmoke.board, "board screenshots");
     assertPixelEvidence(roleSmoke.roles, "role screenshots");
     assertBrowserSetupWorkbenchEvidence(roleSmoke.setup);
+    assertBrowserPublicGamePublicationEvidence(roleSmoke.publications);
+    assertBrowserAdminOperatorInboxEvidence(roleSmoke.roles);
     assertBrowserConfirmationFocusEvidence(roleSmoke.roles);
     assertBrowserPlayerPrivateDisclosureEvidence(roleSmoke.roles);
     assertBrowserPlayerPrivateChannelEvidence(roleSmoke.playerPrivateChannel);
@@ -5940,6 +5949,43 @@ function assertBrowserSetupWorkbenchEvidence(setupEntries) {
       hostSetupScenario.slotIds,
     );
     assertPixelEvidence([entry], "host setup workbench screenshots");
+  }
+}
+
+function assertBrowserPublicGamePublicationEvidence(entries) {
+  assert.equal(Array.isArray(entries), true, "public game publication evidence missing");
+  assert.equal(entries.length, publicationViewports.length);
+  assert.deepEqual(
+    entries.map((entry) => [entry.viewport.name, entry.scenario, entry.path]),
+    publicationViewports.map((viewport) => [
+      viewport.name,
+      publicGameScenario.id,
+      publicGameScenario.path,
+    ]),
+  );
+  for (const entry of entries) {
+    assert.equal(entry.publicationMode, publicGameScenario.publicationMode);
+    assert.equal(entry.threadStartPx <= entry.threadStartBudgetPx, true);
+    assert.equal(entry.readingMeasurePx <= entry.maxReadingMeasurePx + 1, true);
+    assert.equal(entry.panelCount, 0);
+    assert.equal(entry.noHorizontalOverflow, true);
+    assert.deepEqual(entry.posts.map((post) => post.postId), publicGameScenario.postIds);
+    assert.equal(entry.overlapCheckedTargets >= 5, true);
+    assertPixelEvidence([entry], "public game publication screenshots");
+  }
+}
+
+function assertBrowserAdminOperatorInboxEvidence(roleEntries) {
+  const adminEntries = roleEntries.filter((entry) => entry.role === "admin");
+  assert.equal(adminEntries.length, viewports.length);
+  for (const entry of adminEntries) {
+    assert.equal(entry.roleParadigm.mode, "exception-inbox-decision-canvas");
+    assert.equal(entry.roleParadigm.initialCanvasCount, 1);
+    assert.equal(entry.roleParadigm.visibleCanvasCount, 1);
+    assert.equal(entry.roleParadigm.taskCount >= 3, true);
+    assert.equal(entry.roleParadigm.selectedTaskId, "admin-inbox-task-setup-host-setup");
+    assert.equal(entry.roleParadigm.layout, entry.viewport.width <= 820 ? "stacked" : "queue-canvas");
+    assert.equal(entry.roleParadigm.noHorizontalOverflow, true);
   }
 }
 

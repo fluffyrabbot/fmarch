@@ -295,9 +295,11 @@ function surfaceScenarios() {
       surfaceTestId: "admin-surface",
       requiredText: ["Game setup", "Recovery"],
       requiredTestIds: [
+        "admin-operator-inbox",
+        "admin-operator-decision-canvas",
         "admin-command-activity",
         "admin-command-activity-empty",
-        "admin-setup-session-grants",
+        "admin-inbox-task-setup-session-grants",
         "admin-audit-link-proof-runs",
         "admin-recovery-trigger-recovery-gate",
       ],
@@ -307,7 +309,11 @@ function surfaceScenarios() {
           href: "/admin/audit/proof-runs?game=midsummer",
         },
       ],
-      requiredAttributes: ['data-component="admin-command-activity"'],
+      requiredAttributes: [
+        'data-inbox-mode="exception-inbox-decision-canvas"',
+        'data-initial-canvas-count="1"',
+        'data-component="admin-command-activity"',
+      ],
       forbiddenText: [],
     },
     {

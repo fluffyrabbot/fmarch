@@ -27,8 +27,8 @@
     recordAdminFormStatus,
     sendAdminSetupCommand,
   } from "./admin-route-controller.mjs";
-  import { ADMIN_SURFACE_CONTRACT } from "$lib/components/admin/admin-surface-model.mjs";
   import { ADMIN_ROUTE_CONTRACT } from "./admin-route-contract.mjs";
+  import { buildAdminOperatorInbox } from "./admin-operator-inbox.mjs";
   import {
     commandAttemptId,
     commandAttemptTimeoutMs,
@@ -42,6 +42,7 @@
   let lastFormStatusKey = "";
   let recoveryWorkflowOpen = false;
   let commandRecoveryAttempts = {};
+  let preferredAdminTaskId = null;
 
   $: adminSurfaceEmpty = isAdminRouteEmpty(data);
   $: adminForcedRouteState = data.routeState
@@ -50,6 +51,13 @@
   $: adminEmptyState = buildRouteStateViewModel({
     surface: "admin",
     state: "empty",
+  });
+  $: operatorInbox = buildAdminOperatorInbox({
+    gameSetup: data.gameSetup,
+    audit: data.audit,
+    recoveryTasks: data.recoveryTasks,
+    commandStatuses,
+    selectedTaskId: preferredAdminTaskId,
   });
 
   $: if (form?.id && `${form.id}:${form.state}:${form.message}` !== lastFormStatusKey) {
@@ -75,6 +83,10 @@
       item.id,
       adminConfirmStatus(item),
     );
+  }
+
+  function selectAdminTask(taskId) {
+    preferredAdminTaskId = taskId;
   }
 
   async function handleSetupAction(item) {
@@ -243,58 +255,107 @@
   {:else if adminSurfaceEmpty}
     <RouteState view={adminEmptyState} />
   {:else}
-    <section class="admin-surface__section" aria-labelledby="admin-next-actions-heading">
-      <header class="admin-surface__section-heading">
-        <div>
-          <p class="fm-eyebrow">Needs attention</p>
-          <h2 id="admin-next-actions-heading">Administrator actions</h2>
+    <section
+      class="admin-operator-inbox"
+      data-component={operatorInbox.root.data.component}
+      data-inbox-mode={operatorInbox.root.data.mode}
+      data-initial-canvas-count={operatorInbox.root.data.initialCanvasCount}
+      data-testid={operatorInbox.root.testId}
+    >
+      <nav class="admin-operator-inbox__queue" aria-label="Operator inbox" data-testid={operatorInbox.queue.testId}>
+        <header>
+          <div><p class="fm-eyebrow">Needs attention</p><h2>{operatorInbox.queue.heading}</h2></div>
+          <strong>{operatorInbox.queue.attentionCount}</strong>
+        </header>
+        <p>{operatorInbox.queue.summary}</p>
+        <div class="admin-operator-inbox__tasks">
+          {#each operatorInbox.tasks as task}
+            <button
+              type="button"
+              data-state={task.state}
+              data-kind={task.kind}
+              data-testid={task.testId}
+              aria-current={task.id === operatorInbox.selectedTaskId ? "true" : undefined}
+              aria-controls={task.panelTestId}
+              on:click={() => selectAdminTask(task.id)}
+            >
+              <span>{task.badge}</span>
+              <strong>{task.label}</strong>
+              <small>{task.summary}</small>
+            </button>
+          {/each}
         </div>
-        <p>Start with game setup, access, or recovery work.</p>
-      </header>
+      </nav>
 
-      <section
-        class={ADMIN_SURFACE_CONTRACT.operatorRailClassName}
-        aria-label="Admin operator actions"
-        data-control-rail-mode={ADMIN_SURFACE_CONTRACT.operatorRailMode}
-        data-testid="admin-operator-action-rail"
-      >
-        <AdminSetupGrid
-          items={data.gameSetup}
-          {commandStatuses}
-          sessionGrant={data.command.sessionGrant}
-          onSetupAction={handleSetupAction}
-          onConfirmSetupAction={confirmSetupAction}
-          onCancelSetupAction={cancelSetupAction}
-          onRetrySetupAction={retrySetupAction}
-        />
-
+      <section class="admin-operator-inbox__canvas" data-testid={operatorInbox.canvas.testId}>
+        {#if operatorInbox.selectedTask}
+          <article id={operatorInbox.selectedTask.panelTestId} data-testid={operatorInbox.selectedTask.panelTestId}>
+            {#if operatorInbox.selectedTask.kind === "setup"}
+              <AdminSetupGrid
+                items={[operatorInbox.selectedTask.item]}
+                {commandStatuses}
+                sessionGrant={data.command.sessionGrant}
+                onSetupAction={handleSetupAction}
+                onConfirmSetupAction={confirmSetupAction}
+                onCancelSetupAction={cancelSetupAction}
+                onRetrySetupAction={retrySetupAction}
+              />
+            {:else if operatorInbox.selectedTask.kind === "audit"}
+              <header class="admin-operator-inbox__canvas-heading">
+                <div><p class="fm-eyebrow">{operatorInbox.selectedTask.badge}</p><h2>{operatorInbox.selectedTask.label}</h2></div>
+                <span data-state={operatorInbox.selectedTask.state}>{operatorInbox.selectedTask.state}</span>
+              </header>
+              <p>{operatorInbox.selectedTask.summary}</p>
+              <a
+                class="fm-touch-button"
+                href={operatorInbox.selectedTask.item.inspectHref ?? operatorInbox.selectedTask.item.href}
+                data-testid={`admin-inbox-review-audit-${operatorInbox.selectedTask.sourceId}`}
+              >Review check</a>
+            {:else}
+              <header class="admin-operator-inbox__canvas-heading">
+                <div><p class="fm-eyebrow">{operatorInbox.selectedTask.badge}</p><h2>{operatorInbox.selectedTask.label}</h2></div>
+                <span data-state={operatorInbox.selectedTask.state}>{operatorInbox.selectedTask.state}</span>
+              </header>
+              <p>{operatorInbox.selectedTask.summary}</p>
+              <button
+                type="button"
+                class="fm-touch-button"
+                data-testid={`admin-inbox-open-recovery-${operatorInbox.selectedTask.sourceId}`}
+                on:click={() => handleRecoveryTask(operatorInbox.selectedTask.item)}
+              >Open recovery check</button>
+            {/if}
+          </article>
+        {/if}
       </section>
-
-      <details
-        class="fm-surface-drawer"
-        data-testid="admin-recovery-workflow"
-        bind:open={recoveryWorkflowOpen}
-      >
-        <summary>
-          <span class="fm-surface-drawer__label">
-            <strong>Recovery workflow</strong>
-            <small>Run operator recovery checks when routine setup is not enough</small>
-          </span>
-        </summary>
-        <div class="fm-surface-drawer__body">
-          <AdminRecoveryPanel
-            tasks={data.recoveryTasks}
-            {commandStatuses}
-            game={data.shell.game}
-            principalUserId={data.operator.principalUserId}
-            onRecoveryTask={handleRecoveryTask}
-            onCancelRecoveryTask={cancelSetupAction}
-          />
-        </div>
-      </details>
-
-      <AdminCommandActivity {commandStatuses} />
     </section>
+
+    <details
+      class="fm-surface-drawer"
+      data-testid="admin-recovery-workflow"
+      bind:open={recoveryWorkflowOpen}
+    >
+      <summary>
+        <span class="fm-surface-drawer__label">
+          <strong>Recovery workflow</strong>
+          <small>Run operator recovery checks when routine setup is not enough</small>
+        </span>
+      </summary>
+      <div class="fm-surface-drawer__body">
+        <AdminRecoveryPanel
+          tasks={data.recoveryTasks}
+          {commandStatuses}
+          game={data.shell.game}
+          principalUserId={data.operator.principalUserId}
+          onRecoveryTask={handleRecoveryTask}
+          onCancelRecoveryTask={cancelSetupAction}
+        />
+      </div>
+    </details>
+
+    <details class="fm-surface-drawer" data-testid="admin-recent-activity">
+      <summary><span class="fm-surface-drawer__label"><strong>Recent activity</strong><small>Command outcomes and recovery state</small></span></summary>
+      <div class="fm-surface-drawer__body"><AdminCommandActivity {commandStatuses} /></div>
+    </details>
 
     <details class="fm-surface-drawer" data-testid="admin-status-overview">
       <summary>
@@ -346,40 +407,28 @@
     width: 100%;
   }
 
-  .admin-surface__section {
-    display: grid;
-    gap: 18px;
-  }
-
-  .admin-surface__section-heading {
-    align-items: end;
-    border-block-end: 1px solid var(--fm-line);
-    display: flex;
-    gap: 24px;
-    justify-content: space-between;
-    padding-block-end: 12px;
-  }
-
-  .admin-surface__section-heading > p {
-    color: var(--fm-ink-muted);
-    margin: 0;
-    max-inline-size: 34rem;
-    text-align: end;
-  }
+  .admin-operator-inbox { align-items: start; display: grid; gap: 22px; grid-template-columns: 260px minmax(0, 1fr); }
+  .admin-operator-inbox__queue, .admin-operator-inbox__canvas { background: var(--fm-surface-tint); border: 1px solid var(--fm-line-soft); border-radius: 12px; min-inline-size: 0; }
+  .admin-operator-inbox__queue { display: grid; gap: 12px; padding: 14px; }
+  .admin-operator-inbox__queue > header { align-items: center; display: flex; gap: 12px; justify-content: space-between; }
+  .admin-operator-inbox__queue h2, .admin-operator-inbox__queue p, .admin-operator-inbox__canvas h2, .admin-operator-inbox__canvas p { margin: 0; }
+  .admin-operator-inbox__queue > header > strong { align-items: center; background: var(--fm-accent-wash); border-radius: 999px; color: var(--fm-accent-ink); display: inline-flex; justify-content: center; min-block-size: 36px; min-inline-size: 36px; }
+  .admin-operator-inbox__queue > p { color: var(--fm-ink-muted); font-size: 13px; line-height: 1.4; }
+  .admin-operator-inbox__tasks { display: grid; gap: 6px; }
+  .admin-operator-inbox__tasks button { background: transparent; border: 1px solid transparent; border-radius: 9px; color: var(--fm-ink); display: grid; gap: 3px; min-block-size: 64px; padding: 9px 10px; text-align: start; }
+  .admin-operator-inbox__tasks button:hover, .admin-operator-inbox__tasks button[aria-current="true"] { background: var(--fm-raised); border-color: var(--fm-line-strong); }
+  .admin-operator-inbox__tasks button > span { color: var(--fm-ink-muted); font-size: 10px; font-weight: 850; text-transform: uppercase; }
+  .admin-operator-inbox__tasks button[data-state="blocked"] > span, .admin-operator-inbox__tasks button[data-state="interrupted"] > span { color: var(--fm-danger-ink); }
+  .admin-operator-inbox__tasks button > small { color: var(--fm-ink-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .admin-operator-inbox__canvas { padding: clamp(18px, 3vw, 28px); }
+  .admin-operator-inbox__canvas > article { display: grid; gap: 18px; }
+  .admin-operator-inbox__canvas-heading { align-items: center; border-block-end: 1px solid var(--fm-line); display: flex; gap: 16px; justify-content: space-between; padding-block-end: 14px; }
+  .admin-operator-inbox__canvas-heading > span { border: 1px solid var(--fm-line); border-radius: 999px; font-size: 11px; font-weight: 850; padding: 7px 10px; text-transform: uppercase; }
 
   .admin-surface__split {
     display: grid;
     gap: 18px;
     grid-template-columns: minmax(0, 1.4fr) minmax(280px, 0.6fr);
-  }
-
-  .admin-surface__operator-actions {
-    align-self: start;
-    display: grid;
-    gap: 18px;
-    grid-template-columns: minmax(0, 1.45fr) minmax(260px, 0.55fr);
-    overflow: visible;
-    position: static;
   }
 
   .admin-surface__audit-stack {
@@ -392,26 +441,22 @@
       grid-template-columns: 1fr;
     }
 
-    .admin-surface__operator-actions {
-      grid-template-columns: 1fr;
-    }
+  }
+
+  @media (max-width: 820px) {
+    .admin-operator-inbox { gap: 12px; grid-template-columns: 1fr; }
+    .admin-operator-inbox__queue { gap: 6px; padding: 10px; }
+    .admin-operator-inbox__queue > p { display: none; }
+    .admin-operator-inbox__tasks { display: flex; margin-inline: -10px; overflow-x: auto; padding-inline: 10px; }
+    .admin-operator-inbox__tasks button { flex: 0 0 160px; min-block-size: 56px; padding-block: 6px; }
+    .admin-operator-inbox__canvas { padding: 12px; }
   }
 
   @media (max-width: 760px) {
-    .admin-game-picker {
-      align-items: stretch;
-      grid-template-columns: 1fr;
-    }
-
-    .admin-surface__section-heading {
-      align-items: start;
-      display: grid;
-      gap: 4px;
-    }
-
-    .admin-surface__section-heading > p {
-      text-align: start;
-    }
+    .admin-surface { gap: 10px; }
+    .admin-game-picker { gap: 8px; padding: 8px; }
+    .admin-game-picker .fm-field > span { block-size: 1px; clip-path: inset(50%); inline-size: 1px; overflow: hidden; position: absolute; white-space: nowrap; }
+    .admin-operator-inbox__canvas-heading { align-items: start; display: grid; gap: 8px; }
   }
 
 </style>

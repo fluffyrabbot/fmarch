@@ -51,6 +51,21 @@ export const setupViewports = Object.freeze([
   Object.freeze({ name: "desktop", width: 1440, height: 920 }),
 ]);
 
+export const publicationViewports = setupViewports;
+
+export const publicGameScenario = Object.freeze({
+  id: "public-game-publication",
+  path: "/games/midsummer",
+  surfaceTestId: "public-game-surface",
+  publicationTestId: "public-game-publication",
+  metadataTestId: "public-game-metadata",
+  readingLaneTestId: "public-game-reading-lane",
+  publicationMode: "reading-publication",
+  postIds: Object.freeze([42, 41]),
+  threadStartBudgetPx: Object.freeze({ mobile: 420, tablet: 380, desktop: 390 }),
+  maxReadingMeasurePx: 760,
+});
+
 export const boardScenario = buildBoardSmokeScenario({
   id: "board-player",
   token: "fixture-player",
@@ -198,6 +213,7 @@ export const roles = Object.freeze([
       '[data-testid="admin-recovery-workflow"]',
       '[data-testid="admin-status-overview"]',
       '[data-testid="admin-supporting-evidence"]',
+      '[data-testid="admin-recent-activity"]',
     ]),
     expandBeforeChecks: Object.freeze([
       '[data-testid="admin-recovery-workflow"]',
@@ -317,12 +333,15 @@ export const roles = Object.freeze([
         ...adminLiveReadinessTargets.statusRegions,
         Object.freeze({ testId: "admin-audit-status-proof-runs", state: "ack" }),
       ]),
-      focus: roleFocusScenario({
-        shell: adminShell,
-        expectedAfterNav: [
-          "admin-command-trigger-host-setup",
-          "admin-recovery-trigger-recovery-gate",
-        ],
+      focus: Object.freeze({
+        ...roleFocusScenario({
+          shell: adminShell,
+          expectedAfterNav: [
+            "admin-command-trigger-host-setup",
+            "admin-recovery-trigger-recovery-gate",
+          ],
+        }),
+        maxTabs: 36,
       }),
     }),
   }),

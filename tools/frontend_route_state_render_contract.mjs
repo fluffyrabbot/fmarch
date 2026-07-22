@@ -1278,6 +1278,26 @@ async function proveRenderedAdminSurface(bundle) {
   assertIncludes(html, "GlobalAdmin", "admin capability label");
   assertIncludes(
     html,
+    'data-testid="admin-operator-inbox"',
+    "admin operator inbox",
+  );
+  assertIncludes(
+    html,
+    'data-inbox-mode="exception-inbox-decision-canvas"',
+    "admin inbox paradigm",
+  );
+  assertIncludes(
+    html,
+    'data-initial-canvas-count="1"',
+    "admin single-canvas contract",
+  );
+  assertIncludes(
+    html,
+    'data-testid="admin-operator-decision-canvas"',
+    "admin decision canvas",
+  );
+  assertIncludes(
+    html,
     'data-component="admin-command-activity"',
     "admin command activity component",
   );
@@ -1307,8 +1327,8 @@ async function proveRenderedAdminSurface(bundle) {
   assertIncludes(html, 'data-testid="admin-setup-create-game"', "admin create-game setup");
   assertIncludes(
     html,
-    'data-testid="admin-boundary-session-grants"',
-    "admin session-grant boundary",
+    'data-testid="admin-inbox-task-setup-session-grants"',
+    "admin session-grant inbox task",
   );
   assertIncludes(
     html,
@@ -1346,6 +1366,10 @@ async function proveRenderedAdminSurface(bundle) {
       adminReadinessTestId(id),
     ),
     setupTestId: "admin-setup-create-game",
+    inboxTestId: "admin-operator-inbox",
+    inboxMode: "exception-inbox-decision-canvas",
+    initialCanvasCount: 1,
+    decisionCanvasTestId: "admin-operator-decision-canvas",
     auditLinkTestId: "admin-audit-link-proof-runs",
     auditInspectHref: "/admin/audit/proof-runs?game=midsummer",
     auditBoundaryTestId: "admin-audit-boundary-proof-runs",

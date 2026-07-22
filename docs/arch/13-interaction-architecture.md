@@ -11,8 +11,10 @@ different cognitive jobs. Visual primitives are shared; page composition is not.
   canvas.
 - Game setup is a guided workflow with a purpose-built roster editor inside the
   roster and role steps.
-- Administrative pages may use dashboards because scanning system state is their
-  primary job.
+- Public game pages are reading publications: a compact masthead followed by a
+  stable-width public record.
+- Administration is an exception inbox with one decision canvas. Dashboard-like
+  scanning is reserved for secondary evidence and diagnostic drilldowns.
 
 This replaces the earlier practice of composing every projection, receipt,
 checkpoint, and available command into a permanent card stack.
@@ -80,6 +82,24 @@ blocked readiness checks into correction links that select the stage where the
 problem can be fixed. Starting the game remains an explicit,
 consequence-previewed confirmation.
 
+## Public game publication
+
+The public game route is a publication rather than a reduced player dashboard.
+Its masthead states record status, phase, and post count; the main thread follows
+immediately in a stable 760px reading measure. Posts rely on typography and
+rhythm instead of card containers. Watching and reporting remain available but
+do not compete with reading. Private-channel and role-data exclusions appear as
+publication provenance after the record, not as permanent warning chrome.
+
+## Admin operator inbox
+
+The admin overview is an exception-led inbox with a compact work queue and one
+selected decision canvas. Interrupted commands and failing checks move ahead of
+routine setup, recovery, and current evidence. Routine actions remain available
+when no exception exists. Recovery controls, healthy system checks, recent
+activity, and escalation context live in closed secondary drawers; audit detail
+routes remain the durable place for evidence review.
+
 ## Responsive rules
 
 - Phone: one compact app bar, a full-width reading lane, and a bottom action dock.
@@ -109,6 +129,10 @@ gesture. Document order remains useful without client-side enhancement.
 - Desktop width does not increase the number of initially visible status panels.
 - The host first viewport contains the highest-priority task, its consequence,
   and its primary action.
+- The public game thread starts within 420px on phone and 390px on desktop, uses
+  at most a 760px reading measure, and contains no panel-card stack.
+- The admin overview renders one decision canvas, with its queue stacked below
+  820px and beside the canvas above that breakpoint.
 - Proof lanes exercise player and host tasks rather than requiring legacy panel
   topology.
 
@@ -120,4 +144,5 @@ gesture. Document order remains useful without client-side enhancement.
    canvas.
 3. Convert setup to the guided workflow. Complete.
 4. Reassess public and admin surfaces independently; do not force either through
-   the gameplay composition.
+   the gameplay composition. Complete: public uses a publication, admin uses an
+   exception inbox.

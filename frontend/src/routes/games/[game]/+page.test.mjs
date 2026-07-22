@@ -20,6 +20,8 @@ test("public game route exposes only canonical public thread data", async () => 
   assert.equal(data.publicGame.status, "ready");
   assert.equal(data.publicGame.posts[0].body, "Public signal");
   assert.equal(data.shell.activeSurface, "board");
+  assert.equal(data.publication.root.data.mode, "reading-publication");
+  assert.equal(data.publication.readingLane.postCountLabel, "1 public post");
 });
 
 test("signed-in public game report maps only the canonical public post target", async () => {

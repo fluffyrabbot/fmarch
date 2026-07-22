@@ -1,15 +1,20 @@
 import { fail } from "@sveltejs/kit";
 import { buildAppShell } from "../../../lib/app/app-shell-model.mjs";
-import { buildAppSurfaceHeaderViewModel } from "../../../lib/app/app-surface-header-model.mjs";
 import { SESSION_COOKIE_NAME } from "../../../lib/server/session-capabilities.mjs";
+import { buildPublicGamePublication } from "./public-game-publication.mjs";
 
 export async function load({ params, locals, cookies, fetch, url }) {
   const apiBaseUrl = process.env.FMARCH_API_BASE_URL ?? "";
   const search = new URLSearchParams({ limit: "50" });
   const beforeSeq = optionalSequence(url.searchParams.get("before_seq"));
   if (beforeSeq !== null) search.set("before_seq", beforeSeq);
-  const response = await fetch(`${apiBaseUrl}/games/${encodeURIComponent(params.game)}?${search}`);
-  const page = response.ok ? await response.json().catch(() => null) : null;
+  const fixtureMode = process.env.FMARCH_FRONTEND_FIXTURE_SESSION === "1";
+  const response = fixtureMode && apiBaseUrl === ""
+    ? null
+    : await fetch(`${apiBaseUrl}/games/${encodeURIComponent(params.game)}?${search}`);
+  const page = fixtureMode && apiBaseUrl === ""
+    ? fixturePublicGame(params.game)
+    : response.ok ? await response.json().catch(() => null) : null;
   const available = page !== null && typeof page === "object";
   const subscription = available
     ? await loadSubscription({ cookies, fetch, apiBaseUrl, game: params.game })
@@ -21,13 +26,9 @@ export async function load({ params, locals, cookies, fetch, url }) {
       principalUserId: locals.principalUserId,
       capabilities: locals.resolvedCapabilities,
     }),
-    surfaceHeader: buildAppSurfaceHeaderViewModel({
-      surface: "board",
-      eyebrow: "Public game",
-      title: available ? `${page.game.pack} game` : "Game unavailable",
-      summary: available
-        ? "Public main-thread archive. Private channels and role data are excluded."
-        : "This game is not active, completed, or publicly available.",
+    publication: buildPublicGamePublication({
+      game: available ? page.game : null,
+      posts: page?.posts,
     }),
     publicGame: {
       status: available ? "ready" : "unavailable",
@@ -136,4 +137,15 @@ function optionalSequence(value) {
 
 function text(value) {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function fixturePublicGame(game) {
+  return Object.freeze({
+    game: Object.freeze({ game, pack: "mafiascum", status: "active", phase_id: "D02" }),
+    posts: Object.freeze([
+      Object.freeze({ source_seq: 42, author_slot: "slot_2", author_user: "Ilya", body: "The public record stays readable when the game gets complicated.", occurred_at: 1784707200 }),
+      Object.freeze({ source_seq: 41, author_slot: "slot_7", author_user: "Mira", body: "One conversation, in chronological context.", occurred_at: 1784703600 }),
+    ]),
+    next_before_seq: 41,
+  });
 }

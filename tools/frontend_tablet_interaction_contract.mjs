@@ -361,27 +361,32 @@ function assertPlayerReadingOrder(source) {
 }
 
 function proveAdminOperatorSurfaceCss({ route, setupComponent, recoveryComponent }) {
-  assert.match(route, /data-control-rail-mode=\{ADMIN_SURFACE_CONTRACT\.operatorRailMode\}/s);
+  assert.match(route, /data-inbox-mode=\{operatorInbox\.root\.data\.mode\}/s);
+  assert.match(route, /data-initial-canvas-count=\{operatorInbox\.root\.data\.initialCanvasCount\}/s);
+  assert.match(route, /data-testid=\{operatorInbox\.queue\.testId\}/s);
+  assert.match(route, /data-testid=\{operatorInbox\.canvas\.testId\}/s);
   assertAdminActionTilesReserveStatusFloor(setupComponent, "admin setup");
   assertAdminActionTilesReserveStatusFloor(recoveryComponent, "admin recovery");
-  assertAdminOperatorRailBeforeStatusReadouts(route);
+  assertAdminDecisionCanvasBeforeStatusReadouts(route);
   assert.match(
     route,
-    /\.admin-surface__operator-actions\s*\{[^}]*position:\s*static;/s,
+    /\.admin-operator-inbox\s*\{[^}]*grid-template-columns:\s*260px minmax\(0,\s*1fr\);/s,
   );
   assert.match(
     route,
-    /\.admin-surface__operator-actions\s*\{[^}]*overflow:\s*visible;/s,
+    /@media \(max-width:\s*820px\)[\s\S]*?\.admin-operator-inbox\s*\{[^}]*grid-template-columns:\s*1fr;/s,
   );
+  assert.match(route, /\.admin-operator-inbox__tasks\s*\{[^}]*display:\s*flex;[^}]*overflow-x:\s*auto;/s);
 
   return {
-    controlRailMode: "flow-admin-operator-actions",
-    stickyTopPx: 0,
+    controlRailMode: "exception-inbox-decision-canvas",
+    stickyTopPx: null,
     topbarOffsetPx: APP_SHELL_CONTRACT.topbarBlockSizePx,
     safeAreaAware: false,
     internalScroll: false,
-    overscroll: "visible",
-    unstickBelowPx: 0,
+    overscroll: "document",
+    unstickBelowPx: 820,
+    initialCanvasCount: 1,
     setupAndRecoveryBeforeStatusReadouts: true,
     actionTileStabilityMode: "reserved-status-floor",
     actionTileStatusFloorMinBlockSizePx: 44,
@@ -414,7 +419,7 @@ function assertAdminActionTilesReserveStatusFloor(component, label) {
   );
 }
 
-function assertAdminOperatorRailBeforeStatusReadouts(source) {
+function assertAdminDecisionCanvasBeforeStatusReadouts(source) {
   const setupIndex = source.indexOf("<AdminSetupGrid");
   const recoveryIndex = source.indexOf("<AdminRecoveryPanel");
   assert.notEqual(setupIndex, -1, "admin route must render AdminSetupGrid");
@@ -584,8 +589,6 @@ async function proveThumbZonePlacement(bundle) {
           zone: ADMIN_SURFACE_CONTRACT.setupThumbZone,
           requiredDescendants: [
             { kind: "testId", value: "admin-command-trigger-create-game" },
-            { kind: "testId", value: "admin-command-trigger-session-grants" },
-            { kind: "testId", value: "admin-command-trigger-cohost" },
           ],
         },
         {

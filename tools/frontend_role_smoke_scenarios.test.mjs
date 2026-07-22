@@ -6,6 +6,8 @@ import {
   forbiddenRoutes,
   hostSetupScenario,
   navFocusCoverage,
+  publicGameScenario,
+  publicationViewports,
   routeStateScenarios,
   roles,
   setupViewports,
@@ -37,6 +39,21 @@ test("role smoke scenario matrix covers tablet-first acceptance viewports", () =
     ],
   );
   assert.equal(viewports.every(Object.isFrozen), true);
+});
+
+test("public game scenario pins publication density across responsive viewports", () => {
+  assert.deepEqual(
+    publicationViewports.map((viewport) => [viewport.name, viewport.width, viewport.height]),
+    [["mobile", 390, 844], ["tablet", 1024, 768], ["desktop", 1440, 920]],
+  );
+  assert.equal(publicGameScenario.publicationMode, "reading-publication");
+  assert.deepEqual(publicGameScenario.postIds, [42, 41]);
+  assert.deepEqual(publicGameScenario.threadStartBudgetPx, {
+    mobile: 420,
+    tablet: 380,
+    desktop: 390,
+  });
+  assert.equal(publicGameScenario.maxReadingMeasurePx, 760);
 });
 
 test("host setup scenario pins mobile stacking and workbench route identity", () => {
