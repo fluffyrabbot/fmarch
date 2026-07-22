@@ -1,9 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { load } from "./artifact/+page.server.js";
+import { load as loadDevArtifact } from "../_dev/ops/artifact/+page.server.js";
+import { load as loadProductionArtifact } from "./artifact/+page.server.js";
 
-test("admin artifact load reads local dev-test-game JSON proof artifacts", async () => {
-  const data = await load({
+process.env.FMARCH_FRONTEND_FIXTURE_SESSION = "1";
+
+test("dev proof explorer reads local dev-test-game JSON proof artifacts", async () => {
+  const data = await loadDevArtifact({
     locals: {
       resolvedCapabilities: [{ kind: "GlobalAdmin" }],
     },
@@ -20,8 +23,8 @@ test("admin artifact load reads local dev-test-game JSON proof artifacts", async
   assert.match(data.artifact.contents, /target\/dev-test-game\/next-action\.json/);
 });
 
-test("admin artifact load accepts global moderation authority", async () => {
-  const data = await load({
+test("dev proof explorer accepts global moderation authority", async () => {
+  const data = await loadDevArtifact({
     locals: {
       resolvedCapabilities: [{ kind: "GlobalMod" }],
     },
@@ -36,10 +39,10 @@ test("admin artifact load accepts global moderation authority", async () => {
   );
 });
 
-test("admin artifact load rejects game-scoped authority and non-proof paths", async () => {
+test("dev proof explorer rejects game-scoped authority and non-proof paths", async () => {
   await assert.rejects(
     async () =>
-      await load({
+      await loadDevArtifact({
         locals: {
           resolvedCapabilities: [{ kind: "HostOf", game: "midsummer" }],
         },
@@ -51,7 +54,7 @@ test("admin artifact load rejects game-scoped authority and non-proof paths", as
   );
   await assert.rejects(
     async () =>
-      await load({
+      await loadDevArtifact({
         locals: {
           resolvedCapabilities: [{ kind: "GlobalAdmin" }],
         },
@@ -60,5 +63,12 @@ test("admin artifact load rejects game-scoped authority and non-proof paths", as
         ),
       }),
     (err) => err.status === 400,
+  );
+});
+
+test("production admin artifact route does not expose local files", async () => {
+  await assert.rejects(
+    async () => await loadProductionArtifact(),
+    (err) => err.status === 404,
   );
 });

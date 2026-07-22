@@ -1,70 +1,28 @@
-import { error, fail } from "@sveltejs/kit";
+import { error, fail, redirect } from "@sveltejs/kit";
 import { operatorProofRunUrl } from "../../lib/app/cold-load.mjs";
 import { resolveFixtureRouteState } from "../../lib/app/app-route-state-model.mjs";
 import { serverApiBaseUrl } from "../../lib/server/api-base.mjs";
-import {
-  readLocalBackupRestoreProof,
-  readLocalAdminSpineProof,
-  readLocalAdminSpineTerminalBatches,
-  readLocalDevTestGameProofRun,
-  readLocalHostedConcurrentRaceMatrix,
-  readLocalHostedEvidenceLane,
-  readLocalHostedEvidenceLaneDemoProof,
-  readLocalHostedIdentityEvidence,
-  readLocalHostedOpsSignals,
-  readLocalRealHostedObservabilityHandoff,
-  readLocalHostedTargetPreflight,
-  readLocalIdentityAdapterProof,
-  readLocalNextAction,
-  readLocalOpsArtifacts,
-  readLocalProofGraph,
-  readLocalRaceCoverage,
-  readLocalReleaseReadinessChecklist,
-  readLocalReleaseRunbook,
-  readLocalSeedFixtureSummary,
-  readLocalSpineManifest,
-  readLocalProofFreshness,
-} from "../../lib/server/local-ops-artifacts.mjs";
 import { SESSION_COOKIE_NAME } from "../../lib/server/session-capabilities.mjs";
 import {
   adminForbiddenMessage,
-  buildAdminRouteData,
+  buildAdminRuntimeRouteData,
   summarizeRecoveryGate,
-} from "./admin-route-model.mjs";
+} from "./admin-runtime-route-model.mjs";
 
 export async function load({ cookies, locals, fetch, url }) {
+  if (typeof locals.principalUserId !== "string" || locals.principalUserId.trim() === "") {
+    throw redirect(303, loginHref(url));
+  }
   const apiBaseUrl = serverApiBaseUrl();
   const fixtureMode = process.env.FMARCH_FRONTEND_FIXTURE_SESSION === "1";
-  const data = await buildAdminRouteData({
+  const data = await buildAdminRuntimeRouteData({
     principalUserId: locals.principalUserId,
     capabilities: locals.resolvedCapabilities,
-    game: url.searchParams.get("game") ?? "midsummer",
+    game: optionalGame(url.searchParams.get("game")),
     fetchImpl: fixtureMode && apiBaseUrl === "" ? null : fetch,
     apiBaseUrl,
     sessionToken: cookies?.get?.(SESSION_COOKIE_NAME) ?? null,
     identityPrincipalUserId: url.searchParams.get("identity_principal_user_id") ?? "host_h",
-    proofRun: await readLocalDevTestGameProofRun(),
-    opsArtifacts: await readLocalOpsArtifacts(),
-    seedFixtureSummary: await readLocalSeedFixtureSummary(),
-    releaseReadinessChecklist: await readLocalReleaseReadinessChecklist(),
-    releaseRunbook: await readLocalReleaseRunbook(),
-    backupRestoreProof: await readLocalBackupRestoreProof(),
-    identityAdapterProof: await readLocalIdentityAdapterProof(),
-    spineManifest: await readLocalSpineManifest(),
-    adminSpineProof: await readLocalAdminSpineProof(),
-    adminSpineTerminalBatches: await readLocalAdminSpineTerminalBatches(),
-    proofGraph: await readLocalProofGraph(),
-    raceCoverage: await readLocalRaceCoverage(),
-    hostedConcurrentRaceMatrix: await readLocalHostedConcurrentRaceMatrix(),
-    hostedEvidenceLane: await readLocalHostedEvidenceLane(),
-    hostedEvidenceLaneDemoProof: await readLocalHostedEvidenceLaneDemoProof(),
-    hostedIdentityEvidence: await readLocalHostedIdentityEvidence(),
-    hostedOpsSignals: await readLocalHostedOpsSignals(),
-    realHostedObservabilityHandoff:
-      await readLocalRealHostedObservabilityHandoff(),
-    hostedTargetPreflight: await readLocalHostedTargetPreflight(),
-    nextAction: await readLocalNextAction(),
-    proofFreshness: await readLocalProofFreshness(),
   });
 
   if (!data.access.allowed) {
@@ -80,6 +38,15 @@ export async function load({ cookies, locals, fetch, url }) {
       fixtureMode,
     }),
   };
+}
+
+function optionalGame(value) {
+  return typeof value === "string" && value.trim() !== "" ? value.trim() : null;
+}
+
+function loginHref(url) {
+  const returnTo = `${url.pathname}${url.search}`;
+  return `/auth/login?returnTo=${encodeURIComponent(returnTo)}`;
 }
 
 export const actions = {

@@ -7716,6 +7716,25 @@ test("admin load rejects game-scoped host authority", async () => {
   );
 });
 
+test("admin load redirects signed-out visitors to account login", async () => {
+  await assert.rejects(
+    async () =>
+      await load({
+        locals: {
+          principalUserId: null,
+          resolvedCapabilities: [],
+        },
+        url: new URL("http://localhost/admin?game=midsummer"),
+        fetch: async () => {
+          throw new Error("signed-out admin load must not call the API");
+        },
+      }),
+    (err) =>
+      err.status === 303 &&
+      err.location === "/auth/login?returnTo=%2Fadmin%3Fgame%3Dmidsummer",
+  );
+});
+
 function jsonResponse(body, { ok = true, status = 200 } = {}) {
   return {
     ok,

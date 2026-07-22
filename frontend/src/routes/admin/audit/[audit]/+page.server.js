@@ -1,71 +1,22 @@
 import { error, fail } from "@sveltejs/kit";
 import { serverApiBaseUrl } from "../../../../lib/server/api-base.mjs";
-import {
-  readLocalBackupRestoreProof,
-  readLocalAdminSpineProof,
-  readLocalAdminSpineTerminalBatches,
-  readLocalDevTestGameProofRun,
-  readLocalHostedConcurrentRaceMatrix,
-  readLocalHostedEvidenceLane,
-  readLocalHostedEvidenceLaneDemoProof,
-  readLocalHostedIdentityEvidence,
-  readLocalHostedIdentityProgressionSummary,
-  readLocalHostedOpsSignals,
-  readLocalRealHostedObservabilityHandoff,
-  readLocalHostedTargetPreflight,
-  readLocalIdentityAdapterProof,
-  readLocalNextAction,
-  readLocalOpsArtifacts,
-  readLocalProofGraph,
-  readLocalRaceCoverage,
-  readLocalReleaseReadinessChecklist,
-  readLocalReleaseRunbook,
-  readLocalSeedFixtureSummary,
-  readLocalSpineManifest,
-  readLocalProofFreshness,
-} from "../../../../lib/server/local-ops-artifacts.mjs";
 import { SESSION_COOKIE_NAME } from "../../../../lib/server/session-capabilities.mjs";
 import {
   adminForbiddenMessage,
-  buildAdminAuditDetailData,
-} from "../../admin-route-model.mjs";
+  buildAdminRuntimeAuditDetailData,
+} from "../../admin-runtime-route-model.mjs";
 
 export async function load({ cookies, locals, fetch, params, url }) {
   const apiBaseUrl = serverApiBaseUrl();
-  const fixtureMode = process.env.FMARCH_FRONTEND_FIXTURE_SESSION === "1";
-  const data = await buildAdminAuditDetailData({
+  const data = await buildAdminRuntimeAuditDetailData({
     audit: params.audit,
     principalUserId: locals.principalUserId,
     capabilities: locals.resolvedCapabilities,
-    game: url.searchParams.get("game") ?? "midsummer",
-    fetchImpl: fixtureMode && apiBaseUrl === "" ? null : fetch,
+    game: url.searchParams.get("game"),
+    fetchImpl: fetch,
     apiBaseUrl,
     sessionToken: cookies?.get?.(SESSION_COOKIE_NAME) ?? null,
     identityPrincipalUserId: url.searchParams.get("principal_user_id") ?? "host_h",
-    proofRun: await readLocalDevTestGameProofRun(),
-    opsArtifacts: await readLocalOpsArtifacts(),
-    seedFixtureSummary: await readLocalSeedFixtureSummary(),
-    releaseReadinessChecklist: await readLocalReleaseReadinessChecklist(),
-    releaseRunbook: await readLocalReleaseRunbook(),
-    backupRestoreProof: await readLocalBackupRestoreProof(),
-    identityAdapterProof: await readLocalIdentityAdapterProof(),
-    spineManifest: await readLocalSpineManifest(),
-    adminSpineProof: await readLocalAdminSpineProof(),
-    adminSpineTerminalBatches: await readLocalAdminSpineTerminalBatches(),
-    proofGraph: await readLocalProofGraph(),
-    raceCoverage: await readLocalRaceCoverage(),
-    hostedConcurrentRaceMatrix: await readLocalHostedConcurrentRaceMatrix(),
-    hostedEvidenceLane: await readLocalHostedEvidenceLane(),
-    hostedEvidenceLaneDemoProof: await readLocalHostedEvidenceLaneDemoProof(),
-    hostedIdentityEvidence: await readLocalHostedIdentityEvidence(),
-    hostedIdentityProgressionSummary:
-      await readLocalHostedIdentityProgressionSummary(),
-    hostedOpsSignals: await readLocalHostedOpsSignals(),
-    realHostedObservabilityHandoff:
-      await readLocalRealHostedObservabilityHandoff(),
-    hostedTargetPreflight: await readLocalHostedTargetPreflight(),
-    nextAction: await readLocalNextAction(),
-    proofFreshness: await readLocalProofFreshness(),
   });
 
   if (!data.access.allowed) {

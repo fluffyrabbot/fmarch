@@ -58,9 +58,17 @@ export const UI_WORKBENCH_GROUPS = Object.freeze([
       scenario({
         id: "admin",
         label: "Admin operations",
-        description: "Setup, authority, proof artifacts, recovery, and escalation posture.",
+        description: "Live setup, authority, recovery, and escalation posture.",
         token: "fixture-admin",
         path: "/admin?game=midsummer",
+        surface: "admin",
+      }),
+      scenario({
+        id: "admin-proof-explorer",
+        label: "Local proof explorer",
+        description: "Filesystem-backed proof artifacts and development diagnostics.",
+        token: "fixture-admin",
+        path: "/_dev/ops?game=midsummer",
         surface: "admin",
       }),
     ]),
