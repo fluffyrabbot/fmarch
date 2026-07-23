@@ -133,6 +133,24 @@ export function normalizeHostSetupState(raw, { game }) {
           themeRef: normalizeOptionalText(document.theme_ref),
           contentHash: normalizeId(option.content_hash, "program_catalog.content_hash"),
           eventCount: Array.isArray(document.events) ? document.events.length : 0,
+          compatibility: Object.freeze({
+            attachable: option.compatibility?.attachable === true,
+            issues: Object.freeze(
+              (Array.isArray(option.compatibility?.issues)
+                ? option.compatibility.issues
+                : []
+              ).map((issue) =>
+                Object.freeze({
+                  code: normalizeId(issue.code, "program_catalog.compatibility.issue.code"),
+                  eventId: normalizeOptionalText(issue.event_id),
+                  message: normalizeId(
+                    issue.message,
+                    "program_catalog.compatibility.issue.message",
+                  ),
+                }),
+              ),
+            ),
+          }),
           document: deepFreeze(document),
         });
       }),
@@ -300,6 +318,10 @@ function hostSetupFixtureState({ game }) {
     program_catalog: Object.freeze([
       Object.freeze({
         content_hash: "0000000000000000000000000000000000000000000000000000000000000000",
+        compatibility: Object.freeze({
+          attachable: true,
+          issues: Object.freeze([]),
+        }),
         document: Object.freeze({
           id: "bakery",
           version: 1,

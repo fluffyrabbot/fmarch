@@ -44,6 +44,7 @@ use sha2::{Digest, Sha256};
 use sqlx::{postgres::PgPool, Postgres, Row, Transaction};
 use uuid::Uuid;
 
+pub mod day_program;
 mod model;
 pub mod operator_process;
 pub mod operator_proof;
@@ -1833,10 +1834,13 @@ async fn schedule_day_event(
     let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
     require_game_run(tx, &caps, game, CohostPermissionClass::DayEventOps).await?;
     event.validate().map_err(day_event_validation)?;
-    validate_materializable_day_event(&event)?;
     let pack = load_pack(&current_pack_name(tx, game).await?)?;
-    validate_day_event_reward_adapters(&pack, &event)
-        .map_err(|error| day_event_reject(error.to_string()))?;
+    let compatibility_issues = day_program::inspect_event(&pack, &event);
+    if !compatibility_issues.is_empty() {
+        return Err(day_event_reject(day_program::summarize_issues(
+            &compatibility_issues,
+        )));
+    }
     if projections::day_events(&mut **tx, game)
         .await?
         .iter()
@@ -1867,19 +1871,13 @@ async fn attach_day_program(
     require_game(tx, game).await?;
     let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
     require_game_run(tx, &caps, game, CohostPermissionClass::ProgramAttach).await?;
-    let content_hash = program.content_hash().map_err(day_program_validation)?;
-    let compiled = program.compile().map_err(day_program_validation)?;
     let pack = load_pack(&current_pack_name(tx, game).await?)?;
-    for event in &compiled {
-        validate_materializable_day_event(event).map_err(|error| {
-            Reject::DayProgramValidation(match error {
-                Reject::DayEventValidation(message) => message,
-                other => other.to_string(),
-            })
-        })?;
-        validate_day_event_reward_adapters(&pack, event)
-            .map_err(|error| Reject::DayProgramValidation(error.to_string()))?;
-    }
+    let compatibility = day_program::inspect(&pack, &program);
+    let compilation = compatibility
+        .into_compilation()
+        .map_err(|report| Reject::DayProgramValidation(report.summary()))?;
+    let content_hash = compilation.content_hash;
+    let compiled = compilation.events;
     if projections::day_programs(&mut **tx, game)
         .await?
         .iter()
@@ -1922,69 +1920,6 @@ async fn attach_day_program(
         )
     }));
     persist(tx, game, &events).await
-}
-
-fn validate_materializable_day_event(event: &game_platform::DayEvent) -> Result<(), Reject> {
-    if event.state != game_platform::DayEventState::Scheduled {
-        return Err(day_event_reject(
-            "materialized definitions must begin in scheduled state",
-        ));
-    }
-    if !matches!(event.schedule, game_platform::DayEventSchedule::HostOpened) {
-        return Err(day_event_reject(
-            "the minimal vertical supports HostOpened schedules only",
-        ));
-    }
-    if event.participation.mode != game_platform::ParticipationMode::OptIn {
-        return Err(day_event_reject(
-            "the minimal vertical supports OptIn participation only",
-        ));
-    }
-    if matches!(
-        event.participation.who,
-        game_platform::ParticipantFilter::HostInvited
-            | game_platform::ParticipantFilter::ChannelMembers
-    ) {
-        return Err(day_event_reject(
-            "the minimal vertical supports AliveSlots or AllOccupied participants",
-        ));
-    }
-    if matches!(
-        event.phase_scope,
-        game_platform::PhaseScope::ExplicitWindow { .. }
-    ) {
-        return Err(day_event_reject(
-            "explicit DayEvent windows require the scheduling slice",
-        ));
-    }
-    Ok(())
-}
-
-fn validate_day_event_reward_adapters(
-    pack: &domain::Pack,
-    event: &game_platform::DayEvent,
-) -> Result<(), Reject> {
-    for reward in &event.rewards {
-        for effect in &reward.effects {
-            match &effect.operation {
-                game_platform::EffectOperationTemplate::Mark { effect }
-                | game_platform::EffectOperationTemplate::Clear { effect } => {
-                    persistent_effect_policy(pack, effect.as_str())?;
-                }
-                game_platform::EffectOperationTemplate::Grant { grant } => {
-                    validate_platform_grant(pack, grant)?;
-                }
-                game_platform::EffectOperationTemplate::SetSlotLifecycle { .. } => {}
-                game_platform::EffectOperationTemplate::RevealAlignment
-                | game_platform::EffectOperationTemplate::RevealRole => {
-                    return Err(effect_spec_reject(
-                        "reveal adapters are not part of the persistent PR3 catalog",
-                    ));
-                }
-            }
-        }
-    }
-    Ok(())
 }
 
 async fn open_day_event(
@@ -2340,10 +2275,6 @@ fn day_event_validation(error: game_platform::ModelError) -> Reject {
     day_event_reject(error.to_string())
 }
 
-fn day_program_validation(error: game_platform::ModelError) -> Reject {
-    Reject::DayProgramValidation(error.to_string())
-}
-
 fn day_event_reject(message: impl Into<String>) -> Reject {
     Reject::DayEventValidation(message.into())
 }
@@ -2368,18 +2299,8 @@ fn persistent_effect_policy<'a>(
     pack: &'a domain::Pack,
     effect: &str,
 ) -> Result<&'a domain::pack::EffectPolicy, Reject> {
-    let policy = pack.effects.get(effect).ok_or_else(|| {
-        effect_spec_reject(format!(
-            "effect `{effect}` is not declared by pack `{}`",
-            pack.name
-        ))
-    })?;
-    if policy.duration != domain::EffectDuration::Persistent {
-        return Err(effect_spec_reject(format!(
-            "effect `{effect}` is resolution-scoped and cannot be injected persistently"
-        )));
-    }
-    Ok(policy)
+    day_program::persistent_effect_policy(pack, effect)
+        .map_err(|issue| effect_spec_reject(issue.message))
 }
 
 fn platform_grant_kind(kind: game_platform::GrantKind) -> domain::GrantKind {
@@ -2402,37 +2323,8 @@ fn validate_platform_grant(
     pack: &domain::Pack,
     grant: &game_platform::GrantSpec,
 ) -> Result<(), Reject> {
-    match grant.kind {
-        game_platform::GrantKind::ExtraAction => Ok(()),
-        game_platform::GrantKind::Item
-            if pack.item_actions.contains_key(grant.grant_id.as_str()) =>
-        {
-            Ok(())
-        }
-        game_platform::GrantKind::Item => Err(effect_spec_reject(format!(
-            "item grant `{}` is not declared by pack `{}`",
-            grant.grant_id.as_str(),
-            pack.name
-        ))),
-        game_platform::GrantKind::VoteWeight => {
-            let supported = match &pack.vote.weights {
-                domain::pack::WeightPolicy::Dynamic(policy) => policy
-                    .grant_rules
-                    .iter()
-                    .any(|rule| rule.grant_id == grant.grant_id.as_str()),
-                _ => false,
-            };
-            if supported {
-                Ok(())
-            } else {
-                Err(effect_spec_reject(format!(
-                    "vote-weight grant `{}` is not declared by pack `{}` dynamic vote policy",
-                    grant.grant_id.as_str(),
-                    pack.name
-                )))
-            }
-        }
-    }
+    day_program::validate_platform_grant(pack, grant)
+        .map_err(|issue| effect_spec_reject(issue.message))
 }
 
 async fn host_fiat_grant_audience(

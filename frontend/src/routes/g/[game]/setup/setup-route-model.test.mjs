@@ -151,6 +151,57 @@ test("host setup readiness blocks StartGame until slots have occupants and roles
   );
 });
 
+test("host setup preserves pack-derived program compatibility diagnostics", () => {
+  const setupState = normalizeHostSetupState(
+    {
+      game,
+      created: true,
+      pack: {
+        key: "default_open",
+        name: "Default Open",
+        valid: true,
+        role_keys: [],
+        start_phase_options: ["D01"],
+      },
+      program_catalog: [
+        {
+          content_hash: "a".repeat(64),
+          compatibility: {
+            attachable: false,
+            issues: [
+              {
+                code: "undeclared_persistent_effect",
+                event_id: "bakery-cookie-d1",
+                message: "effect `bomb` is not declared by pack `default_open`",
+              },
+            ],
+          },
+          document: {
+            id: "bakery",
+            version: 1,
+            display_name: "Bakery",
+            theme_ref: "theme.bakery",
+            events: [],
+          },
+        },
+      ],
+      attached_programs: [],
+      slots: [],
+      post_policies: [{ channel_id: "main", allow_media_only: false }],
+    },
+    { game },
+  );
+
+  assert.equal(setupState.programCatalog[0].compatibility.attachable, false);
+  assert.deepEqual(setupState.programCatalog[0].compatibility.issues, [
+    {
+      code: "undeclared_persistent_effect",
+      eventId: "bakery-cookie-d1",
+      message: "effect `bomb` is not declared by pack `default_open`",
+    },
+  ]);
+});
+
 test("host setup state URL uses the authenticated gameplay boundary", () => {
   assert.equal(
     hostSetupStateUrl({

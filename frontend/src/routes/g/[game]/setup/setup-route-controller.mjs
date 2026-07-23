@@ -127,6 +127,9 @@ export function setupCommandConfigForAction({
       if (option === undefined) {
         throw new TypeError(`unknown day program: ${programId}`);
       }
+      if (option.compatibility?.attachable !== true) {
+        throw new TypeError(`day program is incompatible with ${setupState.pack.key}: ${programId}`);
+      }
       return Object.freeze({
         action: "attach_day_program",
         game,

@@ -8058,6 +8058,20 @@ pub struct HostSetupStateResponse {
 pub struct HostSetupProgramOption {
     pub document: game_platform::DayProgram,
     pub content_hash: String,
+    pub compatibility: HostSetupProgramCompatibility,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HostSetupProgramCompatibility {
+    pub attachable: bool,
+    pub issues: Vec<HostSetupProgramCompatibilityIssue>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HostSetupProgramCompatibilityIssue {
+    pub code: String,
+    pub event_id: Option<String>,
+    pub message: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -8564,7 +8578,7 @@ async fn load_host_setup_state(
 ) -> Result<HostSetupStateResponse, ApiError> {
     let pack_key = pack_name_for_game(state, game).await?;
     let pack = load_pack_by_name(&pack_key)?;
-    let program_catalog = product_day_program_catalog()?;
+    let program_catalog = product_day_program_catalog(&pack)?;
     let attached_programs = projections::day_programs(&state.pool, game)
         .await?
         .into_iter()
@@ -8698,7 +8712,9 @@ fn load_pack_by_name(pack_name: &str) -> Result<domain::Pack, ApiError> {
     })
 }
 
-fn product_day_program_catalog() -> Result<Vec<HostSetupProgramOption>, ApiError> {
+fn product_day_program_catalog(
+    pack: &domain::Pack,
+) -> Result<Vec<HostSetupProgramOption>, ApiError> {
     let root = FsPath::new(env!("CARGO_MANIFEST_DIR")).join("../../programs");
     let entries = std::fs::read_dir(&root).map_err(|err| ApiError::Reject {
         status: StatusCode::INTERNAL_SERVER_ERROR,
@@ -8730,17 +8746,37 @@ fn product_day_program_catalog() -> Result<Vec<HostSetupProgramOption>, ApiError
                 error: RejectCode::Internal,
                 message: format!("decode day program {}: {err}", path.display()),
             })?;
-        let content_hash = document
-            .content_hash()
-            .map_err(|err| ApiError::Reject {
+        let compatibility = commands::day_program::inspect(pack, &document);
+        let content_hash = compatibility
+            .compilation
+            .as_ref()
+            .ok_or_else(|| ApiError::Reject {
                 status: StatusCode::INTERNAL_SERVER_ERROR,
                 error: RejectCode::Internal,
-                message: format!("validate day program {}: {err}", path.display()),
+                message: format!(
+                    "validate day program {}: {}",
+                    path.display(),
+                    compatibility.summary()
+                ),
             })?
+            .content_hash
             .to_string();
+        let compatibility = HostSetupProgramCompatibility {
+            attachable: compatibility.attachable(),
+            issues: compatibility
+                .issues
+                .into_iter()
+                .map(|issue| HostSetupProgramCompatibilityIssue {
+                    code: issue.code.as_str().to_string(),
+                    event_id: issue.event_id,
+                    message: issue.message,
+                })
+                .collect(),
+        };
         programs.push(HostSetupProgramOption {
             document,
             content_hash,
+            compatibility,
         });
     }
     programs.sort_by(|left, right| {
@@ -8751,6 +8787,47 @@ fn product_day_program_catalog() -> Result<Vec<HostSetupProgramOption>, ApiError
             .then(left.document.version.cmp(&right.document.version))
     });
     Ok(programs)
+}
+
+#[cfg(test)]
+mod day_program_catalog_tests {
+    use super::*;
+
+    #[test]
+    fn setup_catalog_annotates_compatibility_for_every_product_pack() {
+        let expected = BTreeMap::from([
+            ("chinese_structured", false),
+            ("default_open", false),
+            ("epicmafia", false),
+            ("mafia_universe", true),
+            ("mafiascum", true),
+        ]);
+        let product_packs = product_pack_catalog().unwrap();
+        assert_eq!(
+            product_packs
+                .iter()
+                .map(|pack| pack.key.as_str())
+                .collect::<BTreeSet<_>>(),
+            expected.keys().copied().collect(),
+            "every newly shipped pack must declare the expected catalog compatibility"
+        );
+        for product_pack in product_packs {
+            let pack_key = product_pack.key;
+            let expected_attachable = expected[pack_key.as_str()];
+            let pack = load_pack_by_name(&pack_key).unwrap();
+            let catalog = product_day_program_catalog(&pack).unwrap();
+            let bakery = catalog
+                .iter()
+                .find(|option| option.document.id.as_str() == "bakery")
+                .expect("bakery remains visible with derived compatibility");
+            assert_eq!(
+                bakery.compatibility.attachable, expected_attachable,
+                "unexpected setup availability for {pack_key}: {:?}",
+                bakery.compatibility.issues
+            );
+            assert_eq!(bakery.compatibility.issues.is_empty(), expected_attachable);
+        }
+    }
 }
 
 fn product_pack_catalog() -> Result<Vec<AdminGameBootstrapPack>, ApiError> {

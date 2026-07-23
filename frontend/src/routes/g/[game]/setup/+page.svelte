@@ -44,6 +44,7 @@
   $: programOptions = setupState.programCatalog;
   $: attachableProgramOptions = programOptions.filter(
     (option) =>
+      option.compatibility.attachable &&
       !setupState.attachedPrograms.some(
         (attached) => attached.id === option.id && attached.version === option.version,
       ),
@@ -405,6 +406,16 @@
                         <h3>{option.displayName}</h3>
                       </div>
                       <p>{option.eventCount} event{option.eventCount === 1 ? "" : "s"}</p>
+                      {#if !option.compatibility.attachable}
+                        <div data-testid={`host-setup-program-incompatible-${option.id}-${option.version}`}>
+                          <strong>Unavailable for {setupState.pack.name}</strong>
+                          <ul>
+                            {#each option.compatibility.issues as issue}
+                              <li>{issue.eventId ? `${issue.eventId}: ` : ""}{issue.message}</li>
+                            {/each}
+                          </ul>
+                        </div>
+                      {/if}
                       <ul class="host-setup__checklist">
                         {#each option.document.events as event}
                           <li>

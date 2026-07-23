@@ -3098,6 +3098,8 @@ async fn host_setup_sequence_commits_to_setup_state(pool: sqlx::PgPool) {
     assert!(setup.program_catalog.iter().any(|option| {
         option.document == bakery_program
             && option.content_hash == bakery_program.content_hash().unwrap().as_str()
+            && option.compatibility.attachable
+            && option.compatibility.issues.is_empty()
     }));
     assert_eq!(setup.attached_programs.len(), 1);
     assert_eq!(setup.attached_programs[0].program_id, "bakery");

@@ -5061,6 +5061,51 @@ async fn day_program_attachment_compiles_atomically_and_preserves_generations(po
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+async fn incompatible_day_program_rejects_before_any_program_fact(pool: PgPool) {
+    let game = Uuid::new_v4();
+    handle(
+        &pool,
+        &user("host_h"),
+        Command::CreateGame {
+            game,
+            pack: "default_open".into(),
+            cohost_denied: vec![],
+        },
+    )
+    .await
+    .expect("create game");
+    let program: game_platform::DayProgram =
+        serde_json::from_str(include_str!("../../../programs/bakery.json")).unwrap();
+    let before: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM events WHERE stream_id = $1")
+        .bind(game)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+
+    let rejection = handle(
+        &pool,
+        &user("host_h"),
+        Command::AttachDayProgram { game, program },
+    )
+    .await
+    .expect_err("setup-visible incompatibility remains authoritative at command time");
+    assert!(matches!(
+        rejection,
+        Reject::DayProgramValidation(ref message)
+            if message.contains("bakery-cookie-d1")
+                && message.contains("not declared by pack `default_open`")
+    ));
+    let after: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM events WHERE stream_id = $1")
+        .bind(game)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(after, before);
+    assert!(day_programs(&pool, game).await.unwrap().is_empty());
+    assert!(day_events(&pool, game).await.unwrap().is_empty());
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
 async fn day_event_vertical_is_typed_atomic_rebuildable_and_engine_visible(pool: PgPool) {
     let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
     let event_id = game_platform::DayEventId::new("event-cookie").unwrap();

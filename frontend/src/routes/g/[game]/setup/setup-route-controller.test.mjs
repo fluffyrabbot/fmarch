@@ -22,8 +22,14 @@ const bakeryProgram = Object.freeze({
   events: Object.freeze([]),
 });
 const setupState = Object.freeze({
+  pack: Object.freeze({ key: "mafiascum" }),
   programCatalog: Object.freeze([
-    Object.freeze({ id: "bakery", version: 1, document: bakeryProgram }),
+    Object.freeze({
+      id: "bakery",
+      version: 1,
+      document: bakeryProgram,
+      compatibility: Object.freeze({ attachable: true, issues: Object.freeze([]) }),
+    }),
   ]),
 });
 
@@ -154,6 +160,32 @@ test("setup program sender dispatches the exact previewed document", async () =>
       program: bakeryProgram,
     },
   });
+});
+
+test("setup refuses a program the authoritative compiler marked incompatible", () => {
+  assert.throws(
+    () =>
+      setupCommandConfigForAction({
+        actionId: "attach-day-program",
+        data,
+        setupState: {
+          pack: { key: "default_open" },
+          programCatalog: [
+            {
+              id: "bakery",
+              version: 1,
+              document: bakeryProgram,
+              compatibility: {
+                attachable: false,
+                issues: [{ code: "undeclared_persistent_effect" }],
+              },
+            },
+          ],
+        },
+        formData: formData({ programId: "bakery@1" }),
+      }),
+    /day program is incompatible with default_open/,
+  );
 });
 
 test("setup state refresh bypasses cached browser state after command ack", async () => {
