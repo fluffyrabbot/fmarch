@@ -1731,6 +1731,16 @@ pub enum CapabilityGrant {
 }
 
 pub mod typescript {
+    use game_platform::{
+        ChannelId, ConcreteEffect, ContentRef, DayEvent, DayEventDecision, DayEventEvent,
+        DayEventId, DayEventResolutionMode, DayEventSchedule, DayEventState, DurationSeconds,
+        EffectOperationTemplate, EffectOrigin, EffectPlan, EffectVisibility, EventChannelPolicy,
+        GrantKind, GrantSpec, NarrativeTemplates, OptionId, ParticipantFilter, ParticipationLimits,
+        ParticipationMode, ParticipationPayload, ParticipationSpec, PhaseId, PhaseScope,
+        PrincipalId, ProgramId, ProgramTrigger, RecipientBindings, RecipientSelector,
+        RewardAssignment, RewardBinding, RewardEffectTemplate, RewardKey, SlotId,
+        SlotLifecycleEffect, Tag, TemplateKey, UnixSeconds,
+    };
     use ts_rs::TS;
 
     use crate::{
@@ -1756,6 +1766,47 @@ pub mod typescript {
 
     pub fn render() -> String {
         let mut out = String::from(HEADER);
+        push::<DayEventId>(&mut out);
+        push::<ProgramId>(&mut out);
+        push::<TemplateKey>(&mut out);
+        push::<RewardKey>(&mut out);
+        push::<SlotId>(&mut out);
+        push::<PhaseId>(&mut out);
+        push::<OptionId>(&mut out);
+        push::<Tag>(&mut out);
+        push::<ContentRef>(&mut out);
+        push::<ChannelId>(&mut out);
+        push::<PrincipalId>(&mut out);
+        push::<UnixSeconds>(&mut out);
+        push::<DurationSeconds>(&mut out);
+        push::<PhaseScope>(&mut out);
+        push::<ProgramTrigger>(&mut out);
+        push::<DayEventSchedule>(&mut out);
+        push::<DayEventState>(&mut out);
+        push::<DayEventResolutionMode>(&mut out);
+        push::<ParticipantFilter>(&mut out);
+        push::<ParticipationMode>(&mut out);
+        push::<ParticipationLimits>(&mut out);
+        push::<ParticipationSpec>(&mut out);
+        push::<ParticipationPayload>(&mut out);
+        push::<NarrativeTemplates>(&mut out);
+        push::<EventChannelPolicy>(&mut out);
+        push::<RecipientSelector>(&mut out);
+        push::<SlotLifecycleEffect>(&mut out);
+        push::<GrantKind>(&mut out);
+        push::<EffectVisibility>(&mut out);
+        push::<GrantSpec>(&mut out);
+        push::<EffectOperationTemplate>(&mut out);
+        push::<RewardEffectTemplate>(&mut out);
+        push::<RewardBinding>(&mut out);
+        push::<RecipientBindings>(&mut out);
+        push::<ConcreteEffect>(&mut out);
+        push::<EffectOrigin>(&mut out);
+        push::<EffectPlan>(&mut out);
+        push::<DayEvent>(&mut out);
+        push::<RewardAssignment>(&mut out);
+        push::<DayEventDecision>(&mut out);
+        push::<DayEventEvent>(&mut out);
         push::<VoteTarget>(&mut out);
         push::<HostPromptDecision>(&mut out);
         push::<SlotLifecycle>(&mut out);

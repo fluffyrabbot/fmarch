@@ -15,6 +15,7 @@
     "cargo:projections": { "kind": "shell", "command": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p projections -- --test-threads=1" },
     "cargo:caps": { "kind": "shell", "command": "cargo test -p caps" },
     "cargo:commands": { "kind": "shell", "command": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p commands -- --test-threads=1" },
+    "cargo:game-platform": { "kind": "shell", "command": "cargo test -p game_platform --all-features" },
     "cargo:wire": { "kind": "shell", "command": "cargo test -p wire" },
     "cargo:community": { "kind": "shell", "command": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p community -- --test-threads=1" },
     "cargo:identity": { "kind": "shell", "command": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p identity -- --test-threads=1" },
@@ -78,6 +79,13 @@
       "crate": "commands",
       "lanes": ["cargo:commands"],
       "capabilities": ["foundation.command-capability-runtime", "foundation.resolution-engine-parity"]
+    },
+    {
+      "id": "crate:game-platform",
+      "tier": "active",
+      "paths": ["crates/game_platform/"],
+      "crate": "game_platform",
+      "lanes": ["cargo:game-platform"]
     },
     {
       "id": "crate:wire",
