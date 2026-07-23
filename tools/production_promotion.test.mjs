@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   parseArguments,
   localProofRuntime,
+  railwayArguments,
   validateDeployment,
   validateDomainList,
   validateHostedVariables,
@@ -31,6 +32,20 @@ test("promotion proof preserves an explicit database or provisions the repo-loca
   assert.equal(local.startLocalPostgres, true);
   assert.equal(local.env.DATABASE_URL, "postgres://fmarch:fmarch@127.0.0.1:5544/fmarch");
   assert.equal(local.env.KEEP, "yes");
+});
+
+test("Railway commands use explicit project flags except after an explicit link", () => {
+  assert.deepEqual(railwayArguments("project-id", ["environment", "config", "--json"]), [
+    "environment",
+    "config",
+    "--json",
+    "--project",
+    "project-id",
+  ]);
+  assert.deepEqual(
+    railwayArguments("project-id", ["environment", "config", "--json"], { linked: true }),
+    ["environment", "config", "--json"],
+  );
 });
 
 test("repository state requires clean synchronized main and an ancestor release pointer", () => {

@@ -138,6 +138,10 @@ export function localProofRuntime(env) {
   };
 }
 
+export function railwayArguments(projectId, args, { linked = false } = {}) {
+  return linked ? args : [...args, "--project", projectId];
+}
+
 async function main() {
   const { checkOnly } = parseArguments(process.argv.slice(2));
   const config = runtimeConfig();
@@ -154,15 +158,32 @@ async function main() {
     productionIsAncestor,
   });
 
+  run("railway", [
+    "link",
+    "--project",
+    config.projectId,
+    "--environment",
+    config.stagingEnvironment,
+    "--json",
+  ]);
+
   const [stagingConfig, productionConfig] = await Promise.all([
-    railwayJson(config, ["environment", "config", "--environment", config.stagingEnvironment, "--json"]),
-    railwayJson(config, [
-      "environment",
-      "config",
-      "--environment",
-      config.productionEnvironment,
-      "--json",
-    ]),
+    railwayJson(
+      config,
+      ["environment", "config", "--environment", config.stagingEnvironment, "--json"],
+      { linked: true },
+    ),
+    railwayJson(
+      config,
+      [
+        "environment",
+        "config",
+        "--environment",
+        config.productionEnvironment,
+        "--json",
+      ],
+      { linked: true },
+    ),
   ]);
   validateServiceBranches(stagingConfig, "main", config);
   validateServiceBranches(productionConfig, "production", config);
@@ -307,8 +328,8 @@ async function latestDeployment(config, environment, service) {
   return deployments[0];
 }
 
-async function railwayJson(config, args) {
-  const output = execFileSync("railway", [...args, "--project", config.projectId], {
+async function railwayJson(config, args, options) {
+  const output = execFileSync("railway", railwayArguments(config.projectId, args, options), {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
   });
