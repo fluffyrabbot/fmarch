@@ -270,9 +270,6 @@ pub enum Command {
         event_id: game_platform::DayEventId,
         reason: String,
     },
-    /// Observe captured wall-clock and phase-trigger evidence, atomically
-    /// advancing every due DayEvent. Host-team until scheduler authority exists.
-    ObserveDayEventSchedules { game: Uuid, observed_at: i64 },
     /// Submit typed participation as the current slot occupant.
     SubmitDayEventParticipation {
         game: Uuid,

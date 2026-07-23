@@ -75,6 +75,7 @@
   let hostPrompts = data.hostPrompts;
   let hostTasks = data.hostTasks;
   let hostDayEvents = data.hostDayEvents;
+  let dayEventScheduler = data.dayEventScheduler;
   let moderatorActionGroups = data.moderatorActionGroups;
   let liveStatus = LIVE_PROJECTION_CONNECTING_STATUS;
   $: moderatorSurfaceEmpty = isModeratorRouteEmpty({
@@ -130,6 +131,7 @@
     hostPrompts = derived.hostPrompts;
     hostTasks = derived.hostTasks;
     hostDayEvents = derived.hostDayEvents;
+    dayEventScheduler = derived.dayEventScheduler;
     moderatorActionGroups = derived.moderatorActionGroups;
   });
 
@@ -316,6 +318,19 @@
   function recordCommandStatus(actionId, status) {
     commandStatuses = recordHostCommandStatus(commandStatuses, actionId, status);
   }
+
+  function schedulerTime(value) {
+    return typeof value === "number"
+      ? new Date(value * 1000).toISOString()
+      : "Not recorded";
+  }
+
+  function hasScheduleObservation(event) {
+    return (
+      event?.scheduleEvidence?.openObservedAt != null ||
+      event?.scheduleEvidence?.lockObservedAt != null
+    );
+  }
 </script>
 
 <svelte:head>
@@ -372,6 +387,46 @@
           />
 
           <HostWorkQueueStrip queues={workQueues} />
+
+          <section
+            class="fm-section"
+            data-testid="host-day-event-scheduler"
+            data-pending={dayEventScheduler?.pending === true}
+          >
+            <header>
+              <p class="fm-eyebrow">DayEvent automation</p>
+              <strong>
+                {dayEventScheduler?.pending
+                  ? "Schedule work pending"
+                  : "Scheduler caught up"}
+              </strong>
+            </header>
+            {#if dayEventScheduler}
+              <p data-testid="host-day-event-scheduler-health">
+                {dayEventScheduler.totalSuccesses}/{dayEventScheduler.totalAttempts}
+                successful observations · wake {dayEventScheduler.lastObservedWakeSeq}/{dayEventScheduler.wakeSeq}
+              </p>
+              <p>Next due: {schedulerTime(dayEventScheduler.nextDueAt)}</p>
+              {#if dayEventScheduler.lastError}
+                <p role="status">Retrying after: {dayEventScheduler.lastError}</p>
+              {/if}
+            {:else}
+              <p>No scheduled DayEvent work has been projected.</p>
+            {/if}
+            {#if hostDayEvents.some(hasScheduleObservation)}
+              <ul data-testid="host-day-event-schedule-evidence">
+                {#each hostDayEvents as event (event.eventId)}
+                  {#if hasScheduleObservation(event)}
+                    <li>
+                      <strong>{event.eventId}</strong>
+                      · opened {schedulerTime(event.scheduleEvidence?.openObservedAt)}
+                      · locked {schedulerTime(event.scheduleEvidence?.lockObservedAt)}
+                    </li>
+                  {/if}
+                {/each}
+              </ul>
+            {/if}
+          </section>
 
           <HostLifecycleControlCheckpoint
             checkpoint={hostLifecycleControlCheckpoint}

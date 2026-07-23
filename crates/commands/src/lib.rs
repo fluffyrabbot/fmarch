@@ -38,6 +38,7 @@ use domain::{
     IrAbility, Modifier, RoleModifier,
 };
 use eventstore::{ActorId, EventInput};
+use game_platform::day_schedule;
 use projections::{append_and_project_in_tx, audit_rebuild, ProjectionError};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
@@ -45,7 +46,7 @@ use sqlx::{postgres::PgPool, Postgres, Row, Transaction};
 use uuid::Uuid;
 
 pub mod day_program;
-pub mod day_schedule;
+pub mod day_scheduler;
 mod model;
 pub mod operator_process;
 pub mod operator_proof;
@@ -584,6 +585,45 @@ pub async fn handle(pool: &PgPool, principal: &Principal, command: Command) -> R
         .await
 }
 
+/// Execute one schedule observation under the sealed scheduler authority.
+///
+/// This boundary is intentionally separate from [`handle`]: no user principal
+/// can acquire scheduler authority and the network wire has no corresponding
+/// command. The game stream advisory lock remains the correctness boundary when
+/// multiple worker replicas race the same due game.
+pub async fn observe_day_event_schedules_as_scheduler(
+    pool: &PgPool,
+    game: Uuid,
+    observed_at: i64,
+) -> Result<Ack, Reject> {
+    let command_id = Uuid::new_v4();
+    let mut tx = pool
+        .begin()
+        .await
+        .map_err(|error| Reject::Internal(error.to_string()))?;
+    eventstore::lock_stream_in_tx(&mut tx, game)
+        .await
+        .map_err(|error| Reject::Internal(error.to_string()))?;
+    require_game_not_completed(&mut tx, game).await?;
+    let audit_context = CommandAuditContext {
+        principal_user_id: "service:day-event-scheduler".to_string(),
+        command_id,
+        command_kind: "ObserveDayEventSchedules".to_string(),
+        authority_used: format!("DayEventScheduler({game})"),
+        request_source: "day_event_scheduler",
+    };
+    let ack = COMMAND_AUDIT_CONTEXT
+        .scope(
+            audit_context,
+            observe_day_event_schedules_in_tx(&mut tx, game, observed_at),
+        )
+        .await?;
+    tx.commit()
+        .await
+        .map_err(|error| Reject::Internal(error.to_string()))?;
+    Ok(ack)
+}
+
 /// Handle a network command with durable idempotency. If `(principal,
 /// command_id)` has already committed, return the original ack without
 /// revalidating against current state or appending new events. Reusing that id
@@ -798,9 +838,6 @@ async fn handle_command(
             event_id,
             reason,
         } => cancel_day_event(tx, principal, game, event_id, reason).await,
-        Command::ObserveDayEventSchedules { game, observed_at } => {
-            observe_day_event_schedules(tx, principal, game, observed_at).await
-        }
         Command::SubmitDayEventParticipation {
             game,
             event_id,
@@ -1002,9 +1039,6 @@ fn command_audit_shape(command: &Command) -> (&'static str, CommandAuditAuthorit
         Command::OpenDayEvent { .. } => ("OpenDayEvent", CommandAuditAuthority::HostTeam),
         Command::LockDayEvent { .. } => ("LockDayEvent", CommandAuditAuthority::HostTeam),
         Command::CancelDayEvent { .. } => ("CancelDayEvent", CommandAuditAuthority::HostTeam),
-        Command::ObserveDayEventSchedules { .. } => {
-            ("ObserveDayEventSchedules", CommandAuditAuthority::HostTeam)
-        }
         Command::SubmitDayEventParticipation { actor_slot, .. } => (
             "SubmitDayEventParticipation",
             CommandAuditAuthority::SlotOccupant(actor_slot),
@@ -1052,7 +1086,6 @@ fn command_game(command: &Command) -> Uuid {
         | Command::OpenDayEvent { game, .. }
         | Command::LockDayEvent { game, .. }
         | Command::CancelDayEvent { game, .. }
-        | Command::ObserveDayEventSchedules { game, .. }
         | Command::SubmitDayEventParticipation { game, .. }
         | Command::WithdrawDayEventParticipation { game, .. }
         | Command::ResolveDayEvent { game, .. }
@@ -1096,7 +1129,6 @@ fn game_closed_by_completion(command: &Command) -> Option<Uuid> {
         | Command::OpenDayEvent { game, .. }
         | Command::LockDayEvent { game, .. }
         | Command::CancelDayEvent { game, .. }
-        | Command::ObserveDayEventSchedules { game, .. }
         | Command::SubmitDayEventParticipation { game, .. }
         | Command::WithdrawDayEventParticipation { game, .. }
         | Command::ResolveDayEvent { game, .. }
@@ -2070,15 +2102,12 @@ async fn cancel_day_event(
     .await
 }
 
-async fn observe_day_event_schedules(
+async fn observe_day_event_schedules_in_tx(
     tx: &mut Transaction<'_, Postgres>,
-    principal: &Principal,
     game: Uuid,
     observed_at: i64,
 ) -> Result<Ack, Reject> {
     require_game(tx, game).await?;
-    let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
-    require_game_run(tx, &caps, game, CohostPermissionClass::DayEventOps).await?;
     let phase = projections::phase_state(&mut **tx, game)
         .await?
         .ok_or_else(|| day_event_reject("schedule observation requires an active phase"))?;

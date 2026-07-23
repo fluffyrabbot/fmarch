@@ -17,6 +17,7 @@ struct Config {
     media_root: PathBuf,
     database: DatabaseCapacity,
     http: HttpCapacity,
+    scheduler: commands::day_scheduler::DayEventSchedulerConfig,
     bootstrap_admin: Option<BootstrapAdminConfig>,
 }
 
@@ -116,6 +117,34 @@ impl Config {
                 )?,
                 retry_after_seconds: bounded_env("FMARCH_HTTP_RETRY_AFTER_SECONDS", 1, 1, 300)?
                     as i64,
+            },
+            scheduler: commands::day_scheduler::DayEventSchedulerConfig {
+                poll_interval: Duration::from_millis(bounded_env(
+                    "FMARCH_DAY_EVENT_SCHEDULER_POLL_MS",
+                    1_000,
+                    100,
+                    60_000,
+                )?),
+                batch_size: bounded_env("FMARCH_DAY_EVENT_SCHEDULER_BATCH_SIZE", 16, 1, 128)?
+                    as i64,
+                lease_seconds: bounded_env(
+                    "FMARCH_DAY_EVENT_SCHEDULER_LEASE_SECONDS",
+                    30,
+                    1,
+                    3_600,
+                )? as i64,
+                retry_base_seconds: bounded_env(
+                    "FMARCH_DAY_EVENT_SCHEDULER_RETRY_BASE_SECONDS",
+                    1,
+                    1,
+                    300,
+                )? as i64,
+                retry_max_seconds: bounded_env(
+                    "FMARCH_DAY_EVENT_SCHEDULER_RETRY_MAX_SECONDS",
+                    60,
+                    1,
+                    3_600,
+                )? as i64,
             },
             bootstrap_admin: bootstrap_admin_from_values(
                 env::var("FMARCH_BOOTSTRAP_ADMIN_METHOD").ok(),
@@ -298,6 +327,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     sqlx::migrate!("../projections/migrations")
         .run(&pool)
         .await?;
+    let _day_event_scheduler =
+        commands::day_scheduler::spawn_day_event_scheduler(pool.clone(), config.scheduler.clone())?;
 
     let workos_verifier = identity::WorkosAccessTokenVerifier::from_env()
         .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidInput, error))?;

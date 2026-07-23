@@ -85,6 +85,7 @@ export async function buildHostConsoleRouteData({
       replacement,
       tasks: HOST_FIXTURE_HOST_TASKS,
       dayEvents: HOST_FIXTURE_DAY_EVENTS,
+      dayEventScheduler: null,
     }),
   );
   const pendingPromptCount = coldLoad.hostPrompts.filter(
@@ -192,6 +193,7 @@ export async function buildHostConsoleRouteData({
     hostPrompts: coldLoad.hostPrompts,
     hostTasks: hostProjection.tasks,
     hostDayEvents: hostProjection.dayEvents,
+    dayEventScheduler: hostProjection.dayEventScheduler,
     votecount: coldLoad.votecount,
     dayVoteOutcomes: coldLoad.dayVoteOutcomes,
     dayVoteOutcomeBoundary: Object.freeze({

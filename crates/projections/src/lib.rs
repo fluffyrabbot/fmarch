@@ -404,6 +404,19 @@ pub struct PhaseStateRow {
     pub phase_opened_at: Option<i64>,
 }
 
+/// Rebuildable, indexed discovery row for the DayEvent scheduler.
+///
+/// `wake_seq` advances for phase signals and newly scheduled events. The
+/// operational worker cursor lives separately so replaying projections never
+/// invents or erases execution history.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DayEventScheduleWorkRow {
+    pub game_id: Uuid,
+    pub next_due_at: Option<i64>,
+    pub wake_seq: i64,
+    pub updated_seq: i64,
+}
+
 /// Private channel membership derived from setup metadata.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PrivateChannelMemberRow {
@@ -1391,6 +1404,130 @@ async fn fold_event(
         // Ignored here, not rejected — other projections own it.
         _ => {}
     }
+    if ev.kind == "GameCompleted" {
+        sqlx::query("DELETE FROM day_event_schedule_work WHERE game_id = $1")
+            .bind(game_id)
+            .execute(&mut **tx)
+            .await?;
+    } else if day_event_schedule_work_event(&ev.kind) {
+        refresh_day_event_schedule_work(
+            tx,
+            game_id,
+            ev.seq,
+            day_event_schedule_wake_event(&ev.kind),
+        )
+        .await?;
+    }
+    Ok(())
+}
+
+fn day_event_schedule_work_event(kind: &str) -> bool {
+    matches!(
+        kind,
+        "GameStarted"
+            | "PhaseAdvanced"
+            | "ThreadLocked"
+            | "ResolutionApplied"
+            | "DayEventScheduled"
+            | "DayEventOpenDue"
+            | "DayEventLockDue"
+            | "DayEventOpened"
+            | "DayEventLocked"
+            | "DayEventCancelled"
+            | "DayEventResolved"
+    )
+}
+
+fn day_event_schedule_wake_event(kind: &str) -> bool {
+    matches!(
+        kind,
+        "GameStarted"
+            | "PhaseAdvanced"
+            | "ThreadLocked"
+            | "ResolutionApplied"
+            | "DayEventScheduled"
+    )
+}
+
+async fn refresh_day_event_schedule_work(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    game_id: Uuid,
+    updated_seq: i64,
+    advance_wake: bool,
+) -> Result<(), ProjectionError> {
+    let phase = sqlx::query("SELECT phase_id, phase_opened_at FROM phase_state WHERE game_id = $1")
+        .bind(game_id)
+        .fetch_optional(&mut **tx)
+        .await?;
+    let phase_id = phase.as_ref().map(|row| row.get::<String, _>("phase_id"));
+    let phase_opened_at = phase
+        .as_ref()
+        .and_then(|row| row.get::<Option<i64>, _>("phase_opened_at"));
+    let current_day_number = phase_id
+        .as_deref()
+        .and_then(|value| value.strip_prefix('D'))
+        .and_then(|value| value.parse::<u32>().ok());
+
+    let rows = sqlx::query(
+        "SELECT definition, state, open_due_at FROM day_event \
+         WHERE game_id = $1 AND state IN ('scheduled', 'open') ORDER BY event_id",
+    )
+    .bind(game_id)
+    .fetch_all(&mut **tx)
+    .await?;
+    let mut next_due_at: Option<i64> = None;
+    for row in rows {
+        let definition: game_platform::DayEvent = serde_json::from_value(row.get("definition"))
+            .map_err(|source| ProjectionError::Payload {
+                kind: "DayEventScheduled".to_string(),
+                source,
+            })?;
+        let state = match row.get::<String, _>("state").as_str() {
+            "scheduled" => game_platform::DayEventState::Scheduled,
+            "open" => game_platform::DayEventState::Open,
+            other => {
+                return payload_error(
+                    "DayEventScheduled",
+                    &format!("unsupported scheduler work state {other}"),
+                )
+            }
+        };
+        let candidate = game_platform::day_schedule::next_observation_at(
+            &definition,
+            state,
+            phase_id.as_deref(),
+            current_day_number,
+            phase_opened_at,
+            row.get("open_due_at"),
+        );
+        next_due_at = match (next_due_at, candidate) {
+            (Some(current), Some(candidate)) => Some(current.min(candidate)),
+            (None, candidate) => candidate,
+            (current, None) => current,
+        };
+    }
+
+    sqlx::query(
+        "INSERT INTO day_event_schedule_work (game_id, next_due_at, wake_seq, updated_seq) \
+         VALUES ($1, $2, CASE WHEN $3 THEN $4 ELSE 0 END, $4) \
+         ON CONFLICT (game_id) DO UPDATE SET \
+           next_due_at = EXCLUDED.next_due_at, \
+           wake_seq = CASE WHEN $3 THEN $4 ELSE day_event_schedule_work.wake_seq END, \
+           updated_seq = $4",
+    )
+    .bind(game_id)
+    .bind(next_due_at)
+    .bind(advance_wake)
+    .bind(updated_seq)
+    .execute(&mut **tx)
+    .await?;
+    sqlx::query(
+        "INSERT INTO day_event_scheduler_state (game_id) VALUES ($1) \
+         ON CONFLICT (game_id) DO NOTHING",
+    )
+    .bind(game_id)
+    .execute(&mut **tx)
+    .await?;
     Ok(())
 }
 
@@ -3428,6 +3565,7 @@ async fn rebuild_in_tx(
     .await?;
     for table in [
         "vote_ballot",
+        "day_event_schedule_work",
         "day_event_participation",
         "day_event",
         "day_program",
@@ -3523,6 +3661,10 @@ const AUDIT_PROJECTIONS: &[AuditProjection] = &[
     AuditProjection {
         table: "day_event",
         order_by: "event_id",
+    },
+    AuditProjection {
+        table: "day_event_schedule_work",
+        order_by: "game_id",
     },
     AuditProjection {
         table: "day_event_participation",

@@ -37,17 +37,18 @@ use tokio::sync::{broadcast, Mutex, OwnedSemaphorePermit, Semaphore};
 use uuid::Uuid;
 use wire::{
     AckMsg, AdvanceSubscriptionReadRequest, CapabilityGrant, ClientEnvelope, CommunityInboxPage,
-    DayVoteOutcomeDelta, DiscussionArea, DiscussionPost, DiscussionThreadPage, DiscussionTopic,
-    DiscussionTopicPage, GameIndexEntry, GameIndexPage, Hello, HostConsoleAuthorityDelta,
-    HostConsoleAuthorityKind, HostConsolePhaseStateDelta, HostConsoleSlotOccupancyDelta,
-    HostConsoleStateDelta, HostConsoleThreadPostDelta, HostDayEventDelta, HostPhaseControl,
-    HostPromptDelta, HostPromptsDelta, HostTaskAllowedCommand, HostTaskCommandKind, HostTaskDelta,
-    HostTaskKind, HostTaskState, HostTaskUrgency, ModerationCase, ModerationCaseDetail,
-    ModerationCasePage, ModerationReportReceipt, PlayerInvestigationResult,
-    PlayerInvestigationResultsDelta, PlayerNotification, PlayerNotificationsDelta, ProfileEditor,
-    ProjectionDelta, PublicGameThreadPage, PublicProfile, PublicSearchPage, PublicSearchResult,
-    RejectCode, RejectMsg, ServerEnvelope, ServerMsg, SubscriptionTargetState, ThreadPage,
-    ThreadPost, ThreadPostsDelta, VoteCountClearedDelta, VoteCountDelta, PROTOCOL_VERSION,
+    DayEventSchedulerDelta, DayVoteOutcomeDelta, DiscussionArea, DiscussionPost,
+    DiscussionThreadPage, DiscussionTopic, DiscussionTopicPage, GameIndexEntry, GameIndexPage,
+    Hello, HostConsoleAuthorityDelta, HostConsoleAuthorityKind, HostConsolePhaseStateDelta,
+    HostConsoleSlotOccupancyDelta, HostConsoleStateDelta, HostConsoleThreadPostDelta,
+    HostDayEventDelta, HostPhaseControl, HostPromptDelta, HostPromptsDelta, HostTaskAllowedCommand,
+    HostTaskCommandKind, HostTaskDelta, HostTaskKind, HostTaskState, HostTaskUrgency,
+    ModerationCase, ModerationCaseDetail, ModerationCasePage, ModerationReportReceipt,
+    PlayerInvestigationResult, PlayerInvestigationResultsDelta, PlayerNotification,
+    PlayerNotificationsDelta, ProfileEditor, ProjectionDelta, PublicGameThreadPage, PublicProfile,
+    PublicSearchPage, PublicSearchResult, RejectCode, RejectMsg, ServerEnvelope, ServerMsg,
+    SubscriptionTargetState, ThreadPage, ThreadPost, ThreadPostsDelta, VoteCountClearedDelta,
+    VoteCountDelta, PROTOCOL_VERSION,
 };
 
 #[derive(Clone)]
@@ -8012,6 +8013,7 @@ pub struct HostConsoleStateResponse {
     pub phase: Option<HostConsolePhaseState>,
     pub slots: Vec<HostConsoleSlotOccupancy>,
     pub thread_posts: Vec<HostConsoleThreadPost>,
+    pub day_event_scheduler: Option<DayEventSchedulerDelta>,
     pub day_events: Vec<HostDayEventDelta>,
     pub tasks: Vec<HostTaskDelta>,
 }
@@ -8158,6 +8160,7 @@ impl From<HostConsoleStateResponse> for HostConsoleStateDelta {
                 .into_iter()
                 .map(HostConsoleThreadPostDelta::from)
                 .collect(),
+            day_event_scheduler: response.day_event_scheduler,
             day_events: response.day_events,
             tasks: response.tasks,
         }
@@ -8365,6 +8368,29 @@ async fn load_host_console_state(
         .collect();
     let host_prompts = projections::host_prompts(&state.pool, game).await?;
     let day_event_rows = projections::day_events(&state.pool, game).await?;
+    let day_event_scheduler =
+        commands::day_scheduler::day_event_scheduler_status(&state.pool, game, unix_now_seconds())
+            .await
+            .map_err(|error| ApiError::Reject {
+                status: StatusCode::INTERNAL_SERVER_ERROR,
+                error: RejectCode::Internal,
+                message: error.to_string(),
+            })?
+            .map(|status| DayEventSchedulerDelta {
+                pending: status.pending,
+                next_due_at: status.next_due_at,
+                wake_seq: status.wake_seq,
+                last_observed_wake_seq: status.last_observed_wake_seq,
+                lease_until: status.lease_until,
+                retry_not_before: status.retry_not_before,
+                last_attempt_at: status.last_attempt_at,
+                last_success_at: status.last_success_at,
+                last_failure_at: status.last_failure_at,
+                consecutive_failures: status.consecutive_failures,
+                total_attempts: status.total_attempts,
+                total_successes: status.total_successes,
+                last_error: status.last_error,
+            });
     let day_event_participation =
         projections::day_event_participation_for_game(&state.pool, game).await?;
     let tasks = select_host_tasks(&host_prompts, &day_event_rows, &authority);
@@ -8380,6 +8406,10 @@ async fn load_host_console_state(
                 .filter(|row| row.event_id == event.event_id)
                 .map(|row| row.actor_slot.clone())
                 .collect(),
+            open_due_at: event.open_due_at,
+            open_observed_at: event.open_observed_at,
+            lock_due_at: event.lock_due_at,
+            lock_observed_at: event.lock_observed_at,
         })
         .collect();
 
@@ -8390,6 +8420,7 @@ async fn load_host_console_state(
         phase,
         slots,
         thread_posts,
+        day_event_scheduler,
         day_events,
         tasks,
     })
@@ -8781,7 +8812,7 @@ fn product_day_program_catalog(
             .events
             .iter()
             .map(|event| {
-                let schedule = commands::day_schedule::compile(&event.schedule);
+                let schedule = game_platform::day_schedule::compile(&event.schedule);
                 let mut preview = HostSetupProgramSchedulePreview {
                     event_id: event.id.as_str().to_string(),
                     mode: String::new(),
@@ -8793,14 +8824,14 @@ fn product_day_program_catalog(
                     trigger: None,
                 };
                 match schedule.opening {
-                    commands::day_schedule::ScheduleOpening::Manual => {
+                    game_platform::day_schedule::ScheduleOpening::Manual => {
                         preview.mode = "host_opened".to_string();
                     }
-                    commands::day_schedule::ScheduleOpening::Absolute { open_at } => {
+                    game_platform::day_schedule::ScheduleOpening::Absolute { open_at } => {
                         preview.mode = "absolute".to_string();
                         preview.open_at = Some(open_at);
                     }
-                    commands::day_schedule::ScheduleOpening::RelativeToPhase {
+                    game_platform::day_schedule::ScheduleOpening::RelativeToPhase {
                         phase_id,
                         open_offset,
                     } => {
@@ -8808,16 +8839,16 @@ fn product_day_program_catalog(
                         preview.phase_id = Some(phase_id);
                         preview.open_offset = Some(open_offset);
                     }
-                    commands::day_schedule::ScheduleOpening::OnTrigger { trigger } => {
+                    game_platform::day_schedule::ScheduleOpening::OnTrigger { trigger } => {
                         preview.mode = "on_trigger".to_string();
                         preview.trigger = Some(trigger);
                     }
                 }
                 match schedule.lock {
-                    Some(commands::day_schedule::ScheduleLock::Absolute { lock_at }) => {
+                    Some(game_platform::day_schedule::ScheduleLock::Absolute { lock_at }) => {
                         preview.lock_at = Some(lock_at);
                     }
-                    Some(commands::day_schedule::ScheduleLock::RelativeToPhase {
+                    Some(game_platform::day_schedule::ScheduleLock::RelativeToPhase {
                         lock_offset,
                         ..
                     }) => {
@@ -9862,7 +9893,6 @@ fn command_game(command: &wire::Command) -> Option<Uuid> {
         | wire::Command::OpenDayEvent { game, .. }
         | wire::Command::LockDayEvent { game, .. }
         | wire::Command::CancelDayEvent { game, .. }
-        | wire::Command::ObserveDayEventSchedules { game, .. }
         | wire::Command::SubmitDayEventParticipation { game, .. }
         | wire::Command::WithdrawDayEventParticipation { game, .. }
         | wire::Command::ResolveDayEvent { game, .. }
@@ -9896,7 +9926,6 @@ fn command_affects_host_console(command: &wire::Command) -> bool {
             | wire::Command::OpenDayEvent { .. }
             | wire::Command::LockDayEvent { .. }
             | wire::Command::CancelDayEvent { .. }
-            | wire::Command::ObserveDayEventSchedules { .. }
             | wire::Command::SubmitDayEventParticipation { .. }
             | wire::Command::WithdrawDayEventParticipation { .. }
             | wire::Command::ResolveDayEvent { .. }
@@ -9960,7 +9989,6 @@ fn command_affects_player_command_state(command: &wire::Command) -> bool {
             | wire::Command::OpenDayEvent { .. }
             | wire::Command::LockDayEvent { .. }
             | wire::Command::CancelDayEvent { .. }
-            | wire::Command::ObserveDayEventSchedules { .. }
             | wire::Command::SubmitDayEventParticipation { .. }
             | wire::Command::WithdrawDayEventParticipation { .. }
             | wire::Command::ResolveDayEvent { .. }

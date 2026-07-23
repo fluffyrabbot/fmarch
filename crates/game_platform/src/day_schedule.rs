@@ -6,9 +6,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use game_platform::{
-    DayEvent, DayEventSchedule, DayEventState, PhaseScope, ProgramTrigger, UnixSeconds,
-};
+use crate::{DayEvent, DayEventSchedule, DayEventState, PhaseScope, ProgramTrigger, UnixSeconds};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ScheduleOpening {
@@ -145,6 +143,100 @@ pub fn evaluate(
     intents
 }
 
+/// Return the next wall-clock boundary that can change this event's state.
+///
+/// Trigger schedules deliberately return no timestamp: phase lifecycle facts
+/// wake the scheduler through the projection's monotonic wake cursor. Timed
+/// schedules share this function with the indexed work projection, keeping
+/// worker discovery and command evaluation on one rules definition.
+pub fn next_observation_at(
+    event: &DayEvent,
+    state: DayEventState,
+    current_phase_id: Option<&str>,
+    current_day_number: Option<u32>,
+    phase_opened_at: Option<i64>,
+    recorded_open_due_at: Option<i64>,
+) -> Option<i64> {
+    if matches!(
+        state,
+        DayEventState::Resolved | DayEventState::Cancelled | DayEventState::Locked
+    ) {
+        return None;
+    }
+
+    let schedule = compile(&event.schedule);
+    match state {
+        DayEventState::Scheduled => {
+            if !phase_scope_can_open(&event.phase_scope, current_day_number) {
+                return None;
+            }
+            let opening = match schedule.opening {
+                ScheduleOpening::Manual | ScheduleOpening::OnTrigger { .. } => return None,
+                ScheduleOpening::Absolute { open_at } => open_at,
+                ScheduleOpening::RelativeToPhase {
+                    ref phase_id,
+                    open_offset,
+                } => {
+                    if current_phase_id != Some(phase_id.as_str()) {
+                        return None;
+                    }
+                    phase_opened_at?.checked_add(open_offset)?
+                }
+            };
+            match event.phase_scope {
+                PhaseScope::ExplicitWindow {
+                    opens_at,
+                    closes_at,
+                } => {
+                    let due_at = opening.max(opens_at.get());
+                    (due_at < closes_at.get()).then_some(due_at)
+                }
+                _ => Some(opening),
+            }
+        }
+        DayEventState::Open => {
+            let schedule_lock = match schedule.lock {
+                Some(ScheduleLock::Absolute { lock_at }) => Some(lock_at),
+                Some(ScheduleLock::RelativeToPhase {
+                    ref phase_id,
+                    lock_offset,
+                }) => {
+                    let anchor = if current_phase_id == Some(phase_id.as_str()) {
+                        phase_opened_at
+                    } else {
+                        match (&schedule.opening, recorded_open_due_at) {
+                            (
+                                ScheduleOpening::RelativeToPhase { open_offset, .. },
+                                Some(open_due_at),
+                            ) => open_due_at.checked_sub(*open_offset),
+                            _ => None,
+                        }
+                    };
+                    anchor?.checked_add(lock_offset)
+                }
+                None => None,
+            };
+            let scope_lock = match event.phase_scope {
+                PhaseScope::ExplicitWindow { closes_at, .. } => Some(closes_at.get()),
+                _ => None,
+            };
+            match (schedule_lock, scope_lock) {
+                (Some(left), Some(right)) => Some(left.min(right)),
+                (Some(due_at), None) | (None, Some(due_at)) => Some(due_at),
+                (None, None) => None,
+            }
+        }
+        DayEventState::Locked | DayEventState::Resolved | DayEventState::Cancelled => None,
+    }
+}
+
+fn phase_scope_can_open(scope: &PhaseScope, current_day_number: Option<u32>) -> bool {
+    match scope {
+        PhaseScope::DuringDay { number } => current_day_number == Some(*number),
+        PhaseScope::AnyRunning | PhaseScope::ExplicitWindow { .. } => true,
+    }
+}
+
 fn opening_due(opening: &ScheduleOpening, context: &ScheduleContext) -> Option<ScheduleIntent> {
     let (due_at, source) = match opening {
         ScheduleOpening::Manual => return None,
@@ -277,10 +369,10 @@ pub fn unix_seconds(value: i64) -> UnixSeconds {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use game_platform::{
-        ChannelId, DayEventId, DayEventResolutionMode, DurationSeconds, EventChannelPolicy,
-        NarrativeTemplates, ParticipantFilter, ParticipationLimits, ParticipationMode,
-        ParticipationSpec, PhaseId, ProgramId, RecipientSelector, RewardBinding,
+    use crate::{
+        ChannelId, DayEventId, DayEventResolutionMode, DurationSeconds, EffectOperationTemplate,
+        EventChannelPolicy, NarrativeTemplates, ParticipantFilter, ParticipationLimits,
+        ParticipationMode, ParticipationSpec, PhaseId, ProgramId, RecipientSelector, RewardBinding,
         RewardEffectTemplate, RewardKey, Tag, TemplateKey,
     };
 
@@ -306,7 +398,7 @@ mod tests {
                 display_name_theme_key: TemplateKey::new("reward.label").unwrap(),
                 effects: vec![RewardEffectTemplate {
                     recipient: RecipientSelector::Winner,
-                    operation: game_platform::EffectOperationTemplate::Mark {
+                    operation: EffectOperationTemplate::Mark {
                         effect: Tag::new("bomb").unwrap(),
                     },
                 }],
@@ -385,5 +477,72 @@ mod tests {
             "trigger:phase_resolved:D01"
         );
         assert!(evaluate(&event, DayEventState::Cancelled, &context).is_empty());
+    }
+
+    #[test]
+    fn next_observation_tracks_timed_boundaries_without_polling_manual_or_trigger_work() {
+        let absolute = event(DayEventSchedule::Absolute {
+            open_at: unix_seconds(100),
+            lock_at: Some(unix_seconds(200)),
+        });
+        assert_eq!(
+            next_observation_at(
+                &absolute,
+                DayEventState::Scheduled,
+                Some("D01"),
+                Some(1),
+                Some(50),
+                None,
+            ),
+            Some(100)
+        );
+        assert_eq!(
+            next_observation_at(
+                &absolute,
+                DayEventState::Open,
+                Some("D01"),
+                Some(1),
+                Some(50),
+                Some(100),
+            ),
+            Some(200)
+        );
+
+        let trigger = event(DayEventSchedule::OnTrigger {
+            trigger: ProgramTrigger::PhaseResolved {
+                phase_id: PhaseId::new("D01").unwrap(),
+            },
+        });
+        assert_eq!(
+            next_observation_at(
+                &trigger,
+                DayEventState::Scheduled,
+                Some("D01"),
+                Some(1),
+                Some(50),
+                None,
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn relative_lock_keeps_its_original_anchor_after_phase_advance() {
+        let relative = event(DayEventSchedule::RelativeToPhase {
+            phase_id: PhaseId::new("D01").unwrap(),
+            open_offset: DurationSeconds::new(10).unwrap(),
+            lock_offset: Some(DurationSeconds::new(20).unwrap()),
+        });
+        assert_eq!(
+            next_observation_at(
+                &relative,
+                DayEventState::Open,
+                Some("N01"),
+                None,
+                Some(500),
+                Some(110),
+            ),
+            Some(120)
+        );
     }
 }

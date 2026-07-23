@@ -528,6 +528,7 @@ dependencies = [
  "sqlx",
  "thiserror 1.0.69",
  "tokio",
+ "tracing",
  "uuid",
 ]
 
@@ -2567,6 +2568,7 @@ version = "0.1.0"
 dependencies = [
  "api",
  "axum",
+ "commands",
  "eventstore",
  "identity",
  "media",

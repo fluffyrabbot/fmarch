@@ -10,6 +10,8 @@ use std::fmt;
 use serde::{de::Error as _, Deserialize, Deserializer, Serialize};
 use thiserror::Error;
 
+pub mod day_schedule;
+
 #[derive(Debug, Clone, PartialEq, Error)]
 pub enum ModelError {
     #[error("{kind} must not be blank")]

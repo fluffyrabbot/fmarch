@@ -327,14 +327,41 @@ stateDiagram-v2
 `phase_opened_at: UnixSeconds`, and `phase_state.phase_opened_at` projects that
 value. Existing `occurred_at` values remain logical data and are never used as
 the wall-clock base. Legacy/imported phase facts without the explicit field
-leave relative schedules inert. Until a **scheduler principal** exists,
-`ObserveDayEventSchedules` remains host-gated like
-`AdvancePhaseByDeadline`.
+leave relative schedules inert. Schedule observation is not a client command:
+the scoped DayEvent scheduler calls a sealed command boundary that records
+`DayEventScheduler(game)` authority.
 
 Repeated observations are idempotent: committed due evidence and the projected
 DayEvent state suppress duplicate facts. Manual cancellation is terminal and
 takes precedence over every later clock or trigger observation; concurrent
-commands serialize on the game stream.
+workers serialize on the game stream. Indexed work discovery and leases reduce
+duplicate work but are never the correctness boundary.
+
+**Operational scheduler boundary:**
+
+1. `day_event_schedule_work` is a rebuildable projection with one row per game,
+   an indexed `next_due_at`, and a monotonic `wake_seq` for phase signals and
+   newly scheduled events.
+2. `day_event_scheduler_state` is deliberately operational rather than
+   rebuildable. It stores the last observed wake cursor, bounded lease,
+   exponential-retry posture, and success/failure health counters.
+3. Each server process owns a random worker identity. Claims use
+   `FOR UPDATE SKIP LOCKED`; an expired claim may be repeated safely because the
+   sealed observation command revalidates under the game stream lock.
+4. The client wire cannot express schedule observation. Accepted facts carry
+   `service:day-event-scheduler`, `DayEventScheduler(game)`, and
+   `source=day_event_scheduler` audit metadata.
+5. The host console exposes worker health plus each DayEvent's due/observed
+   timestamps. `/healthz` remains dependency-free process liveness; scheduler
+   degradation is game-scoped operational state, not a reason to make the HTTP
+   process disappear from load-balancer health.
+
+Worker bounds are configured with
+`FMARCH_DAY_EVENT_SCHEDULER_POLL_MS`,
+`FMARCH_DAY_EVENT_SCHEDULER_BATCH_SIZE`,
+`FMARCH_DAY_EVENT_SCHEDULER_LEASE_SECONDS`,
+`FMARCH_DAY_EVENT_SCHEDULER_RETRY_BASE_SECONDS`, and
+`FMARCH_DAY_EVENT_SCHEDULER_RETRY_MAX_SECONDS`.
 
 Default product posture for mash: **12h day / 12h night** phase cadence, with zero or more DayEvents scheduled inside each day window.
 

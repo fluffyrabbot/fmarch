@@ -10,14 +10,17 @@
 //! and posts while moving authority from the outgoing to the incoming user.
 
 use caps::Principal;
+use commands::day_scheduler::{
+    day_event_scheduler_status, run_day_event_scheduler_once, DayEventSchedulerConfig,
+};
 use commands::operator_process::{run_bounded_process, ProcessLimits};
 use commands::{
     audit_engine_snapshot_identity_boundary, audit_resolution_envelopes, handle, handle_idempotent,
     inspect_resolution_traces, load_engine_phase_input, load_engine_snapshot,
-    run_large_action_graph_performance_proof, Ack, CohostPermissionClass, Command,
-    HostPromptDecision, Reject, ResolutionEnvelopeAuditEnvelope, ResolutionEnvelopeAuditStatus,
-    ThreadPostMedia, ThreadPostMediaVariant, VoteTarget, LARGE_ACTION_GRAPH_PERFORMANCE_SEED,
-    LARGE_ACTION_GRAPH_PERFORMANCE_THRESHOLD_MS,
+    observe_day_event_schedules_as_scheduler, run_large_action_graph_performance_proof, Ack,
+    CohostPermissionClass, Command, HostPromptDecision, Reject, ResolutionEnvelopeAuditEnvelope,
+    ResolutionEnvelopeAuditStatus, ThreadPostMedia, ThreadPostMediaVariant, VoteTarget,
+    LARGE_ACTION_GRAPH_PERFORMANCE_SEED, LARGE_ACTION_GRAPH_PERFORMANCE_THRESHOLD_MS,
 };
 use eventstore::{ActorId, EventInput};
 use projections::{
@@ -5123,28 +5126,14 @@ async fn absolute_day_event_schedule_records_due_evidence_once_at_boundaries(poo
     .await
     .unwrap();
 
-    let early = handle(
-        &pool,
-        &user("host_h"),
-        Command::ObserveDayEventSchedules {
-            game,
-            observed_at: 99,
-        },
-    )
-    .await
-    .unwrap();
+    let early = observe_day_event_schedules_as_scheduler(&pool, game, 99)
+        .await
+        .unwrap();
     assert!(early.stream_seqs.is_empty());
 
-    let opened = handle(
-        &pool,
-        &user("host_h"),
-        Command::ObserveDayEventSchedules {
-            game,
-            observed_at: 100,
-        },
-    )
-    .await
-    .unwrap();
+    let opened = observe_day_event_schedules_as_scheduler(&pool, game, 100)
+        .await
+        .unwrap();
     assert_eq!(opened.stream_seqs.len(), 2);
     let row = day_events(&pool, game).await.unwrap().remove(0);
     assert_eq!(row.state, "open");
@@ -5152,28 +5141,14 @@ async fn absolute_day_event_schedule_records_due_evidence_once_at_boundaries(poo
     assert_eq!(row.open_observed_at, Some(100));
     assert_eq!(row.opened_at, Some(100));
 
-    let duplicate_open = handle(
-        &pool,
-        &user("host_h"),
-        Command::ObserveDayEventSchedules {
-            game,
-            observed_at: 150,
-        },
-    )
-    .await
-    .unwrap();
+    let duplicate_open = observe_day_event_schedules_as_scheduler(&pool, game, 150)
+        .await
+        .unwrap();
     assert!(duplicate_open.stream_seqs.is_empty());
 
-    let locked = handle(
-        &pool,
-        &user("host_h"),
-        Command::ObserveDayEventSchedules {
-            game,
-            observed_at: 225,
-        },
-    )
-    .await
-    .unwrap();
+    let locked = observe_day_event_schedules_as_scheduler(&pool, game, 225)
+        .await
+        .unwrap();
     assert_eq!(locked.stream_seqs.len(), 2);
     let row = day_events(&pool, game).await.unwrap().remove(0);
     assert_eq!(row.state, "locked");
@@ -5181,16 +5156,9 @@ async fn absolute_day_event_schedule_records_due_evidence_once_at_boundaries(poo
     assert_eq!(row.lock_observed_at, Some(225));
     assert_eq!(row.locked_at, Some(225));
 
-    let duplicate_lock = handle(
-        &pool,
-        &user("host_h"),
-        Command::ObserveDayEventSchedules {
-            game,
-            observed_at: 300,
-        },
-    )
-    .await
-    .unwrap();
+    let duplicate_lock = observe_day_event_schedules_as_scheduler(&pool, game, 300)
+        .await
+        .unwrap();
     assert!(duplicate_lock.stream_seqs.is_empty());
     let evidence = sqlx::query_as::<_, (String, serde_json::Value, serde_json::Value)>(
         "SELECT kind, payload, actor FROM events WHERE stream_id = $1 \
@@ -5233,38 +5201,19 @@ async fn relative_day_event_schedule_uses_explicit_phase_open_clock(pool: PgPool
     .await
     .unwrap();
 
-    assert!(handle(
-        &pool,
-        &user("host_h"),
-        Command::ObserveDayEventSchedules {
-            game,
-            observed_at: phase_opened_at + 9,
-        },
-    )
-    .await
-    .unwrap()
-    .stream_seqs
-    .is_empty());
-    handle(
-        &pool,
-        &user("host_h"),
-        Command::ObserveDayEventSchedules {
-            game,
-            observed_at: phase_opened_at + 10,
-        },
-    )
-    .await
-    .unwrap();
-    handle(
-        &pool,
-        &user("host_h"),
-        Command::ObserveDayEventSchedules {
-            game,
-            observed_at: phase_opened_at + 20,
-        },
-    )
-    .await
-    .unwrap();
+    assert!(
+        observe_day_event_schedules_as_scheduler(&pool, game, phase_opened_at + 9)
+            .await
+            .unwrap()
+            .stream_seqs
+            .is_empty()
+    );
+    observe_day_event_schedules_as_scheduler(&pool, game, phase_opened_at + 10)
+        .await
+        .unwrap();
+    observe_day_event_schedules_as_scheduler(&pool, game, phase_opened_at + 20)
+        .await
+        .unwrap();
     let row = day_events(&pool, game).await.unwrap().remove(0);
     assert_eq!(row.state, "locked");
     assert_eq!(row.open_due_at, Some(phase_opened_at + 10));
@@ -5300,16 +5249,9 @@ async fn phase_trigger_observation_and_manual_cancellation_have_stable_precedenc
     )
     .await
     .unwrap();
-    let opened = handle(
-        &pool,
-        &user("host_h"),
-        Command::ObserveDayEventSchedules {
-            game,
-            observed_at: 1_000,
-        },
-    )
-    .await
-    .unwrap();
+    let opened = observe_day_event_schedules_as_scheduler(&pool, game, 1_000)
+        .await
+        .unwrap();
     assert_eq!(opened.stream_seqs.len(), 2);
     let triggered = day_events(&pool, game).await.unwrap().remove(0);
     assert_eq!(triggered.state, "open");
@@ -5326,16 +5268,9 @@ async fn phase_trigger_observation_and_manual_cancellation_have_stable_precedenc
     )
     .await
     .unwrap();
-    let after_cancel = handle(
-        &pool,
-        &user("host_h"),
-        Command::ObserveDayEventSchedules {
-            game,
-            observed_at: 2_000,
-        },
-    )
-    .await
-    .unwrap();
+    let after_cancel = observe_day_event_schedules_as_scheduler(&pool, game, 2_000)
+        .await
+        .unwrap();
     assert!(after_cancel.stream_seqs.is_empty());
     let cancelled = day_events(&pool, game).await.unwrap().remove(0);
     assert_eq!(cancelled.state, "cancelled");
@@ -5344,6 +5279,150 @@ async fn phase_trigger_observation_and_manual_cancellation_have_stable_precedenc
         Some("host superseded automation")
     );
     assert!(audit_rebuild(&pool, game).await.unwrap().ok);
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn scheduler_worker_catches_up_missed_boundaries_and_records_service_authority(pool: PgPool) {
+    let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
+    let mut event = minimal_day_event("event-worker", "bomb");
+    event.participation.limits.minimum = 0;
+    event.schedule = game_platform::DayEventSchedule::Absolute {
+        open_at: game_platform::UnixSeconds::new(100),
+        lock_at: Some(game_platform::UnixSeconds::new(200)),
+    };
+    handle(
+        &pool,
+        &user("host_h"),
+        Command::ScheduleDayEvent { game, event },
+    )
+    .await
+    .unwrap();
+
+    let config = DayEventSchedulerConfig::default();
+    let report = run_day_event_scheduler_once(&pool, &config, Uuid::new_v4(), 225)
+        .await
+        .unwrap();
+    assert_eq!(report.claimed_games, 1);
+    assert_eq!(report.succeeded_games, 1);
+    assert_eq!(report.appended_events, 4);
+    let event = day_events(&pool, game).await.unwrap().remove(0);
+    assert_eq!(event.state, "locked");
+    assert_eq!(event.open_due_at, Some(100));
+    assert_eq!(event.lock_due_at, Some(200));
+
+    let meta: serde_json::Value = sqlx::query_scalar(
+        "SELECT meta FROM events WHERE stream_id = $1 AND kind = 'DayEventOpenDue'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(meta["principal_user_id"], "service:day-event-scheduler");
+    assert_eq!(meta["authority_used"], format!("DayEventScheduler({game})"));
+    assert_eq!(meta["source"], "day_event_scheduler");
+    let status = day_event_scheduler_status(&pool, game, 225)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(!status.pending);
+    assert_eq!(status.total_attempts, 1);
+    assert_eq!(status.total_successes, 1);
+    assert!(audit_rebuild(&pool, game).await.unwrap().ok);
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn concurrent_scheduler_replicas_claim_one_game_without_duplicate_evidence(pool: PgPool) {
+    let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
+    let mut event = minimal_day_event("event-replica-race", "bomb");
+    event.participation.limits.minimum = 0;
+    event.schedule = game_platform::DayEventSchedule::Absolute {
+        open_at: game_platform::UnixSeconds::new(100),
+        lock_at: None,
+    };
+    handle(
+        &pool,
+        &user("host_h"),
+        Command::ScheduleDayEvent { game, event },
+    )
+    .await
+    .unwrap();
+
+    let config = DayEventSchedulerConfig {
+        batch_size: 1,
+        ..DayEventSchedulerConfig::default()
+    };
+    let (left, right) = tokio::join!(
+        run_day_event_scheduler_once(&pool, &config, Uuid::new_v4(), 100),
+        run_day_event_scheduler_once(&pool, &config, Uuid::new_v4(), 100),
+    );
+    let reports = [left.unwrap(), right.unwrap()];
+    assert_eq!(
+        reports
+            .iter()
+            .map(|report| report.claimed_games)
+            .sum::<usize>(),
+        1
+    );
+    assert_eq!(
+        reports
+            .iter()
+            .map(|report| report.appended_events)
+            .sum::<usize>(),
+        2
+    );
+    let evidence: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM events WHERE stream_id = $1 AND kind = 'DayEventOpenDue'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(evidence, 1);
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn scheduler_failure_releases_lease_and_applies_bounded_retry_backoff(pool: PgPool) {
+    let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
+    let mut event = minimal_day_event("event-retry", "bomb");
+    event.schedule = game_platform::DayEventSchedule::Absolute {
+        open_at: game_platform::UnixSeconds::new(100),
+        lock_at: None,
+    };
+    handle(
+        &pool,
+        &user("host_h"),
+        Command::ScheduleDayEvent { game, event },
+    )
+    .await
+    .unwrap();
+    sqlx::query("UPDATE phase_state SET phase_id = 'invalid' WHERE game_id = $1")
+        .bind(game)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let config = DayEventSchedulerConfig {
+        retry_base_seconds: 5,
+        retry_max_seconds: 20,
+        ..DayEventSchedulerConfig::default()
+    };
+    let first = run_day_event_scheduler_once(&pool, &config, Uuid::new_v4(), 100)
+        .await
+        .unwrap();
+    assert_eq!(first.failed_games, 1);
+    let status = day_event_scheduler_status(&pool, game, 100)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(status.consecutive_failures, 1);
+    assert_eq!(status.retry_not_before, Some(105));
+    assert!(status.lease_owner.is_none());
+    assert!(!status.last_error.unwrap().trim().is_empty());
+
+    let suppressed = run_day_event_scheduler_once(&pool, &config, Uuid::new_v4(), 104)
+        .await
+        .unwrap();
+    assert_eq!(suppressed.claimed_games, 0);
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]

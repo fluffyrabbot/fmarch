@@ -315,6 +315,10 @@ export function projectHostConsoleState(state, fallback) {
 
   return Object.freeze({
     authority: normalizeHostConsoleAuthority(state.authority, fallback.authority),
+    dayEventScheduler: normalizeDayEventScheduler(
+      state.day_event_scheduler ?? state.dayEventScheduler,
+      fallback.dayEventScheduler ?? null,
+    ),
     tasks: normalizeHostTasks(state.tasks),
     dayEvents: normalizeHostDayEvents(
       state.day_events ?? state.dayEvents,
@@ -413,6 +417,16 @@ function normalizeHostDayEvent(event) {
     state: String(event.state ?? "scheduled"),
     phaseId: event.phase_id ?? event.phaseId ?? null,
     templateKey: String(definition.template_key ?? definition.templateKey ?? ""),
+    scheduleEvidence: Object.freeze({
+      openDueAt: finiteNumberOrNull(event.open_due_at ?? event.openDueAt),
+      openObservedAt: finiteNumberOrNull(
+        event.open_observed_at ?? event.openObservedAt,
+      ),
+      lockDueAt: finiteNumberOrNull(event.lock_due_at ?? event.lockDueAt),
+      lockObservedAt: finiteNumberOrNull(
+        event.lock_observed_at ?? event.lockObservedAt,
+      ),
+    }),
     participation: Object.freeze({
       who: String(participation.who ?? ""),
       mode: String(participation.mode ?? ""),
@@ -439,6 +453,51 @@ function normalizeHostDayEvent(event) {
       ),
     ),
   });
+}
+
+export function normalizeDayEventScheduler(scheduler, fallback = null) {
+  const source =
+    scheduler !== null && typeof scheduler === "object" ? scheduler : fallback;
+  if (source === null || typeof source !== "object") {
+    return null;
+  }
+  return Object.freeze({
+    pending: source.pending === true,
+    nextDueAt: finiteNumberOrNull(source.next_due_at ?? source.nextDueAt),
+    wakeSeq: Number(source.wake_seq ?? source.wakeSeq ?? 0),
+    lastObservedWakeSeq: Number(
+      source.last_observed_wake_seq ?? source.lastObservedWakeSeq ?? 0,
+    ),
+    leaseUntil: finiteNumberOrNull(source.lease_until ?? source.leaseUntil),
+    retryNotBefore: finiteNumberOrNull(
+      source.retry_not_before ?? source.retryNotBefore,
+    ),
+    lastAttemptAt: finiteNumberOrNull(
+      source.last_attempt_at ?? source.lastAttemptAt,
+    ),
+    lastSuccessAt: finiteNumberOrNull(
+      source.last_success_at ?? source.lastSuccessAt,
+    ),
+    lastFailureAt: finiteNumberOrNull(
+      source.last_failure_at ?? source.lastFailureAt,
+    ),
+    consecutiveFailures: Number(
+      source.consecutive_failures ?? source.consecutiveFailures ?? 0,
+    ),
+    totalAttempts: Number(source.total_attempts ?? source.totalAttempts ?? 0),
+    totalSuccesses: Number(source.total_successes ?? source.totalSuccesses ?? 0),
+    lastError:
+      typeof (source.last_error ?? source.lastError) === "string"
+        ? source.last_error ?? source.lastError
+        : null,
+  });
+}
+
+function finiteNumberOrNull(value) {
+  const number = Number(value);
+  return value === null || value === undefined || !Number.isFinite(number)
+    ? null
+    : number;
 }
 
 export function normalizeHostTasks(tasks, fallback = []) {

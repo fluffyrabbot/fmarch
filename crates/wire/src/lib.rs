@@ -360,10 +360,6 @@ pub enum Command {
         event_id: game_platform::DayEventId,
         reason: String,
     },
-    ObserveDayEventSchedules {
-        game: Uuid,
-        observed_at: i64,
-    },
     SubmitDayEventParticipation {
         game: Uuid,
         event_id: game_platform::DayEventId,
@@ -544,9 +540,6 @@ impl From<Command> for commands::Command {
                 event_id,
                 reason,
             },
-            Command::ObserveDayEventSchedules { game, observed_at } => {
-                commands::Command::ObserveDayEventSchedules { game, observed_at }
-            }
             Command::SubmitDayEventParticipation {
                 game,
                 event_id,
@@ -840,6 +833,9 @@ pub struct HostConsoleStateDelta {
     pub phase: Option<HostConsolePhaseStateDelta>,
     pub slots: Vec<HostConsoleSlotOccupancyDelta>,
     pub thread_posts: Vec<HostConsoleThreadPostDelta>,
+    /// Operational scheduler posture for this game. This is worker state, not a
+    /// second source of DayEvent truth.
+    pub day_event_scheduler: Option<DayEventSchedulerDelta>,
     /// Authoritative DayEvent workspace rows. HostTasks reference these by
     /// `source_id`; the workspace owns definition and participation detail.
     pub day_events: Vec<HostDayEventDelta>,
@@ -856,6 +852,27 @@ pub struct HostDayEventDelta {
     pub phase_id: Option<String>,
     pub definition: game_platform::DayEvent,
     pub participant_slots: Vec<String>,
+    pub open_due_at: Option<i64>,
+    pub open_observed_at: Option<i64>,
+    pub lock_due_at: Option<i64>,
+    pub lock_observed_at: Option<i64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct DayEventSchedulerDelta {
+    pub pending: bool,
+    pub next_due_at: Option<i64>,
+    pub wake_seq: i64,
+    pub last_observed_wake_seq: i64,
+    pub lease_until: Option<i64>,
+    pub retry_not_before: Option<i64>,
+    pub last_attempt_at: Option<i64>,
+    pub last_success_at: Option<i64>,
+    pub last_failure_at: Option<i64>,
+    pub consecutive_failures: i32,
+    pub total_attempts: i64,
+    pub total_successes: i64,
+    pub last_error: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -1941,17 +1958,18 @@ pub mod typescript {
     use crate::{
         AckMsg, AdvanceSubscriptionReadRequest, CapabilityGrant, ClientEnvelope, ClientMsg,
         CohostPermissionClass, Command, CommandMsg, CommunityInboxItem, CommunityInboxPage,
-        DayVoteOutcomeDelta, DiscussionArea, DiscussionAuthor, DiscussionPost,
-        DiscussionThreadPage, DiscussionTopic, DiscussionTopicPage, GameIndexEntry, GameIndexPage,
-        Hello, HostConsoleAuthorityDelta, HostConsoleAuthorityKind, HostConsolePhaseStateDelta,
-        HostConsoleSlotOccupancyDelta, HostConsoleStateDelta, HostConsoleThreadPostDelta,
-        HostDayEventDelta, HostPhaseControl, HostPromptDecision, HostPromptDelta, HostPromptsDelta,
-        HostTaskAllowedCommand, HostTaskCommandKind, HostTaskDelta, HostTaskKind, HostTaskState,
-        HostTaskUrgency, ModerationCase, ModerationCaseDetail, ModerationCasePage,
-        ModerationHistory, ModerationReport, ModerationReportReceipt, PlayerInvestigationResult,
-        PlayerNotification, ProfileEditor, ProjectionDelta, PublicGameThreadPage, PublicProfile,
-        PublicSearchPage, PublicSearchResult, RejectCode, RejectMsg, ResolutionTraceDecisionRow,
-        ResolutionTraceEdgeRow, ResolutionTraceEffectChangeRow, ResolutionTraceGeneratedRow,
+        DayEventSchedulerDelta, DayVoteOutcomeDelta, DiscussionArea, DiscussionAuthor,
+        DiscussionPost, DiscussionThreadPage, DiscussionTopic, DiscussionTopicPage, GameIndexEntry,
+        GameIndexPage, Hello, HostConsoleAuthorityDelta, HostConsoleAuthorityKind,
+        HostConsolePhaseStateDelta, HostConsoleSlotOccupancyDelta, HostConsoleStateDelta,
+        HostConsoleThreadPostDelta, HostDayEventDelta, HostPhaseControl, HostPromptDecision,
+        HostPromptDelta, HostPromptsDelta, HostTaskAllowedCommand, HostTaskCommandKind,
+        HostTaskDelta, HostTaskKind, HostTaskState, HostTaskUrgency, ModerationCase,
+        ModerationCaseDetail, ModerationCasePage, ModerationHistory, ModerationReport,
+        ModerationReportReceipt, PlayerInvestigationResult, PlayerNotification, ProfileEditor,
+        ProjectionDelta, PublicGameThreadPage, PublicProfile, PublicSearchPage, PublicSearchResult,
+        RejectCode, RejectMsg, ResolutionTraceDecisionRow, ResolutionTraceEdgeRow,
+        ResolutionTraceEffectChangeRow, ResolutionTraceGeneratedRow,
         ResolutionTraceInspectionReport, ResolutionTraceInspectionRun, ResolutionTraceNoteRow,
         ResolutionTraceVisibilityRow, ServerEnvelope, ServerMsg, SlotLifecycle, SubmitPostMedia,
         SubscriptionTargetState, ThreadPage, ThreadPost, ThreadPostMedia, ThreadPostMediaVariant,
@@ -2027,6 +2045,7 @@ pub mod typescript {
         push::<HostConsolePhaseStateDelta>(&mut out);
         push::<HostConsoleSlotOccupancyDelta>(&mut out);
         push::<HostConsoleThreadPostDelta>(&mut out);
+        push::<DayEventSchedulerDelta>(&mut out);
         push::<HostDayEventDelta>(&mut out);
         push::<HostTaskKind>(&mut out);
         push::<HostTaskState>(&mut out);

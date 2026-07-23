@@ -617,6 +617,21 @@ test("host console projection maps deadline and stable slot history to labels", 
         denied_classes: ["phase_resolve", "lifecycle"],
       },
       completed: true,
+      day_event_scheduler: {
+        pending: false,
+        next_due_at: 1781928100,
+        wake_seq: 44,
+        last_observed_wake_seq: 44,
+        lease_until: null,
+        retry_not_before: null,
+        last_attempt_at: 1781928000,
+        last_success_at: 1781928000,
+        last_failure_at: null,
+        consecutive_failures: 0,
+        total_attempts: 3,
+        total_successes: 3,
+        last_error: null,
+      },
       phase: { phase_id: "day-2", locked: true, deadline: 1781928000 },
       slots: [
         {
@@ -668,6 +683,21 @@ test("host console projection maps deadline and stable slot history to labels", 
   );
 
   assert.equal(projection.completed, true);
+  assert.deepEqual(projection.dayEventScheduler, {
+    pending: false,
+    nextDueAt: 1781928100,
+    wakeSeq: 44,
+    lastObservedWakeSeq: 44,
+    leaseUntil: null,
+    retryNotBefore: null,
+    lastAttemptAt: 1781928000,
+    lastSuccessAt: 1781928000,
+    lastFailureAt: null,
+    consecutiveFailures: 0,
+    totalAttempts: 3,
+    totalSuccesses: 3,
+    lastError: null,
+  });
   assert.deepEqual(projection.authority, {
     principalUserId: "cohost_c",
     capabilityKind: "CohostOf",

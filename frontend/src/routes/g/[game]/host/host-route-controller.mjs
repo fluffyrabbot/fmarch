@@ -37,6 +37,7 @@ export function buildHostProjectionInitialSnapshot(data) {
       replacement: data.replacement,
       tasks: data.hostTasks ?? [],
       dayEvents: data.hostDayEvents ?? [],
+      dayEventScheduler: data.dayEventScheduler ?? null,
     }),
     votecount: data.votecount,
     dayVoteOutcomes: data.dayVoteOutcomes,
@@ -100,6 +101,7 @@ export function buildHostDerivedState({ gameId, snapshot, capabilityKind = "Host
     hostPrompts,
     hostTasks: projection.tasks ?? [],
     hostDayEvents: projection.dayEvents ?? [],
+    dayEventScheduler: projection.dayEventScheduler ?? null,
     criticalActions,
     moderatorActionGroups,
   });

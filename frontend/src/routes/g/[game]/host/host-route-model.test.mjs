@@ -289,11 +289,30 @@ test("host console route data uses host prompt and votecount cold-loads when ava
           phase: null,
           slots: [],
           thread_posts: [],
+          day_event_scheduler: {
+            pending: true,
+            next_due_at: 1781928100,
+            wake_seq: 52,
+            last_observed_wake_seq: 51,
+            lease_until: null,
+            retry_not_before: null,
+            last_attempt_at: null,
+            last_success_at: null,
+            last_failure_at: null,
+            consecutive_failures: 0,
+            total_attempts: 0,
+            total_successes: 0,
+            last_error: null,
+          },
           day_events: [{
             event_id: "event-cookie",
             state: "locked",
             phase_id: "D01",
             participant_slots: ["slot_1", "slot_2"],
+            open_due_at: 1781928000,
+            open_observed_at: 1781928001,
+            lock_due_at: 1781928060,
+            lock_observed_at: 1781928062,
             definition: {
               id: "event-cookie",
               template_key: "theme.raffle",
@@ -387,6 +406,12 @@ test("host console route data uses host prompt and votecount cold-loads when ava
     state: "locked",
     phaseId: "D01",
     templateKey: "theme.raffle",
+    scheduleEvidence: {
+      openDueAt: 1781928000,
+      openObservedAt: 1781928001,
+      lockDueAt: 1781928060,
+      lockObservedAt: 1781928062,
+    },
     participation: {
       who: "alive_slots",
       mode: "opt_in",
@@ -400,6 +425,8 @@ test("host console route data uses host prompt and votecount cold-loads when ava
       effectCount: 1,
     }],
   }]);
+  assert.equal(data.dayEventScheduler.pending, true);
+  assert.equal(data.dayEventScheduler.wakeSeq, 52);
   assert.equal(
     data.criticalActions.at(-1).payload.promptId,
     "D01:tie:slot_2",
