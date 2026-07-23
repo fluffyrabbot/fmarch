@@ -24,6 +24,22 @@ const forbiddenStatements = Object.freeze([
   ],
 ]);
 
+const privateProjectionEncryptionMigration = "0006_encrypt_private_projections.sql";
+const allowedPrivateProjectionErasureStatements = Object.freeze([
+  /^TRUNCATE\s+TABLE\s+investigation_memory,\s*player_info_result,\s*player_investigation_result,\s*private_channel_member,\s*slot_state,\s*thread_view$/i,
+  /^ALTER\s+TABLE\s+investigation_memory\s+DROP\s+COLUMN\s+result,\s*ADD\s+COLUMN\s+result_private\s+JSONB\s+NOT\s+NULL$/i,
+  /^ALTER\s+TABLE\s+player_info_result\s+DROP\s+COLUMN\s+result,\s*ADD\s+COLUMN\s+result_private\s+JSONB\s+NOT\s+NULL$/i,
+  /^ALTER\s+TABLE\s+player_investigation_result\s+DROP\s+COLUMN\s+result,\s*ADD\s+COLUMN\s+result_private\s+JSONB\s+NOT\s+NULL$/i,
+  /^ALTER\s+TABLE\s+private_channel_member\s+DROP\s+COLUMN\s+role_key,\s*DROP\s+COLUMN\s+reveals_alignment,\s*ADD\s+COLUMN\s+private\s+JSONB\s+NOT\s+NULL$/i,
+  /^ALTER\s+TABLE\s+slot_state\s+DROP\s+COLUMN\s+role_key,\s*DROP\s+COLUMN\s+alignment,\s*ADD\s+COLUMN\s+private\s+JSONB$/i,
+  /^ALTER\s+TABLE\s+thread_view\s+DROP\s+COLUMN\s+body,\s*ADD\s+COLUMN\s+body\s+TEXT,\s*ADD\s+COLUMN\s+body_private\s+JSONB,\s*ADD\s+CONSTRAINT\s+thread_view_body_storage\s+CHECK\s*\([\s\S]+\)$/i,
+]);
+
+function isAllowedPrivateProjectionErasure(file, statement) {
+  return file === privateProjectionEncryptionMigration
+    && allowedPrivateProjectionErasureStatements.some((pattern) => pattern.test(statement));
+}
+
 function executableStatements(sql) {
   return sql
     .replace(/--.*$/gm, "")
@@ -84,7 +100,7 @@ export async function inspectProjectionBaseline({ root = repoRoot } = {}) {
     statementCount += statements.length;
     for (const statement of statements) {
       for (const [label, pattern] of forbiddenStatements) {
-        if (pattern.test(statement)) {
+        if (pattern.test(statement) && !isAllowedPrivateProjectionErasure(file, statement)) {
           throw new Error(
             `projection migration ${file} contains ${label}: ${statement.slice(0, 120)}`,
           );

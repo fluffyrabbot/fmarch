@@ -98,7 +98,6 @@ async fn post_command(
         }),
     ))
     .unwrap();
-    let token = format!("encryption-command-session:{principal_user_id}");
     let session = app
         .clone()
         .oneshot(
@@ -108,7 +107,6 @@ async fn post_command(
                 .header("content-type", "application/json")
                 .body(Body::from(
                     serde_json::json!({
-                        "token": token,
                         "principal_user_id": principal_user_id,
                         "expires_at": 4_102_444_800i64,
                         "global_capabilities": global_capabilities
@@ -120,6 +118,11 @@ async fn post_command(
         .await
         .unwrap();
     assert_eq!(session.status(), StatusCode::OK);
+    let session_bytes = to_bytes(session.into_body(), usize::MAX).await.unwrap();
+    let session: serde_json::Value = serde_json::from_slice(&session_bytes).unwrap();
+    let token = session["session_token"]
+        .as_str()
+        .expect("dev session response must return its backend-generated token");
     let response = app
         .oneshot(
             Request::builder()
@@ -175,8 +178,8 @@ async fn mixed_kid_private_payloads_survive_rebuild_and_private_thread_api_read(
             Command::CreateGame {
                 game,
                 pack: "mafiascum".into(),
-            cohost_denied: vec![],
-        },
+                cohost_denied: vec![],
+            },
         )
         .await,
     );

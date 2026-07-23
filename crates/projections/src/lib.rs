@@ -744,17 +744,8 @@ async fn fold_event(
             let alignment = optional_string_field(p, "alignment", &ev.kind)?;
             let role_effects = optional_string_array_field(p, "role_effects", &ev.kind)?;
             ensure_slot(tx, game_id, &slot_id).await?;
-            sqlx::query(
-                "UPDATE slot_state SET role_key = $3, alignment = $4 \
-                 WHERE game_id = $1 AND slot_id = $2",
-            )
-            .bind(game_id)
-            .bind(&slot_id)
-            .bind(&role_key)
-            .bind(alignment.as_deref())
-            .execute(&mut **tx)
-            .await?;
-            let role_source_action = format!("role:{role_key}");
+            set_slot_private(tx, game_id, &slot_id, &role_key, alignment.as_deref()).await?;
+            let role_source_action = "role-assignment";
             for effect in role_effects {
                 upsert_effect(
                     tx,
@@ -762,7 +753,7 @@ async fn fold_event(
                     &slot_id,
                     &effect,
                     &slot_id,
-                    Some(role_source_action.as_str()),
+                    Some(role_source_action),
                     None,
                     None,
                     None,
@@ -1141,28 +1132,18 @@ async fn fold_inner(
             ..
         } => {
             ensure_slot(tx, game_id, target).await?;
-            sqlx::query(
-                "UPDATE slot_state SET role_key = $3, alignment = $4 \
-                 WHERE game_id = $1 AND slot_id = $2",
-            )
-            .bind(game_id)
-            .bind(target)
-            .bind(new_role)
-            .bind(new_alignment)
-            .execute(&mut **tx)
-            .await?;
+            set_slot_private(tx, game_id, target, new_role, new_alignment.as_deref()).await?;
         }
         AlignmentRevealed {
             slot_id, alignment, ..
         } => {
             ensure_slot(tx, game_id, slot_id).await?;
+            update_slot_private(tx, game_id, slot_id, None, Some(Some(alignment))).await?;
             sqlx::query(
-                "UPDATE slot_state SET alignment = $3, alignment_revealed = TRUE \
-                 WHERE game_id = $1 AND slot_id = $2",
+                "UPDATE slot_state SET alignment_revealed = TRUE WHERE game_id = $1 AND slot_id = $2",
             )
             .bind(game_id)
             .bind(slot_id)
-            .bind(alignment)
             .execute(&mut **tx)
             .await?;
         }
@@ -1170,13 +1151,12 @@ async fn fold_inner(
             slot_id, role_key, ..
         } => {
             ensure_slot(tx, game_id, slot_id).await?;
+            update_slot_private(tx, game_id, slot_id, Some(role_key), None).await?;
             sqlx::query(
-                "UPDATE slot_state SET role_key = $3, role_revealed = TRUE \
-                 WHERE game_id = $1 AND slot_id = $2",
+                "UPDATE slot_state SET role_revealed = TRUE WHERE game_id = $1 AND slot_id = $2",
             )
             .bind(game_id)
             .bind(slot_id)
-            .bind(role_key)
             .execute(&mut **tx)
             .await?;
         }
@@ -1313,14 +1293,21 @@ async fn fold_inner(
                 }
                 _ => investigator,
             };
+            let game = game_id.to_string();
+            let event = event_index.to_string();
+            let result_private = seal_private_projection(
+                "player_investigation_result",
+                &[game.as_str(), phase_id, event.as_str(), audience_slot],
+                serde_json::json!({ "result": result }),
+            )?;
             sqlx::query(
                 "INSERT INTO player_investigation_result \
-                 (game_id, phase_id, event_index, audience_slot, mode, target_slot, result) \
+                 (game_id, phase_id, event_index, audience_slot, mode, target_slot, result_private) \
                  VALUES ($1, $2, $3, $4, $5, $6, $7) \
                  ON CONFLICT (game_id, phase_id, event_index, audience_slot) DO UPDATE SET \
                  mode = EXCLUDED.mode, \
                  target_slot = EXCLUDED.target_slot, \
-                 result = EXCLUDED.result",
+                 result_private = EXCLUDED.result_private",
             )
             .bind(game_id)
             .bind(phase_id)
@@ -1328,7 +1315,7 @@ async fn fold_inner(
             .bind(audience_slot)
             .bind(format!("{mode:?}"))
             .bind(target)
-            .bind(result)
+            .bind(result_private)
             .execute(&mut **tx)
             .await?;
         }
@@ -1346,10 +1333,17 @@ async fn fold_inner(
             ensure_slot(tx, game_id, target).await?;
             for audience_slot in audience {
                 ensure_slot(tx, game_id, audience_slot).await?;
+                let game = game_id.to_string();
+                let event = event_index.to_string();
+                let result_private = seal_private_projection(
+                    "player_info_result",
+                    &[game.as_str(), phase_id, event.as_str(), audience_slot],
+                    serde_json::json!({ "result": result }),
+                )?;
                 sqlx::query(
                     "INSERT INTO player_info_result \
                      (game_id, phase_id, event_index, audience_slot, kind, actor_slot, \
-                      target_slot, source_action, template_id, result) \
+                      target_slot, source_action, template_id, result_private) \
                      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) \
                      ON CONFLICT (game_id, phase_id, event_index, audience_slot) DO UPDATE SET \
                      kind = EXCLUDED.kind, \
@@ -1357,7 +1351,7 @@ async fn fold_inner(
                      target_slot = EXCLUDED.target_slot, \
                      source_action = EXCLUDED.source_action, \
                      template_id = EXCLUDED.template_id, \
-                     result = EXCLUDED.result",
+                     result_private = EXCLUDED.result_private",
                 )
                 .bind(game_id)
                 .bind(phase_id)
@@ -1368,7 +1362,7 @@ async fn fold_inner(
                 .bind(target)
                 .bind(source_action)
                 .bind(template_id)
-                .bind(result)
+                .bind(result_private)
                 .execute(&mut **tx)
                 .await?;
             }
@@ -1398,13 +1392,20 @@ async fn fold_inner(
                 .execute(&mut **tx)
                 .await?;
             }
+            let game = game_id.to_string();
+            let mode_name = format!("{mode:?}");
+            let result_private = seal_private_projection(
+                "investigation_memory",
+                &[game.as_str(), investigator, target, mode_name.as_str()],
+                serde_json::json!({ "result": result }),
+            )?;
             sqlx::query(
                 "INSERT INTO investigation_memory \
-                 (game_id, investigator_slot, target_slot, mode, memory_scope, result, source_action, template_id, phase_id, phase_kind, phase_number) \
+                 (game_id, investigator_slot, target_slot, mode, memory_scope, result_private, source_action, template_id, phase_id, phase_kind, phase_number) \
                  VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) \
                  ON CONFLICT (game_id, investigator_slot, target_slot, mode) DO UPDATE SET \
                  memory_scope = EXCLUDED.memory_scope, \
-                 result = EXCLUDED.result, \
+                 result_private = EXCLUDED.result_private, \
                  source_action = EXCLUDED.source_action, \
                  template_id = EXCLUDED.template_id, \
                  phase_id = EXCLUDED.phase_id, \
@@ -1414,9 +1415,9 @@ async fn fold_inner(
             .bind(game_id)
             .bind(investigator)
             .bind(target)
-            .bind(format!("{mode:?}"))
+            .bind(&mode_name)
             .bind(format!("{scope:?}"))
-            .bind(result)
+            .bind(result_private)
             .bind(source_action)
             .bind(template_id)
             .bind(phase_id)
@@ -3353,7 +3354,7 @@ async fn projection_snapshot(
         predicate = predicate,
     );
     let row = sqlx::query(&sql).bind(game_id).fetch_one(&mut **tx).await?;
-    Ok(row.get("rows"))
+    normalize_private_snapshot(projection.table, row.get("rows"))
 }
 
 fn audit_table(
@@ -3362,18 +3363,206 @@ fn audit_table(
     rebuilt: serde_json::Value,
 ) -> ProjectionAuditTable {
     let matches = before == rebuilt;
+    let before_report = (!matches).then(|| redact_private_snapshot(table, before.clone()));
+    let rebuilt_report = (!matches).then(|| redact_private_snapshot(table, rebuilt.clone()));
     ProjectionAuditTable {
         table: table.to_string(),
         matches,
         before_rows: json_array_len(&before),
         rebuilt_rows: json_array_len(&rebuilt),
-        before: (!matches).then_some(before),
-        rebuilt: (!matches).then_some(rebuilt),
+        before: before_report,
+        rebuilt: rebuilt_report,
     }
+}
+
+fn normalize_private_snapshot(
+    table: &str,
+    mut rows: serde_json::Value,
+) -> Result<serde_json::Value, ProjectionError> {
+    let Some(array) = rows.as_array_mut() else {
+        return Ok(rows);
+    };
+    for row in array.iter_mut() {
+        let object = row.as_object_mut().ok_or_else(|| {
+            ProjectionError::Store(StoreError::Crypto(
+                "projection audit row must be an object".to_string(),
+            ))
+        })?;
+        let (field, identity): (&str, Vec<String>) = match table {
+            "slot_state" => (
+                "private",
+                vec![
+                    snapshot_string(object, "game_id")?,
+                    snapshot_string(object, "slot_id")?,
+                ],
+            ),
+            "private_channel_member" => (
+                "private",
+                vec![
+                    snapshot_string(object, "game_id")?,
+                    snapshot_string(object, "channel_id")?,
+                    snapshot_string(object, "slot_id")?,
+                ],
+            ),
+            "thread_view" if object.get("body_private").is_some_and(|v| !v.is_null()) => (
+                "body_private",
+                vec![
+                    snapshot_string(object, "game_id")?,
+                    snapshot_number(object, "source_seq")?,
+                    snapshot_string(object, "channel_id")?,
+                ],
+            ),
+            "investigation_memory" => (
+                "result_private",
+                vec![
+                    snapshot_string(object, "game_id")?,
+                    snapshot_string(object, "investigator_slot")?,
+                    snapshot_string(object, "target_slot")?,
+                    snapshot_string(object, "mode")?,
+                ],
+            ),
+            "player_info_result" | "player_investigation_result" => (
+                "result_private",
+                vec![
+                    snapshot_string(object, "game_id")?,
+                    snapshot_string(object, "phase_id")?,
+                    snapshot_number(object, "event_index")?,
+                    snapshot_string(object, "audience_slot")?,
+                ],
+            ),
+            _ => continue,
+        };
+        let Some(envelope) = object.remove(field).filter(|value| !value.is_null()) else {
+            continue;
+        };
+        let identity_refs: Vec<_> = identity.iter().map(String::as_str).collect();
+        let private = open_private_projection(table, &identity_refs, &envelope)?;
+        let private = private.as_object().ok_or_else(|| {
+            ProjectionError::Store(StoreError::Crypto(
+                "private projection audit value must be an object".to_string(),
+            ))
+        })?;
+        for (key, value) in private {
+            object.insert(key.clone(), value.clone());
+        }
+    }
+    Ok(rows)
+}
+
+fn snapshot_string(
+    row: &serde_json::Map<String, serde_json::Value>,
+    field: &str,
+) -> Result<String, ProjectionError> {
+    row.get(field)
+        .and_then(serde_json::Value::as_str)
+        .map(str::to_owned)
+        .ok_or_else(|| {
+            ProjectionError::Store(StoreError::Crypto(format!(
+                "projection audit row missing string `{field}`"
+            )))
+        })
+}
+
+fn snapshot_number(
+    row: &serde_json::Map<String, serde_json::Value>,
+    field: &str,
+) -> Result<String, ProjectionError> {
+    row.get(field)
+        .and_then(serde_json::Value::as_i64)
+        .map(|value| value.to_string())
+        .ok_or_else(|| {
+            ProjectionError::Store(StoreError::Crypto(format!(
+                "projection audit row missing integer `{field}`"
+            )))
+        })
+}
+
+fn redact_private_snapshot(table: &str, mut rows: serde_json::Value) -> serde_json::Value {
+    let Some(array) = rows.as_array_mut() else {
+        return rows;
+    };
+    for row in array.iter_mut() {
+        let Some(object) = row.as_object_mut() else {
+            continue;
+        };
+        match table {
+            "slot_state" => {
+                object.insert("role_key".to_string(), serde_json::json!("<private>"));
+                object.insert("alignment".to_string(), serde_json::json!("<private>"));
+            }
+            "private_channel_member" => {
+                object.insert("role_key".to_string(), serde_json::json!("<private>"));
+                object.insert(
+                    "reveals_alignment".to_string(),
+                    serde_json::json!("<private>"),
+                );
+            }
+            "thread_view" if object.get("channel_id").and_then(|v| v.as_str()) != Some("main") => {
+                object.insert("body".to_string(), serde_json::json!("<private>"));
+            }
+            "investigation_memory" | "player_info_result" | "player_investigation_result" => {
+                object.insert("result".to_string(), serde_json::json!("<private>"));
+            }
+            _ => {}
+        }
+    }
+    rows
 }
 
 fn json_array_len(value: &serde_json::Value) -> usize {
     value.as_array().map_or(0, Vec::len)
+}
+
+fn private_projection_context(table: &str, identity: &[&str]) -> String {
+    format!("fmarch-projection-v1:{table}:{}", identity.join(":"))
+}
+
+fn seal_private_projection(
+    table: &str,
+    identity: &[&str],
+    value: serde_json::Value,
+) -> Result<serde_json::Value, ProjectionError> {
+    Ok(eventstore::encrypt_private_projection(
+        value,
+        &private_projection_context(table, identity),
+    )?)
+}
+
+fn open_private_projection(
+    table: &str,
+    identity: &[&str],
+    envelope: &serde_json::Value,
+) -> Result<serde_json::Value, ProjectionError> {
+    Ok(eventstore::decrypt_private_projection(
+        envelope,
+        &private_projection_context(table, identity),
+    )?)
+}
+
+fn required_private_string(
+    value: &serde_json::Value,
+    field: &str,
+) -> Result<String, ProjectionError> {
+    value
+        .get(field)
+        .and_then(serde_json::Value::as_str)
+        .map(str::to_owned)
+        .ok_or_else(|| {
+            ProjectionError::Store(StoreError::Crypto(format!(
+                "private projection missing string field `{field}`"
+            )))
+        })
+}
+
+fn required_private_value(
+    value: &serde_json::Value,
+    field: &str,
+) -> Result<serde_json::Value, ProjectionError> {
+    value.get(field).cloned().ok_or_else(|| {
+        ProjectionError::Store(StoreError::Crypto(format!(
+            "private projection missing field `{field}`"
+        )))
+    })
 }
 
 // ───────────────────────── read helpers (for tests / queries / caps) ─────────────────────────
@@ -3510,7 +3699,7 @@ where
     E: sqlx::PgExecutor<'e>,
 {
     let rows = sqlx::query(
-        "SELECT game_id, slot_id, alive, status, role_key, alignment, role_revealed, \
+        "SELECT game_id, slot_id, alive, status, private, role_revealed, \
          alignment_revealed, ARRAY(SELECT tag FROM slot_status_tag t \
              WHERE t.game_id = slot_state.game_id AND t.slot_id = slot_state.slot_id \
              ORDER BY tag) AS status_tags FROM slot_state \
@@ -3519,20 +3708,41 @@ where
     .bind(game_id)
     .fetch_all(executor)
     .await?;
-    Ok(rows
-        .into_iter()
-        .map(|r| SlotStateRow {
-            game_id: r.get("game_id"),
-            status_tags: r.get("status_tags"),
-            slot_id: r.get("slot_id"),
-            alive: r.get("alive"),
-            status: r.get("status"),
-            role_key: r.get("role_key"),
-            alignment: r.get("alignment"),
-            role_revealed: r.get("role_revealed"),
-            alignment_revealed: r.get("alignment_revealed"),
+    rows.into_iter()
+        .map(|r| {
+            let row_game_id: Uuid = r.get("game_id");
+            let slot_id: String = r.get("slot_id");
+            let envelope: Option<serde_json::Value> = r.get("private");
+            let private = match envelope {
+                Some(envelope) => {
+                    let game = row_game_id.to_string();
+                    open_private_projection(
+                        "slot_state",
+                        &[game.as_str(), slot_id.as_str()],
+                        &envelope,
+                    )?
+                }
+                None => serde_json::Value::Null,
+            };
+            Ok(SlotStateRow {
+                game_id: row_game_id,
+                status_tags: r.get("status_tags"),
+                slot_id,
+                alive: r.get("alive"),
+                status: r.get("status"),
+                role_key: private
+                    .get("role_key")
+                    .and_then(serde_json::Value::as_str)
+                    .map(str::to_owned),
+                alignment: private
+                    .get("alignment")
+                    .and_then(serde_json::Value::as_str)
+                    .map(str::to_owned),
+                role_revealed: r.get("role_revealed"),
+                alignment_revealed: r.get("alignment_revealed"),
+            })
         })
-        .collect())
+        .collect()
 }
 
 /// Read persistent engine effects, ordered deterministically.
@@ -3661,29 +3871,45 @@ pub async fn investigation_memory(
     game_id: Uuid,
 ) -> Result<Vec<InvestigationMemoryRow>, ProjectionError> {
     let rows = sqlx::query(
-        "SELECT game_id, investigator_slot, target_slot, mode, memory_scope, result, source_action, template_id, phase_id, phase_kind, phase_number \
+        "SELECT game_id, investigator_slot, target_slot, mode, memory_scope, result_private, source_action, template_id, phase_id, phase_kind, phase_number \
          FROM investigation_memory WHERE game_id = $1 \
          ORDER BY phase_number, phase_id, investigator_slot, target_slot, mode",
     )
     .bind(game_id)
     .fetch_all(pool)
     .await?;
-    Ok(rows
-        .into_iter()
-        .map(|r| InvestigationMemoryRow {
-            game_id: r.get("game_id"),
-            investigator_slot: r.get("investigator_slot"),
-            target_slot: r.get("target_slot"),
-            mode: r.get("mode"),
-            memory_scope: r.get("memory_scope"),
-            result: r.get("result"),
-            source_action: r.get("source_action"),
-            template_id: r.get("template_id"),
-            phase_id: r.get("phase_id"),
-            phase_kind: r.get("phase_kind"),
-            phase_number: r.get("phase_number"),
+    rows.into_iter()
+        .map(|r| {
+            let row_game_id: Uuid = r.get("game_id");
+            let investigator_slot: String = r.get("investigator_slot");
+            let target_slot: String = r.get("target_slot");
+            let mode: String = r.get("mode");
+            let game = row_game_id.to_string();
+            let private = open_private_projection(
+                "investigation_memory",
+                &[
+                    game.as_str(),
+                    investigator_slot.as_str(),
+                    target_slot.as_str(),
+                    mode.as_str(),
+                ],
+                &r.get("result_private"),
+            )?;
+            Ok(InvestigationMemoryRow {
+                game_id: row_game_id,
+                investigator_slot,
+                target_slot,
+                mode,
+                memory_scope: r.get("memory_scope"),
+                result: required_private_value(&private, "result")?,
+                source_action: r.get("source_action"),
+                template_id: r.get("template_id"),
+                phase_id: r.get("phase_id"),
+                phase_kind: r.get("phase_kind"),
+                phase_number: r.get("phase_number"),
+            })
         })
-        .collect())
+        .collect()
 }
 
 /// Read active delayed-death queue rows, ordered deterministically.
@@ -3871,25 +4097,42 @@ pub async fn player_investigation_results(
     game_id: Uuid,
 ) -> Result<Vec<PlayerInvestigationResultRow>, ProjectionError> {
     let rows = sqlx::query(
-        "SELECT game_id, phase_id, event_index, audience_slot, mode, target_slot, result \
+        "SELECT game_id, phase_id, event_index, audience_slot, mode, target_slot, result_private \
          FROM player_investigation_result WHERE game_id = $1 \
          ORDER BY phase_id, event_index, audience_slot",
     )
     .bind(game_id)
     .fetch_all(pool)
     .await?;
-    Ok(rows
-        .into_iter()
-        .map(|r| PlayerInvestigationResultRow {
-            game_id: r.get("game_id"),
-            phase_id: r.get("phase_id"),
-            event_index: r.get("event_index"),
-            audience_slot: r.get("audience_slot"),
-            mode: r.get("mode"),
-            target_slot: r.get("target_slot"),
-            result: r.get("result"),
+    rows.into_iter()
+        .map(|r| {
+            let row_game_id: Uuid = r.get("game_id");
+            let phase_id: String = r.get("phase_id");
+            let event_index: i32 = r.get("event_index");
+            let audience_slot: String = r.get("audience_slot");
+            let game = row_game_id.to_string();
+            let event = event_index.to_string();
+            let private = open_private_projection(
+                "player_investigation_result",
+                &[
+                    game.as_str(),
+                    phase_id.as_str(),
+                    event.as_str(),
+                    audience_slot.as_str(),
+                ],
+                &r.get("result_private"),
+            )?;
+            Ok(PlayerInvestigationResultRow {
+                game_id: row_game_id,
+                phase_id,
+                event_index,
+                audience_slot,
+                mode: r.get("mode"),
+                target_slot: r.get("target_slot"),
+                result: required_private_value(&private, "result")?,
+            })
         })
-        .collect())
+        .collect()
 }
 
 /// Read folded private investigation results for one audience slot.
@@ -3899,7 +4142,7 @@ pub async fn player_investigation_results_for_slot(
     audience_slot: &str,
 ) -> Result<Vec<PlayerInvestigationResultRow>, ProjectionError> {
     let rows = sqlx::query(
-        "SELECT game_id, phase_id, event_index, audience_slot, mode, target_slot, result \
+        "SELECT game_id, phase_id, event_index, audience_slot, mode, target_slot, result_private \
          FROM player_investigation_result WHERE game_id = $1 AND audience_slot = $2 \
          ORDER BY phase_id, event_index, audience_slot",
     )
@@ -3907,18 +4150,35 @@ pub async fn player_investigation_results_for_slot(
     .bind(audience_slot)
     .fetch_all(pool)
     .await?;
-    Ok(rows
-        .into_iter()
-        .map(|r| PlayerInvestigationResultRow {
-            game_id: r.get("game_id"),
-            phase_id: r.get("phase_id"),
-            event_index: r.get("event_index"),
-            audience_slot: r.get("audience_slot"),
-            mode: r.get("mode"),
-            target_slot: r.get("target_slot"),
-            result: r.get("result"),
+    rows.into_iter()
+        .map(|r| {
+            let row_game_id: Uuid = r.get("game_id");
+            let phase_id: String = r.get("phase_id");
+            let event_index: i32 = r.get("event_index");
+            let audience_slot: String = r.get("audience_slot");
+            let game = row_game_id.to_string();
+            let event = event_index.to_string();
+            let private = open_private_projection(
+                "player_investigation_result",
+                &[
+                    game.as_str(),
+                    phase_id.as_str(),
+                    event.as_str(),
+                    audience_slot.as_str(),
+                ],
+                &r.get("result_private"),
+            )?;
+            Ok(PlayerInvestigationResultRow {
+                game_id: row_game_id,
+                phase_id,
+                event_index,
+                audience_slot,
+                mode: r.get("mode"),
+                target_slot: r.get("target_slot"),
+                result: required_private_value(&private, "result")?,
+            })
         })
-        .collect())
+        .collect()
 }
 
 /// Read folded private info results, ordered deterministically.
@@ -3928,28 +4188,45 @@ pub async fn player_info_results(
 ) -> Result<Vec<PlayerInfoResultRow>, ProjectionError> {
     let rows = sqlx::query(
         "SELECT game_id, phase_id, event_index, audience_slot, kind, actor_slot, \
-         target_slot, source_action, template_id, result \
+         target_slot, source_action, template_id, result_private \
          FROM player_info_result WHERE game_id = $1 \
          ORDER BY phase_id, event_index, audience_slot",
     )
     .bind(game_id)
     .fetch_all(pool)
     .await?;
-    Ok(rows
-        .into_iter()
-        .map(|r| PlayerInfoResultRow {
-            game_id: r.get("game_id"),
-            phase_id: r.get("phase_id"),
-            event_index: r.get("event_index"),
-            audience_slot: r.get("audience_slot"),
-            kind: r.get("kind"),
-            actor_slot: r.get("actor_slot"),
-            target_slot: r.get("target_slot"),
-            source_action: r.get("source_action"),
-            template_id: r.get("template_id"),
-            result: r.get("result"),
+    rows.into_iter()
+        .map(|r| {
+            let row_game_id: Uuid = r.get("game_id");
+            let phase_id: String = r.get("phase_id");
+            let event_index: i32 = r.get("event_index");
+            let audience_slot: String = r.get("audience_slot");
+            let game = row_game_id.to_string();
+            let event = event_index.to_string();
+            let private = open_private_projection(
+                "player_info_result",
+                &[
+                    game.as_str(),
+                    phase_id.as_str(),
+                    event.as_str(),
+                    audience_slot.as_str(),
+                ],
+                &r.get("result_private"),
+            )?;
+            Ok(PlayerInfoResultRow {
+                game_id: row_game_id,
+                phase_id,
+                event_index,
+                audience_slot,
+                kind: r.get("kind"),
+                actor_slot: r.get("actor_slot"),
+                target_slot: r.get("target_slot"),
+                source_action: r.get("source_action"),
+                template_id: r.get("template_id"),
+                result: required_private_value(&private, "result")?,
+            })
         })
-        .collect())
+        .collect()
 }
 
 /// Read folded private info results for one audience slot.
@@ -3960,7 +4237,7 @@ pub async fn player_info_results_for_slot(
 ) -> Result<Vec<PlayerInfoResultRow>, ProjectionError> {
     let rows = sqlx::query(
         "SELECT game_id, phase_id, event_index, audience_slot, kind, actor_slot, \
-         target_slot, source_action, template_id, result \
+         target_slot, source_action, template_id, result_private \
          FROM player_info_result WHERE game_id = $1 AND audience_slot = $2 \
          ORDER BY phase_id, event_index, audience_slot",
     )
@@ -3968,21 +4245,38 @@ pub async fn player_info_results_for_slot(
     .bind(audience_slot)
     .fetch_all(pool)
     .await?;
-    Ok(rows
-        .into_iter()
-        .map(|r| PlayerInfoResultRow {
-            game_id: r.get("game_id"),
-            phase_id: r.get("phase_id"),
-            event_index: r.get("event_index"),
-            audience_slot: r.get("audience_slot"),
-            kind: r.get("kind"),
-            actor_slot: r.get("actor_slot"),
-            target_slot: r.get("target_slot"),
-            source_action: r.get("source_action"),
-            template_id: r.get("template_id"),
-            result: r.get("result"),
+    rows.into_iter()
+        .map(|r| {
+            let row_game_id: Uuid = r.get("game_id");
+            let phase_id: String = r.get("phase_id");
+            let event_index: i32 = r.get("event_index");
+            let audience_slot: String = r.get("audience_slot");
+            let game = row_game_id.to_string();
+            let event = event_index.to_string();
+            let private = open_private_projection(
+                "player_info_result",
+                &[
+                    game.as_str(),
+                    phase_id.as_str(),
+                    event.as_str(),
+                    audience_slot.as_str(),
+                ],
+                &r.get("result_private"),
+            )?;
+            Ok(PlayerInfoResultRow {
+                game_id: row_game_id,
+                phase_id,
+                event_index,
+                audience_slot,
+                kind: r.get("kind"),
+                actor_slot: r.get("actor_slot"),
+                target_slot: r.get("target_slot"),
+                source_action: r.get("source_action"),
+                template_id: r.get("template_id"),
+                result: required_private_value(&private, "result")?,
+            })
         })
-        .collect())
+        .collect()
 }
 
 /// Read folded host/admin prompts, ordered deterministically.
@@ -4192,24 +4486,35 @@ pub async fn private_channel_members(
     game_id: Uuid,
 ) -> Result<Vec<PrivateChannelMemberRow>, ProjectionError> {
     let rows = sqlx::query(
-        "SELECT game_id, channel_id, kind, slot_id, role_key, reveals_alignment, source \
+        "SELECT game_id, channel_id, kind, slot_id, private, source \
          FROM private_channel_member WHERE game_id = $1 ORDER BY channel_id, slot_id",
     )
     .bind(game_id)
     .fetch_all(pool)
     .await?;
-    Ok(rows
-        .into_iter()
-        .map(|r| PrivateChannelMemberRow {
-            game_id: r.get("game_id"),
-            channel_id: r.get("channel_id"),
-            kind: r.get("kind"),
-            slot_id: r.get("slot_id"),
-            role_key: r.get("role_key"),
-            reveals_alignment: r.get("reveals_alignment"),
-            source: r.get("source"),
+    rows.into_iter()
+        .map(|r| {
+            let row_game_id: Uuid = r.get("game_id");
+            let channel_id: String = r.get("channel_id");
+            let slot_id: String = r.get("slot_id");
+            let envelope: serde_json::Value = r.get("private");
+            let game = row_game_id.to_string();
+            let private = open_private_projection(
+                "private_channel_member",
+                &[game.as_str(), channel_id.as_str(), slot_id.as_str()],
+                &envelope,
+            )?;
+            Ok(PrivateChannelMemberRow {
+                game_id: row_game_id,
+                channel_id,
+                kind: r.get("kind"),
+                slot_id,
+                role_key: required_private_string(&private, "role_key")?,
+                reveals_alignment: required_private_string(&private, "reveals_alignment")?,
+                source: r.get("source"),
+            })
         })
-        .collect())
+        .collect()
 }
 
 pub async fn post_policy<'e, E>(
@@ -5338,7 +5643,7 @@ async fn thread_view_for_channel_with_visibility(
     let rows = sqlx::query(
         r#"
         SELECT game_id, source_seq, stream_seq, channel_id, author_slot,
-               author_user, phase_id, body, media, occurred_at
+               author_user, phase_id, body, body_private, media, occurred_at
         FROM thread_view
         WHERE game_id = $1
           AND channel_id = $2
@@ -5368,19 +5673,38 @@ async fn thread_view_for_channel_with_visibility(
     let mut posts: Vec<_> = rows
         .into_iter()
         .take(limit as usize)
-        .map(|r| ThreadPostRow {
-            game_id: r.get("game_id"),
-            source_seq: r.get("source_seq"),
-            stream_seq: r.get("stream_seq"),
-            channel_id: r.get("channel_id"),
-            author_slot: r.get("author_slot"),
-            author_user: r.get("author_user"),
-            phase_id: r.get("phase_id"),
-            body: r.get("body"),
-            media: r.get("media"),
-            occurred_at: r.get("occurred_at"),
+        .map(|r| {
+            let row_game_id: Uuid = r.get("game_id");
+            let source_seq: i64 = r.get("source_seq");
+            let channel_id: String = r.get("channel_id");
+            let body = match r.get::<Option<String>, _>("body") {
+                Some(body) => body,
+                None => {
+                    let envelope: serde_json::Value = r.get("body_private");
+                    let game = row_game_id.to_string();
+                    let source = source_seq.to_string();
+                    let private = open_private_projection(
+                        "thread_view",
+                        &[game.as_str(), source.as_str(), channel_id.as_str()],
+                        &envelope,
+                    )?;
+                    required_private_string(&private, "body")?
+                }
+            };
+            Ok(ThreadPostRow {
+                game_id: row_game_id,
+                source_seq,
+                stream_seq: r.get("stream_seq"),
+                channel_id,
+                author_slot: r.get("author_slot"),
+                author_user: r.get("author_user"),
+                phase_id: r.get("phase_id"),
+                body,
+                media: r.get("media"),
+                occurred_at: r.get("occurred_at"),
+            })
         })
-        .collect();
+        .collect::<Result<Vec<_>, ProjectionError>>()?;
     posts.reverse();
     let next_before_seq = if has_more {
         posts.first().map(|post| post.source_seq)
@@ -5499,7 +5823,7 @@ async fn ensure_slot(
 ) -> Result<(), ProjectionError> {
     sqlx::query(
         r#"
-        INSERT INTO slot_state (game_id, slot_id, alive, role_key, role_revealed, alignment_revealed)
+        INSERT INTO slot_state (game_id, slot_id, alive, private, role_revealed, alignment_revealed)
         VALUES ($1, $2, TRUE, NULL, FALSE, FALSE)
         ON CONFLICT (game_id, slot_id) DO NOTHING
         "#,
@@ -5508,6 +5832,71 @@ async fn ensure_slot(
     .bind(slot_id)
     .execute(&mut **tx)
     .await?;
+    Ok(())
+}
+
+async fn set_slot_private(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    game_id: Uuid,
+    slot_id: &str,
+    role_key: &str,
+    alignment: Option<&str>,
+) -> Result<(), ProjectionError> {
+    let game = game_id.to_string();
+    let private = seal_private_projection(
+        "slot_state",
+        &[game.as_str(), slot_id],
+        serde_json::json!({ "role_key": role_key, "alignment": alignment }),
+    )?;
+    sqlx::query("UPDATE slot_state SET private = $3 WHERE game_id = $1 AND slot_id = $2")
+        .bind(game_id)
+        .bind(slot_id)
+        .bind(private)
+        .execute(&mut **tx)
+        .await?;
+    Ok(())
+}
+
+async fn update_slot_private(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    game_id: Uuid,
+    slot_id: &str,
+    role_key: Option<&str>,
+    alignment: Option<Option<&str>>,
+) -> Result<(), ProjectionError> {
+    let envelope: Option<serde_json::Value> = sqlx::query_scalar(
+        "SELECT private FROM slot_state WHERE game_id = $1 AND slot_id = $2 FOR UPDATE",
+    )
+    .bind(game_id)
+    .bind(slot_id)
+    .fetch_optional(&mut **tx)
+    .await?
+    .flatten();
+    let game = game_id.to_string();
+    let mut private = match envelope {
+        Some(envelope) => {
+            open_private_projection("slot_state", &[game.as_str(), slot_id], &envelope)?
+        }
+        None => serde_json::json!({ "role_key": null, "alignment": null }),
+    };
+    let object = private.as_object_mut().ok_or_else(|| {
+        ProjectionError::Store(StoreError::Crypto(
+            "slot_state private projection must be an object".to_string(),
+        ))
+    })?;
+    if let Some(role_key) = role_key {
+        object.insert("role_key".to_string(), serde_json::json!(role_key));
+    }
+    if let Some(alignment) = alignment {
+        object.insert("alignment".to_string(), serde_json::json!(alignment));
+    }
+    let private = seal_private_projection("slot_state", &[game.as_str(), slot_id], private)?;
+    sqlx::query("UPDATE slot_state SET private = $3 WHERE game_id = $1 AND slot_id = $2")
+        .bind(game_id)
+        .bind(slot_id)
+        .bind(private)
+        .execute(&mut **tx)
+        .await?;
     Ok(())
 }
 
@@ -6237,13 +6626,27 @@ async fn insert_thread_post(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     post: ThreadPostInsert,
 ) -> Result<(), ProjectionError> {
+    let source = post.source_seq.to_string();
+    let game = post.game_id.to_string();
+    let (body, body_private) = if post.channel_id == "main" {
+        (Some(post.body.as_str()), None)
+    } else {
+        (
+            None,
+            Some(seal_private_projection(
+                "thread_view",
+                &[game.as_str(), source.as_str(), post.channel_id.as_str()],
+                serde_json::json!({ "body": post.body }),
+            )?),
+        )
+    };
     sqlx::query(
         r#"
         INSERT INTO thread_view (
             game_id, source_seq, stream_seq, channel_id, author_slot,
-            author_user, phase_id, body, media, occurred_at
+            author_user, phase_id, body, body_private, media, occurred_at
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
         ON CONFLICT (game_id, source_seq) DO NOTHING
         "#,
     )
@@ -6254,7 +6657,8 @@ async fn insert_thread_post(
     .bind(&post.author_slot)
     .bind(&post.author_user)
     .bind(&post.phase_id)
-    .bind(&post.body)
+    .bind(body)
+    .bind(body_private)
     .bind(&post.media)
     .bind(post.occurred_at)
     .execute(&mut **tx)
@@ -6281,17 +6685,25 @@ async fn insert_private_channel_member(
     reveals_alignment: &str,
     source: &str,
 ) -> Result<(), ProjectionError> {
+    let game = game_id.to_string();
+    let private = seal_private_projection(
+        "private_channel_member",
+        &[game.as_str(), channel_id, slot_id],
+        serde_json::json!({
+            "role_key": role_key,
+            "reveals_alignment": reveals_alignment,
+        }),
+    )?;
     sqlx::query(
         r#"
         INSERT INTO private_channel_member (
-            game_id, channel_id, kind, slot_id, role_key, reveals_alignment, source
+            game_id, channel_id, kind, slot_id, private, source
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        VALUES ($1, $2, $3, $4, $5, $6)
         ON CONFLICT (game_id, channel_id, slot_id)
         DO UPDATE SET
             kind = EXCLUDED.kind,
-            role_key = EXCLUDED.role_key,
-            reveals_alignment = EXCLUDED.reveals_alignment,
+            private = EXCLUDED.private,
             source = EXCLUDED.source
         "#,
     )
@@ -6299,8 +6711,7 @@ async fn insert_private_channel_member(
     .bind(channel_id)
     .bind(kind)
     .bind(slot_id)
-    .bind(role_key)
-    .bind(reveals_alignment)
+    .bind(private)
     .bind(source)
     .execute(&mut **tx)
     .await?;

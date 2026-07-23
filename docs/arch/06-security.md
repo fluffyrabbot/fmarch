@@ -214,8 +214,9 @@ Reads and live deltas are filtered server-side by capability ([03](03-backend.md
   browser posts: each room records two ciphertext envelopes, no plaintext `body` fields, and
   no plaintext body occurrence in the stored JSON. This is local at-rest and replay proof,
   not a hosted key-management or backup-encryption claim.
-- Local dev falls back to a deterministic `local-dev` key if `FMARCH_EVENT_ENCRYPTION_KEY` is
-  unset so tests and scratch stacks stay runnable. Production/staged deployments must provide
+- Library-level local tests fall back to a deterministic `local-dev` key if
+  `FMARCH_EVENT_ENCRYPTION_KEY` is unset so tests stay runnable. The local real-stack harness
+  opts into that debug-only fallback explicitly. Staged and production deployments must provide
   `FMARCH_EVENT_ENCRYPTION_KEY` and `FMARCH_EVENT_ENCRYPTION_KID` from the environment or a
   secrets manager.
 - The ciphertext envelope records an encryption key id alongside the ciphertext. Writes use the

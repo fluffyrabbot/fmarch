@@ -238,6 +238,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .init();
 
     let config = Config::from_env()?;
+    eventstore::require_secure_event_encryption_configuration()?;
     let media_store = media::MediaStore::open(&config.media_root, media::MediaLimits::default())?;
     let statement_timeout = format!("{}ms", config.database.statement_timeout_ms);
     let lock_timeout = format!("{}ms", config.database.lock_timeout_ms);

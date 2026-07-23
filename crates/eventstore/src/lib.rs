@@ -637,6 +637,51 @@ fn encrypt_json(plaintext: serde_json::Value, aad: &[u8]) -> Result<serde_json::
     }))
 }
 
+/// Seal private projection state while keeping key material and rotation
+/// semantics inside the event-store crypto boundary.
+pub fn encrypt_private_projection(
+    plaintext: serde_json::Value,
+    authenticated_context: &str,
+) -> Result<serde_json::Value, StoreError> {
+    encrypt_json(plaintext, authenticated_context.as_bytes())
+}
+
+/// Open projection state sealed by [`encrypt_private_projection`]. The caller
+/// reconstructs the stable row identity used as authenticated context, so an
+/// envelope cannot be relocated to another row.
+pub fn decrypt_private_projection(
+    envelope: &serde_json::Value,
+    authenticated_context: &str,
+) -> Result<serde_json::Value, StoreError> {
+    decrypt_json(envelope, authenticated_context.as_bytes())
+}
+
+/// Fail an internet-facing process closed unless it has explicit key material.
+/// The deterministic fallback exists only in debug builds and server operators
+/// must opt into it explicitly for local development.
+pub fn require_secure_event_encryption_configuration() -> Result<(), StoreError> {
+    let key = std::env::var("FMARCH_EVENT_ENCRYPTION_KEY")
+        .ok()
+        .filter(|value| !value.trim().is_empty());
+    let kid = std::env::var("FMARCH_EVENT_ENCRYPTION_KID")
+        .ok()
+        .filter(|value| !value.trim().is_empty());
+    if key.is_some() && kid.is_some() {
+        active_event_encryption_key()?;
+        return Ok(());
+    }
+    let insecure_dev = std::env::var("FMARCH_ALLOW_INSECURE_DEV_EVENT_KEY")
+        .ok()
+        .is_some_and(|value| value.eq_ignore_ascii_case("true"));
+    if insecure_dev && cfg!(debug_assertions) {
+        return Ok(());
+    }
+    Err(StoreError::Crypto(
+        "FMARCH_EVENT_ENCRYPTION_KEY and FMARCH_EVENT_ENCRYPTION_KID are required; the debug-only fallback requires FMARCH_ALLOW_INSECURE_DEV_EVENT_KEY=true"
+            .to_string(),
+    ))
+}
+
 /// Encrypts a one-time identity credential for a committed delivery intent.
 /// The caller supplies stable AAD so the envelope cannot be moved to another intent.
 pub fn encrypt_delivery_credential(
@@ -781,10 +826,15 @@ fn active_event_encryption_key() -> Result<EventEncryptionKey, StoreError> {
             let raw = raw.trim().to_string();
             event_encryption_key_bytes(&raw)?
         }
-        _ => Sha256::digest(b"fmarch-local-dev-event-encryption-key-v1")
+        _ if cfg!(debug_assertions) => Sha256::digest(b"fmarch-local-dev-event-encryption-key-v1")
             .to_vec()
             .try_into()
             .map_err(|_| StoreError::Crypto("event encryption key must be 32 bytes".to_string()))?,
+        _ => {
+            return Err(StoreError::Crypto(
+                "FMARCH_EVENT_ENCRYPTION_KEY is required in release builds".to_string(),
+            ))
+        }
     };
     Ok(EventEncryptionKey { kid, bytes })
 }

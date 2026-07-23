@@ -124,7 +124,7 @@ async fn mixed_kid_private_payloads_survive_projection_replay_audit_and_rebuild(
     .expect("append new-key private post through projection boundary");
 
     let raw_rows =
-        sqlx::query("SELECT kind, payload FROM events WHERE stream_id = $1 ORDER BY stream_seq")
+        sqlx::query("SELECT seq, kind, payload FROM events WHERE stream_id = $1 ORDER BY stream_seq")
             .bind(game)
             .fetch_all(&pool)
             .await
@@ -144,6 +144,31 @@ async fn mixed_kid_private_payloads_survive_projection_replay_audit_and_rebuild(
     assert!(raw_post.get("body").is_none());
     assert_eq!(raw_post["body_private"]["kid"], "new-kid");
     assert!(raw_post["body_private"]["ciphertext"].is_string());
+
+    let raw_slot: serde_json::Value =
+        sqlx::query_scalar("SELECT private FROM slot_state WHERE game_id = $1 AND slot_id = 'slot_1'")
+            .bind(game)
+            .fetch_one(&pool)
+            .await
+            .expect("encrypted slot projection");
+    let raw_slot_text = raw_slot.to_string();
+    assert_eq!(raw_slot["kid"], "old-kid");
+    assert!(!raw_slot_text.contains("godfather"));
+    assert!(!raw_slot_text.contains("mafia"));
+
+    let (raw_body, raw_body_private): (Option<String>, serde_json::Value) = sqlx::query_as(
+        "SELECT body, body_private FROM thread_view WHERE game_id = $1 AND source_seq = $2",
+    )
+    .bind(game)
+    .bind(raw_rows[1].get::<i64, _>("seq"))
+    .fetch_one(&pool)
+    .await
+    .expect("encrypted private thread projection");
+    assert!(raw_body.is_none());
+    assert_eq!(raw_body_private["kid"], "new-kid");
+    assert!(!raw_body_private
+        .to_string()
+        .contains("coordinate with the new key"));
 
     let missing_old = audit_rebuild(&pool, game)
         .await

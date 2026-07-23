@@ -5,6 +5,7 @@ edition.workspace = true
 
 [dependencies]
 api = { path = "../api" }
+eventstore = { path = "../eventstore" }
 identity = { path = "../identity" }
 media = { path = "../media" }
 operator_api = { path = "../operator_api" }

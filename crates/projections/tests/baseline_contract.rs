@@ -34,6 +34,7 @@ const EXPECTED_TABLES: &[&str] = &[
     "host_prompt",
     "identity_lifecycle_audit",
     "investigation_memory",
+    "media_upload_ledger",
     "moderation_case",
     "moderation_case_history",
     "moderation_report",
@@ -57,6 +58,7 @@ const EXPECTED_TABLES: &[&str] = &[
     "thread_view",
     "visit_history",
     "vote_ballot",
+    "workos_session_exchange",
 ];
 
 const EXPECTED_INDEXES: &[&str] = &[
@@ -143,6 +145,8 @@ const EXPECTED_INDEXES: &[&str] = &[
     "identity_lifecycle_audit_principal_idx",
     "investigation_memory_investigator_idx",
     "investigation_memory_pkey",
+    "media_upload_ledger_pkey",
+    "media_upload_ledger_principal_idx",
     "moderation_case_history_case_idx",
     "moderation_case_history_pkey",
     "moderation_case_pkey",
@@ -189,6 +193,9 @@ const EXPECTED_INDEXES: &[&str] = &[
     "visit_history_target_idx",
     "vote_ballot_pkey",
     "vote_ballot_target_idx",
+    "workos_session_exchange_access_token_hash_key",
+    "workos_session_exchange_expiry_idx",
+    "workos_session_exchange_pkey",
 ];
 
 const EXPECTED_CONSTRAINTS: &[&str] = &[
@@ -285,6 +292,9 @@ const EXPECTED_CONSTRAINTS: &[&str] = &[
     "host_prompt_pkey:p",
     "identity_lifecycle_audit_pkey:p",
     "investigation_memory_pkey:p",
+    "media_upload_ledger_encoded_bytes_check:c",
+    "media_upload_ledger_pkey:p",
+    "media_upload_ledger_principal_user_id_fkey:f",
     "moderation_case_history_case_id_fkey:f",
     "moderation_case_history_pkey:p",
     "moderation_case_pkey:p",
@@ -324,9 +334,13 @@ const EXPECTED_CONSTRAINTS: &[&str] = &[
     "slot_status_tag_pkey:p",
     "spectator_membership_pkey:p",
     "thread_view_author_present:c",
+    "thread_view_body_storage:c",
     "thread_view_pkey:p",
     "visit_history_pkey:p",
     "vote_ballot_pkey:p",
+    "workos_session_exchange_access_token_hash_key:u",
+    "workos_session_exchange_expiry_check:c",
+    "workos_session_exchange_pkey:p",
 ];
 
 fn assert_inventory(kind: &str, actual: &[String], expected: &[&str]) {
