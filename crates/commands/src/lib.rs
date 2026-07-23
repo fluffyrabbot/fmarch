@@ -4077,7 +4077,7 @@ fn current_snapshot(
                         effect: effect.clone(),
                         target: slot_id.clone(),
                         source: slot_id.clone(),
-                        source_action: Some(format!("role:{role_key}")),
+                        source_action: Some("role-assignment".to_string()),
                         phase_id: None,
                         phase_kind: None,
                         phase_number: None,

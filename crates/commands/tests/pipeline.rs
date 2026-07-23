@@ -69786,7 +69786,7 @@ async fn assert_mafia_universe_bomber_case(
         effects.iter().any(|effect| {
             effect.slot_id == "slot_2"
                 && effect.effect == "bomb"
-                && effect.source_action.as_deref() == Some(&format!("role:{bomber_role}"))
+                && effect.source_action.as_deref() == Some("role-assignment")
                 && effect.visibility == "Hidden"
         }),
         "{bomber_role} role assignment should fold hidden bomb effect into projections"
@@ -70022,7 +70022,7 @@ async fn host_resolve_phase_projects_mafiascum_bomb_trigger(pool: PgPool) {
         effects.iter().any(|effect| {
             effect.slot_id == "slot_2"
                 && effect.effect == "bomb"
-                && effect.source_action.as_deref() == Some("role:bomb")
+                && effect.source_action.as_deref() == Some("role-assignment")
                 && effect.visibility == "Hidden"
         }),
         "Bomb role assignment should fold the hidden bomb effect into projections"
