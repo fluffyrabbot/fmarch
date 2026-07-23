@@ -41,20 +41,7 @@ async function contract() {
   assert.match(source["scripts/container-entrypoint.sh"], /exec gosu fmarch "\$@"/);
   assert.match(source[".dockerignore"], /^target$/m);
   assert.match(source["railway.toml"], /healthcheckPath = "\/healthz"/);
-  for (const requiredWatchPath of [
-    "Cargo.toml",
-    "Cargo.lock",
-    "crates/**",
-    "docs/**",
-    "scripts/container-entrypoint.sh",
-    "Dockerfile",
-    "railway.toml",
-  ]) {
-    assert.ok(
-      source["railway.toml"].includes(`"${requiredWatchPath}"`),
-      `API Railway config missing watch path ${requiredWatchPath}`,
-    );
-  }
+  assert.doesNotMatch(source["railway.toml"], /watchPatterns/);
 
   assert.match(source["frontend/svelte.config.js"], /@sveltejs\/adapter-node/);
   assert.match(source["frontend/package.json"], /"@sveltejs\/adapter-node": "5\.5\.7"/);
@@ -69,6 +56,7 @@ async function contract() {
   assert.match(source["Dockerfile.frontend"], /CMD \["node", "build"\]/);
   assert.match(source["deploy/railway/frontend.railway.toml"], /dockerfilePath = "Dockerfile\.frontend"/);
   assert.match(source["deploy/railway/frontend.railway.toml"], /healthcheckPath = "\/healthz"/);
+  assert.doesNotMatch(source["deploy/railway/frontend.railway.toml"], /watchPatterns/);
 
   assert.match(source["deploy/railway/api.env.example"], /DATABASE_URL=\$\{\{Postgres\.DATABASE_URL\}\}/);
   assert.match(source["deploy/railway/api.env.example"], /FMARCH_MEDIA_ROOT=\/var\/lib\/fmarch\/media/);

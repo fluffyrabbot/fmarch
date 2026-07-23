@@ -24,7 +24,7 @@ own the release boundary:
 
 | Railway environment | Git source | Deployment rule |
 | --- | --- | --- |
-| `staging` | `main` | Deploy automatically after a push touches the service's watch paths. |
+| `staging` | `main` | Deploy both API and frontend after every push so both attest the exact same `main` SHA. |
 | `production` | `production` | Deploy only when the release pointer is explicitly advanced to a verified `main` commit. |
 
 The canonical Railway domains are:
@@ -39,6 +39,10 @@ identify a commit already reachable from `origin/main`. Production promotion
 requires a clean worktree, the required local proof, successful staging API and
 frontend health checks, and Railway deployment metadata showing that both
 staging services run the same commit.
+
+Do not configure service watch paths on either application service. Skipping an
+API or frontend build for an apparently unrelated commit breaks the paired-SHA
+release invariant and makes that `main` commit intentionally unpromotable.
 
 Staging and production must have separate Postgres service instances, media
 volumes, public domains, variables, and WorkOS environments. Never duplicate a

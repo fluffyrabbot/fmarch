@@ -1,7 +1,6 @@
 [build]
 builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile.frontend"
-watchPatterns = ["frontend/**", "tools/**", "docs/**", "Dockerfile.frontend"]
 
 [deploy]
 # /healthz never touches the API, so frontend deploys stay possible during an
