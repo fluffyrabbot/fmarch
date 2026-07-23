@@ -9268,6 +9268,7 @@ fn command_game(command: &wire::Command) -> Option<Uuid> {
         | wire::Command::WithdrawAction { game, .. }
         | wire::Command::SubmitPost { game, .. }
         | wire::Command::ExtendDeadline { game, .. }
+        | wire::Command::ApplyEffectPlan { game, .. }
         | wire::Command::ProcessReplacement { game, .. } => Some(*game),
     }
 }
@@ -9292,6 +9293,7 @@ fn command_affects_host_console(command: &wire::Command) -> bool {
             | wire::Command::SetPostPolicy { .. }
             | wire::Command::SubmitPost { .. }
             | wire::Command::ExtendDeadline { .. }
+            | wire::Command::ApplyEffectPlan { .. }
             | wire::Command::ProcessReplacement { .. }
     )
 }
@@ -9311,6 +9313,7 @@ fn command_affects_host_prompts(command: &wire::Command) -> bool {
     matches!(
         command,
         wire::Command::SetSlotStatus { .. }
+            | wire::Command::ApplyEffectPlan { .. }
             | wire::Command::ResolvePhase { .. }
             | wire::Command::ResolveHostPrompt { .. }
     )
@@ -9321,6 +9324,7 @@ fn command_affects_player_private(command: &wire::Command) -> bool {
         command,
         wire::Command::ResolvePhase { .. }
             | wire::Command::ResolveHostPrompt { .. }
+            | wire::Command::ApplyEffectPlan { .. }
             | wire::Command::SubmitAction { .. }
             | wire::Command::WithdrawAction { .. }
     )
@@ -9343,6 +9347,7 @@ fn command_affects_player_command_state(command: &wire::Command) -> bool {
             | wire::Command::SetPostPolicy { .. }
             | wire::Command::SubmitVote { .. }
             | wire::Command::WithdrawVote { .. }
+            | wire::Command::ApplyEffectPlan { .. }
             | wire::Command::ProcessReplacement { .. }
     )
 }
@@ -9394,6 +9399,23 @@ mod live_projection_tests {
                 },
             },
         ));
+    }
+
+    #[test]
+    fn effect_plan_routes_and_refreshes_every_state_surface_it_can_change() {
+        let game = Uuid::new_v4();
+        let command = wire::Command::ApplyEffectPlan {
+            game,
+            effects: Vec::new(),
+            reason: "classification fixture".to_string(),
+        };
+
+        assert_eq!(command_game(&command), Some(game));
+        assert!(command_affects_host_console(&command));
+        assert!(command_affects_host_prompts(&command));
+        assert!(command_affects_player_private(&command));
+        assert!(command_affects_player_command_state(&command));
+        assert!(!command_affects_thread(&command));
     }
 }
 

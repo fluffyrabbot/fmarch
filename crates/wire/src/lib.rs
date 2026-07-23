@@ -334,6 +334,11 @@ pub enum Command {
         #[ts(optional)]
         media: Option<Vec<SubmitPostMedia>>,
     },
+    ApplyEffectPlan {
+        game: Uuid,
+        effects: Vec<game_platform::ConcreteEffect>,
+        reason: String,
+    },
     SubmitVote {
         game: Uuid,
         actor_slot: String,
@@ -468,6 +473,15 @@ impl From<Command> for commands::Command {
                         .collect(),
                 }
             }
+            Command::ApplyEffectPlan {
+                game,
+                effects,
+                reason,
+            } => commands::Command::ApplyEffectPlan {
+                game,
+                effects,
+                reason,
+            },
             Command::SubmitVote {
                 game,
                 actor_slot,
@@ -595,6 +609,7 @@ pub enum RejectCode {
     PromptAlreadyResolved,
     GameAlreadyCompleted,
     InvalidPromptDecision,
+    EffectSpecValidation,
     Internal,
 }
 
@@ -619,6 +634,7 @@ impl From<&commands::Reject> for RejectCode {
             commands::Reject::PromptAlreadyResolved => RejectCode::PromptAlreadyResolved,
             commands::Reject::GameAlreadyCompleted => RejectCode::GameAlreadyCompleted,
             commands::Reject::InvalidPromptDecision => RejectCode::InvalidPromptDecision,
+            commands::Reject::EffectSpecValidation(_) => RejectCode::EffectSpecValidation,
             commands::Reject::Internal(_) => RejectCode::Internal,
         }
     }

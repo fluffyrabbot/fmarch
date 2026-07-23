@@ -31,3 +31,25 @@ fn submit_post_media_rejects_client_authored_variant_fields() {
     let error = serde_json::from_value::<wire::Command>(command).unwrap_err();
     assert!(error.to_string().contains("unknown field `variants`"));
 }
+
+#[test]
+fn apply_effect_plan_deserializes_the_canonical_concrete_catalog() {
+    let command = serde_json::json!({
+        "ApplyEffectPlan": {
+            "game": uuid::Uuid::nil(),
+            "effects": [{
+                "kind": "mark",
+                "target": "slot_1",
+                "effect": "bomb"
+            }],
+            "reason": "manual adjudication"
+        }
+    });
+
+    let parsed = serde_json::from_value::<wire::Command>(command).unwrap();
+    assert!(matches!(
+        parsed,
+        wire::Command::ApplyEffectPlan { effects, reason, .. }
+            if effects.len() == 1 && reason == "manual adjudication"
+    ));
+}

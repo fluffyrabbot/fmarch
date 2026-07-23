@@ -773,6 +773,11 @@ async fn handle_command(
             control,
             message,
         } => control_ita_session(tx, principal, game, session_id, control, message).await,
+        Command::ApplyEffectPlan {
+            game,
+            effects,
+            reason,
+        } => apply_effect_plan(tx, principal, game, effects, reason).await,
 
         // ── slice commands ──
         Command::SubmitVote {
@@ -950,6 +955,7 @@ fn command_audit_shape(command: &Command) -> (&'static str, CommandAuditAuthorit
             ("PublishSpectatorPost", CommandAuditAuthority::HostTeam)
         }
         Command::ControlItaSession { .. } => ("ControlItaSession", CommandAuditAuthority::HostTeam),
+        Command::ApplyEffectPlan { .. } => ("ApplyEffectPlan", CommandAuditAuthority::HostTeam),
         Command::ExtendDeadline { .. } => ("ExtendDeadline", CommandAuditAuthority::HostTeam),
         Command::ProcessReplacement { .. } => {
             ("ProcessReplacement", CommandAuditAuthority::HostTeam)
@@ -982,6 +988,7 @@ fn command_game(command: &Command) -> Uuid {
         | Command::SetPostPolicy { game, .. }
         | Command::PublishSpectatorPost { game, .. }
         | Command::ControlItaSession { game, .. }
+        | Command::ApplyEffectPlan { game, .. }
         | Command::SubmitVote { game, .. }
         | Command::WithdrawVote { game, .. }
         | Command::SubmitAction { game, .. }
@@ -1016,6 +1023,7 @@ fn game_closed_by_completion(command: &Command) -> Option<Uuid> {
         | Command::SetPostPolicy { game, .. }
         | Command::PublishSpectatorPost { game, .. }
         | Command::ControlItaSession { game, .. }
+        | Command::ApplyEffectPlan { game, .. }
         | Command::SubmitVote { game, .. }
         | Command::WithdrawVote { game, .. }
         | Command::SubmitAction { game, .. }
@@ -1468,12 +1476,11 @@ async fn host_slot_lifecycle(
         .await?
         .ok_or(Reject::UnknownSlot)?;
     if kind == "SlotStatusChanged" {
-        let requested_status = payload["status"].as_str().ok_or(Reject::InvalidTarget)?;
-        if requested_status == current_status.as_str()
-            || (current_status.as_str() != "alive" && requested_status != "alive")
-        {
-            return Err(Reject::InvalidTarget);
-        }
+        let requested_status =
+            serde_json::from_value::<domain::SlotLifecycle>(payload["status"].clone())
+                .map_err(|_| Reject::InvalidTarget)?;
+        let event = plan_slot_status_change(&slot, &current_status, requested_status)?;
+        return persist(tx, game, &[event]).await;
     }
     payload["slot_id"] = serde_json::Value::String(slot);
     persist(
@@ -1482,6 +1489,199 @@ async fn host_slot_lifecycle(
         &[EventInput::new(kind, 1, payload, ActorId::Host, 0)],
     )
     .await
+}
+
+fn plan_slot_status_change(
+    slot: &str,
+    current_status: &str,
+    requested_status: domain::SlotLifecycle,
+) -> Result<EventInput, Reject> {
+    let requested = match requested_status {
+        domain::SlotLifecycle::Alive => "alive",
+        domain::SlotLifecycle::Dead => "dead",
+        domain::SlotLifecycle::Modkilled => "modkilled",
+    };
+    if requested == current_status || (current_status != "alive" && requested != "alive") {
+        return Err(Reject::InvalidTarget);
+    }
+    Ok(EventInput::new(
+        "SlotStatusChanged",
+        1,
+        serde_json::json!({
+            "slot_id": slot,
+            "status": requested_status,
+        }),
+        ActorId::Host,
+        0,
+    ))
+}
+
+async fn apply_effect_plan(
+    tx: &mut Transaction<'_, Postgres>,
+    principal: &Principal,
+    game: Uuid,
+    effects: Vec<game_platform::ConcreteEffect>,
+    reason: String,
+) -> Result<Ack, Reject> {
+    require_game(tx, game).await?;
+    let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
+    require_game_run(tx, &caps, game, CohostPermissionClass::EffectSpec).await?;
+
+    let principal_id = game_platform::PrincipalId::new(principal.user_id().to_string())
+        .map_err(effect_spec_validation)?;
+    let plan = game_platform::EffectPlan::try_new(
+        game_platform::EffectOrigin::HostFiat { principal_id },
+        effects,
+        reason,
+    )
+    .map_err(effect_spec_validation)?;
+
+    let phase = projections::phase_state(&mut **tx, game)
+        .await?
+        .ok_or_else(|| effect_spec_reject("effect plans require an active phase"))?;
+    let phase_kind = phase_kind(&phase.phase_id)?;
+    let phase_number = phase_number(&phase.phase_id)?;
+    let pack = load_pack(&current_pack_name(tx, game).await?)?;
+
+    // Preflight the entire plan before appending anything. Lifecycle validation
+    // advances this in-memory view so multiple operations on one slot are
+    // checked in plan order without consulting partially folded projections.
+    let mut lifecycle_states = BTreeMap::<String, String>::new();
+    let mut events = Vec::with_capacity(plan.effects.len());
+    for (index, effect) in plan.effects.into_iter().enumerate() {
+        let mut event = match effect {
+            game_platform::ConcreteEffect::SetSlotLifecycle { target, status } => {
+                let target = target.as_str().to_string();
+                let current = match lifecycle_states.get(&target) {
+                    Some(current) => current.clone(),
+                    None => current_slot_lifecycle_status(tx, game, &target)
+                        .await?
+                        .ok_or(Reject::UnknownSlot)?,
+                };
+                let status = match status {
+                    game_platform::SlotLifecycleEffect::Alive => domain::SlotLifecycle::Alive,
+                    game_platform::SlotLifecycleEffect::Dead => domain::SlotLifecycle::Dead,
+                    game_platform::SlotLifecycleEffect::Modkilled => {
+                        domain::SlotLifecycle::Modkilled
+                    }
+                };
+                let mut event = plan_slot_status_change(&target, &current, status)?;
+                event.payload["source_action"] =
+                    serde_json::Value::String("host_fiat:set_slot_lifecycle".to_string());
+                event.payload["phase_id"] = serde_json::Value::String(phase.phase_id.clone());
+                event.payload["phase_kind"] = serde_json::to_value(phase_kind)
+                    .map_err(|error| Reject::Internal(format!("serialize phase kind: {error}")))?;
+                event.payload["phase_number"] = serde_json::json!(phase_number);
+                lifecycle_states.insert(
+                    target,
+                    match status {
+                        domain::SlotLifecycle::Alive => "alive",
+                        domain::SlotLifecycle::Dead => "dead",
+                        domain::SlotLifecycle::Modkilled => "modkilled",
+                    }
+                    .to_string(),
+                );
+                event
+            }
+            game_platform::ConcreteEffect::Mark { target, effect } => {
+                require_effect_target(tx, game, target.as_str()).await?;
+                let policy = persistent_effect_policy(&pack, effect.as_str())?;
+                EventInput::new(
+                    "EffectsMarked",
+                    1,
+                    serde_json::json!({
+                        "effect": effect.as_str(),
+                        "target": target.as_str(),
+                        "actor": "external",
+                        "source_action": "host_fiat:mark",
+                        "phase_id": phase.phase_id,
+                        "phase_kind": phase_kind,
+                        "phase_number": phase_number,
+                        "duration": "Persistent",
+                        "visibility": policy.visibility,
+                    }),
+                    ActorId::Host,
+                    0,
+                )
+            }
+            game_platform::ConcreteEffect::Clear { target, effect } => {
+                require_effect_target(tx, game, target.as_str()).await?;
+                persistent_effect_policy(&pack, effect.as_str())?;
+                EventInput::new(
+                    "EffectsCleared",
+                    1,
+                    serde_json::json!({
+                        "effect": effect.as_str(),
+                        "targets": [target.as_str()],
+                        "actor": "external",
+                        "source_action": "host_fiat:clear",
+                        "phase_id": phase.phase_id,
+                        "phase_kind": phase_kind,
+                        "phase_number": phase_number,
+                    }),
+                    ActorId::Host,
+                    0,
+                )
+            }
+            game_platform::ConcreteEffect::Grant { .. } => {
+                return Err(effect_spec_reject(
+                    "grant adapter is unavailable until platform grants fold into snapshots",
+                ));
+            }
+            game_platform::ConcreteEffect::RevealAlignment { .. }
+            | game_platform::ConcreteEffect::RevealRole { .. } => {
+                return Err(effect_spec_reject(
+                    "reveal adapters are not part of the persistent PR3 catalog",
+                ));
+            }
+        };
+        event.meta = serde_json::json!({
+            "source": "host_fiat",
+            "effect_plan_reason": plan.reason,
+            "effect_plan_index": index,
+        });
+        events.push(event);
+    }
+
+    persist(tx, game, &events).await
+}
+
+fn effect_spec_validation(error: game_platform::ModelError) -> Reject {
+    effect_spec_reject(error.to_string())
+}
+
+fn effect_spec_reject(message: impl Into<String>) -> Reject {
+    Reject::EffectSpecValidation(message.into())
+}
+
+fn persistent_effect_policy<'a>(
+    pack: &'a domain::Pack,
+    effect: &str,
+) -> Result<&'a domain::pack::EffectPolicy, Reject> {
+    let policy = pack.effects.get(effect).ok_or_else(|| {
+        effect_spec_reject(format!(
+            "effect `{effect}` is not declared by pack `{}`",
+            pack.name
+        ))
+    })?;
+    if policy.duration != domain::EffectDuration::Persistent {
+        return Err(effect_spec_reject(format!(
+            "effect `{effect}` is resolution-scoped and cannot be injected persistently"
+        )));
+    }
+    Ok(policy)
+}
+
+async fn require_effect_target(
+    tx: &mut Transaction<'_, Postgres>,
+    game: Uuid,
+    target: &str,
+) -> Result<(), Reject> {
+    if projections::slot_exists(&mut **tx, game, target).await? {
+        Ok(())
+    } else {
+        Err(Reject::UnknownSlot)
+    }
 }
 
 async fn current_slot_lifecycle_status(

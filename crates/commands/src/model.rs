@@ -68,7 +68,7 @@ pub enum CohostPermissionClass {
     Narrative,
     /// ITA session control.
     ItaControl,
-    /// Future `ApplyEffectSpec` / mechanical fiat.
+    /// `ApplyEffectPlan` / mechanical fiat.
     EffectSpec,
     /// Future day-event open/lock/cancel.
     DayEventOps,
@@ -235,6 +235,14 @@ pub enum Command {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         message: Option<String>,
     },
+    /// Apply fully bound platform effects atomically. Host-team (EffectSpec).
+    /// PR3 supports persistent Mark/Clear/Lifecycle; other catalog members
+    /// remain typed but reject until their snapshot + projection adapters land.
+    ApplyEffectPlan {
+        game: Uuid,
+        effects: Vec<game_platform::ConcreteEffect>,
+        reason: String,
+    },
 
     // ── slice commands ──
     /// Cast/overwrite a vote as `actor_slot`. Requires `SlotOccupant(actor_slot)`.
@@ -346,6 +354,10 @@ pub enum Reject {
     /// The prompt decision is malformed for the prompt kind.
     #[error("invalid prompt decision")]
     InvalidPromptDecision,
+    /// A concrete effect plan is malformed or contains an effect whose adapter
+    /// is not available yet.
+    #[error("effect plan validation failed: {0}")]
+    EffectSpecValidation(String),
     /// An unexpected internal/storage error (not a domain rejection).
     #[error("internal error: {0}")]
     Internal(String),

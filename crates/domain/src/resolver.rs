@@ -490,6 +490,10 @@ fn resolve_one_kill(
                 effect: "bulletproof_vest".to_string(),
                 targets: vec![target.clone()],
                 actor: target.clone(),
+                source_action: None,
+                phase_id: None,
+                phase_kind: None,
+                phase_number: None,
             });
         }
     } else {
@@ -5083,6 +5087,7 @@ fn build_trace(
                 effect,
                 targets,
                 actor,
+                ..
             } => {
                 for target in targets {
                     effect_changes.push(EffectDeltaTrace {
@@ -6571,6 +6576,10 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                                         effect: effect.clone(),
                                         targets: vec![previous.target_id.clone()],
                                         actor: actor.clone(),
+                                        source_action: None,
+                                        phase_id: None,
+                                        phase_kind: None,
+                                        phase_number: None,
                                     });
                                     cleared_effects
                                         .insert((previous.target_id.clone(), effect.clone()));
@@ -6702,6 +6711,10 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                             effect: effect.clone(),
                             targets: targets.clone(),
                             actor,
+                            source_action: None,
+                            phase_id: None,
+                            phase_kind: None,
+                            phase_number: None,
                         });
                         for target in targets {
                             cleared_effects.insert((target.clone(), effect.clone()));

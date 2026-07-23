@@ -4602,7 +4602,234 @@ async fn cohost_default_full_game_run_and_structural_stays_host_only(pool: PgPoo
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
-async fn cohost_denied_lifecycle_rejects_while_deadline_still_allowed(pool: PgPool) {
+async fn apply_effect_plan_is_atomic_audited_and_visible_to_the_engine(pool: PgPool) {
+    let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
+    add_vanilla_slot(&pool, game, "host_h", "slot_2").await;
+    handle(
+        &pool,
+        &user("host_h"),
+        Command::AddCohost {
+            game,
+            user: "user_c".into(),
+        },
+    )
+    .await
+    .expect("delegate cohost");
+
+    let mark = game_platform::ConcreteEffect::Mark {
+        target: game_platform::SlotId::new("slot_1").unwrap(),
+        effect: game_platform::Tag::new("bomb").unwrap(),
+    };
+    let kill = game_platform::ConcreteEffect::SetSlotLifecycle {
+        target: game_platform::SlotId::new("slot_2").unwrap(),
+        status: game_platform::SlotLifecycleEffect::Dead,
+    };
+    let ack = handle_idempotent(
+        &pool,
+        &user("user_c"),
+        Uuid::new_v4(),
+        Command::ApplyEffectPlan {
+            game,
+            effects: vec![mark.clone(), kill],
+            reason: "host-team adjudicated raffle consequence".into(),
+        },
+    )
+    .await
+    .expect("cohost applies a persistent effect plan");
+    assert_eq!(ack.stream_seqs.len(), 2);
+
+    let stream = eventstore::load_stream(&pool, game).await.unwrap();
+    let planned = stream
+        .iter()
+        .filter(|event| ack.stream_seqs.contains(&event.stream_seq))
+        .collect::<Vec<_>>();
+    assert_eq!(planned.len(), 2);
+    for (index, event) in planned.iter().enumerate() {
+        assert_eq!(event.actor, ActorId::Host);
+        assert_eq!(event.meta["source"], "host_fiat");
+        assert_eq!(event.meta["principal_user_id"], "user_c");
+        assert_eq!(event.meta["authority_used"], format!("CohostOf({game})"));
+        assert_eq!(
+            event.meta["effect_plan_reason"],
+            "host-team adjudicated raffle consequence"
+        );
+        assert_eq!(event.meta["effect_plan_index"], index);
+    }
+    assert_eq!(planned[0].kind, "EffectsMarked");
+    assert_eq!(planned[0].payload["actor"], "external");
+    assert_eq!(planned[0].payload["source_action"], "host_fiat:mark");
+    assert_eq!(planned[0].payload["phase_id"], "D01");
+    assert_eq!(planned[0].payload["phase_kind"], "Day");
+    assert_eq!(planned[0].payload["phase_number"], 1);
+    assert_eq!(planned[0].payload["duration"], "Persistent");
+    assert_eq!(planned[1].kind, "SlotStatusChanged");
+    assert_eq!(
+        planned[1].payload["source_action"],
+        "host_fiat:set_slot_lifecycle"
+    );
+    assert_eq!(planned[1].payload["phase_id"], "D01");
+
+    let projected_effects = slot_effects(&pool, game).await.unwrap();
+    let bomb = projected_effects
+        .iter()
+        .find(|effect| effect.slot_id == "slot_1" && effect.effect == "bomb")
+        .expect("persistent mark projected");
+    assert_eq!(bomb.source_slot, "external");
+    assert_eq!(bomb.source_action.as_deref(), Some("host_fiat:mark"));
+    assert_eq!(bomb.phase_id.as_deref(), Some("D01"));
+    assert_eq!(bomb.duration, "Persistent");
+    let projected_slots = slot_state(&pool, game).await.unwrap();
+    assert_eq!(
+        projected_slots
+            .iter()
+            .find(|slot| slot.slot_id == "slot_2")
+            .unwrap()
+            .status,
+        "dead"
+    );
+
+    let phase_input = load_engine_phase_input(&pool, game, "D01")
+        .await
+        .expect("build the exact subsequent ResolvePhase input");
+    let marked_slot = phase_input
+        .state
+        .slots
+        .iter()
+        .find(|slot| slot.slot_id == "slot_1")
+        .unwrap();
+    assert!(marked_slot.effects.iter().any(|effect| effect == "bomb"));
+    assert_eq!(
+        phase_input
+            .state
+            .slots
+            .iter()
+            .find(|slot| slot.slot_id == "slot_2")
+            .unwrap()
+            .status,
+        domain::SlotLifecycle::Dead
+    );
+    let projection_audit = audit_rebuild(&pool, game).await.unwrap();
+    assert!(
+        projection_audit.ok,
+        "effect-plan projections must rebuild from the same stream facts: {:?}",
+        projection_audit
+            .tables
+            .iter()
+            .filter(|table| !table.matches)
+            .collect::<Vec<_>>()
+    );
+
+    let correction_ack = handle(
+        &pool,
+        &user("host_h"),
+        Command::ApplyEffectPlan {
+            game,
+            effects: vec![
+                game_platform::ConcreteEffect::Clear {
+                    target: game_platform::SlotId::new("slot_1").unwrap(),
+                    effect: game_platform::Tag::new("bomb").unwrap(),
+                },
+                game_platform::ConcreteEffect::SetSlotLifecycle {
+                    target: game_platform::SlotId::new("slot_2").unwrap(),
+                    status: game_platform::SlotLifecycleEffect::Alive,
+                },
+            ],
+            reason: "host corrected the adjudication".into(),
+        },
+    )
+    .await
+    .expect("clear and lifecycle restore share the same planner");
+    let corrected_stream = eventstore::load_stream(&pool, game).await.unwrap();
+    let clear = corrected_stream
+        .iter()
+        .find(|event| {
+            correction_ack.stream_seqs.contains(&event.stream_seq) && event.kind == "EffectsCleared"
+        })
+        .expect("clear event from the correction plan");
+    assert_eq!(clear.payload["actor"], "external");
+    assert_eq!(clear.payload["source_action"], "host_fiat:clear");
+    assert_eq!(clear.payload["phase_id"], "D01");
+    assert_eq!(clear.payload["phase_kind"], "Day");
+    assert_eq!(clear.payload["phase_number"], 1);
+    assert!(slot_effects(&pool, game)
+        .await
+        .unwrap()
+        .iter()
+        .all(|effect| effect.effect != "bomb"));
+    assert_eq!(
+        slot_state(&pool, game)
+            .await
+            .unwrap()
+            .iter()
+            .find(|slot| slot.slot_id == "slot_2")
+            .unwrap()
+            .status,
+        "alive"
+    );
+
+    let event_count_before: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM events WHERE stream_id = $1")
+            .bind(game)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    let unsupported = handle(
+        &pool,
+        &user("host_h"),
+        Command::ApplyEffectPlan {
+            game,
+            effects: vec![
+                mark,
+                game_platform::ConcreteEffect::Grant {
+                    target: game_platform::SlotId::new("slot_1").unwrap(),
+                    grant: game_platform::GrantSpec {
+                        grant_id: game_platform::Tag::new("double_vote").unwrap(),
+                        kind: game_platform::GrantKind::VoteWeight,
+                        uses: 1,
+                        vote_weight: Some(2.0),
+                        visibility: game_platform::EffectVisibility::Target,
+                    },
+                },
+            ],
+            reason: "this batch must roll back before append".into(),
+        },
+    )
+    .await
+    .expect_err("Grant remains deliberately unsupported until PR4");
+    assert!(matches!(
+        unsupported,
+        Reject::EffectSpecValidation(message)
+            if message.contains("grant adapter is unavailable")
+    ));
+    let event_count_after: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM events WHERE stream_id = $1")
+            .bind(game)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(
+        event_count_after, event_count_before,
+        "preflight failure must append none of the earlier valid effects"
+    );
+    assert!(slot_effects(&pool, game)
+        .await
+        .unwrap()
+        .iter()
+        .all(|effect| effect.effect != "bomb"));
+    let final_projection_audit = audit_rebuild(&pool, game).await.unwrap();
+    assert!(
+        final_projection_audit.ok,
+        "clear/lifecycle correction must remain rebuild-equivalent: {:?}",
+        final_projection_audit
+            .tables
+            .iter()
+            .filter(|table| !table.matches)
+            .collect::<Vec<_>>()
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn cohost_denied_lifecycle_and_effect_spec_while_deadline_still_allowed(pool: PgPool) {
     let game = Uuid::new_v4();
     handle(
         &pool,
@@ -4610,7 +4837,10 @@ async fn cohost_denied_lifecycle_rejects_while_deadline_still_allowed(pool: PgPo
         Command::CreateGame {
             game,
             pack: "mafiascum".into(),
-            cohost_denied: vec![CohostPermissionClass::Lifecycle],
+            cohost_denied: vec![
+                CohostPermissionClass::Lifecycle,
+                CohostPermissionClass::EffectSpec,
+            ],
         },
     )
     .await
@@ -4704,6 +4934,22 @@ async fn cohost_denied_lifecycle_rejects_while_deadline_still_allowed(pool: PgPo
     .await
     .expect_err("lifecycle class denied for cohost");
     assert_eq!(denied, Reject::CohostPermissionDenied("lifecycle".into()));
+
+    let denied = handle(
+        &pool,
+        &user("user_c"),
+        Command::ApplyEffectPlan {
+            game,
+            effects: vec![game_platform::ConcreteEffect::Mark {
+                target: game_platform::SlotId::new("slot_1").unwrap(),
+                effect: game_platform::Tag::new("bomb").unwrap(),
+            }],
+            reason: "cohost policy must reject before append".into(),
+        },
+    )
+    .await
+    .expect_err("effect-spec class denied for cohost");
+    assert_eq!(denied, Reject::CohostPermissionDenied("effect_spec".into()));
 
     // Primary host ignores denylist.
     handle(
@@ -55609,7 +55855,7 @@ async fn inventor_vest_item_marks_and_consumes_bulletproof_vest(pool: PgPool) {
     )));
     assert!(n03.events.iter().any(|indexed| matches!(
         &indexed.event,
-        domain::InnerEvent::EffectsCleared { effect, targets, actor }
+        domain::InnerEvent::EffectsCleared { effect, targets, actor, .. }
             if effect == "bulletproof_vest"
                 && targets == &vec!["slot_2".to_string()]
                 && actor == "slot_2"

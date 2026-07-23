@@ -518,6 +518,7 @@ dependencies = [
  "caps",
  "domain",
  "eventstore",
+ "game_platform",
  "libc",
  "projections",
  "serde",

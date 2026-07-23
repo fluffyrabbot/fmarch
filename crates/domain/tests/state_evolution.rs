@@ -381,6 +381,10 @@ fn apply_effects_mark_then_clear() {
             effect: "poisoned".to_string(),
             targets: vec!["a".to_string()],
             actor: "p".to_string(),
+            source_action: None,
+            phase_id: None,
+            phase_kind: None,
+            phase_number: None,
         }],
     );
     assert!(find(&cleared, "a").effects.is_empty());

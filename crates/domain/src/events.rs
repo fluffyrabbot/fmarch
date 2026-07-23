@@ -102,6 +102,14 @@ pub enum InnerEvent {
         effect: Tag,
         targets: Vec<SlotId>,
         actor: SlotId,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        source_action: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        phase_id: Option<PhaseId>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        phase_kind: Option<PhaseKind>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        phase_number: Option<u32>,
     },
     ActionGranted {
         grant_id: Tag,
