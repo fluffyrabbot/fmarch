@@ -543,23 +543,26 @@ async fn media_upload(
             .commit_prepared_upload(prepared)
             .map_err(MediaUploadFailure::Commit)
     })
-    .await
-    .map_err(|error| {
-        tracing::error!(error = %error, "media upload worker failed");
-        media_internal_error("media upload worker failed".to_string())
-    })?
-    .map_err(|error| match error {
-        MediaUploadFailure::Prepare(error) => media_api_error(error),
-        MediaUploadFailure::Commit(error) => {
-            tracing::error!(error = %error, "media upload commit failed");
-            media_internal_error("media upload commit failed".to_string())
-        }
-    });
+    .await;
     let committed = match committed {
-        Ok(committed) => committed,
+        Ok(Ok(committed)) => committed,
         Err(error) => {
+            tracing::error!(error = %error, "media upload worker failed");
             release_media_quota(&state.pool, upload_id).await;
-            return Err(error);
+            return Err(media_internal_error(
+                "media upload worker failed".to_string(),
+            ));
+        }
+        Ok(Err(MediaUploadFailure::Prepare(error))) => {
+            release_media_quota(&state.pool, upload_id).await;
+            return Err(media_api_error(error));
+        }
+        Ok(Err(MediaUploadFailure::Commit(error))) => {
+            tracing::error!(error = %error, "media upload commit failed");
+            release_media_quota(&state.pool, upload_id).await;
+            return Err(media_internal_error(
+                "media upload commit failed".to_string(),
+            ));
         }
     };
     let ingest = committed.ingest();
@@ -1766,6 +1769,10 @@ async fn create_auth_account(
     }
     validate_new_account_password(password)?;
     let global_capabilities = normalize_global_capabilities(&request.global_capabilities)?;
+    let _password_permit = acquire_workload_slot(
+        &state.password_slots,
+        "password processing capacity is exhausted; retry shortly",
+    )?;
     let now = unix_now_seconds();
     let password_hash = hash_account_password(password).await?;
     let mut tx = state.pool.begin().await?;
@@ -2323,6 +2330,10 @@ async fn add_classic_method(
     require_recent_authentication(&identity, now)?;
     let login_name = normalize_registration_account_id(request.login_name.as_str())?;
     validate_new_account_password(request.password.as_str())?;
+    let _password_permit = acquire_workload_slot(
+        &state.password_slots,
+        "password processing capacity is exhausted; retry shortly",
+    )?;
     let password_hash = hash_account_password(request.password.as_str()).await?;
 
     let mut tx = state.pool.begin().await?;
@@ -2636,6 +2647,10 @@ async fn rotate_auth_account_password(
     }
     validate_account_password_input(current_password)?;
     validate_new_account_password(new_password)?;
+    let _password_permit = acquire_workload_slot(
+        &state.password_slots,
+        "password processing capacity is exhausted; retry shortly",
+    )?;
 
     let now = unix_now_seconds();
     let caller_hash = hash_session_token(caller_token);
@@ -3069,6 +3084,10 @@ async fn recover_auth_account(
         });
     }
     validate_new_account_password(new_password)?;
+    let _password_permit = acquire_workload_slot(
+        &state.password_slots,
+        "password processing capacity is exhausted; retry shortly",
+    )?;
     let attempt_scope = enforce_auth_attempt_limit(&state, &headers, account_id).await?;
     let now = unix_now_seconds();
     let recovery_hash = hash_session_token(recovery_token);
