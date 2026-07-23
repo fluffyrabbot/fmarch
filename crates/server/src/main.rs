@@ -238,12 +238,30 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .init();
 
     let config = Config::from_env()?;
+    let dev_auth_enabled = env::var("FMARCH_DEV_AUTH").ok().as_deref() == Some("1");
+    if dev_auth_enabled && !cfg!(debug_assertions) {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "FMARCH_DEV_AUTH cannot be enabled in a release build",
+        )
+        .into());
+    }
     eventstore::require_secure_event_encryption_configuration()?;
-    let auth_source_key = env::var("FMARCH_AUTH_SOURCE_SIGNING_KEY")?;
-    if auth_source_key.as_bytes().len() < 32 {
+    let auth_source_key = env::var("FMARCH_AUTH_SOURCE_SIGNING_KEY").ok();
+    if auth_source_key
+        .as_deref()
+        .is_some_and(|value| value.as_bytes().len() < 32)
+    {
         return Err(std::io::Error::new(
             std::io::ErrorKind::InvalidInput,
             "FMARCH_AUTH_SOURCE_SIGNING_KEY must contain at least 32 bytes",
+        )
+        .into());
+    }
+    if auth_source_key.is_none() && !(dev_auth_enabled && cfg!(debug_assertions)) {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "FMARCH_AUTH_SOURCE_SIGNING_KEY is required",
         )
         .into());
     }
@@ -287,14 +305,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Startup requires at least one enabled sign-in method. FMARCH_DEV_AUTH
     // only unlocks dev shortcuts (dev-session endpoint, query-param sockets).
     let classic_enabled = env::var("FMARCH_CLASSIC_AUTH").ok().as_deref() != Some("0");
-    let dev_auth_enabled = env::var("FMARCH_DEV_AUTH").ok().as_deref() == Some("1");
-    if dev_auth_enabled && !cfg!(debug_assertions) {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::InvalidInput,
-            "FMARCH_DEV_AUTH cannot be enabled in a release build",
-        )
-        .into());
-    }
     if !classic_enabled && workos_verifier.is_none() {
         return Err(std::io::Error::new(
             std::io::ErrorKind::InvalidInput,

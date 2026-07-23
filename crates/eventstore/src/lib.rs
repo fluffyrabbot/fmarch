@@ -658,7 +658,8 @@ pub fn decrypt_private_projection(
 
 /// Fail an internet-facing process closed unless it has explicit key material.
 /// The deterministic fallback exists only in debug builds and server operators
-/// must opt into it explicitly for local development.
+/// must opt into it explicitly through the dedicated flag or debug-only dev
+/// authentication mode.
 pub fn require_secure_event_encryption_configuration() -> Result<(), StoreError> {
     let key = std::env::var("FMARCH_EVENT_ENCRYPTION_KEY")
         .ok()
@@ -672,12 +673,13 @@ pub fn require_secure_event_encryption_configuration() -> Result<(), StoreError>
     }
     let insecure_dev = std::env::var("FMARCH_ALLOW_INSECURE_DEV_EVENT_KEY")
         .ok()
-        .is_some_and(|value| value.eq_ignore_ascii_case("true"));
+        .is_some_and(|value| value.eq_ignore_ascii_case("true"))
+        || std::env::var("FMARCH_DEV_AUTH").ok().as_deref() == Some("1");
     if insecure_dev && cfg!(debug_assertions) {
         return Ok(());
     }
     Err(StoreError::Crypto(
-        "FMARCH_EVENT_ENCRYPTION_KEY and FMARCH_EVENT_ENCRYPTION_KID are required; the debug-only fallback requires FMARCH_ALLOW_INSECURE_DEV_EVENT_KEY=true"
+        "FMARCH_EVENT_ENCRYPTION_KEY and FMARCH_EVENT_ENCRYPTION_KID are required; the debug-only fallback requires FMARCH_ALLOW_INSECURE_DEV_EVENT_KEY=true or FMARCH_DEV_AUTH=1"
             .to_string(),
     ))
 }
