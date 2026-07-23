@@ -36,6 +36,9 @@
 //!   phase-skip decisions and host-decided PK ties.
 //! - `host_phase_control` — host/admin prompt decisions that move phase state,
 //!   folded from provenance-bearing `PhaseAdvanced` events.
+//! - `day_event` / `day_event_participation` — authoritative platform
+//!   DayEvent lifecycle and current opt-in evidence. HostTasks and player
+//!   attention are selectors over these rows, never a second mutable model.
 //! - `day_vote_outcome` — official engine/pack-policy day vote results folded
 //!   from `DayVoteOutcome`, separate from the running ballot tally.
 //! - `game_authority` — host + cohosts per game (`GameCreated`, `CohostAdded`).
@@ -301,6 +304,35 @@ pub struct HostPromptRow {
     pub public_resolution: Option<serde_json::Value>,
     pub resolved_by: Option<String>,
     pub resolved_at: Option<i64>,
+}
+
+/// Authoritative folded state for one platform DayEvent.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DayEventRow {
+    pub game_id: Uuid,
+    pub event_id: String,
+    pub definition: game_platform::DayEvent,
+    pub state: String,
+    pub phase_id: Option<String>,
+    pub opened_at: Option<i64>,
+    pub locked_at: Option<i64>,
+    pub cancelled_reason: Option<String>,
+    pub decision: Option<game_platform::DayEventDecision>,
+    pub winner_slots: Vec<String>,
+    pub reward_keys_applied: Vec<String>,
+    pub scheduled_seq: i64,
+    pub updated_seq: i64,
+}
+
+/// Current participation for one slot in one open DayEvent.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DayEventParticipationRow {
+    pub game_id: Uuid,
+    pub event_id: String,
+    pub actor_slot: String,
+    pub payload: game_platform::ParticipationPayload,
+    pub phase_id: String,
+    pub submitted_seq: i64,
 }
 
 /// A folded host/admin prompt decision that moved phase state.
@@ -1081,6 +1113,150 @@ async fn fold_event(
                 .execute(&mut **tx)
                 .await?;
             }
+        }
+        "DayEventScheduled" => {
+            let definition: game_platform::DayEvent =
+                serde_json::from_value(ev.payload["event"].clone()).map_err(|source| {
+                    ProjectionError::Payload {
+                        kind: ev.kind.clone(),
+                        source,
+                    }
+                })?;
+            definition
+                .validate()
+                .map_err(|error| ProjectionError::Payload {
+                    kind: ev.kind.clone(),
+                    source: serde::de::Error::custom(error.to_string()),
+                })?;
+            sqlx::query(
+                "INSERT INTO day_event \
+                 (game_id, event_id, definition, state, scheduled_seq, updated_seq) \
+                 VALUES ($1, $2, $3, 'scheduled', $4, $4)",
+            )
+            .bind(game_id)
+            .bind(definition.id.as_str())
+            .bind(&ev.payload["event"])
+            .bind(ev.seq)
+            .execute(&mut **tx)
+            .await?;
+        }
+        "DayEventOpened" => {
+            let event_id = str_field(&ev.payload, "event_id", &ev.kind)?;
+            let phase_id = str_field(&ev.payload, "phase_id", &ev.kind)?;
+            let opened_at = i64_field(&ev.payload, "opened_at", &ev.kind)?;
+            sqlx::query(
+                "UPDATE day_event SET state = 'open', phase_id = $3, opened_at = $4, \
+                 updated_seq = $5 WHERE game_id = $1 AND event_id = $2",
+            )
+            .bind(game_id)
+            .bind(event_id)
+            .bind(phase_id)
+            .bind(opened_at)
+            .bind(ev.seq)
+            .execute(&mut **tx)
+            .await?;
+        }
+        "DayEventLocked" => {
+            let event_id = str_field(&ev.payload, "event_id", &ev.kind)?;
+            let locked_at = i64_field(&ev.payload, "locked_at", &ev.kind)?;
+            sqlx::query(
+                "UPDATE day_event SET state = 'locked', locked_at = $3, updated_seq = $4 \
+                 WHERE game_id = $1 AND event_id = $2",
+            )
+            .bind(game_id)
+            .bind(event_id)
+            .bind(locked_at)
+            .bind(ev.seq)
+            .execute(&mut **tx)
+            .await?;
+        }
+        "DayEventCancelled" => {
+            let event_id = str_field(&ev.payload, "event_id", &ev.kind)?;
+            let reason = str_field(&ev.payload, "reason", &ev.kind)?;
+            sqlx::query(
+                "UPDATE day_event SET state = 'cancelled', cancelled_reason = $3, \
+                 updated_seq = $4 WHERE game_id = $1 AND event_id = $2",
+            )
+            .bind(game_id)
+            .bind(event_id)
+            .bind(reason)
+            .bind(ev.seq)
+            .execute(&mut **tx)
+            .await?;
+        }
+        "DayEventParticipationSubmitted" => {
+            let event_id = str_field(&ev.payload, "event_id", &ev.kind)?;
+            let actor_slot = str_field(&ev.payload, "actor_slot", &ev.kind)?;
+            let phase_id = str_field(&ev.payload, "phase_id", &ev.kind)?;
+            let payload: game_platform::ParticipationPayload =
+                serde_json::from_value(ev.payload["payload"].clone()).map_err(|source| {
+                    ProjectionError::Payload {
+                        kind: ev.kind.clone(),
+                        source,
+                    }
+                })?;
+            ensure_slot(tx, game_id, &actor_slot).await?;
+            sqlx::query(
+                "INSERT INTO day_event_participation \
+                 (game_id, event_id, actor_slot, payload, phase_id, submitted_seq) \
+                 VALUES ($1, $2, $3, $4, $5, $6)",
+            )
+            .bind(game_id)
+            .bind(event_id)
+            .bind(actor_slot)
+            .bind(
+                serde_json::to_value(payload).map_err(|source| ProjectionError::Payload {
+                    kind: ev.kind.clone(),
+                    source,
+                })?,
+            )
+            .bind(phase_id)
+            .bind(ev.seq)
+            .execute(&mut **tx)
+            .await?;
+        }
+        "DayEventParticipationWithdrawn" => {
+            let event_id = str_field(&ev.payload, "event_id", &ev.kind)?;
+            let actor_slot = str_field(&ev.payload, "actor_slot", &ev.kind)?;
+            sqlx::query(
+                "DELETE FROM day_event_participation \
+                 WHERE game_id = $1 AND event_id = $2 AND actor_slot = $3",
+            )
+            .bind(game_id)
+            .bind(event_id)
+            .bind(actor_slot)
+            .execute(&mut **tx)
+            .await?;
+        }
+        "DayEventResolved" => {
+            let event_id = str_field(&ev.payload, "event_id", &ev.kind)?;
+            let decision: game_platform::DayEventDecision =
+                serde_json::from_value(ev.payload["decision"].clone()).map_err(|source| {
+                    ProjectionError::Payload {
+                        kind: ev.kind.clone(),
+                        source,
+                    }
+                })?;
+            let winner_slots = string_array_field(&ev.payload, "winner_slots", &ev.kind)?;
+            let reward_keys = string_array_field(&ev.payload, "reward_keys_applied", &ev.kind)?;
+            sqlx::query(
+                "UPDATE day_event SET state = 'resolved', decision = $3, winner_slots = $4, \
+                 reward_keys_applied = $5, updated_seq = $6 \
+                 WHERE game_id = $1 AND event_id = $2",
+            )
+            .bind(game_id)
+            .bind(event_id)
+            .bind(
+                serde_json::to_value(decision).map_err(|source| ProjectionError::Payload {
+                    kind: ev.kind.clone(),
+                    source,
+                })?,
+            )
+            .bind(serde_json::json!(winner_slots))
+            .bind(serde_json::json!(reward_keys))
+            .bind(ev.seq)
+            .execute(&mut **tx)
+            .await?;
         }
 
         // ── reveal flip (doc 10): end-of-game flips role visibility ──
@@ -3137,6 +3313,8 @@ async fn rebuild_in_tx(
     .await?;
     for table in [
         "vote_ballot",
+        "day_event_participation",
+        "day_event",
         "day_vote_outcome",
         "game_result",
         "host_phase_control",
@@ -3221,6 +3399,14 @@ const AUDIT_PROJECTIONS: &[AuditProjection] = &[
     AuditProjection {
         table: "day_vote_outcome",
         order_by: "phase_id",
+    },
+    AuditProjection {
+        table: "day_event",
+        order_by: "event_id",
+    },
+    AuditProjection {
+        table: "day_event_participation",
+        order_by: "event_id, submitted_seq, actor_slot",
     },
     AuditProjection {
         table: "game_result",
@@ -4334,6 +4520,112 @@ where
             resolved_at: r.get("resolved_at"),
         })
         .collect())
+}
+
+/// Read authoritative DayEvent rows in stable event-id order.
+pub async fn day_events<'e, E>(
+    executor: E,
+    game_id: Uuid,
+) -> Result<Vec<DayEventRow>, ProjectionError>
+where
+    E: sqlx::PgExecutor<'e>,
+{
+    let rows = sqlx::query(
+        "SELECT game_id, event_id, definition, state, phase_id, opened_at, locked_at, \
+         cancelled_reason, decision, winner_slots, reward_keys_applied, scheduled_seq, updated_seq \
+         FROM day_event WHERE game_id = $1 ORDER BY event_id",
+    )
+    .bind(game_id)
+    .fetch_all(executor)
+    .await?;
+    rows.into_iter()
+        .map(|row| {
+            let definition_value: serde_json::Value = row.get("definition");
+            let definition = serde_json::from_value(definition_value).map_err(|source| {
+                ProjectionError::Payload {
+                    kind: "DayEventScheduled".to_string(),
+                    source,
+                }
+            })?;
+            let decision_value: Option<serde_json::Value> = row.get("decision");
+            let decision = decision_value
+                .map(serde_json::from_value)
+                .transpose()
+                .map_err(|source| ProjectionError::Payload {
+                    kind: "DayEventResolved".to_string(),
+                    source,
+                })?;
+            let winner_slots_value: serde_json::Value = row.get("winner_slots");
+            let winner_slots = serde_json::from_value(winner_slots_value).map_err(|source| {
+                ProjectionError::Payload {
+                    kind: "DayEventResolved".to_string(),
+                    source,
+                }
+            })?;
+            let reward_keys_value: serde_json::Value = row.get("reward_keys_applied");
+            let reward_keys_applied =
+                serde_json::from_value(reward_keys_value).map_err(|source| {
+                    ProjectionError::Payload {
+                        kind: "DayEventResolved".to_string(),
+                        source,
+                    }
+                })?;
+            Ok(DayEventRow {
+                game_id: row.get("game_id"),
+                event_id: row.get("event_id"),
+                definition,
+                state: row.get("state"),
+                phase_id: row.get("phase_id"),
+                opened_at: row.get("opened_at"),
+                locked_at: row.get("locked_at"),
+                cancelled_reason: row.get("cancelled_reason"),
+                decision,
+                winner_slots,
+                reward_keys_applied,
+                scheduled_seq: row.get("scheduled_seq"),
+                updated_seq: row.get("updated_seq"),
+            })
+        })
+        .collect()
+}
+
+/// Read current participation for one DayEvent in deterministic submission order.
+pub async fn day_event_participation<'e, E>(
+    executor: E,
+    game_id: Uuid,
+    event_id: &str,
+) -> Result<Vec<DayEventParticipationRow>, ProjectionError>
+where
+    E: sqlx::PgExecutor<'e>,
+{
+    let rows = sqlx::query(
+        "SELECT game_id, event_id, actor_slot, payload, phase_id, submitted_seq \
+         FROM day_event_participation WHERE game_id = $1 AND event_id = $2 \
+         ORDER BY submitted_seq, actor_slot",
+    )
+    .bind(game_id)
+    .bind(event_id)
+    .fetch_all(executor)
+    .await?;
+    rows.into_iter()
+        .map(|row| {
+            let payload_value: serde_json::Value = row.get("payload");
+            let payload = serde_json::from_value(payload_value).map_err(|source| {
+                ProjectionError::Payload {
+                    kind: "DayEventParticipationSubmitted".to_string(),
+                    source,
+                }
+            })?;
+            Ok(DayEventParticipationRow {
+                game_id: row.get("game_id"),
+                event_id: row.get("event_id"),
+                actor_slot: row.get("actor_slot"),
+                payload,
+                phase_id: row.get("phase_id"),
+                submitted_seq: row.get("submitted_seq"),
+            })
+        })
+        .collect()
 }
 
 /// Read folded host/admin prompt phase-control decisions, ordered by event log position.
@@ -6943,6 +7235,43 @@ fn str_field(p: &serde_json::Value, key: &str, kind: &str) -> Result<String, Pro
             kind: kind.to_string(),
             source: serde::de::Error::custom(format!("missing string field `{key}`")),
         })
+}
+
+fn i64_field(p: &serde_json::Value, key: &str, kind: &str) -> Result<i64, ProjectionError> {
+    p.get(key)
+        .and_then(serde_json::Value::as_i64)
+        .ok_or_else(|| ProjectionError::Payload {
+            kind: kind.to_string(),
+            source: serde::de::Error::custom(format!("missing integer field `{key}`")),
+        })
+}
+
+fn string_array_field(
+    p: &serde_json::Value,
+    key: &str,
+    kind: &str,
+) -> Result<Vec<String>, ProjectionError> {
+    let values = p
+        .get(key)
+        .and_then(serde_json::Value::as_array)
+        .ok_or_else(|| ProjectionError::Payload {
+            kind: kind.to_string(),
+            source: serde::de::Error::custom(format!("missing array field `{key}`")),
+        })?;
+    values
+        .iter()
+        .map(|value| {
+            value
+                .as_str()
+                .map(str::to_string)
+                .ok_or_else(|| ProjectionError::Payload {
+                    kind: kind.to_string(),
+                    source: serde::de::Error::custom(format!(
+                        "field `{key}` must contain only strings"
+                    )),
+                })
+        })
+        .collect()
 }
 
 fn uuid_field(p: &serde_json::Value, key: &str, kind: &str) -> Result<Uuid, ProjectionError> {

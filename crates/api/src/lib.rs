@@ -7205,6 +7205,8 @@ pub struct PlayerCommandStateResponse {
     pub current_actions: Vec<PlayerCommandCurrentAction>,
     pub vote_targets: Vec<PlayerVoteTarget>,
     pub current_vote: Option<PlayerVoteTarget>,
+    /// At most one attention item per open DayEvent the slot can act on.
+    pub day_events: Vec<PlayerDayEventAttention>,
     pub boundary: String,
 }
 
@@ -7253,6 +7255,16 @@ pub struct PlayerVoteTarget {
     pub kind: String,
     pub slot_id: Option<String>,
     pub label: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PlayerDayEventAttention {
+    pub event_id: String,
+    pub template_key: String,
+    pub phase_id: String,
+    pub participation_status: String,
+    pub can_submit: bool,
+    pub can_withdraw: bool,
 }
 
 async fn player_command_state(
@@ -7376,6 +7388,47 @@ async fn player_command_state(
     } else {
         (Vec::new(), Vec::new())
     };
+    let mut day_events = Vec::new();
+    if !game_completed {
+        for event in projections::day_events(&state.pool, game).await? {
+            if event.state != "open" {
+                continue;
+            }
+            let eligible = match event.definition.participation.who {
+                game_platform::ParticipantFilter::AliveSlots => actor.alive,
+                game_platform::ParticipantFilter::AllOccupied => true,
+                game_platform::ParticipantFilter::HostInvited
+                | game_platform::ParticipantFilter::ChannelMembers => false,
+            };
+            if !eligible {
+                continue;
+            }
+            let participation =
+                projections::day_event_participation(&state.pool, game, event.event_id.as_str())
+                    .await?;
+            let submitted = participation
+                .iter()
+                .any(|row| row.actor_slot == actor.slot_id);
+            let at_capacity = event
+                .definition
+                .participation
+                .limits
+                .maximum
+                .is_some_and(|maximum| participation.len() >= maximum as usize);
+            day_events.push(PlayerDayEventAttention {
+                event_id: event.event_id,
+                template_key: event.definition.template_key.as_str().to_string(),
+                phase_id: event.phase_id.unwrap_or_default(),
+                participation_status: if submitted {
+                    "submitted".to_string()
+                } else {
+                    "available".to_string()
+                },
+                can_submit: !submitted && !at_capacity,
+                can_withdraw: submitted,
+            });
+        }
+    }
 
     Ok(Json(PlayerCommandStateResponse {
         game,
@@ -7390,6 +7443,7 @@ async fn player_command_state(
         current_actions,
         vote_targets,
         current_vote,
+        day_events,
         boundary: if game_completed {
             "The game is complete; role actions, votes, and posts are closed while final role and alignment facts are public.".to_string()
         } else {
@@ -7720,7 +7774,7 @@ mod tests {
             host_prompt_row("prompt:resolved", "resolved"),
         ];
         let host = build_host_console_authority("host_h", true, BTreeSet::new());
-        let tasks = select_host_tasks(&prompts, &host);
+        let tasks = select_host_tasks(&prompts, &[], &host);
 
         assert_eq!(tasks.len(), 1, "resolved facts are history, not tasks");
         assert_eq!(tasks[0].id, "engine-host-prompt:prompt:one");
@@ -7741,7 +7795,7 @@ mod tests {
             false,
             BTreeSet::from([commands::CohostPermissionClass::HostPromptResolve]),
         );
-        let tasks = select_host_tasks(&prompts, &denied_cohost);
+        let tasks = select_host_tasks(&prompts, &[], &denied_cohost);
         assert_eq!(tasks[0].id, "engine-host-prompt:prompt:one");
         assert_eq!(tasks[0].state, HostTaskState::Blocked);
         assert!(tasks[0].allowed_commands.is_empty());
@@ -7749,6 +7803,40 @@ mod tests {
             tasks[0].blocked_reason.as_deref(),
             Some("cohost policy denies host_prompt_resolve")
         );
+    }
+
+    #[test]
+    fn locked_day_event_selects_a_permission_aware_host_task() {
+        let event = day_event_row("locked");
+        let host = build_host_console_authority("host_h", true, BTreeSet::new());
+        let tasks = select_host_tasks(&[], std::slice::from_ref(&event), &host);
+        assert_eq!(tasks.len(), 1);
+        assert_eq!(tasks[0].id, "day-event-resolve:event-cookie");
+        assert_eq!(tasks[0].kind, HostTaskKind::DayEventResolve);
+        assert_eq!(tasks[0].source_id, "event-cookie");
+        assert_eq!(
+            tasks[0].allowed_commands,
+            [HostTaskAllowedCommand {
+                kind: HostTaskCommandKind::ResolveDayEvent,
+                permission_class: wire::CohostPermissionClass::DayEventResolve,
+            }]
+        );
+
+        let denied = build_host_console_authority(
+            "cohost_c",
+            false,
+            BTreeSet::from([commands::CohostPermissionClass::DayEventResolve]),
+        );
+        let tasks = select_host_tasks(&[], std::slice::from_ref(&event), &denied);
+        assert_eq!(tasks[0].state, HostTaskState::Blocked);
+        assert!(tasks[0].allowed_commands.is_empty());
+        assert_eq!(
+            tasks[0].blocked_reason.as_deref(),
+            Some("cohost policy denies day_event_resolve")
+        );
+
+        let resolved = day_event_row("resolved");
+        assert!(select_host_tasks(&[], &[resolved], &host).is_empty());
     }
 
     fn host_prompt_row(prompt_id: &str, status: &str) -> projections::HostPromptRow {
@@ -7768,6 +7856,53 @@ mod tests {
             public_resolution: None,
             resolved_by: None,
             resolved_at: None,
+        }
+    }
+
+    fn day_event_row(state: &str) -> projections::DayEventRow {
+        projections::DayEventRow {
+            game_id: Uuid::nil(),
+            event_id: "event-cookie".to_string(),
+            definition: serde_json::from_value(serde_json::json!({
+                "id": "event-cookie",
+                "program_id": "program-bakery",
+                "template_key": "theme.raffle",
+                "phase_scope": { "kind": "during_day", "number": 1 },
+                "schedule": { "kind": "host_opened" },
+                "participation": {
+                    "who": "alive_slots",
+                    "mode": "opt_in",
+                    "limits": { "minimum": 1, "maximum": null }
+                },
+                "state": "scheduled",
+                "resolution": "host_decision",
+                "rewards": [{
+                    "reward_key": "cookie",
+                    "display_name_theme_key": "theme.cookie",
+                    "effects": [{
+                        "recipient": { "kind": "winner" },
+                        "operation": { "kind": "mark", "effect": "marked" }
+                    }]
+                }],
+                "narrative": {
+                    "opened": null,
+                    "locked": null,
+                    "resolved": null,
+                    "cancelled": null
+                },
+                "channel_policy": { "allowed_channels": ["spectator"] }
+            }))
+            .unwrap(),
+            state: state.to_string(),
+            phase_id: Some("D01".to_string()),
+            opened_at: Some(1),
+            locked_at: Some(2),
+            cancelled_reason: None,
+            decision: None,
+            winner_slots: Vec::new(),
+            reward_keys_applied: Vec::new(),
+            scheduled_seq: 1,
+            updated_seq: 2,
         }
     }
 }
@@ -8165,7 +8300,8 @@ async fn load_host_console_state(
         })
         .collect();
     let host_prompts = projections::host_prompts(&state.pool, game).await?;
-    let tasks = select_host_tasks(&host_prompts, &authority);
+    let day_events = projections::day_events(&state.pool, game).await?;
+    let tasks = select_host_tasks(&host_prompts, &day_events, &authority);
 
     Ok(HostConsoleStateResponse {
         game,
@@ -8183,12 +8319,13 @@ async fn load_host_console_state(
 /// durable completion remains available in `host_prompt` history.
 fn select_host_tasks(
     prompts: &[projections::HostPromptRow],
+    day_events: &[projections::DayEventRow],
     authority: &HostConsoleAuthorityDelta,
 ) -> Vec<HostTaskDelta> {
     let can_resolve_prompt = authority
         .allowed_classes
         .contains(&wire::CohostPermissionClass::HostPromptResolve);
-    prompts
+    let mut tasks: Vec<_> = prompts
         .iter()
         .filter(|prompt| prompt.status == "pending")
         .map(|prompt| {
@@ -8232,7 +8369,69 @@ fn select_host_tasks(
                 blocked_reason,
             }
         })
-        .collect()
+        .collect();
+    let can_resolve_day_event = authority
+        .allowed_classes
+        .contains(&wire::CohostPermissionClass::DayEventResolve);
+    tasks.extend(
+        day_events
+            .iter()
+            .filter(|event| {
+                event.state == "locked"
+                    && event.definition.resolution
+                        == game_platform::DayEventResolutionMode::HostDecision
+            })
+            .map(|event| {
+                let (state, allowed_commands, blocked_reason) = if can_resolve_day_event {
+                    (
+                        HostTaskState::Ready,
+                        vec![HostTaskAllowedCommand {
+                            kind: HostTaskCommandKind::ResolveDayEvent,
+                            permission_class: wire::CohostPermissionClass::DayEventResolve,
+                        }],
+                        None,
+                    )
+                } else {
+                    (
+                        HostTaskState::Blocked,
+                        Vec::new(),
+                        Some(match authority.capability {
+                            HostConsoleAuthorityKind::CohostOf => {
+                                "cohost policy denies day_event_resolve".to_string()
+                            }
+                            HostConsoleAuthorityKind::GlobalOperator => {
+                                "global operators have read-only host console access".to_string()
+                            }
+                            HostConsoleAuthorityKind::HostOf => {
+                                "DayEvent resolution is unavailable".to_string()
+                            }
+                        }),
+                    )
+                };
+                HostTaskDelta {
+                    id: format!("day-event-resolve:{}", event.event_id),
+                    kind: HostTaskKind::DayEventResolve,
+                    state,
+                    urgency: HostTaskUrgency::Attention,
+                    intent: format!("Resolve {}", event.definition.template_key.as_str()),
+                    consequence: format!(
+                        "apply {} reward binding{} atomically",
+                        event.definition.rewards.len(),
+                        if event.definition.rewards.len() == 1 {
+                            ""
+                        } else {
+                            "s"
+                        }
+                    ),
+                    phase_id: event.phase_id.clone().unwrap_or_default(),
+                    subject_slot: None,
+                    source_id: event.event_id.clone(),
+                    allowed_commands,
+                    blocked_reason,
+                }
+            }),
+    );
+    tasks
 }
 
 async fn resolve_host_console_authority(
@@ -9390,6 +9589,13 @@ fn command_game(command: &wire::Command) -> Option<Uuid> {
         | wire::Command::SubmitPost { game, .. }
         | wire::Command::ExtendDeadline { game, .. }
         | wire::Command::ApplyEffectPlan { game, .. }
+        | wire::Command::ScheduleDayEvent { game, .. }
+        | wire::Command::OpenDayEvent { game, .. }
+        | wire::Command::LockDayEvent { game, .. }
+        | wire::Command::CancelDayEvent { game, .. }
+        | wire::Command::SubmitDayEventParticipation { game, .. }
+        | wire::Command::WithdrawDayEventParticipation { game, .. }
+        | wire::Command::ResolveDayEvent { game, .. }
         | wire::Command::ProcessReplacement { game, .. } => Some(*game),
     }
 }
@@ -9415,6 +9621,13 @@ fn command_affects_host_console(command: &wire::Command) -> bool {
             | wire::Command::SubmitPost { .. }
             | wire::Command::ExtendDeadline { .. }
             | wire::Command::ApplyEffectPlan { .. }
+            | wire::Command::ScheduleDayEvent { .. }
+            | wire::Command::OpenDayEvent { .. }
+            | wire::Command::LockDayEvent { .. }
+            | wire::Command::CancelDayEvent { .. }
+            | wire::Command::SubmitDayEventParticipation { .. }
+            | wire::Command::WithdrawDayEventParticipation { .. }
+            | wire::Command::ResolveDayEvent { .. }
             | wire::Command::ProcessReplacement { .. }
     )
 }
@@ -9446,6 +9659,7 @@ fn command_affects_player_private(command: &wire::Command) -> bool {
         wire::Command::ResolvePhase { .. }
             | wire::Command::ResolveHostPrompt { .. }
             | wire::Command::ApplyEffectPlan { .. }
+            | wire::Command::ResolveDayEvent { .. }
             | wire::Command::SubmitAction { .. }
             | wire::Command::WithdrawAction { .. }
     )
@@ -9469,6 +9683,13 @@ fn command_affects_player_command_state(command: &wire::Command) -> bool {
             | wire::Command::SubmitVote { .. }
             | wire::Command::WithdrawVote { .. }
             | wire::Command::ApplyEffectPlan { .. }
+            | wire::Command::ScheduleDayEvent { .. }
+            | wire::Command::OpenDayEvent { .. }
+            | wire::Command::LockDayEvent { .. }
+            | wire::Command::CancelDayEvent { .. }
+            | wire::Command::SubmitDayEventParticipation { .. }
+            | wire::Command::WithdrawDayEventParticipation { .. }
+            | wire::Command::ResolveDayEvent { .. }
             | wire::Command::ProcessReplacement { .. }
     )
 }
@@ -9684,7 +9905,9 @@ impl From<IdentityDeliveryError> for ApiError {
 fn command_reject_api_error(reject: commands::Reject) -> ApiError {
     let status = match &reject {
         commands::Reject::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
-        commands::Reject::UnknownGame | commands::Reject::UnknownSlot => StatusCode::NOT_FOUND,
+        commands::Reject::UnknownGame
+        | commands::Reject::UnknownSlot
+        | commands::Reject::UnknownDayEvent => StatusCode::NOT_FOUND,
         commands::Reject::NotAuthorized
         | commands::Reject::NotHost
         | commands::Reject::CohostPermissionDenied(_)

@@ -97,7 +97,7 @@
           </div>
 
           {#if task.actions.length === 0}
-            <p class="host-task-workspace__empty">No action is currently required.</p>
+            <p class="host-task-workspace__empty">{task.emptyLabel ?? "No action is currently required."}</p>
           {:else}
             <div class="host-task-workspace__actions">
               {#each task.actions as action}

@@ -339,6 +339,39 @@ pub enum Command {
         effects: Vec<game_platform::ConcreteEffect>,
         reason: String,
     },
+    ScheduleDayEvent {
+        game: Uuid,
+        event: game_platform::DayEvent,
+    },
+    OpenDayEvent {
+        game: Uuid,
+        event_id: game_platform::DayEventId,
+    },
+    LockDayEvent {
+        game: Uuid,
+        event_id: game_platform::DayEventId,
+    },
+    CancelDayEvent {
+        game: Uuid,
+        event_id: game_platform::DayEventId,
+        reason: String,
+    },
+    SubmitDayEventParticipation {
+        game: Uuid,
+        event_id: game_platform::DayEventId,
+        actor_slot: String,
+        payload: game_platform::ParticipationPayload,
+    },
+    WithdrawDayEventParticipation {
+        game: Uuid,
+        event_id: game_platform::DayEventId,
+        actor_slot: String,
+    },
+    ResolveDayEvent {
+        game: Uuid,
+        event_id: game_platform::DayEventId,
+        decision: game_platform::DayEventDecision,
+    },
     SubmitVote {
         game: Uuid,
         actor_slot: String,
@@ -482,6 +515,53 @@ impl From<Command> for commands::Command {
                 effects,
                 reason,
             },
+            Command::ScheduleDayEvent { game, event } => {
+                commands::Command::ScheduleDayEvent { game, event }
+            }
+            Command::OpenDayEvent { game, event_id } => {
+                commands::Command::OpenDayEvent { game, event_id }
+            }
+            Command::LockDayEvent { game, event_id } => {
+                commands::Command::LockDayEvent { game, event_id }
+            }
+            Command::CancelDayEvent {
+                game,
+                event_id,
+                reason,
+            } => commands::Command::CancelDayEvent {
+                game,
+                event_id,
+                reason,
+            },
+            Command::SubmitDayEventParticipation {
+                game,
+                event_id,
+                actor_slot,
+                payload,
+            } => commands::Command::SubmitDayEventParticipation {
+                game,
+                event_id,
+                actor_slot,
+                payload,
+            },
+            Command::WithdrawDayEventParticipation {
+                game,
+                event_id,
+                actor_slot,
+            } => commands::Command::WithdrawDayEventParticipation {
+                game,
+                event_id,
+                actor_slot,
+            },
+            Command::ResolveDayEvent {
+                game,
+                event_id,
+                decision,
+            } => commands::Command::ResolveDayEvent {
+                game,
+                event_id,
+                decision,
+            },
             Command::SubmitVote {
                 game,
                 actor_slot,
@@ -609,6 +689,13 @@ pub enum RejectCode {
     PromptAlreadyResolved,
     GameAlreadyCompleted,
     InvalidPromptDecision,
+    UnknownDayEvent,
+    DayEventAlreadyExists,
+    DayEventStateConflict,
+    DuplicateParticipation,
+    ParticipationNotFound,
+    ParticipationNotAllowed,
+    DayEventValidation,
     EffectSpecValidation,
     Internal,
 }
@@ -634,6 +721,13 @@ impl From<&commands::Reject> for RejectCode {
             commands::Reject::PromptAlreadyResolved => RejectCode::PromptAlreadyResolved,
             commands::Reject::GameAlreadyCompleted => RejectCode::GameAlreadyCompleted,
             commands::Reject::InvalidPromptDecision => RejectCode::InvalidPromptDecision,
+            commands::Reject::UnknownDayEvent => RejectCode::UnknownDayEvent,
+            commands::Reject::DayEventAlreadyExists => RejectCode::DayEventAlreadyExists,
+            commands::Reject::DayEventStateConflict(_) => RejectCode::DayEventStateConflict,
+            commands::Reject::DuplicateParticipation => RejectCode::DuplicateParticipation,
+            commands::Reject::ParticipationNotFound => RejectCode::ParticipationNotFound,
+            commands::Reject::ParticipationNotAllowed(_) => RejectCode::ParticipationNotAllowed,
+            commands::Reject::DayEventValidation(_) => RejectCode::DayEventValidation,
             commands::Reject::EffectSpecValidation(_) => RejectCode::EffectSpecValidation,
             commands::Reject::Internal(_) => RejectCode::Internal,
         }
@@ -782,6 +876,7 @@ pub struct HostConsoleThreadPostDelta {
 #[serde(rename_all = "snake_case")]
 pub enum HostTaskKind {
     EngineHostPrompt,
+    DayEventResolve,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -801,6 +896,7 @@ pub enum HostTaskUrgency {
 #[serde(rename_all = "snake_case")]
 pub enum HostTaskCommandKind {
     ResolveHostPrompt,
+    ResolveDayEvent,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]

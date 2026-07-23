@@ -38,6 +38,45 @@ fn test_api_state(pool: sqlx::PgPool) -> ApiState {
     ApiState::new(pool, shared_test_media_store())
 }
 
+fn minimal_day_event(event_id: &str) -> game_platform::DayEvent {
+    game_platform::DayEvent {
+        id: game_platform::DayEventId::new(event_id).unwrap(),
+        program_id: game_platform::ProgramId::new("program-bakery").unwrap(),
+        template_key: game_platform::TemplateKey::new("theme.raffle").unwrap(),
+        phase_scope: game_platform::PhaseScope::DuringDay { number: 1 },
+        schedule: game_platform::DayEventSchedule::HostOpened,
+        participation: game_platform::ParticipationSpec {
+            who: game_platform::ParticipantFilter::AliveSlots,
+            mode: game_platform::ParticipationMode::OptIn,
+            limits: game_platform::ParticipationLimits {
+                minimum: 1,
+                maximum: None,
+            },
+        },
+        state: game_platform::DayEventState::Scheduled,
+        resolution: game_platform::DayEventResolutionMode::HostDecision,
+        rewards: vec![game_platform::RewardBinding {
+            reward_key: game_platform::RewardKey::new("cookie").unwrap(),
+            display_name_theme_key: game_platform::TemplateKey::new("theme.cookie").unwrap(),
+            effects: vec![game_platform::RewardEffectTemplate {
+                recipient: game_platform::RecipientSelector::Winner,
+                operation: game_platform::EffectOperationTemplate::Mark {
+                    effect: game_platform::Tag::new("bomb").unwrap(),
+                },
+            }],
+        }],
+        narrative: game_platform::NarrativeTemplates {
+            opened: None,
+            locked: None,
+            resolved: None,
+            cancelled: None,
+        },
+        channel_policy: game_platform::EventChannelPolicy {
+            allowed_channels: vec![game_platform::ChannelId::new("spectator").unwrap()],
+        },
+    }
+}
+
 fn shared_test_media_store() -> MediaStore {
     static ROOT: OnceLock<TempDir> = OnceLock::new();
     let root = ROOT.get_or_init(|| tempfile::tempdir().expect("create shared API test media root"));
@@ -4190,6 +4229,257 @@ async fn websocket_host_connection_streams_command_following_host_prompts_delta(
     );
 
     server.abort();
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn day_event_vertical_exposes_player_attention_and_permission_aware_host_task(
+    pool: sqlx::PgPool,
+) {
+    let app = router(pool.clone());
+    let game = Uuid::new_v4();
+    expect_ack(
+        post_command(
+            app.clone(),
+            501,
+            "host_h",
+            Command::CreateGame {
+                game,
+                pack: "mafiascum".into(),
+                cohost_denied: vec![wire::CohostPermissionClass::DayEventResolve],
+            },
+        )
+        .await,
+    );
+    for (id, command) in [
+        (
+            502,
+            Command::AddSlot {
+                game,
+                slot: "slot_1".into(),
+            },
+        ),
+        (
+            503,
+            Command::AssignSlot {
+                game,
+                slot: "slot_1".into(),
+                user: "user_a".into(),
+            },
+        ),
+        (
+            504,
+            Command::AssignRole {
+                game,
+                slot: "slot_1".into(),
+                role_key: "vanilla_townie".into(),
+            },
+        ),
+        (
+            505,
+            Command::AddCohost {
+                game,
+                user: "cohost_c".into(),
+            },
+        ),
+        (
+            506,
+            Command::StartGame {
+                game,
+                phase: "D01".into(),
+            },
+        ),
+        (
+            507,
+            Command::ScheduleDayEvent {
+                game,
+                event: minimal_day_event("event-cookie"),
+            },
+        ),
+        (
+            508,
+            Command::OpenDayEvent {
+                game,
+                event_id: game_platform::DayEventId::new("event-cookie").unwrap(),
+            },
+        ),
+    ] {
+        expect_ack(post_command(app.clone(), id, "host_h", command).await);
+    }
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!(
+                    "/games/{game}/player-command-state?principal_user_id=user_a&slot_id=slot_1"
+                ))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let state: api::PlayerCommandStateResponse = serde_json::from_slice(&body).unwrap();
+    assert_eq!(state.day_events.len(), 1);
+    assert_eq!(state.day_events[0].event_id, "event-cookie");
+    assert!(state.day_events[0].can_submit);
+    assert!(!state.day_events[0].can_withdraw);
+
+    expect_ack(
+        post_command(
+            app.clone(),
+            509,
+            "user_a",
+            Command::SubmitDayEventParticipation {
+                game,
+                event_id: game_platform::DayEventId::new("event-cookie").unwrap(),
+                actor_slot: "slot_1".into(),
+                payload: game_platform::ParticipationPayload::OptIn,
+            },
+        )
+        .await,
+    );
+    expect_reject(
+        post_command(
+            app.clone(),
+            510,
+            "user_a",
+            Command::SubmitDayEventParticipation {
+                game,
+                event_id: game_platform::DayEventId::new("event-cookie").unwrap(),
+                actor_slot: "slot_1".into(),
+                payload: game_platform::ParticipationPayload::OptIn,
+            },
+        )
+        .await,
+        RejectCode::DuplicateParticipation,
+    );
+    expect_ack(
+        post_command(
+            app.clone(),
+            511,
+            "host_h",
+            Command::LockDayEvent {
+                game,
+                event_id: game_platform::DayEventId::new("event-cookie").unwrap(),
+            },
+        )
+        .await,
+    );
+
+    for (principal, expected_state, expected_commands, expected_reason) in [
+        ("host_h", wire::HostTaskState::Ready, 1usize, None),
+        (
+            "cohost_c",
+            wire::HostTaskState::Blocked,
+            0usize,
+            Some("cohost policy denies day_event_resolve"),
+        ),
+    ] {
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri(format!(
+                        "/games/{game}/host-console-state?principal_user_id={principal}"
+                    ))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let state: api::HostConsoleStateResponse = serde_json::from_slice(&body).unwrap();
+        let task = state
+            .tasks
+            .iter()
+            .find(|task| task.id == "day-event-resolve:event-cookie")
+            .expect("locked event selects exactly one host task");
+        assert_eq!(task.state, expected_state);
+        assert_eq!(task.allowed_commands.len(), expected_commands);
+        assert_eq!(task.blocked_reason.as_deref(), expected_reason);
+    }
+
+    expect_ack(
+        post_command(
+            app.clone(),
+            512,
+            "host_h",
+            Command::ResolveDayEvent {
+                game,
+                event_id: game_platform::DayEventId::new("event-cookie").unwrap(),
+                decision: game_platform::DayEventDecision::SelectWinners {
+                    slots: vec![game_platform::SlotId::new("slot_1").unwrap()],
+                },
+            },
+        )
+        .await,
+    );
+    expect_reject(
+        post_command(
+            app.clone(),
+            513,
+            "host_h",
+            Command::ResolveDayEvent {
+                game,
+                event_id: game_platform::DayEventId::new("event-cookie").unwrap(),
+                decision: game_platform::DayEventDecision::SelectWinners {
+                    slots: vec![game_platform::SlotId::new("slot_1").unwrap()],
+                },
+            },
+        )
+        .await,
+        RejectCode::DayEventStateConflict,
+    );
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!(
+                    "/games/{game}/host-console-state?principal_user_id=host_h"
+                ))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let state: api::HostConsoleStateResponse = serde_json::from_slice(&body).unwrap();
+    assert!(state
+        .tasks
+        .iter()
+        .all(|task| task.id != "day-event-resolve:event-cookie"));
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!(
+                    "/games/{game}/player-command-state?principal_user_id=user_a&slot_id=slot_1"
+                ))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let state: api::PlayerCommandStateResponse = serde_json::from_slice(&body).unwrap();
+    assert!(
+        state.day_events.is_empty(),
+        "resolved events leave player attention"
+    );
+    assert!(projections::slot_effects(&pool, game)
+        .await
+        .unwrap()
+        .iter()
+        .any(|effect| effect.slot_id == "slot_1" && effect.effect == "bomb"));
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]

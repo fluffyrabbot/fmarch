@@ -567,6 +567,7 @@ export const EMPTY_PLAYER_COMMAND_STATE = Object.freeze({
   currentActions: Object.freeze([]),
   voteTargets: Object.freeze([]),
   currentVote: null,
+  dayEvents: Object.freeze([]),
   boundary:
     "No live player command-state endpoint was available; the route renders no role action controls.",
 });
@@ -585,6 +586,11 @@ export function normalizePlayerCommandState(payload, fallback = EMPTY_PLAYER_COM
     ? payload.vote_targets
     : Array.isArray(payload.voteTargets)
       ? payload.voteTargets
+      : [];
+  const dayEvents = Array.isArray(payload.day_events)
+    ? payload.day_events
+    : Array.isArray(payload.dayEvents)
+      ? payload.dayEvents
       : [];
   return Object.freeze({
     game: payload.game ?? fallback.game ?? null,
@@ -617,7 +623,30 @@ export function normalizePlayerCommandState(payload, fallback = EMPTY_PLAYER_COM
     currentVote: normalizePlayerVoteTarget(
       payload.current_vote ?? payload.currentVote ?? null,
     ),
+    dayEvents: Object.freeze(
+      dayEvents.map(normalizePlayerDayEventAttention).filter(Boolean),
+    ),
     boundary: String(payload.boundary ?? fallback.boundary ?? ""),
+  });
+}
+
+function normalizePlayerDayEventAttention(entry) {
+  if (entry === null || typeof entry !== "object") {
+    return null;
+  }
+  const eventId = String(entry.event_id ?? entry.eventId ?? "").trim();
+  if (eventId === "") {
+    return null;
+  }
+  return Object.freeze({
+    eventId,
+    templateKey: String(entry.template_key ?? entry.templateKey ?? ""),
+    phaseId: String(entry.phase_id ?? entry.phaseId ?? ""),
+    participationStatus: String(
+      entry.participation_status ?? entry.participationStatus ?? "available",
+    ),
+    canSubmit: entry.can_submit === true || entry.canSubmit === true,
+    canWithdraw: entry.can_withdraw === true || entry.canWithdraw === true,
   });
 }
 

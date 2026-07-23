@@ -26,7 +26,7 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
 };
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use caps::{Capability, CapabilitySet, Principal};
 use domain::{
@@ -778,6 +778,38 @@ async fn handle_command(
             effects,
             reason,
         } => apply_effect_plan(tx, principal, game, effects, reason).await,
+        Command::ScheduleDayEvent { game, event } => {
+            schedule_day_event(tx, principal, game, event).await
+        }
+        Command::OpenDayEvent { game, event_id } => {
+            open_day_event(tx, principal, game, event_id).await
+        }
+        Command::LockDayEvent { game, event_id } => {
+            lock_day_event(tx, principal, game, event_id).await
+        }
+        Command::CancelDayEvent {
+            game,
+            event_id,
+            reason,
+        } => cancel_day_event(tx, principal, game, event_id, reason).await,
+        Command::SubmitDayEventParticipation {
+            game,
+            event_id,
+            actor_slot,
+            payload,
+        } => {
+            submit_day_event_participation(tx, principal, game, event_id, actor_slot, payload).await
+        }
+        Command::WithdrawDayEventParticipation {
+            game,
+            event_id,
+            actor_slot,
+        } => withdraw_day_event_participation(tx, principal, game, event_id, actor_slot).await,
+        Command::ResolveDayEvent {
+            game,
+            event_id,
+            decision,
+        } => resolve_day_event(tx, principal, game, event_id, decision).await,
 
         // ── slice commands ──
         Command::SubmitVote {
@@ -956,6 +988,19 @@ fn command_audit_shape(command: &Command) -> (&'static str, CommandAuditAuthorit
         }
         Command::ControlItaSession { .. } => ("ControlItaSession", CommandAuditAuthority::HostTeam),
         Command::ApplyEffectPlan { .. } => ("ApplyEffectPlan", CommandAuditAuthority::HostTeam),
+        Command::ScheduleDayEvent { .. } => ("ScheduleDayEvent", CommandAuditAuthority::HostTeam),
+        Command::OpenDayEvent { .. } => ("OpenDayEvent", CommandAuditAuthority::HostTeam),
+        Command::LockDayEvent { .. } => ("LockDayEvent", CommandAuditAuthority::HostTeam),
+        Command::CancelDayEvent { .. } => ("CancelDayEvent", CommandAuditAuthority::HostTeam),
+        Command::SubmitDayEventParticipation { actor_slot, .. } => (
+            "SubmitDayEventParticipation",
+            CommandAuditAuthority::SlotOccupant(actor_slot),
+        ),
+        Command::WithdrawDayEventParticipation { actor_slot, .. } => (
+            "WithdrawDayEventParticipation",
+            CommandAuditAuthority::SlotOccupant(actor_slot),
+        ),
+        Command::ResolveDayEvent { .. } => ("ResolveDayEvent", CommandAuditAuthority::HostTeam),
         Command::ExtendDeadline { .. } => ("ExtendDeadline", CommandAuditAuthority::HostTeam),
         Command::ProcessReplacement { .. } => {
             ("ProcessReplacement", CommandAuditAuthority::HostTeam)
@@ -989,6 +1034,13 @@ fn command_game(command: &Command) -> Uuid {
         | Command::PublishSpectatorPost { game, .. }
         | Command::ControlItaSession { game, .. }
         | Command::ApplyEffectPlan { game, .. }
+        | Command::ScheduleDayEvent { game, .. }
+        | Command::OpenDayEvent { game, .. }
+        | Command::LockDayEvent { game, .. }
+        | Command::CancelDayEvent { game, .. }
+        | Command::SubmitDayEventParticipation { game, .. }
+        | Command::WithdrawDayEventParticipation { game, .. }
+        | Command::ResolveDayEvent { game, .. }
         | Command::SubmitVote { game, .. }
         | Command::WithdrawVote { game, .. }
         | Command::SubmitAction { game, .. }
@@ -1024,6 +1076,13 @@ fn game_closed_by_completion(command: &Command) -> Option<Uuid> {
         | Command::PublishSpectatorPost { game, .. }
         | Command::ControlItaSession { game, .. }
         | Command::ApplyEffectPlan { game, .. }
+        | Command::ScheduleDayEvent { game, .. }
+        | Command::OpenDayEvent { game, .. }
+        | Command::LockDayEvent { game, .. }
+        | Command::CancelDayEvent { game, .. }
+        | Command::SubmitDayEventParticipation { game, .. }
+        | Command::WithdrawDayEventParticipation { game, .. }
+        | Command::ResolveDayEvent { game, .. }
         | Command::SubmitVote { game, .. }
         | Command::WithdrawVote { game, .. }
         | Command::SubmitAction { game, .. }
@@ -1535,23 +1594,83 @@ async fn apply_effect_plan(
         reason,
     )
     .map_err(effect_spec_validation)?;
+    let command_id = COMMAND_AUDIT_CONTEXT
+        .try_with(|audit| audit.command_id)
+        .map_err(|_| {
+            Reject::Internal("command audit context missing in effect plan".to_string())
+        })?;
+    let application = EffectApplication::HostFiat {
+        principal_user_id: principal.user_id().to_string(),
+        command_id,
+    };
+    let mut lifecycle_states = BTreeMap::new();
+    let events = plan_effect_events(tx, game, plan, &application, &mut lifecycle_states).await?;
+    persist(tx, game, &events).await
+}
 
+#[derive(Debug, Clone)]
+enum EffectApplication {
+    HostFiat {
+        principal_user_id: String,
+        command_id: Uuid,
+    },
+    DayEvent {
+        event_id: String,
+        reward_key: String,
+        command_id: Uuid,
+    },
+}
+
+impl EffectApplication {
+    fn meta_source(&self) -> &'static str {
+        match self {
+            Self::HostFiat { .. } => "host_fiat",
+            Self::DayEvent { .. } => "day_event",
+        }
+    }
+
+    fn source_action(&self, operation: &str) -> String {
+        match self {
+            Self::HostFiat { .. } => format!("host_fiat:{operation}"),
+            Self::DayEvent {
+                event_id,
+                reward_key,
+                ..
+            } => format!("day_event:{event_id}:{reward_key}:{operation}"),
+        }
+    }
+
+    fn grant_source(&self, index: usize) -> String {
+        match self {
+            Self::HostFiat {
+                principal_user_id,
+                command_id,
+            } => host_fiat_grant_source(principal_user_id, *command_id, index),
+            Self::DayEvent {
+                event_id,
+                reward_key,
+                command_id,
+            } => format!("day_event:{event_id}:{reward_key}:grant:{command_id}:{index}"),
+        }
+    }
+}
+
+async fn plan_effect_events(
+    tx: &mut Transaction<'_, Postgres>,
+    game: Uuid,
+    plan: game_platform::EffectPlan,
+    application: &EffectApplication,
+    lifecycle_states: &mut BTreeMap<String, String>,
+) -> Result<Vec<EventInput>, Reject> {
     let phase = projections::phase_state(&mut **tx, game)
         .await?
         .ok_or_else(|| effect_spec_reject("effect plans require an active phase"))?;
     let phase_kind = phase_kind(&phase.phase_id)?;
     let phase_number = phase_number(&phase.phase_id)?;
     let pack = load_pack(&current_pack_name(tx, game).await?)?;
-    let command_id = COMMAND_AUDIT_CONTEXT
-        .try_with(|audit| audit.command_id)
-        .map_err(|_| {
-            Reject::Internal("command audit context missing in effect plan".to_string())
-        })?;
-
     // Preflight the entire plan before appending anything. Lifecycle validation
     // advances this in-memory view so multiple operations on one slot are
     // checked in plan order without consulting partially folded projections.
-    let mut lifecycle_states = BTreeMap::<String, String>::new();
     let mut events = Vec::with_capacity(plan.effects.len());
     for (index, effect) in plan.effects.into_iter().enumerate() {
         let planned = match effect {
@@ -1572,7 +1691,7 @@ async fn apply_effect_plan(
                 };
                 let mut event = plan_slot_status_change(&target, &current, status)?;
                 event.payload["source_action"] =
-                    serde_json::Value::String("host_fiat:set_slot_lifecycle".to_string());
+                    serde_json::Value::String(application.source_action("set_slot_lifecycle"));
                 event.payload["phase_id"] = serde_json::Value::String(phase.phase_id.clone());
                 event.payload["phase_kind"] = serde_json::to_value(phase_kind)
                     .map_err(|error| Reject::Internal(format!("serialize phase kind: {error}")))?;
@@ -1598,7 +1717,7 @@ async fn apply_effect_plan(
                         "effect": effect.as_str(),
                         "target": target.as_str(),
                         "actor": "external",
-                        "source_action": "host_fiat:mark",
+                        "source_action": application.source_action("mark"),
                         "phase_id": phase.phase_id,
                         "phase_kind": phase_kind,
                         "phase_number": phase_number,
@@ -1619,7 +1738,7 @@ async fn apply_effect_plan(
                         "effect": effect.as_str(),
                         "targets": [target.as_str()],
                         "actor": "external",
-                        "source_action": "host_fiat:clear",
+                        "source_action": application.source_action("clear"),
                         "phase_id": phase.phase_id,
                         "phase_kind": phase_kind,
                         "phase_number": phase_number,
@@ -1631,7 +1750,7 @@ async fn apply_effect_plan(
             game_platform::ConcreteEffect::Grant { target, grant } => {
                 require_effect_target(tx, game, target.as_str()).await?;
                 validate_platform_grant(&pack, &grant)?;
-                let source_action = host_fiat_grant_source(principal.user_id(), command_id, index);
+                let source_action = application.grant_source(index);
                 let mut grant_events = vec![EventInput::new(
                     "ActionGranted",
                     1,
@@ -1678,15 +1797,452 @@ async fn apply_effect_plan(
         };
         for mut event in planned {
             event.meta = serde_json::json!({
-                "source": "host_fiat",
+                "source": application.meta_source(),
                 "effect_plan_reason": plan.reason,
                 "effect_plan_index": index,
             });
+            if let EffectApplication::DayEvent {
+                event_id,
+                reward_key,
+                ..
+            } = application
+            {
+                event.meta["day_event_id"] = serde_json::json!(event_id);
+                event.meta["reward_key"] = serde_json::json!(reward_key);
+            }
             events.push(event);
         }
     }
 
+    Ok(events)
+}
+
+async fn schedule_day_event(
+    tx: &mut Transaction<'_, Postgres>,
+    principal: &Principal,
+    game: Uuid,
+    event: game_platform::DayEvent,
+) -> Result<Ack, Reject> {
+    require_game(tx, game).await?;
+    let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
+    require_game_run(tx, &caps, game, CohostPermissionClass::DayEventOps).await?;
+    event.validate().map_err(day_event_validation)?;
+    if event.state != game_platform::DayEventState::Scheduled {
+        return Err(day_event_reject(
+            "inline definitions must begin in scheduled state",
+        ));
+    }
+    if !matches!(event.schedule, game_platform::DayEventSchedule::HostOpened) {
+        return Err(day_event_reject(
+            "the minimal vertical supports HostOpened schedules only",
+        ));
+    }
+    if event.participation.mode != game_platform::ParticipationMode::OptIn {
+        return Err(day_event_reject(
+            "the minimal vertical supports OptIn participation only",
+        ));
+    }
+    if matches!(
+        event.participation.who,
+        game_platform::ParticipantFilter::HostInvited
+            | game_platform::ParticipantFilter::ChannelMembers
+    ) {
+        return Err(day_event_reject(
+            "the minimal vertical supports AliveSlots or AllOccupied participants",
+        ));
+    }
+    if matches!(
+        event.phase_scope,
+        game_platform::PhaseScope::ExplicitWindow { .. }
+    ) {
+        return Err(day_event_reject(
+            "explicit DayEvent windows require the scheduling slice",
+        ));
+    }
+    if projections::day_events(&mut **tx, game)
+        .await?
+        .iter()
+        .any(|row| row.event_id == event.id.as_str())
+    {
+        return Err(Reject::DayEventAlreadyExists);
+    }
+    persist(
+        tx,
+        game,
+        &[EventInput::new(
+            "DayEventScheduled",
+            1,
+            serde_json::json!({ "event": event }),
+            ActorId::Host,
+            0,
+        )],
+    )
+    .await
+}
+
+async fn open_day_event(
+    tx: &mut Transaction<'_, Postgres>,
+    principal: &Principal,
+    game: Uuid,
+    event_id: game_platform::DayEventId,
+) -> Result<Ack, Reject> {
+    require_game(tx, game).await?;
+    let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
+    require_game_run(tx, &caps, game, CohostPermissionClass::DayEventOps).await?;
+    let event = load_day_event(tx, game, event_id.as_str()).await?;
+    require_day_event_state(&event, "scheduled")?;
+    if !matches!(
+        event.definition.schedule,
+        game_platform::DayEventSchedule::HostOpened
+    ) {
+        return Err(day_event_reject("DayEvent is not host-opened"));
+    }
+    let phase = projections::phase_state(&mut **tx, game)
+        .await?
+        .ok_or_else(|| day_event_reject("DayEvent open requires an active phase"))?;
+    match event.definition.phase_scope {
+        game_platform::PhaseScope::DuringDay { number } => {
+            if phase_kind(&phase.phase_id)? != domain::pack::PhaseKind::Day
+                || phase_number(&phase.phase_id)? != number
+            {
+                return Err(day_event_reject(format!(
+                    "DayEvent is scoped to Day {number}, current phase is {}",
+                    phase.phase_id
+                )));
+            }
+        }
+        game_platform::PhaseScope::AnyRunning => {}
+        game_platform::PhaseScope::ExplicitWindow { .. } => {
+            return Err(day_event_reject(
+                "explicit DayEvent windows require the scheduling slice",
+            ));
+        }
+    }
+    let opened_at = unix_seconds_now()?;
+    persist(
+        tx,
+        game,
+        &[EventInput::new(
+            "DayEventOpened",
+            1,
+            serde_json::json!({
+                "event_id": event_id.as_str(),
+                "phase_id": phase.phase_id,
+                "opened_at": opened_at,
+            }),
+            ActorId::Host,
+            0,
+        )],
+    )
+    .await
+}
+
+async fn lock_day_event(
+    tx: &mut Transaction<'_, Postgres>,
+    principal: &Principal,
+    game: Uuid,
+    event_id: game_platform::DayEventId,
+) -> Result<Ack, Reject> {
+    require_game(tx, game).await?;
+    let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
+    require_game_run(tx, &caps, game, CohostPermissionClass::DayEventOps).await?;
+    let event = load_day_event(tx, game, event_id.as_str()).await?;
+    require_day_event_state(&event, "open")?;
+    let participation =
+        projections::day_event_participation(&mut **tx, game, event_id.as_str()).await?;
+    if participation.len() < event.definition.participation.limits.minimum as usize {
+        return Err(day_event_reject(format!(
+            "DayEvent requires at least {} participants before lock",
+            event.definition.participation.limits.minimum
+        )));
+    }
+    persist(
+        tx,
+        game,
+        &[EventInput::new(
+            "DayEventLocked",
+            1,
+            serde_json::json!({
+                "event_id": event_id.as_str(),
+                "locked_at": unix_seconds_now()?,
+            }),
+            ActorId::Host,
+            0,
+        )],
+    )
+    .await
+}
+
+async fn cancel_day_event(
+    tx: &mut Transaction<'_, Postgres>,
+    principal: &Principal,
+    game: Uuid,
+    event_id: game_platform::DayEventId,
+    reason: String,
+) -> Result<Ack, Reject> {
+    require_game(tx, game).await?;
+    let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
+    require_game_run(tx, &caps, game, CohostPermissionClass::DayEventOps).await?;
+    let event = load_day_event(tx, game, event_id.as_str()).await?;
+    if matches!(event.state.as_str(), "resolved" | "cancelled") {
+        return Err(Reject::DayEventStateConflict(event.state));
+    }
+    if reason.trim().is_empty() {
+        return Err(day_event_reject("cancellation reason must not be blank"));
+    }
+    persist(
+        tx,
+        game,
+        &[EventInput::new(
+            "DayEventCancelled",
+            1,
+            serde_json::json!({
+                "event_id": event_id.as_str(),
+                "reason": reason,
+            }),
+            ActorId::Host,
+            0,
+        )],
+    )
+    .await
+}
+
+async fn submit_day_event_participation(
+    tx: &mut Transaction<'_, Postgres>,
+    principal: &Principal,
+    game: Uuid,
+    event_id: game_platform::DayEventId,
+    actor_slot: String,
+    payload: game_platform::ParticipationPayload,
+) -> Result<Ack, Reject> {
+    require_game(tx, game).await?;
+    let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
+    require_slot_occupant(tx, game, &actor_slot, &caps).await?;
+    let event = load_day_event(tx, game, event_id.as_str()).await?;
+    require_day_event_state(&event, "open")?;
+    event
+        .definition
+        .participation
+        .validate_payload(&payload)
+        .map_err(|error| Reject::ParticipationNotAllowed(error.to_string()))?;
+    if event.definition.participation.who == game_platform::ParticipantFilter::AliveSlots {
+        require_slot_alive(tx, game, &actor_slot)
+            .await
+            .map_err(|error| match error {
+                Reject::SlotNotAlive => {
+                    Reject::ParticipationNotAllowed("slot is not alive".to_string())
+                }
+                other => other,
+            })?;
+    }
+    let current = projections::day_event_participation(&mut **tx, game, event_id.as_str()).await?;
+    if current.iter().any(|row| row.actor_slot == actor_slot) {
+        return Err(Reject::DuplicateParticipation);
+    }
+    if event
+        .definition
+        .participation
+        .limits
+        .maximum
+        .is_some_and(|maximum| current.len() >= maximum as usize)
+    {
+        return Err(Reject::ParticipationNotAllowed(
+            "DayEvent participation capacity is full".to_string(),
+        ));
+    }
+    let phase_id = event
+        .phase_id
+        .ok_or_else(|| day_event_reject("open DayEvent has no phase"))?;
+    persist(
+        tx,
+        game,
+        &[EventInput::new(
+            "DayEventParticipationSubmitted",
+            1,
+            serde_json::json!({
+                "event_id": event_id.as_str(),
+                "actor_slot": actor_slot,
+                "payload": payload,
+                "phase_id": phase_id,
+            }),
+            ActorId::Slot(actor_slot),
+            0,
+        )],
+    )
+    .await
+}
+
+async fn withdraw_day_event_participation(
+    tx: &mut Transaction<'_, Postgres>,
+    principal: &Principal,
+    game: Uuid,
+    event_id: game_platform::DayEventId,
+    actor_slot: String,
+) -> Result<Ack, Reject> {
+    require_game(tx, game).await?;
+    let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
+    require_slot_occupant(tx, game, &actor_slot, &caps).await?;
+    let event = load_day_event(tx, game, event_id.as_str()).await?;
+    require_day_event_state(&event, "open")?;
+    let current = projections::day_event_participation(&mut **tx, game, event_id.as_str()).await?;
+    if !current.iter().any(|row| row.actor_slot == actor_slot) {
+        return Err(Reject::ParticipationNotFound);
+    }
+    persist(
+        tx,
+        game,
+        &[EventInput::new(
+            "DayEventParticipationWithdrawn",
+            1,
+            serde_json::json!({
+                "event_id": event_id.as_str(),
+                "actor_slot": actor_slot,
+            }),
+            ActorId::Slot(actor_slot),
+            0,
+        )],
+    )
+    .await
+}
+
+async fn resolve_day_event(
+    tx: &mut Transaction<'_, Postgres>,
+    principal: &Principal,
+    game: Uuid,
+    event_id: game_platform::DayEventId,
+    decision: game_platform::DayEventDecision,
+) -> Result<Ack, Reject> {
+    require_game(tx, game).await?;
+    let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
+    require_game_run(tx, &caps, game, CohostPermissionClass::DayEventResolve).await?;
+    let event = load_day_event(tx, game, event_id.as_str()).await?;
+    require_day_event_state(&event, "locked")?;
+    let winner_slots = match &decision {
+        game_platform::DayEventDecision::SelectWinners { slots } => slots.clone(),
+        game_platform::DayEventDecision::SelectMapping { .. } => {
+            return Err(day_event_reject(
+                "SelectMapping requires the multi-reward decision slice",
+            ));
+        }
+        game_platform::DayEventDecision::CancelInstead { .. } => {
+            return Err(day_event_reject(
+                "use CancelDayEvent instead of resolving with cancellation",
+            ));
+        }
+    };
+    let unique_winners = winner_slots.iter().collect::<BTreeSet<_>>();
+    if winner_slots.is_empty() || unique_winners.len() != winner_slots.len() {
+        return Err(day_event_reject(
+            "SelectWinners requires a non-empty unique slot list",
+        ));
+    }
+    let participants =
+        projections::day_event_participation(&mut **tx, game, event_id.as_str()).await?;
+    let participant_slots = participants
+        .iter()
+        .map(|row| row.actor_slot.as_str())
+        .collect::<BTreeSet<_>>();
+    if winner_slots
+        .iter()
+        .any(|winner| !participant_slots.contains(winner.as_str()))
+    {
+        return Err(day_event_reject(
+            "every selected winner must be a current participant",
+        ));
+    }
+    let command_id = COMMAND_AUDIT_CONTEXT
+        .try_with(|audit| audit.command_id)
+        .map_err(|_| Reject::Internal("command audit context missing in DayEvent".to_string()))?;
+    let bindings = game_platform::RecipientBindings {
+        winners: winner_slots.clone(),
+        participants: participants
+            .iter()
+            .map(|row| game_platform::SlotId::new(row.actor_slot.clone()))
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(day_event_validation)?,
+        host_chosen: winner_slots.clone(),
+    };
+    let mut lifecycle_states = BTreeMap::new();
+    let mut events = Vec::new();
+    let mut reward_keys_applied = Vec::new();
+    for reward in &event.definition.rewards {
+        let plan = reward
+            .compile_plan(
+                event_id.clone(),
+                &bindings,
+                format!(
+                    "DayEvent {} host decision reward {}",
+                    event_id.as_str(),
+                    reward.reward_key.as_str()
+                ),
+            )
+            .map_err(day_event_validation)?;
+        let application = EffectApplication::DayEvent {
+            event_id: event_id.as_str().to_string(),
+            reward_key: reward.reward_key.as_str().to_string(),
+            command_id,
+        };
+        events
+            .extend(plan_effect_events(tx, game, plan, &application, &mut lifecycle_states).await?);
+        reward_keys_applied.push(reward.reward_key.as_str().to_string());
+    }
+    let mut resolved = EventInput::new(
+        "DayEventResolved",
+        1,
+        serde_json::json!({
+            "event_id": event_id.as_str(),
+            "decision": decision,
+            "winner_slots": winner_slots.iter().map(|slot| slot.as_str()).collect::<Vec<_>>(),
+            "reward_keys_applied": reward_keys_applied,
+        }),
+        ActorId::Host,
+        0,
+    );
+    resolved.meta = serde_json::json!({
+        "source": "day_event",
+        "day_event_id": event_id.as_str(),
+    });
+    events.push(resolved);
     persist(tx, game, &events).await
+}
+
+async fn load_day_event(
+    tx: &mut Transaction<'_, Postgres>,
+    game: Uuid,
+    event_id: &str,
+) -> Result<projections::DayEventRow, Reject> {
+    projections::day_events(&mut **tx, game)
+        .await?
+        .into_iter()
+        .find(|event| event.event_id == event_id)
+        .ok_or(Reject::UnknownDayEvent)
+}
+
+fn require_day_event_state(event: &projections::DayEventRow, required: &str) -> Result<(), Reject> {
+    if event.state == required {
+        Ok(())
+    } else {
+        Err(Reject::DayEventStateConflict(format!(
+            "{} requires {required}, current state is {}",
+            event.event_id, event.state
+        )))
+    }
+}
+
+fn day_event_validation(error: game_platform::ModelError) -> Reject {
+    day_event_reject(error.to_string())
+}
+
+fn day_event_reject(message: impl Into<String>) -> Reject {
+    Reject::DayEventValidation(message.into())
+}
+
+fn unix_seconds_now() -> Result<i64, Reject> {
+    let seconds = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|error| Reject::Internal(format!("system clock precedes unix epoch: {error}")))?
+        .as_secs();
+    i64::try_from(seconds).map_err(|_| Reject::Internal("unix timestamp exceeds i64".to_string()))
 }
 
 fn effect_spec_validation(error: game_platform::ModelError) -> Reject {

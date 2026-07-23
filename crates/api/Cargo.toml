@@ -9,6 +9,7 @@ community = { path = "../community" }
 commands = { path = "../commands" }
 domain = { path = "../domain" }
 eventstore = { path = "../eventstore" }
+game_platform = { path = "../game_platform" }
 identity = { path = "../identity" }
 media = { path = "../media" }
 projections = { path = "../projections" }

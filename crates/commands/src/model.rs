@@ -243,6 +243,46 @@ pub enum Command {
         effects: Vec<game_platform::ConcreteEffect>,
         reason: String,
     },
+    /// Materialize one immutable inline DayEvent definition. Host-team (DayEventOps).
+    ScheduleDayEvent {
+        game: Uuid,
+        event: game_platform::DayEvent,
+    },
+    /// Open a HostOpened DayEvent in the current phase. Host-team (DayEventOps).
+    OpenDayEvent {
+        game: Uuid,
+        event_id: game_platform::DayEventId,
+    },
+    /// Lock an open DayEvent against further participation. Host-team (DayEventOps).
+    LockDayEvent {
+        game: Uuid,
+        event_id: game_platform::DayEventId,
+    },
+    /// Cancel a non-terminal DayEvent. Host-team (DayEventOps).
+    CancelDayEvent {
+        game: Uuid,
+        event_id: game_platform::DayEventId,
+        reason: String,
+    },
+    /// Submit typed participation as the current slot occupant.
+    SubmitDayEventParticipation {
+        game: Uuid,
+        event_id: game_platform::DayEventId,
+        actor_slot: String,
+        payload: game_platform::ParticipationPayload,
+    },
+    /// Withdraw current participation while the event remains open.
+    WithdrawDayEventParticipation {
+        game: Uuid,
+        event_id: game_platform::DayEventId,
+        actor_slot: String,
+    },
+    /// Resolve a locked host-decision event and apply all rewards atomically.
+    ResolveDayEvent {
+        game: Uuid,
+        event_id: game_platform::DayEventId,
+        decision: game_platform::DayEventDecision,
+    },
 
     // ── slice commands ──
     /// Cast/overwrite a vote as `actor_slot`. Requires `SlotOccupant(actor_slot)`.
@@ -354,6 +394,27 @@ pub enum Reject {
     /// The prompt decision is malformed for the prompt kind.
     #[error("invalid prompt decision")]
     InvalidPromptDecision,
+    /// The referenced platform DayEvent does not exist.
+    #[error("unknown day event")]
+    UnknownDayEvent,
+    /// An inline DayEvent id is already materialized for this game.
+    #[error("day event already exists")]
+    DayEventAlreadyExists,
+    /// The requested lifecycle action is invalid for the current DayEvent state.
+    #[error("day event state conflict: {0}")]
+    DayEventStateConflict(String),
+    /// This slot already has current participation in the event.
+    #[error("duplicate day event participation")]
+    DuplicateParticipation,
+    /// This slot has no current participation to withdraw.
+    #[error("day event participation not found")]
+    ParticipationNotFound,
+    /// Participation is closed, ineligible, or malformed for this event.
+    #[error("day event participation not allowed: {0}")]
+    ParticipationNotAllowed(String),
+    /// The inline definition or host decision violates the PR6 DayEvent contract.
+    #[error("day event validation failed: {0}")]
+    DayEventValidation(String),
     /// A concrete effect plan is malformed or contains an effect whose adapter
     /// is not available yet.
     #[error("effect plan validation failed: {0}")]

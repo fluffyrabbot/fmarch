@@ -155,6 +155,7 @@ function buildHostTaskInstance({
     state === "blocked"
       ? task.blockedReason ?? "No permitted resolution command is available."
       : null;
+  const dayEventDecision = task.kind === "day_event_resolve";
   return Object.freeze({
     id: task.id,
     kind: task.kind,
@@ -164,17 +165,24 @@ function buildHostTaskInstance({
     urgency: task.urgency,
     urgencyLabel: stateLabel(state, "Needs decision"),
     state,
-    label: prompt?.label ?? "Host decision",
+    label: prompt?.label ?? (dayEventDecision ? "DayEvent decision" : "Host decision"),
     intent: task.intent,
     consequence: blockedReason ?? task.consequence,
     meta: [task.phaseId, task.subjectSlot].filter(Boolean).join(" · "),
     testId: `host-task-${stableTestId(task.id)}`,
     panelTestId: `moderator-control-${stableTestId(task.id)}`,
     actions: buildTaskActions(sourceActions, commandStatuses),
+    emptyLabel: state === "blocked"
+      ? "No permitted resolution command is available."
+      : dayEventDecision
+        ? "Choose winners through the typed ResolveDayEvent command boundary."
+        : "No action is currently required.",
     diagnostics: Object.freeze({
       authority: promptGroup?.authority ?? "Host team",
       boundary: promptGroup?.boundary ?? "Typed command",
-      protocol: promptGroup?.boundaryDetail ?? "ResolveHostPrompt",
+      protocol: dayEventDecision
+        ? "ResolveDayEvent"
+        : promptGroup?.boundaryDetail ?? "ResolveHostPrompt",
     }),
   });
 }

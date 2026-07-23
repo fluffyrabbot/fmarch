@@ -22,9 +22,10 @@ use commands::{
 use eventstore::{ActorId, EventInput};
 use projections::{
     action_counters, action_grants, action_history, append_and_project, audit_rebuild,
-    day_vote_outcomes, delayed_death_queues, game_result, host_prompts, investigation_memory,
-    phase_state, player_info_results, player_notifications, player_notifications_for_slot, rebuild,
-    sheriff_badges, slot_effects, slot_state, visit_history, votecount,
+    day_event_participation, day_events, day_vote_outcomes, delayed_death_queues, game_result,
+    host_prompts, investigation_memory, phase_state, player_info_results, player_notifications,
+    player_notifications_for_slot, rebuild, sheriff_badges, slot_effects, slot_state,
+    visit_history, votecount,
 };
 use sqlx::{PgPool, Row};
 use std::collections::{BTreeMap, BTreeSet};
@@ -86,6 +87,45 @@ fn user(id: &str) -> Principal {
     Principal::user(id)
 }
 
+fn minimal_day_event(event_id: &str, effect: &str) -> game_platform::DayEvent {
+    game_platform::DayEvent {
+        id: game_platform::DayEventId::new(event_id).unwrap(),
+        program_id: game_platform::ProgramId::new("program-bakery").unwrap(),
+        template_key: game_platform::TemplateKey::new("theme.raffle").unwrap(),
+        phase_scope: game_platform::PhaseScope::DuringDay { number: 1 },
+        schedule: game_platform::DayEventSchedule::HostOpened,
+        participation: game_platform::ParticipationSpec {
+            who: game_platform::ParticipantFilter::AliveSlots,
+            mode: game_platform::ParticipationMode::OptIn,
+            limits: game_platform::ParticipationLimits {
+                minimum: 1,
+                maximum: None,
+            },
+        },
+        state: game_platform::DayEventState::Scheduled,
+        resolution: game_platform::DayEventResolutionMode::HostDecision,
+        rewards: vec![game_platform::RewardBinding {
+            reward_key: game_platform::RewardKey::new("cookie").unwrap(),
+            display_name_theme_key: game_platform::TemplateKey::new("theme.cookie").unwrap(),
+            effects: vec![game_platform::RewardEffectTemplate {
+                recipient: game_platform::RecipientSelector::Winner,
+                operation: game_platform::EffectOperationTemplate::Mark {
+                    effect: game_platform::Tag::new(effect).unwrap(),
+                },
+            }],
+        }],
+        narrative: game_platform::NarrativeTemplates {
+            opened: None,
+            locked: None,
+            resolved: None,
+            cancelled: None,
+        },
+        channel_policy: game_platform::EventChannelPolicy {
+            allowed_channels: vec![game_platform::ChannelId::new("spectator").unwrap()],
+        },
+    }
+}
+
 /// Stand up a running game: host H creates it, adds slot S, assigns user A into
 /// S, assigns a role, starts the game, and opens a Day phase. Returns (game_id).
 async fn setup_game(pool: &PgPool, host: &str, slot: &str, occupant: &str) -> Uuid {
@@ -99,6 +139,17 @@ async fn setup_game_with_pack(
     occupant: &str,
     pack: &str,
 ) -> Uuid {
+    setup_game_with_pack_and_denied(pool, host, slot, occupant, pack, vec![]).await
+}
+
+async fn setup_game_with_pack_and_denied(
+    pool: &PgPool,
+    host: &str,
+    slot: &str,
+    occupant: &str,
+    pack: &str,
+    cohost_denied: Vec<CohostPermissionClass>,
+) -> Uuid {
     let game = Uuid::new_v4();
     let h = user(host);
 
@@ -108,7 +159,7 @@ async fn setup_game_with_pack(
         Command::CreateGame {
             game,
             pack: pack.into(),
-            cohost_denied: vec![],
+            cohost_denied,
         },
     )
     .await
@@ -4826,6 +4877,406 @@ async fn apply_effect_plan_is_atomic_audited_and_visible_to_the_engine(pool: PgP
             .filter(|table| !table.matches)
             .collect::<Vec<_>>()
     );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn day_event_vertical_is_typed_atomic_rebuildable_and_engine_visible(pool: PgPool) {
+    let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
+    let event_id = game_platform::DayEventId::new("event-cookie").unwrap();
+    handle(
+        &pool,
+        &user("host_h"),
+        Command::ScheduleDayEvent {
+            game,
+            event: minimal_day_event(event_id.as_str(), "bomb"),
+        },
+    )
+    .await
+    .expect("schedule inline event");
+    handle(
+        &pool,
+        &user("host_h"),
+        Command::OpenDayEvent {
+            game,
+            event_id: event_id.clone(),
+        },
+    )
+    .await
+    .expect("host opens event");
+    assert_eq!(day_events(&pool, game).await.unwrap()[0].state, "open");
+
+    handle(
+        &pool,
+        &user("user_a"),
+        Command::SubmitDayEventParticipation {
+            game,
+            event_id: event_id.clone(),
+            actor_slot: "slot_1".into(),
+            payload: game_platform::ParticipationPayload::OptIn,
+        },
+    )
+    .await
+    .expect("eligible occupant opts in");
+    assert_eq!(
+        handle(
+            &pool,
+            &user("user_a"),
+            Command::SubmitDayEventParticipation {
+                game,
+                event_id: event_id.clone(),
+                actor_slot: "slot_1".into(),
+                payload: game_platform::ParticipationPayload::OptIn,
+            },
+        )
+        .await
+        .expect_err("duplicate participation rejects"),
+        Reject::DuplicateParticipation
+    );
+    handle(
+        &pool,
+        &user("user_a"),
+        Command::WithdrawDayEventParticipation {
+            game,
+            event_id: event_id.clone(),
+            actor_slot: "slot_1".into(),
+        },
+    )
+    .await
+    .expect("open participation can be withdrawn");
+    assert!(day_event_participation(&pool, game, event_id.as_str())
+        .await
+        .unwrap()
+        .is_empty());
+    handle(
+        &pool,
+        &user("user_a"),
+        Command::SubmitDayEventParticipation {
+            game,
+            event_id: event_id.clone(),
+            actor_slot: "slot_1".into(),
+            payload: game_platform::ParticipationPayload::OptIn,
+        },
+    )
+    .await
+    .expect("slot opts in again");
+    handle(
+        &pool,
+        &user("host_h"),
+        Command::LockDayEvent {
+            game,
+            event_id: event_id.clone(),
+        },
+    )
+    .await
+    .expect("host locks event");
+    assert_eq!(day_events(&pool, game).await.unwrap()[0].state, "locked");
+    assert!(matches!(
+        handle(
+            &pool,
+            &user("user_a"),
+            Command::WithdrawDayEventParticipation {
+                game,
+                event_id: event_id.clone(),
+                actor_slot: "slot_1".into(),
+            },
+        )
+        .await
+        .expect_err("locked participation is immutable"),
+        Reject::DayEventStateConflict(_)
+    ));
+
+    let ack = handle_idempotent(
+        &pool,
+        &user("host_h"),
+        Uuid::new_v4(),
+        Command::ResolveDayEvent {
+            game,
+            event_id: event_id.clone(),
+            decision: game_platform::DayEventDecision::SelectWinners {
+                slots: vec![game_platform::SlotId::new("slot_1").unwrap()],
+            },
+        },
+    )
+    .await
+    .expect("host resolves with reward effects");
+    assert_eq!(ack.stream_seqs.len(), 2);
+    let stream = eventstore::load_stream(&pool, game).await.unwrap();
+    let resolved_batch = stream
+        .iter()
+        .filter(|event| ack.stream_seqs.contains(&event.stream_seq))
+        .collect::<Vec<_>>();
+    assert_eq!(resolved_batch[0].kind, "EffectsMarked");
+    assert_eq!(resolved_batch[0].meta["source"], "day_event");
+    assert_eq!(resolved_batch[0].meta["day_event_id"], "event-cookie");
+    assert_eq!(resolved_batch[0].meta["reward_key"], "cookie");
+    assert_eq!(
+        resolved_batch[0].payload["source_action"],
+        "day_event:event-cookie:cookie:mark"
+    );
+    assert_eq!(resolved_batch[1].kind, "DayEventResolved");
+    assert_eq!(resolved_batch[1].meta["source"], "day_event");
+    assert_eq!(resolved_batch[1].meta["day_event_id"], "event-cookie");
+    let projected = day_events(&pool, game).await.unwrap();
+    assert_eq!(projected[0].state, "resolved");
+    assert_eq!(projected[0].winner_slots, ["slot_1"]);
+    assert_eq!(projected[0].reward_keys_applied, ["cookie"]);
+    assert!(slot_effects(&pool, game)
+        .await
+        .unwrap()
+        .iter()
+        .any(|effect| effect.slot_id == "slot_1" && effect.effect == "bomb"));
+    assert!(load_engine_snapshot(&pool, game, "D01")
+        .await
+        .unwrap()
+        .slots
+        .iter()
+        .find(|slot| slot.slot_id == "slot_1")
+        .unwrap()
+        .effects
+        .iter()
+        .any(|effect| effect == "bomb"));
+    assert!(matches!(
+        handle(
+            &pool,
+            &user("host_h"),
+            Command::ResolveDayEvent {
+                game,
+                event_id: event_id.clone(),
+                decision: game_platform::DayEventDecision::SelectWinners {
+                    slots: vec![game_platform::SlotId::new("slot_1").unwrap()],
+                },
+            },
+        )
+        .await
+        .expect_err("resolved event cannot resolve twice"),
+        Reject::DayEventStateConflict(_)
+    ));
+
+    let cancelled_id = game_platform::DayEventId::new("event-cancelled").unwrap();
+    handle(
+        &pool,
+        &user("host_h"),
+        Command::ScheduleDayEvent {
+            game,
+            event: minimal_day_event(cancelled_id.as_str(), "bomb"),
+        },
+    )
+    .await
+    .expect("schedule event that will be cancelled");
+    handle(
+        &pool,
+        &user("host_h"),
+        Command::CancelDayEvent {
+            game,
+            event_id: cancelled_id.clone(),
+            reason: "host withdrew the event".into(),
+        },
+    )
+    .await
+    .expect("host cancels a nonterminal event");
+    let cancelled = day_events(&pool, game)
+        .await
+        .unwrap()
+        .into_iter()
+        .find(|event| event.event_id == cancelled_id.as_str())
+        .expect("cancelled event remains inspectable");
+    assert_eq!(cancelled.state, "cancelled");
+    assert_eq!(
+        cancelled.cancelled_reason.as_deref(),
+        Some("host withdrew the event")
+    );
+    assert!(matches!(
+        handle(
+            &pool,
+            &user("host_h"),
+            Command::OpenDayEvent {
+                game,
+                event_id: cancelled_id,
+            },
+        )
+        .await
+        .expect_err("cancelled event cannot be reopened"),
+        Reject::DayEventStateConflict(_)
+    ));
+    assert!(audit_rebuild(&pool, game).await.unwrap().ok);
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn day_event_reward_failure_rolls_back_resolution_and_all_effects(pool: PgPool) {
+    let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
+    let event_id = game_platform::DayEventId::new("event-invalid-reward").unwrap();
+    let mut event = minimal_day_event(event_id.as_str(), "not_declared_by_pack");
+    event.rewards[0].reward_key = game_platform::RewardKey::new("bad-cookie").unwrap();
+    let mut valid = minimal_day_event("source", "bomb");
+    event.rewards.insert(0, valid.rewards.remove(0));
+    handle(
+        &pool,
+        &user("host_h"),
+        Command::ScheduleDayEvent { game, event },
+    )
+    .await
+    .unwrap();
+    handle(
+        &pool,
+        &user("host_h"),
+        Command::OpenDayEvent {
+            game,
+            event_id: event_id.clone(),
+        },
+    )
+    .await
+    .unwrap();
+    handle(
+        &pool,
+        &user("user_a"),
+        Command::SubmitDayEventParticipation {
+            game,
+            event_id: event_id.clone(),
+            actor_slot: "slot_1".into(),
+            payload: game_platform::ParticipationPayload::OptIn,
+        },
+    )
+    .await
+    .unwrap();
+    handle(
+        &pool,
+        &user("host_h"),
+        Command::LockDayEvent {
+            game,
+            event_id: event_id.clone(),
+        },
+    )
+    .await
+    .unwrap();
+    let before: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM events WHERE stream_id = $1")
+        .bind(game)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert!(matches!(
+        handle(
+            &pool,
+            &user("host_h"),
+            Command::ResolveDayEvent {
+                game,
+                event_id: event_id.clone(),
+                decision: game_platform::DayEventDecision::SelectWinners {
+                    slots: vec![game_platform::SlotId::new("slot_1").unwrap()],
+                },
+            },
+        )
+        .await
+        .expect_err("invalid second reward aborts the entire command"),
+        Reject::EffectSpecValidation(_)
+    ));
+    let after: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM events WHERE stream_id = $1")
+        .bind(game)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(after, before);
+    assert_eq!(day_events(&pool, game).await.unwrap()[0].state, "locked");
+    assert!(slot_effects(&pool, game).await.unwrap().is_empty());
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn day_event_ops_and_resolution_honor_independent_cohost_denials(pool: PgPool) {
+    let game = setup_game_with_pack_and_denied(
+        &pool,
+        "host_h",
+        "slot_1",
+        "user_a",
+        "mafiascum",
+        vec![
+            CohostPermissionClass::DayEventOps,
+            CohostPermissionClass::DayEventResolve,
+        ],
+    )
+    .await;
+    handle(
+        &pool,
+        &user("host_h"),
+        Command::AddCohost {
+            game,
+            user: "user_c".into(),
+        },
+    )
+    .await
+    .unwrap();
+    let event_id = game_platform::DayEventId::new("event-cohost-policy").unwrap();
+    assert_eq!(
+        handle(
+            &pool,
+            &user("user_c"),
+            Command::ScheduleDayEvent {
+                game,
+                event: minimal_day_event(event_id.as_str(), "bomb"),
+            },
+        )
+        .await
+        .expect_err("cohost ops denylist blocks definition"),
+        Reject::CohostPermissionDenied("day_event_ops".to_string())
+    );
+    handle(
+        &pool,
+        &user("host_h"),
+        Command::ScheduleDayEvent {
+            game,
+            event: minimal_day_event(event_id.as_str(), "bomb"),
+        },
+    )
+    .await
+    .unwrap();
+    handle(
+        &pool,
+        &user("host_h"),
+        Command::OpenDayEvent {
+            game,
+            event_id: event_id.clone(),
+        },
+    )
+    .await
+    .unwrap();
+    handle(
+        &pool,
+        &user("user_a"),
+        Command::SubmitDayEventParticipation {
+            game,
+            event_id: event_id.clone(),
+            actor_slot: "slot_1".into(),
+            payload: game_platform::ParticipationPayload::OptIn,
+        },
+    )
+    .await
+    .unwrap();
+    handle(
+        &pool,
+        &user("host_h"),
+        Command::LockDayEvent {
+            game,
+            event_id: event_id.clone(),
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        handle(
+            &pool,
+            &user("user_c"),
+            Command::ResolveDayEvent {
+                game,
+                event_id,
+                decision: game_platform::DayEventDecision::SelectWinners {
+                    slots: vec![game_platform::SlotId::new("slot_1").unwrap()],
+                },
+            },
+        )
+        .await
+        .expect_err("cohost resolve denylist blocks rewards"),
+        Reject::CohostPermissionDenied("day_event_resolve".to_string())
+    );
+    assert_eq!(day_events(&pool, game).await.unwrap()[0].state, "locked");
+    assert!(slot_effects(&pool, game).await.unwrap().is_empty());
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]

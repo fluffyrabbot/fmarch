@@ -137,3 +137,34 @@ test("blocked task instances remain visible without leaking denied commands", ()
     "cohost policy denies host_prompt_resolve",
   );
 });
+
+test("DayEvent tasks expose their typed decision boundary without borrowing prompt actions", () => {
+  const view = buildHostTaskWorkspaceViewModel({
+    groups,
+    hostTasks: [{
+      id: "day-event-resolve:event-cookie",
+      kind: "day_event_resolve",
+      state: "ready",
+      urgency: "attention",
+      intent: "Resolve theme.raffle",
+      consequence: "apply 1 reward binding atomically",
+      phaseId: "D01",
+      subjectSlot: null,
+      sourceId: "event-cookie",
+      allowedCommands: [{
+        kind: "resolve_day_event",
+        permissionClass: "day_event_resolve",
+      }],
+      blockedReason: null,
+    }],
+  });
+  const task = view.tasks.find((candidate) =>
+    candidate.id === "day-event-resolve:event-cookie");
+  assert.equal(task.label, "DayEvent decision");
+  assert.equal(task.actions.length, 0);
+  assert.equal(
+    task.emptyLabel,
+    "Choose winners through the typed ResolveDayEvent command boundary.",
+  );
+  assert.equal(task.diagnostics.protocol, "ResolveDayEvent");
+});
