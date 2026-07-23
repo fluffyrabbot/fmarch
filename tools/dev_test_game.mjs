@@ -26649,11 +26649,22 @@ async function visibleHostPhaseActions(page) {
 
 async function visibleHostControlActions(page, controlId) {
   return await page.evaluate((controlId) => {
-    const group = document.querySelector(`[data-testid="moderator-control-${controlId}"]`);
-    if (group === null) {
+    const groups = controlId === "host-prompts"
+      ? [...document.querySelectorAll(
+          'article[data-task-kind="engine_host_prompt"]',
+        )]
+      : [
+          document.querySelector(
+            `[data-testid="moderator-control-${controlId}"]`,
+          ),
+        ].filter(Boolean);
+    if (groups.length === 0) {
       return [];
     }
-    return [...group.querySelectorAll('[data-testid^="critical-host-action-"]')]
+    return groups
+      .flatMap((group) => [
+        ...group.querySelectorAll('[data-testid^="critical-host-action-"]'),
+      ])
       .map((node) => node.getAttribute("data-testid")?.replace("critical-host-action-", ""))
       .filter(
         (id) =>

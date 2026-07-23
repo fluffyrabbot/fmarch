@@ -2291,7 +2291,8 @@ async function readViewportContinuityState(page) {
 
 async function driveModeratorHostPromptAck(page) {
   const actionId = "resolve_host_prompt-D01-skip_next_day-slot_1";
-  await selectHostTask(page, "host-prompts");
+  const taskId = "engine-host-prompt:D01:skip_next_day:slot_1";
+  await selectHostTask(page, taskId);
   const actionRoot = page.getByTestId(`critical-host-action-${actionId}`);
   await assertVisibleBox(actionRoot, "moderator host prompt action");
 
@@ -2344,15 +2345,9 @@ async function driveModeratorHostPromptAck(page) {
     );
   });
   await actionRoot.waitFor({ state: "detached" });
-
-  const promptControlText = await page
-    .getByTestId("moderator-control-host-prompts")
-    .innerText();
-  if (!promptControlText.includes("No pending host prompts.")) {
-    throw new Error(
-      `moderator host prompt control did not render empty label: ${promptControlText}`,
-    );
-  }
+  await page
+    .locator(`[data-task-id="${taskId}"]`)
+    .waitFor({ state: "detached" });
 
   const outcome = await page.evaluate((expectedActionId) => {
     return window.__fmarchHostCommandOutcomes?.find(
@@ -2470,11 +2465,11 @@ async function driveModeratorSlotLifecycleAck(page, { commandRequests = [] } = {
 }
 
 async function selectHostTask(page, taskId) {
-  const task = page.getByTestId(`host-task-${taskId}`);
+  const task = page.locator(`button[data-task-id="${taskId}"]`);
   await task.waitFor({ state: "visible" });
   await task.click();
   await page
-    .locator(`[data-task-id="${taskId}"]:not([hidden])`)
+    .locator(`article[data-task-id="${taskId}"]:not([hidden])`)
     .waitFor({ state: "visible" });
 }
 

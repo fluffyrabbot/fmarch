@@ -2551,7 +2551,7 @@ async fn seed_beloved_princess_ready_to_resolve(app: axum::Router, game: Uuid) {
             Command::CreateGame {
                 game,
                 pack: "mafiascum".into(),
-                cohost_denied: vec![],
+                cohost_denied: vec![wire::CohostPermissionClass::HostPromptResolve],
             },
         )
         .await,
@@ -2603,6 +2603,18 @@ async fn seed_beloved_princess_ready_to_resolve(app: axum::Router, game: Uuid) {
             .await,
         );
     }
+    expect_ack(
+        post_command(
+            app.clone(),
+            75,
+            "host_h",
+            Command::AddCohost {
+                game,
+                user: "cohost_c".into(),
+            },
+        )
+        .await,
+    );
     expect_ack(
         post_command(
             app.clone(),
@@ -4084,7 +4096,7 @@ async fn websocket_host_connection_streams_command_following_host_prompts_delta(
 
     expect_ack(
         post_command(
-            app,
+            app.clone(),
             90,
             "host_h",
             Command::ResolvePhase { game, seed: 7421 },
@@ -4092,31 +4104,89 @@ async fn websocket_host_connection_streams_command_following_host_prompts_delta(
         .await,
     );
 
-    let prompt_delta = tokio::time::timeout(std::time::Duration::from_secs(3), async {
-        loop {
-            let frame = socket.next().await.unwrap().unwrap();
-            let envelope: ServerEnvelope =
-                serde_json::from_str(&frame.into_text().unwrap()).unwrap();
-            if matches!(
-                envelope.body,
-                ServerMsg::Delta(ProjectionDelta::HostPromptsChanged(ref delta))
-                    if delta.game == game
-                        && delta.prompts.iter().any(|prompt|
-                            prompt.prompt_id == "D01:skip_next_day:slot_1"
-                                && prompt.kind == "skip_next_day"
-                                && prompt.status == "pending"
-                                && prompt.reason == "beloved_princess_death"
-                        )
-            ) {
-                return envelope;
+    let (prompt_delta_id, task_delta_id) =
+        tokio::time::timeout(std::time::Duration::from_secs(3), async {
+            let mut prompt_delta_id = None;
+            let mut task_delta_id = None;
+            loop {
+                let frame = socket.next().await.unwrap().unwrap();
+                let envelope: ServerEnvelope =
+                    serde_json::from_str(&frame.into_text().unwrap()).unwrap();
+                match &envelope.body {
+                    ServerMsg::Delta(ProjectionDelta::HostPromptsChanged(delta))
+                        if delta.game == game
+                            && delta.prompts.iter().any(|prompt| {
+                                prompt.prompt_id == "D01:skip_next_day:slot_1"
+                                    && prompt.kind == "skip_next_day"
+                                    && prompt.status == "pending"
+                                    && prompt.reason == "beloved_princess_death"
+                            }) =>
+                    {
+                        prompt_delta_id = Some(envelope.id);
+                    }
+                    ServerMsg::Delta(ProjectionDelta::HostConsoleStateChanged(delta))
+                        if delta.game == game
+                            && delta.tasks.iter().any(|task| {
+                                task.id == "engine-host-prompt:D01:skip_next_day:slot_1"
+                                    && task.kind == wire::HostTaskKind::EngineHostPrompt
+                                    && task.state == wire::HostTaskState::Ready
+                                    && task.source_id == "D01:skip_next_day:slot_1"
+                                    && task.allowed_commands
+                                        == [wire::HostTaskAllowedCommand {
+                                            kind: wire::HostTaskCommandKind::ResolveHostPrompt,
+                                            permission_class:
+                                                wire::CohostPermissionClass::HostPromptResolve,
+                                        }]
+                            }) =>
+                    {
+                        task_delta_id = Some(envelope.id);
+                    }
+                    _ => {}
+                }
+                if let (Some(prompt_delta_id), Some(task_delta_id)) =
+                    (prompt_delta_id, task_delta_id)
+                {
+                    break (prompt_delta_id, task_delta_id);
+                }
             }
-        }
-    })
-    .await
-    .expect("host websocket should receive command-following host prompt projection");
+        })
+        .await
+        .expect("host websocket should receive prompt facts and selected task instances");
     assert!(
-        prompt_delta.id > initial_empty_prompts.id,
+        prompt_delta_id > initial_empty_prompts.id,
         "command-following prompt delta should follow the initial projection"
+    );
+    assert!(
+        task_delta_id > initial_empty_prompts.id,
+        "task selector delta should follow the initial projection"
+    );
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!(
+                    "/games/{game}/host-console-state?principal_user_id=cohost_c"
+                ))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let state: api::HostConsoleStateResponse = serde_json::from_slice(&bytes).unwrap();
+    let task = state
+        .tasks
+        .iter()
+        .find(|task| task.source_id == "D01:skip_next_day:slot_1")
+        .expect("denied cohost should still see the blocked decision");
+    assert_eq!(task.state, wire::HostTaskState::Blocked);
+    assert!(task.allowed_commands.is_empty());
+    assert_eq!(
+        task.blocked_reason.as_deref(),
+        Some("cohost policy denies host_prompt_resolve")
     );
 
     server.abort();

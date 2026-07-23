@@ -298,6 +298,7 @@ export function projectHostConsoleState(state, fallback) {
 
   return Object.freeze({
     authority: normalizeHostConsoleAuthority(state.authority, fallback.authority),
+    tasks: normalizeHostTasks(state.tasks),
     completed:
       typeof state.completed === "boolean"
         ? state.completed
@@ -349,6 +350,66 @@ export function projectHostConsoleState(state, fallback) {
     }),
     slots: Object.freeze(slots),
   });
+}
+
+export function normalizeHostTasks(tasks, fallback = []) {
+  const source = Array.isArray(tasks)
+    ? tasks
+    : Array.isArray(fallback)
+      ? fallback
+      : [];
+  return Object.freeze(
+    source
+      .map((task) => normalizeHostTask(task))
+      .filter((task) => task !== null),
+  );
+}
+
+function normalizeHostTask(task) {
+  if (task === null || typeof task !== "object") {
+    return null;
+  }
+  const id = String(task.id ?? "").trim();
+  const kind = String(task.kind ?? "").trim();
+  const sourceId = String(task.source_id ?? task.sourceId ?? "").trim();
+  if (id === "" || kind === "" || sourceId === "") {
+    return null;
+  }
+  const allowedCommands = Array.isArray(
+    task.allowed_commands ?? task.allowedCommands,
+  )
+    ? (task.allowed_commands ?? task.allowedCommands)
+        .map((command) => normalizeHostTaskAllowedCommand(command))
+        .filter((command) => command !== null)
+    : [];
+  return Object.freeze({
+    id,
+    kind,
+    state: task.state === "ready" ? "ready" : "blocked",
+    urgency: task.urgency === "attention" ? "attention" : "routine",
+    intent: String(task.intent ?? "Host decision required"),
+    consequence: String(task.consequence ?? "Apply the selected decision"),
+    phaseId: String(task.phase_id ?? task.phaseId ?? ""),
+    subjectSlot: task.subject_slot ?? task.subjectSlot ?? null,
+    sourceId,
+    allowedCommands: Object.freeze(allowedCommands),
+    blockedReason:
+      task.blocked_reason ?? task.blockedReason ?? null,
+  });
+}
+
+function normalizeHostTaskAllowedCommand(command) {
+  if (command === null || typeof command !== "object") {
+    return null;
+  }
+  const kind = String(command.kind ?? "").trim();
+  const permissionClass = String(
+    command.permission_class ?? command.permissionClass ?? "",
+  ).trim();
+  if (kind === "" || permissionClass === "") {
+    return null;
+  }
+  return Object.freeze({ kind, permissionClass });
 }
 
 export function normalizeHostConsoleAuthority(authority, fallback = {}) {

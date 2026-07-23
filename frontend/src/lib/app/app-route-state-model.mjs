@@ -221,12 +221,14 @@ export function isModeratorRouteEmpty({
   workQueues,
   votecount,
   hostPrompts,
+  hostTasks,
   moderatorActionGroups,
 } = {}) {
   return (
     arrayLength(workQueues) === 0 &&
     arrayLength(votecount) === 0 &&
     arrayLength(hostPrompts) === 0 &&
+    arrayLength(hostTasks) === 0 &&
     arrayLength(moderatorActionGroups) === 0
   );
 }

@@ -728,6 +728,10 @@ pub struct HostConsoleStateDelta {
     pub phase: Option<HostConsolePhaseStateDelta>,
     pub slots: Vec<HostConsoleSlotOccupancyDelta>,
     pub thread_posts: Vec<HostConsoleThreadPostDelta>,
+    /// Permission-aware exception-queue selectors derived from authoritative
+    /// projections. A task id identifies one decision instance; `kind` only
+    /// identifies the family that knows how to render it.
+    pub tasks: Vec<HostTaskDelta>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -772,6 +776,54 @@ pub struct HostConsoleThreadPostDelta {
     pub author_user: Option<String>,
     pub phase_id: String,
     pub body: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum HostTaskKind {
+    EngineHostPrompt,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum HostTaskState {
+    Ready,
+    Blocked,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum HostTaskUrgency {
+    Attention,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum HostTaskCommandKind {
+    ResolveHostPrompt,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct HostTaskAllowedCommand {
+    pub kind: HostTaskCommandKind,
+    pub permission_class: CohostPermissionClass,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+pub struct HostTaskDelta {
+    /// Stable instance identity, distinct from [`HostTaskKind`].
+    pub id: String,
+    pub kind: HostTaskKind,
+    pub state: HostTaskState,
+    pub urgency: HostTaskUrgency,
+    pub intent: String,
+    pub consequence: String,
+    pub phase_id: String,
+    pub subject_slot: Option<String>,
+    /// Identity of the authoritative fact from which this selector is derived.
+    pub source_id: String,
+    pub allowed_commands: Vec<HostTaskAllowedCommand>,
+    pub blocked_reason: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
@@ -1766,12 +1818,13 @@ pub mod typescript {
         DiscussionThreadPage, DiscussionTopic, DiscussionTopicPage, GameIndexEntry, GameIndexPage,
         Hello, HostConsoleAuthorityDelta, HostConsoleAuthorityKind, HostConsolePhaseStateDelta,
         HostConsoleSlotOccupancyDelta, HostConsoleStateDelta, HostConsoleThreadPostDelta,
-        HostPhaseControl, HostPromptDecision, HostPromptDelta, HostPromptsDelta, ModerationCase,
-        ModerationCaseDetail, ModerationCasePage, ModerationHistory, ModerationReport,
-        ModerationReportReceipt, PlayerInvestigationResult, PlayerNotification, ProfileEditor,
-        ProjectionDelta, PublicGameThreadPage, PublicProfile, PublicSearchPage, PublicSearchResult,
-        RejectCode, RejectMsg, ResolutionTraceDecisionRow, ResolutionTraceEdgeRow,
-        ResolutionTraceEffectChangeRow, ResolutionTraceGeneratedRow,
+        HostPhaseControl, HostPromptDecision, HostPromptDelta, HostPromptsDelta,
+        HostTaskAllowedCommand, HostTaskCommandKind, HostTaskDelta, HostTaskKind, HostTaskState,
+        HostTaskUrgency, ModerationCase, ModerationCaseDetail, ModerationCasePage,
+        ModerationHistory, ModerationReport, ModerationReportReceipt, PlayerInvestigationResult,
+        PlayerNotification, ProfileEditor, ProjectionDelta, PublicGameThreadPage, PublicProfile,
+        PublicSearchPage, PublicSearchResult, RejectCode, RejectMsg, ResolutionTraceDecisionRow,
+        ResolutionTraceEdgeRow, ResolutionTraceEffectChangeRow, ResolutionTraceGeneratedRow,
         ResolutionTraceInspectionReport, ResolutionTraceInspectionRun, ResolutionTraceNoteRow,
         ResolutionTraceVisibilityRow, ServerEnvelope, ServerMsg, SlotLifecycle, SubmitPostMedia,
         SubscriptionTargetState, ThreadPage, ThreadPost, ThreadPostMedia, ThreadPostMediaVariant,
@@ -1844,6 +1897,12 @@ pub mod typescript {
         push::<HostConsolePhaseStateDelta>(&mut out);
         push::<HostConsoleSlotOccupancyDelta>(&mut out);
         push::<HostConsoleThreadPostDelta>(&mut out);
+        push::<HostTaskKind>(&mut out);
+        push::<HostTaskState>(&mut out);
+        push::<HostTaskUrgency>(&mut out);
+        push::<HostTaskCommandKind>(&mut out);
+        push::<HostTaskAllowedCommand>(&mut out);
+        push::<HostTaskDelta>(&mut out);
         push::<HostConsoleStateDelta>(&mut out);
         push::<HostPromptDelta>(&mut out);
         push::<HostPromptsDelta>(&mut out);

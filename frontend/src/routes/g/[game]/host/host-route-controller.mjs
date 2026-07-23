@@ -35,6 +35,7 @@ export function buildHostProjectionInitialSnapshot(data) {
       completed: data.completed ?? false,
       phase: data.phase,
       replacement: data.replacement,
+      tasks: data.hostTasks ?? [],
     }),
     votecount: data.votecount,
     dayVoteOutcomes: data.dayVoteOutcomes,
@@ -96,6 +97,7 @@ export function buildHostDerivedState({ gameId, snapshot, capabilityKind = "Host
     votecount,
     dayVoteOutcomes,
     hostPrompts,
+    hostTasks: projection.tasks ?? [],
     criticalActions,
     moderatorActionGroups,
   });
@@ -227,10 +229,12 @@ export function hostPostAckRefreshKeys({ event, outcome }) {
   if (event?.payload?.kind !== "resolve_host_prompt") {
     return Object.freeze([]);
   }
-  if (outcome.projectionPatches?.hostPrompts !== undefined) {
-    return Object.freeze([]);
-  }
-  return Object.freeze(["hostPrompts"]);
+  return Object.freeze([
+    ...(outcome.projectionState === undefined ? ["host"] : []),
+    ...(outcome.projectionPatches?.hostPrompts === undefined
+      ? ["hostPrompts"]
+      : []),
+  ]);
 }
 
 export function hostPostCommandRefreshKeys({ event, outcome }) {
@@ -250,7 +254,7 @@ export function hostPostCommandRefreshKeys({ event, outcome }) {
     outcome?.error === "PromptAlreadyResolved" &&
     event?.payload?.kind === "resolve_host_prompt"
   ) {
-    return Object.freeze(["hostPrompts"]);
+    return Object.freeze(["host", "hostPrompts"]);
   }
   if (
     outcome?.state === "reject" &&

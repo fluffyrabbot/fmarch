@@ -73,12 +73,14 @@
   let votecount = data.votecount;
   let dayVoteOutcomes = data.dayVoteOutcomes;
   let hostPrompts = data.hostPrompts;
+  let hostTasks = data.hostTasks;
   let moderatorActionGroups = data.moderatorActionGroups;
   let liveStatus = LIVE_PROJECTION_CONNECTING_STATUS;
   $: moderatorSurfaceEmpty = isModeratorRouteEmpty({
     workQueues: data.workQueues,
     votecount,
     hostPrompts,
+    hostTasks,
     moderatorActionGroups,
   });
   $: moderatorForcedRouteState = data.routeState
@@ -96,8 +98,8 @@
     votecountCount: votecount.length,
     nowSeconds: data.deadlineClock?.nowSeconds,
   });
-  $: hostAttentionCount = moderatorActionGroups.filter(
-    (group) => ["deadline", "host-prompts", "replacement"].includes(group.id) && group.actions.length > 0,
+  $: hostAttentionCount = hostTasks.length + moderatorActionGroups.filter(
+    (group) => ["deadline", "replacement"].includes(group.id) && group.actions.length > 0,
   ).length;
   $: if (typeof window !== "undefined") {
     activePhaseTheme.set(phaseThemeKey(projection.phase ?? data.phase));
@@ -125,6 +127,7 @@
     votecount = derived.votecount;
     dayVoteOutcomes = derived.dayVoteOutcomes;
     hostPrompts = derived.hostPrompts;
+    hostTasks = derived.hostTasks;
     moderatorActionGroups = derived.moderatorActionGroups;
   });
 
@@ -344,6 +347,7 @@
         phase={projection.phase ?? data.phase}
         replacement={projection.replacement ?? data.replacement}
         {hostPrompts}
+        {hostTasks}
         {votecount}
         onDispatch={handleDispatch}
         onRetry={retryHostCommand}

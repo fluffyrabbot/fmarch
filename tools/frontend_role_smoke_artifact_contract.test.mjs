@@ -1463,7 +1463,7 @@ test("route-state render artifact covers every forced board and role page state"
     workspaceMode: "exception-queue-decision-canvas",
     taskTestIds: [
       "deadline",
-      "host-prompts",
+      "engine-host-prompt-D01-skip_next_day-slot_1",
       "replacement",
       "phase",
       "votecount",
@@ -1482,7 +1482,8 @@ test("route-state render artifact covers every forced board and role page state"
       "critical-host-action-complete_game",
       "critical-host-action-resolve_host_prompt-D01-skip_next_day-slot_1",
     ],
-    hostPromptControlTestId: "moderator-control-host-prompts",
+    hostPromptControlTestId:
+      "moderator-control-engine-host-prompt-D01-skip_next_day-slot_1",
     hostPromptActionTestId:
       "critical-host-action-resolve_host_prompt-D01-skip_next_day-slot_1",
     commandContext: {

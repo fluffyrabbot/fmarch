@@ -41,7 +41,8 @@ use wire::{
     DiscussionTopicPage, GameIndexEntry, GameIndexPage, Hello, HostConsoleAuthorityDelta,
     HostConsoleAuthorityKind, HostConsolePhaseStateDelta, HostConsoleSlotOccupancyDelta,
     HostConsoleStateDelta, HostConsoleThreadPostDelta, HostPhaseControl, HostPromptDelta,
-    HostPromptsDelta, ModerationCase, ModerationCaseDetail, ModerationCasePage,
+    HostPromptsDelta, HostTaskAllowedCommand, HostTaskCommandKind, HostTaskDelta, HostTaskKind,
+    HostTaskState, HostTaskUrgency, ModerationCase, ModerationCaseDetail, ModerationCasePage,
     ModerationReportReceipt, PlayerInvestigationResult, PlayerInvestigationResultsDelta,
     PlayerNotification, PlayerNotificationsDelta, ProfileEditor, ProjectionDelta,
     PublicGameThreadPage, PublicProfile, PublicSearchPage, PublicSearchResult, RejectCode,
@@ -7711,6 +7712,64 @@ mod tests {
         );
         assert!(operator.allowed_classes.is_empty());
     }
+
+    #[test]
+    fn host_task_selector_uses_stable_instance_ids_and_effective_permissions() {
+        let prompts = vec![
+            host_prompt_row("prompt:one", "pending"),
+            host_prompt_row("prompt:resolved", "resolved"),
+        ];
+        let host = build_host_console_authority("host_h", true, BTreeSet::new());
+        let tasks = select_host_tasks(&prompts, &host);
+
+        assert_eq!(tasks.len(), 1, "resolved facts are history, not tasks");
+        assert_eq!(tasks[0].id, "engine-host-prompt:prompt:one");
+        assert_eq!(tasks[0].kind, HostTaskKind::EngineHostPrompt);
+        assert_eq!(tasks[0].source_id, "prompt:one");
+        assert_eq!(tasks[0].state, HostTaskState::Ready);
+        assert_eq!(
+            tasks[0].allowed_commands,
+            [HostTaskAllowedCommand {
+                kind: HostTaskCommandKind::ResolveHostPrompt,
+                permission_class: wire::CohostPermissionClass::HostPromptResolve,
+            }]
+        );
+        assert_eq!(tasks[0].blocked_reason, None);
+
+        let denied_cohost = build_host_console_authority(
+            "cohost_c",
+            false,
+            BTreeSet::from([commands::CohostPermissionClass::HostPromptResolve]),
+        );
+        let tasks = select_host_tasks(&prompts, &denied_cohost);
+        assert_eq!(tasks[0].id, "engine-host-prompt:prompt:one");
+        assert_eq!(tasks[0].state, HostTaskState::Blocked);
+        assert!(tasks[0].allowed_commands.is_empty());
+        assert_eq!(
+            tasks[0].blocked_reason.as_deref(),
+            Some("cohost policy denies host_prompt_resolve")
+        );
+    }
+
+    fn host_prompt_row(prompt_id: &str, status: &str) -> projections::HostPromptRow {
+        projections::HostPromptRow {
+            game_id: Uuid::nil(),
+            phase_id: "D01".to_string(),
+            event_index: 0,
+            prompt_id: prompt_id.to_string(),
+            kind: "skip_next_day".to_string(),
+            subject_slot: Some("slot_1".to_string()),
+            reason: "beloved_princess_death".to_string(),
+            phase_kind: "Day".to_string(),
+            phase_number: 1,
+            metadata: serde_json::json!({}),
+            status: status.to_string(),
+            decision: None,
+            public_resolution: None,
+            resolved_by: None,
+            resolved_at: None,
+        }
+    }
 }
 
 async fn load_pack_for_game(state: &ApiState, game: Uuid) -> Result<domain::Pack, ApiError> {
@@ -7801,6 +7860,7 @@ pub struct HostConsoleStateResponse {
     pub phase: Option<HostConsolePhaseState>,
     pub slots: Vec<HostConsoleSlotOccupancy>,
     pub thread_posts: Vec<HostConsoleThreadPost>,
+    pub tasks: Vec<HostTaskDelta>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -7900,6 +7960,7 @@ impl From<HostConsoleStateResponse> for HostConsoleStateDelta {
                 .into_iter()
                 .map(HostConsoleThreadPostDelta::from)
                 .collect(),
+            tasks: response.tasks,
         }
     }
 }
@@ -8103,6 +8164,8 @@ async fn load_host_console_state(
             body: post.body,
         })
         .collect();
+    let host_prompts = projections::host_prompts(&state.pool, game).await?;
+    let tasks = select_host_tasks(&host_prompts, &authority);
 
     Ok(HostConsoleStateResponse {
         game,
@@ -8111,7 +8174,65 @@ async fn load_host_console_state(
         phase,
         slots,
         thread_posts,
+        tasks,
     })
+}
+
+/// HostTasks are permission-aware selectors over authoritative projections,
+/// never a second mutable rules model. Resolved prompts disappear because their
+/// durable completion remains available in `host_prompt` history.
+fn select_host_tasks(
+    prompts: &[projections::HostPromptRow],
+    authority: &HostConsoleAuthorityDelta,
+) -> Vec<HostTaskDelta> {
+    let can_resolve_prompt = authority
+        .allowed_classes
+        .contains(&wire::CohostPermissionClass::HostPromptResolve);
+    prompts
+        .iter()
+        .filter(|prompt| prompt.status == "pending")
+        .map(|prompt| {
+            let (state, allowed_commands, blocked_reason) = if can_resolve_prompt {
+                (
+                    HostTaskState::Ready,
+                    vec![HostTaskAllowedCommand {
+                        kind: HostTaskCommandKind::ResolveHostPrompt,
+                        permission_class: wire::CohostPermissionClass::HostPromptResolve,
+                    }],
+                    None,
+                )
+            } else {
+                (
+                    HostTaskState::Blocked,
+                    Vec::new(),
+                    Some(match authority.capability {
+                        HostConsoleAuthorityKind::CohostOf => {
+                            "cohost policy denies host_prompt_resolve".to_string()
+                        }
+                        HostConsoleAuthorityKind::GlobalOperator => {
+                            "global operators have read-only host console access".to_string()
+                        }
+                        HostConsoleAuthorityKind::HostOf => {
+                            "host prompt resolution is unavailable".to_string()
+                        }
+                    }),
+                )
+            };
+            HostTaskDelta {
+                id: format!("engine-host-prompt:{}", prompt.prompt_id),
+                kind: HostTaskKind::EngineHostPrompt,
+                state,
+                urgency: HostTaskUrgency::Attention,
+                intent: prompt.reason.clone(),
+                consequence: format!("resolve pack-defined {} policy", prompt.kind),
+                phase_id: prompt.phase_id.clone(),
+                subject_slot: prompt.subject_slot.clone(),
+                source_id: prompt.prompt_id.clone(),
+                allowed_commands,
+                blocked_reason,
+            }
+        })
+        .collect()
 }
 
 async fn resolve_host_console_authority(

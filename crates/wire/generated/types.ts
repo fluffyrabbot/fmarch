@@ -125,7 +125,33 @@ export type HostConsoleSlotOccupancyDelta = { slot_id: string, occupant_user_id:
 
 export type HostConsoleThreadPostDelta = { stream_seq: bigint, author_slot: string | null, author_user: string | null, phase_id: string, body: string, };
 
-export type HostConsoleStateDelta = { game: string, authority: HostConsoleAuthorityDelta, completed: boolean, phase: HostConsolePhaseStateDelta | null, slots: Array<HostConsoleSlotOccupancyDelta>, thread_posts: Array<HostConsoleThreadPostDelta>, };
+export type HostTaskKind = "engine_host_prompt";
+
+export type HostTaskState = "ready" | "blocked";
+
+export type HostTaskUrgency = "attention";
+
+export type HostTaskCommandKind = "resolve_host_prompt";
+
+export type HostTaskAllowedCommand = { kind: HostTaskCommandKind, permission_class: CohostPermissionClass, };
+
+export type HostTaskDelta = {
+/**
+ * Stable instance identity, distinct from [`HostTaskKind`].
+ */
+id: string, kind: HostTaskKind, state: HostTaskState, urgency: HostTaskUrgency, intent: string, consequence: string, phase_id: string, subject_slot: string | null,
+/**
+ * Identity of the authoritative fact from which this selector is derived.
+ */
+source_id: string, allowed_commands: Array<HostTaskAllowedCommand>, blocked_reason: string | null, };
+
+export type HostConsoleStateDelta = { game: string, authority: HostConsoleAuthorityDelta, completed: boolean, phase: HostConsolePhaseStateDelta | null, slots: Array<HostConsoleSlotOccupancyDelta>, thread_posts: Array<HostConsoleThreadPostDelta>,
+/**
+ * Permission-aware exception-queue selectors derived from authoritative
+ * projections. A task id identifies one decision instance; `kind` only
+ * identifies the family that knows how to render it.
+ */
+tasks: Array<HostTaskDelta>, };
 
 export type HostPromptDelta = { game: string, phase_id: string, event_index: number, prompt_id: string, kind: string, subject_slot: string | null, reason: string, phase_kind: string, phase_number: number, metadata: unknown, status: string, decision: unknown, public_resolution: unknown, resolved_by: string | null, resolved_at: bigint | null, };
 

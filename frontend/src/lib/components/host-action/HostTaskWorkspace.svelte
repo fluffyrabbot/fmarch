@@ -10,6 +10,7 @@
   export let phase = {};
   export let replacement = {};
   export let hostPrompts = [];
+  export let hostTasks = [];
   export let votecount = [];
   export let onDispatch = () => {};
   export let onRetry = () => {};
@@ -23,6 +24,7 @@
     phase,
     replacement,
     hostPrompts,
+    hostTasks,
     votecount,
     selectedTaskId: preferredTaskId,
   });
@@ -55,6 +57,9 @@
           class:host-task-workspace__task--selected={task.id === view.selectedTaskId}
           data-state={task.state}
           data-urgency={task.urgency}
+          data-task-id={task.id}
+          data-task-kind={task.kind}
+          data-task-source-id={task.sourceId}
           data-testid={task.testId}
           aria-pressed={task.id === view.selectedTaskId}
           on:click={() => preferredTaskId = task.id}
@@ -74,6 +79,8 @@
           class="host-task-workspace__decision"
           data-testid={task.panelTestId}
           data-task-id={task.id}
+          data-task-kind={task.kind}
+          data-task-source-id={task.sourceId}
           hidden={task.id !== view.selectedTaskId}
         >
           <header>

@@ -128,6 +128,28 @@ export const mockStateProjections = Object.freeze({
           author_slot: "slot-7",
         },
       ],
+      tasks: state.hostPromptPending
+        ? [
+            {
+              id: "engine-host-prompt:D01:skip_next_day:slot_1",
+              kind: "engine_host_prompt",
+              state: "ready",
+              urgency: "attention",
+              intent: "beloved_princess_death",
+              consequence: "resolve pack-defined skip_next_day policy",
+              phase_id: "D01",
+              subject_slot: "slot_1",
+              source_id: "D01:skip_next_day:slot_1",
+              allowed_commands: [
+                {
+                  kind: "resolve_host_prompt",
+                  permission_class: "host_prompt_resolve",
+                },
+              ],
+              blocked_reason: null,
+            },
+          ]
+        : [],
     };
   },
   hostPrompts(state) {

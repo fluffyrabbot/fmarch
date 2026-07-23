@@ -29,10 +29,13 @@ export function buildHostTaskWorkspaceViewModel({
   phase = {},
   replacement = {},
   hostPrompts = [],
+  hostTasks = [],
   votecount = [],
   selectedTaskId = null,
 } = {}) {
-  const tasks = groups
+  const promptGroup = groups.find((group) => group.id === "host-prompts") ?? null;
+  const groupTasks = groups
+    .filter((group) => group.id !== "host-prompts")
     .map((group, index) => buildTask({
       group,
       index,
@@ -41,7 +44,17 @@ export function buildHostTaskWorkspaceViewModel({
       replacement,
       hostPrompts,
       votecount,
-    }))
+    }));
+  const instanceTasks = hostTasks.map((task, index) =>
+    buildHostTaskInstance({
+      task,
+      index: groups.length + index,
+      promptGroup,
+      hostPrompts,
+      commandStatuses,
+    }),
+  );
+  const tasks = [...groupTasks, ...instanceTasks]
     .sort((left, right) => left.rank - right.rank || left.sourceIndex - right.sourceIndex);
   const resolvedSelectedId = tasks.some((task) => task.id === selectedTaskId)
     ? selectedTaskId
@@ -90,38 +103,15 @@ function buildTask({
     urgency: "routine",
     label: "Available",
   });
-  const statuses = group.actions
-    .map((action) => commandStatuses[action.id])
-    .filter(Boolean);
-  const activeStatus = statuses.find((status) => status.state === "interrupted")
-    ?? statuses.find((status) => status.state === "reject")
-    ?? statuses.find((status) => status.state === "pending")
-    ?? statuses.find((status) => status.state === "ack")
-    ?? null;
+  const activeStatus = activeTaskStatus(group.actions, commandStatuses);
   const state = taskState(activeStatus);
   const rank = ["interrupted", "blocked"].includes(state) ? 0 : posture.rank;
-  const actions = group.actions.map((action, actionIndex) => {
-    const status = commandStatuses[action.id] ?? null;
-    return Object.freeze({
-      config: Object.freeze({
-        ...action,
-        disabled:
-          action.disabled === true ||
-          status?.state === "pending" ||
-          status?.state === "interrupted",
-      }),
-      priority: actionIndex === 0 ? "primary" : "secondary",
-      testId: `critical-host-action-${action.id}`,
-      status: visibleHostCommandStatus(status, action.label),
-      statusTestId: `host-command-status-${action.id}`,
-      statusFloorTestId: `host-command-status-floor-${action.id}`,
-      statusFloorMinBlockSizePx: HOST_TASK_WORKSPACE_CONTRACT.statusFloorMinBlockSizePx,
-    });
-  });
+  const actions = buildTaskActions(group.actions, commandStatuses);
   const primaryAction = group.actions[0] ?? null;
 
   return Object.freeze({
     id: group.id,
+    kind: group.id,
     sourceIndex: index,
     rank,
     urgency: posture.urgency,
@@ -142,12 +132,91 @@ function buildTask({
   });
 }
 
-function taskState(status) {
+function buildHostTaskInstance({
+  task,
+  index,
+  promptGroup,
+  hostPrompts,
+  commandStatuses,
+}) {
+  const allowedCommandKinds = new Set(
+    task.allowedCommands?.map((command) => command.kind) ?? [],
+  );
+  const sourceActions = promptGroup?.actions?.filter(
+    (action) =>
+      action.payload?.promptId === task.sourceId &&
+      allowedCommandKinds.has(action.payload?.kind),
+  ) ?? [];
+  const activeStatus = activeTaskStatus(sourceActions, commandStatuses);
+  const state = taskState(activeStatus, task.state);
+  const prompt = hostPrompts.find((candidate) => candidate.id === task.sourceId);
+  const rank = ["interrupted", "blocked"].includes(state) ? 0 : 2;
+  const blockedReason =
+    state === "blocked"
+      ? task.blockedReason ?? "No permitted resolution command is available."
+      : null;
+  return Object.freeze({
+    id: task.id,
+    kind: task.kind,
+    sourceId: task.sourceId,
+    sourceIndex: index,
+    rank,
+    urgency: task.urgency,
+    urgencyLabel: stateLabel(state, "Needs decision"),
+    state,
+    label: prompt?.label ?? "Host decision",
+    intent: task.intent,
+    consequence: blockedReason ?? task.consequence,
+    meta: [task.phaseId, task.subjectSlot].filter(Boolean).join(" · "),
+    testId: `host-task-${stableTestId(task.id)}`,
+    panelTestId: `moderator-control-${stableTestId(task.id)}`,
+    actions: buildTaskActions(sourceActions, commandStatuses),
+    diagnostics: Object.freeze({
+      authority: promptGroup?.authority ?? "Host team",
+      boundary: promptGroup?.boundary ?? "Typed command",
+      protocol: promptGroup?.boundaryDetail ?? "ResolveHostPrompt",
+    }),
+  });
+}
+
+function activeTaskStatus(actions, commandStatuses) {
+  const statuses = actions
+    .map((action) => commandStatuses[action.id])
+    .filter(Boolean);
+  return statuses.find((status) => status.state === "interrupted")
+    ?? statuses.find((status) => status.state === "reject")
+    ?? statuses.find((status) => status.state === "pending")
+    ?? statuses.find((status) => status.state === "ack")
+    ?? null;
+}
+
+function buildTaskActions(sourceActions, commandStatuses) {
+  return sourceActions.map((action, actionIndex) => {
+    const status = commandStatuses[action.id] ?? null;
+    return Object.freeze({
+      config: Object.freeze({
+        ...action,
+        disabled:
+          action.disabled === true ||
+          status?.state === "pending" ||
+          status?.state === "interrupted",
+      }),
+      priority: actionIndex === 0 ? "primary" : "secondary",
+      testId: `critical-host-action-${action.id}`,
+      status: visibleHostCommandStatus(status, action.label),
+      statusTestId: `host-command-status-${action.id}`,
+      statusFloorTestId: `host-command-status-floor-${action.id}`,
+      statusFloorMinBlockSizePx: HOST_TASK_WORKSPACE_CONTRACT.statusFloorMinBlockSizePx,
+    });
+  });
+}
+
+function taskState(status, fallback = "ready") {
   if (status?.state === "interrupted") return "interrupted";
   if (status?.state === "reject") return "blocked";
   if (status?.state === "pending") return "pending";
   if (status?.state === "ack") return "updated";
-  return "ready";
+  return fallback;
 }
 
 function stateLabel(state, fallback) {
@@ -193,4 +262,8 @@ function buildCommandContext(commandContext) {
     capabilityLabel,
     commandEndpoint: String(commandContext.commandEndpoint ?? "/commands"),
   });
+}
+
+function stableTestId(value) {
+  return String(value).replace(/[^a-zA-Z0-9_-]+/g, "-");
 }

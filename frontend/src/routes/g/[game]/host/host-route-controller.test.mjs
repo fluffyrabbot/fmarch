@@ -56,6 +56,7 @@ test("host route controller builds projection store boundaries from route data",
       completed: false,
       phase: data.phase,
       replacement: data.replacement,
+      tasks: data.hostTasks,
     },
     votecount: data.votecount,
     dayVoteOutcomes: data.dayVoteOutcomes,
@@ -316,7 +317,7 @@ test("host route controller derives dispatch bridge plans from host actions", ()
     commandEndpoint: "/commands",
     optimisticState: "pending",
     finalState: "ack",
-    projectionRefreshKeys: ["hostPrompts"],
+    projectionRefreshKeys: ["host", "hostPrompts"],
   });
 });
 
@@ -450,7 +451,7 @@ test("host route controller applies acked host-prompt projection patches", async
     ),
     false,
   );
-  assert.deepEqual(projectionStore.refreshed, []);
+  assert.deepEqual(projectionStore.refreshed, [["host"]]);
 });
 
 test("host route controller refreshes host prompts after hydrated prompt ACKs", async () => {
@@ -488,7 +489,7 @@ test("host route controller refreshes host prompts after hydrated prompt ACKs", 
   });
 
   assert.equal(result.outcome.state, "ack");
-  assert.deepEqual(projectionStore.refreshed, [["hostPrompts"]]);
+  assert.deepEqual(projectionStore.refreshed, [["host", "hostPrompts"]]);
   assert.deepEqual(result.snapshot.hostPrompts, []);
   assert.equal(
     buildHostDerivedState({
@@ -507,7 +508,7 @@ test("host route controller schedules projection refreshes for prompt ACKs and s
       event: { payload: { kind: "resolve_host_prompt" } },
       outcome: { state: "ack" },
     }),
-    ["hostPrompts"],
+    ["host", "hostPrompts"],
   );
   assert.deepEqual(
     hostPostAckRefreshKeys({
@@ -540,7 +541,7 @@ test("host route controller schedules projection refreshes for prompt ACKs and s
         },
       },
     }),
-    [],
+    ["host"],
   );
   assert.deepEqual(
     hostPostCommandRefreshKeys({
@@ -575,7 +576,7 @@ test("host route controller schedules projection refreshes for prompt ACKs and s
       event: { payload: { kind: "resolve_host_prompt" } },
       outcome: { state: "reject", error: "PromptAlreadyResolved" },
     }),
-    ["hostPrompts"],
+    ["host", "hostPrompts"],
   );
   assert.deepEqual(
     hostPostCommandRefreshKeys({
@@ -741,6 +742,7 @@ function fixtureData(overrides = {}) {
     votecount: [],
     dayVoteOutcomes: [],
     hostPrompts: [],
+    hostTasks: [],
     ...overrides,
   };
 }
@@ -759,7 +761,13 @@ function fakeProjectionStore(snapshot) {
       snapshot = {
         ...snapshot,
         ...(keys.includes("host")
-          ? { host: { phase: { id: "D01", locked: true, state: "locked" }, replacement: null } }
+          ? {
+              host: {
+                phase: { id: "D01", locked: true, state: "locked" },
+                replacement: null,
+                tasks: [],
+              },
+            }
           : {}),
         ...(keys.includes("hostPrompts") ? { hostPrompts: [] } : {}),
       };

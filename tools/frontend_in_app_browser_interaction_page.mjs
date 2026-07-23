@@ -168,7 +168,7 @@ async function buildSurfaces(bundle) {
       requiredText: roleById.moderator.requiredText,
       requiredSelectors: [
         `[data-testid="${roleNavTestId("moderator")}"]`,
-        '[data-testid="moderator-control-host-prompts"]',
+        '[data-testid="moderator-control-engine-host-prompt-D01-skip_next_day-slot_1"]',
         '[data-testid="critical-host-action-resolve_host_prompt-D01-skip_next_day-slot_1"]',
         '[data-testid="critical-host-action-modkill_slot"]',
       ],

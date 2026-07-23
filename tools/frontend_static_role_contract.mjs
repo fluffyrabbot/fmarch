@@ -1868,6 +1868,7 @@ async function proveModeratorSurface() {
       host: {
         phase: data.phase,
         replacement: data.replacement,
+        tasks: data.hostTasks,
       },
       votecount: data.votecount,
       hostPrompts: data.hostPrompts,
@@ -1896,6 +1897,7 @@ async function proveModeratorSurface() {
     phase: derived.projection.phase,
     replacement: derived.projection.replacement,
     hostPrompts: derived.hostPrompts,
+    hostTasks: derived.hostTasks,
     votecount: derived.votecount,
     commandStatuses: {
       extend_deadline: hostCommandPendingStatus(extendDeadlineEvent),
@@ -1971,6 +1973,7 @@ async function proveModeratorSurface() {
     host: {
       phase: data.phase,
       replacement: data.replacement,
+      tasks: data.hostTasks,
     },
     votecount: data.votecount,
     hostPrompts: data.hostPrompts,
@@ -2068,7 +2071,9 @@ async function proveModeratorSurface() {
       };
     },
   });
-  assert.deepEqual(hydratedPromptProjectionStore.refreshed, [["hostPrompts"]]);
+  assert.deepEqual(hydratedPromptProjectionStore.refreshed, [
+    ["host", "hostPrompts"],
+  ]);
   assert.equal(hydratedHostPromptCommand.snapshot.hostPrompts.length, 0);
   const afterHydratedPromptAck = buildHostDerivedState({
     gameId: data.game.id,

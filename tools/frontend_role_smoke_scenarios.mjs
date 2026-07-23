@@ -596,7 +596,7 @@ export const roles = Object.freeze([
     statusRegions: [],
     touchSelectors: [
       '[data-testid="host-task-deadline"]',
-      '[data-testid="host-task-host-prompts"]',
+      '[data-testid="host-task-engine-host-prompt-D01-skip_next_day-slot_1"]',
       '[data-testid="host-task-replacement"]',
       '[data-testid="critical-host-action-extend_deadline"] [data-testid="critical-host-action-trigger"]',
       '[data-testid="host-console-votecount-row-slot-2_Ilya"]',

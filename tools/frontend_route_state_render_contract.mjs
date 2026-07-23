@@ -1742,7 +1742,7 @@ async function proveRenderedModeratorSurface(bundle) {
   );
   for (const id of [
     "deadline",
-    "host-prompts",
+    "engine-host-prompt-D01-skip_next_day-slot_1",
     "replacement",
     "phase",
     "votecount",
@@ -1770,7 +1770,7 @@ async function proveRenderedModeratorSurface(bundle) {
   }
   assertIncludes(
     html,
-    'data-testid="moderator-control-host-prompts"',
+    'data-testid="moderator-control-engine-host-prompt-D01-skip_next_day-slot_1"',
     "moderator host prompts control bay",
   );
   assertIncludes(
@@ -1809,7 +1809,7 @@ async function proveRenderedModeratorSurface(bundle) {
     workspaceMode: "exception-queue-decision-canvas",
     taskTestIds: [
       "deadline",
-      "host-prompts",
+      "engine-host-prompt-D01-skip_next_day-slot_1",
       "replacement",
       "phase",
       "votecount",
@@ -1828,7 +1828,8 @@ async function proveRenderedModeratorSurface(bundle) {
       "critical-host-action-complete_game",
       "critical-host-action-resolve_host_prompt-D01-skip_next_day-slot_1",
     ],
-    hostPromptControlTestId: "moderator-control-host-prompts",
+    hostPromptControlTestId:
+      "moderator-control-engine-host-prompt-D01-skip_next_day-slot_1",
     hostPromptActionTestId:
       "critical-host-action-resolve_host_prompt-D01-skip_next_day-slot_1",
     commandContext: {

@@ -232,6 +232,7 @@ test("route empty helpers use role-owned visible work queues", () => {
       workQueues: [],
       votecount: [],
       hostPrompts: [],
+      hostTasks: [],
       moderatorActionGroups: [],
     }),
     true,
@@ -241,7 +242,18 @@ test("route empty helpers use role-owned visible work queues", () => {
       workQueues: [],
       votecount: [],
       hostPrompts: [],
+      hostTasks: [],
       moderatorActionGroups: [{ id: "phase" }],
+    }),
+    false,
+  );
+  assert.equal(
+    isModeratorRouteEmpty({
+      workQueues: [],
+      votecount: [],
+      hostPrompts: [],
+      hostTasks: [{ id: "engine-host-prompt:prompt-1" }],
+      moderatorActionGroups: [],
     }),
     false,
   );

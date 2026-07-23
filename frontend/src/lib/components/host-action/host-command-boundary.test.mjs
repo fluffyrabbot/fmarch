@@ -611,6 +611,26 @@ test("host console projection maps deadline and stable slot history to labels", 
         },
       ],
       thread_posts: [{ author_slot: "slot-7", body: "before replacement" }],
+      tasks: [
+        {
+          id: "engine-host-prompt:prompt-1",
+          kind: "engine_host_prompt",
+          state: "ready",
+          urgency: "attention",
+          intent: "host_decides_tie",
+          consequence: "resolve pack-defined tie policy",
+          phase_id: "D01",
+          subject_slot: "slot-7",
+          source_id: "prompt-1",
+          allowed_commands: [
+            {
+              kind: "resolve_host_prompt",
+              permission_class: "host_prompt_resolve",
+            },
+          ],
+          blocked_reason: null,
+        },
+      ],
     },
     {
       phase: {
@@ -643,6 +663,26 @@ test("host console projection maps deadline and stable slot history to labels", 
   assert.equal(projection.slots[0].alignment, "mafia");
   assert.equal(projection.slots[0].role_revealed, true);
   assert.equal(projection.slots[0].alignment_revealed, true);
+  assert.deepEqual(projection.tasks, [
+    {
+      id: "engine-host-prompt:prompt-1",
+      kind: "engine_host_prompt",
+      state: "ready",
+      urgency: "attention",
+      intent: "host_decides_tie",
+      consequence: "resolve pack-defined tie policy",
+      phaseId: "D01",
+      subjectSlot: "slot-7",
+      sourceId: "prompt-1",
+      allowedCommands: [
+        {
+          kind: "resolve_host_prompt",
+          permissionClass: "host_prompt_resolve",
+        },
+      ],
+      blockedReason: null,
+    },
+  ]);
   assert.equal(
     projection.replacement.historyLabel,
     "Slot history remains attached to slot-7",

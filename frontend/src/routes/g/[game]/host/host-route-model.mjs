@@ -83,6 +83,7 @@ export async function buildHostConsoleRouteData({
       completed: false,
       phase: HOST_FIXTURE_PHASE,
       replacement,
+      tasks: HOST_FIXTURE_HOST_TASKS,
     }),
   );
   const pendingPromptCount = coldLoad.hostPrompts.filter(
@@ -188,6 +189,7 @@ export async function buildHostConsoleRouteData({
       },
     }),
     hostPrompts: coldLoad.hostPrompts,
+    hostTasks: hostProjection.tasks,
     votecount: coldLoad.votecount,
     dayVoteOutcomes: coldLoad.dayVoteOutcomes,
     dayVoteOutcomeBoundary: Object.freeze({
@@ -390,6 +392,27 @@ const HOST_FIXTURE_COLD_LOAD = Object.freeze({
     }),
   ]),
 });
+
+const HOST_FIXTURE_HOST_TASKS = Object.freeze([
+  Object.freeze({
+    id: "engine-host-prompt:D01:skip_next_day:slot_1",
+    kind: "engine_host_prompt",
+    state: "ready",
+    urgency: "attention",
+    intent: "beloved_princess_death",
+    consequence: "resolve pack-defined skip_next_day policy",
+    phaseId: "D01",
+    subjectSlot: "slot_1",
+    sourceId: "D01:skip_next_day:slot_1",
+    allowedCommands: Object.freeze([
+      Object.freeze({
+        kind: "resolve_host_prompt",
+        permissionClass: "host_prompt_resolve",
+      }),
+    ]),
+    blockedReason: null,
+  }),
+]);
 
 const HOST_FIXTURE_PHASE = Object.freeze({
   id: "D01",

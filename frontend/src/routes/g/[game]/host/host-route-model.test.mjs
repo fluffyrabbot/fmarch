@@ -289,6 +289,26 @@ test("host console route data uses host prompt and votecount cold-loads when ava
           phase: null,
           slots: [],
           thread_posts: [],
+          tasks: [
+            {
+              id: "engine-host-prompt:D01:tie:slot_2",
+              kind: "engine_host_prompt",
+              state: "ready",
+              urgency: "attention",
+              intent: "host_decides_tie",
+              consequence: "resolve pack-defined tie policy",
+              phase_id: "D01",
+              subject_slot: "slot_2",
+              source_id: "D01:tie:slot_2",
+              allowed_commands: [
+                {
+                  kind: "resolve_host_prompt",
+                  permission_class: "host_prompt_resolve",
+                },
+              ],
+              blocked_reason: null,
+            },
+          ],
         });
       }
       return jsonResponse([
@@ -320,6 +340,26 @@ test("host console route data uses host prompt and votecount cold-loads when ava
       subjectSlot: "slot_2",
       decisionKind: "acknowledge",
       metadata: {},
+    },
+  ]);
+  assert.deepEqual(data.hostTasks, [
+    {
+      id: "engine-host-prompt:D01:tie:slot_2",
+      kind: "engine_host_prompt",
+      state: "ready",
+      urgency: "attention",
+      intent: "host_decides_tie",
+      consequence: "resolve pack-defined tie policy",
+      phaseId: "D01",
+      subjectSlot: "slot_2",
+      sourceId: "D01:tie:slot_2",
+      allowedCommands: [
+        {
+          kind: "resolve_host_prompt",
+          permissionClass: "host_prompt_resolve",
+        },
+      ],
+      blockedReason: null,
     },
   ]);
   assert.equal(
