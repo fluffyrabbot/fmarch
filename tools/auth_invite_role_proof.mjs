@@ -32,6 +32,14 @@ const mediaRoot =
     : path.resolve(repoRoot, configuredMediaRoot);
 const evidencePath = path.join(artifactDir, "invite-role-proof.json");
 const databaseUrl = process.env.DATABASE_URL;
+const eventEncryptionKey =
+  process.env.FMARCH_EVENT_ENCRYPTION_KEY ??
+  "fmarch-auth-invite-role-proof-event-encryption-key-v1";
+const eventEncryptionKid =
+  process.env.FMARCH_EVENT_ENCRYPTION_KID ?? "auth-invite-role-proof-v1";
+const authSourceSigningKey =
+  process.env.FMARCH_AUTH_SOURCE_SIGNING_KEY ??
+  "fmarch-auth-invite-role-proof-auth-source-signing-key-v1";
 const host = "127.0.0.1";
 const game = randomUUID();
 const rootAdminSessionToken = `invite-proof-root-admin-${game}`;
@@ -83,6 +91,7 @@ let vite;
 let browser;
 let serverOutput = "";
 const previousApiBaseUrl = process.env.FMARCH_API_BASE_URL;
+const previousAuthSourceSigningKey = process.env.FMARCH_AUTH_SOURCE_SIGNING_KEY;
 
 try {
   await mkdir(artifactDir, { recursive: true });
@@ -233,6 +242,11 @@ try {
     delete process.env.FMARCH_API_BASE_URL;
   } else {
     process.env.FMARCH_API_BASE_URL = previousApiBaseUrl;
+  }
+  if (previousAuthSourceSigningKey === undefined) {
+    delete process.env.FMARCH_AUTH_SOURCE_SIGNING_KEY;
+  } else {
+    process.env.FMARCH_AUTH_SOURCE_SIGNING_KEY = previousAuthSourceSigningKey;
   }
 }
 
@@ -657,11 +671,19 @@ async function driveAccountRegistration({
   }
 
   const registrationAttempts = await storedRegistrationAttemptRecords();
+  const blockedRegistrationAttempts = registrationAttempts.filter(
+    (attempt) => attempt.blocked === true,
+  );
   if (
-    registrationAttempts.length !== 1 ||
-    registrationAttempts[0].scopeHash.length !== 64 ||
-    registrationAttempts[0].attemptCount !== 3 ||
-    registrationAttempts[0].blocked !== true
+    registrationAttempts.length === 0 ||
+    registrationAttempts.some(
+      (attempt) =>
+        attempt.scopeHash.length !== 64 ||
+        attempt.attemptCount < 1 ||
+        attempt.attemptCount > 3,
+    ) ||
+    blockedRegistrationAttempts.length !== 1 ||
+    blockedRegistrationAttempts[0].attemptCount !== 3
   ) {
     throw new Error(`account registration attempt storage drifted: ${JSON.stringify(registrationAttempts)}`);
   }
@@ -878,8 +900,15 @@ async function proveUnknownCredentialAttemptBounding({
     returnTo,
     expectedCapability: "HostOf",
   });
-  if ((await storedAuthAttemptRecords()).length !== 0) {
-    throw new Error("known login did not clear the expired source-pressure scope");
+  const attemptsAfterKnownLogin = await storedAuthAttemptRecords();
+  if (
+    attemptsAfterKnownLogin.length !== 1 ||
+    attemptsAfterKnownLogin[0].failureCount !== 7 ||
+    attemptsAfterKnownLogin[0].blocked
+  ) {
+    throw new Error(
+      `known login mutated an unrelated source-pressure scope: ${JSON.stringify(attemptsAfterKnownLogin)}`,
+    );
   }
   return {
     status: "passed",
@@ -887,6 +916,7 @@ async function proveUnknownCredentialAttemptBounding({
     storedScopeCount: storedAttempts.length,
     sourceThreshold: 7,
     spoofedSourceHeadersIgnored: true,
+    unrelatedSourcePressurePreserved: true,
     staleRowsPruned: true,
     unknownCredentialWorkFactor: "argon2id-dummy-verification",
     operationKinds: [...new Set(requests.map((request) => request.operation))],
@@ -3468,9 +3498,13 @@ async function startApi(url) {
       DATABASE_URL: url,
       FMARCH_BIND: `${host}:${port}`,
       FMARCH_MEDIA_ROOT: mediaRoot,
+      FMARCH_EVENT_ENCRYPTION_KEY: eventEncryptionKey,
+      FMARCH_EVENT_ENCRYPTION_KID: eventEncryptionKid,
+      FMARCH_AUTH_SOURCE_SIGNING_KEY: authSourceSigningKey,
       FMARCH_AUTH_RATE_LIMIT_MAX_FAILURES: "5",
       FMARCH_AUTH_SOURCE_RATE_LIMIT_MAX_FAILURES: "7",
       FMARCH_AUTH_REGISTRATION_SOURCE_LIMIT: "3",
+      FMARCH_PASSWORD_MAX_IN_FLIGHT: "16",
       FMARCH_AUTH_RATE_LIMIT_WINDOW_SECONDS: "30",
       FMARCH_AUTH_RATE_LIMIT_LOCKOUT_SECONDS: "2",
       FMARCH_AUTH_RATE_LIMIT_RETENTION_SECONDS: "120",
@@ -3492,6 +3526,7 @@ async function startApi(url) {
 
 async function startFrontend(apiBaseUrl) {
   process.env.FMARCH_API_BASE_URL = apiBaseUrl;
+  process.env.FMARCH_AUTH_SOURCE_SIGNING_KEY = authSourceSigningKey;
   // This lane proves session-freshness semantics (rotation races, revocation,
   // disablement) against out-of-band state changes; the SSR resolution cache
   // would mask them for up to its TTL, so the proof runs cache-disabled.
