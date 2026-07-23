@@ -239,6 +239,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let config = Config::from_env()?;
     eventstore::require_secure_event_encryption_configuration()?;
+    let auth_source_key = env::var("FMARCH_AUTH_SOURCE_SIGNING_KEY")?;
+    if auth_source_key.as_bytes().len() < 32 {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "FMARCH_AUTH_SOURCE_SIGNING_KEY must contain at least 32 bytes",
+        )
+        .into());
+    }
     let media_store = media::MediaStore::open(&config.media_root, media::MediaLimits::default())?;
     let statement_timeout = format!("{}ms", config.database.statement_timeout_ms);
     let lock_timeout = format!("{}ms", config.database.lock_timeout_ms);
@@ -280,6 +288,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // only unlocks dev shortcuts (dev-session endpoint, query-param sockets).
     let classic_enabled = env::var("FMARCH_CLASSIC_AUTH").ok().as_deref() != Some("0");
     let dev_auth_enabled = env::var("FMARCH_DEV_AUTH").ok().as_deref() == Some("1");
+    if dev_auth_enabled && !cfg!(debug_assertions) {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "FMARCH_DEV_AUTH cannot be enabled in a release build",
+        )
+        .into());
+    }
     if !classic_enabled && workos_verifier.is_none() {
         return Err(std::io::Error::new(
             std::io::ErrorKind::InvalidInput,
@@ -477,8 +492,9 @@ mod tests {
         }
 
         // Incomplete or contradictory configurations fail closed.
-        assert!(bootstrap_admin_from_values(None, None, None, None, Some("label".to_string()))
-            .is_err());
+        assert!(
+            bootstrap_admin_from_values(None, None, None, None, Some("label".to_string())).is_err()
+        );
         assert!(bootstrap_admin_from_values(
             Some("classic".to_string()),
             None,
@@ -487,8 +503,10 @@ mod tests {
             None
         )
         .is_err());
-        assert!(bootstrap_admin_from_values(Some("workos".to_string()), None, None, None, None)
-            .is_err());
+        assert!(
+            bootstrap_admin_from_values(Some("workos".to_string()), None, None, None, None)
+                .is_err()
+        );
         assert!(bootstrap_admin_from_values(
             Some("saml".to_string()),
             Some("user".to_string()),

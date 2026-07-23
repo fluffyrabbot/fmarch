@@ -68,7 +68,17 @@ async fn authenticate_operator_fixture(
         return next.run(request).await;
     };
 
-    let token = format!("vertical-operator-session:{principal_user_id}");
+    let token = format!("fmss_vertical-operator-session:{principal_user_id}");
+    sqlx::query(
+        "INSERT INTO platform_principal \
+         (principal_user_id, status, global_capabilities, created_at) \
+         VALUES ($1, 'active', ARRAY[]::TEXT[], 0) \
+         ON CONFLICT (principal_user_id) DO NOTHING",
+    )
+    .bind(&principal_user_id)
+    .execute(&pool)
+    .await
+    .expect("insert vertical operator fixture principal");
     sqlx::query(
         "INSERT INTO auth_session \
          (token_hash, principal_user_id, created_at, expires_at, global_capabilities, authenticated_at) \
@@ -1256,11 +1266,21 @@ async fn vertical_projection_audit_is_host_audit_only_and_reports_drift(pool: sq
         .await,
     );
 
+    let game_text = game.to_string();
+    let tampered_private = eventstore::encrypt_private_projection(
+        serde_json::json!({
+            "role_key": "tampered_role",
+            "alignment": "town"
+        }),
+        &format!("fmarch-projection-v1:slot_state:{game_text}:slot_1"),
+    )
+    .expect("seal tampered slot state");
     let update = sqlx::query(
-        "UPDATE slot_state SET role_key = 'tampered_role' \
+        "UPDATE slot_state SET private = $2 \
          WHERE game_id = $1 AND slot_id = 'slot_1'",
     )
     .bind(game)
+    .bind(tampered_private)
     .execute(&pool)
     .await
     .expect("tamper live slot_state row");
@@ -1293,18 +1313,14 @@ async fn vertical_projection_audit_is_host_audit_only_and_reports_drift(pool: sq
     assert_eq!(slot_state["matches"], false);
     assert_eq!(slot_state["before_rows"], 1);
     assert_eq!(slot_state["rebuilt_rows"], 1);
-    assert_eq!(slot_state["before"][0]["role_key"], "tampered_role");
-    assert_eq!(slot_state["rebuilt"][0]["role_key"], "vanilla_townie");
+    assert_eq!(slot_state["before"][0]["role_key"], "<private>");
+    assert_eq!(slot_state["rebuilt"][0]["role_key"], "<private>");
 
-    let live_role: Option<String> = sqlx::query_scalar(
-        "SELECT role_key FROM slot_state WHERE game_id = $1 AND slot_id = 'slot_1'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .expect("live slot_state after rollback audit");
+    let live_role = projections::slot_state(&pool, game)
+        .await
+        .expect("live slot_state after rollback audit");
     assert_eq!(
-        live_role.as_deref(),
+        live_role[0].role_key.as_deref(),
         Some("tampered_role"),
         "projection audit must not repair live rows"
     );
@@ -1327,8 +1343,9 @@ async fn vertical_projection_audit_is_host_audit_only_and_reports_drift(pool: sq
     let html = String::from_utf8(bytes.to_vec()).unwrap();
     assert!(html.contains("Projection Rebuild Audit"));
     assert!(html.contains("slot_state"));
-    assert!(html.contains("tampered_role"));
-    assert!(html.contains("vanilla_townie"));
+    assert!(!html.contains("tampered_role"));
+    assert!(!html.contains("vanilla_townie"));
+    assert!(html.contains("private"));
     assert!(html.contains("before"));
     assert!(html.contains("rebuilt"));
     let table_row_id = format!("projection-table-row-{slot_state_index}");

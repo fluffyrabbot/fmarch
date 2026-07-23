@@ -78,14 +78,23 @@ test("Railway services must watch the environment's canonical branch", () => {
 });
 
 test("hosted variables require isolated production identity credentials", () => {
-  const stagingApi = { WORKOS_CLIENT_ID: "staging-client" };
+  const stagingApi = {
+    FMARCH_AUTH_SOURCE_SIGNING_KEY: "staging-auth-source-key",
+    FMARCH_EVENT_ENCRYPTION_KEY: "staging-event-key",
+    FMARCH_EVENT_ENCRYPTION_KID: "staging-v1",
+    WORKOS_CLIENT_ID: "staging-client",
+  };
   const stagingFrontend = {
+    FMARCH_AUTH_SOURCE_SIGNING_KEY: "staging-auth-source-key",
     WORKOS_CLIENT_ID: "staging-client",
     WORKOS_API_KEY: "staging-key",
     WORKOS_COOKIE_PASSWORD: "staging-cookie",
   };
   const productionApi = {
     DATABASE_URL: "postgres://postgres.railway.internal/db",
+    FMARCH_AUTH_SOURCE_SIGNING_KEY: "production-auth-source-key",
+    FMARCH_EVENT_ENCRYPTION_KEY: "production-event-key",
+    FMARCH_EVENT_ENCRYPTION_KID: "production-v1",
     WORKOS_CLIENT_ID: "production-client",
     WORKOS_ISSUER: "https://api.workos.com/user_management/production",
     WORKOS_JWKS_URL: "https://api.workos.com/sso/jwks/production",
@@ -93,6 +102,7 @@ test("hosted variables require isolated production identity credentials", () => 
   const productionFrontend = {
     FMARCH_API_BASE_URL: "https://fmarch-production.up.railway.app",
     FMARCH_API_INTERNAL_URL: "http://fmarch.railway.internal:4000",
+    FMARCH_AUTH_SOURCE_SIGNING_KEY: "production-auth-source-key",
     ORIGIN: "https://fmarch-frontend-production.up.railway.app",
     WORKOS_API_KEY: "production-key",
     WORKOS_CLIENT_ID: "production-client",
@@ -111,7 +121,11 @@ test("hosted variables require isolated production identity credentials", () => 
     /Expected.*not.*strictly equal|strictly unequal/i,
   );
   assert.throws(
-    () => validateHostedVariables({ ...ready, productionApi: { DATABASE_URL: "db" } }),
+    () =>
+      validateHostedVariables({
+        ...ready,
+        productionApi: { ...productionApi, WORKOS_CLIENT_ID: undefined },
+      }),
     /missing WORKOS_CLIENT_ID/,
   );
   assert.throws(

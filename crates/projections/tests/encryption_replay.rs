@@ -123,12 +123,13 @@ async fn mixed_kid_private_payloads_survive_projection_replay_audit_and_rebuild(
     .await
     .expect("append new-key private post through projection boundary");
 
-    let raw_rows =
-        sqlx::query("SELECT seq, kind, payload FROM events WHERE stream_id = $1 ORDER BY stream_seq")
-            .bind(game)
-            .fetch_all(&pool)
-            .await
-            .expect("raw encrypted event rows");
+    let raw_rows = sqlx::query(
+        "SELECT seq, kind, payload FROM events WHERE stream_id = $1 ORDER BY stream_seq",
+    )
+    .bind(game)
+    .fetch_all(&pool)
+    .await
+    .expect("raw encrypted event rows");
     assert_eq!(raw_rows.len(), 2);
 
     let raw_role: serde_json::Value = raw_rows[0].get("payload");
@@ -145,12 +146,13 @@ async fn mixed_kid_private_payloads_survive_projection_replay_audit_and_rebuild(
     assert_eq!(raw_post["body_private"]["kid"], "new-kid");
     assert!(raw_post["body_private"]["ciphertext"].is_string());
 
-    let raw_slot: serde_json::Value =
-        sqlx::query_scalar("SELECT private FROM slot_state WHERE game_id = $1 AND slot_id = 'slot_1'")
-            .bind(game)
-            .fetch_one(&pool)
-            .await
-            .expect("encrypted slot projection");
+    let raw_slot: serde_json::Value = sqlx::query_scalar(
+        "SELECT private FROM slot_state WHERE game_id = $1 AND slot_id = 'slot_1'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .expect("encrypted slot projection");
     let raw_slot_text = raw_slot.to_string();
     assert_eq!(raw_slot["kid"], "old-kid");
     assert!(!raw_slot_text.contains("godfather"));

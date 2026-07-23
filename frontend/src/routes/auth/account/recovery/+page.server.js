@@ -1,5 +1,6 @@
 import { fail, redirect } from "@sveltejs/kit";
 import { serverApiBaseUrl } from "../../../../lib/server/api-base.mjs";
+import { authSourceHeader } from "../../../../lib/server/auth-source.mjs";
 import { SESSION_COOKIE_NAME } from "../../../../lib/server/session-capabilities.mjs";
 
 export function load({ url }) {
@@ -178,10 +179,6 @@ function clientAuthSource(getClientAddress) {
   } catch {
     return null;
   }
-}
-
-function authSourceHeader(authSource) {
-  return authSource === null ? {} : { "x-fmarch-auth-source": authSource };
 }
 
 function credentialField(value) {

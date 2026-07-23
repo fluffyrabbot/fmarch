@@ -63,9 +63,28 @@ export function validateServiceBranches(config, expectedBranch, serviceIds = DEF
 export function validateHostedVariables({ stagingApi, stagingFrontend, productionApi, productionFrontend }) {
   for (const [name, variables, required] of [
     [
+      "staging API",
+      stagingApi,
+      [
+        "FMARCH_AUTH_SOURCE_SIGNING_KEY",
+        "FMARCH_EVENT_ENCRYPTION_KEY",
+        "FMARCH_EVENT_ENCRYPTION_KID",
+        "WORKOS_CLIENT_ID",
+      ],
+    ],
+    ["staging frontend", stagingFrontend, ["FMARCH_AUTH_SOURCE_SIGNING_KEY", "WORKOS_CLIENT_ID"]],
+    [
       "production API",
       productionApi,
-      ["DATABASE_URL", "WORKOS_CLIENT_ID", "WORKOS_ISSUER", "WORKOS_JWKS_URL"],
+      [
+        "DATABASE_URL",
+        "FMARCH_AUTH_SOURCE_SIGNING_KEY",
+        "FMARCH_EVENT_ENCRYPTION_KEY",
+        "FMARCH_EVENT_ENCRYPTION_KID",
+        "WORKOS_CLIENT_ID",
+        "WORKOS_ISSUER",
+        "WORKOS_JWKS_URL",
+      ],
     ],
     [
       "production frontend",
@@ -73,6 +92,7 @@ export function validateHostedVariables({ stagingApi, stagingFrontend, productio
       [
         "FMARCH_API_BASE_URL",
         "FMARCH_API_INTERNAL_URL",
+        "FMARCH_AUTH_SOURCE_SIGNING_KEY",
         "ORIGIN",
         "WORKOS_API_KEY",
         "WORKOS_CLIENT_ID",
@@ -102,6 +122,28 @@ export function validateHostedVariables({ stagingApi, stagingFrontend, productio
     productionApi.WORKOS_CLIENT_ID,
     productionFrontend.WORKOS_CLIENT_ID,
     "production API and frontend must use the same WorkOS client",
+  );
+  assert.equal(
+    stagingApi.FMARCH_AUTH_SOURCE_SIGNING_KEY,
+    stagingFrontend.FMARCH_AUTH_SOURCE_SIGNING_KEY,
+    "staging API and frontend must share the auth-source signing key",
+  );
+  assert.equal(
+    productionApi.FMARCH_AUTH_SOURCE_SIGNING_KEY,
+    productionFrontend.FMARCH_AUTH_SOURCE_SIGNING_KEY,
+    "production API and frontend must share the auth-source signing key",
+  );
+  assert.notEqual(
+    productionApi.FMARCH_AUTH_SOURCE_SIGNING_KEY,
+    stagingApi.FMARCH_AUTH_SOURCE_SIGNING_KEY,
+  );
+  assert.notEqual(
+    productionApi.FMARCH_EVENT_ENCRYPTION_KEY,
+    stagingApi.FMARCH_EVENT_ENCRYPTION_KEY,
+  );
+  assert.notEqual(
+    productionApi.FMARCH_EVENT_ENCRYPTION_KID,
+    stagingApi.FMARCH_EVENT_ENCRYPTION_KID,
   );
   assert.notEqual(productionApi.WORKOS_CLIENT_ID, stagingApi.WORKOS_CLIENT_ID);
   assert.notEqual(productionFrontend.WORKOS_CLIENT_ID, stagingFrontend.WORKOS_CLIENT_ID);

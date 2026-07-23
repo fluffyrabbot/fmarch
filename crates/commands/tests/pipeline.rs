@@ -4703,10 +4703,7 @@ async fn cohost_denied_lifecycle_rejects_while_deadline_still_allowed(pool: PgPo
     )
     .await
     .expect_err("lifecycle class denied for cohost");
-    assert_eq!(
-        denied,
-        Reject::CohostPermissionDenied("lifecycle".into())
-    );
+    assert_eq!(denied, Reject::CohostPermissionDenied("lifecycle".into()));
 
     // Primary host ignores denylist.
     handle(
@@ -13441,8 +13438,8 @@ async fn seeded_day_vote_scenarios_replay_audit_and_rebuild_deterministically(po
             Command::CreateGame {
                 game,
                 pack: "mafiascum".into(),
-            cohost_denied: vec![],
-        },
+                cohost_denied: vec![],
+            },
         )
         .await
         .unwrap_or_else(|err| panic!("seed {seed}: create game failed: {err}"));
@@ -13657,8 +13654,8 @@ async fn seeded_night_action_graphs_replay_audit_and_rebuild_deterministically(p
             Command::CreateGame {
                 game,
                 pack: "mafiascum".into(),
-            cohost_denied: vec![],
-        },
+                cohost_denied: vec![],
+            },
         )
         .await
         .unwrap_or_else(|err| panic!("seed {seed}: create night game failed: {err}"));
@@ -13855,8 +13852,8 @@ async fn seeded_trigger_dependency_graphs_replay_audit_and_rebuild_deterministic
             Command::CreateGame {
                 game,
                 pack: "mafiascum".into(),
-            cohost_denied: vec![],
-        },
+                cohost_denied: vec![],
+            },
         )
         .await
         .unwrap_or_else(|err| panic!("seed {seed}: create trigger game failed: {err}"));
@@ -18507,8 +18504,8 @@ async fn seeded_persistent_trigger_state_replay_audit_and_rebuild_deterministica
             Command::CreateGame {
                 game,
                 pack: "mafiascum".into(),
-            cohost_denied: vec![],
-        },
+                cohost_denied: vec![],
+            },
         )
         .await
         .unwrap_or_else(|err| panic!("seed {seed}: create persistent-trigger game failed: {err}"));
@@ -18837,8 +18834,8 @@ async fn seeded_day_trigger_policy_replay_audit_and_rebuild_deterministically(po
             Command::CreateGame {
                 game,
                 pack: "mafiascum".into(),
-            cohost_denied: vec![],
-        },
+                cohost_denied: vec![],
+            },
         )
         .await
         .unwrap_or_else(|err| panic!("seed {seed}: create day-trigger game failed: {err}"));
@@ -19663,8 +19660,8 @@ async fn generated_night_action_graphs_replay_audit_and_rebuild_deterministicall
             Command::CreateGame {
                 game,
                 pack: "mafiascum".into(),
-            cohost_denied: vec![],
-        },
+                cohost_denied: vec![],
+            },
             &shrink_stem,
             &fixture_json,
             &summary,
@@ -20949,8 +20946,8 @@ async fn generated_chinese_structured_night_graphs_replay_audit_and_rebuild_dete
             Command::CreateGame {
                 game,
                 pack: "chinese_structured".into(),
-            cohost_denied: vec![],
-        },
+                cohost_denied: vec![],
+            },
             &shrink_stem,
             &fixture_json,
             &summary,
@@ -21330,8 +21327,8 @@ async fn generated_chinese_structured_day_graphs_replay_audit_and_rebuild_determ
             Command::CreateGame {
                 game,
                 pack: "chinese_structured".into(),
-            cohost_denied: vec![],
-        },
+                cohost_denied: vec![],
+            },
             &shrink_stem,
             &fixture_json,
             &summary,
@@ -21867,8 +21864,8 @@ async fn generated_mafia_universe_ita_sessions_replay_audit_and_rebuild_determin
             Command::CreateGame {
                 game,
                 pack: "mafia_universe".into(),
-            cohost_denied: vec![],
-        },
+                cohost_denied: vec![],
+            },
             &shrink_stem,
             &fixture_json,
             &summary,
@@ -22401,8 +22398,8 @@ async fn generated_epicmafia_pk_bomb_cult_replay_audit_and_rebuild_deterministic
             Command::CreateGame {
                 game,
                 pack: "epicmafia".into(),
-            cohost_denied: vec![],
-        },
+                cohost_denied: vec![],
+            },
             &shrink_stem,
             &fixture_json,
             &summary,
@@ -22895,8 +22892,8 @@ async fn generated_epicmafia_pk_bomb_cult_replay_audit_and_rebuild_deterministic
             Command::CreateGame {
                 game,
                 pack: "epicmafia".into(),
-            cohost_denied: vec![],
-        },
+                cohost_denied: vec![],
+            },
             &shrink_stem,
             &fixture_json,
             &summary,
@@ -23786,8 +23783,8 @@ async fn generated_default_open_night_replay_audit_and_rebuild_deterministically
             Command::CreateGame {
                 game,
                 pack: "default_open".into(),
-            cohost_denied: vec![],
-        },
+                cohost_denied: vec![],
+            },
             &shrink_stem,
             &fixture_json,
             &summary,
@@ -24362,8 +24359,8 @@ async fn generated_default_open_day_replay_audit_and_rebuild_deterministically(p
             Command::CreateGame {
                 game,
                 pack: "default_open".into(),
-            cohost_denied: vec![],
-        },
+                cohost_denied: vec![],
+            },
             &shrink_stem,
             &fixture_json,
             &summary,
@@ -41902,8 +41899,8 @@ async fn host_resolve_phase_carries_mafiascum_faith_healer_chance_protect(pool: 
             Command::CreateGame {
                 game,
                 pack: "mafiascum".into(),
-            cohost_denied: vec![],
-        },
+                cohost_denied: vec![],
+            },
         )
         .await
         .unwrap();

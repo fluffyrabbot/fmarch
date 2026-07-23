@@ -47,6 +47,7 @@ pub trait AccessTokenVerifier: Send + Sync {
 
 #[derive(Clone)]
 pub struct WorkosAccessTokenVerifier {
+    client_id: Arc<str>,
     pub(crate) issuer: Arc<str>,
     jwks_url: Arc<str>,
     http: reqwest::Client,
@@ -59,7 +60,7 @@ impl WorkosAccessTokenVerifier {
         issuer: impl Into<String>,
         jwks_url: impl Into<String>,
     ) -> Result<Self, IdentityError> {
-        required(client_id.into(), "client id")?;
+        let client_id = required(client_id.into(), "client id")?;
         let issuer = required(issuer.into(), "issuer")?;
         let jwks_url = required(jwks_url.into(), "JWKS URL")?;
         reqwest::Url::parse(jwks_url.as_str()).map_err(|error| {
@@ -72,6 +73,7 @@ impl WorkosAccessTokenVerifier {
                 IdentityError::InvalidConfiguration(format!("HTTP client setup failed: {error}"))
             })?;
         Ok(Self {
+            client_id: client_id.into(),
             issuer: issuer.into(),
             jwks_url: jwks_url.into(),
             http,
@@ -138,6 +140,9 @@ impl WorkosAccessTokenVerifier {
             required(token.claims.sub, "subject").map_err(|_| IdentityError::InvalidToken)?;
         let session_id =
             required(token.claims.sid, "session id").map_err(|_| IdentityError::InvalidToken)?;
+        if token.claims.client_id.as_deref() != Some(self.client_id.as_ref()) {
+            return Err(IdentityError::InvalidToken);
+        }
         let expires_at =
             i64::try_from(token.claims.exp).map_err(|_| IdentityError::InvalidToken)?;
         Ok(VerifiedIdentity {
@@ -168,6 +173,7 @@ struct Claims {
     sub: String,
     sid: String,
     exp: u64,
+    client_id: Option<String>,
     email: Option<String>,
 }
 
@@ -429,6 +435,7 @@ mod tests {
             "https://api.workos.com/sso/jwks/client_123",
         )
         .unwrap();
+        assert_eq!(verifier.client_id.as_ref(), "client_123");
         assert_eq!(verifier.issuer.as_ref(), "https://api.workos.com/");
         assert!(WorkosAccessTokenVerifier::new("", "issuer", "https://example.test/jwks").is_err());
     }

@@ -47,7 +47,10 @@ mod tests {
     fn argon2id_round_trip_and_dummy_hash() {
         let hash = hash_password_sync("correct horse battery staple").unwrap();
         assert!(hash.starts_with("$argon2id$"));
-        assert!(verify_password_sync(hash.as_str(), "correct horse battery staple"));
+        assert!(verify_password_sync(
+            hash.as_str(),
+            "correct horse battery staple"
+        ));
         assert!(!verify_password_sync(hash.as_str(), "wrong password"));
         assert!(dummy_password_hash().starts_with("$argon2id$"));
         assert!(!verify_password_sync("not-a-hash", "anything"));

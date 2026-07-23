@@ -89,4 +89,23 @@ export async function fmarchIdentityHandle({ event, resolve }) {
   return resolve(event);
 }
 
-export const handle = sequence(workosCeremonyHandle, fmarchIdentityHandle);
+export async function securityHeadersHandle({ event, resolve }) {
+  const response = await resolve(event);
+  response.headers.set("x-content-type-options", "nosniff");
+  response.headers.set("referrer-policy", "strict-origin-when-cross-origin");
+  response.headers.set("permissions-policy", "camera=(), microphone=(), geolocation=()");
+  response.headers.set("cross-origin-opener-policy", "same-origin");
+  if (event.url.protocol === "https:") {
+    response.headers.set(
+      "strict-transport-security",
+      "max-age=31536000; includeSubDomains",
+    );
+  }
+  return response;
+}
+
+export const handle = sequence(
+  securityHeadersHandle,
+  workosCeremonyHandle,
+  fmarchIdentityHandle,
+);

@@ -393,6 +393,11 @@ async function startApi() {
       DATABASE_URL: databaseUrl,
       FMARCH_BIND: `${host}:${port}`,
       FMARCH_MEDIA_ROOT: mediaRoot,
+      FMARCH_ALLOW_INSECURE_DEV_EVENT_KEY:
+        process.env.FMARCH_ALLOW_INSECURE_DEV_EVENT_KEY ?? "true",
+      FMARCH_AUTH_SOURCE_SIGNING_KEY:
+        process.env.FMARCH_AUTH_SOURCE_SIGNING_KEY ??
+        "fmarch-local-test-game-auth-source-key",
       FMARCH_LIVE_PROJECTION_CAPACITY: String(
         liveProjectionProofConfig(process.env).capacity,
       ),

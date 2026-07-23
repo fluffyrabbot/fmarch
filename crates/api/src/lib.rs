@@ -29,11 +29,11 @@ use media::{
 };
 use serde::{Deserialize, Serialize};
 use sqlx::postgres::PgPool;
-use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::path::Path as FsPath;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use tokio::sync::{broadcast, Semaphore};
+use tokio::sync::{broadcast, Mutex, OwnedSemaphorePermit, Semaphore};
 use uuid::Uuid;
 use wire::{
     AckMsg, AdvanceSubscriptionReadRequest, CapabilityGrant, ClientEnvelope, CommunityInboxPage,
@@ -61,8 +61,14 @@ pub struct ApiState {
     live_projection_tx: broadcast::Sender<LiveProjectionUpdate>,
     live_projection_delivery_delay: Duration,
     live_connection_slots: Arc<Semaphore>,
+    live_principal_slots: Arc<Mutex<HashMap<String, Arc<Semaphore>>>>,
+    live_principal_limit: usize,
+    password_slots: Arc<Semaphore>,
+    media_slots: Arc<Semaphore>,
+    media_account_quota_bytes: i64,
     websocket_audience: String,
     websocket_ticket_ttl: Duration,
+    websocket_ticket_max_per_window: i32,
     websocket_poll_interval: Duration,
     access_token_verifier: Option<Arc<dyn AccessTokenVerifier>>,
     session_policy: identity::SessionPolicy,
@@ -90,6 +96,7 @@ struct AuthAttemptPolicy {
     lockout_seconds: i64,
     retention_seconds: i64,
     trust_source_header: bool,
+    source_signing_key: Option<Arc<[u8]>>,
 }
 
 #[derive(Debug, Clone)]
@@ -100,6 +107,8 @@ struct AuthAttemptScope {
 }
 
 const AUTH_ATTEMPT_SOURCE_HEADER: &str = "x-fmarch-auth-source";
+const AUTH_ATTEMPT_SOURCE_SIGNATURE_HEADER: &str = "x-fmarch-auth-source-signature";
+const AUTH_ATTEMPT_SOURCE_TIMESTAMP_HEADER: &str = "x-fmarch-auth-source-timestamp";
 const REGISTRATION_SESSION_TTL_SECONDS: i64 = 60 * 60 * 24 * 7;
 
 impl ApiState {
@@ -111,6 +120,8 @@ impl ApiState {
                 env_i64("FMARCH_LIVE_PROJECTION_DELIVERY_DELAY_MS", 0, 0, 60_000) as u64,
             );
         let live_connection_limit = env_i64("FMARCH_WS_MAX_CONNECTIONS", 512, 1, 65_536) as usize;
+        let live_principal_limit =
+            env_i64("FMARCH_WS_MAX_CONNECTIONS_PER_PRINCIPAL", 4, 1, 128) as usize;
         let (live_projection_tx, _) = broadcast::channel(live_projection_capacity);
         let _ = dummy_account_password_hash();
         ApiState {
@@ -126,6 +137,23 @@ impl ApiState {
             live_projection_tx,
             live_projection_delivery_delay,
             live_connection_slots: Arc::new(Semaphore::new(live_connection_limit)),
+            live_principal_slots: Arc::new(Mutex::new(HashMap::new())),
+            live_principal_limit,
+            password_slots: Arc::new(Semaphore::new(env_i64(
+                "FMARCH_PASSWORD_MAX_IN_FLIGHT",
+                4,
+                1,
+                64,
+            ) as usize)),
+            media_slots: Arc::new(Semaphore::new(
+                env_i64("FMARCH_MEDIA_MAX_IN_FLIGHT", 2, 1, 32) as usize,
+            )),
+            media_account_quota_bytes: env_i64(
+                "FMARCH_MEDIA_ACCOUNT_QUOTA_BYTES",
+                256 * 1024 * 1024,
+                12 * 1024 * 1024,
+                10 * 1024 * 1024 * 1024,
+            ),
             websocket_audience: std::env::var("FMARCH_WS_AUDIENCE")
                 .ok()
                 .filter(|value| !value.trim().is_empty())
@@ -136,6 +164,12 @@ impl ApiState {
                 5,
                 120,
             ) as u64),
+            websocket_ticket_max_per_window: env_i64(
+                "FMARCH_WS_TICKET_MAX_PER_WINDOW",
+                60,
+                2,
+                10_000,
+            ) as i32,
             websocket_poll_interval: Duration::from_millis(env_i64(
                 "FMARCH_WS_POLL_INTERVAL_MS",
                 250,
@@ -145,8 +179,7 @@ impl ApiState {
             access_token_verifier: None,
             session_policy: identity::SessionPolicy::from_env(),
             classic_enabled: std::env::var("FMARCH_CLASSIC_AUTH").ok().as_deref() != Some("0"),
-            allow_jwt_bearer: std::env::var("FMARCH_ALLOW_JWT_BEARER").ok().as_deref()
-                == Some("1"),
+            allow_jwt_bearer: std::env::var("FMARCH_ALLOW_JWT_BEARER").ok().as_deref() == Some("1"),
         }
     }
 
@@ -232,6 +265,16 @@ impl ApiState {
 
     pub fn with_live_connection_limit(mut self, limit: usize) -> Self {
         self.live_connection_slots = Arc::new(Semaphore::new(limit.clamp(1, 65_536)));
+        self
+    }
+
+    pub fn with_password_limit(mut self, limit: usize) -> Self {
+        self.password_slots = Arc::new(Semaphore::new(limit.clamp(1, 64)));
+        self
+    }
+
+    pub fn with_media_limit(mut self, limit: usize) -> Self {
+        self.media_slots = Arc::new(Semaphore::new(limit.clamp(1, 32)));
         self
     }
 
@@ -455,13 +498,30 @@ enum MediaUploadFailure {
     Commit(MediaError),
 }
 
+fn acquire_workload_slot(
+    slots: &Arc<Semaphore>,
+    message: &'static str,
+) -> Result<OwnedSemaphorePermit, ApiError> {
+    slots
+        .clone()
+        .try_acquire_owned()
+        .map_err(|_| ApiError::Unavailable {
+            retry_after_seconds: 1,
+            message: message.to_string(),
+        })
+}
+
 async fn media_upload(
     State(state): State<ApiState>,
     headers: HeaderMap,
     body: Bytes,
 ) -> Result<impl IntoResponse, ApiError> {
     let token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
-    require_active_enabled_account(&state, token).await?;
+    let principal_user_id = require_active_enabled_account(&state, token).await?;
+    let _media_permit = acquire_workload_slot(
+        &state.media_slots,
+        "media processing capacity is exhausted; retry shortly",
+    )?;
     let declared_format = declared_upload_format(&headers)?;
     if sniff_upload_format(&body) != Some(declared_format) {
         return Err(media_request_reject(
@@ -473,6 +533,8 @@ async fn media_upload(
     let store = state.media_store.clone();
     let variant_limits = state.variant_limits;
     let encoded = body.to_vec();
+    let upload_id =
+        reserve_media_quota(&state, principal_user_id.as_str(), encoded.len() as i64).await?;
     let committed = tokio::task::spawn_blocking(move || {
         let prepared = store
             .prepare_upload(&encoded, variant_limits)
@@ -492,9 +554,21 @@ async fn media_upload(
             tracing::error!(error = %error, "media upload commit failed");
             media_internal_error("media upload commit failed".to_string())
         }
-    })?;
+    });
+    let committed = match committed {
+        Ok(committed) => committed,
+        Err(error) => {
+            release_media_quota(&state.pool, upload_id).await;
+            return Err(error);
+        }
+    };
     let ingest = committed.ingest();
     let variants = committed.variants();
+    sqlx::query("UPDATE media_upload_ledger SET content_id = $2 WHERE upload_id = $1")
+        .bind(upload_id)
+        .bind(ingest.handle().id().to_string())
+        .execute(&state.pool)
+        .await?;
 
     let response = MediaUploadResponse {
         content_id: ingest.handle().id().to_string(),
@@ -689,7 +763,7 @@ fn identity_api_error(error: IdentityError) -> ApiError {
 
 async fn require_active_enabled_account(state: &ApiState, token: &str) -> Result<String, ApiError> {
     let identity = authenticate_token(state, token).await?;
-    if identity.auth_kind == "legacy-dev" {
+    if matches!(identity.auth_kind, "classic" | "dev" | "legacy-dev") {
         let enabled = sqlx::query_scalar::<_, bool>(
             "SELECT EXISTS (SELECT 1 FROM auth_account WHERE principal_user_id = $1 AND disabled_at IS NULL)",
         )
@@ -701,6 +775,54 @@ async fn require_active_enabled_account(state: &ApiState, token: &str) -> Result
         }
     }
     Ok(identity.principal_user_id)
+}
+
+async fn reserve_media_quota(
+    state: &ApiState,
+    principal_user_id: &str,
+    encoded_bytes: i64,
+) -> Result<Uuid, ApiError> {
+    let upload_id = Uuid::new_v4();
+    let now = unix_now_seconds();
+    let mut tx = state.pool.begin().await?;
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
+        .bind(format!("media-quota:{principal_user_id}"))
+        .execute(&mut *tx)
+        .await?;
+    let used = sqlx::query_scalar::<_, i64>(
+        "SELECT COALESCE(SUM(encoded_bytes), 0)::BIGINT FROM media_upload_ledger WHERE principal_user_id = $1",
+    )
+    .bind(principal_user_id)
+    .fetch_one(&mut *tx)
+    .await?;
+    if used.saturating_add(encoded_bytes) > state.media_account_quota_bytes {
+        return Err(ApiError::Reject {
+            status: StatusCode::PAYLOAD_TOO_LARGE,
+            error: RejectCode::NotAuthorized,
+            message: "account media storage quota is exhausted".to_string(),
+        });
+    }
+    sqlx::query(
+        "INSERT INTO media_upload_ledger (upload_id, principal_user_id, encoded_bytes, content_id, created_at) VALUES ($1, $2, $3, NULL, $4)",
+    )
+    .bind(upload_id)
+    .bind(principal_user_id)
+    .bind(encoded_bytes)
+    .bind(now)
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    Ok(upload_id)
+}
+
+async fn release_media_quota(pool: &PgPool, upload_id: Uuid) {
+    if let Err(error) = sqlx::query("DELETE FROM media_upload_ledger WHERE upload_id = $1")
+        .bind(upload_id)
+        .execute(pool)
+        .await
+    {
+        tracing::error!(%error, %upload_id, "failed to release media quota reservation");
+    }
 }
 
 fn declared_upload_format(headers: &HeaderMap) -> Result<DeclaredUploadFormat, ApiError> {
@@ -1243,7 +1365,6 @@ struct LoginAuthAccount {
     account_id: String,
     password: String,
     session_token: Option<String>,
-    expires_at: Option<i64>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -1315,6 +1436,7 @@ struct RecoverAuthAccount {
     account_id: String,
     recovery_token: String,
     new_password: String,
+    session_token: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1515,11 +1637,6 @@ async fn create_dev_auth_session(
         });
     }
 
-    let client_token = request
-        .token
-        .as_deref()
-        .map(str::trim)
-        .filter(|token| !token.is_empty());
     if request.principal_user_id.trim().is_empty() {
         return Err(ApiError::Reject {
             status: StatusCode::BAD_REQUEST,
@@ -1531,21 +1648,17 @@ async fn create_dev_auth_session(
 
     let now = unix_now_seconds();
     let mut conn = state.pool.acquire().await?;
-    let issued = identity::session::issue_session(
-        &mut conn,
-        identity::SessionSpec {
-            principal_user_id: request.principal_user_id.as_str(),
-            session_capabilities: &global_capabilities,
-            authenticated_via_method_id: None,
-            assurance: identity::Assurance::Dev,
-            authenticated_at: now,
-            expires_at: request.expires_at,
-            idle_expires_at: None,
-            client_supplied_token: client_token,
-        },
-        now,
-    )
-    .await?;
+    let spec = identity::SessionSpec {
+        principal_user_id: request.principal_user_id.as_str(),
+        session_capabilities: &global_capabilities,
+        authenticated_via_method_id: None,
+        assurance: identity::Assurance::Dev,
+        authenticated_at: now,
+        expires_at: request.expires_at,
+        idle_expires_at: None,
+    };
+    let issued =
+        issue_session_for_request(&state, &mut conn, spec, now, request.token.as_deref()).await?;
     drop(conn);
 
     let mut response =
@@ -1553,6 +1666,24 @@ async fn create_dev_auth_session(
     response.session_token = Some(issued.session_token);
     response.expires_at = Some(issued.expires_at);
     Ok(Json(response))
+}
+
+async fn issue_session_for_request(
+    state: &ApiState,
+    conn: &mut sqlx::PgConnection,
+    spec: identity::SessionSpec<'_>,
+    now: i64,
+    requested_debug_token: Option<&str>,
+) -> Result<identity::IssuedSession, ApiError> {
+    let requested_debug_token = requested_debug_token
+        .map(str::trim)
+        .filter(|token| !token.is_empty());
+    if state.dev_auth_enabled && cfg!(debug_assertions) {
+        if let Some(token) = requested_debug_token {
+            return Ok(identity::session::issue_debug_session(conn, spec, now, token).await?);
+        }
+    }
+    Ok(identity::session::issue_session(conn, spec, now).await?)
 }
 
 async fn create_auth_session_grant(
@@ -1574,11 +1705,6 @@ async fn create_auth_session_grant(
         });
     }
 
-    let client_token = request
-        .token
-        .as_deref()
-        .map(str::trim)
-        .filter(|token| !token.is_empty());
     if request.principal_user_id.trim().is_empty() {
         return Err(ApiError::Reject {
             status: StatusCode::BAD_REQUEST,
@@ -1590,7 +1716,11 @@ async fn create_auth_session_grant(
 
     let now = unix_now_seconds();
     let mut conn = state.pool.acquire().await?;
-    let issued = identity::session::issue_session(
+    let expires_at = request
+        .expires_at
+        .min(state.session_policy.classic_expiry(now));
+    let issued = issue_session_for_request(
+        &state,
         &mut conn,
         identity::SessionSpec {
             principal_user_id: request.principal_user_id.as_str(),
@@ -1598,11 +1728,11 @@ async fn create_auth_session_grant(
             authenticated_via_method_id: None,
             assurance: identity::Assurance::AdminGrant,
             authenticated_at: now,
-            expires_at: request.expires_at,
+            expires_at,
             idle_expires_at: None,
-            client_supplied_token: client_token,
         },
         now,
+        request.token.as_deref(),
     )
     .await?;
     drop(conn);
@@ -1721,13 +1851,12 @@ async fn register_auth_account(
     require_classic_enabled(&state)?;
     let account_id = normalize_registration_account_id(request.account_id.as_str())?;
     let password = request.password.as_str();
-    let client_token = request
-        .session_token
-        .as_deref()
-        .map(str::trim)
-        .filter(|token| !token.is_empty());
     validate_new_account_password(password)?;
     enforce_registration_source_limit(&state, &headers).await?;
+    let _password_permit = acquire_workload_slot(
+        &state.password_slots,
+        "password processing capacity is exhausted; retry shortly",
+    )?;
 
     let now = unix_now_seconds();
     let expires_at = now + REGISTRATION_SESSION_TTL_SECONDS;
@@ -1770,7 +1899,8 @@ async fn register_auth_account(
         now,
     )
     .await?;
-    let issued = identity::session::issue_session(
+    let issued = issue_session_for_request(
+        &state,
         &mut *tx,
         identity::SessionSpec {
             principal_user_id: principal_user_id.as_str(),
@@ -1780,9 +1910,9 @@ async fn register_auth_account(
             authenticated_at: now,
             expires_at,
             idle_expires_at: None,
-            client_supplied_token: client_token,
         },
         now,
+        request.session_token.as_deref(),
     )
     .await?;
     let session_hash = issued.token_hash.clone();
@@ -1842,17 +1972,12 @@ async fn login_auth_account(
     headers: HeaderMap,
     Json(request): Json<LoginAuthAccount>,
 ) -> Result<Json<AuthSessionResponse>, ApiError> {
-    let client_token = request.session_token.clone();
     let response = classic_password_session(
         &state,
         &headers,
         request.account_id.trim(),
         request.password.as_str(),
-        client_token
-            .as_deref()
-            .map(str::trim)
-            .filter(|token| !token.is_empty()),
-        request.expires_at,
+        request.session_token.as_deref(),
     )
     .await?;
     Ok(Json(response))
@@ -1863,8 +1988,7 @@ async fn classic_password_session(
     headers: &HeaderMap,
     account_id: &str,
     password: &str,
-    client_token: Option<&str>,
-    requested_expires_at: Option<i64>,
+    requested_debug_token: Option<&str>,
 ) -> Result<AuthSessionResponse, ApiError> {
     require_classic_enabled(state)?;
     if account_id.is_empty() || password.trim().is_empty() {
@@ -1876,17 +2000,11 @@ async fn classic_password_session(
     }
     validate_account_password_input(password)?;
     let now = unix_now_seconds();
-    let expires_at = match requested_expires_at {
-        Some(expires_at) if expires_at <= now => {
-            return Err(ApiError::Reject {
-                status: StatusCode::BAD_REQUEST,
-                error: RejectCode::Internal,
-                message: "account session expiry must be in the future".to_string(),
-            });
-        }
-        Some(expires_at) => expires_at,
-        None => state.session_policy.classic_expiry(now),
-    };
+    let expires_at = state.session_policy.classic_expiry(now);
+    let _password_permit = acquire_workload_slot(
+        &state.password_slots,
+        "password processing capacity is exhausted; retry shortly",
+    )?;
     let attempt_scope = enforce_auth_attempt_limit(state, headers, account_id).await?;
 
     let account = sqlx::query_as::<_, (String, String, Vec<String>)>(
@@ -1927,7 +2045,8 @@ async fn classic_password_session(
     .fetch_optional(&mut *tx)
     .await?
     .ok_or_else(unauthorized_account)?;
-    let issued = identity::session::issue_session(
+    let issued = issue_session_for_request(
+        state,
         &mut *tx,
         identity::SessionSpec {
             principal_user_id: account.0.as_str(),
@@ -1940,9 +2059,9 @@ async fn classic_password_session(
                 now.saturating_add(state.session_policy.idle_ttl_seconds)
                     .min(expires_at.max(now + 1)),
             ),
-            client_supplied_token: client_token,
         },
         now,
+        requested_debug_token,
     )
     .await?;
     let session_hash = issued.token_hash.clone();
@@ -2013,7 +2132,6 @@ async fn create_auth_session(
                 login_name.trim(),
                 password.as_str(),
                 None,
-                None,
             )
             .await?;
             Ok(Json(response))
@@ -2031,7 +2149,38 @@ async fn create_auth_session(
             let token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
             let verified = verifier.verify(token).await.map_err(identity_api_error)?;
             let now = unix_now_seconds();
+            if verified.expires_at <= now {
+                return Err(unauthorized_session());
+            }
             let mut tx = state.pool.begin().await?;
+            sqlx::query("DELETE FROM workos_session_exchange WHERE access_expires_at <= $1")
+                .bind(now)
+                .execute(&mut *tx)
+                .await?;
+            let exchanged = sqlx::query(
+                r#"
+                INSERT INTO workos_session_exchange (
+                    provider_session_id, access_token_hash, subject,
+                    exchanged_at, access_expires_at
+                )
+                VALUES ($1, $2, $3, $4, $5)
+                ON CONFLICT DO NOTHING
+                "#,
+            )
+            .bind(verified.session_id.as_str())
+            .bind(identity::token::hash_token(token))
+            .bind(verified.subject.as_str())
+            .bind(now)
+            .bind(verified.expires_at)
+            .execute(&mut *tx)
+            .await?;
+            if exchanged.rows_affected() != 1 {
+                return Err(ApiError::Reject {
+                    status: StatusCode::CONFLICT,
+                    error: RejectCode::NotAuthorized,
+                    message: "identity assertion was already exchanged".to_string(),
+                });
+            }
             let resolution = identity::workos::resolve_subject(&mut tx, &verified, now)
                 .await
                 .map_err(|error| match error {
@@ -2052,7 +2201,6 @@ async fn create_auth_session(
                         now.saturating_add(state.session_policy.idle_ttl_seconds)
                             .min(expires_at),
                     ),
-                    client_supplied_token: None,
                 },
                 now,
             )
@@ -2145,6 +2293,7 @@ async fn list_account_methods(
 struct AddClassicMethod {
     login_name: String,
     password: String,
+    session_token: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -2258,7 +2407,8 @@ async fn add_classic_method(
     }
 
     let session_expires_at = state.session_policy.classic_expiry(now);
-    let issued = identity::session::issue_session(
+    let issued = issue_session_for_request(
+        &state,
         &mut *tx,
         identity::SessionSpec {
             principal_user_id: identity.principal_user_id.as_str(),
@@ -2271,9 +2421,9 @@ async fn add_classic_method(
                 now.saturating_add(state.session_policy.idle_ttl_seconds)
                     .min(session_expires_at),
             ),
-            client_supplied_token: None,
         },
         now,
+        request.session_token.as_deref(),
     )
     .await?;
 
@@ -3001,7 +3151,8 @@ async fn recover_auth_account(
         now,
     )
     .await?;
-    let issued = identity::session::issue_session(
+    let issued = issue_session_for_request(
+        &state,
         &mut *tx,
         identity::SessionSpec {
             principal_user_id: principal_user_id.as_str(),
@@ -3011,9 +3162,9 @@ async fn recover_auth_account(
             authenticated_at: now,
             expires_at: state.session_policy.classic_expiry(now),
             idle_expires_at: None,
-            client_supplied_token: None,
         },
         now,
+        request.session_token.as_deref(),
     )
     .await?;
     sqlx::query(
@@ -3650,11 +3801,6 @@ async fn redeem_auth_invite(
     let invite_token = request.invite_token.trim();
     let account_id = request.account_id.trim();
     let password = request.password.as_str();
-    let client_token = request
-        .session_token
-        .as_deref()
-        .map(str::trim)
-        .filter(|token| !token.is_empty());
     if invite_token.is_empty() || account_id.is_empty() || password.trim().is_empty() {
         return Err(ApiError::Reject {
             status: StatusCode::BAD_REQUEST,
@@ -3664,6 +3810,10 @@ async fn redeem_auth_invite(
         });
     }
     validate_account_password_input(password)?;
+    let _password_permit = acquire_workload_slot(
+        &state.password_slots,
+        "password processing capacity is exhausted; retry shortly",
+    )?;
     let attempt_scope = enforce_auth_attempt_limit(&state, &headers, account_id).await?;
 
     let now = unix_now_seconds();
@@ -3714,7 +3864,8 @@ async fn redeem_auth_invite(
         now,
     )
     .await?;
-    let issued = identity::session::issue_session(
+    let issued = issue_session_for_request(
+        &state,
         &mut *tx,
         identity::SessionSpec {
             principal_user_id: invite.0.as_str(),
@@ -3724,9 +3875,9 @@ async fn redeem_auth_invite(
             authenticated_at: now,
             expires_at: invite.1,
             idle_expires_at: None,
-            client_supplied_token: client_token,
         },
         now,
+        request.session_token.as_deref(),
     )
     .await?;
     let session_hash = issued.token_hash.clone();
@@ -4079,9 +4230,8 @@ async fn enforce_auth_attempt_limit(
     let account_scope_hash = account_exists.then(|| {
         hash_session_token(
             format!(
-                "credential-account:{}\0source:{}",
-                account_id.trim().to_ascii_lowercase(),
-                normalized_source
+                "credential-account:{}",
+                account_id.trim().to_ascii_lowercase()
             )
             .as_str(),
         )
@@ -4215,16 +4365,67 @@ async fn enforce_public_request_limit(
 }
 
 fn normalized_auth_attempt_source(headers: &HeaderMap, policy: &AuthAttemptPolicy) -> String {
-    if !policy.trust_source_header {
-        return "direct".to_string();
-    }
-    headers
+    let source = headers
         .get(AUTH_ATTEMPT_SOURCE_HEADER)
         .and_then(|value| value.to_str().ok())
         .map(str::trim)
         .filter(|value| !value.is_empty() && value.len() <= 256)
-        .unwrap_or("direct")
-        .to_ascii_lowercase()
+        .map(str::to_ascii_lowercase);
+    if policy.trust_source_header {
+        return source.unwrap_or_else(|| "unattributed".to_string());
+    }
+    let Some(source) = source else {
+        return "unattributed".to_string();
+    };
+    if signed_auth_source_valid(headers, &source, policy) {
+        source
+    } else {
+        "unattributed".to_string()
+    }
+}
+
+fn signed_auth_source_valid(headers: &HeaderMap, source: &str, policy: &AuthAttemptPolicy) -> bool {
+    use hmac::{Hmac, Mac};
+    use sha2::Sha256;
+
+    let Some(key) = policy.source_signing_key.as_deref() else {
+        return false;
+    };
+    let Some(timestamp) = headers
+        .get(AUTH_ATTEMPT_SOURCE_TIMESTAMP_HEADER)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.parse::<i64>().ok())
+    else {
+        return false;
+    };
+    if unix_now_seconds().abs_diff(timestamp) > 60 {
+        return false;
+    }
+    let Some(signature) = headers
+        .get(AUTH_ATTEMPT_SOURCE_SIGNATURE_HEADER)
+        .and_then(|value| value.to_str().ok())
+        .and_then(decode_hex_32)
+    else {
+        return false;
+    };
+    let Ok(mut mac) = Hmac::<Sha256>::new_from_slice(key) else {
+        return false;
+    };
+    mac.update(timestamp.to_string().as_bytes());
+    mac.update(b"\n");
+    mac.update(source.as_bytes());
+    mac.verify_slice(&signature).is_ok()
+}
+
+fn decode_hex_32(value: &str) -> Option<[u8; 32]> {
+    if value.len() != 64 {
+        return None;
+    }
+    let mut decoded = [0_u8; 32];
+    for (index, byte) in decoded.iter_mut().enumerate() {
+        *byte = u8::from_str_radix(&value[index * 2..index * 2 + 2], 16).ok()?;
+    }
+    Some(decoded)
 }
 
 async fn record_failed_auth_attempt(
@@ -4464,6 +4665,10 @@ fn auth_attempt_policy_from_env() -> AuthAttemptPolicy {
             .ok()
             .as_deref()
             == Some("1"),
+        source_signing_key: std::env::var("FMARCH_AUTH_SOURCE_SIGNING_KEY")
+            .ok()
+            .filter(|value| value.as_bytes().len() >= 32)
+            .map(|value| Arc::<[u8]>::from(value.into_bytes())),
     }
 }
 
@@ -8250,6 +8455,15 @@ async fn create_websocket_ticket(
     let token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
     let identity = authenticate_token(&state, token).await?;
     let principal_user_id = identity.principal_user_id.clone();
+    let ticket_scope =
+        hash_session_token(format!("websocket-ticket-principal:{principal_user_id}").as_str());
+    enforce_public_request_limit(
+        &state,
+        ticket_scope.as_str(),
+        state.websocket_ticket_max_per_window,
+        &state.auth_attempt_policy,
+    )
+    .await?;
     let audience = request.audience.trim();
     let channel = request.channel.trim();
     if audience != state.websocket_audience
@@ -8521,10 +8735,41 @@ async fn ws(
             );
         }
     };
+    let principal_slots = {
+        let mut slots = state.live_principal_slots.lock().await;
+        slots
+            .entry(claim.principal_user_id.clone())
+            .or_insert_with(|| Arc::new(Semaphore::new(state.live_principal_limit)))
+            .clone()
+    };
+    let principal_permit = match principal_slots.clone().try_acquire_owned() {
+        Ok(permit) => permit,
+        Err(_) => {
+            tracing::warn!(
+                event = "live_connection_rejected",
+                principal_user_id = %claim.principal_user_id,
+                reason = "principal_connection_capacity_exhausted",
+                "live connection admission rejected"
+            );
+            return capacity_unavailable_response(
+                "principal live connection capacity is exhausted; retry shortly",
+                1,
+            );
+        }
+    };
     upgrade
         .on_upgrade(move |socket| async move {
             let _permit = permit;
-            ws_session(socket, state, claim).await;
+            let principal_user_id = claim.principal_user_id.clone();
+            ws_session(socket, state.clone(), claim).await;
+            drop(principal_permit);
+            let mut slots = state.live_principal_slots.lock().await;
+            if slots.get(&principal_user_id).is_some_and(|entry| {
+                Arc::ptr_eq(entry, &principal_slots)
+                    && entry.available_permits() == state.live_principal_limit
+            }) {
+                slots.remove(&principal_user_id);
+            }
         })
         .into_response()
 }
@@ -9246,8 +9491,9 @@ impl From<identity::IdentityFlowError> for ApiError {
             IdentityFlowError::LastActiveMethod => ApiError::Reject {
                 status: StatusCode::CONFLICT,
                 error: RejectCode::Internal,
-                message: "an active principal must retain at least one active authentication method"
-                    .to_string(),
+                message:
+                    "an active principal must retain at least one active authentication method"
+                        .to_string(),
             },
             IdentityFlowError::Invalid(message) => ApiError::Reject {
                 status: StatusCode::BAD_REQUEST,
@@ -9357,21 +9603,9 @@ impl IntoResponse for ApiError {
             other => other,
         };
         let (status, error, message) = match self_ {
-            ApiError::Projection(err) => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                RejectCode::Internal,
-                err.to_string(),
-            ),
-            ApiError::Capability(err) => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                RejectCode::Internal,
-                err.to_string(),
-            ),
-            ApiError::Db(err) => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                RejectCode::Internal,
-                err.to_string(),
-            ),
+            ApiError::Projection(err) => opaque_internal_error("projection", err),
+            ApiError::Capability(err) => opaque_internal_error("capability", err),
+            ApiError::Db(err) => opaque_internal_error("database", err),
             ApiError::Reject {
                 status,
                 error,
@@ -9390,6 +9624,19 @@ impl IntoResponse for ApiError {
         )
             .into_response()
     }
+}
+
+fn opaque_internal_error(
+    boundary: &'static str,
+    error: impl std::fmt::Display,
+) -> (StatusCode, RejectCode, String) {
+    let reference = Uuid::new_v4();
+    tracing::error!(%reference, %boundary, error = %error, "request failed internally");
+    (
+        StatusCode::INTERNAL_SERVER_ERROR,
+        RejectCode::Internal,
+        format!("internal request failure; reference {reference}"),
+    )
 }
 
 /// Shared overload response for the HTTP and WebSocket admission boundaries.
@@ -9442,5 +9689,64 @@ mod capacity_error_tests {
 
         assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
         assert_eq!(response.headers()[RETRY_AFTER], "1");
+    }
+
+    #[test]
+    fn signed_edge_source_is_accepted_and_spoofed_source_is_collapsed() {
+        use hmac::{Hmac, Mac};
+        use sha2::Sha256;
+
+        let key = b"test-auth-source-signing-key-with-32-bytes-minimum";
+        let policy = AuthAttemptPolicy {
+            account_max_failures: 5,
+            source_max_failures: 50,
+            registration_max_per_source: 5,
+            window_seconds: 900,
+            lockout_seconds: 900,
+            retention_seconds: 3_600,
+            trust_source_header: false,
+            source_signing_key: Some(Arc::<[u8]>::from(key.to_vec())),
+        };
+        let source = "203.0.113.45";
+        let timestamp = unix_now_seconds().to_string();
+        let mut mac = Hmac::<Sha256>::new_from_slice(key).unwrap();
+        mac.update(timestamp.as_bytes());
+        mac.update(b"\n");
+        mac.update(source.as_bytes());
+        let signature = mac.finalize().into_bytes();
+        let signature = signature
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>();
+        let mut headers = HeaderMap::new();
+        headers.insert(AUTH_ATTEMPT_SOURCE_HEADER, source.parse().unwrap());
+        headers.insert(
+            AUTH_ATTEMPT_SOURCE_TIMESTAMP_HEADER,
+            timestamp.parse().unwrap(),
+        );
+        headers.insert(
+            AUTH_ATTEMPT_SOURCE_SIGNATURE_HEADER,
+            signature.parse().unwrap(),
+        );
+        assert_eq!(normalized_auth_attempt_source(&headers, &policy), source);
+
+        headers.insert(
+            AUTH_ATTEMPT_SOURCE_SIGNATURE_HEADER,
+            "00".repeat(32).parse().unwrap(),
+        );
+        assert_eq!(
+            normalized_auth_attempt_source(&headers, &policy),
+            "unattributed"
+        );
+    }
+
+    #[test]
+    fn dedicated_workload_capacity_rejects_excess_parallel_work() {
+        let slots = Arc::new(Semaphore::new(1));
+        let _first = acquire_workload_slot(&slots, "busy").unwrap();
+        assert!(matches!(
+            acquire_workload_slot(&slots, "busy"),
+            Err(ApiError::Unavailable { .. })
+        ));
     }
 }

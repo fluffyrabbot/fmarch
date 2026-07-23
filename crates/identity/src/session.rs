@@ -69,11 +69,6 @@ pub struct SessionSpec<'a> {
     pub authenticated_at: i64,
     pub expires_at: i64,
     pub idle_expires_at: Option<i64>,
-    /// Transitional: pre-refactor clients choose their own session token. When
-    /// present it is honored (upsert semantics, matching the historic flows);
-    /// when absent the backend generates the token. Removed once every caller
-    /// reads the issued token from the response.
-    pub client_supplied_token: Option<&'a str>,
 }
 
 #[derive(Debug, Clone)]
@@ -90,17 +85,40 @@ pub async fn issue_session(
     spec: SessionSpec<'_>,
     now: i64,
 ) -> Result<IssuedSession, IdentityFlowError> {
+    issue_session_with_token(conn, spec, now, generate_session_token(), false).await
+}
+
+/// Deterministic credential seam for debug-only proof harnesses. Internet-facing
+/// server startup rejects dev auth in release builds; ordinary callers cannot
+/// select session credentials.
+pub async fn issue_debug_session(
+    conn: &mut PgConnection,
+    spec: SessionSpec<'_>,
+    now: i64,
+    session_token: &str,
+) -> Result<IssuedSession, IdentityFlowError> {
+    if !cfg!(debug_assertions) || session_token.trim().is_empty() {
+        return Err(IdentityFlowError::Invalid(
+            "deterministic dev sessions require a debug build and non-empty token".to_string(),
+        ));
+    }
+    issue_session_with_token(conn, spec, now, session_token.to_string(), true).await
+}
+
+async fn issue_session_with_token(
+    conn: &mut PgConnection,
+    spec: SessionSpec<'_>,
+    now: i64,
+    session_token: String,
+    replace_existing: bool,
+) -> Result<IssuedSession, IdentityFlowError> {
     if spec.expires_at <= now {
         return Err(IdentityFlowError::Invalid(
             "session expiry must be in the future".to_string(),
         ));
     }
-    let session_token = match spec.client_supplied_token {
-        Some(token) => token.to_string(),
-        None => generate_session_token(),
-    };
     let token_hash = hash_token(session_token.as_str());
-    sqlx::query(
+    let insert = if replace_existing {
         r#"
         INSERT INTO auth_session (
             token_hash,
@@ -115,8 +133,8 @@ pub async fn issue_session(
             authenticated_at
         )
         VALUES ($1, $2, $3, $4, NULL, $5, $6, $7, $8, $9)
-        ON CONFLICT (token_hash) DO UPDATE
-        SET principal_user_id = EXCLUDED.principal_user_id,
+        ON CONFLICT (token_hash) DO UPDATE SET
+            principal_user_id = EXCLUDED.principal_user_id,
             created_at = EXCLUDED.created_at,
             expires_at = EXCLUDED.expires_at,
             revoked_at = NULL,
@@ -125,19 +143,36 @@ pub async fn issue_session(
             idle_expires_at = EXCLUDED.idle_expires_at,
             assurance = EXCLUDED.assurance,
             authenticated_at = EXCLUDED.authenticated_at
-        "#,
-    )
-    .bind(&token_hash)
-    .bind(spec.principal_user_id)
-    .bind(now)
-    .bind(spec.expires_at)
-    .bind(spec.session_capabilities)
-    .bind(spec.authenticated_via_method_id)
-    .bind(spec.idle_expires_at)
-    .bind(spec.assurance.as_str())
-    .bind(spec.authenticated_at)
-    .execute(&mut *conn)
-    .await?;
+        "#
+    } else {
+        r#"
+        INSERT INTO auth_session (
+            token_hash,
+            principal_user_id,
+            created_at,
+            expires_at,
+            revoked_at,
+            global_capabilities,
+            authenticated_via_method_id,
+            idle_expires_at,
+            assurance,
+            authenticated_at
+        )
+        VALUES ($1, $2, $3, $4, NULL, $5, $6, $7, $8, $9)
+        "#
+    };
+    sqlx::query(insert)
+        .bind(&token_hash)
+        .bind(spec.principal_user_id)
+        .bind(now)
+        .bind(spec.expires_at)
+        .bind(spec.session_capabilities)
+        .bind(spec.authenticated_via_method_id)
+        .bind(spec.idle_expires_at)
+        .bind(spec.assurance.as_str())
+        .bind(spec.authenticated_at)
+        .execute(&mut *conn)
+        .await?;
     Ok(IssuedSession {
         session_token,
         token_hash,

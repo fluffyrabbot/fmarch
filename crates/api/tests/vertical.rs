@@ -44,6 +44,39 @@ fn shared_test_media_store() -> MediaStore {
     MediaStore::open(root.path(), MediaLimits::default()).expect("open shared API test media store")
 }
 
+async fn issue_dev_session(
+    app: &axum::Router,
+    principal_user_id: &str,
+    global_capabilities: &[&str],
+) -> String {
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/auth/dev-session")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    serde_json::json!({
+                        "principal_user_id": principal_user_id,
+                        "expires_at": 4_102_444_800i64,
+                        "global_capabilities": global_capabilities
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let response: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    response["session_token"]
+        .as_str()
+        .expect("dev session response must return its backend-generated token")
+        .to_string()
+}
+
 #[derive(Debug)]
 struct PermanentFailureIdentityDeliveryGateway;
 
@@ -177,45 +210,68 @@ async fn fresh_database_bootstraps_exactly_one_global_admin(pool: sqlx::PgPool) 
 async fn workos_exchange_binds_a_stable_local_principal_and_coexists_with_classic(
     pool: sqlx::PgPool,
 ) {
-    let verifier = StaticAccessTokenVerifier::new([(
-        "workos-access-token".to_string(),
-        VerifiedIdentity {
-            subject: "user_01HWORKOS".to_string(),
-            session_id: "session_01HWORKOS".to_string(),
-            expires_at: 4_102_444_800,
-            email: Some("player@example.test".to_string()),
-        },
-    )]);
+    let verifier = StaticAccessTokenVerifier::new([
+        (
+            "workos-access-token".to_string(),
+            VerifiedIdentity {
+                subject: "user_01HWORKOS".to_string(),
+                session_id: "session_01HWORKOS".to_string(),
+                expires_at: 4_102_444_800,
+                email: Some("player@example.test".to_string()),
+            },
+        ),
+        (
+            "workos-access-token-2".to_string(),
+            VerifiedIdentity {
+                subject: "user_01HWORKOS".to_string(),
+                session_id: "session_01HWORKOS_2".to_string(),
+                expires_at: 4_102_444_800,
+                email: Some("player@example.test".to_string()),
+            },
+        ),
+    ]);
     let app = api::router_with_state(
         test_api_state(pool.clone()).with_access_token_verifier(Arc::new(verifier)),
     );
 
-    // The WorkOS access token is exchanged once per sign-in for a backend
-    // session; repeating the exchange rebinds the same principal.
-    let mut session_token = String::new();
-    for _ in 0..2 {
-        let response = app
-            .clone()
-            .oneshot(
-                Request::builder()
-                    .method("POST")
-                    .uri("/auth/sessions")
-                    .header("authorization", "Bearer workos-access-token")
-                    .header("content-type", "application/json")
-                    .body(Body::from(
-                        serde_json::json!({ "method": "workos" }).to_string(),
-                    ))
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-        assert_eq!(response.status(), StatusCode::OK);
-        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
-        let session: serde_json::Value = serde_json::from_slice(&body).unwrap();
-        session_token = session["session_token"].as_str().unwrap().to_string();
-        assert!(session_token.starts_with("fmss_"));
-        assert!(session["expires_at"].as_i64().unwrap() > 0);
-    }
+    // The WorkOS access token is exchanged exactly once for a backend session.
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/auth/sessions")
+                .header("authorization", "Bearer workos-access-token")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    serde_json::json!({ "method": "workos" }).to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let session: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let session_token = session["session_token"].as_str().unwrap().to_string();
+    assert!(session_token.starts_with("fmss_"));
+    assert!(session["expires_at"].as_i64().unwrap() > 0);
+    let replay = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/auth/sessions")
+                .header("authorization", "Bearer workos-access-token")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    serde_json::json!({ "method": "workos" }).to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(replay.status(), StatusCode::CONFLICT);
 
     // The app session is the bearer; the provider JWT is rejected outside the
     // exchange.
@@ -302,7 +358,7 @@ async fn workos_exchange_binds_a_stable_local_principal_and_coexists_with_classi
             Request::builder()
                 .method("POST")
                 .uri("/auth/sessions")
-                .header("authorization", "Bearer workos-access-token")
+                .header("authorization", "Bearer workos-access-token-2")
                 .header("content-type", "application/json")
                 .body(Body::from(
                     serde_json::json!({ "method": "workos" }).to_string(),
@@ -315,32 +371,11 @@ async fn workos_exchange_binds_a_stable_local_principal_and_coexists_with_classi
 }
 
 async fn create_media_upload_account_session(app: &axum::Router, label: &str) -> (String, String) {
-    let admin_token = format!("media-upload-admin-{label}");
     let account_id = format!("media-upload-{label}@example.test");
     let principal_user_id = format!("media_upload_{label}");
     let password = "correct horse battery";
-    let session_token = format!("media-upload-session-{label}");
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/auth/dev-session")
-                .header("content-type", "application/json")
-                .body(Body::from(
-                    serde_json::json!({
-                        "token": admin_token,
-                        "principal_user_id": format!("media_admin_{label}"),
-                        "expires_at": 4_102_444_800i64,
-                        "global_capabilities": ["GlobalAdmin"]
-                    })
-                    .to_string(),
-                ))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
+    let admin_token =
+        issue_dev_session(app, &format!("media_admin_{label}"), &["GlobalAdmin"]).await;
     create_test_auth_account(app, &admin_token, &account_id, password, &principal_user_id).await;
     let response = app
         .clone()
@@ -352,9 +387,7 @@ async fn create_media_upload_account_session(app: &axum::Router, label: &str) ->
                 .body(Body::from(
                     serde_json::json!({
                         "account_id": account_id,
-                        "password": password,
-                        "session_token": session_token,
-                        "expires_at": 4_102_444_800i64
+                        "password": password
                     })
                     .to_string(),
                 ))
@@ -363,6 +396,9 @@ async fn create_media_upload_account_session(app: &axum::Router, label: &str) ->
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let response: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let session_token = response["session_token"].as_str().unwrap().to_string();
     (session_token, principal_user_id)
 }
 
@@ -508,29 +544,8 @@ async fn media_upload_rejects_nonaccount_expired_revoked_and_disabled_sessions_w
     let missing = post_media_upload(&app, None, "image/png", png.clone()).await;
     assert_eq!(missing.status(), StatusCode::UNAUTHORIZED);
 
-    let dev_only_token = "media-upload-dev-only";
-    let dev_only = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/auth/dev-session")
-                .header("content-type", "application/json")
-                .body(Body::from(
-                    serde_json::json!({
-                        "token": dev_only_token,
-                        "principal_user_id": "media_dev_only",
-                        "expires_at": 4_102_444_800i64,
-                        "global_capabilities": []
-                    })
-                    .to_string(),
-                ))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(dev_only.status(), StatusCode::OK);
-    let rejected = post_media_upload(&app, Some(dev_only_token), "image/png", png.clone()).await;
+    let dev_only_token = issue_dev_session(&app, "media_dev_only", &[]).await;
+    let rejected = post_media_upload(&app, Some(&dev_only_token), "image/png", png.clone()).await;
     assert_eq!(rejected.status(), StatusCode::UNAUTHORIZED);
 
     let (expired_token, expired_principal) =
@@ -2992,13 +3007,14 @@ async fn host_setup_sequence_commits_to_setup_state(pool: sqlx::PgPool) {
         expect_ack(post_command(app.clone(), id, "host_h", command).await);
     }
 
+    let host_token = issue_dev_session(&app, "host_h", &[]).await;
     let response = app
         .clone()
         .oneshot(
             Request::builder()
                 .method("GET")
                 .uri(format!("/games/{game}/setup-state"))
-                .header("authorization", "Bearer test-command-session:host_h")
+                .header("authorization", format!("Bearer {host_token}"))
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -5635,6 +5651,7 @@ async fn profile_api_uses_enabled_accounts_and_denies_cross_account_editing(pool
 #[sqlx::test(migrations = "../projections/migrations")]
 async fn vertical_channel_thread_cold_load_is_channel_scoped_and_authorized(pool: sqlx::PgPool) {
     let game = Uuid::new_v4();
+    let game_text = game.to_string();
     sqlx::query(
         "INSERT INTO slot_occupancy (game_id, slot_id, occupant_user_id) VALUES ($1, 'slot_1', 'user_a')",
     )
@@ -5642,12 +5659,23 @@ async fn vertical_channel_thread_cold_load_is_channel_scoped_and_authorized(pool
     .execute(&pool)
     .await
     .unwrap();
+    let member_private = eventstore::encrypt_private_projection(
+        serde_json::json!({
+            "role_key": "vanilla_townie",
+            "reveals_alignment": "never"
+        }),
+        &format!(
+            "fmarch-projection-v1:private_channel_member:{game_text}:private:role_pm:slot_1:slot_1"
+        ),
+    )
+    .unwrap();
     sqlx::query(
         "INSERT INTO private_channel_member \
-         (game_id, channel_id, kind, slot_id, role_key, reveals_alignment, source) \
-         VALUES ($1, 'private:role_pm:slot_1', 'role_pm', 'slot_1', 'vanilla_townie', 'never', 'test')",
+         (game_id, channel_id, kind, slot_id, private, source) \
+         VALUES ($1, 'private:role_pm:slot_1', 'role_pm', 'slot_1', $2, 'test')",
     )
     .bind(game)
+    .bind(member_private)
     .execute(&pool)
     .await
     .unwrap();
@@ -5655,15 +5683,32 @@ async fn vertical_channel_thread_cold_load_is_channel_scoped_and_authorized(pool
         (10_i64, "main", "main thread post"),
         (11_i64, "private:role_pm:slot_1", "private role note"),
     ] {
+        let (body, body_private) = if channel_id == "main" {
+            (Some(body), None)
+        } else {
+            (
+                None,
+                Some(
+                    eventstore::encrypt_private_projection(
+                        serde_json::json!({ "body": body }),
+                        &format!(
+                            "fmarch-projection-v1:thread_view:{game_text}:{source_seq}:{channel_id}"
+                        ),
+                    )
+                    .unwrap(),
+                ),
+            )
+        };
         sqlx::query(
             "INSERT INTO thread_view \
-             (game_id, source_seq, stream_seq, channel_id, author_slot, author_user, phase_id, body, occurred_at) \
-             VALUES ($1, $2, $2, $3, 'slot_1', NULL, 'D01', $4, 1781928000)",
+             (game_id, source_seq, stream_seq, channel_id, author_slot, author_user, phase_id, body, body_private, occurred_at) \
+             VALUES ($1, $2, $2, $3, 'slot_1', NULL, 'D01', $4, $5, 1781928000)",
         )
         .bind(game)
         .bind(source_seq)
         .bind(channel_id)
         .bind(body)
+        .bind(body_private)
         .execute(&pool)
         .await
         .unwrap();
@@ -8190,7 +8235,7 @@ async fn unknown_credentials_use_one_source_scope_and_prune_stale_rows(pool: sql
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
-async fn trusted_credential_sources_partition_account_lockouts(pool: sqlx::PgPool) {
+async fn trusted_credential_sources_cannot_partition_account_lockouts(pool: sqlx::PgPool) {
     let app = api::router_with_state(
         test_api_state(pool.clone())
             .with_dev_auth(true)
@@ -8218,8 +8263,6 @@ async fn trusted_credential_sources_partition_account_lockouts(pool: sqlx::PgPoo
     for (source, expected_status) in [
         ("source-a", StatusCode::UNAUTHORIZED),
         ("source-b", StatusCode::UNAUTHORIZED),
-        ("source-a", StatusCode::UNAUTHORIZED),
-        ("source-b", StatusCode::UNAUTHORIZED),
         ("source-a", StatusCode::TOO_MANY_REQUESTS),
     ] {
         let response = post_public_auth_json(
@@ -8242,7 +8285,7 @@ async fn trusted_credential_sources_partition_account_lockouts(pool: sqlx::PgPoo
             .fetch_one(&pool)
             .await
             .unwrap();
-    assert_eq!(attempts_before_success, 4);
+    assert_eq!(attempts_before_success, 3);
     let response = post_public_auth_json(
         &app,
         "/auth/accounts/login",
@@ -8255,13 +8298,13 @@ async fn trusted_credential_sources_partition_account_lockouts(pool: sqlx::PgPoo
         Some("source-b"),
     )
     .await;
-    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
     let remaining_attempts =
         sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM auth_credential_attempt")
             .fetch_one(&pool)
             .await
             .unwrap();
-    assert_eq!(remaining_attempts, 2);
+    assert_eq!(remaining_attempts, 3);
 
     let response = post_public_auth_json(
         &app,

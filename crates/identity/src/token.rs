@@ -49,7 +49,9 @@ mod tests {
 
     #[test]
     fn jwt_shaped_bearers_are_not_app_session_tokens() {
-        assert!(!is_app_session_token("eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ1In0.sig"));
+        assert!(!is_app_session_token(
+            "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ1In0.sig"
+        ));
         assert!(!is_app_session_token("account-session-1234"));
     }
 }

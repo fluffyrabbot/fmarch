@@ -1816,6 +1816,15 @@ struct SubmitPostRequest {
     media: Vec<model::ThreadPostMedia>,
 }
 
+const MAX_GAME_POST_BODY_BYTES: usize = 50 * 1024;
+
+fn validate_game_post_body(body: &str) -> Result<(), Reject> {
+    if body.len() > MAX_GAME_POST_BODY_BYTES {
+        return Err(Reject::InvalidTarget);
+    }
+    Ok(())
+}
+
 async fn submit_post(
     tx: &mut Transaction<'_, Postgres>,
     principal: &Principal,
@@ -1840,6 +1849,7 @@ async fn submit_post(
     require_channel_post_access(game, &channel_id, &caps)?;
     require_channel_actor_can_post(tx, game, &channel_id, &actor_slot).await?;
     validate_thread_post_media(&media)?;
+    validate_game_post_body(&body)?;
     if body.trim().is_empty() {
         let policy = projections::post_policy(&mut **tx, game, &channel_id).await?;
         if media.is_empty() || !policy.allow_media_only {
@@ -1883,6 +1893,7 @@ async fn publish_spectator_post(
     require_game(tx, game).await?;
     let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
     require_game_run(tx, &caps, game, CohostPermissionClass::Narrative).await?;
+    validate_game_post_body(&body)?;
     validate_thread_post_media(&media)?;
     if body.trim().is_empty() {
         return Err(Reject::InvalidTarget);

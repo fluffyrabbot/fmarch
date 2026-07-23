@@ -1,5 +1,6 @@
 import { fail, redirect } from "@sveltejs/kit";
 import { serverApiBaseUrl } from "../../../../lib/server/api-base.mjs";
+import { authSourceHeader } from "../../../../lib/server/auth-source.mjs";
 import {
   browserSessionCookieOptions,
   SESSION_COOKIE_NAME,
@@ -124,10 +125,6 @@ function clientAuthSource(getClientAddress) {
   } catch {
     return null;
   }
-}
-
-function authSourceHeader(authSource) {
-  return authSource === null ? {} : { "x-fmarch-auth-source": authSource };
 }
 
 function optionalField(value) {

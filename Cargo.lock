@@ -80,6 +80,7 @@ dependencies = [
  "domain",
  "eventstore",
  "futures-util",
+ "hmac",
  "identity",
  "media",
  "png",
@@ -1807,6 +1808,7 @@ dependencies = [
  "caps",
  "commands",
  "eventstore",
+ "identity",
  "projections",
  "serde",
  "serde_json",
@@ -1814,6 +1816,7 @@ dependencies = [
  "sqlx",
  "tokio",
  "tower",
+ "tracing",
  "uuid",
  "wire",
 ]

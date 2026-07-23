@@ -40,20 +40,32 @@ use commands::operator_proof::{
     ProofRunArtifactState,
 };
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 use sqlx::postgres::PgPool;
-use std::{fs, path::Path as FsPath};
+use std::{fs, path::Path as FsPath, sync::Arc};
+use tokio::sync::Semaphore;
 use uuid::Uuid;
 use wire::{HostPhaseControl, RejectCode, RejectMsg, ResolutionTraceInspectionReport};
 
 #[derive(Clone)]
 pub struct OperatorApiState {
     pool: PgPool,
+    session_policy: identity::SessionPolicy,
+    projection_audit_slots: Arc<Semaphore>,
 }
 
 impl OperatorApiState {
     pub fn new(pool: PgPool) -> Self {
-        OperatorApiState { pool }
+        OperatorApiState {
+            pool,
+            session_policy: identity::SessionPolicy::from_env(),
+            projection_audit_slots: Arc::new(Semaphore::new(
+                std::env::var("FMARCH_OPERATOR_AUDIT_MAX_IN_FLIGHT")
+                    .ok()
+                    .and_then(|value| value.parse::<usize>().ok())
+                    .unwrap_or(1)
+                    .clamp(1, 8),
+            )),
+        }
     }
 }
 
@@ -761,6 +773,11 @@ async fn projection_audit(
         "principal cannot read projection rebuild audit for this game",
     )
     .await?;
+    let _permit = state
+        .projection_audit_slots
+        .clone()
+        .try_acquire_owned()
+        .map_err(|_| operator_audit_capacity_exhausted())?;
 
     Ok(Json(projections::audit_rebuild(&state.pool, game).await?))
 }
@@ -777,6 +794,11 @@ async fn projection_audit_view(
         "principal cannot read projection rebuild audit for this game",
     )
     .await?;
+    let _permit = state
+        .projection_audit_slots
+        .clone()
+        .try_acquire_owned()
+        .map_err(|_| operator_audit_capacity_exhausted())?;
 
     let report = projections::audit_rebuild(&state.pool, game).await?;
     Ok(Html(render_projection_audit_html(&report)))
@@ -875,8 +897,7 @@ async fn require_host_audit_access(
     message: &'static str,
 ) -> Result<String, ApiError> {
     let token = bearer_token(headers).ok_or_else(unauthorized_operator_session)?;
-    let (principal_user_id, global_capabilities) =
-        active_operator_session(&state.pool, token).await?;
+    let (principal_user_id, global_capabilities) = active_operator_session(state, token).await?;
     let caps = caps::resolve(
         &state.pool,
         &Principal::user(principal_user_id.as_str()),
@@ -901,22 +922,24 @@ async fn require_host_audit_access(
 }
 
 async fn active_operator_session(
-    pool: &PgPool,
+    state: &OperatorApiState,
     token: &str,
 ) -> Result<(String, Vec<String>), ApiError> {
-    sqlx::query_as::<_, (String, Vec<String>)>(
-        r#"
-        SELECT principal_user_id, global_capabilities
-        FROM auth_session
-        WHERE token_hash = $1
-          AND revoked_at IS NULL
-          AND expires_at > EXTRACT(EPOCH FROM CURRENT_TIMESTAMP)::BIGINT
-        "#,
-    )
-    .bind(hash_session_token(token))
-    .fetch_optional(pool)
-    .await?
-    .ok_or_else(unauthorized_operator_session)
+    if !identity::token::is_app_session_token(token) {
+        return Err(unauthorized_operator_session());
+    }
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs() as i64;
+    let session =
+        identity::session::validate_session(&state.pool, token, &state.session_policy, now)
+            .await
+            .map_err(|error| match error {
+                identity::IdentityFlowError::Db(error) => ApiError::Db(error),
+                _ => unauthorized_operator_session(),
+            })?;
+    Ok((session.principal_user_id, session.global_capabilities))
 }
 
 fn bearer_token(headers: &HeaderMap) -> Option<&str> {
@@ -929,16 +952,17 @@ fn bearer_token(headers: &HeaderMap) -> Option<&str> {
         .filter(|token| !token.is_empty())
 }
 
-fn hash_session_token(token: &str) -> String {
-    let digest = Sha256::digest(token.as_bytes());
-    digest.iter().map(|byte| format!("{byte:02x}")).collect()
-}
-
 fn unauthorized_operator_session() -> ApiError {
     ApiError::Reject {
         status: StatusCode::UNAUTHORIZED,
         error: RejectCode::NotAuthorized,
         message: "operator session token is missing, expired, or revoked".to_string(),
+    }
+}
+
+fn operator_audit_capacity_exhausted() -> ApiError {
+    ApiError::Unavailable {
+        message: "operator projection audit capacity is exhausted; retry shortly".to_string(),
     }
 }
 
@@ -4148,6 +4172,9 @@ pub enum ApiError {
     Projection(projections::ProjectionError),
     Capability(caps::CapError),
     Db(sqlx::Error),
+    Unavailable {
+        message: String,
+    },
     Reject {
         status: StatusCode,
         error: RejectCode,
@@ -4179,7 +4206,7 @@ impl IntoResponse for ApiError {
             ApiError::Projection(error) => projection_capacity_error(error),
             ApiError::Capability(error) => capability_capacity_error(error),
             ApiError::Db(error) => sqlx_capacity_error(error),
-            ApiError::Reject { .. } => false,
+            ApiError::Unavailable { .. } | ApiError::Reject { .. } => false,
         };
         if capacity_exhausted {
             let mut response = (
@@ -4198,22 +4225,27 @@ impl IntoResponse for ApiError {
             return response;
         }
 
+        if let ApiError::Unavailable { message } = self {
+            let mut response = (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(RejectMsg {
+                    error: RejectCode::Internal,
+                    retryable: true,
+                    message,
+                }),
+            )
+                .into_response();
+            response
+                .headers_mut()
+                .insert(RETRY_AFTER, HeaderValue::from_static("1"));
+            return response;
+        }
+
         let (status, error, message) = match self {
-            ApiError::Projection(err) => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                RejectCode::Internal,
-                err.to_string(),
-            ),
-            ApiError::Capability(err) => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                RejectCode::Internal,
-                err.to_string(),
-            ),
-            ApiError::Db(err) => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                RejectCode::Internal,
-                err.to_string(),
-            ),
+            ApiError::Projection(err) => opaque_internal_error("projection", err),
+            ApiError::Capability(err) => opaque_internal_error("capability", err),
+            ApiError::Db(err) => opaque_internal_error("database", err),
+            ApiError::Unavailable { .. } => unreachable!("handled above"),
             ApiError::Reject {
                 status,
                 error,
@@ -4230,6 +4262,19 @@ impl IntoResponse for ApiError {
         )
             .into_response()
     }
+}
+
+fn opaque_internal_error(
+    boundary: &'static str,
+    error: impl std::fmt::Display,
+) -> (StatusCode, RejectCode, String) {
+    let reference = Uuid::new_v4();
+    tracing::error!(%reference, %boundary, error = %error, "operator request failed internally");
+    (
+        StatusCode::INTERNAL_SERVER_ERROR,
+        RejectCode::Internal,
+        format!("internal request failure; reference {reference}"),
+    )
 }
 
 fn sqlx_capacity_error(error: &sqlx::Error) -> bool {
@@ -4275,6 +4320,14 @@ mod tests {
             eventstore::StoreError::Db(sqlx::Error::PoolTimedOut),
         ))
         .into_response();
+
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(response.headers()[RETRY_AFTER], "1");
+    }
+
+    #[test]
+    fn audit_admission_exhaustion_is_a_retryable_503() {
+        let response = operator_audit_capacity_exhausted().into_response();
 
         assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
         assert_eq!(response.headers()[RETRY_AFTER], "1");
