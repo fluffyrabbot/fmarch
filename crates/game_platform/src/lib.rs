@@ -881,11 +881,13 @@ pub enum DayEventEvent {
         event_id: DayEventId,
         due_at: UnixSeconds,
         observed_at: UnixSeconds,
+        source: String,
     },
     LockDue {
         event_id: DayEventId,
         due_at: UnixSeconds,
         observed_at: UnixSeconds,
+        source: String,
     },
     ParticipationSubmitted {
         event_id: DayEventId,

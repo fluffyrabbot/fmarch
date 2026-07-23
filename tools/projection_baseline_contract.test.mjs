@@ -45,8 +45,9 @@ test("checked-in projection schema preserves its baseline and append-only sequen
     "0007_security_capacity_ledgers.sql",
     "0008_day_events.sql",
     "0009_day_programs.sql",
+    "0010_day_event_schedules.sql",
   ]);
-  assert.equal(report.migration_file_count, 9);
+  assert.equal(report.migration_file_count, 10);
   assert.ok(report.statement_count > 100);
 });
 

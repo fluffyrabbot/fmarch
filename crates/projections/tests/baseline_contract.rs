@@ -271,6 +271,8 @@ const EXPECTED_CONSTRAINTS: &[&str] = &[
     "community_subscription_read_through_seq_check:c",
     "community_subscription_target_kind_check:c",
     "day_event_definition_check:c",
+    "day_event_lock_observation_check:c",
+    "day_event_open_observation_check:c",
     "day_event_participation_event_fkey:f",
     "day_event_participation_payload_check:c",
     "day_event_participation_pkey:p",

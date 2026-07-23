@@ -83,6 +83,33 @@
     return `${value?.state ?? ""}:${value?.message ?? ""}:${value?.loginPath ?? ""}`;
   }
 
+  function schedulePreviewLabel(preview) {
+    if (!preview) return "Schedule preview unavailable";
+    if (preview.mode === "host_opened") return "Host opens manually";
+    if (preview.mode === "absolute") {
+      const lock =
+        preview.lockAt === null ? "" : `; locks ${formatUnixSeconds(preview.lockAt)}`;
+      return `Opens ${formatUnixSeconds(preview.openAt)}${lock}`;
+    }
+    if (preview.mode === "relative_to_phase") {
+      const lock =
+        preview.lockOffset === null ? "" : `; locks +${preview.lockOffset}s`;
+      return `Opens ${preview.phaseId} +${preview.openOffset}s${lock}`;
+    }
+    if (preview.mode === "on_trigger") {
+      const kind = String(preview.trigger?.kind ?? "trigger").replaceAll("_", " ");
+      const phase = preview.trigger?.phase_id ? `${preview.trigger.phase_id} ` : "";
+      return `Opens when ${phase}${kind} fires`;
+    }
+    return preview.mode;
+  }
+
+  function formatUnixSeconds(value) {
+    return Number.isFinite(value)
+      ? new Date(value * 1000).toISOString().replace(".000Z", "Z")
+      : "an invalid time";
+  }
+
   async function handleSetupSubmit(event, actionId) {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
@@ -421,6 +448,7 @@
                           <li>
                             <span>{event.id}</span>
                             <strong>{event.template_key}</strong>
+                            <small>{schedulePreviewLabel(option.schedulePreviews.find((preview) => preview.eventId === event.id))}</small>
                           </li>
                         {/each}
                       </ul>

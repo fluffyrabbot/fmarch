@@ -3100,6 +3100,9 @@ async fn host_setup_sequence_commits_to_setup_state(pool: sqlx::PgPool) {
             && option.content_hash == bakery_program.content_hash().unwrap().as_str()
             && option.compatibility.attachable
             && option.compatibility.issues.is_empty()
+            && option.schedule_previews.len() == 1
+            && option.schedule_previews[0].event_id == "bakery-cookie-d1"
+            && option.schedule_previews[0].mode == "host_opened"
     }));
     assert_eq!(setup.attached_programs.len(), 1);
     assert_eq!(setup.attached_programs[0].program_id, "bakery");

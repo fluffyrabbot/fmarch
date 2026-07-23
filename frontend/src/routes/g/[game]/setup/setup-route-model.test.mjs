@@ -176,6 +176,18 @@ test("host setup preserves pack-derived program compatibility diagnostics", () =
               },
             ],
           },
+          schedule_previews: [
+            {
+              event_id: "bakery-cookie-d1",
+              mode: "relative_to_phase",
+              phase_id: "D01",
+              open_at: null,
+              open_offset: 900,
+              lock_at: null,
+              lock_offset: 3600,
+              trigger: null,
+            },
+          ],
           document: {
             id: "bakery",
             version: 1,
@@ -198,6 +210,18 @@ test("host setup preserves pack-derived program compatibility diagnostics", () =
       code: "undeclared_persistent_effect",
       eventId: "bakery-cookie-d1",
       message: "effect `bomb` is not declared by pack `default_open`",
+    },
+  ]);
+  assert.deepEqual(setupState.programCatalog[0].schedulePreviews, [
+    {
+      eventId: "bakery-cookie-d1",
+      mode: "relative_to_phase",
+      phaseId: "D01",
+      openAt: null,
+      openOffset: 900,
+      lockAt: null,
+      lockOffset: 3600,
+      trigger: null,
     },
   ]);
 });

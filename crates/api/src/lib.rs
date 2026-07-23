@@ -7910,6 +7910,10 @@ mod tests {
             phase_id: Some("D01".to_string()),
             opened_at: Some(1),
             locked_at: Some(2),
+            open_due_at: None,
+            open_observed_at: None,
+            lock_due_at: None,
+            lock_observed_at: None,
             cancelled_reason: None,
             decision: None,
             winner_slots: Vec::new(),
@@ -8059,6 +8063,7 @@ pub struct HostSetupProgramOption {
     pub document: game_platform::DayProgram,
     pub content_hash: String,
     pub compatibility: HostSetupProgramCompatibility,
+    pub schedule_previews: Vec<HostSetupProgramSchedulePreview>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -8072,6 +8077,18 @@ pub struct HostSetupProgramCompatibilityIssue {
     pub code: String,
     pub event_id: Option<String>,
     pub message: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HostSetupProgramSchedulePreview {
+    pub event_id: String,
+    pub mode: String,
+    pub phase_id: Option<String>,
+    pub open_at: Option<i64>,
+    pub open_offset: Option<i64>,
+    pub lock_at: Option<i64>,
+    pub lock_offset: Option<i64>,
+    pub trigger: Option<game_platform::ProgramTrigger>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -8747,7 +8764,7 @@ fn product_day_program_catalog(
                 message: format!("decode day program {}: {err}", path.display()),
             })?;
         let compatibility = commands::day_program::inspect(pack, &document);
-        let content_hash = compatibility
+        let compilation = compatibility
             .compilation
             .as_ref()
             .ok_or_else(|| ApiError::Reject {
@@ -8758,9 +8775,59 @@ fn product_day_program_catalog(
                     path.display(),
                     compatibility.summary()
                 ),
-            })?
-            .content_hash
-            .to_string();
+            })?;
+        let content_hash = compilation.content_hash.to_string();
+        let schedule_previews = compilation
+            .events
+            .iter()
+            .map(|event| {
+                let schedule = commands::day_schedule::compile(&event.schedule);
+                let mut preview = HostSetupProgramSchedulePreview {
+                    event_id: event.id.as_str().to_string(),
+                    mode: String::new(),
+                    phase_id: None,
+                    open_at: None,
+                    open_offset: None,
+                    lock_at: None,
+                    lock_offset: None,
+                    trigger: None,
+                };
+                match schedule.opening {
+                    commands::day_schedule::ScheduleOpening::Manual => {
+                        preview.mode = "host_opened".to_string();
+                    }
+                    commands::day_schedule::ScheduleOpening::Absolute { open_at } => {
+                        preview.mode = "absolute".to_string();
+                        preview.open_at = Some(open_at);
+                    }
+                    commands::day_schedule::ScheduleOpening::RelativeToPhase {
+                        phase_id,
+                        open_offset,
+                    } => {
+                        preview.mode = "relative_to_phase".to_string();
+                        preview.phase_id = Some(phase_id);
+                        preview.open_offset = Some(open_offset);
+                    }
+                    commands::day_schedule::ScheduleOpening::OnTrigger { trigger } => {
+                        preview.mode = "on_trigger".to_string();
+                        preview.trigger = Some(trigger);
+                    }
+                }
+                match schedule.lock {
+                    Some(commands::day_schedule::ScheduleLock::Absolute { lock_at }) => {
+                        preview.lock_at = Some(lock_at);
+                    }
+                    Some(commands::day_schedule::ScheduleLock::RelativeToPhase {
+                        lock_offset,
+                        ..
+                    }) => {
+                        preview.lock_offset = Some(lock_offset);
+                    }
+                    None => {}
+                }
+                preview
+            })
+            .collect();
         let compatibility = HostSetupProgramCompatibility {
             attachable: compatibility.attachable(),
             issues: compatibility
@@ -8777,6 +8844,7 @@ fn product_day_program_catalog(
             document,
             content_hash,
             compatibility,
+            schedule_previews,
         });
     }
     programs.sort_by(|left, right| {
@@ -8826,6 +8894,9 @@ mod day_program_catalog_tests {
                 bakery.compatibility.issues
             );
             assert_eq!(bakery.compatibility.issues.is_empty(), expected_attachable);
+            assert_eq!(bakery.schedule_previews.len(), 1);
+            assert_eq!(bakery.schedule_previews[0].event_id, "bakery-cookie-d1");
+            assert_eq!(bakery.schedule_previews[0].mode, "host_opened");
         }
     }
 }
@@ -9791,6 +9862,7 @@ fn command_game(command: &wire::Command) -> Option<Uuid> {
         | wire::Command::OpenDayEvent { game, .. }
         | wire::Command::LockDayEvent { game, .. }
         | wire::Command::CancelDayEvent { game, .. }
+        | wire::Command::ObserveDayEventSchedules { game, .. }
         | wire::Command::SubmitDayEventParticipation { game, .. }
         | wire::Command::WithdrawDayEventParticipation { game, .. }
         | wire::Command::ResolveDayEvent { game, .. }
@@ -9824,6 +9896,7 @@ fn command_affects_host_console(command: &wire::Command) -> bool {
             | wire::Command::OpenDayEvent { .. }
             | wire::Command::LockDayEvent { .. }
             | wire::Command::CancelDayEvent { .. }
+            | wire::Command::ObserveDayEventSchedules { .. }
             | wire::Command::SubmitDayEventParticipation { .. }
             | wire::Command::WithdrawDayEventParticipation { .. }
             | wire::Command::ResolveDayEvent { .. }
@@ -9887,6 +9960,7 @@ fn command_affects_player_command_state(command: &wire::Command) -> bool {
             | wire::Command::OpenDayEvent { .. }
             | wire::Command::LockDayEvent { .. }
             | wire::Command::CancelDayEvent { .. }
+            | wire::Command::ObserveDayEventSchedules { .. }
             | wire::Command::SubmitDayEventParticipation { .. }
             | wire::Command::WithdrawDayEventParticipation { .. }
             | wire::Command::ResolveDayEvent { .. }

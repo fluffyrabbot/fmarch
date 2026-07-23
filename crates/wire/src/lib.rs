@@ -360,6 +360,10 @@ pub enum Command {
         event_id: game_platform::DayEventId,
         reason: String,
     },
+    ObserveDayEventSchedules {
+        game: Uuid,
+        observed_at: i64,
+    },
     SubmitDayEventParticipation {
         game: Uuid,
         event_id: game_platform::DayEventId,
@@ -540,6 +544,9 @@ impl From<Command> for commands::Command {
                 event_id,
                 reason,
             },
+            Command::ObserveDayEventSchedules { game, observed_at } => {
+                commands::Command::ObserveDayEventSchedules { game, observed_at }
+            }
             Command::SubmitDayEventParticipation {
                 game,
                 event_id,

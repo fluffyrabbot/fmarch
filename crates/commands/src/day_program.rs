@@ -6,18 +6,16 @@
 
 use domain::{pack::WeightPolicy, EffectDuration, Pack};
 use game_platform::{
-    DayEvent, DayEventSchedule, DayEventState, DayProgram, EffectOperationTemplate, GrantKind,
-    GrantSpec, ParticipantFilter, ParticipationMode, PhaseScope, ProgramContentHash,
+    DayEvent, DayEventState, DayProgram, EffectOperationTemplate, GrantKind, GrantSpec,
+    ParticipantFilter, ParticipationMode, ProgramContentHash,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CompatibilityIssueCode {
     InvalidDocument,
     InvalidInitialState,
-    UnsupportedSchedule,
     UnsupportedParticipationMode,
     UnsupportedParticipantFilter,
-    UnsupportedPhaseScope,
     UndeclaredPersistentEffect,
     ResolutionScopedEffect,
     UndeclaredItemGrant,
@@ -30,10 +28,8 @@ impl CompatibilityIssueCode {
         match self {
             Self::InvalidDocument => "invalid_document",
             Self::InvalidInitialState => "invalid_initial_state",
-            Self::UnsupportedSchedule => "unsupported_schedule",
             Self::UnsupportedParticipationMode => "unsupported_participation_mode",
             Self::UnsupportedParticipantFilter => "unsupported_participant_filter",
-            Self::UnsupportedPhaseScope => "unsupported_phase_scope",
             Self::UndeclaredPersistentEffect => "undeclared_persistent_effect",
             Self::ResolutionScopedEffect => "resolution_scoped_effect",
             Self::UndeclaredItemGrant => "undeclared_item_grant",
@@ -159,13 +155,6 @@ pub fn inspect_event(pack: &Pack, event: &DayEvent) -> Vec<CompatibilityIssue> {
             "materialized definitions must begin in scheduled state",
         ));
     }
-    if !matches!(event.schedule, DayEventSchedule::HostOpened) {
-        issues.push(CompatibilityIssue::event(
-            CompatibilityIssueCode::UnsupportedSchedule,
-            event,
-            "only host-opened schedules are currently executable",
-        ));
-    }
     if event.participation.mode != ParticipationMode::OptIn {
         issues.push(CompatibilityIssue::event(
             CompatibilityIssueCode::UnsupportedParticipationMode,
@@ -181,13 +170,6 @@ pub fn inspect_event(pack: &Pack, event: &DayEvent) -> Vec<CompatibilityIssue> {
             CompatibilityIssueCode::UnsupportedParticipantFilter,
             event,
             "only alive-slots or all-occupied participant filters are currently executable",
-        ));
-    }
-    if matches!(event.phase_scope, PhaseScope::ExplicitWindow { .. }) {
-        issues.push(CompatibilityIssue::event(
-            CompatibilityIssueCode::UnsupportedPhaseScope,
-            event,
-            "explicit event windows require the scheduling slice",
         ));
     }
     for reward in &event.rewards {
@@ -348,11 +330,7 @@ mod tests {
         let pack = domain::load_pack_from_json(PRODUCT_PACKS[1].1).unwrap();
         let mut program: DayProgram =
             serde_json::from_str(include_str!("../../../programs/bakery.json")).unwrap();
-        program.events[0].schedule = DayEventSchedule::OnTrigger {
-            trigger: game_platform::ProgramTrigger::PhaseOpened {
-                phase_id: game_platform::PhaseId::new("D01").unwrap(),
-            },
-        };
+        program.events[0].participation.who = ParticipantFilter::HostInvited;
 
         let report = inspect(&pack, &program);
         assert!(!report.attachable());
@@ -360,7 +338,7 @@ mod tests {
         assert!(report
             .issues
             .iter()
-            .any(|issue| issue.code == CompatibilityIssueCode::UnsupportedSchedule));
+            .any(|issue| issue.code == CompatibilityIssueCode::UnsupportedParticipantFilter));
         assert!(report
             .issues
             .iter()

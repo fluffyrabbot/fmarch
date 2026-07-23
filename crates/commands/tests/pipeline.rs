@@ -5106,6 +5106,247 @@ async fn incompatible_day_program_rejects_before_any_program_fact(pool: PgPool) 
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+async fn absolute_day_event_schedule_records_due_evidence_once_at_boundaries(pool: PgPool) {
+    let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
+    let event_id = game_platform::DayEventId::new("event-absolute").unwrap();
+    let mut event = minimal_day_event(event_id.as_str(), "bomb");
+    event.participation.limits.minimum = 0;
+    event.schedule = game_platform::DayEventSchedule::Absolute {
+        open_at: game_platform::UnixSeconds::new(100),
+        lock_at: Some(game_platform::UnixSeconds::new(200)),
+    };
+    handle(
+        &pool,
+        &user("host_h"),
+        Command::ScheduleDayEvent { game, event },
+    )
+    .await
+    .unwrap();
+
+    let early = handle(
+        &pool,
+        &user("host_h"),
+        Command::ObserveDayEventSchedules {
+            game,
+            observed_at: 99,
+        },
+    )
+    .await
+    .unwrap();
+    assert!(early.stream_seqs.is_empty());
+
+    let opened = handle(
+        &pool,
+        &user("host_h"),
+        Command::ObserveDayEventSchedules {
+            game,
+            observed_at: 100,
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(opened.stream_seqs.len(), 2);
+    let row = day_events(&pool, game).await.unwrap().remove(0);
+    assert_eq!(row.state, "open");
+    assert_eq!(row.open_due_at, Some(100));
+    assert_eq!(row.open_observed_at, Some(100));
+    assert_eq!(row.opened_at, Some(100));
+
+    let duplicate_open = handle(
+        &pool,
+        &user("host_h"),
+        Command::ObserveDayEventSchedules {
+            game,
+            observed_at: 150,
+        },
+    )
+    .await
+    .unwrap();
+    assert!(duplicate_open.stream_seqs.is_empty());
+
+    let locked = handle(
+        &pool,
+        &user("host_h"),
+        Command::ObserveDayEventSchedules {
+            game,
+            observed_at: 225,
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(locked.stream_seqs.len(), 2);
+    let row = day_events(&pool, game).await.unwrap().remove(0);
+    assert_eq!(row.state, "locked");
+    assert_eq!(row.lock_due_at, Some(200));
+    assert_eq!(row.lock_observed_at, Some(225));
+    assert_eq!(row.locked_at, Some(225));
+
+    let duplicate_lock = handle(
+        &pool,
+        &user("host_h"),
+        Command::ObserveDayEventSchedules {
+            game,
+            observed_at: 300,
+        },
+    )
+    .await
+    .unwrap();
+    assert!(duplicate_lock.stream_seqs.is_empty());
+    let evidence = sqlx::query_as::<_, (String, serde_json::Value, serde_json::Value)>(
+        "SELECT kind, payload, actor FROM events WHERE stream_id = $1 \
+         AND kind IN ('DayEventOpenDue', 'DayEventLockDue') ORDER BY stream_seq",
+    )
+    .bind(game)
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(evidence.len(), 2);
+    assert_eq!(evidence[0].0, "DayEventOpenDue");
+    assert_eq!(evidence[0].1["source"], "absolute");
+    assert_eq!(evidence[1].0, "DayEventLockDue");
+    assert!(evidence
+        .iter()
+        .all(|(_, _, actor)| actor["type"] == "System"));
+    assert!(audit_rebuild(&pool, game).await.unwrap().ok);
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn relative_day_event_schedule_uses_explicit_phase_open_clock(pool: PgPool) {
+    let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
+    let phase = phase_state(&pool, game).await.unwrap().unwrap();
+    let phase_opened_at = phase
+        .phase_opened_at
+        .expect("new phase facts carry an explicit wall-clock anchor");
+    let event_id = game_platform::DayEventId::new("event-relative").unwrap();
+    let mut event = minimal_day_event(event_id.as_str(), "bomb");
+    event.participation.limits.minimum = 0;
+    event.schedule = game_platform::DayEventSchedule::RelativeToPhase {
+        phase_id: game_platform::PhaseId::new("D01").unwrap(),
+        open_offset: game_platform::DurationSeconds::new(10).unwrap(),
+        lock_offset: Some(game_platform::DurationSeconds::new(20).unwrap()),
+    };
+    handle(
+        &pool,
+        &user("host_h"),
+        Command::ScheduleDayEvent { game, event },
+    )
+    .await
+    .unwrap();
+
+    assert!(handle(
+        &pool,
+        &user("host_h"),
+        Command::ObserveDayEventSchedules {
+            game,
+            observed_at: phase_opened_at + 9,
+        },
+    )
+    .await
+    .unwrap()
+    .stream_seqs
+    .is_empty());
+    handle(
+        &pool,
+        &user("host_h"),
+        Command::ObserveDayEventSchedules {
+            game,
+            observed_at: phase_opened_at + 10,
+        },
+    )
+    .await
+    .unwrap();
+    handle(
+        &pool,
+        &user("host_h"),
+        Command::ObserveDayEventSchedules {
+            game,
+            observed_at: phase_opened_at + 20,
+        },
+    )
+    .await
+    .unwrap();
+    let row = day_events(&pool, game).await.unwrap().remove(0);
+    assert_eq!(row.state, "locked");
+    assert_eq!(row.open_due_at, Some(phase_opened_at + 10));
+    assert_eq!(row.lock_due_at, Some(phase_opened_at + 20));
+    assert!(audit_rebuild(&pool, game).await.unwrap().ok);
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn phase_trigger_observation_and_manual_cancellation_have_stable_precedence(pool: PgPool) {
+    let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
+    let triggered_id = game_platform::DayEventId::new("event-triggered").unwrap();
+    let mut triggered = minimal_day_event(triggered_id.as_str(), "bomb");
+    triggered.schedule = game_platform::DayEventSchedule::OnTrigger {
+        trigger: game_platform::ProgramTrigger::PhaseResolved {
+            phase_id: game_platform::PhaseId::new("D01").unwrap(),
+        },
+    };
+    handle(
+        &pool,
+        &user("host_h"),
+        Command::ScheduleDayEvent {
+            game,
+            event: triggered,
+        },
+    )
+    .await
+    .unwrap();
+
+    handle(
+        &pool,
+        &user("host_h"),
+        Command::ResolvePhase { game, seed: 7 },
+    )
+    .await
+    .unwrap();
+    let opened = handle(
+        &pool,
+        &user("host_h"),
+        Command::ObserveDayEventSchedules {
+            game,
+            observed_at: 1_000,
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(opened.stream_seqs.len(), 2);
+    let triggered = day_events(&pool, game).await.unwrap().remove(0);
+    assert_eq!(triggered.state, "open");
+    assert_eq!(triggered.open_due_at, Some(1_000));
+
+    handle(
+        &pool,
+        &user("host_h"),
+        Command::CancelDayEvent {
+            game,
+            event_id: triggered_id,
+            reason: "host superseded automation".into(),
+        },
+    )
+    .await
+    .unwrap();
+    let after_cancel = handle(
+        &pool,
+        &user("host_h"),
+        Command::ObserveDayEventSchedules {
+            game,
+            observed_at: 2_000,
+        },
+    )
+    .await
+    .unwrap();
+    assert!(after_cancel.stream_seqs.is_empty());
+    let cancelled = day_events(&pool, game).await.unwrap().remove(0);
+    assert_eq!(cancelled.state, "cancelled");
+    assert_eq!(
+        cancelled.cancelled_reason.as_deref(),
+        Some("host superseded automation")
+    );
+    assert!(audit_rebuild(&pool, game).await.unwrap().ok);
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
 async fn day_event_vertical_is_typed_atomic_rebuildable_and_engine_visible(pool: PgPool) {
     let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
     let event_id = game_platform::DayEventId::new("event-cookie").unwrap();

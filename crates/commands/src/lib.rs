@@ -45,6 +45,7 @@ use sqlx::{postgres::PgPool, Postgres, Row, Transaction};
 use uuid::Uuid;
 
 pub mod day_program;
+pub mod day_schedule;
 mod model;
 pub mod operator_process;
 pub mod operator_proof;
@@ -358,6 +359,7 @@ struct RebuiltResolutionEnvelope {
 #[derive(Debug, serde::Serialize)]
 struct HostPromptPhaseControlPayload {
     phase_id: String,
+    phase_opened_at: i64,
     source_prompt_id: String,
     source_phase_id: String,
     reason: &'static str,
@@ -796,6 +798,9 @@ async fn handle_command(
             event_id,
             reason,
         } => cancel_day_event(tx, principal, game, event_id, reason).await,
+        Command::ObserveDayEventSchedules { game, observed_at } => {
+            observe_day_event_schedules(tx, principal, game, observed_at).await
+        }
         Command::SubmitDayEventParticipation {
             game,
             event_id,
@@ -997,6 +1002,9 @@ fn command_audit_shape(command: &Command) -> (&'static str, CommandAuditAuthorit
         Command::OpenDayEvent { .. } => ("OpenDayEvent", CommandAuditAuthority::HostTeam),
         Command::LockDayEvent { .. } => ("LockDayEvent", CommandAuditAuthority::HostTeam),
         Command::CancelDayEvent { .. } => ("CancelDayEvent", CommandAuditAuthority::HostTeam),
+        Command::ObserveDayEventSchedules { .. } => {
+            ("ObserveDayEventSchedules", CommandAuditAuthority::HostTeam)
+        }
         Command::SubmitDayEventParticipation { actor_slot, .. } => (
             "SubmitDayEventParticipation",
             CommandAuditAuthority::SlotOccupant(actor_slot),
@@ -1044,6 +1052,7 @@ fn command_game(command: &Command) -> Uuid {
         | Command::OpenDayEvent { game, .. }
         | Command::LockDayEvent { game, .. }
         | Command::CancelDayEvent { game, .. }
+        | Command::ObserveDayEventSchedules { game, .. }
         | Command::SubmitDayEventParticipation { game, .. }
         | Command::WithdrawDayEventParticipation { game, .. }
         | Command::ResolveDayEvent { game, .. }
@@ -1087,6 +1096,7 @@ fn game_closed_by_completion(command: &Command) -> Option<Uuid> {
         | Command::OpenDayEvent { game, .. }
         | Command::LockDayEvent { game, .. }
         | Command::CancelDayEvent { game, .. }
+        | Command::ObserveDayEventSchedules { game, .. }
         | Command::SubmitDayEventParticipation { game, .. }
         | Command::WithdrawDayEventParticipation { game, .. }
         | Command::ResolveDayEvent { game, .. }
@@ -1309,6 +1319,7 @@ async fn host_phase_lifecycle(
     let pack_name = pack_name_from_stream(&stream)?;
     let pack = load_pack(&pack_name)?;
     validate_pack_phase_id(&pack, &phase)?;
+    let phase_opened_at = unix_seconds_now()?;
 
     persist(
         tx,
@@ -1316,7 +1327,10 @@ async fn host_phase_lifecycle(
         &[EventInput::new(
             kind,
             1,
-            serde_json::json!({ "phase_id": phase }),
+            serde_json::json!({
+                "phase_id": phase,
+                "phase_opened_at": phase_opened_at,
+            }),
             ActorId::Host,
             0,
         )],
@@ -1401,11 +1415,15 @@ async fn start_game(
     let pack_name = pack_name_from_stream(&stream)?;
     let pack = load_pack(&pack_name)?;
     validate_pack_phase_id(&pack, &phase)?;
+    let phase_opened_at = unix_seconds_now()?;
 
     let mut events = vec![EventInput::new(
         "GameStarted",
         1,
-        serde_json::json!({ "phase_id": phase }),
+        serde_json::json!({
+            "phase_id": phase,
+            "phase_opened_at": phase_opened_at,
+        }),
         ActorId::Host,
         0,
     )];
@@ -1428,10 +1446,12 @@ async fn advance_phase(
     let pack_name = pack_name_from_stream(&stream)?;
     let pack = load_pack(&pack_name)?;
     let next_phase_id = next_declared_phase_id(&pack.phases, &source_phase_id)?;
+    let phase_opened_at = unix_seconds_now()?;
     let payload = serde_json::json!({
         "phase_id": next_phase_id,
         "source_phase_id": source_phase_id,
         "reason": "resolved_phase",
+        "phase_opened_at": phase_opened_at,
     });
     persist(
         tx,
@@ -1495,6 +1515,7 @@ async fn advance_phase_by_deadline(
             "source_event_kind": "PhaseDeadlineElapsed",
             "source_deadline_at": deadline_at,
             "observed_at": observed_at,
+            "phase_opened_at": observed_at,
         }),
         ActorId::System,
         observed_at,
@@ -2047,6 +2068,168 @@ async fn cancel_day_event(
         )],
     )
     .await
+}
+
+async fn observe_day_event_schedules(
+    tx: &mut Transaction<'_, Postgres>,
+    principal: &Principal,
+    game: Uuid,
+    observed_at: i64,
+) -> Result<Ack, Reject> {
+    require_game(tx, game).await?;
+    let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
+    require_game_run(tx, &caps, game, CohostPermissionClass::DayEventOps).await?;
+    let phase = projections::phase_state(&mut **tx, game)
+        .await?
+        .ok_or_else(|| day_event_reject("schedule observation requires an active phase"))?;
+    let stream = eventstore::load_stream_in_tx(tx, game)
+        .await
+        .map_err(|error| Reject::Internal(error.to_string()))?;
+    let timeline = day_schedule_timeline(&stream);
+    let current_day_number = match phase_kind(&phase.phase_id)? {
+        domain::pack::PhaseKind::Day => Some(phase_number(&phase.phase_id)?),
+        _ => None,
+    };
+    let context = day_schedule::ScheduleContext {
+        observed_at,
+        current_phase_id: phase.phase_id.clone(),
+        current_day_number,
+        timeline,
+    };
+
+    let mut facts = Vec::new();
+    for row in projections::day_events(&mut **tx, game).await? {
+        let state = day_event_state(&row.state)?;
+        for intent in day_schedule::evaluate(&row.definition, state, &context) {
+            match intent.kind {
+                day_schedule::ScheduleIntentKind::Open => {
+                    if row.open_observed_at.is_none() {
+                        facts.push(EventInput::new(
+                            "DayEventOpenDue",
+                            1,
+                            serde_json::json!({
+                                "event_id": row.event_id,
+                                "due_at": intent.due_at,
+                                "observed_at": observed_at,
+                                "source": intent.source,
+                            }),
+                            ActorId::System,
+                            observed_at,
+                        ));
+                    }
+                    facts.push(EventInput::new(
+                        "DayEventOpened",
+                        1,
+                        serde_json::json!({
+                            "event_id": row.event_id,
+                            "phase_id": phase.phase_id,
+                            "opened_at": observed_at,
+                            "source": "scheduler",
+                        }),
+                        ActorId::System,
+                        observed_at,
+                    ));
+                }
+                day_schedule::ScheduleIntentKind::Lock => {
+                    if row.lock_observed_at.is_none() {
+                        facts.push(EventInput::new(
+                            "DayEventLockDue",
+                            1,
+                            serde_json::json!({
+                                "event_id": row.event_id,
+                                "due_at": intent.due_at,
+                                "observed_at": observed_at,
+                                "source": intent.source,
+                            }),
+                            ActorId::System,
+                            observed_at,
+                        ));
+                    }
+                    facts.push(EventInput::new(
+                        "DayEventLocked",
+                        1,
+                        serde_json::json!({
+                            "event_id": row.event_id,
+                            "locked_at": observed_at,
+                            "source": "scheduler",
+                        }),
+                        ActorId::System,
+                        observed_at,
+                    ));
+                }
+            }
+        }
+    }
+    if facts.is_empty() {
+        Ok(Ack {
+            stream_seqs: Vec::new(),
+        })
+    } else {
+        persist(tx, game, &facts).await
+    }
+}
+
+fn day_schedule_timeline(stream: &[eventstore::StoredEvent]) -> day_schedule::ScheduleTimeline {
+    let mut timeline = day_schedule::ScheduleTimeline::default();
+    let mut current_phase_id: Option<String> = None;
+    for event in stream {
+        match event.kind.as_str() {
+            "GameStarted" | "PhaseAdvanced" => {
+                let Some(phase_id) = event.payload["phase_id"].as_str() else {
+                    continue;
+                };
+                current_phase_id = Some(phase_id.to_string());
+                timeline.phase_signals.insert(day_schedule::PhaseSignal {
+                    kind: day_schedule::PhaseSignalKind::Opened,
+                    phase_id: phase_id.to_string(),
+                });
+                if let Some(opened_at) = event.payload["phase_opened_at"].as_i64() {
+                    timeline
+                        .phase_opened_at
+                        .insert(phase_id.to_string(), opened_at);
+                }
+            }
+            "ThreadLocked" => {
+                let phase_id = event.payload["phase_id"]
+                    .as_str()
+                    .map(str::to_string)
+                    .or_else(|| current_phase_id.clone());
+                if let Some(phase_id) = phase_id {
+                    timeline.phase_signals.insert(day_schedule::PhaseSignal {
+                        kind: day_schedule::PhaseSignalKind::Locked,
+                        phase_id,
+                    });
+                }
+            }
+            "ResolutionApplied"
+                if event.payload["run_id"]
+                    .as_str()
+                    .is_some_and(|run_id| run_id.starts_with("resolution:")) =>
+            {
+                if let Some(phase_id) = event.payload["phase_id"].as_str() {
+                    timeline.phase_signals.insert(day_schedule::PhaseSignal {
+                        kind: day_schedule::PhaseSignalKind::Resolved,
+                        phase_id: phase_id.to_string(),
+                    });
+                }
+            }
+            _ => {}
+        }
+    }
+    timeline
+}
+
+fn day_event_state(state: &str) -> Result<game_platform::DayEventState, Reject> {
+    match state {
+        "scheduled" => Ok(game_platform::DayEventState::Scheduled),
+        "open" => Ok(game_platform::DayEventState::Open),
+        "locked" => Ok(game_platform::DayEventState::Locked),
+        "resolved" => Ok(game_platform::DayEventState::Resolved),
+        "cancelled" => Ok(game_platform::DayEventState::Cancelled),
+        other => Err(Reject::Internal(format!(
+            "unknown projected DayEvent state `{other}`"
+        ))),
+    }
 }
 
 async fn submit_day_event_participation(
@@ -4197,6 +4380,7 @@ async fn resolve_host_prompt(
         &stream,
     )?;
     let public_resolution = host_prompt_public_resolution(&prompt, &effect);
+    let phase_opened_at = unix_seconds_now()?;
     let resolved_ev = EventInput::new(
         "HostPromptResolved",
         1,
@@ -4258,6 +4442,7 @@ async fn resolve_host_prompt(
                 reason,
                 skipped_phase_id,
                 next_seq + 1,
+                phase_opened_at,
             ));
         }
         HostPromptEffect::AcknowledgeOnly => {}
@@ -4401,9 +4586,11 @@ fn phase_advanced_from_prompt(
     reason: &'static str,
     skipped_phase_id: Option<String>,
     occurred_at: i64,
+    phase_opened_at: i64,
 ) -> EventInput {
     let payload = serde_json::to_value(HostPromptPhaseControlPayload {
         phase_id,
+        phase_opened_at,
         source_prompt_id: prompt.prompt_id.clone(),
         source_phase_id: prompt.phase_id.clone(),
         reason,

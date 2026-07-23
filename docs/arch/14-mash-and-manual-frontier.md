@@ -323,7 +323,18 @@ stateDiagram-v2
 2. In one transaction it appends inert evidence (`DayEventOpenDue` / `DayEventLockDue`) and the corresponding `DayEventOpened` / `DayEventLocked` transition.
 3. Projection folds **must not** call wall-clock APIs; they only read captured fields.
 
-**RelativeToPhase base:** a future phase event/projection field `phase_opened_at: UnixSeconds`. Existing `PhaseAdvanced.occurred_at` values are logical/legacy data and are not a wall-clock base. Relative schedules do not ship until the phase-open instant is explicit. Until a **scheduler principal** exists, open/lock-by-due remain host-gated like today’s `AdvancePhaseByDeadline`.
+**RelativeToPhase base:** `GameStarted` / `PhaseAdvanced` capture
+`phase_opened_at: UnixSeconds`, and `phase_state.phase_opened_at` projects that
+value. Existing `occurred_at` values remain logical data and are never used as
+the wall-clock base. Legacy/imported phase facts without the explicit field
+leave relative schedules inert. Until a **scheduler principal** exists,
+`ObserveDayEventSchedules` remains host-gated like
+`AdvancePhaseByDeadline`.
+
+Repeated observations are idempotent: committed due evidence and the projected
+DayEvent state suppress duplicate facts. Manual cancellation is terminal and
+takes precedence over every later clock or trigger observation; concurrent
+commands serialize on the game stream.
 
 Default product posture for mash: **12h day / 12h night** phase cadence, with zero or more DayEvents scheduled inside each day window.
 

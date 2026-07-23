@@ -151,6 +151,28 @@ export function normalizeHostSetupState(raw, { game }) {
               ),
             ),
           }),
+          schedulePreviews: Object.freeze(
+            (Array.isArray(option.schedule_previews) ? option.schedule_previews : []).map(
+              (preview) =>
+                Object.freeze({
+                  eventId: normalizeId(
+                    preview.event_id,
+                    "program_catalog.schedule_preview.event_id",
+                  ),
+                  mode: normalizeId(preview.mode, "program_catalog.schedule_preview.mode"),
+                  phaseId: normalizeOptionalText(preview.phase_id),
+                  openAt: Number.isFinite(preview.open_at) ? Number(preview.open_at) : null,
+                  openOffset: Number.isFinite(preview.open_offset)
+                    ? Number(preview.open_offset)
+                    : null,
+                  lockAt: Number.isFinite(preview.lock_at) ? Number(preview.lock_at) : null,
+                  lockOffset: Number.isFinite(preview.lock_offset)
+                    ? Number(preview.lock_offset)
+                    : null,
+                  trigger: preview.trigger ? deepFreeze(structuredCloneValue(preview.trigger)) : null,
+                }),
+            ),
+          ),
           document: deepFreeze(document),
         });
       }),
@@ -322,6 +344,18 @@ function hostSetupFixtureState({ game }) {
           attachable: true,
           issues: Object.freeze([]),
         }),
+        schedule_previews: Object.freeze([
+          Object.freeze({
+            event_id: "bakery-cookie-d1",
+            mode: "host_opened",
+            phase_id: null,
+            open_at: null,
+            open_offset: null,
+            lock_at: null,
+            lock_offset: null,
+            trigger: null,
+          }),
+        ]),
         document: Object.freeze({
           id: "bakery",
           version: 1,

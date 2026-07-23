@@ -316,6 +316,10 @@ pub struct DayEventRow {
     pub phase_id: Option<String>,
     pub opened_at: Option<i64>,
     pub locked_at: Option<i64>,
+    pub open_due_at: Option<i64>,
+    pub open_observed_at: Option<i64>,
+    pub lock_due_at: Option<i64>,
+    pub lock_observed_at: Option<i64>,
     pub cancelled_reason: Option<String>,
     pub decision: Option<game_platform::DayEventDecision>,
     pub winner_slots: Vec<String>,
@@ -397,6 +401,7 @@ pub struct PhaseStateRow {
     pub phase_id: String,
     pub locked: bool,
     pub deadline: Option<i64>,
+    pub phase_opened_at: Option<i64>,
 }
 
 /// Private channel membership derived from setup metadata.
@@ -739,6 +744,8 @@ pub struct ProjectionAuditReport {
 struct PhaseAdvancedPayload {
     phase_id: String,
     #[serde(default)]
+    phase_opened_at: Option<i64>,
+    #[serde(default)]
     source_prompt_id: Option<String>,
     #[serde(default)]
     source_phase_id: Option<String>,
@@ -908,7 +915,8 @@ async fn fold_event(
         "GameStarted" => {
             // Set the current phase; a new phase starts unlocked with no deadline.
             let phase_id = str_field(&ev.payload, "phase_id", &ev.kind)?;
-            set_phase(tx, game_id, &phase_id).await?;
+            let phase_opened_at = ev.payload["phase_opened_at"].as_i64();
+            set_phase(tx, game_id, &phase_id, phase_opened_at).await?;
             activate_game_index(tx, game_id, &phase_id, ev.seq).await?;
             sync_game_search_documents(tx, game_id).await?;
         }
@@ -920,7 +928,13 @@ async fn fold_event(
             if phase_control.source_prompt_id.is_some() {
                 insert_host_phase_control(tx, game_id, ev, &phase_control).await?;
             }
-            set_phase(tx, game_id, &phase_control.phase_id).await?;
+            set_phase(
+                tx,
+                game_id,
+                &phase_control.phase_id,
+                phase_control.phase_opened_at,
+            )
+            .await?;
             update_game_index_phase(tx, game_id, &phase_control.phase_id, ev.seq).await?;
             sync_game_search_documents(tx, game_id).await?;
         }
@@ -1195,6 +1209,48 @@ async fn fold_event(
             .bind(game_id)
             .bind(definition.id.as_str())
             .bind(&ev.payload["event"])
+            .bind(ev.seq)
+            .execute(&mut **tx)
+            .await?;
+        }
+        "DayEventOpenDue" => {
+            let event_id = str_field(&ev.payload, "event_id", &ev.kind)?;
+            let due_at = i64_field(&ev.payload, "due_at", &ev.kind)?;
+            let observed_at = i64_field(&ev.payload, "observed_at", &ev.kind)?;
+            let _source = str_field(&ev.payload, "source", &ev.kind)?;
+            if observed_at < due_at {
+                return payload_error(&ev.kind, "observed_at must be at or after due_at");
+            }
+            sqlx::query(
+                "UPDATE day_event SET open_due_at = COALESCE(open_due_at, $3), \
+                 open_observed_at = COALESCE(open_observed_at, $4), updated_seq = $5 \
+                 WHERE game_id = $1 AND event_id = $2",
+            )
+            .bind(game_id)
+            .bind(event_id)
+            .bind(due_at)
+            .bind(observed_at)
+            .bind(ev.seq)
+            .execute(&mut **tx)
+            .await?;
+        }
+        "DayEventLockDue" => {
+            let event_id = str_field(&ev.payload, "event_id", &ev.kind)?;
+            let due_at = i64_field(&ev.payload, "due_at", &ev.kind)?;
+            let observed_at = i64_field(&ev.payload, "observed_at", &ev.kind)?;
+            let _source = str_field(&ev.payload, "source", &ev.kind)?;
+            if observed_at < due_at {
+                return payload_error(&ev.kind, "observed_at must be at or after due_at");
+            }
+            sqlx::query(
+                "UPDATE day_event SET lock_due_at = COALESCE(lock_due_at, $3), \
+                 lock_observed_at = COALESCE(lock_observed_at, $4), updated_seq = $5 \
+                 WHERE game_id = $1 AND event_id = $2",
+            )
+            .bind(game_id)
+            .bind(event_id)
+            .bind(due_at)
+            .bind(observed_at)
             .bind(ev.seq)
             .execute(&mut **tx)
             .await?;
@@ -4596,6 +4652,7 @@ where
 {
     let rows = sqlx::query(
         "SELECT game_id, event_id, definition, state, phase_id, opened_at, locked_at, \
+         open_due_at, open_observed_at, lock_due_at, lock_observed_at, \
          cancelled_reason, decision, winner_slots, reward_keys_applied, scheduled_seq, updated_seq \
          FROM day_event WHERE game_id = $1 ORDER BY event_id",
     )
@@ -4642,6 +4699,10 @@ where
                 phase_id: row.get("phase_id"),
                 opened_at: row.get("opened_at"),
                 locked_at: row.get("locked_at"),
+                open_due_at: row.get("open_due_at"),
+                open_observed_at: row.get("open_observed_at"),
+                lock_due_at: row.get("lock_due_at"),
+                lock_observed_at: row.get("lock_observed_at"),
                 cancelled_reason: row.get("cancelled_reason"),
                 decision,
                 winner_slots,
@@ -4920,7 +4981,8 @@ where
     E: sqlx::PgExecutor<'e>,
 {
     let row = sqlx::query(
-        "SELECT game_id, phase_id, locked, deadline FROM phase_state WHERE game_id = $1",
+        "SELECT game_id, phase_id, locked, deadline, phase_opened_at \
+         FROM phase_state WHERE game_id = $1",
     )
     .bind(game_id)
     .fetch_optional(executor)
@@ -4930,6 +4992,7 @@ where
         phase_id: r.get("phase_id"),
         locked: r.get("locked"),
         deadline: r.get("deadline"),
+        phase_opened_at: r.get("phase_opened_at"),
     }))
 }
 
@@ -6709,17 +6772,20 @@ async fn set_phase(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     game_id: Uuid,
     phase_id: &str,
+    phase_opened_at: Option<i64>,
 ) -> Result<(), ProjectionError> {
     sqlx::query(
         r#"
-        INSERT INTO phase_state (game_id, phase_id, locked, deadline)
-        VALUES ($1, $2, FALSE, NULL)
+        INSERT INTO phase_state (game_id, phase_id, locked, deadline, phase_opened_at)
+        VALUES ($1, $2, FALSE, NULL, $3)
         ON CONFLICT (game_id)
-        DO UPDATE SET phase_id = EXCLUDED.phase_id, locked = FALSE, deadline = NULL
+        DO UPDATE SET phase_id = EXCLUDED.phase_id, locked = FALSE, deadline = NULL,
+                      phase_opened_at = EXCLUDED.phase_opened_at
         "#,
     )
     .bind(game_id)
     .bind(phase_id)
+    .bind(phase_opened_at)
     .execute(&mut **tx)
     .await?;
     Ok(())
