@@ -23,6 +23,8 @@ async function contract() {
         "deploy/railway/api.env.example",
         "deploy/railway/frontend.env.example",
         "docs/ops/railway-staging-target.md",
+        "tools/production_promotion.mjs",
+        "package.json",
         "crates/server/src/main.rs",
       ].map(async (relativePath) => [relativePath, await read(relativePath)]),
     ),
@@ -113,9 +115,18 @@ async function contract() {
     "`production` branch is a release pointer",
     "production services must watch `production`, never `main`.",
     "separate Postgres service instances",
+    "npm run promote:production -- --check",
+    "npm run proof:lanes -- --mode full --run",
+    "fmarch-frontend-staging.up.railway.app",
+    "fmarch-frontend-production.up.railway.app",
   ]) {
     assert.ok(runbook.includes(requiredText), `runbook missing ${requiredText}`);
   }
+  assert.match(
+    source["package.json"],
+    /"promote:production": "node tools\/production_promotion\.mjs"/,
+  );
+  assert.match(source["tools/production_promotion.mjs"], /origin\/production must be an ancestor/);
 }
 
 async function read(relativePath) {

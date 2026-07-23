@@ -27,6 +27,13 @@ own the release boundary:
 | `staging` | `main` | Deploy automatically after a push touches the service's watch paths. |
 | `production` | `production` | Deploy only when the release pointer is explicitly advanced to a verified `main` commit. |
 
+The canonical Railway domains are:
+
+| Environment | API | Frontend |
+| --- | --- | --- |
+| `staging` | `https://fmarch-staging.up.railway.app` | `https://fmarch-frontend-staging.up.railway.app` |
+| `production` | `https://fmarch-production.up.railway.app` | `https://fmarch-frontend-production.up.railway.app` |
+
 The `production` branch is a release pointer, not a place to work. It may only
 identify a commit already reachable from `origin/main`. Production promotion
 requires a clean worktree, the required local proof, successful staging API and
@@ -53,13 +60,37 @@ resolve inside the selected environment.
 
 ## Production Promotion
 
-After a `main` commit has deployed successfully to staging:
+After a `main` commit has deployed successfully to staging, run the fail-closed
+preflight:
+
+```sh
+npm run promote:production -- --check
+```
+
+The preflight requires a clean synchronized `main`, a fast-forwardable
+`origin/production`, successful staging API and frontend deployments carrying
+the exact `main` SHA, active canonical domains, healthy staging endpoints, and
+complete production variables whose WorkOS client, API key, and cookie secret
+are distinct from staging. It then runs the full proof-lane sweep. When
+`DATABASE_URL` is unset, the command starts the repo-local Postgres and supplies
+its canonical URL to every selected proof lane.
+
+Promote the verified commit with:
+
+```sh
+npm run promote:production
+```
+
+The command advances the release pointer, observes terminal `SUCCESS` for both
+production services at that SHA, and verifies both production health endpoints.
+It does not offer a force flag or a proof bypass.
+
+The underlying sequence is:
 
 1. Verify the worktree is clean and `HEAD` equals `origin/main`.
-2. Run the diff-selected push proof (`npm run proof:lanes -- --mode push`) when
-   that command is present on the commit; otherwise run the narrow deployment
-   contract (`npm run test:railway-staging-target`). At sprint boundaries, run
-   the full proof sweep before promotion.
+2. Run the full proof sweep (`npm run proof:lanes -- --mode full --run`). Production
+   promotion is a sprint boundary, so it deliberately pays the full validation
+   cost rather than selecting only the current diff's push lanes.
 3. Verify both staging health endpoints and confirm the latest successful API
    and frontend Railway deployments carry the same `main` commit SHA.
 4. Fast-forward the remote `production` branch to that exact SHA. Railway

@@ -33,6 +33,7 @@
     "test:dev-postgres-contract": { "kind": "npm" },
     "test:completeness-scorecard": { "kind": "npm" },
     "test:proof-lane-contract": { "kind": "npm" },
+    "test:production-promotion": { "kind": "npm" },
     "test:railway-staging-target": { "kind": "npm" },
     "test:local-postgres-ci": { "kind": "npm" },
     "check:build-posture": { "kind": "npm" }
@@ -214,6 +215,12 @@
       "tier": "active",
       "paths": ["frontend/"],
       "lanes": ["test:frontend-contract"]
+    },
+    {
+      "id": "ops:production-promotion",
+      "tier": "active",
+      "paths": ["tools/production_promotion.mjs", "tools/production_promotion.test.mjs"],
+      "lanes": ["test:production-promotion", "test:railway-staging-target"]
     },
     {
       "id": "tools:proof-infra",
