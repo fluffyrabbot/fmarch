@@ -1542,6 +1542,11 @@ async fn apply_effect_plan(
     let phase_kind = phase_kind(&phase.phase_id)?;
     let phase_number = phase_number(&phase.phase_id)?;
     let pack = load_pack(&current_pack_name(tx, game).await?)?;
+    let command_id = COMMAND_AUDIT_CONTEXT
+        .try_with(|audit| audit.command_id)
+        .map_err(|_| {
+            Reject::Internal("command audit context missing in effect plan".to_string())
+        })?;
 
     // Preflight the entire plan before appending anything. Lifecycle validation
     // advances this in-memory view so multiple operations on one slot are
@@ -1549,7 +1554,7 @@ async fn apply_effect_plan(
     let mut lifecycle_states = BTreeMap::<String, String>::new();
     let mut events = Vec::with_capacity(plan.effects.len());
     for (index, effect) in plan.effects.into_iter().enumerate() {
-        let mut event = match effect {
+        let planned = match effect {
             game_platform::ConcreteEffect::SetSlotLifecycle { target, status } => {
                 let target = target.as_str().to_string();
                 let current = match lifecycle_states.get(&target) {
@@ -1581,12 +1586,12 @@ async fn apply_effect_plan(
                     }
                     .to_string(),
                 );
-                event
+                vec![event]
             }
             game_platform::ConcreteEffect::Mark { target, effect } => {
                 require_effect_target(tx, game, target.as_str()).await?;
                 let policy = persistent_effect_policy(&pack, effect.as_str())?;
-                EventInput::new(
+                vec![EventInput::new(
                     "EffectsMarked",
                     1,
                     serde_json::json!({
@@ -1602,12 +1607,12 @@ async fn apply_effect_plan(
                     }),
                     ActorId::Host,
                     0,
-                )
+                )]
             }
             game_platform::ConcreteEffect::Clear { target, effect } => {
                 require_effect_target(tx, game, target.as_str()).await?;
                 persistent_effect_policy(&pack, effect.as_str())?;
-                EventInput::new(
+                vec![EventInput::new(
                     "EffectsCleared",
                     1,
                     serde_json::json!({
@@ -1621,12 +1626,48 @@ async fn apply_effect_plan(
                     }),
                     ActorId::Host,
                     0,
-                )
+                )]
             }
-            game_platform::ConcreteEffect::Grant { .. } => {
-                return Err(effect_spec_reject(
-                    "grant adapter is unavailable until platform grants fold into snapshots",
-                ));
+            game_platform::ConcreteEffect::Grant { target, grant } => {
+                require_effect_target(tx, game, target.as_str()).await?;
+                validate_platform_grant(&pack, &grant)?;
+                let source_action = host_fiat_grant_source(principal.user_id(), command_id, index);
+                let mut grant_events = vec![EventInput::new(
+                    "ActionGranted",
+                    1,
+                    serde_json::json!({
+                        "grant_id": grant.grant_id.as_str(),
+                        "grant_option": null,
+                        "kind": platform_grant_kind(grant.kind),
+                        "actor": "external",
+                        "target": target.as_str(),
+                        "source_action": source_action,
+                        "uses": grant.uses,
+                        "vote_weight": grant.vote_weight,
+                        "phase_id": phase.phase_id.clone(),
+                        "phase_kind": phase_kind,
+                        "phase_number": phase_number,
+                    }),
+                    ActorId::Host,
+                    0,
+                )];
+                let audience =
+                    host_fiat_grant_audience(tx, game, grant.visibility, target.as_str()).await?;
+                if !audience.is_empty() {
+                    grant_events.push(EventInput::new(
+                        "EffectNotification",
+                        1,
+                        serde_json::json!({
+                            "effect": "grant",
+                            "status": grant.grant_id.as_str(),
+                            "audience": audience,
+                            "phase_id": phase.phase_id.clone(),
+                        }),
+                        ActorId::Host,
+                        0,
+                    ));
+                }
+                grant_events
             }
             game_platform::ConcreteEffect::RevealAlignment { .. }
             | game_platform::ConcreteEffect::RevealRole { .. } => {
@@ -1635,12 +1676,14 @@ async fn apply_effect_plan(
                 ));
             }
         };
-        event.meta = serde_json::json!({
-            "source": "host_fiat",
-            "effect_plan_reason": plan.reason,
-            "effect_plan_index": index,
-        });
-        events.push(event);
+        for mut event in planned {
+            event.meta = serde_json::json!({
+                "source": "host_fiat",
+                "effect_plan_reason": plan.reason,
+                "effect_plan_index": index,
+            });
+            events.push(event);
+        }
     }
 
     persist(tx, game, &events).await
@@ -1670,6 +1713,80 @@ fn persistent_effect_policy<'a>(
         )));
     }
     Ok(policy)
+}
+
+fn platform_grant_kind(kind: game_platform::GrantKind) -> domain::GrantKind {
+    match kind {
+        game_platform::GrantKind::ExtraAction => domain::GrantKind::ExtraAction,
+        game_platform::GrantKind::Item => domain::GrantKind::Item,
+        game_platform::GrantKind::VoteWeight => domain::GrantKind::VoteWeight,
+    }
+}
+
+fn host_fiat_grant_source(principal_user_id: &str, command_id: Uuid, index: usize) -> String {
+    let scope = format!(
+        "{:x}",
+        Sha256::digest(format!("{principal_user_id}\0{command_id}").as_bytes())
+    );
+    format!("host_fiat:grant:{scope}:{index}")
+}
+
+fn validate_platform_grant(
+    pack: &domain::Pack,
+    grant: &game_platform::GrantSpec,
+) -> Result<(), Reject> {
+    match grant.kind {
+        game_platform::GrantKind::ExtraAction => Ok(()),
+        game_platform::GrantKind::Item
+            if pack.item_actions.contains_key(grant.grant_id.as_str()) =>
+        {
+            Ok(())
+        }
+        game_platform::GrantKind::Item => Err(effect_spec_reject(format!(
+            "item grant `{}` is not declared by pack `{}`",
+            grant.grant_id.as_str(),
+            pack.name
+        ))),
+        game_platform::GrantKind::VoteWeight => {
+            let supported = match &pack.vote.weights {
+                domain::pack::WeightPolicy::Dynamic(policy) => policy
+                    .grant_rules
+                    .iter()
+                    .any(|rule| rule.grant_id == grant.grant_id.as_str()),
+                _ => false,
+            };
+            if supported {
+                Ok(())
+            } else {
+                Err(effect_spec_reject(format!(
+                    "vote-weight grant `{}` is not declared by pack `{}` dynamic vote policy",
+                    grant.grant_id.as_str(),
+                    pack.name
+                )))
+            }
+        }
+    }
+}
+
+async fn host_fiat_grant_audience(
+    tx: &mut Transaction<'_, Postgres>,
+    game: Uuid,
+    visibility: game_platform::EffectVisibility,
+    target: &str,
+) -> Result<Vec<String>, Reject> {
+    match visibility {
+        game_platform::EffectVisibility::Hidden | game_platform::EffectVisibility::Actor => {
+            Ok(Vec::new())
+        }
+        game_platform::EffectVisibility::Target
+        | game_platform::EffectVisibility::ActorAndTarget => Ok(vec![target.to_string()]),
+        game_platform::EffectVisibility::Public => Ok(projections::slot_state(&mut **tx, game)
+            .await?
+            .into_iter()
+            .filter(|slot| slot.alive)
+            .map(|slot| slot.slot_id)
+            .collect()),
+    }
 }
 
 async fn require_effect_target(
@@ -4444,6 +4561,47 @@ fn current_snapshot(
                         || !targets.iter().any(|target| target == &record.target)
                 });
             }
+            "ActionGranted" => {
+                let inner: domain::InnerEvent = serde_json::from_value(serde_json::json!({
+                    "kind": ev.kind.clone(),
+                    "payload": ev.payload.clone(),
+                }))
+                .map_err(|error| {
+                    Reject::Internal(format!(
+                        "malformed top-level ActionGranted at stream #{}: {error}",
+                        ev.stream_seq
+                    ))
+                })?;
+                let domain::InnerEvent::ActionGranted {
+                    grant_id,
+                    grant_option,
+                    kind,
+                    actor,
+                    target,
+                    source_action,
+                    uses,
+                    vote_weight,
+                    phase_id: granted_phase_id,
+                    phase_kind: granted_phase_kind,
+                    phase_number: granted_phase_number,
+                } = inner
+                else {
+                    unreachable!("ActionGranted payload decoded to another inner event")
+                };
+                action_grants.push(domain::ActionGrantRecord {
+                    grant_id,
+                    grant_option,
+                    kind,
+                    actor,
+                    target,
+                    source_action,
+                    uses,
+                    vote_weight,
+                    phase_id: granted_phase_id,
+                    phase_kind: granted_phase_kind,
+                    phase_number: granted_phase_number,
+                });
+            }
             "SlotStatusChanged" => {
                 let slot_id = str_payload(ev, "slot_id")?;
                 let status = slot_lifecycle_payload(ev, "status")?;
@@ -6318,5 +6476,20 @@ mod tests {
             ),
             Err(Reject::InvalidTarget)
         );
+    }
+
+    #[test]
+    fn host_fiat_grant_sources_are_opaque_and_collision_free_across_principals() {
+        let command_id = Uuid::nil();
+        let host = host_fiat_grant_source("host_account", command_id, 0);
+        let cohost = host_fiat_grant_source("cohost_account", command_id, 0);
+        let second_effect = host_fiat_grant_source("host_account", command_id, 1);
+
+        assert_ne!(host, cohost);
+        assert_ne!(host, second_effect);
+        assert!(host.starts_with("host_fiat:grant:"));
+        assert!(host.ends_with(":0"));
+        assert!(!host.contains("host_account"));
+        assert!(!cohost.contains("cohost_account"));
     }
 }

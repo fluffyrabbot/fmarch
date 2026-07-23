@@ -763,7 +763,7 @@ async fn fold_event(
                 .await?;
             }
         }
-        "EffectsMarked" | "EffectsCleared" => {
+        "EffectsMarked" | "EffectsCleared" | "ActionGranted" | "EffectNotification" => {
             let inner: domain::InnerEvent = serde_json::from_value(serde_json::json!({
                 "kind": ev.kind.clone(),
                 "payload": ev.payload.clone(),
@@ -772,8 +772,26 @@ async fn fold_event(
                 kind: ev.kind.clone(),
                 source,
             })?;
-            let phase_id = ev.payload["phase_id"].as_str().unwrap_or("");
-            fold_inner(tx, game_id, phase_id, ev.seq, ev.stream_seq as i32, &inner).await?;
+            let phase_id = match ev.kind.as_str() {
+                "ActionGranted" | "EffectNotification" => {
+                    str_field(&ev.payload, "phase_id", &ev.kind)?
+                }
+                _ => ev.payload["phase_id"].as_str().unwrap_or("").to_string(),
+            };
+            let event_index = if ev.kind == "EffectNotification" {
+                i32::try_from(ev.stream_seq)
+                    .ok()
+                    .and_then(i32::checked_neg)
+                    .ok_or_else(|| ProjectionError::Payload {
+                        kind: ev.kind.clone(),
+                        source: serde::de::Error::custom(
+                            "stream_seq cannot form a top-level notification index",
+                        ),
+                    })?
+            } else {
+                ev.stream_seq as i32
+            };
+            fold_inner(tx, game_id, &phase_id, ev.seq, event_index, &inner).await?;
         }
 
         // ── game_authority (caps: HostOf / CohostOf) ──
@@ -1652,6 +1670,7 @@ async fn fold_inner(
             effect,
             status,
             audience,
+            ..
         } => {
             for audience_slot in audience {
                 upsert_player_notification(

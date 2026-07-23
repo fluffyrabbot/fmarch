@@ -3958,6 +3958,7 @@ fn emit_effect_notification(
         effect: effect.to_string(),
         status: status.to_string(),
         audience: effect_audience(input, visibility, actor, target),
+        phase_id: None,
     });
 }
 
@@ -3976,6 +3977,7 @@ fn emit_grant_notification(
         effect: "grant".to_string(),
         status: grant_id.to_string(),
         audience: effect_audience(input, visibility, actor, target),
+        phase_id: None,
     });
 }
 
@@ -4562,6 +4564,7 @@ fn apply_action_constraints(
                 effect: "loud".to_string(),
                 status: action.template.id.clone(),
                 audience: audience.clone(),
+                phase_id: None,
             });
         }
         if action.template.has_modifier(Modifier::Announcing) {
@@ -4569,6 +4572,7 @@ fn apply_action_constraints(
                 effect: "announcing".to_string(),
                 status: action.template.id.clone(),
                 audience: audience.clone(),
+                phase_id: None,
             });
         }
     }
@@ -6786,6 +6790,7 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                             effect: policy.link_effect.clone(),
                             status: actions[idx].sub.action_id.clone(),
                             audience: slots,
+                            phase_id: None,
                         });
                     }
                 }

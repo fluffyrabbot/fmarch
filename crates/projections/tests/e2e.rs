@@ -477,6 +477,7 @@ async fn effect_notifications_project_per_audience_slot_and_rebuild(pool: sqlx::
                     effect: "lovers_link".into(),
                     status: "link_001".into(),
                     audience: vec!["slot_2".into(), "slot_3".into()],
+                    phase_id: None,
                 },
             },
             empty_phase_announcement(1, "N00"),

@@ -4773,7 +4773,7 @@ async fn apply_effect_plan_is_atomic_audited_and_visible_to_the_engine(pool: PgP
             .fetch_one(&pool)
             .await
             .unwrap();
-    let unsupported = handle(
+    let incompatible = handle(
         &pool,
         &user("host_h"),
         Command::ApplyEffectPlan {
@@ -4795,11 +4795,11 @@ async fn apply_effect_plan_is_atomic_audited_and_visible_to_the_engine(pool: PgP
         },
     )
     .await
-    .expect_err("Grant remains deliberately unsupported until PR4");
+    .expect_err("pack-incompatible VoteWeight grant rejects before append");
     assert!(matches!(
-        unsupported,
+        incompatible,
         Reject::EffectSpecValidation(message)
-            if message.contains("grant adapter is unavailable")
+            if message.contains("is not declared by pack `mafiascum` dynamic vote policy")
     ));
     let event_count_after: i64 =
         sqlx::query_scalar("SELECT COUNT(*) FROM events WHERE stream_id = $1")
@@ -4825,6 +4825,335 @@ async fn apply_effect_plan_is_atomic_audited_and_visible_to_the_engine(pool: PgP
             .iter()
             .filter(|table| !table.matches)
             .collect::<Vec<_>>()
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn apply_effect_plan_grants_extra_action_and_item_inventory(pool: PgPool) {
+    let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
+    let command_id = Uuid::new_v4();
+    let ack = handle_idempotent(
+        &pool,
+        &user("host_h"),
+        command_id,
+        Command::ApplyEffectPlan {
+            game,
+            effects: vec![
+                game_platform::ConcreteEffect::Grant {
+                    target: game_platform::SlotId::new("slot_1").unwrap(),
+                    grant: game_platform::GrantSpec {
+                        grant_id: game_platform::Tag::new("extra_action").unwrap(),
+                        kind: game_platform::GrantKind::ExtraAction,
+                        uses: 2,
+                        vote_weight: None,
+                        visibility: game_platform::EffectVisibility::Target,
+                    },
+                },
+                game_platform::ConcreteEffect::Grant {
+                    target: game_platform::SlotId::new("slot_1").unwrap(),
+                    grant: game_platform::GrantSpec {
+                        grant_id: game_platform::Tag::new("single_use_item").unwrap(),
+                        kind: game_platform::GrantKind::Item,
+                        uses: 1,
+                        vote_weight: None,
+                        visibility: game_platform::EffectVisibility::Target,
+                    },
+                },
+            ],
+            reason: "host awarded two mechanical prizes".into(),
+        },
+    )
+    .await
+    .expect("host fiat grants use the durable inventory model");
+    assert_eq!(
+        ack.stream_seqs.len(),
+        4,
+        "each visible grant appends one grant fact and one notification fact"
+    );
+
+    let planned = eventstore::load_stream(&pool, game)
+        .await
+        .unwrap()
+        .into_iter()
+        .filter(|event| ack.stream_seqs.contains(&event.stream_seq))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        planned
+            .iter()
+            .map(|event| event.kind.as_str())
+            .collect::<Vec<_>>(),
+        vec![
+            "ActionGranted",
+            "EffectNotification",
+            "ActionGranted",
+            "EffectNotification",
+        ]
+    );
+    for (effect_index, event_pair) in planned.chunks_exact(2).enumerate() {
+        let grant = &event_pair[0];
+        assert_eq!(grant.actor, ActorId::Host);
+        assert_eq!(grant.payload["actor"], "external");
+        assert_eq!(grant.payload["target"], "slot_1");
+        assert_eq!(grant.payload["phase_id"], "D01");
+        assert_eq!(grant.payload["phase_kind"], "Day");
+        assert_eq!(grant.payload["phase_number"], 1);
+        let source_action = grant.payload["source_action"].as_str().unwrap();
+        assert!(source_action.starts_with("host_fiat:grant:"));
+        assert!(source_action.ends_with(&format!(":{effect_index}")));
+        assert!(
+            !source_action.contains("host_h"),
+            "durable mechanical identity must not expose the account principal"
+        );
+        assert_eq!(grant.meta["effect_plan_index"], effect_index);
+        let notification = &event_pair[1];
+        assert_eq!(notification.payload["effect"], "grant");
+        assert_eq!(notification.payload["status"], grant.payload["grant_id"]);
+        assert_eq!(
+            notification.payload["audience"],
+            serde_json::json!(["slot_1"])
+        );
+        assert_eq!(notification.payload["phase_id"], "D01");
+        assert_eq!(notification.meta["effect_plan_index"], effect_index);
+    }
+
+    let grants = action_grants(&pool, game).await.unwrap();
+    assert_eq!(grants.len(), 2);
+    assert_eq!(grants[0].grant_id, "extra_action");
+    assert_eq!(grants[0].kind, "ExtraAction");
+    assert_eq!(grants[0].source_slot, "external");
+    assert_eq!(grants[0].uses, 2);
+    assert_eq!(grants[1].grant_id, "single_use_item");
+    assert_eq!(grants[1].kind, "Item");
+    assert_eq!(grants[1].source_slot, "external");
+    assert_eq!(grants[1].uses, 1);
+
+    let snapshot = load_engine_snapshot(&pool, game, "D01")
+        .await
+        .expect("top-level grants fold into the exact engine snapshot");
+    assert_eq!(snapshot.action_grants.len(), 2);
+    assert!(snapshot.action_grants.iter().any(|grant| {
+        grant.grant_id == "extra_action"
+            && grant.kind == domain::GrantKind::ExtraAction
+            && grant.actor == "external"
+            && grant.target == "slot_1"
+            && grant.uses == 2
+    }));
+    assert!(snapshot.action_grants.iter().any(|grant| {
+        grant.grant_id == "single_use_item"
+            && grant.kind == domain::GrantKind::Item
+            && grant.actor == "external"
+            && grant.target == "slot_1"
+            && grant.uses == 1
+    }));
+
+    let notices = player_notifications(&pool, game).await.unwrap();
+    assert_eq!(notices.len(), 2);
+    assert!(notices.iter().all(|notice| {
+        notice.audience_slot == "slot_1" && notice.effect == "grant" && notice.phase_id == "D01"
+    }));
+    let projection_audit = audit_rebuild(&pool, game).await.unwrap();
+    assert!(
+        projection_audit.ok,
+        "top-level grant inventory and notifications must rebuild exactly: {:?}",
+        projection_audit
+            .tables
+            .iter()
+            .filter(|table| !table.matches)
+            .collect::<Vec<_>>()
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn host_fiat_vote_weight_grant_hammers_from_folded_snapshot(pool: PgPool) {
+    let host = "host_h";
+    let game = Uuid::new_v4();
+    let h = user(host);
+    handle(
+        &pool,
+        &h,
+        Command::CreateGame {
+            game,
+            pack: "test_dynamic_vote_hammer".into(),
+            cohost_denied: vec![],
+        },
+    )
+    .await
+    .unwrap();
+    for (slot, occupant, role) in [
+        ("slot_1", "user_1", "vanilla_townie"),
+        ("slot_2", "user_2", "mafia_goon"),
+        ("slot_3", "user_3", "vote_granter"),
+    ] {
+        handle(
+            &pool,
+            &h,
+            Command::AddSlot {
+                game,
+                slot: slot.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &h,
+            Command::AssignSlot {
+                game,
+                slot: slot.into(),
+                user: occupant.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &h,
+            Command::AssignRole {
+                game,
+                slot: slot.into(),
+                role_key: role.into(),
+            },
+        )
+        .await
+        .unwrap();
+    }
+    handle(
+        &pool,
+        &h,
+        Command::StartGame {
+            game,
+            phase: "N01".into(),
+        },
+    )
+    .await
+    .unwrap();
+
+    let command_id = Uuid::new_v4();
+    let grant_ack = handle_idempotent(
+        &pool,
+        &h,
+        command_id,
+        Command::ApplyEffectPlan {
+            game,
+            effects: vec![game_platform::ConcreteEffect::Grant {
+                target: game_platform::SlotId::new("slot_1").unwrap(),
+                grant: game_platform::GrantSpec {
+                    grant_id: game_platform::Tag::new("vote_power_boost").unwrap(),
+                    kind: game_platform::GrantKind::VoteWeight,
+                    uses: 1,
+                    vote_weight: Some(2.0),
+                    visibility: game_platform::EffectVisibility::Target,
+                },
+            }],
+            reason: "host awarded a double-vote prize".into(),
+        },
+    )
+    .await
+    .expect("pack-declared VoteWeight grant is accepted");
+    assert_eq!(grant_ack.stream_seqs.len(), 2);
+    let grant_event = eventstore::load_stream(&pool, game)
+        .await
+        .unwrap()
+        .into_iter()
+        .find(|event| {
+            grant_ack.stream_seqs.contains(&event.stream_seq) && event.kind == "ActionGranted"
+        })
+        .expect("host-fiat ActionGranted stream fact");
+    assert_eq!(grant_event.payload["kind"], "VoteWeight");
+    assert_eq!(grant_event.payload["vote_weight"], 2.0);
+    let grant_source_action = grant_event.payload["source_action"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    assert!(grant_source_action.starts_with("host_fiat:grant:"));
+    assert!(grant_source_action.ends_with(":0"));
+    assert!(!grant_source_action.contains("host_h"));
+
+    let n01_snapshot = load_engine_snapshot(&pool, game, "N01")
+        .await
+        .expect("host-fiat VoteWeight grant folds before any resolution");
+    assert!(n01_snapshot.action_grants.iter().any(|grant| {
+        grant.target == "slot_1"
+            && grant.grant_id == "vote_power_boost"
+            && grant.kind == domain::GrantKind::VoteWeight
+            && grant.actor == "external"
+            && grant.source_action == grant_source_action
+            && grant.uses == 1
+            && grant.vote_weight == Some(2.0)
+    }));
+
+    handle(&pool, &h, Command::ResolvePhase { game, seed: 9_101 })
+        .await
+        .expect("night resolution preserves the pre-existing host-fiat grant");
+    handle(
+        &pool,
+        &h,
+        Command::SetSlotStatus {
+            game,
+            slot: "slot_3".into(),
+            status: domain::SlotLifecycle::Dead,
+        },
+    )
+    .await
+    .expect("remove the third slot from the day majority denominator");
+    handle(&pool, &h, Command::AdvancePhase { game })
+        .await
+        .expect("advance to the vote-weighted day");
+
+    let d02_snapshot = load_engine_snapshot(&pool, game, "D02")
+        .await
+        .expect("host-fiat grant survives the phase boundary");
+    assert!(d02_snapshot.action_grants.iter().any(|grant| {
+        grant.target == "slot_1"
+            && grant.grant_id == "vote_power_boost"
+            && grant.kind == domain::GrantKind::VoteWeight
+            && grant.vote_weight == Some(2.0)
+    }));
+
+    let hammer_ack = handle(
+        &pool,
+        &user("user_1"),
+        Command::SubmitVote {
+            game,
+            actor_slot: "slot_1".into(),
+            target: VoteTarget::Slot("slot_2".into()),
+        },
+    )
+    .await
+    .expect("one host-granted 2.0-weight ballot reaches majority");
+    assert_eq!(hammer_ack.stream_seqs.len(), 2);
+    assert!(phase_state(&pool, game).await.unwrap().unwrap().locked);
+    let lock_payload = sqlx::query_scalar::<_, serde_json::Value>(
+        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ThreadLocked' \
+         ORDER BY stream_seq DESC LIMIT 1",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(lock_payload["reason"], "hammer");
+    assert_eq!(lock_payload["actor"], "slot_1");
+    assert_eq!(lock_payload["target"], "slot_2");
+
+    let grants_before = serde_json::to_string(&action_grants(&pool, game).await.unwrap()).unwrap();
+    let phase_before = serde_json::to_string(&phase_state(&pool, game).await.unwrap()).unwrap();
+    let projection_audit = audit_rebuild(&pool, game).await.unwrap();
+    assert!(
+        projection_audit.ok,
+        "host-fiat VoteWeight grant must remain rebuild-equivalent: {:?}",
+        projection_audit
+            .tables
+            .iter()
+            .filter(|table| !table.matches)
+            .collect::<Vec<_>>()
+    );
+    assert_eq!(
+        grants_before,
+        serde_json::to_string(&action_grants(&pool, game).await.unwrap()).unwrap()
+    );
+    assert_eq!(
+        phase_before,
+        serde_json::to_string(&phase_state(&pool, game).await.unwrap()).unwrap()
     );
 }
 
@@ -50156,6 +50485,7 @@ async fn host_resolve_phase_carries_mafia_universe_fruit_vendor_notifications(po
                     effect,
                     status,
                     audience,
+                    ..
                 } if effect == "fruit_received"
                     && status == "marked"
                     && audience == &vec!["slot_4".to_string()]
@@ -50171,6 +50501,7 @@ async fn host_resolve_phase_carries_mafia_universe_fruit_vendor_notifications(po
                     effect,
                     status,
                     audience,
+                    ..
                 } if effect == "fruit_received"
                     && status == "marked"
                     && audience == &vec!["slot_3".to_string()]
@@ -50672,6 +51003,7 @@ async fn host_resolve_phase_carries_mafia_universe_inventor_item_grants_and_spen
                     effect,
                     status,
                     audience,
+                    ..
                 } if effect == "bulletproof_vest"
                     && status == "marked"
                     && audience == &vec!["slot_4".to_string()]
@@ -54693,6 +55025,7 @@ async fn host_resolve_phase_carries_mafiascum_fruit_vendor_notification(pool: Pg
                     effect,
                     status,
                     audience,
+                    ..
                 } if effect == "fruit_received"
                     && status == "marked"
                     && audience == &vec!["slot_2".to_string()]
@@ -56659,6 +56992,7 @@ async fn host_resolve_phase_projects_loud_and_announcing_notifications(pool: PgP
                 effect,
                 status,
                 audience,
+                ..
             } if effect == "loud"
                 && status == "investigate_alignment"
                 && audience == &vec![
@@ -56677,6 +57011,7 @@ async fn host_resolve_phase_projects_loud_and_announcing_notifications(pool: PgP
                 effect,
                 status,
                 audience,
+                ..
             } if effect == "announcing"
                 && status == "investigate_alignment"
                 && audience == &vec![
@@ -57619,7 +57954,12 @@ async fn host_resolve_phase_filters_hidden_effect_notifications(pool: PgPool) {
     assert!(
         applied.events.iter().any(|indexed| matches!(
             &indexed.event,
-            domain::InnerEvent::EffectNotification { effect, status, audience }
+            domain::InnerEvent::EffectNotification {
+                effect,
+                status,
+                audience,
+                ..
+            }
                 if effect == "doused"
                     && status == "marked"
                     && audience == &vec!["slot_2".to_string(), "slot_4".to_string()]
@@ -71921,7 +72261,12 @@ async fn host_resolve_phase_carries_chinese_cupid_link_and_lovers_cascade(pool: 
     )));
     assert!(linked.events.iter().any(|event| matches!(
         &event.event,
-        domain::InnerEvent::EffectNotification { effect, status, audience }
+        domain::InnerEvent::EffectNotification {
+            effect,
+            status,
+            audience,
+            ..
+        }
             if effect == "lovers_link"
                 && status == "link_lovers_n01"
                 && audience == &vec!["slot_2".to_string(), "slot_3".to_string()]

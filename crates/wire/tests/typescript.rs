@@ -37,11 +37,24 @@ fn apply_effect_plan_deserializes_the_canonical_concrete_catalog() {
     let command = serde_json::json!({
         "ApplyEffectPlan": {
             "game": uuid::Uuid::nil(),
-            "effects": [{
-                "kind": "mark",
-                "target": "slot_1",
-                "effect": "bomb"
-            }],
+            "effects": [
+                {
+                    "kind": "mark",
+                    "target": "slot_1",
+                    "effect": "bomb"
+                },
+                {
+                    "kind": "grant",
+                    "target": "slot_1",
+                    "grant": {
+                        "grant_id": "vote_power_boost",
+                        "kind": "vote_weight",
+                        "uses": 1,
+                        "vote_weight": 2.0,
+                        "visibility": "target"
+                    }
+                }
+            ],
             "reason": "manual adjudication"
         }
     });
@@ -50,6 +63,13 @@ fn apply_effect_plan_deserializes_the_canonical_concrete_catalog() {
     assert!(matches!(
         parsed,
         wire::Command::ApplyEffectPlan { effects, reason, .. }
-            if effects.len() == 1 && reason == "manual adjudication"
+            if effects.len() == 2
+                && reason == "manual adjudication"
+                && matches!(
+                    &effects[1],
+                    game_platform::ConcreteEffect::Grant { grant, .. }
+                        if grant.kind == game_platform::GrantKind::VoteWeight
+                            && grant.vote_weight == Some(2.0)
+                )
     ));
 }

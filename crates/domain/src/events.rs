@@ -473,6 +473,8 @@ pub enum InnerEvent {
         effect: Tag,
         status: String,
         audience: Vec<SlotId>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        phase_id: Option<PhaseId>,
     },
 
     // ── Interference ──
