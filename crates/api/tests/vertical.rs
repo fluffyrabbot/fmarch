@@ -4324,6 +4324,10 @@ async fn day_event_vertical_exposes_player_attention_and_permission_aware_host_t
     let state: api::PlayerCommandStateResponse = serde_json::from_slice(&body).unwrap();
     assert_eq!(state.day_events.len(), 1);
     assert_eq!(state.day_events[0].event_id, "event-cookie");
+    assert_eq!(state.day_events[0].participant_count, 0);
+    assert_eq!(state.day_events[0].minimum_participants, 1);
+    assert_eq!(state.day_events[0].maximum_participants, None);
+    assert_eq!(state.day_events[0].reward_keys, ["cookie"]);
     assert!(state.day_events[0].can_submit);
     assert!(!state.day_events[0].can_withdraw);
 
@@ -4356,6 +4360,25 @@ async fn day_event_vertical_exposes_player_attention_and_permission_aware_host_t
         .await,
         RejectCode::DuplicateParticipation,
     );
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!(
+                    "/games/{game}/player-command-state?principal_user_id=user_a&slot_id=slot_1"
+                ))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let state: api::PlayerCommandStateResponse = serde_json::from_slice(&body).unwrap();
+    assert_eq!(state.day_events[0].participation_status, "submitted");
+    assert_eq!(state.day_events[0].participant_count, 1);
+    assert!(!state.day_events[0].can_submit);
+    assert!(state.day_events[0].can_withdraw);
     expect_ack(
         post_command(
             app.clone(),
@@ -4394,6 +4417,17 @@ async fn day_event_vertical_exposes_player_attention_and_permission_aware_host_t
         assert_eq!(response.status(), StatusCode::OK);
         let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let state: api::HostConsoleStateResponse = serde_json::from_slice(&body).unwrap();
+        let workspace = state
+            .day_events
+            .iter()
+            .find(|event| event.event_id == "event-cookie")
+            .expect("host DayEvent workspace is hydrated");
+        assert_eq!(workspace.state, "locked");
+        assert_eq!(workspace.participant_slots, ["slot_1"]);
+        assert_eq!(
+            workspace.definition.rewards[0].reward_key.as_str(),
+            "cookie"
+        );
         let task = state
             .tasks
             .iter()

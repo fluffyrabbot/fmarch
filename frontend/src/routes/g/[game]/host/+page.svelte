@@ -74,6 +74,7 @@
   let dayVoteOutcomes = data.dayVoteOutcomes;
   let hostPrompts = data.hostPrompts;
   let hostTasks = data.hostTasks;
+  let hostDayEvents = data.hostDayEvents;
   let moderatorActionGroups = data.moderatorActionGroups;
   let liveStatus = LIVE_PROJECTION_CONNECTING_STATUS;
   $: moderatorSurfaceEmpty = isModeratorRouteEmpty({
@@ -128,6 +129,7 @@
     dayVoteOutcomes = derived.dayVoteOutcomes;
     hostPrompts = derived.hostPrompts;
     hostTasks = derived.hostTasks;
+    hostDayEvents = derived.hostDayEvents;
     moderatorActionGroups = derived.moderatorActionGroups;
   });
 
@@ -348,6 +350,7 @@
         replacement={projection.replacement ?? data.replacement}
         {hostPrompts}
         {hostTasks}
+        {hostDayEvents}
         {votecount}
         onDispatch={handleDispatch}
         onRetry={retryHostCommand}

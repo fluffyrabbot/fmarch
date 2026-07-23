@@ -3728,7 +3728,7 @@ async function assertNoObviousOverlap(targets, context) {
       const area = overlapArea(left.box, right.box);
       if (area > 1 && !containsBox(left.box, right.box) && !containsBox(right.box, left.box)) {
         throw new Error(
-          `${context.role} ${context.viewport} touch targets overlap: ${left.label} and ${right.label}`,
+          `${context.role} ${context.viewport} touch targets overlap: ${left.label} ${JSON.stringify(left.box)} and ${right.label} ${JSON.stringify(right.box)}`,
         );
       }
     }

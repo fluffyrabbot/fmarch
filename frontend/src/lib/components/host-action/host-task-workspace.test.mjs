@@ -138,9 +138,10 @@ test("blocked task instances remain visible without leaking denied commands", ()
   );
 });
 
-test("DayEvent tasks expose their typed decision boundary without borrowing prompt actions", () => {
+test("DayEvent tasks hydrate typed participants and build one selected-winner command", () => {
   const view = buildHostTaskWorkspaceViewModel({
     groups,
+    commandContext: { gameId: "game-1" },
     hostTasks: [{
       id: "day-event-resolve:event-cookie",
       kind: "day_event_resolve",
@@ -157,14 +158,45 @@ test("DayEvent tasks expose their typed decision boundary without borrowing prom
       }],
       blockedReason: null,
     }],
+    hostDayEvents: [{
+      eventId: "event-cookie",
+      state: "locked",
+      phaseId: "D01",
+      templateKey: "theme.raffle",
+      participation: {
+        who: "alive_slots",
+        mode: "opt_in",
+        minimum: 1,
+        maximum: null,
+      },
+      participantSlots: ["slot_1", "slot_2"],
+      rewards: [{
+        key: "cookie",
+        labelKey: "theme.cookie",
+        effectCount: 1,
+      }],
+    }],
+    dayEventSelections: {
+      "event-cookie": ["slot_2"],
+    },
   });
   const task = view.tasks.find((candidate) =>
     candidate.id === "day-event-resolve:event-cookie");
-  assert.equal(task.label, "DayEvent decision");
-  assert.equal(task.actions.length, 0);
-  assert.equal(
-    task.emptyLabel,
-    "Choose winners through the typed ResolveDayEvent command boundary.",
+  assert.equal(task.label, "Raffle");
+  assert.deepEqual(
+    task.dayEvent.participants.map((participant) => [
+      participant.slot,
+      participant.selected,
+    ]),
+    [["slot_1", false], ["slot_2", true]],
   );
+  assert.deepEqual(task.dayEvent.rewards, ["Cookie"]);
+  assert.equal(task.actions.length, 1);
+  assert.deepEqual(task.actions[0].config.payload, {
+    kind: "resolve_day_event",
+    gameId: "game-1",
+    eventId: "event-cookie",
+    winnerSlots: ["slot_2"],
+  });
   assert.equal(task.diagnostics.protocol, "ResolveDayEvent");
 });

@@ -822,10 +822,22 @@ pub struct HostConsoleStateDelta {
     pub phase: Option<HostConsolePhaseStateDelta>,
     pub slots: Vec<HostConsoleSlotOccupancyDelta>,
     pub thread_posts: Vec<HostConsoleThreadPostDelta>,
+    /// Authoritative DayEvent workspace rows. HostTasks reference these by
+    /// `source_id`; the workspace owns definition and participation detail.
+    pub day_events: Vec<HostDayEventDelta>,
     /// Permission-aware exception-queue selectors derived from authoritative
     /// projections. A task id identifies one decision instance; `kind` only
     /// identifies the family that knows how to render it.
     pub tasks: Vec<HostTaskDelta>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+pub struct HostDayEventDelta {
+    pub event_id: String,
+    pub state: String,
+    pub phase_id: Option<String>,
+    pub definition: game_platform::DayEvent,
+    pub participant_slots: Vec<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -1914,7 +1926,7 @@ pub mod typescript {
         DiscussionThreadPage, DiscussionTopic, DiscussionTopicPage, GameIndexEntry, GameIndexPage,
         Hello, HostConsoleAuthorityDelta, HostConsoleAuthorityKind, HostConsolePhaseStateDelta,
         HostConsoleSlotOccupancyDelta, HostConsoleStateDelta, HostConsoleThreadPostDelta,
-        HostPhaseControl, HostPromptDecision, HostPromptDelta, HostPromptsDelta,
+        HostDayEventDelta, HostPhaseControl, HostPromptDecision, HostPromptDelta, HostPromptsDelta,
         HostTaskAllowedCommand, HostTaskCommandKind, HostTaskDelta, HostTaskKind, HostTaskState,
         HostTaskUrgency, ModerationCase, ModerationCaseDetail, ModerationCasePage,
         ModerationHistory, ModerationReport, ModerationReportReceipt, PlayerInvestigationResult,
@@ -1993,6 +2005,7 @@ pub mod typescript {
         push::<HostConsolePhaseStateDelta>(&mut out);
         push::<HostConsoleSlotOccupancyDelta>(&mut out);
         push::<HostConsoleThreadPostDelta>(&mut out);
+        push::<HostDayEventDelta>(&mut out);
         push::<HostTaskKind>(&mut out);
         push::<HostTaskState>(&mut out);
         push::<HostTaskUrgency>(&mut out);

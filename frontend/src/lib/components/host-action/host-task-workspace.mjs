@@ -30,6 +30,8 @@ export function buildHostTaskWorkspaceViewModel({
   replacement = {},
   hostPrompts = [],
   hostTasks = [],
+  hostDayEvents = [],
+  dayEventSelections = {},
   votecount = [],
   selectedTaskId = null,
 } = {}) {
@@ -51,6 +53,9 @@ export function buildHostTaskWorkspaceViewModel({
       index: groups.length + index,
       promptGroup,
       hostPrompts,
+      hostDayEvents,
+      dayEventSelections,
+      gameId: commandContext.gameId,
       commandStatuses,
     }),
   );
@@ -137,16 +142,33 @@ function buildHostTaskInstance({
   index,
   promptGroup,
   hostPrompts,
+  hostDayEvents,
+  dayEventSelections,
+  gameId,
   commandStatuses,
 }) {
   const allowedCommandKinds = new Set(
     task.allowedCommands?.map((command) => command.kind) ?? [],
   );
-  const sourceActions = promptGroup?.actions?.filter(
+  const promptActions = promptGroup?.actions?.filter(
     (action) =>
       action.payload?.promptId === task.sourceId &&
       allowedCommandKinds.has(action.payload?.kind),
   ) ?? [];
+  const dayEventDecision = task.kind === "day_event_resolve";
+  const dayEvent = dayEventDecision
+    ? buildDayEventContext({
+        event: hostDayEvents.find((candidate) => candidate.eventId === task.sourceId),
+        selectedSlots: dayEventSelections[task.sourceId] ?? [],
+        task,
+        gameId,
+      })
+    : null;
+  const sourceActions = dayEventDecision
+    ? dayEvent?.action === null || dayEvent?.action === undefined
+      ? []
+      : [dayEvent.action]
+    : promptActions;
   const activeStatus = activeTaskStatus(sourceActions, commandStatuses);
   const state = taskState(activeStatus, task.state);
   const prompt = hostPrompts.find((candidate) => candidate.id === task.sourceId);
@@ -155,7 +177,6 @@ function buildHostTaskInstance({
     state === "blocked"
       ? task.blockedReason ?? "No permitted resolution command is available."
       : null;
-  const dayEventDecision = task.kind === "day_event_resolve";
   return Object.freeze({
     id: task.id,
     kind: task.kind,
@@ -165,17 +186,23 @@ function buildHostTaskInstance({
     urgency: task.urgency,
     urgencyLabel: stateLabel(state, "Needs decision"),
     state,
-    label: prompt?.label ?? (dayEventDecision ? "DayEvent decision" : "Host decision"),
+    label:
+      prompt?.label ??
+      dayEvent?.label ??
+      (dayEventDecision ? "DayEvent decision" : "Host decision"),
     intent: task.intent,
     consequence: blockedReason ?? task.consequence,
-    meta: [task.phaseId, task.subjectSlot].filter(Boolean).join(" · "),
+    meta:
+      dayEvent?.meta ??
+      [task.phaseId, task.subjectSlot].filter(Boolean).join(" · "),
     testId: `host-task-${stableTestId(task.id)}`,
     panelTestId: `moderator-control-${stableTestId(task.id)}`,
     actions: buildTaskActions(sourceActions, commandStatuses),
+    dayEvent,
     emptyLabel: state === "blocked"
       ? "No permitted resolution command is available."
       : dayEventDecision
-        ? "Choose winners through the typed ResolveDayEvent command boundary."
+        ? "Select at least one participant before resolving this event."
         : "No action is currently required.",
     diagnostics: Object.freeze({
       authority: promptGroup?.authority ?? "Host team",
@@ -185,6 +212,85 @@ function buildHostTaskInstance({
         : promptGroup?.boundaryDetail ?? "ResolveHostPrompt",
     }),
   });
+}
+
+function buildDayEventContext({ event, selectedSlots, task, gameId }) {
+  if (event === null || event === undefined) {
+    return Object.freeze({
+      eventId: task.sourceId,
+      label: "DayEvent decision",
+      meta: task.phaseId,
+      participantSummary: "Participant projection unavailable",
+      participants: Object.freeze([]),
+      rewards: Object.freeze([]),
+      action: null,
+    });
+  }
+  const availableSlots = new Set(event.participantSlots);
+  const winners = [...new Set(selectedSlots.map(String))]
+    .filter((slot) => availableSlots.has(slot))
+    .sort();
+  const participants = event.participantSlots.map((slot) =>
+    Object.freeze({
+      slot,
+      selected: winners.includes(slot),
+      disabled: task.state !== "ready",
+      testId: `day-event-winner-${stableTestId(event.eventId)}-${stableTestId(slot)}`,
+    }),
+  );
+  const label = presentThemeKey(event.templateKey, "DayEvent decision");
+  const rewardLabels = event.rewards.map((reward) =>
+    presentThemeKey(reward.labelKey || reward.key, reward.key || "Reward"),
+  );
+  const selectedLabel =
+    winners.length === 1 ? winners[0] : `${winners.length} participants`;
+  const outcomeLabel =
+    winners.length === 0
+      ? "select at least one winner before applying rewards"
+      : `select ${selectedLabel} and apply ${rewardLabels.length} reward binding${
+          rewardLabels.length === 1 ? "" : "s"
+        } atomically`;
+  const action =
+    task.state !== "ready"
+      ? null
+      : Object.freeze({
+          id: `resolve_day_event-${stableTestId(event.eventId)}`,
+          label: winners.length === 0 ? "Select a winner" : "Resolve event",
+          objectLabel: label,
+          outcomeLabel,
+          confirmationText: `Resolve ${label}: ${outcomeLabel} for ${label}.`,
+          irreversible: true,
+          disabled: winners.length === 0,
+          payload: Object.freeze({
+            kind: "resolve_day_event",
+            gameId,
+            eventId: event.eventId,
+            winnerSlots: Object.freeze(winners),
+          }),
+        });
+  return Object.freeze({
+    eventId: event.eventId,
+    label,
+    meta: `${event.phaseId ?? task.phaseId} · ${event.participantSlots.length} participant${
+      event.participantSlots.length === 1 ? "" : "s"
+    }`,
+    participantSummary: `${event.participantSlots.length} joined · minimum ${event.participation.minimum}`,
+    participants: Object.freeze(participants),
+    rewards: Object.freeze(rewardLabels),
+    action,
+  });
+}
+
+function presentThemeKey(value, fallback) {
+  const normalized = String(value ?? "")
+    .split(".")
+    .at(-1)
+    ?.replace(/[_-]+/gu, " ")
+    .trim();
+  if (!normalized) {
+    return fallback;
+  }
+  return normalized[0].toUpperCase() + normalized.slice(1);
 }
 
 function activeTaskStatus(actions, commandStatuses) {

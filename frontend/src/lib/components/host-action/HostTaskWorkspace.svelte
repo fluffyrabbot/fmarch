@@ -11,12 +11,14 @@
   export let replacement = {};
   export let hostPrompts = [];
   export let hostTasks = [];
+  export let hostDayEvents = [];
   export let votecount = [];
   export let onDispatch = () => {};
   export let onRetry = () => {};
   export let onCancel = () => {};
 
   let preferredTaskId = null;
+  let dayEventSelections = {};
   $: view = buildHostTaskWorkspaceViewModel({
     groups,
     commandStatuses,
@@ -25,9 +27,24 @@
     replacement,
     hostPrompts,
     hostTasks,
+    hostDayEvents,
+    dayEventSelections,
     votecount,
     selectedTaskId: preferredTaskId,
   });
+
+  function toggleDayEventWinner(eventId, slot) {
+    const current = new Set(dayEventSelections[eventId] ?? []);
+    if (current.has(slot)) {
+      current.delete(slot);
+    } else {
+      current.add(slot);
+    }
+    dayEventSelections = {
+      ...dayEventSelections,
+      [eventId]: [...current].sort(),
+    };
+  }
 </script>
 
 <section
@@ -96,6 +113,48 @@
             <strong>{task.consequence}</strong>
           </div>
 
+          {#if task.dayEvent}
+            <section
+              class="host-task-workspace__day-event"
+              data-testid={`host-day-event-workspace-${task.dayEvent.eventId}`}
+            >
+              <header>
+                <div>
+                  <span>Participants</span>
+                  <strong>{task.dayEvent.participantSummary}</strong>
+                </div>
+                <div>
+                  <span>Rewards</span>
+                  <strong>{task.dayEvent.rewards.join(", ") || "No rewards projected"}</strong>
+                </div>
+              </header>
+              {#if task.dayEvent.participants.length === 0}
+                <p>No participants are available for selection.</p>
+              {:else}
+                <fieldset>
+                  <legend>Select winner slots</legend>
+                  <div class="host-task-workspace__winner-grid">
+                    {#each task.dayEvent.participants as participant}
+                      <label
+                        data-testid={participant.testId}
+                        data-selected={participant.selected}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={participant.selected}
+                          disabled={participant.disabled}
+                          on:change={() =>
+                            toggleDayEventWinner(task.dayEvent.eventId, participant.slot)}
+                        />
+                        <span>{participant.slot}</span>
+                      </label>
+                    {/each}
+                  </div>
+                </fieldset>
+              {/if}
+            </section>
+          {/if}
+
           {#if task.actions.length === 0}
             <p class="host-task-workspace__empty">{task.emptyLabel ?? "No action is currently required."}</p>
           {:else}
@@ -155,3 +214,66 @@
     </details>
   </section>
 </section>
+
+<style>
+  .host-task-workspace__day-event {
+    background: var(--fm-surface-muted);
+    border: 1px solid var(--fm-line-strong);
+    border-radius: 10px;
+    display: grid;
+    gap: 12px;
+    padding: 12px;
+  }
+
+  .host-task-workspace__day-event > header {
+    display: grid;
+    gap: 8px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .host-task-workspace__day-event > header div {
+    display: grid;
+    gap: 2px;
+  }
+
+  .host-task-workspace__day-event span,
+  .host-task-workspace__day-event legend {
+    color: var(--fm-ink-subtle);
+    font-size: 12px;
+    font-weight: 800;
+  }
+
+  .host-task-workspace__day-event fieldset {
+    border: 0;
+    margin: 0;
+    padding: 0;
+  }
+
+  .host-task-workspace__winner-grid {
+    display: grid;
+    gap: 8px;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    margin-block-start: 8px;
+  }
+
+  .host-task-workspace__winner-grid label {
+    align-items: center;
+    border: 1px solid var(--fm-line-strong);
+    border-radius: 8px;
+    display: flex;
+    gap: 8px;
+    min-block-size: 44px;
+    padding: 8px 10px;
+  }
+
+  .host-task-workspace__winner-grid label[data-selected="true"] {
+    background: var(--fm-accent-soft);
+    border-color: var(--fm-accent);
+  }
+
+  @media (max-width: 560px) {
+    .host-task-workspace__day-event > header {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

@@ -4628,6 +4628,44 @@ where
         .collect()
 }
 
+/// Read current participation for every DayEvent in one game. Host-console
+/// hydration uses this game-scoped read instead of one query per task instance.
+pub async fn day_event_participation_for_game<'e, E>(
+    executor: E,
+    game_id: Uuid,
+) -> Result<Vec<DayEventParticipationRow>, ProjectionError>
+where
+    E: sqlx::PgExecutor<'e>,
+{
+    let rows = sqlx::query(
+        "SELECT game_id, event_id, actor_slot, payload, phase_id, submitted_seq \
+         FROM day_event_participation WHERE game_id = $1 \
+         ORDER BY event_id, submitted_seq, actor_slot",
+    )
+    .bind(game_id)
+    .fetch_all(executor)
+    .await?;
+    rows.into_iter()
+        .map(|row| {
+            let payload_value: serde_json::Value = row.get("payload");
+            let payload = serde_json::from_value(payload_value).map_err(|source| {
+                ProjectionError::Payload {
+                    kind: "DayEventParticipationSubmitted".to_string(),
+                    source,
+                }
+            })?;
+            Ok(DayEventParticipationRow {
+                game_id: row.get("game_id"),
+                event_id: row.get("event_id"),
+                actor_slot: row.get("actor_slot"),
+                payload,
+                phase_id: row.get("phase_id"),
+                submitted_seq: row.get("submitted_seq"),
+            })
+        })
+        .collect()
+}
+
 /// Read folded host/admin prompt phase-control decisions, ordered by event log position.
 pub async fn host_phase_controls(
     pool: &PgPool,

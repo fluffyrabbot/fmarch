@@ -57,6 +57,7 @@ test("host route controller builds projection store boundaries from route data",
       phase: data.phase,
       replacement: data.replacement,
       tasks: data.hostTasks,
+      dayEvents: [],
     },
     votecount: data.votecount,
     dayVoteOutcomes: data.dayVoteOutcomes,
@@ -533,6 +534,20 @@ test("host route controller schedules projection refreshes for prompt ACKs and s
   );
   assert.deepEqual(
     hostPostAckRefreshKeys({
+      event: { payload: { kind: "resolve_day_event" } },
+      outcome: { state: "ack" },
+    }),
+    ["host"],
+  );
+  assert.deepEqual(
+    hostPostAckRefreshKeys({
+      event: { payload: { kind: "resolve_day_event" } },
+      outcome: { state: "ack", projectionState: {} },
+    }),
+    [],
+  );
+  assert.deepEqual(
+    hostPostAckRefreshKeys({
       event: { payload: { kind: "resolve_host_prompt" } },
       outcome: {
         state: "ack",
@@ -577,6 +592,13 @@ test("host route controller schedules projection refreshes for prompt ACKs and s
       outcome: { state: "reject", error: "PromptAlreadyResolved" },
     }),
     ["host", "hostPrompts"],
+  );
+  assert.deepEqual(
+    hostPostCommandRefreshKeys({
+      event: { payload: { kind: "resolve_day_event" } },
+      outcome: { state: "reject", error: "DayEventStateConflict" },
+    }),
+    ["host"],
   );
   assert.deepEqual(
     hostPostCommandRefreshKeys({

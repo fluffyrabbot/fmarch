@@ -141,6 +141,16 @@ const RESOLVE_PROMPT_SELECT_POLICY_EVENT = Object.freeze({
   }),
 });
 
+const RESOLVE_DAY_EVENT = Object.freeze({
+  actionId: "resolve_day_event-event-cookie",
+  payload: Object.freeze({
+    kind: "resolve_day_event",
+    gameId: "00000000-0000-0000-0000-000000000001",
+    eventId: "event-cookie",
+    winnerSlots: Object.freeze(["slot_1", "slot_2"]),
+  }),
+});
+
 test("host actions map to generated wire command variants", () => {
   assert.deepEqual(mapHostActionToWireCommand(EXTEND_EVENT), {
     ExtendDeadline: {
@@ -228,6 +238,16 @@ test("host actions map to generated wire command variants", () => {
       game: "00000000-0000-0000-0000-000000000001",
       prompt_id: "D03R2:revote:NoMajority",
       decision: { SelectPolicy: { policy: "no_majority_no_lynch" } },
+    },
+  });
+  assert.deepEqual(mapHostActionToWireCommand(RESOLVE_DAY_EVENT), {
+    ResolveDayEvent: {
+      game: "00000000-0000-0000-0000-000000000001",
+      event_id: "event-cookie",
+      decision: {
+        kind: "select_winners",
+        slots: ["slot_1", "slot_2"],
+      },
     },
   });
 });

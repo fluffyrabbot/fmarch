@@ -645,6 +645,24 @@ function normalizePlayerDayEventAttention(entry) {
     participationStatus: String(
       entry.participation_status ?? entry.participationStatus ?? "available",
     ),
+    participantCount: Number(
+      entry.participant_count ?? entry.participantCount ?? 0,
+    ),
+    minimumParticipants: Number(
+      entry.minimum_participants ?? entry.minimumParticipants ?? 0,
+    ),
+    maximumParticipants:
+      entry.maximum_participants === null ||
+      entry.maximumParticipants === null ||
+      (entry.maximum_participants === undefined &&
+        entry.maximumParticipants === undefined)
+        ? null
+        : Number(entry.maximum_participants ?? entry.maximumParticipants),
+    rewardKeys: Object.freeze(
+      Array.isArray(entry.reward_keys ?? entry.rewardKeys)
+        ? (entry.reward_keys ?? entry.rewardKeys).map(String)
+        : [],
+    ),
     canSubmit: entry.can_submit === true || entry.canSubmit === true,
     canWithdraw: entry.can_withdraw === true || entry.canWithdraw === true,
   });

@@ -1492,6 +1492,23 @@ async function proveRenderedPlayerSurface(bundle) {
   assertIncludes(html, "Main thread as slot-7", "player command channel value");
   assertIncludes(
     html,
+    'data-testid="player-day-event-rail"',
+    "player DayEvent rail",
+  );
+  assertIncludes(
+    html,
+    'data-testid="player-day-event-event-cookie"',
+    "player DayEvent card",
+  );
+  assertIncludes(html, "Open events", "player DayEvent heading");
+  assertIncludes(html, "Join Raffle", "player DayEvent command");
+  assertIncludes(
+    html,
+    'data-testid="player-dock-events"',
+    "player DayEvent dock affordance",
+  );
+  assertIncludes(
+    html,
     'data-capability-label="SlotOccupant or ChannelMember(main)"',
     "player command channel capability",
   );
@@ -1574,6 +1591,9 @@ async function proveRenderedPlayerSurface(bundle) {
       capabilityLabel: "SlotOccupant or ChannelMember(main)",
       actorSlot: "slot-7",
     },
+    dayEventRailTestId: "player-day-event-rail",
+    dayEventCardTestId: "player-day-event-event-cookie",
+    dayEventDockTestId: "player-dock-events",
     threadPager: {
       component: PLAYER_THREAD_PAGER_CONTRACT.component,
       rootTestId: PLAYER_THREAD_PAGER_CONTRACT.rootTestId,
@@ -1743,6 +1763,7 @@ async function proveRenderedModeratorSurface(bundle) {
   for (const id of [
     "deadline",
     "engine-host-prompt-D01-skip_next_day-slot_1",
+    "day-event-resolve-event-cookie",
     "replacement",
     "phase",
     "votecount",
@@ -1783,6 +1804,17 @@ async function proveRenderedModeratorSurface(bundle) {
     "ResolveHostPrompt preserves pack-defined policy",
     "moderator host prompt boundary",
   );
+  assertIncludes(
+    html,
+    'data-testid="host-day-event-workspace-event-cookie"',
+    "moderator DayEvent workspace",
+  );
+  assertIncludes(
+    html,
+    'data-testid="day-event-winner-event-cookie-slot-1"',
+    "moderator DayEvent participant selector",
+  );
+  assertIncludes(html, "Select winner slots", "moderator DayEvent decision");
   assertIncludes(html, "official-votecount-live-ws", "moderator votecount boundary");
   assertIncludes(
     html,
@@ -1810,6 +1842,7 @@ async function proveRenderedModeratorSurface(bundle) {
     taskTestIds: [
       "deadline",
       "engine-host-prompt-D01-skip_next_day-slot_1",
+      "day-event-resolve-event-cookie",
       "replacement",
       "phase",
       "votecount",
@@ -1832,6 +1865,8 @@ async function proveRenderedModeratorSurface(bundle) {
       "moderator-control-engine-host-prompt-D01-skip_next_day-slot_1",
     hostPromptActionTestId:
       "critical-host-action-resolve_host_prompt-D01-skip_next_day-slot_1",
+    dayEventWorkspaceTestId: "host-day-event-workspace-event-cookie",
+    dayEventParticipantTestId: "day-event-winner-event-cookie-slot-1",
     commandContext: {
       testId: HOST_TASK_WORKSPACE_CONTRACT.commandContextTestId,
       gameId: "midsummer",

@@ -84,6 +84,7 @@ export async function buildHostConsoleRouteData({
       phase: HOST_FIXTURE_PHASE,
       replacement,
       tasks: HOST_FIXTURE_HOST_TASKS,
+      dayEvents: HOST_FIXTURE_DAY_EVENTS,
     }),
   );
   const pendingPromptCount = coldLoad.hostPrompts.filter(
@@ -190,6 +191,7 @@ export async function buildHostConsoleRouteData({
     }),
     hostPrompts: coldLoad.hostPrompts,
     hostTasks: hostProjection.tasks,
+    hostDayEvents: hostProjection.dayEvents,
     votecount: coldLoad.votecount,
     dayVoteOutcomes: coldLoad.dayVoteOutcomes,
     dayVoteOutcomeBoundary: Object.freeze({
@@ -411,6 +413,47 @@ const HOST_FIXTURE_HOST_TASKS = Object.freeze([
       }),
     ]),
     blockedReason: null,
+  }),
+  Object.freeze({
+    id: "day-event-resolve:event-cookie",
+    kind: "day_event_resolve",
+    state: "ready",
+    urgency: "attention",
+    intent: "Resolve theme.raffle",
+    consequence: "apply 1 reward binding atomically",
+    phaseId: "D01",
+    subjectSlot: null,
+    sourceId: "event-cookie",
+    allowedCommands: Object.freeze([
+      Object.freeze({
+        kind: "resolve_day_event",
+        permissionClass: "day_event_resolve",
+      }),
+    ]),
+    blockedReason: null,
+  }),
+]);
+
+const HOST_FIXTURE_DAY_EVENTS = Object.freeze([
+  Object.freeze({
+    eventId: "event-cookie",
+    state: "locked",
+    phaseId: "D01",
+    templateKey: "theme.raffle",
+    participation: Object.freeze({
+      who: "alive_slots",
+      mode: "opt_in",
+      minimum: 1,
+      maximum: null,
+    }),
+    participantSlots: Object.freeze(["slot-1", "slot-2", "slot-7"]),
+    rewards: Object.freeze([
+      Object.freeze({
+        key: "cookie",
+        labelKey: "theme.cookie",
+        effectCount: 1,
+      }),
+    ]),
   }),
 ]);
 

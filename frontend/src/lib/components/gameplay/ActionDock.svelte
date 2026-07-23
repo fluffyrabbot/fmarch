@@ -1,6 +1,7 @@
 <script>
   export let view;
   export let privateCount = 0;
+  export let dayEventCount = 0;
   export let onCommand = () => {};
 
   $: quickActions = view?.quickActions?.buttons ?? [];
@@ -57,6 +58,12 @@
   {#if hasPhaseActions}
     <a class="action-dock__tool" href="#player-phase-actions" data-testid="player-dock-act">
       <span>Act</span>
+    </a>
+  {/if}
+  {#if dayEventCount > 0}
+    <a class="action-dock__tool" href="#player-day-events" data-testid="player-dock-events">
+      <span>Event</span>
+      <strong aria-label={`${dayEventCount} open events`}>{dayEventCount}</strong>
     </a>
   {/if}
   <a class="action-dock__tool" href="#player-actions" data-testid="player-dock-count">
@@ -153,11 +160,12 @@
     .action-dock button,
     .action-dock__tool {
       font-size: 12px;
-      min-inline-size: 58px;
-      padding-inline: 8px;
+      min-inline-size: 44px;
+      padding-inline: 6px;
     }
 
-    .action-dock__tool[data-testid="player-dock-count"] {
+    .action-dock__tool[data-testid="player-dock-count"],
+    .action-dock__tool[data-testid="player-dock-more"] {
       display: none;
     }
   }

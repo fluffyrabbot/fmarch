@@ -125,6 +125,8 @@ export type HostConsoleSlotOccupancyDelta = { slot_id: string, occupant_user_id:
 
 export type HostConsoleThreadPostDelta = { stream_seq: bigint, author_slot: string | null, author_user: string | null, phase_id: string, body: string, };
 
+export type HostDayEventDelta = { event_id: string, state: string, phase_id: string | null, definition: DayEvent, participant_slots: Array<string>, };
+
 export type HostTaskKind = "engine_host_prompt" | "day_event_resolve";
 
 export type HostTaskState = "ready" | "blocked";
@@ -146,6 +148,11 @@ id: string, kind: HostTaskKind, state: HostTaskState, urgency: HostTaskUrgency, 
 source_id: string, allowed_commands: Array<HostTaskAllowedCommand>, blocked_reason: string | null, };
 
 export type HostConsoleStateDelta = { game: string, authority: HostConsoleAuthorityDelta, completed: boolean, phase: HostConsolePhaseStateDelta | null, slots: Array<HostConsoleSlotOccupancyDelta>, thread_posts: Array<HostConsoleThreadPostDelta>,
+/**
+ * Authoritative DayEvent workspace rows. HostTasks reference these by
+ * `source_id`; the workspace owns definition and participation detail.
+ */
+day_events: Array<HostDayEventDelta>,
 /**
  * Permission-aware exception-queue selectors derived from authoritative
  * projections. A task id identifies one decision instance; `kind` only

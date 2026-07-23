@@ -40,14 +40,14 @@ use wire::{
     DayVoteOutcomeDelta, DiscussionArea, DiscussionPost, DiscussionThreadPage, DiscussionTopic,
     DiscussionTopicPage, GameIndexEntry, GameIndexPage, Hello, HostConsoleAuthorityDelta,
     HostConsoleAuthorityKind, HostConsolePhaseStateDelta, HostConsoleSlotOccupancyDelta,
-    HostConsoleStateDelta, HostConsoleThreadPostDelta, HostPhaseControl, HostPromptDelta,
-    HostPromptsDelta, HostTaskAllowedCommand, HostTaskCommandKind, HostTaskDelta, HostTaskKind,
-    HostTaskState, HostTaskUrgency, ModerationCase, ModerationCaseDetail, ModerationCasePage,
-    ModerationReportReceipt, PlayerInvestigationResult, PlayerInvestigationResultsDelta,
-    PlayerNotification, PlayerNotificationsDelta, ProfileEditor, ProjectionDelta,
-    PublicGameThreadPage, PublicProfile, PublicSearchPage, PublicSearchResult, RejectCode,
-    RejectMsg, ServerEnvelope, ServerMsg, SubscriptionTargetState, ThreadPage, ThreadPost,
-    ThreadPostsDelta, VoteCountClearedDelta, VoteCountDelta, PROTOCOL_VERSION,
+    HostConsoleStateDelta, HostConsoleThreadPostDelta, HostDayEventDelta, HostPhaseControl,
+    HostPromptDelta, HostPromptsDelta, HostTaskAllowedCommand, HostTaskCommandKind, HostTaskDelta,
+    HostTaskKind, HostTaskState, HostTaskUrgency, ModerationCase, ModerationCaseDetail,
+    ModerationCasePage, ModerationReportReceipt, PlayerInvestigationResult,
+    PlayerInvestigationResultsDelta, PlayerNotification, PlayerNotificationsDelta, ProfileEditor,
+    ProjectionDelta, PublicGameThreadPage, PublicProfile, PublicSearchPage, PublicSearchResult,
+    RejectCode, RejectMsg, ServerEnvelope, ServerMsg, SubscriptionTargetState, ThreadPage,
+    ThreadPost, ThreadPostsDelta, VoteCountClearedDelta, VoteCountDelta, PROTOCOL_VERSION,
 };
 
 #[derive(Clone)]
@@ -7263,6 +7263,10 @@ pub struct PlayerDayEventAttention {
     pub template_key: String,
     pub phase_id: String,
     pub participation_status: String,
+    pub participant_count: u32,
+    pub minimum_participants: u32,
+    pub maximum_participants: Option<u32>,
+    pub reward_keys: Vec<String>,
     pub can_submit: bool,
     pub can_withdraw: bool,
 }
@@ -7424,6 +7428,15 @@ async fn player_command_state(
                 } else {
                     "available".to_string()
                 },
+                participant_count: participation.len() as u32,
+                minimum_participants: event.definition.participation.limits.minimum,
+                maximum_participants: event.definition.participation.limits.maximum,
+                reward_keys: event
+                    .definition
+                    .rewards
+                    .iter()
+                    .map(|reward| reward.reward_key.as_str().to_string())
+                    .collect(),
                 can_submit: !submitted && !at_capacity,
                 can_withdraw: submitted,
             });
@@ -7995,6 +8008,7 @@ pub struct HostConsoleStateResponse {
     pub phase: Option<HostConsolePhaseState>,
     pub slots: Vec<HostConsoleSlotOccupancy>,
     pub thread_posts: Vec<HostConsoleThreadPost>,
+    pub day_events: Vec<HostDayEventDelta>,
     pub tasks: Vec<HostTaskDelta>,
 }
 
@@ -8095,6 +8109,7 @@ impl From<HostConsoleStateResponse> for HostConsoleStateDelta {
                 .into_iter()
                 .map(HostConsoleThreadPostDelta::from)
                 .collect(),
+            day_events: response.day_events,
             tasks: response.tasks,
         }
     }
@@ -8300,8 +8315,24 @@ async fn load_host_console_state(
         })
         .collect();
     let host_prompts = projections::host_prompts(&state.pool, game).await?;
-    let day_events = projections::day_events(&state.pool, game).await?;
-    let tasks = select_host_tasks(&host_prompts, &day_events, &authority);
+    let day_event_rows = projections::day_events(&state.pool, game).await?;
+    let day_event_participation =
+        projections::day_event_participation_for_game(&state.pool, game).await?;
+    let tasks = select_host_tasks(&host_prompts, &day_event_rows, &authority);
+    let day_events = day_event_rows
+        .iter()
+        .map(|event| HostDayEventDelta {
+            event_id: event.event_id.clone(),
+            state: event.state.clone(),
+            phase_id: event.phase_id.clone(),
+            definition: event.definition.clone(),
+            participant_slots: day_event_participation
+                .iter()
+                .filter(|row| row.event_id == event.event_id)
+                .map(|row| row.actor_slot.clone())
+                .collect(),
+        })
+        .collect();
 
     Ok(HostConsoleStateResponse {
         game,
@@ -8310,6 +8341,7 @@ async fn load_host_console_state(
         phase,
         slots,
         thread_posts,
+        day_events,
         tasks,
     })
 }

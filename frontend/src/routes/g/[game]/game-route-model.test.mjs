@@ -11,6 +11,7 @@ import {
   buildPrivateQueueRouteItems,
   buildGameRouteData,
   buildPlayerComposerView,
+  buildPlayerDayEventCommands,
   buildPlayerVoteCommands,
   playerChannelForbiddenMessage,
   playerChannelNotFoundMessage,
@@ -18,6 +19,46 @@ import {
   playerForbiddenMessage,
   threadPageStatusForResult,
 } from "./game-route-model.mjs";
+
+test("player DayEvent attention becomes one current typed participation command", () => {
+  const available = buildPlayerDayEventCommands({
+    dayEvents: [{
+      eventId: "event-cookie",
+      templateKey: "theme.cookie_raffle",
+      participantCount: 2,
+      minimumParticipants: 1,
+      maximumParticipants: 5,
+      rewardKeys: ["cookie"],
+      participationStatus: "available",
+      canSubmit: true,
+      canWithdraw: false,
+    }],
+  });
+  assert.deepEqual(available, [{
+    action: "submit_day_event:event-cookie",
+    commandKind: "submit_day_event",
+    eventId: "event-cookie",
+    label: "Join Cookie raffle",
+    detail: "2/5 joined · Cookie",
+    status: "available",
+  }]);
+
+  const submitted = buildPlayerDayEventCommands({
+    dayEvents: [{
+      ...available[0],
+      eventId: "event-cookie",
+      templateKey: "theme.cookie_raffle",
+      participantCount: 3,
+      maximumParticipants: null,
+      rewardKeys: ["cookie"],
+      participationStatus: "submitted",
+      canSubmit: false,
+      canWithdraw: true,
+    }],
+  });
+  assert.equal(submitted[0].action, "withdraw_day_event:event-cookie");
+  assert.equal(submitted[0].label, "Leave Cookie raffle");
+});
 
 test("player route data exposes thread, channel, votecount, and touch command labels", async () => {
   const data = await buildGameRouteData({

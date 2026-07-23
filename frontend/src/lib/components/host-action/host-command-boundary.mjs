@@ -171,6 +171,17 @@ export function mapHostActionToWireCommand(actionEvent) {
           decision: mapHostPromptDecision(payload.decision),
         }),
       });
+    case "resolve_day_event":
+      return Object.freeze({
+        ResolveDayEvent: Object.freeze({
+          game: requiredString(payload.gameId, "payload.gameId"),
+          event_id: requiredString(payload.eventId, "payload.eventId"),
+          decision: Object.freeze({
+            kind: "select_winners",
+            slots: requiredStringArray(payload.winnerSlots, "payload.winnerSlots"),
+          }),
+        }),
+      });
     default:
       throw new TypeError(`unsupported host action payload kind: ${payload.kind}`);
   }
@@ -259,6 +270,12 @@ function rejectMessage(reject, retryable, { requestEnvelope } = {}) {
   ) {
     return `${base}; host prompt selection is stale, refresh the host console and use current prompt controls`;
   }
+  if (
+    reject.error === "DayEventStateConflict" &&
+    requestEnvelope?.body?.body?.command?.ResolveDayEvent !== undefined
+  ) {
+    return `${base}; DayEvent decision is stale, refresh the host console and use the current participant set`;
+  }
   if (!retryable || /\breload and retry\b/i.test(base)) {
     return base;
   }
@@ -299,6 +316,10 @@ export function projectHostConsoleState(state, fallback) {
   return Object.freeze({
     authority: normalizeHostConsoleAuthority(state.authority, fallback.authority),
     tasks: normalizeHostTasks(state.tasks),
+    dayEvents: normalizeHostDayEvents(
+      state.day_events ?? state.dayEvents,
+      fallback.dayEvents,
+    ),
     completed:
       typeof state.completed === "boolean"
         ? state.completed
@@ -349,6 +370,74 @@ export function projectHostConsoleState(state, fallback) {
         : fallback.replacement.historyLabel,
     }),
     slots: Object.freeze(slots),
+  });
+}
+
+export function normalizeHostDayEvents(dayEvents, fallback = []) {
+  const source = Array.isArray(dayEvents)
+    ? dayEvents
+    : Array.isArray(fallback)
+      ? fallback
+      : [];
+  return Object.freeze(
+    source
+      .map((event) => normalizeHostDayEvent(event))
+      .filter((event) => event !== null),
+  );
+}
+
+function normalizeHostDayEvent(event) {
+  if (event === null || typeof event !== "object") {
+    return null;
+  }
+  const definition =
+    event.definition !== null && typeof event.definition === "object"
+      ? event.definition
+      : {};
+  const eventId = String(event.event_id ?? event.eventId ?? definition.id ?? "").trim();
+  if (eventId === "") {
+    return null;
+  }
+  const participation =
+    definition.participation !== null && typeof definition.participation === "object"
+      ? definition.participation
+      : {};
+  const limits =
+    participation.limits !== null && typeof participation.limits === "object"
+      ? participation.limits
+      : {};
+  const rewards = Array.isArray(definition.rewards) ? definition.rewards : [];
+  const participantSlots = event.participant_slots ?? event.participantSlots;
+  return Object.freeze({
+    eventId,
+    state: String(event.state ?? "scheduled"),
+    phaseId: event.phase_id ?? event.phaseId ?? null,
+    templateKey: String(definition.template_key ?? definition.templateKey ?? ""),
+    participation: Object.freeze({
+      who: String(participation.who ?? ""),
+      mode: String(participation.mode ?? ""),
+      minimum: Number(limits.minimum ?? 0),
+      maximum:
+        limits.maximum === null || limits.maximum === undefined
+          ? null
+          : Number(limits.maximum),
+    }),
+    participantSlots: Object.freeze(
+      Array.isArray(participantSlots)
+        ? [...new Set(participantSlots.map(String))].sort()
+        : [],
+    ),
+    rewards: Object.freeze(
+      rewards.map((reward) =>
+        Object.freeze({
+          key: String(reward?.reward_key ?? reward?.rewardKey ?? ""),
+          labelKey: String(
+            reward?.display_name_theme_key ?? reward?.displayNameThemeKey ?? "",
+          ),
+          effectCount: Array.isArray(reward?.effects) ? reward.effects.length : 0,
+        }),
+      ),
+    ),
   });
 }
 
@@ -538,6 +627,19 @@ function requiredString(value, field) {
     throw new TypeError(`${field} must be a non-empty string`);
   }
   return value;
+}
+
+function requiredStringArray(value, field) {
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new TypeError(`${field} must contain at least one string`);
+  }
+  const normalized = value.map((entry, index) =>
+    requiredString(entry, `${field}[${index}]`),
+  );
+  if (new Set(normalized).size !== normalized.length) {
+    throw new TypeError(`${field} must contain unique strings`);
+  }
+  return Object.freeze(normalized);
 }
 
 function requiredSlotLifecycle(value) {

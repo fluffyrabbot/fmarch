@@ -451,6 +451,8 @@ export const roles = Object.freeze([
     visibleTestIds: [
       "player-game-bar",
       "player-channel-switcher",
+      "player-day-event-rail",
+      "player-day-event-event-cookie",
       "player-primary-action-zone",
       "player-thread-pager",
       "player-private-boundary",
@@ -467,6 +469,7 @@ export const roles = Object.freeze([
     statusRegions: [],
     touchSelectors: [
       '[data-testid="player-channel-main"]',
+      '[data-testid="player-day-event-event-cookie"] button',
       '[data-testid="player-thread-load-older"]',
       '[data-testid="player-composer"] button',
       '[data-testid="player-private-link-notification-1"]',
@@ -586,6 +589,7 @@ export const roles = Object.freeze([
       "host-console-attention",
       "host-task-queue-summary",
       "host-task-queue",
+      "host-task-day-event-resolve-event-cookie",
       "host-decision-canvas",
     ],
     overlapTestIds: [
@@ -597,6 +601,7 @@ export const roles = Object.freeze([
     touchSelectors: [
       '[data-testid="host-task-deadline"]',
       '[data-testid="host-task-engine-host-prompt-D01-skip_next_day-slot_1"]',
+      '[data-testid="host-task-day-event-resolve-event-cookie"]',
       '[data-testid="host-task-replacement"]',
       '[data-testid="critical-host-action-extend_deadline"] [data-testid="critical-host-action-trigger"]',
       '[data-testid="host-console-votecount-row-slot-2_Ilya"]',

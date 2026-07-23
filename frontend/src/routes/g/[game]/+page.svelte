@@ -13,6 +13,7 @@
   import { createProjectionStore } from "$lib/app/projection-store.mjs";
   import { activePhaseTheme, phaseThemeKey } from "$lib/app/phase-theme.mjs";
   import PlayerCommandReceipt from "$lib/components/player-command/PlayerCommandReceipt.svelte";
+  import PlayerDayEventRail from "$lib/components/player-command/PlayerDayEventRail.svelte";
   import PlayerEndgameSummary from "$lib/components/player-endgame-summary/PlayerEndgameSummary.svelte";
   import { buildPlayerEndgameSummaryViewModel } from "$lib/components/player-endgame-summary/player-endgame-summary-model.mjs";
   import PlayerRoleCard from "$lib/components/player-role-card/PlayerRoleCard.svelte";
@@ -475,6 +476,14 @@
       onSelectTarget={selectActionTarget}
     />
 
+    <PlayerDayEventRail
+      commands={composer.dayEventCommands ?? []}
+      {commandPending}
+      {commandInterrupted}
+      {player}
+      onCommand={submitPlayerCommand}
+    />
+
     <ContextSheet>
       <PlayerPrivateQueue
         boundary={privateQueueBoundary}
@@ -520,6 +529,7 @@
       slot="dock"
       view={playerActionView}
       privateCount={privateQueueBoundary.count ?? privateQueue.length}
+      dayEventCount={composer.dayEventCommands?.length ?? 0}
       onCommand={submitPlayerCommand}
     />
   </GameFrame>

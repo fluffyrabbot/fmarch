@@ -463,6 +463,22 @@ test("player route controller refreshes command state after stale phase rejects"
       "endgameSummary",
     ],
   );
+  assert.deepEqual(
+    playerRefreshKeysForCommandOutcome({
+      data: fixtureData(),
+      action: "submit_day_event:event-cookie",
+      commandStatus: { state: "ack" },
+    }),
+    ["commandState"],
+  );
+  assert.deepEqual(
+    playerRefreshKeysForCommandOutcome({
+      data: fixtureData(),
+      action: "withdraw_day_event:event-cookie",
+      commandStatus: { state: "reject", error: "DayEventStateConflict" },
+    }),
+    ["commandState"],
+  );
 });
 
 test("player route controller refreshes action state after invalid target rejects", async () => {

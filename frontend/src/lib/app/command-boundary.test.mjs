@@ -164,6 +164,48 @@ test("player actions map to Rust wire command variants", () => {
   );
 });
 
+test("player DayEvent participation maps to typed opt-in and withdrawal commands", () => {
+  const common = {
+    game: "00000000-0000-0000-0000-000000000001",
+    actorSlot: "slot-7",
+  };
+  assert.deepEqual(
+    buildPlayerCommand({
+      ...common,
+      action: "submit_day_event:event-cookie",
+      actionConfig: {
+        commandKind: "submit_day_event",
+        eventId: "event-cookie",
+      },
+    }),
+    {
+      SubmitDayEventParticipation: {
+        game: common.game,
+        event_id: "event-cookie",
+        actor_slot: "slot-7",
+        payload: { kind: "opt_in" },
+      },
+    },
+  );
+  assert.deepEqual(
+    buildPlayerCommand({
+      ...common,
+      action: "withdraw_day_event:event-cookie",
+      actionConfig: {
+        commandKind: "withdraw_day_event",
+        eventId: "event-cookie",
+      },
+    }),
+    {
+      WithdrawDayEventParticipation: {
+        game: common.game,
+        event_id: "event-cookie",
+        actor_slot: "slot-7",
+      },
+    },
+  );
+});
+
 test("player post builder requires policy affordance for media-only posts", () => {
   assert.throws(
     () =>

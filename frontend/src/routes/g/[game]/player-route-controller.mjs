@@ -235,6 +235,12 @@ export function playerRefreshKeysForAction(action) {
   ) {
     return Object.freeze(["commandState"]);
   }
+  if (
+    normalizedAction.startsWith("submit_day_event:") ||
+    normalizedAction.startsWith("withdraw_day_event:")
+  ) {
+    return Object.freeze(["commandState"]);
+  }
   switch (normalizedAction) {
     case "submit_post":
       return Object.freeze(["thread", "votecount", "commandState", "dayVoteOutcomes"]);
@@ -398,6 +404,19 @@ export function playerRefreshKeysForCommandOutcome({ data, action, commandStatus
   if (commandStatus?.state === "reject" && commandStatus?.error === "ActionAlreadySubmitted") {
     return playerRefreshKeysForDataAction(data, action);
   }
+  if (
+    commandStatus?.state === "reject" &&
+    [
+      "DuplicateParticipation",
+      "ParticipationNotFound",
+      "ParticipationNotAllowed",
+      "DayEventStateConflict",
+    ].includes(commandStatus?.error) &&
+    (String(action).startsWith("submit_day_event:") ||
+      String(action).startsWith("withdraw_day_event:"))
+  ) {
+    return playerRefreshKeysForDataActionWithCommandState(data, action);
+  }
   if (commandStatus?.state === "reject" && commandStatus?.error === "SlotNotAlive") {
     return playerRefreshKeysForDataActionWithCommandState(data, action);
   }
@@ -484,6 +503,9 @@ export function playerActionConfig(data, action) {
       (command) => String(command.action) === String(action),
     ) ??
     data.composer.actionCommands?.find(
+      (command) => String(command.action) === String(action),
+    ) ??
+    data.composer.dayEventCommands?.find(
       (command) => String(command.action) === String(action),
     ) ?? null
   );

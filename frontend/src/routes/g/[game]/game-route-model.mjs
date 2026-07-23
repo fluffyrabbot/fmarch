@@ -371,7 +371,64 @@ export function buildPlayerComposerView(
       actorSlot,
       selectedActionTargets,
     ),
+    dayEventCommands: buildPlayerDayEventCommands(commandState),
   });
+}
+
+export function buildPlayerDayEventCommands(commandState) {
+  const dayEvents = Array.isArray(commandState?.dayEvents)
+    ? commandState.dayEvents
+    : [];
+  return Object.freeze(
+    dayEvents.flatMap((event) => {
+      const label = presentDayEventKey(event.templateKey, "Day event");
+      const capacity =
+        event.maximumParticipants === null
+          ? `${event.participantCount} joined`
+          : `${event.participantCount}/${event.maximumParticipants} joined`;
+      const reward =
+        event.rewardKeys.length === 0
+          ? "Event reward"
+          : event.rewardKeys.map((key) => presentDayEventKey(key, "Reward")).join(", ");
+      if (event.canWithdraw) {
+        return [
+          Object.freeze({
+            action: `withdraw_day_event:${event.eventId}`,
+            commandKind: "withdraw_day_event",
+            eventId: event.eventId,
+            label: `Leave ${label}`,
+            detail: `${capacity} · ${reward}`,
+            status: event.participationStatus,
+          }),
+        ];
+      }
+      if (event.canSubmit) {
+        return [
+          Object.freeze({
+            action: `submit_day_event:${event.eventId}`,
+            commandKind: "submit_day_event",
+            eventId: event.eventId,
+            label: `Join ${label}`,
+            detail: `${capacity} · ${reward}`,
+            status: event.participationStatus,
+          }),
+        ];
+      }
+      return [];
+    }),
+  );
+}
+
+function presentDayEventKey(value, fallback) {
+  const normalized = String(value ?? "")
+    .split(".")
+    .at(-1)
+    ?.replace(/[_-]+/gu, " ")
+    .trim();
+  if (!normalized) {
+    return fallback;
+  }
+  return normalized[0].toUpperCase() + normalized.slice(1);
 }
 
 export function playerWithdrawVoteState(commandState) {
@@ -587,6 +644,20 @@ const PLAYER_FIXTURE_COLD_LOAD = Object.freeze({
     role: null,
     phase: null,
     actions: Object.freeze([]),
+    dayEvents: Object.freeze([
+      Object.freeze({
+        eventId: "event-cookie",
+        templateKey: "theme.raffle",
+        phaseId: "D01",
+        participationStatus: "available",
+        participantCount: 2,
+        minimumParticipants: 1,
+        maximumParticipants: null,
+        rewardKeys: Object.freeze(["cookie"]),
+        canSubmit: true,
+        canWithdraw: false,
+      }),
+    ]),
     voteTargets: Object.freeze([
       Object.freeze({ kind: "slot", slotId: "slot-2", label: "Slot 2" }),
       Object.freeze({ kind: "no_lynch", slotId: null, label: "No lynch" }),

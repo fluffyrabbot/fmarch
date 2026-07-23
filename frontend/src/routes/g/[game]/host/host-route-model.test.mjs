@@ -289,6 +289,26 @@ test("host console route data uses host prompt and votecount cold-loads when ava
           phase: null,
           slots: [],
           thread_posts: [],
+          day_events: [{
+            event_id: "event-cookie",
+            state: "locked",
+            phase_id: "D01",
+            participant_slots: ["slot_1", "slot_2"],
+            definition: {
+              id: "event-cookie",
+              template_key: "theme.raffle",
+              participation: {
+                who: "alive_slots",
+                mode: "opt_in",
+                limits: { minimum: 1, maximum: null },
+              },
+              rewards: [{
+                reward_key: "cookie",
+                display_name_theme_key: "theme.cookie",
+                effects: [{ recipient: "winner" }],
+              }],
+            },
+          }],
           tasks: [
             {
               id: "engine-host-prompt:D01:tie:slot_2",
@@ -362,6 +382,24 @@ test("host console route data uses host prompt and votecount cold-loads when ava
       blockedReason: null,
     },
   ]);
+  assert.deepEqual(data.hostDayEvents, [{
+    eventId: "event-cookie",
+    state: "locked",
+    phaseId: "D01",
+    templateKey: "theme.raffle",
+    participation: {
+      who: "alive_slots",
+      mode: "opt_in",
+      minimum: 1,
+      maximum: null,
+    },
+    participantSlots: ["slot_1", "slot_2"],
+    rewards: [{
+      key: "cookie",
+      labelKey: "theme.cookie",
+      effectCount: 1,
+    }],
+  }]);
   assert.equal(
     data.criticalActions.at(-1).payload.promptId,
     "D01:tie:slot_2",

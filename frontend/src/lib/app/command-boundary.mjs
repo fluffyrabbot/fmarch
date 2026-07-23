@@ -65,6 +65,23 @@ export function buildPlayerCommand({
           action_id: requiredString(actionConfig?.actionId, "actionConfig.actionId"),
         }),
       });
+    case "submit_day_event":
+      return Object.freeze({
+        SubmitDayEventParticipation: Object.freeze({
+          game: requiredString(game, "game"),
+          event_id: requiredString(actionConfig?.eventId, "actionConfig.eventId"),
+          actor_slot: requiredString(actorSlot, "actorSlot"),
+          payload: Object.freeze({ kind: "opt_in" }),
+        }),
+      });
+    case "withdraw_day_event":
+      return Object.freeze({
+        WithdrawDayEventParticipation: Object.freeze({
+          game: requiredString(game, "game"),
+          event_id: requiredString(actionConfig?.eventId, "actionConfig.eventId"),
+          actor_slot: requiredString(actorSlot, "actorSlot"),
+        }),
+      });
     case "submit_action":
     case "submit_invalid_action":
       return Object.freeze({
@@ -274,6 +291,18 @@ function rejectMessage(reject, retryable, { requestEnvelope } = {}) {
   }
   if (reject.error === "NotYourSlot") {
     return `${base}; slot ownership changed, refresh and use current role surface`;
+  }
+  if (
+    [
+      "DuplicateParticipation",
+      "ParticipationNotFound",
+      "ParticipationNotAllowed",
+      "DayEventStateConflict",
+    ].includes(reject.error) &&
+    (requestEnvelope?.body?.body?.command?.SubmitDayEventParticipation !== undefined ||
+      requestEnvelope?.body?.body?.command?.WithdrawDayEventParticipation !== undefined)
+  ) {
+    return `${base}; DayEvent participation changed, refresh and use the current event controls`;
   }
   if (!retryable || /\breload and retry\b/i.test(base)) {
     return base;
