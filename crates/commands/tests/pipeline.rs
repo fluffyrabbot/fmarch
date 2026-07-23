@@ -12798,16 +12798,16 @@ async fn audit_projection_rebuild_artifact_in_process_writes_matched_and_drift_r
         .iter()
         .find(|row| row["slot_id"] == "slot_1")
         .expect("rebuilt slot row");
-    assert_eq!(before_slot["role_key"], "tampered_projection_role");
-    assert_ne!(rebuilt_slot["role_key"], "tampered_projection_role");
-    let live_role: String =
-        sqlx::query_scalar("SELECT role_key FROM slot_state WHERE game_id = $1 AND slot_id = $2")
-            .bind(drift_game)
-            .bind("slot_1")
-            .fetch_one(&pool)
-            .await
-            .expect("live drifted projection row after artifact audit");
-    assert_eq!(live_role, "tampered_projection_role");
+    assert_eq!(before_slot["role_key"], "<private>");
+    assert_eq!(rebuilt_slot["role_key"], "<private>");
+    let live_slots = projections::slot_state(&pool, drift_game)
+        .await
+        .expect("live drifted projection rows after artifact audit");
+    let live_role = live_slots
+        .iter()
+        .find(|row| row.slot_id == "slot_1")
+        .and_then(|row| row.role_key.as_deref());
+    assert_eq!(live_role, Some("tampered_projection_role"));
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
@@ -13383,11 +13383,25 @@ fn in_process_command_output(
 }
 
 async fn tamper_live_slot_state_role(pool: &PgPool, game: Uuid, slot: &str, role_key: &str) {
-    let update =
-        sqlx::query("UPDATE slot_state SET role_key = $3 WHERE game_id = $1 AND slot_id = $2")
+    let game_text = game.to_string();
+    let context = format!("fmarch-projection-v1:slot_state:{game_text}:{slot}");
+    let envelope: serde_json::Value =
+        sqlx::query_scalar("SELECT private FROM slot_state WHERE game_id = $1 AND slot_id = $2")
             .bind(game)
             .bind(slot)
-            .bind(role_key)
+            .fetch_one(pool)
+            .await
+            .expect("read encrypted live slot state before tamper");
+    let mut plaintext = eventstore::decrypt_private_projection(&envelope, &context)
+        .expect("open live slot state before tamper");
+    plaintext["role_key"] = serde_json::json!(role_key);
+    let private = eventstore::encrypt_private_projection(plaintext, &context)
+        .expect("seal tampered slot state");
+    let update =
+        sqlx::query("UPDATE slot_state SET private = $3 WHERE game_id = $1 AND slot_id = $2")
+            .bind(game)
+            .bind(slot)
+            .bind(private)
             .execute(pool)
             .await
             .expect("tamper live slot_state role");
