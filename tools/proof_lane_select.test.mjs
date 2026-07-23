@@ -10,6 +10,7 @@ import {
   loadManifest,
   pathMatches,
   reverseCrateClosure,
+  runLanes,
   selectLanes,
 } from './proof_lane_select.mjs';
 
@@ -54,6 +55,27 @@ test('npm lanes exist as package.json scripts and shell lanes carry commands', (
       assert.equal(laneCommand(laneId, manifest), lane.command);
     }
   }
+});
+
+test('lane execution preserves selected order and stops at the first failure', () => {
+  const calls = [];
+  const spawn = (command) => {
+    calls.push(command);
+    return { status: command.includes('test:proof-lane-contract') ? 7 : 0 };
+  };
+  assert.throws(
+    () =>
+      runLanes(
+        ['check:build-posture', 'test:proof-lane-contract', 'test:completeness-scorecard'],
+        manifest,
+        spawn,
+      ),
+    /test:proof-lane-contract failed \(exit 7\)/,
+  );
+  assert.deepEqual(calls, [
+    'npm run check:build-posture',
+    'npm run test:proof-lane-contract',
+  ]);
 });
 
 test('every manifest path entry exists in the repo', () => {

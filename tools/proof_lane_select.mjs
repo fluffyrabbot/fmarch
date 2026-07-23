@@ -14,11 +14,12 @@
 //
 // CLI:
 //   node tools/proof_lane_select.mjs [--mode inner|push|full] [--base <ref>]
-//                                    [--changed <path> ...] [--json] [--list]
+//                                    [--changed <path> ...] [--json] [--list] [--run]
 //                                    [--record <lane-id>]
 //
 // --changed bypasses git and supplies the changed set explicitly (also used by
-// the contract test). --record runs one lane, times it, and updates
+// the contract test). --run executes the selected lanes in cost order and stops
+// on the first failure. --record runs one lane, times it, and updates
 // docs/ops/proof-lane-timings.json on success.
 
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -188,6 +189,18 @@ export function laneCommand(laneId, manifest) {
   return lane.kind === 'npm' ? `npm run ${laneId}` : lane.command;
 }
 
+export function runLanes(laneIds, manifest, spawn = spawnSync) {
+  for (const [index, laneId] of laneIds.entries()) {
+    const command = laneCommand(laneId, manifest);
+    console.log(`\n[${index + 1}/${laneIds.length}] ${command}`);
+    const result = spawn(command, { cwd: REPO_ROOT, shell: true, stdio: 'inherit' });
+    if (result.status !== 0) {
+      throw new Error(`lane ${laneId} failed (exit ${result.status ?? 'unknown'})`);
+    }
+  }
+  console.log(`\nproof passed: ${laneIds.length} lane(s)`);
+}
+
 function recordLane(laneId, manifest) {
   const command = laneCommand(laneId, manifest);
   console.log(`recording ${laneId}: ${command}`);
@@ -212,7 +225,7 @@ function formatSeconds(entry) {
 }
 
 function main(argv) {
-  const args = { mode: 'inner', changed: [], json: false, list: false };
+  const args = { mode: 'inner', changed: [], json: false, list: false, run: false };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     if (arg === '--mode') args.mode = argv[++i];
@@ -220,11 +233,15 @@ function main(argv) {
     else if (arg === '--changed') args.changed.push(argv[++i]);
     else if (arg === '--json') args.json = true;
     else if (arg === '--list') args.list = true;
+    else if (arg === '--run') args.run = true;
     else if (arg === '--record') args.record = argv[++i];
     else throw new Error(`unknown argument: ${arg}`);
   }
   if (!['inner', 'push', 'full'].includes(args.mode)) {
     throw new Error(`unknown mode: ${args.mode}`);
+  }
+  if (args.run && (args.json || args.list || args.record)) {
+    throw new Error('--run cannot be combined with --json, --list, or --record');
   }
 
   const manifest = loadManifest();
@@ -276,6 +293,7 @@ function main(argv) {
   if (selection.frozenSkipped.length > 0) {
     console.log(`frozen areas untouched, lanes skipped: ${selection.frozenSkipped.join(', ')}`);
   }
+  if (args.run) runLanes(ordered, manifest);
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {

@@ -26,14 +26,15 @@ direct `main` work, and atomic history over PR ceremony.
 - Compute that gate mechanically: `npm run proof:lanes` maps the current diff
   (vs `main`, including uncommitted work) to the required lane set via
   `docs/ops/proof-lane-manifest.json`, expanding touched crates through the
-  reverse cargo dependency closure and `also_triggers` edges. `--mode push`
-  before pushing; `--mode full` for the full sweep.
+  reverse cargo dependency closure and `also_triggers` edges. Add `--run` to
+  execute the selected lanes: `--mode push --run` before pushing and
+  `--mode full --run` for the full sweep.
 - Tier discipline: `frozen` areas are completed surfaces trusted between full
   sweeps — their lanes leave the inner loop, never existence. Editing frozen
   paths is allowed (greenfield stance stands) but automatically re-arms their
   lanes plus the dependent closure; that escalation is the cost signal, not a
   prohibition. Re-declare tiers at sprint boundaries (current frontier =
-  active), and run `--mode full` before landing a sprint to `main` so the
+  active), and run `--mode full --run` before landing a sprint to `main` so the
   freeze stays honest. Validate manifest integrity with
   `npm run test:proof-lane-contract`; record lane costs with
   `node tools/proof_lane_select.mjs --record <lane-id>`.
