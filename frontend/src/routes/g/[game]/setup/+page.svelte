@@ -41,6 +41,13 @@
   $: inviteTargets = occupiedSetupInviteTargets(setupState);
   $: mainPolicy = readiness.mainPolicy;
   $: roleOptions = setupState.pack.roles;
+  $: programOptions = setupState.programCatalog;
+  $: attachableProgramOptions = programOptions.filter(
+    (option) =>
+      !setupState.attachedPrograms.some(
+        (attached) => attached.id === option.id && attached.version === option.version,
+      ),
+  );
   $: workflow = buildHostSetupWorkflow({
     setupState,
     readiness,
@@ -139,6 +146,7 @@
         actionId,
         data,
         formData,
+        setupState,
         fetchImpl: fetch,
       });
       commandStatuses = recordSetupCommandStatus(commandStatuses, actionId, outcome);
@@ -159,6 +167,7 @@
                 actionId,
                 data,
                 formData,
+                setupState,
                 confirmationStatus,
                 optimisticStatus,
                 finalStatus: outcome,
@@ -379,9 +388,73 @@
                 </form>
                 {#if commandStatuses["set-post-policy"]}<AppStatus status={commandStatuses["set-post-policy"]} testId="host-setup-policy-status" />{/if}
               </div>
+            {:else if stage.id === "program"}
+              <header class="host-setup__stage-header">
+                <div><p class="fm-eyebrow">Stage 5 · Optional</p><h2>Attach a day program</h2></div>
+                <span data-state={stage.state}>{stage.statusLabel}</span>
+              </header>
+              <p>Preview and attach immutable event definitions for the mash. You can skip this stage for a manual game.</p>
+              {#if programOptions.length === 0}
+                <p data-testid="host-setup-program-empty">No day programs are available.</p>
+              {:else}
+                <div class="host-setup__card-list" data-testid="host-setup-program-catalog">
+                  {#each programOptions as option}
+                    <article class="host-setup__role-card" data-testid={`host-setup-program-${option.id}-${option.version}`}>
+                      <div>
+                        <p class="fm-eyebrow">{option.id} · v{option.version}</p>
+                        <h3>{option.displayName}</h3>
+                      </div>
+                      <p>{option.eventCount} event{option.eventCount === 1 ? "" : "s"}</p>
+                      <ul class="host-setup__checklist">
+                        {#each option.document.events as event}
+                          <li>
+                            <span>{event.id}</span>
+                            <strong>{event.template_key}</strong>
+                          </li>
+                        {/each}
+                      </ul>
+                      {#if setupState.attachedPrograms.some((attached) => attached.id === option.id && attached.version === option.version)}
+                        <span class="host-setup__slot-state" data-state="ready">Attached</span>
+                      {/if}
+                    </article>
+                  {/each}
+                </div>
+                {#if attachableProgramOptions.length > 0}
+                  <form
+                    class="host-setup__inline-form"
+                    data-testid="host-setup-attach-program-form"
+                    on:submit={(event) => handleSetupSubmit(event, "attach-day-program")}
+                  >
+                    <label class="fm-field">
+                      <span>Day program</span>
+                      <select name="programId">
+                        {#each attachableProgramOptions as option}
+                          <option value={`${option.id}@${option.version}`}>
+                            {option.displayName} v{option.version}
+                          </option>
+                        {/each}
+                      </select>
+                    </label>
+                    <button class="fm-touch-button" type="submit">Attach program</button>
+                  </form>
+                {/if}
+                {#if setupState.attachedPrograms.length > 0}
+                  <dl class="host-setup__facts" data-testid="host-setup-attached-programs">
+                    {#each setupState.attachedPrograms as program}
+                      <div>
+                        <dt>{program.displayName} v{program.version}</dt>
+                        <dd>{program.eventCount} immutable event{program.eventCount === 1 ? "" : "s"}</dd>
+                      </div>
+                    {/each}
+                  </dl>
+                {/if}
+              {/if}
+              {#if commandStatuses["attach-day-program"]}
+                <AppStatus status={commandStatuses["attach-day-program"]} testId="host-setup-program-status" />
+              {/if}
             {:else}
               <header class="host-setup__stage-header">
-                <div><p class="fm-eyebrow">Stage 5</p><h2>Review and start</h2></div>
+                <div><p class="fm-eyebrow">Stage 6</p><h2>Review and start</h2></div>
                 <span data-state={stage.state}>{stage.statusLabel}</span>
               </header>
               <h3 data-testid="host-setup-readiness-summary">{readiness.summary}</h3>

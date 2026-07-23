@@ -28,6 +28,7 @@ test("setup workflow selects the first stage with a fixable blocker", () => {
       ["roster", "blocked"],
       ["roles", "blocked"],
       ["rules", "ready"],
+      ["program", "ready"],
       ["review", "blocked"],
     ],
   );
@@ -46,7 +47,11 @@ test("setup workflow preserves explicit navigation and routes ready setups to re
     readiness: { checks: readyChecks, summary: "Ready to start", startAvailable: true },
   });
   assert.equal(ready.selectedStageId, "review");
-  assert.equal(ready.stepper.readyCount, 5);
+  assert.equal(ready.stepper.readyCount, 6);
+  assert.equal(
+    ready.stages.find((stage) => stage.id === "program").statusLabel,
+    "Optional",
+  );
 
   const selected = buildHostSetupWorkflow({
     setupState: { phase: null },

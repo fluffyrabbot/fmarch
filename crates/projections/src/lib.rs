@@ -324,6 +324,19 @@ pub struct DayEventRow {
     pub updated_seq: i64,
 }
 
+/// One immutable attached DayProgram generation.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DayProgramRow {
+    pub game_id: Uuid,
+    pub program_id: String,
+    pub version: i64,
+    pub display_name: String,
+    pub theme_ref: Option<String>,
+    pub content_hash: String,
+    pub document: game_platform::DayProgram,
+    pub attached_seq: i64,
+}
+
 /// Current participation for one slot in one open DayEvent.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DayEventParticipationRow {
@@ -1113,6 +1126,52 @@ async fn fold_event(
                 .execute(&mut **tx)
                 .await?;
             }
+        }
+        "DayProgramAttached" => {
+            let program: game_platform::DayProgram =
+                serde_json::from_value(ev.payload["program"].clone()).map_err(|source| {
+                    ProjectionError::Payload {
+                        kind: ev.kind.clone(),
+                        source,
+                    }
+                })?;
+            program
+                .validate()
+                .map_err(|error| ProjectionError::Payload {
+                    kind: ev.kind.clone(),
+                    source: serde::de::Error::custom(error.to_string()),
+                })?;
+            let content_hash = str_field(&ev.payload, "content_hash", &ev.kind)?;
+            let expected_hash =
+                program
+                    .content_hash()
+                    .map_err(|error| ProjectionError::Payload {
+                        kind: ev.kind.clone(),
+                        source: serde::de::Error::custom(error.to_string()),
+                    })?;
+            if expected_hash.as_str() != content_hash {
+                return Err(ProjectionError::Payload {
+                    kind: ev.kind.clone(),
+                    source: serde::de::Error::custom(
+                        "DayProgramAttached content hash does not match document",
+                    ),
+                });
+            }
+            sqlx::query(
+                "INSERT INTO day_program \
+                 (game_id, program_id, version, display_name, theme_ref, content_hash, document, attached_seq) \
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
+            )
+            .bind(game_id)
+            .bind(program.id.as_str())
+            .bind(i64::from(program.version))
+            .bind(&program.display_name)
+            .bind(program.theme_ref.as_ref().map(|value| value.as_str()))
+            .bind(content_hash)
+            .bind(&ev.payload["program"])
+            .bind(ev.seq)
+            .execute(&mut **tx)
+            .await?;
         }
         "DayEventScheduled" => {
             let definition: game_platform::DayEvent =
@@ -3315,6 +3374,7 @@ async fn rebuild_in_tx(
         "vote_ballot",
         "day_event_participation",
         "day_event",
+        "day_program",
         "day_vote_outcome",
         "game_result",
         "host_phase_control",
@@ -3399,6 +3459,10 @@ const AUDIT_PROJECTIONS: &[AuditProjection] = &[
     AuditProjection {
         table: "day_vote_outcome",
         order_by: "phase_id",
+    },
+    AuditProjection {
+        table: "day_program",
+        order_by: "program_id, version",
     },
     AuditProjection {
         table: "day_event",
@@ -4584,6 +4648,45 @@ where
                 reward_keys_applied,
                 scheduled_seq: row.get("scheduled_seq"),
                 updated_seq: row.get("updated_seq"),
+            })
+        })
+        .collect()
+}
+
+/// Read immutable program generations in attachment order.
+pub async fn day_programs<'e, E>(
+    executor: E,
+    game_id: Uuid,
+) -> Result<Vec<DayProgramRow>, ProjectionError>
+where
+    E: sqlx::PgExecutor<'e>,
+{
+    let rows = sqlx::query(
+        "SELECT game_id, program_id, version, display_name, theme_ref, content_hash, \
+         document, attached_seq FROM day_program WHERE game_id = $1 \
+         ORDER BY attached_seq, program_id, version",
+    )
+    .bind(game_id)
+    .fetch_all(executor)
+    .await?;
+    rows.into_iter()
+        .map(|row| {
+            let document_value: serde_json::Value = row.get("document");
+            let document = serde_json::from_value(document_value).map_err(|source| {
+                ProjectionError::Payload {
+                    kind: "DayProgramAttached".to_string(),
+                    source,
+                }
+            })?;
+            Ok(DayProgramRow {
+                game_id: row.get("game_id"),
+                program_id: row.get("program_id"),
+                version: row.get("version"),
+                display_name: row.get("display_name"),
+                theme_ref: row.get("theme_ref"),
+                content_hash: row.get("content_hash"),
+                document,
+                attached_seq: row.get("attached_seq"),
             })
         })
         .collect()

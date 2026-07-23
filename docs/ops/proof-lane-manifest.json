@@ -163,6 +163,12 @@
       "capabilities": ["foundation.resolution-engine-parity"]
     },
     {
+      "id": "programs",
+      "tier": "active",
+      "paths": ["programs/"],
+      "lanes": ["cargo:game-platform", "cargo:commands", "cargo:api"]
+    },
+    {
       "id": "frontend:identity",
       "tier": "active",
       "paths": ["frontend/src/routes/auth/", "frontend/src/lib/server/", "frontend/src/hooks.server."],

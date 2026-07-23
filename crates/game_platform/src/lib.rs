@@ -44,6 +44,18 @@ pub enum ModelError {
     EmptyEffectPlan,
     #[error("effect plan reason must not be blank")]
     BlankEffectPlanReason,
+    #[error("day program version must be greater than zero")]
+    ZeroProgramVersion,
+    #[error("day program display name must not be blank")]
+    BlankProgramDisplayName,
+    #[error("day program must define at least one event")]
+    EmptyDayProgram,
+    #[error("duplicate day program event id {0}")]
+    DuplicateProgramEvent(DayEventId),
+    #[error("program content hash must be 64 lowercase hexadecimal characters")]
+    InvalidProgramContentHash,
+    #[error("day program could not be serialized canonically")]
+    CanonicalProgramSerialization,
 }
 
 macro_rules! identifier {
@@ -96,6 +108,44 @@ identifier!(Tag, "tag");
 identifier!(ContentRef, "content reference");
 identifier!(ChannelId, "channel id");
 identifier!(PrincipalId, "principal id");
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[cfg_attr(feature = "typescript", ts(type = "string"))]
+pub struct ProgramContentHash(String);
+
+impl ProgramContentHash {
+    pub fn new(value: impl Into<String>) -> Result<Self, ModelError> {
+        let value = value.into();
+        if value.len() != 64
+            || !value
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+        {
+            return Err(ModelError::InvalidProgramContentHash);
+        }
+        Ok(Self(value))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for ProgramContentHash {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(formatter)
+    }
+}
+
+impl<'de> Deserialize<'de> for ProgramContentHash {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Self::new(String::deserialize(deserializer)?).map_err(D::Error::custom)
+    }
+}
 
 /// Captured platform wall-clock time. This is never engine logical time.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -705,6 +755,91 @@ impl DayEvent {
     }
 }
 
+/// Program-owned event input. Identity and state are compiled at attachment so
+/// authors cannot mismatch an event's program or materialize it mid-lifecycle.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+pub struct DayEventTemplate {
+    pub id: DayEventId,
+    pub template_key: TemplateKey,
+    pub phase_scope: PhaseScope,
+    pub schedule: DayEventSchedule,
+    pub participation: ParticipationSpec,
+    pub resolution: DayEventResolutionMode,
+    pub rewards: Vec<RewardBinding>,
+    pub narrative: NarrativeTemplates,
+    pub channel_policy: EventChannelPolicy,
+}
+
+impl DayEventTemplate {
+    pub fn compile(&self, program_id: ProgramId) -> Result<DayEvent, ModelError> {
+        let event = DayEvent {
+            id: self.id.clone(),
+            program_id,
+            template_key: self.template_key.clone(),
+            phase_scope: self.phase_scope.clone(),
+            schedule: self.schedule.clone(),
+            participation: self.participation.clone(),
+            state: DayEventState::Scheduled,
+            resolution: self.resolution,
+            rewards: self.rewards.clone(),
+            narrative: self.narrative.clone(),
+            channel_policy: self.channel_policy.clone(),
+        };
+        event.validate()?;
+        Ok(event)
+    }
+}
+
+/// Small inline day-program document. Attachment stores this canonical value
+/// and its content hash, then materializes immutable DayEvent definitions.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+pub struct DayProgram {
+    pub id: ProgramId,
+    pub version: u32,
+    pub display_name: String,
+    pub theme_ref: Option<ContentRef>,
+    pub events: Vec<DayEventTemplate>,
+}
+
+impl DayProgram {
+    pub fn validate(&self) -> Result<(), ModelError> {
+        if self.version == 0 {
+            return Err(ModelError::ZeroProgramVersion);
+        }
+        if self.display_name.trim().is_empty() {
+            return Err(ModelError::BlankProgramDisplayName);
+        }
+        if self.events.is_empty() {
+            return Err(ModelError::EmptyDayProgram);
+        }
+        let mut event_ids = BTreeSet::new();
+        for event in &self.events {
+            if !event_ids.insert(&event.id) {
+                return Err(ModelError::DuplicateProgramEvent(event.id.clone()));
+            }
+            event.compile(self.id.clone())?;
+        }
+        Ok(())
+    }
+
+    pub fn compile(&self) -> Result<Vec<DayEvent>, ModelError> {
+        self.validate()?;
+        self.events
+            .iter()
+            .map(|event| event.compile(self.id.clone()))
+            .collect()
+    }
+
+    pub fn content_hash(&self) -> Result<ProgramContentHash, ModelError> {
+        self.validate()?;
+        let canonical =
+            serde_json::to_vec(self).map_err(|_| ModelError::CanonicalProgramSerialization)?;
+        ProgramContentHash::new(blake3::hash(&canonical).to_hex().to_string())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 pub struct RewardAssignment {
@@ -830,6 +965,40 @@ mod tests {
         }
     }
 
+    fn program() -> DayProgram {
+        DayProgram {
+            id: id("program-bakery"),
+            version: 1,
+            display_name: "Bakery mash".to_string(),
+            theme_ref: Some(id("theme.bakery")),
+            events: vec![DayEventTemplate {
+                id: id("event-cookie"),
+                template_key: id("theme.raffle"),
+                phase_scope: PhaseScope::DuringDay { number: 1 },
+                schedule: DayEventSchedule::HostOpened,
+                participation: ParticipationSpec {
+                    who: ParticipantFilter::AliveSlots,
+                    mode: ParticipationMode::OptIn,
+                    limits: ParticipationLimits {
+                        minimum: 1,
+                        maximum: None,
+                    },
+                },
+                resolution: DayEventResolutionMode::HostDecision,
+                rewards: vec![reward()],
+                narrative: NarrativeTemplates {
+                    opened: None,
+                    locked: None,
+                    resolved: None,
+                    cancelled: None,
+                },
+                channel_policy: EventChannelPolicy {
+                    allowed_channels: vec![id("main")],
+                },
+            }],
+        }
+    }
+
     #[test]
     fn reward_templates_compile_to_fully_bound_effects() {
         let plan = reward()
@@ -940,5 +1109,25 @@ mod tests {
     fn validated_identifiers_reject_blank_deserialization() {
         let error = serde_json::from_str::<SlotId>("\"  \"").unwrap_err();
         assert!(error.to_string().contains("slot id must not be blank"));
+    }
+
+    #[test]
+    fn day_program_compiles_identity_and_scheduled_state() {
+        let compiled = program().compile().unwrap();
+        assert_eq!(compiled.len(), 1);
+        assert_eq!(compiled[0].program_id.as_str(), "program-bakery");
+        assert_eq!(compiled[0].state, DayEventState::Scheduled);
+        assert_eq!(program().content_hash().unwrap().as_str().len(), 64);
+        assert_eq!(program().content_hash(), program().content_hash());
+    }
+
+    #[test]
+    fn day_program_rejects_duplicate_event_identity() {
+        let mut invalid = program();
+        invalid.events.push(invalid.events[0].clone());
+        assert_eq!(
+            invalid.validate(),
+            Err(ModelError::DuplicateProgramEvent(id("event-cookie")))
+        );
     }
 }

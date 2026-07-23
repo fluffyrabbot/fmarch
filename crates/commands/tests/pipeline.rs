@@ -22,10 +22,10 @@ use commands::{
 use eventstore::{ActorId, EventInput};
 use projections::{
     action_counters, action_grants, action_history, append_and_project, audit_rebuild,
-    day_event_participation, day_events, day_vote_outcomes, delayed_death_queues, game_result,
-    host_prompts, investigation_memory, phase_state, player_info_results, player_notifications,
-    player_notifications_for_slot, rebuild, sheriff_badges, slot_effects, slot_state,
-    visit_history, votecount,
+    day_event_participation, day_events, day_programs, day_vote_outcomes, delayed_death_queues,
+    game_result, host_prompts, investigation_memory, phase_state, player_info_results,
+    player_notifications, player_notifications_for_slot, rebuild, sheriff_badges, slot_effects,
+    slot_state, visit_history, votecount,
 };
 use sqlx::{PgPool, Row};
 use std::collections::{BTreeMap, BTreeSet};
@@ -123,6 +123,37 @@ fn minimal_day_event(event_id: &str, effect: &str) -> game_platform::DayEvent {
         channel_policy: game_platform::EventChannelPolicy {
             allowed_channels: vec![game_platform::ChannelId::new("spectator").unwrap()],
         },
+    }
+}
+
+fn minimal_day_program(
+    program_id: &str,
+    version: u32,
+    event_ids: &[&str],
+) -> game_platform::DayProgram {
+    let events = event_ids
+        .iter()
+        .map(|event_id| {
+            let event = minimal_day_event(event_id, "bomb");
+            game_platform::DayEventTemplate {
+                id: event.id,
+                template_key: event.template_key,
+                phase_scope: event.phase_scope,
+                schedule: event.schedule,
+                participation: event.participation,
+                resolution: event.resolution,
+                rewards: event.rewards,
+                narrative: event.narrative,
+                channel_policy: event.channel_policy,
+            }
+        })
+        .collect();
+    game_platform::DayProgram {
+        id: game_platform::ProgramId::new(program_id).unwrap(),
+        version,
+        display_name: "Bakery".to_string(),
+        theme_ref: Some(game_platform::ContentRef::new("theme.bakery").unwrap()),
+        events,
     }
 }
 
@@ -4880,6 +4911,156 @@ async fn apply_effect_plan_is_atomic_audited_and_visible_to_the_engine(pool: PgP
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+async fn day_program_attachment_compiles_atomically_and_preserves_generations(pool: PgPool) {
+    let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
+    let first = minimal_day_program("program-bakery", 1, &["event-cookie", "event-cake"]);
+    let expected_hash = first.content_hash().unwrap().to_string();
+    let ack = handle(
+        &pool,
+        &user("host_h"),
+        Command::AttachDayProgram {
+            game,
+            program: first.clone(),
+        },
+    )
+    .await
+    .expect("attach and compile first program generation");
+    assert_eq!(ack.stream_seqs.len(), 3);
+
+    let programs = day_programs(&pool, game).await.unwrap();
+    assert_eq!(programs.len(), 1);
+    assert_eq!(programs[0].program_id, "program-bakery");
+    assert_eq!(programs[0].version, 1);
+    assert_eq!(programs[0].content_hash, expected_hash);
+    assert_eq!(programs[0].document, first);
+    let original_event = day_events(&pool, game)
+        .await
+        .unwrap()
+        .into_iter()
+        .find(|event| event.event_id == "event-cookie")
+        .unwrap()
+        .definition;
+    assert_eq!(
+        original_event.program_id,
+        game_platform::ProgramId::new("program-bakery").unwrap()
+    );
+    assert_eq!(
+        original_event.state,
+        game_platform::DayEventState::Scheduled
+    );
+
+    let before_duplicate: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM events WHERE stream_id = $1")
+            .bind(game)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(
+        handle(
+            &pool,
+            &user("host_h"),
+            Command::AttachDayProgram {
+                game,
+                program: first,
+            },
+        )
+        .await
+        .expect_err("a program generation is immutable"),
+        Reject::DayProgramAlreadyAttached
+    );
+    let after_duplicate: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM events WHERE stream_id = $1")
+            .bind(game)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(after_duplicate, before_duplicate);
+
+    let mut invalid_adapter =
+        minimal_day_program("program-invalid-adapter", 1, &["event-invalid-adapter"]);
+    invalid_adapter.events[0].rewards[0].effects[0].operation =
+        game_platform::EffectOperationTemplate::Mark {
+            effect: game_platform::Tag::new("not_declared_by_pack").unwrap(),
+        };
+    assert!(matches!(
+        handle(
+            &pool,
+            &user("host_h"),
+            Command::AttachDayProgram {
+                game,
+                program: invalid_adapter,
+            },
+        )
+        .await
+        .expect_err("adapter validation applies before any program facts append"),
+        Reject::DayProgramValidation(_)
+    ));
+    assert_eq!(day_programs(&pool, game).await.unwrap().len(), 1);
+    assert!(day_events(&pool, game)
+        .await
+        .unwrap()
+        .iter()
+        .all(|event| event.event_id != "event-invalid-adapter"));
+
+    handle(
+        &pool,
+        &user("host_h"),
+        Command::AttachDayProgram {
+            game,
+            program: minimal_day_program("program-bakery", 2, &["event-bread"]),
+        },
+    )
+    .await
+    .expect("a distinct generation remains additive");
+    assert_eq!(day_programs(&pool, game).await.unwrap().len(), 2);
+    assert_eq!(
+        day_events(&pool, game)
+            .await
+            .unwrap()
+            .into_iter()
+            .find(|event| event.event_id == "event-cookie")
+            .unwrap()
+            .definition,
+        original_event,
+        "later generations cannot rewrite an existing definition"
+    );
+
+    let before_collision: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM events WHERE stream_id = $1")
+            .bind(game)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(
+        handle(
+            &pool,
+            &user("host_h"),
+            Command::AttachDayProgram {
+                game,
+                program: minimal_day_program("program-tea", 1, &["event-cookie", "event-tea"]),
+            },
+        )
+        .await
+        .expect_err("one event-id collision rejects the complete attachment"),
+        Reject::DayEventAlreadyExists
+    );
+    let after_collision: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM events WHERE stream_id = $1")
+            .bind(game)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(after_collision, before_collision);
+    assert_eq!(day_programs(&pool, game).await.unwrap().len(), 2);
+    assert!(day_events(&pool, game)
+        .await
+        .unwrap()
+        .iter()
+        .all(|event| event.event_id != "event-tea"));
+    assert!(audit_rebuild(&pool, game).await.unwrap().ok);
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
 async fn day_event_vertical_is_typed_atomic_rebuildable_and_engine_visible(pool: PgPool) {
     let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
     let event_id = game_platform::DayEventId::new("event-cookie").unwrap();
@@ -5102,52 +5283,13 @@ async fn day_event_vertical_is_typed_atomic_rebuildable_and_engine_visible(pool:
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
-async fn day_event_reward_failure_rolls_back_resolution_and_all_effects(pool: PgPool) {
+async fn day_event_reward_adapters_fail_before_scheduling(pool: PgPool) {
     let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
     let event_id = game_platform::DayEventId::new("event-invalid-reward").unwrap();
     let mut event = minimal_day_event(event_id.as_str(), "not_declared_by_pack");
     event.rewards[0].reward_key = game_platform::RewardKey::new("bad-cookie").unwrap();
     let mut valid = minimal_day_event("source", "bomb");
     event.rewards.insert(0, valid.rewards.remove(0));
-    handle(
-        &pool,
-        &user("host_h"),
-        Command::ScheduleDayEvent { game, event },
-    )
-    .await
-    .unwrap();
-    handle(
-        &pool,
-        &user("host_h"),
-        Command::OpenDayEvent {
-            game,
-            event_id: event_id.clone(),
-        },
-    )
-    .await
-    .unwrap();
-    handle(
-        &pool,
-        &user("user_a"),
-        Command::SubmitDayEventParticipation {
-            game,
-            event_id: event_id.clone(),
-            actor_slot: "slot_1".into(),
-            payload: game_platform::ParticipationPayload::OptIn,
-        },
-    )
-    .await
-    .unwrap();
-    handle(
-        &pool,
-        &user("host_h"),
-        Command::LockDayEvent {
-            game,
-            event_id: event_id.clone(),
-        },
-    )
-    .await
-    .unwrap();
     let before: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM events WHERE stream_id = $1")
         .bind(game)
         .fetch_one(&pool)
@@ -5157,17 +5299,11 @@ async fn day_event_reward_failure_rolls_back_resolution_and_all_effects(pool: Pg
         handle(
             &pool,
             &user("host_h"),
-            Command::ResolveDayEvent {
-                game,
-                event_id: event_id.clone(),
-                decision: game_platform::DayEventDecision::SelectWinners {
-                    slots: vec![game_platform::SlotId::new("slot_1").unwrap()],
-                },
-            },
+            Command::ScheduleDayEvent { game, event },
         )
         .await
-        .expect_err("invalid second reward aborts the entire command"),
-        Reject::EffectSpecValidation(_)
+        .expect_err("an unmaterializable reward adapter rejects the definition"),
+        Reject::DayEventValidation(_)
     ));
     let after: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM events WHERE stream_id = $1")
         .bind(game)
@@ -5175,7 +5311,7 @@ async fn day_event_reward_failure_rolls_back_resolution_and_all_effects(pool: Pg
         .await
         .unwrap();
     assert_eq!(after, before);
-    assert_eq!(day_events(&pool, game).await.unwrap()[0].state, "locked");
+    assert!(day_events(&pool, game).await.unwrap().is_empty());
     assert!(slot_effects(&pool, game).await.unwrap().is_empty());
 }
 
@@ -5190,6 +5326,7 @@ async fn day_event_ops_and_resolution_honor_independent_cohost_denials(pool: PgP
         vec![
             CohostPermissionClass::DayEventOps,
             CohostPermissionClass::DayEventResolve,
+            CohostPermissionClass::ProgramAttach,
         ],
     )
     .await;
@@ -5204,6 +5341,19 @@ async fn day_event_ops_and_resolution_honor_independent_cohost_denials(pool: PgP
     .await
     .unwrap();
     let event_id = game_platform::DayEventId::new("event-cohost-policy").unwrap();
+    assert_eq!(
+        handle(
+            &pool,
+            &user("user_c"),
+            Command::AttachDayProgram {
+                game,
+                program: minimal_day_program("program-cohost-policy", 1, &["event-program-policy"]),
+            },
+        )
+        .await
+        .expect_err("cohost program-attach denylist blocks compilation"),
+        Reject::CohostPermissionDenied("program_attach".to_string())
+    );
     assert_eq!(
         handle(
             &pool,

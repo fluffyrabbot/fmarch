@@ -243,6 +243,12 @@ pub enum Command {
         effects: Vec<game_platform::ConcreteEffect>,
         reason: String,
     },
+    /// Validate and atomically materialize an immutable DayProgram generation.
+    /// Host-team (ProgramAttach).
+    AttachDayProgram {
+        game: Uuid,
+        program: game_platform::DayProgram,
+    },
     /// Materialize one immutable inline DayEvent definition. Host-team (DayEventOps).
     ScheduleDayEvent {
         game: Uuid,
@@ -415,6 +421,12 @@ pub enum Reject {
     /// The inline definition or host decision violates the PR6 DayEvent contract.
     #[error("day event validation failed: {0}")]
     DayEventValidation(String),
+    /// The program document or one of its materialized events is invalid.
+    #[error("day program validation failed: {0}")]
+    DayProgramValidation(String),
+    /// The same immutable program generation is already attached.
+    #[error("day program generation already attached")]
+    DayProgramAlreadyAttached,
     /// A concrete effect plan is malformed or contains an effect whose adapter
     /// is not available yet.
     #[error("effect plan validation failed: {0}")]

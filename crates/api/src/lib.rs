@@ -8046,10 +8046,28 @@ pub struct HostSetupStateResponse {
     pub game: Uuid,
     pub created: bool,
     pub pack: HostSetupPackState,
+    pub program_catalog: Vec<HostSetupProgramOption>,
+    pub attached_programs: Vec<HostSetupAttachedProgram>,
     pub accounts: Vec<HostSetupAccountState>,
     pub phase: Option<HostConsolePhaseState>,
     pub slots: Vec<HostSetupSlotState>,
     pub post_policies: Vec<HostSetupPostPolicyState>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct HostSetupProgramOption {
+    pub document: game_platform::DayProgram,
+    pub content_hash: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HostSetupAttachedProgram {
+    pub program_id: String,
+    pub version: i64,
+    pub display_name: String,
+    pub theme_ref: Option<String>,
+    pub content_hash: String,
+    pub event_count: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -8546,6 +8564,19 @@ async fn load_host_setup_state(
 ) -> Result<HostSetupStateResponse, ApiError> {
     let pack_key = pack_name_for_game(state, game).await?;
     let pack = load_pack_by_name(&pack_key)?;
+    let program_catalog = product_day_program_catalog()?;
+    let attached_programs = projections::day_programs(&state.pool, game)
+        .await?
+        .into_iter()
+        .map(|row| HostSetupAttachedProgram {
+            program_id: row.program_id,
+            version: row.version,
+            display_name: row.display_name,
+            theme_ref: row.theme_ref,
+            content_hash: row.content_hash,
+            event_count: row.document.events.len(),
+        })
+        .collect();
     let phase = projections::phase_state(&state.pool, game)
         .await?
         .map(|row| HostConsolePhaseState {
@@ -8623,6 +8654,8 @@ async fn load_host_setup_state(
             roles,
             start_phase_options: start_phase_options(&pack.phases),
         },
+        program_catalog,
+        attached_programs,
         accounts,
         phase,
         slots,
@@ -8663,6 +8696,61 @@ fn load_pack_by_name(pack_name: &str) -> Result<domain::Pack, ApiError> {
         error: RejectCode::Internal,
         message: format!("load pack {pack_name}: {err}"),
     })
+}
+
+fn product_day_program_catalog() -> Result<Vec<HostSetupProgramOption>, ApiError> {
+    let root = FsPath::new(env!("CARGO_MANIFEST_DIR")).join("../../programs");
+    let entries = std::fs::read_dir(&root).map_err(|err| ApiError::Reject {
+        status: StatusCode::INTERNAL_SERVER_ERROR,
+        error: RejectCode::Internal,
+        message: format!("read day-program catalog {}: {err}", root.display()),
+    })?;
+    let mut programs = Vec::new();
+    for entry in entries {
+        let entry = entry.map_err(|err| ApiError::Reject {
+            status: StatusCode::INTERNAL_SERVER_ERROR,
+            error: RejectCode::Internal,
+            message: format!("read day-program catalog entry: {err}"),
+        })?;
+        let path = entry.path();
+        let file_name = entry.file_name().to_string_lossy().to_string();
+        if file_name.starts_with("test_")
+            || path.extension().and_then(|extension| extension.to_str()) != Some("json")
+        {
+            continue;
+        }
+        let raw = std::fs::read_to_string(&path).map_err(|err| ApiError::Reject {
+            status: StatusCode::INTERNAL_SERVER_ERROR,
+            error: RejectCode::Internal,
+            message: format!("read day program {}: {err}", path.display()),
+        })?;
+        let document: game_platform::DayProgram =
+            serde_json::from_str(&raw).map_err(|err| ApiError::Reject {
+                status: StatusCode::INTERNAL_SERVER_ERROR,
+                error: RejectCode::Internal,
+                message: format!("decode day program {}: {err}", path.display()),
+            })?;
+        let content_hash = document
+            .content_hash()
+            .map_err(|err| ApiError::Reject {
+                status: StatusCode::INTERNAL_SERVER_ERROR,
+                error: RejectCode::Internal,
+                message: format!("validate day program {}: {err}", path.display()),
+            })?
+            .to_string();
+        programs.push(HostSetupProgramOption {
+            document,
+            content_hash,
+        });
+    }
+    programs.sort_by(|left, right| {
+        left.document
+            .id
+            .as_str()
+            .cmp(right.document.id.as_str())
+            .then(left.document.version.cmp(&right.document.version))
+    });
+    Ok(programs)
 }
 
 fn product_pack_catalog() -> Result<Vec<AdminGameBootstrapPack>, ApiError> {
@@ -9621,6 +9709,7 @@ fn command_game(command: &wire::Command) -> Option<Uuid> {
         | wire::Command::SubmitPost { game, .. }
         | wire::Command::ExtendDeadline { game, .. }
         | wire::Command::ApplyEffectPlan { game, .. }
+        | wire::Command::AttachDayProgram { game, .. }
         | wire::Command::ScheduleDayEvent { game, .. }
         | wire::Command::OpenDayEvent { game, .. }
         | wire::Command::LockDayEvent { game, .. }
@@ -9653,6 +9742,7 @@ fn command_affects_host_console(command: &wire::Command) -> bool {
             | wire::Command::SubmitPost { .. }
             | wire::Command::ExtendDeadline { .. }
             | wire::Command::ApplyEffectPlan { .. }
+            | wire::Command::AttachDayProgram { .. }
             | wire::Command::ScheduleDayEvent { .. }
             | wire::Command::OpenDayEvent { .. }
             | wire::Command::LockDayEvent { .. }
@@ -9715,6 +9805,7 @@ fn command_affects_player_command_state(command: &wire::Command) -> bool {
             | wire::Command::SubmitVote { .. }
             | wire::Command::WithdrawVote { .. }
             | wire::Command::ApplyEffectPlan { .. }
+            | wire::Command::AttachDayProgram { .. }
             | wire::Command::ScheduleDayEvent { .. }
             | wire::Command::OpenDayEvent { .. }
             | wire::Command::LockDayEvent { .. }

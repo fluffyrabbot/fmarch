@@ -339,6 +339,10 @@ pub enum Command {
         effects: Vec<game_platform::ConcreteEffect>,
         reason: String,
     },
+    AttachDayProgram {
+        game: Uuid,
+        program: game_platform::DayProgram,
+    },
     ScheduleDayEvent {
         game: Uuid,
         event: game_platform::DayEvent,
@@ -515,6 +519,9 @@ impl From<Command> for commands::Command {
                 effects,
                 reason,
             },
+            Command::AttachDayProgram { game, program } => {
+                commands::Command::AttachDayProgram { game, program }
+            }
             Command::ScheduleDayEvent { game, event } => {
                 commands::Command::ScheduleDayEvent { game, event }
             }
@@ -696,6 +703,8 @@ pub enum RejectCode {
     ParticipationNotFound,
     ParticipationNotAllowed,
     DayEventValidation,
+    DayProgramValidation,
+    DayProgramAlreadyAttached,
     EffectSpecValidation,
     Internal,
 }
@@ -728,6 +737,8 @@ impl From<&commands::Reject> for RejectCode {
             commands::Reject::ParticipationNotFound => RejectCode::ParticipationNotFound,
             commands::Reject::ParticipationNotAllowed(_) => RejectCode::ParticipationNotAllowed,
             commands::Reject::DayEventValidation(_) => RejectCode::DayEventValidation,
+            commands::Reject::DayProgramValidation(_) => RejectCode::DayProgramValidation,
+            commands::Reject::DayProgramAlreadyAttached => RejectCode::DayProgramAlreadyAttached,
             commands::Reject::EffectSpecValidation(_) => RejectCode::EffectSpecValidation,
             commands::Reject::Internal(_) => RejectCode::Internal,
         }
@@ -1909,13 +1920,14 @@ pub enum CapabilityGrant {
 pub mod typescript {
     use game_platform::{
         ChannelId, ConcreteEffect, ContentRef, DayEvent, DayEventDecision, DayEventEvent,
-        DayEventId, DayEventResolutionMode, DayEventSchedule, DayEventState, DurationSeconds,
-        EffectOperationTemplate, EffectOrigin, EffectPlan, EffectVisibility, EventChannelPolicy,
-        GrantKind, GrantSpec, NarrativeTemplates, OptionId, ParticipantFilter, ParticipationLimits,
-        ParticipationMode, ParticipationPayload, ParticipationSpec, PhaseId, PhaseScope,
-        PrincipalId, ProgramId, ProgramTrigger, RecipientBindings, RecipientSelector,
-        RewardAssignment, RewardBinding, RewardEffectTemplate, RewardKey, SlotId,
-        SlotLifecycleEffect, Tag, TemplateKey, UnixSeconds,
+        DayEventId, DayEventResolutionMode, DayEventSchedule, DayEventState, DayEventTemplate,
+        DayProgram, DurationSeconds, EffectOperationTemplate, EffectOrigin, EffectPlan,
+        EffectVisibility, EventChannelPolicy, GrantKind, GrantSpec, NarrativeTemplates, OptionId,
+        ParticipantFilter, ParticipationLimits, ParticipationMode, ParticipationPayload,
+        ParticipationSpec, PhaseId, PhaseScope, PrincipalId, ProgramContentHash, ProgramId,
+        ProgramTrigger, RecipientBindings, RecipientSelector, RewardAssignment, RewardBinding,
+        RewardEffectTemplate, RewardKey, SlotId, SlotLifecycleEffect, Tag, TemplateKey,
+        UnixSeconds,
     };
     use ts_rs::TS;
 
@@ -1945,6 +1957,7 @@ pub mod typescript {
         let mut out = String::from(HEADER);
         push::<DayEventId>(&mut out);
         push::<ProgramId>(&mut out);
+        push::<ProgramContentHash>(&mut out);
         push::<TemplateKey>(&mut out);
         push::<RewardKey>(&mut out);
         push::<SlotId>(&mut out);
@@ -1981,6 +1994,8 @@ pub mod typescript {
         push::<EffectOrigin>(&mut out);
         push::<EffectPlan>(&mut out);
         push::<DayEvent>(&mut out);
+        push::<DayEventTemplate>(&mut out);
+        push::<DayProgram>(&mut out);
         push::<RewardAssignment>(&mut out);
         push::<DayEventDecision>(&mut out);
         push::<DayEventEvent>(&mut out);

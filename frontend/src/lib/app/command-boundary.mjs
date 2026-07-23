@@ -117,6 +117,7 @@ export function buildAdminCommand({
   channelId = "main",
   allowMediaOnly = false,
   phase = "D01",
+  program,
 }) {
   switch (action) {
     case "create_game":
@@ -162,6 +163,13 @@ export function buildAdminCommand({
           game: requiredString(game, "game"),
           channel_id: requiredString(channelId, "channelId"),
           allow_media_only: Boolean(allowMediaOnly),
+        }),
+      });
+    case "attach_day_program":
+      return Object.freeze({
+        AttachDayProgram: Object.freeze({
+          game: requiredString(game, "game"),
+          program: frozenJsonObject(program, "program"),
         }),
       });
     case "start_game":
@@ -313,6 +321,22 @@ function rejectMessage(reject, retryable, { requestEnvelope } = {}) {
 function requiredString(value, field) {
   if (typeof value !== "string" || value.trim() === "") {
     throw new TypeError(`${field} must be a non-empty string`);
+  }
+  return value;
+}
+
+function frozenJsonObject(value, field) {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    throw new TypeError(`${field} must be an object`);
+  }
+  const clone = JSON.parse(JSON.stringify(value));
+  return deepFreeze(clone);
+}
+
+function deepFreeze(value) {
+  if (value !== null && typeof value === "object" && !Object.isFrozen(value)) {
+    Object.values(value).forEach(deepFreeze);
+    Object.freeze(value);
   }
   return value;
 }

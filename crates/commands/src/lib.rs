@@ -778,6 +778,9 @@ async fn handle_command(
             effects,
             reason,
         } => apply_effect_plan(tx, principal, game, effects, reason).await,
+        Command::AttachDayProgram { game, program } => {
+            attach_day_program(tx, principal, game, program).await
+        }
         Command::ScheduleDayEvent { game, event } => {
             schedule_day_event(tx, principal, game, event).await
         }
@@ -988,6 +991,7 @@ fn command_audit_shape(command: &Command) -> (&'static str, CommandAuditAuthorit
         }
         Command::ControlItaSession { .. } => ("ControlItaSession", CommandAuditAuthority::HostTeam),
         Command::ApplyEffectPlan { .. } => ("ApplyEffectPlan", CommandAuditAuthority::HostTeam),
+        Command::AttachDayProgram { .. } => ("AttachDayProgram", CommandAuditAuthority::HostTeam),
         Command::ScheduleDayEvent { .. } => ("ScheduleDayEvent", CommandAuditAuthority::HostTeam),
         Command::OpenDayEvent { .. } => ("OpenDayEvent", CommandAuditAuthority::HostTeam),
         Command::LockDayEvent { .. } => ("LockDayEvent", CommandAuditAuthority::HostTeam),
@@ -1034,6 +1038,7 @@ fn command_game(command: &Command) -> Uuid {
         | Command::PublishSpectatorPost { game, .. }
         | Command::ControlItaSession { game, .. }
         | Command::ApplyEffectPlan { game, .. }
+        | Command::AttachDayProgram { game, .. }
         | Command::ScheduleDayEvent { game, .. }
         | Command::OpenDayEvent { game, .. }
         | Command::LockDayEvent { game, .. }
@@ -1076,6 +1081,7 @@ fn game_closed_by_completion(command: &Command) -> Option<Uuid> {
         | Command::PublishSpectatorPost { game, .. }
         | Command::ControlItaSession { game, .. }
         | Command::ApplyEffectPlan { game, .. }
+        | Command::AttachDayProgram { game, .. }
         | Command::ScheduleDayEvent { game, .. }
         | Command::OpenDayEvent { game, .. }
         | Command::LockDayEvent { game, .. }
@@ -1827,9 +1833,101 @@ async fn schedule_day_event(
     let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
     require_game_run(tx, &caps, game, CohostPermissionClass::DayEventOps).await?;
     event.validate().map_err(day_event_validation)?;
+    validate_materializable_day_event(&event)?;
+    let pack = load_pack(&current_pack_name(tx, game).await?)?;
+    validate_day_event_reward_adapters(&pack, &event)
+        .map_err(|error| day_event_reject(error.to_string()))?;
+    if projections::day_events(&mut **tx, game)
+        .await?
+        .iter()
+        .any(|row| row.event_id == event.id.as_str())
+    {
+        return Err(Reject::DayEventAlreadyExists);
+    }
+    persist(
+        tx,
+        game,
+        &[EventInput::new(
+            "DayEventScheduled",
+            1,
+            serde_json::json!({ "event": event }),
+            ActorId::Host,
+            0,
+        )],
+    )
+    .await
+}
+
+async fn attach_day_program(
+    tx: &mut Transaction<'_, Postgres>,
+    principal: &Principal,
+    game: Uuid,
+    program: game_platform::DayProgram,
+) -> Result<Ack, Reject> {
+    require_game(tx, game).await?;
+    let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
+    require_game_run(tx, &caps, game, CohostPermissionClass::ProgramAttach).await?;
+    let content_hash = program.content_hash().map_err(day_program_validation)?;
+    let compiled = program.compile().map_err(day_program_validation)?;
+    let pack = load_pack(&current_pack_name(tx, game).await?)?;
+    for event in &compiled {
+        validate_materializable_day_event(event).map_err(|error| {
+            Reject::DayProgramValidation(match error {
+                Reject::DayEventValidation(message) => message,
+                other => other.to_string(),
+            })
+        })?;
+        validate_day_event_reward_adapters(&pack, event)
+            .map_err(|error| Reject::DayProgramValidation(error.to_string()))?;
+    }
+    if projections::day_programs(&mut **tx, game)
+        .await?
+        .iter()
+        .any(|row| {
+            row.program_id == program.id.as_str() && row.version == i64::from(program.version)
+        })
+    {
+        return Err(Reject::DayProgramAlreadyAttached);
+    }
+    let existing_event_ids: BTreeSet<_> = projections::day_events(&mut **tx, game)
+        .await?
+        .into_iter()
+        .map(|row| row.event_id)
+        .collect();
+    if compiled
+        .iter()
+        .any(|event| existing_event_ids.contains(event.id.as_str()))
+    {
+        return Err(Reject::DayEventAlreadyExists);
+    }
+
+    let mut events = Vec::with_capacity(compiled.len() + 1);
+    events.push(EventInput::new(
+        "DayProgramAttached",
+        1,
+        serde_json::json!({
+            "program": program,
+            "content_hash": content_hash,
+        }),
+        ActorId::Host,
+        0,
+    ));
+    events.extend(compiled.into_iter().map(|event| {
+        EventInput::new(
+            "DayEventScheduled",
+            1,
+            serde_json::json!({ "event": event }),
+            ActorId::Host,
+            0,
+        )
+    }));
+    persist(tx, game, &events).await
+}
+
+fn validate_materializable_day_event(event: &game_platform::DayEvent) -> Result<(), Reject> {
     if event.state != game_platform::DayEventState::Scheduled {
         return Err(day_event_reject(
-            "inline definitions must begin in scheduled state",
+            "materialized definitions must begin in scheduled state",
         ));
     }
     if !matches!(event.schedule, game_platform::DayEventSchedule::HostOpened) {
@@ -1859,25 +1957,34 @@ async fn schedule_day_event(
             "explicit DayEvent windows require the scheduling slice",
         ));
     }
-    if projections::day_events(&mut **tx, game)
-        .await?
-        .iter()
-        .any(|row| row.event_id == event.id.as_str())
-    {
-        return Err(Reject::DayEventAlreadyExists);
+    Ok(())
+}
+
+fn validate_day_event_reward_adapters(
+    pack: &domain::Pack,
+    event: &game_platform::DayEvent,
+) -> Result<(), Reject> {
+    for reward in &event.rewards {
+        for effect in &reward.effects {
+            match &effect.operation {
+                game_platform::EffectOperationTemplate::Mark { effect }
+                | game_platform::EffectOperationTemplate::Clear { effect } => {
+                    persistent_effect_policy(pack, effect.as_str())?;
+                }
+                game_platform::EffectOperationTemplate::Grant { grant } => {
+                    validate_platform_grant(pack, grant)?;
+                }
+                game_platform::EffectOperationTemplate::SetSlotLifecycle { .. } => {}
+                game_platform::EffectOperationTemplate::RevealAlignment
+                | game_platform::EffectOperationTemplate::RevealRole => {
+                    return Err(effect_spec_reject(
+                        "reveal adapters are not part of the persistent PR3 catalog",
+                    ));
+                }
+            }
+        }
     }
-    persist(
-        tx,
-        game,
-        &[EventInput::new(
-            "DayEventScheduled",
-            1,
-            serde_json::json!({ "event": event }),
-            ActorId::Host,
-            0,
-        )],
-    )
-    .await
+    Ok(())
 }
 
 async fn open_day_event(
@@ -2231,6 +2338,10 @@ fn require_day_event_state(event: &projections::DayEventRow, required: &str) -> 
 
 fn day_event_validation(error: game_platform::ModelError) -> Reject {
     day_event_reject(error.to_string())
+}
+
+fn day_program_validation(error: game_platform::ModelError) -> Reject {
+    Reject::DayProgramValidation(error.to_string())
 }
 
 fn day_event_reject(message: impl Into<String>) -> Reject {

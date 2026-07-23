@@ -84,7 +84,12 @@ export function recordSetupFormStatus({
   });
 }
 
-export function setupCommandConfigForAction({ actionId, data, formData }) {
+export function setupCommandConfigForAction({
+  actionId,
+  data,
+  formData,
+  setupState = data.setupState,
+}) {
   const game = data.game.id;
   switch (actionId) {
     case "add-slot":
@@ -114,6 +119,20 @@ export function setupCommandConfigForAction({ actionId, data, formData }) {
         channelId: requiredFormValue(formData, "channelId", "main"),
         allowMediaOnly: formData.get("allowMediaOnly") === "true",
       });
+    case "attach-day-program": {
+      const programId = requiredFormValue(formData, "programId");
+      const option = setupState.programCatalog.find(
+        (program) => `${program.id}@${program.version}` === programId,
+      );
+      if (option === undefined) {
+        throw new TypeError(`unknown day program: ${programId}`);
+      }
+      return Object.freeze({
+        action: "attach_day_program",
+        game,
+        program: option.document,
+      });
+    }
     case "start-game":
       return Object.freeze({
         action: "start_game",
@@ -129,11 +148,12 @@ export async function sendHostSetupCommand({
   actionId,
   data,
   formData,
+  setupState = data.setupState,
   fetchImpl,
   sendCommandImpl = sendCommand,
 }) {
   const command = buildAdminCommand(
-    setupCommandConfigForAction({ actionId, data, formData }),
+    setupCommandConfigForAction({ actionId, data, formData, setupState }),
   );
   return await sendCommandImpl({
     endpoint: data.commandEndpoint,
@@ -146,6 +166,7 @@ export function buildSetupCommandDispatchBridgePlan({
   actionId,
   data,
   formData,
+  setupState = data.setupState,
   confirmationStatus,
   optimisticStatus,
   finalStatus,
@@ -157,7 +178,7 @@ export function buildSetupCommandDispatchBridgePlan({
     request: {
       endpoint: data.commandEndpoint,
       command: buildAdminCommand(
-        setupCommandConfigForAction({ actionId, data, formData }),
+        setupCommandConfigForAction({ actionId, data, formData, setupState }),
       ),
     },
     optimisticStatus,

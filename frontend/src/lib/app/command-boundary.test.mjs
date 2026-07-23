@@ -271,6 +271,32 @@ test("generic command envelope uses the Rust ClientEnvelope shape", () => {
 test("admin actions map to bootstrap wire command variants", () => {
   assert.deepEqual(
     buildAdminCommand({
+      action: "attach_day_program",
+      game: "00000000-0000-0000-0000-000000000123",
+      program: {
+        id: "bakery",
+        version: 1,
+        display_name: "Bakery",
+        theme_ref: "theme.bakery",
+        events: [],
+      },
+    }),
+    {
+      AttachDayProgram: {
+        game: "00000000-0000-0000-0000-000000000123",
+        program: {
+          id: "bakery",
+          version: 1,
+          display_name: "Bakery",
+          theme_ref: "theme.bakery",
+          events: [],
+        },
+      },
+    },
+  );
+
+  assert.deepEqual(
+    buildAdminCommand({
       action: "create_game",
       game: "00000000-0000-0000-0000-000000000123",
       pack: "mafiascum",

@@ -85,6 +85,7 @@ test("host setup route data derives identity, roster, policy, invites, and readi
     "roster",
     "roles",
     "rules",
+    "program",
     "review",
   ]);
   assert.deepEqual(

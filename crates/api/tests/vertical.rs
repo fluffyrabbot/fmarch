@@ -3007,6 +3007,8 @@ async fn host_setup_sequence_commits_to_setup_state(pool: sqlx::PgPool) {
     .unwrap();
     let app = router(pool);
     let game = Uuid::new_v4();
+    let bakery_program: game_platform::DayProgram =
+        serde_json::from_str(include_str!("../../../programs/bakery.json")).unwrap();
     for (id, command) in [
         (
             1,
@@ -3049,6 +3051,13 @@ async fn host_setup_sequence_commits_to_setup_state(pool: sqlx::PgPool) {
         ),
         (
             6,
+            Command::AttachDayProgram {
+                game,
+                program: bakery_program.clone(),
+            },
+        ),
+        (
+            7,
             Command::StartGame {
                 game,
                 phase: "D01".into(),
@@ -3086,6 +3095,14 @@ async fn host_setup_sequence_commits_to_setup_state(pool: sqlx::PgPool) {
         .iter()
         .any(|role| role.key == "vanilla_townie" && role.label == "Vanilla Townie"));
     assert!(setup.pack.start_phase_options.contains(&"D01".to_string()));
+    assert!(setup.program_catalog.iter().any(|option| {
+        option.document == bakery_program
+            && option.content_hash == bakery_program.content_hash().unwrap().as_str()
+    }));
+    assert_eq!(setup.attached_programs.len(), 1);
+    assert_eq!(setup.attached_programs[0].program_id, "bakery");
+    assert_eq!(setup.attached_programs[0].version, 1);
+    assert_eq!(setup.attached_programs[0].event_count, 1);
     assert_eq!(setup.accounts.len(), 1);
     assert_eq!(setup.accounts[0].account_id, "mira@example.test");
     assert_eq!(setup.accounts[0].principal_user_id, "player_mira");

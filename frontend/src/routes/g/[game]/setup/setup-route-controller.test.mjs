@@ -14,8 +14,34 @@ const data = Object.freeze({
   commandEndpoint: "/commands",
   start: Object.freeze({ defaultPhase: "D01" }),
 });
+const bakeryProgram = Object.freeze({
+  id: "bakery",
+  version: 1,
+  display_name: "Bakery",
+  theme_ref: "theme.bakery",
+  events: Object.freeze([]),
+});
+const setupState = Object.freeze({
+  programCatalog: Object.freeze([
+    Object.freeze({ id: "bakery", version: 1, document: bakeryProgram }),
+  ]),
+});
 
 test("setup form actions map to typed bootstrap command configs", () => {
+  assert.deepEqual(
+    setupCommandConfigForAction({
+      actionId: "attach-day-program",
+      data,
+      setupState,
+      formData: formData({ programId: "bakery@1" }),
+    }),
+    {
+      action: "attach_day_program",
+      game: data.game.id,
+      program: bakeryProgram,
+    },
+  );
+
   assert.deepEqual(
     setupCommandConfigForAction({
       actionId: "add-slot",
@@ -105,6 +131,27 @@ test("setup command sender dispatches Rust wire command envelopes", async () => 
       game: data.game.id,
       slot: "slot_1",
       role_key: "mafia_goon",
+    },
+  });
+});
+
+test("setup program sender dispatches the exact previewed document", async () => {
+  let captured = null;
+  await sendHostSetupCommand({
+    actionId: "attach-day-program",
+    data,
+    setupState,
+    formData: formData({ programId: "bakery@1" }),
+    sendCommandImpl: async (request) => {
+      captured = request;
+      return { state: "ack", message: "Ack: stream seqs 4, 5" };
+    },
+  });
+
+  assert.deepEqual(captured.command, {
+    AttachDayProgram: {
+      game: data.game.id,
+      program: bakeryProgram,
     },
   });
 });

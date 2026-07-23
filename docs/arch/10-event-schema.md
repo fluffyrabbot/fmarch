@@ -101,6 +101,7 @@ enum EventKind {
     HostPromptResolved,     // { prompt_id, phase_id, kind, reason, decision, resolved_by }; revote/skip-next-day decisions append validated PhaseAdvanced provenance
 
     // ── Platform DayEvents (mash/manual frontier, doc 14) ──
+    DayProgramAttached,             // { program: DayProgram, content_hash }; immutable generation compiled atomically
     DayEventScheduled,              // { event: DayEvent }; immutable inline/materialized definition
     DayEventOpened,                 // { event_id, phase_id, opened_at: UnixSeconds }
     DayEventLocked,                 // { event_id, locked_at: UnixSeconds }
@@ -566,6 +567,7 @@ review.
 | `action_grant` (generated action/item inventory) | `ActionGranted/ActionGrantConsumed` |
 | `player_notification` (per-recipient notices) | `EffectNotification`; exposed as wire `PlayerNotification` through capability-filtered REST |
 | `host_prompt` (host/admin interventions) | `HostPromptIssued` / `HostPromptResolved` |
+| `day_program` (immutable inline generation and canonical content hash) | `DayProgramAttached` |
 | `day_event` (platform event lifecycle and decision) | `DayEventScheduled` / `DayEventOpened` / `DayEventLocked` / `DayEventCancelled` / `DayEventResolved` |
 | `day_event_participation` (current typed entries) | `DayEventParticipationSubmitted` / `DayEventParticipationWithdrawn` |
 | `host_phase_control` (host prompt phase movement audit) | provenance-bearing `PhaseAdvanced`; exposed as host/cohost-only wire `HostPhaseControl` |

@@ -4,7 +4,7 @@ export const HOST_SETUP_WORKFLOW_CONTRACT = Object.freeze({
   rootTestId: "host-setup-workflow",
   stepperTestId: "host-setup-stepper",
   canvasTestId: "host-setup-stage-canvas",
-  stageIds: Object.freeze(["pack", "roster", "roles", "rules", "review"]),
+  stageIds: Object.freeze(["pack", "roster", "roles", "rules", "program", "review"]),
 });
 
 const STAGES = Object.freeze([
@@ -12,7 +12,8 @@ const STAGES = Object.freeze([
   Object.freeze({ id: "roster", number: 2, label: "Roster", checkIds: ["slots-exist", "slots-occupied"] }),
   Object.freeze({ id: "roles", number: 3, label: "Roles", checkIds: ["roles-assigned"] }),
   Object.freeze({ id: "rules", number: 4, label: "Rules", checkIds: ["policy-acknowledged"] }),
-  Object.freeze({ id: "review", number: 5, label: "Review", checkIds: ["start-phase"] }),
+  Object.freeze({ id: "program", number: 5, label: "Program", checkIds: [] }),
+  Object.freeze({ id: "review", number: 6, label: "Review", checkIds: ["start-phase"] }),
 ]);
 
 const CHECK_STAGE = Object.freeze({
@@ -81,13 +82,22 @@ function buildStage({ stage, checkById, readiness, started }) {
   const blockedCount = checks.filter((check) => check.state !== "ready").length;
   const state = started
     ? "complete"
+    : stage.id === "program"
+      ? "ready"
     : stage.id === "review"
       ? readiness.startAvailable === true ? "ready" : "blocked"
       : blockedCount === 0 && checks.length === stage.checkIds.length ? "ready" : "blocked";
   return Object.freeze({
     ...stage,
     state,
-    statusLabel: state === "complete" ? "Complete" : state === "ready" ? "Ready" : `${blockedCount} to fix`,
+    statusLabel:
+      stage.id === "program" && !started
+        ? "Optional"
+        : state === "complete"
+          ? "Complete"
+          : state === "ready"
+            ? "Ready"
+            : `${blockedCount} to fix`,
     testId: `host-setup-step-${stage.id}`,
     panelTestId: `host-setup-stage-${stage.id}`,
   });

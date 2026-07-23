@@ -1,0 +1,56 @@
+{
+  "id": "bakery",
+  "version": 1,
+  "display_name": "Bakery",
+  "theme_ref": "theme.bakery",
+  "events": [
+    {
+      "id": "bakery-cookie-d1",
+      "template_key": "theme.bakery.cookie_raffle",
+      "phase_scope": {
+        "kind": "during_day",
+        "number": 1
+      },
+      "schedule": {
+        "kind": "host_opened"
+      },
+      "participation": {
+        "who": "alive_slots",
+        "mode": "opt_in",
+        "limits": {
+          "minimum": 1,
+          "maximum": null
+        }
+      },
+      "resolution": "host_decision",
+      "rewards": [
+        {
+          "reward_key": "cookie",
+          "display_name_theme_key": "theme.bakery.cookie",
+          "effects": [
+            {
+              "recipient": {
+                "kind": "winner"
+              },
+              "operation": {
+                "kind": "mark",
+                "effect": "bomb"
+              }
+            }
+          ]
+        }
+      ],
+      "narrative": {
+        "opened": "theme.bakery.cookie_raffle.opened",
+        "locked": "theme.bakery.cookie_raffle.locked",
+        "resolved": "theme.bakery.cookie_raffle.resolved",
+        "cancelled": "theme.bakery.cookie_raffle.cancelled"
+      },
+      "channel_policy": {
+        "allowed_channels": [
+          "main"
+        ]
+      }
+    }
+  ]
+}

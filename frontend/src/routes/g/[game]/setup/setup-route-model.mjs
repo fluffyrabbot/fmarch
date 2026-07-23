@@ -89,6 +89,8 @@ export function normalizeHostSetupState(raw, { game }) {
   const pack = raw?.pack ?? {};
   const slots = Array.isArray(raw?.slots) ? raw.slots : [];
   const policies = Array.isArray(raw?.post_policies) ? raw.post_policies : [];
+  const programCatalog = Array.isArray(raw?.program_catalog) ? raw.program_catalog : [];
+  const attachedPrograms = Array.isArray(raw?.attached_programs) ? raw.attached_programs : [];
   return Object.freeze({
     game: normalizeId(raw?.game ?? game, "game"),
     created: raw?.created === true,
@@ -120,6 +122,34 @@ export function normalizeHostSetupState(raw, { game }) {
           : ["D01"],
       ),
     }),
+    programCatalog: Object.freeze(
+      programCatalog.map((option) => {
+        const document = structuredCloneValue(option.document);
+        return Object.freeze({
+          id: normalizeId(document.id, "program_catalog.document.id"),
+          version: Number(document.version),
+          displayName:
+            normalizeOptionalText(document.display_name) ?? humanizeIdentifier(document.id),
+          themeRef: normalizeOptionalText(document.theme_ref),
+          contentHash: normalizeId(option.content_hash, "program_catalog.content_hash"),
+          eventCount: Array.isArray(document.events) ? document.events.length : 0,
+          document: deepFreeze(document),
+        });
+      }),
+    ),
+    attachedPrograms: Object.freeze(
+      attachedPrograms.map((program) =>
+        Object.freeze({
+          id: normalizeId(program.program_id, "attached_programs.program_id"),
+          version: Number(program.version),
+          displayName:
+            normalizeOptionalText(program.display_name) ?? humanizeIdentifier(program.program_id),
+          themeRef: normalizeOptionalText(program.theme_ref),
+          contentHash: normalizeId(program.content_hash, "attached_programs.content_hash"),
+          eventCount: Number(program.event_count),
+        }),
+      ),
+    ),
     accounts: Object.freeze(
       (Array.isArray(raw?.accounts) ? raw.accounts : []).map((account) =>
         Object.freeze({
@@ -267,6 +297,24 @@ function hostSetupFixtureState({ game }) {
         allow_media_only: false,
       }),
     ]),
+    program_catalog: Object.freeze([
+      Object.freeze({
+        content_hash: "0000000000000000000000000000000000000000000000000000000000000000",
+        document: Object.freeze({
+          id: "bakery",
+          version: 1,
+          display_name: "Bakery",
+          theme_ref: "theme.bakery",
+          events: Object.freeze([
+            Object.freeze({
+              id: "bakery-cookie-d1",
+              template_key: "theme.bakery.cookie_raffle",
+            }),
+          ]),
+        }),
+      }),
+    ]),
+    attached_programs: Object.freeze([]),
   });
 }
 
@@ -295,6 +343,18 @@ function humanizeIdentifier(value) {
 
 function normalizeOptionalText(value) {
   return typeof value === "string" && value.trim() !== "" ? value.trim() : null;
+}
+
+function structuredCloneValue(value) {
+  return value == null ? {} : JSON.parse(JSON.stringify(value));
+}
+
+function deepFreeze(value) {
+  if (value !== null && typeof value === "object" && !Object.isFrozen(value)) {
+    Object.values(value).forEach(deepFreeze);
+    Object.freeze(value);
+  }
+  return value;
 }
 
 function normalizeId(value, field) {
