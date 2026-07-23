@@ -248,7 +248,14 @@
     {
       "id": "deploy:infra",
       "tier": "active",
-      "paths": ["deploy/", "railway.toml", "docker-compose.yml", "Dockerfile", "Dockerfile.frontend"],
+      "paths": [
+        ".env.example",
+        "deploy/",
+        "railway.toml",
+        "docker-compose.yml",
+        "Dockerfile",
+        "Dockerfile.frontend"
+      ],
       "lanes": ["check:build-posture", "test:railway-staging-target"]
     },
     {
