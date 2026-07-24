@@ -331,6 +331,19 @@
       event?.scheduleEvidence?.lockObservedAt != null
     );
   }
+
+  function hasResolutionEvidence(event) {
+    return event?.resolutionEvidence !== null &&
+      event?.resolutionEvidence !== undefined;
+  }
+
+  function resolutionPolicyLabel(event) {
+    if (event?.resolutionEvidence?.kind !== "auto") {
+      return "Host decision";
+    }
+    const policy = event.resolutionEvidence.policyKind;
+    return policy === "seeded_random" ? "Seeded random" : "First in stable order";
+  }
 </script>
 
 <svelte:head>
@@ -397,7 +410,9 @@
               <p class="fm-eyebrow">DayEvent automation</p>
               <strong>
                 {dayEventScheduler?.pending
-                  ? "Schedule work pending"
+                  ? dayEventScheduler?.autoResolvePending
+                    ? "Automatic resolution pending"
+                    : "Schedule work pending"
                   : "Scheduler caught up"}
               </strong>
             </header>
@@ -421,6 +436,23 @@
                       <strong>{event.eventId}</strong>
                       · opened {schedulerTime(event.scheduleEvidence?.openObservedAt)}
                       · locked {schedulerTime(event.scheduleEvidence?.lockObservedAt)}
+                    </li>
+                  {/if}
+                {/each}
+              </ul>
+            {/if}
+            {#if hostDayEvents.some(hasResolutionEvidence)}
+              <ul data-testid="host-day-event-resolution-evidence">
+                {#each hostDayEvents as event (event.eventId)}
+                  {#if hasResolutionEvidence(event)}
+                    <li>
+                      <strong>{event.eventId}</strong>
+                      · {resolutionPolicyLabel(event)}
+                      · winners {event.winnerSlots.join(", ")}
+                      {#if event.resolutionEvidence.seed !== null}
+                        · seed {event.resolutionEvidence.seed}
+                      {/if}
+                      · rewards {event.rewardKeysApplied.join(", ")}
                     </li>
                   {/if}
                 {/each}

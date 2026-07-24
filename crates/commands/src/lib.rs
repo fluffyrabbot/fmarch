@@ -591,10 +591,11 @@ pub async fn handle(pool: &PgPool, principal: &Principal, command: Command) -> R
 /// can acquire scheduler authority and the network wire has no corresponding
 /// command. The game stream advisory lock remains the correctness boundary when
 /// multiple worker replicas race the same due game.
-pub async fn observe_day_event_schedules_as_scheduler(
+pub async fn advance_day_event_automation_as_scheduler(
     pool: &PgPool,
     game: Uuid,
     observed_at: i64,
+    seed_root: u64,
 ) -> Result<Ack, Reject> {
     let command_id = Uuid::new_v4();
     let mut tx = pool
@@ -606,22 +607,55 @@ pub async fn observe_day_event_schedules_as_scheduler(
         .map_err(|error| Reject::Internal(error.to_string()))?;
     require_game_not_completed(&mut tx, game).await?;
     let audit_context = CommandAuditContext {
-        principal_user_id: "service:day-event-scheduler".to_string(),
+        principal_user_id: "service:day-event-automation".to_string(),
         command_id,
-        command_kind: "ObserveDayEventSchedules".to_string(),
-        authority_used: format!("DayEventScheduler({game})"),
-        request_source: "day_event_scheduler",
+        command_kind: "AdvanceDayEventAutomation".to_string(),
+        authority_used: format!("DayEventAutomation({game})"),
+        request_source: "day_event_automation",
     };
     let ack = COMMAND_AUDIT_CONTEXT
         .scope(
             audit_context,
-            observe_day_event_schedules_in_tx(&mut tx, game, observed_at),
+            advance_day_event_automation_in_tx(&mut tx, game, observed_at, seed_root),
         )
         .await?;
     tx.commit()
         .await
         .map_err(|error| Reject::Internal(error.to_string()))?;
     Ok(ack)
+}
+
+async fn advance_day_event_automation_in_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    game: Uuid,
+    observed_at: i64,
+    seed_root: u64,
+) -> Result<Ack, Reject> {
+    // Resolve only work that was already locked when this transaction began.
+    // A schedule observation that locks an event commits its seed first; the
+    // next leased pass reuses that exact seed even after process failure.
+    let pending_auto = projections::day_events(&mut **tx, game)
+        .await?
+        .into_iter()
+        .filter(|event| {
+            event.state == "locked"
+                && matches!(
+                    event.definition.resolution,
+                    game_platform::DayEventResolutionMode::Auto { .. }
+                )
+        })
+        .collect::<Vec<_>>();
+    let mut stream_seqs = observe_day_event_schedules_in_tx(tx, game, observed_at, seed_root)
+        .await?
+        .stream_seqs;
+    for event in pending_auto {
+        stream_seqs.extend(
+            resolve_auto_day_event_in_tx(tx, game, event)
+                .await?
+                .stream_seqs,
+        );
+    }
+    Ok(Ack { stream_seqs })
 }
 
 /// Handle a network command with durable idempotency. If `(principal,
@@ -2060,6 +2094,11 @@ async fn lock_day_event(
             serde_json::json!({
                 "event_id": event_id.as_str(),
                 "locked_at": unix_seconds_now()?,
+                "auto_seed": auto_seed_for_resolution(
+                    event.definition.resolution,
+                    fresh_auto_seed_root(),
+                    event_id.as_str(),
+                ),
             }),
             ActorId::Host,
             0,
@@ -2106,6 +2145,7 @@ async fn observe_day_event_schedules_in_tx(
     tx: &mut Transaction<'_, Postgres>,
     game: Uuid,
     observed_at: i64,
+    seed_root: u64,
 ) -> Result<Ack, Reject> {
     require_game(tx, game).await?;
     let phase = projections::phase_state(&mut **tx, game)
@@ -2181,6 +2221,11 @@ async fn observe_day_event_schedules_in_tx(
                             "event_id": row.event_id,
                             "locked_at": observed_at,
                             "source": "scheduler",
+                            "auto_seed": auto_seed_for_resolution(
+                                row.definition.resolution,
+                                seed_root,
+                                &row.event_id,
+                            ),
                         }),
                         ActorId::System,
                         observed_at,
@@ -2371,6 +2416,14 @@ async fn resolve_day_event(
     require_game_run(tx, &caps, game, CohostPermissionClass::DayEventResolve).await?;
     let event = load_day_event(tx, game, event_id.as_str()).await?;
     require_day_event_state(&event, "locked")?;
+    if !matches!(
+        event.definition.resolution,
+        game_platform::DayEventResolutionMode::HostDecision
+    ) {
+        return Err(day_event_reject(
+            "automatic DayEvents cannot be host-resolved; cancel and use fiat instead",
+        ));
+    }
     let winner_slots = match &decision {
         game_platform::DayEventDecision::SelectWinners { slots } => slots.clone(),
         game_platform::DayEventDecision::SelectMapping { .. } => {
@@ -2404,16 +2457,92 @@ async fn resolve_day_event(
             "every selected winner must be a current participant",
         ));
     }
+    let participant_slot_ids = participants
+        .iter()
+        .map(|row| game_platform::SlotId::new(row.actor_slot.clone()))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(day_event_validation)?;
+    let evidence = game_platform::DayEventResolutionEvidence::HostDecision {
+        participant_slots: participant_slot_ids.clone(),
+    };
+    apply_day_event_resolution_in_tx(
+        tx,
+        game,
+        event,
+        decision,
+        winner_slots,
+        participant_slot_ids,
+        evidence,
+        ActorId::Host,
+    )
+    .await
+}
+
+async fn resolve_auto_day_event_in_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    game: Uuid,
+    event: projections::DayEventRow,
+) -> Result<Ack, Reject> {
+    let game_platform::DayEventResolutionMode::Auto { policy } = event.definition.resolution else {
+        return Err(day_event_reject("DayEvent is not automatic"));
+    };
+    let participants =
+        projections::day_event_participation(&mut **tx, game, &event.event_id).await?;
+    let mut participant_slots = participants
+        .into_iter()
+        .map(|row| game_platform::SlotId::new(row.actor_slot))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(day_event_validation)?;
+    participant_slots.sort();
+    let winner_slots = game_platform::day_auto_resolution::select_winners(
+        policy,
+        &participant_slots,
+        event.auto_seed,
+    )
+    .map_err(day_event_validation)?;
+    let decision = game_platform::DayEventDecision::SelectWinners {
+        slots: winner_slots.clone(),
+    };
+    let evidence = game_platform::DayEventResolutionEvidence::Auto {
+        policy,
+        seed: event.auto_seed,
+        participant_slots: participant_slots.clone(),
+    };
+    apply_day_event_resolution_in_tx(
+        tx,
+        game,
+        event,
+        decision,
+        winner_slots,
+        participant_slots,
+        evidence,
+        ActorId::System,
+    )
+    .await
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn apply_day_event_resolution_in_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    game: Uuid,
+    event: projections::DayEventRow,
+    decision: game_platform::DayEventDecision,
+    winner_slots: Vec<game_platform::SlotId>,
+    participant_slots: Vec<game_platform::SlotId>,
+    evidence: game_platform::DayEventResolutionEvidence,
+    actor: ActorId,
+) -> Result<Ack, Reject> {
+    let event_id = event.event_id.clone();
+    let resolution_source = match &evidence {
+        game_platform::DayEventResolutionEvidence::HostDecision { .. } => "host decision",
+        game_platform::DayEventResolutionEvidence::Auto { .. } => "automatic policy",
+    };
     let command_id = COMMAND_AUDIT_CONTEXT
         .try_with(|audit| audit.command_id)
         .map_err(|_| Reject::Internal("command audit context missing in DayEvent".to_string()))?;
     let bindings = game_platform::RecipientBindings {
         winners: winner_slots.clone(),
-        participants: participants
-            .iter()
-            .map(|row| game_platform::SlotId::new(row.actor_slot.clone()))
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(day_event_validation)?,
+        participants: participant_slots,
         host_chosen: winner_slots.clone(),
     };
     let mut lifecycle_states = BTreeMap::new();
@@ -2422,17 +2551,18 @@ async fn resolve_day_event(
     for reward in &event.definition.rewards {
         let plan = reward
             .compile_plan(
-                event_id.clone(),
+                event.definition.id.clone(),
                 &bindings,
                 format!(
-                    "DayEvent {} host decision reward {}",
-                    event_id.as_str(),
+                    "DayEvent {} {} reward {}",
+                    event_id,
+                    resolution_source,
                     reward.reward_key.as_str()
                 ),
             )
             .map_err(day_event_validation)?;
         let application = EffectApplication::DayEvent {
-            event_id: event_id.as_str().to_string(),
+            event_id: event_id.clone(),
             reward_key: reward.reward_key.as_str().to_string(),
             command_id,
         };
@@ -2444,20 +2574,52 @@ async fn resolve_day_event(
         "DayEventResolved",
         1,
         serde_json::json!({
-            "event_id": event_id.as_str(),
+            "event_id": event_id.clone(),
             "decision": decision,
             "winner_slots": winner_slots.iter().map(|slot| slot.as_str()).collect::<Vec<_>>(),
             "reward_keys_applied": reward_keys_applied,
+            "evidence": evidence,
         }),
-        ActorId::Host,
+        actor,
         0,
     );
     resolved.meta = serde_json::json!({
         "source": "day_event",
-        "day_event_id": event_id.as_str(),
+        "day_event_id": event_id,
+        "resolution_source": resolution_source,
     });
     events.push(resolved);
     persist(tx, game, &events).await
+}
+
+fn fresh_auto_seed_root() -> u64 {
+    let bytes = Uuid::new_v4().into_bytes();
+    u64::from_le_bytes(bytes[..8].try_into().expect("UUID prefix is eight bytes")) & i64::MAX as u64
+}
+
+fn auto_seed_for_resolution(
+    resolution: game_platform::DayEventResolutionMode,
+    seed_root: u64,
+    event_id: &str,
+) -> Option<u64> {
+    let game_platform::DayEventResolutionMode::Auto { policy } = resolution else {
+        return None;
+    };
+    if !policy.requires_seed() {
+        return None;
+    }
+    let mut digest = Sha256::new();
+    digest.update(b"fmarch-day-event-auto-seed:v1\0");
+    digest.update(seed_root.to_le_bytes());
+    digest.update(event_id.as_bytes());
+    let bytes = digest.finalize();
+    Some(
+        u64::from_le_bytes(
+            bytes[..8]
+                .try_into()
+                .expect("SHA-256 prefix is eight bytes"),
+        ) & i64::MAX as u64,
+    )
 }
 
 async fn load_day_event(

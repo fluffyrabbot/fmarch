@@ -15,9 +15,9 @@ use commands::day_scheduler::{
 };
 use commands::operator_process::{run_bounded_process, ProcessLimits};
 use commands::{
-    audit_engine_snapshot_identity_boundary, audit_resolution_envelopes, handle, handle_idempotent,
-    inspect_resolution_traces, load_engine_phase_input, load_engine_snapshot,
-    observe_day_event_schedules_as_scheduler, run_large_action_graph_performance_proof, Ack,
+    advance_day_event_automation_as_scheduler, audit_engine_snapshot_identity_boundary,
+    audit_resolution_envelopes, handle, handle_idempotent, inspect_resolution_traces,
+    load_engine_phase_input, load_engine_snapshot, run_large_action_graph_performance_proof, Ack,
     CohostPermissionClass, Command, HostPromptDecision, Reject, ResolutionEnvelopeAuditEnvelope,
     ResolutionEnvelopeAuditStatus, ThreadPostMedia, ThreadPostMediaVariant, VoteTarget,
     LARGE_ACTION_GRAPH_PERFORMANCE_SEED, LARGE_ACTION_GRAPH_PERFORMANCE_THRESHOLD_MS,
@@ -5126,12 +5126,12 @@ async fn absolute_day_event_schedule_records_due_evidence_once_at_boundaries(poo
     .await
     .unwrap();
 
-    let early = observe_day_event_schedules_as_scheduler(&pool, game, 99)
+    let early = advance_day_event_automation_as_scheduler(&pool, game, 99, 1)
         .await
         .unwrap();
     assert!(early.stream_seqs.is_empty());
 
-    let opened = observe_day_event_schedules_as_scheduler(&pool, game, 100)
+    let opened = advance_day_event_automation_as_scheduler(&pool, game, 100, 1)
         .await
         .unwrap();
     assert_eq!(opened.stream_seqs.len(), 2);
@@ -5141,12 +5141,12 @@ async fn absolute_day_event_schedule_records_due_evidence_once_at_boundaries(poo
     assert_eq!(row.open_observed_at, Some(100));
     assert_eq!(row.opened_at, Some(100));
 
-    let duplicate_open = observe_day_event_schedules_as_scheduler(&pool, game, 150)
+    let duplicate_open = advance_day_event_automation_as_scheduler(&pool, game, 150, 1)
         .await
         .unwrap();
     assert!(duplicate_open.stream_seqs.is_empty());
 
-    let locked = observe_day_event_schedules_as_scheduler(&pool, game, 225)
+    let locked = advance_day_event_automation_as_scheduler(&pool, game, 225, 1)
         .await
         .unwrap();
     assert_eq!(locked.stream_seqs.len(), 2);
@@ -5156,7 +5156,7 @@ async fn absolute_day_event_schedule_records_due_evidence_once_at_boundaries(poo
     assert_eq!(row.lock_observed_at, Some(225));
     assert_eq!(row.locked_at, Some(225));
 
-    let duplicate_lock = observe_day_event_schedules_as_scheduler(&pool, game, 300)
+    let duplicate_lock = advance_day_event_automation_as_scheduler(&pool, game, 300, 1)
         .await
         .unwrap();
     assert!(duplicate_lock.stream_seqs.is_empty());
@@ -5202,16 +5202,16 @@ async fn relative_day_event_schedule_uses_explicit_phase_open_clock(pool: PgPool
     .unwrap();
 
     assert!(
-        observe_day_event_schedules_as_scheduler(&pool, game, phase_opened_at + 9)
+        advance_day_event_automation_as_scheduler(&pool, game, phase_opened_at + 9, 1)
             .await
             .unwrap()
             .stream_seqs
             .is_empty()
     );
-    observe_day_event_schedules_as_scheduler(&pool, game, phase_opened_at + 10)
+    advance_day_event_automation_as_scheduler(&pool, game, phase_opened_at + 10, 1)
         .await
         .unwrap();
-    observe_day_event_schedules_as_scheduler(&pool, game, phase_opened_at + 20)
+    advance_day_event_automation_as_scheduler(&pool, game, phase_opened_at + 20, 1)
         .await
         .unwrap();
     let row = day_events(&pool, game).await.unwrap().remove(0);
@@ -5249,7 +5249,7 @@ async fn phase_trigger_observation_and_manual_cancellation_have_stable_precedenc
     )
     .await
     .unwrap();
-    let opened = observe_day_event_schedules_as_scheduler(&pool, game, 1_000)
+    let opened = advance_day_event_automation_as_scheduler(&pool, game, 1_000, 1)
         .await
         .unwrap();
     assert_eq!(opened.stream_seqs.len(), 2);
@@ -5268,7 +5268,7 @@ async fn phase_trigger_observation_and_manual_cancellation_have_stable_precedenc
     )
     .await
     .unwrap();
-    let after_cancel = observe_day_event_schedules_as_scheduler(&pool, game, 2_000)
+    let after_cancel = advance_day_event_automation_as_scheduler(&pool, game, 2_000, 1)
         .await
         .unwrap();
     assert!(after_cancel.stream_seqs.is_empty());
@@ -5317,9 +5317,12 @@ async fn scheduler_worker_catches_up_missed_boundaries_and_records_service_autho
     .fetch_one(&pool)
     .await
     .unwrap();
-    assert_eq!(meta["principal_user_id"], "service:day-event-scheduler");
-    assert_eq!(meta["authority_used"], format!("DayEventScheduler({game})"));
-    assert_eq!(meta["source"], "day_event_scheduler");
+    assert_eq!(meta["principal_user_id"], "service:day-event-automation");
+    assert_eq!(
+        meta["authority_used"],
+        format!("DayEventAutomation({game})")
+    );
+    assert_eq!(meta["source"], "day_event_automation");
     let status = day_event_scheduler_status(&pool, game, 225)
         .await
         .unwrap()
@@ -5423,6 +5426,351 @@ async fn scheduler_failure_releases_lease_and_applies_bounded_retry_backoff(pool
         .await
         .unwrap();
     assert_eq!(suppressed.claimed_games, 0);
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn automatic_day_event_records_lock_seed_and_resolves_atomically_as_system(pool: PgPool) {
+    let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
+    let event_id = game_platform::DayEventId::new("event-auto-raffle").unwrap();
+    let mut event = minimal_day_event(event_id.as_str(), "bomb");
+    event.resolution = game_platform::DayEventResolutionMode::Auto {
+        policy: game_platform::AutoResolvePolicy::SeededRandom { winners: 1 },
+    };
+    handle(
+        &pool,
+        &user("host_h"),
+        Command::ScheduleDayEvent { game, event },
+    )
+    .await
+    .unwrap();
+    handle(
+        &pool,
+        &user("host_h"),
+        Command::OpenDayEvent {
+            game,
+            event_id: event_id.clone(),
+        },
+    )
+    .await
+    .unwrap();
+    handle(
+        &pool,
+        &user("user_a"),
+        Command::SubmitDayEventParticipation {
+            game,
+            event_id: event_id.clone(),
+            actor_slot: "slot_1".into(),
+            payload: game_platform::ParticipationPayload::OptIn,
+        },
+    )
+    .await
+    .unwrap();
+    handle(
+        &pool,
+        &user("host_h"),
+        Command::LockDayEvent {
+            game,
+            event_id: event_id.clone(),
+        },
+    )
+    .await
+    .unwrap();
+
+    let locked = day_events(&pool, game).await.unwrap().remove(0);
+    let recorded_seed = locked
+        .auto_seed
+        .expect("seeded policy captures its seed in the lock fact");
+    assert!(matches!(
+        handle(
+            &pool,
+            &user("host_h"),
+            Command::ResolveDayEvent {
+                game,
+                event_id: event_id.clone(),
+                decision: game_platform::DayEventDecision::SelectWinners {
+                    slots: vec![game_platform::SlotId::new("slot_1").unwrap()],
+                },
+            },
+        )
+        .await
+        .expect_err("host cannot redraw an automatic event"),
+        Reject::DayEventValidation(message) if message.contains("cannot be host-resolved")
+    ));
+
+    let report = run_day_event_scheduler_once(
+        &pool,
+        &DayEventSchedulerConfig::default(),
+        Uuid::new_v4(),
+        500,
+    )
+    .await
+    .unwrap();
+    assert_eq!(report.claimed_games, 1);
+    assert_eq!(report.succeeded_games, 1);
+    assert_eq!(report.appended_events, 2);
+
+    let resolved = day_events(&pool, game).await.unwrap().remove(0);
+    assert_eq!(resolved.state, "resolved");
+    assert_eq!(resolved.auto_seed, Some(recorded_seed));
+    assert_eq!(resolved.winner_slots, ["slot_1"]);
+    assert_eq!(
+        resolved.resolution_evidence,
+        Some(game_platform::DayEventResolutionEvidence::Auto {
+            policy: game_platform::AutoResolvePolicy::SeededRandom { winners: 1 },
+            seed: Some(recorded_seed),
+            participant_slots: vec![game_platform::SlotId::new("slot_1").unwrap()],
+        })
+    );
+    let resolution = eventstore::load_stream(&pool, game)
+        .await
+        .unwrap()
+        .into_iter()
+        .find(|event| event.kind == "DayEventResolved")
+        .expect("automatic resolution fact");
+    assert_eq!(resolution.actor, eventstore::ActorId::System);
+    assert_eq!(
+        resolution.meta["principal_user_id"],
+        "service:day-event-automation"
+    );
+    assert_eq!(
+        resolution.meta["authority_used"],
+        format!("DayEventAutomation({game})")
+    );
+    assert_eq!(resolution.meta["resolution_source"], "automatic policy");
+    assert!(slot_effects(&pool, game)
+        .await
+        .unwrap()
+        .iter()
+        .any(|effect| effect.slot_id == "slot_1" && effect.effect == "bomb"));
+    assert!(audit_rebuild(&pool, game).await.unwrap().ok);
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn scheduled_auto_resolution_catches_up_in_seeded_durable_steps(pool: PgPool) {
+    let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
+    let event_id = game_platform::DayEventId::new("event-auto-scheduled").unwrap();
+    let mut event = minimal_day_event(event_id.as_str(), "bomb");
+    event.schedule = game_platform::DayEventSchedule::Absolute {
+        open_at: game_platform::UnixSeconds::new(100),
+        lock_at: Some(game_platform::UnixSeconds::new(200)),
+    };
+    event.resolution = game_platform::DayEventResolutionMode::Auto {
+        policy: game_platform::AutoResolvePolicy::SeededRandom { winners: 1 },
+    };
+    handle(
+        &pool,
+        &user("host_h"),
+        Command::ScheduleDayEvent { game, event },
+    )
+    .await
+    .unwrap();
+    let config = DayEventSchedulerConfig::default();
+    let opened = run_day_event_scheduler_once(&pool, &config, Uuid::new_v4(), 100)
+        .await
+        .unwrap();
+    assert_eq!(opened.appended_events, 2);
+    handle(
+        &pool,
+        &user("user_a"),
+        Command::SubmitDayEventParticipation {
+            game,
+            event_id: event_id.clone(),
+            actor_slot: "slot_1".into(),
+            payload: game_platform::ParticipationPayload::OptIn,
+        },
+    )
+    .await
+    .unwrap();
+
+    let locked = run_day_event_scheduler_once(&pool, &config, Uuid::new_v4(), 225)
+        .await
+        .unwrap();
+    assert_eq!(locked.appended_events, 2);
+    let locked_row = day_events(&pool, game).await.unwrap().remove(0);
+    assert_eq!(locked_row.state, "locked");
+    let seed = locked_row.auto_seed.expect("schedule lock captures seed");
+    let pending = day_event_scheduler_status(&pool, game, 225)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(pending.auto_resolve_pending);
+    assert!(pending.pending);
+
+    let resolved = run_day_event_scheduler_once(&pool, &config, Uuid::new_v4(), 226)
+        .await
+        .unwrap();
+    assert_eq!(resolved.appended_events, 2);
+    let resolved_row = day_events(&pool, game).await.unwrap().remove(0);
+    assert_eq!(resolved_row.state, "resolved");
+    assert_eq!(resolved_row.auto_seed, Some(seed));
+    assert!(matches!(
+        resolved_row.resolution_evidence,
+        Some(game_platform::DayEventResolutionEvidence::Auto {
+            seed: Some(evidence_seed),
+            ..
+        }) if evidence_seed == seed
+    ));
+    let caught_up = day_event_scheduler_status(&pool, game, 226)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(!caught_up.auto_resolve_pending);
+    assert!(!caught_up.pending);
+    assert!(audit_rebuild(&pool, game).await.unwrap().ok);
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn auto_resolution_claim_is_replica_safe_and_manual_cancel_wins_before_claim(pool: PgPool) {
+    let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
+    let event_id = game_platform::DayEventId::new("event-auto-race").unwrap();
+    let mut event = minimal_day_event(event_id.as_str(), "bomb");
+    event.resolution = game_platform::DayEventResolutionMode::Auto {
+        policy: game_platform::AutoResolvePolicy::FirstN { winners: 1 },
+    };
+    handle(
+        &pool,
+        &user("host_h"),
+        Command::ScheduleDayEvent { game, event },
+    )
+    .await
+    .unwrap();
+    handle(
+        &pool,
+        &user("host_h"),
+        Command::OpenDayEvent {
+            game,
+            event_id: event_id.clone(),
+        },
+    )
+    .await
+    .unwrap();
+    handle(
+        &pool,
+        &user("user_a"),
+        Command::SubmitDayEventParticipation {
+            game,
+            event_id: event_id.clone(),
+            actor_slot: "slot_1".into(),
+            payload: game_platform::ParticipationPayload::OptIn,
+        },
+    )
+    .await
+    .unwrap();
+    handle(
+        &pool,
+        &user("host_h"),
+        Command::LockDayEvent {
+            game,
+            event_id: event_id.clone(),
+        },
+    )
+    .await
+    .unwrap();
+
+    let config = DayEventSchedulerConfig {
+        batch_size: 1,
+        ..DayEventSchedulerConfig::default()
+    };
+    let (left, right) = tokio::join!(
+        run_day_event_scheduler_once(&pool, &config, Uuid::new_v4(), 600),
+        run_day_event_scheduler_once(&pool, &config, Uuid::new_v4(), 600),
+    );
+    assert_eq!(
+        [left.unwrap(), right.unwrap()]
+            .iter()
+            .map(|report| report.claimed_games)
+            .sum::<usize>(),
+        1
+    );
+    let resolutions: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM events WHERE stream_id = $1 AND kind = 'DayEventResolved'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(resolutions, 1);
+
+    let cancelled_id = game_platform::DayEventId::new("event-auto-cancel").unwrap();
+    let mut cancelled = minimal_day_event(cancelled_id.as_str(), "bomb");
+    cancelled.resolution = game_platform::DayEventResolutionMode::Auto {
+        policy: game_platform::AutoResolvePolicy::FirstN { winners: 1 },
+    };
+    handle(
+        &pool,
+        &user("host_h"),
+        Command::ScheduleDayEvent {
+            game,
+            event: cancelled,
+        },
+    )
+    .await
+    .unwrap();
+    handle(
+        &pool,
+        &user("host_h"),
+        Command::OpenDayEvent {
+            game,
+            event_id: cancelled_id.clone(),
+        },
+    )
+    .await
+    .unwrap();
+    handle(
+        &pool,
+        &user("user_a"),
+        Command::SubmitDayEventParticipation {
+            game,
+            event_id: cancelled_id.clone(),
+            actor_slot: "slot_1".into(),
+            payload: game_platform::ParticipationPayload::OptIn,
+        },
+    )
+    .await
+    .unwrap();
+    handle(
+        &pool,
+        &user("host_h"),
+        Command::LockDayEvent {
+            game,
+            event_id: cancelled_id.clone(),
+        },
+    )
+    .await
+    .unwrap();
+    handle(
+        &pool,
+        &user("host_h"),
+        Command::CancelDayEvent {
+            game,
+            event_id: cancelled_id.clone(),
+            reason: "host chose fiat instead".into(),
+        },
+    )
+    .await
+    .unwrap();
+    let after_cancel = run_day_event_scheduler_once(&pool, &config, Uuid::new_v4(), 601)
+        .await
+        .unwrap();
+    assert_eq!(after_cancel.claimed_games, 1);
+    assert_eq!(after_cancel.appended_events, 0);
+    let cancelled = day_events(&pool, game)
+        .await
+        .unwrap()
+        .into_iter()
+        .find(|event| event.event_id == cancelled_id.as_str())
+        .unwrap();
+    assert_eq!(cancelled.state, "cancelled");
+    assert!(cancelled.resolution_evidence.is_none());
+    let resolutions_after_cancel: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM events WHERE stream_id = $1 AND kind = 'DayEventResolved'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(resolutions_after_cancel, 1);
+    assert!(audit_rebuild(&pool, game).await.unwrap().ok);
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]

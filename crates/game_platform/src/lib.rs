@@ -10,6 +10,7 @@ use std::fmt;
 use serde::{de::Error as _, Deserialize, Deserializer, Serialize};
 use thiserror::Error;
 
+pub mod day_auto_resolution;
 pub mod day_schedule;
 
 #[derive(Debug, Clone, PartialEq, Error)]
@@ -26,6 +27,16 @@ pub enum ModelError {
     ParticipationPayloadMismatch { mode: &'static str },
     #[error("DayEvent must define at least one reward")]
     MissingRewards,
+    #[error("automatic DayEvent winner count must be positive")]
+    ZeroAutoWinnerCount,
+    #[error(
+        "automatic DayEvent resolution requires at least {required} participants, got {actual}"
+    )]
+    InsufficientAutoParticipants { required: u32, actual: usize },
+    #[error("automatic DayEvent resolution requires a recorded seed")]
+    MissingAutoSeed,
+    #[error("automatic DayEvent resolution received duplicate participant `{0}`")]
+    DuplicateAutoParticipant(SlotId),
     #[error("reward {0} must define at least one effect")]
     EmptyReward(RewardKey),
     #[error("duplicate reward key {0}")]
@@ -295,12 +306,40 @@ impl DayEventState {
     }
 }
 
-/// The only supported v1 mode. Automated policies remain additive future work.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 pub enum DayEventResolutionMode {
     HostDecision,
+    Auto { policy: AutoResolvePolicy },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+pub enum AutoResolvePolicy {
+    FirstN { winners: u32 },
+    SeededRandom { winners: u32 },
+}
+
+impl AutoResolvePolicy {
+    pub const fn winner_count(self) -> u32 {
+        match self {
+            Self::FirstN { winners } | Self::SeededRandom { winners } => winners,
+        }
+    }
+
+    pub const fn requires_seed(self) -> bool {
+        matches!(self, Self::SeededRandom { .. })
+    }
+
+    pub fn validate(self) -> Result<(), ModelError> {
+        if self.winner_count() == 0 {
+            Err(ModelError::ZeroAutoWinnerCount)
+        } else {
+            Ok(())
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -742,6 +781,15 @@ impl DayEvent {
         self.phase_scope.validate()?;
         self.schedule.validate()?;
         self.participation.validate()?;
+        if let DayEventResolutionMode::Auto { policy } = self.resolution {
+            policy.validate()?;
+            if self.participation.limits.minimum < policy.winner_count() {
+                return Err(ModelError::InsufficientAutoParticipants {
+                    required: policy.winner_count(),
+                    actual: self.participation.limits.minimum as usize,
+                });
+            }
+        }
         self.channel_policy.validate()?;
         if self.rewards.is_empty() {
             return Err(ModelError::MissingRewards);
@@ -858,6 +906,20 @@ pub enum DayEventDecision {
     CancelInstead { reason: String },
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+pub enum DayEventResolutionEvidence {
+    HostDecision {
+        participant_slots: Vec<SlotId>,
+    },
+    Auto {
+        policy: AutoResolvePolicy,
+        seed: Option<u64>,
+        participant_slots: Vec<SlotId>,
+    },
+}
+
 /// Typed event payloads for stream facts. Adapters own envelopes and persistence.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
@@ -906,6 +968,7 @@ pub enum DayEventEvent {
         decision: DayEventDecision,
         winner_slots: Vec<SlotId>,
         reward_keys_applied: Vec<RewardKey>,
+        evidence: DayEventResolutionEvidence,
     },
 }
 

@@ -10,7 +10,7 @@ use serde::Serialize;
 use sqlx::{postgres::PgPool, Row};
 use uuid::Uuid;
 
-use crate::{observe_day_event_schedules_as_scheduler, Reject};
+use crate::{advance_day_event_automation_as_scheduler, Reject};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DayEventSchedulerConfig {
@@ -91,6 +91,7 @@ pub struct DayEventSchedulerTickReport {
 pub struct DayEventSchedulerStatus {
     pub game_id: Uuid,
     pub next_due_at: Option<i64>,
+    pub auto_resolve_pending: bool,
     pub wake_seq: i64,
     pub updated_seq: i64,
     pub last_observed_wake_seq: i64,
@@ -163,7 +164,14 @@ pub async fn run_day_event_scheduler_once(
         appended_events: 0,
     };
     for claim in claims {
-        match observe_day_event_schedules_as_scheduler(pool, claim.game_id, observed_at).await {
+        match advance_day_event_automation_as_scheduler(
+            pool,
+            claim.game_id,
+            observed_at,
+            fresh_seed_root(),
+        )
+        .await
+        {
             Ok(ack) => {
                 finish_success(pool, worker_id, &claim, observed_at).await?;
                 report.succeeded_games += 1;
@@ -196,7 +204,7 @@ pub async fn day_event_scheduler_status(
     observed_at: i64,
 ) -> Result<Option<DayEventSchedulerStatus>, SchedulerError> {
     let row = sqlx::query(
-        "SELECT w.game_id, w.next_due_at, w.wake_seq, w.updated_seq, \
+        "SELECT w.game_id, w.next_due_at, w.auto_resolve_pending, w.wake_seq, w.updated_seq, \
                 s.last_observed_wake_seq, s.lease_owner, s.lease_until, \
                 s.retry_not_before, s.last_attempt_at, s.last_success_at, \
                 s.last_failure_at, s.consecutive_failures, s.total_attempts, \
@@ -215,6 +223,7 @@ pub async fn day_event_scheduler_status(
         DayEventSchedulerStatus {
             game_id: row.get("game_id"),
             next_due_at,
+            auto_resolve_pending: row.get("auto_resolve_pending"),
             wake_seq,
             updated_seq: row.get("updated_seq"),
             last_observed_wake_seq,
@@ -229,7 +238,8 @@ pub async fn day_event_scheduler_status(
             total_successes: row.get("total_successes"),
             last_error: row.get("last_error"),
             pending: next_due_at.is_some_and(|due_at| due_at <= observed_at)
-                || wake_seq > last_observed_wake_seq,
+                || wake_seq > last_observed_wake_seq
+                || row.get("auto_resolve_pending"),
         }
     }))
 }
@@ -249,7 +259,8 @@ async fn claim_due_games(
            FROM day_event_scheduler_state s \
            JOIN day_event_schedule_work w ON w.game_id = s.game_id \
            JOIN game_index g ON g.game_id = s.game_id AND g.status = 'active' \
-           WHERE (w.next_due_at <= $1 OR w.wake_seq > s.last_observed_wake_seq) \
+           WHERE (w.next_due_at <= $1 OR w.wake_seq > s.last_observed_wake_seq \
+                  OR w.auto_resolve_pending) \
              AND (s.lease_until IS NULL OR s.lease_until <= $1) \
              AND (s.retry_not_before IS NULL OR s.retry_not_before <= $1) \
            ORDER BY w.next_due_at ASC NULLS LAST, w.wake_seq ASC, s.game_id ASC \
@@ -349,6 +360,11 @@ fn unix_seconds_now() -> Result<i64, SchedulerError> {
         .map_err(|_| SchedulerError::InvalidClock)?
         .as_secs();
     i64::try_from(seconds).map_err(|_| SchedulerError::InvalidClock)
+}
+
+fn fresh_seed_root() -> u64 {
+    let bytes = Uuid::new_v4().into_bytes();
+    u64::from_le_bytes(bytes[..8].try_into().expect("UUID prefix is eight bytes")) & i64::MAX as u64
 }
 
 #[cfg(test)]

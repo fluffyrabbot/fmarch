@@ -412,6 +412,13 @@ function normalizeHostDayEvent(event) {
       : {};
   const rewards = Array.isArray(definition.rewards) ? definition.rewards : [];
   const participantSlots = event.participant_slots ?? event.participantSlots;
+  const resolutionEvidence =
+    event.resolution_evidence ?? event.resolutionEvidence ?? null;
+  const resolutionPolicy =
+    resolutionEvidence?.policy !== null &&
+    typeof resolutionEvidence?.policy === "object"
+      ? resolutionEvidence.policy
+      : null;
   return Object.freeze({
     eventId,
     state: String(event.state ?? "scheduled"),
@@ -427,6 +434,51 @@ function normalizeHostDayEvent(event) {
         event.lock_observed_at ?? event.lockObservedAt,
       ),
     }),
+    autoSeed: finiteNumberOrNull(event.auto_seed ?? event.autoSeed),
+    resolutionEvidence:
+      resolutionEvidence !== null && typeof resolutionEvidence === "object"
+        ? Object.freeze({
+            kind: String(resolutionEvidence.kind ?? ""),
+            policyKind:
+              resolutionPolicy === null
+                ? null
+                : String(resolutionPolicy.kind ?? ""),
+            winnerCount:
+              resolutionPolicy === null
+                ? null
+                : Number(resolutionPolicy.winners ?? 0),
+            seed: finiteNumberOrNull(resolutionEvidence.seed),
+            participantSlots: Object.freeze(
+              Array.isArray(
+                resolutionEvidence.participant_slots ??
+                  resolutionEvidence.participantSlots,
+              )
+                ? [
+                    ...new Set(
+                      (
+                        resolutionEvidence.participant_slots ??
+                        resolutionEvidence.participantSlots
+                      ).map(String),
+                    ),
+                  ].sort()
+                : [],
+            ),
+          })
+        : null,
+    winnerSlots: Object.freeze(
+      Array.isArray(event.winner_slots ?? event.winnerSlots)
+        ? [...new Set((event.winner_slots ?? event.winnerSlots).map(String))].sort()
+        : [],
+    ),
+    rewardKeysApplied: Object.freeze(
+      Array.isArray(event.reward_keys_applied ?? event.rewardKeysApplied)
+        ? [
+            ...new Set(
+              (event.reward_keys_applied ?? event.rewardKeysApplied).map(String),
+            ),
+          ].sort()
+        : [],
+    ),
     participation: Object.freeze({
       who: String(participation.who ?? ""),
       mode: String(participation.mode ?? ""),
@@ -464,6 +516,8 @@ export function normalizeDayEventScheduler(scheduler, fallback = null) {
   return Object.freeze({
     pending: source.pending === true,
     nextDueAt: finiteNumberOrNull(source.next_due_at ?? source.nextDueAt),
+    autoResolvePending:
+      (source.auto_resolve_pending ?? source.autoResolvePending) === true,
     wakeSeq: Number(source.wake_seq ?? source.wakeSeq ?? 0),
     lastObservedWakeSeq: Number(
       source.last_observed_wake_seq ?? source.lastObservedWakeSeq ?? 0,

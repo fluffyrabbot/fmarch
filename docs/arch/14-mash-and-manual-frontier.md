@@ -328,8 +328,8 @@ stateDiagram-v2
 value. Existing `occurred_at` values remain logical data and are never used as
 the wall-clock base. Legacy/imported phase facts without the explicit field
 leave relative schedules inert. Schedule observation is not a client command:
-the scoped DayEvent scheduler calls a sealed command boundary that records
-`DayEventScheduler(game)` authority.
+the scoped DayEvent automation worker calls a sealed command boundary that
+records `DayEventAutomation(game)` authority.
 
 Repeated observations are idempotent: committed due evidence and the projected
 DayEvent state suppress duplicate facts. Manual cancellation is terminal and
@@ -340,17 +340,18 @@ duplicate work but are never the correctness boundary.
 **Operational scheduler boundary:**
 
 1. `day_event_schedule_work` is a rebuildable projection with one row per game,
-   an indexed `next_due_at`, and a monotonic `wake_seq` for phase signals and
-   newly scheduled events.
+   an indexed `next_due_at`, a monotonic `wake_seq` for phase signals and newly
+   scheduled events, and an indexed `auto_resolve_pending` flag for locked
+   automatic events.
 2. `day_event_scheduler_state` is deliberately operational rather than
    rebuildable. It stores the last observed wake cursor, bounded lease,
    exponential-retry posture, and success/failure health counters.
 3. Each server process owns a random worker identity. Claims use
    `FOR UPDATE SKIP LOCKED`; an expired claim may be repeated safely because the
    sealed observation command revalidates under the game stream lock.
-4. The client wire cannot express schedule observation. Accepted facts carry
-   `service:day-event-scheduler`, `DayEventScheduler(game)`, and
-   `source=day_event_scheduler` audit metadata.
+4. The client wire cannot express automation advancement. Accepted facts carry
+   `service:day-event-automation`, `DayEventAutomation(game)`, and
+   `source=day_event_automation` audit metadata.
 5. The host console exposes worker health plus each DayEvent's due/observed
    timestamps. `/healthz` remains dependency-free process liveness; scheduler
    degradation is game-scoped operational state, not a reason to make the HTTP
@@ -362,6 +363,29 @@ Worker bounds are configured with
 `FMARCH_DAY_EVENT_SCHEDULER_LEASE_SECONDS`,
 `FMARCH_DAY_EVENT_SCHEDULER_RETRY_BASE_SECONDS`, and
 `FMARCH_DAY_EVENT_SCHEDULER_RETRY_MAX_SECONDS`.
+
+**Automatic resolution boundary:**
+
+1. `AutoResolvePolicy::FirstN` canonicalizes participant slot ids and selects a
+   declared count in stable order. `AutoResolvePolicy::SeededRandom` ranks the
+   same canonical input set by a keyed digest and selects the declared count.
+   Neither policy reads wall clock, database order, or mutable RNG state.
+2. A seeded automatic event captures its derived non-negative seed on
+   `DayEventLocked`. Lock and seed commit before resolution is attempted. Every
+   retry therefore reuses the same seed; a worker restart cannot silently
+   redraw.
+3. A following leased pass compiles the decision and reward plans, applies all
+   concrete effects, and appends `DayEventResolved` in one transaction. The
+   resolution fact records policy, seed, canonical participant inputs, winners,
+   and reward keys. Effects remain sibling facts through the same adapters used
+   by host fiat and host-decided DayEvents.
+4. Automatic resolution uses `ActorId::System`. `ResolveDayEvent` rejects an
+   automatic event, preventing host seed grinding. The permanent manual
+   frontier is explicit: cancel before the worker claim, then use fiat.
+5. Concurrent cancel/resolve attempts serialize on the game stream. A committed
+   cancellation suppresses later automatic work; a committed resolution is
+   terminal. Operational wake cursors may still consume a now-inert scheduled
+   signal without appending facts.
 
 Default product posture for mash: **12h day / 12h night** phase cadence, with zero or more DayEvents scheduled inside each day window.
 
@@ -930,12 +954,12 @@ Incremental backlog for solo greenfield. Multi-day depth expected on adapter PRs
 | **PR8** | AttachDayProgram compiler + setup stage | program validation/materialization, setup workflow | PR6–7 | Program attachment creates immutable future DayEvent definitions; existing/open events never mutate |
 | **PR9** | explicit phase-open time + absolute scheduling | phase event/projection, atomic due commands | PR6 | `UnixSeconds`; no wall-clock folds |
 | **PR10** | relative scheduling | DayEvent schedule compiler | PR9 | Uses committed `phase_opened_at`, never envelope logical time |
-| **PR11** | L3 auto-resolve + recorded seed | pure platform policy module, command | PR6, PR9 | |
+| **PR11** | L3 auto-resolve + recorded seed | pure platform policy module, sealed automation command, indexed work | PR6, PR9 | First-N + seeded-random policies; lock-captured seed; atomic effects + resolution |
 | **PR12** | theme narrative + host-notice main allow-list | theme refs; generalized host-notice adapter; channel allow-list | PR8 | Separate from concrete-effect enum; **not** player SubmitPost |
 | **PR13** | scale acceptance checks (30+) | ops smoke / projection bench artifacts | PR7, PR9–11 | Numeric checks listed in Scale section |
 | **PR14** | program templates library (data) | `programs/` or content store | PR8, PR12 | raffle, opt-in quest, host-judged showcase |
 
-**Deferred:** scheduler principal; Convert/Link/channel-membership effects; reopen/hybrid semantics; L4 promotion tooling; mid-game cohost denylist edits (v1 = create-time only unless product reopens).
+**Deferred:** Convert/Link/channel-membership effects; reopen/hybrid semantics; L4 promotion tooling; mid-game cohost denylist edits (v1 = create-time only unless product reopens).
 
 ---
 
@@ -1044,12 +1068,12 @@ It continues to consume slot state, submissions, and folded effects — includin
 | `DayProgramAttached` | 1 | `program_id`, `content_hash`, `theme_ref?` | |
 | `DayEventScheduled` | 1 | `event_id`, `program_id`, `template_key`, `schedule`, `resolution_mode`, `rewards_ref` | Materialize from program |
 | `DayEventOpened` | 1 | `event_id`, `phase_id`, `opened_at: UnixSeconds` | |
-| `DayEventLocked` | 1 | `event_id`, `locked_at` | |
+| `DayEventLocked` | 1 | `event_id`, `locked_at`, `auto_seed?` | Seed is present only when the resolution policy requires it |
 | `DayEventCancelled` | 1 | `event_id`, `reason` | |
 | `DayEventOpenDue` / `DayEventLockDue` | 1 | `event_id`, `due_at`, `observed_at`, `source` | Inert evidence |
 | `DayEventParticipationSubmitted` | 1 | `event_id`, `actor_slot`, `payload`, `phase_id` | |
 | `DayEventParticipationWithdrawn` | 1 | `event_id`, `actor_slot` | Only while Open |
-| `DayEventResolved` | 1 | `event_id`, `decision`, `winner_slots`, `seed?`, `reward_keys_applied` | Effects are **sibling events in same txn**, not only embedded opaque blobs — resolved row may reference seqs |
+| `DayEventResolved` | 1 | `event_id`, `decision`, `winner_slots`, `reward_keys_applied`, `evidence` | Evidence records host/auto source, policy, seed, and canonical participants. Effects are **sibling events in same txn**, not only embedded opaque blobs |
 
 Plus existing kinds used by adapters: `EffectsMarked`, `EffectsCleared`, `SlotStatusChanged`, platform grant fact, channel membership, host-authored `PostSubmitted` (host-notice path; same kind as spectator posts, not player `SubmitPost`).
 

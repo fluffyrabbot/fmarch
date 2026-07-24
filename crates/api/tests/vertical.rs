@@ -4506,6 +4506,20 @@ async fn day_event_vertical_exposes_player_attention_and_permission_aware_host_t
         .unwrap();
     let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let state: api::HostConsoleStateResponse = serde_json::from_slice(&body).unwrap();
+    let resolved = state
+        .day_events
+        .iter()
+        .find(|event| event.event_id == "event-cookie")
+        .expect("resolved DayEvent remains visible with evidence");
+    assert_eq!(resolved.auto_seed, None);
+    assert_eq!(resolved.winner_slots, ["slot_1"]);
+    assert_eq!(resolved.reward_keys_applied, ["cookie"]);
+    assert!(matches!(
+        resolved.resolution_evidence.as_ref(),
+        Some(game_platform::DayEventResolutionEvidence::HostDecision {
+            participant_slots,
+        }) if participant_slots == &[game_platform::SlotId::new("slot_1").unwrap()]
+    ));
     assert!(state
         .tasks
         .iter()

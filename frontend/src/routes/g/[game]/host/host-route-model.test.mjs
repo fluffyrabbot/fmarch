@@ -291,6 +291,7 @@ test("host console route data uses host prompt and votecount cold-loads when ava
           thread_posts: [],
           day_event_scheduler: {
             pending: true,
+            auto_resolve_pending: true,
             next_due_at: 1781928100,
             wake_seq: 52,
             last_observed_wake_seq: 51,
@@ -306,13 +307,22 @@ test("host console route data uses host prompt and votecount cold-loads when ava
           },
           day_events: [{
             event_id: "event-cookie",
-            state: "locked",
+            state: "resolved",
             phase_id: "D01",
             participant_slots: ["slot_1", "slot_2"],
             open_due_at: 1781928000,
             open_observed_at: 1781928001,
             lock_due_at: 1781928060,
             lock_observed_at: 1781928062,
+            auto_seed: 73,
+            resolution_evidence: {
+              kind: "auto",
+              policy: { kind: "seeded_random", winners: 1 },
+              seed: 73,
+              participant_slots: ["slot_2", "slot_1"],
+            },
+            winner_slots: ["slot_2"],
+            reward_keys_applied: ["cookie"],
             definition: {
               id: "event-cookie",
               template_key: "theme.raffle",
@@ -403,7 +413,7 @@ test("host console route data uses host prompt and votecount cold-loads when ava
   ]);
   assert.deepEqual(data.hostDayEvents, [{
     eventId: "event-cookie",
-    state: "locked",
+    state: "resolved",
     phaseId: "D01",
     templateKey: "theme.raffle",
     scheduleEvidence: {
@@ -412,6 +422,16 @@ test("host console route data uses host prompt and votecount cold-loads when ava
       lockDueAt: 1781928060,
       lockObservedAt: 1781928062,
     },
+    autoSeed: 73,
+    resolutionEvidence: {
+      kind: "auto",
+      policyKind: "seeded_random",
+      winnerCount: 1,
+      seed: 73,
+      participantSlots: ["slot_1", "slot_2"],
+    },
+    winnerSlots: ["slot_2"],
+    rewardKeysApplied: ["cookie"],
     participation: {
       who: "alive_slots",
       mode: "opt_in",
@@ -426,6 +446,7 @@ test("host console route data uses host prompt and votecount cold-loads when ava
     }],
   }]);
   assert.equal(data.dayEventScheduler.pending, true);
+  assert.equal(data.dayEventScheduler.autoResolvePending, true);
   assert.equal(data.dayEventScheduler.wakeSeq, 52);
   assert.equal(
     data.criticalActions.at(-1).payload.promptId,

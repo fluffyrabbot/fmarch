@@ -320,8 +320,10 @@ pub struct DayEventRow {
     pub open_observed_at: Option<i64>,
     pub lock_due_at: Option<i64>,
     pub lock_observed_at: Option<i64>,
+    pub auto_seed: Option<u64>,
     pub cancelled_reason: Option<String>,
     pub decision: Option<game_platform::DayEventDecision>,
+    pub resolution_evidence: Option<game_platform::DayEventResolutionEvidence>,
     pub winner_slots: Vec<String>,
     pub reward_keys_applied: Vec<String>,
     pub scheduled_seq: i64,
@@ -1287,13 +1289,27 @@ async fn fold_event(
         "DayEventLocked" => {
             let event_id = str_field(&ev.payload, "event_id", &ev.kind)?;
             let locked_at = i64_field(&ev.payload, "locked_at", &ev.kind)?;
+            let auto_seed = ev
+                .payload
+                .get("auto_seed")
+                .and_then(serde_json::Value::as_u64);
+            let auto_seed =
+                auto_seed
+                    .map(i64::try_from)
+                    .transpose()
+                    .map_err(|_| ProjectionError::Payload {
+                        kind: ev.kind.clone(),
+                        source: serde::de::Error::custom("auto_seed exceeds signed storage range"),
+                    })?;
             sqlx::query(
-                "UPDATE day_event SET state = 'locked', locked_at = $3, updated_seq = $4 \
+                "UPDATE day_event SET state = 'locked', locked_at = $3, auto_seed = $4, \
+                 updated_seq = $5 \
                  WHERE game_id = $1 AND event_id = $2",
             )
             .bind(game_id)
             .bind(event_id)
             .bind(locked_at)
+            .bind(auto_seed)
             .bind(ev.seq)
             .execute(&mut **tx)
             .await?;
@@ -1367,9 +1383,20 @@ async fn fold_event(
                 })?;
             let winner_slots = string_array_field(&ev.payload, "winner_slots", &ev.kind)?;
             let reward_keys = string_array_field(&ev.payload, "reward_keys_applied", &ev.kind)?;
+            let evidence: Option<game_platform::DayEventResolutionEvidence> = ev
+                .payload
+                .get("evidence")
+                .filter(|value| !value.is_null())
+                .cloned()
+                .map(serde_json::from_value)
+                .transpose()
+                .map_err(|source| ProjectionError::Payload {
+                    kind: ev.kind.clone(),
+                    source,
+                })?;
             sqlx::query(
                 "UPDATE day_event SET state = 'resolved', decision = $3, winner_slots = $4, \
-                 reward_keys_applied = $5, updated_seq = $6 \
+                 reward_keys_applied = $5, resolution_evidence = $6, updated_seq = $7 \
                  WHERE game_id = $1 AND event_id = $2",
             )
             .bind(game_id)
@@ -1382,6 +1409,15 @@ async fn fold_event(
             )
             .bind(serde_json::json!(winner_slots))
             .bind(serde_json::json!(reward_keys))
+            .bind(
+                evidence
+                    .map(serde_json::to_value)
+                    .transpose()
+                    .map_err(|source| ProjectionError::Payload {
+                        kind: ev.kind.clone(),
+                        source,
+                    })?,
+            )
             .bind(ev.seq)
             .execute(&mut **tx)
             .await?;
@@ -1470,12 +1506,13 @@ async fn refresh_day_event_schedule_work(
 
     let rows = sqlx::query(
         "SELECT definition, state, open_due_at FROM day_event \
-         WHERE game_id = $1 AND state IN ('scheduled', 'open') ORDER BY event_id",
+         WHERE game_id = $1 AND state IN ('scheduled', 'open', 'locked') ORDER BY event_id",
     )
     .bind(game_id)
     .fetch_all(&mut **tx)
     .await?;
     let mut next_due_at: Option<i64> = None;
+    let mut auto_resolve_pending = false;
     for row in rows {
         let definition: game_platform::DayEvent = serde_json::from_value(row.get("definition"))
             .map_err(|source| ProjectionError::Payload {
@@ -1485,6 +1522,7 @@ async fn refresh_day_event_schedule_work(
         let state = match row.get::<String, _>("state").as_str() {
             "scheduled" => game_platform::DayEventState::Scheduled,
             "open" => game_platform::DayEventState::Open,
+            "locked" => game_platform::DayEventState::Locked,
             other => {
                 return payload_error(
                     "DayEventScheduled",
@@ -1492,6 +1530,14 @@ async fn refresh_day_event_schedule_work(
                 )
             }
         };
+        if state == game_platform::DayEventState::Locked
+            && matches!(
+                definition.resolution,
+                game_platform::DayEventResolutionMode::Auto { .. }
+            )
+        {
+            auto_resolve_pending = true;
+        }
         let candidate = game_platform::day_schedule::next_observation_at(
             &definition,
             state,
@@ -1508,17 +1554,19 @@ async fn refresh_day_event_schedule_work(
     }
 
     sqlx::query(
-        "INSERT INTO day_event_schedule_work (game_id, next_due_at, wake_seq, updated_seq) \
-         VALUES ($1, $2, CASE WHEN $3 THEN $4 ELSE 0 END, $4) \
+        "INSERT INTO day_event_schedule_work \
+         (game_id, next_due_at, wake_seq, updated_seq, auto_resolve_pending) \
+         VALUES ($1, $2, CASE WHEN $3 THEN $4 ELSE 0 END, $4, $5) \
          ON CONFLICT (game_id) DO UPDATE SET \
            next_due_at = EXCLUDED.next_due_at, \
            wake_seq = CASE WHEN $3 THEN $4 ELSE day_event_schedule_work.wake_seq END, \
-           updated_seq = $4",
+           updated_seq = $4, auto_resolve_pending = $5",
     )
     .bind(game_id)
     .bind(next_due_at)
     .bind(advance_wake)
     .bind(updated_seq)
+    .bind(auto_resolve_pending)
     .execute(&mut **tx)
     .await?;
     sqlx::query(
@@ -4795,7 +4843,8 @@ where
     let rows = sqlx::query(
         "SELECT game_id, event_id, definition, state, phase_id, opened_at, locked_at, \
          open_due_at, open_observed_at, lock_due_at, lock_observed_at, \
-         cancelled_reason, decision, winner_slots, reward_keys_applied, scheduled_seq, updated_seq \
+         auto_seed, cancelled_reason, decision, resolution_evidence, winner_slots, \
+         reward_keys_applied, scheduled_seq, updated_seq \
          FROM day_event WHERE game_id = $1 ORDER BY event_id",
     )
     .bind(game_id)
@@ -4817,6 +4866,23 @@ where
                 .map_err(|source| ProjectionError::Payload {
                     kind: "DayEventResolved".to_string(),
                     source,
+                })?;
+            let resolution_evidence_value: Option<serde_json::Value> =
+                row.get("resolution_evidence");
+            let resolution_evidence = resolution_evidence_value
+                .map(serde_json::from_value)
+                .transpose()
+                .map_err(|source| ProjectionError::Payload {
+                    kind: "DayEventResolved".to_string(),
+                    source,
+                })?;
+            let auto_seed = row
+                .get::<Option<i64>, _>("auto_seed")
+                .map(u64::try_from)
+                .transpose()
+                .map_err(|_| ProjectionError::Payload {
+                    kind: "DayEventLocked".to_string(),
+                    source: serde::de::Error::custom("auto_seed must be non-negative"),
                 })?;
             let winner_slots_value: serde_json::Value = row.get("winner_slots");
             let winner_slots = serde_json::from_value(winner_slots_value).map_err(|source| {
@@ -4845,8 +4911,10 @@ where
                 open_observed_at: row.get("open_observed_at"),
                 lock_due_at: row.get("lock_due_at"),
                 lock_observed_at: row.get("lock_observed_at"),
+                auto_seed,
                 cancelled_reason: row.get("cancelled_reason"),
                 decision,
+                resolution_evidence,
                 winner_slots,
                 reward_keys_applied,
                 scheduled_seq: row.get("scheduled_seq"),

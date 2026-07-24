@@ -37,7 +37,7 @@ export type DayEventSchedule = { "kind": "absolute", open_at: UnixSeconds, lock_
 
 export type DayEventState = "scheduled" | "open" | "locked" | "resolved" | "cancelled";
 
-export type DayEventResolutionMode = "host_decision";
+export type DayEventResolutionMode = "host_decision" | { "auto": { policy: AutoResolvePolicy, } };
 
 export type ParticipantFilter = "alive_slots" | "all_occupied" | "host_invited" | "channel_members";
 
@@ -87,7 +87,7 @@ export type RewardAssignment = { slot: SlotId, reward_key: RewardKey, };
 
 export type DayEventDecision = { "kind": "select_winners", slots: Array<SlotId>, } | { "kind": "select_mapping", assignments: Array<RewardAssignment>, } | { "kind": "cancel_instead", reason: string, };
 
-export type DayEventEvent = { "kind": "scheduled", event: DayEvent, } | { "kind": "opened", event_id: DayEventId, phase_id: PhaseId, opened_at: UnixSeconds, } | { "kind": "locked", event_id: DayEventId, locked_at: UnixSeconds, } | { "kind": "cancelled", event_id: DayEventId, reason: string, } | { "kind": "open_due", event_id: DayEventId, due_at: UnixSeconds, observed_at: UnixSeconds, source: string, } | { "kind": "lock_due", event_id: DayEventId, due_at: UnixSeconds, observed_at: UnixSeconds, source: string, } | { "kind": "participation_submitted", event_id: DayEventId, actor_slot: SlotId, payload: ParticipationPayload, phase_id: PhaseId, } | { "kind": "participation_withdrawn", event_id: DayEventId, actor_slot: SlotId, } | { "kind": "resolved", event_id: DayEventId, decision: DayEventDecision, winner_slots: Array<SlotId>, reward_keys_applied: Array<RewardKey>, };
+export type DayEventEvent = { "kind": "scheduled", event: DayEvent, } | { "kind": "opened", event_id: DayEventId, phase_id: PhaseId, opened_at: UnixSeconds, } | { "kind": "locked", event_id: DayEventId, locked_at: UnixSeconds, } | { "kind": "cancelled", event_id: DayEventId, reason: string, } | { "kind": "open_due", event_id: DayEventId, due_at: UnixSeconds, observed_at: UnixSeconds, source: string, } | { "kind": "lock_due", event_id: DayEventId, due_at: UnixSeconds, observed_at: UnixSeconds, source: string, } | { "kind": "participation_submitted", event_id: DayEventId, actor_slot: SlotId, payload: ParticipationPayload, phase_id: PhaseId, } | { "kind": "participation_withdrawn", event_id: DayEventId, actor_slot: SlotId, } | { "kind": "resolved", event_id: DayEventId, decision: DayEventDecision, winner_slots: Array<SlotId>, reward_keys_applied: Array<RewardKey>, evidence: DayEventResolutionEvidence, };
 
 export type VoteTarget = { "Slot": string } | "NoLynch";
 
@@ -131,9 +131,9 @@ export type HostConsoleSlotOccupancyDelta = { slot_id: string, occupant_user_id:
 
 export type HostConsoleThreadPostDelta = { stream_seq: bigint, author_slot: string | null, author_user: string | null, phase_id: string, body: string, };
 
-export type DayEventSchedulerDelta = { pending: boolean, next_due_at: bigint | null, wake_seq: bigint, last_observed_wake_seq: bigint, lease_until: bigint | null, retry_not_before: bigint | null, last_attempt_at: bigint | null, last_success_at: bigint | null, last_failure_at: bigint | null, consecutive_failures: number, total_attempts: bigint, total_successes: bigint, last_error: string | null, };
+export type DayEventSchedulerDelta = { pending: boolean, next_due_at: bigint | null, auto_resolve_pending: boolean, wake_seq: bigint, last_observed_wake_seq: bigint, lease_until: bigint | null, retry_not_before: bigint | null, last_attempt_at: bigint | null, last_success_at: bigint | null, last_failure_at: bigint | null, consecutive_failures: number, total_attempts: bigint, total_successes: bigint, last_error: string | null, };
 
-export type HostDayEventDelta = { event_id: string, state: string, phase_id: string | null, definition: DayEvent, participant_slots: Array<string>, open_due_at: bigint | null, open_observed_at: bigint | null, lock_due_at: bigint | null, lock_observed_at: bigint | null, };
+export type HostDayEventDelta = { event_id: string, state: string, phase_id: string | null, definition: DayEvent, participant_slots: Array<string>, open_due_at: bigint | null, open_observed_at: bigint | null, lock_due_at: bigint | null, lock_observed_at: bigint | null, auto_seed: bigint | null, resolution_evidence: DayEventResolutionEvidence | null, winner_slots: Array<string>, reward_keys_applied: Array<string>, };
 
 export type HostTaskKind = "engine_host_prompt" | "day_event_resolve";
 

@@ -856,12 +856,17 @@ pub struct HostDayEventDelta {
     pub open_observed_at: Option<i64>,
     pub lock_due_at: Option<i64>,
     pub lock_observed_at: Option<i64>,
+    pub auto_seed: Option<u64>,
+    pub resolution_evidence: Option<game_platform::DayEventResolutionEvidence>,
+    pub winner_slots: Vec<String>,
+    pub reward_keys_applied: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct DayEventSchedulerDelta {
     pub pending: bool,
     pub next_due_at: Option<i64>,
+    pub auto_resolve_pending: bool,
     pub wake_seq: i64,
     pub last_observed_wake_seq: i64,
     pub lease_until: Option<i64>,

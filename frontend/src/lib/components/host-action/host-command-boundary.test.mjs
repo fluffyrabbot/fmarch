@@ -619,6 +619,7 @@ test("host console projection maps deadline and stable slot history to labels", 
       completed: true,
       day_event_scheduler: {
         pending: false,
+        auto_resolve_pending: false,
         next_due_at: 1781928100,
         wake_seq: 44,
         last_observed_wake_seq: 44,
@@ -683,9 +684,11 @@ test("host console projection maps deadline and stable slot history to labels", 
   );
 
   assert.equal(projection.completed, true);
+  assert.equal(projection.dayEventScheduler.autoResolvePending, false);
   assert.deepEqual(projection.dayEventScheduler, {
     pending: false,
     nextDueAt: 1781928100,
+    autoResolvePending: false,
     wakeSeq: 44,
     lastObservedWakeSeq: 44,
     leaseUntil: null,

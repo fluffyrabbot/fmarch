@@ -7915,8 +7915,10 @@ mod tests {
             open_observed_at: None,
             lock_due_at: None,
             lock_observed_at: None,
+            auto_seed: None,
             cancelled_reason: None,
             decision: None,
+            resolution_evidence: None,
             winner_slots: Vec::new(),
             reward_keys_applied: Vec::new(),
             scheduled_seq: 1,
@@ -8379,6 +8381,7 @@ async fn load_host_console_state(
             .map(|status| DayEventSchedulerDelta {
                 pending: status.pending,
                 next_due_at: status.next_due_at,
+                auto_resolve_pending: status.auto_resolve_pending,
                 wake_seq: status.wake_seq,
                 last_observed_wake_seq: status.last_observed_wake_seq,
                 lease_until: status.lease_until,
@@ -8410,6 +8413,10 @@ async fn load_host_console_state(
             open_observed_at: event.open_observed_at,
             lock_due_at: event.lock_due_at,
             lock_observed_at: event.lock_observed_at,
+            auto_seed: event.auto_seed,
+            resolution_evidence: event.resolution_evidence.clone(),
+            winner_slots: event.winner_slots.clone(),
+            reward_keys_applied: event.reward_keys_applied.clone(),
         })
         .collect();
 
