@@ -32,6 +32,7 @@
     "test:projection-baseline:static": { "kind": "npm" },
     "test:dev-test-game-contract": { "kind": "npm" },
     "test:dev-postgres-contract": { "kind": "npm" },
+    "test:mash-scale-acceptance": { "kind": "npm" },
     "test:completeness-scorecard": { "kind": "npm" },
     "test:proof-lane-contract": { "kind": "npm" },
     "test:production-promotion": { "kind": "npm" },
@@ -137,7 +138,7 @@
       "tier": "active",
       "paths": ["crates/api/"],
       "crate": "api",
-      "lanes": ["cargo:api"],
+      "lanes": ["cargo:api", "test:mash-scale-acceptance"],
       "also_triggers": ["frontend:identity"]
     },
     {
@@ -166,7 +167,12 @@
       "id": "programs",
       "tier": "active",
       "paths": ["programs/"],
-      "lanes": ["cargo:game-platform", "cargo:commands", "cargo:api"]
+      "lanes": [
+        "cargo:game-platform",
+        "cargo:commands",
+        "cargo:api",
+        "test:mash-scale-acceptance"
+      ]
     },
     {
       "id": "frontend:identity",
@@ -235,6 +241,16 @@
       "tier": "active",
       "paths": ["tools/production_promotion.mjs", "tools/production_promotion.test.mjs"],
       "lanes": ["test:production-promotion", "test:railway-staging-target"]
+    },
+    {
+      "id": "proof:mash-scale",
+      "tier": "active",
+      "paths": [
+        "tools/mash_scale_acceptance.mjs",
+        "tools/mash_scale_acceptance_contract.mjs",
+        "tools/mash_scale_acceptance_contract.test.mjs"
+      ],
+      "lanes": ["test:mash-scale-acceptance"]
     },
     {
       "id": "tools:proof-infra",

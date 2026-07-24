@@ -5,6 +5,7 @@
 //! messages.
 
 pub mod identity_delivery;
+pub mod mash_scale;
 
 use crate::identity_delivery::{
     delivery_aad, process_identity_delivery_intent, IdentityDeliveryError, IdentityDeliveryGateway,
@@ -7393,56 +7394,8 @@ async fn player_command_state(
     } else {
         (Vec::new(), Vec::new())
     };
-    let mut day_events = Vec::new();
-    if !game_completed {
-        for event in projections::day_events(&state.pool, game).await? {
-            if event.state != "open" {
-                continue;
-            }
-            let eligible = match event.definition.participation.who {
-                game_platform::ParticipantFilter::AliveSlots => actor.alive,
-                game_platform::ParticipantFilter::AllOccupied => true,
-                game_platform::ParticipantFilter::HostInvited
-                | game_platform::ParticipantFilter::ChannelMembers => false,
-            };
-            if !eligible {
-                continue;
-            }
-            let participation =
-                projections::day_event_participation(&state.pool, game, event.event_id.as_str())
-                    .await?;
-            let submitted = participation
-                .iter()
-                .any(|row| row.actor_slot == actor.slot_id);
-            let at_capacity = event
-                .definition
-                .participation
-                .limits
-                .maximum
-                .is_some_and(|maximum| participation.len() >= maximum as usize);
-            day_events.push(PlayerDayEventAttention {
-                event_id: event.event_id,
-                template_key: event.definition.template_key.as_str().to_string(),
-                phase_id: event.phase_id.unwrap_or_default(),
-                participation_status: if submitted {
-                    "submitted".to_string()
-                } else {
-                    "available".to_string()
-                },
-                participant_count: participation.len() as u32,
-                minimum_participants: event.definition.participation.limits.minimum,
-                maximum_participants: event.definition.participation.limits.maximum,
-                reward_keys: event
-                    .definition
-                    .rewards
-                    .iter()
-                    .map(|reward| reward.reward_key.as_str().to_string())
-                    .collect(),
-                can_submit: !submitted && !at_capacity,
-                can_withdraw: submitted,
-            });
-        }
-    }
+    let day_events =
+        load_player_day_event_attention(&state.pool, game, actor, game_completed).await?;
 
     Ok(Json(PlayerCommandStateResponse {
         game,
@@ -7464,6 +7417,111 @@ async fn player_command_state(
             "Role-action availability is derived from committed phase_state, slot_state, the actor role in the game pack, and conservative target candidates. Final command validation still happens at /commands.".to_string()
         },
     }))
+}
+
+/// Reusable authority-checked DayEvent attention read for local proof and
+/// non-HTTP adapters. The returned items are assembled by the same function as
+/// the player command-state handler.
+pub async fn load_player_day_event_attention_for_principal(
+    pool: &PgPool,
+    game: Uuid,
+    principal_user_id: &str,
+    requested_slot: Option<&str>,
+) -> Result<Vec<PlayerDayEventAttention>, ApiError> {
+    let caps = caps::resolve(pool, &Principal::user(principal_user_id), game).await?;
+    let actor_slot = match requested_slot {
+        Some(slot) if caps.grants(&Capability::SlotOccupant(slot.to_string())) => slot.to_string(),
+        Some(_) => {
+            return Err(ApiError::Reject {
+                status: StatusCode::FORBIDDEN,
+                error: RejectCode::NotYourSlot,
+                message: "principal cannot act as requested slot".to_string(),
+            });
+        }
+        None => caps
+            .iter()
+            .find_map(|cap| match cap {
+                Capability::SlotOccupant(slot) => Some(slot.clone()),
+                _ => None,
+            })
+            .ok_or_else(|| ApiError::Reject {
+                status: StatusCode::FORBIDDEN,
+                error: RejectCode::NotAuthorized,
+                message: "principal cannot read player command state for this game".to_string(),
+            })?,
+    };
+    let slots = projections::slot_state(pool, game).await?;
+    let actor = slots
+        .iter()
+        .find(|slot| slot.slot_id == actor_slot)
+        .ok_or_else(|| ApiError::Reject {
+            status: StatusCode::NOT_FOUND,
+            error: RejectCode::UnknownSlot,
+            message: "actor slot does not exist in this game".to_string(),
+        })?;
+    let game_completed = commands::game_completed(pool, game)
+        .await
+        .map_err(command_reject_api_error)?;
+    load_player_day_event_attention(pool, game, actor, game_completed).await
+}
+
+async fn load_player_day_event_attention(
+    pool: &PgPool,
+    game: Uuid,
+    actor: &projections::SlotStateRow,
+    game_completed: bool,
+) -> Result<Vec<PlayerDayEventAttention>, ApiError> {
+    let mut day_events = Vec::new();
+    if game_completed {
+        return Ok(day_events);
+    }
+    for event in projections::day_events(pool, game).await? {
+        if event.state != "open" {
+            continue;
+        }
+        let eligible = match event.definition.participation.who {
+            game_platform::ParticipantFilter::AliveSlots => actor.alive,
+            game_platform::ParticipantFilter::AllOccupied => true,
+            game_platform::ParticipantFilter::HostInvited
+            | game_platform::ParticipantFilter::ChannelMembers => false,
+        };
+        if !eligible {
+            continue;
+        }
+        let participation =
+            projections::day_event_participation(pool, game, event.event_id.as_str()).await?;
+        let submitted = participation
+            .iter()
+            .any(|row| row.actor_slot == actor.slot_id);
+        let at_capacity = event
+            .definition
+            .participation
+            .limits
+            .maximum
+            .is_some_and(|maximum| participation.len() >= maximum as usize);
+        day_events.push(PlayerDayEventAttention {
+            event_id: event.event_id,
+            template_key: event.definition.template_key.as_str().to_string(),
+            phase_id: event.phase_id.unwrap_or_default(),
+            participation_status: if submitted {
+                "submitted".to_string()
+            } else {
+                "available".to_string()
+            },
+            participant_count: participation.len() as u32,
+            minimum_participants: event.definition.participation.limits.minimum,
+            maximum_participants: event.definition.participation.limits.maximum,
+            reward_keys: event
+                .definition
+                .rewards
+                .iter()
+                .map(|reward| reward.reward_key.as_str().to_string())
+                .collect(),
+            can_submit: !submitted && !at_capacity,
+            can_withdraw: submitted,
+        });
+    }
+    Ok(day_events)
 }
 
 /// Self-scoped role identity for the requesting SlotOccupant. Reads only the
@@ -8268,7 +8326,7 @@ async fn host_console_state(
     let principal_user_id =
         authenticated_or_dev_query_principal(&state, &headers, query.principal_user_id.as_deref())
             .await?;
-    let authority = resolve_host_console_authority(&state, game, principal_user_id.as_str())
+    let authority = resolve_host_console_authority(&state.pool, game, principal_user_id.as_str())
         .await?
         .ok_or_else(|| ApiError::Reject {
             status: StatusCode::FORBIDDEN,
@@ -8278,7 +8336,7 @@ async fn host_console_state(
 
     Ok(Json(
         load_host_console_state(
-            &state,
+            &state.pool,
             game,
             authority,
             query.slot_id.as_deref(),
@@ -8286,6 +8344,25 @@ async fn host_console_state(
         )
         .await?,
     ))
+}
+
+/// Reusable authority-checked host-console read for local proof and non-HTTP
+/// adapters. It preserves the same capability resolution and response assembly
+/// as the network handler.
+pub async fn load_host_console_state_for_principal(
+    pool: &PgPool,
+    game: Uuid,
+    principal_user_id: &str,
+    limit: Option<i64>,
+) -> Result<HostConsoleStateResponse, ApiError> {
+    let authority = resolve_host_console_authority(pool, game, principal_user_id)
+        .await?
+        .ok_or_else(|| ApiError::Reject {
+            status: StatusCode::FORBIDDEN,
+            error: RejectCode::NotAuthorized,
+            message: "principal cannot read host console state for this game".to_string(),
+        })?;
+    load_host_console_state(pool, game, authority, None, limit).await
 }
 
 async fn host_setup_state(
@@ -8309,16 +8386,16 @@ async fn host_setup_state(
 }
 
 async fn load_host_console_state(
-    state: &ApiState,
+    pool: &PgPool,
     game: Uuid,
     authority: HostConsoleAuthorityDelta,
     slot_id: Option<&str>,
     limit: Option<i64>,
 ) -> Result<HostConsoleStateResponse, ApiError> {
-    let completed = commands::game_completed(&state.pool, game)
+    let completed = commands::game_completed(pool, game)
         .await
         .map_err(command_reject_api_error)?;
-    let phase = projections::phase_state(&state.pool, game)
+    let phase = projections::phase_state(pool, game)
         .await?
         .map(|row| HostConsolePhaseState {
             phase_id: row.phase_id,
@@ -8326,8 +8403,8 @@ async fn load_host_console_state(
             deadline: row.deadline,
         });
 
-    let slot_states = projections::slot_state(&state.pool, game).await?;
-    let slots = projections::slot_occupancy(&state.pool, game)
+    let slot_states = projections::slot_state(pool, game).await?;
+    let slots = projections::slot_occupancy(pool, game)
         .await?
         .into_iter()
         .filter(|row| slot_id.map_or(true, |slot_id| row.slot_id == slot_id))
@@ -8355,7 +8432,7 @@ async fn load_host_console_state(
         })
         .collect();
 
-    let thread_posts = projections::thread_view(&state.pool, game, None, limit.unwrap_or(25))
+    let thread_posts = projections::thread_view(pool, game, None, limit.unwrap_or(25))
         .await?
         .posts
         .into_iter()
@@ -8368,10 +8445,10 @@ async fn load_host_console_state(
             body: post.body,
         })
         .collect();
-    let host_prompts = projections::host_prompts(&state.pool, game).await?;
-    let day_event_rows = projections::day_events(&state.pool, game).await?;
+    let host_prompts = projections::host_prompts(pool, game).await?;
+    let day_event_rows = projections::day_events(pool, game).await?;
     let day_event_scheduler =
-        commands::day_scheduler::day_event_scheduler_status(&state.pool, game, unix_now_seconds())
+        commands::day_scheduler::day_event_scheduler_status(pool, game, unix_now_seconds())
             .await
             .map_err(|error| ApiError::Reject {
                 status: StatusCode::INTERNAL_SERVER_ERROR,
@@ -8395,9 +8472,8 @@ async fn load_host_console_state(
                 total_successes: status.total_successes,
                 last_error: status.last_error,
             });
-    let day_event_participation =
-        projections::day_event_participation_for_game(&state.pool, game).await?;
-    let day_event_narratives = projections::day_event_narratives(&state.pool, game).await?;
+    let day_event_participation = projections::day_event_participation_for_game(pool, game).await?;
+    let day_event_narratives = projections::day_event_narratives(pool, game).await?;
     let tasks = select_host_tasks(&host_prompts, &day_event_rows, &authority);
     let day_events = day_event_rows
         .iter()
@@ -8570,12 +8646,11 @@ fn select_host_tasks(
 }
 
 async fn resolve_host_console_authority(
-    state: &ApiState,
+    pool: &PgPool,
     game: Uuid,
     principal_user_id: &str,
 ) -> Result<Option<HostConsoleAuthorityDelta>, ApiError> {
-    let capabilities =
-        caps::resolve(&state.pool, &Principal::user(principal_user_id), game).await?;
+    let capabilities = caps::resolve(pool, &Principal::user(principal_user_id), game).await?;
     let is_host = capabilities
         .iter()
         .any(|cap| cap == &Capability::HostOf(game));
@@ -8583,7 +8658,7 @@ async fn resolve_host_console_authority(
         .iter()
         .any(|cap| cap == &Capability::CohostOf(game));
     if !is_host && !is_cohost {
-        return if active_global_operator(&state.pool, principal_user_id).await? {
+        return if active_global_operator(pool, principal_user_id).await? {
             Ok(Some(build_host_console_operator_authority(
                 principal_user_id,
             )))
@@ -8594,7 +8669,7 @@ async fn resolve_host_console_authority(
     let denied = if is_host {
         BTreeSet::new()
     } else {
-        projections::cohost_denied_classes(&state.pool, game)
+        projections::cohost_denied_classes(pool, game)
             .await?
             .into_iter()
             .filter_map(|class| commands::CohostPermissionClass::parse(&class))
@@ -9783,10 +9858,10 @@ async fn host_console_state_delta_for_ws(
     slot_id: Option<&str>,
 ) -> Option<ProjectionDelta> {
     let principal_user_id = principal_user_id?;
-    let authority = resolve_host_console_authority(state, game, principal_user_id)
+    let authority = resolve_host_console_authority(&state.pool, game, principal_user_id)
         .await
         .ok()??;
-    load_host_console_state(state, game, authority, slot_id, Some(25))
+    load_host_console_state(&state.pool, game, authority, slot_id, Some(25))
         .await
         .ok()
         .map(HostConsoleStateDelta::from)

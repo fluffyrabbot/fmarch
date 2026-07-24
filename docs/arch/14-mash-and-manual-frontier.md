@@ -627,14 +627,28 @@ Mash does **not** replace packs. A mash game still pins a pack, uses `SubmitVote
 | Determinism | Seeds and unit-safe wall-clock instants captured as event data |
 | Capacity | [12](12-capacity-and-overload.md) budgets; optimistic concurrency on game stream |
 
-**Numeric acceptance checks (PR12; microbench earlier in PR4/PR6):**
+**PR13 scale acceptance (delivered):**
 
-1. Participation list keyset page examines **≤ 202** `day_event_participation` rows for a 100-row page (same spirit as thread page budget in [12](12-capacity-and-overload.md)).
-2. Host queue **attention tasks ≤ 8** in a fixture with 5 scheduled DayEvents + 1 engine prompt + routine groups (only decision-needing items count as attention).
-3. **40 concurrent** `SubmitDayEventParticipation` on one open event: each either ACKs or returns typed stream conflict; server-bounded retry; **no duplicate** participation rows per slot after settle.
-4. Live deltas: non-members of a private event channel receive **zero** participation/result payload bytes (capability filter proof).
-5. `PlayerAttention` open-event count for a player **≤ number of events** they can still act on (no spam per participation edit).
-6. Synthetic **30–40 slot** projection rebuild of day_event tables completes under local proof budget (record ms in artifact; fail on multi-second regression order-of-magnitude).
+Run `npm run test:mash-scale-acceptance` with the repo-local Postgres available
+through `DATABASE_URL`. The command creates and removes an isolated database and
+writes its machine-checked evidence to
+`target/mash-scale-acceptance/report.json`.
+
+The deterministic fixture is one 60-seat game with five scheduled DayEvents and
+300 participation rows. Its contract checks:
+
+1. A 100-row bounded participation read returns 60 rows while its query plan examines **≤ 202** rows and uses `day_event_participation_page_idx`; two 25-row reads also prove cursor traversal returns 50 distinct slots.
+2. The authority-checked host console hydrates 60 slots, five events, and 300 participant references with **attention tasks ≤ 8**, serialized payload **≤ 512 KiB**, and elapsed time **≤ 2 seconds**.
+3. **40 concurrent** `SubmitDayEventParticipation` commands on one open event settle within **20 seconds** through at most three bounded retries per typed stream conflict, with all 40 acknowledged and **no duplicate** participation rows per slot.
+4. Two scheduler replicas race both the open and lock boundaries within a combined **5 seconds**: one game claim wins at each boundary, all five events lock, and ten public lifecycle narratives have ten distinct receipts.
+5. The authority-checked player command-state seam returns exactly one `PlayerAttention` item for each of the five open events the fixture player can act on (no missing signals or spam per participation edit).
+6. Full projection rebuild preserves all 300 participation rows and ten published narratives with zero table diffs in **≤ 5 seconds**.
+
+This is deliberately a local, single-node regression proof, not a hosted
+multi-region latency claim. Private event channels are not shipped, so the
+artifact does not pretend to prove their byte-level isolation. Before that
+surface is enabled, capability-filtered delta delivery with a **zero-byte
+non-member** assertion is a prerequisite acceptance lane.
 
 Rough storage: 40 players × 20 events × 40 participations ≈ 800 participation events — negligible vs multi-week thread volume; **concurrency**, not storage, is the 30+ risk.
 
@@ -970,7 +984,7 @@ Incremental backlog for solo greenfield. Multi-day depth expected on adapter PRs
 | **PR10** | relative scheduling | DayEvent schedule compiler | PR9 | Uses committed `phase_opened_at`, never envelope logical time |
 | **PR11** | L3 auto-resolve + recorded seed | pure platform policy module, sealed automation command, indexed work | PR6, PR9 | First-N + seeded-random policies; lock-captured seed; atomic effects + resolution |
 | **PR12** | theme narrative + host-notice main allow-list | immutable inline template catalog; attach-time compilation/hash snapshot; rebuildable retry work; generalized host-notice adapter; host-console delivery evidence | PR8 | Delivered; mechanics commit before narrative; deterministic publication receipt; **not** player SubmitPost |
-| **PR13** | scale acceptance checks (30+) | ops smoke / projection bench artifacts | PR7, PR9–11 | Numeric checks listed in Scale section |
+| **PR13** | scale acceptance checks (30+) | production-path harness, artifact contract, proof lane | PR7, PR9–12 | Delivered; deterministic 60-seat/5-event proof with explicit contention, scheduler, pagination, host-console, narrative-receipt, and rebuild budgets |
 | **PR14** | program templates library (data) | `programs/` or content store | PR8, PR12 | raffle, opt-in quest, host-judged showcase |
 
 **Deferred:** Convert/Link/channel-membership effects; reopen/hybrid semantics; L4 promotion tooling; mid-game cohost denylist edits (v1 = create-time only unless product reopens).

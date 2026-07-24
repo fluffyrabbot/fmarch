@@ -354,6 +354,23 @@ pub struct DayEventParticipationRow {
     pub submitted_seq: i64,
 }
 
+pub const MAX_DAY_EVENT_PARTICIPATION_PAGE_SIZE: u32 = 100;
+
+/// Stable keyset cursor for one event's participation list.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DayEventParticipationCursor {
+    pub submitted_seq: i64,
+    pub actor_slot: String,
+}
+
+/// Bounded participation page. The cursor names the final returned row and can
+/// be supplied verbatim to fetch the next page without an offset scan.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DayEventParticipationPage {
+    pub rows: Vec<DayEventParticipationRow>,
+    pub next_cursor: Option<DayEventParticipationCursor>,
+}
+
 /// Immutable compiled narrative plus its rebuildable delivery state.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DayEventNarrativeRow {
@@ -5234,6 +5251,81 @@ where
             })
         })
         .collect()
+}
+
+/// Read one bounded keyset page for a DayEvent participation list.
+pub async fn day_event_participation_page(
+    pool: &PgPool,
+    game_id: Uuid,
+    event_id: &str,
+    after: Option<&DayEventParticipationCursor>,
+    limit: u32,
+) -> Result<DayEventParticipationPage, ProjectionError> {
+    let limit = limit.clamp(1, MAX_DAY_EVENT_PARTICIPATION_PAGE_SIZE);
+    let fetch_limit = i64::from(limit) + 1;
+    let rows = match after {
+        Some(after) => {
+            sqlx::query(
+                "SELECT game_id, event_id, actor_slot, payload, phase_id, submitted_seq \
+                 FROM day_event_participation \
+                 WHERE game_id = $1 AND event_id = $2 \
+                   AND (submitted_seq, actor_slot) > ($3, $4) \
+                 ORDER BY submitted_seq, actor_slot LIMIT $5",
+            )
+            .bind(game_id)
+            .bind(event_id)
+            .bind(after.submitted_seq)
+            .bind(&after.actor_slot)
+            .bind(fetch_limit)
+            .fetch_all(pool)
+            .await?
+        }
+        None => {
+            sqlx::query(
+                "SELECT game_id, event_id, actor_slot, payload, phase_id, submitted_seq \
+                 FROM day_event_participation \
+                 WHERE game_id = $1 AND event_id = $2 \
+                 ORDER BY submitted_seq, actor_slot LIMIT $3",
+            )
+            .bind(game_id)
+            .bind(event_id)
+            .bind(fetch_limit)
+            .fetch_all(pool)
+            .await?
+        }
+    };
+    let has_more = rows.len() > limit as usize;
+    let rows = rows
+        .into_iter()
+        .take(limit as usize)
+        .map(|row| {
+            let payload_value: serde_json::Value = row.get("payload");
+            let payload = serde_json::from_value(payload_value).map_err(|source| {
+                ProjectionError::Payload {
+                    kind: "DayEventParticipationSubmitted".to_string(),
+                    source,
+                }
+            })?;
+            Ok(DayEventParticipationRow {
+                game_id: row.get("game_id"),
+                event_id: row.get("event_id"),
+                actor_slot: row.get("actor_slot"),
+                payload,
+                phase_id: row.get("phase_id"),
+                submitted_seq: row.get("submitted_seq"),
+            })
+        })
+        .collect::<Result<Vec<_>, ProjectionError>>()?;
+    let next_cursor = has_more.then(|| {
+        let last = rows
+            .last()
+            .expect("a page with a lookahead row has a returned row");
+        DayEventParticipationCursor {
+            submitted_seq: last.submitted_seq,
+            actor_slot: last.actor_slot.clone(),
+        }
+    });
+    Ok(DayEventParticipationPage { rows, next_cursor })
 }
 
 /// Read current participation for every DayEvent in one game. Host-console
