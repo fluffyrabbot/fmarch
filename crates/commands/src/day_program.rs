@@ -4,11 +4,16 @@
 //! catalog presentation. A setup option is attachable exactly when the same
 //! compiler used by `AttachDayProgram` accepts it.
 
+use std::collections::BTreeMap;
+
 use domain::{pack::WeightPolicy, EffectDuration, Pack};
 use game_platform::{
-    DayEvent, DayEventState, DayProgram, EffectOperationTemplate, GrantKind, GrantSpec,
-    ParticipantFilter, ParticipationMode, ProgramContentHash,
+    CompiledNarrativeTemplate, DayEvent, DayEventState, DayProgram, EffectOperationTemplate,
+    GrantKind, GrantSpec, NarrativeTemplate, ParticipantFilter, ParticipationMode,
+    ProgramContentHash,
 };
+
+pub const HOST_NOTICE_CHANNEL_ALLOWLIST: &[&str] = &["main"];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CompatibilityIssueCode {
@@ -21,6 +26,9 @@ pub enum CompatibilityIssueCode {
     UndeclaredItemGrant,
     UndeclaredVoteWeightGrant,
     UnsupportedRewardAdapter,
+    UnresolvedNarrativeTemplate,
+    NarrativeChannelNotAllowed,
+    UnsupportedNarrativeChannel,
 }
 
 impl CompatibilityIssueCode {
@@ -35,6 +43,9 @@ impl CompatibilityIssueCode {
             Self::UndeclaredItemGrant => "undeclared_item_grant",
             Self::UndeclaredVoteWeightGrant => "undeclared_vote_weight_grant",
             Self::UnsupportedRewardAdapter => "unsupported_reward_adapter",
+            Self::UnresolvedNarrativeTemplate => "unresolved_narrative_template",
+            Self::NarrativeChannelNotAllowed => "narrative_channel_not_allowed",
+            Self::UnsupportedNarrativeChannel => "unsupported_narrative_channel",
         }
     }
 }
@@ -68,6 +79,7 @@ impl CompatibilityIssue {
 pub struct CompiledDayProgram {
     pub content_hash: ProgramContentHash,
     pub events: Vec<DayEvent>,
+    pub narratives: BTreeMap<String, Vec<CompiledNarrativeTemplate>>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -132,14 +144,61 @@ pub fn inspect(pack: &Pack, program: &DayProgram) -> CompatibilityReport {
             };
         }
     };
-    let issues = events
+    let catalog = program
+        .narrative_templates
         .iter()
-        .flat_map(|event| inspect_event(pack, event))
-        .collect();
+        .map(|template| (&template.key, template))
+        .collect::<BTreeMap<_, _>>();
+    let mut narratives = BTreeMap::new();
+    let mut issues = Vec::new();
+    for event in &events {
+        issues.extend(inspect_event_adapters(pack, event));
+        let mut compiled = Vec::new();
+        for (lifecycle, template_key) in event.narrative.iter() {
+            let template = catalog
+                .get(template_key)
+                .expect("validated DayProgram resolves every narrative template");
+            if !event
+                .channel_policy
+                .allowed_channels
+                .contains(&template.channel_id)
+            {
+                issues.push(CompatibilityIssue::event(
+                    CompatibilityIssueCode::NarrativeChannelNotAllowed,
+                    event,
+                    format!(
+                        "narrative template `{}` targets channel `{}` outside the event allow-list",
+                        template.key, template.channel_id
+                    ),
+                ));
+            }
+            if !host_notice_channel_supported(template) {
+                issues.push(CompatibilityIssue::event(
+                    CompatibilityIssueCode::UnsupportedNarrativeChannel,
+                    event,
+                    format!(
+                        "narrative template `{}` targets unsupported host-notice channel `{}`",
+                        template.key, template.channel_id
+                    ),
+                ));
+            }
+            compiled.push(CompiledNarrativeTemplate {
+                lifecycle,
+                template_key: template.key.clone(),
+                template_hash: template
+                    .content_hash()
+                    .expect("validated narrative template has a stable hash"),
+                channel_id: template.channel_id.clone(),
+                body: template.body.clone(),
+            });
+        }
+        narratives.insert(event.id.as_str().to_string(), compiled);
+    }
     CompatibilityReport {
         compilation: Some(CompiledDayProgram {
             content_hash,
             events,
+            narratives,
         }),
         issues,
     }
@@ -147,6 +206,18 @@ pub fn inspect(pack: &Pack, program: &DayProgram) -> CompatibilityReport {
 
 /// Inspect an already-compiled inline DayEvent through the same adapter rules.
 pub fn inspect_event(pack: &Pack, event: &DayEvent) -> Vec<CompatibilityIssue> {
+    let mut issues = inspect_event_adapters(pack, event);
+    for (_, template_key) in event.narrative.iter() {
+        issues.push(CompatibilityIssue::event(
+            CompatibilityIssueCode::UnresolvedNarrativeTemplate,
+            event,
+            format!("inline DayEvent narrative `{template_key}` has no immutable program template"),
+        ));
+    }
+    issues
+}
+
+fn inspect_event_adapters(pack: &Pack, event: &DayEvent) -> Vec<CompatibilityIssue> {
     let mut issues = Vec::new();
     if event.state != DayEventState::Scheduled {
         issues.push(CompatibilityIssue::event(
@@ -184,6 +255,10 @@ pub fn inspect_event(pack: &Pack, event: &DayEvent) -> Vec<CompatibilityIssue> {
         }
     }
     issues
+}
+
+pub fn host_notice_channel_supported(template: &NarrativeTemplate) -> bool {
+    HOST_NOTICE_CHANNEL_ALLOWLIST.contains(&template.channel_id.as_str())
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

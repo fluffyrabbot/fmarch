@@ -597,6 +597,26 @@ pub async fn advance_day_event_automation_as_scheduler(
     observed_at: i64,
     seed_root: u64,
 ) -> Result<Ack, Reject> {
+    let mut stream_seqs =
+        advance_day_event_mechanics_as_scheduler(pool, game, observed_at, seed_root)
+            .await?
+            .stream_seqs;
+    // Narrative is deliberately a second transaction. Lifecycle mechanics are
+    // already durable even if host-notice publication fails and must retry.
+    stream_seqs.extend(
+        publish_day_event_narratives_as_scheduler(pool, game)
+            .await?
+            .stream_seqs,
+    );
+    Ok(Ack { stream_seqs })
+}
+
+async fn advance_day_event_mechanics_as_scheduler(
+    pool: &PgPool,
+    game: Uuid,
+    observed_at: i64,
+    seed_root: u64,
+) -> Result<Ack, Reject> {
     let command_id = Uuid::new_v4();
     let mut tx = pool
         .begin()
@@ -617,6 +637,38 @@ pub async fn advance_day_event_automation_as_scheduler(
         .scope(
             audit_context,
             advance_day_event_automation_in_tx(&mut tx, game, observed_at, seed_root),
+        )
+        .await?;
+    tx.commit()
+        .await
+        .map_err(|error| Reject::Internal(error.to_string()))?;
+    Ok(ack)
+}
+
+async fn publish_day_event_narratives_as_scheduler(
+    pool: &PgPool,
+    game: Uuid,
+) -> Result<Ack, Reject> {
+    let command_id = Uuid::new_v4();
+    let mut tx = pool
+        .begin()
+        .await
+        .map_err(|error| Reject::Internal(error.to_string()))?;
+    eventstore::lock_stream_in_tx(&mut tx, game)
+        .await
+        .map_err(|error| Reject::Internal(error.to_string()))?;
+    require_game_not_completed(&mut tx, game).await?;
+    let audit_context = CommandAuditContext {
+        principal_user_id: "service:day-event-narrative".to_string(),
+        command_id,
+        command_kind: "PublishDayEventNarratives".to_string(),
+        authority_used: format!("DayEventNarrative({game})"),
+        request_source: "day_event_narrative",
+    };
+    let ack = COMMAND_AUDIT_CONTEXT
+        .scope(
+            audit_context,
+            publish_day_event_narratives_in_tx(&mut tx, game),
         )
         .await?;
     tx.commit()
@@ -654,6 +706,79 @@ async fn advance_day_event_automation_in_tx(
                 .await?
                 .stream_seqs,
         );
+    }
+    Ok(Ack { stream_seqs })
+}
+
+async fn publish_day_event_narratives_in_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    game: Uuid,
+) -> Result<Ack, Reject> {
+    let pending = projections::pending_day_event_narratives(&mut **tx, game).await?;
+    let mut stream_seqs = Vec::new();
+    for narrative in pending {
+        if !day_program::HOST_NOTICE_CHANNEL_ALLOWLIST.contains(&narrative.channel_id.as_str()) {
+            return Err(day_event_reject(format!(
+                "narrative channel `{}` is not host-notice enabled",
+                narrative.channel_id
+            )));
+        }
+        let body = narrative.rendered_body.as_deref().ok_or_else(|| {
+            Reject::Internal("pending DayEvent narrative has no rendered body".to_string())
+        })?;
+        validate_game_post_body(body)?;
+        let source_seq = narrative.source_seq.ok_or_else(|| {
+            Reject::Internal("pending DayEvent narrative has no source sequence".to_string())
+        })?;
+        let receipt_id = game_platform::day_narrative::receipt_id(
+            &narrative.event_id,
+            narrative.lifecycle,
+            source_seq,
+            &narrative.template_hash,
+        );
+        let phase = current_phase(tx, game).await?.unwrap_or_default();
+        let stream = eventstore::load_stream_in_tx(tx, game)
+            .await
+            .map_err(|error| Reject::Internal(error.to_string()))?;
+        let occurred_at = next_stream_logical_time(&stream);
+        let narrative_receipt = serde_json::json!({
+            "receipt_id": receipt_id,
+            "event_id": narrative.event_id,
+            "lifecycle": narrative.lifecycle,
+            "template_key": narrative.template_key,
+            "template_hash": narrative.template_hash,
+            "source_seq": source_seq,
+        });
+        let mut post = build_host_notice(HostNoticeSpec {
+            channel_id: narrative.channel_id.clone(),
+            body: body.to_string(),
+            media: Vec::new(),
+            phase_id: phase,
+            occurred_at,
+            narrative_receipt: Some(narrative_receipt),
+        })?;
+        post.meta = serde_json::json!({
+            "source": "day_event_narrative",
+            "day_event_id": narrative.event_id,
+            "narrative_lifecycle": narrative.lifecycle.as_str(),
+            "narrative_receipt_id": receipt_id,
+        });
+        let published = EventInput::new(
+            "DayEventNarrativePublished",
+            1,
+            serde_json::json!({
+                "receipt_id": receipt_id,
+                "event_id": narrative.event_id,
+                "lifecycle": narrative.lifecycle,
+                "template_key": narrative.template_key,
+                "template_hash": narrative.template_hash,
+                "channel_id": narrative.channel_id,
+                "source_seq": source_seq,
+            }),
+            ActorId::System,
+            occurred_at,
+        );
+        stream_seqs.extend(persist(tx, game, &[post, published]).await?.stream_seqs);
     }
     Ok(Ack { stream_seqs })
 }
@@ -1965,6 +2090,7 @@ async fn attach_day_program(
         .map_err(|report| Reject::DayProgramValidation(report.summary()))?;
     let content_hash = compilation.content_hash;
     let compiled = compilation.events;
+    let mut compiled_narratives = compilation.narratives;
     if projections::day_programs(&mut **tx, game)
         .await?
         .iter()
@@ -1998,10 +2124,16 @@ async fn attach_day_program(
         0,
     ));
     events.extend(compiled.into_iter().map(|event| {
+        let narratives = compiled_narratives
+            .remove(event.id.as_str())
+            .unwrap_or_default();
         EventInput::new(
             "DayEventScheduled",
             1,
-            serde_json::json!({ "event": event }),
+            serde_json::json!({
+                "event": event,
+                "narrative_templates": narratives,
+            }),
             ActorId::Host,
             0,
         )
@@ -3066,7 +3198,59 @@ struct SubmitPostRequest {
     media: Vec<model::ThreadPostMedia>,
 }
 
-const MAX_GAME_POST_BODY_BYTES: usize = 50 * 1024;
+const MAX_GAME_POST_BODY_BYTES: usize = game_platform::MAX_RENDERED_NARRATIVE_BYTES;
+
+struct HostNoticeSpec {
+    channel_id: String,
+    body: String,
+    media: Vec<model::ThreadPostMedia>,
+    phase_id: String,
+    occurred_at: i64,
+    narrative_receipt: Option<serde_json::Value>,
+}
+
+fn build_host_notice(spec: HostNoticeSpec) -> Result<EventInput, Reject> {
+    let HostNoticeSpec {
+        channel_id,
+        body,
+        media,
+        phase_id,
+        occurred_at,
+        narrative_receipt,
+    } = spec;
+    let channel_allowed = if narrative_receipt.is_some() {
+        day_program::HOST_NOTICE_CHANNEL_ALLOWLIST.contains(&channel_id.as_str())
+    } else {
+        channel_id == "spectator"
+    };
+    if !channel_allowed {
+        return Err(Reject::InvalidTarget);
+    }
+    validate_game_post_body(&body)?;
+    validate_thread_post_media(&media)?;
+    if body.trim().is_empty() {
+        return Err(Reject::InvalidTarget);
+    }
+    let mut payload = serde_json::json!({
+        "channel_id": channel_id,
+        "slot_or_user": { "user": "host" },
+        "body": body,
+        "phase_id": phase_id,
+    });
+    if !media.is_empty() {
+        payload["media"] = serde_json::to_value(media).expect("thread post media serializes");
+    }
+    if let Some(receipt) = narrative_receipt {
+        payload["day_event_narrative"] = receipt;
+    }
+    Ok(EventInput::new(
+        "PostSubmitted",
+        1,
+        payload,
+        ActorId::Host,
+        occurred_at,
+    ))
+}
 
 fn validate_game_post_body(body: &str) -> Result<(), Reject> {
     if body.len() > MAX_GAME_POST_BODY_BYTES {
@@ -3143,37 +3327,20 @@ async fn publish_spectator_post(
     require_game(tx, game).await?;
     let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
     require_game_run(tx, &caps, game, CohostPermissionClass::Narrative).await?;
-    validate_game_post_body(&body)?;
-    validate_thread_post_media(&media)?;
-    if body.trim().is_empty() {
-        return Err(Reject::InvalidTarget);
-    }
     let phase = current_phase(tx, game).await?.unwrap_or_default();
     let stream = eventstore::load_stream_in_tx(tx, game)
         .await
         .map_err(|e| Reject::Internal(e.to_string()))?;
     let occurred_at = next_stream_logical_time(&stream);
-    let mut payload = serde_json::json!({
-        "channel_id": "spectator",
-        "slot_or_user": { "user": "host" },
-        "body": body,
-        "phase_id": phase,
-    });
-    if !media.is_empty() {
-        payload["media"] = serde_json::to_value(media).expect("thread post media serializes");
-    }
-    persist(
-        tx,
-        game,
-        &[EventInput::new(
-            "PostSubmitted",
-            1,
-            payload,
-            ActorId::Host,
-            occurred_at,
-        )],
-    )
-    .await
+    let notice = build_host_notice(HostNoticeSpec {
+        channel_id: "spectator".to_string(),
+        body,
+        media,
+        phase_id: phase,
+        occurred_at,
+        narrative_receipt: None,
+    })?;
+    persist(tx, game, &[notice]).await
 }
 
 fn validate_thread_post_media(media: &[model::ThreadPostMedia]) -> Result<(), Reject> {

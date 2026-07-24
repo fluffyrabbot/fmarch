@@ -860,6 +860,19 @@ pub struct HostDayEventDelta {
     pub resolution_evidence: Option<game_platform::DayEventResolutionEvidence>,
     pub winner_slots: Vec<String>,
     pub reward_keys_applied: Vec<String>,
+    pub narratives: Vec<DayEventNarrativeDelta>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct DayEventNarrativeDelta {
+    pub lifecycle: game_platform::NarrativeLifecycle,
+    pub template_key: String,
+    pub template_hash: String,
+    pub channel_id: String,
+    pub status: String,
+    pub body: Option<String>,
+    pub source_seq: Option<i64>,
+    pub published_seq: Option<i64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -867,6 +880,7 @@ pub struct DayEventSchedulerDelta {
     pub pending: bool,
     pub next_due_at: Option<i64>,
     pub auto_resolve_pending: bool,
+    pub narrative_pending: bool,
     pub wake_seq: i64,
     pub last_observed_wake_seq: i64,
     pub lease_until: Option<i64>,
@@ -1951,30 +1965,30 @@ pub mod typescript {
         ChannelId, ConcreteEffect, ContentRef, DayEvent, DayEventDecision, DayEventEvent,
         DayEventId, DayEventResolutionMode, DayEventSchedule, DayEventState, DayEventTemplate,
         DayProgram, DurationSeconds, EffectOperationTemplate, EffectOrigin, EffectPlan,
-        EffectVisibility, EventChannelPolicy, GrantKind, GrantSpec, NarrativeTemplates, OptionId,
-        ParticipantFilter, ParticipationLimits, ParticipationMode, ParticipationPayload,
-        ParticipationSpec, PhaseId, PhaseScope, PrincipalId, ProgramContentHash, ProgramId,
-        ProgramTrigger, RecipientBindings, RecipientSelector, RewardAssignment, RewardBinding,
-        RewardEffectTemplate, RewardKey, SlotId, SlotLifecycleEffect, Tag, TemplateKey,
-        UnixSeconds,
+        EffectVisibility, EventChannelPolicy, GrantKind, GrantSpec, NarrativeLifecycle,
+        NarrativeTemplate, NarrativeTemplates, OptionId, ParticipantFilter, ParticipationLimits,
+        ParticipationMode, ParticipationPayload, ParticipationSpec, PhaseId, PhaseScope,
+        PrincipalId, ProgramContentHash, ProgramId, ProgramTrigger, RecipientBindings,
+        RecipientSelector, RewardAssignment, RewardBinding, RewardEffectTemplate, RewardKey,
+        SlotId, SlotLifecycleEffect, Tag, TemplateKey, UnixSeconds,
     };
     use ts_rs::TS;
 
     use crate::{
         AckMsg, AdvanceSubscriptionReadRequest, CapabilityGrant, ClientEnvelope, ClientMsg,
         CohostPermissionClass, Command, CommandMsg, CommunityInboxItem, CommunityInboxPage,
-        DayEventSchedulerDelta, DayVoteOutcomeDelta, DiscussionArea, DiscussionAuthor,
-        DiscussionPost, DiscussionThreadPage, DiscussionTopic, DiscussionTopicPage, GameIndexEntry,
-        GameIndexPage, Hello, HostConsoleAuthorityDelta, HostConsoleAuthorityKind,
-        HostConsolePhaseStateDelta, HostConsoleSlotOccupancyDelta, HostConsoleStateDelta,
-        HostConsoleThreadPostDelta, HostDayEventDelta, HostPhaseControl, HostPromptDecision,
-        HostPromptDelta, HostPromptsDelta, HostTaskAllowedCommand, HostTaskCommandKind,
-        HostTaskDelta, HostTaskKind, HostTaskState, HostTaskUrgency, ModerationCase,
-        ModerationCaseDetail, ModerationCasePage, ModerationHistory, ModerationReport,
-        ModerationReportReceipt, PlayerInvestigationResult, PlayerNotification, ProfileEditor,
-        ProjectionDelta, PublicGameThreadPage, PublicProfile, PublicSearchPage, PublicSearchResult,
-        RejectCode, RejectMsg, ResolutionTraceDecisionRow, ResolutionTraceEdgeRow,
-        ResolutionTraceEffectChangeRow, ResolutionTraceGeneratedRow,
+        DayEventNarrativeDelta, DayEventSchedulerDelta, DayVoteOutcomeDelta, DiscussionArea,
+        DiscussionAuthor, DiscussionPost, DiscussionThreadPage, DiscussionTopic,
+        DiscussionTopicPage, GameIndexEntry, GameIndexPage, Hello, HostConsoleAuthorityDelta,
+        HostConsoleAuthorityKind, HostConsolePhaseStateDelta, HostConsoleSlotOccupancyDelta,
+        HostConsoleStateDelta, HostConsoleThreadPostDelta, HostDayEventDelta, HostPhaseControl,
+        HostPromptDecision, HostPromptDelta, HostPromptsDelta, HostTaskAllowedCommand,
+        HostTaskCommandKind, HostTaskDelta, HostTaskKind, HostTaskState, HostTaskUrgency,
+        ModerationCase, ModerationCaseDetail, ModerationCasePage, ModerationHistory,
+        ModerationReport, ModerationReportReceipt, PlayerInvestigationResult, PlayerNotification,
+        ProfileEditor, ProjectionDelta, PublicGameThreadPage, PublicProfile, PublicSearchPage,
+        PublicSearchResult, RejectCode, RejectMsg, ResolutionTraceDecisionRow,
+        ResolutionTraceEdgeRow, ResolutionTraceEffectChangeRow, ResolutionTraceGeneratedRow,
         ResolutionTraceInspectionReport, ResolutionTraceInspectionRun, ResolutionTraceNoteRow,
         ResolutionTraceVisibilityRow, ServerEnvelope, ServerMsg, SlotLifecycle, SubmitPostMedia,
         SubscriptionTargetState, ThreadPage, ThreadPost, ThreadPostMedia, ThreadPostMediaVariant,
@@ -2010,6 +2024,8 @@ pub mod typescript {
         push::<ParticipationSpec>(&mut out);
         push::<ParticipationPayload>(&mut out);
         push::<NarrativeTemplates>(&mut out);
+        push::<NarrativeLifecycle>(&mut out);
+        push::<NarrativeTemplate>(&mut out);
         push::<EventChannelPolicy>(&mut out);
         push::<RecipientSelector>(&mut out);
         push::<SlotLifecycleEffect>(&mut out);
@@ -2051,6 +2067,7 @@ pub mod typescript {
         push::<HostConsoleSlotOccupancyDelta>(&mut out);
         push::<HostConsoleThreadPostDelta>(&mut out);
         push::<DayEventSchedulerDelta>(&mut out);
+        push::<DayEventNarrativeDelta>(&mut out);
         push::<HostDayEventDelta>(&mut out);
         push::<HostTaskKind>(&mut out);
         push::<HostTaskState>(&mut out);

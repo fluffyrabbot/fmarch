@@ -292,6 +292,7 @@ test("host console route data uses host prompt and votecount cold-loads when ava
           day_event_scheduler: {
             pending: true,
             auto_resolve_pending: true,
+            narrative_pending: true,
             next_due_at: 1781928100,
             wake_seq: 52,
             last_observed_wake_seq: 51,
@@ -323,6 +324,16 @@ test("host console route data uses host prompt and votecount cold-loads when ava
             },
             winner_slots: ["slot_2"],
             reward_keys_applied: ["cookie"],
+            narratives: [{
+              lifecycle: "resolved",
+              template_key: "theme.bakery.resolved",
+              template_hash: "a".repeat(64),
+              channel_id: "main",
+              status: "published",
+              body: "event-cookie resolved for slot_2.",
+              source_seq: 51,
+              published_seq: 53,
+            }],
             definition: {
               id: "event-cookie",
               template_key: "theme.raffle",
@@ -432,6 +443,16 @@ test("host console route data uses host prompt and votecount cold-loads when ava
     },
     winnerSlots: ["slot_2"],
     rewardKeysApplied: ["cookie"],
+    narratives: [{
+      lifecycle: "resolved",
+      templateKey: "theme.bakery.resolved",
+      templateHash: "a".repeat(64),
+      channelId: "main",
+      status: "published",
+      body: "event-cookie resolved for slot_2.",
+      sourceSeq: 51,
+      publishedSeq: 53,
+    }],
     participation: {
       who: "alive_slots",
       mode: "opt_in",
@@ -447,6 +468,7 @@ test("host console route data uses host prompt and votecount cold-loads when ava
   }]);
   assert.equal(data.dayEventScheduler.pending, true);
   assert.equal(data.dayEventScheduler.autoResolvePending, true);
+  assert.equal(data.dayEventScheduler.narrativePending, true);
   assert.equal(data.dayEventScheduler.wakeSeq, 52);
   assert.equal(
     data.criticalActions.at(-1).payload.promptId,

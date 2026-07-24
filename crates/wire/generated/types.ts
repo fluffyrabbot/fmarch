@@ -51,6 +51,10 @@ export type ParticipationPayload = { "kind": "opt_in" } | { "kind": "choice", op
 
 export type NarrativeTemplates = { opened: TemplateKey | null, locked: TemplateKey | null, resolved: TemplateKey | null, cancelled: TemplateKey | null, };
 
+export type NarrativeLifecycle = "opened" | "locked" | "resolved" | "cancelled";
+
+export type NarrativeTemplate = { key: TemplateKey, channel_id: ChannelId, body: string, };
+
 export type EventChannelPolicy = { allowed_channels: Array<ChannelId>, };
 
 export type RecipientSelector = { "kind": "winner" } | { "kind": "participant" } | { "kind": "host_chosen" } | { "kind": "explicit_slot", slot: SlotId, };
@@ -81,7 +85,7 @@ export type DayEvent = { id: DayEventId, program_id: ProgramId, template_key: Te
 
 export type DayEventTemplate = { id: DayEventId, template_key: TemplateKey, phase_scope: PhaseScope, schedule: DayEventSchedule, participation: ParticipationSpec, resolution: DayEventResolutionMode, rewards: Array<RewardBinding>, narrative: NarrativeTemplates, channel_policy: EventChannelPolicy, };
 
-export type DayProgram = { id: ProgramId, version: number, display_name: string, theme_ref: ContentRef | null, events: Array<DayEventTemplate>, };
+export type DayProgram = { id: ProgramId, version: number, display_name: string, theme_ref: ContentRef | null, narrative_templates: Array<NarrativeTemplate>, events: Array<DayEventTemplate>, };
 
 export type RewardAssignment = { slot: SlotId, reward_key: RewardKey, };
 
@@ -131,9 +135,11 @@ export type HostConsoleSlotOccupancyDelta = { slot_id: string, occupant_user_id:
 
 export type HostConsoleThreadPostDelta = { stream_seq: bigint, author_slot: string | null, author_user: string | null, phase_id: string, body: string, };
 
-export type DayEventSchedulerDelta = { pending: boolean, next_due_at: bigint | null, auto_resolve_pending: boolean, wake_seq: bigint, last_observed_wake_seq: bigint, lease_until: bigint | null, retry_not_before: bigint | null, last_attempt_at: bigint | null, last_success_at: bigint | null, last_failure_at: bigint | null, consecutive_failures: number, total_attempts: bigint, total_successes: bigint, last_error: string | null, };
+export type DayEventSchedulerDelta = { pending: boolean, next_due_at: bigint | null, auto_resolve_pending: boolean, narrative_pending: boolean, wake_seq: bigint, last_observed_wake_seq: bigint, lease_until: bigint | null, retry_not_before: bigint | null, last_attempt_at: bigint | null, last_success_at: bigint | null, last_failure_at: bigint | null, consecutive_failures: number, total_attempts: bigint, total_successes: bigint, last_error: string | null, };
 
-export type HostDayEventDelta = { event_id: string, state: string, phase_id: string | null, definition: DayEvent, participant_slots: Array<string>, open_due_at: bigint | null, open_observed_at: bigint | null, lock_due_at: bigint | null, lock_observed_at: bigint | null, auto_seed: bigint | null, resolution_evidence: DayEventResolutionEvidence | null, winner_slots: Array<string>, reward_keys_applied: Array<string>, };
+export type DayEventNarrativeDelta = { lifecycle: NarrativeLifecycle, template_key: string, template_hash: string, channel_id: string, status: string, body: string | null, source_seq: bigint | null, published_seq: bigint | null, };
+
+export type HostDayEventDelta = { event_id: string, state: string, phase_id: string | null, definition: DayEvent, participant_slots: Array<string>, open_due_at: bigint | null, open_observed_at: bigint | null, lock_due_at: bigint | null, lock_observed_at: bigint | null, auto_seed: bigint | null, resolution_evidence: DayEventResolutionEvidence | null, winner_slots: Array<string>, reward_keys_applied: Array<string>, narratives: Array<DayEventNarrativeDelta>, };
 
 export type HostTaskKind = "engine_host_prompt" | "day_event_resolve";
 

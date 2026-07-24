@@ -25,10 +25,10 @@ use commands::{
 use eventstore::{ActorId, EventInput};
 use projections::{
     action_counters, action_grants, action_history, append_and_project, audit_rebuild,
-    day_event_participation, day_events, day_programs, day_vote_outcomes, delayed_death_queues,
-    game_result, host_prompts, investigation_memory, phase_state, player_info_results,
-    player_notifications, player_notifications_for_slot, rebuild, sheriff_badges, slot_effects,
-    slot_state, visit_history, votecount,
+    day_event_narratives, day_event_participation, day_events, day_programs, day_vote_outcomes,
+    delayed_death_queues, game_result, host_prompts, investigation_memory, phase_state,
+    player_info_results, player_notifications, player_notifications_for_slot, rebuild,
+    sheriff_badges, slot_effects, slot_state, visit_history, votecount,
 };
 use sqlx::{PgPool, Row};
 use std::collections::{BTreeMap, BTreeSet};
@@ -156,8 +156,52 @@ fn minimal_day_program(
         version,
         display_name: "Bakery".to_string(),
         theme_ref: Some(game_platform::ContentRef::new("theme.bakery").unwrap()),
+        narrative_templates: Vec::new(),
         events,
     }
+}
+
+fn narrative_day_program(program_id: &str, event_ids: &[&str]) -> game_platform::DayProgram {
+    let mut program = minimal_day_program(program_id, 1, event_ids);
+    let keys = [
+        ("opened", "Event {{event_id}} opened."),
+        (
+            "locked",
+            "Event {{event_id}} locked with {{participant_count}}: {{participants}}.",
+        ),
+        (
+            "resolved",
+            "Event {{event_id}} winners {{winners}} received {{rewards}}.",
+        ),
+        (
+            "cancelled",
+            "Event {{event_id}} cancelled: {{cancellation_reason}}.",
+        ),
+    ];
+    program.narrative_templates = keys
+        .iter()
+        .map(|(lifecycle, body)| game_platform::NarrativeTemplate {
+            key: game_platform::TemplateKey::new(format!("theme.bakery.narrative.{lifecycle}"))
+                .unwrap(),
+            channel_id: game_platform::ChannelId::new("main").unwrap(),
+            body: (*body).to_string(),
+        })
+        .collect();
+    for event in &mut program.events {
+        event.narrative = game_platform::NarrativeTemplates {
+            opened: Some(game_platform::TemplateKey::new("theme.bakery.narrative.opened").unwrap()),
+            locked: Some(game_platform::TemplateKey::new("theme.bakery.narrative.locked").unwrap()),
+            resolved: Some(
+                game_platform::TemplateKey::new("theme.bakery.narrative.resolved").unwrap(),
+            ),
+            cancelled: Some(
+                game_platform::TemplateKey::new("theme.bakery.narrative.cancelled").unwrap(),
+            ),
+        };
+        event.channel_policy.allowed_channels =
+            vec![game_platform::ChannelId::new("main").unwrap()];
+    }
+    program
 }
 
 /// Stand up a running game: host H creates it, adds slot S, assigns user A into
@@ -5426,6 +5470,241 @@ async fn scheduler_failure_releases_lease_and_applies_bounded_retry_backoff(pool
         .await
         .unwrap();
     assert_eq!(suppressed.claimed_games, 0);
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn day_event_narratives_compile_publish_and_rebuild_as_host_notices(pool: PgPool) {
+    let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
+    let resolved_id = game_platform::DayEventId::new("event-narrative-resolved").unwrap();
+    let cancelled_id = game_platform::DayEventId::new("event-narrative-cancelled").unwrap();
+    handle(
+        &pool,
+        &user("host_h"),
+        Command::AttachDayProgram {
+            game,
+            program: narrative_day_program(
+                "program-narrative",
+                &[resolved_id.as_str(), cancelled_id.as_str()],
+            ),
+        },
+    )
+    .await
+    .unwrap();
+
+    for event_id in [&resolved_id, &cancelled_id] {
+        handle(
+            &pool,
+            &user("host_h"),
+            Command::OpenDayEvent {
+                game,
+                event_id: event_id.clone(),
+            },
+        )
+        .await
+        .unwrap();
+    }
+    let before_worker = day_event_narratives(&pool, game).await.unwrap();
+    assert_eq!(
+        before_worker
+            .iter()
+            .filter(|row| row.status == "pending")
+            .count(),
+        2
+    );
+    assert_eq!(
+        projections::thread_view(&pool, game, None, 100)
+            .await
+            .unwrap()
+            .posts
+            .len(),
+        0,
+        "mechanics commit before narrative publication"
+    );
+
+    let config = DayEventSchedulerConfig::default();
+    let opened = run_day_event_scheduler_once(&pool, &config, Uuid::new_v4(), 100)
+        .await
+        .unwrap();
+    assert_eq!(opened.appended_events, 4);
+
+    handle(
+        &pool,
+        &user("user_a"),
+        Command::SubmitDayEventParticipation {
+            game,
+            event_id: resolved_id.clone(),
+            actor_slot: "slot_1".into(),
+            payload: game_platform::ParticipationPayload::OptIn,
+        },
+    )
+    .await
+    .unwrap();
+    handle(
+        &pool,
+        &user("host_h"),
+        Command::LockDayEvent {
+            game,
+            event_id: resolved_id.clone(),
+        },
+    )
+    .await
+    .unwrap();
+    handle(
+        &pool,
+        &user("host_h"),
+        Command::CancelDayEvent {
+            game,
+            event_id: cancelled_id,
+            reason: "rain delay".to_string(),
+        },
+    )
+    .await
+    .unwrap();
+    let terminal_inputs = run_day_event_scheduler_once(&pool, &config, Uuid::new_v4(), 101)
+        .await
+        .unwrap();
+    assert_eq!(terminal_inputs.appended_events, 4);
+
+    handle(
+        &pool,
+        &user("host_h"),
+        Command::ResolveDayEvent {
+            game,
+            event_id: resolved_id,
+            decision: game_platform::DayEventDecision::SelectWinners {
+                slots: vec![game_platform::SlotId::new("slot_1").unwrap()],
+            },
+        },
+    )
+    .await
+    .unwrap();
+    let resolved = run_day_event_scheduler_once(&pool, &config, Uuid::new_v4(), 102)
+        .await
+        .unwrap();
+    assert_eq!(resolved.appended_events, 2);
+
+    let notices = projections::thread_view(&pool, game, None, 100)
+        .await
+        .unwrap()
+        .posts;
+    assert_eq!(notices.len(), 5);
+    assert!(notices.iter().all(|post| post.channel_id == "main"
+        && post.author_user.as_deref() == Some("host")
+        && post.author_slot.is_none()));
+    assert!(notices
+        .iter()
+        .any(|post| post.body == "Event event-narrative-cancelled cancelled: rain delay."));
+    assert!(notices.iter().any(|post| {
+        post.body == "Event event-narrative-resolved winners slot_1 received cookie."
+    }));
+
+    let narratives = day_event_narratives(&pool, game).await.unwrap();
+    assert_eq!(
+        narratives
+            .iter()
+            .filter(|row| row.status == "published")
+            .count(),
+        5
+    );
+    assert!(narratives
+        .iter()
+        .filter(|row| row.status == "published")
+        .all(|row| row.source_seq.is_some() && row.published_seq.is_some()));
+    let stream = eventstore::load_stream(&pool, game).await.unwrap();
+    let published = stream
+        .iter()
+        .filter(|event| event.kind == "DayEventNarrativePublished")
+        .count();
+    assert_eq!(published, 5);
+    assert!(stream
+        .iter()
+        .filter(|event| event.kind == "PostSubmitted"
+            && event.payload.get("day_event_narrative").is_some())
+        .all(|event| {
+            event.actor == ActorId::Host
+                && event.meta["principal_user_id"] == "service:day-event-narrative"
+                && event.meta["authority_used"] == format!("DayEventNarrative({game})")
+        }));
+
+    let caught_up = run_day_event_scheduler_once(&pool, &config, Uuid::new_v4(), 103)
+        .await
+        .unwrap();
+    assert_eq!(caught_up.claimed_games, 0);
+    assert!(audit_rebuild(&pool, game).await.unwrap().ok);
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn narrative_publish_failure_never_rolls_back_scheduled_mechanics(pool: PgPool) {
+    let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
+    let mut program = narrative_day_program("program-narrative-failure", &["event-narrative-fail"]);
+    program.events[0].schedule = game_platform::DayEventSchedule::Absolute {
+        open_at: game_platform::UnixSeconds::new(100),
+        lock_at: None,
+    };
+    handle(
+        &pool,
+        &user("host_h"),
+        Command::AttachDayProgram { game, program },
+    )
+    .await
+    .unwrap();
+    sqlx::query(
+        "CREATE FUNCTION fail_day_event_narrative_post() RETURNS trigger LANGUAGE plpgsql AS $$ \
+         BEGIN \
+           IF NEW.kind = 'PostSubmitted' AND NEW.payload ? 'day_event_narrative' THEN \
+             RAISE EXCEPTION 'injected narrative delivery failure'; \
+           END IF; \
+           RETURN NEW; \
+         END $$",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        "CREATE TRIGGER fail_day_event_narrative_post \
+         BEFORE INSERT ON events FOR EACH ROW EXECUTE FUNCTION fail_day_event_narrative_post()",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let config = DayEventSchedulerConfig::default();
+    let failed = run_day_event_scheduler_once(&pool, &config, Uuid::new_v4(), 100)
+        .await
+        .unwrap();
+    assert_eq!(failed.failed_games, 1);
+    assert_eq!(
+        day_events(&pool, game).await.unwrap().remove(0).state,
+        "open",
+        "schedule mechanics committed in the transaction before notice delivery"
+    );
+    assert_eq!(
+        day_event_narratives(&pool, game)
+            .await
+            .unwrap()
+            .into_iter()
+            .find(|row| row.lifecycle == game_platform::NarrativeLifecycle::Opened)
+            .unwrap()
+            .status,
+        "pending"
+    );
+
+    sqlx::query("DROP TRIGGER fail_day_event_narrative_post ON events")
+        .execute(&pool)
+        .await
+        .unwrap();
+    let retry_at = day_event_scheduler_status(&pool, game, 100)
+        .await
+        .unwrap()
+        .unwrap()
+        .retry_not_before
+        .unwrap();
+    let retried = run_day_event_scheduler_once(&pool, &config, Uuid::new_v4(), retry_at)
+        .await
+        .unwrap();
+    assert_eq!(retried.succeeded_games, 1);
+    assert_eq!(retried.appended_events, 2);
+    assert!(audit_rebuild(&pool, game).await.unwrap().ok);
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]

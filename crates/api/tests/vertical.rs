@@ -3125,6 +3125,30 @@ async fn host_setup_sequence_commits_to_setup_state(pool: sqlx::PgPool) {
         setup.phase.as_ref().map(|phase| phase.phase_id.as_str()),
         Some("D01")
     );
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!(
+                    "/games/{game}/host-console-state?principal_user_id=host_h"
+                ))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let host_state: api::HostConsoleStateResponse = serde_json::from_slice(&bytes).unwrap();
+    let narrative = &host_state.day_events[0].narratives;
+    assert_eq!(narrative.len(), 4);
+    assert!(narrative.iter().all(|row| {
+        row.channel_id == "main"
+            && row.status == "armed"
+            && row.body.is_none()
+            && row.template_hash.len() == 64
+    }));
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]

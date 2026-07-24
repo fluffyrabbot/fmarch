@@ -419,6 +419,7 @@ function normalizeHostDayEvent(event) {
     typeof resolutionEvidence?.policy === "object"
       ? resolutionEvidence.policy
       : null;
+  const narratives = Array.isArray(event.narratives) ? event.narratives : [];
   return Object.freeze({
     eventId,
     state: String(event.state ?? "scheduled"),
@@ -479,6 +480,41 @@ function normalizeHostDayEvent(event) {
           ].sort()
         : [],
     ),
+    narratives: Object.freeze(
+      narratives
+        .map((narrative) =>
+          Object.freeze({
+            lifecycle: String(narrative?.lifecycle ?? ""),
+            templateKey: String(
+              narrative?.template_key ?? narrative?.templateKey ?? "",
+            ),
+            templateHash: String(
+              narrative?.template_hash ?? narrative?.templateHash ?? "",
+            ),
+            channelId: String(
+              narrative?.channel_id ?? narrative?.channelId ?? "",
+            ),
+            status: String(narrative?.status ?? "armed"),
+            body:
+              typeof narrative?.body === "string" ? narrative.body : null,
+            sourceSeq: finiteNumberOrNull(
+              narrative?.source_seq ?? narrative?.sourceSeq,
+            ),
+            publishedSeq: finiteNumberOrNull(
+              narrative?.published_seq ?? narrative?.publishedSeq,
+            ),
+          }),
+        )
+        .sort(
+          (left, right) =>
+            ["opened", "locked", "resolved", "cancelled"].indexOf(
+              left.lifecycle,
+            ) -
+            ["opened", "locked", "resolved", "cancelled"].indexOf(
+              right.lifecycle,
+            ),
+        ),
+    ),
     participation: Object.freeze({
       who: String(participation.who ?? ""),
       mode: String(participation.mode ?? ""),
@@ -518,6 +554,8 @@ export function normalizeDayEventScheduler(scheduler, fallback = null) {
     nextDueAt: finiteNumberOrNull(source.next_due_at ?? source.nextDueAt),
     autoResolvePending:
       (source.auto_resolve_pending ?? source.autoResolvePending) === true,
+    narrativePending:
+      (source.narrative_pending ?? source.narrativePending) === true,
     wakeSeq: Number(source.wake_seq ?? source.wakeSeq ?? 0),
     lastObservedWakeSeq: Number(
       source.last_observed_wake_seq ?? source.lastObservedWakeSeq ?? 0,

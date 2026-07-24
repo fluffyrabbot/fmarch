@@ -3,6 +3,28 @@
   "version": 1,
   "display_name": "Bakery",
   "theme_ref": "theme.bakery",
+  "narrative_templates": [
+    {
+      "key": "theme.bakery.cookie_raffle.opened",
+      "channel_id": "main",
+      "body": "The {{event_template}} event is open. Join before it locks."
+    },
+    {
+      "key": "theme.bakery.cookie_raffle.locked",
+      "channel_id": "main",
+      "body": "{{event_id}} is locked with {{participant_count}} participants: {{participants}}."
+    },
+    {
+      "key": "theme.bakery.cookie_raffle.resolved",
+      "channel_id": "main",
+      "body": "{{event_id}} resolved. Winners: {{winners}}. Rewards: {{rewards}}."
+    },
+    {
+      "key": "theme.bakery.cookie_raffle.cancelled",
+      "channel_id": "main",
+      "body": "{{event_id}} was cancelled: {{cancellation_reason}}."
+    }
+  ],
   "events": [
     {
       "id": "bakery-cookie-d1",

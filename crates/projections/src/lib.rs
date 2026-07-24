@@ -354,6 +354,22 @@ pub struct DayEventParticipationRow {
     pub submitted_seq: i64,
 }
 
+/// Immutable compiled narrative plus its rebuildable delivery state.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DayEventNarrativeRow {
+    pub game_id: Uuid,
+    pub event_id: String,
+    pub lifecycle: game_platform::NarrativeLifecycle,
+    pub template_key: String,
+    pub template_hash: game_platform::ProgramContentHash,
+    pub channel_id: String,
+    pub body_template: String,
+    pub source_seq: Option<i64>,
+    pub rendered_body: Option<String>,
+    pub status: String,
+    pub published_seq: Option<i64>,
+}
+
 /// A folded host/admin prompt decision that moved phase state.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct HostPhaseControlRow {
@@ -1227,6 +1243,44 @@ async fn fold_event(
             .bind(ev.seq)
             .execute(&mut **tx)
             .await?;
+            let narratives: Vec<game_platform::CompiledNarrativeTemplate> = ev
+                .payload
+                .get("narrative_templates")
+                .cloned()
+                .map(serde_json::from_value)
+                .transpose()
+                .map_err(|source| ProjectionError::Payload {
+                    kind: ev.kind.clone(),
+                    source,
+                })?
+                .unwrap_or_default();
+            for narrative in narratives {
+                if !definition
+                    .channel_policy
+                    .allowed_channels
+                    .contains(&narrative.channel_id)
+                {
+                    return payload_error(
+                        &ev.kind,
+                        "compiled narrative channel is outside the DayEvent allow-list",
+                    );
+                }
+                sqlx::query(
+                    "INSERT INTO day_event_narrative \
+                     (game_id, event_id, lifecycle, template_key, template_hash, \
+                      channel_id, body_template) \
+                     VALUES ($1, $2, $3, $4, $5, $6, $7)",
+                )
+                .bind(game_id)
+                .bind(definition.id.as_str())
+                .bind(narrative.lifecycle.as_str())
+                .bind(narrative.template_key.as_str())
+                .bind(narrative.template_hash.as_str())
+                .bind(narrative.channel_id.as_str())
+                .bind(&narrative.body)
+                .execute(&mut **tx)
+                .await?;
+            }
         }
         "DayEventOpenDue" => {
             let event_id = str_field(&ev.payload, "event_id", &ev.kind)?;
@@ -1242,7 +1296,7 @@ async fn fold_event(
                  WHERE game_id = $1 AND event_id = $2",
             )
             .bind(game_id)
-            .bind(event_id)
+            .bind(&event_id)
             .bind(due_at)
             .bind(observed_at)
             .bind(ev.seq)
@@ -1263,7 +1317,7 @@ async fn fold_event(
                  WHERE game_id = $1 AND event_id = $2",
             )
             .bind(game_id)
-            .bind(event_id)
+            .bind(&event_id)
             .bind(due_at)
             .bind(observed_at)
             .bind(ev.seq)
@@ -1279,11 +1333,19 @@ async fn fold_event(
                  updated_seq = $5 WHERE game_id = $1 AND event_id = $2",
             )
             .bind(game_id)
-            .bind(event_id)
+            .bind(&event_id)
             .bind(phase_id)
             .bind(opened_at)
             .bind(ev.seq)
             .execute(&mut **tx)
+            .await?;
+            activate_day_event_narrative(
+                tx,
+                game_id,
+                &event_id,
+                game_platform::NarrativeLifecycle::Opened,
+                ev.seq,
+            )
             .await?;
         }
         "DayEventLocked" => {
@@ -1307,9 +1369,68 @@ async fn fold_event(
                  WHERE game_id = $1 AND event_id = $2",
             )
             .bind(game_id)
-            .bind(event_id)
+            .bind(&event_id)
             .bind(locked_at)
             .bind(auto_seed)
+            .bind(ev.seq)
+            .execute(&mut **tx)
+            .await?;
+            activate_day_event_narrative(
+                tx,
+                game_id,
+                &event_id,
+                game_platform::NarrativeLifecycle::Locked,
+                ev.seq,
+            )
+            .await?;
+        }
+        "DayEventNarrativePublished" => {
+            let event_id = str_field(&ev.payload, "event_id", &ev.kind)?;
+            let lifecycle: game_platform::NarrativeLifecycle =
+                serde_json::from_value(ev.payload["lifecycle"].clone()).map_err(|source| {
+                    ProjectionError::Payload {
+                        kind: ev.kind.clone(),
+                        source,
+                    }
+                })?;
+            let receipt_id = str_field(&ev.payload, "receipt_id", &ev.kind)?;
+            let row = sqlx::query(
+                "SELECT source_seq, template_hash FROM day_event_narrative \
+                 WHERE game_id = $1 AND event_id = $2 AND lifecycle = $3 \
+                   AND status = 'pending'",
+            )
+            .bind(game_id)
+            .bind(&event_id)
+            .bind(lifecycle.as_str())
+            .fetch_optional(&mut **tx)
+            .await?
+            .ok_or_else(|| ProjectionError::Payload {
+                kind: ev.kind.clone(),
+                source: serde::de::Error::custom("narrative receipt has no pending work"),
+            })?;
+            let source_seq: i64 = row.get("source_seq");
+            let template_hash =
+                game_platform::ProgramContentHash::new(row.get::<String, _>("template_hash"))
+                    .map_err(|error| ProjectionError::Payload {
+                        kind: ev.kind.clone(),
+                        source: serde::de::Error::custom(error.to_string()),
+                    })?;
+            let expected = game_platform::day_narrative::receipt_id(
+                &event_id,
+                lifecycle,
+                source_seq,
+                &template_hash,
+            );
+            if receipt_id != expected {
+                return payload_error(&ev.kind, "narrative receipt id does not match pending work");
+            }
+            sqlx::query(
+                "UPDATE day_event_narrative SET status = 'published', published_seq = $4 \
+                 WHERE game_id = $1 AND event_id = $2 AND lifecycle = $3",
+            )
+            .bind(game_id)
+            .bind(event_id)
+            .bind(lifecycle.as_str())
             .bind(ev.seq)
             .execute(&mut **tx)
             .await?;
@@ -1322,10 +1443,18 @@ async fn fold_event(
                  updated_seq = $4 WHERE game_id = $1 AND event_id = $2",
             )
             .bind(game_id)
-            .bind(event_id)
+            .bind(&event_id)
             .bind(reason)
             .bind(ev.seq)
             .execute(&mut **tx)
+            .await?;
+            activate_day_event_narrative(
+                tx,
+                game_id,
+                &event_id,
+                game_platform::NarrativeLifecycle::Cancelled,
+                ev.seq,
+            )
             .await?;
         }
         "DayEventParticipationSubmitted" => {
@@ -1400,7 +1529,7 @@ async fn fold_event(
                  WHERE game_id = $1 AND event_id = $2",
             )
             .bind(game_id)
-            .bind(event_id)
+            .bind(&event_id)
             .bind(
                 serde_json::to_value(decision).map_err(|source| ProjectionError::Payload {
                     kind: ev.kind.clone(),
@@ -1420,6 +1549,14 @@ async fn fold_event(
             )
             .bind(ev.seq)
             .execute(&mut **tx)
+            .await?;
+            activate_day_event_narrative(
+                tx,
+                game_id,
+                &event_id,
+                game_platform::NarrativeLifecycle::Resolved,
+                ev.seq,
+            )
             .await?;
         }
 
@@ -1471,6 +1608,7 @@ fn day_event_schedule_work_event(kind: &str) -> bool {
             | "DayEventLocked"
             | "DayEventCancelled"
             | "DayEventResolved"
+            | "DayEventNarrativePublished"
     )
 }
 
@@ -1552,21 +1690,29 @@ async fn refresh_day_event_schedule_work(
             (current, None) => current,
         };
     }
+    let narrative_pending: bool = sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM day_event_narrative \
+         WHERE game_id = $1 AND status = 'pending')",
+    )
+    .bind(game_id)
+    .fetch_one(&mut **tx)
+    .await?;
 
     sqlx::query(
         "INSERT INTO day_event_schedule_work \
-         (game_id, next_due_at, wake_seq, updated_seq, auto_resolve_pending) \
-         VALUES ($1, $2, CASE WHEN $3 THEN $4 ELSE 0 END, $4, $5) \
+         (game_id, next_due_at, wake_seq, updated_seq, auto_resolve_pending, narrative_pending) \
+         VALUES ($1, $2, CASE WHEN $3 THEN $4 ELSE 0 END, $4, $5, $6) \
          ON CONFLICT (game_id) DO UPDATE SET \
            next_due_at = EXCLUDED.next_due_at, \
            wake_seq = CASE WHEN $3 THEN $4 ELSE day_event_schedule_work.wake_seq END, \
-           updated_seq = $4, auto_resolve_pending = $5",
+           updated_seq = $4, auto_resolve_pending = $5, narrative_pending = $6",
     )
     .bind(game_id)
     .bind(next_due_at)
     .bind(advance_wake)
     .bind(updated_seq)
     .bind(auto_resolve_pending)
+    .bind(narrative_pending)
     .execute(&mut **tx)
     .await?;
     sqlx::query(
@@ -1574,6 +1720,89 @@ async fn refresh_day_event_schedule_work(
          ON CONFLICT (game_id) DO NOTHING",
     )
     .bind(game_id)
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
+}
+
+async fn activate_day_event_narrative(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    game_id: Uuid,
+    event_id: &str,
+    lifecycle: game_platform::NarrativeLifecycle,
+    source_seq: i64,
+) -> Result<(), ProjectionError> {
+    let template = sqlx::query(
+        "SELECT body_template FROM day_event_narrative \
+         WHERE game_id = $1 AND event_id = $2 AND lifecycle = $3 AND status = 'armed'",
+    )
+    .bind(game_id)
+    .bind(event_id)
+    .bind(lifecycle.as_str())
+    .fetch_optional(&mut **tx)
+    .await?;
+    let Some(template) = template else {
+        return Ok(());
+    };
+    let event = sqlx::query(
+        "SELECT definition, cancelled_reason, winner_slots, reward_keys_applied \
+         FROM day_event WHERE game_id = $1 AND event_id = $2",
+    )
+    .bind(game_id)
+    .bind(event_id)
+    .fetch_one(&mut **tx)
+    .await?;
+    let definition: game_platform::DayEvent = serde_json::from_value(event.get("definition"))
+        .map_err(|source| ProjectionError::Payload {
+            kind: format!("DayEvent{}Narrative", lifecycle.as_str()),
+            source,
+        })?;
+    let participants = sqlx::query_scalar::<_, Vec<String>>(
+        "SELECT COALESCE(array_agg(actor_slot ORDER BY actor_slot), ARRAY[]::TEXT[]) \
+         FROM day_event_participation WHERE game_id = $1 AND event_id = $2",
+    )
+    .bind(game_id)
+    .bind(event_id)
+    .fetch_one(&mut **tx)
+    .await?;
+    let winners: Vec<String> =
+        serde_json::from_value(event.get("winner_slots")).map_err(|source| {
+            ProjectionError::Payload {
+                kind: "DayEventResolved".to_string(),
+                source,
+            }
+        })?;
+    let rewards: Vec<String> =
+        serde_json::from_value(event.get("reward_keys_applied")).map_err(|source| {
+            ProjectionError::Payload {
+                kind: "DayEventResolved".to_string(),
+                source,
+            }
+        })?;
+    let bindings = game_platform::day_narrative::NarrativeBindings {
+        event_id: event_id.to_string(),
+        event_template: definition.template_key.as_str().to_string(),
+        participants,
+        winners,
+        rewards,
+        cancellation_reason: event.get("cancelled_reason"),
+    };
+    let mut rendered = game_platform::day_narrative::render(
+        &template.get::<String, _>("body_template"),
+        &bindings,
+    );
+    if rendered.len() > game_platform::MAX_RENDERED_NARRATIVE_BYTES {
+        rendered = format!("DayEvent {event_id} {}.", lifecycle.as_str());
+    }
+    sqlx::query(
+        "UPDATE day_event_narrative SET source_seq = $4, rendered_body = $5, status = 'pending' \
+         WHERE game_id = $1 AND event_id = $2 AND lifecycle = $3 AND status = 'armed'",
+    )
+    .bind(game_id)
+    .bind(event_id)
+    .bind(lifecycle.as_str())
+    .bind(source_seq)
+    .bind(rendered)
     .execute(&mut **tx)
     .await?;
     Ok(())
@@ -3615,6 +3844,7 @@ async fn rebuild_in_tx(
         "vote_ballot",
         "day_event_schedule_work",
         "day_event_participation",
+        "day_event_narrative",
         "day_event",
         "day_program",
         "day_vote_outcome",
@@ -3717,6 +3947,10 @@ const AUDIT_PROJECTIONS: &[AuditProjection] = &[
     AuditProjection {
         table: "day_event_participation",
         order_by: "event_id, submitted_seq, actor_slot",
+    },
+    AuditProjection {
+        table: "day_event_narrative",
+        order_by: "event_id, lifecycle",
     },
     AuditProjection {
         table: "game_result",
@@ -5038,6 +5272,70 @@ where
             })
         })
         .collect()
+}
+
+/// Read compiled DayEvent narrative delivery state in deterministic order.
+pub async fn day_event_narratives<'e, E>(
+    executor: E,
+    game_id: Uuid,
+) -> Result<Vec<DayEventNarrativeRow>, ProjectionError>
+where
+    E: sqlx::PgExecutor<'e>,
+{
+    let rows = sqlx::query(
+        "SELECT game_id, event_id, lifecycle, template_key, template_hash, channel_id, \
+         body_template, source_seq, rendered_body, status, published_seq \
+         FROM day_event_narrative WHERE game_id = $1 \
+         ORDER BY event_id, lifecycle",
+    )
+    .bind(game_id)
+    .fetch_all(executor)
+    .await?;
+    rows.into_iter()
+        .map(|row| {
+            let lifecycle_value = serde_json::Value::String(row.get("lifecycle"));
+            let lifecycle = serde_json::from_value(lifecycle_value).map_err(|source| {
+                ProjectionError::Payload {
+                    kind: "DayEventNarrativePublished".to_string(),
+                    source,
+                }
+            })?;
+            let template_hash =
+                game_platform::ProgramContentHash::new(row.get::<String, _>("template_hash"))
+                    .map_err(|error| ProjectionError::Payload {
+                        kind: "DayEventScheduled".to_string(),
+                        source: serde::de::Error::custom(error.to_string()),
+                    })?;
+            Ok(DayEventNarrativeRow {
+                game_id: row.get("game_id"),
+                event_id: row.get("event_id"),
+                lifecycle,
+                template_key: row.get("template_key"),
+                template_hash,
+                channel_id: row.get("channel_id"),
+                body_template: row.get("body_template"),
+                source_seq: row.get("source_seq"),
+                rendered_body: row.get("rendered_body"),
+                status: row.get("status"),
+                published_seq: row.get("published_seq"),
+            })
+        })
+        .collect()
+}
+
+/// Read only delivery-ready narrative rows for the sealed worker boundary.
+pub async fn pending_day_event_narratives<'e, E>(
+    executor: E,
+    game_id: Uuid,
+) -> Result<Vec<DayEventNarrativeRow>, ProjectionError>
+where
+    E: sqlx::PgExecutor<'e>,
+{
+    Ok(day_event_narratives(executor, game_id)
+        .await?
+        .into_iter()
+        .filter(|row| row.status == "pending")
+        .collect())
 }
 
 /// Read folded host/admin prompt phase-control decisions, ordered by event log position.

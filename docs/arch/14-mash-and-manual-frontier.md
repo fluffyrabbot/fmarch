@@ -234,6 +234,15 @@ struct DayEvent {
     channel_policy: EventChannelPolicy,
 }
 
+/// Authored program content owns the immutable narrative catalog. Event
+/// templates reference catalog keys; attach compiles the exact channel/body/hash
+/// snapshot into each scheduled event so later catalog edits cannot rewrite it.
+struct NarrativeTemplate {
+    key: String,
+    channel_id: String,
+    body: String,
+}
+
 /// Platform wall-clock values are explicit and unit-safe. They are never engine
 /// LogicalTime and never inferred from an event envelope's occurred_at field.
 struct UnixSeconds(i64);
@@ -497,14 +506,19 @@ Provenance defaults for all fiat/day-event adapters:
 
 **Narrative decision (separate from mechanical catalog):**
 
-Today only **spectator** host authoring is first-class: `PublishSpectatorPost` → `PostSubmitted` with `ActorId::Host` and host user attribution into the fixed spectator room. Player `SubmitPost` requires `SlotOccupant` and a seat — **not** a silent host→`main` path.
+Manual spectator authoring remains first-class through `PublishSpectatorPost`.
+Automatic DayEvent narrative uses the same generalized host-notice builder, but
+is a distinct service-owned workflow. Player `SubmitPost` still requires
+`SlotOccupant` and a seat — it is **not** a silent host→`main` path.
 
 v1 host-authored narrative therefore:
 
 1. **Does not** call or reuse player `SubmitPost` validation.
-2. **Does** reuse/generalize the **spectator-style host-notice helper**: append `PostSubmitted` with `ActorId::Host`, host attribution (`slot_or_user.user: "host"` or equivalent), `channel_id` from the spec, body from theme template + bindings, post-policy checks for that channel.
-3. **v1 channel allow-list (default):** start with channels that already accept host posts (**`spectator`**). Extending to **`main`** (and optional event channels) is an explicit host-notice capability in **PR13** — same helper, broader allow-list + policy gates — not an implicit claim that main already works.
-4. Narrative validation happens at program attach. A narrative publishing failure must not create a mechanically false `DayEventResolved`; narrative is not an effect-catalog entry.
+2. **Does** use the **generalized host-notice builder** shared with manual spectator posts: append `PostSubmitted` with `ActorId::Host`, host attribution, an explicit channel, and a validated body.
+3. **Automatic DayEvent v1 allow-list:** `main` only. Spectator publishing remains manual because spectator copy can be private; private rendered bodies must not sit in retry-work projections. Additional event channels require an explicit privacy and membership design.
+4. The inline program owns a keyed narrative catalog. Program attach validates every lifecycle reference and placeholder, then writes the exact template key, content hash, channel, and body snapshot into `DayEventScheduled`.
+5. A committed lifecycle fact (`DayEventOpened`, `Locked`, `Resolved`, or `Cancelled`) renders its immutable template with committed projection state and activates rebuildable `day_event_narrative` work.
+6. Scheduler mechanics commit first. A second transaction publishes `PostSubmitted` and `DayEventNarrativePublished` atomically with a deterministic receipt id. Failed delivery remains pending and retry-safe; it can never roll back or falsify the mechanical lifecycle.
 
 **Required proof for every adapter:** after ApplyEffectPlan / ResolveDayEvent rewards, `audit_rebuild` is clean **and** a following `ResolvePhase` input snapshot includes the mark/grant/lifecycle.
 
@@ -955,7 +969,7 @@ Incremental backlog for solo greenfield. Multi-day depth expected on adapter PRs
 | **PR9** | explicit phase-open time + absolute scheduling | phase event/projection, atomic due commands | PR6 | `UnixSeconds`; no wall-clock folds |
 | **PR10** | relative scheduling | DayEvent schedule compiler | PR9 | Uses committed `phase_opened_at`, never envelope logical time |
 | **PR11** | L3 auto-resolve + recorded seed | pure platform policy module, sealed automation command, indexed work | PR6, PR9 | First-N + seeded-random policies; lock-captured seed; atomic effects + resolution |
-| **PR12** | theme narrative + host-notice main allow-list | theme refs; generalized host-notice adapter; channel allow-list | PR8 | Separate from concrete-effect enum; **not** player SubmitPost |
+| **PR12** | theme narrative + host-notice main allow-list | immutable inline template catalog; attach-time compilation/hash snapshot; rebuildable retry work; generalized host-notice adapter; host-console delivery evidence | PR8 | Delivered; mechanics commit before narrative; deterministic publication receipt; **not** player SubmitPost |
 | **PR13** | scale acceptance checks (30+) | ops smoke / projection bench artifacts | PR7, PR9–11 | Numeric checks listed in Scale section |
 | **PR14** | program templates library (data) | `programs/` or content store | PR8, PR12 | raffle, opt-in quest, host-judged showcase |
 
@@ -1066,7 +1080,7 @@ It continues to consume slot state, submissions, and folded effects — includin
 | Kind | version | Required fields (sketch) | Notes |
 |---|---|---|---|
 | `DayProgramAttached` | 1 | `program_id`, `content_hash`, `theme_ref?` | |
-| `DayEventScheduled` | 1 | `event_id`, `program_id`, `template_key`, `schedule`, `resolution_mode`, `rewards_ref` | Materialize from program |
+| `DayEventScheduled` | 1 | `event_id`, `program_id`, `template_key`, `schedule`, `resolution_mode`, `rewards_ref`, compiled narrative templates | Materialize immutable definitions and exact narrative content/hash snapshots from program |
 | `DayEventOpened` | 1 | `event_id`, `phase_id`, `opened_at: UnixSeconds` | |
 | `DayEventLocked` | 1 | `event_id`, `locked_at`, `auto_seed?` | Seed is present only when the resolution policy requires it |
 | `DayEventCancelled` | 1 | `event_id`, `reason` | |
@@ -1074,6 +1088,7 @@ It continues to consume slot state, submissions, and folded effects — includin
 | `DayEventParticipationSubmitted` | 1 | `event_id`, `actor_slot`, `payload`, `phase_id` | |
 | `DayEventParticipationWithdrawn` | 1 | `event_id`, `actor_slot` | Only while Open |
 | `DayEventResolved` | 1 | `event_id`, `decision`, `winner_slots`, `reward_keys_applied`, `evidence` | Evidence records host/auto source, policy, seed, and canonical participants. Effects are **sibling events in same txn**, not only embedded opaque blobs |
+| `DayEventNarrativePublished` | 1 | `event_id`, `lifecycle`, `receipt_id`, `post_id` | Service-owned retry receipt; atomically paired with the host-authored `PostSubmitted`; deterministic receipt prevents duplicate publication |
 
 Plus existing kinds used by adapters: `EffectsMarked`, `EffectsCleared`, `SlotStatusChanged`, platform grant fact, channel membership, host-authored `PostSubmitted` (host-notice path; same kind as spectator posts, not player `SubmitPost`).
 

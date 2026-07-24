@@ -37,18 +37,18 @@ use tokio::sync::{broadcast, Mutex, OwnedSemaphorePermit, Semaphore};
 use uuid::Uuid;
 use wire::{
     AckMsg, AdvanceSubscriptionReadRequest, CapabilityGrant, ClientEnvelope, CommunityInboxPage,
-    DayEventSchedulerDelta, DayVoteOutcomeDelta, DiscussionArea, DiscussionPost,
-    DiscussionThreadPage, DiscussionTopic, DiscussionTopicPage, GameIndexEntry, GameIndexPage,
-    Hello, HostConsoleAuthorityDelta, HostConsoleAuthorityKind, HostConsolePhaseStateDelta,
-    HostConsoleSlotOccupancyDelta, HostConsoleStateDelta, HostConsoleThreadPostDelta,
-    HostDayEventDelta, HostPhaseControl, HostPromptDelta, HostPromptsDelta, HostTaskAllowedCommand,
-    HostTaskCommandKind, HostTaskDelta, HostTaskKind, HostTaskState, HostTaskUrgency,
-    ModerationCase, ModerationCaseDetail, ModerationCasePage, ModerationReportReceipt,
-    PlayerInvestigationResult, PlayerInvestigationResultsDelta, PlayerNotification,
-    PlayerNotificationsDelta, ProfileEditor, ProjectionDelta, PublicGameThreadPage, PublicProfile,
-    PublicSearchPage, PublicSearchResult, RejectCode, RejectMsg, ServerEnvelope, ServerMsg,
-    SubscriptionTargetState, ThreadPage, ThreadPost, ThreadPostsDelta, VoteCountClearedDelta,
-    VoteCountDelta, PROTOCOL_VERSION,
+    DayEventNarrativeDelta, DayEventSchedulerDelta, DayVoteOutcomeDelta, DiscussionArea,
+    DiscussionPost, DiscussionThreadPage, DiscussionTopic, DiscussionTopicPage, GameIndexEntry,
+    GameIndexPage, Hello, HostConsoleAuthorityDelta, HostConsoleAuthorityKind,
+    HostConsolePhaseStateDelta, HostConsoleSlotOccupancyDelta, HostConsoleStateDelta,
+    HostConsoleThreadPostDelta, HostDayEventDelta, HostPhaseControl, HostPromptDelta,
+    HostPromptsDelta, HostTaskAllowedCommand, HostTaskCommandKind, HostTaskDelta, HostTaskKind,
+    HostTaskState, HostTaskUrgency, ModerationCase, ModerationCaseDetail, ModerationCasePage,
+    ModerationReportReceipt, PlayerInvestigationResult, PlayerInvestigationResultsDelta,
+    PlayerNotification, PlayerNotificationsDelta, ProfileEditor, ProjectionDelta,
+    PublicGameThreadPage, PublicProfile, PublicSearchPage, PublicSearchResult, RejectCode,
+    RejectMsg, ServerEnvelope, ServerMsg, SubscriptionTargetState, ThreadPage, ThreadPost,
+    ThreadPostsDelta, VoteCountClearedDelta, VoteCountDelta, PROTOCOL_VERSION,
 };
 
 #[derive(Clone)]
@@ -8382,6 +8382,7 @@ async fn load_host_console_state(
                 pending: status.pending,
                 next_due_at: status.next_due_at,
                 auto_resolve_pending: status.auto_resolve_pending,
+                narrative_pending: status.narrative_pending,
                 wake_seq: status.wake_seq,
                 last_observed_wake_seq: status.last_observed_wake_seq,
                 lease_until: status.lease_until,
@@ -8396,6 +8397,7 @@ async fn load_host_console_state(
             });
     let day_event_participation =
         projections::day_event_participation_for_game(&state.pool, game).await?;
+    let day_event_narratives = projections::day_event_narratives(&state.pool, game).await?;
     let tasks = select_host_tasks(&host_prompts, &day_event_rows, &authority);
     let day_events = day_event_rows
         .iter()
@@ -8417,6 +8419,20 @@ async fn load_host_console_state(
             resolution_evidence: event.resolution_evidence.clone(),
             winner_slots: event.winner_slots.clone(),
             reward_keys_applied: event.reward_keys_applied.clone(),
+            narratives: day_event_narratives
+                .iter()
+                .filter(|row| row.event_id == event.event_id)
+                .map(|row| DayEventNarrativeDelta {
+                    lifecycle: row.lifecycle,
+                    template_key: row.template_key.clone(),
+                    template_hash: row.template_hash.as_str().to_string(),
+                    channel_id: row.channel_id.clone(),
+                    status: row.status.clone(),
+                    body: row.rendered_body.clone(),
+                    source_seq: row.source_seq,
+                    published_seq: row.published_seq,
+                })
+                .collect(),
         })
         .collect();
 

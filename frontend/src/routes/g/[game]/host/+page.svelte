@@ -344,6 +344,10 @@
     const policy = event.resolutionEvidence.policyKind;
     return policy === "seeded_random" ? "Seeded random" : "First in stable order";
   }
+
+  function hasNarrativeEvidence(event) {
+    return Array.isArray(event?.narratives) && event.narratives.length > 0;
+  }
 </script>
 
 <svelte:head>
@@ -412,6 +416,8 @@
                 {dayEventScheduler?.pending
                   ? dayEventScheduler?.autoResolvePending
                     ? "Automatic resolution pending"
+                    : dayEventScheduler?.narrativePending
+                      ? "Narrative delivery pending"
                     : "Schedule work pending"
                   : "Scheduler caught up"}
               </strong>
@@ -455,6 +461,21 @@
                       · rewards {event.rewardKeysApplied.join(", ")}
                     </li>
                   {/if}
+                {/each}
+              </ul>
+            {/if}
+            {#if hostDayEvents.some(hasNarrativeEvidence)}
+              <ul data-testid="host-day-event-narrative-evidence">
+                {#each hostDayEvents as event (event.eventId)}
+                  {#each event.narratives as narrative (`${event.eventId}:${narrative.lifecycle}`)}
+                    <li>
+                      <strong>{event.eventId} · {narrative.lifecycle}</strong>
+                      · {narrative.status} to {narrative.channelId}
+                      {#if narrative.body}
+                        · {narrative.body}
+                      {/if}
+                    </li>
+                  {/each}
                 {/each}
               </ul>
             {/if}

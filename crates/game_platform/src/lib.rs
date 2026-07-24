@@ -4,13 +4,14 @@
 //! or resolver dependencies. It owns the values shared by those layers without
 //! becoming a second rules engine.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
 use serde::{de::Error as _, Deserialize, Deserializer, Serialize};
 use thiserror::Error;
 
 pub mod day_auto_resolution;
+pub mod day_narrative;
 pub mod day_schedule;
 
 #[derive(Debug, Clone, PartialEq, Error)]
@@ -65,6 +66,24 @@ pub enum ModelError {
     EmptyDayProgram,
     #[error("duplicate day program event id {0}")]
     DuplicateProgramEvent(DayEventId),
+    #[error("day program narrative templates require a theme reference")]
+    MissingNarrativeThemeRef,
+    #[error("narrative template {0} must not have a blank body")]
+    BlankNarrativeTemplateBody(TemplateKey),
+    #[error("narrative template {template} exceeds the {maximum} byte limit")]
+    NarrativeTemplateTooLarge {
+        template: TemplateKey,
+        maximum: usize,
+    },
+    #[error("duplicate narrative template key {0}")]
+    DuplicateNarrativeTemplate(TemplateKey),
+    #[error("DayEvent references unknown narrative template {0}")]
+    UnknownNarrativeTemplate(TemplateKey),
+    #[error("narrative template {template} contains unsupported binding `{binding}`")]
+    UnknownNarrativeBinding {
+        template: TemplateKey,
+        binding: String,
+    },
     #[error("program content hash must be 64 lowercase hexadecimal characters")]
     InvalidProgramContentHash,
     #[error("day program could not be serialized canonically")]
@@ -446,6 +465,83 @@ pub struct NarrativeTemplates {
     pub locked: Option<TemplateKey>,
     pub resolved: Option<TemplateKey>,
     pub cancelled: Option<TemplateKey>,
+}
+
+impl NarrativeTemplates {
+    pub fn iter(&self) -> impl Iterator<Item = (NarrativeLifecycle, &TemplateKey)> {
+        [
+            (NarrativeLifecycle::Opened, self.opened.as_ref()),
+            (NarrativeLifecycle::Locked, self.locked.as_ref()),
+            (NarrativeLifecycle::Resolved, self.resolved.as_ref()),
+            (NarrativeLifecycle::Cancelled, self.cancelled.as_ref()),
+        ]
+        .into_iter()
+        .filter_map(|(lifecycle, template)| template.map(|template| (lifecycle, template)))
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+pub enum NarrativeLifecycle {
+    Opened,
+    Locked,
+    Resolved,
+    Cancelled,
+}
+
+impl NarrativeLifecycle {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Opened => "opened",
+            Self::Locked => "locked",
+            Self::Resolved => "resolved",
+            Self::Cancelled => "cancelled",
+        }
+    }
+}
+
+pub const MAX_NARRATIVE_TEMPLATE_BODY_BYTES: usize = 8 * 1024;
+pub const MAX_RENDERED_NARRATIVE_BYTES: usize = 50 * 1024;
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+pub struct NarrativeTemplate {
+    pub key: TemplateKey,
+    pub channel_id: ChannelId,
+    pub body: String,
+}
+
+impl NarrativeTemplate {
+    pub fn validate(&self) -> Result<(), ModelError> {
+        if self.body.trim().is_empty() {
+            return Err(ModelError::BlankNarrativeTemplateBody(self.key.clone()));
+        }
+        if self.body.len() > MAX_NARRATIVE_TEMPLATE_BODY_BYTES {
+            return Err(ModelError::NarrativeTemplateTooLarge {
+                template: self.key.clone(),
+                maximum: MAX_NARRATIVE_TEMPLATE_BODY_BYTES,
+            });
+        }
+        day_narrative::validate_bindings(self)
+    }
+
+    pub fn content_hash(&self) -> Result<ProgramContentHash, ModelError> {
+        self.validate()?;
+        let canonical =
+            serde_json::to_vec(self).map_err(|_| ModelError::CanonicalProgramSerialization)?;
+        ProgramContentHash::new(blake3::hash(&canonical).to_hex().to_string())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+pub struct CompiledNarrativeTemplate {
+    pub lifecycle: NarrativeLifecycle,
+    pub template_key: TemplateKey,
+    pub template_hash: ProgramContentHash,
+    pub channel_id: ChannelId,
+    pub body: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -850,6 +946,8 @@ pub struct DayProgram {
     pub version: u32,
     pub display_name: String,
     pub theme_ref: Option<ContentRef>,
+    #[serde(default)]
+    pub narrative_templates: Vec<NarrativeTemplate>,
     pub events: Vec<DayEventTemplate>,
 }
 
@@ -864,10 +962,28 @@ impl DayProgram {
         if self.events.is_empty() {
             return Err(ModelError::EmptyDayProgram);
         }
+        if !self.narrative_templates.is_empty() && self.theme_ref.is_none() {
+            return Err(ModelError::MissingNarrativeThemeRef);
+        }
+        let mut narrative_templates = BTreeMap::new();
+        for template in &self.narrative_templates {
+            template.validate()?;
+            if narrative_templates
+                .insert(&template.key, template)
+                .is_some()
+            {
+                return Err(ModelError::DuplicateNarrativeTemplate(template.key.clone()));
+            }
+        }
         let mut event_ids = BTreeSet::new();
         for event in &self.events {
             if !event_ids.insert(&event.id) {
                 return Err(ModelError::DuplicateProgramEvent(event.id.clone()));
+            }
+            for (_, template_key) in event.narrative.iter() {
+                if !narrative_templates.contains_key(template_key) {
+                    return Err(ModelError::UnknownNarrativeTemplate(template_key.clone()));
+                }
             }
             event.compile(self.id.clone())?;
         }
@@ -1038,6 +1154,7 @@ mod tests {
             version: 1,
             display_name: "Bakery mash".to_string(),
             theme_ref: Some(id("theme.bakery")),
+            narrative_templates: Vec::new(),
             events: vec![DayEventTemplate {
                 id: id("event-cookie"),
                 template_key: id("theme.raffle"),

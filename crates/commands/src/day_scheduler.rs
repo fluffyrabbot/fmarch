@@ -92,6 +92,7 @@ pub struct DayEventSchedulerStatus {
     pub game_id: Uuid,
     pub next_due_at: Option<i64>,
     pub auto_resolve_pending: bool,
+    pub narrative_pending: bool,
     pub wake_seq: i64,
     pub updated_seq: i64,
     pub last_observed_wake_seq: i64,
@@ -204,7 +205,8 @@ pub async fn day_event_scheduler_status(
     observed_at: i64,
 ) -> Result<Option<DayEventSchedulerStatus>, SchedulerError> {
     let row = sqlx::query(
-        "SELECT w.game_id, w.next_due_at, w.auto_resolve_pending, w.wake_seq, w.updated_seq, \
+        "SELECT w.game_id, w.next_due_at, w.auto_resolve_pending, w.narrative_pending, \
+                w.wake_seq, w.updated_seq, \
                 s.last_observed_wake_seq, s.lease_owner, s.lease_until, \
                 s.retry_not_before, s.last_attempt_at, s.last_success_at, \
                 s.last_failure_at, s.consecutive_failures, s.total_attempts, \
@@ -224,6 +226,7 @@ pub async fn day_event_scheduler_status(
             game_id: row.get("game_id"),
             next_due_at,
             auto_resolve_pending: row.get("auto_resolve_pending"),
+            narrative_pending: row.get("narrative_pending"),
             wake_seq,
             updated_seq: row.get("updated_seq"),
             last_observed_wake_seq,
@@ -239,7 +242,8 @@ pub async fn day_event_scheduler_status(
             last_error: row.get("last_error"),
             pending: next_due_at.is_some_and(|due_at| due_at <= observed_at)
                 || wake_seq > last_observed_wake_seq
-                || row.get("auto_resolve_pending"),
+                || row.get("auto_resolve_pending")
+                || row.get("narrative_pending"),
         }
     }))
 }
@@ -260,7 +264,7 @@ async fn claim_due_games(
            JOIN day_event_schedule_work w ON w.game_id = s.game_id \
            JOIN game_index g ON g.game_id = s.game_id AND g.status = 'active' \
            WHERE (w.next_due_at <= $1 OR w.wake_seq > s.last_observed_wake_seq \
-                  OR w.auto_resolve_pending) \
+                  OR w.auto_resolve_pending OR w.narrative_pending) \
              AND (s.lease_until IS NULL OR s.lease_until <= $1) \
              AND (s.retry_not_before IS NULL OR s.retry_not_before <= $1) \
            ORDER BY w.next_due_at ASC NULLS LAST, w.wake_seq ASC, s.game_id ASC \
