@@ -117,7 +117,7 @@ export function buildAdminCommand({
   channelId = "main",
   allowMediaOnly = false,
   phase = "D01",
-  program,
+  programRef,
 }) {
   switch (action) {
     case "create_game":
@@ -169,7 +169,7 @@ export function buildAdminCommand({
       return Object.freeze({
         AttachDayProgram: Object.freeze({
           game: requiredString(game, "game"),
-          program: frozenJsonObject(program, "program"),
+          program_ref: dayProgramRef(programRef),
         }),
       });
     case "start_game":
@@ -182,6 +182,21 @@ export function buildAdminCommand({
     default:
       throw new TypeError(`unsupported admin command action: ${action}`);
   }
+}
+
+function dayProgramRef(value) {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    throw new TypeError("programRef must be an object");
+  }
+  const version = Number(value.version);
+  if (!Number.isInteger(version) || version <= 0) {
+    throw new TypeError("programRef.version must be a positive integer");
+  }
+  return Object.freeze({
+    id: requiredString(value.id, "programRef.id"),
+    version,
+    content_hash: requiredString(value.contentHash, "programRef.contentHash"),
+  });
 }
 
 export async function sendCommand({
@@ -321,22 +336,6 @@ function rejectMessage(reject, retryable, { requestEnvelope } = {}) {
 function requiredString(value, field) {
   if (typeof value !== "string" || value.trim() === "") {
     throw new TypeError(`${field} must be a non-empty string`);
-  }
-  return value;
-}
-
-function frozenJsonObject(value, field) {
-  if (value === null || typeof value !== "object" || Array.isArray(value)) {
-    throw new TypeError(`${field} must be an object`);
-  }
-  const clone = JSON.parse(JSON.stringify(value));
-  return deepFreeze(clone);
-}
-
-function deepFreeze(value) {
-  if (value !== null && typeof value === "object" && !Object.isFrozen(value)) {
-    Object.values(value).forEach(deepFreeze);
-    Object.freeze(value);
   }
   return value;
 }

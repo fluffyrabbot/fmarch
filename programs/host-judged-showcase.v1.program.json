@@ -1,0 +1,88 @@
+{
+  "id": "host-judged-showcase",
+  "version": 1,
+  "display_name": "Host-judged Showcase",
+  "theme_ref": "theme.host_judged_showcase",
+  "narrative_templates": [
+    {
+      "key": "theme.host_judged_showcase.opened",
+      "channel_id": "main",
+      "body": "{{event_template}} is accepting participants."
+    },
+    {
+      "key": "theme.host_judged_showcase.locked",
+      "channel_id": "main",
+      "body": "{{event_id}} is ready for judging with {{participant_count}} participants: {{participants}}."
+    },
+    {
+      "key": "theme.host_judged_showcase.resolved",
+      "channel_id": "main",
+      "body": "{{event_id}} was judged. Winners: {{winners}}. Rewards: {{rewards}}."
+    },
+    {
+      "key": "theme.host_judged_showcase.cancelled",
+      "channel_id": "main",
+      "body": "{{event_id}} was cancelled: {{cancellation_reason}}."
+    }
+  ],
+  "events": [
+    {
+      "id": "host-judged-showcase-d1",
+      "template_key": "theme.host_judged_showcase.event",
+      "phase_scope": {
+        "kind": "during_day",
+        "number": 1
+      },
+      "schedule": {
+        "kind": "on_trigger",
+        "trigger": {
+          "kind": "phase_opened",
+          "phase_id": "D01"
+        }
+      },
+      "participation": {
+        "who": "alive_slots",
+        "mode": "opt_in",
+        "limits": {
+          "minimum": 1,
+          "maximum": null
+        }
+      },
+      "resolution": "host_decision",
+      "rewards": [
+        {
+          "reward_key": "showcase_bonus",
+          "display_name_theme_key": "theme.host_judged_showcase.reward",
+          "effects": [
+            {
+              "recipient": {
+                "kind": "winner"
+              },
+              "operation": {
+                "kind": "grant",
+                "grant": {
+                  "grant_id": "showcase_bonus_action",
+                  "kind": "extra_action",
+                  "uses": 1,
+                  "vote_weight": null,
+                  "visibility": "public"
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "narrative": {
+        "opened": "theme.host_judged_showcase.opened",
+        "locked": "theme.host_judged_showcase.locked",
+        "resolved": "theme.host_judged_showcase.resolved",
+        "cancelled": "theme.host_judged_showcase.cancelled"
+      },
+      "channel_policy": {
+        "allowed_channels": [
+          "main"
+        ]
+      }
+    }
+  ]
+}

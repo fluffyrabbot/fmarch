@@ -133,7 +133,7 @@ export function setupCommandConfigForAction({
       return Object.freeze({
         action: "attach_day_program",
         game,
-        program: option.document,
+        programRef: option.programRef,
       });
     }
     case "start-game":

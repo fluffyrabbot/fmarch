@@ -341,7 +341,7 @@ pub enum Command {
     },
     AttachDayProgram {
         game: Uuid,
-        program: game_platform::DayProgram,
+        program_ref: game_platform::DayProgramRef,
     },
     ScheduleDayEvent {
         game: Uuid,
@@ -421,9 +421,20 @@ pub enum Command {
     },
 }
 
-impl From<Command> for commands::Command {
-    fn from(command: Command) -> Self {
-        match command {
+/// Transport commands either map directly to the command core or require an
+/// adapter-owned immutable artifact lookup first.
+#[derive(Debug, Clone, PartialEq)]
+pub enum CommandDispatch {
+    Direct(commands::Command),
+    AttachDayProgram {
+        game: Uuid,
+        program_ref: game_platform::DayProgramRef,
+    },
+}
+
+impl Command {
+    pub fn into_dispatch(self) -> CommandDispatch {
+        let command = match self {
             Command::CreateGame {
                 game,
                 pack,
@@ -519,8 +530,8 @@ impl From<Command> for commands::Command {
                 effects,
                 reason,
             },
-            Command::AttachDayProgram { game, program } => {
-                commands::Command::AttachDayProgram { game, program }
+            Command::AttachDayProgram { game, program_ref } => {
+                return CommandDispatch::AttachDayProgram { game, program_ref };
             }
             Command::ScheduleDayEvent { game, event } => {
                 commands::Command::ScheduleDayEvent { game, event }
@@ -640,7 +651,8 @@ impl From<Command> for commands::Command {
                 outgoing_user,
                 incoming_user,
             },
-        }
+        };
+        CommandDispatch::Direct(command)
     }
 }
 

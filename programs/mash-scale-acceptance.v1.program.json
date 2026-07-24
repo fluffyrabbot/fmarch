@@ -1,0 +1,270 @@
+{
+  "id": "mash-scale-acceptance",
+  "version": 1,
+  "display_name": "Mash Scale Acceptance",
+  "theme_ref": "theme.scale",
+  "narrative_templates": [
+    {
+      "key": "theme.scale.narrative.opened",
+      "channel_id": "main",
+      "body": "Scale event {{event_id}} opened."
+    },
+    {
+      "key": "theme.scale.narrative.locked",
+      "channel_id": "main",
+      "body": "Scale event {{event_id}} locked with {{participant_count}} participants."
+    }
+  ],
+  "events": [
+    {
+      "id": "scale-event-1",
+      "template_key": "scale.event.1",
+      "phase_scope": {
+        "kind": "during_day",
+        "number": 1
+      },
+      "schedule": {
+        "kind": "absolute",
+        "open_at": 100,
+        "lock_at": 200
+      },
+      "participation": {
+        "who": "alive_slots",
+        "mode": "opt_in",
+        "limits": {
+          "minimum": 1,
+          "maximum": 60
+        }
+      },
+      "resolution": "host_decision",
+      "rewards": [
+        {
+          "reward_key": "scale_reward",
+          "display_name_theme_key": "theme.scale.reward",
+          "effects": [
+            {
+              "recipient": {
+                "kind": "winner"
+              },
+              "operation": {
+                "kind": "mark",
+                "effect": "bomb"
+              }
+            }
+          ]
+        }
+      ],
+      "narrative": {
+        "opened": "theme.scale.narrative.opened",
+        "locked": "theme.scale.narrative.locked",
+        "resolved": null,
+        "cancelled": null
+      },
+      "channel_policy": {
+        "allowed_channels": [
+          "main"
+        ]
+      }
+    },
+    {
+      "id": "scale-event-2",
+      "template_key": "scale.event.2",
+      "phase_scope": {
+        "kind": "during_day",
+        "number": 1
+      },
+      "schedule": {
+        "kind": "absolute",
+        "open_at": 100,
+        "lock_at": 200
+      },
+      "participation": {
+        "who": "alive_slots",
+        "mode": "opt_in",
+        "limits": {
+          "minimum": 1,
+          "maximum": 60
+        }
+      },
+      "resolution": "host_decision",
+      "rewards": [
+        {
+          "reward_key": "scale_reward",
+          "display_name_theme_key": "theme.scale.reward",
+          "effects": [
+            {
+              "recipient": {
+                "kind": "winner"
+              },
+              "operation": {
+                "kind": "mark",
+                "effect": "bomb"
+              }
+            }
+          ]
+        }
+      ],
+      "narrative": {
+        "opened": "theme.scale.narrative.opened",
+        "locked": "theme.scale.narrative.locked",
+        "resolved": null,
+        "cancelled": null
+      },
+      "channel_policy": {
+        "allowed_channels": [
+          "main"
+        ]
+      }
+    },
+    {
+      "id": "scale-event-3",
+      "template_key": "scale.event.3",
+      "phase_scope": {
+        "kind": "during_day",
+        "number": 1
+      },
+      "schedule": {
+        "kind": "absolute",
+        "open_at": 100,
+        "lock_at": 200
+      },
+      "participation": {
+        "who": "alive_slots",
+        "mode": "opt_in",
+        "limits": {
+          "minimum": 1,
+          "maximum": 60
+        }
+      },
+      "resolution": "host_decision",
+      "rewards": [
+        {
+          "reward_key": "scale_reward",
+          "display_name_theme_key": "theme.scale.reward",
+          "effects": [
+            {
+              "recipient": {
+                "kind": "winner"
+              },
+              "operation": {
+                "kind": "mark",
+                "effect": "bomb"
+              }
+            }
+          ]
+        }
+      ],
+      "narrative": {
+        "opened": "theme.scale.narrative.opened",
+        "locked": "theme.scale.narrative.locked",
+        "resolved": null,
+        "cancelled": null
+      },
+      "channel_policy": {
+        "allowed_channels": [
+          "main"
+        ]
+      }
+    },
+    {
+      "id": "scale-event-4",
+      "template_key": "scale.event.4",
+      "phase_scope": {
+        "kind": "during_day",
+        "number": 1
+      },
+      "schedule": {
+        "kind": "absolute",
+        "open_at": 100,
+        "lock_at": 200
+      },
+      "participation": {
+        "who": "alive_slots",
+        "mode": "opt_in",
+        "limits": {
+          "minimum": 1,
+          "maximum": 60
+        }
+      },
+      "resolution": "host_decision",
+      "rewards": [
+        {
+          "reward_key": "scale_reward",
+          "display_name_theme_key": "theme.scale.reward",
+          "effects": [
+            {
+              "recipient": {
+                "kind": "winner"
+              },
+              "operation": {
+                "kind": "mark",
+                "effect": "bomb"
+              }
+            }
+          ]
+        }
+      ],
+      "narrative": {
+        "opened": "theme.scale.narrative.opened",
+        "locked": "theme.scale.narrative.locked",
+        "resolved": null,
+        "cancelled": null
+      },
+      "channel_policy": {
+        "allowed_channels": [
+          "main"
+        ]
+      }
+    },
+    {
+      "id": "scale-event-5",
+      "template_key": "scale.event.5",
+      "phase_scope": {
+        "kind": "during_day",
+        "number": 1
+      },
+      "schedule": {
+        "kind": "absolute",
+        "open_at": 100,
+        "lock_at": 200
+      },
+      "participation": {
+        "who": "alive_slots",
+        "mode": "opt_in",
+        "limits": {
+          "minimum": 1,
+          "maximum": 60
+        }
+      },
+      "resolution": "host_decision",
+      "rewards": [
+        {
+          "reward_key": "scale_reward",
+          "display_name_theme_key": "theme.scale.reward",
+          "effects": [
+            {
+              "recipient": {
+                "kind": "winner"
+              },
+              "operation": {
+                "kind": "mark",
+                "effect": "bomb"
+              }
+            }
+          ]
+        }
+      ],
+      "narrative": {
+        "opened": "theme.scale.narrative.opened",
+        "locked": "theme.scale.narrative.locked",
+        "resolved": null,
+        "cancelled": null
+      },
+      "channel_policy": {
+        "allowed_channels": [
+          "main"
+        ]
+      }
+    }
+  ]
+}

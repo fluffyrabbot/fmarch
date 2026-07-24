@@ -141,17 +141,21 @@ async fn test_command(
             .and_then(|value| value.strip_prefix("Bearer "))
             .unwrap_or("missing-session"),
     );
-    let body = match commands::handle_idempotent(
-        &state.pool,
-        &principal,
-        msg.command_id,
-        msg.command.into(),
-    )
-    .await
-    {
-        Ok(ack) => ServerMsg::Ack(AckMsg::from(ack)),
-        Err(reject) => ServerMsg::Reject(RejectMsg::from(reject)),
+    let wire::CommandDispatch::Direct(command) = msg.command.into_dispatch() else {
+        return Json(ServerEnvelope::new(
+            envelope.id,
+            ServerMsg::Reject(RejectMsg {
+                error: RejectCode::DayProgramValidation,
+                retryable: false,
+                message: "operator test adapter does not resolve program artifacts".to_string(),
+            }),
+        ));
     };
+    let body =
+        match commands::handle_idempotent(&state.pool, &principal, msg.command_id, command).await {
+            Ok(ack) => ServerMsg::Ack(AckMsg::from(ack)),
+            Err(reject) => ServerMsg::Reject(RejectMsg::from(reject)),
+        };
     Json(ServerEnvelope::new(envelope.id, body))
 }
 

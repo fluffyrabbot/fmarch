@@ -3007,8 +3007,9 @@ async fn host_setup_sequence_commits_to_setup_state(pool: sqlx::PgPool) {
     .unwrap();
     let app = router(pool);
     let game = Uuid::new_v4();
-    let bakery_program: game_platform::DayProgram =
-        serde_json::from_str(include_str!("../../../programs/bakery.json")).unwrap();
+    let raffle_program: game_platform::DayProgram =
+        serde_json::from_str(include_str!("../../../programs/raffle.v1.program.json")).unwrap();
+    let raffle_program_ref = raffle_program.artifact_ref().unwrap();
     for (id, command) in [
         (
             1,
@@ -3053,7 +3054,7 @@ async fn host_setup_sequence_commits_to_setup_state(pool: sqlx::PgPool) {
             6,
             Command::AttachDayProgram {
                 game,
-                program: bakery_program.clone(),
+                program_ref: raffle_program_ref.clone(),
             },
         ),
         (
@@ -3066,6 +3067,23 @@ async fn host_setup_sequence_commits_to_setup_state(pool: sqlx::PgPool) {
     ] {
         expect_ack(post_command(app.clone(), id, "host_h", command).await);
     }
+    expect_reject(
+        post_command(
+            app.clone(),
+            8,
+            "host_h",
+            Command::AttachDayProgram {
+                game,
+                program_ref: game_platform::DayProgramRef {
+                    id: raffle_program_ref.id.clone(),
+                    version: raffle_program_ref.version,
+                    content_hash: game_platform::ProgramContentHash::new("0".repeat(64)).unwrap(),
+                },
+            },
+        )
+        .await,
+        RejectCode::DayProgramValidation,
+    );
 
     let host_token = issue_dev_session(&app, "host_h", &[]).await;
     let response = app
@@ -3096,16 +3114,17 @@ async fn host_setup_sequence_commits_to_setup_state(pool: sqlx::PgPool) {
         .any(|role| role.key == "vanilla_townie" && role.label == "Vanilla Townie"));
     assert!(setup.pack.start_phase_options.contains(&"D01".to_string()));
     assert!(setup.program_catalog.iter().any(|option| {
-        option.document == bakery_program
-            && option.content_hash == bakery_program.content_hash().unwrap().as_str()
+        option.program_ref == raffle_program_ref
+            && option.display_name == raffle_program.display_name
+            && option.event_count == raffle_program.events.len()
             && option.compatibility.attachable
             && option.compatibility.issues.is_empty()
             && option.schedule_previews.len() == 1
-            && option.schedule_previews[0].event_id == "bakery-cookie-d1"
+            && option.schedule_previews[0].event_id == "raffle-d1"
             && option.schedule_previews[0].mode == "host_opened"
     }));
     assert_eq!(setup.attached_programs.len(), 1);
-    assert_eq!(setup.attached_programs[0].program_id, "bakery");
+    assert_eq!(setup.attached_programs[0].program_id, "raffle");
     assert_eq!(setup.attached_programs[0].version, 1);
     assert_eq!(setup.attached_programs[0].event_count, 1);
     assert_eq!(setup.accounts.len(), 1);

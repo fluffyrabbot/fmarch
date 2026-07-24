@@ -273,23 +273,19 @@ test("admin actions map to bootstrap wire command variants", () => {
     buildAdminCommand({
       action: "attach_day_program",
       game: "00000000-0000-0000-0000-000000000123",
-      program: {
-        id: "bakery",
+      programRef: {
+        id: "raffle",
         version: 1,
-        display_name: "Bakery",
-        theme_ref: "theme.bakery",
-        events: [],
+        contentHash: "a".repeat(64),
       },
     }),
     {
       AttachDayProgram: {
         game: "00000000-0000-0000-0000-000000000123",
-        program: {
-          id: "bakery",
+        program_ref: {
+          id: "raffle",
           version: 1,
-          display_name: "Bakery",
-          theme_ref: "theme.bakery",
-          events: [],
+          content_hash: "a".repeat(64),
         },
       },
     },

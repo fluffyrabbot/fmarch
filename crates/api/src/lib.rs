@@ -6,6 +6,7 @@
 
 pub mod identity_delivery;
 pub mod mash_scale;
+pub mod program_library;
 
 use crate::identity_delivery::{
     delivery_aad, process_identity_delivery_intent, IdentityDeliveryError, IdentityDeliveryGateway,
@@ -5283,6 +5284,28 @@ enum PostMediaPreparationError {
     Invariant(&'static str),
 }
 
+async fn prepare_wire_command(
+    state: &ApiState,
+    command: wire::Command,
+) -> Result<commands::Command, commands::Reject> {
+    let command = match command.into_dispatch() {
+        wire::CommandDispatch::Direct(command) => command,
+        wire::CommandDispatch::AttachDayProgram { game, program_ref } => {
+            let library = program_library::load_checked_in_program_library().map_err(|error| {
+                commands::Reject::Internal(format!("load checked-in day-program library: {error}"))
+            })?;
+            let artifact = library
+                .resolve(&program_ref, program_library::ProgramAudience::Product)
+                .map_err(|error| commands::Reject::DayProgramValidation(error.to_string()))?;
+            commands::Command::AttachDayProgram {
+                game,
+                program: artifact.document.clone(),
+            }
+        }
+    };
+    prepare_command_media(state, command).await
+}
+
 async fn prepare_command_media(
     state: &ApiState,
     mut command: commands::Command,
@@ -5427,7 +5450,7 @@ async fn command(
         None => None,
     };
     let principal = Principal::user(principal_user_id);
-    let prepared_command = prepare_command_media(&state, msg.command.into()).await;
+    let prepared_command = prepare_wire_command(&state, msg.command).await;
     let body = match prepared_command {
         Err(reject) => ServerMsg::Reject(RejectMsg::from(reject)),
         Ok(command) => {
@@ -8122,8 +8145,10 @@ pub struct HostSetupStateResponse {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct HostSetupProgramOption {
-    pub document: game_platform::DayProgram,
-    pub content_hash: String,
+    pub program_ref: game_platform::DayProgramRef,
+    pub display_name: String,
+    pub theme_ref: Option<String>,
+    pub event_count: usize,
     pub compatibility: HostSetupProgramCompatibility,
     pub schedule_previews: Vec<HostSetupProgramSchedulePreview>,
 }
@@ -8144,6 +8169,11 @@ pub struct HostSetupProgramCompatibilityIssue {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct HostSetupProgramSchedulePreview {
     pub event_id: String,
+    pub template_key: String,
+    pub participant_filter: String,
+    pub participation_mode: String,
+    pub resolution_mode: String,
+    pub reward_keys: Vec<String>,
     pub mode: String,
     pub phase_id: Option<String>,
     pub open_at: Option<i64>,
@@ -8861,38 +8891,15 @@ fn load_pack_by_name(pack_name: &str) -> Result<domain::Pack, ApiError> {
 fn product_day_program_catalog(
     pack: &domain::Pack,
 ) -> Result<Vec<HostSetupProgramOption>, ApiError> {
-    let root = FsPath::new(env!("CARGO_MANIFEST_DIR")).join("../../programs");
-    let entries = std::fs::read_dir(&root).map_err(|err| ApiError::Reject {
-        status: StatusCode::INTERNAL_SERVER_ERROR,
-        error: RejectCode::Internal,
-        message: format!("read day-program catalog {}: {err}", root.display()),
-    })?;
+    let library =
+        program_library::load_checked_in_program_library().map_err(|error| ApiError::Reject {
+            status: StatusCode::INTERNAL_SERVER_ERROR,
+            error: RejectCode::Internal,
+            message: format!("load checked-in day-program library: {error}"),
+        })?;
     let mut programs = Vec::new();
-    for entry in entries {
-        let entry = entry.map_err(|err| ApiError::Reject {
-            status: StatusCode::INTERNAL_SERVER_ERROR,
-            error: RejectCode::Internal,
-            message: format!("read day-program catalog entry: {err}"),
-        })?;
-        let path = entry.path();
-        let file_name = entry.file_name().to_string_lossy().to_string();
-        if file_name.starts_with("test_")
-            || path.extension().and_then(|extension| extension.to_str()) != Some("json")
-        {
-            continue;
-        }
-        let raw = std::fs::read_to_string(&path).map_err(|err| ApiError::Reject {
-            status: StatusCode::INTERNAL_SERVER_ERROR,
-            error: RejectCode::Internal,
-            message: format!("read day program {}: {err}", path.display()),
-        })?;
-        let document: game_platform::DayProgram =
-            serde_json::from_str(&raw).map_err(|err| ApiError::Reject {
-                status: StatusCode::INTERNAL_SERVER_ERROR,
-                error: RejectCode::Internal,
-                message: format!("decode day program {}: {err}", path.display()),
-            })?;
-        let compatibility = commands::day_program::inspect(pack, &document);
+    for artifact in library.for_audience(program_library::ProgramAudience::Product) {
+        let compatibility = commands::day_program::inspect(pack, &artifact.document);
         let compilation = compatibility
             .compilation
             .as_ref()
@@ -8900,12 +8907,12 @@ fn product_day_program_catalog(
                 status: StatusCode::INTERNAL_SERVER_ERROR,
                 error: RejectCode::Internal,
                 message: format!(
-                    "validate day program {}: {}",
-                    path.display(),
+                    "validate day program {}@{}: {}",
+                    artifact.program_ref.id,
+                    artifact.program_ref.version,
                     compatibility.summary()
                 ),
             })?;
-        let content_hash = compilation.content_hash.to_string();
         let schedule_previews = compilation
             .events
             .iter()
@@ -8913,6 +8920,38 @@ fn product_day_program_catalog(
                 let schedule = game_platform::day_schedule::compile(&event.schedule);
                 let mut preview = HostSetupProgramSchedulePreview {
                     event_id: event.id.as_str().to_string(),
+                    template_key: event.template_key.as_str().to_string(),
+                    participant_filter: match event.participation.who {
+                        game_platform::ParticipantFilter::AliveSlots => "alive_slots",
+                        game_platform::ParticipantFilter::AllOccupied => "all_occupied",
+                        game_platform::ParticipantFilter::HostInvited => "host_invited",
+                        game_platform::ParticipantFilter::ChannelMembers => "channel_members",
+                    }
+                    .to_string(),
+                    participation_mode: match event.participation.mode {
+                        game_platform::ParticipationMode::OptIn => "opt_in",
+                        game_platform::ParticipationMode::SubmitChoice => "submit_choice",
+                        game_platform::ParticipationMode::SubmitFreeformRef => {
+                            "submit_freeform_ref"
+                        }
+                        game_platform::ParticipationMode::VoteAmongOptions => "vote_among_options",
+                    }
+                    .to_string(),
+                    resolution_mode: match event.resolution {
+                        game_platform::DayEventResolutionMode::HostDecision => "host_decision",
+                        game_platform::DayEventResolutionMode::Auto {
+                            policy: game_platform::AutoResolvePolicy::FirstN { .. },
+                        } => "auto_first_n",
+                        game_platform::DayEventResolutionMode::Auto {
+                            policy: game_platform::AutoResolvePolicy::SeededRandom { .. },
+                        } => "auto_seeded_random",
+                    }
+                    .to_string(),
+                    reward_keys: event
+                        .rewards
+                        .iter()
+                        .map(|reward| reward.reward_key.as_str().to_string())
+                        .collect(),
                     mode: String::new(),
                     phase_id: None,
                     open_at: None,
@@ -8970,18 +9009,23 @@ fn product_day_program_catalog(
                 .collect(),
         };
         programs.push(HostSetupProgramOption {
-            document,
-            content_hash,
+            program_ref: artifact.program_ref.clone(),
+            display_name: artifact.document.display_name.clone(),
+            theme_ref: artifact
+                .document
+                .theme_ref
+                .as_ref()
+                .map(ToString::to_string),
+            event_count: artifact.document.events.len(),
             compatibility,
             schedule_previews,
         });
     }
     programs.sort_by(|left, right| {
-        left.document
+        left.program_ref
             .id
-            .as_str()
-            .cmp(right.document.id.as_str())
-            .then(left.document.version.cmp(&right.document.version))
+            .cmp(&right.program_ref.id)
+            .then(left.program_ref.version.cmp(&right.program_ref.version))
     });
     Ok(programs)
 }
@@ -8992,40 +9036,48 @@ mod day_program_catalog_tests {
 
     #[test]
     fn setup_catalog_annotates_compatibility_for_every_product_pack() {
-        let expected = BTreeMap::from([
-            ("chinese_structured", false),
-            ("default_open", false),
-            ("epicmafia", false),
-            ("mafia_universe", true),
-            ("mafiascum", true),
-        ]);
         let product_packs = product_pack_catalog().unwrap();
         assert_eq!(
             product_packs
                 .iter()
                 .map(|pack| pack.key.as_str())
                 .collect::<BTreeSet<_>>(),
-            expected.keys().copied().collect(),
+            BTreeSet::from([
+                "chinese_structured",
+                "default_open",
+                "epicmafia",
+                "mafia_universe",
+                "mafiascum",
+            ]),
             "every newly shipped pack must declare the expected catalog compatibility"
         );
         for product_pack in product_packs {
             let pack_key = product_pack.key;
-            let expected_attachable = expected[pack_key.as_str()];
             let pack = load_pack_by_name(&pack_key).unwrap();
             let catalog = product_day_program_catalog(&pack).unwrap();
-            let bakery = catalog
+            assert_eq!(catalog.len(), 3);
+            assert!(catalog
                 .iter()
-                .find(|option| option.document.id.as_str() == "bakery")
-                .expect("bakery remains visible with derived compatibility");
+                .all(|option| option.compatibility.attachable
+                    && option.compatibility.issues.is_empty()));
+            let modes = catalog
+                .iter()
+                .map(|option| {
+                    (
+                        option.program_ref.id.as_str(),
+                        option.schedule_previews[0].mode.as_str(),
+                    )
+                })
+                .collect::<BTreeMap<_, _>>();
             assert_eq!(
-                bakery.compatibility.attachable, expected_attachable,
-                "unexpected setup availability for {pack_key}: {:?}",
-                bakery.compatibility.issues
+                modes,
+                BTreeMap::from([
+                    ("host-judged-showcase", "on_trigger"),
+                    ("opt-in-quest", "relative_to_phase"),
+                    ("raffle", "host_opened"),
+                ]),
+                "unexpected product program schedule preview for {pack_key}"
             );
-            assert_eq!(bakery.compatibility.issues.is_empty(), expected_attachable);
-            assert_eq!(bakery.schedule_previews.len(), 1);
-            assert_eq!(bakery.schedule_previews[0].event_id, "bakery-cookie-d1");
-            assert_eq!(bakery.schedule_previews[0].mode, "host_opened");
         }
     }
 }

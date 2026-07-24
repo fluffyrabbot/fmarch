@@ -165,20 +165,32 @@ test("host setup preserves pack-derived program compatibility diagnostics", () =
       },
       program_catalog: [
         {
-          content_hash: "a".repeat(64),
+          program_ref: {
+            id: "raffle",
+            version: 1,
+            content_hash: "a".repeat(64),
+          },
+          display_name: "Raffle",
+          theme_ref: "theme.raffle",
+          event_count: 1,
           compatibility: {
             attachable: false,
             issues: [
               {
                 code: "undeclared_persistent_effect",
-                event_id: "bakery-cookie-d1",
+                event_id: "raffle-d1",
                 message: "effect `bomb` is not declared by pack `default_open`",
               },
             ],
           },
           schedule_previews: [
             {
-              event_id: "bakery-cookie-d1",
+              event_id: "raffle-d1",
+              template_key: "theme.raffle.event",
+              participant_filter: "alive_slots",
+              participation_mode: "opt_in",
+              resolution_mode: "auto_seeded_random",
+              reward_keys: ["raffle_bonus"],
               mode: "relative_to_phase",
               phase_id: "D01",
               open_at: null,
@@ -188,13 +200,6 @@ test("host setup preserves pack-derived program compatibility diagnostics", () =
               trigger: null,
             },
           ],
-          document: {
-            id: "bakery",
-            version: 1,
-            display_name: "Bakery",
-            theme_ref: "theme.bakery",
-            events: [],
-          },
         },
       ],
       attached_programs: [],
@@ -204,17 +209,28 @@ test("host setup preserves pack-derived program compatibility diagnostics", () =
     { game },
   );
 
+  assert.deepEqual(setupState.programCatalog[0].programRef, {
+    id: "raffle",
+    version: 1,
+    contentHash: "a".repeat(64),
+  });
+  assert.equal("document" in setupState.programCatalog[0], false);
   assert.equal(setupState.programCatalog[0].compatibility.attachable, false);
   assert.deepEqual(setupState.programCatalog[0].compatibility.issues, [
     {
       code: "undeclared_persistent_effect",
-      eventId: "bakery-cookie-d1",
+      eventId: "raffle-d1",
       message: "effect `bomb` is not declared by pack `default_open`",
     },
   ]);
   assert.deepEqual(setupState.programCatalog[0].schedulePreviews, [
     {
-      eventId: "bakery-cookie-d1",
+      eventId: "raffle-d1",
+      templateKey: "theme.raffle.event",
+      participantFilter: "alive_slots",
+      participationMode: "opt_in",
+      resolutionMode: "auto_seeded_random",
+      rewardKeys: ["raffle_bonus"],
       mode: "relative_to_phase",
       phaseId: "D01",
       openAt: null,

@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 
-export const mashScaleAcceptanceVersion = 1;
+export const mashScaleAcceptanceVersion = 2;
 
 export function mashScaleAcceptanceDiff(report) {
   const diffs = [];
@@ -9,6 +9,13 @@ export function mashScaleAcceptanceDiff(report) {
   check(report?.ok === true, "ok", diffs);
   check(typeof report?.artifact_path === "string" && report.artifact_path.length > 0, "artifact_path", diffs);
   check(typeof report?.proof_boundary === "string" && report.proof_boundary.includes("60-seat"), "proof_boundary", diffs);
+  check(report?.program_ref?.id === "mash-scale-acceptance", "program_ref.id", diffs);
+  check(report?.program_ref?.version === 1, "program_ref.version", diffs);
+  check(
+    /^[0-9a-f]{64}$/u.test(report?.program_ref?.content_hash ?? ""),
+    "program_ref.content_hash",
+    diffs,
+  );
   check(report?.roster_count === 60, "roster_count", diffs);
   check(report?.event_count === 5, "event_count", diffs);
   check(report?.total_participation_rows === 300, "total_participation_rows", diffs);

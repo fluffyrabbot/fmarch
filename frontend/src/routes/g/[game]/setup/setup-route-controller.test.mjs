@@ -14,20 +14,18 @@ const data = Object.freeze({
   commandEndpoint: "/commands",
   start: Object.freeze({ defaultPhase: "D01" }),
 });
-const bakeryProgram = Object.freeze({
-  id: "bakery",
+const raffleProgramRef = Object.freeze({
+  id: "raffle",
   version: 1,
-  display_name: "Bakery",
-  theme_ref: "theme.bakery",
-  events: Object.freeze([]),
+  contentHash: "a".repeat(64),
 });
 const setupState = Object.freeze({
   pack: Object.freeze({ key: "mafiascum" }),
   programCatalog: Object.freeze([
     Object.freeze({
-      id: "bakery",
+      id: "raffle",
       version: 1,
-      document: bakeryProgram,
+      programRef: raffleProgramRef,
       compatibility: Object.freeze({ attachable: true, issues: Object.freeze([]) }),
     }),
   ]),
@@ -39,12 +37,12 @@ test("setup form actions map to typed bootstrap command configs", () => {
       actionId: "attach-day-program",
       data,
       setupState,
-      formData: formData({ programId: "bakery@1" }),
+      formData: formData({ programId: "raffle@1" }),
     }),
     {
       action: "attach_day_program",
       game: data.game.id,
-      program: bakeryProgram,
+      programRef: raffleProgramRef,
     },
   );
 
@@ -141,13 +139,13 @@ test("setup command sender dispatches Rust wire command envelopes", async () => 
   });
 });
 
-test("setup program sender dispatches the exact previewed document", async () => {
+test("setup program sender dispatches only the immutable catalog reference", async () => {
   let captured = null;
   await sendHostSetupCommand({
     actionId: "attach-day-program",
     data,
     setupState,
-    formData: formData({ programId: "bakery@1" }),
+    formData: formData({ programId: "raffle@1" }),
     sendCommandImpl: async (request) => {
       captured = request;
       return { state: "ack", message: "Ack: stream seqs 4, 5" };
@@ -157,7 +155,11 @@ test("setup program sender dispatches the exact previewed document", async () =>
   assert.deepEqual(captured.command, {
     AttachDayProgram: {
       game: data.game.id,
-      program: bakeryProgram,
+      program_ref: {
+        id: "raffle",
+        version: 1,
+        content_hash: "a".repeat(64),
+      },
     },
   });
 });
@@ -172,9 +174,9 @@ test("setup refuses a program the authoritative compiler marked incompatible", (
           pack: { key: "default_open" },
           programCatalog: [
             {
-              id: "bakery",
+              id: "raffle",
               version: 1,
-              document: bakeryProgram,
+              programRef: raffleProgramRef,
               compatibility: {
                 attachable: false,
                 issues: [{ code: "undeclared_persistent_effect" }],
@@ -182,7 +184,7 @@ test("setup refuses a program the authoritative compiler marked incompatible", (
             },
           ],
         },
-        formData: formData({ programId: "bakery@1" }),
+        formData: formData({ programId: "raffle@1" }),
       }),
     /day program is incompatible with default_open/,
   );

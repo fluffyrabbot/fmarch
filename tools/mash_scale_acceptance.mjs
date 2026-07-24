@@ -37,7 +37,8 @@ try {
     JSON.parse(await readFile(artifactPath, "utf8")),
   );
   console.log(
-    `mash scale acceptance passed: ${report.roster_count} slots, ` +
+    `mash scale acceptance passed: ${report.program_ref.id}@${report.program_ref.version} ` +
+      `(${report.program_ref.content_hash.slice(0, 12)}), ${report.roster_count} slots, ` +
       `${report.total_participation_rows} participation rows, ` +
       `${report.concurrency.elapsed_ms}ms contention, ` +
       `${report.rebuild.elapsed_ms}ms rebuild`,

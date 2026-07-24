@@ -124,15 +124,22 @@ export function normalizeHostSetupState(raw, { game }) {
     }),
     programCatalog: Object.freeze(
       programCatalog.map((option) => {
-        const document = structuredCloneValue(option.document);
+        const programRef = option.program_ref ?? {};
+        const id = normalizeId(programRef.id, "program_catalog.program_ref.id");
+        const version = Number(programRef.version);
+        const contentHash = normalizeId(
+          programRef.content_hash,
+          "program_catalog.program_ref.content_hash",
+        );
         return Object.freeze({
-          id: normalizeId(document.id, "program_catalog.document.id"),
-          version: Number(document.version),
+          id,
+          version,
           displayName:
-            normalizeOptionalText(document.display_name) ?? humanizeIdentifier(document.id),
-          themeRef: normalizeOptionalText(document.theme_ref),
-          contentHash: normalizeId(option.content_hash, "program_catalog.content_hash"),
-          eventCount: Array.isArray(document.events) ? document.events.length : 0,
+            normalizeOptionalText(option.display_name) ?? humanizeIdentifier(id),
+          themeRef: normalizeOptionalText(option.theme_ref),
+          contentHash,
+          eventCount: Number(option.event_count),
+          programRef: Object.freeze({ id, version, contentHash }),
           compatibility: Object.freeze({
             attachable: option.compatibility?.attachable === true,
             issues: Object.freeze(
@@ -159,6 +166,25 @@ export function normalizeHostSetupState(raw, { game }) {
                     preview.event_id,
                     "program_catalog.schedule_preview.event_id",
                   ),
+                  templateKey: normalizeId(
+                    preview.template_key,
+                    "program_catalog.schedule_preview.template_key",
+                  ),
+                  participantFilter: normalizeId(
+                    preview.participant_filter,
+                    "program_catalog.schedule_preview.participant_filter",
+                  ),
+                  participationMode: normalizeId(
+                    preview.participation_mode,
+                    "program_catalog.schedule_preview.participation_mode",
+                  ),
+                  resolutionMode: normalizeId(
+                    preview.resolution_mode,
+                    "program_catalog.schedule_preview.resolution_mode",
+                  ),
+                  rewardKeys: Object.freeze(
+                    (Array.isArray(preview.reward_keys) ? preview.reward_keys : []).map(String),
+                  ),
                   mode: normalizeId(preview.mode, "program_catalog.schedule_preview.mode"),
                   phaseId: normalizeOptionalText(preview.phase_id),
                   openAt: Number.isFinite(preview.open_at) ? Number(preview.open_at) : null,
@@ -173,7 +199,6 @@ export function normalizeHostSetupState(raw, { game }) {
                 }),
             ),
           ),
-          document: deepFreeze(document),
         });
       }),
     ),
@@ -339,14 +364,26 @@ function hostSetupFixtureState({ game }) {
     ]),
     program_catalog: Object.freeze([
       Object.freeze({
-        content_hash: "0000000000000000000000000000000000000000000000000000000000000000",
+        program_ref: Object.freeze({
+          id: "raffle",
+          version: 1,
+          content_hash: "0000000000000000000000000000000000000000000000000000000000000000",
+        }),
+        display_name: "Raffle",
+        theme_ref: "theme.raffle",
+        event_count: 1,
         compatibility: Object.freeze({
           attachable: true,
           issues: Object.freeze([]),
         }),
         schedule_previews: Object.freeze([
           Object.freeze({
-            event_id: "bakery-cookie-d1",
+            event_id: "raffle-d1",
+            template_key: "theme.raffle.event",
+            participant_filter: "alive_slots",
+            participation_mode: "opt_in",
+            resolution_mode: "auto_seeded_random",
+            reward_keys: Object.freeze(["raffle_bonus"]),
             mode: "host_opened",
             phase_id: null,
             open_at: null,
@@ -356,18 +393,6 @@ function hostSetupFixtureState({ game }) {
             trigger: null,
           }),
         ]),
-        document: Object.freeze({
-          id: "bakery",
-          version: 1,
-          display_name: "Bakery",
-          theme_ref: "theme.bakery",
-          events: Object.freeze([
-            Object.freeze({
-              id: "bakery-cookie-d1",
-              template_key: "theme.bakery.cookie_raffle",
-            }),
-          ]),
-        }),
       }),
     ]),
     attached_programs: Object.freeze([]),

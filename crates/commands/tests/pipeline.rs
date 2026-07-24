@@ -5121,8 +5121,10 @@ async fn incompatible_day_program_rejects_before_any_program_fact(pool: PgPool) 
     )
     .await
     .expect("create game");
-    let program: game_platform::DayProgram =
-        serde_json::from_str(include_str!("../../../programs/bakery.json")).unwrap();
+    let program: game_platform::DayProgram = serde_json::from_str(include_str!(
+        "../../../programs/mash-scale-acceptance.v1.program.json"
+    ))
+    .unwrap();
     let before: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM events WHERE stream_id = $1")
         .bind(game)
         .fetch_one(&pool)
@@ -5139,7 +5141,7 @@ async fn incompatible_day_program_rejects_before_any_program_fact(pool: PgPool) 
     assert!(matches!(
         rejection,
         Reject::DayProgramValidation(ref message)
-            if message.contains("bakery-cookie-d1")
+            if message.contains("scale-event-1")
                 && message.contains("not declared by pack `default_open`")
     ));
     let after: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM events WHERE stream_id = $1")

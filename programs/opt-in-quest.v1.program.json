@@ -1,0 +1,94 @@
+{
+  "id": "opt-in-quest",
+  "version": 1,
+  "display_name": "Opt-in Quest",
+  "theme_ref": "theme.opt_in_quest",
+  "narrative_templates": [
+    {
+      "key": "theme.opt_in_quest.opened",
+      "channel_id": "main",
+      "body": "{{event_template}} is open for volunteers."
+    },
+    {
+      "key": "theme.opt_in_quest.locked",
+      "channel_id": "main",
+      "body": "{{event_id}} set out with {{participant_count}} volunteers: {{participants}}."
+    },
+    {
+      "key": "theme.opt_in_quest.resolved",
+      "channel_id": "main",
+      "body": "{{event_id}} completed. Winners: {{winners}}. Rewards: {{rewards}}."
+    },
+    {
+      "key": "theme.opt_in_quest.cancelled",
+      "channel_id": "main",
+      "body": "{{event_id}} was cancelled: {{cancellation_reason}}."
+    }
+  ],
+  "events": [
+    {
+      "id": "opt-in-quest-d1",
+      "template_key": "theme.opt_in_quest.event",
+      "phase_scope": {
+        "kind": "during_day",
+        "number": 1
+      },
+      "schedule": {
+        "kind": "relative_to_phase",
+        "phase_id": "D01",
+        "open_offset": 600,
+        "lock_offset": 3600
+      },
+      "participation": {
+        "who": "all_occupied",
+        "mode": "opt_in",
+        "limits": {
+          "minimum": 1,
+          "maximum": null
+        }
+      },
+      "resolution": {
+        "auto": {
+          "policy": {
+            "kind": "first_n",
+            "winners": 1
+          }
+        }
+      },
+      "rewards": [
+        {
+          "reward_key": "quest_bonus",
+          "display_name_theme_key": "theme.opt_in_quest.reward",
+          "effects": [
+            {
+              "recipient": {
+                "kind": "winner"
+              },
+              "operation": {
+                "kind": "grant",
+                "grant": {
+                  "grant_id": "quest_bonus_action",
+                  "kind": "extra_action",
+                  "uses": 1,
+                  "vote_weight": null,
+                  "visibility": "public"
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "narrative": {
+        "opened": "theme.opt_in_quest.opened",
+        "locked": "theme.opt_in_quest.locked",
+        "resolved": "theme.opt_in_quest.resolved",
+        "cancelled": "theme.opt_in_quest.cancelled"
+      },
+      "channel_policy": {
+        "allowed_channels": [
+          "main"
+        ]
+      }
+    }
+  ]
+}

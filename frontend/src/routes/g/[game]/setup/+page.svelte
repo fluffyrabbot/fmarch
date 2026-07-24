@@ -444,11 +444,11 @@
                         </div>
                       {/if}
                       <ul class="host-setup__checklist">
-                        {#each option.document.events as event}
+                        {#each option.schedulePreviews as event}
                           <li>
-                            <span>{event.id}</span>
-                            <strong>{event.template_key}</strong>
-                            <small>{schedulePreviewLabel(option.schedulePreviews.find((preview) => preview.eventId === event.id))}</small>
+                            <span>{event.eventId}</span>
+                            <strong>{event.templateKey}</strong>
+                            <small>{schedulePreviewLabel(event)} · {event.participantFilter} · {event.resolutionMode} · {event.rewardKeys.join(", ")}</small>
                           </li>
                         {/each}
                       </ul>

@@ -1,0 +1,91 @@
+{
+  "id": "raffle",
+  "version": 1,
+  "display_name": "Raffle",
+  "theme_ref": "theme.raffle",
+  "narrative_templates": [
+    {
+      "key": "theme.raffle.opened",
+      "channel_id": "main",
+      "body": "The {{event_template}} raffle is open. Join before it locks."
+    },
+    {
+      "key": "theme.raffle.locked",
+      "channel_id": "main",
+      "body": "{{event_id}} locked with {{participant_count}} entrants: {{participants}}."
+    },
+    {
+      "key": "theme.raffle.resolved",
+      "channel_id": "main",
+      "body": "{{event_id}} drew {{winners}}. Rewards: {{rewards}}."
+    },
+    {
+      "key": "theme.raffle.cancelled",
+      "channel_id": "main",
+      "body": "{{event_id}} was cancelled: {{cancellation_reason}}."
+    }
+  ],
+  "events": [
+    {
+      "id": "raffle-d1",
+      "template_key": "theme.raffle.event",
+      "phase_scope": {
+        "kind": "during_day",
+        "number": 1
+      },
+      "schedule": {
+        "kind": "host_opened"
+      },
+      "participation": {
+        "who": "alive_slots",
+        "mode": "opt_in",
+        "limits": {
+          "minimum": 1,
+          "maximum": null
+        }
+      },
+      "resolution": {
+        "auto": {
+          "policy": {
+            "kind": "seeded_random",
+            "winners": 1
+          }
+        }
+      },
+      "rewards": [
+        {
+          "reward_key": "raffle_bonus",
+          "display_name_theme_key": "theme.raffle.reward",
+          "effects": [
+            {
+              "recipient": {
+                "kind": "winner"
+              },
+              "operation": {
+                "kind": "grant",
+                "grant": {
+                  "grant_id": "raffle_bonus_action",
+                  "kind": "extra_action",
+                  "uses": 1,
+                  "vote_weight": null,
+                  "visibility": "public"
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "narrative": {
+        "opened": "theme.raffle.opened",
+        "locked": "theme.raffle.locked",
+        "resolved": "theme.raffle.resolved",
+        "cancelled": "theme.raffle.cancelled"
+      },
+      "channel_policy": {
+        "allowed_channels": [
+          "main"
+        ]
+      }
+    }
+  ]
+}

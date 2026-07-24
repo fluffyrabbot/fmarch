@@ -13,13 +13,7 @@ use commands::day_scheduler::{
     SchedulerError,
 };
 use commands::{Command, Reject};
-use game_platform::{
-    ChannelId, ContentRef, DayEventId, DayEventResolutionMode, DayEventSchedule, DayEventTemplate,
-    EffectOperationTemplate, EventChannelPolicy, NarrativeTemplate, NarrativeTemplates,
-    ParticipantFilter, ParticipationLimits, ParticipationMode, ParticipationPayload,
-    ParticipationSpec, PhaseScope, ProgramId, RecipientSelector, RewardBinding,
-    RewardEffectTemplate, RewardKey, Tag, TemplateKey, UnixSeconds,
-};
+use game_platform::{DayEventId, DayProgramRef, ParticipationPayload};
 use projections::{
     audit_rebuild, day_event_narratives, day_event_participation_page, DayEventParticipationCursor,
     ProjectionError, MAX_DAY_EVENT_PARTICIPATION_PAGE_SIZE,
@@ -29,9 +23,12 @@ use sqlx::{PgPool, Row};
 use tokio::task::JoinSet;
 use uuid::Uuid;
 
+use crate::program_library::{
+    load_checked_in_program_library, ProgramAudience, ProgramLibraryError,
+};
 use crate::{load_host_console_state_for_principal, load_player_day_event_attention_for_principal};
 
-pub const MASH_SCALE_ARTIFACT_VERSION: u16 = 1;
+pub const MASH_SCALE_ARTIFACT_VERSION: u16 = 2;
 pub const MASH_SCALE_ROSTER_COUNT: usize = 60;
 pub const MASH_SCALE_EVENT_COUNT: usize = 5;
 pub const MASH_SCALE_CONCURRENT_SUBMISSIONS: usize = 40;
@@ -124,6 +121,7 @@ pub struct MashScaleAcceptanceReport {
     pub artifact_path: String,
     pub ok: bool,
     pub proof_boundary: String,
+    pub program_ref: DayProgramRef,
     pub game_id: Uuid,
     pub roster_count: usize,
     pub event_count: usize,
@@ -148,6 +146,8 @@ pub enum MashScaleError {
     Scheduler(#[from] SchedulerError),
     #[error(transparent)]
     Serialization(#[from] serde_json::Error),
+    #[error(transparent)]
+    ProgramLibrary(#[from] ProgramLibraryError),
     #[error("host-console scale read failed: {0}")]
     HostConsole(String),
     #[error("player-attention scale read failed: {0}")]
@@ -164,7 +164,11 @@ pub async fn run_mash_scale_acceptance(
         Uuid::parse_str("6d617368-7363-416c-8000-000000000013").expect("checked mash-scale UUID");
     seed_game(pool, game).await?;
 
-    let program = mash_scale_program();
+    let library = load_checked_in_program_library()?;
+    let artifact =
+        library.resolve_identity("mash-scale-acceptance", 1, ProgramAudience::Acceptance)?;
+    let program_ref = artifact.program_ref.clone();
+    let program = artifact.document.clone();
     commands::handle(
         pool,
         &Principal::user(HOST),
@@ -379,7 +383,8 @@ pub async fn run_mash_scale_acceptance(
         artifact_version: MASH_SCALE_ARTIFACT_VERSION,
         artifact_path: artifact_path.into(),
         ok,
-        proof_boundary: "Local single-node Postgres acceptance for one deterministic 60-seat game with five scheduled host-decision DayEvents. It proves bounded keyset reads, 40-way command contention, two scheduler replicas, public narrative receipt uniqueness, host-console hydration, and projection rebuild under explicit local regression ceilings; it does not prove hosted multi-region latency or private event channels.".to_string(),
+        proof_boundary: "Local single-node Postgres acceptance for one deterministic, manifest-pinned 60-seat program artifact with five scheduled host-decision DayEvents. It proves content-addressed program resolution, bounded keyset reads, 40-way command contention, two scheduler replicas, public narrative receipt uniqueness, host-console hydration, and projection rebuild under explicit local regression ceilings; it does not prove hosted multi-region latency or private event channels.".to_string(),
+        program_ref,
         game_id: game,
         roster_count: MASH_SCALE_ROSTER_COUNT,
         event_count: MASH_SCALE_EVENT_COUNT,
@@ -640,72 +645,6 @@ fn collect_plan_evidence(
             }
         }
         _ => {}
-    }
-}
-
-fn mash_scale_program() -> game_platform::DayProgram {
-    let opened_key = TemplateKey::new("theme.scale.narrative.opened").expect("checked key");
-    let locked_key = TemplateKey::new("theme.scale.narrative.locked").expect("checked key");
-    let events = (1..=MASH_SCALE_EVENT_COUNT)
-        .map(|number| DayEventTemplate {
-            id: DayEventId::new(format!("scale-event-{number}")).expect("checked event id"),
-            template_key: TemplateKey::new(format!("scale.event.{number}"))
-                .expect("checked template key"),
-            phase_scope: PhaseScope::DuringDay { number: 1 },
-            schedule: DayEventSchedule::Absolute {
-                open_at: UnixSeconds::new(OPEN_AT),
-                lock_at: Some(UnixSeconds::new(LOCK_AT)),
-            },
-            participation: ParticipationSpec {
-                who: ParticipantFilter::AliveSlots,
-                mode: ParticipationMode::OptIn,
-                limits: ParticipationLimits {
-                    minimum: 1,
-                    maximum: Some(MASH_SCALE_ROSTER_COUNT as u32),
-                },
-            },
-            resolution: DayEventResolutionMode::HostDecision,
-            rewards: vec![RewardBinding {
-                reward_key: RewardKey::new("scale_reward").expect("checked reward"),
-                display_name_theme_key: TemplateKey::new("theme.scale.reward")
-                    .expect("checked template"),
-                effects: vec![RewardEffectTemplate {
-                    recipient: RecipientSelector::Winner,
-                    operation: EffectOperationTemplate::Mark {
-                        effect: Tag::new("bomb").expect("checked tag"),
-                    },
-                }],
-            }],
-            narrative: NarrativeTemplates {
-                opened: Some(opened_key.clone()),
-                locked: Some(locked_key.clone()),
-                resolved: None,
-                cancelled: None,
-            },
-            channel_policy: EventChannelPolicy {
-                allowed_channels: vec![ChannelId::new("main").expect("checked channel")],
-            },
-        })
-        .collect();
-    game_platform::DayProgram {
-        id: ProgramId::new("mash-scale-acceptance").expect("checked program id"),
-        version: 1,
-        display_name: "Mash scale acceptance".to_string(),
-        theme_ref: Some(ContentRef::new("theme.scale").expect("checked content ref")),
-        narrative_templates: vec![
-            NarrativeTemplate {
-                key: opened_key,
-                channel_id: ChannelId::new("main").expect("checked channel"),
-                body: "Scale event {{event_id}} opened.".to_string(),
-            },
-            NarrativeTemplate {
-                key: locked_key,
-                channel_id: ChannelId::new("main").expect("checked channel"),
-                body: "Scale event {{event_id}} locked with {{participant_count}} participants."
-                    .to_string(),
-            },
-        ],
-        events,
     }
 }
 

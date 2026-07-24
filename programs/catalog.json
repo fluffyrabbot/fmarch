@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "programs": [
+    {
+      "program_ref": {
+        "id": "raffle",
+        "version": 1,
+        "content_hash": "43ae91d9858580a74f00dfa91848821d4ce60a93a68ab8dbd972818a06d24800"
+      },
+      "audience": "product",
+      "file": "raffle.v1.program.json"
+    },
+    {
+      "program_ref": {
+        "id": "opt-in-quest",
+        "version": 1,
+        "content_hash": "03db7811aa0e52355ca23eaa7d6f31ab387149ff965f42a4aa100be030d26ac7"
+      },
+      "audience": "product",
+      "file": "opt-in-quest.v1.program.json"
+    },
+    {
+      "program_ref": {
+        "id": "host-judged-showcase",
+        "version": 1,
+        "content_hash": "b67631ab1ea6c914f548a3c4c53a5469169f0b81b55707bb5191088506626a18"
+      },
+      "audience": "product",
+      "file": "host-judged-showcase.v1.program.json"
+    },
+    {
+      "program_ref": {
+        "id": "mash-scale-acceptance",
+        "version": 1,
+        "content_hash": "084f4e212fe08eb1ebaf73cc08fa34740c0afdd756cb56986c9c1f18bb754aa3"
+      },
+      "audience": "acceptance",
+      "file": "mash-scale-acceptance.v1.program.json"
+    }
+  ]
+}

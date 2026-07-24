@@ -73,3 +73,41 @@ fn apply_effect_plan_deserializes_the_canonical_concrete_catalog() {
                 )
     ));
 }
+
+#[test]
+fn attach_day_program_carries_only_a_content_addressed_reference() {
+    let game = "00000000-0000-0000-0000-000000000123";
+    let command = serde_json::json!({
+        "AttachDayProgram": {
+            "game": game,
+            "program_ref": {
+                "id": "raffle",
+                "version": 1,
+                "content_hash": "43ae91d9858580a74f00dfa91848821d4ce60a93a68ab8dbd972818a06d24800"
+            }
+        }
+    });
+    let parsed = serde_json::from_value::<wire::Command>(command).unwrap();
+    assert!(matches!(
+        parsed.into_dispatch(),
+        wire::CommandDispatch::AttachDayProgram { program_ref, .. }
+            if program_ref.id.as_str() == "raffle"
+                && program_ref.version == 1
+                && program_ref.content_hash.as_str()
+                    == "43ae91d9858580a74f00dfa91848821d4ce60a93a68ab8dbd972818a06d24800"
+    ));
+
+    let inline = serde_json::json!({
+        "AttachDayProgram": {
+            "game": game,
+            "program": {
+                "id": "browser-authored",
+                "version": 1,
+                "display_name": "Browser authored",
+                "theme_ref": null,
+                "events": []
+            }
+        }
+    });
+    assert!(serde_json::from_value::<wire::Command>(inline).is_err());
+}

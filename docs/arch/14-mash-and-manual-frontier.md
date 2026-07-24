@@ -516,7 +516,7 @@ v1 host-authored narrative therefore:
 1. **Does not** call or reuse player `SubmitPost` validation.
 2. **Does** use the **generalized host-notice builder** shared with manual spectator posts: append `PostSubmitted` with `ActorId::Host`, host attribution, an explicit channel, and a validated body.
 3. **Automatic DayEvent v1 allow-list:** `main` only. Spectator publishing remains manual because spectator copy can be private; private rendered bodies must not sit in retry-work projections. Additional event channels require an explicit privacy and membership design.
-4. The inline program owns a keyed narrative catalog. Program attach validates every lifecycle reference and placeholder, then writes the exact template key, content hash, channel, and body snapshot into `DayEventScheduled`.
+4. The resolved, content-addressed program artifact owns a keyed narrative catalog. Program attach validates every lifecycle reference and placeholder, then writes the exact template key, content hash, channel, and body snapshot into `DayEventScheduled`.
 5. A committed lifecycle fact (`DayEventOpened`, `Locked`, `Resolved`, or `Cancelled`) renders its immutable template with committed projection state and activates rebuildable `day_event_narrative` work.
 6. Scheduler mechanics commit first. A second transaction publishes `PostSubmitted` and `DayEventNarrativePublished` atomically with a deterministic receipt id. Failed delivery remains pending and retry-safe; it can never roll back or falsify the mechanical lifecycle.
 
@@ -753,7 +753,10 @@ Wire/commands that today use `require(HostOf)` for pure game-run work **migrate*
 
 ```rust
 // Program lifecycle — host-team / ProgramAttach
-AttachDayProgram { game, program_ref: ContentHash /* or inline small doc */ },
+AttachDayProgram {
+    game,
+    program_ref: DayProgramRef { id, version, content_hash },
+},
 
 // Event lifecycle — host-team / DayEventOps
 OpenDayEvent { game, event_id },
@@ -809,7 +812,12 @@ Wire: extend `wire::Command` / TS generation per [04](04-wire-protocol.md). Clos
 
 ### Stream events
 
-Additive **platform** events on the **game** stream. Program document: content-addressed JSON in blob store + hash on `DayProgramAttached` (BLAKE3 family consistent with media where practical); small inline allowed under size threshold.
+Additive **platform** events on the **game** stream. The transport carries only a
+manifest-pinned `DayProgramRef`; the API resolves the exact checked-in artifact
+and the command core snapshots its canonical document plus BLAKE3 content hash
+on `DayProgramAttached`. Browsers never submit program documents. A future blob
+adapter may replace the checked-in loader without changing the reference or
+command-core boundary.
 
 ### Projections (rebuildable)
 
@@ -985,7 +993,7 @@ Incremental backlog for solo greenfield. Multi-day depth expected on adapter PRs
 | **PR11** | L3 auto-resolve + recorded seed | pure platform policy module, sealed automation command, indexed work | PR6, PR9 | First-N + seeded-random policies; lock-captured seed; atomic effects + resolution |
 | **PR12** | theme narrative + host-notice main allow-list | immutable inline template catalog; attach-time compilation/hash snapshot; rebuildable retry work; generalized host-notice adapter; host-console delivery evidence | PR8 | Delivered; mechanics commit before narrative; deterministic publication receipt; **not** player SubmitPost |
 | **PR13** | scale acceptance checks (30+) | production-path harness, artifact contract, proof lane | PR7, PR9–12 | Delivered; deterministic 60-seat/5-event proof with explicit contention, scheduler, pagination, host-console, narrative-receipt, and rebuild budgets |
-| **PR14** | program templates library (data) | `programs/` or content store | PR8, PR12 | raffle, opt-in quest, host-judged showcase |
+| **PR14** | program templates library (data) | manifest-pinned `programs/` library, reference-only wire command, setup previews | PR8, PR12–13 | Delivered; raffle, opt-in quest, and host-judged showcase compile across every shipped pack; acceptance fixtures are audience-partitioned |
 
 **Deferred:** Convert/Link/channel-membership effects; reopen/hybrid semantics; L4 promotion tooling; mid-game cohost denylist edits (v1 = create-time only unless product reopens).
 
@@ -995,8 +1003,13 @@ Incremental backlog for solo greenfield. Multi-day depth expected on adapter PRs
 
 1. **Cohost authority** — **Decided.** Default **co-GM full mutator parity** (host|cohost for game-run). Optional **creation-time denylist** of `CohostPermissionClass`. Structural acts primary-host-only. See [Cohost authority](#cohost-authority-co-gm-default). Residual: exact closed enum of classes and whether denylist can be edited mid-game (default **create-time only** for v1).
 
-2. **Program document storage**  
-   **Default:** content-addressed JSON (hash on `DayProgramAttached`); small inline under threshold.
+2. **Program document storage** — **Decided.** Checked-in JSON artifacts are
+   closed by `programs/catalog.json` and addressed by `{id, version,
+   content_hash}`. Setup exposes product metadata, compatibility, and event
+   previews only. The API resolves the reference and passes the canonical
+   document to the existing attachment compiler; event history retains the
+   immutable snapshot. Acceptance-only artifacts share validation but never
+   appear in setup.
 
 3. **Mid-game program attach**  
    **Default:** setup + host-team attach while `running`; forbid after `completed`.

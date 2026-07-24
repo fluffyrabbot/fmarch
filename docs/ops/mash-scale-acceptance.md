@@ -29,7 +29,8 @@ target/mash-scale-acceptance/report.json
 | Dimension | Contract |
 |---|---|
 | Roster | 60 occupied, role-assigned slots |
-| DayEvents | 5 absolute-schedule, host-decision events |
+| Program | Manifest-pinned acceptance artifact `mash-scale-acceptance@1` |
+| DayEvents | 5 absolute-schedule, host-decision events loaded from that artifact |
 | Participation | 300 final rows |
 | Contention | 40 simultaneous submissions, all acknowledged, no duplicates, ≤ 20 s |
 | Scheduler | 2 replicas race open and lock, one winning game claim per boundary, ≤ 5 s combined |

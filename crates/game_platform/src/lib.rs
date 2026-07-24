@@ -179,6 +179,19 @@ impl<'de> Deserialize<'de> for ProgramContentHash {
     }
 }
 
+/// Immutable address of one versioned DayProgram artifact.
+///
+/// The identity and version keep the reference discoverable for humans while
+/// the content hash makes resolution fail closed if the checked-in document
+/// drifts.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+pub struct DayProgramRef {
+    pub id: ProgramId,
+    pub version: u32,
+    pub content_hash: ProgramContentHash,
+}
+
 /// Captured platform wall-clock time. This is never engine logical time.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
@@ -1003,6 +1016,14 @@ impl DayProgram {
         let canonical =
             serde_json::to_vec(self).map_err(|_| ModelError::CanonicalProgramSerialization)?;
         ProgramContentHash::new(blake3::hash(&canonical).to_hex().to_string())
+    }
+
+    pub fn artifact_ref(&self) -> Result<DayProgramRef, ModelError> {
+        Ok(DayProgramRef {
+            id: self.id.clone(),
+            version: self.version,
+            content_hash: self.content_hash()?,
+        })
     }
 }
 

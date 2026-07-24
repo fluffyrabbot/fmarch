@@ -346,56 +346,57 @@ fn inspect_reward_operation(
 mod tests {
     use super::*;
 
-    const PRODUCT_PACKS: [(&str, &str, bool); 5] = [
+    const PRODUCT_PACKS: [(&str, &str); 5] = [
         (
             "chinese_structured",
             include_str!("../../../packs/chinese_structured/pack.json"),
-            false,
         ),
         (
             "default_open",
             include_str!("../../../packs/default_open/pack.json"),
-            false,
         ),
         (
             "epicmafia",
             include_str!("../../../packs/epicmafia/pack.json"),
-            false,
         ),
         (
             "mafia_universe",
             include_str!("../../../packs/mafia_universe/pack.json"),
-            true,
         ),
         (
             "mafiascum",
             include_str!("../../../packs/mafiascum/pack.json"),
-            true,
         ),
     ];
 
     #[test]
     fn catalog_program_compatibility_is_derived_for_every_product_pack() {
-        let program: DayProgram =
-            serde_json::from_str(include_str!("../../../programs/bakery.json")).unwrap();
-
-        for (pack_key, raw_pack, expected_attachable) in PRODUCT_PACKS {
-            let pack = domain::load_pack_from_json(raw_pack)
-                .unwrap_or_else(|error| panic!("load {pack_key}: {error}"));
-            let report = inspect(&pack, &program);
-            assert_eq!(
-                report.attachable(),
-                expected_attachable,
-                "unexpected bakery compatibility for {pack_key}: {}",
-                report.summary()
-            );
-            if expected_attachable {
+        let programs = [
+            (
+                "raffle",
+                include_str!("../../../programs/raffle.v1.program.json"),
+            ),
+            (
+                "opt-in-quest",
+                include_str!("../../../programs/opt-in-quest.v1.program.json"),
+            ),
+            (
+                "host-judged-showcase",
+                include_str!("../../../programs/host-judged-showcase.v1.program.json"),
+            ),
+        ];
+        for (program_key, raw_program) in programs {
+            let program: DayProgram = serde_json::from_str(raw_program).unwrap();
+            for (pack_key, raw_pack) in PRODUCT_PACKS {
+                let pack = domain::load_pack_from_json(raw_pack)
+                    .unwrap_or_else(|error| panic!("load {pack_key}: {error}"));
+                let report = inspect(&pack, &program);
+                assert!(
+                    report.attachable(),
+                    "unexpected {program_key} incompatibility for {pack_key}: {}",
+                    report.summary()
+                );
                 assert!(report.issues.is_empty());
-            } else {
-                assert!(report.issues.iter().any(|issue| {
-                    issue.code == CompatibilityIssueCode::UndeclaredPersistentEffect
-                        && issue.event_id.as_deref() == Some("bakery-cookie-d1")
-                }));
             }
         }
     }
@@ -403,13 +404,15 @@ mod tests {
     #[test]
     fn compatibility_report_accumulates_event_and_pack_adapter_issues() {
         let pack = domain::load_pack_from_json(PRODUCT_PACKS[1].1).unwrap();
-        let mut program: DayProgram =
-            serde_json::from_str(include_str!("../../../programs/bakery.json")).unwrap();
+        let mut program: DayProgram = serde_json::from_str(include_str!(
+            "../../../programs/mash-scale-acceptance.v1.program.json"
+        ))
+        .unwrap();
         program.events[0].participation.who = ParticipantFilter::HostInvited;
 
         let report = inspect(&pack, &program);
         assert!(!report.attachable());
-        assert_eq!(report.issues.len(), 2);
+        assert_eq!(report.issues.len(), 6);
         assert!(report
             .issues
             .iter()

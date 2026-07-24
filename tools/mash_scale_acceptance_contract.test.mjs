@@ -8,10 +8,15 @@ import {
 
 function validReport() {
   return {
-    artifact_version: 1,
+    artifact_version: 2,
     artifact_path: "target/mash-scale-acceptance/report.json",
     ok: true,
     proof_boundary: "Local deterministic 60-seat scale proof.",
+    program_ref: {
+      id: "mash-scale-acceptance",
+      version: 1,
+      content_hash: "a".repeat(64),
+    },
     game_id: "6d617368-7363-416c-8000-000000000013",
     roster_count: 60,
     event_count: 5,
