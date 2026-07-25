@@ -32,6 +32,8 @@
     "test:projection-baseline:static": { "kind": "npm" },
     "test:dev-test-game-contract": { "kind": "npm" },
     "test:dev-postgres-contract": { "kind": "npm" },
+    "test:host-console-live-stack-contract": { "kind": "npm" },
+    "test:host-console-day-event-room-live-stack": { "kind": "npm" },
     "test:mash-scale-acceptance": { "kind": "npm" },
     "test:completeness-scorecard": { "kind": "npm" },
     "test:proof-lane-contract": { "kind": "npm" },
@@ -251,6 +253,18 @@
         "tools/mash_scale_acceptance_contract.test.mjs"
       ],
       "lanes": ["test:mash-scale-acceptance"]
+    },
+    {
+      "id": "proof:host-console-live-stack",
+      "tier": "active",
+      "paths": [
+        "tools/host_console_live_stack_smoke.mjs",
+        "tools/live_stack/"
+      ],
+      "lanes": [
+        "test:host-console-live-stack-contract",
+        "test:host-console-day-event-room-live-stack"
+      ]
     },
     {
       "id": "tools:proof-infra",

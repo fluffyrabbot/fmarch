@@ -1,8 +1,6 @@
 import { spawn } from "node:child_process";
-import { createHash } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
-import net from "node:net";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
@@ -20,6 +18,22 @@ import {
   markdownLiveStackProofSummary,
 } from "./live_stack_proof_summary.mjs";
 import {
+  DAY_EVENT_ROOM_SCOPE,
+  createDayEventRoomFixture,
+  createDayEventRoomSessions as createDayEventRoomScenarioSessions,
+  driveDayEventRoomBrowser as driveDayEventRoomScenario,
+  seedDayEventRoom as seedDayEventRoomScenario,
+} from "./live_stack/day_event_room_scenario.mjs";
+import {
+  createLiveStackAuth,
+  createLiveStackCommandSender,
+  hashSessionToken,
+} from "./live_stack/auth_commands.mjs";
+import {
+  createLiveStackFixtureTools,
+  sqlLiteral,
+} from "./live_stack/fixture.mjs";
+import {
   buildSetupCommandEvidence,
   selectHostSetupStage,
   waitForHostSetupCommand,
@@ -28,7 +42,20 @@ import { generatedThreadMediaPng } from "../frontend/src/lib/server/thread-media
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const frontendRoot = path.join(repoRoot, "frontend");
-const artifactDir = path.join(repoRoot, "target", "host-console-live-stack-smoke");
+const configuredScope = process.env.FMARCH_LIVE_STACK_SCOPE;
+if (
+  configuredScope !== undefined &&
+  configuredScope !== "" &&
+  configuredScope !== DAY_EVENT_ROOM_SCOPE
+) {
+  throw new Error(`unsupported FMARCH_LIVE_STACK_SCOPE: ${configuredScope}`);
+}
+const dayEventRoomOnly =
+  configuredScope === DAY_EVENT_ROOM_SCOPE;
+const smokeName = dayEventRoomOnly
+  ? "host-console-day-event-room-live-stack"
+  : "host-console-live-stack-smoke";
+const artifactDir = path.join(repoRoot, "target", smokeName);
 const configuredMediaRoot = process.env.FMARCH_MEDIA_ROOT;
 if (configuredMediaRoot !== undefined && configuredMediaRoot.trim() === "") {
   throw new Error("FMARCH_MEDIA_ROOT must not be empty");
@@ -41,16 +68,28 @@ const evidencePath = path.join(artifactDir, "live-stack-proof.json");
 const summaryPath = path.join(artifactDir, "live-stack-summary.json");
 const summaryMarkdownPath = path.join(artifactDir, "live-stack-summary.md");
 const databaseUrl = process.env.DATABASE_URL;
-const dayEventRoomOnly =
-  process.env.FMARCH_LIVE_STACK_SCOPE === "day-event-room";
 const host = "127.0.0.1";
+const {
+  createScratchDatabase,
+  dropScratchDatabase,
+  freePort,
+  runSql,
+  runSqlScalar,
+  stopChild,
+  writeProgress,
+} = createLiveStackFixtureTools({
+  artifactDir,
+  cwd: repoRoot,
+  host,
+});
 const smokeViewport = Object.freeze({ width: 1024, height: 768 });
 const game = crypto.randomUUID();
 const actionGame = crypto.randomUUID();
 const additionalRoomsGame = crypto.randomUUID();
 const deadChatGame = crypto.randomUUID();
 const spectatorGame = crypto.randomUUID();
-const dayEventRoomGame = crypto.randomUUID();
+const dayEventRoomFixture = createDayEventRoomFixture();
+const dayEventRoomGame = dayEventRoomFixture.game;
 const adminCreatedGame = crypto.randomUUID();
 const rootAdminSessionToken = `host-console-live-stack-root-admin-${crypto.randomUUID()}`;
 const hostSessionToken = `host-console-live-stack-host-${crypto.randomUUID()}`;
@@ -62,17 +101,10 @@ const targetPlayerSessionToken = `host-console-live-stack-target-player-${crypto
 const goonBSessionToken = `host-console-live-stack-goon-b-${crypto.randomUUID()}`;
 const adminSessionToken = `host-console-live-stack-admin-${crypto.randomUUID()}`;
 const cohostSessionToken = `host-console-live-stack-cohost-${crypto.randomUUID()}`;
-const dayEventRoomOutgoing = Object.freeze({
-  slotId: "event-room-slot",
-  principalUserId: "event-room-outgoing",
-  sessionToken: `host-console-live-stack-event-room-outgoing-${crypto.randomUUID()}`,
-});
-const dayEventRoomIncoming = Object.freeze({
-  principalUserId: "event-room-incoming",
-  sessionToken: `host-console-live-stack-event-room-incoming-${crypto.randomUUID()}`,
-});
-const dayEventRoomId = "event-browser-room";
-const dayEventRoomChannel = `private:event:${dayEventRoomId}`;
+const dayEventRoomOutgoing = dayEventRoomFixture.outgoing;
+const dayEventRoomIncoming = dayEventRoomFixture.incoming;
+const dayEventRoomId = dayEventRoomFixture.eventId;
+const dayEventRoomChannel = dayEventRoomFixture.channelId;
 const grantedGlobalModToken = `session-grant-${adminCreatedGame}`;
 const factionDayChatChannel = "private:mafia_day_chat";
 const factionDayChatRoute = encodeURIComponent(factionDayChatChannel);
@@ -183,7 +215,7 @@ await preflightLocalhostBindOrExit({
   repoRoot,
   artifactDir,
   evidencePath,
-  smokeName: "host-console-live-stack-smoke",
+  smokeName,
 });
 const apiPort = await freePort();
 const apiBaseUrl = `http://${host}:${apiPort}`;
@@ -196,6 +228,30 @@ if (!databaseUrl) {
 }
 
 let commandEnvelopeId = 1;
+const {
+  createAccountSession,
+  createAuthAccount,
+  createGrantedSession,
+} = createLiveStackAuth({
+  apiBaseUrl,
+  fetchJson,
+  rootAdminSessionToken,
+});
+const sendCommand = createLiveStackCommandSender({
+  apiBaseUrl,
+  fetchJson,
+  nextEnvelopeId: () => commandEnvelopeId++,
+  sessionTokenForPrincipal: (principalUserId) =>
+    ({
+      host_h: hostSessionToken,
+      "player-mira": playerSessionToken,
+      "player-seed": seedPlayerSessionToken,
+      "player-target": targetPlayerSessionToken,
+      "player-goon-a": racePlayerSessionToken,
+      "player-goon-b": goonBSessionToken,
+      "action-goon": actionPlayerSessionToken,
+    })[principalUserId],
+});
 let server;
 let vite;
 let browser;
@@ -212,7 +268,7 @@ try {
   await mkdir(artifactDir, { recursive: true });
   await mkdir(mediaRoot, { recursive: true, mode: 0o700 });
   await writeProgress({ stage: "create-temp-database" });
-  smokeDatabase = await createSmokeDatabase(databaseUrl);
+  smokeDatabase = await createScratchDatabase(databaseUrl);
 
   await writeProgress({ stage: "start-rust-server", apiPort });
   server = spawn("cargo", ["run", "-p", "server"], {
@@ -237,30 +293,57 @@ try {
   await waitForHealth();
   await writeProgress({ stage: "seed-root-admin-session" });
   const rootAdminSession = await seedRootAdminSession();
-  await writeProgress({ stage: "create-granted-sessions", game });
-  const grantedSessions = await createGrantedSessions();
-  await writeProgress({ stage: "seed-game", game });
-  const seedCommands = await seedGame();
-  await writeProgress({ stage: "seed-action-game", actionGame });
-  const actionSeedCommands = await seedActionGame();
-  await writeProgress({ stage: "seed-additional-rooms-game", additionalRoomsGame });
-  const additionalRoomsSeed = await seedAdditionalRoomsGame();
-  await writeProgress({ stage: "seed-dead-chat-game", deadChatGame });
-  const deadChatSeed = await seedDeadChatGame();
-  await writeProgress({ stage: "seed-spectator-game", spectatorGame });
-  const spectatorSeed = await seedSpectatorGame();
+  let grantedSessions;
+  let seedCommands = null;
+  let actionSeedCommands = null;
+  let additionalRoomsSeed = null;
+  let deadChatSeed = null;
+  let spectatorSeed = null;
+  let privateChannelFixture = null;
+  let additionalRoomSessions = null;
+  let deadChatSessions = null;
+  let spectatorSession = null;
+  if (dayEventRoomOnly) {
+    await writeProgress({ stage: "create-day-event-room-host-session", dayEventRoomGame });
+    grantedSessions = {
+      host: await createGrantedSession({
+        token: hostSessionToken,
+        principalUserId: "host_h",
+        globalCapabilities: ["GlobalAdmin"],
+      }),
+    };
+  } else {
+    await writeProgress({ stage: "create-granted-sessions", game });
+    grantedSessions = await createGrantedSessions();
+    await writeProgress({ stage: "seed-game", game });
+    seedCommands = await seedGame();
+    await writeProgress({ stage: "seed-action-game", actionGame });
+    actionSeedCommands = await seedActionGame();
+    await writeProgress({ stage: "seed-additional-rooms-game", additionalRoomsGame });
+    additionalRoomsSeed = await seedAdditionalRoomsGame();
+    await writeProgress({ stage: "seed-dead-chat-game", deadChatGame });
+    deadChatSeed = await seedDeadChatGame();
+    await writeProgress({ stage: "seed-spectator-game", spectatorGame });
+    spectatorSeed = await seedSpectatorGame();
+    await writeProgress({ stage: "seed-faction-day-chat-fixture", game });
+    privateChannelFixture = await seedFactionDayChatFixture();
+    await writeProgress({ stage: "create-additional-room-sessions", additionalRoomsGame });
+    additionalRoomSessions = await createAdditionalRoomSessions();
+    await writeProgress({ stage: "create-dead-chat-sessions", deadChatGame });
+    deadChatSessions = await createDeadChatSessions();
+    await writeProgress({ stage: "create-spectator-session", spectatorGame });
+    spectatorSession = await createSpectatorSession();
+  }
   await writeProgress({ stage: "seed-day-event-room-game", dayEventRoomGame });
-  const dayEventRoomSeed = await seedDayEventRoomGame();
-  await writeProgress({ stage: "seed-faction-day-chat-fixture", game });
-  const privateChannelFixture = await seedFactionDayChatFixture();
-  await writeProgress({ stage: "create-additional-room-sessions", additionalRoomsGame });
-  const additionalRoomSessions = await createAdditionalRoomSessions();
-  await writeProgress({ stage: "create-dead-chat-sessions", deadChatGame });
-  const deadChatSessions = await createDeadChatSessions();
-  await writeProgress({ stage: "create-spectator-session", spectatorGame });
-  const spectatorSession = await createSpectatorSession();
+  const dayEventRoomSeed = await seedDayEventRoomScenario({
+    fixture: dayEventRoomFixture,
+    sendCommand,
+  });
   await writeProgress({ stage: "create-day-event-room-sessions", dayEventRoomGame });
-  const dayEventRoomSessions = await createDayEventRoomSessions();
+  const dayEventRoomSessions = await createDayEventRoomScenarioSessions({
+    fixture: dayEventRoomFixture,
+    createAccountSession,
+  });
 
   await writeProgress({ stage: "start-sveltekit" });
   const { createServer: createViteServer } = await import(
@@ -321,7 +404,7 @@ try {
   const evidence = {
     status: "passed",
     generatedAt: new Date().toISOString(),
-    game,
+    game: dayEventRoomOnly ? dayEventRoomGame : game,
     database: {
       name: smokeDatabase.name,
       lifecycle: "created-and-dropped-per-smoke-run",
@@ -380,7 +463,7 @@ try {
     repoRoot,
     artifactDir,
     evidencePath,
-    smokeName: "host-console-live-stack-smoke",
+    smokeName,
     stage: "live-stack-listen",
   });
   if (!handled) {
@@ -403,7 +486,7 @@ try {
         : { error: String(primaryError?.stack ?? primaryError) }),
     });
     try {
-      await dropSmokeDatabase(smokeDatabase);
+      await dropScratchDatabase(smokeDatabase);
     } catch (dropError) {
       if (primaryError === null) {
         throw dropError;
@@ -428,112 +511,6 @@ try {
   } else {
     process.env.FMARCH_API_BASE_URL = previousApiBaseUrl;
   }
-}
-
-async function createSmokeDatabase(sourceDatabaseUrl) {
-  const source = new URL(sourceDatabaseUrl);
-  const admin = new URL(sourceDatabaseUrl);
-  admin.pathname = "/postgres";
-  const smoke = new URL(sourceDatabaseUrl);
-  const sourceName = source.pathname.replace(/^\/+/, "") || "fmarch";
-  const name = `${sanitizeDatabaseName(sourceName)}_live_stack_${process.pid}_${Date.now()}`;
-  smoke.pathname = `/${name}`;
-
-  await runProcess("psql", [
-    admin.toString(),
-    "-v",
-    "ON_ERROR_STOP=1",
-    "-c",
-    `CREATE DATABASE "${name}"`,
-  ]);
-
-  return { name, adminUrl: admin.toString(), url: smoke.toString() };
-}
-
-async function dropSmokeDatabase({ adminUrl, name }) {
-  await runProcess("psql", [
-    adminUrl,
-    "-v",
-    "ON_ERROR_STOP=1",
-    "-c",
-    `SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '${name}'`,
-  ]);
-  await runProcess("psql", [
-    adminUrl,
-    "-v",
-    "ON_ERROR_STOP=1",
-    "-c",
-    `DROP DATABASE IF EXISTS "${name}"`,
-  ]);
-}
-
-async function runProcess(command, args) {
-  const child = spawn(command, args, {
-    cwd: repoRoot,
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  let output = "";
-  child.stdout.on("data", (chunk) => {
-    output += chunk.toString();
-  });
-  child.stderr.on("data", (chunk) => {
-    output += chunk.toString();
-  });
-  const code = await new Promise((resolve, reject) => {
-    child.on("error", reject);
-    child.on("exit", resolve);
-  });
-  if (code !== 0) {
-    throw new Error(`${command} ${args[0]} failed with exit ${code}:\n${output}`);
-  }
-  return output;
-}
-
-async function runSql(url, sql) {
-  return await runProcess("psql", [
-    url,
-    "-v",
-    "ON_ERROR_STOP=1",
-    "-c",
-    sql,
-  ]);
-}
-
-async function runSqlScalar(url, sql) {
-  return (
-    await runProcess("psql", [
-      url,
-      "-v",
-      "ON_ERROR_STOP=1",
-      "-Atc",
-      sql,
-    ])
-  ).trim();
-}
-
-function sqlLiteral(value) {
-  return `'${String(value).replaceAll("'", "''")}'`;
-}
-
-async function stopChild(child, label) {
-  if (child.exitCode !== null || child.signalCode !== null) {
-    return;
-  }
-  child.kill("SIGINT");
-  const stopped = await Promise.race([
-    new Promise((resolve) => child.once("exit", resolve)),
-    delay(5000).then(() => "timeout"),
-  ]);
-  if (stopped === "timeout") {
-    child.kill("SIGKILL");
-    await new Promise((resolve) => child.once("exit", resolve));
-  }
-}
-
-function sanitizeDatabaseName(name) {
-  const sanitized = name.replace(/[^a-zA-Z0-9_]/g, "_").toLowerCase();
-  const prefix = sanitized === "" ? "fmarch" : sanitized;
-  return prefix.slice(0, 24);
 }
 
 async function seedGame() {
@@ -933,83 +910,6 @@ async function seedSpectatorGame() {
   };
 }
 
-async function seedDayEventRoomGame() {
-  const commands = [];
-  for (const command of [
-    { CreateGame: { game: dayEventRoomGame, pack: "mafiascum" } },
-    { AddSlot: { game: dayEventRoomGame, slot: dayEventRoomOutgoing.slotId } },
-    {
-      AssignSlot: {
-        game: dayEventRoomGame,
-        slot: dayEventRoomOutgoing.slotId,
-        user: dayEventRoomOutgoing.principalUserId,
-      },
-    },
-    {
-      AssignRole: {
-        game: dayEventRoomGame,
-        slot: dayEventRoomOutgoing.slotId,
-        role_key: "vanilla_townie",
-      },
-    },
-    { StartGame: { game: dayEventRoomGame, phase: "D01" } },
-    {
-      ScheduleDayEvent: {
-        game: dayEventRoomGame,
-        event: {
-          id: dayEventRoomId,
-          program_id: "program-browser-proof",
-          template_key: "theme.raffle",
-          phase_scope: { kind: "during_day", number: 1 },
-          schedule: { kind: "host_opened" },
-          participation: {
-            who: "alive_slots",
-            mode: "opt_in",
-            limits: { minimum: 1, maximum: null },
-          },
-          state: "scheduled",
-          resolution: "host_decision",
-          rewards: [{
-            reward_key: "cookie",
-            display_name_theme_key: "theme.cookie",
-            effects: [{
-              recipient: { kind: "winner" },
-              operation: { kind: "mark", effect: "bomb" },
-            }],
-          }],
-          narrative: {
-            opened: null,
-            locked: null,
-            resolved: null,
-            cancelled: null,
-          },
-          channel_policy: {
-            visibility: "private",
-            membership: "participants",
-          },
-        },
-      },
-    },
-    {
-      OpenDayEvent: {
-        game: dayEventRoomGame,
-        event_id: dayEventRoomId,
-      },
-    },
-  ]) {
-    commands.push(await sendCommand("host_h", command));
-  }
-  return {
-    game: dayEventRoomGame,
-    eventId: dayEventRoomId,
-    channelId: dayEventRoomChannel,
-    slotId: dayEventRoomOutgoing.slotId,
-    commands,
-    boundary:
-      "A real host-opened, participant-scoped private DayEvent begins with no room members; the browser owns every subsequent membership and room-lifecycle transition.",
-  };
-}
-
 async function seedFactionDayChatFixture() {
   const memberRows = await runSql(
     smokeDatabase.url,
@@ -1186,85 +1086,6 @@ async function createSpectatorSession() {
   });
 }
 
-async function createDayEventRoomSessions() {
-  return {
-    outgoing: await createAccountSession({
-      token: dayEventRoomOutgoing.sessionToken,
-      principalUserId: dayEventRoomOutgoing.principalUserId,
-      label: "day-event-room-outgoing",
-    }),
-    incoming: await createAccountSession({
-      token: dayEventRoomIncoming.sessionToken,
-      principalUserId: dayEventRoomIncoming.principalUserId,
-      label: "day-event-room-incoming",
-    }),
-  };
-}
-
-async function createAccountSession({ token, principalUserId, label }) {
-  const accountId = `live-stack-${label}-${crypto.randomUUID()}@example.test`;
-  const password = `live-stack account password ${crypto.randomUUID()}`;
-  await createAuthAccount({ accountId, password, principalUserId });
-  const session = await fetchJson(`${apiBaseUrl}/auth/accounts/login`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      account_id: accountId,
-      password,
-      session_token: token,
-      expires_at: 4102444800,
-    }),
-  });
-  return {
-    accountId,
-    principalUserId: session.principal_user_id,
-    capabilityKinds: (session.capabilities ?? []).map((capability) => capability.kind),
-    authentication: "enabled-account-login",
-  };
-}
-
-async function createAuthAccount({ accountId, password, principalUserId }) {
-  await fetchJson(`${apiBaseUrl}/auth/accounts`, {
-    method: "POST",
-    headers: {
-      authorization: `Bearer ${rootAdminSessionToken}`,
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({
-      account_id: accountId,
-      password,
-      principal_user_id: principalUserId,
-    }),
-  });
-}
-
-async function createGrantedSession({ token, principalUserId, globalCapabilities = [] }) {
-  const session = await fetchJson(`${apiBaseUrl}/auth/session-grants`, {
-    method: "POST",
-    headers: {
-      authorization: `Bearer ${rootAdminSessionToken}`,
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({
-      token,
-      principal_user_id: principalUserId,
-      expires_at: 4102444800,
-      global_capabilities: globalCapabilities,
-    }),
-  });
-  const capabilityKinds = (session.capabilities ?? []).map(
-    (capability) => capability.kind,
-  );
-  return {
-    principalUserId: session.principal_user_id,
-    capabilityKinds,
-  };
-}
-
-function hashSessionToken(token) {
-  return createHash("sha256").update(token).digest("hex");
-}
-
 async function driveBrowser(
   frontendBaseUrl,
   privateChannelFixture,
@@ -1276,10 +1097,16 @@ async function driveBrowser(
   browser = await chromium.launch();
   if (dayEventRoomOnly) {
     return {
-      dayEventRoom: await driveDayEventRoomBrowser(
+      dayEventRoom: await driveDayEventRoomScenario({
+        apiBaseUrl,
+        browser,
+        fetchJson,
+        fixture: dayEventRoomFixture,
         frontendBaseUrl,
-        dayEventRoomSeed,
-      ),
+        seed: dayEventRoomSeed,
+        sendCommand,
+        viewport: smokeViewport,
+      }),
     };
   }
   const adminEvidence = await driveAdminBrowser(frontendBaseUrl);
@@ -1301,10 +1128,16 @@ async function driveBrowser(
     );
     const deadChat = await driveDeadChatBrowser(frontendBaseUrl, deadChatSeed);
     const spectator = await driveSpectatorBrowser(frontendBaseUrl, spectatorSeed);
-    const dayEventRoom = await driveDayEventRoomBrowser(
+    const dayEventRoom = await driveDayEventRoomScenario({
+      apiBaseUrl,
+      browser,
+      fetchJson,
+      fixture: dayEventRoomFixture,
       frontendBaseUrl,
-      dayEventRoomSeed,
-    );
+      seed: dayEventRoomSeed,
+      sendCommand,
+      viewport: smokeViewport,
+    });
     const rolePmHistory = await seedRolePmHistory(
       playerPrivateChannelEvidence.media.contentId,
     );
@@ -2791,211 +2624,6 @@ async function driveSpectatorBrowser(frontendBaseUrl, seed) {
     },
     proof:
       "A host-issued SpectatorOf(game) grant exposed only the read-only spectator role URL. The enabled account received host-authored encrypted history, canonical media, a channel-scoped live notice, and durable reload; it had no composer or role card, could not append or read player-private surfaces, and grant revocation closed route/thread/media with zero media bytes.",
-  };
-}
-
-async function driveDayEventRoomBrowser(frontendBaseUrl, seed) {
-  const secret = "DayEvent browser room history survives its lifecycle";
-  const outgoingContext = await browserContextWithSession(
-    dayEventRoomOutgoing.sessionToken,
-  );
-  const outgoingPage = await outgoingContext.newPage();
-  const mainUrl = `${frontendBaseUrl}/g/${dayEventRoomGame}`;
-  const roomUrl =
-    `${frontendBaseUrl}/g/${dayEventRoomGame}/c/${encodeURIComponent(dayEventRoomChannel)}`;
-  const initial = await outgoingPage.goto(mainUrl, { waitUntil: "networkidle" });
-  if (initial === null || !initial.ok()) {
-    throw new Error(`DayEvent outgoing player route failed (${initial?.status()})`);
-  }
-  await outgoingPage.getByTestId(`player-day-event-${dayEventRoomId}`).waitFor({
-    state: "visible",
-  });
-  if (await outgoingPage.getByTestId(`player-channel-${dayEventRoomChannel}`).count()) {
-    throw new Error("participant-scoped DayEvent room appeared before joining");
-  }
-
-  const [joinResponse] = await Promise.all([
-    outgoingPage.waitForResponse(
-      (response) =>
-        response.url().endsWith("/commands") &&
-        response.request().method() === "POST",
-    ),
-    outgoingPage.locator(`[data-action="submit_day_event:${dayEventRoomId}"]`).click(),
-  ]);
-  const roomTab = outgoingPage.getByTestId(
-    `player-channel-${dayEventRoomChannel}`,
-  );
-  try {
-    await roomTab.waitFor({ state: "visible", timeout: 15_000 });
-  } catch {
-    const browserState = await outgoingPage.evaluate(() => ({
-      status: window.__fmarchPlayerCommandStatus,
-      commandState: window.__fmarchPlayerProjection?.commandState,
-      body: document.body.innerText,
-    }));
-    const apiCommandState = await fetchJson(
-      `${apiBaseUrl}/games/${dayEventRoomGame}/player-command-state?slot_id=${dayEventRoomOutgoing.slotId}`,
-      {
-        headers: {
-          authorization: `Bearer ${dayEventRoomOutgoing.sessionToken}`,
-        },
-      },
-    );
-    throw new Error(
-      `joined DayEvent room did not appear: command=${await joinResponse.text()} browser=${JSON.stringify(browserState)} api=${JSON.stringify(apiCommandState)}`,
-    );
-  }
-  if ((await roomTab.getAttribute("data-room-state")) !== "open") {
-    throw new Error("joined DayEvent room did not project open state");
-  }
-
-  await roomTab.click();
-  await outgoingPage.waitForURL(roomUrl);
-  try {
-    await outgoingPage.getByTestId("player-composer").waitFor({
-      state: "visible",
-      timeout: 15_000,
-    });
-  } catch {
-    throw new Error(
-      `joined DayEvent room did not expose composer: ${JSON.stringify(await outgoingPage.evaluate(() => ({
-        url: location.href,
-        body: document.body.innerText,
-        readOnly: document.querySelector('[data-testid="player-composer-read-only"]')?.innerText,
-        projection: window.__fmarchPlayerProjection,
-      })))}`,
-    );
-  }
-  await outgoingPage.getByTestId("player-composer").locator("textarea").fill(secret);
-  await Promise.all([
-    outgoingPage.waitForResponse(
-      (response) =>
-        response.url().endsWith("/commands") &&
-        response.request().method() === "POST",
-    ),
-    outgoingPage.locator('[data-action="submit_post"]').click(),
-  ]);
-  await outgoingPage.getByText(secret, { exact: false }).waitFor({ state: "visible" });
-
-  await Promise.all([
-    outgoingPage.waitForResponse(
-      (response) =>
-        response.url().endsWith("/commands") &&
-        response.request().method() === "POST",
-    ),
-    outgoingPage
-      .locator(`[data-action="withdraw_day_event:${dayEventRoomId}"]`)
-      .click(),
-  ]);
-  await outgoingPage.getByTestId("player-composer-read-only").waitFor({
-    state: "visible",
-  });
-  if (await outgoingPage.getByText(secret, { exact: false }).count()) {
-    throw new Error("withdrawn DayEvent member retained private history in the DOM");
-  }
-  if (await roomTab.count()) {
-    throw new Error("withdrawn DayEvent room remained in channel discovery");
-  }
-
-  await Promise.all([
-    outgoingPage.waitForResponse(
-      (response) =>
-        response.url().endsWith("/commands") &&
-        response.request().method() === "POST",
-    ),
-    outgoingPage.locator(`[data-action="submit_day_event:${dayEventRoomId}"]`).click(),
-  ]);
-  await roomTab.waitFor({ state: "visible" });
-  await outgoingPage.goto(roomUrl, { waitUntil: "networkidle" });
-  await outgoingPage.getByText(secret, { exact: false }).waitFor({ state: "visible" });
-
-  const replacement = await sendCommand("host_h", {
-    ProcessReplacement: {
-      game: dayEventRoomGame,
-      slot: dayEventRoomOutgoing.slotId,
-      outgoing_user: dayEventRoomOutgoing.principalUserId,
-      incoming_user: dayEventRoomIncoming.principalUserId,
-    },
-  });
-  await outgoingPage.evaluate(async () => {
-    await window.__fmarchTriggerPlayerResync?.();
-  });
-  await outgoingPage.waitForFunction(
-    (channelTestId) =>
-      window.__fmarchPlayerProjection?.commandState?.actorStatus === "replaced" &&
-      document.querySelector(`[data-testid="${channelTestId}"]`) === null,
-    `player-channel-${dayEventRoomChannel}`,
-  );
-  if (await outgoingPage.getByText(secret, { exact: false }).count()) {
-    throw new Error("replaced DayEvent occupant retained private history in the DOM");
-  }
-
-  const incomingContext = await browserContextWithSession(
-    dayEventRoomIncoming.sessionToken,
-  );
-  const incomingPage = await incomingContext.newPage();
-  const incoming = await incomingPage.goto(roomUrl, { waitUntil: "networkidle" });
-  if (incoming === null || !incoming.ok()) {
-    throw new Error(`incoming DayEvent replacement route failed (${incoming?.status()})`);
-  }
-  await incomingPage.getByText(secret, { exact: false }).waitFor({ state: "visible" });
-  const incomingTab = incomingPage.getByTestId(
-    `player-channel-${dayEventRoomChannel}`,
-  );
-  if ((await incomingTab.getAttribute("data-room-state")) !== "open") {
-    throw new Error("replacement did not inherit the open DayEvent room descriptor");
-  }
-
-  const lock = await sendCommand("host_h", {
-    LockDayEvent: {
-      game: dayEventRoomGame,
-      event_id: dayEventRoomId,
-    },
-  });
-  await incomingPage.evaluate(async () => {
-    await window.__fmarchTriggerPlayerResync?.();
-  });
-  await incomingPage.waitForFunction(
-    (testId) =>
-      document.querySelector(`[data-testid="${testId}"]`)?.getAttribute(
-        "data-room-state",
-      ) === "locked",
-    `player-channel-${dayEventRoomChannel}`,
-  );
-  await incomingPage.getByTestId("player-composer-read-only").waitFor({
-    state: "visible",
-  });
-  await incomingPage.getByText(secret, { exact: false }).waitFor({ state: "visible" });
-
-  const hostState = await fetchJson(
-    `${apiBaseUrl}/games/${dayEventRoomGame}/host-console-state?principal_user_id=host_h&slot_id=${dayEventRoomOutgoing.slotId}`,
-  );
-  const hostRoom = hostState.day_events?.find(
-    (event) => event.event_id === dayEventRoomId,
-  )?.room;
-  if (
-    hostRoom?.channel_id !== dayEventRoomChannel ||
-    hostRoom?.member_count !== 1 ||
-    hostRoom?.posting_allowed !== false
-  ) {
-    throw new Error(
-      `host DayEvent room membership projection drifted: ${JSON.stringify(hostRoom)}`,
-    );
-  }
-
-  await outgoingContext.close();
-  await incomingContext.close();
-  return {
-    status: "passed",
-    game: dayEventRoomGame,
-    eventId: dayEventRoomId,
-    channelId: dayEventRoomChannel,
-    seed,
-    replacement,
-    lock,
-    finalHostRoom: hostRoom,
-    proof:
-      "A browser joined a participant-scoped DayEvent, discovered its typed room, posted history, withdrew and immediately lost room/history DOM access, rejoined, transferred the slot to a replacement who inherited history, then retained that history with a lifecycle-aware read-only composer after host lock; the host projection reported one retained member.",
   };
 }
 
@@ -6200,47 +5828,6 @@ async function waitForHostConsoleReplacementDelta(page, occupantUserId) {
   );
 }
 
-async function sendCommand(principalUserId, command) {
-  const sessionToken = {
-    host_h: hostSessionToken,
-    "player-mira": playerSessionToken,
-    "player-seed": seedPlayerSessionToken,
-    "player-target": targetPlayerSessionToken,
-    "player-goon-a": racePlayerSessionToken,
-    "player-goon-b": goonBSessionToken,
-    "action-goon": actionPlayerSessionToken,
-  }[principalUserId];
-  if (sessionToken === undefined) {
-    throw new Error(`live-stack command actor has no session: ${principalUserId}`);
-  }
-  const response = await fetchJson(`${apiBaseUrl}/commands`, {
-    method: "POST",
-    headers: {
-      authorization: `Bearer ${sessionToken}`,
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({
-      v: 1,
-      id: commandEnvelopeId++,
-      body: {
-        kind: "Command",
-        body: {
-          command_id: crypto.randomUUID(),
-          command,
-        },
-      },
-    }),
-  });
-  if (response.body?.kind !== "Ack") {
-    throw new Error(`seed command rejected: ${JSON.stringify(response)}`);
-  }
-  return {
-    principalUserId,
-    command,
-    streamSeqs: response.body.body.stream_seqs,
-  };
-}
-
 async function fetchJson(url, options = {}, timeoutMs = 15000) {
   const response = await fetchWithTimeout(url, options, timeoutMs);
   const body = await response.json();
@@ -6876,30 +6463,6 @@ function assertVisibleBox(box, label) {
   if (box.width <= 0 || box.height <= 0) {
     throw new Error(`${label} is ${box.width}x${box.height}, expected visible pixels`);
   }
-}
-
-async function writeProgress(progress) {
-  await writeFile(
-    path.join(artifactDir, "live-stack-progress.json"),
-    JSON.stringify({ at: new Date().toISOString(), ...progress }, null, 2),
-  );
-}
-
-async function freePort() {
-  return await new Promise((resolve, reject) => {
-    const portServer = net.createServer();
-    portServer.on("error", reject);
-    portServer.listen(0, host, () => {
-      const address = portServer.address();
-      portServer.close(() => {
-        if (!address || typeof address === "string") {
-          reject(new Error("could not allocate a free TCP port"));
-          return;
-        }
-        resolve(address.port);
-      });
-    });
-  });
 }
 
 process.on("uncaughtException", (error) => {

@@ -659,6 +659,17 @@ private retry/thread rows, mixed public/private narratives, and rebuild. Focused
 API proof separately asserts **zero private bytes** at denied or revoked REST,
 WebSocket-ticket, and media boundaries.
 
+The browser-facing participant-room lifecycle has its own bounded live-stack
+lane: `DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch npm run
+test:host-console-day-event-room-live-stack`. It composes the reusable scratch
+stack/auth/command fixture with
+`tools/live_stack/day_event_room_scenario.mjs`, seeds no unrelated games, and
+writes isolated evidence to
+`target/host-console-day-event-room-live-stack/live-stack-proof.json`. The
+aggregate `test:host-console-live-stack-smoke` runner delegates to that same
+scenario, so focused and aggregate proof cannot drift into separate lifecycle
+implementations.
+
 Rough storage: 40 players × 20 events × 40 participations ≈ 800 participation events — negligible vs multi-week thread volume; **concurrency**, not storage, is the 30+ risk.
 
 ### Security & capabilities
