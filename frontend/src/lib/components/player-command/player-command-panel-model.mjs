@@ -27,7 +27,16 @@ export function buildPlayerCommandPanelViewModel({
   commandInterrupted = false,
   confirmingAction = null,
 }) {
-  if (player.readOnly === true) {
+  const channelContext = buildChannelContextViewModel({ channel, player });
+  const readOnlyReason =
+    player.readOnly === true
+      ? "Spectator rooms are read-only."
+      : channel.allowed === false
+        ? "You no longer have access to this event room."
+        : channel.postingAllowed === false
+          ? `${channel.roomStateLabel ?? "This event room is read-only"}. History remains available to current members.`
+          : null;
+  if (readOnlyReason !== null) {
     return Object.freeze({
       root: Object.freeze({
         className: PLAYER_COMMAND_PANEL_CONTRACT.rootClassName,
@@ -42,7 +51,11 @@ export function buildPlayerCommandPanelViewModel({
       heading: "Vote",
       context: buildActionContextViewModel({ phase, composer }),
       votecount: buildVotecountViewModel(votecount),
-      composer: Object.freeze({ readOnly: true }),
+      composer: Object.freeze({
+        readOnly: true,
+        reason: readOnlyReason,
+        channelContext,
+      }),
       quickActions: Object.freeze({
         className: PLAYER_COMMAND_PANEL_CONTRACT.quickActionClassName,
         testId: PLAYER_COMMAND_PANEL_CONTRACT.quickActionTestId,
@@ -50,7 +63,6 @@ export function buildPlayerCommandPanelViewModel({
       }),
     });
   }
-  const channelContext = buildChannelContextViewModel({ channel, player });
   const commandUnavailable = commandPending || commandInterrupted;
   const playerCommandsDisabled =
     commandUnavailable || player.alive === false || player.gameCompleted === true;

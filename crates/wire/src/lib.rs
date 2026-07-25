@@ -863,6 +863,9 @@ pub struct HostDayEventDelta {
     pub state: String,
     pub phase_id: Option<String>,
     pub definition: game_platform::DayEvent,
+    /// The derived private room and its current membership posture. Public
+    /// events have no room descriptor because their narratives live in main.
+    pub room: Option<DayEventRoomDelta>,
     pub participant_slots: Vec<String>,
     pub open_due_at: Option<i64>,
     pub open_observed_at: Option<i64>,
@@ -873,6 +876,21 @@ pub struct HostDayEventDelta {
     pub winner_slots: Vec<String>,
     pub reward_keys_applied: Vec<String>,
     pub narratives: Vec<DayEventNarrativeDelta>,
+}
+
+/// One derived private DayEvent room. This is a read projection, not ambient
+/// authority: player responses include it only while the current slot remains
+/// a projected member, and all thread/post boundaries still resolve capability
+/// authority independently.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct DayEventRoomDelta {
+    pub event_id: String,
+    pub channel_id: String,
+    pub template_key: String,
+    pub state: String,
+    pub membership: game_platform::EventChannelMembership,
+    pub member_count: u32,
+    pub posting_allowed: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -1989,8 +2007,8 @@ pub mod typescript {
     use crate::{
         AckMsg, AdvanceSubscriptionReadRequest, CapabilityGrant, ClientEnvelope, ClientMsg,
         CohostPermissionClass, Command, CommandMsg, CommunityInboxItem, CommunityInboxPage,
-        DayEventNarrativeDelta, DayEventSchedulerDelta, DayVoteOutcomeDelta, DiscussionArea,
-        DiscussionAuthor, DiscussionPost, DiscussionThreadPage, DiscussionTopic,
+        DayEventNarrativeDelta, DayEventRoomDelta, DayEventSchedulerDelta, DayVoteOutcomeDelta,
+        DiscussionArea, DiscussionAuthor, DiscussionPost, DiscussionThreadPage, DiscussionTopic,
         DiscussionTopicPage, GameIndexEntry, GameIndexPage, Hello, HostConsoleAuthorityDelta,
         HostConsoleAuthorityKind, HostConsolePhaseStateDelta, HostConsoleSlotOccupancyDelta,
         HostConsoleStateDelta, HostConsoleThreadPostDelta, HostDayEventDelta, HostPhaseControl,
@@ -2080,6 +2098,7 @@ pub mod typescript {
         push::<HostConsoleSlotOccupancyDelta>(&mut out);
         push::<HostConsoleThreadPostDelta>(&mut out);
         push::<DayEventSchedulerDelta>(&mut out);
+        push::<DayEventRoomDelta>(&mut out);
         push::<DayEventNarrativeDelta>(&mut out);
         push::<HostDayEventDelta>(&mut out);
         push::<HostTaskKind>(&mut out);

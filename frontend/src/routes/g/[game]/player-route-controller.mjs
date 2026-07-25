@@ -76,8 +76,30 @@ export function buildPlayerProjectionColdLoads(data) {
           commandState: Object.freeze({
             url: data.coldLoad.commandStateEndpoint,
             normalize: normalizePlayerCommandState,
+            normalizeError: normalizePlayerCommandStateRefreshError,
           }),
         }),
+  });
+}
+
+export function normalizePlayerCommandStateRefreshError({ status, previous }) {
+  if (status !== 403 || previous === null || typeof previous !== "object") {
+    return previous;
+  }
+  return Object.freeze({
+    ...previous,
+    actorAlive: false,
+    actorStatus: "replaced",
+    roleKey: null,
+    role: null,
+    actions: Object.freeze([]),
+    currentActions: Object.freeze([]),
+    voteTargets: Object.freeze([]),
+    currentVote: null,
+    dayEvents: Object.freeze([]),
+    dayEventRooms: Object.freeze([]),
+    boundary:
+      "Slot authority changed. Player-private command state and room discovery were revoked.",
   });
 }
 

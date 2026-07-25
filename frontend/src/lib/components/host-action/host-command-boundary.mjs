@@ -1,3 +1,5 @@
+import { normalizeDayEventRoom } from "../../app/day-event-room.mjs";
+
 export const HOST_COMMAND_ENDPOINT = "/commands";
 export const WIRE_PROTOCOL_VERSION = 1;
 
@@ -425,6 +427,7 @@ function normalizeHostDayEvent(event) {
     state: String(event.state ?? "scheduled"),
     phaseId: event.phase_id ?? event.phaseId ?? null,
     templateKey: String(definition.template_key ?? definition.templateKey ?? ""),
+    room: normalizeDayEventRoom(event.room ?? null),
     scheduleEvidence: Object.freeze({
       openDueAt: finiteNumberOrNull(event.open_due_at ?? event.openDueAt),
       openObservedAt: finiteNumberOrNull(

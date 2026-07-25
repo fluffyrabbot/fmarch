@@ -69,14 +69,15 @@ export async function buildGameRouteData({
     game: gameId,
     capabilities: normalizedCapabilities,
   });
-  const channelAccess = resolvePlayerChannelAccess({
+  const initialChannelAccess = resolvePlayerChannelAccess({
     game: gameId,
     channel: channelId,
     capabilities: normalizedCapabilities,
   });
   const canColdLoadActiveChannel =
     !pendingReplacement &&
-    (channelId === "main" || (channelAccess.supported && channelAccess.allowed));
+    (channelId === "main" ||
+      (initialChannelAccess.supported && initialChannelAccess.allowed));
 
   const slotCapability = normalizedCapabilities.find(
     (capability) =>
@@ -102,6 +103,13 @@ export async function buildGameRouteData({
     fetchImpl: canColdLoadActiveChannel ? fetchImpl : null,
     apiBaseUrl,
     fallback: coldLoadFallback,
+  });
+  const dayEventRooms = coldLoad.commandState.dayEventRooms;
+  const channelAccess = resolvePlayerChannelAccess({
+    game: gameId,
+    channel: channelId,
+    capabilities: normalizedCapabilities,
+    dayEventRooms,
   });
 
   const privateQueue = buildPrivateQueueRouteItems(coldLoad, {
@@ -169,10 +177,12 @@ export async function buildGameRouteData({
       liveStatusTestId: PLAYER_ROUTE_CONTRACT.liveStatusTestId,
     }),
     channel: channelAccess,
+    channelCapabilities: normalizedCapabilities,
     channels: buildPlayerChannels({
       game: gameId,
       capabilities: normalizedCapabilities,
       activeChannel: channelId,
+      dayEventRooms,
     }),
     phase,
     ...coldLoad,

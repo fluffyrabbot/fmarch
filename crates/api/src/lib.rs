@@ -39,9 +39,9 @@ use tokio::sync::{broadcast, Mutex, OwnedSemaphorePermit, Semaphore};
 use uuid::Uuid;
 use wire::{
     AckMsg, AdvanceSubscriptionReadRequest, CapabilityGrant, ClientEnvelope, CommunityInboxPage,
-    DayEventNarrativeDelta, DayEventSchedulerDelta, DayVoteOutcomeDelta, DiscussionArea,
-    DiscussionPost, DiscussionThreadPage, DiscussionTopic, DiscussionTopicPage, GameIndexEntry,
-    GameIndexPage, Hello, HostConsoleAuthorityDelta, HostConsoleAuthorityKind,
+    DayEventNarrativeDelta, DayEventRoomDelta, DayEventSchedulerDelta, DayVoteOutcomeDelta,
+    DiscussionArea, DiscussionPost, DiscussionThreadPage, DiscussionTopic, DiscussionTopicPage,
+    GameIndexEntry, GameIndexPage, Hello, HostConsoleAuthorityDelta, HostConsoleAuthorityKind,
     HostConsolePhaseStateDelta, HostConsoleSlotOccupancyDelta, HostConsoleStateDelta,
     HostConsoleThreadPostDelta, HostDayEventDelta, HostPhaseControl, HostPromptDelta,
     HostPromptsDelta, HostTaskAllowedCommand, HostTaskCommandKind, HostTaskDelta, HostTaskKind,
@@ -7232,6 +7232,10 @@ pub struct PlayerCommandStateResponse {
     pub current_vote: Option<PlayerVoteTarget>,
     /// At most one attention item per open DayEvent the slot can act on.
     pub day_events: Vec<PlayerDayEventAttention>,
+    /// Self-scoped private DayEvent rooms for the current slot. Locked and
+    /// terminal rooms remain visible as read-only history while membership is
+    /// retained; revoked rooms disappear from this projection immediately.
+    pub day_event_rooms: Vec<DayEventRoomDelta>,
     pub boundary: String,
 }
 
@@ -7417,8 +7421,8 @@ async fn player_command_state(
     } else {
         (Vec::new(), Vec::new())
     };
-    let day_events =
-        load_player_day_event_attention(&state.pool, game, actor, game_completed).await?;
+    let day_event_workspace =
+        load_player_day_event_workspace(&state.pool, game, actor, game_completed).await?;
 
     Ok(Json(PlayerCommandStateResponse {
         game,
@@ -7433,7 +7437,8 @@ async fn player_command_state(
         current_actions,
         vote_targets,
         current_vote,
-        day_events,
+        day_events: day_event_workspace.attention,
+        day_event_rooms: day_event_workspace.rooms,
         boundary: if game_completed {
             "The game is complete; role actions, votes, and posts are closed while final role and alignment facts are public.".to_string()
         } else {
@@ -7485,21 +7490,43 @@ pub async fn load_player_day_event_attention_for_principal(
     let game_completed = commands::game_completed(pool, game)
         .await
         .map_err(command_reject_api_error)?;
-    load_player_day_event_attention(pool, game, actor, game_completed).await
+    Ok(
+        load_player_day_event_workspace(pool, game, actor, game_completed)
+            .await?
+            .attention,
+    )
 }
 
-async fn load_player_day_event_attention(
+struct PlayerDayEventWorkspace {
+    attention: Vec<PlayerDayEventAttention>,
+    rooms: Vec<DayEventRoomDelta>,
+}
+
+async fn load_player_day_event_workspace(
     pool: &PgPool,
     game: Uuid,
     actor: &projections::SlotStateRow,
     game_completed: bool,
-) -> Result<Vec<PlayerDayEventAttention>, ApiError> {
-    let mut day_events = Vec::new();
-    if game_completed {
-        return Ok(day_events);
-    }
-    for event in projections::day_events(pool, game).await? {
-        if event.state != "open" {
+) -> Result<PlayerDayEventWorkspace, ApiError> {
+    let event_rows = projections::day_events(pool, game).await?;
+    let participation = projections::day_event_participation_for_game(pool, game).await?;
+    let private_members = projections::private_channel_members(pool, game).await?;
+    let mut attention = Vec::new();
+    let mut rooms = Vec::new();
+
+    for event in &event_rows {
+        if let Some(room) = day_event_room_delta(event, &private_members) {
+            if private_members.iter().any(|member| {
+                member.channel_id == room.channel_id && member.slot_id == actor.slot_id
+            }) {
+                rooms.push(DayEventRoomDelta {
+                    posting_allowed: room.posting_allowed && !game_completed,
+                    ..room
+                });
+            }
+        }
+
+        if game_completed || event.state != "open" {
             continue;
         }
         let eligible = match event.definition.participation.who {
@@ -7511,9 +7538,11 @@ async fn load_player_day_event_attention(
         if !eligible {
             continue;
         }
-        let participation =
-            projections::day_event_participation(pool, game, event.event_id.as_str()).await?;
-        let submitted = participation
+        let event_participation = participation
+            .iter()
+            .filter(|row| row.event_id == event.event_id)
+            .collect::<Vec<_>>();
+        let submitted = event_participation
             .iter()
             .any(|row| row.actor_slot == actor.slot_id);
         let at_capacity = event
@@ -7521,17 +7550,17 @@ async fn load_player_day_event_attention(
             .participation
             .limits
             .maximum
-            .is_some_and(|maximum| participation.len() >= maximum as usize);
-        day_events.push(PlayerDayEventAttention {
-            event_id: event.event_id,
+            .is_some_and(|maximum| event_participation.len() >= maximum as usize);
+        attention.push(PlayerDayEventAttention {
+            event_id: event.event_id.clone(),
             template_key: event.definition.template_key.as_str().to_string(),
-            phase_id: event.phase_id.unwrap_or_default(),
+            phase_id: event.phase_id.clone().unwrap_or_default(),
             participation_status: if submitted {
                 "submitted".to_string()
             } else {
                 "available".to_string()
             },
-            participant_count: participation.len() as u32,
+            participant_count: event_participation.len() as u32,
             minimum_participants: event.definition.participation.limits.minimum,
             maximum_participants: event.definition.participation.limits.maximum,
             reward_keys: event
@@ -7544,7 +7573,31 @@ async fn load_player_day_event_attention(
             can_withdraw: submitted,
         });
     }
-    Ok(day_events)
+    Ok(PlayerDayEventWorkspace { attention, rooms })
+}
+
+fn day_event_room_delta(
+    event: &projections::DayEventRow,
+    private_members: &[projections::PrivateChannelMemberRow],
+) -> Option<DayEventRoomDelta> {
+    let membership = event.definition.channel_policy.membership()?;
+    let channel_id = event
+        .definition
+        .channel_policy
+        .channel_id(&event.definition.id)
+        .to_string();
+    Some(DayEventRoomDelta {
+        event_id: event.event_id.clone(),
+        channel_id: channel_id.clone(),
+        template_key: event.definition.template_key.as_str().to_string(),
+        state: event.state.clone(),
+        membership,
+        member_count: private_members
+            .iter()
+            .filter(|member| member.channel_id == channel_id)
+            .count() as u32,
+        posting_allowed: event.state == "open",
+    })
 }
 
 /// Self-scoped role identity for the requesting SlotOccupant. Reads only the
@@ -8505,6 +8558,7 @@ async fn load_host_console_state(
             });
     let day_event_participation = projections::day_event_participation_for_game(pool, game).await?;
     let day_event_narratives = projections::day_event_narratives(pool, game).await?;
+    let private_channel_members = projections::private_channel_members(pool, game).await?;
     let tasks = select_host_tasks(&host_prompts, &day_event_rows, &authority);
     let day_events = day_event_rows
         .iter()
@@ -8513,6 +8567,7 @@ async fn load_host_console_state(
             state: event.state.clone(),
             phase_id: event.phase_id.clone(),
             definition: event.definition.clone(),
+            room: day_event_room_delta(event, &private_channel_members),
             participant_slots: day_event_participation
                 .iter()
                 .filter(|row| row.event_id == event.event_id)

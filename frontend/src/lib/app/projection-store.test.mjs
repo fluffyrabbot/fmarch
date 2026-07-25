@@ -68,6 +68,32 @@ test("projection store refreshes cold-load keys and preserves failed projections
   ]);
 });
 
+test("projection store can normalize an authorization loss into an explicit snapshot", async () => {
+  const store = createProjectionStore({
+    initialSnapshot: {
+      commandState: { actorStatus: "alive", dayEventRooms: [{ eventId: "event-1" }] },
+    },
+    coldLoads: {
+      commandState: {
+        url: "/player-command-state",
+        normalizeError: ({ status, previous }) => ({
+          ...previous,
+          actorStatus: status === 403 ? "replaced" : previous.actorStatus,
+          dayEventRooms: status === 403 ? [] : previous.dayEventRooms,
+        }),
+      },
+    },
+  });
+
+  const snapshot = await store.refresh("commandState", {
+    fetchImpl: async () => ({ ok: false, status: 403 }),
+  });
+  assert.deepEqual(snapshot.commandState, {
+    actorStatus: "replaced",
+    dayEventRooms: [],
+  });
+});
+
 test("projection store applies server payloads through the registered normalizer", () => {
   const store = createProjectionStore({
     initialSnapshot: {

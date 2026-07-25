@@ -230,3 +230,75 @@ test("player channel switcher derives Mason and Neighbor rooms from capabilities
     ],
   );
 });
+
+test("typed DayEvent rooms override stale capability labels and posting posture", () => {
+  const capabilities = [
+    { kind: "SlotOccupant", game: "midsummer", slot: "slot_1" },
+    {
+      kind: "ChannelMember",
+      game: "midsummer",
+      channel: "private:event:event-cookie",
+    },
+  ];
+  const dayEventRooms = [{
+    eventId: "event-cookie",
+    channelId: "private:event:event-cookie",
+    templateKey: "theme.raffle",
+    state: "locked",
+    membership: "participants",
+    memberCount: 2,
+    postingAllowed: false,
+  }];
+
+  const channels = buildPlayerChannels({
+    game: "midsummer",
+    capabilities,
+    activeChannel: "private:event:event-cookie",
+    dayEventRooms,
+  });
+  assert.deepEqual(channels[1], {
+    id: "private:event:event-cookie",
+    label: "Raffle room",
+    href: "/g/midsummer/c/private%3Aevent%3Aevent-cookie",
+    active: true,
+    capabilityLabel: "DayEventRoom(event-cookie)",
+    roomState: "locked",
+    postingAllowed: false,
+    roomStateLabel: "Locked · read-only",
+    eventId: "event-cookie",
+  });
+  assert.equal(
+    resolvePlayerChannelAccess({
+      game: "midsummer",
+      channel: "private:event:event-cookie",
+      capabilities,
+      dayEventRooms,
+    }).postingAllowed,
+    false,
+  );
+});
+
+test("authoritative DayEvent room projection removes a revoked static capability", () => {
+  const capabilities = [{
+    kind: "ChannelMember",
+    game: "midsummer",
+    channel: "private:event:event-cookie",
+  }];
+  assert.deepEqual(
+    buildPlayerChannels({
+      game: "midsummer",
+      capabilities,
+      dayEventRooms: [],
+    }),
+    [],
+  );
+  assert.equal(
+    resolvePlayerChannelAccess({
+      game: "midsummer",
+      channel: "private:event:event-cookie",
+      capabilities,
+      dayEventRooms: [],
+    }).allowed,
+    false,
+  );
+});

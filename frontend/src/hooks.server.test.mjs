@@ -32,7 +32,7 @@ test("handle clears a concurrently stale browser session instead of serving it",
 });
 
 
-test("handle serves repeat requests from the session cache within the TTL", async () => {
+test("handle re-resolves game authority on every request", async () => {
   clearSessionCache();
   const observed = { requests: [], set: null, deleted: null };
   const event = eventFor(observed, [
@@ -44,13 +44,39 @@ test("handle serves repeat requests from the session cache within the TTL", asyn
   await handle({ event, resolve: async () => new Response("ok") });
   assert.equal(
     observed.requests.filter((request) => request.url.startsWith("/auth/session?")).length,
+    2,
+  );
+  assert.equal(event.locals.principalUserId, "host_h");
+  clearSessionCache();
+});
+
+test("handle serves repeat non-game identity requests from the session cache within the TTL", async () => {
+  clearSessionCache();
+  const observed = { requests: [], set: null, deleted: null };
+  const event = eventFor(
+    observed,
+    [sessionResponse({ rotationRequired: false })],
+    { url: "http://localhost/admin" },
+  );
+  event.cookies.get = (name) => (name === "fmarch_session" ? "cached-hook-token" : undefined);
+  await handle({ event, resolve: async () => new Response("ok") });
+  await handle({ event, resolve: async () => new Response("ok") });
+  assert.equal(
+    observed.requests.filter((request) => request.url === "/auth/session").length,
     1,
   );
   assert.equal(event.locals.principalUserId, "host_h");
   clearSessionCache();
 });
 
-function eventFor(observed, sessions, { rotation = sessionResponse({ rotationRequired: false }) } = {}) {
+function eventFor(
+  observed,
+  sessions,
+  {
+    rotation = sessionResponse({ rotationRequired: false }),
+    url = "http://localhost/g/game-1/host",
+  } = {},
+) {
   let token = "old-session";
   return {
     cookies: {
@@ -73,8 +99,8 @@ function eventFor(observed, sessions, { rotation = sessionResponse({ rotationReq
       }
       return sessions.shift() ?? sessionResponse({ rotationRequired: false });
     },
-    url: new URL("http://localhost/g/game-1/host"),
-    request: new Request("http://localhost/g/game-1/host"),
+    url: new URL(url),
+    request: new Request(url),
     locals: {},
   };
 }

@@ -8,9 +8,10 @@ export const DEFAULT_SESSION_CACHE_TTL_MS = 30_000;
 const SESSION_CACHE_MAX_ENTRIES = 1000;
 const sessionCache = new Map();
 
-// TTL for cached auth-session resolutions. Bounds capability-change lag; the
-// win is removing one serial API round trip from almost every SSR request.
-// 0 disables caching.
+// TTL for cached non-game auth-session resolutions. Game-scoped slot/channel
+// authority is intentionally never cached: join, withdrawal, death, and
+// replacement must affect the next SSR authorization decision immediately.
+// 0 disables all caching.
 export function sessionCacheTtlMs(env = globalThis.process?.env) {
   const raw = env?.FMARCH_SESSION_CACHE_TTL_MS;
   if (raw === undefined || raw === null || String(raw).trim() === "") {
@@ -72,7 +73,8 @@ export async function resolveAuthenticatedSessionCached({
     env?.FMARCH_FRONTEND_FIXTURE_SESSION !== "1" &&
     typeof token === "string" &&
     token.trim() !== "" &&
-    context !== null;
+    context !== null &&
+    context.kind !== "game";
   if (!cacheable) {
     return resolveAuthenticatedSession({ cookies, request, fetchImpl, env });
   }

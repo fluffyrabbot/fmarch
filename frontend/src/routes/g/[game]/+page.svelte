@@ -30,10 +30,12 @@
   import {
     PLAYER_ROUTE_CONTRACT,
     buildPlayerComposerView,
+    buildPlayerChannels,
     buildPlayerPhaseView,
     buildLiveOfficialPost,
     buildPrivateQueueBoundary,
     buildPrivateQueueRouteItems,
+    resolvePlayerChannelAccess,
   } from "./game-route-model.mjs";
   import { buildPlayerRoleCardViewModel } from "$lib/components/player-role-card/player-role-card-model.mjs";
   import {
@@ -87,6 +89,8 @@
   let player = data.player;
   let phase = data.phase;
   let composer = data.composer;
+  let channel = data.channel;
+  let channels = data.channels;
   let surfaceHeader = data.surfaceHeader;
   let privateQueue = data.privateQueue;
   let privateQueueBoundary = data.privateQueueBoundary;
@@ -123,7 +127,7 @@
       votecount,
       privateQueue,
       commandState,
-      channel: data.channel,
+      channel,
     });
   $: playerForcedRouteState = data.routeState
     ? buildRouteStateViewModel(data.routeState)
@@ -136,13 +140,15 @@
     player,
     phase,
     composer,
+    channel,
+    channels,
     surfaceHeader,
   });
   $: playerActionView = buildPlayerCommandPanelViewModel({
     composer,
     phase,
     votecount,
-    channel: data.channel,
+    channel,
     player,
     commandPending,
     commandInterrupted,
@@ -175,6 +181,27 @@
       : [];
     endgameSummary = snapshot.endgameSummary ?? null;
     commandState = snapshot.commandState;
+    channels = buildPlayerChannels({
+      game: data.game.id,
+      capabilities: data.channelCapabilities,
+      activeChannel: data.threadPager.channel,
+      dayEventRooms: commandState?.dayEventRooms ?? [],
+    });
+    channel = resolvePlayerChannelAccess({
+      game: data.game.id,
+      channel: data.threadPager.channel,
+      capabilities: data.channelCapabilities,
+      dayEventRooms: commandState?.dayEventRooms ?? [],
+    });
+    if (
+      channel.allowed !== true &&
+      data.threadPager.channel.startsWith("private:event:")
+    ) {
+      thread = Object.freeze({
+        posts: Object.freeze([]),
+        nextBeforeSeq: null,
+      });
+    }
     player = Object.freeze({
       ...data.player,
       alive: commandState?.actorAlive ?? data.player.alive,
@@ -197,7 +224,7 @@
       title: phase.label,
       summary: phase.summary,
     });
-    liveOfficialPost = buildLiveOfficialPost(snapshot.thread);
+    liveOfficialPost = buildLiveOfficialPost(thread);
     privateQueue = buildPrivateQueueRouteItems(snapshot, {
       game: data.game.id,
       channel: data.threadPager.channel,
@@ -213,6 +240,8 @@
       projectionStore,
       fetchImpl: fetch,
       resyncKeys: playerProjectionResyncKeys,
+      authorizationLossRefreshKeys:
+        data.coldLoad.commandStateEndpoint == null ? [] : ["commandState"],
       reconnectDelayMs: 1500,
       refreshKeysForEvent: (message) =>
         playerRefreshKeysForLiveDelta(data, message),
@@ -452,7 +481,7 @@
       {liveStatus}
       {player}
     />
-    <ChannelTabs slot="channels" channels={data.channels} />
+    <ChannelTabs slot="channels" {channels} />
 
     <PlayerThread
       {thread}

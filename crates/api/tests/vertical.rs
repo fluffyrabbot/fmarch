@@ -6256,6 +6256,8 @@ async fn vertical_private_day_event_channel_discloses_zero_bytes_after_denial_or
     let app = router(pool.clone());
     let (member_token, member_principal) =
         create_media_upload_account_session(&app, "private-event-member").await;
+    let (replacement_token, replacement_principal) =
+        create_media_upload_account_session(&app, "private-event-replacement").await;
     let (nonmember_token, _) =
         create_media_upload_account_session(&app, "private-event-nonmember").await;
     let game = Uuid::new_v4();
@@ -6354,6 +6356,29 @@ async fn vertical_private_day_event_channel_discloses_zero_bytes_after_denial_or
     assert_eq!(member.status(), StatusCode::OK);
     let member_body = to_bytes(member.into_body(), usize::MAX).await.unwrap();
     assert!(String::from_utf8_lossy(&member_body).contains(secret));
+    let command_state = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!("/games/{game}/player-command-state?slot_id=slot_1"))
+                .header("authorization", format!("Bearer {member_token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(command_state.status(), StatusCode::OK);
+    let command_state: api::PlayerCommandStateResponse = serde_json::from_slice(
+        &to_bytes(command_state.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(command_state.day_event_rooms.len(), 1);
+    assert_eq!(command_state.day_event_rooms[0].channel_id, channel_id);
+    assert_eq!(command_state.day_event_rooms[0].member_count, 1);
+    assert!(command_state.day_event_rooms[0].posting_allowed);
 
     let denied = app
         .clone()
@@ -6402,7 +6427,7 @@ async fn vertical_private_day_event_channel_discloses_zero_bytes_after_denial_or
         &caps::Principal::user(&member_principal),
         commands::Command::WithdrawDayEventParticipation {
             game,
-            event_id,
+            event_id: event_id.clone(),
             actor_slot: "slot_1".into(),
         },
     )
@@ -6451,6 +6476,118 @@ async fn vertical_private_day_event_channel_discloses_zero_bytes_after_denial_or
             "revoked REST, WebSocket-ticket, and media boundaries disclose zero private bytes"
         );
     }
+
+    let revoked_state = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!("/games/{game}/player-command-state?slot_id=slot_1"))
+                .header("authorization", format!("Bearer {member_token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let revoked_state: api::PlayerCommandStateResponse = serde_json::from_slice(
+        &to_bytes(revoked_state.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert!(revoked_state.day_event_rooms.is_empty());
+
+    commands::handle(
+        &pool,
+        &caps::Principal::user(&member_principal),
+        commands::Command::SubmitDayEventParticipation {
+            game,
+            event_id: event_id.clone(),
+            actor_slot: "slot_1".into(),
+            payload: game_platform::ParticipationPayload::OptIn,
+        },
+    )
+    .await
+    .unwrap();
+    commands::handle(
+        &pool,
+        &host,
+        commands::Command::ProcessReplacement {
+            game,
+            slot: "slot_1".into(),
+            outgoing_user: member_principal.clone(),
+            incoming_user: replacement_principal,
+        },
+    )
+    .await
+    .unwrap();
+
+    let outgoing_state = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!("/games/{game}/player-command-state?slot_id=slot_1"))
+                .header("authorization", format!("Bearer {member_token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(outgoing_state.status(), StatusCode::FORBIDDEN);
+
+    commands::handle(
+        &pool,
+        &host,
+        commands::Command::LockDayEvent {
+            game,
+            event_id: event_id.clone(),
+        },
+    )
+    .await
+    .unwrap();
+    let replacement_state = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!("/games/{game}/player-command-state?slot_id=slot_1"))
+                .header("authorization", format!("Bearer {replacement_token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(replacement_state.status(), StatusCode::OK);
+    let replacement_state: api::PlayerCommandStateResponse = serde_json::from_slice(
+        &to_bytes(replacement_state.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(replacement_state.day_event_rooms.len(), 1);
+    assert_eq!(replacement_state.day_event_rooms[0].state, "locked");
+    assert!(!replacement_state.day_event_rooms[0].posting_allowed);
+
+    let replacement_history = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!(
+                    "/games/{game}/channels/{channel_id}/thread?limit=10"
+                ))
+                .header("authorization", format!("Bearer {replacement_token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(replacement_history.status(), StatusCode::OK);
+    let replacement_history = to_bytes(replacement_history.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    assert!(String::from_utf8_lossy(&replacement_history).contains(secret));
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]

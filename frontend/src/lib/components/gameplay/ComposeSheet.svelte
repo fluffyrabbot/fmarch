@@ -72,6 +72,17 @@
       {/each}
     </div>
   </section>
+{:else}
+  <section
+    class="compose-sheet compose-sheet--read-only"
+    data-testid="player-composer-read-only"
+    data-channel-id={view?.channelContext?.channelId}
+    aria-live="polite"
+  >
+    <p class="fm-eyebrow">Read-only room</p>
+    <h2>{view?.channelContext?.channelLabel ?? "Channel history"}</h2>
+    <p>{view?.reason ?? "Posting is unavailable in this room."}</p>
+  </section>
 {/if}
 
 <style>
@@ -93,6 +104,10 @@
   .compose-sheet h2,
   .compose-sheet p {
     margin: 0;
+  }
+
+  .compose-sheet--read-only {
+    color: var(--fm-ink-muted);
   }
 
   .compose-sheet header > span {

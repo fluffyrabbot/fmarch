@@ -475,3 +475,41 @@ test("player command panel model normalizes missing row and label data", () => {
   assert.deepEqual(view.composer.actionPicker.actions, []);
   assert.deepEqual(view.composer.actionPicker.recoveryCommands, []);
 });
+
+test("locked DayEvent rooms retain context with a read-only composer", () => {
+  const view = buildPlayerCommandPanelViewModel({
+    composer: {},
+    channel: {
+      channel: "private:event:event-cookie",
+      label: "Raffle room",
+      capabilityLabel: "DayEventRoom(event-cookie)",
+      allowed: true,
+      postingAllowed: false,
+      roomStateLabel: "Locked · read-only",
+    },
+    player: { slotId: "slot-1", alive: true, status: "alive" },
+  });
+
+  assert.equal(view.composer.readOnly, true);
+  assert.equal(view.composer.channelContext.channelLabel, "Raffle room");
+  assert.match(view.composer.reason, /History remains available/u);
+  assert.deepEqual(view.quickActions.buttons, []);
+});
+
+test("revoked DayEvent rooms remove posting and explain lost access", () => {
+  const view = buildPlayerCommandPanelViewModel({
+    composer: {},
+    channel: {
+      channel: "private:event:event-cookie",
+      label: "Event cookie",
+      allowed: false,
+    },
+    player: { slotId: "slot-1", alive: true, status: "alive" },
+  });
+
+  assert.equal(view.composer.readOnly, true);
+  assert.equal(
+    view.composer.reason,
+    "You no longer have access to this event room.",
+  );
+});

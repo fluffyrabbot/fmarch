@@ -139,9 +139,16 @@ export type HostConsoleThreadPostDelta = { stream_seq: bigint, author_slot: stri
 
 export type DayEventSchedulerDelta = { pending: boolean, next_due_at: bigint | null, auto_resolve_pending: boolean, narrative_pending: boolean, wake_seq: bigint, last_observed_wake_seq: bigint, lease_until: bigint | null, retry_not_before: bigint | null, last_attempt_at: bigint | null, last_success_at: bigint | null, last_failure_at: bigint | null, consecutive_failures: number, total_attempts: bigint, total_successes: bigint, last_error: string | null, };
 
+export type DayEventRoomDelta = { event_id: string, channel_id: string, template_key: string, state: string, membership: EventChannelMembership, member_count: number, posting_allowed: boolean, };
+
 export type DayEventNarrativeDelta = { lifecycle: NarrativeLifecycle, template_key: string, template_hash: string, channel_id: string, status: string, body: string | null, source_seq: bigint | null, published_seq: bigint | null, };
 
-export type HostDayEventDelta = { event_id: string, state: string, phase_id: string | null, definition: DayEvent, participant_slots: Array<string>, open_due_at: bigint | null, open_observed_at: bigint | null, lock_due_at: bigint | null, lock_observed_at: bigint | null, auto_seed: bigint | null, resolution_evidence: DayEventResolutionEvidence | null, winner_slots: Array<string>, reward_keys_applied: Array<string>, narratives: Array<DayEventNarrativeDelta>, };
+export type HostDayEventDelta = { event_id: string, state: string, phase_id: string | null, definition: DayEvent,
+/**
+ * The derived private room and its current membership posture. Public
+ * events have no room descriptor because their narratives live in main.
+ */
+room: DayEventRoomDelta | null, participant_slots: Array<string>, open_due_at: bigint | null, open_observed_at: bigint | null, lock_due_at: bigint | null, lock_observed_at: bigint | null, auto_seed: bigint | null, resolution_evidence: DayEventResolutionEvidence | null, winner_slots: Array<string>, reward_keys_applied: Array<string>, narratives: Array<DayEventNarrativeDelta>, };
 
 export type HostTaskKind = "engine_host_prompt" | "day_event_resolve";
 

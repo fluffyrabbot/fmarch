@@ -1,3 +1,5 @@
+import { normalizeDayEventRoom } from "./day-event-room.mjs";
+
 export const DEFAULT_SSR_FETCH_TIMEOUT_MS = 2000;
 
 // Budget for one server-side projection fetch. Every cold-load call has a
@@ -568,6 +570,7 @@ export const EMPTY_PLAYER_COMMAND_STATE = Object.freeze({
   voteTargets: Object.freeze([]),
   currentVote: null,
   dayEvents: Object.freeze([]),
+  dayEventRooms: Object.freeze([]),
   boundary:
     "No live player command-state endpoint was available; the route renders no role action controls.",
 });
@@ -591,6 +594,11 @@ export function normalizePlayerCommandState(payload, fallback = EMPTY_PLAYER_COM
     ? payload.day_events
     : Array.isArray(payload.dayEvents)
       ? payload.dayEvents
+      : [];
+  const dayEventRooms = Array.isArray(payload.day_event_rooms)
+    ? payload.day_event_rooms
+    : Array.isArray(payload.dayEventRooms)
+      ? payload.dayEventRooms
       : [];
   return Object.freeze({
     game: payload.game ?? fallback.game ?? null,
@@ -625,6 +633,9 @@ export function normalizePlayerCommandState(payload, fallback = EMPTY_PLAYER_COM
     ),
     dayEvents: Object.freeze(
       dayEvents.map(normalizePlayerDayEventAttention).filter(Boolean),
+    ),
+    dayEventRooms: Object.freeze(
+      dayEventRooms.map(normalizeDayEventRoom).filter(Boolean),
     ),
     boundary: String(payload.boundary ?? fallback.boundary ?? ""),
   });

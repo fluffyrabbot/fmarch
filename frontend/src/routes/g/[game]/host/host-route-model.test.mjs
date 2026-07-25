@@ -460,6 +460,7 @@ test("host console route data uses host prompt and votecount cold-loads when ava
       maximum: null,
     },
     participantSlots: ["slot_1", "slot_2"],
+    room: null,
     rewards: [{
       key: "cookie",
       labelKey: "theme.cookie",

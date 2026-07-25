@@ -1,4 +1,8 @@
 import { hasCapability } from "../../app/capabilities.mjs";
+import {
+  dayEventRoomLabel,
+  dayEventRoomStateLabel,
+} from "../../app/day-event-room.mjs";
 
 export const PLAYER_CHANNEL_SWITCHER_CONTRACT = Object.freeze({
   rootClassName: "player-channel-switcher",
@@ -46,8 +50,13 @@ const PLAYER_CHANNELS = Object.freeze([
   }),
 ]);
 
-export function buildPlayerChannels({ game, capabilities, activeChannel = "main" }) {
-  const definitions = playerChannelDefinitions({ capabilities, game });
+export function buildPlayerChannels({
+  game,
+  capabilities,
+  activeChannel = "main",
+  dayEventRooms = null,
+}) {
+  const definitions = playerChannelDefinitions({ capabilities, game, dayEventRooms });
   const channels = definitions.map((channel) => ({
     id: channel.id,
     label: channel.label,
@@ -55,6 +64,14 @@ export function buildPlayerChannels({ game, capabilities, activeChannel = "main"
     active: channel.id === activeChannel,
     capabilityLabel: channel.capabilityLabel,
     allowed: channel.allowed({ capabilities, game }),
+    ...(channel.roomState === undefined
+      ? {}
+      : {
+          roomState: channel.roomState,
+          postingAllowed: channel.postingAllowed,
+          roomStateLabel: channel.roomStateLabel,
+          eventId: channel.eventId,
+        }),
   }));
 
   return Object.freeze(
@@ -68,12 +85,16 @@ export function resolvePlayerChannelAccess({
   game,
   channel,
   capabilities = [],
+  dayEventRooms = null,
 }) {
-  let definition = playerChannelDefinitions({ capabilities, game }).find(
+  let definition = playerChannelDefinitions({ capabilities, game, dayEventRooms }).find(
     (candidate) => candidate.id === channel,
   );
   if (definition === undefined && isPrivateRoomChannel(channel)) {
-    definition = dynamicPrivateChannel(channel);
+    definition =
+      Array.isArray(dayEventRooms) && channel.startsWith("private:event:")
+        ? revokedDayEventRoom(channel)
+        : dynamicPrivateChannel(channel);
   }
   if (definition === undefined) {
     return Object.freeze({
@@ -93,6 +114,14 @@ export function resolvePlayerChannelAccess({
     label: definition.label,
     capabilityLabel: definition.capabilityLabel,
     href: definition.href(game),
+    ...(definition.roomState === undefined
+      ? {}
+      : {
+          roomState: definition.roomState,
+          postingAllowed: definition.postingAllowed,
+          roomStateLabel: definition.roomStateLabel,
+          eventId: definition.eventId,
+        }),
   });
 }
 
@@ -111,7 +140,14 @@ export function buildPlayerChannelSwitcherViewModel({ channels = [] } = {}) {
         Object.freeze({
           ...channel,
           ariaCurrent: channel.active ? "page" : undefined,
-          stateLabel: channel.active ? "Current channel" : "Open channel",
+          stateLabel:
+            channel.roomStateLabel === undefined
+              ? channel.active
+                ? "Current channel"
+                : "Open channel"
+              : channel.active
+                ? `Current channel · ${channel.roomStateLabel}`
+                : channel.roomStateLabel,
           minTouchTargetPx: PLAYER_CHANNEL_SWITCHER_CONTRACT.minTouchTargetPx,
         }),
       ),
@@ -119,16 +155,24 @@ export function buildPlayerChannelSwitcherViewModel({ channels = [] } = {}) {
   });
 }
 
-function playerChannelDefinitions({ capabilities, game }) {
+function playerChannelDefinitions({ capabilities, game, dayEventRooms }) {
+  const roomProjectionIsAuthoritative = Array.isArray(dayEventRooms);
+  const eventRooms = roomProjectionIsAuthoritative
+    ? dayEventRooms.map(dynamicDayEventRoom)
+    : [];
   const dynamicChannels = capabilities
     .filter(
       (capability) =>
         capability.kind === "ChannelMember" &&
         capability.game === game &&
+        !(
+          roomProjectionIsAuthoritative &&
+          String(capability.channel).startsWith("private:event:")
+        ) &&
         !PLAYER_CHANNELS.some((channel) => channel.id === capability.channel),
     )
     .map((capability) => dynamicPrivateChannel(capability.channel));
-  const definitions = [...PLAYER_CHANNELS, ...dynamicChannels].sort(
+  const definitions = [...PLAYER_CHANNELS, ...eventRooms, ...dynamicChannels].sort(
     (left, right) => channelOrder(left.id) - channelOrder(right.id),
   );
   const seen = new Set();
@@ -138,6 +182,37 @@ function playerChannelDefinitions({ capabilities, game }) {
     }
     seen.add(channel.id);
     return true;
+  });
+}
+
+function revokedDayEventRoom(channelId) {
+  const definition = dynamicPrivateChannel(channelId);
+  return Object.freeze({
+    ...definition,
+    label: "Event room",
+    capabilityLabel: "Current DayEvent room membership",
+    allowed() {
+      return false;
+    },
+  });
+}
+
+function dynamicDayEventRoom(room) {
+  const id = String(room.channelId);
+  return Object.freeze({
+    id,
+    eventId: String(room.eventId),
+    label: dayEventRoomLabel(room),
+    capabilityLabel: `DayEventRoom(${room.eventId})`,
+    roomState: String(room.state),
+    postingAllowed: room.postingAllowed === true,
+    roomStateLabel: dayEventRoomStateLabel(room),
+    href(game) {
+      return `/g/${encodeURIComponent(game)}/c/${encodeURIComponent(id)}`;
+    },
+    allowed() {
+      return true;
+    },
   });
 }
 

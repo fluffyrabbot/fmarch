@@ -348,6 +348,16 @@
   function hasNarrativeEvidence(event) {
     return Array.isArray(event?.narratives) && event.narratives.length > 0;
   }
+
+  function hasPrivateRoom(event) {
+    return event?.room !== null && event?.room !== undefined;
+  }
+
+  function roomPosture(room) {
+    return room?.postingAllowed === true
+      ? "open for posting"
+      : `${room?.state ?? "closed"} · read-only`;
+  }
 </script>
 
 <svelte:head>
@@ -476,6 +486,23 @@
                       {/if}
                     </li>
                   {/each}
+                {/each}
+              </ul>
+            {/if}
+            {#if hostDayEvents.some(hasPrivateRoom)}
+              <ul data-testid="host-day-event-room-evidence">
+                {#each hostDayEvents as event (event.eventId)}
+                  {#if event.room}
+                    <li
+                      data-event-room={event.room.channelId}
+                      data-member-count={event.room.memberCount}
+                    >
+                      <strong>{event.eventId} · private room</strong>
+                      · {event.room.memberCount} members
+                      · {event.room.membership}
+                      · {roomPosture(event.room)}
+                    </li>
+                  {/if}
                 {/each}
               </ul>
             {/if}

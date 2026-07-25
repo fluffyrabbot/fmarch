@@ -41,6 +41,8 @@ const evidencePath = path.join(artifactDir, "live-stack-proof.json");
 const summaryPath = path.join(artifactDir, "live-stack-summary.json");
 const summaryMarkdownPath = path.join(artifactDir, "live-stack-summary.md");
 const databaseUrl = process.env.DATABASE_URL;
+const dayEventRoomOnly =
+  process.env.FMARCH_LIVE_STACK_SCOPE === "day-event-room";
 const host = "127.0.0.1";
 const smokeViewport = Object.freeze({ width: 1024, height: 768 });
 const game = crypto.randomUUID();
@@ -48,14 +50,29 @@ const actionGame = crypto.randomUUID();
 const additionalRoomsGame = crypto.randomUUID();
 const deadChatGame = crypto.randomUUID();
 const spectatorGame = crypto.randomUUID();
+const dayEventRoomGame = crypto.randomUUID();
 const adminCreatedGame = crypto.randomUUID();
 const rootAdminSessionToken = `host-console-live-stack-root-admin-${crypto.randomUUID()}`;
 const hostSessionToken = `host-console-live-stack-host-${crypto.randomUUID()}`;
 const playerSessionToken = `host-console-live-stack-player-${crypto.randomUUID()}`;
 const actionPlayerSessionToken = `host-console-live-stack-action-player-${crypto.randomUUID()}`;
 const racePlayerSessionToken = `host-console-live-stack-race-player-${crypto.randomUUID()}`;
+const seedPlayerSessionToken = `host-console-live-stack-seed-player-${crypto.randomUUID()}`;
+const targetPlayerSessionToken = `host-console-live-stack-target-player-${crypto.randomUUID()}`;
+const goonBSessionToken = `host-console-live-stack-goon-b-${crypto.randomUUID()}`;
 const adminSessionToken = `host-console-live-stack-admin-${crypto.randomUUID()}`;
 const cohostSessionToken = `host-console-live-stack-cohost-${crypto.randomUUID()}`;
+const dayEventRoomOutgoing = Object.freeze({
+  slotId: "event-room-slot",
+  principalUserId: "event-room-outgoing",
+  sessionToken: `host-console-live-stack-event-room-outgoing-${crypto.randomUUID()}`,
+});
+const dayEventRoomIncoming = Object.freeze({
+  principalUserId: "event-room-incoming",
+  sessionToken: `host-console-live-stack-event-room-incoming-${crypto.randomUUID()}`,
+});
+const dayEventRoomId = "event-browser-room";
+const dayEventRoomChannel = `private:event:${dayEventRoomId}`;
 const grantedGlobalModToken = `session-grant-${adminCreatedGame}`;
 const factionDayChatChannel = "private:mafia_day_chat";
 const factionDayChatRoute = encodeURIComponent(factionDayChatChannel);
@@ -218,6 +235,10 @@ try {
 
   await writeProgress({ stage: "wait-for-rust-health" });
   await waitForHealth();
+  await writeProgress({ stage: "seed-root-admin-session" });
+  const rootAdminSession = await seedRootAdminSession();
+  await writeProgress({ stage: "create-granted-sessions", game });
+  const grantedSessions = await createGrantedSessions();
   await writeProgress({ stage: "seed-game", game });
   const seedCommands = await seedGame();
   await writeProgress({ stage: "seed-action-game", actionGame });
@@ -228,18 +249,18 @@ try {
   const deadChatSeed = await seedDeadChatGame();
   await writeProgress({ stage: "seed-spectator-game", spectatorGame });
   const spectatorSeed = await seedSpectatorGame();
+  await writeProgress({ stage: "seed-day-event-room-game", dayEventRoomGame });
+  const dayEventRoomSeed = await seedDayEventRoomGame();
   await writeProgress({ stage: "seed-faction-day-chat-fixture", game });
   const privateChannelFixture = await seedFactionDayChatFixture();
-  await writeProgress({ stage: "seed-root-admin-session" });
-  const rootAdminSession = await seedRootAdminSession();
-  await writeProgress({ stage: "create-granted-sessions", game });
-  const grantedSessions = await createGrantedSessions();
   await writeProgress({ stage: "create-additional-room-sessions", additionalRoomsGame });
   const additionalRoomSessions = await createAdditionalRoomSessions();
   await writeProgress({ stage: "create-dead-chat-sessions", deadChatGame });
   const deadChatSessions = await createDeadChatSessions();
   await writeProgress({ stage: "create-spectator-session", spectatorGame });
   const spectatorSession = await createSpectatorSession();
+  await writeProgress({ stage: "create-day-event-room-sessions", dayEventRoomGame });
+  const dayEventRoomSessions = await createDayEventRoomSessions();
 
   await writeProgress({ stage: "start-sveltekit" });
   const { createServer: createViteServer } = await import(
@@ -252,7 +273,6 @@ try {
       port: 0,
       strictPort: false,
       proxy: {
-        "/commands": apiBaseUrl,
         "/games": apiBaseUrl,
         "/ws": {
           target: apiBaseUrl,
@@ -276,23 +296,27 @@ try {
     additionalRoomsSeed,
     deadChatSeed,
     spectatorSeed,
+    dayEventRoomSeed,
   );
-  const playerVoteCount =
-    browserEvidence.playerVoteCountAfterPlayer ??
-    (await fetchJson(`${apiBaseUrl}/games/${game}/votecount`));
-  assertPlayerVoteProjection(playerVoteCount);
-  const apiState =
-    browserEvidence.moderator?.apiStateBeforePrompt ??
-    (await fetchJson(
-      `${apiBaseUrl}/games/${game}/host-console-state?principal_user_id=host_h&slot_id=slot-7`,
-    ));
-  assertApiProjection(apiState);
-  const slotLifecycleApiState =
-    browserEvidence.moderator?.slotLifecycle?.apiStateAfter ??
-    (await fetchJson(
-      `${apiBaseUrl}/games/${game}/host-console-state?principal_user_id=host_h&slot_id=slot-7`,
-    ));
-  assertSlotLifecycleApiProjection(slotLifecycleApiState);
+  const playerVoteCount = dayEventRoomOnly
+    ? null
+    : browserEvidence.playerVoteCountAfterPlayer ??
+      (await fetchJson(`${apiBaseUrl}/games/${game}/votecount`));
+  if (!dayEventRoomOnly) assertPlayerVoteProjection(playerVoteCount);
+  const apiState = dayEventRoomOnly
+    ? null
+    : browserEvidence.moderator?.apiStateBeforePrompt ??
+      (await fetchJson(
+        `${apiBaseUrl}/games/${game}/host-console-state?principal_user_id=host_h&slot_id=slot-7`,
+      ));
+  if (!dayEventRoomOnly) assertApiProjection(apiState);
+  const slotLifecycleApiState = dayEventRoomOnly
+    ? null
+    : browserEvidence.moderator?.slotLifecycle?.apiStateAfter ??
+      (await fetchJson(
+        `${apiBaseUrl}/games/${game}/host-console-state?principal_user_id=host_h&slot_id=slot-7`,
+      ));
+  if (!dayEventRoomOnly) assertSlotLifecycleApiProjection(slotLifecycleApiState);
 
   const evidence = {
     status: "passed",
@@ -310,24 +334,39 @@ try {
     additionalRoomsSeed,
     deadChatSeed,
     spectatorSeed,
+    dayEventRoomSeed,
     privateChannelFixture,
     rootAdminSession,
     grantedSessions,
     additionalRoomSessions,
     deadChatSessions,
     spectatorSession,
+    dayEventRoomSessions,
     browser: browserEvidence,
     playerVoteCount,
     apiState,
     slotLifecycleApiState,
   };
-  const readiness = buildLiveStackReadiness(evidence);
-  assertLiveStackReadiness(readiness);
+  const readiness = dayEventRoomOnly
+    ? {
+        status: "passed",
+        scope: "day-event-room",
+        proof: browserEvidence.dayEventRoom.proof,
+      }
+    : buildLiveStackReadiness(evidence);
+  if (!dayEventRoomOnly) assertLiveStackReadiness(readiness);
   evidence.readiness = readiness;
-  const summary = buildLiveStackProofSummary(evidence);
+  const summary = dayEventRoomOnly
+    ? readiness
+    : buildLiveStackProofSummary(evidence);
   await writeFile(evidencePath, `${JSON.stringify(evidence, null, 2)}\n`);
   await writeFile(summaryPath, `${JSON.stringify(summary, null, 2)}\n`);
-  await writeFile(summaryMarkdownPath, markdownLiveStackProofSummary(summary));
+  await writeFile(
+    summaryMarkdownPath,
+    dayEventRoomOnly
+      ? `# DayEvent room live-stack proof\n\n${readiness.proof}\n`
+      : markdownLiveStackProofSummary(summary),
+  );
   await writeProgress({ stage: "complete", evidencePath, summaryPath });
   console.log(`wrote ${path.relative(repoRoot, evidencePath)}`);
 } catch (error) {
@@ -793,7 +832,7 @@ async function seedAdditionalRoomsGame() {
 
   const memberRows = await runSql(
     smokeDatabase.url,
-    `SELECT channel_id, kind, slot_id, role_key, reveals_alignment, source
+    `SELECT channel_id, kind, slot_id, source
      FROM private_channel_member
      WHERE game_id = '${additionalRoomsGame}'
        AND channel_id IN ('private:mason', 'private:neighbor')
@@ -809,7 +848,6 @@ async function seedAdditionalRoomsGame() {
     }
     if (
       !memberRows.includes(room.kind) ||
-      !memberRows.includes(room.revealsAlignment) ||
       !memberRows.includes(`pack.private_channels.${room.id}`)
     ) {
       throw new Error(`${room.kind} declaration metadata drifted:\n${memberRows}`);
@@ -895,19 +933,96 @@ async function seedSpectatorGame() {
   };
 }
 
+async function seedDayEventRoomGame() {
+  const commands = [];
+  for (const command of [
+    { CreateGame: { game: dayEventRoomGame, pack: "mafiascum" } },
+    { AddSlot: { game: dayEventRoomGame, slot: dayEventRoomOutgoing.slotId } },
+    {
+      AssignSlot: {
+        game: dayEventRoomGame,
+        slot: dayEventRoomOutgoing.slotId,
+        user: dayEventRoomOutgoing.principalUserId,
+      },
+    },
+    {
+      AssignRole: {
+        game: dayEventRoomGame,
+        slot: dayEventRoomOutgoing.slotId,
+        role_key: "vanilla_townie",
+      },
+    },
+    { StartGame: { game: dayEventRoomGame, phase: "D01" } },
+    {
+      ScheduleDayEvent: {
+        game: dayEventRoomGame,
+        event: {
+          id: dayEventRoomId,
+          program_id: "program-browser-proof",
+          template_key: "theme.raffle",
+          phase_scope: { kind: "during_day", number: 1 },
+          schedule: { kind: "host_opened" },
+          participation: {
+            who: "alive_slots",
+            mode: "opt_in",
+            limits: { minimum: 1, maximum: null },
+          },
+          state: "scheduled",
+          resolution: "host_decision",
+          rewards: [{
+            reward_key: "cookie",
+            display_name_theme_key: "theme.cookie",
+            effects: [{
+              recipient: { kind: "winner" },
+              operation: { kind: "mark", effect: "bomb" },
+            }],
+          }],
+          narrative: {
+            opened: null,
+            locked: null,
+            resolved: null,
+            cancelled: null,
+          },
+          channel_policy: {
+            visibility: "private",
+            membership: "participants",
+          },
+        },
+      },
+    },
+    {
+      OpenDayEvent: {
+        game: dayEventRoomGame,
+        event_id: dayEventRoomId,
+      },
+    },
+  ]) {
+    commands.push(await sendCommand("host_h", command));
+  }
+  return {
+    game: dayEventRoomGame,
+    eventId: dayEventRoomId,
+    channelId: dayEventRoomChannel,
+    slotId: dayEventRoomOutgoing.slotId,
+    commands,
+    boundary:
+      "A real host-opened, participant-scoped private DayEvent begins with no room members; the browser owns every subsequent membership and room-lifecycle transition.",
+  };
+}
+
 async function seedFactionDayChatFixture() {
   const memberRows = await runSql(
     smokeDatabase.url,
-    `SELECT channel_id, kind, slot_id, role_key, source
+    `SELECT channel_id, kind, slot_id, source
      FROM private_channel_member
      WHERE game_id = '${game}' AND channel_id = '${factionDayChatChannel}'
      ORDER BY slot_id`,
   );
   if (
     !memberRows.includes("slot-7") ||
-    !memberRows.includes("encryptor") ||
     !memberRows.includes("slot_4") ||
-    !memberRows.includes("mafia_goon")
+    !memberRows.includes("FactionDayChat") ||
+    !memberRows.includes("pack.private_channels.mafia_day_chat")
   ) {
     throw new Error(`faction day chat membership was not command-declared:\n${memberRows}`);
   }
@@ -979,6 +1094,7 @@ async function createGrantedSessions() {
     host: await createGrantedSession({
       token: hostSessionToken,
       principalUserId: "host_h",
+      globalCapabilities: ["GlobalAdmin"],
     }),
     player: await createAccountSession({
       token: playerSessionToken,
@@ -992,6 +1108,18 @@ async function createGrantedSessions() {
     racePlayer: await createGrantedSession({
       token: racePlayerSessionToken,
       principalUserId: "player-goon-a",
+    }),
+    seedPlayer: await createGrantedSession({
+      token: seedPlayerSessionToken,
+      principalUserId: "player-seed",
+    }),
+    targetPlayer: await createGrantedSession({
+      token: targetPlayerSessionToken,
+      principalUserId: "player-target",
+    }),
+    goonB: await createGrantedSession({
+      token: goonBSessionToken,
+      principalUserId: "player-goon-b",
     }),
     cohost: await createGrantedSession({
       token: cohostSessionToken,
@@ -1056,6 +1184,21 @@ async function createSpectatorSession() {
     principalUserId: spectatorDefinition.principalUserId,
     label: "spectator-room",
   });
+}
+
+async function createDayEventRoomSessions() {
+  return {
+    outgoing: await createAccountSession({
+      token: dayEventRoomOutgoing.sessionToken,
+      principalUserId: dayEventRoomOutgoing.principalUserId,
+      label: "day-event-room-outgoing",
+    }),
+    incoming: await createAccountSession({
+      token: dayEventRoomIncoming.sessionToken,
+      principalUserId: dayEventRoomIncoming.principalUserId,
+      label: "day-event-room-incoming",
+    }),
+  };
 }
 
 async function createAccountSession({ token, principalUserId, label }) {
@@ -1128,8 +1271,17 @@ async function driveBrowser(
   additionalRoomsSeed,
   deadChatSeed,
   spectatorSeed,
+  dayEventRoomSeed,
 ) {
   browser = await chromium.launch();
+  if (dayEventRoomOnly) {
+    return {
+      dayEventRoom: await driveDayEventRoomBrowser(
+        frontendBaseUrl,
+        dayEventRoomSeed,
+      ),
+    };
+  }
   const adminEvidence = await driveAdminBrowser(frontendBaseUrl);
   const moderatorSession = await openModeratorBrowser(frontendBaseUrl);
   let playerEvidence;
@@ -1149,6 +1301,10 @@ async function driveBrowser(
     );
     const deadChat = await driveDeadChatBrowser(frontendBaseUrl, deadChatSeed);
     const spectator = await driveSpectatorBrowser(frontendBaseUrl, spectatorSeed);
+    const dayEventRoom = await driveDayEventRoomBrowser(
+      frontendBaseUrl,
+      dayEventRoomSeed,
+    );
     const rolePmHistory = await seedRolePmHistory(
       playerPrivateChannelEvidence.media.contentId,
     );
@@ -1174,6 +1330,7 @@ async function driveBrowser(
       additionalRooms,
       deadChat,
       spectator,
+      dayEventRoom,
       rolePmHistory,
       privateChannelForbidden: privateChannelForbiddenEvidence,
       hostVotecountConvergence,
@@ -2637,6 +2794,211 @@ async function driveSpectatorBrowser(frontendBaseUrl, seed) {
   };
 }
 
+async function driveDayEventRoomBrowser(frontendBaseUrl, seed) {
+  const secret = "DayEvent browser room history survives its lifecycle";
+  const outgoingContext = await browserContextWithSession(
+    dayEventRoomOutgoing.sessionToken,
+  );
+  const outgoingPage = await outgoingContext.newPage();
+  const mainUrl = `${frontendBaseUrl}/g/${dayEventRoomGame}`;
+  const roomUrl =
+    `${frontendBaseUrl}/g/${dayEventRoomGame}/c/${encodeURIComponent(dayEventRoomChannel)}`;
+  const initial = await outgoingPage.goto(mainUrl, { waitUntil: "networkidle" });
+  if (initial === null || !initial.ok()) {
+    throw new Error(`DayEvent outgoing player route failed (${initial?.status()})`);
+  }
+  await outgoingPage.getByTestId(`player-day-event-${dayEventRoomId}`).waitFor({
+    state: "visible",
+  });
+  if (await outgoingPage.getByTestId(`player-channel-${dayEventRoomChannel}`).count()) {
+    throw new Error("participant-scoped DayEvent room appeared before joining");
+  }
+
+  const [joinResponse] = await Promise.all([
+    outgoingPage.waitForResponse(
+      (response) =>
+        response.url().endsWith("/commands") &&
+        response.request().method() === "POST",
+    ),
+    outgoingPage.locator(`[data-action="submit_day_event:${dayEventRoomId}"]`).click(),
+  ]);
+  const roomTab = outgoingPage.getByTestId(
+    `player-channel-${dayEventRoomChannel}`,
+  );
+  try {
+    await roomTab.waitFor({ state: "visible", timeout: 15_000 });
+  } catch {
+    const browserState = await outgoingPage.evaluate(() => ({
+      status: window.__fmarchPlayerCommandStatus,
+      commandState: window.__fmarchPlayerProjection?.commandState,
+      body: document.body.innerText,
+    }));
+    const apiCommandState = await fetchJson(
+      `${apiBaseUrl}/games/${dayEventRoomGame}/player-command-state?slot_id=${dayEventRoomOutgoing.slotId}`,
+      {
+        headers: {
+          authorization: `Bearer ${dayEventRoomOutgoing.sessionToken}`,
+        },
+      },
+    );
+    throw new Error(
+      `joined DayEvent room did not appear: command=${await joinResponse.text()} browser=${JSON.stringify(browserState)} api=${JSON.stringify(apiCommandState)}`,
+    );
+  }
+  if ((await roomTab.getAttribute("data-room-state")) !== "open") {
+    throw new Error("joined DayEvent room did not project open state");
+  }
+
+  await roomTab.click();
+  await outgoingPage.waitForURL(roomUrl);
+  try {
+    await outgoingPage.getByTestId("player-composer").waitFor({
+      state: "visible",
+      timeout: 15_000,
+    });
+  } catch {
+    throw new Error(
+      `joined DayEvent room did not expose composer: ${JSON.stringify(await outgoingPage.evaluate(() => ({
+        url: location.href,
+        body: document.body.innerText,
+        readOnly: document.querySelector('[data-testid="player-composer-read-only"]')?.innerText,
+        projection: window.__fmarchPlayerProjection,
+      })))}`,
+    );
+  }
+  await outgoingPage.getByTestId("player-composer").locator("textarea").fill(secret);
+  await Promise.all([
+    outgoingPage.waitForResponse(
+      (response) =>
+        response.url().endsWith("/commands") &&
+        response.request().method() === "POST",
+    ),
+    outgoingPage.locator('[data-action="submit_post"]').click(),
+  ]);
+  await outgoingPage.getByText(secret, { exact: false }).waitFor({ state: "visible" });
+
+  await Promise.all([
+    outgoingPage.waitForResponse(
+      (response) =>
+        response.url().endsWith("/commands") &&
+        response.request().method() === "POST",
+    ),
+    outgoingPage
+      .locator(`[data-action="withdraw_day_event:${dayEventRoomId}"]`)
+      .click(),
+  ]);
+  await outgoingPage.getByTestId("player-composer-read-only").waitFor({
+    state: "visible",
+  });
+  if (await outgoingPage.getByText(secret, { exact: false }).count()) {
+    throw new Error("withdrawn DayEvent member retained private history in the DOM");
+  }
+  if (await roomTab.count()) {
+    throw new Error("withdrawn DayEvent room remained in channel discovery");
+  }
+
+  await Promise.all([
+    outgoingPage.waitForResponse(
+      (response) =>
+        response.url().endsWith("/commands") &&
+        response.request().method() === "POST",
+    ),
+    outgoingPage.locator(`[data-action="submit_day_event:${dayEventRoomId}"]`).click(),
+  ]);
+  await roomTab.waitFor({ state: "visible" });
+  await outgoingPage.goto(roomUrl, { waitUntil: "networkidle" });
+  await outgoingPage.getByText(secret, { exact: false }).waitFor({ state: "visible" });
+
+  const replacement = await sendCommand("host_h", {
+    ProcessReplacement: {
+      game: dayEventRoomGame,
+      slot: dayEventRoomOutgoing.slotId,
+      outgoing_user: dayEventRoomOutgoing.principalUserId,
+      incoming_user: dayEventRoomIncoming.principalUserId,
+    },
+  });
+  await outgoingPage.evaluate(async () => {
+    await window.__fmarchTriggerPlayerResync?.();
+  });
+  await outgoingPage.waitForFunction(
+    (channelTestId) =>
+      window.__fmarchPlayerProjection?.commandState?.actorStatus === "replaced" &&
+      document.querySelector(`[data-testid="${channelTestId}"]`) === null,
+    `player-channel-${dayEventRoomChannel}`,
+  );
+  if (await outgoingPage.getByText(secret, { exact: false }).count()) {
+    throw new Error("replaced DayEvent occupant retained private history in the DOM");
+  }
+
+  const incomingContext = await browserContextWithSession(
+    dayEventRoomIncoming.sessionToken,
+  );
+  const incomingPage = await incomingContext.newPage();
+  const incoming = await incomingPage.goto(roomUrl, { waitUntil: "networkidle" });
+  if (incoming === null || !incoming.ok()) {
+    throw new Error(`incoming DayEvent replacement route failed (${incoming?.status()})`);
+  }
+  await incomingPage.getByText(secret, { exact: false }).waitFor({ state: "visible" });
+  const incomingTab = incomingPage.getByTestId(
+    `player-channel-${dayEventRoomChannel}`,
+  );
+  if ((await incomingTab.getAttribute("data-room-state")) !== "open") {
+    throw new Error("replacement did not inherit the open DayEvent room descriptor");
+  }
+
+  const lock = await sendCommand("host_h", {
+    LockDayEvent: {
+      game: dayEventRoomGame,
+      event_id: dayEventRoomId,
+    },
+  });
+  await incomingPage.evaluate(async () => {
+    await window.__fmarchTriggerPlayerResync?.();
+  });
+  await incomingPage.waitForFunction(
+    (testId) =>
+      document.querySelector(`[data-testid="${testId}"]`)?.getAttribute(
+        "data-room-state",
+      ) === "locked",
+    `player-channel-${dayEventRoomChannel}`,
+  );
+  await incomingPage.getByTestId("player-composer-read-only").waitFor({
+    state: "visible",
+  });
+  await incomingPage.getByText(secret, { exact: false }).waitFor({ state: "visible" });
+
+  const hostState = await fetchJson(
+    `${apiBaseUrl}/games/${dayEventRoomGame}/host-console-state?principal_user_id=host_h&slot_id=${dayEventRoomOutgoing.slotId}`,
+  );
+  const hostRoom = hostState.day_events?.find(
+    (event) => event.event_id === dayEventRoomId,
+  )?.room;
+  if (
+    hostRoom?.channel_id !== dayEventRoomChannel ||
+    hostRoom?.member_count !== 1 ||
+    hostRoom?.posting_allowed !== false
+  ) {
+    throw new Error(
+      `host DayEvent room membership projection drifted: ${JSON.stringify(hostRoom)}`,
+    );
+  }
+
+  await outgoingContext.close();
+  await incomingContext.close();
+  return {
+    status: "passed",
+    game: dayEventRoomGame,
+    eventId: dayEventRoomId,
+    channelId: dayEventRoomChannel,
+    seed,
+    replacement,
+    lock,
+    finalHostRoom: hostRoom,
+    proof:
+      "A browser joined a participant-scoped DayEvent, discovered its typed room, posted history, withdrew and immediately lost room/history DOM access, rejoined, transferred the slot to a replacement who inherited history, then retained that history with a lifecycle-aware read-only composer after host lock; the host projection reported one retained member.",
+  };
+}
+
 async function proveDeadChatDenial({
   frontendBaseUrl,
   token,
@@ -2769,7 +3131,7 @@ async function privateThreadLiveDelta(page, body) {
 async function seedRolePmHistory(contentId) {
   const membership = await runSql(
     smokeDatabase.url,
-    `SELECT channel_id, kind, slot_id, role_key, source
+    `SELECT channel_id, kind, slot_id, source
      FROM private_channel_member
      WHERE game_id = '${game}' AND channel_id = '${rolePmChannel}'`,
   );
@@ -3187,7 +3549,7 @@ async function driveAdminBrowser(frontendBaseUrl) {
 
   await page.getByTestId("admin-surface").waitFor({ state: "visible" });
   const capability = await page.getByTestId("admin-capability").innerText();
-  if (capability !== "GlobalAdmin") {
+  if (!["GlobalAdmin", "Site administrator"].includes(capability)) {
     throw new Error(`admin capability did not render GlobalAdmin: ${capability}`);
   }
   const proofCard = page.locator('[data-testid^="admin-audit-"]').first();
@@ -5839,9 +6201,24 @@ async function waitForHostConsoleReplacementDelta(page, occupantUserId) {
 }
 
 async function sendCommand(principalUserId, command) {
+  const sessionToken = {
+    host_h: hostSessionToken,
+    "player-mira": playerSessionToken,
+    "player-seed": seedPlayerSessionToken,
+    "player-target": targetPlayerSessionToken,
+    "player-goon-a": racePlayerSessionToken,
+    "player-goon-b": goonBSessionToken,
+    "action-goon": actionPlayerSessionToken,
+  }[principalUserId];
+  if (sessionToken === undefined) {
+    throw new Error(`live-stack command actor has no session: ${principalUserId}`);
+  }
   const response = await fetchJson(`${apiBaseUrl}/commands`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: {
+      authorization: `Bearer ${sessionToken}`,
+      "content-type": "application/json",
+    },
     body: JSON.stringify({
       v: 1,
       id: commandEnvelopeId++,
@@ -5849,7 +6226,6 @@ async function sendCommand(principalUserId, command) {
         kind: "Command",
         body: {
           command_id: crypto.randomUUID(),
-          principal_user_id: principalUserId,
           command,
         },
       },

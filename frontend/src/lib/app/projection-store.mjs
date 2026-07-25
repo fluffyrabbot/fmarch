@@ -53,6 +53,15 @@ export function createProjectionStore({
           },
         );
         if (!response?.ok) {
+          if (typeof coldLoad.normalizeError === "function") {
+            return [
+              key,
+              coldLoad.normalizeError({
+                status: Number(response?.status ?? 0),
+                previous: snapshot[key],
+              }),
+            ];
+          }
           return null;
         }
         return [

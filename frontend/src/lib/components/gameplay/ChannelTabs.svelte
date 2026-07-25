@@ -17,10 +17,16 @@
       aria-current={channel.ariaCurrent}
       data-testid={`player-channel-${channel.id}`}
       data-channel-capability={channel.capabilityLabel}
+      data-room-state={channel.roomState}
+      data-posting-allowed={channel.postingAllowed}
       data-min-touch-target-px={channel.minTouchTargetPx}
     >
       <span>{channel.label}</span>
-      {#if channel.active}<span class="fm-sr-only">Current channel</span>{/if}
+      {#if channel.roomStateLabel}
+        <small>{channel.roomStateLabel}</small>
+      {:else if channel.active}
+        <span class="fm-sr-only">Current channel</span>
+      {/if}
     </a>
   {/each}
 </nav>
@@ -47,6 +53,13 @@
     min-block-size: 44px;
     padding-inline: 12px;
     text-decoration: none;
+  }
+
+  .channel-tabs small {
+    color: var(--fm-ink-muted);
+    font-size: 10px;
+    margin-inline-start: 8px;
+    white-space: nowrap;
   }
 
   .channel-tabs a[aria-current="page"] {

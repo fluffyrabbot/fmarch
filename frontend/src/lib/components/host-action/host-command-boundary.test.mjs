@@ -634,6 +634,25 @@ test("host console projection maps deadline and stable slot history to labels", 
         total_successes: 3,
         last_error: null,
       },
+      day_events: [{
+        event_id: "event-cookie",
+        state: "locked",
+        definition: {
+          id: "event-cookie",
+          template_key: "theme.raffle",
+          participation: { who: "alive_slots", mode: "opt_in", limits: { minimum: 1 } },
+          rewards: [],
+        },
+        room: {
+          event_id: "event-cookie",
+          channel_id: "private:event:event-cookie",
+          template_key: "theme.raffle",
+          state: "locked",
+          membership: "participants",
+          member_count: 3,
+          posting_allowed: false,
+        },
+      }],
       phase: { phase_id: "day-2", locked: true, deadline: 1781928000 },
       slots: [
         {
@@ -686,6 +705,15 @@ test("host console projection maps deadline and stable slot history to labels", 
 
   assert.equal(projection.completed, true);
   assert.equal(projection.dayEventScheduler.autoResolvePending, false);
+  assert.deepEqual(projection.dayEvents[0].room, {
+    eventId: "event-cookie",
+    channelId: "private:event:event-cookie",
+    templateKey: "theme.raffle",
+    state: "locked",
+    membership: "participants",
+    memberCount: 3,
+    postingAllowed: false,
+  });
   assert.deepEqual(projection.dayEventScheduler, {
     pending: false,
     nextDueAt: 1781928100,

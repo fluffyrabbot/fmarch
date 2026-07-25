@@ -393,6 +393,43 @@ test("ticket endpoints mint a fresh audience-bound socket URL before opening", a
   connection.close();
 });
 
+test("ticket authorization loss refreshes player authority before reconnecting", async () => {
+  const events = [];
+  const ticketSeen = deferred();
+  const store = fakeProjectionStore({
+    commandState: { actorStatus: "alive", dayEventRooms: [{ eventId: "event-1" }] },
+  });
+  connectLiveProjection({
+    url: "/live/tickets?game=midsummer",
+    projectionStore: store,
+    WebSocketCtor: FakeWebSocket,
+    fetchImpl: async (url) => {
+      if (url.startsWith("/live/tickets")) {
+        ticketSeen.resolve();
+        return { ok: false, status: 403 };
+      }
+      return jsonResponse({ actorStatus: "replaced", dayEventRooms: [] });
+    },
+    authorizationLossRefreshKeys: ["commandState"],
+    reconnect: false,
+    onEvent(message, snapshot) {
+      events.push({ message, snapshot });
+    },
+  });
+
+  await ticketSeen.promise;
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.deepEqual(store.refreshCalls, [
+    { keys: ["commandState"], hasFetchImpl: true },
+  ]);
+  assert.deepEqual(events[0], {
+    message: { kind: "authorization-lost", status: 403 },
+    snapshot: {
+      commandState: { actorStatus: "replaced", dayEventRooms: [] },
+    },
+  });
+});
+
 test("websocket resync frames refresh the projection store", async () => {
   const events = [];
   const store = fakeProjectionStore({

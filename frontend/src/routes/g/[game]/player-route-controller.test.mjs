@@ -6,6 +6,7 @@ import {
   buildPlayerProjectionColdLoads,
   buildPlayerProjectionInitialSnapshot,
   loadOlderPlayerThreadPage,
+  normalizePlayerCommandStateRefreshError,
   normalizePrivateRows,
   playerCommandErrorStatus,
   playerCommandInterruptedStatus,
@@ -111,6 +112,36 @@ test("player route controller builds projection store boundaries from route data
       delta: { kind: "DayVoteOutcomeApplied" },
     }),
     ["dayVoteOutcomes"],
+  );
+});
+
+test("player command-state authorization loss clears all private authority", () => {
+  const previous = {
+    actorAlive: true,
+    actorStatus: "alive",
+    roleKey: "doctor",
+    role: { key: "doctor" },
+    actions: [{ templateId: "protect" }],
+    currentActions: [],
+    voteTargets: [{ kind: "slot" }],
+    currentVote: { kind: "slot" },
+    dayEvents: [{ eventId: "event-1" }],
+    dayEventRooms: [{ eventId: "event-1" }],
+  };
+  const revoked = normalizePlayerCommandStateRefreshError({
+    status: 403,
+    previous,
+  });
+
+  assert.equal(revoked.actorStatus, "replaced");
+  assert.equal(revoked.actorAlive, false);
+  assert.equal(revoked.role, null);
+  assert.deepEqual(revoked.actions, []);
+  assert.deepEqual(revoked.dayEvents, []);
+  assert.deepEqual(revoked.dayEventRooms, []);
+  assert.equal(
+    normalizePlayerCommandStateRefreshError({ status: 503, previous }),
+    previous,
   );
 });
 

@@ -440,7 +440,7 @@ test("session resolution passes an abort signal from the SSR fetch budget", asyn
   assert.ok(observed[0].signal instanceof AbortSignal);
 });
 
-test("cached session resolution reuses a live entry and refetches after the TTL", async () => {
+test("cached non-game session resolution reuses a live entry and refetches after the TTL", async () => {
   const { resolveAuthenticatedSessionCached, clearSessionCache } = await import(
     "./session-capabilities.mjs"
   );
@@ -449,7 +449,7 @@ test("cached session resolution reuses a live entry and refetches after the TTL"
   let clock = 1_000;
   const args = {
     cookies: cookieJar("cache-token"),
-    request: requestFor("/g/game-1/host"),
+    request: requestFor("/admin"),
     env: { FMARCH_API_BASE_URL: "http://127.0.0.1:4017/" },
     fetchImpl: async () => {
       fetches += 1;
@@ -467,6 +467,39 @@ test("cached session resolution reuses a live entry and refetches after the TTL"
   clock += 30_001;
   await resolveAuthenticatedSessionCached(args);
   assert.equal(fetches, 2);
+  clearSessionCache();
+});
+
+test("game-scoped session resolution never caches mutable capabilities", async () => {
+  const { resolveAuthenticatedSessionCached, clearSessionCache } = await import(
+    "./session-capabilities.mjs"
+  );
+  clearSessionCache();
+  let fetches = 0;
+  const args = {
+    cookies: cookieJar("game-capability-token"),
+    request: requestFor("/g/game-1"),
+    env: { FMARCH_API_BASE_URL: "http://127.0.0.1:4017/" },
+    fetchImpl: async () => {
+      fetches += 1;
+      return jsonResponse({
+        principal_user_id: "player_a",
+        capabilities: fetches === 1
+          ? [{ kind: "SlotOccupant", body: { slot: "slot-1" } }]
+          : [
+              { kind: "SlotOccupant", body: { slot: "slot-1" } },
+              { kind: "ChannelMember", body: { channel: "private:event:event-1" } },
+            ],
+      });
+    },
+    now: () => 1_000,
+  };
+
+  const first = await resolveAuthenticatedSessionCached(args);
+  const second = await resolveAuthenticatedSessionCached(args);
+  assert.equal(fetches, 2);
+  assert.equal(first.resolvedCapabilities.length, 1);
+  assert.equal(second.resolvedCapabilities.length, 2);
   clearSessionCache();
 });
 

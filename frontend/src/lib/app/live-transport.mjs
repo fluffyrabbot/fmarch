@@ -124,6 +124,7 @@ export function connectLiveProjection({
   WebSocketCtor = globalThis.WebSocket,
   fetchImpl = globalThis.fetch,
   resyncKeys = undefined,
+  authorizationLossRefreshKeys = [],
   refreshKeysForEvent = () => [],
   onEvent = () => {},
   reconnect = true,
@@ -156,6 +157,23 @@ export function connectLiveProjection({
           headers: { accept: "application/json" },
         });
         if (!ticketResponse.ok) {
+          if ([401, 403].includes(ticketResponse.status)) {
+            const refreshKeys = normalizeRefreshKeys(
+              authorizationLossRefreshKeys,
+            );
+            if (refreshKeys.length > 0) {
+              const snapshot = await projectionStore.refresh(refreshKeys, {
+                fetchImpl,
+              });
+              onEvent(
+                Object.freeze({
+                  kind: "authorization-lost",
+                  status: ticketResponse.status,
+                }),
+                snapshot,
+              );
+            }
+          }
           throw new Error(`live ticket request failed with HTTP ${ticketResponse.status}`);
         }
         const ticket = await ticketResponse.json();
