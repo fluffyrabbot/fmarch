@@ -42,10 +42,6 @@ pub enum ModelError {
     EmptyReward(RewardKey),
     #[error("duplicate reward key {0}")]
     DuplicateReward(RewardKey),
-    #[error("event channel policy must allow at least one channel")]
-    MissingEventChannel,
-    #[error("duplicate event channel {0}")]
-    DuplicateEventChannel(ChannelId),
     #[error("recipient selector {selector} resolved to no slots")]
     MissingRecipients { selector: &'static str },
     #[error("grant uses must be greater than zero")]
@@ -521,7 +517,6 @@ pub const MAX_RENDERED_NARRATIVE_BYTES: usize = 50 * 1024;
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 pub struct NarrativeTemplate {
     pub key: TemplateKey,
-    pub channel_id: ChannelId,
     pub body: String,
 }
 
@@ -557,25 +552,60 @@ pub struct CompiledNarrativeTemplate {
     pub body: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub const EVENT_PRIVATE_CHANNEL_PREFIX: &str = "private:event:";
+
+/// The event owns its publication scope. Program authors never provide a raw
+/// channel id: public events use `main`, while private events derive a stable
+/// slot-scoped channel from the immutable DayEvent id.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "visibility", rename_all = "snake_case")]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
-pub struct EventChannelPolicy {
-    pub allowed_channels: Vec<ChannelId>,
+pub enum EventChannelPolicy {
+    PublicMain,
+    Private { membership: EventChannelMembership },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+pub enum EventChannelMembership {
+    /// Capture every slot eligible under the participation filter when the
+    /// event opens. Later valid participants are also admitted, so a slot that
+    /// becomes eligible after opening cannot participate without channel access.
+    EligibleSlots,
+    /// Membership follows current participation: submit grants and withdraw
+    /// revokes. Locked/resolved events retain their final member set for
+    /// read-only history.
+    Participants,
 }
 
 impl EventChannelPolicy {
-    pub fn validate(&self) -> Result<(), ModelError> {
-        if self.allowed_channels.is_empty() {
-            return Err(ModelError::MissingEventChannel);
-        }
-        let mut seen = BTreeSet::new();
-        for channel in &self.allowed_channels {
-            if !seen.insert(channel) {
-                return Err(ModelError::DuplicateEventChannel(channel.clone()));
+    pub fn channel_id(self, event_id: &DayEventId) -> ChannelId {
+        match self {
+            Self::PublicMain => ChannelId::new("main"),
+            Self::Private { .. } => {
+                ChannelId::new(format!("{EVENT_PRIVATE_CHANNEL_PREFIX}{event_id}"))
             }
         }
-        Ok(())
+        .expect("validated DayEvent ids always derive non-blank channels")
     }
+
+    pub const fn is_private(self) -> bool {
+        matches!(self, Self::Private { .. })
+    }
+
+    pub const fn membership(self) -> Option<EventChannelMembership> {
+        match self {
+            Self::PublicMain => None,
+            Self::Private { membership } => Some(membership),
+        }
+    }
+}
+
+pub fn event_id_from_private_channel(channel_id: &str) -> Option<&str> {
+    channel_id
+        .strip_prefix(EVENT_PRIVATE_CHANNEL_PREFIX)
+        .filter(|event_id| !event_id.trim().is_empty())
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -899,7 +929,6 @@ impl DayEvent {
                 });
             }
         }
-        self.channel_policy.validate()?;
         if self.rewards.is_empty() {
             return Err(ModelError::MissingRewards);
         }
@@ -1197,9 +1226,7 @@ mod tests {
                     resolved: None,
                     cancelled: None,
                 },
-                channel_policy: EventChannelPolicy {
-                    allowed_channels: vec![id("main")],
-                },
+                channel_policy: EventChannelPolicy::PublicMain,
             }],
         }
     }

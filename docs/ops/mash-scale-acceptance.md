@@ -34,11 +34,12 @@ target/mash-scale-acceptance/report.json
 | Participation | 300 final rows |
 | Contention | 40 simultaneous submissions, all acknowledged, no duplicates, ≤ 20 s |
 | Scheduler | 2 replicas race open and lock, one winning game claim per boundary, ≤ 5 s combined |
-| Narrative | 10 public lifecycle posts, 10 distinct receipts, 10 published projections |
+| Narrative | 8 public and 2 private lifecycle posts, 10 distinct receipts, 10 published projections |
+| Private channel | 1 participant-scoped event, 60 slot members, zero plaintext private retry/thread rows |
 | Keyset read | 100-row cap; ≤ 202 plan rows examined; required index; two 25-row pages yield 50 distinct slots |
 | Player attention | Exactly one item for each of 5 open events the fixture player can still act on |
 | Host console | 60 slots, 5 events, 300 participant references, ≤ 8 tasks, ≤ 512 KiB, ≤ 2 s |
-| Rebuild | Zero diffs, 300 participation rows and 10 narratives preserved, ≤ 5 s |
+| Rebuild | Zero diffs, 300 participation rows, 10 narratives, and 60 private members preserved, ≤ 5 s |
 
 The ceilings are regression tripwires for the local proof machine, not production
 service-level objectives. Change them only with an artifact-backed explanation,
@@ -47,7 +48,8 @@ never merely to make a regression green.
 ## Boundary
 
 This lane proves one local Postgres node. It does not model network latency,
-multi-region scheduling, or hosted resource contention. It also covers only the
-shipped public `main` narrative channel. Private event channels require their own
-capability-filtered delivery design and a zero-byte non-member proof before that
-surface can ship.
+multi-region scheduling, or hosted resource contention. It does exercise mixed
+public/private event publication and sealed projection storage. Focused API
+integration proof covers current membership checks at REST, WebSocket-ticket,
+and media boundaries and asserts denied/revoked responses contain none of the
+private post body.

@@ -6,22 +6,18 @@
   "narrative_templates": [
     {
       "key": "theme.raffle.opened",
-      "channel_id": "main",
       "body": "The {{event_template}} raffle is open. Join before it locks."
     },
     {
       "key": "theme.raffle.locked",
-      "channel_id": "main",
       "body": "{{event_id}} locked with {{participant_count}} entrants: {{participants}}."
     },
     {
       "key": "theme.raffle.resolved",
-      "channel_id": "main",
       "body": "{{event_id}} drew {{winners}}. Rewards: {{rewards}}."
     },
     {
       "key": "theme.raffle.cancelled",
-      "channel_id": "main",
       "body": "{{event_id}} was cancelled: {{cancellation_reason}}."
     }
   ],
@@ -82,9 +78,7 @@
         "cancelled": "theme.raffle.cancelled"
       },
       "channel_policy": {
-        "allowed_channels": [
-          "main"
-        ]
+        "visibility": "public_main"
       }
     }
   ]

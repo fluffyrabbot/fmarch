@@ -5,7 +5,7 @@
       "program_ref": {
         "id": "raffle",
         "version": 1,
-        "content_hash": "43ae91d9858580a74f00dfa91848821d4ce60a93a68ab8dbd972818a06d24800"
+        "content_hash": "2ba519ba13f90b411bfe584a14ef754b1fa7b717f58ec3c33485d1a45dc3bf1f"
       },
       "audience": "product",
       "file": "raffle.v1.program.json"
@@ -14,7 +14,7 @@
       "program_ref": {
         "id": "opt-in-quest",
         "version": 1,
-        "content_hash": "03db7811aa0e52355ca23eaa7d6f31ab387149ff965f42a4aa100be030d26ac7"
+        "content_hash": "6e7a69715d826d0053e7fcc643186c833bd1f029d51f98ead10ddc8b9cda2ccc"
       },
       "audience": "product",
       "file": "opt-in-quest.v1.program.json"
@@ -23,16 +23,25 @@
       "program_ref": {
         "id": "host-judged-showcase",
         "version": 1,
-        "content_hash": "b67631ab1ea6c914f548a3c4c53a5469169f0b81b55707bb5191088506626a18"
+        "content_hash": "b4b40d3ce579dfd3b235a6a1e9686ccb9e77c0bef8efb6a7e2460b5ae406e9f7"
       },
       "audience": "product",
       "file": "host-judged-showcase.v1.program.json"
     },
     {
       "program_ref": {
+        "id": "private-opt-in-circle",
+        "version": 1,
+        "content_hash": "906411977b0572be675e09d603c12b93ebeea3b91feb80ff27b79d592883ab1e"
+      },
+      "audience": "product",
+      "file": "private-opt-in-circle.v1.program.json"
+    },
+    {
+      "program_ref": {
         "id": "mash-scale-acceptance",
         "version": 1,
-        "content_hash": "084f4e212fe08eb1ebaf73cc08fa34740c0afdd756cb56986c9c1f18bb754aa3"
+        "content_hash": "d9fe4fdb1db6d0b1986bdce3666b93eeef38a39cf9d1017fc01250e66bc9a32f"
       },
       "audience": "acceptance",
       "file": "mash-scale-acceptance.v1.program.json"

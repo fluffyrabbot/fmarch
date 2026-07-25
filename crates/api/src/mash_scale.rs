@@ -28,7 +28,7 @@ use crate::program_library::{
 };
 use crate::{load_host_console_state_for_principal, load_player_day_event_attention_for_principal};
 
-pub const MASH_SCALE_ARTIFACT_VERSION: u16 = 2;
+pub const MASH_SCALE_ARTIFACT_VERSION: u16 = 3;
 pub const MASH_SCALE_ROSTER_COUNT: usize = 60;
 pub const MASH_SCALE_EVENT_COUNT: usize = 5;
 pub const MASH_SCALE_CONCURRENT_SUBMISSIONS: usize = 40;
@@ -106,11 +106,22 @@ pub struct MashScaleHostConsoleEvidence {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MashScalePrivateChannelEvidence {
+    pub private_event_count: usize,
+    pub member_rows: i64,
+    pub narrative_rows: i64,
+    pub narrative_plaintext_rows: i64,
+    pub thread_posts: i64,
+    pub thread_plaintext_rows: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MashScaleRebuildEvidence {
     pub ok: bool,
     pub diff_count: usize,
     pub participation_rows_after_rebuild: i64,
     pub published_narratives_after_rebuild: usize,
+    pub private_channel_members_after_rebuild: i64,
     pub elapsed_ms: u64,
     pub threshold_ms: u64,
 }
@@ -131,6 +142,7 @@ pub struct MashScaleAcceptanceReport {
     pub participation_page: MashScaleParticipationPageEvidence,
     pub player_attention: MashScaleAttentionEvidence,
     pub host_console: MashScaleHostConsoleEvidence,
+    pub private_channel: MashScalePrivateChannelEvidence,
     pub rebuild: MashScaleRebuildEvidence,
 }
 
@@ -154,6 +166,8 @@ pub enum MashScaleError {
     PlayerAttention(String),
     #[error("concurrent participation task failed: {0}")]
     Join(String),
+    #[error("scale fixture private-channel contract failed: {0}")]
+    PrivateChannelFixture(String),
 }
 
 pub async fn run_mash_scale_acceptance(
@@ -311,6 +325,68 @@ pub async fn run_mash_scale_acceptance(
         elapsed_ms: host_console_elapsed_ms,
         threshold_ms: MASH_SCALE_MAX_HOST_CONSOLE_MS,
     };
+    let private_events = program
+        .events
+        .iter()
+        .filter(|event| {
+            matches!(
+                event.channel_policy,
+                game_platform::EventChannelPolicy::Private { .. }
+            )
+        })
+        .collect::<Vec<_>>();
+    let private_event = private_events.first().ok_or_else(|| {
+        MashScaleError::PrivateChannelFixture(
+            "acceptance program must contain a private DayEvent".to_string(),
+        )
+    })?;
+    let private_channel_id = private_event
+        .channel_policy
+        .channel_id(&private_event.id)
+        .to_string();
+    let private_channel = MashScalePrivateChannelEvidence {
+        private_event_count: private_events.len(),
+        member_rows: sqlx::query_scalar(
+            "SELECT count(*) FROM private_channel_member \
+             WHERE game_id = $1 AND channel_id = $2",
+        )
+        .bind(game)
+        .bind(&private_channel_id)
+        .fetch_one(pool)
+        .await?,
+        narrative_rows: sqlx::query_scalar(
+            "SELECT count(*) FROM day_event_narrative \
+             WHERE game_id = $1 AND channel_id = $2",
+        )
+        .bind(game)
+        .bind(&private_channel_id)
+        .fetch_one(pool)
+        .await?,
+        narrative_plaintext_rows: sqlx::query_scalar(
+            "SELECT count(*) FROM day_event_narrative \
+             WHERE game_id = $1 AND channel_id = $2 \
+               AND (body_template IS NOT NULL OR rendered_body IS NOT NULL)",
+        )
+        .bind(game)
+        .bind(&private_channel_id)
+        .fetch_one(pool)
+        .await?,
+        thread_posts: sqlx::query_scalar(
+            "SELECT count(*) FROM thread_view WHERE game_id = $1 AND channel_id = $2",
+        )
+        .bind(game)
+        .bind(&private_channel_id)
+        .fetch_one(pool)
+        .await?,
+        thread_plaintext_rows: sqlx::query_scalar(
+            "SELECT count(*) FROM thread_view \
+             WHERE game_id = $1 AND channel_id = $2 AND body IS NOT NULL",
+        )
+        .bind(game)
+        .bind(&private_channel_id)
+        .fetch_one(pool)
+        .await?,
+    };
 
     let rebuild_started = Instant::now();
     let rebuild_report = audit_rebuild(pool, game).await?;
@@ -325,6 +401,14 @@ pub async fn run_mash_scale_acceptance(
         .iter()
         .filter(|row| row.status == "published")
         .count();
+    let private_channel_members_after_rebuild: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM private_channel_member \
+         WHERE game_id = $1 AND channel_id = $2",
+    )
+    .bind(game)
+    .bind(&private_channel_id)
+    .fetch_one(pool)
+    .await?;
     let rebuild = MashScaleRebuildEvidence {
         ok: rebuild_report.ok,
         diff_count: rebuild_report
@@ -334,6 +418,7 @@ pub async fn run_mash_scale_acceptance(
             .count(),
         participation_rows_after_rebuild,
         published_narratives_after_rebuild,
+        private_channel_members_after_rebuild,
         elapsed_ms: rebuild_elapsed_ms,
         threshold_ms: MASH_SCALE_MAX_REBUILD_MS,
     };
@@ -373,17 +458,24 @@ pub async fn run_mash_scale_acceptance(
         && host_console.attention_task_count <= host_console.maximum_attention_tasks
         && host_console.serialized_bytes <= host_console.maximum_serialized_bytes
         && host_console.elapsed_ms <= host_console.threshold_ms
+        && private_channel.private_event_count == 1
+        && private_channel.member_rows == MASH_SCALE_ROSTER_COUNT as i64
+        && private_channel.narrative_rows == 2
+        && private_channel.narrative_plaintext_rows == 0
+        && private_channel.thread_posts == 2
+        && private_channel.thread_plaintext_rows == 0
         && rebuild.ok
         && rebuild.diff_count == 0
         && rebuild.participation_rows_after_rebuild == MASH_SCALE_PARTICIPATION_ROWS as i64
         && rebuild.published_narratives_after_rebuild == expected_narratives
+        && rebuild.private_channel_members_after_rebuild == MASH_SCALE_ROSTER_COUNT as i64
         && rebuild.elapsed_ms <= rebuild.threshold_ms;
 
     Ok(MashScaleAcceptanceReport {
         artifact_version: MASH_SCALE_ARTIFACT_VERSION,
         artifact_path: artifact_path.into(),
         ok,
-        proof_boundary: "Local single-node Postgres acceptance for one deterministic, manifest-pinned 60-seat program artifact with five scheduled host-decision DayEvents. It proves content-addressed program resolution, bounded keyset reads, 40-way command contention, two scheduler replicas, public narrative receipt uniqueness, host-console hydration, and projection rebuild under explicit local regression ceilings; it does not prove hosted multi-region latency or private event channels.".to_string(),
+        proof_boundary: "Local single-node Postgres acceptance for one deterministic, manifest-pinned 60-seat program artifact with five scheduled host-decision DayEvents, including one participant-scoped private event channel. It proves content-addressed program resolution, bounded keyset reads, 40-way command plus membership contention, two scheduler replicas, mixed public/private narrative receipt uniqueness, ciphertext-only private retry/thread rows, host-console hydration, and projection rebuild under explicit local regression ceilings; it does not prove hosted multi-region latency.".to_string(),
         program_ref,
         game_id: game,
         roster_count: MASH_SCALE_ROSTER_COUNT,
@@ -394,6 +486,7 @@ pub async fn run_mash_scale_acceptance(
         participation_page,
         player_attention,
         host_console,
+        private_channel,
         rebuild,
     })
 }

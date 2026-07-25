@@ -9,11 +9,8 @@ use std::collections::BTreeMap;
 use domain::{pack::WeightPolicy, EffectDuration, Pack};
 use game_platform::{
     CompiledNarrativeTemplate, DayEvent, DayEventState, DayProgram, EffectOperationTemplate,
-    GrantKind, GrantSpec, NarrativeTemplate, ParticipantFilter, ParticipationMode,
-    ProgramContentHash,
+    GrantKind, GrantSpec, ParticipantFilter, ParticipationMode, ProgramContentHash,
 };
-
-pub const HOST_NOTICE_CHANNEL_ALLOWLIST: &[&str] = &["main"];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CompatibilityIssueCode {
@@ -27,8 +24,6 @@ pub enum CompatibilityIssueCode {
     UndeclaredVoteWeightGrant,
     UnsupportedRewardAdapter,
     UnresolvedNarrativeTemplate,
-    NarrativeChannelNotAllowed,
-    UnsupportedNarrativeChannel,
 }
 
 impl CompatibilityIssueCode {
@@ -44,8 +39,6 @@ impl CompatibilityIssueCode {
             Self::UndeclaredVoteWeightGrant => "undeclared_vote_weight_grant",
             Self::UnsupportedRewardAdapter => "unsupported_reward_adapter",
             Self::UnresolvedNarrativeTemplate => "unresolved_narrative_template",
-            Self::NarrativeChannelNotAllowed => "narrative_channel_not_allowed",
-            Self::UnsupportedNarrativeChannel => "unsupported_narrative_channel",
         }
     }
 }
@@ -153,42 +146,19 @@ pub fn inspect(pack: &Pack, program: &DayProgram) -> CompatibilityReport {
     let mut issues = Vec::new();
     for event in &events {
         issues.extend(inspect_event_adapters(pack, event));
+        let channel_id = event.channel_policy.channel_id(&event.id);
         let mut compiled = Vec::new();
         for (lifecycle, template_key) in event.narrative.iter() {
             let template = catalog
                 .get(template_key)
                 .expect("validated DayProgram resolves every narrative template");
-            if !event
-                .channel_policy
-                .allowed_channels
-                .contains(&template.channel_id)
-            {
-                issues.push(CompatibilityIssue::event(
-                    CompatibilityIssueCode::NarrativeChannelNotAllowed,
-                    event,
-                    format!(
-                        "narrative template `{}` targets channel `{}` outside the event allow-list",
-                        template.key, template.channel_id
-                    ),
-                ));
-            }
-            if !host_notice_channel_supported(template) {
-                issues.push(CompatibilityIssue::event(
-                    CompatibilityIssueCode::UnsupportedNarrativeChannel,
-                    event,
-                    format!(
-                        "narrative template `{}` targets unsupported host-notice channel `{}`",
-                        template.key, template.channel_id
-                    ),
-                ));
-            }
             compiled.push(CompiledNarrativeTemplate {
                 lifecycle,
                 template_key: template.key.clone(),
                 template_hash: template
                     .content_hash()
                     .expect("validated narrative template has a stable hash"),
-                channel_id: template.channel_id.clone(),
+                channel_id: channel_id.clone(),
                 body: template.body.clone(),
             });
         }
@@ -257,8 +227,8 @@ fn inspect_event_adapters(pack: &Pack, event: &DayEvent) -> Vec<CompatibilityIss
     issues
 }
 
-pub fn host_notice_channel_supported(template: &NarrativeTemplate) -> bool {
-    HOST_NOTICE_CHANNEL_ALLOWLIST.contains(&template.channel_id.as_str())
+pub fn host_notice_channel_supported(event: &DayEvent, channel_id: &str) -> bool {
+    event.channel_policy.channel_id(&event.id).as_str() == channel_id
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -383,6 +353,10 @@ mod tests {
             (
                 "host-judged-showcase",
                 include_str!("../../../programs/host-judged-showcase.v1.program.json"),
+            ),
+            (
+                "private-opt-in-circle",
+                include_str!("../../../programs/private-opt-in-circle.v1.program.json"),
             ),
         ];
         for (program_key, raw_program) in programs {

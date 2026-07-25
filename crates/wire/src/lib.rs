@@ -1977,10 +1977,10 @@ pub mod typescript {
         ChannelId, ConcreteEffect, ContentRef, DayEvent, DayEventDecision, DayEventEvent,
         DayEventId, DayEventResolutionMode, DayEventSchedule, DayEventState, DayEventTemplate,
         DayProgram, DurationSeconds, EffectOperationTemplate, EffectOrigin, EffectPlan,
-        EffectVisibility, EventChannelPolicy, GrantKind, GrantSpec, NarrativeLifecycle,
-        NarrativeTemplate, NarrativeTemplates, OptionId, ParticipantFilter, ParticipationLimits,
-        ParticipationMode, ParticipationPayload, ParticipationSpec, PhaseId, PhaseScope,
-        PrincipalId, ProgramContentHash, ProgramId, ProgramTrigger, RecipientBindings,
+        EffectVisibility, EventChannelMembership, EventChannelPolicy, GrantKind, GrantSpec,
+        NarrativeLifecycle, NarrativeTemplate, NarrativeTemplates, OptionId, ParticipantFilter,
+        ParticipationLimits, ParticipationMode, ParticipationPayload, ParticipationSpec, PhaseId,
+        PhaseScope, PrincipalId, ProgramContentHash, ProgramId, ProgramTrigger, RecipientBindings,
         RecipientSelector, RewardAssignment, RewardBinding, RewardEffectTemplate, RewardKey,
         SlotId, SlotLifecycleEffect, Tag, TemplateKey, UnixSeconds,
     };
@@ -2038,6 +2038,7 @@ pub mod typescript {
         push::<NarrativeTemplates>(&mut out);
         push::<NarrativeLifecycle>(&mut out);
         push::<NarrativeTemplate>(&mut out);
+        push::<EventChannelMembership>(&mut out);
         push::<EventChannelPolicy>(&mut out);
         push::<RecipientSelector>(&mut out);
         push::<SlotLifecycleEffect>(&mut out);

@@ -45,10 +45,14 @@ event history continue to receive the same canonical document.
 | `raffle@1` | Host opened | Seeded random | All shipped packs |
 | `opt-in-quest@1` | Relative to D01 | First participant | All shipped packs |
 | `host-judged-showcase@1` | D01-open trigger | Host decision | All shipped packs |
+| `private-opt-in-circle@1` | Host opened | Seeded random | All shipped packs |
 
 The shared reward adapter is a public one-use extra-action grant, which is
-supported by every shipped pack. Each artifact includes immutable public
-lifecycle narratives.
+supported by every shipped pack. The first three artifacts publish lifecycle
+narratives to `main`. `private-opt-in-circle@1` derives
+`private:event:private-opt-in-circle-d1`; participation grants membership,
+withdrawal revokes it, replacement transfers it through the stable slot, and a
+locked event retains read-only history.
 
 ## Editing
 

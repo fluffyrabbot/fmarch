@@ -318,7 +318,12 @@ mod tests {
                 .for_audience(ProgramAudience::Product)
                 .map(|artifact| artifact.program_ref.id.as_str())
                 .collect::<Vec<_>>(),
-            vec!["host-judged-showcase", "opt-in-quest", "raffle"]
+            vec![
+                "host-judged-showcase",
+                "opt-in-quest",
+                "private-opt-in-circle",
+                "raffle",
+            ]
         );
         assert_eq!(
             library
@@ -368,6 +373,7 @@ mod tests {
         for file in [
             "opt-in-quest.v1.program.json",
             "host-judged-showcase.v1.program.json",
+            "private-opt-in-circle.v1.program.json",
             "mash-scale-acceptance.v1.program.json",
         ] {
             fs::copy(source_root.join(file), root.join(file)).unwrap();

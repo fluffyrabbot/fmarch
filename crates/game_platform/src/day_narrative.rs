@@ -95,13 +95,12 @@ fn binding_names(body: &str) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{ChannelId, NarrativeTemplate, TemplateKey};
+    use crate::{NarrativeTemplate, TemplateKey};
 
     #[test]
     fn templates_reject_unknown_bindings_and_render_captured_values() {
         let invalid = NarrativeTemplate {
             key: TemplateKey::new("event.bad").unwrap(),
-            channel_id: ChannelId::new("main").unwrap(),
             body: "Hello {{mystery}}".to_string(),
         };
         assert!(matches!(

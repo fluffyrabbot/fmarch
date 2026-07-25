@@ -6,12 +6,10 @@
   "narrative_templates": [
     {
       "key": "theme.scale.narrative.opened",
-      "channel_id": "main",
       "body": "Scale event {{event_id}} opened."
     },
     {
       "key": "theme.scale.narrative.locked",
-      "channel_id": "main",
       "body": "Scale event {{event_id}} locked with {{participant_count}} participants."
     }
   ],
@@ -61,9 +59,8 @@
         "cancelled": null
       },
       "channel_policy": {
-        "allowed_channels": [
-          "main"
-        ]
+        "visibility": "private",
+        "membership": "participants"
       }
     },
     {
@@ -111,9 +108,7 @@
         "cancelled": null
       },
       "channel_policy": {
-        "allowed_channels": [
-          "main"
-        ]
+        "visibility": "public_main"
       }
     },
     {
@@ -161,9 +156,7 @@
         "cancelled": null
       },
       "channel_policy": {
-        "allowed_channels": [
-          "main"
-        ]
+        "visibility": "public_main"
       }
     },
     {
@@ -211,9 +204,7 @@
         "cancelled": null
       },
       "channel_policy": {
-        "allowed_channels": [
-          "main"
-        ]
+        "visibility": "public_main"
       }
     },
     {
@@ -261,9 +252,7 @@
         "cancelled": null
       },
       "channel_policy": {
-        "allowed_channels": [
-          "main"
-        ]
+        "visibility": "public_main"
       }
     }
   ]

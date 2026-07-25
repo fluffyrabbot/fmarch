@@ -370,7 +370,7 @@ pub fn unix_seconds(value: i64) -> UnixSeconds {
 mod tests {
     use super::*;
     use crate::{
-        ChannelId, DayEventId, DayEventResolutionMode, DurationSeconds, EffectOperationTemplate,
+        DayEventId, DayEventResolutionMode, DurationSeconds, EffectOperationTemplate,
         EventChannelPolicy, NarrativeTemplates, ParticipantFilter, ParticipationLimits,
         ParticipationMode, ParticipationSpec, PhaseId, ProgramId, RecipientSelector, RewardBinding,
         RewardEffectTemplate, RewardKey, Tag, TemplateKey,
@@ -409,9 +409,7 @@ mod tests {
                 resolved: None,
                 cancelled: None,
             },
-            channel_policy: EventChannelPolicy {
-                allowed_channels: vec![ChannelId::new("main").unwrap()],
-            },
+            channel_policy: EventChannelPolicy::PublicMain,
         }
     }
 

@@ -1082,6 +1082,33 @@ async fn fold_event(
                 .await?;
             }
         }
+        "PrivateChannelMemberGranted" => {
+            let p = &ev.payload;
+            let channel_id = str_field(p, "channel_id", &ev.kind)?;
+            let kind = str_field(p, "kind", &ev.kind)?;
+            let slot_id = str_field(p, "slot_id", &ev.kind)?;
+            let role_key = str_field(p, "role_key", &ev.kind)?;
+            let reveals_alignment = str_field(p, "reveals_alignment", &ev.kind)?;
+            let source = str_field(p, "source", &ev.kind)?;
+            ensure_slot(tx, game_id, &slot_id).await?;
+            insert_private_channel_member(
+                tx,
+                game_id,
+                &channel_id,
+                &kind,
+                &slot_id,
+                &role_key,
+                &reveals_alignment,
+                &source,
+            )
+            .await?;
+        }
+        "PrivateChannelMemberRevoked" => {
+            let p = &ev.payload;
+            let channel_id = str_field(p, "channel_id", &ev.kind)?;
+            let slot_id = str_field(p, "slot_id", &ev.kind)?;
+            delete_private_channel_member(tx, game_id, &channel_id, &slot_id).await?;
+        }
         "PrivateChannelRevoked" => {
             let p = &ev.payload;
             let channel_id = str_field(p, "channel_id", &ev.kind)?;
@@ -1271,30 +1298,43 @@ async fn fold_event(
                     source,
                 })?
                 .unwrap_or_default();
+            let expected_channel = definition.channel_policy.channel_id(&definition.id);
             for narrative in narratives {
-                if !definition
-                    .channel_policy
-                    .allowed_channels
-                    .contains(&narrative.channel_id)
-                {
+                if narrative.channel_id != expected_channel {
                     return payload_error(
                         &ev.kind,
-                        "compiled narrative channel is outside the DayEvent allow-list",
+                        "compiled narrative channel does not match the DayEvent policy",
                     );
                 }
+                let lifecycle = narrative.lifecycle.as_str();
+                let game = game_id.to_string();
+                let (body_template, body_template_private) =
+                    if narrative.channel_id.as_str() == "main" {
+                        (Some(narrative.body.as_str()), None)
+                    } else {
+                        (
+                            None,
+                            Some(seal_private_projection(
+                                "day_event_narrative",
+                                &[game.as_str(), definition.id.as_str(), lifecycle, "template"],
+                                serde_json::json!({ "body": narrative.body }),
+                            )?),
+                        )
+                    };
                 sqlx::query(
                     "INSERT INTO day_event_narrative \
                      (game_id, event_id, lifecycle, template_key, template_hash, \
-                      channel_id, body_template) \
-                     VALUES ($1, $2, $3, $4, $5, $6, $7)",
+                      channel_id, body_template, body_template_private) \
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
                 )
                 .bind(game_id)
                 .bind(definition.id.as_str())
-                .bind(narrative.lifecycle.as_str())
+                .bind(lifecycle)
                 .bind(narrative.template_key.as_str())
                 .bind(narrative.template_hash.as_str())
                 .bind(narrative.channel_id.as_str())
-                .bind(&narrative.body)
+                .bind(body_template)
+                .bind(body_template_private)
                 .execute(&mut **tx)
                 .await?;
             }
@@ -1750,7 +1790,7 @@ async fn activate_day_event_narrative(
     source_seq: i64,
 ) -> Result<(), ProjectionError> {
     let template = sqlx::query(
-        "SELECT body_template FROM day_event_narrative \
+        "SELECT channel_id, body_template, body_template_private FROM day_event_narrative \
          WHERE game_id = $1 AND event_id = $2 AND lifecycle = $3 AND status = 'armed'",
     )
     .bind(game_id)
@@ -1760,6 +1800,19 @@ async fn activate_day_event_narrative(
     .await?;
     let Some(template) = template else {
         return Ok(());
+    };
+    let channel_id: String = template.get("channel_id");
+    let game = game_id.to_string();
+    let template_body = if channel_id == "main" {
+        template.get::<String, _>("body_template")
+    } else {
+        let envelope: serde_json::Value = template.get("body_template_private");
+        let private = open_private_projection(
+            "day_event_narrative",
+            &[game.as_str(), event_id, lifecycle.as_str(), "template"],
+            &envelope,
+        )?;
+        required_private_string(&private, "body")?
     };
     let event = sqlx::query(
         "SELECT definition, cancelled_reason, winner_slots, reward_keys_applied \
@@ -1804,22 +1857,33 @@ async fn activate_day_event_narrative(
         rewards,
         cancellation_reason: event.get("cancelled_reason"),
     };
-    let mut rendered = game_platform::day_narrative::render(
-        &template.get::<String, _>("body_template"),
-        &bindings,
-    );
+    let mut rendered = game_platform::day_narrative::render(&template_body, &bindings);
     if rendered.len() > game_platform::MAX_RENDERED_NARRATIVE_BYTES {
         rendered = format!("DayEvent {event_id} {}.", lifecycle.as_str());
     }
+    let (rendered_body, rendered_body_private) = if channel_id == "main" {
+        (Some(rendered.clone()), None)
+    } else {
+        (
+            None,
+            Some(seal_private_projection(
+                "day_event_narrative",
+                &[game.as_str(), event_id, lifecycle.as_str(), "rendered"],
+                serde_json::json!({ "body": rendered }),
+            )?),
+        )
+    };
     sqlx::query(
-        "UPDATE day_event_narrative SET source_seq = $4, rendered_body = $5, status = 'pending' \
+        "UPDATE day_event_narrative SET source_seq = $4, rendered_body = $5, \
+         rendered_body_private = $6, status = 'pending' \
          WHERE game_id = $1 AND event_id = $2 AND lifecycle = $3 AND status = 'armed'",
     )
     .bind(game_id)
     .bind(event_id)
     .bind(lifecycle.as_str())
     .bind(source_seq)
-    .bind(rendered)
+    .bind(rendered_body)
+    .bind(rendered_body_private)
     .execute(&mut **tx)
     .await?;
     Ok(())
@@ -4154,6 +4218,10 @@ fn normalize_private_snapshot(
                 "projection audit row must be an object".to_string(),
             ))
         })?;
+        if table == "day_event_narrative" {
+            normalize_private_day_event_narrative(object)?;
+            continue;
+        }
         let (field, identity): (&str, Vec<String>) = match table {
             "slot_state" => (
                 "private",
@@ -4215,6 +4283,58 @@ fn normalize_private_snapshot(
     Ok(rows)
 }
 
+fn normalize_private_day_event_narrative(
+    object: &mut serde_json::Map<String, serde_json::Value>,
+) -> Result<(), ProjectionError> {
+    let game = snapshot_string(object, "game_id")?;
+    let event_id = snapshot_string(object, "event_id")?;
+    let lifecycle = snapshot_string(object, "lifecycle")?;
+    let channel_id = snapshot_string(object, "channel_id")?;
+    let template_private = object.remove("body_template_private");
+    let rendered_private = object.remove("rendered_body_private");
+    if channel_id == "main" {
+        return Ok(());
+    }
+    let template_envelope = template_private
+        .filter(|value| !value.is_null())
+        .ok_or_else(|| {
+            ProjectionError::Store(StoreError::Crypto(
+                "private DayEvent narrative is missing its sealed template".to_string(),
+            ))
+        })?;
+    let template = open_private_projection(
+        "day_event_narrative",
+        &[
+            game.as_str(),
+            event_id.as_str(),
+            lifecycle.as_str(),
+            "template",
+        ],
+        &template_envelope,
+    )?;
+    object.insert(
+        "body_template".to_string(),
+        serde_json::Value::String(required_private_string(&template, "body")?),
+    );
+    if let Some(rendered_envelope) = rendered_private.filter(|value| !value.is_null()) {
+        let rendered = open_private_projection(
+            "day_event_narrative",
+            &[
+                game.as_str(),
+                event_id.as_str(),
+                lifecycle.as_str(),
+                "rendered",
+            ],
+            &rendered_envelope,
+        )?;
+        object.insert(
+            "rendered_body".to_string(),
+            serde_json::Value::String(required_private_string(&rendered, "body")?),
+        );
+    }
+    Ok(())
+}
+
 fn snapshot_string(
     row: &serde_json::Map<String, serde_json::Value>,
     field: &str,
@@ -4265,6 +4385,17 @@ fn redact_private_snapshot(table: &str, mut rows: serde_json::Value) -> serde_js
             }
             "thread_view" if object.get("channel_id").and_then(|v| v.as_str()) != Some("main") => {
                 object.insert("body".to_string(), serde_json::json!("<private>"));
+            }
+            "day_event_narrative"
+                if object.get("channel_id").and_then(|v| v.as_str()) != Some("main") =>
+            {
+                object.insert("body_template".to_string(), serde_json::json!("<private>"));
+                if object
+                    .get("rendered_body")
+                    .is_some_and(|value| !value.is_null())
+                {
+                    object.insert("rendered_body".to_string(), serde_json::json!("<private>"));
+                }
             }
             "investigation_memory" | "player_info_result" | "player_investigation_result" => {
                 object.insert("result".to_string(), serde_json::json!("<private>"));
@@ -5376,7 +5507,8 @@ where
 {
     let rows = sqlx::query(
         "SELECT game_id, event_id, lifecycle, template_key, template_hash, channel_id, \
-         body_template, source_seq, rendered_body, status, published_seq \
+         body_template, body_template_private, source_seq, rendered_body, \
+         rendered_body_private, status, published_seq \
          FROM day_event_narrative WHERE game_id = $1 \
          ORDER BY event_id, lifecycle",
     )
@@ -5385,7 +5517,11 @@ where
     .await?;
     rows.into_iter()
         .map(|row| {
-            let lifecycle_value = serde_json::Value::String(row.get("lifecycle"));
+            let row_game_id: Uuid = row.get("game_id");
+            let event_id: String = row.get("event_id");
+            let channel_id: String = row.get("channel_id");
+            let lifecycle_name: String = row.get("lifecycle");
+            let lifecycle_value = serde_json::Value::String(lifecycle_name.clone());
             let lifecycle = serde_json::from_value(lifecycle_value).map_err(|source| {
                 ProjectionError::Payload {
                     kind: "DayEventNarrativePublished".to_string(),
@@ -5398,16 +5534,53 @@ where
                         kind: "DayEventScheduled".to_string(),
                         source: serde::de::Error::custom(error.to_string()),
                     })?;
+            let game = row_game_id.to_string();
+            let body_template = if channel_id == "main" {
+                row.get("body_template")
+            } else {
+                let envelope: serde_json::Value = row.get("body_template_private");
+                let private = open_private_projection(
+                    "day_event_narrative",
+                    &[
+                        game.as_str(),
+                        event_id.as_str(),
+                        lifecycle_name.as_str(),
+                        "template",
+                    ],
+                    &envelope,
+                )?;
+                required_private_string(&private, "body")?
+            };
+            let rendered_body = if channel_id == "main" {
+                row.get("rendered_body")
+            } else {
+                let envelope: Option<serde_json::Value> = row.get("rendered_body_private");
+                envelope
+                    .map(|envelope| {
+                        let private = open_private_projection(
+                            "day_event_narrative",
+                            &[
+                                game.as_str(),
+                                event_id.as_str(),
+                                lifecycle_name.as_str(),
+                                "rendered",
+                            ],
+                            &envelope,
+                        )?;
+                        required_private_string(&private, "body")
+                    })
+                    .transpose()?
+            };
             Ok(DayEventNarrativeRow {
-                game_id: row.get("game_id"),
-                event_id: row.get("event_id"),
+                game_id: row_game_id,
+                event_id,
                 lifecycle,
                 template_key: row.get("template_key"),
                 template_hash,
-                channel_id: row.get("channel_id"),
-                body_template: row.get("body_template"),
+                channel_id,
+                body_template,
                 source_seq: row.get("source_seq"),
-                rendered_body: row.get("rendered_body"),
+                rendered_body,
                 status: row.get("status"),
                 published_seq: row.get("published_seq"),
             })
@@ -7846,6 +8019,24 @@ async fn delete_private_channel_members(
         .bind(channel_id)
         .execute(&mut **tx)
         .await?;
+    Ok(())
+}
+
+async fn delete_private_channel_member(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    game_id: Uuid,
+    channel_id: &str,
+    slot_id: &str,
+) -> Result<(), ProjectionError> {
+    sqlx::query(
+        "DELETE FROM private_channel_member \
+         WHERE game_id = $1 AND channel_id = $2 AND slot_id = $3",
+    )
+    .bind(game_id)
+    .bind(channel_id)
+    .bind(slot_id)
+    .execute(&mut **tx)
+    .await?;
     Ok(())
 }
 

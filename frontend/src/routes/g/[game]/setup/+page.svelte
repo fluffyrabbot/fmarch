@@ -448,7 +448,7 @@
                           <li>
                             <span>{event.eventId}</span>
                             <strong>{event.templateKey}</strong>
-                            <small>{schedulePreviewLabel(event)} · {event.participantFilter} · {event.resolutionMode} · {event.rewardKeys.join(", ")}</small>
+                            <small>{schedulePreviewLabel(event)} · {event.participantFilter} · {event.resolutionMode} · {event.channelVisibility === "private" ? `private (${event.channelMembership})` : "public main"} · {event.rewardKeys.join(", ")}</small>
                           </li>
                         {/each}
                       </ul>

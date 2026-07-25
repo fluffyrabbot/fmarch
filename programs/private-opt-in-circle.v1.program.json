@@ -1,0 +1,86 @@
+{
+  "id": "private-opt-in-circle",
+  "version": 1,
+  "display_name": "Private Opt-in Circle",
+  "theme_ref": "theme.private_opt_in_circle",
+  "narrative_templates": [
+    {
+      "key": "theme.private_opt_in_circle.opened",
+      "body": "The {{event_template}} circle is open. Join to enter its private room."
+    },
+    {
+      "key": "theme.private_opt_in_circle.locked",
+      "body": "{{event_id}} locked with {{participant_count}} members: {{participants}}."
+    },
+    {
+      "key": "theme.private_opt_in_circle.resolved",
+      "body": "{{event_id}} selected {{winners}}. Rewards: {{rewards}}."
+    },
+    {
+      "key": "theme.private_opt_in_circle.cancelled",
+      "body": "{{event_id}} was cancelled: {{cancellation_reason}}."
+    }
+  ],
+  "events": [
+    {
+      "id": "private-opt-in-circle-d1",
+      "template_key": "theme.private_opt_in_circle.event",
+      "phase_scope": {
+        "kind": "during_day",
+        "number": 1
+      },
+      "schedule": {
+        "kind": "host_opened"
+      },
+      "participation": {
+        "who": "alive_slots",
+        "mode": "opt_in",
+        "limits": {
+          "minimum": 1,
+          "maximum": null
+        }
+      },
+      "resolution": {
+        "auto": {
+          "policy": {
+            "kind": "seeded_random",
+            "winners": 1
+          }
+        }
+      },
+      "rewards": [
+        {
+          "reward_key": "circle_bonus",
+          "display_name_theme_key": "theme.private_opt_in_circle.reward",
+          "effects": [
+            {
+              "recipient": {
+                "kind": "winner"
+              },
+              "operation": {
+                "kind": "grant",
+                "grant": {
+                  "grant_id": "private_circle_bonus_action",
+                  "kind": "extra_action",
+                  "uses": 1,
+                  "vote_weight": null,
+                  "visibility": "actor"
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "narrative": {
+        "opened": "theme.private_opt_in_circle.opened",
+        "locked": "theme.private_opt_in_circle.locked",
+        "resolved": "theme.private_opt_in_circle.resolved",
+        "cancelled": "theme.private_opt_in_circle.cancelled"
+      },
+      "channel_policy": {
+        "visibility": "private",
+        "membership": "participants"
+      }
+    }
+  ]
+}

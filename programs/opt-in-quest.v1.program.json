@@ -6,22 +6,18 @@
   "narrative_templates": [
     {
       "key": "theme.opt_in_quest.opened",
-      "channel_id": "main",
       "body": "{{event_template}} is open for volunteers."
     },
     {
       "key": "theme.opt_in_quest.locked",
-      "channel_id": "main",
       "body": "{{event_id}} set out with {{participant_count}} volunteers: {{participants}}."
     },
     {
       "key": "theme.opt_in_quest.resolved",
-      "channel_id": "main",
       "body": "{{event_id}} completed. Winners: {{winners}}. Rewards: {{rewards}}."
     },
     {
       "key": "theme.opt_in_quest.cancelled",
-      "channel_id": "main",
       "body": "{{event_id}} was cancelled: {{cancellation_reason}}."
     }
   ],
@@ -85,9 +81,7 @@
         "cancelled": "theme.opt_in_quest.cancelled"
       },
       "channel_policy": {
-        "allowed_channels": [
-          "main"
-        ]
+        "visibility": "public_main"
       }
     }
   ]

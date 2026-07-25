@@ -8,7 +8,7 @@ import {
 
 function validReport() {
   return {
-    artifact_version: 2,
+    artifact_version: 3,
     artifact_path: "target/mash-scale-acceptance/report.json",
     ok: true,
     proof_boundary: "Local deterministic 60-seat scale proof.",
@@ -71,11 +71,20 @@ function validReport() {
       elapsed_ms: 30,
       threshold_ms: 2_000,
     },
+    private_channel: {
+      private_event_count: 1,
+      member_rows: 60,
+      narrative_rows: 2,
+      narrative_plaintext_rows: 0,
+      thread_posts: 2,
+      thread_plaintext_rows: 0,
+    },
     rebuild: {
       ok: true,
       diff_count: 0,
       participation_rows_after_rebuild: 300,
       published_narratives_after_rebuild: 10,
+      private_channel_members_after_rebuild: 60,
       elapsed_ms: 700,
       threshold_ms: 5_000,
     },
@@ -94,6 +103,7 @@ test("mash scale artifact rejects concurrency, receipt, pagination, and rebuild 
   report.participation_page.rows_examined = 203;
   report.player_attention.attention_items = 4;
   report.host_console.attention_task_count = 9;
+  report.private_channel.narrative_plaintext_rows = 1;
   report.rebuild.ok = false;
   assert.deepEqual(mashScaleAcceptanceDiff(report), [
     "concurrency.duplicate_participation_rows",
@@ -102,6 +112,7 @@ test("mash scale artifact rejects concurrency, receipt, pagination, and rebuild 
     "participation_page.rows_examined",
     "player_attention.attention_items",
     "host_console.attention_task_count",
+    "private_channel.narrative_plaintext_rows",
     "rebuild.ok",
   ]);
 });

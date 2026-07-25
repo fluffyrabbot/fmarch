@@ -235,12 +235,16 @@ struct DayEvent {
 }
 
 /// Authored program content owns the immutable narrative catalog. Event
-/// templates reference catalog keys; attach compiles the exact channel/body/hash
+/// templates reference catalog keys; attach compiles the event-derived channel/body/hash
 /// snapshot into each scheduled event so later catalog edits cannot rewrite it.
 struct NarrativeTemplate {
     key: String,
-    channel_id: String,
     body: String,
+}
+
+enum EventChannelPolicy {
+    PublicMain,
+    Private { membership: EligibleSlots | Participants },
 }
 
 /// Platform wall-clock values are explicit and unit-safe. They are never engine
@@ -515,7 +519,11 @@ v1 host-authored narrative therefore:
 
 1. **Does not** call or reuse player `SubmitPost` validation.
 2. **Does** use the **generalized host-notice builder** shared with manual spectator posts: append `PostSubmitted` with `ActorId::Host`, host attribution, an explicit channel, and a validated body.
-3. **Automatic DayEvent v1 allow-list:** `main` only. Spectator publishing remains manual because spectator copy can be private; private rendered bodies must not sit in retry-work projections. Additional event channels require an explicit privacy and membership design.
+3. **Automatic DayEvent channel policy:** the event owns either `PublicMain` or
+   a derived `private:event:<event_id>` channel. Private membership is
+   slot-stable and either captured from eligible slots at open or follows
+   participation grant/withdrawal facts. Program authors cannot inject raw
+   channel ids.
 4. The resolved, content-addressed program artifact owns a keyed narrative catalog. Program attach validates every lifecycle reference and placeholder, then writes the exact template key, content hash, channel, and body snapshot into `DayEventScheduled`.
 5. A committed lifecycle fact (`DayEventOpened`, `Locked`, `Resolved`, or `Cancelled`) renders its immutable template with committed projection state and activates rebuildable `day_event_narrative` work.
 6. Scheduler mechanics commit first. A second transaction publishes `PostSubmitted` and `DayEventNarrativePublished` atomically with a deterministic receipt id. Failed delivery remains pending and retry-safe; it can never roll back or falsify the mechanical lifecycle.
@@ -645,10 +653,11 @@ The deterministic fixture is one 60-seat game with five scheduled DayEvents and
 6. Full projection rebuild preserves all 300 participation rows and ten published narratives with zero table diffs in **≤ 5 seconds**.
 
 This is deliberately a local, single-node regression proof, not a hosted
-multi-region latency claim. Private event channels are not shipped, so the
-artifact does not pretend to prove their byte-level isolation. Before that
-surface is enabled, capability-filtered delta delivery with a **zero-byte
-non-member** assertion is a prerequisite acceptance lane.
+multi-region latency claim. One event uses participant-scoped private
+membership, so the artifact covers concurrent membership grants, ciphertext-only
+private retry/thread rows, mixed public/private narratives, and rebuild. Focused
+API proof separately asserts **zero private bytes** at denied or revoked REST,
+WebSocket-ticket, and media boundaries.
 
 Rough storage: 40 players × 20 events × 40 participations ≈ 800 participation events — negligible vs multi-week thread volume; **concurrency**, not storage, is the 30+ risk.
 
@@ -994,6 +1003,7 @@ Incremental backlog for solo greenfield. Multi-day depth expected on adapter PRs
 | **PR12** | theme narrative + host-notice main allow-list | immutable inline template catalog; attach-time compilation/hash snapshot; rebuildable retry work; generalized host-notice adapter; host-console delivery evidence | PR8 | Delivered; mechanics commit before narrative; deterministic publication receipt; **not** player SubmitPost |
 | **PR13** | scale acceptance checks (30+) | production-path harness, artifact contract, proof lane | PR7, PR9–12 | Delivered; deterministic 60-seat/5-event proof with explicit contention, scheduler, pagination, host-console, narrative-receipt, and rebuild budgets |
 | **PR14** | program templates library (data) | manifest-pinned `programs/` library, reference-only wire command, setup previews | PR8, PR12–13 | Delivered; raffle, opt-in quest, and host-judged showcase compile across every shipped pack; acceptance fixtures are audience-partitioned |
+| **PR15** | participant-scoped private event channels | event-owned channel policy, membership facts, sealed narrative work, generic private transport boundary | PR12–14 | Delivered; private opt-in circle compiles across every shipped pack, replacement/revocation is slot-stable, denied REST/live/media responses disclose zero private bytes, and scale mixes public/private events |
 
 **Deferred:** Convert/Link/channel-membership effects; reopen/hybrid semantics; L4 promotion tooling; mid-game cohost denylist edits (v1 = create-time only unless product reopens).
 
@@ -1070,7 +1080,7 @@ Assumes program already attached; event `ev_cookie_d2` scheduled HostOpened.
 
 1. Host `OpenDayEvent { event_id: ev_cookie_d2 }`  
    → `DayEventOpened { event_id, phase_id, opened_at, … }`  
-   → optional narrative via **host-notice** authoring (host-authored `PostSubmitted` on an allow-listed channel)
+   → optional narrative via **host-notice** authoring (host-authored `PostSubmitted` on the event policy's derived channel)
 
 2. Players (×N) `SubmitDayEventParticipation { actor_slot, payload: OptIn }`  
    → `DayEventParticipationSubmitted { … }` each  
@@ -1083,7 +1093,7 @@ Assumes program already attached; event `ev_cookie_d2` scheduled HostOpened.
    - **no partial apply**  
 5. Later `ResolvePhase` rebuilds snapshot including grant/mark for slot-7.
 
-**Rejects (illustrative closed set):** `DayEventNotOpen`, `DayEventNotLocked`, `DayEventAlreadyResolved`, `ParticipationNotAllowed`, `DuplicateParticipation`, `WithdrawAfterLock`, `UnknownRewardBinding`, `EffectSpecValidation`, `NarrativeChannelNotAllowed`, `NotHost`, `StreamConflict`.
+**Rejects (illustrative closed set):** `DayEventNotOpen`, `DayEventNotLocked`, `DayEventAlreadyResolved`, `ParticipationNotAllowed`, `DuplicateParticipation`, `WithdrawAfterLock`, `UnknownRewardBinding`, `EffectSpecValidation`, `NotHost`, `StreamConflict`.
 
 ---
 

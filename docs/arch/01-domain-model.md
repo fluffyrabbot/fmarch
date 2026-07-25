@@ -86,6 +86,13 @@ projection transfers `ChannelMember` to the incoming account. The player rail an
 derive both rooms from that capability, and non-`main` post bodies use the generic encrypted
 event envelope.
 
+Day programs use the same boundary without accepting authored channel ids. A
+private DayEvent derives `private:event:<event_id>`. `eligible_slots` captures
+the participation filter when the event opens; `participants` appends
+membership grant/revoke facts with submit/withdraw. Membership remains keyed to
+the stable slot, so replacement transfers history. Locked/resolved rooms retain
+read access but reject new player posts.
+
 Dead chat is lifecycle-derived rather than pack-member-declared. The current occupant of
 any dead slot resolves `DeadViewer(game)`; replacement transfers that grant with the stable
 slot, and restoring the slot alive revokes it. A dead occupant may author encrypted posts in

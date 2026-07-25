@@ -7985,7 +7985,7 @@ mod tests {
                     "resolved": null,
                     "cancelled": null
                 },
-                "channel_policy": { "allowed_channels": ["spectator"] }
+                "channel_policy": { "visibility": "public_main" }
             }))
             .unwrap(),
             state: state.to_string(),
@@ -8173,6 +8173,7 @@ pub struct HostSetupProgramSchedulePreview {
     pub participant_filter: String,
     pub participation_mode: String,
     pub resolution_mode: String,
+    pub channel_policy: game_platform::EventChannelPolicy,
     pub reward_keys: Vec<String>,
     pub mode: String,
     pub phase_id: Option<String>,
@@ -8947,6 +8948,7 @@ fn product_day_program_catalog(
                         } => "auto_seeded_random",
                     }
                     .to_string(),
+                    channel_policy: event.channel_policy,
                     reward_keys: event
                         .rewards
                         .iter()
@@ -9055,7 +9057,7 @@ mod day_program_catalog_tests {
             let pack_key = product_pack.key;
             let pack = load_pack_by_name(&pack_key).unwrap();
             let catalog = product_day_program_catalog(&pack).unwrap();
-            assert_eq!(catalog.len(), 3);
+            assert_eq!(catalog.len(), 4);
             assert!(catalog
                 .iter()
                 .all(|option| option.compatibility.attachable
@@ -9074,9 +9076,23 @@ mod day_program_catalog_tests {
                 BTreeMap::from([
                     ("host-judged-showcase", "on_trigger"),
                     ("opt-in-quest", "relative_to_phase"),
+                    ("private-opt-in-circle", "host_opened"),
                     ("raffle", "host_opened"),
                 ]),
                 "unexpected product program schedule preview for {pack_key}"
+            );
+            let private_preview = catalog
+                .iter()
+                .find(|option| option.program_ref.id.as_str() == "private-opt-in-circle")
+                .unwrap()
+                .schedule_previews
+                .first()
+                .unwrap();
+            assert_eq!(
+                private_preview.channel_policy,
+                game_platform::EventChannelPolicy::Private {
+                    membership: game_platform::EventChannelMembership::Participants,
+                }
             );
         }
     }

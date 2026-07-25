@@ -191,6 +191,9 @@ test("host setup preserves pack-derived program compatibility diagnostics", () =
               participation_mode: "opt_in",
               resolution_mode: "auto_seeded_random",
               reward_keys: ["raffle_bonus"],
+              channel_policy: {
+                visibility: "public_main",
+              },
               mode: "relative_to_phase",
               phase_id: "D01",
               open_at: null,
@@ -231,6 +234,8 @@ test("host setup preserves pack-derived program compatibility diagnostics", () =
       participationMode: "opt_in",
       resolutionMode: "auto_seeded_random",
       rewardKeys: ["raffle_bonus"],
+      channelVisibility: "public_main",
+      channelMembership: null,
       mode: "relative_to_phase",
       phaseId: "D01",
       openAt: null,

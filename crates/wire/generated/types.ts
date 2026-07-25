@@ -53,9 +53,11 @@ export type NarrativeTemplates = { opened: TemplateKey | null, locked: TemplateK
 
 export type NarrativeLifecycle = "opened" | "locked" | "resolved" | "cancelled";
 
-export type NarrativeTemplate = { key: TemplateKey, channel_id: ChannelId, body: string, };
+export type NarrativeTemplate = { key: TemplateKey, body: string, };
 
-export type EventChannelPolicy = { allowed_channels: Array<ChannelId>, };
+export type EventChannelMembership = "eligible_slots" | "participants";
+
+export type EventChannelPolicy = { "visibility": "public_main" } | { "visibility": "private", membership: EventChannelMembership, };
 
 export type RecipientSelector = { "kind": "winner" } | { "kind": "participant" } | { "kind": "host_chosen" } | { "kind": "explicit_slot", slot: SlotId, };
 

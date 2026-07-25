@@ -182,6 +182,7 @@ export function normalizeHostSetupState(raw, { game }) {
                     preview.resolution_mode,
                     "program_catalog.schedule_preview.resolution_mode",
                   ),
+                  ...normalizeEventChannelPolicy(preview.channel_policy),
                   rewardKeys: Object.freeze(
                     (Array.isArray(preview.reward_keys) ? preview.reward_keys : []).map(String),
                   ),
@@ -259,6 +260,36 @@ export function normalizeHostSetupState(raw, { game }) {
       ),
     ),
   });
+}
+
+function normalizeEventChannelPolicy(raw) {
+  const visibility = normalizeId(
+    raw?.visibility,
+    "program_catalog.schedule_preview.channel_policy.visibility",
+  );
+  if (visibility === "public_main") {
+    if (raw?.membership != null) {
+      throw new Error("public DayEvent channel policy cannot declare membership");
+    }
+    return {
+      channelVisibility: visibility,
+      channelMembership: null,
+    };
+  }
+  const membership = normalizeId(
+    raw?.membership,
+    "program_catalog.schedule_preview.channel_policy.membership",
+  );
+  if (
+    visibility !== "private"
+    || !["eligible_slots", "participants"].includes(membership)
+  ) {
+    throw new Error("unsupported DayEvent channel policy");
+  }
+  return {
+    channelVisibility: visibility,
+    channelMembership: membership,
+  };
 }
 
 export function buildHostSetupReadiness(setupState) {
@@ -383,6 +414,9 @@ function hostSetupFixtureState({ game }) {
             participant_filter: "alive_slots",
             participation_mode: "opt_in",
             resolution_mode: "auto_seeded_random",
+            channel_policy: Object.freeze({
+              visibility: "public_main",
+            }),
             reward_keys: Object.freeze(["raffle_bonus"]),
             mode: "host_opened",
             phase_id: null,

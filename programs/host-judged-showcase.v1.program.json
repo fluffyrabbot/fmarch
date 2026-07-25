@@ -6,22 +6,18 @@
   "narrative_templates": [
     {
       "key": "theme.host_judged_showcase.opened",
-      "channel_id": "main",
       "body": "{{event_template}} is accepting participants."
     },
     {
       "key": "theme.host_judged_showcase.locked",
-      "channel_id": "main",
       "body": "{{event_id}} is ready for judging with {{participant_count}} participants: {{participants}}."
     },
     {
       "key": "theme.host_judged_showcase.resolved",
-      "channel_id": "main",
       "body": "{{event_id}} was judged. Winners: {{winners}}. Rewards: {{rewards}}."
     },
     {
       "key": "theme.host_judged_showcase.cancelled",
-      "channel_id": "main",
       "body": "{{event_id}} was cancelled: {{cancellation_reason}}."
     }
   ],
@@ -79,9 +75,7 @@
         "cancelled": "theme.host_judged_showcase.cancelled"
       },
       "channel_policy": {
-        "allowed_channels": [
-          "main"
-        ]
+        "visibility": "public_main"
       }
     }
   ]

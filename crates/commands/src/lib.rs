@@ -717,9 +717,13 @@ async fn publish_day_event_narratives_in_tx(
     let pending = projections::pending_day_event_narratives(&mut **tx, game).await?;
     let mut stream_seqs = Vec::new();
     for narrative in pending {
-        if !day_program::HOST_NOTICE_CHANNEL_ALLOWLIST.contains(&narrative.channel_id.as_str()) {
+        let event = load_day_event(tx, game, &narrative.event_id).await?;
+        if !day_program::host_notice_channel_supported(
+            &event.definition,
+            narrative.channel_id.as_str(),
+        ) {
             return Err(day_event_reject(format!(
-                "narrative channel `{}` is not host-notice enabled",
+                "narrative channel `{}` does not match its DayEvent policy",
                 narrative.channel_id
             )));
         }
@@ -2180,22 +2184,21 @@ async fn open_day_event(
         }
     }
     let opened_at = unix_seconds_now()?;
-    persist(
-        tx,
-        game,
-        &[EventInput::new(
-            "DayEventOpened",
-            1,
-            serde_json::json!({
-                "event_id": event_id.as_str(),
-                "phase_id": phase.phase_id,
-                "opened_at": opened_at,
-            }),
-            ActorId::Host,
-            0,
-        )],
-    )
-    .await
+    let mut events = vec![EventInput::new(
+        "DayEventOpened",
+        1,
+        serde_json::json!({
+            "event_id": event_id.as_str(),
+            "phase_id": phase.phase_id,
+            "opened_at": opened_at,
+        }),
+        ActorId::Host,
+        0,
+    )];
+    events.extend(
+        private_event_channel_open_events(tx, game, &event.definition, ActorId::Host, 0).await?,
+    );
+    persist(tx, game, &events).await
 }
 
 async fn lock_day_event(
@@ -2273,6 +2276,89 @@ async fn cancel_day_event(
     .await
 }
 
+async fn private_event_channel_open_events(
+    tx: &mut Transaction<'_, Postgres>,
+    game: Uuid,
+    event: &game_platform::DayEvent,
+    actor: ActorId,
+    occurred_at: i64,
+) -> Result<Vec<EventInput>, Reject> {
+    if event.channel_policy.membership()
+        != Some(game_platform::EventChannelMembership::EligibleSlots)
+    {
+        return Ok(Vec::new());
+    }
+    let alive_slots = projections::slot_state(&mut **tx, game)
+        .await?
+        .into_iter()
+        .filter(|slot| slot.alive)
+        .map(|slot| slot.slot_id)
+        .collect::<BTreeSet<_>>();
+    let member_slots = projections::slot_occupancy(&mut **tx, game)
+        .await?
+        .into_iter()
+        .filter(|row| match event.participation.who {
+            game_platform::ParticipantFilter::AliveSlots => alive_slots.contains(&row.slot_id),
+            game_platform::ParticipantFilter::AllOccupied => true,
+            game_platform::ParticipantFilter::HostInvited
+            | game_platform::ParticipantFilter::ChannelMembers => false,
+        })
+        .map(|row| row.slot_id)
+        .collect::<Vec<_>>();
+    Ok(member_slots
+        .into_iter()
+        .map(|slot_id| {
+            private_event_channel_member_granted(event, &slot_id, actor.clone(), occurred_at)
+        })
+        .collect())
+}
+
+fn private_event_channel_member_granted(
+    event: &game_platform::DayEvent,
+    slot_id: &str,
+    actor: ActorId,
+    occurred_at: i64,
+) -> EventInput {
+    EventInput::new(
+        "PrivateChannelMemberGranted",
+        1,
+        serde_json::json!({
+            "channel_id": event.channel_policy.channel_id(&event.id),
+            "group_id": event.id,
+            "kind": "DayEvent",
+            "slot_id": slot_id,
+            "role_key": "event_participant",
+            "reveals_alignment": "None",
+            "source": format!("day_event.{}", event.id),
+        }),
+        actor,
+        occurred_at,
+    )
+}
+
+fn private_event_channel_member_revoked(
+    event: &game_platform::DayEvent,
+    slot_id: &str,
+    actor: ActorId,
+    reason: &str,
+    occurred_at: i64,
+) -> EventInput {
+    EventInput::new(
+        "PrivateChannelMemberRevoked",
+        1,
+        serde_json::json!({
+            "channel_id": event.channel_policy.channel_id(&event.id),
+            "group_id": event.id,
+            "kind": "DayEvent",
+            "slot_id": slot_id,
+            "reason": reason,
+            "source": format!("day_event.{}", event.id),
+        }),
+        actor,
+        occurred_at,
+    )
+}
+
 async fn observe_day_event_schedules_in_tx(
     tx: &mut Transaction<'_, Postgres>,
     game: Uuid,
@@ -2330,6 +2416,16 @@ async fn observe_day_event_schedules_in_tx(
                         ActorId::System,
                         observed_at,
                     ));
+                    facts.extend(
+                        private_event_channel_open_events(
+                            tx,
+                            game,
+                            &row.definition,
+                            ActorId::System,
+                            observed_at,
+                        )
+                        .await?,
+                    );
                 }
                 day_schedule::ScheduleIntentKind::Lock => {
                     if row.lock_observed_at.is_none() {
@@ -2484,23 +2580,27 @@ async fn submit_day_event_participation(
     let phase_id = event
         .phase_id
         .ok_or_else(|| day_event_reject("open DayEvent has no phase"))?;
-    persist(
-        tx,
-        game,
-        &[EventInput::new(
-            "DayEventParticipationSubmitted",
-            1,
-            serde_json::json!({
-                "event_id": event_id.as_str(),
-                "actor_slot": actor_slot,
-                "payload": payload,
-                "phase_id": phase_id,
-            }),
-            ActorId::Slot(actor_slot),
+    let mut events = vec![EventInput::new(
+        "DayEventParticipationSubmitted",
+        1,
+        serde_json::json!({
+            "event_id": event_id.as_str(),
+            "actor_slot": actor_slot,
+            "payload": payload,
+            "phase_id": phase_id,
+        }),
+        ActorId::Slot(actor_slot.clone()),
+        0,
+    )];
+    if event.definition.channel_policy.is_private() {
+        events.push(private_event_channel_member_granted(
+            &event.definition,
+            &actor_slot,
+            ActorId::Slot(actor_slot.clone()),
             0,
-        )],
-    )
-    .await
+        ));
+    }
+    persist(tx, game, &events).await
 }
 
 async fn withdraw_day_event_participation(
@@ -2519,21 +2619,28 @@ async fn withdraw_day_event_participation(
     if !current.iter().any(|row| row.actor_slot == actor_slot) {
         return Err(Reject::ParticipationNotFound);
     }
-    persist(
-        tx,
-        game,
-        &[EventInput::new(
-            "DayEventParticipationWithdrawn",
-            1,
-            serde_json::json!({
-                "event_id": event_id.as_str(),
-                "actor_slot": actor_slot,
-            }),
-            ActorId::Slot(actor_slot),
+    let mut events = vec![EventInput::new(
+        "DayEventParticipationWithdrawn",
+        1,
+        serde_json::json!({
+            "event_id": event_id.as_str(),
+            "actor_slot": actor_slot,
+        }),
+        ActorId::Slot(actor_slot.clone()),
+        0,
+    )];
+    if event.definition.channel_policy.membership()
+        == Some(game_platform::EventChannelMembership::Participants)
+    {
+        events.push(private_event_channel_member_revoked(
+            &event.definition,
+            &actor_slot,
+            ActorId::Slot(actor_slot.clone()),
+            "participation_withdrawn",
             0,
-        )],
-    )
-    .await
+        ));
+    }
+    persist(tx, game, &events).await
 }
 
 async fn resolve_day_event(
@@ -3218,14 +3325,6 @@ fn build_host_notice(spec: HostNoticeSpec) -> Result<EventInput, Reject> {
         occurred_at,
         narrative_receipt,
     } = spec;
-    let channel_allowed = if narrative_receipt.is_some() {
-        day_program::HOST_NOTICE_CHANNEL_ALLOWLIST.contains(&channel_id.as_str())
-    } else {
-        channel_id == "spectator"
-    };
-    if !channel_allowed {
-        return Err(Reject::InvalidTarget);
-    }
     validate_game_post_body(&body)?;
     validate_thread_post_media(&media)?;
     if body.trim().is_empty() {
@@ -5605,6 +5704,32 @@ fn current_snapshot(
                     });
                 }
             }
+            "PrivateChannelMemberGranted" => {
+                let channel_id = str_payload(ev, "channel_id")?;
+                let kind = str_payload(ev, "kind")?;
+                let slot_id = str_payload(ev, "slot_id")?;
+                let role_key = str_payload(ev, "role_key")?;
+                let reveals_alignment = str_payload(ev, "reveals_alignment")?;
+                let source = str_payload(ev, "source")?;
+                private_channels.retain(|record: &domain::PrivateChannelRecord| {
+                    record.channel_id != channel_id || record.slot_id != slot_id
+                });
+                private_channels.push(domain::PrivateChannelRecord {
+                    channel_id,
+                    kind,
+                    slot_id,
+                    role_key,
+                    reveals_alignment,
+                    source,
+                });
+            }
+            "PrivateChannelMemberRevoked" => {
+                let channel_id = str_payload(ev, "channel_id")?;
+                let slot_id = str_payload(ev, "slot_id")?;
+                private_channels.retain(|record: &domain::PrivateChannelRecord| {
+                    record.channel_id != channel_id || record.slot_id != slot_id
+                });
+            }
             "PrivateChannelRevoked" => {
                 let channel_id = str_payload(ev, "channel_id")?;
                 private_channels.retain(|record: &domain::PrivateChannelRecord| {
@@ -6228,6 +6353,12 @@ async fn require_channel_actor_can_post(
     channel_id: &str,
     slot: &str,
 ) -> Result<(), Reject> {
+    if let Some(event_id) = game_platform::event_id_from_private_channel(channel_id) {
+        let event = load_day_event(tx, game, event_id).await?;
+        if event.state != "open" {
+            return Err(Reject::NotAuthorized);
+        }
+    }
     if channel_id == "dead" {
         return match projections::slot_alive(&mut **tx, game, slot).await? {
             Some(false) => Ok(()),

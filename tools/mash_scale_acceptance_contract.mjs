@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 
-export const mashScaleAcceptanceVersion = 2;
+export const mashScaleAcceptanceVersion = 3;
 
 export function mashScaleAcceptanceDiff(report) {
   const diffs = [];
@@ -79,11 +79,32 @@ export function mashScaleAcceptanceDiff(report) {
   );
   check(withinBudget(host), "host_console.elapsed_ms", diffs);
 
+  const privateChannel = report?.private_channel;
+  check(privateChannel?.private_event_count === 1, "private_channel.private_event_count", diffs);
+  check(privateChannel?.member_rows === 60, "private_channel.member_rows", diffs);
+  check(privateChannel?.narrative_rows === 2, "private_channel.narrative_rows", diffs);
+  check(
+    privateChannel?.narrative_plaintext_rows === 0,
+    "private_channel.narrative_plaintext_rows",
+    diffs,
+  );
+  check(privateChannel?.thread_posts === 2, "private_channel.thread_posts", diffs);
+  check(
+    privateChannel?.thread_plaintext_rows === 0,
+    "private_channel.thread_plaintext_rows",
+    diffs,
+  );
+
   const rebuild = report?.rebuild;
   check(rebuild?.ok === true, "rebuild.ok", diffs);
   check(rebuild?.diff_count === 0, "rebuild.diff_count", diffs);
   check(rebuild?.participation_rows_after_rebuild === 300, "rebuild.participation_rows_after_rebuild", diffs);
   check(rebuild?.published_narratives_after_rebuild === 10, "rebuild.published_narratives_after_rebuild", diffs);
+  check(
+    rebuild?.private_channel_members_after_rebuild === 60,
+    "rebuild.private_channel_members_after_rebuild",
+    diffs,
+  );
   check(withinBudget(rebuild), "rebuild.elapsed_ms", diffs);
   return diffs;
 }

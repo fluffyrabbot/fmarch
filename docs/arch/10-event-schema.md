@@ -83,6 +83,8 @@ enum EventKind {
     ChannelMemberRemoved,
     ChannelVisibilityChanged,
     PrivateChannelDeclared, // { channel_id, group_id, kind, members, reveals_alignment, source }
+    PrivateChannelMemberGranted, // { channel_id, group_id, kind, slot_id, role_key, reveals_alignment, source }
+    PrivateChannelMemberRevoked, // { channel_id, group_id, kind, slot_id, reason, source }
     PrivateChannelRevoked,  // { channel_id, group_id, kind, reason, source }
 
     // ── Submissions (platform → engine seam, doc 09) ──

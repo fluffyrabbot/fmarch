@@ -71,9 +71,7 @@ fn minimal_day_event(event_id: &str) -> game_platform::DayEvent {
             resolved: None,
             cancelled: None,
         },
-        channel_policy: game_platform::EventChannelPolicy {
-            allowed_channels: vec![game_platform::ChannelId::new("spectator").unwrap()],
-        },
+        channel_policy: game_platform::EventChannelPolicy::PublicMain,
     }
 }
 
@@ -6249,6 +6247,210 @@ async fn vertical_channel_thread_cold_load_is_channel_scoped_and_authorized(pool
         .await
         .unwrap();
     assert_eq!(denied.status(), StatusCode::FORBIDDEN);
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn vertical_private_day_event_channel_discloses_zero_bytes_after_denial_or_revocation(
+    pool: sqlx::PgPool,
+) {
+    let app = router(pool.clone());
+    let (member_token, member_principal) =
+        create_media_upload_account_session(&app, "private-event-member").await;
+    let (nonmember_token, _) =
+        create_media_upload_account_session(&app, "private-event-nonmember").await;
+    let game = Uuid::new_v4();
+    let host = caps::Principal::user("host_h");
+    for command in [
+        commands::Command::CreateGame {
+            game,
+            pack: "mafiascum".into(),
+            cohost_denied: vec![],
+        },
+        commands::Command::AddSlot {
+            game,
+            slot: "slot_1".into(),
+        },
+        commands::Command::AssignSlot {
+            game,
+            slot: "slot_1".into(),
+            user: member_principal.clone(),
+        },
+        commands::Command::AssignRole {
+            game,
+            slot: "slot_1".into(),
+            role_key: "vanilla_townie".into(),
+        },
+        commands::Command::StartGame {
+            game,
+            phase: "D01".into(),
+        },
+    ] {
+        commands::handle(&pool, &host, command).await.unwrap();
+    }
+    let mut event = minimal_day_event("event-private-api");
+    event.channel_policy = game_platform::EventChannelPolicy::Private {
+        membership: game_platform::EventChannelMembership::Participants,
+    };
+    let event_id = event.id.clone();
+    let channel_id = event.channel_policy.channel_id(&event_id).to_string();
+    commands::handle(
+        &pool,
+        &host,
+        commands::Command::ScheduleDayEvent { game, event },
+    )
+    .await
+    .unwrap();
+    commands::handle(
+        &pool,
+        &host,
+        commands::Command::OpenDayEvent {
+            game,
+            event_id: event_id.clone(),
+        },
+    )
+    .await
+    .unwrap();
+    commands::handle(
+        &pool,
+        &caps::Principal::user(&member_principal),
+        commands::Command::SubmitDayEventParticipation {
+            game,
+            event_id: event_id.clone(),
+            actor_slot: "slot_1".into(),
+            payload: game_platform::ParticipationPayload::OptIn,
+        },
+    )
+    .await
+    .unwrap();
+    let secret = "event-channel-secret-never-crosses-denied-boundaries";
+    commands::handle(
+        &pool,
+        &caps::Principal::user(&member_principal),
+        commands::Command::SubmitPost {
+            game,
+            channel_id: channel_id.clone(),
+            actor_slot: "slot_1".into(),
+            body: secret.into(),
+            media: Vec::new(),
+        },
+    )
+    .await
+    .unwrap();
+
+    let member = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!(
+                    "/games/{game}/channels/{channel_id}/thread?limit=10"
+                ))
+                .header("authorization", format!("Bearer {member_token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(member.status(), StatusCode::OK);
+    let member_body = to_bytes(member.into_body(), usize::MAX).await.unwrap();
+    assert!(String::from_utf8_lossy(&member_body).contains(secret));
+
+    let denied = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!(
+                    "/games/{game}/channels/{channel_id}/thread?limit=10"
+                ))
+                .header("authorization", format!("Bearer {nonmember_token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(denied.status(), StatusCode::FORBIDDEN);
+    let denied_body = to_bytes(denied.into_body(), usize::MAX).await.unwrap();
+    assert!(!String::from_utf8_lossy(&denied_body).contains(secret));
+
+    let ticket = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/auth/websocket-tickets")
+                .header("authorization", format!("Bearer {member_token}"))
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    serde_json::json!({
+                        "audience": "fmarch-live",
+                        "game": game,
+                        "channel": channel_id,
+                        "slot_id": "slot_1",
+                        "after_seq": 0
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(ticket.status(), StatusCode::OK);
+
+    commands::handle(
+        &pool,
+        &caps::Principal::user(&member_principal),
+        commands::Command::WithdrawDayEventParticipation {
+            game,
+            event_id,
+            actor_slot: "slot_1".into(),
+        },
+    )
+    .await
+    .unwrap();
+    for denied_request in [
+        Request::builder()
+            .method("GET")
+            .uri(format!(
+                "/games/{game}/channels/{channel_id}/thread?limit=10"
+            ))
+            .header("authorization", format!("Bearer {member_token}"))
+            .body(Body::empty())
+            .unwrap(),
+        Request::builder()
+            .method("POST")
+            .uri("/auth/websocket-tickets")
+            .header("authorization", format!("Bearer {member_token}"))
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::json!({
+                    "audience": "fmarch-live",
+                    "game": game,
+                    "channel": channel_id,
+                    "slot_id": "slot_1",
+                    "after_seq": 0
+                })
+                .to_string(),
+            ))
+            .unwrap(),
+        Request::builder()
+            .method("GET")
+            .uri(format!(
+                "/media/thread/{game}/{channel_id}/1/{}/thumb.webp",
+                "0".repeat(64)
+            ))
+            .header("authorization", format!("Bearer {member_token}"))
+            .body(Body::empty())
+            .unwrap(),
+    ] {
+        let denied = app.clone().oneshot(denied_request).await.unwrap();
+        assert_eq!(denied.status(), StatusCode::FORBIDDEN);
+        let denied_body = to_bytes(denied.into_body(), usize::MAX).await.unwrap();
+        assert!(
+            !String::from_utf8_lossy(&denied_body).contains(secret),
+            "revoked REST, WebSocket-ticket, and media boundaries disclose zero private bytes"
+        );
+    }
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]

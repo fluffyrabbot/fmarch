@@ -123,9 +123,7 @@ fn minimal_day_event(event_id: &str, effect: &str) -> game_platform::DayEvent {
             resolved: None,
             cancelled: None,
         },
-        channel_policy: game_platform::EventChannelPolicy {
-            allowed_channels: vec![game_platform::ChannelId::new("spectator").unwrap()],
-        },
+        channel_policy: game_platform::EventChannelPolicy::PublicMain,
     }
 }
 
@@ -183,7 +181,6 @@ fn narrative_day_program(program_id: &str, event_ids: &[&str]) -> game_platform:
         .map(|(lifecycle, body)| game_platform::NarrativeTemplate {
             key: game_platform::TemplateKey::new(format!("theme.bakery.narrative.{lifecycle}"))
                 .unwrap(),
-            channel_id: game_platform::ChannelId::new("main").unwrap(),
             body: (*body).to_string(),
         })
         .collect();
@@ -198,8 +195,7 @@ fn narrative_day_program(program_id: &str, event_ids: &[&str]) -> game_platform:
                 game_platform::TemplateKey::new("theme.bakery.narrative.cancelled").unwrap(),
             ),
         };
-        event.channel_policy.allowed_channels =
-            vec![game_platform::ChannelId::new("main").unwrap()];
+        event.channel_policy = game_platform::EventChannelPolicy::PublicMain;
     }
     program
 }
@@ -5632,6 +5628,250 @@ async fn day_event_narratives_compile_publish_and_rebuild_as_host_notices(pool: 
         .await
         .unwrap();
     assert_eq!(caught_up.claimed_games, 0);
+    assert!(audit_rebuild(&pool, game).await.unwrap().ok);
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn private_day_event_channel_is_sealed_participation_scoped_and_replacement_safe(
+    pool: PgPool,
+) {
+    let host = "host_h";
+    let outgoing = "user_a";
+    let incoming = "user_b";
+    let slot = "slot_1";
+    let game = setup_game(&pool, host, slot, outgoing).await;
+    let event_id = game_platform::DayEventId::new("event-private-showcase").unwrap();
+    let channel_id = game_platform::EventChannelPolicy::Private {
+        membership: game_platform::EventChannelMembership::Participants,
+    }
+    .channel_id(&event_id)
+    .as_str()
+    .to_string();
+    let mut program = narrative_day_program("program-private-showcase", &[event_id.as_str()]);
+    program.events[0].channel_policy = game_platform::EventChannelPolicy::Private {
+        membership: game_platform::EventChannelMembership::Participants,
+    };
+    handle(
+        &pool,
+        &user(host),
+        Command::AttachDayProgram { game, program },
+    )
+    .await
+    .unwrap();
+    handle(
+        &pool,
+        &user(host),
+        Command::OpenDayEvent {
+            game,
+            event_id: event_id.clone(),
+        },
+    )
+    .await
+    .unwrap();
+
+    let sealed_work: (
+        Option<String>,
+        serde_json::Value,
+        Option<String>,
+        serde_json::Value,
+    ) = sqlx::query_as(
+        "SELECT body_template, body_template_private, rendered_body, rendered_body_private \
+             FROM day_event_narrative \
+             WHERE game_id = $1 AND event_id = $2 AND lifecycle = 'opened'",
+    )
+    .bind(game)
+    .bind(event_id.as_str())
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(sealed_work.0.is_none());
+    assert!(sealed_work.1["ciphertext"].is_string());
+    assert!(sealed_work.2.is_none());
+    assert!(sealed_work.3["ciphertext"].is_string());
+    assert!(!caps::resolve(&pool, &user(outgoing), game)
+        .await
+        .unwrap()
+        .grants(&caps::Capability::ChannelMember(channel_id.clone())));
+
+    handle(
+        &pool,
+        &user(outgoing),
+        Command::SubmitDayEventParticipation {
+            game,
+            event_id: event_id.clone(),
+            actor_slot: slot.into(),
+            payload: game_platform::ParticipationPayload::OptIn,
+        },
+    )
+    .await
+    .unwrap();
+    assert!(caps::resolve(&pool, &user(outgoing), game)
+        .await
+        .unwrap()
+        .grants(&caps::Capability::ChannelMember(channel_id.clone())));
+    handle(
+        &pool,
+        &user(outgoing),
+        Command::SubmitPost {
+            game,
+            channel_id: channel_id.clone(),
+            actor_slot: slot.into(),
+            body: "participant-only draft".into(),
+            media: Vec::new(),
+        },
+    )
+    .await
+    .unwrap();
+    run_day_event_scheduler_once(
+        &pool,
+        &DayEventSchedulerConfig::default(),
+        Uuid::new_v4(),
+        100,
+    )
+    .await
+    .unwrap();
+
+    let stored_private_posts: Vec<(Option<String>, serde_json::Value)> = sqlx::query_as(
+        "SELECT body, body_private FROM thread_view \
+         WHERE game_id = $1 AND channel_id = $2 ORDER BY source_seq",
+    )
+    .bind(game)
+    .bind(&channel_id)
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(stored_private_posts.len(), 2);
+    assert!(stored_private_posts
+        .iter()
+        .all(|(body, private)| body.is_none() && private["ciphertext"].is_string()));
+
+    handle(
+        &pool,
+        &user(outgoing),
+        Command::WithdrawDayEventParticipation {
+            game,
+            event_id: event_id.clone(),
+            actor_slot: slot.into(),
+        },
+    )
+    .await
+    .unwrap();
+    assert!(!caps::resolve(&pool, &user(outgoing), game)
+        .await
+        .unwrap()
+        .grants(&caps::Capability::ChannelMember(channel_id.clone())));
+    handle(
+        &pool,
+        &user(outgoing),
+        Command::SubmitDayEventParticipation {
+            game,
+            event_id: event_id.clone(),
+            actor_slot: slot.into(),
+            payload: game_platform::ParticipationPayload::OptIn,
+        },
+    )
+    .await
+    .unwrap();
+    handle(
+        &pool,
+        &user(host),
+        Command::ProcessReplacement {
+            game,
+            slot: slot.into(),
+            outgoing_user: outgoing.into(),
+            incoming_user: incoming.into(),
+        },
+    )
+    .await
+    .unwrap();
+    assert!(!caps::resolve(&pool, &user(outgoing), game)
+        .await
+        .unwrap()
+        .grants(&caps::Capability::ChannelMember(channel_id.clone())));
+    assert!(caps::resolve(&pool, &user(incoming), game)
+        .await
+        .unwrap()
+        .grants(&caps::Capability::ChannelMember(channel_id.clone())));
+
+    handle(
+        &pool,
+        &user(host),
+        Command::LockDayEvent {
+            game,
+            event_id: event_id.clone(),
+        },
+    )
+    .await
+    .unwrap();
+    let closed_post = handle(
+        &pool,
+        &user(incoming),
+        Command::SubmitPost {
+            game,
+            channel_id: channel_id.clone(),
+            actor_slot: slot.into(),
+            body: "late private post".into(),
+            media: Vec::new(),
+        },
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(closed_post, Reject::NotAuthorized);
+    assert_eq!(
+        projections::thread_view_for_channel(&pool, game, &channel_id, None, 10)
+            .await
+            .unwrap()
+            .posts
+            .iter()
+            .map(|post| post.body.as_str())
+            .collect::<Vec<_>>(),
+        vec![
+            "participant-only draft",
+            "Event event-private-showcase opened."
+        ]
+    );
+
+    let eligible_event_id = game_platform::DayEventId::new("event-private-eligible-slots").unwrap();
+    let eligible_channel_id = game_platform::EventChannelPolicy::Private {
+        membership: game_platform::EventChannelMembership::EligibleSlots,
+    }
+    .channel_id(&eligible_event_id)
+    .as_str()
+    .to_string();
+    let mut eligible_event = minimal_day_event(eligible_event_id.as_str(), "bomb");
+    eligible_event.channel_policy = game_platform::EventChannelPolicy::Private {
+        membership: game_platform::EventChannelMembership::EligibleSlots,
+    };
+    handle(
+        &pool,
+        &user(host),
+        Command::ScheduleDayEvent {
+            game,
+            event: eligible_event,
+        },
+    )
+    .await
+    .unwrap();
+    handle(
+        &pool,
+        &user(host),
+        Command::OpenDayEvent {
+            game,
+            event_id: eligible_event_id,
+        },
+    )
+    .await
+    .unwrap();
+    assert!(!caps::resolve(&pool, &user(outgoing), game)
+        .await
+        .unwrap()
+        .grants(&caps::Capability::ChannelMember(
+            eligible_channel_id.clone()
+        )));
+    assert!(caps::resolve(&pool, &user(incoming), game)
+        .await
+        .unwrap()
+        .grants(&caps::Capability::ChannelMember(eligible_channel_id)));
     assert!(audit_rebuild(&pool, game).await.unwrap().ok);
 }
 

@@ -158,6 +158,10 @@ SpectatorOf(game)            read fixed spectator room; never grants a player sl
   matching role slots. The outgoing account loses both `SlotOccupant` and the derived
   `ChannelMember` after replacement; the incoming account receives the same room history
   and media without copying or re-authoring either.
+- DayEvent rooms derive `private:event:<event_id>` from an immutable definition.
+  Eligible-slot rooms capture members at open; participant rooms grant on submit
+  and revoke on withdrawal. The same slot join transfers access on replacement,
+  and event state closes posting without erasing authorized read history.
 - `DeadViewer(game)` is derived by joining current `slot_occupancy` with `slot_state`. A dead
   slot grants it to the current occupant, replacement transfers it, and an alive restoration
   revokes it. Posting additionally checks that the command's actor slot itself is dead, so a
