@@ -7,9 +7,11 @@ import {
   MANIFEST_PATH,
   REPO_ROOT,
   deduplicateLaneIds,
+  gitChangedFiles,
   laneCommand,
   laneExecutionKey,
   loadManifest,
+  mergeTimings,
   orderedExecutionPlan,
   pathMatches,
   reverseCrateClosure,
@@ -22,6 +24,9 @@ const registry = JSON.parse(
   readFileSync(join(REPO_ROOT, 'docs', 'ops', 'completion-registry.json'), 'utf8'),
 );
 const packageScripts = JSON.parse(readFileSync(join(REPO_ROOT, 'package.json'), 'utf8')).scripts;
+const timingBaseline = JSON.parse(
+  readFileSync(join(REPO_ROOT, 'docs', 'ops', 'proof-lane-timings.json'), 'utf8'),
+);
 
 // Fixture mirroring the real workspace DAG shape; keeps selection tests
 // hermetic (no cargo invocation).
@@ -36,16 +41,53 @@ const FIXTURE_GRAPH = {
   server: ['api', 'identity'],
 };
 
-test('every area lane and push_always lane is defined in the lane table', () => {
+test('every area lane and push sentinel is defined in the lane table', () => {
   const laneIds = new Set(Object.keys(manifest.lanes));
   for (const area of manifest.areas) {
     for (const lane of area.lanes) {
       assert.ok(laneIds.has(lane), `area ${area.id} references undefined lane ${lane}`);
     }
   }
-  for (const lane of manifest.push_always) {
-    assert.ok(laneIds.has(lane), `push_always references undefined lane ${lane}`);
+  for (const lane of manifest.push_sentinels) {
+    assert.ok(laneIds.has(lane), `push_sentinels references undefined lane ${lane}`);
   }
+});
+
+test('remote trunk is canonical and the push sentinel set fits its measured budget', () => {
+  assert.equal(manifest.base_ref, 'origin/main');
+  assert.ok(manifest.push_sentinel_budget_seconds > 0);
+  let measuredSeconds = 0;
+  for (const lane of manifest.push_sentinels) {
+    const timing = timingBaseline.lanes[lane];
+    assert.ok(timing, `push sentinel ${lane} needs a tracked timing baseline`);
+    assert.equal(timing.command, laneCommand(lane, manifest));
+    assert.ok(Number.isFinite(timing.seconds) && timing.seconds >= 0);
+    measuredSeconds += timing.seconds;
+  }
+  assert.ok(
+    measuredSeconds <= manifest.push_sentinel_budget_seconds,
+    `push sentinels cost ${measuredSeconds}s, over ${manifest.push_sentinel_budget_seconds}s budget`,
+  );
+});
+
+test('remote trunk avoids false history when a worktree-local main ref is stale', () => {
+  const git = (...args) => {
+    const command = args.join(' ');
+    if (command === 'merge-base main HEAD') return 'stale-main\n';
+    if (command === 'merge-base origin/main HEAD') return 'current-head\n';
+    if (command === 'diff --name-only stale-main..HEAD') {
+      return 'crates/commands/src/lib.rs\n';
+    }
+    if (command === 'diff --name-only current-head..HEAD') return '';
+    if (command === 'status --porcelain=v1') return ' M tools/proof_lane_select.mjs\n';
+    throw new Error(`unexpected git command: ${command}`);
+  };
+
+  assert.deepEqual(gitChangedFiles('origin/main', git), ['tools/proof_lane_select.mjs']);
+  assert.deepEqual(
+    gitChangedFiles('main', git),
+    ['crates/commands/src/lib.rs', 'tools/proof_lane_select.mjs'],
+  );
 });
 
 test('npm lanes exist as package.json scripts and shell lanes carry commands', () => {
@@ -109,9 +151,11 @@ test('canonical execution planning runs an equivalent command only once', () => 
     ['duplicate'],
   );
   const calls = [];
-  runLanes(['fast', 'slow', 'duplicate'], fixtureManifest, (command) => {
-    calls.push(command);
-    return { status: 0 };
+  runLanes(['fast', 'slow', 'duplicate'], fixtureManifest, {
+    spawn(command) {
+      calls.push(command);
+      return { status: 0 };
+    },
   });
   assert.deepEqual(calls, [
     'cargo test -p projections',
@@ -127,6 +171,52 @@ test('canonical execution planning runs an equivalent command only once', () => 
     fullPlan.length,
     Object.keys(manifest.lanes).length,
     'real manifest must not declare duplicate canonical execution keys',
+  );
+});
+
+test('lane execution emits automatic timing observations for every attempted lane', () => {
+  const fixtureManifest = {
+    lanes: {
+      pass: { kind: 'shell', command: 'pass-command' },
+      fail: { kind: 'shell', command: 'fail-command' },
+    },
+  };
+  const times = [1_000, 1_240, 2_000, 2_710];
+  const observations = [];
+  assert.throws(
+    () =>
+      runLanes(['pass', 'fail'], fixtureManifest, {
+        spawn: (command) => ({ status: command === 'fail-command' ? 9 : 0 }),
+        now: () => times.shift(),
+        onResult: (laneId, entry) => observations.push([laneId, entry]),
+      }),
+    /lane fail failed \(exit 9\)/,
+  );
+  assert.deepEqual(
+    observations.map(([laneId, entry]) => ({
+      laneId,
+      seconds: entry.seconds,
+      command: entry.command,
+      status: entry.status,
+    })),
+    [
+      { laneId: 'pass', seconds: 0.2, command: 'pass-command', status: 0 },
+      { laneId: 'fail', seconds: 0.7, command: 'fail-command', status: 9 },
+    ],
+  );
+
+  assert.deepEqual(
+    mergeTimings(
+      { version: 1, lanes: { pass: { seconds: 4 } } },
+      { version: 1, lanes: { pass: { seconds: 0.2 }, fail: { seconds: 0.7 } } },
+    ),
+    {
+      version: 1,
+      lanes: {
+        pass: { seconds: 0.2 },
+        fail: { seconds: 0.7 },
+      },
+    },
   );
 });
 
@@ -176,7 +266,7 @@ test('lane execution preserves selected order and stops at the first failure', (
       runLanes(
         ['check:build-posture', 'test:proof-lane-contract', 'test:completeness-scorecard'],
         manifest,
-        spawn,
+        { spawn },
       ),
     /test:proof-lane-contract failed \(exit 7\)/,
   );
@@ -299,16 +389,24 @@ test('also_triggers re-arms cross-boundary areas: wire thaws frontend:game and t
   assert.ok(!selection.frozenSkipped.includes('frontend:game'));
 });
 
-test('inner mode skips untouched frozen lanes; push adds active tier; full has everything', () => {
+test('inner, push, sprint, and full modes escalate coverage deliberately', () => {
   const changed = ['frontend/src/routes/auth/login/+page.svelte'];
   const inner = selectLanes({ changed, manifest, crateGraph: FIXTURE_GRAPH, mode: 'inner' });
   assert.ok(!inner.laneIds.includes('test:frontend-role-smoke'), 'frozen game lanes stay out of inner loop');
   assert.ok(inner.frozenSkipped.includes('frontend:game'));
 
   const push = selectLanes({ changed, manifest, crateGraph: FIXTURE_GRAPH, mode: 'push' });
-  assert.ok(push.laneIds.includes('test:completeness-scorecard'), 'push_always applies');
-  assert.ok(push.laneIds.includes('cargo:identity'), 'active-tier lanes join push mode');
+  assert.ok(push.laneIds.includes('test:completeness-scorecard'), 'push sentinels apply');
+  assert.ok(!push.laneIds.includes('cargo:identity'), 'unrelated active lanes stay out of push');
   assert.ok(!push.laneIds.includes('test:frontend-visual-regression'), 'untouched frozen lanes stay out of push');
+
+  const sprint = selectLanes({ changed, manifest, crateGraph: FIXTURE_GRAPH, mode: 'sprint' });
+  assert.ok(sprint.laneIds.includes('cargo:identity'), 'active-tier lanes join sprint mode');
+  assert.ok(sprint.laneIds.includes('test:completeness-scorecard'), 'sprint retains sentinels');
+  assert.ok(
+    !sprint.laneIds.includes('test:frontend-visual-regression'),
+    'untouched frozen lanes stay out of sprint',
+  );
 
   const full = selectLanes({ changed, manifest, crateGraph: FIXTURE_GRAPH, mode: 'full' });
   assert.deepEqual([...full.laneIds].sort(), Object.keys(manifest.lanes).sort());

@@ -4,32 +4,35 @@
 // paths to manifest areas (longest match wins), expands touched crates through
 // the reverse cargo dependency closure, follows also_triggers edges for
 // cross-boundary blast radius the crate DAG cannot see, and unions the touched
-// areas' lanes. Frozen-tier areas are excluded from push-mode defaults but are
+// areas' lanes. Frozen-tier areas are excluded from sprint-mode defaults but are
 // always re-armed when the diff reaches them.
 //
 // Modes:
 //   inner (default)  lanes for the touched closure only
-//   push             inner + all active-tier lanes + push_always
+//   push             inner + the bounded push sentinel set
+//   sprint           push + all active-tier lanes
 //   full             every lane in the manifest
 //
 // CLI:
-//   node tools/proof_lane_select.mjs [--mode inner|push|full] [--base <ref>]
+//   node tools/proof_lane_select.mjs [--mode inner|push|sprint|full] [--base <ref>]
 //                                    [--changed <path> ...] [--json] [--list] [--run]
 //                                    [--record <lane-id>]
 //
 // --changed bypasses git and supplies the changed set explicitly (also used by
 // the contract test). --run executes the selected lanes in cost order and stops
-// on the first failure. --record runs one lane, times it, and updates
-// docs/ops/proof-lane-timings.json on success.
+// on the first failure while recording runtime observations under target/.
+// --record deliberately promotes one observation into the tracked timing
+// baseline at docs/ops/proof-lane-timings.json.
 
 import { execFileSync, spawnSync } from 'node:child_process';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 export const MANIFEST_PATH = join(REPO_ROOT, 'docs', 'ops', 'proof-lane-manifest.json');
 export const TIMINGS_PATH = join(REPO_ROOT, 'docs', 'ops', 'proof-lane-timings.json');
+export const RUNTIME_TIMINGS_PATH = join(REPO_ROOT, 'target', 'proof-lanes', 'timings.json');
 
 export function loadManifest(path = MANIFEST_PATH) {
   return JSON.parse(readFileSync(path, 'utf8'));
@@ -41,6 +44,18 @@ export function loadTimings(path = TIMINGS_PATH) {
   } catch {
     return { version: 1, lanes: {} };
   }
+}
+
+export function mergeTimings(...sources) {
+  return {
+    version: 1,
+    lanes: Object.assign({}, ...sources.map((source) => source?.lanes ?? {})),
+  };
+}
+
+export function writeTimings(path, timings) {
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, `${JSON.stringify(timings, null, 2)}\n`);
 }
 
 // Path entries ending in '/' or '.' are prefixes; anything else matches exactly.
@@ -81,9 +96,11 @@ export function workspaceCrateGraph() {
   return graph;
 }
 
-export function gitChangedFiles(baseRef) {
-  const git = (...args) =>
-    execFileSync('git', args, { cwd: REPO_ROOT, maxBuffer: 16 * 1024 * 1024 }).toString('utf8');
+export function gitChangedFiles(
+  baseRef,
+  git = (...args) =>
+    execFileSync('git', args, { cwd: REPO_ROOT, maxBuffer: 16 * 1024 * 1024 }).toString('utf8'),
+) {
   const files = new Set();
   const mergeBase = git('merge-base', baseRef, 'HEAD').trim();
   for (const line of git('diff', '--name-only', `${mergeBase}..HEAD`).split('\n')) {
@@ -163,9 +180,11 @@ export function selectLanes({ changed, manifest, crateGraph, mode = 'inner' }) {
     for (const lane of Object.keys(manifest.lanes)) laneIds.add(lane);
   } else {
     for (const id of touched.keys()) addAreaLanes(areasById.get(id));
-    if (mode === 'push') {
+    if (mode === 'sprint') {
       for (const area of manifest.areas) if (area.tier === 'active') addAreaLanes(area);
-      for (const lane of manifest.push_always ?? []) laneIds.add(lane);
+    }
+    if (mode === 'push' || mode === 'sprint') {
+      for (const lane of manifest.push_sentinels ?? []) laneIds.add(lane);
     }
   }
 
@@ -213,12 +232,32 @@ export function orderedExecutionPlan(laneIds, manifest, timings = { lanes: {} })
   return deduplicateLaneIds([...laneIds].sort(bySeconds), manifest);
 }
 
-export function runLanes(laneIds, manifest, spawn = spawnSync) {
+function elapsedSeconds(started, finished) {
+  return Math.round((finished - started) / 100) / 10;
+}
+
+export function runLanes(
+  laneIds,
+  manifest,
+  {
+    spawn = spawnSync,
+    now = Date.now,
+    onResult = () => {},
+  } = {},
+) {
   const executionLaneIds = deduplicateLaneIds(laneIds, manifest);
   for (const [index, laneId] of executionLaneIds.entries()) {
     const command = laneCommand(laneId, manifest);
     console.log(`\n[${index + 1}/${executionLaneIds.length}] ${command}`);
+    const started = now();
     const result = spawn(command, { cwd: REPO_ROOT, shell: true, stdio: 'inherit' });
+    const status = result.status ?? 1;
+    onResult(laneId, {
+      seconds: elapsedSeconds(started, now()),
+      measured_at: new Date().toISOString(),
+      command,
+      status,
+    });
     if (result.status !== 0) {
       throw new Error(`lane ${laneId} failed (exit ${result.status ?? 'unknown'})`);
     }
@@ -237,8 +276,13 @@ function recordLane(laneId, manifest) {
     process.exit(result.status ?? 1);
   }
   const timings = loadTimings();
-  timings.lanes[laneId] = { seconds, measured_at: new Date().toISOString(), command };
-  writeFileSync(TIMINGS_PATH, `${JSON.stringify(timings, null, 2)}\n`);
+  timings.lanes[laneId] = {
+    seconds,
+    measured_at: new Date().toISOString(),
+    command,
+    status: 0,
+  };
+  writeTimings(TIMINGS_PATH, timings);
   console.log(`recorded ${laneId}: ${seconds}s`);
 }
 
@@ -262,7 +306,7 @@ function main(argv) {
     else if (arg === '--record') args.record = argv[++i];
     else throw new Error(`unknown argument: ${arg}`);
   }
-  if (!['inner', 'push', 'full'].includes(args.mode)) {
+  if (!['inner', 'push', 'sprint', 'full'].includes(args.mode)) {
     throw new Error(`unknown mode: ${args.mode}`);
   }
   if (args.run && (args.json || args.list || args.record)) {
@@ -271,7 +315,9 @@ function main(argv) {
 
   const manifest = loadManifest();
   if (args.record) return recordLane(args.record, manifest);
-  const timings = loadTimings();
+  const baselineTimings = loadTimings();
+  const runtimeTimings = loadTimings(RUNTIME_TIMINGS_PATH);
+  const timings = mergeTimings(baselineTimings, runtimeTimings);
 
   if (args.list) {
     for (const laneId of Object.keys(manifest.lanes)) {
@@ -316,7 +362,14 @@ function main(argv) {
   if (selection.frozenSkipped.length > 0) {
     console.log(`frozen areas untouched, lanes skipped: ${selection.frozenSkipped.join(', ')}`);
   }
-  if (args.run) runLanes(ordered, manifest);
+  if (args.run) {
+    runLanes(ordered, manifest, {
+      onResult(laneId, entry) {
+        runtimeTimings.lanes[laneId] = entry;
+        writeTimings(RUNTIME_TIMINGS_PATH, runtimeTimings);
+      },
+    });
+  }
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {

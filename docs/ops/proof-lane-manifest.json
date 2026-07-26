@@ -1,15 +1,17 @@
 {
   "version": 1,
-  "base_ref": "main",
+  "base_ref": "origin/main",
   "notes": [
     "Maps changed paths to the narrowest truthful proof-lane set. Consumed by tools/proof_lane_select.mjs.",
-    "Tier semantics: 'frozen' areas are trusted between full sweeps and excluded from push-mode defaults; tier NEVER exempts an area from diff-triggered selection — touching a frozen area (directly, via crate closure, or via also_triggers) re-arms its lanes for that run.",
+    "Tier semantics: 'frozen' areas are trusted between full sweeps and excluded from sprint-mode defaults; tier NEVER exempts an area from diff-triggered selection — touching a frozen area (directly, via crate closure, or via also_triggers) re-arms its lanes for that run.",
     "Re-declare tiers at sprint boundaries: the current frontier's areas are 'active', completed-and-untouched surfaces are 'frozen'. Frozen areas must cite registry capabilities that are all status=complete (validated by test:proof-lane-contract).",
     "Path matching: entries ending in '/' or '.' are prefixes; anything else is an exact file match. Longest match wins.",
     "also_triggers encodes cross-boundary blast radius the crate DAG cannot see (e.g. strict-wire change 32e8623b broke ~10 proof tools and frontend transport).",
-    "Manifest lanes are executable leaves. Human aggregate npm aliases stay outside this table; selected leaves are deduplicated by canonical execution key."
+    "Manifest lanes are executable leaves. Human aggregate npm aliases stay outside this table; selected leaves are deduplicated by canonical execution key.",
+    "Push mode is the touched closure plus a measured bounded sentinel set. Sprint mode adds every active-tier area; full mode adds every declared lane."
   ],
-  "push_always": ["test:completeness-scorecard", "test:proof-lane-contract"],
+  "push_sentinel_budget_seconds": 60,
+  "push_sentinels": ["test:completeness-scorecard", "test:proof-lane-contract"],
   "lanes": {
     "cargo:domain": { "kind": "shell", "command": "cargo test -p domain" },
     "cargo:eventstore": { "kind": "shell", "command": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p eventstore -- --test-threads=1" },

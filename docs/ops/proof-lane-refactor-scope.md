@@ -1,6 +1,6 @@
 # Proof Lane Architecture Refactor
 
-Status: active; aggregate-duplication work package delivered 2026-07-26.
+Status: active; leaf execution and fast truthful selection delivered 2026-07-26.
 
 ## Delivered foundation
 
@@ -11,32 +11,37 @@ lanes are represented directly in the manifest. Selection deduplicates by a
 canonical execution key after cost ordering, and the manifest contract rejects
 an npm leaf that invokes another declared leaf.
 
-The remaining work packages below are still intentionally open: automatic
-receipts/timings/resume, run-scoped Postgres and artifacts, semantic command
-suite splitting, and resource-aware scheduling.
+The remaining work packages below are still intentionally open: structured
+receipts and resume, run-scoped Postgres and artifacts, semantic command suite
+splitting, and resource-aware scheduling.
 
 The motivating push sweep executed the commands integration suite twice
 (847.7s through `test:local-postgres-ci`, then 789.4s through
 `cargo:commands`). The leaf plan now selects `cargo:commands` exactly once and
 orders its latest measured ~14.8-minute cost after the cheaper local lanes.
 
+The selector now compares against `origin/main`, so another worktree's stale
+local `main` ref cannot manufacture a large historical diff. Push mode is the
+touched closure plus two measured sentinels with a 60-second budget. The former
+all-active behavior is explicit sprint mode; full mode still runs every leaf.
+Every `--run` records timing observations under ignored
+`target/proof-lanes/timings.json`, while `--record` remains the deliberate path
+for updating the tracked baseline.
+
 ## Problem
 
-The proof selector has a sound path-to-lane model, but the executable lane set
-is not yet a clean execution graph:
+The proof selector now has a sound path-to-leaf model and a fast ordinary push
+path, but the executable suites and resource model still contain the dominant
+latency:
 
-- `cargo:commands` combines 347 tests in a 74,625-line `pipeline.rs`; 55 tests
-  are generated/minimizer cases and 223 are integration-named cases. A clean
-  serial run took about fourteen minutes on the current development machine.
-- `test:local-postgres-ci` invokes the projection baseline and the command and
-  projection crate suites already represented by leaf lanes. Full mode
-  therefore repeats its most expensive work.
-- `test:frontend-role-proof:quick` nests `test:frontend-contract` and
-  `test:frontend-static-role-contract`, which are also selected independently.
+- `cargo:commands` combines 365 tests in a 77,063-line `pipeline.rs`; 360 cases
+  provision SQLx test databases. A clean serial run took about thirteen minutes
+  on the current development machine and still dominates any truthful change
+  that reaches the command boundary.
 - Database-dependent npm lanes rely on ambient `DATABASE_URL`; concurrent runs
   can share the mutable `fmarch` database and contaminate one another.
-- Only six of 27 lanes have recorded costs. Execution has no timeout, checkpoint,
-  resume token, structured receipt, or resource scheduler.
+- The tracked baseline does not yet cover every lane. Execution has no timeout,
+  checkpoint, resume token, structured receipt, or resource scheduler.
 
 The desired shape is a manifest-owned DAG of independently executable leaf
 lanes. Aggregates remain useful user-facing aliases, but they must not appear as
@@ -50,7 +55,7 @@ Move the manifest to version 2. Each lane declares:
 - execution class: `hermetic`, `postgres`, `browser`, or `hosted`;
 - dependencies on other lanes, if any;
 - a timeout and expected cost band;
-- whether it runs in `inner`, `push`, `full`, or only when directly armed;
+- whether it runs in `inner`, `push`, `sprint`, `full`, or only when directly armed;
 - resource requirements and an isolation strategy;
 - the artifact or receipt it produces.
 
@@ -62,10 +67,11 @@ only for the same commit and manifest digest.
 
 ## Work Packages
 
-### 1. Make execution observable and resumable
+### 1. Make execution observable and resumable — timing observations delivered
 
-- Record duration for every executed lane automatically; keep `--record` only
-  for deliberate remeasurement.
+- Every executed lane records its duration, command, status, and timestamp under
+  ignored `target/proof-lanes/`; `--record` deliberately promotes a stable
+  measurement into the tracked baseline.
 - Add per-lane timeout enforcement, compact live progress, and a final table.
 - Persist ignored receipts under `target/proof-lanes/` and support
   `--resume <receipt>` plus `--only <lane>` for exact failure reproduction.
@@ -81,7 +87,15 @@ only for the same commit and manifest digest.
   unless the relationship is expressed as `depends_on`; dependency expansion
   must execute each leaf once.
 
-### 3. Split command proof by semantic cost
+### 3. Make selection worktree-safe and mode costs explicit — delivered 2026-07-26
+
+- Use `origin/main` as the default base while retaining `--base` as an explicit
+  override.
+- Keep ordinary push proof to the touched closure plus a measured sentinel set.
+- Preserve the former active-frontier sweep as explicit sprint mode.
+- Contract-test the stale-local-main regression and the sentinel cost budget.
+
+### 4. Split command proof by semantic cost
 
 Replace `crates/commands/tests/pipeline.rs` with focused integration binaries:
 
@@ -96,7 +110,7 @@ generated search/reduction belongs in full mode and is directly re-armed by
 changes to generators, minimizer code, or their fixtures. Shared test support
 moves to a private `tests/support/` module rather than another catch-all binary.
 
-### 4. Own Postgres as a run resource
+### 5. Own Postgres as a run resource
 
 - Start or reuse the repo-local server once through `tools/dev_postgres.mjs`.
 - Create a run-scoped database, then create a lane-scoped database for every
@@ -106,7 +120,7 @@ moves to a private `tests/support/` module rather than another catch-all binary.
 - Permit Postgres lanes to run concurrently only after lane-scoped isolation is
   proven. Until then, serialize them with an explicit resource lock.
 
-### 5. Schedule by dependency and resource
+### 6. Schedule by dependency and resource
 
 - Run hermetic Rust and Node lanes concurrently within a conservative worker
   limit.
@@ -118,6 +132,9 @@ moves to a private `tests/support/` module rather than another catch-all binary.
 ## Acceptance Criteria
 
 - Full selection contains only leaf work and executes no test body twice.
+- A stale worktree-local `main` ref cannot expand a clean `origin/main` checkout.
+- The push sentinel set has complete tracked timings and stays within its
+  declared 60-second budget.
 - A clean machine can run `npm run proof:lanes -- --mode full --run` without
   manually exporting `DATABASE_URL`.
 - Two simultaneous proof runs cannot share a writable database or artifact
@@ -135,14 +152,12 @@ moves to a private `tests/support/` module rather than another catch-all binary.
 
 ## Recommended Implementation Order
 
-1. Add receipts, automatic timings, `--only`, and commit-safe `--resume` without
-   changing lane membership.
-2. Introduce manifest-v2 dependencies/resources and reject nested aggregate
-   work.
+1. Split the command pipeline and assign fast versus exhaustive modes.
+2. Introduce manifest-v2 dependencies/resources, timeouts, structured receipts,
+   `--only`, and commit-safe `--resume`.
 3. Add run-scoped Postgres and artifact directories, keeping execution serial.
-4. Split the command pipeline and assign fast versus exhaustive modes.
-5. Enable bounded parallel scheduling only after isolation contracts pass.
-6. Measure a full sweep, update cost bands, and then simplify the compatibility
+4. Enable bounded parallel scheduling only after isolation contracts pass.
+5. Measure a full sweep, update cost bands, and then simplify the compatibility
    npm aliases that are no longer operationally useful.
 
 ## Non-Goals

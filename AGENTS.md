@@ -24,19 +24,24 @@ direct `main` work, and atomic history over PR ceremony.
 - Use the narrowest truthful local gate for the touched area, then broaden only
   when the change crosses boundaries.
 - Compute that gate mechanically: `npm run proof:lanes` maps the current diff
-  (vs `main`, including uncommitted work) to the required lane set via
+  (vs `origin/main`, including uncommitted work) to the required lane set via
   `docs/ops/proof-lane-manifest.json`, expanding touched crates through the
   reverse cargo dependency closure and `also_triggers` edges. Add `--run` to
-  execute the selected lanes: `--mode push --run` before pushing and
+  execute the selected lanes: `--mode push --run` before ordinary pushes,
+  `--mode sprint --run` for an active-frontier checkpoint, and
   `--mode full --run` for the full sweep.
 - Tier discipline: `frozen` areas are completed surfaces trusted between full
   sweeps — their lanes leave the inner loop, never existence. Editing frozen
   paths is allowed (greenfield stance stands) but automatically re-arms their
   lanes plus the dependent closure; that escalation is the cost signal, not a
-  prohibition. Re-declare tiers at sprint boundaries (current frontier =
-  active), and run `--mode full --run` before landing a sprint to `main` so the
-  freeze stays honest. Validate manifest integrity with
-  `npm run test:proof-lane-contract`; record lane costs with
+  prohibition. Push mode adds only its bounded sentinel set to the touched
+  closure; sprint mode adds every active-tier area. Re-declare tiers at sprint
+  boundaries (current frontier = active), use sprint mode during frontier-wide
+  checkpoints, and run `--mode full --run` before landing a sprint to `main` so
+  the freeze stays honest. Validate manifest integrity with
+  `npm run test:proof-lane-contract`. Normal `--run` executions record current
+  costs under ignored `target/proof-lanes/`; deliberately promote a stable cost
+  into the tracked baseline with
   `node tools/proof_lane_select.mjs --record <lane-id>`.
 - For frontend browser/readiness work, prefer the role proof and artifact
   contract lanes before pushing.
