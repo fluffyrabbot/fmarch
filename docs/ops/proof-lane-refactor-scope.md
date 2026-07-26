@@ -1,6 +1,24 @@
 # Proof Lane Architecture Refactor
 
-Status: proposed followup after the staged-release landing.
+Status: active; aggregate-duplication work package delivered 2026-07-26.
+
+## Delivered foundation
+
+The manifest now contains executable leaves only. The human-facing
+`test:local-postgres-ci` and `test:frontend-role-proof:quick` aliases remain in
+`package.json`, but their baseline/commands/projections and frontend constituent
+lanes are represented directly in the manifest. Selection deduplicates by a
+canonical execution key after cost ordering, and the manifest contract rejects
+an npm leaf that invokes another declared leaf.
+
+The remaining work packages below are still intentionally open: automatic
+receipts/timings/resume, run-scoped Postgres and artifacts, semantic command
+suite splitting, and resource-aware scheduling.
+
+The motivating push sweep executed the commands integration suite twice
+(847.7s through `test:local-postgres-ci`, then 789.4s through
+`cargo:commands`). The leaf plan now selects `cargo:commands` exactly once and
+orders its latest measured ~14.8-minute cost after the cheaper local lanes.
 
 ## Problem
 
@@ -54,7 +72,7 @@ only for the same commit and manifest digest.
 - Include the git SHA, dirty-state digest, manifest digest, and database identity
   in each receipt so stale success cannot be reused.
 
-### 2. Remove aggregate duplication
+### 2. Remove aggregate duplication — delivered 2026-07-26
 
 - Keep `test:frontend-role-proof:quick` and `test:local-postgres-ci` as optional
   human-facing aliases, but remove them from `manifest.lanes`.

@@ -189,16 +189,41 @@ export function laneCommand(laneId, manifest) {
   return lane.kind === 'npm' ? `npm run ${laneId}` : lane.command;
 }
 
+export function laneExecutionKey(laneId, manifest) {
+  const lane = manifest.lanes[laneId];
+  if (!lane) throw new Error(`unknown lane: ${laneId}`);
+  return lane.execution_key ?? laneCommand(laneId, manifest).trim().replace(/\s+/g, ' ');
+}
+
+export function deduplicateLaneIds(laneIds, manifest) {
+  const seen = new Set();
+  const deduplicated = [];
+  for (const laneId of laneIds) {
+    const key = laneExecutionKey(laneId, manifest);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduplicated.push(laneId);
+  }
+  return deduplicated;
+}
+
+export function orderedExecutionPlan(laneIds, manifest, timings = { lanes: {} }) {
+  const bySeconds = (a, b) =>
+    (timings.lanes[a]?.seconds ?? Infinity) - (timings.lanes[b]?.seconds ?? Infinity);
+  return deduplicateLaneIds([...laneIds].sort(bySeconds), manifest);
+}
+
 export function runLanes(laneIds, manifest, spawn = spawnSync) {
-  for (const [index, laneId] of laneIds.entries()) {
+  const executionLaneIds = deduplicateLaneIds(laneIds, manifest);
+  for (const [index, laneId] of executionLaneIds.entries()) {
     const command = laneCommand(laneId, manifest);
-    console.log(`\n[${index + 1}/${laneIds.length}] ${command}`);
+    console.log(`\n[${index + 1}/${executionLaneIds.length}] ${command}`);
     const result = spawn(command, { cwd: REPO_ROOT, shell: true, stdio: 'inherit' });
     if (result.status !== 0) {
       throw new Error(`lane ${laneId} failed (exit ${result.status ?? 'unknown'})`);
     }
   }
-  console.log(`\nproof passed: ${laneIds.length} lane(s)`);
+  console.log(`\nproof passed: ${executionLaneIds.length} lane(s)`);
 }
 
 function recordLane(laneId, manifest) {
@@ -267,9 +292,7 @@ function main(argv) {
   }
 
   const selection = selectLanes({ changed, manifest, crateGraph, mode: args.mode });
-  const bySeconds = (a, b) =>
-    (timings.lanes[a]?.seconds ?? Infinity) - (timings.lanes[b]?.seconds ?? Infinity);
-  const ordered = [...selection.laneIds].sort(bySeconds);
+  const ordered = orderedExecutionPlan(selection.laneIds, manifest, timings);
 
   if (args.json) {
     console.log(JSON.stringify({ ...selection, changed, lanes: ordered.map((id) => ({ id, command: laneCommand(id, manifest), timing: timings.lanes[id] ?? null })) }, null, 2));

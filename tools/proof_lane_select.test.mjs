@@ -6,8 +6,11 @@ import test from 'node:test';
 import {
   MANIFEST_PATH,
   REPO_ROOT,
+  deduplicateLaneIds,
   laneCommand,
+  laneExecutionKey,
   loadManifest,
+  orderedExecutionPlan,
   pathMatches,
   reverseCrateClosure,
   runLanes,
@@ -55,6 +58,111 @@ test('npm lanes exist as package.json scripts and shell lanes carry commands', (
       assert.equal(laneCommand(laneId, manifest), lane.command);
     }
   }
+});
+
+test('manifest lanes are executable leaves, while human aggregate aliases stay outside the graph', () => {
+  const declared = new Set(Object.keys(manifest.lanes));
+  for (const [laneId, lane] of Object.entries(manifest.lanes)) {
+    if (lane.kind !== 'npm') continue;
+    const nested = [
+      ...packageScripts[laneId].matchAll(/\bnpm run ([A-Za-z0-9:_-]+)/g),
+    ].map((match) => match[1]).filter((nestedId) => declared.has(nestedId));
+    assert.deepEqual(
+      nested,
+      [],
+      `manifest lane ${laneId} nests declared lane(s): ${nested.join(', ')}`,
+    );
+  }
+
+  for (const alias of ['test:local-postgres-ci', 'test:frontend-role-proof:quick']) {
+    assert.ok(packageScripts[alias], `human aggregate alias ${alias} must remain available`);
+    assert.ok(!declared.has(alias), `aggregate alias ${alias} must not be a manifest leaf`);
+  }
+});
+
+test('canonical execution planning runs an equivalent command only once', () => {
+  const fixtureManifest = {
+    lanes: {
+      slow: { kind: 'shell', command: 'cargo test -p commands' },
+      duplicate: { kind: 'shell', command: '  cargo   test -p commands  ' },
+      fast: { kind: 'shell', command: 'cargo test -p projections' },
+    },
+  };
+  const timings = {
+    lanes: {
+      slow: { seconds: 800 },
+      duplicate: { seconds: 900 },
+      fast: { seconds: 10 },
+    },
+  };
+
+  assert.equal(
+    laneExecutionKey('slow', fixtureManifest),
+    laneExecutionKey('duplicate', fixtureManifest),
+  );
+  assert.deepEqual(
+    orderedExecutionPlan(['slow', 'duplicate', 'fast'], fixtureManifest, timings),
+    ['fast', 'slow'],
+  );
+  assert.deepEqual(
+    deduplicateLaneIds(['duplicate', 'slow'], fixtureManifest),
+    ['duplicate'],
+  );
+  const calls = [];
+  runLanes(['fast', 'slow', 'duplicate'], fixtureManifest, (command) => {
+    calls.push(command);
+    return { status: 0 };
+  });
+  assert.deepEqual(calls, [
+    'cargo test -p projections',
+    'cargo test -p commands',
+  ]);
+
+  const fullPlan = orderedExecutionPlan(
+    Object.keys(manifest.lanes),
+    manifest,
+    { lanes: {} },
+  );
+  assert.equal(
+    fullPlan.length,
+    Object.keys(manifest.lanes).length,
+    'real manifest must not declare duplicate canonical execution keys',
+  );
+});
+
+test('aggregate coverage expands to atomic Postgres and frontend leaves', () => {
+  const workspace = selectLanes({
+    changed: ['package.json'],
+    manifest,
+    crateGraph: FIXTURE_GRAPH,
+    mode: 'inner',
+  });
+  for (const lane of [
+    'check:build-posture',
+    'test:projection-baseline:static',
+    'cargo:commands',
+    'cargo:projections',
+  ]) {
+    assert.ok(workspace.laneIds.includes(lane), `workspace manifest must arm ${lane}`);
+  }
+  assert.ok(!workspace.laneIds.includes('test:local-postgres-ci'));
+
+  const frontend = selectLanes({
+    changed: ['frontend/src/routes/g/demo/+page.svelte'],
+    manifest,
+    crateGraph: FIXTURE_GRAPH,
+    mode: 'inner',
+  });
+  for (const lane of [
+    'test:frontend-contract',
+    'test:frontend-route-state-render',
+    'test:frontend-static-role-contract',
+    'test:frontend-tablet-interaction',
+    'test:frontend-role-dom-smoke',
+  ]) {
+    assert.ok(frontend.laneIds.includes(lane), `frontend game area must arm ${lane}`);
+  }
+  assert.ok(!frontend.laneIds.includes('test:frontend-role-proof:quick'));
 });
 
 test('lane execution preserves selected order and stops at the first failure', () => {

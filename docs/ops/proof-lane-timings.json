@@ -30,6 +30,91 @@
       "seconds": 0.1,
       "measured_at": "2026-07-22T19:17:55.089Z",
       "command": "npm run check:build-posture"
+    },
+    "cargo:projections": {
+      "seconds": 26.3,
+      "measured_at": "2026-07-26T09:42:52.377Z",
+      "command": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p projections -- --test-threads=1"
+    },
+    "cargo:commands": {
+      "seconds": 885.3,
+      "measured_at": "2026-07-26T10:10:48.000Z",
+      "command": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p commands -- --test-threads=1"
+    },
+    "test:frontend-route-state-render": {
+      "seconds": 0.3,
+      "measured_at": "2026-07-26T09:42:52.718Z",
+      "command": "npm run test:frontend-route-state-render"
+    },
+    "test:frontend-tablet-interaction": {
+      "seconds": 0.3,
+      "measured_at": "2026-07-26T09:42:53.068Z",
+      "command": "npm run test:frontend-tablet-interaction"
+    },
+    "test:frontend-role-dom-smoke": {
+      "seconds": 0.3,
+      "measured_at": "2026-07-26T09:42:53.421Z",
+      "command": "npm run test:frontend-role-dom-smoke"
+    },
+    "test:host-console-live-stack-contract": {
+      "seconds": 0.2,
+      "measured_at": "2026-07-26T09:43:27.940Z",
+      "command": "npm run test:host-console-live-stack-contract"
+    },
+    "test:host-console-day-event-room-live-stack": {
+      "seconds": 13.5,
+      "measured_at": "2026-07-26T09:43:47.105Z",
+      "command": "npm run test:host-console-day-event-room-live-stack"
+    },
+    "test:frontend-static-role-contract": {
+      "seconds": 0.2,
+      "measured_at": "2026-07-26T09:43:47.386Z",
+      "command": "npm run test:frontend-static-role-contract"
+    },
+    "cargo:game-platform": {
+      "seconds": 6.3,
+      "measured_at": "2026-07-26T09:44:54.837Z",
+      "command": "cargo test -p game_platform --all-features"
+    },
+    "cargo:identity": {
+      "seconds": 7.2,
+      "measured_at": "2026-07-26T09:45:02.071Z",
+      "command": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p identity -- --test-threads=1"
+    },
+    "test:auth-invite-role-proof": {
+      "seconds": 71.8,
+      "measured_at": "2026-07-26T09:46:13.877Z",
+      "command": "npm run test:auth-invite-role-proof"
+    },
+    "cargo:api": {
+      "seconds": 192.4,
+      "measured_at": "2026-07-26T09:49:26.291Z",
+      "command": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p api -- --test-threads=1"
+    },
+    "test:mash-scale-acceptance": {
+      "seconds": 9.5,
+      "measured_at": "2026-07-26T09:49:43.343Z",
+      "command": "npm run test:mash-scale-acceptance"
+    },
+    "cargo:server": {
+      "seconds": 0.9,
+      "measured_at": "2026-07-26T09:49:44.239Z",
+      "command": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p server -- --test-threads=1"
+    },
+    "test:frontend-contract": {
+      "seconds": 2,
+      "measured_at": "2026-07-26T09:49:46.255Z",
+      "command": "npm run test:frontend-contract"
+    },
+    "test:production-promotion": {
+      "seconds": 0.2,
+      "measured_at": "2026-07-26T09:49:46.430Z",
+      "command": "npm run test:production-promotion"
+    },
+    "test:railway-staging-target": {
+      "seconds": 0.1,
+      "measured_at": "2026-07-26T09:49:46.563Z",
+      "command": "npm run test:railway-staging-target"
     }
   }
 }

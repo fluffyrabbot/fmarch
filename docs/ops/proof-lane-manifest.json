@@ -6,7 +6,8 @@
     "Tier semantics: 'frozen' areas are trusted between full sweeps and excluded from push-mode defaults; tier NEVER exempts an area from diff-triggered selection — touching a frozen area (directly, via crate closure, or via also_triggers) re-arms its lanes for that run.",
     "Re-declare tiers at sprint boundaries: the current frontier's areas are 'active', completed-and-untouched surfaces are 'frozen'. Frozen areas must cite registry capabilities that are all status=complete (validated by test:proof-lane-contract).",
     "Path matching: entries ending in '/' or '.' are prefixes; anything else is an exact file match. Longest match wins.",
-    "also_triggers encodes cross-boundary blast radius the crate DAG cannot see (e.g. strict-wire change 32e8623b broke ~10 proof tools and frontend transport)."
+    "also_triggers encodes cross-boundary blast radius the crate DAG cannot see (e.g. strict-wire change 32e8623b broke ~10 proof tools and frontend transport).",
+    "Manifest lanes are executable leaves. Human aggregate npm aliases stay outside this table; selected leaves are deduplicated by canonical execution key."
   ],
   "push_always": ["test:completeness-scorecard", "test:proof-lane-contract"],
   "lanes": {
@@ -26,7 +27,9 @@
     "test:frontend-contract": { "kind": "npm" },
     "test:frontend-static-role-contract": { "kind": "npm" },
     "test:frontend-role-smoke": { "kind": "npm" },
-    "test:frontend-role-proof:quick": { "kind": "npm" },
+    "test:frontend-route-state-render": { "kind": "npm" },
+    "test:frontend-tablet-interaction": { "kind": "npm" },
+    "test:frontend-role-dom-smoke": { "kind": "npm" },
     "test:frontend-visual-regression": { "kind": "npm" },
     "test:auth-invite-role-proof": { "kind": "npm" },
     "test:projection-baseline:static": { "kind": "npm" },
@@ -39,7 +42,6 @@
     "test:proof-lane-contract": { "kind": "npm" },
     "test:production-promotion": { "kind": "npm" },
     "test:railway-staging-target": { "kind": "npm" },
-    "test:local-postgres-ci": { "kind": "npm" },
     "check:build-posture": { "kind": "npm" }
   },
   "areas": [
@@ -200,7 +202,10 @@
       "lanes": [
         "test:frontend-contract",
         "test:frontend-role-smoke",
-        "test:frontend-role-proof:quick",
+        "test:frontend-route-state-render",
+        "test:frontend-static-role-contract",
+        "test:frontend-tablet-interaction",
+        "test:frontend-role-dom-smoke",
         "test:frontend-visual-regression"
       ],
       "capabilities": [
@@ -306,7 +311,12 @@
       "id": "workspace:manifests",
       "tier": "active",
       "paths": ["scripts/", "Cargo.toml", "Cargo.lock", "package.json", "package-lock.json"],
-      "lanes": ["check:build-posture", "test:local-postgres-ci"]
+      "lanes": [
+        "check:build-posture",
+        "test:projection-baseline:static",
+        "cargo:commands",
+        "cargo:projections"
+      ]
     }
   ]
 }
