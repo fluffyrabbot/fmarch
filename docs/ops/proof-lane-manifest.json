@@ -20,6 +20,10 @@
     "cargo:commands": { "kind": "shell", "command": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p commands -- --test-threads=1" },
     "cargo:game-platform": { "kind": "shell", "command": "cargo test -p game_platform --all-features" },
     "cargo:wire": { "kind": "shell", "command": "cargo test -p wire" },
+    "check:wire-types": {
+      "kind": "shell",
+      "command": "cargo run -p wire --bin export_types -- --check"
+    },
     "cargo:community": { "kind": "shell", "command": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p community -- --test-threads=1" },
     "cargo:identity": { "kind": "shell", "command": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p identity -- --test-threads=1" },
     "cargo:media": { "kind": "shell", "command": "cargo test -p media" },
@@ -115,7 +119,7 @@
       "tier": "frozen",
       "paths": ["crates/wire/"],
       "crate": "wire",
-      "lanes": ["cargo:wire"],
+      "lanes": ["cargo:wire", "check:wire-types"],
       "capabilities": ["foundation.wire-live-delivery"],
       "also_triggers": ["frontend:game", "tools:proof-infra"]
     },

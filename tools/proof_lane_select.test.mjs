@@ -102,6 +102,28 @@ test('npm lanes exist as package.json scripts and shell lanes carry commands', (
   }
 });
 
+test('wire generator sources and artifact select one explicit exporter check', () => {
+  const selection = selectLanes({
+    changed: [
+      'crates/wire/src/bin/export_types.rs',
+      'crates/wire/src/lib.rs',
+      'crates/wire/generated/types.ts',
+    ],
+    manifest,
+    crateGraph: FIXTURE_GRAPH,
+  });
+
+  assert.ok(selection.laneIds.includes('cargo:wire'));
+  assert.equal(
+    selection.laneIds.filter((laneId) => laneId === 'check:wire-types').length,
+    1,
+  );
+  assert.equal(
+    laneCommand('check:wire-types', manifest),
+    'cargo run -p wire --bin export_types -- --check',
+  );
+});
+
 test('Postgres-backed mash acceptance owns a repo-local database default', () => {
   assert.match(
     packageScripts['test:mash-scale-acceptance'],
