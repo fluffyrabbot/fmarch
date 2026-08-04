@@ -32,7 +32,10 @@
     "test:frontend-route-state-render": { "kind": "npm" },
     "test:frontend-tablet-interaction": { "kind": "npm" },
     "test:frontend-role-dom-smoke": { "kind": "npm" },
-    "test:frontend-visual-regression": { "kind": "npm" },
+    "test:frontend-visual-regression": {
+      "kind": "npm",
+      "after": ["test:frontend-role-smoke"]
+    },
     "test:auth-invite-role-proof": { "kind": "npm" },
     "test:projection-baseline:static": { "kind": "npm" },
     "test:dev-test-game-contract": { "kind": "npm" },

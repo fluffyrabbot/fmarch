@@ -6,6 +6,9 @@ import { chromium } from "playwright";
 import { captureScreenshotEvidence } from "./frontend_screenshot_pixels.mjs";
 import { roleNavTestId } from "../frontend/src/lib/app/app-shell-model.mjs";
 import {
+  encodeServerEnvelopeFrame,
+} from "../frontend/src/lib/app/live-transport.mjs";
+import {
   handleLocalhostBindFailure,
   preflightLocalhostBindOrExit,
 } from "./frontend_smoke_bind_preflight.mjs";
@@ -3178,7 +3181,15 @@ async function assertUrlAddressedPrivateReview(page, { viewport, detailId, revie
 }
 
 async function installLiveProjectionHarness(page) {
-  await page.addInitScript(() => {
+  const helloFrame = [...encodeServerEnvelopeFrame({
+    v: 1,
+    id: 0,
+    body: {
+      kind: "Hello",
+      body: { protocol_v: 1, server: "smoke", caps: [] },
+    },
+  })];
+  await page.addInitScript((helloFrameBytes) => {
     const NativeWebSocket = window.WebSocket;
     const sockets = [];
     class FmarchSmokeWebSocket {
@@ -3191,14 +3202,7 @@ async function installLiveProjectionHarness(page) {
           this.readyState = 1;
           this.dispatch("open", {});
           this.dispatch("message", {
-            data: JSON.stringify({
-              v: 1,
-              id: 0,
-              body: {
-                kind: "Hello",
-                body: { protocol_v: 1, server: "smoke", caps: [] },
-              },
-            }),
+            data: Uint8Array.from(helloFrameBytes).buffer,
           });
         }, 0);
       }
@@ -3243,45 +3247,49 @@ async function installLiveProjectionHarness(page) {
     window.WebSocket.CLOSED = NativeWebSocket.CLOSED;
 
     window.__fmarchSmokeLiveSockets = sockets;
-    window.__fmarchEmitLiveProjection = (delta) => {
+    window.__fmarchEmitLiveProjection = (frameBytes) => {
       const socket = sockets.at(-1);
       if (socket === undefined) {
         throw new Error("no fmarch live projection socket is connected");
       }
       socket.dispatch("message", {
-        data: JSON.stringify({
-          v: 1,
-          id: 44,
-          body: { kind: "Delta", body: delta },
-        }),
+        data: Uint8Array.from(frameBytes).buffer,
       });
     };
-  });
+  }, helloFrame);
 }
 
 async function emitPlayerOfficialThreadPost(page) {
   await page.waitForFunction(() => typeof window.__fmarchEmitLiveProjection === "function");
-  await page.evaluate(() => {
-    window.__fmarchEmitLiveProjection({
-      kind: "ThreadPostsChanged",
+  const frame = [...encodeServerEnvelopeFrame({
+    v: 1,
+    id: 44,
+    body: {
+      kind: "Delta",
       body: {
-        game: "midsummer",
-        posts: [
-          {
-            game: "midsummer",
-            source_seq: 444,
-            stream_seq: 90,
-            channel_id: "main",
-            author_user: "host",
-            author_slot: null,
-            phase_id: "D01",
-            body: "Official votecount for D01\n- slot_2: 1",
-            occurred_at: 1781928000,
-          },
-        ],
+        kind: "ThreadPostsChanged",
+        body: {
+          game: "midsummer",
+          posts: [
+            {
+              game: "midsummer",
+              source_seq: 444,
+              stream_seq: 90,
+              channel_id: "main",
+              author_user: "host",
+              author_slot: null,
+              phase_id: "D01",
+              body: "Official votecount for D01\n- slot_2: 1",
+              occurred_at: 1781928000,
+            },
+          ],
+        },
       },
-    });
-  });
+    },
+  })];
+  await page.evaluate((frameBytes) => {
+    window.__fmarchEmitLiveProjection(frameBytes);
+  }, frame);
 }
 
 async function assertRoleNav(page, expectedNavigation = null) {

@@ -229,7 +229,31 @@ export function deduplicateLaneIds(laneIds, manifest) {
 export function orderedExecutionPlan(laneIds, manifest, timings = { lanes: {} }) {
   const bySeconds = (a, b) =>
     (timings.lanes[a]?.seconds ?? Infinity) - (timings.lanes[b]?.seconds ?? Infinity);
-  return deduplicateLaneIds([...laneIds].sort(bySeconds), manifest);
+  const sorted = deduplicateLaneIds([...laneIds].sort(bySeconds), manifest);
+  const selected = new Set(sorted);
+  const visiting = new Set();
+  const visited = new Set();
+  const ordered = [];
+
+  const visit = (laneId) => {
+    if (visited.has(laneId)) return;
+    if (visiting.has(laneId)) {
+      throw new Error(`proof lane ordering cycle includes ${laneId}`);
+    }
+    visiting.add(laneId);
+    for (const dependency of manifest.lanes[laneId]?.after ?? []) {
+      if (!manifest.lanes[dependency]) {
+        throw new Error(`proof lane ${laneId} orders after unknown lane ${dependency}`);
+      }
+      if (selected.has(dependency)) visit(dependency);
+    }
+    visiting.delete(laneId);
+    visited.add(laneId);
+    ordered.push(laneId);
+  };
+
+  for (const laneId of sorted) visit(laneId);
+  return ordered;
 }
 
 function elapsedSeconds(started, finished) {

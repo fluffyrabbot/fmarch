@@ -181,6 +181,41 @@ test('canonical execution planning runs an equivalent command only once', () => 
   );
 });
 
+test('execution planning respects declared artifact producer ordering', () => {
+  const fixtureManifest = {
+    lanes: {
+      capture: { kind: 'shell', command: 'capture' },
+      compare: { kind: 'shell', command: 'compare', after: ['capture'] },
+      fast: { kind: 'shell', command: 'fast' },
+    },
+  };
+  const timings = {
+    lanes: {
+      capture: { seconds: 120 },
+      compare: { seconds: 1 },
+      fast: { seconds: 0.1 },
+    },
+  };
+
+  assert.deepEqual(
+    orderedExecutionPlan(['compare', 'capture', 'fast'], fixtureManifest, timings),
+    ['fast', 'capture', 'compare'],
+  );
+  assert.throws(
+    () =>
+      orderedExecutionPlan(
+        ['compare'],
+        {
+          lanes: {
+            compare: { kind: 'shell', command: 'compare', after: ['missing'] },
+          },
+        },
+        timings,
+      ),
+    /orders after unknown lane missing/,
+  );
+});
+
 test('lane execution emits automatic timing observations for every attempted lane', () => {
   const fixtureManifest = {
     lanes: {
