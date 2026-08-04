@@ -67,21 +67,49 @@ export const devTestGameCoreLiveSpinePlan = [
   }),
 ];
 
-export const devTestGameLiveSpinePlan = [
-  ...devTestGameCoreLiveSpinePlan,
+const devTestGameSeedFixtureLiveSubspinePlan = [
   { kind: "node", script: "tools/dev_test_game_seed_fixture_summary.mjs" },
   { kind: "node", script: "tools/dev_test_game_seed_admin_proof.mjs" },
+];
+const devTestGameBackupRestoreLiveSubspinePlan = [
   { kind: "custom", script: "backup-restore", label: "Backup/restore spine" },
+];
+const devTestGameIdentityLiveSubspinePlan = [
   { kind: "custom", script: "identity", label: "Identity spine" },
+];
+const devTestGameAdminLiveSubspinePlan = [
   { kind: "custom", script: "admin", label: "Admin spine" },
 ];
 
+export const devTestGameLiveSubspines = Object.freeze([
+  Object.freeze({ id: "core-live", plan: devTestGameCoreLiveSpinePlan }),
+  Object.freeze({ id: "seed-fixture", plan: devTestGameSeedFixtureLiveSubspinePlan }),
+  Object.freeze({ id: "backup-restore", plan: devTestGameBackupRestoreLiveSubspinePlan }),
+  Object.freeze({ id: "identity", plan: devTestGameIdentityLiveSubspinePlan }),
+  Object.freeze({ id: "admin", plan: devTestGameAdminLiveSubspinePlan }),
+]);
+
+export const devTestGameLiveSpinePlan = [
+  ...devTestGameLiveSubspines.flatMap(({ plan }) => plan),
+];
+
 export async function runDevTestGameCoreLiveSpine() {
-  await runSpinePlan(devTestGameCoreLiveSpinePlan);
+  await runDevTestGameLiveSubspine("core-live");
 }
 
 export async function runDevTestGameLiveSpine() {
-  await runSpinePlan(devTestGameLiveSpinePlan, {
+  for (const { id } of devTestGameLiveSubspines) {
+    await runDevTestGameLiveSubspine(id);
+  }
+}
+
+export async function runDevTestGameLiveSubspine(id) {
+  const subspine = devTestGameLiveSubspines.find((candidate) => candidate.id === id);
+  if (subspine === undefined) {
+    throw new Error(`unknown dev test-game live subspine: ${id}`);
+  }
+  await runSpinePlan(subspine.plan, {
+    checkpoint: { id: subspine.id },
     custom: {
       "backup-restore": runDevTestGameBackupRestoreSpine,
       identity: runDevTestGameIdentitySpine,
@@ -93,6 +121,9 @@ export async function runDevTestGameLiveSpine() {
 if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
   if (process.argv.includes("--core")) {
     await runDevTestGameCoreLiveSpine();
+  } else if (process.argv.includes("--subspine")) {
+    const index = process.argv.indexOf("--subspine");
+    await runDevTestGameLiveSubspine(process.argv[index + 1]);
   } else {
     await runDevTestGameLiveSpine();
   }

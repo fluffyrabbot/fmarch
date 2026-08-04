@@ -347,6 +347,16 @@ export async function driveDayEventRoomBrowser({
     );
   }
 
+  await Promise.all(
+    [outgoingPage, incomingPage].map((page) =>
+      page.evaluate(() => window.__fmarchClosePlayerLiveProjection?.()),
+    ),
+  );
+  await Promise.all(
+    [outgoingPage, incomingPage].map((page) =>
+      page.waitForLoadState("networkidle", { timeout: 5_000 }),
+    ),
+  );
   await outgoingContext.close();
   await incomingContext.close();
   return {

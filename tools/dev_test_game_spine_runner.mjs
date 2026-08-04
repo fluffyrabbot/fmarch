@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
-import { readFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -20,10 +21,86 @@ export function runNpmScript(scriptName, options = {}) {
   return runCommand("npm", ["run", scriptName], options);
 }
 
-export async function runSpinePlan(plan, { custom = {} } = {}) {
-  for (const step of plan) {
-    await runSpinePlanStep(step, { custom });
+export async function runSpinePlan(plan, { custom = {}, checkpoint } = {}) {
+  const checkpointRun = await startSpineCheckpointRun({ checkpoint, plan });
+  for (const [index, step] of plan.entries()) {
+    await checkpointRun?.record({ index, state: "running" });
+    try {
+      await runSpinePlanStep(step, { custom });
+    } catch (error) {
+      await checkpointRun?.record({
+        index,
+        state: "failed",
+        error: String(error?.stack ?? error),
+      });
+      throw error;
+    }
+    await checkpointRun?.record({ index, state: "passed" });
   }
+}
+
+export function spineCheckpointPath(id, { root = repoRoot } = {}) {
+  if (typeof id !== "string" || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(id)) {
+    throw new Error("spine checkpoint id must be lowercase kebab-case");
+  }
+  return path.join(root, "target", "dev-test-game", "spine-checkpoints", `${id}.json`);
+}
+
+async function startSpineCheckpointRun({ checkpoint, plan }) {
+  if (checkpoint === undefined) {
+    return null;
+  }
+  const id = checkpoint?.id;
+  const defaultCheckpointPath = spineCheckpointPath(id);
+  const checkpointPath = checkpoint?.path ?? defaultCheckpointPath;
+  const startedAt = new Date().toISOString();
+  const planFingerprint = createHash("sha256")
+    .update(JSON.stringify(plan))
+    .digest("hex");
+  const completedSteps = [];
+
+  const record = async ({ index, state, error }) => {
+    if (state === "passed") {
+      completedSteps.push(spineCheckpointStep(plan[index], index));
+    }
+    const completed = completedSteps.length === plan.length;
+    const receiptState =
+      state === "failed" ? "failed" : completed ? "passed" : "running";
+    const activeStepIndex = state === "passed" ? index + 1 : index;
+    const receipt = {
+      schema: "fmarch.dev-test-game-spine-checkpoint.v1",
+      id,
+      state: receiptState,
+      startedAt,
+      updatedAt: new Date().toISOString(),
+      planFingerprint,
+      totalSteps: plan.length,
+      completedSteps: [...completedSteps],
+      ...(completed
+        ? { completedAt: new Date().toISOString() }
+        : { activeStep: spineCheckpointStep(plan[activeStepIndex], activeStepIndex) }),
+      ...(error === undefined ? {} : { error }),
+    };
+    await writeJsonAtomically(checkpointPath, receipt);
+  };
+
+  return { record };
+}
+
+function spineCheckpointStep(step, index) {
+  return {
+    index,
+    kind: step.kind ?? "node",
+    script: step.script,
+    ...(step.label === undefined ? {} : { label: step.label }),
+  };
+}
+
+async function writeJsonAtomically(outputPath, value) {
+  await mkdir(path.dirname(outputPath), { recursive: true });
+  const temporaryPath = `${outputPath}.${process.pid}.tmp`;
+  await writeFile(temporaryPath, `${JSON.stringify(value, null, 2)}\n`);
+  await rename(temporaryPath, outputPath);
 }
 
 export function phaseLocalNextActionStep({ id, outputPath, sequenceStage } = {}) {

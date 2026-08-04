@@ -350,6 +350,7 @@ import {
   handoffPhaseSteps,
   phaseLocalNextActionStep,
   runSpinePlan,
+  spineCheckpointPath,
   spinePlanStepEnv,
 } from "./dev_test_game_spine_runner.mjs";
 import {
@@ -466,6 +467,7 @@ import {
 import {
   devTestGameCoreLiveSpinePlan,
   devTestGameLiveSpinePlan,
+  devTestGameLiveSubspines,
 } from "./dev_test_game_live_spine.mjs";
 import {
   recoveryReceiptGraphDescriptors,
@@ -2250,6 +2252,14 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     { kind: "custom", script: "identity", label: "Identity spine" },
     { kind: "custom", script: "admin", label: "Admin spine" },
   ]);
+  assert.deepEqual(
+    devTestGameLiveSubspines.map(({ id }) => id),
+    ["core-live", "seed-fixture", "backup-restore", "identity", "admin"],
+  );
+  assert.deepEqual(
+    devTestGameLiveSubspines.flatMap(({ plan }) => plan),
+    devTestGameLiveSpinePlan,
+  );
   const [
     terminalAdminProofBatch,
     terminalHostedIdentityNextActionProofBatch,
@@ -9723,6 +9733,43 @@ test("spine runner enforces hosted identity graph preconditions before a step", 
     /proof graph hosted identity operator dependency missing/,
   );
   assert.deepEqual(calls, ["record"]);
+});
+
+test("spine runner records an isolated atomic checkpoint receipt", async () => {
+  const checkpointRoot = path.join(
+    "target",
+    "dev-test-game",
+    "spine-checkpoint-runner-test",
+  );
+  const checkpointPath = spineCheckpointPath("contract-proof", {
+    root: checkpointRoot,
+  });
+  const calls = [];
+  await rm(checkpointRoot, { recursive: true, force: true });
+  await runSpinePlan(
+    [
+      { kind: "custom", script: "first" },
+      { kind: "custom", script: "second", label: "Second proof" },
+    ],
+    {
+      checkpoint: { id: "contract-proof", path: checkpointPath },
+      custom: {
+        first: async () => calls.push("first"),
+        second: async () => calls.push("second"),
+      },
+    },
+  );
+
+  const receipt = JSON.parse(await readFile(checkpointPath, "utf8"));
+  assert.equal(receipt.schema, "fmarch.dev-test-game-spine-checkpoint.v1");
+  assert.equal(receipt.id, "contract-proof");
+  assert.equal(receipt.state, "passed");
+  assert.equal(receipt.totalSteps, 2);
+  assert.equal(receipt.completedSteps.length, 2);
+  assert.equal(receipt.completedSteps[1].label, "Second proof");
+  assert.match(receipt.planFingerprint, /^[a-f0-9]{64}$/u);
+  assert.deepEqual(calls, ["first", "second"]);
+  await rm(checkpointRoot, { recursive: true, force: true });
 });
 
 test("phase-local next-action spine steps share one env contract", () => {

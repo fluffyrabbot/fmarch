@@ -129,6 +129,27 @@ export function sqlLiteral(value) {
   return `'${String(value).replaceAll("'", "''")}'`;
 }
 
+const expectedViteWebSocketTeardownCodes = new Set(["ECONNRESET", "EPIPE"]);
+
+export function createLiveStackViteLogger({ logger }) {
+  if (logger === null || typeof logger !== "object") {
+    throw new Error("live-stack Vite logger requires a base logger");
+  }
+  const liveStackLogger = Object.create(logger);
+  liveStackLogger.error = (message, options = {}) => {
+    if (
+      /^(?:\u001b\[[0-9;]*m)?ws proxy (?:socket )?error:/u.test(
+        String(message),
+      ) &&
+      expectedViteWebSocketTeardownCodes.has(options.error?.code)
+    ) {
+      return;
+    }
+    logger.error(message, options);
+  };
+  return liveStackLogger;
+}
+
 export async function stopChild(child) {
   if (child.exitCode !== null || child.signalCode !== null) {
     return;

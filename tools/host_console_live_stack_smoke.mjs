@@ -30,6 +30,7 @@ import {
   hashSessionToken,
 } from "./live_stack/auth_commands.mjs";
 import {
+  createLiveStackViteLogger,
   createLiveStackFixtureTools,
   sqlLiteral,
 } from "./live_stack/fixture.mjs";
@@ -372,7 +373,7 @@ try {
   });
 
   await writeProgress({ stage: "start-sveltekit" });
-  const { createServer: createViteServer } = await import(
+  const { createLogger, createServer: createViteServer } = await import(
     frontendRequire.resolve("vite")
   );
   vite = await createViteServer({
@@ -390,6 +391,9 @@ try {
       },
     },
     logLevel: "error",
+    customLogger: createLiveStackViteLogger({
+      logger: createLogger("error"),
+    }),
   });
   await vite.listen();
   const frontendAddress = vite.httpServer?.address();
