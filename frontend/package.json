@@ -22,5 +22,9 @@
     "@sveltejs/kit": {
       "cookie": "0.7.2"
     }
+  },
+  "allowScripts": {
+    "cbor-extract": false,
+    "fsevents": false
   }
 }
