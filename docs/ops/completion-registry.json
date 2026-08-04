@@ -215,6 +215,94 @@
       "remaining": []
     },
     {
+      "id": "foundation.release-topology",
+      "section": "foundation",
+      "order": 50,
+      "title": "Multi-replica release topology",
+      "execution_class": "code",
+      "status": "open",
+      "summary": "The current bootstrap uses startup-owned migrations and a replica-local filesystem, so it cannot truthfully exercise the canonical multi-node release gate.",
+      "complete_when": [
+        "API startup is migration-free, an explicit migrator owns schema changes, shared S3-compatible media preserves the existing content-addressed contract, and a two-replica local or hosted proof exercises cross-replica media and live recovery."
+      ],
+      "depends_on": [
+        "foundation.event-store-projections",
+        "foundation.wire-live-delivery",
+        "product.media.upload-to-private-post"
+      ],
+      "evidence": [
+        {
+          "kind": "source",
+          "value": "docs/arch/15-one-zero-governance.md"
+        },
+        {
+          "kind": "source",
+          "value": "docs/ops/railway-staging-target.md"
+        }
+      ],
+      "remaining": [
+        "Add a shared object-storage backend, split migration execution from API startup, configure the two-replica Railway target, and prove cross-replica media/live behavior."
+      ]
+    },
+    {
+      "id": "foundation.security-release-baseline",
+      "section": "foundation",
+      "order": 60,
+      "title": "1.0 security release baseline",
+      "execution_class": "code",
+      "status": "open",
+      "summary": "Capability authorization and encrypted storage are locally proven, but the browser CSP, release secret-custody contract, and provenance gate are not yet closed.",
+      "complete_when": [
+        "A strict production CSP, secret custody/rotation configuration, dependency/container provenance checks, and no-sensitive-telemetry contracts are enforced and locally proven."
+      ],
+      "depends_on": [
+        "foundation.wire-live-delivery",
+        "product.identity.method-coexistence"
+      ],
+      "evidence": [
+        {
+          "kind": "source",
+          "value": "docs/arch/15-one-zero-governance.md"
+        },
+        {
+          "kind": "source",
+          "value": "frontend/src/hooks.server.js"
+        }
+      ],
+      "remaining": [
+        "Ship and test CSP, release secret-custody configuration, dependency/container provenance, and no-sensitive-telemetry enforcement."
+      ]
+    },
+    {
+      "id": "foundation.maintainable-core",
+      "section": "foundation",
+      "order": 70,
+      "title": "Reviewable 1.0 core and toolchain",
+      "execution_class": "code",
+      "status": "open",
+      "summary": "Core domain, API, projection, command-test, and proof-runner responsibilities are concentrated in modules too large to review or evolve safely as 1.0 contracts.",
+      "complete_when": [
+        "The Rust toolchain is pinned, workspace Clippy is warning-clean, and concentrated pack, resolver, API, projection, command-test, and proof orchestration responsibilities are split into coherent modules without weakening proof coverage."
+      ],
+      "depends_on": [
+        "foundation.command-capability-runtime",
+        "foundation.wire-live-delivery"
+      ],
+      "evidence": [
+        {
+          "kind": "source",
+          "value": "docs/arch/15-one-zero-governance.md"
+        },
+        {
+          "kind": "source",
+          "value": "Cargo.toml"
+        }
+      ],
+      "remaining": [
+        "Pin the workspace toolchain, make strict Clippy green, and decompose the concentrated core and proof modules along their existing domain boundaries."
+      ]
+    },
+    {
       "id": "product.game.core-loop",
       "section": "game",
       "order": 20,
@@ -1192,6 +1280,33 @@
       "remaining": []
     },
     {
+      "id": "product.identity.data-lifecycle",
+      "section": "identity",
+      "order": 70,
+      "title": "Member data lifecycle and export",
+      "execution_class": "code",
+      "status": "open",
+      "summary": "Authentication can be disabled and game data can be exported, but fmarch does not yet own a coherent member-level deactivation, erasure/pseudonymization, retention, and personal-data export contract.",
+      "complete_when": [
+        "A member can export their associated account data and request a typed lifecycle transition that revokes authority, erases credentials and nonessential identifiers, pseudonymizes retained authorship, and rebuilds every affected projection deterministically under a declared retention policy."
+      ],
+      "depends_on": [
+        "foundation.event-store-projections",
+        "product.identity.method-coexistence",
+        "product.community.profiles",
+        "product.community.moderation-operations"
+      ],
+      "evidence": [
+        {
+          "kind": "source",
+          "value": "docs/arch/15-one-zero-governance.md"
+        }
+      ],
+      "remaining": [
+        "Define and implement typed member deactivation/erasure facts, deterministic projection pseudonymization, personal-data export, retention boundaries, member controls, and rebuild/browser proof."
+      ]
+    },
+    {
       "id": "product.community.discussions",
       "section": "community",
       "order": 20,
@@ -1511,7 +1626,8 @@
       "depends_on": [
         "product.identity.registration",
         "product.identity.delivery",
-        "product.identity.session-lifecycle"
+        "product.identity.session-lifecycle",
+        "product.identity.data-lifecycle"
       ],
       "evidence": [
         {
@@ -1546,7 +1662,10 @@
         "Externally reachable API and frontend targets pass the real-hosted preflight and raw-capture contract without fixture or synthetic inputs."
       ],
       "depends_on": [
-        "product.game.core-loop"
+        "product.game.core-loop",
+        "foundation.release-topology",
+        "foundation.security-release-baseline",
+        "foundation.maintainable-core"
       ],
       "evidence": [
         {
@@ -1723,7 +1842,9 @@
         "hosted-demo-fixtures",
         "production-backup-recovery",
         "real-hosted-concurrent-race-matrix",
-        "real-hosted-observability-and-operations"
+        "real-hosted-observability-and-operations",
+        "housekeeping.accessibility-review",
+        "housekeeping.product-policy-approval"
       ],
       "evidence": [
         {
@@ -1786,8 +1907,8 @@
       "order": 20,
       "title": "Ratify the fmarch codename",
       "execution_class": "human",
-      "status": "open",
-      "summary": "The repository and packages use fmarch while the vision docs still call the product unnamed or TBD.",
+      "status": "complete",
+      "summary": "The owner ratified fmarch and the governing architecture, repository, package, domain, and deployment names agree.",
       "complete_when": [
         "The owner ratifies the name and the vision/index docs consistently use it."
       ],
@@ -1802,8 +1923,58 @@
           "value": "docs/arch/00-vision.md"
         }
       ],
+      "remaining": []
+    },
+    {
+      "id": "housekeeping.accessibility-review",
+      "section": "housekeeping",
+      "order": 30,
+      "title": "Human assistive-technology release review",
+      "execution_class": "human",
+      "status": "open",
+      "summary": "Synthetic interaction checks do not establish that the critical 1.0 journeys work with a real keyboard and screen reader.",
+      "complete_when": [
+        "A retained human keyboard and screen-reader packet covers the critical identity, public, player, host, moderation, inbox, and mute journeys and records successful reruns after every critical fix."
+      ],
+      "depends_on": [
+        "product.community.member-mutes"
+      ],
+      "evidence": [
+        {
+          "kind": "source",
+          "value": "docs/arch/15-one-zero-governance.md"
+        },
+        {
+          "kind": "source",
+          "value": "docs/ui-ux-tablet-first-viewport-audit-2026-07-17.md"
+        }
+      ],
       "remaining": [
-        "Obtain the naming decision and update the governing docs."
+        "Run, retain, remediate, and rerun the critical keyboard and screen-reader journey matrix."
+      ]
+    },
+    {
+      "id": "housekeeping.product-policy-approval",
+      "section": "housekeeping",
+      "order": 40,
+      "title": "Privacy, terms, retention, and moderation policy approval",
+      "execution_class": "human",
+      "status": "open",
+      "summary": "The codebase does not yet carry owner-approved public policy for data use, retention, acceptable use, moderation, appeals, and support.",
+      "complete_when": [
+        "The operator approves and publishes policy text consistent with the implemented member data lifecycle, retention boundaries, moderation process, appeal route, and support ownership."
+      ],
+      "depends_on": [
+        "product.identity.data-lifecycle"
+      ],
+      "evidence": [
+        {
+          "kind": "source",
+          "value": "docs/arch/15-one-zero-governance.md"
+        }
+      ],
+      "remaining": [
+        "Draft, review, approve, publish, and link the privacy, terms, retention, acceptable-use, moderation-appeal, and support policies."
       ]
     },
     {

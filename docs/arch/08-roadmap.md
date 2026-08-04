@@ -103,6 +103,15 @@ After the mute slice is complete:
 Projection snapshots remain deferred until a representative replay benchmark
 exceeds a declared latency or resource SLO.
 
+## 1.0 substrate after local product closure
+
+Before hosted release evidence begins, close the required 1.0 substrate in
+[15-one-zero-governance](15-one-zero-governance.md): shared object-backed media,
+controlled migration ownership, a two-replica staging API, member data
+lifecycle, CSP and release-security policy, retained assistive-technology
+evidence, a pinned warning-clean toolchain, and decomposition of the
+concentrated core/proof modules without compatibility scaffolding.
+
 ## Hosted release sequence
 
 Local product closure does not authorize release. Hosted work proceeds in this
@@ -122,11 +131,10 @@ order:
 No local, fixture, generated, or hosted-like artifact may stand in for those
 external observations.
 
-## Open owner decision
+## Product name
 
-The repository, packages, domains, and deployment configuration use `fmarch`,
-while the vision documents still call the codename undecided. Ratify `fmarch`
-or choose its replacement, then update the governing docs in one atomic change.
+The owner has ratified `fmarch`; repository, package, domain, deployment, and
+governing architecture names now agree.
 
 Continue to [09-engine-and-packs](09-engine-and-packs.md) for the engine model,
 [14-mash-and-manual-frontier](14-mash-and-manual-frontier.md) for mash design,

@@ -4,17 +4,29 @@ This is the repeatable bootstrap for fmarch's first externally reachable staging
 
 ## Target Shape
 
-Create one Railway project in one region with three services:
+Create one Railway project in one region with three application services, one
+managed database, and one shared object store:
 
 | Service | Repository root | Public | Persistent state |
 | --- | --- | --- | --- |
-| `api` | repository root | yes | Railway Postgres plus one mounted Railway Volume |
+| `migrate` | repository root | no | Railway Postgres |
+| `api` | repository root | yes | Railway Postgres plus shared Railway Bucket |
 | `frontend` | repository root | yes | none |
 | `Postgres` | Railway managed database | no | Railway managed database storage/backups |
+| `media` | Railway Bucket | no | S3-compatible canonical media and variants |
 
-Both services retain the repository root as their Railway root directory because frontend server routes import shared root-level `tools/` modules. The `api` service uses the root `Dockerfile` and `railway.toml`. Configure the `frontend` service's Config-as-Code path as `/deploy/railway/frontend.railway.toml`; that file selects `Dockerfile.frontend` for the frontend service only.
+All three application services retain the repository root as their Railway root
+directory because frontend server routes import shared root-level `tools/`
+modules. The `api` and `migrate` services use the root `Dockerfile`; configure
+their distinct start commands explicitly. Configure the `frontend` service's
+Config-as-Code path as `/deploy/railway/frontend.railway.toml`; that file selects
+`Dockerfile.frontend` for the frontend service only.
 
-Keep the API at one replica for this first target. `FMARCH_MEDIA_ROOT` is a mounted filesystem, and the server applies SQL migrations during startup. Scaling, shared media storage, and controlled migration ownership are later hardening work, not properties of this bootstrap.
+Run the API at two replicas. Both use the same S3-compatible `media` bucket and
+never apply migrations during ordinary startup. The `migrate` service runs the
+exact image's explicit migration command to completion before the corresponding
+API deployment is admitted. This shape is required by the canonical hosted
+multi-node race gate; a one-replica mounted-volume bootstrap cannot close 1.0.
 
 ## Branch And Environment Model
 
@@ -54,10 +66,14 @@ resolve inside the selected environment.
 
 1. Create a Railway project and add a managed PostgreSQL service named `Postgres`.
 2. Add an `api` service from this repository. Leave its root directory at the repository root and use the default `/railway.toml` config path.
-3. Add a Railway Volume to `api`, mounted at `/var/lib/fmarch/media`. Railway mounts volumes as `root`; the image entrypoint creates or repairs that directory while privileged, then drops permanently to the unprivileged `fmarch` account (UID 10001) before starting the server. Do not set a Railway runtime UID override.
+3. Add a Railway Bucket named `media`. Bind its S3 endpoint, bucket, region,
+   access key, and secret key to both API replicas through Railway reference
+   variables. Do not mount a per-replica media volume in staging or production.
 4. Create a WorkOS AuthKit environment and configure its sign-in endpoint as `https://<frontend>/auth/sign-in` and redirect URI as `https://<frontend>/auth/callback`. Copy `deploy/railway/api.env.example` into Railway Variables, set `DATABASE_URL` as the reference to `Postgres.DATABASE_URL`, and fill in the WorkOS client id, issuer, and JWKS URL. For a fresh database, set `FMARCH_BOOTSTRAP_ADMIN_WORKOS_USER_ID` to the immutable WorkOS user id that should receive the first GlobalAdmin grant; an optional label is display-only. Startup grants it only when no active GlobalAdmin exists. Remove the bootstrap variables after the first successful boot.
 5. Do not set `FMARCH_BIND`. When a platform supplies `PORT`, the server binds `0.0.0.0:$PORT`; local development still defaults to `127.0.0.1:4000`, and an explicit `FMARCH_BIND` overrides either behavior.
-6. Deploy `api`, generate a public Railway domain, and verify `GET /healthz` returns `{ "ok": true }`.
+6. Deploy `migrate` and require a successful terminal exit. Deploy `api` at two
+   replicas, generate a public Railway domain, and verify `GET /healthz` returns
+   `{ "ok": true }` while both replicas are present.
 7. Add a `frontend` service from the same repository. Leave its root directory at the repository root, then set its Config-as-Code path to `/deploy/railway/frontend.railway.toml`.
 8. Generate the frontend public domain. Replace the example values in `deploy/railway/frontend.env.example` with the two real HTTPS URLs, the same WorkOS client id, a WorkOS API key, the exact callback URI, and a random cookie password of at least 32 characters. Add them as Railway Variables for `frontend`.
 9. Redeploy `frontend`, sign in as the bootstrapped GlobalAdmin, create the first game from `/admin`, choose a pack, and complete `/g/<game>/setup`. Verify a player follows the host-issued WorkOS sign-in link, start the game, refresh the setup and host surfaces, and confirm the started game appears on the board. Browser commands and one-time WebSocket tickets are bound to the verified WorkOS session and local principal rather than caller-supplied identifiers.
@@ -107,7 +123,7 @@ If either service fails, leave the last successful deployment running, diagnose
 the failed deployment, and do not move the release pointer again until the pair
 can be proven together. Do not deploy a dirty local directory to production.
 
-Never set `FMARCH_DEV_AUTH=1` or `FMARCH_FRONTEND_FIXTURE_SESSION=1` on either hosted service. They are local proof modes, not hosted-target configuration. The API container must retain its default privileged entrypoint so it can prepare the mounted volume and drop to UID 10001; do not configure `RAILWAY_RUN_UID`.
+Never set `FMARCH_DEV_AUTH=1` or `FMARCH_FRONTEND_FIXTURE_SESSION=1` on any hosted service. They are local proof modes, not hosted-target configuration.
 
 ## Secrets And Evidence
 

@@ -4,7 +4,7 @@ Working docs for a from-scratch, forum-mafia–focused text+image forum / messag
 platform. Tablet-friendly (the moderator console especially), data-efficient on the
 wire and in storage, server-trusted with strong authorization.
 
-> **Codename:** TBD. Docs refer to it as "the platform."
+> **Product name:** fmarch.
 
 These are *design intent* documents, not API references. They describe the substrate
 we are converging on and the reasoning behind each choice, so that implementation can
@@ -27,6 +27,7 @@ proceed without relitigating settled decisions.
 | Overload | **Bounded admission**, explicit `429`/`503`, recoverable live lag | [12-capacity-and-overload](12-capacity-and-overload.md) |
 | Interaction | **Reading-first player** / **exception-queue host** / guided setup | [13-interaction-architecture](13-interaction-architecture.md) |
 | Mash + manual frontier | **Day program + catalog-parity host fiat**; automation recedes HostTasks | [14-mash-and-manual-frontier](14-mash-and-manual-frontier.md) |
+| 1.0 release substrate | **Multi-replica**, shared media, controlled migrations, explicit governance | [15-one-zero-governance](15-one-zero-governance.md) |
 
 ## Document index
 
@@ -45,6 +46,7 @@ proceed without relitigating settled decisions.
 12. [12-capacity-and-overload](12-capacity-and-overload.md) — resource budgets, load shedding, and reproducible capacity proof
 13. [13-interaction-architecture](13-interaction-architecture.md) — player workspace, host exception queue, setup workflow
 14. [14-mash-and-manual-frontier](14-mash-and-manual-frontier.md) — mash culture (30+, day events, rewards) and permanent manual frontier
+15. [15-one-zero-governance](15-one-zero-governance.md) — hosted topology, data stewardship, accessibility, security, and maintainability gates
 
 ## The one idea everything hangs on
 

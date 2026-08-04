@@ -13,17 +13,17 @@ import {
   validateRegistry,
 } from "./completeness_scorecard.mjs";
 
-test("real completion registry records the mash baseline before member mutes", async () => {
+test("real completion registry records the 1.0 frontier before member mutes", async () => {
   const registry = await loadCompletionRegistry();
   await validateRegistry(registry);
   const summary = summarizeRegistry(registry);
   assert.deepEqual(summary.byExecutionClass.code, {
     complete: 37,
     partial: 0,
-    open: 1,
+    open: 5,
     blocked: 0,
     deferred: 0,
-    total: 38,
+    total: 42,
   });
   assert.deepEqual(summary.byExecutionClass["external-evidence"], {
     complete: 0,
@@ -32,6 +32,14 @@ test("real completion registry records the mash baseline before member mutes", a
     blocked: 6,
     deferred: 0,
     total: 6,
+  });
+  assert.deepEqual(summary.byExecutionClass.human, {
+    complete: 1,
+    partial: 0,
+    open: 2,
+    blocked: 1,
+    deferred: 0,
+    total: 4,
   });
   assert.equal(summary.productCapabilitiesComplete, false);
   assert.equal(summary.platformComplete, false);
@@ -178,7 +186,9 @@ test("registry validation rejects illegal completion and blocked states", async 
   );
 
   const whitespaceRemaining = structuredClone(registry);
-  whitespaceRemaining.items.find((item) => item.id === "housekeeping.codename").remaining = ["   "];
+  whitespaceRemaining.items.find(
+    (item) => item.id === "housekeeping.accessibility-review",
+  ).remaining = ["   "];
   await assert.rejects(
     validateRegistry(whitespaceRemaining, { verifySourcePaths: false }),
     /remaining must contain nonempty strings/,
