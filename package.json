@@ -14,7 +14,7 @@
     "test:capacity-overload-contract": "node --test tools/capacity_overload_contract.test.mjs",
     "test:capacity-overload": "node tools/capacity_overload_proof.mjs",
     "test:capacity-overload:local": "FMARCH_DEV_POSTGRES_DB=fmarch_capacity_overload DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch_capacity_overload node tools/dev_test_game_local_spine.mjs --script test:capacity-overload --prebuild",
-    "test:mash-scale-acceptance": "node --test tools/mash_scale_acceptance_contract.test.mjs && node tools/mash_scale_acceptance.mjs",
+    "test:mash-scale-acceptance": "node --test tools/mash_scale_acceptance_contract.test.mjs && DATABASE_URL=${DATABASE_URL:-postgres://fmarch:fmarch@127.0.0.1:5544/fmarch} node tools/mash_scale_acceptance.mjs",
     "test:railway-staging-target": "node tools/railway_staging_target_contract.mjs",
     "test:projection-baseline:static": "node --test tools/projection_baseline_contract.test.mjs && node tools/projection_baseline_contract.mjs",
     "test:projection-baseline": "npm run test:projection-baseline:static && cargo test -p projections --test baseline_contract -- --test-threads=1",

@@ -69,7 +69,12 @@
       "paths": ["crates/projections/"],
       "crate": "projections",
       "lanes": ["cargo:projections", "test:projection-baseline:static"],
-      "capabilities": ["foundation.event-store-projections"]
+      "capabilities": [
+        "foundation.event-store-projections",
+        "product.mash.day-event-runtime",
+        "product.mash.private-day-event-rooms",
+        "product.mash.scale-acceptance"
+      ]
     },
     {
       "id": "crate:caps",
@@ -85,14 +90,22 @@
       "paths": ["crates/commands/"],
       "crate": "commands",
       "lanes": ["cargo:commands"],
-      "capabilities": ["foundation.command-capability-runtime", "foundation.resolution-engine-parity"]
+      "capabilities": [
+        "foundation.command-capability-runtime",
+        "foundation.resolution-engine-parity",
+        "product.mash.day-program-library",
+        "product.mash.day-event-runtime",
+        "product.mash.private-day-event-rooms",
+        "product.mash.scale-acceptance"
+      ]
     },
     {
       "id": "crate:game-platform",
       "tier": "active",
       "paths": ["crates/game_platform/"],
       "crate": "game_platform",
-      "lanes": ["cargo:game-platform"]
+      "lanes": ["cargo:game-platform"],
+      "capabilities": ["product.mash.day-event-model"]
     },
     {
       "id": "crate:wire",
@@ -145,7 +158,13 @@
       "paths": ["crates/api/"],
       "crate": "api",
       "lanes": ["cargo:api", "test:mash-scale-acceptance"],
-      "also_triggers": ["frontend:identity"]
+      "also_triggers": ["frontend:identity"],
+      "capabilities": [
+        "product.mash.day-program-library",
+        "product.mash.day-event-runtime",
+        "product.mash.private-day-event-rooms",
+        "product.mash.scale-acceptance"
+      ]
     },
     {
       "id": "crate:operator_api",
@@ -178,6 +197,10 @@
         "cargo:commands",
         "cargo:api",
         "test:mash-scale-acceptance"
+      ],
+      "capabilities": [
+        "product.mash.day-program-library",
+        "product.mash.scale-acceptance"
       ]
     },
     {
@@ -216,7 +239,10 @@
         "product.game.core-loop",
         "product.game.host-moderation",
         "product.game.replacement-continuity",
-        "product.game.endgame-reveal-history"
+        "product.game.endgame-reveal-history",
+        "product.mash.day-program-library",
+        "product.mash.day-event-runtime",
+        "product.mash.private-day-event-rooms"
       ]
     },
     {
@@ -259,7 +285,8 @@
         "tools/mash_scale_acceptance_contract.mjs",
         "tools/mash_scale_acceptance_contract.test.mjs"
       ],
-      "lanes": ["test:mash-scale-acceptance"]
+      "lanes": ["test:mash-scale-acceptance"],
+      "capabilities": ["product.mash.scale-acceptance"]
     },
     {
       "id": "proof:host-console-live-stack",
@@ -271,7 +298,8 @@
       "lanes": [
         "test:host-console-live-stack-contract",
         "test:host-console-day-event-room-live-stack"
-      ]
+      ],
+      "capabilities": ["product.mash.private-day-event-rooms"]
     },
     {
       "id": "tools:proof-infra",

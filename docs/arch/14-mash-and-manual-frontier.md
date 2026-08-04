@@ -2,13 +2,17 @@
 
 | Field | Value |
 |---|---|
-| **Document** | `docs/arch/14-mash-and-manual-frontier.md` (proposed) |
-| **Author** | TBD |
+| **Document** | `docs/arch/14-mash-and-manual-frontier.md` |
+| **Author** | fmarch architecture |
 | **Date** | 2026-07-22 |
-| **Status** | Draft (rev 4 — prerequisite and vertical-slice review) |
+| **Status** | Implemented local baseline; design record for the continuing manual frontier |
 | **Depends on** | [00](00-vision.md), [01](01-domain-model.md), [02](02-event-sourcing.md), [06](06-security.md), [09](09-engine-and-packs.md), [10](10-event-schema.md), [13](13-interaction-architecture.md) |
 
-> **Landing note (PR1):** index both this doc and [13](13-interaction-architecture.md) in `docs/arch/README.md` (13 is settled interaction architecture but is not yet in the README index).
+The DayEvent model, program library, scheduler, resolution, narratives, private
+event rooms, and 60-player acceptance baseline described here are implemented
+and locally proven. Remaining “future” language records the deliberate manual
+frontier or optional extensions; current capability status lives in
+`docs/ops/completion-registry.json`.
 
 ---
 

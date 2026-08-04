@@ -102,6 +102,13 @@ test('npm lanes exist as package.json scripts and shell lanes carry commands', (
   }
 });
 
+test('Postgres-backed mash acceptance owns a repo-local database default', () => {
+  assert.match(
+    packageScripts['test:mash-scale-acceptance'],
+    /DATABASE_URL=\$\{DATABASE_URL:-postgres:\/\/fmarch:fmarch@127\.0\.0\.1:5544\/fmarch\}/,
+  );
+});
+
 test('manifest lanes are executable leaves, while human aggregate aliases stay outside the graph', () => {
   const declared = new Set(Object.keys(manifest.lanes));
   for (const [laneId, lane] of Object.entries(manifest.lanes)) {

@@ -1,159 +1,134 @@
-# 08 — Roadmap: the first vertical slice
+# 08 — Current roadmap and release frontier
 
-We do **not** build layer-by-layer (all the storage, then all the API, then all the UI).
-We build a thin **vertical slice** that exercises the architecture end-to-end and proves the
-hardest, least-reversible decisions early. If the slice feels right, everything else is more
-of the same shape.
+| Field | Value |
+|---|---|
+| **Status** | Active |
+| **Updated** | 2026-07-28 |
+| **Scope authority** | `docs/ops/completion-registry.json` |
+| **Generated view** | `docs/ops/completeness-scorecard.md` |
 
-## The slice (proves the architecture end-to-end)
+This document describes the current build and release order. It replaces the
+original first-vertical-slice plan: that slice proved the architecture and the
+product has since grown through game completion, private rooms, identity,
+community, media, archival, and mash-scale DayEvents.
 
-A single game, one channel, real votes, live, with the two irreversible mechanics exercised.
+The completion registry is authoritative for capability status. This roadmap
+explains sequencing and boundaries; it must not independently promote an item
+to complete.
 
-1. **Event store + one projection, end-to-end.**
-   Append-only `events` table, optimistic concurrency, and the `votecount` projection folded
-   from `VoteCast`/`VoteRetracted` in one transaction with the append
-   ([02](02-event-sourcing.md)). Proves: the log, sync projections, replay determinism.
+## Current system baseline
 
-2. **A game thread with phases + vote submissions + engine resolution.**
-   `PostSubmitted` events; phase gating ([01](01-domain-model.md)); server-supplied eligible
-   vote targets rendered as player controls that emit typed `SubmitVote`/`WithdrawVote`
-   commands; and a **minimal mafiascum pack** driving the engine's `DayVoteOutcome` at deadline
-   ([09](09-engine-and-packs.md),
-   [10](10-event-schema.md)). Proves: phases partition content, the platform→engine
-   submission seam, and that the official outcome is engine+pack resolved (not a forum
-   projection).
+The locally proven platform is built around four settled invariants:
 
-3. **Live votecount over the wire.**
-   CBOR deltas over WebSocket ([04](04-wire-protocol.md)); the Svelte votecount component
-   subscribing and rendering ([05](05-frontend.md)); types generated from the Rust `wire`
-   crate. Proves: the Rust↔TS seam, generated types, live delta fan-out, capability-filtered
-   delivery.
+1. **User is not Slot.** Replacement transfers current human authority while
+   preserving slot-authored roles, votes, posts, actions, and private history.
+2. **The event log is truth.** Commands append immutable facts and update
+   rebuildable projections in one transaction.
+3. **Authority is explicit.** The HTTP/WebSocket boundary resolves scoped
+   capabilities and the command core receives a principal plus typed command.
+4. **The engine is user-agnostic.** Declarative packs and the deterministic
+   resolver operate on slots; the forum platform owns users, channels, media,
+   identity, and delivery.
 
-4. **The two irreversible mechanics — on day one.**
-   - **`extend_deadline`** — a host capability action ([06](06-security.md)) through the full
-     command pipeline ([03](03-backend.md)), rendered live in the mod console
-     ([05](05-frontend.md)).
-   - **`process_replacement`** — swap the human in a slot while preserving the slot's votes,
-     posts, and role. **This is the design call that's unfixable if wrong**
-     ([01](01-domain-model.md)), so we exercise it immediately, not in a later milestone.
-   Proves: capability resolution at the boundary, User≠Slot, history preservation.
-   Current proof: `host_action_commands_are_capability_gated_and_projected` posts both
-   commands through `/commands`, verifies host/cohost rejection and acceptance at the API
-   boundary, then reads `host-console-state` from committed projections to prove the deadline
-   update and stable slot-history attribution. `npm run test:host-console-tablet-smoke` covers
-   the tablet route's typed command adapter and post-ACK projection rendering.
-   `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run
-   test:host-console-live-stack-smoke` starts the Rust API and SvelteKit together against a
-   temporary database, seeds through `/commands`, keeps `/auth/dev-session` disabled, issues
-   browser tokens through `/auth/session-grants`, submits one granted token through
-   `/auth/login` to write `fmarch_session`, drives the tablet browser route without
-   route-level command or state mocks, verifies the browser reads the post-action state
-   from the real API, posts to the mafiascum Encryptor-backed `private:mafia_day_chat`
-   room through the hydrated player UI and real `/commands` API, proves a private-channel
-   403 can recover through `Back to board`, and records tablet media request evidence from
-   a live Rust `ThreadPage` media payload served through the reference-checked SvelteKit
-   media route. The media lane proves tablet/small rendering, content-address/reference
-   headers for the projected private-channel post, and 403 denial for a non-member media
-   request. The faction day chat membership is declared by `StartGame` from pack data, and
-   the tablet/small media reference is now ingested through a real `SubmitPost` `/commands`
-   ACK into `ThreadPage.media`; full binary upload/storage/transcode remains future work.
-   The login redirect/cookie write, ACK, recovery navigation, API reads, SvelteKit rendering,
-   media serving, and Chromium request evidence are live-stack proof. The same live-stack
-   moderator session now proves `ResolveHostPrompt` ACK/removal and `modkill_slot` to typed
-   `SetSlotStatus` ACK with `Modkilled` slot lifecycle API/projection evidence.
-   `npm run test:frontend-role-proof:browser` is the current full browser
-   role proof; the latest local run passed and refreshed the browser-acceptance boundary,
-   completion audit, and readiness summary to complete. It runs the Chromium smoke and then
-   verifies the generated artifact shape. `npm run test:frontend-role-proof` is the
-   restricted-sandbox proof lane: it does not bind localhost, but it does build the admin,
-   player, and moderator route/component contracts, checks capability gating and forbidden
-   messages, verifies 44px-modeled touch targets, exercises representative admin/player
-   reject and moderator ack plus post-ACK projection paths, including the admin audit native
-   inspect-route affordance plus principal-scoped operator-proof evidence endpoint and
-   host-prompt ACK projection-patch and
-   hydrated-refresh removal paths, and verifies that the role-smoke fallback artifact embeds
-   the same static nav/focus contract, admin setup/recovery
-   confirmation coverage, moderator critical-action confirmation coverage, and modeled
-   confirmation initial-focus/focus-return/Escape/tab-containment semantics, plus
-   fixture-routable empty/loading/reject route-state scenarios. It also runs
-   `npm run test:frontend-route-state-render`, which build-mode SSR renders those forced
-   states through the actual role pages and checks the shared shell, route-state root,
-   model-owned 44px nav metadata, live-region status, and recovery action markup, plus the
-   normal admin readiness/setup/audit/recovery surface including audit authority, boundary,
-   and evidence targets, the native admin audit detail surface with its machine evidence
-   link, the normal player projected deadline/votecount panel, player private disclosure
-   collapsed/expanded markup without host-only copy, the normal moderator
-   operations/critical-action/host-prompt surface, and already-open admin/moderator
-   confirmation alertdialog markup including host-prompt resolution.
-   The saved
-   `target/frontend-static-role-contract/role-contract.json` and
-   `target/frontend-route-state-render/route-state-render.json` artifacts record the
-   restricted fallback boundary explicitly; they are supporting evidence, not a substitute
-   for the Chromium smoke's rendered route-state, pixel, overlap, focus, or browser-interaction
-   proof. The current `target/frontend-role-smoke/role-smoke.json`,
-   `target/frontend-completion-audit/completion-audit.json`, and
-   `target/frontend-readiness-summary/readiness-summary.json` artifacts come from the passed
-   browser lane. Browser-passed role-smoke
-   artifacts must include screenshot pixel metrics proving the saved board, role, forbidden,
-   and route-state screenshots are nonblank at the exercised viewports. In sandboxes that
-   reject localhost binds, the browser smokes write structured `EPERM` artifacts and stay
-   nonzero unless
-   `FMARCH_ALLOW_STATIC_ROLE_FALLBACK=1` explicitly opts into that static fallback. The
-   browser-passed role smoke must also record real admin/moderator confirmation focus
-   evidence for initial confirm focus, Escape return-to-trigger behavior, and local
-   Tab/Shift-Tab containment, including the editable session-grant form fields. It must also
-   record click-through from the admin audit list to the native inspect route, the
-   principal-scoped operator-proof evidence endpoint, a nonblank detail screenshot,
-   moderator host-prompt resolution evidence for typed
-   `ResolveHostPrompt` ACK, refreshed prompt projection, and resolved prompt action removal,
-   plus player private disclosure evidence before and after expansion with nonblank
-   screenshots. The
-   command-by-command proof matrix lives in
-   [05](05-frontend.md#current-frontend-proof-commands).
+Votes use server-supplied target controls and typed `SubmitVote`/`WithdrawVote`
+commands. Posts are never parsed as votes.
 
-If steps 1–4 feel clean, the architecture is sound. Everything after is breadth on a proven
-spine.
+## Shipped local capability groups
 
-## Why this order
+The canonical registry records local completion for:
 
-- **Front-load irreversibility.** Replacement and the event-schema shape are the only truly
-  one-way doors ([01](01-domain-model.md), [02](02-event-sourcing.md)). We hit them first,
-  while changing course is cheap.
-- **One thin path through every layer** surfaces seam problems (CBOR framing, type gen,
-  capability passing, sync projection consistency) before we've built breadth on top of a
-  bad seam.
-- **A real, playable artifact** — even a one-channel game with a live votecount — is worth
-  more for validating the domain than any amount of half-finished infrastructure.
+- append-only Postgres streams, encryption envelopes, optimistic concurrency,
+  idempotent commands, synchronous projections, replay, and rebuild audits;
+- declarative multi-ruleset resolution packs and deterministic result traces;
+- setup, posting, voting, actions, host/cohost control, replacement, phase
+  progression, endgame reveal, reconnect, stale-command recovery, and export;
+- role PM, mafia, mason, neighbor, dead, spectator, and private DayEvent rooms;
+- content-addressed media ingest plus bounded AVIF/WebP generation and serving;
+- classic and WorkOS authentication methods, opaque app sessions, recovery,
+  registration, invitations, delivery adapters, and lifecycle audit;
+- public game discovery, discussions, profiles, search, moderation,
+  subscriptions, unread inbox, and completed-game import/export;
+- versioned DayPrograms, scheduled/automatic/host-decided DayEvents, rewards,
+  narratives, participant attention, and sixty-player mash acceptance.
 
-## After the slice (breadth, in rough priority)
+“Complete” here means the registry's declared local proof boundary is closed.
+It does not mean hosted, production, or human release evidence exists.
 
-Not committed; sequence as needs dictate.
+## Transport boundary
 
-- **Private channels as scoped rooms** — scumchat, role PMs, neighborhoods; visibility
-  filtering and encryption at rest exercised for real ([01](01-domain-model.md),
-  [06](06-security.md)).
-- **Image pipeline** — content-addressed ingest, transcode, EXIF strip
-  ([07](07-images.md)).
-- **Full mod console** — phase advance, lock/unlock, bulk role reveal, modkill
-  ([05](05-frontend.md)).
-- **Board / forum surface** — game index, non-game discussion areas, profiles.
-- **Account lifecycle** — registration, session management, recovery
-  ([06](06-security.md)).
-- **Snapshots** — only if/when replay cost demands it ([02](02-event-sourcing.md)).
-- **Archival & export** — a completed game exported as its event stream.
+The authoritative browser transport is deliberately asymmetric:
 
-## Open design calls to close before/within the slice
+- **REST/JSON** carries commands, authentication, uploads, and cold projection
+  reads.
+- **WebSocket/binary CBOR** carries versioned server-to-client `Hello` and
+  `ProjectionDelta` envelopes.
+- A live connection is acquired through a short-lived, audience-bound ticket.
+- Broadcast lag emits `ResyncRequired`; the client refreshes authoritative REST
+  projections and continues on the same or a reconnected socket.
 
-These are flagged across the docs and should be resolved as they're hit, not deferred
-indefinitely:
+There is no JSON WebSocket compatibility mode. Pre-1.0 greenfield status lets
+the binary boundary remain singular and testable.
 
-1. **Event-schema shape for slot/replacement** — the one irreversible modeling decision
-   ([01](01-domain-model.md), [02](02-event-sourcing.md)). Draft and review before step 4.
-2. **Codename / project name** — currently "the platform" ([00](00-vision.md)).
+## Next buildable product slice
 
-## Suggested next concrete step
+The next dependency-satisfied coding item is
+`product.community.member-mutes`.
 
-Draft the **event schema for the game / slot / phase / vote core** — the types in the
-`domain` and `wire` crates ([03](03-backend.md), [04](04-wire-protocol.md)) — since it's the
-spine of steps 1–4 and contains the irreversible decisions. That's the natural thing to
-write first in code.
+Its required shape is:
+
+1. append typed mute/unmute facts to one private relationship stream per member
+   and target public profile;
+2. project the current mute set without exposing credential principals;
+3. apply one shared personalized-author suppression policy to discussion
+   threads, public search, and subscription inbox reads;
+4. expose bounded mute-list pagination plus profile and inbox controls;
+5. prove two-member isolation, reversibility, moderation independence, rebuild,
+   cursor stability, and browser recovery.
+
+It does not add direct-message blocking, private-channel blocking, global
+moderation, ranking, or recommendation semantics.
+
+## Local closure after member mutes
+
+After the mute slice is complete:
+
+1. update the completion registry and regenerate the scorecard;
+2. re-declare proof tiers so completed untouched surfaces are frozen and the
+   next real frontier remains active;
+3. run `npm run proof:lanes -- --mode sprint --run` during the checkpoint;
+4. run `npm run proof:lanes -- --mode full --run` before landing the sprint;
+5. retain the mash-scale report and role/browser proof artifacts from that exact
+   commit.
+
+Projection snapshots remain deferred until a representative replay benchmark
+exceeds a declared latency or resource SLO.
+
+## Hosted release sequence
+
+Local product closure does not authorize release. Hosted work proceeds in this
+order:
+
+1. deploy the exact clean `main` commit to isolated Railway staging API,
+   frontend, Postgres, media volume, variables, domains, and WorkOS environment;
+2. verify staging API/frontend health and same-commit attribution;
+3. capture non-fixture hosted identity and deployed gameplay evidence;
+4. run the real hosted concurrent-race matrix;
+5. retain logs, metrics, traces, alerts/SLO, and incident-response evidence;
+6. run production-like backup/PITR, key escrow, and secret-rotation drills;
+7. obtain explicit human rollback, support, and release approval;
+8. advance the `production` release pointer to that already-pushed `main`
+   commit.
+
+No local, fixture, generated, or hosted-like artifact may stand in for those
+external observations.
+
+## Open owner decision
+
+The repository, packages, domains, and deployment configuration use `fmarch`,
+while the vision documents still call the codename undecided. Ratify `fmarch`
+or choose its replacement, then update the governing docs in one atomic change.
+
+Continue to [09-engine-and-packs](09-engine-and-packs.md) for the engine model,
+[14-mash-and-manual-frontier](14-mash-and-manual-frontier.md) for mash design,
+and the generated
+[completeness scorecard](../ops/completeness-scorecard.md) for current status.

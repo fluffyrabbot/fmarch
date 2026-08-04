@@ -13,10 +13,18 @@ import {
   validateRegistry,
 } from "./completeness_scorecard.mjs";
 
-test("real completion registry exposes member mutes after community subscriptions", async () => {
+test("real completion registry records the mash baseline before member mutes", async () => {
   const registry = await loadCompletionRegistry();
   await validateRegistry(registry);
   const summary = summarizeRegistry(registry);
+  assert.deepEqual(summary.byExecutionClass.code, {
+    complete: 37,
+    partial: 0,
+    open: 1,
+    blocked: 0,
+    deferred: 0,
+    total: 38,
+  });
   assert.deepEqual(summary.byExecutionClass["external-evidence"], {
     complete: 0,
     partial: 0,
@@ -28,6 +36,11 @@ test("real completion registry exposes member mutes after community subscription
   assert.equal(summary.productCapabilitiesComplete, false);
   assert.equal(summary.platformComplete, false);
   assert.equal(summary.releaseComplete, false);
+  assert.equal(
+    registry.items.find((item) => item.id === "product.mash.scale-acceptance")
+      ?.status,
+    "complete",
+  );
   assert.equal(nextBuildableCodeItem(registry)?.id, "product.community.member-mutes");
 });
 
@@ -43,6 +56,8 @@ test("generated scorecard exactly matches the canonical registry", async () => {
   assert.match(rendered, /Canonical private media blob store/);
   assert.match(rendered, /Authenticated bounded media upload/);
   assert.match(rendered, /Uploaded media through a private post/);
+  assert.match(rendered, /Sixty-player mash acceptance/);
+  assert.match(rendered, /binary-CBOR WebSocket projection delivery/);
   assert.doesNotMatch(rendered, /Last updated|main @|Proof surface|tools\/ file/);
 });
 
@@ -57,6 +72,22 @@ test("governing docs record the typed vote-target contract", async () => {
   assert.doesNotMatch(domain, /Open design call:\*\* strict tag syntax/);
   assert.match(roadmap, /typed `SubmitVote`\/`WithdrawVote`/);
   assert.doesNotMatch(roadmap, /\*\*Vote syntax\*\*/);
+});
+
+test("governing transport docs and browser boundary require binary CBOR", async () => {
+  const [wire, transport] = await Promise.all([
+    readFile(path.resolve(repoRoot, "docs/arch/04-wire-protocol.md"), "utf8"),
+    readFile(
+      path.resolve(repoRoot, "frontend/src/lib/app/live-transport.mjs"),
+      "utf8",
+    ),
+  ]);
+
+  assert.match(wire, /WebSocket\/binary CBOR/);
+  assert.match(wire, /There is no JSON WebSocket compatibility mode/);
+  assert.match(transport, /protocol: "WebSocket CBOR"/);
+  assert.match(transport, /decodeServerEnvelopeFrame/);
+  assert.doesNotMatch(transport, /JSON\.parse\(String\(event\.data\)\)/);
 });
 
 test("registry validation rejects duplicate ids and unknown dependencies", async () => {

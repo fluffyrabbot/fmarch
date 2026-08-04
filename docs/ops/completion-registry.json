@@ -25,6 +25,13 @@
       "order": 30
     },
     {
+      "id": "mash",
+      "title": "Mash and DayEvent platform",
+      "kind": "product-capability",
+      "required_for": "platform",
+      "order": 35
+    },
+    {
       "id": "private-channels",
       "title": "Private-channel breadth",
       "kind": "product-capability",
@@ -161,9 +168,9 @@
       "title": "Versioned wire and recoverable live delivery",
       "execution_class": "code",
       "status": "complete",
-      "summary": "Versioned wire types, REST cold loads, WebSocket projection delivery, lag resync, and frontend hydration recovery are locally proven.",
+      "summary": "Versioned Rust-owned wire types, REST/JSON commands and cold loads, binary-CBOR WebSocket projection delivery, lag resync, and frontend hydration recovery are locally proven.",
       "complete_when": [
-        "A seeded client can cold-load, receive live updates, recover from lag, and retain capability-filtered state."
+        "A seeded client can cold-load, decode only versioned binary-CBOR live frames, recover from lag, and retain capability-filtered state."
       ],
       "depends_on": [
         "foundation.command-capability-runtime"
@@ -307,6 +314,172 @@
         {
           "kind": "artifact",
           "value": "target/dev-test-game/proof-run.json"
+        }
+      ],
+      "remaining": []
+    },
+    {
+      "id": "product.mash.day-event-model",
+      "section": "mash",
+      "order": 10,
+      "title": "Typed DayEvent and reward model",
+      "execution_class": "code",
+      "status": "complete",
+      "summary": "A database-free platform model owns validated DayEvent identity, lifecycle, schedules, participation, deterministic resolution evidence, narratives, reward bindings, and concrete effect plans without duplicating the rules engine.",
+      "complete_when": [
+        "Invalid DayEvent states fail closed and valid schedules, decisions, narratives, rewards, and terminal transitions are deterministic values."
+      ],
+      "depends_on": [
+        "foundation.resolution-engine-parity"
+      ],
+      "evidence": [
+        {
+          "kind": "source",
+          "value": "crates/game_platform/src/lib.rs"
+        },
+        {
+          "kind": "source",
+          "value": "docs/arch/14-mash-and-manual-frontier.md"
+        },
+        {
+          "kind": "command",
+          "value": "cargo test -p game_platform"
+        }
+      ],
+      "remaining": []
+    },
+    {
+      "id": "product.mash.day-program-library",
+      "section": "mash",
+      "order": 20,
+      "title": "Immutable DayProgram library",
+      "execution_class": "code",
+      "status": "complete",
+      "summary": "Hosts select product-visible, versioned, BLAKE3-pinned DayPrograms through a checked-in catalog; the API resolves the authoritative document, verifies pack compatibility, and appends the immutable program plus derived events.",
+      "complete_when": [
+        "A browser can attach only a catalog-published compatible DayProgram reference, and replay remains independent of later catalog changes."
+      ],
+      "depends_on": [
+        "product.game.setup",
+        "product.mash.day-event-model"
+      ],
+      "evidence": [
+        {
+          "kind": "source",
+          "value": "crates/api/src/program_library.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/commands/src/day_program.rs"
+        },
+        {
+          "kind": "source",
+          "value": "docs/ops/program-library.md"
+        },
+        {
+          "kind": "command",
+          "value": "cargo test -p api program_library -- --test-threads=1"
+        }
+      ],
+      "remaining": []
+    },
+    {
+      "id": "product.mash.day-event-runtime",
+      "section": "mash",
+      "order": 30,
+      "title": "Scheduled and resolved DayEvent runtime",
+      "execution_class": "code",
+      "status": "complete",
+      "summary": "Typed commands, leased scheduler claims, deterministic automatic resolution, host decisions, reward effect application, narrative publication, attention rows, and replayable projections execute DayPrograms through the production transaction boundary.",
+      "complete_when": [
+        "Concurrent scheduler and participant operations converge without duplicate boundaries, rewards, narratives, or projection drift."
+      ],
+      "depends_on": [
+        "foundation.command-capability-runtime",
+        "product.game.core-loop",
+        "product.mash.day-program-library"
+      ],
+      "evidence": [
+        {
+          "kind": "source",
+          "value": "crates/commands/src/day_scheduler.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/projections/migrations/0008_day_events.sql"
+        },
+        {
+          "kind": "source",
+          "value": "crates/projections/migrations/0013_day_event_narrative.sql"
+        },
+        {
+          "kind": "command",
+          "value": "npm run test:mash-scale-acceptance"
+        }
+      ],
+      "remaining": []
+    },
+    {
+      "id": "product.mash.private-day-event-rooms",
+      "section": "mash",
+      "order": 40,
+      "title": "Private DayEvent room lifecycle",
+      "execution_class": "code",
+      "status": "complete",
+      "summary": "Private DayEvents derive a stable event channel, grant and revoke membership with participation, transfer access through slot-stable replacement, encrypt private history, and retain read-only history after lock or resolution.",
+      "complete_when": [
+        "Member, withdrawn, replaced, revoked, locked, and non-member role surfaces enforce the same private-room authority across REST, live tickets, media, reconnect, and reload."
+      ],
+      "depends_on": [
+        "product.mash.day-event-runtime",
+        "product.private.role-pm"
+      ],
+      "evidence": [
+        {
+          "kind": "source",
+          "value": "crates/projections/migrations/0014_private_day_event_channels.sql"
+        },
+        {
+          "kind": "source",
+          "value": "tools/live_stack/day_event_room_scenario.mjs"
+        },
+        {
+          "kind": "command",
+          "value": "npm run test:host-console-day-event-room-live-stack"
+        }
+      ],
+      "remaining": []
+    },
+    {
+      "id": "product.mash.scale-acceptance",
+      "section": "mash",
+      "order": 50,
+      "title": "Sixty-player mash acceptance",
+      "execution_class": "code",
+      "status": "complete",
+      "summary": "The deterministic local acceptance fixture drives 60 occupied slots, five DayEvents, 300 participant rows, concurrent submissions, two scheduler replicas, public/private narratives, bounded host state, and projection rebuild through production paths.",
+      "complete_when": [
+        "The checked 60-player fixture stays within its contention, query-plan, payload, scheduler, and rebuild regression ceilings."
+      ],
+      "depends_on": [
+        "product.mash.private-day-event-rooms"
+      ],
+      "evidence": [
+        {
+          "kind": "source",
+          "value": "docs/ops/mash-scale-acceptance.md"
+        },
+        {
+          "kind": "source",
+          "value": "crates/api/src/mash_scale.rs"
+        },
+        {
+          "kind": "command",
+          "value": "npm run test:mash-scale-acceptance"
+        },
+        {
+          "kind": "artifact",
+          "value": "target/mash-scale-acceptance/report.json"
         }
       ],
       "remaining": []
