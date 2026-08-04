@@ -115,6 +115,18 @@
       "seconds": 0.1,
       "measured_at": "2026-07-26T09:49:46.563Z",
       "command": "npm run test:railway-staging-target"
+    },
+    "check:command-goldens": {
+      "seconds": 2.5,
+      "measured_at": "2026-08-04T20:13:08.802Z",
+      "command": "cargo run -p commands --bin check_goldens -- --check",
+      "status": 0
+    },
+    "check:wire-types": {
+      "seconds": 0.2,
+      "measured_at": "2026-08-04T20:13:08.980Z",
+      "command": "cargo run -p wire --bin export_types -- --check",
+      "status": 0
     }
   }
 }

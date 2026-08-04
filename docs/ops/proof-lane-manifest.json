@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "base_ref": "origin/main",
   "notes": [
     "Maps changed paths to the narrowest truthful proof-lane set. Consumed by tools/proof_lane_select.mjs.",
@@ -7,7 +7,7 @@
     "Re-declare tiers at sprint boundaries: the current frontier's areas are 'active', completed-and-untouched surfaces are 'frozen'. Frozen areas must cite registry capabilities that are all status=complete (validated by test:proof-lane-contract).",
     "Path matching: entries ending in '/' or '.' are prefixes; anything else is an exact file match. Longest match wins.",
     "also_triggers encodes cross-boundary blast radius the crate DAG cannot see (e.g. strict-wire change 32e8623b broke ~10 proof tools and frontend transport).",
-    "Generated-artifact lanes declare exact source inputs and checked-in outputs. Either side directly arms the freshness lane, independent of area boundaries; outputs have one lane owner.",
+    "Generated-artifact lanes declare source input and checked-in output path patterns plus a canonical write_command. Either side directly arms the freshness lane, independent of area boundaries; every concrete output has one lane owner.",
     "Manifest lanes are executable leaves. Human aggregate npm aliases stay outside this table; selected leaves are deduplicated by canonical execution key.",
     "Push mode is the touched closure plus a measured bounded sentinel set. Sprint mode adds every active-tier area; full mode adds every declared lane."
   ],
@@ -24,11 +24,26 @@
     "check:wire-types": {
       "kind": "shell",
       "command": "cargo run -p wire --bin export_types -- --check",
+      "write_command": "cargo run -p wire --bin export_types -- --write",
       "inputs": [
         "crates/wire/src/bin/export_types.rs",
         "crates/wire/src/lib.rs"
       ],
       "outputs": ["crates/wire/generated/types.ts"]
+    },
+    "check:command-goldens": {
+      "kind": "shell",
+      "command": "cargo run -p commands --bin check_goldens -- --check",
+      "write_command": "cargo run -p commands --bin check_goldens -- --write",
+      "inputs": [
+        "Cargo.lock",
+        "crates/domain/Cargo.toml",
+        "crates/domain/src/**/*.rs",
+        "crates/commands/Cargo.toml",
+        "crates/commands/src/bin/check_goldens.rs",
+        "packs/*/pack.json"
+      ],
+      "outputs": ["packs/*/golden/*.json"]
     },
     "cargo:community": { "kind": "shell", "command": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p community -- --test-threads=1" },
     "cargo:identity": { "kind": "shell", "command": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p identity -- --test-threads=1" },
@@ -55,6 +70,7 @@
     "test:mash-scale-acceptance": { "kind": "npm" },
     "test:completeness-scorecard": {
       "kind": "npm",
+      "write_command": "npm run generate:completeness-scorecard",
       "inputs": [
         "docs/ops/completion-registry.json",
         "tools/completeness_scorecard.mjs",

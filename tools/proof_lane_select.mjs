@@ -17,7 +17,7 @@
 // CLI:
 //   node tools/proof_lane_select.mjs [--mode inner|push|sprint|full] [--base <ref>]
 //                                    [--changed <path> ...] [--json] [--list] [--run]
-//                                    [--record <lane-id>]
+//                                    [--record <lane-id>] [--regenerate <lane-id>]
 //
 // --changed bypasses git and supplies the changed set explicitly (also used by
 // the contract test). --run executes the selected lanes in cost order and stops
@@ -27,7 +27,7 @@
 
 import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, matchesGlob } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -65,18 +65,25 @@ export function pathMatches(file, entry) {
   return file === entry;
 }
 
+export function artifactPathMatches(file, entry) {
+  return /[*?\[\]{}]/.test(entry) ? matchesGlob(file, entry) : file === entry;
+}
+
 export function generatedArtifactTriggers(changed, manifest) {
   const triggered = new Map();
   for (const [laneId, lane] of Object.entries(manifest.lanes)) {
     for (const entry of [...(lane.inputs ?? []), ...(lane.outputs ?? [])]) {
       for (const file of changed) {
-        if (!pathMatches(file, entry)) continue;
-        if (!triggered.has(laneId)) triggered.set(laneId, []);
-        triggered.get(laneId).push(file);
+        if (!artifactPathMatches(file, entry)) continue;
+        if (!triggered.has(laneId)) triggered.set(laneId, new Set());
+        triggered.get(laneId).add(file);
       }
     }
   }
-  return [...triggered.entries()].map(([laneId, reasons]) => ({ laneId, reasons }));
+  return [...triggered.entries()].map(([laneId, reasons]) => ({
+    laneId,
+    reasons: [...reasons],
+  }));
 }
 
 // Reverse closure over the workspace crate graph: crate name -> Set of
@@ -328,6 +335,27 @@ function recordLane(laneId, manifest) {
   console.log(`recorded ${laneId}: ${seconds}s`);
 }
 
+export function regenerateArtifact(
+  laneId,
+  manifest,
+  { spawn = spawnSync } = {},
+) {
+  const lane = manifest.lanes[laneId];
+  if (!lane) throw new Error(`unknown lane: ${laneId}`);
+  if (!lane.write_command) throw new Error(`lane ${laneId} is not a generated artifact lane`);
+
+  for (const [phase, command] of [
+    ['regenerate', lane.write_command],
+    ['check', laneCommand(laneId, manifest)],
+  ]) {
+    console.log(`${phase} ${laneId}: ${command}`);
+    const result = spawn(command, { cwd: REPO_ROOT, shell: true, stdio: 'inherit' });
+    if (result.status !== 0) {
+      throw new Error(`${phase} command for ${laneId} failed (exit ${result.status ?? 'unknown'})`);
+    }
+  }
+}
+
 function formatSeconds(entry) {
   if (!entry) return 'unmeasured';
   return entry.seconds >= 60
@@ -346,17 +374,22 @@ function main(argv) {
     else if (arg === '--list') args.list = true;
     else if (arg === '--run') args.run = true;
     else if (arg === '--record') args.record = argv[++i];
+    else if (arg === '--regenerate') args.regenerate = argv[++i];
     else throw new Error(`unknown argument: ${arg}`);
   }
   if (!['inner', 'push', 'sprint', 'full'].includes(args.mode)) {
     throw new Error(`unknown mode: ${args.mode}`);
   }
-  if (args.run && (args.json || args.list || args.record)) {
-    throw new Error('--run cannot be combined with --json, --list, or --record');
+  if (args.run && (args.json || args.list || args.record || args.regenerate)) {
+    throw new Error('--run cannot be combined with --json, --list, --record, or --regenerate');
+  }
+  if (args.regenerate && (args.json || args.list || args.record || args.changed.length > 0 || args.base)) {
+    throw new Error('--regenerate must be used without selection or recording options');
   }
 
   const manifest = loadManifest();
   if (args.record) return recordLane(args.record, manifest);
+  if (args.regenerate) return regenerateArtifact(args.regenerate, manifest);
   const baselineTimings = loadTimings();
   const runtimeTimings = loadTimings(RUNTIME_TIMINGS_PATH);
   const timings = mergeTimings(baselineTimings, runtimeTimings);

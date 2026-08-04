@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, globSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import test from 'node:test';
 
 import {
   MANIFEST_PATH,
   REPO_ROOT,
+  artifactPathMatches,
   deduplicateLaneIds,
   gitChangedFiles,
   laneCommand,
@@ -15,6 +16,7 @@ import {
   orderedExecutionPlan,
   pathMatches,
   reverseCrateClosure,
+  regenerateArtifact,
   runLanes,
   selectLanes,
 } from './proof_lane_select.mjs';
@@ -102,37 +104,58 @@ test('npm lanes exist as package.json scripts and shell lanes carry commands', (
   }
 });
 
-test('generated artifacts have one owner and select their freshness lane exactly once', () => {
-  assert.equal(manifest.version, 2);
+test('generated artifacts have one owner, a writer, and exact freshness selection', () => {
+  assert.equal(manifest.version, 3);
   const outputOwners = new Map();
   const artifactLanes = Object.entries(manifest.lanes).filter(
-    ([, lane]) => lane.inputs || lane.outputs,
+    ([, lane]) => lane.inputs || lane.outputs || lane.write_command,
   );
   assert.ok(artifactLanes.length > 0);
 
   for (const [laneId, lane] of artifactLanes) {
     assert.ok(lane.inputs?.length > 0, `generated artifact lane ${laneId} needs inputs`);
     assert.ok(lane.outputs?.length > 0, `generated artifact lane ${laneId} needs outputs`);
+    assert.ok(lane.write_command?.length > 0, `generated artifact lane ${laneId} needs a writer`);
+    assert.notEqual(lane.write_command, laneCommand(laneId, manifest));
     assert.equal(
       new Set([...lane.inputs, ...lane.outputs]).size,
       lane.inputs.length + lane.outputs.length,
       `generated artifact lane ${laneId} repeats an input or output`,
     );
 
-    for (const output of lane.outputs) {
-      assert.ok(!outputOwners.has(output), `${output} is also owned by ${outputOwners.get(output)}`);
-      outputOwners.set(output, laneId);
+    const expand = (entry) => /[*?\[\]{}]/.test(entry)
+      ? globSync(entry, { cwd: REPO_ROOT }).sort()
+      : [entry];
+    const inputPaths = lane.inputs.flatMap(expand);
+    const outputPaths = lane.outputs.flatMap(expand);
+    const concreteInputs = new Set(inputPaths);
+    assert.deepEqual(
+      outputPaths.filter((outputPath) => concreteInputs.has(outputPath)),
+      [],
+      `generated artifact lane ${laneId} overlaps concrete inputs and outputs`,
+    );
+    for (const [entryType, entries, paths] of [
+      ['input', lane.inputs, inputPaths],
+      ['output', lane.outputs, outputPaths],
+    ]) {
+      for (const entry of entries) {
+        assert.ok(!entry.startsWith('/') && !entry.includes('..'), `${laneId} has unsafe ${entryType} ${entry}`);
+        assert.ok(expand(entry).length > 0, `${laneId} ${entryType} ${entry} matches no files`);
+      }
+      for (const artifactPath of paths) {
+        assert.ok(existsSync(join(REPO_ROOT, artifactPath)));
+      }
     }
 
-    for (const artifactPath of [...lane.inputs, ...lane.outputs]) {
+    for (const outputPath of outputPaths) {
       assert.ok(
-        existsSync(join(REPO_ROOT, artifactPath)),
-        `generated artifact path ${artifactPath} does not exist`,
+        !outputOwners.has(outputPath),
+        `${outputPath} is also owned by ${outputOwners.get(outputPath)}`,
       );
-      assert.ok(
-        statSync(join(REPO_ROOT, artifactPath)).isFile(),
-        `generated artifact path ${artifactPath} must be an exact file`,
-      );
+      outputOwners.set(outputPath, laneId);
+    }
+
+    for (const artifactPath of [...inputPaths, ...outputPaths]) {
       const selection = selectLanes({
         changed: [artifactPath],
         manifest,
@@ -159,13 +182,69 @@ test('generated artifacts have one owner and select their freshness lane exactly
     }
 
     const combined = selectLanes({
-      changed: [...lane.inputs, ...lane.outputs],
+      changed: [...inputPaths, ...outputPaths],
       manifest,
       crateGraph: FIXTURE_GRAPH,
     });
     assert.equal(combined.laneIds.filter((selected) => selected === laneId).length, 1);
     assert.equal(combined.artifactTriggers.filter((trigger) => trigger.laneId === laneId).length, 1);
   }
+});
+
+test('artifact path matching supports exact files and collection globs', () => {
+  assert.ok(artifactPathMatches('packs/mafiascum/golden/kill_vs_doctor.json', 'packs/*/golden/*.json'));
+  assert.ok(artifactPathMatches('crates/wire/generated/types.ts', 'crates/wire/generated/types.ts'));
+  assert.ok(!artifactPathMatches('packs/mafiascum/pack.json', 'packs/*/golden/*.json'));
+});
+
+test('regeneration writes then checks one declared artifact lane', () => {
+  const calls = [];
+  regenerateArtifact(
+    'artifact',
+    {
+      lanes: {
+        artifact: {
+          kind: 'shell',
+          command: 'check-command',
+          write_command: 'write-command',
+        },
+      },
+    },
+    {
+      spawn(command) {
+        calls.push(command);
+        return { status: 0 };
+      },
+    },
+  );
+  assert.deepEqual(calls, ['write-command', 'check-command']);
+  const failedCalls = [];
+  assert.throws(
+    () => regenerateArtifact(
+      'artifact',
+      {
+        lanes: {
+          artifact: {
+            kind: 'shell',
+            command: 'check-command',
+            write_command: 'write-command',
+          },
+        },
+      },
+      {
+        spawn(command) {
+          failedCalls.push(command);
+          return { status: 7 };
+        },
+      },
+    ),
+    /regenerate command for artifact failed \(exit 7\)/,
+  );
+  assert.deepEqual(failedCalls, ['write-command']);
+  assert.throws(
+    () => regenerateArtifact('cargo:wire', manifest, { spawn: () => ({ status: 0 }) }),
+    /not a generated artifact lane/,
+  );
 });
 
 test('Postgres-backed mash acceptance owns a repo-local database default', () => {
