@@ -9,6 +9,37 @@ fn generated_typescript_contract_is_current() {
 }
 
 #[test]
+fn create_game_cohost_policy_is_omittable_in_both_wire_directions_and_typescript() {
+    let game = uuid::Uuid::nil();
+    let parsed = serde_json::from_value::<wire::Command>(serde_json::json!({
+        "CreateGame": {
+            "game": game,
+            "pack": "mafiascum"
+        }
+    }))
+    .unwrap();
+    assert!(matches!(
+        parsed,
+        wire::Command::CreateGame {
+            cohost_denied,
+            ..
+        } if cohost_denied.is_empty()
+    ));
+
+    let serialized = serde_json::to_value(wire::Command::CreateGame {
+        game,
+        pack: "mafiascum".to_owned(),
+        cohost_denied: Vec::new(),
+    })
+    .unwrap();
+    assert!(serialized["CreateGame"].get("cohost_denied").is_none());
+
+    assert!(wire::typescript::render().contains(
+        "CreateGame\": { game: string, pack: string, cohost_denied?: Array<CohostPermissionClass>"
+    ));
+}
+
+#[test]
 fn submit_post_media_rejects_client_authored_variant_fields() {
     let command = serde_json::json!({
         "SubmitPost": {
