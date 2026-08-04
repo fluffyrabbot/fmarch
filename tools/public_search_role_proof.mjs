@@ -19,6 +19,7 @@ const artifactDir = path.join(repoRoot, "target", "public-search-role-proof");
 const evidencePath = path.join(artifactDir, "public-search-proof.json");
 const databaseUrl = process.env.DATABASE_URL;
 const host = "127.0.0.1";
+const devSessionTokens = new Map();
 
 if (!databaseUrl) throw new Error("DATABASE_URL is required for public search proof");
 
@@ -103,10 +104,12 @@ try {
 
 async function seedSearchCorpus(apiBaseUrl) {
   const memberToken = "search-proof-member-session";
+  const memberBootstrapToken = "search-proof-member-bootstrap";
   const moderatorToken = "search-proof-moderator-session";
   const member = "search_member";
   const moderator = "search_moderator";
   await createDevSession(apiBaseUrl, memberToken, member, []);
+  await createDevSession(apiBaseUrl, memberBootstrapToken, member, ["GlobalAdmin"]);
   await createDevSession(apiBaseUrl, moderatorToken, moderator, ["GlobalAdmin", "GlobalMod"]);
   await createAccount(apiBaseUrl, moderatorToken, "search-member@example.test", member, []);
   await createAccount(apiBaseUrl, moderatorToken, "search-moderator@example.test", moderator, ["GlobalAdmin", "GlobalMod"]);
@@ -142,6 +145,7 @@ async function seedSearchCorpus(apiBaseUrl) {
   const game = randomUUID();
   let id = 1;
   await sendCommand(apiBaseUrl, id++, member, { CreateGame: { game, pack: "mafiascum" } });
+  devSessionTokens.set(member, memberToken);
   await sendCommand(apiBaseUrl, id++, member, { AddSlot: { game, slot: "slot_1" } });
   await sendCommand(apiBaseUrl, id++, member, { AssignSlot: { game, slot: "slot_1", user: member } });
   await sendCommand(apiBaseUrl, id++, member, { StartGame: { game, phase: "D01" } });
@@ -278,6 +282,7 @@ async function createDevSession(apiBaseUrl, token, principalUserId, globalCapabi
       global_capabilities: globalCapabilities,
     }),
   });
+  devSessionTokens.set(principalUserId, token);
 }
 
 async function createAccount(apiBaseUrl, adminToken, accountId, principalUserId, globalCapabilities) {
@@ -293,16 +298,25 @@ async function createAccount(apiBaseUrl, adminToken, accountId, principalUserId,
   });
 }
 
+// The strict wire rejects any actor field in the envelope; seed commands act
+// as a principal by presenting that principal's dev session as the bearer.
 async function sendCommand(apiBaseUrl, id, principalUserId, command) {
+  const sessionToken = devSessionTokens.get(principalUserId);
+  if (sessionToken === undefined) {
+    throw new Error(`no dev session minted for ${principalUserId}`);
+  }
   const result = await fetchJson(`${apiBaseUrl}/commands`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: {
+      authorization: `Bearer ${sessionToken}`,
+      "content-type": "application/json",
+    },
     body: JSON.stringify({
       v: 1,
       id,
       body: {
         kind: "Command",
-        body: { command_id: randomUUID(), principal_user_id: principalUserId, command },
+        body: { command_id: randomUUID(), command },
       },
     }),
   });

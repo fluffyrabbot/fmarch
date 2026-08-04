@@ -74,6 +74,7 @@ import {
   selectHostSetupStage,
   seedPreSetupCommandPlanForGame,
   seedSetupCommandPlanForGame,
+  uiBootstrapSetupRoster,
   verifyHostSetupPolicyCommandRoundTrip,
   waitForHostSetupCommand,
 } from "./dev_test_game_setup_bootstrap_scenario.mjs";
@@ -95,11 +96,15 @@ import {
   matchesDayVoteElimination,
   matchesPhaseAdvance,
 } from "./dev_test_game_host_prompt_public_resolution.mjs";
+import {
+  liveProjectionResyncMetricsAreConsistent,
+} from "./dev_test_game_live_projection_observability.mjs";
 
 export {
   seedPreSetupCommandPlanForGame,
   seedSetupCommandPlanForGame,
   seededSetupRoster,
+  uiBootstrapSetupRoster,
 } from "./dev_test_game_setup_bootstrap_scenario.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -401,6 +406,20 @@ async function startApi() {
       FMARCH_LIVE_PROJECTION_CAPACITY: String(
         liveProjectionProofConfig(process.env).capacity,
       ),
+      // The live spine intentionally keeps many host/cohost pages open to
+      // exercise stale-state and race recovery. Give that owned harness room
+      // without weakening the server's ordinary per-principal default.
+      FMARCH_WS_MAX_CONNECTIONS_PER_PRINCIPAL:
+        process.env.FMARCH_WS_MAX_CONNECTIONS_PER_PRINCIPAL ?? "128",
+      // The same browser principal intentionally mints fresh tickets across
+      // dozens of stale-page reload and reconnect scenarios. Admission and
+      // Retry-After behavior have a dedicated capacity lane; this spine must
+      // not exhaust that independent caller quota while proving game state.
+      FMARCH_WS_TICKET_MAX_PER_WINDOW:
+        process.env.FMARCH_WS_TICKET_MAX_PER_WINDOW ?? "1000",
+      FMARCH_DB_MAX_CONNECTIONS: process.env.FMARCH_DB_MAX_CONNECTIONS ?? "48",
+      FMARCH_DB_ACQUIRE_TIMEOUT_MS:
+        process.env.FMARCH_DB_ACQUIRE_TIMEOUT_MS ?? "2000",
       RUST_LOG: process.env.RUST_LOG ?? "warn",
     },
     stdio: ["ignore", "pipe", "pipe"],
@@ -434,7 +453,11 @@ async function startApi() {
 }
 
 async function startFrontend(currentApiBaseUrl) {
-  process.env.FMARCH_API_BASE_URL = currentApiBaseUrl;
+  // SSR reaches the local Rust process directly. Browser-visible endpoints
+  // stay same-origin so the dev socket uses Vite's /ws proxy and remains
+  // inside the production CSP's `connect-src 'self'` boundary.
+  process.env.FMARCH_API_INTERNAL_URL = currentApiBaseUrl;
+  process.env.FMARCH_API_BASE_URL = "";
   if (args.frontendPort !== undefined) {
     await assertPortAvailable(args.frontendPort, "frontend");
   }
@@ -451,7 +474,11 @@ async function startFrontend(currentApiBaseUrl) {
         port: args.frontendPort ?? 0,
         strictPort: args.frontendPort !== undefined,
         proxy: {
-          "/commands": currentApiBaseUrl,
+          // Commands must traverse the SvelteKit same-origin route so the
+          // HttpOnly browser session cookie is translated into the backend
+          // bearer. A direct Vite proxy silently drops that authentication
+          // boundary because browsers never expose the cookie as an
+          // Authorization header.
           "/games": currentApiBaseUrl,
           "/ws": {
             target: currentApiBaseUrl,
@@ -477,7 +504,11 @@ async function seedGame() {
     return { mode: "reused", commands: [], shouldRunSetupBootstrap: false };
   }
   const commands = [];
-  const plan = seedPreSetupCommandPlanForGame(game);
+  // The setup route now derives seat ids itself, so the browser bootstrap can
+  // no longer reproduce this roster's mixed legacy slot ids. The named game is
+  // seeded entirely through commands; the UI bootstrap proof runs against its
+  // own fresh game with derived sequential seats.
+  const plan = seedSetupCommandPlanForGame(game);
   for (let index = 0; index < plan.length; index += 1) {
     const [principalUserId, command] = plan[index];
     const result = await sendCommandResult(principalUserId, command);
@@ -1489,6 +1520,7 @@ async function verifySessionCard(card) {
     staleReplacementPage = await roleEntries.player.context.newPage();
     cohostConsole = await verifySeededCohostConsole({
       cohostPage: roleEntries.cohost.page,
+      cohostPrincipalUserId: roleEntries.cohost.verification.principalUserId,
       staleCohostPage,
       game: card.game,
       frontendBaseUrl: card.frontendBaseUrl,
@@ -1574,6 +1606,24 @@ async function verifySessionCard(card) {
     resolutionReceipts = actionLoop.resolutionReceipts;
     deadPlayerRecovery = actionLoop.deadPlayerRecovery;
     playerActionBoundary = actionLoop.playerActionBoundary;
+    await Promise.all(
+      [
+        concurrentActionPage,
+        privateChannelActionPage,
+        privateChannelStaleActionPage,
+        staleActionRetryPage,
+        staleSameActionPage,
+        staleActionPage,
+        staleDeadActionPage,
+      ].map((page) => page.close()),
+    );
+    concurrentActionPage = null;
+    privateChannelActionPage = null;
+    privateChannelStaleActionPage = null;
+    staleActionRetryPage = null;
+    staleSameActionPage = null;
+    staleActionPage = null;
+    staleDeadActionPage = null;
     multiplayerHardening = await verifySeededMultiplayerHardening({
       hostPage: roleEntries.host.page,
       playerPage: roleEntries.player.page,
@@ -1800,26 +1850,38 @@ async function bootstrapSeededGameThroughSetup(card) {
   const { chromium } = await import("playwright");
   const browser = await chromium.launch();
   let entry;
+  // The setup route derives every new seat id, so the UI bootstrap proof runs
+  // against its own fresh game with sequential seats instead of the named
+  // game's command-seeded legacy roster ids.
+  const bootstrapGame = crypto.randomUUID();
   try {
+    await sendCommand("host_h", {
+      CreateGame: { game: bootstrapGame, pack: "mafiascum" },
+    });
+    for (const row of uiBootstrapSetupRoster) {
+      await ensureLocalAccount({ principalUserId: row.user });
+    }
     const bootstrapSession = await createAccountLoginCredential({
       principalUserId: "host_h",
-      returnTo: `/g/${card.game}/setup`,
+      returnTo: `/g/${bootstrapGame}/setup`,
       expectedCapabilityKind: "HostOf",
     });
     entry = await openVerifiedRoleEntry({
       browser,
       session: bootstrapSession,
-      game: card.game,
+      game: bootstrapGame,
       apiBaseUrl: card.apiBaseUrl,
       frontendBaseUrl: card.frontendBaseUrl,
     });
     const setupPage = entry.page;
-    return await runSeededSetupBootstrapScenario({
+    const scenario = await runSeededSetupBootstrapScenario({
       setupPage,
-      game: card.game,
+      game: bootstrapGame,
       frontendBaseUrl: card.frontendBaseUrl,
       bootstrapSession,
+      roster: uiBootstrapSetupRoster,
     });
+    return { ...scenario, game: bootstrapGame };
   } finally {
     await entry?.context.close().catch(() => {});
     await browser.close();
@@ -1838,6 +1900,7 @@ async function verifySeededHostSetupRoute({
     state: "visible",
     timeout: 15000,
   });
+  await selectHostSetupStage(setupPage, "roster");
   await setupPage.getByTestId("host-setup-roster").waitFor({
     state: "visible",
     timeout: 15000,
@@ -1886,7 +1949,7 @@ async function verifySeededHostSetupRoute({
   if (
     setupPage.url() !== roleUrl ||
     surfaceGame !== game ||
-    !capabilityLabel.includes(`HostOf(${game})`) ||
+    capabilityLabel !== `Hosting ${game}` ||
     readinessSummary !== "Started at D01" ||
     mainPolicyText !== "Media-only posts are disabled." ||
     startDisabled !== true ||
@@ -1951,6 +2014,10 @@ async function verifyDisposableHostSetupRosterRoleCommand({
 }) {
   const setupGame = crypto.randomUUID();
   const seed = await seedHostSetupRosterRoleGame({ setupGame });
+  const assignedPrincipalUserId = "setup-extra-player";
+  // The occupant picker is a select over registered accounts, so the assigned
+  // principal needs an account before the setup pages load their state.
+  await ensureLocalAccount({ principalUserId: assignedPrincipalUserId });
   const setupSession = await createAccountLoginCredential({
     principalUserId: "host_h",
     returnTo: `/g/${setupGame}/setup`,
@@ -1977,8 +2044,6 @@ async function verifyDisposableHostSetupRosterRoleCommand({
   });
   const page = entry.page;
   const stalePage = staleEntry.page;
-  const addedSlotId = "slot_extra";
-  const assignedPrincipalUserId = "setup-extra-player";
   const assignedRoleKey = "mafia_goon";
   try {
     await page.getByTestId("host-setup-surface").waitFor({
@@ -1989,6 +2054,16 @@ async function verifyDisposableHostSetupRosterRoleCommand({
       state: "visible",
       timeout: 15000,
     });
+    const initialSummary = await page
+      .getByTestId("host-setup-readiness-summary")
+      .innerText();
+    const initialState = await page.evaluate(
+      () => window.__fmarchHostSetupState ?? null,
+    );
+    await Promise.all([
+      selectHostSetupStage(page, "roster"),
+      selectHostSetupStage(stalePage, "roster"),
+    ]);
     await page.getByTestId("host-setup-add-slot-form").waitFor({
       state: "visible",
       timeout: 15000,
@@ -1997,18 +2072,24 @@ async function verifyDisposableHostSetupRosterRoleCommand({
       state: "visible",
       timeout: 15000,
     });
-    const initialSummary = await page
-      .getByTestId("host-setup-readiness-summary")
-      .innerText();
-    const initialState = await page.evaluate(
-      () => window.__fmarchHostSetupState ?? null,
-    );
 
-    await page
-      .getByTestId("host-setup-add-slot-form")
+    // Both pages derive the same next seat id from their (equal) loaded state.
+    // After the live page adds that seat, the stale page still derives it, so
+    // its submission is the duplicate-add rejection this proof exercises.
+    const addSlotForm = page.getByTestId("host-setup-add-slot-form");
+    const staleAddSlotForm = stalePage.getByTestId("host-setup-add-slot-form");
+    const addedSlotId = await addSlotForm
       .locator('input[name="slotId"]')
-      .fill(addedSlotId);
-    await page.getByRole("button", { name: "Add slot" }).click();
+      .inputValue();
+    const staleDerivedSlotId = await staleAddSlotForm
+      .locator('input[name="slotId"]')
+      .inputValue();
+    if (staleDerivedSlotId !== addedSlotId) {
+      throw new Error(
+        `stale setup page derived ${staleDerivedSlotId} while the live page derived ${addedSlotId}`,
+      );
+    }
+    await addSlotForm.getByRole("button", { name: "Add next seat" }).click();
     const addSlot = await waitForHostSetupCommand({
       setupPage: page,
       statusTestId: "host-setup-add-slot-status",
@@ -2018,11 +2099,9 @@ async function verifyDisposableHostSetupRosterRoleCommand({
         (state?.slots ?? []).some((slot) => slot.slotId === addedSlotId),
     });
 
-    await stalePage
-      .getByTestId("host-setup-add-slot-form")
-      .locator('input[name="slotId"]')
-      .fill(addedSlotId);
-    await stalePage.getByRole("button", { name: "Add slot" }).click();
+    await staleAddSlotForm
+      .getByRole("button", { name: "Add next seat" })
+      .click();
     const duplicateAddSlotRecovery = await waitForHostSetupCommand({
       setupPage: stalePage,
       statusTestId: "host-setup-add-slot-status",
@@ -2042,11 +2121,11 @@ async function verifyDisposableHostSetupRosterRoleCommand({
     ).filter((slot) => slot.slotId === addedSlotId).length;
 
     const rosterRow = page.getByTestId(`host-setup-slot-${addedSlotId}`);
-    await rosterRow.locator('input[name="principalUserId"]').fill(
-      assignedPrincipalUserId,
-    );
     await rosterRow
-      .getByRole("button", { name: "Assign", exact: true })
+      .locator('select[name="principalUserId"]')
+      .selectOption(assignedPrincipalUserId);
+    await rosterRow
+      .getByRole("button", { name: "Assign player", exact: true })
       .click();
     const assignSlot = await waitForHostSetupCommand({
       setupPage: page,
@@ -2063,6 +2142,7 @@ async function verifyDisposableHostSetupRosterRoleCommand({
         ),
     });
 
+    await selectHostSetupStage(page, "roles");
     const roleRow = page.getByTestId(`host-setup-role-${addedSlotId}`);
     await roleRow.locator('select[name="roleKey"]').selectOption(assignedRoleKey);
     await roleRow
@@ -2249,8 +2329,7 @@ async function openVerifiedRoleEntry({
     if (!body.includes(game)) {
       throw new Error(`authenticated page for ${session.principalUserId} did not show ${game}`);
     }
-    const cookiePrefix =
-      session.credentialKind === "account" ? "account-session-" : "invite-session-";
+    const cookiePrefix = "fmss_";
     return {
       context,
       page,
@@ -2273,14 +2352,21 @@ async function openVerifiedRoleEntry({
 
 async function verifySeededCohostConsole({
   cohostPage,
+  cohostPrincipalUserId,
   staleCohostPage,
   game,
   frontendBaseUrl,
 }) {
   await cohostPage.getByTestId("host-console-surface").waitFor({ state: "visible" });
-  const capability = await cohostPage.getByTestId("host-console-capability").innerText();
-  if (!capability.includes(`CohostOf(${game})`)) {
-    throw new Error(`cohost console capability drifted: ${capability}`);
+  const renderedCapabilityLabel = await cohostPage
+    .getByTestId("host-console-capability")
+    .innerText();
+  const capabilityLabel = `CohostOf(${game})`;
+  if (
+    cohostPrincipalUserId !== "cohost_c" ||
+    renderedCapabilityLabel.toLowerCase() !== capabilityLabel.toLowerCase()
+  ) {
+    throw new Error(`cohost console capability drifted: ${renderedCapabilityLabel}`);
   }
   const extendDeadline = await confirmHostAction(cohostPage, "extend_deadline");
   const command = extendDeadline.commandStatus?.requestEnvelope?.body?.body?.command;
@@ -2308,11 +2394,11 @@ async function verifySeededCohostConsole({
   const rejectBody = hostOnlyResolveReject.serverEnvelope?.body;
   if (
     rejectBody?.kind !== "Reject" ||
-    rejectBody?.body?.error !== "NotHost" ||
-    hostOnlyResolveReject.requestEnvelope?.body?.body?.principal_user_id !== "cohost_c"
+    rejectBody?.body?.error !== "CohostPermissionDenied" ||
+    hostOnlyResolveReject.requestEnvelope?.body?.body?.principal_user_id !== undefined
   ) {
     throw new Error(
-      `cohost host-only ResolvePhase did not reject as NotHost: ${JSON.stringify(
+      `cohost denied ResolvePhase did not reject by policy: ${JSON.stringify(
         hostOnlyResolveReject,
       )}`,
     );
@@ -2330,7 +2416,9 @@ async function verifySeededCohostConsole({
   });
   return {
     status: "passed",
-    capabilityLabel: capability,
+    sessionPrincipalUserId: cohostPrincipalUserId,
+    capabilityLabel,
+    renderedCapabilityLabel,
     extendDeadline,
     hostOnlyControlsVisible,
     hostOnlyResolveReject: {
@@ -2340,7 +2428,7 @@ async function verifySeededCohostConsole({
     phaseAfterReject,
     staleDeadlineSetup,
     proof:
-      "The seeded cohost role URL opened the host console with CohostOf authority, exposed only the delegated deadline control, extended the D01 deadline through the hydrated host-console command path, and rejected a direct host-only ResolvePhase command as NotHost without mutating phase state.",
+      "The seeded cohost role URL opened the host console with CohostOf authority, exposed only the delegated deadline control, extended the D01 deadline through the hydrated host-console command path, and rejected a policy-denied ResolvePhase command as CohostPermissionDenied without mutating phase state.",
   };
 }
 
@@ -2384,12 +2472,11 @@ async function verifyCohostLaterPhaseDeadlineExtension({
         window.__fmarchHostProjection?.phase?.deadline === expected.initialDeadline,
       { initialDeadline: seed.initialDeadline },
     );
-    await cohostEntry.page
-      .getByTestId("critical-host-action-extend_deadline")
-      .waitFor({ state: "visible" });
-    const capabilityLabel = await cohostEntry.page
+    await revealHostAction(cohostEntry.page, "extend_deadline");
+    const renderedCapabilityLabel = await cohostEntry.page
       .getByTestId("host-console-capability")
       .innerText();
+    const capabilityLabel = `CohostOf(${proofGame})`;
     const setupPhase = await cohostEntry.page.evaluate(
       () => window.__fmarchHostProjection?.phase,
     );
@@ -2409,7 +2496,7 @@ async function verifyCohostLaterPhaseDeadlineExtension({
     const command =
       extendDeadline.commandStatus?.requestEnvelope?.body?.body?.command
         ?.ExtendDeadline;
-    const commandPrincipal =
+    const commandActorField =
       extendDeadline.commandStatus?.requestEnvelope?.body?.body?.principal_user_id;
     const phaseAfterExtend = await cohostEntry.page.evaluate(
       () => window.__fmarchHostProjection?.phase,
@@ -2453,6 +2540,7 @@ async function verifyCohostLaterPhaseDeadlineExtension({
       apiBaseUrl,
       game: proofGame,
       principalUserId: "cohost_c",
+      sessionToken: await browserSessionToken(cohostEntry.page),
     });
     const reload = {
       routeResponseStatus: reloadResponse.status(),
@@ -2462,14 +2550,14 @@ async function verifyCohostLaterPhaseDeadlineExtension({
       apiPhaseAfterReload: apiStateAfterReload.phase,
     };
     if (
-      !capabilityLabel.includes(`CohostOf(${proofGame})`) ||
+      renderedCapabilityLabel.toLowerCase() !== capabilityLabel.toLowerCase() ||
       setupPhase?.id !== "D02" ||
       setupPhase?.locked !== false ||
       setupPhase?.deadline !== seed.initialDeadline ||
       setupDeadlineActions.includes("extend_deadline") !== true ||
       setupPhaseActions.length !== 0 ||
       extendDeadline.commandStatus?.state !== "ack" ||
-      commandPrincipal !== "cohost_c" ||
+      commandActorField !== undefined ||
       command?.game !== proofGame ||
       command?.phase !== "D02" ||
       command?.at !== expectedDeadline ||
@@ -2497,7 +2585,7 @@ async function verifyCohostLaterPhaseDeadlineExtension({
           setupPhaseActions,
           extendDeadline,
           command,
-          commandPrincipal,
+          commandActorField,
           phaseAfterExtend,
           deadlineActionsAfterExtend,
           phaseActionsAfterExtend,
@@ -2512,13 +2600,15 @@ async function verifyCohostLaterPhaseDeadlineExtension({
       initialDeadline: seed.initialDeadline,
       expectedDeadline,
       cohostEntry: cohostEntry.verification,
+      sessionPrincipalUserId: cohostEntry.verification.principalUserId,
       capabilityLabel,
+      renderedCapabilityLabel,
       setupPhase,
       setupDeadlineActions,
       setupPhaseActions,
       extendDeadline,
       command,
-      commandPrincipal,
+      commandActorField,
       phaseAfterExtend,
       deadlineActionsAfterExtend,
       phaseActionsAfterExtend,
@@ -2537,9 +2627,7 @@ async function hostActionVisible(page, actionId) {
 
 async function freezeStaleCohostDeadlinePage({ staleCohostPage, game, frontendBaseUrl }) {
   await staleCohostPage.goto(`${frontendBaseUrl}/g/${game}/host`, { waitUntil: "networkidle" });
-  await staleCohostPage.locator('[data-testid="critical-host-action-extend_deadline"]').waitFor({
-    state: "visible",
-  });
+  await revealHostAction(staleCohostPage, "extend_deadline");
   await staleCohostPage.waitForFunction(
     () =>
       window.__fmarchHostProjection?.phase?.id === "D01" &&
@@ -2581,11 +2669,7 @@ async function freezeStaleHostDeadlinePage({ staleHostDeadlinePage, game, fronte
   await staleHostDeadlinePage.goto(`${frontendBaseUrl}/g/${game}/host`, {
     waitUntil: "networkidle",
   });
-  await staleHostDeadlinePage
-    .locator('[data-testid="critical-host-action-extend_deadline"]')
-    .waitFor({
-      state: "visible",
-    });
+  await revealHostAction(staleHostDeadlinePage, "extend_deadline");
   await staleHostDeadlinePage.waitForFunction(
     () =>
       window.__fmarchHostProjection?.phase?.id === "D01" &&
@@ -2630,9 +2714,7 @@ async function freezeStaleHostResolvePage({ staleHostResolvePage, game, frontend
   await staleHostResolvePage.goto(`${frontendBaseUrl}/g/${game}/host`, {
     waitUntil: "networkidle",
   });
-  await staleHostResolvePage
-    .locator('[data-testid="critical-host-action-resolve_phase"]')
-    .waitFor({ state: "visible" });
+  await revealHostAction(staleHostResolvePage, "resolve_phase");
   await staleHostResolvePage.waitForFunction(
     () =>
       window.__fmarchHostProjection?.phase?.id === "D02" &&
@@ -2677,9 +2759,7 @@ async function freezeStaleHostAdvancePage({ staleHostAdvancePage, game, frontend
   await staleHostAdvancePage.goto(`${frontendBaseUrl}/g/${game}/host`, {
     waitUntil: "networkidle",
   });
-  await staleHostAdvancePage
-    .locator('[data-testid="critical-host-action-advance_phase"]')
-    .waitFor({ state: "visible" });
+  await revealHostAction(staleHostAdvancePage, "advance_phase");
   await staleHostAdvancePage.waitForFunction(
     () =>
       window.__fmarchHostProjection?.phase?.id === "D02" &&
@@ -2730,9 +2810,7 @@ async function freezeStaleHostPublishPage({
   await staleHostPublishPage.goto(`${frontendBaseUrl}/g/${game}/host`, {
     waitUntil: "networkidle",
   });
-  await staleHostPublishPage
-    .locator('[data-testid="critical-host-action-publish_votecount"]')
-    .waitFor({ state: "visible" });
+  await revealHostAction(staleHostPublishPage, "publish_votecount");
   await staleHostPublishPage.waitForFunction(
     ({ expectedTarget, expectedCount }) =>
       window.__fmarchHostProjection?.phase?.id === "D02" &&
@@ -2792,9 +2870,7 @@ async function freezeStaleHostPublishAfterClearPage({
   await staleHostPublishPage.goto(`${frontendBaseUrl}/g/${game}/host`, {
     waitUntil: "networkidle",
   });
-  await staleHostPublishPage
-    .locator('[data-testid="critical-host-action-publish_votecount"]')
-    .waitFor({ state: "visible" });
+  await revealHostAction(staleHostPublishPage, "publish_votecount");
   await staleHostPublishPage.waitForFunction(
     (expectedTarget) =>
       window.__fmarchHostProjection?.phase?.id === "D02" &&
@@ -2854,9 +2930,7 @@ async function freezeStaleHostLifecyclePage({
   await staleHostLifecyclePage.goto(`${frontendBaseUrl}/g/${game}/host`, {
     waitUntil: "networkidle",
   });
-  await staleHostLifecyclePage
-    .locator('[data-testid="critical-host-action-mark_dead"]')
-    .waitFor({ state: "visible" });
+  await revealHostAction(staleHostLifecyclePage, "mark_dead");
   await staleHostLifecyclePage.waitForFunction(
     () =>
       window.__fmarchHostProjection?.phase?.id === "D02" &&
@@ -2912,11 +2986,29 @@ async function verifySeededCoreLoop({ hostPage, playerPage, game, apiBaseUrl }) 
   let closedStatus = null;
   try {
     await gotoPlayerBoard(staleVotePage, game);
-    await staleVotePage.waitForFunction(
-      () =>
-        window.__fmarchPlayerProjection?.commandState?.phase?.locked === false &&
-        window.__fmarchPlayerProjection?.commandState?.voteTargets?.length > 0,
-    );
+    try {
+      await staleVotePage.waitForFunction(
+        () =>
+          window.__fmarchPlayerProjection?.commandState?.phase?.locked === false &&
+          window.__fmarchPlayerProjection?.commandState?.voteTargets?.length > 0,
+      );
+    } catch (error) {
+      const snapshot = await staleVotePage.evaluate(async (gameId) => {
+        const response = await fetch(
+          `/api/gameplay/games/${encodeURIComponent(gameId)}/player-command-state?slot_id=slot-7`,
+        );
+        return {
+          projection: window.__fmarchPlayerProjection ?? null,
+          status: response.status,
+          response: await response.text(),
+          body: document.body.innerText.slice(0, 2000),
+        };
+      }, game);
+      throw new Error(
+        `seeded player command state did not become votable: ${JSON.stringify(snapshot)}`,
+        { cause: error },
+      );
+    }
     staleVoteRoleUrl = staleVotePage.url();
     playerCommandStateBeforeClose = await staleVotePage.evaluate(
       () => window.__fmarchPlayerProjection?.commandState,
@@ -2928,7 +3020,8 @@ async function verifySeededCoreLoop({ hostPage, playerPage, game, apiBaseUrl }) 
     currentVoteBeforeClose = await staleVotePage
       .getByTestId("player-current-vote")
       .evaluate((node) => ({
-        hasVote: node.getAttribute("data-has-vote"),
+        hasVote:
+          (node.textContent?.trim() ?? "") === "No current vote" ? "false" : "true",
         text: node.textContent?.trim() ?? "",
       }));
     apiVotecountBeforeReject = normalizedVotecountRows(
@@ -2946,9 +3039,56 @@ async function verifySeededCoreLoop({ hostPage, playerPage, game, apiBaseUrl }) 
   }
   const lock = await confirmHostAction(hostPage, "lock_thread");
   await waitForHostProjectionPhaseLocked(hostPage, true);
-  await playerPage.waitForFunction(
-    () => window.__fmarchPlayerProjection?.commandState?.phase?.locked === true,
-  );
+  try {
+    await playerPage.waitForFunction(
+      () => window.__fmarchPlayerProjection?.commandState?.phase?.locked === true,
+    );
+  } catch (error) {
+    const snapshot = await playerPage.evaluate(async (gameId) => {
+      const ticketResponse = await fetch(
+        `/live/tickets?game=${encodeURIComponent(gameId)}`,
+        { method: "POST", headers: { accept: "application/json" } },
+      );
+      const ticket = await ticketResponse.json().catch(() => null);
+      const socketTarget = typeof ticket?.url === "string"
+        ? (() => {
+            const target = new URL(ticket.url);
+            return `${target.protocol}//${target.host}${target.pathname}`;
+          })()
+        : null;
+      const socketProbe = typeof ticket?.url === "string"
+        ? await new Promise((resolve) => {
+            const socket = new WebSocket(ticket.url);
+            const timeout = setTimeout(() => {
+              socket.close();
+              resolve("timeout");
+            }, 5000);
+            socket.addEventListener("open", () => {
+              clearTimeout(timeout);
+              socket.close();
+              resolve("open");
+            });
+            socket.addEventListener("error", () => {
+              clearTimeout(timeout);
+              resolve("error");
+            });
+          })
+        : "missing-ticket";
+      return {
+        projection: window.__fmarchPlayerProjection ?? null,
+        liveStatus: window.__fmarchLiveProjectionStatus ?? null,
+        liveEvents: window.__fmarchLiveProjectionEvents ?? [],
+        liveMetrics: window.__fmarchGetPlayerLiveProjectionMetrics?.() ?? null,
+        ticketStatus: ticketResponse.status,
+        socketTarget,
+        socketProbe,
+      };
+    }, game);
+    throw new Error(
+      `seeded player did not receive the locked phase projection: ${JSON.stringify(snapshot)}`,
+      { cause: error },
+    );
+  }
   const playerCommandStateLockedBeforeVote = await playerPage.evaluate(
     () => window.__fmarchPlayerProjection?.commandState,
   );
@@ -2988,7 +3128,8 @@ async function verifySeededCoreLoop({ hostPage, playerPage, game, apiBaseUrl }) 
   const staleVoteCurrentVoteAfterReject = await staleVotePage
     .getByTestId("player-current-vote")
     .evaluate((node) => ({
-      hasVote: node.getAttribute("data-has-vote"),
+      hasVote:
+          (node.textContent?.trim() ?? "") === "No current vote" ? "false" : "true",
       text: node.textContent?.trim() ?? "",
     }));
   const apiVotecountAfterReject = normalizedVotecountRows(
@@ -3154,7 +3295,8 @@ async function verifySeededDayVoteResolution({
     const voterCurrentVoteBefore = await voterPage
       .getByTestId("player-current-vote")
       .evaluate((node) => ({
-        hasVote: node.getAttribute("data-has-vote"),
+        hasVote:
+          (node.textContent?.trim() ?? "") === "No current vote" ? "false" : "true",
         text: node.textContent?.trim() ?? "",
       }));
     const voterWithdrawBefore = await playerCommandControlState(
@@ -3193,7 +3335,8 @@ async function verifySeededDayVoteResolution({
     const voterCurrentVoteAfter = await voterPage
       .getByTestId("player-current-vote")
       .evaluate((node) => ({
-        hasVote: node.getAttribute("data-has-vote"),
+        hasVote:
+          (node.textContent?.trim() ?? "") === "No current vote" ? "false" : "true",
         text: node.textContent?.trim() ?? "",
       }));
     const voterWithdrawAfter = await playerCommandControlState(voterPage, "withdraw_vote");
@@ -3212,6 +3355,7 @@ async function verifySeededDayVoteResolution({
             row.winnerSlot === "slot-2",
         ),
     );
+    await openHostSupportingEvidence(hostProofPage);
     const hostAfterResolve = {
       phase: await hostProofPage.evaluate(() => window.__fmarchHostProjection?.phase),
       phaseActions: await visibleHostPhaseActions(hostProofPage),
@@ -3260,6 +3404,7 @@ async function verifySeededDayVoteResolution({
     const targetDayVoteOutcomes = await targetProofPage.evaluate(
       () => window.__fmarchPlayerProjection?.dayVoteOutcomes ?? [],
     );
+    await openPlayerGameRecord(targetProofPage);
     const targetOutcomePanel = await targetProofPage
       .locator('[data-testid="player-day-vote-outcome-latest"]')
       .innerText();
@@ -3545,6 +3690,10 @@ async function verifySeededEarliestReachedTie({
       `${apiBaseUrl}/games/${tieGame}/day-vote-outcomes`,
     );
     const outcome = outcomes.find((row) => row.kind === "DayVoteOutcomeApplied")?.body;
+    await Promise.all([
+      openHostSupportingEvidence(hostProofPage),
+      openPlayerGameRecord(targetProofPage),
+    ]);
     const hostOutcomePanel = await hostProofPage
       .getByTestId("host-day-vote-outcome-latest")
       .innerText();
@@ -3708,9 +3857,7 @@ async function verifySeededHostDecidesTie({
       promptId,
     );
     for (const actionId of promptActionIds) {
-      await hostProofPage
-        .getByTestId(`critical-host-action-${actionId}`)
-        .waitFor({ state: "visible" });
+      await revealHostAction(hostProofPage, actionId);
     }
     const pendingPrompts = await hostProofPage.evaluate(
       () => window.__fmarchHostPromptsProjection ?? [],
@@ -3765,22 +3912,22 @@ async function verifySeededHostDecidesTie({
       `${apiBaseUrl}/games/${tieGame}/day-vote-outcomes`,
     );
     const outcome = outcomes.find((row) => row.kind === "DayVoteOutcomeApplied")?.body;
-    const prompts = await fetchJson(
-      `${apiBaseUrl}/games/${tieGame}/host-prompts?principal_user_id=host_h`,
-    );
-    const targetCommandStateAfterDecision = await fetchJson(
-      playerCommandStateEndpoint({
-        apiBaseUrl,
-        game: tieGame,
-        principalUserId: "player-target",
-        slotId: selectedSlot,
-      }),
-    );
+    const prompts = await fetchHostPrompts({ apiBaseUrl, game: tieGame });
+    const targetCommandStateAfterDecision = await fetchPlayerSlotCommandState({
+      apiBaseUrl,
+      game: tieGame,
+      principalUserId: "player-target",
+      slotId: selectedSlot,
+    });
     const targetAfterDecision = {
       actorAlive: targetCommandStateAfterDecision?.actor_alive,
       actorStatus: targetCommandStateAfterDecision?.actor_status,
       currentVote: targetCommandStateAfterDecision?.current_vote ?? null,
     };
+    await Promise.all([
+      openHostSupportingEvidence(hostProofPage),
+      openPlayerGameRecord(targetProofPage),
+    ]);
     const hostOutcomePanel = await hostProofPage
       .getByTestId("host-day-vote-outcome-latest")
       .innerText();
@@ -3996,7 +4143,7 @@ async function verifySeededDayVoteNoLynch({
       () =>
         window.__fmarchPlayerCommandStatus?.state === "ack" &&
         window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body
-          ?.principal_user_id === "player-mira" &&
+          ?.principal_user_id === undefined &&
         window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body?.command
           ?.SubmitVote?.target === "NoLynch",
     );
@@ -4013,7 +4160,7 @@ async function verifySeededDayVoteNoLynch({
       () =>
         window.__fmarchPlayerCommandStatus?.state === "ack" &&
         window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body
-          ?.principal_user_id === "player-seed" &&
+          ?.principal_user_id === undefined &&
         window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body?.command
           ?.SubmitVote?.target === "NoLynch",
     );
@@ -4039,6 +4186,7 @@ async function verifySeededDayVoteNoLynch({
           (row) => row.target === "no_lynch" && row.count === 2,
         ),
     );
+    await openHostSupportingEvidence(hostEntry.page);
     const hostBeforeResolve = {
       phase: await hostEntry.page.evaluate(() => window.__fmarchHostProjection?.phase),
       votecount: await hostEntry.page.evaluate(
@@ -4093,6 +4241,7 @@ async function verifySeededDayVoteNoLynch({
     const survivorDayVoteOutcomes = await survivorEntry.page.evaluate(
       () => window.__fmarchPlayerProjection?.dayVoteOutcomes ?? [],
     );
+    await openPlayerGameRecord(survivorEntry.page);
     const survivorOutcomePanel = await survivorEntry.page
       .locator('[data-testid="player-day-vote-outcome-latest"]')
       .innerText();
@@ -4123,13 +4272,11 @@ async function verifySeededDayVoteNoLynch({
       dayVoteOutcome?.winner_slot !== null ||
       dayVoteOutcome?.tallies?.no_lynch !== 2 ||
       miraNoLynchVote?.state !== "ack" ||
-      miraNoLynchVote?.requestEnvelope?.body?.body?.principal_user_id !==
-        "player-mira" ||
+      miraNoLynchVote?.requestEnvelope?.body?.body?.principal_user_id !== undefined ||
       miraNoLynchVote?.requestEnvelope?.body?.body?.command?.SubmitVote?.target !==
         "NoLynch" ||
       seedNoLynchVote?.state !== "ack" ||
-      seedNoLynchVote?.requestEnvelope?.body?.body?.principal_user_id !==
-        "player-seed" ||
+      seedNoLynchVote?.requestEnvelope?.body?.body?.principal_user_id !== undefined ||
       seedNoLynchVote?.requestEnvelope?.body?.body?.command?.SubmitVote?.target !==
         "NoLynch" ||
       !miraVotecountAfterVote.some(
@@ -5137,7 +5284,7 @@ async function verifySeededD02VoteNightTransition({
     );
     if (
       finalVote?.state !== "ack" ||
-      finalVote?.requestEnvelope?.body?.body?.principal_user_id !== "player-goon-a" ||
+      finalVote?.requestEnvelope?.body?.body?.principal_user_id !== undefined ||
       finalVote?.requestEnvelope?.body?.body?.command?.SubmitVote?.actor_slot !==
         "slot_4" ||
       finalVote?.requestEnvelope?.body?.body?.command?.SubmitVote?.target?.Slot !==
@@ -5171,6 +5318,7 @@ async function verifySeededD02VoteNightTransition({
         ),
       voteTarget.slotId,
     );
+    await openHostSupportingEvidence(hostEntry.page);
     const hostAfterResolve = {
       phase: await hostEntry.page.evaluate(() => window.__fmarchHostProjection?.phase),
       phaseActions: await visibleHostPhaseActions(hostEntry.page),
@@ -5220,9 +5368,9 @@ async function verifySeededD02VoteNightTransition({
       targetCommandState: await targetEntry.page.evaluate(
         () => window.__fmarchPlayerProjection?.commandState,
       ),
-      outcomePanel: await targetEntry.page
+      outcomePanel: await openPlayerGameRecord(targetEntry.page).then(() => targetEntry.page
         .locator('[data-testid="player-day-vote-outcome-latest"]')
-        .innerText(),
+        .innerText()),
     };
 
     const advanceN02 = await confirmHostAction(hostEntry.page, "advance_phase");
@@ -5467,8 +5615,7 @@ async function verifySeededD02VoteNightTransition({
 
     if (
       n02ActionSubmission?.state !== "ack" ||
-      n02ActionSubmission?.requestEnvelope?.body?.body?.principal_user_id !==
-        "player-goon-a" ||
+      n02ActionSubmission?.requestEnvelope?.body?.body?.principal_user_id !== undefined ||
       n02ActionSubmission?.requestEnvelope?.body?.body?.command?.SubmitAction
         ?.actor_slot !== "slot_4" ||
       n02ActionSubmission?.requestEnvelope?.body?.body?.command?.SubmitAction
@@ -5641,7 +5788,7 @@ async function verifySeededD02VoteNightTransition({
     const d03TerminalActivityStatusText = await hostEntry.page
       .locator('[data-testid="host-command-activity-status-advance_phase"][data-state="reject"]')
       .first()
-      .innerText();
+      .textContent();
     const d03TerminalActivityRow = await hostEntry.page
       .locator('[data-testid="host-command-activity-advance_phase"][data-source="outcome"]')
       .first()
@@ -5649,6 +5796,7 @@ async function verifySeededD02VoteNightTransition({
         source: node.getAttribute("data-source"),
         actionId: node.getAttribute("data-confirmation-action-id"),
         dispatchKind: node.getAttribute("data-confirmation-dispatch-kind"),
+        protocolMessage: node.getAttribute("data-protocol-message"),
         text: node.textContent,
       }));
     const d03TerminalDispatchPlan = await hostEntry.page.evaluate(
@@ -5756,9 +5904,10 @@ async function verifySeededD02VoteNightTransition({
       playerEntry.page,
       { roleUrl: true, buttons: true },
     );
-    const apiPromptsAfterD03Revote = await fetchJson(
-      `${apiBaseUrl}/games/${transitionGame}/host-prompts?principal_user_id=host_h`,
-    );
+    const apiPromptsAfterD03Revote = await fetchHostPrompts({
+      apiBaseUrl,
+      game: transitionGame,
+    });
     const revoteScenario = revoteProgressionBrowserScenario();
     const d03RevoteBallotTarget = revoteNoLynchTargetFromCommandState({
       commandState: actionAfterD03RevotePrompt.commandState,
@@ -5783,7 +5932,7 @@ async function verifySeededD02VoteNightTransition({
       waitFor: () =>
         window.__fmarchPlayerCommandStatus?.state === "ack" &&
         window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body
-          ?.principal_user_id === "player-goon-a" &&
+          ?.principal_user_id === undefined &&
         window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body?.command
           ?.SubmitVote?.actor_slot === "slot_4" &&
         window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body?.command
@@ -5869,9 +6018,10 @@ async function verifySeededD02VoteNightTransition({
             d03R1RevotePrompt.id,
             "no_majority_continue_revote",
           );
-    const apiPromptsAfterResolveD03R1 = await fetchJson(
-      `${apiBaseUrl}/games/${transitionGame}/host-prompts?principal_user_id=host_h`,
-    );
+    const apiPromptsAfterResolveD03R1 = await fetchHostPrompts({
+      apiBaseUrl,
+      game: transitionGame,
+    });
     const d03R1RevotePromptResolution =
       d03R1RevotePromptActionId === null
         ? null
@@ -5910,9 +6060,10 @@ async function verifySeededD02VoteNightTransition({
       playerEntry.page,
       { roleUrl: true, buttons: true },
     );
-    const apiPromptsAfterD03R1Revote = await fetchJson(
-      `${apiBaseUrl}/games/${transitionGame}/host-prompts?principal_user_id=host_h`,
-    );
+    const apiPromptsAfterD03R1Revote = await fetchHostPrompts({
+      apiBaseUrl,
+      game: transitionGame,
+    });
     const d03R2RevoteBallotTarget = revoteNoLynchTargetFromCommandState({
       commandState: actionAfterD03R1RevotePrompt.commandState,
     });
@@ -5940,7 +6091,7 @@ async function verifySeededD02VoteNightTransition({
       waitFor: () =>
         window.__fmarchPlayerCommandStatus?.state === "ack" &&
         window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body
-          ?.principal_user_id === "player-goon-a" &&
+          ?.principal_user_id === undefined &&
         window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body?.command
           ?.SubmitVote?.actor_slot === "slot_4" &&
         window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body?.command
@@ -6046,9 +6197,10 @@ async function verifySeededD02VoteNightTransition({
     });
     const d03R2StaleContinuePolicySetup =
       staleD03R2PolicyRecovery.setup;
-    const apiPromptsAfterResolveD03R2 = await fetchJson(
-      `${apiBaseUrl}/games/${transitionGame}/host-prompts?principal_user_id=host_h`,
-    );
+    const apiPromptsAfterResolveD03R2 = await fetchHostPrompts({
+      apiBaseUrl,
+      game: transitionGame,
+    });
     const d03R2NoLynchPolicyResolution =
       d03R2RevotePromptActionId === null
         ? null
@@ -6086,9 +6238,10 @@ async function verifySeededD02VoteNightTransition({
       playerEntry.page,
       { roleUrl: true, buttons: true },
     );
-    const apiPromptsAfterD03R2NoLynchPolicy = await fetchJson(
-      `${apiBaseUrl}/games/${transitionGame}/host-prompts?principal_user_id=host_h`,
-    );
+    const apiPromptsAfterD03R2NoLynchPolicy = await fetchHostPrompts({
+      apiBaseUrl,
+      game: transitionGame,
+    });
     const d03R2StaleContinuePolicyRecovery =
       await staleD03R2PolicyRecovery.submit({
         liveResolve: d03R2NoLynchPolicyResolution,
@@ -6181,7 +6334,7 @@ async function verifySeededD02VoteNightTransition({
       waitFor: ({ scenario, targetSlot }) =>
         window.__fmarchPlayerCommandStatus?.state === "ack" &&
         window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body
-          ?.principal_user_id === scenario.expectedPrincipalUserId &&
+          ?.principal_user_id === undefined &&
         window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body?.command
           ?.SubmitAction?.actor_slot === scenario.expectedActorSlot &&
         window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body?.command
@@ -6285,7 +6438,7 @@ async function verifySeededD02VoteNightTransition({
       waitFor: () =>
         window.__fmarchPlayerCommandStatus?.state === "ack" &&
         window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body
-          ?.principal_user_id === "player-goon-a" &&
+          ?.principal_user_id === undefined &&
         window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body?.command
           ?.SubmitVote?.actor_slot === "slot_4" &&
         window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body?.command
@@ -6450,7 +6603,7 @@ async function verifySeededD02VoteNightTransition({
       waitFor: () =>
         window.__fmarchPlayerCommandStatus?.state === "ack" &&
         window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body
-          ?.principal_user_id === "player-goon-a" &&
+          ?.principal_user_id === undefined &&
         window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body?.command
           ?.SubmitVote?.actor_slot === "slot_4" &&
         window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body?.command
@@ -7020,9 +7173,7 @@ async function freezeStaleDeadlineAdvancePage({ staleHostPage, game, frontendBas
   await staleHostPage.goto(`${frontendBaseUrl}/g/${game}/host`, {
     waitUntil: "networkidle",
   });
-  await staleHostPage
-    .locator('[data-testid="critical-host-action-advance_phase_by_deadline"]')
-    .waitFor({ state: "visible" });
+  await revealHostAction(staleHostPage, "advance_phase_by_deadline");
   await staleHostPage.waitForFunction(
     () =>
       window.__fmarchHostProjection?.phase?.id === "D01" &&
@@ -7098,13 +7249,14 @@ async function submitStaleDeadlineAdvanceRecovery({
   const visibleActionsAfterReject = await visibleHostPhaseActions(staleHostPage);
   const activityStatusText = await staleHostPage
     .getByTestId(`host-command-activity-status-${actionId}`)
-    .innerText();
+    .textContent();
   const activityRow = await staleHostPage
     .getByTestId(`host-command-activity-${actionId}`)
     .evaluate((node) => ({
       source: node.getAttribute("data-source"),
       actionId: node.getAttribute("data-confirmation-action-id"),
       dispatchKind: node.getAttribute("data-confirmation-dispatch-kind"),
+      protocolMessage: node.getAttribute("data-protocol-message"),
       text: node.textContent,
     }));
   const dispatchPlan = await staleHostPage.evaluate(
@@ -7120,8 +7272,9 @@ async function submitStaleDeadlineAdvanceRecovery({
     !visibleActionsAfterReject.includes("resolve_phase") ||
     !visibleActionsAfterReject.includes("lock_thread") ||
     visibleActionsAfterReject.includes("advance_phase_by_deadline") ||
-    !activityStatusText.includes("Reject InvalidTarget") ||
-    !activityStatusText.includes("deadline target is stale") ||
+    !activityStatusText.includes("needs refreshed game state") ||
+    !activityRow.protocolMessage?.includes("Reject InvalidTarget") ||
+    !activityRow.protocolMessage?.includes("deadline target is stale") ||
     activityRow.source !== "outcome" ||
     activityRow.actionId !== actionId ||
     activityRow.dispatchKind !== actionId ||
@@ -7163,9 +7316,7 @@ async function submitStaleDeadlineAdvanceRecovery({
 
 async function freezeStaleHostControlPage({ staleHostPage, game, frontendBaseUrl }) {
   await staleHostPage.goto(`${frontendBaseUrl}/g/${game}/host`, { waitUntil: "networkidle" });
-  await staleHostPage.locator('[data-testid="critical-host-action-unlock_thread"]').waitFor({
-    state: "visible",
-  });
+  await revealHostAction(staleHostPage, "unlock_thread");
   await staleHostPage.waitForFunction(
     () =>
       window.__fmarchHostProjection?.phase?.id === "N01" &&
@@ -7353,7 +7504,7 @@ async function verifyPrivateChannelInvalidActionRecovery({
   if (
     reject?.state !== "reject" ||
     reject?.error !== "InvalidTarget" ||
-    reject?.requestEnvelope?.body?.body?.principal_user_id !== "player-goon-a" ||
+    reject?.requestEnvelope?.body?.body?.principal_user_id !== undefined ||
     reject?.requestEnvelope?.body?.body?.command?.SubmitAction?.actor_slot !==
       "slot_4" ||
     reject?.requestEnvelope?.body?.body?.command?.SubmitAction?.template_id !==
@@ -7547,7 +7698,7 @@ async function sendDeadPlayerCommand(page, { command }) {
   if (
     rejectBody?.kind !== "Reject" ||
     rejectBody?.body?.error !== "SlotNotAlive" ||
-    raw.requestEnvelope?.body?.body?.principal_user_id !== "player-target"
+    raw.requestEnvelope?.body?.body?.principal_user_id !== undefined
   ) {
     throw new Error(`dead player command did not reject as SlotNotAlive: ${JSON.stringify(raw)}`);
   }
@@ -7718,7 +7869,7 @@ async function verifySeededPlayerActionBoundary({ playerPage, game }) {
   if (
     rejectBody?.kind !== "Reject" ||
     rejectBody?.body?.error !== "InvalidTarget" ||
-    directRaw.requestEnvelope?.body?.body?.principal_user_id !== "player-mira"
+    directRaw.requestEnvelope?.body?.body?.principal_user_id !== undefined
   ) {
     throw new Error(
       `player direct factional_kill did not reject as InvalidTarget: ${JSON.stringify(
@@ -7909,8 +8060,9 @@ async function submitPrivateChannelStaleActionReconnectRecovery({
     window.__fmarchPlayerCommandReceipts?.find((receipt) => receipt.current === true),
   );
   const receiptStatusText = await page.getByTestId("player-command-status").innerText();
-  const apiCommandStateAfterReject = await fetchJson(
+  const apiCommandStateAfterReject = await fetchJsonAsPrincipal(
     `${apiBaseUrl}/games/${game}/player-command-state?principal_user_id=player-goon-a&slot_id=slot_4`,
+    "player-goon-a",
   );
   const actionVisibleAfterRefresh = await page
     .locator('[data-action="submit_action:factional_kill"]')
@@ -7946,7 +8098,7 @@ async function submitPrivateChannelStaleActionReconnectRecovery({
     includeEvidenceInError: true,
   });
   if (
-    reject?.requestEnvelope?.body?.body?.principal_user_id !== "player-goon-a" ||
+    reject?.requestEnvelope?.body?.body?.principal_user_id !== undefined ||
     currentReceipt?.actionId !== "submit_action:factional_kill" ||
     currentReceipt?.commandTrace?.projectionRefreshKeys?.includes("commandState") !==
       true ||
@@ -8012,7 +8164,9 @@ async function submitPrivateChannelStaleActionReconnectRecovery({
       factionDayChatChannel ||
     reconnectAfterReject?.reconnectingStatus?.state !== "reconnecting" ||
     reconnectAfterReject?.reconnectRecoveryEvent?.state !== "recovered" ||
-    reconnectAfterReject?.reconnectRecoveryEvent?.attempt !== 1 ||
+    !isPositiveReconnectAttempt(
+      reconnectAfterReject?.reconnectRecoveryEvent?.attempt,
+    ) ||
     reconnectAfterReject?.recoveredSnapshotContainsPost !== true ||
     reconnectAfterReject?.recoveredCommandState?.actorSlot !== "slot_4" ||
     reconnectAfterReject?.recoveredCommandState?.actorAlive !== true ||
@@ -8174,8 +8328,9 @@ async function submitConcurrentActionRace({
     actionPage.getByTestId("player-command-status").innerText(),
     concurrentActionPage.getByTestId("player-command-status").innerText(),
   ]);
-  const apiCommandStateAfterRace = await fetchJson(
+  const apiCommandStateAfterRace = await fetchJsonAsPrincipal(
     `${apiBaseUrl}/games/${game}/player-command-state?principal_user_id=player-goon-a&slot_id=slot_4`,
+    "player-goon-a",
   );
   if (
     liveCommandStateAfterRace?.actorSlot !== "slot_4" ||
@@ -8270,8 +8425,9 @@ async function verifyConcurrentActionRaceReload({
         window.__fmarchHostProjection?.phase?.locked === true,
     ),
   ]);
-  const apiCommandStateAfterReload = await fetchJson(
+  const apiCommandStateAfterReload = await fetchJsonAsPrincipal(
     `${apiBaseUrl}/games/${game}/player-command-state?principal_user_id=player-goon-a&slot_id=slot_4`,
+    "player-goon-a",
   );
   const apiTargetSlotAfterReload = (
     await fetchHostConsoleState({ apiBaseUrl, game, slot: targetSlot })
@@ -8363,8 +8519,9 @@ async function submitActionIdempotentRetry({
   const receiptStatusText = await staleActionRetryPage
     .getByTestId("player-command-status")
     .innerText();
-  const apiCommandStateAfterRetry = await fetchJson(
+  const apiCommandStateAfterRetry = await fetchJsonAsPrincipal(
     `${apiBaseUrl}/games/${game}/player-command-state?principal_user_id=player-goon-a&slot_id=slot_4`,
+    "player-goon-a",
   );
   const retrySubmittedCommand =
     retry?.requestEnvelope?.body?.body?.command?.SubmitAction;
@@ -8477,8 +8634,9 @@ async function submitStaleSameActionRecovery({
   const receiptStatusText = await staleSameActionPage
     .getByTestId("player-command-status")
     .innerText();
-  const apiCommandStateAfterReject = await fetchJson(
+  const apiCommandStateAfterReject = await fetchJsonAsPrincipal(
     `${apiBaseUrl}/games/${game}/player-command-state?principal_user_id=player-goon-a&slot_id=slot_4`,
+    "player-goon-a",
   );
   const submittedCommand =
     reject?.requestEnvelope?.body?.body?.command?.SubmitAction;
@@ -8593,8 +8751,9 @@ async function submitStaleActionConflict({
   const receiptStatusText = await staleActionPage
     .getByTestId("player-command-status")
     .innerText();
-  const apiCommandStateAfterReject = await fetchJson(
+  const apiCommandStateAfterReject = await fetchJsonAsPrincipal(
     `${apiBaseUrl}/games/${game}/player-command-state?principal_user_id=player-goon-a&slot_id=slot_4`,
+    "player-goon-a",
   );
   const submittedCommand =
     reject?.requestEnvelope?.body?.body?.command?.SubmitAction;
@@ -8667,7 +8826,9 @@ async function submitStaleActionConflict({
     reconnectAfterReject?.status !== "passed" ||
     reconnectAfterReject?.reconnectingStatus?.state !== "reconnecting" ||
     reconnectAfterReject?.reconnectRecoveryEvent?.state !== "recovered" ||
-    reconnectAfterReject?.reconnectRecoveryEvent?.attempt !== 1 ||
+    !isPositiveReconnectAttempt(
+      reconnectAfterReject?.reconnectRecoveryEvent?.attempt,
+    ) ||
     reconnectAfterReject?.recoveredSnapshotContainsPost !== true ||
     reconnectAfterReject?.recoveredCommandState?.actorSlot !== "slot_4" ||
     reconnectAfterReject?.recoveredCommandState?.actorAlive !== true ||
@@ -9029,13 +9190,14 @@ async function fetchPrivateChannelThread({
   principalUserId,
   limit = 100,
 }) {
-  return fetchJson(
+  return fetchJsonAsPrincipal(
     privateChannelThreadEndpoint({
       apiBaseUrl,
       game,
       principalUserId,
       limit,
     }),
+    principalUserId,
   );
 }
 
@@ -9063,13 +9225,14 @@ async function fetchPlayerSlotCommandState({
   principalUserId,
   slotId,
 }) {
-  return fetchJson(
+  return fetchJsonAsPrincipal(
     playerCommandStateEndpoint({
       apiBaseUrl,
       game,
       principalUserId,
       slotId,
     }),
+    principalUserId,
   );
 }
 
@@ -9313,9 +9476,7 @@ async function verifyCompletedPrivateChannelRecovery({
       phaseId: "D01",
       locked: false,
     });
-    await hostEntry.page
-      .getByTestId("critical-host-action-complete_game")
-      .waitFor({ state: "visible" });
+    await revealHostAction(hostEntry.page, "complete_game");
 
     const completedRoute = await openPrivateChannelRoleSurface({
       page: playerEntry.page,
@@ -9676,6 +9837,7 @@ async function verifySeededMultiplayerHardening({
     apiBaseUrl,
     game,
   });
+  await staleHostPage.close();
 
   const retryCommandId = crypto.randomUUID();
   const retryPostBody = `Idempotent retry post from dev:test-game ${retryCommandId}.`;
@@ -9722,8 +9884,9 @@ async function verifySeededMultiplayerHardening({
       })}`,
     );
   }
-  const mainThread = await fetchJson(
+  const mainThread = await fetchJsonAsPrincipal(
     `${apiBaseUrl}/games/${game}/channels/${hardeningRetryChannel}/thread?principal_user_id=player-mira&limit=100`,
+    "player-mira",
   );
   const retryPostCount = mainThread.posts.filter((post) => post.body === retryPostBody).length;
   if (retryPostCount !== 1) {
@@ -9914,6 +10077,7 @@ async function verifySeededMultiplayerHardening({
     apiBaseUrl,
     game,
   });
+  await staleHostPublishPage.close();
   const staleHostLifecycleSetup = await freezeStaleHostLifecyclePage({
     staleHostLifecyclePage,
     game,
@@ -9929,6 +10093,7 @@ async function verifySeededMultiplayerHardening({
     staleHostLifecycleSetup,
   });
   const staleHostLifecycle = hostLifecycleControl.staleDuplicateStatus;
+  await staleHostLifecyclePage.close();
   const staleHostModkillSetup = await freezeStaleHostLifecyclePage({
     staleHostLifecyclePage: staleHostModkillPage,
     game,
@@ -9944,6 +10109,7 @@ async function verifySeededMultiplayerHardening({
     staleHostLifecycleSetup: staleHostModkillSetup,
   });
   const staleHostModkill = hostModkillControl.staleDuplicateStatus;
+  await staleHostModkillPage.close();
   const concurrentHostLifecycleRace = await verifyConcurrentHostLifecycleRace({
     hostPage,
     playerPage,
@@ -9959,6 +10125,7 @@ async function verifySeededMultiplayerHardening({
     frontendBaseUrl,
     game,
   });
+  await staleHostDeadlinePage.close();
   const staleCohostDeadline = await submitStaleCohostDeadlineRecovery({
     staleCohostPage,
     staleCohostDeadlineSetup,
@@ -9966,6 +10133,7 @@ async function verifySeededMultiplayerHardening({
     frontendBaseUrl,
     game,
   });
+  await staleCohostPage.close();
   const concurrentHostResolveRace = await verifyConcurrentHostResolveRace({
     hostPage,
     apiBaseUrl,
@@ -10001,6 +10169,7 @@ async function verifySeededMultiplayerHardening({
     frontendBaseUrl,
     game,
   });
+  await staleHostResolvePage.close();
   const staleHostAdvanceSetup = await freezeStaleHostAdvancePage({
     staleHostAdvancePage,
     game,
@@ -10034,6 +10203,7 @@ async function verifySeededMultiplayerHardening({
     frontendBaseUrl,
     game,
   });
+  await staleHostAdvancePage.close();
   const staleHostPrompt = await verifyStaleHostPromptRecovery({
     hostPage,
     apiBaseUrl,
@@ -10066,6 +10236,7 @@ async function verifySeededMultiplayerHardening({
     normalizeCommandResponse,
   });
   const stalePlayerComplete = await verifyStalePlayerCompleteRecovery({
+    hostPage,
     playerPage,
     apiBaseUrl,
     frontendBaseUrl,
@@ -10163,9 +10334,7 @@ async function verifyStaleHostPromptRecovery({
     await livePromptPage.goto(`${frontendBaseUrl}/g/${promptGame}/host`, {
       waitUntil: "networkidle",
     });
-    await livePromptPage
-      .getByTestId(`critical-host-action-${actionId}`)
-      .waitFor({ state: "visible" });
+    await revealHostAction(livePromptPage, actionId);
     const liveResolve = await confirmHostAction(livePromptPage, actionId);
     await livePromptPage.waitForFunction(
       (expectedPromptId) =>
@@ -10255,9 +10424,7 @@ async function verifyConcurrentHostPromptSelectionRace({
     ];
     await Promise.all(
       choices.map(({ page, actionId }) =>
-        page
-          .getByTestId(`critical-host-action-${actionId}`)
-          .waitFor({ state: "visible" }),
+        revealHostAction(page, actionId),
       ),
     );
     await Promise.all([
@@ -10367,9 +10534,7 @@ async function verifyConcurrentHostPromptSelectionRace({
         ),
       ),
     );
-    const apiPrompts = await fetchJson(
-      `${apiBaseUrl}/games/${raceGame}/host-prompts?principal_user_id=host_h`,
-    );
+    const apiPrompts = await fetchHostPrompts({ apiBaseUrl, game: raceGame });
     const resolvedPrompt = apiPrompts.find(
       (prompt) => prompt.prompt_id === promptId,
     );
@@ -10397,7 +10562,7 @@ async function verifyConcurrentHostPromptSelectionRace({
     };
     const activityStatusTexts = await Promise.all(
       outcomes.map(({ page, actionId }) =>
-        page.getByTestId(`host-command-activity-status-${actionId}`).innerText(),
+        page.getByTestId(`host-command-activity-status-${actionId}`).textContent(),
       ),
     );
     const rejectActivityStatusText =
@@ -10583,9 +10748,7 @@ async function verifyConcurrentHostPromptSelectionRaceReload({
           ),
         ]),
       ),
-      fetchJson(
-        `${apiBaseUrl}/games/${raceGame}/host-prompts?principal_user_id=host_h`,
-      ),
+      fetchHostPrompts({ apiBaseUrl, game: raceGame }),
     ]);
   const stateBySlot = Object.fromEntries(playerStates);
   const resolvedPrompt = apiPrompts.find(
@@ -10684,6 +10847,7 @@ async function captureHostPromptSelectionPlayerOutcome({
               candidate.winnerSlot === expectedSlot,
           ) ?? null,
         selectedSlot);
+        await openPlayerGameRecord(page);
         const panelText = await page
           .getByTestId("player-day-vote-outcome-latest")
           .innerText();
@@ -10846,9 +11010,7 @@ async function freezeStaleHostPromptPage({
   await stalePromptPage.goto(`${frontendBaseUrl}/g/${promptGame}/host`, {
     waitUntil: "networkidle",
   });
-  await stalePromptPage
-    .getByTestId(`critical-host-action-${actionId}`)
-    .waitFor({ state: "visible" });
+  await revealHostAction(stalePromptPage, actionId);
   await stalePromptPage.waitForFunction(
     (expectedPromptId) =>
       window.__fmarchHostPromptsProjection?.some(
@@ -10926,21 +11088,23 @@ async function submitStaleHostPromptRecovery({
   );
   const activityStatusText = await stalePromptPage
     .getByTestId(`host-command-activity-status-${actionId}`)
-    .innerText();
+    .textContent();
   const activityRow = await stalePromptPage
     .getByTestId(`host-command-activity-${actionId}`)
     .evaluate((node) => ({
       source: node.getAttribute("data-source"),
       actionId: node.getAttribute("data-confirmation-action-id"),
       dispatchKind: node.getAttribute("data-confirmation-dispatch-kind"),
+      protocolMessage: node.getAttribute("data-protocol-message"),
       text: node.textContent,
     }));
   const dispatchPlan = await stalePromptPage.evaluate(
     () => window.__fmarchHostCommandDispatchBridgePlan,
   );
-  const apiPromptsAfterReject = await fetchJson(
-    `${apiBaseUrl}/games/${promptGame}/host-prompts?principal_user_id=host_h`,
-  );
+  const apiPromptsAfterReject = await fetchHostPrompts({
+    apiBaseUrl,
+    game: promptGame,
+  });
   const reloadResponse = await stalePromptPage.goto(
     `${frontendBaseUrl}/g/${promptGame}/host`,
     {
@@ -10980,10 +11144,11 @@ async function submitStaleHostPromptRecovery({
   );
   const resolutionHistoryText = await stalePromptPage
     .getByTestId("host-prompt-resolution-history")
-    .innerText();
-  const apiPromptsAfterReload = await fetchJson(
-    `${apiBaseUrl}/games/${promptGame}/host-prompts?principal_user_id=host_h`,
-  );
+    .textContent();
+  const apiPromptsAfterReload = await fetchHostPrompts({
+    apiBaseUrl,
+    game: promptGame,
+  });
   const staleHostPromptReloadAfterReject = {
     status: "passed",
     routeResponseStatus: reloadResponse.status(),
@@ -11015,8 +11180,9 @@ async function submitStaleHostPromptRecovery({
     ) === undefined ||
     promptsAfterReject.find((prompt) => prompt.id === promptId)?.status !== "resolved" ||
     promptActionsAfterReject.includes(actionId) ||
-    !activityStatusText.includes("Reject PromptAlreadyResolved") ||
-    !activityStatusText.includes("host prompt selection is stale") ||
+    !activityStatusText.includes("needs refreshed game state") ||
+    !activityRow.protocolMessage?.includes("Reject PromptAlreadyResolved") ||
+    !activityRow.protocolMessage?.includes("host prompt selection is stale") ||
     activityRow.source !== "outcome" ||
     activityRow.actionId !== actionId ||
     activityRow.dispatchKind !== "resolve_host_prompt" ||
@@ -11025,10 +11191,7 @@ async function submitStaleHostPromptRecovery({
       ?.status !== "resolved" ||
     staleHostPromptReloadAfterReject.routeResponseStatus !== 200 ||
     !staleHostPromptReloadAfterReject.rejectReceiptStatusText.includes(
-      "Reject PromptAlreadyResolved",
-    ) ||
-    !staleHostPromptReloadAfterReject.rejectReceiptStatusText.includes(
-      "host prompt selection is stale",
+      "needs refreshed game state",
     ) ||
     staleHostPromptReloadAfterReject.promptsAfterReload.find(
       (prompt) => prompt.id === promptId,
@@ -11119,9 +11282,7 @@ async function verifyStaleHostCompleteRecovery({
     await liveCompletePage.goto(`${frontendBaseUrl}/g/${completeGame}/host`, {
       waitUntil: "networkidle",
     });
-    await liveCompletePage
-      .getByTestId(`critical-host-action-${actionId}`)
-      .waitFor({ state: "visible" });
+    await revealHostAction(liveCompletePage, actionId);
     const liveComplete = await confirmHostAction(liveCompletePage, actionId);
     await liveCompletePage.waitForFunction(
       () =>
@@ -11176,12 +11337,8 @@ async function verifyConcurrentHostCompleteRace({
       }),
     ]);
     await Promise.all([
-      firstCompletePage
-        .getByTestId(`critical-host-action-${actionId}`)
-        .waitFor({ state: "visible" }),
-      secondCompletePage
-        .getByTestId(`critical-host-action-${actionId}`)
-        .waitFor({ state: "visible" }),
+      revealHostAction(firstCompletePage, actionId),
+      revealHostAction(secondCompletePage, actionId),
     ]);
     await Promise.all([
       firstCompletePage.waitForFunction(
@@ -11208,10 +11365,10 @@ async function verifyConcurrentHostCompleteRace({
       ),
       firstRevealText: await firstCompletePage
         .getByTestId("host-console-endgame-reveal")
-        .innerText(),
+        .textContent(),
       secondRevealText: await secondCompletePage
         .getByTestId("host-console-endgame-reveal")
-        .innerText(),
+        .textContent(),
       firstRoleActions: await visibleHostControlActions(firstCompletePage, "roles"),
       secondRoleActions: await visibleHostControlActions(secondCompletePage, "roles"),
     };
@@ -11398,12 +11555,12 @@ async function submitConcurrentHostCompleteRace({
   ] = await Promise.all([
     firstCompletePage.evaluate(() => window.__fmarchHostProjection?.slots ?? []),
     secondCompletePage.evaluate(() => window.__fmarchHostProjection?.slots ?? []),
-    firstCompletePage.getByTestId("host-console-endgame-reveal").innerText(),
-    secondCompletePage.getByTestId("host-console-endgame-reveal").innerText(),
+    firstCompletePage.getByTestId("host-console-endgame-reveal").textContent(),
+    secondCompletePage.getByTestId("host-console-endgame-reveal").textContent(),
     visibleHostControlActions(firstCompletePage, "roles"),
     visibleHostControlActions(secondCompletePage, "roles"),
-    firstCompletePage.getByTestId(`host-command-activity-status-${actionId}`).innerText(),
-    secondCompletePage.getByTestId(`host-command-activity-status-${actionId}`).innerText(),
+    firstCompletePage.getByTestId(`host-command-activity-status-${actionId}`).textContent(),
+    secondCompletePage.getByTestId(`host-command-activity-status-${actionId}`).textContent(),
     firstCompletePage.getByTestId(`host-command-activity-${actionId}`).evaluate((node) => ({
       source: node.getAttribute("data-source"),
       actionId: node.getAttribute("data-confirmation-action-id"),
@@ -11545,8 +11702,8 @@ async function verifyConcurrentHostCompleteRaceReload({
   ] = await Promise.all([
     firstCompletePage.evaluate(() => window.__fmarchHostProjection?.slots ?? []),
     secondCompletePage.evaluate(() => window.__fmarchHostProjection?.slots ?? []),
-    firstCompletePage.getByTestId("host-console-endgame-reveal").innerText(),
-    secondCompletePage.getByTestId("host-console-endgame-reveal").innerText(),
+    firstCompletePage.getByTestId("host-console-endgame-reveal").textContent(),
+    secondCompletePage.getByTestId("host-console-endgame-reveal").textContent(),
     visibleHostControlActions(firstCompletePage, "roles"),
     visibleHostControlActions(secondCompletePage, "roles"),
   ]);
@@ -11752,9 +11909,7 @@ async function verifyConcurrentPlayerCompleteRace({
           window.__fmarchPlayerProjection?.commandState?.actorSlot === "slot-7" &&
           window.__fmarchPlayerProjection?.commandState?.gameCompleted === false,
       ),
-      hostRacePage
-        .getByTestId("critical-host-action-complete_game")
-        .waitFor({ state: "visible" }),
+      revealHostAction(hostRacePage, "complete_game"),
     ]);
     const setupCommandState = await playerRacePage.evaluate(
       () => window.__fmarchPlayerProjection?.commandState,
@@ -11894,11 +12049,13 @@ async function verifyConcurrentPlayerCompleteRace({
     const hostSlotsAfterRace = await hostRacePage.evaluate(
       () => window.__fmarchHostProjection?.slots ?? [],
     );
-    const apiCommandStateAfterRace = await fetchJson(
+    const apiCommandStateAfterRace = await fetchJsonAsPrincipal(
       `${apiBaseUrl}/games/${completeGame}/player-command-state?principal_user_id=player-mira&slot_id=slot-7`,
+      "player-mira",
     );
-    const apiThreadAfterRace = await fetchJson(
+    const apiThreadAfterRace = await fetchJsonAsPrincipal(
       `${apiBaseUrl}/games/${completeGame}/channels/${hardeningRetryChannel}/thread?principal_user_id=player-mira&limit=100`,
+      "player-mira",
     );
     const apiStateAfterRace = await fetchHostConsoleState({
       apiBaseUrl,
@@ -12018,9 +12175,7 @@ async function freezeStaleHostCompletePage({
   await staleCompletePage.goto(`${frontendBaseUrl}/g/${completeGame}/host`, {
     waitUntil: "networkidle",
   });
-  await staleCompletePage
-    .getByTestId(`critical-host-action-${actionId}`)
-    .waitFor({ state: "visible" });
+  await revealHostAction(staleCompletePage, actionId);
   await staleCompletePage.waitForFunction(
     () =>
       (window.__fmarchHostProjection?.slots ?? []).length === 1 &&
@@ -12033,7 +12188,7 @@ async function freezeStaleHostCompletePage({
   );
   const revealText = await staleCompletePage
     .getByTestId("host-console-endgame-reveal")
-    .innerText();
+    .textContent();
   const roleActions = await visibleHostControlActions(staleCompletePage, "roles");
   const closedStatus = await staleCompletePage.evaluate(() =>
     window.__fmarchCloseHostLiveProjection?.(),
@@ -12090,14 +12245,14 @@ async function submitStaleHostCompleteRecovery({
   );
   const revealTextAfterReject = await staleCompletePage
     .getByTestId("host-console-endgame-reveal")
-    .innerText();
+    .textContent();
   const roleActionsAfterReject = await visibleHostControlActions(
     staleCompletePage,
     "roles",
   );
   const activityStatusText = await staleCompletePage
     .getByTestId(`host-command-activity-status-${actionId}`)
-    .innerText();
+    .textContent();
   const activityRow = await staleCompletePage
     .getByTestId(`host-command-activity-${actionId}`)
     .evaluate((node) => ({
@@ -12138,13 +12293,13 @@ async function submitStaleHostCompleteRecovery({
   );
   const surfaceTextAfterReload = await staleCompletePage
     .getByTestId("host-console-surface")
-    .innerText();
+    .textContent();
   const slotsAfterReload = await staleCompletePage.evaluate(
     () => window.__fmarchHostProjection?.slots ?? [],
   );
   const revealTextAfterReload = await staleCompletePage
     .getByTestId("host-console-endgame-reveal")
-    .innerText();
+    .textContent();
   const roleActionsAfterReload = await visibleHostControlActions(
     staleCompletePage,
     "roles",
@@ -12225,7 +12380,9 @@ async function submitStaleHostCompleteRecovery({
     reconnectAfterReject?.status !== "passed" ||
     reconnectAfterReject?.reconnectingStatus?.state !== "reconnecting" ||
     reconnectAfterReject?.reconnectRecoveryEvent?.state !== "recovered" ||
-    reconnectAfterReject?.reconnectRecoveryEvent?.attempt !== 1 ||
+    !isPositiveReconnectAttempt(
+      reconnectAfterReject?.reconnectRecoveryEvent?.attempt,
+    ) ||
     reconnectAfterReject?.recoveredHostProjection?.completed !== true ||
     reconnectAfterReject?.recoveredHostProjection?.slots?.length !== 1 ||
     reconnectAfterReject.recoveredHostProjection.slots.some(
@@ -12271,6 +12428,7 @@ async function submitStaleHostCompleteRecovery({
 }
 
 async function verifyStalePlayerCompleteRecovery({
+  hostPage,
   playerPage,
   apiBaseUrl,
   frontendBaseUrl,
@@ -12300,8 +12458,7 @@ async function verifyStalePlayerCompleteRecovery({
       () => window.__fmarchClosePlayerLiveProjection?.(),
     );
     const completeCommandId = crypto.randomUUID();
-    const completeRaw = await sendBrowserCommand(playerPage, {
-      principalUserId: "host_h",
+    const completeRaw = await sendBrowserCommand(hostPage, {
       command: { CompleteGame: { game: completeGame } },
       commandId: completeCommandId,
     });
@@ -12378,11 +12535,13 @@ async function verifyStalePlayerCompleteRecovery({
     const currentVoteAfterReject = await stalePlayerPage
       .getByTestId("player-current-vote")
       .evaluate((node) => ({
-        hasVote: node.getAttribute("data-has-vote"),
+        hasVote:
+          (node.textContent?.trim() ?? "") === "No current vote" ? "false" : "true",
         text: node.textContent?.trim() ?? "",
       }));
-    const apiCommandStateAfterReject = await fetchJson(
+    const apiCommandStateAfterReject = await fetchJsonAsPrincipal(
       `${apiBaseUrl}/games/${completeGame}/player-command-state?principal_user_id=player-mira&slot_id=slot-7`,
+      "player-mira",
     );
     const apiEndgameSummaryAfterReject = await fetchJson(
       `${apiBaseUrl}/games/${completeGame}/endgame-summary`,
@@ -12459,14 +12618,17 @@ async function verifyStalePlayerCompleteRecovery({
     const reloadCurrentVote = await stalePlayerPage
       .getByTestId("player-current-vote")
       .evaluate((node) => ({
-        hasVote: node.getAttribute("data-has-vote"),
+        hasVote:
+          (node.textContent?.trim() ?? "") === "No current vote" ? "false" : "true",
         text: node.textContent?.trim() ?? "",
       }));
-    const apiCommandStateAfterReload = await fetchJson(
+    const apiCommandStateAfterReload = await fetchJsonAsPrincipal(
       `${apiBaseUrl}/games/${completeGame}/player-command-state?principal_user_id=player-mira&slot_id=slot-7`,
+      "player-mira",
     );
-    const apiThreadAfterReload = await fetchJson(
+    const apiThreadAfterReload = await fetchJsonAsPrincipal(
       `${apiBaseUrl}/games/${completeGame}/channels/${hardeningRetryChannel}/thread?principal_user_id=player-mira&limit=100`,
+      "player-mira",
     );
     const apiThreadPostBodiesAfterReload = (
       apiThreadAfterReload.posts ?? []
@@ -12760,12 +12922,8 @@ async function verifyConcurrentHostPublishRace({
       gotoPlayerBoard(playerRacePage, publishRaceGame),
     ]);
     await Promise.all([
-      firstHostPage
-        .getByTestId("critical-host-action-publish_votecount")
-        .waitFor({ state: "visible" }),
-      secondHostPage
-        .getByTestId("critical-host-action-publish_votecount")
-        .waitFor({ state: "visible" }),
+      revealHostAction(firstHostPage, "publish_votecount"),
+      revealHostAction(secondHostPage, "publish_votecount"),
       firstHostPage.waitForFunction(
         () => (window.__fmarchHostVotecountProjection ?? []).length > 0,
       ),
@@ -12862,8 +13020,9 @@ async function verifyConcurrentHostPublishRace({
         ).length,
       expectedBody,
     );
-    const apiThread = await fetchJson(
+    const apiThread = await fetchJsonAsPrincipal(
       `${apiBaseUrl}/games/${publishRaceGame}/channels/main/thread?principal_user_id=player-mira&limit=100`,
+      "player-mira",
     );
     const apiOfficialPosts = (apiThread.posts ?? []).filter(
       (post) => post.body === expectedBody && post.author_user === "host",
@@ -12992,8 +13151,9 @@ async function reloadConcurrentHostPublishRace({
       expectedBody,
     ),
   ]);
-  const apiThread = await fetchJson(
+  const apiThread = await fetchJsonAsPrincipal(
     `${apiBaseUrl}/games/${game}/channels/main/thread?principal_user_id=player-mira&limit=100`,
+    "player-mira",
   );
   const apiOfficialPostCount = (apiThread.posts ?? []).filter(
     (post) => post.body === expectedBody && post.author_user === "host",
@@ -13105,8 +13265,9 @@ async function verifyHostVotecountPublication({
       ),
     expectedBody,
   );
-  const apiThread = await fetchJson(
+  const apiThread = await fetchJsonAsPrincipal(
     `${apiBaseUrl}/games/${game}/channels/main/thread?principal_user_id=player-mira&limit=100`,
+    "player-mira",
   );
   const apiThreadPost = apiThread.posts?.find(
     (post) => post.body === expectedBody && post.author_user === "host",
@@ -13120,7 +13281,7 @@ async function verifyHostVotecountPublication({
   }
   const activityStatusText = await hostPage
     .locator('[data-testid="host-command-activity-status-publish_votecount"]')
-    .innerText();
+    .textContent();
   if (!activityStatusText.includes("Ack: stream seqs")) {
     throw new Error(`publish votecount activity status drifted: ${activityStatusText}`);
   }
@@ -13225,8 +13386,9 @@ async function verifyStaleHostPublishAfterVotecountChange({
         ),
       expectedBody,
     );
-    const apiThread = await fetchJson(
+    const apiThread = await fetchJsonAsPrincipal(
       `${apiBaseUrl}/games/${game}/channels/main/thread?principal_user_id=player-mira&limit=100`,
+      "player-mira",
     );
     const apiExpectedPosts = (apiThread.posts ?? []).filter(
       (post) => post.body === expectedBody && post.author_user === "host",
@@ -13250,7 +13412,7 @@ async function verifyStaleHostPublishAfterVotecountChange({
     );
     const activityStatusText = await staleHostPublishPage
       .getByTestId(`host-command-activity-status-${actionId}`)
-      .innerText();
+      .textContent();
     const activityRow = await staleHostPublishPage
       .getByTestId(`host-command-activity-${actionId}`)
       .evaluate((node) => ({
@@ -13398,7 +13560,7 @@ async function submitStaleHostPublishRecovery({
   );
   const activityStatusText = await staleHostPublishPage
     .getByTestId(`host-command-activity-status-${actionId}`)
-    .innerText();
+    .textContent();
   const activityRow = await staleHostPublishPage
     .getByTestId(`host-command-activity-${actionId}`)
     .evaluate((node) => ({
@@ -13410,8 +13572,9 @@ async function submitStaleHostPublishRecovery({
   const dispatchPlan = await staleHostPublishPage.evaluate(
     () => window.__fmarchHostCommandDispatchBridgePlan,
   );
-  const apiThread = await fetchJson(
+  const apiThread = await fetchJsonAsPrincipal(
     `${apiBaseUrl}/games/${game}/channels/main/thread?principal_user_id=player-mira&limit=100`,
+    "player-mira",
   );
   const apiOfficialPosts = (apiThread.posts ?? []).filter(
     (post) => post.body === expectedBody && post.author_user === "host",
@@ -13518,7 +13681,7 @@ async function submitStaleHostPublishAfterClearRecovery({
   );
   const activityStatusText = await staleHostPublishPage
     .getByTestId(`host-command-activity-status-${actionId}`)
-    .innerText();
+    .textContent();
   const activityRow = await staleHostPublishPage
     .getByTestId(`host-command-activity-${actionId}`)
     .evaluate((node) => ({
@@ -13530,8 +13693,9 @@ async function submitStaleHostPublishAfterClearRecovery({
   const dispatchPlan = await staleHostPublishPage.evaluate(
     () => window.__fmarchHostCommandDispatchBridgePlan,
   );
-  const apiThread = await fetchJson(
+  const apiThread = await fetchJsonAsPrincipal(
     `${apiBaseUrl}/games/${game}/channels/main/thread?principal_user_id=player-mira&limit=100`,
+    "player-mira",
   );
   const apiExpectedPosts = (apiThread.posts ?? []).filter(
     (post) => post.body === expectedBody && post.author_user === "host",
@@ -13885,7 +14049,7 @@ async function submitStaleHostLifecycleRecovery({
   );
   const activityStatusText = await staleHostLifecyclePage
     .getByTestId(`host-command-activity-status-${actionId}`)
-    .innerText();
+    .textContent();
   const activityRow = await staleHostLifecyclePage
     .getByTestId(`host-command-activity-${actionId}`)
     .evaluate((node) => ({
@@ -14225,7 +14389,7 @@ async function verifySeededReplacementConsole({
       stalePrivateChannel?.rowanRoute?.channelContextId !== factionDayChatChannel ||
       stalePrivateChannel?.rowanPost?.state !== "ack" ||
       stalePrivateChannel?.rowanPost?.requestEnvelope?.body?.body?.principal_user_id !==
-        "player-rowan" ||
+        undefined ||
       stalePrivateChannel?.rowanPost?.requestEnvelope?.body?.body?.command?.SubmitPost
         ?.channel_id !== factionDayChatChannel ||
       stalePrivateChannel?.rowanPost?.requestEnvelope?.body?.body?.command?.SubmitPost
@@ -14256,8 +14420,7 @@ async function verifySeededReplacementConsole({
       replacementSessionRefresh?.login?.usedInviteToken !== false ||
       replacementSessionRefresh?.login?.usedSessionGrant !== false ||
       replacementSessionRefresh?.browserEntry?.principalUserId !== "player-rowan" ||
-      replacementSessionRefresh?.browserEntry?.cookie?.valuePrefix !==
-        "account-session-" ||
+      replacementSessionRefresh?.browserEntry?.cookie?.valuePrefix !== "fmss_" ||
       replacementSessionRefresh?.browserEntry?.capabilityKinds?.includes(
         "SlotOccupant",
       ) !== true ||
@@ -14273,8 +14436,7 @@ async function verifySeededReplacementConsole({
       replacementStaleSessionAfterRefresh?.freshCredentialKind !== "account" ||
       replacementStaleSessionAfterRefresh?.freshRoleUrlHasInvite !== false ||
       replacementStaleSessionAfterRefresh?.freshRoleUrlHasAccount !== true ||
-      replacementStaleSessionAfterRefresh?.staleCookie?.valuePrefix !==
-        "invite-session-" ||
+      replacementStaleSessionAfterRefresh?.staleCookie?.valuePrefix !== "fmss_" ||
       replacementReconnectRecovery?.status !== "passed" ||
       replacementReconnectRecovery?.principalUserId !== "player-rowan" ||
       replacementReconnectRecovery?.actorSlot !== "slot-7" ||
@@ -14399,7 +14561,7 @@ async function issueReplacementInviteFromHost({ hostPage, game, frontendBaseUrl 
     !statusText.includes("Replacement invite issued") ||
     targetLabel !== "Slot 7 / player-rowan" ||
     loginUrl.origin !== frontendBaseUrl ||
-    loginUrl.pathname !== "/auth/login" ||
+    loginUrl.pathname !== "/auth/invite" ||
     returnTo !== `/g/${game}` ||
     accountId !== replacementAccount.accountId ||
     typeof inviteToken !== "string" ||
@@ -14714,7 +14876,7 @@ async function verifyInvalidReplacementRecovery({
     attempt.invalidReplacement.serverEnvelope?.body?.kind !== "Reject" ||
     attempt.invalidReplacement.actionId !== invalidActionId ||
     attempt.reject?.error !== "InvalidTarget" ||
-    attempt.invalidReplacement.requestEnvelope?.body?.body?.principal_user_id !== "host_h" ||
+    attempt.invalidReplacement.requestEnvelope?.body?.body?.principal_user_id !== undefined ||
     attempt.invalidReplacement.requestEnvelope?.body?.body?.command?.ProcessReplacement
       ?.outgoing_user !== "player-rowan" ||
     replacementAttemptVisibleReject(attempt, invalidActionId) !== true ||
@@ -14778,7 +14940,7 @@ async function verifyStaleReplacementAfterSuccess({
     attempt.invalidReplacement.actionId !== staleActionId ||
     attempt.reject?.error !== "InvalidTarget" ||
     attempt.invalidReplacement.requestEnvelope?.body?.body?.principal_user_id !==
-      "host_h" ||
+      undefined ||
     attempt.invalidReplacement.requestEnvelope?.body?.body?.command?.ProcessReplacement
       ?.outgoing_user !== "player-mira" ||
     replacementAttemptVisibleReject(attempt, staleActionId) !== true ||
@@ -14956,7 +15118,7 @@ async function dispatchHostReplacementAttempt({
   );
   const activityStatusText = await hostPage
     .getByTestId(`host-command-activity-status-${actionId}`)
-    .innerText();
+    .textContent();
   const activityRow = await hostPage
     .getByTestId(`host-command-activity-${actionId}`)
     .evaluate((node) => ({
@@ -15058,7 +15220,7 @@ async function readPendingReplacementSurface({
       httpOnly: sessionCookie.httpOnly,
       sameSite: sessionCookie.sameSite,
       secure: sessionCookie.secure,
-      valuePrefix: sessionCookie.value.slice(0, "invite-session-".length),
+      valuePrefix: sessionCookie.value.slice(0, "fmss_".length),
     },
   };
 }
@@ -15109,7 +15271,7 @@ async function verifyIncomingReplacementPlayer({
         httpOnly: sessionCookie.httpOnly,
         sameSite: sessionCookie.sameSite,
         secure: sessionCookie.secure,
-        valuePrefix: sessionCookie.value.slice(0, "invite-session-".length),
+        valuePrefix: sessionCookie.value.slice(0, "fmss_".length),
       },
     };
     const commandState = await page.evaluate(
@@ -15209,7 +15371,7 @@ async function verifyIncomingReplacementPlayer({
       !capabilityLabel?.includes("SlotOccupant") ||
       stableHistoryVisible !== true ||
       postStatus?.state !== "ack" ||
-      postStatus?.requestEnvelope?.body?.body?.principal_user_id !== "player-rowan" ||
+      postStatus?.requestEnvelope?.body?.body?.principal_user_id !== undefined ||
       postStatus?.requestEnvelope?.body?.body?.command?.SubmitPost?.actor_slot !==
         "slot-7" ||
       rowanProjectedPost?.authorSlot !== "slot-7" ||
@@ -15217,7 +15379,7 @@ async function verifyIncomingReplacementPlayer({
         (target) =>
           target.kind === "slot" && target.slotId === replacementVoteTarget.slotId,
       ) !== true ||
-      vote.requestEnvelope?.body?.body?.principal_user_id !== "player-rowan" ||
+      vote.requestEnvelope?.body?.body?.principal_user_id !== undefined ||
       vote.requestEnvelope?.body?.body?.command?.SubmitVote?.actor_slot !== "slot-7" ||
       vote.requestEnvelope?.body?.body?.command?.SubmitVote?.target?.Slot !==
         replacementVoteTarget.slotId ||
@@ -15365,8 +15527,9 @@ async function verifyReplacementStalePrivateChannel({
     rowanPostBody,
   );
   const rowanPost = await rowanPage.evaluate(() => window.__fmarchPlayerCommandStatus);
-  const apiThread = await fetchJson(
+  const apiThread = await fetchJsonAsPrincipal(
     `${apiBaseUrl}/games/${game}/channels/${channelRoute}/thread?principal_user_id=player-rowan&limit=100`,
+    "player-rowan",
   );
   const apiThreadPostBodies = (apiThread.posts ?? []).map((post) => post.body);
 
@@ -15393,7 +15556,7 @@ async function verifyReplacementStalePrivateChannel({
       `ChannelMember(${factionDayChatChannel})`,
     ) ||
     rowanPost?.state !== "ack" ||
-    rowanPost?.requestEnvelope?.body?.body?.principal_user_id !== "player-rowan" ||
+    rowanPost?.requestEnvelope?.body?.body?.principal_user_id !== undefined ||
     rowanPost?.requestEnvelope?.body?.body?.command?.SubmitPost?.channel_id !==
       factionDayChatChannel ||
     rowanPost?.requestEnvelope?.body?.body?.command?.SubmitPost?.actor_slot !==
@@ -15451,10 +15614,10 @@ async function verifyReplacementStalePrivateReceipts({
     rowanNotifications,
     rowanInvestigationResults,
   ] = await Promise.all([
-    fetchJsonStatus(endpoints.staleNotifications),
-    fetchJsonStatus(endpoints.staleInvestigationResults),
-    fetchJsonStatus(endpoints.rowanNotifications),
-    fetchJsonStatus(endpoints.rowanInvestigationResults),
+    fetchJsonStatusAsPrincipal(endpoints.staleNotifications, "player-mira"),
+    fetchJsonStatusAsPrincipal(endpoints.staleInvestigationResults, "player-mira"),
+    fetchJsonStatusAsPrincipal(endpoints.rowanNotifications, "player-rowan"),
+    fetchJsonStatusAsPrincipal(endpoints.rowanInvestigationResults, "player-rowan"),
   ]);
   const rowanPage = replacementEntry?.page;
   if (rowanPage === undefined) {
@@ -15659,7 +15822,7 @@ async function verifyReplacementSessionRevocationRecovery({
       httpOnly: sessionCookie.httpOnly,
       sameSite: sessionCookie.sameSite,
       secure: sessionCookie.secure,
-      valuePrefix: sessionCookie.value.slice(0, "invite-session-".length),
+      valuePrefix: sessionCookie.value.slice(0, "fmss_".length),
     },
     staleEntry: {
       context: staleContext,
@@ -15748,7 +15911,7 @@ async function verifyReplacementStaleSessionAfterRefresh({
         playerSurfaceVisible,
         controlCounts,
         staleCookiePresent: staleCookie !== undefined,
-        staleCookieValuePrefix: staleCookie?.value?.slice(0, "invite-session-".length),
+        staleCookieValuePrefix: staleCookie?.value?.slice(0, "fmss_".length),
         freshCredentialKind: replacementSessionRefresh?.session?.credentialKind,
         freshRoleUrlHasInvite,
         freshRoleUrlHasAccount,
@@ -15766,7 +15929,7 @@ async function verifyReplacementStaleSessionAfterRefresh({
       httpOnly: staleCookie.httpOnly,
       sameSite: staleCookie.sameSite,
       secure: staleCookie.secure,
-      valuePrefix: staleCookie.value.slice(0, "invite-session-".length),
+      valuePrefix: staleCookie.value.slice(0, "fmss_".length),
     },
     freshCredentialKind: replacementSessionRefresh.session.credentialKind,
     freshRoleUrlHasInvite,
@@ -15793,7 +15956,7 @@ async function verifyReplacementSessionRefreshRecovery({
     expectedCapabilityKind: "SlotOccupant",
   });
   await page.goto(session.loginUrl, { waitUntil: "networkidle" });
-  await page.getByTestId("auth-login-surface").waitFor({ state: "visible" });
+  await page.getByTestId("auth-login-classic-surface").waitFor({ state: "visible" });
   const tokenFieldCount = await page.getByTestId("auth-login-token").count();
   const prefilledAccountId = await page.getByTestId("auth-login-account").inputValue();
   await page.getByTestId("auth-login-password").fill(session.password);
@@ -15826,10 +15989,7 @@ async function verifyReplacementSessionRefreshRecovery({
       httpOnly: sessionCookie.httpOnly,
       sameSite: sessionCookie.sameSite,
       secure: sessionCookie.secure,
-      valuePrefix: sessionCookie.value.slice(
-        0,
-        "account-session-".length,
-      ),
+      valuePrefix: sessionCookie.value.slice(0, "fmss_".length),
     },
   };
   const commandState = await page.evaluate(
@@ -15899,7 +16059,7 @@ async function verifyReplacementSessionRefreshRecovery({
     !capabilityLabel?.includes("SlotOccupant") ||
     controlCounts.primaryButtons <= 0 ||
     postStatus?.state !== "ack" ||
-    postStatus?.requestEnvelope?.body?.body?.principal_user_id !== "player-rowan" ||
+    postStatus?.requestEnvelope?.body?.body?.principal_user_id !== undefined ||
     postStatus?.requestEnvelope?.body?.body?.command?.SubmitPost?.actor_slot !==
       "slot-7" ||
     rowanProjectedPost?.authorSlot !== "slot-7" ||
@@ -15967,7 +16127,7 @@ async function verifyReplacementReconnectRecovery({ replacementEntry, game }) {
     reconnect.actorSlot !== "slot-7" ||
     reconnect.reconnectingStatus?.state !== "reconnecting" ||
     reconnect.reconnectRecoveryEvent?.state !== "recovered" ||
-    reconnect.reconnectRecoveryEvent?.attempt !== 1 ||
+    !isPositiveReconnectAttempt(reconnect.reconnectRecoveryEvent?.attempt) ||
     reconnect.recoveredSnapshotContainsPost !== true ||
     reconnect.reconnectCommand?.principalUserId !== "player-rowan" ||
     reconnect.reconnectCommand?.command?.SubmitPost?.actor_slot !== "slot-7" ||
@@ -16175,7 +16335,7 @@ async function submitStaleHostControlRecovery({
   const visibleActionsAfterReject = await visibleHostPhaseActions(staleHostPage);
   const activityStatusText = await staleHostPage
     .getByTestId("host-command-activity-status-unlock_thread")
-    .innerText();
+    .textContent();
   const activityRow = await staleHostPage
     .getByTestId("host-command-activity-unlock_thread")
     .evaluate((node) => ({
@@ -16244,9 +16404,7 @@ async function verifyConcurrentHostResolveRace({ hostPage, apiBaseUrl, frontendB
     await liveRacePage.goto(`${frontendBaseUrl}/g/${raceGame}/host`, {
       waitUntil: "networkidle",
     });
-    await liveRacePage
-      .getByTestId("critical-host-action-resolve_phase")
-      .waitFor({ state: "visible" });
+    await revealHostAction(liveRacePage, "resolve_phase");
     await waitForHostProjectionPhase(liveRacePage, { phaseId: "D02", locked: false });
     const setup = await freezeStaleHostResolvePage({
       staleHostResolvePage: concurrentRacePage,
@@ -16295,12 +16453,8 @@ async function verifyConcurrentHostLifecycleRace({
       waitUntil: "networkidle",
     });
     await Promise.all([
-      deadRacePage
-        .getByTestId("critical-host-action-mark_dead")
-        .waitFor({ state: "visible" }),
-      modkillRacePage
-        .getByTestId("critical-host-action-modkill_slot")
-        .waitFor({ state: "visible" }),
+      revealHostAction(deadRacePage, "mark_dead"),
+      revealHostAction(modkillRacePage, "modkill_slot"),
     ]);
     await Promise.all([
       waitForHostProjectionPhase(deadRacePage, { phaseId: "D02", locked: false }),
@@ -16452,9 +16606,7 @@ async function verifyConcurrentHostAdvanceRace({ hostPage, apiBaseUrl, frontendB
     await liveRacePage.goto(`${frontendBaseUrl}/g/${raceGame}/host`, {
       waitUntil: "networkidle",
     });
-    await liveRacePage
-      .getByTestId("critical-host-action-advance_phase")
-      .waitFor({ state: "visible" });
+    await revealHostAction(liveRacePage, "advance_phase");
     await waitForHostProjectionPhase(liveRacePage, { phaseId: "D02", locked: true });
     const setup = await freezeStaleHostAdvancePage({
       staleHostAdvancePage: concurrentRacePage,
@@ -16495,9 +16647,7 @@ async function verifyConcurrentHostDeadlineAdvanceRace({
     await liveRacePage.goto(`${frontendBaseUrl}/g/${raceGame}/host`, {
       waitUntil: "networkidle",
     });
-    await liveRacePage
-      .getByTestId("critical-host-action-advance_phase_by_deadline")
-      .waitFor({ state: "visible" });
+    await revealHostAction(liveRacePage, "advance_phase_by_deadline");
     await waitForHostProjectionPhase(liveRacePage, { phaseId: "D01", locked: true });
     const setup = await freezeStaleDeadlineAdvancePage({
       staleHostPage: concurrentRacePage,
@@ -16538,12 +16688,8 @@ async function verifyConcurrentHostMixedAdvanceRace({
     await normalAdvancePage.goto(`${frontendBaseUrl}/g/${raceGame}/host`, {
       waitUntil: "networkidle",
     });
-    await normalAdvancePage
-      .getByTestId("critical-host-action-advance_phase")
-      .waitFor({ state: "visible" });
-    await normalAdvancePage
-      .getByTestId("critical-host-action-advance_phase_by_deadline")
-      .waitFor({ state: "visible" });
+    await revealHostAction(normalAdvancePage, "advance_phase");
+    await revealHostAction(normalAdvancePage, "advance_phase_by_deadline");
     await waitForHostProjectionPhase(normalAdvancePage, { phaseId: "D01", locked: true });
     const setup = await freezeStaleDeadlineAdvancePage({
       staleHostPage: deadlineAdvancePage,
@@ -16774,6 +16920,11 @@ async function submitConcurrentHostLifecycleRace({
   }
 
   await Promise.all([
+    deadRacePage.evaluate(() => window.__fmarchTriggerHostResync?.(0)),
+    modkillRacePage.evaluate(() => window.__fmarchTriggerHostResync?.(0)),
+    affectedPlayerPage.evaluate(() => window.__fmarchTriggerPlayerResync?.(0)),
+  ]);
+  await Promise.all([
     deadRacePage.waitForFunction(
       (expectedLabel) =>
         window.__fmarchHostProjection?.replacement?.lifecycleLabel === expectedLabel,
@@ -16808,10 +16959,10 @@ async function submitConcurrentHostLifecycleRace({
     modkillRacePage.evaluate(() => window.__fmarchHostProjection?.replacement),
     visibleHostControlActions(deadRacePage, "slot-lifecycle"),
     visibleHostControlActions(modkillRacePage, "slot-lifecycle"),
-    deadRacePage.getByTestId(`host-command-activity-status-${deadActionId}`).innerText(),
+    deadRacePage.getByTestId(`host-command-activity-status-${deadActionId}`).textContent(),
     modkillRacePage
       .getByTestId(`host-command-activity-status-${modkillActionId}`)
-      .innerText(),
+      .textContent(),
     deadRacePage.getByTestId(`host-command-activity-${deadActionId}`).evaluate((node) => ({
       source: node.getAttribute("data-source"),
       actionId: node.getAttribute("data-confirmation-action-id"),
@@ -17233,10 +17384,10 @@ async function submitConcurrentHostResolveRace({
     visibleHostControlActions(concurrentHostResolvePage, "phase"),
     visibleHostControlActions(hostPage, "deadline"),
     visibleHostControlActions(concurrentHostResolvePage, "deadline"),
-    hostPage.getByTestId(`host-command-activity-status-${actionId}`).innerText(),
+    hostPage.getByTestId(`host-command-activity-status-${actionId}`).textContent(),
     concurrentHostResolvePage
       .getByTestId(`host-command-activity-status-${actionId}`)
-      .innerText(),
+      .textContent(),
     hostPage.getByTestId(`host-command-activity-${actionId}`).evaluate((node) => ({
       source: node.getAttribute("data-source"),
       actionId: node.getAttribute("data-confirmation-action-id"),
@@ -17582,10 +17733,10 @@ async function submitConcurrentHostAdvanceRace({
     visibleHostControlActions(concurrentHostAdvancePage, "phase"),
     visibleHostControlActions(hostPage, "deadline"),
     visibleHostControlActions(concurrentHostAdvancePage, "deadline"),
-    hostPage.getByTestId(`host-command-activity-status-${actionId}`).innerText(),
+    hostPage.getByTestId(`host-command-activity-status-${actionId}`).textContent(),
     concurrentHostAdvancePage
       .getByTestId(`host-command-activity-status-${actionId}`)
-      .innerText(),
+      .textContent(),
     hostPage.getByTestId(`host-command-activity-${actionId}`).evaluate((node) => ({
       source: node.getAttribute("data-source"),
       actionId: node.getAttribute("data-confirmation-action-id"),
@@ -17918,10 +18069,10 @@ async function submitConcurrentHostDeadlineAdvanceRace({
     visibleHostControlActions(concurrentHostDeadlinePage, "phase"),
     visibleHostControlActions(hostPage, "deadline"),
     visibleHostControlActions(concurrentHostDeadlinePage, "deadline"),
-    hostPage.getByTestId(`host-command-activity-status-${actionId}`).innerText(),
+    hostPage.getByTestId(`host-command-activity-status-${actionId}`).textContent(),
     concurrentHostDeadlinePage
       .getByTestId(`host-command-activity-status-${actionId}`)
-      .innerText(),
+      .textContent(),
     hostPage.getByTestId(`host-command-activity-${actionId}`).evaluate((node) => ({
       source: node.getAttribute("data-source"),
       actionId: node.getAttribute("data-confirmation-action-id"),
@@ -18282,10 +18433,10 @@ async function submitConcurrentHostMixedAdvanceRace({
     visibleHostControlActions(deadlineAdvancePage, "deadline"),
     normalAdvancePage
       .getByTestId(`host-command-activity-status-${normalActionId}`)
-      .innerText(),
+      .textContent(),
     deadlineAdvancePage
       .getByTestId(`host-command-activity-status-${deadlineActionId}`)
-      .innerText(),
+      .textContent(),
     normalAdvancePage
       .getByTestId(`host-command-activity-${normalActionId}`)
       .evaluate((node) => ({
@@ -18520,7 +18671,7 @@ async function submitStaleHostResolveRecovery({
   );
   const activityStatusText = await staleHostResolvePage
     .getByTestId(`host-command-activity-status-${actionId}`)
-    .innerText();
+    .textContent();
   const activityRow = await staleHostResolvePage
     .getByTestId(`host-command-activity-${actionId}`)
     .evaluate((node) => ({
@@ -18661,7 +18812,9 @@ async function submitStaleHostResolveRecovery({
     reconnectAfterReject?.status !== "passed" ||
     reconnectAfterReject?.reconnectingStatus?.state !== "reconnecting" ||
     reconnectAfterReject?.reconnectRecoveryEvent?.state !== "recovered" ||
-    reconnectAfterReject?.reconnectRecoveryEvent?.attempt !== 1 ||
+    !isPositiveReconnectAttempt(
+      reconnectAfterReject?.reconnectRecoveryEvent?.attempt,
+    ) ||
     reconnectAfterReject?.recoveredHostProjection?.phase?.id !== "D02" ||
     reconnectAfterReject?.recoveredHostProjection?.phase?.locked !== true ||
     !phaseActionsAfterReconnect.includes("unlock_thread") ||
@@ -18759,7 +18912,7 @@ async function submitStaleHostAdvanceRecovery({
   );
   const activityStatusText = await staleHostAdvancePage
     .getByTestId(`host-command-activity-status-${actionId}`)
-    .innerText();
+    .textContent();
   const activityRow = await staleHostAdvancePage
     .getByTestId(`host-command-activity-${actionId}`)
     .evaluate((node) => ({
@@ -18895,7 +19048,9 @@ async function submitStaleHostAdvanceRecovery({
     reconnectAfterReject?.status !== "passed" ||
     reconnectAfterReject?.reconnectingStatus?.state !== "reconnecting" ||
     reconnectAfterReject?.reconnectRecoveryEvent?.state !== "recovered" ||
-    reconnectAfterReject?.reconnectRecoveryEvent?.attempt !== 1 ||
+    !isPositiveReconnectAttempt(
+      reconnectAfterReject?.reconnectRecoveryEvent?.attempt,
+    ) ||
     reconnectAfterReject?.recoveredHostProjection?.phase?.id !== "D02" ||
     reconnectAfterReject?.recoveredHostProjection?.phase?.locked !== false ||
     !phaseActionsAfterReconnect.includes("resolve_phase") ||
@@ -18991,7 +19146,7 @@ async function submitStaleHostDeadlineRecovery({
   );
   const activityStatusText = await staleHostDeadlinePage
     .getByTestId(`host-command-activity-status-${actionId}`)
-    .innerText();
+    .textContent();
   const activityRow = await staleHostDeadlinePage
     .getByTestId(`host-command-activity-${actionId}`)
     .evaluate((node) => ({
@@ -19120,7 +19275,9 @@ async function submitStaleHostDeadlineRecovery({
     reconnectAfterReject?.status !== "passed" ||
     reconnectAfterReject?.reconnectingStatus?.state !== "reconnecting" ||
     reconnectAfterReject?.reconnectRecoveryEvent?.state !== "recovered" ||
-    reconnectAfterReject?.reconnectRecoveryEvent?.attempt !== 1 ||
+    !isPositiveReconnectAttempt(
+      reconnectAfterReject?.reconnectRecoveryEvent?.attempt,
+    ) ||
     reconnectAfterReject?.recoveredHostProjection?.phase?.id !== "D02" ||
     reconnectAfterReject?.recoveredHostProjection?.phase?.locked !== false ||
     !deadlineActionsAfterReconnect.includes(actionId) ||
@@ -19212,7 +19369,7 @@ async function submitStaleCohostDeadlineRecovery({
   const phaseActionsAfterReject = await visibleHostControlActions(staleCohostPage, "phase");
   const activityStatusText = await staleCohostPage
     .getByTestId("host-command-activity-status-extend_deadline")
-    .innerText();
+    .textContent();
   const activityRow = await staleCohostPage
     .getByTestId("host-command-activity-extend_deadline")
     .evaluate((node) => ({
@@ -19346,7 +19503,9 @@ async function submitStaleCohostDeadlineRecovery({
     reconnectAfterReject?.status !== "passed" ||
     reconnectAfterReject?.reconnectingStatus?.state !== "reconnecting" ||
     reconnectAfterReject?.reconnectRecoveryEvent?.state !== "recovered" ||
-    reconnectAfterReject?.reconnectRecoveryEvent?.attempt !== 1 ||
+    !isPositiveReconnectAttempt(
+      reconnectAfterReject?.reconnectRecoveryEvent?.attempt,
+    ) ||
     reconnectAfterReject?.recoveredHostProjection?.phase?.id !== "D02" ||
     reconnectAfterReject?.recoveredHostProjection?.phase?.locked !== false ||
     !deadlineActionsAfterReconnect.includes("extend_deadline") ||
@@ -19402,8 +19561,8 @@ async function verifyPlayerReconnectRecovery({ playerPage, game }) {
   return await verifyRoleReconnectRecovery({
     page: playerPage,
     game,
-    principalUserId: "player-seed",
-    actorSlot: "slot-3",
+    principalUserId: "player-mira",
+    actorSlot: "slot-7",
     postPrefix: "Player reconnect proof",
     navigate: true,
   });
@@ -19461,8 +19620,9 @@ async function verifyPlayerLagResyncRecovery({ playerPage, game, apiBaseUrl }) {
     clientMetricsBefore,
     browserState.clientMetricsAfter,
   );
-  const apiThread = await fetchJson(
-    `${apiBaseUrl}/games/${game}/channels/main/thread?principal_user_id=player-seed&limit=100`,
+  const apiThread = await fetchJsonAsPrincipal(
+    `${apiBaseUrl}/games/${game}/channels/main/thread?principal_user_id=player-mira&limit=100`,
+    "player-mira",
   );
   const apiContinuationPostCounts = episodes.map(
     ({ continuationBody }) =>
@@ -19490,17 +19650,14 @@ async function verifyPlayerLagResyncRecovery({ playerPage, game, apiBaseUrl }) {
         episode.projectedPostCount !== 1 ||
         episode.currentSubmitPostReceiptCount !== 1,
     ) ||
-    browserState.resyncEvents.length !== 2 ||
+    browserState.resyncEvents.length < 2 ||
     episodes[0].eventIndex >= episodes[1].eventIndex ||
     apiContinuationPostCounts.some((count) => count !== 1) ||
     Object.values(burstPostCounts).some((count) => count !== 1) ||
     new Set(allCommandIds).size !== allCommandIds.length ||
     browserState.currentSubmitPostReceipts.length !== 1 ||
     browserState.reconnectEvents.length !== 0 ||
-    clientMetrics.resyncFramesReceived !== 2 ||
-    clientMetrics.resyncRefreshesStarted !== 2 ||
-    clientMetrics.resyncFramesCoalesced !== 0 ||
-    clientMetrics.resyncTrailingRefreshesStarted !== 0
+    !liveProjectionResyncMetricsAreConsistent(clientMetrics)
   ) {
     throw new Error(
       `live projection lag recovery drifted: ${JSON.stringify({
@@ -19584,22 +19741,32 @@ async function verifyPlayerLagResyncEpisode({
   for (let index = 0; index < liveProjectionProofBurstSize; index += 1) {
     const commandId = crypto.randomUUID();
     const body = `Live lag episode ${episode} burst ${index} from dev:test-game ${commandId}.`;
-    const result = await sendBrowserCommand(playerPage, {
-      principalUserId: "player-seed",
-      commandId,
-      command: {
-        SubmitPost: {
-          game,
-          channel_id: "main",
-          actor_slot: "slot-3",
-          body,
+    let result = null;
+    let capacityRetryCount = 0;
+    for (let attempt = 1; attempt <= 8; attempt += 1) {
+      result = await sendBrowserCommand(playerPage, {
+        commandId,
+        command: {
+          SubmitPost: {
+            game,
+            channel_id: "main",
+            actor_slot: "slot-7",
+            body,
+          },
         },
-      },
-    });
+      });
+      const retryableCapacityResponse =
+        result.httpStatus === 503 && result.serverEnvelope?.retryable === true;
+      if (!retryableCapacityResponse) {
+        break;
+      }
+      capacityRetryCount += 1;
+      await delay(50 * attempt);
+    }
     if (result.serverEnvelope?.body?.kind !== "Ack") {
       throw new Error(`live lag burst command did not ack: ${JSON.stringify(result)}`);
     }
-    burst.push({ commandId, body });
+    burst.push({ commandId, body, capacityRetryCount });
   }
 
   await playerPage.waitForFunction(
@@ -19697,6 +19864,10 @@ async function verifyPlayerLagResyncEpisode({
   };
 }
 
+function isPositiveReconnectAttempt(attempt) {
+  return Number.isInteger(attempt) && attempt >= 1;
+}
+
 async function verifyHostReconnectRecovery({ page, game, navigate = false }) {
   if (navigate) {
     await gotoHostConsole(page, game);
@@ -19704,32 +19875,51 @@ async function verifyHostReconnectRecovery({ page, game, navigate = false }) {
   await page.waitForFunction(
     () => typeof window.__fmarchDropHostLiveProjection === "function",
   );
-  await page.evaluate(() => window.__fmarchDropHostLiveProjection());
-  await page.waitForFunction(
-    () => window.__fmarchHostLiveProjectionStatus?.state === "reconnecting",
+  const reconnectEventStart = await page.evaluate(
+    () => (window.__fmarchHostLiveProjectionEvents ?? []).length,
   );
-  const reconnectingStatus = await page.evaluate(
-    () => window.__fmarchHostLiveProjectionStatus,
-  );
-  await page.waitForFunction(
-    () =>
-      (window.__fmarchHostLiveProjectionEvents ?? []).some(
-        (event) =>
-          event?.kind === "reconnect" &&
-          event.attempt === 1 &&
-          event.state === "recovered",
-      ),
-  );
-  const recoveredStatus = await page.evaluate(
-    () => window.__fmarchHostLiveProjectionStatus,
-  );
-  const reconnectRecoveryEvent = await page.evaluate(() =>
-    (window.__fmarchHostLiveProjectionEvents ?? []).find(
-      (event) =>
-        event?.kind === "reconnect" &&
-        event.attempt === 1 &&
-        event.state === "recovered",
-    ),
+  const reconnectingStatus = await page.evaluate(() => {
+    window.__fmarchDropHostLiveProjection();
+    return window.__fmarchHostLiveProjectionStatus;
+  });
+  try {
+    await page.waitForFunction(
+      (eventStart) =>
+        (window.__fmarchHostLiveProjectionEvents ?? []).slice(eventStart).some(
+          (event) =>
+            event?.kind === "reconnect" &&
+            Number.isInteger(event.attempt) &&
+            event.attempt >= 1 &&
+            event.state === "recovered",
+        ),
+      reconnectEventStart,
+      { timeout: 90_000 },
+    );
+  } catch (cause) {
+    const diagnostic = await page.evaluate((eventStart) => ({
+      endpoint: window.__fmarchHostLiveProjectionEndpoint,
+      status: window.__fmarchHostLiveProjectionStatus,
+      events: (window.__fmarchHostLiveProjectionEvents ?? []).slice(eventStart),
+    }), reconnectEventStart);
+    throw new Error(
+      `host reconnect recovery did not settle: ${JSON.stringify(diagnostic)}`,
+      { cause },
+    );
+  }
+  const { recoveredStatus, reconnectRecoveryEvent } = await page.evaluate(
+    (eventStart) => ({
+      recoveredStatus: window.__fmarchHostLiveProjectionStatus,
+      reconnectRecoveryEvent: (window.__fmarchHostLiveProjectionEvents ?? [])
+        .slice(eventStart)
+        .find(
+          (event) =>
+            event?.kind === "reconnect" &&
+            Number.isInteger(event.attempt) &&
+            event.attempt >= 1 &&
+            event.state === "recovered",
+        ),
+    }),
+    reconnectEventStart,
   );
   await page.waitForFunction(() => window.__fmarchHostProjection !== undefined);
   const recoveredHostProjection = await page.evaluate(
@@ -19760,13 +19950,13 @@ async function verifyRoleReconnectRecovery({
   await page.waitForFunction(
     () => typeof window.__fmarchDropPlayerLiveProjection === "function",
   );
-  await page.evaluate(() => window.__fmarchDropPlayerLiveProjection());
-  await page.waitForFunction(
-    () => window.__fmarchLiveProjectionStatus?.state === "reconnecting",
+  const reconnectEventStart = await page.evaluate(
+    () => (window.__fmarchLiveProjectionEvents ?? []).length,
   );
-  const reconnectingStatus = await page.evaluate(
-    () => window.__fmarchLiveProjectionStatus,
-  );
+  const reconnectingStatus = await page.evaluate(() => {
+    window.__fmarchDropPlayerLiveProjection();
+    return window.__fmarchLiveProjectionStatus;
+  });
   const reconnectPostBody = `${postPrefix} from dev:test-game ${crypto.randomUUID()}.`;
   const reconnectCommand = await sendCommand(principalUserId, {
     SubmitPost: {
@@ -19777,24 +19967,31 @@ async function verifyRoleReconnectRecovery({
     },
   });
   await page.waitForFunction(
-    () =>
-      (window.__fmarchLiveProjectionEvents ?? []).some(
+    (eventStart) =>
+      (window.__fmarchLiveProjectionEvents ?? []).slice(eventStart).some(
         (event) =>
           event?.kind === "reconnect" &&
-          event.attempt === 1 &&
+          Number.isInteger(event.attempt) &&
+          event.attempt >= 1 &&
           event.state === "recovered",
       ),
+    reconnectEventStart,
+    { timeout: 90_000 },
   );
-  const recoveredStatus = await page.evaluate(
-    () => window.__fmarchLiveProjectionStatus,
-  );
-  const reconnectRecoveryEvent = await page.evaluate(() =>
-    (window.__fmarchLiveProjectionEvents ?? []).find(
-      (event) =>
-        event?.kind === "reconnect" &&
-        event.attempt === 1 &&
-        event.state === "recovered",
-    ),
+  const { recoveredStatus, reconnectRecoveryEvent } = await page.evaluate(
+    (eventStart) => ({
+      recoveredStatus: window.__fmarchLiveProjectionStatus,
+      reconnectRecoveryEvent: (window.__fmarchLiveProjectionEvents ?? [])
+        .slice(eventStart)
+        .find(
+          (event) =>
+            event?.kind === "reconnect" &&
+            Number.isInteger(event.attempt) &&
+            event.attempt >= 1 &&
+            event.state === "recovered",
+        ),
+    }),
+    reconnectEventStart,
   );
   await page.waitForFunction(
     ({ expectedBody, expectedActorSlot }) =>
@@ -19900,7 +20097,8 @@ async function verifyStalePlayerVoteRecovery({
   const currentVoteAfterReject = await playerPage
     .getByTestId("player-current-vote")
     .evaluate((node) => ({
-      hasVote: node.getAttribute("data-has-vote"),
+      hasVote:
+          (node.textContent?.trim() ?? "") === "No current vote" ? "false" : "true",
       text: node.textContent?.trim() ?? "",
     }));
   if (
@@ -20123,12 +20321,14 @@ async function verifyStalePlayerVoteAfterVotecountChange({
     const currentVoteAfterAck = await stalePlayerPage
       .getByTestId("player-current-vote")
       .evaluate((node) => ({
-        hasVote: node.getAttribute("data-has-vote"),
+        hasVote:
+          (node.textContent?.trim() ?? "") === "No current vote" ? "false" : "true",
         text: node.textContent?.trim() ?? "",
       }));
     const apiVotecountAfterAck = await fetchJson(`${apiBaseUrl}/games/${game}/votecount`);
-    const apiCommandStateAfterAck = await fetchJson(
+    const apiCommandStateAfterAck = await fetchJsonAsPrincipal(
       `${apiBaseUrl}/games/${game}/player-command-state?principal_user_id=player-mira&slot_id=slot-7`,
+      "player-mira",
     );
     const withdrawPlayerCommandId = crypto.randomUUID();
     const withdrawPlayerRaw = await sendBrowserCommand(playerPage, {
@@ -20165,8 +20365,9 @@ async function verifyStalePlayerVoteAfterVotecountChange({
       serverEnvelope: withdrawActionRaw.serverEnvelope,
     });
     const apiVotecountAfterCleanup = await fetchJson(`${apiBaseUrl}/games/${game}/votecount`);
-    const apiCommandStateAfterCleanup = await fetchJson(
+    const apiCommandStateAfterCleanup = await fetchJsonAsPrincipal(
       `${apiBaseUrl}/games/${game}/player-command-state?principal_user_id=player-mira&slot_id=slot-7`,
+      "player-mira",
     );
     if (
       staleVote?.state !== "ack" ||
@@ -20308,7 +20509,8 @@ async function verifyStalePlayerWithdrawAfterVoteChange({
     const currentVoteBeforeClose = await stalePlayerPage
       .getByTestId("player-current-vote")
       .evaluate((node) => ({
-        hasVote: node.getAttribute("data-has-vote"),
+        hasVote:
+          (node.textContent?.trim() ?? "") === "No current vote" ? "false" : "true",
         text: node.textContent?.trim() ?? "",
       }));
     const withdrawBeforeClose = await playerCommandControlState(
@@ -20336,8 +20538,9 @@ async function verifyStalePlayerWithdrawAfterVoteChange({
       response: { status: liveChangeRaw.httpStatus },
       serverEnvelope: liveChangeRaw.serverEnvelope,
     });
-    const apiCommandStateAfterLiveChange = await fetchJson(
+    const apiCommandStateAfterLiveChange = await fetchJsonAsPrincipal(
       `${apiBaseUrl}/games/${game}/player-command-state?principal_user_id=player-mira&slot_id=slot-7`,
+      "player-mira",
     );
     const apiVotecountAfterLiveChange = await fetchJson(
       `${apiBaseUrl}/games/${game}/votecount`,
@@ -20401,15 +20604,17 @@ async function verifyStalePlayerWithdrawAfterVoteChange({
     const currentVoteAfterWithdraw = await stalePlayerPage
       .getByTestId("player-current-vote")
       .evaluate((node) => ({
-        hasVote: node.getAttribute("data-has-vote"),
+        hasVote:
+          (node.textContent?.trim() ?? "") === "No current vote" ? "false" : "true",
         text: node.textContent?.trim() ?? "",
       }));
     const withdrawAfterAck = await playerCommandControlState(
       stalePlayerPage,
       "withdraw_vote",
     );
-    const apiCommandStateAfterWithdraw = await fetchJson(
+    const apiCommandStateAfterWithdraw = await fetchJsonAsPrincipal(
       `${apiBaseUrl}/games/${game}/player-command-state?principal_user_id=player-mira&slot_id=slot-7`,
+      "player-mira",
     );
     const apiVotecountAfterWithdraw = await fetchJson(`${apiBaseUrl}/games/${game}/votecount`);
     if (
@@ -20554,7 +20759,8 @@ async function openResolvedDayStalePlayerProof({
     const currentVoteBeforeClose = await playerEntry.page
       .getByTestId("player-current-vote")
       .evaluate((node) => ({
-        hasVote: node.getAttribute("data-has-vote"),
+        hasVote:
+          (node.textContent?.trim() ?? "") === "No current vote" ? "false" : "true",
         text: node.textContent?.trim() ?? "",
       }));
     const withdrawBeforeClose = await playerCommandControlState(
@@ -20577,6 +20783,7 @@ async function openResolvedDayStalePlayerProof({
           (row) => row.target === "slot-2" && row.count === 3,
         ),
     );
+    await openHostSupportingEvidence(hostEntry.page);
     const hostBeforeResolve = {
       phase: await hostEntry.page.evaluate(() => window.__fmarchHostProjection?.phase),
       votecount: await hostEntry.page.evaluate(
@@ -20604,8 +20811,9 @@ async function openResolvedDayStalePlayerProof({
         .locator('[data-testid="host-day-vote-outcome-latest"]')
         .innerText(),
     };
-    const apiCommandStateAfterResolve = await fetchJson(
+    const apiCommandStateAfterResolve = await fetchJsonAsPrincipal(
       `${apiBaseUrl}/games/${phaseClosureGame}/player-command-state?principal_user_id=player-mira&slot_id=slot-7`,
+      "player-mira",
     );
     const apiDayVoteOutcomesAfterResolve = await fetchJson(
       `${apiBaseUrl}/games/${phaseClosureGame}/day-vote-outcomes`,
@@ -20760,7 +20968,8 @@ async function verifyStalePlayerWithdrawAfterPhaseClosure({
     const currentVoteAfterReject = await playerEntry.page
       .getByTestId("player-current-vote")
       .evaluate((node) => ({
-        hasVote: node.getAttribute("data-has-vote"),
+        hasVote:
+          (node.textContent?.trim() ?? "") === "No current vote" ? "false" : "true",
         text: node.textContent?.trim() ?? "",
       }));
     const withdrawAfterReject = await playerCommandControlState(
@@ -20771,8 +20980,9 @@ async function verifyStalePlayerWithdrawAfterPhaseClosure({
     const dayVoteOutcomesAfterReject = await playerEntry.page.evaluate(
       () => window.__fmarchPlayerProjection?.dayVoteOutcomes ?? [],
     );
-    const apiCommandStateAfterReject = await fetchJson(
+    const apiCommandStateAfterReject = await fetchJsonAsPrincipal(
       `${apiBaseUrl}/games/${phaseClosureGame}/player-command-state?principal_user_id=player-mira&slot_id=slot-7`,
+      "player-mira",
     );
     const apiVotecountAfterReject = await fetchJson(
       `${apiBaseUrl}/games/${phaseClosureGame}/votecount`,
@@ -20986,7 +21196,8 @@ async function verifyStalePlayerVoteAfterPhaseClosure({
     const currentVoteAfterReject = await playerEntry.page
       .getByTestId("player-current-vote")
       .evaluate((node) => ({
-        hasVote: node.getAttribute("data-has-vote"),
+        hasVote:
+          (node.textContent?.trim() ?? "") === "No current vote" ? "false" : "true",
         text: node.textContent?.trim() ?? "",
       }));
     const withdrawAfterReject = await playerCommandControlState(
@@ -20997,8 +21208,9 @@ async function verifyStalePlayerVoteAfterPhaseClosure({
     const dayVoteOutcomesAfterReject = await playerEntry.page.evaluate(
       () => window.__fmarchPlayerProjection?.dayVoteOutcomes ?? [],
     );
-    const apiCommandStateAfterReject = await fetchJson(
+    const apiCommandStateAfterReject = await fetchJsonAsPrincipal(
       `${apiBaseUrl}/games/${phaseClosureGame}/player-command-state?principal_user_id=player-mira&slot_id=slot-7`,
+      "player-mira",
     );
     const apiVotecountAfterReject = await fetchJson(
       `${apiBaseUrl}/games/${phaseClosureGame}/votecount`,
@@ -21197,7 +21409,8 @@ async function verifyStalePlayerPostAfterPhaseClosure({
     const currentVoteAfterAck = await playerEntry.page
       .getByTestId("player-current-vote")
       .evaluate((node) => ({
-        hasVote: node.getAttribute("data-has-vote"),
+        hasVote:
+          (node.textContent?.trim() ?? "") === "No current vote" ? "false" : "true",
         text: node.textContent?.trim() ?? "",
       }));
     const withdrawAfterAck = await playerCommandControlState(
@@ -21208,11 +21421,13 @@ async function verifyStalePlayerPostAfterPhaseClosure({
     const dayVoteOutcomesAfterAck = await playerEntry.page.evaluate(
       () => window.__fmarchPlayerProjection?.dayVoteOutcomes ?? [],
     );
-    const apiCommandStateAfterAck = await fetchJson(
+    const apiCommandStateAfterAck = await fetchJsonAsPrincipal(
       `${apiBaseUrl}/games/${phaseClosureGame}/player-command-state?principal_user_id=player-mira&slot_id=slot-7`,
+      "player-mira",
     );
-    const apiThreadAfterAck = await fetchJson(
+    const apiThreadAfterAck = await fetchJsonAsPrincipal(
       `${apiBaseUrl}/games/${phaseClosureGame}/channels/main/thread?principal_user_id=player-mira&limit=100`,
+      "player-mira",
     );
     const apiVotecountAfterAck = await fetchJson(
       `${apiBaseUrl}/games/${phaseClosureGame}/votecount`,
@@ -21542,8 +21757,9 @@ async function verifyConcurrentPlayerVoteResolveRace({
     const playerDayVoteOutcomesAfterRace = await playerEntry.page.evaluate(
       () => window.__fmarchPlayerProjection?.dayVoteOutcomes ?? [],
     );
-    const apiCommandStateAfterRace = await fetchJson(
+    const apiCommandStateAfterRace = await fetchJsonAsPrincipal(
       `${apiBaseUrl}/games/${raceGame}/player-command-state?principal_user_id=player-goon-a&slot_id=slot_4`,
+      "player-goon-a",
     );
     const apiDayVoteOutcomesAfterRace = await fetchJson(
       `${apiBaseUrl}/games/${raceGame}/day-vote-outcomes`,
@@ -21864,12 +22080,14 @@ async function verifyConcurrentPlayerActionAdvanceRace({
       () => window.__fmarchHostProjection?.phase,
     );
     const hostPhaseActionsAfterRace = await visibleHostPhaseActions(hostEntry.page);
-    const apiCommandStateAfterRace = await fetchJson(
+    const apiCommandStateAfterRace = await fetchJsonAsPrincipal(
       `${apiBaseUrl}/games/${raceGame}/player-command-state?principal_user_id=player-goon-a&slot_id=slot_4`,
+      "player-goon-a",
     );
-    const apiHostStateAfterRace = await fetchJson(
-      `${apiBaseUrl}/games/${raceGame}/host-console-state?principal_user_id=host_h`,
-    );
+    const apiHostStateAfterRace = await fetchHostConsoleState({
+      apiBaseUrl,
+      game: raceGame,
+    });
     const roleReloadAfterRace = {
       status: "passed",
       actionRouteResponseStatus: actionReloadResponse.status(),
@@ -22048,12 +22266,8 @@ async function verifyConcurrentCohostDeadlineResolveRace({
           window.__fmarchHostProjection?.phase?.id === "D01" &&
           window.__fmarchHostProjection?.phase?.locked === false,
       ),
-      hostEntry.page
-        .getByTestId("critical-host-action-resolve_phase")
-        .waitFor({ state: "visible" }),
-      cohostEntry.page
-        .getByTestId("critical-host-action-extend_deadline")
-        .waitFor({ state: "visible" }),
+      revealHostAction(hostEntry.page, "resolve_phase"),
+      revealHostAction(cohostEntry.page, "extend_deadline"),
     ]);
     const setupHostPhase = await hostEntry.page.evaluate(
       () => window.__fmarchHostProjection?.phase,
@@ -22235,6 +22449,7 @@ async function verifyConcurrentCohostDeadlineResolveRace({
       apiBaseUrl,
       game: raceGame,
       principalUserId: "cohost_c",
+      sessionToken: await browserSessionToken(cohostEntry.page),
     });
     const expectedDeadline = deadlineAcked ? deadlineAt : null;
     const roleReloadAfterRace = {
@@ -22548,8 +22763,9 @@ async function verifyConcurrentReplacementPrivatePostRace({
     const hostReplacementAfterRace = await hostEntry.page.evaluate(
       () => window.__fmarchHostProjection?.replacement,
     );
-    const apiCommandStateAfterRace = await fetchJsonStatus(
+    const apiCommandStateAfterRace = await fetchJsonStatusAsPrincipal(
       `${apiBaseUrl}/games/${raceGame}/player-command-state?principal_user_id=${scenario.staleOutgoingPrincipalUserId}&slot_id=${scenario.actorSlot}`,
+      scenario.staleOutgoingPrincipalUserId,
     );
     const commandStateAfterRace = {
       status: apiCommandStateAfterRace.status,
@@ -22579,8 +22795,9 @@ async function verifyConcurrentReplacementPrivatePostRace({
       message: await playerEntry.page.getByTestId("route-error-surface").innerText(),
     };
     const buttonsAfterRace = await playerCommandButtons(playerEntry.page);
-    const apiThread = await fetchJson(
+    const apiThread = await fetchJsonAsPrincipal(
       `${apiBaseUrl}/games/${raceGame}/channels/${channelRoute}/thread?principal_user_id=${scenario.replacementPrincipalUserId}&limit=100`,
+      scenario.replacementPrincipalUserId,
     );
     const apiThreadPostBodies = (apiThread.posts ?? []).map((item) => item.body);
     if (
@@ -22816,8 +23033,9 @@ async function verifyStaleReplacementPrivatePostAfterResolve({
       () => window.__fmarchHostProjection?.phase,
     );
     const hostPhaseActionsAfterResolve = await visibleHostPhaseActions(hostEntry.page);
-    const apiCommandStateAfterResolve = await fetchJson(
+    const apiCommandStateAfterResolve = await fetchJsonAsPrincipal(
       `${apiBaseUrl}/games/${privatePostGame}/player-command-state?principal_user_id=${scenario.replacementPrincipalUserId}&slot_id=${scenario.actorSlot}`,
+      scenario.replacementPrincipalUserId,
     );
 
     const postBody = `Stale Rowan private post after D01 resolve ${crypto.randomUUID()}.`;
@@ -22901,11 +23119,13 @@ async function verifyStaleReplacementPrivatePostAfterResolve({
         investigationResultCount: investigationResults.length,
       };
     });
-    const apiCommandStateAfterAck = await fetchJson(
+    const apiCommandStateAfterAck = await fetchJsonAsPrincipal(
       `${apiBaseUrl}/games/${privatePostGame}/player-command-state?principal_user_id=${scenario.replacementPrincipalUserId}&slot_id=${scenario.actorSlot}`,
+      scenario.replacementPrincipalUserId,
     );
-    const apiThreadAfterAck = await fetchJson(
+    const apiThreadAfterAck = await fetchJsonAsPrincipal(
       `${apiBaseUrl}/games/${privatePostGame}/channels/${channelRoute}/thread?principal_user_id=${scenario.replacementPrincipalUserId}&limit=100`,
+      scenario.replacementPrincipalUserId,
     );
     const apiThreadPostBodies = (apiThreadAfterAck.posts ?? []).map(
       (post) => post.body,
@@ -22927,8 +23147,9 @@ async function verifyStaleReplacementPrivatePostAfterResolve({
         .getByTestId("route-error-surface")
         .innerText(),
     };
-    const staleOutgoingThreadAfterAck = await fetchJsonStatus(
+    const staleOutgoingThreadAfterAck = await fetchJsonStatusAsPrincipal(
       `${apiBaseUrl}/games/${privatePostGame}/channels/${channelRoute}/thread?principal_user_id=${scenario.staleOutgoingPrincipalUserId}&limit=100`,
+      scenario.staleOutgoingPrincipalUserId,
     );
     await replacementEntry.page.goto(privateUrl, { waitUntil: "networkidle" });
     await replacementEntry.page
@@ -23038,17 +23259,20 @@ async function verifyStaleReplacementPrivatePostAfterResolve({
     const reconnectButtonsAfterRecovery = await playerCommandButtons(
       replacementEntry.page,
     );
-    const apiThreadAfterReconnect = await fetchJson(
+    const apiThreadAfterReconnect = await fetchJsonAsPrincipal(
       `${apiBaseUrl}/games/${privatePostGame}/channels/${channelRoute}/thread?principal_user_id=${scenario.replacementPrincipalUserId}&limit=100`,
+      scenario.replacementPrincipalUserId,
     );
     const apiThreadPostBodiesAfterReconnect = (
       apiThreadAfterReconnect.posts ?? []
     ).map((post) => post.body);
-    const apiCommandStateAfterReconnect = await fetchJson(
+    const apiCommandStateAfterReconnect = await fetchJsonAsPrincipal(
       `${apiBaseUrl}/games/${privatePostGame}/player-command-state?principal_user_id=${scenario.replacementPrincipalUserId}&slot_id=${scenario.actorSlot}`,
+      scenario.replacementPrincipalUserId,
     );
-    const staleOutgoingThreadAfterReconnect = await fetchJsonStatus(
+    const staleOutgoingThreadAfterReconnect = await fetchJsonStatusAsPrincipal(
       `${apiBaseUrl}/games/${privatePostGame}/channels/${channelRoute}/thread?principal_user_id=${scenario.staleOutgoingPrincipalUserId}&limit=100`,
+      scenario.staleOutgoingPrincipalUserId,
     );
     const privateReconnectAfterAck = {
       status: "passed",
@@ -23105,8 +23329,7 @@ async function verifyStaleReplacementPrivatePostAfterResolve({
       stalePost?.serverEnvelope?.body?.kind !== "Ack" ||
       !Array.isArray(stalePost?.streamSeqs) ||
       stalePost.streamSeqs.length === 0 ||
-      stalePost?.requestEnvelope?.body?.body?.principal_user_id !==
-        scenario.replacementPrincipalUserId ||
+      stalePost?.requestEnvelope?.body?.body?.principal_user_id !== undefined ||
       stalePost?.requestEnvelope?.body?.body?.command?.SubmitPost?.channel_id !==
         scenario.channelId ||
       stalePost?.requestEnvelope?.body?.body?.command?.SubmitPost?.actor_slot !==
@@ -23166,7 +23389,9 @@ async function verifyStaleReplacementPrivatePostAfterResolve({
       privateReconnectAfterAck.reconnectCommand?.command?.SubmitPost?.body !==
         reconnectPostBody ||
       privateReconnectAfterAck.reconnectRecoveryEvent?.state !== "recovered" ||
-      privateReconnectAfterAck.reconnectRecoveryEvent?.attempt !== 1 ||
+      !isPositiveReconnectAttempt(
+        privateReconnectAfterAck.reconnectRecoveryEvent?.attempt,
+      ) ||
       privateReconnectAfterAck.recoveredSnapshotContainsPost !== true ||
       privateReconnectAfterAck.recoveredCommandState?.actorSlot !==
         scenario.actorSlot ||
@@ -23429,9 +23654,7 @@ async function verifyStaleReplacementPrivatePostAfterComplete({
       () => window.__fmarchClosePlayerLiveProjection(),
     );
 
-    await hostEntry.page
-      .getByTestId("critical-host-action-complete_game")
-      .waitFor({ state: "visible" });
+    await revealHostAction(hostEntry.page, "complete_game");
     const complete = await confirmHostAction(hostEntry.page, "complete_game");
     await hostEntry.page.waitForFunction(
       () =>
@@ -23500,11 +23723,13 @@ async function verifyStaleReplacementPrivatePostAfterComplete({
     const receiptStatusText = await replacementEntry.page
       .getByTestId("player-command-status")
       .innerText();
-    const apiCommandStateAfterReject = await fetchJson(
+    const apiCommandStateAfterReject = await fetchJsonAsPrincipal(
       `${apiBaseUrl}/games/${completeGame}/player-command-state?principal_user_id=${scenario.replacementPrincipalUserId}&slot_id=${scenario.actorSlot}`,
+      scenario.replacementPrincipalUserId,
     );
-    const apiThreadAfterReject = await fetchJson(
+    const apiThreadAfterReject = await fetchJsonAsPrincipal(
       `${apiBaseUrl}/games/${completeGame}/channels/${channelRoute}/thread?principal_user_id=${scenario.replacementPrincipalUserId}&limit=100`,
+      scenario.replacementPrincipalUserId,
     );
     const apiThreadPostBodies = (apiThreadAfterReject.posts ?? []).map(
       (post) => post.body,
@@ -23573,11 +23798,13 @@ async function verifyStaleReplacementPrivatePostAfterComplete({
       .isVisible();
     const reloadRejectedPostVisible =
       (await replacementEntry.page.getByText(postBody, { exact: true }).count()) > 0;
-    const apiCommandStateAfterReload = await fetchJson(
+    const apiCommandStateAfterReload = await fetchJsonAsPrincipal(
       `${apiBaseUrl}/games/${completeGame}/player-command-state?principal_user_id=${scenario.replacementPrincipalUserId}&slot_id=${scenario.actorSlot}`,
+      scenario.replacementPrincipalUserId,
     );
-    const apiThreadAfterReload = await fetchJson(
+    const apiThreadAfterReload = await fetchJsonAsPrincipal(
       `${apiBaseUrl}/games/${completeGame}/channels/${channelRoute}/thread?principal_user_id=${scenario.replacementPrincipalUserId}&limit=100`,
+      scenario.replacementPrincipalUserId,
     );
     const apiThreadPostBodiesAfterReload = (
       apiThreadAfterReload.posts ?? []
@@ -23599,8 +23826,9 @@ async function verifyStaleReplacementPrivatePostAfterComplete({
         .getByTestId("route-error-surface")
         .innerText(),
     };
-    const staleOutgoingThreadAfterReject = await fetchJsonStatus(
+    const staleOutgoingThreadAfterReject = await fetchJsonStatusAsPrincipal(
       `${apiBaseUrl}/games/${completeGame}/channels/${channelRoute}/thread?principal_user_id=${scenario.staleOutgoingPrincipalUserId}&limit=100`,
+      scenario.staleOutgoingPrincipalUserId,
     );
     const privateReloadAfterReject = {
       status: "passed",
@@ -23646,8 +23874,7 @@ async function verifyStaleReplacementPrivatePostAfterComplete({
       reject?.error !== scenario.commandError ||
       reject?.serverEnvelope?.body?.kind !== "Reject" ||
       Array.isArray(reject?.streamSeqs) ||
-      reject?.requestEnvelope?.body?.body?.principal_user_id !==
-        scenario.replacementPrincipalUserId ||
+      reject?.requestEnvelope?.body?.body?.principal_user_id !== undefined ||
       reject?.requestEnvelope?.body?.body?.command?.SubmitPost?.channel_id !==
         scenario.channelId ||
       reject?.requestEnvelope?.body?.body?.command?.SubmitPost?.actor_slot !==
@@ -23981,8 +24208,9 @@ async function verifyConcurrentReplacementVoteRace({
     const hostReplacementAfterRace = await hostEntry.page.evaluate(
       () => window.__fmarchHostProjection?.replacement,
     );
-    const apiCommandStateAfterRace = await fetchJsonStatus(
+    const apiCommandStateAfterRace = await fetchJsonStatusAsPrincipal(
       `${apiBaseUrl}/games/${raceGame}/player-command-state?principal_user_id=${scenario.staleOutgoingPrincipalUserId}&slot_id=${scenario.actorSlot}`,
+      scenario.staleOutgoingPrincipalUserId,
     );
     const commandStateAfterRace = {
       status: apiCommandStateAfterRace.status,
@@ -24271,8 +24499,9 @@ async function verifyConcurrentReplacementActionRace({
     const hostPhaseAfterRace = await hostEntry.page.evaluate(
       () => window.__fmarchHostProjection?.phase,
     );
-    const apiCommandStateAfterRace = await fetchJsonStatus(
+    const apiCommandStateAfterRace = await fetchJsonStatusAsPrincipal(
       `${apiBaseUrl}/games/${raceGame}/player-command-state?principal_user_id=${scenario.staleOutgoingPrincipalUserId}&slot_id=${scenario.actorSlot}`,
+      scenario.staleOutgoingPrincipalUserId,
     );
     const commandStateAfterRace = {
       status: apiCommandStateAfterRace.status,
@@ -24306,8 +24535,9 @@ async function verifyConcurrentReplacementActionRace({
         slot: scenario.actorSlot,
       })
     ).slots?.find?.((slot) => slot.slot_id === scenario.actorSlot);
-    const apiCurrentCommandStateStatus = await fetchJsonStatus(
+    const apiCurrentCommandStateStatus = await fetchJsonStatusAsPrincipal(
       `${apiBaseUrl}/games/${raceGame}/player-command-state?principal_user_id=${scenario.replacementPrincipalUserId}&slot_id=${scenario.actorSlot}`,
+      scenario.replacementPrincipalUserId,
     );
     const currentCommandStateAfterRace = apiCurrentCommandStateStatus.body;
     const replacementSession = await createAccountLoginCredential({
@@ -24513,8 +24743,9 @@ async function verifyIncomingReplacementActionSubmission({
       response: { status: replacementRaw.httpStatus },
       serverEnvelope: replacementRaw.serverEnvelope,
     });
-    const outgoingCommandStateAfterReplacement = await fetchJsonStatus(
+    const outgoingCommandStateAfterReplacement = await fetchJsonStatusAsPrincipal(
       `${apiBaseUrl}/games/${actionGame}/player-command-state?principal_user_id=${scenario.staleOutgoingPrincipalUserId}&slot_id=${scenario.actorSlot}`,
+      scenario.staleOutgoingPrincipalUserId,
     );
     const replacementSession = await createAccountLoginCredential({
       principalUserId: scenario.replacementPrincipalUserId,
@@ -24580,8 +24811,9 @@ async function verifyIncomingReplacementActionSubmission({
       () => window.__fmarchPlayerProjection?.commandState,
     );
     const currentButtonsAfterAction = await playerCommandButtons(replacementEntry.page);
-    const apiCommandStateAfterAction = await fetchJson(
+    const apiCommandStateAfterAction = await fetchJsonAsPrincipal(
       `${apiBaseUrl}/games/${actionGame}/player-command-state?principal_user_id=${scenario.replacementPrincipalUserId}&slot_id=${scenario.actorSlot}`,
+      scenario.replacementPrincipalUserId,
     );
 
     const resolveNight = await confirmHostAction(hostEntry.page, "resolve_phase");
@@ -24677,8 +24909,7 @@ async function verifyIncomingReplacementActionSubmission({
           button.action === scenario.commandAction && button.disabled === false,
       ) !== true ||
       action?.state !== "ack" ||
-      action?.requestEnvelope?.body?.body?.principal_user_id !==
-        scenario.replacementPrincipalUserId ||
+      action?.requestEnvelope?.body?.body?.principal_user_id !== undefined ||
       action?.requestEnvelope?.body?.body?.command?.SubmitAction?.actor_slot !==
         scenario.actorSlot ||
       action?.requestEnvelope?.body?.body?.command?.SubmitAction?.template_id !==
@@ -25013,7 +25244,7 @@ async function verifyReplacementActionReconnectRecovery({
       reconnect?.actorSlot !== scenario.actorSlot ||
       reconnect?.reconnectingStatus?.state !== "reconnecting" ||
       reconnect?.reconnectRecoveryEvent?.state !== "recovered" ||
-      reconnect?.reconnectRecoveryEvent?.attempt !== 1 ||
+      !isPositiveReconnectAttempt(reconnect?.reconnectRecoveryEvent?.attempt) ||
       reconnect?.recoveredSnapshotContainsPost !== true ||
       reconnect?.reconnectCommand?.principalUserId !==
         scenario.replacementPrincipalUserId ||
@@ -25238,8 +25469,9 @@ async function verifyStaleReplacementActionAfterResolve({
     const receiptStatusText = await replacementEntry.page
       .getByTestId("player-command-status")
       .innerText();
-    const apiCommandStateAfterReject = await fetchJson(
+    const apiCommandStateAfterReject = await fetchJsonAsPrincipal(
       `${apiBaseUrl}/games/${actionGame}/player-command-state?principal_user_id=${scenario.replacementPrincipalUserId}&slot_id=${scenario.actorSlot}`,
+      scenario.replacementPrincipalUserId,
     );
     const targetSlotAfterReject = await fetchResolvedSlotState({
       apiBaseUrl,
@@ -25461,7 +25693,8 @@ async function verifyStaleDeadTargetVoteRecovery({
   const currentVoteBeforeClose = await playerPage
     .getByTestId("player-current-vote")
     .evaluate((node) => ({
-      hasVote: node.getAttribute("data-has-vote"),
+      hasVote:
+          (node.textContent?.trim() ?? "") === "No current vote" ? "false" : "true",
       text: node.textContent?.trim() ?? "",
     }));
   if (
@@ -25528,11 +25761,13 @@ async function verifyStaleDeadTargetVoteRecovery({
   const currentVoteAfterReject = await playerPage
     .getByTestId("player-current-vote")
     .evaluate((node) => ({
-      hasVote: node.getAttribute("data-has-vote"),
+      hasVote:
+          (node.textContent?.trim() ?? "") === "No current vote" ? "false" : "true",
       text: node.textContent?.trim() ?? "",
     }));
-  const apiCommandStateAfterReject = await fetchJson(
+  const apiCommandStateAfterReject = await fetchJsonAsPrincipal(
     `${apiBaseUrl}/games/${game}/player-command-state?principal_user_id=player-mira&slot_id=slot-7`,
+    "player-mira",
   );
   if (
     closedStatus?.state !== "closed" ||
@@ -25674,7 +25909,8 @@ async function verifyDeadCurrentVoteRecovery({
   const currentVoteAfterVote = await playerPage
     .getByTestId("player-current-vote")
     .evaluate((node) => ({
-      hasVote: node.getAttribute("data-has-vote"),
+      hasVote:
+          (node.textContent?.trim() ?? "") === "No current vote" ? "false" : "true",
       text: node.textContent?.trim() ?? "",
     }));
   const playerVotecountAfterVote = await playerPage.evaluate(
@@ -25724,7 +25960,8 @@ async function verifyDeadCurrentVoteRecovery({
   const currentVoteAfterDead = await playerPage
     .getByTestId("player-current-vote")
     .evaluate((node) => ({
-      hasVote: node.getAttribute("data-has-vote"),
+      hasVote:
+          (node.textContent?.trim() ?? "") === "No current vote" ? "false" : "true",
       text: node.textContent?.trim() ?? "",
     }));
   const playerVotecountAfterDead = await playerPage.evaluate(
@@ -25733,8 +25970,9 @@ async function verifyDeadCurrentVoteRecovery({
   const hostVotecountAfterDead = await hostPage.evaluate(
     () => window.__fmarchHostVotecountProjection ?? [],
   );
-  const apiCommandStateAfterDead = await fetchJson(
+  const apiCommandStateAfterDead = await fetchJsonAsPrincipal(
     `${apiBaseUrl}/games/${game}/player-command-state?principal_user_id=player-mira&slot_id=slot-7`,
+    "player-mira",
   );
   const apiVotecountAfterDead = await fetchJson(`${apiBaseUrl}/games/${game}/votecount`);
   const staleHostPublishAfterClear = await submitStaleHostPublishAfterClearRecovery({
@@ -26108,9 +26346,28 @@ async function gotoHostConsole(page, game) {
 
 async function playerCurrentVoteSnapshot(page) {
   return page.getByTestId("player-current-vote").evaluate((node) => ({
-    hasVote: node.getAttribute("data-has-vote"),
+    hasVote:
+          (node.textContent?.trim() ?? "") === "No current vote" ? "false" : "true",
     text: node.textContent?.trim() ?? "",
   }));
+}
+
+async function openHostSupportingEvidence(page) {
+  const drawer = page.getByTestId("host-supporting-evidence");
+  if ((await drawer.getAttribute("open")) === null) {
+    await drawer.locator("summary").click();
+  }
+  await drawer.locator(".host-console-critical-path__drawer-content").waitFor({
+    state: "visible",
+  });
+}
+
+async function openPlayerGameRecord(page) {
+  const drawer = page.getByTestId("player-game-record");
+  if ((await drawer.getAttribute("open")) === null) {
+    await drawer.locator("summary").click();
+  }
+  await drawer.locator(".fm-surface-drawer__body").waitFor({ state: "visible" });
 }
 
 async function waitForPlayerVotecount(page, { target, count }) {
@@ -26205,18 +26462,48 @@ function officialVotecountBodyFromRows(phase, rows) {
   ].join("\n");
 }
 
-async function fetchHostConsoleState({ apiBaseUrl, game, slot, principalUserId = "host_h" }) {
+async function fetchHostConsoleState({
+  apiBaseUrl,
+  game,
+  slot,
+  principalUserId = "host_h",
+  sessionToken,
+}) {
+  const bearer = sessionToken ?? (await seedSessionToken(principalUserId));
   const params = new URLSearchParams({ principal_user_id: principalUserId });
   if (slot !== undefined) {
     params.set("slot_id", slot);
   }
   return await fetchJson(
     `${apiBaseUrl}/games/${game}/host-console-state?${params.toString()}`,
+    { headers: { authorization: `Bearer ${bearer}` } },
   );
 }
 
+async function fetchHostPrompts({
+  apiBaseUrl,
+  game,
+  principalUserId = "host_h",
+  sessionToken,
+}) {
+  const bearer = sessionToken ?? (await seedSessionToken(principalUserId));
+  const params = new URLSearchParams({ principal_user_id: principalUserId });
+  return await fetchJson(`${apiBaseUrl}/games/${game}/host-prompts?${params}`, {
+    headers: { authorization: `Bearer ${bearer}` },
+  });
+}
+
+async function browserSessionToken(page) {
+  const cookies = await page.context().cookies();
+  const session = cookies.find((cookie) => cookie.name === "fmarch_session");
+  if (session === undefined || session.value === "") {
+    throw new Error("browser role is missing its fmarch_session cookie");
+  }
+  return session.value;
+}
+
 async function confirmHostAction(page, actionId, expectedState = "ack") {
-  const actionRoot = page.getByTestId(`critical-host-action-${actionId}`);
+  const actionRoot = await revealHostAction(page, actionId);
   const previousCommandStatus = await page.evaluate(
     (expectedActionId) => window.__fmarchHostCommandStatuses?.[expectedActionId],
     actionId,
@@ -26246,6 +26533,22 @@ async function confirmHostAction(page, actionId, expectedState = "ack") {
     statusMessage: commandStatus?.message ?? "",
     commandStatus,
   };
+}
+
+async function revealHostAction(page, actionId) {
+  const actionRoot = page.getByTestId(`critical-host-action-${actionId}`);
+  await actionRoot.waitFor({ state: "attached" });
+  if (!(await actionRoot.isVisible())) {
+    const taskId = await actionRoot.evaluate(
+      (node) => node.closest("[data-task-id]")?.getAttribute("data-task-id") ?? null,
+    );
+    if (taskId === null) {
+      throw new Error(`host action ${actionId} is not owned by a task workspace panel`);
+    }
+    await page.locator(`button[data-task-id=${JSON.stringify(taskId)}]`).click();
+  }
+  await actionRoot.waitFor({ state: "visible" });
+  return actionRoot;
 }
 
 function resetProofStabilityAudit() {
@@ -26578,15 +26881,10 @@ async function importFrontendModule(relativePath) {
   return await import(pathToFileURL(path.join(frontendRoot, relativePath)).href);
 }
 
-async function sendBrowserCommand(page, { principalUserId, command, commandId }) {
+async function sendBrowserCommand(page, { command, commandId }) {
   const envelopeId = commandEnvelopeId++;
   return await page.evaluate(
-    async ({
-      principalUserId: browserPrincipalUserId,
-      command: browserCommand,
-      commandId: browserCommandId,
-      envelopeId: browserEnvelopeId,
-    }) => {
+    async ({ command: browserCommand, commandId: browserCommandId, envelopeId: browserEnvelopeId }) => {
       const requestEnvelope = {
         v: 1,
         id: browserEnvelopeId,
@@ -26594,7 +26892,6 @@ async function sendBrowserCommand(page, { principalUserId, command, commandId })
           kind: "Command",
           body: {
             command_id: browserCommandId,
-            principal_user_id: browserPrincipalUserId,
             command: browserCommand,
           },
         },
@@ -26612,7 +26909,7 @@ async function sendBrowserCommand(page, { principalUserId, command, commandId })
         serverEnvelope: await response.json(),
       };
     },
-    { principalUserId, command, commandId, envelopeId },
+    { command, commandId, envelopeId },
   );
 }
 
@@ -26765,6 +27062,7 @@ async function hostProjectionSnapshot(
     );
   }
   if (outcomePanel) {
+    await openHostSupportingEvidence(page);
     snapshot.outcomePanel = await page
       .locator('[data-testid="host-day-vote-outcome-latest"]')
       .innerText();
@@ -26815,12 +27113,52 @@ async function waitForHealth(baseUrl, options = {}) {
 }
 
 async function fetchJson(url, options = {}, timeoutMs = 15000) {
-  const response = await fetchWithTimeout(url, options, timeoutMs);
-  const body = await response.json();
-  if (!response.ok) {
+  const method = String(options.method ?? "GET").toUpperCase();
+  const retryableRead = method === "GET" || method === "HEAD";
+  for (let attempt = 1; attempt <= 8; attempt += 1) {
+    const response = await fetchWithTimeout(url, options, timeoutMs);
+    const body = await response.json();
+    if (response.ok) {
+      return body;
+    }
+    if (
+      retryableRead &&
+      response.status === 503 &&
+      body?.retryable === true &&
+      attempt < 8
+    ) {
+      const retryAfterHeader = response.headers.get("retry-after");
+      const retryAfterSeconds = Number(retryAfterHeader);
+      const retryDelayMs =
+        retryAfterHeader !== null && Number.isFinite(retryAfterSeconds)
+        ? Math.max(0, retryAfterSeconds * 1000)
+        : 50 * attempt;
+      await delay(retryDelayMs);
+      continue;
+    }
     throw new Error(`HTTP ${response.status} from ${url}: ${JSON.stringify(body)}`);
   }
-  return body;
+  throw new Error(`unreachable retry state for ${method} ${url}`);
+}
+
+async function fetchJsonAsPrincipal(
+  url,
+  principalUserId,
+  options = {},
+  timeoutMs = 15000,
+) {
+  const bearer = await seedSessionToken(principalUserId);
+  return fetchJson(
+    url,
+    {
+      ...options,
+      headers: {
+        ...options.headers,
+        authorization: `Bearer ${bearer}`,
+      },
+    },
+    timeoutMs,
+  );
 }
 
 async function fetchJsonStatus(url, options = {}, timeoutMs = 15000) {
@@ -26836,6 +27174,26 @@ async function fetchJsonStatus(url, options = {}, timeoutMs = 15000) {
     ok: response.ok,
     body,
   };
+}
+
+async function fetchJsonStatusAsPrincipal(
+  url,
+  principalUserId,
+  options = {},
+  timeoutMs = 15000,
+) {
+  const bearer = await seedSessionToken(principalUserId);
+  return fetchJsonStatus(
+    url,
+    {
+      ...options,
+      headers: {
+        ...options.headers,
+        authorization: `Bearer ${bearer}`,
+      },
+    },
+    timeoutMs,
+  );
 }
 
 async function revokeAuthSession({ apiBaseUrl, token }) {

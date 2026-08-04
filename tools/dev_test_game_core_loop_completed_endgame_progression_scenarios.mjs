@@ -215,8 +215,12 @@ export function completedHostStaleCompleteProofLaneDescriptors({ hardening }) {
             ?.state === "reconnecting" &&
           hardening.staleHostComplete?.reconnectAfterReject?.reconnectRecoveryEvent
             ?.state === "recovered" &&
-          hardening.staleHostComplete?.reconnectAfterReject?.reconnectRecoveryEvent
-            ?.attempt === 1 &&
+          Number.isInteger(
+            hardening.staleHostComplete?.reconnectAfterReject
+              ?.reconnectRecoveryEvent?.attempt,
+          ) &&
+          hardening.staleHostComplete.reconnectAfterReject.reconnectRecoveryEvent
+            .attempt >= 1 &&
           hardening.staleHostComplete?.reconnectAfterReject
             ?.recoveredHostProjection?.completed === true &&
           hardening.staleHostComplete?.reconnectAfterReject

@@ -14,6 +14,7 @@ export function createLiveStackAuth({
     accountId,
     password,
     principalUserId,
+    globalCapabilities = [],
   }) => {
     await fetchJson(`${apiBaseUrl}/auth/accounts`, {
       method: "POST",
@@ -25,12 +26,13 @@ export function createLiveStackAuth({
         account_id: accountId,
         password,
         principal_user_id: principalUserId,
+        global_capabilities: globalCapabilities,
       }),
     });
   };
 
-  const createAccountSession = async ({ token, principalUserId, label }) => {
-    const accountId = `live-stack-${label}-${uuid()}@example.test`;
+  const createAccountSession = async ({ token, principalUserId, label, accountId: requestedAccountId }) => {
+    const accountId = requestedAccountId ?? `live-stack-${label}-${uuid()}@example.test`;
     const password = `live-stack account password ${uuid()}`;
     await createAuthAccount({ accountId, password, principalUserId });
     const session = await fetchJson(`${apiBaseUrl}/auth/accounts/login`, {
@@ -46,6 +48,7 @@ export function createLiveStackAuth({
     return {
       accountId,
       principalUserId: session.principal_user_id,
+      sessionToken: requiredSessionToken(session),
       capabilityKinds: (session.capabilities ?? []).map(
         (capability) => capability.kind,
       ),
@@ -58,6 +61,14 @@ export function createLiveStackAuth({
     principalUserId,
     globalCapabilities = [],
   }) => {
+    const accountId = `live-stack-grant-${principalUserId}-${uuid()}@example.test`;
+    const password = `live-stack grant password ${uuid()}`;
+    await createAuthAccount({
+      accountId,
+      password,
+      principalUserId,
+      globalCapabilities,
+    });
     const session = await fetchJson(`${apiBaseUrl}/auth/session-grants`, {
       method: "POST",
       headers: {
@@ -72,7 +83,9 @@ export function createLiveStackAuth({
       }),
     });
     return {
+      accountId,
       principalUserId: session.principal_user_id,
+      sessionToken: requiredSessionToken(session),
       capabilityKinds: (session.capabilities ?? []).map(
         (capability) => capability.kind,
       ),
@@ -84,6 +97,12 @@ export function createLiveStackAuth({
     createAuthAccount,
     createGrantedSession,
   });
+}
+
+function requiredSessionToken(session) {
+  const token = session?.session_token;
+  requireString(token, "auth response session_token");
+  return token;
 }
 
 export function createLiveStackCommandSender({

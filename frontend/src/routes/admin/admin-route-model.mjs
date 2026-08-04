@@ -10027,12 +10027,14 @@ function normalizeIdentityAdapterContractSummary(packet, diff) {
 }
 
 export function adminAuditInspectHref({ game, audit }) {
+  const auditId = normalizeRoutePart(audit, "audit");
   const params = new URLSearchParams({
     game: normalizeRoutePart(game, "game"),
   });
-  return `/admin/audit/${encodeURIComponent(
-    normalizeRoutePart(audit, "audit"),
-  )}?${params.toString()}`;
+  const basePath = auditId.startsWith("local-")
+    ? "/_dev/ops/audit"
+    : "/admin/audit";
+  return `${basePath}/${encodeURIComponent(auditId)}?${params.toString()}`;
 }
 
 export function adminArtifactInspectHref({ game, artifact }) {

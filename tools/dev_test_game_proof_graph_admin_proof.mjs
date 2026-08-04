@@ -1181,7 +1181,7 @@ function proofGraphNextActionHandoffDestinations(proofGraph) {
       linkId: "next-action-sequence-handoff",
       auditId: localAdminAuditIds.nextAction,
       detailRoleUrl:
-        `/admin/audit/${localAdminAuditIds.nextAction}?game=<seeded-game>`,
+        `/_dev/ops/audit/${localAdminAuditIds.nextAction}?game=<seeded-game>`,
       requiredChecks: [pair.id],
       requiredCheckStatuses: {
         [pair.id]: [
@@ -1406,7 +1406,7 @@ function proofGraphAdminSpineTerminalReceiptDestination(
     linkId: proofGraphTerminalReceiptParentId,
     auditId: localAdminAuditIds.adminSpine,
     detailRoleUrl:
-      `/admin/audit/${localAdminAuditIds.adminSpine}?game=<seeded-game>`,
+      `/_dev/ops/audit/${localAdminAuditIds.adminSpine}?game=<seeded-game>`,
     ...(receipt?.status === "passed"
       ? selectedOperatorHandoffTerminalReceiptDestinationFields(receipt)
       : {}),
@@ -1419,7 +1419,7 @@ function proofGraphSelectedOperatorHandoffReceiptDestination(receipt) {
     linkId: proofGraphTerminalReceiptParentId,
     auditId: localAdminAuditIds.adminSpine,
     detailRoleUrl:
-      `/admin/audit/${localAdminAuditIds.adminSpine}?game=<seeded-game>`,
+      `/_dev/ops/audit/${localAdminAuditIds.adminSpine}?game=<seeded-game>`,
     ...selectedOperatorHandoffTerminalReceiptDestinationFields(receipt),
   };
 }
@@ -1498,7 +1498,7 @@ function proofGraphAdminSpineTerminalValidationDestination(
     linkId: proofGraphTerminalReceiptParentId,
     auditId: localAdminAuditIds.adminSpine,
     detailRoleUrl:
-      `/admin/audit/${localAdminAuditIds.adminSpine}?game=<seeded-game>`,
+      `/_dev/ops/audit/${localAdminAuditIds.adminSpine}?game=<seeded-game>`,
     terminalValidationIds: terminalValidations.map(
       (validation) => validation.id,
     ),
@@ -1585,7 +1585,7 @@ function assertProofGraphAdminProofCoversAdminSpineTerminalValidations(evidence)
     destination.linkId !== proofGraphTerminalReceiptParentId ||
     destination.auditId !== localAdminAuditIds.adminSpine ||
     destination.detailRoleUrl !==
-      `/admin/audit/${localAdminAuditIds.adminSpine}?game=<seeded-game>` ||
+      `/_dev/ops/audit/${localAdminAuditIds.adminSpine}?game=<seeded-game>` ||
     !Array.isArray(destination.requiredAdminSpineTerminalValidations) ||
     destination.requiredAdminSpineTerminalValidations.length === 0
   ) {

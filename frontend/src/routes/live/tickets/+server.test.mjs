@@ -40,3 +40,18 @@ test("live ticket proxy emits no upstream request without a session", async () =
   assert.equal(response.status, 401);
   assert.equal(called, false);
 });
+
+test("live ticket proxy preserves upstream retry guidance", async () => {
+  const response = await POST({
+    cookies: { get: () => "opaque-session" },
+    url: new URL("https://app.example/live/tickets?game=game-1"),
+    fetch: async () =>
+      Response.json(
+        { error: "RateLimited", retryable: true },
+        { status: 429, headers: { "retry-after": "17" } },
+      ),
+  });
+
+  assert.equal(response.status, 429);
+  assert.equal(response.headers.get("retry-after"), "17");
+});

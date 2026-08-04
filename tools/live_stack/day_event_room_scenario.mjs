@@ -123,6 +123,8 @@ export async function driveDayEventRoomBrowser({
   frontendBaseUrl,
   seed,
   sendCommand,
+  sessionTokenFor = (token) => token,
+  hostSessionToken,
   viewport,
 }) {
   const secret = "DayEvent browser room history survives its lifecycle";
@@ -130,7 +132,7 @@ export async function driveDayEventRoomBrowser({
     const context = await browser.newContext({ viewport });
     await context.addCookies([{
       name: "fmarch_session",
-      value: token,
+      value: sessionTokenFor(token),
       domain: new URL(frontendBaseUrl).hostname,
       path: "/",
       httpOnly: true,
@@ -159,7 +161,7 @@ export async function driveDayEventRoomBrowser({
       `${apiBaseUrl}/games/${fixture.game}/player-command-state?slot_id=${fixture.outgoing.slotId}`,
       {
         headers: {
-          authorization: `Bearer ${fixture.outgoing.sessionToken}`,
+          authorization: `Bearer ${sessionTokenFor(fixture.outgoing.sessionToken)}`,
         },
       },
     );
@@ -198,7 +200,7 @@ export async function driveDayEventRoomBrowser({
       `${apiBaseUrl}/games/${fixture.game}/player-command-state?slot_id=${fixture.outgoing.slotId}`,
       {
         headers: {
-          authorization: `Bearer ${fixture.outgoing.sessionToken}`,
+          authorization: `Bearer ${sessionTokenFor(fixture.outgoing.sessionToken)}`,
         },
       },
     );
@@ -330,6 +332,7 @@ export async function driveDayEventRoomBrowser({
 
   const hostState = await fetchJson(
     `${apiBaseUrl}/games/${fixture.game}/host-console-state?principal_user_id=host_h&slot_id=${fixture.outgoing.slotId}`,
+    { headers: { authorization: `Bearer ${hostSessionToken}` } },
   );
   const hostRoom = hostState.day_events?.find(
     (event) => event.event_id === fixture.eventId,

@@ -77,20 +77,22 @@ try {
 
 async function seed(api) {
   const memberToken = "moderation-proof-member-session";
+  const memberBootstrapToken = "moderation-proof-member-bootstrap";
   const moderatorToken = "moderation-proof-moderator-session";
   const member = "moderation_member";
   const moderator = "moderation_operator";
   await json(`${api}/auth/dev-session`, post({ token: memberToken, principal_user_id: member, expires_at: 4_102_444_800, global_capabilities: [] }));
+  await json(`${api}/auth/dev-session`, post({ token: memberBootstrapToken, principal_user_id: member, expires_at: 4_102_444_800, global_capabilities: ["GlobalAdmin"] }));
   await json(`${api}/auth/dev-session`, post({ token: moderatorToken, principal_user_id: moderator, expires_at: 4_102_444_800, global_capabilities: ["GlobalAdmin", "GlobalMod"] }));
   await json(`${api}/auth/accounts`, post({ account_id: "moderation-member@example.test", password: "correct horse battery staple", principal_user_id: member, global_capabilities: [] }, moderatorToken));
   await json(`${api}/auth/accounts`, post({ account_id: "moderation-operator@example.test", password: "correct horse battery staple", principal_user_id: moderator, global_capabilities: ["GlobalAdmin", "GlobalMod"] }, moderatorToken));
   const game = randomUUID();
   let id = 1;
-  await command(api, id++, member, { CreateGame: { game, pack: "mafiascum" } });
-  await command(api, id++, member, { AddSlot: { game, slot: "slot_1" } });
-  await command(api, id++, member, { AssignSlot: { game, slot: "slot_1", user: member } });
-  await command(api, id++, member, { StartGame: { game, phase: "D01" } });
-  await command(api, id++, member, { SubmitPost: { game, channel_id: "main", actor_slot: "slot_1", body: "Cobalt moderation proof message", media: [] } });
+  await command(api, id++, memberBootstrapToken, { CreateGame: { game, pack: "mafiascum" } });
+  await command(api, id++, memberToken, { AddSlot: { game, slot: "slot_1" } });
+  await command(api, id++, memberToken, { AssignSlot: { game, slot: "slot_1", user: member } });
+  await command(api, id++, memberToken, { StartGame: { game, phase: "D01" } });
+  await command(api, id++, memberToken, { SubmitPost: { game, channel_id: "main", actor_slot: "slot_1", body: "Cobalt moderation proof message", media: [] } });
   const page = await json(`${api}/games/${game}`);
   return { game, member, memberToken, moderatorToken, sourceSeq: page.posts[0].source_seq };
 }
@@ -155,8 +157,8 @@ async function moderatorRestore(modContext, memberContext, base, seeded) {
 function post(body, token) {
   return { method: "POST", headers: { ...(token ? { authorization: `Bearer ${token}` } : {}), "content-type": "application/json" }, body: JSON.stringify(body) };
 }
-async function command(api, id, principal, commandBody) {
-  const result = await json(`${api}/commands`, post({ v: 1, id, body: { kind: "Command", body: { command_id: randomUUID(), principal_user_id: principal, command: commandBody } } }));
+async function command(api, id, sessionToken, commandBody) {
+  const result = await json(`${api}/commands`, post({ v: 1, id, body: { kind: "Command", body: { command_id: randomUUID(), command: commandBody } } }, sessionToken));
   if (result.body?.kind !== "Ack") throw new Error(`seed command rejected: ${JSON.stringify(result)}`);
 }
 async function cookie(context, base, value) {

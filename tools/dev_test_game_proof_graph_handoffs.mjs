@@ -98,5 +98,5 @@ function adminProofRoleNodes(proofGraph) {
 }
 
 function nodeRoleUrlMatchesAudit(node, auditId) {
-  return node.roleUrl.includes(`/admin/audit/${auditId}`);
+  return node.roleUrl.includes(`/_dev/ops/audit/${auditId}`);
 }

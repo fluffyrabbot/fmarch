@@ -33,7 +33,7 @@ test("production-facing surface checklist binds proof graph nodes to admin audit
       item.proofGraphNodeId,
     );
     assert.equal(item.adminAuditId, destination.auditId);
-    assert.ok(item.roleUrl.includes(`/admin/audit/${destination.auditId}`));
+    assert.ok(item.roleUrl.includes(`/_dev/ops/audit/${destination.auditId}`));
     assert.ok(
       featureSpineSourceCheckIds.includes(
         item.productionFeatureSpineTarget.sourceCheckId,
@@ -131,7 +131,7 @@ test("production-facing surface checklist rejects malformed surface declarations
       assertProductionFacingSurfaceChecklist([
         {
           ...first,
-          roleUrl: "/admin/audit/local-hosted-evidence-lane",
+          roleUrl: "/_dev/ops/audit/local-hosted-evidence-lane",
         },
       ]),
     /production-facing surface .* is missing a seeded role URL/,

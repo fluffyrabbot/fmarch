@@ -578,8 +578,8 @@ export async function proveAdminAuditDetail({
 }) {
   const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
   const linkTestId = `admin-audit-link-${auditId}`;
-  const detailRoleUrl = `/admin/audit/${auditId}?game=<seeded-game>`;
-  const detailUrl = `${frontendBaseUrl}/admin/audit/${auditId}?game=${encodeURIComponent(
+  const detailRoleUrl = `/_dev/ops/audit/${auditId}?game=<seeded-game>`;
+  const detailUrl = `${frontendBaseUrl}/_dev/ops/audit/${auditId}?game=${encodeURIComponent(
     game,
   )}`;
   try {
@@ -592,7 +592,7 @@ export async function proveAdminAuditDetail({
         sameSite: "Lax",
       },
     ]);
-    await page.goto(`${frontendBaseUrl}/admin?game=${encodeURIComponent(game)}`, {
+    await page.goto(`${frontendBaseUrl}/_dev/ops?game=${encodeURIComponent(game)}`, {
       waitUntil: "networkidle",
     });
     await page.getByTestId("admin-surface").waitFor({
@@ -600,18 +600,40 @@ export async function proveAdminAuditDetail({
       timeout: 15000,
     });
     await page.getByTestId(linkTestId).waitFor({
-      state: "visible",
+      state: "attached",
       timeout: 15000,
     });
+    await page.getByTestId(linkTestId).evaluate((element) => {
+      for (let parent = element.parentElement; parent !== null; parent = parent.parentElement) {
+        if (parent instanceof HTMLDetailsElement) {
+          parent.open = true;
+        }
+      }
+    });
+    try {
+      await page.getByTestId(linkTestId).waitFor({
+        state: "visible",
+        timeout: 15000,
+      });
+    } catch (cause) {
+      const diagnostic = await page.evaluate(() => ({
+        url: window.location.href,
+        bodyText: document.body.textContent?.trim().slice(0, 4000) ?? "",
+        auditLinkTestIds: [...document.querySelectorAll('[data-testid^="admin-audit-link-"]')]
+          .map((element) => element.getAttribute("data-testid"))
+          .filter(Boolean),
+      }));
+      throw new Error(
+        `admin audit link ${linkTestId} did not become visible: ${JSON.stringify(diagnostic)}`,
+        { cause },
+      );
+    }
     await page.getByTestId(linkTestId).evaluate((element) => {
       element.scrollIntoView({ block: "center", inline: "nearest" });
     });
     await page.getByTestId(linkTestId).focus();
     await Promise.all([
-      page.waitForURL(
-        `${frontendBaseUrl}/admin/audit/${auditId}?game=${encodeURIComponent(game)}`,
-        { timeout: 15000 },
-      ),
+      page.waitForURL(detailUrl, { timeout: 15000 }),
       page.keyboard.press("Enter"),
     ]);
     await page.waitForLoadState("networkidle");
@@ -1236,7 +1258,7 @@ export async function proveAdminAuditDetail({
       });
       await Promise.all([
         page.waitForURL(
-          `${frontendBaseUrl}/admin/audit/${destinationAuditId}?game=${encodeURIComponent(
+          `${frontendBaseUrl}/_dev/ops/audit/${destinationAuditId}?game=${encodeURIComponent(
             game,
           )}`,
           { timeout: 15000 },
@@ -1331,7 +1353,7 @@ export async function proveAdminAuditDetail({
         await visitLocalPrerequisiteDestinations({
           page,
           frontendBaseUrl,
-          detailUrl: `${frontendBaseUrl}/admin/audit/${destinationAuditId}?game=${encodeURIComponent(
+          detailUrl: `${frontendBaseUrl}/_dev/ops/audit/${destinationAuditId}?game=${encodeURIComponent(
             game,
           )}`,
           game,
@@ -1413,7 +1435,7 @@ export async function proveAdminAuditDetail({
         await visitPhaseLocalNextActionDrilldowns({
           page,
           frontendBaseUrl,
-          detailUrl: `${frontendBaseUrl}/admin/audit/${destinationAuditId}?game=${encodeURIComponent(
+          detailUrl: `${frontendBaseUrl}/_dev/ops/audit/${destinationAuditId}?game=${encodeURIComponent(
             game,
           )}`,
           game,
@@ -1463,7 +1485,7 @@ export async function proveAdminAuditDetail({
       visibleRelatedDestinations.push({
         linkId,
         auditId: destinationAuditId,
-        detailRoleUrl: `/admin/audit/${destinationAuditId}?game=<seeded-game>`,
+        detailRoleUrl: `/_dev/ops/audit/${destinationAuditId}?game=<seeded-game>`,
         ...(destinationVisibleChecks.length === 0
           ? {}
           : { visibleChecks: destinationVisibleChecks }),

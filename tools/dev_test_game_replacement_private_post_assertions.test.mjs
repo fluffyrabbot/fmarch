@@ -69,7 +69,6 @@ const replacementResolvedPrivatePostProofFixture = () => ({
     requestEnvelope: {
       body: {
         body: {
-          principal_user_id: resolveScenario.replacementPrincipalUserId,
           command: {
             SubmitPost: {
               channel_id: resolveScenario.channelId,
@@ -217,7 +216,6 @@ const replacementCompletedPrivatePostProofFixture = () => ({
     requestEnvelope: {
       body: {
         body: {
-          principal_user_id: scenario.replacementPrincipalUserId,
           command: {
             SubmitPost: {
               channel_id: scenario.channelId,

@@ -382,10 +382,9 @@ export function assertCompletedPlayerReloadProofCase({
       snapshot.coldLoadEndpoints?.notificationsEndpoint !==
         expectedNotificationsEndpoint ||
       snapshot.coldLoadEndpoints?.endgameSummaryEndpoint !==
-        expectedCommandStateEndpoint.replace(
-          /\/player-command-state\?.*$/,
-          "/endgame-summary",
-        ) ||
+        expectedCommandStateEndpoint
+          .replace(/^\/api\/gameplay/, "")
+          .replace(/\/player-command-state\?.*$/, "/endgame-summary") ||
       snapshot.endgameSummary?.completed !== true ||
       snapshot.endgameSummary?.slots?.some(
         (slot) =>
@@ -474,9 +473,9 @@ export function assertCompletedDeadPlayerStaleVoteRecoveryProofCase({
       scenario.expectedBoundaryText,
     ) ||
     snapshot.coldLoadEndpoints?.commandStateEndpoint !==
-      `/games/${expectedGame}/player-command-state?principal_user_id=${scenario.principalUserId}&slot_id=${scenario.expectedSlot}` ||
+      `/api/gameplay/games/${expectedGame}/player-command-state?slot_id=${scenario.expectedSlot}` ||
     snapshot.coldLoadEndpoints?.notificationsEndpoint !==
-      `/games/${expectedGame}/notifications?principal_user_id=${scenario.principalUserId}` ||
+      `/api/gameplay/games/${expectedGame}/notifications` ||
     snapshot.coldLoadEndpoints?.endgameSummaryEndpoint !==
       `/games/${expectedGame}/endgame-summary` ||
     snapshot.endgameSummary?.completed !== true ||

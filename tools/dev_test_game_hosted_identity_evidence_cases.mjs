@@ -105,10 +105,10 @@ export const devTestGameHostedIdentityEvidenceAdminProofPath =
 export const hostedIdentityEvidenceRoleSurfaceDrilldown = Object.freeze({
   localCapabilityAuditId: "local-identity-adapter",
   localCapabilityRoleUrl:
-    "/admin/audit/local-identity-adapter?game=<seeded-game>",
+    "/_dev/ops/audit/local-identity-adapter?game=<seeded-game>",
   handoffAuditId: "local-hosted-identity-evidence",
   handoffRoleUrl:
-    "/admin/audit/local-hosted-identity-evidence?game=<seeded-game>",
+    "/_dev/ops/audit/local-hosted-identity-evidence?game=<seeded-game>",
   proofGraphNodeId: hostedIdentityEvidenceProofGraphNodeId,
   productionFeatureGraphNodeId:
     hostedIdentityEvidenceProductionFeatureGraphNodeId,

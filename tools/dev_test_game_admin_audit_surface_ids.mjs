@@ -33,5 +33,5 @@ export function localAdminAuditRoleUrl(
   auditId,
   { game = "<seeded-game>" } = {},
 ) {
-  return `/admin/audit/${auditId}?game=${String(game)}`;
+  return `/_dev/ops/audit/${auditId}?game=${String(game)}`;
 }

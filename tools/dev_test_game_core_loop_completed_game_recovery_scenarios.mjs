@@ -484,9 +484,9 @@ export function assertCompletedPlayerReloadCases(
     assertCompletedPlayerReloadProof({
       ...scenario,
       expectedCommandStateEndpoint:
-        `/games/${scenario.expectedGame}/player-command-state?principal_user_id=${scenario.principalUserId}&slot_id=${scenario.expectedSlot}`,
+        `/api/gameplay/games/${scenario.expectedGame}/player-command-state?slot_id=${scenario.expectedSlot}`,
       expectedNotificationsEndpoint:
-        `/games/${scenario.expectedGame}/notifications?principal_user_id=${scenario.principalUserId}`,
+        `/api/gameplay/games/${scenario.expectedGame}/notifications`,
     });
   }
 }

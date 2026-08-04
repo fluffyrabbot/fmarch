@@ -134,8 +134,8 @@ export function assertNightThreeProgressionBrowserProof({
     ],
     [
       proof?.n03ActionSubmission?.requestEnvelope?.body?.body
-        ?.principal_user_id === scenario.expectedPrincipalUserId,
-      "night three action principal mismatch",
+        ?.principal_user_id === undefined,
+      "night three action included a client-supplied principal",
     ],
     [
       submitAction?.actor_slot === scenario.expectedActorSlot,

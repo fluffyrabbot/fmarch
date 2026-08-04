@@ -20,6 +20,7 @@ const evidencePath = path.join(artifactDir, "game-index-proof.json");
 const databaseUrl = process.env.DATABASE_URL;
 const host = "127.0.0.1";
 const pageSize = 12;
+const seedSessionTokens = new Map();
 
 if (!databaseUrl) {
   throw new Error(
@@ -324,6 +325,7 @@ async function startApi(url) {
       DATABASE_URL: url,
       FMARCH_BIND: `${host}:${port}`,
       FMARCH_MEDIA_ROOT: mediaRoot,
+      FMARCH_DEV_AUTH: "1",
       RUST_LOG: process.env.RUST_LOG ?? "warn",
     },
     stdio: ["ignore", "pipe", "pipe"],
@@ -365,16 +367,43 @@ async function startFrontend(apiBaseUrl) {
   return `http://${host}:${address.port}`;
 }
 
-async function sendCommand(apiBaseUrl, id, principalUserId, command) {
-  const result = await fetchJson(`${apiBaseUrl}/commands`, {
+// The strict wire rejects any actor field in the envelope; seed commands act
+// as a principal by presenting that principal's dev session as the bearer.
+async function seedSessionToken(apiBaseUrl, principalUserId) {
+  const cached = seedSessionTokens.get(principalUserId);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const session = await fetchJson(`${apiBaseUrl}/auth/dev-session`, {
     method: "POST",
     headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      principal_user_id: principalUserId,
+      expires_at: 4_102_444_800,
+      global_capabilities: ["GlobalAdmin"],
+    }),
+  });
+  if (typeof session.session_token !== "string" || session.session_token === "") {
+    throw new Error(`dev session for ${principalUserId} returned no session_token`);
+  }
+  seedSessionTokens.set(principalUserId, session.session_token);
+  return session.session_token;
+}
+
+async function sendCommand(apiBaseUrl, id, principalUserId, command) {
+  const sessionToken = await seedSessionToken(apiBaseUrl, principalUserId);
+  const result = await fetchJson(`${apiBaseUrl}/commands`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${sessionToken}`,
+      "content-type": "application/json",
+    },
     body: JSON.stringify({
       v: 1,
       id,
       body: {
         kind: "Command",
-        body: { command_id: randomUUID(), principal_user_id: principalUserId, command },
+        body: { command_id: randomUUID(), command },
       },
     }),
   });

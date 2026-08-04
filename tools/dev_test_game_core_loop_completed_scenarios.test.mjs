@@ -1164,9 +1164,9 @@ test("core-loop proof fixture module builds shared host and player proof shapes"
     boundary: "completed game endgame state",
     resyncFromSeq: 921,
     commandStateEndpoint:
-      "/games/game-a/player-command-state?principal_user_id=player_mira&slot_id=slot-7",
+      "/api/gameplay/games/game-a/player-command-state?slot_id=slot-7",
     notificationsEndpoint:
-      "/games/game-a/notifications?principal_user_id=player_mira",
+      "/api/gameplay/games/game-a/notifications",
   });
 
   assert.equal(hostProof.commandStatus.message, "Ack: stream seqs 701");
@@ -1206,11 +1206,11 @@ test("core-loop proof fixture module derives seeded role URLs and endpoints", ()
   assert.equal(proof.visitedRolePath, "/g/game-a?private=notification-1");
   assert.equal(
     proof.coldLoadEndpoints.commandStateEndpoint,
-    "/games/game-a/player-command-state?principal_user_id=player_sage&slot_id=slot-5",
+    "/api/gameplay/games/game-a/player-command-state?slot_id=slot-5",
   );
   assert.equal(
     proof.coldLoadEndpoints.notificationsEndpoint,
-    "/games/game-a/notifications?principal_user_id=player_sage",
+    "/api/gameplay/games/game-a/notifications",
   );
   assert.equal(proof.privateNotice.detailText, "Phase N04");
 });
@@ -1614,9 +1614,9 @@ test("completed-game scenario module derives action-player completed surface cas
       expectedBoundaryText: "completed game endgame state",
       expectedResyncFromSeq: 921,
       expectedCommandStateEndpoint:
-        "/games/game-a/player-command-state?principal_user_id=player_mira&slot_id=slot-7",
+        "/api/gameplay/games/game-a/player-command-state?slot_id=slot-7",
       expectedNotificationsEndpoint:
-        "/games/game-a/notifications?principal_user_id=player_mira",
+        "/api/gameplay/games/game-a/notifications",
       expectedLastVoteOutcomePhaseId: "D05",
     },
   );
@@ -1645,9 +1645,9 @@ test("completed-game scenario module derives action-player completed surface cas
       expectedBoundaryText: "completed game endgame state",
       expectedResyncFromSeq: 921,
       expectedCommandStateEndpoint:
-        "/games/game-a/player-command-state?principal_user_id=player_mira&slot_id=slot-7",
+        "/api/gameplay/games/game-a/player-command-state?slot_id=slot-7",
       expectedNotificationsEndpoint:
-        "/games/game-a/notifications?principal_user_id=player_mira",
+        "/api/gameplay/games/game-a/notifications",
       expectedLastVoteOutcomePhaseId: "D05",
     },
   );
@@ -1884,9 +1884,9 @@ test("completed-game scenario module delegates action-player completed assertion
       expectedBoundaryText: "completed game endgame state",
       expectedResyncFromSeq: 921,
       expectedCommandStateEndpoint:
-        "/games/game-a/player-command-state?principal_user_id=player_mira&slot_id=slot-7",
+        "/api/gameplay/games/game-a/player-command-state?slot_id=slot-7",
       expectedNotificationsEndpoint:
-        "/games/game-a/notifications?principal_user_id=player_mira",
+        "/api/gameplay/games/game-a/notifications",
       expectedLastVoteOutcomePhaseId: "D05",
     },
   ]);

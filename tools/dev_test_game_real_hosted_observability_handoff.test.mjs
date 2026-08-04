@@ -80,7 +80,7 @@ test("real hosted observability handoff records blocked receipt from local basel
   assert.equal(
     handoff.hostedHandoffChecklist.blockedReceipt.blockedOperatorPacket
       .selectedProductionFeatureRoleUrl,
-    "/admin/audit/local-hosted-ops-signals?game=<seeded-game>",
+    "/_dev/ops/audit/local-hosted-ops-signals?game=<seeded-game>",
   );
   assert(
     handoff.hostedHandoffChecklist.blockedCheckIds.includes(

@@ -14,6 +14,9 @@
         data-testid={view.channelContext.testId}
         data-channel-id={view.channelContext.channelId}
         data-capability-label={view.channelContext.capabilityLabel}
+        data-actor-slot={view.channelContext.slotId}
+        data-actor-alive={view.channelContext.actorAlive}
+        data-actor-status={view.channelContext.actorStatus}
       >
         <p class="fm-eyebrow">Reply</p>
         <h2>{view.channelContext.channelLabel}</h2>

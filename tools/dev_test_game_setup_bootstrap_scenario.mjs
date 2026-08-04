@@ -28,6 +28,16 @@ export const seededSetupRoster = Object.freeze([
   }),
 ]);
 
+// The setup route derives each new seat id as `slot_${slots.length + 1}`, so a
+// browser-driven bootstrap can only produce sequential ids. The command-seeded
+// roster above keeps its mixed legacy ids to prove the id-format tolerance of
+// the command path.
+export const uiBootstrapSetupRoster = Object.freeze(
+  seededSetupRoster.map((row, index) =>
+    Object.freeze({ ...row, slot: `slot_${index + 1}` }),
+  ),
+);
+
 export const setupCommandEvidenceKeys = Object.freeze([
   "addSlot",
   "assignSlot",
@@ -44,8 +54,22 @@ export const setupCommandEvidenceKindByKey = Object.freeze({
   startGame: "StartGame",
 });
 
+export const seededCohostDeniedClasses = Object.freeze([
+  "phase_resolve",
+  "lifecycle",
+]);
+
 export function seedPreSetupCommandPlanForGame(game) {
-  return [["host_h", { CreateGame: { game, pack: "mafiascum" } }]];
+  return [[
+    "host_h",
+    {
+      CreateGame: {
+        game,
+        pack: "mafiascum",
+        cohost_denied: [...seededCohostDeniedClasses],
+      },
+    },
+  ]];
 }
 
 export function seedSetupCommandPlanForGame(game) {
@@ -249,8 +273,13 @@ export async function selectHostSetupStage(setupPage, stageId) {
 export async function addSetupSlot({ setupPage, slotId }) {
   await selectHostSetupStage(setupPage, "roster");
   const form = setupPage.getByTestId("host-setup-add-slot-form");
-  await form.locator('input[name="slotId"]').fill(slotId);
-  await form.getByRole("button", { name: "Add slot" }).click();
+  const derivedSlotId = await form.locator('input[name="slotId"]').inputValue();
+  if (derivedSlotId !== slotId) {
+    throw new Error(
+      `host setup add-slot derived ${derivedSlotId} but the scenario expected ${slotId}`,
+    );
+  }
+  await form.getByRole("button", { name: "Add next seat" }).click();
   return await waitForHostSetupCommand({
     setupPage,
     statusTestId: "host-setup-add-slot-status",
@@ -268,8 +297,10 @@ export async function assignSetupSlot({
 }) {
   await selectHostSetupStage(setupPage, "roster");
   const row = setupPage.getByTestId(`host-setup-slot-${slotId}`);
-  await row.locator('input[name="principalUserId"]').fill(principalUserId);
-  await row.getByRole("button", { name: "Assign", exact: true }).click();
+  await row
+    .locator('select[name="principalUserId"]')
+    .selectOption(principalUserId);
+  await row.getByRole("button", { name: "Assign player", exact: true }).click();
   return await waitForHostSetupCommand({
     setupPage,
     statusTestId: "host-setup-assign-slot-status",
@@ -358,18 +389,6 @@ export async function waitForHostSetupCommand({
       { commandKind, expectedState },
       { timeout: 15000 },
     );
-    await setupPage.getByTestId(statusTestId).waitFor({
-      state: "visible",
-      timeout: 15000,
-    });
-    await setupPage.waitForFunction(
-      ({ statusTestId: expectedTestId, expectedState }) =>
-        document
-          .querySelector(`[data-testid="${expectedTestId}"]`)
-          ?.getAttribute("data-state") === expectedState,
-      { statusTestId, expectedState },
-      { timeout: 15000 },
-    );
   } catch (error) {
     throw new Error(
       `host setup ${commandKind} command wait timed out: ${JSON.stringify({
@@ -382,10 +401,12 @@ export async function waitForHostSetupCommand({
   let snapshot = null;
   const deadline = Date.now() + 15000;
   while (Date.now() < deadline) {
+    const status = setupPage.getByTestId(statusTestId);
+    const statusVisible = await status.isVisible();
     const [statusState, statusText, outcome, setupState, readiness] =
       await Promise.all([
-        setupPage.getByTestId(statusTestId).getAttribute("data-state"),
-        setupPage.getByTestId(statusTestId).innerText(),
+        statusVisible ? status.getAttribute("data-state") : null,
+        statusVisible ? status.innerText() : null,
         setupPage.evaluate(() => window.__fmarchHostSetupCommandOutcome ?? null),
         setupPage.evaluate(() => window.__fmarchHostSetupState ?? null),
         setupPage.evaluate(() => window.__fmarchHostSetupReadiness ?? null),
@@ -505,7 +526,7 @@ async function waitForHostSetupPolicyCommand({
   if (
     policyText !== expectedPolicyText ||
     statusState !== "ack" ||
-    outcome?.requestEnvelope?.body?.body?.principal_user_id !== "host_h" ||
+    outcome?.requestEnvelope?.body?.body?.principal_user_id !== undefined ||
     outcome?.requestEnvelope?.body?.body?.command?.SetPostPolicy?.channel_id !==
       "main" ||
     outcome?.requestEnvelope?.body?.body?.command?.SetPostPolicy

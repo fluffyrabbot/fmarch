@@ -97,12 +97,12 @@ function selectedOperatorHandoffFixture() {
     command: `npm run ${devTestGameHostedEvidenceLaneCommand}`,
     unprovenId: "hosted-deployment",
     proofTarget: devTestGameHostedEvidenceLanePath,
-    roleUrl: `/admin/audit/${localAdminAuditIds.hostedEvidenceLane}?game=<seeded-game>`,
+    roleUrl: `/_dev/ops/audit/${localAdminAuditIds.hostedEvidenceLane}?game=<seeded-game>`,
     firstMissingInputId: "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
     selectedProductionFeatureGraphNodeId:
       "production-feature:host-phase-control",
     selectedProductionFeatureRoleUrl:
-      `/admin/audit/${localAdminAuditIds.coreLoop}?game=<seeded-game>`,
+      `/_dev/ops/audit/${localAdminAuditIds.coreLoop}?game=<seeded-game>`,
     rawEvidenceTemplate: hostedMatrixRawEvidenceTemplateDescriptor(),
     blockedOperatorPacket,
   };

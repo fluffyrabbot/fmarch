@@ -167,7 +167,7 @@ export function assertHostVisibleInvalidActionRecoverySummary({
     !String(summary.hostRoleUrl ?? "").includes("/g/") ||
     !String(summary.hostRoleUrl ?? "").includes("/host") ||
     !String(summary.actionPlayerRoleUrl ?? "").includes("/g/") ||
-    !String(summary.detailRoleUrl ?? "").includes("/admin/audit/") ||
+    !String(summary.detailRoleUrl ?? "").includes("/_dev/ops/audit/") ||
     (requireVisibleStatus &&
       (!visibleStatus.includes(scenario.messageIncludes) ||
         !visibleStatus.includes("legal action visible true")));
@@ -567,7 +567,7 @@ function assertHostVisibleStaleTransitionRecoverySummary({
     !String(summary.hostRoleUrl ?? "").includes("/g/") ||
     !String(summary.hostRoleUrl ?? "").includes("/host") ||
     !String(summary.actionPlayerRoleUrl ?? "").includes("/g/") ||
-    !String(summary.detailRoleUrl ?? "").includes("/admin/audit/") ||
+    !String(summary.detailRoleUrl ?? "").includes("/_dev/ops/audit/") ||
     (requireBrowserProof &&
       (summary.browserProofStatus !== "passed" ||
         summary.browserProofPassed !== true ||

@@ -46,7 +46,7 @@ export const roleSurfaceSpineCases = Object.freeze({
     label: "cohost console",
     readinessLabel: "Cohost role URL delegated host-console proof",
     proofBoundary:
-      "Seeded dev-test-game cohost role URL proof from proof-run. Proves delegated deadline control and NotHost rejection for host-only resolve; does not prove hosted identity, multi-node races, release readiness, or production readiness.",
+      "Seeded dev-test-game cohost role URL proof from proof-run. Proves delegated deadline control and CohostPermissionDenied rejection for policy-denied resolve; does not prove hosted identity, multi-node races, release readiness, or production readiness.",
     source: cohostFeatureSpineSource,
     provenanceCase: cohostFeatureSpineTargetProvenanceCases[0],
     targetRow: cohostFeatureSpineTargetRows.cohostConsole,

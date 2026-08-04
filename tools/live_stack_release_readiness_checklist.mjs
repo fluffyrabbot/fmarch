@@ -253,7 +253,7 @@ function validateInviteRoleProof(artifact) {
     if (!roleEvidence?.capabilityKinds?.includes(capability)) {
       throw new Error(`invite role proof missing ${role} ${capability}`);
     }
-    if (roleEvidence.cookie?.valuePrefix !== "invite-session-") {
+    if (roleEvidence.cookie?.valuePrefix !== "fmss_") {
       throw new Error(`invite role proof did not issue an invite session for ${role}`);
     }
   }

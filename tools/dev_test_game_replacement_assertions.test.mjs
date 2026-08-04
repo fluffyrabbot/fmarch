@@ -22,7 +22,6 @@ test("replacement command assertions match shared command envelope", () => {
     requestEnvelope: {
       body: {
         body: {
-          principal_user_id: scenario.hostPrincipalUserId,
           command: {
             ProcessReplacement: {
               game: scenario.gameFixtureId,

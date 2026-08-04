@@ -94,7 +94,7 @@ function assertChecklistItemShape(item) {
   }
   if (
     typeof item.roleUrl !== "string" ||
-    !item.roleUrl.includes("/admin/audit/") ||
+    !item.roleUrl.includes("/_dev/ops/audit/") ||
     !item.roleUrl.includes("?game=<seeded-game>")
   ) {
     throw new Error(`production-facing surface ${id} is missing a seeded role URL`);
@@ -105,7 +105,7 @@ function assertChecklistItemShape(item) {
       `production-facing surface ${id} is missing an admin proof destination`,
     );
   }
-  if (!item.roleUrl.includes(`/admin/audit/${destination.auditId}`)) {
+  if (!item.roleUrl.includes(`/_dev/ops/audit/${destination.auditId}`)) {
     throw new Error(
       `production-facing surface ${id} role URL does not match its audit destination`,
     );

@@ -166,7 +166,7 @@ export function getLocalReadinessDependency(id) {
 
 export function localReadinessDependencyAuditIdFromRoleUrl(roleUrl) {
   const match = String(roleUrl).match(
-    /^\/admin\/audit\/([^?]+)\?game=<seeded-game>$/,
+    /^\/_dev\/ops\/audit\/([^?]+)\?game=<seeded-game>$/,
   );
   if (match === null) {
     throw new Error(

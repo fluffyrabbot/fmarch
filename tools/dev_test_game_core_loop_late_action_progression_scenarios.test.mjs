@@ -401,9 +401,9 @@ function nightFourPlayerSurfaceProof({
     },
     coldLoadEndpoints: {
       notificationsEndpoint:
-        `/games/${game}/notifications?principal_user_id=${principalUserId}`,
+        `/api/gameplay/games/${game}/notifications`,
       commandStateEndpoint:
-        `/games/${game}/player-command-state?principal_user_id=${principalUserId}&slot_id=${slot}`,
+        `/api/gameplay/games/${game}/player-command-state?slot_id=${slot}`,
     },
     ...(privateReceipt
       ? {

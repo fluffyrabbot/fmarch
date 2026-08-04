@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
     collections::{BTreeMap, BTreeSet},
-    fs,
+    env, fs,
     path::{Path as FsPath, PathBuf},
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -3043,10 +3043,31 @@ pub fn proof_run_artifact_fs_path(path: &str) -> PathBuf {
     if artifact_path.is_absolute() {
         artifact_path.to_path_buf()
     } else {
-        FsPath::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../..")
-            .join(artifact_path)
+        proof_run_workspace_root().join(artifact_path)
     }
+}
+
+fn proof_run_workspace_root() -> PathBuf {
+    if let Some(configured) = env::var_os("FMARCH_WORKSPACE_ROOT").filter(|value| !value.is_empty())
+    {
+        let configured = PathBuf::from(configured);
+        return if configured.is_absolute() {
+            configured
+        } else {
+            env::current_dir()
+                .unwrap_or_else(|_| PathBuf::from("."))
+                .join(configured)
+        };
+    }
+    if let Ok(current_dir) = env::current_dir() {
+        if let Some(root) = current_dir.ancestors().find(|candidate| {
+            candidate.join("Cargo.toml").is_file()
+                && candidate.join("docs/ops/proof-runs.json").is_file()
+        }) {
+            return root.to_path_buf();
+        }
+    }
+    FsPath::new(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
 
 pub fn audit_operator_proof_status_values(
@@ -3358,7 +3379,7 @@ pub fn proof_run_command_placeholder_errors(template: &str) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::{collections::HashSet, env, fs, path::Path, process::Command as ProcessCommand};
+    use std::{collections::HashSet, env, fs, process::Command as ProcessCommand};
 
     const COMMANDS_PIPELINE_RS: &str = include_str!("../tests/pipeline.rs");
     const ENGINE_AND_PACKS_MD: &str = include_str!("../../../docs/arch/09-engine-and-packs.md");
@@ -5489,8 +5510,8 @@ mod tests {
                     "ok": true,
                     "game_id": "08d8a45f-6c3b-4401-8e31-8d7637f36a82",
                     "isolation": "rollback-only transaction",
-                    "table_count": 26,
-                    "matched_table_count": 26,
+                    "table_count": 32,
+                    "matched_table_count": 32,
                     "drifted_table_count": 0,
                     "tables": []
                 },
@@ -5741,8 +5762,6 @@ mod tests {
     }
 
     fn workspace_path(path: &str) -> std::path::PathBuf {
-        Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../..")
-            .join(path)
+        proof_run_artifact_fs_path(path)
     }
 }

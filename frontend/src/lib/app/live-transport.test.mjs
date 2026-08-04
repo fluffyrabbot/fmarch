@@ -374,6 +374,7 @@ test("ticket endpoints mint a fresh audience-bound socket URL before opening", a
   const connection = connectLiveProjection({
     url: "/live/tickets?game=midsummer",
     projectionStore: fakeProjectionStore({}),
+    resyncKeys: [],
     WebSocketCtor: FakeWebSocket,
     fetchImpl: async (url, init) => {
       requests.push({ url, init });
@@ -390,6 +391,81 @@ test("ticket endpoints mint a fresh audience-bound socket URL before opening", a
     FakeWebSocket.instances[0].url,
     "wss://api.example/ws?ticket=opaque&audience=fmarch-live",
   );
+  connection.close();
+});
+
+test("hung ticket mint is aborted before retrying connection establishment", async () => {
+  FakeWebSocket.instances = [];
+  const scheduled = [];
+  const events = [];
+  let ticketAttempt = 0;
+  const connection = connectLiveProjection({
+    url: "/live/tickets?game=midsummer",
+    projectionStore: fakeProjectionStore({}),
+    resyncKeys: [],
+    WebSocketCtor: FakeWebSocket,
+    recoveryTimeoutMs: 1,
+    fetchImpl: async (_url, { signal }) => {
+      ticketAttempt += 1;
+      if (ticketAttempt === 1) {
+        return await new Promise((_resolve, reject) => {
+          signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+        });
+      }
+      return jsonResponse({ url: "wss://api.example/ws?ticket=recovered" });
+    },
+    scheduleReconnect(callback, delayMs) {
+      scheduled.push({ callback, delayMs });
+      return scheduled.length;
+    },
+    onEvent: (message, snapshot) => events.push({ message, snapshot }),
+  });
+
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.equal(scheduled.length, 1);
+  assert.deepEqual(events.map((event) => event.message), [
+    { kind: "error", message: "live ticket request timed out" },
+    { kind: "reconnecting", attempt: 1 },
+  ]);
+
+  scheduled[0].callback();
+  await waitFor(() => FakeWebSocket.instances.length === 1);
+  await FakeWebSocket.instances[0].emit("open");
+
+  assert.deepEqual(events.at(-1).message, {
+    kind: "reconnect",
+    attempt: 1,
+    state: "recovered",
+  });
+  connection.close();
+});
+
+test("rate-limited ticket mint honors Retry-After before reconnecting", async () => {
+  const scheduled = [];
+  const events = [];
+  const connection = connectLiveProjection({
+    url: "/live/tickets?game=midsummer",
+    projectionStore: fakeProjectionStore({}),
+    WebSocketCtor: FakeWebSocket,
+    reconnectDelayMs: 1_000,
+    fetchImpl: async () => ({
+      ok: false,
+      status: 429,
+      headers: new Headers({ "retry-after": "17" }),
+    }),
+    scheduleReconnect(callback, delayMs) {
+      scheduled.push({ callback, delayMs });
+      return scheduled.length;
+    },
+    onEvent: (message, snapshot) => events.push({ message, snapshot }),
+  });
+
+  await waitFor(() => scheduled.length === 1);
+  assert.equal(scheduled[0].delayMs, 17_000);
+  assert.deepEqual(events.map((event) => event.message), [
+    { kind: "error", message: "live ticket request failed with HTTP 429" },
+    { kind: "reconnecting", attempt: 1 },
+  ]);
   connection.close();
 });
 
@@ -678,6 +754,100 @@ test("websocket close schedules reconnect and refreshes projections on reopen", 
     posts: [{ seq: 30, body: "missed while disconnected" }],
   });
   assert.deepEqual(store.refreshed, [["thread"]]);
+});
+
+test("failed reconnect refresh closes the unusable socket and retries recovery", async () => {
+  FakeWebSocket.instances = [];
+  const scheduled = [];
+  const events = [];
+  const store = fakeProjectionStore({ thread: { posts: [] } });
+  let refreshAttempt = 0;
+  store.refresh = async function refresh(keys) {
+    this.refreshed.push(keys);
+    refreshAttempt += 1;
+    if (refreshAttempt === 1) {
+      throw new Error("snapshot refresh unavailable");
+    }
+    this.snapshot = {
+      ...this.snapshot,
+      thread: { posts: [{ seq: 31, body: "recovered on retry" }] },
+    };
+    return this.snapshot;
+  };
+
+  const connection = connectLiveProjection({
+    url: "/ws?game=midsummer",
+    projectionStore: store,
+    WebSocketCtor: FakeWebSocket,
+    resyncKeys: ["thread"],
+    reconnectDelayMs: 42,
+    scheduleReconnect(callback, delayMs) {
+      scheduled.push({ callback, delayMs });
+      return scheduled.length;
+    },
+    onEvent: (message, snapshot) => events.push({ message, snapshot }),
+  });
+
+  connection.drop();
+  scheduled[0].callback();
+  await FakeWebSocket.instances[1].emit("open");
+
+  assert.equal(FakeWebSocket.instances[1].closed, true);
+  assert.deepEqual(events.slice(-3).map((event) => event.message), [
+    { kind: "error", message: "snapshot refresh unavailable" },
+    { kind: "close" },
+    { kind: "reconnecting", attempt: 2 },
+  ]);
+  assert.equal(scheduled.length, 2);
+  assert.equal(scheduled[1].delayMs, 42);
+
+  scheduled[1].callback();
+  await FakeWebSocket.instances[2].emit("open");
+
+  assert.deepEqual(events.at(-1), {
+    message: { kind: "reconnect", attempt: 2, state: "recovered" },
+    snapshot: {
+      thread: { posts: [{ seq: 31, body: "recovered on retry" }] },
+    },
+  });
+  assert.deepEqual(store.refreshed, [["thread"], ["thread"]]);
+});
+
+test("hung reconnect refresh is aborted before retrying recovery", async () => {
+  FakeWebSocket.instances = [];
+  const scheduled = [];
+  const events = [];
+  const store = fakeProjectionStore({ thread: { posts: [] } });
+  store.refresh = async (_keys, { signal }) =>
+    await new Promise((_resolve, reject) => {
+      signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+    });
+
+  const connection = connectLiveProjection({
+    url: "/ws?game=midsummer",
+    projectionStore: store,
+    WebSocketCtor: FakeWebSocket,
+    resyncKeys: ["thread"],
+    recoveryTimeoutMs: 1,
+    scheduleReconnect(callback, delayMs) {
+      scheduled.push({ callback, delayMs });
+      return scheduled.length;
+    },
+    onEvent: (message, snapshot) => events.push({ message, snapshot }),
+  });
+
+  connection.drop();
+  scheduled[0].callback();
+  await FakeWebSocket.instances[1].emit("open");
+
+  assert.equal(FakeWebSocket.instances[1].closed, true);
+  assert.deepEqual(events.slice(-3).map((event) => event.message), [
+    { kind: "error", message: "live projection recovery timed out" },
+    { kind: "close" },
+    { kind: "reconnecting", attempt: 2 },
+  ]);
+  assert.equal(scheduled.length, 2);
+  connection.close();
 });
 
 test("intentional websocket close does not schedule reconnect", async () => {

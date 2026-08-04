@@ -54,7 +54,7 @@ export function hostedMatrixHandoffSummaryForRoleLink({
   if (
     linkId !== "admin-proof:hosted-concurrent-race-matrix" ||
     typeof roleUrl !== "string" ||
-    !roleUrl.includes("/admin/audit/local-hosted-concurrent-race-matrix")
+    !roleUrl.includes("/_dev/ops/audit/local-hosted-concurrent-race-matrix")
   ) {
     return null;
   }
@@ -118,6 +118,6 @@ function auditIdFromProofGraphNodeRoleUrl(roleUrl) {
   if (typeof roleUrl !== "string") {
     return "";
   }
-  const match = roleUrl.match(/\/admin\/audit\/([^/?#]+)/);
+  const match = roleUrl.match(/\/_dev\/ops\/audit\/([^/?#]+)/);
   return match?.[1] ?? "";
 }

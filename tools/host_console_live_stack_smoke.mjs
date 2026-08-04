@@ -94,6 +94,7 @@ const adminCreatedGame = crypto.randomUUID();
 const rootAdminSessionToken = `host-console-live-stack-root-admin-${crypto.randomUUID()}`;
 const hostSessionToken = `host-console-live-stack-host-${crypto.randomUUID()}`;
 const playerSessionToken = `host-console-live-stack-player-${crypto.randomUUID()}`;
+const rolePmIncomingSessionToken = `host-console-live-stack-role-pm-incoming-${crypto.randomUUID()}`;
 const actionPlayerSessionToken = `host-console-live-stack-action-player-${crypto.randomUUID()}`;
 const racePlayerSessionToken = `host-console-live-stack-race-player-${crypto.randomUUID()}`;
 const seedPlayerSessionToken = `host-console-live-stack-seed-player-${crypto.randomUUID()}`;
@@ -105,7 +106,6 @@ const dayEventRoomOutgoing = dayEventRoomFixture.outgoing;
 const dayEventRoomIncoming = dayEventRoomFixture.incoming;
 const dayEventRoomId = dayEventRoomFixture.eventId;
 const dayEventRoomChannel = dayEventRoomFixture.channelId;
-const grantedGlobalModToken = `session-grant-${adminCreatedGame}`;
 const factionDayChatChannel = "private:mafia_day_chat";
 const factionDayChatRoute = encodeURIComponent(factionDayChatChannel);
 const factionDayChatPostBody = "Faction day chat received from live-stack smoke";
@@ -115,6 +115,7 @@ const rolePmRoute = encodeURIComponent(rolePmChannel);
 const rolePmHistoryBody = "Role PM history before replacement";
 const rolePmIncomingBody = "Incoming replacement continued the durable Role PM";
 const rolePmMediaAlt = "Transferred private Role PM receipt";
+const rolePmIncomingAccountId = `player-rowan-${game}@example.test`;
 const additionalRoomDefinitions = Object.freeze([
   Object.freeze({
     id: "mason",
@@ -228,29 +229,33 @@ if (!databaseUrl) {
 }
 
 let commandEnvelopeId = 1;
-const {
-  createAccountSession,
-  createAuthAccount,
-  createGrantedSession,
-} = createLiveStackAuth({
+const issuedSessionTokens = new Map([[rootAdminSessionToken, rootAdminSessionToken]]);
+const liveStackAuth = createLiveStackAuth({
   apiBaseUrl,
   fetchJson,
   rootAdminSessionToken,
 });
+const { createAuthAccount } = liveStackAuth;
+const createAccountSession = async (options) =>
+  registerIssuedSession(options.token, await liveStackAuth.createAccountSession(options));
+const createGrantedSession = async (options) =>
+  registerIssuedSession(options.token, await liveStackAuth.createGrantedSession(options));
 const sendCommand = createLiveStackCommandSender({
   apiBaseUrl,
   fetchJson,
   nextEnvelopeId: () => commandEnvelopeId++,
   sessionTokenForPrincipal: (principalUserId) =>
-    ({
+    resolveSessionToken(({
       host_h: hostSessionToken,
+      admin_a: adminSessionToken,
       "player-mira": playerSessionToken,
+      "player-rowan": rolePmIncomingSessionToken,
       "player-seed": seedPlayerSessionToken,
       "player-target": targetPlayerSessionToken,
       "player-goon-a": racePlayerSessionToken,
       "player-goon-b": goonBSessionToken,
       "action-goon": actionPlayerSessionToken,
-    })[principalUserId],
+    })[principalUserId]),
 });
 let server;
 let vite;
@@ -258,10 +263,15 @@ let browser;
 let smokeDatabase;
 let serverOutput = "";
 let primaryError = null;
+const moderatorSocketDiagnostics = [];
+const moderatorTicketDiagnostics = [];
+const moderatorConsoleDiagnostics = [];
 const previousSmokeAuth = process.env.FMARCH_HOST_CONSOLE_SMOKE_AUTH;
 const previousApiBaseUrl = process.env.FMARCH_API_BASE_URL;
+const previousApiInternalUrl = process.env.FMARCH_API_INTERNAL_URL;
 process.env.FMARCH_HOST_CONSOLE_SMOKE_AUTH = "1";
-process.env.FMARCH_API_BASE_URL = apiBaseUrl;
+delete process.env.FMARCH_API_BASE_URL;
+process.env.FMARCH_API_INTERNAL_URL = apiBaseUrl;
 process.chdir(frontendRoot);
 
 try {
@@ -278,6 +288,18 @@ try {
       DATABASE_URL: smokeDatabase.url,
       FMARCH_BIND: `${host}:${apiPort}`,
       FMARCH_MEDIA_ROOT: mediaRoot,
+      FMARCH_EVENT_ENCRYPTION_KEY:
+        process.env.FMARCH_EVENT_ENCRYPTION_KEY ??
+        "host-console-live-proof-key-at-least-32-bytes",
+      FMARCH_EVENT_ENCRYPTION_KID:
+        process.env.FMARCH_EVENT_ENCRYPTION_KID ?? "host-console-live-proof-v1",
+      FMARCH_AUTH_SOURCE_SIGNING_KEY:
+        process.env.FMARCH_AUTH_SOURCE_SIGNING_KEY ??
+        "host-console-live-proof-signing-key-at-least-32-bytes",
+      FMARCH_DB_MAX_CONNECTIONS:
+        process.env.FMARCH_DB_MAX_CONNECTIONS ?? "48",
+      FMARCH_HTTP_REQUEST_TIMEOUT_MS:
+        process.env.FMARCH_HTTP_REQUEST_TIMEOUT_MS ?? "180000",
       RUST_LOG: process.env.RUST_LOG ?? "warn",
     },
     stdio: ["ignore", "pipe", "pipe"],
@@ -315,6 +337,10 @@ try {
   } else {
     await writeProgress({ stage: "create-granted-sessions", game });
     grantedSessions = await createGrantedSessions();
+    await writeProgress({ stage: "seed-admin-setup-game", game: adminCreatedGame });
+    await sendCommand("admin_a", {
+      CreateGame: { game: adminCreatedGame, pack: "mafiascum" },
+    });
     await writeProgress({ stage: "seed-game", game });
     seedCommands = await seedGame();
     await writeProgress({ stage: "seed-action-game", actionGame });
@@ -391,6 +417,7 @@ try {
     : browserEvidence.moderator?.apiStateBeforePrompt ??
       (await fetchJson(
         `${apiBaseUrl}/games/${game}/host-console-state?principal_user_id=host_h&slot_id=slot-7`,
+        { headers: { authorization: `Bearer ${hostSessionToken}` } },
       ));
   if (!dayEventRoomOnly) assertApiProjection(apiState);
   const slotLifecycleApiState = dayEventRoomOnly
@@ -398,6 +425,7 @@ try {
     : browserEvidence.moderator?.slotLifecycle?.apiStateAfter ??
       (await fetchJson(
         `${apiBaseUrl}/games/${game}/host-console-state?principal_user_id=host_h&slot_id=slot-7`,
+        { headers: { authorization: `Bearer ${hostSessionToken}` } },
       ));
   if (!dayEventRoomOnly) assertSlotLifecycleApiProjection(slotLifecycleApiState);
 
@@ -477,6 +505,9 @@ try {
   if (vite !== undefined) {
     await vite.close();
   }
+  if (server !== undefined) {
+    await stopChild(server, "rust server");
+  }
   if (smokeDatabase !== undefined) {
     await writeProgress({
       stage: primaryError === null ? "drop-temp-database" : "failed",
@@ -498,9 +529,6 @@ try {
       );
     }
   }
-  if (server !== undefined) {
-    await stopChild(server, "rust server");
-  }
   if (previousSmokeAuth === undefined) {
     delete process.env.FMARCH_HOST_CONSOLE_SMOKE_AUTH;
   } else {
@@ -510,6 +538,11 @@ try {
     delete process.env.FMARCH_API_BASE_URL;
   } else {
     process.env.FMARCH_API_BASE_URL = previousApiBaseUrl;
+  }
+  if (previousApiInternalUrl === undefined) {
+    delete process.env.FMARCH_API_INTERNAL_URL;
+  } else {
+    process.env.FMARCH_API_INTERNAL_URL = previousApiInternalUrl;
   }
 }
 
@@ -939,6 +972,25 @@ async function seedFactionDayChatFixture() {
 
 async function seedRootAdminSession() {
   await runSql(smokeDatabase.url, `
+    INSERT INTO auth_account (
+      account_id,
+      principal_user_id,
+      password_hash,
+      created_at,
+      disabled_at,
+      global_capabilities
+    )
+    VALUES (
+      'host-console-root-admin@local.fmarch.test',
+      'root_admin',
+      'seed-only-not-a-real-hash',
+      0,
+      NULL,
+      ARRAY['GlobalAdmin']::TEXT[]
+    )
+    ON CONFLICT (account_id) DO NOTHING;
+  `);
+  await runSql(smokeDatabase.url, `
     INSERT INTO auth_session (
       token_hash,
       principal_user_id,
@@ -984,6 +1036,16 @@ async function seedRootAdminSession() {
   };
 }
 
+function registerIssuedSession(requestedToken, session) {
+  issuedSessionTokens.set(requestedToken, session.sessionToken);
+  const { sessionToken: _sessionToken, ...evidence } = session;
+  return evidence;
+}
+
+function resolveSessionToken(token) {
+  return issuedSessionTokens.get(token) ?? token;
+}
+
 async function createGrantedSessions() {
   return {
     admin: await createGrantedSession({
@@ -1000,6 +1062,12 @@ async function createGrantedSessions() {
       token: playerSessionToken,
       principalUserId: "player-mira",
       label: "player-mira",
+    }),
+    rolePmIncoming: await createAccountSession({
+      token: rolePmIncomingSessionToken,
+      principalUserId: "player-rowan",
+      label: "role-pm-incoming",
+      accountId: rolePmIncomingAccountId,
     }),
     actionPlayer: await createGrantedSession({
       token: actionPlayerSessionToken,
@@ -1105,6 +1173,8 @@ async function driveBrowser(
         frontendBaseUrl,
         seed: dayEventRoomSeed,
         sendCommand,
+        sessionTokenFor: resolveSessionToken,
+        hostSessionToken: resolveSessionToken(hostSessionToken),
         viewport: smokeViewport,
       }),
     };
@@ -1136,6 +1206,8 @@ async function driveBrowser(
       frontendBaseUrl,
       seed: dayEventRoomSeed,
       sendCommand,
+      sessionTokenFor: resolveSessionToken,
+      hostSessionToken: resolveSessionToken(hostSessionToken),
       viewport: smokeViewport,
     });
     const rolePmHistory = await seedRolePmHistory(
@@ -1229,7 +1301,7 @@ async function drivePlayerPrivateChannelBrowser(frontendBaseUrl, privateChannelF
   await context.addCookies([
     {
       name: "fmarch_session",
-      value: playerSessionToken,
+      value: resolveSessionToken(playerSessionToken),
       domain: host,
       path: "/",
       httpOnly: true,
@@ -1263,6 +1335,9 @@ async function drivePlayerPrivateChannelBrowser(frontendBaseUrl, privateChannelF
   if (privateChannelFixture.memberPrincipalUserId !== "player-mira") {
     throw new Error(`private media fixture member drifted: ${JSON.stringify(privateChannelFixture)}`);
   }
+  await page.getByTestId("player-media-composer").evaluate((node) => {
+    node.open = true;
+  });
   const upload = generatedThreadMediaPng(factionDayChatUploadAsset);
   await page.getByTestId("player-media-file").setInputFiles({
     name: "private-faction-receipt.png",
@@ -1301,6 +1376,7 @@ async function drivePlayerPrivateChannelBrowser(frontendBaseUrl, privateChannelF
   );
   const privateThreadPage = await fetchJson(
     `${apiBaseUrl}/games/${game}/channels/${factionDayChatRoute}/thread?principal_user_id=player-mira&limit=50`,
+    { headers: { authorization: `Bearer ${playerSessionToken}` } },
   );
   const mediaPost = privateThreadPage.posts?.find(
     (post) => post.body === factionDayChatPostBody,
@@ -1507,6 +1583,9 @@ async function driveAdditionalRoomLifecycle(frontendBaseUrl, room) {
       accent: room.id === "mason" ? [68, 101, 132] : [113, 86, 128],
     },
   });
+  await outgoingPage.getByTestId("player-media-composer").evaluate((node) => {
+    node.open = true;
+  });
   await outgoingPage.getByTestId("player-media-file").setInputFiles({
     name: `${room.id}-private-receipt.png`,
     mimeType: "image/png",
@@ -1564,6 +1643,7 @@ async function driveAdditionalRoomLifecycle(frontendBaseUrl, room) {
   );
   const initialThread = await fetchJson(
     `${apiBaseUrl}/games/${additionalRoomsGame}/channels/${room.route}/thread?principal_user_id=${room.outgoing.principalUserId}&limit=50`,
+    { headers: { authorization: `Bearer ${room.outgoing.sessionToken}` } },
   );
   const historyPost = initialThread.posts?.find(
     (post) => post.body === room.historyBody,
@@ -1710,6 +1790,7 @@ async function driveAdditionalRoomLifecycle(frontendBaseUrl, room) {
   }
   const finalThread = await fetchJson(
     `${apiBaseUrl}/games/${additionalRoomsGame}/channels/${room.route}/thread?principal_user_id=${room.incoming.principalUserId}&limit=50`,
+    { headers: { authorization: `Bearer ${room.incoming.sessionToken}` } },
   );
   if (
     finalThread.posts?.length !== 2 ||
@@ -1822,7 +1903,7 @@ async function proveAdditionalRoomDenial({
   await page.getByTestId("route-error-surface").waitFor({ state: "visible" });
   const threadResponse = await fetchWithTimeout(
     `${apiBaseUrl}/games/${additionalRoomsGame}/channels/${room.route}/thread?principal_user_id=${principalUserId}&limit=50`,
-    {},
+    { headers: { authorization: `Bearer ${resolveSessionToken(token)}` } },
     15_000,
   );
   if (threadResponse.status !== 403) {
@@ -1845,7 +1926,6 @@ async function proveAdditionalRoomDenial({
         kind: "Command",
         body: {
           command_id: crypto.randomUUID(),
-          principal_user_id: principalUserId,
           command: {
             SubmitPost: {
               game: additionalRoomsGame,
@@ -1945,9 +2025,14 @@ async function driveDeadChatBrowser(frontendBaseUrl, seed) {
     "player-command-channel-context",
   );
   await channelContext.waitFor({ state: "visible" });
+  const actorState = await outgoingPage.evaluate(() => ({
+    alive: window.__fmarchPlayerProjection?.commandState?.actorAlive,
+    status: window.__fmarchPlayerProjection?.commandState?.actorStatus,
+  }));
   if (
     (await channelContext.getAttribute("data-channel-id")) !== "dead" ||
-    (await channelContext.getAttribute("data-actor-alive")) !== "false"
+    actorState.alive !== false ||
+    actorState.status !== "dead"
   ) {
     throw new Error("dead-chat browser command context did not retain dead actor state");
   }
@@ -1971,6 +2056,9 @@ async function driveDeadChatBrowser(frontendBaseUrl, seed) {
       ...factionDayChatUploadAsset.palette,
       accent: [88, 91, 112],
     },
+  });
+  await outgoingPage.getByTestId("player-media-composer").evaluate((node) => {
+    node.open = true;
   });
   await outgoingPage.getByTestId("player-media-file").setInputFiles({
     name: "dead-chat-receipt.png",
@@ -2028,6 +2116,7 @@ async function driveDeadChatBrowser(frontendBaseUrl, seed) {
   );
   const initialThread = await fetchJson(
     `${apiBaseUrl}/games/${deadChatGame}/channels/dead/thread?principal_user_id=${deadChatDefinition.outgoing.principalUserId}&limit=50`,
+    { headers: { authorization: `Bearer ${deadChatDefinition.outgoing.sessionToken}` } },
   );
   const historyPost = initialThread.posts?.find(
     (post) => post.body === deadChatDefinition.historyBody,
@@ -2162,6 +2251,7 @@ async function driveDeadChatBrowser(frontendBaseUrl, seed) {
   await incomingPage.getByTestId("player-surface").waitFor({ state: "visible" });
   const finalThread = await fetchJson(
     `${apiBaseUrl}/games/${deadChatGame}/channels/dead/thread?principal_user_id=${deadChatDefinition.incoming.principalUserId}&limit=50`,
+    { headers: { authorization: `Bearer ${deadChatDefinition.incoming.sessionToken}` } },
   );
   if (
     finalThread.posts?.length !== 2 ||
@@ -2308,7 +2398,7 @@ async function driveSpectatorBrowser(frontendBaseUrl, seed) {
     );
   }
   const preGrantThread = await preGrantContext.request.get(
-    `${frontendBaseUrl}/games/${spectatorGame}/channels/spectator/thread?principal_user_id=${spectatorDefinition.principalUserId}&limit=50`,
+    `${frontendBaseUrl}/api/gameplay/games/${spectatorGame}/channels/spectator/thread?principal_user_id=${spectatorDefinition.principalUserId}&limit=50`,
   );
   if (preGrantThread.status() !== 403) {
     throw new Error(`pre-grant spectator received thread rows (${preGrantThread.status()})`);
@@ -2347,7 +2437,7 @@ async function driveSpectatorBrowser(frontendBaseUrl, seed) {
     {
       method: "POST",
       headers: {
-        authorization: `Bearer ${spectatorDefinition.sessionToken}`,
+        authorization: `Bearer ${resolveSessionToken(spectatorDefinition.sessionToken)}`,
         "content-type": "image/png",
       },
       body: upload.bytes,
@@ -2393,6 +2483,7 @@ async function driveSpectatorBrowser(frontendBaseUrl, seed) {
 
   const thread = await fetchJson(
     `${apiBaseUrl}/games/${spectatorGame}/channels/spectator/thread?principal_user_id=${spectatorDefinition.principalUserId}&limit=50`,
+    { headers: { authorization: `Bearer ${spectatorDefinition.sessionToken}` } },
   );
   const historyPost = thread.posts?.find(
     (post) => post.body === spectatorDefinition.historyBody,
@@ -2478,7 +2569,6 @@ async function driveSpectatorBrowser(frontendBaseUrl, seed) {
         kind: "Command",
         body: {
           command_id: crypto.randomUUID(),
-          principal_user_id: spectatorDefinition.principalUserId,
           command: {
             SubmitPost: {
               game: spectatorGame,
@@ -2511,9 +2601,9 @@ async function driveSpectatorBrowser(frontendBaseUrl, seed) {
     deniedEndpoints[id] = denied.status();
   }
   for (const [id, path] of Object.entries({
-    notifications: `/games/${spectatorGame}/notifications?principal_user_id=${spectatorDefinition.principalUserId}`,
-    investigations: `/games/${spectatorGame}/investigation-results?principal_user_id=${spectatorDefinition.principalUserId}`,
-    commandState: `/games/${spectatorGame}/player-command-state?principal_user_id=${spectatorDefinition.principalUserId}`,
+    notifications: `/api/gameplay/games/${spectatorGame}/notifications?principal_user_id=${spectatorDefinition.principalUserId}`,
+    investigations: `/api/gameplay/games/${spectatorGame}/investigation-results?principal_user_id=${spectatorDefinition.principalUserId}`,
+    commandState: `/api/gameplay/games/${spectatorGame}/player-command-state?principal_user_id=${spectatorDefinition.principalUserId}`,
   })) {
     const denied = await context.request.get(`${frontendBaseUrl}${path}`);
     if (denied.status() !== 403) {
@@ -2533,7 +2623,7 @@ async function driveSpectatorBrowser(frontendBaseUrl, seed) {
     throw new Error(`revoked spectator route expected 403, got ${revokedRoute?.status() ?? "none"}`);
   }
   const revokedThread = await context.request.get(
-    `${frontendBaseUrl}/games/${spectatorGame}/channels/spectator/thread?principal_user_id=${spectatorDefinition.principalUserId}&limit=50`,
+    `${frontendBaseUrl}/api/gameplay/games/${spectatorGame}/channels/spectator/thread?principal_user_id=${spectatorDefinition.principalUserId}&limit=50`,
   );
   if (revokedThread.status() !== 403) {
     throw new Error(`revoked spectator received thread rows (${revokedThread.status()})`);
@@ -2555,7 +2645,6 @@ async function driveSpectatorBrowser(frontendBaseUrl, seed) {
         kind: "Command",
         body: {
           command_id: crypto.randomUUID(),
-          principal_user_id: spectatorDefinition.principalUserId,
           command: {
             SubmitPost: {
               game: spectatorGame,
@@ -2650,7 +2739,7 @@ async function proveDeadChatDenial({
   await page.getByTestId("route-error-surface").waitFor({ state: "visible" });
   const threadResponse = await fetchWithTimeout(
     `${apiBaseUrl}/games/${deadChatGame}/channels/dead/thread?principal_user_id=${principalUserId}&limit=50`,
-    {},
+    { headers: { authorization: `Bearer ${resolveSessionToken(token)}` } },
     15_000,
   );
   if (threadResponse.status !== 403) {
@@ -2679,7 +2768,6 @@ async function proveDeadChatDenial({
         kind: "Command",
         body: {
           command_id: crypto.randomUUID(),
-          principal_user_id: principalUserId,
           command: {
             SubmitPost: {
               game: deadChatGame,
@@ -2718,7 +2806,7 @@ async function browserContextWithSession(token) {
   await context.addCookies([
     {
       name: "fmarch_session",
-      value: token,
+      value: resolveSessionToken(token),
       domain: host,
       path: "/",
       httpOnly: true,
@@ -2783,6 +2871,7 @@ async function seedRolePmHistory(contentId) {
   });
   const thread = await fetchJson(
     `${apiBaseUrl}/games/${game}/channels/${rolePmRoute}/thread?principal_user_id=player-mira&limit=50`,
+    { headers: { authorization: `Bearer ${playerSessionToken}` } },
   );
   const post = thread.posts?.find((candidate) => candidate.body === rolePmHistoryBody);
   if (post === undefined) {
@@ -2817,17 +2906,16 @@ async function seedRolePmHistory(contentId) {
 }
 
 async function drivePrivateChannelForbiddenBrowser(frontendBaseUrl, privateMediaPath) {
-  const deniedToken = `host-console-live-stack-denied-${crypto.randomUUID()}`;
-  const deniedSession = await createAccountSession({
-    token: deniedToken,
+  const deniedToken = targetPlayerSessionToken;
+  const deniedSession = {
     principalUserId: "player-target",
-    label: "private-media-nonmember",
-  });
+    authentication: "existing-enabled-account-session",
+  };
   const context = await browser.newContext({ viewport: smokeViewport });
   await context.addCookies([
     {
       name: "fmarch_session",
-      value: deniedToken,
+      value: resolveSessionToken(deniedToken),
       domain: host,
       path: "/",
       httpOnly: true,
@@ -2898,17 +2986,11 @@ async function driveRolePmReplacementBrowser(frontendBaseUrl, fixture) {
   if (fixture?.channelId !== rolePmChannel || fixture?.memberSlot !== "slot-7") {
     throw new Error(`Role PM replacement fixture drifted: ${JSON.stringify(fixture)}`);
   }
-  const incomingToken = `host-console-live-stack-role-pm-incoming-${crypto.randomUUID()}`;
-  const incomingSession = await createAccountSession({
-    token: incomingToken,
-    principalUserId: fixture.incomingPrincipalUserId,
-    label: "role-pm-incoming",
-  });
   const incomingContext = await browser.newContext({ viewport: smokeViewport });
   await incomingContext.addCookies([
     {
       name: "fmarch_session",
-      value: incomingToken,
+      value: resolveSessionToken(rolePmIncomingSessionToken),
       domain: host,
       path: "/",
       httpOnly: true,
@@ -3043,6 +3125,7 @@ async function driveRolePmReplacementBrowser(frontendBaseUrl, fixture) {
   }
   const apiThread = await fetchJson(
     `${apiBaseUrl}/games/${game}/channels/${rolePmRoute}/thread?principal_user_id=player-rowan&limit=50`,
+    { headers: { authorization: `Bearer ${resolveSessionToken(rolePmIncomingSessionToken)}` } },
   );
   if (
     !apiThread.posts?.some((post) => post.body === rolePmHistoryBody) ||
@@ -3056,7 +3139,7 @@ async function driveRolePmReplacementBrowser(frontendBaseUrl, fixture) {
   await outgoingContext.addCookies([
     {
       name: "fmarch_session",
-      value: playerSessionToken,
+      value: resolveSessionToken(playerSessionToken),
       domain: host,
       path: "/",
       httpOnly: true,
@@ -3073,7 +3156,7 @@ async function driveRolePmReplacementBrowser(frontendBaseUrl, fixture) {
   await outgoingPage.getByTestId("route-error-surface").waitFor({ state: "visible" });
   const staleThreadResponse = await fetchWithTimeout(
     `${apiBaseUrl}/games/${game}/channels/${rolePmRoute}/thread?principal_user_id=player-mira&limit=50`,
-    {},
+    { headers: { authorization: `Bearer ${resolveSessionToken(playerSessionToken)}` } },
     15_000,
   );
   if (staleThreadResponse.status !== 403) {
@@ -3099,7 +3182,6 @@ async function driveRolePmReplacementBrowser(frontendBaseUrl, fixture) {
           kind: "Command",
           body: {
             command_id: crypto.randomUUID(),
-            principal_user_id: "player-mira",
             command: {
               SubmitPost: {
                 game,
@@ -3129,7 +3211,11 @@ async function driveRolePmReplacementBrowser(frontendBaseUrl, fixture) {
     pageUrl,
     channelId: rolePmChannel,
     slotId: "slot-7",
-    incomingSession,
+    incomingSession: {
+      accountId: rolePmIncomingAccountId,
+      principalUserId: fixture.incomingPrincipalUserId,
+      authentication: "enabled-account-login",
+    },
     incoming: {
       principalUserId: "player-rowan",
       commandStatus,
@@ -3159,7 +3245,7 @@ async function driveAdminBrowser(frontendBaseUrl) {
   await context.addCookies([
     {
       name: "fmarch_session",
-      value: adminSessionToken,
+      value: resolveSessionToken(adminSessionToken),
       domain: host,
       path: "/",
       httpOnly: true,
@@ -3180,6 +3266,10 @@ async function driveAdminBrowser(frontendBaseUrl) {
   if (!["GlobalAdmin", "Site administrator"].includes(capability)) {
     throw new Error(`admin capability did not render GlobalAdmin: ${capability}`);
   }
+  const supportingEvidence = page.getByTestId("admin-supporting-evidence");
+  await supportingEvidence.evaluate((node) => {
+    node.open = true;
+  });
   const proofCard = page.locator('[data-testid^="admin-audit-"]').first();
   await proofCard.waitFor({ state: "visible" });
   const proofCardText = await proofCard.innerText();
@@ -3188,132 +3278,7 @@ async function driveAdminBrowser(frontendBaseUrl) {
   }
   const inspect = proofCard.locator("a").first();
   assertHitTarget(await inspect.boundingBox(), "admin audit inspect");
-  const createButton = page
-    .getByTestId("admin-setup-create-game")
-    .locator("button")
-    .first();
-  assertHitTarget(await createButton.boundingBox(), "admin create game");
-  await createButton.click();
-  const createStatus = page.getByTestId("admin-command-status-create-game");
-  await createStatus.waitFor({ state: "visible" });
-  if ((await createStatus.getAttribute("data-state")) !== "confirm") {
-    throw new Error("admin create game did not render confirmation");
-  }
-  const createConfirm = page.getByTestId("admin-command-confirm-create-game");
-  assertHitTarget(await createConfirm.boundingBox(), "admin create game confirm");
-  await createConfirm.click();
-  await page.waitForFunction(() => {
-    const node = document.querySelector(
-      '[data-testid="admin-command-status-create-game"]',
-    );
-    return node?.getAttribute("data-state") === "ack";
-  });
-  const createOutcome = await page.evaluate(
-    () => window.__fmarchAdminCommandOutcome,
-  );
-  assertAdminCreateGameEnvelope(createOutcome?.requestEnvelope);
-  const createStatusText = await createStatus.innerText();
-  const cohostButton = page
-    .getByTestId("admin-setup-cohost")
-    .locator("button")
-    .first();
-  assertHitTarget(await cohostButton.boundingBox(), "admin cohost delegation");
-  await cohostButton.click();
-  const cohostStatus = page.getByTestId("admin-command-status-cohost");
-  await cohostStatus.waitFor({ state: "visible" });
-  if ((await cohostStatus.getAttribute("data-state")) !== "confirm") {
-    throw new Error("admin cohost delegation did not render confirmation");
-  }
-  const cohostConfirm = page.getByTestId("admin-command-confirm-cohost");
-  assertHitTarget(await cohostConfirm.boundingBox(), "admin cohost confirm");
-  await cohostConfirm.click();
-  await page.waitForFunction(() => {
-    const node = document.querySelector(
-      '[data-testid="admin-command-status-cohost"]',
-    );
-    return node?.getAttribute("data-state") === "ack";
-  });
-  const cohostOutcome = await page.evaluate(
-    () => window.__fmarchAdminCommandStatuses?.cohost,
-  );
-  assertAdminCohostEnvelope(cohostOutcome?.requestEnvelope);
-  const cohostStatusText = await cohostStatus.innerText();
-  const sessionGrantButton = page
-    .getByTestId("admin-setup-session-grants")
-    .locator("button")
-    .first();
-  assertHitTarget(await sessionGrantButton.boundingBox(), "admin session grant");
-  await sessionGrantButton.click();
-  const sessionGrantStatus = page.getByTestId("admin-command-status-session-grants");
-  await sessionGrantStatus.waitFor({ state: "visible" });
-  if ((await sessionGrantStatus.getAttribute("data-state")) !== "confirm") {
-    throw new Error("admin session grant did not render confirmation");
-  }
-  const sessionGrantConfirm = page.getByTestId(
-    "admin-command-confirm-session-grants",
-  );
-  assertHitTarget(await sessionGrantConfirm.boundingBox(), "admin session grant confirm");
-  await Promise.all([
-    page.waitForNavigation({ waitUntil: "networkidle" }),
-    sessionGrantConfirm.click(),
-  ]);
-  const sessionGrantResult = page.getByTestId(
-    "admin-command-status-session-grants",
-  );
-  await sessionGrantResult.waitFor({ state: "visible" });
-  await page.waitForFunction(() => {
-    const node = document.querySelector(
-      '[data-testid="admin-command-status-session-grants"]',
-    );
-    return node?.getAttribute("data-state") === "ack";
-  });
-  const sessionGrantStatusText = await sessionGrantResult.innerText();
-  const createdSession = await fetchJson(
-    `${apiBaseUrl}/auth/session?game=${adminCreatedGame}`,
-    {
-      headers: {
-        authorization: `Bearer ${adminSessionToken}`,
-      },
-    },
-  );
-  const createdCapabilityKinds = (createdSession.capabilities ?? []).map(
-    (capability) => capability.kind,
-  );
-  if (!createdCapabilityKinds.includes("HostOf")) {
-    throw new Error(
-      `admin-created game did not grant HostOf: ${JSON.stringify(createdSession)}`,
-    );
-  }
-  const delegatedSession = await fetchJson(
-    `${apiBaseUrl}/auth/session?game=${adminCreatedGame}`,
-    {
-      headers: {
-        authorization: `Bearer ${cohostSessionToken}`,
-      },
-    },
-  );
-  const delegatedCapabilityKinds = (delegatedSession.capabilities ?? []).map(
-    (capability) => capability.kind,
-  );
-  if (!delegatedCapabilityKinds.includes("CohostOf")) {
-    throw new Error(
-      `admin cohost delegation did not grant CohostOf: ${JSON.stringify(delegatedSession)}`,
-    );
-  }
-  const grantedGlobalModSession = await fetchJson(`${apiBaseUrl}/auth/session`, {
-    headers: {
-      authorization: `Bearer ${grantedGlobalModToken}`,
-    },
-  });
-  const grantedGlobalModCapabilityKinds = (
-    grantedGlobalModSession.capabilities ?? []
-  ).map((capability) => capability.kind);
-  if (!grantedGlobalModCapabilityKinds.includes("GlobalMod")) {
-    throw new Error(
-      `admin session grant did not grant GlobalMod: ${JSON.stringify(grantedGlobalModSession)}`,
-    );
-  }
-  const grantedGlobalModLogin = await driveGrantedGlobalModLogin(frontendBaseUrl);
+  const auditInspectHref = await inspect.getAttribute("href");
   const hostSetup = await driveHostSetupBrowser(page, frontendBaseUrl);
 
   await context.close();
@@ -3321,24 +3286,7 @@ async function driveAdminBrowser(frontendBaseUrl) {
     url: pageUrl,
     capability,
     proofCardText,
-    createStatusText,
-    createOutcome,
-    cohostStatusText,
-    cohostOutcome,
-    sessionGrantStatusText,
-    createdSession: {
-      principalUserId: createdSession.principal_user_id,
-      capabilityKinds: createdCapabilityKinds,
-    },
-    delegatedSession: {
-      principalUserId: delegatedSession.principal_user_id,
-      capabilityKinds: delegatedCapabilityKinds,
-    },
-    grantedGlobalModSession: {
-      principalUserId: grantedGlobalModSession.principal_user_id,
-      capabilityKinds: grantedGlobalModCapabilityKinds,
-    },
-    grantedGlobalModLogin,
+    auditInspectHref,
     hostSetup,
   };
 }
@@ -3350,6 +3298,7 @@ async function driveHostSetupBrowser(page, frontendBaseUrl) {
     await page.getByTestId("admin-surface").waitFor({ state: "visible" });
   }
 
+  await page.getByTestId("admin-inbox-task-setup-host-setup").click();
   const setupTrigger = page.getByTestId("admin-command-trigger-host-setup");
   await setupTrigger.waitFor({ state: "visible" });
   const setupTriggerBox = await setupTrigger.boundingBox();
@@ -3371,13 +3320,17 @@ async function driveHostSetupBrowser(page, frontendBaseUrl) {
   }
 
   const slotId = "slot_1";
-  const occupantUserId = "player_mira";
+  const occupantUserId = "player-mira";
   const roleKey = "vanilla_townie";
   const addSlotForm = page.getByTestId("host-setup-add-slot-form");
   await addSlotForm.waitFor({ state: "visible" });
   const addSlotInput = addSlotForm.locator('input[name="slotId"]');
-  await addSlotInput.fill(slotId);
-  const addSlotButton = page.getByRole("button", { name: "Add slot" });
+  if ((await addSlotInput.inputValue()) !== slotId) {
+    throw new Error("fresh setup route did not derive slot_1 as its next seat");
+  }
+  const addSlotButton = addSlotForm.getByRole("button", {
+    name: "Add next seat",
+  });
   const addSlotBox = await addSlotButton.boundingBox();
   assertHitTarget(addSlotBox, "host setup add slot");
   await addSlotButton.click();
@@ -3393,9 +3346,11 @@ async function driveHostSetupBrowser(page, frontendBaseUrl) {
 
   const rosterRow = page.getByTestId(`host-setup-slot-${slotId}`);
   await rosterRow.waitFor({ state: "visible" });
-  await rosterRow.locator('input[name="principalUserId"]').fill(occupantUserId);
+  await rosterRow
+    .locator('select[name="principalUserId"]')
+    .selectOption(occupantUserId);
   const assignSlotButton = rosterRow.getByRole("button", {
-    name: "Assign",
+    name: "Assign player",
     exact: true,
   });
   const assignSlotBox = await assignSlotButton.boundingBox();
@@ -3513,6 +3468,9 @@ async function driveHostSetupBrowser(page, frontendBaseUrl) {
   const hostConsoleUrl = page.url();
   const hostConsoleState = await fetchJson(
     `${apiBaseUrl}/games/${adminCreatedGame}/host-console-state?principal_user_id=admin_a&slot_id=${slotId}`,
+    {
+      headers: { authorization: `Bearer ${adminSessionToken}` },
+    },
   );
   if (hostConsoleState.phase?.phase_id !== "D01") {
     throw new Error(
@@ -3568,67 +3526,12 @@ async function setupReadiness(page) {
   return await page.evaluate(() => window.__fmarchHostSetupReadiness ?? null);
 }
 
-async function driveGrantedGlobalModLogin(frontendBaseUrl) {
-  const context = await browser.newContext({ viewport: smokeViewport });
-  const page = await context.newPage();
-  const returnTo = `/admin?game=${adminCreatedGame}`;
-  const loginUrl = `${frontendBaseUrl}/auth/invite?returnTo=${encodeURIComponent(returnTo)}`;
-  const response = await page.goto(loginUrl, { waitUntil: "networkidle" });
-  if (response === null || !response.ok()) {
-    throw new Error(
-      `auth login route failed with ${response?.status() ?? "no response"}: ${await page.textContent("body")}`,
-    );
-  }
-  await page.getByTestId("auth-invite-surface").waitFor({ state: "visible" });
-  await page.getByTestId("auth-invite-token").fill(grantedGlobalModToken);
-  await Promise.all([
-    page.waitForURL(`${frontendBaseUrl}${returnTo}`, { waitUntil: "networkidle" }),
-    page.getByTestId("auth-invite-submit").click(),
-  ]);
-  await page.getByTestId("admin-surface").waitFor({ state: "visible" });
-  const capability = await page.getByTestId("admin-capability").innerText();
-  if (capability !== "GlobalMod") {
-    throw new Error(`login-granted admin capability did not render GlobalMod: ${capability}`);
-  }
-  const sessionCookies = (await context.cookies(frontendBaseUrl)).filter(
-    (cookie) => cookie.name === "fmarch_session",
-  );
-  const sessionCookie = sessionCookies.at(-1);
-  if (sessionCookie === undefined || sessionCookie.value !== grantedGlobalModToken) {
-    throw new Error(
-      `auth login did not write fmarch_session cookie: ${JSON.stringify(sessionCookies)}`,
-    );
-  }
-  const proofCard = page.locator('[data-testid^="admin-audit-"]').first();
-  await proofCard.waitFor({ state: "visible" });
-  const proofCardText = await proofCard.innerText();
-  const finalUrl = page.url();
-  await context.close();
-  return {
-    loginUrl,
-    returnTo,
-    finalUrl,
-    capability,
-    sessionCookie: {
-      name: sessionCookie.name,
-      path: sessionCookie.path,
-      httpOnly: sessionCookie.httpOnly,
-      sameSite: sessionCookie.sameSite,
-      secure: sessionCookie.secure,
-      valueMatchesGrantedToken: sessionCookie.value === grantedGlobalModToken,
-    },
-    proofCardText,
-    proof:
-      "A GlobalAdmin-issued /auth/session-grants token was submitted through /auth/invite, the SvelteKit action verified it with /auth/session, wrote the httpOnly fmarch_session cookie, redirected to /admin, and rendered the authenticated GlobalMod UI without a pre-seeded browser cookie.",
-  };
-}
-
 async function drivePlayerBrowser(frontendBaseUrl) {
   const context = await browser.newContext({ viewport: smokeViewport });
   await context.addCookies([
     {
       name: "fmarch_session",
-      value: playerSessionToken,
+      value: resolveSessionToken(playerSessionToken),
       domain: host,
       path: "/",
       httpOnly: true,
@@ -3654,7 +3557,7 @@ async function drivePlayerBrowser(frontendBaseUrl) {
     ),
   );
   const capability = await page.getByTestId("player-capability").innerText();
-  if (!capability.includes("SlotOccupant")) {
+  if (!/^SLOTOCCUPANT\([^)]+\)$/iu.test(capability)) {
     throw new Error(`player capability did not render SlotOccupant: ${capability}`);
   }
   const firstPost = await page.locator('[data-testid^="thread-post-"]').first();
@@ -3699,16 +3602,10 @@ async function drivePlayerBrowser(frontendBaseUrl) {
     await status.waitFor({ state: "visible" });
     await raceStatus.waitFor({ state: "visible" });
     await page.waitForFunction(
-      () =>
-        document
-          .querySelector('[data-testid="player-command-status"]')
-          ?.getAttribute("data-state") === "ack",
+      () => window.__fmarchPlayerCommandStatus?.state === "ack",
     );
     await raceVoteSession.page.waitForFunction(
-      () =>
-        document
-          .querySelector('[data-testid="player-command-status"]')
-          ?.getAttribute("data-state") === "ack",
+      () => window.__fmarchPlayerCommandStatus?.state === "ack",
     );
   } finally {
     await dropVoteInsertDelayTrigger();
@@ -4201,7 +4098,7 @@ async function openStalePlayerVoteBrowser(
   await context.addCookies([
     {
       name: "fmarch_session",
-      value: sessionToken,
+      value: resolveSessionToken(sessionToken),
       domain: host,
       path: "/",
       httpOnly: true,
@@ -4322,7 +4219,7 @@ async function drivePlayerActionBrowser(frontendBaseUrl) {
   await context.addCookies([
     {
       name: "fmarch_session",
-      value: actionPlayerSessionToken,
+      value: resolveSessionToken(actionPlayerSessionToken),
       domain: host,
       path: "/",
       httpOnly: true,
@@ -4340,13 +4237,13 @@ async function drivePlayerActionBrowser(frontendBaseUrl) {
 
   await page.getByTestId("player-surface").waitFor({ state: "visible" });
   const capability = await page.getByTestId("player-capability").innerText();
-  if (!capability.includes("SlotOccupant")) {
+  if (!/^SLOTOCCUPANT\([^)]+\)$/iu.test(capability)) {
     throw new Error(`action player capability did not render SlotOccupant: ${capability}`);
   }
   const actionCommands = page.getByTestId("player-action-commands");
   await actionCommands.waitFor({ state: "visible" });
   if (commandStateResponses.length === 0) {
-    const commandStateUrl = `${frontendBaseUrl}/games/${actionGame}/player-command-state?principal_user_id=action-goon&slot_id=slot_4`;
+    const commandStateUrl = `${frontendBaseUrl}/api/gameplay/games/${actionGame}/player-command-state?principal_user_id=action-goon&slot_id=slot_4`;
     const response = await context.request.get(commandStateUrl, {
       headers: { accept: "application/json" },
     });
@@ -4498,15 +4395,17 @@ async function drivePlayerActionBrowser(frontendBaseUrl) {
       response.actions.length === 0,
   );
   await page.waitForFunction(() =>
-    document
-      .querySelector('[data-testid="player-votecount-deadline"]')
-      ?.innerText.includes("Day 2"),
+    window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "D02",
   );
-  const postAdvancePhaseText = await page
-    .getByTestId("player-votecount-deadline")
-    .innerText();
+  const phaseHeading = page.getByTestId("player-game-bar").locator("h1");
+  await phaseHeading.waitFor({ state: "visible" });
+  const postAdvancePhaseText = await phaseHeading.innerText();
+  if (postAdvancePhaseText !== "Day 2") {
+    throw new Error(`player phase heading did not update: ${postAdvancePhaseText}`);
+  }
   const actionGameHostState = await fetchJson(
     `${apiBaseUrl}/games/${actionGame}/host-console-state?principal_user_id=host_h&slot_id=slot-2`,
+    { headers: { authorization: `Bearer ${hostSessionToken}` } },
   );
   const targetSlot = actionGameHostState.slots?.find(
     (slot) => slot.slot_id === "slot-2",
@@ -4615,7 +4514,7 @@ async function openStalePlayerActionBrowser(frontendBaseUrl) {
   await context.addCookies([
     {
       name: "fmarch_session",
-      value: actionPlayerSessionToken,
+      value: resolveSessionToken(actionPlayerSessionToken),
       domain: host,
       path: "/",
       httpOnly: true,
@@ -4843,7 +4742,7 @@ async function openModeratorBrowser(frontendBaseUrl) {
   await context.addCookies([
     {
       name: "fmarch_session",
-      value: hostSessionToken,
+      value: resolveSessionToken(hostSessionToken),
       domain: host,
       path: "/",
       httpOnly: true,
@@ -4851,6 +4750,30 @@ async function openModeratorBrowser(frontendBaseUrl) {
     },
   ]);
   const page = await context.newPage();
+  page.on("console", (message) => {
+    if (["error", "warning"].includes(message.type())) {
+      moderatorConsoleDiagnostics.push(`${message.type()}: ${message.text()}`);
+    }
+  });
+  page.on("pageerror", (error) => {
+    moderatorConsoleDiagnostics.push(`pageerror: ${String(error)}`);
+  });
+  page.on("response", async (response) => {
+    if (new URL(response.url()).pathname !== "/live/tickets") return;
+    moderatorTicketDiagnostics.push({
+      url: response.url(),
+      status: response.status(),
+      body: await response.json().catch(() => null),
+    });
+  });
+  page.on("websocket", (socket) => {
+    const diagnostic = { url: socket.url(), errors: [], frames: [] };
+    moderatorSocketDiagnostics.push(diagnostic);
+    socket.on("socketerror", (error) => diagnostic.errors.push(String(error)));
+    socket.on("framereceived", (event) => {
+      diagnostic.frames.push(String(event.payload).slice(0, 500));
+    });
+  });
   const pageUrl = `${frontendBaseUrl}/g/${game}/host`;
   const response = await page.goto(pageUrl, { waitUntil: "networkidle" });
   if (response === null || !response.ok()) {
@@ -4877,6 +4800,8 @@ async function driveModeratorBrowser(
     { id: "extend_deadline", status: "ack" },
     { id: "process_replacement", status: "ack" },
   ]) {
+    const taskId = expected.id === "extend_deadline" ? "deadline" : "replacement";
+    await page.getByTestId(`host-task-${taskId}`).click();
     if (expected.id === "process_replacement") {
       stalePlayerInviteSession = await openStaleModeratorBrowser(pageUrl);
       stalePlayerInviteBefore = await readPlayerInviteTarget(stalePlayerInviteSession.page);
@@ -4970,6 +4895,7 @@ async function driveModeratorBrowser(
   await stalePlayerInviteSession?.context.close();
   const apiStateBeforePrompt = await fetchJson(
     `${apiBaseUrl}/games/${game}/host-console-state?principal_user_id=host_h&slot_id=slot-7`,
+    { headers: { authorization: `Bearer ${hostSessionToken}` } },
   );
   const rolePmReplacement = await driveRolePmReplacementBrowser(
     frontendBaseUrl,
@@ -5180,7 +5106,7 @@ async function openStaleModeratorBrowser(pageUrl) {
   await context.addCookies([
     {
       name: "fmarch_session",
-      value: hostSessionToken,
+      value: resolveSessionToken(hostSessionToken),
       domain: host,
       path: "/",
       httpOnly: true,
@@ -5210,7 +5136,7 @@ async function openHostConsoleDrawer(page, testId) {
 
 async function readPlayerInviteTarget(page) {
   return {
-    targetLabel: await page.getByTestId("host-player-invite-target").innerText(),
+    targetLabel: await page.getByTestId("host-player-invite-target").textContent(),
     principalUserId: await page
       .getByTestId("host-player-invite-panel")
       .locator('input[name="principalUserId"]')
@@ -5228,12 +5154,7 @@ async function readPlayerInviteTarget(page) {
 
 async function rejectStalePlayerInviteFromBrowser(page) {
   const beforeSubmit = await readPlayerInviteTarget(page);
-  const invitedAccountId = `player-rowan-${game}@example.test`;
-  await createAuthAccount({
-    accountId: invitedAccountId,
-    password: `replacement account password ${crypto.randomUUID()}`,
-    principalUserId: "player-rowan",
-  });
+  const invitedAccountId = rolePmIncomingAccountId;
   await page.getByTestId("host-player-invite-account").fill(invitedAccountId);
   const submit = page.getByTestId("host-player-invite-submit");
   const submitBox = await submit.boundingBox();
@@ -5329,6 +5250,8 @@ async function rejectStalePlayerInviteFromBrowser(page) {
 }
 
 async function confirmHostAction(page, actionId, expectedState = "ack") {
+  const taskId = actionId === "extend_deadline" ? "deadline" : "phase";
+  await page.getByTestId(`host-task-${taskId}`).click();
   const actionRoot = page.getByTestId(`critical-host-action-${actionId}`);
   const trigger = actionRoot.getByTestId("critical-host-action-trigger");
   await trigger.waitFor({ state: "visible" });
@@ -5456,6 +5379,10 @@ async function issueBelovedPrincessPrompt() {
 
 async function resolveHostPromptFromBrowser(page) {
   const actionId = "resolve_host_prompt-D01-skip_next_day-slot_1";
+  await page
+    .getByTestId("host-task-queue")
+    .locator('button[data-task-source-id="D01:skip_next_day:slot_1"]')
+    .click();
   const actionRoot = page.getByTestId(`critical-host-action-${actionId}`);
   const trigger = actionRoot.getByTestId("critical-host-action-trigger");
   await trigger.waitFor({ state: "visible" });
@@ -5507,6 +5434,7 @@ async function resolveHostPromptFromBrowser(page) {
 
 async function modkillSlotFromBrowser(page) {
   const actionId = "modkill_slot";
+  await page.getByTestId("host-task-slot-lifecycle").click();
   const actionRoot = page.getByTestId(`critical-host-action-${actionId}`);
   const trigger = actionRoot.getByTestId("critical-host-action-trigger");
   await trigger.waitFor({ state: "visible" });
@@ -5554,6 +5482,7 @@ async function modkillSlotFromBrowser(page) {
   assertModkillCommandStatus(commandStatus);
   const apiStateAfter = await fetchJson(
     `${apiBaseUrl}/games/${game}/host-console-state?principal_user_id=host_h&slot_id=slot-7`,
+    { headers: { authorization: `Bearer ${hostSessionToken}` } },
   );
   assertSlotLifecycleApiProjection(apiStateAfter);
 
@@ -5689,7 +5618,9 @@ async function waitForHostLiveVotecount(page, count) {
       events: window.__fmarchHostLiveProjectionEvents,
       projection: window.__fmarchHostVotecountProjection,
     }));
-    throw new Error(`host live votecount did not reach ${count}: ${JSON.stringify(debug)}`);
+    throw new Error(
+      `host live votecount did not reach ${count}: ${JSON.stringify({ ...debug, tickets: moderatorTicketDiagnostics, sockets: moderatorSocketDiagnostics, console: moderatorConsoleDiagnostics })}`,
+    );
   }
 }
 
@@ -5829,7 +5760,15 @@ async function waitForHostConsoleReplacementDelta(page, occupantUserId) {
 }
 
 async function fetchJson(url, options = {}, timeoutMs = 15000) {
-  const response = await fetchWithTimeout(url, options, timeoutMs);
+  const headers = new Headers(options.headers);
+  const authorization = headers.get("authorization");
+  if (authorization?.startsWith("Bearer ")) {
+    headers.set(
+      "authorization",
+      `Bearer ${resolveSessionToken(authorization.slice("Bearer ".length))}`,
+    );
+  }
+  const response = await fetchWithTimeout(url, { ...options, headers }, timeoutMs);
   const body = await response.json();
   if (!response.ok) {
     throw new Error(`HTTP ${response.status} from ${url}: ${JSON.stringify(body)}`);
@@ -6014,40 +5953,6 @@ function assertDuplicatePlayerVoteReceipt({ commandId, receiptRows }) {
     throw new Error(
       `duplicate player SubmitVote receipt did not persist stream seqs:\n${receiptRows}`,
     );
-  }
-}
-
-function assertAdminCreateGameEnvelope(envelope) {
-  if (envelope?.v !== 1 || envelope?.body?.kind !== "Command") {
-    throw new Error(`admin create game did not send a command envelope: ${JSON.stringify(envelope)}`);
-  }
-  const commandBody = envelope.body.body;
-  if (commandBody.principal_user_id !== "admin_a") {
-    throw new Error(`admin create game principal drifted: ${commandBody.principal_user_id}`);
-  }
-  const command = commandBody.command;
-  if (command?.CreateGame?.game !== adminCreatedGame) {
-    throw new Error(`admin create game used wrong game: ${JSON.stringify(command)}`);
-  }
-  if (command.CreateGame.pack !== "mafiascum") {
-    throw new Error(`admin create game used wrong pack: ${JSON.stringify(command)}`);
-  }
-}
-
-function assertAdminCohostEnvelope(envelope) {
-  if (envelope?.v !== 1 || envelope?.body?.kind !== "Command") {
-    throw new Error(`admin cohost did not send a command envelope: ${JSON.stringify(envelope)}`);
-  }
-  const commandBody = envelope.body.body;
-  if (commandBody.principal_user_id !== "admin_a") {
-    throw new Error(`admin cohost principal drifted: ${commandBody.principal_user_id}`);
-  }
-  const command = commandBody.command;
-  if (command?.AddCohost?.game !== adminCreatedGame) {
-    throw new Error(`admin cohost used wrong game: ${JSON.stringify(command)}`);
-  }
-  if (command.AddCohost.user !== "cohost_c") {
-    throw new Error(`admin cohost used wrong user: ${JSON.stringify(command)}`);
   }
 }
 

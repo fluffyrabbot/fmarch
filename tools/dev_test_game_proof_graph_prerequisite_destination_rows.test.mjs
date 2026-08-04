@@ -20,7 +20,7 @@ test("proof graph prerequisite destination rows share UI and proof ids", () => {
             id: "local-proof-freshness-admin-surface",
             auditId: "local-proof-freshness",
             roleUrl:
-              "/admin/audit/local-proof-freshness?game=<seeded-game>",
+              "/_dev/ops/audit/local-proof-freshness?game=<seeded-game>",
           },
         ],
       },
@@ -43,7 +43,7 @@ test("proof graph prerequisite destination rows share UI and proof ids", () => {
       nodeId: "admin-proof:release",
       destinationId: "local-proof-freshness-admin-surface",
       auditId: "local-proof-freshness",
-      roleUrl: "/admin/audit/local-proof-freshness?game=<seeded-game>",
+      roleUrl: "/_dev/ops/audit/local-proof-freshness?game=<seeded-game>",
       proofTarget: "target/dev-test-game/proof-freshness-admin-proof.json",
       rowId: "admin-proof:release:local-proof-freshness-admin-surface",
       rowTestId: proofGraphPrerequisiteDestinationRowTestId(

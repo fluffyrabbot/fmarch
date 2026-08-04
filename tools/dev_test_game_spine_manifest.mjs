@@ -400,19 +400,19 @@ export function buildDevTestGameSpineManifest({
           devTestGameIdentityAdapterProofPath,
           devTestGameIdentityAdminProofPath,
         ],
-        roleUrl: "/admin/audit/local-identity-adapter?game=<seeded-game>",
+        roleUrl: "/_dev/ops/audit/local-identity-adapter?game=<seeded-game>",
       },
       hostedIdentityProgressionSummary: {
         script: devTestGameHostedIdentityProgressionSummaryCommand,
         proofArtifact: devTestGameHostedIdentityProgressionSummaryPath,
         dependsOn: [devTestGameHostedIdentityEvidencePath],
-        roleUrl: "/admin/audit/local-hosted-identity-evidence?game=<seeded-game>",
+        roleUrl: "/_dev/ops/audit/local-hosted-identity-evidence?game=<seeded-game>",
       },
       hostedIdentityProgressionAdminProofBatch: {
         script: devTestGameHostedIdentityProgressionAdminProofBatchCommand,
         proofArtifacts: [...hostedIdentityProgressionAdminProofBatchArtifactPaths],
         dependsOn: [devTestGameHostedIdentityProgressionSummaryPath],
-        roleUrl: "/admin/audit/local-hosted-identity-evidence?game=<seeded-game>",
+        roleUrl: "/_dev/ops/audit/local-hosted-identity-evidence?game=<seeded-game>",
       },
       hostedIdentityEvidenceAdminProof: {
         script: hostedIdentityEvidenceAdminProofArtifact.script,
@@ -437,7 +437,7 @@ export function buildDevTestGameSpineManifest({
         proofArtifact: devTestGameRealHostedObservabilityHandoffPath,
         dependsOn: [devTestGameHostedOpsSignalsPath],
         roleUrl:
-          "/admin/audit/local-real-hosted-observability-handoff?game=<seeded-game>",
+          "/_dev/ops/audit/local-real-hosted-observability-handoff?game=<seeded-game>",
       },
       realHostedObservabilityHandoffAdminProof: {
         script: realHostedObservabilityHandoffAdminProofArtifact.script,
@@ -449,7 +449,7 @@ export function buildDevTestGameSpineManifest({
         script: devTestGameHostedTargetPreflightCommand,
         proofArtifact: devTestGameHostedTargetPreflightPath,
         dependsOn: [devTestGameHostedConcurrentRaceMatrixPath],
-        roleUrl: "/admin/audit/local-hosted-target-preflight?game=<seeded-game>",
+        roleUrl: "/_dev/ops/audit/local-hosted-target-preflight?game=<seeded-game>",
       },
       hostedEvidenceLane: {
         script: devTestGameHostedEvidenceLaneCommand,
@@ -458,7 +458,7 @@ export function buildDevTestGameSpineManifest({
           devTestGameHostedConcurrentRaceMatrixPath,
           devTestGameHostedTargetPreflightPath,
         ],
-        roleUrl: "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
+        roleUrl: "/_dev/ops/audit/local-hosted-evidence-lane?game=<seeded-game>",
       },
       hostedEvidenceOperatorChecklistProof: {
         script: devTestGameHostedEvidenceOperatorChecklistProofCommand,
@@ -480,7 +480,7 @@ export function buildDevTestGameSpineManifest({
           devTestGameReleaseReadinessPath,
           nextActionPath,
         ],
-        roleUrl: "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
+        roleUrl: "/_dev/ops/audit/local-hosted-evidence-lane?game=<seeded-game>",
         releaseReady: false,
         productionReady: false,
       },
@@ -489,7 +489,7 @@ export function buildDevTestGameSpineManifest({
         proofArtifact: devTestGameHostedEvidenceLaneDemoProofPath,
         dependsOn: [devTestGameHostedConcurrentRaceMatrixPath],
         demoOnly: true,
-        roleUrl: "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
+        roleUrl: "/_dev/ops/audit/local-hosted-evidence-lane?game=<seeded-game>",
       },
       hostedMatrixRawEvidenceTemplateProof: {
         script: devTestGameHostedMatrixRawEvidenceTemplateProofCommand,
@@ -518,7 +518,7 @@ export function buildDevTestGameSpineManifest({
           devTestGameHostedEvidenceLaneOperatorFixturePath,
         ],
         fixtureEvidence: true,
-        roleUrl: "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
+        roleUrl: "/_dev/ops/audit/local-hosted-evidence-lane?game=<seeded-game>",
       },
       realHostedMatrixRawCapture: {
         script: devTestGameRealHostedMatrixRawCaptureCommand,
@@ -542,14 +542,14 @@ export function buildDevTestGameSpineManifest({
         fixtureEvidence: false,
         releaseReady: false,
         productionReady: false,
-        roleUrl: "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
+        roleUrl: "/_dev/ops/audit/local-hosted-evidence-lane?game=<seeded-game>",
       },
       ...recoveryReceiptManifestCommands(),
       releaseRunbook: {
         script: devTestGameReleaseRunbookCommand,
         proofArtifact: devTestGameReleaseRunbookPath,
         dependsOn: [devTestGameReleaseReadinessPath],
-        roleUrl: "/admin/audit/local-release-runbook?game=<seeded-game>",
+        roleUrl: "/_dev/ops/audit/local-release-runbook?game=<seeded-game>",
       },
       releaseAdminProofContract: {
         script: devTestGameReleaseAdminProofContractCommand,
@@ -1318,7 +1318,7 @@ export function assertDevTestGameSpineManifest(manifest) {
       nextActionPath,
     ) ||
     manifest.commands.hostedEvidenceOperatorChecklistAdminProof.roleUrl !==
-      "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>" ||
+      "/_dev/ops/audit/local-hosted-evidence-lane?game=<seeded-game>" ||
     manifest.commands.hostedEvidenceOperatorChecklistAdminProof.releaseReady !==
       false ||
     manifest.commands.hostedEvidenceOperatorChecklistAdminProof.productionReady !==

@@ -3350,7 +3350,7 @@ export function validateDevTestGameHostSetupProof(proof, options = {}) {
   ) {
     throw new Error("host setup proof role URL does not target setup route");
   }
-  if (proof.hostSetup.capabilityLabel !== `HostOf(${proof.game})`) {
+  if (proof.hostSetup.capabilityLabel !== `Hosting ${proof.game}`) {
     throw new Error("host setup proof capability label drifted");
   }
   if (
@@ -3446,7 +3446,7 @@ function validateCohostConsoleLaneProof(proof, options = {}) {
     evidence.extendDeadlineState !== "ack" ||
     evidence.extendDeadlinePrincipal !== "cohost_c" ||
     evidence.hostOnlyControlsVisible !== false ||
-    evidence.hostOnlyRejectError !== "NotHost" ||
+    evidence.hostOnlyRejectError !== "CohostPermissionDenied" ||
     evidence.hostOnlyRejectPrincipal !== "cohost_c" ||
     evidence.phaseAfterReject?.id !== "D01" ||
     evidence.phaseAfterReject?.locked !== false
@@ -6269,11 +6269,11 @@ export function validateDevTestGameIdentityAdapterProof(proof, options = {}) {
     proof.identityLifecycle?.localDelivery?.rawCredentialsStored !== false ||
     proof.identityLifecycle?.accountRegistration?.status !== "passed" ||
     proof.identityLifecycle?.accountRegistration?.registrationSurfaceTestId !==
-      "auth-registration-surface" ||
+      "auth-registration-classic-surface" ||
     proof.identityLifecycle?.accountRegistration?.securitySurfaceTestId !==
       "account-security-surface" ||
     proof.identityLifecycle?.accountRegistration?.sessionCookiePrefix !==
-      "registration-session-" ||
+      "fmss_" ||
     proof.identityLifecycle?.accountRegistration?.sessionHasNoGameCapabilities !== true ||
     proof.identityLifecycle?.accountRegistration?.gameRolePendingReplacement !== true ||
     proof.identityLifecycle?.accountRegistration?.gameRoleRecoveryTestId !==
@@ -6282,7 +6282,7 @@ export function validateDevTestGameIdentityAdapterProof(proof, options = {}) {
     proof.identityLifecycle?.accountRegistration?.rateLimitVisible !== true ||
     proof.identityLifecycle?.accountRegistration?.rateLimitSeconds !== 2 ||
     proof.identityLifecycle?.accountRegistration?.registrationScopeHashed !== true ||
-    proof.identityLifecycle?.accountRegistration?.registrationScopeCount !== 1 ||
+    proof.identityLifecycle?.accountRegistration?.registrationScopeCount !== 4 ||
     proof.identityLifecycle?.accountRegistration?.rawPasswordStored !== false ||
     !proof.identityLifecycle?.accountRegistration?.auditEventKinds?.includes(
       "account_registered",
@@ -6339,7 +6339,7 @@ export function validateDevTestGameIdentityAdapterProof(proof, options = {}) {
     proof.identityLifecycle?.accountLogin?.principalUserId !== "host_h" ||
     !proof.identityLifecycle?.accountLogin?.capabilityKinds?.includes("HostOf") ||
     proof.identityLifecycle?.accountLogin?.sameRoleSurface !== true ||
-    proof.identityLifecycle?.accountLogin?.cookieValuePrefix !== "account-session-" ||
+    proof.identityLifecycle?.accountLogin?.cookieValuePrefix !== "fmss_" ||
     proof.identityLifecycle?.accountLogin?.rawPasswordStored !== false ||
     proof.identityLifecycle?.accountPasswordRotation?.status !== "passed" ||
     proof.identityLifecycle?.accountPasswordRotation?.passwordAlgorithm !==
@@ -6543,7 +6543,7 @@ export function validateDevTestGameIdentityAdapterProof(proof, options = {}) {
     if (!entry.capabilityKinds?.includes(capability)) {
       throw new Error(`identity adapter proof role ${role} missing ${capability}`);
     }
-    if (entry.cookie?.valuePrefix !== "invite-session-") {
+    if (entry.cookie?.valuePrefix !== "fmss_") {
       throw new Error(`identity adapter proof role ${role} did not use invite session`);
     }
     const loginUrl = typeof entry.loginUrl === "string" ? new URL(entry.loginUrl) : null;
@@ -8673,7 +8673,7 @@ export function validateDevTestGameAdminSpineProof(proof, options = {}) {
     }
     if (
       typeof entry.detailRoleUrl !== "string" ||
-      !entry.detailRoleUrl.startsWith("/admin/audit/") ||
+      !entry.detailRoleUrl.startsWith("/_dev/ops/audit/") ||
       !entry.detailRoleUrl.includes("?game=<seeded-game>")
     ) {
       throw new Error(`admin spine proof entry ${id} has invalid detail role URL`);
@@ -9234,7 +9234,11 @@ export function assertDevTestGameReleaseReadiness(checklist) {
     coreLoopCheck?.spineTargets !== undefined &&
     !validCoreLoopSpineTargets(coreLoopCheck.spineTargets)
   ) {
-    throw new Error("dev-test-game core-loop readiness check is missing spine targets");
+    throw new Error(
+      `dev-test-game core-loop readiness check is missing spine targets ` +
+        `(detailRoleUrl=${JSON.stringify(coreLoopCheck.spineTargets.detailRoleUrl)}, ` +
+        `productionFeatureTargets=${validCoreLoopProductionFeatureTargets(coreLoopCheck.spineTargets.productionFeatureTargets)})`,
+    );
   }
   const hardeningCheck = checklist.localDevelopmentSpine?.checks?.find(
     (check) => check.id === hardeningFeatureSpineSourceCheckId,
@@ -9280,7 +9284,7 @@ export function assertDevTestGameReleaseReadiness(checklist) {
     cohostCheck.capabilityLabel !== "CohostOf(<seeded-game>)" ||
     cohostCheck.extendDeadlineState !== "ack" ||
     cohostCheck.extendDeadlinePrincipal !== "cohost_c" ||
-    cohostCheck.hostOnlyRejectError !== "NotHost" ||
+    cohostCheck.hostOnlyRejectError !== "CohostPermissionDenied" ||
     cohostCheck.hostOnlyRejectPrincipal !== "cohost_c" ||
     cohostCheck.phaseAfterRejectId !== "D01" ||
     cohostCheck.phaseAfterRejectLocked !== false ||
@@ -9758,7 +9762,7 @@ function validCoreLoopSpineTargets(spineTargets) {
     typeof spineTargets === "object" &&
     spineTargets.status === "passed" &&
     typeof spineTargets.detailRoleUrl === "string" &&
-    spineTargets.detailRoleUrl.includes("/admin/audit/local-core-loop") &&
+    spineTargets.detailRoleUrl.includes("/_dev/ops/audit/local-core-loop") &&
     typeof spineTargets.defaultCycleId === "string" &&
     spineTargets.defaultCycleId.length > 0 &&
     typeof spineTargets.defaultRoleUrlId === "string" &&
@@ -9814,7 +9818,7 @@ function validHardeningSpineTargets(spineTargets) {
     typeof spineTargets === "object" &&
     spineTargets.status === "passed" &&
     typeof spineTargets.detailRoleUrl === "string" &&
-    spineTargets.detailRoleUrl.includes("/admin/audit/local-hardening") &&
+    spineTargets.detailRoleUrl.includes("/_dev/ops/audit/local-hardening") &&
     spineTargets.defaultCycleId ===
       hardeningFeatureSpineCycleIds.staleConflict &&
     spineTargets.defaultRoleUrlId === replacementStaleConflictLane.laneId &&

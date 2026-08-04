@@ -145,13 +145,13 @@ test("local readiness dependency contract carries recovery command and role surf
   );
   assert.throws(
     () =>
-      localReadinessDependencyAuditIdFromRoleUrl("/admin/audit/local-proof-graph"),
+      localReadinessDependencyAuditIdFromRoleUrl("/_dev/ops/audit/local-proof-graph"),
     /local readiness dependency role URL is malformed/,
   );
   assert.throws(
     () =>
       localReadinessDependencyAuditIdFromRoleUrl(
-        "/admin/audit/local-unknown?game=<seeded-game>",
+        "/_dev/ops/audit/local-unknown?game=<seeded-game>",
       ),
     /local readiness dependency role URL uses unknown admin audit id/,
   );

@@ -19,11 +19,12 @@ const databaseUrl = process.env.DATABASE_URL;
 const host = "127.0.0.1";
 const game = randomUUID();
 const rootAdminSessionToken = `backup-restore-root-admin-${game}`;
-const hostSessionToken = `backup-restore-host-${game}`;
-const playerSessionToken = `backup-restore-player-${game}`;
-const adminSessionToken = `backup-restore-admin-${game}`;
+let hostSessionToken;
+let playerSessionToken;
+let adminSessionToken;
 const privateChannelId = "private:mafia_day_chat";
 const privatePostBody = "Backup restore private-channel proof post";
+const seedSessionTokens = new Map();
 
 if (!databaseUrl) {
   throw new Error(
@@ -96,28 +97,27 @@ try {
 }
 
 async function seedSourceGame(apiBaseUrl) {
-  const seedCommands = [];
-  for (const [principalUserId, command] of [
-    ...seedCommandPlanForGame(game),
-    ["host_h", { LockThread: { game } }],
-    ["host_h", { UnlockThread: { game } }],
-    [
-      "player-mira",
-      {
-        SubmitPost: {
-          game,
-          channel_id: privateChannelId,
-          actor_slot: "slot-7",
-          body: privatePostBody,
-        },
-      },
-    ],
-  ]) {
-    seedCommands.push(
-      await sendCommand(apiBaseUrl, seedCommands.length + 1, principalUserId, command),
-    );
-  }
-
+  // The root GlobalAdmin session must exist before the seed loop: every seed
+  // command now authenticates through a session granted by this root token.
+  await runSql(sourceDatabase.url, `
+    INSERT INTO auth_account (
+      account_id,
+      principal_user_id,
+      password_hash,
+      created_at,
+      disabled_at,
+      global_capabilities
+    )
+    VALUES (
+      'backup-restore-root@local.fmarch.test',
+      'root_admin',
+      'seed-only-not-a-real-hash',
+      0,
+      NULL,
+      ARRAY['GlobalAdmin']::TEXT[]
+    )
+    ON CONFLICT (account_id) DO NOTHING;
+  `);
   await runSql(sourceDatabase.url, `
     INSERT INTO auth_session (
       token_hash,
@@ -144,24 +144,56 @@ async function seedSourceGame(apiBaseUrl) {
       global_capabilities = EXCLUDED.global_capabilities;
   `);
 
-  const grantedSessions = {
+  const seedCommands = [];
+  for (const [principalUserId, command] of [
+    ...seedCommandPlanForGame(game),
+    ["host_h", { LockThread: { game } }],
+    ["host_h", { UnlockThread: { game } }],
+    [
+      "player-mira",
+      {
+        SubmitPost: {
+          game,
+          channel_id: privateChannelId,
+          actor_slot: "slot-7",
+          body: privatePostBody,
+        },
+      },
+    ],
+  ]) {
+    seedCommands.push(
+      await sendCommand(apiBaseUrl, seedCommands.length + 1, principalUserId, command),
+    );
+  }
+
+  await seedSessionToken(apiBaseUrl, "admin_a");
+  const grants = {
     admin: await createGrantedSession({
       apiBaseUrl,
-      token: adminSessionToken,
       principalUserId: "admin_a",
       globalCapabilities: ["GlobalAdmin"],
     }),
     host: await createGrantedSession({
       apiBaseUrl,
-      token: hostSessionToken,
       principalUserId: "host_h",
     }),
     player: await createGrantedSession({
       apiBaseUrl,
-      token: playerSessionToken,
       principalUserId: "player-mira",
     }),
   };
+  adminSessionToken = grants.admin.sessionToken;
+  hostSessionToken = grants.host.sessionToken;
+  playerSessionToken = grants.player.sessionToken;
+  const grantedSessions = Object.fromEntries(
+    Object.entries(grants).map(([role, grant]) => [
+      role,
+      {
+        principalUserId: grant.principalUserId,
+        capabilityKinds: grant.capabilityKinds,
+      },
+    ]),
+  );
 
   return {
     game,
@@ -195,6 +227,7 @@ async function assertRestoredApi(apiBaseUrl) {
 
   const hostConsoleState = await fetchJson(
     `${apiBaseUrl}/games/${game}/host-console-state?principal_user_id=host_h&slot_id=slot-7`,
+    { headers: { authorization: `Bearer ${hostSessionToken}` } },
   );
   if (hostConsoleState.phase?.phase_id !== "D01" || hostConsoleState.phase?.locked !== false) {
     throw new Error(
@@ -216,6 +249,7 @@ async function assertRestoredApi(apiBaseUrl) {
 
   const thread = await fetchJson(
     `${apiBaseUrl}/games/${game}/thread?principal_user_id=player-mira&limit=25`,
+    { headers: { authorization: `Bearer ${playerSessionToken}` } },
   );
   if (
     !thread.posts?.some((post) =>
@@ -229,6 +263,7 @@ async function assertRestoredApi(apiBaseUrl) {
     `${apiBaseUrl}/games/${game}/channels/${encodeURIComponent(
       privateChannelId,
     )}/thread?principal_user_id=player-mira&limit=25`,
+    { headers: { authorization: `Bearer ${playerSessionToken}` } },
   );
   if (!privateThread.posts?.some((post) => post.body === privatePostBody)) {
     throw new Error(
@@ -333,7 +368,7 @@ async function databaseFingerprint(url) {
         ),
         'slot_state', (
           SELECT COALESCE(jsonb_agg(to_jsonb(rows) ORDER BY slot_id), '[]'::jsonb)
-          FROM (SELECT slot_id, alive, role_key, role_revealed, alignment_revealed FROM slot_state WHERE game_id = ${sqlLiteral(game)}::uuid) rows
+          FROM (SELECT slot_id, alive, role_revealed, alignment_revealed, status, private FROM slot_state WHERE game_id = ${sqlLiteral(game)}::uuid) rows
         ),
         'vote_ballot', (
           SELECT COALESCE(jsonb_agg(to_jsonb(rows) ORDER BY actor_slot), '[]'::jsonb)
@@ -341,11 +376,11 @@ async function databaseFingerprint(url) {
         ),
         'thread_view', (
           SELECT COALESCE(jsonb_agg(to_jsonb(rows) ORDER BY source_seq), '[]'::jsonb)
-          FROM (SELECT source_seq, stream_seq, channel_id, author_slot, author_user, phase_id, body FROM thread_view WHERE game_id = ${sqlLiteral(game)}::uuid) rows
+          FROM (SELECT source_seq, stream_seq, channel_id, author_slot, author_user, phase_id, body, body_private FROM thread_view WHERE game_id = ${sqlLiteral(game)}::uuid) rows
         ),
         'private_channel_member', (
           SELECT COALESCE(jsonb_agg(to_jsonb(rows) ORDER BY channel_id, slot_id), '[]'::jsonb)
-          FROM (SELECT channel_id, kind, slot_id, role_key, reveals_alignment, source FROM private_channel_member WHERE game_id = ${sqlLiteral(game)}::uuid) rows
+          FROM (SELECT channel_id, kind, slot_id, source, private FROM private_channel_member WHERE game_id = ${sqlLiteral(game)}::uuid) rows
         )
       ),
       'authSessions', (
@@ -412,6 +447,14 @@ async function startApi(url, label) {
       DATABASE_URL: url,
       FMARCH_BIND: `${host}:${port}`,
       FMARCH_MEDIA_ROOT: mediaRoot,
+      FMARCH_EVENT_ENCRYPTION_KEY:
+        process.env.FMARCH_EVENT_ENCRYPTION_KEY ??
+        "backup-restore-proof-key-at-least-32-bytes",
+      FMARCH_EVENT_ENCRYPTION_KID:
+        process.env.FMARCH_EVENT_ENCRYPTION_KID ?? "backup-restore-proof-v1",
+      FMARCH_AUTH_SOURCE_SIGNING_KEY:
+        process.env.FMARCH_AUTH_SOURCE_SIGNING_KEY ??
+        "backup-restore-proof-signing-key-at-least-32-bytes",
       RUST_LOG: process.env.RUST_LOG ?? "warn",
     },
     stdio: ["ignore", "pipe", "pipe"],
@@ -442,10 +485,58 @@ async function startApi(url, label) {
   return baseUrl;
 }
 
+// The strict wire rejects any actor field in the envelope; seed commands act
+// as a principal by presenting a granted session for that principal instead.
+async function seedSessionToken(apiBaseUrl, principalUserId) {
+  if (principalUserId === "root_admin") {
+    return rootAdminSessionToken;
+  }
+  const cached = seedSessionTokens.get(principalUserId);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const globalCapabilities =
+    principalUserId === "host_h" ? ["GlobalAdmin"] : [];
+  await fetchJson(`${apiBaseUrl}/auth/accounts`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${rootAdminSessionToken}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      account_id: `backup-restore-${principalUserId}@local.fmarch.test`,
+      password: `backup restore seed password ${principalUserId}`,
+      principal_user_id: principalUserId,
+      global_capabilities: globalCapabilities,
+    }),
+  });
+  const granted = await fetchJson(`${apiBaseUrl}/auth/session-grants`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${rootAdminSessionToken}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      principal_user_id: principalUserId,
+      expires_at: 4102444800,
+      global_capabilities: globalCapabilities,
+    }),
+  });
+  if (typeof granted.session_token !== "string" || granted.session_token === "") {
+    throw new Error(`session grant for ${principalUserId} returned no session_token`);
+  }
+  seedSessionTokens.set(principalUserId, granted.session_token);
+  return granted.session_token;
+}
+
 async function sendCommand(apiBaseUrl, id, principalUserId, command) {
+  const sessionToken = await seedSessionToken(apiBaseUrl, principalUserId);
   const result = await fetchJson(`${apiBaseUrl}/commands`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: {
+      authorization: `Bearer ${sessionToken}`,
+      "content-type": "application/json",
+    },
     body: JSON.stringify({
       v: 1,
       id,
@@ -453,7 +544,6 @@ async function sendCommand(apiBaseUrl, id, principalUserId, command) {
         kind: "Command",
         body: {
           command_id: randomUUID(),
-          principal_user_id: principalUserId,
           command,
         },
       },
@@ -471,7 +561,6 @@ async function sendCommand(apiBaseUrl, id, principalUserId, command) {
 
 async function createGrantedSession({
   apiBaseUrl,
-  token,
   principalUserId,
   globalCapabilities = [],
 }) {
@@ -482,13 +571,13 @@ async function createGrantedSession({
       "content-type": "application/json",
     },
     body: JSON.stringify({
-      token,
       principal_user_id: principalUserId,
       expires_at: 4102444800,
       global_capabilities: globalCapabilities,
     }),
   });
   return {
+    sessionToken: session.session_token,
     principalUserId: session.principal_user_id,
     capabilityKinds: capabilityKinds(session),
   };

@@ -286,7 +286,7 @@ function productionFeatureRoleUrlRoute(roleUrl) {
 }
 
 function productionFeatureRoleSurfaceKind(route) {
-  if (String(route).startsWith("/admin/audit/")) {
+  if (String(route).startsWith("/_dev/ops/audit/")) {
     return "admin-audit";
   }
   if (String(route).includes("/host")) {

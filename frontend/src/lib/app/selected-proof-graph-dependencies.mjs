@@ -12,7 +12,7 @@ export function selectedProofGraphDependencyDefinitions({
     Object.freeze({
       id: "hosted-matrix-transition",
       selectedProofGraphNodeId: "admin-proof:hosted-concurrent-race-matrix",
-      roleUrlIncludes: "/admin/audit/local-hosted-concurrent-race-matrix",
+      roleUrlIncludes: "/_dev/ops/audit/local-hosted-concurrent-race-matrix",
       edges: Object.freeze([
         Object.freeze({
           from: "admin-proof:hosted-evidence-lane",
@@ -33,7 +33,7 @@ export function selectedProofGraphDependencyDefinitions({
       id: "hosted-identity-proof-graph-dependency",
       selectedProofGraphNodeId: "admin-proof:hosted-identity-evidence",
       unprovenId: "hosted-production-identity",
-      roleUrlIncludes: "/admin/audit/local-hosted-identity-evidence",
+      roleUrlIncludes: "/_dev/ops/audit/local-hosted-identity-evidence",
       edges: Object.freeze(
         Array.isArray(hostedIdentityProofGraphEdges?.edges)
           ? hostedIdentityProofGraphEdges.edges
@@ -48,7 +48,7 @@ export function selectedProofGraphDependencyDefinitions({
       selectedProofGraphNodeId:
         realHostedObservabilityRoleSurfaceDrilldown.proofGraphNodeId,
       roleUrlIncludes:
-        "/admin/audit/local-real-hosted-observability-handoff",
+        "/_dev/ops/audit/local-real-hosted-observability-handoff",
       edges: Object.freeze([
         Object.freeze({
           from: "admin-proof:hosted-ops-signals",

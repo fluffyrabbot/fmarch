@@ -164,7 +164,6 @@ function terminalRecoveryBrowserProofFixture() {
       requestEnvelope: {
         body: {
           body: {
-            principal_user_id: "player-mira",
             command: {
               SubmitVote: {
                 actor_slot: "slot-7",
@@ -201,11 +200,12 @@ function terminalRecoveryBrowserProofFixture() {
       phaseActions: ["advance_phase"],
     },
     d03TerminalActivityStatusText:
-      "Reject InvalidTarget: stale phase state",
+      "Advance phase needs refreshed game state. Reload and try again.",
     d03TerminalActivityRow: {
       source: "outcome",
       actionId: "advance_phase",
       dispatchKind: "advance_phase",
+      protocolMessage: "Reject InvalidTarget: stale phase state",
     },
     d03TerminalDispatchPlan: { projectionRefreshKeys: ["host"] },
     d03TerminalApiHostStateAfterReject: {

@@ -877,9 +877,8 @@ export function completedPlayerReloadSnapshotFixture({
     dayVoteOutcomes,
     coldLoadEndpoints: {
       commandStateEndpoint:
-        `/games/${game}/player-command-state?principal_user_id=${principalUserId}&slot_id=${slot}`,
-      notificationsEndpoint:
-        `/games/${game}/notifications?principal_user_id=${principalUserId}`,
+        `/api/gameplay/games/${game}/player-command-state?slot_id=${slot}`,
+      notificationsEndpoint: `/api/gameplay/games/${game}/notifications`,
       endgameSummaryEndpoint: `/games/${game}/endgame-summary`,
     },
     buttons: [{ action: "submit_post", disabled: true, text: "Post" }],

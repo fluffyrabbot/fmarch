@@ -213,7 +213,7 @@ export const devTestGameSeedFixtureCommand =
   "npm run test:dev-test-game-seed-fixture";
 export { devTestGameSeedFixturePath };
 export const devTestGameSeedFixtureRoleUrl =
-  "/admin/audit/local-seed-fixtures?game=<seeded-game>";
+  "/_dev/ops/audit/local-seed-fixtures?game=<seeded-game>";
 export const devTestGameDefaultSequenceStage = "local-capability-model";
 export const devTestGameHostedIdentitySequenceStage = "hosted-identity";
 export const devTestGameHostedIdentitySequencePromotionCommand =
@@ -1899,7 +1899,7 @@ function assertCoreLoopRecoveryDestinationCoverageForNextAction(coverage) {
     }
     if (
       row.status === "passed" &&
-      (row.roleUrl !== "/admin/audit/local-core-loop?game=<seeded-game>" ||
+      (row.roleUrl !== "/_dev/ops/audit/local-core-loop?game=<seeded-game>" ||
         row.proofTarget !== devTestGameCoreLoopAdminProofPath ||
         row.command !== devTestGameCoreLoopAdminProofCommand)
     ) {
@@ -1921,7 +1921,7 @@ function assertTerminalBatchGraph(terminalBatchGraph) {
     terminalBatchGraph.proofTarget !==
       adminSpineTerminalBatchProofPath ||
     terminalBatchGraph.roleUrl !==
-      "/admin/audit/local-admin-spine?game=<seeded-game>" ||
+      "/_dev/ops/audit/local-admin-spine?game=<seeded-game>" ||
     !Number.isInteger(terminalBatchGraph.batchCount) ||
     terminalBatchGraph.batchCount < 1 ||
     terminalBatchGraph.edgeCount !== 3 ||

@@ -280,10 +280,10 @@ test("hosted identity evidence cases share handoff inputs and blocked groups", (
     roleSurfaceDrilldown: {
       localCapabilityAuditId: "local-identity-adapter",
       localCapabilityRoleUrl:
-        "/admin/audit/local-identity-adapter?game=<seeded-game>",
+        "/_dev/ops/audit/local-identity-adapter?game=<seeded-game>",
       handoffAuditId: "local-hosted-identity-evidence",
       handoffRoleUrl:
-        "/admin/audit/local-hosted-identity-evidence?game=<seeded-game>",
+        "/_dev/ops/audit/local-hosted-identity-evidence?game=<seeded-game>",
       proofGraphNodeId: "admin-proof:hosted-identity-evidence",
       productionFeatureGraphNodeId: "production-feature:identity-adapter",
       proofGraphEvidencePath: "target/dev-test-game/proof-graph.json",
@@ -299,7 +299,7 @@ test("hosted identity evidence cases share handoff inputs and blocked groups", (
   );
   assert.equal(
     handoff.blockedReceipt.blockedOperatorPacket.selectedProductionFeatureRoleUrl,
-    "/admin/audit/local-identity-adapter?game=<seeded-game>",
+    "/_dev/ops/audit/local-identity-adapter?game=<seeded-game>",
   );
   assert.deepEqual(
     handoff.blockedReceipt.blockedOperatorPacket

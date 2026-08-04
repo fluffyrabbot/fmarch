@@ -846,7 +846,7 @@ function assertFeatureSpineProofGraphDestination({
   };
   if (expectedGraphKind === "admin-audit") {
     const expectedAuditId = provenanceCase.detailRoleUrlIncludes.match(
-      /^\/admin\/audit\/([^?]+)/,
+      /^\/_dev\/ops\/audit\/([^?]+)/,
     )?.[1];
     assert.deepEqual(
       {
@@ -915,7 +915,7 @@ test("proof graph admin feature targets derive from shared source rows", () => {
       label: "cohost console",
       readinessLabel: "Cohost role URL delegated host-console proof",
       proofBoundary:
-        "Seeded dev-test-game cohost role URL proof from proof-run. Proves delegated deadline control and NotHost rejection for host-only resolve; does not prove hosted identity, multi-node races, release readiness, or production readiness.",
+        "Seeded dev-test-game cohost role URL proof from proof-run. Proves delegated deadline control and CohostPermissionDenied rejection for policy-denied resolve; does not prove hosted identity, multi-node races, release readiness, or production readiness.",
       source: cohostFeatureSpineSource,
       targetRow: cohostFeatureSpineTargetRows.cohostConsole,
       visibleAdminCheckIds: ["cohost-console"],
@@ -1169,7 +1169,7 @@ test("hosted deployment buildable case carries blocked and passed preflight stat
   );
   assert.equal(
     rawCaptureProven.roleUrl,
-    "/admin/audit/local-hosted-target-preflight?game=<seeded-game>",
+    "/_dev/ops/audit/local-hosted-target-preflight?game=<seeded-game>",
   );
   assert.equal(
     rawCaptureProven.proofGraphNodeId,

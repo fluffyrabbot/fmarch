@@ -110,13 +110,8 @@ function liveStackReadinessFixture() {
     },
     browser: {
       admin: {
-        createOutcome: { state: "ack" },
-        cohostOutcome: { state: "ack" },
-        grantedGlobalModLogin: {
-          sessionCookie: {
-            valueMatchesGrantedToken: true,
-          },
-        },
+        capability: "GlobalAdmin",
+        auditInspectHref: "/admin/audit/proof-runs?game=game-a",
         hostSetup: {
           status: "passed",
           setupCommandEvidence: {

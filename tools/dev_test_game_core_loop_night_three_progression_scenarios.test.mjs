@@ -18,11 +18,23 @@ test("night three progression cases map live N03 action into D04 checkpoints", (
   assert.equal(nightThreeDayFourCycleId, "n03-d04");
   assert.deepEqual(
     nightThreeProgressionCheckpointCases().map((scenario) => scenario.id),
-    [nightThreeActionResolutionLaneId, dayFourControlsReturnLaneId],
+    [
+      "night-three-action-submission",
+      nightThreeActionResolutionLaneId,
+      dayFourControlsReturnLaneId,
+    ],
   );
   assert.deepEqual(
     nightThreeProgressionFeatureSpineRows({ cycleId: "n03-d04" }),
     [
+      {
+        targetKey: "nightThreeActionSubmission",
+        featureSlotId: "night-three-action-submission",
+        cycleId: "n03-d04",
+        role: "actionPlayer",
+        checkpointId: "n03-d04-n03-action-submitted",
+        adminCheckId: "core-loop",
+      },
       {
         targetKey: "nightThreeActionResolution",
         featureSlotId: "night-three-action-resolution",
@@ -54,6 +66,14 @@ test("night three progression assertion covers live action and D04 return facts"
   const cycle = {
     id: "n03-d04",
     checkpoints: [
+      {
+        id: "n03-action-submitted",
+        actionState: "ack",
+        actorSlot: "slot_4",
+        templateId: "factional_kill",
+        targetSlot: "slot-7",
+        actionButtonVisible: false,
+      },
       {
         id: "n03-resolved-target-killed",
         resolveState: "ack",
@@ -94,8 +114,9 @@ test("night three progression assertion covers live action and D04 return facts"
         cycle: {
           ...cycle,
           checkpoints: [
-            { ...cycle.checkpoints[0], targetAlive: true },
-            cycle.checkpoints[1],
+            cycle.checkpoints[0],
+            { ...cycle.checkpoints[1], targetAlive: true },
+            cycle.checkpoints[2],
           ],
         },
       }),
@@ -160,7 +181,6 @@ function nightThreeBrowserProofFixture() {
       requestEnvelope: {
         body: {
           body: {
-            principal_user_id: "player-goon-a",
             command: {
               SubmitAction: {
                 actor_slot: "slot_4",

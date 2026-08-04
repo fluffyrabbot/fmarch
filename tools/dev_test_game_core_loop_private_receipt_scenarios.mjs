@@ -831,9 +831,8 @@ export function assertLiveCompletedPrivateChannelPostRejectOutcome({
     outcome?.commandStatus?.error !== scenario.commandError ||
     outcome?.commandStatus?.serverEnvelope?.body?.kind !== "Reject" ||
     Array.isArray(outcome?.commandStatus?.streamSeqs) ||
-    (expectedPrincipalUserId !== undefined &&
-      outcome?.commandStatus?.requestEnvelope?.body?.body?.principal_user_id !==
-        expectedPrincipalUserId) ||
+    outcome?.commandStatus?.requestEnvelope?.body?.body?.principal_user_id !==
+      undefined ||
     command?.game !== expectedGame ||
     command?.channel_id !== expectedChannelId ||
     command?.actor_slot !== expectedActorSlot ||
@@ -1204,9 +1203,9 @@ export function privateReceiptAssertionArgs({
     expectedResyncSnapshotPhaseId:
       scenario.assertResyncSnapshotPhase === false ? null : scenario.phaseId,
     expectedCommandStateEndpoint:
-      `/games/${expectedGame}/player-command-state?principal_user_id=${scenario.principalUserId}&slot_id=${scenario.expectedSlot}`,
+      `/api/gameplay/games/${expectedGame}/player-command-state?slot_id=${scenario.expectedSlot}`,
     expectedNotificationsEndpoint:
-      `/games/${expectedGame}/notifications?principal_user_id=${scenario.principalUserId}`,
+      `/api/gameplay/games/${expectedGame}/notifications`,
   };
 }
 

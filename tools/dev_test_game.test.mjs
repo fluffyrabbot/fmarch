@@ -16,6 +16,7 @@ import {
 import {
   buildSetupBootstrapCommandEvidence,
   seedSetupCommandPlanForGame as setupBootstrapCommandPlanForGame,
+  seededCohostDeniedClasses,
   seededSetupRoster as setupBootstrapRoster,
 } from "./dev_test_game_setup_bootstrap_scenario.mjs";
 import {
@@ -146,6 +147,7 @@ import {
 } from "./dev_test_game_ops_artifacts.mjs";
 import {
   liveProjectionLagServerTraceContract,
+  liveProjectionResyncMetricsAreConsistent,
 } from "./dev_test_game_live_projection_observability.mjs";
 import {
   devTestGameBackupRestoreDumpPath,
@@ -1141,6 +1143,24 @@ test("live projection lag observability contract matches the server trace", asyn
   assert.match(source, /game_id = %game/);
   assert.match(source, /connection_id = %connection_id/);
   assert.match(source, /dropped_messages,/);
+  assert.equal(
+    liveProjectionResyncMetricsAreConsistent({
+      resyncFramesReceived: 3,
+      resyncRefreshesStarted: 3,
+      resyncFramesCoalesced: 1,
+      resyncTrailingRefreshesStarted: 1,
+    }),
+    true,
+  );
+  assert.equal(
+    liveProjectionResyncMetricsAreConsistent({
+      resyncFramesReceived: 3,
+      resyncRefreshesStarted: 2,
+      resyncFramesCoalesced: 1,
+      resyncTrailingRefreshesStarted: 1,
+    }),
+    false,
+  );
 });
 
 test("session cards can target focused proof artifacts without clobbering canonical proof inputs", () => {
@@ -1200,6 +1220,37 @@ test("dev test-game browser role entry uses accounts and invites only", async ()
   assert.match(source, /createInviteCredential/);
   assert.doesNotMatch(source, /createSessionGrantCredential/);
   assert.doesNotMatch(source, /\/auth\/session-grants/);
+});
+
+test("dev test-game commands traverse the authenticated same-origin route", async () => {
+  const [harnessSource, commandRouteSource] = await Promise.all([
+    readFile("tools/dev_test_game.mjs", "utf8"),
+    readFile("frontend/src/routes/commands/+server.js", "utf8"),
+  ]);
+  assert.doesNotMatch(harnessSource, /"\/commands": currentApiBaseUrl/);
+  assert.match(
+    harnessSource,
+    /process\.env\.FMARCH_API_INTERNAL_URL = currentApiBaseUrl/,
+  );
+  assert.match(harnessSource, /process\.env\.FMARCH_API_BASE_URL = ""/);
+  assert.match(
+    harnessSource,
+    /FMARCH_DB_MAX_CONNECTIONS: process\.env\.FMARCH_DB_MAX_CONNECTIONS \?\? "48"/,
+  );
+  assert.match(
+    harnessSource,
+    /process\.env\.FMARCH_WS_TICKET_MAX_PER_WINDOW \?\? "1000"/,
+  );
+  assert.match(
+    harnessSource,
+    /process\.env\.FMARCH_WS_MAX_CONNECTIONS_PER_PRINCIPAL \?\? "128"/,
+  );
+  assert.match(
+    harnessSource,
+    /process\.env\.FMARCH_DB_ACQUIRE_TIMEOUT_MS \?\? "2000"/,
+  );
+  assert.match(commandRouteSource, /accessTokenForRequest/);
+  assert.match(commandRouteSource, /authorization: `Bearer \$\{token\}`/);
 });
 
 test("private-channel stale action recovery uses shared transition assertion", async () => {
@@ -2911,7 +2962,7 @@ test("hosted identity evidence lane records blocked and passed handoffs", async 
       "target/dev-test-game/hosted-identity-evidence-account-recovery.json",
     proofTarget:
       "target/dev-test-game/hosted-identity-evidence-account-recovery-admin-proof.json",
-    roleUrl: "/admin/audit/local-hosted-identity-evidence?game=<seeded-game>",
+    roleUrl: "/_dev/ops/audit/local-hosted-identity-evidence?game=<seeded-game>",
     firstMissingInputId: "redacted-account-recovery-packet",
     firstMissingCheckId: "account-recovery-evidence",
     proofBoundary:
@@ -3312,7 +3363,7 @@ test("hosted identity evidence lane records blocked and passed handoffs", async 
       adminProofTarget: hostedIdentityEvidenceProgressionAdminProofPath(
         progression.id,
       ),
-      roleUrl: "/admin/audit/local-hosted-identity-evidence?game=<seeded-game>",
+      roleUrl: "/_dev/ops/audit/local-hosted-identity-evidence?game=<seeded-game>",
       firstMissingInputId: progression.missingInputId,
       firstMissingCheckId: progression.checkId,
     })),
@@ -3836,7 +3887,7 @@ test("dev test-game spine manifest records command order and evidence wiring", (
       "target/auth-invite-role-proof/invite-role-proof.json",
       devTestGameIdentityAdminProofPath,
     ],
-    roleUrl: "/admin/audit/local-identity-adapter?game=<seeded-game>",
+    roleUrl: "/_dev/ops/audit/local-identity-adapter?game=<seeded-game>",
   });
   const hostedIdentityEvidenceAdminProofArtifact =
     hostedAdminHandoffProofArtifactCase("hostedIdentityEvidenceAdminProof");
@@ -3863,7 +3914,7 @@ test("dev test-game spine manifest records command order and evidence wiring", (
     proofArtifact: devTestGameRealHostedObservabilityHandoffPath,
     dependsOn: [devTestGameHostedOpsSignalsPath],
     roleUrl:
-      "/admin/audit/local-real-hosted-observability-handoff?game=<seeded-game>",
+      "/_dev/ops/audit/local-real-hosted-observability-handoff?game=<seeded-game>",
   });
   const realHostedObservabilityHandoffAdminProofArtifact =
     hostedAdminHandoffProofArtifactCase(
@@ -3879,7 +3930,7 @@ test("dev test-game spine manifest records command order and evidence wiring", (
     script: devTestGameHostedTargetPreflightCommand,
     proofArtifact: devTestGameHostedTargetPreflightPath,
     dependsOn: [devTestGameHostedConcurrentRaceMatrixPath],
-    roleUrl: "/admin/audit/local-hosted-target-preflight?game=<seeded-game>",
+    roleUrl: "/_dev/ops/audit/local-hosted-target-preflight?game=<seeded-game>",
   });
   assert.deepEqual(manifest.commands.hostedEvidenceLane, {
     script: devTestGameHostedEvidenceLaneCommand,
@@ -3888,7 +3939,7 @@ test("dev test-game spine manifest records command order and evidence wiring", (
       devTestGameHostedConcurrentRaceMatrixPath,
       devTestGameHostedTargetPreflightPath,
     ],
-    roleUrl: "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
+    roleUrl: "/_dev/ops/audit/local-hosted-evidence-lane?game=<seeded-game>",
   });
   assert.deepEqual(manifest.commands.hostedEvidenceOperatorChecklistProof, {
     script: devTestGameHostedEvidenceOperatorChecklistProofCommand,
@@ -3906,7 +3957,7 @@ test("dev test-game spine manifest records command order and evidence wiring", (
     proofArtifact: devTestGameHostedEvidenceLaneDemoProofPath,
     dependsOn: [devTestGameHostedConcurrentRaceMatrixPath],
     demoOnly: true,
-    roleUrl: "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
+    roleUrl: "/_dev/ops/audit/local-hosted-evidence-lane?game=<seeded-game>",
   });
   assert.deepEqual(manifest.commands.hostedMatrixRawEvidenceFixtureProof, {
     script: devTestGameHostedMatrixRawEvidenceFixtureProofCommand,
@@ -3937,7 +3988,7 @@ test("dev test-game spine manifest records command order and evidence wiring", (
         devTestGameHostedEvidenceLaneOperatorFixturePath,
       ],
       fixtureEvidence: true,
-      roleUrl: "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
+      roleUrl: "/_dev/ops/audit/local-hosted-evidence-lane?game=<seeded-game>",
     },
   );
   assert.deepEqual(manifest.commands.realHostedMatrixRawCapture, {
@@ -3962,7 +4013,7 @@ test("dev test-game spine manifest records command order and evidence wiring", (
     fixtureEvidence: false,
     releaseReady: false,
     productionReady: false,
-    roleUrl: "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
+    roleUrl: "/_dev/ops/audit/local-hosted-evidence-lane?game=<seeded-game>",
   });
   for (const descriptor of recoveryReceiptGraphDescriptors) {
     assert.deepEqual(manifest.commands[descriptor.receiptKey], {
@@ -3976,7 +4027,7 @@ test("dev test-game spine manifest records command order and evidence wiring", (
     script: devTestGameReleaseRunbookCommand,
     proofArtifact: devTestGameReleaseRunbookPath,
     dependsOn: [devTestGameReleaseReadinessPath],
-    roleUrl: "/admin/audit/local-release-runbook?game=<seeded-game>",
+    roleUrl: "/_dev/ops/audit/local-release-runbook?game=<seeded-game>",
   });
   assert.deepEqual(manifest.commands.releaseAdminProofContract, {
     script: devTestGameReleaseAdminProofContractCommand,
@@ -3985,7 +4036,7 @@ test("dev test-game spine manifest records command order and evidence wiring", (
       devTestGameReleaseReadinessPath,
       devTestGameReleaseAdminProofPath,
     ],
-    roleUrl: "/admin/audit/local-release-readiness?game=<seeded-game>",
+    roleUrl: "/_dev/ops/audit/local-release-readiness?game=<seeded-game>",
     releaseReady: false,
     productionReady: false,
   });
@@ -4013,7 +4064,7 @@ test("dev test-game spine manifest records command order and evidence wiring", (
       "target/dev-test-game/proof-run.json",
       devTestGameProofGraphPath,
     ],
-    roleUrl: "/admin/audit/local-next-action?game=<seeded-game>",
+    roleUrl: "/_dev/ops/audit/local-next-action?game=<seeded-game>",
   });
   assert.deepEqual(manifest.commands.proofGraph, {
     script: devTestGameProofGraphCommand,
@@ -4031,7 +4082,7 @@ test("dev test-game spine manifest records command order and evidence wiring", (
       "target/dev-test-game/admin-spine-proof.json",
       "target/dev-test-game/proof-run.json",
     ],
-    roleUrl: "/admin/audit/local-proof-graph?game=<seeded-game>",
+    roleUrl: "/_dev/ops/audit/local-proof-graph?game=<seeded-game>",
   });
   assert.deepEqual(
     manifest.terminalArtifacts.map((artifact) => ({
@@ -4063,7 +4114,7 @@ test("dev test-game spine manifest records command order and evidence wiring", (
         id: "next-action-admin-proof",
         command: nextActionAdminProofCommand,
         path: nextActionAdminProofPath,
-        roleUrl: "/admin/audit/local-next-action?game=<seeded-game>",
+        roleUrl: "/_dev/ops/audit/local-next-action?game=<seeded-game>",
       },
       {
         id: "proof-graph",
@@ -4075,13 +4126,13 @@ test("dev test-game spine manifest records command order and evidence wiring", (
         id: "proof-graph-admin-proof",
         command: devTestGameProofGraphAdminProofCommand,
         path: devTestGameProofGraphAdminProofPath,
-        roleUrl: "/admin/audit/local-proof-graph?game=<seeded-game>",
+        roleUrl: "/_dev/ops/audit/local-proof-graph?game=<seeded-game>",
       },
       {
         id: "release-admin-proof-contract",
         command: devTestGameReleaseAdminProofContractCommand,
         path: devTestGameReleaseAdminProofContractPath,
-        roleUrl: "/admin/audit/local-release-readiness?game=<seeded-game>",
+        roleUrl: "/_dev/ops/audit/local-release-readiness?game=<seeded-game>",
       },
     ],
   );
@@ -4338,7 +4389,7 @@ test("spine manifest gives host setup freshness artifacts focused recovery comma
       status: "stale",
       refreshSource: "manifest-default",
       proofTarget: devTestGameHostSetupAdminProofPath,
-      roleUrl: "/admin/audit/local-host-setup-proof?game=<seeded-game>",
+      roleUrl: "/_dev/ops/audit/local-host-setup-proof?game=<seeded-game>",
       requiredEvidence:
         "Fresh host setup admin proof artifact with visible setup checks.",
       buildSlice:
@@ -4946,10 +4997,10 @@ test("dev test-game next-action derives one local recovery command from the mani
       deferredCommand: `npm run ${devTestGameHostedIdentityEvidenceCommand}`,
       deferredProofTarget: devTestGameHostedIdentityEvidencePath,
       deferredRoleUrl:
-        "/admin/audit/local-hosted-identity-evidence?game=<seeded-game>",
+        "/_dev/ops/audit/local-hosted-identity-evidence?game=<seeded-game>",
       nextLocalCommand: devTestGameLiveProofCommand,
       nextLocalProofTarget: "target/dev-test-game/proof-run.json",
-      roleUrl: "/admin/audit/local-identity-adapter?game=<seeded-game>",
+      roleUrl: "/_dev/ops/audit/local-identity-adapter?game=<seeded-game>",
       sequenceTransition: {
         status: "blocked",
         promotionCommand: devTestGameHostedIdentitySequencePromotionCommand,
@@ -5440,7 +5491,7 @@ test("dev test-game next-action derives one local recovery command from the mani
       buildSlice:
         "Refresh the proof graph admin role-handoff browser proof before choosing hosted readiness work.",
       proofTarget: "target/dev-test-game/proof-graph-admin-proof.json",
-      roleUrl: "/admin/audit/local-proof-graph?game=<seeded-game>",
+      roleUrl: "/_dev/ops/audit/local-proof-graph?game=<seeded-game>",
     },
   });
   assert.deepEqual(missingLocalDependencyAction.localReadinessDependencyTrace, {
@@ -5458,7 +5509,7 @@ test("dev test-game next-action derives one local recovery command from the mani
         buildSlice:
           "Refresh the proof graph admin role-handoff browser proof before choosing hosted readiness work.",
         proofTarget: "target/dev-test-game/proof-graph-admin-proof.json",
-        roleUrl: "/admin/audit/local-proof-graph?game=<seeded-game>",
+        roleUrl: "/_dev/ops/audit/local-proof-graph?game=<seeded-game>",
         proofBoundary:
           "Local browser proof that the proof graph admin surface follows every mapped admin-proof role URL. This recovers a local readiness dependency only; it does not prove hosted deployment, release readiness, or production readiness.",
         requiredEvidence:
@@ -5474,7 +5525,7 @@ test("dev test-game next-action derives one local recovery command from the mani
         buildSlice:
           "Refresh the proof graph admin browser proof until the manifest production-feature provenance summary matches proof-graph destinations.",
         proofTarget: "target/dev-test-game/proof-graph-admin-proof.json",
-        roleUrl: "/admin/audit/local-proof-graph?game=<seeded-game>",
+        roleUrl: "/_dev/ops/audit/local-proof-graph?game=<seeded-game>",
         proofBoundary:
           "Local browser proof that the proof graph admin surface carries a passed production-feature provenance comparison between the spine manifest summary and proof-graph destinations. This recovers a local readiness dependency only; it does not prove hosted deployment, release readiness, or production readiness.",
         requiredEvidence:
@@ -5490,7 +5541,7 @@ test("dev test-game next-action derives one local recovery command from the mani
         buildSlice:
           "Refresh the proof graph admin browser proof so the terminal batch links to the next-action handoff detail before hosted readiness work can be selected.",
         proofTarget: "target/dev-test-game/proof-graph-admin-proof.json",
-        roleUrl: "/admin/audit/local-proof-graph?game=<seeded-game>",
+        roleUrl: "/_dev/ops/audit/local-proof-graph?game=<seeded-game>",
         proofBoundary:
           "Local browser proof that the proof graph terminal batch links to the next-action handoff detail and verifies the default blocker plus opt-in hosted identity predicate rows. This recovers a local readiness dependency only; it does not prove hosted deployment, release readiness, or production readiness.",
         requiredEvidence:
@@ -5506,7 +5557,7 @@ test("dev test-game next-action derives one local recovery command from the mani
         buildSlice:
           "Refresh the proof graph admin browser proof so the terminal validation links to the admin-spine diagnostics contract row before hosted readiness work can be selected.",
         proofTarget: "target/dev-test-game/proof-graph-admin-proof.json",
-        roleUrl: "/admin/audit/local-proof-graph?game=<seeded-game>",
+        roleUrl: "/_dev/ops/audit/local-proof-graph?game=<seeded-game>",
         proofBoundary:
           "Local browser proof that the proof graph terminal validation destination clicks through to the admin-spine diagnostics contract row. This recovers a local readiness dependency only; it does not prove hosted deployment, release readiness, or production readiness.",
         requiredEvidence:
@@ -5545,7 +5596,7 @@ test("dev test-game next-action derives one local recovery command from the mani
       buildSlice:
         "Refresh the proof graph admin browser proof so the terminal batch links to the next-action handoff detail before hosted readiness work can be selected.",
       proofTarget: "target/dev-test-game/proof-graph-admin-proof.json",
-      roleUrl: "/admin/audit/local-proof-graph?game=<seeded-game>",
+      roleUrl: "/_dev/ops/audit/local-proof-graph?game=<seeded-game>",
     },
   });
   assert.deepEqual(
@@ -5565,7 +5616,7 @@ test("dev test-game next-action derives one local recovery command from the mani
           buildSlice:
             "Refresh the proof graph admin browser proof so the terminal batch links to the next-action handoff detail before hosted readiness work can be selected.",
           proofTarget: "target/dev-test-game/proof-graph-admin-proof.json",
-          roleUrl: "/admin/audit/local-proof-graph?game=<seeded-game>",
+          roleUrl: "/_dev/ops/audit/local-proof-graph?game=<seeded-game>",
           proofBoundary:
             "Local browser proof that the proof graph terminal batch links to the next-action handoff detail and verifies the default blocker plus opt-in hosted identity predicate rows. This recovers a local readiness dependency only; it does not prove hosted deployment, release readiness, or production readiness.",
           requiredEvidence:
@@ -5605,7 +5656,7 @@ test("dev test-game next-action derives one local recovery command from the mani
       buildSlice:
         "Refresh the proof graph admin browser proof so the terminal validation links to the admin-spine diagnostics contract row before hosted readiness work can be selected.",
       proofTarget: "target/dev-test-game/proof-graph-admin-proof.json",
-      roleUrl: "/admin/audit/local-proof-graph?game=<seeded-game>",
+      roleUrl: "/_dev/ops/audit/local-proof-graph?game=<seeded-game>",
     },
   });
   assert.deepEqual(
@@ -5625,7 +5676,7 @@ test("dev test-game next-action derives one local recovery command from the mani
           buildSlice:
             "Refresh the proof graph admin browser proof so the terminal validation links to the admin-spine diagnostics contract row before hosted readiness work can be selected.",
           proofTarget: "target/dev-test-game/proof-graph-admin-proof.json",
-          roleUrl: "/admin/audit/local-proof-graph?game=<seeded-game>",
+          roleUrl: "/_dev/ops/audit/local-proof-graph?game=<seeded-game>",
           proofBoundary:
             "Local browser proof that the proof graph terminal validation destination clicks through to the admin-spine diagnostics contract row. This recovers a local readiness dependency only; it does not prove hosted deployment, release readiness, or production readiness.",
           requiredEvidence:
@@ -5973,7 +6024,7 @@ test("dev test-game next-action derives one local recovery command from the mani
       buildSlice:
         "Refresh the proof-freshness admin browser proof before hosted readiness work can be selected.",
       proofTarget: "target/dev-test-game/proof-freshness-admin-proof.json",
-      roleUrl: "/admin/audit/local-proof-freshness?game=<seeded-game>",
+      roleUrl: "/_dev/ops/audit/local-proof-freshness?game=<seeded-game>",
     },
   });
   assert.deepEqual(
@@ -5993,7 +6044,7 @@ test("dev test-game next-action derives one local recovery command from the mani
           buildSlice:
             "Refresh the proof-freshness admin browser proof before hosted readiness work can be selected.",
           proofTarget: "target/dev-test-game/proof-freshness-admin-proof.json",
-          roleUrl: "/admin/audit/local-proof-freshness?game=<seeded-game>",
+          roleUrl: "/_dev/ops/audit/local-proof-freshness?game=<seeded-game>",
           proofBoundary:
             "Local browser proof that the proof-freshness admin surface exposes fresh generated artifacts and the next-action handoff from the seeded admin audit route. This recovers a local readiness dependency only; it does not validate artifact contents, hosted deployment, release readiness, or production readiness.",
           requiredEvidence:
@@ -6074,7 +6125,7 @@ test("dev test-game next-action derives one local recovery command from the mani
       buildSlice:
         "Refresh the local hosted evidence lane demo proof before choosing hosted deployment work.",
       proofTarget: devTestGameHostedEvidenceLaneDemoProofPath,
-      roleUrl: "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
+      roleUrl: "/_dev/ops/audit/local-hosted-evidence-lane?game=<seeded-game>",
     },
   });
   assert.deepEqual(
@@ -6094,7 +6145,7 @@ test("dev test-game next-action derives one local recovery command from the mani
           buildSlice:
             "Refresh the local hosted evidence lane demo proof before choosing hosted deployment work.",
           proofTarget: devTestGameHostedEvidenceLaneDemoProofPath,
-          roleUrl: "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
+          roleUrl: "/_dev/ops/audit/local-hosted-evidence-lane?game=<seeded-game>",
           proofBoundary:
             "Local demo proof for the hosted evidence lane pass path. This recovers the blocked-to-passed handoff using synthetic external-looking evidence only; it does not prove hosted deployment, release readiness, or production readiness.",
           requiredEvidence:
@@ -6318,7 +6369,7 @@ test("dev test-game next-action advances hosted deployment after target prefligh
   );
   assert.equal(
     blockedPreflightAction.nextAction.unproven.roleUrl,
-    "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
+    "/_dev/ops/audit/local-hosted-evidence-lane?game=<seeded-game>",
   );
   assert.equal(
     blockedPreflightAction.nextAction.unproven.proofGraphNodeId,
@@ -6326,7 +6377,7 @@ test("dev test-game next-action advances hosted deployment after target prefligh
   );
   assert.equal(
     blockedPreflightAction.releaseReadinessTrace.candidates[0].roleUrl,
-    "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
+    "/_dev/ops/audit/local-hosted-evidence-lane?game=<seeded-game>",
   );
   assert.equal(
     blockedPreflightAction.releaseReadinessTrace.candidates[0].proofGraphNodeId,
@@ -6492,7 +6543,7 @@ test("dev test-game next-action advances hosted deployment after target prefligh
     command: `npm run ${devTestGameHostedEvidenceOperatorChecklistProofCommand}`,
     unprovenId: "hosted-deployment",
     proofTarget: devTestGameHostedEvidenceOperatorChecklistProofPath,
-    roleUrl: "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
+    roleUrl: "/_dev/ops/audit/local-hosted-evidence-lane?game=<seeded-game>",
     firstMissingInputId: blockedPreflightOperatorPacket.firstMissingInputId,
     selectedProductionFeatureGraphNodeId:
       blockedPreflightOperatorPacket.selectedProductionFeatureGraphNodeId,
@@ -6525,7 +6576,7 @@ test("dev test-game next-action advances hosted deployment after target prefligh
     checklistProofTarget: devTestGameHostedEvidenceOperatorChecklistProofPath,
     nextCommand: `npm run ${devTestGameRealHostedMatrixRawCaptureCommand}`,
     nextProofTarget: devTestGameRealHostedMatrixRawCapturePath,
-    roleUrl: "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
+    roleUrl: "/_dev/ops/audit/local-hosted-evidence-lane?game=<seeded-game>",
     releaseReady: false,
     productionReady: false,
   });
@@ -6672,7 +6723,7 @@ test("dev test-game next-action advances hosted deployment after target prefligh
   );
   assert.equal(
     passedPreflightAction.nextAction.unproven.roleUrl,
-    "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
+    "/_dev/ops/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
   );
   assert.equal(
     passedPreflightAction.nextAction.unproven.proofGraphNodeId,
@@ -6728,7 +6779,7 @@ test("dev test-game next-action advances hosted deployment after target prefligh
   );
   assert.equal(
     rawCaptureReadyAction.nextAction.unproven.roleUrl,
-    "/admin/audit/local-hosted-target-preflight?game=<seeded-game>",
+    "/_dev/ops/audit/local-hosted-target-preflight?game=<seeded-game>",
   );
   assert.equal(
     rawCaptureReadyAction.nextAction.unproven.proofGraphNodeId,
@@ -6800,7 +6851,7 @@ test("dev test-game next-action advances hosted deployment after target prefligh
   );
   assert.equal(
     syntheticPreflightAction.nextAction.unproven.roleUrl,
-    "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
+    "/_dev/ops/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
   );
   assert.equal(
     syntheticPreflightAction.nextAction.unproven.proofGraphNodeId,
@@ -7708,7 +7759,7 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
     adminRoleSurface: {
       status: "passed",
       detailRoleUrl:
-        "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
+        "/_dev/ops/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
     },
   });
   const graphWithHostedTransition = buildDevTestGameProofGraph(
@@ -7747,7 +7798,7 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
       realHostedDeploymentStatus: "passed",
       externalEvidencePath: "target/dev-test-game/hosted-matrix-external.json",
       roleUrl:
-        "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
+        "/_dev/ops/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
       command: devTestGameHostedConcurrentRaceMatrixCommand,
       proofTarget: devTestGameHostedConcurrentRaceMatrixPath,
     },
@@ -7766,7 +7817,7 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
       command: `npm run ${devTestGameRealHostedObservabilityHandoffCommand}`,
       proofTarget: devTestGameRealHostedObservabilityHandoffPath,
       roleUrl:
-        "/admin/audit/local-real-hosted-observability-handoff?game=<seeded-game>",
+        "/_dev/ops/audit/local-real-hosted-observability-handoff?game=<seeded-game>",
       status: "blocked",
       source: "hosted-ops-signals",
     },
@@ -8089,12 +8140,12 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
         command: `npm run ${devTestGameHostedEvidenceOperatorChecklistProofCommand}`,
         unprovenId: "hosted-deployment",
         proofTarget: devTestGameHostedEvidenceOperatorChecklistProofPath,
-        roleUrl: "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
+        roleUrl: "/_dev/ops/audit/local-hosted-evidence-lane?game=<seeded-game>",
         firstMissingInputId: "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
         selectedProductionFeatureGraphNodeId:
           "production-feature:host-phase-control",
         selectedProductionFeatureRoleUrl:
-          "/admin/audit/local-core-loop?game=<seeded-game>",
+          "/_dev/ops/audit/local-core-loop?game=<seeded-game>",
         rawEvidenceTemplate: hostedMatrixRawEvidenceTemplateDescriptor(),
       },
       selectedOperatorHandoffPacket: {
@@ -8108,9 +8159,9 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
         selectedProductionFeatureGraphNodeId:
           "production-feature:host-phase-control",
         selectedProductionFeatureRoleUrl:
-          "/admin/audit/local-core-loop?game=<seeded-game>",
+          "/_dev/ops/audit/local-core-loop?game=<seeded-game>",
         handoffRoleUrl:
-          "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
+          "/_dev/ops/audit/local-hosted-evidence-lane?game=<seeded-game>",
         operatorChecklistProofTarget: devTestGameHostedEvidenceLanePath,
         operatorChecklistPreflightTarget: devTestGameHostedTargetPreflightPath,
         rawEvidenceTemplate: hostedMatrixRawEvidenceTemplateDescriptor(),
@@ -8122,7 +8173,7 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
         relationship: "selected-operator-handoff",
         command: `npm run ${devTestGameHostedEvidenceOperatorChecklistProofCommand}`,
         firstMissingInputId: "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
-        roleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
+        roleUrl: "/_dev/ops/audit/local-core-loop?game=<seeded-game>",
         proofTarget: devTestGameHostedEvidenceOperatorChecklistProofPath,
         unprovenId: "hosted-deployment",
       },
@@ -8222,7 +8273,7 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
       label: "Core-loop command proof role URL audit",
       kind: "command-proof-role-url-audit",
       artifact: devTestGameCoreLoopAdminProofPath,
-      roleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
+      roleUrl: "/_dev/ops/audit/local-core-loop?game=<seeded-game>",
       proofCommand: devTestGameCoreLoopAdminProofCommand,
       recoveryCommand: devTestGameCoreLoopAdminProofCommand,
       visibleAdminRowId: "command-proof-role-url-audit",
@@ -8241,7 +8292,7 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
       from: "admin-proof:core-loop",
       to: "core-loop-command-proof-role-url-audit",
       relationship: "audits-command-proof-role-urls",
-      roleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
+      roleUrl: "/_dev/ops/audit/local-core-loop?game=<seeded-game>",
       command: devTestGameCoreLoopAdminProofCommand,
       proofTarget: devTestGameCoreLoopAdminProofPath,
       checkedCount: coreLoopCommandProofRoleUrlAuditExpectation.checkedCount,
@@ -8323,7 +8374,7 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
       kind: "optional-browser-proof",
       status: "passed",
       artifact: devTestGameHostedEvidenceLaneRealCaptureAdminProofPath,
-      roleUrl: "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
+      roleUrl: "/_dev/ops/audit/local-hosted-evidence-lane?game=<seeded-game>",
       proofCommand: devTestGameHostedEvidenceLaneRealCaptureAdminProofCommand,
       recoveryCommand: devTestGameHostedEvidenceLaneRealCaptureAdminProofCommand,
       releaseReady: false,
@@ -8338,7 +8389,7 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
       kind: "terminal-validation",
       status: "passed",
       artifact: devTestGameReleaseAdminProofContractPath,
-      roleUrl: "/admin/audit/local-release-readiness?game=<seeded-game>",
+      roleUrl: "/_dev/ops/audit/local-release-readiness?game=<seeded-game>",
       proofCommand: devTestGameReleaseAdminProofContractCommand,
       recoveryCommand: devTestGameReleaseAdminProofContractCommand,
       validatesArtifacts: [
@@ -8506,7 +8557,7 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
   assert.equal(
     [
       "http://127.0.0.1:5173/g/<seeded-game>/setup",
-      "/admin/audit/local-host-setup-proof?game=<seeded-game>",
+      "/_dev/ops/audit/local-host-setup-proof?game=<seeded-game>",
       "target/dev-test-game/host-setup-proof.json",
       devTestGameHostSetupProofCommand,
       "setup workbench browser surface",
@@ -8622,49 +8673,49 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
         "admin-spine",
         "aggregate-proof",
         "target/dev-test-game/admin-spine-proof.json",
-        "/admin/audit/local-admin-spine?game=<seeded-game>",
+        "/_dev/ops/audit/local-admin-spine?game=<seeded-game>",
         "npm run test:dev-test-game-admin-spine",
       ],
       [
         "spine-manifest",
         "manifest",
         "target/dev-test-game/spine-manifest.json",
-        "/admin/audit/local-spine-manifest?game=<seeded-game>",
+        "/_dev/ops/audit/local-spine-manifest?game=<seeded-game>",
         "npm run test:dev-test-game-spine-manifest-admin-proof",
       ],
       [
         "proof-graph",
         "proof-graph",
         "target/dev-test-game/proof-graph.json",
-        "/admin/audit/local-proof-graph?game=<seeded-game>",
+        "/_dev/ops/audit/local-proof-graph?game=<seeded-game>",
         "test:dev-test-game-proof-graph",
       ],
       [
         "proof-freshness",
         "freshness-dashboard",
         "target/dev-test-game/proof-freshness-admin-proof.json",
-        "/admin/audit/local-proof-freshness?game=<seeded-game>",
+        "/_dev/ops/audit/local-proof-freshness?game=<seeded-game>",
         devTestGameLiveProofCommand,
       ],
       [
         "next-action",
         "recovery-receipt",
         "target/dev-test-game/next-action.json",
-        "/admin/audit/local-next-action?game=<seeded-game>",
+        "/_dev/ops/audit/local-next-action?game=<seeded-game>",
         "test:dev-test-game-proof-freshness-admin-proof",
       ],
       [
         "diagnostic:proof-graph-destination-summary-drift",
         "diagnostic-browser-proof",
         proofGraphDestinationSummaryDriftNextActionAdminProofPath,
-        "/admin/audit/local-next-action?game=<seeded-game>",
+        "/_dev/ops/audit/local-next-action?game=<seeded-game>",
         "test:dev-test-game-proof-graph",
       ],
       [
         "admin-spine-terminal-batches",
         "terminal-proof-batch-receipt",
         "target/dev-test-game/admin-spine-terminal-batches.json",
-        "/admin/audit/local-admin-spine?game=<seeded-game>",
+        "/_dev/ops/audit/local-admin-spine?game=<seeded-game>",
         "npm run test:dev-test-game-admin-spine",
       ],
       ...recoveryReceiptGraphDescriptors.map((descriptor) => [
@@ -8678,21 +8729,21 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
         "release-admin-proof-contract",
         "terminal-validation",
         devTestGameReleaseAdminProofContractPath,
-        "/admin/audit/local-release-readiness?game=<seeded-game>",
+        "/_dev/ops/audit/local-release-readiness?game=<seeded-game>",
         devTestGameReleaseAdminProofContractCommand,
       ],
       [
         "hosted-identity-family-proof-batch",
         "hosted-identity-family-proof-batch",
         devTestGameHostedIdentityProgressionSummaryPath,
-        "/admin/audit/local-hosted-identity-evidence?game=<seeded-game>",
+        "/_dev/ops/audit/local-hosted-identity-evidence?game=<seeded-game>",
         `npm run ${devTestGameHostedIdentityProgressionAdminProofBatchCommand}`,
       ],
       [
         "hosted-identity-operator-predicate-proof",
         "hosted-identity-operator-predicate-proof",
         devTestGameHostedIdentityOperatorAdminProofPath,
-        "/admin/audit/local-hosted-identity-evidence?game=<seeded-game>",
+        "/_dev/ops/audit/local-hosted-identity-evidence?game=<seeded-game>",
         `npm run ${devTestGameHostedIdentityOperatorAdminProofCommand}`,
       ],
     ],
@@ -8828,7 +8879,7 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
       {
         id: "hosted-identity-family-proof-batch",
         artifact: devTestGameHostedIdentityProgressionSummaryPath,
-        roleUrl: "/admin/audit/local-hosted-identity-evidence?game=<seeded-game>",
+        roleUrl: "/_dev/ops/audit/local-hosted-identity-evidence?game=<seeded-game>",
         proofCommand: `npm run ${devTestGameHostedIdentityProgressionAdminProofBatchCommand}`,
         progressionIds: hostedIdentityEvidenceFamilyProgressionCases.map(
           (progression) => progression.id,
@@ -8843,7 +8894,7 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
       {
         id: "hosted-identity-operator-predicate-proof",
         artifact: devTestGameHostedIdentityOperatorAdminProofPath,
-        roleUrl: "/admin/audit/local-hosted-identity-evidence?game=<seeded-game>",
+        roleUrl: "/_dev/ops/audit/local-hosted-identity-evidence?game=<seeded-game>",
         proofCommand: `npm run ${devTestGameHostedIdentityOperatorAdminProofCommand}`,
         progressionIds: undefined,
         proofTargets: undefined,
@@ -9108,7 +9159,7 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
       browserWorkbench: hostSetupFeatureNode.browserWorkbench,
     },
     {
-      adminDetailRoleUrl: "/admin/audit/local-host-setup-proof?game=<seeded-game>",
+      adminDetailRoleUrl: "/_dev/ops/audit/local-host-setup-proof?game=<seeded-game>",
       recoveryCommand: devTestGameHostSetupProofCommand,
       readinessEvidence: "target/dev-test-game/host-setup-proof.json",
       browserWorkbench: hostSetupBrowserWorkbenchFixture(
@@ -9349,7 +9400,7 @@ test("selected proof graph dependency handoffs are table-driven across hosted la
     realHostedDeploymentStatus: "passed",
     externalEvidencePath: "target/dev-test-game/hosted-matrix-external.json",
     roleUrl:
-      "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
+      "/_dev/ops/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
     command: devTestGameHostedConcurrentRaceMatrixCommand,
     proofTarget: devTestGameHostedConcurrentRaceMatrixPath,
   };
@@ -9360,7 +9411,7 @@ test("selected proof graph dependency handoffs are table-driven across hosted la
     command: `npm run ${devTestGameRealHostedObservabilityHandoffCommand}`,
     proofTarget: devTestGameRealHostedObservabilityHandoffPath,
     roleUrl:
-      "/admin/audit/local-real-hosted-observability-handoff?game=<seeded-game>",
+      "/_dev/ops/audit/local-real-hosted-observability-handoff?game=<seeded-game>",
     status: "blocked",
     source: "hosted-ops-signals",
   };
@@ -9372,7 +9423,7 @@ test("selected proof graph dependency handoffs are table-driven across hosted la
           unproven: {
             proofGraphNodeId: "admin-proof:hosted-concurrent-race-matrix",
             roleUrl:
-              "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
+              "/_dev/ops/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
           },
         },
       },
@@ -9380,7 +9431,7 @@ test("selected proof graph dependency handoffs are table-driven across hosted la
       dependencies: [
         {
           selectedProofGraphNodeId: "admin-proof:hosted-concurrent-race-matrix",
-          roleUrlIncludes: "/admin/audit/local-hosted-concurrent-race-matrix",
+          roleUrlIncludes: "/_dev/ops/audit/local-hosted-concurrent-race-matrix",
           edges: [
             {
               from: matrixEdge.from,
@@ -9403,7 +9454,7 @@ test("selected proof graph dependency handoffs are table-driven across hosted la
         "externalEvidencePath target/dev-test-game/hosted-matrix-external.json",
         `command ${devTestGameHostedConcurrentRaceMatrixCommand}`,
         `proofTarget ${devTestGameHostedConcurrentRaceMatrixPath}`,
-        "roleUrl /admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
+        "roleUrl /_dev/ops/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
       ].join(" "),
     },
     {
@@ -9414,7 +9465,7 @@ test("selected proof graph dependency handoffs are table-driven across hosted la
             id: "hosted-production-identity",
             proofGraphNodeId: "admin-proof:hosted-identity-evidence",
             roleUrl:
-              "/admin/audit/local-hosted-identity-evidence?game=<seeded-game>",
+              "/_dev/ops/audit/local-hosted-identity-evidence?game=<seeded-game>",
             hostedIdentityProofGraphEdges: hostedIdentityDependency,
           },
         },
@@ -9424,7 +9475,7 @@ test("selected proof graph dependency handoffs are table-driven across hosted la
         {
           unprovenId: "hosted-production-identity",
           selectedProofGraphNodeId: "admin-proof:hosted-identity-evidence",
-          roleUrlIncludes: "/admin/audit/local-hosted-identity-evidence",
+          roleUrlIncludes: "/_dev/ops/audit/local-hosted-identity-evidence",
           edges: hostedIdentityDependency.edges,
         },
       ],
@@ -9443,7 +9494,7 @@ test("selected proof graph dependency handoffs are table-driven across hosted la
             proofGraphNodeId:
               realHostedObservabilityRoleSurfaceDrilldown.proofGraphNodeId,
             roleUrl:
-              "/admin/audit/local-real-hosted-observability-handoff?game=<seeded-game>",
+              "/_dev/ops/audit/local-real-hosted-observability-handoff?game=<seeded-game>",
           },
         },
       },
@@ -9453,7 +9504,7 @@ test("selected proof graph dependency handoffs are table-driven across hosted la
           selectedProofGraphNodeId:
             realHostedObservabilityRoleSurfaceDrilldown.proofGraphNodeId,
           roleUrlIncludes:
-            "/admin/audit/local-real-hosted-observability-handoff",
+            "/_dev/ops/audit/local-real-hosted-observability-handoff",
           edges: [
             {
               from: observabilityEdge.from,
@@ -9472,7 +9523,7 @@ test("selected proof graph dependency handoffs are table-driven across hosted la
         "status blocked",
         `command npm run ${devTestGameRealHostedObservabilityHandoffCommand}`,
         `proofTarget ${devTestGameRealHostedObservabilityHandoffPath}`,
-        "roleUrl /admin/audit/local-real-hosted-observability-handoff?game=<seeded-game>",
+        "roleUrl /_dev/ops/audit/local-real-hosted-observability-handoff?game=<seeded-game>",
       ].join(" "),
     },
   ];
@@ -9503,7 +9554,7 @@ test("selected proof graph dependency edge descriptors share route and proof con
     proofGraphNodeId:
       realHostedObservabilityRoleSurfaceDrilldown.proofGraphNodeId,
     roleUrl:
-      "/admin/audit/local-real-hosted-observability-handoff?game=<seeded-game>",
+      "/_dev/ops/audit/local-real-hosted-observability-handoff?game=<seeded-game>",
     status: "blocked",
   };
   const definition = selectedProofGraphDependencyDefinitions({
@@ -9518,7 +9569,7 @@ test("selected proof graph dependency edge descriptors share route and proof con
     command,
     proofTarget: devTestGameRealHostedObservabilityHandoffPath,
     roleUrl:
-      "/admin/audit/local-real-hosted-observability-handoff?game=<seeded-game>",
+      "/_dev/ops/audit/local-real-hosted-observability-handoff?game=<seeded-game>",
     status: "blocked",
     source: "hosted-ops-signals",
   };
@@ -9552,7 +9603,7 @@ test("next-action admin proof includes real-hosted observability dependency hand
     command: `npm run ${devTestGameRealHostedObservabilityHandoffCommand}`,
     proofTarget: devTestGameRealHostedObservabilityHandoffPath,
     roleUrl:
-      "/admin/audit/local-real-hosted-observability-handoff?game=<seeded-game>",
+      "/_dev/ops/audit/local-real-hosted-observability-handoff?game=<seeded-game>",
     status: "blocked",
     source: "hosted-ops-signals",
   };
@@ -9563,7 +9614,7 @@ test("next-action admin proof includes real-hosted observability dependency hand
         proofGraphNodeId:
           realHostedObservabilityRoleSurfaceDrilldown.proofGraphNodeId,
         roleUrl:
-          "/admin/audit/local-real-hosted-observability-handoff?game=<seeded-game>",
+          "/_dev/ops/audit/local-real-hosted-observability-handoff?game=<seeded-game>",
       },
     },
   };
@@ -9593,7 +9644,7 @@ test("next-action admin proof includes real-hosted observability dependency hand
             "status blocked",
             `command npm run ${devTestGameRealHostedObservabilityHandoffCommand}`,
             `proofTarget ${devTestGameRealHostedObservabilityHandoffPath}`,
-            "roleUrl /admin/audit/local-real-hosted-observability-handoff?game=<seeded-game>",
+            "roleUrl /_dev/ops/audit/local-real-hosted-observability-handoff?game=<seeded-game>",
           ].join(" "),
       },
       requiredRelatedLinkIds: [
@@ -11257,12 +11308,12 @@ test("next-action related link descriptors share route and proof ids", () => {
       id: "local-proof-graph-next-action-handoff",
       status: "missing",
     },
-    localCheckRoleUrl: "/admin/audit/local-proof-graph?game=<seeded-game>",
+    localCheckRoleUrl: "/_dev/ops/audit/local-proof-graph?game=<seeded-game>",
     seedProofLaneCoverage: {
       status: "drifted",
     },
     seedProofLaneCoverageRoleUrl:
-      "/admin/audit/local-seed-fixtures?game=<seeded-game>",
+      "/_dev/ops/audit/local-seed-fixtures?game=<seeded-game>",
     proofGraphDestinationSummary: {
       summaryStatus: "drift",
     },
@@ -11272,7 +11323,7 @@ test("next-action related link descriptors share route and proof ids", () => {
       deferredCommand: "npm run test:dev-test-game-identity:operator",
     },
     sequenceDeferralRoleUrl:
-      "/admin/audit/local-hosted-identity-evidence?game=<seeded-game>",
+      "/_dev/ops/audit/local-hosted-identity-evidence?game=<seeded-game>",
   });
 
   assert.deepEqual(
@@ -11290,12 +11341,12 @@ test("next-action related link descriptors share route and proof ids", () => {
         id: "local-proof-graph-next-action-handoff",
         status: "missing",
       },
-      localCheckRoleUrl: "/admin/audit/local-proof-graph?game=<seeded-game>",
+      localCheckRoleUrl: "/_dev/ops/audit/local-proof-graph?game=<seeded-game>",
       seedProofLaneCoverage: {
         status: "drifted",
       },
       seedProofLaneCoverageRoleUrl:
-        "/admin/audit/local-seed-fixtures?game=<seeded-game>",
+        "/_dev/ops/audit/local-seed-fixtures?game=<seeded-game>",
       proofGraphDestinationSummary: {
         summaryStatus: "drift",
       },
@@ -11536,7 +11587,16 @@ test("seed plan creates a playable mafiascum D01 game shape", () => {
   const game = "33333333-3333-4333-8333-333333333333";
   const plan = seedCommandPlanForGame(game);
   assert.equal(plan.length, 24);
-  assert.deepEqual(plan[0], ["host_h", { CreateGame: { game, pack: "mafiascum" } }]);
+  assert.deepEqual(plan[0], [
+    "host_h",
+    {
+      CreateGame: {
+        game,
+        pack: "mafiascum",
+        cohost_denied: [...seededCohostDeniedClasses],
+      },
+    },
+  ]);
   assert(plan.some(([, command]) => command.AddCohost?.user === "cohost_c"));
   assert(plan.some(([, command]) => command.SetPostPolicy?.allow_media_only === true));
   assert(plan.some(([, command]) => command.SetPostPolicy?.allow_media_only === false));
@@ -11550,7 +11610,16 @@ test("setup bootstrap scenario owns the seeded setup command grammar", () => {
   const plan = setupBootstrapCommandPlanForGame(game);
   assert.equal(setupBootstrapRoster.length, 5);
   assert.equal(plan.length, 19);
-  assert.deepEqual(plan[0], ["host_h", { CreateGame: { game, pack: "mafiascum" } }]);
+  assert.deepEqual(plan[0], [
+    "host_h",
+    {
+      CreateGame: {
+        game,
+        pack: "mafiascum",
+        cohost_denied: [...seededCohostDeniedClasses],
+      },
+    },
+  ]);
   assert.deepEqual(
     plan.filter(([, command]) => command.AddSlot).map(([, command]) => command.AddSlot.slot),
     setupBootstrapRoster.map((row) => row.slot),
@@ -11613,14 +11682,16 @@ test("session card and markdown include role credential URLs and tokens", async 
   const replacementActionReconnectCase = replacementActionReconnectScenario();
   const replacementStaleActionAfterResolveCase =
     replacementStaleActionAfterResolveScenario();
+  const bootstrapGame = "55555555-5555-4555-8555-555555555555";
   const setupBootstrapFixture = {
     status: "passed",
     proof:
       "Seeded local game bootstrap used the /setup route to add slots, assign occupants, assign roles, round-trip main post policy, and start D01 before gameplay priming.",
-    roleUrl: `http://127.0.0.1:4102/g/${game}/setup`,
+    game: bootstrapGame,
+    roleUrl: `http://127.0.0.1:4102/g/${bootstrapGame}/setup`,
     sessionPrincipalUserId: "host_h",
     credentialKind: "account",
-    capabilityLabel: `HostOf(${game})`,
+    capabilityLabel: `Hosting ${bootstrapGame}`,
     readinessSummary: "Started at D01",
     phaseId: "D01",
     commandCount: 18,
@@ -11628,37 +11699,37 @@ test("session card and markdown include role credential URLs and tokens", async 
       {
         status: "ack",
         commandKind: "AddSlot",
-        command: { game, slot: "slot-7" },
+        command: { game: bootstrapGame, slot: "slot_1" },
         streamSeqs: [20],
         readinessSummary: "Setup still needs attention",
       },
       {
         status: "ack",
         commandKind: "AssignSlot",
-        command: { game, slot: "slot-7", user: "player-mira" },
+        command: { game: bootstrapGame, slot: "slot_1", user: "player-mira" },
         streamSeqs: [21],
         readinessSummary: "Setup still needs attention",
       },
       {
         status: "ack",
         commandKind: "AssignRole",
-        command: { game, slot: "slot-7", role_key: "encryptor" },
+        command: { game: bootstrapGame, slot: "slot_1", role_key: "encryptor" },
         streamSeqs: [22],
         readinessSummary: "Ready to start",
       },
       {
         status: "ack",
         commandKind: "StartGame",
-        command: { game, phase: "D01" },
+        command: { game: bootstrapGame, phase: "D01" },
         streamSeqs: [24],
         readinessSummary: "Started at D01",
       },
     ],
-    slotIds: ["slot-2", "slot-3", "slot-7", "slot_4", "slot_5"],
+    slotIds: ["slot_1", "slot_2", "slot_3", "slot_4", "slot_5"],
     roleAssignments: {
-      "slot-2": "vanilla_townie",
-      "slot-3": "vanilla_townie",
-      "slot-7": "encryptor",
+      slot_1: "encryptor",
+      slot_2: "vanilla_townie",
+      slot_3: "vanilla_townie",
       slot_4: "mafia_goon",
       slot_5: "vanilla_townie",
     },
@@ -11672,7 +11743,7 @@ test("session card and markdown include role credential URLs and tokens", async 
       restored: {
         status: "ack",
         commandKind: "SetPostPolicy",
-        command: { game, channel_id: "main", allow_media_only: false },
+        command: { game: bootstrapGame, channel_id: "main", allow_media_only: false },
         streamSeqs: [23],
         readinessSummary: "Ready to start",
       },
@@ -11794,16 +11865,16 @@ test("session card and markdown include role credential URLs and tokens", async 
     sessions: {
       hostSetup: {
         capabilityKinds: ["HostOf"],
-        cookie: { valuePrefix: "invite-session-" },
+        cookie: { valuePrefix: "fmss_" },
       },
       cohost: {
         capabilityKinds: ["CohostOf"],
-        cookie: { valuePrefix: "invite-session-" },
+        cookie: { valuePrefix: "fmss_" },
       },
       replacementPlayer: {
         principalUserId: "player-rowan",
         capabilityKinds: ["SlotOccupant", "ChannelMember"],
-        cookie: { valuePrefix: "invite-session-" },
+        cookie: { valuePrefix: "fmss_" },
       },
     },
     hostSetup: {
@@ -11811,7 +11882,7 @@ test("session card and markdown include role credential URLs and tokens", async 
       proof:
         "Host setup role URL opens roster, role, policy, invite, and start recovery surface, then round-trips the post-policy command and restores the seeded policy.",
       roleUrl: `http://127.0.0.1:4102/g/${game}/setup`,
-      capabilityLabel: `HostOf(${game})`,
+      capabilityLabel: `Hosting ${game}`,
       readinessSummary: "Started at D01",
       phaseId: "D01",
       startDisabled: true,
@@ -11836,7 +11907,6 @@ test("session card and markdown include role credential URLs and tokens", async 
           requestEnvelope: {
             body: {
               body: {
-                principal_user_id: "host_h",
                 command: {
                   SetPostPolicy: {
                     game,
@@ -11856,7 +11926,6 @@ test("session card and markdown include role credential URLs and tokens", async 
           requestEnvelope: {
             body: {
               body: {
-                principal_user_id: "host_h",
                 command: {
                   SetPostPolicy: {
                     game,
@@ -11884,7 +11953,7 @@ test("session card and markdown include role credential URLs and tokens", async 
           initialPrincipalUserId: "setup-player-one",
           initialRoleKey: "vanilla_townie",
         },
-        addedSlotId: "slot_extra",
+        addedSlotId: "slot_2",
         assignedPrincipalUserId: "setup-extra-player",
         assignedRoleKey: "mafia_goon",
         initialSummary: "Ready to start",
@@ -11896,7 +11965,7 @@ test("session card and markdown include role credential URLs and tokens", async 
           retryable: false,
           command: {
             game: "77777777-7777-4777-8777-777777777777",
-            slot: "slot_extra",
+            slot: "slot_2",
           },
           streamSeqs: [],
           readinessSummary: "Setup still needs attention",
@@ -11907,7 +11976,7 @@ test("session card and markdown include role credential URLs and tokens", async 
         finalSummary: "Ready to start",
         finalStartAvailable: true,
         finalSlot: {
-          slotId: "slot_extra",
+          slotId: "slot_2",
           occupantUserId: "setup-extra-player",
           alive: true,
           status: "alive",
@@ -11920,7 +11989,7 @@ test("session card and markdown include role credential URLs and tokens", async 
             commandKind: "AddSlot",
             command: {
               game: "77777777-7777-4777-8777-777777777777",
-              slot: "slot_extra",
+              slot: "slot_2",
             },
             streamSeqs: [5],
             readinessSummary: "Setup still needs attention",
@@ -11930,7 +11999,7 @@ test("session card and markdown include role credential URLs and tokens", async 
             commandKind: "AssignSlot",
             command: {
               game: "77777777-7777-4777-8777-777777777777",
-              slot: "slot_extra",
+              slot: "slot_2",
               user: "setup-extra-player",
             },
             streamSeqs: [6],
@@ -11941,7 +12010,7 @@ test("session card and markdown include role credential URLs and tokens", async 
             commandKind: "AssignRole",
             command: {
               game: "77777777-7777-4777-8777-777777777777",
-              slot: "slot_extra",
+              slot: "slot_2",
               role_key: "mafia_goon",
             },
             streamSeqs: [7],
@@ -11984,6 +12053,7 @@ test("session card and markdown include role credential URLs and tokens", async 
     },
     cohostConsole: {
       status: "passed",
+      sessionPrincipalUserId: "cohost_c",
       capabilityLabel: `CohostOf(${game})`,
       proof: "cohost opened the host console, extended deadline, and rejected host-only resolve",
       extendDeadline: {
@@ -11993,7 +12063,6 @@ test("session card and markdown include role credential URLs and tokens", async 
           requestEnvelope: {
             body: {
               body: {
-                principal_user_id: "cohost_c",
                 command: {
                   ExtendDeadline: {
                     game,
@@ -12007,11 +12076,11 @@ test("session card and markdown include role credential URLs and tokens", async 
       },
       hostOnlyControlsVisible: false,
       hostOnlyResolveReject: {
-        statusMessage: "Reject NotHost: not host",
+        statusMessage:
+          "Reject CohostPermissionDenied: cohost permission denied: phase_resolve",
         requestEnvelope: {
           body: {
             body: {
-              principal_user_id: "cohost_c",
               command: {
                 ResolvePhase: {
                   game,
@@ -12025,8 +12094,8 @@ test("session card and markdown include role credential URLs and tokens", async 
           body: {
             kind: "Reject",
             body: {
-              error: "NotHost",
-              message: "not host",
+              error: "CohostPermissionDenied",
+              message: "cohost permission denied: phase_resolve",
               retryable: false,
             },
           },
@@ -12039,6 +12108,7 @@ test("session card and markdown include role credential URLs and tokens", async 
     },
     cohostLaterPhaseDeadline: {
       status: "passed",
+      sessionPrincipalUserId: "cohost_c",
       game: laterPhaseDeadlineGame,
       seed: {
         game: laterPhaseDeadlineGame,
@@ -12078,7 +12148,6 @@ test("session card and markdown include role credential URLs and tokens", async 
           requestEnvelope: {
             body: {
               body: {
-                principal_user_id: "cohost_c",
                 command: {
                   ExtendDeadline: {
                     game: laterPhaseDeadlineGame,
@@ -12261,7 +12330,6 @@ test("session card and markdown include role credential URLs and tokens", async 
         requestEnvelope: {
           body: {
             body: {
-              principal_user_id: "player-mira",
               command: {
                 SubmitVote: {
                   target: "NoLynch",
@@ -12277,7 +12345,6 @@ test("session card and markdown include role credential URLs and tokens", async 
         requestEnvelope: {
           body: {
             body: {
-              principal_user_id: "player-seed",
               command: {
                 SubmitVote: {
                   target: "NoLynch",
@@ -12567,7 +12634,6 @@ test("session card and markdown include role credential URLs and tokens", async 
           requestEnvelope: {
             body: {
               body: {
-                principal_user_id: "player-mira",
                 command: {
                   SubmitVote: {
                     actor_slot: "slot-7",
@@ -12641,11 +12707,13 @@ test("session card and markdown include role credential URLs and tokens", async 
           slots: [{ slot_id: "slot_4", alive: true, status: "alive" }],
         },
         d03TerminalActivityStatusText:
-          "Reject InvalidTarget: invalid target; stale phase state, refresh and use current controls",
+          "Advance phase needs refreshed game state. Reload and try again.",
         d03TerminalActivityRow: {
           source: "outcome",
           actionId: "advance_phase",
           dispatchKind: "advance_phase",
+          protocolMessage:
+            "Reject InvalidTarget: invalid target; stale phase state, refresh and use current controls",
         },
         d03TerminalDispatchPlan: {
           projectionRefreshKeys: ["host"],
@@ -12741,7 +12809,6 @@ test("session card and markdown include role credential URLs and tokens", async 
           requestEnvelope: {
             body: {
               body: {
-                principal_user_id: "player-goon-a",
                 command: {
                   SubmitVote: {
                     actor_slot: "slot_4",
@@ -12900,7 +12967,6 @@ test("session card and markdown include role credential URLs and tokens", async 
           requestEnvelope: {
             body: {
               body: {
-                principal_user_id: "player-goon-a",
                 command: {
                   SubmitVote: {
                     actor_slot: "slot_4",
@@ -13159,7 +13225,6 @@ test("session card and markdown include role credential URLs and tokens", async 
           requestEnvelope: {
             body: {
               body: {
-                principal_user_id: "player-goon-a",
                 command: {
                   SubmitAction: {
                     actor_slot: "slot_4",
@@ -13615,7 +13680,7 @@ test("session card and markdown include role credential URLs and tokens", async 
       actionControlCount: 0,
       directVote: {
         statusMessage: "Reject SlotNotAlive: slot not alive",
-        requestEnvelope: { body: { body: { principal_user_id: "player-target" } } },
+        requestEnvelope: { body: { body: {} } },
         serverEnvelope: {
           body: {
             kind: "Reject",
@@ -13629,7 +13694,7 @@ test("session card and markdown include role credential URLs and tokens", async 
       },
       directPost: {
         statusMessage: "Reject SlotNotAlive: slot not alive",
-        requestEnvelope: { body: { body: { principal_user_id: "player-target" } } },
+        requestEnvelope: { body: { body: {} } },
         serverEnvelope: {
           body: {
             kind: "Reject",
@@ -13643,7 +13708,7 @@ test("session card and markdown include role credential URLs and tokens", async 
       },
       directAction: {
         statusMessage: "Reject SlotNotAlive: slot not alive",
-        requestEnvelope: { body: { body: { principal_user_id: "player-target" } } },
+        requestEnvelope: { body: { body: {} } },
         serverEnvelope: {
           body: {
             kind: "Reject",
@@ -13673,7 +13738,6 @@ test("session card and markdown include role credential URLs and tokens", async 
         requestEnvelope: {
           body: {
             body: {
-              principal_user_id: "player-mira",
               command: {
                 SubmitAction: {
                   game,
@@ -14031,7 +14095,7 @@ test("session card and markdown include role credential URLs and tokens", async 
           httpOnly: true,
           sameSite: "Lax",
           secure: false,
-          valuePrefix: "invite-session-",
+          valuePrefix: "fmss_",
         },
       },
       replacementSessionRefresh: {
@@ -14056,7 +14120,7 @@ test("session card and markdown include role credential URLs and tokens", async 
         browserEntry: {
           principalUserId: "player-rowan",
           capabilityKinds: ["SlotOccupant", "ChannelMember"],
-          cookie: { valuePrefix: "account-session-" },
+          cookie: { valuePrefix: "fmss_" },
         },
         commandState: {
           actorSlot: "slot-7",
@@ -14074,7 +14138,6 @@ test("session card and markdown include role credential URLs and tokens", async 
           requestEnvelope: {
             body: {
               body: {
-                principal_user_id: "player-rowan",
                 command: {
                   SubmitPost: {
                     actor_slot: "slot-7",
@@ -14110,7 +14173,7 @@ test("session card and markdown include role credential URLs and tokens", async 
           httpOnly: true,
           sameSite: "Lax",
           secure: false,
-          valuePrefix: "invite-session-",
+          valuePrefix: "fmss_",
         },
         freshCredentialKind: "account",
         freshRoleUrlHasInvite: false,
@@ -14145,7 +14208,6 @@ test("session card and markdown include role credential URLs and tokens", async 
           requestEnvelope: {
             body: {
               body: {
-                principal_user_id: "host_h",
                 command: {
                   ProcessReplacement: {
                     game,
@@ -14217,7 +14279,6 @@ test("session card and markdown include role credential URLs and tokens", async 
             body: {
               body: {
                 command_id: "replacement-command-id",
-                principal_user_id: "host_h",
                 command: {
                   ProcessReplacement: {
                     game,
@@ -14262,7 +14323,6 @@ test("session card and markdown include role credential URLs and tokens", async 
             body: {
               body: {
                 command_id: "replacement-command-id",
-                principal_user_id: "host_h",
                 command: {
                   ProcessReplacement: {
                     game,
@@ -14384,7 +14444,6 @@ test("session card and markdown include role credential URLs and tokens", async 
           requestEnvelope: {
             body: {
               body: {
-                principal_user_id: "host_h",
                 command: {
                   ProcessReplacement: {
                     game,
@@ -14463,7 +14522,6 @@ test("session card and markdown include role credential URLs and tokens", async 
           requestEnvelope: {
             body: {
               body: {
-                principal_user_id: "player-rowan",
                 command: {
                   SubmitPost: {
                     actor_slot: "slot-7",
@@ -14483,7 +14541,6 @@ test("session card and markdown include role credential URLs and tokens", async 
           requestEnvelope: {
             body: {
               body: {
-                principal_user_id: "player-rowan",
                 command: {
                   SubmitVote: {
                     actor_slot: "slot-7",
@@ -14513,7 +14570,6 @@ test("session card and markdown include role credential URLs and tokens", async 
           requestEnvelope: {
             body: {
               body: {
-                principal_user_id: "player-mira",
                 command: {
                   SubmitPost: {
                     channel_id: "private:mafia_day_chat",
@@ -14547,7 +14603,6 @@ test("session card and markdown include role credential URLs and tokens", async 
           requestEnvelope: {
             body: {
               body: {
-                principal_user_id: "player-rowan",
                 command: {
                   SubmitPost: {
                     channel_id: "private:mafia_day_chat",
@@ -15914,8 +15969,6 @@ test("session card and markdown include role credential URLs and tokens", async 
           requestEnvelope: {
             body: {
               body: {
-                principal_user_id:
-                  replacementIncomingActionCase.replacementPrincipalUserId,
                 command: {
                   SubmitAction: {
                     game: replacementIncomingActionCase.gameFixtureId,
@@ -15994,8 +16047,6 @@ test("session card and markdown include role credential URLs and tokens", async 
           requestEnvelope: {
             body: {
               body: {
-                principal_user_id:
-                  replacementActionReconnectCase.replacementPrincipalUserId,
                 command: {
                   SubmitAction: {
                     game: replacementActionReconnectCase.gameFixtureId,
@@ -16270,8 +16321,6 @@ test("session card and markdown include role credential URLs and tokens", async 
           requestEnvelope: {
             body: {
               body: {
-                principal_user_id:
-                  replacementResolvedPrivatePost.replacementPrincipalUserId,
                 command: {
                   SubmitPost: {
                     channel_id: replacementResolvedPrivatePost.channelId,
@@ -16445,8 +16494,6 @@ test("session card and markdown include role credential URLs and tokens", async 
           requestEnvelope: {
             body: {
               body: {
-                principal_user_id:
-                  replacementCompletedPrivatePost.replacementPrincipalUserId,
                 command: {
                   SubmitPost: {
                     channel_id: replacementCompletedPrivatePost.channelId,
@@ -18751,7 +18798,11 @@ test("session card and markdown include role credential URLs and tokens", async 
   assert(markdown.includes("## Cohost Console Proof"));
   assert(markdown.includes("Extend deadline: Ack: stream seqs 41"));
   assert(markdown.includes("Host-only controls visible: false"));
-  assert(markdown.includes("Host-only resolve: Reject NotHost: not host"));
+  assert(
+    markdown.includes(
+      "Host-only resolve: Reject CohostPermissionDenied: cohost permission denied: phase_resolve",
+    ),
+  );
   assert(markdown.includes("## Cohost Later-Phase Deadline Proof"));
   assert(markdown.includes("Phase after reload: D02 deadline 1782100800"));
   assert(markdown.includes("## Core Loop Proof"));
@@ -19174,8 +19225,8 @@ test("session card and markdown include role credential URLs and tokens", async 
       "target/dev-test-game/host-setup-proof.json",
       devTestGameHostSetupAdminProofPath,
       "http://127.0.0.1:5173/g/<seeded-game>/setup",
-      "/admin/audit/local-host-setup-proof?game=<seeded-game>",
-      "/admin/audit/local-host-setup-proof?game=<seeded-game>",
+      "/_dev/ops/audit/local-host-setup-proof?game=<seeded-game>",
+      "/_dev/ops/audit/local-host-setup-proof?game=<seeded-game>",
       "http://127.0.0.1:5173/g/<seeded-game>/setup",
       "npm run dev:test-game -- --verify-host-setup-only",
       true,
@@ -19203,7 +19254,7 @@ test("session card and markdown include role credential URLs and tokens", async 
       cohostCheck.roleUrl,
       "CohostOf(<seeded-game>)",
       "ack",
-      "NotHost",
+      "CohostPermissionDenied",
       "D01",
       false,
       "npm run test:dev-test-game-core-live:local",
@@ -19410,7 +19461,7 @@ test("session card and markdown include role credential URLs and tokens", async 
     raceCoverageReadiness.localDevelopmentSpine.checks.find(
       (item) => item.id === "local-race-coverage-inventory",
     ).adminRoleSurface.detailRoleUrl,
-    "/admin/audit/local-race-coverage?game=<seeded-game>",
+    "/_dev/ops/audit/local-race-coverage?game=<seeded-game>",
   );
   assert.equal(
     raceCoverageReadiness.generatedFrom.raceCoverage,
@@ -19899,7 +19950,7 @@ test("session card and markdown include role credential URLs and tokens", async 
   );
   assert.equal(
     passedLaneNextAction.nextAction.unproven.roleUrl,
-    "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
+    "/_dev/ops/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
   );
   assert.equal(
     passedLaneNextAction.nextAction.unproven.proofGraphNodeId,
@@ -19933,11 +19984,11 @@ test("session card and markdown include role credential URLs and tokens", async 
   ]);
   assert.equal(
     demoProof.handoff.blockedRoleUrl,
-    "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
+    "/_dev/ops/audit/local-hosted-evidence-lane?game=<seeded-game>",
   );
   assert.equal(
     demoProof.handoff.syntheticRejectedRoleUrl,
-    "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
+    "/_dev/ops/audit/local-hosted-evidence-lane?game=<seeded-game>",
   );
   assert.equal(
     demoProof.externalEvidence.rawRoleCredentialsRedacted,
@@ -20174,7 +20225,7 @@ test("session card and markdown include role credential URLs and tokens", async 
     opsReadiness.localDevelopmentSpine.checks.find(
       (item) => item.id === "local-ops-artifact-bundle",
     ).adminRoleSurface.detailRoleUrl,
-    "/admin/audit/local-ops-artifacts?game=<seeded-game>",
+    "/_dev/ops/audit/local-ops-artifacts?game=<seeded-game>",
   );
   assert.equal(
     opsReadiness.releaseReadiness.unproven.some(
@@ -20287,7 +20338,7 @@ test("session card and markdown include role credential URLs and tokens", async 
   assert.equal(hostedEvidenceLaneCheck.blockedCheckCount, 6);
   assert.equal(
     hostedEvidenceLaneCheck.adminRoleSurface.detailRoleUrl,
-    "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
+    "/_dev/ops/audit/local-hosted-evidence-lane?game=<seeded-game>",
   );
   assert.equal(
     hostedEvidenceLaneCheck.adminRoleSurface.preflightStatus,
@@ -20312,7 +20363,7 @@ test("session card and markdown include role credential URLs and tokens", async 
   ]);
   assert(
     markdownChecklist(hostedEvidenceLaneReadiness).includes(
-      "| Local hosted evidence lane admin surface | passed | `target/dev-test-game/hosted-evidence-lane-admin-proof.json` |  | `FMARCH_HOSTED_MATRIX_FRONTEND_URL`; check `hosted-frontend-url-configured`; role `/admin/audit/local-hosted-evidence-lane?game=<seeded-game>` |",
+      "| Local hosted evidence lane admin surface | passed | `target/dev-test-game/hosted-evidence-lane-admin-proof.json` |  | `FMARCH_HOSTED_MATRIX_FRONTEND_URL`; check `hosted-frontend-url-configured`; role `/_dev/ops/audit/local-hosted-evidence-lane?game=<seeded-game>` |",
     ),
   );
   const hostedEvidenceOperatorChecklistAdminProof =
@@ -20512,11 +20563,11 @@ test("session card and markdown include role credential URLs and tokens", async 
   );
   assert.equal(
     hostedEvidenceLaneDemoCheck.syntheticRejectedRoleUrl,
-    "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
+    "/_dev/ops/audit/local-hosted-evidence-lane?game=<seeded-game>",
   );
   assert.equal(
     hostedEvidenceLaneDemoCheck.recovery.roleUrl,
-    "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
+    "/_dev/ops/audit/local-hosted-evidence-lane?game=<seeded-game>",
   );
   assert.equal(
     hostedEvidenceLaneDemoReadiness.releaseReadiness.unproven.some(
@@ -20601,7 +20652,7 @@ test("session card and markdown include role credential URLs and tokens", async 
     seedFixtureReadiness.localDevelopmentSpine.checks.find(
       (item) => item.id === "local-seed-demo-fixture",
     ).adminRoleSurface.detailRoleUrl,
-    "/admin/audit/local-seed-fixtures?game=<seeded-game>",
+    "/_dev/ops/audit/local-seed-fixtures?game=<seeded-game>",
   );
   assert.deepEqual(
     seedFixtureReadiness.localDevelopmentSpine.checks.find(
@@ -20671,7 +20722,7 @@ test("session card and markdown include role credential URLs and tokens", async 
     identityReadiness.localDevelopmentSpine.checks.find(
       (item) => item.id === "local-identity-adapter-proof",
     ).adminRoleSurface.detailRoleUrl,
-    "/admin/audit/local-identity-adapter?game=<seeded-game>",
+    "/_dev/ops/audit/local-identity-adapter?game=<seeded-game>",
   );
   assert.equal(
     identityReadiness.releaseReadiness.unproven.some(
@@ -20811,7 +20862,7 @@ test("session card and markdown include role credential URLs and tokens", async 
     backupRestoreReadiness.localDevelopmentSpine.checks.find(
       (item) => item.id === "local-backup-restore-drill",
     ).adminRoleSurface.detailRoleUrl,
-    "/admin/audit/local-backup-restore?game=<seeded-game>",
+    "/_dev/ops/audit/local-backup-restore?game=<seeded-game>",
   );
   assert.equal(
     backupRestoreReadiness.releaseReadiness.unproven.some(
@@ -20877,7 +20928,7 @@ test("session card and markdown include role credential URLs and tokens", async 
     adminSpineReadiness.localDevelopmentSpine.checks.find(
       (item) => item.id === "local-admin-spine-surface",
     ).adminRoleSurface.detailRoleUrl,
-    "/admin/audit/local-admin-spine?game=<seeded-game>",
+    "/_dev/ops/audit/local-admin-spine?game=<seeded-game>",
   );
   assert.equal(
     adminSpineReadiness.localDevelopmentSpine.evidence.adminProofSpine.proofCount,
@@ -21055,7 +21106,7 @@ test("session card and markdown include role credential URLs and tokens", async 
   assert(handoffCheck.destinationAuditIds.includes("local-release-readiness"));
   assert.equal(
     handoffCheck.adminRoleSurface.detailRoleUrl,
-    "/admin/audit/local-proof-graph?game=<seeded-game>",
+    "/_dev/ops/audit/local-proof-graph?game=<seeded-game>",
   );
   assert.equal(
     proofGraphHandoffReadiness.localDevelopmentSpine.evidence.proofGraphAdminProof
@@ -21171,7 +21222,7 @@ test("session card and markdown include role credential URLs and tokens", async 
       kind: "artifact-click-coverage",
       evidence: "target/dev-test-game/proof-graph-admin-proof.json",
       command: "npm run test:dev-test-game-proof-graph-admin-proof",
-      roleUrl: "/admin/audit/local-proof-graph?game=<seeded-game>",
+      roleUrl: "/_dev/ops/audit/local-proof-graph?game=<seeded-game>",
       familyCount: 4,
       missingFamilyCount: 0,
       familyIds: [
@@ -21214,7 +21265,7 @@ test("session card and markdown include role credential URLs and tokens", async 
         kind: "artifact-click-coverage",
         command: "npm run test:dev-test-game-proof-graph-admin-proof",
         proofTarget: "target/dev-test-game/proof-graph-admin-proof.json",
-        roleUrl: "/admin/audit/local-proof-graph?game=<seeded-game>",
+        roleUrl: "/_dev/ops/audit/local-proof-graph?game=<seeded-game>",
         fixtureEvidence: false,
         demoOnly: false,
       },
@@ -21226,7 +21277,7 @@ test("session card and markdown include role credential URLs and tokens", async 
         kind: "fixture-browser-proof",
         command: `npm run ${selectedOperatorHandoffReceiptAdminProofCommand}`,
         proofTarget: selectedOperatorHandoffReceiptAdminProofPath,
-        roleUrl: "/admin/audit/local-proof-graph?game=<seeded-game>",
+        roleUrl: "/_dev/ops/audit/local-proof-graph?game=<seeded-game>",
         fixtureEvidence: true,
         demoOnly: false,
       },
@@ -21252,7 +21303,7 @@ test("session card and markdown include role credential URLs and tokens", async 
   assert.equal(proofFreshnessAdminCheck.artifactCount, 3);
   assert.equal(
     proofFreshnessAdminCheck.adminRoleSurface.detailRoleUrl,
-    "/admin/audit/local-proof-freshness?game=<seeded-game>",
+    "/_dev/ops/audit/local-proof-freshness?game=<seeded-game>",
   );
   assert.deepEqual(
     proofFreshnessAdminReadiness.localDevelopmentSpine.diagnostics.map(
@@ -21302,7 +21353,7 @@ test("session card and markdown include role credential URLs and tokens", async 
   );
   assert.equal(
     nextActionAdminCheck.adminRoleSurface.detailRoleUrl,
-    "/admin/audit/local-next-action?game=<seeded-game>",
+    "/_dev/ops/audit/local-next-action?game=<seeded-game>",
   );
   assert.equal(
     nextActionAdminReadiness.localDevelopmentSpine.evidence.nextActionAdminProof
@@ -21329,7 +21380,7 @@ test("session card and markdown include role credential URLs and tokens", async 
     manifestReadiness.localDevelopmentSpine.checks.find(
       (item) => item.id === "local-spine-manifest",
     ).adminRoleSurface.detailRoleUrl,
-    "/admin/audit/local-spine-manifest?game=<seeded-game>",
+    "/_dev/ops/audit/local-spine-manifest?game=<seeded-game>",
   );
   assert.deepEqual(
     manifestReadiness.localDevelopmentSpine.checks.find(
@@ -21438,7 +21489,7 @@ function hostSetupProofFixture(game = "game-a") {
       status: "passed",
       proof: "Host setup role URL opens setup recovery surface.",
       roleUrl: `http://127.0.0.1:5173/g/${game}/setup`,
-      capabilityLabel: `HostOf(${game})`,
+      capabilityLabel: `Hosting ${game}`,
       readinessSummary: "Started at D01",
       phaseId: "D01",
       startDisabled: true,
@@ -21460,7 +21511,7 @@ function hostSetupProofFixture(game = "game-a") {
         game: "setup-game-a",
         roleUrl: "http://127.0.0.1:5173/g/setup-game-a/setup",
         sessionPrincipalUserId: "host_h",
-        addedSlotId: "slot_extra",
+        addedSlotId: "slot_2",
         assignedPrincipalUserId: "setup-extra-player",
         assignedRoleKey: "mafia_goon",
         initialSummary: "Ready to start",
@@ -21475,7 +21526,7 @@ function hostSetupProofFixture(game = "game-a") {
         finalSummary: "Ready to start",
         finalStartAvailable: true,
         finalSlot: {
-          slotId: "slot_extra",
+          slotId: "slot_2",
           occupantUserId: "setup-extra-player",
           roleKey: "mafia_goon",
         },
@@ -21565,11 +21616,11 @@ function identityAdapterProofFixture(game) {
           `/auth/register?account=${encodeURIComponent("registered@example.test")}&returnTo=${encodeURIComponent(`/g/${game}`)}`,
         securityRoleUrl:
           `/auth/account/security?account=${encodeURIComponent("registered@example.test")}&returnTo=${encodeURIComponent(`/g/${game}`)}`,
-        registrationSurfaceTestId: "auth-registration-surface",
+        registrationSurfaceTestId: "auth-registration-classic-surface",
         securitySurfaceTestId: "account-security-surface",
         accountId: "registered@example.test",
         principalUserId: "registered-user",
-        sessionCookiePrefix: "registration-session-",
+        sessionCookiePrefix: "fmss_",
         sessionHasNoGameCapabilities: true,
         gameRolePendingReplacement: true,
         gameRoleRecoveryTestId: "route-state-player-empty",
@@ -21577,7 +21628,7 @@ function identityAdapterProofFixture(game) {
         rateLimitVisible: true,
         rateLimitSeconds: 2,
         registrationScopeHashed: true,
-        registrationScopeCount: 1,
+        registrationScopeCount: 4,
         rawPasswordStored: false,
         auditEventKinds: ["account_registered", "account_session_created"],
       },
@@ -21641,7 +21692,7 @@ function identityAdapterProofFixture(game) {
         accountId: "host@example.test",
         capabilityKinds: ["HostOf"],
         sameRoleSurface: true,
-        cookieValuePrefix: "account-session-",
+        cookieValuePrefix: "fmss_",
         rawPasswordStored: false,
       },
       accountPasswordRotation: {
@@ -21934,7 +21985,7 @@ function devTestGameReleaseReadinessChecklistFixture({
                 roleUrl: "http://127.0.0.1:5173/g/<seeded-game>/setup",
                 proofBoundary:
                   "Local dev-test-game host setup role URL browser proof over the seeded setup route.",
-                capabilityLabel: "HostOf(<seeded-game>)",
+                capabilityLabel: "Hosting <seeded-game>",
                 readyCheckIds: [
                   "game-created",
                   "pack-valid",
@@ -21967,11 +22018,11 @@ function devTestGameReleaseReadinessChecklistFixture({
           evidence: "target/dev-test-game/proof-run.json",
           roleUrl: "http://127.0.0.1:5173/g/<seeded-game>/host",
           proofBoundary:
-            "Seeded dev-test-game cohost role URL proof from proof-run. Proves delegated deadline control and NotHost rejection for host-only resolve; does not prove hosted identity, multi-node races, release readiness, or production readiness.",
+            "Seeded dev-test-game cohost role URL proof from proof-run. Proves delegated deadline control and CohostPermissionDenied rejection for policy-denied resolve; does not prove hosted identity, multi-node races, release readiness, or production readiness.",
           capabilityLabel: "CohostOf(<seeded-game>)",
           extendDeadlineState: "ack",
           extendDeadlinePrincipal: "cohost_c",
-          hostOnlyRejectError: "NotHost",
+          hostOnlyRejectError: "CohostPermissionDenied",
           hostOnlyRejectPrincipal: "cohost_c",
           phaseAfterRejectId: "D01",
           phaseAfterRejectLocked: false,
@@ -22171,7 +22222,7 @@ function devTestGameReleaseReadinessChecklistFixture({
                 adminRoleSurface: {
                   status: "passed",
                   detailRoleUrl:
-                    "/admin/audit/local-ops-artifacts?game=<seeded-game>",
+                    "/_dev/ops/audit/local-ops-artifacts?game=<seeded-game>",
                 },
               },
             ]
@@ -22217,7 +22268,7 @@ function devTestGameReleaseReadinessChecklistFixture({
               "Local identity adapter admin role URL proof.",
             overviewRoleUrl: "/admin?game=<seeded-game>",
             detailRoleUrl:
-              "/admin/audit/local-identity-adapter?game=<seeded-game>",
+              "/_dev/ops/audit/local-identity-adapter?game=<seeded-game>",
             visibleChecks: [
               "account-login",
               "account-lifecycle",
@@ -22249,7 +22300,7 @@ function devTestGameReleaseReadinessChecklistFixture({
                   buildSlice:
                     "Refresh the proof graph admin role-handoff browser proof before choosing hosted readiness work.",
                   proofTarget: "target/dev-test-game/proof-graph-admin-proof.json",
-                  roleUrl: "/admin/audit/local-proof-graph?game=<seeded-game>",
+                  roleUrl: "/_dev/ops/audit/local-proof-graph?game=<seeded-game>",
                   proofBoundary:
                     "Local browser proof that the proof graph admin surface follows every mapped admin-proof role URL. This recovers a local readiness dependency only; it does not prove hosted deployment, release readiness, or production readiness.",
                   requiredEvidence:
@@ -22276,7 +22327,7 @@ function devTestGameReleaseReadinessChecklistFixture({
                   buildSlice:
                     "Refresh the proof graph admin browser proof until the manifest production-feature provenance summary matches proof-graph destinations.",
                   proofTarget: "target/dev-test-game/proof-graph-admin-proof.json",
-                  roleUrl: "/admin/audit/local-proof-graph?game=<seeded-game>",
+                  roleUrl: "/_dev/ops/audit/local-proof-graph?game=<seeded-game>",
                   proofBoundary:
                     "Local browser proof that the proof graph admin surface carries a passed production-feature provenance comparison between the spine manifest summary and proof-graph destinations. This recovers a local readiness dependency only; it does not prove hosted deployment, release readiness, or production readiness.",
                   requiredEvidence:
@@ -22312,7 +22363,7 @@ function devTestGameReleaseReadinessChecklistFixture({
                   buildSlice:
                     "Refresh the proof graph admin browser proof so the terminal batch links to the next-action handoff detail before hosted readiness work can be selected.",
                   proofTarget: "target/dev-test-game/proof-graph-admin-proof.json",
-                  roleUrl: "/admin/audit/local-proof-graph?game=<seeded-game>",
+                  roleUrl: "/_dev/ops/audit/local-proof-graph?game=<seeded-game>",
                   proofBoundary:
                     "Local browser proof that the proof graph terminal batch links to the next-action handoff detail and verifies the default blocker plus opt-in hosted identity predicate rows. This recovers a local readiness dependency only; it does not prove hosted deployment, release readiness, or production readiness.",
                   requiredEvidence:
@@ -22338,7 +22389,7 @@ function devTestGameReleaseReadinessChecklistFixture({
                   buildSlice:
                     "Refresh the proof graph admin browser proof so the terminal validation links to the admin-spine diagnostics contract row before hosted readiness work can be selected.",
                   proofTarget: "target/dev-test-game/proof-graph-admin-proof.json",
-                  roleUrl: "/admin/audit/local-proof-graph?game=<seeded-game>",
+                  roleUrl: "/_dev/ops/audit/local-proof-graph?game=<seeded-game>",
                   proofBoundary:
                     "Local browser proof that the proof graph terminal validation destination clicks through to the admin-spine diagnostics contract row. This recovers a local readiness dependency only; it does not prove hosted deployment, release readiness, or production readiness.",
                   requiredEvidence:
@@ -22365,7 +22416,7 @@ function devTestGameReleaseReadinessChecklistFixture({
                     "Refresh the proof-freshness admin browser proof before hosted readiness work can be selected.",
                   proofTarget:
                     "target/dev-test-game/proof-freshness-admin-proof.json",
-                  roleUrl: "/admin/audit/local-proof-freshness?game=<seeded-game>",
+                  roleUrl: "/_dev/ops/audit/local-proof-freshness?game=<seeded-game>",
                   proofBoundary:
                     "Local browser proof that the proof-freshness admin surface exposes fresh generated artifacts and the next-action handoff from the seeded admin audit route. This recovers a local readiness dependency only; it does not validate artifact contents, hosted deployment, release readiness, or production readiness.",
                   requiredEvidence:
@@ -22396,7 +22447,7 @@ function devTestGameReleaseReadinessChecklistFixture({
                   buildSlice:
                     "Refresh the next-action admin browser proof before hosted readiness work can be selected.",
                   proofTarget: "target/dev-test-game/next-action-admin-proof.json",
-                  roleUrl: "/admin/audit/local-next-action?game=<seeded-game>",
+                  roleUrl: "/_dev/ops/audit/local-next-action?game=<seeded-game>",
                   proofBoundary:
                     "Local browser proof that the next-action admin surface exposes the selected command, local readiness dependency trace, release-readiness trace, and role URL handoffs from the seeded admin audit route. This recovers a local readiness dependency only; it does not prove hosted deployment, release readiness, or production readiness.",
                   requiredEvidence:
@@ -22425,7 +22476,7 @@ function devTestGameReleaseReadinessChecklistFixture({
                 blockedLaneStatus: "blocked",
                 syntheticRejectedLaneStatus: "blocked",
                 syntheticRejectedRoleUrl:
-                  "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
+                  "/_dev/ops/audit/local-hosted-evidence-lane?game=<seeded-game>",
                 externalEvidencePath:
                   "target/dev-test-game/hosted-matrix-demo-external.json",
                 recovery: {
@@ -22436,7 +22487,7 @@ function devTestGameReleaseReadinessChecklistFixture({
                   proofTarget:
                     "target/dev-test-game/hosted-evidence-lane-demo-proof.json",
                   roleUrl:
-                    "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
+                    "/_dev/ops/audit/local-hosted-evidence-lane?game=<seeded-game>",
                   proofBoundary:
                     "Local demo proof for the hosted evidence lane pass path. This recovers the blocked-to-passed handoff using synthetic external-looking evidence only; it does not prove hosted deployment, release readiness, or production readiness.",
                   requiredEvidence:
@@ -22521,7 +22572,7 @@ function hostedIdentityLocalCapabilityConfidenceFixture() {
           "Host controls, replacement, player actions, private channels, and day/night loop",
         status: "passed",
         evidence: "target/dev-test-game/proof-run.json",
-        roleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
+        roleUrl: "/_dev/ops/audit/local-core-loop?game=<seeded-game>",
         proofBoundary: "",
       },
       {
@@ -22530,7 +22581,7 @@ function hostedIdentityLocalCapabilityConfidenceFixture() {
           "Idempotency, reconnect, stale-client, and local concurrent race matrix",
         status: "passed",
         evidence: "target/dev-test-game/proof-run.json",
-        roleUrl: "/admin/audit/local-hardening?game=<seeded-game>",
+        roleUrl: "/_dev/ops/audit/local-hardening?game=<seeded-game>",
         proofBoundary: "",
       },
       {
@@ -22555,7 +22606,7 @@ function hostedIdentityLocalCapabilityConfidenceFixture() {
         label: "Local production-identity adapter proof",
         status: "passed",
         evidence: "target/auth-invite-role-proof/invite-role-proof.json",
-        roleUrl: "/admin/audit/local-identity-adapter?game=<seeded-game>",
+        roleUrl: "/_dev/ops/audit/local-identity-adapter?game=<seeded-game>",
         proofBoundary:
           "Local identity adapter proof keeps role surfaces stable.",
       },
@@ -22578,7 +22629,7 @@ function hostedIdentityPassedLocalCapabilityConfidenceFixture() {
             label: "Local ops artifact bundle",
             status: "passed",
             evidence: "target/dev-test-game/ops-artifacts.json",
-            roleUrl: "/admin/audit/local-ops-artifacts?game=<seeded-game>",
+            roleUrl: "/_dev/ops/audit/local-ops-artifacts?game=<seeded-game>",
             proofBoundary: "Local ops artifact bundle.",
           }
         : check,
@@ -23273,12 +23324,12 @@ function devTestGameOpsArtifactsFixture({
     adminProofs: {
       coreLoop: {
         status: "passed",
-        detailRoleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
+        detailRoleUrl: "/_dev/ops/audit/local-core-loop?game=<seeded-game>",
         visibleCheckCount: 30,
       },
       hardening: {
         status: "passed",
-        detailRoleUrl: "/admin/audit/local-hardening?game=<seeded-game>",
+        detailRoleUrl: "/_dev/ops/audit/local-hardening?game=<seeded-game>",
         visibleCheckCount: 40,
       },
     },
@@ -23334,7 +23385,7 @@ function identityAdminProofFixture() {
     adminRoleSurface: {
       status: "passed",
       overviewRoleUrl: "/admin?game=<seeded-game>",
-      detailRoleUrl: "/admin/audit/local-identity-adapter?game=<seeded-game>",
+      detailRoleUrl: "/_dev/ops/audit/local-identity-adapter?game=<seeded-game>",
       linkTestId: "admin-audit-link-local-identity-adapter",
       surfaceTestId: "admin-audit-detail-surface",
       clickedThroughFromOverview: true,
@@ -23640,7 +23691,7 @@ function hostLifecycleRoleSurfaceFixture() {
       checkpointDeadlineAffordanceAfterAck: "unlock_thread,advance_phase",
       statusText: "Ack: stream seqs 601",
       activityCount: 1,
-      activityStatusText: "Ack: stream seqs 601",
+      activityStatusText: "Lock thread completed.",
     },
     hostLifecycleUnlockProof: {
       status: "passed",
@@ -23676,7 +23727,7 @@ function hostLifecycleRoleSurfaceFixture() {
       checkpointDeadlineAffordanceAfterAck: "resolve_phase,lock_thread",
       statusText: "Ack: stream seqs 602",
       activityCount: 2,
-      activityStatusText: "Ack: stream seqs 602",
+      activityStatusText: "Unlock thread completed.",
     },
     hostDeadlineControlProof: {
       status: "passed",
@@ -23716,7 +23767,7 @@ function hostLifecycleRoleSurfaceFixture() {
       checkpointDeadlineAfterAck: 1781928000,
       statusText: "Ack: stream seqs 603",
       activityCount: 3,
-      activityStatusText: "Ack: stream seqs 603",
+      activityStatusText: "Extend deadline 24h completed.",
     },
     hostLifecycleStaleRejectProof: {
       status: "passed",
@@ -23755,7 +23806,8 @@ function hostLifecycleRoleSurfaceFixture() {
       recoveryText:
         "Stale recovery\nReject PhaseLocked: refresh host projection and use current lifecycle controls.",
       activityCount: 1,
-      activityStatusText: "Reject PhaseLocked: phase locked",
+      activityStatusText:
+        "Lock thread needs refreshed game state. Reload and try again.",
     },
     releaseReady: false,
     productionReady: false,
@@ -25100,8 +25152,8 @@ function featureSpineCaseFixture(
   if (slotId === "identity-adapter") {
     return featureSpineFixture({
       slotId,
-      detailRoleUrl: "/admin/audit/local-identity-adapter?game=<seeded-game>",
-      roleUrl: "/admin/audit/local-identity-adapter?game=<seeded-game>",
+      detailRoleUrl: "/_dev/ops/audit/local-identity-adapter?game=<seeded-game>",
+      roleUrl: "/_dev/ops/audit/local-identity-adapter?game=<seeded-game>",
       browserProofCommand: devTestGameLiveProofCommand,
       rerunCommand: devTestGameIdentityAdminProofCommand,
       includeTargetRerunCommand: true,
@@ -25401,7 +25453,7 @@ function opsAdminProofFixture() {
     adminRoleSurface: {
       status: "passed",
       overviewRoleUrl: "/admin?game=<seeded-game>",
-      detailRoleUrl: "/admin/audit/local-ops-artifacts?game=<seeded-game>",
+      detailRoleUrl: "/_dev/ops/audit/local-ops-artifacts?game=<seeded-game>",
       linkTestId: "admin-audit-link-local-ops-artifacts",
       surfaceTestId: "admin-audit-detail-surface",
       clickedThroughFromOverview: true,
@@ -25437,7 +25489,7 @@ function hostedOpsSignalsAdminProofFixture() {
     adminRoleSurface: {
       status: "passed",
       overviewRoleUrl: "/admin?game=<seeded-game>",
-      detailRoleUrl: "/admin/audit/local-hosted-ops-signals?game=<seeded-game>",
+      detailRoleUrl: "/_dev/ops/audit/local-hosted-ops-signals?game=<seeded-game>",
       linkTestId: "admin-audit-link-local-hosted-ops-signals",
       surfaceTestId: "admin-audit-detail-surface",
       clickedThroughFromOverview: true,
@@ -25526,7 +25578,7 @@ function realHostedObservabilityHandoffAdminProofFixture() {
       status: "passed",
       overviewRoleUrl: "/admin?game=<seeded-game>",
       detailRoleUrl:
-        "/admin/audit/local-real-hosted-observability-handoff?game=<seeded-game>",
+        "/_dev/ops/audit/local-real-hosted-observability-handoff?game=<seeded-game>",
       linkTestId: "admin-audit-link-local-real-hosted-observability-handoff",
       surfaceTestId: "admin-audit-detail-surface",
       clickedThroughFromOverview: true,
@@ -25583,7 +25635,7 @@ function realHostedObservabilityHandoffAdminProofFixture() {
         {
           linkId: "local-next-action",
           auditId: "local-next-action",
-          detailRoleUrl: "/admin/audit/local-next-action?game=<seeded-game>",
+          detailRoleUrl: "/_dev/ops/audit/local-next-action?game=<seeded-game>",
           visibleChecks: ["next-command"],
         },
       ],
@@ -25621,7 +25673,7 @@ function seedAdminProofFixture() {
     adminRoleSurface: {
       status: "passed",
       overviewRoleUrl: "/admin?game=<seeded-game>",
-      detailRoleUrl: "/admin/audit/local-seed-fixtures?game=<seeded-game>",
+      detailRoleUrl: "/_dev/ops/audit/local-seed-fixtures?game=<seeded-game>",
       linkTestId: "admin-audit-link-local-seed-fixtures",
       surfaceTestId: "admin-audit-detail-surface",
       clickedThroughFromOverview: true,
@@ -25666,7 +25718,7 @@ function hostSetupAdminProofFixture() {
     adminRoleSurface: {
       status: "passed",
       overviewRoleUrl: "/admin?game=<seeded-game>",
-      detailRoleUrl: "/admin/audit/local-host-setup-proof?game=<seeded-game>",
+      detailRoleUrl: "/_dev/ops/audit/local-host-setup-proof?game=<seeded-game>",
       linkTestId: "admin-audit-link-local-host-setup-proof",
       surfaceTestId: "admin-audit-detail-surface",
       clickedThroughFromOverview: true,
@@ -25697,7 +25749,7 @@ function backupAdminProofFixture() {
     adminRoleSurface: {
       status: "passed",
       overviewRoleUrl: "/admin?game=<seeded-game>",
-      detailRoleUrl: "/admin/audit/local-backup-restore?game=<seeded-game>",
+      detailRoleUrl: "/_dev/ops/audit/local-backup-restore?game=<seeded-game>",
       linkTestId: "admin-audit-link-local-backup-restore",
       surfaceTestId: "admin-audit-detail-surface",
       clickedThroughFromOverview: true,
@@ -25759,7 +25811,7 @@ function releaseAdminProofFixture({
     adminRoleSurface: {
       status: "passed",
       overviewRoleUrl: "/admin?game=<seeded-game>",
-      detailRoleUrl: "/admin/audit/local-release-readiness?game=<seeded-game>",
+      detailRoleUrl: "/_dev/ops/audit/local-release-readiness?game=<seeded-game>",
       linkTestId: "admin-audit-link-local-release-readiness",
       surfaceTestId: "admin-audit-detail-surface",
       clickedThroughFromOverview: true,
@@ -25875,7 +25927,7 @@ function releaseRunbookAdminProofFixture() {
     adminRoleSurface: {
       status: "passed",
       overviewRoleUrl: "/admin?game=<seeded-game>",
-      detailRoleUrl: "/admin/audit/local-release-runbook?game=<seeded-game>",
+      detailRoleUrl: "/_dev/ops/audit/local-release-runbook?game=<seeded-game>",
       linkTestId: "admin-audit-link-local-release-runbook",
       surfaceTestId: "admin-audit-detail-surface",
       clickedThroughFromOverview: true,
@@ -26117,7 +26169,7 @@ function proofGraphAdminProofFixture() {
     adminRoleSurface: {
       status: "passed",
       overviewRoleUrl: "/admin?game=<seeded-game>",
-      detailRoleUrl: "/admin/audit/local-proof-graph?game=<seeded-game>",
+      detailRoleUrl: "/_dev/ops/audit/local-proof-graph?game=<seeded-game>",
       linkTestId: "admin-audit-link-local-proof-graph",
       surfaceTestId: "admin-audit-detail-surface",
       clickedThroughFromOverview: true,
@@ -26295,7 +26347,7 @@ function proofGraphAdminProofFixture() {
         ...handoffs.map((handoff) => ({
           linkId: handoff.linkId,
           auditId: handoff.auditId,
-          detailRoleUrl: `/admin/audit/${handoff.auditId}?game=<seeded-game>`,
+          detailRoleUrl: `/_dev/ops/audit/${handoff.auditId}?game=<seeded-game>`,
           ...(handoff.linkId === "admin-proof:hosted-evidence-lane"
             ? {
                 visibleHostedHandoffInputs: hostedHandoffInputIdsFixture(),
@@ -26367,7 +26419,7 @@ function proofGraphHostSetupFeatureTargetFixture() {
     browserProofCommand: devTestGameLiveProofCommand,
     recoveryCommand: devTestGameHostSetupProofCommand,
     sourceProofArtifact: "target/dev-test-game/host-setup-proof.json",
-    adminDetailRoleUrl: "/admin/audit/local-host-setup-proof?game=<seeded-game>",
+    adminDetailRoleUrl: "/_dev/ops/audit/local-host-setup-proof?game=<seeded-game>",
     readinessEvidence: "target/dev-test-game/host-setup-proof.json",
     browserWorkbench: {
       status: "passed",
@@ -26387,7 +26439,7 @@ function proofGraphCoreLoopProductionFeatureTargetFixture() {
     productionFeatureNodeId: "production-feature:host-phase-control",
     sourceCheckId: "local-core-loop-proof",
     featureSlotId: "host-phase-control",
-    roleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
+    roleUrl: "/_dev/ops/audit/local-core-loop?game=<seeded-game>",
     targetRoleUrl: "http://127.0.0.1:5173/g/<seeded-game>/host",
     checkpointId: "host-control-start-phase",
     adminCheckId: "host-lifecycle-control",
@@ -26567,13 +26619,15 @@ function proofGraphCoreLoopHostVisibleRecoveryEdgeRowIdsFixture() {
 
 function proofGraphProductionFeatureTargetDestinationsFixture(targets) {
   return targets.map((target) => {
-    const auditId = target.roleUrl.match(/^\/admin\/audit\/([^?]+)/)?.[1];
+    const auditId = target.roleUrl.match(
+      /^\/_dev\/ops\/audit\/([^?]+)/,
+    )?.[1];
     if (auditId !== undefined) {
       return {
         kind: "admin-audit",
         linkId: target.productionFeatureNodeId,
         auditId,
-        detailRoleUrl: `/admin/audit/${auditId}?game=<seeded-game>`,
+        detailRoleUrl: `/_dev/ops/audit/${auditId}?game=<seeded-game>`,
         featureSlotId: target.featureSlotId,
         sourceCheckId: target.sourceCheckId,
         targetRoleUrl: target.targetRoleUrl,
@@ -26766,7 +26820,7 @@ function proofFreshnessAdminProofFixture() {
     adminRoleSurface: {
       status: "passed",
       overviewRoleUrl: "/admin?game=<seeded-game>",
-      detailRoleUrl: "/admin/audit/local-proof-freshness?game=<seeded-game>",
+      detailRoleUrl: "/_dev/ops/audit/local-proof-freshness?game=<seeded-game>",
       linkTestId: "admin-audit-link-local-proof-freshness",
       surfaceTestId: "admin-audit-detail-surface",
       clickedThroughFromOverview: true,
@@ -26815,7 +26869,7 @@ function nextActionAdminProofFixture() {
     "realHostedDeploymentStatus unproven",
     `command ${devTestGameHostedConcurrentRaceMatrixCommand}`,
     `proofTarget ${devTestGameHostedConcurrentRaceMatrixPath}`,
-    "roleUrl /admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
+    "roleUrl /_dev/ops/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
   ].join(" ");
   return {
     version: 1,
@@ -26839,7 +26893,7 @@ function nextActionAdminProofFixture() {
       localCheckRoleUrl: null,
       unprovenId: "hosted-concurrent-race-matrix",
       unprovenRoleUrl:
-        "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
+        "/_dev/ops/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
       unprovenProofGraphNodeId: "admin-proof:hosted-concurrent-race-matrix",
       unprovenProductionFeatureSpineTarget:
         invalidActionRecoveryUnproven.productionFeatureSpineTarget,
@@ -26855,7 +26909,7 @@ function nextActionAdminProofFixture() {
         status: "ready",
         auditId: "local-hosted-concurrent-race-matrix",
         roleUrl:
-          "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
+          "/_dev/ops/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
         proofCommand:
           "npm run test:dev-test-game-hosted-concurrent-race-matrix-admin-proof",
         graphProofCommand:
@@ -26931,7 +26985,7 @@ function nextActionAdminProofFixture() {
     adminRoleSurface: {
       status: "passed",
       overviewRoleUrl: "/admin?game=<seeded-game>",
-      detailRoleUrl: "/admin/audit/local-next-action?game=<seeded-game>",
+      detailRoleUrl: "/_dev/ops/audit/local-next-action?game=<seeded-game>",
       linkTestId: "admin-audit-link-local-next-action",
       surfaceTestId: "admin-audit-detail-surface",
       clickedThroughFromOverview: true,
@@ -27013,12 +27067,12 @@ function nextActionAdminProofFixture() {
         {
           linkId: "selected-proof-graph-node",
           auditId: "local-proof-graph",
-          detailRoleUrl: "/admin/audit/local-proof-graph?game=<seeded-game>",
+          detailRoleUrl: "/_dev/ops/audit/local-proof-graph?game=<seeded-game>",
           visibleChecks: ["admin-proof:hosted-concurrent-race-matrix"],
           visibleCheckStatuses: {
             "admin-proof:hosted-concurrent-race-matrix": [
               "passed",
-              "roleUrl /admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
+              "roleUrl /_dev/ops/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
               "recoveryCommand npm run test:dev-test-game-hosted-concurrent-race-matrix-admin-proof",
             ].join("\n"),
           },
@@ -27027,7 +27081,7 @@ function nextActionAdminProofFixture() {
         {
           linkId: hostedMatrixTransitionEdgeRowId,
           auditId: "local-proof-graph",
-          detailRoleUrl: "/admin/audit/local-proof-graph?game=<seeded-game>",
+          detailRoleUrl: "/_dev/ops/audit/local-proof-graph?game=<seeded-game>",
           visibleChecks: [
             hostedMatrixTransitionEdgeRowId,
             "admin-proof:hosted-evidence-lane",
@@ -27045,7 +27099,7 @@ function nextActionAdminProofFixture() {
           linkId: "admin-proof:hosted-concurrent-race-matrix",
           auditId: "local-hosted-concurrent-race-matrix",
           detailRoleUrl:
-            "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
+            "/_dev/ops/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
           visibleChecks: [
             hostedMatrixAdminRequiredCheckIds[0],
             hostedMatrixAdminRequiredCheckIds.at(-1),
@@ -27321,7 +27375,7 @@ function raceCoverageAdminProofFixture() {
     adminRoleSurface: {
       status: "passed",
       overviewRoleUrl: "/admin?game=<seeded-game>",
-      detailRoleUrl: "/admin/audit/local-race-coverage?game=<seeded-game>",
+      detailRoleUrl: "/_dev/ops/audit/local-race-coverage?game=<seeded-game>",
       linkTestId: "admin-audit-link-local-race-coverage",
       surfaceTestId: "admin-audit-detail-surface",
       clickedThroughFromOverview: true,
@@ -27440,7 +27494,7 @@ function hostedConcurrentRaceMatrixAdminProofFixture() {
       status: "passed",
       overviewRoleUrl: "/admin?game=<seeded-game>",
       detailRoleUrl:
-        "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
+        "/_dev/ops/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
       linkTestId: "admin-audit-link-local-hosted-concurrent-race-matrix",
       surfaceTestId: "admin-audit-detail-surface",
       clickedThroughFromOverview: true,
@@ -27493,7 +27547,7 @@ function hostedConcurrentRaceMatrixAdminProofFixture() {
         {
           linkId: "local-next-action",
           auditId: "local-next-action",
-          detailRoleUrl: "/admin/audit/local-next-action?game=<seeded-game>",
+          detailRoleUrl: "/_dev/ops/audit/local-next-action?game=<seeded-game>",
           visibleChecks: ["next-command"],
         },
       ],
@@ -27575,7 +27629,7 @@ function spineManifestFixture() {
         id: "next-action-admin-proof",
         command: "test:dev-test-game-next-action-admin-proof",
         path: "target/dev-test-game/next-action-admin-proof.json",
-        roleUrl: "/admin/audit/local-next-action?game=<seeded-game>",
+        roleUrl: "/_dev/ops/audit/local-next-action?game=<seeded-game>",
         dependsOn: [
           "target/dev-test-game/next-action.json",
           "target/dev-test-game/proof-run.json",
@@ -27714,7 +27768,7 @@ function spineManifestAdminProofFixture() {
     adminRoleSurface: {
       status: "passed",
       overviewRoleUrl: "/admin?game=<seeded-game>",
-      detailRoleUrl: "/admin/audit/local-spine-manifest?game=<seeded-game>",
+      detailRoleUrl: "/_dev/ops/audit/local-spine-manifest?game=<seeded-game>",
       linkTestId: "admin-audit-link-local-spine-manifest",
       surfaceTestId: "admin-audit-detail-surface",
       clickedThroughFromOverview: true,
@@ -27791,7 +27845,7 @@ function hostedTargetPreflightAdminProofFixture() {
       status: "passed",
       overviewRoleUrl: "/admin?game=<seeded-game>",
       detailRoleUrl:
-        "/admin/audit/local-hosted-target-preflight?game=<seeded-game>",
+        "/_dev/ops/audit/local-hosted-target-preflight?game=<seeded-game>",
       linkTestId: "admin-audit-link-local-hosted-target-preflight",
       surfaceTestId: "admin-audit-detail-surface",
       clickedThroughFromOverview: true,
@@ -27972,7 +28026,7 @@ function hostedIdentityEvidenceAdminProofFixture() {
       status: "passed",
       overviewRoleUrl: "/admin?game=<seeded-game>",
       detailRoleUrl:
-        "/admin/audit/local-hosted-identity-evidence?game=<seeded-game>",
+        "/_dev/ops/audit/local-hosted-identity-evidence?game=<seeded-game>",
       linkTestId: "admin-audit-link-local-hosted-identity-evidence",
       surfaceTestId: "admin-audit-detail-surface",
       clickedThroughFromOverview: true,
@@ -28067,7 +28121,7 @@ function hostedIdentityEvidenceAdminProofFixture() {
         {
           linkId: "local-next-action",
           auditId: "local-next-action",
-          detailRoleUrl: "/admin/audit/local-next-action?game=<seeded-game>",
+          detailRoleUrl: "/_dev/ops/audit/local-next-action?game=<seeded-game>",
           visibleChecks: ["next-command"],
         },
       ],
@@ -28263,7 +28317,7 @@ function hostedEvidenceLaneAdminProofFixture({
     adminRoleSurface: {
       status: "passed",
       overviewRoleUrl: "/admin?game=<seeded-game>",
-      detailRoleUrl: "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
+      detailRoleUrl: "/_dev/ops/audit/local-hosted-evidence-lane?game=<seeded-game>",
       linkTestId: "admin-audit-link-local-hosted-evidence-lane",
       surfaceTestId: "admin-audit-detail-surface",
       clickedThroughFromOverview: true,
@@ -28783,9 +28837,9 @@ function hostedEvidenceLaneDemoProofFixture() {
       },
     ],
     handoff: {
-      blockedRoleUrl: "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
+      blockedRoleUrl: "/_dev/ops/audit/local-hosted-evidence-lane?game=<seeded-game>",
       syntheticRejectedRoleUrl:
-        "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
+        "/_dev/ops/audit/local-hosted-evidence-lane?game=<seeded-game>",
       blockedNextCommand: "npm run test:dev-test-game-hosted-evidence-lane",
       syntheticRejectedNextCommand:
         "npm run test:dev-test-game-hosted-evidence-lane",
@@ -29135,7 +29189,7 @@ function adminSpineAdminProofFixture() {
     adminRoleSurface: {
       status: "passed",
       overviewRoleUrl: "/admin?game=<seeded-game>",
-      detailRoleUrl: "/admin/audit/local-admin-spine?game=<seeded-game>",
+      detailRoleUrl: "/_dev/ops/audit/local-admin-spine?game=<seeded-game>",
       linkTestId: "admin-audit-link-local-admin-spine",
       surfaceTestId: "admin-audit-detail-surface",
       clickedThroughFromOverview: true,
@@ -29336,12 +29390,12 @@ function selectedOperatorHandoffReceiptPassedFixture() {
         command: `npm run ${devTestGameHostedEvidenceLaneCommand}`,
         unprovenId: "hosted-deployment",
         proofTarget: devTestGameHostedEvidenceLanePath,
-        roleUrl: "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
+        roleUrl: "/_dev/ops/audit/local-hosted-evidence-lane?game=<seeded-game>",
         firstMissingInputId: "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
         selectedProductionFeatureGraphNodeId:
           "production-feature:host-phase-control",
         selectedProductionFeatureRoleUrl:
-          "/admin/audit/local-core-loop?game=<seeded-game>",
+          "/_dev/ops/audit/local-core-loop?game=<seeded-game>",
         rawEvidenceTemplate: hostedMatrixRawEvidenceTemplateDescriptor(),
         blockedOperatorPacket,
       },
@@ -29355,7 +29409,7 @@ function selectedOperatorHandoffReceiptPassedFixture() {
           relationship: "selected-operator-handoff",
           command: `npm run ${devTestGameHostedEvidenceLaneCommand}`,
           firstMissingInputId: "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
-          roleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
+          roleUrl: "/_dev/ops/audit/local-core-loop?game=<seeded-game>",
           proofTarget: devTestGameHostedEvidenceLanePath,
           unprovenId: "hosted-deployment",
         },
@@ -29410,7 +29464,7 @@ function selectedOperatorHandoffBlockedOperatorPacket() {
     selectedProductionFeatureGraphNodeId:
       "production-feature:host-phase-control",
     selectedProductionFeatureRoleUrl:
-      "/admin/audit/local-core-loop?game=<seeded-game>",
+      "/_dev/ops/audit/local-core-loop?game=<seeded-game>",
     roleSurfaceDrilldown: {
       localCapabilityAuditId: localAdminAuditIds.coreLoop,
       localCapabilityRoleUrl: localAdminAuditRoleUrl(localAdminAuditIds.coreLoop),
@@ -29890,7 +29944,7 @@ function identityRole({ role, loginUrl, principalUserId, capabilityKinds }) {
       httpOnly: true,
       sameSite: "Lax",
       secure: false,
-      valuePrefix: "invite-session-",
+      valuePrefix: "fmss_",
     },
   };
 }

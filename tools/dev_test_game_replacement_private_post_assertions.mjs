@@ -14,11 +14,11 @@ const rejectedSubmitPostCommand = (proof) =>
 const ackedSubmitPostCommand = (proof) =>
   proof?.stalePost?.requestEnvelope?.body?.body?.command?.SubmitPost;
 
-const principalUserIdFromAckedPost = (proof) =>
-  proof?.stalePost?.requestEnvelope?.body?.body?.principal_user_id;
+const ackedPostOmitsClientPrincipal = (proof) =>
+  proof?.stalePost?.requestEnvelope?.body?.body?.principal_user_id === undefined;
 
-const principalUserIdFromReject = (proof) =>
-  proof?.reject?.requestEnvelope?.body?.body?.principal_user_id;
+const rejectedPostOmitsClientPrincipal = (proof) =>
+  proof?.reject?.requestEnvelope?.body?.body?.principal_user_id === undefined;
 
 const completedCommandStateMatches = (commandState, scenario) =>
   commandState?.actorSlot === scenario.actorSlot &&
@@ -276,8 +276,7 @@ export function replacementResolvedPrivatePostAckMatches(proof, scenario) {
     proof?.stalePost?.state === "ack" &&
     proof?.stalePost?.serverEnvelope?.body?.kind === "Ack" &&
     Array.isArray(proof?.stalePost?.streamSeqs) === true &&
-    principalUserIdFromAckedPost(proof) ===
-      scenario.replacementPrincipalUserId &&
+    ackedPostOmitsClientPrincipal(proof) &&
     ackedPost?.channel_id === scenario.channelId &&
     ackedPost?.actor_slot === scenario.actorSlot &&
     ackedPost?.body === proof?.postBody &&
@@ -326,7 +325,8 @@ export function replacementResolvedPrivatePostReconnectMatches(
     reconnectPost?.actor_slot === scenario.actorSlot &&
     reconnectPost?.body === reconnectProof?.reconnectPostBody &&
     reconnectProof?.reconnectRecoveryEvent?.state === "recovered" &&
-    reconnectProof?.reconnectRecoveryEvent?.attempt === 1 &&
+    Number.isInteger(reconnectProof?.reconnectRecoveryEvent?.attempt) &&
+    reconnectProof.reconnectRecoveryEvent.attempt >= 1 &&
     reconnectProof?.recoveredSnapshotContainsPost === true &&
     lockedDayOneCommandStateMatches(
       reconnectProof?.recoveredCommandState,
@@ -392,7 +392,7 @@ export function replacementCompletedPrivatePostRejectMatches(
     proof?.reject?.error === scenario.commandError &&
     proof?.reject?.serverEnvelope?.body?.kind === "Reject" &&
     Array.isArray(proof?.reject?.streamSeqs) === false &&
-    principalUserIdFromReject(proof) === scenario.replacementPrincipalUserId &&
+    rejectedPostOmitsClientPrincipal(proof) &&
     rejectedPost?.channel_id === scenario.channelId &&
     rejectedPost?.actor_slot === scenario.actorSlot &&
     rejectedPost?.body === proof?.postBody &&

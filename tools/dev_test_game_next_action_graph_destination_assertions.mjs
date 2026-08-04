@@ -22,7 +22,7 @@ export const selectedNextActionGraphDestinationCases = Object.freeze([
       status: "ready",
       auditId: "local-hosted-concurrent-race-matrix",
       roleUrl:
-        "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
+        "/_dev/ops/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
       proofCommand:
         "npm run test:dev-test-game-hosted-concurrent-race-matrix-admin-proof",
       graphProofCommand:
@@ -71,7 +71,7 @@ export const selectedNextActionGraphDestinationCases = Object.freeze([
         to: "production-feature:player-action-submission",
         relationship: "proves-production-feature",
       },
-      roleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
+      roleUrl: "/_dev/ops/audit/local-core-loop?game=<seeded-game>",
       targetRoleUrl: "http://127.0.0.1:5173/g/<seeded-game>/c/thread:day-two",
       browserProofCommand: String(browserProofCommand ?? ""),
       browserWorkbench: {

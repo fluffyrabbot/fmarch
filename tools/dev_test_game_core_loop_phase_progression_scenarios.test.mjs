@@ -61,6 +61,8 @@ test("core loop phase progression family names proof, seed, and stale reject cas
   ]);
   assert.deepEqual(coreLoopPhaseProgressionDemoOnlySeedScenarioIds, [
     "day-vote-resolution",
+    "earliest-reached-tie",
+    "host-decides-tie",
     "day-vote-no-lynch",
   ]);
   assert.deepEqual(coreLoopPhaseProgressionAliasOnlyProofLaneIds, [
@@ -257,9 +259,9 @@ test("phase progression shares empty Night 3 and Day 4 survivor assertions", () 
     expectedBoundaryText: "survivor role opened D04",
     expectedResyncFromSeq: 911,
     expectedCommandStateEndpoint:
-      `/games/${game}/player-command-state?principal_user_id=player_sage&slot_id=slot-5`,
+      `/api/gameplay/games/${game}/player-command-state?slot_id=slot-5`,
     expectedNotificationsEndpoint:
-      `/games/${game}/notifications?principal_user_id=player_sage`,
+      `/api/gameplay/games/${game}/notifications`,
     expectedVoteButtonCount: 2,
     expectedVoteTargetCount: 2,
     includeEvidenceInError: false,

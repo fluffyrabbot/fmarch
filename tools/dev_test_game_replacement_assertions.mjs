@@ -6,9 +6,7 @@ export function replacementCommandEnvelopeMatches(commandStatus, scenario, game)
     command?.slot === scenario.actorSlot &&
     command?.outgoing_user === scenario.staleOutgoingPrincipalUserId &&
     command?.incoming_user === scenario.replacementPrincipalUserId &&
-    (scenario.hostPrincipalUserId === undefined ||
-      body?.principal_user_id === undefined ||
-      body.principal_user_id === scenario.hostPrincipalUserId)
+    body?.principal_user_id === undefined
   );
 }
 

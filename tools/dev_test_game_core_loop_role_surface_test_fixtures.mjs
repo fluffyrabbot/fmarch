@@ -170,7 +170,7 @@ export function hostPhaseTransitionSurfaceFixture({
       checkpointPhaseStateAfterReject: "open",
       checkpointDeadlineAffordanceAfterReject: "resolve_phase,lock_thread",
       activityStatusText:
-        "Reject InvalidTarget: invalid target; stale phase state, refresh and use current controls",
+        "Advance phase needs refreshed game state. Reload and try again.",
       releaseReady: false,
       productionReady: false,
     },
@@ -623,10 +623,9 @@ export function privateReceiptProofFixture({ game, scenario }) {
       phase: { phaseId: scenario.phaseId },
     },
     coldLoadEndpoints: {
-      notificationsEndpoint:
-        `/games/${game}/notifications?principal_user_id=${scenario.principalUserId}`,
+      notificationsEndpoint: `/api/gameplay/games/${game}/notifications`,
       commandStateEndpoint:
-        `/games/${game}/player-command-state?principal_user_id=${scenario.principalUserId}&slot_id=${scenario.expectedSlot}`,
+        `/api/gameplay/games/${game}/player-command-state?slot_id=${scenario.expectedSlot}`,
     },
   };
   if (scenario.privateReceipt) {
@@ -701,10 +700,9 @@ export function postDayVoteAdvanceProofFixture({ game, surfaceCase }) {
     },
     resyncSnapshotNotifications: [],
     coldLoadEndpoints: {
-      notificationsEndpoint:
-        `/games/${game}/notifications?principal_user_id=${surfaceCase.principalUserId}`,
+      notificationsEndpoint: `/api/gameplay/games/${game}/notifications`,
       commandStateEndpoint:
-        `/games/${game}/player-command-state?principal_user_id=${surfaceCase.principalUserId}&slot_id=${surfaceCase.expectedSlot}`,
+        `/api/gameplay/games/${game}/player-command-state?slot_id=${surfaceCase.expectedSlot}`,
     },
   };
   if (surfaceCase.privateReceipt) {

@@ -38,8 +38,17 @@
       <h2>Vote and actions</h2>
     </div>
     <div class="vote-sheet__current" data-testid="player-vote-context">
+      <span>{view.context.deadline.label}</span>
+      <strong
+        data-testid={view.context.deadline.testId}
+        data-state={view.context.deadline.state}
+        data-projected={view.context.deadline.isProjected}
+      >{view.context.deadline.phaseLabel} · {view.context.deadline.value}</strong>
       <span>{view.context.currentVote.label}</span>
-      <strong data-testid={view.context.currentVote.testId}>{view.context.currentVote.value}</strong>
+      <strong
+        data-testid={view.context.currentVote.testId}
+        data-has-vote={String(view.context.currentVote.hasVote)}
+      >{view.context.currentVote.value}</strong>
     </div>
   </header>
 
@@ -99,7 +108,10 @@
               testId={action.confirmation.confirmationTestId}
               onKeydown={(event) => onConfirmationKeydown(event, action)}
             >
-              <p id={action.confirmation.messageId}>{action.confirmation.message}</p>
+              <p
+                id={action.confirmation.messageId}
+                data-testid={action.confirmation.messageTestId}
+              >{action.confirmation.message}</p>
               <div class={action.confirmation.actionsClassName}>
                 <button
                   type="button"

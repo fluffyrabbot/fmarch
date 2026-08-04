@@ -22,6 +22,7 @@
   aria-label="Player actions"
   aria-busy={view?.root?.ariaBusy}
   data-component="player-action-dock"
+  data-channel-id={view?.root?.data?.channelId}
   data-thumb-zone="player-primary-actions"
   data-action-priority="primary"
   data-testid="player-primary-action-zone"

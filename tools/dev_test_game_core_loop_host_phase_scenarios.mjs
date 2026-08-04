@@ -322,9 +322,9 @@ export function assertHostNightActionTransitionSurfaceCase({
       expectedPrivateReceipt: playerCase.expectedPrivateReceipt,
       expectedBoundaryText: playerCase.expectedBoundaryText,
       expectedCommandStateEndpoint:
-        `/games/${expectedGame}/player-command-state?principal_user_id=${playerCase.expectedPrincipalUserId}&slot_id=${playerCase.expectedSlot}`,
+        `/api/gameplay/games/${expectedGame}/player-command-state?slot_id=${playerCase.expectedSlot}`,
       expectedNotificationsEndpoint:
-        `/games/${expectedGame}/notifications?principal_user_id=${playerCase.expectedPrincipalUserId}`,
+        `/api/gameplay/games/${expectedGame}/notifications`,
     });
   }
 }
@@ -892,7 +892,7 @@ export function assertHostLifecycleControlClickProofCase({
     clickProof.activityCount !== 1 ||
     !String(clickProof.activityStatusText ?? "")
       .toLowerCase()
-      .includes(`ack: stream seqs ${scenario.ackStreamSeq}`)
+      .includes(hostActivityAckMessage(scenario.actionId))
   ) {
     throwHostPhaseScenarioAssertionError({
       message: "core-loop admin proof missing host lifecycle click ACK",
@@ -942,7 +942,7 @@ export function assertHostLifecycleUnlockProofCase({
     unlockProof.activityCount !== 2 ||
     !String(unlockProof.activityStatusText ?? "")
       .toLowerCase()
-      .includes(`ack: stream seqs ${scenario.unlockAckStreamSeq}`)
+      .includes(hostActivityAckMessage(scenario.unlockActionId))
   ) {
     throwHostPhaseScenarioAssertionError({
       message: "core-loop admin proof missing host lifecycle unlock ACK",
@@ -997,7 +997,7 @@ export function assertHostDeadlineControlProofCase({
     deadlineProof.activityCount !== 3 ||
     !String(deadlineProof.activityStatusText ?? "")
       .toLowerCase()
-      .includes(`ack: stream seqs ${scenario.deadlineAckStreamSeq}`)
+      .includes(hostActivityAckMessage(scenario.deadlineActionId))
   ) {
     throwHostPhaseScenarioAssertionError({
       message: "core-loop admin proof missing host deadline control ACK",
@@ -1049,7 +1049,7 @@ export function assertHostLifecycleStaleRejectProofCase({
     staleRejectProof.activityCount !== 1 ||
     !String(staleRejectProof.activityStatusText ?? "")
       .toLowerCase()
-      .includes("reject phaselocked: phase locked")
+      .includes(hostActivityRefreshMessage(scenario.actionId))
   ) {
     throwHostPhaseScenarioAssertionError({
       message: "core-loop admin proof missing host stale lifecycle recovery",
@@ -1541,7 +1541,7 @@ export function assertHostPhaseTransitionActionProofCase({
     proof.checkpointDeadlineAffordance !== expectedDeadlineAffordance ||
     !String(proof.activityStatusText ?? "")
       .toLowerCase()
-      .includes(`ack: stream seqs ${streamSeq}`)
+      .includes(hostActivityAckMessage(actionId))
   ) {
     throwHostPhaseScenarioAssertionError({
       message: `core-loop admin proof missing host ${actionId} transition ACK`,
@@ -1595,7 +1595,7 @@ export function assertHostStaleAdvanceAfterTransitionProofCase({
       hostDeadlineAffordanceForPhaseState("open") ||
     !String(proof.activityStatusText ?? "")
       .toLowerCase()
-      .includes("reject invalidtarget: invalid target")
+      .includes(hostActivityRefreshMessage("advance_phase"))
   ) {
     throwHostPhaseScenarioAssertionError({
       message:
@@ -1604,6 +1604,19 @@ export function assertHostStaleAdvanceAfterTransitionProofCase({
       includeEvidenceInError,
     });
   }
+}
+
+function hostActivityActionLabel(actionId) {
+  const label = String(actionId).replaceAll("_", " ").replaceAll("-", " ");
+  return `${label.charAt(0).toUpperCase()}${label.slice(1)}`;
+}
+
+function hostActivityAckMessage(actionId) {
+  return `${hostActivityActionLabel(actionId)} completed.`.toLowerCase();
+}
+
+function hostActivityRefreshMessage(actionId) {
+  return `${hostActivityActionLabel(actionId)} needs refreshed game state. Reload and try again.`.toLowerCase();
 }
 
 function throwHostPhaseScenarioAssertionError({

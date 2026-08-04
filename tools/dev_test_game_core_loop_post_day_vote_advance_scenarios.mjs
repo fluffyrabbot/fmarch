@@ -144,9 +144,9 @@ function assertPostDayVoteAdvanceSurfaceProof({
     proof.resyncSnapshotCommandState?.actorSlot !== surfaceCase.expectedSlot ||
     proof.resyncSnapshotCommandState?.phase?.phaseId !== surfaceCase.phaseId ||
     proof.coldLoadEndpoints?.notificationsEndpoint !==
-      `/games/${expectedGame}/notifications?principal_user_id=${surfaceCase.principalUserId}` ||
+      `/api/gameplay/games/${expectedGame}/notifications` ||
     proof.coldLoadEndpoints?.commandStateEndpoint !==
-      `/games/${expectedGame}/player-command-state?principal_user_id=${surfaceCase.principalUserId}&slot_id=${surfaceCase.expectedSlot}`
+      `/api/gameplay/games/${expectedGame}/player-command-state?slot_id=${surfaceCase.expectedSlot}`
   ) {
     throwPostDayVoteAdvanceAssertionError({
       message: surfaceCase.errorMessage,

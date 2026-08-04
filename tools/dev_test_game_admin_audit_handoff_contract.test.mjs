@@ -150,7 +150,7 @@ test("related handoff assertion fails closed for local prerequisite role URL dri
               ...adminRoleSurfaceFixture().visibleRelatedDestinations[0],
               visibleLocalPrerequisiteRoleUrls: {
                 [localProofFreshnessAdminSurfaceCheckId]:
-                  "/admin/audit/local-next-action?game=game-a",
+                  "/_dev/ops/audit/local-next-action?game=game-a",
               },
             },
           ],
@@ -276,7 +276,7 @@ function adminRoleSurfaceFixture() {
         linkId: "admin-proof:hosted-concurrent-race-matrix",
         auditId: "local-hosted-concurrent-race-matrix",
         detailRoleUrl:
-          "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
+          "/_dev/ops/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
         visibleChecks: [hostedMatrixAdminRequiredCheckIds.at(-1)],
         visibleCheckStatuses: {
           [hostedMatrixAdminRequiredCheckIds.at(-1)]: "unproven",

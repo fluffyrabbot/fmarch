@@ -303,15 +303,18 @@ function runtimeAuditFallback({ game }) {
 
 function withRuntimeAuditLinks(audit, { game }) {
   return Object.freeze(
-    audit.map((item) =>
-      Object.freeze({
+    audit.map((item) => {
+      const basePath = String(item.id).startsWith("local-")
+        ? "/_dev/ops/audit"
+        : "/admin/audit";
+      return Object.freeze({
         ...item,
         inspectHref:
           typeof item.inspectHref === "string" && item.inspectHref.trim() !== ""
             ? item.inspectHref
-            : `/admin/audit/${encodeURIComponent(item.id)}?game=${encodeURIComponent(game)}`,
-      }),
-    ),
+            : `${basePath}/${encodeURIComponent(item.id)}?game=${encodeURIComponent(game)}`,
+      });
+    }),
   );
 }
 

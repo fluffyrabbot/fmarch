@@ -1276,7 +1276,7 @@ multi-node, production, browser, or exhaustive state-space behavior.` This comma
 scratch database on the local Postgres service and emitted `ok: true`, 26 matched projection tables,
 one matched resolution envelope, zero drifted tables, zero drifted phases, and zero diffs. The shared
 status/go-no-go/browser-smoke surfaces now require this trusted row and carry exact trusted metadata
-for `projection_table_count: 26` and `resolution_phase_count: 1`.
+for `projection_table_count: 32` and `resolution_phase_count: 1`.
 The API manifest unit test now mechanically checks those artifact doc-truth rows in both this
 engine note and the checklist: every manifest row with an `artifact_path` must have its artifact
 path, rendered command, exact proof boundary, current `trusted` artifact state, and production

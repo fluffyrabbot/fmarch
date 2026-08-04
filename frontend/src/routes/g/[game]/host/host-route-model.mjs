@@ -155,7 +155,10 @@ export async function buildHostConsoleRouteData({
     hostConsoleStateEndpoint: buildHostConsoleStateEndpoint({
       gameId,
       slotId: replacement.slotId,
-      apiBaseUrl: publicApiBaseUrl ?? apiBaseUrl,
+      // Browser reads must stay same-origin so the gameplay proxy can derive
+      // bearer authority from the httpOnly app session. Only the websocket
+      // URL below is handed the public API base directly.
+      apiBaseUrl: "",
     }),
     hostPromptEndpoint: hostPromptsUrl({
       game: gameId,

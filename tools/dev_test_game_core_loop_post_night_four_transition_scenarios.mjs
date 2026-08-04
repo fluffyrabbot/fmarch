@@ -146,9 +146,9 @@ export function assertPostNightFourTransitionSurfaceCase({
       expectedBoundaryText: playerCase.expectedBoundaryText,
       expectedResyncFromSeq: playerCase.expectedResyncFromSeq,
       expectedCommandStateEndpoint:
-        `/games/${expectedGame}/player-command-state?principal_user_id=${playerCase.expectedPrincipalUserId}&slot_id=${playerCase.expectedSlot}`,
+        `/api/gameplay/games/${expectedGame}/player-command-state?slot_id=${playerCase.expectedSlot}`,
       expectedNotificationsEndpoint:
-        `/games/${expectedGame}/notifications?principal_user_id=${playerCase.expectedPrincipalUserId}`,
+        `/api/gameplay/games/${expectedGame}/notifications`,
       expectedVoteButtonCount: playerCase.expectedVoteButtonCount,
       expectedVoteTargetCount: playerCase.expectedVoteTargetCount,
       expectedLastVoteOutcomePhaseId: playerCase.expectedLastVoteOutcomePhaseId,

@@ -107,8 +107,9 @@ export async function recoverLiveProjection({
   resyncKeys = undefined,
   fetchImpl = globalThis.fetch,
   message,
+  signal,
 }) {
-  const snapshot = await projectionStore.refresh(resyncKeys, { fetchImpl });
+  const snapshot = await projectionStore.refresh(resyncKeys, { fetchImpl, signal });
   return Object.freeze({
     message: Object.freeze({
       ...(message ?? { kind: "resync-required", fromSeq: 0 }),
@@ -129,6 +130,7 @@ export function connectLiveProjection({
   onEvent = () => {},
   reconnect = true,
   reconnectDelayMs = 1000,
+  recoveryTimeoutMs = 15_000,
   scheduleReconnect = (callback, delayMs) => globalThis.setTimeout(callback, delayMs),
   clearReconnect = (handle) => globalThis.clearTimeout(handle),
 }) {
@@ -152,9 +154,15 @@ export function connectLiveProjection({
     let socketUrl = ticketEndpoint;
     if (!ticketEndpoint.startsWith("ws://") && !ticketEndpoint.startsWith("wss://") && !ticketEndpoint.startsWith("/ws?")) {
       try {
-        const ticketResponse = await fetchImpl(ticketEndpoint, {
-          method: "POST",
-          headers: { accept: "application/json" },
+        const ticketResponse = await fetchWithAbortTimeout({
+          fetchImpl,
+          input: ticketEndpoint,
+          init: {
+            method: "POST",
+            headers: { accept: "application/json" },
+          },
+          timeoutMs: recoveryTimeoutMs,
+          timeoutMessage: "live ticket request timed out",
         });
         if (!ticketResponse.ok) {
           if ([401, 403].includes(ticketResponse.status)) {
@@ -174,14 +182,24 @@ export function connectLiveProjection({
               );
             }
           }
-          throw new Error(`live ticket request failed with HTTP ${ticketResponse.status}`);
+          const error = new Error(
+            `live ticket request failed with HTTP ${ticketResponse.status}`,
+          );
+          if ([429, 503].includes(ticketResponse.status)) {
+            error.reconnectDelayMs = retryAfterMilliseconds({
+              headers: ticketResponse.headers,
+              fallbackMs:
+                reconnectDelayMs * 2 ** Math.min(reconnectAttempt, 5),
+            });
+          }
+          throw error;
         }
         const ticket = await ticketResponse.json();
         socketUrl = requiredString(ticket?.url, "ticket.url");
       } catch (error) {
         if (!stopped) {
           onEvent(Object.freeze({ kind: "error", message: error.message }), null);
-          queueReconnect();
+          queueReconnect(error.reconnectDelayMs);
         }
         return null;
       }
@@ -194,6 +212,35 @@ export function connectLiveProjection({
     let closeHandled = false;
     let pendingResyncMessage = null;
     let resyncRecoveryPromise = null;
+
+    async function recoverProjection(message) {
+      const controller = new AbortController();
+      const timeoutHandle = globalThis.setTimeout(
+        () => controller.abort(new Error("live projection recovery timed out")),
+        recoveryTimeoutMs,
+      );
+      try {
+        return await recoverLiveProjection({
+          projectionStore,
+          resyncKeys,
+          fetchImpl,
+          message,
+          signal: controller.signal,
+        });
+      } finally {
+        globalThis.clearTimeout(timeoutHandle);
+      }
+    }
+
+    function invalidateSocketAfterRecoveryFailure(error) {
+      if (openedSocket !== socket || stopped) {
+        return;
+      }
+      onEvent(Object.freeze({ kind: "error", message: error.message }), null);
+      handleSocketClose();
+      socket = null;
+      openedSocket.close();
+    }
 
     async function queueResyncRecovery(message) {
       if (resyncRecoveryPromise !== null) {
@@ -215,12 +262,7 @@ export function connectLiveProjection({
           }
           refreshIndex += 1;
           try {
-            const recovery = await recoverLiveProjection({
-              projectionStore,
-              resyncKeys,
-              fetchImpl,
-              message: nextMessage,
-            });
+            const recovery = await recoverProjection(nextMessage);
             if (openedSocket !== socket || stopped) {
               return;
             }
@@ -229,7 +271,8 @@ export function connectLiveProjection({
             if (openedSocket !== socket || stopped) {
               return;
             }
-            onEvent(Object.freeze({ kind: "error", message: error.message }), null);
+            invalidateSocketAfterRecoveryFailure(error);
+            return;
           }
         }
       })();
@@ -257,18 +300,13 @@ export function connectLiveProjection({
         return;
       }
       try {
-        const recovery = await recoverLiveProjection({
-          projectionStore,
-          resyncKeys,
-          fetchImpl,
-          message: {
-            kind: "reconnect",
-            attempt: reconnectAttempt,
-          },
+        const recovery = await recoverProjection({
+          kind: "reconnect",
+          attempt: reconnectAttempt,
         });
         onEvent(recovery.message, recovery.snapshot);
       } catch (error) {
-        onEvent(Object.freeze({ kind: "error", message: error.message }), null);
+        invalidateSocketAfterRecoveryFailure(error);
       }
     });
     openedSocket.addEventListener("message", async (event) => {
@@ -308,7 +346,7 @@ export function connectLiveProjection({
     return openedSocket;
   }
 
-  function queueReconnect() {
+  function queueReconnect(delayMs = reconnectDelayMs) {
     if (stopped || reconnect !== true || reconnectHandle !== null) {
       return;
     }
@@ -320,7 +358,7 @@ export function connectLiveProjection({
     reconnectHandle = scheduleReconnect(() => {
       reconnectHandle = null;
       openSocket({ recoverOnOpen: true });
-    }, reconnectDelayMs);
+    }, delayMs);
   }
 
   void openSocket();
@@ -342,6 +380,39 @@ export function connectLiveProjection({
     },
     metrics: currentMetrics,
   });
+}
+
+async function fetchWithAbortTimeout({
+  fetchImpl,
+  input,
+  init,
+  timeoutMs,
+  timeoutMessage,
+}) {
+  const controller = new AbortController();
+  const timeoutHandle = globalThis.setTimeout(
+    () => controller.abort(new Error(timeoutMessage)),
+    timeoutMs,
+  );
+  try {
+    return await fetchImpl(input, { ...init, signal: controller.signal });
+  } finally {
+    globalThis.clearTimeout(timeoutHandle);
+  }
+}
+
+function retryAfterMilliseconds({ headers, fallbackMs }) {
+  const value = headers?.get?.("retry-after")?.trim();
+  if (value !== undefined && /^\d+$/.test(value)) {
+    return Math.max(fallbackMs, Number(value) * 1000);
+  }
+  if (value !== undefined) {
+    const retryAt = Date.parse(value);
+    if (Number.isFinite(retryAt)) {
+      return Math.max(fallbackMs, retryAt - Date.now());
+    }
+  }
+  return fallbackMs;
 }
 
 function normalizeRefreshKeys(value) {

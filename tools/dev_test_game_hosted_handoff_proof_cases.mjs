@@ -24,7 +24,7 @@ export const hostedAdminHandoffProofArtifactCases = Object.freeze([
       freshnessMetadata: "hostedIdentityEvidenceAdminProofArtifact",
     },
     roleUrl:
-      "/admin/audit/local-hosted-identity-evidence?game=<seeded-game>",
+      "/_dev/ops/audit/local-hosted-identity-evidence?game=<seeded-game>",
   }),
   createHostedAdminHandoffProofArtifactCase({
     id: "hosted-concurrent-race-matrix-admin-proof",
@@ -42,7 +42,7 @@ export const hostedAdminHandoffProofArtifactCases = Object.freeze([
       freshnessMetadata: "hostedConcurrentRaceMatrixAdminProofArtifact",
     },
     roleUrl:
-      "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
+      "/_dev/ops/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
   }),
   createHostedAdminHandoffProofArtifactCase({
     id: "real-hosted-observability-handoff-admin-proof",
@@ -60,7 +60,7 @@ export const hostedAdminHandoffProofArtifactCases = Object.freeze([
       freshnessMetadata: "realHostedObservabilityHandoffAdminProofArtifact",
     },
     roleUrl:
-      "/admin/audit/local-real-hosted-observability-handoff?game=<seeded-game>",
+      "/_dev/ops/audit/local-real-hosted-observability-handoff?game=<seeded-game>",
   }),
 ]);
 

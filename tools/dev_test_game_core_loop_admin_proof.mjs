@@ -593,6 +593,38 @@ if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
   await runAdminAuditProof(coreLoopAdminProofCase());
 }
 
+async function revealPlayerActionSubmissionCheckpoint(page) {
+  const checkpoint = page.getByTestId("player-action-submission-checkpoint");
+  await checkpoint.waitFor({ state: "attached", timeout: 15000 });
+  await checkpoint.evaluate((element) => element.setAttribute("open", ""));
+  await checkpoint.waitFor({ state: "visible", timeout: 15000 });
+  return checkpoint;
+}
+
+async function revealHostAction(page, actionId) {
+  const actionTile = page.getByTestId(`critical-host-action-${actionId}`);
+  await actionTile.waitFor({ state: "attached", timeout: 15000 });
+  if (!(await actionTile.isVisible())) {
+    const taskId = await actionTile.evaluate(
+      (element) =>
+        element.closest("[data-task-id]")?.getAttribute("data-task-id") ?? null,
+    );
+    if (taskId === null) {
+      throw new Error(`host action ${actionId} is not owned by a task workspace panel`);
+    }
+    await page.locator(`button[data-task-id=${JSON.stringify(taskId)}]`).click();
+  }
+  await actionTile.waitFor({ state: "visible", timeout: 15000 });
+  return actionTile;
+}
+
+async function revealHostSupportingEvidence(page) {
+  const drawer = page.getByTestId("host-supporting-evidence");
+  await drawer.waitFor({ state: "attached", timeout: 15000 });
+  await drawer.evaluate((element) => element.setAttribute("open", ""));
+  return drawer;
+}
+
 async function proveHostLifecycleControlCheckpoint({
   browser,
   frontendBaseUrl,
@@ -619,6 +651,14 @@ async function proveHostLifecycleControlCheckpoint({
       timeout: 15000,
     });
     const checkpoint = page.getByTestId("host-lifecycle-control-checkpoint");
+    await checkpoint.waitFor({ state: "attached", timeout: 15000 });
+    await checkpoint.evaluate((element) => {
+      for (let parent = element.parentElement; parent !== null; parent = parent.parentElement) {
+        if (parent instanceof HTMLDetailsElement) {
+          parent.open = true;
+        }
+      }
+    });
     await checkpoint.waitFor({ state: "visible", timeout: 15000 });
     const proofCheckId = await checkpoint.getAttribute("data-proof-check-id");
     const phaseId = await checkpoint.getAttribute("data-phase-id");
@@ -802,8 +842,7 @@ async function proveHostLifecycleControlClick({
   roleUrl,
   visitedRolePath,
 }) {
-  const actionTile = page.getByTestId("critical-host-action-lock_thread");
-  await actionTile.waitFor({ state: "visible", timeout: 15000 });
+  const actionTile = await revealHostAction(page, "lock_thread");
   await actionTile.getByTestId("critical-host-action-trigger").click();
   await actionTile.getByTestId("critical-host-action-confirm").waitFor({
     state: "visible",
@@ -872,8 +911,7 @@ async function proveHostLifecycleUnlock({
   roleUrl,
   visitedRolePath,
 }) {
-  const actionTile = page.getByTestId("critical-host-action-unlock_thread");
-  await actionTile.waitFor({ state: "visible", timeout: 15000 });
+  const actionTile = await revealHostAction(page, "unlock_thread");
   await actionTile.getByTestId("critical-host-action-trigger").click();
   await actionTile.getByTestId("critical-host-action-confirm").waitFor({
     state: "visible",
@@ -943,10 +981,7 @@ async function proveHostDeadlineControl({
   visitedRolePath,
 }) {
   const scenario = hostLifecycleControlScenario();
-  const actionTile = page.getByTestId(
-    `critical-host-action-${scenario.deadlineActionId}`,
-  );
-  await actionTile.waitFor({ state: "visible", timeout: 15000 });
+  const actionTile = await revealHostAction(page, scenario.deadlineActionId);
   await actionTile.getByTestId("critical-host-action-trigger").click();
   await actionTile.getByTestId("critical-host-action-confirm").waitFor({
     state: "visible",
@@ -992,6 +1027,7 @@ async function proveHostDeadlineControl({
     },
     { timeout: 15000 },
   );
+  await revealHostSupportingEvidence(page);
   const commandStatuses = await page.evaluate(
     () => window.__fmarchHostCommandStatuses,
   );
@@ -1065,8 +1101,7 @@ async function proveHostLifecycleStaleReject({
       state: "visible",
       timeout: 15000,
     });
-    const actionTile = page.getByTestId("critical-host-action-lock_thread");
-    await actionTile.waitFor({ state: "visible", timeout: 15000 });
+    const actionTile = await revealHostAction(page, "lock_thread");
     await actionTile.getByTestId("critical-host-action-trigger").click();
     await actionTile.getByTestId("critical-host-action-confirm").waitFor({
       state: "visible",
@@ -1090,6 +1125,7 @@ async function proveHostLifecycleStaleReject({
       hostDeadlineAffordanceForPhaseState("open"),
       { timeout: 15000 },
     );
+    await revealHostSupportingEvidence(page);
     const commandStatuses = await page.evaluate(
       () => window.__fmarchHostCommandStatuses,
     );
@@ -1439,7 +1475,7 @@ async function proveDayThreePlayerObservation({
       { slot: expectedSlot },
       { timeout: 15000 },
     );
-    const checkpoint = page.getByTestId("player-action-submission-checkpoint");
+    const checkpoint = await revealPlayerActionSubmissionCheckpoint(page);
     await checkpoint.waitFor({ state: "visible", timeout: 15000 });
     const privateQueue = page.locator('[data-component="player-private-queue"]');
     await privateQueue.waitFor({ state: "visible", timeout: 15000 });
@@ -3828,7 +3864,7 @@ async function provePostDayThreePlayerSurface({
       },
       { timeout: 15000 },
     );
-    const checkpoint = page.getByTestId("player-action-submission-checkpoint");
+    const checkpoint = await revealPlayerActionSubmissionCheckpoint(page);
     await checkpoint.waitFor({ state: "visible", timeout: 15000 });
     const privateQueue = page.locator('[data-component="player-private-queue"]');
     await privateQueue.waitFor({ state: "visible", timeout: 15000 });
@@ -4198,8 +4234,7 @@ async function proveHostPhaseActionClick({
     expectedPhaseState,
   ),
 }) {
-  const actionTile = page.getByTestId(`critical-host-action-${actionId}`);
-  await actionTile.waitFor({ state: "visible", timeout: 15000 });
+  const actionTile = await revealHostAction(page, actionId);
   await actionTile.getByTestId("critical-host-action-trigger").click();
   await actionTile.getByTestId("critical-host-action-confirm").waitFor({
     state: "visible",
@@ -4240,6 +4275,7 @@ async function proveHostPhaseActionClick({
     },
     { timeout: 15000 },
   );
+  await revealHostSupportingEvidence(page);
   const commandStatuses = await page.evaluate(
     () => window.__fmarchHostCommandStatuses,
   );
@@ -4335,8 +4371,7 @@ async function proveHostStaleAdvanceAfterTransition({
       hostDeadlineAffordanceForPhaseState("locked"),
       { timeout: 15000 },
     );
-    const actionTile = page.getByTestId("critical-host-action-advance_phase");
-    await actionTile.waitFor({ state: "visible", timeout: 15000 });
+    const actionTile = await revealHostAction(page, "advance_phase");
     await actionTile.getByTestId("critical-host-action-trigger").click();
     await actionTile.getByTestId("critical-host-action-confirm").waitFor({
       state: "visible",
@@ -4368,6 +4403,7 @@ async function proveHostStaleAdvanceAfterTransition({
       hostDeadlineAffordanceForPhaseState("open"),
       { timeout: 15000 },
     );
+    await revealHostSupportingEvidence(page);
     const commandStatuses = await page.evaluate(
       () => window.__fmarchHostCommandStatuses,
     );
@@ -4713,7 +4749,7 @@ async function provePlayerPhaseTransitionObservation({
     );
     const resyncKeys = await page.evaluate(() => window.__fmarchPlayerResyncKeys);
     const projection = await page.evaluate(() => window.__fmarchPlayerProjection);
-    const checkpoint = page.getByTestId("player-action-submission-checkpoint");
+    const checkpoint = await revealPlayerActionSubmissionCheckpoint(page);
     const checkpointPhaseId = await checkpoint.getAttribute("data-phase-id");
     const checkpointPhaseState = await checkpoint.getAttribute("data-phase-state");
     const checkpointActionState = await checkpoint.getAttribute("data-action-state");
@@ -5016,7 +5052,7 @@ async function collectPlayerStaleCommandProof({
   );
   const receipts = await page.evaluate(() => window.__fmarchPlayerCommandReceipts);
   const projection = await page.evaluate(() => window.__fmarchPlayerProjection);
-  const checkpoint = page.getByTestId("player-action-submission-checkpoint");
+    const checkpoint = await revealPlayerActionSubmissionCheckpoint(page);
   const receiptState = await checkpoint.getAttribute("data-receipt-state");
   const phaseIdAfterReject = await checkpoint.getAttribute("data-phase-id");
   const actionStateAfterReject = await checkpoint.getAttribute("data-action-state");
@@ -5181,7 +5217,7 @@ async function provePlayerActionSubmissionCheckpoint({
       state: "visible",
       timeout: 15000,
     });
-    const checkpoint = page.getByTestId("player-action-submission-checkpoint");
+    const checkpoint = await revealPlayerActionSubmissionCheckpoint(page);
     await checkpoint.waitFor({ state: "visible", timeout: 15000 });
     const proofCheckId = await checkpoint.getAttribute("data-proof-check-id");
     const phaseId = await checkpoint.getAttribute("data-phase-id");
@@ -5305,24 +5341,22 @@ async function installPlayerActionSubmissionBrowserRoutes(page, { commandRequest
     await fulfillJson(route, []);
   });
   await page.route("**/games/*/player-command-state?**", async (route) => {
-    await fulfillJson(route, {
-      game: "seeded-action-open",
-      actorSlot: "slot-7",
-      actorAlive: true,
-      actorStatus: "alive",
-      roleKey: "mafia_goon",
-      gameCompleted: false,
-      phase: {
-        phaseId: "N02",
-        phaseKind: "Night",
-        phaseNumber: 2,
-        locked: false,
-      },
-      actions: [],
-      voteTargets: [],
-      currentVote: null,
-      boundary: "Seeded browser ACK refreshed action state.",
-    });
+    const ackObserved = commandRequests.some(
+      (command) => command?.[scenario.commandSelector] !== undefined,
+    );
+    await fulfillJson(
+      route,
+      ackObserved
+        ? {
+            ...seededActionOpenCommandState({
+              boundary: "Seeded browser ACK refreshed action state.",
+            }),
+            actions: [],
+          }
+        : seededActionOpenCommandState({
+            boundary: "Seeded browser action state remains open before ACK.",
+          }),
+    );
   });
 }
 
@@ -5382,7 +5416,7 @@ async function provePlayerActionInvalidRecovery({
     );
     const receipts = await page.evaluate(() => window.__fmarchPlayerCommandReceipts);
     const projection = await page.evaluate(() => window.__fmarchPlayerProjection);
-    const checkpoint = page.getByTestId("player-action-submission-checkpoint");
+    const checkpoint = await revealPlayerActionSubmissionCheckpoint(page);
     const receiptState = await checkpoint.getAttribute("data-receipt-state");
     const actionStateAfterReject = await checkpoint.getAttribute("data-action-state");
     const targetSlotsAfterReject = await checkpoint.getAttribute("data-target-slots");
@@ -5517,7 +5551,7 @@ async function proveTargetResolutionReceiptSurface({
       null,
       { timeout: 15000 },
     );
-    const checkpoint = page.getByTestId("player-action-submission-checkpoint");
+    const checkpoint = await revealPlayerActionSubmissionCheckpoint(page);
     await checkpoint.waitFor({ state: "visible", timeout: 15000 });
     const privateQueue = page.locator('[data-component="player-private-queue"]');
     await privateQueue.waitFor({ state: "visible", timeout: 15000 });
@@ -5685,7 +5719,7 @@ async function proveNormalResolutionPrivacySurface({
       null,
       { timeout: 15000 },
     );
-    const checkpoint = page.getByTestId("player-action-submission-checkpoint");
+    const checkpoint = await revealPlayerActionSubmissionCheckpoint(page);
     await checkpoint.waitFor({ state: "visible", timeout: 15000 });
     const privateQueue = page.locator('[data-component="player-private-queue"]');
     await privateQueue.waitFor({ state: "visible", timeout: 15000 });
@@ -5840,7 +5874,7 @@ async function proveTargetDayVoteReceiptSurface({
       null,
       { timeout: 15000 },
     );
-    const checkpoint = page.getByTestId("player-action-submission-checkpoint");
+    const checkpoint = await revealPlayerActionSubmissionCheckpoint(page);
     await checkpoint.waitFor({ state: "visible", timeout: 15000 });
     const privateQueue = page.locator('[data-component="player-private-queue"]');
     await privateQueue.waitFor({ state: "visible", timeout: 15000 });
@@ -5976,7 +6010,7 @@ async function proveNormalDayVotePrivacySurface({
       null,
       { timeout: 15000 },
     );
-    const checkpoint = page.getByTestId("player-action-submission-checkpoint");
+    const checkpoint = await revealPlayerActionSubmissionCheckpoint(page);
     await checkpoint.waitFor({ state: "visible", timeout: 15000 });
     const privateQueue = page.locator('[data-component="player-private-queue"]');
     await privateQueue.waitFor({ state: "visible", timeout: 15000 });
@@ -6100,7 +6134,7 @@ async function proveTargetPostDayVoteAdvanceSurface({
       null,
       { timeout: 15000 },
     );
-    const checkpoint = page.getByTestId("player-action-submission-checkpoint");
+    const checkpoint = await revealPlayerActionSubmissionCheckpoint(page);
     await checkpoint.waitFor({ state: "visible", timeout: 15000 });
     const privateQueue = page.locator('[data-component="player-private-queue"]');
     await privateQueue.waitFor({ state: "visible", timeout: 15000 });
@@ -6237,7 +6271,7 @@ async function proveNormalPostDayVoteAdvanceSurface({
       null,
       { timeout: 15000 },
     );
-    const checkpoint = page.getByTestId("player-action-submission-checkpoint");
+    const checkpoint = await revealPlayerActionSubmissionCheckpoint(page);
     await checkpoint.waitFor({ state: "visible", timeout: 15000 });
     const privateQueue = page.locator('[data-component="player-private-queue"]');
     await privateQueue.waitFor({ state: "visible", timeout: 15000 });
@@ -6363,7 +6397,7 @@ async function proveNightActionResolutionReceiptSurface({
       null,
       { timeout: 15000 },
     );
-    const checkpoint = page.getByTestId("player-action-submission-checkpoint");
+    const checkpoint = await revealPlayerActionSubmissionCheckpoint(page);
     await checkpoint.waitFor({ state: "visible", timeout: 15000 });
     const privateQueue = page.locator('[data-component="player-private-queue"]');
     await privateQueue.waitFor({ state: "visible", timeout: 15000 });
@@ -6500,7 +6534,7 @@ async function proveNormalNightActionResolutionPrivacySurface({
       null,
       { timeout: 15000 },
     );
-    const checkpoint = page.getByTestId("player-action-submission-checkpoint");
+    const checkpoint = await revealPlayerActionSubmissionCheckpoint(page);
     await checkpoint.waitFor({ state: "visible", timeout: 15000 });
     const privateQueue = page.locator('[data-component="player-private-queue"]');
     await privateQueue.waitFor({ state: "visible", timeout: 15000 });
@@ -8356,7 +8390,7 @@ async function provePlayerActionSubmissionClick({
   );
   const receipts = await page.evaluate(() => window.__fmarchPlayerCommandReceipts);
   const projection = await page.evaluate(() => window.__fmarchPlayerProjection);
-  const checkpoint = page.getByTestId("player-action-submission-checkpoint");
+    const checkpoint = await revealPlayerActionSubmissionCheckpoint(page);
   const receiptState = await checkpoint.getAttribute("data-receipt-state");
   const actionStateAfterAck = await checkpoint.getAttribute("data-action-state");
   const receiptCountText = await page
@@ -8630,7 +8664,7 @@ async function provePrivateChannelInvalidActionRecovery({
     );
     const receipts = await page.evaluate(() => window.__fmarchPlayerCommandReceipts);
     const projection = await page.evaluate(() => window.__fmarchPlayerProjection);
-    const checkpoint = page.getByTestId("player-action-submission-checkpoint");
+    const checkpoint = await revealPlayerActionSubmissionCheckpoint(page);
     const checkpointPhaseId = await checkpoint.getAttribute("data-phase-id");
     const checkpointActionState = await checkpoint.getAttribute("data-action-state");
     const checkpointReceiptState = await checkpoint.getAttribute("data-receipt-state");
@@ -8746,7 +8780,7 @@ async function provePrivateChannelStalePostAfterPhaseTransition({
     );
     const receipts = await page.evaluate(() => window.__fmarchPlayerCommandReceipts);
     const projection = await page.evaluate(() => window.__fmarchPlayerProjection);
-    const checkpoint = page.getByTestId("player-action-submission-checkpoint");
+    const checkpoint = await revealPlayerActionSubmissionCheckpoint(page);
     const checkpointPhaseId = await checkpoint.getAttribute("data-phase-id");
     const checkpointActionState = await checkpoint.getAttribute("data-action-state");
     const checkpointReceiptState = await checkpoint.getAttribute("data-receipt-state");

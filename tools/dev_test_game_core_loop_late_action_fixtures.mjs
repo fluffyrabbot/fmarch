@@ -259,9 +259,9 @@ export function nightFourNoActionResolutionSurfaceFixture({
       boundary: `Seeded browser ${privacyCase.boundaryText}.`,
       resyncFromSeq: privacyCase.resyncFromSeq,
       commandStateEndpoint:
-        `/games/${game}/player-command-state?principal_user_id=${privacyCase.principalUserId}&slot_id=${privacyCase.expectedSlot}`,
+        `/api/gameplay/games/${game}/player-command-state?slot_id=${privacyCase.expectedSlot}`,
       notificationsEndpoint:
-        `/games/${game}/notifications?principal_user_id=${privacyCase.principalUserId}`,
+        `/api/gameplay/games/${game}/notifications`,
     }),
     releaseReady: false,
     productionReady: false,

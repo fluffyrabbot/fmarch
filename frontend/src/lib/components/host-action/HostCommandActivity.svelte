@@ -53,7 +53,11 @@
         >
           <strong>{item.label}</strong>
           <AppStatus
-            status={{ state: item.state, message: item.message }}
+            status={{
+              state: item.state,
+              message: item.message,
+              protocolMessage: item.rawMessage,
+            }}
             testId={item.statusTestId}
             className="fm-ledger__status"
           />

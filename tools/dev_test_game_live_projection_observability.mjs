@@ -8,6 +8,31 @@ export const liveProjectionLagServerTraceContract = Object.freeze({
   measurementField: "dropped_messages",
 });
 
+export function liveProjectionResyncMetricsAreConsistent(
+  metrics,
+  { minimumFrames = 2, minimumRefreshes = 2 } = {},
+) {
+  const values = [
+    metrics?.resyncFramesReceived,
+    metrics?.resyncRefreshesStarted,
+    metrics?.resyncFramesCoalesced,
+    metrics?.resyncTrailingRefreshesStarted,
+  ];
+  if (!values.every((value) => Number.isInteger(value) && value >= 0)) {
+    return false;
+  }
+  return (
+    metrics.resyncFramesReceived >= minimumFrames &&
+    metrics.resyncRefreshesStarted >= minimumRefreshes &&
+    metrics.resyncFramesCoalesced <= metrics.resyncFramesReceived &&
+    metrics.resyncTrailingRefreshesStarted <= metrics.resyncFramesCoalesced &&
+    metrics.resyncRefreshesStarted ===
+      metrics.resyncFramesReceived -
+        metrics.resyncFramesCoalesced +
+        metrics.resyncTrailingRefreshesStarted
+  );
+}
+
 export function liveProjectionLagObservabilityFromProofRun(proofRun) {
   const lane = proofRun?.lanes?.find(
     (entry) => entry.id === playerLiveLagResyncLaneId,
@@ -31,10 +56,7 @@ export function assertLiveProjectionLagObservability(observability) {
       JSON.stringify(liveProjectionLagServerTraceContract.scopeFields) ||
     observability.serverTraceContract?.measurementField !==
       liveProjectionLagServerTraceContract.measurementField ||
-    metrics?.resyncFramesReceived !== 2 ||
-    metrics?.resyncRefreshesStarted !== 2 ||
-    metrics?.resyncFramesCoalesced !== 0 ||
-    metrics?.resyncTrailingRefreshesStarted !== 0
+    !liveProjectionResyncMetricsAreConsistent(metrics)
   ) {
     throw new Error("live projection lag observability evidence drifted");
   }

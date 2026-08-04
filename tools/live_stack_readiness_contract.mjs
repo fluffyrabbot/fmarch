@@ -26,12 +26,13 @@ const CHECKS = Object.freeze([
   },
   {
     id: "admin-identity",
-    label: "Admin route proves session grants and authenticated login",
+    label: "Admin route proves authenticated audit access and host-setup handoff",
     predicate: (evidence) =>
-      evidence?.browser?.admin?.createOutcome?.state === "ack" &&
-      evidence?.browser?.admin?.cohostOutcome?.state === "ack" &&
-      evidence?.browser?.admin?.grantedGlobalModLogin?.sessionCookie
-        ?.valueMatchesGrantedToken === true,
+      ["GlobalAdmin", "Site administrator"].includes(
+        evidence?.browser?.admin?.capability,
+      ) &&
+      evidence?.browser?.admin?.auditInspectHref?.startsWith("/admin/") === true &&
+      evidence?.browser?.admin?.hostSetup?.status === "passed",
   },
   {
     id: "host-setup-workflow",

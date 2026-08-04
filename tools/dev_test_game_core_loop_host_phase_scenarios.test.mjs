@@ -127,7 +127,7 @@ test("host phase transition ACK assertion covers resolve projection refresh", ()
     checkpointPhaseId: "D02",
     checkpointPhaseState: "locked",
     checkpointDeadlineAffordance: "unlock_thread,advance_phase",
-    activityStatusText: "Ack: stream seqs 801",
+    activityStatusText: "Resolve phase completed.",
   };
 
   assert.doesNotThrow(() =>
@@ -515,20 +515,20 @@ test("host night action transition assertion delegates player observation cases"
       [
         "action",
         "player_mira",
-        "/games/game-a/player-command-state?principal_user_id=player_mira&slot_id=slot-7",
-        "/games/game-a/notifications?principal_user_id=player_mira",
+        "/api/gameplay/games/game-a/player-command-state?slot_id=slot-7",
+        "/api/gameplay/games/game-a/notifications",
       ],
       [
         "target",
         "player-seed",
-        "/games/game-a/player-command-state?principal_user_id=player-seed&slot_id=slot-3",
-        "/games/game-a/notifications?principal_user_id=player-seed",
+        "/api/gameplay/games/game-a/player-command-state?slot_id=slot-3",
+        "/api/gameplay/games/game-a/notifications",
       ],
       [
         "normal",
         "player_rowan",
-        "/games/game-a/player-command-state?principal_user_id=player_rowan&slot_id=slot-4",
-        "/games/game-a/notifications?principal_user_id=player_rowan",
+        "/api/gameplay/games/game-a/player-command-state?slot_id=slot-4",
+        "/api/gameplay/games/game-a/notifications",
       ],
     ],
   );
@@ -901,16 +901,16 @@ test("post-Night 4 transition assertion delegates host, player, and stale checks
       [
         "deadPlayer",
         "player-seed",
-        "/games/game-a/player-command-state?principal_user_id=player-seed&slot_id=slot-3",
-        "/games/game-a/notifications?principal_user_id=player-seed",
+        "/api/gameplay/games/game-a/player-command-state?slot_id=slot-3",
+        "/api/gameplay/games/game-a/notifications",
         0,
         "factional_kill",
       ],
       [
         "actionPlayer",
         "player_mira",
-        "/games/game-a/player-command-state?principal_user_id=player_mira&slot_id=slot-7",
-        "/games/game-a/notifications?principal_user_id=player_mira",
+        "/api/gameplay/games/game-a/player-command-state?slot_id=slot-7",
+        "/api/gameplay/games/game-a/notifications",
         1,
         "day_vote",
       ],
@@ -1004,7 +1004,7 @@ test("host lifecycle control assertion covers checkpoint, lock, unlock, deadline
       checkpointDeadlineAffordanceAfterAck: "unlock_thread,advance_phase",
       statusText: "Ack: stream seqs 601",
       activityCount: 1,
-      activityStatusText: "Ack: stream seqs 601",
+      activityStatusText: "Lock thread completed.",
     },
     hostLifecycleUnlockProof: {
       status: "passed",
@@ -1027,7 +1027,7 @@ test("host lifecycle control assertion covers checkpoint, lock, unlock, deadline
       checkpointDeadlineAffordanceAfterAck: "resolve_phase,lock_thread",
       statusText: "Ack: stream seqs 602",
       activityCount: 2,
-      activityStatusText: "Ack: stream seqs 602",
+      activityStatusText: "Unlock thread completed.",
     },
     hostDeadlineControlProof: {
       status: "passed",
@@ -1061,7 +1061,7 @@ test("host lifecycle control assertion covers checkpoint, lock, unlock, deadline
       checkpointDeadlineAfterAck: 1781928000,
       statusText: "Ack: stream seqs 603",
       activityCount: 3,
-      activityStatusText: "Ack: stream seqs 603",
+      activityStatusText: "Extend deadline 24h completed.",
     },
     hostLifecycleStaleRejectProof: {
       status: "passed",
@@ -1092,7 +1092,8 @@ test("host lifecycle control assertion covers checkpoint, lock, unlock, deadline
       checkpointDeadlineAffordanceAfterReject: "resolve_phase,lock_thread",
       recoveryText: "Reject PhaseLocked: phase locked",
       activityCount: 1,
-      activityStatusText: "Reject PhaseLocked: phase locked",
+      activityStatusText:
+        "Lock thread needs refreshed game state. Reload and try again.",
     },
   };
 
@@ -1672,7 +1673,8 @@ test("host stale advance recovery assertion covers refreshed host controls", () 
     checkpointPhaseIdAfterReject: "N02",
     checkpointPhaseStateAfterReject: "open",
     checkpointDeadlineAffordanceAfterReject: "resolve_phase,lock_thread",
-    activityStatusText: "Reject InvalidTarget: invalid target",
+    activityStatusText:
+      "Advance phase needs refreshed game state. Reload and try again.",
   };
 
   assert.doesNotThrow(() =>
@@ -1743,6 +1745,9 @@ function hostPhaseTransitionProofFixture({
     checkpointPhaseId: expectedPhaseId,
     checkpointPhaseState: expectedPhaseState,
     checkpointDeadlineAffordance: deadlineAffordance,
-    activityStatusText: `Ack: stream seqs ${streamSeq}`,
+    activityStatusText: `${String(actionId)
+      .replaceAll("_", " ")
+      .replaceAll("-", " ")
+      .replace(/^./, (letter) => letter.toUpperCase())} completed.`,
   };
 }

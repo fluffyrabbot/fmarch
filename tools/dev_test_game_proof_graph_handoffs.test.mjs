@@ -130,7 +130,7 @@ test("admin proof graph role handoff coverage fails closed for unmapped nodes", 
           nodes: [
             {
               id: "admin-proof:new-surface",
-              roleUrl: "/admin/audit/local-new-surface?game=<seeded-game>",
+              roleUrl: "/_dev/ops/audit/local-new-surface?game=<seeded-game>",
             },
           ],
         },

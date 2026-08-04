@@ -654,9 +654,9 @@ export function completedActionPlayerSurfaceProofArgs({
     expectedBoundaryText: "completed game endgame state",
     expectedResyncFromSeq: 921,
     expectedCommandStateEndpoint:
-      `/games/${expectedGame}/player-command-state?principal_user_id=player_mira&slot_id=slot-7`,
+      `/api/gameplay/games/${expectedGame}/player-command-state?slot_id=slot-7`,
     expectedNotificationsEndpoint:
-      `/games/${expectedGame}/notifications?principal_user_id=player_mira`,
+      `/api/gameplay/games/${expectedGame}/notifications`,
     expectedLastVoteOutcomePhaseId: "D05",
   };
 }
@@ -713,9 +713,9 @@ export function completedGameEndgameSurfaceAssertionCases({
       assertProof: assertCompletedPlayerReloadProof,
       ...scenario,
       expectedCommandStateEndpoint:
-        `/games/${scenario.expectedGame}/player-command-state?principal_user_id=${scenario.principalUserId}&slot_id=${scenario.expectedSlot}`,
+        `/api/gameplay/games/${scenario.expectedGame}/player-command-state?slot_id=${scenario.expectedSlot}`,
       expectedNotificationsEndpoint:
-        `/games/${scenario.expectedGame}/notifications?principal_user_id=${scenario.principalUserId}`,
+        `/api/gameplay/games/${scenario.expectedGame}/notifications`,
     })),
     ...completedGameEndgameStaleRejectAssertionCases({
       completedGameEndgameSurface,

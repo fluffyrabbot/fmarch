@@ -277,7 +277,6 @@ function revoteBrowserProofFixture() {
     requestEnvelope: {
       body: {
         body: {
-          principal_user_id: "player-goon-a",
           command: {
             SubmitVote: {
               actor_slot: "slot_4",
@@ -411,7 +410,7 @@ function revoteBrowserProofFixture() {
     d03R2StaleContinuePolicyRecovery: {
       reject: { state: "reject", error: "PromptAlreadyResolved" },
       activityStatusText:
-        "Reject PromptAlreadyResolved: host prompt selection is stale",
+        "Resolve prompt needs refreshed game state. Reload and try again.",
       staleHostPromptReloadAfterReject: {
         phase: { id: "N03", locked: false },
         promptActionsAfterReload: [],

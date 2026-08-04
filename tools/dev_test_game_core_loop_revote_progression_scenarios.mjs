@@ -615,9 +615,8 @@ function voteSubmissionChecks({
   return [
     [submission?.state === "ack", `${label} did not ack`],
     [
-      submission?.requestEnvelope?.body?.body?.principal_user_id ===
-        scenario.expectedPrincipalUserId,
-      `${label} principal mismatch`,
+      submission?.requestEnvelope?.body?.body?.principal_user_id === undefined,
+      `${label} included a client-supplied principal`,
     ],
     [
       submitVote?.actor_slot === scenario.expectedActorSlot,

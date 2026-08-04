@@ -63,14 +63,7 @@ export function createLiveStackFixtureTools({
       "-v",
       "ON_ERROR_STOP=1",
       "-c",
-      `SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '${name}'`,
-    ]);
-    await runProcess("psql", [
-      adminUrl,
-      "-v",
-      "ON_ERROR_STOP=1",
-      "-c",
-      `DROP DATABASE IF EXISTS "${name}"`,
+      `DROP DATABASE IF EXISTS "${name}" WITH (FORCE)`,
     ]);
   };
 

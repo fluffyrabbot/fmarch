@@ -49,7 +49,7 @@ export function proofGraphProductionFeatureTargetDestinations(proofGraph) {
         kind: "admin-audit",
         linkId: String(node.id ?? ""),
         auditId,
-        detailRoleUrl: `/admin/audit/${auditId}?game=<seeded-game>`,
+        detailRoleUrl: `/_dev/ops/audit/${auditId}?game=<seeded-game>`,
         featureSlotId: String(node.featureSlotId ?? ""),
         sourceCheckId: String(node.sourceCheckId ?? ""),
         targetRoleUrl: String(node.targetRoleUrl ?? ""),
@@ -523,6 +523,8 @@ function productionFeatureTargetNodes(proofGraph) {
 }
 
 function auditIdFromAdminRoleUrl(roleUrl) {
-  const match = String(roleUrl ?? "").match(/^\/admin\/audit\/([^?]+)/);
+  const match = String(roleUrl ?? "").match(
+    /^\/_dev\/ops\/audit\/([^?]+)/,
+  );
   return match === null ? null : match[1];
 }

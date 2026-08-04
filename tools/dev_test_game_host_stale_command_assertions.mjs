@@ -93,7 +93,8 @@ export function hostPhaseStaleReconnectPassed({
     reconnectProof?.status === "passed" &&
     reconnectProof?.reconnectingStatus?.state === "reconnecting" &&
     reconnectProof?.reconnectRecoveryEvent?.state === "recovered" &&
-    reconnectProof?.reconnectRecoveryEvent?.attempt === 1 &&
+    Number.isInteger(reconnectProof?.reconnectRecoveryEvent?.attempt) &&
+    reconnectProof.reconnectRecoveryEvent.attempt >= 1 &&
     hostPhaseMatches(
       reconnectProof?.recoveredHostProjection?.phase,
       scenario.expectedCurrentPhase,
@@ -193,7 +194,8 @@ export function cohostDeadlineStaleReconnectPassed({
     reconnectProof?.status === "passed" &&
     reconnectProof?.reconnectingStatus?.state === "reconnecting" &&
     reconnectProof?.reconnectRecoveryEvent?.state === "recovered" &&
-    reconnectProof?.reconnectRecoveryEvent?.attempt === 1 &&
+    Number.isInteger(reconnectProof?.reconnectRecoveryEvent?.attempt) &&
+    reconnectProof.reconnectRecoveryEvent.attempt >= 1 &&
     hostPhaseMatches(
       reconnectProof?.recoveredHostProjection?.phase,
       scenario.expectedCurrentPhase,

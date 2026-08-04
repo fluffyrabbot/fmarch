@@ -17,8 +17,8 @@ export const identityFeatureSpineSource = Object.freeze({
     kind: "seeded-admin-proof",
     proofCommand: devTestGameIdentityAdminProofCommand,
   }),
-  detailRoleUrlIncludes: "/admin/audit/local-identity-adapter",
-  roleUrlIncludes: "/admin/audit/local-identity-adapter",
+  detailRoleUrlIncludes: "/_dev/ops/audit/local-identity-adapter",
+  roleUrlIncludes: "/_dev/ops/audit/local-identity-adapter",
   proofArtifact: devTestGameIdentityAdminProofPath,
   rerunCommand: devTestGameIdentityAdminProofCommand,
 });

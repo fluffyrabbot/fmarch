@@ -90,7 +90,7 @@ export const coreLoopFeatureSpineSource = Object.freeze({
     kind: "seeded-role-url-proof",
     proofCommand: devTestGameCoreLoopAdminProofCommand,
   }),
-  detailRoleUrlIncludes: "/admin/audit/local-core-loop",
+  detailRoleUrlIncludes: "/_dev/ops/audit/local-core-loop",
   roleUrlIncludes: "/g/",
   proofArtifact: devTestGameCoreLoopAdminProofPath,
   rerunCommand: devTestGameCoreLoopAdminProofCommand,

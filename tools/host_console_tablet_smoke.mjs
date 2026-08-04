@@ -24,12 +24,19 @@ const smokeViewport = Object.freeze({ width: 1024, height: 768 });
 const smokeGame = randomUUID();
 const hostPrincipal = "host_h";
 const sessionToken = `host-tablet-smoke-${randomUUID()}`;
+const bootstrapSessionToken = `host-tablet-smoke-bootstrap-${randomUUID()}`;
+const playerSessionToken = `host-tablet-smoke-player-${randomUUID()}`;
+const commandSessionTokens = Object.freeze({
+  [hostPrincipal]: sessionToken,
+  "player-mira": playerSessionToken,
+});
 const databaseUrl =
   process.env.DATABASE_URL ?? "postgres://fmarch:fmarch@localhost:5544/fmarch";
 const frontendRequire = createRequire(path.join(frontendRoot, "package.json"));
 const criticalActions = Object.freeze([
   Object.freeze({
     id: "extend_deadline",
+    taskId: "deadline",
     label: "Extend deadline",
     objectLabel: "Day 2 deadline",
     outcomeLabel: "move the deadline to June 19, 2026 at 9:00 PM PT",
@@ -38,6 +45,7 @@ const criticalActions = Object.freeze([
   }),
   Object.freeze({
     id: "process_replacement",
+    taskId: "replacement",
     label: "Process replacement",
     objectLabel: "Slot 7 / Mira",
     outcomeLabel: "replace Mira with Rowan and preserve slot history",
@@ -46,6 +54,7 @@ const criticalActions = Object.freeze([
   }),
   Object.freeze({
     id: "modkill_slot",
+    taskId: "slot-lifecycle",
     label: "Modkill slot",
     objectLabel: "Slot 7",
     outcomeLabel: "set lifecycle to modkilled",
@@ -86,9 +95,11 @@ try {
       port: 0,
       strictPort: false,
       proxy: {
-        "/auth": apiBaseUrl,
-        "/commands": apiBaseUrl,
         "/games": apiBaseUrl,
+        "/ws": {
+          target: apiBaseUrl,
+          ws: true,
+        },
       },
     },
     logLevel: "error",
@@ -134,7 +145,26 @@ try {
     },
   ]);
   const page = await context.newPage();
+  const commandNetwork = [];
+  page.on("response", (response) => {
+    if (new URL(response.url()).pathname === "/commands") {
+      commandNetwork.push({ kind: "response", status: response.status() });
+    }
+  });
+  page.on("requestfailed", (request) => {
+    if (new URL(request.url()).pathname === "/commands") {
+      commandNetwork.push({
+        kind: "requestfailed",
+        failure: request.failure()?.errorText ?? null,
+      });
+    }
+  });
   await page.goto(pageUrl, { waitUntil: "networkidle" });
+  const supportingEvidence = page.getByTestId("host-supporting-evidence");
+  await supportingEvidence.waitFor({ state: "visible" });
+  await supportingEvidence.evaluate((node) => {
+    node.open = true;
+  });
   const votecountRow = page.getByTestId("host-console-votecount-row-slot-target");
   await votecountRow.waitFor({ state: "visible" });
   assertHitTarget(await votecountRow.boundingBox(), "host votecount row");
@@ -152,6 +182,11 @@ try {
   const actionEvidence = [];
 
   for (const [index, expectedAction] of criticalActions.entries()) {
+    const task = page.getByTestId(`host-task-${expectedAction.taskId}`);
+    await task.click();
+    await page
+      .getByTestId(`moderator-control-${expectedAction.taskId}`)
+      .waitFor({ state: "visible" });
     const actionRoot = page.getByTestId(`critical-host-action-${expectedAction.id}`);
     const trigger = actionRoot.getByTestId("critical-host-action-trigger");
     await trigger.waitFor({ state: "visible" });
@@ -214,31 +249,38 @@ try {
       );
     }
 
+    try {
+      await page.waitForFunction(
+        (actionId) =>
+          ["ack", "reject"].includes(
+            window.__fmarchHostCommandStatuses?.[actionId]?.state,
+          ),
+        expectedAction.id,
+      );
+    } catch (error) {
+      const diagnostic = await page.evaluate((actionId) => ({
+        status: window.__fmarchHostCommandStatuses?.[actionId] ?? null,
+        outcomes: window.__fmarchHostCommandOutcomes ?? null,
+        body: document.body.innerText.slice(0, 4_000),
+      }), expectedAction.id);
+      throw new Error(
+        `${expectedAction.id} command did not settle: ${JSON.stringify({ ...diagnostic, commandNetwork })}`,
+        { cause: error },
+      );
+    }
+    const settledStatus = await page.evaluate(
+      (actionId) => window.__fmarchHostCommandStatuses?.[actionId] ?? null,
+      expectedAction.id,
+    );
     const commandStatus = page.getByTestId(
       `host-command-status-${expectedAction.id}`,
     );
-    await commandStatus.waitFor({ state: "visible" });
-    await page.waitForFunction(
-      ({ outcomeIndex }) =>
-        window.__fmarchHostCommandOutcomes?.length > outcomeIndex,
-      {
-        outcomeIndex: index,
-      },
-    );
-    const actionStatusVisible = (await commandStatus.count()) > 0;
+    const actionStatusVisible = await commandStatus.isVisible();
     const feedbackStatus = actionStatusVisible
       ? commandStatus
       : page.getByTestId(`host-command-activity-status-${expectedAction.id}`);
     await feedbackStatus.waitFor({ state: "visible" });
-    await page.waitForFunction((actionId) => {
-      const status =
-        document.querySelector(`[data-testid="host-command-status-${actionId}"]`) ??
-        document.querySelector(
-          `[data-testid="host-command-activity-status-${actionId}"]`,
-        );
-      return ["ack", "reject"].includes(status?.getAttribute("data-state"));
-    }, expectedAction.id);
-    const statusState = await feedbackStatus.getAttribute("data-state");
+    const statusState = settledStatus?.state ?? null;
     const statusMessage = await feedbackStatus.innerText();
     if (statusState !== expectedAction.expectedResult) {
       throw new Error(
@@ -277,6 +319,7 @@ try {
   const duplicateAck = await postJson(
     `${apiBaseUrl}/commands`,
     actionEvidence[0].commandEnvelope,
+    { authorization: `Bearer ${sessionToken}` },
   );
   const duplicateStreamSeqs = duplicateAck.body?.body?.stream_seqs ?? [];
   if (
@@ -473,14 +516,25 @@ function sanitizeDatabaseName(name) {
 }
 
 async function seedLiveHostGame() {
+  for (const [principalUserId, token] of Object.entries(commandSessionTokens)) {
+    await postJson(`${apiBaseUrl}/auth/dev-session`, {
+      token,
+      principal_user_id: principalUserId,
+      expires_at: 4_102_444_800,
+    });
+  }
   await postJson(`${apiBaseUrl}/auth/dev-session`, {
-    token: sessionToken,
+    token: bootstrapSessionToken,
     principal_user_id: hostPrincipal,
     expires_at: 4_102_444_800,
+    global_capabilities: ["GlobalAdmin"],
   });
-  await postCommand(1, hostPrincipal, {
-    CreateGame: { game: smokeGame, pack: "mafiascum" },
-  });
+  await postCommand(
+    1,
+    hostPrincipal,
+    { CreateGame: { game: smokeGame, pack: "mafiascum" } },
+    { sessionTokenOverride: bootstrapSessionToken },
+  );
   await postCommand(2, hostPrincipal, {
     AddSlot: { game: smokeGame, slot: "slot-7" },
   });
@@ -533,7 +587,17 @@ async function seedLiveHostGame() {
   });
 }
 
-async function postCommand(id, principalUserId, command) {
+async function postCommand(
+  id,
+  principalUserId,
+  command,
+  { sessionTokenOverride } = {},
+) {
+  const actorSessionToken =
+    sessionTokenOverride ?? commandSessionTokens[principalUserId];
+  if (actorSessionToken === undefined) {
+    throw new Error(`seed command actor has no session: ${principalUserId}`);
+  }
   const envelope = {
     v: 1,
     id,
@@ -541,22 +605,23 @@ async function postCommand(id, principalUserId, command) {
       kind: "Command",
       body: {
         command_id: randomUUID(),
-        principal_user_id: principalUserId,
         command,
       },
     },
   };
-  const response = await postJson(`${apiBaseUrl}/commands`, envelope);
+  const response = await postJson(`${apiBaseUrl}/commands`, envelope, {
+    authorization: `Bearer ${actorSessionToken}`,
+  });
   if (response.body?.kind !== "Ack") {
     throw new Error(`seed command ${Object.keys(command)[0]} rejected`);
   }
   return response;
 }
 
-async function postJson(url, body) {
+async function postJson(url, body, headers = {}) {
   const response = await fetch(url, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { ...headers, "content-type": "application/json" },
     body: JSON.stringify(body),
   });
   const payload = await response.json();
@@ -603,9 +668,9 @@ function assertCommandEnvelope(envelope, expectedAction) {
     throw new Error(`${expectedAction.id} did not send a Command frame`);
   }
   const commandBody = envelope.body.body;
-  if (commandBody.principal_user_id !== hostPrincipal) {
+  if (commandBody.principal_user_id !== undefined) {
     throw new Error(
-      `${expectedAction.id} command principal was ${commandBody.principal_user_id}`,
+      `${expectedAction.id} included a client-supplied command principal`,
     );
   }
   if (!isUuid(commandBody.command_id)) {

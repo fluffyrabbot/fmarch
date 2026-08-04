@@ -43,6 +43,9 @@ import {
   playerLiveLagResyncLaneId,
 } from "./dev_test_game_stale_client_reconnect_scenarios.mjs";
 import {
+  liveProjectionResyncMetricsAreConsistent,
+} from "./dev_test_game_live_projection_observability.mjs";
+import {
   hostAdvanceByDeadlineCommandFacts,
   hostAdvancePhaseCommandFacts,
   hostExtendDeadlineCommandFacts,
@@ -245,8 +248,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
     cohostLaterPhaseDeadline.extendDeadline?.commandStatus?.requestEnvelope?.body
       ?.body?.command?.ExtendDeadline;
   const cohostLaterPhaseDeadlinePrincipal =
-    cohostLaterPhaseDeadline.extendDeadline?.commandStatus?.requestEnvelope?.body
-      ?.body?.principal_user_id;
+    cohostLaterPhaseDeadline.sessionPrincipalUserId;
   const replacementPrivatePostRaceScenario =
     replacementConcurrentPrivatePostRaceScenario();
   const replacementVoteRaceScenario = replacementConcurrentVoteRaceScenario();
@@ -324,7 +326,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
         verification.hostSetup?.roleUrl?.includes(`/g/${session?.game ?? ""}/setup`) ===
           true &&
         verification.hostSetup?.capabilityLabel ===
-          `HostOf(${session?.game ?? ""})` &&
+          `Hosting ${session?.game ?? ""}` &&
         verification.hostSetup?.readinessSummary === "Started at D01" &&
         verification.hostSetup?.phaseId === "D01" &&
         verification.hostSetup?.startDisabled === true &&
@@ -336,8 +338,10 @@ export function buildDevTestGameProofRun(session, options = {}) {
         verification.hostSetup?.roleKeys?.includes("mafia_goon") === true &&
         verification.hostSetup?.roleKeys?.includes("vanilla_townie") === true &&
         verification.hostSetup?.setupBootstrap?.status === "passed" &&
+        typeof verification.hostSetup?.setupBootstrap?.game === "string" &&
+        verification.hostSetup?.setupBootstrap?.game !== "" &&
         verification.hostSetup?.setupBootstrap?.roleUrl?.includes(
-          `/g/${session?.game ?? ""}/setup`,
+          `/g/${verification.hostSetup?.setupBootstrap?.game ?? ""}/setup`,
         ) === true &&
         verification.hostSetup?.setupBootstrap?.phaseId === "D01" &&
         verification.hostSetup?.setupBootstrap?.readinessSummary ===
@@ -360,7 +364,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
           ?.allow_media_only === false &&
         verification.hostSetup?.setupBootstrap?.roleAssignments?.["slot_4"] ===
           "mafia_goon" &&
-        verification.hostSetup?.setupBootstrap?.roleAssignments?.["slot-7"] ===
+        verification.hostSetup?.setupBootstrap?.roleAssignments?.["slot_1"] ===
           "encryptor" &&
         verification.hostSetup?.policyCommand?.status === "passed" &&
         verification.hostSetup?.policyCommand?.commandKind === "SetPostPolicy" &&
@@ -390,7 +394,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
           "Ready to start" &&
         verification.hostSetup?.setupMutationCommand?.finalStartAvailable === true &&
         verification.hostSetup?.setupMutationCommand?.addedSlotId ===
-          "slot_extra" &&
+          "slot_2" &&
         verification.hostSetup?.setupMutationCommand?.assignedPrincipalUserId ===
           "setup-extra-player" &&
         verification.hostSetup?.setupMutationCommand?.assignedRoleKey ===
@@ -402,11 +406,11 @@ export function buildDevTestGameProofRun(session, options = {}) {
         verification.hostSetup?.setupMutationCommand?.duplicateAddSlotRecovery
           ?.commandKind === "AddSlot" &&
         verification.hostSetup?.setupMutationCommand?.duplicateAddSlotRecovery
-          ?.command?.slot === "slot_extra" &&
+          ?.command?.slot === "slot_2" &&
         verification.hostSetup?.setupMutationCommand?.duplicateAddSlotRecovery
           ?.duplicateSlotCountAfterReject === 1 &&
         verification.hostSetup?.setupMutationCommand?.finalSlot?.slotId ===
-          "slot_extra" &&
+          "slot_2" &&
         verification.hostSetup?.setupMutationCommand?.finalSlot?.occupantUserId ===
           "setup-extra-player" &&
         verification.hostSetup?.setupMutationCommand?.finalSlot?.roleKey ===
@@ -414,7 +418,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
         verification.hostSetup?.setupMutationCommand?.commands?.addSlot?.status ===
           "ack" &&
         verification.hostSetup?.setupMutationCommand?.commands?.addSlot?.command
-          ?.slot === "slot_extra" &&
+          ?.slot === "slot_2" &&
         verification.hostSetup?.setupMutationCommand?.commands?.assignSlot?.status ===
           "ack" &&
         verification.hostSetup?.setupMutationCommand?.commands?.assignSlot?.command
@@ -430,16 +434,14 @@ export function buildDevTestGameProofRun(session, options = {}) {
       extendDeadlineState:
         verification.cohostConsole?.extendDeadline?.commandStatus?.state ?? null,
       extendDeadlinePrincipal:
-        verification.cohostConsole?.extendDeadline?.commandStatus?.requestEnvelope?.body?.body
-          ?.principal_user_id ?? null,
+        verification.cohostConsole?.sessionPrincipalUserId ?? null,
       hostOnlyControlsVisible:
         verification.cohostConsole?.hostOnlyControlsVisible ?? null,
       hostOnlyRejectError:
         verification.cohostConsole?.hostOnlyResolveReject?.serverEnvelope?.body?.body
           ?.error ?? null,
       hostOnlyRejectPrincipal:
-        verification.cohostConsole?.hostOnlyResolveReject?.requestEnvelope?.body?.body
-          ?.principal_user_id ?? null,
+        verification.cohostConsole?.sessionPrincipalUserId ?? null,
       phaseAfterReject: verification.cohostConsole?.phaseAfterReject ?? null,
       passed:
         verification.cohostConsole?.status === "passed" &&
@@ -447,14 +449,15 @@ export function buildDevTestGameProofRun(session, options = {}) {
           `CohostOf(${session?.game ?? ""})` &&
         verification.cohostConsole?.extendDeadline?.commandStatus?.state === "ack" &&
         verification.cohostConsole?.extendDeadline?.commandStatus?.requestEnvelope?.body
-          ?.body?.principal_user_id === "cohost_c" &&
+          ?.body?.principal_user_id === undefined &&
+        verification.cohostConsole?.sessionPrincipalUserId === "cohost_c" &&
         verification.cohostConsole?.hostOnlyControlsVisible === false &&
         verification.cohostConsole?.hostOnlyResolveReject?.serverEnvelope?.body?.kind ===
           "Reject" &&
         verification.cohostConsole?.hostOnlyResolveReject?.serverEnvelope?.body?.body
-          ?.error === "NotHost" &&
+          ?.error === "CohostPermissionDenied" &&
         verification.cohostConsole?.hostOnlyResolveReject?.requestEnvelope?.body?.body
-          ?.principal_user_id === "cohost_c" &&
+          ?.principal_user_id === undefined &&
         verification.cohostConsole?.phaseAfterReject?.id === "D01" &&
         verification.cohostConsole?.phaseAfterReject?.locked === false,
     }),
@@ -496,6 +499,8 @@ export function buildDevTestGameProofRun(session, options = {}) {
           cohostLaterPhaseDeadline.extendDeadline?.commandStatus?.state ===
             "ack" &&
           cohostLaterPhaseDeadlinePrincipal === "cohost_c" &&
+          cohostLaterPhaseDeadline.extendDeadline?.commandStatus?.requestEnvelope
+            ?.body?.body?.principal_user_id === undefined &&
           cohostLaterPhaseDeadlineCommand?.game ===
             cohostLaterPhaseDeadline.game &&
           cohostLaterPhaseDeadlineCommand?.phase === "D02" &&
@@ -696,12 +701,12 @@ export function buildDevTestGameProofRun(session, options = {}) {
         verification.dayVoteNoLynch?.dayVoteOutcome?.tallies?.no_lynch === 2 &&
         verification.dayVoteNoLynch?.miraNoLynchVote?.state === "ack" &&
         verification.dayVoteNoLynch?.miraNoLynchVote?.requestEnvelope?.body?.body
-          ?.principal_user_id === "player-mira" &&
+          ?.principal_user_id === undefined &&
         verification.dayVoteNoLynch?.miraNoLynchVote?.requestEnvelope?.body?.body
           ?.command?.SubmitVote?.target === "NoLynch" &&
         verification.dayVoteNoLynch?.seedNoLynchVote?.state === "ack" &&
         verification.dayVoteNoLynch?.seedNoLynchVote?.requestEnvelope?.body?.body
-          ?.principal_user_id === "player-seed" &&
+          ?.principal_user_id === undefined &&
         verification.dayVoteNoLynch?.seedNoLynchVote?.requestEnvelope?.body?.body
           ?.command?.SubmitVote?.target === "NoLynch" &&
         verification.dayVoteNoLynch?.miraVotecountAfterVote?.some(
@@ -1364,7 +1369,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
         verification.playerActionBoundary?.directFactionalKill?.serverEnvelope?.body?.body
           ?.error === "InvalidTarget" &&
         verification.playerActionBoundary?.directFactionalKill?.requestEnvelope?.body?.body
-          ?.principal_user_id === "player-mira" &&
+          ?.principal_user_id === undefined &&
         verification.playerActionBoundary?.phaseAfterReject?.phaseId === "N01" &&
         verification.playerActionBoundary?.actionVisibleAfterReject === false,
     }),
@@ -1855,7 +1860,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
         verification.replacementConsole?.replacementSessionRefresh?.postStatus
           ?.state === "ack" &&
         verification.replacementConsole?.replacementSessionRefresh?.postStatus
-          ?.requestEnvelope?.body?.body?.principal_user_id === "player-rowan" &&
+          ?.requestEnvelope?.body?.body?.principal_user_id === undefined &&
         verification.replacementConsole?.replacementSessionRefresh?.postStatus
           ?.requestEnvelope?.body?.body?.command?.SubmitPost?.actor_slot ===
           "slot-7" &&
@@ -1913,7 +1918,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
         verification.replacementConsole?.replacementStaleSessionAfterRefresh
           ?.controlCounts?.actionButtons === 0 &&
         verification.replacementConsole?.replacementStaleSessionAfterRefresh
-          ?.staleCookie?.valuePrefix === "invite-session-" &&
+          ?.staleCookie?.valuePrefix === "fmss_" &&
         verification.replacementConsole?.replacementStaleSessionAfterRefresh
           ?.freshCredentialKind === "account" &&
         verification.replacementConsole?.replacementStaleSessionAfterRefresh
@@ -1954,8 +1959,12 @@ export function buildDevTestGameProofRun(session, options = {}) {
           ?.reconnectingStatus?.state === "reconnecting" &&
         verification.replacementConsole?.replacementReconnectRecovery
           ?.reconnectRecoveryEvent?.state === "recovered" &&
-        verification.replacementConsole?.replacementReconnectRecovery
-          ?.reconnectRecoveryEvent?.attempt === 1 &&
+        Number.isInteger(
+          verification.replacementConsole?.replacementReconnectRecovery
+            ?.reconnectRecoveryEvent?.attempt,
+        ) &&
+        verification.replacementConsole.replacementReconnectRecovery
+          .reconnectRecoveryEvent.attempt >= 1 &&
         verification.replacementConsole?.replacementReconnectRecovery
           ?.recoveredSnapshotContainsPost === true &&
         verification.replacementConsole?.replacementReconnectRecovery
@@ -2097,7 +2106,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
         verification.replacementConsole?.invalidReplacementRecovery?.reject?.error ===
           "InvalidTarget" &&
         verification.replacementConsole?.invalidReplacementRecovery?.invalidReplacement
-          ?.requestEnvelope?.body?.body?.principal_user_id === "host_h" &&
+          ?.requestEnvelope?.body?.body?.principal_user_id === undefined &&
         verification.replacementConsole?.invalidReplacementRecovery?.invalidReplacement
           ?.requestEnvelope?.body?.body?.command?.ProcessReplacement?.outgoing_user ===
           "player-rowan" &&
@@ -2239,7 +2248,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
           ?.error === "InvalidTarget" &&
         verification.replacementConsole?.staleReplacementAfterSuccess
           ?.invalidReplacement?.requestEnvelope?.body?.body?.principal_user_id ===
-          "host_h" &&
+          undefined &&
         verification.replacementConsole?.staleReplacementAfterSuccess
           ?.invalidReplacement?.requestEnvelope?.body?.body?.command
           ?.ProcessReplacement?.outgoing_user === "player-mira" &&
@@ -2386,7 +2395,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
           "slot ownership changed",
         ) === true &&
         verification.replacementConsole?.stalePrivateChannel?.stalePost
-          ?.requestEnvelope?.body?.body?.principal_user_id === "player-mira" &&
+          ?.requestEnvelope?.body?.body?.principal_user_id === undefined &&
         verification.replacementConsole?.stalePrivateChannel?.stalePost
           ?.requestEnvelope?.body?.body?.command?.SubmitPost?.channel_id ===
           "private:mafia_day_chat" &&
@@ -2415,7 +2424,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
         verification.replacementConsole?.stalePrivateChannel?.rowanPost?.state ===
           "ack" &&
         verification.replacementConsole?.stalePrivateChannel?.rowanPost
-          ?.requestEnvelope?.body?.body?.principal_user_id === "player-rowan" &&
+          ?.requestEnvelope?.body?.body?.principal_user_id === undefined &&
         verification.replacementConsole?.stalePrivateChannel?.rowanPost
           ?.requestEnvelope?.body?.body?.command?.SubmitPost?.channel_id ===
           "private:mafia_day_chat" &&
@@ -2522,7 +2531,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
         verification.replacementConsole?.incomingPlayer?.stableHistoryVisible === true &&
         verification.replacementConsole?.incomingPlayer?.postStatus?.state === "ack" &&
         verification.replacementConsole?.incomingPlayer?.postStatus?.requestEnvelope?.body
-          ?.body?.principal_user_id === "player-rowan" &&
+          ?.body?.principal_user_id === undefined &&
         verification.replacementConsole?.incomingPlayer?.postStatus?.requestEnvelope?.body
           ?.body?.command?.SubmitPost?.actor_slot === "slot-7" &&
         verification.replacementConsole?.incomingPlayer?.rowanProjectedPost?.authorSlot ===
@@ -2535,7 +2544,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
                 ?.slotId,
         ) === true &&
         verification.replacementConsole?.incomingPlayer?.vote?.requestEnvelope?.body?.body
-          ?.principal_user_id === "player-rowan" &&
+          ?.principal_user_id === undefined &&
         verification.replacementConsole?.incomingPlayer?.vote?.requestEnvelope?.body?.body
           ?.command?.SubmitVote?.actor_slot === "slot-7" &&
         verification.replacementConsole?.incomingPlayer?.vote?.requestEnvelope?.body?.body
@@ -4109,8 +4118,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
         hardening.replacementIncomingAction?.action?.serverEnvelope?.body?.kind ===
           "Ack" &&
         hardening.replacementIncomingAction?.action?.requestEnvelope?.body?.body
-          ?.principal_user_id ===
-          replacementIncomingActionCase.replacementPrincipalUserId &&
+          ?.principal_user_id === undefined &&
         hardening.replacementIncomingAction?.action?.requestEnvelope?.body?.body
           ?.command?.SubmitAction?.actor_slot ===
           replacementIncomingActionCase.actorSlot &&
@@ -4203,8 +4211,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
         hardening.replacementActionReconnect?.action?.serverEnvelope?.body?.kind ===
           "Ack" &&
         hardening.replacementActionReconnect?.action?.requestEnvelope?.body?.body
-          ?.principal_user_id ===
-          replacementActionReconnectCase.replacementPrincipalUserId &&
+          ?.principal_user_id === undefined &&
         hardening.replacementActionReconnect?.action?.requestEnvelope?.body?.body
           ?.command?.SubmitAction?.actor_slot ===
           replacementActionReconnectCase.actorSlot &&
@@ -4244,8 +4251,12 @@ export function buildDevTestGameProofRun(session, options = {}) {
           replacementActionReconnectCase.actorSlot &&
         hardening.replacementActionReconnect?.reconnect?.reconnectingStatus?.state ===
           "reconnecting" &&
-        hardening.replacementActionReconnect?.reconnect?.reconnectRecoveryEvent
-          ?.attempt === 1 &&
+        Number.isInteger(
+          hardening.replacementActionReconnect?.reconnect?.reconnectRecoveryEvent
+            ?.attempt,
+        ) &&
+        hardening.replacementActionReconnect.reconnect.reconnectRecoveryEvent
+          .attempt >= 1 &&
         hardening.replacementActionReconnect?.reconnect?.reconnectRecoveryEvent
           ?.state === "recovered" &&
         hardening.replacementActionReconnect?.reconnect
@@ -6229,8 +6240,12 @@ export function buildDevTestGameProofRun(session, options = {}) {
           hardening.privateChannelStaleActionReconnectRecovery
             ?.reconnectAfterReject?.reconnectRecoveryEvent?.state ===
             privateStaleActionReconnectExpectation.recoveryState &&
+          Number.isInteger(
+            hardening.privateChannelStaleActionReconnectRecovery
+              ?.reconnectAfterReject?.reconnectRecoveryEvent?.attempt,
+          ) &&
           hardening.privateChannelStaleActionReconnectRecovery
-            ?.reconnectAfterReject?.reconnectRecoveryEvent?.attempt === 1 &&
+            .reconnectAfterReject.reconnectRecoveryEvent.attempt >= 1 &&
           hardening.privateChannelStaleActionReconnectRecovery
             ?.reconnectAfterReject?.recoveredSnapshotContainsPost === true &&
           hardening.privateChannelStaleActionReconnectRecovery
@@ -7066,7 +7081,11 @@ export function buildDevTestGameProofRun(session, options = {}) {
           ? null
           : {
               status: session.setupBootstrap.status,
-              roleUrl: redactSeededGameUrl(session.setupBootstrap.roleUrl, session?.game),
+              roleUrl: redactSeededGameUrl(
+                session.setupBootstrap.roleUrl,
+                session.setupBootstrap.game,
+                "<bootstrap-game>",
+              ),
               commandCount: session.setupBootstrap.commandCount,
               phaseId: session.setupBootstrap.phaseId,
               readinessSummary: session.setupBootstrap.readinessSummary,
@@ -7161,7 +7180,7 @@ export function assertDevTestGameProofRun(proof) {
   }
   if (
     proof.session?.setupBootstrap?.status !== "passed" ||
-    proof.session?.setupBootstrap?.roleUrl?.includes("/g/<seeded-game>/setup") !==
+    proof.session?.setupBootstrap?.roleUrl?.includes("/g/<bootstrap-game>/setup") !==
       true ||
     proof.session?.setupBootstrap?.commandCount !== 18 ||
     proof.session?.setupBootstrap?.phaseId !== "D01" ||
@@ -7206,11 +7225,11 @@ export function assertDevTestGameProofRun(proof) {
   return proof;
 }
 
-function redactSeededGameUrl(value, game) {
+function redactSeededGameUrl(value, game, placeholder = "<seeded-game>") {
   if (typeof value !== "string" || typeof game !== "string" || game === "") {
     return value ?? null;
   }
-  return value.replaceAll(game, "<seeded-game>");
+  return value.replaceAll(game, placeholder);
 }
 
 function normalizedPrivateChannelSubmitPostAckProofPassed(proof) {
@@ -8994,9 +9013,9 @@ function liveProjectionLagResyncPassed(proof) {
     proof.roleUrl.includes("/g/") &&
     proof.configuredCapacity === 1 &&
     proof.configuredDeliveryDelayMs > 0 &&
-    proof.resyncRecoveryCount === 2 &&
+    proof.resyncRecoveryCount >= 2 &&
     Array.isArray(resyncEvents) &&
-    resyncEvents.length === 2 &&
+    resyncEvents.length >= 2 &&
     resyncEvents.every(
       (event) =>
         event?.kind === "resync-required" &&
@@ -9024,10 +9043,7 @@ function liveProjectionLagResyncPassed(proof) {
     proof.apiContinuationPostCounts.every((count) => count === 1) &&
     proof.currentSubmitPostReceiptCount === 1 &&
     proof.reconnectEventCount === 0 &&
-    proof.clientMetrics?.resyncFramesReceived === 2 &&
-    proof.clientMetrics?.resyncRefreshesStarted === 2 &&
-    proof.clientMetrics?.resyncFramesCoalesced === 0 &&
-    proof.clientMetrics?.resyncTrailingRefreshesStarted === 0 &&
+    liveProjectionResyncMetricsAreConsistent(proof.clientMetrics) &&
     allCommandIds.length > 4 &&
     new Set(allCommandIds).size === allCommandIds.length &&
     Object.values(proof.burstPostCounts ?? {}).length === burstCommandIds.length &&

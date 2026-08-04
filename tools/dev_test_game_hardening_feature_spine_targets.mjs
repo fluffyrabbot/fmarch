@@ -192,7 +192,7 @@ export const hardeningFeatureSpineSource = Object.freeze({
     kind: "seeded-role-url-proof",
     proofCommand: devTestGameHardeningAdminProofCommand,
   }),
-  detailRoleUrlIncludes: "/admin/audit/local-hardening",
+  detailRoleUrlIncludes: "/_dev/ops/audit/local-hardening",
   roleUrlIncludes: "/g/",
   proofArtifact: devTestGameHardeningAdminProofPath,
   rerunCommand: devTestGameHardeningAdminProofCommand,

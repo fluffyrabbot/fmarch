@@ -268,7 +268,8 @@ function hostStaleAdvanceProofFixture() {
     checkpointPhaseIdAfterReject: "N02",
     checkpointPhaseStateAfterReject: "open",
     checkpointDeadlineAffordanceAfterReject: "resolve_phase,lock_thread",
-    activityStatusText: "Reject InvalidTarget: invalid target",
+    activityStatusText:
+      "Advance phase needs refreshed game state. Reload and try again.",
   };
 }
 

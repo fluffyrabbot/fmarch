@@ -7,6 +7,7 @@ import {
   defaultHost,
   defaultPort,
   defaultUser,
+  devPostgresListenerState,
   parseArgs,
 } from "./dev_postgres.mjs";
 
@@ -54,4 +55,52 @@ test("dev postgres config accepts environment overrides", () => {
   assert.equal(config.dataDir, "/tmp/fmarch-pg");
   assert.equal(config.logPath, "/tmp/fmarch-pg.log");
   assert.equal(databaseUrl(config), "postgres://alice:secret%20value@localhost:6544/scratch");
+});
+
+test("dev postgres distinguishes its server from an occupied port", () => {
+  assert.equal(
+    devPostgresListenerState({
+      initialized: true,
+      ownedServerRunning: true,
+      acceptingConnections: true,
+      portOpen: true,
+    }),
+    "ready",
+  );
+  assert.equal(
+    devPostgresListenerState({
+      initialized: true,
+      ownedServerRunning: true,
+      acceptingConnections: false,
+      portOpen: true,
+    }),
+    "starting",
+  );
+  assert.equal(
+    devPostgresListenerState({
+      initialized: true,
+      ownedServerRunning: false,
+      acceptingConnections: true,
+      portOpen: true,
+    }),
+    "occupied",
+  );
+  assert.equal(
+    devPostgresListenerState({
+      initialized: true,
+      ownedServerRunning: false,
+      acceptingConnections: false,
+      portOpen: false,
+    }),
+    "stopped",
+  );
+  assert.equal(
+    devPostgresListenerState({
+      initialized: false,
+      ownedServerRunning: false,
+      acceptingConnections: false,
+      portOpen: false,
+    }),
+    "uninitialized",
+  );
 });

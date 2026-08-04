@@ -38,11 +38,11 @@ test("local admin audit surface ids build stable seeded role URLs", () => {
   });
   assert.equal(
     localAdminAuditRoleUrl(localAdminAuditIds.nextAction),
-    "/admin/audit/local-next-action?game=<seeded-game>",
+    "/_dev/ops/audit/local-next-action?game=<seeded-game>",
   );
   assert.equal(
     localAdminAuditRoleUrl(localAdminAuditIds.proofGraph, { game: "midsummer" }),
-    "/admin/audit/local-proof-graph?game=midsummer",
+    "/_dev/ops/audit/local-proof-graph?game=midsummer",
   );
 });
 

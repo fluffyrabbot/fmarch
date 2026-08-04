@@ -643,7 +643,6 @@ test("live completed private-channel reject outcome assertion covers reload clos
       requestEnvelope: {
         body: {
           body: {
-            principal_user_id: "player-mira",
             command: {
               SubmitPost: {
                 game: "game-a",
@@ -872,9 +871,9 @@ test("Day 3 player observation assertion covers target private receipt", () => {
     },
     coldLoadEndpoints: {
       notificationsEndpoint:
-        "/games/game-a/notifications?principal_user_id=player-seed",
+        "/api/gameplay/games/game-a/notifications",
       commandStateEndpoint:
-        "/games/game-a/player-command-state?principal_user_id=player-seed&slot_id=slot-3",
+        "/api/gameplay/games/game-a/player-command-state?slot_id=slot-3",
     },
     privateNotice: {
       id: "notification-1",
@@ -981,9 +980,9 @@ test("post-Day 3 player surface assertion covers private day-vote receipt", () =
     },
     coldLoadEndpoints: {
       notificationsEndpoint:
-        "/games/game-a/notifications?principal_user_id=player_ilya",
+        "/api/gameplay/games/game-a/notifications",
       commandStateEndpoint:
-        "/games/game-a/player-command-state?principal_user_id=player_ilya&slot_id=slot-2",
+        "/api/gameplay/games/game-a/player-command-state?slot_id=slot-2",
     },
     privateNotice: {
       id: "notification-1",

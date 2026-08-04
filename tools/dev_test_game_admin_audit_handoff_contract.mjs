@@ -303,7 +303,10 @@ export function assertGeneratedAdminProofHandoffPath({ proof, proofName }) {
     throw new Error(`${name} did not follow generated handoff upstream`);
   }
   if (destination.detailRoleUrl !== localAdminAuditRoleUrl(upstreamAuditId)) {
-    throw new Error(`${name} generated handoff upstream role URL drifted`);
+    throw new Error(
+      `${name} generated handoff upstream role URL drifted: ` +
+        `${destination.detailRoleUrl} !== ${localAdminAuditRoleUrl(upstreamAuditId)}`,
+    );
   }
   if (!destination.visibleChecks?.includes("next-command")) {
     throw new Error(`${name} generated handoff upstream missing next-command`);

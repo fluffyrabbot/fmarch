@@ -1981,7 +1981,7 @@ function hostedIdentityEvidenceHandoffSummary({ nextAction }) {
     unproven?.id !== "hosted-production-identity" ||
     unproven?.proofGraphNodeId !== "admin-proof:hosted-identity-evidence" ||
     typeof unproven?.roleUrl !== "string" ||
-    !unproven.roleUrl.includes("/admin/audit/local-hosted-identity-evidence")
+    !unproven.roleUrl.includes("/_dev/ops/audit/local-hosted-identity-evidence")
   ) {
     return null;
   }

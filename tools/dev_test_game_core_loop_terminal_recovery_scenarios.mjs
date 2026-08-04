@@ -127,8 +127,8 @@ export function assertTerminalRecoveryBrowserProof({
     ],
     [
       proof?.d03TerminalVoteSubmission?.requestEnvelope?.body?.body
-        ?.principal_user_id === scenario.expectedVotePrincipalUserId,
-      "terminal vote principal mismatch",
+        ?.principal_user_id === undefined,
+      "terminal vote included a client-supplied principal",
     ],
     [
       submitVote?.actor_slot === scenario.expectedVoteActorSlot,
@@ -209,9 +209,12 @@ export function assertTerminalRecoveryBrowserProof({
     ],
     [
       String(proof?.d03TerminalActivityStatusText ?? "").includes(
-        "Reject InvalidTarget",
+        "needs refreshed game state",
       ) &&
-        String(proof?.d03TerminalActivityStatusText ?? "").includes(
+        String(proof?.d03TerminalActivityRow?.protocolMessage ?? "").includes(
+          "Reject InvalidTarget",
+        ) &&
+        String(proof?.d03TerminalActivityRow?.protocolMessage ?? "").includes(
           "stale phase state",
         ),
       "terminal rejection receipt text mismatch",

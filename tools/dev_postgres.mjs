@@ -155,14 +155,22 @@ async function startPostgres(config) {
   await mkdir(path.dirname(config.logPath), { recursive: true });
   await initIfNeeded(config);
 
-  if (await isReady(config)) {
+  if (await isOwnedServerRunning(config)) {
+    if (!(await isReady(config))) {
+      await waitForReady(config);
+    }
     await ensureDatabase(config);
     return;
   }
 
   if (await canOpenTcp(config.host, config.port)) {
     throw new Error(
-      `port ${config.host}:${config.port} is already open, but pg_isready did not accept ${config.user}/${config.database}`,
+      [
+        `port ${config.host}:${config.port} is already occupied by a process outside`,
+        `the repo-local Postgres data directory (${config.dataDir}).`,
+        "Use that Postgres explicitly through DATABASE_URL, or select another",
+        "repo-local port with FMARCH_DEV_POSTGRES_PORT.",
+      ].join(" "),
     );
   }
 
@@ -198,8 +206,23 @@ async function stopPostgres(config, { allowStopped = false } = {}) {
 async function printStatus(config) {
   requirePgBin(config);
   const initialized = existsSync(path.join(config.dataDir, "PG_VERSION"));
-  const ready = initialized ? await isReady(config) : false;
-  console.log(`status=${ready ? "ready" : initialized ? "stopped" : "uninitialized"}`);
+  const ownedServerRunning = initialized
+    ? await isOwnedServerRunning(config)
+    : false;
+  const acceptingConnections = ownedServerRunning
+    ? await isReady(config)
+    : false;
+  const portOpen = acceptingConnections
+    ? true
+    : await canOpenTcp(config.host, config.port);
+  console.log(
+    `status=${devPostgresListenerState({
+      initialized,
+      ownedServerRunning,
+      acceptingConnections,
+      portOpen,
+    })}`,
+  );
   console.log(`dataDir=${config.dataDir}`);
   console.log(`log=${config.logPath}`);
   console.log(`DATABASE_URL=${databaseUrl(config)}`);
@@ -260,6 +283,31 @@ async function isReady(config) {
     { allowFailure: true },
   );
   return result.code === 0;
+}
+
+async function isOwnedServerRunning(config) {
+  const result = await runPg(
+    config,
+    "pg_ctl",
+    ["-D", config.dataDir, "status"],
+    { allowFailure: true },
+  );
+  return result.code === 0;
+}
+
+export function devPostgresListenerState({
+  initialized,
+  ownedServerRunning,
+  acceptingConnections,
+  portOpen,
+}) {
+  if (ownedServerRunning) {
+    return acceptingConnections ? "ready" : "starting";
+  }
+  if (portOpen) {
+    return "occupied";
+  }
+  return initialized ? "stopped" : "uninitialized";
 }
 
 async function canOpenTcp(host, port) {

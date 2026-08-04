@@ -535,7 +535,7 @@ The cohost proof uses the generated cohost role URL to open the host console
 with `CohostOf(<game>)`, renders only the delegated deadline control, runs the
 delegated D01 `ExtendDeadline` host action, and records the ACK as part of the
 `cohost-console` proof lane. The same browser session then submits a direct
-host-only `ResolvePhase` command and records `Reject NotHost` while D01 remains
+policy-denied `ResolvePhase` command and records `Reject CohostPermissionDenied` while D01 remains
 open. That proves the local capability shape for delegated host controls without
 claiming production identity or exhaustive cohost policy coverage.
 

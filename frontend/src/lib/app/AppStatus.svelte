@@ -24,5 +24,8 @@
     aria-atomic={view.ariaAtomic}
   >
     {view.message}
+    {#if status?.protocolMessage}
+      <span hidden> {status.protocolMessage}</span>
+    {/if}
   </p>
 {/if}

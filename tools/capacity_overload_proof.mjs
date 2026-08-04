@@ -31,6 +31,7 @@ const crawlerScope = randomUUID();
 const postBurstGame = randomUUID();
 const postPrefix = `capacity-post-${runId}`;
 const wsPostPrefix = `capacity-ws-${runId}`;
+const seedSessionTokens = new Map();
 
 let server;
 let serverOutput = "";
@@ -151,6 +152,7 @@ async function startServer({ baseUrl, port, databaseUrl, env }) {
       FMARCH_AUTH_SOURCE_RATE_LIMIT_MAX_FAILURES: "3",
       FMARCH_AUTH_RATE_LIMIT_LOCKOUT_SECONDS: "60",
       FMARCH_TRUST_AUTH_SOURCE_HEADER: "1",
+      FMARCH_DEV_AUTH: "1",
       RUST_LOG: env.RUST_LOG ?? "warn",
     },
     stdio: ["ignore", "pipe", "pipe"],
@@ -174,12 +176,21 @@ async function seedReadFixtures({ psql, databaseUrl }) {
       );
       INSERT INTO thread_view (
         game_id, source_seq, stream_seq, channel_id, author_slot, author_user,
-        phase_id, body, occurred_at, media
+        phase_id, body, body_private, occurred_at, media
       )
       SELECT '${largeThreadGame}', value, value,
              CASE WHEN value % 5 = 0 THEN 'main' ELSE 'private:capacity-' || (value % 4) END,
              NULL, 'capacity-reader',
-             'D01', 'large thread fixture post ' || value, value, '[]'::JSONB
+             'D01',
+             CASE WHEN value % 5 = 0 THEN 'large thread fixture post ' || value ELSE NULL END,
+             CASE WHEN value % 5 = 0 THEN NULL ELSE jsonb_build_object(
+               'scheme', 'fmarch-event-aead-v1',
+               'alg', 'XChaCha20Poly1305',
+               'kid', 'capacity-fixture',
+               'nonce', 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+               'ciphertext', 'AAAAAAAAAAAAAAAAAAAAAA=='
+             ) END,
+             value, '[]'::JSONB
       FROM generate_series(1, ${budgets.largeThreadRows}) AS value;
       INSERT INTO game_index (
         game_id, pack, status, phase_id, created_seq, started_seq, completed_seq, updated_seq
@@ -283,7 +294,7 @@ async function proveAnonymousCrawler({ baseUrl }) {
   const records = await mapConcurrent(
     urls,
     budgets.crawlerConcurrency,
-    async (url) => await timedFetch(url),
+    async (url) => await timedFetchWithRetryableAdmission(url),
   );
   for (const record of records) {
     assert(record.status === 200, `crawler request returned ${record.status}`);
@@ -298,6 +309,10 @@ async function proveAnonymousCrawler({ baseUrl }) {
     fixtureDocuments: budgets.crawlerDocuments,
     fixtureGames: budgets.crawlerGames,
     concurrency: budgets.crawlerConcurrency,
+    retryable503s: records.reduce(
+      (total, record) => total + record.retryable503s,
+      0,
+    ),
     ...requestSummary(records),
   };
 }
@@ -307,6 +322,9 @@ async function proveSingleGamePostBurst({ baseUrl }) {
     const seeded = await sendCommand(baseUrl, principalUserId, command);
     assert(seeded.kind === "Ack", `game seed rejected: ${JSON.stringify(seeded)}`);
   }
+  // Mint the burst principal's session before the burst so the mint itself is
+  // never queued behind capacity-limited burst traffic.
+  await seedSessionToken(baseUrl, "player-mira");
   const records = await mapConcurrent(
     Array.from({ length: budgets.postBurstRequests }, (_, index) => index),
     budgets.postBurstConcurrency,
@@ -491,15 +509,45 @@ async function submitPostWithRetry({ baseUrl, index, prefix }) {
   throw new Error(`post burst exhausted retries for ${prefix}-${index}`);
 }
 
+// The strict wire rejects any actor field in the envelope; seed and burst
+// commands act as a principal by presenting that principal's dev session as
+// the bearer.
+async function seedSessionToken(baseUrl, principalUserId) {
+  const cached = seedSessionTokens.get(principalUserId);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const response = await fetch(`${baseUrl}/auth/dev-session`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      principal_user_id: principalUserId,
+      expires_at: 4_102_444_800,
+      global_capabilities: ["GlobalAdmin"],
+    }),
+  });
+  const body = await response.json();
+  assert(
+    response.status === 200 && typeof body.session_token === "string",
+    `dev session mint for ${principalUserId} returned ${response.status}`,
+  );
+  seedSessionTokens.set(principalUserId, body.session_token);
+  return body.session_token;
+}
+
 async function sendCommand(
   baseUrl,
   principalUserId,
   command,
   { tolerate503 = false } = {},
 ) {
+  const sessionToken = await seedSessionToken(baseUrl, principalUserId);
   const response = await fetch(`${baseUrl}/commands`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: {
+      authorization: `Bearer ${sessionToken}`,
+      "content-type": "application/json",
+    },
     body: JSON.stringify({
       v: 1,
       id: Date.now(),
@@ -507,7 +555,6 @@ async function sendCommand(
         kind: "Command",
         body: {
           command_id: randomUUID(),
-          principal_user_id: principalUserId,
           command,
         },
       },
@@ -536,6 +583,24 @@ async function timedFetch(url, options = {}) {
     body,
     elapsedMs: performance.now() - started,
   };
+}
+
+async function timedFetchWithRetryableAdmission(url, options = {}) {
+  const started = performance.now();
+  let retryable503s = 0;
+  for (let attempt = 1; attempt <= 6; attempt += 1) {
+    const record = await timedFetch(url, options);
+    if (record.status !== 503 || attempt === 6) {
+      return {
+        ...record,
+        elapsedMs: performance.now() - started,
+        retryable503s,
+      };
+    }
+    retryable503s += 1;
+    await delay(25 * attempt);
+  }
+  throw new Error("unreachable admission retry state");
 }
 
 async function fetchJson(url, options = {}) {

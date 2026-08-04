@@ -12,6 +12,7 @@
   } from "$lib/app/live-transport.mjs";
   import { createProjectionStore } from "$lib/app/projection-store.mjs";
   import { activePhaseTheme, phaseThemeKey } from "$lib/app/phase-theme.mjs";
+  import PlayerActionSubmissionCheckpoint from "$lib/components/player-command/PlayerActionSubmissionCheckpoint.svelte";
   import PlayerCommandReceipt from "$lib/components/player-command/PlayerCommandReceipt.svelte";
   import PlayerDayEventRail from "$lib/components/player-command/PlayerDayEventRail.svelte";
   import PlayerEndgameSummary from "$lib/components/player-endgame-summary/PlayerEndgameSummary.svelte";
@@ -27,6 +28,7 @@
   import VoteSheet from "$lib/components/gameplay/VoteSheet.svelte";
   import ContextSheet from "$lib/components/gameplay/ContextSheet.svelte";
   import { buildPlayerCommandPanelViewModel } from "$lib/components/player-command/player-command-panel-model.mjs";
+  import { buildPlayerActionSubmissionCheckpoint } from "$lib/components/player-command/player-action-submission-checkpoint.mjs";
   import {
     PLAYER_ROUTE_CONTRACT,
     buildPlayerComposerView,
@@ -153,6 +155,12 @@
     commandPending,
     commandInterrupted,
   });
+  $: playerActionSubmissionCheckpoint = buildPlayerActionSubmissionCheckpoint({
+    commandState,
+    composer,
+    player,
+    commandStatus,
+  });
   $: playerRoleCard = buildPlayerRoleCardViewModel({ commandState, player });
   $: playerEndgameSummary = buildPlayerEndgameSummaryViewModel({
     endgameSummary: endgameSummary ?? null,
@@ -235,6 +243,10 @@
   const playerProjectionResyncKeys = playerResyncKeys(data);
 
   onMount(() => {
+    exposePlayerProjection({
+      windowRef: window,
+      snapshot: projectionStore.getSnapshot(),
+    });
     const connection = connectLiveProjection({
       url: data.liveProjection.endpoint,
       projectionStore,
@@ -464,10 +476,16 @@
 
 {#if playerForcedRouteState}
   <main class="fm-surface player-surface" data-testid={PLAYER_ROUTE_CONTRACT.surfaceTestId}>
+    <span class="fm-sr-only" data-testid={PLAYER_ROUTE_CONTRACT.capabilityTestId}>
+      {player.capabilityLabel}
+    </span>
     <RouteState view={playerForcedRouteState} />
   </main>
 {:else if playerSurfaceEmpty}
   <main class="fm-surface player-surface" data-testid={PLAYER_ROUTE_CONTRACT.surfaceTestId}>
+    <span class="fm-sr-only" data-testid={PLAYER_ROUTE_CONTRACT.capabilityTestId}>
+      {player.capabilityLabel}
+    </span>
     <RouteState view={playerEmptyState} />
   </main>
 {:else}
@@ -482,6 +500,13 @@
       {player}
     />
     <ChannelTabs slot="channels" {channels} />
+
+    {#if player.gameCompleted}
+      <section class="player-game-complete" data-testid="player-game-complete">
+        <strong>The game is complete.</strong>
+        <span>Final role and alignment facts are public. Player commands are closed.</span>
+      </section>
+    {/if}
 
     <PlayerThread
       {thread}
@@ -523,6 +548,9 @@
 
       {#if player.readOnly !== true}
         <PlayerRoleCard card={playerRoleCard} />
+        <PlayerActionSubmissionCheckpoint
+          checkpoint={playerActionSubmissionCheckpoint}
+        />
       {/if}
 
       <details class="fm-surface-drawer player-surface__drawer" data-testid="player-game-record">
@@ -666,6 +694,19 @@
     line-height: 1.35;
     margin: 0;
     overflow-wrap: anywhere;
+  }
+
+  .player-game-complete {
+    display: grid;
+    gap: 0.25rem;
+    padding: 0.85rem 1rem;
+    border: 1px solid var(--fm-line-strong);
+    border-radius: 12px;
+    background: var(--fm-raised);
+  }
+
+  .player-game-complete span {
+    color: var(--fm-ink-muted);
   }
 
   :global(.player-action-target-picker__action) {

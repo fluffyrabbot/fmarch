@@ -31,9 +31,13 @@ export async function POST({ cookies, fetch, locals, url }) {
     }),
   });
   if (!response.ok) {
+    const retryAfter = response.headers.get("retry-after");
     return new Response(response.body, {
       status: response.status,
-      headers: { "content-type": response.headers.get("content-type") ?? "application/json" },
+      headers: {
+        "content-type": response.headers.get("content-type") ?? "application/json",
+        ...(retryAfter === null ? {} : { "retry-after": retryAfter }),
+      },
     });
   }
 

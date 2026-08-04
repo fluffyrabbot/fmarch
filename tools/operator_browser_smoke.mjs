@@ -63,10 +63,13 @@ const generatedShrinkGapAuditReport =
   "target/operator-proof/current-generated-shrink-gap-audit-report.json";
 const commandProjectionResolutionReport =
   "target/operator-proof/current-command-projection-resolution-report.json";
+const derivedProjectionTableCount = Symbol("derived projection table count");
 const proofRunSelectors = await proofRunAnchorSelectors();
 const checkedAuditGame = "08d8a45f-6c3b-4401-8e31-8d7637f36a82";
-const hostSessionToken = `operator-browser-host-${process.pid}`;
-const fixtureHostSessionToken = `operator-browser-fixture-host-${process.pid}`;
+const hostSessionToken = `fmss_operator-browser-host-${process.pid}`;
+const fixtureHostSessionToken = `fmss_operator-browser-fixture-host-${process.pid}`;
+const seedSessionTokens = new Map();
+const issuedSessionTokens = new Map();
 
 if (!databaseUrl) {
   throw new Error("DATABASE_URL is required, e.g. postgres://fmarch:fmarch@localhost:5544/fmarch");
@@ -362,7 +365,7 @@ const pages = [
       "count_mismatch_count: 0",
       "evidence_failure_count: 0",
       "gap_audit_ok: true",
-      "projection_table_count: 26",
+      derivedProjectionTableCount,
       "resolution_phase_count: 1",
       "audit_operator_proof_artifacts",
     ],
@@ -654,7 +657,7 @@ const jsonPages = [
         artifact_version: 1,
         expected_version: 1,
         trusted: {
-          projection_table_count: 26,
+          projection_table_count: derivedProjectionTableCount,
           resolution_phase_count: 1,
         },
         audit_report: {
@@ -1259,8 +1262,18 @@ async function main() {
   try {
     await writeSmokeProgress({ stage: "wait-for-health", port });
     await waitForHealth();
-    await createOperatorSession(hostSessionToken, "host_h");
-    await createOperatorSession(fixtureHostSessionToken, "fixture_host");
+    seedSessionTokens.set(
+      "host_h",
+      await createOperatorSession(hostSessionToken, "host_h", {
+        globalCapabilities: ["GlobalAdmin"],
+      }),
+    );
+    seedSessionTokens.set(
+      "fixture_host",
+      await createOperatorSession(fixtureHostSessionToken, "fixture_host", {
+        globalCapabilities: ["GlobalAdmin"],
+      }),
+    );
     await writeSmokeProgress({ stage: "seed-checked-audit-game" });
     await seedCheckedAuditGame();
     await writeSmokeProgress({ stage: "write-operator-reports" });
@@ -1296,11 +1309,6 @@ async function writeSmokeProgress(progress) {
 }
 
 async function writeOperatorReports() {
-  await writeStatusAuditExport();
-  await writeStatusAuditReport();
-  await writeGoNoGoReport();
-  await writePreviousGoNoGoReport();
-  await writeRetentionReport();
   await writeProjectionRebuildReport();
   await writeResolutionDiffReport();
   await writeTraceInspectionReport();
@@ -1311,10 +1319,6 @@ async function writeOperatorReports() {
   await writeGoNoGoReport();
   await writePreviousGoNoGoReport();
   await writeRetentionReport();
-  await writeProjectionRebuildReport();
-  await writeResolutionDiffReport();
-  await writeTraceInspectionReport();
-  await writeCommandProjectionResolutionReport();
 }
 
 async function requireProofArtifacts() {
@@ -1545,8 +1549,8 @@ async function writeLocalReportBootstraps() {
           ok: true,
           game_id: "08d8a45f-2a97-43ab-9192-f9f7bf179511",
           isolation: "rollback-only transaction",
-          table_count: 20,
-          matched_table_count: 20,
+          table_count: 32,
+          matched_table_count: 32,
           drifted_table_count: 0,
           tables: [
             {
@@ -1904,12 +1908,34 @@ async function waitForHealth() {
   throw new Error(`server did not become healthy at ${baseUrl}/healthz`);
 }
 
+// The strict wire rejects any actor field in the envelope; seed commands act
+// as a principal by presenting that principal's dev session as the bearer.
+async function seedSessionToken(principalUserId) {
+  const cached = seedSessionTokens.get(principalUserId);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const token = `fmss_operator-smoke-seed-${principalUserId}`;
+  const sessionToken = await createOperatorSession(token, principalUserId, {
+    globalCapabilities:
+      principalUserId === "host_h" || principalUserId === "fixture_host"
+        ? ["GlobalAdmin"]
+        : [],
+  });
+  seedSessionTokens.set(principalUserId, sessionToken);
+  return sessionToken;
+}
+
 async function sendCommand(principalUserId, command) {
+  const sessionToken = await seedSessionToken(principalUserId);
   const response = await fetchWithTimeout(
     `${baseUrl}/commands`,
     {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: {
+        authorization: `Bearer ${sessionToken}`,
+        "content-type": "application/json",
+      },
       body: JSON.stringify({
         v: 1,
         id: commandId++,
@@ -1917,7 +1943,6 @@ async function sendCommand(principalUserId, command) {
           kind: "Command",
           body: {
             command_id: crypto.randomUUID(),
-            principal_user_id: principalUserId,
             command,
           },
         },
@@ -1931,7 +1956,11 @@ async function sendCommand(principalUserId, command) {
   }
 }
 
-async function createOperatorSession(token, principalUserId) {
+async function createOperatorSession(
+  token,
+  principalUserId,
+  { globalCapabilities = [] } = {},
+) {
   const deadline = Date.now() + 15_000;
   while (Date.now() < deadline) {
     const response = await fetchWithTimeout(
@@ -1943,13 +1972,18 @@ async function createOperatorSession(token, principalUserId) {
           token,
           principal_user_id: principalUserId,
           expires_at: 4_102_444_800,
-          global_capabilities: [],
+          global_capabilities: globalCapabilities,
         }),
       },
       5000,
     );
     if (response.ok) {
-      return;
+      const body = await response.json();
+      if (typeof body.session_token !== "string" || body.session_token.length === 0) {
+        throw new Error("operator fixture session response omitted its issued token");
+      }
+      issuedSessionTokens.set(token, body.session_token);
+      return body.session_token;
     }
     const body = await response.text();
     if (response.status !== 503) {
@@ -1963,7 +1997,11 @@ async function createOperatorSession(token, principalUserId) {
 async function checkedAuditGameHasTrace() {
   const response = await fetchWithTimeout(
     `${baseUrl}/games/${checkedAuditGame}/resolution-traces`,
-    { headers: { authorization: `Bearer ${fixtureHostSessionToken}` } },
+    {
+      headers: {
+        authorization: `Bearer ${resolveSessionToken(fixtureHostSessionToken)}`,
+      },
+    },
     5000,
   );
   if (!response.ok) {
@@ -1971,6 +2009,10 @@ async function checkedAuditGameHasTrace() {
   }
   const report = await response.json();
   return Array.isArray(report.traces) && report.traces.length > 0;
+}
+
+function resolveSessionToken(token) {
+  return issuedSessionTokens.get(token) ?? token;
 }
 
 async function fetchWithTimeout(url, options, timeoutMs) {
@@ -2074,6 +2116,13 @@ async function seedGame() {
 }
 
 async function runBrowserProof() {
+  const commandProjectionArtifact = JSON.parse(
+    await readFile(path.join(root, commandProjectionResolutionReport), "utf8"),
+  );
+  const projectionTableCount = commandProjectionArtifact.projection_rebuild?.table_count;
+  if (!Number.isSafeInteger(projectionTableCount) || projectionTableCount <= 0) {
+    throw new Error("command/projection proof omitted its audited projection table count");
+  }
   await writePlaywrightProgress({ stage: "launching-browser" });
   const browser = await withTimeout(
     chromium.launch({ headless: true }),
@@ -2085,7 +2134,7 @@ async function runBrowserProof() {
       browser.newPage({
         viewport: { width: 1280, height: 720 },
         extraHTTPHeaders: {
-          authorization: `Bearer ${hostSessionToken}`,
+          authorization: `Bearer ${resolveSessionToken(hostSessionToken)}`,
         },
       }),
       15000,
@@ -2102,15 +2151,20 @@ async function runBrowserProof() {
         url,
         completed_pages: surfaces.length,
       });
-      await page.goto(url, { waitUntil: "domcontentloaded" });
+      const response = await page.goto(url, { waitUntil: "domcontentloaded" });
       const text = await page.locator("body").innerText();
-      const checks = smokePage.checks.map((needle) => ({
-        needle,
-        present: text.includes(needle),
-      }));
+      const checks = smokePage.checks.map((configuredNeedle) => {
+        const needle = configuredNeedle === derivedProjectionTableCount
+          ? `projection_table_count: ${projectionTableCount}`
+          : configuredNeedle;
+        return { needle, present: text.includes(needle) };
+      });
       const missing = checks.filter((check) => !check.present).map((check) => check.needle);
       if (missing.length > 0) {
-        throw new Error(`${smokePage.name} missing visible text: ${missing.join(", ")}`);
+        throw new Error(
+          `${smokePage.name} returned ${response?.status() ?? "no response"} and ` +
+            `missed visible text ${missing.join(", ")}: ${text.slice(0, 1_000)}`,
+        );
       }
       const selectors = [];
       for (const selector of smokePage.selectors ?? []) {
@@ -2279,9 +2333,12 @@ async function runBrowserProof() {
             throw new Error(`${jsonPage.name} row ${expected.row_id} missing trusted metadata`);
           }
           for (const [key, value] of Object.entries(expected.trusted)) {
-            if (trusted[key] !== value) {
+            const expectedValue = value === derivedProjectionTableCount
+              ? projectionTableCount
+              : value;
+            if (trusted[key] !== expectedValue) {
               throw new Error(
-                `${jsonPage.name} row ${expected.row_id} trusted ${key} ${trusted[key]} !== ${value}`,
+                `${jsonPage.name} row ${expected.row_id} trusted ${key} ${trusted[key]} !== ${expectedValue}`,
               );
             }
           }

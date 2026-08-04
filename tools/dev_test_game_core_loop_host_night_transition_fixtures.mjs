@@ -65,9 +65,9 @@ export function hostNightActionTransitionSurfaceFixture({
           privateReceipt: playerCase.expectedPrivateReceipt,
           boundary: dayThreeObservationBoundary(playerCase.proofField),
           commandStateEndpoint:
-            `/games/${game}/player-command-state?principal_user_id=${playerCase.expectedPrincipalUserId}&slot_id=${playerCase.expectedSlot}`,
+            `/api/gameplay/games/${game}/player-command-state?slot_id=${playerCase.expectedSlot}`,
           notificationsEndpoint:
-            `/games/${game}/notifications?principal_user_id=${playerCase.expectedPrincipalUserId}`,
+            `/api/gameplay/games/${game}/notifications`,
         }),
       ]),
     ),

@@ -15,9 +15,10 @@ test("enabled-account sessions are created and logged in through public auth", a
     fetchJson: async (url, options) => {
       requests.push({ url, options, body: JSON.parse(options.body) });
       return url.endsWith("/login")
-        ? {
+          ? {
             principal_user_id: "player-a",
             capabilities: [{ kind: "SlotOccupant" }],
+            session_token: "issued-player-token",
           }
         : {};
     },
@@ -37,6 +38,7 @@ test("enabled-account sessions are created and logged in through public auth", a
   assert.equal(requests[1].url, "http://127.0.0.1:4000/auth/accounts/login");
   assert.equal(requests[1].body.session_token, "player-token");
   assert.equal(session.authentication, "enabled-account-login");
+  assert.equal(session.sessionToken, "issued-player-token");
   assert.deepEqual(session.capabilityKinds, ["SlotOccupant"]);
 });
 
@@ -45,12 +47,14 @@ test("granted sessions resolve their authoritative capability projection", async
   const auth = createLiveStackAuth({
     apiBaseUrl: "http://127.0.0.1:4000",
     rootAdminSessionToken: "root-token",
+    uuid: sequence(["account-id", "password-id"]),
     fetchJson: async (url, options) => {
-      requests.push({ url, options });
-      return {
+      requests.push({ url, options, body: JSON.parse(options.body) });
+      return url.endsWith("/session-grants") ? {
         principal_user_id: "host-h",
         capabilities: [{ kind: "GlobalAdmin" }],
-      };
+        session_token: "issued-host-token",
+      } : {};
     },
   });
 
@@ -60,9 +64,12 @@ test("granted sessions resolve their authoritative capability projection", async
     globalCapabilities: ["GlobalAdmin"],
   });
 
-  assert.equal(requests[0].url, "http://127.0.0.1:4000/auth/session-grants");
-  assert.equal(JSON.parse(requests[0].options.body).token, "host-token");
-  assert.equal(requests.length, 1);
+  assert.equal(requests[0].url, "http://127.0.0.1:4000/auth/accounts");
+  assert.deepEqual(requests[0].body.global_capabilities, ["GlobalAdmin"]);
+  assert.equal(requests[1].url, "http://127.0.0.1:4000/auth/session-grants");
+  assert.equal(requests[1].body.token, "host-token");
+  assert.equal(requests.length, 2);
+  assert.equal(session.sessionToken, "issued-host-token");
   assert.deepEqual(session.capabilityKinds, ["GlobalAdmin"]);
 });
 

@@ -44,7 +44,10 @@ export function hostPhaseTransitionActionFixture({
     checkpointPhaseId: phaseId,
     checkpointPhaseState: phaseState,
     checkpointDeadlineAffordance: deadlineAffordance,
-    activityStatusText: `Ack: stream seqs ${streamSeq}`,
+    activityStatusText: `${String(actionId)
+      .replaceAll("_", " ")
+      .replaceAll("-", " ")
+      .replace(/^./, (letter) => letter.toUpperCase())} completed.`,
   };
 }
 
@@ -258,12 +261,11 @@ export function seededCoreLoopRolePath({ game, suffix = "" }) {
 
 export function seededCoreLoopCommandStateEndpoint({
   game,
-  principalUserId,
   slot,
 }) {
-  return `/games/${game}/player-command-state?principal_user_id=${principalUserId}&slot_id=${slot}`;
+  return `/api/gameplay/games/${game}/player-command-state?slot_id=${slot}`;
 }
 
-export function seededCoreLoopNotificationsEndpoint({ game, principalUserId }) {
-  return `/games/${game}/notifications?principal_user_id=${principalUserId}`;
+export function seededCoreLoopNotificationsEndpoint({ game }) {
+  return `/api/gameplay/games/${game}/notifications`;
 }
