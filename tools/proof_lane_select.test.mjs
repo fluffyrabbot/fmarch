@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import test from 'node:test';
 
@@ -102,26 +102,70 @@ test('npm lanes exist as package.json scripts and shell lanes carry commands', (
   }
 });
 
-test('wire generator sources and artifact select one explicit exporter check', () => {
-  const selection = selectLanes({
-    changed: [
-      'crates/wire/src/bin/export_types.rs',
-      'crates/wire/src/lib.rs',
-      'crates/wire/generated/types.ts',
-    ],
-    manifest,
-    crateGraph: FIXTURE_GRAPH,
-  });
+test('generated artifacts have one owner and select their freshness lane exactly once', () => {
+  assert.equal(manifest.version, 2);
+  const outputOwners = new Map();
+  const artifactLanes = Object.entries(manifest.lanes).filter(
+    ([, lane]) => lane.inputs || lane.outputs,
+  );
+  assert.ok(artifactLanes.length > 0);
 
-  assert.ok(selection.laneIds.includes('cargo:wire'));
-  assert.equal(
-    selection.laneIds.filter((laneId) => laneId === 'check:wire-types').length,
-    1,
-  );
-  assert.equal(
-    laneCommand('check:wire-types', manifest),
-    'cargo run -p wire --bin export_types -- --check',
-  );
+  for (const [laneId, lane] of artifactLanes) {
+    assert.ok(lane.inputs?.length > 0, `generated artifact lane ${laneId} needs inputs`);
+    assert.ok(lane.outputs?.length > 0, `generated artifact lane ${laneId} needs outputs`);
+    assert.equal(
+      new Set([...lane.inputs, ...lane.outputs]).size,
+      lane.inputs.length + lane.outputs.length,
+      `generated artifact lane ${laneId} repeats an input or output`,
+    );
+
+    for (const output of lane.outputs) {
+      assert.ok(!outputOwners.has(output), `${output} is also owned by ${outputOwners.get(output)}`);
+      outputOwners.set(output, laneId);
+    }
+
+    for (const artifactPath of [...lane.inputs, ...lane.outputs]) {
+      assert.ok(
+        existsSync(join(REPO_ROOT, artifactPath)),
+        `generated artifact path ${artifactPath} does not exist`,
+      );
+      assert.ok(
+        statSync(join(REPO_ROOT, artifactPath)).isFile(),
+        `generated artifact path ${artifactPath} must be an exact file`,
+      );
+      const selection = selectLanes({
+        changed: [artifactPath],
+        manifest,
+        crateGraph: FIXTURE_GRAPH,
+      });
+      assert.deepEqual(selection.unmapped, [], `${artifactPath} needs one area owner`);
+      assert.equal(
+        selection.touched.filter(({ reasons }) => reasons.includes(artifactPath)).length,
+        1,
+        `${artifactPath} needs exactly one direct area owner`,
+      );
+      assert.equal(
+        selection.laneIds.filter((selected) => selected === laneId).length,
+        1,
+        `${artifactPath} must select ${laneId} exactly once`,
+      );
+      const directTriggers = selection.artifactTriggers.filter(
+        (trigger) => trigger.laneId === laneId,
+      );
+      assert.deepEqual(
+        directTriggers,
+        [{ laneId, reasons: [artifactPath] }],
+      );
+    }
+
+    const combined = selectLanes({
+      changed: [...lane.inputs, ...lane.outputs],
+      manifest,
+      crateGraph: FIXTURE_GRAPH,
+    });
+    assert.equal(combined.laneIds.filter((selected) => selected === laneId).length, 1);
+    assert.equal(combined.artifactTriggers.filter((trigger) => trigger.laneId === laneId).length, 1);
+  }
 });
 
 test('Postgres-backed mash acceptance owns a repo-local database default', () => {

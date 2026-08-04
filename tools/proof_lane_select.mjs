@@ -3,9 +3,10 @@
 // Selects the narrowest truthful proof-lane set for a change: maps changed
 // paths to manifest areas (longest match wins), expands touched crates through
 // the reverse cargo dependency closure, follows also_triggers edges for
-// cross-boundary blast radius the crate DAG cannot see, and unions the touched
-// areas' lanes. Frozen-tier areas are excluded from sprint-mode defaults but are
-// always re-armed when the diff reaches them.
+// cross-boundary blast radius the crate DAG cannot see, directly matches
+// generated-artifact inputs and outputs, and unions the resulting lanes.
+// Frozen-tier areas are excluded from sprint-mode defaults but are always
+// re-armed when the diff reaches them.
 //
 // Modes:
 //   inner (default)  lanes for the touched closure only
@@ -62,6 +63,20 @@ export function writeTimings(path, timings) {
 export function pathMatches(file, entry) {
   if (entry.endsWith('/') || entry.endsWith('.')) return file.startsWith(entry);
   return file === entry;
+}
+
+export function generatedArtifactTriggers(changed, manifest) {
+  const triggered = new Map();
+  for (const [laneId, lane] of Object.entries(manifest.lanes)) {
+    for (const entry of [...(lane.inputs ?? []), ...(lane.outputs ?? [])]) {
+      for (const file of changed) {
+        if (!pathMatches(file, entry)) continue;
+        if (!triggered.has(laneId)) triggered.set(laneId, []);
+        triggered.get(laneId).push(file);
+      }
+    }
+  }
+  return [...triggered.entries()].map(([laneId, reasons]) => ({ laneId, reasons }));
 }
 
 // Reverse closure over the workspace crate graph: crate name -> Set of
@@ -174,12 +189,14 @@ export function selectLanes({ changed, manifest, crateGraph, mode = 'inner' }) {
     }
   }
 
+  const artifactTriggers = generatedArtifactTriggers(changed, manifest);
   const laneIds = new Set();
   const addAreaLanes = (area) => area.lanes.forEach((lane) => laneIds.add(lane));
   if (mode === 'full') {
     for (const lane of Object.keys(manifest.lanes)) laneIds.add(lane);
   } else {
     for (const id of touched.keys()) addAreaLanes(areasById.get(id));
+    for (const { laneId } of artifactTriggers) laneIds.add(laneId);
     if (mode === 'sprint') {
       for (const area of manifest.areas) if (area.tier === 'active') addAreaLanes(area);
     }
@@ -195,6 +212,7 @@ export function selectLanes({ changed, manifest, crateGraph, mode = 'inner' }) {
   return {
     mode,
     touched: [...touched.entries()].map(([id, reasons]) => ({ id, reasons })),
+    artifactTriggers,
     unmapped,
     crateFallback,
     laneIds: [...laneIds],
@@ -373,6 +391,10 @@ function main(argv) {
   for (const { id, reasons } of selection.touched) {
     const shown = reasons.slice(0, 3).join(', ') + (reasons.length > 3 ? `, +${reasons.length - 3} more` : '');
     console.log(`  touched ${id}  (${shown})`);
+  }
+  for (const { laneId, reasons } of selection.artifactTriggers) {
+    const shown = reasons.slice(0, 3).join(', ') + (reasons.length > 3 ? `, +${reasons.length - 3} more` : '');
+    console.log(`  generated artifact ${laneId}  (${shown})`);
   }
   if (selection.unmapped.length > 0) {
     console.log(`  warning: ${selection.unmapped.length} unmapped file(s) — consider --mode full or extending the manifest:`);
