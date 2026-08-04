@@ -26,6 +26,13 @@ use wire::{
     PROTOCOL_VERSION,
 };
 
+fn decode_server_envelope(message: tokio_tungstenite::tungstenite::Message) -> ServerEnvelope {
+    let tokio_tungstenite::tungstenite::Message::Binary(bytes) = message else {
+        panic!("expected binary CBOR websocket frame");
+    };
+    ciborium::from_reader(bytes.as_ref()).expect("decode server CBOR envelope")
+}
+
 fn router(pool: sqlx::PgPool) -> axum::Router {
     api::router_with_state(test_api_state(pool).with_dev_auth(true))
 }
@@ -852,13 +859,12 @@ async fn role_pm_media_reloads_transfers_and_denies_stale_outgoing_session(pool:
     .await
     .unwrap();
     let hello = socket.next().await.unwrap().unwrap();
-    let hello: ServerEnvelope = serde_json::from_str(&hello.into_text().unwrap()).unwrap();
+    let hello: ServerEnvelope = decode_server_envelope(hello);
     assert!(matches!(hello.body, ServerMsg::Hello(_)));
     let initial_role_pm = tokio::time::timeout(std::time::Duration::from_secs(3), async {
         loop {
             let frame = socket.next().await.unwrap().unwrap();
-            let envelope: ServerEnvelope =
-                serde_json::from_str(&frame.into_text().unwrap()).unwrap();
+            let envelope: ServerEnvelope = decode_server_envelope(frame);
             if matches!(
                 envelope.body,
                 ServerMsg::Delta(ProjectionDelta::ThreadPostsChanged(ref delta))
@@ -891,8 +897,7 @@ async fn role_pm_media_reloads_transfers_and_denies_stale_outgoing_session(pool:
     let live_role_pm = tokio::time::timeout(std::time::Duration::from_secs(3), async {
         loop {
             let frame = socket.next().await.unwrap().unwrap();
-            let envelope: ServerEnvelope =
-                serde_json::from_str(&frame.into_text().unwrap()).unwrap();
+            let envelope: ServerEnvelope = decode_server_envelope(frame);
             if matches!(
                 envelope.body,
                 ServerMsg::Delta(ProjectionDelta::ThreadPostsChanged(ref delta))
@@ -913,14 +918,12 @@ async fn role_pm_media_reloads_transfers_and_denies_stale_outgoing_session(pool:
     .await
     .unwrap();
     let stale_hello = stale_socket.next().await.unwrap().unwrap();
-    let stale_hello: ServerEnvelope =
-        serde_json::from_str(&stale_hello.into_text().unwrap()).unwrap();
+    let stale_hello: ServerEnvelope = decode_server_envelope(stale_hello);
     assert!(matches!(stale_hello.body, ServerMsg::Hello(_)));
     let stale_thread = tokio::time::timeout(std::time::Duration::from_millis(500), async {
         loop {
             let frame = stale_socket.next().await.unwrap().unwrap();
-            let envelope: ServerEnvelope =
-                serde_json::from_str(&frame.into_text().unwrap()).unwrap();
+            let envelope: ServerEnvelope = decode_server_envelope(frame);
             if matches!(
                 envelope.body,
                 ServerMsg::Delta(ProjectionDelta::ThreadPostsChanged(_))
@@ -1694,14 +1697,12 @@ async fn dead_chat_lifecycle_encrypts_streams_transfers_and_revokes(pool: sqlx::
     ))
     .await
     .unwrap();
-    let hello: ServerEnvelope =
-        serde_json::from_str(&socket.next().await.unwrap().unwrap().into_text().unwrap()).unwrap();
+    let hello: ServerEnvelope = decode_server_envelope(socket.next().await.unwrap().unwrap());
     assert!(matches!(hello.body, ServerMsg::Hello(_)));
     let initial_dead_chat = tokio::time::timeout(std::time::Duration::from_secs(3), async {
         loop {
             let envelope: ServerEnvelope =
-                serde_json::from_str(&socket.next().await.unwrap().unwrap().into_text().unwrap())
-                    .unwrap();
+                decode_server_envelope(socket.next().await.unwrap().unwrap());
             if matches!(
                 envelope.body,
                 ServerMsg::Delta(ProjectionDelta::ThreadPostsChanged(ref delta))
@@ -1736,8 +1737,7 @@ async fn dead_chat_lifecycle_encrypts_streams_transfers_and_revokes(pool: sqlx::
     let live_dead_chat = tokio::time::timeout(std::time::Duration::from_secs(3), async {
         loop {
             let envelope: ServerEnvelope =
-                serde_json::from_str(&socket.next().await.unwrap().unwrap().into_text().unwrap())
-                    .unwrap();
+                decode_server_envelope(socket.next().await.unwrap().unwrap());
             if matches!(
                 envelope.body,
                 ServerMsg::Delta(ProjectionDelta::ThreadPostsChanged(ref delta))
@@ -2060,14 +2060,12 @@ async fn spectator_room_grant_reads_host_notices_and_revokes(pool: sqlx::PgPool)
     ))
     .await
     .unwrap();
-    let hello: ServerEnvelope =
-        serde_json::from_str(&socket.next().await.unwrap().unwrap().into_text().unwrap()).unwrap();
+    let hello: ServerEnvelope = decode_server_envelope(socket.next().await.unwrap().unwrap());
     assert!(matches!(hello.body, ServerMsg::Hello(_)));
     let initial_spectator = tokio::time::timeout(std::time::Duration::from_secs(3), async {
         loop {
             let envelope: ServerEnvelope =
-                serde_json::from_str(&socket.next().await.unwrap().unwrap().into_text().unwrap())
-                    .unwrap();
+                decode_server_envelope(socket.next().await.unwrap().unwrap());
             if matches!(
                 envelope.body,
                 ServerMsg::Delta(ProjectionDelta::ThreadPostsChanged(ref delta))
@@ -2099,8 +2097,7 @@ async fn spectator_room_grant_reads_host_notices_and_revokes(pool: sqlx::PgPool)
     let live_spectator = tokio::time::timeout(std::time::Duration::from_secs(3), async {
         loop {
             let envelope: ServerEnvelope =
-                serde_json::from_str(&socket.next().await.unwrap().unwrap().into_text().unwrap())
-                    .unwrap();
+                decode_server_envelope(socket.next().await.unwrap().unwrap());
             if matches!(
                 envelope.body,
                 ServerMsg::Delta(ProjectionDelta::ThreadPostsChanged(ref delta))
@@ -2313,8 +2310,7 @@ async fn spectator_room_grant_reads_host_notices_and_revokes(pool: sqlx::PgPool)
     let revoked_live = tokio::time::timeout(std::time::Duration::from_millis(500), async {
         loop {
             let envelope: ServerEnvelope =
-                serde_json::from_str(&socket.next().await.unwrap().unwrap().into_text().unwrap())
-                    .unwrap();
+                decode_server_envelope(socket.next().await.unwrap().unwrap());
             if matches!(
                 envelope.body,
                 ServerMsg::Delta(ProjectionDelta::ThreadPostsChanged(ref thread))
@@ -3791,11 +3787,11 @@ async fn websocket_game_connection_sends_initial_votecount_delta(pool: sqlx::PgP
     .await
     .unwrap();
     let hello = socket.next().await.unwrap().unwrap();
-    let hello: ServerEnvelope = serde_json::from_str(&hello.into_text().unwrap()).unwrap();
+    let hello: ServerEnvelope = decode_server_envelope(hello);
     assert!(matches!(hello.body, ServerMsg::Hello(_)));
 
     let delta = socket.next().await.unwrap().unwrap();
-    let delta: ServerEnvelope = serde_json::from_str(&delta.into_text().unwrap()).unwrap();
+    let delta: ServerEnvelope = decode_server_envelope(delta);
     assert_eq!(delta.id, 1);
     assert!(matches!(
         delta.body,
@@ -3828,20 +3824,18 @@ async fn websocket_game_connection_streams_command_following_votecount_delta(poo
     .await
     .unwrap();
     let hello = socket.next().await.unwrap().unwrap();
-    let hello: ServerEnvelope = serde_json::from_str(&hello.into_text().unwrap()).unwrap();
+    let hello: ServerEnvelope = decode_server_envelope(hello);
     assert!(matches!(hello.body, ServerMsg::Hello(_)));
 
     let initial_delta = socket.next().await.unwrap().unwrap();
-    let initial_delta: ServerEnvelope =
-        serde_json::from_str(&initial_delta.into_text().unwrap()).unwrap();
+    let initial_delta: ServerEnvelope = decode_server_envelope(initial_delta);
     assert!(matches!(
         initial_delta.body,
         ServerMsg::Delta(ProjectionDelta::VoteCountChanged(v))
             if v.game == game && v.candidate_slot == "slot_2" && v.count == 1
     ));
     let initial_thread = socket.next().await.unwrap().unwrap();
-    let initial_thread: ServerEnvelope =
-        serde_json::from_str(&initial_thread.into_text().unwrap()).unwrap();
+    let initial_thread: ServerEnvelope = decode_server_envelope(initial_thread);
     assert_eq!(initial_thread.id, 2);
     assert!(matches!(
         initial_thread.body,
@@ -3866,8 +3860,7 @@ async fn websocket_game_connection_streams_command_following_votecount_delta(poo
     let live_delta = tokio::time::timeout(std::time::Duration::from_secs(3), async {
         loop {
             let frame = socket.next().await.unwrap().unwrap();
-            let envelope: ServerEnvelope =
-                serde_json::from_str(&frame.into_text().unwrap()).unwrap();
+            let envelope: ServerEnvelope = decode_server_envelope(frame);
             if matches!(
                 envelope.body,
                 ServerMsg::Delta(ProjectionDelta::VoteCountChanged(ref v))
@@ -3918,7 +3911,7 @@ async fn websocket_lag_requests_resync_and_keeps_streaming(pool: sqlx::PgPool) {
     .await
     .unwrap();
     let hello = socket.next().await.unwrap().unwrap();
-    let hello: ServerEnvelope = serde_json::from_str(&hello.into_text().unwrap()).unwrap();
+    let hello: ServerEnvelope = decode_server_envelope(hello);
     assert!(matches!(hello.body, ServerMsg::Hello(_)));
 
     for offset in 0_u64..3 {
@@ -3942,8 +3935,7 @@ async fn websocket_lag_requests_resync_and_keeps_streaming(pool: sqlx::PgPool) {
     let resync = tokio::time::timeout(std::time::Duration::from_secs(5), async {
         loop {
             let frame = socket.next().await.unwrap().unwrap();
-            let envelope: ServerEnvelope =
-                serde_json::from_str(&frame.into_text().unwrap()).unwrap();
+            let envelope: ServerEnvelope = decode_server_envelope(frame);
             if matches!(
                 envelope.body,
                 ServerMsg::Delta(ProjectionDelta::ResyncRequired { from_seq: 0 })
@@ -3975,8 +3967,7 @@ async fn websocket_lag_requests_resync_and_keeps_streaming(pool: sqlx::PgPool) {
     let continued = tokio::time::timeout(std::time::Duration::from_secs(5), async {
         loop {
             let frame = socket.next().await.unwrap().unwrap();
-            let envelope: ServerEnvelope =
-                serde_json::from_str(&frame.into_text().unwrap()).unwrap();
+            let envelope: ServerEnvelope = decode_server_envelope(frame);
             if matches!(
                 envelope.body,
                 ServerMsg::Delta(ProjectionDelta::ThreadPostsChanged(ref thread))
@@ -4012,20 +4003,18 @@ async fn websocket_game_connection_streams_votecount_clear_delta(pool: sqlx::PgP
     .await
     .unwrap();
     let hello = socket.next().await.unwrap().unwrap();
-    let hello: ServerEnvelope = serde_json::from_str(&hello.into_text().unwrap()).unwrap();
+    let hello: ServerEnvelope = decode_server_envelope(hello);
     assert!(matches!(hello.body, ServerMsg::Hello(_)));
 
     let initial_delta = socket.next().await.unwrap().unwrap();
-    let initial_delta: ServerEnvelope =
-        serde_json::from_str(&initial_delta.into_text().unwrap()).unwrap();
+    let initial_delta: ServerEnvelope = decode_server_envelope(initial_delta);
     assert!(matches!(
         initial_delta.body,
         ServerMsg::Delta(ProjectionDelta::VoteCountChanged(v))
             if v.game == game && v.candidate_slot == "slot_2" && v.count == 1
     ));
     let initial_thread = socket.next().await.unwrap().unwrap();
-    let initial_thread: ServerEnvelope =
-        serde_json::from_str(&initial_thread.into_text().unwrap()).unwrap();
+    let initial_thread: ServerEnvelope = decode_server_envelope(initial_thread);
     assert_eq!(initial_thread.id, 2);
     assert!(matches!(
         initial_thread.body,
@@ -4049,8 +4038,7 @@ async fn websocket_game_connection_streams_votecount_clear_delta(pool: sqlx::PgP
     let live_delta = tokio::time::timeout(std::time::Duration::from_secs(3), async {
         loop {
             let frame = socket.next().await.unwrap().unwrap();
-            let envelope: ServerEnvelope =
-                serde_json::from_str(&frame.into_text().unwrap()).unwrap();
+            let envelope: ServerEnvelope = decode_server_envelope(frame);
             if matches!(
                 envelope.body,
                 ServerMsg::Delta(ProjectionDelta::VoteCountCleared(ref v))
@@ -4095,14 +4083,13 @@ async fn websocket_game_connection_streams_thread_delta_after_official_votecount
     .await
     .unwrap();
     let hello = socket.next().await.unwrap().unwrap();
-    let hello: ServerEnvelope = serde_json::from_str(&hello.into_text().unwrap()).unwrap();
+    let hello: ServerEnvelope = decode_server_envelope(hello);
     assert!(matches!(hello.body, ServerMsg::Hello(_)));
 
     let initial_thread = tokio::time::timeout(std::time::Duration::from_secs(3), async {
         loop {
             let frame = socket.next().await.unwrap().unwrap();
-            let envelope: ServerEnvelope =
-                serde_json::from_str(&frame.into_text().unwrap()).unwrap();
+            let envelope: ServerEnvelope = decode_server_envelope(frame);
             if matches!(
                 envelope.body,
                 ServerMsg::Delta(ProjectionDelta::ThreadPostsChanged(ref delta))
@@ -4128,8 +4115,7 @@ async fn websocket_game_connection_streams_thread_delta_after_official_votecount
     let thread_delta = tokio::time::timeout(std::time::Duration::from_secs(3), async {
         loop {
             let frame = socket.next().await.unwrap().unwrap();
-            let envelope: ServerEnvelope =
-                serde_json::from_str(&frame.into_text().unwrap()).unwrap();
+            let envelope: ServerEnvelope = decode_server_envelope(frame);
             if matches!(
                 envelope.body,
                 ServerMsg::Delta(ProjectionDelta::ThreadPostsChanged(ref delta))
@@ -4172,14 +4158,13 @@ async fn websocket_host_connection_streams_command_following_host_prompts_delta(
     .await
     .unwrap();
     let hello = socket.next().await.unwrap().unwrap();
-    let hello: ServerEnvelope = serde_json::from_str(&hello.into_text().unwrap()).unwrap();
+    let hello: ServerEnvelope = decode_server_envelope(hello);
     assert!(matches!(hello.body, ServerMsg::Hello(_)));
 
     let initial_empty_prompts = tokio::time::timeout(std::time::Duration::from_secs(3), async {
         loop {
             let frame = socket.next().await.unwrap().unwrap();
-            let envelope: ServerEnvelope =
-                serde_json::from_str(&frame.into_text().unwrap()).unwrap();
+            let envelope: ServerEnvelope = decode_server_envelope(frame);
             if matches!(
                 envelope.body,
                 ServerMsg::Delta(ProjectionDelta::HostPromptsChanged(ref delta))
@@ -4212,8 +4197,7 @@ async fn websocket_host_connection_streams_command_following_host_prompts_delta(
             let mut task_delta_id = None;
             loop {
                 let frame = socket.next().await.unwrap().unwrap();
-                let envelope: ServerEnvelope =
-                    serde_json::from_str(&frame.into_text().unwrap()).unwrap();
+                let envelope: ServerEnvelope = decode_server_envelope(frame);
                 match &envelope.body {
                     ServerMsg::Delta(ProjectionDelta::HostPromptsChanged(delta))
                         if delta.game == game
@@ -4698,14 +4682,13 @@ async fn websocket_player_connection_streams_scoped_private_notification_delta(p
     .await
     .unwrap();
     let hello = socket.next().await.unwrap().unwrap();
-    let hello: ServerEnvelope = serde_json::from_str(&hello.into_text().unwrap()).unwrap();
+    let hello: ServerEnvelope = decode_server_envelope(hello);
     assert!(matches!(hello.body, ServerMsg::Hello(_)));
 
     let initial_private = tokio::time::timeout(std::time::Duration::from_secs(3), async {
         loop {
             let frame = socket.next().await.unwrap().unwrap();
-            let envelope: ServerEnvelope =
-                serde_json::from_str(&frame.into_text().unwrap()).unwrap();
+            let envelope: ServerEnvelope = decode_server_envelope(frame);
             if matches!(
                 envelope.body,
                 ServerMsg::Delta(ProjectionDelta::PlayerNotificationsChanged(ref delta))
@@ -4721,8 +4704,7 @@ async fn websocket_player_connection_streams_scoped_private_notification_delta(p
     let initial_investigations = tokio::time::timeout(std::time::Duration::from_secs(3), async {
         loop {
             let frame = socket.next().await.unwrap().unwrap();
-            let envelope: ServerEnvelope =
-                serde_json::from_str(&frame.into_text().unwrap()).unwrap();
+            let envelope: ServerEnvelope = decode_server_envelope(frame);
             if matches!(
                 envelope.body,
                 ServerMsg::Delta(ProjectionDelta::PlayerInvestigationResultsChanged(ref delta))
@@ -4749,8 +4731,7 @@ async fn websocket_player_connection_streams_scoped_private_notification_delta(p
     let notification_delta = tokio::time::timeout(std::time::Duration::from_secs(3), async {
         loop {
             let frame = socket.next().await.unwrap().unwrap();
-            let envelope: ServerEnvelope =
-                serde_json::from_str(&frame.into_text().unwrap()).unwrap();
+            let envelope: ServerEnvelope = decode_server_envelope(frame);
             if matches!(
                 envelope.body,
                 ServerMsg::Delta(ProjectionDelta::PlayerNotificationsChanged(ref delta))
@@ -10534,8 +10515,7 @@ async fn websocket_hello_announces_protocol(pool: sqlx::PgPool) {
     .await
     .unwrap();
     let msg = socket.next().await.unwrap().unwrap();
-    let text = msg.into_text().unwrap();
-    let envelope: ServerEnvelope = serde_json::from_str(&text).unwrap();
+    let envelope = decode_server_envelope(msg);
 
     assert_eq!(envelope.v, PROTOCOL_VERSION);
     assert_eq!(envelope.id, 0);

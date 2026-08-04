@@ -17,18 +17,22 @@ must still load in a current client). We get both with a schema-first, generated
    built to survive it.
 4. **Additive evolution only** — same discipline as the event log ([02](02-event-sourcing.md)).
 
-## Format: CBOR over WebSocket
+## Format: REST/JSON commands and CBOR WebSocket deltas
 
 - **CBOR** (via `ciborium` on Rust, a small CBOR lib on TS) — compact binary, schema-light,
   excellent serde support, far fewer bytes than JSON for the high-frequency live frames
   (votecount ticks, deadline countdown, new posts).
-- **WebSocket** carries the live bidirectional stream. REST (also CBOR, or JSON for
-  debuggability on cold endpoints) carries uploads and cold loads ([03](03-backend.md)).
+- **REST/JSON** carries authenticated commands, uploads, and cold loads
+  ([03](03-backend.md)). It remains easy to inspect and naturally fits the
+  SvelteKit same-origin session boundary.
+- **WebSocket/binary CBOR** carries the server-to-client live stream. The
+  browser obtains a short-lived, audience-bound ticket, opens the socket, sets
+  `binaryType = "arraybuffer"`, and decodes only CBOR envelopes.
   Cold projection DTOs include `ThreadPage`, `PlayerNotification`, host/cohost-only
-  `HostPhaseControl`, and host/cohost-only `ResolutionTraceInspectionReport`; live deltas remain a
-  narrower `ProjectionDelta` stream until the push layer grows per-recipient notification delivery.
-- JSON remains available behind a content-negotiation header for debugging and tooling —
-  the *types* are identical; only the encoding differs.
+  `HostPhaseControl`, and host/cohost-only `ResolutionTraceInspectionReport`;
+  live deltas remain a narrower `ProjectionDelta` stream.
+- There is no JSON WebSocket compatibility mode. Debugging and tooling use the
+  REST projections or decode the same typed CBOR envelope.
 
 ## Framing
 
@@ -37,27 +41,32 @@ Every message is an envelope:
 ```
 Envelope {
   v:    u16,         // protocol version
-  id:   u64,         // monotonic per-connection; commands echo it in their ack
-  kind: Tag,         // discriminant: which message variant
-  body: <variant>,   // the payload, shape determined by kind
+  id:   u64,         // monotonic per live connection
+  body: {
+    kind: Tag,       // Hello | Delta | Ack | Reject
+    body: <variant>  // payload shape determined by kind
+  }
 }
 ```
 
-- **Client → Server: Commands.** `id` lets the client correlate the `Ack`/`Reject` to the
-  command it sent. Each command body also carries a durable `command_id` used for
-  idempotency across reconnects and lost acks; retrying the same `(principal, command_id)`
-  returns the original ack and appends no duplicate events. The command envelope deliberately
-  carries no principal or actor-account field: the API derives the principal from the current
-  enabled current session before authorization, idempotency lookup, or event handling.
-- **Server → Client: Events / Deltas / Acks.** Projection deltas ([03](03-backend.md)),
-  command acknowledgements, and errors.
+- **Client → Server: REST commands.** Each command carries a durable
+  `command_id`; retrying the same `(principal, command_id)` returns the original
+  acknowledgement and appends no duplicate events. The payload carries no
+  principal or actor-account field: the API derives the principal from the
+  current enabled session before authorization, idempotency lookup, or event
+  handling.
+- **Server → Client: CBOR live envelopes.** The first frame is `Hello`.
+  Subsequent frames contain capability-filtered projection deltas or
+  `ResyncRequired`. REST command responses carry typed `Ack` or `Reject`
+  envelopes independently of the live connection.
 
 ```
-Command  (C→S):  SubmitVote { slot, target } | WithdrawVote | SubmitAction { slot, template, targets, grant_id? }
+REST Command:    SubmitVote { slot, target } | WithdrawVote | SubmitAction { slot, template, targets, grant_id? }
                  | WithdrawAction { action_id } | SubmitPost { channel, body, attachments }
                  | SetDeadline { game, at } | RequestReplacement { slot } | ...
-ServerMsg (S→C): Ack { id } | Reject { id, error } | Delta { projection, change }
-                 | Hello { protocol_v, server_v, caps } | Resync { from_seq } | ...
+REST Response:   Ack { id } | Reject { id, error }
+Live ServerMsg:  Hello { protocol_v, server, caps }
+                 | Delta { projection change } | ResyncRequired { from_seq }
 ```
 
 Browser commands and private reads cross same-origin SvelteKit endpoints, which attach the
@@ -71,7 +80,7 @@ not become browser-authored WebSocket query claims.
 
 ## Versioning & negotiation
 
-- On connect, the server sends `Hello { protocol_v, server_v, caps }`. The client knows the
+- On connect, the server sends `Hello { protocol_v, server, caps }`. The client knows the
   range it supports; if the server's `protocol_v` is newer, the client degrades gracefully
   or prompts for refresh. The protocol version is explicit, never inferred.
 - **Variant tags are stable forever.** A `Tag` value, once shipped, keeps its meaning. New

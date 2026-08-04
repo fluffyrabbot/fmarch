@@ -13,6 +13,13 @@ use tower::ServiceExt;
 use uuid::Uuid;
 use wire::{ClientEnvelope, ClientMsg, Command, CommandMsg, ServerEnvelope, ServerMsg};
 
+fn decode_server_envelope(message: Message) -> ServerEnvelope {
+    let Message::Binary(bytes) = message else {
+        panic!("expected binary CBOR websocket frame");
+    };
+    ciborium::from_reader(bytes.as_ref()).expect("decode server CBOR envelope")
+}
+
 fn test_state(pool: sqlx::PgPool, root: &TempDir) -> ApiState {
     let store = MediaStore::open(root.path(), MediaLimits::default()).unwrap();
     ApiState::new(pool, store)
@@ -359,7 +366,7 @@ async fn websocket_ticket_is_short_lived_one_time_and_session_bound(pool: sqlx::
         .await
         .unwrap();
     let first = socket.next().await.unwrap().unwrap();
-    assert!(matches!(first, Message::Text(_)));
+    assert!(matches!(first, Message::Binary(_)));
     drop(socket);
 
     let replay = tokio_tungstenite::connect_async(url.as_str())
@@ -510,7 +517,7 @@ async fn open_socket_rechecks_revoked_session_before_delayed_private_delivery(po
     .unwrap();
     assert!(matches!(
         socket.next().await.unwrap().unwrap(),
-        Message::Text(_)
+        Message::Binary(_)
     ));
     loop {
         match tokio::time::timeout(Duration::from_millis(50), socket.next()).await {
@@ -541,8 +548,13 @@ async fn open_socket_rechecks_revoked_session_before_delayed_private_delivery(po
 
     let leaked = tokio::time::timeout(Duration::from_millis(700), async {
         while let Some(frame) = socket.next().await {
-            if let Ok(Message::Text(text)) = frame {
-                if text.contains("slot_after_revocation") {
+            if let Ok(Message::Binary(bytes)) = frame {
+                let envelope: ServerEnvelope =
+                    ciborium::from_reader(bytes.as_ref()).expect("decode server CBOR envelope");
+                if serde_json::to_string(&envelope)
+                    .expect("render test envelope")
+                    .contains("slot_after_revocation")
+                {
                     return true;
                 }
             }
@@ -615,7 +627,7 @@ async fn external_identity_ticket_is_bound_to_the_enabled_platform_principal(poo
     .unwrap();
     assert!(matches!(
         socket.next().await.unwrap().unwrap(),
-        Message::Text(_)
+        Message::Binary(_)
     ));
     drop(socket);
 
@@ -734,10 +746,7 @@ async fn command_on_instance_a_wakes_socket_b_and_reconnect_hydrates_durable_sta
     let received = tokio::time::timeout(Duration::from_secs(2), async {
         loop {
             let message = socket.next().await.unwrap().unwrap();
-            let Message::Text(text) = message else {
-                continue;
-            };
-            let envelope: ServerEnvelope = serde_json::from_str(&text).unwrap();
+            let envelope = decode_server_envelope(message);
             if matches!(
                 envelope.body,
                 ServerMsg::Delta(wire::ProjectionDelta::HostConsoleStateChanged(ref delta))
@@ -764,10 +773,7 @@ async fn command_on_instance_a_wakes_socket_b_and_reconnect_hydrates_durable_sta
     let caught_up = tokio::time::timeout(Duration::from_secs(2), async {
         loop {
             let message = reconnected.next().await.unwrap().unwrap();
-            let Message::Text(text) = message else {
-                continue;
-            };
-            let envelope: ServerEnvelope = serde_json::from_str(&text).unwrap();
+            let envelope = decode_server_envelope(message);
             if matches!(
                 envelope.body,
                 ServerMsg::Delta(wire::ProjectionDelta::HostConsoleStateChanged(ref delta))

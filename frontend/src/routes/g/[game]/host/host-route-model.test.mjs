@@ -50,7 +50,7 @@ test("host console route data is allowed for HostOf scoped to the current game",
   assert.equal(data.access.capabilityLabel, "HostOf(midsummer)");
   assert.equal(
     data.projectionBoundary.status,
-    "json-ws-command-projection-deltas-with-resync-and-reconnect",
+    "cbor-ws-projection-deltas-with-resync-and-reconnect",
   );
   assert.equal(
     data.projectionBoundary.resyncPolicy,
@@ -58,7 +58,7 @@ test("host console route data is allowed for HostOf scoped to the current game",
   );
   assert.equal(
     data.votecountBoundary.status,
-    "json-ws-command-projection-deltas-with-resync-and-reconnect",
+    "cbor-ws-projection-deltas-with-resync-and-reconnect",
   );
   assert.equal(data.votecountBoundary.command, "official-votecount-live-ws");
   assert.equal(data.hostVotecountEndpoint, "/games/midsummer/votecount");

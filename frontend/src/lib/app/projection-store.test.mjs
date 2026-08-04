@@ -140,7 +140,7 @@ test("projection store can be explicitly marked with the live transport boundary
 
   assert.equal(
     store.liveTransport.status,
-    "json-ws-command-projection-deltas-with-resync-and-reconnect",
+    "cbor-ws-projection-deltas-with-resync-and-reconnect",
   );
   assert.match(store.liveTransport.proof, /reconnect refresh recovery/);
 });

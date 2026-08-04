@@ -189,7 +189,7 @@ test("player route data exposes thread, channel, votecount, and touch command la
   );
   assert.equal(
     data.projectionBoundary.status,
-    "json-ws-command-projection-deltas-with-resync-and-reconnect",
+    "cbor-ws-projection-deltas-with-resync-and-reconnect",
   );
   assert.equal(
     data.projectionBoundary.resyncPolicy,

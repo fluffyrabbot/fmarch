@@ -13,6 +13,7 @@ import {
   requestSummary,
 } from "./capacity_overload_contract.mjs";
 import { seedSetupCommandPlanForGame } from "./dev_test_game_setup_bootstrap_scenario.mjs";
+import { decodeServerEnvelopeFrame } from "../frontend/src/lib/app/live-transport.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const defaultDatabaseUrl =
@@ -366,13 +367,14 @@ async function proveSlowWebsocketConsumers({ baseUrl }) {
           const socket = new WebSocket(
             `${wsUrl}/ws?game=${postBurstGame}&principal_user_id=player-mira&channel=main`,
           );
+          socket.binaryType = "arraybuffer";
           socket.addEventListener("open", () => resolve(socket), { once: true });
           socket.addEventListener("error", () => reject(new Error("websocket open failed")), {
             once: true,
           });
-          socket.addEventListener("message", (event) => {
+          socket.addEventListener("message", async (event) => {
             try {
-              const envelope = JSON.parse(String(event.data));
+              const envelope = await decodeServerEnvelopeFrame(event.data);
               if (
                 envelope?.body?.kind === "Delta" &&
                 envelope?.body?.body?.kind === "ResyncRequired"
@@ -380,7 +382,7 @@ async function proveSlowWebsocketConsumers({ baseUrl }) {
                 state.resyncs += 1;
               }
             } catch {
-              // Non-JSON frames are not part of the typed server protocol.
+              // Malformed/non-CBOR frames are outside the typed server protocol.
             }
           });
         }),

@@ -3,6 +3,8 @@ import { test } from "node:test";
 import {
   buildLiveProjectionUrl,
   connectLiveProjection,
+  decodeServerEnvelopeFrame,
+  encodeServerEnvelopeFrame,
   liveProjectionStatusForEvent,
   normalizeServerEnvelopeMessage,
   projectionPatchForLiveEnvelope,
@@ -201,6 +203,28 @@ test("normalizes tagged server envelopes", () => {
         },
       },
     },
+  );
+});
+
+test("encodes and decodes the versioned binary CBOR live envelope", async () => {
+  const envelope = {
+    v: 1,
+    id: 9,
+    body: {
+      kind: "Delta",
+      body: {
+        kind: "ResyncRequired",
+        body: { from_seq: 8 },
+      },
+    },
+  };
+  const frame = encodeServerEnvelopeFrame(envelope);
+
+  assert(frame instanceof Uint8Array);
+  assert.deepEqual(await decodeServerEnvelopeFrame(frame), envelope);
+  await assert.rejects(
+    decodeServerEnvelopeFrame(JSON.stringify(envelope)),
+    /binary CBOR/,
   );
 });
 
@@ -523,7 +547,7 @@ test("websocket resync frames refresh the projection store", async () => {
   });
 
   await FakeWebSocket.last.emit("message", {
-    data: JSON.stringify({
+    data: encodeServerEnvelopeFrame({
       v: 1,
       id: 9,
       body: {
@@ -583,16 +607,16 @@ test("back-to-back websocket resync frames collapse to one trailing refresh", as
   });
 
   const first = FakeWebSocket.last.emit("message", {
-    data: JSON.stringify(resyncEnvelope(8, 9)),
+    data: encodeServerEnvelopeFrame(resyncEnvelope(8, 9)),
   });
   await Promise.resolve();
   assert.equal(refreshes.length, 1);
 
   const second = FakeWebSocket.last.emit("message", {
-    data: JSON.stringify(resyncEnvelope(9, 10)),
+    data: encodeServerEnvelopeFrame(resyncEnvelope(9, 10)),
   });
   const third = FakeWebSocket.last.emit("message", {
-    data: JSON.stringify(resyncEnvelope(10, 11)),
+    data: encodeServerEnvelopeFrame(resyncEnvelope(10, 11)),
   });
   assert.equal(refreshes.length, 1);
 
@@ -650,7 +674,7 @@ test("resync completion from a dropped websocket cannot publish stale state", as
     onEvent: (message, snapshot) => events.push({ message, snapshot }),
   });
   const recovery = FakeWebSocket.last.emit("message", {
-    data: JSON.stringify(resyncEnvelope(12, 13)),
+    data: encodeServerEnvelopeFrame(resyncEnvelope(12, 13)),
   });
   await Promise.resolve();
   connection.drop();
@@ -688,7 +712,7 @@ test("websocket delta frames can refresh dependent cold-load keys", async () => 
   });
 
   await FakeWebSocket.last.emit("message", {
-    data: JSON.stringify({
+    data: encodeServerEnvelopeFrame({
       v: 1,
       id: 7,
       body: {
@@ -919,7 +943,7 @@ test("transport drop ignores late messages from the invalidated socket", async (
   const droppedSocket = FakeWebSocket.instances[0];
   connection.drop();
   await droppedSocket.emit("message", {
-    data: JSON.stringify({
+    data: encodeServerEnvelopeFrame({
       v: 1,
       id: 30,
       body: {

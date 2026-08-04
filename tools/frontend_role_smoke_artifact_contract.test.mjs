@@ -2755,8 +2755,8 @@ test("route live contract records Svelte onMount websocket and resync evidence",
     [
       true,
       true,
-      "json-ws-command-projection-deltas-with-resync-and-reconnect",
-      "json-ws-command-projection-deltas-with-resync-and-reconnect",
+      "cbor-ws-projection-deltas-with-resync-and-reconnect",
+      "cbor-ws-projection-deltas-with-resync-and-reconnect",
     ],
   );
   assert.deepEqual(routeLive.runtime.player.resyncKeys, [

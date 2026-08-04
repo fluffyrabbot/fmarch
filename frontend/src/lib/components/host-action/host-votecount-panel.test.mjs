@@ -9,7 +9,7 @@ import {
 test("host votecount panel model exposes live official-count boundary", () => {
   const view = buildHostVotecountPanelViewModel({
     boundary: {
-      status: "json-ws-command-projection-deltas-with-resync",
+      status: "cbor-ws-projection-deltas-with-resync-and-reconnect",
       command: "official-votecount-live-ws",
     },
     rows: [
@@ -20,7 +20,10 @@ test("host votecount panel model exposes live official-count boundary", () => {
 
   assert.equal(view.root.className, HOST_VOTECOUNT_PANEL_CONTRACT.rootClassName);
   assert.equal(view.root.data.component, "host-votecount-panel");
-  assert.equal(view.boundary.status, "json-ws-command-projection-deltas-with-resync");
+  assert.equal(
+    view.boundary.status,
+    "cbor-ws-projection-deltas-with-resync-and-reconnect",
+  );
   assert.equal(view.boundary.command, "official-votecount-live-ws");
   assert.deepEqual(view.rows, [
     {

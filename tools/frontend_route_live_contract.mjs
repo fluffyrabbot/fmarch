@@ -4,6 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   connectLiveProjection,
+  encodeServerEnvelopeFrame,
 } from "../frontend/src/lib/app/live-transport.mjs";
 import {
   createProjectionStore,
@@ -147,6 +148,7 @@ function assertSourceOwnsLiveConnection(
 }
 
 async function provePlayerLiveRuntime() {
+  FakeWebSocket.last = null;
   const data = await buildGameRouteData({
     game: "midsummer",
     principalUserId: "player_mira",
@@ -168,6 +170,9 @@ async function provePlayerLiveRuntime() {
     projectionStore: store,
     WebSocketCtor: FakeWebSocket,
     fetchImpl: responseMap({
+      [data.liveProjection.endpoint]: {
+        url: "ws://fmarch.local/ws?ticket=player-proof&audience=fmarch-live",
+      },
       [data.coldLoad.threadEndpoint]: {
         next_before_seq: 449,
         posts: [
@@ -251,6 +256,7 @@ async function provePlayerLiveRuntime() {
   });
 
   assert.notEqual(connection, null);
+  await waitForFakeSocket();
   await FakeWebSocket.last.emit("open");
   await FakeWebSocket.last.emit("message", liveEnvelope("Hello", { protocol_v: 1 }));
   await FakeWebSocket.last.emit(
@@ -318,6 +324,7 @@ async function provePlayerLiveRuntime() {
 }
 
 async function proveModeratorLiveRuntime() {
+  FakeWebSocket.last = null;
   const data = await buildHostConsoleRouteData({
     game: "midsummer",
     principalUserId: "host_h",
@@ -336,6 +343,9 @@ async function proveModeratorLiveRuntime() {
     projectionStore: store,
     WebSocketCtor: FakeWebSocket,
     fetchImpl: responseMap({
+      [data.liveProjection.endpoint]: {
+        url: "ws://fmarch.local/ws?ticket=host-proof&audience=fmarch-live",
+      },
       [data.hostConsoleStateEndpoint]: {
         phase: { phase_id: "D02", locked: true },
         slots: [
@@ -373,6 +383,7 @@ async function proveModeratorLiveRuntime() {
   });
 
   assert.notEqual(connection, null);
+  await waitForFakeSocket();
   await FakeWebSocket.last.emit("open");
   await FakeWebSocket.last.emit("message", liveEnvelope("Hello", { protocol_v: 1 }));
   await FakeWebSocket.last.emit(
@@ -439,9 +450,16 @@ function stripProjectionRefreshParam(url) {
   return `${parsed.pathname}${parsed.search}`;
 }
 
+async function waitForFakeSocket() {
+  for (let attempt = 0; attempt < 10 && FakeWebSocket.last === null; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+  assert.notEqual(FakeWebSocket.last, null, "live ticket should open a websocket");
+}
+
 function liveEnvelope(kind, body) {
   return {
-    data: JSON.stringify({
+    data: encodeServerEnvelopeFrame({
       v: 1,
       id: 1,
       body: {

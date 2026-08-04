@@ -9647,8 +9647,8 @@ async fn ws_session(mut socket: WebSocket, state: ApiState, claim: WebsocketTick
     if !websocket_session_active(&state, &claim).await {
         return;
     }
-    if let Ok(text) = serde_json::to_string(&ServerEnvelope::new(0, ServerMsg::Hello(hello))) {
-        let _ = socket.send(Message::Text(text.into())).await;
+    if let Some(frame) = server_envelope_frame(&ServerEnvelope::new(0, ServerMsg::Hello(hello))) {
+        let _ = socket.send(frame).await;
     }
 
     let game = claim.game;
@@ -10053,15 +10053,21 @@ async fn send_projection_deltas(
 ) -> u64 {
     for delta in deltas {
         let envelope = ServerEnvelope::new(next_envelope_id, ServerMsg::Delta(delta));
-        let Ok(text) = serde_json::to_string(&envelope) else {
+        let Some(frame) = server_envelope_frame(&envelope) else {
             continue;
         };
-        if socket.send(Message::Text(text.into())).await.is_err() {
+        if socket.send(frame).await.is_err() {
             return next_envelope_id;
         }
         next_envelope_id += 1;
     }
     next_envelope_id
+}
+
+fn server_envelope_frame(envelope: &ServerEnvelope) -> Option<Message> {
+    let mut bytes = Vec::new();
+    ciborium::into_writer(envelope, &mut bytes).ok()?;
+    Some(Message::Binary(bytes.into()))
 }
 
 async fn hello_for(state: &ApiState, principal_user_id: Option<&str>, game: Option<Uuid>) -> Hello {

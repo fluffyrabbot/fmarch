@@ -32,7 +32,7 @@ The backend is **CQRS-flavored** but pragmatic:
 ### Command handling pipeline
 
 ```
-client frame ─▶ decode (CBOR, versioned)
+HTTP JSON command ─▶ decode (versioned typed envelope)
              ─▶ authenticate (session) ─────────────┐
              ─▶ claim durable command_id receipt ────┤ retry boundary
              ─▶ resolve capability for this action ──┤ trust boundary
@@ -63,9 +63,11 @@ client frame ─▶ decode (CBOR, versioned)
 
 ## Live delivery
 
-WebSocket per connected client. The server pushes **projection deltas** — framed,
-versioned, and *filtered by the client's capabilities* so a client only ever receives what
-it may see (a spectator never receives scumchat frames; the bytes don't leave the server).
+One ticketed WebSocket per connected live surface. The server pushes **binary
+CBOR projection deltas** — framed, versioned, and *filtered by the client's
+capabilities* so a client only ever receives what it may see (a spectator never
+receives scumchat frames; the bytes don't leave the server). Commands remain on
+authenticated REST/JSON; the WebSocket is a server-to-client projection channel.
 
 ```
             append committed ─▶ NOTIFY ─▶ fan-out task

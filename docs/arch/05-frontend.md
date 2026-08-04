@@ -11,7 +11,7 @@ is a hard requirement, not a nicety.
 |---|---|---|
 | Framework | **SvelteKit** | lean runtime; small bundles serve the data-efficiency value |
 | Language | **TypeScript** | strict; types generated from Rust ([04](04-wire-protocol.md)) |
-| Transport | **WebSocket** (CBOR) + **REST** for cold loads/uploads | see [03](03-backend.md) |
+| Transport | binary **WebSocket CBOR** for live deltas + **REST JSON** for commands/cold loads/uploads | see [03](03-backend.md) |
 | State | Svelte stores fed by the live delta stream | projections mirrored client-side |
 
 > Solid is a viable alternative if we want an even leaner runtime; SvelteKit wins on

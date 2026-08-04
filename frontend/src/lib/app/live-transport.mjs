@@ -1,4 +1,7 @@
 import { normalizeThreadPost as normalizeProjectionThreadPost } from "./cold-load.mjs";
+import { decode, encode } from "cbor-x";
+
+export const LIVE_PROTOCOL_VERSION = 1;
 
 export const COLD_LOAD_TRANSPORT_BOUNDARY = Object.freeze({
   status: "cold-load-refresh-only",
@@ -8,11 +11,11 @@ export const COLD_LOAD_TRANSPORT_BOUNDARY = Object.freeze({
 });
 
 export const LIVE_TRANSPORT_BOUNDARY = Object.freeze({
-  status: "json-ws-command-projection-deltas-with-resync-and-reconnect",
-  protocol: "WebSocket JSON",
+  status: "cbor-ws-projection-deltas-with-resync-and-reconnect",
+  protocol: "WebSocket CBOR",
   resyncPolicy: "single-flight-latest-trailing-refresh",
   proof:
-    "Initial WebSocket Hello plus command-following projection delta, single-flight ResyncRequired recovery with one latest trailing refresh, and reconnect refresh recovery are proven over the typed JSON websocket boundary.",
+    "Initial binary-CBOR WebSocket Hello plus command-following projection delta, single-flight ResyncRequired recovery with one latest trailing refresh, and reconnect refresh recovery are proven over the versioned typed CBOR boundary.",
 });
 
 export const LIVE_PROJECTION_CONNECTING_STATUS = Object.freeze({
@@ -58,6 +61,9 @@ export function resolveWebSocketUrl(url, locationHref = globalThis.location?.hre
 }
 
 export function normalizeServerEnvelopeMessage(envelope) {
+  if (envelope?.v !== LIVE_PROTOCOL_VERSION) {
+    return null;
+  }
   const body = envelope?.body;
   if (body?.kind === "Hello") {
     return Object.freeze({ kind: "hello", body: body.body ?? {} });
@@ -75,6 +81,24 @@ export function normalizeServerEnvelopeMessage(envelope) {
     }
   }
   return null;
+}
+
+export function encodeServerEnvelopeFrame(envelope) {
+  return encode(envelope);
+}
+
+export async function decodeServerEnvelopeFrame(frame) {
+  let bytes;
+  if (frame instanceof ArrayBuffer) {
+    bytes = new Uint8Array(frame);
+  } else if (ArrayBuffer.isView(frame)) {
+    bytes = new Uint8Array(frame.buffer, frame.byteOffset, frame.byteLength);
+  } else if (typeof Blob !== "undefined" && frame instanceof Blob) {
+    bytes = new Uint8Array(await frame.arrayBuffer());
+  } else {
+    throw new TypeError("live websocket frames must be binary CBOR");
+  }
+  return decode(bytes);
 }
 
 export function projectionPatchForLiveEnvelope(envelope, previousSnapshot) {
@@ -208,6 +232,7 @@ export function connectLiveProjection({
       return null;
     }
     const openedSocket = new WebSocketCtor(resolveWebSocketUrl(socketUrl));
+    openedSocket.binaryType = "arraybuffer";
     socket = openedSocket;
     let closeHandled = false;
     let pendingResyncMessage = null;
@@ -314,7 +339,7 @@ export function connectLiveProjection({
         return;
       }
       try {
-        const envelope = JSON.parse(String(event.data));
+        const envelope = await decodeServerEnvelopeFrame(event.data);
         const message = normalizeServerEnvelopeMessage(envelope);
         if (message?.kind === "resync-required") {
           metrics.resyncFramesReceived += 1;
