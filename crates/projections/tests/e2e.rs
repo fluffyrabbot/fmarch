@@ -28,11 +28,18 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 fn load_pack() -> Pack {
-    let path = concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../../packs/mafiascum/pack.json"
-    );
-    let raw = std::fs::read_to_string(path).expect("read pack.json");
+    let current_dir = std::env::current_dir().expect("resolve current directory");
+    let path = current_dir
+        .ancestors()
+        .map(|ancestor| ancestor.join("packs/mafiascum/pack.json"))
+        .find(|candidate| candidate.is_file())
+        .unwrap_or_else(|| {
+            panic!(
+                "find packs/mafiascum/pack.json from {}",
+                current_dir.display()
+            )
+        });
+    let raw = std::fs::read_to_string(&path).expect("read pack.json");
     serde_json::from_str(&raw).expect("parse pack.json")
 }
 
