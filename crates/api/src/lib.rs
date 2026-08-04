@@ -45,12 +45,12 @@ use wire::{
     HostConsolePhaseStateDelta, HostConsoleSlotOccupancyDelta, HostConsoleStateDelta,
     HostConsoleThreadPostDelta, HostDayEventDelta, HostPhaseControl, HostPromptDelta,
     HostPromptsDelta, HostTaskAllowedCommand, HostTaskCommandKind, HostTaskDelta, HostTaskKind,
-    HostTaskState, HostTaskUrgency, ModerationCase, ModerationCaseDetail, ModerationCasePage,
-    ModerationReportReceipt, PlayerInvestigationResult, PlayerInvestigationResultsDelta,
-    PlayerNotification, PlayerNotificationsDelta, ProfileEditor, ProjectionDelta,
-    PublicGameThreadPage, PublicProfile, PublicSearchPage, PublicSearchResult, RejectCode,
-    RejectMsg, ServerEnvelope, ServerMsg, SubscriptionTargetState, ThreadPage, ThreadPost,
-    ThreadPostsDelta, VoteCountClearedDelta, VoteCountDelta, PROTOCOL_VERSION,
+    HostTaskState, HostTaskUrgency, MemberMutePage, MemberMuteState, ModerationCase,
+    ModerationCaseDetail, ModerationCasePage, ModerationReportReceipt, PlayerInvestigationResult,
+    PlayerInvestigationResultsDelta, PlayerNotification, PlayerNotificationsDelta, ProfileEditor,
+    ProjectionDelta, PublicGameThreadPage, PublicProfile, PublicSearchPage, PublicSearchResult,
+    RejectCode, RejectMsg, ServerEnvelope, ServerMsg, SubscriptionTargetState, ThreadPage,
+    ThreadPost, ThreadPostsDelta, VoteCountClearedDelta, VoteCountDelta, PROTOCOL_VERSION,
 };
 
 #[derive(Clone)]
@@ -385,6 +385,13 @@ pub fn router_with_state(state: ApiState) -> Router {
         .route("/games/import", post(import_completed_game_export))
         .route("/search", get(public_search))
         .route("/inbox", get(community_inbox))
+        .route("/mutes", get(member_mutes))
+        .route(
+            "/mutes/profiles/{handle}",
+            get(member_mute_state)
+                .put(mute_public_profile)
+                .delete(unmute_public_profile),
+        )
         .route(
             "/subscriptions/{target_kind}/{scope_id}",
             get(subscription_target_state)
@@ -5782,6 +5789,12 @@ struct CommunityInboxQuery {
     limit: Option<i64>,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+struct MemberMuteQuery {
+    cursor: Option<String>,
+    limit: Option<i64>,
+}
+
 async fn game_index(
     State(state): State<ApiState>,
     Query(query): Query<GameIndexQuery>,
@@ -5832,7 +5845,10 @@ async fn public_game_thread(
     State(state): State<ApiState>,
     Path(game): Path<Uuid>,
     Query(query): Query<ThreadQuery>,
+    headers: HeaderMap,
 ) -> Result<Json<PublicGameThreadPage>, ApiError> {
+    let viewer_principal_user_id =
+        optional_authenticated_community_member(&state, &headers).await?;
     let game_row = projections::public_game_by_id(&state.pool, game)
         .await?
         .ok_or_else(|| ApiError::Reject {
@@ -5845,6 +5861,7 @@ async fn public_game_thread(
         game,
         query.before_seq,
         query.limit.unwrap_or(50),
+        viewer_principal_user_id.as_deref(),
     )
     .await?;
     Ok(Json(PublicGameThreadPage {
@@ -5948,12 +5965,159 @@ async fn community_inbox(
     ))
 }
 
+async fn member_mutes(
+    State(state): State<ApiState>,
+    Query(query): Query<MemberMuteQuery>,
+    headers: HeaderMap,
+) -> Result<Json<MemberMutePage>, ApiError> {
+    let principal_user_id = authenticated_community_member(&state, &headers).await?;
+    let cursor = query
+        .cursor
+        .as_deref()
+        .map(parse_member_mute_cursor)
+        .transpose()?;
+    let page = projections::member_mutes(
+        &state.pool,
+        principal_user_id.as_str(),
+        cursor,
+        query.limit.unwrap_or(50),
+    )
+    .await?;
+    Ok(Json(MemberMutePage {
+        members: page
+            .members
+            .into_iter()
+            .map(MemberMuteState::from)
+            .collect(),
+        next_cursor: page
+            .next_cursor
+            .map(|cursor| format!("{}:{}", cursor.updated_seq, cursor.relationship_id)),
+    }))
+}
+
+async fn member_mute_state(
+    State(state): State<ApiState>,
+    Path(handle): Path<String>,
+    headers: HeaderMap,
+) -> Result<Json<MemberMuteState>, ApiError> {
+    let principal_user_id = authenticated_community_member(&state, &headers).await?;
+    Ok(Json(
+        projections::member_mute_state(&state.pool, principal_user_id.as_str(), handle.as_str())
+            .await
+            .map_err(member_mute_projection_api_error)?
+            .into(),
+    ))
+}
+
+async fn mute_public_profile(
+    State(state): State<ApiState>,
+    Path(handle): Path<String>,
+    headers: HeaderMap,
+) -> Result<Json<MemberMuteState>, ApiError> {
+    let principal_user_id = authenticated_community_member(&state, &headers).await?;
+    Ok(Json(
+        projections::mute_public_profile(
+            &state.pool,
+            principal_user_id.as_str(),
+            handle.as_str(),
+            unix_now_seconds(),
+        )
+        .await
+        .map_err(member_mute_projection_api_error)?
+        .into(),
+    ))
+}
+
+async fn unmute_public_profile(
+    State(state): State<ApiState>,
+    Path(handle): Path<String>,
+    headers: HeaderMap,
+) -> Result<Json<MemberMuteState>, ApiError> {
+    let principal_user_id = authenticated_community_member(&state, &headers).await?;
+    Ok(Json(
+        projections::unmute_public_profile(
+            &state.pool,
+            principal_user_id.as_str(),
+            handle.as_str(),
+            unix_now_seconds(),
+        )
+        .await
+        .map_err(member_mute_projection_api_error)?
+        .into(),
+    ))
+}
+
 async fn authenticated_community_member(
     state: &ApiState,
     headers: &HeaderMap,
 ) -> Result<String, ApiError> {
     let token = bearer_token(headers).ok_or_else(unauthorized_account)?;
     require_active_enabled_account(state, token).await
+}
+
+async fn optional_authenticated_community_member(
+    state: &ApiState,
+    headers: &HeaderMap,
+) -> Result<Option<String>, ApiError> {
+    if !headers.contains_key(AUTHORIZATION) {
+        return Ok(None);
+    }
+    let token = bearer_token(headers).ok_or_else(unauthorized_account)?;
+    require_active_enabled_account(state, token).await.map(Some)
+}
+
+fn parse_member_mute_cursor(value: &str) -> Result<projections::MemberMuteCursor, ApiError> {
+    let (updated_seq, relationship_id) = value
+        .split_once(':')
+        .ok_or_else(|| member_mute_bad_request("mute cursor is invalid"))?;
+    let updated_seq = updated_seq
+        .parse::<i64>()
+        .map_err(|_| member_mute_bad_request("mute cursor is invalid"))?;
+    let relationship_id = Uuid::parse_str(relationship_id)
+        .map_err(|_| member_mute_bad_request("mute cursor is invalid"))?;
+    Ok(projections::MemberMuteCursor {
+        updated_seq,
+        relationship_id,
+    })
+}
+
+fn member_mute_projection_api_error(error: projections::ProjectionError) -> ApiError {
+    match error {
+        projections::ProjectionError::MuteTargetNotPublic => ApiError::Reject {
+            status: StatusCode::NOT_FOUND,
+            error: RejectCode::Internal,
+            message: "public profile was not found".to_string(),
+        },
+        projections::ProjectionError::CannotMuteSelf => {
+            member_mute_bad_request("members cannot mute their own profile")
+        }
+        projections::ProjectionError::AlreadyMuted => ApiError::Reject {
+            status: StatusCode::CONFLICT,
+            error: RejectCode::Internal,
+            message: "member is already muted".to_string(),
+        },
+        projections::ProjectionError::NotMuted => ApiError::Reject {
+            status: StatusCode::CONFLICT,
+            error: RejectCode::Internal,
+            message: "member is not muted".to_string(),
+        },
+        projections::ProjectionError::Store(eventstore::StoreError::Conflict { .. }) => {
+            ApiError::Reject {
+                status: StatusCode::CONFLICT,
+                error: RejectCode::StreamConflict,
+                message: "mute changed concurrently; refresh and try again".to_string(),
+            }
+        }
+        error => ApiError::Projection(error),
+    }
+}
+
+fn member_mute_bad_request(message: &str) -> ApiError {
+    ApiError::Reject {
+        status: StatusCode::BAD_REQUEST,
+        error: RejectCode::Internal,
+        message: message.to_string(),
+    }
 }
 
 fn subscription_target(
@@ -6009,7 +6173,10 @@ fn subscription_bad_request(message: &str) -> ApiError {
 async fn public_search(
     State(state): State<ApiState>,
     Query(query): Query<PublicSearchQuery>,
+    headers: HeaderMap,
 ) -> Result<Json<PublicSearchPage>, ApiError> {
+    let viewer_principal_user_id =
+        optional_authenticated_community_member(&state, &headers).await?;
     let normalized_query = query.q.trim();
     if normalized_query.chars().count() < 2 || normalized_query.chars().count() > 200 {
         return Err(ApiError::Reject {
@@ -6042,6 +6209,7 @@ async fn public_search(
         filter,
         cursor,
         query.limit.unwrap_or(20),
+        viewer_principal_user_id.as_deref(),
     )
     .await?;
     Ok(Json(PublicSearchPage {
@@ -6200,7 +6368,10 @@ async fn discussion_area_topics(
     State(state): State<ApiState>,
     Path(slug): Path<String>,
     Query(query): Query<DiscussionPageQuery>,
+    headers: HeaderMap,
 ) -> Result<Json<DiscussionTopicPage>, ApiError> {
+    let viewer_principal_user_id =
+        optional_authenticated_community_member(&state, &headers).await?;
     let area = projections::discussion_area_by_slug(&state.pool, slug.as_str())
         .await?
         .ok_or_else(|| discussion_not_found("discussion area"))?;
@@ -6214,6 +6385,7 @@ async fn discussion_area_topics(
         area.area_id,
         cursor,
         query.limit.unwrap_or(20),
+        viewer_principal_user_id.as_deref(),
     )
     .await?;
     Ok(Json(DiscussionTopicPage {
@@ -6229,7 +6401,10 @@ async fn discussion_topic_thread(
     State(state): State<ApiState>,
     Path((slug, topic)): Path<(String, Uuid)>,
     Query(query): Query<DiscussionPostQuery>,
+    headers: HeaderMap,
 ) -> Result<Json<DiscussionThreadPage>, ApiError> {
+    let viewer_principal_user_id =
+        optional_authenticated_community_member(&state, &headers).await?;
     let area = projections::discussion_area_by_slug(&state.pool, slug.as_str())
         .await?
         .ok_or_else(|| discussion_not_found("discussion area"))?;
@@ -6242,6 +6417,7 @@ async fn discussion_topic_thread(
         topic.topic_id,
         query.before_seq,
         query.limit.unwrap_or(50),
+        viewer_principal_user_id.as_deref(),
     )
     .await?;
     Ok(Json(DiscussionThreadPage {

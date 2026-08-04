@@ -19,11 +19,11 @@ use tower::ServiceExt;
 use uuid::Uuid;
 use wire::{
     ClientEnvelope, ClientMsg, Command, CommandMsg, CommunityInboxPage, DiscussionThreadPage,
-    DiscussionTopic, DiscussionTopicPage, GameIndexPage, ModerationCaseDetail, ModerationCasePage,
-    ModerationReportReceipt, PlayerInvestigationResult, PlayerNotification, ProfileEditor,
-    ProjectionDelta, PublicProfile, PublicSearchPage, RejectCode, RejectMsg, ServerEnvelope,
-    ServerMsg, SlotLifecycle, SubmitPostMedia, SubscriptionTargetState, ThreadPage, VoteTarget,
-    PROTOCOL_VERSION,
+    DiscussionTopic, DiscussionTopicPage, GameIndexPage, MemberMutePage, MemberMuteState,
+    ModerationCaseDetail, ModerationCasePage, ModerationReportReceipt, PlayerInvestigationResult,
+    PlayerNotification, ProfileEditor, ProjectionDelta, PublicProfile, PublicSearchPage,
+    RejectCode, RejectMsg, ServerEnvelope, ServerMsg, SlotLifecycle, SubmitPostMedia,
+    SubscriptionTargetState, ThreadPage, VoteTarget, PROTOCOL_VERSION,
 };
 
 fn decode_server_envelope(message: tokio_tungstenite::tungstenite::Message) -> ServerEnvelope {
@@ -5563,6 +5563,155 @@ async fn discussion_and_public_search_api_enforce_visibility_sessions_and_modera
     )
     .unwrap();
     assert!(hidden_search.results.is_empty());
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn member_mute_api_is_authenticated_private_and_reversible(pool: sqlx::PgPool) {
+    let app = router_with_dev_auth(pool);
+    let (reader_token, _) = create_media_upload_account_session(&app, "mute-reader").await;
+    let (target_token, _) = create_media_upload_account_session(&app, "mute-target").await;
+    for (token, handle, display_name) in [
+        (&reader_token, "mute_reader", "Mute Reader"),
+        (&target_token, "mute_target", "Mute Target"),
+    ] {
+        let response = post_bearer_json(
+            &app,
+            "/profiles",
+            serde_json::json!({
+                "handle": handle,
+                "display_name": display_name,
+                "bio": "Public mute API profile",
+                "visibility": "public"
+            }),
+            token,
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::CREATED);
+    }
+
+    let uri = "/mutes/profiles/mute_target";
+    let unauthenticated = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("PUT")
+                .uri(uri)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(unauthenticated.status(), StatusCode::UNAUTHORIZED);
+
+    let muted = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("PUT")
+                .uri(uri)
+                .header("authorization", format!("Bearer {reader_token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(muted.status(), StatusCode::OK);
+    let muted: MemberMuteState =
+        serde_json::from_slice(&to_bytes(muted.into_body(), usize::MAX).await.unwrap()).unwrap();
+    assert!(muted.muted);
+    assert_eq!(muted.handle, "mute_target");
+
+    let duplicate = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("PUT")
+                .uri(uri)
+                .header("authorization", format!("Bearer {reader_token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(duplicate.status(), StatusCode::CONFLICT);
+    let self_mute = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("PUT")
+                .uri("/mutes/profiles/mute_reader")
+                .header("authorization", format!("Bearer {reader_token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(self_mute.status(), StatusCode::BAD_REQUEST);
+
+    let list = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/mutes?limit=20")
+                .header("authorization", format!("Bearer {reader_token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(list.status(), StatusCode::OK);
+    let list: MemberMutePage =
+        serde_json::from_slice(&to_bytes(list.into_body(), usize::MAX).await.unwrap()).unwrap();
+    assert_eq!(list.members.len(), 1);
+    assert_eq!(list.members[0].handle, "mute_target");
+    assert!(list.next_cursor.is_none());
+
+    let target_list = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/mutes?limit=20")
+                .header("authorization", format!("Bearer {target_token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let target_list: MemberMutePage =
+        serde_json::from_slice(&to_bytes(target_list.into_body(), usize::MAX).await.unwrap())
+            .unwrap();
+    assert!(target_list.members.is_empty());
+
+    let unmuted = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("DELETE")
+                .uri(uri)
+                .header("authorization", format!("Bearer {reader_token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(unmuted.status(), StatusCode::OK);
+    let unmuted: MemberMuteState =
+        serde_json::from_slice(&to_bytes(unmuted.into_body(), usize::MAX).await.unwrap()).unwrap();
+    assert!(!unmuted.muted);
+    let duplicate_unmute = app
+        .oneshot(
+            Request::builder()
+                .method("DELETE")
+                .uri(uri)
+                .header("authorization", format!("Bearer {reader_token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(duplicate_unmute.status(), StatusCode::CONFLICT);
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]

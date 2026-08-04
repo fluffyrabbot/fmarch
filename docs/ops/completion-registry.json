@@ -242,7 +242,30 @@
       ],
       "remaining": [
         "Add a shared object-storage backend, split migration execution from API startup, configure the two-replica Railway target, and prove cross-replica media/live behavior."
-      ]
+      ],
+      "recommended_slice": {
+        "objective": "Replace the single-process deployment assumptions with the canonical 1.0 topology: an async content-addressed S3-compatible media repository, an explicit one-shot migrator, migration-free API startup, two local API replicas behind one endpoint, and a cross-replica upload/read/live-recovery proof that drives the Railway service configuration.",
+        "paths": [
+          "crates/media/",
+          "crates/api/",
+          "crates/server/",
+          "deploy/railway/",
+          "railway.toml",
+          "Dockerfile",
+          "tools/",
+          "docs/ops/railway-staging-target.md"
+        ],
+        "proof_commands": [
+          "npm run test:proof-lane-contract",
+          "npm run proof:lanes -- --mode push --run",
+          "npm run test:railway-staging-target"
+        ],
+        "non_claims": [
+          "No production promotion before hosted staging health, same-commit attribution, and the full release sweep pass.",
+          "No per-replica filesystem fallback in staging or production.",
+          "No claim that local multi-replica proof substitutes for the real-hosted race matrix."
+        ]
+      }
     },
     {
       "id": "foundation.security-release-baseline",
@@ -1526,8 +1549,8 @@
       "order": 70,
       "title": "Personal community mute controls",
       "execution_class": "code",
-      "status": "open",
-      "summary": "Public community reads are globally moderated, but a member cannot create a reversible personal boundary around another public profile's contributions without affecting anyone else's view.",
+      "status": "complete",
+      "summary": "Authenticated members own durable private mute relationships whose read-time overlays suppress public-profile contributions across discussion, search, public game threads, and watched inboxes without changing anyone else's view.",
       "complete_when": [
         "Authenticated members can mute and unmute public profiles through a durable private relationship stream, inspect their bounded mute list, and have muted authors consistently suppressed from personalized discussion, search, and inbox reads without changing global visibility or exposing credential principals."
       ],
@@ -1542,36 +1565,37 @@
         {
           "kind": "source",
           "value": "docs/arch/02-event-sourcing.md"
+        },
+        {
+          "kind": "source",
+          "value": "crates/community/src/lib.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/projections/src/lib.rs"
+        },
+        {
+          "kind": "source",
+          "value": "frontend/src/routes/u/[handle]/+page.svelte"
+        },
+        {
+          "kind": "source",
+          "value": "frontend/src/routes/inbox/+page.svelte"
+        },
+        {
+          "kind": "command",
+          "value": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p community -p projections -p api member_mute -- --test-threads=1"
+        },
+        {
+          "kind": "command",
+          "value": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch npm run test:dev-test-game-community-subscriptions"
+        },
+        {
+          "kind": "artifact",
+          "value": "target/community-subscription-role-proof/community-subscription-proof.json"
         }
       ],
-      "remaining": [
-        "Add typed member-profile mute streams, a private current-mute projection, personalized public-read overlays, profile and inbox controls, bounded list pagination, rebuild coverage, and two-member browser proof."
-      ],
-      "recommended_slice": {
-        "objective": "Build private, reversible member-to-profile mute controls: typed mute/unmute events, one durable relationship stream per member and public profile, a current-mute projection and bounded list, consistent personalized suppression across discussion threads, public search, and watched-update inboxes, plus profile/inbox controls and seeded two-member Chromium proof.",
-        "paths": [
-          "crates/community/",
-          "crates/projections/",
-          "crates/api/",
-          "crates/wire/",
-          "frontend/src/routes/u/",
-          "frontend/src/routes/inbox/",
-          "frontend/src/routes/discussions/",
-          "frontend/src/routes/search/",
-          "tools/",
-          "docs/arch/02-event-sourcing.md"
-        ],
-        "proof_commands": [
-          "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p community -p projections -p api member_mute -- --test-threads=1",
-          "npm run test:frontend-contract",
-          "npm run test:completeness-scorecard"
-        ],
-        "non_claims": [
-          "No global content removal, moderation action, or effect on other members' views.",
-          "No direct-message, mention, or private-channel blocking semantics before those interaction surfaces exist.",
-          "No recommendation ranking, engagement optimization, or release-readiness claim from local proof."
-        ]
-      }
+      "remaining": []
     },
     {
       "id": "product.archive.completed-game-export",

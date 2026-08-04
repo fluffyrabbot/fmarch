@@ -60,6 +60,31 @@
   {#if data.inbox.nextCursor !== null}
     <a class="fm-touch-button fm-touch-button--secondary" href={`?before_seq=${data.inbox.nextCursor}`} data-testid="community-inbox-older">Older updates</a>
   {/if}
+
+  <section class="fm-panel" aria-labelledby="muted-members-heading" data-testid="community-muted-members">
+    <p class="fm-eyebrow">Private controls</p>
+    <h2 id="muted-members-heading">Muted members</h2>
+    <p>Muted contributions stay hidden only for you. Unmuting restores them without changing shared history.</p>
+    {#if data.mutedMembers.length === 0}
+      <p data-testid="community-muted-members-empty">You have not muted anyone.</p>
+    {:else}
+      <ul class="muted-member-list">
+        {#each data.mutedMembers as member}
+          <li>
+            <a href={`/u/${encodeURIComponent(member.handle)}`}>{member.display_name}</a>
+            <form method="POST" action="?/unmute">
+              <input type="hidden" name="handle" value={member.handle} />
+              <button
+                type="submit"
+                class="fm-touch-button fm-touch-button--secondary"
+                data-testid={`community-muted-member-unmute-${member.handle}`}
+              >Unmute</button>
+            </form>
+          </li>
+        {/each}
+      </ul>
+    {/if}
+  </section>
   {#if form?.state === "reject"}
     <p role="alert" class="fm-panel" data-testid="community-inbox-reject">{form.message}</p>
   {/if}
@@ -72,4 +97,6 @@
   .inbox-item.unread { border-inline-start: 5px solid var(--fm-accent); }
   .inbox-item h2 { margin-block: 4px; }
   .inbox-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+  .muted-member-list { display: grid; gap: 10px; list-style: none; padding: 0; }
+  .muted-member-list li { align-items: center; display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; }
 </style>

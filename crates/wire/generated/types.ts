@@ -230,6 +230,10 @@ export type CommunityInboxItem = { target_kind: string, scope_id: string, source
 
 export type CommunityInboxPage = { items: Array<CommunityInboxItem>, unread_count: bigint, next_cursor: bigint | null, };
 
+export type MemberMuteState = { profile_id: string, handle: string, display_name: string, muted: boolean, updated_seq: bigint, };
+
+export type MemberMutePage = { members: Array<MemberMuteState>, next_cursor: string | null, };
+
 export type ModerationReportReceipt = { report_id: string, status: string, submitted_at: bigint, };
 
 export type ModerationCase = { case_id: string, target_kind: string, scope_id: string, source_seq: bigint, target_href: string, target_body: string, status: string, report_count: bigint, opened_at: bigint, updated_at: bigint, updated_seq: bigint, action_reason: string | null, };

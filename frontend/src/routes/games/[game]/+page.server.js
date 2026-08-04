@@ -5,13 +5,16 @@ import { buildPublicGamePublication } from "./public-game-publication.mjs";
 
 export async function load({ params, locals, cookies, fetch, url }) {
   const apiBaseUrl = process.env.FMARCH_API_BASE_URL ?? "";
+  const token = accessTokenForRequest({ locals, cookies });
   const search = new URLSearchParams({ limit: "50" });
   const beforeSeq = optionalSequence(url.searchParams.get("before_seq"));
   if (beforeSeq !== null) search.set("before_seq", beforeSeq);
   const fixtureMode = process.env.FMARCH_FRONTEND_FIXTURE_SESSION === "1";
   const response = fixtureMode && apiBaseUrl === ""
     ? null
-    : await fetch(`${apiBaseUrl}/games/${encodeURIComponent(params.game)}?${search}`);
+    : await fetch(`${apiBaseUrl}/games/${encodeURIComponent(params.game)}?${search}`, {
+        headers: readHeaders(token),
+      });
   const page = fixtureMode && apiBaseUrl === ""
     ? fixturePublicGame(params.game)
     : response.ok ? await response.json().catch(() => null) : null;
@@ -39,6 +42,12 @@ export async function load({ params, locals, cookies, fetch, url }) {
       subscription,
     },
   };
+}
+
+function readHeaders(token) {
+  return typeof token === "string" && token.trim() !== ""
+    ? { authorization: `Bearer ${token}`, accept: "application/json" }
+    : { accept: "application/json" };
 }
 
 export const actions = {

@@ -6,11 +6,13 @@ import { accessTokenForRequest } from "../../../../../lib/server/session-capabil
 
 export async function load({ params, locals, cookies, fetch, url }) {
   const apiBaseUrl = process.env.FMARCH_API_BASE_URL ?? "";
+  const token = accessTokenForRequest({ locals, cookies });
   const search = new URLSearchParams({ limit: "50" });
   const beforeSeq = optionalSequence(url.searchParams.get("before_seq"));
   if (beforeSeq !== null) search.set("before_seq", beforeSeq);
   const response = await fetch(
     `${apiBaseUrl}/discussions/areas/${encodeURIComponent(params.slug)}/topics/${encodeURIComponent(params.topic)}?${search}`,
+    { headers: readHeaders(token) },
   );
   const thread = response.ok ? await response.json().catch(() => null) : null;
   const profile = await loadCurrentProfile({ locals, cookies, fetch, apiBaseUrl });
@@ -48,6 +50,12 @@ export async function load({ params, locals, cookies, fetch, url }) {
         || hasCapability({ capabilities: locals.resolvedCapabilities, kind: "GlobalAdmin" }),
     },
   };
+}
+
+function readHeaders(token) {
+  return typeof token === "string" && token.trim() !== ""
+    ? { authorization: `Bearer ${token}`, accept: "application/json" }
+    : { accept: "application/json" };
 }
 
 export const actions = {

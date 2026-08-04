@@ -36,6 +36,7 @@ try {
     const watch = await watchTopic(watcher, frontendBase, seeded);
     await publishReply(author, frontendBase, seeded, "First subscribed reply");
     const fanout = await inspectInbox(watcher, frontendBase, seeded, 1, 1, true);
+    const mute = await proveMuteBoundary(watcher, author, frontendBase, seeded);
     const read = await markRead(watcher, frontendBase);
     await unwatch(watcher, frontendBase);
     await publishReply(author, frontendBase, seeded, "Reply during inactive watch");
@@ -74,11 +75,12 @@ try {
       status: "passed",
       releaseReady: false,
       productionReady: false,
-      proofBoundary: "Local scratch Postgres, typed member-target subscription streams, active-period fanout, local API, SvelteKit, and two member Chromium contexts. Proves public topic watches, durable privacy-safe inbox updates, monotonic read advancement, inactive-period exclusion, and moderation hide/restore suppression. Does not prove email, SMS, mobile push, private-channel watches, recommendation ranking, hosted delivery, or release readiness.",
+      proofBoundary: "Local scratch Postgres, typed member-target subscription and mute streams, personalized read overlays, local API, SvelteKit, and two member Chromium contexts. Proves public topic watches, durable privacy-safe inbox updates, private reversible profile mutes across profile controls, discussion, search, and inbox, monotonic read advancement, inactive-period exclusion, and moderation hide/restore suppression. Does not prove direct-message blocking, private-channel blocking, recommendation ranking, hosted delivery, or release readiness.",
       watcherRoleUrl: `${frontendBase}/inbox`,
       authorRoleUrl: `${frontendBase}/discussions/subscriptions/t/${seeded.topic}`,
       watch,
       fanout,
+      mute,
       read,
       inactive,
       restoredWatch,
@@ -89,7 +91,8 @@ try {
       },
       denied: { status: "passed", httpStatus: deniedResponse?.status() },
     };
-    if (!watch.subscribed || !fanout.privacySafe || read.unread !== 0
+    if (!watch.subscribed || !fanout.privacySafe || !mute.private || !mute.reversible
+      || read.unread !== 0
       || inactive.items !== 1 || restoredWatch.items !== 2
       || hidden.items !== 1 || moderationRestored.items !== 2
       || evidence.denied.httpStatus !== 401) {
@@ -106,6 +109,76 @@ try {
   if (vite) await vite.close();
   if (apiProcess) await stop(apiProcess);
   if (database) await dropDatabase(database);
+}
+
+async function proveMuteBoundary(watcher, author, base, seeded) {
+  const profile = await watcher.newPage();
+  await profile.goto(`${base}/u/subscription_author`, { waitUntil: "networkidle" });
+  const control = profile.getByTestId("profile-member-mute-control");
+  if (!(await control.innerText()).includes("Mute member")) {
+    throw new Error("profile did not expose the private mute control");
+  }
+  await control.click();
+  await profile.waitForLoadState("networkidle");
+  const active = (await profile.getByTestId("profile-member-mute-control").innerText()).includes("Unmute member");
+  await profile.close();
+
+  const watcherThread = await watcher.newPage();
+  await watcherThread.goto(`${base}/discussions/subscriptions/t/${seeded.topic}`, { waitUntil: "networkidle" });
+  const watcherPostsWhileMuted = await watcherThread.locator('article[data-testid^="discussion-post-"]').count();
+  await watcherThread.close();
+  const authorThread = await author.newPage();
+  await authorThread.goto(`${base}/discussions/subscriptions/t/${seeded.topic}`, { waitUntil: "networkidle" });
+  const authorPostsWhileMuted = await authorThread.locator('article[data-testid^="discussion-post-"]').count();
+  await authorThread.close();
+
+  const watcherSearch = await watcher.newPage();
+  await watcherSearch.goto(`${base}/search?q=subscribed&filter=discussions`, { waitUntil: "networkidle" });
+  const watcherSearchResults = await watcherSearch.locator('[data-testid^="public-search-result-"]').count();
+  await watcherSearch.close();
+  const authorSearch = await author.newPage();
+  await authorSearch.goto(`${base}/search?q=subscribed&filter=discussions`, { waitUntil: "networkidle" });
+  const authorSearchResults = await authorSearch.locator('[data-testid^="public-search-result-"]').count();
+  await authorSearch.close();
+
+  const inbox = await watcher.newPage();
+  await inbox.goto(`${base}/inbox`, { waitUntil: "networkidle" });
+  const hiddenInboxItems = await inbox.locator('[data-testid^="community-inbox-item-"]').count();
+  const muteListText = await inbox.getByTestId("community-muted-members").innerText();
+  await inbox.getByTestId("community-muted-member-unmute-subscription_author").click();
+  await inbox.waitForLoadState("networkidle");
+  const muteListAfter = await inbox.getByTestId("community-muted-members").innerText();
+  const restoredInboxItems = await inbox.locator('[data-testid^="community-inbox-item-"]').count();
+  await inbox.close();
+
+  const restoredThread = await watcher.newPage();
+  await restoredThread.goto(`${base}/discussions/subscriptions/t/${seeded.topic}`, { waitUntil: "networkidle" });
+  const restoredPosts = await restoredThread.locator('article[data-testid^="discussion-post-"]').count();
+  await restoredThread.close();
+  const privateBoundary = active
+    && watcherPostsWhileMuted === 0
+    && authorPostsWhileMuted > 0
+    && watcherSearchResults === 0
+    && authorSearchResults > 0
+    && hiddenInboxItems === 0
+    && muteListText.includes("Subscription Author");
+  const reversible = !muteListAfter.includes("Subscription Author")
+    && restoredInboxItems === 1
+    && restoredPosts > 0;
+  if (!privateBoundary || !reversible) {
+    throw new Error(`mute boundary drifted: ${JSON.stringify({ active, watcherPostsWhileMuted, authorPostsWhileMuted, watcherSearchResults, authorSearchResults, hiddenInboxItems, restoredInboxItems, restoredPosts })}`);
+  }
+  return {
+    status: "passed",
+    private: privateBoundary,
+    reversible,
+    watcherPostsWhileMuted,
+    authorPostsWhileMuted,
+    watcherSearchResults,
+    authorSearchResults,
+    hiddenInboxItems,
+    restoredInboxItems,
+  };
 }
 
 async function seed(api) {

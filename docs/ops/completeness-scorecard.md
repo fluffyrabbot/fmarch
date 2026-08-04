@@ -17,7 +17,7 @@ count is treated as product progress.
 
 | Execution class | Complete | Partial | Open | Blocked | Deferred | Total |
 |---|---:|---:|---:|---:|---:|---:|
-| code | 37 | 0 | 5 | 0 | 0 | 42 |
+| code | 38 | 0 | 4 | 0 | 0 | 42 |
 | external-evidence | 0 | 0 | 0 | 6 | 0 | 6 |
 | human | 1 | 0 | 2 | 1 | 0 | 4 |
 | optional | 0 | 0 | 0 | 0 | 1 | 1 |
@@ -28,23 +28,23 @@ Overall release closure complete: **no**.
 
 ## Next buildable coding slice
 
-### Personal community mute controls `product.community.member-mutes`
+### Multi-replica release topology `foundation.release-topology`
 
-Build private, reversible member-to-profile mute controls: typed mute/unmute events, one durable relationship stream per member and public profile, a current-mute projection and bounded list, consistent personalized suppression across discussion threads, public search, and watched-update inboxes, plus profile/inbox controls and seeded two-member Chromium proof.
+Replace the single-process deployment assumptions with the canonical 1.0 topology: an async content-addressed S3-compatible media repository, an explicit one-shot migrator, migration-free API startup, two local API replicas behind one endpoint, and a cross-replica upload/read/live-recovery proof that drives the Railway service configuration.
 
-Owned paths: `crates/community/`, `crates/projections/`, `crates/api/`, `crates/wire/`, `frontend/src/routes/u/`, `frontend/src/routes/inbox/`, `frontend/src/routes/discussions/`, `frontend/src/routes/search/`, `tools/`, `docs/arch/02-event-sourcing.md`.
+Owned paths: `crates/media/`, `crates/api/`, `crates/server/`, `deploy/railway/`, `railway.toml`, `Dockerfile`, `tools/`, `docs/ops/railway-staging-target.md`.
 
 Proof:
 
-- `DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p community -p projections -p api member_mute -- --test-threads=1`
-- `npm run test:frontend-contract`
-- `npm run test:completeness-scorecard`
+- `npm run test:proof-lane-contract`
+- `npm run proof:lanes -- --mode push --run`
+- `npm run test:railway-staging-target`
 
 Explicit non-claims:
 
-- No global content removal, moderation action, or effect on other members' views.
-- No direct-message, mention, or private-channel blocking semantics before those interaction surfaces exist.
-- No recommendation ranking, engagement optimization, or release-readiness claim from local proof.
+- No production promotion before hosted staging health, same-commit attribution, and the full release sweep pass.
+- No per-replica filesystem fallback in staging or production.
+- No claim that local multi-replica proof substitutes for the real-hosted race matrix.
 
 ## Locally proven foundation
 
@@ -119,7 +119,7 @@ Explicit non-claims:
 | complete | Public community search<br>`product.community.search` | `product.community.discussions`<br>`product.community.profiles`<br>`product.community.game-index` | Users can search public discussions, public game threads, profiles, and games through visibility-safe ranked results with stable pagination and canonical result links. | Complete. | source: `crates/projections/migrations/0001_baseline.sql`<br>source: `frontend/src/routes/search/+page.svelte`<br>source: `frontend/src/routes/games/[game]/+page.svelte`<br>source: `docs/arch/02-event-sourcing.md`<br>command: `npm run test:dev-test-game-search:local`<br>artifact: `target/public-search-role-proof/public-search-proof.json`<br>A rebuildable PostgreSQL full-text projection searches visible discussions, public profiles, active/completed games, and public main-thread posts with weighted rank, stable cursor pagination, typed filters, excerpts, canonical destinations, and synchronous visibility removal. |
 | complete | Community moderation operations<br>`product.community.moderation-operations` | `product.community.discussions`<br>`product.community.search`<br>`product.identity.session-lifecycle` | Members can report public discussion and game-thread content into a durable deduplicated queue, and GlobalMod operators can review, reason, action, restore, and audit those reports through capability-safe routes. | Complete. | source: `crates/projections/migrations/0001_baseline.sql`<br>source: `frontend/src/routes/moderation/+page.svelte`<br>source: `docs/arch/02-event-sourcing.md`<br>command: `npm run test:dev-test-game-community-moderation:local`<br>artifact: `target/community-moderation-role-proof/community-moderation-proof.json`<br>Authenticated members can report public discussion and game-thread posts into typed moderation-case streams with active-report deduplication and bounded daily submissions. GlobalMod operators have a capability-safe queue, reporter evidence, reasoned hide/dismiss/restore transitions, append-only history, and synchronous public-thread/search visibility updates. |
 | complete | Community subscriptions and unread inbox<br>`product.community.subscriptions` | `product.community.discussions`<br>`product.community.search`<br>`product.community.moderation-operations`<br>`product.identity.session-lifecycle` | Authenticated members can subscribe and unsubscribe to public topics and public game threads, receive a durable privacy-safe in-app update inbox, and advance a per-subscription read cursor without polling private audiences or exposing credential principals. | Complete. | source: `crates/projections/migrations/0001_baseline.sql`<br>source: `frontend/src/routes/inbox/+page.svelte`<br>source: `docs/arch/02-event-sourcing.md`<br>command: `npm run test:dev-test-game-community-subscriptions:local`<br>artifact: `target/community-subscription-role-proof/community-subscription-proof.json`<br>Authenticated members can watch public discussion topics and public game threads through one durable member-target stream, receive privacy-safe in-app update references only for active watch periods, and advance a monotonic per-watch read cursor. Fanout is synchronous and rebuildable, author-self updates are excluded, and moderation hide/restore state suppresses and restores inbox entries without mutating history. |
-| open | Personal community mute controls<br>`product.community.member-mutes` | `product.community.profiles`<br>`product.community.discussions`<br>`product.community.search`<br>`product.community.subscriptions`<br>`product.identity.session-lifecycle` | Authenticated members can mute and unmute public profiles through a durable private relationship stream, inspect their bounded mute list, and have muted authors consistently suppressed from personalized discussion, search, and inbox reads without changing global visibility or exposing credential principals. | Remaining: Add typed member-profile mute streams, a private current-mute projection, personalized public-read overlays, profile and inbox controls, bounded list pagination, rebuild coverage, and two-member browser proof. | source: `docs/arch/02-event-sourcing.md`<br>Public community reads are globally moderated, but a member cannot create a reversible personal boundary around another public profile's contributions without affecting anyone else's view. |
+| complete | Personal community mute controls<br>`product.community.member-mutes` | `product.community.profiles`<br>`product.community.discussions`<br>`product.community.search`<br>`product.community.subscriptions`<br>`product.identity.session-lifecycle` | Authenticated members can mute and unmute public profiles through a durable private relationship stream, inspect their bounded mute list, and have muted authors consistently suppressed from personalized discussion, search, and inbox reads without changing global visibility or exposing credential principals. | Complete. | source: `docs/arch/02-event-sourcing.md`<br>source: `crates/community/src/lib.rs`<br>source: `crates/projections/src/lib.rs`<br>source: `frontend/src/routes/u/[handle]/+page.svelte`<br>source: `frontend/src/routes/inbox/+page.svelte`<br>command: `DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p community -p projections -p api member_mute -- --test-threads=1`<br>command: `DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch npm run test:dev-test-game-community-subscriptions`<br>artifact: `target/community-subscription-role-proof/community-subscription-proof.json`<br>Authenticated members own durable private mute relationships whose read-time overlays suppress public-profile contributions across discussion, search, public game threads, and watched inboxes without changing anyone else's view. |
 
 ## Archival and export
 

@@ -1469,6 +1469,33 @@ pub struct CommunityInboxPage {
     pub next_cursor: Option<i64>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct MemberMuteState {
+    pub profile_id: Uuid,
+    pub handle: String,
+    pub display_name: String,
+    pub muted: bool,
+    pub updated_seq: i64,
+}
+
+impl From<projections::MemberMuteStateRow> for MemberMuteState {
+    fn from(row: projections::MemberMuteStateRow) -> Self {
+        Self {
+            profile_id: row.profile_id,
+            handle: row.handle,
+            display_name: row.display_name,
+            muted: row.muted,
+            updated_seq: row.updated_seq,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct MemberMutePage {
+    pub members: Vec<MemberMuteState>,
+    pub next_cursor: Option<String>,
+}
+
 impl From<projections::CommunityInboxPage> for CommunityInboxPage {
     fn from(page: projections::CommunityInboxPage) -> Self {
         Self {
@@ -2014,10 +2041,10 @@ pub mod typescript {
         HostConsoleStateDelta, HostConsoleThreadPostDelta, HostDayEventDelta, HostPhaseControl,
         HostPromptDecision, HostPromptDelta, HostPromptsDelta, HostTaskAllowedCommand,
         HostTaskCommandKind, HostTaskDelta, HostTaskKind, HostTaskState, HostTaskUrgency,
-        ModerationCase, ModerationCaseDetail, ModerationCasePage, ModerationHistory,
-        ModerationReport, ModerationReportReceipt, PlayerInvestigationResult, PlayerNotification,
-        ProfileEditor, ProjectionDelta, PublicGameThreadPage, PublicProfile, PublicSearchPage,
-        PublicSearchResult, RejectCode, RejectMsg, ResolutionTraceDecisionRow,
+        MemberMutePage, MemberMuteState, ModerationCase, ModerationCaseDetail, ModerationCasePage,
+        ModerationHistory, ModerationReport, ModerationReportReceipt, PlayerInvestigationResult,
+        PlayerNotification, ProfileEditor, ProjectionDelta, PublicGameThreadPage, PublicProfile,
+        PublicSearchPage, PublicSearchResult, RejectCode, RejectMsg, ResolutionTraceDecisionRow,
         ResolutionTraceEdgeRow, ResolutionTraceEffectChangeRow, ResolutionTraceGeneratedRow,
         ResolutionTraceInspectionReport, ResolutionTraceInspectionRun, ResolutionTraceNoteRow,
         ResolutionTraceVisibilityRow, ServerEnvelope, ServerMsg, SlotLifecycle, SubmitPostMedia,
@@ -2130,6 +2157,8 @@ pub mod typescript {
         push::<AdvanceSubscriptionReadRequest>(&mut out, &config);
         push::<CommunityInboxItem>(&mut out, &config);
         push::<CommunityInboxPage>(&mut out, &config);
+        push::<MemberMuteState>(&mut out, &config);
+        push::<MemberMutePage>(&mut out, &config);
         push::<ModerationReportReceipt>(&mut out, &config);
         push::<ModerationCase>(&mut out, &config);
         push::<ModerationReport>(&mut out, &config);

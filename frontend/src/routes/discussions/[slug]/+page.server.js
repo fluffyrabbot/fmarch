@@ -6,12 +6,14 @@ import { accessTokenForRequest } from "../../../lib/server/session-capabilities.
 
 export async function load({ params, locals, cookies, fetch, url }) {
   const apiBaseUrl = process.env.FMARCH_API_BASE_URL ?? "";
+  const token = accessTokenForRequest({ locals, cookies });
   const search = new URLSearchParams({ limit: "12" });
   const cursor = optionalText(url.searchParams.get("cursor"));
   if (cursor !== null) search.set("cursor", cursor);
   const area = await loadJson(
     fetch,
     `${apiBaseUrl}/discussions/areas/${encodeURIComponent(params.slug)}?${search.toString()}`,
+    readHeaders(token),
   );
   if (area === null) {
     return unavailableData(params.slug, locals);
@@ -119,11 +121,17 @@ function mutationStatus(state, message) {
   return { id: "discussion-mutation", state, message };
 }
 
-async function loadJson(fetch, url) {
-  const response = await fetch(url);
+async function loadJson(fetch, url, headers = { accept: "application/json" }) {
+  const response = await fetch(url, { headers });
   if (!response.ok) return null;
   const value = await response.json().catch(() => null);
   return value !== null && typeof value === "object" ? value : null;
+}
+
+function readHeaders(token) {
+  return typeof token === "string" && token.trim() !== ""
+    ? { authorization: `Bearer ${token}`, accept: "application/json" }
+    : { accept: "application/json" };
 }
 
 async function loadCurrentProfile({ locals, cookies, fetch, apiBaseUrl }) {

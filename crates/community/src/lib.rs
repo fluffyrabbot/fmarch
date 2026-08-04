@@ -20,6 +20,74 @@ pub const MODERATION_CONTENT_RESTORED: &str = "ModerationContentRestored";
 pub const SUBSCRIPTION_ENABLED: &str = "CommunitySubscriptionEnabled";
 pub const SUBSCRIPTION_DISABLED: &str = "CommunitySubscriptionDisabled";
 pub const SUBSCRIPTION_READ_ADVANCED: &str = "CommunitySubscriptionReadAdvanced";
+pub const MEMBER_MUTED: &str = "CommunityMemberMuted";
+pub const MEMBER_UNMUTED: &str = "CommunityMemberUnmuted";
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MemberMuteState {
+    pub relationship_id: Uuid,
+    pub principal_user_id: String,
+    pub target_profile_id: Uuid,
+    pub active: bool,
+    pub version: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MemberMuteCommand {
+    Mute { target_profile_id: Uuid },
+    Unmute,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MemberMuteEvent {
+    Muted { target_profile_id: Uuid },
+    Unmuted,
+}
+
+impl MemberMuteEvent {
+    pub fn kind(&self) -> &'static str {
+        match self {
+            Self::Muted { .. } => MEMBER_MUTED,
+            Self::Unmuted => MEMBER_UNMUTED,
+        }
+    }
+
+    pub fn payload(&self) -> serde_json::Value {
+        match self {
+            Self::Muted { target_profile_id } => {
+                serde_json::json!({ "target_profile_id": target_profile_id })
+            }
+            Self::Unmuted => serde_json::json!({}),
+        }
+    }
+}
+
+pub fn decide_member_mute(
+    state: Option<&MemberMuteState>,
+    command: MemberMuteCommand,
+) -> Result<Vec<MemberMuteEvent>, CommunityReject> {
+    match (state, command) {
+        (None, MemberMuteCommand::Mute { target_profile_id }) => {
+            Ok(vec![MemberMuteEvent::Muted { target_profile_id }])
+        }
+        (Some(state), MemberMuteCommand::Mute { target_profile_id }) => {
+            if state.target_profile_id != target_profile_id {
+                return Err(CommunityReject::InvalidMuteTarget);
+            }
+            if state.active {
+                return Err(CommunityReject::AlreadyMuted);
+            }
+            Ok(vec![MemberMuteEvent::Muted { target_profile_id }])
+        }
+        (None, MemberMuteCommand::Unmute) => Err(CommunityReject::MuteNotFound),
+        (Some(state), MemberMuteCommand::Unmute) => {
+            if !state.active {
+                return Err(CommunityReject::NotMuted);
+            }
+            Ok(vec![MemberMuteEvent::Unmuted])
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -662,6 +730,14 @@ pub enum CommunityReject {
     NotSubscribed,
     #[error("subscription read cursor must advance monotonically")]
     ReadCursorMustAdvance,
+    #[error("mute target is invalid")]
+    InvalidMuteTarget,
+    #[error("member is already muted")]
+    AlreadyMuted,
+    #[error("mute relationship was not found")]
+    MuteNotFound,
+    #[error("member is not muted")]
+    NotMuted,
 }
 
 #[cfg(test)]
@@ -844,5 +920,40 @@ mod tests {
             ),
             Ok(events) if matches!(events.as_slice(), [SubscriptionEvent::Enabled { initial_read_through_seq: 14, .. }])
         ));
+    }
+
+    #[test]
+    fn member_mutes_are_private_reversible_relationships() {
+        let target_profile_id = Uuid::from_u128(41);
+        assert_eq!(
+            decide_member_mute(None, MemberMuteCommand::Mute { target_profile_id },),
+            Ok(vec![MemberMuteEvent::Muted { target_profile_id }])
+        );
+
+        let mut state = MemberMuteState {
+            relationship_id: Uuid::from_u128(42),
+            principal_user_id: "member-a".into(),
+            target_profile_id,
+            active: true,
+            version: 1,
+        };
+        assert_eq!(
+            decide_member_mute(Some(&state), MemberMuteCommand::Mute { target_profile_id }),
+            Err(CommunityReject::AlreadyMuted)
+        );
+        assert_eq!(
+            decide_member_mute(Some(&state), MemberMuteCommand::Unmute),
+            Ok(vec![MemberMuteEvent::Unmuted])
+        );
+
+        state.active = false;
+        assert_eq!(
+            decide_member_mute(Some(&state), MemberMuteCommand::Unmute),
+            Err(CommunityReject::NotMuted)
+        );
+        assert_eq!(
+            decide_member_mute(Some(&state), MemberMuteCommand::Mute { target_profile_id }),
+            Ok(vec![MemberMuteEvent::Muted { target_profile_id }])
+        );
     }
 }

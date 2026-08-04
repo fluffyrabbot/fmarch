@@ -1738,7 +1738,7 @@ async fn public_search_filters_visibility_private_channels_and_rebuilds(pool: sq
     .await
     .unwrap();
 
-    let first = public_search(&pool, "signal", PublicSearchFilter::All, None, 2)
+    let first = public_search(&pool, "signal", PublicSearchFilter::All, None, 2, None)
         .await
         .unwrap();
     assert_eq!(first.results.len(), 2);
@@ -1748,13 +1748,21 @@ async fn public_search_filters_visibility_private_channels_and_rebuilds(pool: sq
         PublicSearchFilter::All,
         first.next_cursor,
         10,
+        None,
     )
     .await
     .unwrap();
     assert!(!second.results.is_empty());
-    let discussions = public_search(&pool, "signal", PublicSearchFilter::Discussions, None, 10)
-        .await
-        .unwrap();
+    let discussions = public_search(
+        &pool,
+        "signal",
+        PublicSearchFilter::Discussions,
+        None,
+        10,
+        None,
+    )
+    .await
+    .unwrap();
     assert!(discussions
         .results
         .iter()
@@ -1763,7 +1771,7 @@ async fn public_search_filters_visibility_private_channels_and_rebuilds(pool: sq
         .results
         .iter()
         .any(|row| row.href.contains("/discussions/theory/t/") && row.href.contains("#post-")));
-    let private = public_search(&pool, "secret", PublicSearchFilter::All, None, 10)
+    let private = public_search(&pool, "secret", PublicSearchFilter::All, None, 10, None)
         .await
         .unwrap();
     assert!(private.results.is_empty());
@@ -1782,13 +1790,18 @@ async fn public_search_filters_visibility_private_channels_and_rebuilds(pool: sq
     )
     .await
     .unwrap();
-    assert!(
-        public_search(&pool, "alpha", PublicSearchFilter::Discussions, None, 10)
-            .await
-            .unwrap()
-            .results
-            .is_empty()
-    );
+    assert!(public_search(
+        &pool,
+        "alpha",
+        PublicSearchFilter::Discussions,
+        None,
+        10,
+        None,
+    )
+    .await
+    .unwrap()
+    .results
+    .is_empty());
 
     append_profile_and_project(
         &pool,
@@ -1807,17 +1820,22 @@ async fn public_search_filters_visibility_private_channels_and_rebuilds(pool: sq
     )
     .await
     .unwrap();
-    assert!(
-        public_search(&pool, "signal", PublicSearchFilter::Profiles, None, 10)
-            .await
-            .unwrap()
-            .results
-            .is_empty()
-    );
+    assert!(public_search(
+        &pool,
+        "signal",
+        PublicSearchFilter::Profiles,
+        None,
+        10,
+        None,
+    )
+    .await
+    .unwrap()
+    .results
+    .is_empty());
     rebuild_profile_stream(&pool, profile).await.unwrap();
 
     rebuild(&pool, game).await.unwrap();
-    let rebuilt_games = public_search(&pool, "signal", PublicSearchFilter::Games, None, 10)
+    let rebuilt_games = public_search(&pool, "signal", PublicSearchFilter::Games, None, 10, None)
         .await
         .unwrap();
     assert!(rebuilt_games
@@ -1936,13 +1954,13 @@ async fn moderation_reports_dedupe_hide_restore_audit_and_rebuild(pool: sqlx::Pg
     )
     .await
     .unwrap();
-    assert!(projections::public_thread_view(&pool, game, None, 10)
+    assert!(projections::public_thread_view(&pool, game, None, 10, None)
         .await
         .unwrap()
         .posts
         .is_empty());
     assert!(
-        public_search(&pool, "zebra", PublicSearchFilter::Games, None, 10)
+        public_search(&pool, "zebra", PublicSearchFilter::Games, None, 10, None)
             .await
             .unwrap()
             .results
@@ -1979,7 +1997,7 @@ async fn moderation_reports_dedupe_hide_restore_audit_and_rebuild(pool: sqlx::Pg
     .await
     .unwrap();
     assert_eq!(
-        projections::public_thread_view(&pool, game, None, 10)
+        projections::public_thread_view(&pool, game, None, 10, None)
             .await
             .unwrap()
             .posts
@@ -1987,7 +2005,7 @@ async fn moderation_reports_dedupe_hide_restore_audit_and_rebuild(pool: sqlx::Pg
         1
     );
     assert_eq!(
-        public_search(&pool, "zebra", PublicSearchFilter::Games, None, 10)
+        public_search(&pool, "zebra", PublicSearchFilter::Games, None, 10, None)
             .await
             .unwrap()
             .results
@@ -2043,7 +2061,7 @@ async fn moderation_reports_dedupe_hide_restore_audit_and_rebuild(pool: sqlx::Pg
     assert_eq!(rebuilt.case.status, "dismissed");
     assert_eq!(rebuilt.history, detail.history);
     assert_eq!(
-        public_search(&pool, "zebra", PublicSearchFilter::Games, None, 10)
+        public_search(&pool, "zebra", PublicSearchFilter::Games, None, 10, None)
             .await
             .unwrap()
             .results
@@ -2086,7 +2104,7 @@ async fn moderation_report_submissions_are_bounded_per_reporter(pool: sqlx::PgPo
         ));
     }
     append_and_project(&pool, game, &events).await.unwrap();
-    let posts = projections::public_thread_view(&pool, game, None, 20)
+    let posts = projections::public_thread_view(&pool, game, None, 20, None)
         .await
         .unwrap()
         .posts;
@@ -2702,7 +2720,7 @@ async fn discussion_projection_pages_visible_topics_and_hides_moderated_rows(poo
         .await
         .unwrap()
         .unwrap();
-    let page = discussion_topics(&pool, area_row.area_id, None, 10)
+    let page = discussion_topics(&pool, area_row.area_id, None, 10, None)
         .await
         .unwrap();
     assert_eq!(page.topics.len(), 1);
@@ -2711,7 +2729,7 @@ async fn discussion_projection_pages_visible_topics_and_hides_moderated_rows(poo
     assert_eq!(page.topics[0].posting_state, "open");
     assert_eq!(page.topics[0].visibility, "visible");
     assert_eq!(page.topics[0].author.as_ref().unwrap().handle, "member");
-    let posts = discussion_posts(&pool, visible_topic, None, 10)
+    let posts = discussion_posts(&pool, visible_topic, None, 10, None)
         .await
         .unwrap();
     assert_eq!(posts.posts[0].body, "First public post");
@@ -2751,7 +2769,7 @@ async fn discussion_projection_pages_visible_topics_and_hides_moderated_rows(poo
         ProjectionError::Store(StoreError::Conflict { .. })
     ));
     assert_eq!(
-        discussion_posts(&pool, visible_topic, None, 10)
+        discussion_posts(&pool, visible_topic, None, 10, None)
             .await
             .unwrap()
             .posts
@@ -2769,7 +2787,7 @@ async fn discussion_projection_pages_visible_topics_and_hides_moderated_rows(poo
     rebuild_discussion_stream(&pool, visible_topic)
         .await
         .unwrap();
-    let rebuilt_posts = discussion_posts(&pool, visible_topic, None, 10)
+    let rebuilt_posts = discussion_posts(&pool, visible_topic, None, 10, None)
         .await
         .unwrap();
     assert_eq!(rebuilt_posts.posts[0].body, "First public post");
@@ -2783,7 +2801,7 @@ async fn discussion_projection_pages_visible_topics_and_hides_moderated_rows(poo
         "member"
     );
     assert_eq!(
-        discussion_posts(&pool, visible_topic, None, 10)
+        discussion_posts(&pool, visible_topic, None, 10, None)
             .await
             .unwrap()
             .posts[0]
@@ -2793,6 +2811,261 @@ async fn discussion_projection_pages_visible_topics_and_hides_moderated_rows(poo
             .handle,
         "member"
     );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn member_mutes_are_private_reversible_and_filter_personalized_reads(pool: sqlx::PgPool) {
+    let reader_profile = Uuid::from_u128(140);
+    let target_profile = Uuid::from_u128(141);
+    let area = Uuid::from_u128(142);
+    let topic = Uuid::from_u128(143);
+    for (profile, principal, handle, display_name) in [
+        (reader_profile, "reader", "reader", "Reader"),
+        (
+            target_profile,
+            "orchid_author",
+            "orchid-author",
+            "Orchid Author",
+        ),
+    ] {
+        append_profile_and_project(
+            &pool,
+            profile,
+            &[EventInput::new(
+                "ProfileCreated",
+                1,
+                serde_json::json!({
+                    "principal_user_id": principal,
+                    "handle": handle,
+                    "display_name": display_name,
+                    "bio": if principal == "reader" { "Reader profile" } else { "Orchid community profile" },
+                    "visibility": "public"
+                }),
+                ActorId::User(principal.into()),
+                1,
+            )],
+        )
+        .await
+        .unwrap();
+    }
+    append_discussion_and_project(
+        &pool,
+        area,
+        &[EventInput::new(
+            "DiscussionAreaCreated",
+            1,
+            serde_json::json!({
+                "slug": "orchids",
+                "title": "Orchids",
+                "description": "Orchid discussion"
+            }),
+            ActorId::User("moderator".into()),
+            2,
+        )],
+    )
+    .await
+    .unwrap();
+    append_discussion_and_project(
+        &pool,
+        topic,
+        &[
+            EventInput::new(
+                "DiscussionTopicCreated",
+                1,
+                serde_json::json!({
+                    "area_id": area,
+                    "title": "Orchid signals",
+                    "author_profile_id": target_profile
+                }),
+                ActorId::User("orchid_author".into()),
+                3,
+            ),
+            EventInput::new(
+                "DiscussionPostSubmitted",
+                1,
+                serde_json::json!({
+                    "body": "Opening orchid signal",
+                    "author_profile_id": target_profile
+                }),
+                ActorId::User("orchid_author".into()),
+                4,
+            ),
+        ],
+    )
+    .await
+    .unwrap();
+    let subscription_target = community::SubscriptionTarget {
+        kind: community::SubscriptionTargetKind::DiscussionTopic,
+        scope_id: topic,
+    };
+    projections::subscribe_to_public_target(&pool, subscription_target.clone(), "reader", 5)
+        .await
+        .unwrap();
+    let version = discussion_topic_by_id(&pool, topic)
+        .await
+        .unwrap()
+        .unwrap()
+        .version;
+    append_discussion_and_project_expected(
+        &pool,
+        topic,
+        version,
+        &[EventInput::new(
+            "DiscussionPostSubmitted",
+            1,
+            serde_json::json!({
+                "body": "Watched orchid reply",
+                "author_profile_id": target_profile
+            }),
+            ActorId::User("orchid_author".into()),
+            6,
+        )],
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        projections::community_inbox(&pool, "reader", None, 20)
+            .await
+            .unwrap()
+            .unread_count,
+        1
+    );
+
+    let muted = projections::mute_public_profile(&pool, "reader", "orchid-author", 7)
+        .await
+        .unwrap();
+    assert!(muted.muted);
+    assert!(matches!(
+        projections::mute_public_profile(&pool, "reader", "orchid-author", 8).await,
+        Err(ProjectionError::AlreadyMuted)
+    ));
+    assert!(matches!(
+        projections::mute_public_profile(&pool, "reader", "reader", 8).await,
+        Err(ProjectionError::CannotMuteSelf)
+    ));
+    assert_eq!(
+        projections::member_mutes(&pool, "reader", None, 20)
+            .await
+            .unwrap()
+            .members
+            .len(),
+        1
+    );
+    assert!(discussion_topics(&pool, area, None, 20, Some("reader"))
+        .await
+        .unwrap()
+        .topics
+        .is_empty());
+    assert!(discussion_posts(&pool, topic, None, 20, Some("reader"))
+        .await
+        .unwrap()
+        .posts
+        .is_empty());
+    assert!(public_search(
+        &pool,
+        "orchid",
+        PublicSearchFilter::All,
+        None,
+        20,
+        Some("reader"),
+    )
+    .await
+    .unwrap()
+    .results
+    .is_empty());
+    assert!(
+        !public_search(&pool, "orchid", PublicSearchFilter::All, None, 20, None,)
+            .await
+            .unwrap()
+            .results
+            .is_empty()
+    );
+    assert!(projections::community_inbox(&pool, "reader", None, 20)
+        .await
+        .unwrap()
+        .items
+        .is_empty());
+    assert_eq!(
+        projections::subscription_target_state(&pool, "reader", subscription_target.clone())
+            .await
+            .unwrap()
+            .unread_count,
+        0
+    );
+
+    let relationship_id: Uuid = sqlx::query_scalar(
+        "SELECT relationship_id FROM community_member_mute WHERE principal_user_id = 'reader'",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    projections::rebuild_member_mute_stream(&pool, relationship_id)
+        .await
+        .unwrap();
+    assert_eq!(
+        projections::member_mutes(&pool, "reader", None, 20)
+            .await
+            .unwrap()
+            .members
+            .len(),
+        1
+    );
+
+    append_profile_and_project(
+        &pool,
+        target_profile,
+        &[EventInput::new(
+            "ProfileUpdated",
+            1,
+            serde_json::json!({
+                "display_name": "Orchid Author",
+                "bio": "Orchid community profile",
+                "visibility": "members"
+            }),
+            ActorId::User("orchid_author".into()),
+            9,
+        )],
+    )
+    .await
+    .unwrap();
+    assert!(
+        projections::member_mute_state(&pool, "reader", "orchid-author")
+            .await
+            .unwrap()
+            .muted
+    );
+
+    let unmuted = projections::unmute_public_profile(&pool, "reader", "orchid-author", 10)
+        .await
+        .unwrap();
+    assert!(!unmuted.muted);
+    assert!(
+        discussion_posts(&pool, topic, None, 20, Some("reader"))
+            .await
+            .unwrap()
+            .posts
+            .len()
+            >= 2
+    );
+    assert_eq!(
+        projections::community_inbox(&pool, "reader", None, 20)
+            .await
+            .unwrap()
+            .unread_count,
+        1
+    );
+    assert!(matches!(
+        projections::unmute_public_profile(&pool, "reader", "orchid-author", 11).await,
+        Err(ProjectionError::NotMuted)
+    ));
+    projections::rebuild_member_mute_stream(&pool, relationship_id)
+        .await
+        .unwrap();
+    assert!(projections::member_mutes(&pool, "reader", None, 20)
+        .await
+        .unwrap()
+        .members
+        .is_empty());
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]

@@ -714,6 +714,27 @@ pub struct CommunityInboxPage {
     pub next_cursor: Option<i64>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MemberMuteStateRow {
+    pub profile_id: Uuid,
+    pub handle: String,
+    pub display_name: String,
+    pub muted: bool,
+    pub updated_seq: i64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MemberMuteCursor {
+    pub updated_seq: i64,
+    pub relationship_id: Uuid,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MemberMutePage {
+    pub members: Vec<MemberMuteStateRow>,
+    pub next_cursor: Option<MemberMuteCursor>,
+}
+
 /// Capability-safe public profile data. The owning principal is intentionally
 /// absent from this row and its wire representation.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -759,6 +780,14 @@ pub enum ProjectionError {
     NotSubscribed,
     #[error("subscription read cursor is outside the current public target")]
     InvalidSubscriptionReadCursor,
+    #[error("the mute target is not a public profile")]
+    MuteTargetNotPublic,
+    #[error("a member cannot mute their own profile")]
+    CannotMuteSelf,
+    #[error("member is already muted")]
+    AlreadyMuted,
+    #[error("member is not muted")]
+    NotMuted,
     #[error("malformed event payload for kind {kind}: {source}")]
     Payload {
         kind: String,
@@ -2721,6 +2750,253 @@ fn moderation_event_inputs(
         .collect()
 }
 
+pub async fn member_mute_state(
+    pool: &PgPool,
+    principal_user_id: &str,
+    target_handle: &str,
+) -> Result<MemberMuteStateRow, ProjectionError> {
+    let row = sqlx::query(
+        r#"
+        SELECT profile.profile_id, profile.handle, profile.display_name,
+               COALESCE(mute.active, FALSE) AS muted,
+               COALESCE(mute.updated_seq, 0) AS updated_seq
+        FROM profile_public AS profile
+        JOIN profile_editor AS owner ON owner.profile_id = profile.profile_id
+        LEFT JOIN community_member_mute AS mute
+          ON mute.principal_user_id = $1
+         AND mute.target_profile_id = profile.profile_id
+        WHERE profile.handle = $2
+          AND (profile.visibility = 'public' OR mute.relationship_id IS NOT NULL)
+        "#,
+    )
+    .bind(principal_user_id)
+    .bind(target_handle)
+    .fetch_optional(pool)
+    .await?
+    .ok_or(ProjectionError::MuteTargetNotPublic)?;
+    Ok(MemberMuteStateRow {
+        profile_id: row.get("profile_id"),
+        handle: row.get("handle"),
+        display_name: row.get("display_name"),
+        muted: row.get("muted"),
+        updated_seq: row.get("updated_seq"),
+    })
+}
+
+pub async fn mute_public_profile(
+    pool: &PgPool,
+    principal_user_id: &str,
+    target_handle: &str,
+    occurred_at: i64,
+) -> Result<MemberMuteStateRow, ProjectionError> {
+    change_public_profile_mute(pool, principal_user_id, target_handle, true, occurred_at).await
+}
+
+pub async fn unmute_public_profile(
+    pool: &PgPool,
+    principal_user_id: &str,
+    target_handle: &str,
+    occurred_at: i64,
+) -> Result<MemberMuteStateRow, ProjectionError> {
+    change_public_profile_mute(pool, principal_user_id, target_handle, false, occurred_at).await
+}
+
+async fn change_public_profile_mute(
+    pool: &PgPool,
+    principal_user_id: &str,
+    target_handle: &str,
+    mute: bool,
+    occurred_at: i64,
+) -> Result<MemberMuteStateRow, ProjectionError> {
+    let mut tx = pool.begin().await?;
+    let target = sqlx::query(
+        r#"
+        SELECT profile.profile_id, owner.principal_user_id AS owner_principal_user_id
+        FROM profile_public AS profile
+        JOIN profile_editor AS owner ON owner.profile_id = profile.profile_id
+        LEFT JOIN community_member_mute AS existing
+          ON existing.principal_user_id = $2
+         AND existing.target_profile_id = profile.profile_id
+        WHERE profile.handle = $1
+          AND (profile.visibility = 'public' OR (NOT $3 AND existing.relationship_id IS NOT NULL))
+        "#,
+    )
+    .bind(target_handle)
+    .bind(principal_user_id)
+    .bind(mute)
+    .fetch_optional(&mut *tx)
+    .await?
+    .ok_or(ProjectionError::MuteTargetNotPublic)?;
+    let target_profile_id: Uuid = target.get("profile_id");
+    if target.get::<String, _>("owner_principal_user_id") == principal_user_id {
+        return Err(ProjectionError::CannotMuteSelf);
+    }
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
+        .bind(format!(
+            "member-mute:{principal_user_id}:{target_profile_id}"
+        ))
+        .execute(&mut *tx)
+        .await?;
+    let existing = member_mute_domain_state(&mut tx, principal_user_id, target_profile_id).await?;
+    let relationship_id = existing
+        .as_ref()
+        .map_or_else(Uuid::new_v4, |state| state.relationship_id);
+    let command = if mute {
+        community::MemberMuteCommand::Mute { target_profile_id }
+    } else {
+        community::MemberMuteCommand::Unmute
+    };
+    let events = community::decide_member_mute(existing.as_ref(), command)
+        .map_err(member_mute_domain_error)?;
+    append_member_mute_events(
+        &mut tx,
+        relationship_id,
+        existing.as_ref().map_or(0, |state| state.version),
+        events,
+        principal_user_id,
+        occurred_at,
+    )
+    .await?;
+    tx.commit().await?;
+    member_mute_state(pool, principal_user_id, target_handle).await
+}
+
+pub async fn member_mutes(
+    pool: &PgPool,
+    principal_user_id: &str,
+    cursor: Option<MemberMuteCursor>,
+    limit: i64,
+) -> Result<MemberMutePage, ProjectionError> {
+    let limit = limit.clamp(1, 100);
+    let fetch_limit = limit + 1;
+    let rows = match cursor {
+        Some(cursor) => {
+            sqlx::query(
+                r#"
+                SELECT mute.relationship_id, mute.target_profile_id, mute.updated_seq,
+                       profile.handle, profile.display_name
+                FROM community_member_mute AS mute
+                JOIN profile_public AS profile ON profile.profile_id = mute.target_profile_id
+                WHERE mute.principal_user_id = $1 AND mute.active
+                  AND (mute.updated_seq < $2 OR
+                       (mute.updated_seq = $2 AND mute.relationship_id < $3))
+                ORDER BY mute.updated_seq DESC, mute.relationship_id DESC
+                LIMIT $4
+                "#,
+            )
+            .bind(principal_user_id)
+            .bind(cursor.updated_seq)
+            .bind(cursor.relationship_id)
+            .bind(fetch_limit)
+            .fetch_all(pool)
+            .await?
+        }
+        None => {
+            sqlx::query(
+                r#"
+                SELECT mute.relationship_id, mute.target_profile_id, mute.updated_seq,
+                       profile.handle, profile.display_name
+                FROM community_member_mute AS mute
+                JOIN profile_public AS profile ON profile.profile_id = mute.target_profile_id
+                WHERE mute.principal_user_id = $1 AND mute.active
+                ORDER BY mute.updated_seq DESC, mute.relationship_id DESC
+                LIMIT $2
+                "#,
+            )
+            .bind(principal_user_id)
+            .bind(fetch_limit)
+            .fetch_all(pool)
+            .await?
+        }
+    };
+    let has_more = rows.len() as i64 > limit;
+    let mut final_cursor = None;
+    let members = rows
+        .into_iter()
+        .take(limit as usize)
+        .map(|row| {
+            final_cursor = Some(MemberMuteCursor {
+                updated_seq: row.get("updated_seq"),
+                relationship_id: row.get("relationship_id"),
+            });
+            MemberMuteStateRow {
+                profile_id: row.get("target_profile_id"),
+                handle: row.get("handle"),
+                display_name: row.get("display_name"),
+                muted: true,
+                updated_seq: row.get("updated_seq"),
+            }
+        })
+        .collect();
+    Ok(MemberMutePage {
+        members,
+        next_cursor: has_more.then(|| final_cursor.expect("full mute page has a cursor")),
+    })
+}
+
+async fn member_mute_domain_state(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    principal_user_id: &str,
+    target_profile_id: Uuid,
+) -> Result<Option<community::MemberMuteState>, ProjectionError> {
+    let row = sqlx::query(
+        "SELECT relationship_id, active, version FROM community_member_mute WHERE principal_user_id = $1 AND target_profile_id = $2",
+    )
+    .bind(principal_user_id)
+    .bind(target_profile_id)
+    .fetch_optional(&mut **tx)
+    .await?;
+    Ok(row.map(|row| community::MemberMuteState {
+        relationship_id: row.get("relationship_id"),
+        principal_user_id: principal_user_id.to_string(),
+        target_profile_id,
+        active: row.get("active"),
+        version: row.get("version"),
+    }))
+}
+
+fn member_mute_domain_error(reject: community::CommunityReject) -> ProjectionError {
+    match reject {
+        community::CommunityReject::AlreadyMuted => ProjectionError::AlreadyMuted,
+        community::CommunityReject::NotMuted | community::CommunityReject::MuteNotFound => {
+            ProjectionError::NotMuted
+        }
+        _ => ProjectionError::Payload {
+            kind: "community member mute".to_string(),
+            source: serde::de::Error::custom(reject.to_string()),
+        },
+    }
+}
+
+async fn append_member_mute_events(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    relationship_id: Uuid,
+    expected_stream_seq: i64,
+    events: Vec<community::MemberMuteEvent>,
+    principal_user_id: &str,
+    occurred_at: i64,
+) -> Result<(), ProjectionError> {
+    let inputs: Vec<_> = events
+        .into_iter()
+        .map(|event| {
+            EventInput::new(
+                event.kind(),
+                1,
+                event.payload(),
+                eventstore::ActorId::User(principal_user_id.to_string()),
+                occurred_at,
+            )
+        })
+        .collect();
+    let stored =
+        eventstore::append_expected_in_tx(tx, relationship_id, expected_stream_seq, &inputs)
+            .await?;
+    for event in &stored {
+        fold_member_mute_event(tx, relationship_id, event).await?;
+    }
+    Ok(())
+}
+
 pub async fn subscribe_to_public_target(
     pool: &PgPool,
     target: community::SubscriptionTarget,
@@ -3148,6 +3424,75 @@ async fn fold_subscription_event(
     Ok(())
 }
 
+async fn fold_member_mute_event(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    relationship_id: Uuid,
+    event: &StoredEvent,
+) -> Result<(), ProjectionError> {
+    let principal_user_id = match &event.actor {
+        eventstore::ActorId::User(principal) => principal,
+        _ => {
+            return Err(ProjectionError::Payload {
+                kind: event.kind.clone(),
+                source: serde::de::Error::custom("member mute events require a user actor"),
+            })
+        }
+    };
+    match event.kind.as_str() {
+        community::MEMBER_MUTED => {
+            let target_profile_id =
+                event
+                    .payload
+                    .get("target_profile_id")
+                    .cloned()
+                    .ok_or_else(|| ProjectionError::Payload {
+                        kind: event.kind.clone(),
+                        source: serde::de::Error::custom(
+                            "member mute event requires target_profile_id",
+                        ),
+                    })?;
+            let target_profile_id: Uuid =
+                serde_json::from_value(target_profile_id).map_err(|source| {
+                    ProjectionError::Payload {
+                        kind: event.kind.clone(),
+                        source,
+                    }
+                })?;
+            sqlx::query(
+                r#"
+                INSERT INTO community_member_mute (
+                    relationship_id, principal_user_id, target_profile_id,
+                    active, updated_seq, version
+                ) VALUES ($1, $2, $3, TRUE, $4, $5)
+                ON CONFLICT (relationship_id) DO UPDATE SET
+                    active = TRUE,
+                    updated_seq = EXCLUDED.updated_seq,
+                    version = EXCLUDED.version
+                "#,
+            )
+            .bind(relationship_id)
+            .bind(principal_user_id)
+            .bind(target_profile_id)
+            .bind(event.seq)
+            .bind(event.stream_seq)
+            .execute(&mut **tx)
+            .await?;
+        }
+        community::MEMBER_UNMUTED => {
+            sqlx::query(
+                "UPDATE community_member_mute SET active = FALSE, updated_seq = $2, version = $3 WHERE relationship_id = $1",
+            )
+            .bind(relationship_id)
+            .bind(event.seq)
+            .bind(event.stream_seq)
+            .execute(&mut **tx)
+            .await?;
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
 async fn fan_out_public_community_update(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     target_kind: community::SubscriptionTargetKind,
@@ -3538,6 +3883,29 @@ pub async fn rebuild_subscription_stream(
         fold_subscription_event(&mut tx, subscription_id, event).await?;
     }
     backfill_subscription_inbox(&mut tx, subscription_id).await?;
+    tx.commit().await?;
+    Ok(())
+}
+
+pub async fn rebuild_member_mute_stream(
+    pool: &PgPool,
+    relationship_id: Uuid,
+) -> Result<(), ProjectionError> {
+    let events = eventstore::load_stream(pool, relationship_id).await?;
+    if !events
+        .iter()
+        .any(|event| event.kind == community::MEMBER_MUTED)
+    {
+        return Ok(());
+    }
+    let mut tx = pool.begin().await?;
+    sqlx::query("DELETE FROM community_member_mute WHERE relationship_id = $1")
+        .bind(relationship_id)
+        .execute(&mut *tx)
+        .await?;
+    for event in &events {
+        fold_member_mute_event(&mut tx, relationship_id, event).await?;
+    }
     tx.commit().await?;
     Ok(())
 }
@@ -5898,8 +6266,18 @@ pub async fn public_thread_view(
     game_id: Uuid,
     before_seq: Option<i64>,
     limit: i64,
+    viewer_principal_user_id: Option<&str>,
 ) -> Result<ThreadViewPage, ProjectionError> {
-    thread_view_for_channel_with_visibility(pool, game_id, "main", before_seq, limit, true).await
+    thread_view_for_channel_with_visibility(
+        pool,
+        game_id,
+        "main",
+        before_seq,
+        limit,
+        true,
+        viewer_principal_user_id,
+    )
+    .await
 }
 
 /// Read public active and completed games newest-first. Setup rows are kept for
@@ -6063,6 +6441,7 @@ pub async fn public_search(
     filter: PublicSearchFilter,
     cursor: Option<PublicSearchCursor>,
     limit: i64,
+    viewer_principal_user_id: Option<&str>,
 ) -> Result<PublicSearchPage, ProjectionError> {
     let limit = limit.clamp(1, 50);
     let fetch_limit = limit + 1;
@@ -6088,27 +6467,59 @@ pub async fn public_search(
                                ),
                                '</?b>', '', 'g'
                            ) AS excerpt
-                    FROM public_search_document, search_query
-                    WHERE search_vector @@ search_query.value
+                    FROM public_search_document AS document, search_query
+                    WHERE document.search_vector @@ search_query.value
                       AND (
                           $2 = 'all'
-                          OR ($2 = 'discussions' AND document_kind IN ('discussion_topic', 'discussion_post'))
-                          OR ($2 = 'profiles' AND document_kind = 'profile')
-                          OR ($2 = 'games' AND document_kind IN ('game', 'game_post'))
+                          OR ($2 = 'discussions' AND document.document_kind IN ('discussion_topic', 'discussion_post'))
+                          OR ($2 = 'profiles' AND document.document_kind = 'profile')
+                          OR ($2 = 'games' AND document.document_kind IN ('game', 'game_post'))
+                      )
+                      AND NOT EXISTS (
+                          SELECT 1
+                          FROM community_member_mute AS mute
+                          WHERE $3::text IS NOT NULL
+                            AND mute.principal_user_id = $3
+                            AND mute.active
+                            AND (
+                                (document.document_kind = 'profile'
+                                 AND mute.target_profile_id = document.scope_id)
+                                OR (document.document_kind = 'discussion_topic' AND EXISTS (
+                                    SELECT 1 FROM discussion_topic AS topic
+                                    WHERE topic.topic_id = document.scope_id
+                                      AND topic.author_profile_id = mute.target_profile_id
+                                ))
+                                OR (document.document_kind = 'discussion_post' AND EXISTS (
+                                    SELECT 1 FROM discussion_post AS post
+                                    WHERE post.topic_id = document.scope_id
+                                      AND post.source_seq = document.updated_seq
+                                      AND post.author_profile_id = mute.target_profile_id
+                                ))
+                                OR (document.document_kind = 'game_post' AND EXISTS (
+                                    SELECT 1
+                                    FROM thread_view AS post
+                                    JOIN profile_editor AS author
+                                      ON author.principal_user_id = post.author_user
+                                    WHERE post.game_id = document.scope_id
+                                      AND post.source_seq = document.updated_seq
+                                      AND author.profile_id = mute.target_profile_id
+                                ))
+                            )
                       )
                 )
                 SELECT document_kind, document_key, title, href, updated_seq, published_at, rank, excerpt
                 FROM ranked
-                WHERE rank < $3
-                   OR (rank = $3 AND updated_seq < $4)
-                   OR (rank = $3 AND updated_seq = $4 AND document_kind > $5)
-                   OR (rank = $3 AND updated_seq = $4 AND document_kind = $5 AND document_key > $6)
+                WHERE rank < $4
+                   OR (rank = $4 AND updated_seq < $5)
+                   OR (rank = $4 AND updated_seq = $5 AND document_kind > $6)
+                   OR (rank = $4 AND updated_seq = $5 AND document_kind = $6 AND document_key > $7)
                 ORDER BY rank DESC, updated_seq DESC, document_kind, document_key
-                LIMIT $7
+                LIMIT $8
                 "#,
             )
             .bind(query)
             .bind(filter)
+            .bind(viewer_principal_user_id)
             .bind(cursor.rank)
             .bind(cursor.updated_seq)
             .bind(cursor.document_kind)
@@ -6132,20 +6543,52 @@ pub async fn public_search(
                            ),
                            '</?b>', '', 'g'
                        ) AS excerpt
-                FROM public_search_document, search_query
-                WHERE search_vector @@ search_query.value
+                FROM public_search_document AS document, search_query
+                WHERE document.search_vector @@ search_query.value
                   AND (
                       $2 = 'all'
-                      OR ($2 = 'discussions' AND document_kind IN ('discussion_topic', 'discussion_post'))
-                      OR ($2 = 'profiles' AND document_kind = 'profile')
-                      OR ($2 = 'games' AND document_kind IN ('game', 'game_post'))
+                      OR ($2 = 'discussions' AND document.document_kind IN ('discussion_topic', 'discussion_post'))
+                      OR ($2 = 'profiles' AND document.document_kind = 'profile')
+                      OR ($2 = 'games' AND document.document_kind IN ('game', 'game_post'))
+                  )
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM community_member_mute AS mute
+                      WHERE $3::text IS NOT NULL
+                        AND mute.principal_user_id = $3
+                        AND mute.active
+                        AND (
+                            (document.document_kind = 'profile'
+                             AND mute.target_profile_id = document.scope_id)
+                            OR (document.document_kind = 'discussion_topic' AND EXISTS (
+                                SELECT 1 FROM discussion_topic AS topic
+                                WHERE topic.topic_id = document.scope_id
+                                  AND topic.author_profile_id = mute.target_profile_id
+                            ))
+                            OR (document.document_kind = 'discussion_post' AND EXISTS (
+                                SELECT 1 FROM discussion_post AS post
+                                WHERE post.topic_id = document.scope_id
+                                  AND post.source_seq = document.updated_seq
+                                  AND post.author_profile_id = mute.target_profile_id
+                            ))
+                            OR (document.document_kind = 'game_post' AND EXISTS (
+                                SELECT 1
+                                FROM thread_view AS post
+                                JOIN profile_editor AS author
+                                  ON author.principal_user_id = post.author_user
+                                WHERE post.game_id = document.scope_id
+                                  AND post.source_seq = document.updated_seq
+                                  AND author.profile_id = mute.target_profile_id
+                            ))
+                        )
                   )
                 ORDER BY rank DESC, updated_seq DESC, document_kind, document_key
-                LIMIT $3
+                LIMIT $4
                 "#,
             )
             .bind(query)
             .bind(filter)
+            .bind(viewer_principal_user_id)
             .bind(fetch_limit)
             .fetch_all(pool)
             .await?
@@ -6226,6 +6669,7 @@ pub async fn discussion_topics(
     area_id: Uuid,
     cursor: Option<DiscussionTopicCursor>,
     limit: i64,
+    viewer_principal_user_id: Option<&str>,
 ) -> Result<DiscussionTopicPage, ProjectionError> {
     let limit = limit.clamp(1, 100);
     let fetch_limit = limit + 1;
@@ -6244,13 +6688,21 @@ pub async fn discussion_topics(
                 WHERE topic.area_id = $1
                   AND topic.visibility = 'visible'
                   AND (topic.updated_seq < $2 OR (topic.updated_seq = $2 AND topic.topic_id < $3))
+                  AND NOT EXISTS (
+                      SELECT 1 FROM community_member_mute AS mute
+                      WHERE $4::text IS NOT NULL
+                        AND mute.principal_user_id = $4
+                        AND mute.target_profile_id = topic.author_profile_id
+                        AND mute.active
+                  )
                 ORDER BY topic.updated_seq DESC, topic.topic_id DESC
-                LIMIT $4
+                LIMIT $5
                 "#,
             )
             .bind(area_id)
             .bind(cursor.updated_seq)
             .bind(cursor.topic_id)
+            .bind(viewer_principal_user_id)
             .bind(fetch_limit)
             .fetch_all(pool)
             .await?
@@ -6267,11 +6719,19 @@ pub async fn discussion_topics(
                 FROM discussion_topic AS topic
                 LEFT JOIN profile_public AS author ON author.profile_id = topic.author_profile_id
                 WHERE topic.area_id = $1 AND topic.visibility = 'visible'
+                  AND NOT EXISTS (
+                      SELECT 1 FROM community_member_mute AS mute
+                      WHERE $2::text IS NOT NULL
+                        AND mute.principal_user_id = $2
+                        AND mute.target_profile_id = topic.author_profile_id
+                        AND mute.active
+                  )
                 ORDER BY topic.updated_seq DESC, topic.topic_id DESC
-                LIMIT $2
+                LIMIT $3
                 "#,
             )
             .bind(area_id)
+            .bind(viewer_principal_user_id)
             .bind(fetch_limit)
             .fetch_all(pool)
             .await?
@@ -6331,6 +6791,7 @@ pub async fn discussion_posts(
     topic_id: Uuid,
     before_seq: Option<i64>,
     limit: i64,
+    viewer_principal_user_id: Option<&str>,
 ) -> Result<DiscussionPostPage, ProjectionError> {
     let limit = limit.clamp(1, 100);
     let fetch_limit = limit + 1;
@@ -6345,6 +6806,13 @@ pub async fn discussion_posts(
                 LEFT JOIN profile_public AS author ON author.profile_id = post.author_profile_id
                 WHERE post.topic_id = $1 AND post.source_seq < $2
                   AND NOT EXISTS (
+                      SELECT 1 FROM community_member_mute AS mute
+                      WHERE $3::text IS NOT NULL
+                        AND mute.principal_user_id = $3
+                        AND mute.target_profile_id = post.author_profile_id
+                        AND mute.active
+                  )
+                  AND NOT EXISTS (
                       SELECT 1 FROM moderation_target_state AS moderation
                       WHERE moderation.target_kind = 'discussion_post'
                         AND moderation.scope_id = post.topic_id
@@ -6352,11 +6820,12 @@ pub async fn discussion_posts(
                         AND moderation.visibility = 'hidden'
                   )
                 ORDER BY post.source_seq DESC
-                LIMIT $3
+                LIMIT $4
                 "#,
             )
             .bind(topic_id)
             .bind(before_seq)
+            .bind(viewer_principal_user_id)
             .bind(fetch_limit)
             .fetch_all(pool)
             .await?
@@ -6371,6 +6840,13 @@ pub async fn discussion_posts(
                 LEFT JOIN profile_public AS author ON author.profile_id = post.author_profile_id
                 WHERE post.topic_id = $1
                   AND NOT EXISTS (
+                      SELECT 1 FROM community_member_mute AS mute
+                      WHERE $2::text IS NOT NULL
+                        AND mute.principal_user_id = $2
+                        AND mute.target_profile_id = post.author_profile_id
+                        AND mute.active
+                  )
+                  AND NOT EXISTS (
                       SELECT 1 FROM moderation_target_state AS moderation
                       WHERE moderation.target_kind = 'discussion_post'
                         AND moderation.scope_id = post.topic_id
@@ -6378,10 +6854,11 @@ pub async fn discussion_posts(
                         AND moderation.visibility = 'hidden'
                   )
                 ORDER BY post.source_seq DESC
-                LIMIT $2
+                LIMIT $3
                 "#,
             )
             .bind(topic_id)
+            .bind(viewer_principal_user_id)
             .bind(fetch_limit)
             .fetch_all(pool)
             .await?
@@ -6424,6 +6901,7 @@ pub async fn subscription_target_state(
                 &mut tx,
                 state.subscription_id,
                 state.read_through_seq,
+                principal_user_id,
             )
             .await?;
             (state.active, state.read_through_seq, unread_count)
@@ -6445,6 +6923,7 @@ async fn visible_subscription_inbox_count(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     subscription_id: Uuid,
     after_seq: i64,
+    principal_user_id: &str,
 ) -> Result<i64, ProjectionError> {
     Ok(sqlx::query_scalar(
         r#"
@@ -6470,10 +6949,33 @@ async fn visible_subscription_inbox_count(
               AND moderation.source_seq = item.source_seq
               AND moderation.visibility = 'hidden'
           )
+          AND NOT EXISTS (
+            SELECT 1 FROM community_member_mute AS mute
+            WHERE mute.principal_user_id = $3
+              AND mute.active
+              AND (
+                (item.target_kind = 'discussion_topic' AND EXISTS (
+                  SELECT 1 FROM discussion_post AS post
+                  WHERE post.topic_id = item.scope_id
+                    AND post.source_seq = item.source_seq
+                    AND post.author_profile_id = mute.target_profile_id
+                ))
+                OR (item.target_kind = 'game_thread' AND EXISTS (
+                  SELECT 1
+                  FROM thread_view AS post
+                  JOIN profile_editor AS author
+                    ON author.principal_user_id = post.author_user
+                  WHERE post.game_id = item.scope_id
+                    AND post.source_seq = item.source_seq
+                    AND author.profile_id = mute.target_profile_id
+                ))
+              )
+          )
         "#,
     )
     .bind(subscription_id)
     .bind(after_seq)
+    .bind(principal_user_id)
     .fetch_one(&mut **tx)
     .await?)
 }
@@ -6523,6 +7025,28 @@ pub async fn community_inbox(
               AND moderation.scope_id = item.scope_id
               AND moderation.source_seq = item.source_seq
               AND moderation.visibility = 'hidden'
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM community_member_mute AS mute
+            WHERE mute.principal_user_id = $1
+              AND mute.active
+              AND (
+                (item.target_kind = 'discussion_topic' AND EXISTS (
+                  SELECT 1 FROM discussion_post AS post
+                  WHERE post.topic_id = item.scope_id
+                    AND post.source_seq = item.source_seq
+                    AND post.author_profile_id = mute.target_profile_id
+                ))
+                OR (item.target_kind = 'game_thread' AND EXISTS (
+                  SELECT 1
+                  FROM thread_view AS post
+                  JOIN profile_editor AS author
+                    ON author.principal_user_id = post.author_user
+                  WHERE post.game_id = item.scope_id
+                    AND post.source_seq = item.source_seq
+                    AND author.profile_id = mute.target_profile_id
+                ))
+              )
           )
         ORDER BY item.source_seq DESC
         LIMIT $3
@@ -6574,6 +7098,28 @@ pub async fn community_inbox(
               AND moderation.scope_id = item.scope_id
               AND moderation.source_seq = item.source_seq
               AND moderation.visibility = 'hidden'
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM community_member_mute AS mute
+            WHERE mute.principal_user_id = $1
+              AND mute.active
+              AND (
+                (item.target_kind = 'discussion_topic' AND EXISTS (
+                  SELECT 1 FROM discussion_post AS post
+                  WHERE post.topic_id = item.scope_id
+                    AND post.source_seq = item.source_seq
+                    AND post.author_profile_id = mute.target_profile_id
+                ))
+                OR (item.target_kind = 'game_thread' AND EXISTS (
+                  SELECT 1
+                  FROM thread_view AS post
+                  JOIN profile_editor AS author
+                    ON author.principal_user_id = post.author_user
+                  WHERE post.game_id = item.scope_id
+                    AND post.source_seq = item.source_seq
+                    AND author.profile_id = mute.target_profile_id
+                ))
+              )
           )
         "#,
     )
@@ -6914,8 +7460,10 @@ pub async fn thread_view_for_channel(
     before_seq: Option<i64>,
     limit: i64,
 ) -> Result<ThreadViewPage, ProjectionError> {
-    thread_view_for_channel_with_visibility(pool, game_id, channel_id, before_seq, limit, false)
-        .await
+    thread_view_for_channel_with_visibility(
+        pool, game_id, channel_id, before_seq, limit, false, None,
+    )
+    .await
 }
 
 async fn thread_view_for_channel_with_visibility(
@@ -6925,6 +7473,7 @@ async fn thread_view_for_channel_with_visibility(
     before_seq: Option<i64>,
     limit: i64,
     public_only: bool,
+    viewer_principal_user_id: Option<&str>,
 ) -> Result<ThreadViewPage, ProjectionError> {
     let limit = limit.clamp(1, 100);
     let fetch_limit = limit + 1;
@@ -6945,6 +7494,16 @@ async fn thread_view_for_channel_with_visibility(
                     AND moderation.visibility = 'hidden'
               )
           )
+          AND NOT EXISTS (
+              SELECT 1
+              FROM community_member_mute AS mute
+              JOIN profile_editor AS author
+                ON author.profile_id = mute.target_profile_id
+              WHERE $6::text IS NOT NULL
+                AND mute.principal_user_id = $6
+                AND mute.active
+                AND author.principal_user_id = thread_view.author_user
+          )
         ORDER BY source_seq DESC
         LIMIT $4
         "#,
@@ -6954,6 +7513,7 @@ async fn thread_view_for_channel_with_visibility(
     .bind(before_seq)
     .bind(fetch_limit)
     .bind(public_only)
+    .bind(viewer_principal_user_id)
     .fetch_all(pool)
     .await?;
 

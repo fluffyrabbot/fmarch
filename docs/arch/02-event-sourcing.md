@@ -157,6 +157,7 @@ Examples:
 | `moderation_target_state` | reversible public visibility overlay for individually moderated discussion and main-thread posts |
 | `community_subscription` / `community_subscription_period` | one member/target watch stream, current membership, monotonic read cursor, and historical active intervals |
 | `community_inbox_item` | privacy-safe per-member references to public posts published during active watch intervals |
+| `community_member_mute` | one private member/profile relationship stream, current active state, replay version, and bounded member-owned list cursor |
 
 `game_index` folds `GameCreated`, `GameStarted`, `PhaseAdvanced`, and `GameCompleted`
 synchronously with the game stream. Setup rows remain rebuildable but are excluded from the
@@ -222,6 +223,20 @@ title and canonical post URL. Topic/game visibility and `moderation_target_state
 read time, so hiding a post immediately suppresses its inbox entry and restoring it reveals the
 same immutable reference. Topic, game, and subscription rebuilds use the historical periods to
 reproduce exactly the updates that existed while each watch was active.
+
+Member mutes use one durable relationship stream per authenticated member and target public
+profile. `CommunityMemberMuted` and `CommunityMemberUnmuted` preserve the reversible decision
+history while `community_member_mute` exposes only the member's current active relationships.
+Self-mutes and duplicate transitions are rejected under a transaction-scoped relationship lock.
+The relationship is never global moderation: anonymous and other-member reads are unchanged.
+
+Authenticated public-search, discussion-list, discussion-thread, public-game-thread, and watched
+inbox queries apply the active mute relationship as a private read-time overlay. Contributions are
+matched through public profile authorship; credential principals never cross the response boundary.
+The overlay is applied before keyset limits, so cursors remain stable and pages remain full.
+Unmuting immediately restores the same immutable posts and inbox references without rewriting the
+shared search, discussion, game, or subscription history. Relationship replay deterministically
+reproduces both active and inactive final states.
 
 Completed game streams can be exported as versioned `StreamExport` manifests. The checksum covers
 the canonical manifest content, stream sequence positions must be contiguous, and imports refuse

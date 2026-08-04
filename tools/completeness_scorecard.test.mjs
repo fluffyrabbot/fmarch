@@ -13,14 +13,14 @@ import {
   validateRegistry,
 } from "./completeness_scorecard.mjs";
 
-test("real completion registry records the 1.0 frontier before member mutes", async () => {
+test("real completion registry records the 1.0 substrate frontier", async () => {
   const registry = await loadCompletionRegistry();
   await validateRegistry(registry);
   const summary = summarizeRegistry(registry);
   assert.deepEqual(summary.byExecutionClass.code, {
-    complete: 37,
+    complete: 38,
     partial: 0,
-    open: 5,
+    open: 4,
     blocked: 0,
     deferred: 0,
     total: 42,
@@ -49,7 +49,7 @@ test("real completion registry records the 1.0 frontier before member mutes", as
       ?.status,
     "complete",
   );
-  assert.equal(nextBuildableCodeItem(registry)?.id, "product.community.member-mutes");
+  assert.equal(nextBuildableCodeItem(registry)?.id, "foundation.release-topology");
 });
 
 test("generated scorecard exactly matches the canonical registry", async () => {
@@ -141,6 +141,11 @@ test("registry validation rejects dependency cycles", async () => {
   );
   subscriptions.status = "open";
   subscriptions.remaining = ["cyclic test dependency"];
+  const mutes = cyclic.items.find(
+    (item) => item.id === "product.community.member-mutes",
+  );
+  mutes.status = "open";
+  mutes.remaining = ["cyclic test dependency"];
   const registration = cyclic.items.find(
     (item) => item.id === "product.identity.registration",
   );

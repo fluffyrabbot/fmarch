@@ -12,11 +12,13 @@ export async function load({ cookies, locals, fetch, url }) {
   const beforeSeq = positiveSequence(url.searchParams.get("before_seq"));
   if (beforeSeq !== null) search.set("before_seq", beforeSeq);
   const apiBaseUrl = process.env.FMARCH_API_BASE_URL ?? "";
-  const response = await fetch(`${apiBaseUrl}/inbox?${search}`, {
-    headers: authHeaders(token),
-  });
+  const [response, muteResponse] = await Promise.all([
+    fetch(`${apiBaseUrl}/inbox?${search}`, { headers: authHeaders(token) }),
+    fetch(`${apiBaseUrl}/mutes?limit=50`, { headers: authHeaders(token) }),
+  ]);
   if (!response.ok) throw error(response.status, "Community inbox is unavailable");
   const page = await response.json();
+  const mutePage = muteResponse.ok ? await muteResponse.json().catch(() => null) : null;
   return {
     shellOwner: "layout",
     shell: buildAppShell({
@@ -35,6 +37,7 @@ export async function load({ cookies, locals, fetch, url }) {
       unreadCount: Number.isSafeInteger(page?.unread_count) ? page.unread_count : 0,
       nextCursor: positiveSequence(page?.next_cursor),
     },
+    mutedMembers: Array.isArray(mutePage?.members) ? mutePage.members : [],
   };
 }
 
@@ -73,6 +76,22 @@ export const actions = {
       method: "DELETE",
     });
     if (!response.ok) return mutationFailure(response, "Unable to remove this watch");
+    throw redirect(303, "/inbox");
+  },
+  unmute: async ({ locals, cookies, fetch, request }) => {
+    const form = await request.formData();
+    const handle = text(form.get("handle"));
+    if (handle === "") {
+      return fail(400, { id: "inbox-unmute", state: "reject", message: "Invalid muted member" });
+    }
+    const response = await mutation({
+      cookies,
+      locals,
+      fetch,
+      path: `/mutes/profiles/${encodeURIComponent(handle)}`,
+      method: "DELETE",
+    });
+    if (!response.ok) return mutationFailure(response, "Unable to unmute this member");
     throw redirect(303, "/inbox");
   },
 };
