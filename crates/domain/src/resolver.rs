@@ -36,6 +36,14 @@ use crate::state::{
 
 use serde::{Deserialize, Serialize};
 
+mod trigger;
+
+use trigger::{
+    apply_trigger_fixpoint, apply_win_triggers_before_final, collect_night_observations,
+    effect_marked_observation, phase_end_observations, ProducedKillCollection,
+    TriggerCascadeContext, TriggerObservation, TriggerResolutionContext,
+};
+
 /// Resolver contract version (doc 10 `result_version`).
 pub const RESULT_VERSION: u16 = 19;
 
@@ -223,6 +231,34 @@ struct KillRecord {
     cause: String,
 }
 
+struct ActionResolutionContext<'a> {
+    input: &'a ResolutionInput,
+    protections: &'a BTreeMap<SlotId, Vec<ProtectionSource>>,
+    cpr_saves: &'a mut BTreeSet<String>,
+    events: &'a mut Vec<InnerEvent>,
+    killed: &'a mut Vec<SlotId>,
+    log: &'a mut Vec<KillRecord>,
+    trace_decisions: &'a mut Vec<DecisionTrace>,
+}
+
+struct KillAction<'a> {
+    target: &'a SlotId,
+    attacker: &'a SlotId,
+    cause: &'a str,
+    unstoppable: bool,
+    death_reveal: DeathRevealMode,
+    target_tags: &'a BTreeSet<String>,
+}
+
+struct ActionInterference<'a> {
+    action: &'a Action<'a>,
+    target: &'a SlotId,
+    ability: IrAbility,
+    mode: Option<InvestigateMode>,
+    reason: &'a str,
+    target_tags: &'a BTreeSet<String>,
+}
+
 fn death_reveal_mode(input: &ResolutionInput, target: &SlotId, cause: &str) -> DeathRevealMode {
     let mut mode = input.pack.death_reveal.default;
     if let Some(by_cause) = input.pack.death_reveal.by_cause.get(cause) {
@@ -259,39 +295,32 @@ fn death_reveal_rank(mode: DeathRevealMode) -> u8 {
     }
 }
 
-#[derive(Clone)]
-struct TriggerObservation {
-    on: TriggerOn,
-    target: SlotId,
-    actor: SlotId,
-    cause: String,
-    target_tags: Vec<String>,
-    actor_tags: Vec<String>,
-}
-
 /// Resolve a single kill against `target` by `attacker` (template id `cause`).
 /// `unstoppable` is the already-computed Strongman bypass flag for this kill.
 /// Pushes `PlayerSaved` (if protected and not bypassed) or `PlayerKilled`, and on
 /// a death records the slot in `killed` and a `KillRecord` in `log`.
-#[allow(clippy::too_many_arguments)]
-fn resolve_one_kill(
-    pack: &Pack,
-    phase_id: &PhaseId,
-    phase_kind: PhaseKind,
-    phase_number: u32,
-    target: &SlotId,
-    attacker: &SlotId,
-    cause: &str,
-    unstoppable: bool,
-    death_reveal: DeathRevealMode,
-    protections: &BTreeMap<SlotId, Vec<ProtectionSource>>,
-    target_tags: &BTreeSet<String>,
-    cpr_saves: &mut BTreeSet<String>,
-    events: &mut Vec<InnerEvent>,
-    killed: &mut Vec<SlotId>,
-    log: &mut Vec<KillRecord>,
-    trace_decisions: &mut Vec<DecisionTrace>,
-) {
+fn resolve_one_kill(context: ActionResolutionContext<'_>, action: KillAction<'_>) {
+    let ActionResolutionContext {
+        input,
+        protections,
+        cpr_saves,
+        events,
+        killed,
+        log,
+        trace_decisions,
+    } = context;
+    let KillAction {
+        target,
+        attacker,
+        cause,
+        unstoppable,
+        death_reveal,
+        target_tags,
+    } = action;
+    let pack = &input.pack;
+    let phase_id = &input.phase_id;
+    let phase_kind = input.state.phase_kind;
+    let phase_number = input.state.phase_number;
     // A slot already killed this resolution is not killed twice.
     if killed.contains(target) {
         if night_resolution_aggregates_kill_attackers(pack) {
@@ -650,324 +679,6 @@ fn backup_role<'a>(policy: &crate::pack::BackupPolicy, effect: &'a str) -> Optio
     effect.strip_prefix(&policy.passive_effect_prefix)
 }
 
-fn trigger_slot_has_tags(tags: &[String], slot: &SlotState, observation_tags: &[String]) -> bool {
-    tags.iter()
-        .all(|tag| slot.effects.contains(tag) || observation_tags.contains(tag))
-}
-
-/// Does a trigger match the observed target and actor slots? `if_target_has`
-/// matches the visited/killed slot; `if_actor_has` matches the visitor/killer.
-fn trigger_observation_matches(
-    trig: &TriggerRule,
-    target_slot: &SlotState,
-    actor_slot: Option<&SlotState>,
-    observation: &TriggerObservation,
-) -> bool {
-    if !trigger_slot_has_tags(&trig.if_target_has, target_slot, &observation.target_tags) {
-        return false;
-    }
-    if trig.if_actor_has.is_empty() {
-        return true;
-    }
-    actor_slot
-        .map(|slot| trigger_slot_has_tags(&trig.if_actor_has, slot, &observation.actor_tags))
-        .unwrap_or(false)
-}
-
-fn trigger_on_label(on: TriggerOn) -> &'static str {
-    match on {
-        TriggerOn::Ability(IrAbility::Kill) => "Kill",
-        TriggerOn::Ability(IrAbility::Protect) => "Protect",
-        TriggerOn::Ability(IrAbility::Block) => "Block",
-        TriggerOn::Ability(IrAbility::Redirect) => "Redirect",
-        TriggerOn::Ability(IrAbility::Investigate) => "Investigate",
-        TriggerOn::Ability(IrAbility::Convert) => "Convert",
-        TriggerOn::Ability(IrAbility::Mark) => "Mark",
-        TriggerOn::Ability(IrAbility::Clear) => "Clear",
-        TriggerOn::Ability(IrAbility::Grant) => "Grant",
-        TriggerOn::Ability(IrAbility::Link) => "Link",
-        TriggerOn::Ability(IrAbility::Retaliate) => "Retaliate",
-        TriggerOn::Ability(IrAbility::Badge) => "Badge",
-        TriggerOn::Ability(IrAbility::Duel) => "Duel",
-        TriggerOn::Ability(IrAbility::ItaShot) => "ItaShot",
-        TriggerOn::Ability(IrAbility::SelfDestruct) => "SelfDestruct",
-        TriggerOn::Ability(IrAbility::Visit) => "Visit",
-        TriggerOn::Ability(IrAbility::RevealTown) => "RevealTown",
-        TriggerOn::Ability(IrAbility::VoteDuel) => "VoteDuel",
-        TriggerOn::Ability(IrAbility::Veto) => "Veto",
-        TriggerOn::Ability(IrAbility::Info) => "Info",
-        TriggerOn::Event(TriggerEvent::Visit) => "Visit",
-        TriggerOn::Event(TriggerEvent::Lynch) => "Lynch",
-        TriggerOn::Event(TriggerEvent::Death) => "Death",
-        TriggerOn::Event(TriggerEvent::EffectMarked) => "EffectMarked",
-        TriggerOn::Event(TriggerEvent::PhaseEnd) => "PhaseEnd",
-        TriggerOn::Event(TriggerEvent::Win) => "Win",
-    }
-}
-
-fn kill_observations(record: &KillRecord) -> Vec<TriggerObservation> {
-    vec![
-        TriggerObservation {
-            on: TriggerOn::Ability(IrAbility::Kill),
-            target: record.target.clone(),
-            actor: record.attacker.clone(),
-            cause: record.cause.clone(),
-            target_tags: Vec::new(),
-            actor_tags: Vec::new(),
-        },
-        TriggerObservation {
-            on: TriggerOn::Event(TriggerEvent::Death),
-            target: record.target.clone(),
-            actor: record.attacker.clone(),
-            cause: record.cause.clone(),
-            target_tags: Vec::new(),
-            actor_tags: Vec::new(),
-        },
-    ]
-}
-
-fn visit_observations(actions: &[Action<'_>]) -> Vec<TriggerObservation> {
-    let mut observations = Vec::new();
-    for action in actions {
-        if action.blocked {
-            continue;
-        }
-        for target in &action.targets {
-            observations.push(TriggerObservation {
-                on: TriggerOn::Ability(IrAbility::Visit),
-                target: target.clone(),
-                actor: action.sub.actor.clone(),
-                cause: action.template.id.clone(),
-                target_tags: Vec::new(),
-                actor_tags: Vec::new(),
-            });
-        }
-    }
-    observations
-}
-
-fn effect_marked_observation(
-    target: SlotId,
-    actor: SlotId,
-    effect: String,
-    source_action: String,
-) -> TriggerObservation {
-    TriggerObservation {
-        on: TriggerOn::Event(TriggerEvent::EffectMarked),
-        target,
-        actor,
-        cause: source_action,
-        target_tags: vec![effect],
-        actor_tags: Vec::new(),
-    }
-}
-
-fn phase_end_observations(input: &ResolutionInput, killed: &[SlotId]) -> Vec<TriggerObservation> {
-    let killed: BTreeSet<SlotId> = killed.iter().cloned().collect();
-    input
-        .state
-        .slots
-        .iter()
-        .filter(|slot| slot.is_alive() && !killed.contains(&slot.slot_id))
-        .map(|slot| TriggerObservation {
-            on: TriggerOn::Event(TriggerEvent::PhaseEnd),
-            target: slot.slot_id.clone(),
-            actor: slot.slot_id.clone(),
-            cause: format!("phase_end:{}", input.phase_id),
-            target_tags: Vec::new(),
-            actor_tags: Vec::new(),
-        })
-        .collect()
-}
-
-fn win_observations(state: &StateSnapshot, winner: &str) -> Vec<TriggerObservation> {
-    state
-        .slots
-        .iter()
-        .filter(|slot| slot.is_alive())
-        .map(|slot| TriggerObservation {
-            on: TriggerOn::Event(TriggerEvent::Win),
-            target: slot.slot_id.clone(),
-            actor: slot.slot_id.clone(),
-            cause: format!("win:{winner}"),
-            target_tags: vec!["win".to_string(), format!("winner:{winner}")],
-            actor_tags: Vec::new(),
-        })
-        .collect()
-}
-
-fn apply_win_triggers_before_final(
-    input: &ResolutionInput,
-    events: &mut Vec<InnerEvent>,
-    tentative_win: &InnerEvent,
-    trace_decisions: &mut Vec<DecisionTrace>,
-    trace_notes: &mut Vec<String>,
-) {
-    let InnerEvent::WinReached { winner, .. } = tentative_win else {
-        return;
-    };
-    let Some(InnerEvent::PhaseAnnouncement(announcement)) = events.pop() else {
-        panic!("resolver invariant: PhaseAnnouncement must precede Win trigger observation");
-    };
-    let mut announced_deaths = announcement.deaths;
-    let mut announced_slots = announced_deaths
-        .iter()
-        .map(|death| death.slot_id.clone())
-        .collect::<BTreeSet<_>>();
-
-    let state_before_final = apply_events(&input.state, events);
-    let mut killed = deaths_from_events(events)
-        .into_iter()
-        .map(|death| death.slot_id)
-        .collect::<Vec<_>>();
-    let mut cpr_saves = BTreeSet::new();
-    let _generated_kills = apply_trigger_fixpoint(
-        input,
-        win_observations(&state_before_final, winner),
-        &BTreeMap::new(),
-        &BTreeMap::new(),
-        &mut killed,
-        &mut cpr_saves,
-        events,
-        trace_decisions,
-        trace_notes,
-    );
-    for death in deaths_from_events(events) {
-        if announced_slots.insert(death.slot_id.clone()) {
-            announced_deaths.push(death);
-        }
-    }
-    events.push(InnerEvent::PhaseAnnouncement(phase_announcement(
-        input,
-        announced_deaths,
-    )));
-}
-
-#[expect(
-    clippy::too_many_arguments,
-    reason = "trigger resolution context extraction remains queued behind the pack boundary"
-)]
-fn apply_trigger_fixpoint(
-    input: &ResolutionInput,
-    mut frontier: Vec<TriggerObservation>,
-    protections: &BTreeMap<SlotId, Vec<ProtectionSource>>,
-    transient_effects: &BTreeMap<SlotId, BTreeSet<String>>,
-    killed: &mut Vec<SlotId>,
-    cpr_saves: &mut BTreeSet<String>,
-    events: &mut Vec<InnerEvent>,
-    trace_decisions: &mut Vec<DecisionTrace>,
-    trace_notes: &mut Vec<String>,
-) -> Vec<KillRecord> {
-    let pack = &input.pack;
-    let loop_cap = pack.redirects.loop_cap as usize;
-    let mut produced_kills = Vec::new();
-    let mut iterations = 0usize;
-    while !frontier.is_empty() {
-        if iterations >= loop_cap {
-            trace_notes.push(format!(
-                "trigger loop_cap ({loop_cap}) reached; terminating trigger fixpoint"
-            ));
-            break;
-        }
-        iterations += 1;
-        let mut next_kills: Vec<KillRecord> = Vec::new();
-        for observation in &frontier {
-            for trig in &pack.triggers {
-                if trig.on != observation.on {
-                    continue;
-                }
-                if !night_resolution_trigger_participates_in_fixpoint(pack, trig) {
-                    continue;
-                }
-                let Some(target_slot) = input
-                    .state
-                    .slots
-                    .iter()
-                    .find(|s| s.slot_id == observation.target)
-                else {
-                    continue;
-                };
-                let actor_slot = input
-                    .state
-                    .slots
-                    .iter()
-                    .find(|s| s.slot_id == observation.actor);
-                if !trigger_observation_matches(trig, target_slot, actor_slot, observation) {
-                    continue;
-                }
-                let produced_actor = match trig.produces.actor {
-                    ActorRef::Target => observation.target.clone(),
-                    ActorRef::Actor => observation.actor.clone(),
-                    ActorRef::TargetGuard | ActorRef::Other => continue,
-                };
-                let produced_target = match trig.produces.target {
-                    TargetRef::Killer | TargetRef::Actor => observation.actor.clone(),
-                    TargetRef::Target => observation.target.clone(),
-                    TargetRef::Other => continue,
-                };
-                let mut payload = serde_json::json!({
-                    "on": trigger_on_label(observation.on),
-                    "source_target": observation.target,
-                    "source_actor": observation.actor,
-                    "source_cause": observation.cause,
-                    "produced_actor": produced_actor,
-                    "produced_target": produced_target,
-                });
-                if !trig.if_actor_has.is_empty() {
-                    payload["actor_filter"] = serde_json::json!(trig.if_actor_has);
-                }
-                events.push(InnerEvent::Trigger {
-                    trigger_id: trig.id.clone(),
-                    payload,
-                });
-                if trig.produces.ability == IrAbility::Kill {
-                    let strongman = night_resolution_generated_kill_bypasses_protect(pack, trig);
-                    let target_tags = target_tags(input, transient_effects, &produced_target);
-                    if let Some(reason) =
-                        target_state_gate_reason(pack, &target_tags, IrAbility::Kill)
-                    {
-                        trace_decisions.push(DecisionTrace {
-                            stage: "kill_resolution".to_string(),
-                            source: format!("cause:{}", trig.id),
-                            outcome: "kill_skipped_by_target_state".to_string(),
-                            detail: serde_json::json!({
-                                "action_id": trig.id,
-                                "template_id": trig.id,
-                                "actor": produced_actor,
-                                "target": produced_target,
-                                "reason": reason,
-                                "target_tags": target_tags,
-                            }),
-                        });
-                        continue;
-                    }
-                    resolve_one_kill(
-                        pack,
-                        &input.phase_id,
-                        input.state.phase_kind,
-                        input.state.phase_number,
-                        &produced_target,
-                        &produced_actor,
-                        &trig.id,
-                        strongman,
-                        death_reveal_mode(input, &produced_target, &trig.id),
-                        protections,
-                        &target_tags,
-                        cpr_saves,
-                        events,
-                        killed,
-                        &mut next_kills,
-                        trace_decisions,
-                    );
-                }
-            }
-        }
-        produced_kills.extend(next_kills.clone());
-        frontier = next_kills.iter().flat_map(kill_observations).collect();
-    }
-    produced_kills
-}
-
 fn apply_lover_suicides(
     input: &ResolutionInput,
     killed: &mut Vec<SlotId>,
@@ -1117,23 +828,29 @@ fn apply_chosen_retaliations(
                 "timing": "ImmediateBeforePhaseAnnouncement",
             }),
         });
+        let retaliation_target_tags = target_tags(input, &BTreeMap::new(), &retaliation.target);
         resolve_one_kill(
-            &input.pack,
-            &input.phase_id,
-            input.state.phase_kind,
-            input.state.phase_number,
-            &retaliation.target,
-            &retaliation.actor,
-            &retaliation.source_action,
-            strongman,
-            death_reveal_mode(input, &retaliation.target, &retaliation.source_action),
-            protections,
-            &target_tags(input, &BTreeMap::new(), &retaliation.target),
-            cpr_saves,
-            events,
-            killed,
-            kill_log,
-            trace_decisions,
+            ActionResolutionContext {
+                input,
+                protections,
+                cpr_saves,
+                events,
+                killed,
+                log: kill_log,
+                trace_decisions,
+            },
+            KillAction {
+                target: &retaliation.target,
+                attacker: &retaliation.actor,
+                cause: &retaliation.source_action,
+                unstoppable: strongman,
+                death_reveal: death_reveal_mode(
+                    input,
+                    &retaliation.target,
+                    &retaliation.source_action,
+                ),
+                target_tags: &retaliation_target_tags,
+            },
         );
     }
 }
@@ -1626,20 +1343,19 @@ fn target_state_interference_reason(reason: &str) -> String {
     }
 }
 
-#[expect(
-    clippy::too_many_arguments,
-    reason = "action-resolution context extraction remains queued behind the pack boundary"
-)]
 fn emit_action_interfered_by_target_state(
     trace_decisions: &mut Vec<DecisionTrace>,
     events: &mut Vec<InnerEvent>,
-    action: &Action<'_>,
-    target: &SlotId,
-    ability: IrAbility,
-    mode: Option<InvestigateMode>,
-    reason: &str,
-    target_tags: &BTreeSet<String>,
+    interference: ActionInterference<'_>,
 ) {
+    let ActionInterference {
+        action,
+        target,
+        ability,
+        mode,
+        reason,
+        target_tags,
+    } = interference;
     let mut detail = serde_json::json!({
         "action_id": action.sub.action_id,
         "template_id": action.template.id,
@@ -6531,12 +6247,14 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                             emit_action_interfered_by_target_state(
                                 &mut trace_decisions,
                                 &mut events,
-                                &actions[idx],
-                                &target,
-                                IrAbility::Mark,
-                                None,
-                                reason,
-                                &tags,
+                                ActionInterference {
+                                    action: &actions[idx],
+                                    target: &target,
+                                    ability: IrAbility::Mark,
+                                    mode: None,
+                                    reason,
+                                    target_tags: &tags,
+                                },
                             );
                             continue;
                         }
@@ -6936,12 +6654,14 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                             emit_action_interfered_by_target_state(
                                 &mut trace_decisions,
                                 &mut events,
-                                &actions[idx],
-                                &t,
-                                IrAbility::Protect,
-                                None,
-                                reason,
-                                &tags,
+                                ActionInterference {
+                                    action: &actions[idx],
+                                    target: &t,
+                                    ability: IrAbility::Protect,
+                                    mode: None,
+                                    reason,
+                                    target_tags: &tags,
+                                },
                             );
                             continue;
                         }
@@ -7104,22 +6824,23 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                             continue;
                         }
                         resolve_one_kill(
-                            pack,
-                            &input.phase_id,
-                            input.state.phase_kind,
-                            input.state.phase_number,
-                            &victim,
-                            &attacker,
-                            &cause,
-                            is_strongman && strongman_bypasses_protect,
-                            death_reveal_mode(input, &victim, &cause),
-                            &protections,
-                            &target_tags,
-                            &mut cpr_saves,
-                            &mut events,
-                            &mut killed,
-                            &mut kill_log,
-                            &mut trace_decisions,
+                            ActionResolutionContext {
+                                input,
+                                protections: &protections,
+                                cpr_saves: &mut cpr_saves,
+                                events: &mut events,
+                                killed: &mut killed,
+                                log: &mut kill_log,
+                                trace_decisions: &mut trace_decisions,
+                            },
+                            KillAction {
+                                target: &victim,
+                                attacker: &attacker,
+                                cause: &cause,
+                                unstoppable: is_strongman && strongman_bypasses_protect,
+                                death_reveal: death_reveal_mode(input, &victim, &cause),
+                                target_tags: &target_tags,
+                            },
                         );
                     }
                     for (carry_idx, (token, target)) in carry_targets.into_iter().enumerate() {
@@ -7159,22 +6880,27 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                             continue;
                         }
                         resolve_one_kill(
-                            pack,
-                            &input.phase_id,
-                            input.state.phase_kind,
-                            input.state.phase_number,
-                            &target,
-                            &token.owner_id,
-                            &input.pack.wolf_carry.cause,
-                            is_strongman && strongman_bypasses_protect,
-                            death_reveal_mode(input, &target, &input.pack.wolf_carry.cause),
-                            &protections,
-                            &target_tags,
-                            &mut cpr_saves,
-                            &mut events,
-                            &mut killed,
-                            &mut kill_log,
-                            &mut trace_decisions,
+                            ActionResolutionContext {
+                                input,
+                                protections: &protections,
+                                cpr_saves: &mut cpr_saves,
+                                events: &mut events,
+                                killed: &mut killed,
+                                log: &mut kill_log,
+                                trace_decisions: &mut trace_decisions,
+                            },
+                            KillAction {
+                                target: &target,
+                                attacker: &token.owner_id,
+                                cause: &input.pack.wolf_carry.cause,
+                                unstoppable: is_strongman && strongman_bypasses_protect,
+                                death_reveal: death_reveal_mode(
+                                    input,
+                                    &target,
+                                    &input.pack.wolf_carry.cause,
+                                ),
+                                target_tags: &target_tags,
+                            },
                         );
                     }
                 }
@@ -7406,12 +7132,14 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                             emit_action_interfered_by_target_state(
                                 &mut trace_decisions,
                                 &mut events,
-                                &actions[idx],
-                                &target,
-                                IrAbility::Investigate,
-                                Some(mode),
-                                reason,
-                                &tags,
+                                ActionInterference {
+                                    action: &actions[idx],
+                                    target: &target,
+                                    ability: IrAbility::Investigate,
+                                    mode: Some(mode),
+                                    reason,
+                                    target_tags: &tags,
+                                },
                             );
                             continue;
                         }
@@ -7753,139 +7481,35 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
         &mut trace_decisions,
     );
 
-    // ── Phase 8: Triggers ── reactive abilities (doc 09). After core resolution,
-    // fire every trigger whose `on` event was observed against a slot carrying
-    // every tag in `if_target_has`, and resolve the action it `produces`
-    // (actor/target chosen per ActorRef/TargetRef). Determinism: observations
-    // are processed in event order; a produced kill becomes a new observation and
-    // is re-examined, bounded by `redirects.loop_cap` (reused as the trigger loop
-    // cap — see note). On reaching the cap the engine pushes a diagnostic note
-    // and terminates deterministically.
-    let loop_cap = pack.redirects.loop_cap as usize;
-    let mut frontier: Vec<TriggerObservation> =
-        kill_log.iter().flat_map(kill_observations).collect();
-    frontier.extend(visit_observations(&actions));
-    frontier.extend(effect_marked_observations);
-    frontier.extend(phase_end_observations(input, &killed));
-    let mut iterations = 0usize;
-    while !frontier.is_empty() {
-        if iterations >= loop_cap {
-            trace_notes.push(format!(
-                "trigger loop_cap ({loop_cap}) reached; terminating trigger fixpoint"
-            ));
-            break;
-        }
-        iterations += 1;
-        let mut next_kills: Vec<KillRecord> = Vec::new();
-        for observation in &frontier {
-            for trig in &pack.triggers {
-                if trig.on != observation.on {
-                    continue;
-                }
-                if !night_resolution_trigger_participates_in_fixpoint(pack, trig) {
-                    continue;
-                }
-                let Some(target_slot) = input
-                    .state
-                    .slots
-                    .iter()
-                    .find(|s| s.slot_id == observation.target)
-                else {
-                    continue;
-                };
-                let actor_slot = input
-                    .state
-                    .slots
-                    .iter()
-                    .find(|s| s.slot_id == observation.actor);
-                if !trigger_observation_matches(trig, target_slot, actor_slot, observation) {
-                    continue;
-                }
-                let produced_actor = match trig.produces.actor {
-                    ActorRef::Target => observation.target.clone(),
-                    ActorRef::Actor => observation.actor.clone(),
-                    ActorRef::TargetGuard | ActorRef::Other => continue,
-                };
-                let produced_target = match trig.produces.target {
-                    TargetRef::Killer | TargetRef::Actor => observation.actor.clone(),
-                    TargetRef::Target => observation.target.clone(),
-                    TargetRef::Other => continue,
-                };
-                let mut payload = serde_json::json!({
-                    "on": trigger_on_label(observation.on),
-                    "source_target": observation.target,
-                    "source_actor": observation.actor,
-                    "source_cause": observation.cause,
-                    "produced_actor": produced_actor,
-                    "produced_target": produced_target,
-                });
-                if !trig.if_actor_has.is_empty() {
-                    payload["actor_filter"] = serde_json::json!(trig.if_actor_has);
-                }
-                events.push(InnerEvent::Trigger {
-                    trigger_id: trig.id.clone(),
-                    payload,
-                });
-                if trig.produces.ability == IrAbility::Kill {
-                    let strongman = night_resolution_generated_kill_bypasses_protect(pack, trig);
-                    let target_tags = target_tags(input, &transient_effects, &produced_target);
-                    if let Some(reason) =
-                        target_state_gate_reason(pack, &target_tags, IrAbility::Kill)
-                    {
-                        trace_decisions.push(DecisionTrace {
-                            stage: "kill_resolution".to_string(),
-                            source: format!("cause:{}", trig.id),
-                            outcome: "kill_skipped_by_target_state".to_string(),
-                            detail: serde_json::json!({
-                                "action_id": trig.id,
-                                "template_id": trig.id,
-                                "actor": produced_actor,
-                                "target": produced_target,
-                                "reason": reason,
-                                "target_tags": target_tags,
-                            }),
-                        });
-                        continue;
-                    }
-                    resolve_one_kill(
-                        pack,
-                        &input.phase_id,
-                        input.state.phase_kind,
-                        input.state.phase_number,
-                        &produced_target,
-                        &produced_actor,
-                        &trig.id,
-                        strongman,
-                        death_reveal_mode(input, &produced_target, &trig.id),
-                        &protections,
-                        &target_tags,
-                        &mut cpr_saves,
-                        &mut events,
-                        &mut killed,
-                        &mut next_kills,
-                        &mut trace_decisions,
-                    );
-                }
-            }
-        }
-        next_kills.extend(apply_guard_dependency_deaths(
+    // ── Phase 8: Triggers ── reactive abilities (doc 09). Observation order is
+    // fixed by the collector; generated kills re-enter through the bounded
+    // fixpoint, with night-only guard/hide dependency cascades between rounds.
+    let trigger_frontier = collect_night_observations(
+        input,
+        &actions,
+        &kill_log,
+        effect_marked_observations,
+        &killed,
+    );
+    let _generated_kills = apply_trigger_fixpoint(
+        TriggerResolutionContext {
             input,
-            &guard_dependencies,
-            &mut killed,
-            &mut kill_log,
-            &mut events,
-            &mut trace_decisions,
-        ));
-        next_kills.extend(apply_hide_dependency_deaths(
-            input,
-            &hide_dependencies,
-            &mut killed,
-            &mut kill_log,
-            &mut events,
-            &mut trace_decisions,
-        ));
-        frontier = next_kills.iter().flat_map(kill_observations).collect();
-    }
+            protections: &protections,
+            transient_effects: &transient_effects,
+            killed: &mut killed,
+            cpr_saves: &mut cpr_saves,
+            events: &mut events,
+            trace_decisions: &mut trace_decisions,
+            trace_notes: &mut trace_notes,
+            produced_kill_collection: ProducedKillCollection::FrontierOnly,
+            cascade: Some(TriggerCascadeContext {
+                guard_dependencies: &guard_dependencies,
+                hide_dependencies: &hide_dependencies,
+                kill_log: &mut kill_log,
+            }),
+        },
+        trigger_frontier,
+    );
 
     apply_cpr_harms(
         input,
@@ -9491,16 +9115,22 @@ fn resolve_day(input: &ResolutionInput) -> InnerResolution {
         .collect();
     let mut cpr_saves: BTreeSet<String> = BTreeSet::new();
     trigger_frontier.extend(phase_end_observations(input, &killed));
+    let no_protections = BTreeMap::new();
+    let no_transient_effects = BTreeMap::new();
     let generated_kills = apply_trigger_fixpoint(
-        input,
+        TriggerResolutionContext {
+            input,
+            protections: &no_protections,
+            transient_effects: &no_transient_effects,
+            killed: &mut killed,
+            cpr_saves: &mut cpr_saves,
+            events: &mut events,
+            trace_decisions: &mut trace_decisions,
+            trace_notes: &mut trace_notes,
+            produced_kill_collection: ProducedKillCollection::Return,
+            cascade: None,
+        },
         trigger_frontier,
-        &BTreeMap::new(),
-        &BTreeMap::new(),
-        &mut killed,
-        &mut cpr_saves,
-        &mut events,
-        &mut trace_decisions,
-        &mut trace_notes,
     );
     for record in generated_kills {
         deaths.push(Death {
@@ -11632,8 +11262,21 @@ fn resolve_duel_actions(
         });
         let mut killed_slots = vec![killed.clone()];
         let mut cpr_saves = BTreeSet::new();
+        let no_protections = BTreeMap::new();
+        let no_transient_effects = BTreeMap::new();
         let generated_kills = apply_trigger_fixpoint(
-            input,
+            TriggerResolutionContext {
+                input,
+                protections: &no_protections,
+                transient_effects: &no_transient_effects,
+                killed: &mut killed_slots,
+                cpr_saves: &mut cpr_saves,
+                events: &mut duel_events,
+                trace_decisions,
+                trace_notes,
+                produced_kill_collection: ProducedKillCollection::Return,
+                cascade: None,
+            },
             vec![TriggerObservation {
                 on: TriggerOn::Ability(IrAbility::Duel),
                 target: killed.clone(),
@@ -11642,13 +11285,6 @@ fn resolve_duel_actions(
                 target_tags: Vec::new(),
                 actor_tags: Vec::new(),
             }],
-            &BTreeMap::new(),
-            &BTreeMap::new(),
-            &mut killed_slots,
-            &mut cpr_saves,
-            &mut duel_events,
-            trace_decisions,
-            trace_notes,
         );
         for record in generated_kills {
             trace_decisions.push(DecisionTrace {
