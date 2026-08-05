@@ -638,10 +638,12 @@ pub enum SlotLifecycleEffect {
     Modkilled,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
-pub enum GrantKind {
+/// Platform grants share domain pack IR `GrantKind` (single source of truth).
+pub use domain::GrantKind;
+
+#[derive(Serialize, Deserialize)]
+#[serde(remote = "GrantKind", rename_all = "snake_case")]
+enum PlatformGrantKindSerde {
     ExtraAction,
     Item,
     VoteWeight,
@@ -662,6 +664,8 @@ pub enum EffectVisibility {
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 pub struct GrantSpec {
     pub grant_id: Tag,
+    #[serde(with = "PlatformGrantKindSerde")]
+    #[cfg_attr(feature = "typescript", ts(as = "GrantKind"))]
     pub kind: GrantKind,
     pub uses: u16,
     pub vote_weight: Option<f64>,
@@ -1361,5 +1365,25 @@ mod tests {
             invalid.validate(),
             Err(ModelError::DuplicateProgramEvent(id("event-cookie")))
         );
+    }
+
+    #[test]
+    fn grant_kind_uses_snake_case_at_the_platform_boundary() {
+        for (kind, name) in [
+            (GrantKind::ExtraAction, "extra_action"),
+            (GrantKind::Item, "item"),
+            (GrantKind::VoteWeight, "vote_weight"),
+        ] {
+            let grant = GrantSpec {
+                grant_id: id("grant"),
+                kind,
+                uses: 1,
+                vote_weight: (kind == GrantKind::VoteWeight).then_some(2.0),
+                visibility: EffectVisibility::Target,
+            };
+            let encoded = serde_json::to_value(&grant).unwrap();
+            assert_eq!(encoded["kind"], name);
+            assert_eq!(serde_json::from_value::<GrantSpec>(encoded).unwrap(), grant);
+        }
     }
 }

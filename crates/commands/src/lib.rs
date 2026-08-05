@@ -1980,7 +1980,7 @@ async fn plan_effect_events(
                     serde_json::json!({
                         "grant_id": grant.grant_id.as_str(),
                         "grant_option": null,
-                        "kind": platform_grant_kind(grant.kind),
+                        "kind": grant.kind,
                         "actor": "external",
                         "target": target.as_str(),
                         "source_action": source_action,
@@ -2914,14 +2914,6 @@ fn persistent_effect_policy<'a>(
 ) -> Result<&'a domain::pack::EffectPolicy, Reject> {
     day_program::persistent_effect_policy(pack, effect)
         .map_err(|issue| effect_spec_reject(issue.message))
-}
-
-fn platform_grant_kind(kind: game_platform::GrantKind) -> domain::GrantKind {
-    match kind {
-        game_platform::GrantKind::ExtraAction => domain::GrantKind::ExtraAction,
-        game_platform::GrantKind::Item => domain::GrantKind::Item,
-        game_platform::GrantKind::VoteWeight => domain::GrantKind::VoteWeight,
-    }
 }
 
 fn host_fiat_grant_source(principal_user_id: &str, command_id: Uuid, index: usize) -> String {

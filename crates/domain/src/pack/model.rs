@@ -294,11 +294,41 @@ fn default_effect_duration() -> EffectDuration {
     EffectDuration::Persistent
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+/// Pack IR grant kind. Serializes as PascalCase for packs/events; also accepts
+/// snake_case aliases so platform/wire payloads (`extra_action`, `item`,
+/// `vote_weight`) deserialize without a second enum.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[cfg_attr(feature = "typescript", ts(rename_all = "snake_case"))]
 pub enum GrantKind {
     ExtraAction,
     Item,
     VoteWeight,
+}
+
+impl<'de> Deserialize<'de> for GrantKind {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        match value.as_str() {
+            "ExtraAction" | "extra_action" => Ok(Self::ExtraAction),
+            "Item" | "item" => Ok(Self::Item),
+            "VoteWeight" | "vote_weight" => Ok(Self::VoteWeight),
+            _ => Err(serde::de::Error::unknown_variant(
+                &value,
+                &[
+                    "ExtraAction",
+                    "Item",
+                    "VoteWeight",
+                    "extra_action",
+                    "item",
+                    "vote_weight",
+                ],
+            )),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -91,6 +91,11 @@ fn apply_effect_plan_deserializes_the_canonical_concrete_catalog() {
     });
 
     let parsed = serde_json::from_value::<wire::Command>(command).unwrap();
+    let serialized = serde_json::to_value(&parsed).unwrap();
+    assert_eq!(
+        serialized["ApplyEffectPlan"]["effects"][1]["grant"]["kind"],
+        "vote_weight"
+    );
     assert!(matches!(
         parsed,
         wire::Command::ApplyEffectPlan { effects, reason, .. }
