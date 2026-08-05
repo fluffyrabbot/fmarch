@@ -306,7 +306,7 @@
       "title": "Reviewable 1.0 core and toolchain",
       "execution_class": "code",
       "status": "open",
-      "summary": "Rust 1.95.0 and strict workspace Clippy are proof-enforced; API media HTTP, domain pack model/validation, and resolver action/trigger ownership are isolated behind typed boundaries. Remaining resolver outcome/day-vote, API, projection, command-test, and proof-runner concentrations remain inventoried.",
+      "summary": "Rust 1.95.0 and strict workspace Clippy are proof-enforced; API media HTTP and authentication attempt/delivery, domain pack model/validation, and resolver action/trigger/outcome ownership are isolated behind typed boundaries. Remaining resolver coordinator, API route/live-publication, projection, command-test, and proof-runner concentrations remain inventoried.",
       "complete_when": [
         "The Rust toolchain is pinned, workspace Clippy is warning-clean, and concentrated pack, resolver, API, projection, command-test, and proof orchestration responsibilities are split into coherent modules without weakening proof coverage."
       ],
@@ -329,6 +329,10 @@
         },
         {
           "kind": "source",
+          "value": "crates/api/src/authentication.rs"
+        },
+        {
+          "kind": "source",
           "value": "crates/domain/src/pack/model.rs"
         },
         {
@@ -345,6 +349,10 @@
         },
         {
           "kind": "source",
+          "value": "crates/domain/src/resolver/outcome.rs"
+        },
+        {
+          "kind": "source",
           "value": "crates/domain/tests/resolver_boundary.rs"
         },
         {
@@ -357,31 +365,30 @@
         }
       ],
       "remaining": [
-        "Split remaining resolver outcome/day-vote, API, projection, command-test, and proof-runner responsibilities along the dependency direction recorded in docs/arch/16-maintainable-core.md.",
+        "Split remaining resolver coordinator, API, projection, command-test, and proof-runner responsibilities along the dependency direction recorded in docs/arch/16-maintainable-core.md.",
         "Remove the exact lint expectations as typed contexts and bounded modules supersede them."
       ],
       "recommended_slice": {
-        "objective": "Extract the resolver day-vote/outcome boundary: move day-vote tallying, threshold and tie resolution, duel outcome handling, decide_outcome, and their event/trace construction into resolver/outcome.rs; introduce typed DayVoteResolutionContext and OutcomeDecisionInput records; and remove the remaining vote-outcome high-arity lint expectation without changing announcements, prompt ordering, seeded tie-breaking, win-trigger handoff, or golden behavior.",
+        "objective": "Extract API live-projection publication from crates/api/src/lib.rs into a bounded live_projection module: move LiveProjectionUpdate, vote-count snapshot/delta/clear construction, dirty-surface publication, broadcast receive/lag handling, and publication-focused tests behind typed LiveProjectionChangeSet and LiveProjectionPublisher boundaries; remove the remaining lib.rs projection-flags high-arity expectation; and preserve update ordering, bounded-channel lag/resync behavior, cross-instance notification hydration, scoped private delivery, and wire payloads.",
         "paths": [
-          "crates/domain/src/resolver.rs",
-          "crates/domain/src/resolver/",
-          "crates/domain/tests/",
-          "packs/*/golden/",
-          "crates/commands/src/bin/check_goldens.rs",
+          "crates/api/src/lib.rs",
+          "crates/api/src/live_projection.rs",
+          "crates/api/tests/",
+          "crates/api/tests/authenticated_transport.rs",
           "docs/arch/16-maintainable-core.md"
         ],
         "proof_commands": [
-          "cargo test -p domain",
-          "cargo run -p commands --bin check_goldens -- --check",
+          "cargo test -p api",
+          "npm run test:release-topology",
           "cargo clippy --workspace --all-targets --all-features -- -D warnings",
           "npm run proof:lanes -- --mode sprint --run",
           "npm run proof:lanes -- --mode full --run"
         ],
         "non_claims": [
-          "Do not preserve resolver-local helper signatures through compatibility facades.",
-          "Do not change event order, event or trace payloads, seeded determinism, or generated golden semantics as an accidental side effect of module extraction.",
-          "Do not reopen action or trigger ownership or mix pack/API extraction into this atomic day-vote/outcome boundary change.",
-          "Do not mark foundation.maintainable-core complete; remaining resolver, API, projection, command-test, and proof-runner concentrations remain."
+          "Do not move command authorization/adaptation, cold-load route handlers, or WebSocket authentication into the publication module.",
+          "Do not change broadcast capacity, dirty-surface semantics, refresh ordering, resync frames, wire variants, or cross-replica behavior as an accidental side effect of ownership extraction.",
+          "Do not reopen the closed media or authentication boundaries or mix community/game route extraction into this atomic live-publication change.",
+          "Do not mark foundation.maintainable-core complete; remaining resolver coordinator, API, projection, command-test, and proof-runner concentrations remain."
         ]
       }
     },
