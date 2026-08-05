@@ -849,6 +849,10 @@ async fn finalize_delivery(
     Ok(Some(receipt))
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "delivery audit fields remain explicit until identity delivery owns a typed audit record"
+)]
 async fn record_delivery_audit(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     event_kind: &str,

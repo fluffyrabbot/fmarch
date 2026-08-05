@@ -17,6 +17,10 @@ use domain::{InvestigateMode, IrAbility};
 use serde::Deserialize;
 use serde_json::Value;
 
+type PackMutation = fn(&mut Pack);
+type InvalidPackCase = (&'static str, PackMutation, &'static str);
+type InvalidPackPolicyCase = (&'static str, PackMutation, &'static str, &'static str);
+
 fn repo_root() -> PathBuf {
     // crates/domain -> repo root is two parents up.
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -1130,7 +1134,7 @@ fn resolver_rejects_missing_night_resolution_jailkeep_explicit_block_policy_befo
 #[test]
 fn resolver_rejects_wrong_night_resolution_action_bucket_entries_before_night_resolution() {
     let golden = load_golden("kill_vs_doctor.json");
-    let cases: Vec<(&str, fn(&mut Pack), &str, &str)> = vec![
+    let cases: Vec<InvalidPackPolicyCase> = vec![
         (
             "empty block_action_ids",
             |pack| pack.night_resolution.block_action_ids.clear(),
@@ -1249,7 +1253,7 @@ fn resolver_rejects_wrong_night_resolution_action_bucket_entries_before_night_re
 #[test]
 fn resolver_rejects_malformed_night_resolution_team_kill_policy_before_resolution() {
     let golden = load_golden("lost_mafia_goon_blocks_team_kill_with_teammate_alive.json");
-    let cases: Vec<(&str, fn(&mut Pack), &str, &str)> =
+    let cases: Vec<InvalidPackPolicyCase> =
         vec![
         (
             "blank team_kill_action_ids",
@@ -1387,7 +1391,7 @@ fn resolver_rejects_missing_night_resolution_kill_cause_catalog_before_resolutio
 #[test]
 fn resolver_rejects_malformed_night_resolution_kill_cause_catalog_before_resolution() {
     let golden = load_golden("kill_vs_doctor.json");
-    let cases: Vec<(&str, fn(&mut Pack), &str)> = vec![
+    let cases: Vec<InvalidPackCase> = vec![
         (
             "empty kill cause id",
             |pack| pack.night_resolution.kill_cause_ids.push("".to_string()),
@@ -1489,7 +1493,7 @@ fn resolver_rejects_missing_night_resolution_protection_source_before_night_reso
 #[test]
 fn resolver_rejects_malformed_night_resolution_protection_cause_policy_before_night_resolution() {
     let golden = load_golden("kill_vs_doctor.json");
-    let cases: Vec<(&str, fn(&mut Pack), &str)> = vec![
+    let cases: Vec<InvalidPackCase> = vec![
         (
             "empty protection source key",
             |pack| {
@@ -2012,7 +2016,7 @@ fn resolver_rejects_missing_night_resolution_target_state_save_source_before_nig
 #[test]
 fn resolver_rejects_malformed_night_resolution_target_state_save_policy_before_night_resolution() {
     let golden = load_golden("bulletproof_saves_kill.json");
-    let cases: Vec<(&str, fn(&mut Pack), &str)> = vec![
+    let cases: Vec<InvalidPackCase> = vec![
         (
             "empty save policy key",
             |pack| {
@@ -2372,7 +2376,7 @@ fn resolver_rejects_missing_night_resolution_suppression_source_before_night_res
 #[test]
 fn resolver_rejects_malformed_night_resolution_suppression_policy_before_night_resolution() {
     let golden = load_golden("kill_vs_doctor.json");
-    let cases: Vec<(&str, fn(&mut Pack), &str)> = vec![
+    let cases: Vec<InvalidPackCase> = vec![
         (
             "empty block source key",
             |pack| {
@@ -3008,7 +3012,7 @@ fn resolver_rejects_missing_night_resolution_cpr_harm_source_before_night_resolu
 #[test]
 fn resolver_rejects_malformed_night_resolution_cpr_harm_cause_policy_before_night_resolution() {
     let golden = load_golden("cpr_kills_unattacked_target.json");
-    let cases: Vec<(&str, fn(&mut Pack), &str)> = vec![
+    let cases: Vec<InvalidPackCase> = vec![
         (
             "empty CPR source key",
             |pack| {
@@ -3304,7 +3308,7 @@ fn resolver_rejects_missing_night_resolution_guard_dependency_source_before_nigh
 fn resolver_rejects_malformed_night_resolution_guard_dependency_cause_policy_before_night_resolution(
 ) {
     let golden = load_golden("babysitter_protects_then_dooms_ward.json");
-    let cases: Vec<(&str, fn(&mut Pack), &str)> = vec![
+    let cases: Vec<InvalidPackCase> = vec![
         (
             "empty guard dependency source key",
             |pack| {
@@ -3643,7 +3647,7 @@ fn resolver_rejects_missing_night_resolution_target_state_gate_source_before_nig
 #[test]
 fn resolver_rejects_malformed_night_resolution_target_state_gate_policy_before_night_resolution() {
     let golden = load_golden("commuter_avoids_targeting.json");
-    let cases: Vec<(&str, fn(&mut Pack), &str)> = vec![
+    let cases: Vec<InvalidPackCase> = vec![
         (
             "empty gate policy key",
             |pack| {
@@ -6398,7 +6402,7 @@ fn resolver_rejects_malformed_night_resolution_generated_kill_shape_before_trigg
 fn resolver_rejects_malformed_night_resolution_generated_kill_cause_policy_before_trigger_fixpoint()
 {
     let golden = load_golden("pgo_shoots_visitor.json");
-    let cases: Vec<(&str, fn(&mut Pack), &str)> = vec![
+    let cases: Vec<InvalidPackCase> = vec![
         (
             "empty generated kill trigger key",
             |pack| {
@@ -6486,7 +6490,7 @@ fn resolver_rejects_missing_night_resolution_trigger_fixpoint_policy_source_befo
 #[test]
 fn resolver_rejects_malformed_night_resolution_trigger_fixpoint_policy_before_trigger_fixpoint() {
     let golden = load_golden("pgo_shoots_visitor.json");
-    let cases: Vec<(&str, fn(&mut Pack), &str)> = vec![
+    let cases: Vec<InvalidPackCase> = vec![
         (
             "empty trigger fixpoint source key",
             |pack| {
@@ -6821,7 +6825,7 @@ fn resolver_rejects_missing_night_resolution_intercept_source_before_night_resol
 #[test]
 fn resolver_rejects_malformed_night_resolution_intercept_cause_policy_before_night_resolution() {
     let golden = load_golden("pgo_bodyguard_intercept.json");
-    let cases: Vec<(&str, fn(&mut Pack), &str)> = vec![
+    let cases: Vec<InvalidPackCase> = vec![
         (
             "empty intercept source key",
             |pack| {
@@ -7127,7 +7131,7 @@ fn resolver_rejects_missing_night_resolution_chosen_retaliation_cause_policy_bef
 fn resolver_rejects_malformed_night_resolution_chosen_retaliation_cause_policy_before_retaliation()
 {
     let golden = load_golden("hunter_retaliates_on_death.json");
-    let cases: Vec<(&str, fn(&mut Pack), &str)> = vec![
+    let cases: Vec<InvalidPackCase> = vec![
         (
             "empty Retaliate source key",
             |pack| {
@@ -7295,7 +7299,7 @@ fn resolver_rejects_missing_night_resolution_hide_dependency_source_before_night
 fn resolver_rejects_malformed_night_resolution_hide_dependency_cause_policy_before_night_resolution(
 ) {
     let golden = load_golden("hider_dies_when_host_dies.json");
-    let cases: Vec<(&str, fn(&mut Pack), &str)> = vec![
+    let cases: Vec<InvalidPackCase> = vec![
         (
             "empty hide dependency source key",
             |pack| {

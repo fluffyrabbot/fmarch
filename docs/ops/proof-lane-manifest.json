@@ -14,6 +14,7 @@
   "push_sentinel_budget_seconds": 60,
   "push_sentinels": ["test:completeness-scorecard", "test:proof-lane-contract"],
   "lanes": {
+    "cargo:clippy-workspace": { "kind": "shell", "command": "cargo clippy --workspace --all-targets --all-features -- -D warnings" },
     "cargo:domain": { "kind": "shell", "command": "cargo test -p domain" },
     "cargo:eventstore": { "kind": "shell", "command": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p eventstore -- --test-threads=1" },
     "cargo:projections": { "kind": "shell", "command": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p projections -- --test-threads=1" },
@@ -92,7 +93,7 @@
       "tier": "frozen",
       "paths": ["crates/domain/"],
       "crate": "domain",
-      "lanes": ["cargo:domain"],
+      "lanes": ["cargo:domain", "cargo:clippy-workspace"],
       "capabilities": ["foundation.resolution-engine-parity"]
     },
     {
@@ -100,7 +101,7 @@
       "tier": "frozen",
       "paths": ["crates/eventstore/"],
       "crate": "eventstore",
-      "lanes": ["cargo:eventstore"],
+      "lanes": ["cargo:eventstore", "cargo:clippy-workspace"],
       "capabilities": ["foundation.event-store-projections"]
     },
     {
@@ -108,7 +109,7 @@
       "tier": "frozen",
       "paths": ["crates/projections/"],
       "crate": "projections",
-      "lanes": ["cargo:projections", "test:projection-baseline:static"],
+      "lanes": ["cargo:projections", "cargo:clippy-workspace", "test:projection-baseline:static"],
       "capabilities": [
         "foundation.event-store-projections",
         "product.mash.day-event-runtime",
@@ -121,7 +122,7 @@
       "tier": "frozen",
       "paths": ["crates/caps/"],
       "crate": "caps",
-      "lanes": ["cargo:caps"],
+      "lanes": ["cargo:caps", "cargo:clippy-workspace"],
       "capabilities": ["foundation.command-capability-runtime"]
     },
     {
@@ -129,7 +130,7 @@
       "tier": "frozen",
       "paths": ["crates/commands/"],
       "crate": "commands",
-      "lanes": ["cargo:commands"],
+      "lanes": ["cargo:commands", "cargo:clippy-workspace"],
       "capabilities": [
         "foundation.command-capability-runtime",
         "foundation.resolution-engine-parity",
@@ -144,7 +145,7 @@
       "tier": "active",
       "paths": ["crates/game_platform/"],
       "crate": "game_platform",
-      "lanes": ["cargo:game-platform"],
+      "lanes": ["cargo:game-platform", "cargo:clippy-workspace"],
       "capabilities": ["product.mash.day-event-model"]
     },
     {
@@ -152,7 +153,7 @@
       "tier": "frozen",
       "paths": ["crates/wire/"],
       "crate": "wire",
-      "lanes": ["cargo:wire", "check:wire-types"],
+      "lanes": ["cargo:wire", "cargo:clippy-workspace", "check:wire-types"],
       "capabilities": ["foundation.wire-live-delivery"],
       "also_triggers": ["frontend:game", "tools:proof-infra"]
     },
@@ -161,7 +162,7 @@
       "tier": "frozen",
       "paths": ["crates/community/"],
       "crate": "community",
-      "lanes": ["cargo:community"],
+      "lanes": ["cargo:community", "cargo:clippy-workspace"],
       "capabilities": [
         "product.community.game-index",
         "product.community.discussions",
@@ -176,14 +177,14 @@
       "tier": "active",
       "paths": ["crates/identity/"],
       "crate": "identity",
-      "lanes": ["cargo:identity", "test:auth-invite-role-proof"]
+      "lanes": ["cargo:identity", "cargo:clippy-workspace", "test:auth-invite-role-proof"]
     },
     {
       "id": "crate:media",
       "tier": "frozen",
       "paths": ["crates/media/"],
       "crate": "media",
-      "lanes": ["cargo:media", "test:release-topology"],
+      "lanes": ["cargo:media", "cargo:clippy-workspace", "test:release-topology"],
       "capabilities": [
         "product.media.reference-ingest-serving",
         "product.media.canonical-blob-store",
@@ -197,7 +198,7 @@
       "tier": "active",
       "paths": ["crates/api/"],
       "crate": "api",
-      "lanes": ["cargo:api", "test:mash-scale-acceptance", "test:security-release-baseline"],
+      "lanes": ["cargo:api", "cargo:clippy-workspace", "test:mash-scale-acceptance", "test:security-release-baseline"],
       "also_triggers": ["frontend:identity"],
       "capabilities": [
         "product.mash.day-program-library",
@@ -211,7 +212,7 @@
       "tier": "frozen",
       "paths": ["crates/operator_api/"],
       "crate": "operator_api",
-      "lanes": ["cargo:operator_api"],
+      "lanes": ["cargo:operator_api", "cargo:clippy-workspace"],
       "capabilities": ["product.archive.completed-game-export"]
     },
     {
@@ -219,7 +220,7 @@
       "tier": "active",
       "paths": ["crates/server/"],
       "crate": "server",
-      "lanes": ["cargo:server", "test:release-topology", "test:security-release-baseline"]
+      "lanes": ["cargo:server", "cargo:clippy-workspace", "test:release-topology", "test:security-release-baseline"]
     },
     {
       "id": "packs",
@@ -413,10 +414,11 @@
     {
       "id": "workspace:manifests",
       "tier": "active",
-      "paths": ["scripts/", "Cargo.toml", "Cargo.lock", "package.json", "package-lock.json"],
+      "paths": ["scripts/", "Cargo.toml", "Cargo.lock", "rust-toolchain.toml", "package.json", "package-lock.json"],
       "lanes": [
         "check:build-posture",
         "test:projection-baseline:static",
+        "cargo:clippy-workspace",
         "cargo:commands",
         "cargo:projections"
       ]

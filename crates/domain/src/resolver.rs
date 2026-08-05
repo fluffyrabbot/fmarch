@@ -843,6 +843,10 @@ fn apply_win_triggers_before_final(
     )));
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "trigger resolution context extraction remains queued behind the pack boundary"
+)]
 fn apply_trigger_fixpoint(
     input: &ResolutionInput,
     mut frontier: Vec<TriggerObservation>,
@@ -1231,9 +1235,7 @@ fn chosen_retaliation_suppression_reason(
             "invalid death_retaliation policy: enabled policy must declare ImmediateBeforePhaseAnnouncement timing"
         );
     }
-    let Some(role) = slot_role(input, actor) else {
-        return None;
-    };
+    let role = slot_role(input, actor)?;
     if !policy
         .eligible_roles
         .iter()
@@ -1603,7 +1605,7 @@ fn target_state_gate_reason<'a>(
             pack.night_resolution
                 .target_state_gate_policy
                 .get(tag)
-                .is_some_and(|policy| policy.blocks.iter().any(|blocked| *blocked == ability))
+                .is_some_and(|policy| policy.blocks.contains(&ability))
                 .then_some(tag.as_str())
         });
     }
@@ -1624,6 +1626,10 @@ fn target_state_interference_reason(reason: &str) -> String {
     }
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "action-resolution context extraction remains queued behind the pack boundary"
+)]
 fn emit_action_interfered_by_target_state(
     trace_decisions: &mut Vec<DecisionTrace>,
     events: &mut Vec<InnerEvent>,
@@ -3822,6 +3828,10 @@ fn inventory_use_counted(
     }
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "counter event construction remains explicit until resolver event builders are grouped"
+)]
 fn counter_use_counted(
     phase_id: &PhaseId,
     phase_kind: PhaseKind,
@@ -3854,7 +3864,7 @@ fn counter_use_counted(
 fn phase_parity_matches(phase_number: u32, parity: PhaseParity) -> bool {
     match parity {
         PhaseParity::Odd => phase_number % 2 == 1,
-        PhaseParity::Even => phase_number % 2 == 0,
+        PhaseParity::Even => phase_number.is_multiple_of(2),
     }
 }
 
@@ -8271,7 +8281,7 @@ fn followed_action_types(
         if idx == observer_idx || &action.sub.actor != followed || !visible_visit(action, pack) {
             continue;
         }
-        let action_type = action_type_category(&action.template);
+        let action_type = action_type_category(action.template);
         if !action_types.iter().any(|existing| existing == action_type) {
             action_types.push(action_type.to_string());
         }
@@ -10818,10 +10828,8 @@ fn resolve_ita_actions(
                 .then_some((sub, template))
         })
         .collect();
-    if ordered.is_empty() {
-        if lifecycle.opened.is_empty() {
-            return;
-        }
+    if ordered.is_empty() && lifecycle.opened.is_empty() {
+        return;
     }
     ordered.sort_by(|(a, a_template), (b, b_template)| {
         b_template
@@ -10915,14 +10923,12 @@ fn resolve_ita_actions(
                 input.pack.ita.resolution_policy.on_target_already_dead,
                 ItaTargetAlreadyDeadPolicy::RefundShot
             );
-        if !target_slot.is_alive() {
-            if invalidated_by.is_none() && !should_refund_dead_target {
-                events.push(InnerEvent::ActionInterfered {
-                    actor: sub.actor.clone(),
-                    reason: "ita_target_dead".to_string(),
-                });
-                continue;
-            }
+        if !target_slot.is_alive() && invalidated_by.is_none() && !should_refund_dead_target {
+            events.push(InnerEvent::ActionInterfered {
+                actor: sub.actor.clone(),
+                reason: "ita_target_dead".to_string(),
+            });
+            continue;
         }
 
         let released_from_buffer = sub
@@ -11801,6 +11807,10 @@ fn earliest_reached_winner(
     })
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "vote outcome context extraction remains queued behind the resolver boundary"
+)]
 fn decide_outcome(
     tallies: &BTreeMap<SlotId, f64>,
     top_contenders: &[SlotId],

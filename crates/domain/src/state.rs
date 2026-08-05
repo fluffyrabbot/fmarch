@@ -495,27 +495,25 @@ pub fn apply_events(state: &StateSnapshot, events: &[InnerEvent]) -> StateSnapsh
                 phase_number,
                 duration,
                 visibility,
-            } => {
-                if *duration == EffectDuration::Persistent {
-                    if let Some(slot) = next.slots.iter_mut().find(|s| &s.slot_id == target) {
-                        if !slot.effects.contains(effect) {
-                            slot.effects.push(effect.clone());
-                        }
+            } if *duration == EffectDuration::Persistent => {
+                if let Some(slot) = next.slots.iter_mut().find(|s| &s.slot_id == target) {
+                    if !slot.effects.contains(effect) {
+                        slot.effects.push(effect.clone());
                     }
-                    next.effect_records
-                        .retain(|record| record.effect != *effect || record.target != *target);
-                    next.effect_records.push(EffectRecord {
-                        effect: effect.clone(),
-                        target: target.clone(),
-                        source: actor.clone(),
-                        source_action: source_action.clone(),
-                        phase_id: phase_id.clone(),
-                        phase_kind: *phase_kind,
-                        phase_number: *phase_number,
-                        duration: *duration,
-                        visibility: *visibility,
-                    });
                 }
+                next.effect_records
+                    .retain(|record| record.effect != *effect || record.target != *target);
+                next.effect_records.push(EffectRecord {
+                    effect: effect.clone(),
+                    target: target.clone(),
+                    source: actor.clone(),
+                    source_action: source_action.clone(),
+                    phase_id: phase_id.clone(),
+                    phase_kind: *phase_kind,
+                    phase_number: *phase_number,
+                    duration: *duration,
+                    visibility: *visibility,
+                });
             }
             InnerEvent::EffectsCleared {
                 effect, targets, ..
@@ -678,23 +676,22 @@ pub fn apply_events(state: &StateSnapshot, events: &[InnerEvent]) -> StateSnapsh
                 phase_kind,
                 phase_number,
                 visible,
-            } => {
-                if !next.visit_history.iter().any(|record| {
-                    record.actor == *actor
-                        && record.target == *target
-                        && record.source_action == *source_action
-                }) {
-                    next.visit_history.push(VisitRecord {
-                        actor: actor.clone(),
-                        target: target.clone(),
-                        template_id: template_id.clone(),
-                        source_action: source_action.clone(),
-                        phase_id: phase_id.clone(),
-                        phase_kind: *phase_kind,
-                        phase_number: *phase_number,
-                        visible: *visible,
-                    });
-                }
+            } if !next.visit_history.iter().any(|record| {
+                record.actor == *actor
+                    && record.target == *target
+                    && record.source_action == *source_action
+            }) =>
+            {
+                next.visit_history.push(VisitRecord {
+                    actor: actor.clone(),
+                    target: target.clone(),
+                    template_id: template_id.clone(),
+                    source_action: source_action.clone(),
+                    phase_id: phase_id.clone(),
+                    phase_kind: *phase_kind,
+                    phase_number: *phase_number,
+                    visible: *visible,
+                });
             }
             InnerEvent::ActionGranted {
                 grant_id,
@@ -752,18 +749,16 @@ pub fn apply_events(state: &StateSnapshot, events: &[InnerEvent]) -> StateSnapsh
                 link_id,
                 slots,
                 source,
-            } => {
-                if !next
-                    .linked_slots
-                    .iter()
-                    .any(|link| &link.link_id == link_id)
-                {
-                    next.linked_slots.push(LinkRecord {
-                        link_id: link_id.clone(),
-                        slots: slots.clone(),
-                        source: source.clone(),
-                    });
-                }
+            } if !next
+                .linked_slots
+                .iter()
+                .any(|link| &link.link_id == link_id) =>
+            {
+                next.linked_slots.push(LinkRecord {
+                    link_id: link_id.clone(),
+                    slots: slots.clone(),
+                    source: source.clone(),
+                });
             }
             InnerEvent::RetaliationArmed {
                 retaliation_id,

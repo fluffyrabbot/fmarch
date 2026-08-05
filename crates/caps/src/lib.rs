@@ -181,7 +181,7 @@ pub async fn resolve_in_tx(
     principal: &Principal,
     game: GameId,
 ) -> Result<CapabilitySet, CapError> {
-    resolve_with(&mut **tx, principal, game).await
+    resolve_with(tx, principal, game).await
 }
 
 async fn resolve_with(

@@ -3134,6 +3134,10 @@ async fn withdraw_vote(
     persist(tx, game, &[ev]).await
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "command submission inputs remain explicit until action orchestration is extracted behind a request context"
+)]
 async fn submit_action(
     tx: &mut Transaction<'_, Postgres>,
     principal: &Principal,
@@ -4704,6 +4708,10 @@ fn host_prompt_from_stream(
     Err(Reject::UnknownPrompt)
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "prompt resolution inputs remain explicit until prompt rebuilding owns a typed resolution context"
+)]
 fn build_pk_prompt_resolution(
     pack: &domain::Pack,
     game: Uuid,
@@ -5959,7 +5967,7 @@ fn current_phase_deadline(stream: &[eventstore::StoredEvent], phase_id: &str) ->
         .filter(|ev| matches!(ev.kind.as_str(), "DeadlineSet" | "DeadlineExtended"))
         .filter(|ev| ev.payload["phase_id"].as_str() == Some(phase_id))
         .filter_map(|ev| ev.payload["at"].as_i64())
-        .last()
+        .next_back()
 }
 
 fn next_stream_logical_time(stream: &[eventstore::StoredEvent]) -> i64 {
@@ -6459,6 +6467,10 @@ async fn require_slot_can_post(
     }
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "validation inputs remain explicit until action validation owns a typed submission context"
+)]
 async fn validate_action_submission(
     tx: &mut Transaction<'_, Postgres>,
     game: Uuid,
@@ -6781,6 +6793,10 @@ fn selected_grant_option<'a>(
         .find(|grant| grant.grant_id == grant_id)
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "capacity inputs remain explicit until action validation owns a typed capacity context"
+)]
 async fn validate_action_slot_capacity(
     tx: &mut Transaction<'_, Postgres>,
     game: Uuid,

@@ -30,21 +30,24 @@ Overall release closure complete: **no**.
 
 ### Reviewable 1.0 core and toolchain `foundation.maintainable-core`
 
-Make the 1.0 core mechanically reviewable: pin the Rust toolchain, establish a warning-clean workspace Clippy gate, inventory the largest domain/API/projection/command-test/proof modules by responsibility and dependency direction, then extract the first coherent vertical family without compatibility shims or proof loss.
+Extract the domain pack model/validation boundary: introduce a typed PackValidationContext, move cross-reference and action-policy validation behind it, relocate pack validation tests out of the production module, and remove the superseded pack high-arity and test-placement lint expectations without changing pack JSON or golden behavior.
 
-Owned paths: `rust-toolchain.toml`, `Cargo.toml`, `crates/domain/src/`, `crates/api/src/`, `crates/projections/src/`, `crates/commands/tests/`, `tools/`, `docs/arch/`.
+Owned paths: `crates/domain/src/pack.rs`, `crates/domain/src/pack/`, `crates/domain/tests/`, `packs/`, `crates/commands/src/bin/check_goldens.rs`, `docs/arch/16-maintainable-core.md`.
 
 Proof:
 
+- `cargo test -p domain`
+- `cargo run -p commands --bin check_goldens -- --check`
 - `cargo clippy --workspace --all-targets --all-features -- -D warnings`
-- `npm run test:proof-lane-contract`
 - `npm run proof:lanes -- --mode sprint --run`
+- `npm run proof:lanes -- --mode full --run`
 
 Explicit non-claims:
 
-- Do not preserve internal module paths or transitional facades solely for compatibility in this greenfield workspace.
-- Do not combine unrelated responsibility extractions into one commit; each extraction must retain its narrow proof lane.
-- Do not claim maintainability completion from line-count reduction alone; ownership, dependency direction, and reviewable contracts must improve.
+- Do not preserve the current pack.rs internal layout through compatibility facades.
+- Do not change serialized pack fields, defaults, validation diagnostics, or generated golden semantics as an accidental side effect of module extraction.
+- Do not mix resolver-family extraction into this atomic pack-boundary change.
+- Do not mark foundation.maintainable-core complete; resolver, API, projection, command-test, and proof-runner concentrations remain.
 
 ## Locally proven foundation
 
@@ -56,7 +59,7 @@ Explicit non-claims:
 | complete | Versioned wire and recoverable live delivery<br>`foundation.wire-live-delivery` | `foundation.command-capability-runtime` | A seeded client can cold-load, decode only versioned binary-CBOR live frames, recover from lag, and retain capability-filtered state. | Complete. | source: `crates/wire/src/lib.rs`<br>source: `frontend/src/lib/app/live-transport.mjs`<br>Versioned Rust-owned wire types, REST/JSON commands and cold loads, binary-CBOR WebSocket projection delivery, lag resync, and frontend hydration recovery are locally proven. |
 | complete | Multi-replica release topology<br>`foundation.release-topology` | `foundation.event-store-projections`<br>`foundation.wire-live-delivery`<br>`product.media.upload-to-private-post` | API startup is migration-free, an explicit migrator owns schema changes, shared S3-compatible media preserves the existing content-addressed contract, and a two-replica local or hosted proof exercises cross-replica media and live recovery. | Complete. | source: `crates/media/src/repository.rs`<br>source: `crates/server/src/bin/fmarch-migrate.rs`<br>source: `railway.toml`<br>command: `npm run test:release-topology`<br>The API now uses shared async object media, migration-free startup, an explicit pre-deploy migrator, and a locally proven two-instance media/live recovery boundary. |
 | complete | 1.0 security release baseline<br>`foundation.security-release-baseline` | `foundation.wire-live-delivery`<br>`product.identity.method-coexistence` | A strict production CSP, secret custody/rotation configuration, dependency/container provenance checks, and no-sensitive-telemetry contracts are enforced and locally proven. | Complete. | source: `docs/arch/15-one-zero-governance.md`<br>source: `frontend/svelte.config.js`<br>source: `docs/ops/release-secret-custody.json`<br>source: `tools/security_release_baseline.mjs`<br>command: `npm run test:security-release-baseline`<br>command: `npm run test:frontend-csp-browser`<br>command: `npm run test:production-promotion`<br>The production frontend uses a browser-proven nonce CSP, release secrets have an environment-isolated custody and rotation contract, deployable images have locked provenance, and source plus artifact proofs reject sensitive telemetry. |
-| open | Reviewable 1.0 core and toolchain<br>`foundation.maintainable-core` | `foundation.command-capability-runtime`<br>`foundation.wire-live-delivery` | The Rust toolchain is pinned, workspace Clippy is warning-clean, and concentrated pack, resolver, API, projection, command-test, and proof orchestration responsibilities are split into coherent modules without weakening proof coverage. | Remaining: Pin the workspace toolchain, make strict Clippy green, and decompose the concentrated core and proof modules along their existing domain boundaries. | source: `docs/arch/15-one-zero-governance.md`<br>source: `Cargo.toml`<br>Core domain, API, projection, command-test, and proof-runner responsibilities are concentrated in modules too large to review or evolve safely as 1.0 contracts. |
+| open | Reviewable 1.0 core and toolchain<br>`foundation.maintainable-core` | `foundation.command-capability-runtime`<br>`foundation.wire-live-delivery` | The Rust toolchain is pinned, workspace Clippy is warning-clean, and concentrated pack, resolver, API, projection, command-test, and proof orchestration responsibilities are split into coherent modules without weakening proof coverage. | Remaining: Extract pack model and validation ownership, then split resolver, remaining API, projection, command-test, and proof-runner responsibilities along the dependency direction recorded in docs/arch/16-maintainable-core.md.<br>Remaining: Remove the exact lint expectations as typed contexts and bounded modules supersede them. | source: `docs/arch/16-maintainable-core.md`<br>source: `rust-toolchain.toml`<br>source: `crates/api/src/media_http.rs`<br>source: `docs/ops/proof-lane-manifest.json`<br>command: `cargo clippy --workspace --all-targets --all-features -- -D warnings`<br>Rust 1.95.0 and strict workspace Clippy are pinned and proof-enforced, the first API media HTTP family is isolated, and the remaining domain, API, projection, command-test, and proof-runner concentrations have an explicit ownership inventory. |
 
 ## Game product capabilities
 

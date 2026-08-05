@@ -972,7 +972,7 @@ impl DayEventTemplate {
             resolution: self.resolution,
             rewards: self.rewards.clone(),
             narrative: self.narrative.clone(),
-            channel_policy: self.channel_policy.clone(),
+            channel_policy: self.channel_policy,
         };
         event.validate()?;
         Ok(event)

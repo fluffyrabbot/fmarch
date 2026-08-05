@@ -306,7 +306,7 @@
       "title": "Reviewable 1.0 core and toolchain",
       "execution_class": "code",
       "status": "open",
-      "summary": "Core domain, API, projection, command-test, and proof-runner responsibilities are concentrated in modules too large to review or evolve safely as 1.0 contracts.",
+      "summary": "Rust 1.95.0 and strict workspace Clippy are pinned and proof-enforced, the first API media HTTP family is isolated, and the remaining domain, API, projection, command-test, and proof-runner concentrations have an explicit ownership inventory.",
       "complete_when": [
         "The Rust toolchain is pinned, workspace Clippy is warning-clean, and concentrated pack, resolver, API, projection, command-test, and proof orchestration responsibilities are split into coherent modules without weakening proof coverage."
       ],
@@ -317,37 +317,51 @@
       "evidence": [
         {
           "kind": "source",
-          "value": "docs/arch/15-one-zero-governance.md"
+          "value": "docs/arch/16-maintainable-core.md"
         },
         {
           "kind": "source",
-          "value": "Cargo.toml"
+          "value": "rust-toolchain.toml"
+        },
+        {
+          "kind": "source",
+          "value": "crates/api/src/media_http.rs"
+        },
+        {
+          "kind": "source",
+          "value": "docs/ops/proof-lane-manifest.json"
+        },
+        {
+          "kind": "command",
+          "value": "cargo clippy --workspace --all-targets --all-features -- -D warnings"
         }
       ],
       "remaining": [
-        "Pin the workspace toolchain, make strict Clippy green, and decompose the concentrated core and proof modules along their existing domain boundaries."
+        "Extract pack model and validation ownership, then split resolver, remaining API, projection, command-test, and proof-runner responsibilities along the dependency direction recorded in docs/arch/16-maintainable-core.md.",
+        "Remove the exact lint expectations as typed contexts and bounded modules supersede them."
       ],
       "recommended_slice": {
-        "objective": "Make the 1.0 core mechanically reviewable: pin the Rust toolchain, establish a warning-clean workspace Clippy gate, inventory the largest domain/API/projection/command-test/proof modules by responsibility and dependency direction, then extract the first coherent vertical family without compatibility shims or proof loss.",
+        "objective": "Extract the domain pack model/validation boundary: introduce a typed PackValidationContext, move cross-reference and action-policy validation behind it, relocate pack validation tests out of the production module, and remove the superseded pack high-arity and test-placement lint expectations without changing pack JSON or golden behavior.",
         "paths": [
-          "rust-toolchain.toml",
-          "Cargo.toml",
-          "crates/domain/src/",
-          "crates/api/src/",
-          "crates/projections/src/",
-          "crates/commands/tests/",
-          "tools/",
-          "docs/arch/"
+          "crates/domain/src/pack.rs",
+          "crates/domain/src/pack/",
+          "crates/domain/tests/",
+          "packs/",
+          "crates/commands/src/bin/check_goldens.rs",
+          "docs/arch/16-maintainable-core.md"
         ],
         "proof_commands": [
+          "cargo test -p domain",
+          "cargo run -p commands --bin check_goldens -- --check",
           "cargo clippy --workspace --all-targets --all-features -- -D warnings",
-          "npm run test:proof-lane-contract",
-          "npm run proof:lanes -- --mode sprint --run"
+          "npm run proof:lanes -- --mode sprint --run",
+          "npm run proof:lanes -- --mode full --run"
         ],
         "non_claims": [
-          "Do not preserve internal module paths or transitional facades solely for compatibility in this greenfield workspace.",
-          "Do not combine unrelated responsibility extractions into one commit; each extraction must retain its narrow proof lane.",
-          "Do not claim maintainability completion from line-count reduction alone; ownership, dependency direction, and reviewable contracts must improve."
+          "Do not preserve the current pack.rs internal layout through compatibility facades.",
+          "Do not change serialized pack fields, defaults, validation diagnostics, or generated golden semantics as an accidental side effect of module extraction.",
+          "Do not mix resolver-family extraction into this atomic pack-boundary change.",
+          "Do not mark foundation.maintainable-core complete; resolver, API, projection, command-test, and proof-runner concentrations remain."
         ]
       }
     },

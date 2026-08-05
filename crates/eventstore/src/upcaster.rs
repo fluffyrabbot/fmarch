@@ -18,9 +18,5 @@ use crate::StoredEvent;
 /// `(ev.kind.as_str(), ev.version)` and rewrite `ev.payload`/`ev.version` to the
 /// current shape before returning.
 pub fn upcast(ev: StoredEvent) -> StoredEvent {
-    match (ev.kind.as_str(), ev.version) {
-        // (example for the future)
-        // ("VoteSubmitted", 1) => upcast_vote_submitted_v1_to_v2(ev),
-        _ => ev,
-    }
+    ev
 }

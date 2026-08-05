@@ -103,6 +103,10 @@ impl From<Envelope<ServerMsg>> for ServerEnvelope {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(tag = "kind", content = "body")]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "transport messages preserve direct payload ownership until the wire boundary is benchmarked as an allocation concern"
+)]
 pub enum ClientMsg {
     Command(CommandMsg),
     SubscribeGame { game: Uuid },
@@ -110,6 +114,10 @@ pub enum ClientMsg {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(tag = "kind", content = "body")]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "transport messages preserve direct payload ownership until the wire boundary is benchmarked as an allocation concern"
+)]
 pub enum ServerMsg {
     Hello(Hello),
     Ack(AckMsg),
@@ -424,6 +432,10 @@ pub enum Command {
 /// Transport commands either map directly to the command core or require an
 /// adapter-owned immutable artifact lookup first.
 #[derive(Debug, Clone, PartialEq)]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "dispatch preserves direct command ownership until adapter extraction establishes the final transport shape"
+)]
 pub enum CommandDispatch {
     Direct(commands::Command),
     AttachDayProgram {

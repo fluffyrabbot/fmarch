@@ -879,15 +879,17 @@ async fn fold_event(
                 upsert_effect(
                     tx,
                     game_id,
-                    &slot_id,
-                    &effect,
-                    &slot_id,
-                    Some(role_source_action),
-                    None,
-                    None,
-                    None,
-                    "Persistent",
-                    "Hidden",
+                    EffectProjection {
+                        slot_id: &slot_id,
+                        effect: &effect,
+                        source_slot: &slot_id,
+                        source_action: Some(role_source_action),
+                        phase_id: None,
+                        phase_kind: None,
+                        phase_number: None,
+                        duration: "Persistent",
+                        visibility: "Hidden",
+                    },
                 )
                 .await?;
             }
@@ -1101,12 +1103,14 @@ async fn fold_event(
                 insert_private_channel_member(
                     tx,
                     game_id,
-                    &channel_id,
-                    &kind,
-                    &member.slot_id,
-                    &member.role_key,
-                    &reveals_alignment,
-                    &source,
+                    PrivateChannelMemberProjection {
+                        channel_id: &channel_id,
+                        kind: &kind,
+                        slot_id: &member.slot_id,
+                        role_key: &member.role_key,
+                        reveals_alignment: &reveals_alignment,
+                        source: &source,
+                    },
                 )
                 .await?;
             }
@@ -1123,12 +1127,14 @@ async fn fold_event(
             insert_private_channel_member(
                 tx,
                 game_id,
-                &channel_id,
-                &kind,
-                &slot_id,
-                &role_key,
-                &reveals_alignment,
-                &source,
+                PrivateChannelMemberProjection {
+                    channel_id: &channel_id,
+                    kind: &kind,
+                    slot_id: &slot_id,
+                    role_key: &role_key,
+                    reveals_alignment: &reveals_alignment,
+                    source: &source,
+                },
             )
             .await?;
         }
@@ -1750,7 +1756,7 @@ async fn refresh_day_event_schedule_work(
             other => {
                 return payload_error(
                     "DayEventScheduled",
-                    &format!("unsupported scheduler work state {other}"),
+                    format!("unsupported scheduler work state {other}"),
                 )
             }
         };
@@ -2001,28 +2007,30 @@ async fn fold_inner(
             phase_id,
             phase_kind,
             phase_number,
-            duration,
+            duration: domain::EffectDuration::Persistent,
             visibility,
         } => {
-            if *duration == domain::EffectDuration::Persistent {
-                ensure_slot(tx, game_id, target).await?;
-                let phase_kind = phase_kind.map(|kind| format!("{kind:?}"));
-                upsert_effect(
-                    tx,
-                    game_id,
-                    target,
+            ensure_slot(tx, game_id, target).await?;
+            let phase_kind = phase_kind.map(|kind| format!("{kind:?}"));
+            let visibility = format!("{visibility:?}");
+            upsert_effect(
+                tx,
+                game_id,
+                EffectProjection {
+                    slot_id: target,
                     effect,
-                    actor,
-                    source_action.as_deref(),
-                    phase_id.as_deref(),
-                    phase_kind.as_deref(),
-                    phase_number.map(|number| number as i32),
-                    &format!("{duration:?}"),
-                    &format!("{visibility:?}"),
-                )
-                .await?;
-            }
+                    source_slot: actor,
+                    source_action: source_action.as_deref(),
+                    phase_id: phase_id.as_deref(),
+                    phase_kind: phase_kind.as_deref(),
+                    phase_number: phase_number.map(|number| number as i32),
+                    duration: "Persistent",
+                    visibility: &visibility,
+                },
+            )
+            .await?;
         }
+        EffectsMarked { .. } => {}
         EffectsCleared {
             effect, targets, ..
         } => {
@@ -7863,18 +7871,22 @@ async fn upsert_occupancy(
     Ok(())
 }
 
+struct EffectProjection<'a> {
+    slot_id: &'a str,
+    effect: &'a str,
+    source_slot: &'a str,
+    source_action: Option<&'a str>,
+    phase_id: Option<&'a str>,
+    phase_kind: Option<&'a str>,
+    phase_number: Option<i32>,
+    duration: &'a str,
+    visibility: &'a str,
+}
+
 async fn upsert_effect(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     game_id: Uuid,
-    slot_id: &str,
-    effect: &str,
-    source_slot: &str,
-    source_action: Option<&str>,
-    phase_id: Option<&str>,
-    phase_kind: Option<&str>,
-    phase_number: Option<i32>,
-    duration: &str,
-    visibility: &str,
+    projection: EffectProjection<'_>,
 ) -> Result<(), ProjectionError> {
     sqlx::query(
         "INSERT INTO slot_effect \
@@ -7891,15 +7903,15 @@ async fn upsert_effect(
          visibility = EXCLUDED.visibility",
     )
     .bind(game_id)
-    .bind(slot_id)
-    .bind(effect)
-    .bind(source_slot)
-    .bind(source_action)
-    .bind(phase_id)
-    .bind(phase_kind)
-    .bind(phase_number)
-    .bind(duration)
-    .bind(visibility)
+    .bind(projection.slot_id)
+    .bind(projection.effect)
+    .bind(projection.source_slot)
+    .bind(projection.source_action)
+    .bind(projection.phase_id)
+    .bind(projection.phase_kind)
+    .bind(projection.phase_number)
+    .bind(projection.duration)
+    .bind(projection.visibility)
     .execute(&mut **tx)
     .await?;
     Ok(())
@@ -8526,23 +8538,27 @@ fn thread_media_payload(payload: &serde_json::Value) -> serde_json::Value {
     serde_json::json!([])
 }
 
+struct PrivateChannelMemberProjection<'a> {
+    channel_id: &'a str,
+    kind: &'a str,
+    slot_id: &'a str,
+    role_key: &'a str,
+    reveals_alignment: &'a str,
+    source: &'a str,
+}
+
 async fn insert_private_channel_member(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     game_id: Uuid,
-    channel_id: &str,
-    kind: &str,
-    slot_id: &str,
-    role_key: &str,
-    reveals_alignment: &str,
-    source: &str,
+    member: PrivateChannelMemberProjection<'_>,
 ) -> Result<(), ProjectionError> {
     let game = game_id.to_string();
     let private = seal_private_projection(
         "private_channel_member",
-        &[game.as_str(), channel_id, slot_id],
+        &[game.as_str(), member.channel_id, member.slot_id],
         serde_json::json!({
-            "role_key": role_key,
-            "reveals_alignment": reveals_alignment,
+            "role_key": member.role_key,
+            "reveals_alignment": member.reveals_alignment,
         }),
     )?;
     sqlx::query(
@@ -8559,11 +8575,11 @@ async fn insert_private_channel_member(
         "#,
     )
     .bind(game_id)
-    .bind(channel_id)
-    .bind(kind)
-    .bind(slot_id)
+    .bind(member.channel_id)
+    .bind(member.kind)
+    .bind(member.slot_id)
     .bind(private)
-    .bind(source)
+    .bind(member.source)
     .execute(&mut **tx)
     .await?;
     Ok(())

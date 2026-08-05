@@ -28,6 +28,7 @@ proceed without relitigating settled decisions.
 | Interaction | **Reading-first player** / **exception-queue host** / guided setup | [13-interaction-architecture](13-interaction-architecture.md) |
 | Mash + manual frontier | **Day program + catalog-parity host fiat**; automation recedes HostTasks | [14-mash-and-manual-frontier](14-mash-and-manual-frontier.md) |
 | 1.0 release substrate | **Multi-replica**, shared media, controlled migrations, explicit governance | [15-one-zero-governance](15-one-zero-governance.md) |
+| Maintainable core | **Pinned strict toolchain**, ownership-based module boundaries | [16-maintainable-core](16-maintainable-core.md) |
 
 ## Document index
 
@@ -47,6 +48,7 @@ proceed without relitigating settled decisions.
 13. [13-interaction-architecture](13-interaction-architecture.md) — player workspace, host exception queue, setup workflow
 14. [14-mash-and-manual-frontier](14-mash-and-manual-frontier.md) — mash culture (30+, day events, rewards) and permanent manual frontier
 15. [15-one-zero-governance](15-one-zero-governance.md) — hosted topology, data stewardship, accessibility, security, and maintainability gates
+16. [16-maintainable-core](16-maintainable-core.md) — strict toolchain baseline, responsibility inventory, and extraction order
 
 ## The one idea everything hangs on
 

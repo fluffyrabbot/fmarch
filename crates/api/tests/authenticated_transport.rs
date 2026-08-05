@@ -567,12 +567,7 @@ async fn open_socket_rechecks_revoked_session_before_delayed_private_delivery(po
         socket.next().await.unwrap().unwrap(),
         Message::Binary(_)
     ));
-    loop {
-        match tokio::time::timeout(Duration::from_millis(50), socket.next()).await {
-            Ok(Some(_)) => continue,
-            Ok(None) | Err(_) => break,
-        }
-    }
+    while let Ok(Some(_)) = tokio::time::timeout(Duration::from_millis(50), socket.next()).await {}
 
     assert_eq!(
         post_command(

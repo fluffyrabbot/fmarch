@@ -227,19 +227,27 @@ struct OperatorProofDeterminismFuzzQuery {
 #[derive(Debug, Clone, Copy, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 enum OperatorProofProjectionRebuildFixture {
-    MissingReport,
-    StaleReport,
-    DriftedReport,
-    RecoveredReport,
+    #[serde(rename = "missing-report")]
+    Missing,
+    #[serde(rename = "stale-report")]
+    Stale,
+    #[serde(rename = "drifted-report")]
+    Drifted,
+    #[serde(rename = "recovered-report")]
+    Recovered,
 }
 
 #[derive(Debug, Clone, Copy, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 enum OperatorProofResolutionDiffFixture {
-    MissingReport,
-    StaleReport,
-    DriftedReport,
-    MatchedReport,
+    #[serde(rename = "missing-report")]
+    Missing,
+    #[serde(rename = "stale-report")]
+    Stale,
+    #[serde(rename = "drifted-report")]
+    Drifted,
+    #[serde(rename = "matched-report")]
+    Matched,
 }
 
 #[derive(Debug, Clone, Copy, Deserialize)]
@@ -281,9 +289,12 @@ enum OperatorProofRetentionFixture {
 #[derive(Debug, Clone, Copy, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 enum OperatorProofGoNoGoFixture {
-    MissingProductionArtifact,
-    StaleProductionArtifact,
-    DriftedProductionArtifact,
+    #[serde(rename = "missing-production-artifact")]
+    Missing,
+    #[serde(rename = "stale-production-artifact")]
+    Stale,
+    #[serde(rename = "drifted-production-artifact")]
+    Drifted,
 }
 
 #[derive(Debug, Clone, Copy, Deserialize)]
@@ -1279,7 +1290,7 @@ fn apply_projection_rebuild_fixture(
     fixture: OperatorProofProjectionRebuildFixture,
 ) -> &'static str {
     match fixture {
-        OperatorProofProjectionRebuildFixture::MissingReport => {
+        OperatorProofProjectionRebuildFixture::Missing => {
             report.ok = false;
             report.table_count = 0;
             report.matched_table_count = 0;
@@ -1287,8 +1298,8 @@ fn apply_projection_rebuild_fixture(
             report.tables.clear();
             "missing"
         }
-        OperatorProofProjectionRebuildFixture::StaleReport => "stale",
-        OperatorProofProjectionRebuildFixture::DriftedReport => {
+        OperatorProofProjectionRebuildFixture::Stale => "stale",
+        OperatorProofProjectionRebuildFixture::Drifted => {
             report.ok = false;
             report.table_count = report.table_count.max(1);
             report.matched_table_count = report.matched_table_count.saturating_sub(1);
@@ -1296,7 +1307,7 @@ fn apply_projection_rebuild_fixture(
             report.tables = vec![projection_rebuild_table_fixture("slot_state", false, 6, 5)];
             "drifted"
         }
-        OperatorProofProjectionRebuildFixture::RecoveredReport => {
+        OperatorProofProjectionRebuildFixture::Recovered => {
             report.ok = true;
             report.table_count = report.table_count.max(1);
             report.matched_table_count = report.table_count;
@@ -1336,10 +1347,10 @@ fn projection_rebuild_fixture_label(
     fixture: OperatorProofProjectionRebuildFixture,
 ) -> &'static str {
     match fixture {
-        OperatorProofProjectionRebuildFixture::MissingReport => "missing-report",
-        OperatorProofProjectionRebuildFixture::StaleReport => "stale-report",
-        OperatorProofProjectionRebuildFixture::DriftedReport => "drifted-report",
-        OperatorProofProjectionRebuildFixture::RecoveredReport => "recovered-report",
+        OperatorProofProjectionRebuildFixture::Missing => "missing-report",
+        OperatorProofProjectionRebuildFixture::Stale => "stale-report",
+        OperatorProofProjectionRebuildFixture::Drifted => "drifted-report",
+        OperatorProofProjectionRebuildFixture::Recovered => "recovered-report",
     }
 }
 
@@ -1368,7 +1379,7 @@ fn apply_resolution_diff_fixture(
     fixture: OperatorProofResolutionDiffFixture,
 ) -> &'static str {
     match fixture {
-        OperatorProofResolutionDiffFixture::MissingReport => {
+        OperatorProofResolutionDiffFixture::Missing => {
             report.ok = false;
             report.audited_phase_count = 0;
             report.matched_phase_count = 0;
@@ -1379,8 +1390,8 @@ fn apply_resolution_diff_fixture(
             report.phases.clear();
             "missing"
         }
-        OperatorProofResolutionDiffFixture::StaleReport => "stale",
-        OperatorProofResolutionDiffFixture::DriftedReport => {
+        OperatorProofResolutionDiffFixture::Stale => "stale",
+        OperatorProofResolutionDiffFixture::Drifted => {
             report.ok = false;
             report.audited_phase_count = report.audited_phase_count.max(1);
             report.matched_phase_count = report.matched_phase_count.saturating_sub(1);
@@ -1396,7 +1407,7 @@ fn apply_resolution_diff_fixture(
             report.phases = vec![resolution_diff_phase_fixture(false)];
             "drifted"
         }
-        OperatorProofResolutionDiffFixture::MatchedReport => {
+        OperatorProofResolutionDiffFixture::Matched => {
             report.ok = true;
             report.audited_phase_count = report.audited_phase_count.max(1);
             report.matched_phase_count = report.audited_phase_count;
@@ -1429,25 +1440,25 @@ fn resolution_diff_phase_fixture(matched: bool) -> SharedOperatorResolutionDiffP
         trace_matches: true,
         diff_count: usize::from(!matched),
         reason: (!matched).then(|| "fixture drift".to_string()),
-        diffs: (!matched)
-            .then(|| {
-                vec![SharedOperatorResolutionDiff {
-                    envelope: "applied".to_string(),
-                    path: "$.winner".to_string(),
-                    expected: serde_json::json!("slot_1"),
-                    actual: serde_json::json!("slot_2"),
-                }]
-            })
-            .unwrap_or_default(),
+        diffs: if matched {
+            Vec::new()
+        } else {
+            vec![SharedOperatorResolutionDiff {
+                envelope: "applied".to_string(),
+                path: "$.winner".to_string(),
+                expected: serde_json::json!("slot_1"),
+                actual: serde_json::json!("slot_2"),
+            }]
+        },
     }
 }
 
 fn resolution_diff_fixture_label(fixture: OperatorProofResolutionDiffFixture) -> &'static str {
     match fixture {
-        OperatorProofResolutionDiffFixture::MissingReport => "missing-report",
-        OperatorProofResolutionDiffFixture::StaleReport => "stale-report",
-        OperatorProofResolutionDiffFixture::DriftedReport => "drifted-report",
-        OperatorProofResolutionDiffFixture::MatchedReport => "matched-report",
+        OperatorProofResolutionDiffFixture::Missing => "missing-report",
+        OperatorProofResolutionDiffFixture::Stale => "stale-report",
+        OperatorProofResolutionDiffFixture::Drifted => "drifted-report",
+        OperatorProofResolutionDiffFixture::Matched => "matched-report",
     }
 }
 
@@ -1551,22 +1562,32 @@ fn trace_inspection_run_fixture(
         effect_change_count: usize::from(include_rows),
         visibility_count: 0,
         note_count: usize::from(include_rows),
-        decisions: include_rows
-            .then(|| vec![serde_json::json!({"stage": "resolve", "outcome": "applied"})])
-            .unwrap_or_default(),
-        edges: include_rows
-            .then(|| vec![serde_json::json!({"from": "slot_1", "to": "slot_2", "kind": "visit"})])
-            .unwrap_or_default(),
-        generated: include_rows
-            .then(|| vec![serde_json::json!({"action_id": "generated:1", "actor": "slot_1"})])
-            .unwrap_or_default(),
-        effect_changes: include_rows
-            .then(|| vec![serde_json::json!({"effect": "dead", "target": "slot_2"})])
-            .unwrap_or_default(),
+        decisions: if include_rows {
+            vec![serde_json::json!({"stage": "resolve", "outcome": "applied"})]
+        } else {
+            Vec::new()
+        },
+        edges: if include_rows {
+            vec![serde_json::json!({"from": "slot_1", "to": "slot_2", "kind": "visit"})]
+        } else {
+            Vec::new()
+        },
+        generated: if include_rows {
+            vec![serde_json::json!({"action_id": "generated:1", "actor": "slot_1"})]
+        } else {
+            Vec::new()
+        },
+        effect_changes: if include_rows {
+            vec![serde_json::json!({"effect": "dead", "target": "slot_2"})]
+        } else {
+            Vec::new()
+        },
         visibility: Vec::new(),
-        notes: include_rows
-            .then(|| vec![serde_json::json!({"note": "fixture trace"})])
-            .unwrap_or_default(),
+        notes: if include_rows {
+            vec![serde_json::json!({"note": "fixture trace"})]
+        } else {
+            Vec::new()
+        },
     }
 }
 
@@ -1844,9 +1865,9 @@ fn apply_go_no_go_fixture(
     fixture: OperatorProofGoNoGoFixture,
 ) {
     let state = match fixture {
-        OperatorProofGoNoGoFixture::MissingProductionArtifact => "missing",
-        OperatorProofGoNoGoFixture::StaleProductionArtifact => "stale",
-        OperatorProofGoNoGoFixture::DriftedProductionArtifact => "drifted",
+        OperatorProofGoNoGoFixture::Missing => "missing",
+        OperatorProofGoNoGoFixture::Stale => "stale",
+        OperatorProofGoNoGoFixture::Drifted => "drifted",
     };
     if let Some(row) = report.rows.iter_mut().find(|row| !row.fixture) {
         row.state = state.to_string();
@@ -1856,9 +1877,9 @@ fn apply_go_no_go_fixture(
 
 fn go_no_go_fixture_label(fixture: OperatorProofGoNoGoFixture) -> &'static str {
     match fixture {
-        OperatorProofGoNoGoFixture::MissingProductionArtifact => "missing-production-artifact",
-        OperatorProofGoNoGoFixture::StaleProductionArtifact => "stale-production-artifact",
-        OperatorProofGoNoGoFixture::DriftedProductionArtifact => "drifted-production-artifact",
+        OperatorProofGoNoGoFixture::Missing => "missing-production-artifact",
+        OperatorProofGoNoGoFixture::Stale => "stale-production-artifact",
+        OperatorProofGoNoGoFixture::Drifted => "drifted-production-artifact",
     }
 }
 
@@ -3445,7 +3466,7 @@ fn render_resolution_audit_html(report: &commands::ResolutionEnvelopeAuditReport
                 html_escape_into(&mut html, &diff_id);
                 html.push_str("\"><code>");
                 html_escape_into(&mut html, &json_label(&diff.envelope));
-                html.push_str(" ");
+                html.push(' ');
                 html_escape_into(&mut html, &diff.path);
                 html.push_str("</code></a><br><a class=\"audit-link audit-detail-link\" href=\"#");
                 html_escape_into(&mut html, &expected_id);

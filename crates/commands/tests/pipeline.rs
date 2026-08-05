@@ -15786,9 +15786,11 @@ fn in_process_command_output(
     InProcessCommandOutput {
         status: InProcessCommandStatus(ok),
         stdout: json,
-        stderr: (!ok)
-            .then(|| failure_message.as_bytes().to_vec())
-            .unwrap_or_default(),
+        stderr: if ok {
+            Vec::new()
+        } else {
+            failure_message.as_bytes().to_vec()
+        },
     }
 }
 
@@ -27315,7 +27317,7 @@ fn generated_mafia_universe_ita_case(seed: u64) -> GeneratedNightCase {
         ("slot_7".to_string(), "mafia_goon".to_string()),
         ("slot_8".to_string(), "mafia_goon".to_string()),
     ];
-    let mut targets = vec!["slot_5", "slot_6", "slot_7", "slot_8"];
+    let mut targets = ["slot_5", "slot_6", "slot_7", "slot_8"];
     for index in (1..targets.len()).rev() {
         let swap_with = rng.index(index + 1);
         targets.swap(index, swap_with);

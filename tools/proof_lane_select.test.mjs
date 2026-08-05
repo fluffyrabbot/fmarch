@@ -104,6 +104,22 @@ test('npm lanes exist as package.json scripts and shell lanes carry commands', (
   }
 });
 
+test('every Rust crate change arms pinned strict workspace Clippy', () => {
+  assert.equal(
+    manifest.lanes['cargo:clippy-workspace'].command,
+    'cargo clippy --workspace --all-targets --all-features -- -D warnings',
+  );
+  for (const area of manifest.areas.filter((area) => area.crate)) {
+    assert.ok(
+      area.lanes.includes('cargo:clippy-workspace'),
+      `${area.id} must arm strict workspace Clippy`,
+    );
+  }
+  const workspaceArea = manifest.areas.find((area) => area.id === 'workspace:manifests');
+  assert.ok(workspaceArea.paths.includes('rust-toolchain.toml'));
+  assert.ok(workspaceArea.lanes.includes('cargo:clippy-workspace'));
+});
+
 test('generated artifacts have one owner, a writer, and exact freshness selection', () => {
   assert.equal(manifest.version, 3);
   const outputOwners = new Map();
@@ -253,6 +269,7 @@ test('Postgres-backed npm lanes own a repo-local database default', () => {
   assert.match(packageScripts['test:mash-scale-acceptance'], localDatabase);
   assert.match(packageScripts['test:release-topology'], localDatabase);
   assert.match(packageScripts['test:auth-invite-role-proof'], localDatabase);
+  assert.match(packageScripts['test:host-console-day-event-room-live-stack'], localDatabase);
 });
 
 test('manifest lanes are executable leaves, while human aggregate aliases stay outside the graph', () => {

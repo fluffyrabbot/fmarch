@@ -275,13 +275,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let original = run_fixture(&pool, &fixture).await;
     let reduction_target = ReductionTarget::from_report(&fixture, &original);
-    let (fixture, steps, minimized) = if args.reduce && reduction_target.is_some() {
-        minimize_fixture(
-            &pool,
-            fixture.clone(),
-            reduction_target.expect("checked reduction target"),
-        )
-        .await
+    let (fixture, steps, minimized) = if args.reduce {
+        if let Some(target) = reduction_target {
+            minimize_fixture(&pool, fixture.clone(), target).await
+        } else {
+            (fixture, Vec::new(), original.clone())
+        }
     } else {
         (fixture, Vec::new(), original.clone())
     };

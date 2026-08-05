@@ -334,7 +334,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let auth_source_key = env::var("FMARCH_AUTH_SOURCE_SIGNING_KEY").ok();
     if auth_source_key
         .as_deref()
-        .is_some_and(|value| value.as_bytes().len() < 32)
+        .is_some_and(|value| value.len() < 32)
     {
         return Err(std::io::Error::new(
             std::io::ErrorKind::InvalidInput,

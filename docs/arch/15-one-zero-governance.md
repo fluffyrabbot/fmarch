@@ -100,3 +100,6 @@ pinned Rust toolchain and warning-clean workspace Clippy gate.
 
 This is not a line-count aesthetic. It makes the 1.0 event, pack, and wire
 contracts reviewable and limits the blast radius of later changes.
+
+The current responsibility inventory, strict lint-debt register, and extraction
+order live in [16-maintainable-core](16-maintainable-core.md).

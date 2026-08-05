@@ -62,9 +62,10 @@ pub struct ProofRunSpec {
     pub proof_boundary: String,
 }
 
-#[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum ProofRunArtifactKind {
+    #[default]
     GameSpecificAuditBundle,
     OperatorProofStatusAuditReport,
     OperatorProofGoNoGoReport,
@@ -77,12 +78,6 @@ pub enum ProofRunArtifactKind {
     DeterminismFuzzReport,
     GeneratedShrinkMatrixReport,
     GeneratedShrinkGapAuditReport,
-}
-
-impl Default for ProofRunArtifactKind {
-    fn default() -> Self {
-        Self::GameSpecificAuditBundle
-    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -2965,6 +2960,10 @@ pub fn proof_run_status_audit_report_artifact_state_at(
     )
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "artifact audit inputs remain explicit until the proof-report boundary gains a request context"
+)]
 pub fn proof_run_status_audit_report_artifact_state_from_report(
     path: &str,
     expected_report_expected_path: &str,

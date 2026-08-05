@@ -250,33 +250,23 @@ pub enum RedirectKind {
     Retarget,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum EffectDuration {
     /// Effect is emitted as `EffectsMarked` and folded into future state.
+    #[default]
     Persistent,
     /// Effect exists only inside the current resolution.
     Resolution,
 }
 
-impl Default for EffectDuration {
-    fn default() -> Self {
-        Self::Persistent
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum EffectVisibility {
+    #[default]
     Hidden,
     Public,
     Actor,
     Target,
     ActorAndTarget,
-}
-
-impl Default for EffectVisibility {
-    fn default() -> Self {
-        Self::Hidden
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -498,21 +488,12 @@ impl Default for GuardPolicy {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FactionActionPolicy {
     #[serde(default)]
     pub enabled: bool,
     #[serde(default)]
     pub actions: Vec<FactionActionSpec>,
-}
-
-impl Default for FactionActionPolicy {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            actions: Vec::new(),
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -529,16 +510,11 @@ fn default_faction_max_resolved_submissions() -> u16 {
     1
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum FactionVoteTieBreaker {
+    #[default]
     BlockAll,
     EarliestSubmitted,
-}
-
-impl Default for FactionVoteTieBreaker {
-    fn default() -> Self {
-        Self::BlockAll
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -749,17 +725,12 @@ pub enum KillStackingPolicy {
     AggregateAttackers,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum DeathRevealMode {
+    #[default]
     Full,
     AlignmentOnly,
     Concealed,
-}
-
-impl Default for DeathRevealMode {
-    fn default() -> Self {
-        Self::Full
-    }
 }
 
 pub fn default_death_reveal_mode() -> DeathRevealMode {
@@ -790,7 +761,7 @@ impl Default for DeathRevealPolicy {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct DeathRetaliationPolicy {
     #[serde(default)]
     pub enabled: bool,
@@ -807,18 +778,6 @@ pub struct DeathRetaliationPolicy {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum DeathRetaliationTiming {
     ImmediateBeforePhaseAnnouncement,
-}
-
-impl Default for DeathRetaliationPolicy {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            eligible_roles: Vec::new(),
-            timing: None,
-            allowed_death_causes: Vec::new(),
-            suppressed_death_causes: Vec::new(),
-        }
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -912,21 +871,12 @@ fn default_backup_targeted_effect() -> String {
     "backup_target".to_string()
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct PrivateChannelPolicy {
     #[serde(default)]
     pub enabled: bool,
     #[serde(default)]
     pub groups: Vec<PrivateChannelGroup>,
-}
-
-impl Default for PrivateChannelPolicy {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            groups: Vec::new(),
-        }
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1205,18 +1155,13 @@ pub enum ItaVoteConflictPolicy {
     ResolveShotsBeforeVote,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum ItaTargetAlreadyDeadPolicy {
+    #[default]
     ConsumeShot,
     RefundShot,
     SkipWithWarning,
-}
-
-impl Default for ItaTargetAlreadyDeadPolicy {
-    fn default() -> Self {
-        Self::ConsumeShot
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -1393,7 +1338,7 @@ pub struct DayDeathCauseTemplate {
     pub audience: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct LastWordsPolicy {
     #[serde(default)]
     pub day_deaths: bool,
@@ -1403,17 +1348,6 @@ pub struct LastWordsPolicy {
     pub audience: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub window: Option<String>,
-}
-
-impl Default for LastWordsPolicy {
-    fn default() -> Self {
-        Self {
-            day_deaths: false,
-            template_id: None,
-            audience: None,
-            window: None,
-        }
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -1830,16 +1764,11 @@ pub struct ResultMemorySpec {
     pub output: ResultMemoryOutput,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ResultMemoryScope {
+    #[default]
     Target,
     Investigator,
-}
-
-impl Default for ResultMemoryScope {
-    fn default() -> Self {
-        Self::Target
-    }
 }
 
 impl ResultMemoryScope {
@@ -1848,16 +1777,11 @@ impl ResultMemoryScope {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ResultMemoryOutput {
+    #[default]
     PreviousCurrentChanged,
     SameDifferent,
-}
-
-impl Default for ResultMemoryOutput {
-    fn default() -> Self {
-        Self::PreviousCurrentChanged
-    }
 }
 
 impl ResultMemoryOutput {
@@ -1866,21 +1790,12 @@ impl ResultMemoryOutput {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct InvestigationResultPolicy {
     #[serde(default)]
     pub parity: ParityResultPolicy,
     #[serde(default)]
     pub role_sets: RoleSetInvestigationPolicy,
-}
-
-impl Default for InvestigationResultPolicy {
-    fn default() -> Self {
-        Self {
-            parity: ParityResultPolicy::default(),
-            role_sets: RoleSetInvestigationPolicy::default(),
-        }
-    }
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -2517,8 +2432,8 @@ fn validate_precedence_rules(issues: &mut Vec<PackValidationIssue>, pack: &Pack)
                 "precedence rule cannot relate an ability to itself",
             );
         }
-        if !rule.unless_modifiers.is_empty()
-            && !(rule.when.effect == IrAbility::Protect && rule.beats.contains(&IrAbility::Kill))
+        if !(rule.unless_modifiers.is_empty()
+            || rule.when.effect == IrAbility::Protect && rule.beats.contains(&IrAbility::Kill))
         {
             issue(
                 issues,
@@ -7652,6 +7567,10 @@ fn validate_treestump_policy(
     }
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "pack validation context extraction is the next maintainability slice"
+)]
 fn validate_target_lynch_win_policies(
     issues: &mut Vec<PackValidationIssue>,
     path: &str,
@@ -8288,6 +8207,10 @@ fn validate_investigation_result_policy(
     }
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "pack validation context extraction is the next maintainability slice"
+)]
 fn validate_action(
     issues: &mut Vec<PackValidationIssue>,
     path: &str,
@@ -8672,14 +8595,14 @@ fn validate_action(
         || abilities.contains(&IrAbility::Clear)
         || abilities.contains(&IrAbility::Convert)
         || abilities.contains(&IrAbility::Link);
-    if abilities.contains(&IrAbility::Mark) || abilities.contains(&IrAbility::Clear) {
-        if action.effect.is_none() {
-            issue(
-                issues,
-                format!("{path}.effect"),
-                "Mark/Clear actions must declare effect",
-            );
-        }
+    if (abilities.contains(&IrAbility::Mark) || abilities.contains(&IrAbility::Clear))
+        && action.effect.is_none()
+    {
+        issue(
+            issues,
+            format!("{path}.effect"),
+            "Mark/Clear actions must declare effect",
+        );
     }
     if (abilities.contains(&IrAbility::Mark)
         || abilities.contains(&IrAbility::Clear)
@@ -9110,23 +9033,23 @@ fn validate_action(
             "self_destruct is only legal on SelfDestruct actions",
         );
     }
-    if abilities.contains(&IrAbility::Link) {
-        if action.targets != TargetSpec::Many || action.constraints.max_targets < 2 {
-            issue(
-                issues,
-                format!("{path}.targets"),
-                "Link actions must target at least two unique slots",
-            );
-        }
+    if abilities.contains(&IrAbility::Link)
+        && (action.targets != TargetSpec::Many || action.constraints.max_targets < 2)
+    {
+        issue(
+            issues,
+            format!("{path}.targets"),
+            "Link actions must target at least two unique slots",
+        );
     }
-    if abilities.contains(&IrAbility::Retaliate) {
-        if action.targets != TargetSpec::One || action.constraints.max_targets != 1 {
-            issue(
-                issues,
-                format!("{path}.targets"),
-                "Retaliate actions must target exactly one slot",
-            );
-        }
+    if abilities.contains(&IrAbility::Retaliate)
+        && (action.targets != TargetSpec::One || action.constraints.max_targets != 1)
+    {
+        issue(
+            issues,
+            format!("{path}.targets"),
+            "Retaliate actions must target exactly one slot",
+        );
     }
 
     if let Some(tag) = &action.reads_effect {
@@ -9896,6 +9819,10 @@ fn require_ir(
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::items_after_test_module,
+    reason = "pack tests move with the dedicated pack-validation module in the next slice"
+)]
 mod tests {
     use super::*;
     use serde_json::{json, Value};
@@ -10462,6 +10389,10 @@ fn validate_source_ids(issues: &mut Vec<PackValidationIssue>, path: &str, action
     }
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "pack validation context extraction is the next maintainability slice"
+)]
 fn validate_vote_policy(
     issues: &mut Vec<PackValidationIssue>,
     policy: &VotePolicy,
@@ -10785,7 +10716,6 @@ fn night_ability_priorities(pack: &Pack) -> BTreeMap<IrAbility, i32> {
 fn night_order_abilities(action: &ActionTemplate) -> Vec<IrAbility> {
     action
         .abilities()
-        .into_iter()
         .filter(|ability| !(action.has_modifier(Modifier::Cpr) && *ability == IrAbility::Kill))
         .collect()
 }

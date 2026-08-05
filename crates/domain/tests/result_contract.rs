@@ -61,11 +61,14 @@ fn with_phase_announcement(mut payload: serde_json::Value) -> serde_json::Value 
 
     let phase_id = payload["phase_id"].clone();
     let events = payload["events"].as_array_mut().unwrap();
-    let insert_at = events
+    let insert_at = if events
         .last()
         .is_some_and(|event| event["kind"] == "WinReached")
-        .then(|| events.len() - 1)
-        .unwrap_or(events.len());
+    {
+        events.len() - 1
+    } else {
+        events.len()
+    };
     events.insert(
         insert_at,
         json!({

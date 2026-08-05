@@ -685,10 +685,12 @@ fn ensure_operator_proof_artifacts() {
         .join("../..")
         .join("target/operator-proof/current-status-audit-check.json");
     fs::create_dir_all(status_path.parent().unwrap()).unwrap();
-    let mut trusted_production = OperatorProofRunArtifactCounts::default();
-    trusted_production.total_artifact_rows = 13;
-    trusted_production.trusted = 13;
-    trusted_production.non_trusted = 0;
+    let trusted_production = OperatorProofRunArtifactCounts {
+        total_artifact_rows: 13,
+        trusted: 13,
+        non_trusted: 0,
+        ..OperatorProofRunArtifactCounts::default()
+    };
 
     let snapshot_path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
@@ -1089,10 +1091,8 @@ fn normalize_proof_status_value(value: &mut serde_json::Value, game: &str) {
                 normalize_proof_status_value(item, game);
             }
         }
-        serde_json::Value::String(text) => {
-            if text.contains(game) {
-                *text = text.replace(game, "<normalized-game>");
-            }
+        serde_json::Value::String(text) if text.contains(game) => {
+            *text = text.replace(game, "<normalized-game>");
         }
         _ => {}
     }
