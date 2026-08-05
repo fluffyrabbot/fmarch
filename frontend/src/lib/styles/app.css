@@ -15,6 +15,10 @@ body {
   overscroll-behavior: contain;
 }
 
+.fm-sveltekit-body {
+  display: contents;
+}
+
 * {
   box-sizing: border-box;
 }

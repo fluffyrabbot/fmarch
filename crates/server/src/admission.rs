@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use axum::extract::{Request, State};
+use axum::extract::{MatchedPath, Request, State};
 use axum::middleware::Next;
 use axum::response::Response;
 use tokio::sync::Semaphore;
@@ -40,7 +40,14 @@ pub async fn enforce_http_admission(
     }
 
     let method = request.method().clone();
-    let path = request.uri().path().to_string();
+    // Log the declared route shape rather than path parameters, slugs, account
+    // handles, media addresses, or other request-derived identifiers.
+    let route = request
+        .extensions()
+        .get::<MatchedPath>()
+        .map(MatchedPath::as_str)
+        .unwrap_or("unmatched")
+        .to_string();
     let permit = match tokio::time::timeout(
         admission.queue_timeout,
         admission.slots.clone().acquire_owned(),
@@ -53,7 +60,7 @@ pub async fn enforce_http_admission(
                 event = "http_admission_rejected",
                 reason = "in_flight_capacity_exhausted",
                 %method,
-                %path,
+                %route,
                 queue_timeout_ms = admission.queue_timeout.as_millis(),
                 "HTTP admission rejected"
             );
@@ -71,7 +78,7 @@ pub async fn enforce_http_admission(
             tracing::warn!(
                 event = "http_request_deadline_exceeded",
                 %method,
-                %path,
+                %route,
                 request_timeout_ms = admission.request_timeout.as_millis(),
                 "HTTP request exceeded its deadline"
             );
@@ -85,7 +92,7 @@ pub async fn enforce_http_admission(
     tracing::info!(
         event = "http_request_completed",
         %method,
-        %path,
+        %route,
         status,
         elapsed_ms = started.elapsed().as_millis(),
         "HTTP request completed"

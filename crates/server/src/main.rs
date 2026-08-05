@@ -433,11 +433,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .map_err(|message| {
                     std::io::Error::new(std::io::ErrorKind::InvalidInput, message)
                 })?;
-                tracing::info!(
-                    workos_user_id = %workos_user_id,
-                    created,
-                    "WorkOS global admin bootstrap checked"
-                );
+                tracing::info!(created, "WorkOS global admin bootstrap checked");
             }
             BootstrapAdminConfig::Classic {
                 login_name,
@@ -459,11 +455,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .map_err(|message| {
                     std::io::Error::new(std::io::ErrorKind::InvalidInput, message)
                 })?;
-                tracing::info!(
-                    login_name = %login_name,
-                    created,
-                    "classic global admin bootstrap checked"
-                );
+                tracing::info!(created, "classic global admin bootstrap checked");
             }
         }
     }

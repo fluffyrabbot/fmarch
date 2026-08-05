@@ -69,15 +69,25 @@ interaction or visual-only state.
 
 ## Security release boundary
 
-The existing capability and encrypted-event model remains governing. 1.0 adds:
+The existing capability and encrypted-event model remains governing. The local
+1.0 baseline enforces:
 
-- a nonce- or hash-based Content Security Policy compatible with SvelteKit and
-  WorkOS without `unsafe-eval`;
-- explicit production secret custody, escrow, rotation, and retirement;
-- dependency and container provenance checks tied to the release commit;
-- a pinned Rust toolchain and a warning-clean workspace lint gate;
-- retained hosted evidence that logs, metrics, traces, and alerts exclude
-  credentials and private content.
+- a per-response nonce Content Security Policy for executable frontend content,
+  with no `unsafe-inline` or `unsafe-eval`; SvelteKit's fixed accessibility
+  announcer style is the sole inline-style exception and is authorized by its
+  exact hash;
+- an environment-isolated custody, version-marker, rotation, deployment, and
+  retirement contract for auth-source signing, event encryption, object-store,
+  and WorkOS credentials in `docs/ops/release-secret-custody.json`;
+- lockfile-enforced builds and digest-pinned OCI base images carrying source
+  provenance labels;
+- source checks that reject concrete identity, raw error, and request-path
+  logging, plus canary proof that operator evidence recursively redacts tokens,
+  credentials, personal data, and signed URLs.
+
+These are source-controlled and local-browser guarantees. Third-party security
+assessment, hosted telemetry retention evidence, incident-response rehearsal,
+and production promotion remain independent release gates.
 
 ## Maintainability boundary
 
@@ -85,7 +95,8 @@ Pre-1.0 is the last cheap point to cut concentrated modules into coherent
 owners. Refactoring is complete when the pack model/validation, resolver
 families, API route families, projection families, and command integration
 scenarios are addressable as bounded modules without changing their public
-contracts or weakening their existing proof lanes.
+contracts or weakening their existing proof lanes. The same boundary owns a
+pinned Rust toolchain and warning-clean workspace Clippy gate.
 
 This is not a line-count aesthetic. It makes the 1.0 event, pack, and wire
 contracts reviewable and limits the blast radius of later changes.

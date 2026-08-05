@@ -257,8 +257,8 @@
       "order": 60,
       "title": "1.0 security release baseline",
       "execution_class": "code",
-      "status": "open",
-      "summary": "Capability authorization and encrypted storage are locally proven, but the browser CSP, release secret-custody contract, and provenance gate are not yet closed.",
+      "status": "complete",
+      "summary": "The production frontend uses a browser-proven nonce CSP, release secrets have an environment-isolated custody and rotation contract, deployable images have locked provenance, and source plus artifact proofs reject sensitive telemetry.",
       "complete_when": [
         "A strict production CSP, secret custody/rotation configuration, dependency/container provenance checks, and no-sensitive-telemetry contracts are enforced and locally proven."
       ],
@@ -273,35 +273,31 @@
         },
         {
           "kind": "source",
-          "value": "frontend/src/hooks.server.js"
+          "value": "frontend/svelte.config.js"
+        },
+        {
+          "kind": "source",
+          "value": "docs/ops/release-secret-custody.json"
+        },
+        {
+          "kind": "source",
+          "value": "tools/security_release_baseline.mjs"
+        },
+        {
+          "kind": "command",
+          "value": "npm run test:security-release-baseline"
+        },
+        {
+          "kind": "command",
+          "value": "npm run test:frontend-csp-browser"
+        },
+        {
+          "kind": "command",
+          "value": "npm run test:production-promotion"
         }
       ],
-      "remaining": [
-        "Ship and test CSP, release secret-custody configuration, dependency/container provenance, and no-sensitive-telemetry enforcement."
-      ],
-      "recommended_slice": {
-        "objective": "Establish the 1.0 security release baseline as one fail-closed contract: emit and browser-test a strict nonce-based production CSP, define environment-isolated secret ownership and rotation checks for Railway/WorkOS/event encryption/object storage, add locked dependency and container provenance gates, and prove logs plus operator artifacts redact credentials, tokens, personal data, and signed URLs.",
-        "paths": [
-          "frontend/src/hooks.server.js",
-          "frontend/src/",
-          "crates/server/",
-          "crates/eventstore/",
-          "deploy/railway/",
-          "Dockerfile",
-          "tools/",
-          "docs/ops/"
-        ],
-        "proof_commands": [
-          "npm run test:production-promotion",
-          "npm run test:railway-staging-target",
-          "npm run proof:lanes -- --mode push --run"
-        ],
-        "non_claims": [
-          "No claim of third-party penetration testing, formal compliance certification, or production incident readiness.",
-          "No secret values, resolved Railway credentials, WorkOS API keys, session material, or personal data may enter repository evidence.",
-          "No production promotion until the independent hosted evidence and human release gates are satisfied."
-        ]
-      }
+      "remaining": [],
+      "boundary": "This closes the source-controlled and local-browser security release baseline. The SvelteKit accessibility announcer is the sole inline-style exception and is authorized by an exact CSP hash; executable inline content remains nonce-bound. Secret evidence contains policy and version markers only, never values. Third-party penetration testing, compliance certification, hosted telemetry retention, incident response rehearsal, and production promotion remain independent release evidence."
     },
     {
       "id": "foundation.maintainable-core",
@@ -330,7 +326,30 @@
       ],
       "remaining": [
         "Pin the workspace toolchain, make strict Clippy green, and decompose the concentrated core and proof modules along their existing domain boundaries."
-      ]
+      ],
+      "recommended_slice": {
+        "objective": "Make the 1.0 core mechanically reviewable: pin the Rust toolchain, establish a warning-clean workspace Clippy gate, inventory the largest domain/API/projection/command-test/proof modules by responsibility and dependency direction, then extract the first coherent vertical family without compatibility shims or proof loss.",
+        "paths": [
+          "rust-toolchain.toml",
+          "Cargo.toml",
+          "crates/domain/src/",
+          "crates/api/src/",
+          "crates/projections/src/",
+          "crates/commands/tests/",
+          "tools/",
+          "docs/arch/"
+        ],
+        "proof_commands": [
+          "cargo clippy --workspace --all-targets --all-features -- -D warnings",
+          "npm run test:proof-lane-contract",
+          "npm run proof:lanes -- --mode sprint --run"
+        ],
+        "non_claims": [
+          "Do not preserve internal module paths or transitional facades solely for compatibility in this greenfield workspace.",
+          "Do not combine unrelated responsibility extractions into one commit; each extraction must retain its narrow proof lane.",
+          "Do not claim maintainability completion from line-count reduction alone; ownership, dependency direction, and reviewable contracts must improve."
+        ]
+      }
     },
     {
       "id": "product.game.core-loop",

@@ -56,7 +56,7 @@
         class="public-game-reading-lane"
         aria-labelledby={data.publication.readingLane.headingId}
         data-testid={data.publication.readingLane.testId}
-        style={`--public-game-reading-measure: ${data.publication.readingLane.maxMeasurePx}px`}
+        data-max-reading-measure-px={data.publication.readingLane.maxMeasurePx}
       >
         <header class="public-game-thread-heading" data-testid="public-game-thread">
           <h2 id={data.publication.readingLane.headingId} tabindex="-1">{data.publication.readingLane.heading}</h2>
@@ -112,14 +112,14 @@
 
 <style>
   .public-game-publication { display: grid; gap: 32px; margin-inline: auto; max-inline-size: 1080px; padding-block-end: 48px; width: 100%; }
-  .public-game-masthead { border-block-end: 1px solid var(--fm-line-strong); display: grid; gap: 10px; margin-inline: auto; max-inline-size: var(--public-game-reading-measure, 760px); padding-block: 4px 22px; width: 100%; }
+  .public-game-masthead { border-block-end: 1px solid var(--fm-line-strong); display: grid; gap: 10px; margin-inline: auto; max-inline-size: 760px; padding-block: 4px 22px; width: 100%; }
   .public-game-masthead h2 { font-family: var(--fm-font-display); font-size: clamp(32px, 6vw, 56px); line-height: 1; margin: 0; }
   .public-game-deck { color: var(--fm-ink-muted); font-size: clamp(17px, 2vw, 21px); line-height: 1.45; margin: 0; max-inline-size: 42rem; }
   .public-game-meta, .public-game-actions { align-items: center; display: flex; flex-wrap: wrap; gap: 8px 18px; }
   .public-game-meta { color: var(--fm-ink-muted); font-size: 14px; }
   .public-game-meta span + span { border-inline-start: 1px solid var(--fm-line); padding-inline-start: 18px; }
   .public-game-actions form { margin: 0; }
-  .public-game-reading-lane { margin-inline: auto; max-inline-size: var(--public-game-reading-measure, 760px); width: 100%; }
+  .public-game-reading-lane { margin-inline: auto; max-inline-size: 760px; width: 100%; }
   .public-game-skip-posts { block-size: 1px; clip-path: inset(50%); inline-size: 1px; overflow: hidden; position: absolute; white-space: nowrap; }
   .public-game-skip-posts:focus { block-size: auto; clip-path: none; inline-size: auto; inset-inline-start: 16px; padding: 10px 14px; position: fixed; top: 80px; z-index: 20; }
   .public-game-thread-heading { align-items: baseline; display: flex; justify-content: space-between; padding-block-end: 12px; }
@@ -135,7 +135,7 @@
   .report-control textarea { min-block-size: 72px; resize: vertical; }
   .public-game-empty { border-block-start: 1px solid var(--fm-line); color: var(--fm-ink-muted); padding-block: 24px; }
   .public-game-older { margin-block-start: 16px; }
-  .public-game-colophon { border-block-start: 1px solid var(--fm-line); color: var(--fm-ink-muted); font-size: 13px; margin-inline: auto; max-inline-size: var(--public-game-reading-measure, 760px); padding-block-start: 16px; width: 100%; }
+  .public-game-colophon { border-block-start: 1px solid var(--fm-line); color: var(--fm-ink-muted); font-size: 13px; margin-inline: auto; max-inline-size: 760px; padding-block-start: 16px; width: 100%; }
 
   @media (max-width: 600px) {
     .public-game-publication { gap: 24px; }

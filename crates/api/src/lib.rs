@@ -738,8 +738,11 @@ async fn authenticate_legacy_token(
 
 fn identity_api_error(error: IdentityError) -> ApiError {
     match error {
-        IdentityError::ProviderUnavailable(message) => {
-            tracing::warn!(error = %message, "WorkOS token verification dependency unavailable");
+        IdentityError::ProviderUnavailable(_) => {
+            tracing::warn!(
+                dependency = "workos-token-verification",
+                "identity verification dependency unavailable"
+            );
             ApiError::Reject {
                 status: StatusCode::SERVICE_UNAVAILABLE,
                 error: RejectCode::Internal,
@@ -805,12 +808,12 @@ async fn reserve_media_quota(
 }
 
 async fn release_media_quota(pool: &PgPool, upload_id: Uuid) {
-    if let Err(error) = sqlx::query("DELETE FROM media_upload_ledger WHERE upload_id = $1")
+    if let Err(_) = sqlx::query("DELETE FROM media_upload_ledger WHERE upload_id = $1")
         .bind(upload_id)
         .execute(pool)
         .await
     {
-        tracing::error!(%error, %upload_id, "failed to release media quota reservation");
+        tracing::error!(%upload_id, "failed to release media quota reservation");
     }
 }
 
@@ -862,8 +865,8 @@ fn media_api_error(error: MediaError) -> ApiError {
             StatusCode::UNPROCESSABLE_ENTITY,
             "media cannot be processed within configured limits",
         ),
-        other => {
-            tracing::error!(error = %other, "media upload preparation failed");
+        _ => {
+            tracing::error!("media upload preparation failed");
             media_internal_error("media upload preparation failed".to_string())
         }
     }
@@ -938,8 +941,8 @@ async fn media_thread_variant(
         .media_store
         .lookup_variant(id, asset.format, asset.kind, state.variant_limits)
         .await
-        .map_err(|error| {
-            tracing::error!(error = %error, "thread media lookup failed");
+        .map_err(|_| {
+            tracing::error!("thread media lookup failed");
             media_internal_error("thread media lookup failed".to_string())
         })?
         .ok_or_else(|| media_not_found("media variant unavailable"))?;
@@ -1057,8 +1060,8 @@ fn projected_media_references_variant(
 }
 
 fn header_value(value: impl AsRef<str>, label: &'static str) -> Result<HeaderValue, ApiError> {
-    HeaderValue::from_str(value.as_ref()).map_err(|error| {
-        tracing::error!(error = %error, label, "invalid media response header");
+    HeaderValue::from_str(value.as_ref()).map_err(|_| {
+        tracing::error!(label, "invalid media response header");
         media_internal_error("thread media response metadata is invalid".to_string())
     })
 }
@@ -5256,8 +5259,8 @@ fn unix_now_seconds() -> i64 {
 
 enum PostMediaPreparationError {
     Invalid,
-    Store(MediaError),
-    Invariant(&'static str),
+    Store,
+    Invariant,
 }
 
 async fn prepare_wire_command(
@@ -5317,7 +5320,7 @@ async fn prepare_command_media(
                 .media_store
                 .lookup_variant_set(id, limits)
                 .await
-                .map_err(PostMediaPreparationError::Store)?
+                .map_err(|_| PostMediaPreparationError::Store)?
                 .ok_or(PostMediaPreparationError::Invalid)?;
             let mut dimensions = BTreeMap::<String, (u32, u32, usize)>::new();
             for record in set.variants() {
@@ -5326,9 +5329,7 @@ async fn prepare_command_media(
                     .entry(key)
                     .or_insert((record.width(), record.height(), 0));
                 if (entry.0, entry.1) != (record.width(), record.height()) {
-                    return Err(PostMediaPreparationError::Invariant(
-                        "variant formats disagree on dimensions",
-                    ));
+                    return Err(PostMediaPreparationError::Invariant);
                 }
                 entry.2 += 1;
             }
@@ -5336,14 +5337,10 @@ async fn prepare_command_media(
                 .into_iter()
                 .map(|kind| {
                     let Some((width, height, count)) = dimensions.remove(kind) else {
-                        return Err(PostMediaPreparationError::Invariant(
-                            "fixed variant role is missing",
-                        ));
+                        return Err(PostMediaPreparationError::Invariant);
                     };
                     if count != VariantFormat::ALL.len() {
-                        return Err(PostMediaPreparationError::Invariant(
-                            "fixed variant format is missing",
-                        ));
+                        return Err(PostMediaPreparationError::Invariant);
                     }
                     Ok((
                         kind.to_string(),
@@ -5352,9 +5349,7 @@ async fn prepare_command_media(
                 })
                 .collect::<Result<BTreeMap<_, _>, _>>()?;
             if !dimensions.is_empty() {
-                return Err(PostMediaPreparationError::Invariant(
-                    "unexpected variant role is present",
-                ));
+                return Err(PostMediaPreparationError::Invariant);
             }
             prepared.push(commands::ThreadPostMedia {
                 content_id: id.to_string(),
@@ -5366,12 +5361,12 @@ async fn prepare_command_media(
         .await;
         result.map_err(|error| match error {
             PostMediaPreparationError::Invalid => commands::Reject::InvalidTarget,
-            PostMediaPreparationError::Store(error) => {
-                tracing::error!(error = %error, "post media lookup failed");
+            PostMediaPreparationError::Store => {
+                tracing::error!("post media lookup failed");
                 commands::Reject::Internal("post media lookup failed".to_string())
             }
-            PostMediaPreparationError::Invariant(message) => {
-                tracing::error!(message, "post media invariant failed");
+            PostMediaPreparationError::Invariant => {
+                tracing::error!("post media invariant failed");
                 commands::Reject::Internal("post media lookup failed".to_string())
             }
         })?;
@@ -9748,7 +9743,6 @@ async fn ws(
         Err(_) => {
             tracing::warn!(
                 event = "live_connection_rejected",
-                principal_user_id = %claim.principal_user_id,
                 reason = "principal_connection_capacity_exhausted",
                 "live connection admission rejected"
             );
@@ -10684,10 +10678,10 @@ impl IntoResponse for ApiError {
 
 fn opaque_internal_error(
     boundary: &'static str,
-    error: impl std::fmt::Display,
+    _error: impl std::fmt::Display,
 ) -> (StatusCode, RejectCode, String) {
     let reference = Uuid::new_v4();
-    tracing::error!(%reference, %boundary, error = %error, "request failed internally");
+    tracing::error!(%reference, %boundary, "request failed internally");
     (
         StatusCode::INTERNAL_SERVER_ERROR,
         RejectCode::Internal,

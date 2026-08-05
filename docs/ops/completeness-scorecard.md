@@ -17,7 +17,7 @@ count is treated as product progress.
 
 | Execution class | Complete | Partial | Open | Blocked | Deferred | Total |
 |---|---:|---:|---:|---:|---:|---:|
-| code | 39 | 0 | 3 | 0 | 0 | 42 |
+| code | 40 | 0 | 2 | 0 | 0 | 42 |
 | external-evidence | 0 | 0 | 0 | 6 | 0 | 6 |
 | human | 1 | 0 | 2 | 1 | 0 | 4 |
 | optional | 0 | 0 | 0 | 0 | 1 | 1 |
@@ -28,23 +28,23 @@ Overall release closure complete: **no**.
 
 ## Next buildable coding slice
 
-### 1.0 security release baseline `foundation.security-release-baseline`
+### Reviewable 1.0 core and toolchain `foundation.maintainable-core`
 
-Establish the 1.0 security release baseline as one fail-closed contract: emit and browser-test a strict nonce-based production CSP, define environment-isolated secret ownership and rotation checks for Railway/WorkOS/event encryption/object storage, add locked dependency and container provenance gates, and prove logs plus operator artifacts redact credentials, tokens, personal data, and signed URLs.
+Make the 1.0 core mechanically reviewable: pin the Rust toolchain, establish a warning-clean workspace Clippy gate, inventory the largest domain/API/projection/command-test/proof modules by responsibility and dependency direction, then extract the first coherent vertical family without compatibility shims or proof loss.
 
-Owned paths: `frontend/src/hooks.server.js`, `frontend/src/`, `crates/server/`, `crates/eventstore/`, `deploy/railway/`, `Dockerfile`, `tools/`, `docs/ops/`.
+Owned paths: `rust-toolchain.toml`, `Cargo.toml`, `crates/domain/src/`, `crates/api/src/`, `crates/projections/src/`, `crates/commands/tests/`, `tools/`, `docs/arch/`.
 
 Proof:
 
-- `npm run test:production-promotion`
-- `npm run test:railway-staging-target`
-- `npm run proof:lanes -- --mode push --run`
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings`
+- `npm run test:proof-lane-contract`
+- `npm run proof:lanes -- --mode sprint --run`
 
 Explicit non-claims:
 
-- No claim of third-party penetration testing, formal compliance certification, or production incident readiness.
-- No secret values, resolved Railway credentials, WorkOS API keys, session material, or personal data may enter repository evidence.
-- No production promotion until the independent hosted evidence and human release gates are satisfied.
+- Do not preserve internal module paths or transitional facades solely for compatibility in this greenfield workspace.
+- Do not combine unrelated responsibility extractions into one commit; each extraction must retain its narrow proof lane.
+- Do not claim maintainability completion from line-count reduction alone; ownership, dependency direction, and reviewable contracts must improve.
 
 ## Locally proven foundation
 
@@ -55,7 +55,7 @@ Explicit non-claims:
 | complete | Capability-gated command runtime<br>`foundation.command-capability-runtime` | `foundation.event-store-projections`<br>`foundation.resolution-engine-parity` | Commands preserve capability, concurrency, idempotency, and event-log invariants through the Postgres pipeline. | Complete. | source: `crates/commands/src/lib.rs`<br>source: `crates/caps/src/lib.rs`<br>Typed commands resolve authority at the boundary, append events transactionally, update projections, and return idempotent acknowledgements. |
 | complete | Versioned wire and recoverable live delivery<br>`foundation.wire-live-delivery` | `foundation.command-capability-runtime` | A seeded client can cold-load, decode only versioned binary-CBOR live frames, recover from lag, and retain capability-filtered state. | Complete. | source: `crates/wire/src/lib.rs`<br>source: `frontend/src/lib/app/live-transport.mjs`<br>Versioned Rust-owned wire types, REST/JSON commands and cold loads, binary-CBOR WebSocket projection delivery, lag resync, and frontend hydration recovery are locally proven. |
 | complete | Multi-replica release topology<br>`foundation.release-topology` | `foundation.event-store-projections`<br>`foundation.wire-live-delivery`<br>`product.media.upload-to-private-post` | API startup is migration-free, an explicit migrator owns schema changes, shared S3-compatible media preserves the existing content-addressed contract, and a two-replica local or hosted proof exercises cross-replica media and live recovery. | Complete. | source: `crates/media/src/repository.rs`<br>source: `crates/server/src/bin/fmarch-migrate.rs`<br>source: `railway.toml`<br>command: `npm run test:release-topology`<br>The API now uses shared async object media, migration-free startup, an explicit pre-deploy migrator, and a locally proven two-instance media/live recovery boundary. |
-| open | 1.0 security release baseline<br>`foundation.security-release-baseline` | `foundation.wire-live-delivery`<br>`product.identity.method-coexistence` | A strict production CSP, secret custody/rotation configuration, dependency/container provenance checks, and no-sensitive-telemetry contracts are enforced and locally proven. | Remaining: Ship and test CSP, release secret-custody configuration, dependency/container provenance, and no-sensitive-telemetry enforcement. | source: `docs/arch/15-one-zero-governance.md`<br>source: `frontend/src/hooks.server.js`<br>Capability authorization and encrypted storage are locally proven, but the browser CSP, release secret-custody contract, and provenance gate are not yet closed. |
+| complete | 1.0 security release baseline<br>`foundation.security-release-baseline` | `foundation.wire-live-delivery`<br>`product.identity.method-coexistence` | A strict production CSP, secret custody/rotation configuration, dependency/container provenance checks, and no-sensitive-telemetry contracts are enforced and locally proven. | Complete. | source: `docs/arch/15-one-zero-governance.md`<br>source: `frontend/svelte.config.js`<br>source: `docs/ops/release-secret-custody.json`<br>source: `tools/security_release_baseline.mjs`<br>command: `npm run test:security-release-baseline`<br>command: `npm run test:frontend-csp-browser`<br>command: `npm run test:production-promotion`<br>The production frontend uses a browser-proven nonce CSP, release secrets have an environment-isolated custody and rotation contract, deployable images have locked provenance, and source plus artifact proofs reject sensitive telemetry. |
 | open | Reviewable 1.0 core and toolchain<br>`foundation.maintainable-core` | `foundation.command-capability-runtime`<br>`foundation.wire-live-delivery` | The Rust toolchain is pinned, workspace Clippy is warning-clean, and concentrated pack, resolver, API, projection, command-test, and proof orchestration responsibilities are split into coherent modules without weakening proof coverage. | Remaining: Pin the workspace toolchain, make strict Clippy green, and decompose the concentrated core and proof modules along their existing domain boundaries. | source: `docs/arch/15-one-zero-governance.md`<br>source: `Cargo.toml`<br>Core domain, API, projection, command-test, and proof-runner responsibilities are concentrated in modules too large to review or evolve safely as 1.0 contracts. |
 
 ## Game product capabilities

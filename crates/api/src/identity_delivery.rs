@@ -432,8 +432,8 @@ pub fn spawn_identity_delivery_worker(
             {
                 Ok(Some(_)) => continue,
                 Ok(None) => tokio::time::sleep(Duration::from_millis(100)).await,
-                Err(error) => {
-                    tracing::error!(error = %error, "identity delivery worker failed");
+                Err(_) => {
+                    tracing::error!("identity delivery worker failed");
                     tokio::time::sleep(Duration::from_secs(1)).await;
                 }
             }

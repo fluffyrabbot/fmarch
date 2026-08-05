@@ -6,18 +6,36 @@ const config = {
   kit: {
     adapter: adapter(),
     csp: {
-      mode: "auto",
+      mode: "nonce",
       directives: {
         "default-src": ["self"],
-        "base-uri": ["self"],
-        "connect-src": ["self", "https:", "wss:"],
+        "base-uri": ["none"],
+        "connect-src": [
+          "self",
+          "https://fmarch-staging.up.railway.app",
+          "wss://fmarch-staging.up.railway.app",
+          "https://fmarch-production.up.railway.app",
+          "wss://fmarch-production.up.railway.app",
+        ],
         "font-src": ["self"],
         "form-action": ["self"],
         "frame-ancestors": ["none"],
-        "img-src": ["self", "data:", "blob:", "https:"],
+        "frame-src": ["none"],
+        "img-src": ["self", "data:", "blob:"],
+        "manifest-src": ["self"],
+        "media-src": ["self"],
         "object-src": ["none"],
-        "script-src": ["self"],
+        "script-src": ["self", "strict-dynamic"],
+        "script-src-attr": ["none"],
         "style-src": ["self"],
+        // SvelteKit's generated accessibility route announcer has one fixed
+        // inline style attribute. Authorize only that exact value; application
+        // source remains inline-style-free.
+        "style-src-attr": [
+          "unsafe-hashes",
+          "sha256-S8qMpvofolR8Mpjy4kQvEm7m1q8clzU4dfDH0AmvZjo=",
+        ],
+        "worker-src": ["self"],
       },
     },
   },

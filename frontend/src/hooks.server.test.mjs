@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { fmarchIdentityHandle as handle } from "./hooks.server.js";
+import {
+  fmarchIdentityHandle as handle,
+  securityHeadersHandle,
+} from "./hooks.server.js";
 import { clearSessionCache } from "./lib/server/session-capabilities.mjs";
 
 test("handle rotates an overdue browser session before resolving the route", async () => {
@@ -67,6 +70,23 @@ test("handle serves repeat non-game identity requests from the session cache wit
   );
   assert.equal(event.locals.principalUserId, "host_h");
   clearSessionCache();
+});
+
+test("security header hook closes browser embedding and cross-origin policy defaults", async () => {
+  const event = { url: new URL("https://fmarch.example.test/") };
+  const response = await securityHeadersHandle({
+    event,
+    resolve: async () => new Response("ok"),
+  });
+  assert.equal(response.headers.get("x-content-type-options"), "nosniff");
+  assert.equal(response.headers.get("x-frame-options"), "DENY");
+  assert.equal(response.headers.get("cross-origin-opener-policy"), "same-origin");
+  assert.equal(response.headers.get("cross-origin-resource-policy"), "same-origin");
+  assert.equal(response.headers.get("x-permitted-cross-domain-policies"), "none");
+  assert.equal(
+    response.headers.get("strict-transport-security"),
+    "max-age=31536000; includeSubDomains",
+  );
 });
 
 function eventFor(

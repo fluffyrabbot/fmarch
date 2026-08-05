@@ -21,6 +21,7 @@ async function contract() {
         "frontend/svelte.config.js",
         "deploy/railway/api.env.example",
         "deploy/railway/frontend.env.example",
+        "docs/ops/release-secret-custody.json",
         "docs/ops/railway-staging-target.md",
         "tools/production_promotion.mjs",
         "package.json",
@@ -31,6 +32,9 @@ async function contract() {
   );
 
   assert.match(source.Dockerfile, /cargo build --release --locked -p server --bins/);
+  assert.match(source.Dockerfile, /^FROM rust:[^\n]+@sha256:[a-f0-9]{64} AS builder$/m);
+  assert.match(source.Dockerfile, /^FROM debian:[^\n]+@sha256:[a-f0-9]{64} AS runtime$/m);
+  assert.match(source.Dockerfile, /org\.opencontainers\.image\.source=/);
   assert.match(source.Dockerfile, /COPY docs \.\/docs/);
   assert.doesNotMatch(source.Dockerfile, /\/var\/lib\/fmarch\/media/);
   assert.match(source.Dockerfile, /apt-get install --yes --no-install-recommends ca-certificates/);
@@ -44,10 +48,16 @@ async function contract() {
   assert.doesNotMatch(source["railway.toml"], /watchPatterns/);
 
   assert.match(source["frontend/svelte.config.js"], /@sveltejs\/adapter-node/);
+  assert.match(source["frontend/svelte.config.js"], /mode:\s*"nonce"/);
+  assert.doesNotMatch(source["frontend/svelte.config.js"], /unsafe-inline|unsafe-eval/);
   assert.match(source["frontend/package.json"], /"@sveltejs\/adapter-node": "5\.5\.7"/);
   assert.match(source["Dockerfile.frontend"], /COPY frontend\/package\.json frontend\/package-lock\.json/);
   assert.match(source["Dockerfile.frontend"], /COPY \. \./);
-  assert.match(source["Dockerfile.frontend"], /npm ci/);
+  assert.match(
+    source["Dockerfile.frontend"],
+    /^FROM node:[^\n]+@sha256:[a-f0-9]{64} AS (?:builder|runtime)$/gm,
+  );
+  assert.match(source["Dockerfile.frontend"], /npm ci --ignore-scripts/);
   assert.match(source["Dockerfile.frontend"], /npm prune --omit=dev/);
   assert.match(
     source["Dockerfile.frontend"],
@@ -62,6 +72,18 @@ async function contract() {
   assert.match(source["deploy/railway/api.env.example"], /AWS_ENDPOINT_URL=\$\{\{media\.AWS_ENDPOINT_URL\}\}/);
   assert.match(source["deploy/railway/api.env.example"], /AWS_S3_BUCKET_NAME=\$\{\{media\.AWS_S3_BUCKET_NAME\}\}/);
   assert.match(source["deploy/railway/api.env.example"], /AWS_S3_URL_STYLE=path/);
+  assert.match(
+    source["deploy/railway/api.env.example"],
+    /^FMARCH_OBJECT_STORAGE_CREDENTIAL_KID=/m,
+  );
+  assert.match(
+    source["deploy/railway/api.env.example"],
+    /^FMARCH_AUTH_SOURCE_SIGNING_KID=/m,
+  );
+  assert.match(
+    source["deploy/railway/api.env.example"],
+    /^FMARCH_WORKOS_CREDENTIAL_KID=/m,
+  );
   assert.doesNotMatch(source["deploy/railway/api.env.example"], /FMARCH_MEDIA_ROOT/);
   assert.doesNotMatch(source["deploy/railway/api.env.example"], /^RAILWAY_RUN_UID=/m);
   assert.match(source["deploy/railway/api.env.example"], /^WORKOS_CLIENT_ID=/m);
@@ -90,6 +112,21 @@ async function contract() {
   assert.match(source["deploy/railway/frontend.env.example"], /^WORKOS_API_KEY=/m);
   assert.match(source["deploy/railway/frontend.env.example"], /^WORKOS_REDIRECT_URI=https:\/\//m);
   assert.match(source["deploy/railway/frontend.env.example"], /^WORKOS_COOKIE_PASSWORD=/m);
+  assert.match(
+    source["deploy/railway/frontend.env.example"],
+    /^FMARCH_AUTH_SOURCE_SIGNING_KID=/m,
+  );
+  assert.match(
+    source["deploy/railway/frontend.env.example"],
+    /^FMARCH_WORKOS_CREDENTIAL_KID=/m,
+  );
+
+  const custody = JSON.parse(source["docs/ops/release-secret-custody.json"]);
+  assert.deepEqual(custody.environments, ["staging", "production"]);
+  assert.deepEqual(
+    custody.families.map((family) => family.id),
+    ["auth-source-signing", "event-encryption", "object-storage", "workos"],
+  );
 
   assert.match(source["crates/server/src/main.rs"], /platform_port/);
   assert.match(source["crates/server/src/main.rs"], /format!\("0\.0\.0\.0:\{port\}"\)/);

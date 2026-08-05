@@ -46,12 +46,12 @@
           data-at-hammer={row.atHammer}
         >
           <span class="fm-wagon__name">{row.target}</span>
-          <span class="fm-wagon__track" aria-hidden="true">
-            <span
-              class="fm-wagon__fill"
-              style={`--fm-wagon-fill: ${row.fillPercent}%`}
-            ></span>
-          </span>
+          <progress
+            class="fm-wagon__track"
+            max="100"
+            value={row.fillPercent}
+            aria-hidden="true"
+          ></progress>
           <strong class="fm-wagon__count">{row.tally}</strong>
         </div>
       {/each}

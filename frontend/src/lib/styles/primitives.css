@@ -426,10 +426,7 @@
   white-space: nowrap;
 }
 
-/* ---- wagon: votecount tally bars (name · track · count) ----
-   The fill width comes from an inline --fm-wagon-fill custom property set by
-   the view model (count/needed). A row at or one vote from hammer flips its
-   fill to the danger tone. */
+/* ---- wagon: votecount tally bars (name · progress · count) ---- */
 
 .fm-wagon {
   display: grid;
@@ -451,23 +448,34 @@
 }
 
 .fm-wagon__track {
+  appearance: none;
   background: var(--fm-surface-muted);
+  border: 0;
   border-radius: 6px;
   block-size: 26px;
   display: block;
+  inline-size: 100%;
   overflow: hidden;
 }
 
-.fm-wagon__fill {
+.fm-wagon__track::-webkit-progress-bar {
+  background: var(--fm-surface-muted);
+}
+
+.fm-wagon__track::-webkit-progress-value {
   background: var(--fm-accent);
-  block-size: 100%;
   border-radius: 6px 0 0 6px;
-  display: block;
-  inline-size: var(--fm-wagon-fill, 0%);
   opacity: 0.85;
 }
 
-.fm-wagon__row[data-at-hammer="true"] .fm-wagon__fill {
+.fm-wagon__track::-moz-progress-bar {
+  background: var(--fm-accent);
+  border-radius: 6px 0 0 6px;
+  opacity: 0.85;
+}
+
+.fm-wagon__row[data-at-hammer="true"] .fm-wagon__track::-webkit-progress-value,
+.fm-wagon__row[data-at-hammer="true"] .fm-wagon__track::-moz-progress-bar {
   background: var(--fm-danger);
 }
 

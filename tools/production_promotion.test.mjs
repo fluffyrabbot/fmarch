@@ -9,6 +9,7 @@ import {
   validateDomainList,
   validateHostedVariables,
   validateRepositoryState,
+  validateSecretCustodyPolicy,
   validateServiceBranches,
 } from "./production_promotion.mjs";
 
@@ -79,22 +80,36 @@ test("Railway services must watch the environment's canonical branch", () => {
 
 test("hosted variables require isolated production identity credentials", () => {
   const stagingApi = {
-    FMARCH_AUTH_SOURCE_SIGNING_KEY: "staging-auth-source-key",
-    FMARCH_EVENT_ENCRYPTION_KEY: "staging-event-key",
+    FMARCH_AUTH_SOURCE_SIGNING_KEY: "staging-auth-source-key-at-least-32-bytes",
+    FMARCH_AUTH_SOURCE_SIGNING_KID: "staging-auth-2026-08-04",
+    FMARCH_EVENT_ENCRYPTION_KEY: "staging-event-key-at-least-32-bytes",
     FMARCH_EVENT_ENCRYPTION_KID: "staging-v1",
+    FMARCH_OBJECT_STORAGE_CREDENTIAL_KID: "staging-storage-2026-08-04",
+    FMARCH_WORKOS_CREDENTIAL_KID: "staging-workos-2026-08-04",
+    AWS_ACCESS_KEY_ID: "staging-access-key",
+    AWS_SECRET_ACCESS_KEY: "staging-secret-key",
+    AWS_S3_BUCKET_NAME: "staging-media",
     WORKOS_CLIENT_ID: "staging-client",
   };
   const stagingFrontend = {
-    FMARCH_AUTH_SOURCE_SIGNING_KEY: "staging-auth-source-key",
+    FMARCH_AUTH_SOURCE_SIGNING_KEY: "staging-auth-source-key-at-least-32-bytes",
+    FMARCH_AUTH_SOURCE_SIGNING_KID: "staging-auth-2026-08-04",
+    FMARCH_WORKOS_CREDENTIAL_KID: "staging-workos-2026-08-04",
     WORKOS_CLIENT_ID: "staging-client",
     WORKOS_API_KEY: "staging-key",
-    WORKOS_COOKIE_PASSWORD: "staging-cookie",
+    WORKOS_COOKIE_PASSWORD: "staging-cookie-password-at-least-32-bytes",
   };
   const productionApi = {
     DATABASE_URL: "postgres://postgres.railway.internal/db",
-    FMARCH_AUTH_SOURCE_SIGNING_KEY: "production-auth-source-key",
-    FMARCH_EVENT_ENCRYPTION_KEY: "production-event-key",
+    FMARCH_AUTH_SOURCE_SIGNING_KEY: "production-auth-source-key-at-least-32-bytes",
+    FMARCH_AUTH_SOURCE_SIGNING_KID: "production-auth-2026-08-04",
+    FMARCH_EVENT_ENCRYPTION_KEY: "production-event-key-at-least-32-bytes",
     FMARCH_EVENT_ENCRYPTION_KID: "production-v1",
+    FMARCH_OBJECT_STORAGE_CREDENTIAL_KID: "production-storage-2026-08-04",
+    FMARCH_WORKOS_CREDENTIAL_KID: "production-workos-2026-08-04",
+    AWS_ACCESS_KEY_ID: "production-access-key",
+    AWS_SECRET_ACCESS_KEY: "production-secret-key",
+    AWS_S3_BUCKET_NAME: "production-media",
     WORKOS_CLIENT_ID: "production-client",
     WORKOS_ISSUER: "https://api.workos.com/user_management/production",
     WORKOS_JWKS_URL: "https://api.workos.com/sso/jwks/production",
@@ -102,11 +117,13 @@ test("hosted variables require isolated production identity credentials", () => 
   const productionFrontend = {
     FMARCH_API_BASE_URL: "https://fmarch-production.up.railway.app",
     FMARCH_API_INTERNAL_URL: "http://fmarch.railway.internal:4000",
-    FMARCH_AUTH_SOURCE_SIGNING_KEY: "production-auth-source-key",
+    FMARCH_AUTH_SOURCE_SIGNING_KEY: "production-auth-source-key-at-least-32-bytes",
+    FMARCH_AUTH_SOURCE_SIGNING_KID: "production-auth-2026-08-04",
+    FMARCH_WORKOS_CREDENTIAL_KID: "production-workos-2026-08-04",
     ORIGIN: "https://fmarch-frontend-production.up.railway.app",
     WORKOS_API_KEY: "production-key",
     WORKOS_CLIENT_ID: "production-client",
-    WORKOS_COOKIE_PASSWORD: "production-cookie",
+    WORKOS_COOKIE_PASSWORD: "production-cookie-password-at-least-32-bytes",
     WORKOS_REDIRECT_URI:
       "https://fmarch-frontend-production.up.railway.app/auth/callback",
   };
@@ -118,7 +135,7 @@ test("hosted variables require isolated production identity credentials", () => 
         ...ready,
         productionFrontend: { ...productionFrontend, WORKOS_API_KEY: "staging-key" },
       }),
-    /Expected.*not.*strictly equal|strictly unequal/i,
+    /must not share the WorkOS API key/,
   );
   assert.throws(
     () =>
@@ -135,6 +152,44 @@ test("hosted variables require isolated production identity credentials", () => 
         productionApi: { ...productionApi, WORKOS_CLIENT_ID: "different-production-client" },
       }),
     /same WorkOS client/,
+  );
+});
+
+test("secret custody policy names owners, consumers, rotation, and retirement", () => {
+  const policy = {
+    version: 1,
+    environments: ["staging", "production"],
+    rules: {
+      environment_isolation_required: true,
+      repository_secret_values_forbidden: true,
+      rotation_marker_required: true,
+      retirement_requires_successful_redeploy: true,
+    },
+    families: [
+      ["auth-source-signing", "FMARCH_AUTH_SOURCE_SIGNING_KEY", "FMARCH_AUTH_SOURCE_SIGNING_KID"],
+      ["event-encryption", "FMARCH_EVENT_ENCRYPTION_KEY", "FMARCH_EVENT_ENCRYPTION_KID"],
+      ["object-storage", "AWS_SECRET_ACCESS_KEY", "FMARCH_OBJECT_STORAGE_CREDENTIAL_KID"],
+      ["workos", "WORKOS_API_KEY", "FMARCH_WORKOS_CREDENTIAL_KID"],
+    ].map(([id, secret, marker]) => ({
+      id,
+      owner: "release operator",
+      custody: "external secret store",
+      secret_variables: [secret],
+      rotation_marker: marker,
+      consumers: ["api"],
+      rotation: "deploy the replacement, verify it, then retire the prior value",
+    })),
+  };
+  assert.doesNotThrow(() => validateSecretCustodyPolicy(policy));
+  assert.throws(
+    () =>
+      validateSecretCustodyPolicy({
+        ...policy,
+        families: policy.families.map((family) =>
+          family.id === "workos" ? { ...family, rotation: "replace it" } : family,
+        ),
+      }),
+    /rotation must include deployment/,
   );
 });
 

@@ -82,6 +82,8 @@
     "test:production-promotion": { "kind": "npm" },
     "test:railway-staging-target": { "kind": "npm" },
     "test:release-topology": { "kind": "npm" },
+    "test:security-release-baseline": { "kind": "npm" },
+    "test:frontend-csp-browser": { "kind": "npm" },
     "check:build-posture": { "kind": "npm" }
   },
   "areas": [
@@ -195,7 +197,7 @@
       "tier": "active",
       "paths": ["crates/api/"],
       "crate": "api",
-      "lanes": ["cargo:api", "test:mash-scale-acceptance"],
+      "lanes": ["cargo:api", "test:mash-scale-acceptance", "test:security-release-baseline"],
       "also_triggers": ["frontend:identity"],
       "capabilities": [
         "product.mash.day-program-library",
@@ -217,7 +219,7 @@
       "tier": "active",
       "paths": ["crates/server/"],
       "crate": "server",
-      "lanes": ["cargo:server", "test:release-topology"]
+      "lanes": ["cargo:server", "test:release-topology", "test:security-release-baseline"]
     },
     {
       "id": "packs",
@@ -245,7 +247,12 @@
       "id": "frontend:identity",
       "tier": "active",
       "paths": ["frontend/src/routes/auth/", "frontend/src/lib/server/", "frontend/src/hooks.server."],
-      "lanes": ["test:frontend-contract", "test:auth-invite-role-proof"]
+      "lanes": [
+        "test:frontend-contract",
+        "test:auth-invite-role-proof",
+        "test:security-release-baseline",
+        "test:frontend-csp-browser"
+      ]
     },
     {
       "id": "frontend:admin",
@@ -269,7 +276,8 @@
         "test:frontend-static-role-contract",
         "test:frontend-tablet-interaction",
         "test:frontend-role-dom-smoke",
-        "test:frontend-visual-regression"
+        "test:frontend-visual-regression",
+        "test:security-release-baseline"
       ],
       "capabilities": [
         "foundation.wire-live-delivery",
@@ -307,13 +315,21 @@
       "id": "frontend:infra",
       "tier": "active",
       "paths": ["frontend/"],
-      "lanes": ["test:frontend-contract"]
+      "lanes": [
+        "test:frontend-contract",
+        "test:security-release-baseline",
+        "test:frontend-csp-browser"
+      ]
     },
     {
       "id": "ops:production-promotion",
       "tier": "active",
       "paths": ["tools/production_promotion.mjs", "tools/production_promotion.test.mjs"],
-      "lanes": ["test:production-promotion", "test:railway-staging-target"]
+      "lanes": [
+        "test:production-promotion",
+        "test:railway-staging-target",
+        "test:security-release-baseline"
+      ]
     },
     {
       "id": "proof:mash-scale",
@@ -340,6 +356,17 @@
       "capabilities": ["product.mash.private-day-event-rooms"]
     },
     {
+      "id": "proof:security-release",
+      "tier": "frozen",
+      "paths": [
+        "tools/frontend_csp_browser_proof.mjs",
+        "tools/security_release_baseline.mjs",
+        "tools/security_release_baseline.test.mjs"
+      ],
+      "lanes": ["test:security-release-baseline", "test:frontend-csp-browser"],
+      "capabilities": ["foundation.security-release-baseline"]
+    },
+    {
       "id": "tools:proof-infra",
       "tier": "active",
       "paths": ["tools/"],
@@ -354,7 +381,11 @@
       "id": "ops:scorecard",
       "tier": "active",
       "paths": ["docs/ops/"],
-      "lanes": ["test:completeness-scorecard", "test:proof-lane-contract"]
+      "lanes": [
+        "test:completeness-scorecard",
+        "test:proof-lane-contract",
+        "test:security-release-baseline"
+      ]
     },
     {
       "id": "docs",
@@ -373,7 +404,11 @@
         "Dockerfile",
         "Dockerfile.frontend"
       ],
-      "lanes": ["check:build-posture", "test:railway-staging-target"]
+      "lanes": [
+        "check:build-posture",
+        "test:railway-staging-target",
+        "test:security-release-baseline"
+      ]
     },
     {
       "id": "workspace:manifests",

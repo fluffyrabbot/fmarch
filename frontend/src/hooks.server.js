@@ -95,6 +95,9 @@ export async function securityHeadersHandle({ event, resolve }) {
   response.headers.set("referrer-policy", "strict-origin-when-cross-origin");
   response.headers.set("permissions-policy", "camera=(), microphone=(), geolocation=()");
   response.headers.set("cross-origin-opener-policy", "same-origin");
+  response.headers.set("cross-origin-resource-policy", "same-origin");
+  response.headers.set("x-frame-options", "DENY");
+  response.headers.set("x-permitted-cross-domain-policies", "none");
   if (event.url.protocol === "https:") {
     response.headers.set(
       "strict-transport-security",

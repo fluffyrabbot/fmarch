@@ -18,9 +18,9 @@ test("real completion registry records the 1.0 substrate frontier", async () => 
   await validateRegistry(registry);
   const summary = summarizeRegistry(registry);
   assert.deepEqual(summary.byExecutionClass.code, {
-    complete: 39,
+    complete: 40,
     partial: 0,
-    open: 3,
+    open: 2,
     blocked: 0,
     deferred: 0,
     total: 42,
@@ -49,7 +49,7 @@ test("real completion registry records the 1.0 substrate frontier", async () => 
       ?.status,
     "complete",
   );
-  assert.equal(nextBuildableCodeItem(registry)?.id, "foundation.security-release-baseline");
+  assert.equal(nextBuildableCodeItem(registry)?.id, "foundation.maintainable-core");
 });
 
 test("generated scorecard exactly matches the canonical registry", async () => {

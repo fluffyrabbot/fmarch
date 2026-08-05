@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 const DEFAULTS = Object.freeze({
@@ -60,6 +61,35 @@ export function validateServiceBranches(config, expectedBranch, serviceIds = DEF
   }
 }
 
+export function validateSecretCustodyPolicy(policy) {
+  assert.equal(policy?.version, 1, "secret custody policy version must be 1");
+  assert.deepEqual(policy.environments, ["staging", "production"]);
+  assert.equal(policy.rules?.environment_isolation_required, true);
+  assert.equal(policy.rules?.repository_secret_values_forbidden, true);
+  assert.equal(policy.rules?.rotation_marker_required, true);
+  assert.equal(policy.rules?.retirement_requires_successful_redeploy, true);
+  assert.deepEqual(
+    policy.families?.map((family) => family.id),
+    ["auth-source-signing", "event-encryption", "object-storage", "workos"],
+  );
+  for (const family of policy.families ?? []) {
+    assert.ok(family.owner, `${family.id} must name an owner`);
+    assert.ok(family.custody, `${family.id} must name its custody boundary`);
+    assert.ok(family.secret_variables?.length > 0, `${family.id} must name secret variables`);
+    assert.match(
+      family.rotation_marker ?? "",
+      /^[A-Z][A-Z0-9_]+(?:KID|REVISION)$/,
+      `${family.id} must name a non-secret rotation marker`,
+    );
+    assert.ok(family.consumers?.length > 0, `${family.id} must name consumers`);
+    assert.ok(family.rotation?.includes("deploy"), `${family.id} rotation must include deployment`);
+    assert.ok(
+      family.rotation?.match(/retire|revoke/),
+      `${family.id} rotation must define retirement`,
+    );
+  }
+}
+
 export function validateHostedVariables({ stagingApi, stagingFrontend, productionApi, productionFrontend }) {
   for (const [name, variables, required] of [
     [
@@ -67,20 +97,43 @@ export function validateHostedVariables({ stagingApi, stagingFrontend, productio
       stagingApi,
       [
         "FMARCH_AUTH_SOURCE_SIGNING_KEY",
+        "FMARCH_AUTH_SOURCE_SIGNING_KID",
         "FMARCH_EVENT_ENCRYPTION_KEY",
         "FMARCH_EVENT_ENCRYPTION_KID",
+        "FMARCH_OBJECT_STORAGE_CREDENTIAL_KID",
+        "FMARCH_WORKOS_CREDENTIAL_KID",
+        "AWS_ACCESS_KEY_ID",
+        "AWS_SECRET_ACCESS_KEY",
+        "AWS_S3_BUCKET_NAME",
         "WORKOS_CLIENT_ID",
       ],
     ],
-    ["staging frontend", stagingFrontend, ["FMARCH_AUTH_SOURCE_SIGNING_KEY", "WORKOS_CLIENT_ID"]],
+    [
+      "staging frontend",
+      stagingFrontend,
+      [
+        "FMARCH_AUTH_SOURCE_SIGNING_KEY",
+        "FMARCH_AUTH_SOURCE_SIGNING_KID",
+        "FMARCH_WORKOS_CREDENTIAL_KID",
+        "WORKOS_API_KEY",
+        "WORKOS_CLIENT_ID",
+        "WORKOS_COOKIE_PASSWORD",
+      ],
+    ],
     [
       "production API",
       productionApi,
       [
         "DATABASE_URL",
         "FMARCH_AUTH_SOURCE_SIGNING_KEY",
+        "FMARCH_AUTH_SOURCE_SIGNING_KID",
         "FMARCH_EVENT_ENCRYPTION_KEY",
         "FMARCH_EVENT_ENCRYPTION_KID",
+        "FMARCH_OBJECT_STORAGE_CREDENTIAL_KID",
+        "FMARCH_WORKOS_CREDENTIAL_KID",
+        "AWS_ACCESS_KEY_ID",
+        "AWS_SECRET_ACCESS_KEY",
+        "AWS_S3_BUCKET_NAME",
         "WORKOS_CLIENT_ID",
         "WORKOS_ISSUER",
         "WORKOS_JWKS_URL",
@@ -93,6 +146,8 @@ export function validateHostedVariables({ stagingApi, stagingFrontend, productio
         "FMARCH_API_BASE_URL",
         "FMARCH_API_INTERNAL_URL",
         "FMARCH_AUTH_SOURCE_SIGNING_KEY",
+        "FMARCH_AUTH_SOURCE_SIGNING_KID",
+        "FMARCH_WORKOS_CREDENTIAL_KID",
         "ORIGIN",
         "WORKOS_API_KEY",
         "WORKOS_CLIENT_ID",
@@ -118,39 +173,116 @@ export function validateHostedVariables({ stagingApi, stagingFrontend, productio
     productionFrontend.WORKOS_REDIRECT_URI,
     `${DEFAULTS.productionFrontendUrl}/auth/callback`,
   );
-  assert.equal(
-    productionApi.WORKOS_CLIENT_ID,
-    productionFrontend.WORKOS_CLIENT_ID,
+  assertSecretRelation(
+    productionApi.WORKOS_CLIENT_ID === productionFrontend.WORKOS_CLIENT_ID,
     "production API and frontend must use the same WorkOS client",
   );
-  assert.equal(
-    stagingApi.FMARCH_AUTH_SOURCE_SIGNING_KEY,
-    stagingFrontend.FMARCH_AUTH_SOURCE_SIGNING_KEY,
+  assertSecretRelation(
+    stagingApi.FMARCH_AUTH_SOURCE_SIGNING_KEY ===
+      stagingFrontend.FMARCH_AUTH_SOURCE_SIGNING_KEY,
     "staging API and frontend must share the auth-source signing key",
   );
-  assert.equal(
-    productionApi.FMARCH_AUTH_SOURCE_SIGNING_KEY,
-    productionFrontend.FMARCH_AUTH_SOURCE_SIGNING_KEY,
+  assertSecretRelation(
+    productionApi.FMARCH_AUTH_SOURCE_SIGNING_KEY ===
+      productionFrontend.FMARCH_AUTH_SOURCE_SIGNING_KEY,
     "production API and frontend must share the auth-source signing key",
   );
-  assert.notEqual(
-    productionApi.FMARCH_AUTH_SOURCE_SIGNING_KEY,
-    stagingApi.FMARCH_AUTH_SOURCE_SIGNING_KEY,
+  assertSecretRelation(
+    productionApi.FMARCH_AUTH_SOURCE_SIGNING_KEY !==
+      stagingApi.FMARCH_AUTH_SOURCE_SIGNING_KEY,
+    "production and staging must not share the auth-source signing key",
   );
-  assert.notEqual(
-    productionApi.FMARCH_EVENT_ENCRYPTION_KEY,
-    stagingApi.FMARCH_EVENT_ENCRYPTION_KEY,
+  assertSecretRelation(
+    productionApi.FMARCH_EVENT_ENCRYPTION_KEY !== stagingApi.FMARCH_EVENT_ENCRYPTION_KEY,
+    "production and staging must not share the event encryption key",
   );
-  assert.notEqual(
-    productionApi.FMARCH_EVENT_ENCRYPTION_KID,
-    stagingApi.FMARCH_EVENT_ENCRYPTION_KID,
+  assertSecretRelation(
+    productionApi.FMARCH_EVENT_ENCRYPTION_KID !== stagingApi.FMARCH_EVENT_ENCRYPTION_KID,
+    "production and staging must not share the event encryption KID",
   );
-  assert.notEqual(productionApi.WORKOS_CLIENT_ID, stagingApi.WORKOS_CLIENT_ID);
-  assert.notEqual(productionFrontend.WORKOS_CLIENT_ID, stagingFrontend.WORKOS_CLIENT_ID);
-  assert.notEqual(productionFrontend.WORKOS_API_KEY, stagingFrontend.WORKOS_API_KEY);
-  assert.notEqual(
-    productionFrontend.WORKOS_COOKIE_PASSWORD,
-    stagingFrontend.WORKOS_COOKIE_PASSWORD,
+  assertSecretRelation(
+    productionApi.AWS_ACCESS_KEY_ID !== stagingApi.AWS_ACCESS_KEY_ID &&
+      productionApi.AWS_SECRET_ACCESS_KEY !== stagingApi.AWS_SECRET_ACCESS_KEY &&
+      productionApi.AWS_S3_BUCKET_NAME !== stagingApi.AWS_S3_BUCKET_NAME,
+    "production and staging must use isolated object storage",
+  );
+  for (const [label, left, right] of [
+    ["WorkOS client", productionApi.WORKOS_CLIENT_ID, stagingApi.WORKOS_CLIENT_ID],
+    ["WorkOS API key", productionFrontend.WORKOS_API_KEY, stagingFrontend.WORKOS_API_KEY],
+    [
+      "WorkOS cookie password",
+      productionFrontend.WORKOS_COOKIE_PASSWORD,
+      stagingFrontend.WORKOS_COOKIE_PASSWORD,
+    ],
+  ]) {
+    assertSecretRelation(left !== right, `production and staging must not share the ${label}`);
+  }
+
+  for (const [label, api, frontend] of [
+    ["staging auth-source KID", stagingApi, stagingFrontend],
+    ["production auth-source KID", productionApi, productionFrontend],
+  ]) {
+    assertSecretRelation(
+      api.FMARCH_AUTH_SOURCE_SIGNING_KID === frontend.FMARCH_AUTH_SOURCE_SIGNING_KID,
+      `${label} must match across API and frontend`,
+    );
+  }
+  for (const [label, api, frontend] of [
+    ["staging WorkOS KID", stagingApi, stagingFrontend],
+    ["production WorkOS KID", productionApi, productionFrontend],
+  ]) {
+    assertSecretRelation(
+      api.FMARCH_WORKOS_CREDENTIAL_KID === frontend.FMARCH_WORKOS_CREDENTIAL_KID,
+      `${label} must match across API and frontend`,
+    );
+  }
+  for (const [label, production, staging] of [
+    [
+      "auth-source signing KID",
+      productionApi.FMARCH_AUTH_SOURCE_SIGNING_KID,
+      stagingApi.FMARCH_AUTH_SOURCE_SIGNING_KID,
+    ],
+    [
+      "object-storage credential KID",
+      productionApi.FMARCH_OBJECT_STORAGE_CREDENTIAL_KID,
+      stagingApi.FMARCH_OBJECT_STORAGE_CREDENTIAL_KID,
+    ],
+    [
+      "WorkOS credential KID",
+      productionApi.FMARCH_WORKOS_CREDENTIAL_KID,
+      stagingApi.FMARCH_WORKOS_CREDENTIAL_KID,
+    ],
+  ]) {
+    assertSecretRelation(production !== staging, `production and staging must not share ${label}`);
+  }
+
+  for (const [label, value] of [
+    ["staging auth-source signing key", stagingApi.FMARCH_AUTH_SOURCE_SIGNING_KEY],
+    ["production auth-source signing key", productionApi.FMARCH_AUTH_SOURCE_SIGNING_KEY],
+    ["staging event encryption key", stagingApi.FMARCH_EVENT_ENCRYPTION_KEY],
+    ["production event encryption key", productionApi.FMARCH_EVENT_ENCRYPTION_KEY],
+    ["staging WorkOS cookie password", stagingFrontend.WORKOS_COOKIE_PASSWORD],
+    ["production WorkOS cookie password", productionFrontend.WORKOS_COOKIE_PASSWORD],
+  ]) {
+    assertSecretRelation(
+      typeof value === "string" && value.length >= 32 && !value.includes("replace_me"),
+      `${label} must be a non-placeholder value of at least 32 characters`,
+    );
+  }
+}
+
+function assertSecretRelation(condition, message) {
+  // Boolean-only assertions prevent assertion diagnostics from echoing either
+  // side of a secret comparison into terminal logs or retained artifacts.
+  assert.ok(condition, message);
+}
+
+function secretCustodyPolicy() {
+  return JSON.parse(
+    readFileSync(
+      new URL("../docs/ops/release-secret-custody.json", import.meta.url),
+      "utf8",
+    ),
   );
 }
 
@@ -187,6 +319,7 @@ export function railwayArguments(projectId, args, { linked = false } = {}) {
 async function main() {
   const { checkOnly } = parseArguments(process.argv.slice(2));
   const config = runtimeConfig();
+  validateSecretCustodyPolicy(secretCustodyPolicy());
 
   run("git", ["fetch", "--quiet", "origin", "main", "production"]);
   const head = text("git", ["rev-parse", "HEAD"]);
