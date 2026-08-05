@@ -26,12 +26,12 @@ those contracts are still intentional.
 
 ## Responsibility inventory
 
-The line counts below are a 2026-08-04 orientation snapshot, not a target.
+The line counts below are a 2026-08-05 orientation snapshot, not a target.
 
 | Surface | Current concentration | Superior ownership boundary | Dependency direction | Next extraction |
 |---|---|---|---|---|
-| `crates/domain/src/pack.rs` (~10.8k) | Pack schema, defaults, cross-reference validation, action-policy validation, ordering, and in-file tests | `pack/model` owns declarative types; `pack/validation` owns validation contexts and diagnostics; integration tests own contract fixtures | validation → model; resolver/commands → validated pack | First: introduce `PackValidationContext`, separate model from validation, and move in-file tests out of the production module |
-| `crates/domain/src/resolver.rs` (~12.0k) | Action collection, ordering, interference, trigger fixpoint, outcomes, day vote, and result construction | Resolver coordinator plus bounded action, trigger, outcome, and day-vote families | family modules → domain state/validated pack; coordinator → families | Follow pack extraction so resolver contexts consume a stable validated model |
+| `crates/domain/src/pack.rs` façade; `pack/model.rs` (~1.9k); `pack/validation.rs` (~8.5k) | Closed first-level boundary: serialized schema/defaults are separate from loading, derived indexes, diagnostics, and ordering | `pack/model` owns declarative types; `pack/validation` owns `PackValidationContext` and validation behavior; `validation_tests` owns private contract tests | validation → model; resolver/commands → public pack façade | Split validation families only when their next independent change requires it; do not re-complect model ownership |
+| `crates/domain/src/resolver.rs` (~12.0k) | Action collection, ordering, interference, trigger fixpoint, outcomes, day vote, and result construction | Resolver coordinator plus bounded action, trigger, outcome, and day-vote families | family modules → domain state/validated pack; coordinator → families | Introduce typed action/trigger/vote resolution contexts and extract the trigger fixpoint family first |
 | `crates/api/src/lib.rs` (~10.4k) | Router composition, auth/session flows, community reads/writes, game transport, live publication, and command adaptation | Thin composition root plus route-family modules with typed request contexts | route families → application/domain ports; composition root → route families | Continue with authentication delivery/rate-limit ownership after the media route family |
 | `crates/projections/src/lib.rs` (~9.1k) | Event dispatch and unrelated game, community, identity, media-reference, scheduler, and private-channel projections | Projection dispatcher plus one module per projection family and shared SQL primitives | family projectors → shared transaction primitives; dispatcher → families | Extract effect/private-channel projectors using the typed records established by the Clippy cleanup |
 | `crates/commands/tests/pipeline.rs` (~77.1k) | Cross-domain command scenarios, fixtures, helpers, and operator proof cases | Shared hermetic harness plus scenario-family integration modules | scenario modules → harness/public command API; never scenario ↔ scenario | Split by command family while preserving serial Postgres proof semantics |
@@ -49,21 +49,33 @@ This is an ownership improvement rather than a file move: HTTP media concerns
 no longer share a module with authentication, community, game command, and
 live-publication orchestration.
 
+## Closed domain boundary: pack model and validation
+
+`crates/domain/src/pack.rs` is now the public façade over two inward-facing
+owners. `pack/model.rs` contains the serialized schema and defaults;
+`pack/validation.rs` contains decoding, diagnostics, derived ordering, and a
+single `PackValidationContext` that computes cross-reference indexes once per
+validation pass. Action, target-lynch, and vote-policy validators consume that
+context instead of independent high-arity parameter lists.
+
+The private IR-version mapping tests live in the test-only
+`pack/validation_tests.rs` sibling. No pack-specific Clippy expectation remains.
+Public pack exports, JSON fields/defaults, validation diagnostics, and golden
+semantics remain unchanged.
+
 ## Exact lint-debt register
 
 The strict baseline intentionally records, rather than hides, remaining
 boundary pressure:
 
-- pack validation and resolver high-arity functions await typed validation and
-  resolution contexts;
+- resolver trigger, action, event-builder, guard/witch, and vote paths await
+  typed resolution contexts;
 - command submission, action validation, prompt reconstruction, and operator
   proof audit functions await bounded request contexts;
 - authentication delivery/audit and live publication functions await route-
   family extraction and typed records;
 - direct wire enum payload ownership remains until transport allocation is
   benchmark-driven or the adapter boundary is reshaped;
-- the pack module's in-file test placement remains only until the next pack
-  extraction.
 
 Each extraction must remove the expectations it supersedes. Adding an exact
 expectation requires a reason that names the missing boundary and an update to

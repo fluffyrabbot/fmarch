@@ -306,7 +306,7 @@
       "title": "Reviewable 1.0 core and toolchain",
       "execution_class": "code",
       "status": "open",
-      "summary": "Rust 1.95.0 and strict workspace Clippy are pinned and proof-enforced, the first API media HTTP family is isolated, and the remaining domain, API, projection, command-test, and proof-runner concentrations have an explicit ownership inventory.",
+      "summary": "Rust 1.95.0 and strict workspace Clippy are proof-enforced, API media HTTP is isolated, and the domain pack façade now separates serialized model ownership from typed validation context, diagnostics, and ordering. Resolver, remaining API, projection, command-test, and proof-runner concentrations remain inventoried.",
       "complete_when": [
         "The Rust toolchain is pinned, workspace Clippy is warning-clean, and concentrated pack, resolver, API, projection, command-test, and proof orchestration responsibilities are split into coherent modules without weakening proof coverage."
       ],
@@ -329,6 +329,14 @@
         },
         {
           "kind": "source",
+          "value": "crates/domain/src/pack/model.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/domain/src/pack/validation.rs"
+        },
+        {
+          "kind": "source",
           "value": "docs/ops/proof-lane-manifest.json"
         },
         {
@@ -337,16 +345,16 @@
         }
       ],
       "remaining": [
-        "Extract pack model and validation ownership, then split resolver, remaining API, projection, command-test, and proof-runner responsibilities along the dependency direction recorded in docs/arch/16-maintainable-core.md.",
+        "Split resolver, remaining API, projection, command-test, and proof-runner responsibilities along the dependency direction recorded in docs/arch/16-maintainable-core.md.",
         "Remove the exact lint expectations as typed contexts and bounded modules supersede them."
       ],
       "recommended_slice": {
-        "objective": "Extract the domain pack model/validation boundary: introduce a typed PackValidationContext, move cross-reference and action-policy validation behind it, relocate pack validation tests out of the production module, and remove the superseded pack high-arity and test-placement lint expectations without changing pack JSON or golden behavior.",
+        "objective": "Extract the resolver trigger-fixpoint boundary: introduce typed action and trigger resolution contexts, move trigger collection, fixpoint application, and their event/trace construction into a bounded resolver module, and remove the superseded trigger/action high-arity lint allowances without changing event order, trace payloads, or golden behavior.",
         "paths": [
-          "crates/domain/src/pack.rs",
-          "crates/domain/src/pack/",
+          "crates/domain/src/resolver.rs",
+          "crates/domain/src/resolver/",
           "crates/domain/tests/",
-          "packs/",
+          "packs/*/golden/",
           "crates/commands/src/bin/check_goldens.rs",
           "docs/arch/16-maintainable-core.md"
         ],
@@ -358,10 +366,10 @@
           "npm run proof:lanes -- --mode full --run"
         ],
         "non_claims": [
-          "Do not preserve the current pack.rs internal layout through compatibility facades.",
-          "Do not change serialized pack fields, defaults, validation diagnostics, or generated golden semantics as an accidental side effect of module extraction.",
-          "Do not mix resolver-family extraction into this atomic pack-boundary change.",
-          "Do not mark foundation.maintainable-core complete; resolver, API, projection, command-test, and proof-runner concentrations remain."
+          "Do not preserve resolver-local helper signatures through compatibility facades.",
+          "Do not change event order, event or trace payloads, seeded determinism, or generated golden semantics as an accidental side effect of module extraction.",
+          "Do not mix day-vote, remaining resolver families, or pack/API extraction into this atomic trigger-boundary change.",
+          "Do not mark foundation.maintainable-core complete; remaining resolver, API, projection, command-test, and proof-runner concentrations remain."
         ]
       }
     },

@@ -1,0 +1,8457 @@
+//! Pack decoding, semantic validation, and derived execution ordering.
+
+use std::collections::{BTreeMap, BTreeSet};
+
+use crate::events::VoteStatus;
+use crate::ir::{InvestigateMode, IrAbility, Modifier};
+
+use super::model::*;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PackValidationError {
+    pub issues: Vec<PackValidationIssue>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PackValidationIssue {
+    pub path: String,
+    pub message: String,
+}
+
+impl std::fmt::Display for PackValidationError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for (idx, issue) in self.issues.iter().enumerate() {
+            if idx > 0 {
+                write!(f, "; ")?;
+            }
+            write!(f, "{}: {}", issue.path, issue.message)?;
+        }
+        Ok(())
+    }
+}
+
+impl std::error::Error for PackValidationError {}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PackLoadError {
+    Json(String),
+    Decode(String),
+    Validation(PackValidationError),
+}
+
+impl std::fmt::Display for PackLoadError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PackLoadError::Json(message) => write!(f, "pack JSON parse error: {message}"),
+            PackLoadError::Decode(message) => write!(f, "pack decode error: {message}"),
+            PackLoadError::Validation(err) => write!(f, "pack validation: {err}"),
+        }
+    }
+}
+
+impl std::error::Error for PackLoadError {}
+
+pub fn load_pack_from_json(raw: &str) -> Result<Pack, PackLoadError> {
+    let pack: Pack = serde_json::from_str(raw).map_err(|err| {
+        if err.classify() == serde_json::error::Category::Data {
+            PackLoadError::Decode(err.to_string())
+        } else {
+            PackLoadError::Json(err.to_string())
+        }
+    })?;
+    validate_pack(&pack).map_err(PackLoadError::Validation)?;
+    Ok(pack)
+}
+
+/// Derived indexes shared by validation families for one immutable pack.
+///
+/// Keeping these lookups together makes cross-reference validation explicit,
+/// prevents validators from rebuilding subtly different views of the model,
+/// and gives action-policy validation one stable dependency boundary.
+struct PackValidationContext<'a> {
+    pack: &'a Pack,
+    role_keys: BTreeSet<&'a str>,
+    alignments: BTreeSet<&'a str>,
+    effect_tags: BTreeSet<&'a str>,
+    team_kill_action_ids: BTreeSet<&'a str>,
+    cadence: BTreeSet<PhaseKind>,
+    kill_cause_ids: BTreeSet<String>,
+    vote_weight_grant_ids: BTreeSet<String>,
+    uses_vote_duel: bool,
+}
+
+impl<'a> PackValidationContext<'a> {
+    fn new(pack: &'a Pack) -> Self {
+        Self {
+            pack,
+            role_keys: pack.roles.keys().map(String::as_str).collect(),
+            alignments: pack
+                .roles
+                .values()
+                .filter_map(|role| role.alignment.as_deref())
+                .collect(),
+            effect_tags: declared_effect_tags(pack),
+            team_kill_action_ids: pack
+                .night_resolution
+                .team_kill_action_ids
+                .iter()
+                .map(String::as_str)
+                .collect(),
+            cadence: pack.phases.cadence.iter().copied().collect(),
+            kill_cause_ids: pack_kill_cause_ids(pack),
+            vote_weight_grant_ids: pack
+                .roles
+                .values()
+                .flat_map(|role| role.actions.iter())
+                .filter_map(|action| action.grant.as_ref())
+                .filter(|grant| grant.kind == GrantKind::VoteWeight)
+                .map(|grant| grant.grant_id.clone())
+                .collect(),
+            uses_vote_duel: pack_uses_ability(pack, IrAbility::VoteDuel),
+        }
+    }
+}
+
+pub fn validate_pack(pack: &Pack) -> Result<(), PackValidationError> {
+    let mut issues = Vec::new();
+
+    if pack.version != SUPPORTED_PACK_VERSION {
+        issue(
+            &mut issues,
+            "version",
+            format!(
+                "unsupported pack version {}; supported version is {}",
+                pack.version, SUPPORTED_PACK_VERSION
+            ),
+        );
+    }
+    if pack.ir_version < MIN_SUPPORTED_IR_VERSION || pack.ir_version > SUPPORTED_IR_VERSION {
+        issue(
+            &mut issues,
+            "ir_version",
+            format!(
+                "unsupported IR version {}; supported range is {}..={}",
+                pack.ir_version, MIN_SUPPORTED_IR_VERSION, SUPPORTED_IR_VERSION
+            ),
+        );
+    }
+    validate_pack_required_ir_version(&mut issues, pack);
+    if pack.name.trim().is_empty() {
+        issue(&mut issues, "name", "pack name must not be empty");
+    }
+    if pack.roles.is_empty() {
+        issue(&mut issues, "roles", "pack must define at least one role");
+    }
+    validate_phase_policy(&mut issues, "phases", &pack.phases);
+
+    let context = PackValidationContext::new(pack);
+    let role_keys = &context.role_keys;
+    validate_ita_policy(&mut issues, "ita", &pack.ita, role_keys);
+    let alignments = &context.alignments;
+    let effect_tags = &context.effect_tags;
+    let cadence = &context.cadence;
+    validate_investigation_result_policy(
+        &mut issues,
+        "investigation_results",
+        &pack.investigation_results,
+        role_keys,
+        alignments,
+    );
+    let kill_cause_ids = &context.kill_cause_ids;
+    validate_day_note_policy(
+        &mut issues,
+        "day_notes",
+        &pack.day_notes,
+        cadence,
+        kill_cause_ids,
+    );
+    validate_wolf_carry_policy(
+        &mut issues,
+        "wolf_carry",
+        &pack.wolf_carry,
+        pack.ir_version,
+        role_keys,
+        cadence,
+    );
+    validate_wolf_beauty_policy(
+        &mut issues,
+        "wolf_beauty",
+        &pack.wolf_beauty,
+        pack.ir_version,
+        role_keys,
+        effect_tags,
+        cadence,
+    );
+    validate_guard_policy(
+        &mut issues,
+        "guard_policy",
+        &pack.guard_policy,
+        pack.ir_version,
+        pack,
+        cadence,
+    );
+    validate_faction_action_policy(
+        &mut issues,
+        "faction_actions",
+        &pack.faction_actions,
+        pack.ir_version,
+        pack,
+        alignments,
+        cadence,
+    );
+    validate_night_resolution_policy(
+        &mut issues,
+        "night_resolution",
+        &pack.night_resolution,
+        pack,
+        cadence,
+    );
+    validate_death_retaliation_policy(
+        &mut issues,
+        "death_retaliation",
+        &pack.death_retaliation,
+        pack.ir_version,
+        role_keys,
+        cadence,
+    );
+    validate_death_reveal_policy(
+        &mut issues,
+        "death_reveal",
+        &pack.death_reveal,
+        pack.ir_version,
+        pack,
+        effect_tags,
+    );
+    validate_effect_source_death_reveals(
+        &mut issues,
+        "effect_source_death_reveals",
+        &pack.effect_source_death_reveals,
+        pack.ir_version,
+        pack,
+        effect_tags,
+    );
+    validate_idiot_policy(
+        &mut issues,
+        "idiot_policy",
+        &pack.idiot_policy,
+        pack.ir_version,
+        role_keys,
+        effect_tags,
+        cadence,
+    );
+    validate_saulus_policy(
+        &mut issues,
+        "saulus_policy",
+        &pack.saulus_policy,
+        pack.ir_version,
+        role_keys,
+        alignments,
+        cadence,
+    );
+    validate_backup_policy(
+        &mut issues,
+        "backup_policy",
+        &pack.backup_policy,
+        pack.ir_version,
+        role_keys,
+        effect_tags,
+    );
+    validate_private_channel_policy(
+        &mut issues,
+        "private_channels",
+        &pack.private_channels,
+        pack.ir_version,
+        role_keys,
+    );
+    validate_treestump_policy(
+        &mut issues,
+        "treestump_policy",
+        &pack.treestump_policy,
+        pack.ir_version,
+        role_keys,
+    );
+    validate_conversion_policy(
+        &mut issues,
+        "conversion_policy",
+        &pack.conversion_policy,
+        pack,
+    );
+    validate_target_lynch_win_policies(&mut issues, &context);
+    validate_self_lynch_win_policies(
+        &mut issues,
+        "self_lynch_win_policies",
+        &pack.self_lynch_win_policies,
+        pack.ir_version,
+        role_keys,
+        alignments,
+        cadence,
+    );
+    validate_beloved_princess_policy(
+        &mut issues,
+        "beloved_princess_policy",
+        &pack.beloved_princess_policy,
+        pack.ir_version,
+        role_keys,
+        cadence,
+    );
+    validate_day_vote_prompt_policies(
+        &mut issues,
+        "day_vote_prompt_policies",
+        &pack.day_vote_prompt_policies,
+        pack.ir_version,
+        cadence,
+    );
+    validate_host_prompt_resolution_effects(
+        &mut issues,
+        "host_prompt_resolution_effects",
+        &pack.host_prompt_resolution_effects,
+        pack.ir_version,
+        pack,
+    );
+    validate_lover_policy(
+        &mut issues,
+        "lover_policy",
+        &pack.lover_policy,
+        pack.ir_version,
+        effect_tags,
+        cadence,
+    );
+
+    for tag in pack.effects.keys() {
+        if tag.trim().is_empty() {
+            issue(
+                &mut issues,
+                "effects",
+                "effect policy tags must not be empty",
+            );
+        }
+    }
+
+    let mut has_ita_shot = false;
+    for (role_key, role) in &pack.roles {
+        validate_role(
+            &mut issues,
+            &format!("roles.{role_key}"),
+            role,
+            &pack.night_resolution,
+        );
+        let mut role_action_ids = BTreeSet::new();
+        if role.description.trim().is_empty() {
+            issue(
+                &mut issues,
+                format!("roles.{role_key}.description"),
+                "role description must not be empty",
+            );
+        }
+        for (idx, action) in role.actions.iter().enumerate() {
+            let path = format!("roles.{role_key}.actions[{idx}]");
+            validate_action(&mut issues, &path, action, &context);
+            if action
+                .abilities()
+                .any(|ability| ability == IrAbility::ItaShot)
+            {
+                has_ita_shot = true;
+            }
+            if let Some(grant) = &action.grant {
+                validate_grant_spec(&mut issues, format!("{path}.grant"), grant, pack);
+            }
+            for (idx, grant) in action.grant_options.iter().enumerate() {
+                validate_grant_spec(
+                    &mut issues,
+                    format!("{path}.grant_options[{idx}]"),
+                    grant,
+                    pack,
+                );
+            }
+            if !role_action_ids.insert(action.id.as_str()) {
+                issue(
+                    &mut issues,
+                    format!("{path}.id"),
+                    format!(
+                        "duplicate action id `{}` within role `{role_key}`",
+                        action.id
+                    ),
+                );
+            }
+        }
+    }
+    for (grant_id, action) in &pack.item_actions {
+        let path = format!("item_actions.{grant_id}");
+        if grant_id.trim().is_empty() {
+            issue(
+                &mut issues,
+                "item_actions",
+                "item action grant ids must not be empty",
+            );
+        }
+        if action.id != *grant_id {
+            issue(
+                &mut issues,
+                format!("{path}.id"),
+                "item action id must match its item_actions key",
+            );
+        }
+        validate_action(&mut issues, &path, action, &context);
+        if action
+            .abilities()
+            .any(|ability| ability == IrAbility::ItaShot)
+        {
+            has_ita_shot = true;
+        }
+    }
+    if has_ita_shot && pack.ita.sessions.is_empty() {
+        issue(
+            &mut issues,
+            "ita.sessions",
+            "packs with ItaShot actions must declare at least one ITA session",
+        );
+    }
+    if has_ita_shot
+        && !matches!(
+            pack.ita.vote_conflict,
+            Some(ItaVoteConflictPolicy::ResolveShotsBeforeVote)
+        )
+    {
+        issue(
+            &mut issues,
+            "ita.vote_conflict",
+            "packs with ItaShot actions must declare vote_conflict ResolveShotsBeforeVote",
+        );
+    }
+
+    validate_precedence_rules(&mut issues, pack);
+    validate_visibility_rules(&mut issues, pack);
+    validate_visibility_families(&mut issues, pack);
+
+    validate_trigger_identity_and_filters(&mut issues, pack, effect_tags);
+    validate_trigger_production_shapes(&mut issues, pack);
+    validate_visit_trigger_contracts(&mut issues, pack);
+    validate_kill_trigger_contracts(&mut issues, pack);
+    validate_lynch_trigger_contracts(&mut issues, pack);
+
+    for (tag, overrides) in &pack.investigation_overrides.clone().unwrap_or_default() {
+        if !effect_tags.contains(tag.as_str()) {
+            issue(
+                &mut issues,
+                format!("investigation_overrides.{tag}"),
+                format!("unknown effect tag `{tag}`"),
+            );
+        }
+        if overrides.by_mode.is_empty() {
+            issue(
+                &mut issues,
+                format!("investigation_overrides.{tag}"),
+                "override must define at least one investigate mode",
+            );
+        }
+    }
+
+    validate_vote_policy(&mut issues, &context);
+
+    validate_win_policy(
+        &mut issues,
+        &pack.win,
+        pack.ir_version,
+        alignments,
+        role_keys,
+    );
+    validate_win_families(&mut issues, pack);
+
+    if issues.is_empty() {
+        Ok(())
+    } else {
+        Err(PackValidationError { issues })
+    }
+}
+
+/// Derive the current night ability stage order from pack action priorities and
+/// precedence edges. Only declared night/any-window abilities participate; day
+/// handling has its own vote pipeline.
+pub fn night_ability_order(pack: &Pack) -> Result<Vec<IrAbility>, PackValidationError> {
+    let priorities = night_ability_priorities(pack);
+    let abilities: BTreeSet<IrAbility> = priorities.keys().copied().collect();
+    let edges = precedence_edges(pack, &abilities);
+    topological_ability_order(&priorities, &edges)
+}
+
+fn validate_precedence_rules(issues: &mut Vec<PackValidationIssue>, pack: &Pack) {
+    let mut ids = BTreeSet::new();
+    let mut keys = BTreeSet::new();
+
+    for (idx, rule) in pack.precedence.iter().enumerate() {
+        let path = format!("precedence[{idx}]");
+        if rule.id.trim().is_empty() {
+            issue(
+                issues,
+                format!("{path}.id"),
+                "precedence rule id must not be empty",
+            );
+        } else if !ids.insert(rule.id.as_str()) {
+            issue(
+                issues,
+                format!("{path}.id"),
+                format!("duplicate precedence rule id `{}`", rule.id),
+            );
+        }
+
+        let key = (rule.when.effect, rule.when.target_state.as_deref());
+        if !keys.insert(key) {
+            issue(
+                issues,
+                format!("{path}.when"),
+                "duplicate precedence rule for ability/target_state",
+            );
+        }
+
+        if rule.when.target_state.is_some() {
+            issue(
+                issues,
+                format!("{path}.when.target_state"),
+                "target_state precedence is not supported by the v1 resolver",
+            );
+        }
+        if rule.beats.is_empty() && rule.blocked_by.is_empty() {
+            issue(
+                issues,
+                path.clone(),
+                "precedence rule must declare beats or blocked_by",
+            );
+        }
+        validate_unique_abilities(issues, format!("{path}.beats"), &rule.beats);
+        validate_unique_abilities(issues, format!("{path}.blocked_by"), &rule.blocked_by);
+        if rule.beats.contains(&rule.when.effect) || rule.blocked_by.contains(&rule.when.effect) {
+            issue(
+                issues,
+                path.clone(),
+                "precedence rule cannot relate an ability to itself",
+            );
+        }
+        if !(rule.unless_modifiers.is_empty()
+            || rule.when.effect == IrAbility::Protect && rule.beats.contains(&IrAbility::Kill))
+        {
+            issue(
+                issues,
+                format!("{path}.unless_modifiers"),
+                "unless_modifiers are currently supported only for Protect beating Kill",
+            );
+        }
+    }
+
+    validate_priority_ties(issues, pack);
+    if let Err(err) = night_ability_order(pack) {
+        issues.extend(err.issues);
+    }
+}
+
+fn validate_unique_abilities(
+    issues: &mut Vec<PackValidationIssue>,
+    path: impl Into<String>,
+    abilities: &[IrAbility],
+) {
+    let path = path.into();
+    let mut seen = BTreeSet::new();
+    for ability in abilities {
+        if !seen.insert(*ability) {
+            issue(
+                issues,
+                path.clone(),
+                format!("duplicate ability `{ability:?}`"),
+            );
+        }
+    }
+}
+
+fn validate_priority_ties(issues: &mut Vec<PackValidationIssue>, pack: &Pack) {
+    let priorities = night_ability_priorities(pack);
+    let abilities: Vec<IrAbility> = priorities.keys().copied().collect();
+    let ability_set: BTreeSet<IrAbility> = abilities.iter().copied().collect();
+    let edges = precedence_edges(pack, &ability_set);
+
+    for (idx, left) in abilities.iter().enumerate() {
+        for right in abilities.iter().skip(idx + 1) {
+            if priorities.get(left) != priorities.get(right) {
+                continue;
+            }
+            if has_path(*left, *right, &edges) || has_path(*right, *left, &edges) {
+                continue;
+            }
+            issue(
+                issues,
+                "precedence",
+                format!(
+                    "abilities `{left:?}` and `{right:?}` share priority {} without precedence",
+                    priorities[left]
+                ),
+            );
+        }
+    }
+}
+
+fn validate_unique_strings(
+    issues: &mut Vec<PackValidationIssue>,
+    path: impl Into<String>,
+    values: &[String],
+) {
+    let path = path.into();
+    let mut seen = BTreeSet::new();
+    for value in values {
+        if !seen.insert(value.as_str()) {
+            issue(issues, path.clone(), format!("duplicate value `{value}`"));
+        }
+    }
+}
+
+fn validate_visibility_rules(issues: &mut Vec<PackValidationIssue>, pack: &Pack) {
+    for (ability, rule) in &pack.visibility {
+        let path = format!("visibility.{ability:?}");
+        if rule.sees.is_empty() {
+            issue(
+                issues,
+                format!("{path}.sees"),
+                "visibility rule must expose at least one field",
+            );
+        }
+        validate_unique_vis_fields(issues, format!("{path}.sees"), &rule.sees);
+        validate_unique_modifiers(
+            issues,
+            format!("{path}.unless_modifiers"),
+            &rule.unless_modifiers,
+        );
+        if *ability != IrAbility::Investigate && rule.sees.contains(&VisField::Result) {
+            issue(
+                issues,
+                format!("{path}.sees"),
+                "Result visibility is currently supported only for Investigate",
+            );
+        }
+    }
+
+    if pack
+        .investigation_overrides
+        .as_ref()
+        .is_some_and(|overrides| !overrides.is_empty())
+    {
+        let Some(rule) = pack.visibility.get(&IrAbility::Investigate) else {
+            issue(
+                issues,
+                "visibility.Investigate",
+                "investigation_overrides require Investigate visibility policy",
+            );
+            return;
+        };
+        if !rule.sees.contains(&VisField::Result) {
+            issue(
+                issues,
+                "visibility.Investigate.sees",
+                "investigation_overrides require Investigate visibility to expose Result",
+            );
+        }
+    }
+
+    if !pack_has_ninja_action(pack) {
+        return;
+    }
+
+    let Some(rule) = pack.visibility.get(&IrAbility::Investigate) else {
+        issue(
+            issues,
+            "visibility.Investigate",
+            "Ninja actions require Investigate visibility policy",
+        );
+        return;
+    };
+    if !rule.unless_modifiers.contains(&Modifier::Ninja) {
+        issue(
+            issues,
+            "visibility.Investigate.unless_modifiers",
+            "Ninja actions require Investigate visibility unless_modifiers Ninja",
+        );
+    }
+    if !rule.sees.contains(&VisField::TargetId) {
+        issue(
+            issues,
+            "visibility.Investigate.sees",
+            "Ninja visit hiding requires Investigate visibility to expose TargetId",
+        );
+    }
+}
+
+fn validate_visibility_families(issues: &mut Vec<PackValidationIssue>, pack: &Pack) {
+    if pack.visibility_families.is_empty() {
+        if pack.ir_version >= 45 && !visibility_required_families(pack).is_empty() {
+            issue(
+                issues,
+                "visibility_families",
+                "packs with visibility policy surfaces must declare visibility_families",
+            );
+        }
+        return;
+    }
+    if pack.ir_version < 45 {
+        issue(
+            issues,
+            "visibility_families",
+            "visibility_families requires ir_version >= 45",
+        );
+    }
+
+    let mut declared = BTreeSet::new();
+    for family in &pack.visibility_families {
+        if !declared.insert(*family) {
+            issue(
+                issues,
+                "visibility_families",
+                format!("duplicate visibility family `{family:?}`"),
+            );
+        }
+    }
+
+    let required = visibility_required_families(pack);
+    for family in &required {
+        if !declared.contains(family) {
+            issue(
+                issues,
+                "visibility_families",
+                format!("visibility_families must include `{family:?}`"),
+            );
+        }
+    }
+    for family in &declared {
+        if !required.contains(family) {
+            issue(
+                issues,
+                "visibility_families",
+                format!("declared visibility family `{family:?}` has no matching policy surface"),
+            );
+        }
+    }
+}
+
+pub(crate) fn visibility_required_families(pack: &Pack) -> BTreeSet<VisibilityFamily> {
+    let mut required = BTreeSet::new();
+    if pack
+        .visibility
+        .get(&IrAbility::Investigate)
+        .is_some_and(|rule| rule.sees.contains(&VisField::Result))
+    {
+        required.insert(VisibilityFamily::PrivateInvestigationResults);
+    }
+    if pack_uses_graph_visit_results(pack) {
+        required.insert(VisibilityFamily::GraphVisitResults);
+    }
+    if pack_has_ninja_action(pack) {
+        required.insert(VisibilityFamily::StealthNinjaVisits);
+    }
+    if pack
+        .investigation_overrides
+        .as_ref()
+        .is_some_and(|overrides| !overrides.is_empty())
+    {
+        required.insert(VisibilityFamily::ResultTampering);
+    }
+    if pack.death_reveal != DeathRevealPolicy::default() {
+        required.insert(VisibilityFamily::DeathRevealVariants);
+    }
+    if !pack.effects.is_empty() {
+        required.insert(VisibilityFamily::EffectAudiences);
+    }
+    if pack_uses_grant_audience(pack) {
+        required.insert(VisibilityFamily::GrantAudiences);
+    }
+    if pack.private_channels.enabled {
+        required.insert(VisibilityFamily::PrivateChannels);
+    }
+    required
+}
+
+fn pack_uses_graph_visit_results(pack: &Pack) -> bool {
+    night_resolution_pack_actions(pack)
+        .iter()
+        .any(|(_, action)| {
+            matches!(
+                action.mode,
+                Some(InvestigateMode::Track)
+                    | Some(InvestigateMode::Watch)
+                    | Some(InvestigateMode::Motion)
+                    | Some(InvestigateMode::PriorMotion)
+            )
+        })
+}
+
+fn pack_uses_grant_audience(pack: &Pack) -> bool {
+    night_resolution_pack_actions(pack)
+        .iter()
+        .any(|(_, action)| {
+            action.has_ability(IrAbility::Grant)
+                || action.grant.is_some()
+                || !action.grant_options.is_empty()
+        })
+}
+
+fn validate_win_policy(
+    issues: &mut Vec<PackValidationIssue>,
+    win: &WinPolicy,
+    ir_version: u16,
+    alignments: &BTreeSet<&str>,
+    role_keys: &BTreeSet<&str>,
+) {
+    let mut conditions = BTreeSet::new();
+    for (idx, rule) in win.rules.iter().enumerate() {
+        let winner_path = format!("win.rules[{idx}].winner");
+        let when_path = format!("win.rules[{idx}].when");
+        let blockers_path = format!("win.rules[{idx}].blocked_by_alive");
+        let condition_label = win_condition_label(&rule.when);
+        if !conditions.insert(condition_label.clone()) {
+            issue(
+                issues,
+                when_path.clone(),
+                format!("duplicate win condition `{condition_label}`"),
+            );
+        }
+        validate_alignment_ref(issues, winner_path.clone(), &rule.winner, alignments);
+        match &rule.when {
+            WinCondition::FactionEliminated(alignment) => {
+                validate_alignment_ref(issues, when_path.clone(), alignment, alignments);
+                if rule.winner == *alignment {
+                    issue(
+                        issues,
+                        winner_path,
+                        "FactionEliminated rules must not award the eliminated faction",
+                    );
+                }
+            }
+            WinCondition::FactionReachesParity(alignment) => {
+                validate_alignment_ref(issues, when_path.clone(), alignment, alignments);
+                if rule.winner != *alignment {
+                    issue(
+                        issues,
+                        winner_path,
+                        "FactionReachesParity rules must award the parity faction",
+                    );
+                }
+            }
+            WinCondition::AllOtherFactionsEliminated(alignment) => {
+                validate_alignment_ref(issues, when_path, alignment, alignments);
+                if rule.winner != *alignment {
+                    issue(
+                        issues,
+                        winner_path,
+                        "AllOtherFactionsEliminated rules must award the surviving faction",
+                    );
+                }
+            }
+        }
+        let mut blockers = BTreeSet::new();
+        for blocker in &rule.blocked_by_alive {
+            validate_alignment_ref(issues, blockers_path.clone(), blocker, alignments);
+            if blocker == &rule.winner {
+                issue(
+                    issues,
+                    blockers_path.clone(),
+                    "win rule blockers must not include the winning alignment",
+                );
+            }
+            if !blockers.insert(blocker.as_str()) {
+                issue(
+                    issues,
+                    blockers_path.clone(),
+                    format!("duplicate win rule blocker `{blocker}`"),
+                );
+            }
+        }
+    }
+
+    let mut award_ids = BTreeSet::new();
+    for (idx, award) in win.survival_awards.iter().enumerate() {
+        let award_path = format!("win.survival_awards[{idx}]");
+        if ir_version < 63 {
+            issue(
+                issues,
+                award_path.clone(),
+                "survival awards require ir_version >= 63",
+            );
+        }
+        if award.id.trim().is_empty() {
+            issue(issues, format!("{award_path}.id"), "id must not be empty");
+        } else if !award_ids.insert(award.id.as_str()) {
+            issue(
+                issues,
+                format!("{award_path}.id"),
+                format!("duplicate survival award id `{}`", award.id),
+            );
+        }
+        if award.winner.trim().is_empty() {
+            issue(
+                issues,
+                format!("{award_path}.winner"),
+                "winner must not be empty",
+            );
+        }
+        if award.eligible_roles.is_empty() {
+            issue(
+                issues,
+                format!("{award_path}.eligible_roles"),
+                "survival award must declare eligible_roles",
+            );
+        }
+        validate_unique_strings(
+            issues,
+            format!("{award_path}.eligible_roles"),
+            &award.eligible_roles,
+        );
+        for role_key in &award.eligible_roles {
+            if !role_keys.contains(role_key.as_str()) {
+                issue(
+                    issues,
+                    format!("{award_path}.eligible_roles"),
+                    format!("unknown eligible role `{role_key}`"),
+                );
+            }
+        }
+        if let Some(source_event) = &award.source_event {
+            if source_event.trim().is_empty() {
+                issue(
+                    issues,
+                    format!("{award_path}.source_event"),
+                    "source_event must not be empty",
+                );
+            } else if !source_event.starts_with("win.") {
+                issue(
+                    issues,
+                    format!("{award_path}.source_event"),
+                    "source_event must be a win.* result event string",
+                );
+            }
+        }
+    }
+}
+
+fn validate_win_families(issues: &mut Vec<PackValidationIssue>, pack: &Pack) {
+    if pack.win_families.is_empty() {
+        if pack.ir_version >= 46 && !win_required_families(pack).is_empty() {
+            issue(
+                issues,
+                "win_families",
+                "packs with win policy surfaces must declare win_families",
+            );
+        }
+        return;
+    }
+    if pack.ir_version < 46 {
+        issue(
+            issues,
+            "win_families",
+            "win_families requires ir_version >= 46",
+        );
+    }
+
+    let mut declared = BTreeSet::new();
+    for family in &pack.win_families {
+        if !declared.insert(*family) {
+            issue(
+                issues,
+                "win_families",
+                format!("duplicate win family `{family:?}`"),
+            );
+        }
+    }
+
+    let required = win_required_families(pack);
+    for family in &required {
+        if !declared.contains(family) {
+            issue(
+                issues,
+                "win_families",
+                format!("win_families must include `{family:?}`"),
+            );
+        }
+    }
+    for family in &declared {
+        if !required.contains(family) {
+            issue(
+                issues,
+                "win_families",
+                format!("declared win family `{family:?}` has no matching policy surface"),
+            );
+        }
+    }
+}
+
+pub(crate) fn win_required_families(pack: &Pack) -> BTreeSet<WinFamily> {
+    let mut required = BTreeSet::new();
+    for rule in &pack.win.rules {
+        match &rule.when {
+            WinCondition::FactionEliminated(_) => {
+                required.insert(WinFamily::FactionElimination);
+            }
+            WinCondition::FactionReachesParity(alignment) => {
+                required.insert(WinFamily::FactionParity);
+                if alignment == "cult" || rule.winner == "cult" {
+                    required.insert(WinFamily::CultParity);
+                }
+            }
+            WinCondition::AllOtherFactionsEliminated(_) => {
+                required.insert(WinFamily::AllOtherFactionsEliminated);
+            }
+        }
+    }
+    if !pack.target_lynch_win_policies.is_empty() {
+        required.insert(WinFamily::TargetLynchIndependent);
+    }
+    if !pack.self_lynch_win_policies.is_empty() {
+        required.insert(WinFamily::SelfLynchIndependent);
+    }
+    if pack
+        .triggers
+        .iter()
+        .any(|trigger| trigger.on == TriggerOn::Event(TriggerEvent::Win))
+    {
+        required.insert(WinFamily::WinTriggeredActions);
+    }
+    if !pack.win.survival_awards.is_empty() {
+        required.insert(WinFamily::SurvivalIndependent);
+    }
+    required
+}
+
+fn win_condition_label(condition: &WinCondition) -> String {
+    match condition {
+        WinCondition::FactionEliminated(alignment) => {
+            format!("FactionEliminated({alignment})")
+        }
+        WinCondition::FactionReachesParity(alignment) => {
+            format!("FactionReachesParity({alignment})")
+        }
+        WinCondition::AllOtherFactionsEliminated(alignment) => {
+            format!("AllOtherFactionsEliminated({alignment})")
+        }
+    }
+}
+
+fn validate_unique_vis_fields(
+    issues: &mut Vec<PackValidationIssue>,
+    path: impl Into<String>,
+    values: &[VisField],
+) {
+    let path = path.into();
+    let mut seen = BTreeSet::new();
+    for value in values {
+        if !seen.insert(*value) {
+            issue(issues, path.clone(), format!("duplicate field `{value:?}`"));
+        }
+    }
+}
+
+fn validate_unique_modifiers(
+    issues: &mut Vec<PackValidationIssue>,
+    path: impl Into<String>,
+    values: &[Modifier],
+) {
+    let path = path.into();
+    let mut seen = BTreeSet::new();
+    for value in values {
+        if !seen.insert(*value) {
+            issue(
+                issues,
+                path.clone(),
+                format!("duplicate modifier `{value:?}`"),
+            );
+        }
+    }
+}
+
+fn pack_has_ninja_action(pack: &Pack) -> bool {
+    pack.roles
+        .values()
+        .flat_map(|role| role.actions.iter())
+        .chain(pack.item_actions.values())
+        .any(|action| action.has_modifier(Modifier::Ninja))
+}
+
+fn validate_conversion_spec(
+    issues: &mut Vec<PackValidationIssue>,
+    path: &str,
+    conversion: &ConversionSpec,
+    role_keys: &BTreeSet<&str>,
+) {
+    match conversion.mode {
+        ConversionMode::AssignRole => match &conversion.role {
+            Some(role_key) if role_keys.contains(role_key.as_str()) => {}
+            Some(role_key) => issue(
+                issues,
+                format!("{path}.role"),
+                format!("AssignRole conversion references unknown role `{role_key}`"),
+            ),
+            None => issue(
+                issues,
+                format!("{path}.role"),
+                "AssignRole conversion must declare role",
+            ),
+        },
+        ConversionMode::RestoreOriginal => {
+            if conversion.role.is_some() {
+                issue(
+                    issues,
+                    format!("{path}.role"),
+                    "RestoreOriginal conversion must not declare role",
+                );
+            }
+        }
+    }
+}
+
+fn validate_conversion_policy(
+    issues: &mut Vec<PackValidationIssue>,
+    path: &str,
+    policy: &ConversionPolicy,
+    pack: &Pack,
+) {
+    if !pack_has_convert_action(pack) {
+        return;
+    }
+    match policy.on_dead_target {
+        Some(ConversionDeadTargetPolicy::Block) => {}
+        None => issue(
+            issues,
+            format!("{path}.on_dead_target"),
+            "packs with Convert actions must declare on_dead_target Block",
+        ),
+    }
+    match policy.on_pending_death {
+        Some(ConversionPendingDeathPolicy::Block) => {}
+        None => issue(
+            issues,
+            format!("{path}.on_pending_death"),
+            "packs with Convert actions must declare on_pending_death Block",
+        ),
+    }
+}
+
+fn pack_has_convert_action(pack: &Pack) -> bool {
+    pack.roles
+        .values()
+        .flat_map(|role| role.actions.iter())
+        .chain(pack.item_actions.values())
+        .any(|action| action.has_ability(IrAbility::Convert))
+}
+
+fn validate_ita_policy(
+    issues: &mut Vec<PackValidationIssue>,
+    path: &str,
+    ita: &ItaPolicy,
+    role_keys: &BTreeSet<&str>,
+) {
+    if !ita.default_hit_chance.is_finite()
+        || ita.default_hit_chance < 0.0
+        || ita.default_hit_chance > 1.0
+    {
+        issue(
+            issues,
+            format!("{path}.default_hit_chance"),
+            "ITA default_hit_chance must be finite and between 0.0 and 1.0",
+        );
+    }
+
+    if (!ita.role_overrides.is_empty()
+        || !ita.modifier_components.is_empty()
+        || !ita.role_modifier_refs.is_empty())
+        && ita.sessions.is_empty()
+    {
+        issue(
+            issues,
+            path,
+            "ITA modifiers require at least one ITA session",
+        );
+    }
+    if !ita.lifecycle.is_empty() && ita.sessions.is_empty() {
+        issue(
+            issues,
+            path,
+            "ITA lifecycle controls require at least one ITA session",
+        );
+    }
+
+    for (component_id, component) in &ita.modifier_components {
+        let component_path = format!("{path}.modifier_components.{component_id}");
+        if component_id.trim().is_empty() {
+            issue(
+                issues,
+                format!("{path}.modifier_components"),
+                "ITA modifier component id must not be empty",
+            );
+        }
+        validate_ita_role_override(issues, &component_path, component, "component");
+    }
+
+    for (role_key, component_refs) in &ita.role_modifier_refs {
+        let refs_path = format!("{path}.role_modifier_refs.{role_key}");
+        if !role_keys.contains(role_key.as_str()) {
+            issue(
+                issues,
+                format!("{path}.role_modifier_refs"),
+                format!("unknown ITA role modifier ref `{role_key}`"),
+            );
+        }
+        if component_refs.is_empty() {
+            issue(
+                issues,
+                refs_path.clone(),
+                "ITA role modifier refs must not be empty",
+            );
+        }
+        let mut seen_refs = BTreeSet::new();
+        for component_ref in component_refs {
+            if !seen_refs.insert(component_ref) {
+                issue(
+                    issues,
+                    refs_path.clone(),
+                    format!("duplicate ITA modifier component ref `{component_ref}`"),
+                );
+            }
+            if !ita.modifier_components.contains_key(component_ref) {
+                issue(
+                    issues,
+                    refs_path.clone(),
+                    format!("unknown ITA modifier component `{component_ref}`"),
+                );
+            }
+        }
+        let effective = ita.effective_role_override(role_key);
+        validate_ita_role_override(
+            issues,
+            &format!("{refs_path}.effective"),
+            &effective,
+            "effective role modifier",
+        );
+    }
+
+    for (role_key, override_policy) in &ita.role_overrides {
+        let override_path = format!("{path}.role_overrides.{role_key}");
+        if !role_keys.contains(role_key.as_str()) {
+            issue(
+                issues,
+                format!("{path}.role_overrides"),
+                format!("unknown ITA role override `{role_key}`"),
+            );
+        }
+        validate_ita_role_override(issues, &override_path, override_policy, "role override");
+    }
+
+    let mut seen = BTreeSet::new();
+    for (idx, session) in ita.sessions.iter().enumerate() {
+        let session_path = format!("{path}.sessions[{idx}]");
+        if session.session_id.trim().is_empty() {
+            issue(
+                issues,
+                format!("{session_path}.session_id"),
+                "ITA session_id must not be empty",
+            );
+        } else if !seen.insert(session.session_id.as_str()) {
+            issue(
+                issues,
+                format!("{session_path}.session_id"),
+                format!("duplicate ITA session `{}`", session.session_id),
+            );
+        }
+        if matches!(session.day, Some(0)) {
+            issue(
+                issues,
+                format!("{session_path}.day"),
+                "ITA session day must be greater than zero",
+            );
+        }
+        if let Some(hit_chance) = session.hit_chance {
+            if !hit_chance.is_finite() || !(0.0..=1.0).contains(&hit_chance) {
+                issue(
+                    issues,
+                    format!("{session_path}.hit_chance"),
+                    "ITA session hit_chance must be finite and between 0.0 and 1.0",
+                );
+            }
+        }
+        if matches!(session.shot_limit, Some(0)) {
+            issue(
+                issues,
+                format!("{session_path}.shot_limit"),
+                "ITA session shot_limit must be greater than zero",
+            );
+        }
+        if matches!(session.buffer_delay_ms, Some(0)) {
+            issue(
+                issues,
+                format!("{session_path}.buffer_delay_ms"),
+                "ITA session buffer_delay_ms must be greater than zero",
+            );
+        }
+    }
+}
+
+fn validate_probability_delta(issues: &mut Vec<PackValidationIssue>, path: &str, value: f64) {
+    if !value.is_finite() || !(0.0..=1.0).contains(&value) {
+        issue(
+            issues,
+            path,
+            "ITA probability modifiers must be finite and between 0.0 and 1.0",
+        );
+    }
+}
+
+fn validate_ita_role_override(
+    issues: &mut Vec<PackValidationIssue>,
+    path: &str,
+    policy: &ItaRoleOverride,
+    label: &str,
+) {
+    validate_probability_delta(issues, &format!("{path}.hit_bonus"), policy.hit_bonus);
+    validate_probability_delta(issues, &format!("{path}.hit_penalty"), policy.hit_penalty);
+    validate_probability_delta(issues, &format!("{path}.target_evade"), policy.target_evade);
+    if policy.is_empty() {
+        issue(
+            issues,
+            path,
+            format!("ITA {label} must declare at least one nonzero modifier"),
+        );
+    }
+}
+
+fn validate_day_note_policy(
+    issues: &mut Vec<PackValidationIssue>,
+    path: &str,
+    policy: &DayNotePolicy,
+    cadence: &BTreeSet<PhaseKind>,
+    kill_cause_ids: &BTreeSet<String>,
+) {
+    let needs_day =
+        policy.announcements.enabled || policy.last_words.day_deaths || policy.day_deaths.enabled;
+    if needs_day && !cadence.contains(&PhaseKind::Day) {
+        issue(
+            issues,
+            path,
+            "day-note policy requires Day in phases.cadence",
+        );
+    }
+    validate_optional_nonempty(
+        issues,
+        &format!("{path}.announcements.template_id"),
+        policy.announcements.template_id.as_deref(),
+        "day announcement template_id",
+    );
+    validate_optional_nonempty(
+        issues,
+        &format!("{path}.announcements.audience"),
+        policy.announcements.audience.as_deref(),
+        "day announcement audience",
+    );
+    let announcement_metadata_declared = policy.announcements.template_id.is_some()
+        || policy.announcements.audience.is_some()
+        || policy.announcements.role_payload != DayNoteRolePayload::default();
+    if announcement_metadata_declared && !policy.announcements.enabled {
+        issue(
+            issues,
+            format!("{path}.announcements"),
+            "day announcement metadata requires enabled announcements",
+        );
+    }
+    if policy.announcements.multiple_night_deaths_n2plus
+        && !policy.announcements.night_deaths_after_n1
+    {
+        issue(
+            issues,
+            format!("{path}.announcements.multiple_night_deaths_n2plus"),
+            "multiple_night_deaths_n2plus requires night_deaths_after_n1",
+        );
+    }
+    validate_optional_nonempty(
+        issues,
+        &format!("{path}.last_words.template_id"),
+        policy.last_words.template_id.as_deref(),
+        "last words template_id",
+    );
+    validate_optional_nonempty(
+        issues,
+        &format!("{path}.last_words.audience"),
+        policy.last_words.audience.as_deref(),
+        "last words audience",
+    );
+    validate_optional_nonempty(
+        issues,
+        &format!("{path}.last_words.window"),
+        policy.last_words.window.as_deref(),
+        "last words window",
+    );
+    let last_words_metadata_declared = policy.last_words.template_id.is_some()
+        || policy.last_words.audience.is_some()
+        || policy.last_words.window.is_some();
+    if last_words_metadata_declared && !policy.last_words.day_deaths {
+        issue(
+            issues,
+            format!("{path}.last_words"),
+            "last words metadata requires day_deaths",
+        );
+    }
+    validate_optional_nonempty(
+        issues,
+        &format!("{path}.day_deaths.template_id"),
+        policy.day_deaths.template_id.as_deref(),
+        "day-death announcement template_id",
+    );
+    validate_optional_nonempty(
+        issues,
+        &format!("{path}.day_deaths.audience"),
+        policy.day_deaths.audience.as_deref(),
+        "day-death announcement audience",
+    );
+    let day_death_metadata_declared = policy.day_deaths.template_id.is_some()
+        || policy.day_deaths.audience.is_some()
+        || !policy.day_deaths.cause_templates.is_empty();
+    if day_death_metadata_declared && !policy.day_deaths.enabled {
+        issue(
+            issues,
+            format!("{path}.day_deaths"),
+            "day-death announcement metadata requires enabled day_deaths",
+        );
+    }
+    let mut cause_templates = BTreeSet::new();
+    for (cause, template) in &policy.day_deaths.cause_templates {
+        if cause.trim().is_empty() {
+            issue(
+                issues,
+                format!("{path}.day_deaths.cause_templates"),
+                "day-death cause template cause must not be empty",
+            );
+        } else if !cause_templates.insert(cause) {
+            issue(
+                issues,
+                format!("{path}.day_deaths.cause_templates.{cause}"),
+                "duplicate day-death cause template",
+            );
+        }
+        if template.template_id.trim().is_empty() {
+            issue(
+                issues,
+                format!("{path}.day_deaths.cause_templates.{cause}.template_id"),
+                "day-death cause template_id must not be empty",
+            );
+        }
+        if !cause.trim().is_empty() && !kill_cause_ids.contains(cause) {
+            issue(
+                issues,
+                format!("{path}.day_deaths.cause_templates.{cause}"),
+                format!("unknown day-death cause `{cause}`"),
+            );
+        }
+        validate_optional_nonempty(
+            issues,
+            &format!("{path}.day_deaths.cause_templates.{cause}.audience"),
+            template.audience.as_deref(),
+            "day-death cause audience",
+        );
+    }
+    if policy.day_deaths.enabled {
+        if policy.day_deaths.template_id.is_none() {
+            issue(
+                issues,
+                format!("{path}.day_deaths.template_id"),
+                "enabled day-death announcements require template_id",
+            );
+        }
+        if policy.day_deaths.audience.is_none() {
+            issue(
+                issues,
+                format!("{path}.day_deaths.audience"),
+                "enabled day-death announcements require audience",
+            );
+        }
+    }
+}
+
+fn validate_optional_nonempty(
+    issues: &mut Vec<PackValidationIssue>,
+    path: &str,
+    value: Option<&str>,
+    label: &str,
+) {
+    if value.is_some_and(|value| value.trim().is_empty()) {
+        issue(issues, path, format!("{label} must not be empty"));
+    }
+}
+
+fn validate_wolf_carry_policy(
+    issues: &mut Vec<PackValidationIssue>,
+    path: &str,
+    policy: &WolfCarryPolicy,
+    ir_version: u16,
+    role_keys: &BTreeSet<&str>,
+    cadence: &BTreeSet<PhaseKind>,
+) {
+    if !policy.enabled {
+        return;
+    }
+    if ir_version < 11 {
+        issue(
+            issues,
+            path,
+            "enabled wolf carry policy requires ir_version >= 11",
+        );
+    }
+    if policy.token_id.trim().is_empty() {
+        issue(
+            issues,
+            format!("{path}.token_id"),
+            "wolf carry token_id must not be empty",
+        );
+    }
+    if policy.cause.trim().is_empty() {
+        issue(
+            issues,
+            format!("{path}.cause"),
+            "wolf carry cause must not be empty",
+        );
+    }
+    if policy.eligible_roles.is_empty() {
+        issue(
+            issues,
+            format!("{path}.eligible_roles"),
+            "enabled wolf carry policy must declare eligible_roles",
+        );
+    }
+    if policy.wolf_kill_roles.is_empty() {
+        issue(
+            issues,
+            format!("{path}.wolf_kill_roles"),
+            "enabled wolf carry policy must declare wolf_kill_roles",
+        );
+    }
+    for role_key in &policy.eligible_roles {
+        if !role_keys.contains(role_key.as_str()) {
+            issue(
+                issues,
+                format!("{path}.eligible_roles"),
+                format!("unknown eligible role `{role_key}`"),
+            );
+        }
+    }
+    for role_key in &policy.wolf_kill_roles {
+        if !role_keys.contains(role_key.as_str()) {
+            issue(
+                issues,
+                format!("{path}.wolf_kill_roles"),
+                format!("unknown wolf kill role `{role_key}`"),
+            );
+        }
+    }
+    if !cadence.contains(&PhaseKind::Day) || !cadence.contains(&PhaseKind::Night) {
+        issue(
+            issues,
+            path,
+            "enabled wolf carry policy requires Day and Night in phases.cadence",
+        );
+    }
+}
+
+fn validate_wolf_beauty_policy(
+    issues: &mut Vec<PackValidationIssue>,
+    path: &str,
+    policy: &WolfBeautyPolicy,
+    ir_version: u16,
+    role_keys: &BTreeSet<&str>,
+    effect_tags: &BTreeSet<&str>,
+    cadence: &BTreeSet<PhaseKind>,
+) {
+    if !policy.enabled {
+        return;
+    }
+    if ir_version < 12 {
+        issue(
+            issues,
+            path,
+            "enabled wolf beauty policy requires ir_version >= 12",
+        );
+    }
+    if policy.mark_effect.trim().is_empty() {
+        issue(
+            issues,
+            format!("{path}.mark_effect"),
+            "wolf beauty mark_effect must not be empty",
+        );
+    } else if !effect_tags.contains(policy.mark_effect.as_str()) {
+        issue(
+            issues,
+            format!("{path}.mark_effect"),
+            format!("unknown mark effect `{}`", policy.mark_effect),
+        );
+    }
+    if policy.drag_cause.trim().is_empty() {
+        issue(
+            issues,
+            format!("{path}.drag_cause"),
+            "wolf beauty drag_cause must not be empty",
+        );
+    }
+    if policy.eligible_roles.is_empty() {
+        issue(
+            issues,
+            format!("{path}.eligible_roles"),
+            "enabled wolf beauty policy must declare eligible_roles",
+        );
+    }
+    for role_key in &policy.eligible_roles {
+        if !role_keys.contains(role_key.as_str()) {
+            issue(
+                issues,
+                format!("{path}.eligible_roles"),
+                format!("unknown eligible role `{role_key}`"),
+            );
+        }
+    }
+    if policy.death_causes.is_empty() {
+        issue(
+            issues,
+            format!("{path}.death_causes"),
+            "enabled wolf beauty policy must declare death_causes",
+        );
+    }
+    for cause in &policy.death_causes {
+        if cause.trim().is_empty() {
+            issue(
+                issues,
+                format!("{path}.death_causes"),
+                "wolf beauty day death causes must not be empty",
+            );
+        }
+    }
+    if !cadence.contains(&PhaseKind::Day) || !cadence.contains(&PhaseKind::Night) {
+        issue(
+            issues,
+            path,
+            "enabled wolf beauty policy requires Day and Night in phases.cadence",
+        );
+    }
+}
+
+fn validate_guard_policy(
+    issues: &mut Vec<PackValidationIssue>,
+    path: &str,
+    policy: &GuardPolicy,
+    ir_version: u16,
+    pack: &Pack,
+    cadence: &BTreeSet<PhaseKind>,
+) {
+    if !policy.enabled {
+        return;
+    }
+    if ir_version < 13 {
+        issue(
+            issues,
+            path,
+            "enabled guard policy requires ir_version >= 13",
+        );
+    }
+    if policy.guard_action_ids.is_empty() {
+        issue(
+            issues,
+            format!("{path}.guard_action_ids"),
+            "enabled guard policy must declare guard_action_ids",
+        );
+    }
+    validate_unique_strings(
+        issues,
+        format!("{path}.guard_action_ids"),
+        &policy.guard_action_ids,
+    );
+    for action_id in &policy.guard_action_ids {
+        validate_policy_action_ref(
+            issues,
+            format!("{path}.guard_action_ids"),
+            pack,
+            action_id,
+            IrAbility::Protect,
+            "guard action",
+        );
+    }
+    match policy.guard_self_allowed {
+        Some(self_allowed) => {
+            for action_id in &policy.guard_action_ids {
+                for action in policy_action_templates(pack, action_id, IrAbility::Protect) {
+                    if action.constraints.self_allowed != self_allowed {
+                        issue(
+                            issues,
+                            format!("{path}.guard_self_allowed"),
+                            format!(
+                                "guard action `{}` constraints.self_allowed must be {}",
+                                action.id, self_allowed
+                            ),
+                        );
+                    }
+                }
+            }
+        }
+        None => issue(
+            issues,
+            format!("{path}.guard_self_allowed"),
+            "enabled guard policy must declare guard_self_allowed",
+        ),
+    }
+    match policy.guard_night_one_allowed {
+        Some(night_one_allowed) => {
+            for action_id in &policy.guard_action_ids {
+                for action in policy_action_templates(pack, action_id, IrAbility::Protect) {
+                    let valid = if night_one_allowed {
+                        match action.constraints.active_from.as_ref() {
+                            None => true,
+                            Some(gate) => {
+                                gate.phase_kind == PhaseKind::Night && gate.phase_number <= 1
+                            }
+                        }
+                    } else {
+                        action.constraints.active_from.as_ref().is_some_and(|gate| {
+                            gate.phase_kind == PhaseKind::Night && gate.phase_number == 2
+                        })
+                    };
+                    if !valid {
+                        issue(
+                            issues,
+                            format!("{path}.guard_night_one_allowed"),
+                            format!(
+                                "guard action `{}` active_from must match guard_night_one_allowed={}",
+                                action.id, night_one_allowed
+                            ),
+                        );
+                    }
+                }
+            }
+        }
+        None => issue(
+            issues,
+            format!("{path}.guard_night_one_allowed"),
+            "enabled guard policy must declare guard_night_one_allowed",
+        ),
+    }
+    validate_unique_strings(
+        issues,
+        format!("{path}.witch_heal_action_ids"),
+        &policy.witch_heal_action_ids,
+    );
+    for action_id in &policy.witch_heal_action_ids {
+        validate_policy_action_ref(
+            issues,
+            format!("{path}.witch_heal_action_ids"),
+            pack,
+            action_id,
+            IrAbility::Protect,
+            "witch heal action",
+        );
+    }
+    if policy.guard_blockable_causes.is_empty() {
+        issue(
+            issues,
+            format!("{path}.guard_blockable_causes"),
+            "enabled guard policy must declare guard_blockable_causes",
+        );
+    }
+    validate_unique_strings(
+        issues,
+        format!("{path}.guard_blockable_causes"),
+        &policy.guard_blockable_causes,
+    );
+    for cause in &policy.guard_blockable_causes {
+        if cause.trim().is_empty() {
+            issue(
+                issues,
+                format!("{path}.guard_blockable_causes"),
+                "guard-blockable kill causes must not be empty",
+            );
+        }
+    }
+    if matches!(
+        policy.same_target_witch,
+        GuardWitchSameTargetPolicy::KillTarget
+    ) {
+        match policy.same_target_witch_kill_cause.as_deref() {
+            Some(cause) if !cause.trim().is_empty() => {}
+            _ => issue(
+                issues,
+                format!("{path}.same_target_witch_kill_cause"),
+                "KillTarget guard/witch same-target policy requires same_target_witch_kill_cause",
+            ),
+        }
+    } else if policy.same_target_witch_kill_cause.is_some() {
+        issue(
+            issues,
+            format!("{path}.same_target_witch_kill_cause"),
+            "same_target_witch_kill_cause is only valid with KillTarget policy",
+        );
+    }
+    if !cadence.contains(&PhaseKind::Night) {
+        issue(
+            issues,
+            path,
+            "enabled guard policy requires Night in phases.cadence",
+        );
+    }
+    if !pack.precedence.iter().any(|rule| {
+        rule.when.effect == IrAbility::Protect
+            && rule.when.target_state.is_none()
+            && rule.beats.contains(&IrAbility::Kill)
+    }) {
+        issue(
+            issues,
+            format!("{path}.precedence"),
+            "enabled guard policy requires a Protect precedence rule that beats Kill",
+        );
+    }
+}
+
+fn validate_faction_action_policy(
+    issues: &mut Vec<PackValidationIssue>,
+    path: &str,
+    policy: &FactionActionPolicy,
+    ir_version: u16,
+    pack: &Pack,
+    alignments: &BTreeSet<&str>,
+    cadence: &BTreeSet<PhaseKind>,
+) {
+    if !policy.enabled {
+        if !policy.actions.is_empty() {
+            issue(
+                issues,
+                format!("{path}.actions"),
+                "disabled faction action policy must not declare actions",
+            );
+        }
+        return;
+    }
+    if ir_version < 35 {
+        issue(
+            issues,
+            path,
+            "enabled faction action policy requires ir_version >= 35",
+        );
+    }
+    if !cadence.contains(&PhaseKind::Night) {
+        issue(
+            issues,
+            path,
+            "enabled faction action policy requires Night in phases.cadence",
+        );
+    }
+    if policy.actions.is_empty() {
+        issue(
+            issues,
+            format!("{path}.actions"),
+            "enabled faction action policy must declare actions",
+        );
+    }
+
+    let mut seen_actions = BTreeSet::new();
+    for (idx, spec) in policy.actions.iter().enumerate() {
+        let spec_path = format!("{path}.actions[{idx}]");
+        if spec.action_id.trim().is_empty() {
+            issue(
+                issues,
+                format!("{spec_path}.action_id"),
+                "faction action id must not be empty",
+            );
+            continue;
+        }
+        if !seen_actions.insert(spec.action_id.as_str()) {
+            issue(
+                issues,
+                format!("{spec_path}.action_id"),
+                format!("duplicate faction action `{}`", spec.action_id),
+            );
+        }
+        if spec.alignment.trim().is_empty() {
+            issue(
+                issues,
+                format!("{spec_path}.alignment"),
+                "faction action alignment must not be empty",
+            );
+        } else if !alignments.contains(spec.alignment.as_str()) {
+            issue(
+                issues,
+                format!("{spec_path}.alignment"),
+                format!("unknown faction action alignment `{}`", spec.alignment),
+            );
+        }
+        if spec.max_resolved_submissions != 1 {
+            issue(
+                issues,
+                format!("{spec_path}.max_resolved_submissions"),
+                "faction action max_resolved_submissions must be 1",
+            );
+        }
+
+        let matches: Vec<&ActionTemplate> = pack
+            .roles
+            .values()
+            .flat_map(|role| role.actions.iter())
+            .filter(|action| action.id == spec.action_id)
+            .collect();
+        if matches.is_empty() {
+            issue(
+                issues,
+                format!("{spec_path}.action_id"),
+                format!("unknown faction action `{}`", spec.action_id),
+            );
+            continue;
+        }
+        if !matches.iter().any(|action| {
+            action.window.is_night_resolution_window() && action.has_ability(IrAbility::Kill)
+        }) {
+            issue(
+                issues,
+                format!("{spec_path}.action_id"),
+                format!(
+                    "faction action `{}` must be a night/any Kill action",
+                    spec.action_id
+                ),
+            );
+        }
+        if matches
+            .iter()
+            .any(|action| action.has_modifier(Modifier::Simultaneous))
+        {
+            issue(
+                issues,
+                format!("{spec_path}.action_id"),
+                format!(
+                    "faction action `{}` must not use Simultaneous",
+                    spec.action_id
+                ),
+            );
+        }
+        if !matches
+            .iter()
+            .all(|action| action.targets != TargetSpec::None && action.constraints.max_targets >= 1)
+        {
+            issue(
+                issues,
+                format!("{spec_path}.action_id"),
+                format!(
+                    "faction action `{}` must accept at least one target",
+                    spec.action_id
+                ),
+            );
+        }
+    }
+}
+
+fn validate_night_resolution_policy(
+    issues: &mut Vec<PackValidationIssue>,
+    path: &str,
+    policy: &NightResolutionPolicy,
+    pack: &Pack,
+    cadence: &BTreeSet<PhaseKind>,
+) {
+    if !policy.is_explicit() {
+        return;
+    }
+    if !cadence.contains(&PhaseKind::Night) {
+        issue(
+            issues,
+            path,
+            "explicit night_resolution policy requires Night in phases.cadence",
+        );
+    }
+    if !matches!(
+        policy.kill_stacking,
+        Some(KillStackingPolicy::AggregateAttackers)
+    ) {
+        issue(
+            issues,
+            format!("{path}.kill_stacking"),
+            "explicit night_resolution policy requires kill_stacking AggregateAttackers",
+        );
+    }
+    if !policy.strongman_bypasses_protect {
+        issue(
+            issues,
+            format!("{path}.strongman_bypasses_protect"),
+            "explicit night_resolution policy requires strongman_bypasses_protect true",
+        );
+    }
+
+    validate_night_resolution_bucket(
+        issues,
+        path,
+        "block_action_ids",
+        &policy.block_action_ids,
+        pack,
+        |action| action.has_ability(IrAbility::Block),
+        "Block",
+    );
+    validate_night_resolution_bucket(
+        issues,
+        path,
+        "protect_action_ids",
+        &policy.protect_action_ids,
+        pack,
+        |action| {
+            action.has_ability(IrAbility::Protect)
+                && !action.has_modifier(Modifier::Bodyguard)
+                && !action.has_modifier(Modifier::Martyr)
+                && !action.has_modifier(Modifier::Cpr)
+        },
+        "Protect without Bodyguard/Martyr/Cpr",
+    );
+    validate_night_resolution_bucket(
+        issues,
+        path,
+        "kill_action_ids",
+        &policy.kill_action_ids,
+        pack,
+        |action| {
+            action.has_ability(IrAbility::Kill)
+                && !action.has_modifier(Modifier::Strongman)
+                && !action.has_modifier(Modifier::Cpr)
+        },
+        "Kill without Strongman/Cpr",
+    );
+    validate_night_resolution_team_kill_actions(issues, path, policy, pack);
+    validate_night_resolution_bucket(
+        issues,
+        path,
+        "bodyguard_action_ids",
+        &policy.bodyguard_action_ids,
+        pack,
+        |action| action.has_ability(IrAbility::Protect) && action.has_modifier(Modifier::Bodyguard),
+        "Protect with Bodyguard",
+    );
+    validate_night_resolution_bucket(
+        issues,
+        path,
+        "martyr_action_ids",
+        &policy.martyr_action_ids,
+        pack,
+        |action| action.has_ability(IrAbility::Protect) && action.has_modifier(Modifier::Martyr),
+        "Protect with Martyr",
+    );
+    validate_night_resolution_bucket(
+        issues,
+        path,
+        "cpr_action_ids",
+        &policy.cpr_action_ids,
+        pack,
+        |action| {
+            action.has_ability(IrAbility::Protect)
+                && action.has_ability(IrAbility::Kill)
+                && action.has_modifier(Modifier::Cpr)
+        },
+        "Protect plus Kill with Cpr",
+    );
+    validate_night_resolution_bucket(
+        issues,
+        path,
+        "jailkeep_action_ids",
+        &policy.jailkeep_action_ids,
+        pack,
+        |action| action.has_ability(IrAbility::Block) && action.has_ability(IrAbility::Protect),
+        "Block plus Protect",
+    );
+    validate_night_resolution_bucket(
+        issues,
+        path,
+        "strongman_action_ids",
+        &policy.strongman_action_ids,
+        pack,
+        |action| action.has_ability(IrAbility::Kill) && action.has_modifier(Modifier::Strongman),
+        "Kill with Strongman",
+    );
+    validate_night_resolution_declares_block_protect_actions(issues, path, policy, pack);
+    validate_night_resolution_declares_kill_actions(issues, path, policy, pack);
+    validate_night_resolution_declares_strongman_actions(issues, path, policy, pack);
+    validate_night_resolution_jailkeep_is_explicit_block_and_protect(issues, path, policy);
+    validate_night_resolution_kill_cause_catalog(issues, path, policy, pack);
+    validate_night_resolution_intercept_cause_policy(issues, path, policy, pack);
+    validate_night_resolution_guard_retaliation_cause_policy(issues, path, policy, pack);
+    validate_night_resolution_cpr_harm_cause_policy(issues, path, policy, pack);
+    validate_night_resolution_guard_dependency_cause_policy(issues, path, policy, pack);
+    validate_night_resolution_hide_dependency_cause_policy(issues, path, policy, pack);
+    validate_night_resolution_chosen_retaliation_cause_policy(issues, path, policy, pack);
+    validate_night_resolution_target_state_save_catalog(issues, path, policy, pack);
+    validate_night_resolution_target_state_gate_catalog(issues, path, policy, pack);
+    validate_night_resolution_generated_kill_ownership(issues, path, policy, pack);
+    validate_night_resolution_target_state_gate_policy(issues, path, policy, pack);
+    validate_night_resolution_suppression_precedence(issues, path, policy, pack);
+    validate_night_resolution_action_chance_policy(issues, path, policy, pack);
+    validate_night_resolution_conflict_families(issues, path, policy, pack);
+
+    if !pack.precedence.iter().any(|rule| {
+        rule.when.effect == IrAbility::Block
+            && rule.when.target_state.is_none()
+            && rule.beats.contains(&IrAbility::Protect)
+            && rule.beats.contains(&IrAbility::Kill)
+    }) {
+        issue(
+            issues,
+            format!("{path}.precedence"),
+            "explicit night_resolution policy requires Block precedence over Protect and Kill",
+        );
+    }
+    if !pack.precedence.iter().any(|rule| {
+        rule.when.effect == IrAbility::Protect
+            && rule.when.target_state.is_none()
+            && rule.beats.contains(&IrAbility::Kill)
+            && rule.blocked_by.contains(&IrAbility::Block)
+    }) {
+        issue(
+            issues,
+            format!("{path}.precedence"),
+            "explicit night_resolution policy requires Protect beats Kill and is blocked_by Block",
+        );
+    }
+    if !pack.precedence.iter().any(|rule| {
+        rule.when.effect == IrAbility::Kill
+            && rule.when.target_state.is_none()
+            && rule.blocked_by.contains(&IrAbility::Block)
+            && rule.blocked_by.contains(&IrAbility::Protect)
+    }) {
+        issue(
+            issues,
+            format!("{path}.precedence"),
+            "explicit night_resolution policy requires Kill blocked_by Block and Protect",
+        );
+    }
+}
+
+fn validate_night_resolution_conflict_families(
+    issues: &mut Vec<PackValidationIssue>,
+    policy_path: &str,
+    policy: &NightResolutionPolicy,
+    pack: &Pack,
+) {
+    let path = format!("{policy_path}.conflict_families");
+    if policy.conflict_families.is_empty() {
+        issue(
+            issues,
+            path.clone(),
+            "explicit night_resolution policy must declare conflict_families",
+        );
+        return;
+    }
+    if pack.ir_version < 44 {
+        issue(
+            issues,
+            path.clone(),
+            "night_resolution conflict_families requires ir_version >= 44",
+        );
+    }
+
+    let mut declared = BTreeSet::new();
+    for family in &policy.conflict_families {
+        if !declared.insert(*family) {
+            issue(
+                issues,
+                path.clone(),
+                format!("duplicate conflict family `{family:?}`"),
+            );
+        }
+    }
+
+    let required = night_resolution_required_conflict_families(policy, pack);
+    for family in &required {
+        if !declared.contains(family) {
+            issue(
+                issues,
+                path.clone(),
+                format!("night_resolution conflict_families must include `{family:?}`"),
+            );
+        }
+    }
+    for family in &declared {
+        if !required.contains(family) {
+            issue(
+                issues,
+                path.clone(),
+                format!("declared conflict family `{family:?}` has no matching policy surface"),
+            );
+        }
+    }
+}
+
+fn night_resolution_required_conflict_families(
+    policy: &NightResolutionPolicy,
+    pack: &Pack,
+) -> BTreeSet<NightResolutionConflictFamily> {
+    let mut required = BTreeSet::from([
+        NightResolutionConflictFamily::BlockSuppressesActions,
+        NightResolutionConflictFamily::ProtectBlocksKills,
+        NightResolutionConflictFamily::StrongmanBypassesProtect,
+        NightResolutionConflictFamily::KillStacking,
+    ]);
+
+    if !policy.intercept_cause_policy.is_empty()
+        || !policy.bodyguard_action_ids.is_empty()
+        || !policy.martyr_action_ids.is_empty()
+    {
+        required.insert(NightResolutionConflictFamily::InterceptProtection);
+    }
+    if !policy.guard_retaliation_cause_policy.is_empty() {
+        required.insert(NightResolutionConflictFamily::GuardRetaliation);
+    }
+    if !policy.cpr_action_ids.is_empty() || !policy.cpr_harm_cause_policy.is_empty() {
+        required.insert(NightResolutionConflictFamily::CprProtection);
+    }
+    if !policy.guard_dependency_cause_policy.is_empty() {
+        required.insert(NightResolutionConflictFamily::GuardDependency);
+    }
+    if !policy.hide_dependency_cause_policy.is_empty() {
+        required.insert(NightResolutionConflictFamily::HideDependency);
+    }
+    if !policy.chosen_retaliation_cause_policy.is_empty() {
+        required.insert(NightResolutionConflictFamily::ChosenRetaliation);
+    }
+    if !policy.generated_kill_cause_policy.is_empty() || !policy.trigger_fixpoint_policy.is_empty()
+    {
+        required.insert(NightResolutionConflictFamily::GeneratedKillReentry);
+    }
+    if !night_resolution_target_state_save_tags(pack).is_empty() {
+        required.insert(NightResolutionConflictFamily::TargetStateSave);
+    }
+    if !night_resolution_target_state_gate_tags(pack).is_empty() {
+        required.insert(NightResolutionConflictFamily::TargetStateGate);
+    }
+    if !policy.action_chance.is_empty() {
+        required.insert(NightResolutionConflictFamily::ActionChance);
+    }
+
+    required
+}
+
+fn validate_night_resolution_action_chance_policy(
+    issues: &mut Vec<PackValidationIssue>,
+    policy_path: &str,
+    policy: &NightResolutionPolicy,
+    pack: &Pack,
+) {
+    let path = format!("{policy_path}.action_chance");
+    if policy.action_chance.is_empty() {
+        return;
+    }
+    if pack.ir_version < 43 {
+        issue(
+            issues,
+            path.clone(),
+            "night_resolution action_chance requires ir_version >= 43",
+        );
+    }
+
+    for (action_id, chance_policy) in &policy.action_chance {
+        let action_path = format!("{path}.{action_id}");
+        if action_id.trim().is_empty() {
+            issue(issues, path.clone(), "action_chance id must not be empty");
+            continue;
+        }
+        let matches = night_resolution_pack_actions(pack)
+            .into_iter()
+            .map(|(_, action)| action)
+            .filter(|action| action.id == action_id.as_str())
+            .collect::<Vec<_>>();
+        if matches.is_empty() {
+            issue(
+                issues,
+                action_path.clone(),
+                format!("unknown night_resolution action `{action_id}`"),
+            );
+        } else if !matches
+            .iter()
+            .any(|action| action.window.is_night_resolution_window())
+        {
+            issue(
+                issues,
+                action_path.clone(),
+                format!("night_resolution action `{action_id}` must be a night/any action"),
+            );
+        }
+        if !chance_policy.chance.is_finite() || !(0.0..=1.0).contains(&chance_policy.chance) {
+            issue(
+                issues,
+                format!("{action_path}.chance"),
+                "action chance must be finite and between 0.0 and 1.0",
+            );
+        }
+    }
+}
+
+fn validate_role(
+    issues: &mut Vec<PackValidationIssue>,
+    path: &str,
+    role: &Role,
+    night_resolution: &NightResolutionPolicy,
+) {
+    validate_unique_role_modifiers(issues, format!("{path}.modifiers"), &role.modifiers);
+
+    let team_kill_restricted =
+        role.has_modifier(RoleModifier::Lost) || role.has_modifier(RoleModifier::Recluse);
+    if team_kill_restricted {
+        if role.alignment.as_deref() != Some("mafia") {
+            issue(
+                issues,
+                format!("{path}.alignment"),
+                "team-kill restricted role modifiers require mafia alignment",
+            );
+        }
+        if night_resolution.team_kill_action_ids.is_empty() {
+            issue(
+                issues,
+                "night_resolution.team_kill_action_ids",
+                "team-kill restricted role modifiers require night_resolution.team_kill_action_ids",
+            );
+        } else if !role.actions.iter().any(|action| {
+            night_resolution
+                .team_kill_action_ids
+                .iter()
+                .any(|team_kill| team_kill == &action.id)
+        }) {
+            issue(
+                issues,
+                path,
+                "team-kill restricted role modifiers must expose a night_resolution team kill action",
+            );
+        }
+    }
+}
+
+fn validate_unique_role_modifiers(
+    issues: &mut Vec<PackValidationIssue>,
+    path: impl Into<String>,
+    modifiers: &[RoleModifier],
+) {
+    let path = path.into();
+    let mut seen = BTreeSet::new();
+    for modifier in modifiers {
+        if !seen.insert(*modifier) {
+            issue(
+                issues,
+                path.clone(),
+                format!("duplicate role modifier `{modifier:?}`"),
+            );
+        }
+    }
+}
+
+fn validate_night_resolution_team_kill_actions(
+    issues: &mut Vec<PackValidationIssue>,
+    policy_path: &str,
+    policy: &NightResolutionPolicy,
+    pack: &Pack,
+) {
+    let path = format!("{policy_path}.team_kill_action_ids");
+    validate_unique_strings(issues, path.clone(), &policy.team_kill_action_ids);
+    for action_id in &policy.team_kill_action_ids {
+        if action_id.trim().is_empty() {
+            issue(
+                issues,
+                path.clone(),
+                "team_kill_action_ids id must not be empty",
+            );
+            continue;
+        }
+        if !policy
+            .kill_action_ids
+            .iter()
+            .any(|kill_id| kill_id == action_id)
+        {
+            issue(
+                issues,
+                path.clone(),
+                format!("team kill action `{action_id}` must also be declared in kill_action_ids"),
+            );
+        }
+        let matches: Vec<&ActionTemplate> = night_resolution_pack_actions(pack)
+            .into_iter()
+            .map(|(_, action)| action)
+            .filter(|action| action.id == action_id.as_str())
+            .collect();
+        if matches.is_empty() {
+            issue(
+                issues,
+                path.clone(),
+                format!("unknown night_resolution team kill action `{action_id}`"),
+            );
+            continue;
+        }
+        if !matches.iter().any(|action| {
+            action.window.is_night_resolution_window() && action.has_ability(IrAbility::Kill)
+        }) {
+            issue(
+                issues,
+                path.clone(),
+                format!(
+                    "night_resolution team kill action `{action_id}` must be a night/any Kill action"
+                ),
+            );
+        }
+    }
+}
+
+fn validate_night_resolution_suppression_precedence(
+    issues: &mut Vec<PackValidationIssue>,
+    policy_path: &str,
+    policy: &NightResolutionPolicy,
+    pack: &Pack,
+) {
+    let priorities = night_ability_priorities(pack);
+    if !priorities.contains_key(&IrAbility::Block) {
+        return;
+    }
+    let abilities: BTreeSet<IrAbility> = priorities.keys().copied().collect();
+    let edges = precedence_edges(pack, &abilities);
+    let action_abilities = night_resolution_night_action_abilities(pack);
+    let mut required = BTreeSet::new();
+
+    for source_id in night_resolution_block_source_ids(policy) {
+        let Some(suppression) = policy.suppression_policy.get(&source_id) else {
+            continue;
+        };
+        for action_id in &suppression.suppresses {
+            let Some(suppressed_abilities) = action_abilities.get(action_id) else {
+                continue;
+            };
+            for ability in suppressed_abilities {
+                if *ability != IrAbility::Block {
+                    required.insert(*ability);
+                }
+            }
+        }
+    }
+
+    for ability in required {
+        if priorities.contains_key(&ability) && !has_path(IrAbility::Block, ability, &edges) {
+            issue(
+                issues,
+                format!("{policy_path}.precedence"),
+                format!(
+                    "night_resolution suppression policy requires Block precedence before suppressed ability `{ability:?}`"
+                ),
+            );
+        }
+    }
+}
+
+fn validate_night_resolution_suppression_policy(
+    issues: &mut Vec<PackValidationIssue>,
+    policy_path: &str,
+    policy: &NightResolutionPolicy,
+    pack: &Pack,
+) {
+    let path = format!("{policy_path}.suppression_policy");
+    let block_sources = night_resolution_block_source_ids(policy);
+    let action_roleblockability = night_resolution_night_action_roleblockability(issues, pack);
+    let generated_trigger_feeds = night_resolution_generated_trigger_feed_actions(pack);
+
+    if policy.suppression_policy.is_empty() {
+        issue(
+            issues,
+            path.clone(),
+            "explicit night_resolution policy must classify roleblock suppression",
+        );
+    }
+
+    for source_id in &block_sources {
+        if !policy.suppression_policy.contains_key(source_id) {
+            issue(
+                issues,
+                path.clone(),
+                format!(
+                    "night_resolution Block action `{source_id}` must classify every night action"
+                ),
+            );
+        }
+    }
+
+    for (source_id, suppression) in &policy.suppression_policy {
+        let source_path = format!("{path}.{source_id}");
+        if source_id.trim().is_empty() {
+            issue(issues, path.clone(), "block source id must not be empty");
+            continue;
+        }
+        if !block_sources.contains(source_id) {
+            issue(
+                issues,
+                source_path.clone(),
+                format!("unknown night_resolution block source `{source_id}`"),
+            );
+        }
+        if suppression.scope.is_none() {
+            issue(
+                issues,
+                format!("{source_path}.scope"),
+                "night_resolution suppression policy must declare scope",
+            );
+        }
+
+        validate_unique_strings(
+            issues,
+            format!("{source_path}.suppresses"),
+            &suppression.suppresses,
+        );
+        validate_unique_strings(
+            issues,
+            format!("{source_path}.bypasses"),
+            &suppression.bypasses,
+        );
+
+        let mut classified = BTreeSet::new();
+        for action_id in &suppression.suppresses {
+            validate_night_resolution_suppression_action(
+                issues,
+                format!("{source_path}.suppresses"),
+                action_id,
+                &action_roleblockability,
+            );
+            if suppression.scope == Some(SuppressionScope::FirstMatchingAction)
+                && action_roleblockability
+                    .get(action_id)
+                    .is_some_and(|action| !action.roleblockable || action.strong_willed)
+            {
+                issue(
+                    issues,
+                    format!("{source_path}.suppresses"),
+                    format!(
+                        "suppression-immune action `{action_id}` must be classified in bypasses"
+                    ),
+                );
+            }
+            classified.insert(action_id.as_str());
+        }
+        for action_id in &suppression.bypasses {
+            validate_night_resolution_suppression_action(
+                issues,
+                format!("{source_path}.bypasses"),
+                action_id,
+                &action_roleblockability,
+            );
+            if suppression.scope == Some(SuppressionScope::FirstMatchingAction)
+                && action_roleblockability
+                    .get(action_id)
+                    .is_some_and(|action| action.roleblockable && !action.strong_willed)
+            {
+                issue(
+                    issues,
+                    format!("{source_path}.bypasses"),
+                    format!("roleblockable action `{action_id}` must be classified in suppresses"),
+                );
+            }
+            if classified.contains(action_id.as_str()) {
+                issue(
+                    issues,
+                    source_path.clone(),
+                    format!("night action `{action_id}` cannot be both suppressed and bypassed"),
+                );
+            }
+            classified.insert(action_id.as_str());
+        }
+        for action_id in action_roleblockability.keys() {
+            if !classified.contains(action_id.as_str()) {
+                issue(
+                    issues,
+                    source_path.clone(),
+                    format!(
+                        "block source `{source_id}` does not classify night action `{action_id}`"
+                    ),
+                );
+                if let Some(trigger_ids) = generated_trigger_feeds.get(action_id) {
+                    for trigger_id in trigger_ids {
+                        issue(
+                            issues,
+                            source_path.clone(),
+                            format!(
+                                "block source `{source_id}` does not classify night action `{action_id}` that can feed generated kill trigger `{trigger_id}`"
+                            ),
+                        );
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn night_resolution_generated_trigger_feed_actions(
+    pack: &Pack,
+) -> BTreeMap<String, BTreeSet<String>> {
+    let generated_triggers = night_resolution_generated_kill_source_ids(pack);
+    let mut feeds: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+    for (_, action) in night_resolution_pack_actions(pack) {
+        if !action.window.is_night_resolution_window() {
+            continue;
+        }
+        for (trigger_id, trigger) in &generated_triggers {
+            if action_can_feed_trigger(action, trigger.on) {
+                feeds
+                    .entry(action.id.clone())
+                    .or_default()
+                    .insert(trigger_id.clone());
+            }
+        }
+    }
+    feeds
+}
+
+fn action_can_feed_trigger(action: &ActionTemplate, on: TriggerOn) -> bool {
+    match on {
+        TriggerOn::Ability(IrAbility::Visit) => action.targets != TargetSpec::None,
+        TriggerOn::Ability(ability) => action
+            .abilities()
+            .any(|action_ability| action_ability == ability),
+        TriggerOn::Event(TriggerEvent::Death) => {
+            action.has_ability(IrAbility::Kill) || action.has_ability(IrAbility::Retaliate)
+        }
+        TriggerOn::Event(TriggerEvent::EffectMarked) => action.has_ability(IrAbility::Mark),
+        TriggerOn::Event(TriggerEvent::Lynch | TriggerEvent::PhaseEnd | TriggerEvent::Win) => false,
+        TriggerOn::Event(TriggerEvent::Visit) => action.targets != TargetSpec::None,
+    }
+}
+
+fn night_resolution_night_action_abilities(pack: &Pack) -> BTreeMap<String, BTreeSet<IrAbility>> {
+    let mut actions = BTreeMap::new();
+    for (_, action) in night_resolution_pack_actions(pack) {
+        if !action.window.is_night_resolution_window() {
+            continue;
+        }
+        let entry = actions
+            .entry(action.id.clone())
+            .or_insert_with(BTreeSet::new);
+        entry.extend(night_order_abilities(action));
+    }
+    actions
+}
+
+fn night_resolution_block_source_ids(policy: &NightResolutionPolicy) -> BTreeSet<String> {
+    policy
+        .block_action_ids
+        .iter()
+        .chain(policy.jailkeep_action_ids.iter())
+        .cloned()
+        .collect()
+}
+
+#[derive(Debug, Clone, Copy)]
+struct NightResolutionNightAction {
+    roleblockable: bool,
+    strong_willed: bool,
+}
+
+fn night_resolution_night_action_roleblockability(
+    issues: &mut Vec<PackValidationIssue>,
+    pack: &Pack,
+) -> BTreeMap<String, NightResolutionNightAction> {
+    let mut actions = BTreeMap::new();
+    for (role_key, role) in &pack.roles {
+        for action in &role.actions {
+            if !action.window.is_night_resolution_window() {
+                continue;
+            }
+            record_night_resolution_action_roleblockability(
+                issues,
+                &mut actions,
+                &action.id,
+                action.constraints.roleblockable,
+                action.has_modifier(Modifier::StrongWilled),
+                format!("roles.{role_key}.actions.{}", action.id),
+            );
+        }
+    }
+    for (grant_id, action) in &pack.item_actions {
+        if !action.window.is_night_resolution_window() {
+            continue;
+        }
+        record_night_resolution_action_roleblockability(
+            issues,
+            &mut actions,
+            &action.id,
+            action.constraints.roleblockable,
+            action.has_modifier(Modifier::StrongWilled),
+            format!("item_actions.{grant_id}"),
+        );
+    }
+    actions
+}
+
+fn record_night_resolution_action_roleblockability(
+    issues: &mut Vec<PackValidationIssue>,
+    actions: &mut BTreeMap<String, NightResolutionNightAction>,
+    action_id: &str,
+    roleblockable: bool,
+    strong_willed: bool,
+    path: String,
+) {
+    let record = NightResolutionNightAction {
+        roleblockable,
+        strong_willed,
+    };
+    if let Some(existing) = actions.insert(action_id.to_string(), record) {
+        if existing.roleblockable != roleblockable || existing.strong_willed != strong_willed {
+            issue(
+                issues,
+                path,
+                format!(
+                    "night action `{action_id}` has inconsistent night_resolution suppression traits"
+                ),
+            );
+        }
+    }
+}
+
+fn validate_night_resolution_suppression_action(
+    issues: &mut Vec<PackValidationIssue>,
+    path: String,
+    action_id: &str,
+    action_roleblockability: &BTreeMap<String, NightResolutionNightAction>,
+) {
+    if action_id.trim().is_empty() {
+        issue(issues, path, "night action id must not be empty");
+        return;
+    }
+    if !action_roleblockability.contains_key(action_id) {
+        issue(
+            issues,
+            path,
+            format!("unknown night_resolution night action `{action_id}`"),
+        );
+    }
+}
+
+fn validate_night_resolution_kill_cause_catalog(
+    issues: &mut Vec<PackValidationIssue>,
+    policy_path: &str,
+    policy: &NightResolutionPolicy,
+    pack: &Pack,
+) {
+    let path = format!("{policy_path}.kill_cause_ids");
+    let expected = night_resolution_derived_kill_cause_ids(pack);
+
+    if policy.kill_cause_ids.is_empty() {
+        issue(
+            issues,
+            path.clone(),
+            "explicit night_resolution policy must declare kill_cause_ids",
+        );
+    }
+    validate_unique_strings(issues, path.clone(), &policy.kill_cause_ids);
+
+    let declared = policy
+        .kill_cause_ids
+        .iter()
+        .filter_map(|cause| {
+            if cause.trim().is_empty() {
+                issue(
+                    issues,
+                    path.clone(),
+                    "night_resolution kill cause id must not be empty",
+                );
+                None
+            } else {
+                Some(cause.as_str())
+            }
+        })
+        .collect::<BTreeSet<_>>();
+
+    for cause in &declared {
+        if !expected.contains(*cause) {
+            issue(
+                issues,
+                path.clone(),
+                format!("unknown night_resolution kill cause `{cause}`"),
+            );
+        }
+    }
+    for cause in expected {
+        if !declared.contains(cause.as_str()) {
+            issue(
+                issues,
+                path.clone(),
+                format!("night_resolution kill_cause_ids must include `{cause}`"),
+            );
+        }
+    }
+}
+
+fn validate_night_resolution_protection_cause_policy(
+    issues: &mut Vec<PackValidationIssue>,
+    policy_path: &str,
+    policy: &NightResolutionPolicy,
+    pack: &Pack,
+) {
+    let path = format!("{policy_path}.protection_cause_policy");
+    let protect_sources = night_resolution_protect_source_ids(policy);
+    let kill_causes = night_resolution_kill_cause_ids(pack);
+    let unstoppable_causes = night_resolution_unstoppable_cause_ids(policy, pack);
+    let generated_kill_causes = night_resolution_generated_kill_cause_ids(pack);
+
+    if policy.protection_cause_policy.is_empty() {
+        issue(
+            issues,
+            path.clone(),
+            "explicit night_resolution policy must classify protection causes",
+        );
+    }
+
+    for source_id in &protect_sources {
+        if !policy.protection_cause_policy.contains_key(source_id) {
+            issue(
+                issues,
+                path.clone(),
+                format!(
+                    "night_resolution Protect action `{source_id}` must classify every kill cause"
+                ),
+            );
+        }
+    }
+
+    for (source_id, cause_policy) in &policy.protection_cause_policy {
+        let source_path = format!("{path}.{source_id}");
+        if source_id.trim().is_empty() {
+            issue(
+                issues,
+                path.clone(),
+                "protection source id must not be empty",
+            );
+            continue;
+        }
+        if !protect_sources.contains(source_id) {
+            issue(
+                issues,
+                source_path.clone(),
+                format!("unknown night_resolution protection source `{source_id}`"),
+            );
+        }
+
+        validate_unique_strings(
+            issues,
+            format!("{source_path}.blocks"),
+            &cause_policy.blocks,
+        );
+        validate_unique_strings(
+            issues,
+            format!("{source_path}.bypasses"),
+            &cause_policy.bypasses,
+        );
+
+        let mut classified = BTreeSet::new();
+        for cause in &cause_policy.blocks {
+            validate_night_resolution_protection_cause(
+                issues,
+                format!("{source_path}.blocks"),
+                cause,
+                &kill_causes,
+            );
+            if unstoppable_causes.contains(cause) {
+                issue(
+                    issues,
+                    format!("{source_path}.blocks"),
+                    format!("strongman bypass cause `{cause}` must be classified in bypasses"),
+                );
+            }
+            classified.insert(cause.as_str());
+        }
+        for cause in &cause_policy.bypasses {
+            validate_night_resolution_protection_cause(
+                issues,
+                format!("{source_path}.bypasses"),
+                cause,
+                &kill_causes,
+            );
+            if !unstoppable_causes.contains(cause) {
+                issue(
+                    issues,
+                    format!("{source_path}.bypasses"),
+                    format!("bypassed kill cause `{cause}` must be a Strongman bypass cause"),
+                );
+            }
+            if classified.contains(cause.as_str()) {
+                issue(
+                    issues,
+                    source_path.clone(),
+                    format!("kill cause `{cause}` cannot be both blocked and bypassed"),
+                );
+            }
+            classified.insert(cause.as_str());
+        }
+        for cause in &kill_causes {
+            if !classified.contains(cause.as_str()) {
+                issue(
+                    issues,
+                    source_path.clone(),
+                    format!(
+                        "protection source `{source_id}` does not classify kill cause `{cause}`"
+                    ),
+                );
+                issue_generated_kill_classifier_gap(
+                    issues,
+                    source_path.clone(),
+                    &generated_kill_causes,
+                    cause,
+                    format!(
+                        "protection source `{source_id}` must classify generated kill trigger `{cause}`"
+                    ),
+                );
+            }
+        }
+    }
+}
+
+fn validate_night_resolution_target_state_save_catalog(
+    issues: &mut Vec<PackValidationIssue>,
+    policy_path: &str,
+    policy: &NightResolutionPolicy,
+    pack: &Pack,
+) {
+    let path = format!("{policy_path}.target_state_save_tags");
+    validate_night_resolution_target_state_catalog(
+        issues,
+        path,
+        &policy.target_state_save_tags,
+        night_resolution_derived_target_state_save_tags(pack),
+        "save",
+    );
+}
+
+fn validate_night_resolution_target_state_gate_catalog(
+    issues: &mut Vec<PackValidationIssue>,
+    policy_path: &str,
+    policy: &NightResolutionPolicy,
+    pack: &Pack,
+) {
+    let path = format!("{policy_path}.target_state_gate_tags");
+    validate_night_resolution_target_state_catalog(
+        issues,
+        path,
+        &policy.target_state_gate_tags,
+        night_resolution_derived_target_state_gate_tags(pack),
+        "gate",
+    );
+}
+
+fn validate_night_resolution_target_state_catalog(
+    issues: &mut Vec<PackValidationIssue>,
+    path: String,
+    declared_tags: &[String],
+    expected_tags: BTreeSet<String>,
+    label: &str,
+) {
+    if !expected_tags.is_empty() && declared_tags.is_empty() {
+        issue(
+            issues,
+            path.clone(),
+            format!("explicit night_resolution policy must declare target-state {label} tags"),
+        );
+    }
+    validate_unique_strings(issues, path.clone(), declared_tags);
+
+    let declared = declared_tags
+        .iter()
+        .filter_map(|tag| {
+            if tag.trim().is_empty() {
+                issue(
+                    issues,
+                    path.clone(),
+                    format!("night_resolution target-state {label} tag must not be empty"),
+                );
+                None
+            } else {
+                Some(tag.as_str())
+            }
+        })
+        .collect::<BTreeSet<_>>();
+
+    for tag in &declared {
+        if !expected_tags.contains(*tag) {
+            issue(
+                issues,
+                path.clone(),
+                format!("unknown night_resolution target-state {label} tag `{tag}`"),
+            );
+        }
+    }
+    for tag in expected_tags {
+        if !declared.contains(tag.as_str()) {
+            issue(
+                issues,
+                path.clone(),
+                format!("night_resolution target_state_{label}_tags must include `{tag}`"),
+            );
+        }
+    }
+}
+
+fn validate_night_resolution_target_state_save_policy(
+    issues: &mut Vec<PackValidationIssue>,
+    policy_path: &str,
+    policy: &NightResolutionPolicy,
+    pack: &Pack,
+) {
+    let path = format!("{policy_path}.target_state_save_policy");
+    let save_tags = night_resolution_target_state_save_tags(pack);
+    let kill_causes = night_resolution_kill_cause_ids(pack);
+    let unstoppable_causes = night_resolution_unstoppable_cause_ids(policy, pack);
+    let generated_kill_causes = night_resolution_generated_kill_cause_ids(pack);
+
+    if !save_tags.is_empty() && policy.target_state_save_policy.is_empty() {
+        issue(
+            issues,
+            path.clone(),
+            "explicit night_resolution policy must classify target-state saves",
+        );
+    }
+
+    for tag in &save_tags {
+        if !policy.target_state_save_policy.contains_key(tag) {
+            issue(
+                issues,
+                path.clone(),
+                format!(
+                    "night_resolution target-state save `{tag}` must classify every kill cause"
+                ),
+            );
+        }
+    }
+
+    for (tag, save_policy) in &policy.target_state_save_policy {
+        let tag_path = format!("{path}.{tag}");
+        if tag.trim().is_empty() {
+            issue(
+                issues,
+                path.clone(),
+                "target-state save tag must not be empty",
+            );
+            continue;
+        }
+        if !save_tags.contains(tag) {
+            issue(
+                issues,
+                tag_path.clone(),
+                format!("unknown night_resolution target-state save `{tag}`"),
+            );
+        }
+
+        validate_unique_strings(issues, format!("{tag_path}.blocks"), &save_policy.blocks);
+        validate_unique_strings(
+            issues,
+            format!("{tag_path}.bypasses"),
+            &save_policy.bypasses,
+        );
+
+        let mut classified = BTreeSet::new();
+        for cause in &save_policy.blocks {
+            validate_night_resolution_protection_cause(
+                issues,
+                format!("{tag_path}.blocks"),
+                cause,
+                &kill_causes,
+            );
+            if unstoppable_causes.contains(cause) {
+                issue(
+                    issues,
+                    format!("{tag_path}.blocks"),
+                    format!("strongman bypass cause `{cause}` must be classified in bypasses"),
+                );
+            }
+            classified.insert(cause.as_str());
+        }
+        for cause in &save_policy.bypasses {
+            validate_night_resolution_protection_cause(
+                issues,
+                format!("{tag_path}.bypasses"),
+                cause,
+                &kill_causes,
+            );
+            if !unstoppable_causes.contains(cause) {
+                issue(
+                    issues,
+                    format!("{tag_path}.bypasses"),
+                    format!("bypassed kill cause `{cause}` must be a Strongman bypass cause"),
+                );
+            }
+            if classified.contains(cause.as_str()) {
+                issue(
+                    issues,
+                    tag_path.clone(),
+                    format!("kill cause `{cause}` cannot be both blocked and bypassed"),
+                );
+            }
+            classified.insert(cause.as_str());
+        }
+        for cause in &kill_causes {
+            if !classified.contains(cause.as_str()) {
+                issue(
+                    issues,
+                    tag_path.clone(),
+                    format!("target-state save `{tag}` does not classify kill cause `{cause}`"),
+                );
+                issue_generated_kill_classifier_gap(
+                    issues,
+                    tag_path.clone(),
+                    &generated_kill_causes,
+                    cause,
+                    format!(
+                        "target-state save `{tag}` must classify generated kill trigger `{cause}`"
+                    ),
+                );
+            }
+        }
+    }
+}
+
+fn issue_generated_kill_classifier_gap(
+    issues: &mut Vec<PackValidationIssue>,
+    path: String,
+    generated_kill_causes: &BTreeSet<String>,
+    cause: &str,
+    message: String,
+) {
+    if generated_kill_causes.contains(cause) {
+        issue(issues, path, message);
+    }
+}
+
+fn validate_night_resolution_target_state_gate_policy(
+    issues: &mut Vec<PackValidationIssue>,
+    policy_path: &str,
+    policy: &NightResolutionPolicy,
+    pack: &Pack,
+) {
+    let path = format!("{policy_path}.target_state_gate_policy");
+    let gate_tags = night_resolution_target_state_gate_tags(pack);
+
+    if !gate_tags.is_empty() && policy.target_state_gate_policy.is_empty() {
+        issue(
+            issues,
+            path.clone(),
+            "explicit night_resolution policy must classify target-state gates",
+        );
+    }
+
+    for tag in &gate_tags {
+        if !policy.target_state_gate_policy.contains_key(tag) {
+            issue(
+                issues,
+                path.clone(),
+                format!(
+                    "night_resolution target-state gate `{tag}` must classify blocked abilities"
+                ),
+            );
+        }
+    }
+
+    for (tag, gate_policy) in &policy.target_state_gate_policy {
+        let tag_path = format!("{path}.{tag}");
+        if tag.trim().is_empty() {
+            issue(
+                issues,
+                path.clone(),
+                "target-state gate tag must not be empty",
+            );
+            continue;
+        }
+        if !gate_tags.contains(tag) {
+            issue(
+                issues,
+                tag_path.clone(),
+                format!("unknown night_resolution target-state gate `{tag}`"),
+            );
+        }
+        if gate_policy.blocks.is_empty() {
+            issue(
+                issues,
+                format!("{tag_path}.blocks"),
+                "target-state gate policy must declare blocked abilities",
+            );
+        }
+        let mut seen = BTreeSet::new();
+        for ability in &gate_policy.blocks {
+            if !seen.insert(*ability) {
+                issue(
+                    issues,
+                    format!("{tag_path}.blocks"),
+                    format!("duplicate blocked ability `{ability:?}`"),
+                );
+            }
+            if !matches!(
+                ability,
+                IrAbility::Kill
+                    | IrAbility::Protect
+                    | IrAbility::Investigate
+                    | IrAbility::Convert
+                    | IrAbility::Mark
+            ) {
+                issue(
+                    issues,
+                    format!("{tag_path}.blocks"),
+                    format!(
+                        "target-state gates only support Kill, Protect, Investigate, Convert, or Mark, got `{ability:?}`"
+                    ),
+                );
+            }
+        }
+    }
+}
+
+fn validate_lynch_trigger_contracts(issues: &mut Vec<PackValidationIssue>, pack: &Pack) {
+    let mut has_super_saint_effect = false;
+
+    for role in pack.roles.values() {
+        for effect in &role.effects {
+            if effect == "super_saint" {
+                has_super_saint_effect = true;
+            }
+        }
+    }
+
+    if pack.effects.contains_key("super_saint") {
+        has_super_saint_effect = true;
+    }
+
+    if has_super_saint_effect
+        && !has_lynch_retaliation_trigger(pack, "super_saint", TargetRef::Actor)
+    {
+        issue(
+            issues,
+            "triggers",
+            "super_saint effects require a Lynch trigger that produces Kill from Target to Actor",
+        );
+    }
+}
+
+fn validate_trigger_identity_and_filters(
+    issues: &mut Vec<PackValidationIssue>,
+    pack: &Pack,
+    effect_tags: &BTreeSet<&str>,
+) {
+    let mut trigger_ids = BTreeSet::new();
+    for (idx, trigger) in pack.triggers.iter().enumerate() {
+        let path = format!("triggers[{idx}]");
+        if trigger.id.trim().is_empty() {
+            issue(issues, format!("{path}.id"), "trigger id must not be empty");
+        } else if !trigger_ids.insert(trigger.id.as_str()) {
+            issue(
+                issues,
+                format!("{path}.id"),
+                format!("duplicate trigger id `{}`", trigger.id),
+            );
+        }
+
+        validate_trigger_filter_tags(
+            issues,
+            &path,
+            "if_target_has",
+            &trigger.if_target_has,
+            effect_tags,
+        );
+        validate_trigger_filter_tags(
+            issues,
+            &path,
+            "if_actor_has",
+            &trigger.if_actor_has,
+            effect_tags,
+        );
+    }
+}
+
+fn validate_trigger_filter_tags(
+    issues: &mut Vec<PackValidationIssue>,
+    trigger_path: &str,
+    field: &str,
+    tags: &[String],
+    effect_tags: &BTreeSet<&str>,
+) {
+    let path = format!("{trigger_path}.{field}");
+    validate_unique_strings(issues, path.clone(), tags);
+    for tag in tags {
+        if tag.trim().is_empty() {
+            issue(
+                issues,
+                path.clone(),
+                "trigger filter tags must not be empty",
+            );
+            continue;
+        }
+        if !effect_tags.contains(tag.as_str()) {
+            issue(issues, path.clone(), format!("unknown effect tag `{tag}`"));
+        }
+    }
+}
+
+fn validate_trigger_production_shapes(issues: &mut Vec<PackValidationIssue>, pack: &Pack) {
+    for (idx, trigger) in pack.triggers.iter().enumerate() {
+        let path = format!("triggers[{idx}].produces");
+        if matches!(
+            trigger.produces.actor,
+            ActorRef::TargetGuard | ActorRef::Other
+        ) {
+            issue(
+                issues,
+                format!("{path}.actor"),
+                "trigger productions only support Actor or Target actor refs",
+            );
+        }
+        if matches!(trigger.produces.target, TargetRef::Other) {
+            issue(
+                issues,
+                format!("{path}.target"),
+                "trigger productions only support Actor, Target, or Killer target refs",
+            );
+        }
+        match trigger.produces.ability {
+            IrAbility::Kill => {
+                let mut seen_modifiers = BTreeSet::new();
+                for modifier in &trigger.produces.modifiers {
+                    if !seen_modifiers.insert(*modifier) {
+                        issue(
+                            issues,
+                            format!("{path}.modifiers"),
+                            format!("duplicate generated Kill modifier `{modifier:?}`"),
+                        );
+                    }
+                    if *modifier != Modifier::Strongman {
+                        issue(
+                            issues,
+                            format!("{path}.modifiers"),
+                            format!(
+                                "generated Kill triggers only support Strongman modifier, got `{modifier:?}`"
+                            ),
+                        );
+                    }
+                }
+            }
+            IrAbility::Visit => {
+                if trigger.produces.actor != ActorRef::Target {
+                    issue(
+                        issues,
+                        format!("{path}.actor"),
+                        "generated Visit triggers must use actor Target",
+                    );
+                }
+                if trigger.produces.target != TargetRef::Target {
+                    issue(
+                        issues,
+                        format!("{path}.target"),
+                        "generated Visit triggers must use target Target",
+                    );
+                }
+                if !trigger.produces.modifiers.is_empty() {
+                    issue(
+                        issues,
+                        format!("{path}.modifiers"),
+                        "generated Visit triggers must not declare modifiers",
+                    );
+                }
+            }
+            _ => {
+                issue(
+                    issues,
+                    format!("{path}.ability"),
+                    "trigger productions currently support generated Kill or self-targeted Visit",
+                );
+            }
+        }
+    }
+}
+
+fn has_lynch_retaliation_trigger(pack: &Pack, effect: &str, target: TargetRef) -> bool {
+    pack.triggers.iter().any(|trigger| {
+        trigger_on_is_lynch(trigger.on)
+            && trigger.if_target_has.iter().any(|tag| tag == effect)
+            && trigger.produces.ability == IrAbility::Kill
+            && trigger.produces.actor == ActorRef::Target
+            && trigger.produces.target == target
+    })
+}
+
+fn trigger_on_is_lynch(on: TriggerOn) -> bool {
+    matches!(on, TriggerOn::Event(TriggerEvent::Lynch))
+}
+
+fn validate_kill_trigger_contracts(issues: &mut Vec<PackValidationIssue>, pack: &Pack) {
+    let mut has_bomb_effect = false;
+    let mut has_hero_effect = false;
+    let mut has_vengeful_effect = false;
+    let mut has_unstoppable_vengeful_effect = false;
+
+    for role in pack.roles.values() {
+        for effect in &role.effects {
+            match effect.as_str() {
+                "bomb" => has_bomb_effect = true,
+                "hero" => has_hero_effect = true,
+                "vengeful" => has_vengeful_effect = true,
+                "unstoppable_vengeful" => has_unstoppable_vengeful_effect = true,
+                _ => {}
+            }
+        }
+    }
+
+    if pack.effects.contains_key("bomb") {
+        has_bomb_effect = true;
+    }
+    if pack.effects.contains_key("hero") {
+        has_hero_effect = true;
+    }
+    if pack.effects.contains_key("vengeful") {
+        has_vengeful_effect = true;
+    }
+    if pack.effects.contains_key("unstoppable_vengeful") {
+        has_unstoppable_vengeful_effect = true;
+    }
+
+    if has_bomb_effect && !has_kill_retaliation_trigger(pack, "bomb", TargetRef::Killer, false) {
+        issue(
+            issues,
+            "triggers",
+            "bomb effects require a Kill trigger that produces Kill from Target to Killer",
+        );
+    }
+
+    if has_vengeful_effect
+        && !has_kill_retaliation_trigger(pack, "vengeful", TargetRef::Actor, false)
+    {
+        issue(
+            issues,
+            "triggers",
+            "vengeful effects require a Kill trigger that produces Kill from Target to Actor",
+        );
+    }
+
+    if has_unstoppable_vengeful_effect
+        && !has_kill_retaliation_trigger(pack, "unstoppable_vengeful", TargetRef::Actor, true)
+    {
+        issue(
+            issues,
+            "triggers",
+            "unstoppable_vengeful effects require a Kill trigger that produces Strongman Kill from Target to Actor",
+        );
+    }
+
+    if has_hero_effect
+        && !has_ability_retaliation_trigger(
+            pack,
+            "hero",
+            IrAbility::VoteDuel,
+            TargetRef::Actor,
+            true,
+        )
+    {
+        issue(
+            issues,
+            "triggers",
+            "hero effects require a VoteDuel trigger that produces Strongman Kill from Target to Actor",
+        );
+    }
+}
+
+fn has_kill_retaliation_trigger(
+    pack: &Pack,
+    effect: &str,
+    target: TargetRef,
+    requires_strongman: bool,
+) -> bool {
+    pack.triggers.iter().any(|trigger| {
+        trigger_on_is_kill(trigger.on)
+            && trigger.if_target_has.iter().any(|tag| tag == effect)
+            && trigger.produces.ability == IrAbility::Kill
+            && trigger.produces.actor == ActorRef::Target
+            && trigger.produces.target == target
+            && (!requires_strongman || trigger.produces.modifiers.contains(&Modifier::Strongman))
+    })
+}
+
+fn has_ability_retaliation_trigger(
+    pack: &Pack,
+    effect: &str,
+    on_ability: IrAbility,
+    target: TargetRef,
+    requires_strongman: bool,
+) -> bool {
+    pack.triggers.iter().any(|trigger| {
+        trigger.on == TriggerOn::Ability(on_ability)
+            && trigger.if_target_has.iter().any(|tag| tag == effect)
+            && trigger.produces.ability == IrAbility::Kill
+            && trigger.produces.actor == ActorRef::Target
+            && trigger.produces.target == target
+            && (!requires_strongman || trigger.produces.modifiers.contains(&Modifier::Strongman))
+    })
+}
+
+fn trigger_on_is_kill(on: TriggerOn) -> bool {
+    matches!(on, TriggerOn::Ability(IrAbility::Kill))
+}
+
+fn validate_visit_trigger_contracts(issues: &mut Vec<PackValidationIssue>, pack: &Pack) {
+    let mut has_pgo_effect = false;
+    let mut has_visitor_kill_effect = false;
+
+    for role in pack.roles.values() {
+        for effect in &role.effects {
+            match effect.as_str() {
+                "pgo" => has_pgo_effect = true,
+                "visitor_kill" => has_visitor_kill_effect = true,
+                _ => {}
+            }
+        }
+    }
+
+    if pack.effects.contains_key("pgo") {
+        has_pgo_effect = true;
+    }
+    if pack.effects.contains_key("visitor_kill") {
+        has_visitor_kill_effect = true;
+    }
+
+    if has_pgo_effect && pack.ir_version < 24 {
+        issue(
+            issues,
+            "triggers",
+            "pgo visit-trigger effects require ir_version >= 24",
+        );
+    }
+
+    if has_pgo_effect && !has_pgo_visit_kill_trigger(pack) {
+        issue(
+            issues,
+            "triggers",
+            "pgo effects require a Visit trigger that produces Kill from Target to Actor",
+        );
+    }
+
+    if has_visitor_kill_effect && pack.ir_version < 24 {
+        issue(
+            issues,
+            "triggers",
+            "visitor_kill visit-trigger effects require ir_version >= 24",
+        );
+    }
+
+    if has_visitor_kill_effect && !has_visitor_kill_trigger(pack) {
+        issue(
+            issues,
+            "triggers",
+            "visitor_kill effects require a target-filtered Visit trigger with if_target_has visitor_kill, non-empty if_actor_has, and Kill from Target to Actor",
+        );
+    }
+}
+
+fn has_pgo_visit_kill_trigger(pack: &Pack) -> bool {
+    pack.triggers.iter().any(|trigger| {
+        trigger_on_is_visit(trigger.on)
+            && trigger.if_target_has.iter().any(|tag| tag == "pgo")
+            && trigger.produces.ability == IrAbility::Kill
+            && trigger.produces.actor == ActorRef::Target
+            && trigger.produces.target == TargetRef::Actor
+    })
+}
+
+fn has_visitor_kill_trigger(pack: &Pack) -> bool {
+    pack.triggers.iter().any(|trigger| {
+        trigger_on_is_visit(trigger.on)
+            && trigger
+                .if_target_has
+                .iter()
+                .any(|tag| tag == "visitor_kill")
+            && !trigger.if_actor_has.is_empty()
+            && trigger.produces.ability == IrAbility::Kill
+            && trigger.produces.actor == ActorRef::Target
+            && trigger.produces.target == TargetRef::Actor
+    })
+}
+
+fn trigger_on_is_visit(on: TriggerOn) -> bool {
+    matches!(
+        on,
+        TriggerOn::Ability(IrAbility::Visit) | TriggerOn::Event(TriggerEvent::Visit)
+    )
+}
+
+fn night_resolution_protect_source_ids(policy: &NightResolutionPolicy) -> BTreeSet<String> {
+    policy
+        .protect_action_ids
+        .iter()
+        .chain(policy.bodyguard_action_ids.iter())
+        .chain(policy.martyr_action_ids.iter())
+        .chain(policy.cpr_action_ids.iter())
+        .chain(policy.jailkeep_action_ids.iter())
+        .cloned()
+        .collect()
+}
+
+fn night_resolution_intercept_source_ids(policy: &NightResolutionPolicy) -> BTreeSet<String> {
+    policy
+        .bodyguard_action_ids
+        .iter()
+        .chain(policy.martyr_action_ids.iter())
+        .cloned()
+        .collect()
+}
+
+fn night_resolution_guard_retaliation_source_ids(
+    policy: &NightResolutionPolicy,
+) -> BTreeSet<String> {
+    policy
+        .guard_retaliation_cause_policy
+        .keys()
+        .cloned()
+        .collect()
+}
+
+fn night_resolution_guard_dependency_source_ids(pack: &Pack) -> BTreeSet<String> {
+    night_resolution_pack_actions(pack)
+        .into_iter()
+        .map(|(_, action)| action)
+        .filter(|action| {
+            action.window.is_night_resolution_window()
+                && action.has_ability(IrAbility::Protect)
+                && action.has_modifier(Modifier::Babysitter)
+        })
+        .map(|action| action.id.clone())
+        .collect()
+}
+
+fn night_resolution_hide_dependency_source_ids(pack: &Pack) -> BTreeSet<String> {
+    night_resolution_pack_actions(pack)
+        .into_iter()
+        .map(|(_, action)| action)
+        .filter(|action| {
+            action.window.is_night_resolution_window()
+                && action.has_ability(IrAbility::Mark)
+                && action.has_modifier(Modifier::Hider)
+        })
+        .map(|action| action.id.clone())
+        .collect()
+}
+
+fn night_resolution_chosen_retaliation_source_ids(
+    pack: &Pack,
+) -> BTreeMap<String, &ActionTemplate> {
+    night_resolution_pack_actions(pack)
+        .into_iter()
+        .map(|(_, action)| action)
+        .filter(|action| {
+            action.window.is_night_resolution_window() && action.has_ability(IrAbility::Retaliate)
+        })
+        .map(|action| (action.id.clone(), action))
+        .collect()
+}
+
+fn night_resolution_generated_kill_source_ids(pack: &Pack) -> BTreeMap<String, &TriggerRule> {
+    pack.triggers
+        .iter()
+        .filter(|trigger| trigger.produces.ability == IrAbility::Kill)
+        .map(|trigger| (trigger.id.clone(), trigger))
+        .collect()
+}
+
+fn night_resolution_generated_kill_cause_ids(pack: &Pack) -> BTreeSet<String> {
+    night_resolution_generated_kill_source_ids(pack)
+        .into_keys()
+        .collect()
+}
+
+fn night_resolution_kill_cause_ids(pack: &Pack) -> BTreeSet<String> {
+    if pack.night_resolution.is_explicit() {
+        return pack
+            .night_resolution
+            .kill_cause_ids
+            .iter()
+            .cloned()
+            .collect();
+    }
+    night_resolution_derived_kill_cause_ids(pack)
+}
+
+fn night_resolution_derived_kill_cause_ids(pack: &Pack) -> BTreeSet<String> {
+    let mut causes = BTreeSet::new();
+    for (_, action) in night_resolution_pack_actions(pack) {
+        if action.window.is_night_resolution_window()
+            && (action.has_ability(IrAbility::Kill) || action.has_ability(IrAbility::Retaliate))
+            && !pack
+                .night_resolution
+                .cpr_action_ids
+                .iter()
+                .any(|action_id| action_id == &action.id)
+        {
+            causes.insert(action.id.clone());
+        }
+    }
+    for trigger in &pack.triggers {
+        if trigger.produces.ability == IrAbility::Kill {
+            causes.insert(trigger.id.clone());
+        }
+    }
+    causes.extend(
+        pack.night_resolution
+            .guard_retaliation_cause_policy
+            .values()
+            .cloned(),
+    );
+    causes
+}
+
+fn night_resolution_unstoppable_cause_ids(
+    policy: &NightResolutionPolicy,
+    _pack: &Pack,
+) -> BTreeSet<String> {
+    let mut causes = policy
+        .strongman_action_ids
+        .iter()
+        .cloned()
+        .collect::<BTreeSet<_>>();
+    causes.extend(
+        policy
+            .chosen_retaliation_cause_policy
+            .iter()
+            .filter(|(_, generated)| generated.strongman_bypasses_protect)
+            .map(|(cause, _)| cause.clone()),
+    );
+    causes.extend(
+        policy
+            .generated_kill_cause_policy
+            .iter()
+            .filter(|(_, generated)| generated.strongman_bypasses_protect)
+            .map(|(cause, _)| cause.clone()),
+    );
+    causes
+}
+
+fn night_resolution_target_state_save_tags(pack: &Pack) -> BTreeSet<String> {
+    if pack.night_resolution.is_explicit() {
+        return pack
+            .night_resolution
+            .target_state_save_tags
+            .iter()
+            .cloned()
+            .collect();
+    }
+    night_resolution_derived_target_state_save_tags(pack)
+}
+
+fn night_resolution_derived_target_state_save_tags(pack: &Pack) -> BTreeSet<String> {
+    let mut tags = BTreeSet::new();
+    for role in pack.roles.values() {
+        for effect in &role.effects {
+            if effect == "bulletproof" || effect == "bulletproof_vest" {
+                tags.insert(effect.clone());
+            }
+        }
+    }
+    for effect in pack.effects.keys() {
+        if effect == "bulletproof" || effect == "bulletproof_vest" {
+            tags.insert(effect.clone());
+        }
+    }
+    tags
+}
+
+fn night_resolution_target_state_gate_tags(pack: &Pack) -> BTreeSet<String> {
+    if pack.night_resolution.is_explicit() {
+        return pack
+            .night_resolution
+            .target_state_gate_tags
+            .iter()
+            .cloned()
+            .collect();
+    }
+    night_resolution_derived_target_state_gate_tags(pack)
+}
+
+fn night_resolution_derived_target_state_gate_tags(pack: &Pack) -> BTreeSet<String> {
+    let mut tags = BTreeSet::new();
+    for role in pack.roles.values() {
+        for effect in &role.effects {
+            record_night_resolution_target_state_gate_tag(&mut tags, effect);
+        }
+        for action in &role.actions {
+            if let Some(effect) = &action.effect {
+                record_night_resolution_target_state_gate_tag(&mut tags, effect);
+            }
+        }
+    }
+    for effect in pack.effects.keys() {
+        record_night_resolution_target_state_gate_tag(&mut tags, effect);
+    }
+    tags
+}
+
+fn record_night_resolution_target_state_gate_tag(tags: &mut BTreeSet<String>, effect: &str) {
+    if effect == "ascetic" || effect == "commuted" || effect == "untargetable" {
+        tags.insert(effect.to_string());
+    }
+}
+
+fn validate_night_resolution_protection_cause(
+    issues: &mut Vec<PackValidationIssue>,
+    path: String,
+    cause: &str,
+    kill_causes: &BTreeSet<String>,
+) {
+    if cause.trim().is_empty() {
+        issue(issues, path, "kill cause must not be empty");
+        return;
+    }
+    if !kill_causes.contains(cause) {
+        issue(
+            issues,
+            path,
+            format!("unknown night_resolution kill cause `{cause}`"),
+        );
+    }
+}
+
+fn validate_night_resolution_declares_block_protect_actions(
+    issues: &mut Vec<PackValidationIssue>,
+    policy_path: &str,
+    policy: &NightResolutionPolicy,
+    pack: &Pack,
+) {
+    let declared_blocks = policy
+        .block_action_ids
+        .iter()
+        .chain(policy.jailkeep_action_ids.iter())
+        .collect::<BTreeSet<_>>();
+    let declared_protects = policy
+        .protect_action_ids
+        .iter()
+        .chain(policy.bodyguard_action_ids.iter())
+        .chain(policy.martyr_action_ids.iter())
+        .chain(policy.cpr_action_ids.iter())
+        .chain(policy.jailkeep_action_ids.iter())
+        .collect::<BTreeSet<_>>();
+
+    for (source, action) in night_resolution_pack_actions(pack) {
+        if !action.window.is_night_resolution_window() {
+            continue;
+        }
+        if action.has_ability(IrAbility::Block) && !declared_blocks.contains(&action.id) {
+            issue(
+                issues,
+                format!("{policy_path}.block_action_ids"),
+                format!(
+                    "night_resolution Block action `{}` on {source} must be declared in block_action_ids or jailkeep_action_ids",
+                    action.id
+                ),
+            );
+        }
+        if action.has_ability(IrAbility::Protect) && !declared_protects.contains(&action.id) {
+            issue(
+                issues,
+                format!("{policy_path}.protect_action_ids"),
+                format!(
+                    "night_resolution Protect action `{}` on {source} must be declared in protect_action_ids, bodyguard_action_ids, martyr_action_ids, cpr_action_ids, or jailkeep_action_ids",
+                    action.id
+                ),
+            );
+        }
+    }
+}
+
+fn validate_night_resolution_declares_kill_actions(
+    issues: &mut Vec<PackValidationIssue>,
+    policy_path: &str,
+    policy: &NightResolutionPolicy,
+    pack: &Pack,
+) {
+    let kill_sources = policy
+        .kill_action_ids
+        .iter()
+        .chain(policy.strongman_action_ids.iter())
+        .cloned()
+        .collect::<BTreeSet<_>>();
+    for (source, action) in night_resolution_pack_actions(pack) {
+        if !action.window.is_night_resolution_window() || !action.has_ability(IrAbility::Kill) {
+            continue;
+        }
+        if policy
+            .cpr_action_ids
+            .iter()
+            .any(|action_id| action_id == &action.id)
+        {
+            continue;
+        }
+        if !kill_sources.contains(&action.id) {
+            issue(
+                issues,
+                format!("{policy_path}.kill_action_ids"),
+                format!(
+                    "night_resolution Kill action `{}` on {source} must be declared in kill_action_ids or strongman_action_ids",
+                    action.id
+                ),
+            );
+        }
+    }
+}
+
+fn validate_night_resolution_declares_strongman_actions(
+    issues: &mut Vec<PackValidationIssue>,
+    policy_path: &str,
+    policy: &NightResolutionPolicy,
+    pack: &Pack,
+) {
+    let declared_strongman_kills = policy.strongman_action_ids.iter().collect::<BTreeSet<_>>();
+    for (source, action) in night_resolution_pack_actions(pack) {
+        if action.window.is_night_resolution_window()
+            && action.has_ability(IrAbility::Kill)
+            && action.has_modifier(Modifier::Strongman)
+            && !declared_strongman_kills.contains(&action.id)
+        {
+            issue(
+                issues,
+                format!("{policy_path}.strongman_action_ids"),
+                format!(
+                    "night_resolution Strongman Kill action `{}` on {source} must be declared in strongman_action_ids",
+                    action.id
+                ),
+            );
+        }
+    }
+}
+
+fn validate_night_resolution_jailkeep_is_explicit_block_and_protect(
+    issues: &mut Vec<PackValidationIssue>,
+    policy_path: &str,
+    policy: &NightResolutionPolicy,
+) {
+    let block_ids = policy.block_action_ids.iter().collect::<BTreeSet<_>>();
+    let protect_ids = policy.protect_action_ids.iter().collect::<BTreeSet<_>>();
+    for action_id in &policy.jailkeep_action_ids {
+        if !block_ids.contains(action_id) {
+            issue(
+                issues,
+                format!("{policy_path}.jailkeep_action_ids"),
+                format!(
+                    "night_resolution Jailkeeper action `{action_id}` must also be declared in block_action_ids"
+                ),
+            );
+        }
+        if !protect_ids.contains(action_id) {
+            issue(
+                issues,
+                format!("{policy_path}.jailkeep_action_ids"),
+                format!(
+                    "night_resolution Jailkeeper action `{action_id}` must also be declared in protect_action_ids"
+                ),
+            );
+        }
+    }
+}
+
+fn validate_night_resolution_intercept_cause_policy(
+    issues: &mut Vec<PackValidationIssue>,
+    policy_path: &str,
+    policy: &NightResolutionPolicy,
+    pack: &Pack,
+) {
+    let path = format!("{policy_path}.intercept_cause_policy");
+    let intercept_sources = night_resolution_intercept_source_ids(policy);
+    if intercept_sources.is_empty() {
+        return;
+    }
+    if policy.intercept_cause_policy.is_empty() {
+        issue(
+            issues,
+            path.clone(),
+            "explicit night_resolution policy must classify intercept causes",
+        );
+    }
+
+    let direct_kill_causes = night_resolution_kill_cause_ids(pack);
+    for source_id in &intercept_sources {
+        if !policy.intercept_cause_policy.contains_key(source_id) {
+            issue(
+                issues,
+                path.clone(),
+                format!(
+                    "night_resolution intercept action `{source_id}` must declare intercept cause"
+                ),
+            );
+        }
+    }
+
+    for (source_id, cause) in &policy.intercept_cause_policy {
+        let entry_path = format!("{path}.{source_id}");
+        if !intercept_sources.contains(source_id) {
+            issue(
+                issues,
+                entry_path.clone(),
+                format!("unknown night_resolution intercept source `{source_id}`"),
+            );
+        }
+        if cause.trim().is_empty() {
+            issue(
+                issues,
+                entry_path.clone(),
+                "night_resolution intercept cause must not be empty",
+            );
+        } else if direct_kill_causes.contains(cause) {
+            issue(
+                issues,
+                entry_path,
+                format!(
+                    "night_resolution intercept cause `{cause}` must not reuse a direct kill cause"
+                ),
+            );
+        }
+    }
+}
+
+fn validate_night_resolution_guard_retaliation_cause_policy(
+    issues: &mut Vec<PackValidationIssue>,
+    policy_path: &str,
+    policy: &NightResolutionPolicy,
+    pack: &Pack,
+) {
+    let path = format!("{policy_path}.guard_retaliation_cause_policy");
+    let retaliation_sources = night_resolution_guard_retaliation_source_ids(policy);
+    if retaliation_sources.is_empty() {
+        return;
+    }
+
+    let intercept_sources = night_resolution_intercept_source_ids(policy);
+    let declared_kill_causes = night_resolution_kill_cause_ids(pack);
+    for source_id in &retaliation_sources {
+        if !intercept_sources.contains(source_id) {
+            issue(
+                issues,
+                format!("{path}.{source_id}"),
+                format!(
+                    "night_resolution guard retaliation source `{source_id}` must also be an intercept source"
+                ),
+            );
+        }
+    }
+
+    for (source_id, cause) in &policy.guard_retaliation_cause_policy {
+        let entry_path = format!("{path}.{source_id}");
+        if cause.trim().is_empty() {
+            issue(
+                issues,
+                entry_path.clone(),
+                "night_resolution guard retaliation cause must not be empty",
+            );
+        } else if !declared_kill_causes.contains(cause) {
+            issue(
+                issues,
+                entry_path,
+                format!(
+                    "night_resolution guard retaliation cause `{cause}` must be declared in kill_cause_ids"
+                ),
+            );
+        }
+    }
+}
+
+fn validate_night_resolution_cpr_harm_cause_policy(
+    issues: &mut Vec<PackValidationIssue>,
+    policy_path: &str,
+    policy: &NightResolutionPolicy,
+    pack: &Pack,
+) {
+    let path = format!("{policy_path}.cpr_harm_cause_policy");
+    let cpr_sources = policy
+        .cpr_action_ids
+        .iter()
+        .cloned()
+        .collect::<BTreeSet<_>>();
+    if cpr_sources.is_empty() {
+        return;
+    }
+    if policy.cpr_harm_cause_policy.is_empty() {
+        issue(
+            issues,
+            path.clone(),
+            "explicit night_resolution policy must classify CPR harm causes",
+        );
+    }
+
+    let direct_kill_causes = night_resolution_kill_cause_ids(pack);
+    for source_id in &cpr_sources {
+        if !policy.cpr_harm_cause_policy.contains_key(source_id) {
+            issue(
+                issues,
+                path.clone(),
+                format!("night_resolution CPR action `{source_id}` must declare harm cause"),
+            );
+        }
+    }
+
+    for (source_id, cause) in &policy.cpr_harm_cause_policy {
+        let entry_path = format!("{path}.{source_id}");
+        if !cpr_sources.contains(source_id) {
+            issue(
+                issues,
+                entry_path.clone(),
+                format!("unknown night_resolution CPR source `{source_id}`"),
+            );
+        }
+        if cause.trim().is_empty() {
+            issue(
+                issues,
+                entry_path.clone(),
+                "night_resolution CPR harm cause must not be empty",
+            );
+        } else if direct_kill_causes.contains(cause) {
+            issue(
+                issues,
+                entry_path,
+                format!(
+                    "night_resolution CPR harm cause `{cause}` must not reuse a direct kill cause"
+                ),
+            );
+        }
+    }
+}
+
+fn validate_night_resolution_guard_dependency_cause_policy(
+    issues: &mut Vec<PackValidationIssue>,
+    policy_path: &str,
+    policy: &NightResolutionPolicy,
+    pack: &Pack,
+) {
+    let path = format!("{policy_path}.guard_dependency_cause_policy");
+    let guard_sources = night_resolution_guard_dependency_source_ids(pack);
+    if guard_sources.is_empty() {
+        return;
+    }
+    if policy.guard_dependency_cause_policy.is_empty() {
+        issue(
+            issues,
+            path.clone(),
+            "explicit night_resolution policy must classify guard dependency causes",
+        );
+    }
+
+    let direct_kill_causes = night_resolution_kill_cause_ids(pack);
+    for source_id in &guard_sources {
+        if !policy.guard_dependency_cause_policy.contains_key(source_id) {
+            issue(
+                issues,
+                path.clone(),
+                format!("night_resolution guard dependency action `{source_id}` must declare dependency cause"),
+            );
+        }
+    }
+
+    for (source_id, cause) in &policy.guard_dependency_cause_policy {
+        let entry_path = format!("{path}.{source_id}");
+        if !guard_sources.contains(source_id) {
+            issue(
+                issues,
+                entry_path.clone(),
+                format!("unknown night_resolution guard dependency source `{source_id}`"),
+            );
+        }
+        if cause.trim().is_empty() {
+            issue(
+                issues,
+                entry_path.clone(),
+                "night_resolution guard dependency cause must not be empty",
+            );
+        } else if direct_kill_causes.contains(cause) {
+            issue(
+                issues,
+                entry_path,
+                format!(
+                    "night_resolution guard dependency cause `{cause}` must not reuse a direct kill cause"
+                ),
+            );
+        }
+    }
+}
+
+fn validate_night_resolution_hide_dependency_cause_policy(
+    issues: &mut Vec<PackValidationIssue>,
+    policy_path: &str,
+    policy: &NightResolutionPolicy,
+    pack: &Pack,
+) {
+    let path = format!("{policy_path}.hide_dependency_cause_policy");
+    let hide_sources = night_resolution_hide_dependency_source_ids(pack);
+    if hide_sources.is_empty() {
+        return;
+    }
+    if policy.hide_dependency_cause_policy.is_empty() {
+        issue(
+            issues,
+            path.clone(),
+            "explicit night_resolution policy must classify hide dependency causes",
+        );
+    }
+
+    let direct_kill_causes = night_resolution_kill_cause_ids(pack);
+    for source_id in &hide_sources {
+        if !policy.hide_dependency_cause_policy.contains_key(source_id) {
+            issue(
+                issues,
+                path.clone(),
+                format!("night_resolution hide dependency action `{source_id}` must declare dependency cause"),
+            );
+        }
+    }
+
+    for (source_id, cause) in &policy.hide_dependency_cause_policy {
+        let entry_path = format!("{path}.{source_id}");
+        if !hide_sources.contains(source_id) {
+            issue(
+                issues,
+                entry_path.clone(),
+                format!("unknown night_resolution hide dependency source `{source_id}`"),
+            );
+        }
+        if cause.trim().is_empty() {
+            issue(
+                issues,
+                entry_path.clone(),
+                "night_resolution hide dependency cause must not be empty",
+            );
+        } else if direct_kill_causes.contains(cause) {
+            issue(
+                issues,
+                entry_path,
+                format!(
+                    "night_resolution hide dependency cause `{cause}` must not reuse a direct kill cause"
+                ),
+            );
+        }
+    }
+}
+
+fn validate_night_resolution_chosen_retaliation_cause_policy(
+    issues: &mut Vec<PackValidationIssue>,
+    policy_path: &str,
+    policy: &NightResolutionPolicy,
+    pack: &Pack,
+) {
+    let path = format!("{policy_path}.chosen_retaliation_cause_policy");
+    let retaliation_sources = night_resolution_chosen_retaliation_source_ids(pack);
+    if retaliation_sources.is_empty() {
+        return;
+    }
+
+    if policy.chosen_retaliation_cause_policy.is_empty() {
+        issue(
+            issues,
+            path.clone(),
+            "explicit night_resolution policy must classify chosen retaliation causes",
+        );
+    }
+
+    for source_id in retaliation_sources.keys() {
+        if !policy
+            .chosen_retaliation_cause_policy
+            .contains_key(source_id)
+        {
+            issue(
+                issues,
+                path.clone(),
+                format!("night_resolution Retaliate action `{source_id}` must declare chosen retaliation cause policy"),
+            );
+        }
+    }
+
+    for (source_id, cause_policy) in &policy.chosen_retaliation_cause_policy {
+        let source_path = format!("{path}.{source_id}");
+        let Some(action) = retaliation_sources.get(source_id) else {
+            issue(
+                issues,
+                source_path.clone(),
+                format!("unknown night_resolution Retaliate action `{source_id}`"),
+            );
+            continue;
+        };
+        let action_is_strongman = action.has_modifier(Modifier::Strongman);
+        if cause_policy.strongman_bypasses_protect != action_is_strongman {
+            issue(
+                issues,
+                format!("{source_path}.strongman_bypasses_protect"),
+                format!(
+                    "night_resolution Retaliate action `{source_id}` strongman_bypasses_protect must match Strongman modifier"
+                ),
+            );
+        }
+    }
+}
+
+fn validate_night_resolution_generated_kill_ownership(
+    issues: &mut Vec<PackValidationIssue>,
+    policy_path: &str,
+    policy: &NightResolutionPolicy,
+    pack: &Pack,
+) {
+    validate_night_resolution_generated_kill_ownership_matrix(issues, policy_path, policy, pack);
+    validate_night_resolution_generated_kill_cause_policy(issues, policy_path, policy, pack);
+    validate_night_resolution_trigger_fixpoint_policy(issues, policy_path, policy, pack);
+    validate_night_resolution_generated_kill_policy_alignment(issues, policy_path, policy, pack);
+    validate_night_resolution_protection_cause_policy(issues, policy_path, policy, pack);
+    validate_night_resolution_target_state_save_policy(issues, policy_path, policy, pack);
+    validate_night_resolution_empower_effects(issues, policy_path, policy, pack);
+    validate_night_resolution_suppression_policy(issues, policy_path, policy, pack);
+}
+
+fn validate_night_resolution_empower_effects(
+    issues: &mut Vec<PackValidationIssue>,
+    policy_path: &str,
+    policy: &NightResolutionPolicy,
+    pack: &Pack,
+) {
+    let path = format!("{policy_path}.empower_effects");
+    if policy.empower_effects.is_empty() {
+        return;
+    }
+
+    validate_unique_strings(issues, path.clone(), &policy.empower_effects);
+    for effect in &policy.empower_effects {
+        if effect.trim().is_empty() {
+            issue(issues, path.clone(), "empower effect tag must not be empty");
+            continue;
+        }
+        let Some(effect_policy) = pack.effects.get(effect) else {
+            issue(
+                issues,
+                path.clone(),
+                format!("unknown night_resolution empower effect `{effect}`"),
+            );
+            continue;
+        };
+        if effect_policy.duration != EffectDuration::Resolution {
+            issue(
+                issues,
+                path.clone(),
+                format!("night_resolution empower effect `{effect}` must be resolution-scoped"),
+            );
+        }
+
+        let mut produced_by_mark = false;
+        for (owner, action) in night_resolution_pack_actions(pack) {
+            if !action.window.is_night_resolution_window()
+                || !action.has_ability(IrAbility::Mark)
+                || action.effect.as_deref() != Some(effect.as_str())
+            {
+                continue;
+            }
+            produced_by_mark = true;
+            let duration = action
+                .effect_duration
+                .or_else(|| pack.effects.get(effect).map(|policy| policy.duration))
+                .unwrap_or(EffectDuration::Persistent);
+            if duration != EffectDuration::Resolution {
+                issue(
+                    issues,
+                    path.clone(),
+                    format!(
+                        "night_resolution empower effect `{effect}` producer {owner} action `{}` must be resolution-scoped",
+                        action.id
+                    ),
+                );
+            }
+        }
+        if !produced_by_mark {
+            issue(
+                issues,
+                path.clone(),
+                format!(
+                    "night_resolution empower effect `{effect}` must be produced by a night Mark action"
+                ),
+            );
+        }
+    }
+}
+
+fn validate_effect_source_death_reveals(
+    issues: &mut Vec<PackValidationIssue>,
+    path: &str,
+    policies: &[EffectSourceDeathRevealPolicy],
+    ir_version: u16,
+    pack: &Pack,
+    effect_tags: &BTreeSet<&str>,
+) {
+    if policies.is_empty() {
+        return;
+    }
+    if ir_version < 57 {
+        issue(
+            issues,
+            path,
+            "effect source-death reveal policies require ir_version >= 57",
+        );
+    }
+
+    let mut ids = BTreeSet::new();
+    let mut effects = BTreeSet::new();
+    for (idx, policy) in policies.iter().enumerate() {
+        let policy_path = format!("{path}[{idx}]");
+        if policy.reveal == EffectSourceDeathRevealKind::Role && ir_version < 58 {
+            issue(
+                issues,
+                format!("{policy_path}.reveal"),
+                "effect source-death role reveal policies require ir_version >= 58",
+            );
+        }
+        if policy.id.trim().is_empty() {
+            issue(
+                issues,
+                format!("{policy_path}.id"),
+                "effect source-death reveal policy id must not be empty",
+            );
+        } else if !ids.insert(policy.id.as_str()) {
+            issue(
+                issues,
+                format!("{policy_path}.id"),
+                format!(
+                    "duplicate effect source-death reveal policy `{}`",
+                    policy.id
+                ),
+            );
+        }
+
+        if policy.effect.trim().is_empty() {
+            issue(
+                issues,
+                format!("{policy_path}.effect"),
+                "effect source-death reveal effect must not be empty",
+            );
+            continue;
+        }
+        if !effects.insert(policy.effect.as_str()) {
+            issue(
+                issues,
+                format!("{policy_path}.effect"),
+                format!(
+                    "duplicate effect source-death reveal effect `{}`",
+                    policy.effect
+                ),
+            );
+        }
+        if !effect_tags.contains(policy.effect.as_str()) {
+            issue(
+                issues,
+                format!("{policy_path}.effect"),
+                format!(
+                    "unknown effect source-death reveal effect `{}`",
+                    policy.effect
+                ),
+            );
+            continue;
+        }
+
+        let Some(effect_policy) = pack.effects.get(&policy.effect) else {
+            issue(
+                issues,
+                format!("{policy_path}.effect"),
+                format!(
+                    "effect source-death reveal effect `{}` must declare effect metadata",
+                    policy.effect
+                ),
+            );
+            continue;
+        };
+        if effect_policy.duration != EffectDuration::Persistent {
+            issue(
+                issues,
+                format!("{policy_path}.effect"),
+                format!(
+                    "effect source-death reveal effect `{}` must be persistent",
+                    policy.effect
+                ),
+            );
+        }
+
+        let produced_by_persistent_mark =
+            night_resolution_pack_actions(pack)
+                .into_iter()
+                .any(|(_, action)| {
+                    action.has_ability(IrAbility::Mark)
+                        && action.effect.as_deref() == Some(policy.effect.as_str())
+                        && action
+                            .effect_duration
+                            .or_else(|| {
+                                pack.effects
+                                    .get(&policy.effect)
+                                    .map(|policy| policy.duration)
+                            })
+                            .unwrap_or(EffectDuration::Persistent)
+                            == EffectDuration::Persistent
+                });
+        if !produced_by_persistent_mark {
+            issue(
+                issues,
+                format!("{policy_path}.effect"),
+                format!(
+                    "effect source-death reveal effect `{}` must be produced by a persistent Mark action",
+                    policy.effect
+                ),
+            );
+        }
+    }
+}
+
+fn validate_night_resolution_generated_kill_ownership_matrix(
+    issues: &mut Vec<PackValidationIssue>,
+    policy_path: &str,
+    policy: &NightResolutionPolicy,
+    pack: &Pack,
+) {
+    let generated_sources = night_resolution_generated_kill_source_ids(pack);
+    if generated_sources.is_empty() {
+        return;
+    }
+
+    let path = format!("{policy_path}.generated_kill_ownership");
+    let kill_causes = policy.kill_cause_ids.iter().collect::<BTreeSet<_>>();
+    let protect_sources = night_resolution_protect_source_ids(policy);
+    let save_tags = night_resolution_target_state_save_tags(pack);
+    let block_sources = night_resolution_block_source_ids(policy);
+    let generated_trigger_feeds = night_resolution_generated_trigger_feed_actions(pack);
+
+    for source_id in generated_sources.keys() {
+        let source_path = format!("{path}.{source_id}");
+        if !kill_causes.contains(source_id) {
+            issue(
+                issues,
+                source_path.clone(),
+                format!("generated kill trigger `{source_id}` is missing from kill_cause_ids"),
+            );
+        }
+        if !policy.generated_kill_cause_policy.contains_key(source_id) {
+            issue(
+                issues,
+                source_path.clone(),
+                format!(
+                    "generated kill trigger `{source_id}` is missing generated_kill_cause_policy"
+                ),
+            );
+        }
+        if !policy.trigger_fixpoint_policy.contains_key(source_id) {
+            issue(
+                issues,
+                source_path.clone(),
+                format!("generated kill trigger `{source_id}` is missing trigger_fixpoint_policy"),
+            );
+        }
+
+        for protect_source in &protect_sources {
+            let Some(cause_policy) = policy.protection_cause_policy.get(protect_source) else {
+                continue;
+            };
+            if !night_resolution_blocks_bypasses_contains(
+                &cause_policy.blocks,
+                &cause_policy.bypasses,
+                source_id,
+            ) {
+                issue(
+                    issues,
+                    source_path.clone(),
+                    format!(
+                        "generated kill trigger `{source_id}` is not owned by protection source `{protect_source}`"
+                    ),
+                );
+            }
+        }
+
+        for save_tag in &save_tags {
+            let Some(save_policy) = policy.target_state_save_policy.get(save_tag) else {
+                continue;
+            };
+            if !night_resolution_blocks_bypasses_contains(
+                &save_policy.blocks,
+                &save_policy.bypasses,
+                source_id,
+            ) {
+                issue(
+                    issues,
+                    source_path.clone(),
+                    format!(
+                        "generated kill trigger `{source_id}` is not owned by target-state save `{save_tag}`"
+                    ),
+                );
+            }
+        }
+
+        for block_source in &block_sources {
+            let Some(suppression) = policy.suppression_policy.get(block_source) else {
+                continue;
+            };
+            for (action_id, trigger_ids) in &generated_trigger_feeds {
+                if !trigger_ids.contains(source_id) {
+                    continue;
+                }
+                if !night_resolution_suppression_contains(suppression, action_id) {
+                    issue(
+                        issues,
+                        source_path.clone(),
+                        format!(
+                            "generated kill trigger `{source_id}` feeder action `{action_id}` is not owned by block source `{block_source}`"
+                        ),
+                    );
+                }
+            }
+        }
+    }
+}
+
+fn night_resolution_blocks_bypasses_contains(
+    blocks: &[String],
+    bypasses: &[String],
+    cause: &str,
+) -> bool {
+    blocks.iter().any(|item| item == cause) || bypasses.iter().any(|item| item == cause)
+}
+
+fn night_resolution_suppression_contains(policy: &SuppressionPolicy, action_id: &str) -> bool {
+    policy.suppresses.iter().any(|item| item == action_id)
+        || policy.bypasses.iter().any(|item| item == action_id)
+}
+
+fn validate_night_resolution_generated_kill_cause_policy(
+    issues: &mut Vec<PackValidationIssue>,
+    policy_path: &str,
+    policy: &NightResolutionPolicy,
+    pack: &Pack,
+) {
+    let path = format!("{policy_path}.generated_kill_cause_policy");
+    let generated_sources = night_resolution_generated_kill_source_ids(pack);
+    if generated_sources.is_empty() {
+        return;
+    }
+    if policy.generated_kill_cause_policy.is_empty() {
+        issue(
+            issues,
+            path.clone(),
+            "explicit night_resolution policy must classify generated kill causes",
+        );
+    }
+
+    for source_id in generated_sources.keys() {
+        if !policy.generated_kill_cause_policy.contains_key(source_id) {
+            issue(
+                issues,
+                path.clone(),
+                format!("night_resolution generated kill trigger `{source_id}` must declare generated kill cause policy"),
+            );
+        }
+    }
+
+    for (source_id, cause_policy) in &policy.generated_kill_cause_policy {
+        let entry_path = format!("{path}.{source_id}");
+        let Some(trigger) = generated_sources.get(source_id) else {
+            issue(
+                issues,
+                entry_path,
+                format!("unknown night_resolution generated kill trigger `{source_id}`"),
+            );
+            continue;
+        };
+        if cause_policy.on.is_none() {
+            issue(
+                issues,
+                format!("{entry_path}.on"),
+                format!(
+                    "night_resolution generated kill trigger `{source_id}` must declare trigger on"
+                ),
+            );
+        } else if cause_policy.on != Some(trigger.on) {
+            issue(
+                issues,
+                format!("{entry_path}.on"),
+                format!(
+                    "night_resolution generated kill trigger `{source_id}` on must match trigger rule"
+                ),
+            );
+        }
+        if cause_policy.actor.is_none() {
+            issue(
+                issues,
+                format!("{entry_path}.actor"),
+                format!(
+                    "night_resolution generated kill trigger `{source_id}` must declare produced actor"
+                ),
+            );
+        } else if cause_policy.actor != Some(trigger.produces.actor) {
+            issue(
+                issues,
+                format!("{entry_path}.actor"),
+                format!(
+                    "night_resolution generated kill trigger `{source_id}` actor must match trigger production"
+                ),
+            );
+        }
+        if cause_policy.target.is_none() {
+            issue(
+                issues,
+                format!("{entry_path}.target"),
+                format!(
+                    "night_resolution generated kill trigger `{source_id}` must declare produced target"
+                ),
+            );
+        } else if cause_policy.target != Some(trigger.produces.target) {
+            issue(
+                issues,
+                format!("{entry_path}.target"),
+                format!(
+                    "night_resolution generated kill trigger `{source_id}` target must match trigger production"
+                ),
+            );
+        }
+        let trigger_is_strongman = trigger.produces.modifiers.contains(&Modifier::Strongman);
+        if cause_policy.strongman_bypasses_protect != trigger_is_strongman {
+            issue(
+                issues,
+                format!("{entry_path}.strongman_bypasses_protect"),
+                format!(
+                    "night_resolution generated kill trigger `{source_id}` strongman_bypasses_protect must match produced Strongman modifier"
+                ),
+            );
+        }
+    }
+}
+
+fn validate_night_resolution_trigger_fixpoint_policy(
+    issues: &mut Vec<PackValidationIssue>,
+    policy_path: &str,
+    policy: &NightResolutionPolicy,
+    pack: &Pack,
+) {
+    let path = format!("{policy_path}.trigger_fixpoint_policy");
+    let generated_sources = night_resolution_generated_kill_source_ids(pack);
+    if generated_sources.is_empty() {
+        return;
+    }
+    if policy.trigger_fixpoint_policy.is_empty() {
+        issue(
+            issues,
+            path.clone(),
+            "explicit night_resolution policy must classify trigger fixpoint participation",
+        );
+    }
+
+    for source_id in generated_sources.keys() {
+        if !policy.trigger_fixpoint_policy.contains_key(source_id) {
+            issue(
+                issues,
+                path.clone(),
+                format!(
+                    "night_resolution generated kill trigger `{source_id}` must declare trigger fixpoint policy"
+                ),
+            );
+        }
+    }
+
+    for (source_id, fixpoint_policy) in &policy.trigger_fixpoint_policy {
+        let entry_path = format!("{path}.{source_id}");
+        let Some(trigger) = generated_sources.get(source_id) else {
+            issue(
+                issues,
+                entry_path,
+                format!("unknown night_resolution trigger fixpoint source `{source_id}`"),
+            );
+            continue;
+        };
+        if fixpoint_policy.on.is_none() {
+            issue(
+                issues,
+                format!("{entry_path}.on"),
+                format!("night_resolution trigger `{source_id}` must declare observed trigger on"),
+            );
+        } else if fixpoint_policy.on != Some(trigger.on) {
+            issue(
+                issues,
+                format!("{entry_path}.on"),
+                format!("night_resolution trigger `{source_id}` on must match trigger rule"),
+            );
+        }
+        if !fixpoint_policy.produced_kill_reenters {
+            issue(
+                issues,
+                format!("{entry_path}.produced_kill_reenters"),
+                format!(
+                    "night_resolution generated kill trigger `{source_id}` must declare produced_kill_reenters true"
+                ),
+            );
+        }
+        if fixpoint_policy.loop_cap.is_none() {
+            issue(
+                issues,
+                format!("{entry_path}.loop_cap"),
+                format!("night_resolution trigger `{source_id}` must declare loop_cap policy"),
+            );
+        } else if fixpoint_policy.loop_cap != Some(TriggerLoopCapPolicy::RedirectLoopCap) {
+            issue(
+                issues,
+                format!("{entry_path}.loop_cap"),
+                format!("night_resolution trigger `{source_id}` loop_cap must use RedirectLoopCap"),
+            );
+        }
+        if !fixpoint_policy.trace {
+            issue(
+                issues,
+                format!("{entry_path}.trace"),
+                format!("night_resolution trigger `{source_id}` must declare trace true"),
+            );
+        }
+    }
+}
+
+fn validate_night_resolution_generated_kill_policy_alignment(
+    issues: &mut Vec<PackValidationIssue>,
+    policy_path: &str,
+    policy: &NightResolutionPolicy,
+    pack: &Pack,
+) {
+    let generated_sources = night_resolution_generated_kill_source_ids(pack);
+    for source_id in generated_sources.keys() {
+        let has_cause_policy = policy.generated_kill_cause_policy.contains_key(source_id);
+        let has_fixpoint_policy = policy.trigger_fixpoint_policy.contains_key(source_id);
+        if has_cause_policy && !has_fixpoint_policy {
+            issue(
+                issues,
+                format!("{policy_path}.generated_kill_cause_policy.{source_id}"),
+                format!(
+                    "night_resolution generated kill trigger `{source_id}` must also declare trigger fixpoint policy"
+                ),
+            );
+        }
+        if has_fixpoint_policy && !has_cause_policy {
+            issue(
+                issues,
+                format!("{policy_path}.trigger_fixpoint_policy.{source_id}"),
+                format!(
+                    "night_resolution generated kill trigger `{source_id}` must also declare generated kill cause policy"
+                ),
+            );
+        }
+    }
+}
+
+fn validate_night_resolution_bucket(
+    issues: &mut Vec<PackValidationIssue>,
+    policy_path: &str,
+    field: &str,
+    action_ids: &[String],
+    pack: &Pack,
+    predicate: impl Fn(&ActionTemplate) -> bool,
+    expected: &str,
+) {
+    let path = format!("{policy_path}.{field}");
+    if action_ids.is_empty() {
+        issue(
+            issues,
+            path.clone(),
+            format!("explicit night_resolution policy must declare {field}"),
+        );
+    }
+    validate_unique_strings(issues, path.clone(), action_ids);
+    for action_id in action_ids {
+        if action_id.trim().is_empty() {
+            issue(
+                issues,
+                path.clone(),
+                format!("{field} id must not be empty"),
+            );
+            continue;
+        }
+        let matches: Vec<&ActionTemplate> = night_resolution_pack_actions(pack)
+            .into_iter()
+            .map(|(_, action)| action)
+            .filter(|action| action.id == action_id.as_str())
+            .collect();
+        if matches.is_empty() {
+            issue(
+                issues,
+                path.clone(),
+                format!("unknown night_resolution action `{action_id}`"),
+            );
+            continue;
+        }
+        if !matches
+            .iter()
+            .any(|action| action.window.is_night_resolution_window() && predicate(action))
+        {
+            issue(
+                issues,
+                path.clone(),
+                format!(
+                    "night_resolution action `{action_id}` must be a night/any {expected} action"
+                ),
+            );
+        }
+    }
+}
+
+fn night_resolution_pack_actions(pack: &Pack) -> Vec<(String, &ActionTemplate)> {
+    let mut actions = Vec::new();
+    for (role_key, role) in &pack.roles {
+        for action in &role.actions {
+            actions.push((format!("role `{role_key}`"), action));
+        }
+    }
+    for (grant_id, action) in &pack.item_actions {
+        actions.push((format!("item_actions `{grant_id}`"), action));
+    }
+    actions
+}
+
+fn pack_uses_ability(pack: &Pack, ability: IrAbility) -> bool {
+    night_resolution_pack_actions(pack)
+        .iter()
+        .any(|(_, action)| action.has_ability(ability))
+}
+
+fn pack_kill_cause_ids(pack: &Pack) -> BTreeSet<String> {
+    let mut causes = BTreeSet::new();
+    for (_, action) in night_resolution_pack_actions(pack) {
+        if action.has_ability(IrAbility::Kill) {
+            causes.insert(action.id.clone());
+            causes.extend(action.source_ids.iter().cloned());
+        }
+        if action.has_ability(IrAbility::SelfDestruct) {
+            if let Some(spec) = &action.self_destruct {
+                causes.insert(spec.cause.clone());
+            }
+        }
+        if action.has_ability(IrAbility::ItaShot) {
+            causes.insert("ita_shot".to_string());
+        }
+        if action.has_ability(IrAbility::Duel) || action.has_ability(IrAbility::VoteDuel) {
+            causes.insert(action.id.clone());
+            causes.extend(action.source_ids.iter().cloned());
+        }
+        if action.has_ability(IrAbility::Retaliate) {
+            causes.insert(action.id.clone());
+            causes.extend(action.source_ids.iter().cloned());
+        }
+    }
+    for trigger in &pack.triggers {
+        if trigger.produces.ability == IrAbility::Kill {
+            causes.insert(trigger.id.clone());
+        }
+    }
+    for effect in &pack.host_prompt_resolution_effects {
+        if effect.effect == HostPromptResolutionEffect::PkKill {
+            causes.insert("host_prompt:pk".to_string());
+        }
+    }
+    if pack.wolf_carry.enabled {
+        causes.insert(pack.wolf_carry.cause.clone());
+    }
+    if pack.wolf_beauty.enabled {
+        causes.insert(pack.wolf_beauty.drag_cause.clone());
+    }
+    if pack.lover_policy.enabled {
+        causes.insert(pack.lover_policy.suicide_cause.clone());
+    }
+    causes.extend(
+        pack.night_resolution
+            .intercept_cause_policy
+            .values()
+            .cloned(),
+    );
+    causes.extend(
+        pack.night_resolution
+            .guard_retaliation_cause_policy
+            .values()
+            .cloned(),
+    );
+    causes.extend(
+        pack.night_resolution
+            .cpr_harm_cause_policy
+            .values()
+            .cloned(),
+    );
+    causes.extend(
+        pack.night_resolution
+            .guard_dependency_cause_policy
+            .values()
+            .cloned(),
+    );
+    causes.extend(
+        pack.night_resolution
+            .hide_dependency_cause_policy
+            .values()
+            .cloned(),
+    );
+    causes.extend(
+        pack.night_resolution
+            .chosen_retaliation_cause_policy
+            .keys()
+            .cloned(),
+    );
+    causes.insert("day_vote".to_string());
+    causes.insert("lynch".to_string());
+    causes.insert("weak".to_string());
+    causes
+}
+
+fn validate_policy_action_ref(
+    issues: &mut Vec<PackValidationIssue>,
+    path: impl Into<String>,
+    pack: &Pack,
+    action_id: &str,
+    required_ability: IrAbility,
+    label: &str,
+) {
+    let path = path.into();
+    if action_id.trim().is_empty() {
+        issue(issues, path, format!("{label} id must not be empty"));
+        return;
+    }
+    let matches: Vec<&ActionTemplate> = pack
+        .roles
+        .values()
+        .flat_map(|role| role.actions.iter())
+        .filter(|action| action.id == action_id)
+        .collect();
+    if matches.is_empty() {
+        issue(issues, path, format!("unknown {label} `{action_id}`"));
+        return;
+    }
+    if !matches.iter().any(|action| {
+        action.has_ability(required_ability) && action.window.is_night_resolution_window()
+    }) {
+        issue(
+            issues,
+            path,
+            format!("{label} `{action_id}` must be a night/any {required_ability:?} action"),
+        );
+    }
+}
+
+fn policy_action_templates<'a>(
+    pack: &'a Pack,
+    action_id: &str,
+    required_ability: IrAbility,
+) -> Vec<&'a ActionTemplate> {
+    pack.roles
+        .values()
+        .flat_map(|role| role.actions.iter())
+        .filter(|action| {
+            action.id == action_id
+                && action.has_ability(required_ability)
+                && action.window.is_night_resolution_window()
+        })
+        .collect()
+}
+
+fn validate_death_retaliation_policy(
+    issues: &mut Vec<PackValidationIssue>,
+    path: &str,
+    policy: &DeathRetaliationPolicy,
+    ir_version: u16,
+    role_keys: &BTreeSet<&str>,
+    cadence: &BTreeSet<PhaseKind>,
+) {
+    if !policy.enabled {
+        return;
+    }
+    if ir_version < 14 {
+        issue(
+            issues,
+            path,
+            "enabled death retaliation policy requires ir_version >= 14",
+        );
+    }
+    if policy.eligible_roles.is_empty() {
+        issue(
+            issues,
+            format!("{path}.eligible_roles"),
+            "enabled death retaliation policy must declare eligible_roles",
+        );
+    }
+    validate_unique_strings(
+        issues,
+        format!("{path}.eligible_roles"),
+        &policy.eligible_roles,
+    );
+    for role_key in &policy.eligible_roles {
+        if !role_keys.contains(role_key.as_str()) {
+            issue(
+                issues,
+                format!("{path}.eligible_roles"),
+                format!("unknown eligible role `{role_key}`"),
+            );
+        }
+    }
+    if policy.timing.is_none() {
+        issue(
+            issues,
+            format!("{path}.timing"),
+            "enabled death retaliation policy must declare timing",
+        );
+    }
+    if policy.allowed_death_causes.is_empty() {
+        issue(
+            issues,
+            format!("{path}.allowed_death_causes"),
+            "enabled death retaliation policy must declare allowed_death_causes",
+        );
+    }
+    validate_unique_strings(
+        issues,
+        format!("{path}.allowed_death_causes"),
+        &policy.allowed_death_causes,
+    );
+    validate_unique_strings(
+        issues,
+        format!("{path}.suppressed_death_causes"),
+        &policy.suppressed_death_causes,
+    );
+    for cause in policy
+        .allowed_death_causes
+        .iter()
+        .chain(policy.suppressed_death_causes.iter())
+    {
+        if cause.trim().is_empty() {
+            issue(issues, path, "death retaliation causes must not be empty");
+        }
+    }
+    for cause in &policy.allowed_death_causes {
+        if policy.suppressed_death_causes.contains(cause) {
+            issue(
+                issues,
+                path,
+                format!("death cause `{cause}` cannot be both allowed and suppressed"),
+            );
+        }
+    }
+    if !cadence.contains(&PhaseKind::Night) {
+        issue(
+            issues,
+            path,
+            "enabled death retaliation policy requires Night in phases.cadence",
+        );
+    }
+}
+
+fn validate_death_reveal_policy(
+    issues: &mut Vec<PackValidationIssue>,
+    path: &str,
+    policy: &DeathRevealPolicy,
+    ir_version: u16,
+    pack: &Pack,
+    effect_tags: &BTreeSet<&str>,
+) {
+    if *policy != DeathRevealPolicy::default() && ir_version < 26 {
+        issue(
+            issues,
+            path,
+            "death_reveal policy requires ir_version >= 26",
+        );
+    }
+
+    let kill_causes = pack_kill_cause_ids(pack);
+    for cause in policy.by_cause.keys() {
+        if cause.trim().is_empty() {
+            issue(
+                issues,
+                format!("{path}.by_cause"),
+                "death reveal cause must not be empty",
+            );
+        } else if !kill_causes.contains(cause) {
+            issue(
+                issues,
+                format!("{path}.by_cause.{cause}"),
+                format!("unknown kill cause `{cause}`"),
+            );
+        }
+    }
+
+    for effect in policy.by_effect.keys() {
+        if effect.trim().is_empty() {
+            issue(
+                issues,
+                format!("{path}.by_effect"),
+                "death reveal effect must not be empty",
+            );
+        } else if !effect_tags.contains(effect.as_str()) {
+            issue(
+                issues,
+                format!("{path}.by_effect.{effect}"),
+                format!("unknown effect tag `{effect}`"),
+            );
+        }
+    }
+}
+
+fn validate_idiot_policy(
+    issues: &mut Vec<PackValidationIssue>,
+    path: &str,
+    policy: &IdiotPolicy,
+    ir_version: u16,
+    role_keys: &BTreeSet<&str>,
+    effect_tags: &BTreeSet<&str>,
+    cadence: &BTreeSet<PhaseKind>,
+) {
+    if !policy.enabled {
+        return;
+    }
+    if ir_version < 15 {
+        issue(
+            issues,
+            path,
+            "enabled idiot policy requires ir_version >= 15",
+        );
+    }
+    if policy.eligible_roles.is_empty() {
+        issue(
+            issues,
+            format!("{path}.eligible_roles"),
+            "enabled idiot policy must declare eligible_roles",
+        );
+    }
+    validate_unique_strings(
+        issues,
+        format!("{path}.eligible_roles"),
+        &policy.eligible_roles,
+    );
+    for role_key in &policy.eligible_roles {
+        if !role_keys.contains(role_key.as_str()) {
+            issue(
+                issues,
+                format!("{path}.eligible_roles"),
+                format!("unknown eligible role `{role_key}`"),
+            );
+        }
+    }
+    if policy.vote_loss_effect.trim().is_empty() {
+        issue(
+            issues,
+            format!("{path}.vote_loss_effect"),
+            "idiot vote_loss_effect must not be empty",
+        );
+    } else if !effect_tags.contains(policy.vote_loss_effect.as_str()) {
+        issue(
+            issues,
+            format!("{path}.vote_loss_effect"),
+            format!("unknown vote loss effect `{}`", policy.vote_loss_effect),
+        );
+    }
+    if policy.survival_reason.trim().is_empty() {
+        issue(
+            issues,
+            format!("{path}.survival_reason"),
+            "idiot survival_reason must not be empty",
+        );
+    }
+    if !cadence.contains(&PhaseKind::Day) {
+        issue(
+            issues,
+            path,
+            "enabled idiot policy requires Day in phases.cadence",
+        );
+    }
+}
+
+fn validate_saulus_policy(
+    issues: &mut Vec<PackValidationIssue>,
+    path: &str,
+    policy: &SaulusPolicy,
+    ir_version: u16,
+    role_keys: &BTreeSet<&str>,
+    alignments: &BTreeSet<&str>,
+    cadence: &BTreeSet<PhaseKind>,
+) {
+    if !policy.enabled {
+        return;
+    }
+    if ir_version < 62 {
+        issue(
+            issues,
+            path,
+            "enabled saulus policy requires ir_version >= 62",
+        );
+    }
+    if policy.eligible_roles.is_empty() {
+        issue(
+            issues,
+            format!("{path}.eligible_roles"),
+            "enabled saulus policy must declare eligible_roles",
+        );
+    }
+    validate_unique_strings(
+        issues,
+        format!("{path}.eligible_roles"),
+        &policy.eligible_roles,
+    );
+    for role_key in &policy.eligible_roles {
+        if !role_keys.contains(role_key.as_str()) {
+            issue(
+                issues,
+                format!("{path}.eligible_roles"),
+                format!("unknown eligible role `{role_key}`"),
+            );
+        }
+    }
+    validate_alignment_ref(
+        issues,
+        format!("{path}.target_alignment"),
+        &policy.target_alignment,
+        alignments,
+    );
+    if policy.survival_reason.trim().is_empty() {
+        issue(
+            issues,
+            format!("{path}.survival_reason"),
+            "saulus survival_reason must not be empty",
+        );
+    }
+    if !cadence.contains(&PhaseKind::Day) {
+        issue(
+            issues,
+            path,
+            "enabled saulus policy requires Day in phases.cadence",
+        );
+    }
+}
+
+fn validate_backup_policy(
+    issues: &mut Vec<PackValidationIssue>,
+    path: &str,
+    policy: &BackupPolicy,
+    ir_version: u16,
+    role_keys: &BTreeSet<&str>,
+    effect_tags: &BTreeSet<&str>,
+) {
+    if !policy.enabled {
+        return;
+    }
+    if ir_version < 68 {
+        issue(
+            issues,
+            path,
+            "enabled backup policy requires ir_version >= 68",
+        );
+    }
+    if policy.priority.is_none() {
+        issue(
+            issues,
+            format!("{path}.priority"),
+            "enabled backup policy requires an explicit priority",
+        );
+    } else if ir_version < 68 {
+        issue(
+            issues,
+            format!("{path}.priority"),
+            "backup priority policy requires ir_version >= 68",
+        );
+    }
+    if policy.passive_effect_prefix.trim().is_empty() {
+        issue(
+            issues,
+            format!("{path}.passive_effect_prefix"),
+            "backup passive_effect_prefix must not be empty",
+        );
+    }
+    if policy.targeted_effect.trim().is_empty() {
+        issue(
+            issues,
+            format!("{path}.targeted_effect"),
+            "backup targeted_effect must not be empty",
+        );
+    } else if !effect_tags.contains(policy.targeted_effect.as_str()) {
+        issue(
+            issues,
+            format!("{path}.targeted_effect"),
+            format!(
+                "unknown targeted backup effect `{}`",
+                policy.targeted_effect
+            ),
+        );
+    }
+
+    for role in role_keys {
+        let passive_effect = format!("{}{}", policy.passive_effect_prefix, role);
+        if !effect_tags.contains(passive_effect.as_str()) {
+            continue;
+        }
+        if !role_keys.contains(role) {
+            issue(
+                issues,
+                format!("{path}.passive_effect_prefix"),
+                format!("backup effect `{passive_effect}` references unknown role `{role}`"),
+            );
+        }
+    }
+    for effect in effect_tags {
+        let Some(role) = effect.strip_prefix(&policy.passive_effect_prefix) else {
+            continue;
+        };
+        if !role.is_empty() && !role_keys.contains(role) {
+            issue(
+                issues,
+                format!("{path}.passive_effect_prefix"),
+                format!("backup effect `{effect}` references unknown role `{role}`"),
+            );
+        }
+    }
+}
+
+fn validate_private_channel_policy(
+    issues: &mut Vec<PackValidationIssue>,
+    path: &str,
+    policy: &PrivateChannelPolicy,
+    ir_version: u16,
+    role_keys: &BTreeSet<&str>,
+) {
+    if !policy.enabled {
+        if !policy.groups.is_empty() {
+            issue(
+                issues,
+                path,
+                "private channel groups require private_channels.enabled",
+            );
+        }
+        return;
+    }
+    if ir_version < 29 {
+        issue(
+            issues,
+            path,
+            "enabled private channel policy requires ir_version >= 29",
+        );
+    }
+    if policy.groups.is_empty() {
+        issue(issues, path, "private channel groups must not be empty");
+    }
+
+    let mut ids = BTreeSet::new();
+    for group in &policy.groups {
+        let group_path = format!("{path}.{}", group.id);
+        if group.id.trim().is_empty() {
+            issue(issues, path, "private channel group id must not be empty");
+        } else if !ids.insert(group.id.as_str()) {
+            issue(
+                issues,
+                format!("{path}.{}", group.id),
+                format!("duplicate private channel group id `{}`", group.id),
+            );
+        }
+        let is_faction_day_chat = group.kind == PrivateChannelKind::FactionDayChat;
+        if group.roles.is_empty() && !is_faction_day_chat {
+            issue(
+                issues,
+                group_path.clone(),
+                "private channel group roles must not be empty",
+            );
+        }
+        let mut roles = BTreeSet::new();
+        for role in &group.roles {
+            if role.trim().is_empty() {
+                issue(
+                    issues,
+                    format!("{group_path}.roles"),
+                    "private channel role must not be empty",
+                );
+            } else if !role_keys.contains(role.as_str()) {
+                issue(
+                    issues,
+                    format!("{group_path}.roles"),
+                    format!("unknown private channel role `{role}`"),
+                );
+            } else if !roles.insert(role.as_str()) {
+                issue(
+                    issues,
+                    format!("{group_path}.roles"),
+                    format!("duplicate private channel role `{role}`"),
+                );
+            }
+        }
+        if !group.excluded_roles.is_empty() && ir_version < 64 {
+            issue(
+                issues,
+                format!("{group_path}.excluded_roles"),
+                "private channel role exclusions require ir_version >= 64",
+            );
+        }
+        let mut excluded_roles = BTreeSet::new();
+        for role in &group.excluded_roles {
+            if role.trim().is_empty() {
+                issue(
+                    issues,
+                    format!("{group_path}.excluded_roles"),
+                    "private channel excluded role must not be empty",
+                );
+            } else if !role_keys.contains(role.as_str()) {
+                issue(
+                    issues,
+                    format!("{group_path}.excluded_roles"),
+                    format!("unknown private channel excluded role `{role}`"),
+                );
+            } else if !excluded_roles.insert(role.as_str()) {
+                issue(
+                    issues,
+                    format!("{group_path}.excluded_roles"),
+                    format!("duplicate private channel excluded role `{role}`"),
+                );
+            }
+        }
+        let mut enabled_by_roles = BTreeSet::new();
+        for role in &group.enabled_by_roles {
+            if role.trim().is_empty() {
+                issue(
+                    issues,
+                    format!("{group_path}.enabled_by_roles"),
+                    "private channel enabling role must not be empty",
+                );
+            } else if !role_keys.contains(role.as_str()) {
+                issue(
+                    issues,
+                    format!("{group_path}.enabled_by_roles"),
+                    format!("unknown private channel enabling role `{role}`"),
+                );
+            } else if !enabled_by_roles.insert(role.as_str()) {
+                issue(
+                    issues,
+                    format!("{group_path}.enabled_by_roles"),
+                    format!("duplicate private channel enabling role `{role}`"),
+                );
+            }
+        }
+        let mut member_alignments = BTreeSet::new();
+        for alignment in &group.member_alignments {
+            if alignment.trim().is_empty() {
+                issue(
+                    issues,
+                    format!("{group_path}.member_alignments"),
+                    "private channel member alignment must not be empty",
+                );
+            } else if !member_alignments.insert(alignment.as_str()) {
+                issue(
+                    issues,
+                    format!("{group_path}.member_alignments"),
+                    format!("duplicate private channel member alignment `{alignment}`"),
+                );
+            }
+        }
+        match (group.kind, group.reveals_alignment) {
+            (PrivateChannelKind::Mason, PrivateChannelAlignmentReveal::Town)
+            | (PrivateChannelKind::Neighbor, PrivateChannelAlignmentReveal::None)
+            | (PrivateChannelKind::FactionDayChat, PrivateChannelAlignmentReveal::None) => {}
+            (PrivateChannelKind::Mason, _) => issue(
+                issues,
+                format!("{group_path}.reveals_alignment"),
+                "mason private channels must reveal Town alignment",
+            ),
+            (PrivateChannelKind::Neighbor, _) => issue(
+                issues,
+                format!("{group_path}.reveals_alignment"),
+                "neighbor private channels must not reveal alignment",
+            ),
+            (PrivateChannelKind::FactionDayChat, _) => issue(
+                issues,
+                format!("{group_path}.reveals_alignment"),
+                "faction day-chat private channels must not reveal alignment",
+            ),
+        }
+        match group.kind {
+            PrivateChannelKind::Mason | PrivateChannelKind::Neighbor => {
+                if !group.member_alignments.is_empty() {
+                    issue(
+                        issues,
+                        format!("{group_path}.member_alignments"),
+                        "role-based private channels must not declare member_alignments",
+                    );
+                }
+                if !group.enabled_by_roles.is_empty() {
+                    issue(
+                        issues,
+                        format!("{group_path}.enabled_by_roles"),
+                        "role-based private channels must not declare enabled_by_roles",
+                    );
+                }
+                if group.active_while_source_alive {
+                    issue(
+                        issues,
+                        format!("{group_path}.active_while_source_alive"),
+                        "role-based private channels must not be source-alive gated",
+                    );
+                }
+                if !group.excluded_roles.is_empty() {
+                    issue(
+                        issues,
+                        format!("{group_path}.excluded_roles"),
+                        "role-based private channels must not declare excluded_roles",
+                    );
+                }
+            }
+            PrivateChannelKind::FactionDayChat => {
+                if !group.roles.is_empty() {
+                    issue(
+                        issues,
+                        format!("{group_path}.roles"),
+                        "faction day-chat private channels use member_alignments, not roles",
+                    );
+                }
+                if group.member_alignments.is_empty() {
+                    issue(
+                        issues,
+                        format!("{group_path}.member_alignments"),
+                        "faction day-chat private channels must declare member_alignments",
+                    );
+                }
+                if group.enabled_by_roles.is_empty() {
+                    issue(
+                        issues,
+                        format!("{group_path}.enabled_by_roles"),
+                        "faction day-chat private channels must declare enabled_by_roles",
+                    );
+                }
+                if !group.active_while_source_alive {
+                    issue(
+                        issues,
+                        format!("{group_path}.active_while_source_alive"),
+                        "faction day-chat private channels must be source-alive gated",
+                    );
+                }
+            }
+        }
+    }
+}
+
+fn validate_treestump_policy(
+    issues: &mut Vec<PackValidationIssue>,
+    path: &str,
+    policy: &TreestumpPolicy,
+    ir_version: u16,
+    role_keys: &BTreeSet<&str>,
+) {
+    if !policy.enabled {
+        if !policy.eligible_roles.is_empty() {
+            issue(
+                issues,
+                path,
+                "treestump eligible roles require treestump_policy.enabled",
+            );
+        }
+        return;
+    }
+    if ir_version < 30 {
+        issue(
+            issues,
+            path,
+            "enabled treestump policy requires ir_version >= 30",
+        );
+    }
+    if policy.status_tag.trim().is_empty() {
+        issue(
+            issues,
+            format!("{path}.status_tag"),
+            "status tag must not be empty",
+        );
+    }
+    if policy.eligible_roles.is_empty() {
+        issue(issues, path, "eligible roles must not be empty");
+    }
+
+    let mut roles = BTreeSet::new();
+    for role in &policy.eligible_roles {
+        if role.trim().is_empty() {
+            issue(
+                issues,
+                format!("{path}.eligible_roles"),
+                "eligible role must not be empty",
+            );
+        } else if !role_keys.contains(role.as_str()) {
+            issue(
+                issues,
+                format!("{path}.eligible_roles"),
+                format!("unknown treestump role `{role}`"),
+            );
+        } else if !roles.insert(role.as_str()) {
+            issue(
+                issues,
+                format!("{path}.eligible_roles"),
+                format!("duplicate treestump role `{role}`"),
+            );
+        }
+    }
+}
+
+fn validate_target_lynch_win_policies(
+    issues: &mut Vec<PackValidationIssue>,
+    context: &PackValidationContext<'_>,
+) {
+    let path = "target_lynch_win_policies";
+    let policies = &context.pack.target_lynch_win_policies;
+    let ir_version = context.pack.ir_version;
+    let role_keys = &context.role_keys;
+    let alignments = &context.alignments;
+    let effect_tags = &context.effect_tags;
+    let cadence = &context.cadence;
+
+    if policies.is_empty() {
+        return;
+    }
+    if ir_version < 19 {
+        issue(
+            issues,
+            path,
+            "target lynch win policies require ir_version >= 19",
+        );
+    }
+    let mut ids = Vec::new();
+    let mut source_keys = BTreeSet::new();
+    for (idx, policy) in policies.iter().enumerate() {
+        let item_path = format!("{path}[{idx}]");
+        ids.push(policy.id.clone());
+        if policy.id.trim().is_empty() {
+            issue(
+                issues,
+                format!("{item_path}.id"),
+                "target lynch win policy id must not be empty",
+            );
+        }
+        if policy.target_effect.trim().is_empty() {
+            issue(
+                issues,
+                format!("{item_path}.target_effect"),
+                "target lynch win target_effect must not be empty",
+            );
+        } else if !effect_tags.contains(policy.target_effect.as_str()) {
+            issue(
+                issues,
+                format!("{item_path}.target_effect"),
+                format!("unknown target effect `{}`", policy.target_effect),
+            );
+        }
+        if policy.eligible_roles.is_empty() {
+            issue(
+                issues,
+                format!("{item_path}.eligible_roles"),
+                "target lynch win policy must declare eligible_roles",
+            );
+        }
+        validate_unique_strings(
+            issues,
+            format!("{item_path}.eligible_roles"),
+            &policy.eligible_roles,
+        );
+        for role_key in &policy.eligible_roles {
+            if !role_keys.contains(role_key.as_str()) {
+                issue(
+                    issues,
+                    format!("{item_path}.eligible_roles"),
+                    format!("unknown eligible role `{role_key}`"),
+                );
+            }
+            let semantic_key = (role_key.clone(), policy.target_effect.clone());
+            if !role_key.trim().is_empty()
+                && !policy.target_effect.trim().is_empty()
+                && !source_keys.insert(semantic_key)
+            {
+                issue(
+                    issues,
+                    format!("{item_path}.eligible_roles"),
+                    format!(
+                        "duplicate target lynch win source `{}` for eligible role `{role_key}`",
+                        policy.target_effect
+                    ),
+                );
+            }
+        }
+        validate_alignment_ref(
+            issues,
+            format!("{item_path}.winner"),
+            &policy.winner,
+            alignments,
+        );
+    }
+    validate_unique_strings(issues, format!("{path}.id"), &ids);
+    if !cadence.contains(&PhaseKind::Day) {
+        issue(
+            issues,
+            path,
+            "target lynch win policies require Day in phases.cadence",
+        );
+    }
+}
+
+fn validate_self_lynch_win_policies(
+    issues: &mut Vec<PackValidationIssue>,
+    path: &str,
+    policies: &[SelfLynchWinPolicy],
+    ir_version: u16,
+    role_keys: &BTreeSet<&str>,
+    alignments: &BTreeSet<&str>,
+    cadence: &BTreeSet<PhaseKind>,
+) {
+    if policies.is_empty() {
+        return;
+    }
+    if ir_version < 25 {
+        issue(
+            issues,
+            path,
+            "self lynch win policies require ir_version >= 25",
+        );
+    }
+    let mut ids = Vec::new();
+    let mut source_keys = BTreeSet::new();
+    for (idx, policy) in policies.iter().enumerate() {
+        let item_path = format!("{path}[{idx}]");
+        ids.push(policy.id.clone());
+        if policy.id.trim().is_empty() {
+            issue(
+                issues,
+                format!("{item_path}.id"),
+                "self lynch win policy id must not be empty",
+            );
+        }
+        if policy.eligible_roles.is_empty() {
+            issue(
+                issues,
+                format!("{item_path}.eligible_roles"),
+                "self lynch win policy must declare eligible_roles",
+            );
+        }
+        validate_unique_strings(
+            issues,
+            format!("{item_path}.eligible_roles"),
+            &policy.eligible_roles,
+        );
+        for role_key in &policy.eligible_roles {
+            if !role_keys.contains(role_key.as_str()) {
+                issue(
+                    issues,
+                    format!("{item_path}.eligible_roles"),
+                    format!("unknown eligible role `{role_key}`"),
+                );
+            }
+        }
+        validate_alignment_ref(
+            issues,
+            format!("{item_path}.winner"),
+            &policy.winner,
+            alignments,
+        );
+        let source_event = policy
+            .source_event
+            .as_deref()
+            .map(str::to_string)
+            .unwrap_or_else(|| format!("win.{}", policy.id));
+        for role_key in &policy.eligible_roles {
+            if role_key.trim().is_empty() {
+                continue;
+            }
+            let semantic_key = (role_key.clone(), source_event.clone());
+            if !source_keys.insert(semantic_key) {
+                issue(
+                    issues,
+                    format!("{item_path}.eligible_roles"),
+                    format!(
+                        "duplicate self lynch win source `{source_event}` for eligible role `{role_key}`"
+                    ),
+                );
+            }
+        }
+        if let Some(source_event) = &policy.source_event {
+            if !source_event.starts_with("win.") {
+                issue(
+                    issues,
+                    format!("{item_path}.source_event"),
+                    "self lynch win source_event must start with `win.`",
+                );
+            }
+        }
+    }
+    validate_unique_strings(issues, format!("{path}.id"), &ids);
+    if !cadence.contains(&PhaseKind::Day) {
+        issue(
+            issues,
+            path,
+            "self lynch win policies require Day in phases.cadence",
+        );
+    }
+}
+
+fn validate_beloved_princess_policy(
+    issues: &mut Vec<PackValidationIssue>,
+    path: &str,
+    policy: &BelovedPrincessPolicy,
+    ir_version: u16,
+    role_keys: &BTreeSet<&str>,
+    cadence: &BTreeSet<PhaseKind>,
+) {
+    if !policy.enabled {
+        return;
+    }
+    if ir_version < 20 {
+        issue(
+            issues,
+            path,
+            "enabled beloved princess policy requires ir_version >= 20",
+        );
+    }
+    if policy.all_death_causes && ir_version < 65 {
+        issue(
+            issues,
+            format!("{path}.all_death_causes"),
+            "beloved princess all-death trigger matching requires ir_version >= 65",
+        );
+    }
+    if policy.eligible_roles.is_empty() {
+        issue(
+            issues,
+            format!("{path}.eligible_roles"),
+            "enabled beloved princess policy must declare eligible_roles",
+        );
+    }
+    validate_unique_strings(
+        issues,
+        format!("{path}.eligible_roles"),
+        &policy.eligible_roles,
+    );
+    for role_key in &policy.eligible_roles {
+        if !role_keys.contains(role_key.as_str()) {
+            issue(
+                issues,
+                format!("{path}.eligible_roles"),
+                format!("unknown eligible role `{role_key}`"),
+            );
+        }
+    }
+    if policy.prompt_kind.trim().is_empty() {
+        issue(
+            issues,
+            format!("{path}.prompt_kind"),
+            "beloved princess prompt_kind must not be empty",
+        );
+    }
+    if policy.prompt_reason.trim().is_empty() {
+        issue(
+            issues,
+            format!("{path}.prompt_reason"),
+            "beloved princess prompt_reason must not be empty",
+        );
+    }
+    if !policy.all_death_causes && policy.death_causes.is_empty() {
+        issue(
+            issues,
+            format!("{path}.death_causes"),
+            "enabled beloved princess policy must declare death_causes",
+        );
+    }
+    validate_unique_strings(issues, format!("{path}.death_causes"), &policy.death_causes);
+    for cause in &policy.death_causes {
+        if cause.trim().is_empty() {
+            issue(
+                issues,
+                format!("{path}.death_causes"),
+                "beloved princess death causes must not be empty",
+            );
+        }
+    }
+    if !cadence.contains(&PhaseKind::Day) {
+        issue(
+            issues,
+            path,
+            "enabled beloved princess policy requires Day in phases.cadence",
+        );
+    }
+}
+
+fn validate_day_vote_prompt_policies(
+    issues: &mut Vec<PackValidationIssue>,
+    path: &str,
+    policies: &[DayVotePromptPolicy],
+    ir_version: u16,
+    cadence: &BTreeSet<PhaseKind>,
+) {
+    if policies.is_empty() {
+        return;
+    }
+    if ir_version < 21 {
+        issue(
+            issues,
+            path,
+            "day vote prompt policies require ir_version >= 21",
+        );
+    }
+    let mut ids = Vec::new();
+    for (idx, policy) in policies.iter().enumerate() {
+        let item_path = format!("{path}[{idx}]");
+        ids.push(policy.id.clone());
+        if policy.id.trim().is_empty() {
+            issue(
+                issues,
+                format!("{item_path}.id"),
+                "day vote prompt policy id must not be empty",
+            );
+        }
+        if policy.statuses.is_empty() {
+            issue(
+                issues,
+                format!("{item_path}.statuses"),
+                "day vote prompt policy must declare statuses",
+            );
+        }
+        let status_names: Vec<String> = policy
+            .statuses
+            .iter()
+            .map(|status| format!("{status:?}"))
+            .collect();
+        validate_unique_strings(issues, format!("{item_path}.statuses"), &status_names);
+        if policy.prompt_kind.trim().is_empty() {
+            issue(
+                issues,
+                format!("{item_path}.prompt_kind"),
+                "day vote prompt_kind must not be empty",
+            );
+        }
+        if policy.prompt_reason.trim().is_empty() {
+            issue(
+                issues,
+                format!("{item_path}.prompt_reason"),
+                "day vote prompt_reason must not be empty",
+            );
+        }
+    }
+    validate_unique_strings(issues, format!("{path}.id"), &ids);
+    if !cadence.contains(&PhaseKind::Day) {
+        issue(
+            issues,
+            path,
+            "day vote prompt policies require Day in phases.cadence",
+        );
+    }
+}
+
+fn validate_host_prompt_resolution_effects(
+    issues: &mut Vec<PackValidationIssue>,
+    path: &str,
+    policies: &[HostPromptResolutionEffectPolicy],
+    ir_version: u16,
+    pack: &Pack,
+) {
+    let mut prompt_pairs = Vec::new();
+    if pack.beloved_princess_policy.enabled
+        && !pack.beloved_princess_policy.prompt_kind.trim().is_empty()
+        && !pack.beloved_princess_policy.prompt_reason.trim().is_empty()
+    {
+        prompt_pairs.push((
+            pack.beloved_princess_policy.prompt_kind.as_str(),
+            pack.beloved_princess_policy.prompt_reason.as_str(),
+            "beloved_princess_policy",
+        ));
+    }
+    for policy in &pack.day_vote_prompt_policies {
+        if !policy.prompt_kind.trim().is_empty() && !policy.prompt_reason.trim().is_empty() {
+            prompt_pairs.push((
+                policy.prompt_kind.as_str(),
+                policy.prompt_reason.as_str(),
+                "day_vote_prompt_policies",
+            ));
+        }
+    }
+
+    if policies.is_empty() {
+        if !prompt_pairs.is_empty() && ir_version >= 22 {
+            issue(
+                issues,
+                path,
+                "missing resolution effect for declared host prompt producer",
+            );
+        }
+        return;
+    }
+    if ir_version < 22 {
+        issue(
+            issues,
+            path,
+            "host prompt resolution effects require ir_version >= 22",
+        );
+    }
+
+    let mut ids = Vec::new();
+    let mut implicit_selectors = Vec::new();
+    for (idx, policy) in policies.iter().enumerate() {
+        let item_path = format!("{path}[{idx}]");
+        ids.push(policy.id.clone());
+        if policy.id.trim().is_empty() {
+            issue(
+                issues,
+                format!("{item_path}.id"),
+                "host prompt resolution effect id must not be empty",
+            );
+        }
+        if policy.prompt_kind.trim().is_empty() {
+            issue(
+                issues,
+                format!("{item_path}.prompt_kind"),
+                "host prompt resolution effect prompt_kind must not be empty",
+            );
+        }
+        if policy.prompt_reason.trim().is_empty() {
+            issue(
+                issues,
+                format!("{item_path}.prompt_reason"),
+                "host prompt resolution effect prompt_reason must not be empty",
+            );
+        }
+        if policy.decision != HostPromptDecisionKind::SelectPolicy {
+            implicit_selectors.push(format!(
+                "{}:{}:{:?}",
+                policy.prompt_kind, policy.prompt_reason, policy.decision
+            ));
+        }
+        match (policy.decision, policy.effect) {
+            (HostPromptDecisionKind::SelectSlot, HostPromptResolutionEffect::PkKill)
+            | (HostPromptDecisionKind::SelectPolicy, HostPromptResolutionEffect::AdvanceRevote)
+            | (HostPromptDecisionKind::SelectPolicy, HostPromptResolutionEffect::AdvanceNight)
+            | (HostPromptDecisionKind::SelectPolicy, HostPromptResolutionEffect::AcknowledgeOnly)
+            | (HostPromptDecisionKind::Acknowledge, HostPromptResolutionEffect::AdvanceRevote)
+            | (HostPromptDecisionKind::Acknowledge, HostPromptResolutionEffect::SkipNextDay)
+            | (HostPromptDecisionKind::Acknowledge, HostPromptResolutionEffect::AcknowledgeOnly) => {
+            }
+            (HostPromptDecisionKind::SelectSlot, _) => issue(
+                issues,
+                format!("{item_path}.decision"),
+                "SelectSlot decisions are only valid for PkKill prompt effects",
+            ),
+            (HostPromptDecisionKind::SelectPolicy, HostPromptResolutionEffect::PkKill)
+            | (HostPromptDecisionKind::SelectPolicy, HostPromptResolutionEffect::SkipNextDay) => {
+                issue(
+                    issues,
+                    format!("{item_path}.decision"),
+                    "SelectPolicy decisions are only valid for AdvanceRevote, AdvanceNight, or AcknowledgeOnly prompt effects",
+                );
+            }
+            (HostPromptDecisionKind::Acknowledge, HostPromptResolutionEffect::PkKill) => {
+                issue(
+                    issues,
+                    format!("{item_path}.decision"),
+                    "PkKill prompt effects require SelectSlot decisions",
+                );
+            }
+            (HostPromptDecisionKind::Acknowledge, HostPromptResolutionEffect::AdvanceNight) => {
+                issue(
+                    issues,
+                    format!("{item_path}.decision"),
+                    "AdvanceNight prompt effects require SelectPolicy decisions",
+                );
+            }
+        }
+    }
+    validate_unique_strings(issues, format!("{path}.id"), &ids);
+    validate_unique_strings(
+        issues,
+        format!("{path}.implicit_prompt_decision"),
+        &implicit_selectors,
+    );
+
+    for (kind, reason, producer_path) in prompt_pairs {
+        if !policies
+            .iter()
+            .any(|policy| policy.prompt_kind == kind && policy.prompt_reason == reason)
+        {
+            issue(
+                issues,
+                path,
+                format!(
+                    "missing resolution effect for prompt {kind}:{reason} declared by {producer_path}",
+                ),
+            );
+        }
+    }
+}
+
+fn validate_lover_policy(
+    issues: &mut Vec<PackValidationIssue>,
+    path: &str,
+    policy: &LoverPolicy,
+    ir_version: u16,
+    effect_tags: &BTreeSet<&str>,
+    cadence: &BTreeSet<PhaseKind>,
+) {
+    if !policy.enabled {
+        return;
+    }
+    if ir_version < 16 {
+        issue(
+            issues,
+            path,
+            "enabled lover policy requires ir_version >= 16",
+        );
+    }
+    if policy.link_effect.trim().is_empty() {
+        issue(
+            issues,
+            format!("{path}.link_effect"),
+            "lover link_effect must not be empty",
+        );
+    } else if !effect_tags.contains(policy.link_effect.as_str()) {
+        issue(
+            issues,
+            format!("{path}.link_effect"),
+            format!("unknown lover link effect `{}`", policy.link_effect),
+        );
+    }
+    if policy.suicide_cause.trim().is_empty() {
+        issue(
+            issues,
+            format!("{path}.suicide_cause"),
+            "lover suicide_cause must not be empty",
+        );
+    }
+    if let Some(source_helper_role) = &policy.source_helper_role {
+        if source_helper_role.trim().is_empty() {
+            issue(
+                issues,
+                format!("{path}.source_helper_role"),
+                "lover source_helper_role must not be empty",
+            );
+        }
+    }
+    if !cadence.contains(&PhaseKind::Night) {
+        issue(
+            issues,
+            path,
+            "enabled lover policy requires Night in phases.cadence",
+        );
+    }
+}
+
+fn validate_investigation_result_policy(
+    issues: &mut Vec<PackValidationIssue>,
+    path: &str,
+    policy: &InvestigationResultPolicy,
+    role_keys: &BTreeSet<&str>,
+    alignments: &BTreeSet<&str>,
+) {
+    if policy.parity.town.trim().is_empty() {
+        issue(
+            issues,
+            format!("{path}.parity.town"),
+            "Parity town result label must not be empty",
+        );
+    }
+    if policy.parity.non_town.trim().is_empty() {
+        issue(
+            issues,
+            format!("{path}.parity.non_town"),
+            "Parity non_town result label must not be empty",
+        );
+    }
+    for (alignment, label) in &policy.parity.alignment_results {
+        validate_alignment_ref(
+            issues,
+            format!("{path}.parity.alignment_results.{alignment}"),
+            alignment,
+            alignments,
+        );
+        if label.trim().is_empty() {
+            issue(
+                issues,
+                format!("{path}.parity.alignment_results.{alignment}"),
+                "alignment result label must not be empty",
+            );
+        }
+    }
+    validate_unique_strings(
+        issues,
+        format!("{path}.role_sets.vanilla_roles"),
+        &policy.role_sets.vanilla_roles,
+    );
+    validate_unique_strings(
+        issues,
+        format!("{path}.role_sets.gun_bearing_roles"),
+        &policy.role_sets.gun_bearing_roles,
+    );
+    validate_unique_strings(
+        issues,
+        format!("{path}.role_sets.killer_roles"),
+        &policy.role_sets.killer_roles,
+    );
+    validate_unique_strings(
+        issues,
+        format!("{path}.role_sets.specialist_roles"),
+        &policy.role_sets.specialist_roles,
+    );
+    for role_key in &policy.role_sets.vanilla_roles {
+        if !role_keys.contains(role_key.as_str()) {
+            issue(
+                issues,
+                format!("{path}.role_sets.vanilla_roles"),
+                format!("unknown vanilla role `{role_key}`"),
+            );
+        }
+    }
+    for role_key in &policy.role_sets.gun_bearing_roles {
+        if !role_keys.contains(role_key.as_str()) {
+            issue(
+                issues,
+                format!("{path}.role_sets.gun_bearing_roles"),
+                format!("unknown gun-bearing role `{role_key}`"),
+            );
+        }
+    }
+    for role_key in &policy.role_sets.killer_roles {
+        if !role_keys.contains(role_key.as_str()) {
+            issue(
+                issues,
+                format!("{path}.role_sets.killer_roles"),
+                format!("unknown killer role `{role_key}`"),
+            );
+        }
+    }
+    for role_key in &policy.role_sets.specialist_roles {
+        if !role_keys.contains(role_key.as_str()) {
+            issue(
+                issues,
+                format!("{path}.role_sets.specialist_roles"),
+                format!("unknown specialist role `{role_key}`"),
+            );
+        }
+    }
+}
+
+fn validate_action(
+    issues: &mut Vec<PackValidationIssue>,
+    path: &str,
+    action: &ActionTemplate,
+    context: &PackValidationContext<'_>,
+) {
+    let ir_version = context.pack.ir_version;
+    let role_keys = &context.role_keys;
+    let alignments = &context.alignments;
+    let effect_tags = &context.effect_tags;
+    let effect_policies = &context.pack.effects;
+    let team_kill_action_ids = &context.team_kill_action_ids;
+    let vanilla_roles = &context.pack.investigation_results.role_sets.vanilla_roles;
+    let cadence = &context.cadence;
+
+    if action.id.trim().is_empty() {
+        issue(issues, format!("{path}.id"), "action id must not be empty");
+    }
+    validate_source_ids(issues, path, action);
+    validate_unique_abilities(
+        issues,
+        format!("{path}.additional_abilities"),
+        &action.additional_abilities,
+    );
+    if action.additional_abilities.contains(&action.ability) {
+        issue(
+            issues,
+            format!("{path}.additional_abilities"),
+            "additional_abilities cannot repeat the primary ability",
+        );
+    }
+    let abilities: BTreeSet<IrAbility> = action.abilities().collect();
+    if ir_version < 2 && abilities.contains(&IrAbility::Grant) {
+        issue(
+            issues,
+            format!("{path}.ability"),
+            "Grant requires ir_version >= 2",
+        );
+    }
+    if ir_version < 3 && abilities.contains(&IrAbility::Link) {
+        issue(
+            issues,
+            format!("{path}.ability"),
+            "Link requires ir_version >= 3",
+        );
+    }
+    if ir_version < 4 && abilities.contains(&IrAbility::Retaliate) {
+        issue(
+            issues,
+            format!("{path}.ability"),
+            "Retaliate requires ir_version >= 4",
+        );
+    }
+    if ir_version < 5 && action.modifiers.contains(&Modifier::Babysitter) {
+        issue(
+            issues,
+            format!("{path}.modifiers"),
+            "Babysitter requires ir_version >= 5",
+        );
+    }
+    if ir_version < 6 && action.modifiers.contains(&Modifier::Hider) {
+        issue(
+            issues,
+            format!("{path}.modifiers"),
+            "Hider requires ir_version >= 6",
+        );
+    }
+    if ir_version < 57 && action.modifiers.contains(&Modifier::Disloyal) {
+        issue(
+            issues,
+            format!("{path}.modifiers"),
+            "Disloyal requires ir_version >= 57",
+        );
+    }
+    if ir_version < 7 && abilities.contains(&IrAbility::Badge) {
+        issue(
+            issues,
+            format!("{path}.ability"),
+            "Badge requires ir_version >= 7",
+        );
+    }
+    if ir_version < 8 && abilities.contains(&IrAbility::Duel) {
+        issue(
+            issues,
+            format!("{path}.ability"),
+            "Duel requires ir_version >= 8",
+        );
+    }
+    if ir_version < 9 && abilities.contains(&IrAbility::ItaShot) {
+        issue(
+            issues,
+            format!("{path}.ability"),
+            "ItaShot requires ir_version >= 9",
+        );
+    }
+    if ir_version < 10 && abilities.contains(&IrAbility::SelfDestruct) {
+        issue(
+            issues,
+            format!("{path}.ability"),
+            "SelfDestruct requires ir_version >= 10",
+        );
+    }
+    if ir_version < 24 && abilities.contains(&IrAbility::Visit) {
+        issue(
+            issues,
+            format!("{path}.ability"),
+            "Visit requires ir_version >= 24",
+        );
+    }
+    if ir_version < 33 && abilities.contains(&IrAbility::RevealTown) {
+        issue(
+            issues,
+            format!("{path}.ability"),
+            "RevealTown requires ir_version >= 33",
+        );
+    }
+    if ir_version < 34 && abilities.contains(&IrAbility::VoteDuel) {
+        issue(
+            issues,
+            format!("{path}.ability"),
+            "VoteDuel requires ir_version >= 34",
+        );
+    }
+    if ir_version < 47 && abilities.contains(&IrAbility::Veto) {
+        issue(
+            issues,
+            format!("{path}.ability"),
+            "Veto requires ir_version >= 47",
+        );
+    }
+    if action.modifiers.contains(&Modifier::Babysitter) && !abilities.contains(&IrAbility::Protect)
+    {
+        issue(
+            issues,
+            format!("{path}.modifiers"),
+            "Babysitter modifier is only legal on Protect actions",
+        );
+    }
+    if action.modifiers.contains(&Modifier::Hider) {
+        if !abilities.contains(&IrAbility::Mark) {
+            issue(
+                issues,
+                format!("{path}.modifiers"),
+                "Hider modifier is only legal on Mark actions",
+            );
+        }
+        if action.targets != TargetSpec::One || action.constraints.max_targets != 1 {
+            issue(
+                issues,
+                format!("{path}.targets"),
+                "Hider actions must target exactly one host slot",
+            );
+        }
+        match &action.effect {
+            Some(effect) => {
+                let duration = action
+                    .effect_duration
+                    .or_else(|| effect_policies.get(effect).map(|policy| policy.duration))
+                    .unwrap_or(EffectDuration::Persistent);
+                if duration != EffectDuration::Resolution {
+                    issue(
+                        issues,
+                        format!("{path}.effect_duration"),
+                        "Hider link effects must be resolution-scoped",
+                    );
+                }
+            }
+            None => issue(
+                issues,
+                format!("{path}.effect"),
+                "Hider actions must declare a link effect",
+            ),
+        }
+    }
+    if abilities.contains(&IrAbility::Investigate) {
+        if action.mode.is_none() {
+            issue(
+                issues,
+                format!("{path}.mode"),
+                "Investigate actions must declare mode",
+            );
+        }
+        if ir_version < 24 && matches!(action.mode, Some(InvestigateMode::PriorMotion)) {
+            issue(
+                issues,
+                format!("{path}.mode"),
+                "PriorMotion requires ir_version >= 24",
+            );
+        }
+        if ir_version < 36
+            && matches!(
+                action.mode,
+                Some(
+                    InvestigateMode::Vanilla
+                        | InvestigateMode::Neapolitan
+                        | InvestigateMode::Gunsmith
+                )
+            )
+        {
+            issue(
+                issues,
+                format!("{path}.mode"),
+                "role-set investigation modes require ir_version >= 36",
+            );
+        }
+        if ir_version < 50 && matches!(action.mode, Some(InvestigateMode::Killer)) {
+            issue(
+                issues,
+                format!("{path}.mode"),
+                "killer role-set investigation mode requires ir_version >= 50",
+            );
+        }
+        if ir_version < 51 && matches!(action.mode, Some(InvestigateMode::Specialist)) {
+            issue(
+                issues,
+                format!("{path}.mode"),
+                "specialist role-set investigation mode requires ir_version >= 51",
+            );
+        }
+        if ir_version < 52 && matches!(action.mode, Some(InvestigateMode::PtAccess)) {
+            issue(
+                issues,
+                format!("{path}.mode"),
+                "PT access investigation mode requires ir_version >= 52",
+            );
+        }
+        if ir_version < 37 && matches!(action.mode, Some(InvestigateMode::Role)) {
+            issue(
+                issues,
+                format!("{path}.mode"),
+                "role disclosure investigation modes require ir_version >= 37",
+            );
+        }
+        if ir_version < 38 && matches!(action.mode, Some(InvestigateMode::FullRole)) {
+            issue(
+                issues,
+                format!("{path}.mode"),
+                "full role disclosure investigation modes require ir_version >= 38",
+            );
+        }
+        if ir_version < 55
+            && matches!(
+                action.mode,
+                Some(
+                    InvestigateMode::RoleWatcher
+                        | InvestigateMode::RoleGuard
+                        | InvestigateMode::SecurityGuard
+                )
+            )
+        {
+            issue(
+                issues,
+                format!("{path}.mode"),
+                "visitor role/identity investigation modes require ir_version >= 55",
+            );
+        }
+        if ir_version < 56 && matches!(action.mode, Some(InvestigateMode::Voyeur)) {
+            issue(
+                issues,
+                format!("{path}.mode"),
+                "voyeur action investigation mode requires ir_version >= 56",
+            );
+        }
+        if ir_version < 61 && matches!(action.mode, Some(InvestigateMode::ActionType)) {
+            issue(
+                issues,
+                format!("{path}.mode"),
+                "action-type follow investigation mode requires ir_version >= 61",
+            );
+        }
+    } else if action.mode.is_some() {
+        issue(
+            issues,
+            format!("{path}.mode"),
+            "mode is only legal on Investigate actions",
+        );
+    }
+    if abilities.contains(&IrAbility::Info) {
+        if ir_version < 54 {
+            issue(
+                issues,
+                format!("{path}.ability"),
+                "Info requires ir_version >= 54",
+            );
+        }
+        let Some(info) = &action.info else {
+            issue(
+                issues,
+                format!("{path}.info"),
+                "Info actions must declare info",
+            );
+            return;
+        };
+        if info.kind.trim().is_empty() {
+            issue(
+                issues,
+                format!("{path}.info.kind"),
+                "info kind must not be empty",
+            );
+        }
+        if matches!(
+            info.audience,
+            InfoAudience::Target | InfoAudience::ActorAndTarget
+        ) && (action.targets == TargetSpec::None || action.constraints.max_targets == 0)
+        {
+            issue(
+                issues,
+                format!("{path}.info.audience"),
+                "target-audience Info actions require targets",
+            );
+        }
+    } else if action.info.is_some() {
+        issue(
+            issues,
+            format!("{path}.info"),
+            "info is only legal on Info actions",
+        );
+    }
+    if let Some(memory) = &action.result_memory {
+        if ir_version < 23 {
+            issue(
+                issues,
+                format!("{path}.result_memory"),
+                "result_memory requires ir_version >= 23",
+            );
+        }
+        if !abilities.contains(&IrAbility::Investigate) {
+            issue(
+                issues,
+                format!("{path}.result_memory"),
+                "result_memory is only legal on Investigate actions",
+            );
+        }
+        if !memory.record && !memory.compare_previous {
+            issue(
+                issues,
+                format!("{path}.result_memory"),
+                "result_memory must enable record or compare_previous",
+            );
+        }
+        if ir_version < 39
+            && (memory.scope != ResultMemoryScope::Target
+                || memory.output != ResultMemoryOutput::PreviousCurrentChanged)
+        {
+            issue(
+                issues,
+                format!("{path}.result_memory"),
+                "investigator-scoped or same/different result memory requires ir_version >= 39",
+            );
+        }
+    }
+    if action.constraints.target_role_filter.is_some() {
+        if ir_version < 40 {
+            issue(
+                issues,
+                format!("{path}.constraints.target_role_filter"),
+                "target_role_filter requires ir_version >= 40",
+            );
+        }
+        if action.targets == TargetSpec::None || action.constraints.max_targets == 0 {
+            issue(
+                issues,
+                format!("{path}.constraints.target_role_filter"),
+                "target_role_filter requires a targetful action",
+            );
+        }
+        if action.constraints.personal_only {
+            issue(
+                issues,
+                format!("{path}.constraints.target_role_filter"),
+                "target_role_filter is not legal on personal-only actions",
+            );
+        }
+        if vanilla_roles.is_empty() {
+            issue(
+                issues,
+                format!("{path}.constraints.target_role_filter"),
+                "target_role_filter requires investigation_results.role_sets.vanilla_roles",
+            );
+        }
+    }
+
+    let effect_abilities = abilities.contains(&IrAbility::Mark)
+        || abilities.contains(&IrAbility::Clear)
+        || abilities.contains(&IrAbility::Convert)
+        || abilities.contains(&IrAbility::Link);
+    if (abilities.contains(&IrAbility::Mark) || abilities.contains(&IrAbility::Clear))
+        && action.effect.is_none()
+    {
+        issue(
+            issues,
+            format!("{path}.effect"),
+            "Mark/Clear actions must declare effect",
+        );
+    }
+    if (abilities.contains(&IrAbility::Mark)
+        || abilities.contains(&IrAbility::Clear)
+        || abilities.contains(&IrAbility::Link))
+        && action
+            .effect
+            .as_ref()
+            .is_some_and(|effect| !effect_policies.contains_key(effect))
+    {
+        issue(
+            issues,
+            format!("{path}.effect"),
+            "Mark/Clear/Link action effects must declare effects metadata",
+        );
+    }
+    if abilities.contains(&IrAbility::Convert) {
+        if action.effect.is_some() && action.conversion.is_some() {
+            issue(
+                issues,
+                format!("{path}.conversion"),
+                "Convert actions must not declare both effect and conversion",
+            );
+        }
+        match (&action.effect, &action.conversion) {
+            (Some(role_key), None) if !role_keys.contains(role_key.as_str()) => issue(
+                issues,
+                format!("{path}.effect"),
+                format!("Convert effect must reference a role; unknown role `{role_key}`"),
+            ),
+            (Some(_), None) => {}
+            (None, Some(conversion)) => validate_conversion_spec(
+                issues,
+                &format!("{path}.conversion"),
+                conversion,
+                role_keys,
+            ),
+            (None, None) => issue(
+                issues,
+                format!("{path}.conversion"),
+                "Convert actions must declare effect or conversion",
+            ),
+            (Some(_), Some(conversion)) => validate_conversion_spec(
+                issues,
+                &format!("{path}.conversion"),
+                conversion,
+                role_keys,
+            ),
+        }
+    } else if action.effect.is_some() && !effect_abilities {
+        issue(
+            issues,
+            format!("{path}.effect"),
+            "effect is only legal on Mark, Clear, Convert, and Link actions",
+        );
+    }
+    if action.conversion.is_some() && !abilities.contains(&IrAbility::Convert) {
+        issue(
+            issues,
+            format!("{path}.conversion"),
+            "conversion is only legal on Convert actions",
+        );
+    }
+    if action.effect_duration.is_some() && !abilities.contains(&IrAbility::Mark) {
+        issue(
+            issues,
+            format!("{path}.effect_duration"),
+            "effect_duration is only legal on Mark actions",
+        );
+    }
+    if action.effect.as_deref() == Some("untargetable") {
+        if !abilities.contains(&IrAbility::Mark) {
+            issue(
+                issues,
+                format!("{path}.effect"),
+                "untargetable target-state actions must use Mark ability",
+            );
+        }
+        let duration = action
+            .effect_duration
+            .or_else(|| {
+                action
+                    .effect
+                    .as_ref()
+                    .and_then(|effect| effect_policies.get(effect).map(|policy| policy.duration))
+            })
+            .unwrap_or(EffectDuration::Persistent);
+        if duration != EffectDuration::Resolution {
+            issue(
+                issues,
+                format!("{path}.effect_duration"),
+                "untargetable target-state actions must be resolution-scoped",
+            );
+        }
+        if action.targets == TargetSpec::None || action.constraints.max_targets == 0 {
+            issue(
+                issues,
+                format!("{path}.targets"),
+                "untargetable target-state actions must target at least one slot",
+            );
+        }
+    }
+    if action.effect.as_deref() == Some("poisoned") && abilities.contains(&IrAbility::Mark) {
+        let duration = action
+            .effect_duration
+            .or_else(|| {
+                action
+                    .effect
+                    .as_ref()
+                    .and_then(|effect| effect_policies.get(effect).map(|policy| policy.duration))
+            })
+            .unwrap_or(EffectDuration::Persistent);
+        if duration != EffectDuration::Persistent {
+            issue(
+                issues,
+                format!("{path}.effect_duration"),
+                "poisoned delayed-death marks must be persistent",
+            );
+        }
+    }
+    if abilities.contains(&IrAbility::Grant) {
+        if action.grant.is_none() && action.grant_options.is_empty() {
+            issue(
+                issues,
+                format!("{path}.grant"),
+                "Grant actions must declare grant or grant_options",
+            );
+        }
+        if action.grant.is_some() && !action.grant_options.is_empty() {
+            issue(
+                issues,
+                format!("{path}.grant_options"),
+                "Grant actions must declare either grant or grant_options, not both",
+            );
+        }
+        if let Some(grant) = &action.grant {
+            validate_grant_payload(issues, format!("{path}.grant"), grant);
+        }
+        let mut seen_grants = BTreeSet::new();
+        for (idx, grant) in action.grant_options.iter().enumerate() {
+            let option_path = format!("{path}.grant_options[{idx}]");
+            validate_grant_payload(issues, option_path.clone(), grant);
+            if !seen_grants.insert(grant.grant_id.as_str()) {
+                issue(
+                    issues,
+                    format!("{option_path}.grant_id"),
+                    format!("duplicate grant option `{}`", grant.grant_id),
+                );
+            }
+        }
+    } else if action.grant.is_some() || !action.grant_options.is_empty() {
+        issue(
+            issues,
+            if action.grant.is_some() {
+                format!("{path}.grant")
+            } else {
+                format!("{path}.grant_options")
+            },
+            "grant is only legal on Grant actions",
+        );
+    }
+    if abilities.contains(&IrAbility::Badge) {
+        match &action.badge {
+            Some(badge) => {
+                if badge.badge_id.trim().is_empty() {
+                    issue(
+                        issues,
+                        format!("{path}.badge.badge_id"),
+                        "badge_id must not be empty",
+                    );
+                }
+                if let Some(vote_weight) = badge.vote_weight {
+                    if !vote_weight.is_finite() || vote_weight <= 0.0 {
+                        issue(
+                            issues,
+                            format!("{path}.badge.vote_weight"),
+                            "badge vote_weight must be finite and greater than zero",
+                        );
+                    }
+                }
+                match badge.operation {
+                    BadgeOperation::Elect | BadgeOperation::Pass => {
+                        if action.targets != TargetSpec::One || action.constraints.max_targets != 1
+                        {
+                            issue(
+                                issues,
+                                format!("{path}.targets"),
+                                "Badge Elect/Pass actions must target exactly one slot",
+                            );
+                        }
+                    }
+                    BadgeOperation::Destroy => {
+                        if action.targets != TargetSpec::None || action.constraints.max_targets != 0
+                        {
+                            issue(
+                                issues,
+                                format!("{path}.targets"),
+                                "Badge Destroy actions must not target slots",
+                            );
+                        }
+                    }
+                }
+            }
+            None => issue(
+                issues,
+                format!("{path}.badge"),
+                "Badge actions must declare badge",
+            ),
+        }
+    } else if action.badge.is_some() {
+        issue(
+            issues,
+            format!("{path}.badge"),
+            "badge is only legal on Badge actions",
+        );
+    }
+    if abilities.contains(&IrAbility::Duel) {
+        match &action.duel {
+            Some(duel) => {
+                if duel.hostile_alignments.is_empty() {
+                    issue(
+                        issues,
+                        format!("{path}.duel.hostile_alignments"),
+                        "Duel actions must declare at least one hostile alignment",
+                    );
+                }
+                let mut seen = BTreeSet::new();
+                for alignment in &duel.hostile_alignments {
+                    if alignment.trim().is_empty() {
+                        issue(
+                            issues,
+                            format!("{path}.duel.hostile_alignments"),
+                            "Duel hostile alignments must not be empty",
+                        );
+                    } else if !alignments.contains(alignment.as_str()) {
+                        issue(
+                            issues,
+                            format!("{path}.duel.hostile_alignments"),
+                            format!("unknown hostile alignment `{alignment}`"),
+                        );
+                    } else if !seen.insert(alignment.as_str()) {
+                        issue(
+                            issues,
+                            format!("{path}.duel.hostile_alignments"),
+                            format!("duplicate hostile alignment `{alignment}`"),
+                        );
+                    }
+                }
+                if action.window != Window::Day {
+                    issue(
+                        issues,
+                        format!("{path}.window"),
+                        "Duel actions must use the Day window",
+                    );
+                }
+                if action.targets != TargetSpec::One || action.constraints.max_targets != 1 {
+                    issue(
+                        issues,
+                        format!("{path}.targets"),
+                        "Duel actions must target exactly one slot",
+                    );
+                }
+            }
+            None => issue(
+                issues,
+                format!("{path}.duel"),
+                "Duel actions must declare duel",
+            ),
+        }
+    } else if action.duel.is_some() {
+        issue(
+            issues,
+            format!("{path}.duel"),
+            "duel is only legal on Duel actions",
+        );
+    }
+    if let Some(failback) = &action.alignment_failback {
+        if ir_version < 41 {
+            issue(
+                issues,
+                format!("{path}.alignment_failback"),
+                "alignment_failback requires ir_version >= 41",
+            );
+        }
+        if !abilities.contains(&IrAbility::Kill) {
+            issue(
+                issues,
+                format!("{path}.alignment_failback"),
+                "alignment_failback is only legal on Kill actions",
+            );
+        }
+        if action.targets != TargetSpec::One || action.constraints.max_targets != 1 {
+            issue(
+                issues,
+                format!("{path}.targets"),
+                "alignment_failback actions must target exactly one slot",
+            );
+        }
+        if failback.hostile_alignments.is_empty() {
+            issue(
+                issues,
+                format!("{path}.alignment_failback.hostile_alignments"),
+                "alignment_failback must declare at least one hostile alignment",
+            );
+        }
+        let mut seen = BTreeSet::new();
+        for alignment in &failback.hostile_alignments {
+            if alignment.trim().is_empty() {
+                issue(
+                    issues,
+                    format!("{path}.alignment_failback.hostile_alignments"),
+                    "alignment_failback hostile alignment must not be empty",
+                );
+            } else if !alignments.contains(alignment.as_str()) {
+                issue(
+                    issues,
+                    format!("{path}.alignment_failback.hostile_alignments"),
+                    format!("unknown hostile alignment `{alignment}`"),
+                );
+            } else if !seen.insert(alignment.as_str()) {
+                issue(
+                    issues,
+                    format!("{path}.alignment_failback.hostile_alignments"),
+                    format!("duplicate hostile alignment `{alignment}`"),
+                );
+            }
+        }
+    }
+    if abilities.contains(&IrAbility::VoteDuel) {
+        if action.window != Window::Day {
+            issue(
+                issues,
+                format!("{path}.window"),
+                "VoteDuel actions must use the Day window",
+            );
+        }
+        if action.targets != TargetSpec::One || action.constraints.max_targets != 1 {
+            issue(
+                issues,
+                format!("{path}.targets"),
+                "VoteDuel actions must target exactly one slot",
+            );
+        }
+        if action.duel.is_some() {
+            issue(
+                issues,
+                format!("{path}.duel"),
+                "VoteDuel actions must not declare lethal duel config",
+            );
+        }
+    }
+    if abilities.contains(&IrAbility::Veto) {
+        if action.window != Window::Day {
+            issue(
+                issues,
+                format!("{path}.window"),
+                "Veto actions must use the Day window",
+            );
+        }
+        if action.targets != TargetSpec::One || action.constraints.max_targets != 1 {
+            issue(
+                issues,
+                format!("{path}.targets"),
+                "Veto actions must target exactly one slot",
+            );
+        }
+    }
+    if abilities.contains(&IrAbility::ItaShot) {
+        if action.window != Window::Day {
+            issue(
+                issues,
+                format!("{path}.window"),
+                "ItaShot actions must use the Day window",
+            );
+        }
+        if action.targets != TargetSpec::One || action.constraints.max_targets != 1 {
+            issue(
+                issues,
+                format!("{path}.targets"),
+                "ItaShot actions must target exactly one slot",
+            );
+        }
+    }
+    if abilities.contains(&IrAbility::SelfDestruct) {
+        match &action.self_destruct {
+            Some(spec) => {
+                if spec.cause.trim().is_empty() {
+                    issue(
+                        issues,
+                        format!("{path}.self_destruct.cause"),
+                        "SelfDestruct cause must not be empty",
+                    );
+                }
+                if !spec.kill_target && !spec.sacrifice_actor {
+                    issue(
+                        issues,
+                        format!("{path}.self_destruct"),
+                        "SelfDestruct must kill the target or sacrifice the actor",
+                    );
+                }
+            }
+            None => issue(
+                issues,
+                format!("{path}.self_destruct"),
+                "SelfDestruct actions must declare self_destruct",
+            ),
+        }
+        if !matches!(
+            action.window,
+            Window::Day | Window::Twilight | Window::Instant
+        ) {
+            issue(
+                issues,
+                format!("{path}.window"),
+                "SelfDestruct actions must use the Day, Twilight, or Instant window",
+            );
+        }
+        if action.targets != TargetSpec::One || action.constraints.max_targets != 1 {
+            issue(
+                issues,
+                format!("{path}.targets"),
+                "SelfDestruct actions must target exactly one slot",
+            );
+        }
+    } else if action.self_destruct.is_some() {
+        issue(
+            issues,
+            format!("{path}.self_destruct"),
+            "self_destruct is only legal on SelfDestruct actions",
+        );
+    }
+    if abilities.contains(&IrAbility::Link)
+        && (action.targets != TargetSpec::Many || action.constraints.max_targets < 2)
+    {
+        issue(
+            issues,
+            format!("{path}.targets"),
+            "Link actions must target at least two unique slots",
+        );
+    }
+    if abilities.contains(&IrAbility::Retaliate)
+        && (action.targets != TargetSpec::One || action.constraints.max_targets != 1)
+    {
+        issue(
+            issues,
+            format!("{path}.targets"),
+            "Retaliate actions must target exactly one slot",
+        );
+    }
+
+    if let Some(tag) = &action.reads_effect {
+        if !abilities.contains(&IrAbility::Kill) {
+            issue(
+                issues,
+                format!("{path}.reads_effect"),
+                "reads_effect is only legal on Kill actions",
+            );
+        }
+        if !effect_tags.contains(tag.as_str()) {
+            issue(
+                issues,
+                format!("{path}.reads_effect"),
+                format!("unknown effect tag `{tag}`"),
+            );
+        }
+    }
+
+    if abilities.contains(&IrAbility::Redirect) {
+        if action.redirect.is_none() {
+            issue(
+                issues,
+                format!("{path}.redirect"),
+                "Redirect actions must declare redirect kind",
+            );
+        }
+    } else if action.redirect.is_some() {
+        issue(
+            issues,
+            format!("{path}.redirect"),
+            "redirect is only legal on Redirect actions",
+        );
+    }
+
+    if matches!(action.ability, IrAbility::Clear | IrAbility::Link) {
+        if let Some(tag) = &action.effect {
+            if !effect_tags.contains(tag.as_str()) {
+                issue(
+                    issues,
+                    format!("{path}.effect"),
+                    format!("unknown effect tag `{tag}`"),
+                );
+            }
+        }
+    }
+
+    match action.targets {
+        TargetSpec::None if action.constraints.max_targets != 0 => issue(
+            issues,
+            format!("{path}.constraints.max_targets"),
+            "TargetSpec::None requires max_targets = 0",
+        ),
+        TargetSpec::One if action.constraints.max_targets != 1 => issue(
+            issues,
+            format!("{path}.constraints.max_targets"),
+            "TargetSpec::One requires max_targets = 1",
+        ),
+        TargetSpec::Many | TargetSpec::Group if action.constraints.max_targets == 0 => issue(
+            issues,
+            format!("{path}.constraints.max_targets"),
+            "multi-target actions require max_targets > 0",
+        ),
+        _ => {}
+    }
+    if action.targets == TargetSpec::None
+        && !matches!(
+            action.constraints.target_state,
+            None | Some(TargetState::Any)
+        )
+    {
+        issue(
+            issues,
+            format!("{path}.constraints.target_state"),
+            "TargetSpec::None requires target_state = Any",
+        );
+    }
+    if action.targets == TargetSpec::None && action.constraints.target_role_filter.is_some() {
+        issue(
+            issues,
+            format!("{path}.constraints.target_role_filter"),
+            "TargetSpec::None cannot declare target_role_filter",
+        );
+    }
+    if action.has_modifier(Modifier::Reflexive) && !action.constraints.self_allowed {
+        issue(
+            issues,
+            format!("{path}.constraints.self_allowed"),
+            "Reflexive actions must allow self-targeting",
+        );
+    }
+    if action.targets != TargetSpec::None
+        && action.constraints.self_allowed
+        && !action.has_modifier(Modifier::Reflexive)
+    {
+        issue(
+            issues,
+            format!("{path}.modifiers"),
+            "self_allowed actions must declare Reflexive",
+        );
+    }
+    if action.has_modifier(Modifier::Personal) && !action.constraints.personal_only {
+        issue(
+            issues,
+            format!("{path}.constraints.personal_only"),
+            "Personal actions must declare personal_only",
+        );
+    }
+    if action.constraints.personal_only && !action.has_modifier(Modifier::Personal) {
+        issue(
+            issues,
+            format!("{path}.modifiers"),
+            "personal_only actions must declare Personal",
+        );
+    }
+    if action.constraints.personal_only && !action.constraints.self_allowed {
+        issue(
+            issues,
+            format!("{path}.constraints.self_allowed"),
+            "personal_only actions must allow self-targeting",
+        );
+    }
+    if action.constraints.personal_only
+        && (action.targets != TargetSpec::One || action.constraints.max_targets != 1)
+    {
+        issue(
+            issues,
+            format!("{path}.targets"),
+            "personal_only actions must target exactly one self slot",
+        );
+    }
+    if action.has_modifier(Modifier::Lazy) && !action.constraints.lazy_requires_multiple_non_town {
+        issue(
+            issues,
+            format!("{path}.constraints.lazy_requires_multiple_non_town"),
+            "Lazy actions must declare lazy_requires_multiple_non_town",
+        );
+    }
+    if action.constraints.lazy_requires_multiple_non_town && !action.has_modifier(Modifier::Lazy) {
+        issue(
+            issues,
+            format!("{path}.modifiers"),
+            "lazy_requires_multiple_non_town actions must declare Lazy",
+        );
+    }
+    if action.has_modifier(Modifier::DisabledEndgame)
+        && action.constraints.disabled_at_or_below_alive.is_none()
+    {
+        issue(
+            issues,
+            format!("{path}.constraints.disabled_at_or_below_alive"),
+            "DisabledEndgame actions must declare disabled_at_or_below_alive",
+        );
+    }
+    if let Some(threshold) = action.constraints.disabled_at_or_below_alive {
+        if !action.has_modifier(Modifier::DisabledEndgame) {
+            issue(
+                issues,
+                format!("{path}.modifiers"),
+                "disabled_at_or_below_alive actions must declare DisabledEndgame",
+            );
+        }
+        if threshold == 0 {
+            issue(
+                issues,
+                format!("{path}.constraints.disabled_at_or_below_alive"),
+                "disabled_at_or_below_alive must be greater than zero",
+            );
+        }
+    }
+    if action.has_modifier(Modifier::Uncooperative)
+        && action.constraints.uncooperative_result.is_none()
+    {
+        issue(
+            issues,
+            format!("{path}.constraints.uncooperative_result"),
+            "Uncooperative actions must declare uncooperative_result",
+        );
+    }
+    if let Some(result) = &action.constraints.uncooperative_result {
+        if !action.has_modifier(Modifier::Uncooperative) {
+            issue(
+                issues,
+                format!("{path}.modifiers"),
+                "uncooperative_result actions must declare Uncooperative",
+            );
+        }
+        if action.ability != IrAbility::Investigate {
+            issue(
+                issues,
+                format!("{path}.constraints.uncooperative_result"),
+                "uncooperative_result is only legal on Investigate actions",
+            );
+        }
+        if result.trim().is_empty() {
+            issue(
+                issues,
+                format!("{path}.constraints.uncooperative_result"),
+                "uncooperative_result must not be empty",
+            );
+        }
+    }
+    if action.has_modifier(Modifier::Simultaneous)
+        && team_kill_action_ids.contains(action.id.as_str())
+    {
+        issue(
+            issues,
+            format!("{path}.modifiers"),
+            "Simultaneous actions must not be night_resolution team kills",
+        );
+    }
+    if action.has_modifier(Modifier::Disloyal) && action.targets == TargetSpec::None {
+        issue(
+            issues,
+            format!("{path}.targets"),
+            "Disloyal actions must target at least one slot",
+        );
+    }
+
+    match action.redirect {
+        Some(RedirectKind::Swap | RedirectKind::Retarget)
+            if action.constraints.max_targets != 2 =>
+        {
+            issue(
+                issues,
+                format!("{path}.constraints.max_targets"),
+                "Swap/Retarget redirects require max_targets = 2",
+            );
+        }
+        Some(RedirectKind::Rotate) if ir_version < 25 => {
+            issue(
+                issues,
+                format!("{path}.redirect"),
+                "Rotate redirects require ir_version >= 25",
+            );
+        }
+        Some(RedirectKind::Rotate)
+            if action.targets != TargetSpec::Many || action.constraints.max_targets < 3 =>
+        {
+            issue(
+                issues,
+                format!("{path}.constraints.max_targets"),
+                "Rotate redirects require Many targets with max_targets >= 3",
+            );
+        }
+        Some(RedirectKind::Pull) if action.constraints.max_targets > 1 => {
+            issue(
+                issues,
+                format!("{path}.constraints.max_targets"),
+                "Pull redirects require max_targets <= 1",
+            );
+        }
+        _ => {}
+    }
+
+    if let Some(shots) = action.constraints.x_shots {
+        if shots == 0 {
+            issue(
+                issues,
+                format!("{path}.constraints.x_shots"),
+                "x_shots must be greater than zero when present",
+            );
+        }
+    }
+
+    if action.constraints.cooldown_cycles == Some(0) {
+        issue(
+            issues,
+            format!("{path}.constraints.cooldown_cycles"),
+            "cooldown_cycles must be greater than zero when present",
+        );
+    }
+
+    if action.constraints.phase_parity.is_some() && action.constraints.cycle_parity.is_some() {
+        issue(
+            issues,
+            format!("{path}.constraints.cycle_parity"),
+            "cycle_parity must not be combined with phase_parity",
+        );
+    }
+
+    if let Some(active_from) = &action.constraints.active_from {
+        if active_from.phase_number == 0 {
+            issue(
+                issues,
+                format!("{path}.constraints.active_from.phase_number"),
+                "active_from.phase_number must be greater than zero",
+            );
+        }
+        let window_matches = action.window.matches_phase_kind(active_from.phase_kind);
+        if !window_matches {
+            issue(
+                issues,
+                format!("{path}.constraints.active_from.phase_kind"),
+                "active_from.phase_kind must match the action window",
+            );
+        }
+    }
+
+    if cadence.is_empty() {
+        issue(
+            issues,
+            "phases.cadence",
+            "phase cadence must declare at least one phase kind",
+        );
+    } else if let Some(required) = action.window.required_phase_kind() {
+        if !cadence.contains(&required) {
+            issue(
+                issues,
+                format!("{path}.window"),
+                format!(
+                    "action window {:?} is absent from phases.cadence",
+                    action.window
+                ),
+            );
+        }
+    }
+}
+
+fn validate_pack_required_ir_version(issues: &mut Vec<PackValidationIssue>, pack: &Pack) {
+    let (required, reasons) = pack_required_ir_version(pack);
+    if pack.ir_version < required {
+        issue(
+            issues,
+            "ir_version",
+            format!(
+                "pack declares features requiring ir_version >= {required}: {}",
+                reasons.into_iter().collect::<Vec<_>>().join(", ")
+            ),
+        );
+    }
+}
+
+pub(super) fn pack_required_ir_version(pack: &Pack) -> (u16, BTreeSet<&'static str>) {
+    let mut required = MIN_SUPPORTED_IR_VERSION;
+    let mut reasons = BTreeSet::new();
+
+    for (_, action) in night_resolution_pack_actions(pack) {
+        record_action_required_ir_version(action, &mut required, &mut reasons);
+    }
+    if pack.roles.values().any(|role| !role.modifiers.is_empty()) {
+        require_ir(&mut required, &mut reasons, 27, "role_modifiers");
+    }
+
+    if pack.wolf_carry.enabled {
+        require_ir(&mut required, &mut reasons, 11, "wolf_carry");
+    }
+    if !pack.ita.role_overrides.is_empty() {
+        require_ir(&mut required, &mut reasons, 31, "ita.role_overrides");
+    }
+    if !pack.ita.modifier_components.is_empty() || !pack.ita.role_modifier_refs.is_empty() {
+        require_ir(&mut required, &mut reasons, 32, "ita.modifier_components");
+    }
+    if pack
+        .ita
+        .modifier_components
+        .values()
+        .any(|component| component.hit_points > 0)
+        || pack
+            .ita
+            .role_overrides
+            .values()
+            .any(|override_policy| override_policy.hit_points > 0)
+    {
+        require_ir(&mut required, &mut reasons, 61, "ita.hit_points");
+    }
+    if pack.ita.resolution_policy != ItaResolutionPolicy::default() {
+        require_ir(&mut required, &mut reasons, 60, "ita.resolution_policy");
+    }
+    if !pack.ita.lifecycle.is_empty() {
+        require_ir(&mut required, &mut reasons, 62, "ita.lifecycle");
+    }
+    if pack.day_notes.announcements.template_id.is_some()
+        || pack.day_notes.announcements.audience.is_some()
+        || pack.day_notes.announcements.role_payload != DayNoteRolePayload::default()
+        || pack.day_notes.last_words.template_id.is_some()
+        || pack.day_notes.last_words.audience.is_some()
+        || pack.day_notes.last_words.window.is_some()
+    {
+        require_ir(&mut required, &mut reasons, 63, "day_notes.templates");
+    }
+    if pack.day_notes.day_deaths.enabled
+        || pack.day_notes.day_deaths.template_id.is_some()
+        || pack.day_notes.day_deaths.audience.is_some()
+    {
+        require_ir(
+            &mut required,
+            &mut reasons,
+            66,
+            "day_notes.day_death_announcements",
+        );
+    }
+    if !pack.day_notes.day_deaths.cause_templates.is_empty() {
+        require_ir(
+            &mut required,
+            &mut reasons,
+            67,
+            "day_notes.day_death_cause_templates",
+        );
+    }
+    if pack
+        .ita
+        .sessions
+        .iter()
+        .any(|session| session.buffer_delay_ms.is_some())
+    {
+        require_ir(
+            &mut required,
+            &mut reasons,
+            59,
+            "ita.session.buffer_delay_ms",
+        );
+    }
+    if pack.wolf_beauty.enabled {
+        require_ir(&mut required, &mut reasons, 12, "wolf_beauty");
+    }
+    if pack.guard_policy.enabled {
+        require_ir(&mut required, &mut reasons, 13, "guard_policy");
+    }
+    if pack.faction_actions.enabled {
+        require_ir(&mut required, &mut reasons, 35, "faction_actions");
+    }
+    if pack.death_retaliation.enabled {
+        require_ir(&mut required, &mut reasons, 14, "death_retaliation");
+    }
+    if pack.idiot_policy.enabled {
+        require_ir(&mut required, &mut reasons, 15, "idiot_policy");
+    }
+    if pack.saulus_policy.enabled {
+        require_ir(&mut required, &mut reasons, 62, "saulus_policy");
+    }
+    if pack.lover_policy.enabled {
+        require_ir(&mut required, &mut reasons, 16, "lover_policy");
+    }
+    if pack.backup_policy.enabled {
+        require_ir(&mut required, &mut reasons, 68, "backup_policy.priority");
+    }
+    if pack.private_channels.enabled {
+        require_ir(&mut required, &mut reasons, 29, "private_channels");
+    }
+    if pack
+        .private_channels
+        .groups
+        .iter()
+        .any(|group| !group.excluded_roles.is_empty())
+    {
+        require_ir(
+            &mut required,
+            &mut reasons,
+            64,
+            "private_channels.excluded_roles",
+        );
+    }
+    if pack.treestump_policy.enabled {
+        require_ir(&mut required, &mut reasons, 30, "treestump_policy");
+    }
+    if !pack.target_lynch_win_policies.is_empty() {
+        require_ir(&mut required, &mut reasons, 19, "target_lynch_win_policies");
+    }
+    if !pack.win.survival_awards.is_empty() {
+        require_ir(&mut required, &mut reasons, 63, "win.survival_awards");
+    }
+    if pack.beloved_princess_policy.enabled {
+        require_ir(&mut required, &mut reasons, 20, "beloved_princess_policy");
+    }
+    if pack.beloved_princess_policy.all_death_causes {
+        require_ir(
+            &mut required,
+            &mut reasons,
+            65,
+            "beloved_princess_policy.all_death_causes",
+        );
+    }
+    if !pack.day_vote_prompt_policies.is_empty() {
+        require_ir(&mut required, &mut reasons, 21, "day_vote_prompt_policies");
+    }
+    if !pack.vote.tiebreaker_roles.is_empty() {
+        require_ir(&mut required, &mut reasons, 58, "vote.tiebreaker_roles");
+    }
+    if !pack.host_prompt_resolution_effects.is_empty() {
+        require_ir(
+            &mut required,
+            &mut reasons,
+            22,
+            "host_prompt_resolution_effects",
+        );
+    }
+    if !pack.self_lynch_win_policies.is_empty() {
+        require_ir(&mut required, &mut reasons, 25, "self_lynch_win_policies");
+    }
+    if pack.death_reveal != DeathRevealPolicy::default() {
+        require_ir(&mut required, &mut reasons, 26, "death_reveal");
+    }
+    if !pack.effect_source_death_reveals.is_empty() {
+        require_ir(
+            &mut required,
+            &mut reasons,
+            57,
+            "effect_source_death_reveals",
+        );
+        if pack
+            .effect_source_death_reveals
+            .iter()
+            .any(|policy| policy.reveal == EffectSourceDeathRevealKind::Role)
+        {
+            require_ir(
+                &mut required,
+                &mut reasons,
+                58,
+                "effect_source_death_reveals.Role",
+            );
+        }
+    }
+    if !pack.night_resolution.conflict_families.is_empty() {
+        require_ir(
+            &mut required,
+            &mut reasons,
+            44,
+            "night_resolution.conflict_families",
+        );
+    }
+    if !pack.visibility_families.is_empty() {
+        require_ir(&mut required, &mut reasons, 45, "visibility_families");
+    }
+    if !pack.win_families.is_empty() {
+        require_ir(&mut required, &mut reasons, 46, "win_families");
+    }
+    if pack
+        .win
+        .rules
+        .iter()
+        .any(|rule| !rule.blocked_by_alive.is_empty())
+    {
+        require_ir(&mut required, &mut reasons, 53, "win_rule_blockers");
+    }
+    if !pack.night_resolution.action_chance.is_empty() {
+        require_ir(
+            &mut required,
+            &mut reasons,
+            43,
+            "night_resolution.action_chance",
+        );
+    }
+
+    (required, reasons)
+}
+
+fn record_action_required_ir_version(
+    action: &ActionTemplate,
+    required: &mut u16,
+    reasons: &mut BTreeSet<&'static str>,
+) {
+    if action.window == Window::Twilight {
+        require_ir(required, reasons, 48, "Twilight action window");
+    }
+    if action.window == Window::Instant {
+        require_ir(required, reasons, 49, "Instant action window");
+    }
+
+    for ability in action.abilities() {
+        match ability {
+            IrAbility::Grant => require_ir(required, reasons, 2, "Grant"),
+            IrAbility::Link => require_ir(required, reasons, 3, "Link"),
+            IrAbility::Retaliate => require_ir(required, reasons, 4, "Retaliate"),
+            IrAbility::Badge => require_ir(required, reasons, 7, "Badge"),
+            IrAbility::Duel => require_ir(required, reasons, 8, "Duel"),
+            IrAbility::ItaShot => require_ir(required, reasons, 9, "ItaShot"),
+            IrAbility::SelfDestruct => require_ir(required, reasons, 10, "SelfDestruct"),
+            IrAbility::Visit => require_ir(required, reasons, 24, "Visit"),
+            IrAbility::RevealTown => require_ir(required, reasons, 33, "RevealTown"),
+            IrAbility::VoteDuel => require_ir(required, reasons, 34, "VoteDuel"),
+            IrAbility::Veto => require_ir(required, reasons, 47, "Veto"),
+            IrAbility::Info => require_ir(required, reasons, 54, "Info"),
+            IrAbility::Kill
+            | IrAbility::Protect
+            | IrAbility::Block
+            | IrAbility::Redirect
+            | IrAbility::Investigate
+            | IrAbility::Convert
+            | IrAbility::Mark
+            | IrAbility::Clear => {}
+        }
+    }
+
+    if action.modifiers.contains(&Modifier::Babysitter) {
+        require_ir(required, reasons, 5, "Babysitter");
+    }
+    if action.modifiers.contains(&Modifier::Hider) {
+        require_ir(required, reasons, 6, "Hider");
+    }
+    if action.modifiers.contains(&Modifier::Disloyal) {
+        require_ir(required, reasons, 57, "Disloyal");
+    }
+    if action.modifiers.contains(&Modifier::Simultaneous) {
+        require_ir(required, reasons, 28, "Simultaneous");
+    }
+    if action.result_memory.is_some() {
+        require_ir(required, reasons, 23, "result_memory");
+    }
+    if action.result_memory.as_ref().is_some_and(|memory| {
+        memory.scope != ResultMemoryScope::Target
+            || memory.output != ResultMemoryOutput::PreviousCurrentChanged
+    }) {
+        require_ir(
+            required,
+            reasons,
+            39,
+            "investigator-scoped or same/different result memory",
+        );
+    }
+    if matches!(action.mode, Some(InvestigateMode::PriorMotion)) {
+        require_ir(required, reasons, 24, "PriorMotion");
+    }
+    if matches!(
+        action.mode,
+        Some(InvestigateMode::Vanilla | InvestigateMode::Neapolitan | InvestigateMode::Gunsmith)
+    ) {
+        require_ir(required, reasons, 36, "role-set investigation modes");
+    }
+    if matches!(action.mode, Some(InvestigateMode::Killer)) {
+        require_ir(required, reasons, 50, "killer role-set investigation mode");
+    }
+    if matches!(action.mode, Some(InvestigateMode::Specialist)) {
+        require_ir(
+            required,
+            reasons,
+            51,
+            "specialist role-set investigation mode",
+        );
+    }
+    if matches!(action.mode, Some(InvestigateMode::PtAccess)) {
+        require_ir(required, reasons, 52, "PT access investigation mode");
+    }
+    if matches!(action.mode, Some(InvestigateMode::Role)) {
+        require_ir(required, reasons, 37, "role disclosure investigation modes");
+    }
+    if matches!(action.mode, Some(InvestigateMode::FullRole)) {
+        require_ir(
+            required,
+            reasons,
+            38,
+            "full role disclosure investigation modes",
+        );
+    }
+    if matches!(
+        action.mode,
+        Some(
+            InvestigateMode::RoleWatcher
+                | InvestigateMode::RoleGuard
+                | InvestigateMode::SecurityGuard
+        )
+    ) {
+        require_ir(
+            required,
+            reasons,
+            55,
+            "visitor role/identity investigation modes",
+        );
+    }
+    if matches!(action.mode, Some(InvestigateMode::Voyeur)) {
+        require_ir(required, reasons, 56, "voyeur action investigation mode");
+    }
+    if matches!(action.mode, Some(InvestigateMode::ActionType)) {
+        require_ir(
+            required,
+            reasons,
+            61,
+            "action-type follow investigation mode",
+        );
+    }
+    if matches!(action.redirect, Some(RedirectKind::Rotate)) {
+        require_ir(required, reasons, 25, "Rotate");
+    }
+    if action.constraints.target_role_filter.is_some() {
+        require_ir(required, reasons, 40, "target_role_filter");
+    }
+    if action.alignment_failback.is_some() {
+        require_ir(required, reasons, 41, "alignment_failback");
+    }
+    if !action.grant_options.is_empty() {
+        require_ir(required, reasons, 42, "grant_options");
+    }
+}
+
+fn validate_grant_spec(
+    issues: &mut Vec<PackValidationIssue>,
+    path: String,
+    grant: &GrantSpec,
+    pack: &Pack,
+) {
+    match grant.kind {
+        GrantKind::ExtraAction => {
+            if grant.vote_weight.is_some() {
+                issue(
+                    issues,
+                    format!("{path}.vote_weight"),
+                    "ExtraAction grants must not declare vote_weight",
+                );
+            }
+        }
+        GrantKind::Item => {
+            if !pack.item_actions.contains_key(&grant.grant_id) {
+                issue(
+                    issues,
+                    format!("{path}.grant_id"),
+                    format!(
+                        "Item grant `{}` must reference an item_actions entry",
+                        grant.grant_id
+                    ),
+                );
+            }
+            if grant.vote_weight.is_some() {
+                issue(
+                    issues,
+                    format!("{path}.vote_weight"),
+                    "Item grants must not declare vote_weight",
+                );
+            }
+        }
+        GrantKind::VoteWeight => match grant.vote_weight {
+            Some(weight) if weight.is_finite() && weight >= 0.0 => {}
+            Some(weight) => issue(
+                issues,
+                format!("{path}.vote_weight"),
+                format!(
+                    "VoteWeight grant `{}` has invalid vote_weight {}; expected finite weight >= 0",
+                    grant.grant_id, weight
+                ),
+            ),
+            None => issue(
+                issues,
+                format!("{path}.vote_weight"),
+                format!(
+                    "VoteWeight grant `{}` must declare vote_weight",
+                    grant.grant_id
+                ),
+            ),
+        },
+    }
+}
+
+fn validate_grant_payload(issues: &mut Vec<PackValidationIssue>, path: String, grant: &GrantSpec) {
+    if grant.grant_id.trim().is_empty() {
+        issue(
+            issues,
+            format!("{path}.grant_id"),
+            "grant_id must not be empty",
+        );
+    }
+    if grant.uses == 0 {
+        issue(
+            issues,
+            format!("{path}.uses"),
+            "grant uses must be greater than zero",
+        );
+    }
+}
+
+fn require_ir(
+    required: &mut u16,
+    reasons: &mut BTreeSet<&'static str>,
+    version: u16,
+    reason: &'static str,
+) {
+    *required = (*required).max(version);
+    reasons.insert(reason);
+}
+
+fn validate_phase_policy(issues: &mut Vec<PackValidationIssue>, path: &str, policy: &PhasePolicy) {
+    let mut cadence = BTreeSet::new();
+    if policy.cadence.is_empty() {
+        issue(
+            issues,
+            format!("{path}.cadence"),
+            "phase cadence must declare at least one phase kind",
+        );
+    }
+    for kind in &policy.cadence {
+        if !cadence.insert(*kind) {
+            issue(
+                issues,
+                format!("{path}.cadence"),
+                format!("duplicate phase kind `{kind:?}`"),
+            );
+        }
+    }
+
+    if policy.twilight && !cadence.contains(&PhaseKind::Twilight) {
+        issue(
+            issues,
+            format!("{path}.twilight"),
+            "twilight requires Twilight in phases.cadence",
+        );
+    }
+    if !policy.twilight && cadence.contains(&PhaseKind::Twilight) {
+        issue(
+            issues,
+            format!("{path}.cadence"),
+            "Twilight cadence requires phases.twilight = true",
+        );
+    }
+
+    for (kind, subsegments) in &policy.subsegments {
+        let subsegment_path = format!("{path}.subsegments.{kind:?}");
+        if !cadence.contains(kind) {
+            issue(
+                issues,
+                &subsegment_path,
+                format!("subsegments declared for absent phase kind `{kind:?}`"),
+            );
+        }
+        if subsegments.is_empty() {
+            issue(
+                issues,
+                &subsegment_path,
+                "subsegments must declare at least one step when the phase key is present",
+            );
+        }
+
+        let mut seen = BTreeSet::new();
+        for (idx, segment) in subsegments.iter().enumerate() {
+            let item_path = format!("{subsegment_path}[{idx}]");
+            if segment.trim().is_empty() {
+                issue(issues, &item_path, "subsegment names must not be empty");
+            } else if !segment
+                .chars()
+                .all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '_')
+            {
+                issue(
+                    issues,
+                    &item_path,
+                    "subsegment names must be lowercase snake_case ASCII",
+                );
+            }
+            if !seen.insert(segment.as_str()) {
+                issue(
+                    issues,
+                    &item_path,
+                    format!("duplicate subsegment `{segment}` for `{kind:?}`"),
+                );
+            }
+        }
+    }
+}
+
+fn validate_source_ids(issues: &mut Vec<PackValidationIssue>, path: &str, action: &ActionTemplate) {
+    let mut seen = BTreeSet::new();
+    for source_id in &action.source_ids {
+        if source_id.trim().is_empty() {
+            issue(
+                issues,
+                format!("{path}.source_ids"),
+                "source action ids must not be empty",
+            );
+        } else if source_id == &action.id {
+            issue(
+                issues,
+                format!("{path}.source_ids"),
+                format!("source action id `{source_id}` duplicates canonical id"),
+            );
+        } else if !seen.insert(source_id.as_str()) {
+            issue(
+                issues,
+                format!("{path}.source_ids"),
+                format!("duplicate source action id `{source_id}`"),
+            );
+        }
+    }
+}
+
+fn validate_vote_policy(
+    issues: &mut Vec<PackValidationIssue>,
+    context: &PackValidationContext<'_>,
+) {
+    let policy = &context.pack.vote;
+    let role_keys = &context.role_keys;
+    let effect_tags = &context.effect_tags;
+    let vote_weight_grant_ids = &context.vote_weight_grant_ids;
+    let cadence = &context.cadence;
+    let prompt_policies = &context.pack.day_vote_prompt_policies;
+    let prompt_effects = &context.pack.host_prompt_resolution_effects;
+    let uses_vote_duel = context.uses_vote_duel;
+
+    if !cadence.contains(&PhaseKind::Day) {
+        issue(issues, "vote", "vote policy requires Day in phases.cadence");
+    }
+
+    validate_vote_method(issues, &policy.method);
+    if matches!(policy.method, VoteMethod::Plurality) {
+        if policy.hammer {
+            issue(
+                issues,
+                "vote.hammer",
+                "hammer requires Majority or Supermajority vote method",
+            );
+        }
+        if !policy.threshold_adjustments.is_empty() {
+            issue(
+                issues,
+                "vote.threshold_adjustments",
+                "threshold adjustments require Majority or Supermajority vote method",
+            );
+        }
+    }
+
+    match &policy.weights {
+        WeightPolicy::Equal => {}
+        WeightPolicy::PerRole(weights) => {
+            if weights.is_empty() {
+                issue(
+                    issues,
+                    "vote.weights",
+                    "PerRole vote weights must declare at least one role override",
+                );
+            }
+            for (role_key, weight) in weights {
+                if !role_keys.contains(role_key.as_str()) {
+                    issue(issues, "vote.weights", format!("unknown role `{role_key}`"));
+                }
+                if !weight.is_finite() || *weight < 0.0 {
+                    issue(
+                        issues,
+                        "vote.weights",
+                        format!("role `{role_key}` has invalid vote weight {weight}; expected finite weight >= 0"),
+                    );
+                }
+            }
+        }
+        WeightPolicy::Dynamic(dynamic) => {
+            if !dynamic.base.is_finite() || dynamic.base < 0.0 {
+                issue(
+                    issues,
+                    "vote.weights.Dynamic.base",
+                    "dynamic vote base weight must be finite and >= 0",
+                );
+            }
+            if dynamic.effect_rules.is_empty() && dynamic.grant_rules.is_empty() {
+                issue(
+                    issues,
+                    "vote.weights.Dynamic",
+                    "dynamic vote weights must declare at least one effect or grant rule",
+                );
+            }
+            let mut seen_effects = BTreeSet::new();
+            let mut seen_priorities = BTreeSet::new();
+            for (idx, rule) in dynamic.effect_rules.iter().enumerate() {
+                let path = format!("vote.weights.Dynamic.effect_rules[{idx}]");
+                if rule.effect.trim().is_empty() {
+                    issue(issues, format!("{path}.effect"), "effect must not be empty");
+                } else if !effect_tags.contains(rule.effect.as_str()) {
+                    issue(
+                        issues,
+                        format!("{path}.effect"),
+                        format!("unknown effect `{}`", rule.effect),
+                    );
+                }
+                if !seen_effects.insert(rule.effect.as_str()) {
+                    issue(
+                        issues,
+                        format!("{path}.effect"),
+                        format!("duplicate dynamic vote effect `{}`", rule.effect),
+                    );
+                }
+                if !rule.weight.is_finite() || rule.weight < 0.0 {
+                    issue(
+                        issues,
+                        format!("{path}.weight"),
+                        format!(
+                            "dynamic vote effect `{}` has invalid weight {}; expected finite weight >= 0",
+                            rule.effect, rule.weight
+                        ),
+                    );
+                }
+                if !seen_priorities.insert(rule.priority) {
+                    issue(
+                        issues,
+                        format!("{path}.priority"),
+                        format!("duplicate dynamic vote priority {}", rule.priority),
+                    );
+                }
+            }
+            let mut seen_grants = BTreeSet::new();
+            for (idx, rule) in dynamic.grant_rules.iter().enumerate() {
+                let path = format!("vote.weights.Dynamic.grant_rules[{idx}]");
+                if rule.grant_id.trim().is_empty() {
+                    issue(
+                        issues,
+                        format!("{path}.grant_id"),
+                        "grant_id must not be empty",
+                    );
+                } else if !vote_weight_grant_ids.contains(&rule.grant_id) {
+                    issue(
+                        issues,
+                        format!("{path}.grant_id"),
+                        format!(
+                            "unknown VoteWeight grant `{}`; dynamic grant rules must reference a Grant action with kind VoteWeight",
+                            rule.grant_id
+                        ),
+                    );
+                }
+                if !seen_grants.insert(rule.grant_id.as_str()) {
+                    issue(
+                        issues,
+                        format!("{path}.grant_id"),
+                        format!("duplicate dynamic vote grant `{}`", rule.grant_id),
+                    );
+                }
+                if !seen_priorities.insert(rule.priority) {
+                    issue(
+                        issues,
+                        format!("{path}.priority"),
+                        format!("duplicate dynamic vote priority {}", rule.priority),
+                    );
+                }
+            }
+        }
+    }
+
+    for (role_key, adjustment) in &policy.threshold_adjustments {
+        if !role_keys.contains(role_key.as_str()) {
+            issue(
+                issues,
+                "vote.threshold_adjustments",
+                format!("unknown role `{role_key}`"),
+            );
+        }
+        if !adjustment.is_finite() {
+            issue(
+                issues,
+                "vote.threshold_adjustments",
+                format!(
+                    "role `{role_key}` has invalid vote threshold adjustment {adjustment}; expected finite value"
+                ),
+            );
+        }
+    }
+
+    let mut seen_tiebreaker_roles = BTreeSet::new();
+    for role_key in &policy.tiebreaker_roles {
+        if role_key.trim().is_empty() {
+            issue(
+                issues,
+                "vote.tiebreaker_roles",
+                "tiebreaker role must not be empty",
+            );
+        } else if !role_keys.contains(role_key.as_str()) {
+            issue(
+                issues,
+                "vote.tiebreaker_roles",
+                format!("unknown role `{role_key}`"),
+            );
+        } else if !seen_tiebreaker_roles.insert(role_key.as_str()) {
+            issue(
+                issues,
+                "vote.tiebreaker_roles",
+                format!("duplicate tiebreaker role `{role_key}`"),
+            );
+        }
+    }
+
+    match policy.tie_breaker {
+        VoteTieBreaker::NoElimination
+        | VoteTieBreaker::Random
+        | VoteTieBreaker::EarliestReached => {}
+        VoteTieBreaker::HostDecides => {
+            validate_host_decided_vote_tie(issues, prompt_policies, prompt_effects)
+        }
+    }
+
+    match (uses_vote_duel, policy.vote_duel_tie_breaker) {
+        (true, None) => issue(
+            issues,
+            "vote.vote_duel_tie_breaker",
+            "VoteDuel actions require an explicit vote_duel_tie_breaker",
+        ),
+        (false, Some(_)) => issue(
+            issues,
+            "vote.vote_duel_tie_breaker",
+            "vote_duel_tie_breaker requires a VoteDuel action",
+        ),
+        _ => {}
+    }
+}
+
+fn validate_vote_method(issues: &mut Vec<PackValidationIssue>, method: &VoteMethod) {
+    if let VoteMethod::Supermajority { num, den } = method {
+        if *den == 0 || *num == 0 || num > den {
+            issue(
+                issues,
+                "vote.method",
+                "supermajority must satisfy 0 < num <= den",
+            );
+        } else if (*num as u64) * 2 <= *den as u64 {
+            issue(
+                issues,
+                "vote.method",
+                "supermajority must be greater than one-half; use Majority for simple majority",
+            );
+        }
+    }
+}
+
+fn validate_host_decided_vote_tie(
+    issues: &mut Vec<PackValidationIssue>,
+    prompt_policies: &[DayVotePromptPolicy],
+    prompt_effects: &[HostPromptResolutionEffectPolicy],
+) {
+    let tie_prompt_pairs: BTreeSet<(&str, &str)> = prompt_policies
+        .iter()
+        .filter(|policy| policy.statuses.contains(&VoteStatus::Tie))
+        .map(|policy| (policy.prompt_kind.as_str(), policy.prompt_reason.as_str()))
+        .collect();
+    if tie_prompt_pairs.is_empty() {
+        issue(
+            issues,
+            "vote.tie_breaker",
+            "HostDecides vote tie breaker requires a Tie day_vote_prompt_policy",
+        );
+        return;
+    }
+
+    let has_select_slot_effect = prompt_effects.iter().any(|effect| {
+        tie_prompt_pairs.contains(&(effect.prompt_kind.as_str(), effect.prompt_reason.as_str()))
+            && effect.decision == HostPromptDecisionKind::SelectSlot
+            && effect.effect == HostPromptResolutionEffect::PkKill
+    });
+    if !has_select_slot_effect {
+        issue(
+            issues,
+            "vote.tie_breaker",
+            "HostDecides vote tie breaker requires a SelectSlot/PkKill host_prompt_resolution_effect for a Tie prompt",
+        );
+    }
+}
+
+fn validate_alignment_ref(
+    issues: &mut Vec<PackValidationIssue>,
+    path: impl Into<String>,
+    alignment: &str,
+    alignments: &BTreeSet<&str>,
+) {
+    if !alignments.contains(alignment) {
+        issue(issues, path, format!("unknown alignment `{alignment}`"));
+    }
+}
+
+fn declared_effect_tags(pack: &Pack) -> BTreeSet<&str> {
+    let mut tags = BTreeSet::new();
+    tags.extend(pack.effects.keys().map(String::as_str));
+    for role in pack.roles.values() {
+        tags.extend(role.effects.iter().map(String::as_str));
+        for action in &role.actions {
+            if matches!(action.ability, IrAbility::Mark) {
+                if let Some(effect) = &action.effect {
+                    tags.insert(effect.as_str());
+                }
+            }
+        }
+    }
+    for action in pack.item_actions.values() {
+        if matches!(action.ability, IrAbility::Mark) {
+            if let Some(effect) = &action.effect {
+                tags.insert(effect.as_str());
+            }
+        }
+    }
+    tags
+}
+
+fn night_ability_priorities(pack: &Pack) -> BTreeMap<IrAbility, i32> {
+    let mut priorities = BTreeMap::new();
+    for action in pack
+        .roles
+        .values()
+        .flat_map(|role| role.actions.iter())
+        .chain(pack.item_actions.values())
+    {
+        if !action.window.is_night_resolution_window() {
+            continue;
+        }
+        for ability in night_order_abilities(action) {
+            priorities
+                .entry(ability)
+                .and_modify(|priority: &mut i32| {
+                    *priority = (*priority).max(action.constraints.priority);
+                })
+                .or_insert(action.constraints.priority);
+        }
+    }
+    priorities
+}
+
+fn night_order_abilities(action: &ActionTemplate) -> Vec<IrAbility> {
+    action
+        .abilities()
+        .filter(|ability| !(action.has_modifier(Modifier::Cpr) && *ability == IrAbility::Kill))
+        .collect()
+}
+
+fn precedence_edges(pack: &Pack, abilities: &BTreeSet<IrAbility>) -> Vec<(IrAbility, IrAbility)> {
+    let mut edges = BTreeSet::new();
+    for rule in &pack.precedence {
+        for beaten in &rule.beats {
+            if abilities.contains(&rule.when.effect) && abilities.contains(beaten) {
+                edges.insert((rule.when.effect, *beaten));
+            }
+        }
+        for blocker in &rule.blocked_by {
+            if abilities.contains(blocker) && abilities.contains(&rule.when.effect) {
+                edges.insert((*blocker, rule.when.effect));
+            }
+        }
+    }
+    edges.into_iter().collect()
+}
+
+fn topological_ability_order(
+    priorities: &BTreeMap<IrAbility, i32>,
+    edges: &[(IrAbility, IrAbility)],
+) -> Result<Vec<IrAbility>, PackValidationError> {
+    let mut incoming: BTreeMap<IrAbility, usize> =
+        priorities.keys().map(|ability| (*ability, 0)).collect();
+    let mut outgoing: BTreeMap<IrAbility, Vec<IrAbility>> = priorities
+        .keys()
+        .map(|ability| (*ability, Vec::new()))
+        .collect();
+
+    for (from, to) in edges {
+        if from == to {
+            return Err(pack_order_error(
+                "precedence",
+                "precedence cycle includes self-edge",
+            ));
+        }
+        if !priorities.contains_key(from) || !priorities.contains_key(to) {
+            continue;
+        }
+        outgoing.entry(*from).or_default().push(*to);
+        *incoming.entry(*to).or_default() += 1;
+    }
+
+    let mut ready: Vec<IrAbility> = incoming
+        .iter()
+        .filter_map(|(ability, count)| (*count == 0).then_some(*ability))
+        .collect();
+    sort_ready(&mut ready, priorities);
+
+    let mut order = Vec::new();
+    while let Some(ability) = ready.first().copied() {
+        ready.remove(0);
+        order.push(ability);
+        for next in outgoing.get(&ability).cloned().unwrap_or_default() {
+            let count = incoming.get_mut(&next).expect("known ability");
+            *count -= 1;
+            if *count == 0 {
+                ready.push(next);
+                sort_ready(&mut ready, priorities);
+            }
+        }
+    }
+
+    if order.len() != priorities.len() {
+        return Err(pack_order_error(
+            "precedence",
+            "precedence cycle prevents deriving night ability order",
+        ));
+    }
+
+    Ok(order)
+}
+
+fn sort_ready(ready: &mut [IrAbility], priorities: &BTreeMap<IrAbility, i32>) {
+    ready.sort_by(|left, right| {
+        priorities[right]
+            .cmp(&priorities[left])
+            .then_with(|| left.cmp(right))
+    });
+}
+
+fn has_path(from: IrAbility, to: IrAbility, edges: &[(IrAbility, IrAbility)]) -> bool {
+    let mut stack = vec![from];
+    let mut seen = BTreeSet::new();
+    while let Some(current) = stack.pop() {
+        if current == to {
+            return true;
+        }
+        if !seen.insert(current) {
+            continue;
+        }
+        for (_, next) in edges.iter().filter(|(edge_from, _)| *edge_from == current) {
+            stack.push(*next);
+        }
+    }
+    false
+}
+
+fn pack_order_error(path: impl Into<String>, message: impl Into<String>) -> PackValidationError {
+    PackValidationError {
+        issues: vec![PackValidationIssue {
+            path: path.into(),
+            message: message.into(),
+        }],
+    }
+}
+
+fn issue(
+    issues: &mut Vec<PackValidationIssue>,
+    path: impl Into<String>,
+    message: impl Into<String>,
+) {
+    issues.push(PackValidationIssue {
+        path: path.into(),
+        message: message.into(),
+    });
+}
