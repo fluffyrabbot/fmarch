@@ -31,7 +31,7 @@ The line counts below are a 2026-08-05 orientation snapshot, not a target.
 | Surface | Current concentration | Superior ownership boundary | Dependency direction | Next extraction |
 |---|---|---|---|---|
 | `crates/domain/src/pack.rs` façade; `pack/model.rs` (~1.9k); `pack/validation.rs` (~8.5k) | Closed first-level boundary: serialized schema/defaults are separate from loading, derived indexes, diagnostics, and ordering | `pack/model` owns declarative types; `pack/validation` owns `PackValidationContext` and validation behavior; `validation_tests` owns private contract tests | validation → model; resolver/commands → public pack façade | Split validation families only when their next independent change requires it; do not re-complect model ownership |
-| `crates/domain/src/resolver.rs` (~11.6k); `resolver/trigger.rs` (~0.4k) | Trigger observation and fixpoint ownership are closed behind a typed boundary; action collection, ordering, interference, outcomes, day vote, and result construction remain concentrated | Resolver coordinator plus bounded action, trigger, outcome, and day-vote families | trigger → coordinator-owned action resolution/domain state/validated pack; coordinator → trigger and remaining families | Extract the kill-action family around the established `ActionResolutionContext` without reopening trigger ownership |
+| `crates/domain/src/resolver.rs` (~10.6k); `resolver/action.rs` (~1.0k); `resolver/trigger.rs` (~0.4k) | Kill/protection and trigger-fixpoint ownership are closed behind typed boundaries; action collection/ordering, outcomes, day vote, and result construction remain concentrated | Resolver coordinator plus bounded action, trigger, outcome, and day-vote families | trigger → action resolution/domain state/validated pack; coordinator → action, trigger, and remaining families | Extract the day-vote/outcome family and replace the remaining high-arity outcome decision input |
 | `crates/api/src/lib.rs` (~10.4k) | Router composition, auth/session flows, community reads/writes, game transport, live publication, and command adaptation | Thin composition root plus route-family modules with typed request contexts | route families → application/domain ports; composition root → route families | Continue with authentication delivery/rate-limit ownership after the media route family |
 | `crates/projections/src/lib.rs` (~9.1k) | Event dispatch and unrelated game, community, identity, media-reference, scheduler, and private-channel projections | Projection dispatcher plus one module per projection family and shared SQL primitives | family projectors → shared transaction primitives; dispatcher → families | Extract effect/private-channel projectors using the typed records established by the Clippy cleanup |
 | `crates/commands/tests/pipeline.rs` (~77.1k) | Cross-domain command scenarios, fixtures, helpers, and operator proof cases | Shared hermetic harness plus scenario-family integration modules | scenario modules → harness/public command API; never scenario ↔ scenario | Split by command family while preserving serial Postgres proof semantics |
@@ -77,21 +77,37 @@ day/duel/win callers receive generated kill records, while the night pipeline
 uses them only as the next fixpoint frontier and avoids needless minimizer work.
 
 The coordinator retains day-vote observation production and supplies typed
-`TriggerObservation` values to the family. Generated kills enter the existing
-`ActionResolutionContext`/`KillAction` pair, which also replaced the former
-high-arity kill helper. Target-state interference now consumes a typed action
-record. No trigger or superseded action-specific lint expectation remains, and
-the resolver boundary contract prevents the fixpoint implementation from
-returning to the coordinator. Event order, trace payloads, loop-cap behavior,
-seeded determinism, and generated goldens remain unchanged.
+`TriggerObservation` values to the family. Generated kills enter the action
+family described below. The resolver boundary contract prevents the fixpoint
+implementation from returning to the coordinator. Event order, trace payloads,
+loop-cap behavior, seeded determinism, and generated goldens remain unchanged.
+
+## Closed resolver boundary: kill and protection resolution
+
+`crates/domain/src/resolver/action.rs` is the single owner of kill resolution,
+protection interception and retaliation, CPR and dependency deaths, stacked
+attacker attribution, death-reveal selection, and target-state interference
+events and trace decisions. `ActionResolutionContext` and `KillAction` separate
+resolution state from one kill request. `ProtectionResolutionContext` expresses
+the guard/witch policy sinks, while `CounterUseInput` replaces the former
+positional counter-event builder.
+
+The action family also owns the `ProtectionSource`, `KillRecord`, guard/hide
+dependency, and interference records shared with the coordinator and trigger
+fixpoint. The coordinator still owns action collection, precedence, redirect,
+and broad phase orchestration, but it cannot implement kill resolution, stacked
+attribution, or protection-policy event construction. The boundary contract
+enforces that ownership and forbids local lint suppression. The superseded
+event-builder and guard/witch high-arity allowances are removed without changes
+to event order, trace payloads, seeded determinism, or generated goldens.
 
 ## Exact lint-debt register
 
 The strict baseline intentionally records, rather than hides, remaining
 boundary pressure:
 
-- resolver remaining action, event-builder, guard/witch, and vote paths await
-  typed resolution contexts; trigger fixpoint ownership is closed;
+- resolver day-vote and outcome paths await a typed resolution context; action
+  and trigger ownership are closed;
 - command submission, action validation, prompt reconstruction, and operator
   proof audit functions await bounded request contexts;
 - authentication delivery/audit and live publication functions await route-

@@ -306,7 +306,7 @@
       "title": "Reviewable 1.0 core and toolchain",
       "execution_class": "code",
       "status": "open",
-      "summary": "Rust 1.95.0 and strict workspace Clippy are proof-enforced; API media HTTP, domain pack model/validation, and resolver trigger-fixpoint ownership are isolated behind typed boundaries. Remaining resolver, API, projection, command-test, and proof-runner concentrations remain inventoried.",
+      "summary": "Rust 1.95.0 and strict workspace Clippy are proof-enforced; API media HTTP, domain pack model/validation, and resolver action/trigger ownership are isolated behind typed boundaries. Remaining resolver outcome/day-vote, API, projection, command-test, and proof-runner concentrations remain inventoried.",
       "complete_when": [
         "The Rust toolchain is pinned, workspace Clippy is warning-clean, and concentrated pack, resolver, API, projection, command-test, and proof orchestration responsibilities are split into coherent modules without weakening proof coverage."
       ],
@@ -337,6 +337,10 @@
         },
         {
           "kind": "source",
+          "value": "crates/domain/src/resolver/action.rs"
+        },
+        {
+          "kind": "source",
           "value": "crates/domain/src/resolver/trigger.rs"
         },
         {
@@ -353,11 +357,11 @@
         }
       ],
       "remaining": [
-        "Split remaining resolver action/outcome/day-vote, API, projection, command-test, and proof-runner responsibilities along the dependency direction recorded in docs/arch/16-maintainable-core.md.",
+        "Split remaining resolver outcome/day-vote, API, projection, command-test, and proof-runner responsibilities along the dependency direction recorded in docs/arch/16-maintainable-core.md.",
         "Remove the exact lint expectations as typed contexts and bounded modules supersede them."
       ],
       "recommended_slice": {
-        "objective": "Extract the resolver kill-action boundary: move ActionResolutionContext, KillAction, kill/protection resolution, stacked attribution, target-state interference, and their event/trace construction into resolver/action.rs; introduce typed protection and counter-event inputs; and remove the superseded event-builder and guard/witch high-arity lint allowances without changing event order, trace payloads, or golden behavior.",
+        "objective": "Extract the resolver day-vote/outcome boundary: move day-vote tallying, threshold and tie resolution, duel outcome handling, decide_outcome, and their event/trace construction into resolver/outcome.rs; introduce typed DayVoteResolutionContext and OutcomeDecisionInput records; and remove the remaining vote-outcome high-arity lint expectation without changing announcements, prompt ordering, seeded tie-breaking, win-trigger handoff, or golden behavior.",
         "paths": [
           "crates/domain/src/resolver.rs",
           "crates/domain/src/resolver/",
@@ -376,7 +380,7 @@
         "non_claims": [
           "Do not preserve resolver-local helper signatures through compatibility facades.",
           "Do not change event order, event or trace payloads, seeded determinism, or generated golden semantics as an accidental side effect of module extraction.",
-          "Do not reopen trigger ownership or mix day-vote, outcome, pack, or API extraction into this atomic kill-action boundary change.",
+          "Do not reopen action or trigger ownership or mix pack/API extraction into this atomic day-vote/outcome boundary change.",
           "Do not mark foundation.maintainable-core complete; remaining resolver, API, projection, command-test, and proof-runner concentrations remain."
         ]
       }
