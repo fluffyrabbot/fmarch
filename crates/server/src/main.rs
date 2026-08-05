@@ -165,6 +165,19 @@ fn required_env(name: &str) -> Result<String, std::io::Error> {
         })
 }
 
+fn virtual_hosted_style_from_value(value: &str) -> Result<bool, std::io::Error> {
+    match value {
+        "path" => Ok(false),
+        // Railway's S3-compatible bucket credential uses `virtual-host`; accept the
+        // longer spelling as a provider-neutral synonym for manually managed stores.
+        "virtual-host" | "virtual-hosted" => Ok(true),
+        _ => Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "AWS_S3_URL_STYLE must be path, virtual-host, or virtual-hosted",
+        )),
+    }
+}
+
 fn media_config_from_env() -> Result<MediaConfig, Box<dyn std::error::Error>> {
     if let Ok(root) = env::var("FMARCH_MEDIA_ROOT") {
         if root.trim().is_empty() {
@@ -178,17 +191,7 @@ fn media_config_from_env() -> Result<MediaConfig, Box<dyn std::error::Error>> {
     }
     let endpoint = required_env("AWS_ENDPOINT_URL")?;
     let url_style = env::var("AWS_S3_URL_STYLE").unwrap_or_else(|_| "path".to_string());
-    let virtual_hosted_style = match url_style.as_str() {
-        "path" => false,
-        "virtual-hosted" => true,
-        _ => {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::InvalidInput,
-                "AWS_S3_URL_STYLE must be path or virtual-hosted",
-            )
-            .into())
-        }
-    };
+    let virtual_hosted_style = virtual_hosted_style_from_value(&url_style)?;
     let allow_http = endpoint.starts_with("http://")
         && env::var("FMARCH_S3_ALLOW_HTTP").ok().as_deref() == Some("1");
     if endpoint.starts_with("http://") && !allow_http {
@@ -512,7 +515,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 #[cfg(test)]
 mod tests {
-    use super::{bind_from_values, bootstrap_admin_from_values, bounded_env};
+    use super::{
+        bind_from_values, bootstrap_admin_from_values, bounded_env, virtual_hosted_style_from_value,
+    };
     #[test]
     fn configured_bind_overrides_platform_port() {
         assert_eq!(
@@ -545,6 +550,14 @@ mod tests {
         let error = bounded_env("FMARCH_TEST_CAPACITY_VALUE", 10, 1, 100).unwrap_err();
         std::env::remove_var("FMARCH_TEST_CAPACITY_VALUE");
         assert!(error.to_string().contains("between 1 and 100"));
+    }
+
+    #[test]
+    fn s3_url_style_accepts_railway_and_provider_neutral_spellings() {
+        assert!(!virtual_hosted_style_from_value("path").unwrap());
+        assert!(virtual_hosted_style_from_value("virtual-host").unwrap());
+        assert!(virtual_hosted_style_from_value("virtual-hosted").unwrap());
+        assert!(virtual_hosted_style_from_value("virtual").is_err());
     }
 
     #[test]

@@ -138,7 +138,8 @@ Current implemented slice:
   total process memory. Generation is sequential and the AVIF thread count is one to keep those
   indirect costs and deterministic behavior bounded in practice.
 - `MediaRepository` is the async API boundary. Hosted construction requires an S3-compatible
-  endpoint, region, bucket, credentials, and an explicit path/virtual-hosted URL style. Canonical
+  endpoint, region, bucket, credentials, and an explicit path/virtual-host URL style (with
+  `virtual-hosted` accepted as a provider-neutral synonym). Canonical
   `orig`, six immutable variant objects, and the canonical manifest use the same typed key layout;
   writes are create-only, conflicting existing bytes fail closed, and the manifest is committed
   last. Lookup bounds object size before collection and revalidates canonical identity, manifest,
