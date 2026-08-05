@@ -1,7 +1,7 @@
 //! Deterministic cancellation coverage for the transaction-owning command
-//! runtime. The database-blocking tests in `pipeline.rs` cover cancellation
-//! *inside* lock and projection awaits; this matrix covers every orchestration
-//! boundary and the ambiguous post-commit outcome.
+//! runtime. The database-blocking tests in the `pipeline` harness cover
+//! cancellation *inside* lock and projection awaits; this matrix covers every
+//! orchestration boundary and the ambiguous post-commit outcome.
 
 use std::time::Duration;
 

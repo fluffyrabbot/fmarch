@@ -2,6 +2,18 @@
 name = "commands"
 version = "0.1.0"
 edition.workspace = true
+# Directory harness at tests/pipeline/; residual body still lives at
+# tests/pipeline.rs and is include!'d — disable autotests so that file is not
+# a second integration binary (cargo forbids tests/pipeline.rs + tests/pipeline/).
+autotests = false
+
+[[test]]
+name = "pipeline"
+path = "tests/pipeline/main.rs"
+
+[[test]]
+name = "runtime_cancellation"
+path = "tests/runtime_cancellation.rs"
 
 [dependencies]
 caps = { path = "../caps" }

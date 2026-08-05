@@ -10,7 +10,8 @@ use serde::Serialize;
 use sqlx::{postgres::PgPool, Row};
 use uuid::Uuid;
 
-use crate::{advance_day_event_automation_as_scheduler, Reject};
+use crate::day_runtime::advance_day_event_automation_as_scheduler;
+use crate::Reject;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DayEventSchedulerConfig {

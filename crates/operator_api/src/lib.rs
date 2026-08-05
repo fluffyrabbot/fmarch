@@ -4355,7 +4355,13 @@ mod tests {
     }
     use std::{collections::HashSet, env, fs, path::Path as FsPath, time::SystemTime};
 
-    const COMMANDS_PIPELINE_RS: &str = include_str!("../../commands/tests/pipeline.rs");
+    // Pipeline harness is a directory crate; selectors may live in the residual
+    // body or the day-family module.
+    const COMMANDS_PIPELINE_RS: &str = concat!(
+        include_str!("../../commands/tests/pipeline.rs"),
+        include_str!("../../commands/tests/pipeline/day_events.rs"),
+        include_str!("../../commands/tests/pipeline/residual.rs"),
+    );
     const ENGINE_AND_PACKS_MD: &str = include_str!("../../../docs/arch/09-engine-and-packs.md");
     const ENGINE_PORT_CHECKLIST_MD: &str =
         include_str!("../../../docs/arch/11-engine-port-checklist.md");
@@ -4474,7 +4480,7 @@ mod tests {
                     let async_fn = format!("async fn {selector}(");
                     assert!(
                         COMMANDS_PIPELINE_RS.contains(&async_fn),
-                        "proof-run selector {selector} must exist in crates/commands/tests/pipeline.rs"
+                        "proof-run selector {selector} must exist in crates/commands/tests/pipeline harness"
                     );
                 }
             }

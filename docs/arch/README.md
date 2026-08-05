@@ -29,6 +29,7 @@ proceed without relitigating settled decisions.
 | Mash + manual frontier | **Day program + catalog-parity host fiat**; automation recedes HostTasks | [14-mash-and-manual-frontier](14-mash-and-manual-frontier.md) |
 | 1.0 release substrate | **Multi-replica**, shared media, controlled migrations, explicit governance | [15-one-zero-governance](15-one-zero-governance.md) |
 | Maintainable core | **Pinned strict toolchain**, ownership-based module boundaries | [16-maintainable-core](16-maintainable-core.md) |
+| DayEvent runtime | **Sole write emitter** in `commands::day_runtime`; pure policy in game_platform | [17-day-runtime-ownership](17-day-runtime-ownership.md) |
 
 ## Document index
 
@@ -49,6 +50,11 @@ proceed without relitigating settled decisions.
 14. [14-mash-and-manual-frontier](14-mash-and-manual-frontier.md) — mash culture (30+, day events, rewards) and permanent manual frontier
 15. [15-one-zero-governance](15-one-zero-governance.md) — hosted topology, data stewardship, accessibility, security, and maintainability gates
 16. [16-maintainable-core](16-maintainable-core.md) — strict toolchain baseline, responsibility inventory, and extraction order
+17. [17-day-runtime-ownership](17-day-runtime-ownership.md) — DayEvent write/runtime ownership, emit table, scheduler path, ban list
+
+## RFCs
+
+- **Accepted:** [RFC 0001 — First-class replay and history explorer](../rfcs/0001-first-class-replay-and-history-explorer.md) — public as-of state, named occupancy history, meaningful-moment navigation, and durable share links
 
 ## The one idea everything hangs on
 

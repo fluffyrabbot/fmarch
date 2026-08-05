@@ -124,11 +124,7 @@ fn add_slot_status_tag_dispatches_direct() {
     .into_dispatch();
 
     match dispatch {
-        CommandDispatch::Direct(commands::Command::AddSlotStatusTag {
-            game: g,
-            slot,
-            tag,
-        }) => {
+        CommandDispatch::Direct(commands::Command::AddSlotStatusTag { game: g, slot, tag }) => {
             assert_eq!(g, game);
             assert_eq!(slot, "slot_1");
             assert_eq!(tag, "bomb");
@@ -148,11 +144,7 @@ fn remove_slot_status_tag_dispatches_direct() {
     .into_dispatch();
 
     match dispatch {
-        CommandDispatch::Direct(commands::Command::RemoveSlotStatusTag {
-            game: g,
-            slot,
-            tag,
-        }) => {
+        CommandDispatch::Direct(commands::Command::RemoveSlotStatusTag { game: g, slot, tag }) => {
             assert_eq!(g, game);
             assert_eq!(slot, "slot_2");
             assert_eq!(tag, "lover");
@@ -206,7 +198,10 @@ fn control_ita_session_omits_empty_message_on_wire() {
 #[test]
 fn ita_session_control_kind_maps_all_variants() {
     let pairs = [
-        (ItaSessionControlKind::Open, domain::ItaSessionControlKind::Open),
+        (
+            ItaSessionControlKind::Open,
+            domain::ItaSessionControlKind::Open,
+        ),
         (
             ItaSessionControlKind::Pause,
             domain::ItaSessionControlKind::Pause,
