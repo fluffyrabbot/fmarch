@@ -6,6 +6,7 @@
 
 mod authentication;
 pub mod identity_delivery;
+mod live_projection;
 pub mod mash_scale;
 mod media_http;
 pub mod program_library;
@@ -18,6 +19,7 @@ use authentication::{
     enforce_recovery_request_limit, enforce_registration_source_limit, record_failed_auth_attempt,
     AuthAttemptPolicy, AuthCredentialDeliveryRequest,
 };
+use live_projection::{LiveProjectionChangeSet, LiveProjectionPublisher, LiveProjectionReceive};
 
 use crate::identity_delivery::{
     process_identity_delivery_intent, IdentityDeliveryError, IdentityDeliveryGateway,
@@ -36,11 +38,11 @@ use identity::{AccessTokenVerifier, IdentityError, VerifiedIdentity};
 use media::{ContentId, MediaRepository, VariantFormat, VariantLimits};
 use serde::{Deserialize, Serialize};
 use sqlx::postgres::PgPool;
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::Path as FsPath;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use tokio::sync::{broadcast, Mutex, OwnedSemaphorePermit, Semaphore};
+use tokio::sync::{Mutex, OwnedSemaphorePermit, Semaphore};
 use uuid::Uuid;
 use wire::{
     AckMsg, AdvanceSubscriptionReadRequest, CapabilityGrant, ClientEnvelope, CommunityInboxPage,
@@ -55,7 +57,7 @@ use wire::{
     PlayerInvestigationResultsDelta, PlayerNotification, PlayerNotificationsDelta, ProfileEditor,
     ProjectionDelta, PublicGameThreadPage, PublicProfile, PublicSearchPage, PublicSearchResult,
     RejectCode, RejectMsg, ServerEnvelope, ServerMsg, SubscriptionTargetState, ThreadPage,
-    ThreadPost, ThreadPostsDelta, VoteCountClearedDelta, VoteCountDelta, PROTOCOL_VERSION,
+    ThreadPost, ThreadPostsDelta, PROTOCOL_VERSION,
 };
 
 #[derive(Clone)]
@@ -67,7 +69,7 @@ pub struct ApiState {
     dev_auth_enabled: bool,
     auth_attempt_policy: AuthAttemptPolicy,
     identity_delivery_gateway: Arc<dyn IdentityDeliveryGateway>,
-    live_projection_tx: broadcast::Sender<LiveProjectionUpdate>,
+    live_projection: LiveProjectionPublisher,
     live_projection_delivery_delay: Duration,
     live_connection_slots: Arc<Semaphore>,
     live_principal_slots: Arc<Mutex<HashMap<String, Arc<Semaphore>>>>,
@@ -85,17 +87,6 @@ pub struct ApiState {
     allow_jwt_bearer: bool,
 }
 
-#[derive(Debug, Clone)]
-struct LiveProjectionUpdate {
-    game: Uuid,
-    deltas: Vec<ProjectionDelta>,
-    thread_dirty: bool,
-    host_console_dirty: bool,
-    host_prompts_dirty: bool,
-    player_private_dirty: bool,
-    player_command_state_dirty: bool,
-}
-
 const REGISTRATION_SESSION_TTL_SECONDS: i64 = 60 * 60 * 24 * 7;
 
 impl ApiState {
@@ -109,7 +100,6 @@ impl ApiState {
         let live_connection_limit = env_i64("FMARCH_WS_MAX_CONNECTIONS", 512, 1, 65_536) as usize;
         let live_principal_limit =
             env_i64("FMARCH_WS_MAX_CONNECTIONS_PER_PRINCIPAL", 4, 1, 128) as usize;
-        let (live_projection_tx, _) = broadcast::channel(live_projection_capacity);
         let _ = dummy_account_password_hash();
         ApiState {
             pool,
@@ -121,7 +111,7 @@ impl ApiState {
             identity_delivery_gateway: Arc::new(
                 LocalDeterministicIdentityDeliveryGateway::from_env(),
             ),
-            live_projection_tx,
+            live_projection: LiveProjectionPublisher::new(live_projection_capacity),
             live_projection_delivery_delay,
             live_connection_slots: Arc::new(Semaphore::new(live_connection_limit)),
             live_principal_slots: Arc::new(Mutex::new(HashMap::new())),
@@ -240,8 +230,7 @@ impl ApiState {
     }
 
     pub fn with_live_projection_capacity(mut self, capacity: usize) -> Self {
-        let (live_projection_tx, _) = broadcast::channel(capacity.clamp(1, 65_536));
-        self.live_projection_tx = live_projection_tx;
+        self.live_projection = LiveProjectionPublisher::new(capacity);
         self
     }
 
@@ -4340,7 +4329,9 @@ async fn command(
     let player_private_dirty = command_affects_player_private(&msg.command);
     let player_command_state_dirty = command_affects_player_command_state(&msg.command);
     let previous_votecount = match game {
-        Some(game) => current_votecount_rows(&state, game).await.ok(),
+        Some(game) => live_projection::vote_count_rows(&state.pool, game)
+            .await
+            .ok(),
         None => None,
     };
     let principal = Principal::user(principal_user_id);
@@ -4353,17 +4344,21 @@ async fn command(
             {
                 Ok(ack) => {
                     if let Some(game) = game {
-                        publish_live_projection_change(
-                            &state,
-                            game,
-                            previous_votecount,
-                            thread_dirty,
-                            host_console_dirty,
-                            host_prompts_dirty,
-                            player_private_dirty,
-                            player_command_state_dirty,
-                        )
-                        .await;
+                        state
+                            .live_projection
+                            .publish(
+                                &state.pool,
+                                LiveProjectionChangeSet {
+                                    game,
+                                    previous_vote_counts: previous_votecount,
+                                    thread_dirty,
+                                    host_console_dirty,
+                                    host_prompts_dirty,
+                                    player_private_dirty,
+                                    player_command_state_dirty,
+                                },
+                            )
+                            .await;
                     }
                     ServerMsg::Ack(AckMsg::from(ack))
                 }
@@ -4395,66 +4390,6 @@ fn command_api_error_response(id: u64, error: ApiError) -> Response {
         )),
     )
         .into_response()
-}
-
-#[expect(
-    clippy::too_many_arguments,
-    reason = "projection flags remain explicit until live publication owns a typed change set"
-)]
-async fn publish_live_projection_change(
-    state: &ApiState,
-    game: Uuid,
-    previous: Option<Vec<VoteCountDelta>>,
-    thread_dirty: bool,
-    host_console_dirty: bool,
-    host_prompts_dirty: bool,
-    player_private_dirty: bool,
-    player_command_state_dirty: bool,
-) {
-    let Ok(current) = current_votecount_rows(state, game).await else {
-        return;
-    };
-    let mut deltas: Vec<_> = current
-        .iter()
-        .cloned()
-        .map(ProjectionDelta::VoteCountChanged)
-        .collect();
-
-    if let Some(previous) = previous {
-        let current_keys: HashSet<_> = current
-            .iter()
-            .map(|delta| (delta.phase_id.as_str(), delta.candidate_slot.as_str()))
-            .collect();
-        deltas.extend(
-            previous
-                .into_iter()
-                .filter(|delta| {
-                    !current_keys
-                        .contains(&(delta.phase_id.as_str(), delta.candidate_slot.as_str()))
-                })
-                .map(VoteCountClearedDelta::from)
-                .map(ProjectionDelta::VoteCountCleared),
-        );
-    }
-
-    if deltas.is_empty()
-        && !thread_dirty
-        && !host_console_dirty
-        && !host_prompts_dirty
-        && !player_private_dirty
-        && !player_command_state_dirty
-    {
-        return;
-    }
-    let _ = state.live_projection_tx.send(LiveProjectionUpdate {
-        game,
-        deltas,
-        thread_dirty,
-        host_console_dirty,
-        host_prompts_dirty,
-        player_private_dirty,
-        player_command_state_dirty,
-    });
 }
 
 async fn votecount(
@@ -4615,19 +4550,7 @@ async fn current_votecount_deltas(
     state: &ApiState,
     game: Uuid,
 ) -> Result<Vec<ProjectionDelta>, projections::ProjectionError> {
-    Ok(current_votecount_rows(state, game)
-        .await?
-        .into_iter()
-        .map(ProjectionDelta::VoteCountChanged)
-        .collect())
-}
-
-async fn current_votecount_rows(
-    state: &ApiState,
-    game: Uuid,
-) -> Result<Vec<VoteCountDelta>, projections::ProjectionError> {
-    let rows = projections::votecount(&state.pool, game).await?;
-    Ok(rows.into_iter().map(VoteCountDelta::from).collect())
+    live_projection::vote_count_deltas(&state.pool, game).await
 }
 
 async fn day_vote_outcomes(
@@ -8720,7 +8643,7 @@ async fn ws_session(mut socket: WebSocket, state: ApiState, claim: WebsocketTick
     let game = claim.game;
 
     // Subscribe before hydration so commands cannot publish into a handshake gap.
-    let mut live_projection_rx = state.live_projection_tx.subscribe();
+    let mut live_projection_rx = state.live_projection.subscribe();
     let mut durable_poll = tokio::time::interval(state.websocket_poll_interval);
     durable_poll.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     let mut observed_seq = current_game_event_seq(&state, game)
@@ -8779,7 +8702,7 @@ async fn ws_session(mut socket: WebSocket, state: ApiState, claim: WebsocketTick
 
     loop {
         let receive = tokio::select! {
-            update = receive_live_projection(&mut live_projection_rx) => Some(update),
+            update = live_projection::receive(&mut live_projection_rx) => Some(update),
             _ = durable_poll.tick() => None,
         };
         if !websocket_session_active(&state, &claim).await {
@@ -9020,24 +8943,6 @@ async fn thread_posts_delta_for_ws(
             .ok()?;
     }
     current_thread_posts_delta(state, game, channel).await.ok()
-}
-
-enum LiveProjectionReceive {
-    Update(LiveProjectionUpdate),
-    Lagged { dropped_messages: u64 },
-    Closed,
-}
-
-async fn receive_live_projection(
-    receiver: &mut broadcast::Receiver<LiveProjectionUpdate>,
-) -> LiveProjectionReceive {
-    match receiver.recv().await {
-        Ok(update) => LiveProjectionReceive::Update(update),
-        Err(broadcast::error::RecvError::Lagged(dropped_messages)) => {
-            LiveProjectionReceive::Lagged { dropped_messages }
-        }
-        Err(broadcast::error::RecvError::Closed) => LiveProjectionReceive::Closed,
-    }
 }
 
 async fn host_console_state_delta_for_ws(
@@ -9299,40 +9204,8 @@ fn command_affects_player_command_state(command: &wire::Command) -> bool {
 }
 
 #[cfg(test)]
-mod live_projection_tests {
+mod command_publication_classification_tests {
     use super::*;
-
-    fn live_update(game: Uuid) -> LiveProjectionUpdate {
-        LiveProjectionUpdate {
-            game,
-            deltas: Vec::new(),
-            thread_dirty: true,
-            host_console_dirty: false,
-            host_prompts_dirty: false,
-            player_private_dirty: false,
-            player_command_state_dirty: false,
-        }
-    }
-
-    #[tokio::test]
-    async fn bounded_live_projection_receiver_reports_lag_and_then_continues() {
-        let (sender, _) = broadcast::channel(1);
-        let mut receiver = sender.subscribe();
-        let game = Uuid::new_v4();
-        sender.send(live_update(game)).unwrap();
-        sender.send(live_update(game)).unwrap();
-
-        assert!(matches!(
-            receive_live_projection(&mut receiver).await,
-            LiveProjectionReceive::Lagged {
-                dropped_messages: 1
-            }
-        ));
-        assert!(matches!(
-            receive_live_projection(&mut receiver).await,
-            LiveProjectionReceive::Update(update) if update.game == game
-        ));
-    }
 
     #[test]
     fn host_prompt_resolution_refreshes_player_command_and_outcome_state() {
