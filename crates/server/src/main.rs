@@ -14,11 +14,17 @@ use admission::{enforce_http_admission, HttpAdmission};
 struct Config {
     database_url: String,
     bind: SocketAddr,
-    media_root: PathBuf,
+    media: MediaConfig,
     database: DatabaseCapacity,
     http: HttpCapacity,
     scheduler: commands::day_scheduler::DayEventSchedulerConfig,
     bootstrap_admin: Option<BootstrapAdminConfig>,
+}
+
+#[derive(Debug, Clone)]
+enum MediaConfig {
+    S3(media::S3MediaConfig),
+    LocalDebug(PathBuf),
 }
 
 #[derive(Clone)]
@@ -77,18 +83,11 @@ impl Config {
             env::var("FMARCH_BIND").ok().as_deref(),
             env::var("PORT").ok().as_deref(),
         )?;
-        let media_root = env::var("FMARCH_MEDIA_ROOT")?;
-        if media_root.trim().is_empty() {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::InvalidInput,
-                "FMARCH_MEDIA_ROOT must not be empty",
-            )
-            .into());
-        }
+        let media = media_config_from_env()?;
         Ok(Config {
             database_url,
             bind,
-            media_root: PathBuf::from(media_root),
+            media,
             database: DatabaseCapacity {
                 max_connections: bounded_env("FMARCH_DB_MAX_CONNECTIONS", 10, 1, 256)? as u32,
                 acquire_timeout_ms: bounded_env("FMARCH_DB_ACQUIRE_TIMEOUT_MS", 250, 1, 60_000)?,
@@ -155,6 +154,59 @@ impl Config {
             )?,
         })
     }
+}
+
+fn required_env(name: &str) -> Result<String, std::io::Error> {
+    env::var(name)
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| {
+            std::io::Error::new(std::io::ErrorKind::NotFound, format!("{name} is required"))
+        })
+}
+
+fn media_config_from_env() -> Result<MediaConfig, Box<dyn std::error::Error>> {
+    if let Ok(root) = env::var("FMARCH_MEDIA_ROOT") {
+        if root.trim().is_empty() {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "FMARCH_MEDIA_ROOT must not be empty",
+            )
+            .into());
+        }
+        return Ok(MediaConfig::LocalDebug(PathBuf::from(root)));
+    }
+    let endpoint = required_env("AWS_ENDPOINT_URL")?;
+    let url_style = env::var("AWS_S3_URL_STYLE").unwrap_or_else(|_| "path".to_string());
+    let virtual_hosted_style = match url_style.as_str() {
+        "path" => false,
+        "virtual-hosted" => true,
+        _ => {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "AWS_S3_URL_STYLE must be path or virtual-hosted",
+            )
+            .into())
+        }
+    };
+    let allow_http = endpoint.starts_with("http://")
+        && env::var("FMARCH_S3_ALLOW_HTTP").ok().as_deref() == Some("1");
+    if endpoint.starts_with("http://") && !allow_http {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "HTTP object storage requires explicit FMARCH_S3_ALLOW_HTTP=1",
+        )
+        .into());
+    }
+    Ok(MediaConfig::S3(media::S3MediaConfig {
+        endpoint,
+        region: required_env("AWS_DEFAULT_REGION")?,
+        bucket: required_env("AWS_S3_BUCKET_NAME")?,
+        access_key_id: required_env("AWS_ACCESS_KEY_ID")?,
+        secret_access_key: required_env("AWS_SECRET_ACCESS_KEY")?,
+        virtual_hosted_style,
+        allow_http,
+    }))
 }
 
 fn bootstrap_admin_from_values(
@@ -294,7 +346,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         )
         .into());
     }
-    let media_store = media::MediaStore::open(&config.media_root, media::MediaLimits::default())?;
+    let media_store = match &config.media {
+        MediaConfig::S3(config) => {
+            media::MediaRepository::s3(config.clone(), media::MediaLimits::default())?
+        }
+        MediaConfig::LocalDebug(root) => {
+            if !cfg!(debug_assertions) {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    "FMARCH_MEDIA_ROOT is available only in debug builds",
+                )
+                .into());
+            }
+            media::MediaStore::open(root, media::MediaLimits::default())?.into()
+        }
+    };
     let statement_timeout = format!("{}ms", config.database.statement_timeout_ms);
     let lock_timeout = format!("{}ms", config.database.lock_timeout_ms);
     let idle_transaction_timeout = format!("{}ms", config.database.idle_transaction_timeout_ms);
@@ -324,9 +390,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .connect(&config.database_url)
         .await?;
 
-    sqlx::migrate!("../projections/migrations")
-        .run(&pool)
-        .await?;
+    server::ensure_schema_ready(&pool).await?;
     let _day_event_scheduler =
         commands::day_scheduler::spawn_day_event_scheduler(pool.clone(), config.scheduler.clone())?;
 

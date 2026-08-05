@@ -11,6 +11,7 @@ import {
   handleLocalhostBindFailure,
   preflightLocalhostBindOrExit,
 } from "./frontend_smoke_bind_preflight.mjs";
+import { runFmarchMigrations } from "./run_fmarch_migrations.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const frontendRoot = path.join(repoRoot, "frontend");
@@ -341,6 +342,7 @@ async function dropScratchDatabase({ adminUrl, name }) {
 }
 
 async function startApi(url) {
+  await runFmarchMigrations({ cwd: repoRoot, databaseUrl: url });
   const port = await freePort();
   const baseUrl = `http://${host}:${port}`;
   const mediaRoot = path.join(artifactDir, "media-store");

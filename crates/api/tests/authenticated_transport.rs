@@ -1,9 +1,9 @@
-use api::{ApiState, WebsocketTicketResponse};
+use api::{ApiState, MediaUploadResponse, WebsocketTicketResponse};
 use axum::body::{to_bytes, Body};
 use axum::http::{Request, StatusCode};
 use futures_util::StreamExt;
 use identity::{StaticAccessTokenVerifier, VerifiedIdentity};
-use media::{MediaLimits, MediaStore};
+use media::{MediaLimits, MediaRepository, MediaStore};
 use sha2::{Digest, Sha256};
 use std::sync::Arc;
 use std::time::Duration;
@@ -11,7 +11,10 @@ use tempfile::TempDir;
 use tokio_tungstenite::tungstenite::Message;
 use tower::ServiceExt;
 use uuid::Uuid;
-use wire::{ClientEnvelope, ClientMsg, Command, CommandMsg, ServerEnvelope, ServerMsg};
+use wire::{
+    ClientEnvelope, ClientMsg, Command, CommandMsg, PublicGameThreadPage, ServerEnvelope,
+    ServerMsg, SubmitPostMedia,
+};
 
 fn decode_server_envelope(message: Message) -> ServerEnvelope {
     let Message::Binary(bytes) = message else {
@@ -42,6 +45,13 @@ async fn insert_account_session(
     revoked_at: Option<i64>,
     disabled_at: Option<i64>,
 ) {
+    sqlx::query(
+        "INSERT INTO platform_principal (principal_user_id, status, global_capabilities, created_at, disabled_at) VALUES ($1, 'active', ARRAY['GlobalAdmin'], 1, NULL) ON CONFLICT (principal_user_id) DO NOTHING",
+    )
+    .bind(principal)
+    .execute(pool)
+    .await
+    .unwrap();
     sqlx::query(
         "INSERT INTO auth_account (account_id, principal_user_id, password_hash, created_at, disabled_at, global_capabilities) VALUES ($1, $2, 'test-only', 1, $3, ARRAY['GlobalAdmin'])",
     )
@@ -91,6 +101,44 @@ async fn post_command(
         .oneshot(request.body(Body::from(command_body(id, command))).unwrap())
         .await
         .unwrap()
+}
+
+async fn upload_media(app: &axum::Router, token: &str) -> MediaUploadResponse {
+    let mut encoded = Vec::new();
+    {
+        let mut encoder = png::Encoder::new(&mut encoded, 3, 2);
+        encoder.set_color(png::ColorType::Rgba);
+        encoder.set_depth(png::BitDepth::Eight);
+        let mut writer = encoder.write_header().unwrap();
+        writer
+            .write_image_data(&[
+                10, 20, 30, 255, 40, 50, 60, 255, 70, 80, 90, 255, 90, 80, 70, 255, 60, 50, 40,
+                255, 30, 20, 10, 255,
+            ])
+            .unwrap();
+    }
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/media/uploads")
+                .header("authorization", format!("Bearer {token}"))
+                .header("content-type", "image/png")
+                .body(Body::from(encoded))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let status = response.status();
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    assert_eq!(
+        status,
+        StatusCode::CREATED,
+        "media upload failed: {}",
+        String::from_utf8_lossy(&body)
+    );
+    serde_json::from_slice(&body).unwrap()
 }
 
 async fn issue_ticket(
@@ -671,10 +719,17 @@ async fn external_identity_ticket_is_bound_to_the_enabled_platform_principal(poo
 async fn command_on_instance_a_wakes_socket_b_and_reconnect_hydrates_durable_state(
     pool: sqlx::PgPool,
 ) {
-    let root_a = tempfile::tempdir().unwrap();
-    let root_b = tempfile::tempdir().unwrap();
-    let app_a = api::router_with_state(test_state(pool.clone(), &root_a));
-    let app_b = api::router_with_state(test_state(pool.clone(), &root_b));
+    let media = MediaRepository::in_memory(MediaLimits::default()).unwrap();
+    let app_a = api::router_with_state(
+        ApiState::new(pool.clone(), media.clone())
+            .with_websocket_audience("transport-proof")
+            .with_websocket_poll_interval(Duration::from_millis(20)),
+    );
+    let app_b = api::router_with_state(
+        ApiState::new(pool.clone(), media)
+            .with_websocket_audience("transport-proof")
+            .with_websocket_poll_interval(Duration::from_millis(20)),
+    );
     let game = Uuid::new_v4();
     insert_account_session(&pool, "host", "host-token", 4_102_444_800, None, None).await;
     assert_eq!(
@@ -717,7 +772,8 @@ async fn command_on_instance_a_wakes_socket_b_and_reconnect_hydrates_durable_sta
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
-    let server = tokio::spawn(async move { axum::serve(listener, app_b).await.unwrap() });
+    let app_b_server = app_b.clone();
+    let server = tokio::spawn(async move { axum::serve(listener, app_b_server).await.unwrap() });
     let ticket = ticket.unwrap();
     let (mut socket, _) = tokio_tungstenite::connect_async(format!(
         "ws://{addr}/ws?ticket={}&audience=transport-proof",
@@ -789,6 +845,84 @@ async fn command_on_instance_a_wakes_socket_b_and_reconnect_hydrates_durable_sta
         "reconnect did not hydrate durable sequence state"
     );
     drop(reconnected);
+
+    let upload = upload_media(&app_a, "host-token").await;
+    for (id, command) in [
+        (
+            4,
+            Command::AddSlot {
+                game,
+                slot: "slot_2".into(),
+            },
+        ),
+        (
+            5,
+            Command::AssignSlot {
+                game,
+                slot: "slot_2".into(),
+                user: "host".into(),
+            },
+        ),
+        (
+            6,
+            Command::StartGame {
+                game,
+                phase: "D01".into(),
+            },
+        ),
+        (
+            7,
+            Command::SubmitPost {
+                game,
+                channel_id: "main".into(),
+                actor_slot: "slot_2".into(),
+                body: "cross-replica object media".into(),
+                media: Some(vec![SubmitPostMedia {
+                    content_id: upload.content_id.clone(),
+                    alt: "Cross-replica proof".into(),
+                }]),
+            },
+        ),
+    ] {
+        assert_eq!(
+            post_command(&app_a, id, Some("host-token"), command)
+                .await
+                .status(),
+            StatusCode::OK
+        );
+    }
+    let page = app_b
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!("/games/{game}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(page.status(), StatusCode::OK);
+    let page: PublicGameThreadPage =
+        serde_json::from_slice(&to_bytes(page.into_body(), usize::MAX).await.unwrap()).unwrap();
+    let media = &page.posts.last().unwrap().media[0];
+    assert_eq!(media.content_id, upload.content_id);
+    let served = app_b
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(&media.variants["tablet"].webp_url)
+                .header("authorization", "Bearer host-token")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(served.status(), StatusCode::OK);
+    assert_eq!(served.headers()["content-type"], "image/webp");
+    assert!(!to_bytes(served.into_body(), usize::MAX)
+        .await
+        .unwrap()
+        .is_empty());
     server.abort();
     let _ = server.await;
 }

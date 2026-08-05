@@ -7,6 +7,7 @@ import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
+import { runFmarchMigrations } from "./run_fmarch_migrations.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const frontendRoot = path.join(root, "frontend");
@@ -186,6 +187,7 @@ async function dropDatabase(database) {
   await processRun("psql", [database.admin, "-v", "ON_ERROR_STOP=1", "-c", `DROP DATABASE IF EXISTS "${database.name}"`]);
 }
 async function startApi(url) {
+  await runFmarchMigrations({ cwd: root, databaseUrl: url });
   const port = await freePort();
   const base = `http://${host}:${port}`;
   const mediaRoot = path.join(artifactDir, "media");

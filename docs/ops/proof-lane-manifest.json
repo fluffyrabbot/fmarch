@@ -81,6 +81,7 @@
     "test:proof-lane-contract": { "kind": "npm" },
     "test:production-promotion": { "kind": "npm" },
     "test:railway-staging-target": { "kind": "npm" },
+    "test:release-topology": { "kind": "npm" },
     "check:build-posture": { "kind": "npm" }
   },
   "areas": [
@@ -180,7 +181,7 @@
       "tier": "frozen",
       "paths": ["crates/media/"],
       "crate": "media",
-      "lanes": ["cargo:media"],
+      "lanes": ["cargo:media", "test:release-topology"],
       "capabilities": [
         "product.media.reference-ingest-serving",
         "product.media.canonical-blob-store",
@@ -216,7 +217,7 @@
       "tier": "active",
       "paths": ["crates/server/"],
       "crate": "server",
-      "lanes": ["cargo:server"]
+      "lanes": ["cargo:server", "test:release-topology"]
     },
     {
       "id": "packs",

@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import { randomUUID } from "node:crypto";
 import { chromium } from "playwright";
 import { handleLocalhostBindFailure, preflightLocalhostBindOrExit } from "./frontend_smoke_bind_preflight.mjs";
+import { runFmarchMigrations } from "./run_fmarch_migrations.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const frontendRoot = path.join(root, "frontend");
@@ -22,6 +23,7 @@ let database; let server; let vite; let browser; let output = ""; const priorApi
 try {
   await mkdir(artifactDir, { recursive: true });
   database = await scratch(databaseUrl);
+  await runFmarchMigrations({ cwd: root, databaseUrl: database.url });
   const api = await startApi(database.url);
   const frontend = await startFrontend(api);
   const game = randomUUID(); const hostUser = "export_role_host"; const token = "export-role-host-session"; const bootstrapToken = "export-role-host-bootstrap";

@@ -4,6 +4,7 @@ import net from "node:net";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { chromium } from "playwright";
+import { runFmarchMigrations } from "./run_fmarch_migrations.mjs";
 
 const root = process.cwd();
 const databaseUrl = process.env.DATABASE_URL;
@@ -1237,6 +1238,7 @@ async function main() {
   await requireProofArtifacts();
   await writeSmokeProgress({ stage: "write-local-report-bootstraps" });
   await writeLocalReportBootstraps();
+  await runFmarchMigrations({ cwd: root, databaseUrl });
   await writeSmokeProgress({ stage: "start-server", port });
   const server = spawn("cargo", ["run", "-p", "server"], {
     cwd: root,

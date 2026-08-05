@@ -4,28 +4,26 @@ This is the repeatable bootstrap for fmarch's first externally reachable staging
 
 ## Target Shape
 
-Create one Railway project in one region with three application services, one
+Create one Railway project in one region with two application services, one
 managed database, and one shared object store:
 
 | Service | Repository root | Public | Persistent state |
 | --- | --- | --- | --- |
-| `migrate` | repository root | no | Railway Postgres |
 | `api` | repository root | yes | Railway Postgres plus shared Railway Bucket |
 | `frontend` | repository root | yes | none |
 | `Postgres` | Railway managed database | no | Railway managed database storage/backups |
 | `media` | Railway Bucket | no | S3-compatible canonical media and variants |
 
-All three application services retain the repository root as their Railway root
+Both application services retain the repository root as their Railway root
 directory because frontend server routes import shared root-level `tools/`
-modules. The `api` and `migrate` services use the root `Dockerfile`; configure
-their distinct start commands explicitly. Configure the `frontend` service's
+modules. The `api` service uses the root `Dockerfile`. Configure the `frontend` service's
 Config-as-Code path as `/deploy/railway/frontend.railway.toml`; that file selects
 `Dockerfile.frontend` for the frontend service only.
 
 Run the API at two replicas. Both use the same S3-compatible `media` bucket and
-never apply migrations during ordinary startup. The `migrate` service runs the
-exact image's explicit migration command to completion before the corresponding
-API deployment is admitted. This shape is required by the canonical hosted
+never apply migrations during ordinary startup. The API deployment's
+`preDeployCommand` runs the exact image's explicit `fmarch-migrate` binary to
+completion once before the corresponding replicas are admitted. This shape is required by the canonical hosted
 multi-node race gate; a one-replica mounted-volume bootstrap cannot close 1.0.
 
 ## Branch And Environment Model
@@ -57,7 +55,7 @@ API or frontend build for an apparently unrelated commit breaks the paired-SHA
 release invariant and makes that `main` commit intentionally unpromotable.
 
 Staging and production must have separate Postgres service instances, media
-volumes, public domains, variables, and WorkOS environments. Never duplicate a
+buckets, public domains, variables, and WorkOS environments. Never duplicate a
 resolved database URL or runtime secret across those boundaries. Railway
 template references such as `${{Postgres.DATABASE_URL}}` are safe because they
 resolve inside the selected environment.
@@ -71,8 +69,8 @@ resolve inside the selected environment.
    variables. Do not mount a per-replica media volume in staging or production.
 4. Create a WorkOS AuthKit environment and configure its sign-in endpoint as `https://<frontend>/auth/sign-in` and redirect URI as `https://<frontend>/auth/callback`. Copy `deploy/railway/api.env.example` into Railway Variables, set `DATABASE_URL` as the reference to `Postgres.DATABASE_URL`, and fill in the WorkOS client id, issuer, and JWKS URL. For a fresh database, set `FMARCH_BOOTSTRAP_ADMIN_WORKOS_USER_ID` to the immutable WorkOS user id that should receive the first GlobalAdmin grant; an optional label is display-only. Startup grants it only when no active GlobalAdmin exists. Remove the bootstrap variables after the first successful boot.
 5. Do not set `FMARCH_BIND`. When a platform supplies `PORT`, the server binds `0.0.0.0:$PORT`; local development still defaults to `127.0.0.1:4000`, and an explicit `FMARCH_BIND` overrides either behavior.
-6. Deploy `migrate` and require a successful terminal exit. Deploy `api` at two
-   replicas, generate a public Railway domain, and verify `GET /healthz` returns
+6. Deploy `api`; require its `fmarch-migrate` pre-deploy command to finish
+   successfully before Railway admits two replicas. Generate a public Railway domain, and verify `GET /healthz` returns
    `{ "ok": true }` while both replicas are present.
 7. Add a `frontend` service from the same repository. Leave its root directory at the repository root, then set its Config-as-Code path to `/deploy/railway/frontend.railway.toml`.
 8. Generate the frontend public domain. Replace the example values in `deploy/railway/frontend.env.example` with the two real HTTPS URLs, the same WorkOS client id, a WorkOS API key, the exact callback URI, and a random cookie password of at least 32 characters. Add them as Railway Variables for `frontend`.

@@ -26,7 +26,7 @@ use caps::{Capability, Principal};
 use eventstore::{ActorId, EventInput};
 use identity::{AccessTokenVerifier, IdentityError, VerifiedIdentity};
 use media::{
-    ContentId, IngestStatus, MediaError, MediaStore, VariantFormat, VariantGenerationStatus,
+    ContentId, IngestStatus, MediaError, MediaRepository, VariantFormat, VariantGenerationStatus,
     VariantKind, VariantLimits, VARIANT_RECIPE_REVISION,
 };
 use serde::{Deserialize, Serialize};
@@ -56,7 +56,7 @@ use wire::{
 #[derive(Clone)]
 pub struct ApiState {
     pool: PgPool,
-    media_store: MediaStore,
+    media_store: MediaRepository,
     variant_limits: VariantLimits,
     server_name: String,
     dev_auth_enabled: bool,
@@ -116,7 +116,7 @@ const AUTH_ATTEMPT_SOURCE_TIMESTAMP_HEADER: &str = "x-fmarch-auth-source-timesta
 const REGISTRATION_SESSION_TTL_SECONDS: i64 = 60 * 60 * 24 * 7;
 
 impl ApiState {
-    pub fn new(pool: PgPool, media_store: MediaStore) -> Self {
+    pub fn new(pool: PgPool, media_store: impl Into<MediaRepository>) -> Self {
         let live_projection_capacity =
             env_i64("FMARCH_LIVE_PROJECTION_CAPACITY", 256, 1, 65_536) as usize;
         let live_projection_delivery_delay =
@@ -130,7 +130,7 @@ impl ApiState {
         let _ = dummy_account_password_hash();
         ApiState {
             pool,
-            media_store,
+            media_store: media_store.into(),
             variant_limits: VariantLimits::default(),
             server_name: "fmarch-dev".to_string(),
             dev_auth_enabled: std::env::var("FMARCH_DEV_AUTH").ok().as_deref() == Some("1"),
@@ -308,7 +308,7 @@ impl ApiState {
     }
 }
 
-pub fn router(pool: PgPool, media_store: MediaStore) -> Router {
+pub fn router(pool: PgPool, media_store: impl Into<MediaRepository>) -> Router {
     router_with_state(ApiState::new(pool, media_store))
 }
 
@@ -504,11 +504,6 @@ enum DeclaredUploadFormat {
     Jpeg,
 }
 
-enum MediaUploadFailure {
-    Prepare(MediaError),
-    Commit(MediaError),
-}
-
 fn acquire_workload_slot(
     slots: &Arc<Semaphore>,
     message: &'static str,
@@ -546,34 +541,14 @@ async fn media_upload(
     let encoded = body.to_vec();
     let upload_id =
         reserve_media_quota(&state, principal_user_id.as_str(), encoded.len() as i64).await?;
-    let committed = tokio::task::spawn_blocking(move || {
-        let prepared = store
-            .prepare_upload(&encoded, variant_limits)
-            .map_err(MediaUploadFailure::Prepare)?;
-        store
-            .commit_prepared_upload(prepared)
-            .map_err(MediaUploadFailure::Commit)
-    })
-    .await;
-    let committed = match committed {
-        Ok(Ok(committed)) => committed,
+    let committed = match store
+        .prepare_and_commit_upload(encoded, variant_limits)
+        .await
+    {
+        Ok(committed) => committed,
         Err(error) => {
-            tracing::error!(error = %error, "media upload worker failed");
-            release_media_quota(&state.pool, upload_id).await;
-            return Err(media_internal_error(
-                "media upload worker failed".to_string(),
-            ));
-        }
-        Ok(Err(MediaUploadFailure::Prepare(error))) => {
             release_media_quota(&state.pool, upload_id).await;
             return Err(media_api_error(error));
-        }
-        Ok(Err(MediaUploadFailure::Commit(error))) => {
-            tracing::error!(error = %error, "media upload commit failed");
-            release_media_quota(&state.pool, upload_id).await;
-            return Err(media_internal_error(
-                "media upload commit failed".to_string(),
-            ));
         }
     };
     let ingest = committed.ingest();
@@ -959,21 +934,15 @@ async fn media_thread_variant(
         ));
     }
 
-    let store = state.media_store.clone();
-    let limits = state.variant_limits;
-    let stored = tokio::task::spawn_blocking(move || {
-        store.lookup_variant(id, asset.format, asset.kind, limits)
-    })
-    .await
-    .map_err(|error| {
-        tracing::error!(error = %error, "thread media lookup worker failed");
-        media_internal_error("thread media lookup failed".to_string())
-    })?
-    .map_err(|error| {
-        tracing::error!(error = %error, "thread media lookup failed");
-        media_internal_error("thread media lookup failed".to_string())
-    })?
-    .ok_or_else(|| media_not_found("media variant unavailable"))?;
+    let stored = state
+        .media_store
+        .lookup_variant(id, asset.format, asset.kind, state.variant_limits)
+        .await
+        .map_err(|error| {
+            tracing::error!(error = %error, "thread media lookup failed");
+            media_internal_error("thread media lookup failed".to_string())
+        })?
+        .ok_or_else(|| media_not_found("media variant unavailable"))?;
 
     let record = stored.record();
     let etag = format!("\"{}\"", record.blake3());
@@ -5329,12 +5298,11 @@ async fn prepare_command_media(
         return Err(commands::Reject::InvalidTarget);
     }
     let requested = std::mem::take(media);
-    let store = state.media_store.clone();
     let limits = state.variant_limits;
-    let prepared = tokio::task::spawn_blocking(move || {
-        let mut content_ids = BTreeSet::new();
-        let mut prepared = Vec::with_capacity(requested.len());
-        for item in requested {
+    let mut content_ids = BTreeSet::new();
+    let mut prepared = Vec::with_capacity(requested.len());
+    for item in requested {
+        let result: Result<(), PostMediaPreparationError> = async {
             if item.alt.trim().is_empty()
                 || item.alt.len() > 1_000
                 || !content_ids.insert(item.content_id.clone())
@@ -5345,8 +5313,10 @@ async fn prepare_command_media(
                 .content_id
                 .parse::<ContentId>()
                 .map_err(|_| PostMediaPreparationError::Invalid)?;
-            let set = store
+            let set = state
+                .media_store
                 .lookup_variant_set(id, limits)
+                .await
                 .map_err(PostMediaPreparationError::Store)?
                 .ok_or(PostMediaPreparationError::Invalid)?;
             let mut dimensions = BTreeMap::<String, (u32, u32, usize)>::new();
@@ -5391,25 +5361,21 @@ async fn prepare_command_media(
                 alt: item.alt.trim().to_string(),
                 variants,
             });
+            Ok(())
         }
-        Ok(prepared)
-    })
-    .await
-    .map_err(|error| {
-        tracing::error!(error = %error, "post media preparation worker failed");
-        commands::Reject::Internal("post media preparation failed".to_string())
-    })?
-    .map_err(|error| match error {
-        PostMediaPreparationError::Invalid => commands::Reject::InvalidTarget,
-        PostMediaPreparationError::Store(error) => {
-            tracing::error!(error = %error, "post media lookup failed");
-            commands::Reject::Internal("post media lookup failed".to_string())
-        }
-        PostMediaPreparationError::Invariant(message) => {
-            tracing::error!(message, "post media invariant failed");
-            commands::Reject::Internal("post media lookup failed".to_string())
-        }
-    })?;
+        .await;
+        result.map_err(|error| match error {
+            PostMediaPreparationError::Invalid => commands::Reject::InvalidTarget,
+            PostMediaPreparationError::Store(error) => {
+                tracing::error!(error = %error, "post media lookup failed");
+                commands::Reject::Internal("post media lookup failed".to_string())
+            }
+            PostMediaPreparationError::Invariant(message) => {
+                tracing::error!(message, "post media invariant failed");
+                commands::Reject::Internal("post media lookup failed".to_string())
+            }
+        })?;
+    }
     *media = prepared;
     Ok(command)
 }

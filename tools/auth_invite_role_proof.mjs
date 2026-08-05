@@ -8,6 +8,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
 import { seedCommandPlanForGame } from "./dev_test_game.mjs";
+import { runFmarchMigrations } from "./run_fmarch_migrations.mjs";
 import {
   assertDevTestGameIdentityAdapterContractPacket,
   buildDevTestGameIdentityAdapterContractPacket,
@@ -3488,6 +3489,7 @@ async function dropScratchDatabase({ adminUrl, name }) {
 }
 
 async function startApi(url) {
+  await runFmarchMigrations({ cwd: repoRoot, databaseUrl: url });
   const port = await freePort();
   const baseUrl = `http://${host}:${port}`;
   await mkdir(mediaRoot, { recursive: true, mode: 0o700 });

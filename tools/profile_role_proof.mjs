@@ -7,6 +7,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
 import { handleLocalhostBindFailure, preflightLocalhostBindOrExit } from "./frontend_smoke_bind_preflight.mjs";
+import { runFmarchMigrations } from "./run_fmarch_migrations.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const frontendRoot = path.join(repoRoot, "frontend");
@@ -23,6 +24,7 @@ const previousApiBaseUrl = process.env.FMARCH_API_BASE_URL;
 try {
   await mkdir(artifactDir, { recursive: true });
   database = await scratchDatabase(databaseUrl);
+  await runFmarchMigrations({ cwd: repoRoot, databaseUrl: database.url });
   const api = await startApi(database.url);
   const frontend = await startFrontend(api);
   browser = await chromium.launch();

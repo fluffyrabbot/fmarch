@@ -70,7 +70,7 @@ blobs/
 
 Current implemented slice:
 
-- The `media` crate owns canonical local ingest and blob persistence. It accepts PNG/JPEG bytes
+- The `media` crate owns canonical ingest and content-addressed persistence. It accepts PNG/JPEG bytes
   only after enforcing configured encoded-byte, width, height, total-pixel, decoder-output, and
   canonical-output caps. Undecodable/malformed input and unsupported formats are rejected before
   persistence. The decoder also receives its non-strict `max_alloc` hint; this is defense in depth,
@@ -137,11 +137,17 @@ Current implemented slice:
   persistence limits, not a strict cap on resize buffers, codec workspace, allocator overhead, or
   total process memory. Generation is sequential and the AVIF thread count is one to keep those
   indirect costs and deterministic behavior bounded in practice.
-- Server startup now requires `FMARCH_MEDIA_ROOT` to name a pre-provisioned directory; failure to
-  open the private store prevents the main API from starting. The store is a required `ApiState`
-  dependency rather than a route-local or optional filesystem singleton. Repo-owned local server
-  harnesses explicitly pre-provision isolated roots under their `target/` artifact directories and
-  pass the resulting path; the server itself has no implicit fallback.
+- `MediaRepository` is the async API boundary. Hosted construction requires an S3-compatible
+  endpoint, region, bucket, credentials, and an explicit path/virtual-hosted URL style. Canonical
+  `orig`, six immutable variant objects, and the canonical manifest use the same typed key layout;
+  writes are create-only, conflicting existing bytes fail closed, and the manifest is committed
+  last. Lookup bounds object size before collection and revalidates canonical identity, manifest,
+  dimensions, member digests, codecs, and aggregate limits.
+- Server release builds have no filesystem media fallback. They require the S3 variables and fail
+  startup when object-store construction is invalid. `FMARCH_MEDIA_ROOT` remains only as an
+  explicit debug-build adapter; repo-owned local harnesses use it independently of their auth mode
+  to retain the descriptor-hardening and local browser suites. Both adapters satisfy the same
+  required `ApiState` repository dependency.
 - `POST /media/uploads` accepts one raw `image/png` or `image/jpeg` body. Its Axum route limit is
   the store's encoded-byte cap, and the declared content type must match the PNG/JPEG signature.
   Before any persistence, the endpoint resolves the bearer token to an unrevoked, unexpired
@@ -172,7 +178,7 @@ Current implemented slice:
   an unexpired, unrevoked session backed by an enabled account. Private channels then require
   current projected channel membership before any blob lookup. The route verifies that the
   exact post projection references the requested content id and role, performs a
-  manifest-backed `MediaStore` lookup, and returns only the transcoded member with a stable ETag,
+  manifest-backed async repository lookup, and returns only the transcoded member with a stable ETag,
   `private, no-cache`, content-address, channel, post-sequence, reference, role, and format
   headers. Conditional requests return `304` only after those account/reference checks. Unknown,
   original, unreferenced, and unauthorized members never return media bytes.

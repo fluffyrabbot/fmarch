@@ -6,6 +6,7 @@ import net from "node:net";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { runFmarchMigrations } from "./run_fmarch_migrations.mjs";
 import {
   assertDevTestGameProofRun,
   buildDevTestGameProofRun,
@@ -389,6 +390,7 @@ async function startApi() {
     await assertPortAvailable(port, "API");
   }
   await mkdir(mediaRoot, { recursive: true, mode: 0o700 });
+  await runFmarchMigrations({ cwd: repoRoot, databaseUrl });
   const baseUrl = `http://${host}:${port}`;
   console.log(`starting Rust API on ${baseUrl} with cargo run -p server`);
   apiServer = spawn("cargo", ["run", "-p", "server"], {

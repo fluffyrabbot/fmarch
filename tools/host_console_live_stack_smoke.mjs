@@ -5,6 +5,7 @@ import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
+import { runFmarchMigrations } from "./run_fmarch_migrations.mjs";
 import {
   handleLocalhostBindFailure,
   preflightLocalhostBindOrExit,
@@ -280,6 +281,7 @@ try {
   await mkdir(mediaRoot, { recursive: true, mode: 0o700 });
   await writeProgress({ stage: "create-temp-database" });
   smokeDatabase = await createScratchDatabase(databaseUrl);
+  await runFmarchMigrations({ cwd: repoRoot, databaseUrl: smokeDatabase.url });
 
   await writeProgress({ stage: "start-rust-server", apiPort });
   server = spawn("cargo", ["run", "-p", "server"], {

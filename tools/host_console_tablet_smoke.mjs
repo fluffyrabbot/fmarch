@@ -7,6 +7,7 @@ import { randomUUID } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
+import { runFmarchMigrations } from "./run_fmarch_migrations.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const frontendRoot = path.join(repoRoot, "frontend");
@@ -81,6 +82,7 @@ try {
   await mkdir(artifactDir, { recursive: true });
   await mkdir(mediaRoot, { recursive: true, mode: 0o700 });
   smokeDatabase = await createSmokeDatabase(databaseUrl);
+  await runFmarchMigrations({ cwd: repoRoot, databaseUrl: smokeDatabase.url });
   rustServer = startRustServer(apiPort);
   await waitForHealth(`${apiBaseUrl}/healthz`);
   await seedLiveHostGame();

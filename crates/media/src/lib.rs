@@ -1,4 +1,4 @@
-//! Canonical image ingestion and local content-addressed persistence (doc 07).
+//! Canonical image ingestion and content-addressed persistence (doc 07).
 //!
 //! This crate owns canonical ingest, private local persistence, and deterministic AVIF/WebP
 //! variants below future HTTP and product-integration layers. Untrusted PNG/JPEG uploads are
@@ -21,8 +21,10 @@ use std::sync::Arc;
 use image::{DynamicImage, ImageDecoder, ImageFormat, ImageReader, Limits};
 use rustix::fs::{AtFlags, Mode, OFlags};
 
+mod repository;
 mod variants;
 
+pub use repository::{MediaRepository, S3MediaConfig};
 pub use variants::{
     MediaUploadCommitResult, PreparedMediaUpload, StoredVariant, VariantFormat,
     VariantGenerationResult, VariantGenerationStatus, VariantKey, VariantKind, VariantLimits,
@@ -322,6 +324,11 @@ pub enum MediaError {
     CorruptVariantSet { id: ContentId, reason: String },
     #[error("media filesystem operation failed: {0}")]
     Io(#[from] io::Error),
+    #[error("media object-store {operation} failed: {reason}")]
+    ObjectStore {
+        operation: &'static str,
+        reason: String,
+    },
 }
 
 /// Local, content-addressed canonical-raster store.
@@ -366,9 +373,14 @@ impl MediaStore {
         self.limits
     }
 
+    #[cfg(test)]
+    fn decode_bounded(&self, encoded: &[u8]) -> Result<DynamicImage, MediaError> {
+        decode_bounded(encoded, self.limits)
+    }
+
     /// Decode, canonicalize, identify, and idempotently persist one encoded upload.
     pub fn ingest(&self, encoded: &[u8]) -> Result<IngestResult, MediaError> {
-        let decoded = self.decode_bounded(encoded)?;
+        let decoded = decode_bounded(encoded, self.limits)?;
         let canonical_bytes = canonical_raster_bytes(decoded)?;
         let id = ContentId::from_bytes(*blake3::hash(&canonical_bytes).as_bytes());
         let (width, height) = parse_canonical_header(&canonical_bytes)
@@ -397,87 +409,85 @@ impl MediaStore {
         self.verify_store_attached()?;
         Ok(Some(raster))
     }
+}
 
-    fn decode_bounded(&self, encoded: &[u8]) -> Result<DynamicImage, MediaError> {
-        if encoded.len() > self.limits.max_encoded_bytes {
-            return Err(MediaError::EncodedInputTooLarge {
-                actual: encoded.len(),
-                max: self.limits.max_encoded_bytes,
-            });
-        }
-
-        let format = image::guess_format(encoded).map_err(|_| MediaError::UnsupportedFormat)?;
-        if !matches!(format, ImageFormat::Png | ImageFormat::Jpeg) {
-            return Err(MediaError::UnsupportedFormat);
-        }
-
-        let mut reader = ImageReader::with_format(Cursor::new(encoded), format);
-        let mut initial_limits = Limits::default();
-        initial_limits.max_image_width = None;
-        initial_limits.max_image_height = None;
-        initial_limits.max_alloc = Some(self.decoder_allocation_hint());
-        reader.limits(initial_limits);
-        let mut decoder = reader.into_decoder().map_err(map_decode_error)?;
-        let (width, height) = decoder.dimensions();
-        self.check_dimensions(width, height)?;
-        self.check_decoded_bytes(decoder.total_bytes())?;
-        let mut decode_limits = Limits::default();
-        decode_limits.max_image_width = Some(self.limits.max_width);
-        decode_limits.max_image_height = Some(self.limits.max_height);
-        decode_limits.max_alloc = Some(self.decoder_allocation_hint());
-        decoder
-            .set_limits(decode_limits)
-            .map_err(map_decode_error)?;
-
-        // Orientation changes visible pixels and is therefore applied before all container
-        // metadata is discarded. Other EXIF/XMP/IPTC/text/profile bytes never enter the raster.
-        let orientation = decoder.orientation().map_err(map_decode_error)?;
-        let mut image = DynamicImage::from_decoder(decoder).map_err(map_decode_error)?;
-        image.apply_orientation(orientation);
-        self.check_dimensions(image.width(), image.height())?;
-        Ok(image)
+fn decode_bounded(encoded: &[u8], limits: MediaLimits) -> Result<DynamicImage, MediaError> {
+    if encoded.len() > limits.max_encoded_bytes {
+        return Err(MediaError::EncodedInputTooLarge {
+            actual: encoded.len(),
+            max: limits.max_encoded_bytes,
+        });
     }
 
-    fn check_dimensions(&self, width: u32, height: u32) -> Result<(), MediaError> {
-        if width == 0
-            || height == 0
-            || width > self.limits.max_width
-            || height > self.limits.max_height
-        {
-            return Err(MediaError::DimensionsExceeded {
-                width,
-                height,
-                max_width: self.limits.max_width,
-                max_height: self.limits.max_height,
-            });
-        }
-        let pixels = u64::from(width) * u64::from(height);
-        if pixels > self.limits.max_pixels {
-            return Err(MediaError::PixelCountExceeded {
-                pixels,
-                max_pixels: self.limits.max_pixels,
-            });
-        }
-        self.check_decoded_bytes(pixels.saturating_mul(BYTES_PER_CANONICAL_PIXEL))
+    let format = image::guess_format(encoded).map_err(|_| MediaError::UnsupportedFormat)?;
+    if !matches!(format, ImageFormat::Png | ImageFormat::Jpeg) {
+        return Err(MediaError::UnsupportedFormat);
     }
 
-    fn check_decoded_bytes(&self, actual: u64) -> Result<(), MediaError> {
-        if actual > self.limits.max_decoded_bytes {
-            return Err(MediaError::DecodedBytesExceeded {
-                actual,
-                max: self.limits.max_decoded_bytes,
-            });
-        }
-        Ok(())
-    }
+    let mut reader = ImageReader::with_format(Cursor::new(encoded), format);
+    let mut initial_limits = Limits::default();
+    initial_limits.max_image_width = None;
+    initial_limits.max_image_height = None;
+    initial_limits.max_alloc = Some(decoder_allocation_hint(limits));
+    reader.limits(initial_limits);
+    let mut decoder = reader.into_decoder().map_err(map_decode_error)?;
+    let (width, height) = decoder.dimensions();
+    check_dimensions(limits, width, height)?;
+    check_decoded_bytes(limits, decoder.total_bytes())?;
+    let mut decode_limits = Limits::default();
+    decode_limits.max_image_width = Some(limits.max_width);
+    decode_limits.max_image_height = Some(limits.max_height);
+    decode_limits.max_alloc = Some(decoder_allocation_hint(limits));
+    decoder
+        .set_limits(decode_limits)
+        .map_err(map_decode_error)?;
 
-    fn decoder_allocation_hint(&self) -> u64 {
-        self.limits
-            .max_decoded_bytes
-            .saturating_add(self.limits.max_encoded_bytes as u64)
-            .saturating_add(DECODER_OVERHEAD_BYTES)
-    }
+    // Orientation changes visible pixels and is therefore applied before all container
+    // metadata is discarded. Other EXIF/XMP/IPTC/text/profile bytes never enter the raster.
+    let orientation = decoder.orientation().map_err(map_decode_error)?;
+    let mut image = DynamicImage::from_decoder(decoder).map_err(map_decode_error)?;
+    image.apply_orientation(orientation);
+    check_dimensions(limits, image.width(), image.height())?;
+    Ok(image)
+}
 
+fn check_dimensions(limits: MediaLimits, width: u32, height: u32) -> Result<(), MediaError> {
+    if width == 0 || height == 0 || width > limits.max_width || height > limits.max_height {
+        return Err(MediaError::DimensionsExceeded {
+            width,
+            height,
+            max_width: limits.max_width,
+            max_height: limits.max_height,
+        });
+    }
+    let pixels = u64::from(width) * u64::from(height);
+    if pixels > limits.max_pixels {
+        return Err(MediaError::PixelCountExceeded {
+            pixels,
+            max_pixels: limits.max_pixels,
+        });
+    }
+    check_decoded_bytes(limits, pixels.saturating_mul(BYTES_PER_CANONICAL_PIXEL))
+}
+
+fn check_decoded_bytes(limits: MediaLimits, actual: u64) -> Result<(), MediaError> {
+    if actual > limits.max_decoded_bytes {
+        return Err(MediaError::DecodedBytesExceeded {
+            actual,
+            max: limits.max_decoded_bytes,
+        });
+    }
+    Ok(())
+}
+
+fn decoder_allocation_hint(limits: MediaLimits) -> u64 {
+    limits
+        .max_decoded_bytes
+        .saturating_add(limits.max_encoded_bytes as u64)
+        .saturating_add(DECODER_OVERHEAD_BYTES)
+}
+
+impl MediaStore {
     fn persist(
         &self,
         handle: &MediaHandle,
@@ -642,11 +652,12 @@ impl MediaStore {
 
         let (width, height) = parse_canonical_header(&canonical_bytes)
             .map_err(|reason| MediaError::CorruptStoredRaster { id, reason })?;
-        self.check_dimensions(width, height)
-            .map_err(|error| MediaError::CorruptStoredRaster {
+        check_dimensions(self.limits, width, height).map_err(|error| {
+            MediaError::CorruptStoredRaster {
                 id,
                 reason: error.to_string(),
-            })?;
+            }
+        })?;
         let actual_id = ContentId::from_bytes(*blake3::hash(&canonical_bytes).as_bytes());
         if actual_id != id {
             return Err(MediaError::CorruptStoredRaster {

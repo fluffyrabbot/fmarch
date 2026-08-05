@@ -14,6 +14,7 @@ import {
 } from "./capacity_overload_contract.mjs";
 import { seedSetupCommandPlanForGame } from "./dev_test_game_setup_bootstrap_scenario.mjs";
 import { decodeServerEnvelopeFrame } from "../frontend/src/lib/app/live-transport.mjs";
+import { runFmarchMigrations } from "./run_fmarch_migrations.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const defaultDatabaseUrl =
@@ -131,6 +132,7 @@ function parseArgs(argv) {
 }
 
 async function startServer({ baseUrl, port, databaseUrl, env }) {
+  await runFmarchMigrations({ cwd: repoRoot, databaseUrl, env });
   server = spawn(serverBinary, [], {
     cwd: repoRoot,
     env: {

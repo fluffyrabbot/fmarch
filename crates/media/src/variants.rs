@@ -19,8 +19,8 @@ use super::*;
 pub const VARIANT_RECIPE_REVISION: &str =
     "v1-img02510-ravif0130-q72-s6-t1-webp024-lossless-lanczos3-pmul-floor";
 const MANIFEST_SCHEMA: &str = "fmarch.media.variants.v1";
-const MANIFEST_NAME: &str = "manifest.json";
-const MANIFEST_MAX_BYTES: u64 = 32 * 1024;
+pub(crate) const MANIFEST_NAME: &str = "manifest.json";
+pub(crate) const MANIFEST_MAX_BYTES: u64 = 32 * 1024;
 const AVIF_SPEED: u8 = 6;
 const AVIF_QUALITY: u8 = 72;
 const VARIANT_COUNT: usize = 6;
@@ -172,7 +172,7 @@ impl VariantLimits {
         self.max_total_encoded_bytes
     }
 
-    fn validate(self) -> Result<(), MediaError> {
+    pub(crate) fn validate(self) -> Result<(), MediaError> {
         if self.max_width == 0 {
             return Err(MediaError::InvalidVariantLimits(
                 "max_width must be non-zero",
@@ -216,12 +216,12 @@ impl Default for VariantLimits {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VariantRecord {
-    key: VariantKey,
-    width: u32,
-    height: u32,
-    encoded_len: u64,
-    blake3: ContentId,
-    has_alpha: bool,
+    pub(crate) key: VariantKey,
+    pub(crate) width: u32,
+    pub(crate) height: u32,
+    pub(crate) encoded_len: u64,
+    pub(crate) blake3: ContentId,
+    pub(crate) has_alpha: bool,
 }
 
 impl VariantRecord {
@@ -256,10 +256,10 @@ impl VariantRecord {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VariantSet {
-    source: ContentId,
-    source_width: u32,
-    source_height: u32,
-    variants: Vec<VariantRecord>,
+    pub(crate) source: ContentId,
+    pub(crate) source_width: u32,
+    pub(crate) source_height: u32,
+    pub(crate) variants: Vec<VariantRecord>,
 }
 
 impl VariantSet {
@@ -282,8 +282,8 @@ impl VariantSet {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StoredVariant {
-    record: VariantRecord,
-    encoded_bytes: Vec<u8>,
+    pub(crate) record: VariantRecord,
+    pub(crate) encoded_bytes: Vec<u8>,
 }
 
 impl StoredVariant {
@@ -304,8 +304,8 @@ pub enum VariantGenerationStatus {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VariantGenerationResult {
-    set: VariantSet,
-    status: VariantGenerationStatus,
+    pub(crate) set: VariantSet,
+    pub(crate) status: VariantGenerationStatus,
 }
 
 impl VariantGenerationResult {
@@ -318,23 +318,23 @@ impl VariantGenerationResult {
     }
 }
 
-struct PreparedVariant {
-    record: VariantRecord,
-    encoded_bytes: Vec<u8>,
+pub(crate) struct PreparedVariant {
+    pub(crate) record: VariantRecord,
+    pub(crate) encoded_bytes: Vec<u8>,
 }
 
-struct PreparedVariantSet {
-    set: VariantSet,
-    members: Vec<PreparedVariant>,
-    manifest: Vec<u8>,
+pub(crate) struct PreparedVariantSet {
+    pub(crate) set: VariantSet,
+    pub(crate) members: Vec<PreparedVariant>,
+    pub(crate) manifest: Vec<u8>,
 }
 
 /// Fully decoded, canonicalized, resized, encoded, and validated upload with no filesystem
 /// effects yet. Client-controlled validation failures therefore occur before persistence.
 pub struct PreparedMediaUpload {
-    handle: MediaHandle,
-    canonical_bytes: Vec<u8>,
-    variants: PreparedVariantSet,
+    pub(crate) handle: MediaHandle,
+    pub(crate) canonical_bytes: Vec<u8>,
+    pub(crate) variants: PreparedVariantSet,
 }
 
 impl fmt::Debug for PreparedMediaUpload {
@@ -359,8 +359,8 @@ impl PreparedMediaUpload {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MediaUploadCommitResult {
-    ingest: IngestResult,
-    variants: VariantGenerationResult,
+    pub(crate) ingest: IngestResult,
+    pub(crate) variants: VariantGenerationResult,
 }
 
 impl MediaUploadCommitResult {
@@ -424,20 +424,7 @@ impl MediaStore {
         encoded: &[u8],
         limits: VariantLimits,
     ) -> Result<PreparedMediaUpload, MediaError> {
-        limits.validate()?;
-        let decoded = self.decode_bounded(encoded)?;
-        let canonical_bytes = canonical_raster_bytes(decoded)?;
-        let id = ContentId::from_bytes(*blake3::hash(&canonical_bytes).as_bytes());
-        let (width, height) = parse_canonical_header(&canonical_bytes)
-            .map_err(|reason| MediaError::CorruptStoredRaster { id, reason })?;
-        let handle = MediaHandle { id, width, height };
-        let variants =
-            prepare_variant_set(handle, &canonical_bytes[CANONICAL_HEADER_BYTES..], limits)?;
-        Ok(PreparedMediaUpload {
-            handle,
-            canonical_bytes,
-            variants,
-        })
+        prepare_upload(encoded, self.limits, limits)
     }
 
     /// Persist an already validated upload. The canonical record is installed first and the
@@ -889,6 +876,31 @@ impl MediaStore {
     }
 }
 
+pub(crate) fn prepare_upload(
+    encoded: &[u8],
+    media_limits: MediaLimits,
+    variant_limits: VariantLimits,
+) -> Result<PreparedMediaUpload, MediaError> {
+    media_limits.validate()?;
+    variant_limits.validate()?;
+    let decoded = decode_bounded(encoded, media_limits)?;
+    let canonical_bytes = canonical_raster_bytes(decoded)?;
+    let id = ContentId::from_bytes(*blake3::hash(&canonical_bytes).as_bytes());
+    let (width, height) = parse_canonical_header(&canonical_bytes)
+        .map_err(|reason| MediaError::CorruptStoredRaster { id, reason })?;
+    let handle = MediaHandle { id, width, height };
+    let variants = prepare_variant_set(
+        handle,
+        &canonical_bytes[CANONICAL_HEADER_BYTES..],
+        variant_limits,
+    )?;
+    Ok(PreparedMediaUpload {
+        handle,
+        canonical_bytes,
+        variants,
+    })
+}
+
 fn prepare_variant_set(
     handle: MediaHandle,
     rgba8_pixels: &[u8],
@@ -954,7 +966,7 @@ fn prepare_variant_set(
     })
 }
 
-fn fitted_dimensions(
+pub(crate) fn fitted_dimensions(
     width: u32,
     height: u32,
     (max_width, max_height): (u32, u32),
@@ -978,7 +990,7 @@ fn fitted_dimensions(
     }
 }
 
-fn check_variant_dimensions(
+pub(crate) fn check_variant_dimensions(
     key: VariantKey,
     width: u32,
     height: u32,
@@ -1166,7 +1178,7 @@ fn validate_encoded_variant(
     Ok(())
 }
 
-fn verify_member_bytes(
+pub(crate) fn verify_member_bytes(
     id: ContentId,
     record: &VariantRecord,
     bytes: &[u8],
@@ -1213,7 +1225,7 @@ fn serialize_manifest(set: &VariantSet) -> Result<Vec<u8>, MediaError> {
     serde_json::to_vec(&disk).map_err(|error| corrupt_set(set.source, &error.to_string()))
 }
 
-fn parse_manifest(id: ContentId, bytes: &[u8]) -> Result<VariantSet, MediaError> {
+pub(crate) fn parse_manifest(id: ContentId, bytes: &[u8]) -> Result<VariantSet, MediaError> {
     let disk: DiskManifest =
         serde_json::from_slice(bytes).map_err(|error| corrupt_set(id, &error.to_string()))?;
     let canonical =
@@ -1415,7 +1427,7 @@ fn read_capped_attached(
     Ok(bytes)
 }
 
-fn corrupt_set(id: ContentId, reason: &str) -> MediaError {
+pub(crate) fn corrupt_set(id: ContentId, reason: &str) -> MediaError {
     MediaError::CorruptVariantSet {
         id,
         reason: reason.to_owned(),

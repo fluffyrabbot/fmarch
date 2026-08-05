@@ -13,7 +13,6 @@ async function contract() {
     await Promise.all(
       [
         "Dockerfile",
-        "scripts/container-entrypoint.sh",
         ".dockerignore",
         "railway.toml",
         "Dockerfile.frontend",
@@ -26,21 +25,22 @@ async function contract() {
         "tools/production_promotion.mjs",
         "package.json",
         "crates/server/src/main.rs",
+        "crates/server/src/bin/fmarch-migrate.rs",
       ].map(async (relativePath) => [relativePath, await read(relativePath)]),
     ),
   );
 
-  assert.match(source.Dockerfile, /cargo build --release --locked -p server/);
+  assert.match(source.Dockerfile, /cargo build --release --locked -p server --bins/);
   assert.match(source.Dockerfile, /COPY docs \.\/docs/);
-  assert.match(source.Dockerfile, /install --directory --owner=fmarch --group=fmarch --mode=0700 \/var\/lib\/fmarch\/media/);
-  assert.match(source.Dockerfile, /apt-get install --yes --no-install-recommends ca-certificates gosu/);
-  assert.match(source.Dockerfile, /ENTRYPOINT \["fmarch-entrypoint"\]/);
-  assert.doesNotMatch(source.Dockerfile, /USER fmarch/);
+  assert.doesNotMatch(source.Dockerfile, /\/var\/lib\/fmarch\/media/);
+  assert.match(source.Dockerfile, /apt-get install --yes --no-install-recommends ca-certificates/);
+  assert.match(source.Dockerfile, /COPY --from=builder \/app\/target\/release\/fmarch-migrate \/usr\/local\/bin\/fmarch-migrate/);
+  assert.match(source.Dockerfile, /USER fmarch/);
   assert.match(source.Dockerfile, /CMD \["fmarch-server"\]/);
-  assert.match(source["scripts/container-entrypoint.sh"], /chown --recursive fmarch:fmarch/);
-  assert.match(source["scripts/container-entrypoint.sh"], /exec gosu fmarch "\$@"/);
   assert.match(source[".dockerignore"], /^target$/m);
   assert.match(source["railway.toml"], /healthcheckPath = "\/healthz"/);
+  assert.match(source["railway.toml"], /preDeployCommand = "fmarch-migrate"/);
+  assert.match(source["railway.toml"], /numReplicas = 2/);
   assert.doesNotMatch(source["railway.toml"], /watchPatterns/);
 
   assert.match(source["frontend/svelte.config.js"], /@sveltejs\/adapter-node/);
@@ -59,7 +59,10 @@ async function contract() {
   assert.doesNotMatch(source["deploy/railway/frontend.railway.toml"], /watchPatterns/);
 
   assert.match(source["deploy/railway/api.env.example"], /DATABASE_URL=\$\{\{Postgres\.DATABASE_URL\}\}/);
-  assert.match(source["deploy/railway/api.env.example"], /FMARCH_MEDIA_ROOT=\/var\/lib\/fmarch\/media/);
+  assert.match(source["deploy/railway/api.env.example"], /AWS_ENDPOINT_URL=\$\{\{media\.AWS_ENDPOINT_URL\}\}/);
+  assert.match(source["deploy/railway/api.env.example"], /AWS_S3_BUCKET_NAME=\$\{\{media\.AWS_S3_BUCKET_NAME\}\}/);
+  assert.match(source["deploy/railway/api.env.example"], /AWS_S3_URL_STYLE=path/);
+  assert.doesNotMatch(source["deploy/railway/api.env.example"], /FMARCH_MEDIA_ROOT/);
   assert.doesNotMatch(source["deploy/railway/api.env.example"], /^RAILWAY_RUN_UID=/m);
   assert.match(source["deploy/railway/api.env.example"], /^WORKOS_CLIENT_ID=/m);
   assert.match(source["deploy/railway/api.env.example"], /^WORKOS_ISSUER=https:\/\//m);
@@ -90,6 +93,9 @@ async function contract() {
 
   assert.match(source["crates/server/src/main.rs"], /platform_port/);
   assert.match(source["crates/server/src/main.rs"], /format!\("0\.0\.0\.0:\{port\}"\)/);
+  assert.doesNotMatch(source["crates/server/src/main.rs"], /\.run\(&pool\)\.await/);
+  assert.match(source["crates/server/src/main.rs"], /ensure_schema_ready\(&pool\)/);
+  assert.match(source["crates/server/src/bin/fmarch-migrate.rs"], /MIGRATOR\.run\(&pool\)\.await/);
 
   const runbook = source["docs/ops/railway-staging-target.md"];
   for (const requiredText of [

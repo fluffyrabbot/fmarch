@@ -220,8 +220,8 @@
       "order": 50,
       "title": "Multi-replica release topology",
       "execution_class": "code",
-      "status": "open",
-      "summary": "The current bootstrap uses startup-owned migrations and a replica-local filesystem, so it cannot truthfully exercise the canonical multi-node release gate.",
+      "status": "complete",
+      "summary": "The API now uses shared async object media, migration-free startup, an explicit pre-deploy migrator, and a locally proven two-instance media/live recovery boundary.",
       "complete_when": [
         "API startup is migration-free, an explicit migrator owns schema changes, shared S3-compatible media preserves the existing content-addressed contract, and a two-replica local or hosted proof exercises cross-replica media and live recovery."
       ],
@@ -233,39 +233,23 @@
       "evidence": [
         {
           "kind": "source",
-          "value": "docs/arch/15-one-zero-governance.md"
+          "value": "crates/media/src/repository.rs"
         },
         {
           "kind": "source",
-          "value": "docs/ops/railway-staging-target.md"
+          "value": "crates/server/src/bin/fmarch-migrate.rs"
+        },
+        {
+          "kind": "source",
+          "value": "railway.toml"
+        },
+        {
+          "kind": "command",
+          "value": "npm run test:release-topology"
         }
       ],
-      "remaining": [
-        "Add a shared object-storage backend, split migration execution from API startup, configure the two-replica Railway target, and prove cross-replica media/live behavior."
-      ],
-      "recommended_slice": {
-        "objective": "Replace the single-process deployment assumptions with the canonical 1.0 topology: an async content-addressed S3-compatible media repository, an explicit one-shot migrator, migration-free API startup, two local API replicas behind one endpoint, and a cross-replica upload/read/live-recovery proof that drives the Railway service configuration.",
-        "paths": [
-          "crates/media/",
-          "crates/api/",
-          "crates/server/",
-          "deploy/railway/",
-          "railway.toml",
-          "Dockerfile",
-          "tools/",
-          "docs/ops/railway-staging-target.md"
-        ],
-        "proof_commands": [
-          "npm run test:proof-lane-contract",
-          "npm run proof:lanes -- --mode push --run",
-          "npm run test:railway-staging-target"
-        ],
-        "non_claims": [
-          "No production promotion before hosted staging health, same-commit attribution, and the full release sweep pass.",
-          "No per-replica filesystem fallback in staging or production.",
-          "No claim that local multi-replica proof substitutes for the real-hosted race matrix."
-        ]
-      }
+      "remaining": [],
+      "boundary": "The local proof drives two API instances against one Postgres pool and one shared object repository: instance A uploads and commands, instance B serves the committed variant, observes the live change, and rehydrates on reconnect. The Railway source contract requires a pre-deploy migrator and two API replicas. This closes the code capability, not hosted race evidence, production promotion, or release readiness."
     },
     {
       "id": "foundation.security-release-baseline",
@@ -294,7 +278,30 @@
       ],
       "remaining": [
         "Ship and test CSP, release secret-custody configuration, dependency/container provenance, and no-sensitive-telemetry enforcement."
-      ]
+      ],
+      "recommended_slice": {
+        "objective": "Establish the 1.0 security release baseline as one fail-closed contract: emit and browser-test a strict nonce-based production CSP, define environment-isolated secret ownership and rotation checks for Railway/WorkOS/event encryption/object storage, add locked dependency and container provenance gates, and prove logs plus operator artifacts redact credentials, tokens, personal data, and signed URLs.",
+        "paths": [
+          "frontend/src/hooks.server.js",
+          "frontend/src/",
+          "crates/server/",
+          "crates/eventstore/",
+          "deploy/railway/",
+          "Dockerfile",
+          "tools/",
+          "docs/ops/"
+        ],
+        "proof_commands": [
+          "npm run test:production-promotion",
+          "npm run test:railway-staging-target",
+          "npm run proof:lanes -- --mode push --run"
+        ],
+        "non_claims": [
+          "No claim of third-party penetration testing, formal compliance certification, or production incident readiness.",
+          "No secret values, resolved Railway credentials, WorkOS API keys, session material, or personal data may enter repository evidence.",
+          "No production promotion until the independent hosted evidence and human release gates are satisfied."
+        ]
+      }
     },
     {
       "id": "foundation.maintainable-core",

@@ -17,7 +17,7 @@ count is treated as product progress.
 
 | Execution class | Complete | Partial | Open | Blocked | Deferred | Total |
 |---|---:|---:|---:|---:|---:|---:|
-| code | 38 | 0 | 4 | 0 | 0 | 42 |
+| code | 39 | 0 | 3 | 0 | 0 | 42 |
 | external-evidence | 0 | 0 | 0 | 6 | 0 | 6 |
 | human | 1 | 0 | 2 | 1 | 0 | 4 |
 | optional | 0 | 0 | 0 | 0 | 1 | 1 |
@@ -28,23 +28,23 @@ Overall release closure complete: **no**.
 
 ## Next buildable coding slice
 
-### Multi-replica release topology `foundation.release-topology`
+### 1.0 security release baseline `foundation.security-release-baseline`
 
-Replace the single-process deployment assumptions with the canonical 1.0 topology: an async content-addressed S3-compatible media repository, an explicit one-shot migrator, migration-free API startup, two local API replicas behind one endpoint, and a cross-replica upload/read/live-recovery proof that drives the Railway service configuration.
+Establish the 1.0 security release baseline as one fail-closed contract: emit and browser-test a strict nonce-based production CSP, define environment-isolated secret ownership and rotation checks for Railway/WorkOS/event encryption/object storage, add locked dependency and container provenance gates, and prove logs plus operator artifacts redact credentials, tokens, personal data, and signed URLs.
 
-Owned paths: `crates/media/`, `crates/api/`, `crates/server/`, `deploy/railway/`, `railway.toml`, `Dockerfile`, `tools/`, `docs/ops/railway-staging-target.md`.
+Owned paths: `frontend/src/hooks.server.js`, `frontend/src/`, `crates/server/`, `crates/eventstore/`, `deploy/railway/`, `Dockerfile`, `tools/`, `docs/ops/`.
 
 Proof:
 
-- `npm run test:proof-lane-contract`
-- `npm run proof:lanes -- --mode push --run`
+- `npm run test:production-promotion`
 - `npm run test:railway-staging-target`
+- `npm run proof:lanes -- --mode push --run`
 
 Explicit non-claims:
 
-- No production promotion before hosted staging health, same-commit attribution, and the full release sweep pass.
-- No per-replica filesystem fallback in staging or production.
-- No claim that local multi-replica proof substitutes for the real-hosted race matrix.
+- No claim of third-party penetration testing, formal compliance certification, or production incident readiness.
+- No secret values, resolved Railway credentials, WorkOS API keys, session material, or personal data may enter repository evidence.
+- No production promotion until the independent hosted evidence and human release gates are satisfied.
 
 ## Locally proven foundation
 
@@ -54,7 +54,7 @@ Explicit non-claims:
 | complete | Deterministic resolution engine and pack parity<br>`foundation.resolution-engine-parity` | — | Every actionable in-scope engine inventory row is supported and validated, and every remaining unsupported row is explicitly classified out of scope. | Complete. | source: `docs/arch/11-engine-port-checklist.md`<br>source: `docs/arch/im-human-engine-parity-matrix.md`<br>source: `tools/engine_port_completion_audit.py`<br>The closed rules IR and deterministic resolver cover the full source-derived engine inventory; this is local engine parity, not hosted product readiness. |
 | complete | Capability-gated command runtime<br>`foundation.command-capability-runtime` | `foundation.event-store-projections`<br>`foundation.resolution-engine-parity` | Commands preserve capability, concurrency, idempotency, and event-log invariants through the Postgres pipeline. | Complete. | source: `crates/commands/src/lib.rs`<br>source: `crates/caps/src/lib.rs`<br>Typed commands resolve authority at the boundary, append events transactionally, update projections, and return idempotent acknowledgements. |
 | complete | Versioned wire and recoverable live delivery<br>`foundation.wire-live-delivery` | `foundation.command-capability-runtime` | A seeded client can cold-load, decode only versioned binary-CBOR live frames, recover from lag, and retain capability-filtered state. | Complete. | source: `crates/wire/src/lib.rs`<br>source: `frontend/src/lib/app/live-transport.mjs`<br>Versioned Rust-owned wire types, REST/JSON commands and cold loads, binary-CBOR WebSocket projection delivery, lag resync, and frontend hydration recovery are locally proven. |
-| open | Multi-replica release topology<br>`foundation.release-topology` | `foundation.event-store-projections`<br>`foundation.wire-live-delivery`<br>`product.media.upload-to-private-post` | API startup is migration-free, an explicit migrator owns schema changes, shared S3-compatible media preserves the existing content-addressed contract, and a two-replica local or hosted proof exercises cross-replica media and live recovery. | Remaining: Add a shared object-storage backend, split migration execution from API startup, configure the two-replica Railway target, and prove cross-replica media/live behavior. | source: `docs/arch/15-one-zero-governance.md`<br>source: `docs/ops/railway-staging-target.md`<br>The current bootstrap uses startup-owned migrations and a replica-local filesystem, so it cannot truthfully exercise the canonical multi-node release gate. |
+| complete | Multi-replica release topology<br>`foundation.release-topology` | `foundation.event-store-projections`<br>`foundation.wire-live-delivery`<br>`product.media.upload-to-private-post` | API startup is migration-free, an explicit migrator owns schema changes, shared S3-compatible media preserves the existing content-addressed contract, and a two-replica local or hosted proof exercises cross-replica media and live recovery. | Complete. | source: `crates/media/src/repository.rs`<br>source: `crates/server/src/bin/fmarch-migrate.rs`<br>source: `railway.toml`<br>command: `npm run test:release-topology`<br>The API now uses shared async object media, migration-free startup, an explicit pre-deploy migrator, and a locally proven two-instance media/live recovery boundary. |
 | open | 1.0 security release baseline<br>`foundation.security-release-baseline` | `foundation.wire-live-delivery`<br>`product.identity.method-coexistence` | A strict production CSP, secret custody/rotation configuration, dependency/container provenance checks, and no-sensitive-telemetry contracts are enforced and locally proven. | Remaining: Ship and test CSP, release secret-custody configuration, dependency/container provenance, and no-sensitive-telemetry enforcement. | source: `docs/arch/15-one-zero-governance.md`<br>source: `frontend/src/hooks.server.js`<br>Capability authorization and encrypted storage are locally proven, but the browser CSP, release secret-custody contract, and provenance gate are not yet closed. |
 | open | Reviewable 1.0 core and toolchain<br>`foundation.maintainable-core` | `foundation.command-capability-runtime`<br>`foundation.wire-live-delivery` | The Rust toolchain is pinned, workspace Clippy is warning-clean, and concentrated pack, resolver, API, projection, command-test, and proof orchestration responsibilities are split into coherent modules without weakening proof coverage. | Remaining: Pin the workspace toolchain, make strict Clippy green, and decompose the concentrated core and proof modules along their existing domain boundaries. | source: `docs/arch/15-one-zero-governance.md`<br>source: `Cargo.toml`<br>Core domain, API, projection, command-test, and proof-runner responsibilities are concentrated in modules too large to review or evolve safely as 1.0 contracts. |
 
