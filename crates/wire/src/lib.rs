@@ -198,6 +198,29 @@ impl From<SlotLifecycle> for domain::SlotLifecycle {
     }
 }
 
+/// Wire-local ITA session control kind. Domain's enum has no TS derive.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum ItaSessionControlKind {
+    Open,
+    Pause,
+    Cancel,
+    Update,
+    Close,
+}
+
+impl From<ItaSessionControlKind> for domain::ItaSessionControlKind {
+    fn from(control: ItaSessionControlKind) -> Self {
+        match control {
+            ItaSessionControlKind::Open => domain::ItaSessionControlKind::Open,
+            ItaSessionControlKind::Pause => domain::ItaSessionControlKind::Pause,
+            ItaSessionControlKind::Cancel => domain::ItaSessionControlKind::Cancel,
+            ItaSessionControlKind::Update => domain::ItaSessionControlKind::Update,
+            ItaSessionControlKind::Close => domain::ItaSessionControlKind::Close,
+        }
+    }
+}
+
 /// Permission classes a primary host may deny to cohosts at game creation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]
@@ -281,6 +304,16 @@ pub enum Command {
         slot: String,
         status: SlotLifecycle,
     },
+    AddSlotStatusTag {
+        game: Uuid,
+        slot: String,
+        tag: String,
+    },
+    RemoveSlotStatusTag {
+        game: Uuid,
+        slot: String,
+        tag: String,
+    },
     AddCohost {
         game: Uuid,
         user: String,
@@ -341,6 +374,14 @@ pub enum Command {
         #[serde(default)]
         #[ts(optional)]
         media: Option<Vec<SubmitPostMedia>>,
+    },
+    ControlItaSession {
+        game: Uuid,
+        session_id: String,
+        control: ItaSessionControlKind,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        message: Option<String>,
     },
     ApplyEffectPlan {
         game: Uuid,
@@ -474,6 +515,12 @@ impl Command {
                 slot,
                 status: status.into(),
             },
+            Command::AddSlotStatusTag { game, slot, tag } => {
+                commands::Command::AddSlotStatusTag { game, slot, tag }
+            }
+            Command::RemoveSlotStatusTag { game, slot, tag } => {
+                commands::Command::RemoveSlotStatusTag { game, slot, tag }
+            }
             Command::AddCohost { game, user } => commands::Command::AddCohost { game, user },
             Command::GrantSpectator { game, user } => {
                 commands::Command::GrantSpectator { game, user }
@@ -533,6 +580,17 @@ impl Command {
                         .collect(),
                 }
             }
+            Command::ControlItaSession {
+                game,
+                session_id,
+                control,
+                message,
+            } => commands::Command::ControlItaSession {
+                game,
+                session_id,
+                control: control.into(),
+                message,
+            },
             Command::ApplyEffectPlan {
                 game,
                 effects,
@@ -2053,11 +2111,12 @@ pub mod typescript {
         HostConsoleStateDelta, HostConsoleThreadPostDelta, HostDayEventDelta, HostPhaseControl,
         HostPromptDecision, HostPromptDelta, HostPromptsDelta, HostTaskAllowedCommand,
         HostTaskCommandKind, HostTaskDelta, HostTaskKind, HostTaskState, HostTaskUrgency,
-        MemberMutePage, MemberMuteState, ModerationCase, ModerationCaseDetail, ModerationCasePage,
-        ModerationHistory, ModerationReport, ModerationReportReceipt, PlayerInvestigationResult,
-        PlayerNotification, ProfileEditor, ProjectionDelta, PublicGameThreadPage, PublicProfile,
-        PublicSearchPage, PublicSearchResult, RejectCode, RejectMsg, ResolutionTraceDecisionRow,
-        ResolutionTraceEdgeRow, ResolutionTraceEffectChangeRow, ResolutionTraceGeneratedRow,
+        ItaSessionControlKind, MemberMutePage, MemberMuteState, ModerationCase,
+        ModerationCaseDetail, ModerationCasePage, ModerationHistory, ModerationReport,
+        ModerationReportReceipt, PlayerInvestigationResult, PlayerNotification, ProfileEditor,
+        ProjectionDelta, PublicGameThreadPage, PublicProfile, PublicSearchPage, PublicSearchResult,
+        RejectCode, RejectMsg, ResolutionTraceDecisionRow, ResolutionTraceEdgeRow,
+        ResolutionTraceEffectChangeRow, ResolutionTraceGeneratedRow,
         ResolutionTraceInspectionReport, ResolutionTraceInspectionRun, ResolutionTraceNoteRow,
         ResolutionTraceVisibilityRow, ServerEnvelope, ServerMsg, SlotLifecycle, SubmitPostMedia,
         SubscriptionTargetState, ThreadPage, ThreadPost, ThreadPostMedia, ThreadPostMediaVariant,
@@ -2119,6 +2178,7 @@ pub mod typescript {
         push::<VoteTarget>(&mut out, &config);
         push::<HostPromptDecision>(&mut out, &config);
         push::<SlotLifecycle>(&mut out, &config);
+        push::<ItaSessionControlKind>(&mut out, &config);
         push::<SubmitPostMedia>(&mut out, &config);
         push::<CohostPermissionClass>(&mut out, &config);
         push::<Command>(&mut out, &config);

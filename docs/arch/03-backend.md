@@ -108,13 +108,16 @@ upload go over plain HTTP:
 - Authenticated `GET /games/{game}/resolution-traces?run_id=...` returns host/cohost-only
   stored `ResolutionTrace` inspection rows, with each decision/edge/generated/effect/visibility
   row anchored to the persisted `ResolutionApplied` stream sequence when one exists.
-- `GET /auth/session` verifies a WorkOS access token, maps its immutable `sub` to one stable
-  local `platform_principal`, and returns only server-derived principal/capability data.
-  SvelteKit AuthKit owns the encrypted browser session and forwards its short-lived access
-  token to the API. Passwords, MFA, recovery, verification, and session refresh do not cross
-  the API boundary. Legacy account/session endpoints are absent whenever WorkOS verification
-  is configured; they remain available only behind `FMARCH_DEV_AUTH=1` for deterministic
-  scratch-database proof lanes.
+- Auth is multi-method and API-owned (source of truth: [06-security](06-security.md)).
+  `GET /auth/session` validates an **opaque app-session bearer** (`fmss_…` → `auth_session`)
+  and returns only server-derived principal/capability data (optional game-scoped caps).
+  `POST /auth/sessions` creates that session via `method: "classic"` (password) or
+  `method: "workos"` (one-time WorkOS access-token exchange). Classic account, recovery,
+  invite, and session-lifecycle routes are first-class (default on; disable with
+  `FMARCH_CLASSIC_AUTH=0`). WorkOS is additive when configured. All `/auth/*` routes are
+  always mounted; availability is runtime policy. `FMARCH_DEV_AUTH=1` gates only
+  `POST /auth/dev-session` and the dev WebSocket principal form—not classic production auth.
+  Frontend AuthKit (if used) is browser ceremony only; it does not own the API session.
 - Image upload is a `POST` that runs the ingest pipeline ([07](07-images.md)) and returns
   a content-addressed handle.
 - A reconnecting client cold-loads the current projection state, then resumes the live

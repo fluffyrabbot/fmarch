@@ -8,29 +8,47 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-const GENERATED_TYPES: &str = "crates/wire/generated/types.ts";
+/// Checked-in TypeScript contract paths. Both must match
+/// `wire::typescript::render()` under `--check`; `--write` updates both.
+const GENERATED_TYPES: &[&str] = &[
+    "crates/wire/generated/types.ts",
+    "frontend/src/lib/wire/types.ts",
+];
 const USAGE: &str = "usage: export_types --check|--write";
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mode = Mode::parse(env::args().skip(1))?;
-    let path = workspace_root()?.join(GENERATED_TYPES);
+    let root = workspace_root()?;
     let rendered = wire::typescript::render();
+    let paths: Vec<PathBuf> = GENERATED_TYPES
+        .iter()
+        .map(|relative| root.join(relative))
+        .collect();
 
     match mode {
         Mode::Check => {
-            let checked_in = fs::read_to_string(&path)?;
-            if checked_in != rendered {
-                return Err(format!(
-                    "{} drifted; run `cargo run -p wire --bin export_types -- --write`",
-                    path.display()
-                )
-                .into());
+            for path in &paths {
+                let checked_in = fs::read_to_string(path).map_err(|error| {
+                    format!(
+                        "failed to read {}: {error}; run `cargo run -p wire --bin export_types -- --write`",
+                        path.display()
+                    )
+                })?;
+                if checked_in != rendered {
+                    return Err(format!(
+                        "{} drifted; run `cargo run -p wire --bin export_types -- --write`",
+                        path.display()
+                    )
+                    .into());
+                }
+                println!("ok: checked {}", path.display());
             }
-            println!("ok: checked {}", path.display());
         }
         Mode::Write => {
-            write_atomic(&path, rendered.as_bytes())?;
-            println!("ok: wrote {}", path.display());
+            for path in &paths {
+                write_atomic(path, rendered.as_bytes())?;
+                println!("ok: wrote {}", path.display());
+            }
         }
     }
 
@@ -127,6 +145,17 @@ mod tests {
         assert_eq!(
             Mode::parse(["--check".to_owned(), "--write".to_owned()]),
             Err(USAGE.to_owned())
+        );
+    }
+
+    #[test]
+    fn generated_paths_cover_crate_and_spa() {
+        assert_eq!(
+            GENERATED_TYPES,
+            &[
+                "crates/wire/generated/types.ts",
+                "frontend/src/lib/wire/types.ts",
+            ]
         );
     }
 

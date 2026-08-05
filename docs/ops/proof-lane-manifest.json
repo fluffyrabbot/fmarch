@@ -30,7 +30,10 @@
         "crates/wire/src/bin/export_types.rs",
         "crates/wire/src/lib.rs"
       ],
-      "outputs": ["crates/wire/generated/types.ts"]
+      "outputs": [
+        "crates/wire/generated/types.ts",
+        "frontend/src/lib/wire/types.ts"
+      ]
     },
     "check:command-goldens": {
       "kind": "shell",

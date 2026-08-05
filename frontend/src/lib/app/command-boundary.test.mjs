@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  commandVariantTag,
+  readGeneratedCommandTags,
+} from "../wire/generated-command-tags.mjs";
+import {
   buildAdminCommand,
   buildCommandEnvelope,
   buildPlayerCommand,
@@ -689,6 +693,104 @@ test("generic command sender normalizes ack and reject outcomes", async () => {
     retryableRejectWithGuidance.message,
     "Reject StreamConflict: reload and retry",
   );
+});
+
+test("player and admin builders emit tags present in generated wire Command union", () => {
+  const tags = readGeneratedCommandTags();
+  const game = "00000000-0000-0000-0000-000000000001";
+  const samples = [
+    buildPlayerCommand({
+      action: "submit_vote",
+      game,
+      actorSlot: "slot-7",
+      target: "slot-2",
+    }),
+    buildPlayerCommand({
+      action: "withdraw_vote",
+      game,
+      actorSlot: "slot-7",
+    }),
+    buildPlayerCommand({
+      action: "submit_post",
+      game,
+      actorSlot: "slot-7",
+      body: "hello",
+    }),
+    buildPlayerCommand({
+      action: "submit_action",
+      game,
+      actorSlot: "slot-7",
+      actionConfig: {
+        actionId: "action-1",
+        templateId: "kill",
+        targets: ["slot-2"],
+      },
+    }),
+    buildPlayerCommand({
+      action: "withdraw_action",
+      game,
+      actorSlot: "slot-7",
+      actionConfig: { actionId: "action-1" },
+    }),
+    buildPlayerCommand({
+      action: "submit_day_event",
+      game,
+      actorSlot: "slot-7",
+      actionConfig: { eventId: "event-1" },
+    }),
+    buildPlayerCommand({
+      action: "withdraw_day_event",
+      game,
+      actorSlot: "slot-7",
+      actionConfig: { eventId: "event-1" },
+    }),
+    buildAdminCommand({
+      action: "create_game",
+      game,
+      pack: "mafiascum",
+    }),
+    buildAdminCommand({ action: "add_slot", game, slot: "slot_1" }),
+    buildAdminCommand({
+      action: "assign_slot",
+      game,
+      slot: "slot_1",
+      user: "player_mira",
+    }),
+    buildAdminCommand({
+      action: "assign_role",
+      game,
+      slot: "slot_1",
+      roleKey: "vanilla_townie",
+    }),
+    buildAdminCommand({
+      action: "add_cohost",
+      game,
+      user: "cohost_a",
+    }),
+    buildAdminCommand({
+      action: "set_post_policy",
+      game,
+      allowMediaOnly: true,
+    }),
+    buildAdminCommand({
+      action: "attach_day_program",
+      game,
+      programRef: {
+        id: "raffle",
+        version: 1,
+        contentHash: "a".repeat(64),
+      },
+    }),
+    buildAdminCommand({ action: "start_game", game, phase: "D01" }),
+  ];
+
+  for (const command of samples) {
+    const tag = commandVariantTag(command);
+    assert.ok(
+      tags.has(tag),
+      `built command tag ${tag} missing from generated export type Command`,
+    );
+  }
 });
 
 function jsonResponse(body) {

@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  commandVariantTag,
+  readGeneratedCommandTags,
+} from "../../wire/generated-command-tags.mjs";
+import {
   buildHostCommandEnvelope,
   buildHostConsoleStateEndpoint,
   mapHostActionToWireCommand,
@@ -250,6 +254,37 @@ test("host actions map to generated wire command variants", () => {
       },
     },
   });
+});
+
+test("host action map tags appear in generated wire Command union", () => {
+  const tags = readGeneratedCommandTags();
+  // No AddSlotStatusTag / ControlItaSession UI kinds exist yet; when they land,
+  // mapHostActionToWireCommand should emit those wire tags and they will be
+  // covered here automatically.
+  const hostEvents = [
+    EXTEND_EVENT,
+    REPLACEMENT_EVENT,
+    LOCK_THREAD_EVENT,
+    UNLOCK_THREAD_EVENT,
+    RESOLVE_PHASE_EVENT,
+    ADVANCE_PHASE_EVENT,
+    ADVANCE_PHASE_BY_DEADLINE_EVENT,
+    PUBLISH_VOTECOUNT_EVENT,
+    MARK_DEAD_EVENT,
+    MODKILL_EVENT,
+    COMPLETE_GAME_EVENT,
+    RESOLVE_PROMPT_ACK_EVENT,
+    RESOLVE_PROMPT_SELECT_SLOT_EVENT,
+    RESOLVE_PROMPT_SELECT_POLICY_EVENT,
+    RESOLVE_DAY_EVENT,
+  ];
+  for (const actionEvent of hostEvents) {
+    const tag = commandVariantTag(mapHostActionToWireCommand(actionEvent));
+    assert.ok(
+      tags.has(tag),
+      `host command tag ${tag} missing from generated export type Command`,
+    );
+  }
 });
 
 test("host command envelope uses the Rust wire ClientEnvelope shape", () => {

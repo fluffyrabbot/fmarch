@@ -51,7 +51,7 @@ events
   the current `stream_seq`, computes new events at `stream_seq+1…`, and the unique
   constraint rejects a conflicting concurrent append. Retry on conflict.
 - Append-only. There is no `UPDATE` and no `DELETE` on `events`. Ever. Corrections are new
-  events (a `PostEdited`, a `VoteRetracted`), not mutations.
+  events (a `PostEdited`, a `VoteWithdrawn`), not mutations.
 
 ## Projection replay audits
 
@@ -106,8 +106,11 @@ Grouped by aggregate concern. Names are stable contracts once shipped.
 
 **Posting:** `PostSubmitted`, `PostEdited`, `PostRetracted`
 
-**Voting:** `VoteCast`, `VoteRetracted`, `HammerReached` (server-detected),
-`VotecountPosted`
+**Voting:** `VoteSubmitted`, `VoteWithdrawn` (platform stream kinds; see
+[10-event-schema](10-event-schema.md)). Official vote outcome is engine
+`DayVoteOutcome` inside `ResolutionApplied`. Hammer may lock the main thread via
+`ThreadLocked` (vote_hammer)—there is no separate `HammerReached` event. Host
+votecount publish is a command/projection, not a `VotecountPosted` fact.
 
 **Roles / reveal:** `RoleAssigned` (encrypted payload; see [06](06-security.md)),
 `SlotKilled` (death), `RoleRevealed`
