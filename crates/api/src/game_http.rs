@@ -4,7 +4,8 @@ use super::auth_http::{
     authenticate_token, bearer_token, require_global_admin, require_global_operator,
     unauthorized_session, unix_now_seconds, AuthHttpState,
 };
-use super::{command_reject_api_error, ApiError, ApiState};
+use super::command_http::command_reject_api_error;
+use super::{ApiError, ApiState};
 use crate::{community_http, live_projection, program_library};
 use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, StatusCode};

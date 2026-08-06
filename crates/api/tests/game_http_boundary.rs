@@ -5,6 +5,7 @@ fn game_http_has_one_typed_owner_with_narrow_live_and_media_adapters() {
     let source_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src");
     let composition_root = std::fs::read_to_string(source_root.join("lib.rs")).unwrap();
     let game_http = std::fs::read_to_string(source_root.join("game_http.rs")).unwrap();
+    let command_http = std::fs::read_to_string(source_root.join("command_http.rs")).unwrap();
     let media_http = std::fs::read_to_string(source_root.join("media_http.rs")).unwrap();
     let live_delivery = std::fs::read_to_string(source_root.join("live_delivery.rs")).unwrap();
 
@@ -59,14 +60,15 @@ fn game_http_has_one_typed_owner_with_narrow_live_and_media_adapters() {
     assert!(live_delivery.contains("game_http::load_host_console_state(&state.pool"));
     assert!(media_http.contains("use super::game_http::require_channel_thread_access;"));
 
-    for root_owned in [
+    for command_owned in [
         "async fn command(",
         "async fn import_completed_game_export(",
     ] {
-        assert!(composition_root.contains(root_owned));
+        assert!(command_http.contains(command_owned));
+        assert!(!composition_root.contains(command_owned));
         assert!(
-            !game_http.contains(root_owned),
-            "write transport drifted into game HTTP: {root_owned}"
+            !game_http.contains(command_owned),
+            "write transport drifted into game HTTP: {command_owned}"
         );
     }
     for live_owned in ["async fn create_websocket_ticket(", "async fn ws_session("] {

@@ -306,7 +306,7 @@
       "title": "Reviewable 1.0 core and toolchain",
       "execution_class": "code",
       "status": "open",
-      "summary": "Rust 1.95.0 and strict workspace Clippy are proof-enforced; API media, auth, community, game-read HTTP, live WebSocket delivery, authentication attempt/delivery, and live publication, domain pack model/validation, resolver action/trigger/outcome, and projection effect/private-channel ownership are isolated behind typed boundaries. Remaining resolver coordinator, API command/import transport, other projection, command-test, and proof-runner concentrations remain inventoried.",
+      "summary": "Rust 1.95.0 and strict workspace Clippy are proof-enforced; API media, auth, community, game-read, command/import, and live WebSocket delivery, authentication attempt/delivery, and live publication, domain pack model/validation, resolver action/trigger/outcome, and projection effect/private-channel ownership are isolated behind typed boundaries. Remaining resolver coordinator, other projection, command-test, and proof-runner concentrations remain inventoried.",
       "complete_when": [
         "The Rust toolchain is pinned, workspace Clippy is warning-clean, and concentrated pack, resolver, API, projection, command-test, and proof orchestration responsibilities are split into coherent modules without weakening proof coverage."
       ],
@@ -373,6 +373,14 @@
         },
         {
           "kind": "source",
+          "value": "crates/api/src/command_http.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/api/tests/command_http_boundary.rs"
+        },
+        {
+          "kind": "source",
           "value": "crates/domain/src/pack/model.rs"
         },
         {
@@ -417,29 +425,29 @@
         }
       ],
       "remaining": [
-        "Split remaining resolver coordinator, API command/import transport, other projection, command-test, and proof-runner responsibilities along the dependency direction recorded in docs/arch/16-maintainable-core.md.",
+        "Split remaining resolver coordinator, other projection, command-test, and proof-runner responsibilities along the dependency direction recorded in docs/arch/16-maintainable-core.md.",
         "Remove the exact lint expectations as typed contexts and bounded modules supersede them."
       ],
       "recommended_slice": {
-        "objective": "Extract command submission/preparation and completed-game import from crates/api/src/lib.rs into a typed command HTTP owner: move /commands and /games/import routes, wire command adaptation, media-reference preparation, idempotent dispatch, live-publication dirty-surface classification handoff, and import authorization behind a bounded state; keep router composition, auth/game/community/media/live-delivery route families, and live change publication in their current owners; preserve protocol version, reject mapping, idempotency, and projection publish semantics.",
+        "objective": "Extract action submission and validation from crates/commands/src/lib.rs into a typed action-submission owner: introduce request and validation contexts for submit_action, validate_action_submission, and validate_action_slot_capacity; move action-template/grant selection and capacity/admission checks with that owner; keep top-level command dispatch and transaction/idempotency orchestration in lib.rs, projection reads behind their current public ports, and event persistence at the existing command boundary; preserve reject taxonomy, phase and capability admission, target ordering, grant semantics, event payloads, and transaction behavior.",
         "paths": [
-          "crates/api/src/lib.rs",
-          "crates/api/src/command_http.rs",
-          "crates/api/tests/command_http_boundary.rs",
+          "crates/commands/src/lib.rs",
+          "crates/commands/src/action_submission.rs",
+          "crates/commands/tests/action_submission_boundary.rs",
           "docs/arch/16-maintainable-core.md"
         ],
         "proof_commands": [
-          "cargo test -p api --lib",
-          "cargo test -p api --test vertical -- --test-threads=1",
+          "cargo test -p commands --lib",
+          "cargo test -p commands --test pipeline -- --test-threads=1",
           "cargo clippy --workspace --all-targets --all-features -- -D warnings",
           "npm run proof:lanes -- --mode sprint --run",
           "npm run proof:lanes -- --mode full --run"
         ],
         "non_claims": [
-          "Do not move command decisioning into the HTTP boundary; keep commands::handle_idempotent as the write owner.",
-          "Do not merge live delivery or live publication into the command HTTP owner.",
-          "Do not change command URLs, wire DTOs, reject codes, or publish dirty-surface classification as an accidental side effect of extraction.",
-          "Do not mark foundation.maintainable-core complete; remaining resolver coordinator, other projection families, command-test, and proof-runner concentrations remain."
+          "Do not change top-level command dispatch, idempotency, or transaction ownership as part of the action-submission extraction.",
+          "Do not move projection SQL or generic persistence into the action-submission owner; consume existing ports and persist through the current command boundary.",
+          "Do not change reject variants, action/grant eligibility, target ordering, event JSON, or concurrency behavior as an accidental side effect of extraction.",
+          "Do not mark foundation.maintainable-core complete; remaining resolver coordinator, other projection families, prompt reconstruction, command-test, operator-proof, and proof-runner concentrations remain."
         ]
       }
     },

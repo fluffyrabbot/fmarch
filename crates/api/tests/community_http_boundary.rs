@@ -6,6 +6,7 @@ fn community_http_has_one_typed_owner_without_transport_or_persistence_drift() {
     let composition_root = std::fs::read_to_string(source_root.join("lib.rs")).unwrap();
     let community_http = std::fs::read_to_string(source_root.join("community_http.rs")).unwrap();
     let game_http = std::fs::read_to_string(source_root.join("game_http.rs")).unwrap();
+    let command_http = std::fs::read_to_string(source_root.join("command_http.rs")).unwrap();
 
     assert!(composition_root.contains("mod community_http;"));
     assert!(composition_root.contains("let community_routes = community_http::routes(&state);"));
@@ -40,7 +41,8 @@ fn community_http_has_one_typed_owner_without_transport_or_persistence_drift() {
     assert!(!community_http.contains("async fn public_game_thread("));
 
     let live_delivery = std::fs::read_to_string(source_root.join("live_delivery.rs")).unwrap();
-    assert!(composition_root.contains("async fn command("));
+    assert!(command_http.contains("async fn command("));
+    assert!(!composition_root.contains("async fn command("));
     assert!(!community_http.contains("async fn command("));
     for live_owned in ["async fn create_websocket_ticket(", "async fn ws_session("] {
         assert!(live_delivery.contains(live_owned));

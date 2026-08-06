@@ -4,11 +4,9 @@
 //! validation, projection-reference authorization, and immutable response
 //! metadata. Command-side media normalization remains with command preparation.
 
-use super::auth_http::require_active_enabled_account;
+use super::auth_http::{bearer_token, require_active_enabled_account};
 use super::game_http::require_channel_thread_access;
-use super::{
-    acquire_workload_slot, bearer_token, unauthorized_session, unix_now_seconds, ApiError, ApiState,
-};
+use super::{acquire_workload_slot, unauthorized_session, unix_now_seconds, ApiError, ApiState};
 use axum::body::Bytes;
 use axum::extract::{DefaultBodyLimit, Path, State};
 use axum::http::header::{CACHE_CONTROL, CONTENT_LENGTH, CONTENT_TYPE, ETAG, IF_NONE_MATCH};
