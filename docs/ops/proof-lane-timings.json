@@ -124,9 +124,9 @@
       "status": 0
     },
     "cargo:commands-unit": {
-      "seconds": 0.4,
-      "measured_at": "2026-08-06T22:33:54.779Z",
-      "command": "cargo test -p commands --lib --bin check_goldens --test action_submission_boundary --test host_prompt_resolution_boundary",
+      "seconds": 0.7,
+      "measured_at": "2026-08-06T23:45:06.553Z",
+      "command": "cargo test -p commands --lib --bin check_goldens --test action_submission_boundary --test host_prompt_resolution_boundary --test day_runtime_boundary",
       "status": 0
     },
     "cargo:commands-pg": {
@@ -142,8 +142,8 @@
       "status": 0
     },
     "cargo:commands-audit": {
-      "seconds": 653.4,
-      "measured_at": "2026-08-06T22:46:09.983Z",
+      "seconds": 413.5,
+      "measured_at": "2026-08-06T23:52:03.228Z",
       "command": "RUST_MIN_STACK=8388608 DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p commands --test pipeline -- --ignored --test-threads=4",
       "status": 0
     },

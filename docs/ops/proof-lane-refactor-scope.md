@@ -108,9 +108,10 @@ only for the same commit and manifest digest.
 - `cargo:commands-concurrency` owns the serial cancellation matrix.
 - `cargo:commands-audit` owns 217 ignored-but-compiled semantic and generated
   cases, including the 29-family generated matrix, and remains in full mode.
-  Its four-worker run completes in 638.58 seconds; the lane declares the 8 MiB
-  test-thread stack required by the deepest EpicMafia replay rather than
-  depending on host defaults.
+  The authoritative full sweep observed 407.9 seconds and the independent
+  baseline recorder observed 413.5 seconds, 36.7% below the former tracked
+  653.4-second cost. The lane declares the 8 MiB test-thread stack required by
+  the deepest EpicMafia replay rather than depending on host defaults.
 - `operator_proof::minimizer` is an in-process library; generated tests reuse
   their SQLx pool instead of spawning Cargo and reconnecting to Postgres.
 - The generated shrink matrix owns one SQLx-isolated database per test run and
