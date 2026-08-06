@@ -32,8 +32,8 @@ The line counts below are a 2026-08-05 orientation snapshot, not a target.
 |---|---|---|---|---|
 | `crates/domain/src/pack.rs` façade; `pack/model.rs` (~1.9k); `pack/validation.rs` (~8.5k) | Closed first-level boundary: serialized schema/defaults are separate from loading, derived indexes, diagnostics, and ordering | `pack/model` owns declarative types; `pack/validation` owns `PackValidationContext` and validation behavior; `validation_tests` owns private contract tests | validation → model; resolver/commands → public pack façade | Split validation families only when their next independent change requires it; do not re-complect model ownership |
 | `crates/domain/src/resolver.rs` (~9.2k); `resolver/action.rs` (~1.0k); `resolver/trigger.rs` (~0.4k); `resolver/outcome.rs` (~1.4k) | Kill/protection, trigger-fixpoint, duel, and day-vote/outcome ownership are closed behind typed boundaries; action collection/ordering and result construction remain concentrated | Resolver coordinator plus bounded action, trigger, and outcome families | outcome → action/trigger/domain state/validated pack; trigger → action resolution/domain state/validated pack; coordinator → bounded families | Split remaining action collection or result construction only when its next independent change requires it; continue the maintainable-core frontier at remaining API route families |
-| `crates/api/src/lib.rs` (~5.8k); `auth_http.rs` (~3.9k); `authentication.rs` (~0.7k); `live_projection.rs` (~0.2k) | Auth HTTP, attempt/delivery orchestration, and live publication are closed behind typed boundaries; router composition, community reads/writes, game transport, command adaptation, and WebSocket sessions remain concentrated | Thin composition root plus route-family modules with typed request contexts | route families → application/domain ports; composition root → route families; authentication → identity-delivery ports; live transport → live-publication port | Continue at projection effect/private-channel ownership, then return to the next independently changing API route family |
-| `crates/projections/src/lib.rs` (~9.1k) | Event dispatch and unrelated game, community, identity, media-reference, scheduler, and private-channel projections | Projection dispatcher plus one module per projection family and shared SQL primitives | family projectors → shared transaction primitives; dispatcher → families | Extract effect/private-channel projectors using the typed records established by the Clippy cleanup |
+| `crates/api/src/lib.rs` (~5.8k); `auth_http.rs` (~3.9k); `authentication.rs` (~0.7k); `live_projection.rs` (~0.2k) | Auth HTTP, attempt/delivery orchestration, and live publication are closed behind typed boundaries; router composition, community reads/writes, game transport, command adaptation, and WebSocket sessions remain concentrated | Thin composition root plus route-family modules with typed request contexts | route families → application/domain ports; composition root → route families; authentication → identity-delivery ports; live transport → live-publication port | Extract the cohesive community HTTP route family behind a typed state boundary |
+| `crates/projections/src/lib.rs` (~8.2k); `effect_projection.rs` (~0.3k); `private_channel_projection.rs` (~0.3k) | Effect and encrypted private-channel folding, reads, mutations, and rebuild hooks are closed behind typed family boundaries; dispatcher plus unrelated game, community, identity, media-reference, and scheduler projections remain concentrated | Projection dispatcher plus one module per projection family and shared SQL/encryption primitives | family projectors → shared transaction/encryption primitives; dispatcher → families | Split the next family only when it has an independent change; continue the active frontier at API community transport |
 | `crates/commands/src/day_runtime.rs` | DayEvent write/runtime (schedule, participate, resolve, sealed automation, narrative publish); see [17](17-day-runtime-ownership.md) | Sole emitter of `DayEvent*` and sole write-path caller of `game_platform` day_schedule / auto_resolution / narrative | day_runtime → shared command helpers + pure game_platform; day_scheduler → day_runtime only | Keep phase lifecycle in lib; further split only if program attach or narrative needs an independent change |
 | `crates/commands/tests/pipeline.rs` (~77.1k) | Cross-domain command scenarios, fixtures, helpers, and operator proof cases | Shared hermetic harness plus scenario-family integration modules | scenario modules → harness/public command API; never scenario ↔ scenario | Split by command family while preserving serial Postgres proof semantics |
 | `tools/dev_test_game.mjs` / `.test.mjs` (~27.5k/~30.0k) | CLI parsing, environment setup, orchestration, browser roles, evidence assembly, and contract tests | Small CLI/composition root over scenario, runtime, artifact, and assertion libraries | CLI → orchestration → scenario/runtime ports; artifacts depend only on normalized results | Extract proof-runner configuration and artifact assembly before further scenario growth |
@@ -96,6 +96,29 @@ delivery delay, and scoped private refreshes. Unit tests cover publication
 assembly and lag continuation; the source boundary contract prevents those
 responsibilities or their removed high-arity lint expectation from drifting
 back into `lib.rs`.
+
+## Closed projection boundaries: effects and private channels
+
+`crates/projections/src/effect_projection.rs` owns persistent role and engine
+effect folding, effect clearing, player-facing effect notifications, the typed
+effect input and public row, deterministic reads, SQL upsert/delete semantics,
+and its rebuild/audit table declaration. Top-level effect events and
+resolution-wrapped inner events enter the same family projector, preserving
+their distinct event-index rules and the existing projection order.
+
+`crates/projections/src/private_channel_projection.rs` owns declared, granted,
+member-revoked, and channel-revoked membership folding; payload decoding; the
+typed encrypted row/input records; sealed SQL writes; deterministic decrypted
+reads; and encrypted snapshot identity/redaction hooks. It consumes the shared
+slot, encryption, transaction, and audit primitives without exposing private
+fields to the composition root.
+
+The root remains the sole event dispatcher and rebuild/snapshot orchestrator,
+and re-exports both public reader contracts. The family boundary contract
+prevents row types, mutation helpers, decoders, readers, or audit metadata from
+drifting back into `lib.rs`, and forbids wildcard imports or local lint
+suppression. Event order, visibility, conflict behavior, ciphertext context,
+rebuild hashes, and public projection APIs remain unchanged.
 
 ## Closed domain boundary: pack model and validation
 
@@ -179,6 +202,9 @@ boundary pressure:
 - auth HTTP, authentication attempt/delivery, and live-publication ownership are
   typed and carry no local lint expectations; remaining community/game
   transport families await bounded route contexts;
+- effect and private-channel projection ownership is typed and carries no local
+  lint expectations; unrelated projection families remain deliberately
+  separate rather than hidden behind a generic SQL projector;
 - direct wire enum payload ownership remains until transport allocation is
   benchmark-driven or the adapter boundary is reshaped;
 

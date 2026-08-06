@@ -306,7 +306,7 @@
       "title": "Reviewable 1.0 core and toolchain",
       "execution_class": "code",
       "status": "open",
-      "summary": "Rust 1.95.0 and strict workspace Clippy are proof-enforced; API media and auth HTTP, authentication attempt/delivery, and live publication, domain pack model/validation, and resolver action/trigger/outcome ownership are isolated behind typed boundaries. Remaining resolver coordinator, API community/game transport, projection, command-test, and proof-runner concentrations remain inventoried.",
+      "summary": "Rust 1.95.0 and strict workspace Clippy are proof-enforced; API media and auth HTTP, authentication attempt/delivery, and live publication, domain pack model/validation, resolver action/trigger/outcome, and projection effect/private-channel ownership are isolated behind typed boundaries. Remaining resolver coordinator, API community/game transport, other projection, command-test, and proof-runner concentrations remain inventoried.",
       "complete_when": [
         "The Rust toolchain is pinned, workspace Clippy is warning-clean, and concentrated pack, resolver, API, projection, command-test, and proof orchestration responsibilities are split into coherent modules without weakening proof coverage."
       ],
@@ -373,6 +373,18 @@
         },
         {
           "kind": "source",
+          "value": "crates/projections/src/effect_projection.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/projections/src/private_channel_projection.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/projections/tests/projection_family_boundary.rs"
+        },
+        {
+          "kind": "source",
           "value": "docs/ops/proof-lane-manifest.json"
         },
         {
@@ -381,30 +393,34 @@
         }
       ],
       "remaining": [
-        "Split remaining resolver coordinator, API, projection, command-test, and proof-runner responsibilities along the dependency direction recorded in docs/arch/16-maintainable-core.md.",
+        "Split remaining resolver coordinator, API community/game transport, other projection, command-test, and proof-runner responsibilities along the dependency direction recorded in docs/arch/16-maintainable-core.md.",
         "Remove the exact lint expectations as typed contexts and bounded modules supersede them."
       ],
       "recommended_slice": {
-        "objective": "Extract the projections effect and private-channel families from crates/projections/src/lib.rs into bounded effect_projection and private_channel_projection modules: move their event dispatch arms, typed row/input records, SQL mutation helpers, deterministic readers, snapshot/rebuild hooks, and field decoders behind family-owned projection functions; keep the top-level dispatcher and shared transaction/snapshot primitives in lib.rs; and preserve event ordering, idempotent upsert/delete semantics, rebuild hashes, visibility rules, and existing public reader contracts.",
+        "objective": "Extract the cohesive community HTTP route family from crates/api/src/lib.rs into community_http.rs: move public search, inbox, subscription, mute, discussion, moderation, and profile routes; their request/query DTOs, cursor and target decoders, authentication/admission helpers, response adaptation, and projection-error mapping behind a typed CommunityHttpState; keep router composition, game transport, commands, WebSocket sessions, auth persistence, and projection SQL in their existing owners; and preserve every URL, method, status code, JSON shape, pagination cursor, capability check, transaction boundary, moderation limit, visibility rule, and personalized filtering behavior.",
         "paths": [
-          "crates/projections/src/lib.rs",
-          "crates/projections/src/effect_projection.rs",
-          "crates/projections/src/private_channel_projection.rs",
-          "crates/projections/tests",
+          "crates/api/src/lib.rs",
+          "crates/api/src/community_http.rs",
+          "crates/api/tests/vertical.rs",
+          "crates/api/tests/community_http_boundary.rs",
           "docs/arch/16-maintainable-core.md"
         ],
         "proof_commands": [
-          "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p projections -- --test-threads=1",
-          "npm run test:projection-baseline",
+          "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p api -- --test-threads=1",
+          "npm run test:dev-test-game-discussion",
+          "npm run test:dev-test-game-search",
+          "npm run test:dev-test-game-community-moderation",
+          "npm run test:dev-test-game-community-subscriptions",
+          "npm run test:dev-test-game-profile",
           "cargo clippy --workspace --all-targets --all-features -- -D warnings",
           "npm run proof:lanes -- --mode sprint --run",
           "npm run proof:lanes -- --mode full --run"
         ],
         "non_claims": [
-          "Do not redesign the projection dispatcher, event schema, public projection structs, migrations, or rebuild protocol as an accidental side effect of ownership extraction.",
-          "Do not merge effect and private-channel visibility semantics into one generic projection abstraction; each family keeps its own typed vocabulary and SQL invariants.",
-          "Do not mix identity, community, scheduler, media-reference, or unrelated game projectors into this atomic change.",
-          "Do not mark foundation.maintainable-core complete; remaining resolver coordinator, API community/game transport, other projection families, command-test, and proof-runner concentrations remain."
+          "Do not move community projection SQL or event folding out of the projections and community crates, or duplicate auth/session persistence inside the HTTP family.",
+          "Do not change public community URLs, wire DTOs, cursor encodings, visibility/moderation semantics, rate limits, timestamps, or transaction boundaries as an accidental side effect of ownership extraction.",
+          "Do not mix game reads, game commands, WebSocket delivery, media, auth/account/session, or admin bootstrap routes into this atomic community transport change.",
+          "Do not mark foundation.maintainable-core complete; remaining resolver coordinator, API game transport, other projection families, command-test, and proof-runner concentrations remain."
         ]
       }
     },

@@ -70,11 +70,15 @@ use sqlx::Row;
 use uuid::Uuid;
 
 mod community_writes;
+mod effect_projection;
+mod private_channel_projection;
 pub use community_writes::{
     advance_subscription_read_cursor, append_moderation_and_project_expected, mute_public_profile,
     submit_moderation_report, subscribe_to_public_target, unmute_public_profile,
     unsubscribe_from_public_target,
 };
+pub use effect_projection::{slot_effects, SlotEffectRow};
+pub use private_channel_projection::{private_channel_members, PrivateChannelMemberRow};
 
 /// A row of the `votecount` running tally: the COUNT of current ballots cast at
 /// `candidate_slot` in `phase_id` (unweighted; Phase-3 ruling).
@@ -129,21 +133,6 @@ pub struct SlotStateRow {
     pub alignment: Option<String>,
     pub role_revealed: bool,
     pub alignment_revealed: bool,
-}
-
-/// A persistent engine effect tag carried by a slot.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct SlotEffectRow {
-    pub game_id: Uuid,
-    pub slot_id: String,
-    pub effect: String,
-    pub source_slot: String,
-    pub source_action: Option<String>,
-    pub phase_id: Option<String>,
-    pub phase_kind: Option<String>,
-    pub phase_number: Option<i32>,
-    pub duration: String,
-    pub visibility: String,
 }
 
 /// A folded engine action-use history record.
@@ -457,18 +446,6 @@ pub struct DayEventScheduleWorkRow {
     pub next_due_at: Option<i64>,
     pub wake_seq: i64,
     pub updated_seq: i64,
-}
-
-/// Private channel membership derived from setup metadata.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct PrivateChannelMemberRow {
-    pub game_id: Uuid,
-    pub channel_id: String,
-    pub kind: String,
-    pub slot_id: String,
-    pub role_key: String,
-    pub reveals_alignment: String,
-    pub source: String,
 }
 
 /// Channel-level post policy derived from host/admin events.
@@ -881,27 +858,12 @@ async fn fold_event(
             let role_effects = optional_string_array_field(p, "role_effects", &ev.kind)?;
             ensure_slot(tx, game_id, &slot_id).await?;
             set_slot_private(tx, game_id, &slot_id, &role_key, alignment.as_deref()).await?;
-            let role_source_action = "role-assignment";
-            for effect in role_effects {
-                upsert_effect(
-                    tx,
-                    game_id,
-                    EffectProjection {
-                        slot_id: &slot_id,
-                        effect: &effect,
-                        source_slot: &slot_id,
-                        source_action: Some(role_source_action),
-                        phase_id: None,
-                        phase_kind: None,
-                        phase_number: None,
-                        duration: "Persistent",
-                        visibility: "Hidden",
-                    },
-                )
-                .await?;
-            }
+            effect_projection::project_role_effects(tx, game_id, &slot_id, &role_effects).await?;
         }
-        "EffectsMarked" | "EffectsCleared" | "ActionGranted" | "EffectNotification" => {
+        "EffectsMarked" | "EffectsCleared" | "EffectNotification" => {
+            effect_projection::project_stored_event(tx, game_id, ev).await?;
+        }
+        "ActionGranted" => {
             let inner: domain::InnerEvent = serde_json::from_value(serde_json::json!({
                 "kind": ev.kind.clone(),
                 "payload": ev.payload.clone(),
@@ -910,26 +872,8 @@ async fn fold_event(
                 kind: ev.kind.clone(),
                 source,
             })?;
-            let phase_id = match ev.kind.as_str() {
-                "ActionGranted" | "EffectNotification" => {
-                    str_field(&ev.payload, "phase_id", &ev.kind)?
-                }
-                _ => ev.payload["phase_id"].as_str().unwrap_or("").to_string(),
-            };
-            let event_index = if ev.kind == "EffectNotification" {
-                i32::try_from(ev.stream_seq)
-                    .ok()
-                    .and_then(i32::checked_neg)
-                    .ok_or_else(|| ProjectionError::Payload {
-                        kind: ev.kind.clone(),
-                        source: serde::de::Error::custom(
-                            "stream_seq cannot form a top-level notification index",
-                        ),
-                    })?
-            } else {
-                ev.stream_seq as i32
-            };
-            fold_inner(tx, game_id, &phase_id, ev.seq, event_index, &inner).await?;
+            let phase_id = str_field(&ev.payload, "phase_id", &ev.kind)?;
+            fold_inner(tx, game_id, &phase_id, ev.seq, ev.stream_seq as i32, &inner).await?;
         }
 
         // ── game_authority (caps: HostOf / CohostOf) ──
@@ -1098,63 +1042,11 @@ async fn fold_event(
                 .await?;
             }
         }
-        "PrivateChannelDeclared" => {
-            let p = &ev.payload;
-            let channel_id = str_field(p, "channel_id", &ev.kind)?;
-            let kind = str_field(p, "kind", &ev.kind)?;
-            let reveals_alignment = str_field(p, "reveals_alignment", &ev.kind)?;
-            let source = str_field(p, "source", &ev.kind)?;
-            let members = private_channel_members_field(p, &ev.kind)?;
-            for member in members {
-                ensure_slot(tx, game_id, &member.slot_id).await?;
-                insert_private_channel_member(
-                    tx,
-                    game_id,
-                    PrivateChannelMemberProjection {
-                        channel_id: &channel_id,
-                        kind: &kind,
-                        slot_id: &member.slot_id,
-                        role_key: &member.role_key,
-                        reveals_alignment: &reveals_alignment,
-                        source: &source,
-                    },
-                )
-                .await?;
-            }
-        }
-        "PrivateChannelMemberGranted" => {
-            let p = &ev.payload;
-            let channel_id = str_field(p, "channel_id", &ev.kind)?;
-            let kind = str_field(p, "kind", &ev.kind)?;
-            let slot_id = str_field(p, "slot_id", &ev.kind)?;
-            let role_key = str_field(p, "role_key", &ev.kind)?;
-            let reveals_alignment = str_field(p, "reveals_alignment", &ev.kind)?;
-            let source = str_field(p, "source", &ev.kind)?;
-            ensure_slot(tx, game_id, &slot_id).await?;
-            insert_private_channel_member(
-                tx,
-                game_id,
-                PrivateChannelMemberProjection {
-                    channel_id: &channel_id,
-                    kind: &kind,
-                    slot_id: &slot_id,
-                    role_key: &role_key,
-                    reveals_alignment: &reveals_alignment,
-                    source: &source,
-                },
-            )
-            .await?;
-        }
-        "PrivateChannelMemberRevoked" => {
-            let p = &ev.payload;
-            let channel_id = str_field(p, "channel_id", &ev.kind)?;
-            let slot_id = str_field(p, "slot_id", &ev.kind)?;
-            delete_private_channel_member(tx, game_id, &channel_id, &slot_id).await?;
-        }
-        "PrivateChannelRevoked" => {
-            let p = &ev.payload;
-            let channel_id = str_field(p, "channel_id", &ev.kind)?;
-            delete_private_channel_members(tx, game_id, &channel_id).await?;
+        "PrivateChannelDeclared"
+        | "PrivateChannelMemberGranted"
+        | "PrivateChannelMemberRevoked"
+        | "PrivateChannelRevoked" => {
+            private_channel_projection::project_stored_event(tx, game_id, ev).await?;
         }
 
         // ── engine resolution envelope: unwrap and fold inner events ──
@@ -2006,44 +1898,8 @@ async fn fold_inner(
             .execute(&mut **tx)
             .await?;
         }
-        EffectsMarked {
-            effect,
-            target,
-            actor,
-            source_action,
-            phase_id,
-            phase_kind,
-            phase_number,
-            duration: domain::EffectDuration::Persistent,
-            visibility,
-        } => {
-            ensure_slot(tx, game_id, target).await?;
-            let phase_kind = phase_kind.map(|kind| format!("{kind:?}"));
-            let visibility = format!("{visibility:?}");
-            upsert_effect(
-                tx,
-                game_id,
-                EffectProjection {
-                    slot_id: target,
-                    effect,
-                    source_slot: actor,
-                    source_action: source_action.as_deref(),
-                    phase_id: phase_id.as_deref(),
-                    phase_kind: phase_kind.as_deref(),
-                    phase_number: phase_number.map(|number| number as i32),
-                    duration: "Persistent",
-                    visibility: &visibility,
-                },
-            )
-            .await?;
-        }
-        EffectsMarked { .. } => {}
-        EffectsCleared {
-            effect, targets, ..
-        } => {
-            for target in targets {
-                delete_effect(tx, game_id, target, effect).await?;
-            }
+        EffectsMarked { .. } | EffectsCleared { .. } | EffectNotification { .. } => {
+            effect_projection::project_inner_event(tx, game_id, phase_id, event_index, ev).await?;
         }
         ActionRecorded {
             actor,
@@ -2495,25 +2351,6 @@ async fn fold_inner(
             .bind(event_index)
             .execute(&mut **tx)
             .await?;
-        }
-        EffectNotification {
-            effect,
-            status,
-            audience,
-            ..
-        } => {
-            for audience_slot in audience {
-                upsert_player_notification(
-                    tx,
-                    game_id,
-                    phase_id,
-                    event_index,
-                    audience_slot,
-                    effect,
-                    status,
-                )
-                .await?;
-            }
         }
         HostPromptIssued(note) => {
             if let Some(subject) = &note.subject {
@@ -3821,14 +3658,14 @@ async fn rebuild_in_tx(
         "visit_history",
         "action_grant",
         "action_history",
-        "slot_effect",
+        effect_projection::TABLE,
         "slot_state",
         "game_authority",
         "game_cohost_policy",
         "spectator_membership",
         "slot_occupancy",
         "phase_state",
-        "private_channel_member",
+        private_channel_projection::TABLE,
         "post_policy",
         "thread_view",
         "game_index",
@@ -3965,8 +3802,8 @@ const AUDIT_PROJECTIONS: &[AuditProjection] = &[
         order_by: "phase_number, phase_id, slot_id, template_id",
     },
     AuditProjection {
-        table: "slot_effect",
-        order_by: "slot_id, effect",
+        table: effect_projection::TABLE,
+        order_by: effect_projection::AUDIT_ORDER_BY,
     },
     AuditProjection {
         table: "slot_state",
@@ -3993,8 +3830,8 @@ const AUDIT_PROJECTIONS: &[AuditProjection] = &[
         order_by: "game_id",
     },
     AuditProjection {
-        table: "private_channel_member",
-        order_by: "channel_id, slot_id",
+        table: private_channel_projection::TABLE,
+        order_by: private_channel_projection::AUDIT_ORDER_BY,
     },
     AuditProjection {
         table: "post_policy",
@@ -4109,13 +3946,9 @@ fn normalize_private_snapshot(
                     snapshot_string(object, "slot_id")?,
                 ],
             ),
-            "private_channel_member" => (
+            private_channel_projection::TABLE => (
                 "private",
-                vec![
-                    snapshot_string(object, "game_id")?,
-                    snapshot_string(object, "channel_id")?,
-                    snapshot_string(object, "slot_id")?,
-                ],
+                private_channel_projection::snapshot_identity(object)?,
             ),
             "thread_view" if object.get("body_private").is_some_and(|v| !v.is_null()) => (
                 "body_private",
@@ -4255,12 +4088,8 @@ fn redact_private_snapshot(table: &str, mut rows: serde_json::Value) -> serde_js
                 object.insert("role_key".to_string(), serde_json::json!("<private>"));
                 object.insert("alignment".to_string(), serde_json::json!("<private>"));
             }
-            "private_channel_member" => {
-                object.insert("role_key".to_string(), serde_json::json!("<private>"));
-                object.insert(
-                    "reveals_alignment".to_string(),
-                    serde_json::json!("<private>"),
-                );
+            private_channel_projection::TABLE => {
+                private_channel_projection::redact_snapshot(object);
             }
             "thread_view" if object.get("channel_id").and_then(|v| v.as_str()) != Some("main") => {
                 object.insert("body".to_string(), serde_json::json!("<private>"));
@@ -4519,36 +4348,6 @@ where
             })
         })
         .collect()
-}
-
-/// Read persistent engine effects, ordered deterministically.
-pub async fn slot_effects(
-    pool: &PgPool,
-    game_id: Uuid,
-) -> Result<Vec<SlotEffectRow>, ProjectionError> {
-    let rows = sqlx::query(
-        "SELECT game_id, slot_id, effect, source_slot, source_action, phase_id, phase_kind, \
-         phase_number, duration, visibility FROM slot_effect \
-         WHERE game_id = $1 ORDER BY slot_id, effect",
-    )
-    .bind(game_id)
-    .fetch_all(pool)
-    .await?;
-    Ok(rows
-        .into_iter()
-        .map(|r| SlotEffectRow {
-            game_id: r.get("game_id"),
-            slot_id: r.get("slot_id"),
-            effect: r.get("effect"),
-            source_slot: r.get("source_slot"),
-            source_action: r.get("source_action"),
-            phase_id: r.get("phase_id"),
-            phase_kind: r.get("phase_kind"),
-            phase_number: r.get("phase_number"),
-            duration: r.get("duration"),
-            visibility: r.get("visibility"),
-        })
-        .collect())
 }
 
 pub async fn slot_status_tags<'e, E>(
@@ -5646,42 +5445,6 @@ where
         deadline: r.get("deadline"),
         phase_opened_at: r.get("phase_opened_at"),
     }))
-}
-
-pub async fn private_channel_members(
-    pool: &PgPool,
-    game_id: Uuid,
-) -> Result<Vec<PrivateChannelMemberRow>, ProjectionError> {
-    let rows = sqlx::query(
-        "SELECT game_id, channel_id, kind, slot_id, private, source \
-         FROM private_channel_member WHERE game_id = $1 ORDER BY channel_id, slot_id",
-    )
-    .bind(game_id)
-    .fetch_all(pool)
-    .await?;
-    rows.into_iter()
-        .map(|r| {
-            let row_game_id: Uuid = r.get("game_id");
-            let channel_id: String = r.get("channel_id");
-            let slot_id: String = r.get("slot_id");
-            let envelope: serde_json::Value = r.get("private");
-            let game = row_game_id.to_string();
-            let private = open_private_projection(
-                "private_channel_member",
-                &[game.as_str(), channel_id.as_str(), slot_id.as_str()],
-                &envelope,
-            )?;
-            Ok(PrivateChannelMemberRow {
-                game_id: row_game_id,
-                channel_id,
-                kind: r.get("kind"),
-                slot_id,
-                role_key: required_private_string(&private, "role_key")?,
-                reveals_alignment: required_private_string(&private, "reveals_alignment")?,
-                source: r.get("source"),
-            })
-        })
-        .collect()
 }
 
 pub async fn post_policy<'e, E>(
@@ -7374,52 +7137,6 @@ async fn upsert_occupancy(
     Ok(())
 }
 
-struct EffectProjection<'a> {
-    slot_id: &'a str,
-    effect: &'a str,
-    source_slot: &'a str,
-    source_action: Option<&'a str>,
-    phase_id: Option<&'a str>,
-    phase_kind: Option<&'a str>,
-    phase_number: Option<i32>,
-    duration: &'a str,
-    visibility: &'a str,
-}
-
-async fn upsert_effect(
-    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    game_id: Uuid,
-    projection: EffectProjection<'_>,
-) -> Result<(), ProjectionError> {
-    sqlx::query(
-        "INSERT INTO slot_effect \
-         (game_id, slot_id, effect, source_slot, source_action, phase_id, phase_kind, \
-          phase_number, duration, visibility) \
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) \
-         ON CONFLICT (game_id, slot_id, effect) DO UPDATE SET \
-         source_slot = EXCLUDED.source_slot, \
-         source_action = EXCLUDED.source_action, \
-         phase_id = EXCLUDED.phase_id, \
-         phase_kind = EXCLUDED.phase_kind, \
-         phase_number = EXCLUDED.phase_number, \
-         duration = EXCLUDED.duration, \
-         visibility = EXCLUDED.visibility",
-    )
-    .bind(game_id)
-    .bind(projection.slot_id)
-    .bind(projection.effect)
-    .bind(projection.source_slot)
-    .bind(projection.source_action)
-    .bind(projection.phase_id)
-    .bind(projection.phase_kind)
-    .bind(projection.phase_number)
-    .bind(projection.duration)
-    .bind(projection.visibility)
-    .execute(&mut **tx)
-    .await?;
-    Ok(())
-}
-
 async fn set_slot_status(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     game_id: Uuid,
@@ -7545,21 +7262,6 @@ async fn delete_status_tag(
         .bind(game_id)
         .bind(slot_id)
         .bind(tag)
-        .execute(&mut **tx)
-        .await?;
-    Ok(())
-}
-
-async fn delete_effect(
-    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    game_id: Uuid,
-    slot_id: &str,
-    effect: &str,
-) -> Result<(), ProjectionError> {
-    sqlx::query("DELETE FROM slot_effect WHERE game_id = $1 AND slot_id = $2 AND effect = $3")
-        .bind(game_id)
-        .bind(slot_id)
-        .bind(effect)
         .execute(&mut **tx)
         .await?;
     Ok(())
@@ -8041,84 +7743,6 @@ fn thread_media_payload(payload: &serde_json::Value) -> serde_json::Value {
     serde_json::json!([])
 }
 
-struct PrivateChannelMemberProjection<'a> {
-    channel_id: &'a str,
-    kind: &'a str,
-    slot_id: &'a str,
-    role_key: &'a str,
-    reveals_alignment: &'a str,
-    source: &'a str,
-}
-
-async fn insert_private_channel_member(
-    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    game_id: Uuid,
-    member: PrivateChannelMemberProjection<'_>,
-) -> Result<(), ProjectionError> {
-    let game = game_id.to_string();
-    let private = seal_private_projection(
-        "private_channel_member",
-        &[game.as_str(), member.channel_id, member.slot_id],
-        serde_json::json!({
-            "role_key": member.role_key,
-            "reveals_alignment": member.reveals_alignment,
-        }),
-    )?;
-    sqlx::query(
-        r#"
-        INSERT INTO private_channel_member (
-            game_id, channel_id, kind, slot_id, private, source
-        )
-        VALUES ($1, $2, $3, $4, $5, $6)
-        ON CONFLICT (game_id, channel_id, slot_id)
-        DO UPDATE SET
-            kind = EXCLUDED.kind,
-            private = EXCLUDED.private,
-            source = EXCLUDED.source
-        "#,
-    )
-    .bind(game_id)
-    .bind(member.channel_id)
-    .bind(member.kind)
-    .bind(member.slot_id)
-    .bind(private)
-    .bind(member.source)
-    .execute(&mut **tx)
-    .await?;
-    Ok(())
-}
-
-async fn delete_private_channel_members(
-    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    game_id: Uuid,
-    channel_id: &str,
-) -> Result<(), ProjectionError> {
-    sqlx::query("DELETE FROM private_channel_member WHERE game_id = $1 AND channel_id = $2")
-        .bind(game_id)
-        .bind(channel_id)
-        .execute(&mut **tx)
-        .await?;
-    Ok(())
-}
-
-async fn delete_private_channel_member(
-    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    game_id: Uuid,
-    channel_id: &str,
-    slot_id: &str,
-) -> Result<(), ProjectionError> {
-    sqlx::query(
-        "DELETE FROM private_channel_member \
-         WHERE game_id = $1 AND channel_id = $2 AND slot_id = $3",
-    )
-    .bind(game_id)
-    .bind(channel_id)
-    .bind(slot_id)
-    .execute(&mut **tx)
-    .await?;
-    Ok(())
-}
-
 async fn upsert_post_policy(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     game_id: Uuid,
@@ -8299,11 +7923,6 @@ fn resolution_thread_announcement_body(applied: &domain::ResolutionApplied) -> O
 
 // ───────────────────────── payload accessors ─────────────────────────
 
-struct PrivateChannelMemberPayload {
-    slot_id: String,
-    role_key: String,
-}
-
 fn str_field(p: &serde_json::Value, key: &str, kind: &str) -> Result<String, ProjectionError> {
     p.get(key)
         .and_then(|v| v.as_str())
@@ -8360,33 +7979,6 @@ fn uuid_field(p: &serde_json::Value, key: &str, kind: &str) -> Result<Uuid, Proj
             source.to_string(),
         )),
     })
-}
-
-fn private_channel_members_field(
-    p: &serde_json::Value,
-    kind: &str,
-) -> Result<Vec<PrivateChannelMemberPayload>, ProjectionError> {
-    let members = p
-        .get("members")
-        .and_then(|value| value.as_array())
-        .ok_or_else(|| ProjectionError::Payload {
-            kind: kind.to_string(),
-            source: serde::de::Error::custom("missing array field `members`"),
-        })?;
-    if members.is_empty() {
-        return Err(ProjectionError::Payload {
-            kind: kind.to_string(),
-            source: serde::de::Error::custom("field `members` must not be empty"),
-        });
-    }
-    members
-        .iter()
-        .map(|member| {
-            let slot_id = str_field(member, "slot_id", kind)?;
-            let role_key = str_field(member, "role_key", kind)?;
-            Ok(PrivateChannelMemberPayload { slot_id, role_key })
-        })
-        .collect()
 }
 
 fn optional_string_field(
