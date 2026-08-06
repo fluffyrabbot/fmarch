@@ -318,7 +318,7 @@
       "title": "Reviewable 1.0 core and toolchain",
       "execution_class": "code",
       "status": "open",
-      "summary": "Rust 1.95.0 and strict workspace Clippy are proof-enforced; API media, auth, community, game-read, command/import, and live WebSocket delivery, authentication attempt/delivery, and live publication, command action submission/validation and host-prompt resolution/replay, domain pack model/validation, resolver action/trigger/outcome, projection effect/private-channel, and proof-runner configuration/session-artifact ownership are isolated behind typed boundaries. Remaining resolver coordinator, other projection, command-test, operator-proof, and proof-runner scenario/orchestration concentrations remain inventoried.",
+      "summary": "Rust 1.95.0 and strict workspace Clippy are proof-enforced; API media, auth, community, game-read, command/import, and live WebSocket delivery, authentication attempt/delivery, and live publication, command action submission/validation, host-prompt resolution/replay, and operator-proof status-audit classification, domain pack model/validation, resolver action/trigger/outcome, projection effect/private-channel, and proof-runner configuration/session-artifact ownership are isolated behind typed boundaries. Remaining resolver coordinator, other projection, command-test, broader operator-proof, DayEvent resolution-application, and proof-runner scenario/orchestration concentrations remain inventoried.",
       "complete_when": [
         "The Rust toolchain is pinned, workspace Clippy is warning-clean, and concentrated pack, resolver, API, projection, command-test, and proof orchestration responsibilities are split into coherent modules without weakening proof coverage."
       ],
@@ -409,6 +409,14 @@
         },
         {
           "kind": "source",
+          "value": "crates/commands/src/operator_proof.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/commands/tests/operator_proof_boundary.rs"
+        },
+        {
+          "kind": "source",
           "value": "crates/domain/src/pack/model.rs"
         },
         {
@@ -477,30 +485,30 @@
         }
       ],
       "remaining": [
-        "Split remaining resolver coordinator, other projection, command-test, operator-proof, and proof-runner scenario/orchestration responsibilities along the dependency direction recorded in docs/arch/16-maintainable-core.md.",
-        "Remove the exact lint expectations as typed contexts and bounded modules supersede them."
+        "Split remaining resolver coordinator, other projection, command-test, broader operator-proof, DayEvent resolution-application, and proof-runner scenario/orchestration responsibilities along the dependency direction recorded in docs/arch/16-maintainable-core.md.",
+        "Remove the remaining localized lint expectations and allowances as typed contexts and bounded modules supersede them."
       ],
       "recommended_slice": {
-        "objective": "Replace the remaining positional operator-proof status-audit evaluator inputs in crates/commands/src/operator_proof.rs with one bounded request context: group the declared artifact path, expected report input paths, manifest version, freshness policy/time, resolved filesystem path, and parsed report behind an explicit immutable value; make report evaluation a private implementation detail below the existing filesystem-loading entrypoint; remove the exact clippy::too_many_arguments expectation; add table-driven state coverage plus a source-boundary contract; preserve every ProofRunArtifactState variant and field, path/version/input mismatch precedence, relative workspace-path resolution, filesystem timestamp and max-age semantics, malformed/missing/drift decisions, serialized report schema, and public CLI behavior.",
+        "objective": "Replace the positional DayEvent resolution-application inputs in crates/commands/src/day_runtime.rs with one immutable DayEventResolutionRequest: group the game, loaded DayEvent row, host-or-auto decision, winner slots, participant slots, resolution evidence, and Host/System actor while keeping the SQL transaction as the explicit execution boundary; construct the request directly in both host and automatic resolution callers; remove the function-level clippy::too_many_arguments allowance; add a source-boundary contract and focused state/actor coverage; preserve validation and rejection behavior, command-audit lookup, recipient bindings, reward compilation and ordering, lifecycle facts, narrative publication, persistence atomicity, scheduler behavior, automatic seed selection, and serialized event payloads.",
         "paths": [
-          "crates/commands/src/operator_proof.rs",
-          "crates/commands/tests/operator_proof_boundary.rs",
+          "crates/commands/Cargo.toml",
+          "crates/commands/src/day_runtime.rs",
+          "crates/commands/tests/day_runtime_boundary.rs",
           "crates/commands/tests/pipeline.rs",
           "docs/arch/16-maintainable-core.md"
         ],
         "proof_commands": [
-          "cargo test -p commands --lib operator_proof",
-          "cargo test -p commands --test operator_proof_boundary",
-          "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p commands --test pipeline operator_proof -- --test-threads=1",
+          "cargo test -p commands --test day_runtime_boundary",
+          "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p commands --test pipeline day_event -- --test-threads=1",
           "cargo clippy --workspace --all-targets --all-features -- -D warnings",
           "npm run test:proof-lane-contract",
           "npm run proof:lanes -- --mode sprint --run",
           "npm run proof:lanes -- --mode full --run"
         ],
         "non_claims": [
-          "Do not redesign the operator-proof manifest, report formats, artifact inventory, fixture catalog, or CLI binaries as part of the request-context extraction.",
-          "Do not change mismatch precedence, freshness calculations, trusted/non-trusted classification, artifact version rules, relative-path handling, or saved snapshot semantics.",
-          "Do not preserve the eight-argument evaluator as a compatibility overload; the workspace is greenfield and its sole caller should construct the typed request directly.",
+          "Do not redesign DayEvent definitions, reward semantics, scheduler leasing, projection schemas, command admission, or public commands as part of the request-context extraction.",
+          "Do not change winner or participant ordering, host-versus-system attribution, event and narrative ordering, audit command identity, transaction boundaries, rejection text, or automatic-resolution seed behavior.",
+          "Do not preserve the eight-argument resolution function as a compatibility overload; the workspace is greenfield and both callers should construct the typed request directly.",
           "Do not mark foundation.maintainable-core complete; resolver coordinator, other projection families, command-test, broader operator-proof, and remaining proof-runner scenario/orchestration concentrations remain."
         ]
       }

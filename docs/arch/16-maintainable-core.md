@@ -31,10 +31,10 @@ The line counts below are a 2026-08-06 orientation snapshot, not a target.
 | Surface | Current concentration | Superior ownership boundary | Dependency direction | Next extraction |
 |---|---|---|---|---|
 | `crates/domain/src/pack.rs` façade; `pack/model.rs` (~1.9k); `pack/validation.rs` (~8.5k) | Closed first-level boundary: serialized schema/defaults are separate from loading, derived indexes, diagnostics, and ordering | `pack/model` owns declarative types; `pack/validation` owns `PackValidationContext` and validation behavior; `validation_tests` owns private contract tests | validation → model; resolver/commands → public pack façade | Split validation families only when their next independent change requires it; do not re-complect model ownership |
-| `crates/domain/src/resolver.rs` (~9.2k); `resolver/action.rs` (~1.0k); `resolver/trigger.rs` (~0.4k); `resolver/outcome.rs` (~1.4k) | Kill/protection, trigger-fixpoint, duel, and day-vote/outcome ownership are closed behind typed boundaries; action collection/ordering and result construction remain concentrated | Resolver coordinator plus bounded action, trigger, and outcome families | outcome → action/trigger/domain state/validated pack; trigger → action resolution/domain state/validated pack; coordinator → bounded families | Split remaining action collection or result construction only when its next independent change requires it; clear the bounded operator-proof audit-input debt first |
+| `crates/domain/src/resolver.rs` (~9.2k); `resolver/action.rs` (~1.0k); `resolver/trigger.rs` (~0.4k); `resolver/outcome.rs` (~1.4k) | Kill/protection, trigger-fixpoint, duel, and day-vote/outcome ownership are closed behind typed boundaries; action collection/ordering and result construction remain concentrated | Resolver coordinator plus bounded action, trigger, and outcome families | outcome → action/trigger/domain state/validated pack; trigger → action resolution/domain state/validated pack; coordinator → bounded families | Split remaining action collection or result construction only when its next independent change requires it; clear the bounded DayEvent resolution-input debt first |
 | `crates/api/src/lib.rs` (~0.6k); `command_http.rs` (~0.5k); `game_http.rs` (~2.6k); `community_http.rs` (~1.4k); `auth_http.rs` (~3.9k); `authentication.rs` (~0.7k); `live_projection.rs` (~0.2k); `live_delivery.rs` (~0.9k) | Media, auth, community, game-read, command/import, and live-delivery HTTP plus authentication attempt/delivery and live publication are closed behind typed boundaries; the root is router/state/error composition | Thin composition root plus route-family modules with typed request contexts | route families → application/domain ports; composition root → route families; authentication → identity-delivery ports; command transport → command application port/live-publication port | Keep the composition root thin; split a route family further only when a new independent change exposes a narrower owner |
-| `crates/projections/src/lib.rs` (~8.2k); `effect_projection.rs` (~0.3k); `private_channel_projection.rs` (~0.3k) | Effect and encrypted private-channel folding, reads, mutations, and rebuild hooks are closed behind typed family boundaries; dispatcher plus unrelated game, community, identity, media-reference, and scheduler projections remain concentrated | Projection dispatcher plus one module per projection family and shared SQL/encryption primitives | family projectors → shared transaction/encryption primitives; dispatcher → families | Split the next family only when it has an independent change; clear the bounded operator-proof audit-input debt first |
-| `crates/commands/src/lib.rs` (~5.1k); `action_submission.rs` (~0.7k); `host_prompt_resolution.rs` (~1.0k including focused tests); `day_runtime.rs`; `operator_proof.rs` (~5.8k) | Action submission/admission/capacity, host-prompt resolution/replay, and DayEvent runtime are closed behind typed boundaries; command dispatch, shared admission/transaction/persistence, phase lifecycle, and operator-proof reporting remain concentrated | Thin command transaction/dispatch owner plus bounded action, prompt, day-runtime, and operator-proof families | bounded families → shared command admission/persistence ports + projections/domain; dispatch → bounded families; proof report evaluation → immutable audit inputs | Replace the remaining positional operator-proof artifact audit inputs with one bounded request context and remove its exact lint expectation |
+| `crates/projections/src/lib.rs` (~8.2k); `effect_projection.rs` (~0.3k); `private_channel_projection.rs` (~0.3k) | Effect and encrypted private-channel folding, reads, mutations, and rebuild hooks are closed behind typed family boundaries; dispatcher plus unrelated game, community, identity, media-reference, and scheduler projections remain concentrated | Projection dispatcher plus one module per projection family and shared SQL/encryption primitives | family projectors → shared transaction/encryption primitives; dispatcher → families | Split the next family only when it has an independent change; clear the bounded DayEvent resolution-input debt first |
+| `crates/commands/src/lib.rs` (~5.1k); `action_submission.rs` (~0.7k); `host_prompt_resolution.rs` (~1.0k including focused tests); `day_runtime.rs`; `operator_proof.rs` (~6.1k including focused tests) | Action submission/admission/capacity, host-prompt resolution/replay, and operator-proof status-audit classification are closed behind typed request boundaries; command dispatch, shared admission/transaction/persistence, phase lifecycle, broader operator-proof reporting, and DayEvent resolution application remain concentrated | Thin command transaction/dispatch owner plus bounded action, prompt, day-runtime, and operator-proof families | bounded families → shared command admission/persistence ports + projections/domain; dispatch → bounded families; proof report loading → immutable audit request → private classification | Replace positional DayEvent resolution-application inputs with one bounded request context and remove its function-level lint allowance |
 | `crates/commands/tests/pipeline.rs` (~77.1k) | Cross-domain command scenarios, fixtures, helpers, and operator proof cases | Shared hermetic harness plus scenario-family integration modules | scenario modules → harness/public command API; never scenario ↔ scenario | Split by command family while preserving serial Postgres proof semantics |
 | `tools/dev_test_game.mjs` / `.test.mjs` (~26.9k/~29.9k); `dev_test_game_configuration.mjs` (~0.3k); `dev_test_game_session_artifacts.mjs` (~0.7k) | Immutable CLI/environment/default/path normalization and session JSON/Markdown/stdout/proof-input assembly are closed behind dedicated owners; mutable process, network, browser, scenario, and assertion orchestration remains concentrated in the root | Small CLI/composition root over configuration, scenario, runtime, artifact, and assertion libraries | configuration → path contracts; artifacts → normalized values only; CLI root → configuration/artifacts/orchestration; assertions remain in the root | Split another scenario/runtime family only when its next independent change requires it; do not return configuration, path, or representation assembly to the root |
 
@@ -340,6 +340,24 @@ acquiring I/O/orchestration dependencies, prevents ownership from drifting back
 into the root, and requires matching contracts to import the extracted modules
 directly instead of a compatibility façade.
 
+## Closed operator-proof boundary: status-audit classification
+
+`ProofRunStatusAuditRequest` is the immutable boundary between status-audit
+artifact loading and report classification. The public filesystem entrypoint
+continues to resolve workspace-relative or absolute paths, distinguish missing
+and malformed files, parse the existing report schema, and then constructs the
+request with the declared path, expected report inputs, manifest version,
+freshness policy and clock, resolved filesystem path, and parsed report.
+
+The private evaluator owns the preserved path, version, input, freshness,
+staleness, semantic-drift, and trusted-result precedence. The former public
+eight-argument evaluator and its `clippy::too_many_arguments` expectation no
+longer exist. A table-driven unit contract locks every decision and returned
+field, while `operator_proof_boundary.rs` prevents the request, loader, and
+private evaluator from collapsing back into positional or public compatibility
+surfaces. Saved status snapshots, report serialization, CLI binaries, and
+artifact paths are unchanged.
+
 ## Exact lint-debt register
 
 The strict baseline intentionally records, rather than hides, remaining
@@ -348,9 +366,10 @@ boundary pressure:
 - resolver action, trigger, and outcome boundaries are typed and carry no local
   lint expectations; remaining coordinator concentration is tracked as an
   ownership frontier rather than hidden lint debt;
-- action submission/validation and host-prompt resolution/replay are typed and
-  carry no local lint expectations; operator-proof artifact audit inputs still
-  await one bounded request context;
+- action submission/validation, host-prompt resolution/replay, and
+  operator-proof status-audit classification are typed and carry no local lint
+  expectations; DayEvent resolution application still awaits one bounded
+  request context and carries a function-level lint allowance;
 - auth, community, game-read, command/import, and live-delivery HTTP plus
   authentication attempt/delivery and live-publication ownership are typed and
   carry no local lint expectations;
@@ -360,9 +379,9 @@ boundary pressure:
 - direct wire enum payload ownership remains until transport allocation is
   benchmark-driven or the adapter boundary is reshaped;
 
-Each extraction must remove the expectations it supersedes. Adding an exact
-expectation requires a reason that names the missing boundary and an update to
-this inventory when it creates a new debt category.
+Each extraction must remove the expectations or allowances it supersedes.
+Adding an exact lint suppression requires a reason that names the missing
+boundary and an update to this inventory when it creates a new debt category.
 
 ## Proof product freeze
 

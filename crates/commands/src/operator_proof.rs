@@ -2930,6 +2930,18 @@ pub fn proof_run_go_no_go_report_artifact_state_at(
     }
 }
 
+#[derive(Debug)]
+struct ProofRunStatusAuditRequest<'a> {
+    declared_artifact_path: &'a str,
+    expected_report_expected_path: &'a str,
+    expected_report_actual_path: &'a str,
+    expected_manifest_version: u16,
+    artifact_freshness_max_age_seconds: u64,
+    now: SystemTime,
+    resolved_artifact_path: &'a FsPath,
+    report: &'a OperatorProofRunStatusAuditReport,
+}
+
 pub fn proof_run_status_audit_report_artifact_state_at(
     path: &str,
     expected_report_expected_path: &str,
@@ -2948,59 +2960,52 @@ pub fn proof_run_status_audit_report_artifact_state_at(
     let Ok(report) = serde_json::from_str::<OperatorProofRunStatusAuditReport>(&text) else {
         return ProofRunArtifactState::Malformed;
     };
-    proof_run_status_audit_report_artifact_state_from_report(
-        path,
+    let request = ProofRunStatusAuditRequest {
+        declared_artifact_path: path,
         expected_report_expected_path,
         expected_report_actual_path,
         expected_manifest_version,
         artifact_freshness_max_age_seconds,
         now,
-        &artifact_path,
-        &report,
-    )
+        resolved_artifact_path: &artifact_path,
+        report: &report,
+    };
+    evaluate_proof_run_status_audit_report(&request)
 }
 
-#[expect(
-    clippy::too_many_arguments,
-    reason = "artifact audit inputs remain explicit until the proof-report boundary gains a request context"
-)]
-pub fn proof_run_status_audit_report_artifact_state_from_report(
-    path: &str,
-    expected_report_expected_path: &str,
-    expected_report_actual_path: &str,
-    expected_manifest_version: u16,
-    artifact_freshness_max_age_seconds: u64,
-    now: SystemTime,
-    artifact_path: &FsPath,
-    report: &OperatorProofRunStatusAuditReport,
+fn evaluate_proof_run_status_audit_report(
+    request: &ProofRunStatusAuditRequest<'_>,
 ) -> ProofRunArtifactState {
-    if report.artifact_path != path {
+    let report = request.report;
+    if report.artifact_path != request.declared_artifact_path {
         return ProofRunArtifactState::PathMismatch {
             reported_path: report.artifact_path.clone(),
         };
     }
-    if report.artifact_version != expected_manifest_version {
+    if report.artifact_version != request.expected_manifest_version {
         return ProofRunArtifactState::VersionMismatch {
             artifact_manifest_version: report.artifact_version,
-            expected_manifest_version,
+            expected_manifest_version: request.expected_manifest_version,
         };
     }
-    if report.expected_path != expected_report_expected_path
-        || report.actual_path != expected_report_actual_path
+    if report.expected_path != request.expected_report_expected_path
+        || report.actual_path != request.expected_report_actual_path
     {
         return ProofRunArtifactState::InputMismatch {
-            expected_expected_path: expected_report_expected_path.to_string(),
-            expected_actual_path: expected_report_actual_path.to_string(),
+            expected_expected_path: request.expected_report_expected_path.to_string(),
+            expected_actual_path: request.expected_report_actual_path.to_string(),
             reported_expected_path: report.expected_path.clone(),
             reported_actual_path: report.actual_path.clone(),
         };
     }
-    let Ok(freshness) =
-        proof_run_artifact_freshness(artifact_path, artifact_freshness_max_age_seconds, now)
-    else {
+    let Ok(freshness) = proof_run_artifact_freshness(
+        request.resolved_artifact_path,
+        request.artifact_freshness_max_age_seconds,
+        request.now,
+    ) else {
         return ProofRunArtifactState::Malformed;
     };
-    if freshness.age_seconds > artifact_freshness_max_age_seconds {
+    if freshness.age_seconds > request.artifact_freshness_max_age_seconds {
         return ProofRunArtifactState::Stale { freshness };
     }
     let diff_count = report.diffs.len();
@@ -5258,6 +5263,308 @@ mod tests {
             other => panic!("expected present artifact, got {other:?}"),
         }
         let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn proof_run_status_audit_request_preserves_state_precedence() {
+        #[derive(Debug)]
+        enum ExpectedState {
+            PathMismatch,
+            VersionMismatch,
+            InputMismatch,
+            Malformed,
+            Stale,
+            Drifted,
+            Trusted,
+        }
+
+        struct AuditCase<'a> {
+            name: &'static str,
+            report: OperatorProofRunStatusAuditReport,
+            max_age_seconds: u64,
+            resolved_artifact_path: &'a FsPath,
+            expected: ExpectedState,
+        }
+
+        let dir = env::temp_dir().join(format!("fmarch-status-audit-{}", Uuid::new_v4()));
+        let artifact = dir.join("audit-report.json");
+        let missing_metadata = dir.join("missing-metadata.json");
+        fs::create_dir_all(&dir).expect("status audit artifact dir");
+        fs::write(&artifact, "{}").expect("status audit artifact metadata source");
+        let artifact_text = artifact.to_string_lossy().into_owned();
+        let modified = fs::metadata(&artifact)
+            .and_then(|metadata| metadata.modified())
+            .expect("status audit artifact modified time");
+        let now = modified + std::time::Duration::from_secs(20);
+
+        let base_report = || OperatorProofRunStatusAuditReport {
+            artifact_version: PROOF_RUN_STATUS_AUDIT_REPORT_ARTIFACT_VERSION,
+            artifact_path: artifact_text.clone(),
+            ok: true,
+            expected_path: "expected-status.json".to_string(),
+            actual_path: "actual-status.json".to_string(),
+            normalized_fields: Vec::new(),
+            diffs: Vec::new(),
+        };
+        let drift = OperatorProofRunStatusDiff {
+            path: "$.rows[\"proof\"].artifact.state".to_string(),
+            expected: Value::String("trusted".to_string()),
+            actual: Value::String("missing".to_string()),
+        };
+
+        let mut path_mismatch = base_report();
+        path_mismatch.artifact_path = "wrong-audit-report.json".to_string();
+        path_mismatch.artifact_version = 2;
+        path_mismatch.expected_path = "wrong-expected.json".to_string();
+        path_mismatch.ok = false;
+        path_mismatch.diffs.push(drift.clone());
+
+        let mut version_mismatch = base_report();
+        version_mismatch.artifact_version = 2;
+        version_mismatch.expected_path = "wrong-expected.json".to_string();
+        version_mismatch.ok = false;
+        version_mismatch.diffs.push(drift.clone());
+
+        let mut input_mismatch = base_report();
+        input_mismatch.expected_path = "wrong-expected.json".to_string();
+        input_mismatch.actual_path = "wrong-actual.json".to_string();
+        input_mismatch.ok = false;
+        input_mismatch.diffs.push(drift.clone());
+
+        let mut drifted = base_report();
+        drifted.diffs.push(drift);
+
+        let cases = vec![
+            AuditCase {
+                name: "path mismatch precedes version, inputs, freshness, and drift",
+                report: path_mismatch,
+                max_age_seconds: 10,
+                resolved_artifact_path: &missing_metadata,
+                expected: ExpectedState::PathMismatch,
+            },
+            AuditCase {
+                name: "version mismatch precedes inputs, freshness, and drift",
+                report: version_mismatch,
+                max_age_seconds: 10,
+                resolved_artifact_path: &missing_metadata,
+                expected: ExpectedState::VersionMismatch,
+            },
+            AuditCase {
+                name: "input mismatch precedes freshness and drift",
+                report: input_mismatch,
+                max_age_seconds: 10,
+                resolved_artifact_path: &missing_metadata,
+                expected: ExpectedState::InputMismatch,
+            },
+            AuditCase {
+                name: "unreadable freshness metadata is malformed",
+                report: base_report(),
+                max_age_seconds: 30,
+                resolved_artifact_path: &missing_metadata,
+                expected: ExpectedState::Malformed,
+            },
+            AuditCase {
+                name: "staleness precedes semantic drift",
+                report: drifted.clone(),
+                max_age_seconds: 10,
+                resolved_artifact_path: &artifact,
+                expected: ExpectedState::Stale,
+            },
+            AuditCase {
+                name: "fresh semantic differences are drifted",
+                report: drifted,
+                max_age_seconds: 30,
+                resolved_artifact_path: &artifact,
+                expected: ExpectedState::Drifted,
+            },
+            AuditCase {
+                name: "fresh matching report is trusted with exact inputs",
+                report: base_report(),
+                max_age_seconds: 30,
+                resolved_artifact_path: &artifact,
+                expected: ExpectedState::Trusted,
+            },
+        ];
+
+        for case in cases {
+            let request = ProofRunStatusAuditRequest {
+                declared_artifact_path: &artifact_text,
+                expected_report_expected_path: "expected-status.json",
+                expected_report_actual_path: "actual-status.json",
+                expected_manifest_version: 1,
+                artifact_freshness_max_age_seconds: case.max_age_seconds,
+                now,
+                resolved_artifact_path: case.resolved_artifact_path,
+                report: &case.report,
+            };
+            let state = evaluate_proof_run_status_audit_report(&request);
+            match (case.expected, state) {
+                (
+                    ExpectedState::PathMismatch,
+                    ProofRunArtifactState::PathMismatch { reported_path },
+                ) => assert_eq!(reported_path, "wrong-audit-report.json", "{}", case.name),
+                (
+                    ExpectedState::VersionMismatch,
+                    ProofRunArtifactState::VersionMismatch {
+                        artifact_manifest_version,
+                        expected_manifest_version,
+                    },
+                ) => {
+                    assert_eq!(artifact_manifest_version, 2, "{}", case.name);
+                    assert_eq!(expected_manifest_version, 1, "{}", case.name);
+                }
+                (
+                    ExpectedState::InputMismatch,
+                    ProofRunArtifactState::InputMismatch {
+                        expected_expected_path,
+                        expected_actual_path,
+                        reported_expected_path,
+                        reported_actual_path,
+                    },
+                ) => {
+                    assert_eq!(
+                        expected_expected_path, "expected-status.json",
+                        "{}",
+                        case.name
+                    );
+                    assert_eq!(expected_actual_path, "actual-status.json", "{}", case.name);
+                    assert_eq!(
+                        reported_expected_path, "wrong-expected.json",
+                        "{}",
+                        case.name
+                    );
+                    assert_eq!(reported_actual_path, "wrong-actual.json", "{}", case.name);
+                }
+                (ExpectedState::Malformed, ProofRunArtifactState::Malformed) => {}
+                (ExpectedState::Stale, ProofRunArtifactState::Stale { freshness }) => {
+                    assert_eq!(freshness.age_seconds, 20, "{}", case.name);
+                    assert_eq!(freshness.max_age_seconds, 10, "{}", case.name);
+                }
+                (
+                    ExpectedState::Drifted,
+                    ProofRunArtifactState::Drifted {
+                        diff_count,
+                        freshness,
+                    },
+                ) => {
+                    assert_eq!(diff_count, 1, "{}", case.name);
+                    assert_eq!(freshness.age_seconds, 20, "{}", case.name);
+                    assert_eq!(freshness.max_age_seconds, 30, "{}", case.name);
+                }
+                (
+                    ExpectedState::Trusted,
+                    ProofRunArtifactState::AuditReportPresent {
+                        artifact_version,
+                        expected_path,
+                        actual_path,
+                        diff_count,
+                        freshness,
+                    },
+                ) => {
+                    assert_eq!(artifact_version, 1, "{}", case.name);
+                    assert_eq!(expected_path, "expected-status.json", "{}", case.name);
+                    assert_eq!(actual_path, "actual-status.json", "{}", case.name);
+                    assert_eq!(diff_count, 0, "{}", case.name);
+                    assert_eq!(freshness.age_seconds, 20, "{}", case.name);
+                    assert_eq!(freshness.max_age_seconds, 30, "{}", case.name);
+                }
+                (expected, actual) => {
+                    panic!("{}: expected {expected:?}, got {actual:?}", case.name)
+                }
+            }
+        }
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn proof_run_status_audit_loader_preserves_missing_malformed_and_path_resolution() {
+        let relative_path = format!(
+            "target/operator-proof/status-audit-loader-{}/report.json",
+            Uuid::new_v4()
+        );
+        let resolved_path = proof_run_artifact_fs_path(&relative_path);
+        let parent = resolved_path.parent().expect("status audit parent");
+        let _ = fs::remove_dir_all(parent);
+
+        assert_eq!(
+            proof_run_status_audit_report_artifact_state_at(
+                &relative_path,
+                "expected-status.json",
+                "actual-status.json",
+                1,
+                86_400,
+                SystemTime::now(),
+            ),
+            ProofRunArtifactState::Missing
+        );
+
+        fs::create_dir_all(parent).expect("status audit parent creation");
+        fs::write(&resolved_path, "{").expect("malformed status audit report");
+        assert_eq!(
+            proof_run_status_audit_report_artifact_state_at(
+                &relative_path,
+                "expected-status.json",
+                "actual-status.json",
+                1,
+                86_400,
+                SystemTime::now(),
+            ),
+            ProofRunArtifactState::Malformed
+        );
+
+        let report = OperatorProofRunStatusAuditReport {
+            artifact_version: 1,
+            artifact_path: relative_path.clone(),
+            ok: true,
+            expected_path: "expected-status.json".to_string(),
+            actual_path: "actual-status.json".to_string(),
+            normalized_fields: vec!["$.game".to_string()],
+            diffs: Vec::new(),
+        };
+        fs::write(&resolved_path, serde_json::to_vec_pretty(&report).unwrap())
+            .expect("relative status audit report");
+        assert!(matches!(
+            proof_run_status_audit_report_artifact_state_at(
+                &relative_path,
+                "expected-status.json",
+                "actual-status.json",
+                1,
+                86_400,
+                SystemTime::now(),
+            ),
+            ProofRunArtifactState::AuditReportPresent {
+                artifact_version: 1,
+                expected_path,
+                actual_path,
+                diff_count: 0,
+                ..
+            } if expected_path == "expected-status.json" && actual_path == "actual-status.json"
+        ));
+
+        let absolute_path = resolved_path.to_string_lossy().into_owned();
+        let absolute_report = OperatorProofRunStatusAuditReport {
+            artifact_path: absolute_path.clone(),
+            ..report
+        };
+        fs::write(
+            &resolved_path,
+            serde_json::to_vec_pretty(&absolute_report).unwrap(),
+        )
+        .expect("absolute status audit report");
+        assert!(matches!(
+            proof_run_status_audit_report_artifact_state_at(
+                &absolute_path,
+                "expected-status.json",
+                "actual-status.json",
+                1,
+                86_400,
+                SystemTime::now(),
+            ),
+            ProofRunArtifactState::AuditReportPresent { diff_count: 0, .. }
+        ));
+
+        let _ = fs::remove_dir_all(parent);
     }
 
     #[test]

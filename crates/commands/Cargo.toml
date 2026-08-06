@@ -24,6 +24,10 @@ path = "tests/action_submission_boundary.rs"
 name = "host_prompt_resolution_boundary"
 path = "tests/host_prompt_resolution_boundary.rs"
 
+[[test]]
+name = "operator_proof_boundary"
+path = "tests/operator_proof_boundary.rs"
+
 [dependencies]
 caps = { path = "../caps", version = "0.1.0" }
 projections = { path = "../projections", version = "0.1.0" }
