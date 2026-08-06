@@ -242,6 +242,12 @@ Reads and live deltas are filtered server-side by capability ([03](03-backend.md
 
 - Secrets (DB creds, signing keys, encryption keys) come from the environment / a secrets
   manager, never source. (Cf. this machine's Keychain pattern for local secrets.)
+- Dependency policy is checked in at `deny.toml` and
+  `docs/ops/dependency-policy.json`. It evaluates the enabled Rust feature graph
+  for macOS development and Linux deployment, blocks unapproved registries,
+  Git sources, licenses, and advisories, and audits both npm lockfiles at
+  moderate severity or above. Exceptions name their exact path, reason,
+  removal condition, and review deadline; an expired exception fails proof.
 - Every command's audit metadata records the **capability used**, actor, and request id
   ([02](02-event-sourcing.md)) — disputes and incident response replay exactly who did what
   under which authority.

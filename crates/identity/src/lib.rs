@@ -7,10 +7,11 @@ pub mod token;
 pub mod workos;
 
 pub use data_lifecycle::{
-    apply_lifecycle_events, decide_member_lifecycle, disposition, DataClass, MemberLifecycleCommand,
-    MemberLifecycleEvent, MemberLifecycleReject, MemberLifecycleState, MemberLifecycleStatus,
-    RetentionDisposition, MEMBER_AUTHORSHIP_PSEUDONYMIZED, MEMBER_CREDENTIALS_ERASED,
-    MEMBER_DEACTIVATED, MEMBER_ERASURE_REQUESTED, MEMBER_PERSONAL_EXPORT_RECORDED,
+    apply_lifecycle_events, decide_member_lifecycle, disposition, DataClass,
+    MemberLifecycleCommand, MemberLifecycleEvent, MemberLifecycleReject, MemberLifecycleState,
+    MemberLifecycleStatus, RetentionDisposition, MEMBER_AUTHORSHIP_PSEUDONYMIZED,
+    MEMBER_CREDENTIALS_ERASED, MEMBER_DEACTIVATED, MEMBER_ERASURE_REQUESTED,
+    MEMBER_PERSONAL_EXPORT_RECORDED,
 };
 
 pub use error::IdentityFlowError;

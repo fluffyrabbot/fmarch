@@ -386,7 +386,7 @@ async fn stream_export_imports_into_an_isolated_database() {
         .await
         .unwrap();
     for name in [&source_name, &target_name] {
-        sqlx::query(&format!("CREATE DATABASE \"{name}\""))
+        sqlx::query(sqlx::AssertSqlSafe(format!("CREATE DATABASE \"{name}\"")))
             .execute(&admin)
             .await
             .unwrap();
@@ -427,7 +427,7 @@ async fn stream_export_imports_into_an_isolated_database() {
             .execute(&admin)
             .await
             .unwrap();
-        sqlx::query(&format!("DROP DATABASE \"{name}\""))
+        sqlx::query(sqlx::AssertSqlSafe(format!("DROP DATABASE \"{name}\"")))
             .execute(&admin)
             .await
             .unwrap();

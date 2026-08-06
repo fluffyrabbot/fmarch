@@ -258,7 +258,7 @@
       "title": "1.0 security release baseline",
       "execution_class": "code",
       "status": "complete",
-      "summary": "The production frontend uses a browser-proven nonce CSP, release secrets have an environment-isolated custody and rotation contract, deployable images have locked provenance, and source plus artifact proofs reject sensitive telemetry.",
+      "summary": "The production frontend uses a browser-proven nonce CSP, release secrets have an environment-isolated custody and rotation contract, deployable images have locked provenance, graph-aware Rust/npm advisory and license policy is proof-enforced, and source plus artifact proofs reject sensitive telemetry.",
       "complete_when": [
         "A strict production CSP, secret custody/rotation configuration, dependency/container provenance checks, and no-sensitive-telemetry contracts are enforced and locally proven."
       ],
@@ -281,11 +281,23 @@
         },
         {
           "kind": "source",
+          "value": "docs/ops/dependency-policy.json"
+        },
+        {
+          "kind": "source",
+          "value": "deny.toml"
+        },
+        {
+          "kind": "source",
           "value": "tools/security_release_baseline.mjs"
         },
         {
           "kind": "command",
           "value": "npm run test:security-release-baseline"
+        },
+        {
+          "kind": "command",
+          "value": "npm run test:dependency-policy"
         },
         {
           "kind": "command",

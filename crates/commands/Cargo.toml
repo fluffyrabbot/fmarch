@@ -2,6 +2,7 @@
 name = "commands"
 version = "0.1.0"
 edition.workspace = true
+publish.workspace = true
 # Directory harness at tests/pipeline/; residual body still lives at
 # tests/pipeline.rs and is include!'d — disable autotests so that file is not
 # a second integration binary (cargo forbids tests/pipeline.rs + tests/pipeline/).
@@ -20,15 +21,15 @@ name = "action_submission_boundary"
 path = "tests/action_submission_boundary.rs"
 
 [dependencies]
-caps = { path = "../caps" }
-projections = { path = "../projections" }
-eventstore = { path = "../eventstore" }
-domain = { path = "../domain" }
-game_platform = { path = "../game_platform" }
+caps = { path = "../caps", version = "0.1.0" }
+projections = { path = "../projections", version = "0.1.0" }
+eventstore = { path = "../eventstore", version = "0.1.0" }
+domain = { path = "../domain", version = "0.1.0" }
+game_platform = { path = "../game_platform", version = "0.1.0" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.10"
-sqlx = { version = "0.8", default-features = false, features = [
+sqlx = { version = "0.9", default-features = false, features = [
     "runtime-tokio",
     "postgres",
     "uuid",

@@ -2,18 +2,19 @@
 name = "server"
 version = "0.1.0"
 edition.workspace = true
+publish.workspace = true
 default-run = "server"
 
 [dependencies]
-api = { path = "../api" }
-commands = { path = "../commands" }
-eventstore = { path = "../eventstore" }
-identity = { path = "../identity" }
-media = { path = "../media" }
-operator_api = { path = "../operator_api" }
-projections = { path = "../projections" }
+api = { path = "../api", version = "0.1.0" }
+commands = { path = "../commands", version = "0.1.0" }
+eventstore = { path = "../eventstore", version = "0.1.0" }
+identity = { path = "../identity", version = "0.1.0" }
+media = { path = "../media", version = "0.1.0" }
+operator_api = { path = "../operator_api", version = "0.1.0" }
+projections = { path = "../projections", version = "0.1.0" }
 axum = "0.8"
-sqlx = { version = "0.8", default-features = false, features = [
+sqlx = { version = "0.9", default-features = false, features = [
     "runtime-tokio",
     "postgres",
     "migrate",

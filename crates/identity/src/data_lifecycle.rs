@@ -346,10 +346,7 @@ mod tests {
         for (status, command, expected) in cases {
             let state = MemberLifecycleState { status };
             let got = decide_member_lifecycle(&state, command.clone());
-            assert_eq!(
-                got, expected,
-                "status={status:?} command={command:?}"
-            );
+            assert_eq!(got, expected, "status={status:?} command={command:?}");
         }
     }
 
@@ -392,9 +389,7 @@ mod tests {
     fn event_kind_constants_are_stable() {
         let cases = [
             (
-                MemberLifecycleEvent::Deactivated {
-                    reason: "x".into(),
-                },
+                MemberLifecycleEvent::Deactivated { reason: "x".into() },
                 MEMBER_DEACTIVATED,
             ),
             (

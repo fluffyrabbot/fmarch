@@ -18,3 +18,4 @@ members = [
 
 [workspace.package]
 edition = "2021"
+publish = false

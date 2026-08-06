@@ -97,6 +97,9 @@ export async function validateSecurityReleaseBaseline() {
         "crates/api/src/identity_delivery.rs",
         "deploy/railway/api.env.example",
         "deploy/railway/frontend.env.example",
+        "deny.toml",
+        "docs/ops/dependency-policy.json",
+        "package.json",
       ].map(async (relativePath) => [
         relativePath,
         await readFile(path.join(root, relativePath), "utf8"),
@@ -138,6 +141,23 @@ export async function validateSecurityReleaseBaseline() {
   assert.match(source.Dockerfile, /cargo build --release --locked/);
   assert.match(source["Dockerfile.frontend"], /npm ci --ignore-scripts/);
   assert.match(source["Dockerfile.frontend"], /npm prune --omit=dev/);
+
+  const dependencyPolicy = JSON.parse(source["docs/ops/dependency-policy.json"]);
+  assert.equal(dependencyPolicy.version, 1);
+  assert.deepEqual(dependencyPolicy.rust.checks, [
+    "advisories",
+    "licenses",
+    "sources",
+    "bans",
+  ]);
+  assert.equal(dependencyPolicy.npm.audit_level, "moderate");
+  assert.match(source["deny.toml"], /unknown-registry = "deny"/);
+  assert.match(source["deny.toml"], /unknown-git = "deny"/);
+  assert.match(source["deny.toml"], /RUSTSEC-2024-0436/);
+  assert.match(
+    source["package.json"],
+    /"test:dependency-policy": "node tools\/dependency_policy\.mjs/,
+  );
 
   for (const relativePath of [
     "crates/server/src/main.rs",
@@ -187,10 +207,11 @@ export async function validateSecurityReleaseBaseline() {
     version: 1,
     ok: true,
     boundary:
-      "Local source, runtime-header, telemetry-field, secret-custody, locked-dependency, pinned-container, and evidence-redaction contract; not third-party penetration testing, compliance certification, hosted telemetry retention, or production incident readiness.",
+      "Local source, runtime-header, telemetry-field, secret-custody, graph-aware dependency advisory/license/source, pinned-container, and evidence-redaction contract; not third-party penetration testing, compliance certification, hosted telemetry retention, or production incident readiness.",
     checks: [
       "nonce-csp",
       "locked-dependencies",
+      "dependency-advisory-license-source-policy",
       "pinned-container-bases",
       "bounded-telemetry-fields",
       "environment-secret-custody-and-rotation",

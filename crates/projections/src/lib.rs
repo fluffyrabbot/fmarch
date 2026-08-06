@@ -3672,10 +3672,12 @@ async fn rebuild_in_tx(
         "thread_view",
         "game_index",
     ] {
-        sqlx::query(&format!("DELETE FROM {table} WHERE game_id = $1"))
-            .bind(game_id)
-            .execute(&mut **tx)
-            .await?;
+        sqlx::query(sqlx::AssertSqlSafe(format!(
+            "DELETE FROM {table} WHERE game_id = $1"
+        )))
+        .bind(game_id)
+        .execute(&mut **tx)
+        .await?;
     }
     sqlx::query("DELETE FROM public_search_document WHERE scope_kind = 'game' AND scope_id = $1")
         .bind(game_id)
@@ -3901,7 +3903,10 @@ async fn projection_snapshot(
         order_by = projection.order_by,
         predicate = predicate,
     );
-    let row = sqlx::query(&sql).bind(game_id).fetch_one(&mut **tx).await?;
+    let row = sqlx::query(sqlx::AssertSqlSafe(sql.as_str()))
+        .bind(game_id)
+        .fetch_one(&mut **tx)
+        .await?;
     normalize_private_snapshot(projection.table, row.get("rows"))
 }
 

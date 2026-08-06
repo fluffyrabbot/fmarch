@@ -909,7 +909,9 @@ mod secure_event_encryption_config_tests {
 
     impl EnvGuard {
         fn new() -> Self {
-            let lock = ENV_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+            let lock = ENV_LOCK
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
             let guard = Self {
                 prior_key: std::env::var("FMARCH_EVENT_ENCRYPTION_KEY").ok(),
                 prior_kid: std::env::var("FMARCH_EVENT_ENCRYPTION_KID").ok(),
@@ -976,7 +978,10 @@ mod secure_event_encryption_config_tests {
     #[test]
     fn local_dev_active_kid_banned_without_explicit_dev() {
         let env = EnvGuard::new();
-        env.set_active(LOCAL_DEV_EVENT_ENCRYPTION_KID, "unit-test-event-key-material");
+        env.set_active(
+            LOCAL_DEV_EVENT_ENCRYPTION_KID,
+            "unit-test-event-key-material",
+        );
         assert_crypto_err(
             require_secure_event_encryption_configuration(),
             LOCAL_DEV_EVENT_ENCRYPTION_KID,
@@ -986,7 +991,10 @@ mod secure_event_encryption_config_tests {
     #[test]
     fn local_dev_active_kid_allowed_with_dev_auth() {
         let env = EnvGuard::new();
-        env.set_active(LOCAL_DEV_EVENT_ENCRYPTION_KID, "unit-test-event-key-material");
+        env.set_active(
+            LOCAL_DEV_EVENT_ENCRYPTION_KID,
+            "unit-test-event-key-material",
+        );
         env.set_dev_auth("1");
         require_secure_event_encryption_configuration().expect("dev auth opts into local-dev");
     }
@@ -994,7 +1002,10 @@ mod secure_event_encryption_config_tests {
     #[test]
     fn local_dev_active_kid_allowed_with_allow_insecure_flag() {
         let env = EnvGuard::new();
-        env.set_active(LOCAL_DEV_EVENT_ENCRYPTION_KID, "unit-test-event-key-material");
+        env.set_active(
+            LOCAL_DEV_EVENT_ENCRYPTION_KID,
+            "unit-test-event-key-material",
+        );
         env.set_allow_insecure("true");
         require_secure_event_encryption_configuration()
             .expect("allow-insecure flag opts into local-dev");
@@ -1003,10 +1014,12 @@ mod secure_event_encryption_config_tests {
     #[test]
     fn local_dev_active_kid_allowed_with_allow_insecure_case_insensitive() {
         let env = EnvGuard::new();
-        env.set_active(LOCAL_DEV_EVENT_ENCRYPTION_KID, "unit-test-event-key-material");
+        env.set_active(
+            LOCAL_DEV_EVENT_ENCRYPTION_KID,
+            "unit-test-event-key-material",
+        );
         env.set_allow_insecure("TRUE");
-        require_secure_event_encryption_configuration()
-            .expect("allow-insecure accepts TRUE");
+        require_secure_event_encryption_configuration().expect("allow-insecure accepts TRUE");
     }
 
     #[test]

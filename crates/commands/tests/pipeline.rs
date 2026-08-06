@@ -72811,7 +72811,10 @@ async fn install_vote_insert_blocker(pool: &PgPool, game: Uuid, lock_key: i64) {
         $$ LANGUAGE plpgsql;
         "#
     );
-    sqlx::query(&function_sql).execute(pool).await.unwrap();
+    sqlx::query(sqlx::AssertSqlSafe(function_sql.as_str()))
+        .execute(pool)
+        .await
+        .unwrap();
     sqlx::query("DROP TRIGGER IF EXISTS test_block_vote_insert ON events")
         .execute(pool)
         .await
@@ -72842,7 +72845,10 @@ async fn install_deadline_insert_blocker(pool: &PgPool, game: Uuid, lock_key: i6
         $$ LANGUAGE plpgsql;
         "#
     );
-    sqlx::query(&function_sql).execute(pool).await.unwrap();
+    sqlx::query(sqlx::AssertSqlSafe(function_sql.as_str()))
+        .execute(pool)
+        .await
+        .unwrap();
     sqlx::query("DROP TRIGGER IF EXISTS test_block_deadline_insert ON events")
         .execute(pool)
         .await
@@ -74235,7 +74241,10 @@ async fn install_forced_deadline_stream_conflict(pool: &PgPool, game: Uuid) {
         $$ LANGUAGE plpgsql;
         "#
     );
-    sqlx::query(&function_sql).execute(pool).await.unwrap();
+    sqlx::query(sqlx::AssertSqlSafe(function_sql.as_str()))
+        .execute(pool)
+        .await
+        .unwrap();
     sqlx::query("DROP TRIGGER IF EXISTS test_force_deadline_stream_conflict ON events")
         .execute(pool)
         .await
@@ -74277,7 +74286,10 @@ async fn install_post_insert_blocker(pool: &PgPool, game: Uuid, lock_key: i64) {
         $$ LANGUAGE plpgsql;
         "#
     );
-    sqlx::query(&function_sql).execute(pool).await.unwrap();
+    sqlx::query(sqlx::AssertSqlSafe(function_sql.as_str()))
+        .execute(pool)
+        .await
+        .unwrap();
     sqlx::query("DROP TRIGGER IF EXISTS test_block_post_insert ON events")
         .execute(pool)
         .await
@@ -74476,7 +74488,10 @@ async fn install_action_insert_blocker(pool: &PgPool, game: Uuid, lock_key: i64)
         $$ LANGUAGE plpgsql;
         "#
     );
-    sqlx::query(&function_sql).execute(pool).await.unwrap();
+    sqlx::query(sqlx::AssertSqlSafe(function_sql.as_str()))
+        .execute(pool)
+        .await
+        .unwrap();
     sqlx::query("DROP TRIGGER IF EXISTS test_block_action_insert ON events")
         .execute(pool)
         .await
@@ -74677,7 +74692,10 @@ async fn install_thread_view_insert_blocker(pool: &PgPool, game: Uuid, lock_key:
         $$ LANGUAGE plpgsql;
         "#
     );
-    sqlx::query(&function_sql).execute(pool).await.unwrap();
+    sqlx::query(sqlx::AssertSqlSafe(function_sql.as_str()))
+        .execute(pool)
+        .await
+        .unwrap();
     sqlx::query("DROP TRIGGER IF EXISTS test_block_thread_view_insert ON thread_view")
         .execute(pool)
         .await

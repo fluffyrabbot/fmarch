@@ -87,6 +87,7 @@
     "test:railway-staging-target": { "kind": "npm" },
     "test:release-topology": { "kind": "npm" },
     "test:security-release-baseline": { "kind": "npm" },
+    "test:dependency-policy": { "kind": "npm" },
     "test:frontend-csp-browser": { "kind": "npm" },
     "check:build-posture": { "kind": "npm" }
   },
@@ -363,11 +364,18 @@
       "id": "proof:security-release",
       "tier": "frozen",
       "paths": [
+        "deny.toml",
+        "docs/ops/dependency-policy.json",
+        "tools/dependency_policy.mjs",
         "tools/frontend_csp_browser_proof.mjs",
         "tools/security_release_baseline.mjs",
         "tools/security_release_baseline.test.mjs"
       ],
-      "lanes": ["test:security-release-baseline", "test:frontend-csp-browser"],
+      "lanes": [
+        "test:security-release-baseline",
+        "test:dependency-policy",
+        "test:frontend-csp-browser"
+      ],
       "capabilities": ["foundation.security-release-baseline"]
     },
     {
@@ -423,7 +431,8 @@
         "test:projection-baseline:static",
         "cargo:clippy-workspace",
         "cargo:commands",
-        "cargo:projections"
+        "cargo:projections",
+        "test:dependency-policy"
       ]
     }
   ]

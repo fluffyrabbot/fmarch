@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "boundary": "The checked-in dependency gate covers the enabled Rust feature graph for macOS development and Linux deployment plus both npm lockfiles. It blocks known Rust advisories, unapproved dependency licenses and sources, and moderate-or-higher npm advisories. A reviewed exception is not evidence that a dependency is safe forever.",
+  "rust": {
+    "config": "deny.toml",
+    "checks": [
+      "advisories",
+      "licenses",
+      "sources",
+      "bans"
+    ],
+    "minimums": {
+      "sqlx": "0.9.0",
+      "anyhow": "1.0.103",
+      "event-listener": "5.4.2"
+    },
+    "forbidden_lock_packages": [
+      "rsa@0.9.10"
+    ]
+  },
+  "npm": {
+    "audit_level": "moderate",
+    "lockfiles": [
+      "package-lock.json",
+      "frontend/package-lock.json"
+    ]
+  },
+  "exceptions": [
+    {
+      "id": "dependency-policy.paste-rav1e",
+      "advisory": "RUSTSEC-2024-0436",
+      "crate": "paste@1.0.15",
+      "scope": "Compile-time macro used transitively by rav1e 0.8.1 through ravif for AVIF encoding.",
+      "reason": "No maintained rav1e release or safe upgrade currently removes paste; this exception does not cover runtime vulnerabilities or a different dependency path.",
+      "review_by": "2026-11-01",
+      "remove_when": "Upgrade or replace rav1e/ravif as soon as a maintained release removes paste, then delete this exception in the same change."
+    }
+  ],
+  "license_exceptions": []
+}

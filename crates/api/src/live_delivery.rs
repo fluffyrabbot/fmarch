@@ -340,18 +340,31 @@ async fn websocket_session_active(state: &LiveDeliveryState, claim: &WebsocketTi
             .unwrap_or(false),
         },
         _ => {
-            let account_predicate = if state.auth.dev_auth_enabled {
-                "TRUE"
-            } else {
-                "EXISTS (SELECT 1 FROM auth_account WHERE auth_account.principal_user_id = auth_session.principal_user_id AND auth_account.disabled_at IS NULL)"
-            };
-            let query = format!(
-                "SELECT EXISTS (SELECT 1 FROM auth_session WHERE token_hash = $1 AND principal_user_id = $2 AND revoked_at IS NULL AND expires_at > $3 AND {account_predicate})"
-            );
-            sqlx::query_scalar::<_, bool>(query.as_str())
+            sqlx::query_scalar::<_, bool>(
+                r#"
+                SELECT EXISTS (
+                    SELECT 1
+                    FROM auth_session
+                    WHERE token_hash = $1
+                      AND principal_user_id = $2
+                      AND revoked_at IS NULL
+                      AND expires_at > $3
+                      AND (
+                          $4::boolean
+                          OR EXISTS (
+                              SELECT 1
+                              FROM auth_account
+                              WHERE auth_account.principal_user_id = auth_session.principal_user_id
+                                AND auth_account.disabled_at IS NULL
+                          )
+                      )
+                )
+                "#,
+            )
                 .bind(claim.session_reference.as_str())
                 .bind(claim.principal_user_id.as_str())
                 .bind(now)
+                .bind(state.auth.dev_auth_enabled)
                 .fetch_one(&state.pool)
                 .await
                 .unwrap_or(false)

@@ -3156,10 +3156,12 @@ async fn completed_game_export_import_rebuilds_and_audits_in_an_isolated_databas
         .await
         .unwrap();
     let target_name = format!("fmarch_projection_import_{}", Uuid::new_v4().simple());
-    sqlx::query(&format!("CREATE DATABASE \"{target_name}\""))
-        .execute(&admin)
-        .await
-        .unwrap();
+    sqlx::query(sqlx::AssertSqlSafe(format!(
+        "CREATE DATABASE \"{target_name}\""
+    )))
+    .execute(&admin)
+    .await
+    .unwrap();
     let target = PgPoolOptions::new()
         .max_connections(2)
         .connect(&format!("{prefix}/{target_name}"))
@@ -3176,8 +3178,10 @@ async fn completed_game_export_import_rebuilds_and_audits_in_an_isolated_databas
         .execute(&admin)
         .await
         .unwrap();
-    sqlx::query(&format!("DROP DATABASE \"{target_name}\""))
-        .execute(&admin)
-        .await
-        .unwrap();
+    sqlx::query(sqlx::AssertSqlSafe(format!(
+        "DROP DATABASE \"{target_name}\""
+    )))
+    .execute(&admin)
+    .await
+    .unwrap();
 }
