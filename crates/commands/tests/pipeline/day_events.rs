@@ -1573,10 +1573,11 @@ async fn day_event_vertical_is_typed_atomic_rebuildable_and_engine_visible(pool:
         Reject::DayEventStateConflict(_)
     ));
 
+    let resolution_command_id = Uuid::new_v4();
     let ack = handle_idempotent(
         &pool,
         &user("host_h"),
-        Uuid::new_v4(),
+        resolution_command_id,
         Command::ResolveDayEvent {
             game,
             event_id: event_id.clone(),
@@ -1602,12 +1603,30 @@ async fn day_event_vertical_is_typed_atomic_rebuildable_and_engine_visible(pool:
         "day_event:event-cookie:cookie:mark"
     );
     assert_eq!(resolved_batch[1].kind, "DayEventResolved");
+    assert_eq!(resolved_batch[1].actor, ActorId::Host);
+    assert_eq!(resolved_batch[1].causation_id, Some(resolution_command_id));
     assert_eq!(resolved_batch[1].meta["source"], "day_event");
     assert_eq!(resolved_batch[1].meta["day_event_id"], "event-cookie");
+    assert_eq!(
+        resolved_batch[1].meta["command_id"],
+        resolution_command_id.to_string()
+    );
+    assert_eq!(resolved_batch[1].meta["principal_user_id"], "host_h");
+    assert_eq!(
+        resolved_batch[1].meta["authority_used"],
+        format!("HostOf({game})")
+    );
+    assert_eq!(resolved_batch[1].meta["resolution_source"], "host decision");
     let projected = day_events(&pool, game).await.unwrap();
     assert_eq!(projected[0].state, "resolved");
     assert_eq!(projected[0].winner_slots, ["slot_1"]);
     assert_eq!(projected[0].reward_keys_applied, ["cookie"]);
+    assert_eq!(
+        projected[0].resolution_evidence,
+        Some(game_platform::DayEventResolutionEvidence::HostDecision {
+            participant_slots: vec![game_platform::SlotId::new("slot_1").unwrap()],
+        })
+    );
     assert!(slot_effects(&pool, game)
         .await
         .unwrap()

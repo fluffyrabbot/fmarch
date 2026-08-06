@@ -318,7 +318,7 @@
       "title": "Reviewable 1.0 core and toolchain",
       "execution_class": "code",
       "status": "open",
-      "summary": "Rust 1.95.0 and strict workspace Clippy are proof-enforced; API media, auth, community, game-read, command/import, and live WebSocket delivery, authentication attempt/delivery, and live publication, command action submission/validation, host-prompt resolution/replay, operator-proof report/tool ownership, command verification cost boundaries, domain pack model/validation, resolver action/trigger/outcome, projection effect/private-channel, and proof-runner configuration/session-artifact ownership are isolated behind typed boundaries. Remaining resolver coordinator, other projection, physical command-test family, DayEvent resolution-application, and proof-runner scenario/orchestration concentrations remain inventoried.",
+      "summary": "Rust 1.95.0 and strict workspace Clippy are proof-enforced; API media, auth, community, game-read, command/import, and live WebSocket delivery, authentication attempt/delivery, and live publication, command action submission/validation, host-prompt resolution/replay, DayEvent resolution application, operator-proof report/tool ownership, command verification cost boundaries, domain pack model/validation, resolver action/trigger/outcome, projection effect/private-channel, and proof-runner configuration/session-artifact ownership are isolated behind typed boundaries. Remaining identity-delivery lifecycle records, media attached-read inputs, resolver coordinator, other projection, physical command-test family, and proof-runner scenario/orchestration concentrations remain inventoried.",
       "complete_when": [
         "The Rust toolchain is pinned, workspace Clippy is warning-clean, and concentrated pack, resolver, API, projection, command-test, and proof orchestration responsibilities are split into coherent modules without weakening proof coverage."
       ],
@@ -409,6 +409,18 @@
         },
         {
           "kind": "source",
+          "value": "crates/commands/src/day_runtime.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/commands/tests/day_runtime_boundary.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/commands/tests/pipeline/day_events.rs"
+        },
+        {
+          "kind": "source",
           "value": "crates/operator_proof/src/lib.rs"
         },
         {
@@ -489,31 +501,30 @@
         }
       ],
       "remaining": [
-        "Split remaining resolver coordinator, other projection, physical command-test family, DayEvent resolution-application, and proof-runner scenario/orchestration responsibilities along the dependency direction recorded in docs/arch/16-maintainable-core.md.",
+        "Split remaining identity-delivery lifecycle records, media attached-read inputs, resolver coordinator, other projection, physical command-test family, and proof-runner scenario/orchestration responsibilities along the dependency direction recorded in docs/arch/16-maintainable-core.md.",
         "Remove the remaining localized lint expectations and allowances as typed contexts and bounded modules supersede them."
       ],
       "recommended_slice": {
-        "objective": "Replace the positional DayEvent resolution-application inputs in crates/commands/src/day_runtime.rs with one immutable DayEventResolutionRequest: group the game, loaded DayEvent row, host-or-auto decision, winner slots, participant slots, resolution evidence, and Host/System actor while keeping the SQL transaction as the explicit execution boundary; construct the request directly in both host and automatic resolution callers; remove the function-level clippy::too_many_arguments allowance; add a source-boundary contract and focused state/actor coverage; preserve validation and rejection behavior, command-audit lookup, recipient bindings, reward compilation and ordering, lifecycle facts, narrative publication, persistence atomicity, scheduler behavior, automatic seed selection, and serialized event payloads.",
+        "objective": "Replace the positional cancellation and audit inputs in crates/api/src/identity_delivery.rs with immutable IdentityDeliveryCancellationRequest and IdentityDeliveryAuditRecord values while keeping the SQL transaction as the explicit persistence boundary; construct the cancellation request from the claimed intent row and construct audit records directly at cancellation and finalization; remove both clippy::too_many_arguments entries; add a source-boundary contract and focused cancelled, delivered, retryable-failure, and permanent-failure coverage; preserve credential-before-intent lock ordering, cancellation and outcome strings, claim-token clearing, credential-envelope retention or redaction, audit JSON shape, actor/principal/provider attribution, receipts, retry scheduling, and transaction boundaries.",
         "paths": [
-          "crates/commands/Cargo.toml",
-          "crates/commands/src/day_runtime.rs",
-          "crates/commands/tests/day_runtime_boundary.rs",
-          "crates/commands/tests/pipeline.rs",
+          "crates/api/src/identity_delivery.rs",
+          "crates/api/tests/identity_delivery_boundary.rs",
+          "crates/api/tests/vertical.rs",
           "docs/arch/16-maintainable-core.md"
         ],
         "proof_commands": [
-          "cargo test -p commands --test day_runtime_boundary",
-          "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p commands --test pipeline day_event -- --test-threads=1",
+          "cargo test -p api --test identity_delivery_boundary",
+          "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p api --test vertical identity_delivery -- --test-threads=1",
           "cargo clippy --workspace --all-targets --all-features -- -D warnings",
           "npm run test:proof-lane-contract",
           "npm run proof:lanes -- --mode sprint --run",
           "npm run proof:lanes -- --mode full --run"
         ],
         "non_claims": [
-          "Do not redesign DayEvent definitions, reward semantics, scheduler leasing, projection schemas, command admission, or public commands as part of the request-context extraction.",
-          "Do not change winner or participant ordering, host-versus-system attribution, event and narrative ordering, audit command identity, transaction boundaries, rejection text, or automatic-resolution seed behavior.",
-          "Do not preserve the eight-argument resolution function as a compatibility overload; the workspace is greenfield and both callers should construct the typed request directly.",
-          "Do not mark foundation.maintainable-core complete; resolver coordinator, other projection families, physical command-test family, DayEvent resolution-application, and remaining proof-runner scenario/orchestration concentrations remain."
+          "Do not redesign delivery gateway behavior, credential encryption, credential lifecycle tables, retry policy, HTTP endpoints, provider adapters, or public receipt types as part of the lifecycle-record extraction.",
+          "Do not change credential and intent lock order, transaction boundaries, audit event names or JSON keys, outcome/status/code strings, retry timestamps, envelope clearing rules, actor attribution, or provider receipt behavior.",
+          "Do not preserve the positional cancellation or audit functions as compatibility overloads; the workspace is greenfield and callers should construct the typed values directly.",
+          "Do not mark foundation.maintainable-core complete; media attached-read inputs, resolver coordinator, other projection families, physical command-test family, and remaining proof-runner scenario/orchestration concentrations remain."
         ]
       }
     },

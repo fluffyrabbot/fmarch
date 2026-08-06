@@ -31,12 +31,12 @@ The line counts below are a 2026-08-06 orientation snapshot, not a target.
 | Surface | Current concentration | Superior ownership boundary | Dependency direction | Next extraction |
 |---|---|---|---|---|
 | `crates/domain/src/pack.rs` façade; `pack/model.rs` (~1.9k); `pack/validation.rs` (~8.5k) | Closed first-level boundary: serialized schema/defaults are separate from loading, derived indexes, diagnostics, and ordering | `pack/model` owns declarative types; `pack/validation` owns `PackValidationContext` and validation behavior; `validation_tests` owns private contract tests | validation → model; resolver/commands → public pack façade | Split validation families only when their next independent change requires it; do not re-complect model ownership |
-| `crates/domain/src/resolver.rs` (~9.2k); `resolver/action.rs` (~1.0k); `resolver/trigger.rs` (~0.4k); `resolver/outcome.rs` (~1.4k) | Kill/protection, trigger-fixpoint, duel, and day-vote/outcome ownership are closed behind typed boundaries; action collection/ordering and result construction remain concentrated | Resolver coordinator plus bounded action, trigger, and outcome families | outcome → action/trigger/domain state/validated pack; trigger → action resolution/domain state/validated pack; coordinator → bounded families | Split remaining action collection or result construction only when its next independent change requires it; clear the bounded DayEvent resolution-input debt first |
-| `crates/api/src/lib.rs` (~0.6k); `command_http.rs` (~0.5k); `game_http.rs` (~2.6k); `community_http.rs` (~1.4k); `auth_http.rs` (~3.9k); `authentication.rs` (~0.7k); `live_projection.rs` (~0.2k); `live_delivery.rs` (~0.9k) | Media, auth, community, game-read, command/import, and live-delivery HTTP plus authentication attempt/delivery and live publication are closed behind typed boundaries; the root is router/state/error composition | Thin composition root plus route-family modules with typed request contexts | route families → application/domain ports; composition root → route families; authentication → identity-delivery ports; command transport → command application port/live-publication port | Keep the composition root thin; split a route family further only when a new independent change exposes a narrower owner |
-| `crates/projections/src/lib.rs` (~8.2k); `effect_projection.rs` (~0.3k); `private_channel_projection.rs` (~0.3k) | Effect and encrypted private-channel folding, reads, mutations, and rebuild hooks are closed behind typed family boundaries; dispatcher plus unrelated game, community, identity, media-reference, and scheduler projections remain concentrated | Projection dispatcher plus one module per projection family and shared SQL/encryption primitives | family projectors → shared transaction/encryption primitives; dispatcher → families | Split the next family only when it has an independent change; clear the bounded DayEvent resolution-input debt first |
-| `crates/commands/src/lib.rs` (~5.1k); `action_submission.rs` (~0.7k); `host_prompt_resolution.rs` (~1.0k including focused tests); `day_runtime.rs` | Action submission/admission/capacity and host-prompt resolution/replay are closed behind typed request boundaries; command dispatch, shared admission/transaction/persistence, phase lifecycle, and DayEvent resolution application remain concentrated | Thin command transaction/dispatch owner plus bounded action, prompt, and day-runtime families | bounded families → shared command admission/persistence ports + projections/domain; dispatch → bounded families | Replace positional DayEvent resolution-application inputs with one bounded request context and remove its function-level lint allowance |
+| `crates/domain/src/resolver.rs` (~9.2k); `resolver/action.rs` (~1.0k); `resolver/trigger.rs` (~0.4k); `resolver/outcome.rs` (~1.4k) | Kill/protection, trigger-fixpoint, duel, and day-vote/outcome ownership are closed behind typed boundaries; action collection/ordering and result construction remain concentrated | Resolver coordinator plus bounded action, trigger, and outcome families | outcome → action/trigger/domain state/validated pack; trigger → action resolution/domain state/validated pack; coordinator → bounded families | Split remaining action collection or result construction only when its next independent change requires it; clear the bounded identity-delivery lifecycle input debt first |
+| `crates/api/src/lib.rs` (~0.6k); `command_http.rs` (~0.5k); `game_http.rs` (~2.6k); `community_http.rs` (~1.4k); `auth_http.rs` (~3.9k); `authentication.rs` (~0.7k); `identity_delivery.rs` (~1.0k); `live_projection.rs` (~0.2k); `live_delivery.rs` (~0.9k) | Media, auth, community, game-read, command/import, and live-delivery HTTP plus authentication attempt/delivery and live publication are closed behind typed boundaries; provider-neutral identity-delivery cancellation and audit records remain positional below the HTTP boundary | Thin composition root plus route-family modules with typed request contexts and a provider-neutral identity-delivery worker with typed lifecycle records | route families → application/domain ports; composition root → route families; authentication → identity-delivery ports; identity-delivery lifecycle records → worker transaction; command transport → command application port/live-publication port | Replace identity-delivery cancellation and audit field lists with immutable lifecycle records while keeping the SQL transaction explicit |
+| `crates/projections/src/lib.rs` (~8.2k); `effect_projection.rs` (~0.3k); `private_channel_projection.rs` (~0.3k) | Effect and encrypted private-channel folding, reads, mutations, and rebuild hooks are closed behind typed family boundaries; dispatcher plus unrelated game, community, identity, media-reference, and scheduler projections remain concentrated | Projection dispatcher plus one module per projection family and shared SQL/encryption primitives | family projectors → shared transaction/encryption primitives; dispatcher → families | Split the next family only when it has an independent change; clear the bounded identity-delivery lifecycle input debt first |
+| `crates/commands/src/lib.rs` (~5.1k); `action_submission.rs` (~0.7k); `host_prompt_resolution.rs` (~1.0k including focused tests); `day_runtime.rs` (~1.1k) | Action submission/admission/capacity, host-prompt resolution/replay, and DayEvent resolution application are closed behind typed request boundaries; command dispatch, shared admission/transaction/persistence, and phase lifecycle remain concentrated | Thin command transaction/dispatch owner plus bounded action, prompt, and day-runtime families | bounded families → shared command admission/persistence ports + projections/domain; dispatch → bounded families | Split broader command ownership only when its next independent change exposes a coherent boundary; do not reopen the DayEvent request |
 | `crates/operator_proof/src/lib.rs` (~6.1k); proof binaries under `src/bin/`; focused boundary test | Operator report contracts, artifact classification, manifest loading, and local proof executables are no longer production command ownership | Dedicated operator-proof library and executable package | operator-proof → public command/projection APIs; operator API → operator-proof report contracts; commands may use it only as a test dependency | Separate the fixture minimizer core from CLI I/O and keep generated matrices out of the ordinary command gate |
-| `crates/commands/tests/pipeline.rs` (~71k) | Cross-domain command scenarios, generated cases, fixtures, helpers, and Postgres boundaries | Pure command tests, parallel isolated Postgres scenarios, serial concurrency proofs, and explicit generated audits | scenario modules → harness/public command API; audit tools → public verification APIs; never scenario ↔ scenario | Extract semantic audit generators into their own integration module so path ownership can arm the expensive lane exactly |
+| `crates/commands/tests/pipeline.rs` (~77.1k) | Cross-domain command scenarios, generated cases, fixtures, helpers, and Postgres boundaries | Pure command tests, parallel isolated Postgres scenarios, serial concurrency proofs, and explicit generated audits | scenario modules → harness/public command API; audit tools → public verification APIs; never scenario ↔ scenario | Split by proof responsibility; serial execution is reserved for ordering/locking proofs rather than inherited by the entire package |
 | `tools/dev_test_game.mjs` / `.test.mjs` (~26.9k/~29.9k); `dev_test_game_configuration.mjs` (~0.3k); `dev_test_game_session_artifacts.mjs` (~0.7k) | Immutable CLI/environment/default/path normalization and session JSON/Markdown/stdout/proof-input assembly are closed behind dedicated owners; mutable process, network, browser, scenario, and assertion orchestration remains concentrated in the root | Small CLI/composition root over configuration, scenario, runtime, artifact, and assertion libraries | configuration → path contracts; artifacts → normalized values only; CLI root → configuration/artifacts/orchestration; assertions remain in the root | Split another scenario/runtime family only when its next independent change requires it; do not return configuration, path, or representation assembly to the root |
 
 ## First closed boundary: API media HTTP
@@ -359,6 +359,26 @@ private evaluator from collapsing back into positional or public compatibility
 surfaces. Saved status snapshots, report serialization, CLI binaries, and
 artifact paths are unchanged.
 
+## Closed DayEvent boundary: resolution application
+
+`DayEventResolutionRequest` is the private immutable boundary between host or
+automatic resolution preparation and transactional resolution application. It
+owns the game, loaded DayEvent row, typed decision, ordered winner and
+participant slots, resolution evidence, and Host/System actor. Both callers
+construct the request directly; the SQL transaction remains a separate
+application parameter and no compatibility overload preserves the former
+eight-input function.
+
+The application retains command-audit lookup before reward work, recipient
+binding construction, declaration-order reward compilation and effect event
+planning, the terminal `DayEventResolved` fact, and one final persistence call.
+Focused SQLx coverage fixes host command causation, host authority and evidence,
+automatic System attribution and durable seed evidence, effect-before-resolution
+ordering, rejection behavior, scheduler behavior, and projection rebuild. The
+`day_runtime_boundary.rs` source contract prevents positional inputs, caller
+indirection, actor drift, transaction capture, reordered application, or a
+replacement lint allowance.
+
 ## Exact lint-debt register
 
 The strict baseline intentionally records, rather than hides, remaining
@@ -367,17 +387,21 @@ boundary pressure:
 - resolver action, trigger, and outcome boundaries are typed and carry no local
   lint expectations; remaining coordinator concentration is tracked as an
   ownership frontier rather than hidden lint debt;
-- action submission/validation and host-prompt resolution/replay are typed and
-  carry no local lint expectations; operator-proof status and artifact
-  classification live in their own crate rather than the production command
-  module; DayEvent resolution application still awaits one bounded request
-  context and carries a function-level lint allowance;
+- action submission/validation, host-prompt resolution/replay, and DayEvent
+  resolution application are typed and carry no local lint expectations or
+  allowances; operator-proof status and artifact classification live in their
+  own crate rather than the production command module;
 - auth, community, game-read, command/import, and live-delivery HTTP plus
-  authentication attempt/delivery and live-publication ownership are typed and
-  carry no local lint expectations;
+  authentication attempt/delivery and live-publication ownership are typed;
+  provider-neutral identity-delivery cancellation and audit persistence still
+  carry two bounded high-arity lint entries awaiting immutable lifecycle
+  records;
 - effect and private-channel projection ownership is typed and carries no local
   lint expectations; unrelated projection families remain deliberately
   separate rather than hidden behind a generic SQL projector;
+- attached media-variant file reading retains one bounded high-arity allowance
+  pending a typed verified-read context; the safety checks and attached file
+  handle must remain in one operation when that debt is cleared;
 - direct wire enum payload ownership remains until transport allocation is
   benchmark-driven or the adapter boundary is reshaped;
 

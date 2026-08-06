@@ -19,7 +19,7 @@
     "cargo:eventstore": { "kind": "shell", "command": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p eventstore -- --test-threads=1" },
     "cargo:projections": { "kind": "shell", "command": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p projections -- --test-threads=1" },
     "cargo:caps": { "kind": "shell", "command": "cargo test -p caps" },
-    "cargo:commands-unit": { "kind": "shell", "command": "cargo test -p commands --lib --bin check_goldens --test action_submission_boundary --test host_prompt_resolution_boundary" },
+    "cargo:commands-unit": { "kind": "shell", "command": "cargo test -p commands --lib --bin check_goldens --test action_submission_boundary --test host_prompt_resolution_boundary --test day_runtime_boundary" },
     "cargo:commands-pg": { "kind": "shell", "command": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p commands --test pipeline -- --test-threads=4" },
     "cargo:commands-concurrency": { "kind": "shell", "command": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p commands --test runtime_cancellation -- --test-threads=1" },
     "cargo:commands-audit": { "kind": "shell", "command": "RUST_MIN_STACK=8388608 DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p commands --test pipeline -- --ignored --test-threads=4" },

@@ -891,17 +891,16 @@ pub(crate) async fn resolve_day_event(
     let evidence = game_platform::DayEventResolutionEvidence::HostDecision {
         participant_slots: participant_slot_ids.clone(),
     };
-    apply_day_event_resolution_in_tx(
-        tx,
+    let request = DayEventResolutionRequest {
         game,
         event,
         decision,
         winner_slots,
-        participant_slot_ids,
+        participant_slots: participant_slot_ids,
         evidence,
-        ActorId::Host,
-    )
-    .await
+        actor: ActorId::Host,
+    };
+    apply_day_event_resolution_in_tx(tx, request).await
 }
 
 async fn resolve_auto_day_event_in_tx(
@@ -934,22 +933,20 @@ async fn resolve_auto_day_event_in_tx(
         seed: event.auto_seed,
         participant_slots: participant_slots.clone(),
     };
-    apply_day_event_resolution_in_tx(
-        tx,
+    let request = DayEventResolutionRequest {
         game,
         event,
         decision,
         winner_slots,
         participant_slots,
         evidence,
-        ActorId::System,
-    )
-    .await
+        actor: ActorId::System,
+    };
+    apply_day_event_resolution_in_tx(tx, request).await
 }
 
-#[allow(clippy::too_many_arguments)]
-async fn apply_day_event_resolution_in_tx(
-    tx: &mut Transaction<'_, Postgres>,
+#[derive(Debug)]
+struct DayEventResolutionRequest {
     game: Uuid,
     event: projections::DayEventRow,
     decision: game_platform::DayEventDecision,
@@ -957,7 +954,21 @@ async fn apply_day_event_resolution_in_tx(
     participant_slots: Vec<game_platform::SlotId>,
     evidence: game_platform::DayEventResolutionEvidence,
     actor: ActorId,
+}
+
+async fn apply_day_event_resolution_in_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    request: DayEventResolutionRequest,
 ) -> Result<Ack, Reject> {
+    let DayEventResolutionRequest {
+        game,
+        event,
+        decision,
+        winner_slots,
+        participant_slots,
+        evidence,
+        actor,
+    } = request;
     let event_id = event.event_id.clone();
     let resolution_source = match &evidence {
         game_platform::DayEventResolutionEvidence::HostDecision { .. } => "host decision",
