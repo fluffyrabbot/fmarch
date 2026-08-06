@@ -68,10 +68,9 @@ resolve inside the selected environment.
    access key, and secret key to both API replicas through Railway reference
    variables. Do not mount a per-replica media volume in staging or production.
 4. Create a WorkOS AuthKit environment and configure its sign-in endpoint as `https://<frontend>/auth/sign-in` and redirect URI as `https://<frontend>/auth/callback`. Copy `deploy/railway/api.env.example` into Railway Variables, set `DATABASE_URL` as the reference to `Postgres.DATABASE_URL`, and fill in the WorkOS client id, issuer, and JWKS URL. The template is explicitly WorkOS-only (`FMARCH_CLASSIC_AUTH=0`). A hosted classic-plus-WorkOS deployment must instead set `FMARCH_CLASSIC_AUTH=1` and configure `FMARCH_IDENTITY_DELIVERY_ENDPOINT`, `FMARCH_IDENTITY_DELIVERY_PROVIDER_ID`, and `FMARCH_IDENTITY_DELIVERY_AUTH_TOKEN` for a real HTTPS provider; startup fails closed when classic is enabled without that transport. For a fresh database, set `FMARCH_BOOTSTRAP_ADMIN_WORKOS_USER_ID` to the immutable WorkOS user id that should receive the first GlobalAdmin grant; an optional label is display-only. Startup grants it only when no active GlobalAdmin exists. Remove the bootstrap variables after the first successful boot.
-5. Do not set `FMARCH_BIND`. When a platform supplies `PORT`, the server binds `0.0.0.0:$PORT`; local development still defaults to `127.0.0.1:4000`, and an explicit `FMARCH_BIND` overrides either behavior.
+5. Do not set `FMARCH_BIND`. When a platform supplies `PORT`, the server binds `[::]:$PORT` for public IPv4 and private-network IPv6 reachability; local development still defaults to `127.0.0.1:4000`, and an explicit `FMARCH_BIND` overrides either behavior.
 6. Deploy `api`; require its `fmarch-migrate` pre-deploy command to finish
-   successfully before Railway admits two replicas. Generate a public Railway domain, and verify `GET /healthz` returns
-   `{ "ok": true }` while both replicas are present.
+   successfully before Railway admits two replicas. Generate a public Railway domain, verify `GET /healthz` returns dependency-free process liveness, and require `GET /readyz` to return `{ "ok": true, "database_schema": true, "object_storage": true }` while both replicas are present. Railway admission and release promotion consume `/readyz`, not `/healthz`.
 7. Add a `frontend` service from the same repository. Leave its root directory at the repository root, then set its Config-as-Code path to `/deploy/railway/frontend.railway.toml`.
 8. Generate the frontend public domain. Replace the example values in `deploy/railway/frontend.env.example` with the two real HTTPS URLs, the same WorkOS client id, a WorkOS API key, the exact callback URI, and a random cookie password of at least 32 characters. Add them as Railway Variables for `frontend`.
 9. Redeploy `frontend`, sign in as the bootstrapped GlobalAdmin, create the first game from `/admin`, choose a pack, and complete `/g/<game>/setup`. Verify a player follows the host-issued WorkOS sign-in link, start the game, refresh the setup and host surfaces, and confirm the started game appears on the board. Browser commands and one-time WebSocket tickets are bound to the verified WorkOS session and local principal rather than caller-supplied identifiers.
@@ -109,8 +108,9 @@ The underlying sequence is:
 2. Run the full proof sweep (`npm run proof:lanes -- --mode full --run`). Production
    promotion is a sprint boundary, so it deliberately pays the full validation
    cost rather than selecting only the current diff's push lanes.
-3. Verify both staging health endpoints and confirm the latest successful API
-   and frontend Railway deployments carry the same `main` commit SHA.
+3. Verify staging API dependency readiness, frontend health, and confirm the
+   latest successful API and frontend Railway deployments carry the same
+   `main` commit SHA.
 4. Fast-forward the remote `production` branch to that exact SHA. Railway
    production services must watch `production`, never `main`.
 5. Observe terminal `SUCCESS` for both production services and verify their

@@ -27,6 +27,9 @@ async function contract() {
         "package.json",
         "crates/server/src/main.rs",
         "crates/server/src/bin/fmarch-migrate.rs",
+        "crates/api/src/lib.rs",
+        "crates/media/src/repository.rs",
+        "crates/projections/src/schema.rs",
       ].map(async (relativePath) => [relativePath, await read(relativePath)]),
     ),
   );
@@ -42,7 +45,7 @@ async function contract() {
   assert.match(source.Dockerfile, /USER fmarch/);
   assert.match(source.Dockerfile, /CMD \["fmarch-server"\]/);
   assert.match(source[".dockerignore"], /^target$/m);
-  assert.match(source["railway.toml"], /healthcheckPath = "\/healthz"/);
+  assert.match(source["railway.toml"], /healthcheckPath = "\/readyz"/);
   assert.match(source["railway.toml"], /preDeployCommand = "fmarch-migrate"/);
   assert.match(source["railway.toml"], /numReplicas = 2/);
   assert.doesNotMatch(source["railway.toml"], /watchPatterns/);
@@ -85,6 +88,7 @@ async function contract() {
     /^FMARCH_WORKOS_CREDENTIAL_KID=/m,
   );
   assert.doesNotMatch(source["deploy/railway/api.env.example"], /FMARCH_MEDIA_ROOT/);
+  assert.doesNotMatch(source["deploy/railway/api.env.example"], /^FMARCH_BIND=/m);
   assert.doesNotMatch(source["deploy/railway/api.env.example"], /^RAILWAY_RUN_UID=/m);
   assert.match(source["deploy/railway/api.env.example"], /^WORKOS_CLIENT_ID=/m);
   assert.match(source["deploy/railway/api.env.example"], /^WORKOS_ISSUER=https:\/\//m);
@@ -130,7 +134,7 @@ async function contract() {
   );
 
   assert.match(source["crates/server/src/main.rs"], /platform_port/);
-  assert.match(source["crates/server/src/main.rs"], /format!\("0\.0\.0\.0:\{port\}"\)/);
+  assert.match(source["crates/server/src/main.rs"], /format!\("\[::\]:\{port\}"\)/);
   assert.doesNotMatch(source["crates/server/src/main.rs"], /\.run\(&pool\)\.await/);
   assert.match(source["crates/server/src/main.rs"], /ensure_schema_ready\(&pool\)/);
   assert.match(
@@ -139,6 +143,29 @@ async function contract() {
   );
   assert.match(source["crates/server/src/main.rs"], /dev_auth_enabled && debug_build/);
   assert.match(source["crates/server/src/bin/fmarch-migrate.rs"], /MIGRATOR\.run\(&pool\)\.await/);
+  assert.match(source["crates/api/src/lib.rs"], /route\("\/readyz", get\(readyz\)\)/);
+  assert.match(
+    source["crates/api/src/lib.rs"],
+    /projections::ensure_schema_ready\(&state\.pool\)/,
+  );
+  assert.match(
+    source["crates/api/src/lib.rs"],
+    /state\.media_store\.check_readiness\(\)/,
+  );
+  assert.match(
+    source["crates/media/src/repository.rs"],
+    /list_with_delimiter\(Some\(&prefix\)\)/,
+  );
+  assert.match(source["crates/projections/src/schema.rs"], /pub static MIGRATOR/);
+  assert.match(source["tools/production_promotion.mjs"], /\$\{urls\.apiUrl\}\/readyz/);
+  assert.match(
+    source["tools/production_promotion.mjs"],
+    /body\.database_schema === true/,
+  );
+  assert.match(
+    source["tools/production_promotion.mjs"],
+    /body\.object_storage === true/,
+  );
 
   const runbook = source["docs/ops/railway-staging-target.md"];
   for (const requiredText of [

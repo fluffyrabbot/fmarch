@@ -370,9 +370,9 @@ duplicate work but are never the correctness boundary.
    `service:day-event-automation`, `DayEventAutomation(game)`, and
    `source=day_event_automation` audit metadata.
 5. The host console exposes worker health plus each DayEvent's due/observed
-   timestamps. `/healthz` remains dependency-free process liveness; scheduler
-   degradation is game-scoped operational state, not a reason to make the HTTP
-   process disappear from load-balancer health.
+   timestamps. `/healthz` remains dependency-free process liveness and
+   `/readyz` covers database schema, object storage, and admission; scheduler
+   degradation is game-scoped operational state, not an HTTP readiness failure.
 
 Worker bounds are configured with
 `FMARCH_DAY_EVENT_SCHEDULER_POLL_MS`,

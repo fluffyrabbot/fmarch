@@ -114,6 +114,29 @@ impl MediaRepository {
         self.limits
     }
 
+    /// Prove that the configured media backend is reachable without writing a
+    /// sentinel object. Object storage uses a bounded delimiter listing under
+    /// a reserved empty prefix; the local test adapter verifies its retained
+    /// directory capabilities.
+    pub async fn check_readiness(&self) -> Result<(), MediaError> {
+        match &self.backend {
+            RepositoryBackend::Local(store) => {
+                let store = store.clone();
+                tokio::task::spawn_blocking(move || store.check_readiness())
+                    .await
+                    .map_err(join_error)?
+            }
+            RepositoryBackend::Object(store) => {
+                let prefix = ObjectPath::from("__fmarch_readiness__");
+                store
+                    .list_with_delimiter(Some(&prefix))
+                    .await
+                    .map(|_| ())
+                    .map_err(|error| object_error("readiness-list", error))
+            }
+        }
+    }
+
     pub async fn prepare_and_commit_upload(
         &self,
         encoded: Vec<u8>,
@@ -436,6 +459,7 @@ mod tests {
     async fn shared_object_repository_cross_replica_round_trip_is_idempotent() {
         let first = MediaRepository::in_memory(MediaLimits::default()).unwrap();
         let second = first.clone();
+        first.check_readiness().await.unwrap();
         let committed = first
             .prepare_and_commit_upload(png(), VariantLimits::default())
             .await

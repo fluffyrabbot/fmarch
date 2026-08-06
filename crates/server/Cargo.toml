@@ -11,6 +11,7 @@ eventstore = { path = "../eventstore" }
 identity = { path = "../identity" }
 media = { path = "../media" }
 operator_api = { path = "../operator_api" }
+projections = { path = "../projections" }
 axum = "0.8"
 sqlx = { version = "0.8", default-features = false, features = [
     "runtime-tokio",

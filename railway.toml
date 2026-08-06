@@ -4,7 +4,7 @@ dockerfilePath = "Dockerfile"
 
 [deploy]
 preDeployCommand = "fmarch-migrate"
-healthcheckPath = "/healthz"
+healthcheckPath = "/readyz"
 healthcheckTimeout = 120
 numReplicas = 2
 restartPolicyType = "ON_FAILURE"

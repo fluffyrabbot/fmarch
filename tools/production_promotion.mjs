@@ -467,7 +467,14 @@ async function validateEnvironment(config, environment, commit, urls) {
   validateDomainList(apiDomains, new URL(urls.apiUrl).host, `${environment} API`);
   validateDomainList(frontendDomains, new URL(urls.frontendUrl).host, `${environment} frontend`);
   await Promise.all([
-    health(`${urls.apiUrl}/healthz`, (body) => body.ok === true, `${environment} API`),
+    health(
+      `${urls.apiUrl}/readyz`,
+      (body) =>
+        body.ok === true &&
+        body.database_schema === true &&
+        body.object_storage === true,
+      `${environment} API`,
+    ),
     health(
       `${urls.frontendUrl}/healthz`,
       (body) => body.status === "ok",

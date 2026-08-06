@@ -38,6 +38,7 @@ use auth_http::{
 use live_projection::LiveProjectionPublisher;
 
 use crate::identity_delivery::{IdentityDeliveryError, IdentityDeliveryGateway};
+use axum::extract::State;
 use axum::http::header::RETRY_AFTER;
 use axum::http::{HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
@@ -248,7 +249,9 @@ pub fn router_with_state(state: ApiState) -> Router {
     let community_routes = community_http::routes(&state);
     let game_routes = game_http::routes(&state);
     let live_delivery_routes = live_delivery::routes(&state);
-    let app = Router::new().route("/healthz", get(healthz));
+    let app = Router::new()
+        .route("/healthz", get(healthz))
+        .route("/readyz", get(readyz));
     let app = app
         .merge(media_routes)
         .merge(auth_routes)
@@ -264,8 +267,41 @@ pub struct Health {
     pub ok: bool,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Readiness {
+    pub ok: bool,
+    pub database_schema: bool,
+    pub object_storage: bool,
+}
+
 async fn healthz() -> Json<Health> {
     Json(Health { ok: true })
+}
+
+async fn readyz(State(state): State<ApiState>) -> (StatusCode, Json<Readiness>) {
+    let (database_schema, object_storage) = tokio::join!(
+        projections::ensure_schema_ready(&state.pool),
+        state.media_store.check_readiness(),
+    );
+    let readiness = Readiness {
+        ok: database_schema.is_ok() && object_storage.is_ok(),
+        database_schema: database_schema.is_ok(),
+        object_storage: object_storage.is_ok(),
+    };
+    if !readiness.ok {
+        tracing::warn!(
+            event = "readiness_failed",
+            database_schema_ready = readiness.database_schema,
+            object_storage_ready = readiness.object_storage,
+            "API dependency readiness failed"
+        );
+    }
+    let status = if readiness.ok {
+        StatusCode::OK
+    } else {
+        StatusCode::SERVICE_UNAVAILABLE
+    };
+    (status, Json(readiness))
 }
 
 fn acquire_workload_slot(

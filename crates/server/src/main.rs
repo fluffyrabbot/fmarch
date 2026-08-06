@@ -316,7 +316,7 @@ fn bind_from_values(
         .or_else(|| {
             platform_port
                 .filter(|value| !value.trim().is_empty())
-                .map(|port| format!("0.0.0.0:{port}"))
+                .map(|port| format!("[::]:{port}"))
         })
         .unwrap_or_else(|| "127.0.0.1:4000".to_string());
     bind.parse()
@@ -577,10 +577,10 @@ mod tests {
     }
 
     #[test]
-    fn platform_port_binds_publicly_when_no_explicit_bind_exists() {
+    fn platform_port_binds_dual_stack_when_no_explicit_bind_exists() {
         assert_eq!(
             bind_from_values(None, Some("8080")).unwrap().to_string(),
-            "0.0.0.0:8080"
+            "[::]:8080"
         );
     }
 

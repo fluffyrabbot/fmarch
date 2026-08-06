@@ -121,6 +121,7 @@ mod tests {
                 }),
             )
             .route("/healthz", get(|| async { StatusCode::OK }))
+            .route("/readyz", get(|| async { StatusCode::OK }))
             .layer(middleware::from_fn_with_state(
                 admission,
                 enforce_http_admission,
@@ -189,10 +190,16 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(20)).await;
 
         let health = app
+            .clone()
             .oneshot(Request::get("/healthz").body(Body::empty()).unwrap())
             .await
             .unwrap();
         assert_eq!(health.status(), StatusCode::OK);
+        let readiness = app
+            .oneshot(Request::get("/readyz").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(readiness.status(), StatusCode::SERVICE_UNAVAILABLE);
         assert_eq!(first.await.unwrap().status(), StatusCode::OK);
     }
 }

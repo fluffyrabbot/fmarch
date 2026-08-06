@@ -111,7 +111,7 @@ order:
 
 1. deploy the exact clean `main` commit to isolated Railway staging API,
    frontend, Postgres, object storage, variables, domains, and WorkOS environment;
-2. verify staging API/frontend health and same-commit attribution;
+2. verify staging API dependency readiness, frontend health, and same-commit attribution;
 3. capture non-fixture hosted identity and deployed gameplay evidence;
 4. run the real hosted concurrent-race matrix;
 5. retain logs, metrics, traces, alerts/SLO, and incident-response evidence;

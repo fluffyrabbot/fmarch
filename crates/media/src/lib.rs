@@ -373,6 +373,12 @@ impl MediaStore {
         self.limits
     }
 
+    /// Verify that the retained directory capabilities still name the
+    /// provisioned store without reading or mutating media objects.
+    pub fn check_readiness(&self) -> Result<(), MediaError> {
+        self.verify_store_attached()
+    }
+
     #[cfg(test)]
     fn decode_bounded(&self, encoded: &[u8]) -> Result<DynamicImage, MediaError> {
         decode_bounded(encoded, self.limits)

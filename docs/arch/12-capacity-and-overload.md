@@ -116,3 +116,9 @@ The lane writes `target/capacity-overload/report.json` and proves six related ca
 The latency thresholds are intentionally generous regression tripwires for a developer machine.
 They do not establish production SLOs, maximum users, Railway sizing, or internet-path behavior.
 Hosted SLOs must be set from captured staging traffic and resource telemetry.
+
+`/healthz` is dependency-free process liveness and bypasses admission. `/readyz`
+is admitted work and returns `200` only while the complete migration set and
+the configured object store are reachable; database, storage, or global
+admission failure makes it `503`. Railway deployment admission and release
+promotion use readiness, not liveness.

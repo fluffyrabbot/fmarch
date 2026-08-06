@@ -72,6 +72,7 @@ use uuid::Uuid;
 mod community_writes;
 mod effect_projection;
 mod private_channel_projection;
+mod schema;
 pub use community_writes::{
     advance_subscription_read_cursor, append_moderation_and_project_expected, mute_public_profile,
     submit_moderation_report, subscribe_to_public_target, unmute_public_profile,
@@ -79,6 +80,7 @@ pub use community_writes::{
 };
 pub use effect_projection::{slot_effects, SlotEffectRow};
 pub use private_channel_projection::{private_channel_members, PrivateChannelMemberRow};
+pub use schema::{ensure_schema_ready, MIGRATOR};
 
 /// A row of the `votecount` running tally: the COUNT of current ballots cast at
 /// `candidate_slot` in `phase_id` (unweighted; Phase-3 ruling).
