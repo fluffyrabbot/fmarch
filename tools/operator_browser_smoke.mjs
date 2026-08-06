@@ -148,7 +148,7 @@ const pages = [
       "artifact metadata unreadable",
       "--compare-with target/operator-proof/game-specific-audit-bundle-20260613T000000Z.json",
       "export_operator_proof_status -- --fixture artifact-provenance --output target/operator-proof/current-status-audit-check.json",
-      "audit_operator_proof_status -- --output target/operator-proof/current-status-audit-report.json crates/commands/fixtures/operator-proof-status-artifact-provenance.snapshot.json target/operator-proof/current-status-audit-check.json",
+      "audit_operator_proof_status -- --output target/operator-proof/current-status-audit-report.json crates/operator_proof/fixtures/operator-proof-status-artifact-provenance.snapshot.json target/operator-proof/current-status-audit-check.json",
       "audit_operator_proof_artifacts -- --output target/operator-proof/current-artifact-go-no-go-report.json",
       "audit_operator_proof_artifact_retention -- --output target/operator-proof/current-artifact-retention-report.json",
       "audit_projection_rebuild_artifact -- --output target/operator-proof/current-projection-rebuild-report.json",
@@ -602,7 +602,7 @@ const jsonPages = [
         expected_version: 1,
         audit_report: {
           expected_path:
-            "crates/commands/fixtures/operator-proof-status-artifact-provenance.snapshot.json",
+            "crates/operator_proof/fixtures/operator-proof-status-artifact-provenance.snapshot.json",
           actual_path: "target/operator-proof/current-status-audit-check.json",
           diff_count: 0,
         },
@@ -875,7 +875,7 @@ function determinismFuzzBootstrapReport() {
     artifact_path: determinismFuzzReport,
     ok: true,
     command:
-      "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo run -q -p commands --bin audit_determinism_fuzz_artifact -- --output target/operator-proof/current-determinism-fuzz-report.json",
+      "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo run -q -p operator_proof --bin audit_determinism_fuzz_artifact -- --output target/operator-proof/current-determinism-fuzz-report.json",
     test_filter: "replay_audit_and_rebuild_deterministically",
     elapsed_ms: 1234,
     family_count: families.length,
@@ -1402,7 +1402,7 @@ async function writeLocalReportBootstraps() {
         artifact_path: statusAuditReport,
         ok: true,
         expected_path:
-          "crates/commands/fixtures/operator-proof-status-artifact-provenance.snapshot.json",
+          "crates/operator_proof/fixtures/operator-proof-status-artifact-provenance.snapshot.json",
         actual_path: statusAuditExport,
         normalized_fields: [
           "$.game",
@@ -1728,7 +1728,7 @@ async function writeStatusAuditReport() {
     "--",
     "--output",
     statusAuditReport,
-    "crates/commands/fixtures/operator-proof-status-artifact-provenance.snapshot.json",
+    "crates/operator_proof/fixtures/operator-proof-status-artifact-provenance.snapshot.json",
     statusAuditExport,
   ]);
 }

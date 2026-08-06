@@ -2,7 +2,6 @@
 // Shared harness: tests/pipeline/common.rs. Day family: tests/pipeline/day_events.rs.
 
 use caps::Principal;
-use commands::operator_process::{run_bounded_process, ProcessLimits};
 use commands::{
     audit_engine_snapshot_identity_boundary,
     audit_resolution_envelopes, handle, handle_idempotent, inspect_resolution_traces,
@@ -21,26 +20,10 @@ use projections::{
 };
 use sqlx::{PgPool, Row};
 use std::collections::{BTreeMap, BTreeSet};
-use std::ffi::OsString;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::{Command as ProcessCommand, Output};
-use std::sync::{Condvar, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 use uuid::Uuid;
-
-// The repo default caps the SQLx harness at four threads; keep an independent
-// ceiling here so an explicit test-thread override cannot fan out child
-// processes without bound.
-const MAX_CONCURRENT_MINIMIZER_CHILDREN: usize = 4;
-static MINIMIZER_CHILD_SLOTS: OnceLock<(Mutex<usize>, Condvar)> = OnceLock::new();
-
-#[derive(Debug, PartialEq, Eq)]
-struct ProcessInvocation {
-    program: OsString,
-    current_dir: Option<PathBuf>,
-    fixed_args: Vec<OsString>,
-}
 
 #[derive(Debug)]
 struct InProcessCommandOutput {
@@ -58,20 +41,6 @@ impl InProcessCommandStatus {
     }
 }
 
-struct MinimizeNightFixturePermit;
-
-impl Drop for MinimizeNightFixturePermit {
-    fn drop(&mut self) {
-        let (active, available) = MINIMIZER_CHILD_SLOTS
-            .get()
-            .expect("minimizer child slots initialized before permit creation");
-        let mut active = active
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        *active = active.saturating_sub(1);
-        available.notify_one();
-    }
-}
 #[sqlx::test(migrations = "../projections/migrations")]
 async fn host_phase_movement_respects_pack_cadence(pool: PgPool) {
     let game = Uuid::new_v4();
@@ -653,6 +622,7 @@ async fn start_game_declares_mafia_universe_mason_neighbor_private_channels(pool
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_mafia_universe_town_strongman_pierce(pool: PgPool) {
     let host = user("host_mu_town_strongman");
     let game = Uuid::new_v4();
@@ -817,6 +787,7 @@ async fn host_resolve_phase_carries_mafia_universe_town_strongman_pierce(pool: P
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_projects_huntsman_guard_retaliation(pool: PgPool) {
     let host = user("host_huntsman_guard");
     let game = Uuid::new_v4();
@@ -5987,6 +5958,7 @@ async fn concurrent_player_post_and_complete_game_serialize_terminal_boundary(po
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_reveals_town_alignment_without_role(pool: PgPool) {
     let host = user("host_alignment_reveal");
     let game = Uuid::new_v4();
@@ -6164,6 +6136,7 @@ async fn host_resolve_phase_reveals_town_alignment_without_role(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_mafia_universe_reveal_town(pool: PgPool) {
     let host = user("host_mu_alignment_reveal");
     let game = Uuid::new_v4();
@@ -6342,6 +6315,7 @@ async fn host_resolve_phase_carries_mafia_universe_reveal_town(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_mafia_universe_alignment_oracle_reveal(pool: PgPool) {
     let host = user("host_mu_alignment_oracle");
     let game = Uuid::new_v4();
@@ -6616,6 +6590,7 @@ async fn host_resolve_phase_carries_mafia_universe_alignment_oracle_reveal(pool:
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_mafia_universe_role_oracle_reveal(pool: PgPool) {
     let host = user("host_mu_role_oracle");
     let game = Uuid::new_v4();
@@ -6890,6 +6865,7 @@ async fn host_resolve_phase_carries_mafia_universe_role_oracle_reveal(pool: PgPo
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_mafia_universe_janitor_concealment(pool: PgPool) {
     let host = user("host_mu_janitor");
     let game = Uuid::new_v4();
@@ -7072,6 +7048,7 @@ async fn host_resolve_phase_carries_mafia_universe_janitor_concealment(pool: PgP
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_mafia_universe_backup_inheritance(pool: PgPool) {
     let host = user("host_mu_backup");
     let game = Uuid::new_v4();
@@ -7448,6 +7425,7 @@ async fn host_resolve_phase_carries_mafia_universe_backup_inheritance(pool: PgPo
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_applies_gladiator_vote_duel(pool: PgPool) {
     let host = user("host_vote_duel");
     let game = Uuid::new_v4();
@@ -7663,6 +7641,7 @@ async fn host_resolve_phase_applies_gladiator_vote_duel(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_projects_hero_instigator_kill_on_vote_duel(pool: PgPool) {
     let host = user("host_hero_vote_duel");
     let game = Uuid::new_v4();
@@ -7896,6 +7875,7 @@ async fn host_resolve_phase_projects_hero_instigator_kill_on_vote_duel(pool: PgP
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_applies_gladiator_vote_duel_no_ballots(pool: PgPool) {
     let host = user("host_vote_duel_no_ballots");
     let game = Uuid::new_v4();
@@ -8075,6 +8055,7 @@ async fn host_resolve_phase_applies_gladiator_vote_duel_no_ballots(pool: PgPool)
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_applies_gladiator_vote_duel_tied_ballots(pool: PgPool) {
     let host = user("host_vote_duel_tied_ballots");
     let game = Uuid::new_v4();
@@ -8274,6 +8255,7 @@ async fn host_resolve_phase_applies_gladiator_vote_duel_tied_ballots(pool: PgPoo
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_mafiascum_day_self_destruct_trade(pool: PgPool) {
     let host = user("host_day_self_destruct");
     let game = Uuid::new_v4();
@@ -8480,6 +8462,7 @@ async fn host_resolve_phase_carries_mafiascum_day_self_destruct_trade(pool: PgPo
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_twilight_self_destruct_window(pool: PgPool) {
     let host = user("host_twilight_self_destruct");
     let game = Uuid::new_v4();
@@ -8932,6 +8915,7 @@ async fn submit_action_resolves_instant_self_destruct_atomically(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_mafiascum_day_vigilante_kill(pool: PgPool) {
     let host = user("host_day_vigilante");
     let game = Uuid::new_v4();
@@ -9121,6 +9105,7 @@ async fn host_resolve_phase_carries_mafiascum_day_vigilante_kill(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_mafiascum_serial_killer_win(pool: PgPool) {
     let host = user("host_serial_killer");
     let game = Uuid::new_v4();
@@ -9268,6 +9253,7 @@ async fn host_resolve_phase_carries_mafiascum_serial_killer_win(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_serial_killer_blocks_mafia_parity(pool: PgPool) {
     let host = user("host_serial_killer_blocks_parity");
     let game = Uuid::new_v4();
@@ -9416,6 +9402,7 @@ async fn host_resolve_phase_serial_killer_blocks_mafia_parity(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_day_action_win_runs_after_announcement(pool: PgPool) {
     let host = user("host_day_action_win");
     let game = Uuid::new_v4();
@@ -9664,6 +9651,7 @@ async fn host_resolve_phase_day_action_win_runs_after_announcement(pool: PgPool)
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_mafiascum_white_wolf_king_dual_window(pool: PgPool) {
     let host = user("host_mafiascum_white_wolf_king");
 
@@ -10031,6 +10019,7 @@ async fn host_resolve_phase_carries_mafiascum_white_wolf_king_dual_window(pool: 
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_mafiascum_governor_veto(pool: PgPool) {
     let host = user("host_governor_veto");
     let game = Uuid::new_v4();
@@ -10407,6 +10396,7 @@ async fn host_resolve_phase_reveals_killed_slot_without_endgame(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_conceals_janitor_and_flipless_death_reveals(pool: PgPool) {
     let host = user("host_concealed_death_reveal");
     let game = Uuid::new_v4();
@@ -10587,6 +10577,7 @@ async fn host_resolve_phase_conceals_janitor_and_flipless_death_reveals(pool: Pg
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_projects_alignment_only_death_reveal(pool: PgPool) {
     let host = user("host_alignment_only_death_reveal");
     let game = Uuid::new_v4();
@@ -13073,7 +13064,7 @@ async fn audit_large_action_graph_performance_artifact_in_process_writes_pass_an
 async fn audit_determinism_fuzz_artifact_in_process_writes_pass_and_missing_family_reports(
     _pool: PgPool,
 ) {
-    let family_specs = commands::operator_proof::determinism_fuzz_family_specs();
+    let family_specs = operator_proof::determinism_fuzz_family_specs();
     let expected_family_count = family_specs.len() as u64;
     let expected_seed_count = family_specs
         .iter()
@@ -13114,7 +13105,7 @@ async fn audit_determinism_fuzz_artifact_in_process_writes_pass_and_missing_fami
     assert!(pass_file["command"]
         .as_str()
         .expect("passing determinism command")
-        .contains("cargo test -p commands --test pipeline replay_audit_and_rebuild_deterministically -- --nocapture"));
+        .contains("cargo test -p commands --test pipeline replay_audit_and_rebuild_deterministically -- --ignored --nocapture"));
     assert_eq!(pass_file["family_count"], expected_family_count);
     assert_eq!(pass_file["passed_family_count"], expected_family_count);
     assert_eq!(pass_file["failed_family_count"], 0);
@@ -13372,7 +13363,7 @@ async fn run_audit_resolution_diff_artifact_in_process(
     let audit = audit_resolution_envelopes(pool, game)
         .await
         .expect("run resolution diff audit in process");
-    let report = commands::operator_proof::build_operator_resolution_diff_report(
+    let report = operator_proof::build_operator_resolution_diff_report(
         output_path.to_string_lossy(),
         audit,
     );
@@ -13394,7 +13385,7 @@ async fn run_audit_trace_inspection_artifact_in_process(
     let inspection = inspect_resolution_traces(pool, game, run_id)
         .await
         .expect("inspect resolution traces in process");
-    let report = commands::operator_proof::build_operator_trace_inspection_report(
+    let report = operator_proof::build_operator_trace_inspection_report(
         output_path.to_string_lossy(),
         inspection,
     );
@@ -13415,7 +13406,7 @@ async fn run_audit_projection_rebuild_artifact_in_process(
     let projection_report = audit_rebuild(pool, game)
         .await
         .expect("audit projection rebuild in process");
-    let report = commands::operator_proof::build_operator_projection_rebuild_audit_report(
+    let report = operator_proof::build_operator_projection_rebuild_audit_report(
         output_path.to_string_lossy(),
         projection_report,
     );
@@ -13441,7 +13432,7 @@ async fn run_audit_large_action_graph_performance_artifact_in_process(
     )
     .await
     .expect("run large action graph proof in process");
-    let report = commands::operator_proof::build_operator_large_action_graph_performance_report(
+    let report = operator_proof::build_operator_large_action_graph_performance_report(
         output_path.to_string_lossy(),
         proof,
     );
@@ -13460,7 +13451,7 @@ fn run_audit_determinism_fuzz_artifact_in_process(
 ) -> InProcessCommandOutput {
     let test_filter = test_filter.unwrap_or("replay_audit_and_rebuild_deterministically");
     let output = if test_filter == "replay_audit_and_rebuild_deterministically" {
-        commands::operator_proof::determinism_fuzz_family_specs()
+        operator_proof::determinism_fuzz_family_specs()
             .into_iter()
             .map(|family| format!("test {} ... ok", family.selector))
             .collect::<Vec<_>>()
@@ -13468,8 +13459,10 @@ fn run_audit_determinism_fuzz_artifact_in_process(
     } else {
         String::new()
     };
-    let command = format!("cargo test -p commands --test pipeline {test_filter} -- --nocapture");
-    let report = commands::operator_proof::build_operator_determinism_fuzz_report(
+    let command = format!(
+        "RUST_MIN_STACK=8388608 cargo test -p commands --test pipeline {test_filter} -- --ignored --nocapture"
+    );
+    let report = operator_proof::build_operator_determinism_fuzz_report(
         output_path.to_string_lossy(),
         command,
         test_filter,
@@ -13545,28 +13538,8 @@ fn test_operator_proof_artifact_path(label: &str, game: Uuid) -> PathBuf {
         .join(format!("test-{label}-{game}.json"))
 }
 
-async fn database_url_for_pool(pool: &PgPool) -> String {
-    let database: String = sqlx::query_scalar("SELECT current_database()")
-        .fetch_one(pool)
-        .await
-        .expect("query current test database");
-    let base = std::env::var("DATABASE_URL").expect("DATABASE_URL for sqlx test");
-    let (without_query, query) = base
-        .split_once('?')
-        .map(|(left, right)| (left, Some(right)))
-        .unwrap_or((base.as_str(), None));
-    let slash = without_query
-        .rfind('/')
-        .expect("DATABASE_URL includes database path");
-    let mut url = format!("{}/{}", &without_query[..slash], database);
-    if let Some(query) = query {
-        url.push('?');
-        url.push_str(query);
-    }
-    url
-}
-
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit generated command audit lane"]
 async fn seeded_day_vote_scenarios_replay_audit_and_rebuild_deterministically(pool: PgPool) {
     for seed in [101_u64, 202, 303, 404, 505] {
         let mut rng = DeterministicRng::new(seed);
@@ -13766,6 +13739,7 @@ async fn seeded_day_vote_scenarios_replay_audit_and_rebuild_deterministically(po
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit generated command audit lane"]
 async fn seeded_night_action_graphs_replay_audit_and_rebuild_deterministically(pool: PgPool) {
     for seed in [6101_u64, 6202, 6303, 6404, 6505] {
         let mut rng = DeterministicRng::new(seed);
@@ -13967,6 +13941,7 @@ async fn seeded_night_action_graphs_replay_audit_and_rebuild_deterministically(p
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit generated command audit lane"]
 async fn seeded_trigger_dependency_graphs_replay_audit_and_rebuild_deterministically(pool: PgPool) {
     for (seed, case_name) in [
         (7101_u64, "pgo"),
@@ -14301,3587 +14276,12 @@ async fn seeded_trigger_dependency_graphs_replay_audit_and_rebuild_deterministic
     }
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
-async fn minimized_trigger_dependency_fixtures_replay_semantic_expectations(pool: PgPool) {
-    for (
-        stem,
-        fixture_json,
-        expected_roster,
-        expected_actions,
-        expected_audited,
-        expected_traces,
-        expected_expectations,
-    ) in [
-        (
-            "night-babysitter-dependency-minimized",
-            include_str!("../fixtures/night-babysitter-dependency-minimized.json"),
-            4,
-            3,
-            1,
-            1,
-            3,
-        ),
-        (
-            "night-hider-dependency-minimized",
-            include_str!("../fixtures/night-hider-dependency-minimized.json"),
-            3,
-            2,
-            1,
-            1,
-            3,
-        ),
-        (
-            "night-pgo-trigger-minimized",
-            include_str!("../fixtures/night-pgo-trigger-minimized.json"),
-            2,
-            1,
-            1,
-            1,
-            4,
-        ),
-        (
-            "night-extra-action-generated-minimized",
-            include_str!("../fixtures/night-extra-action-generated-minimized.json"),
-            4,
-            2,
-            2,
-            2,
-            5,
-        ),
-        (
-            "night-item-grant-generated-minimized",
-            include_str!("../fixtures/night-item-grant-generated-minimized.json"),
-            2,
-            1,
-            2,
-            2,
-            5,
-        ),
-        (
-            "night-private-notification-generated-minimized",
-            include_str!("../fixtures/night-private-notification-generated-minimized.json"),
-            2,
-            1,
-            2,
-            2,
-            6,
-        ),
-    ] {
-        let fixture: serde_json::Value =
-            serde_json::from_str(fixture_json).expect("minimized fixture should parse");
-        assert_eq!(
-            fixture["roster"].as_array().map_or(0, Vec::len),
-            expected_roster,
-            "{stem} persisted roster size"
-        );
-        assert_eq!(
-            fixture["actions"].as_array().map_or(0, Vec::len),
-            expected_actions,
-            "{stem} persisted action size"
-        );
-        assert_eq!(
-            generated_expectation_count(&fixture["expectations"]),
-            expected_expectations,
-            "{stem} semantic expectation count"
-        );
-
-        let artifacts = GeneratedShrinkArtifacts::new(&format!("{stem}-semantic-replay"));
-        artifacts.remove_existing();
-        artifacts.write_fixture(fixture_json);
-        let report = artifacts.run_minimizer(&pool).await;
-
-        assert_eq!(report["original"]["ok"], true, "{stem} should replay");
-        assert_eq!(
-            report["original"]["resolution_audited"],
-            serde_json::json!(expected_audited),
-            "{stem} should audit expected resolution envelopes"
-        );
-        assert_eq!(
-            report["original"]["trace_count"],
-            serde_json::json!(expected_traces),
-            "{stem} should inspect expected anchored traces"
-        );
-        assert_eq!(
-            report["original"]["projection_audit_ok"],
-            serde_json::json!(true),
-            "{stem} projection rebuild should be drift-free"
-        );
-        assert_eq!(
-            report["original"]["semantic_expectations_checked"],
-            serde_json::json!(expected_expectations),
-            "{stem} should check every declared semantic expectation"
-        );
-        assert_eq!(report["minimized"]["ok"], true, "{stem} minimized replay");
-        assert_eq!(
-            report["minimized"]["semantic_expectations_checked"],
-            serde_json::json!(expected_expectations),
-            "{stem} minimized expectation count"
-        );
-        assert_eq!(
-            report["reduction"]["replay_success"],
-            serde_json::json!(true),
-            "{stem} success fixture should remain replayable"
-        );
-        assert_eq!(
-            report["reduction"]["success_invariant_preserved"],
-            serde_json::json!(true),
-            "{stem} success reduction should preserve semantic expectations"
-        );
-    }
-}
+// Derived minimized, nonminimal, and bad-expectation fixture replays were removed.
+// The generated audit cases below synthesize the same semantic families and reduce them
+// through the in-process minimizer, so no checked-in fixture cross-product can drift.
 
 #[sqlx::test(migrations = "../projections/migrations")]
-async fn checked_in_generated_action_bad_expectation_fixture_preserves_semantic_failure(
-    pool: PgPool,
-) {
-    for (family, bad_stem, bad_fixture_json, success_fixture_json, expected_expectations) in [
-        (
-            "extra-action",
-            "night-extra-action-generated-bad-expectation",
-            include_str!("../fixtures/night-extra-action-generated-bad-expectation.json"),
-            include_str!("../fixtures/night-extra-action-generated-minimized.json"),
-            5,
-        ),
-        (
-            "item-grant",
-            "night-item-grant-generated-bad-expectation",
-            include_str!("../fixtures/night-item-grant-generated-bad-expectation.json"),
-            include_str!("../fixtures/night-item-grant-generated-minimized.json"),
-            5,
-        ),
-        (
-            "private-notification",
-            "night-private-notification-generated-bad-expectation",
-            include_str!("../fixtures/night-private-notification-generated-bad-expectation.json"),
-            include_str!("../fixtures/night-private-notification-generated-minimized.json"),
-            6,
-        ),
-    ] {
-        let bad_fixture: serde_json::Value =
-            serde_json::from_str(bad_fixture_json).expect("bad generated-action fixture parses");
-        assert_eq!(
-            generated_expectation_count(&bad_fixture["expectations"]),
-            expected_expectations,
-            "{bad_stem} should keep semantic expectation metadata"
-        );
-
-        let bad_artifacts = GeneratedShrinkArtifacts::new(&format!("{bad_stem}-semantic-replay"));
-        bad_artifacts.remove_existing();
-        bad_artifacts.write_fixture(bad_fixture_json);
-        let bad_report = bad_artifacts.run_minimizer(&pool).await;
-
-        assert_eq!(
-            bad_report["original"]["ok"], false,
-            "{bad_stem} bad original should fail"
-        );
-        assert_eq!(
-            bad_report["original"]["failure_class"], "semantic_expectation",
-            "{bad_stem} bad original failure class"
-        );
-        assert_eq!(
-            bad_report["minimized"]["ok"], false,
-            "{bad_stem} bad minimized should fail"
-        );
-        assert_eq!(
-            bad_report["minimized"]["failure_class"], "semantic_expectation",
-            "{bad_stem} bad minimized failure class"
-        );
-        assert_eq!(
-            bad_report["reduction"]["replay_success"],
-            serde_json::json!(false),
-            "{bad_stem} bad reduction should remain failing"
-        );
-        assert_eq!(
-            bad_report["reduction"]["failure_class_preserved"],
-            serde_json::json!(true),
-            "{bad_stem} bad reduction should preserve semantic failure"
-        );
-        assert_eq!(
-            bad_report["write_reduced"]["wrote"],
-            serde_json::json!(true),
-            "{bad_stem} bad reduced artifact should be written"
-        );
-        assert_eq!(
-            bad_report["write_reduced"]["promoted_success_fixture"],
-            serde_json::json!(false),
-            "{bad_stem} bad reduced artifact should not be promoted"
-        );
-
-        let success_artifacts = GeneratedShrinkArtifacts::new(&format!(
-            "night-{family}-generated-success-after-bad-expectation"
-        ));
-        success_artifacts.remove_existing();
-        success_artifacts.write_fixture(success_fixture_json);
-        let success_report = success_artifacts.run_minimizer(&pool).await;
-        assert_eq!(
-            success_report["original"]["ok"], true,
-            "{family} success fixture should replay after bad expectation"
-        );
-        assert_eq!(
-            success_report["original"]["semantic_expectations_checked"],
-            serde_json::json!(expected_expectations),
-            "{family} success fixture expectation count"
-        );
-        assert_eq!(
-            success_report["original"]["projection_audit_ok"],
-            serde_json::json!(true),
-            "{family} success fixture projection audit"
-        );
-        assert_eq!(
-            success_report["write_reduced"]["promoted_success_fixture"],
-            serde_json::json!(true),
-            "{family} success fixture remains promotable"
-        );
-    }
-}
-
-#[sqlx::test(migrations = "../projections/migrations")]
-async fn checked_in_backup_generated_fixtures_replay_semantic_expectations(pool: PgPool) {
-    for (
-        _family,
-        success_stem,
-        success_fixture_json,
-        bad_stem,
-        bad_fixture_json,
-        expected_roster,
-        expected_expectations,
-    ) in [
-        (
-            "backup-inheritance",
-            "night-backup-inheritance-generated-minimized",
-            include_str!("../fixtures/night-backup-inheritance-generated-minimized.json"),
-            "night-backup-inheritance-generated-bad-expectation",
-            include_str!("../fixtures/night-backup-inheritance-generated-bad-expectation.json"),
-            3,
-            2,
-        ),
-        (
-            "backup-projection-state",
-            "night-backup-projection-state-generated-minimized",
-            include_str!("../fixtures/night-backup-projection-state-generated-minimized.json"),
-            "night-backup-projection-state-generated-bad-expectation",
-            include_str!(
-                "../fixtures/night-backup-projection-state-generated-bad-expectation.json"
-            ),
-            4,
-            3,
-        ),
-    ] {
-        let success_fixture: serde_json::Value =
-            serde_json::from_str(success_fixture_json).expect("backup fixture parses");
-        assert_eq!(
-            success_fixture["roster"].as_array().map_or(0, Vec::len),
-            expected_roster,
-            "{success_stem} roster size"
-        );
-        assert_eq!(
-            success_fixture["actions"].as_array().map_or(0, Vec::len),
-            1,
-            "{success_stem} action count"
-        );
-        assert_eq!(
-            success_fixture["setup_phases"]
-                .as_array()
-                .map_or(0, Vec::len),
-            2,
-            "{success_stem} setup phase count"
-        );
-        assert_eq!(
-            generated_expectation_count(&success_fixture["expectations"]),
-            expected_expectations,
-            "{success_stem} semantic expectation count"
-        );
-
-        let success_artifacts =
-            GeneratedShrinkArtifacts::new(&format!("{success_stem}-semantic-replay"));
-        success_artifacts.remove_existing();
-        success_artifacts.write_fixture(success_fixture_json);
-        let success_report = success_artifacts.run_minimizer(&pool).await;
-
-        assert_eq!(
-            success_report["original"]["ok"], true,
-            "{success_stem} should replay"
-        );
-        assert_eq!(
-            success_report["original"]["resolution_audited"],
-            serde_json::json!(3),
-            "{success_stem} audited resolution count"
-        );
-        assert_eq!(
-            success_report["original"]["trace_count"],
-            serde_json::json!(3),
-            "{success_stem} trace count"
-        );
-        assert_eq!(
-            success_report["original"]["projection_audit_ok"],
-            serde_json::json!(true),
-            "{success_stem} projection audit"
-        );
-        assert_eq!(
-            success_report["original"]["semantic_expectations_checked"],
-            serde_json::json!(expected_expectations),
-            "{success_stem} semantic expectation count"
-        );
-        assert_eq!(
-            success_report["minimized"]["ok"], true,
-            "{success_stem} minimized replay"
-        );
-        assert_eq!(
-            success_report["minimized"]["semantic_expectations_checked"],
-            serde_json::json!(expected_expectations),
-            "{success_stem} minimized semantic expectation count"
-        );
-        assert_eq!(
-            success_report["reduction"]["replay_success"],
-            serde_json::json!(true),
-            "{success_stem} reduction replay"
-        );
-        assert_eq!(
-            success_report["reduction"]["success_invariant_preserved"],
-            serde_json::json!(true),
-            "{success_stem} success invariant"
-        );
-        assert_eq!(
-            success_report["write_reduced"]["promoted_success_fixture"],
-            serde_json::json!(true),
-            "{success_stem} promoted success fixture"
-        );
-
-        let bad_fixture: serde_json::Value =
-            serde_json::from_str(bad_fixture_json).expect("bad backup fixture parses");
-        assert_eq!(
-            generated_expectation_count(&bad_fixture["expectations"]),
-            expected_expectations,
-            "{bad_stem} semantic expectation count"
-        );
-        let bad_artifacts = GeneratedShrinkArtifacts::new(&format!("{bad_stem}-semantic-replay"));
-        bad_artifacts.remove_existing();
-        bad_artifacts.write_fixture(bad_fixture_json);
-        let bad_report = bad_artifacts.run_minimizer(&pool).await;
-
-        assert_eq!(
-            bad_report["original"]["ok"], false,
-            "{bad_stem} bad original should fail"
-        );
-        assert_eq!(
-            bad_report["original"]["failure_class"], "semantic_expectation",
-            "{bad_stem} bad original failure class"
-        );
-        assert_eq!(
-            bad_report["minimized"]["ok"], false,
-            "{bad_stem} bad minimized should fail"
-        );
-        assert_eq!(
-            bad_report["minimized"]["failure_class"], "semantic_expectation",
-            "{bad_stem} bad minimized failure class"
-        );
-        assert_eq!(
-            bad_report["reduction"]["replay_success"],
-            serde_json::json!(false),
-            "{bad_stem} bad reduction should remain failing"
-        );
-        assert_eq!(
-            bad_report["reduction"]["failure_class_preserved"],
-            serde_json::json!(true),
-            "{bad_stem} bad reduction should preserve semantic failure"
-        );
-        assert_eq!(
-            bad_report["write_reduced"]["wrote"],
-            serde_json::json!(true),
-            "{bad_stem} bad reduced artifact should be written"
-        );
-        assert_eq!(
-            bad_report["write_reduced"]["promoted_success_fixture"],
-            serde_json::json!(false),
-            "{bad_stem} bad reduced artifact should not be promoted"
-        );
-    }
-}
-
-#[sqlx::test(migrations = "../projections/migrations")]
-async fn checked_in_conversion_generated_fixtures_replay_semantic_expectations(pool: PgPool) {
-    for (success_stem, success_fixture_json, bad_stem, bad_fixture_json, expected_expectations) in [
-        (
-            "night-conversion-deprogramming-generated-minimized",
-            include_str!("../fixtures/night-conversion-deprogramming-generated-minimized.json"),
-            "night-conversion-deprogramming-generated-bad-expectation",
-            include_str!(
-                "../fixtures/night-conversion-deprogramming-generated-bad-expectation.json"
-            ),
-            3,
-        ),
-        (
-            "night-conversion-projection-state-generated-minimized",
-            include_str!("../fixtures/night-conversion-projection-state-generated-minimized.json"),
-            "night-conversion-projection-state-generated-bad-expectation",
-            include_str!(
-                "../fixtures/night-conversion-projection-state-generated-bad-expectation.json"
-            ),
-            4,
-        ),
-    ] {
-        let success_fixture: serde_json::Value =
-            serde_json::from_str(success_fixture_json).expect("conversion fixture parses");
-        assert_eq!(
-            success_fixture["roster"].as_array().map_or(0, Vec::len),
-            4,
-            "{success_stem} roster size"
-        );
-        assert_eq!(
-            success_fixture["actions"].as_array().map_or(0, Vec::len),
-            1,
-            "{success_stem} action count"
-        );
-        assert_eq!(
-            success_fixture["setup_phases"]
-                .as_array()
-                .map_or(0, Vec::len),
-            2,
-            "{success_stem} setup phase count"
-        );
-        assert_eq!(
-            generated_expectation_count(&success_fixture["expectations"]),
-            expected_expectations,
-            "{success_stem} semantic expectation count"
-        );
-
-        let success_artifacts =
-            GeneratedShrinkArtifacts::new(&format!("{success_stem}-semantic-replay"));
-        success_artifacts.remove_existing();
-        success_artifacts.write_fixture(success_fixture_json);
-        let success_report = success_artifacts.run_minimizer(&pool).await;
-
-        assert_eq!(
-            success_report["original"]["ok"], true,
-            "{success_stem} should replay"
-        );
-        assert_eq!(
-            success_report["original"]["resolution_audited"],
-            serde_json::json!(3),
-            "{success_stem} audited resolution count"
-        );
-        assert_eq!(
-            success_report["original"]["trace_count"],
-            serde_json::json!(3),
-            "{success_stem} trace count"
-        );
-        assert_eq!(
-            success_report["original"]["projection_audit_ok"],
-            serde_json::json!(true),
-            "{success_stem} projection audit"
-        );
-        assert_eq!(
-            success_report["original"]["semantic_expectations_checked"],
-            serde_json::json!(expected_expectations),
-            "{success_stem} semantic expectation count"
-        );
-        assert_eq!(
-            success_report["minimized"]["ok"], true,
-            "{success_stem} minimized replay"
-        );
-        assert_eq!(
-            success_report["minimized"]["semantic_expectations_checked"],
-            serde_json::json!(expected_expectations),
-            "{success_stem} minimized semantic expectation count"
-        );
-        assert_eq!(
-            success_report["reduction"]["replay_success"],
-            serde_json::json!(true),
-            "{success_stem} reduction replay"
-        );
-        assert_eq!(
-            success_report["reduction"]["success_invariant_preserved"],
-            serde_json::json!(true),
-            "{success_stem} success invariant"
-        );
-        assert_eq!(
-            success_report["write_reduced"]["promoted_success_fixture"],
-            serde_json::json!(true),
-            "{success_stem} promoted success fixture"
-        );
-
-        let bad_fixture: serde_json::Value =
-            serde_json::from_str(bad_fixture_json).expect("bad conversion fixture parses");
-        assert_eq!(
-            generated_expectation_count(&bad_fixture["expectations"]),
-            expected_expectations,
-            "{bad_stem} semantic expectation count"
-        );
-
-        let bad_artifacts = GeneratedShrinkArtifacts::new(&format!("{bad_stem}-semantic-replay"));
-        bad_artifacts.remove_existing();
-        bad_artifacts.write_fixture(bad_fixture_json);
-        let bad_report = bad_artifacts.run_minimizer(&pool).await;
-
-        assert_eq!(
-            bad_report["original"]["ok"], false,
-            "{bad_stem} bad original should fail"
-        );
-        assert_eq!(
-            bad_report["original"]["failure_class"], "semantic_expectation",
-            "{bad_stem} bad original failure class"
-        );
-        assert_eq!(
-            bad_report["minimized"]["ok"], false,
-            "{bad_stem} bad minimized should fail"
-        );
-        assert_eq!(
-            bad_report["minimized"]["failure_class"], "semantic_expectation",
-            "{bad_stem} bad minimized failure class"
-        );
-        assert_eq!(
-            bad_report["reduction"]["replay_success"],
-            serde_json::json!(false),
-            "{bad_stem} bad reduction should remain failing"
-        );
-        assert_eq!(
-            bad_report["reduction"]["failure_class_preserved"],
-            serde_json::json!(true),
-            "{bad_stem} bad reduction should preserve semantic failure"
-        );
-        assert_eq!(
-            bad_report["write_reduced"]["wrote"],
-            serde_json::json!(true),
-            "{bad_stem} bad reduced artifact should be written"
-        );
-        assert_eq!(
-            bad_report["write_reduced"]["promoted_success_fixture"],
-            serde_json::json!(false),
-            "{bad_stem} bad reduced artifact should not be promoted"
-        );
-    }
-}
-
-#[sqlx::test(migrations = "../projections/migrations")]
-async fn checked_in_mark_clear_generated_fixtures_replay_semantic_expectations(pool: PgPool) {
-    for (
-        success_stem,
-        success_fixture_json,
-        bad_stem,
-        bad_fixture_json,
-        expected_roster,
-        expected_actions,
-        expected_inner_events,
-        expected_trace_decisions,
-        expected_player_notifications,
-        expected_absent_slot_effects,
-        expected_expectations,
-    ) in [
-        (
-            "night-mark-clear-visibility-generated-minimized",
-            include_str!("../fixtures/night-mark-clear-visibility-generated-minimized.json"),
-            "night-mark-clear-visibility-generated-bad-expectation",
-            include_str!("../fixtures/night-mark-clear-visibility-generated-bad-expectation.json"),
-            4,
-            3,
-            4,
-            1,
-            0,
-            0,
-            5,
-        ),
-        (
-            "night-mark-clear-expiry-generated-minimized",
-            include_str!("../fixtures/night-mark-clear-expiry-generated-minimized.json"),
-            "night-mark-clear-expiry-generated-bad-expectation",
-            include_str!("../fixtures/night-mark-clear-expiry-generated-bad-expectation.json"),
-            3,
-            1,
-            2,
-            0,
-            2,
-            2,
-            6,
-        ),
-    ] {
-        let success_fixture: serde_json::Value =
-            serde_json::from_str(success_fixture_json).expect("mark/clear fixture parses");
-        assert_eq!(
-            success_fixture["roster"].as_array().map_or(0, Vec::len),
-            expected_roster,
-            "{success_stem} roster size"
-        );
-        assert_eq!(
-            success_fixture["actions"].as_array().map_or(0, Vec::len),
-            expected_actions,
-            "{success_stem} action count"
-        );
-        assert_eq!(
-            success_fixture["setup_phases"]
-                .as_array()
-                .map_or(0, Vec::len),
-            1,
-            "{success_stem} setup phase count"
-        );
-        assert_eq!(
-            success_fixture["expectations"]["inner_events"]
-                .as_array()
-                .map_or(0, Vec::len),
-            expected_inner_events,
-            "{success_stem} inner event expectation count"
-        );
-        assert_eq!(
-            success_fixture["expectations"]["trace_decisions"]
-                .as_array()
-                .map_or(0, Vec::len),
-            expected_trace_decisions,
-            "{success_stem} trace decision expectation count"
-        );
-        assert_eq!(
-            success_fixture["expectations"]["player_notifications"]
-                .as_array()
-                .map_or(0, Vec::len),
-            expected_player_notifications,
-            "{success_stem} player notification expectation count"
-        );
-        assert_eq!(
-            success_fixture["expectations"]["absent_slot_effects"]
-                .as_array()
-                .map_or(0, Vec::len),
-            expected_absent_slot_effects,
-            "{success_stem} absent slot effect expectation count"
-        );
-        assert_eq!(
-            generated_expectation_count(&success_fixture["expectations"]),
-            expected_expectations,
-            "{success_stem} semantic expectation count"
-        );
-
-        let success_artifacts =
-            GeneratedShrinkArtifacts::new(&format!("{success_stem}-semantic-replay"));
-        success_artifacts.remove_existing();
-        success_artifacts.write_fixture(success_fixture_json);
-        let success_report = success_artifacts.run_minimizer(&pool).await;
-
-        assert_eq!(
-            success_report["original"]["ok"], true,
-            "{success_stem} should replay"
-        );
-        assert_eq!(
-            success_report["original"]["resolution_audited"],
-            serde_json::json!(2),
-            "{success_stem} audited resolution count"
-        );
-        assert_eq!(
-            success_report["original"]["trace_count"],
-            serde_json::json!(2),
-            "{success_stem} trace count"
-        );
-        assert_eq!(
-            success_report["original"]["projection_audit_ok"],
-            serde_json::json!(true),
-            "{success_stem} projection audit"
-        );
-        assert_eq!(
-            success_report["original"]["semantic_expectations_checked"],
-            serde_json::json!(expected_expectations),
-            "{success_stem} semantic expectation count"
-        );
-        assert_eq!(
-            success_report["minimized"]["ok"], true,
-            "{success_stem} minimized replay"
-        );
-        assert_eq!(
-            success_report["minimized"]["semantic_expectations_checked"],
-            serde_json::json!(expected_expectations),
-            "{success_stem} minimized semantic expectation count"
-        );
-        assert_eq!(
-            success_report["reduction"]["replay_success"],
-            serde_json::json!(true),
-            "{success_stem} reduction replay"
-        );
-        assert_eq!(
-            success_report["reduction"]["success_invariant_preserved"],
-            serde_json::json!(true),
-            "{success_stem} success invariant"
-        );
-        assert_eq!(
-            success_report["write_reduced"]["promoted_success_fixture"],
-            serde_json::json!(true),
-            "{success_stem} promoted success fixture"
-        );
-
-        let bad_fixture: serde_json::Value =
-            serde_json::from_str(bad_fixture_json).expect("bad mark/clear fixture parses");
-        assert_eq!(
-            generated_expectation_count(&bad_fixture["expectations"]),
-            expected_expectations,
-            "{bad_stem} semantic expectation count"
-        );
-
-        let bad_artifacts = GeneratedShrinkArtifacts::new(&format!("{bad_stem}-semantic-replay"));
-        bad_artifacts.remove_existing();
-        bad_artifacts.write_fixture(bad_fixture_json);
-        let bad_report = bad_artifacts.run_minimizer(&pool).await;
-
-        assert_eq!(
-            bad_report["original"]["ok"], false,
-            "{bad_stem} bad original should fail"
-        );
-        assert_eq!(
-            bad_report["original"]["failure_class"], "semantic_expectation",
-            "{bad_stem} bad original failure class"
-        );
-        assert_eq!(
-            bad_report["minimized"]["ok"], false,
-            "{bad_stem} bad minimized should fail"
-        );
-        assert_eq!(
-            bad_report["minimized"]["failure_class"], "semantic_expectation",
-            "{bad_stem} bad minimized failure class"
-        );
-        assert_eq!(
-            bad_report["reduction"]["replay_success"],
-            serde_json::json!(false),
-            "{bad_stem} bad reduction should remain failing"
-        );
-        assert_eq!(
-            bad_report["reduction"]["failure_class_preserved"],
-            serde_json::json!(true),
-            "{bad_stem} bad reduction should preserve semantic failure"
-        );
-        assert_eq!(
-            bad_report["write_reduced"]["wrote"],
-            serde_json::json!(true),
-            "{bad_stem} bad reduced artifact should be written"
-        );
-        assert_eq!(
-            bad_report["write_reduced"]["promoted_success_fixture"],
-            serde_json::json!(false),
-            "{bad_stem} bad reduced artifact should not be promoted"
-        );
-    }
-}
-
-#[sqlx::test(migrations = "../projections/migrations")]
-async fn checked_in_poison_cure_generated_fixtures_replay_semantic_expectations(pool: PgPool) {
-    let success_stem = "night-poison-cure-generated-minimized";
-    let success_fixture_json =
-        include_str!("../fixtures/night-poison-cure-generated-minimized.json");
-    let bad_stem = "night-poison-cure-generated-bad-expectation";
-    let bad_fixture_json =
-        include_str!("../fixtures/night-poison-cure-generated-bad-expectation.json");
-    let expected_expectations = 10;
-
-    let success_fixture: serde_json::Value =
-        serde_json::from_str(success_fixture_json).expect("poison/cure fixture parses");
-    assert_eq!(
-        success_fixture["roster"].as_array().map_or(0, Vec::len),
-        4,
-        "{success_stem} roster size"
-    );
-    assert_eq!(
-        success_fixture["actions"].as_array().map_or(0, Vec::len),
-        2,
-        "{success_stem} action count"
-    );
-    assert_eq!(
-        success_fixture["setup_phases"]
-            .as_array()
-            .map_or(0, Vec::len),
-        1,
-        "{success_stem} setup phase count"
-    );
-    assert_eq!(
-        success_fixture["expectations"]["inner_events"]
-            .as_array()
-            .map_or(0, Vec::len),
-        4,
-        "{success_stem} inner event expectation count"
-    );
-    assert_eq!(
-        success_fixture["expectations"]["trace_decisions"]
-            .as_array()
-            .map_or(0, Vec::len),
-        1,
-        "{success_stem} trace decision expectation count"
-    );
-    assert_eq!(
-        success_fixture["expectations"]["player_notifications"]
-            .as_array()
-            .map_or(0, Vec::len),
-        1,
-        "{success_stem} player notification expectation count"
-    );
-    assert_eq!(
-        success_fixture["expectations"]["delayed_death_queues"]
-            .as_array()
-            .map_or(0, Vec::len),
-        1,
-        "{success_stem} delayed death queue expectation count"
-    );
-    assert_eq!(
-        success_fixture["expectations"]["absent_delayed_death_queues"]
-            .as_array()
-            .map_or(0, Vec::len),
-        1,
-        "{success_stem} absent delayed death queue expectation count"
-    );
-    assert_eq!(
-        success_fixture["expectations"]["slot_effects"]
-            .as_array()
-            .map_or(0, Vec::len),
-        1,
-        "{success_stem} slot effect expectation count"
-    );
-    assert_eq!(
-        success_fixture["expectations"]["absent_slot_effects"]
-            .as_array()
-            .map_or(0, Vec::len),
-        1,
-        "{success_stem} absent slot effect expectation count"
-    );
-    assert_eq!(
-        generated_expectation_count(&success_fixture["expectations"]),
-        expected_expectations,
-        "{success_stem} semantic expectation count"
-    );
-
-    let success_artifacts =
-        GeneratedShrinkArtifacts::new(&format!("{success_stem}-semantic-replay"));
-    success_artifacts.remove_existing();
-    success_artifacts.write_fixture(success_fixture_json);
-    let success_report = success_artifacts.run_minimizer(&pool).await;
-
-    assert_eq!(
-        success_report["original"]["ok"], true,
-        "{success_stem} should replay"
-    );
-    assert_eq!(
-        success_report["original"]["resolution_audited"],
-        serde_json::json!(2),
-        "{success_stem} audited resolution count"
-    );
-    assert_eq!(
-        success_report["original"]["trace_count"],
-        serde_json::json!(2),
-        "{success_stem} trace count"
-    );
-    assert_eq!(
-        success_report["original"]["projection_audit_ok"],
-        serde_json::json!(true),
-        "{success_stem} projection audit"
-    );
-    assert_eq!(
-        success_report["original"]["semantic_expectations_checked"],
-        serde_json::json!(expected_expectations),
-        "{success_stem} semantic expectation count"
-    );
-    assert_eq!(
-        success_report["minimized"]["ok"], true,
-        "{success_stem} minimized replay"
-    );
-    assert_eq!(
-        success_report["minimized"]["semantic_expectations_checked"],
-        serde_json::json!(expected_expectations),
-        "{success_stem} minimized semantic expectation count"
-    );
-    assert_eq!(
-        success_report["reduction"]["replay_success"],
-        serde_json::json!(true),
-        "{success_stem} reduction replay"
-    );
-    assert_eq!(
-        success_report["reduction"]["success_invariant_preserved"],
-        serde_json::json!(true),
-        "{success_stem} success invariant"
-    );
-    assert_eq!(
-        success_report["write_reduced"]["promoted_success_fixture"],
-        serde_json::json!(true),
-        "{success_stem} promoted success fixture"
-    );
-
-    let bad_fixture: serde_json::Value =
-        serde_json::from_str(bad_fixture_json).expect("bad poison/cure fixture parses");
-    assert_eq!(
-        generated_expectation_count(&bad_fixture["expectations"]),
-        expected_expectations,
-        "{bad_stem} semantic expectation count"
-    );
-
-    let bad_artifacts = GeneratedShrinkArtifacts::new(&format!("{bad_stem}-semantic-replay"));
-    bad_artifacts.remove_existing();
-    bad_artifacts.write_fixture(bad_fixture_json);
-    let bad_report = bad_artifacts.run_minimizer(&pool).await;
-
-    assert_eq!(
-        bad_report["original"]["ok"], false,
-        "{bad_stem} bad original should fail"
-    );
-    assert_eq!(
-        bad_report["original"]["failure_class"], "semantic_expectation",
-        "{bad_stem} bad original failure class"
-    );
-    assert_eq!(
-        bad_report["minimized"]["ok"], false,
-        "{bad_stem} bad minimized should fail"
-    );
-    assert_eq!(
-        bad_report["minimized"]["failure_class"], "semantic_expectation",
-        "{bad_stem} bad minimized failure class"
-    );
-    assert_eq!(
-        bad_report["reduction"]["replay_success"],
-        serde_json::json!(false),
-        "{bad_stem} bad reduction should remain failing"
-    );
-    assert_eq!(
-        bad_report["reduction"]["failure_class_preserved"],
-        serde_json::json!(true),
-        "{bad_stem} bad reduction should preserve semantic failure"
-    );
-    assert_eq!(
-        bad_report["write_reduced"]["wrote"],
-        serde_json::json!(true),
-        "{bad_stem} bad reduced artifact should be written"
-    );
-    assert_eq!(
-        bad_report["write_reduced"]["promoted_success_fixture"],
-        serde_json::json!(false),
-        "{bad_stem} bad reduced artifact should not be promoted"
-    );
-}
-
-#[sqlx::test(migrations = "../projections/migrations")]
-async fn checked_in_ignite_generated_fixtures_replay_semantic_expectations(pool: PgPool) {
-    let success_stem = "night-ignite-generated-minimized";
-    let success_fixture_json = include_str!("../fixtures/night-ignite-generated-minimized.json");
-    let bad_stem = "night-ignite-generated-bad-expectation";
-    let bad_fixture_json = include_str!("../fixtures/night-ignite-generated-bad-expectation.json");
-    let expected_expectations = 2;
-
-    let success_fixture: serde_json::Value =
-        serde_json::from_str(success_fixture_json).expect("ignite fixture parses");
-    assert_eq!(
-        success_fixture["roster"].as_array().map_or(0, Vec::len),
-        2,
-        "{success_stem} roster size"
-    );
-    assert_eq!(
-        success_fixture["actions"].as_array().map_or(0, Vec::len),
-        1,
-        "{success_stem} action count"
-    );
-    assert_eq!(
-        success_fixture["setup_phases"]
-            .as_array()
-            .map_or(0, Vec::len),
-        1,
-        "{success_stem} setup phase count"
-    );
-    assert_eq!(
-        success_fixture["expectations"]["inner_events"]
-            .as_array()
-            .map_or(0, Vec::len),
-        2,
-        "{success_stem} inner event expectation count"
-    );
-    assert_eq!(
-        generated_expectation_count(&success_fixture["expectations"]),
-        expected_expectations,
-        "{success_stem} semantic expectation count"
-    );
-
-    let success_artifacts =
-        GeneratedShrinkArtifacts::new(&format!("{success_stem}-semantic-replay"));
-    success_artifacts.remove_existing();
-    success_artifacts.write_fixture(success_fixture_json);
-    let success_report = success_artifacts.run_minimizer(&pool).await;
-
-    assert_eq!(
-        success_report["original"]["ok"], true,
-        "{success_stem} should replay"
-    );
-    assert_eq!(
-        success_report["original"]["resolution_audited"],
-        serde_json::json!(2),
-        "{success_stem} audited resolution count"
-    );
-    assert_eq!(
-        success_report["original"]["trace_count"],
-        serde_json::json!(2),
-        "{success_stem} trace count"
-    );
-    assert_eq!(
-        success_report["original"]["projection_audit_ok"],
-        serde_json::json!(true),
-        "{success_stem} projection audit"
-    );
-    assert_eq!(
-        success_report["original"]["semantic_expectations_checked"],
-        serde_json::json!(expected_expectations),
-        "{success_stem} semantic expectation count"
-    );
-    assert_eq!(
-        success_report["minimized"]["ok"], true,
-        "{success_stem} minimized replay"
-    );
-    assert_eq!(
-        success_report["minimized"]["semantic_expectations_checked"],
-        serde_json::json!(expected_expectations),
-        "{success_stem} minimized semantic expectation count"
-    );
-    assert_eq!(
-        success_report["reduction"]["replay_success"],
-        serde_json::json!(true),
-        "{success_stem} reduction replay"
-    );
-    assert_eq!(
-        success_report["reduction"]["success_invariant_preserved"],
-        serde_json::json!(true),
-        "{success_stem} success invariant"
-    );
-    assert_eq!(
-        success_report["write_reduced"]["promoted_success_fixture"],
-        serde_json::json!(true),
-        "{success_stem} promoted success fixture"
-    );
-
-    let bad_fixture: serde_json::Value =
-        serde_json::from_str(bad_fixture_json).expect("bad ignite fixture parses");
-    assert_eq!(
-        generated_expectation_count(&bad_fixture["expectations"]),
-        expected_expectations,
-        "{bad_stem} semantic expectation count"
-    );
-
-    let bad_artifacts = GeneratedShrinkArtifacts::new(&format!("{bad_stem}-semantic-replay"));
-    bad_artifacts.remove_existing();
-    bad_artifacts.write_fixture(bad_fixture_json);
-    let bad_report = bad_artifacts.run_minimizer(&pool).await;
-
-    assert_eq!(
-        bad_report["original"]["ok"], false,
-        "{bad_stem} bad original should fail"
-    );
-    assert_eq!(
-        bad_report["original"]["failure_class"], "semantic_expectation",
-        "{bad_stem} bad original failure class"
-    );
-    assert_eq!(
-        bad_report["minimized"]["ok"], false,
-        "{bad_stem} bad minimized should fail"
-    );
-    assert_eq!(
-        bad_report["minimized"]["failure_class"], "semantic_expectation",
-        "{bad_stem} bad minimized failure class"
-    );
-    assert_eq!(
-        bad_report["reduction"]["replay_success"],
-        serde_json::json!(false),
-        "{bad_stem} bad reduction should remain failing"
-    );
-    assert_eq!(
-        bad_report["reduction"]["failure_class_preserved"],
-        serde_json::json!(true),
-        "{bad_stem} bad reduction should preserve semantic failure"
-    );
-    assert_eq!(
-        bad_report["write_reduced"]["wrote"],
-        serde_json::json!(true),
-        "{bad_stem} bad reduced artifact should be written"
-    );
-    assert_eq!(
-        bad_report["write_reduced"]["promoted_success_fixture"],
-        serde_json::json!(false),
-        "{bad_stem} bad reduced artifact should not be promoted"
-    );
-}
-
-#[sqlx::test(migrations = "../projections/migrations")]
-async fn checked_in_pgo_projection_state_generated_fixtures_replay_semantic_expectations(
-    pool: PgPool,
-) {
-    let success_stem = "night-pgo-projection-state-generated-minimized";
-    let success_fixture_json =
-        include_str!("../fixtures/night-pgo-projection-state-generated-minimized.json");
-    let bad_stem = "night-pgo-projection-state-generated-bad-expectation";
-    let bad_fixture_json =
-        include_str!("../fixtures/night-pgo-projection-state-generated-bad-expectation.json");
-    let expected_expectations = 9;
-
-    let success_fixture: serde_json::Value =
-        serde_json::from_str(success_fixture_json).expect("PGO projection-state fixture parses");
-    assert_eq!(
-        success_fixture["roster"].as_array().map_or(0, Vec::len),
-        3,
-        "{success_stem} roster size"
-    );
-    assert_eq!(
-        success_fixture["actions"].as_array().map_or(0, Vec::len),
-        1,
-        "{success_stem} action count"
-    );
-    assert_eq!(
-        success_fixture["setup_phases"]
-            .as_array()
-            .map_or(0, Vec::len),
-        0,
-        "{success_stem} setup phase count"
-    );
-    assert_eq!(
-        success_fixture["expectations"]["inner_events"]
-            .as_array()
-            .map_or(0, Vec::len),
-        2,
-        "{success_stem} inner event expectation count"
-    );
-    assert_eq!(
-        success_fixture["expectations"]["trace_decisions"]
-            .as_array()
-            .map_or(0, Vec::len),
-        1,
-        "{success_stem} trace decision expectation count"
-    );
-    assert_eq!(
-        success_fixture["expectations"]["trace_notes"]
-            .as_array()
-            .map_or(0, Vec::len),
-        1,
-        "{success_stem} trace note expectation count"
-    );
-    assert_eq!(
-        success_fixture["expectations"]["generated_actions"]
-            .as_array()
-            .map_or(0, Vec::len),
-        1,
-        "{success_stem} generated action expectation count"
-    );
-    assert_eq!(
-        success_fixture["expectations"]["generated_action_counts"]
-            .as_array()
-            .map_or(0, Vec::len),
-        1,
-        "{success_stem} generated action count expectation count"
-    );
-    assert_eq!(
-        success_fixture["expectations"]["slot_states"]
-            .as_array()
-            .map_or(0, Vec::len),
-        3,
-        "{success_stem} slot state expectation count"
-    );
-    assert_eq!(
-        generated_expectation_count(&success_fixture["expectations"]),
-        expected_expectations,
-        "{success_stem} semantic expectation count"
-    );
-
-    let success_artifacts =
-        GeneratedShrinkArtifacts::new(&format!("{success_stem}-semantic-replay"));
-    success_artifacts.remove_existing();
-    success_artifacts.write_fixture(success_fixture_json);
-    let success_report = success_artifacts.run_minimizer(&pool).await;
-
-    assert_eq!(
-        success_report["original"]["ok"], true,
-        "{success_stem} should replay"
-    );
-    assert_eq!(
-        success_report["original"]["resolution_audited"],
-        serde_json::json!(1),
-        "{success_stem} audited resolution count"
-    );
-    assert_eq!(
-        success_report["original"]["trace_count"],
-        serde_json::json!(1),
-        "{success_stem} trace count"
-    );
-    assert_eq!(
-        success_report["original"]["projection_audit_ok"],
-        serde_json::json!(true),
-        "{success_stem} projection audit"
-    );
-    assert_eq!(
-        success_report["original"]["semantic_expectations_checked"],
-        serde_json::json!(expected_expectations),
-        "{success_stem} semantic expectation count"
-    );
-    assert_eq!(
-        success_report["minimized"]["ok"], true,
-        "{success_stem} minimized replay"
-    );
-    assert_eq!(
-        success_report["minimized"]["semantic_expectations_checked"],
-        serde_json::json!(expected_expectations),
-        "{success_stem} minimized semantic expectation count"
-    );
-    assert_eq!(
-        success_report["reduction"]["replay_success"],
-        serde_json::json!(true),
-        "{success_stem} reduction replay"
-    );
-    assert_eq!(
-        success_report["reduction"]["success_invariant_preserved"],
-        serde_json::json!(true),
-        "{success_stem} success invariant"
-    );
-    assert_eq!(
-        success_report["write_reduced"]["promoted_success_fixture"],
-        serde_json::json!(true),
-        "{success_stem} promoted success fixture"
-    );
-
-    let bad_fixture: serde_json::Value =
-        serde_json::from_str(bad_fixture_json).expect("bad PGO projection-state fixture parses");
-    assert_eq!(
-        generated_expectation_count(&bad_fixture["expectations"]),
-        expected_expectations,
-        "{bad_stem} semantic expectation count"
-    );
-
-    let bad_artifacts = GeneratedShrinkArtifacts::new(&format!("{bad_stem}-semantic-replay"));
-    bad_artifacts.remove_existing();
-    bad_artifacts.write_fixture(bad_fixture_json);
-    let bad_report = bad_artifacts.run_minimizer(&pool).await;
-
-    assert_eq!(
-        bad_report["original"]["ok"], false,
-        "{bad_stem} bad original should fail"
-    );
-    assert_eq!(
-        bad_report["original"]["failure_class"], "semantic_expectation",
-        "{bad_stem} bad original failure class"
-    );
-    assert_eq!(
-        bad_report["minimized"]["ok"], false,
-        "{bad_stem} bad minimized should fail"
-    );
-    assert_eq!(
-        bad_report["minimized"]["failure_class"], "semantic_expectation",
-        "{bad_stem} bad minimized failure class"
-    );
-    assert_eq!(
-        bad_report["reduction"]["replay_success"],
-        serde_json::json!(false),
-        "{bad_stem} bad reduction should remain failing"
-    );
-    assert_eq!(
-        bad_report["reduction"]["failure_class_preserved"],
-        serde_json::json!(true),
-        "{bad_stem} bad reduction should preserve semantic failure"
-    );
-    assert_eq!(
-        bad_report["write_reduced"]["wrote"],
-        serde_json::json!(true),
-        "{bad_stem} bad reduced artifact should be written"
-    );
-    assert_eq!(
-        bad_report["write_reduced"]["promoted_success_fixture"],
-        serde_json::json!(false),
-        "{bad_stem} bad reduced artifact should not be promoted"
-    );
-}
-
-#[sqlx::test(migrations = "../projections/migrations")]
-async fn checked_in_hider_projection_state_generated_fixtures_replay_semantic_expectations(
-    pool: PgPool,
-) {
-    let success_stem = "night-hider-projection-state-generated-minimized";
-    let success_fixture_json =
-        include_str!("../fixtures/night-hider-projection-state-generated-minimized.json");
-    let bad_stem = "night-hider-projection-state-generated-bad-expectation";
-    let bad_fixture_json =
-        include_str!("../fixtures/night-hider-projection-state-generated-bad-expectation.json");
-    let expected_expectations = 6;
-
-    let success_fixture: serde_json::Value =
-        serde_json::from_str(success_fixture_json).expect("Hider projection-state fixture parses");
-    assert_eq!(
-        success_fixture["roster"].as_array().map_or(0, Vec::len),
-        3,
-        "{success_stem} roster size"
-    );
-    assert_eq!(
-        success_fixture["actions"].as_array().map_or(0, Vec::len),
-        2,
-        "{success_stem} action count"
-    );
-    assert_eq!(
-        success_fixture["setup_phases"]
-            .as_array()
-            .map_or(0, Vec::len),
-        0,
-        "{success_stem} setup phase count"
-    );
-    assert_eq!(
-        success_fixture["expectations"]["inner_events"]
-            .as_array()
-            .map_or(0, Vec::len),
-        2,
-        "{success_stem} inner event expectation count"
-    );
-    assert_eq!(
-        success_fixture["expectations"]["trace_decisions"]
-            .as_array()
-            .map_or(0, Vec::len),
-        1,
-        "{success_stem} trace decision expectation count"
-    );
-    assert_eq!(
-        success_fixture["expectations"]["trace_notes"]
-            .as_array()
-            .map_or(0, Vec::len),
-        0,
-        "{success_stem} trace note expectation count"
-    );
-    assert_eq!(
-        success_fixture["expectations"]["generated_actions"]
-            .as_array()
-            .map_or(0, Vec::len),
-        0,
-        "{success_stem} generated action expectation count"
-    );
-    assert_eq!(
-        success_fixture["expectations"]["generated_action_counts"]
-            .as_array()
-            .map_or(0, Vec::len),
-        0,
-        "{success_stem} generated action count expectation count"
-    );
-    assert_eq!(
-        success_fixture["expectations"]["slot_states"]
-            .as_array()
-            .map_or(0, Vec::len),
-        3,
-        "{success_stem} slot state expectation count"
-    );
-    assert_eq!(
-        generated_expectation_count(&success_fixture["expectations"]),
-        expected_expectations,
-        "{success_stem} semantic expectation count"
-    );
-
-    let success_artifacts =
-        GeneratedShrinkArtifacts::new(&format!("{success_stem}-semantic-replay"));
-    success_artifacts.remove_existing();
-    success_artifacts.write_fixture(success_fixture_json);
-    let success_report = success_artifacts.run_minimizer(&pool).await;
-
-    assert_eq!(
-        success_report["original"]["ok"], true,
-        "{success_stem} should replay"
-    );
-    assert_eq!(
-        success_report["original"]["resolution_audited"],
-        serde_json::json!(1),
-        "{success_stem} audited resolution count"
-    );
-    assert_eq!(
-        success_report["original"]["trace_count"],
-        serde_json::json!(1),
-        "{success_stem} trace count"
-    );
-    assert_eq!(
-        success_report["original"]["projection_audit_ok"],
-        serde_json::json!(true),
-        "{success_stem} projection audit"
-    );
-    assert_eq!(
-        success_report["original"]["semantic_expectations_checked"],
-        serde_json::json!(expected_expectations),
-        "{success_stem} semantic expectation count"
-    );
-    assert_eq!(
-        success_report["minimized"]["ok"], true,
-        "{success_stem} minimized replay"
-    );
-    assert_eq!(
-        success_report["minimized"]["semantic_expectations_checked"],
-        serde_json::json!(expected_expectations),
-        "{success_stem} minimized semantic expectation count"
-    );
-    assert_eq!(
-        success_report["reduction"]["replay_success"],
-        serde_json::json!(true),
-        "{success_stem} reduction replay"
-    );
-    assert_eq!(
-        success_report["reduction"]["success_invariant_preserved"],
-        serde_json::json!(true),
-        "{success_stem} success invariant"
-    );
-    assert_eq!(
-        success_report["write_reduced"]["promoted_success_fixture"],
-        serde_json::json!(true),
-        "{success_stem} promoted success fixture"
-    );
-
-    let bad_fixture: serde_json::Value =
-        serde_json::from_str(bad_fixture_json).expect("bad Hider projection-state fixture parses");
-    assert_eq!(
-        generated_expectation_count(&bad_fixture["expectations"]),
-        expected_expectations,
-        "{bad_stem} semantic expectation count"
-    );
-
-    let bad_artifacts = GeneratedShrinkArtifacts::new(&format!("{bad_stem}-semantic-replay"));
-    bad_artifacts.remove_existing();
-    bad_artifacts.write_fixture(bad_fixture_json);
-    let bad_report = bad_artifacts.run_minimizer(&pool).await;
-
-    assert_eq!(
-        bad_report["original"]["ok"], false,
-        "{bad_stem} bad original should fail"
-    );
-    assert_eq!(
-        bad_report["original"]["failure_class"], "semantic_expectation",
-        "{bad_stem} bad original failure class"
-    );
-    assert_eq!(
-        bad_report["minimized"]["ok"], false,
-        "{bad_stem} bad minimized should fail"
-    );
-    assert_eq!(
-        bad_report["minimized"]["failure_class"], "semantic_expectation",
-        "{bad_stem} bad minimized failure class"
-    );
-    assert_eq!(
-        bad_report["reduction"]["replay_success"],
-        serde_json::json!(false),
-        "{bad_stem} bad reduction should remain failing"
-    );
-    assert_eq!(
-        bad_report["reduction"]["failure_class_preserved"],
-        serde_json::json!(true),
-        "{bad_stem} bad reduction should preserve semantic failure"
-    );
-    assert_eq!(
-        bad_report["write_reduced"]["wrote"],
-        serde_json::json!(true),
-        "{bad_stem} bad reduced artifact should be written"
-    );
-    assert_eq!(
-        bad_report["write_reduced"]["promoted_success_fixture"],
-        serde_json::json!(false),
-        "{bad_stem} bad reduced artifact should not be promoted"
-    );
-}
-
-#[sqlx::test(migrations = "../projections/migrations")]
-async fn checked_in_babysitter_projection_state_generated_fixtures_replay_semantic_expectations(
-    pool: PgPool,
-) {
-    let success_stem = "night-babysitter-projection-state-generated-minimized";
-    let success_fixture_json =
-        include_str!("../fixtures/night-babysitter-projection-state-generated-minimized.json");
-    let bad_stem = "night-babysitter-projection-state-generated-bad-expectation";
-    let bad_fixture_json = include_str!(
-        "../fixtures/night-babysitter-projection-state-generated-bad-expectation.json"
-    );
-    let expected_expectations = 7;
-
-    let success_fixture: serde_json::Value = serde_json::from_str(success_fixture_json)
-        .expect("Babysitter projection-state fixture parses");
-    assert_eq!(
-        success_fixture["roster"].as_array().map_or(0, Vec::len),
-        4,
-        "{success_stem} roster size"
-    );
-    assert_eq!(
-        success_fixture["actions"].as_array().map_or(0, Vec::len),
-        3,
-        "{success_stem} action count"
-    );
-    assert_eq!(
-        success_fixture["setup_phases"]
-            .as_array()
-            .map_or(0, Vec::len),
-        0,
-        "{success_stem} setup phase count"
-    );
-    assert_eq!(
-        success_fixture["expectations"]["inner_events"]
-            .as_array()
-            .map_or(0, Vec::len),
-        3,
-        "{success_stem} inner event expectation count"
-    );
-    assert_eq!(
-        success_fixture["expectations"]["trace_decisions"]
-            .as_array()
-            .map_or(0, Vec::len),
-        1,
-        "{success_stem} trace decision expectation count"
-    );
-    assert_eq!(
-        success_fixture["expectations"]["trace_notes"]
-            .as_array()
-            .map_or(0, Vec::len),
-        0,
-        "{success_stem} trace note expectation count"
-    );
-    assert_eq!(
-        success_fixture["expectations"]["generated_actions"]
-            .as_array()
-            .map_or(0, Vec::len),
-        0,
-        "{success_stem} generated action expectation count"
-    );
-    assert_eq!(
-        success_fixture["expectations"]["generated_action_counts"]
-            .as_array()
-            .map_or(0, Vec::len),
-        0,
-        "{success_stem} generated action count expectation count"
-    );
-    assert_eq!(
-        success_fixture["expectations"]["slot_states"]
-            .as_array()
-            .map_or(0, Vec::len),
-        3,
-        "{success_stem} slot state expectation count"
-    );
-    assert_eq!(
-        generated_expectation_count(&success_fixture["expectations"]),
-        expected_expectations,
-        "{success_stem} semantic expectation count"
-    );
-
-    let success_artifacts =
-        GeneratedShrinkArtifacts::new(&format!("{success_stem}-semantic-replay"));
-    success_artifacts.remove_existing();
-    success_artifacts.write_fixture(success_fixture_json);
-    let success_report = success_artifacts.run_minimizer(&pool).await;
-
-    assert_eq!(
-        success_report["original"]["ok"], true,
-        "{success_stem} should replay"
-    );
-    assert_eq!(
-        success_report["original"]["resolution_audited"],
-        serde_json::json!(1),
-        "{success_stem} audited resolution count"
-    );
-    assert_eq!(
-        success_report["original"]["trace_count"],
-        serde_json::json!(1),
-        "{success_stem} trace count"
-    );
-    assert_eq!(
-        success_report["original"]["projection_audit_ok"],
-        serde_json::json!(true),
-        "{success_stem} projection audit"
-    );
-    assert_eq!(
-        success_report["original"]["semantic_expectations_checked"],
-        serde_json::json!(expected_expectations),
-        "{success_stem} semantic expectation count"
-    );
-    assert_eq!(
-        success_report["minimized"]["ok"], true,
-        "{success_stem} minimized replay"
-    );
-    assert_eq!(
-        success_report["minimized"]["semantic_expectations_checked"],
-        serde_json::json!(expected_expectations),
-        "{success_stem} minimized semantic expectation count"
-    );
-    assert_eq!(
-        success_report["reduction"]["replay_success"],
-        serde_json::json!(true),
-        "{success_stem} reduction replay"
-    );
-    assert_eq!(
-        success_report["reduction"]["success_invariant_preserved"],
-        serde_json::json!(true),
-        "{success_stem} success invariant"
-    );
-    assert_eq!(
-        success_report["write_reduced"]["promoted_success_fixture"],
-        serde_json::json!(true),
-        "{success_stem} promoted success fixture"
-    );
-
-    let bad_fixture: serde_json::Value = serde_json::from_str(bad_fixture_json)
-        .expect("bad Babysitter projection-state fixture parses");
-    assert_eq!(
-        generated_expectation_count(&bad_fixture["expectations"]),
-        expected_expectations,
-        "{bad_stem} semantic expectation count"
-    );
-
-    let bad_artifacts = GeneratedShrinkArtifacts::new(&format!("{bad_stem}-semantic-replay"));
-    bad_artifacts.remove_existing();
-    bad_artifacts.write_fixture(bad_fixture_json);
-    let bad_report = bad_artifacts.run_minimizer(&pool).await;
-
-    assert_eq!(
-        bad_report["original"]["ok"], false,
-        "{bad_stem} bad original should fail"
-    );
-    assert_eq!(
-        bad_report["original"]["failure_class"], "semantic_expectation",
-        "{bad_stem} bad original failure class"
-    );
-    assert_eq!(
-        bad_report["minimized"]["ok"], false,
-        "{bad_stem} bad minimized should fail"
-    );
-    assert_eq!(
-        bad_report["minimized"]["failure_class"], "semantic_expectation",
-        "{bad_stem} bad minimized failure class"
-    );
-    assert_eq!(
-        bad_report["reduction"]["replay_success"],
-        serde_json::json!(false),
-        "{bad_stem} bad reduction should remain failing"
-    );
-    assert_eq!(
-        bad_report["reduction"]["failure_class_preserved"],
-        serde_json::json!(true),
-        "{bad_stem} bad reduction should preserve semantic failure"
-    );
-    assert_eq!(
-        bad_report["write_reduced"]["wrote"],
-        serde_json::json!(true),
-        "{bad_stem} bad reduced artifact should be written"
-    );
-    assert_eq!(
-        bad_report["write_reduced"]["promoted_success_fixture"],
-        serde_json::json!(false),
-        "{bad_stem} bad reduced artifact should not be promoted"
-    );
-}
-
-#[sqlx::test(migrations = "../projections/migrations")]
-async fn checked_in_lovers_projection_state_generated_fixtures_replay_semantic_expectations(
-    pool: PgPool,
-) {
-    let success_stem = "night-lovers-projection-state-generated-minimized";
-    let success_fixture_json =
-        include_str!("../fixtures/night-lovers-projection-state-generated-minimized.json");
-    let bad_stem = "night-lovers-projection-state-generated-bad-expectation";
-    let bad_fixture_json =
-        include_str!("../fixtures/night-lovers-projection-state-generated-bad-expectation.json");
-    let expected_expectations = 6;
-
-    let success_fixture: serde_json::Value =
-        serde_json::from_str(success_fixture_json).expect("Lovers projection-state fixture parses");
-    assert_eq!(
-        success_fixture["roster"].as_array().map_or(0, Vec::len),
-        5,
-        "{success_stem} roster size"
-    );
-    assert_eq!(
-        success_fixture["actions"].as_array().map_or(0, Vec::len),
-        1,
-        "{success_stem} action count"
-    );
-    assert_eq!(
-        success_fixture["setup_phases"]
-            .as_array()
-            .map_or(0, Vec::len),
-        1,
-        "{success_stem} setup phase count"
-    );
-    assert_eq!(
-        success_fixture["expectations"]["inner_events"]
-            .as_array()
-            .map_or(0, Vec::len),
-        2,
-        "{success_stem} inner event expectation count"
-    );
-    assert_eq!(
-        success_fixture["expectations"]["trace_decisions"]
-            .as_array()
-            .map_or(0, Vec::len),
-        1,
-        "{success_stem} trace decision expectation count"
-    );
-    assert_eq!(
-        success_fixture["expectations"]["trace_notes"]
-            .as_array()
-            .map_or(0, Vec::len),
-        0,
-        "{success_stem} trace note expectation count"
-    );
-    assert_eq!(
-        success_fixture["expectations"]["generated_actions"]
-            .as_array()
-            .map_or(0, Vec::len),
-        0,
-        "{success_stem} generated action expectation count"
-    );
-    assert_eq!(
-        success_fixture["expectations"]["generated_action_counts"]
-            .as_array()
-            .map_or(0, Vec::len),
-        0,
-        "{success_stem} generated action count expectation count"
-    );
-    assert_eq!(
-        success_fixture["expectations"]["slot_states"]
-            .as_array()
-            .map_or(0, Vec::len),
-        3,
-        "{success_stem} slot state expectation count"
-    );
-    assert_eq!(
-        generated_expectation_count(&success_fixture["expectations"]),
-        expected_expectations,
-        "{success_stem} semantic expectation count"
-    );
-
-    let success_artifacts =
-        GeneratedShrinkArtifacts::new(&format!("{success_stem}-semantic-replay"));
-    success_artifacts.remove_existing();
-    success_artifacts.write_fixture(success_fixture_json);
-    let success_report = success_artifacts.run_minimizer(&pool).await;
-
-    assert_eq!(
-        success_report["original"]["ok"], true,
-        "{success_stem} should replay"
-    );
-    assert_eq!(
-        success_report["original"]["resolution_audited"],
-        serde_json::json!(2),
-        "{success_stem} audited resolution count"
-    );
-    assert_eq!(
-        success_report["original"]["trace_count"],
-        serde_json::json!(2),
-        "{success_stem} trace count"
-    );
-    assert_eq!(
-        success_report["original"]["projection_audit_ok"],
-        serde_json::json!(true),
-        "{success_stem} projection audit"
-    );
-    assert_eq!(
-        success_report["original"]["semantic_expectations_checked"],
-        serde_json::json!(expected_expectations),
-        "{success_stem} semantic expectation count"
-    );
-    assert_eq!(
-        success_report["minimized"]["ok"], true,
-        "{success_stem} minimized replay"
-    );
-    assert_eq!(
-        success_report["minimized"]["semantic_expectations_checked"],
-        serde_json::json!(expected_expectations),
-        "{success_stem} minimized semantic expectation count"
-    );
-    assert_eq!(
-        success_report["reduction"]["replay_success"],
-        serde_json::json!(true),
-        "{success_stem} reduction replay"
-    );
-    assert_eq!(
-        success_report["reduction"]["success_invariant_preserved"],
-        serde_json::json!(true),
-        "{success_stem} success invariant"
-    );
-    assert_eq!(
-        success_report["write_reduced"]["promoted_success_fixture"],
-        serde_json::json!(true),
-        "{success_stem} promoted success fixture"
-    );
-
-    let bad_fixture: serde_json::Value =
-        serde_json::from_str(bad_fixture_json).expect("bad Lovers projection-state fixture parses");
-    assert_eq!(
-        bad_fixture["setup_phases"].as_array().map_or(0, Vec::len),
-        1,
-        "{bad_stem} setup phase count"
-    );
-    assert_eq!(
-        generated_expectation_count(&bad_fixture["expectations"]),
-        expected_expectations,
-        "{bad_stem} semantic expectation count"
-    );
-
-    let bad_artifacts = GeneratedShrinkArtifacts::new(&format!("{bad_stem}-semantic-replay"));
-    bad_artifacts.remove_existing();
-    bad_artifacts.write_fixture(bad_fixture_json);
-    let bad_report = bad_artifacts.run_minimizer(&pool).await;
-
-    assert_eq!(
-        bad_report["original"]["ok"], false,
-        "{bad_stem} bad original should fail"
-    );
-    assert_eq!(
-        bad_report["original"]["failure_class"], "semantic_expectation",
-        "{bad_stem} bad original failure class"
-    );
-    assert_eq!(
-        bad_report["minimized"]["ok"], false,
-        "{bad_stem} bad minimized should fail"
-    );
-    assert_eq!(
-        bad_report["minimized"]["failure_class"], "semantic_expectation",
-        "{bad_stem} bad minimized failure class"
-    );
-    assert_eq!(
-        bad_report["reduction"]["replay_success"],
-        serde_json::json!(false),
-        "{bad_stem} bad reduction should remain failing"
-    );
-    assert_eq!(
-        bad_report["reduction"]["failure_class_preserved"],
-        serde_json::json!(true),
-        "{bad_stem} bad reduction should preserve semantic failure"
-    );
-    assert_eq!(
-        bad_report["write_reduced"]["wrote"],
-        serde_json::json!(true),
-        "{bad_stem} bad reduced artifact should be written"
-    );
-    assert_eq!(
-        bad_report["write_reduced"]["promoted_success_fixture"],
-        serde_json::json!(false),
-        "{bad_stem} bad reduced artifact should not be promoted"
-    );
-}
-
-#[sqlx::test(migrations = "../projections/migrations")]
-async fn checked_in_bomb_projection_state_generated_fixtures_replay_semantic_expectations(
-    pool: PgPool,
-) {
-    let success_stem = "night-bomb-projection-state-generated-minimized";
-    let success_fixture_json =
-        include_str!("../fixtures/night-bomb-projection-state-generated-minimized.json");
-    let bad_stem = "night-bomb-projection-state-generated-bad-expectation";
-    let bad_fixture_json =
-        include_str!("../fixtures/night-bomb-projection-state-generated-bad-expectation.json");
-    let expected_expectations = 10;
-
-    let success_fixture: serde_json::Value =
-        serde_json::from_str(success_fixture_json).expect("Bomb projection-state fixture parses");
-    assert_eq!(
-        success_fixture["roster"].as_array().map_or(0, Vec::len),
-        3,
-        "{success_stem} roster size"
-    );
-    assert_eq!(
-        success_fixture["actions"].as_array().map_or(0, Vec::len),
-        1,
-        "{success_stem} action count"
-    );
-    assert_eq!(
-        success_fixture["setup_phases"]
-            .as_array()
-            .map_or(0, Vec::len),
-        0,
-        "{success_stem} setup phase count"
-    );
-    assert_eq!(
-        success_fixture["expectations"]["inner_events"]
-            .as_array()
-            .map_or(0, Vec::len),
-        3,
-        "{success_stem} inner event expectation count"
-    );
-    assert_eq!(
-        success_fixture["expectations"]["trace_decisions"]
-            .as_array()
-            .map_or(0, Vec::len),
-        1,
-        "{success_stem} trace decision expectation count"
-    );
-    assert_eq!(
-        success_fixture["expectations"]["trace_notes"]
-            .as_array()
-            .map_or(0, Vec::len),
-        1,
-        "{success_stem} trace note expectation count"
-    );
-    assert_eq!(
-        success_fixture["expectations"]["generated_actions"]
-            .as_array()
-            .map_or(0, Vec::len),
-        1,
-        "{success_stem} generated action expectation count"
-    );
-    assert_eq!(
-        success_fixture["expectations"]["generated_action_counts"]
-            .as_array()
-            .map_or(0, Vec::len),
-        1,
-        "{success_stem} generated action count expectation count"
-    );
-    assert_eq!(
-        success_fixture["expectations"]["slot_states"]
-            .as_array()
-            .map_or(0, Vec::len),
-        3,
-        "{success_stem} slot state expectation count"
-    );
-    assert_eq!(
-        generated_expectation_count(&success_fixture["expectations"]),
-        expected_expectations,
-        "{success_stem} semantic expectation count"
-    );
-
-    let success_artifacts =
-        GeneratedShrinkArtifacts::new(&format!("{success_stem}-semantic-replay"));
-    success_artifacts.remove_existing();
-    success_artifacts.write_fixture(success_fixture_json);
-    let success_report = success_artifacts.run_minimizer(&pool).await;
-
-    assert_eq!(
-        success_report["original"]["ok"], true,
-        "{success_stem} should replay"
-    );
-    assert_eq!(
-        success_report["original"]["resolution_audited"],
-        serde_json::json!(1),
-        "{success_stem} audited resolution count"
-    );
-    assert_eq!(
-        success_report["original"]["trace_count"],
-        serde_json::json!(1),
-        "{success_stem} trace count"
-    );
-    assert_eq!(
-        success_report["original"]["projection_audit_ok"],
-        serde_json::json!(true),
-        "{success_stem} projection audit"
-    );
-    assert_eq!(
-        success_report["original"]["semantic_expectations_checked"],
-        serde_json::json!(expected_expectations),
-        "{success_stem} semantic expectation count"
-    );
-    assert_eq!(
-        success_report["minimized"]["ok"], true,
-        "{success_stem} minimized replay"
-    );
-    assert_eq!(
-        success_report["minimized"]["semantic_expectations_checked"],
-        serde_json::json!(expected_expectations),
-        "{success_stem} minimized semantic expectation count"
-    );
-    assert_eq!(
-        success_report["reduction"]["replay_success"],
-        serde_json::json!(true),
-        "{success_stem} reduction replay"
-    );
-    assert_eq!(
-        success_report["reduction"]["success_invariant_preserved"],
-        serde_json::json!(true),
-        "{success_stem} success invariant"
-    );
-    assert_eq!(
-        success_report["write_reduced"]["promoted_success_fixture"],
-        serde_json::json!(true),
-        "{success_stem} promoted success fixture"
-    );
-
-    let bad_fixture: serde_json::Value =
-        serde_json::from_str(bad_fixture_json).expect("bad Bomb projection-state fixture parses");
-    assert_eq!(
-        generated_expectation_count(&bad_fixture["expectations"]),
-        expected_expectations,
-        "{bad_stem} semantic expectation count"
-    );
-
-    let bad_artifacts = GeneratedShrinkArtifacts::new(&format!("{bad_stem}-semantic-replay"));
-    bad_artifacts.remove_existing();
-    bad_artifacts.write_fixture(bad_fixture_json);
-    let bad_report = bad_artifacts.run_minimizer(&pool).await;
-
-    assert_eq!(
-        bad_report["original"]["ok"], false,
-        "{bad_stem} bad original should fail"
-    );
-    assert_eq!(
-        bad_report["original"]["failure_class"], "semantic_expectation",
-        "{bad_stem} bad original failure class"
-    );
-    assert_eq!(
-        bad_report["minimized"]["ok"], false,
-        "{bad_stem} bad minimized should fail"
-    );
-    assert_eq!(
-        bad_report["minimized"]["failure_class"], "semantic_expectation",
-        "{bad_stem} bad minimized failure class"
-    );
-    assert_eq!(
-        bad_report["reduction"]["replay_success"],
-        serde_json::json!(false),
-        "{bad_stem} bad reduction should remain failing"
-    );
-    assert_eq!(
-        bad_report["reduction"]["failure_class_preserved"],
-        serde_json::json!(true),
-        "{bad_stem} bad reduction should preserve semantic failure"
-    );
-    assert_eq!(
-        bad_report["write_reduced"]["wrote"],
-        serde_json::json!(true),
-        "{bad_stem} bad reduced artifact should be written"
-    );
-    assert_eq!(
-        bad_report["write_reduced"]["promoted_success_fixture"],
-        serde_json::json!(false),
-        "{bad_stem} bad reduced artifact should not be promoted"
-    );
-}
-
-#[sqlx::test(migrations = "../projections/migrations")]
-async fn checked_in_hunter_projection_state_generated_fixtures_replay_semantic_expectations(
-    pool: PgPool,
-) {
-    let success_stem = "night-hunter-projection-state-generated-minimized";
-    let success_fixture_json =
-        include_str!("../fixtures/night-hunter-projection-state-generated-minimized.json");
-    let bad_stem = "night-hunter-projection-state-generated-bad-expectation";
-    let bad_fixture_json =
-        include_str!("../fixtures/night-hunter-projection-state-generated-bad-expectation.json");
-    let expected_expectations = 6;
-
-    let success_fixture: serde_json::Value =
-        serde_json::from_str(success_fixture_json).expect("Hunter projection-state fixture parses");
-    assert_eq!(
-        success_fixture["roster"].as_array().map_or(0, Vec::len),
-        4,
-        "{success_stem} roster size"
-    );
-    assert_eq!(
-        success_fixture["actions"].as_array().map_or(0, Vec::len),
-        1,
-        "{success_stem} action count"
-    );
-    assert_eq!(
-        success_fixture["setup_phases"]
-            .as_array()
-            .map_or(0, Vec::len),
-        1,
-        "{success_stem} setup phase count"
-    );
-    assert_eq!(
-        success_fixture["expectations"]["inner_events"]
-            .as_array()
-            .map_or(0, Vec::len),
-        2,
-        "{success_stem} inner event expectation count"
-    );
-    assert_eq!(
-        success_fixture["expectations"]["trace_decisions"]
-            .as_array()
-            .map_or(0, Vec::len),
-        1,
-        "{success_stem} trace decision expectation count"
-    );
-    assert_eq!(
-        success_fixture["expectations"]["trace_notes"]
-            .as_array()
-            .map_or(0, Vec::len),
-        0,
-        "{success_stem} trace note expectation count"
-    );
-    assert_eq!(
-        success_fixture["expectations"]["generated_actions"]
-            .as_array()
-            .map_or(0, Vec::len),
-        0,
-        "{success_stem} generated action expectation count"
-    );
-    assert_eq!(
-        success_fixture["expectations"]["generated_action_counts"]
-            .as_array()
-            .map_or(0, Vec::len),
-        0,
-        "{success_stem} generated action count expectation count"
-    );
-    assert_eq!(
-        success_fixture["expectations"]["slot_states"]
-            .as_array()
-            .map_or(0, Vec::len),
-        3,
-        "{success_stem} slot state expectation count"
-    );
-    assert_eq!(
-        generated_expectation_count(&success_fixture["expectations"]),
-        expected_expectations,
-        "{success_stem} semantic expectation count"
-    );
-
-    let success_artifacts =
-        GeneratedShrinkArtifacts::new(&format!("{success_stem}-semantic-replay"));
-    success_artifacts.remove_existing();
-    success_artifacts.write_fixture(success_fixture_json);
-    let success_report = success_artifacts.run_minimizer(&pool).await;
-
-    assert_eq!(
-        success_report["original"]["ok"], true,
-        "{success_stem} should replay"
-    );
-    assert_eq!(
-        success_report["original"]["resolution_audited"],
-        serde_json::json!(2),
-        "{success_stem} audited resolution count"
-    );
-    assert_eq!(
-        success_report["original"]["trace_count"],
-        serde_json::json!(2),
-        "{success_stem} trace count"
-    );
-    assert_eq!(
-        success_report["original"]["projection_audit_ok"],
-        serde_json::json!(true),
-        "{success_stem} projection audit"
-    );
-    assert_eq!(
-        success_report["original"]["semantic_expectations_checked"],
-        serde_json::json!(expected_expectations),
-        "{success_stem} semantic expectation count"
-    );
-    assert_eq!(
-        success_report["minimized"]["ok"], true,
-        "{success_stem} minimized replay"
-    );
-    assert_eq!(
-        success_report["minimized"]["semantic_expectations_checked"],
-        serde_json::json!(expected_expectations),
-        "{success_stem} minimized semantic expectation count"
-    );
-    assert_eq!(
-        success_report["reduction"]["replay_success"],
-        serde_json::json!(true),
-        "{success_stem} reduction replay"
-    );
-    assert_eq!(
-        success_report["reduction"]["success_invariant_preserved"],
-        serde_json::json!(true),
-        "{success_stem} success invariant"
-    );
-    assert_eq!(
-        success_report["write_reduced"]["promoted_success_fixture"],
-        serde_json::json!(true),
-        "{success_stem} promoted success fixture"
-    );
-
-    let bad_fixture: serde_json::Value =
-        serde_json::from_str(bad_fixture_json).expect("bad Hunter projection-state fixture parses");
-    assert_eq!(
-        bad_fixture["setup_phases"].as_array().map_or(0, Vec::len),
-        1,
-        "{bad_stem} setup phase count"
-    );
-    assert_eq!(
-        generated_expectation_count(&bad_fixture["expectations"]),
-        expected_expectations,
-        "{bad_stem} semantic expectation count"
-    );
-
-    let bad_artifacts = GeneratedShrinkArtifacts::new(&format!("{bad_stem}-semantic-replay"));
-    bad_artifacts.remove_existing();
-    bad_artifacts.write_fixture(bad_fixture_json);
-    let bad_report = bad_artifacts.run_minimizer(&pool).await;
-
-    assert_eq!(
-        bad_report["original"]["ok"], false,
-        "{bad_stem} bad original should fail"
-    );
-    assert_eq!(
-        bad_report["original"]["failure_class"], "semantic_expectation",
-        "{bad_stem} bad original failure class"
-    );
-    assert_eq!(
-        bad_report["minimized"]["ok"], false,
-        "{bad_stem} bad minimized should fail"
-    );
-    assert_eq!(
-        bad_report["minimized"]["failure_class"], "semantic_expectation",
-        "{bad_stem} bad minimized failure class"
-    );
-    assert_eq!(
-        bad_report["reduction"]["replay_success"],
-        serde_json::json!(false),
-        "{bad_stem} bad reduction should remain failing"
-    );
-    assert_eq!(
-        bad_report["reduction"]["failure_class_preserved"],
-        serde_json::json!(true),
-        "{bad_stem} bad reduction should preserve semantic failure"
-    );
-    assert_eq!(
-        bad_report["write_reduced"]["wrote"],
-        serde_json::json!(true),
-        "{bad_stem} bad reduced artifact should be written"
-    );
-    assert_eq!(
-        bad_report["write_reduced"]["promoted_success_fixture"],
-        serde_json::json!(false),
-        "{bad_stem} bad reduced artifact should not be promoted"
-    );
-}
-
-#[sqlx::test(migrations = "../projections/migrations")]
-async fn checked_in_vengeful_projection_state_generated_fixtures_replay_semantic_expectations(
-    pool: PgPool,
-) {
-    let success_stem = "night-vengeful-projection-state-generated-minimized";
-    let success_fixture_json =
-        include_str!("../fixtures/night-vengeful-projection-state-generated-minimized.json");
-    let bad_stem = "night-vengeful-projection-state-generated-bad-expectation";
-    let bad_fixture_json =
-        include_str!("../fixtures/night-vengeful-projection-state-generated-bad-expectation.json");
-    let expected_expectations = 10;
-
-    let success_fixture: serde_json::Value = serde_json::from_str(success_fixture_json)
-        .expect("Vengeful projection-state fixture parses");
-    assert_eq!(
-        success_fixture["roster"].as_array().map_or(0, Vec::len),
-        3,
-        "{success_stem} roster size"
-    );
-    assert_eq!(
-        success_fixture["actions"].as_array().map_or(0, Vec::len),
-        1,
-        "{success_stem} action count"
-    );
-    assert_eq!(
-        success_fixture["setup_phases"]
-            .as_array()
-            .map_or(0, Vec::len),
-        0,
-        "{success_stem} setup phase count"
-    );
-    assert_eq!(
-        success_fixture["expectations"]["inner_events"]
-            .as_array()
-            .map_or(0, Vec::len),
-        3,
-        "{success_stem} inner event expectation count"
-    );
-    assert_eq!(
-        success_fixture["expectations"]["trace_decisions"]
-            .as_array()
-            .map_or(0, Vec::len),
-        1,
-        "{success_stem} trace decision expectation count"
-    );
-    assert_eq!(
-        success_fixture["expectations"]["trace_notes"]
-            .as_array()
-            .map_or(0, Vec::len),
-        1,
-        "{success_stem} trace note expectation count"
-    );
-    assert_eq!(
-        success_fixture["expectations"]["generated_actions"]
-            .as_array()
-            .map_or(0, Vec::len),
-        1,
-        "{success_stem} generated action expectation count"
-    );
-    assert_eq!(
-        success_fixture["expectations"]["generated_action_counts"]
-            .as_array()
-            .map_or(0, Vec::len),
-        1,
-        "{success_stem} generated action count expectation count"
-    );
-    assert_eq!(
-        success_fixture["expectations"]["slot_states"]
-            .as_array()
-            .map_or(0, Vec::len),
-        3,
-        "{success_stem} slot state expectation count"
-    );
-    assert_eq!(
-        generated_expectation_count(&success_fixture["expectations"]),
-        expected_expectations,
-        "{success_stem} semantic expectation count"
-    );
-
-    let success_artifacts =
-        GeneratedShrinkArtifacts::new(&format!("{success_stem}-semantic-replay"));
-    success_artifacts.remove_existing();
-    success_artifacts.write_fixture(success_fixture_json);
-    let success_report = success_artifacts.run_minimizer(&pool).await;
-
-    assert_eq!(
-        success_report["original"]["ok"], true,
-        "{success_stem} should replay"
-    );
-    assert_eq!(
-        success_report["original"]["resolution_audited"],
-        serde_json::json!(1),
-        "{success_stem} audited resolution count"
-    );
-    assert_eq!(
-        success_report["original"]["trace_count"],
-        serde_json::json!(1),
-        "{success_stem} trace count"
-    );
-    assert_eq!(
-        success_report["original"]["projection_audit_ok"],
-        serde_json::json!(true),
-        "{success_stem} projection audit"
-    );
-    assert_eq!(
-        success_report["original"]["semantic_expectations_checked"],
-        serde_json::json!(expected_expectations),
-        "{success_stem} semantic expectation count"
-    );
-    assert_eq!(
-        success_report["minimized"]["ok"], true,
-        "{success_stem} minimized replay"
-    );
-    assert_eq!(
-        success_report["minimized"]["semantic_expectations_checked"],
-        serde_json::json!(expected_expectations),
-        "{success_stem} minimized semantic expectation count"
-    );
-    assert_eq!(
-        success_report["reduction"]["replay_success"],
-        serde_json::json!(true),
-        "{success_stem} reduction replay"
-    );
-    assert_eq!(
-        success_report["reduction"]["success_invariant_preserved"],
-        serde_json::json!(true),
-        "{success_stem} success invariant"
-    );
-    assert_eq!(
-        success_report["write_reduced"]["promoted_success_fixture"],
-        serde_json::json!(true),
-        "{success_stem} promoted success fixture"
-    );
-
-    let bad_fixture: serde_json::Value = serde_json::from_str(bad_fixture_json)
-        .expect("bad Vengeful projection-state fixture parses");
-    assert_eq!(
-        bad_fixture["roster"].as_array().map_or(0, Vec::len),
-        0,
-        "{bad_stem} roster size"
-    );
-    assert_eq!(
-        bad_fixture["actions"].as_array().map_or(0, Vec::len),
-        0,
-        "{bad_stem} action count"
-    );
-    assert_eq!(
-        generated_expectation_count(&bad_fixture["expectations"]),
-        expected_expectations,
-        "{bad_stem} semantic expectation count"
-    );
-
-    let bad_artifacts = GeneratedShrinkArtifacts::new(&format!("{bad_stem}-semantic-replay"));
-    bad_artifacts.remove_existing();
-    bad_artifacts.write_fixture(bad_fixture_json);
-    let bad_report = bad_artifacts.run_minimizer(&pool).await;
-
-    assert_eq!(
-        bad_report["original"]["ok"], false,
-        "{bad_stem} bad original should fail"
-    );
-    assert_eq!(
-        bad_report["original"]["failure_class"], "semantic_expectation",
-        "{bad_stem} bad original failure class"
-    );
-    assert_eq!(
-        bad_report["minimized"]["ok"], false,
-        "{bad_stem} bad minimized should fail"
-    );
-    assert_eq!(
-        bad_report["minimized"]["failure_class"], "semantic_expectation",
-        "{bad_stem} bad minimized failure class"
-    );
-    assert_eq!(
-        bad_report["reduction"]["replay_success"],
-        serde_json::json!(false),
-        "{bad_stem} bad reduction should remain failing"
-    );
-    assert_eq!(
-        bad_report["reduction"]["failure_class_preserved"],
-        serde_json::json!(true),
-        "{bad_stem} bad reduction should preserve semantic failure"
-    );
-    assert_eq!(
-        bad_report["write_reduced"]["wrote"],
-        serde_json::json!(true),
-        "{bad_stem} bad reduced artifact should be written"
-    );
-    assert_eq!(
-        bad_report["write_reduced"]["promoted_success_fixture"],
-        serde_json::json!(false),
-        "{bad_stem} bad reduced artifact should not be promoted"
-    );
-}
-
-#[sqlx::test(migrations = "../projections/migrations")]
-async fn checked_in_strongman_vengeful_projection_state_generated_fixtures_replay_semantic_expectations(
-    pool: PgPool,
-) {
-    let success_stem = "night-strongman-vengeful-projection-state-generated-minimized";
-    let success_fixture_json = include_str!(
-        "../fixtures/night-strongman-vengeful-projection-state-generated-minimized.json"
-    );
-    let bad_stem = "night-strongman-vengeful-projection-state-generated-bad-expectation";
-    let bad_fixture_json = include_str!(
-        "../fixtures/night-strongman-vengeful-projection-state-generated-bad-expectation.json"
-    );
-    let expected_expectations = 11;
-
-    let success_fixture: serde_json::Value = serde_json::from_str(success_fixture_json)
-        .expect("Strongman Vengeful projection-state fixture parses");
-    assert_eq!(
-        success_fixture["roster"].as_array().map_or(0, Vec::len),
-        3,
-        "{success_stem} roster size"
-    );
-    assert_eq!(
-        success_fixture["actions"].as_array().map_or(0, Vec::len),
-        2,
-        "{success_stem} action count"
-    );
-    assert_eq!(
-        success_fixture["setup_phases"]
-            .as_array()
-            .map_or(0, Vec::len),
-        0,
-        "{success_stem} setup phase count"
-    );
-    assert_eq!(
-        success_fixture["expectations"]["inner_events"]
-            .as_array()
-            .map_or(0, Vec::len),
-        3,
-        "{success_stem} inner event expectation count"
-    );
-    assert_eq!(
-        success_fixture["expectations"]["trace_decisions"]
-            .as_array()
-            .map_or(0, Vec::len),
-        2,
-        "{success_stem} trace decision expectation count"
-    );
-    assert_eq!(
-        success_fixture["expectations"]["trace_notes"]
-            .as_array()
-            .map_or(0, Vec::len),
-        1,
-        "{success_stem} trace note expectation count"
-    );
-    assert_eq!(
-        success_fixture["expectations"]["generated_actions"]
-            .as_array()
-            .map_or(0, Vec::len),
-        1,
-        "{success_stem} generated action expectation count"
-    );
-    assert_eq!(
-        success_fixture["expectations"]["generated_action_counts"]
-            .as_array()
-            .map_or(0, Vec::len),
-        1,
-        "{success_stem} generated action count expectation count"
-    );
-    assert_eq!(
-        success_fixture["expectations"]["slot_states"]
-            .as_array()
-            .map_or(0, Vec::len),
-        3,
-        "{success_stem} slot state expectation count"
-    );
-    assert_eq!(
-        generated_expectation_count(&success_fixture["expectations"]),
-        expected_expectations,
-        "{success_stem} semantic expectation count"
-    );
-
-    let success_artifacts =
-        GeneratedShrinkArtifacts::new(&format!("{success_stem}-semantic-replay"));
-    success_artifacts.remove_existing();
-    success_artifacts.write_fixture(success_fixture_json);
-    let success_report = success_artifacts.run_minimizer(&pool).await;
-
-    assert_eq!(
-        success_report["original"]["ok"], true,
-        "{success_stem} should replay"
-    );
-    assert_eq!(
-        success_report["original"]["resolution_audited"],
-        serde_json::json!(1),
-        "{success_stem} audited resolution count"
-    );
-    assert_eq!(
-        success_report["original"]["trace_count"],
-        serde_json::json!(1),
-        "{success_stem} trace count"
-    );
-    assert_eq!(
-        success_report["original"]["projection_audit_ok"],
-        serde_json::json!(true),
-        "{success_stem} projection audit"
-    );
-    assert_eq!(
-        success_report["original"]["semantic_expectations_checked"],
-        serde_json::json!(expected_expectations),
-        "{success_stem} semantic expectation count"
-    );
-    assert_eq!(
-        success_report["minimized"]["ok"], true,
-        "{success_stem} minimized replay"
-    );
-    assert_eq!(
-        success_report["minimized"]["semantic_expectations_checked"],
-        serde_json::json!(expected_expectations),
-        "{success_stem} minimized semantic expectation count"
-    );
-    assert_eq!(
-        success_report["reduction"]["replay_success"],
-        serde_json::json!(true),
-        "{success_stem} reduction replay"
-    );
-    assert_eq!(
-        success_report["reduction"]["success_invariant_preserved"],
-        serde_json::json!(true),
-        "{success_stem} success invariant"
-    );
-    assert_eq!(
-        success_report["write_reduced"]["promoted_success_fixture"],
-        serde_json::json!(true),
-        "{success_stem} promoted success fixture"
-    );
-
-    let bad_fixture: serde_json::Value = serde_json::from_str(bad_fixture_json)
-        .expect("bad Strongman Vengeful projection-state fixture parses");
-    assert_eq!(
-        bad_fixture["roster"].as_array().map_or(0, Vec::len),
-        0,
-        "{bad_stem} roster size"
-    );
-    assert_eq!(
-        bad_fixture["actions"].as_array().map_or(0, Vec::len),
-        0,
-        "{bad_stem} action count"
-    );
-    assert_eq!(
-        generated_expectation_count(&bad_fixture["expectations"]),
-        expected_expectations,
-        "{bad_stem} semantic expectation count"
-    );
-
-    let bad_artifacts = GeneratedShrinkArtifacts::new(&format!("{bad_stem}-semantic-replay"));
-    bad_artifacts.remove_existing();
-    bad_artifacts.write_fixture(bad_fixture_json);
-    let bad_report = bad_artifacts.run_minimizer(&pool).await;
-
-    assert_eq!(
-        bad_report["original"]["ok"], false,
-        "{bad_stem} bad original should fail"
-    );
-    assert_eq!(
-        bad_report["original"]["failure_class"], "semantic_expectation",
-        "{bad_stem} bad original failure class"
-    );
-    assert_eq!(
-        bad_report["minimized"]["ok"], false,
-        "{bad_stem} bad minimized should fail"
-    );
-    assert_eq!(
-        bad_report["minimized"]["failure_class"], "semantic_expectation",
-        "{bad_stem} bad minimized failure class"
-    );
-    assert_eq!(
-        bad_report["reduction"]["replay_success"],
-        serde_json::json!(false),
-        "{bad_stem} bad reduction should remain failing"
-    );
-    assert_eq!(
-        bad_report["reduction"]["failure_class_preserved"],
-        serde_json::json!(true),
-        "{bad_stem} bad reduction should preserve semantic failure"
-    );
-    assert_eq!(
-        bad_report["write_reduced"]["wrote"],
-        serde_json::json!(true),
-        "{bad_stem} bad reduced artifact should be written"
-    );
-    assert_eq!(
-        bad_report["write_reduced"]["promoted_success_fixture"],
-        serde_json::json!(false),
-        "{bad_stem} bad reduced artifact should not be promoted"
-    );
-}
-
-#[sqlx::test(migrations = "../projections/migrations")]
-async fn checked_in_bodyguard_strongman_vengeful_projection_state_generated_fixtures_replay_semantic_expectations(
-    pool: PgPool,
-) {
-    for (success_stem, success_fixture_json, bad_stem, bad_fixture_json) in [
-        (
-            "night-bodyguard-strongman-vengeful-projection-state-generated-minimized",
-            include_str!(
-                "../fixtures/night-bodyguard-strongman-vengeful-projection-state-generated-minimized.json"
-            ),
-            "night-bodyguard-strongman-vengeful-projection-state-generated-bad-expectation",
-            include_str!(
-                "../fixtures/night-bodyguard-strongman-vengeful-projection-state-generated-bad-expectation.json"
-            ),
-        ),
-        (
-            "night-bodyguard-strongman-vengeful-projection-state-generated-seed-97262-minimized",
-            include_str!(
-                "../fixtures/night-bodyguard-strongman-vengeful-projection-state-generated-seed-97262-minimized.json"
-            ),
-            "night-bodyguard-strongman-vengeful-projection-state-generated-seed-97262-bad-expectation",
-            include_str!(
-                "../fixtures/night-bodyguard-strongman-vengeful-projection-state-generated-seed-97262-bad-expectation.json"
-            ),
-        ),
-    ] {
-        checked_in_bodyguard_strongman_vengeful_projection_state_generated_fixture_replays(
-            &pool,
-            success_stem,
-            success_fixture_json,
-            bad_stem,
-            bad_fixture_json,
-        )
-        .await;
-    }
-}
-
-async fn checked_in_bodyguard_strongman_vengeful_projection_state_generated_fixture_replays(
-    pool: &PgPool,
-    success_stem: &str,
-    success_fixture_json: &str,
-    bad_stem: &str,
-    bad_fixture_json: &str,
-) {
-    let expected_expectations = 11;
-
-    let success_fixture: serde_json::Value = serde_json::from_str(success_fixture_json)
-        .expect("Bodyguard Strongman Vengeful projection-state fixture parses");
-    assert_eq!(
-        success_fixture["roster"].as_array().map_or(0, Vec::len),
-        3,
-        "{success_stem} roster size"
-    );
-    assert_eq!(
-        success_fixture["actions"].as_array().map_or(0, Vec::len),
-        2,
-        "{success_stem} action count"
-    );
-    assert_eq!(
-        success_fixture["setup_phases"]
-            .as_array()
-            .map_or(0, Vec::len),
-        0,
-        "{success_stem} setup phase count"
-    );
-    assert_eq!(
-        success_fixture["expectations"]["inner_events"]
-            .as_array()
-            .map_or(0, Vec::len),
-        3,
-        "{success_stem} inner event expectation count"
-    );
-    assert_eq!(
-        success_fixture["expectations"]["trace_decisions"]
-            .as_array()
-            .map_or(0, Vec::len),
-        2,
-        "{success_stem} trace decision expectation count"
-    );
-    assert_eq!(
-        success_fixture["expectations"]["trace_notes"]
-            .as_array()
-            .map_or(0, Vec::len),
-        1,
-        "{success_stem} trace note expectation count"
-    );
-    assert_eq!(
-        success_fixture["expectations"]["generated_actions"]
-            .as_array()
-            .map_or(0, Vec::len),
-        1,
-        "{success_stem} generated action expectation count"
-    );
-    assert_eq!(
-        success_fixture["expectations"]["generated_action_counts"]
-            .as_array()
-            .map_or(0, Vec::len),
-        1,
-        "{success_stem} generated action count expectation count"
-    );
-    assert_eq!(
-        success_fixture["expectations"]["slot_states"]
-            .as_array()
-            .map_or(0, Vec::len),
-        3,
-        "{success_stem} slot state expectation count"
-    );
-    assert_eq!(
-        generated_expectation_count(&success_fixture["expectations"]),
-        expected_expectations,
-        "{success_stem} semantic expectation count"
-    );
-
-    let success_artifacts =
-        GeneratedShrinkArtifacts::new(&format!("{success_stem}-semantic-replay"));
-    success_artifacts.remove_existing();
-    success_artifacts.write_fixture(success_fixture_json);
-    let success_report = success_artifacts.run_minimizer(pool).await;
-
-    assert_eq!(
-        success_report["original"]["ok"], true,
-        "{success_stem} should replay"
-    );
-    assert_eq!(
-        success_report["original"]["resolution_audited"],
-        serde_json::json!(1),
-        "{success_stem} audited resolution count"
-    );
-    assert_eq!(
-        success_report["original"]["trace_count"],
-        serde_json::json!(1),
-        "{success_stem} trace count"
-    );
-    assert_eq!(
-        success_report["original"]["projection_audit_ok"],
-        serde_json::json!(true),
-        "{success_stem} projection audit"
-    );
-    assert_eq!(
-        success_report["original"]["semantic_expectations_checked"],
-        serde_json::json!(expected_expectations),
-        "{success_stem} semantic expectation count"
-    );
-    assert_eq!(
-        success_report["minimized"]["ok"], true,
-        "{success_stem} minimized replay"
-    );
-    assert_eq!(
-        success_report["minimized"]["semantic_expectations_checked"],
-        serde_json::json!(expected_expectations),
-        "{success_stem} minimized semantic expectation count"
-    );
-    assert_eq!(
-        success_report["reduction"]["replay_success"],
-        serde_json::json!(true),
-        "{success_stem} reduction replay"
-    );
-    assert_eq!(
-        success_report["reduction"]["success_invariant_preserved"],
-        serde_json::json!(true),
-        "{success_stem} success invariant"
-    );
-    assert_eq!(
-        success_report["write_reduced"]["promoted_success_fixture"],
-        serde_json::json!(true),
-        "{success_stem} promoted success fixture"
-    );
-
-    let bad_fixture: serde_json::Value = serde_json::from_str(bad_fixture_json)
-        .expect("bad Bodyguard Strongman Vengeful projection-state fixture parses");
-    assert_eq!(
-        bad_fixture["roster"].as_array().map_or(0, Vec::len),
-        0,
-        "{bad_stem} roster size"
-    );
-    assert_eq!(
-        bad_fixture["actions"].as_array().map_or(0, Vec::len),
-        0,
-        "{bad_stem} action count"
-    );
-    assert_eq!(
-        generated_expectation_count(&bad_fixture["expectations"]),
-        expected_expectations,
-        "{bad_stem} semantic expectation count"
-    );
-
-    let bad_artifacts = GeneratedShrinkArtifacts::new(&format!("{bad_stem}-semantic-replay"));
-    bad_artifacts.remove_existing();
-    bad_artifacts.write_fixture(bad_fixture_json);
-    let bad_report = bad_artifacts.run_minimizer(pool).await;
-
-    assert_eq!(
-        bad_report["original"]["ok"], false,
-        "{bad_stem} bad original should fail"
-    );
-    assert_eq!(
-        bad_report["original"]["failure_class"], "semantic_expectation",
-        "{bad_stem} bad original failure class"
-    );
-    assert_eq!(
-        bad_report["minimized"]["ok"], false,
-        "{bad_stem} bad minimized should fail"
-    );
-    assert_eq!(
-        bad_report["minimized"]["failure_class"], "semantic_expectation",
-        "{bad_stem} bad minimized failure class"
-    );
-    assert_eq!(
-        bad_report["reduction"]["replay_success"],
-        serde_json::json!(false),
-        "{bad_stem} bad reduction should remain failing"
-    );
-    assert_eq!(
-        bad_report["reduction"]["failure_class_preserved"],
-        serde_json::json!(true),
-        "{bad_stem} bad reduction should preserve semantic failure"
-    );
-    assert_eq!(
-        bad_report["write_reduced"]["wrote"],
-        serde_json::json!(true),
-        "{bad_stem} bad reduced artifact should be written"
-    );
-    assert_eq!(
-        bad_report["write_reduced"]["promoted_success_fixture"],
-        serde_json::json!(false),
-        "{bad_stem} bad reduced artifact should not be promoted"
-    );
-}
-
-#[sqlx::test(migrations = "../projections/migrations")]
-async fn checked_in_vengeful_fixpoint_generated_fixtures_replay_semantic_expectations(
-    pool: PgPool,
-) {
-    let success_stem = "night-vengeful-fixpoint-generated-minimized";
-    let success_fixture_json =
-        include_str!("../fixtures/night-vengeful-fixpoint-generated-minimized.json");
-    let bad_stem = "night-vengeful-fixpoint-generated-bad-expectation";
-    let bad_fixture_json =
-        include_str!("../fixtures/night-vengeful-fixpoint-generated-bad-expectation.json");
-    let expected_expectations = 9;
-
-    let success_fixture: serde_json::Value =
-        serde_json::from_str(success_fixture_json).expect("Vengeful fixpoint fixture parses");
-    assert_eq!(
-        success_fixture["roster"].as_array().map_or(0, Vec::len),
-        2,
-        "{success_stem} roster size"
-    );
-    assert_eq!(
-        success_fixture["actions"].as_array().map_or(0, Vec::len),
-        1,
-        "{success_stem} action count"
-    );
-    assert_eq!(
-        success_fixture["setup_phases"]
-            .as_array()
-            .map_or(0, Vec::len),
-        0,
-        "{success_stem} setup phase count"
-    );
-    assert_eq!(
-        success_fixture["expectations"]["inner_events"]
-            .as_array()
-            .map_or(0, Vec::len),
-        3,
-        "{success_stem} inner event expectation count"
-    );
-    assert_eq!(
-        success_fixture["expectations"]["trace_decisions"]
-            .as_array()
-            .map_or(0, Vec::len),
-        1,
-        "{success_stem} trace decision expectation count"
-    );
-    assert_eq!(
-        success_fixture["expectations"]["trace_notes"]
-            .as_array()
-            .map_or(0, Vec::len),
-        1,
-        "{success_stem} trace note expectation count"
-    );
-    assert_eq!(
-        success_fixture["expectations"]["generated_actions"]
-            .as_array()
-            .map_or(0, Vec::len),
-        1,
-        "{success_stem} generated action expectation count"
-    );
-    assert_eq!(
-        success_fixture["expectations"]["generated_action_counts"]
-            .as_array()
-            .map_or(0, Vec::len),
-        1,
-        "{success_stem} generated action count expectation count"
-    );
-    assert_eq!(
-        success_fixture["expectations"]["slot_states"]
-            .as_array()
-            .map_or(0, Vec::len),
-        2,
-        "{success_stem} slot state expectation count"
-    );
-    assert_eq!(
-        generated_expectation_count(&success_fixture["expectations"]),
-        expected_expectations,
-        "{success_stem} semantic expectation count"
-    );
-
-    let success_artifacts =
-        GeneratedShrinkArtifacts::new(&format!("{success_stem}-semantic-replay"));
-    success_artifacts.remove_existing();
-    success_artifacts.write_fixture(success_fixture_json);
-    let success_report = success_artifacts.run_minimizer(&pool).await;
-
-    assert_eq!(
-        success_report["original"]["ok"], true,
-        "{success_stem} should replay"
-    );
-    assert_eq!(
-        success_report["original"]["resolution_audited"],
-        serde_json::json!(1),
-        "{success_stem} audited resolution count"
-    );
-    assert_eq!(
-        success_report["original"]["trace_count"],
-        serde_json::json!(1),
-        "{success_stem} trace count"
-    );
-    assert_eq!(
-        success_report["original"]["projection_audit_ok"],
-        serde_json::json!(true),
-        "{success_stem} projection audit"
-    );
-    assert_eq!(
-        success_report["original"]["semantic_expectations_checked"],
-        serde_json::json!(expected_expectations),
-        "{success_stem} semantic expectation count"
-    );
-    assert_eq!(
-        success_report["minimized"]["ok"], true,
-        "{success_stem} minimized replay"
-    );
-    assert_eq!(
-        success_report["minimized"]["semantic_expectations_checked"],
-        serde_json::json!(expected_expectations),
-        "{success_stem} minimized semantic expectation count"
-    );
-    assert_eq!(
-        success_report["reduction"]["replay_success"],
-        serde_json::json!(true),
-        "{success_stem} reduction replay"
-    );
-    assert_eq!(
-        success_report["reduction"]["success_invariant_preserved"],
-        serde_json::json!(true),
-        "{success_stem} success invariant"
-    );
-    assert_eq!(
-        success_report["write_reduced"]["promoted_success_fixture"],
-        serde_json::json!(true),
-        "{success_stem} promoted success fixture"
-    );
-
-    let bad_fixture: serde_json::Value =
-        serde_json::from_str(bad_fixture_json).expect("bad Vengeful fixpoint fixture parses");
-    assert_eq!(
-        bad_fixture["roster"].as_array().map_or(0, Vec::len),
-        0,
-        "{bad_stem} roster size"
-    );
-    assert_eq!(
-        bad_fixture["actions"].as_array().map_or(0, Vec::len),
-        0,
-        "{bad_stem} action count"
-    );
-    assert_eq!(
-        generated_expectation_count(&bad_fixture["expectations"]),
-        expected_expectations,
-        "{bad_stem} semantic expectation count"
-    );
-
-    let bad_artifacts = GeneratedShrinkArtifacts::new(&format!("{bad_stem}-semantic-replay"));
-    bad_artifacts.remove_existing();
-    bad_artifacts.write_fixture(bad_fixture_json);
-    let bad_report = bad_artifacts.run_minimizer(&pool).await;
-
-    assert_eq!(
-        bad_report["original"]["ok"], false,
-        "{bad_stem} bad original should fail"
-    );
-    assert_eq!(
-        bad_report["original"]["failure_class"], "semantic_expectation",
-        "{bad_stem} bad original failure class"
-    );
-    assert_eq!(
-        bad_report["minimized"]["ok"], false,
-        "{bad_stem} bad minimized should fail"
-    );
-    assert_eq!(
-        bad_report["minimized"]["failure_class"], "semantic_expectation",
-        "{bad_stem} bad minimized failure class"
-    );
-    assert_eq!(
-        bad_report["reduction"]["replay_success"],
-        serde_json::json!(false),
-        "{bad_stem} bad reduction should remain failing"
-    );
-    assert_eq!(
-        bad_report["reduction"]["failure_class_preserved"],
-        serde_json::json!(true),
-        "{bad_stem} bad reduction should preserve semantic failure"
-    );
-    assert_eq!(
-        bad_report["write_reduced"]["wrote"],
-        serde_json::json!(true),
-        "{bad_stem} bad reduced artifact should be written"
-    );
-    assert_eq!(
-        bad_report["write_reduced"]["promoted_success_fixture"],
-        serde_json::json!(false),
-        "{bad_stem} bad reduced artifact should not be promoted"
-    );
-}
-
-#[sqlx::test(migrations = "../projections/migrations")]
-async fn checked_in_strongman_vengeful_fixpoint_generated_fixtures_replay_semantic_expectations(
-    pool: PgPool,
-) {
-    let success_stem = "night-strongman-vengeful-fixpoint-generated-minimized";
-    let success_fixture_json =
-        include_str!("../fixtures/night-strongman-vengeful-fixpoint-generated-minimized.json");
-    let bad_stem = "night-strongman-vengeful-fixpoint-generated-bad-expectation";
-    let bad_fixture_json = include_str!(
-        "../fixtures/night-strongman-vengeful-fixpoint-generated-bad-expectation.json"
-    );
-    let expected_expectations = 11;
-
-    let success_fixture: serde_json::Value = serde_json::from_str(success_fixture_json)
-        .expect("Strongman Vengeful fixpoint fixture parses");
-    assert_eq!(
-        success_fixture["roster"].as_array().map_or(0, Vec::len),
-        3,
-        "{success_stem} roster size"
-    );
-    assert_eq!(
-        success_fixture["actions"].as_array().map_or(0, Vec::len),
-        2,
-        "{success_stem} action count"
-    );
-    assert_eq!(
-        success_fixture["setup_phases"]
-            .as_array()
-            .map_or(0, Vec::len),
-        0,
-        "{success_stem} setup phase count"
-    );
-    assert_eq!(
-        success_fixture["expectations"]["inner_events"]
-            .as_array()
-            .map_or(0, Vec::len),
-        3,
-        "{success_stem} inner event expectation count"
-    );
-    assert_eq!(
-        success_fixture["expectations"]["trace_decisions"]
-            .as_array()
-            .map_or(0, Vec::len),
-        2,
-        "{success_stem} trace decision expectation count"
-    );
-    assert_eq!(
-        success_fixture["expectations"]["trace_notes"]
-            .as_array()
-            .map_or(0, Vec::len),
-        1,
-        "{success_stem} trace note expectation count"
-    );
-    assert_eq!(
-        success_fixture["expectations"]["generated_actions"]
-            .as_array()
-            .map_or(0, Vec::len),
-        1,
-        "{success_stem} generated action expectation count"
-    );
-    assert_eq!(
-        success_fixture["expectations"]["generated_action_counts"]
-            .as_array()
-            .map_or(0, Vec::len),
-        1,
-        "{success_stem} generated action count expectation count"
-    );
-    assert_eq!(
-        success_fixture["expectations"]["slot_states"]
-            .as_array()
-            .map_or(0, Vec::len),
-        3,
-        "{success_stem} slot state expectation count"
-    );
-    assert_eq!(
-        generated_expectation_count(&success_fixture["expectations"]),
-        expected_expectations,
-        "{success_stem} semantic expectation count"
-    );
-
-    let success_artifacts =
-        GeneratedShrinkArtifacts::new(&format!("{success_stem}-semantic-replay"));
-    success_artifacts.remove_existing();
-    success_artifacts.write_fixture(success_fixture_json);
-    let success_report = success_artifacts.run_minimizer(&pool).await;
-
-    assert_eq!(
-        success_report["original"]["ok"], true,
-        "{success_stem} should replay"
-    );
-    assert_eq!(
-        success_report["original"]["resolution_audited"],
-        serde_json::json!(1),
-        "{success_stem} audited resolution count"
-    );
-    assert_eq!(
-        success_report["original"]["trace_count"],
-        serde_json::json!(1),
-        "{success_stem} trace count"
-    );
-    assert_eq!(
-        success_report["original"]["projection_audit_ok"],
-        serde_json::json!(true),
-        "{success_stem} projection audit"
-    );
-    assert_eq!(
-        success_report["original"]["semantic_expectations_checked"],
-        serde_json::json!(expected_expectations),
-        "{success_stem} semantic expectation count"
-    );
-    assert_eq!(
-        success_report["minimized"]["ok"], true,
-        "{success_stem} minimized replay"
-    );
-    assert_eq!(
-        success_report["minimized"]["semantic_expectations_checked"],
-        serde_json::json!(expected_expectations),
-        "{success_stem} minimized semantic expectation count"
-    );
-    assert_eq!(
-        success_report["reduction"]["replay_success"],
-        serde_json::json!(true),
-        "{success_stem} reduction replay"
-    );
-    assert_eq!(
-        success_report["reduction"]["success_invariant_preserved"],
-        serde_json::json!(true),
-        "{success_stem} success invariant"
-    );
-    assert_eq!(
-        success_report["write_reduced"]["promoted_success_fixture"],
-        serde_json::json!(true),
-        "{success_stem} promoted success fixture"
-    );
-
-    let bad_fixture: serde_json::Value = serde_json::from_str(bad_fixture_json)
-        .expect("bad Strongman Vengeful fixpoint fixture parses");
-    assert_eq!(
-        bad_fixture["roster"].as_array().map_or(0, Vec::len),
-        0,
-        "{bad_stem} roster size"
-    );
-    assert_eq!(
-        bad_fixture["actions"].as_array().map_or(0, Vec::len),
-        0,
-        "{bad_stem} action count"
-    );
-    assert_eq!(
-        generated_expectation_count(&bad_fixture["expectations"]),
-        expected_expectations,
-        "{bad_stem} semantic expectation count"
-    );
-
-    let bad_artifacts = GeneratedShrinkArtifacts::new(&format!("{bad_stem}-semantic-replay"));
-    bad_artifacts.remove_existing();
-    bad_artifacts.write_fixture(bad_fixture_json);
-    let bad_report = bad_artifacts.run_minimizer(&pool).await;
-
-    assert_eq!(
-        bad_report["original"]["ok"], false,
-        "{bad_stem} bad original should fail"
-    );
-    assert_eq!(
-        bad_report["original"]["failure_class"], "semantic_expectation",
-        "{bad_stem} bad original failure class"
-    );
-    assert_eq!(
-        bad_report["minimized"]["ok"], false,
-        "{bad_stem} bad minimized should fail"
-    );
-    assert_eq!(
-        bad_report["minimized"]["failure_class"], "semantic_expectation",
-        "{bad_stem} bad minimized failure class"
-    );
-    assert_eq!(
-        bad_report["reduction"]["replay_success"],
-        serde_json::json!(false),
-        "{bad_stem} bad reduction should remain failing"
-    );
-    assert_eq!(
-        bad_report["reduction"]["failure_class_preserved"],
-        serde_json::json!(true),
-        "{bad_stem} bad reduction should preserve semantic failure"
-    );
-    assert_eq!(
-        bad_report["write_reduced"]["wrote"],
-        serde_json::json!(true),
-        "{bad_stem} bad reduced artifact should be written"
-    );
-    assert_eq!(
-        bad_report["write_reduced"]["promoted_success_fixture"],
-        serde_json::json!(false),
-        "{bad_stem} bad reduced artifact should not be promoted"
-    );
-}
-
-#[sqlx::test(migrations = "../projections/migrations")]
-async fn checked_in_bodyguard_strongman_vengeful_fixpoint_generated_fixtures_replay_semantic_expectations(
-    pool: PgPool,
-) {
-    let success_stem = "night-bodyguard-strongman-vengeful-fixpoint-generated-minimized";
-    let success_fixture_json = include_str!(
-        "../fixtures/night-bodyguard-strongman-vengeful-fixpoint-generated-minimized.json"
-    );
-    let bad_stem = "night-bodyguard-strongman-vengeful-fixpoint-generated-bad-expectation";
-    let bad_fixture_json = include_str!(
-        "../fixtures/night-bodyguard-strongman-vengeful-fixpoint-generated-bad-expectation.json"
-    );
-    let expected_expectations = 11;
-
-    let success_fixture: serde_json::Value = serde_json::from_str(success_fixture_json)
-        .expect("Bodyguard Strongman Vengeful fixpoint fixture parses");
-    assert_eq!(
-        success_fixture["roster"].as_array().map_or(0, Vec::len),
-        3,
-        "{success_stem} roster size"
-    );
-    assert_eq!(
-        success_fixture["actions"].as_array().map_or(0, Vec::len),
-        2,
-        "{success_stem} action count"
-    );
-    assert_eq!(
-        success_fixture["setup_phases"]
-            .as_array()
-            .map_or(0, Vec::len),
-        0,
-        "{success_stem} setup phase count"
-    );
-    assert_eq!(
-        success_fixture["expectations"]["inner_events"]
-            .as_array()
-            .map_or(0, Vec::len),
-        3,
-        "{success_stem} inner event expectation count"
-    );
-    assert_eq!(
-        success_fixture["expectations"]["trace_decisions"]
-            .as_array()
-            .map_or(0, Vec::len),
-        2,
-        "{success_stem} trace decision expectation count"
-    );
-    assert_eq!(
-        success_fixture["expectations"]["trace_notes"]
-            .as_array()
-            .map_or(0, Vec::len),
-        1,
-        "{success_stem} trace note expectation count"
-    );
-    assert_eq!(
-        success_fixture["expectations"]["generated_actions"]
-            .as_array()
-            .map_or(0, Vec::len),
-        1,
-        "{success_stem} generated action expectation count"
-    );
-    assert_eq!(
-        success_fixture["expectations"]["generated_action_counts"]
-            .as_array()
-            .map_or(0, Vec::len),
-        1,
-        "{success_stem} generated action count expectation count"
-    );
-    assert_eq!(
-        success_fixture["expectations"]["slot_states"]
-            .as_array()
-            .map_or(0, Vec::len),
-        3,
-        "{success_stem} slot state expectation count"
-    );
-    assert_eq!(
-        generated_expectation_count(&success_fixture["expectations"]),
-        expected_expectations,
-        "{success_stem} semantic expectation count"
-    );
-
-    let success_artifacts =
-        GeneratedShrinkArtifacts::new(&format!("{success_stem}-semantic-replay"));
-    success_artifacts.remove_existing();
-    success_artifacts.write_fixture(success_fixture_json);
-    let success_report = success_artifacts.run_minimizer(&pool).await;
-
-    assert_eq!(
-        success_report["original"]["ok"], true,
-        "{success_stem} should replay"
-    );
-    assert_eq!(
-        success_report["original"]["resolution_audited"],
-        serde_json::json!(1),
-        "{success_stem} audited resolution count"
-    );
-    assert_eq!(
-        success_report["original"]["trace_count"],
-        serde_json::json!(1),
-        "{success_stem} trace count"
-    );
-    assert_eq!(
-        success_report["original"]["projection_audit_ok"],
-        serde_json::json!(true),
-        "{success_stem} projection audit"
-    );
-    assert_eq!(
-        success_report["original"]["semantic_expectations_checked"],
-        serde_json::json!(expected_expectations),
-        "{success_stem} semantic expectation count"
-    );
-    assert_eq!(
-        success_report["minimized"]["ok"], true,
-        "{success_stem} minimized replay"
-    );
-    assert_eq!(
-        success_report["minimized"]["semantic_expectations_checked"],
-        serde_json::json!(expected_expectations),
-        "{success_stem} minimized semantic expectation count"
-    );
-    assert_eq!(
-        success_report["reduction"]["replay_success"],
-        serde_json::json!(true),
-        "{success_stem} reduction replay"
-    );
-    assert_eq!(
-        success_report["reduction"]["success_invariant_preserved"],
-        serde_json::json!(true),
-        "{success_stem} success invariant"
-    );
-    assert_eq!(
-        success_report["write_reduced"]["promoted_success_fixture"],
-        serde_json::json!(true),
-        "{success_stem} promoted success fixture"
-    );
-
-    let bad_fixture: serde_json::Value = serde_json::from_str(bad_fixture_json)
-        .expect("bad Bodyguard Strongman Vengeful fixpoint fixture parses");
-    assert_eq!(
-        bad_fixture["roster"].as_array().map_or(0, Vec::len),
-        0,
-        "{bad_stem} roster size"
-    );
-    assert_eq!(
-        bad_fixture["actions"].as_array().map_or(0, Vec::len),
-        0,
-        "{bad_stem} action count"
-    );
-    assert_eq!(
-        generated_expectation_count(&bad_fixture["expectations"]),
-        expected_expectations,
-        "{bad_stem} semantic expectation count"
-    );
-
-    let bad_artifacts = GeneratedShrinkArtifacts::new(&format!("{bad_stem}-semantic-replay"));
-    bad_artifacts.remove_existing();
-    bad_artifacts.write_fixture(bad_fixture_json);
-    let bad_report = bad_artifacts.run_minimizer(&pool).await;
-
-    assert_eq!(
-        bad_report["original"]["ok"], false,
-        "{bad_stem} bad original should fail"
-    );
-    assert_eq!(
-        bad_report["original"]["failure_class"], "semantic_expectation",
-        "{bad_stem} bad original failure class"
-    );
-    assert_eq!(
-        bad_report["minimized"]["ok"], false,
-        "{bad_stem} bad minimized should fail"
-    );
-    assert_eq!(
-        bad_report["minimized"]["failure_class"], "semantic_expectation",
-        "{bad_stem} bad minimized failure class"
-    );
-    assert_eq!(
-        bad_report["reduction"]["replay_success"],
-        serde_json::json!(false),
-        "{bad_stem} bad reduction should remain failing"
-    );
-    assert_eq!(
-        bad_report["reduction"]["failure_class_preserved"],
-        serde_json::json!(true),
-        "{bad_stem} bad reduction should preserve semantic failure"
-    );
-    assert_eq!(
-        bad_report["write_reduced"]["wrote"],
-        serde_json::json!(true),
-        "{bad_stem} bad reduced artifact should be written"
-    );
-    assert_eq!(
-        bad_report["write_reduced"]["promoted_success_fixture"],
-        serde_json::json!(false),
-        "{bad_stem} bad reduced artifact should not be promoted"
-    );
-}
-
-#[sqlx::test(migrations = "../projections/migrations")]
-async fn nonminimal_trigger_dependency_fixtures_shrink_to_checked_semantic_replays(pool: PgPool) {
-    for (
-        stem,
-        fixture_json,
-        original_roster,
-        reduced_roster,
-        action_count,
-        expectation_count,
-        removed_slot,
-    ) in [
-        (
-            "night-babysitter-dependency",
-            include_str!("../fixtures/night-babysitter-dependency-nonminimal.json"),
-            5,
-            4,
-            3,
-            3,
-            "slot_5",
-        ),
-        (
-            "night-hider-dependency",
-            include_str!("../fixtures/night-hider-dependency-nonminimal.json"),
-            4,
-            3,
-            2,
-            3,
-            "slot_4",
-        ),
-        (
-            "night-pgo-trigger",
-            include_str!("../fixtures/night-pgo-trigger-nonminimal.json"),
-            3,
-            2,
-            1,
-            4,
-            "slot_3",
-        ),
-    ] {
-        let fixture: serde_json::Value =
-            serde_json::from_str(fixture_json).expect("nonminimal fixture should parse");
-        assert_eq!(
-            fixture["roster"].as_array().map_or(0, Vec::len),
-            original_roster,
-            "{stem} original roster size"
-        );
-        assert_eq!(
-            fixture["actions"].as_array().map_or(0, Vec::len),
-            action_count,
-            "{stem} action count"
-        );
-        assert_eq!(
-            generated_expectation_count(&fixture["expectations"]),
-            expectation_count,
-            "{stem} semantic expectation count"
-        );
-
-        let artifacts = GeneratedShrinkArtifacts::new(&format!("{stem}-nonminimal-success-shrink"));
-        artifacts.remove_existing();
-        artifacts.write_fixture(fixture_json);
-        let report = artifacts.run_minimizer(&pool).await;
-
-        assert_eq!(report["original"]["ok"], true, "{stem} original replay");
-        assert_eq!(
-            report["original"]["resolution_audited"],
-            serde_json::json!(1),
-            "{stem} original resolution audit"
-        );
-        assert_eq!(
-            report["original"]["trace_count"],
-            serde_json::json!(1),
-            "{stem} original trace count"
-        );
-        assert_eq!(
-            report["original"]["projection_audit_ok"],
-            serde_json::json!(true),
-            "{stem} original projection audit"
-        );
-        assert_eq!(
-            report["original"]["semantic_expectations_checked"],
-            serde_json::json!(expectation_count),
-            "{stem} original semantic expectation count"
-        );
-        assert_eq!(report["minimized"]["ok"], true, "{stem} minimized replay");
-        assert_eq!(
-            report["minimized"]["semantic_expectations_checked"],
-            serde_json::json!(expectation_count),
-            "{stem} minimized semantic expectation count"
-        );
-        assert_eq!(
-            report["reduction"]["replay_success"],
-            serde_json::json!(true),
-            "{stem} reduction replay"
-        );
-        assert_eq!(
-            report["reduction"]["success_invariant_preserved"],
-            serde_json::json!(true),
-            "{stem} success invariant"
-        );
-        assert_eq!(
-            report["write_reduced"]["promoted_success_fixture"],
-            serde_json::json!(true),
-            "{stem} promoted success fixture"
-        );
-        assert!(
-            report["reduction_steps"]
-                .as_array()
-                .is_some_and(|steps| !steps.is_empty()),
-            "{stem} fixture should shrink at least one item"
-        );
-
-        let reduced_fixture_json = fs::read_to_string(&artifacts.reduced_path)
-            .unwrap_or_else(|err| panic!("{stem} reduced fixture should be written: {err}"));
-        let reduced_fixture: serde_json::Value =
-            serde_json::from_str(&reduced_fixture_json).expect("reduced fixture should parse");
-        assert_eq!(
-            reduced_fixture["roster"].as_array().map_or(0, Vec::len),
-            reduced_roster,
-            "{stem} reduced roster size"
-        );
-        assert_eq!(
-            reduced_fixture["actions"].as_array().map_or(0, Vec::len),
-            action_count,
-            "{stem} reduced action count"
-        );
-        assert!(
-            !reduced_fixture["roster"]
-                .as_array()
-                .expect("reduced fixture carries roster")
-                .iter()
-                .any(|slot| slot["slot"] == removed_slot),
-            "{stem} irrelevant extra slot should be removed"
-        );
-        assert_eq!(
-            generated_expectation_count(&reduced_fixture["expectations"]),
-            expectation_count,
-            "{stem} reduced semantic expectation count"
-        );
-
-        let replay_artifacts =
-            GeneratedShrinkArtifacts::new(&format!("{stem}-reduced-written-replay"));
-        replay_artifacts.remove_existing();
-        replay_artifacts.write_fixture(&reduced_fixture_json);
-        let replay_report = replay_artifacts.run_minimizer(&pool).await;
-        assert_eq!(
-            replay_report["original"]["ok"], true,
-            "{stem} reduced replay"
-        );
-        assert_eq!(
-            replay_report["original"]["semantic_expectations_checked"],
-            serde_json::json!(expectation_count),
-            "{stem} reduced replay semantic expectation count"
-        );
-        assert_eq!(
-            replay_report["original"]["projection_audit_ok"],
-            serde_json::json!(true),
-            "{stem} reduced replay projection audit"
-        );
-    }
-}
-
-#[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit generated command audit lane"]
 async fn generated_trigger_dependency_search_shrinks_to_replayable_artifacts(pool: PgPool) {
     let found = generated_trigger_dependency_search_fixtures();
 
@@ -18033,6 +14433,7 @@ async fn generated_trigger_dependency_search_shrinks_to_replayable_artifacts(poo
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit generated command audit lane"]
 async fn generated_trigger_dependency_bad_expectations_shrink_to_failing_artifacts(pool: PgPool) {
     let found = generated_trigger_dependency_search_fixtures();
 
@@ -18146,6 +14547,7 @@ async fn generated_trigger_dependency_bad_expectations_shrink_to_failing_artifac
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit generated command audit lane"]
 async fn generated_persistent_trigger_fixtures_shrink_to_replayable_artifacts(pool: PgPool) {
     for (stem, fixture_json, expected_audited, expected_traces, min_expectations) in [
         (
@@ -18288,6 +14690,7 @@ async fn generated_persistent_trigger_fixtures_shrink_to_replayable_artifacts(po
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit generated command audit lane"]
 async fn generated_persistent_trigger_bad_expectations_shrink_to_failing_artifacts(pool: PgPool) {
     for (family, stem, seed, min_expectations) in [
         (
@@ -18617,6 +15020,7 @@ async fn generated_shrink_matrix_writes_compact_operator_report(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit generated command audit lane"]
 async fn seeded_persistent_trigger_state_replay_audit_and_rebuild_deterministically(pool: PgPool) {
     for (seed, case_name) in [
         (8101_u64, "hunter"),
@@ -18965,6 +15369,7 @@ async fn seeded_persistent_trigger_state_replay_audit_and_rebuild_deterministica
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit generated command audit lane"]
 async fn seeded_day_trigger_policy_replay_audit_and_rebuild_deterministically(pool: PgPool) {
     for (seed, case_name) in [(8501_u64, "super_saint"), (8602, "hero_vote_duel")] {
         let game = Uuid::new_v4();
@@ -19242,6 +15647,7 @@ async fn seeded_day_trigger_policy_replay_audit_and_rebuild_deterministically(po
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit generated command audit lane"]
 async fn large_action_graph_resolves_and_audits_within_regression_ceiling(pool: PgPool) {
     let seed = 90_001_u64;
     let game = Uuid::new_v4();
@@ -19786,6 +16192,7 @@ struct GeneratedEpicmafiaPkCase {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit generated command audit lane"]
 async fn generated_night_action_graphs_replay_audit_and_rebuild_deterministically(pool: PgPool) {
     for seed in [91_001_u64, 91_113, 91_227, 91_331, 91_447, 91_559] {
         let case = generated_night_case(seed);
@@ -20164,6 +16571,7 @@ async fn generated_night_action_graphs_replay_audit_and_rebuild_deterministicall
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit generated command audit lane"]
 async fn generated_mafiascum_failure_fixture_shrinks_to_saved_artifacts(pool: PgPool) {
     let case = GeneratedNightCase {
         seed: 91_777,
@@ -20218,6 +16626,7 @@ async fn generated_mafiascum_failure_fixture_shrinks_to_saved_artifacts(pool: Pg
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit generated command audit lane"]
 async fn generated_failure_message_includes_saved_shrink_summary(pool: PgPool) {
     let case = GeneratedNightCase {
         seed: 91_778,
@@ -20261,6 +16670,7 @@ async fn generated_failure_message_includes_saved_shrink_summary(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit generated command audit lane"]
 async fn generated_chinese_failure_fixture_shrinks_to_saved_artifacts(pool: PgPool) {
     let case = GeneratedNightCase {
         seed: 92_777,
@@ -20323,6 +16733,7 @@ async fn generated_chinese_failure_fixture_shrinks_to_saved_artifacts(pool: PgPo
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit generated command audit lane"]
 async fn generated_epicmafia_pk_fixture_replays_prompt_through_minimizer(pool: PgPool) {
     let case = generated_epicmafia_pk_case(95_777);
     let fixture_json = generated_epicmafia_pk_case_fixture_json(&case, case.seed + 47_000);
@@ -20551,6 +16962,7 @@ fn pack_declared_pk_prompt_policies_have_semantic_minimizer_coverage() {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit generated command audit lane"]
 async fn generated_epicmafia_night_fixture_replays_semantic_expectations_through_minimizer(
     pool: PgPool,
 ) {
@@ -20578,6 +16990,7 @@ async fn generated_epicmafia_night_fixture_replays_semantic_expectations_through
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit generated command audit lane"]
 async fn generated_chinese_structured_night_fixtures_replay_semantic_expectations_through_minimizer(
     pool: PgPool,
 ) {
@@ -20669,6 +17082,7 @@ async fn chinese_folded_state_cascade_fixtures_replay_semantic_expectations_thro
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit generated command audit lane"]
 async fn generated_phase5_day_fixtures_replay_semantic_expectations_through_minimizer(
     pool: PgPool,
 ) {
@@ -21018,6 +17432,7 @@ async fn phase5_day_note_and_revote_prompt_fixtures_replay_semantic_expectations
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit generated command audit lane"]
 async fn generated_default_open_fixtures_replay_semantic_expectations_through_minimizer(
     pool: PgPool,
 ) {
@@ -21069,6 +17484,7 @@ async fn generated_default_open_fixtures_replay_semantic_expectations_through_mi
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit generated command audit lane"]
 async fn generated_chinese_structured_night_graphs_replay_audit_and_rebuild_deterministically(
     pool: PgPool,
 ) {
@@ -21449,6 +17865,7 @@ async fn generated_chinese_structured_night_graphs_replay_audit_and_rebuild_dete
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit generated command audit lane"]
 async fn generated_chinese_structured_day_graphs_replay_audit_and_rebuild_deterministically(
     pool: PgPool,
 ) {
@@ -21987,6 +18404,7 @@ async fn generated_chinese_structured_day_graphs_replay_audit_and_rebuild_determ
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit generated command audit lane"]
 async fn generated_mafia_universe_ita_sessions_replay_audit_and_rebuild_deterministically(
     pool: PgPool,
 ) {
@@ -22524,6 +18942,7 @@ async fn generated_mafia_universe_ita_sessions_replay_audit_and_rebuild_determin
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit generated command audit lane"]
 async fn generated_epicmafia_pk_bomb_cult_replay_audit_and_rebuild_deterministically(pool: PgPool) {
     for seed in [95_001_u64, 95_113, 95_227] {
         let case = generated_epicmafia_pk_case(seed);
@@ -23640,6 +20059,7 @@ async fn generated_epicmafia_pk_bomb_cult_replay_audit_and_rebuild_deterministic
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_default_open_guardian_seer(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -23909,6 +20329,7 @@ async fn host_resolve_phase_carries_default_open_guardian_seer(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit generated command audit lane"]
 async fn generated_default_open_night_replay_audit_and_rebuild_deterministically(pool: PgPool) {
     for seed in [97_101_u64, 97_211, 97_307] {
         let case = generated_default_open_night_case(seed);
@@ -24256,6 +20677,7 @@ async fn generated_default_open_night_replay_audit_and_rebuild_deterministically
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_default_open_day_majority(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -24485,6 +20907,7 @@ async fn host_resolve_phase_carries_default_open_day_majority(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit generated command audit lane"]
 async fn generated_default_open_day_replay_audit_and_rebuild_deterministically(pool: PgPool) {
     for seed in [97_409_u64, 97_521, 97_633] {
         let case = generated_default_open_day_case(seed);
@@ -27901,112 +24324,28 @@ impl GeneratedShrinkArtifacts {
     }
 
     async fn try_run_minimizer(&self, pool: &PgPool) -> Result<serde_json::Value, String> {
-        let database_url = database_url_for_pool(pool).await;
-        let args = vec![
-            OsString::from("--reduce"),
-            OsString::from("--write-reduced"),
-            self.reduced_path.clone().into_os_string(),
-            OsString::from("--write-report"),
-            self.report_path.clone().into_os_string(),
-            self.fixture_path.clone().into_os_string(),
-        ];
-        let output = run_minimize_night_fixture(&args, &database_url)
-            .map_err(|err| format!("run minimize_night_fixture for generated fixture: {err}"))?;
-        if !output.status.success() {
-            return Err(format!(
-                "minimize_night_fixture failed\nstdout:\n{}\nstderr:\n{}",
-                String::from_utf8_lossy(&output.stdout),
-                String::from_utf8_lossy(&output.stderr)
-            ));
-        }
-        // The minimizer writes its report to --write-report, so the saved file is
-        // the authoritative report surface even when diagnostic output is capped.
-        let saved_report: serde_json::Value = serde_json::from_str(
-            &fs::read_to_string(&self.report_path)
-                .map_err(|err| format!("read saved minimizer report: {err}"))?,
+        let fixture_json = fs::read_to_string(&self.fixture_path)
+            .map_err(|err| format!("read generated minimizer fixture: {err}"))?;
+        let reduced_path_label = self.reduced_path.to_string_lossy().into_owned();
+        let artifacts = operator_proof::minimizer::minimize_fixture_json(
+            pool,
+            &fixture_json,
+            true,
+            Some(&reduced_path_label),
         )
-        .map_err(|err| format!("saved minimizer report is not JSON: {err}"))?;
-        Ok(saved_report)
+        .await?;
+        write_generated_shrink_artifact(
+            &self.reduced_path,
+            &serde_json::to_string_pretty(&artifacts.reduced_fixture)
+                .map_err(|err| format!("serialize reduced minimizer fixture: {err}"))?,
+        );
+        write_generated_shrink_artifact(
+            &self.report_path,
+            &serde_json::to_string_pretty(&artifacts.report)
+                .map_err(|err| format!("serialize minimizer report: {err}"))?,
+        );
+        Ok(artifacts.report)
     }
-}
-
-fn run_minimize_night_fixture(args: &[OsString], database_url: &str) -> std::io::Result<Output> {
-    let _permit = acquire_minimize_night_fixture_permit();
-    let cargo_bin = std::env::var_os("CARGO_BIN_EXE_minimize_night_fixture")
-        .unwrap_or_else(|| OsString::from(env!("CARGO_BIN_EXE_minimize_night_fixture")));
-    let cargo = std::env::var_os("CARGO").unwrap_or_else(|| OsString::from("cargo"));
-    let invocation = minimize_night_fixture_invocation(cargo_bin, cargo, commands_workspace_root());
-    let mut command = ProcessCommand::new(&invocation.program);
-    if let Some(current_dir) = &invocation.current_dir {
-        command.current_dir(current_dir);
-    }
-    command
-        .args(&invocation.fixed_args)
-        .args(args)
-        .env("DATABASE_URL", database_url);
-    let output = run_bounded_process(
-        &mut command,
-        ProcessLimits::new(Duration::from_secs(3 * 60), 64 * 1024, 512 * 1024),
-    )
-    .map_err(std::io::Error::other)?;
-    Ok(Output {
-        status: output.status,
-        stdout: output.stdout.bytes,
-        stderr: output.stderr.bytes,
-    })
-}
-
-fn acquire_minimize_night_fixture_permit() -> MinimizeNightFixturePermit {
-    let (active, available) = MINIMIZER_CHILD_SLOTS.get_or_init(|| (Mutex::new(0), Condvar::new()));
-    let mut active = active
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
-    while *active >= MAX_CONCURRENT_MINIMIZER_CHILDREN {
-        active = available
-            .wait(active)
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-    }
-    *active += 1;
-    MinimizeNightFixturePermit
-}
-
-fn minimize_night_fixture_invocation(
-    cargo_bin: OsString,
-    cargo: OsString,
-    workspace_root: PathBuf,
-) -> ProcessInvocation {
-    if Path::new(&cargo_bin).is_file() {
-        return ProcessInvocation {
-            program: cargo_bin,
-            current_dir: None,
-            fixed_args: Vec::new(),
-        };
-    }
-
-    ProcessInvocation {
-        program: cargo,
-        current_dir: Some(workspace_root),
-        fixed_args: [
-            "run",
-            "-q",
-            "-p",
-            "commands",
-            "--bin",
-            "minimize_night_fixture",
-            "--",
-        ]
-        .into_iter()
-        .map(OsString::from)
-        .collect(),
-    }
-}
-
-fn commands_workspace_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .and_then(Path::parent)
-        .expect("commands crate lives under workspace crates/")
-        .to_path_buf()
 }
 
 async fn generated_shrink_failure_message(
@@ -31021,6 +27360,7 @@ fn pick_generated_slot<'a>(rng: &mut DeterministicRng, slots: &'a [&'a str]) -> 
 }
 
 #[test]
+#[ignore = "explicit generated command audit lane"]
 fn generated_night_case_fixture_json_is_minimizer_ready() {
     let case = generated_night_case(91_001);
     let fixture: serde_json::Value = serde_json::from_str(&generated_night_case_fixture_json(
@@ -31074,6 +27414,7 @@ fn generated_night_case_fixture_json_is_minimizer_ready() {
 }
 
 #[test]
+#[ignore = "explicit generated command audit lane"]
 fn generated_mafiascum_fixture_json_emits_trigger_dependency_expectations() {
     let pgo_case = GeneratedNightCase {
         seed: 1,
@@ -31182,6 +27523,7 @@ fn generated_mafiascum_fixture_json_emits_trigger_dependency_expectations() {
 }
 
 #[test]
+#[ignore = "explicit generated command audit lane"]
 fn generated_shrink_report_summary_mentions_paths_and_preservation() {
     let artifacts = GeneratedShrinkArtifacts::new("summary-contract");
     let report = serde_json::json!({
@@ -31200,58 +27542,6 @@ fn generated_shrink_report_summary_mentions_paths_and_preservation() {
     assert!(summary.contains("success_invariant_preserved=null"));
     assert!(summary.contains("promoted_success_fixture=false"));
     assert!(summary.contains("reduction_steps=2"));
-}
-
-#[test]
-fn minimize_night_fixture_invocation_uses_existing_cargo_bin() {
-    let cargo_bin = commands_workspace_root()
-        .join("Cargo.toml")
-        .into_os_string();
-    let invocation = minimize_night_fixture_invocation(
-        cargo_bin.clone(),
-        OsString::from("cargo"),
-        commands_workspace_root(),
-    );
-    assert_eq!(
-        invocation,
-        ProcessInvocation {
-            program: cargo_bin,
-            current_dir: None,
-            fixed_args: Vec::new(),
-        }
-    );
-}
-
-#[test]
-fn minimize_night_fixture_invocation_falls_back_when_cargo_bin_is_missing() {
-    let workspace_root = commands_workspace_root();
-    let invocation = minimize_night_fixture_invocation(
-        workspace_root
-            .join("target")
-            .join("definitely-missing-minimize-night-fixture")
-            .into_os_string(),
-        OsString::from("cargo-test"),
-        workspace_root.clone(),
-    );
-    assert_eq!(
-        invocation,
-        ProcessInvocation {
-            program: OsString::from("cargo-test"),
-            current_dir: Some(workspace_root),
-            fixed_args: [
-                "run",
-                "-q",
-                "-p",
-                "commands",
-                "--bin",
-                "minimize_night_fixture",
-                "--",
-            ]
-            .into_iter()
-            .map(OsString::from)
-            .collect(),
-        }
-    );
 }
 
 async fn resolution_payload(
@@ -31302,6 +27592,7 @@ fn choose_target_pair<'a>(
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_super_saint_lynch_trigger(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -31512,6 +27803,7 @@ async fn host_resolve_phase_carries_super_saint_lynch_trigger(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_projects_beloved_princess_host_prompt(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -31838,6 +28130,7 @@ async fn host_resolve_phase_projects_beloved_princess_host_prompt(pool: PgPool) 
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_projects_virgin_night_death_skip_prompt(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -32057,6 +28350,7 @@ async fn host_resolve_phase_projects_virgin_night_death_skip_prompt(pool: PgPool
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_uses_pack_declared_vote_weights(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -32190,6 +28484,7 @@ async fn host_resolve_phase_uses_pack_declared_vote_weights(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_uses_pack_declared_role_tiebreaker(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -32316,6 +28611,7 @@ async fn host_resolve_phase_uses_pack_declared_role_tiebreaker(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_uses_pack_declared_triplevoter_weight(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -32458,6 +28754,7 @@ async fn host_resolve_phase_uses_pack_declared_triplevoter_weight(pool: PgPool) 
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_uses_pack_declared_x_voter_weight(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -32602,6 +28899,7 @@ async fn host_resolve_phase_uses_pack_declared_x_voter_weight(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_uses_dynamic_effect_vote_weight(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -32811,6 +29109,7 @@ async fn host_resolve_phase_uses_dynamic_effect_vote_weight(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_uses_vote_weight_action_grant(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -33226,6 +29525,7 @@ async fn submit_vote_hammer_uses_folded_vote_weight_grant(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_uses_dynamic_vote_weight_for_no_majority_prompt(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -33612,6 +29912,7 @@ async fn host_prompt_skip_next_day_rejects_unsupported_pack_cadence(pool: PgPool
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_uses_loved_hated_threshold_adjustments(pool: PgPool) {
     let host = "host_h";
     let h = user(host);
@@ -34085,6 +30386,7 @@ async fn host_resolve_phase_uses_loved_hated_threshold_adjustments(pool: PgPool)
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_projects_epicmafia_pk_tie_prompt(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -34475,6 +30777,7 @@ async fn host_resolve_phase_projects_epicmafia_pk_tie_prompt(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_uses_dynamic_vote_weight_for_pk_tie_prompt(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -34831,6 +31134,7 @@ async fn host_resolve_phase_uses_dynamic_vote_weight_for_pk_tie_prompt(pool: PgP
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_sheriff_badge_lifecycle(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -35130,6 +31434,7 @@ async fn host_resolve_phase_carries_sheriff_badge_lifecycle(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_knight_duel_death(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -35268,6 +31573,7 @@ async fn host_resolve_phase_carries_knight_duel_death(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_knight_duel_failure_before_vote(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -35456,6 +31762,7 @@ async fn host_resolve_phase_carries_knight_duel_failure_before_vote(pool: PgPool
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_wolf_self_destruct_trade(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -35627,11 +31934,13 @@ async fn host_resolve_phase_carries_wolf_self_destruct_trade(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_consumes_white_wolf_carry_on_next_wolf_kill(pool: PgPool) {
     host_resolve_phase_consumes_white_wolf_carry_on_next_wolf_kill_for_role(pool).await;
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_consumes_passive_white_wolf_carry_on_next_wolf_kill(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -35873,6 +32182,7 @@ async fn host_resolve_phase_consumes_passive_white_wolf_carry_on_next_wolf_kill(
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_chinese_wolf_faction_vote_policy(pool: PgPool) {
     let same_target_game = Uuid::new_v4();
     let same_target_host = user("host_wolf_faction_same_target");
@@ -36061,6 +32371,7 @@ async fn host_resolve_phase_carries_chinese_wolf_faction_vote_policy(pool: PgPoo
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_chinese_white_wolf_king_night_kill(pool: PgPool) {
     let host = user("host_chinese_wwk_night_kill");
     let game = Uuid::new_v4();
@@ -36546,6 +32857,7 @@ async fn host_resolve_phase_consumes_white_wolf_carry_on_next_wolf_kill_for_role
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_wolf_beauty_mark_and_drag(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -36812,6 +33124,7 @@ async fn host_resolve_phase_carries_wolf_beauty_mark_and_drag(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_witch_poison_beauty_drag(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -37076,6 +33389,7 @@ async fn host_resolve_phase_carries_witch_poison_beauty_drag(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_stacks_wolf_beauty_drag_with_direct_death(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -37359,6 +33673,7 @@ async fn host_resolve_phase_stacks_wolf_beauty_drag_with_direct_death(pool: PgPo
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_guard_witch_poison_policy(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -37581,6 +33896,7 @@ async fn host_resolve_phase_carries_guard_witch_poison_policy(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_guard_witch_double_save_policy(pool: PgPool) {
     let host = "host_guard_witch_double_save";
     let game = Uuid::new_v4();
@@ -37820,6 +34136,7 @@ async fn host_resolve_phase_carries_guard_witch_double_save_policy(pool: PgPool)
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_chinese_guard_self_save_night_one_policy(pool: PgPool) {
     let host = "host_chinese_guard_self_save_n1";
     let game = Uuid::new_v4();
@@ -38015,6 +34332,7 @@ async fn host_resolve_phase_carries_chinese_guard_self_save_night_one_policy(poo
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_guard_witch_killtarget_policy(pool: PgPool) {
     let host = "host_guard_witch_killtarget";
     let game = Uuid::new_v4();
@@ -38261,6 +34579,7 @@ async fn host_resolve_phase_carries_guard_witch_killtarget_policy(pool: PgPool) 
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_ita_session_lethal_shot(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -38527,6 +34846,7 @@ async fn host_resolve_phase_carries_ita_session_lethal_shot(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_invalidates_later_ita_shot_at_dead_target(pool: PgPool) {
     let host = "host_ita_invalidated";
     let game = Uuid::new_v4();
@@ -38801,6 +35121,7 @@ async fn host_resolve_phase_invalidates_later_ita_shot_at_dead_target(pool: PgPo
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_refunds_ita_shot_at_already_dead_target(pool: PgPool) {
     let host = "host_ita_refunded";
     let game = Uuid::new_v4();
@@ -39150,6 +35471,7 @@ async fn host_resolve_phase_refunds_ita_shot_at_already_dead_target(pool: PgPool
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_buffers_ita_shot_without_same_pass_resolution(pool: PgPool) {
     let host = "host_ita_buffered";
     let game = Uuid::new_v4();
@@ -39381,6 +35703,7 @@ async fn host_resolve_phase_buffers_ita_shot_without_same_pass_resolution(pool: 
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_releases_buffered_ita_shot_on_later_pass(pool: PgPool) {
     let host = "host_ita_buffer_release";
     let game = Uuid::new_v4();
@@ -39636,6 +35959,7 @@ async fn host_resolve_phase_releases_buffered_ita_shot_on_later_pass(pool: PgPoo
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_invalidates_buffered_ita_shot_on_later_release(pool: PgPool) {
     let host = "host_ita_buffer_invalidated";
     let game = Uuid::new_v4();
@@ -39926,6 +36250,7 @@ async fn host_resolve_phase_invalidates_buffered_ita_shot_on_later_release(pool:
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_refunds_buffered_ita_shot_when_target_dies_before_release(
     pool: PgPool,
 ) {
@@ -40238,6 +36563,7 @@ async fn host_resolve_phase_refunds_buffered_ita_shot_when_target_dies_before_re
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_applies_ita_lifecycle_pause_control(pool: PgPool) {
     let host = "host_ita_lifecycle";
     let game = Uuid::new_v4();
@@ -40403,6 +36729,7 @@ async fn host_resolve_phase_applies_ita_lifecycle_pause_control(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_releases_buffered_ita_hp_and_hybrid_protection(pool: PgPool) {
     let host = "host_ita_buffer_hp_hybrid";
     let game = Uuid::new_v4();
@@ -40709,6 +37036,7 @@ async fn host_resolve_phase_releases_buffered_ita_hp_and_hybrid_protection(pool:
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_ita_chance_overrides_and_shields(pool: PgPool) {
     let host = "host_ita_modifiers";
     let game = Uuid::new_v4();
@@ -41012,6 +37340,7 @@ async fn host_resolve_phase_carries_ita_chance_overrides_and_shields(pool: PgPoo
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_mafia_universe_basic_nar(pool: PgPool) {
     let host = "host_mu_basic_nar";
     let game = Uuid::new_v4();
@@ -41193,6 +37522,7 @@ async fn host_resolve_phase_carries_mafia_universe_basic_nar(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_mafia_universe_joat_block_counter(pool: PgPool) {
     let host = "host_mu_joat_block";
     let game = Uuid::new_v4();
@@ -41396,6 +37726,7 @@ async fn host_resolve_phase_carries_mafia_universe_joat_block_counter(pool: PgPo
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_mafiascum_joat_block_counter(pool: PgPool) {
     let host = "host_mafiascum_joat_block";
     let game = Uuid::new_v4();
@@ -41582,6 +37913,7 @@ async fn host_resolve_phase_carries_mafiascum_joat_block_counter(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_mafiascum_two_shot_counter(pool: PgPool) {
     let host = "host_mafiascum_two_shot";
     let game = Uuid::new_v4();
@@ -41822,6 +38154,7 @@ async fn host_resolve_phase_carries_mafiascum_two_shot_counter(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_mafiascum_roleblocker_aliases(pool: PgPool) {
     let host = "host_mafiascum_roleblocker_aliases";
     let game = Uuid::new_v4();
@@ -42029,6 +38362,7 @@ async fn host_resolve_phase_carries_mafiascum_roleblocker_aliases(pool: PgPool) 
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_mafiascum_faith_healer_chance_protect(pool: PgPool) {
     for (label, seed, expect_save) in [("saves", 1_u64, true), ("misses", 2_u64, false)] {
         let host = format!("host_mafiascum_faith_healer_{label}");
@@ -42237,6 +38571,7 @@ async fn host_resolve_phase_carries_mafiascum_faith_healer_chance_protect(pool: 
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_mafia_universe_night_desperado_kills(pool: PgPool) {
     let host = "host_mu_night_desperado";
     let game = Uuid::new_v4();
@@ -42483,6 +38818,7 @@ async fn host_resolve_phase_carries_mafia_universe_night_desperado_kills(pool: P
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_mafia_universe_vigilante_kills(pool: PgPool) {
     let host = "host_mu_vigilante";
     let game = Uuid::new_v4();
@@ -42685,6 +39021,7 @@ async fn host_resolve_phase_carries_mafia_universe_vigilante_kills(pool: PgPool)
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_mafia_universe_day_vigilante_kills(pool: PgPool) {
     let host = "host_mu_day_vigilante";
     let game = Uuid::new_v4();
@@ -42933,6 +39270,7 @@ async fn host_resolve_phase_carries_mafia_universe_day_vigilante_kills(pool: PgP
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_mafia_universe_day_desperado_failback(pool: PgPool) {
     let host = "host_mu_day_desperado";
     let game = Uuid::new_v4();
@@ -43175,6 +39513,7 @@ async fn host_resolve_phase_carries_mafia_universe_day_desperado_failback(pool: 
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_mafia_universe_power_role_killer_filter(pool: PgPool) {
     let host = "host_mu_power_role_killer";
     let game = Uuid::new_v4();
@@ -43408,6 +39747,7 @@ async fn host_resolve_phase_carries_mafia_universe_power_role_killer_filter(pool
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_mafia_universe_cpr_harm(pool: PgPool) {
     let host = "host_mu_cpr_harm";
     let game = Uuid::new_v4();
@@ -43586,6 +39926,7 @@ async fn host_resolve_phase_carries_mafia_universe_cpr_harm(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_mafia_universe_framer_investigation(pool: PgPool) {
     let host = "host_mu_framer_investigation";
     let game = Uuid::new_v4();
@@ -43790,6 +40131,7 @@ async fn host_resolve_phase_carries_mafia_universe_framer_investigation(pool: Pg
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_mafia_universe_town_framer_investigation(pool: PgPool) {
     let host = "host_mu_town_framer_investigation";
     let game = Uuid::new_v4();
@@ -43994,6 +40336,7 @@ async fn host_resolve_phase_carries_mafia_universe_town_framer_investigation(poo
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_mafiascum_role_scan(pool: PgPool) {
     let host = "host_ms_role_scan";
     let game = Uuid::new_v4();
@@ -44171,6 +40514,7 @@ async fn host_resolve_phase_carries_mafiascum_role_scan(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_mafiascum_coroner_corpse_inspection(pool: PgPool) {
     let host = "host_ms_coroner";
     let game = Uuid::new_v4();
@@ -44381,6 +40725,7 @@ async fn host_resolve_phase_carries_mafiascum_coroner_corpse_inspection(pool: Pg
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_mafiascum_psychologist_killer_info(pool: PgPool) {
     let host = "host_ms_psychologist";
     let game = Uuid::new_v4();
@@ -44587,6 +40932,7 @@ async fn host_resolve_phase_carries_mafiascum_psychologist_killer_info(pool: PgP
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_mafiascum_specialist_info(pool: PgPool) {
     let host = "host_ms_specialist";
     let game = Uuid::new_v4();
@@ -44801,6 +41147,7 @@ async fn host_resolve_phase_carries_mafiascum_specialist_info(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_mafiascum_pt_cop_access(pool: PgPool) {
     let host = "host_ms_pt_cop";
     let game = Uuid::new_v4();
@@ -45051,6 +41398,7 @@ async fn host_resolve_phase_carries_mafiascum_pt_cop_access(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_mafiascum_role_set_info(pool: PgPool) {
     let host = "host_ms_role_set_info";
     let game = Uuid::new_v4();
@@ -45333,6 +41681,7 @@ async fn host_resolve_phase_carries_mafiascum_role_set_info(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_mafia_universe_role_set_info(pool: PgPool) {
     let host = "host_mu_role_set_info";
     let game = Uuid::new_v4();
@@ -45612,6 +41961,7 @@ async fn host_resolve_phase_carries_mafia_universe_role_set_info(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_mafia_universe_role_and_full_role_info(pool: PgPool) {
     let host = "host_mu_role_full_role_info";
     let game = Uuid::new_v4();
@@ -45867,6 +42217,7 @@ async fn host_resolve_phase_carries_mafia_universe_role_and_full_role_info(pool:
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_mafia_universe_culture_aliases(pool: PgPool) {
     let host = "host_mu_culture_aliases";
     let game = Uuid::new_v4();
@@ -46114,6 +42465,7 @@ async fn host_resolve_phase_carries_mafia_universe_culture_aliases(pool: PgPool)
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_mafia_universe_parity_scan_memory(pool: PgPool) {
     let host = "host_mu_parity_scan";
     let game = Uuid::new_v4();
@@ -46416,6 +42768,7 @@ async fn host_resolve_phase_carries_mafia_universe_parity_scan_memory(pool: PgPo
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_mafia_universe_graph_info(pool: PgPool) {
     let host = "host_mu_graph_info";
     let game = Uuid::new_v4();
@@ -46740,6 +43093,7 @@ async fn host_resolve_phase_carries_mafia_universe_graph_info(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_mafia_universe_voyeur_action_info(pool: PgPool) {
     let host = "host_mu_voyeur_action_info";
     let game = Uuid::new_v4();
@@ -47027,6 +43381,7 @@ async fn host_resolve_phase_carries_mafia_universe_voyeur_action_info(pool: PgPo
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_mafia_universe_ninja_hidden_visit_results(pool: PgPool) {
     let host = "host_mu_ninja";
     let game = Uuid::new_v4();
@@ -47374,6 +43729,7 @@ async fn host_resolve_phase_carries_mafia_universe_ninja_hidden_visit_results(po
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_mafia_universe_redirect_graph(pool: PgPool) {
     let host = "host_mu_redirect_graph";
     let game = Uuid::new_v4();
@@ -47618,6 +43974,7 @@ async fn host_resolve_phase_carries_mafia_universe_redirect_graph(pool: PgPool) 
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_mafia_universe_commute(pool: PgPool) {
     let host = "host_mu_commute";
     let game = Uuid::new_v4();
@@ -47893,6 +44250,7 @@ async fn host_resolve_phase_carries_mafia_universe_commute(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_mafia_universe_rolestop(pool: PgPool) {
     let host = "host_mu_rolestop";
     let game = Uuid::new_v4();
@@ -48155,6 +44513,7 @@ async fn host_resolve_phase_carries_mafia_universe_rolestop(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_mafia_universe_poison_cure_and_delayed_death(pool: PgPool) {
     let host = "host_mu_poison";
     let game = Uuid::new_v4();
@@ -48531,6 +44890,7 @@ async fn host_resolve_phase_carries_mafia_universe_poison_cure_and_delayed_death
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_mafia_universe_healer_alias_cure(pool: PgPool) {
     let host = "host_mu_healer";
     let game = Uuid::new_v4();
@@ -48869,6 +45229,7 @@ async fn host_resolve_phase_carries_mafia_universe_healer_alias_cure(pool: PgPoo
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_mafia_universe_douse_extinguish_and_ignite(pool: PgPool) {
     let host = "host_mu_arson";
     let game = Uuid::new_v4();
@@ -49251,6 +45612,7 @@ async fn host_resolve_phase_carries_mafia_universe_douse_extinguish_and_ignite(p
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_mafia_universe_town_firefighter_preempt_alias(pool: PgPool) {
     let host = "host_mu_firefighter_preempt";
     let game = Uuid::new_v4();
@@ -49526,6 +45888,7 @@ async fn host_resolve_phase_carries_mafia_universe_town_firefighter_preempt_alia
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_mafia_universe_motivator_grants_and_spends(pool: PgPool) {
     let host = "host_mu_motivator";
     let game = Uuid::new_v4();
@@ -49903,6 +46266,7 @@ async fn host_resolve_phase_carries_mafia_universe_motivator_grants_and_spends(p
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_mafia_universe_fruit_vendor_notifications(pool: PgPool) {
     let host = "host_mu_fruit_vendor";
     let game = Uuid::new_v4();
@@ -50130,6 +46494,7 @@ async fn host_resolve_phase_carries_mafia_universe_fruit_vendor_notifications(po
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_mafia_universe_inventor_item_grants_and_spends(pool: PgPool) {
     let host = "host_mu_inventor";
     let game = Uuid::new_v4();
@@ -50746,6 +47111,7 @@ async fn host_resolve_phase_carries_mafia_universe_inventor_item_grants_and_spen
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_mafia_universe_empower_bypass(pool: PgPool) {
     let host = "host_mu_empower";
     let game = Uuid::new_v4();
@@ -50956,6 +47322,7 @@ async fn host_resolve_phase_carries_mafia_universe_empower_bypass(pool: PgPool) 
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_day_announcements_and_last_words(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -52982,6 +49349,7 @@ async fn action_submission_allows_simultaneous_duplicate_base_template(pool: PgP
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_uses_pack_declared_night_parity(pool: PgPool) {
     let host = "host_h";
     let h = user(host);
@@ -53130,6 +49498,7 @@ async fn host_resolve_phase_uses_pack_declared_night_parity(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_uses_pack_declared_cycle_parity(pool: PgPool) {
     let host = "host_h";
     let h = user(host);
@@ -53978,6 +50347,7 @@ async fn action_submission_spends_inventor_item_grant(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_applies_godfather_investigation_override(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -54105,6 +50475,7 @@ async fn host_resolve_phase_applies_godfather_investigation_override(pool: PgPoo
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_applies_lawyer_result_mod_override(pool: PgPool) {
     let host = "host_lawyer_result_mod";
     let game = Uuid::new_v4();
@@ -54263,6 +50634,7 @@ async fn host_resolve_phase_applies_lawyer_result_mod_override(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_projects_mafiascum_info_results(pool: PgPool) {
     let host = "host_mafiascum_info";
     let game = Uuid::new_v4();
@@ -54469,6 +50841,7 @@ async fn host_resolve_phase_projects_mafiascum_info_results(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_mafiascum_fruit_vendor_notification(pool: PgPool) {
     let host = "host_mafiascum_fruit_vendor";
     let game = Uuid::new_v4();
@@ -54639,6 +51012,7 @@ async fn host_resolve_phase_carries_mafiascum_fruit_vendor_notification(pool: Pg
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_projects_mafiascum_action_investigation_guards(pool: PgPool) {
     let host = "host_mafiascum_action_investigation";
     let game = Uuid::new_v4();
@@ -54875,6 +51249,7 @@ async fn host_resolve_phase_projects_mafiascum_action_investigation_guards(pool:
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_preserves_prior_investigation_memory(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -55082,6 +51457,7 @@ async fn host_resolve_phase_preserves_prior_investigation_memory(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_records_visit_history_for_prior_motion(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -55278,6 +51654,7 @@ async fn host_resolve_phase_records_visit_history_for_prior_motion(pool: PgPool)
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_records_friendly_neighbor_visit(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -55402,6 +51779,7 @@ async fn host_resolve_phase_records_friendly_neighbor_visit(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_records_neighborize_visit(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -55826,6 +52204,7 @@ async fn inventor_vest_item_marks_and_consumes_bulletproof_vest(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_action_history_for_non_consecutive(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -55991,6 +52370,7 @@ async fn host_resolve_phase_carries_action_history_for_non_consecutive(pool: PgP
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_records_missing_compulsive_action(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -56139,6 +52519,7 @@ async fn host_resolve_phase_records_missing_compulsive_action(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_weak_cop_dies_on_scum_result(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -56295,6 +52676,7 @@ async fn host_resolve_phase_weak_cop_dies_on_scum_result(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_macho_target_ignores_doctor_protection(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -56447,6 +52829,7 @@ async fn host_resolve_phase_macho_target_ignores_doctor_protection(pool: PgPool)
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_projects_loud_and_announcing_notifications(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -56638,6 +53021,7 @@ async fn host_resolve_phase_projects_loud_and_announcing_notifications(pool: PgP
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_projects_conversion_and_persistent_effects(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -56951,6 +53335,7 @@ async fn host_resolve_phase_projects_conversion_and_persistent_effects(pool: PgP
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_blocks_conversion_of_dead_target(pool: PgPool) {
     let host = "host_conversion_dead_target";
     let game = Uuid::new_v4();
@@ -57136,6 +53521,7 @@ async fn host_resolve_phase_blocks_conversion_of_dead_target(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_blocks_conversion_of_pending_death_target(pool: PgPool) {
     let host = "host_conversion_pending_death";
     let game = Uuid::new_v4();
@@ -57389,6 +53775,7 @@ async fn host_resolve_phase_blocks_conversion_of_pending_death_target(pool: PgPo
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_filters_hidden_effect_notifications(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -57567,6 +53954,7 @@ async fn host_resolve_phase_filters_hidden_effect_notifications(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_persists_loyal_conversion_block_trace(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -57727,6 +54115,7 @@ async fn host_resolve_phase_persists_loyal_conversion_block_trace(pool: PgPool) 
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_persists_disloyal_modifier_trace_and_projection(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -57944,6 +54333,7 @@ async fn host_resolve_phase_persists_disloyal_modifier_trace_and_projection(pool
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_poison_cure_and_delayed_death(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -58273,6 +54663,7 @@ async fn host_resolve_phase_carries_poison_cure_and_delayed_death(pool: PgPool) 
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_traces_pending_poison_target_already_dead(pool: PgPool) {
     let host = "host_pending_poison_already_dead";
     let game = Uuid::new_v4();
@@ -58476,6 +54867,7 @@ async fn host_resolve_phase_traces_pending_poison_target_already_dead(pool: PgPo
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_persists_cleanse_read_effect_trace_decision(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -58659,6 +55051,7 @@ async fn host_resolve_phase_persists_cleanse_read_effect_trace_decision(pool: Pg
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_projects_motivator_grant(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -58802,6 +55195,7 @@ async fn host_resolve_phase_projects_motivator_grant(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_deprograms_from_conversion_origin(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -59046,6 +55440,7 @@ async fn host_resolve_phase_deprograms_from_conversion_origin(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_vanillaize_then_restore_mutation(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -59292,6 +55687,7 @@ async fn host_resolve_phase_vanillaize_then_restore_mutation(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_backup_cop_inherits_on_death(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -59428,6 +55824,7 @@ async fn host_resolve_phase_backup_cop_inherits_on_death(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_targeted_backup_inherits_chosen_source(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -59906,6 +56303,7 @@ async fn assert_target_lynch_win_pipeline(pool: PgPool, case: TargetLynchWinPipe
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_condemner_target_lynch_win(pool: PgPool) {
     assert_target_lynch_win_pipeline(
         pool,
@@ -59923,6 +56321,7 @@ async fn host_resolve_phase_carries_condemner_target_lynch_win(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_executioner_target_lynch_win(pool: PgPool) {
     assert_target_lynch_win_pipeline(
         pool,
@@ -59940,6 +56339,7 @@ async fn host_resolve_phase_carries_executioner_target_lynch_win(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_jester_self_lynch_win(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -60123,6 +56523,7 @@ async fn host_resolve_phase_carries_jester_self_lynch_win(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_saulus_alignment_flip_on_lynch(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -60322,6 +56723,7 @@ async fn host_resolve_phase_carries_saulus_alignment_flip_on_lynch(pool: PgPool)
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_awards_survivor_alive_at_end(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -60511,6 +56913,7 @@ async fn host_resolve_phase_awards_survivor_alive_at_end(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_counts_traitor_for_mafia_parity(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -60708,6 +57111,7 @@ async fn host_resolve_phase_counts_traitor_for_mafia_parity(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_self_lynch_win_suppresses_target_lynch_and_faction_wins(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -60958,6 +57362,7 @@ async fn host_resolve_phase_self_lynch_win_suppresses_target_lynch_and_faction_w
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_projects_pgo_visit_trigger(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -61106,6 +57511,7 @@ async fn host_resolve_phase_projects_pgo_visit_trigger(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_projects_target_filtered_visitor_kill(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -61321,6 +57727,7 @@ async fn host_resolve_phase_projects_target_filtered_visitor_kill(pool: PgPool) 
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_projects_epicmafia_bomb_trigger(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -61525,6 +57932,7 @@ async fn host_resolve_phase_projects_epicmafia_bomb_trigger(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_protects_generated_pgo_trigger_kill(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -61735,6 +58143,7 @@ async fn host_resolve_phase_protects_generated_pgo_trigger_kill(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_generated_pgo_kill_obeys_transient_target_state(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -61939,6 +58348,7 @@ async fn host_resolve_phase_generated_pgo_kill_obeys_transient_target_state(pool
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_bodyguard_intercepts_generated_pgo_trigger_kill(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -62204,6 +58614,7 @@ async fn host_resolve_phase_bodyguard_intercepts_generated_pgo_trigger_kill(pool
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_persists_martyr_intercept_policy(pool: PgPool) {
     let game = Uuid::new_v4();
     let h = user("host_h");
@@ -62414,6 +58825,7 @@ async fn host_resolve_phase_persists_martyr_intercept_policy(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_persists_cpr_harm_policy(pool: PgPool) {
     let game = Uuid::new_v4();
     let h = user("host_h");
@@ -62590,6 +59002,7 @@ async fn host_resolve_phase_persists_cpr_harm_policy(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_bypasses_protection_for_strongman_trigger_kill(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -62822,6 +59235,7 @@ async fn host_resolve_phase_bypasses_protection_for_strongman_trigger_kill(pool:
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_projects_death_trigger_kill(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -63011,6 +59425,7 @@ async fn host_resolve_phase_projects_death_trigger_kill(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_projects_effect_marked_trigger_kill(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -63213,6 +59628,7 @@ async fn host_resolve_phase_projects_effect_marked_trigger_kill(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_projects_phase_end_trigger_kill(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -63375,6 +59791,7 @@ async fn host_resolve_phase_projects_phase_end_trigger_kill(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_projects_win_trigger_before_final_win(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -63537,6 +59954,7 @@ async fn host_resolve_phase_projects_win_trigger_before_final_win(pool: PgPool) 
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_protects_ordinary_vengeful_trigger_kill(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -63774,6 +60192,7 @@ async fn host_resolve_phase_protects_ordinary_vengeful_trigger_kill(pool: PgPool
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_bypasses_bodyguard_for_strongman_trigger_kill(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -64022,6 +60441,7 @@ async fn host_resolve_phase_bypasses_bodyguard_for_strongman_trigger_kill(pool: 
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_persists_redirect_trace_edge(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -64182,6 +60602,7 @@ async fn host_resolve_phase_persists_redirect_trace_edge(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_persists_mass_redirect_rotate_trace_edges(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -64401,6 +60822,7 @@ async fn host_resolve_phase_persists_mass_redirect_rotate_trace_edges(pool: PgPo
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_persists_suppression_and_conflict_trace_decisions(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -64785,6 +61207,7 @@ async fn host_resolve_phase_persists_suppression_and_conflict_trace_decisions(po
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_strong_willed_bypasses_roleblock(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -64954,6 +61377,7 @@ async fn host_resolve_phase_strong_willed_bypasses_roleblock(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_non_roleblockable_block_survives_roleblock(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -65153,6 +61577,7 @@ async fn host_resolve_phase_non_roleblockable_block_survives_roleblock(pool: PgP
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_persists_jailkeeper_block_plus_protect_policy(pool: PgPool) {
     let game = Uuid::new_v4();
     let h = user("host_h");
@@ -65382,6 +61807,7 @@ async fn host_resolve_phase_persists_jailkeeper_block_plus_protect_policy(pool: 
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_persists_catastrophic_roleblock_multi_action_trace(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -65566,6 +61992,7 @@ async fn host_resolve_phase_persists_catastrophic_roleblock_multi_action_trace(p
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_preserves_protected_multi_attacker_no_death(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -65804,6 +62231,7 @@ async fn host_resolve_phase_preserves_protected_multi_attacker_no_death(pool: Pg
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_persists_combined_trace_audit_branches(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -66183,6 +62611,7 @@ async fn host_resolve_phase_persists_combined_trace_audit_branches(pool: PgPool)
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_persists_redirect_loop_cap_trace_note(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -66576,6 +63005,7 @@ async fn resolution_scoped_effects_do_not_enter_command_snapshot(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_persists_trigger_loop_cap_trace_note(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -66866,6 +63296,7 @@ async fn host_resolve_phase_persists_trigger_loop_cap_trace_note(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_persists_target_state_trace_decisions(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -67080,6 +63511,7 @@ async fn host_resolve_phase_persists_target_state_trace_decisions(pool: PgPool) 
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_mafiascum_ascetic_non_lethal_immunity(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -67330,6 +63762,7 @@ async fn host_resolve_phase_carries_mafiascum_ascetic_non_lethal_immunity(pool: 
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_preserves_ninja_hidden_visit_results(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -67588,6 +64021,7 @@ async fn host_resolve_phase_preserves_ninja_hidden_visit_results(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_projects_tracker_private_visit_result(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -67794,6 +64228,7 @@ async fn host_resolve_phase_projects_tracker_private_visit_result(pool: PgPool) 
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_projects_follower_action_type_result(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -67998,6 +64433,7 @@ async fn host_resolve_phase_projects_follower_action_type_result(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_persists_rolestop_and_shield_target_state(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -68284,6 +64720,7 @@ async fn host_resolve_phase_persists_rolestop_and_shield_target_state(pool: PgPo
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_projects_babysitter_dependency_death(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -68488,6 +64925,7 @@ async fn host_resolve_phase_projects_babysitter_dependency_death(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_stacks_babysitter_dependency_with_direct_ward_death(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -68732,6 +65170,7 @@ async fn host_resolve_phase_stacks_babysitter_dependency_with_direct_ward_death(
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_projects_hider_host_death(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -68937,6 +65376,7 @@ async fn host_resolve_phase_projects_hider_host_death(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_stacks_hider_dependency_with_direct_death(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -69181,6 +65621,7 @@ async fn host_resolve_phase_stacks_hider_dependency_with_direct_death(pool: PgPo
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_lover_link_and_suicide(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -69376,6 +65817,7 @@ async fn host_resolve_phase_carries_lover_link_and_suicide(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_stacks_lover_suicide_with_direct_death(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -69626,6 +66068,7 @@ async fn host_resolve_phase_stacks_lover_suicide_with_direct_death(pool: PgPool)
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_mafia_universe_lover_setup_cascade(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -70089,6 +66532,7 @@ async fn assert_mafia_universe_bomber_case(
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_projects_mafia_universe_bomber_triggers(pool: PgPool) {
     assert_mafia_universe_bomber_case(
         &pool,
@@ -70111,6 +66555,7 @@ async fn host_resolve_phase_projects_mafia_universe_bomber_triggers(pool: PgPool
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_projects_mafiascum_bomb_trigger(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -70333,6 +66778,7 @@ async fn host_resolve_phase_projects_mafiascum_bomb_trigger(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_hunter_retaliation(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -70535,6 +66981,7 @@ async fn host_resolve_phase_carries_hunter_retaliation(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_chinese_hunter_poison_policy(pool: PgPool) {
     let host = "host_h";
     let h = user(host);
@@ -70986,6 +67433,7 @@ async fn host_resolve_phase_carries_chinese_hunter_poison_policy(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_chinese_hunter_day_vote_retaliation(pool: PgPool) {
     let host = "host_h";
     let h = user(host);
@@ -71281,6 +67729,7 @@ async fn host_resolve_phase_carries_chinese_hunter_day_vote_retaliation(pool: Pg
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_chinese_idiot_survival_policy(pool: PgPool) {
     let host = "host_h";
     let h = user(host);
@@ -71546,6 +67995,7 @@ async fn host_resolve_phase_carries_chinese_idiot_survival_policy(pool: PgPool) 
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_chinese_prophet_alignment_result(pool: PgPool) {
     let host = "host_h";
     let h = user(host);
@@ -71716,6 +68166,7 @@ async fn host_resolve_phase_carries_chinese_prophet_alignment_result(pool: PgPoo
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_chinese_cupid_link_and_lovers_cascade(pool: PgPool) {
     let host = "host_h";
     let h = user(host);
@@ -71960,6 +68411,7 @@ async fn host_resolve_phase_carries_chinese_cupid_link_and_lovers_cascade(pool: 
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_chinese_lover_poison_cascade(pool: PgPool) {
     let host = "host_h";
     let h = user(host);
@@ -72203,6 +68655,7 @@ async fn host_resolve_phase_carries_chinese_lover_poison_cascade(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_carries_chinese_lover_lynch_cascade(pool: PgPool) {
     let host = "host_h";
     let h = user(host);
@@ -73813,6 +70266,7 @@ async fn submit_vote_hammer_locks_phase_when_threshold_is_reached(pool: PgPool) 
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "explicit command semantic audit lane"]
 async fn host_resolve_phase_emits_hammer_vote_outcome(pool: PgPool) {
     let game = Uuid::new_v4();
     let h = user("host_h");

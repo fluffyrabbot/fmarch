@@ -110,10 +110,16 @@ export function workspaceCrateGraph() {
     maxBuffer: 64 * 1024 * 1024,
   });
   const metadata = JSON.parse(raw.toString('utf8'));
+  return crateGraphFromMetadata(metadata);
+}
+
+export function crateGraphFromMetadata(metadata) {
   const names = new Set(metadata.packages.map((p) => p.name));
   const graph = {};
   for (const pkg of metadata.packages) {
-    graph[pkg.name] = pkg.dependencies.filter((d) => names.has(d.name)).map((d) => d.name);
+    graph[pkg.name] = pkg.dependencies
+      .filter((dependency) => dependency.kind !== 'dev' && names.has(dependency.name))
+      .map((dependency) => dependency.name);
   }
   return graph;
 }

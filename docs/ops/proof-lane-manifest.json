@@ -19,7 +19,11 @@
     "cargo:eventstore": { "kind": "shell", "command": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p eventstore -- --test-threads=1" },
     "cargo:projections": { "kind": "shell", "command": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p projections -- --test-threads=1" },
     "cargo:caps": { "kind": "shell", "command": "cargo test -p caps" },
-    "cargo:commands": { "kind": "shell", "command": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p commands -- --test-threads=1" },
+    "cargo:commands-unit": { "kind": "shell", "command": "cargo test -p commands --lib --bin check_goldens --test action_submission_boundary --test host_prompt_resolution_boundary" },
+    "cargo:commands-pg": { "kind": "shell", "command": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p commands --test pipeline -- --test-threads=4" },
+    "cargo:commands-concurrency": { "kind": "shell", "command": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p commands --test runtime_cancellation -- --test-threads=1" },
+    "cargo:commands-audit": { "kind": "shell", "command": "RUST_MIN_STACK=8388608 DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p commands --test pipeline -- --ignored --test-threads=4" },
+    "cargo:operator-proof": { "kind": "shell", "command": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p operator_proof -- --test-threads=1" },
     "cargo:game-platform": { "kind": "shell", "command": "cargo test -p game_platform --all-features" },
     "cargo:wire": { "kind": "shell", "command": "cargo test -p wire" },
     "check:wire-types": {
@@ -130,11 +134,26 @@
       "capabilities": ["foundation.command-capability-runtime"]
     },
     {
+      "id": "commands:semantic-audit",
+      "tier": "active",
+      "paths": ["crates/commands/tests/pipeline.rs"],
+      "lanes": [
+        "cargo:commands-pg",
+        "cargo:commands-audit",
+        "cargo:clippy-workspace"
+      ]
+    },
+    {
       "id": "crate:commands",
       "tier": "frozen",
       "paths": ["crates/commands/"],
       "crate": "commands",
-      "lanes": ["cargo:commands", "cargo:clippy-workspace"],
+      "lanes": [
+        "cargo:commands-unit",
+        "cargo:commands-pg",
+        "cargo:commands-concurrency",
+        "cargo:clippy-workspace"
+      ],
       "capabilities": [
         "foundation.command-capability-runtime",
         "foundation.resolution-engine-parity",
@@ -143,6 +162,26 @@
         "product.mash.private-day-event-rooms",
         "product.mash.scale-acceptance"
       ]
+    },
+    {
+      "id": "operator-proof:minimizer",
+      "tier": "active",
+      "paths": [
+        "crates/operator_proof/src/minimizer.rs",
+        "crates/operator_proof/src/bin/minimize_night_fixture.rs"
+      ],
+      "lanes": [
+        "cargo:operator-proof",
+        "cargo:commands-audit",
+        "cargo:clippy-workspace"
+      ]
+    },
+    {
+      "id": "crate:operator-proof",
+      "tier": "active",
+      "paths": ["crates/operator_proof/"],
+      "crate": "operator_proof",
+      "lanes": ["cargo:operator-proof", "cargo:clippy-workspace"]
     },
     {
       "id": "crate:game-platform",
@@ -230,7 +269,7 @@
       "id": "packs",
       "tier": "frozen",
       "paths": ["packs/"],
-      "lanes": ["cargo:domain", "cargo:commands"],
+      "lanes": ["cargo:domain", "cargo:commands-pg"],
       "capabilities": ["foundation.resolution-engine-parity"]
     },
     {
@@ -239,7 +278,7 @@
       "paths": ["programs/"],
       "lanes": [
         "cargo:game-platform",
-        "cargo:commands",
+        "cargo:commands-pg",
         "cargo:api",
         "test:mash-scale-acceptance"
       ],
@@ -430,7 +469,9 @@
         "check:build-posture",
         "test:projection-baseline:static",
         "cargo:clippy-workspace",
-        "cargo:commands",
+        "cargo:commands-unit",
+        "cargo:commands-pg",
+        "cargo:commands-concurrency",
         "cargo:projections",
         "test:dependency-policy"
       ]

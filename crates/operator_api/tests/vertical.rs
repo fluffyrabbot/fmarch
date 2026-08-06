@@ -6,7 +6,7 @@ use axum::response::Response;
 use axum::routing::post;
 use axum::{Json, Router};
 use caps::Principal;
-use commands::operator_proof::{
+use operator_proof::{
     audit_operator_proof_run_go_no_go_retention, build_operator_determinism_fuzz_report,
     build_operator_proof_run_go_no_go_report, build_operator_proof_run_status,
     determinism_fuzz_family_specs, generated_shrink_matrix_expected_families,
@@ -357,7 +357,7 @@ fn ensure_operator_proof_artifacts() {
             "artifact_version": PROOF_RUN_STATUS_AUDIT_REPORT_ARTIFACT_VERSION,
             "artifact_path": "target/operator-proof/current-status-audit-report.json",
             "ok": true,
-            "expected_path": "crates/commands/fixtures/operator-proof-status-artifact-provenance.snapshot.json",
+            "expected_path": "crates/operator_proof/fixtures/operator-proof-status-artifact-provenance.snapshot.json",
             "actual_path": "target/operator-proof/current-status-audit-check.json",
             "normalized_fields": [
                 "$.game",
@@ -692,9 +692,9 @@ fn ensure_operator_proof_artifacts() {
         ..OperatorProofRunArtifactCounts::default()
     };
 
-    let snapshot_path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join("crates/commands/fixtures/operator-proof-status-artifact-provenance.snapshot.json");
+    let snapshot_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").join(
+        "crates/operator_proof/fixtures/operator-proof-status-artifact-provenance.snapshot.json",
+    );
     fs::write(&status_path, fs::read(&snapshot_path).unwrap()).unwrap();
     fs::write(
         &report_path,
@@ -702,7 +702,7 @@ fn ensure_operator_proof_artifacts() {
             "artifact_version": PROOF_RUN_STATUS_AUDIT_REPORT_ARTIFACT_VERSION,
             "artifact_path": "target/operator-proof/current-status-audit-report.json",
             "ok": true,
-            "expected_path": "crates/commands/fixtures/operator-proof-status-artifact-provenance.snapshot.json",
+            "expected_path": "crates/operator_proof/fixtures/operator-proof-status-artifact-provenance.snapshot.json",
             "actual_path": "target/operator-proof/current-status-audit-check.json",
             "normalized_fields": [
                 "$.game",
@@ -767,7 +767,7 @@ fn ensure_operator_proof_artifacts() {
 
 fn determinism_fuzz_bootstrap_report(
     artifact_path: &str,
-) -> commands::operator_proof::OperatorDeterminismFuzzReport {
+) -> operator_proof::OperatorDeterminismFuzzReport {
     let output = determinism_fuzz_family_specs()
         .iter()
         .map(|family| format!("test {} ... ok", family.selector))
@@ -775,7 +775,7 @@ fn determinism_fuzz_bootstrap_report(
         .join("\n");
     build_operator_determinism_fuzz_report(
         artifact_path,
-        "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo run -q -p commands --bin audit_determinism_fuzz_artifact -- --output target/operator-proof/current-determinism-fuzz-report.json",
+        "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo run -q -p operator_proof --bin audit_determinism_fuzz_artifact -- --output target/operator-proof/current-determinism-fuzz-report.json",
         "replay_audit_and_rebuild_deterministically",
         1234,
         true,
@@ -1651,13 +1651,13 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
     assert!(proof_html.contains("id=\"proof-run-operator-proof-generated-shrink-matrix\""));
     assert!(proof_html.contains("id=\"proof-run-operator-proof-generated-shrink-gap-audit\""));
     assert!(proof_html.contains(&format!(
-        "cargo run -p commands --bin audit_resolution -- {game}"
+        "cargo run -p operator_proof --bin audit_resolution -- {game}"
     )));
     assert!(proof_html.contains(
-        "cargo test -p commands large_action_graph_resolves_and_audits_within_regression_ceiling -- --nocapture"
+        "cargo test -p commands large_action_graph_resolves_and_audits_within_regression_ceiling -- --ignored --nocapture"
     ));
     assert!(proof_html.contains(
-        "cargo test -p commands --test pipeline generated_default_open_day_replay_audit_and_rebuild_deterministically -- --nocapture"
+        "cargo test -p commands --test pipeline generated_default_open_day_replay_audit_and_rebuild_deterministically -- --ignored --nocapture"
     ));
     assert!(proof_html
         .contains("target/operator-proof/game-specific-audit-bundle-20260613T000000Z.json"));
@@ -1671,28 +1671,28 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
         "--compare-with target/operator-proof/game-specific-audit-bundle-20260613T000000Z.json"
     ));
     assert!(proof_html.contains(
-        "cargo run -q -p commands --bin export_operator_proof_status -- --fixture artifact-provenance --output target/operator-proof/current-status-audit-check.json 00000000-0000-0000-0000-000000000000"
+        "cargo run -q -p operator_proof --bin export_operator_proof_status -- --fixture artifact-provenance --output target/operator-proof/current-status-audit-check.json 00000000-0000-0000-0000-000000000000"
     ));
     assert!(proof_html.contains(
-        "cargo run -q -p commands --bin audit_operator_proof_status -- --output target/operator-proof/current-status-audit-report.json crates/commands/fixtures/operator-proof-status-artifact-provenance.snapshot.json target/operator-proof/current-status-audit-check.json"
+        "cargo run -q -p operator_proof --bin audit_operator_proof_status -- --output target/operator-proof/current-status-audit-report.json crates/operator_proof/fixtures/operator-proof-status-artifact-provenance.snapshot.json target/operator-proof/current-status-audit-check.json"
     ));
     assert!(proof_html.contains(
-        "cargo run -q -p commands --bin audit_operator_proof_artifact_retention -- --output target/operator-proof/current-artifact-retention-report.json target/operator-proof/previous-artifact-go-no-go-report.json target/operator-proof/current-artifact-go-no-go-report.json"
+        "cargo run -q -p operator_proof --bin audit_operator_proof_artifact_retention -- --output target/operator-proof/current-artifact-retention-report.json target/operator-proof/previous-artifact-go-no-go-report.json target/operator-proof/current-artifact-go-no-go-report.json"
     ));
     assert!(proof_html.contains(
-        "cargo run -q -p commands --bin audit_projection_rebuild_artifact -- --output target/operator-proof/current-projection-rebuild-report.json 08d8a45f-6c3b-4401-8e31-8d7637f36a82"
+        "cargo run -q -p operator_proof --bin audit_projection_rebuild_artifact -- --output target/operator-proof/current-projection-rebuild-report.json 08d8a45f-6c3b-4401-8e31-8d7637f36a82"
     ));
     assert!(proof_html.contains(
-        "cargo run -q -p commands --bin audit_resolution_diff_artifact -- --output target/operator-proof/current-resolution-diff-report.json 08d8a45f-6c3b-4401-8e31-8d7637f36a82"
+        "cargo run -q -p operator_proof --bin audit_resolution_diff_artifact -- --output target/operator-proof/current-resolution-diff-report.json 08d8a45f-6c3b-4401-8e31-8d7637f36a82"
     ));
     assert!(proof_html.contains(
-        "cargo run -q -p commands --bin audit_trace_inspection_artifact -- --output target/operator-proof/current-trace-inspection-report.json 08d8a45f-6c3b-4401-8e31-8d7637f36a82"
+        "cargo run -q -p operator_proof --bin audit_trace_inspection_artifact -- --output target/operator-proof/current-trace-inspection-report.json 08d8a45f-6c3b-4401-8e31-8d7637f36a82"
     ));
     assert!(proof_html.contains(
-        "cargo run -q -p commands --bin audit_large_action_graph_performance_artifact -- --output target/operator-proof/current-large-action-graph-performance-report.json"
+        "cargo run -q -p operator_proof --bin audit_large_action_graph_performance_artifact -- --output target/operator-proof/current-large-action-graph-performance-report.json"
     ));
     assert!(proof_html.contains(
-        "cargo run -q -p commands --bin audit_determinism_fuzz_artifact -- --output target/operator-proof/current-determinism-fuzz-report.json"
+        "cargo run -q -p operator_proof --bin audit_determinism_fuzz_artifact -- --output target/operator-proof/current-determinism-fuzz-report.json"
     ));
     assert!(proof_html.contains(
         "cargo test -p commands --test pipeline generated_shrink_matrix_writes_compact_operator_report -- --ignored --nocapture"
@@ -1954,7 +1954,7 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
     let status_export_row = proof_status_row(&status, "proof-run-operator-proof-status-export");
     assert!(status_export_row["artifact"].is_null());
     assert!(status_export_row["command"].as_str().unwrap().contains(
-        "cargo run -q -p commands --bin export_operator_proof_status -- --fixture artifact-provenance --output target/operator-proof/current-status-audit-check.json 00000000-0000-0000-0000-000000000000"
+        "cargo run -q -p operator_proof --bin export_operator_proof_status -- --fixture artifact-provenance --output target/operator-proof/current-status-audit-check.json 00000000-0000-0000-0000-000000000000"
     ));
     let status_audit_row =
         proof_status_row(&status, "proof-run-operator-proof-status-snapshot-audit");
@@ -1967,7 +1967,7 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
     assert_eq!(status_audit_row["artifact"]["expected_version"], 1);
     assert_eq!(
         status_audit_row["artifact"]["expected_path"],
-        "crates/commands/fixtures/operator-proof-status-artifact-provenance.snapshot.json"
+        "crates/operator_proof/fixtures/operator-proof-status-artifact-provenance.snapshot.json"
     );
     assert_eq!(
         status_audit_row["artifact"]["actual_path"],
@@ -1975,7 +1975,7 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
     );
     assert_eq!(status_audit_row["artifact"]["diff_count"], 0);
     assert!(status_audit_row["command"].as_str().unwrap().contains(
-        "cargo run -q -p commands --bin audit_operator_proof_status -- --output target/operator-proof/current-status-audit-report.json crates/commands/fixtures/operator-proof-status-artifact-provenance.snapshot.json target/operator-proof/current-status-audit-check.json"
+        "cargo run -q -p operator_proof --bin audit_operator_proof_status -- --output target/operator-proof/current-status-audit-report.json crates/operator_proof/fixtures/operator-proof-status-artifact-provenance.snapshot.json target/operator-proof/current-status-audit-check.json"
     ));
     let go_no_go_status_row =
         proof_status_row(&status, "proof-run-operator-proof-artifact-go-no-go");
@@ -1988,7 +1988,7 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
     assert_eq!(go_no_go_status_row["artifact"]["expected_version"], 1);
     assert_eq!(go_no_go_status_row["artifact"]["diff_count"], 0);
     assert!(go_no_go_status_row["command"].as_str().unwrap().contains(
-        "cargo run -q -p commands --bin audit_operator_proof_artifacts -- --output target/operator-proof/current-artifact-go-no-go-report.json 00000000-0000-0000-0000-000000000000"
+        "cargo run -q -p operator_proof --bin audit_operator_proof_artifacts -- --output target/operator-proof/current-artifact-go-no-go-report.json 00000000-0000-0000-0000-000000000000"
     ));
     let retention_status_row =
         proof_status_row(&status, "proof-run-operator-proof-artifact-retention");
@@ -2007,7 +2007,7 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
     );
     assert_eq!(retention_status_row["artifact"]["diff_count"], 0);
     assert!(retention_status_row["command"].as_str().unwrap().contains(
-        "cargo run -q -p commands --bin audit_operator_proof_artifact_retention -- --output target/operator-proof/current-artifact-retention-report.json target/operator-proof/previous-artifact-go-no-go-report.json target/operator-proof/current-artifact-go-no-go-report.json"
+        "cargo run -q -p operator_proof --bin audit_operator_proof_artifact_retention -- --output target/operator-proof/current-artifact-retention-report.json target/operator-proof/previous-artifact-go-no-go-report.json target/operator-proof/current-artifact-go-no-go-report.json"
     ));
     let rebuild_status_row =
         proof_status_row(&status, "proof-run-operator-proof-projection-rebuild");
@@ -2026,7 +2026,7 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
     );
     assert_eq!(rebuild_status_row["artifact"]["diff_count"], 0);
     assert!(rebuild_status_row["command"].as_str().unwrap().contains(
-        "cargo run -q -p commands --bin audit_projection_rebuild_artifact -- --output target/operator-proof/current-projection-rebuild-report.json 08d8a45f-6c3b-4401-8e31-8d7637f36a82"
+        "cargo run -q -p operator_proof --bin audit_projection_rebuild_artifact -- --output target/operator-proof/current-projection-rebuild-report.json 08d8a45f-6c3b-4401-8e31-8d7637f36a82"
     ));
     let resolution_diff_status_row =
         proof_status_row(&status, "proof-run-operator-proof-resolution-diff");
@@ -2045,7 +2045,7 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
     );
     assert_eq!(resolution_diff_status_row["artifact"]["diff_count"], 0);
     assert!(resolution_diff_status_row["command"].as_str().unwrap().contains(
-        "cargo run -q -p commands --bin audit_resolution_diff_artifact -- --output target/operator-proof/current-resolution-diff-report.json 08d8a45f-6c3b-4401-8e31-8d7637f36a82"
+        "cargo run -q -p operator_proof --bin audit_resolution_diff_artifact -- --output target/operator-proof/current-resolution-diff-report.json 08d8a45f-6c3b-4401-8e31-8d7637f36a82"
     ));
     let trace_inspection_status_row =
         proof_status_row(&status, "proof-run-operator-proof-trace-inspection");
@@ -2064,7 +2064,7 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
     );
     assert_eq!(trace_inspection_status_row["artifact"]["diff_count"], 0);
     assert!(trace_inspection_status_row["command"].as_str().unwrap().contains(
-        "cargo run -q -p commands --bin audit_trace_inspection_artifact -- --output target/operator-proof/current-trace-inspection-report.json 08d8a45f-6c3b-4401-8e31-8d7637f36a82"
+        "cargo run -q -p operator_proof --bin audit_trace_inspection_artifact -- --output target/operator-proof/current-trace-inspection-report.json 08d8a45f-6c3b-4401-8e31-8d7637f36a82"
     ));
     let command_projection_status_row = proof_status_row(
         &status,
@@ -2096,7 +2096,7 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
         1
     );
     assert!(command_projection_status_row["command"].as_str().unwrap().contains(
-        "cargo run -q -p commands --bin prove_command_projection_resolution -- --output target/operator-proof/current-command-projection-resolution-report.json crates/commands/fixtures/night-passing.json"
+        "cargo run -q -p operator_proof --bin prove_command_projection_resolution -- --output target/operator-proof/current-command-projection-resolution-report.json crates/commands/fixtures/night-passing.json"
     ));
     let performance_status_row = proof_status_row(
         &status,
@@ -2141,7 +2141,7 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
         true
     );
     assert!(performance_status_row["command"].as_str().unwrap().contains(
-        "cargo run -q -p commands --bin audit_large_action_graph_performance_artifact -- --output target/operator-proof/current-large-action-graph-performance-report.json"
+        "cargo run -q -p operator_proof --bin audit_large_action_graph_performance_artifact -- --output target/operator-proof/current-large-action-graph-performance-report.json"
     ));
     let determinism_status_row =
         proof_status_row(&status, "proof-run-operator-proof-determinism-fuzz");
@@ -2180,7 +2180,7 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
         true
     );
     assert!(determinism_status_row["command"].as_str().unwrap().contains(
-        "cargo run -q -p commands --bin audit_determinism_fuzz_artifact -- --output target/operator-proof/current-determinism-fuzz-report.json"
+        "cargo run -q -p operator_proof --bin audit_determinism_fuzz_artifact -- --output target/operator-proof/current-determinism-fuzz-report.json"
     ));
     let generated_shrink_status_row =
         proof_status_row(&status, "proof-run-operator-proof-generated-shrink-matrix");
@@ -2248,7 +2248,7 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
     assert_eq!(status_audit["diffs"].as_array().unwrap().len(), 0);
     assert_eq!(
         status_audit["expected_path"],
-        "crates/commands/fixtures/operator-proof-status-artifact-provenance.snapshot.json"
+        "crates/operator_proof/fixtures/operator-proof-status-artifact-provenance.snapshot.json"
     );
     assert_eq!(
         status_audit["actual_path"],
@@ -4487,7 +4487,7 @@ async fn vertical_operator_html_surfaces_render_from_seeded_http_server(pool: sq
                 "retention_comparison.normalized_match: true",
                 "--compare-with target/operator-proof/game-specific-audit-bundle-20260613T000000Z.json",
                 "export_operator_proof_status -- --fixture artifact-provenance --output target/operator-proof/current-status-audit-check.json",
-                "audit_operator_proof_status -- --output target/operator-proof/current-status-audit-report.json crates/commands/fixtures/operator-proof-status-artifact-provenance.snapshot.json target/operator-proof/current-status-audit-check.json",
+                "audit_operator_proof_status -- --output target/operator-proof/current-status-audit-report.json crates/operator_proof/fixtures/operator-proof-status-artifact-provenance.snapshot.json target/operator-proof/current-status-audit-check.json",
                 "audit_operator_proof_artifacts -- --output target/operator-proof/current-artifact-go-no-go-report.json",
                 "audit_operator_proof_artifact_retention -- --output target/operator-proof/current-artifact-retention-report.json",
                 "audit_projection_rebuild_artifact -- --output target/operator-proof/current-projection-rebuild-report.json",
@@ -4543,33 +4543,33 @@ async fn vertical_operator_html_surfaces_render_from_seeded_http_server(pool: sq
                 "\"row_id\":\"proof-run-operator-proof-status-snapshot-audit\"",
                 "\"path\":\"target/operator-proof/current-status-audit-report.json\"",
                 "\"artifact_version\":1",
-                "\"expected_path\":\"crates/commands/fixtures/operator-proof-status-artifact-provenance.snapshot.json\"",
+                "\"expected_path\":\"crates/operator_proof/fixtures/operator-proof-status-artifact-provenance.snapshot.json\"",
                 "\"actual_path\":\"target/operator-proof/current-status-audit-check.json\"",
                 "\"diff_count\":0",
                 "\"row_id\":\"proof-run-operator-proof-artifact-go-no-go\"",
                 "\"path\":\"target/operator-proof/current-artifact-go-no-go-report.json\"",
-                "\"command\":\"cargo run -q -p commands --bin audit_operator_proof_artifacts",
+                "\"command\":\"cargo run -q -p operator_proof --bin audit_operator_proof_artifacts",
                 "\"row_id\":\"proof-run-operator-proof-artifact-retention\"",
                 "\"path\":\"target/operator-proof/current-artifact-retention-report.json\"",
-                "\"command\":\"cargo run -q -p commands --bin audit_operator_proof_artifact_retention",
+                "\"command\":\"cargo run -q -p operator_proof --bin audit_operator_proof_artifact_retention",
                 "\"row_id\":\"proof-run-operator-proof-projection-rebuild\"",
                 "\"path\":\"target/operator-proof/current-projection-rebuild-report.json\"",
-                "\"command\":\"DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo run -q -p commands --bin audit_projection_rebuild_artifact",
+                "\"command\":\"DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo run -q -p operator_proof --bin audit_projection_rebuild_artifact",
                 "\"row_id\":\"proof-run-operator-proof-resolution-diff\"",
                 "\"path\":\"target/operator-proof/current-resolution-diff-report.json\"",
-                "\"command\":\"DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo run -q -p commands --bin audit_resolution_diff_artifact",
+                "\"command\":\"DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo run -q -p operator_proof --bin audit_resolution_diff_artifact",
                 "\"row_id\":\"proof-run-operator-proof-trace-inspection\"",
                 "\"path\":\"target/operator-proof/current-trace-inspection-report.json\"",
-                "\"command\":\"DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo run -q -p commands --bin audit_trace_inspection_artifact",
+                "\"command\":\"DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo run -q -p operator_proof --bin audit_trace_inspection_artifact",
                 "\"row_id\":\"proof-run-operator-proof-large-action-graph-performance\"",
                 "\"path\":\"target/operator-proof/current-large-action-graph-performance-report.json\"",
-                "\"command\":\"DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo run -q -p commands --bin audit_large_action_graph_performance_artifact",
+                "\"command\":\"DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo run -q -p operator_proof --bin audit_large_action_graph_performance_artifact",
                 "\"row_id\":\"proof-run-operator-proof-determinism-fuzz\"",
                 "\"path\":\"target/operator-proof/current-determinism-fuzz-report.json\"",
-                "\"command\":\"DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo run -q -p commands --bin audit_determinism_fuzz_artifact",
+                "\"command\":\"DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo run -q -p operator_proof --bin audit_determinism_fuzz_artifact",
                 "\"row_id\":\"proof-run-operator-proof-generated-shrink-matrix\"",
                 "\"path\":\"target/operator-proof/current-generated-shrink-matrix-report.tmp.json\"",
-                "\"command\":\"DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands --test pipeline generated_shrink_matrix_writes_compact_operator_report",
+                "\"command\":\"RUST_MIN_STACK=8388608 DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands --test pipeline generated_shrink_matrix_writes_compact_operator_report",
                 "\"row_id\":\"proof-run-missing-artifact-provenance-guard\"",
                 "\"state\":\"missing\"",
                 "\"row_id\":\"proof-run-malformed-artifact-metadata-guard\"",
@@ -4593,7 +4593,7 @@ async fn vertical_operator_html_surfaces_render_from_seeded_http_server(pool: sq
             format!("/games/{game}/operator/proof-runs/status-audit?principal_user_id=host_h"),
             vec![
                 "\"ok\":true",
-                "\"expected_path\":\"crates/commands/fixtures/operator-proof-status-artifact-provenance.snapshot.json\"",
+                "\"expected_path\":\"crates/operator_proof/fixtures/operator-proof-status-artifact-provenance.snapshot.json\"",
                 "\"actual_path\":\"target/operator-proof/current-status-audit-check.json\"",
                 "\"artifact\":{\"path\":\"target/operator-proof/current-status-audit-report.json\",\"state\":\"trusted\"",
                 "\"normalized_fields\":",

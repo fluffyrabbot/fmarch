@@ -8,6 +8,7 @@ members = [
     "crates/projections",
     "crates/caps",
     "crates/commands",
+    "crates/operator_proof",
     "crates/game_platform",
     "crates/wire",
     "crates/api",

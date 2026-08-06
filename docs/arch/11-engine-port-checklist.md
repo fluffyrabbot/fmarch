@@ -1837,7 +1837,7 @@ The only identity that crosses into the engine is `SlotId`.
   records `ok: true`, 4 passed lanes, zero failed lanes, and explicitly excludes Postgres
   command/projection integration.]
 - [x] Integration command that runs command/projection resolution against Postgres. [proven:
-  `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/<scratch-db> cargo run -q -p commands
+  `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/<scratch-db> cargo run -q -p operator_proof
   --bin prove_command_projection_resolution -- --output
   target/operator-proof/current-command-projection-resolution-report.json
   crates/commands/fixtures/night-passing.json` seeds the checked fixture through
@@ -2321,7 +2321,7 @@ coverage, and a playable vertical scenario through the command pipeline.
 ### Phase 7 - Operational hardening
 
 1. Replay tooling and resolution diff UI.
-   [done: `cargo run -p commands --bin audit_resolution -- <game_uuid>` scans stored
+   [done: `cargo run -p operator_proof --bin audit_resolution -- <game_uuid>` scans stored
    `ResolutionApplied` / `ResolutionTrace` pairs, reruns ordinary `ResolvePhase` envelopes from
    the event-stream prefix with the stored seed/run id/logical time, reconstructs PK
    `ResolveHostPrompt` envelopes from `HostPromptIssued` + `HostPromptResolved`, emits a JSON
@@ -2341,7 +2341,7 @@ coverage, and a playable vertical scenario through the command pipeline.
    `/games/{game}/resolution-traces` JSON and `/games/{game}/resolution-traces/view` HTML expose
    stored trace rows with stream anchors, decisions, redirect edges, generated actions, effect
    changes, visibility rows, and notes for operator review. The manifest-listed command
-   `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo run -p commands --bin audit_resolution -- 08d8a45f-6c3b-4401-8e31-8d7637f36a82`
+   `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo run -p operator_proof --bin audit_resolution -- 08d8a45f-6c3b-4401-8e31-8d7637f36a82`
    was rerun by `prove_game_specific_audits` against freshly seeded fixture game
    `08d8a45f-6c3b-4401-8e31-8d7637f36a82` and
    returned `ok: true`, `audited: 1`, `skipped: 0`, one matched `N01` phase, and zero drifted
@@ -2391,7 +2391,7 @@ coverage, and a playable vertical scenario through the command pipeline.
    Visibility, and Notes sections; decision and redirect-edge rows now have stable row anchors plus
    links to anchored JSON detail blocks; the trace vertical proves the section, row, and detail
    anchors render for a seeded trace. The manifest-listed command
-   `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo run -p commands --bin inspect_trace -- 08d8a45f-6c3b-4401-8e31-8d7637f36a82`
+   `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo run -p operator_proof --bin inspect_trace -- 08d8a45f-6c3b-4401-8e31-8d7637f36a82`
    was rerun against the same freshly seeded fixture game and returned one anchored `N01` trace
    with four decisions: result-contract validation, protected kill resolution, and the two emitted
    inner events. The `audit_trace_inspection_artifact` binary is covered end-to-end for a
@@ -2440,7 +2440,7 @@ coverage, and a playable vertical scenario through the command pipeline.
    boundary, stdout/file JSON parity, artifact path, fixed dimensions, replay/projection audit
    flags, trace anchors, elapsed/threshold fields, and bounded count fields. The manifest artifact
    was regenerated from a short-lived scratch database with
-   `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch_large_action_perf cargo run -q -p commands --bin audit_large_action_graph_performance_artifact -- --output target/operator-proof/current-large-action-graph-performance-report.json`
+   `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch_large_action_perf cargo run -q -p operator_proof --bin audit_large_action_graph_performance_artifact -- --output target/operator-proof/current-large-action-graph-performance-report.json`
    and produced `ok: true` for 40 slots, 29 submitted actions, 25 inner events, 154 stream events,
    73 trace rows, and 36 ms under the 20-second local ceiling. The operator browser smoke was rerun
    against the same scratch lane and proved the large-action proof-run JSON/HTML surfaces through
@@ -2452,7 +2452,7 @@ coverage, and a playable vertical scenario through the command pipeline.
    through `Command::ResolvePhase`, then proves `audit_resolution`, exact anchored day-vote
    inner-event decisions in `inspect_trace`, and `audit_rebuild` all stay clean. This
    manifest-listed lane was rerun locally with
-   `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands seeded_day_vote_scenarios_replay_audit_and_rebuild_deterministically -- --nocapture`
+   `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands seeded_day_vote_scenarios_replay_audit_and_rebuild_deterministically -- --ignored --nocapture`
    and passed one filtered pipeline test across the five deterministic seeds. A second seeded lane now generates legal Mafiascum N01 action
    graphs across Doctor, Roleblocker, Tracker, Watcher, Bus Driver, Mafia Goon, and Strongman,
    submits through `Command::SubmitAction`, resolves, and runs the same audit trio with exact
@@ -2493,329 +2493,20 @@ coverage, and a playable vertical scenario through the command pipeline.
    helper-enforces exact anchored result-contract plus representative inner-event decisions. This
    generated Mafiascum lane was rerun locally with
    `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -q -p commands generated_night_action_graphs_replay_audit_and_rebuild_deterministically`
-   and passed one filtered pipeline test across its six fixed generated seeds. `minimize_night_fixture`
-   now replays that seed/roster/action JSON fixture through the command pipeline and, with
-   `--reduce`, greedily removes actions then slots while preserving the original failure class.
-   Generated failures now print valid minimizer JSON directly, and
-   `crates/commands/fixtures/night-passing.json` is a checked-in passing replay sample documented
-   in the engine notes. `crates/commands/fixtures/night-babysitter-dependency-minimized.json`
-   persists a four-slot, three-action Babysitter generated-death replay, and
-   `crates/commands/fixtures/night-hider-dependency-minimized.json` promotes a three-slot,
-   two-action Hider host-death dependency replay. `crates/commands/fixtures/night-pgo-trigger-minimized.json`
-   covers the remaining trigger-note side with a two-slot, one-action PGO replay.
-   `crates/commands/fixtures/night-extra-action-generated-minimized.json`,
-   `crates/commands/fixtures/night-item-grant-generated-minimized.json`, and
-   `crates/commands/fixtures/night-private-notification-generated-minimized.json` now promote the
-   generated-action matrix rows into checked-in replays: ExtraAction stays at four slots and two
-   actions, while ItemGrant and PrivateNotification shrink to two slots and one action. All three
-   replay setup plus N02 with two audited resolution envelopes and two anchored traces; ExtraAction
-   and ItemGrant check five semantic expectations, while PrivateNotification checks six including
-   the private target notification.
-   `minimize_night_fixture`
-   now asserts fixture metadata for expected inner events, anchored trace decisions, trace notes,
-   and generated-action rows; the Babysitter and Hider minimized replays each pass with three
-   checked semantic expectations, while the PGO replay passes with four checked semantic
-   expectations including the `Trigger` inner event, generated kill, generated-action trace row,
-   and anchored diagnostic note; the ExtraAction, ItemGrant, and PrivateNotification replays check
-   the grant-consumption inner events and generated-action rows across setup plus N02. `--reduce` now also reduces successful fixtures
-   with expectations only while the same expectation count remains green. The generated Mafiascum N01 fixture JSON
-   helper now emits matching `expectations` metadata for unambiguous PGO visit-trigger,
-   Babysitter dependency-death, and Hider host-death cases, while avoiding inference when
-   redirect/bus target mutation or obvious actor suppression is present.
-   `minimized_trigger_dependency_fixtures_replay_semantic_expectations` now proves the checked-in
-   Babysitter, Hider, PGO, ExtraAction, ItemGrant, and PrivateNotification minimized fixtures through command replay, `audit_resolution`,
-   anchored `inspect_trace`, `audit_rebuild`, and their declared semantic expectation counts.
-   `crates/commands/fixtures/night-extra-action-generated-bad-expectation.json`,
-   `crates/commands/fixtures/night-item-grant-generated-bad-expectation.json`, and
-   `crates/commands/fixtures/night-private-notification-generated-bad-expectation.json` are
-   checked-in generated-action bad-expectation artifacts; the
-   `checked_in_generated_action_bad_expectation_fixture_preserves_semantic_failure` selector proves
-   all three reduced fixtures remain `semantic_expectation` failures and are not promoted as successes.
-   `crates/commands/fixtures/night-backup-inheritance-generated-minimized.json` and
-   `crates/commands/fixtures/night-backup-projection-state-generated-minimized.json` now promote
-   the first conversion/backup matrix rows into checked-in targeted BackupInheritance replays. Both
-   carry one action, two setup phases, three audited resolution envelopes, and three anchored traces;
-   the inheritance fixture keeps three slots and two semantic expectations for the inherited Cop
-   check plus `night:backup` trace decision, while the projection-state fixture keeps four slots
-   and three semantic expectations by also checking the rebuilt Cop `slot_state`. Their matching
-   checked-in negative artifacts,
-   `crates/commands/fixtures/night-backup-inheritance-generated-bad-expectation.json` and
-   `crates/commands/fixtures/night-backup-projection-state-generated-bad-expectation.json`, are
-   covered by `checked_in_backup_generated_fixtures_replay_semantic_expectations`, which proves
-   both success fixtures remain promotable while both reduced negative fixtures preserve
-   `semantic_expectation` failure class without success promotion.
-   `crates/commands/fixtures/night-conversion-deprogramming-generated-minimized.json` and
-   `crates/commands/fixtures/night-conversion-projection-state-generated-minimized.json` now promote
-   the ConversionDeprogramming and ConversionProjectionState rows into checked-in cult recruit plus
-   deprogram replays with four slots, one N03 action, two setup phases, three audited resolution
-   envelopes, and three anchored traces. The deprogramming fixture checks three semantic expectations
-   for the restored Cop check plus both conversion trace decisions; the projection-state fixture
-   adds the restored Cop `slot_state` for four semantic expectations. Their matching checked-in
-   negative artifacts,
-   `crates/commands/fixtures/night-conversion-deprogramming-generated-bad-expectation.json` and
-   `crates/commands/fixtures/night-conversion-projection-state-generated-bad-expectation.json`, are
-   covered by `checked_in_conversion_generated_fixtures_replay_semantic_expectations`, which proves
-   both success fixtures remain promotable while both reduced negative fixtures preserve
-   `semantic_expectation` failure class without success promotion.
-   `crates/commands/fixtures/night-mark-clear-visibility-generated-minimized.json` now promotes the
-   MarkClearVisibility row into a checked-in Mafiascum N02 mark/clear replay with four slots, three
-   actions, one setup phase, two audited resolution envelopes, and two anchored traces. It checks
-   five semantic expectations: four inner events for visible `doused` notification, clear, fresh
-   visible mark, and the empty phase announcement, plus the read-effect preemption trace proving
-   same-resolution clear blocks the later `ignite`. Its matching checked-in negative artifact,
-   `crates/commands/fixtures/night-mark-clear-visibility-generated-bad-expectation.json`, is covered
-   by `checked_in_mark_clear_generated_fixtures_replay_semantic_expectations`, which proves the
-   success fixture remains promotable while the reduced negative fixture preserves
-   `semantic_expectation` failure class without success promotion.
-   `crates/commands/fixtures/night-mark-clear-expiry-generated-minimized.json` now promotes the
-   MarkClearExpiry row into a checked-in Mafiascum N02 expiring mark replay with three slots, one
-   action, one setup phase, two audited resolution envelopes, and two anchored traces. It checks six
-   semantic expectations: two inner events for the target-visible `fruit_received` mark and empty
-   phase announcement, two player notifications covering the setup-phase and current-phase marks,
-   and two absent slot-effect assertions proving both expiring marks are removed from rebuilt slot
-   state. Its matching checked-in negative artifact,
-   `crates/commands/fixtures/night-mark-clear-expiry-generated-bad-expectation.json`, is covered by
-   the same `checked_in_mark_clear_generated_fixtures_replay_semantic_expectations` selector, which
-   proves the success fixture remains promotable while the reduced negative fixture preserves
-   `semantic_expectation` failure class without success promotion.
-   `crates/commands/fixtures/night-poison-cure-generated-minimized.json` now promotes the PoisonCure
-   row into a checked-in Mafiascum N02 pending-poison cure replay with four slots, two actions, one
-   setup phase, two audited resolution envelopes, and two anchored traces. It checks ten semantic
-   expectations: four inner events for the cleared poison notification, `EffectsCleared`,
-   `DelayedDeathResolved(preempted_by_clear)`, and empty phase announcement; one pending-effect trace
-   decision; one player notification; one carried fresh poison delayed-death queue; one absent cured
-   delayed-death queue; one carried fresh poisoned slot effect; and one absent cured poisoned slot
-   effect. Its matching checked-in negative artifact,
-   `crates/commands/fixtures/night-poison-cure-generated-bad-expectation.json`, is covered by
-   `checked_in_poison_cure_generated_fixtures_replay_semantic_expectations`, which proves the success
-   fixture remains promotable while the reduced negative fixture preserves `semantic_expectation`
-   failure class without success promotion.
-   `crates/commands/fixtures/night-ignite-generated-minimized.json` now promotes the Ignite row into
-   a checked-in Mafiascum N02 carried-douse ignite replay with two slots, one action, one setup
-   phase, two audited resolution envelopes, and two anchored traces. It checks two semantic
-   expectations: the `PlayerKilled(cause = ignite)` inner event for the doused target and the
-   matching phase announcement death entry. Its matching checked-in negative artifact,
-   `crates/commands/fixtures/night-ignite-generated-bad-expectation.json`, is covered by
-   `checked_in_ignite_generated_fixtures_replay_semantic_expectations`, which proves the success
-   fixture remains promotable while the reduced negative fixture preserves `semantic_expectation`
-   failure class without success promotion.
-   `crates/commands/fixtures/night-pgo-projection-state-generated-minimized.json` now promotes the
-   PgoProjectionState row into a checked-in Mafiascum N01 trigger replay with three slots, one
-   action, one audited resolution envelope, and one anchored trace. It checks nine semantic
-   expectations: the PGO `Trigger` inner event, the generated PGO `PlayerKilled` inner event, one
-   trigger trace decision, one trigger trace note, one generated action, one generated-action count,
-   and three rebuilt `slot_state` rows proving the visitor dies while the PGO and untouched slot
-   survive. Its matching checked-in negative artifact,
-   `crates/commands/fixtures/night-pgo-projection-state-generated-bad-expectation.json`, is covered
-   by `checked_in_pgo_projection_state_generated_fixtures_replay_semantic_expectations`, which proves
-   the success fixture remains promotable while the reduced negative fixture preserves
-   `semantic_expectation` failure class without success promotion.
-   `crates/commands/fixtures/night-hider-projection-state-generated-minimized.json` now promotes the
-   HiderProjectionState row into a checked-in Mafiascum N01 dependency-death replay with three
-   slots, two actions, one audited resolution envelope, and one anchored trace. It checks six
-   semantic expectations: the factional `PlayerKilled` inner event for the host, the dependent hider
-   `PlayerKilled(cause = hide)` inner event, one `night:dependency_death` trace decision, and three
-   rebuilt `slot_state` rows proving the host and hider die while the attacker survives. Its
-   matching checked-in negative artifact,
-   `crates/commands/fixtures/night-hider-projection-state-generated-bad-expectation.json`, is
-   covered by `checked_in_hider_projection_state_generated_fixtures_replay_semantic_expectations`,
-   which proves the success fixture remains promotable while the reduced negative fixture preserves
-   `semantic_expectation` failure class without success promotion.
-   `crates/commands/fixtures/night-babysitter-projection-state-generated-minimized.json` now
-   promotes the BabysitterProjectionState row into a checked-in Mafiascum N01 dependency-death replay
-   with four slots, three actions, one audited resolution envelope, and one anchored trace. It checks
-   seven semantic expectations: the `PlayerSaved` inner event for the ward, the factional
-   `PlayerKilled` inner event for the babysitter, the dependent ward `PlayerKilled(cause = babysit)`
-   inner event, one `night:dependency_death` trace decision, and three rebuilt `slot_state` rows
-   proving the babysitter and ward die while the surviving attacker remains alive. Its matching
-   checked-in negative artifact,
-   `crates/commands/fixtures/night-babysitter-projection-state-generated-bad-expectation.json`, is
-   covered by
-   `checked_in_babysitter_projection_state_generated_fixtures_replay_semantic_expectations`, which
-   proves the success fixture remains promotable while the reduced negative fixture preserves
-   `semantic_expectation` failure class without success promotion.
-   `crates/commands/fixtures/night-lovers-projection-state-generated-minimized.json` now promotes
-   the LoversProjectionState row into a checked-in Mafiascum N02 carried-link cascade replay with
-   five slots, one setup phase, one night action, two audited resolution envelopes, and two anchored
-   traces. It checks six semantic expectations: the factional `PlayerKilled` inner event for the
-   first lover, the linked `PlayerKilled(cause = lover_suicide)` inner event for the surviving lover,
-   one `death:cascade` trace decision, and three rebuilt `slot_state` rows proving both linked slots
-   die while the unrelated attacker remains alive. Its matching checked-in negative artifact,
-   `crates/commands/fixtures/night-lovers-projection-state-generated-bad-expectation.json`, is
-   covered by `checked_in_lovers_projection_state_generated_fixtures_replay_semantic_expectations`,
-   which proves the success fixture remains promotable while the reduced negative fixture preserves
-   `semantic_expectation` failure class without success promotion.
-   `crates/commands/fixtures/night-bomb-projection-state-generated-minimized.json` now promotes the
-   BombProjectionState row into a checked-in Mafiascum N01 trigger replay with three slots, one
-   action, one audited resolution envelope, and one anchored trace. It checks ten semantic
-   expectations: the initial factional `PlayerKilled` inner event for the bomb, the `Trigger` inner
-   event for `bomb_retaliates`, the generated retaliatory `PlayerKilled` inner event for the
-   attacker, one trigger trace decision, one trigger trace note, one generated action, one
-   generated-action count, and three rebuilt `slot_state` rows proving the bomb and attacker die
-   while the unrelated slot survives. Its matching checked-in negative artifact,
-   `crates/commands/fixtures/night-bomb-projection-state-generated-bad-expectation.json`, is covered
-   by `checked_in_bomb_projection_state_generated_fixtures_replay_semantic_expectations`, which
-   proves the success fixture remains promotable while the reduced negative fixture preserves
-   `semantic_expectation` failure class without success promotion.
-   `crates/commands/fixtures/night-hunter-projection-state-generated-minimized.json` now promotes
-   the HunterProjectionState row into a checked-in Mafiascum N02 carried-retaliation replay with four
-   slots, one setup phase, one night action, two audited resolution envelopes, and two anchored
-   traces. It checks six semantic expectations: the factional `PlayerKilled` inner event for the
-   hunter, the retaliatory `PlayerKilled(cause = hunter_retaliate)` inner event for the selected
-   target, one `death:cascade` trace decision, and three rebuilt `slot_state` rows proving the hunter
-   and chosen target die while the unrelated slot survives. Its matching checked-in negative
-   artifact,
-   `crates/commands/fixtures/night-hunter-projection-state-generated-bad-expectation.json`, is
-   covered by `checked_in_hunter_projection_state_generated_fixtures_replay_semantic_expectations`,
-   which proves the success fixture remains promotable while the reduced negative fixture preserves
-   `semantic_expectation` failure class without success promotion.
-   `crates/commands/fixtures/night-vengeful-projection-state-generated-minimized.json` now promotes
-   the VengefulProjectionState row into a checked-in Mafiascum N01 trigger replay with three slots,
-   one night action, one audited resolution envelope, and one anchored trace. It checks ten semantic
-   expectations: the initial factional `PlayerKilled` inner event for the vengeful slot, the
-   `Trigger` inner event for `vengeful_retaliates`, the generated retaliatory
-   `PlayerKilled(cause = vengeful_retaliates)` inner event for the attacker, one trigger trace
-   decision, one trigger trace note, one generated action, one generated-action count, and three
-   rebuilt `slot_state` rows proving the vengeful slot and attacker die while the unrelated slot
-   survives. Its matching checked-in negative artifact,
-   `crates/commands/fixtures/night-vengeful-projection-state-generated-bad-expectation.json`, is
-   covered by `checked_in_vengeful_projection_state_generated_fixtures_replay_semantic_expectations`,
-   which proves the success fixture remains promotable while the reduced negative fixture preserves
-   `semantic_expectation` failure class without success promotion.
-   `crates/commands/fixtures/night-strongman-vengeful-projection-state-generated-minimized.json`
-   now promotes the StrongmanVengefulProjectionState row into a checked-in Mafiascum N01 unstoppable
-   retaliation replay with three slots, two night actions, one audited resolution envelope, and one
-   anchored trace. It checks eleven semantic expectations: the initial factional `PlayerKilled`
-   inner event for the unstoppable vengeful slot, the `Trigger` inner event for
-   `unstoppable_vengeful_retaliates`, the generated unstoppable retaliatory
-   `PlayerKilled(cause = unstoppable_vengeful_retaliates)` inner event for the attacker, the trigger
-   trace decision, the `protection_bypassed_by_unstoppable_kill` trace decision proving the doctor
-   protection is bypassed, one trigger trace note, one generated action, one generated-action count,
-   and three rebuilt `slot_state` rows proving the attacker and vengeful slot die while the doctor
-   survives. Its matching checked-in negative artifact,
-   `crates/commands/fixtures/night-strongman-vengeful-projection-state-generated-bad-expectation.json`,
-   is covered by
-   `checked_in_strongman_vengeful_projection_state_generated_fixtures_replay_semantic_expectations`,
-   which proves the success fixture remains promotable while the reduced negative fixture preserves
-   `semantic_expectation` failure class without success promotion.
-   `crates/commands/fixtures/night-bodyguard-strongman-vengeful-projection-state-generated-minimized.json`
-   and
-   `crates/commands/fixtures/night-bodyguard-strongman-vengeful-projection-state-generated-seed-97262-minimized.json`
-   now promote both deterministic BodyguardStrongmanVengefulProjectionState generated-shrink seeds
-   into checked-in Mafiascum N01 bodyguard-intercept plus unstoppable-retaliation replays with three
-   slots, two night actions, one audited resolution envelope, and one anchored trace each. Each
-   checks eleven semantic expectations: the initial factional `PlayerKilled` inner event for the
-   unstoppable vengeful slot, the `Trigger` inner event for `unstoppable_vengeful_retaliates`, the
-   generated unstoppable retaliatory `PlayerKilled(cause = unstoppable_vengeful_retaliates)` inner
-   event for the attacker, the trigger trace decision, the
-   `protection_bypassed_by_unstoppable_kill` trace decision proving the bodyguard intercept is
-   recorded but bypassed, one trigger trace note, one generated action, one generated-action count,
-   and three rebuilt `slot_state` rows proving the attacker and vengeful slot die while the
-   bodyguard survives. Its matching checked-in negative artifacts,
-   `crates/commands/fixtures/night-bodyguard-strongman-vengeful-projection-state-generated-bad-expectation.json`
-   and
-   `crates/commands/fixtures/night-bodyguard-strongman-vengeful-projection-state-generated-seed-97262-bad-expectation.json`,
-   are covered by
-   `checked_in_bodyguard_strongman_vengeful_projection_state_generated_fixtures_replay_semantic_expectations`,
-   which proves both success fixtures remain promotable while both reduced negative fixtures
-   preserve `semantic_expectation` failure class without success promotion. This is deterministic
-   generated fixture replay coverage, not exhaustive randomized coverage.
-   `crates/commands/fixtures/night-vengeful-fixpoint-generated-minimized.json` now promotes the
-   VengefulFixpoint row into a checked-in Mafiascum N01 generated-kill fixpoint replay with two
-   slots, one night action, one audited resolution envelope, and one anchored trace. It checks nine
-   semantic expectations: the initial factional `PlayerKilled` inner event for the vengeful slot,
-   the `Trigger` inner event for `vengeful_retaliates`, the generated retaliatory
-   `PlayerKilled(cause = vengeful_retaliates)` inner event for the attacker, one trigger trace
-   decision, one trigger trace note, one generated action, one generated-action count, and two
-   rebuilt `slot_state` rows proving both slots die through the fixpoint. Its matching checked-in
-   negative artifact, `crates/commands/fixtures/night-vengeful-fixpoint-generated-bad-expectation.json`,
-   is covered by `checked_in_vengeful_fixpoint_generated_fixtures_replay_semantic_expectations`,
-   which proves the success fixture remains promotable while the reduced negative fixture preserves
-   `semantic_expectation` failure class without success promotion.
-   `crates/commands/fixtures/night-strongman-vengeful-fixpoint-generated-minimized.json` now
-   promotes the StrongmanVengefulFixpoint row into a checked-in Mafiascum N01 unstoppable
-   generated-kill fixpoint replay with three slots, two night actions, one audited resolution
-   envelope, and one anchored trace. It checks eleven semantic expectations: the initial factional
-   `PlayerKilled` inner event for the unstoppable vengeful slot, the `Trigger` inner event for
-   `unstoppable_vengeful_retaliates`, the generated unstoppable retaliatory
-   `PlayerKilled(cause = unstoppable_vengeful_retaliates)` inner event for the attacker, the trigger
-   trace decision, the `protection_bypassed_by_unstoppable_kill` trace decision proving the doctor
-   protection is bypassed, one trigger trace note, one generated action, one generated-action count,
-   and three rebuilt `slot_state` rows proving the attacker and vengeful slot die while the doctor
-   survives. Its matching checked-in negative artifact,
-   `crates/commands/fixtures/night-strongman-vengeful-fixpoint-generated-bad-expectation.json`, is
-   covered by `checked_in_strongman_vengeful_fixpoint_generated_fixtures_replay_semantic_expectations`,
-   which proves the success fixture remains promotable while the reduced negative fixture preserves
-   `semantic_expectation` failure class without success promotion.
-   `crates/commands/fixtures/night-bodyguard-strongman-vengeful-fixpoint-generated-minimized.json`
-   now promotes the BodyguardStrongmanVengefulFixpoint row into a checked-in Mafiascum N01
-   bodyguard-intercept plus unstoppable generated-kill fixpoint replay with three slots, two night
-   actions, one audited resolution envelope, and one anchored trace. It checks eleven semantic
-   expectations: the initial factional `PlayerKilled` inner event for the unstoppable vengeful
-   slot, the `Trigger` inner event for `unstoppable_vengeful_retaliates`, the generated unstoppable
-   retaliatory `PlayerKilled(cause = unstoppable_vengeful_retaliates)` inner event for the attacker,
-   the trigger trace decision, the `protection_bypassed_by_unstoppable_kill` trace decision proving
-   the bodyguard intercept is recorded but bypassed, one trigger trace note, one generated action,
-   one generated-action count, and three rebuilt `slot_state` rows proving the attacker and
-   vengeful slot die while the bodyguard survives. Its matching checked-in negative artifact,
-   `crates/commands/fixtures/night-bodyguard-strongman-vengeful-fixpoint-generated-bad-expectation.json`,
-   is covered by
-   `checked_in_bodyguard_strongman_vengeful_fixpoint_generated_fixtures_replay_semantic_expectations`,
-   which proves the success fixture remains promotable while the reduced negative fixture preserves
-   `semantic_expectation` failure class without success promotion.
-   `crates/commands/fixtures/night-babysitter-dependency-nonminimal.json`,
-   `crates/commands/fixtures/night-hider-dependency-nonminimal.json`, and
-   `crates/commands/fixtures/night-pgo-trigger-nonminimal.json` prove the success-shrinking path:
-   `--reduce` removes each irrelevant extra slot while preserving all declared semantic
-   expectations. `--write-reduced <path>` now writes each post-reduction fixture; the non-minimal
-   PGO, Babysitter, and Hider replays are reduced into `target/operator-proof/*.reduced.tmp.json`
-   artifacts and then replayed from those written artifacts with one audited resolution, one trace,
-   clean projection rebuild, and all semantic expectations checked by
-   `nonminimal_trigger_dependency_fixtures_shrink_to_checked_semantic_replays`. The report now distinguishes replay
-   success, failure-class preservation, and success-invariant preservation.
-   `generated_trigger_dependency_search_shrinks_to_replayable_artifacts` now removes the
-   hand-authored nonminimal-fixture dependency for that proof shape: it runs a bounded
-   `generated_night_case` seed search, discovers generated PGO, Babysitter, and Hider cases with
-   emitted semantic expectations, writes each generated fixture through `GeneratedShrinkArtifacts`,
-   reduces it with `minimize_night_fixture --reduce --write-reduced --write-report`, and replays the
-   reduced JSON artifact with the same expectation counts and clean projection rebuilds.
-   `generated_trigger_dependency_bad_expectations_shrink_to_failing_artifacts` now covers the
-   matching generated failure path for those discovered PGO, Babysitter, and Hider cases: each
-   fixture receives one intentionally wrong semantic expectation, the minimizer preserves the
-   `semantic_expectation` failure class, writes a reduced failing artifact with
-   `promoted_success_fixture: false`, and then replays the original generated success fixture so the
-   negative lane cannot hide resolver drift.
-   `generated_shrink_matrix_writes_compact_operator_report` now makes that shrink breadth visible
-   in a compact local-Postgres report: it collects two deterministic PGO, Babysitter, and Hider
-   generated seeds plus two deterministic Hunter, HunterProjectionState, VengefulFixpoint, VengefulProjectionState, StrongmanVengefulFixpoint, StrongmanVengefulProjectionState, BodyguardStrongmanVengefulFixpoint, BodyguardStrongmanVengefulProjectionState, PgoProjectionState, HiderProjectionState, BabysitterProjectionState, LoversProjectionState, BackupInheritance, BackupProjectionState, ConversionDeprogramming,
-   ConversionProjectionState, MarkClearVisibility, MarkClearExpiry, PoisonCure, Ignite, ExtraAction, ItemGrant, PrivateNotification, Lovers, Bomb, and BombProjectionState persistent/generated-action
-   seeds, runs each of the 58 cases through success and bad-expectation reductions, asserts success
-   invariants and `semantic_expectation` failure preservation, writes per-case reduced fixture and
-   report artifacts under `target/operator-proof`, and saves
-   `target/operator-proof/current-generated-shrink-matrix-report.tmp.json` with `ok: true`, 29
-   families, 58 cases, and the proof boundary that it is bounded local-Postgres coverage rather
-   than exhaustive randomized coverage.
-   `tools/check_generated_shrink_matrix_gap_audit.py --check` now adds the matching
-   no-Postgres gap audit for that compact matrix: it derives the expected 29 Phase 4
-   persistent/generated-action families from the checked checklist buckets plus source/test
-   evidence needles, compares them to `generated_shrink_matrix_expected_families()`, and writes
-   `target/operator-proof/current-generated-shrink-gap-audit-report.json` with `ok: true`, 29
-   expected/manifest families, 58 expected/manifest cases, no missing families, no unexpected
-   families, no count mismatches, and no evidence failures. That audit does not execute resolver
-   cases; it proves the matrix is not missing a named Phase 4 family before new generated cases are
-   added.
-   `crates/commands/fixtures/night-pgo-trigger-bad-expectation.json` proves the negative
-   semantic-expectation path: `--write-reduced` can save a reduced failing artifact while reporting
-   `promoted_success_fixture: false`. `--write-report <path>` now persists the minimizer JSON
-   report, and the generated Mafiascum N01 failure-artifact proof writes
-   `target/operator-proof/generated-mafiascum-n01-bad-pgo-expectation.fixture.tmp.json`, invokes
-   `minimize_night_fixture --reduce --write-reduced --write-report`, and verifies the saved report
-   preserves `semantic_expectation` failure class while keeping `promoted_success_fixture: false`.
-   The Chinese Structured N01 failure-artifact proof uses the same helper to write
-   `target/operator-proof/generated-chinese-n01-bad-prophet-expectation.fixture.tmp.json`, shrink it,
-   and verify the saved report preserves `semantic_expectation` failure class without promoting the
-   fixture as a success.
-   The Mafiascum and Chinese Structured N01 generated replay lanes now route their resolve,
+   and passed one filtered pipeline test across its six fixed generated seeds. `minimize_night_fixture` now exposes its reducer through `operator_proof::minimizer`.
+   Generated tests pass fixture JSON and their existing isolated `PgPool` directly, so reductions
+   no longer spawn Cargo, reconnect to Postgres, or coordinate child-process slots. A pure-predicate
+   unit contract proves that irrelevant actions and slots are removed while the target failure
+   remains. The CLI is retained as a thin file/database adapter and
+   `crates/commands/fixtures/night-passing.json` is the sole durable command fixture.
+   The generated shrink matrix continues to synthesize all 29 declared semantic families in both
+   success and bad-expectation form (58 cases), verifies success-invariant or failure-class
+   preservation, and writes disposable reduced fixtures and reports under `target/operator-proof`.
+   The former checked-in minimized, nonminimal, and bad-expectation fixture cross-product was
+   deleted because it duplicated that generator and could not drift independently. The
+   no-Postgres gap audit still checks exact family/case coverage before the explicit generated lane
+   runs resolver or Postgres work.
+      The Mafiascum and Chinese Structured N01 generated replay lanes now route their resolve,
    result validation, event-count, representative-event, audit, trace-count, anchored trace-decision,
    and projection-rebuild failures through the shrink helper before panicking; the panic message
    includes the saved report path, reduced fixture path, preservation booleans, and reduction step count.
@@ -2986,10 +2677,10 @@ coverage, and a playable vertical scenario through the command pipeline.
    copyright-free shipped default pack. `audit_resolution` now treats
    tiny `jsonb` floating-point rendering differences as numeric equality while keeping the replayed
    JSON structure exact. The manifest-listed fixture minimizer lane was rerun locally with
-   `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo run -q -p commands --bin minimize_night_fixture -- crates/commands/fixtures/night-passing.json`
+   `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo run -q -p operator_proof --bin minimize_night_fixture -- crates/commands/fixtures/night-passing.json`
    and replayed the checked-in fixture with one audited resolution, one trace, and clean projection
    rebuild. The manifest-listed checked game-specific audit bundle was rerun locally with
-   `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo run -q -p commands --bin prove_game_specific_audits -- --output target/operator-proof/game-specific-audit-bundle-20260613T000000Z.json crates/commands/fixtures/night-passing.json`;
+   `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo run -q -p operator_proof --bin prove_game_specific_audits -- --output target/operator-proof/game-specific-audit-bundle-20260613T000000Z.json crates/commands/fixtures/night-passing.json`;
    it created fixture game `08d8a45f-6c3b-4401-8e31-8d7637f36a82`, expanded and executed the three
    game-specific manifest templates for that id, wrote
    `target/operator-proof/game-specific-audit-bundle-20260613T000000Z.json` atomically, and failed
@@ -3004,7 +2695,7 @@ coverage, and a playable vertical scenario through the command pipeline.
    execution. The proof-run page header and status JSON also expose compact production/fixture
    artifact summaries: production rows must be trusted for the browser smoke to pass, while fixture
    rows are allowed to exercise negative states. The retention lane was rerun locally with
-   `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo run -q -p commands --bin prove_game_specific_audits -- --compare-with target/operator-proof/game-specific-audit-bundle-20260613T000000Z.json --output target/operator-proof/game-specific-audit-bundle-20260613T001500Z.json crates/commands/fixtures/night-passing.json`;
+   `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo run -q -p operator_proof --bin prove_game_specific_audits -- --compare-with target/operator-proof/game-specific-audit-bundle-20260613T000000Z.json --output target/operator-proof/game-specific-audit-bundle-20260613T001500Z.json crates/commands/fixtures/night-passing.json`;
    it created fixture game `3e3cccc1-c837-46d3-b0d6-1b83ae0cc82b`, wrote
    `target/operator-proof/game-specific-audit-bundle-20260613T001500Z.json`, and returned
    `retention_comparison.normalized_match: true` after normalizing `game_id`, `artifact_path`,
@@ -3033,19 +2724,19 @@ coverage, and a playable vertical scenario through the command pipeline.
    artifact state (`missing`, `malformed`, `stale`, `path_mismatch`, `version_mismatch`,
    `input_mismatch`, `drifted`, or `trusted`), freshness fields for trusted/stale/drifted
    artifacts, and trusted metadata only for fresh path/version-matching game-audit artifacts. A
-   focused shared `commands::operator_proof` unit test validates the versioned shape, row-derived
+   focused shared `operator_proof` unit test validates the versioned shape, row-derived
    summary counts, and state-specific fields across all eight
    artifact states. The proof-run manifest parser, artifact classifier, status builder, contract
-   DTO, and fixture rows now live in `commands::operator_proof`, so the HTTP JSON endpoint and HTML
+   DTO, and fixture rows now live in `operator_proof`, so the HTTP JSON endpoint and HTML
    page render the same shared model. The no-server
-   `cargo run -q -p commands --bin export_operator_proof_status -- <game> --fixture
+   `cargo run -q -p operator_proof --bin export_operator_proof_status -- <game> --fixture
    artifact-provenance` exporter emits that same `contract_version: 1` JSON without starting Axum,
    touching Postgres, or executing proof commands. The saved snapshot
-   `crates/commands/fixtures/operator-proof-status-artifact-provenance.snapshot.json` captures the
+   `crates/operator_proof/fixtures/operator-proof-status-artifact-provenance.snapshot.json` captures the
    audited `artifact-provenance` contract projection with normalized game ids and artifact age/mtime
-   fields. `cargo run -q -p commands --bin audit_operator_proof_status -- --output
+   fields. `cargo run -q -p operator_proof --bin audit_operator_proof_status -- --output
    target/operator-proof/current-status-audit-report.json
-   crates/commands/fixtures/operator-proof-status-artifact-provenance.snapshot.json
+   crates/operator_proof/fixtures/operator-proof-status-artifact-provenance.snapshot.json
    target/operator-proof/current-status-audit-check.json` compares two status JSON files, writes the
    saved audit report artifact, normalizes `$.game`, game ids embedded in command text,
    `modified_at_unix_seconds`, and `age_seconds`, and reports row-addressed JSON-path drift for
@@ -3076,7 +2767,7 @@ coverage, and a playable vertical scenario through the command pipeline.
    Additional query-gated `fixture=saved-report-malformed`, `fixture=saved-report-stale`, and
    `fixture=saved-report-drifted` routes prove malformed, stale, and drifted saved-report artifact
    states are visible without executing proof commands.
-   `cargo run -q -p commands --bin audit_operator_proof_artifacts -- --output
+   `cargo run -q -p operator_proof --bin audit_operator_proof_artifacts -- --output
    target/operator-proof/current-artifact-go-no-go-report.json
    00000000-0000-0000-0000-000000000000` loads the published manifest, builds the shared
    `artifact-provenance` status model, writes a compact report with production/fixture counts,
@@ -3125,7 +2816,7 @@ coverage, and a playable vertical scenario through the command pipeline.
    audit report artifact, and fails on row-addressed contract drift.` `operator-proof-artifact-go-no-go`
    currently has artifact state `trusted`, artifact path
    `target/operator-proof/current-artifact-go-no-go-report.json`, rendered command
-   `cargo run -q -p commands --bin audit_operator_proof_artifacts -- --output
+   `cargo run -q -p operator_proof --bin audit_operator_proof_artifacts -- --output
    target/operator-proof/current-artifact-go-no-go-report.json
    00000000-0000-0000-0000-000000000000`, and proof boundary `Loads the
    published proof-run manifest, classifies artifact-provenance rows, writes the compact go/no-go
@@ -3133,7 +2824,7 @@ coverage, and a playable vertical scenario through the command pipeline.
    any production artifact row is not trusted.`
    `operator-proof-artifact-retention` currently has artifact state `trusted`, artifact path
    `target/operator-proof/current-artifact-retention-report.json`, rendered command
-   `cargo run -q -p commands --bin audit_operator_proof_artifact_retention -- --output
+   `cargo run -q -p operator_proof --bin audit_operator_proof_artifact_retention -- --output
    target/operator-proof/current-artifact-retention-report.json
    target/operator-proof/previous-artifact-go-no-go-report.json
    target/operator-proof/current-artifact-go-no-go-report.json`, and proof boundary `Compares the
@@ -3141,7 +2832,7 @@ coverage, and a playable vertical scenario through the command pipeline.
    production artifact state regressions.`
    `operator-proof-projection-rebuild` currently has artifact state `trusted`, artifact path
    `target/operator-proof/current-projection-rebuild-report.json`, rendered command
-   `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo run -q -p commands --bin
+   `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo run -q -p operator_proof --bin
    audit_projection_rebuild_artifact -- --output
    target/operator-proof/current-projection-rebuild-report.json
    08d8a45f-6c3b-4401-8e31-8d7637f36a82`, and proof boundary `Runs the projection rebuild audit
@@ -3149,7 +2840,7 @@ coverage, and a playable vertical scenario through the command pipeline.
    table counts, and fails on rebuild drift.`
    `operator-proof-resolution-diff` currently has artifact state `trusted`, artifact path
    `target/operator-proof/current-resolution-diff-report.json`, rendered command
-   `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo run -q -p commands --bin
+   `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo run -q -p operator_proof --bin
    audit_resolution_diff_artifact -- --output
    target/operator-proof/current-resolution-diff-report.json
    08d8a45f-6c3b-4401-8e31-8d7637f36a82`, and proof boundary `Runs the resolution replay diff for
@@ -3157,7 +2848,7 @@ coverage, and a playable vertical scenario through the command pipeline.
    row-addressed envelope diffs, and fails on resolution drift.`
    `operator-proof-trace-inspection` currently has artifact state `trusted`, artifact path
    `target/operator-proof/current-trace-inspection-report.json`, rendered command
-   `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo run -q -p commands --bin
+   `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo run -q -p operator_proof --bin
    audit_trace_inspection_artifact -- --output
    target/operator-proof/current-trace-inspection-report.json
    08d8a45f-6c3b-4401-8e31-8d7637f36a82`, and proof boundary `Exports the host/admin trace
@@ -3165,7 +2856,7 @@ coverage, and a playable vertical scenario through the command pipeline.
    and row-count summaries, and fails when no stored trace is available.`
    `operator-proof-large-action-graph-performance` currently has artifact state `trusted`, artifact
    path `target/operator-proof/current-large-action-graph-performance-report.json`, rendered
-   command `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo run -q -p commands
+   command `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo run -q -p operator_proof
    --bin audit_large_action_graph_performance_artifact -- --output
    target/operator-proof/current-large-action-graph-performance-report.json`, and proof boundary
    `Runs the dense Mafiascum N01 large-action-graph scenario, writes a versioned report with
@@ -3176,7 +2867,7 @@ coverage, and a playable vertical scenario through the command pipeline.
    `phase_trace_anchored: true`, and `decision_trace_anchored: true`.
    `operator-proof-determinism-fuzz` currently has artifact state `trusted`, artifact path
    `target/operator-proof/current-determinism-fuzz-report.json`, rendered command
-   `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo run -q -p commands --bin
+   `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo run -q -p operator_proof --bin
    audit_determinism_fuzz_artifact -- --output
    target/operator-proof/current-determinism-fuzz-report.json`, and proof boundary `Runs the known
    seeded command-pipeline replay/projection/trace scenario families as local Postgres integration
@@ -3196,7 +2887,7 @@ coverage, and a playable vertical scenario through the command pipeline.
    `target/operator-browser-smoke/playwright-dom-proof.json`.
    `operator-proof-generated-shrink-matrix` currently has artifact state `trusted`, artifact path
    `target/operator-proof/current-generated-shrink-matrix-report.tmp.json`, rendered command
-   `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands --test
+   `RUST_MIN_STACK=8388608 DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands --test
    pipeline generated_shrink_matrix_writes_compact_operator_report -- --ignored --nocapture && test -f
    target/operator-proof/current-generated-shrink-matrix-report.tmp.json`, and proof boundary
    `Runs the bounded deterministic generated shrink matrix for PGO, PgoProjectionState, Babysitter,
@@ -3219,7 +2910,7 @@ coverage, and a playable vertical scenario through the command pipeline.
    `evidence_failure_count: 0`, and `gap_audit_ok: true`.
    `operator-proof-command-projection-resolution` currently has artifact state `trusted`, artifact
    path `target/operator-proof/current-command-projection-resolution-report.json`, rendered command
-   `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo run -q -p commands --bin
+   `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo run -q -p operator_proof --bin
    prove_command_projection_resolution -- --output
    target/operator-proof/current-command-projection-resolution-report.json
    crates/commands/fixtures/night-passing.json`, and proof boundary `Local-Postgres-only proof:

@@ -7,6 +7,7 @@ import {
   MANIFEST_PATH,
   REPO_ROOT,
   artifactPathMatches,
+  crateGraphFromMetadata,
   deduplicateLaneIds,
   gitChangedFiles,
   laneCommand,
@@ -38,10 +39,30 @@ const FIXTURE_GRAPH = {
   eventstore: ['domain'],
   projections: ['domain', 'eventstore'],
   commands: ['domain', 'eventstore', 'projections'],
+  operator_proof: ['commands'],
   wire: ['domain', 'projections', 'commands'],
   api: ['domain', 'identity', 'wire'],
-  server: ['api', 'identity'],
+  operator_api: ['commands', 'operator_proof', 'wire'],
+  server: ['api', 'identity', 'operator_api'],
 };
+
+test('workspace crate graph excludes test-only reverse dependencies', () => {
+  const graph = crateGraphFromMetadata({
+    packages: [
+      {
+        name: 'commands',
+        dependencies: [
+          { name: 'domain', kind: null },
+          { name: 'operator_proof', kind: 'dev' },
+        ],
+      },
+      { name: 'domain', dependencies: [] },
+      { name: 'operator_proof', dependencies: [{ name: 'commands', kind: null }] },
+    ],
+  });
+  assert.deepEqual(graph.commands, ['domain']);
+  assert.deepEqual(graph.operator_proof, ['commands']);
+});
 
 test('every area lane and push sentinel is defined in the lane table', () => {
   const laneIds = new Set(Object.keys(manifest.lanes));
@@ -435,12 +456,43 @@ test('aggregate coverage expands to atomic Postgres and frontend leaves', () => 
   for (const lane of [
     'check:build-posture',
     'test:projection-baseline:static',
-    'cargo:commands',
+    'cargo:commands-unit',
+    'cargo:commands-pg',
+    'cargo:commands-concurrency',
     'cargo:projections',
   ]) {
     assert.ok(workspace.laneIds.includes(lane), `workspace manifest must arm ${lane}`);
   }
   assert.ok(!workspace.laneIds.includes('test:local-postgres-ci'));
+
+  const commandSource = selectLanes({
+    changed: ['crates/commands/src/lib.rs'],
+    manifest,
+    crateGraph: FIXTURE_GRAPH,
+    mode: 'inner',
+  });
+  assert.ok(commandSource.laneIds.includes('cargo:commands-pg'));
+  assert.ok(!commandSource.laneIds.includes('cargo:commands-audit'));
+
+  const generatedAudit = selectLanes({
+    changed: ['crates/commands/tests/pipeline.rs'],
+    manifest,
+    crateGraph: FIXTURE_GRAPH,
+    mode: 'inner',
+  });
+  assert.ok(generatedAudit.laneIds.includes('cargo:commands-pg'));
+  assert.ok(generatedAudit.laneIds.includes('cargo:commands-audit'));
+
+  const minimizer = selectLanes({
+    changed: ['crates/operator_proof/src/minimizer.rs'],
+    manifest,
+    crateGraph: FIXTURE_GRAPH,
+    mode: 'inner',
+  });
+  assert.deepEqual(minimizer.touched.map((area) => area.id), ['operator-proof:minimizer']);
+  assert.ok(minimizer.laneIds.includes('cargo:operator-proof'));
+  assert.ok(minimizer.laneIds.includes('cargo:commands-audit'));
+  assert.ok(!minimizer.laneIds.includes('cargo:operator_api'));
 
   const frontend = selectLanes({
     changed: ['frontend/src/routes/g/demo/+page.svelte'],
@@ -566,7 +618,7 @@ test('crate closure arms dependent crate areas', () => {
   const closure = reverseCrateClosure(FIXTURE_GRAPH);
   assert.deepEqual(
     [...closure.get('eventstore')].sort(),
-    ['api', 'commands', 'projections', 'server', 'wire'],
+    ['api', 'commands', 'operator_api', 'operator_proof', 'projections', 'server', 'wire'],
   );
 
   const selection = selectLanes({
@@ -575,7 +627,16 @@ test('crate closure arms dependent crate areas', () => {
     crateGraph: FIXTURE_GRAPH,
   });
   const touchedIds = new Set(selection.touched.map((t) => t.id));
-  for (const id of ['crate:eventstore', 'crate:projections', 'crate:commands', 'crate:wire', 'crate:api', 'crate:server']) {
+  for (const id of [
+    'crate:eventstore',
+    'crate:projections',
+    'crate:commands',
+    'crate:operator-proof',
+    'crate:wire',
+    'crate:api',
+    'crate:operator_api',
+    'crate:server',
+  ]) {
     assert.ok(touchedIds.has(id), `expected ${id} in closure`);
   }
   assert.ok(!touchedIds.has('crate:domain'), 'dependencies (not dependents) must stay untouched');

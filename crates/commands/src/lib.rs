@@ -44,7 +44,6 @@ pub mod day_scheduler;
 mod host_prompt_resolution;
 mod model;
 pub mod operator_process;
-pub mod operator_proof;
 pub use day_runtime::advance_day_event_automation_as_scheduler;
 pub use model::{
     Ack, CohostPermissionClass, Command, HostPromptDecision, Reject, ThreadPostMedia,

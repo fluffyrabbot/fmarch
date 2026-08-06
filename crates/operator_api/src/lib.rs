@@ -11,7 +11,7 @@ use axum::response::{Html, IntoResponse};
 use axum::routing::get;
 use axum::{Json, Router};
 use caps::{Capability, Principal};
-use commands::operator_proof::{
+use operator_proof::{
     audit_operator_proof_status_values,
     build_operator_proof_run_status as shared_build_operator_proof_run_status,
     proof_run_artifact_status, proof_run_manifest, proof_run_status_audit_report_artifact_state,
@@ -1249,7 +1249,7 @@ fn render_proof_run_table(
 }
 
 const OPERATOR_PROOF_STATUS_SNAPSHOT_PATH: &str =
-    "crates/commands/fixtures/operator-proof-status-artifact-provenance.snapshot.json";
+    "crates/operator_proof/fixtures/operator-proof-status-artifact-provenance.snapshot.json";
 const OPERATOR_PROOF_STATUS_CURRENT_PATH: &str =
     "target/operator-proof/current-status-audit-check.json";
 const OPERATOR_PROOF_STATUS_AUDIT_REPORT_PATH: &str =
@@ -1795,7 +1795,7 @@ fn apply_retention_fixture(
                 "target/operator-proof/game-specific-audit-bundle-20260613T000000Z.json",
                 "trusted",
                 "missing",
-                "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo run -q -p commands --bin prove_game_specific_audits -- --output target/operator-proof/game-specific-audit-bundle-20260613T000000Z.json crates/commands/fixtures/night-passing.json",
+                "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo run -q -p operator_proof --bin prove_game_specific_audits -- --output target/operator-proof/game-specific-audit-bundle-20260613T000000Z.json crates/commands/fixtures/night-passing.json",
             )];
         }
         OperatorProofRetentionFixture::StalePreviouslyTrusted => {
@@ -1805,7 +1805,7 @@ fn apply_retention_fixture(
                 "target/operator-proof/game-specific-audit-bundle-20260613T001500Z.json",
                 "trusted",
                 "stale",
-                "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo run -q -p commands --bin prove_game_specific_audits -- --compare-with target/operator-proof/game-specific-audit-bundle-20260613T000000Z.json --output target/operator-proof/game-specific-audit-bundle-20260613T001500Z.json crates/commands/fixtures/night-passing.json",
+                "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo run -q -p operator_proof --bin prove_game_specific_audits -- --compare-with target/operator-proof/game-specific-audit-bundle-20260613T000000Z.json --output target/operator-proof/game-specific-audit-bundle-20260613T001500Z.json crates/commands/fixtures/night-passing.json",
             )];
         }
         OperatorProofRetentionFixture::RecoveredArtifact => {
@@ -1815,7 +1815,7 @@ fn apply_retention_fixture(
                 "target/operator-proof/game-specific-audit-bundle-20260613T000000Z.json",
                 "missing",
                 "trusted",
-                "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo run -q -p commands --bin prove_game_specific_audits -- --output target/operator-proof/game-specific-audit-bundle-20260613T000000Z.json crates/commands/fixtures/night-passing.json",
+                "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo run -q -p operator_proof --bin prove_game_specific_audits -- --output target/operator-proof/game-specific-audit-bundle-20260613T000000Z.json crates/commands/fixtures/night-passing.json",
             )];
         }
     }
@@ -4326,7 +4326,7 @@ fn capability_capacity_error(error: &caps::CapError) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use commands::operator_proof::{
+    use operator_proof::{
         proof_run_artifact_state_at, proof_run_artifact_status,
         proof_run_command_placeholder_errors, proof_run_command_placeholders, proof_run_manifest,
         proof_run_row_id, proof_run_summary, render_proof_run_command,

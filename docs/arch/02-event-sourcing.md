@@ -69,7 +69,7 @@ row determinism.
 Stored resolution envelopes have a narrower command-side audit:
 
 ```bash
-DATABASE_URL=postgres://... cargo run -p commands --bin audit_resolution -- <game_uuid>
+DATABASE_URL=postgres://... cargo run -p operator_proof --bin audit_resolution -- <game_uuid>
 ```
 
 That command scans stored `ResolutionApplied` / `ResolutionTrace` pairs, reruns ordinary
@@ -82,7 +82,7 @@ the host phase-control projection audit.
 Stored traces can also be inspected without rerunning the resolver:
 
 ```bash
-DATABASE_URL=postgres://... cargo run -p commands --bin inspect_trace -- <game_uuid> [run_id]
+DATABASE_URL=postgres://... cargo run -p operator_proof --bin inspect_trace -- <game_uuid> [run_id]
 ```
 
 `inspect_trace` and the host/cohost-only REST trace endpoint flatten `ResolutionTrace` decisions,

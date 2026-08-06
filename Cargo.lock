@@ -627,6 +627,7 @@ dependencies = [
  "eventstore",
  "game_platform",
  "libc",
+ "operator_proof",
  "projections",
  "serde",
  "serde_json",
@@ -2124,6 +2125,7 @@ dependencies = [
  "commands",
  "eventstore",
  "identity",
+ "operator_proof",
  "projections",
  "serde",
  "serde_json",
@@ -2134,6 +2136,21 @@ dependencies = [
  "tracing",
  "uuid",
  "wire",
+]
+
+[[package]]
+name = "operator_proof"
+version = "0.1.0"
+dependencies = [
+ "caps",
+ "commands",
+ "domain",
+ "projections",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "tokio",
+ "uuid",
 ]
 
 [[package]]

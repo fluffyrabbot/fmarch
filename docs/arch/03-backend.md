@@ -142,7 +142,7 @@ crates/
   deterministic (a hard requirement for replay, [02](02-event-sourcing.md)).
 - `operator_api` keeps proof-run status, projection/resolution audits, and HTML inspection
   pages out of the gameplay transport surface while still deriving authority from the same
-  committed projections and `commands::operator_proof` service code.
+  committed projections and `operator_proof` service code.
 - `wire` is the **only** place types crossing the network are defined; TS is generated from
   it ([04](04-wire-protocol.md)). Domain events and wire frames are deliberately *separate*
   types — the wire is a projection of the domain, not the domain itself.

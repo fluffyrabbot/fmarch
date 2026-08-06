@@ -23,7 +23,7 @@ from typing import Any
 ARTIFACT_VERSION = 1
 DEFAULT_OUTPUT = "target/operator-proof/current-generated-shrink-gap-audit-report.json"
 CHECKLIST_PATH = "docs/arch/11-engine-port-checklist.md"
-OPERATOR_PROOF_PATH = "crates/commands/src/operator_proof.rs"
+OPERATOR_PROOF_PATH = "crates/operator_proof/src/lib.rs"
 PIPELINE_TEST_PATH = "crates/commands/tests/pipeline.rs"
 PROOF_BOUNDARY = (
     "No-Postgres mechanical audit over the Phase 4 checklist expectation set, "

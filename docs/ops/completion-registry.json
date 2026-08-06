@@ -318,7 +318,7 @@
       "title": "Reviewable 1.0 core and toolchain",
       "execution_class": "code",
       "status": "open",
-      "summary": "Rust 1.95.0 and strict workspace Clippy are proof-enforced; API media, auth, community, game-read, command/import, and live WebSocket delivery, authentication attempt/delivery, and live publication, command action submission/validation, host-prompt resolution/replay, and operator-proof status-audit classification, domain pack model/validation, resolver action/trigger/outcome, projection effect/private-channel, and proof-runner configuration/session-artifact ownership are isolated behind typed boundaries. Remaining resolver coordinator, other projection, command-test, broader operator-proof, DayEvent resolution-application, and proof-runner scenario/orchestration concentrations remain inventoried.",
+      "summary": "Rust 1.95.0 and strict workspace Clippy are proof-enforced; API media, auth, community, game-read, command/import, and live WebSocket delivery, authentication attempt/delivery, and live publication, command action submission/validation, host-prompt resolution/replay, operator-proof report/tool ownership, command verification cost boundaries, domain pack model/validation, resolver action/trigger/outcome, projection effect/private-channel, and proof-runner configuration/session-artifact ownership are isolated behind typed boundaries. Remaining resolver coordinator, other projection, physical command-test family, DayEvent resolution-application, and proof-runner scenario/orchestration concentrations remain inventoried.",
       "complete_when": [
         "The Rust toolchain is pinned, workspace Clippy is warning-clean, and concentrated pack, resolver, API, projection, command-test, and proof orchestration responsibilities are split into coherent modules without weakening proof coverage."
       ],
@@ -409,11 +409,15 @@
         },
         {
           "kind": "source",
-          "value": "crates/commands/src/operator_proof.rs"
+          "value": "crates/operator_proof/src/lib.rs"
         },
         {
           "kind": "source",
-          "value": "crates/commands/tests/operator_proof_boundary.rs"
+          "value": "crates/operator_proof/src/minimizer.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/operator_proof/tests/boundary.rs"
         },
         {
           "kind": "source",
@@ -485,7 +489,7 @@
         }
       ],
       "remaining": [
-        "Split remaining resolver coordinator, other projection, command-test, broader operator-proof, DayEvent resolution-application, and proof-runner scenario/orchestration responsibilities along the dependency direction recorded in docs/arch/16-maintainable-core.md.",
+        "Split remaining resolver coordinator, other projection, physical command-test family, DayEvent resolution-application, and proof-runner scenario/orchestration responsibilities along the dependency direction recorded in docs/arch/16-maintainable-core.md.",
         "Remove the remaining localized lint expectations and allowances as typed contexts and bounded modules supersede them."
       ],
       "recommended_slice": {
@@ -509,7 +513,7 @@
           "Do not redesign DayEvent definitions, reward semantics, scheduler leasing, projection schemas, command admission, or public commands as part of the request-context extraction.",
           "Do not change winner or participant ordering, host-versus-system attribution, event and narrative ordering, audit command identity, transaction boundaries, rejection text, or automatic-resolution seed behavior.",
           "Do not preserve the eight-argument resolution function as a compatibility overload; the workspace is greenfield and both callers should construct the typed request directly.",
-          "Do not mark foundation.maintainable-core complete; resolver coordinator, other projection families, command-test, broader operator-proof, and remaining proof-runner scenario/orchestration concentrations remain."
+          "Do not mark foundation.maintainable-core complete; resolver coordinator, other projection families, physical command-test family, DayEvent resolution-application, and remaining proof-runner scenario/orchestration concentrations remain."
         ]
       }
     },

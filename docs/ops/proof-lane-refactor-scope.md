@@ -1,6 +1,7 @@
 # Proof Lane Architecture Refactor
 
-Status: active; leaf execution and fast truthful selection delivered 2026-07-26.
+Status: active; leaf execution and fast truthful selection delivered 2026-07-26;
+command proof cost boundaries delivered 2026-08-06.
 
 ## Delivered foundation
 
@@ -12,13 +13,15 @@ canonical execution key after cost ordering, and the manifest contract rejects
 an npm leaf that invokes another declared leaf.
 
 The remaining work packages below are still intentionally open: structured
-receipts and resume, run-scoped Postgres and artifacts, semantic command suite
-splitting, and resource-aware scheduling.
+receipts and resume, run-scoped Postgres and artifacts, physical command-test
+family extraction, and resource-aware scheduling.
 
-The motivating push sweep executed the commands integration suite twice
-(847.7s through `test:local-postgres-ci`, then 789.4s through
-`cargo:commands`). The leaf plan now selects `cargo:commands` exactly once and
-orders its latest measured ~14.8-minute cost after the cheaper local lanes.
+The original command lane accumulated 365 tests and later measured 1,059s on a
+warm checkout. It is now four truthful leaves: hermetic unit/boundary tests,
+parallel ordinary Postgres integration, serial cancellation/concurrency proof,
+and an explicit semantic/generated audit. The ordinary Postgres lane retains
+126 transaction, authorization, persistence, projection, and representative
+resolution boundaries and measured 85.02s with four isolated SQLx workers.
 
 The selector now compares against `origin/main`, so another worktree's stale
 local `main` ref cannot manufacture a large historical diff. Push mode is the
@@ -34,10 +37,9 @@ The proof selector now has a sound path-to-leaf model and a fast ordinary push
 path, but the executable suites and resource model still contain the dominant
 latency:
 
-- `cargo:commands` combines 365 tests in a 77,063-line `pipeline.rs`; 360 cases
-  provision SQLx test databases. A clean serial run took about thirteen minutes
-  on the current development machine and still dominates any truthful change
-  that reaches the command boundary.
+- `crates/commands/tests/pipeline.rs` remains a large residual source module even
+  though its execution costs now have separate ownership. Physical family
+  extraction is still needed for reviewability and path-precise audit arming.
 - Database-dependent npm lanes rely on ambient `DATABASE_URL`; concurrent runs
   can share the mutable `fmarch` database and contaminate one another.
 - The tracked baseline does not yet cover every lane. Execution has no timeout,
@@ -95,20 +97,28 @@ only for the same commit and manifest digest.
 - Preserve the former active-frontier sweep as explicit sprint mode.
 - Contract-test the stale-local-main regression and the sentinel cost budget.
 
-### 4. Split command proof by semantic cost
+### 4. Split command proof by semantic cost — first boundary delivered 2026-08-06
 
-Replace `crates/commands/tests/pipeline.rs` with focused integration binaries:
+- `cargo:commands-unit` owns hermetic command and boundary tests.
+- `cargo:commands-pg` owns 126 ordinary Postgres transaction, authorization,
+  persistence, projection, and representative resolution cases and runs with
+  four test workers. It completes in 85.02 seconds, down from the former
+  1,059.3-second aggregate command lane.
+- `cargo:commands-concurrency` owns the serial cancellation matrix.
+- `cargo:commands-audit` owns 217 ignored-but-compiled semantic and generated
+  cases, including the 29-family generated matrix, and remains in full mode.
+  Its four-worker run completes in 638.58 seconds; the lane declares the 8 MiB
+  test-thread stack required by the deepest EpicMafia replay rather than
+  depending on host defaults.
+- `operator_proof::minimizer` is an in-process library; generated tests reuse
+  their SQLx pool instead of spawning Cargo and reconnecting to Postgres.
+- The 55 derived minimized/nonminimal/bad-expectation fixtures were deleted;
+  generated audit evidence is disposable under `target/operator-proof`, while
+  `night-passing.json` remains the single CLI fixture.
 
-- transaction and command/projection correctness;
-- host, audit, rebuild, and authorization behavior;
-- checked-in generated-fixture replay;
-- generated search and minimizer reduction;
-- small hermetic generator/minimizer contracts.
-
-The ordinary command integration lane belongs in push closure. Exhaustive
-generated search/reduction belongs in full mode and is directly re-armed by
-changes to generators, minimizer code, or their fixtures. Shared test support
-moves to a private `tests/support/` module rather than another catch-all binary.
+The next physical extraction should move the semantic audit and its generator
+support into a dedicated integration module so changes can arm it by path
+without mapping the residual pipeline file as a whole.
 
 ### 5. Own Postgres as a run resource
 
@@ -152,7 +162,8 @@ moves to a private `tests/support/` module rather than another catch-all binary.
 
 ## Recommended Implementation Order
 
-1. Split the command pipeline and assign fast versus exhaustive modes.
+1. Extract the semantic audit into a dedicated integration module without
+   changing the delivered lane split.
 2. Introduce manifest-v2 dependencies/resources, timeouts, structured receipts,
    `--only`, and commit-safe `--resume`.
 3. Add run-scoped Postgres and artifact directories, keeping execution serial.
