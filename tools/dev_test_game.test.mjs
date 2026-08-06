@@ -1135,7 +1135,7 @@ test("HostDecides race browser proof has a standalone artifact contract", () => 
 });
 
 test("live projection lag observability contract matches the server trace", async () => {
-  const source = await readFile("crates/api/src/lib.rs", "utf8");
+  const source = await readFile("crates/api/src/live_delivery.rs", "utf8");
   assert.deepEqual(liveProjectionLagServerTraceContract, {
     event: "live_projection_receiver_lagged",
     scopeFields: ["game_id", "connection_id"],
