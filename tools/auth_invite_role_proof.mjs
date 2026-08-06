@@ -3503,6 +3503,11 @@ async function startApi(url) {
       FMARCH_EVENT_ENCRYPTION_KEY: eventEncryptionKey,
       FMARCH_EVENT_ENCRYPTION_KID: eventEncryptionKid,
       FMARCH_AUTH_SOURCE_SIGNING_KEY: authSourceSigningKey,
+      // This scratch-stack lane deliberately exercises the debug-only local
+      // delivery adapter. Hosted and release-mode classic auth must provide an
+      // explicit HTTP delivery endpoint instead.
+      FMARCH_DEV_AUTH: "1",
+      FMARCH_CLASSIC_AUTH: "1",
       FMARCH_AUTH_RATE_LIMIT_MAX_FAILURES: "5",
       FMARCH_AUTH_SOURCE_RATE_LIMIT_MAX_FAILURES: "7",
       FMARCH_AUTH_REGISTRATION_SOURCE_LIMIT: "3",
