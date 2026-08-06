@@ -6,6 +6,7 @@ use object_store::aws::AmazonS3Builder;
 use object_store::memory::InMemory;
 use object_store::path::Path as ObjectPath;
 use object_store::{ObjectStore, ObjectStoreExt, PutMode};
+use url::Url;
 
 use super::variants::{
     check_variant_dimensions, corrupt_set, fitted_dimensions, parse_manifest, prepare_upload,
@@ -84,8 +85,9 @@ impl From<MediaStore> for MediaRepository {
 impl MediaRepository {
     pub fn s3(config: S3MediaConfig, limits: MediaLimits) -> Result<Self, MediaError> {
         limits.validate()?;
+        let endpoint = s3_bucket_endpoint(&config)?;
         let store = AmazonS3Builder::new()
-            .with_endpoint(config.endpoint)
+            .with_endpoint(endpoint)
             .with_region(config.region)
             .with_bucket_name(config.bucket)
             .with_access_key_id(config.access_key_id)
@@ -211,6 +213,50 @@ impl MediaRepository {
             .and_then(|snapshot| snapshot.1)),
         }
     }
+}
+
+/// `object_store` treats a custom virtual-hosted endpoint as a complete bucket
+/// endpoint. S3-compatible providers such as Railway instead publish a base
+/// endpoint and expect the client to put the bucket in the hostname. Normalize
+/// the provider contract here so every object-store operation signs and sends
+/// the same canonical URL.
+fn s3_bucket_endpoint(config: &S3MediaConfig) -> Result<String, MediaError> {
+    let mut endpoint = Url::parse(&config.endpoint).map_err(|error| MediaError::ObjectStore {
+        operation: "configure-endpoint",
+        reason: error.to_string(),
+    })?;
+    if !matches!(endpoint.scheme(), "http" | "https")
+        || !endpoint.username().is_empty()
+        || endpoint.password().is_some()
+        || endpoint.query().is_some()
+        || endpoint.fragment().is_some()
+    {
+        return Err(MediaError::ObjectStore {
+            operation: "configure-endpoint",
+            reason: "endpoint must be an HTTP(S) base URL without credentials, query, or fragment"
+                .to_string(),
+        });
+    }
+
+    if config.virtual_hosted_style {
+        let host = endpoint.host_str().ok_or_else(|| MediaError::ObjectStore {
+            operation: "configure-endpoint",
+            reason: "virtual-hosted endpoint must have a DNS host".to_string(),
+        })?;
+        let bucket_prefix = format!("{}.", config.bucket);
+        if host != config.bucket && !host.starts_with(&bucket_prefix) {
+            let bucket_host = format!("{}.{}", config.bucket, host);
+            endpoint
+                .set_host(Some(&bucket_host))
+                .map_err(|_| MediaError::ObjectStore {
+                    operation: "configure-endpoint",
+                    reason: "bucket and endpoint do not form a valid virtual-hosted URL"
+                        .to_string(),
+                })?;
+        }
+    }
+
+    Ok(endpoint.as_str().trim_end_matches('/').to_string())
 }
 
 async fn commit_object_upload(
@@ -453,6 +499,53 @@ mod tests {
             .write_to(&mut Cursor::new(&mut bytes), ImageFormat::Png)
             .unwrap();
         bytes
+    }
+
+    fn s3_config(endpoint: &str, bucket: &str, virtual_hosted_style: bool) -> S3MediaConfig {
+        S3MediaConfig {
+            endpoint: endpoint.to_string(),
+            region: "auto".to_string(),
+            bucket: bucket.to_string(),
+            access_key_id: "access-key".to_string(),
+            secret_access_key: "secret-key".to_string(),
+            virtual_hosted_style,
+            allow_http: false,
+        }
+    }
+
+    #[test]
+    fn virtual_hosted_s3_endpoint_composes_bucket_with_provider_base() {
+        let config = s3_config("https://t3.storageapi.dev", "media-staging-abc123", true);
+        assert_eq!(
+            s3_bucket_endpoint(&config).unwrap(),
+            "https://media-staging-abc123.t3.storageapi.dev"
+        );
+    }
+
+    #[test]
+    fn s3_endpoint_preserves_path_style_and_precomposed_virtual_hosts() {
+        let path_style = s3_config("https://objects.example.test/base/", "media", false);
+        assert_eq!(
+            s3_bucket_endpoint(&path_style).unwrap(),
+            "https://objects.example.test/base"
+        );
+
+        let virtual_hosted = s3_config("https://media.objects.example.test/", "media", true);
+        assert_eq!(
+            s3_bucket_endpoint(&virtual_hosted).unwrap(),
+            "https://media.objects.example.test"
+        );
+    }
+
+    #[test]
+    fn s3_endpoint_rejects_credential_bearing_or_opaque_urls() {
+        for endpoint in [
+            "https://user:password@objects.example.test",
+            "https://objects.example.test?bucket=media",
+            "file:///tmp/media",
+        ] {
+            assert!(s3_bucket_endpoint(&s3_config(endpoint, "media", true)).is_err());
+        }
     }
 
     #[tokio::test]

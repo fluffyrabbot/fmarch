@@ -72,9 +72,12 @@ async function contract() {
   assert.doesNotMatch(source["deploy/railway/frontend.railway.toml"], /watchPatterns/);
 
   assert.match(source["deploy/railway/api.env.example"], /DATABASE_URL=\$\{\{Postgres\.DATABASE_URL\}\}/);
-  assert.match(source["deploy/railway/api.env.example"], /AWS_ENDPOINT_URL=\$\{\{media\.AWS_ENDPOINT_URL\}\}/);
-  assert.match(source["deploy/railway/api.env.example"], /AWS_S3_BUCKET_NAME=\$\{\{media\.AWS_S3_BUCKET_NAME\}\}/);
-  assert.match(source["deploy/railway/api.env.example"], /AWS_S3_URL_STYLE=path/);
+  assert.match(source["deploy/railway/api.env.example"], /AWS_ENDPOINT_URL=\$\{\{media\.ENDPOINT\}\}/);
+  assert.match(source["deploy/railway/api.env.example"], /AWS_ACCESS_KEY_ID=\$\{\{media\.ACCESS_KEY_ID\}\}/);
+  assert.match(source["deploy/railway/api.env.example"], /AWS_SECRET_ACCESS_KEY=\$\{\{media\.SECRET_ACCESS_KEY\}\}/);
+  assert.match(source["deploy/railway/api.env.example"], /AWS_S3_BUCKET_NAME=\$\{\{media\.BUCKET\}\}/);
+  assert.match(source["deploy/railway/api.env.example"], /AWS_DEFAULT_REGION=\$\{\{media\.REGION\}\}/);
+  assert.match(source["deploy/railway/api.env.example"], /AWS_S3_URL_STYLE=virtual-host/);
   assert.match(
     source["deploy/railway/api.env.example"],
     /^FMARCH_OBJECT_STORAGE_CREDENTIAL_KID=/m,

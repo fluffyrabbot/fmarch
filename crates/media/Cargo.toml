@@ -17,6 +17,7 @@ thiserror = "1"
 bytes = "1"
 object_store = { version = "0.14.1", default-features = false, features = ["aws"] }
 tokio = { version = "1", features = ["rt"] }
+url = "2"
 
 [dev-dependencies]
 image = { version = "=0.25.10", default-features = false, features = ["avif", "avif-native", "jpeg", "png", "webp"] }
