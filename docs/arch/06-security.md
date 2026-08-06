@@ -31,9 +31,12 @@ removing a sign-in method never rewrites a principal.
 - **Classic — direct sign-in (first-class, on by default):** Argon2id credentials, invites,
   recovery credentials, and login throttling, all server-local. Product promise: *your
   credentials and sessions stay on this server; no third-party identity provider is
-  contacted.* A classic-only deployment has zero outbound identity dependencies.
-  `FMARCH_CLASSIC_AUTH=0` disables it for a WorkOS-only deployment; startup requires at
-  least one enabled method.
+  contacted.* Credential verification has no outbound identity-provider dependency;
+  hosted invite and recovery delivery still require the configured HTTPS delivery
+  transport. `FMARCH_CLASSIC_AUTH=0` disables classic for a WorkOS-only deployment;
+  otherwise startup requires that real transport. The deterministic delivery adapter is
+  available only with `FMARCH_DEV_AUTH=1` in a debug build and can never satisfy a hosted
+  delivery contract. Startup requires at least one enabled method.
 - **WorkOS — managed sign-in (additive):** AuthKit owns the interactive ceremony (signup,
   email verification, passkeys, MFA, provider-side recovery). The frontend confines AuthKit
   middleware and its sealed cookie to the start and callback routes; after the OAuth

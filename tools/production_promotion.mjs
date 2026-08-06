@@ -105,7 +105,10 @@ export function validateHostedVariables({ stagingApi, stagingFrontend, productio
         "AWS_ACCESS_KEY_ID",
         "AWS_SECRET_ACCESS_KEY",
         "AWS_S3_BUCKET_NAME",
+        "FMARCH_CLASSIC_AUTH",
         "WORKOS_CLIENT_ID",
+        "WORKOS_ISSUER",
+        "WORKOS_JWKS_URL",
       ],
     ],
     [
@@ -134,6 +137,7 @@ export function validateHostedVariables({ stagingApi, stagingFrontend, productio
         "AWS_ACCESS_KEY_ID",
         "AWS_SECRET_ACCESS_KEY",
         "AWS_S3_BUCKET_NAME",
+        "FMARCH_CLASSIC_AUTH",
         "WORKOS_CLIENT_ID",
         "WORKOS_ISSUER",
         "WORKOS_JWKS_URL",
@@ -166,6 +170,9 @@ export function validateHostedVariables({ stagingApi, stagingFrontend, productio
       `${name} must not enable fixture sessions`,
     );
   }
+
+  validateHostedIdentityDelivery("staging API", stagingApi);
+  validateHostedIdentityDelivery("production API", productionApi);
 
   assert.equal(productionFrontend.FMARCH_API_BASE_URL, DEFAULTS.productionApiUrl);
   assert.equal(productionFrontend.ORIGIN, DEFAULTS.productionFrontendUrl);
@@ -269,6 +276,44 @@ export function validateHostedVariables({ stagingApi, stagingFrontend, productio
       `${label} must be a non-placeholder value of at least 32 characters`,
     );
   }
+}
+
+function validateHostedIdentityDelivery(name, variables) {
+  const mode = variables.FMARCH_CLASSIC_AUTH;
+  assert.ok(
+    mode === "0" || mode === "1",
+    `${name} must set FMARCH_CLASSIC_AUTH explicitly to 0 or 1`,
+  );
+  const deliveryVariables = [
+    "FMARCH_IDENTITY_DELIVERY_ENDPOINT",
+    "FMARCH_IDENTITY_DELIVERY_PROVIDER_ID",
+    "FMARCH_IDENTITY_DELIVERY_AUTH_TOKEN",
+  ];
+  if (mode === "0") {
+    for (const key of deliveryVariables) {
+      assert.equal(
+        variables[key],
+        undefined,
+        `${name} WorkOS-only mode must not retain ${key}`,
+      );
+    }
+    return;
+  }
+
+  for (const key of deliveryVariables) {
+    assert.ok(variables[key], `${name} classic mode is missing ${key}`);
+  }
+  let endpoint;
+  try {
+    endpoint = new URL(variables.FMARCH_IDENTITY_DELIVERY_ENDPOINT);
+  } catch {
+    assert.fail(`${name} classic delivery endpoint is not a valid URL`);
+  }
+  assert.equal(
+    endpoint.protocol,
+    "https:",
+    `${name} classic delivery endpoint must use HTTPS`,
+  );
 }
 
 function assertSecretRelation(condition, message) {

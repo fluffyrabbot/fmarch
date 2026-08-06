@@ -27,6 +27,13 @@ enum MediaConfig {
     LocalDebug(PathBuf),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum IdentityDeliveryMode {
+    Disabled,
+    HttpJson,
+    LocalDeterministic,
+}
+
 #[derive(Clone)]
 enum BootstrapAdminConfig {
     Workos {
@@ -315,6 +322,27 @@ fn bind_from_values(
     bind.parse()
 }
 
+fn identity_delivery_mode(
+    classic_enabled: bool,
+    http_gateway_configured: bool,
+    dev_auth_enabled: bool,
+    debug_build: bool,
+) -> Result<IdentityDeliveryMode, std::io::Error> {
+    if !classic_enabled {
+        return Ok(IdentityDeliveryMode::Disabled);
+    }
+    if http_gateway_configured {
+        return Ok(IdentityDeliveryMode::HttpJson);
+    }
+    if dev_auth_enabled && debug_build {
+        return Ok(IdentityDeliveryMode::LocalDeterministic);
+    }
+    Err(std::io::Error::new(
+        std::io::ErrorKind::InvalidInput,
+        "classic authentication requires FMARCH_IDENTITY_DELIVERY_ENDPOINT; the local deterministic delivery gateway is available only with FMARCH_DEV_AUTH=1 in a debug build, or set FMARCH_CLASSIC_AUTH=0 for a WorkOS-only deployment",
+    ))
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt()
@@ -462,20 +490,29 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Delivery transport is a classic-method concern (invite and recovery
     // credentials), independent of whether WorkOS is also configured.
+    let http_gateway = if classic_enabled {
+        api::identity_delivery::HttpJsonIdentityDeliveryGateway::from_env()
+            .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidInput, error))?
+    } else {
+        None
+    };
+    let delivery_mode = identity_delivery_mode(
+        classic_enabled,
+        http_gateway.is_some(),
+        dev_auth_enabled,
+        cfg!(debug_assertions),
+    )?;
     let gateway: std::sync::Arc<dyn api::identity_delivery::IdentityDeliveryGateway> =
-        if classic_enabled {
-            match api::identity_delivery::HttpJsonIdentityDeliveryGateway::from_env()
-                .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidInput, error))?
-            {
-                Some(gateway) => std::sync::Arc::new(gateway),
-                None => std::sync::Arc::new(
-                    api::identity_delivery::LocalDeterministicIdentityDeliveryGateway::from_env(),
-                ),
+        match delivery_mode {
+            IdentityDeliveryMode::HttpJson => std::sync::Arc::new(
+                http_gateway.expect("HTTP delivery mode requires a configured gateway"),
+            ),
+            IdentityDeliveryMode::LocalDeterministic => std::sync::Arc::new(
+                api::identity_delivery::LocalDeterministicIdentityDeliveryGateway::from_env(),
+            ),
+            IdentityDeliveryMode::Disabled => {
+                std::sync::Arc::new(api::identity_delivery::DisabledIdentityDeliveryGateway)
             }
-        } else {
-            std::sync::Arc::new(
-                api::identity_delivery::LocalDeterministicIdentityDeliveryGateway::new(false),
-            )
         };
     if classic_enabled {
         api::identity_delivery::spawn_identity_delivery_worker(pool.clone(), gateway.clone());
@@ -508,8 +545,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 #[cfg(test)]
 mod tests {
     use super::{
-        bind_from_values, bootstrap_admin_from_values, bounded_env, virtual_hosted_style_from_value,
+        bind_from_values, bootstrap_admin_from_values, bounded_env, identity_delivery_mode,
+        virtual_hosted_style_from_value, IdentityDeliveryMode,
     };
+
+    #[test]
+    fn identity_delivery_selection_is_explicit_and_fail_closed() {
+        assert_eq!(
+            identity_delivery_mode(false, false, false, false).unwrap(),
+            IdentityDeliveryMode::Disabled
+        );
+        assert_eq!(
+            identity_delivery_mode(true, true, false, false).unwrap(),
+            IdentityDeliveryMode::HttpJson
+        );
+        assert_eq!(
+            identity_delivery_mode(true, false, true, true).unwrap(),
+            IdentityDeliveryMode::LocalDeterministic
+        );
+        assert!(identity_delivery_mode(true, false, false, true).is_err());
+        assert!(identity_delivery_mode(true, false, true, false).is_err());
+    }
     #[test]
     fn configured_bind_overrides_platform_port() {
         assert_eq!(

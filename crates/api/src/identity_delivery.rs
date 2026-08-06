@@ -10,7 +10,7 @@ use thiserror::Error;
 use uuid::Uuid;
 
 pub const LOCAL_DETERMINISTIC_PROVIDER_ID: &str = "local-deterministic";
-pub const HTTP_JSON_PROVIDER_DEFAULT_ID: &str = "http-json";
+pub const DISABLED_PROVIDER_ID: &str = "disabled";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IdentityDeliveryKind {
@@ -172,6 +172,23 @@ pub trait IdentityDeliveryGateway: Send + Sync {
     fn deliver<'a>(&'a self, attempt: &'a IdentityDeliveryAttempt) -> IdentityDeliveryFuture<'a>;
 }
 
+#[derive(Debug, Clone, Copy, Default)]
+pub struct DisabledIdentityDeliveryGateway;
+
+impl IdentityDeliveryGateway for DisabledIdentityDeliveryGateway {
+    fn provider_id(&self) -> &str {
+        DISABLED_PROVIDER_ID
+    }
+
+    fn deliver<'a>(&'a self, _attempt: &'a IdentityDeliveryAttempt) -> IdentityDeliveryFuture<'a> {
+        Box::pin(async {
+            IdentityDeliveryOutcome::PermanentFailure(
+                IdentityDeliveryFailureCode::CredentialUnavailable,
+            )
+        })
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct LocalDeterministicIdentityDeliveryGateway {
     fail_first_attempt: bool,
@@ -238,14 +255,21 @@ impl HttpJsonIdentityDeliveryGateway {
         let provider_id = std::env::var("FMARCH_IDENTITY_DELIVERY_PROVIDER_ID")
             .ok()
             .filter(|value| !value.trim().is_empty())
-            .unwrap_or_else(|| HTTP_JSON_PROVIDER_DEFAULT_ID.to_string());
+            .ok_or_else(|| {
+                "FMARCH_IDENTITY_DELIVERY_PROVIDER_ID is required when the delivery endpoint is configured"
+                    .to_string()
+            })?;
         let auth_token = std::env::var("FMARCH_IDENTITY_DELIVERY_AUTH_TOKEN")
             .ok()
-            .filter(|value| !value.trim().is_empty());
+            .filter(|value| !value.trim().is_empty())
+            .ok_or_else(|| {
+                "FMARCH_IDENTITY_DELIVERY_AUTH_TOKEN is required when the delivery endpoint is configured"
+                    .to_string()
+            })?;
         Ok(Some(Self {
             provider_id,
             endpoint,
-            auth_token,
+            auth_token: Some(auth_token),
             client: Client::new(),
         }))
     }
@@ -903,9 +927,10 @@ pub fn unix_now_seconds() -> i64 {
 #[cfg(test)]
 mod tests {
     use super::{
-        IdentityDeliveryAttempt, IdentityDeliveryCancellationCode, IdentityDeliveryFailureCode,
-        IdentityDeliveryGateway, IdentityDeliveryKind, IdentityDeliveryOutcome,
-        LocalDeterministicIdentityDeliveryGateway, LOCAL_DETERMINISTIC_PROVIDER_ID,
+        DisabledIdentityDeliveryGateway, IdentityDeliveryAttempt, IdentityDeliveryCancellationCode,
+        IdentityDeliveryFailureCode, IdentityDeliveryGateway, IdentityDeliveryKind,
+        IdentityDeliveryOutcome, LocalDeterministicIdentityDeliveryGateway, DISABLED_PROVIDER_ID,
+        LOCAL_DETERMINISTIC_PROVIDER_ID,
     };
     use uuid::Uuid;
 
@@ -972,6 +997,18 @@ mod tests {
             IdentityDeliveryOutcome::Delivered {
                 provider_receipt_id: "local-00000000-0000-0000-0000-000000000000".to_string(),
             }
+        );
+    }
+
+    #[tokio::test]
+    async fn disabled_gateway_can_never_report_delivery() {
+        let gateway = DisabledIdentityDeliveryGateway;
+        assert_eq!(gateway.provider_id(), DISABLED_PROVIDER_ID);
+        assert_eq!(
+            gateway.deliver(&attempt(1)).await,
+            IdentityDeliveryOutcome::PermanentFailure(
+                IdentityDeliveryFailureCode::CredentialUnavailable
+            )
         );
     }
 

@@ -89,17 +89,18 @@ async function contract() {
   assert.match(source["deploy/railway/api.env.example"], /^WORKOS_CLIENT_ID=/m);
   assert.match(source["deploy/railway/api.env.example"], /^WORKOS_ISSUER=https:\/\//m);
   assert.match(source["deploy/railway/api.env.example"], /^WORKOS_JWKS_URL=https:\/\//m);
+  assert.match(source["deploy/railway/api.env.example"], /^FMARCH_CLASSIC_AUTH=0$/m);
   assert.match(
     source["deploy/railway/api.env.example"],
     /FMARCH_BOOTSTRAP_ADMIN_WORKOS_USER_ID=/,
   );
   assert.match(
     source["deploy/railway/api.env.example"],
-    /FMARCH_IDENTITY_DELIVERY_ENDPOINT=https:\/\/.+/,
+    /^# FMARCH_IDENTITY_DELIVERY_ENDPOINT=https:\/\/.+/m,
   );
   assert.match(
     source["deploy/railway/api.env.example"],
-    /FMARCH_IDENTITY_DELIVERY_AUTH_TOKEN=\$\{\{IDENTITY_DELIVERY_AUTH_TOKEN\}\}/,
+    /^# FMARCH_IDENTITY_DELIVERY_AUTH_TOKEN=\$\{\{IDENTITY_DELIVERY_AUTH_TOKEN\}\}/m,
   );
   assert.doesNotMatch(
     source["deploy/railway/api.env.example"],
@@ -132,6 +133,11 @@ async function contract() {
   assert.match(source["crates/server/src/main.rs"], /format!\("0\.0\.0\.0:\{port\}"\)/);
   assert.doesNotMatch(source["crates/server/src/main.rs"], /\.run\(&pool\)\.await/);
   assert.match(source["crates/server/src/main.rs"], /ensure_schema_ready\(&pool\)/);
+  assert.match(
+    source["crates/server/src/main.rs"],
+    /classic authentication requires FMARCH_IDENTITY_DELIVERY_ENDPOINT/,
+  );
+  assert.match(source["crates/server/src/main.rs"], /dev_auth_enabled && debug_build/);
   assert.match(source["crates/server/src/bin/fmarch-migrate.rs"], /MIGRATOR\.run\(&pool\)\.await/);
 
   const runbook = source["docs/ops/railway-staging-target.md"];

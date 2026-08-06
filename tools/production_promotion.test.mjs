@@ -89,7 +89,10 @@ test("hosted variables require isolated production identity credentials", () => 
     AWS_ACCESS_KEY_ID: "staging-access-key",
     AWS_SECRET_ACCESS_KEY: "staging-secret-key",
     AWS_S3_BUCKET_NAME: "staging-media",
+    FMARCH_CLASSIC_AUTH: "0",
     WORKOS_CLIENT_ID: "staging-client",
+    WORKOS_ISSUER: "https://api.workos.com/user_management/staging",
+    WORKOS_JWKS_URL: "https://api.workos.com/sso/jwks/staging",
   };
   const stagingFrontend = {
     FMARCH_AUTH_SOURCE_SIGNING_KEY: "staging-auth-source-key-at-least-32-bytes",
@@ -110,6 +113,7 @@ test("hosted variables require isolated production identity credentials", () => 
     AWS_ACCESS_KEY_ID: "production-access-key",
     AWS_SECRET_ACCESS_KEY: "production-secret-key",
     AWS_S3_BUCKET_NAME: "production-media",
+    FMARCH_CLASSIC_AUTH: "0",
     WORKOS_CLIENT_ID: "production-client",
     WORKOS_ISSUER: "https://api.workos.com/user_management/production",
     WORKOS_JWKS_URL: "https://api.workos.com/sso/jwks/production",
@@ -152,6 +156,50 @@ test("hosted variables require isolated production identity credentials", () => 
         productionApi: { ...productionApi, WORKOS_CLIENT_ID: "different-production-client" },
       }),
     /same WorkOS client/,
+  );
+  assert.throws(
+    () =>
+      validateHostedVariables({
+        ...ready,
+        productionApi: { ...productionApi, FMARCH_CLASSIC_AUTH: undefined },
+      }),
+    /missing FMARCH_CLASSIC_AUTH/,
+  );
+  assert.throws(
+    () =>
+      validateHostedVariables({
+        ...ready,
+        productionApi: { ...productionApi, FMARCH_CLASSIC_AUTH: "1" },
+      }),
+    /classic mode is missing FMARCH_IDENTITY_DELIVERY_ENDPOINT/,
+  );
+  assert.doesNotThrow(() =>
+    validateHostedVariables({
+      ...ready,
+      productionApi: {
+        ...productionApi,
+        FMARCH_CLASSIC_AUTH: "1",
+        FMARCH_IDENTITY_DELIVERY_ENDPOINT:
+          "https://identity-delivery.example.test/v1/deliveries",
+        FMARCH_IDENTITY_DELIVERY_PROVIDER_ID: "http-json",
+        FMARCH_IDENTITY_DELIVERY_AUTH_TOKEN: "production-delivery-token",
+      },
+    }),
+  );
+  assert.throws(
+    () =>
+      validateHostedVariables({
+        ...ready,
+        productionApi: {
+          ...productionApi,
+          FMARCH_CLASSIC_AUTH: "1",
+          FMARCH_IDENTITY_DELIVERY_ENDPOINT:
+            "http://identity-delivery.example.test/v1/deliveries",
+          FMARCH_IDENTITY_DELIVERY_PROVIDER_ID: "http-json",
+          FMARCH_IDENTITY_DELIVERY_AUTH_TOKEN: "production-delivery-token",
+        },
+      }),
+    /must use HTTPS/,
   );
 });
 
