@@ -15,6 +15,10 @@ path = "tests/pipeline/main.rs"
 name = "runtime_cancellation"
 path = "tests/runtime_cancellation.rs"
 
+[[test]]
+name = "action_submission_boundary"
+path = "tests/action_submission_boundary.rs"
+
 [dependencies]
 caps = { path = "../caps" }
 projections = { path = "../projections" }

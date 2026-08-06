@@ -29,13 +29,9 @@ use std::sync::{
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use caps::{Capability, CapabilitySet, Principal};
-use domain::{
-    pack::{
-        ActionTemplate, ActivationGateReason, GrantKind, GrantSpec, HostPromptDecisionKind,
-        HostPromptResolutionEffect, HostPromptResolutionEffectPolicy, ItaSessionControlKind,
-        PhaseParity, TargetRoleFilter, TargetSpec, TargetState, Window,
-    },
-    IrAbility, Modifier, RoleModifier,
+use domain::pack::{
+    HostPromptDecisionKind, HostPromptResolutionEffect, HostPromptResolutionEffectPolicy,
+    ItaSessionControlKind,
 };
 use eventstore::{ActorId, EventInput};
 use projections::{append_and_project_in_tx, audit_rebuild, ProjectionError};
@@ -44,6 +40,7 @@ use sha2::{Digest, Sha256};
 use sqlx::{postgres::PgPool, Postgres, Row, Transaction};
 use uuid::Uuid;
 
+mod action_submission;
 pub mod day_program;
 pub mod day_runtime;
 pub mod day_scheduler;
@@ -294,19 +291,6 @@ pub(crate) struct CommandAuditContext {
     pub(crate) command_kind: String,
     pub(crate) authority_used: String,
     pub(crate) request_source: &'static str,
-}
-
-#[derive(Debug, Clone)]
-struct ActiveAction {
-    template_id: String,
-    grant_id: Option<String>,
-    targets: Vec<String>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ActionSource {
-    Role,
-    ItemGrant,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -842,16 +826,18 @@ async fn handle_command(
             targets,
             grant_id,
         } => {
-            submit_action(
+            action_submission::submit_action(action_submission::ActionSubmissionContext::new(
                 tx,
                 principal,
-                game,
-                action_id,
-                actor_slot,
-                template_id,
-                targets,
-                grant_id,
-            )
+                action_submission::ActionSubmissionRequest {
+                    game,
+                    action_id,
+                    actor_slot,
+                    template_id,
+                    targets,
+                    grant_id,
+                },
+            ))
             .await
         }
         Command::WithdrawAction {
@@ -2077,109 +2063,6 @@ async fn withdraw_vote(
         0,
     );
     persist(tx, game, &[ev]).await
-}
-
-#[expect(
-    clippy::too_many_arguments,
-    reason = "command submission inputs remain explicit until action orchestration is extracted behind a request context"
-)]
-async fn submit_action(
-    tx: &mut Transaction<'_, Postgres>,
-    principal: &Principal,
-    game: Uuid,
-    action_id: String,
-    actor_slot: String,
-    template_id: String,
-    targets: Vec<String>,
-    grant_id: Option<String>,
-) -> Result<Ack, Reject> {
-    require_game(tx, game).await?;
-    if action_id.trim().is_empty() || template_id.trim().is_empty() {
-        return Err(Reject::InvalidTarget);
-    }
-    if grant_id.as_deref().is_some_and(|id| id.trim().is_empty()) {
-        return Err(Reject::InvalidTarget);
-    }
-
-    let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
-    require_slot_occupant(tx, game, &actor_slot, &caps).await?;
-    let phase = require_open_phase(tx, game).await?;
-    require_slot_alive(tx, game, &actor_slot).await?;
-    let stream = eventstore::load_stream_in_tx(tx, game)
-        .await
-        .map_err(|e| Reject::Internal(e.to_string()))?;
-    let pack_name = pack_name_from_stream(&stream)?;
-    let pack = load_pack(&pack_name)?;
-    let action_window = validate_action_submission(
-        tx,
-        game,
-        &pack,
-        &phase,
-        &actor_slot,
-        &template_id,
-        &targets,
-        grant_id.as_deref(),
-    )
-    .await?;
-
-    let mut payload = serde_json::json!({
-        "action_id": action_id,
-        "template_id": template_id,
-        "actor": actor_slot,
-        "targets": targets,
-        "phase_id": phase
-    });
-    if action_window == Window::Instant {
-        payload["instant_resolved"] = serde_json::Value::Bool(true);
-    }
-    if let Some(grant_id) = &grant_id {
-        payload["grant_id"] = serde_json::Value::String(grant_id.clone());
-    }
-    let ev = EventInput::new(
-        "ActionSubmitted",
-        1,
-        payload.clone(),
-        ActorId::Slot(actor_slot.clone()),
-        0,
-    );
-    let mut events = vec![ev];
-    if action_window == Window::Instant {
-        let mut phase_input = EngineInputBuilder::new(game, &stream, &phase).build()?;
-        let submission = domain::Submission {
-            action_id: action_id.clone(),
-            actor: actor_slot.clone(),
-            template_id: template_id.clone(),
-            targets: targets.clone(),
-            phase_id: phase.clone(),
-            submitted_at: phase_input.logical_time(),
-            withdrawn: false,
-            metadata: metadata_from_payload(&payload),
-        };
-        phase_input.submissions = vec![submission];
-        phase_input.day_phase_inputs = domain::DayPhaseInputs::default();
-        let output = domain::resolve_instant(phase_input.resolve_input(EngineRunKind::Instant {
-            action_id: &action_id,
-        }));
-        domain::validate_resolution_applied(&output.applied, domain::RESULT_VERSION)
-            .map_err(|e| Reject::Internal(format!("invalid instant resolution result: {e}")))?;
-        domain::validate_resolution_trace(&output.trace, domain::TRACE_VERSION)
-            .map_err(|e| Reject::Internal(format!("invalid instant resolution trace: {e}")))?;
-        events.push(EventInput::new(
-            "ResolutionApplied",
-            1,
-            serde_json::to_value(output.applied).map_err(|e| Reject::Internal(e.to_string()))?,
-            ActorId::System,
-            phase_input.next_stream_seq + 1,
-        ));
-        events.push(EventInput::new(
-            "ResolutionTrace",
-            1,
-            serde_json::to_value(output.trace).map_err(|e| Reject::Internal(e.to_string()))?,
-            ActorId::System,
-            phase_input.next_stream_seq + 2,
-        ));
-    }
-    persist(tx, game, &events).await
 }
 
 async fn withdraw_action(
@@ -5415,488 +5298,6 @@ async fn require_slot_can_post(
     }
 }
 
-#[expect(
-    clippy::too_many_arguments,
-    reason = "validation inputs remain explicit until action validation owns a typed submission context"
-)]
-async fn validate_action_submission(
-    tx: &mut Transaction<'_, Postgres>,
-    game: Uuid,
-    pack: &domain::Pack,
-    phase_id: &str,
-    actor_slot: &str,
-    template_id: &str,
-    targets: &[String],
-    grant_id: Option<&str>,
-) -> Result<Window, Reject> {
-    let phase_kind = phase_kind(phase_id)?;
-    let phase_number = phase_number(phase_id)?;
-    let slots = projections::slot_state(&mut **tx, game).await?;
-    let actor = slots
-        .iter()
-        .find(|slot| slot.slot_id == actor_slot)
-        .cloned()
-        .ok_or(Reject::UnknownSlot)?;
-    let role_key = actor.role_key.as_deref().ok_or(Reject::InvalidTarget)?;
-    let role = pack.roles.get(role_key).ok_or_else(|| {
-        Reject::Internal(format!(
-            "role `{role_key}` is missing from pack {}",
-            pack.name
-        ))
-    })?;
-    let (template, source) = submission_template(pack, role, template_id, grant_id)?;
-    let uses_grant_option = matches!(source, ActionSource::Role)
-        && template.has_ability(IrAbility::Grant)
-        && !template.grant_options.is_empty();
-    if uses_grant_option
-        && grant_id
-            .and_then(|id| selected_grant_option(template, id))
-            .is_none()
-    {
-        return Err(Reject::InvalidTarget);
-    }
-
-    let window_matches = template.window.matches_phase_kind(phase_kind);
-    if !window_matches {
-        return Err(Reject::PhaseLocked);
-    }
-    if let Some(parity) = template.constraints.phase_parity {
-        let matches = match parity {
-            PhaseParity::Odd => phase_number % 2 == 1,
-            PhaseParity::Even => phase_number % 2 == 0,
-        };
-        if !matches {
-            return Err(Reject::InvalidTarget);
-        }
-    }
-    if let Some(parity) = template.constraints.cycle_parity {
-        let matches = match parity {
-            PhaseParity::Odd => phase_number % 2 == 1,
-            PhaseParity::Even => phase_number % 2 == 0,
-        };
-        if !matches {
-            return Err(Reject::InvalidTarget);
-        }
-    }
-    if activation_gate_reason(template, phase_kind, phase_number).is_some() {
-        return Err(Reject::InvalidTarget);
-    }
-
-    match template.targets {
-        TargetSpec::None if !targets.is_empty() => return Err(Reject::InvalidTarget),
-        TargetSpec::One if targets.len() != 1 => return Err(Reject::InvalidTarget),
-        TargetSpec::Many | TargetSpec::Group
-            if targets.is_empty() || targets.len() > template.constraints.max_targets as usize =>
-        {
-            return Err(Reject::InvalidTarget);
-        }
-        _ => {}
-    }
-    if template.ability == IrAbility::Link && targets.len() < 2 {
-        return Err(Reject::InvalidTarget);
-    }
-    if !template.constraints.self_allowed && targets.iter().any(|target| target == actor_slot) {
-        return Err(Reject::InvalidTarget);
-    }
-    if template.constraints.personal_only && targets.iter().any(|target| target != actor_slot) {
-        return Err(Reject::InvalidTarget);
-    }
-    if template.constraints.lazy_requires_multiple_non_town
-        && slots
-            .iter()
-            .filter(|slot| slot.alive)
-            .filter(|slot| slot.alignment.as_deref() != Some("town"))
-            .count()
-            <= 1
-    {
-        return Err(Reject::InvalidTarget);
-    }
-    if template
-        .constraints
-        .disabled_at_or_below_alive
-        .map(|threshold| slots.iter().filter(|slot| slot.alive).count() <= threshold as usize)
-        .unwrap_or(false)
-    {
-        return Err(Reject::InvalidTarget);
-    }
-    if role_modifier_team_kill_rejected(pack, role, template, &actor, &slots) {
-        return Err(Reject::InvalidTarget);
-    }
-    if template.constraints.unique_targets {
-        let unique: std::collections::BTreeSet<&str> = targets.iter().map(String::as_str).collect();
-        if unique.len() != targets.len() {
-            return Err(Reject::InvalidTarget);
-        }
-    }
-    if target_role_filter_rejected(pack, template, targets, &slots) {
-        return Err(Reject::InvalidTarget);
-    }
-    if template.constraints.x_shots.is_some() {
-        let counter_id = action_counter_id(&template.id);
-        let exhausted = projections::action_counters(&mut **tx, game)
-            .await?
-            .iter()
-            .any(|counter| {
-                counter.slot_id == actor_slot
-                    && counter.counter_id == counter_id
-                    && counter.remaining == 0
-            });
-        if exhausted {
-            return Err(Reject::InvalidTarget);
-        }
-    }
-    if let Some(cooldown_cycles) = template.constraints.cooldown_cycles {
-        let counter_id = cooldown_counter_id(&template.id);
-        let on_cooldown = projections::action_counters(&mut **tx, game)
-            .await?
-            .iter()
-            .any(|counter| {
-                counter.slot_id == actor_slot
-                    && counter.counter_id == counter_id
-                    && counter.phase_kind == phase_kind_name(phase_kind)
-                    && phase_number as i32 <= counter.phase_number + i32::from(cooldown_cycles)
-            });
-        if on_cooldown {
-            return Err(Reject::InvalidTarget);
-        }
-    }
-    if template.has_ability(IrAbility::ItaShot) {
-        let session = ita_session_for_phase(pack, phase_number).ok_or(Reject::InvalidTarget)?;
-        if session.shot_limit.is_some() {
-            let counter_id = day_session_counter_id(&session.session_id, &template.id);
-            let exhausted = projections::action_counters(&mut **tx, game)
-                .await?
-                .iter()
-                .any(|counter| {
-                    counter.slot_id == actor_slot
-                        && counter.counter_id == counter_id
-                        && counter.remaining == 0
-                });
-            if exhausted {
-                return Err(Reject::InvalidTarget);
-            }
-        }
-    }
-    if source == ActionSource::ItemGrant {
-        let grant_id = grant_id.ok_or(Reject::InvalidTarget)?;
-        let counter_id = inventory_counter_id(grant_id);
-        let exhausted = projections::action_counters(&mut **tx, game)
-            .await?
-            .iter()
-            .any(|counter| {
-                counter.slot_id == actor_slot
-                    && counter.counter_id == counter_id
-                    && counter.remaining == 0
-            });
-        if exhausted {
-            return Err(Reject::InvalidTarget);
-        }
-    }
-    if template.has_modifier(Modifier::NonConsecutive)
-        || template.has_modifier(Modifier::Indecisive)
-        || template.has_modifier(Modifier::Roaming)
-    {
-        let repeated = projections::action_history(&mut **tx, game)
-            .await?
-            .iter()
-            .any(|record| {
-                let in_scope = if template.has_modifier(Modifier::Roaming) {
-                    record.phase_kind == "Night"
-                } else {
-                    record.phase_kind == "Night" && record.phase_number + 1 == phase_number as i32
-                };
-                record.slot_id == actor_slot
-                    && record.template_id == template.id
-                    && in_scope
-                    && record.status == "resolved"
-                    && targets.iter().any(|target| record.targets.contains(target))
-            });
-        if repeated {
-            return Err(Reject::InvalidTarget);
-        }
-    }
-    validate_action_slot_capacity(
-        tx,
-        game,
-        phase_id,
-        phase_number,
-        actor_slot,
-        template_id,
-        template,
-        grant_id,
-        source,
-    )
-    .await?;
-    let target_state = template
-        .constraints
-        .target_state
-        .unwrap_or(TargetState::Alive);
-    for target in targets {
-        let alive = projections::slot_alive(&mut **tx, game, target)
-            .await?
-            .ok_or(Reject::InvalidTarget)?;
-        match target_state {
-            TargetState::Any => {}
-            TargetState::Alive if !alive => return Err(Reject::InvalidTarget),
-            TargetState::Dead if alive => return Err(Reject::InvalidTarget),
-            TargetState::Alive | TargetState::Dead => {}
-        }
-    }
-    Ok(template.window)
-}
-
-fn target_role_filter_rejected(
-    pack: &domain::Pack,
-    template: &ActionTemplate,
-    targets: &[String],
-    slots: &[projections::SlotStateRow],
-) -> bool {
-    let Some(filter) = template.constraints.target_role_filter else {
-        return false;
-    };
-    let vanilla_roles = &pack.investigation_results.role_sets.vanilla_roles;
-    if vanilla_roles.is_empty() {
-        return true;
-    }
-    targets.iter().any(|target| {
-        let Some(role_key) = slots
-            .iter()
-            .find(|slot| slot.slot_id == *target)
-            .and_then(|slot| slot.role_key.as_deref())
-        else {
-            return true;
-        };
-        let is_vanilla = vanilla_roles.iter().any(|candidate| candidate == role_key);
-        match filter {
-            TargetRoleFilter::PowerRole => is_vanilla,
-            TargetRoleFilter::Vanilla => !is_vanilla,
-        }
-    })
-}
-
-fn role_modifier_team_kill_rejected(
-    pack: &domain::Pack,
-    role: &domain::pack::Role,
-    template: &ActionTemplate,
-    actor: &projections::SlotStateRow,
-    slots: &[projections::SlotStateRow],
-) -> bool {
-    let lost = role.has_modifier(RoleModifier::Lost);
-    let recluse = role.has_modifier(RoleModifier::Recluse);
-    if (!lost && !recluse)
-        || !pack
-            .night_resolution
-            .team_kill_action_ids
-            .iter()
-            .any(|id| id == &template.id)
-    {
-        return false;
-    }
-    if actor.alignment.as_deref() != Some("mafia") {
-        return true;
-    }
-    let mut living_teammates = slots.iter().filter(|slot| {
-        slot.slot_id != actor.slot_id && slot.alive && slot.alignment.as_deref() == Some("mafia")
-    });
-    if lost {
-        return living_teammates.count() > 0;
-    }
-    living_teammates.any(|slot| {
-        slot.role_key
-            .as_deref()
-            .and_then(|role_key| pack.roles.get(role_key))
-            .map(|role| !role.has_modifier(RoleModifier::Recluse))
-            .unwrap_or(true)
-    })
-}
-
-fn submission_template<'a>(
-    pack: &'a domain::Pack,
-    role: &'a domain::pack::Role,
-    template_id: &str,
-    grant_id: Option<&str>,
-) -> Result<(&'a ActionTemplate, ActionSource), Reject> {
-    if let Some(template) = role.actions.iter().find(|action| action.id == template_id) {
-        return Ok((template, ActionSource::Role));
-    }
-    let Some(grant_id) = grant_id else {
-        return Err(Reject::InvalidTarget);
-    };
-    let Some(template) = pack.item_actions.get(grant_id) else {
-        return Err(Reject::InvalidTarget);
-    };
-    if template.id != template_id {
-        return Err(Reject::InvalidTarget);
-    }
-    Ok((template, ActionSource::ItemGrant))
-}
-
-fn selected_grant_option<'a>(
-    template: &'a ActionTemplate,
-    grant_id: &str,
-) -> Option<&'a GrantSpec> {
-    template
-        .grant_options
-        .iter()
-        .find(|grant| grant.grant_id == grant_id)
-}
-
-#[expect(
-    clippy::too_many_arguments,
-    reason = "capacity inputs remain explicit until action validation owns a typed capacity context"
-)]
-async fn validate_action_slot_capacity(
-    tx: &mut Transaction<'_, Postgres>,
-    game: Uuid,
-    phase_id: &str,
-    phase_number: u32,
-    actor_slot: &str,
-    template_id: &str,
-    template: &ActionTemplate,
-    grant_id: Option<&str>,
-    source: ActionSource,
-) -> Result<(), Reject> {
-    let active = active_actions_for_actor_phase_in_tx(tx, game, phase_id, actor_slot).await?;
-    let uses_grant_option = matches!(source, ActionSource::Role)
-        && grant_id
-            .and_then(|id| selected_grant_option(template, id))
-            .is_some();
-    match (source, grant_id) {
-        (ActionSource::Role, _) if uses_grant_option => {
-            let base_already_active = active
-                .values()
-                .any(|action| action.template_id == template_id);
-            if base_already_active && !template.has_modifier(Modifier::Simultaneous) {
-                return Err(Reject::ActionAlreadySubmitted);
-            }
-        }
-        (ActionSource::Role, None) => {
-            let base_already_active = active
-                .values()
-                .any(|action| action.grant_id.is_none() && action.template_id == template_id);
-            if base_already_active && !template.has_modifier(Modifier::Simultaneous) {
-                return Err(Reject::ActionAlreadySubmitted);
-            }
-        }
-        (ActionSource::Role, Some(grant_id)) | (ActionSource::ItemGrant, Some(grant_id)) => {
-            let required_kind = match source {
-                ActionSource::Role => GrantKind::ExtraAction,
-                ActionSource::ItemGrant => GrantKind::Item,
-            };
-            let granted_uses = projections::action_grants(&mut **tx, game)
-                .await?
-                .into_iter()
-                .filter(|grant| {
-                    grant.slot_id == actor_slot
-                        && grant.grant_id == grant_id
-                        && grant.kind == grant_kind_name(required_kind)
-                        && grant.phase_number < phase_number as i32
-                })
-                .map(|grant| grant.uses.max(0) as usize)
-                .sum::<usize>();
-            let active_grant_uses = active
-                .values()
-                .filter(|action| action.grant_id.as_deref() == Some(grant_id))
-                .count();
-            if granted_uses == 0 || active_grant_uses >= granted_uses {
-                return Err(Reject::InvalidTarget);
-            }
-        }
-        (ActionSource::ItemGrant, None) => return Err(Reject::InvalidTarget),
-    }
-    Ok(())
-}
-
-fn grant_kind_name(kind: GrantKind) -> &'static str {
-    match kind {
-        GrantKind::ExtraAction => "ExtraAction",
-        GrantKind::Item => "Item",
-        GrantKind::VoteWeight => "VoteWeight",
-    }
-}
-
-async fn active_actions_for_actor_phase_in_tx(
-    tx: &mut Transaction<'_, Postgres>,
-    game: Uuid,
-    phase_id: &str,
-    actor_slot: &str,
-) -> Result<BTreeMap<String, ActiveAction>, Reject> {
-    let stream = eventstore::load_stream_in_tx(tx, game)
-        .await
-        .map_err(|e| Reject::Internal(e.to_string()))?;
-    Ok(active_actions_from_stream(stream, phase_id, actor_slot))
-}
-
-async fn active_actions_for_actor_phase(
-    pool: &PgPool,
-    game: Uuid,
-    phase_id: &str,
-    actor_slot: &str,
-) -> Result<BTreeMap<String, ActiveAction>, Reject> {
-    let stream = eventstore::load_stream(pool, game)
-        .await
-        .map_err(|e| Reject::Internal(e.to_string()))?;
-    Ok(active_actions_from_stream(stream, phase_id, actor_slot))
-}
-
-fn active_actions_from_stream(
-    stream: Vec<eventstore::StoredEvent>,
-    phase_id: &str,
-    actor_slot: &str,
-) -> BTreeMap<String, ActiveAction> {
-    let mut active = BTreeMap::new();
-    for ev in stream {
-        match ev.kind.as_str() {
-            "ActionSubmitted"
-                if ev.payload["phase_id"].as_str() == Some(phase_id)
-                    && ev.payload["actor"].as_str() == Some(actor_slot) =>
-            {
-                if let (Some(action_id), Some(template_id)) = (
-                    ev.payload["action_id"].as_str(),
-                    ev.payload["template_id"].as_str(),
-                ) {
-                    active.insert(
-                        action_id.to_string(),
-                        ActiveAction {
-                            template_id: template_id.to_string(),
-                            grant_id: ev.payload["grant_id"].as_str().map(str::to_string),
-                            targets: ev.payload["targets"]
-                                .as_array()
-                                .map(|targets| {
-                                    targets
-                                        .iter()
-                                        .filter_map(|target| target.as_str().map(str::to_string))
-                                        .collect()
-                                })
-                                .unwrap_or_default(),
-                        },
-                    );
-                }
-            }
-            "ActionWithdrawn"
-                if ev
-                    .payload
-                    .get("phase_id")
-                    .and_then(|value| value.as_str())
-                    .map(|withdraw_phase| withdraw_phase == phase_id)
-                    .unwrap_or(true)
-                    && ev
-                        .payload
-                        .get("actor")
-                        .and_then(|value| value.as_str())
-                        .map(|withdraw_actor| withdraw_actor == actor_slot)
-                        .unwrap_or(true) =>
-            {
-                if let Some(action_id) = ev.payload["action_id"].as_str() {
-                    active.remove(action_id);
-                }
-            }
-            _ => {}
-        }
-    }
-    active
-}
-
 pub async fn active_action_templates_for_actor_phase(
     pool: &PgPool,
     game: Uuid,
@@ -5904,7 +5305,7 @@ pub async fn active_action_templates_for_actor_phase(
     actor_slot: &str,
 ) -> Result<BTreeSet<String>, Reject> {
     Ok(
-        active_actions_for_actor_phase(pool, game, phase_id, actor_slot)
+        action_submission::active_actions_for_actor_phase(pool, game, phase_id, actor_slot)
             .await?
             .into_values()
             .map(|action| action.template_id)
@@ -5932,7 +5333,7 @@ pub async fn active_actions_view_for_actor_phase(
     actor_slot: &str,
 ) -> Result<Vec<CurrentAction>, Reject> {
     Ok(
-        active_actions_for_actor_phase(pool, game, phase_id, actor_slot)
+        action_submission::active_actions_for_actor_phase(pool, game, phase_id, actor_slot)
             .await?
             .into_iter()
             .map(|(action_id, action)| CurrentAction {
@@ -5943,55 +5344,6 @@ pub async fn active_actions_view_for_actor_phase(
             })
             .collect(),
     )
-}
-
-fn action_counter_id(template_id: &str) -> String {
-    format!("x_shot:{template_id}")
-}
-
-fn cooldown_counter_id(template_id: &str) -> String {
-    format!("cooldown:{template_id}")
-}
-
-fn day_session_counter_id(session_id: &str, template_id: &str) -> String {
-    format!("day_session:{session_id}:{template_id}")
-}
-
-fn inventory_counter_id(grant_id: &str) -> String {
-    format!("inventory:{grant_id}")
-}
-
-fn ita_session_for_phase(
-    pack: &domain::Pack,
-    phase_number: u32,
-) -> Option<&domain::pack::ItaSessionSpec> {
-    pack.ita.sessions.iter().find(|session| match session.day {
-        Some(day) => day == phase_number,
-        None => true,
-    })
-}
-
-fn phase_kind_name(phase_kind: domain::pack::PhaseKind) -> &'static str {
-    match phase_kind {
-        domain::pack::PhaseKind::Day => "Day",
-        domain::pack::PhaseKind::Night => "Night",
-        domain::pack::PhaseKind::Twilight => "Twilight",
-    }
-}
-
-fn activation_gate_reason(
-    template: &ActionTemplate,
-    phase_kind: domain::pack::PhaseKind,
-    phase_number: u32,
-) -> Option<&'static str> {
-    let gate = template.constraints.active_from.as_ref()?;
-    if gate.phase_kind == phase_kind && phase_number >= gate.phase_number {
-        return None;
-    }
-    Some(match gate.reason {
-        ActivationGateReason::Novice => "novice_inactive",
-        ActivationGateReason::Activated => "activated_inactive",
-    })
 }
 
 async fn active_action_exists(
