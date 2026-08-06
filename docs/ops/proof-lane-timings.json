@@ -36,11 +36,6 @@
       "measured_at": "2026-07-26T09:42:52.377Z",
       "command": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p projections -- --test-threads=1"
     },
-    "cargo:commands": {
-      "seconds": 885.3,
-      "measured_at": "2026-07-26T10:10:48.000Z",
-      "command": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p commands -- --test-threads=1"
-    },
     "test:frontend-route-state-render": {
       "seconds": 0.3,
       "measured_at": "2026-07-26T09:42:52.718Z",
@@ -126,6 +121,36 @@
       "seconds": 0.2,
       "measured_at": "2026-08-04T20:13:08.980Z",
       "command": "cargo run -p wire --bin export_types -- --check",
+      "status": 0
+    },
+    "cargo:commands-unit": {
+      "seconds": 0.4,
+      "measured_at": "2026-08-06T22:33:54.779Z",
+      "command": "cargo test -p commands --lib --bin check_goldens --test action_submission_boundary --test host_prompt_resolution_boundary",
+      "status": 0
+    },
+    "cargo:commands-pg": {
+      "seconds": 80.1,
+      "measured_at": "2026-08-06T22:35:14.907Z",
+      "command": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p commands --test pipeline -- --test-threads=4",
+      "status": 0
+    },
+    "cargo:commands-concurrency": {
+      "seconds": 1.6,
+      "measured_at": "2026-08-06T22:35:16.585Z",
+      "command": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p commands --test runtime_cancellation -- --test-threads=1",
+      "status": 0
+    },
+    "cargo:commands-audit": {
+      "seconds": 653.4,
+      "measured_at": "2026-08-06T22:46:09.983Z",
+      "command": "RUST_MIN_STACK=8388608 DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p commands --test pipeline -- --ignored --test-threads=4",
+      "status": 0
+    },
+    "cargo:operator-proof": {
+      "seconds": 2.1,
+      "measured_at": "2026-08-06T22:46:12.162Z",
+      "command": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p operator_proof -- --test-threads=1",
       "status": 0
     }
   }
