@@ -32,7 +32,7 @@ The line counts below are a 2026-08-05 orientation snapshot, not a target.
 |---|---|---|---|---|
 | `crates/domain/src/pack.rs` façade; `pack/model.rs` (~1.9k); `pack/validation.rs` (~8.5k) | Closed first-level boundary: serialized schema/defaults are separate from loading, derived indexes, diagnostics, and ordering | `pack/model` owns declarative types; `pack/validation` owns `PackValidationContext` and validation behavior; `validation_tests` owns private contract tests | validation → model; resolver/commands → public pack façade | Split validation families only when their next independent change requires it; do not re-complect model ownership |
 | `crates/domain/src/resolver.rs` (~9.2k); `resolver/action.rs` (~1.0k); `resolver/trigger.rs` (~0.4k); `resolver/outcome.rs` (~1.4k) | Kill/protection, trigger-fixpoint, duel, and day-vote/outcome ownership are closed behind typed boundaries; action collection/ordering and result construction remain concentrated | Resolver coordinator plus bounded action, trigger, and outcome families | outcome → action/trigger/domain state/validated pack; trigger → action resolution/domain state/validated pack; coordinator → bounded families | Split remaining action collection or result construction only when its next independent change requires it; continue the maintainable-core frontier at remaining API route families |
-| `crates/api/src/lib.rs` (~5.8k); `auth_http.rs` (~3.9k); `authentication.rs` (~0.7k); `live_projection.rs` (~0.2k) | Auth HTTP, attempt/delivery orchestration, and live publication are closed behind typed boundaries; router composition, community reads/writes, game transport, command adaptation, and WebSocket sessions remain concentrated | Thin composition root plus route-family modules with typed request contexts | route families → application/domain ports; composition root → route families; authentication → identity-delivery ports; live transport → live-publication port | Extract the cohesive community HTTP route family behind a typed state boundary |
+| `crates/api/src/lib.rs` (~4.4k); `community_http.rs` (~1.4k); `auth_http.rs` (~3.9k); `authentication.rs` (~0.7k); `live_projection.rs` (~0.2k) | Auth and community HTTP, attempt/delivery orchestration, and live publication are closed behind typed boundaries; router composition, game transport, command adaptation, and WebSocket sessions remain concentrated | Thin composition root plus route-family modules with typed request contexts | route families → application/domain ports; composition root → route families; authentication → identity-delivery ports; live transport → live-publication port | Extract the cohesive game-read HTTP route family behind a typed state boundary |
 | `crates/projections/src/lib.rs` (~8.2k); `effect_projection.rs` (~0.3k); `private_channel_projection.rs` (~0.3k) | Effect and encrypted private-channel folding, reads, mutations, and rebuild hooks are closed behind typed family boundaries; dispatcher plus unrelated game, community, identity, media-reference, and scheduler projections remain concentrated | Projection dispatcher plus one module per projection family and shared SQL/encryption primitives | family projectors → shared transaction/encryption primitives; dispatcher → families | Split the next family only when it has an independent change; continue the active frontier at API community transport |
 | `crates/commands/src/day_runtime.rs` | DayEvent write/runtime (schedule, participate, resolve, sealed automation, narrative publish); see [17](17-day-runtime-ownership.md) | Sole emitter of `DayEvent*` and sole write-path caller of `game_platform` day_schedule / auto_resolution / narrative | day_runtime → shared command helpers + pure game_platform; day_scheduler → day_runtime only | Keep phase lifecycle in lib; further split only if program attach or narrative needs an independent change |
 | `crates/commands/tests/pipeline.rs` (~77.1k) | Cross-domain command scenarios, fixtures, helpers, and operator proof cases | Shared hermetic harness plus scenario-family integration modules | scenario modules → harness/public command API; never scenario ↔ scenario | Split by command family while preserving serial Postgres proof semantics |
@@ -96,6 +96,26 @@ delivery delay, and scoped private refreshes. Unit tests cover publication
 assembly and lag continuation; the source boundary contract prevents those
 responsibilities or their removed high-arity lint expectation from drifting
 back into `lib.rs`.
+
+## Closed API boundary: public community HTTP
+
+`crates/api/src/community_http.rs` owns the public search, personalized inbox,
+subscriptions, member mutes, discussion, moderation, and profile route family.
+Its request/query DTOs, cursor and target decoders, community admission,
+capability checks, response adaptation, validation, and projection-error
+mapping live behind `CommunityHttpState`, whose dependency set is only the
+Postgres pool and the configured authentication boundary.
+
+The composition root mounts the route family as one fragment. It retains game
+transport, commands, WebSocket sessions, auth/account/session persistence,
+media, and admin game bootstrap. The public game thread consumes one narrow
+optional-community-viewer helper so personalized post filtering has a single
+bearer/admission rule without pulling the game route into the community owner.
+The source contract prevents community handlers and DTOs from returning to the
+root, direct SQL persistence from entering the HTTP module, or unrelated
+transport from drifting across the boundary. URLs, methods, JSON shapes,
+cursor encodings, status codes, moderation limits, visibility rules,
+transactions, timestamps, and personalized filtering remain unchanged.
 
 ## Closed projection boundaries: effects and private channels
 
@@ -199,9 +219,9 @@ boundary pressure:
   ownership frontier rather than hidden lint debt;
 - command submission, action validation, prompt reconstruction, and operator
   proof audit functions await bounded request contexts;
-- auth HTTP, authentication attempt/delivery, and live-publication ownership are
-  typed and carry no local lint expectations; remaining community/game
-  transport families await bounded route contexts;
+- auth and community HTTP, authentication attempt/delivery, and
+  live-publication ownership are typed and carry no local lint expectations;
+  remaining game transport awaits a bounded route context;
 - effect and private-channel projection ownership is typed and carries no local
   lint expectations; unrelated projection families remain deliberately
   separate rather than hidden behind a generic SQL projector;
