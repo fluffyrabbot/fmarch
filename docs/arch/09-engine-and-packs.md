@@ -1246,8 +1246,10 @@ locally and emitted `ok: true`, `family_count: 12`, `seed_count: 57`, `expected_
 pipeline generated_shrink_matrix_writes_compact_operator_report -- --ignored --nocapture && test -f
 target/operator-proof/current-generated-shrink-matrix-report.tmp.json`, and proof boundary `Runs
 the bounded deterministic generated shrink matrix for PGO, PgoProjectionState, Babysitter, BabysitterProjectionState, Hider, HiderProjectionState, Hunter, HunterProjectionState, VengefulFixpoint, VengefulProjectionState, StrongmanVengefulFixpoint, StrongmanVengefulProjectionState, BodyguardStrongmanVengefulFixpoint, BodyguardStrongmanVengefulProjectionState, BackupInheritance, BackupProjectionState, ConversionDeprogramming, ConversionProjectionState, MarkClearVisibility, MarkClearExpiry, PoisonCure, Ignite, ExtraAction, ItemGrant, PrivateNotification, Lovers, LoversProjectionState, Bomb, and
-BombProjectionState against local Postgres, writes a versioned report with two cases per family plus success and
-bad-expectation shrink preservation metadata, is ignored in the default command pipeline and run explicitly with --ignored, and does not prove exhaustive randomized coverage.`
+BombProjectionState against one SQLx-isolated local Postgres database on eight bounded worker
+runtimes, sorts entries by family and seed, writes a versioned report with two cases per family plus
+success and bad-expectation shrink preservation metadata, is ignored in the default command pipeline
+and run explicitly with --ignored, and does not prove exhaustive randomized coverage.`
 This row is trusted through the artifact classifier with `ok: true`, `family_count: 29`,
 `case_count: 58`, `expected_family_count: 29`, `expected_case_count: 58`, and
 `family_manifest_matched: true`.

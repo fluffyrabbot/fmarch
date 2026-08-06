@@ -14799,9 +14799,186 @@ async fn generated_persistent_trigger_bad_expectations_shrink_to_failing_artifac
     }
 }
 
+const GENERATED_SHRINK_MATRIX_WORKERS: usize = 8;
+const GENERATED_SHRINK_MATRIX_WORKER_STACK_BYTES: usize = 8 * 1024 * 1024;
+
+#[derive(Debug)]
+struct GeneratedShrinkMatrixCase {
+    family: String,
+    seed: u64,
+    success_fixture_json: String,
+    bad_fixture_json: String,
+}
+
+#[derive(Debug)]
+struct GeneratedShrinkMatrixEntry {
+    family: String,
+    seed: u64,
+    report: serde_json::Value,
+}
+
+async fn run_generated_shrink_matrix_case(
+    pool: &PgPool,
+    case: GeneratedShrinkMatrixCase,
+) -> GeneratedShrinkMatrixEntry {
+    let GeneratedShrinkMatrixCase {
+        family,
+        seed,
+        success_fixture_json,
+        bad_fixture_json,
+    } = case;
+    let success_fixture: serde_json::Value =
+        serde_json::from_str(&success_fixture_json).expect("matrix success fixture parses");
+    let expectation_count = generated_expectation_count(&success_fixture["expectations"]);
+    assert!(
+        expectation_count > 0,
+        "{family} seed {seed} should carry semantic expectations"
+    );
+
+    let success_artifacts =
+        GeneratedShrinkArtifacts::new(&format!("generated-shrink-matrix-{family}-{seed}-ok"));
+    success_artifacts.remove_existing();
+    success_artifacts.write_fixture(&success_fixture_json);
+    let success_report = success_artifacts.run_minimizer(pool).await;
+    assert_eq!(
+        success_report["original"]["ok"], true,
+        "{family} seed {seed} success original"
+    );
+    assert_eq!(
+        success_report["original"]["semantic_expectations_checked"],
+        serde_json::json!(expectation_count),
+        "{family} seed {seed} success expectation count"
+    );
+    assert_eq!(
+        success_report["reduction"]["success_invariant_preserved"],
+        serde_json::json!(true),
+        "{family} seed {seed} success invariant"
+    );
+    assert_eq!(
+        success_report["write_reduced"]["promoted_success_fixture"],
+        serde_json::json!(true),
+        "{family} seed {seed} success promotion"
+    );
+
+    let bad_artifacts =
+        GeneratedShrinkArtifacts::new(&format!("generated-shrink-matrix-{family}-{seed}-bad"));
+    bad_artifacts.remove_existing();
+    bad_artifacts.write_fixture(&bad_fixture_json);
+    let bad_report = bad_artifacts.run_minimizer(pool).await;
+    assert_eq!(
+        bad_report["original"]["ok"], false,
+        "{family} seed {seed} bad original"
+    );
+    assert_eq!(
+        bad_report["original"]["failure_class"],
+        "semantic_expectation",
+        "{family} seed {seed} bad failure class"
+    );
+    assert_eq!(
+        bad_report["reduction"]["failure_class_preserved"],
+        serde_json::json!(true),
+        "{family} seed {seed} bad failure preservation"
+    );
+    assert_eq!(
+        bad_report["write_reduced"]["promoted_success_fixture"],
+        serde_json::json!(false),
+        "{family} seed {seed} bad non-promotion"
+    );
+
+    let report = serde_json::json!({
+        "family": family,
+        "seed": seed,
+        "expectation_count": expectation_count,
+        "success": {
+            "ok": success_report["original"]["ok"],
+            "success_invariant_preserved": success_report["reduction"]["success_invariant_preserved"],
+            "promoted_success_fixture": success_report["write_reduced"]["promoted_success_fixture"],
+            "reduction_steps": success_report["reduction_steps"].as_array().map_or(0, Vec::len),
+            "report_path": success_artifacts.report_path.display().to_string(),
+            "reduced_path": success_artifacts.reduced_path.display().to_string(),
+        },
+        "bad_expectation": {
+            "ok": bad_report["original"]["ok"],
+            "failure_class": bad_report["original"]["failure_class"],
+            "failure_class_preserved": bad_report["reduction"]["failure_class_preserved"],
+            "promoted_success_fixture": bad_report["write_reduced"]["promoted_success_fixture"],
+            "reduction_steps": bad_report["reduction_steps"].as_array().map_or(0, Vec::len),
+            "report_path": bad_artifacts.report_path.display().to_string(),
+            "reduced_path": bad_artifacts.reduced_path.display().to_string(),
+        }
+    });
+    GeneratedShrinkMatrixEntry {
+        family,
+        seed,
+        report,
+    }
+}
+
+fn run_generated_shrink_matrix_cases(
+    connect_options: sqlx::postgres::PgConnectOptions,
+    cases: Vec<GeneratedShrinkMatrixCase>,
+) -> Vec<GeneratedShrinkMatrixEntry> {
+    assert_eq!(cases.len(), 58, "generated shrink matrix case manifest");
+    let queue = std::sync::Arc::new(std::sync::Mutex::new(
+        std::collections::VecDeque::from(cases),
+    ));
+    let mut entries = std::thread::scope(|scope| {
+        let mut workers = Vec::with_capacity(GENERATED_SHRINK_MATRIX_WORKERS);
+        for worker_index in 0..GENERATED_SHRINK_MATRIX_WORKERS {
+            let queue = std::sync::Arc::clone(&queue);
+            let connect_options = connect_options.clone();
+            workers.push(
+                std::thread::Builder::new()
+                    .name(format!("generated-shrink-matrix-{worker_index}"))
+                    .stack_size(GENERATED_SHRINK_MATRIX_WORKER_STACK_BYTES)
+                    .spawn_scoped(scope, move || {
+                        let runtime = tokio::runtime::Builder::new_current_thread()
+                            .enable_all()
+                            .build()
+                            .expect("generated shrink worker runtime");
+                        runtime.block_on(async move {
+                            let pool = sqlx::postgres::PgPoolOptions::new()
+                                .max_connections(1)
+                                .connect_with(connect_options)
+                                .await
+                                .expect("generated shrink worker database connection");
+                            let mut entries = Vec::new();
+                            loop {
+                                let next = queue
+                                    .lock()
+                                    .expect("generated shrink case queue")
+                                    .pop_front();
+                                let Some(case) = next else {
+                                    break;
+                                };
+                                entries.push(run_generated_shrink_matrix_case(&pool, case).await);
+                            }
+                            pool.close().await;
+                            entries
+                        })
+                    })
+                    .expect("spawn generated shrink worker"),
+            );
+        }
+        workers
+            .into_iter()
+            .flat_map(|worker| worker.join().expect("generated shrink worker failed"))
+            .collect::<Vec<_>>()
+    });
+    entries.sort_by(|left, right| {
+        left.family
+            .cmp(&right.family)
+            .then_with(|| left.seed.cmp(&right.seed))
+    });
+    entries
+}
+
 #[sqlx::test(migrations = "../projections/migrations")]
 #[ignore = "heavy operator proof lane; run explicitly with --ignored"]
-async fn generated_shrink_matrix_writes_compact_operator_report(pool: PgPool) {
+async fn generated_shrink_matrix_writes_compact_operator_report(
+    _pool_options: sqlx::postgres::PgPoolOptions,
+    connect_options: sqlx::postgres::PgConnectOptions,
+) {
     let mut cases = Vec::new();
     let trigger_fixtures = generated_trigger_dependency_search_fixture_matrix(2);
     for family in ["babysitter", "hider", "pgo"] {
@@ -14814,15 +14991,15 @@ async fn generated_shrink_matrix_writes_compact_operator_report(pool: PgPool) {
             "matrix should collect two generated {family} fixtures"
         );
         for generated in fixtures {
-            cases.push((
-                family.to_string(),
-                generated.seed,
-                generated.fixture_json.clone(),
-                generated_trigger_dependency_bad_expectation_fixture_json(
+            cases.push(GeneratedShrinkMatrixCase {
+                family: family.to_string(),
+                seed: generated.seed,
+                success_fixture_json: generated.fixture_json.clone(),
+                bad_fixture_json: generated_trigger_dependency_bad_expectation_fixture_json(
                     family,
                     &generated.fixture_json,
                 ),
-            ));
+            });
         }
     }
 
@@ -14858,106 +15035,29 @@ async fn generated_shrink_matrix_writes_compact_operator_report(pool: PgPool) {
         ("private_notification", [97_101, 97_102]),
     ] {
         for seed in seeds {
-            cases.push((
-                family.to_string(),
+            cases.push(GeneratedShrinkMatrixCase {
+                family: family.to_string(),
                 seed,
-                generated_persistent_trigger_success_fixture_json(family, seed),
-                generated_persistent_trigger_bad_expectation_fixture_json(family, seed),
-            ));
+                success_fixture_json: generated_persistent_trigger_success_fixture_json(
+                    family, seed,
+                ),
+                bad_fixture_json: generated_persistent_trigger_bad_expectation_fixture_json(
+                    family, seed,
+                ),
+            });
         }
     }
 
-    let mut entries = Vec::new();
-    for (family, seed, success_fixture_json, bad_fixture_json) in cases {
-        let success_fixture: serde_json::Value =
-            serde_json::from_str(&success_fixture_json).expect("matrix success fixture parses");
-        let expectation_count = generated_expectation_count(&success_fixture["expectations"]);
-        assert!(
-            expectation_count > 0,
-            "{family} seed {seed} should carry semantic expectations"
-        );
-
-        let success_artifacts =
-            GeneratedShrinkArtifacts::new(&format!("generated-shrink-matrix-{family}-{seed}-ok"));
-        success_artifacts.remove_existing();
-        success_artifacts.write_fixture(&success_fixture_json);
-        let success_report = success_artifacts.run_minimizer(&pool).await;
-        assert_eq!(
-            success_report["original"]["ok"], true,
-            "{family} seed {seed} success original"
-        );
-        assert_eq!(
-            success_report["original"]["semantic_expectations_checked"],
-            serde_json::json!(expectation_count),
-            "{family} seed {seed} success expectation count"
-        );
-        assert_eq!(
-            success_report["reduction"]["success_invariant_preserved"],
-            serde_json::json!(true),
-            "{family} seed {seed} success invariant"
-        );
-        assert_eq!(
-            success_report["write_reduced"]["promoted_success_fixture"],
-            serde_json::json!(true),
-            "{family} seed {seed} success promotion"
-        );
-
-        let bad_artifacts =
-            GeneratedShrinkArtifacts::new(&format!("generated-shrink-matrix-{family}-{seed}-bad"));
-        bad_artifacts.remove_existing();
-        bad_artifacts.write_fixture(&bad_fixture_json);
-        let bad_report = bad_artifacts.run_minimizer(&pool).await;
-        assert_eq!(
-            bad_report["original"]["ok"], false,
-            "{family} seed {seed} bad original"
-        );
-        assert_eq!(
-            bad_report["original"]["failure_class"], "semantic_expectation",
-            "{family} seed {seed} bad failure class"
-        );
-        assert_eq!(
-            bad_report["reduction"]["failure_class_preserved"],
-            serde_json::json!(true),
-            "{family} seed {seed} bad failure preservation"
-        );
-        assert_eq!(
-            bad_report["write_reduced"]["promoted_success_fixture"],
-            serde_json::json!(false),
-            "{family} seed {seed} bad non-promotion"
-        );
-
-        entries.push(serde_json::json!({
-            "family": family,
-            "seed": seed,
-            "expectation_count": expectation_count,
-            "success": {
-                "ok": success_report["original"]["ok"],
-                "success_invariant_preserved": success_report["reduction"]["success_invariant_preserved"],
-                "promoted_success_fixture": success_report["write_reduced"]["promoted_success_fixture"],
-                "reduction_steps": success_report["reduction_steps"].as_array().map_or(0, Vec::len),
-                "report_path": success_artifacts.report_path.display().to_string(),
-                "reduced_path": success_artifacts.reduced_path.display().to_string(),
-            },
-            "bad_expectation": {
-                "ok": bad_report["original"]["ok"],
-                "failure_class": bad_report["original"]["failure_class"],
-                "failure_class_preserved": bad_report["reduction"]["failure_class_preserved"],
-                "promoted_success_fixture": bad_report["write_reduced"]["promoted_success_fixture"],
-                "reduction_steps": bad_report["reduction_steps"].as_array().map_or(0, Vec::len),
-                "report_path": bad_artifacts.report_path.display().to_string(),
-                "reduced_path": bad_artifacts.reduced_path.display().to_string(),
-            }
-        }));
-    }
+    let entries = run_generated_shrink_matrix_cases(connect_options, cases);
 
     let mut family_counts: BTreeMap<String, usize> = BTreeMap::new();
     for entry in &entries {
-        let family = entry["family"]
-            .as_str()
-            .expect("matrix entry carries family")
-            .to_string();
-        *family_counts.entry(family).or_default() += 1;
+        *family_counts.entry(entry.family.clone()).or_default() += 1;
     }
+    let entries = entries
+        .into_iter()
+        .map(|entry| entry.report)
+        .collect::<Vec<_>>();
     let artifact_path = "target/operator-proof/current-generated-shrink-matrix-report.tmp.json";
     let report_path =
         generated_shrink_artifact_root().join("current-generated-shrink-matrix-report.tmp.json");
@@ -14965,7 +15065,7 @@ async fn generated_shrink_matrix_writes_compact_operator_report(pool: PgPool) {
         "artifact_version": 1,
         "artifact_path": artifact_path,
         "ok": true,
-        "proof_boundary": "Local-Postgres-only generated shrink matrix: runs bounded deterministic generated fixtures through minimize_night_fixture success and bad-expectation reductions, writes per-case reduced/report artifacts under target/operator-proof, and does not prove exhaustive randomized coverage.",
+        "proof_boundary": "Local-Postgres-only generated shrink matrix: runs 58 deterministic generated fixtures through success and bad-expectation minimization on eight bounded workers sharing one SQLx-isolated run database, sorts the aggregate report by family and seed, writes per-case reduced/report artifacts under target/operator-proof, and does not prove exhaustive randomized coverage.",
         "family_count": family_counts.len(),
         "case_count": entries.len(),
         "expected_family_count": 29,

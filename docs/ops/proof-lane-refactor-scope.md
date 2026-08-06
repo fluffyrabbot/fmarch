@@ -1,7 +1,8 @@
 # Proof Lane Architecture Refactor
 
 Status: active; leaf execution and fast truthful selection delivered 2026-07-26;
-command proof cost boundaries delivered 2026-08-06.
+command proof cost boundaries and bounded generated-shrink execution delivered
+2026-08-06.
 
 ## Delivered foundation
 
@@ -112,6 +113,12 @@ only for the same commit and manifest digest.
   depending on host defaults.
 - `operator_proof::minimizer` is an in-process library; generated tests reuse
   their SQLx pool instead of spawning Cargo and reconnecting to Postgres.
+- The generated shrink matrix owns one SQLx-isolated database per test run and
+  drains its 58-case manifest through eight named worker runtimes. Each worker
+  owns one connection and an explicit 8 MiB stack; aggregate entries are sorted
+  by family and seed before publication. Two unchanged measured runs completed
+  in 153.91s and 165.53s and produced the same SHA-256 digest
+  (`8b571b10dd894ff6285454680b94b06e7baa5df1fff2aecc001121d00a52532d`).
 - The 55 derived minimized/nonminimal/bad-expectation fixtures were deleted;
   generated audit evidence is disposable under `target/operator-proof`, while
   `night-passing.json` remains the single CLI fixture.
