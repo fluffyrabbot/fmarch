@@ -52,6 +52,57 @@ The event log remains append-only. Erasure is represented by typed lifecycle
 facts plus projection redaction/pseudonymization; it is never an ad-hoc delete
 that makes replay diverge.
 
+### Wave 3 pure substrate (D10)
+
+Typed ownership lives in `crates/identity/src/data_lifecycle.rs` as a pure
+decide surface (no HTTP, SQL, or migrations in this wave). Statuses are
+`Active`, `Deactivated`, `ErasureInProgress`, and `Erased`. Commands are
+`Deactivate { reason }` and `RequestErasure`. Deactivation is the required
+gate before erasure; re-deactivating an already-deactivated member is an
+idempotent no-op.
+
+#### Fact kinds
+
+| Kind | When |
+|---|---|
+| `MemberDeactivated` | Active member deactivates (methods/sessions revoked by later handlers) |
+| `MemberErasureRequested` | Deactivated member requests erasure; status → `ErasureInProgress` |
+| `MemberCredentialsErased` | Credential/recovery/delivery secrets wiped (co-emitted on clean deactivation path) |
+| `MemberAuthorshipPseudonymized` | Projection rebuild replaced durable public authorship identifiers |
+| `MemberPersonalExportRecorded` | A personal/account export package was produced for the subject |
+
+`MemberPersonalExportRecorded` is **not** a host completed-game export. Personal
+export is subject-scoped account data under `ExportableToSubject`; completed-game
+export remains a host/game capability and does not satisfy the member export
+obligation.
+
+#### Ownership matrix (`disposition(DataClass)`)
+
+| Data class | Disposition |
+|---|---|
+| `Credentials` | `Erase` |
+| `RecoveryMaterial` | `Erase` |
+| `DeliveryDestination` | `Erase` |
+| `NonessentialProfileIdentifier` | `Erase` |
+| `PublicAuthorship` | `RetainPseudonymize` |
+| `PrivateContent` | `RetainRestricted` |
+| `ModerationEvidence` | `RetainRestricted` |
+| `PersonalExportBundle` | `ExportableToSubject` |
+| `AuditFacts` | `OperatorOnly` |
+| `BackupCopy` | `OperatorOnly` |
+
+Decide transitions (Wave 3):
+
+- `Active` + `Deactivate` → `MemberDeactivated`
+- `Deactivated` + `Deactivate` → empty ok (idempotent)
+- `Active` + `RequestErasure` → reject (`MustDeactivateFirst`)
+- `Deactivated` + `RequestErasure` → `MemberErasureRequested` + `MemberCredentialsErased`
+- `ErasureInProgress` / `Erased` + any command → reject
+
+Later waves own HTTP controls, migrations, projection rebuild/pseudonymization,
+personal-export assembly, and browser proof. This section does not mark
+`product.identity.data-lifecycle` complete.
+
 ## Accessibility release boundary
 
 Static semantics and synthetic browser checks are necessary but insufficient.

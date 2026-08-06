@@ -223,6 +223,11 @@ Reads and live deltas are filtered server-side by capability ([03](03-backend.md
   opts into that debug-only fallback explicitly. Staged and production deployments must provide
   `FMARCH_EVENT_ENCRYPTION_KEY` and `FMARCH_EVENT_ENCRYPTION_KID` from the environment or a
   secrets manager.
+- Startup (`require_secure_event_encryption_configuration`) rejects an *active* write kid of
+  `local-dev` unless the process is a debug build with explicit opt-in
+  (`FMARCH_DEV_AUTH=1` or `FMARCH_ALLOW_INSECURE_DEV_EVENT_KEY=true`). The ban applies only to
+  the active write kid; historical `FMARCH_EVENT_ENCRYPTION_KEYS` ring entries may still use
+  `local-dev` for decrypt during rotation. Setting KEY+KID does not bypass the ban.
 - The ciphertext envelope records an encryption key id alongside the ciphertext. Writes use the
   active `FMARCH_EVENT_ENCRYPTION_KEY` / `FMARCH_EVENT_ENCRYPTION_KID`; reads resolve by the
   envelope `kid` against the active key plus historical `FMARCH_EVENT_ENCRYPTION_KEYS`

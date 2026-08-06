@@ -306,7 +306,7 @@
       "title": "Reviewable 1.0 core and toolchain",
       "execution_class": "code",
       "status": "open",
-      "summary": "Rust 1.95.0 and strict workspace Clippy are proof-enforced; API media, auth, and community HTTP, authentication attempt/delivery, and live publication, domain pack model/validation, resolver action/trigger/outcome, and projection effect/private-channel ownership are isolated behind typed boundaries. Remaining resolver coordinator, API game transport, other projection, command-test, and proof-runner concentrations remain inventoried.",
+      "summary": "Rust 1.95.0 and strict workspace Clippy are proof-enforced; API media, auth, community, game-read HTTP, live WebSocket delivery, authentication attempt/delivery, and live publication, domain pack model/validation, resolver action/trigger/outcome, and projection effect/private-channel ownership are isolated behind typed boundaries. Remaining resolver coordinator, API command/import transport, other projection, command-test, and proof-runner concentrations remain inventoried.",
       "complete_when": [
         "The Rust toolchain is pinned, workspace Clippy is warning-clean, and concentrated pack, resolver, API, projection, command-test, and proof orchestration responsibilities are split into coherent modules without weakening proof coverage."
       ],
@@ -345,6 +345,14 @@
         },
         {
           "kind": "source",
+          "value": "crates/api/src/live_delivery.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/api/tests/live_delivery_boundary.rs"
+        },
+        {
+          "kind": "source",
           "value": "crates/api/tests/auth_http_boundary.rs"
         },
         {
@@ -354,6 +362,14 @@
         {
           "kind": "source",
           "value": "crates/api/tests/community_http_boundary.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/api/src/game_http.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/api/tests/game_http_boundary.rs"
         },
         {
           "kind": "source",
@@ -401,32 +417,28 @@
         }
       ],
       "remaining": [
-        "Split remaining resolver coordinator, API game transport, other projection, command-test, and proof-runner responsibilities along the dependency direction recorded in docs/arch/16-maintainable-core.md.",
+        "Split remaining resolver coordinator, API command/import transport, other projection, command-test, and proof-runner responsibilities along the dependency direction recorded in docs/arch/16-maintainable-core.md.",
         "Remove the exact lint expectations as typed contexts and bounded modules supersede them."
       ],
       "recommended_slice": {
-        "objective": "Extract the cohesive game-read HTTP route family from crates/api/src/lib.rs into game_http.rs: move public and operator game discovery, public game threads, vote counts, day-vote outcomes, endgame summaries and completed exports, game and private-channel threads, player notifications and investigation results, player command state, and host phase-control, prompt, console, and setup reads; move their query/response DTOs, cursor decoders, admission/capability checks, pack metadata adaptation, and projection-error mapping behind a typed GameHttpState; keep router composition, command submission and preparation, game import writes, WebSocket sessions and hydration, auth/media/community transport, live publication, and projection SQL in their existing owners; expose only narrow read helpers where WebSocket hydration intentionally shares the same projection adaptation; and preserve every URL, method, status code, JSON/wire shape, ordering, cursor, visibility rule, authorization decision, and audience filter.",
+        "objective": "Extract command submission/preparation and completed-game import from crates/api/src/lib.rs into a typed command HTTP owner: move /commands and /games/import routes, wire command adaptation, media-reference preparation, idempotent dispatch, live-publication dirty-surface classification handoff, and import authorization behind a bounded state; keep router composition, auth/game/community/media/live-delivery route families, and live change publication in their current owners; preserve protocol version, reject mapping, idempotency, and projection publish semantics.",
         "paths": [
           "crates/api/src/lib.rs",
-          "crates/api/src/game_http.rs",
-          "crates/api/tests/vertical.rs",
-          "crates/api/tests/game_http_boundary.rs",
+          "crates/api/src/command_http.rs",
+          "crates/api/tests/command_http_boundary.rs",
           "docs/arch/16-maintainable-core.md"
         ],
         "proof_commands": [
-          "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p api -- --test-threads=1",
-          "npm run test:dev-test-game-core-live:local",
-          "npm run test:dev-test-game-host-setup-admin-proof",
-          "npm run test:dev-test-game-private-channel-recovery-receipt",
-          "npm run test:dev-test-game-completed-export",
+          "cargo test -p api --lib",
+          "cargo test -p api --test vertical -- --test-threads=1",
           "cargo clippy --workspace --all-targets --all-features -- -D warnings",
           "npm run proof:lanes -- --mode sprint --run",
           "npm run proof:lanes -- --mode full --run"
         ],
         "non_claims": [
-          "Do not move projection SQL or event folding out of the projections crate, or duplicate auth/session persistence inside the game HTTP family.",
-          "Do not move command submission/preparation, game import writes, WebSocket connection and resync orchestration, or live publication into the game-read boundary.",
-          "Do not change game URLs, wire DTOs, cursor/order semantics, capability checks, private-audience filtering, export contents, or host/player visibility as an accidental side effect of ownership extraction.",
+          "Do not move command decisioning into the HTTP boundary; keep commands::handle_idempotent as the write owner.",
+          "Do not merge live delivery or live publication into the command HTTP owner.",
+          "Do not change command URLs, wire DTOs, reject codes, or publish dirty-surface classification as an accidental side effect of extraction.",
           "Do not mark foundation.maintainable-core complete; remaining resolver coordinator, other projection families, command-test, and proof-runner concentrations remain."
         ]
       }

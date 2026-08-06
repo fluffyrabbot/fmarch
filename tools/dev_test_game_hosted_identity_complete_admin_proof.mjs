@@ -1,3 +1,4 @@
+// Deprecated alias of evidence/operator admin-proof — do not add more re-export-only *-admin-proof scripts (docs/ops/proof-product-freeze.md).
 import { pathToFileURL } from "node:url";
 import {
   writeHostedIdentityCompleteAdminProof,

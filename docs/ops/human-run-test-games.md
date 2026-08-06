@@ -301,9 +301,20 @@ FMARCH_HOSTED_IDENTITY_PROGRESSION_ID=account-recovery npm run test:dev-test-gam
 FMARCH_HOSTED_IDENTITY_PROGRESSION_ID=abuse-and-rate-limit npm run test:dev-test-game-hosted-identity-progression-admin-proof
 FMARCH_HOSTED_IDENTITY_PROGRESSION_ID=session-secret-policy npm run test:dev-test-game-hosted-identity-progression-admin-proof
 FMARCH_HOSTED_IDENTITY_PROGRESSION_ID=hosted-audit-retention-export npm run test:dev-test-game-hosted-identity-progression-admin-proof
-npm run test:dev-test-game-hosted-identity-complete-admin-proof
+npm run test:dev-test-game-hosted-identity-evidence-admin-proof
 npm run test:dev-test-game-hosted-identity-operator-admin-proof
 ```
+
+**Deprecated aliases** (kept for existing callers; do not add more of this
+shape—see [proof-product-freeze](proof-product-freeze.md)):
+
+- `npm run test:dev-test-game-hosted-identity-partial-admin-proof` — deprecated
+  alias of the progression/evidence admin-proof path (thin re-export).
+- `npm run test:dev-test-game-hosted-identity-complete-admin-proof` — deprecated
+  alias of the evidence/operator admin-proof path (all-families redacted packet
+  through the evidence admin proof).
+
+Prefer the evidence and operator commands above.
 
 Those progression admin proofs are local role-surface checks. They prove the
 seeded admin detail can show the specific missing redacted packet and the
@@ -315,9 +326,10 @@ The `hosted-account-lifecycle`, `invite-delivery`, `account-recovery`,
 flows: each admin proof reads a redacted packet with only that evidence family
 provided, so the admin handoff shows one family as provided while hosted
 identity readiness remains blocked on the remaining hosted identity packets.
-The complete admin proof reads the all-families redacted packet and proves the
-seeded admin detail can show all six evidence-family sections as provided while
-`releaseReady` and `productionReady` remain false.
+The evidence admin proof (and the deprecated complete alias) can exercise an
+all-families redacted packet and prove the seeded admin detail can show all six
+evidence-family sections as provided while `releaseReady` and `productionReady`
+remain false.
 The operator admin proof writes a target-local example packet under
 `target/operator-evidence/`, proves that non-fixture path through the same
 seeded admin role URL, and records that the hosted-production-identity

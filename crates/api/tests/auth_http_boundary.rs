@@ -41,8 +41,11 @@ fn auth_http_has_one_typed_owner_without_transport_or_persistence_drift() {
     assert!(identity_delivery.contains("trait IdentityDeliveryGateway"));
     assert!(identity_delivery.contains("process_identity_delivery_intent"));
 
-    assert!(composition_root.contains("async fn create_websocket_ticket("));
-    assert!(composition_root.contains("async fn ws_session("));
+    let live_delivery = std::fs::read_to_string(source_root.join("live_delivery.rs")).unwrap();
+    assert!(live_delivery.contains("async fn create_websocket_ticket("));
+    assert!(live_delivery.contains("async fn ws_session("));
+    assert!(!composition_root.contains("async fn create_websocket_ticket("));
+    assert!(!composition_root.contains("async fn ws_session("));
     assert!(!auth_http.contains("async fn create_websocket_ticket("));
     assert!(!auth_http.contains("async fn ws_session("));
     assert!(

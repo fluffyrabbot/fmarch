@@ -294,7 +294,7 @@ pub async fn append(
 }
 
 /// Load a full stream in canonical order (`stream_seq` ascending), each row
-/// passed through the upcaster seam (identity in v1).
+/// passed through the upcaster seam (`eventstore::upcast`).
 pub async fn load_stream(pool: &PgPool, stream_id: Uuid) -> Result<Vec<StoredEvent>, StoreError> {
     load_stream_with(pool, stream_id).await
 }
@@ -448,6 +448,10 @@ const PRIVATE_SCHEME: &str = "fmarch-event-aead-v1";
 const PRIVATE_ALG: &str = "XChaCha20Poly1305";
 const ROLE_PRIVATE_FIELD: &str = "private";
 const POST_BODY_PRIVATE_FIELD: &str = "body_private";
+/// Debug-only default / fallback encryption key id. Banned as the *active* write kid
+/// outside explicit debug dev mode; historical `FMARCH_EVENT_ENCRYPTION_KEYS` ring
+/// entries may still carry this kid for decrypt.
+const LOCAL_DEV_EVENT_ENCRYPTION_KID: &str = "local-dev";
 
 #[derive(Debug, Clone)]
 struct EventEncryptionKey {
@@ -659,7 +663,8 @@ pub fn decrypt_private_projection(
 /// Fail an internet-facing process closed unless it has explicit key material.
 /// The deterministic fallback exists only in debug builds and server operators
 /// must opt into it explicitly through the dedicated flag or debug-only dev
-/// authentication mode.
+/// authentication mode. Active write kid [`LOCAL_DEV_EVENT_ENCRYPTION_KID`] is
+/// banned outside that same explicit debug dev mode even when KEY+KID are set.
 pub fn require_secure_event_encryption_configuration() -> Result<(), StoreError> {
     let key = std::env::var("FMARCH_EVENT_ENCRYPTION_KEY")
         .ok()
@@ -667,17 +672,26 @@ pub fn require_secure_event_encryption_configuration() -> Result<(), StoreError>
     let kid = std::env::var("FMARCH_EVENT_ENCRYPTION_KID")
         .ok()
         .filter(|value| !value.trim().is_empty());
+    let explicit_dev = cfg!(debug_assertions)
+        && (std::env::var("FMARCH_ALLOW_INSECURE_DEV_EVENT_KEY")
+            .ok()
+            .is_some_and(|value| value.eq_ignore_ascii_case("true"))
+            || std::env::var("FMARCH_DEV_AUTH").ok().as_deref() == Some("1"));
+
     if key.is_some() && kid.is_some() {
-        active_event_encryption_key()?;
+        let active = active_event_encryption_key()?;
+        if active.kid == LOCAL_DEV_EVENT_ENCRYPTION_KID && !explicit_dev {
+            return Err(StoreError::Crypto(format!(
+                "active event encryption kid `{LOCAL_DEV_EVENT_ENCRYPTION_KID}` is banned outside explicit debug dev mode; set FMARCH_DEV_AUTH=1 or FMARCH_ALLOW_INSECURE_DEV_EVENT_KEY=true in a debug build, or use a non-dev kid"
+            )));
+        }
         return Ok(());
     }
-    let insecure_dev = std::env::var("FMARCH_ALLOW_INSECURE_DEV_EVENT_KEY")
-        .ok()
-        .is_some_and(|value| value.eq_ignore_ascii_case("true"))
-        || std::env::var("FMARCH_DEV_AUTH").ok().as_deref() == Some("1");
-    if insecure_dev && cfg!(debug_assertions) {
+
+    if explicit_dev {
         return Ok(());
     }
+
     Err(StoreError::Crypto(
         "FMARCH_EVENT_ENCRYPTION_KEY and FMARCH_EVENT_ENCRYPTION_KID are required; the debug-only fallback requires FMARCH_ALLOW_INSECURE_DEV_EVENT_KEY=true or FMARCH_DEV_AUTH=1"
             .to_string(),
@@ -821,7 +835,7 @@ fn active_event_encryption_key() -> Result<EventEncryptionKey, StoreError> {
         .ok()
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty())
-        .unwrap_or_else(|| "local-dev".to_string());
+        .unwrap_or_else(|| LOCAL_DEV_EVENT_ENCRYPTION_KID.to_string());
     let raw_key = std::env::var("FMARCH_EVENT_ENCRYPTION_KEY").ok();
     let bytes = match raw_key {
         Some(raw) if !raw.trim().is_empty() => {
@@ -875,4 +889,163 @@ fn json_string(value: &serde_json::Value, key: &str) -> Result<String, StoreErro
         .and_then(|value| value.as_str())
         .map(str::to_string)
         .ok_or_else(|| StoreError::Crypto(format!("missing string field `{key}`")))
+}
+
+#[cfg(test)]
+mod secure_event_encryption_config_tests {
+    use super::*;
+    use std::sync::{Mutex, MutexGuard};
+
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    struct EnvGuard {
+        prior_key: Option<String>,
+        prior_kid: Option<String>,
+        prior_keys: Option<String>,
+        prior_dev_auth: Option<String>,
+        prior_allow_insecure: Option<String>,
+        _lock: MutexGuard<'static, ()>,
+    }
+
+    impl EnvGuard {
+        fn new() -> Self {
+            let lock = ENV_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+            let guard = Self {
+                prior_key: std::env::var("FMARCH_EVENT_ENCRYPTION_KEY").ok(),
+                prior_kid: std::env::var("FMARCH_EVENT_ENCRYPTION_KID").ok(),
+                prior_keys: std::env::var("FMARCH_EVENT_ENCRYPTION_KEYS").ok(),
+                prior_dev_auth: std::env::var("FMARCH_DEV_AUTH").ok(),
+                prior_allow_insecure: std::env::var("FMARCH_ALLOW_INSECURE_DEV_EVENT_KEY").ok(),
+                _lock: lock,
+            };
+            std::env::remove_var("FMARCH_EVENT_ENCRYPTION_KEY");
+            std::env::remove_var("FMARCH_EVENT_ENCRYPTION_KID");
+            std::env::remove_var("FMARCH_EVENT_ENCRYPTION_KEYS");
+            std::env::remove_var("FMARCH_DEV_AUTH");
+            std::env::remove_var("FMARCH_ALLOW_INSECURE_DEV_EVENT_KEY");
+            guard
+        }
+
+        fn set_active(&self, kid: &str, key: &str) {
+            std::env::set_var("FMARCH_EVENT_ENCRYPTION_KID", kid);
+            std::env::set_var("FMARCH_EVENT_ENCRYPTION_KEY", key);
+        }
+
+        fn set_dev_auth(&self, value: &str) {
+            std::env::set_var("FMARCH_DEV_AUTH", value);
+        }
+
+        fn set_allow_insecure(&self, value: &str) {
+            std::env::set_var("FMARCH_ALLOW_INSECURE_DEV_EVENT_KEY", value);
+        }
+    }
+
+    impl Drop for EnvGuard {
+        fn drop(&mut self) {
+            restore_env("FMARCH_EVENT_ENCRYPTION_KEY", &self.prior_key);
+            restore_env("FMARCH_EVENT_ENCRYPTION_KID", &self.prior_kid);
+            restore_env("FMARCH_EVENT_ENCRYPTION_KEYS", &self.prior_keys);
+            restore_env("FMARCH_DEV_AUTH", &self.prior_dev_auth);
+            restore_env(
+                "FMARCH_ALLOW_INSECURE_DEV_EVENT_KEY",
+                &self.prior_allow_insecure,
+            );
+        }
+    }
+
+    fn restore_env(name: &str, prior: &Option<String>) {
+        match prior {
+            Some(value) => std::env::set_var(name, value),
+            None => std::env::remove_var(name),
+        }
+    }
+
+    fn assert_crypto_err(result: Result<(), StoreError>, needle: &str) {
+        match result {
+            Err(StoreError::Crypto(message)) => {
+                assert!(
+                    message.contains(needle),
+                    "expected crypto error containing `{needle}`, got `{message}`"
+                );
+            }
+            other => panic!("expected StoreError::Crypto containing `{needle}`, got {other:?}"),
+        }
+    }
+
+    /// Ban matrix (debug builds): active `local-dev` kid requires explicit_dev.
+    #[test]
+    fn local_dev_active_kid_banned_without_explicit_dev() {
+        let env = EnvGuard::new();
+        env.set_active(LOCAL_DEV_EVENT_ENCRYPTION_KID, "unit-test-event-key-material");
+        assert_crypto_err(
+            require_secure_event_encryption_configuration(),
+            LOCAL_DEV_EVENT_ENCRYPTION_KID,
+        );
+    }
+
+    #[test]
+    fn local_dev_active_kid_allowed_with_dev_auth() {
+        let env = EnvGuard::new();
+        env.set_active(LOCAL_DEV_EVENT_ENCRYPTION_KID, "unit-test-event-key-material");
+        env.set_dev_auth("1");
+        require_secure_event_encryption_configuration().expect("dev auth opts into local-dev");
+    }
+
+    #[test]
+    fn local_dev_active_kid_allowed_with_allow_insecure_flag() {
+        let env = EnvGuard::new();
+        env.set_active(LOCAL_DEV_EVENT_ENCRYPTION_KID, "unit-test-event-key-material");
+        env.set_allow_insecure("true");
+        require_secure_event_encryption_configuration()
+            .expect("allow-insecure flag opts into local-dev");
+    }
+
+    #[test]
+    fn local_dev_active_kid_allowed_with_allow_insecure_case_insensitive() {
+        let env = EnvGuard::new();
+        env.set_active(LOCAL_DEV_EVENT_ENCRYPTION_KID, "unit-test-event-key-material");
+        env.set_allow_insecure("TRUE");
+        require_secure_event_encryption_configuration()
+            .expect("allow-insecure accepts TRUE");
+    }
+
+    #[test]
+    fn non_local_dev_active_kid_ok_without_explicit_dev() {
+        let env = EnvGuard::new();
+        env.set_active("staging-v1", "unit-test-event-key-material");
+        require_secure_event_encryption_configuration()
+            .expect("non-dev kid does not require explicit_dev");
+    }
+
+    #[test]
+    fn missing_key_material_rejected_without_explicit_dev() {
+        let _env = EnvGuard::new();
+        assert_crypto_err(
+            require_secure_event_encryption_configuration(),
+            "FMARCH_EVENT_ENCRYPTION_KEY and FMARCH_EVENT_ENCRYPTION_KID are required",
+        );
+    }
+
+    #[test]
+    fn missing_key_material_allowed_with_dev_auth() {
+        let env = EnvGuard::new();
+        env.set_dev_auth("1");
+        require_secure_event_encryption_configuration()
+            .expect("FMARCH_DEV_AUTH=1 allows debug fallback");
+    }
+
+    #[test]
+    fn missing_key_material_allowed_with_allow_insecure_flag() {
+        let env = EnvGuard::new();
+        env.set_allow_insecure("true");
+        require_secure_event_encryption_configuration()
+            .expect("allow-insecure allows debug fallback");
+    }
+
+    #[test]
+    fn default_active_kid_is_local_dev_constant() {
+        let _env = EnvGuard::new();
+        let active = active_event_encryption_key().expect("debug fallback key material");
+        assert_eq!(active.kid, LOCAL_DEV_EVENT_ENCRYPTION_KID);
+    }
 }
